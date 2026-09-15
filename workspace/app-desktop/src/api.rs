@@ -167,6 +167,16 @@ impl ApiClient {
         Ok(resp.json::<BlockPropertiesResponse>().await?.properties)
     }
 
+    /// Idempotent on the backend: starting an already-running flow just
+    /// returns its current state, no error - safe to call unconditionally
+    /// whenever the Console opens a flow.
+    pub async fn start_flow(&self, flow_id: FlowId) -> ApiResult<()> {
+        let url = format!("{}/api/flows/{}/start", self.base_url, flow_id);
+        let resp = self.http.post(url).send().await?;
+        Self::check_status(resp).await?;
+        Ok(())
+    }
+
     pub async fn get_thumbnail(&self, flow_id: FlowId, block_id: &str) -> ApiResult<Vec<u8>> {
         let url = format!(
             "{}/api/flows/{}/blocks/{}/thumbnail",

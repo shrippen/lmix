@@ -103,12 +103,22 @@ impl ConsoleApp {
         let audio_block = flow.audio_mixer_block_id.clone();
         let flow_id = flow.flow_id;
 
-        // Initial state fetch (WS only carries *changes* from here on).
+        // Start the flow, then fetch its initial Vision Mixer state (WS only
+        // carries *changes* from here on). `start_flow` is idempotent on the
+        // backend (already-running is not an error), so the Console can be
+        // pointed at a stopped flow and just start it, instead of leaving
+        // the operator stuck on "Flow is not running - start it to switch".
+        // Sequenced (not two independent spawns): the state fetch must not
+        // race a start still in flight, or it observes the pre-start 404.
         {
             let api = self.api.clone();
             let tx = self.tx.clone();
             let vm_block = vm_block.clone();
             tokio::spawn(async move {
+                if let Err(e) = api.start_flow(flow_id).await {
+                    let _ = tx.send((session, AppMessage::Error(format!("Failed to start flow: {e}"))));
+                    return;
+                }
                 match api.get_vision_mixer_state(flow_id, &vm_block).await {
                     Ok(Some(state)) => {
                         let _ = tx.send((session, AppMessage::VisionMixerStateLoaded(state)));
@@ -117,7 +127,7 @@ impl ConsoleApp {
                         let _ = tx.send((
                             session,
                             AppMessage::Error(
-                                "Flow is not running - start it to switch".to_string(),
+                                "Flow started but has no Vision Mixer state yet".to_string(),
                             ),
                         ));
                     }
