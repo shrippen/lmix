@@ -380,10 +380,9 @@ impl ConsoleApp {
         }
     }
 
-    /// PGM/PVW grid: one tile per Vision Mixer input, red border on the
-    /// input currently on PGM, green on PVW. Interaction (click-to-preview,
-    /// take/cut, hotkeys) lands in the next step - this renders live state
-    /// only, always from `self.mixer`, never from a locally-assumed value.
+    /// vMix-style Console: big PREVIEW/PROGRAM monitors on top with the
+    /// transition bar between them, the input list (all sources, click to
+    /// preview) below, and the audio mixer strip at the bottom.
     fn render_console(&mut self, ui: &mut egui::Ui, selection: &Selection) {
         ui.horizontal(|ui| {
             ui.heading(&selection.flow_name);
@@ -420,18 +419,59 @@ impl ConsoleApp {
         }
 
         ui.separator();
-        egui::Grid::new("pgm_pvw_grid")
-            .num_columns(4)
-            .spacing([12.0, 12.0])
-            .show(ui, |ui| {
+
+        // Two big monitors, PREVIEW (green) left / PROGRAM (red) right -
+        // vMix's own left-to-right convention. Each shows the same texture
+        // as its input's tile below, just enlarged.
+        const PREVIEW_COLOR: egui::Color32 = egui::Color32::from_rgb(40, 200, 80);
+        const PROGRAM_COLOR: egui::Color32 = egui::Color32::from_rgb(220, 40, 40);
+        let preview_tex = self.mixer.preview_input.and_then(|idx| self.textures.get(&idx));
+        let program_tex = self.mixer.program_input.and_then(|idx| self.textures.get(&idx));
+        ui.columns(2, |columns| {
+            render_monitor(&mut columns[0], "PREVIEW", PREVIEW_COLOR, preview_tex);
+            render_monitor(&mut columns[1], "PROGRAM", PROGRAM_COLOR, program_tex);
+        });
+
+        // Transition bar, centered between the monitors above and the input
+        // list below - vMix's Cut/Auto row.
+        let can_take = self.mixer.program_input.is_some() && self.mixer.preview_input.is_some();
+        ui.vertical_centered(|ui| {
+            ui.add_space(6.0);
+            ui.add_enabled_ui(can_take, |ui| {
+                ui.horizontal(|ui| {
+                    if ui
+                        .add_sized([90.0, 36.0], egui::Button::new(
+                            egui::RichText::new("CUT").strong(),
+                        ))
+                        .clicked()
+                    {
+                        self.take("cut", 0);
+                    }
+                    if ui
+                        .add_sized([120.0, 36.0], egui::Button::new("AUTO (fade)"))
+                        .clicked()
+                    {
+                        self.take("fade", 300);
+                    }
+                });
+            });
+            ui.add_space(6.0);
+        });
+
+        ui.separator();
+
+        // Input list: every source, click (or hotkey) to preview. Tally
+        // border mirrors the monitor above it, just smaller.
+        egui::ScrollArea::horizontal().show(ui, |ui| {
+            ui.horizontal(|ui| {
                 for idx in 0..self.mixer.num_inputs {
                     let is_pgm = self.mixer.program_input == Some(idx);
                     let is_pvw = self.mixer.preview_input == Some(idx);
 
                     let border_color = if is_pgm {
-                        egui::Color32::from_rgb(220, 40, 40)
+                        PROGRAM_COLOR
                     } else if is_pvw {
-                        egui::Color32::from_rgb(40, 200, 80)
+                        PREVIEW_COLOR
                     } else {
                         ui.visuals().widgets.inactive.bg_fill
                     };
@@ -440,13 +480,13 @@ impl ConsoleApp {
                         .stroke(egui::Stroke::new(3.0_f32, border_color))
                         .inner_margin(4.0)
                         .show(ui, |ui| {
-                            ui.set_width(200.0);
+                            ui.set_width(150.0);
                             ui.vertical(|ui| {
                                 if let Some(tex) = self.textures.get(&idx) {
-                                    let size = egui::vec2(192.0, 108.0);
+                                    let size = egui::vec2(142.0, 80.0);
                                     ui.image((tex.id(), size));
                                 } else {
-                                    let (_, rect) = ui.allocate_space(egui::vec2(192.0, 108.0));
+                                    let (_, rect) = ui.allocate_space(egui::vec2(142.0, 80.0));
                                     ui.painter().rect_filled(
                                         rect,
                                         0.0,
@@ -473,22 +513,6 @@ impl ConsoleApp {
                     {
                         self.select_preview(idx);
                     }
-
-                    if (idx + 1) % 4 == 0 {
-                        ui.end_row();
-                    }
-                }
-            });
-
-        ui.separator();
-        let can_take = self.mixer.program_input.is_some() && self.mixer.preview_input.is_some();
-        ui.horizontal(|ui| {
-            ui.add_enabled_ui(can_take, |ui| {
-                if ui.button("CUT").clicked() {
-                    self.take("cut", 0);
-                }
-                if ui.button("AUTO (fade)").clicked() {
-                    self.take("fade", 300);
                 }
             });
         });
@@ -506,39 +530,74 @@ impl ConsoleApp {
         let audio = self.audio.as_mut().expect("checked by caller");
         let mut changes: Vec<(String, strom_types::PropertyValue)> = Vec::new();
 
-        ui.heading("Audio");
-        ui.horizontal(|ui| {
-            for ch in 1..=audio.num_channels {
-                ui.vertical(|ui| {
-                    ui.label(format!("Ch {ch}"));
+        egui::Frame::new()
+            .fill(egui::Color32::from_gray(18))
+            .inner_margin(8.0)
+            .show(ui, |ui| {
+                ui.label(egui::RichText::new("AUDIO MIXER").strong());
+                ui.horizontal(|ui| {
+                    for ch in 1..=audio.num_channels {
+                        ui.vertical(|ui| {
+                            ui.label(format!("Ch {ch}"));
 
-                    let fader = audio.faders.entry(ch).or_insert(1.0);
-                    if ui
-                        .add(egui::Slider::new(fader, 0.0..=2.0).vertical())
-                        .changed()
-                    {
-                        changes.push((
-                            format!("ch{ch}_fader"),
-                            strom_types::PropertyValue::Float(*fader),
-                        ));
-                    }
+                            let fader = audio.faders.entry(ch).or_insert(1.0);
+                            if ui
+                                .add(egui::Slider::new(fader, 0.0..=2.0).vertical())
+                                .changed()
+                            {
+                                changes.push((
+                                    format!("ch{ch}_fader"),
+                                    strom_types::PropertyValue::Float(*fader),
+                                ));
+                            }
 
-                    let muted = audio.mutes.entry(ch).or_insert(false);
-                    if ui.selectable_label(*muted, "MUTE").clicked() {
-                        *muted = !*muted;
-                        changes.push((
-                            format!("ch{ch}_mute"),
-                            strom_types::PropertyValue::Bool(*muted),
-                        ));
+                            let muted = audio.mutes.entry(ch).or_insert(false);
+                            if ui.selectable_label(*muted, "MUTE").clicked() {
+                                *muted = !*muted;
+                                changes.push((
+                                    format!("ch{ch}_mute"),
+                                    strom_types::PropertyValue::Bool(*muted),
+                                ));
+                            }
+                        });
+                        ui.add_space(10.0);
                     }
                 });
-            }
-        });
+            });
 
         for (name, value) in changes {
             self.patch_audio_property(name, value);
         }
     }
+}
+
+/// One big vMix-style monitor: a colored label bar (tally color) over a
+/// 16:9 video area, filling the column's available width. `texture` is
+/// `None` when nothing is on that bus yet (fresh flow, or PGM/PVW unset).
+fn render_monitor(
+    ui: &mut egui::Ui,
+    label: &str,
+    tally_color: egui::Color32,
+    texture: Option<&egui::TextureHandle>,
+) {
+    egui::Frame::new()
+        .stroke(egui::Stroke::new(3.0_f32, tally_color))
+        .inner_margin(4.0)
+        .show(ui, |ui| {
+            ui.vertical(|ui| {
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new(label).strong().color(tally_color));
+                });
+                let width = ui.available_width();
+                let size = egui::vec2(width, width * 9.0 / 16.0);
+                if let Some(tex) = texture {
+                    ui.image((tex.id(), size));
+                } else {
+                    let (_, rect) = ui.allocate_space(size);
+                    ui.painter().rect_filled(rect, 0.0, egui::Color32::from_gray(20));
+                }
+            });
+        });
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -656,7 +715,7 @@ fn main() -> eframe::Result<()> {
 
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([1000.0, 700.0])
+            .with_inner_size([1280.0, 860.0])
             .with_title("lmix Console"),
         ..Default::default()
     };
