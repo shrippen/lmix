@@ -157,6 +157,21 @@ Konfigurationspriorität (höchste zuerst): CLI-Argumente > Env-Variablen
 (`STROM_*`) > lokale `.strom.toml` > User-Config (`~/.config/strom/config.toml`)
 > Defaults. Implementiert über `figment` (`Config::from_figment`).
 
+## Gotcha: `PropertyValue` ist `#[serde(untagged)]`
+
+`strom_types::element::PropertyValue` (`String | Int(i64) | UInt(u64) | Float(f64)
+| Bool`) trägt `#[serde(untagged)]`, `Int` vor `UInt` deklariert. Ein
+schlichtes JSON-Integer-Literal (`"num_channels": 2`) deserialisiert deshalb
+immer als `Int`, nie als `UInt` — unabhängig davon, welche Variante die
+Property "eigentlich" meint. Code, der auf `PropertyValue::UInt` matcht, um
+einen aus JSON gelesenen Zähler zu erkennen, matcht in der Praxis nie.
+Betroffen: alles was Property-Werte aus einem `Flow`/`BlockInstance` (nicht
+aus einer Live-`GET .../properties`-Antwort, die eigene Regeln hat, siehe
+unten) liest. Workaround: entweder beide Varianten matchen, oder — robuster —
+den Wert aus einer Live-Quelle ableiten statt aus dem gespeicherten JSON zu
+raten (siehe `workspace/app-desktop/src/main.rs`, `num_channels`-Herleitung
+aus den tatsächlich zurückgegebenen `ch{N}_fader`-Keys).
+
 ## Property-System
 
 `ExposedProperty` bildet eine Block-Property (z. B. `ndi_name`) auf ein
