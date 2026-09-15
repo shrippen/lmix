@@ -115,6 +115,47 @@ enabled"), nicht nur den Laufzeit-Flag `--headless` verwenden. Kein Diff
 gegen strom nötig — das Feature existiert bereits upstream, wird nur von uns
 konsequent genutzt.
 
+## 2026-09-15 — libomt-Build verifiziert + omt-rs-Spike erfolgreich → Option (a)
+
+**Kontext**: `docs/OMT-PLAN.md` nannte zwei offene Vorbedingungen, bevor
+zwischen Option (a) (OmtBlock in strom) und (b) (omtpw-bridge) entschieden
+werden kann: (1) `libomt` selbst aus Quelle bauen und per `ldd` verifizieren,
+dass keine .NET-Runtime-Reste im AOT-Kompilat stecken, (2) `omt-rs` gegen
+dieses Build spiken.
+
+**Durchgeführt** (alles im Scratchpad, nicht Teil des Repos — reiner
+Machbarkeits-Nachweis, kein Vendoring):
+1. `dotnet-sdk-8.0` via pacman installiert (User hat das manuell erledigt,
+   `sudo` hatte in der Agent-Session kein Passwort-Terminal).
+2. `libomtnet` (netstandard2.0) und danach `libomt` (`buildlinuxx64.sh`,
+   AOT-Publish für `linux-x64`) sauber gebaut — Ergebnis: `libomt.so`,
+   8,2 MB, Version 1.0.0.19.
+3. `ldd libomt.so`: nur `libm.so.6`, `libc.so.6`, `ld-linux-x86-64.so.2` —
+   keine .NET-Runtime-Abhängigkeit (kein `libcoreclr.so` o. ä.). Der in
+   `OMT-PLAN.md` offen gelassene Schritt ist damit verifiziert, nicht mehr
+   nur angenommen.
+4. `udoschneider/omt-rs` geklont, mit `OMT_LIB_DIR` auf das eigene Build
+   gezeigt (trotz Versions-Offset: omt-rs ist auf libomt v1.0.0.16 gepinnt,
+   unser Build ist v1.0.0.19) — `cargo build --workspace` kompiliert ohne
+   Fehler, `bindgen` läuft gegen den vendorten Header durch.
+5. `cargo run --example discovery` (gegen `LD_LIBRARY_PATH` auf unser Build
+   gesetzt) läuft, startet einen echten mDNS-Scan, meldet korrekt "No
+   sources found" (kein OMT-Sender im Netz vorhanden) — kein Crash, kein
+   Linker-/ABI-Fehler trotz Versions-Offset.
+
+**Nicht verifiziert** (nächster Schritt, nicht mehr Vorbedingung für die
+Options-Entscheidung): tatsächlicher Frame-Empfang über `Receiver` gegen
+einen echten Sender (`omtsendtest` o.ä.) — dafür fehlte eine Gegenstelle im
+Netz. Blockiert die OmtBlock-Implementierung nicht, nur den späteren
+Latenz-Messschritt aus dem M2-Akzeptanzkriterium.
+
+**Entscheidung**: Option (a) — OmtBlock in der strom-Block-Registry, wie in
+`docs/OMT-PLAN.md` skizziert (`appsrc`-Bridge, SPSC-Queue mit Frame-Drop).
+Die ursprüngliche Sorge bei (a) (eigene C-FFI-Schicht) entfällt durch
+`omt-rs`; der Latenzvorteil eines direkten Blocks (kein Zwischen-Prozess wie
+bei (b)) macht damit den Ausschlag, wie in `OMT-PLAN.md`s Empfehlung bereits
+vermutet — jetzt durch den Spike bestätigt statt nur angenommen.
+
 ## 2026-09-15 — Repo-Hosting und Push-Verhalten
 
 **Kontext**: Wohin soll das lmix-Repo, wann pushen?

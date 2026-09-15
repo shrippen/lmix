@@ -99,11 +99,19 @@ eines Test-Streams gegen `omtsendtest`), wie in `claude.md` für M2 vorgesehen.
 
 ## Nächste konkrete Schritte (M2, nicht M0)
 
-1. .NET 8 SDK installieren, `libomt` + `libomtnet` nebeneinander klonen,
-   `buildlinuxx64.sh` laufen lassen, `ldd` gegen das Ergebnis verifizieren.
-2. `omt-rs` als Git-Dependency in einem Wegwerf-Testprojekt gegen die
-   selbst gebaute `libomt.so` linken, `Discovery::get_addresses()` gegen
-   `omtsendtest` (aus libomtnet-Examples) prüfen.
-3. Erst danach: Aufwandsschätzung oben verifizieren/korrigieren, dann
-   Options-Entscheidung (a) vs (b) treffen und in `docs/DECISIONS.md`
-   protokollieren.
+1. ~~.NET 8 SDK installieren, `libomt` + `libomtnet` nebeneinander klonen,
+   `buildlinuxx64.sh` laufen lassen, `ldd` gegen das Ergebnis verifizieren.~~
+   **Erledigt** — siehe `docs/DECISIONS.md`, Eintrag 2026-09-15 "libomt-Build
+   verifiziert + omt-rs-Spike erfolgreich".
+2. ~~`omt-rs` als Git-Dependency in einem Wegwerf-Testprojekt gegen die
+   selbst gebaute `libomt.so` linken, `Discovery::get_addresses()` prüfen.~~
+   **Erledigt**, siehe selber Eintrag. (Ohne laufenden `omtsendtest` als
+   Gegenstelle — bestätigt wurde der FFI-Link + ein echter mDNS-Scan, kein
+   tatsächlicher Frame-Empfang. Das ist der nächste Schritt.)
+3. ~~Aufwandsschätzung oben verifizieren/korrigieren, dann Options-Entscheidung
+   (a) vs (b) treffen~~ — **Entscheidung getroffen: Option (a)**, siehe
+   `docs/DECISIONS.md`.
+4. Jetzt offen: `omtsendtest` (oder ein anderer echter OMT-Sender) als
+   Gegenstelle aufsetzen, echten Frame-Empfang über `Receiver` verifizieren,
+   dann `OmtBlock` in `backend/src/blocks/builtin/` bauen (Vorbild:
+   `ndi.rs`), inkl. `appsrc`-Bridge und SPSC-Queue mit Frame-Drop.
