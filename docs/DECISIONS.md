@@ -2,6 +2,36 @@
 
 Format: Datum, Kontext, Optionen, Entscheidung.
 
+## 2026-09-15 — M1: `app-desktop` als eigenständiges Crate statt Fork/Lib-Nutzung von strom-frontend
+
+**Kontext**: `claude.md` sagt für `app-desktop`: "Fork/Neuaufbau auf Basis
+strom-frontend". Vor dem Bauen zwei Explore-Agents auf `workspace/strom`
+angesetzt, um zu prüfen, was von `strom-frontend` für eine vMix-Style
+Schalter-Console wiederverwendbar ist.
+
+**Befund**: Es existiert keine PGM/PVW-Switcher-UI in Rust/egui — das
+einzige Vision-Mixer-Bedienelement ist eine eigenständige Browser-Seite
+(`backend/static/vision-mixer.html`, Vanilla-JS), komplett losgelöst vom
+egui-Prozess. `StromApp` ist ein ~100-Felder-Monolith mit zentralem
+Event-Pump; `AppMode` wird nicht mal aus der Lib exportiert. Als
+Bibliothek für ein zusätzliches Panel taugt das ohne Upstream-Patch nicht.
+
+**Entscheidung**: `app-desktop` ist ein neues, unabhängiges egui/eframe-
+Binary-Crate (kein Fork, keine Lib-Abhängigkeit auf `strom-frontend`),
+das direkt gegen `strom_types` + die dokumentierte REST/WS-API arbeitet,
+orientiert an den *Mustern* aus `strom-frontend` (Thumbnail-Polling→
+`TextureHandle`, Hotkey-Idiom) und am Tastenschema/API-Contract von
+`vision-mixer.html`. Hält den Diff gegen `workspace/strom` bei exakt
+Null für M1 (verifiziert: `git log main..dev` im Submodule zeigt nur die
+zwei M0-Fixes, keine neuen Commits).
+
+**Zwei Implementierungs-Gotchas dabei gefunden** (Details in
+`docs/STROM-ANATOMY.md`): `strom_types::vision_mixer::Source` ist
+extern-tagged lowercase auf der Leitung (`{"input": N}`, nicht aus dem
+Rust-Typ ersichtlich ohne einen echten Request mitzuschneiden) und
+`PropertyValue` ist `#[serde(untagged)]` mit `Int` vor `UInt` — ein
+JSON-Integer wird nie als `UInt` erkannt.
+
 ## 2026-09-15 — Korrekturen an den Repo-Struktur-Annahmen in `claude.md`
 
 **Kontext**: `claude.md` nennt Crates `strom`, `strom-frontend`, `strom-types`,
