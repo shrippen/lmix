@@ -3,3 +3,4 @@
 .strom.toml
 data/
 *.log
+.claude/
