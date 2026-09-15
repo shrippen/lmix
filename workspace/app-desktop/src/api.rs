@@ -3,12 +3,14 @@
 //! Deliberately thin: only the endpoints the Console actually calls, not a
 //! general-purpose strom client (see docs/STROM-ANATOMY.md for the full API).
 
+use std::collections::HashMap;
 use strom_types::api::{
-    FlowListResponse, FlowResponse, SelectPreviewRequest, SelectPreviewResponse,
-    TransitionResponse, TriggerTransitionRequest, VisionMixerState,
+    BlockPropertiesResponse, FlowListResponse, FlowResponse, SelectPreviewRequest,
+    SelectPreviewResponse, TransitionResponse, TriggerTransitionRequest,
+    UpdateBlockPropertiesRequest, VisionMixerState,
 };
 use strom_types::vision_mixer::Source;
-use strom_types::{Flow, FlowId};
+use strom_types::{Flow, FlowId, PropertyValue};
 
 #[derive(Debug, thiserror::Error)]
 pub enum ApiError {
@@ -125,6 +127,44 @@ impl ApiClient {
             .await?;
         let resp = Self::check_status(resp).await?;
         Ok(resp.json().await?)
+    }
+
+    pub async fn get_block_properties(
+        &self,
+        flow_id: FlowId,
+        block_id: &str,
+    ) -> ApiResult<HashMap<String, PropertyValue>> {
+        let url = format!(
+            "{}/api/flows/{}/blocks/{}/properties",
+            self.base_url, flow_id, block_id
+        );
+        let resp = self.http.get(url).send().await?;
+        let resp = Self::check_status(resp).await?;
+        Ok(resp.json::<BlockPropertiesResponse>().await?.properties)
+    }
+
+    pub async fn patch_block_properties(
+        &self,
+        flow_id: FlowId,
+        block_id: &str,
+        properties: HashMap<String, PropertyValue>,
+    ) -> ApiResult<HashMap<String, PropertyValue>> {
+        let url = format!(
+            "{}/api/flows/{}/blocks/{}/properties",
+            self.base_url, flow_id, block_id
+        );
+        let resp = self
+            .http
+            .patch(url)
+            .json(&UpdateBlockPropertiesRequest {
+                properties,
+                ramp_ms: None,
+                ramp_ms_overrides: None,
+            })
+            .send()
+            .await?;
+        let resp = Self::check_status(resp).await?;
+        Ok(resp.json::<BlockPropertiesResponse>().await?.properties)
     }
 
     pub async fn get_thumbnail(&self, flow_id: FlowId, block_id: &str) -> ApiResult<Vec<u8>> {

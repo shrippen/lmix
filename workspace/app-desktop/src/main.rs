@@ -9,8 +9,8 @@ mod ws;
 use api::ApiClient;
 use clap::Parser;
 use state::{
-    find_switchable_flows, find_thumbnail_block, AppMessage, MixerState, Selection,
-    SwitchableFlow,
+    find_switchable_flows, find_thumbnail_block, AppMessage, AudioMixerState, MixerState,
+    Selection, SwitchableFlow,
 };
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -44,6 +44,7 @@ struct ConsoleApp {
 
     selection: Option<Selection>,
     mixer: MixerState,
+    audio: Option<AudioMixerState>,
     textures: HashMap<usize, egui::TextureHandle>,
 }
 
@@ -60,6 +61,7 @@ impl ConsoleApp {
             error: None,
             selection: None,
             mixer: MixerState::default(),
+            audio: None,
             textures: HashMap::new(),
         };
         app.refresh_flows();
@@ -86,6 +88,7 @@ impl ConsoleApp {
     fn select_flow(&mut self, flow: &SwitchableFlow, ctx: &egui::Context) {
         let session = self.session.fetch_add(1, Ordering::SeqCst) + 1;
         self.mixer = MixerState::default();
+        self.audio = None;
         self.textures.clear();
         self.error = None;
 
@@ -97,6 +100,7 @@ impl ConsoleApp {
         });
 
         let vm_block = flow.vision_mixer_block_id.clone();
+        let audio_block = flow.audio_mixer_block_id.clone();
         let flow_id = flow.flow_id;
 
         // Initial state fetch (WS only carries *changes* from here on).
@@ -158,6 +162,34 @@ impl ConsoleApp {
                             idx,
                             thumb_block,
                         );
+                    }
+                }
+
+                if let Some(audio_block) = audio_block {
+                    match api.get_block_properties(flow_id, &audio_block).await {
+                        Ok(properties) => {
+                            // num_channels itself is construction-time (not
+                            // "live"), so GET .../properties omits it - derive
+                            // the channel count from how many ch{N}_fader
+                            // keys are actually present instead.
+                            let num_channels = properties
+                                .keys()
+                                .filter_map(|k| {
+                                    k.strip_prefix("ch")?.strip_suffix("_fader")?.parse::<usize>().ok()
+                                })
+                                .max()
+                                .unwrap_or(0);
+                            let _ = tx.send((
+                                session,
+                                AppMessage::AudioMixerLoaded {
+                                    num_channels,
+                                    properties,
+                                },
+                            ));
+                        }
+                        Err(e) => {
+                            tracing::warn!("Failed to load audio mixer properties: {e}");
+                        }
                     }
                 }
             });
@@ -250,6 +282,36 @@ impl ConsoleApp {
         });
     }
 
+    /// Patch one audio mixer channel property. Applied to local state
+    /// immediately (audio has no WS event stream in our scope, unlike the
+    /// Vision Mixer) - the PATCH response isn't awaited for UI feedback,
+    /// just logged if it's rejected.
+    fn patch_audio_property(&mut self, name: String, value: strom_types::PropertyValue) {
+        let Some(selection) = self.selection.clone() else {
+            return;
+        };
+        let Some(audio_block) = selection.audio_mixer_block_id.clone() else {
+            return;
+        };
+        let api = self.api.clone();
+        let tx = self.tx.clone();
+        let session = self.session.load(Ordering::SeqCst);
+        let name_for_task = name.clone();
+        tokio::spawn(async move {
+            let mut properties = HashMap::new();
+            properties.insert(name_for_task.clone(), value);
+            if let Err(e) = api
+                .patch_block_properties(selection.flow_id, &audio_block, properties)
+                .await
+            {
+                let _ = tx.send((
+                    session,
+                    AppMessage::Error(format!("Failed to set {name_for_task}: {e}")),
+                ));
+            }
+        });
+    }
+
     fn drain_messages(&mut self, ctx: &egui::Context) {
         let current_session = self.session.load(Ordering::SeqCst);
         while let Ok((session, msg)) = self.rx.try_recv() {
@@ -295,6 +357,12 @@ impl ConsoleApp {
                 } if session == current_session => {
                     self.mixer.preview_input = preview_input;
                     self.mixer.program_input = program_input;
+                }
+                AppMessage::AudioMixerLoaded {
+                    num_channels,
+                    properties,
+                } if session == current_session => {
+                    self.audio = Some(AudioMixerState::from_properties(num_channels, &properties));
                 }
                 AppMessage::ThumbnailDecoded(idx, image) if session == current_session => {
                     let handle = ctx.load_texture(
@@ -424,6 +492,52 @@ impl ConsoleApp {
                 }
             });
         });
+
+        if self.audio.is_some() {
+            ui.separator();
+            self.render_audio_strip(ui);
+        }
+    }
+
+    /// Simplified audio strip: one fader + mute per channel on the
+    /// `builtin.mixer` block. Not the full X32-style panel
+    /// `frontend/src/mixer/` has - just what M1 asks for.
+    fn render_audio_strip(&mut self, ui: &mut egui::Ui) {
+        let audio = self.audio.as_mut().expect("checked by caller");
+        let mut changes: Vec<(String, strom_types::PropertyValue)> = Vec::new();
+
+        ui.heading("Audio");
+        ui.horizontal(|ui| {
+            for ch in 1..=audio.num_channels {
+                ui.vertical(|ui| {
+                    ui.label(format!("Ch {ch}"));
+
+                    let fader = audio.faders.entry(ch).or_insert(1.0);
+                    if ui
+                        .add(egui::Slider::new(fader, 0.0..=2.0).vertical())
+                        .changed()
+                    {
+                        changes.push((
+                            format!("ch{ch}_fader"),
+                            strom_types::PropertyValue::Float(*fader),
+                        ));
+                    }
+
+                    let muted = audio.mutes.entry(ch).or_insert(false);
+                    if ui.selectable_label(*muted, "MUTE").clicked() {
+                        *muted = !*muted;
+                        changes.push((
+                            format!("ch{ch}_mute"),
+                            strom_types::PropertyValue::Bool(*muted),
+                        ));
+                    }
+                });
+            }
+        });
+
+        for (name, value) in changes {
+            self.patch_audio_property(name, value);
+        }
     }
 }
 

@@ -1,8 +1,9 @@
 //! Console application state, shared between the eframe update loop and the
 //! background tokio tasks that talk to the strom backend.
 
+use std::collections::HashMap;
 use strom_types::api::VisionMixerState;
-use strom_types::{Flow, FlowId, StromEvent};
+use strom_types::{Flow, FlowId, PropertyValue, StromEvent};
 
 pub const VISION_MIXER_BLOCK: &str = "builtin.vision_mixer";
 pub const AUDIO_MIXER_BLOCK: &str = "builtin.mixer";
@@ -26,6 +27,42 @@ pub enum AppMessage {
         preview_input: Option<usize>,
         program_input: Option<usize>,
     },
+    /// Initial audio mixer channel count + current fader/mute values.
+    AudioMixerLoaded {
+        num_channels: usize,
+        properties: HashMap<String, PropertyValue>,
+    },
+}
+
+/// A `builtin.mixer` block's channel strips, only as much as the Console's
+/// simplified audio strip needs (not the full X32-style panel strom-frontend
+/// has in `frontend/src/mixer/`).
+#[derive(Default)]
+pub struct AudioMixerState {
+    pub num_channels: usize,
+    /// 1-based channel index -> current fader value (0.0-2.0, 1.0 = unity).
+    pub faders: HashMap<usize, f64>,
+    pub mutes: HashMap<usize, bool>,
+}
+
+impl AudioMixerState {
+    pub fn from_properties(num_channels: usize, properties: &HashMap<String, PropertyValue>) -> Self {
+        let mut faders = HashMap::new();
+        let mut mutes = HashMap::new();
+        for ch in 1..=num_channels {
+            if let Some(PropertyValue::Float(v)) = properties.get(&format!("ch{ch}_fader")) {
+                faders.insert(ch, *v);
+            }
+            if let Some(PropertyValue::Bool(v)) = properties.get(&format!("ch{ch}_mute")) {
+                mutes.insert(ch, *v);
+            }
+        }
+        Self {
+            num_channels,
+            faders,
+            mutes,
+        }
+    }
 }
 
 /// A flow that has at least one Vision Mixer block, ready to be switched.
