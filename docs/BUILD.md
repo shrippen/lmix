@@ -1,0 +1,136 @@
+# Build
+
+Reproduzierbare Build-/Run-Kommandos für unseren Anwendungsfall: Server headless
+auf 127.0.0.1, nativer egui-Client als eigener Prozess. Für alles, was hier
+nicht steht (Docker, PostgreSQL, TLS, ...), siehe `workspace/strom/docs/`.
+
+## Systemabhängigkeiten
+
+Rust-Toolchain: `workspace/strom/rust-toolchain.toml` pinnt 1.97.1, wird aber
+nur über `rustup` automatisch angezogen. Ohne `rustup` (z. B. Arch-Paket
+`rust`) baut der Workspace auch mit einer neueren Version (getestet: 1.98.1) —
+`cargo build`/`cargo run` funktionieren; nur `cargo clippy` kann durch neue
+Lints in der falschen Version rot werden (siehe Kommentar in
+`rust-toolchain.toml`).
+
+GStreamer + Cairo + graphviz + libnice (Debian/Ubuntu, aus
+`workspace/strom/docs/DEVELOPMENT.md`):
+
+```bash
+sudo apt-get install libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+  libgstreamer-plugins-bad1.0-dev gstreamer1.0-plugins-base \
+  gstreamer1.0-plugins-good gstreamer1.0-plugins-bad \
+  gstreamer1.0-plugins-ugly gstreamer1.0-libav \
+  gstreamer1.0-tools libnice-dev gstreamer1.0-nice \
+  libcairo2-dev graphviz
+```
+
+**Nicht nötig**: `wasm32-unknown-unknown`-Target, `trunk`. Die Web-GUI ist für
+uns kein Ziel (Entscheidung 3). Fehlt `trunk`, fällt `backend/build.rs`
+automatisch auf eine Platzhalter-Seite zurück und kompiliert normal weiter —
+kein Fehler, keine Warnung, die man beheben müsste.
+
+**Nicht nötig**: `cmake`/`libclang-dev` — nur für das optionale `efp`-Feature,
+das wir nicht aktivieren.
+
+## Bauen
+
+```bash
+cd workspace/strom
+
+# Backend, mit dem no-gui-Feature (siehe unten, "GUI/Server-Trennung")
+cargo build --features no-gui
+
+# Nativer Client, eigenes Binary im selben Workspace
+cargo build -p strom-frontend
+```
+
+`cargo build` ohne `-p` baut wegen `default-members = ["backend"]` in der
+Workspace-`Cargo.toml` nur das Backend (inkl. Platzhalter-Frontend-Assets
+für die eingebettete Web-GUI). Für den nativen Client ist `-p strom-frontend`
+nötig — das weicht bewusst von der Konvention aus `workspace/strom/CLAUDE.md`
+("never use the -p flag") ab, weil unser Prozessmodell den Client als eigenes
+Binary braucht, nicht als eingebettete GUI im Backend-Prozess.
+
+## GUI/Server-Trennung (Entscheidung 4, hart)
+
+Der `strom`-Serverprozess kann standardmäßig selbst ein natives GUI-Fenster
+im selben Prozess öffnen (`backend/src/gui.rs` ruft
+`strom_frontend::run_native_gui(...)` — das Backend hängt direkt von
+`strom-frontend` ab, siehe `backend/Cargo.toml`). Das verletzt unsere
+Prozesstrennung, wenn man es nicht abschaltet.
+
+Wir bauen das Backend deshalb **immer** mit dem `no-gui`-Feature
+(compile-time, nicht nur `--headless` zur Laufzeit — das ist robuster gegen
+versehentliches Vergessen des Flags):
+
+```bash
+cargo run --features no-gui -- --host 127.0.0.1 --port 8080 --no-auto-restart
+```
+
+Der native Client läuft als komplett separater Prozess:
+
+```bash
+cargo run -p strom-frontend
+```
+
+Er verbindet sich fest gegen `strom_types::DEFAULT_PORT` (8080) auf
+`localhost` (`frontend/src/main.rs`) — für M0 reicht das; ein konfigurierbarer
+Zielport für `app-desktop` ist ein M1-Thema.
+
+## `--host` / `STROM_HOST` (unser Patch, `dev`-Branch)
+
+Upstream bindet immer auf `0.0.0.0` (kein `--host`-Schalter existierte). Wir
+haben `--host`/`STROM_HOST` ergänzt (Default weiterhin `0.0.0.0`, keine
+Verhaltensänderung für bestehende Deployments). Siehe
+`docs/DECISIONS.md` für die Begründung und den Commit auf `workspace/strom`
+(`dev`-Branch, `git log main..dev`).
+
+**Bekannte Lücke**: der REST/WS-API-Server bindet dank des Patches korrekt
+auf `127.0.0.1`. Ein separater RTSP-Discovery-Server
+(`backend/src/rtsp_server.rs`, Port 8554) bindet weiterhin hart auf
+`0.0.0.0` — das ist ein Media-Plane-Dienst (RTSP-Streaming für entdeckte
+Geräte), kein Control-Plane-API-Endpunkt, und war von Entscheidung 4 vermutlich
+nicht gemeint. Trotzdem als offener Punkt in `docs/DECISIONS.md` festgehalten.
+
+## Smoke-Test
+
+```bash
+curl -s http://127.0.0.1:8080/health          # -> OK
+curl -s http://127.0.0.1:8080/api/flows       # -> {"flows":[]}
+```
+
+Flow mit zwei Testquellen anlegen und starten (siehe
+`docs/STROM-ANATOMY.md#flow-lifecycle` für die Feldbedeutung):
+
+```bash
+FLOW_ID=$(python3 -c "import uuid; print(uuid.uuid4())")
+curl -s -X POST http://127.0.0.1:8080/api/flows \
+  -H "Content-Type: application/json" \
+  -d "{\"id\":\"$FLOW_ID\",\"name\":\"Smoke Test\"}"
+
+curl -s -X PUT http://127.0.0.1:8080/api/flows/$FLOW_ID \
+  -H "Content-Type: application/json" \
+  -d "{\"id\":\"$FLOW_ID\",\"name\":\"Smoke Test\",\"elements\":[
+    {\"id\":\"$(python3 -c 'import uuid; print(uuid.uuid4())')\",\"element_type\":\"videotestsrc\",\"position\":[0,0],\"properties\":{\"pattern\":\"smpte\"}},
+    {\"id\":\"$(python3 -c 'import uuid; print(uuid.uuid4())')\",\"element_type\":\"videotestsrc\",\"position\":[0,200],\"properties\":{\"pattern\":\"ball\"}}
+  ],\"blocks\":[],\"links\":[]}"
+
+curl -s -X POST http://127.0.0.1:8080/api/flows/$FLOW_ID/start   # -> gst_state: "Playing"
+curl -s -X POST http://127.0.0.1:8080/api/flows/$FLOW_ID/stop
+curl -s -X DELETE http://127.0.0.1:8080/api/flows/$FLOW_ID
+```
+
+Interaktive API-Doku: `http://127.0.0.1:8080/swagger-ui` (nur erreichbar,
+solange der Prozess mit `--host 0.0.0.0` oder von localhost aus getestet
+wird — mit `--host 127.0.0.1` nur vom selben Host).
+
+Nativer Client (separates Terminal, braucht eine laufende Desktop-Session):
+
+```bash
+cargo run -p strom-frontend
+```
+
+Erwartet: natives Fenster "Strom" öffnet sich, verbindet per WebSocket
+(`ws://localhost:8080/api/ws`) und REST, zeigt die Elementpalette und die
+oben angelegten Flows.
