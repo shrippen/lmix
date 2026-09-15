@@ -173,6 +173,83 @@ impl ConsoleApp {
         ws::connect(ws_url, self.tx.clone(), ctx.clone(), session);
     }
 
+    /// Put an input on PVW (click a tile, or a number hotkey).
+    fn select_preview(&self, input: usize) {
+        let Some(selection) = self.selection.clone() else {
+            return;
+        };
+        let session = self.session.load(Ordering::SeqCst);
+        let api = self.api.clone();
+        let tx = self.tx.clone();
+        tokio::spawn(async move {
+            match api
+                .select_preview(
+                    selection.flow_id,
+                    &selection.vision_mixer_block_id,
+                    strom_types::vision_mixer::Source::Input(input),
+                )
+                .await
+            {
+                Ok(resp) => {
+                    let _ = tx.send((
+                        session,
+                        AppMessage::MixerUpdate {
+                            preview_input: resp.preview_input,
+                            program_input: resp.program_input,
+                        },
+                    ));
+                }
+                Err(e) => {
+                    let _ = tx.send((session, AppMessage::Error(format!("Preview select failed: {e}"))));
+                }
+            }
+        });
+    }
+
+    /// Take the current PVW to PGM (CUT, or a timed transition).
+    fn take(&self, transition_type: &'static str, duration_ms: u64) {
+        let Some(selection) = self.selection.clone() else {
+            return;
+        };
+        let Some(from_input) = self.mixer.program_input else {
+            return;
+        };
+        let Some(to_input) = self.mixer.preview_input else {
+            return;
+        };
+        let session = self.session.load(Ordering::SeqCst);
+        let api = self.api.clone();
+        let tx = self.tx.clone();
+        tokio::spawn(async move {
+            match api
+                .trigger_transition(
+                    selection.flow_id,
+                    &selection.vision_mixer_block_id,
+                    from_input,
+                    to_input,
+                    transition_type,
+                    duration_ms,
+                )
+                .await
+            {
+                // After a take, PGM/PVW swap (old PGM becomes the new PVW) -
+                // mirrors backend/src/state.rs's own post-take bookkeeping.
+                Ok(_resp) => {
+                    let _ = tx.send((
+                        session,
+                        AppMessage::MixerUpdate {
+                            preview_input: Some(from_input),
+                            program_input: Some(to_input),
+                        },
+                    ));
+                }
+                Err(e) => {
+                    let _ = tx.send((session, AppMessage::Error(format!("Transition failed: {e}"))));
+                }
+            }
+        });
+    }
+
     fn drain_messages(&mut self, ctx: &egui::Context) {
         let current_session = self.session.load(Ordering::SeqCst);
         while let Ok((session, msg)) = self.rx.try_recv() {
@@ -212,6 +289,13 @@ impl ConsoleApp {
                         self.mixer.program_input = program_input;
                     }
                 }
+                AppMessage::MixerUpdate {
+                    preview_input,
+                    program_input,
+                } if session == current_session => {
+                    self.mixer.preview_input = preview_input;
+                    self.mixer.program_input = program_input;
+                }
                 AppMessage::ThumbnailDecoded(idx, image) if session == current_session => {
                     let handle = ctx.load_texture(
                         format!("thumb-{idx}"),
@@ -246,6 +330,27 @@ impl ConsoleApp {
             return;
         }
 
+        // Hotkeys 1-8 select PVW, matching backend/static/vision-mixer.html's
+        // own scheme. Guarded so typing into a text field never triggers a
+        // switch.
+        if !ui.ctx().egui_wants_keyboard_input() {
+            const HOTKEYS: [egui::Key; 8] = [
+                egui::Key::Num1,
+                egui::Key::Num2,
+                egui::Key::Num3,
+                egui::Key::Num4,
+                egui::Key::Num5,
+                egui::Key::Num6,
+                egui::Key::Num7,
+                egui::Key::Num8,
+            ];
+            for (idx, key) in HOTKEYS.iter().enumerate() {
+                if idx < self.mixer.num_inputs && ui.input(|i| i.key_pressed(*key)) {
+                    self.select_preview(idx);
+                }
+            }
+        }
+
         ui.separator();
         egui::Grid::new("pgm_pvw_grid")
             .num_columns(4)
@@ -263,7 +368,7 @@ impl ConsoleApp {
                         ui.visuals().widgets.inactive.bg_fill
                     };
 
-                    egui::Frame::new()
+                    let tile = egui::Frame::new()
                         .stroke(egui::Stroke::new(3.0_f32, border_color))
                         .inner_margin(4.0)
                         .show(ui, |ui| {
@@ -289,11 +394,36 @@ impl ConsoleApp {
                             });
                         });
 
+                    // Click a tile (unless it's already PGM - nothing to
+                    // preview there) to put it on PVW.
+                    if !is_pgm
+                        && tile
+                            .response
+                            .interact(egui::Sense::click())
+                            .on_hover_cursor(egui::CursorIcon::PointingHand)
+                            .clicked()
+                    {
+                        self.select_preview(idx);
+                    }
+
                     if (idx + 1) % 4 == 0 {
                         ui.end_row();
                     }
                 }
             });
+
+        ui.separator();
+        let can_take = self.mixer.program_input.is_some() && self.mixer.preview_input.is_some();
+        ui.horizontal(|ui| {
+            ui.add_enabled_ui(can_take, |ui| {
+                if ui.button("CUT").clicked() {
+                    self.take("cut", 0);
+                }
+                if ui.button("AUTO (fade)").clicked() {
+                    self.take("fade", 300);
+                }
+            });
+        });
     }
 }
 

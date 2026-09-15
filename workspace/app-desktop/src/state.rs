@@ -19,6 +19,13 @@ pub enum AppMessage {
     /// A decoded thumbnail for one Vision Mixer input, ready to upload as a
     /// texture on the UI thread.
     ThumbnailDecoded(usize, egui::ColorImage),
+    /// Authoritative PVW/PGM state returned directly by a `preview` or
+    /// `transition` REST call - applied immediately for snappy feedback,
+    /// the WS event that follows just confirms the same values.
+    MixerUpdate {
+        preview_input: Option<usize>,
+        program_input: Option<usize>,
+    },
 }
 
 /// A flow that has at least one Vision Mixer block, ready to be switched.
