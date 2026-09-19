@@ -5,10 +5,11 @@
 
 use std::collections::HashMap;
 use strom_types::api::{
-    BlockPropertiesResponse, FlowListResponse, FlowResponse, SelectPreviewRequest,
+    BlockPropertiesResponse, FlowListResponse, FlowResponse, LatencyResponse, SelectPreviewRequest,
     SelectPreviewResponse, TransitionResponse, TriggerTransitionRequest,
     UpdateBlockPropertiesRequest, VisionMixerState,
 };
+use strom_types::discovery::DeviceResponse;
 use strom_types::vision_mixer::Source;
 use strom_types::{Flow, FlowId, PropertyValue};
 
@@ -185,5 +186,42 @@ impl ApiClient {
         let resp = self.http.get(url).send().await?;
         let resp = Self::check_status(resp).await?;
         Ok(resp.bytes().await?.to_vec())
+    }
+
+    /// Create a flow under its own client-generated id.
+    pub async fn create_flow(&self, flow: &Flow) -> ApiResult<Flow> {
+        let url = format!("{}/api/flows", self.base_url);
+        let resp = self.http.post(url).json(flow).send().await?;
+        let resp = Self::check_status(resp).await?;
+        Ok(resp.json::<FlowResponse>().await?.flow)
+    }
+
+    pub async fn delete_flow(&self, flow_id: FlowId) -> ApiResult<()> {
+        let url = format!("{}/api/flows/{}", self.base_url, flow_id);
+        let resp = self.http.delete(url).send().await?;
+        Self::check_status(resp).await?;
+        Ok(())
+    }
+
+    pub async fn stop_flow(&self, flow_id: FlowId) -> ApiResult<()> {
+        let url = format!("{}/api/flows/{}/stop", self.base_url, flow_id);
+        let resp = self.http.post(url).send().await?;
+        Self::check_status(resp).await?;
+        Ok(())
+    }
+
+    /// Video capture devices known to the backend's discovery.
+    pub async fn list_video_devices(&self) -> ApiResult<Vec<DeviceResponse>> {
+        let url = format!("{}/api/discovery/devices?category=video_source", self.base_url);
+        let resp = self.http.get(url).send().await?;
+        let resp = Self::check_status(resp).await?;
+        Ok(resp.json().await?)
+    }
+
+    pub async fn get_latency(&self, flow_id: FlowId) -> ApiResult<LatencyResponse> {
+        let url = format!("{}/api/flows/{}/latency", self.base_url, flow_id);
+        let resp = self.http.get(url).send().await?;
+        let resp = Self::check_status(resp).await?;
+        Ok(resp.json().await?)
     }
 }

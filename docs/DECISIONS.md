@@ -163,3 +163,52 @@ vermutet — jetzt durch den Spike bestätigt statt nur angenommen.
 **Entscheidung** (User): Remote `https://git.arianw.de/shrippen/lmix`. Push
 nur nach Abschluss eines Meilensteins oder auf explizite Anweisung — nie
 automatisch nach einzelnen Commits während der Arbeit an einer Meile.
+
+## 2026-09-19 — Quellen-Builder, Perf-Overlay und Selftest in der Console
+
+**Kontext**: Zum Testen braucht die Console eigene Quellen und messbare
+Performance (Latenz, Jitter), ohne Node-Editor.
+
+**Umsetzung** (nur `workspace/app-desktop/`, keine Server-Änderung):
+- `sources.rs`/`source_ui.rs`: Quellenliste (Testbilder: Bars, Farbtafel,
+  Schwarz/Weiss/Rot/Grün/Blau, Ramp, Checkers, Zone-Plate, Ball, Rauschen …;
+  V4L2-Geräte per `/api/discovery/devices`; Dateien; URLs) → ein Flow
+  `Quelle → Thumbnail-Tap → Vision Mixer`. 2–16 Inputs.
+- `perf.rs`: Overlay (F3 / `--debug-perf`), CSV aller Samples (`--perf-log`).
+  Metriken: UI-Frame/-Kosten, Thumbnail-RTT/-Abstand, WS-Abstand,
+  Take-RTT, Take→WS-Event, State-RTT, Pipeline-Latenz. Jitter = RFC-3550-
+  Mean-Deviation.
+- `selftest.rs`: `--selftest` (headless): Flow bauen, alle Inputs pollen,
+  alle 1,5 s PVW+Take (cut/fade/dip/wipe), Budgets prüfen, Exit-Code.
+  Beispiel: `app-desktop --server URL --selftest --selftest-patterns 8
+  --selftest-file x.mp4 --selftest-url http://… --selftest-devices`.
+
+**Befunde**:
+1. `autovideoconvert` (gewählt, weil CUDA-GL-Probe besteht) liefert auf
+   GStreamer 1.28.7 `not-negotiated` an jedem Mixer-Input. Fix: upstream-
+   tauglicher strom-Commit `bd86930` (`STROM_FORCE_SOFTWARE_CONVERT=1`),
+   in `run.sh` gesetzt. Default-Verhalten unverändert.
+2. `builtin.media_player` liefert ohne `decode=true` nur das encodierte
+   Signal (Passthrough) → not-negotiated. `builtin.local_input` (pipewire)
+   braucht explizit Auflösung + Framerate.
+3. **Thumbnails sind serverseitig fest auf 1 fps / 320x180** begrenzt
+   (`ThumbnailTapConfig::default`, `update_interval = 1 s`, nicht per API
+   änderbar). Die Console-Monitore aktualisieren deshalb höchstens 1×/s,
+   egal wie schnell gepollt wird. Der Multiview-Ausgang des Mixers
+   (`multiview_out`) ist nur per WHEP erreichbar, nicht per REST.
+   → egui-/API-Grenze für "echte" Live-Monitore. Optionen: (a) upstream-PR
+   für konfigurierbares Thumbnail-Intervall, (b) WHEP-Empfang in der
+   Console, (c) Qt/Tauri-Shell (Entscheidung spätestens M3). Offen.
+4. Kein GL auf dem Host → CPU-Compositor (PGM 1080p30 + Multiview 720p30).
+
+**Messwerte** (strom Release-Build, dieser Host, 20 s, Selftest):
+
+| Inputs | Backend-CPU | RSS | Pipeline-Latenz | thumb_rtt p95 | take→event p95 | Start |
+|-------:|------------:|----:|----------------:|--------------:|---------------:|------:|
+| 8      | ~700 %      | 0,7 GB | 233 ms max   | 3 ms          | 11 ms          | 10 s  |
+| 16     | ~1700 %     | 2,4 GB | **2,2 s**    | 10 ms         | 26 ms          | 6 s   |
+
+8 Inputs bestehen alle Budgets; 16 scheitern an der Pipeline-Latenz
+(CPU-Compositor). Debug-Build war noch schlechter (8 Inputs: 3–4 s
+Latenz im GUI). Take-Latenz und REST sind unkritisch, der Engpass ist der
+Compositor.

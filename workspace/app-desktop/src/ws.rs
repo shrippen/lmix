@@ -4,19 +4,33 @@
 
 use futures_util::stream::StreamExt;
 use std::sync::mpsc::Sender;
+use std::sync::Arc;
 use strom_types::StromEvent;
 use tokio::time::{sleep, Duration};
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 
+use crate::perf::Perf;
 use crate::state::AppMessage;
 
-pub fn connect(url: String, tx: Sender<(u64, AppMessage)>, ctx: egui::Context, session: u64) {
+pub fn connect(
+    url: String,
+    tx: Sender<(u64, AppMessage)>,
+    ctx: egui::Context,
+    session: u64,
+    perf: Arc<Perf>,
+) {
     tokio::spawn(async move {
-        connection_loop(url, tx, ctx, session).await;
+        connection_loop(url, tx, ctx, session, perf).await;
     });
 }
 
-async fn connection_loop(url: String, tx: Sender<(u64, AppMessage)>, ctx: egui::Context, session: u64) {
+async fn connection_loop(
+    url: String,
+    tx: Sender<(u64, AppMessage)>,
+    ctx: egui::Context,
+    session: u64,
+    perf: Arc<Perf>,
+) {
     let mut attempt: u32 = 1;
 
     loop {
@@ -32,6 +46,7 @@ async fn connection_loop(url: String, tx: Sender<(u64, AppMessage)>, ctx: egui::
                         Ok(Message::Text(text)) => match serde_json::from_str::<StromEvent>(&text)
                         {
                             Ok(event) => {
+                                perf.ws_event();
                                 let _ = tx.send((session, AppMessage::Event(event)));
                                 ctx.request_repaint();
                             }

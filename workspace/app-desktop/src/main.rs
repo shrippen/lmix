@@ -3,10 +3,16 @@
 //! (see claude.md, "Feststehende Entscheidung 4").
 
 mod api;
+mod perf;
+mod selftest;
+mod source_ui;
+mod sources;
 mod state;
 mod ws;
 
 use api::ApiClient;
+use perf::{Metric, Perf};
+use source_ui::SourceBuilder;
 use clap::Parser;
 use state::{
     find_switchable_flows, find_thumbnail_block, meter_channel, AppMessage, AudioMixerState, AutoTransition,
@@ -24,6 +30,46 @@ struct Args {
     /// Base URL of the strom backend to connect to.
     #[arg(long, default_value = "http://127.0.0.1:8080")]
     server: String,
+
+    /// Show the performance overlay from the start (toggle with F3).
+    #[arg(long)]
+    debug_perf: bool,
+
+    /// Write every latency/jitter sample to this CSV file.
+    #[arg(long)]
+    perf_log: Option<std::path::PathBuf>,
+
+    /// Run the headless multiview/switching self-test instead of the GUI.
+    #[arg(long)]
+    selftest: bool,
+
+    /// Self-test: number of generated test-pattern inputs.
+    #[arg(long, default_value_t = 8)]
+    selftest_patterns: usize,
+
+    /// Self-test: duration of the load phase in seconds.
+    #[arg(long, default_value_t = 20)]
+    selftest_secs: u64,
+
+    /// Self-test: add a file input (repeatable).
+    #[arg(long)]
+    selftest_file: Vec<String>,
+
+    /// Self-test: add a URL input (repeatable).
+    #[arg(long)]
+    selftest_url: Vec<String>,
+
+    /// Self-test: add every discovered video capture device.
+    #[arg(long)]
+    selftest_devices: bool,
+
+    /// Create and open the 8-pattern preset flow right away (for testing).
+    #[arg(long)]
+    auto_open: bool,
+
+    /// Thumbnail poll interval per input, in milliseconds.
+    #[arg(long, default_value_t = DEFAULT_THUMB_MS)]
+    thumb_ms: u64,
 }
 
 /// A background task tags every message it sends with the session it was
@@ -35,6 +81,10 @@ type Session = u64;
 const METER_FLOOR_DB: f64 = -60.0;
 const METER_HOT_DB: f64 = -6.0;
 const METER_WIDTH: f32 = 40.0;
+const IDLE_REPAINT_MS: u64 = 250;
+const PERF_REPAINT_MS: u64 = 16;
+const DEFAULT_THUMB_MS: u64 = 250;
+const LATENCY_POLL_MS: u64 = 2000;
 const DEFAULT_AUTO_MS: u64 = 300;
 const AUTO_MS_RANGE: std::ops::RangeInclusive<u64> = 100..=5000;
 
@@ -54,13 +104,21 @@ struct ConsoleApp {
     textures: HashMap<usize, egui::TextureHandle>,
     auto_transition: AutoTransition,
     auto_duration_ms: u64,
+
+    perf: Arc<Perf>,
+    show_perf: bool,
+    thumb_ms: u64,
+    last_frame: Option<std::time::Instant>,
+    builder: SourceBuilder,
+    devices: Vec<strom_types::discovery::DeviceResponse>,
 }
 
 impl ConsoleApp {
-    fn new(server: String) -> Self {
+    fn new(args: Args) -> Self {
         let (tx, rx) = mpsc::channel();
-        let app = Self {
-            api: ApiClient::new(server),
+        let auto_open = args.auto_open;
+        let mut app = Self {
+            api: ApiClient::new(args.server),
             tx,
             rx,
             session: Arc::new(AtomicU64::new(0)),
@@ -73,8 +131,19 @@ impl ConsoleApp {
             textures: HashMap::new(),
             auto_transition: AutoTransition::Fade,
             auto_duration_ms: DEFAULT_AUTO_MS,
+            perf: Arc::new(Perf::new(args.perf_log.as_deref())),
+            show_perf: args.debug_perf,
+            thumb_ms: args.thumb_ms,
+            last_frame: None,
+            builder: SourceBuilder::new(),
+            devices: Vec::new(),
         };
         app.refresh_flows();
+        app.refresh_devices();
+        if auto_open {
+            let request = app.builder.preset_request();
+            app.create_flow(request);
+        }
         app
     }
 
@@ -86,6 +155,42 @@ impl ConsoleApp {
             let msg = match api.list_flows().await {
                 Ok(flows) => AppMessage::FlowsLoaded(flows),
                 Err(e) => AppMessage::Error(format!("Failed to load flows: {e}")),
+            };
+            let _ = tx.send((session, msg));
+        });
+    }
+
+    fn refresh_devices(&self) {
+        let api = self.api.clone();
+        let tx = self.tx.clone();
+        let session = self.session.load(Ordering::SeqCst);
+        tokio::spawn(async move {
+            match api.list_video_devices().await {
+                Ok(devices) => {
+                    let _ = tx.send((session, AppMessage::DevicesLoaded(devices)));
+                }
+                Err(e) => tracing::warn!("device discovery failed: {e}"),
+            }
+        });
+    }
+
+    /// Build a flow from the user's source list, create it on the backend
+    /// and report it back so the Console can open it.
+    fn create_flow(&self, request: source_ui::CreateRequest) {
+        let flow = match sources::build_flow(&request.name, &request.sources) {
+            Ok(flow) => flow,
+            Err(e) => {
+                let _ = self.tx.send((0, AppMessage::Error(e.to_string())));
+                return;
+            }
+        };
+        let api = self.api.clone();
+        let tx = self.tx.clone();
+        let session = self.session.load(Ordering::SeqCst);
+        tokio::spawn(async move {
+            let msg = match api.create_flow(&flow).await {
+                Ok(created) => AppMessage::FlowCreated(created),
+                Err(e) => AppMessage::Error(format!("Failed to create flow: {e}")),
             };
             let _ = tx.send((session, msg));
         });
@@ -112,6 +217,8 @@ impl ConsoleApp {
         let vm_block = flow.vision_mixer_block_id.clone();
         let audio_block = flow.audio_mixer_block_id.clone();
         let flow_id = flow.flow_id;
+        let perf = self.perf.clone();
+        let thumb_ms = self.thumb_ms;
 
         // Start the flow, then fetch its initial Vision Mixer state (WS only
         // carries *changes* from here on). `start_flow` is idempotent on the
@@ -173,6 +280,8 @@ impl ConsoleApp {
                         find_thumbnail_block(&full_flow, &vm_block, idx)
                     {
                         spawn_thumbnail_poller(
+                            perf.clone(),
+                            thumb_ms,
                             api.clone(),
                             tx.clone(),
                             ctx.clone(),
@@ -215,6 +324,8 @@ impl ConsoleApp {
             });
         }
 
+        spawn_latency_poller(self.perf.clone(), self.api.clone(), self.session.clone(), session, flow_id);
+
         // WS event stream for live PVW/PGM state.
         let ws_url = self
             .api
@@ -222,7 +333,7 @@ impl ConsoleApp {
             .replacen("http://", "ws://", 1)
             .replacen("https://", "wss://", 1)
             + "/api/ws";
-        ws::connect(ws_url, self.tx.clone(), ctx.clone(), session);
+        ws::connect(ws_url, self.tx.clone(), ctx.clone(), session, self.perf.clone());
     }
 
     /// Put an input on PVW (click a tile, or a number hotkey).
@@ -272,8 +383,11 @@ impl ConsoleApp {
         let session = self.session.load(Ordering::SeqCst);
         let api = self.api.clone();
         let tx = self.tx.clone();
+        let perf = self.perf.clone();
+        perf.take_started();
         tokio::spawn(async move {
-            match api
+            let started = std::time::Instant::now();
+            let result = api
                 .trigger_transition(
                     selection.flow_id,
                     &selection.vision_mixer_block_id,
@@ -282,8 +396,9 @@ impl ConsoleApp {
                     transition_type,
                     duration_ms,
                 )
-                .await
-            {
+                .await;
+            perf.record(Metric::TakeRtt, started.elapsed().as_secs_f64() * 1000.0);
+            match result {
                 // After a take, PGM/PVW swap (old PGM becomes the new PVW) -
                 // mirrors backend/src/state.rs's own post-take bookkeeping.
                 Ok(_resp) => {
@@ -347,6 +462,15 @@ impl ConsoleApp {
                     self.loading = false;
                     self.error = None;
                 }
+                AppMessage::DevicesLoaded(devices) => {
+                    self.devices = devices;
+                }
+                AppMessage::FlowCreated(flow) => {
+                    self.refresh_flows();
+                    if let Some(switchable) = find_switchable_flows(&[flow]).pop() {
+                        self.select_flow(&switchable, ctx);
+                    }
+                }
                 AppMessage::Error(e) => {
                     if session == current_session {
                         self.error = Some(e);
@@ -362,6 +486,7 @@ impl ConsoleApp {
                     program_input,
                     ..
                 }) if session == current_session => {
+                    self.perf.take_confirmed();
                     if self
                         .selection
                         .as_ref()
@@ -675,8 +800,29 @@ fn render_monitor(
         });
 }
 
+/// Pipeline latency as reported by the backend, sampled every couple of
+/// seconds while the flow is open.
+fn spawn_latency_poller(
+    perf: Arc<Perf>,
+    api: ApiClient,
+    session_counter: Arc<AtomicU64>,
+    session: Session,
+    flow_id: strom_types::FlowId,
+) {
+    tokio::spawn(async move {
+        while session_counter.load(Ordering::SeqCst) == session {
+            if let Ok(latency) = api.get_latency(flow_id).await {
+                perf.record(Metric::PipelineLatency, latency.min_latency_ns as f64 / 1e6);
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(LATENCY_POLL_MS)).await;
+        }
+    });
+}
+
 #[allow(clippy::too_many_arguments)]
 fn spawn_thumbnail_poller(
+    perf: Arc<Perf>,
+    thumb_ms: u64,
     api: ApiClient,
     tx: mpsc::Sender<(Session, AppMessage)>,
     ctx: egui::Context,
@@ -691,7 +837,13 @@ fn spawn_thumbnail_poller(
             if session_counter.load(Ordering::SeqCst) != session {
                 return;
             }
-            match api.get_thumbnail(flow_id, &thumbnail_block_id).await {
+            let started = std::time::Instant::now();
+            let result = api.get_thumbnail(flow_id, &thumbnail_block_id).await;
+            if result.is_ok() {
+                perf.record(Metric::ThumbRtt, started.elapsed().as_secs_f64() * 1000.0);
+                perf.thumb_arrived(input_index);
+            }
+            match result {
                 Ok(bytes) => {
                     if let Ok(img) = image::load_from_memory(&bytes) {
                         let rgba = img.to_rgba8();
@@ -713,17 +865,32 @@ fn spawn_thumbnail_poller(
                     tracing::trace!("thumbnail poll for input {input_index} failed: {e}");
                 }
             }
-            tokio::time::sleep(std::time::Duration::from_millis(1200)).await;
+            tokio::time::sleep(std::time::Duration::from_millis(thumb_ms)).await;
         }
     });
 }
 
 impl eframe::App for ConsoleApp {
+    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+        self.perf.flush();
+    }
+
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        let frame_start = std::time::Instant::now();
+        if let Some(prev) = self.last_frame.replace(frame_start) {
+            self.perf
+                .record(Metric::UiFrame, frame_start.duration_since(prev).as_secs_f64() * 1000.0);
+        }
         let ctx = ui.ctx().clone();
+        if ctx.input(|i| i.key_pressed(egui::Key::F3)) {
+            self.show_perf = !self.show_perf;
+        }
         self.drain_messages(&ctx);
+        // With the overlay on, repaint at ~60 Hz so ui_frame shows real frame
+        // pacing instead of the idle repaint interval.
+        let repaint_ms = if self.show_perf { PERF_REPAINT_MS } else { IDLE_REPAINT_MS };
         ui.ctx()
-            .request_repaint_after(std::time::Duration::from_millis(250));
+            .request_repaint_after(std::time::Duration::from_millis(repaint_ms));
 
         egui::Panel::top("toolbar").show_inside(ui, |ui| {
             ui.horizontal(|ui| {
@@ -750,14 +917,15 @@ impl eframe::App for ConsoleApp {
                 return;
             }
 
+            if let Some(request) = self.builder.show(ui, &self.devices) {
+                self.create_flow(request);
+            }
+            ui.separator();
+
             ui.heading("Select a flow to switch");
             let switchable: Vec<SwitchableFlow> = find_switchable_flows(&self.flows);
             if switchable.is_empty() {
-                ui.weak(
-                    "No flow with a Vision Mixer block found. Build one first \
-                     (existing node editor, or docs/BUILD.md's curl example).",
-                );
-                return;
+                ui.weak("No flow with a Vision Mixer block yet - create one above.");
             }
             let ctx = ui.ctx().clone();
             for flow in switchable {
@@ -769,6 +937,14 @@ impl eframe::App for ConsoleApp {
                 });
             }
         });
+
+        if self.show_perf {
+            self.perf.overlay(&ctx);
+        }
+        self.perf.record(
+            Metric::UiCost,
+            frame_start.elapsed().as_secs_f64() * 1000.0,
+        );
     }
 }
 
@@ -788,6 +964,21 @@ fn main() -> eframe::Result<()> {
     let runtime = tokio::runtime::Runtime::new().expect("failed to create Tokio runtime");
     let _runtime_guard = runtime.enter();
 
+    if args.selftest {
+        let opts = selftest::Options {
+            server: args.server.clone(),
+            patterns: args.selftest_patterns,
+            files: args.selftest_file.clone(),
+            urls: args.selftest_url.clone(),
+            devices: args.selftest_devices,
+            seconds: args.selftest_secs,
+            thumb_ms: args.thumb_ms,
+            perf_log: args.perf_log.clone(),
+        };
+        let passed = runtime.block_on(selftest::run(opts));
+        std::process::exit(if passed { 0 } else { 1 });
+    }
+
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1280.0, 860.0])
@@ -798,6 +989,6 @@ fn main() -> eframe::Result<()> {
     eframe::run_native(
         "lmix Console",
         native_options,
-        Box::new(move |_cc| Ok(Box::new(ConsoleApp::new(args.server)))),
+        Box::new(move |_cc| Ok(Box::new(ConsoleApp::new(args)))),
     )
 }

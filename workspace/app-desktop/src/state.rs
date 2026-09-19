@@ -58,6 +58,9 @@ impl AutoTransition {
 pub enum AppMessage {
     FlowsLoaded(Vec<Flow>),
     Error(String),
+    DevicesLoaded(Vec<strom_types::discovery::DeviceResponse>),
+    /// A flow the Console just created from its source list.
+    FlowCreated(Flow),
     VisionMixerStateLoaded(VisionMixerState),
     /// A WebSocket event from the backend - the authoritative source of
     /// truth for live state, never overridden by local optimistic updates.
