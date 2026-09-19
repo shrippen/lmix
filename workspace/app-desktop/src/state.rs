@@ -79,6 +79,17 @@ pub enum AppMessage {
     },
 }
 
+/// Parse a mixer meter `element_id` of the form `{block_id}:meter:{N}` into
+/// the 1-based channel number. `None` for other meters (main, aux, ...) or
+/// another block.
+pub fn meter_channel(element_id: &str, audio_block_id: &str) -> Option<usize> {
+    element_id
+        .strip_prefix(audio_block_id)?
+        .strip_prefix(":meter:")?
+        .parse()
+        .ok()
+}
+
 /// A `builtin.mixer` block's channel strips, only as much as the Console's
 /// simplified audio strip needs (not the full X32-style panel strom-frontend
 /// has in `frontend/src/mixer/`).
@@ -88,6 +99,9 @@ pub struct AudioMixerState {
     /// 1-based channel index -> current fader value (0.0-2.0, 1.0 = unity).
     pub faders: HashMap<usize, f64>,
     pub mutes: HashMap<usize, bool>,
+    /// 1-based channel index -> latest peak in dB (max over the channel's
+    /// audio channels), from `MeterData` WS events.
+    pub peaks_db: HashMap<usize, f64>,
 }
 
 impl AudioMixerState {
@@ -106,6 +120,7 @@ impl AudioMixerState {
             num_channels,
             faders,
             mutes,
+            peaks_db: HashMap::new(),
         }
     }
 }
@@ -192,5 +207,17 @@ impl From<VisionMixerState> for MixerState {
             preview_input: s.preview_input,
             num_inputs: s.input_resolutions.len(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn meter_channel_parses_channels_only() {
+        assert_eq!(meter_channel("mix:meter:3", "mix"), Some(3));
+        assert_eq!(meter_channel("mix:meter:main", "mix"), None);
+        assert_eq!(meter_channel("other:meter:3", "mix"), None);
     }
 }

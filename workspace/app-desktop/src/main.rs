@@ -9,7 +9,7 @@ mod ws;
 use api::ApiClient;
 use clap::Parser;
 use state::{
-    find_switchable_flows, find_thumbnail_block, AppMessage, AudioMixerState, AutoTransition,
+    find_switchable_flows, find_thumbnail_block, meter_channel, AppMessage, AudioMixerState, AutoTransition,
     MixerState, Selection, SwitchableFlow,
 };
 use std::collections::HashMap;
@@ -32,6 +32,9 @@ struct Args {
 /// flight) instead of applying stale data.
 type Session = u64;
 
+const METER_FLOOR_DB: f64 = -60.0;
+const METER_HOT_DB: f64 = -6.0;
+const METER_WIDTH: f32 = 40.0;
 const DEFAULT_AUTO_MS: u64 = 300;
 const AUTO_MS_RANGE: std::ops::RangeInclusive<u64> = 100..=5000;
 
@@ -368,6 +371,30 @@ impl ConsoleApp {
                         self.mixer.program_input = program_input;
                     }
                 }
+                AppMessage::Event(StromEvent::MeterData {
+                    flow_id,
+                    element_id,
+                    peak,
+                    ..
+                }) if session == current_session => {
+                    let Some(selection) = self.selection.as_ref() else {
+                        continue;
+                    };
+                    let Some(block_id) = selection.audio_mixer_block_id.as_deref() else {
+                        continue;
+                    };
+                    let Some(audio) = self.audio.as_mut() else {
+                        continue;
+                    };
+                    if flow_id != selection.flow_id {
+                        continue;
+                    }
+                    let Some(ch) = meter_channel(&element_id, block_id) else {
+                        continue;
+                    };
+                    let loudest = peak.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+                    audio.peaks_db.insert(ch, loudest);
+                }
                 AppMessage::MixerUpdate {
                     preview_input,
                     program_input,
@@ -580,6 +607,9 @@ impl ConsoleApp {
                                 ));
                             }
 
+                            let peak_db = audio.peaks_db.get(&ch).copied().unwrap_or(METER_FLOOR_DB);
+                            render_meter(ui, peak_db);
+
                             let muted = audio.mutes.entry(ch).or_insert(false);
                             if ui.selectable_label(*muted, "MUTE").clicked() {
                                 *muted = !*muted;
@@ -598,6 +628,22 @@ impl ConsoleApp {
             self.patch_audio_property(name, value);
         }
     }
+}
+
+/// Horizontal peak bar, `METER_FLOOR_DB`..0 dB; green, red above
+/// `METER_HOT_DB`.
+fn render_meter(ui: &mut egui::Ui, peak_db: f64) {
+    let (rect, _) = ui.allocate_exact_size(egui::vec2(METER_WIDTH, 8.0), egui::Sense::hover());
+    ui.painter().rect_filled(rect, 0.0, egui::Color32::from_gray(30));
+
+    let level = ((peak_db - METER_FLOOR_DB) / -METER_FLOOR_DB).clamp(0.0, 1.0) as f32;
+    let color = if peak_db > METER_HOT_DB {
+        egui::Color32::RED
+    } else {
+        egui::Color32::GREEN
+    };
+    let fill = egui::Rect::from_min_size(rect.min, egui::vec2(rect.width() * level, rect.height()));
+    ui.painter().rect_filled(fill, 0.0, color);
 }
 
 /// One big vMix-style monitor: a colored label bar (tally color) over a
