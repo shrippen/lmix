@@ -27,6 +27,7 @@ trap cleanup EXIT
 echo "Starting strom backend on ${BASE_URL} ..."
 (
     cd "$ROOT/workspace/strom/backend"
+    export STROM_FORCE_SOFTWARE_CONVERT=1
     exec cargo run --features no-gui -- --host "$HOST" --port "$PORT" --no-auto-restart
 ) &
 BACKEND_PID=$!
