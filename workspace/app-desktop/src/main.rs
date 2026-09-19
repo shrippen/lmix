@@ -9,8 +9,8 @@ mod ws;
 use api::ApiClient;
 use clap::Parser;
 use state::{
-    find_switchable_flows, find_thumbnail_block, AppMessage, AudioMixerState, MixerState,
-    Selection, SwitchableFlow,
+    find_switchable_flows, find_thumbnail_block, AppMessage, AudioMixerState, AutoTransition,
+    MixerState, Selection, SwitchableFlow,
 };
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -32,6 +32,9 @@ struct Args {
 /// flight) instead of applying stale data.
 type Session = u64;
 
+const DEFAULT_AUTO_MS: u64 = 300;
+const AUTO_MS_RANGE: std::ops::RangeInclusive<u64> = 100..=5000;
+
 struct ConsoleApp {
     api: ApiClient,
     tx: mpsc::Sender<(Session, AppMessage)>,
@@ -46,6 +49,8 @@ struct ConsoleApp {
     mixer: MixerState,
     audio: Option<AudioMixerState>,
     textures: HashMap<usize, egui::TextureHandle>,
+    auto_transition: AutoTransition,
+    auto_duration_ms: u64,
 }
 
 impl ConsoleApp {
@@ -63,6 +68,8 @@ impl ConsoleApp {
             mixer: MixerState::default(),
             audio: None,
             textures: HashMap::new(),
+            auto_transition: AutoTransition::Fade,
+            auto_duration_ms: DEFAULT_AUTO_MS,
         };
         app.refresh_flows();
         app
@@ -458,11 +465,23 @@ impl ConsoleApp {
                         self.take("cut", 0);
                     }
                     if ui
-                        .add_sized([120.0, 36.0], egui::Button::new("AUTO (fade)"))
+                        .add_sized([120.0, 36.0], egui::Button::new("AUTO"))
                         .clicked()
                     {
-                        self.take("fade", 300);
+                        self.take(self.auto_transition.wire_name(), self.auto_duration_ms);
                     }
+                    egui::ComboBox::from_id_salt("auto_transition")
+                        .selected_text(self.auto_transition.label())
+                        .show_ui(ui, |ui| {
+                            for t in AutoTransition::ALL {
+                                ui.selectable_value(&mut self.auto_transition, t, t.label());
+                            }
+                        });
+                    ui.add(
+                        egui::DragValue::new(&mut self.auto_duration_ms)
+                            .range(AUTO_MS_RANGE)
+                            .suffix(" ms"),
+                    );
                 });
             });
             ui.add_space(6.0);

@@ -9,6 +9,51 @@ pub const VISION_MIXER_BLOCK: &str = "builtin.vision_mixer";
 pub const AUDIO_MIXER_BLOCK: &str = "builtin.mixer";
 pub const THUMBNAIL_BLOCK: &str = "builtin.thumbnail";
 
+/// Timed transitions offered by the Console's AUTO button. The wire names
+/// are strom's `TransitionType` strings (backend/src/gst/transitions/mod.rs).
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum AutoTransition {
+    Fade,
+    DipToBlack,
+    WipeLeft,
+    WipeRight,
+    SlideLeft,
+    PushLeft,
+}
+
+impl AutoTransition {
+    pub const ALL: [Self; 6] = [
+        Self::Fade,
+        Self::DipToBlack,
+        Self::WipeLeft,
+        Self::WipeRight,
+        Self::SlideLeft,
+        Self::PushLeft,
+    ];
+
+    pub fn wire_name(self) -> &'static str {
+        match self {
+            Self::Fade => "fade",
+            Self::DipToBlack => "dip_to_black",
+            Self::WipeLeft => "wipe_left",
+            Self::WipeRight => "wipe_right",
+            Self::SlideLeft => "slide_left",
+            Self::PushLeft => "push_left",
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Fade => "Fade",
+            Self::DipToBlack => "Dip to black",
+            Self::WipeLeft => "Wipe left",
+            Self::WipeRight => "Wipe right",
+            Self::SlideLeft => "Slide left",
+            Self::PushLeft => "Push left",
+        }
+    }
+}
+
 /// Messages sent from background tasks back to the UI thread.
 pub enum AppMessage {
     FlowsLoaded(Vec<Flow>),
