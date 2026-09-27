@@ -1,4 +1,4 @@
 [submodule "workspace/strom"]
 	path = workspace/strom
-	url = https://github.com/Eyevinn/strom
+	url = https://git.arianw.de/shrippen/strom
 	branch = dev
