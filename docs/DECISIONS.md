@@ -212,3 +212,25 @@ Performance (Latenz, Jitter), ohne Node-Editor.
 (CPU-Compositor). Debug-Build war noch schlechter (8 Inputs: 3–4 s
 Latenz im GUI). Take-Latenz und REST sind unkritisch, der Engpass ist der
 Compositor.
+
+## 2026-09-27 — Korrektur: GPU vorhanden; GPU-Pipeline zuerst, herstellerneutral
+
+**Kontext**: Eintrag 2026-09-19, Befund 4 ("Kein GL auf dem Host →
+CPU-Compositor") ist falsch. Host: RTX 3090, OpenGL 4.6 (NVIDIA-EGL),
+NVDEC/NVENC. `glvideomixerelement` und `cudacompositor` laufen per
+`gst-launch-1.0` headless (ohne `DISPLAY`) fehlerfrei. Der CPU-Fallback
+kam aus stroms Auto-Auswahl (`has_hardware_gl()`) oder dem
+`STROM_FORCE_SOFTWARE_CONVERT`-Workaround; Ursache offen (M1b G.1). Die
+Messwerte vom 2026-09-19 zeigen damit den CPU-Pfad, nicht die
+Hardwaregrenze.
+
+**Entscheidung** (User):
+1. Performance hat Vorrang: GPU-Pipeline (M1b) kommt vor allen weiteren
+   Features. Ziel: möglichst viele parallele Inputs/Outputs live.
+2. NVIDIA, AMD und Intel gleichrangig: herstellerneutraler GL-Kern,
+   herstellerspezifische Decode/Encode-Pfade hinter einer Abstraktion.
+3. AMD-/Intel-Hardware derzeit nicht verfügbar: Pfade jetzt bauen und
+   optimieren, nur per Unit-/Snapshot-Test absichern, als `unverified`
+   markieren; Abnahme auf echter Hardware später (M5b).
+
+Details: `docs/ROADMAP.md`.
