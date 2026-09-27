@@ -1,0 +1,264 @@
+# Roadmap: lmix auf vMix-Niveau
+
+Stand 2026-09-27. Grundlage: vMix 29 (Feb. 2026), strom `dev` (`bd86930`),
+app-desktop `23e0606`. Ergänzt die Meilensteine in `claude.md`, ersetzt sie
+nicht. Feststehende Entscheidungen und Ausschlüsse von dort gelten weiter.
+
+Legende Aufwandsort: **C** = nur app-desktop, **S** = strom-Patch
+(upstream-PR), **B** = neuer Block.
+
+---
+
+## 1. Wie vMix funktioniert
+
+### 1.1 Das Kernmodell: alles ist ein Input
+
+```
+  Inputs (beliebig viele, zur Laufzeit hinzufügen/entfernen)
+  Kamera · NDI · SRT · OMT · Datei · Playlist/List · Bild · Farbe ·
+  Browser · Titel (GT) · vMix Call · Replay · Mix · Zoom · PowerPoint
+      │   jeder Input trägt: Audio-Kanal, Effekte (Farbkorrektur, Key,
+      │   Crop/Zoom/Pan), bis zu 10 Layer (andere Inputs), Loop, Label
+      ▼
+  PREVIEW ──[Cut · Fade · Merge · Stinger 1–8 · T-Bar]──► OUTPUT
+                                                          │
+                                   Overlay 1–8 (je eigene Transition,
+                                   auch auf Preview, auch aus Inputs)
+                                                          ▼
+                    Stream (3 Ziele) · Record · MultiCorder (ISO) ·
+                    Fullscreen · Karte (SDI/HDMI) · NDI/SRT/OMT · VirtualCam
+```
+
+Der Operator denkt in **Inputs**, nicht in Pipelines. Ein Input ist Quelle,
+Audiokanal und Grafikebene zugleich; derselbe Input kann Fullscreen, Layer
+eines anderen Inputs, Overlay oder Replay-Quelle sein.
+
+### 1.2 Funktionsumfang (gruppiert)
+
+| Bereich | vMix |
+|---|---|
+| Schalten | Preview/Output, 4 Transition-Buttons (13 Typen), 8 Stinger, T-Bar, Quick Play/GO, bis 15 Zusatz-Mixe (Mix-Input) |
+| Overlays | 8 Overlay-Kanäle mit Ein-/Ausblend-Transition, Position, Rand |
+| Layer | 10 Layer pro Input, Crop/Zoom/Pan/Rotate, Chroma-/Luma-Key |
+| Grafik | GT Title Designer (Titel, Ticker, Scoreboards, Timer), Datenquellen (Excel, Google Sheets, JSON, XML, RSS) |
+| Audio | Kanal pro Input, Master + Busse A–G, Mute/Solo, EQ/Comp/Gate, VST3, Delay, Audio-follows-Video, Auto-Mix |
+| Ausgänge | Stream (RTMP/SRT, 3 Ziele), Record (MP4/MOV/MXF/AVI), MultiCorder (jeder Input einzeln), External/Fullscreen, NDI-/SRT-/OMT-Out |
+| Replay | Ringbuffer bis 8 Kameras, Zeitlupe, Events/Tags, Highlights, Quad-View |
+| Gäste | vMix Call (WebRTC, bis 8), Zoom-Integration |
+| Steuerung | Shortcuts (Tastatur, MIDI, X-keys, Stream Deck), Trigger (OnTransitionIn …), Activators (Tally/LED), VB.NET-Scripting, HTTP-/TCP-API, Web Controller, PTZ (VISCA/NDI) |
+| Messen | Waveform, Vectorscope, Parade, Stream-Statistik, Tally |
+| Projekt | Preset-Datei (.vmix) mit allen Inputs, Layern, Audio, Ausgängen |
+
+Editionen begrenzen v. a. Input-Zahl, Auflösung, MultiCorder, Replay-Kameras,
+Call-Gäste, Scripting. **vMix 29 spricht OMT** (Senden, Empfangen,
+MultiCorder ohne Re-Encode) — relevant für M2 als Interop-Gegenstelle.
+
+---
+
+## 2. Abgleich: vMix ↔ strom ↔ lmix heute
+
+| Funktion | strom (Engine) | lmix Console | Lücke / Weg |
+|---|---|---|---|
+| Preview/Program, Cut, Auto | ✅ | ✅ | — |
+| Transitions | ✅ Fade, Slide, Push, Dip; Wipes/FX nur GPU | ✅ Auswahl + Dauer | Stinger, T-Bar fehlen (**S**) |
+| Live-Monitore | Thumbnails fest 1 fps; Multiview nur per WHEP | 1 fps | **Kernlücke** (siehe M1-Rest) |
+| Inputs zur Laufzeit | Mixer-Inputs fest zur Build-Zeit (2–16) | Quellen in einen Flow gebacken, Änderung = Neubau | **Kernlücke** (Input-Modell, M2b) |
+| Quellentypen | V4L2, Datei/Playlist, NDI, SRT, WHIP/WHEP, AES67, DeckLink, PipeWire, CEF (strom-full) | Testbild, V4L2, Datei, URL | NDI/SRT/OMT/WHIP/HTML in Builder (**C**) |
+| Layer/PiP, Crop | ✅ 4 PiPs, Zonen, Punch-in | ❌ | PiP-Editor (**C**) |
+| Overlays | DSK 0–4, nur an/aus, keine Transition, nicht im Multiview | ❌ | 8 Kanäle + Transition (**S**) |
+| Farbkorrektur, Key | ✅ Looks (nur GPU) | ❌ | UI (**C**), GPU nötig |
+| FTB | ✅ | ❌ | Button (**C**) |
+| Audio-Mixer | ✅ 128 Kanäle, Gruppen, Aux, Gate/Comp/EQ, PFL/AFL | Fader + Peak-Meter | Busse, Solo, EQ-UI, **Audio-follows-Video** (**C**) |
+| Titel/Grafik | CEF-HTML (Build separat) | ❌ | HTML-Titel + Datenquellen (**C**/**B**) |
+| Stream | SRT, WHIP, NDI; RTMP-Block upstream offen (#771) | ❌ | Ausgangsleiste (**C**) |
+| Record / MultiCorder | Recorder-Block | ❌ | pro Input via `inter` (**C**) |
+| Replay | ❌ | ❌ | Ringbuffer-Block (**B**) |
+| Gäste | WHIP-Input | ❌ | Browser-Gast per WHIP (**C**) |
+| Shortcuts | — | Tasten 1–8, Take | Editor, Trigger (**C**) |
+| API/Automation | REST, WS, MCP | — | vorhanden auf Engine-Ebene |
+| Projekt speichern | Flows persistiert | ❌ | Show-Datei (**C**) |
+| Performance | GL-Mixer, NVDEC/NVENC vorhanden; gemessen lief aber der CPU-Compositor: 8 Inputs ok, 16 → 2,2 s Latenz | — | **GPU-Pipeline, M1b** |
+
+**Befund**: Die Engine deckt Schalten, Audio und Transport breit ab. Was lmix
+von vMix trennt, liegt fast vollständig im **Bedienmodell** (Inputs statt
+Flows, Live-Bild, Overlays, Ausgangsleiste) und in drei Engine-Grenzen:
+feste Input-Zahl, 1-fps-Thumbnails, CPU-Compositor.
+
+**GPU-Befund (2026-09-27)**: Host hat RTX 3090, OpenGL 4.6 (NVIDIA-EGL),
+NVDEC/NVENC, `cudacompositor`. `glvideomixerelement` und `cudacompositor`
+laufen headless (ohne `DISPLAY`) fehlerfrei. "Kein GL auf dem Host" in
+`DECISIONS.md` (2026-09-19) ist damit falsch; der CPU-Fallback kam aus
+stroms Erkennung oder dem Konvertierungs-Workaround, nicht von der Hardware.
+
+---
+
+## 3. Roadmap
+
+Reihenfolge nach Wert für den Kern-Workflow
+(Input → Preview → Take → Output). Jede Stufe endet abnahmefähig.
+
+### Leitprinzip: Performance zuerst
+
+Ziel: maximale Zahl paralleler Inputs/Outputs live auf einer Maschine.
+
+- Frames bleiben vom Decode bis zum Encode im GPU-Speicher. Jeder
+  `gldownload`/`cudadownload` im Hot-Path ist ein Bug, außer an Senken,
+  die zwingend CPU-Speicher brauchen.
+- Jedes Feature hat ein Messbudget (Latenz, GPU-/CPU-Last pro Input) und
+  wird vor dem Merge gemessen; Selftest ist das Werkzeug.
+- NVIDIA, AMD und Intel gleichrangig: jeder Hersteller bekommt seinen
+  schnellsten Pfad, keiner fällt auf CPU zurück.
+- Kennzahl über alle Meilensteine: **max. Inputs @ Budget** (1080p30,
+  PGM + Multiview + 2 Encodes, < 5 Frames Latenz, kein Drop). Regression
+  bricht CI.
+
+### M1b — GPU-Pipeline (nächster Schritt, vor allem anderen)
+
+Architektur: herstellerneutraler Kern, herstellerspezifische Ränder.
+
+```
+            Decode (pro Hersteller)          Kern (neutral)          Encode (pro Hersteller)
+ NVIDIA   NVDEC ──CUDA-GL-Interop──┐                              ┌──CUDA-GL── NVENC
+ AMD      VA-API ──DMABuf──────────┼──► OpenGL/EGL: Mixer, FX, ───┼──DMABuf─── VA-API
+ Intel    VA-API/QSV ──DMABuf──────┘    Skalierung, Thumbnails    └──DMABuf─── VA-API/QSV
+```
+
+- Kern bleibt GL, weil stroms Mixer und Shader-FX schon GL sind und GL auf
+  allen drei Herstellern läuft. Vulkan-Video als späterer neutraler Pfad
+  beobachten (GStreamer hat heute Vulkan-Decode, aber keinen vollen
+  Vulkan-Compositor).
+- Herstellerwahl als eigene Schicht (`GpuProfile`: Erkennung per
+  GL-Renderer/DRM-Treiber → passende Decoder, Encoder, Upload-Elemente);
+  Blocks fragen die Schicht, statt Elementnamen fest zu verdrahten.
+
+| # | Punkt | Ort |
+|---|---|---|
+| G.1 | Diagnose: warum stroms Auto-Auswahl CPU wählte (`has_hardware_gl()`-Probe im Backend-Log, Reihenfolge der Probe) und warum `autovideoconvert` mit CUDA-GL `not-negotiated` liefert. `STROM_FORCE_SOFTWARE_CONVERT` in `run.sh` durch echten Fix ersetzen | S |
+| G.2 | Vision Mixer fest auf GPU-Backend (`gpu`), CPU nur als expliziter Notfall; Start bricht laut ab statt still zu degradieren | C (+S) |
+| G.3 | `GpuProfile`-Schicht: Hersteller erkennen, Elementwahl kapseln (Decode, Encode, Upload/Download, JPEG). Baut auf stroms `gpu.rs` auf | S |
+| G.4 | Decode auf GPU, zero-copy in GL: NVDEC (CUDA-GL), VA-API (DMABuf→GL) für AMD/Intel; H.264/H.265/JPEG aus Datei, SRT, NDI, OMT, V4L2-MJPEG | S/B |
+| G.5 | Encode aus GL-Speicher: NVENC (Interop in `gpu.rs` vorhanden), VA-API-Encode per DMABuf für AMD/Intel | S |
+| G.6 | Thumbnails/Monitor-Vorschau auf GPU skalieren und kodieren (NVJPEG bzw. VA-API-JPEG, sonst GL-Skalierung + kleines CPU-JPEG) | S |
+| G.7 | Messen pro Hersteller: GL-Kern vs. herstellereigene Compositor (`cudacompositor`, `vacompositor`). Ein herstellereigener Pfad nur, wenn er messbar schneller ist, und dann hinter `GpuProfile`. Ergebnis in `DECISIONS.md` | — |
+| G.8 | Selftest erweitert: N Inputs × M Outputs, misst GPU-Last (NVML bzw. `amdgpu`/`i915`/`xe`-fdinfo), Kopien pro Frame, Latenz; liefert "max. Inputs @ Budget" pro Hersteller | C |
+
+Testlage: aktuell nur NVIDIA-Hardware verfügbar. AMD-/Intel-Pfade werden
+trotzdem jetzt gebaut und optimiert (VA-API/DMABuf nach Doku und
+GStreamer-Referenz), aber erst in M5b auf echter Hardware geprüft. Bis dahin
+gilt für sie: Elementwahl per Unit-Test gegen eine simulierte
+Element-Registry abgesichert, Pipeline-Beschreibung pro Profil als
+Snapshot-Test, im Code als `unverified` markiert.
+
+**Abnahme** (NVIDIA-Host; AMD/Intel siehe M5b):
+16 × 1080p30 Inputs, PGM + Multiview + 2 Hardware-Encodes,
+Latenz < 5 Frames, keine Drops über 10 min; Pipeline-Graph zeigt keinen
+Download im Hot-Path; Messwerte in `docs/LATENCY.md`. Danach Kapazitätsgrenze
+ausreizen (32+ Inputs) und dokumentieren.
+
+### M1-Rest — Console abschließen
+
+| # | Punkt | Ort |
+|---|---|---|
+| 1.1 | **Live-Monitore**: PGM/PVW/Multiview flüssig. Entscheidung: WHEP-Empfang des `multiview_out` in der Console vs. upstream-PR konfigurierbares Thumbnail-Intervall. Empfehlung: WHEP (echte Framerate, keine REST-Last), Hardware-Encode (M1b), Decode in der Console auf der GPU (NVDEC bzw. VA-API). | C (+S) |
+| 1.2 | Audio-follows-Video: Take schaltet zugeordnete Audiokanäle | C |
+| 1.3 | FTB-Button, DSK-Toggles | C |
+| 1.4 | Live-State-Test: Quelle weg während Transition (Akzeptanz aus `claude.md`) | C |
+
+**Abnahme**: PGM-Monitor ≥ 25 fps sichtbar; Take mit AFV; Akzeptanz M1 erfüllt.
+
+### M2 — OMT (wie geplant) + Interop
+
+- OmtBlock Input (Option a, entschieden). **B**
+- Neu: **OMT-Output** im selben Block-Modul — geringer Mehraufwand, macht
+  lmix als Quelle für vMix 29 nutzbar. **B**
+- Abnahme erweitert: vMix 29 → OMT → lmix PGM, und lmix PGM → OMT → vMix;
+  Latenz in `docs/LATENCY.md`.
+
+### M2b — Input-Modell (neu, Voraussetzung für alles Weitere)
+
+vMix-Grundprinzip: Inputs kommen und gehen, ohne dass Program stockt.
+
+```
+  Quellen-Flow 1: V4L2 → inter_output "in1" ┐
+  Quellen-Flow 2: NDI  → inter_output "in2" ├─► Mixer-Flow: inter_input ×N → Vision Mixer → PGM
+  Quellen-Flow 3: Datei→ inter_output "in3" ┘                          └─► Audio-Mixer
+```
+
+| # | Punkt | Ort |
+|---|---|---|
+| 2b.1 | Ein Flow pro Quelle, Kopplung über `builtin.inter_*`; Mixer-Flow mit festen Slots (z. B. 16), Quelle in Slot tauschen ohne Mixer-Neustart | C |
+| 2b.2 | Input-Leiste im vMix-Stil: Kacheln mit Typ, Label, Farbe, Audio, Klick = PVW, Doppelklick = Take | C |
+| 2b.3 | Quellentypen im Builder: NDI, SRT, OMT, WHIP, Bild, Farbe, Playlist (mit Transport: Play/Pause/Seek/Loop) | C |
+| 2b.4 | **Show-Datei** (`.lmix`, JSON): Inputs, Mixer-Konfig, Audio, Ausgänge, Hotkeys; Laden baut alle Flows | C |
+| 2b.5 | Vorab messen: bleibt GPU-Speicher über `intersink`/`intersrc` erhalten (geteilter GL-/CUDA-Kontext) oder erzwingt die Kopplung Download/Upload? Falls Kopie: Kopplung ändern (geteilter Kontext, ein Flow mit dynamischen Pads), nicht Performance opfern. Ergebnis in `DECISIONS.md` | S? |
+
+**Abnahme**: Input während laufender Sendung hinzufügen/entfernen, PGM ohne
+Aussetzer; Show speichern, Neustart, Show laden → identischer Zustand.
+
+### M3 — Ausgänge + Robustheit (wie geplant, konkretisiert; GPU liegt jetzt in M1b)
+
+| # | Punkt | Ort |
+|---|---|---|
+| 3.1 | Ausgangsleiste: Stream (SRT jetzt, RTMP sobald #771 upstream), Record, NDI/OMT-Out; Status: Bitrate, Drops, Laufzeit | C |
+| 3.2 | MultiCorder: Recorder pro Input am `inter`-Bus | C |
+| 3.3 | Fullscreen-Output auf zweitem Monitor (Sink im Engine-Prozess, nicht in der GUI — Crash-Isolation) | C |
+| 3.4 | Failover, Latenz-CI (wie `claude.md`) | C |
+| 3.5 | GUI-Shell-Entscheidung egui vs. Qt/Tauri — Kriterien jetzt: Video-Textur-Performance (1.1, GPU-Decode direkt in Textur), Multi-Display (3.3), Dichte der Input-Leiste (2b.2) | — |
+
+### M4 — Produktionswerkzeuge (wie geplant, erweitert)
+
+| # | Punkt | Ort |
+|---|---|---|
+| 4.1 | Overlays: 8 Kanäle, Ein-/Ausblend-Transition, im Multiview sichtbar | S |
+| 4.2 | Stinger-Transition (Video mit Alpha + Cut-Punkt) | S |
+| 4.3 | T-Bar (manueller Transition-Fortschritt) | S |
+| 4.4 | HTML-Titel statt GT: Vorlagen (Lower Third, Ticker, Uhr, Countdown, Scoreboard) über CEF, Felder aus der Console; Datenquellen JSON/CSV | C/B |
+| 4.5 | Instant Replay: Ringbuffer pro Input, Markieren, Zeitlupe, Abspielen als Input | B |
+| 4.6 | PiP-/Layer-Editor, Looks/Farbkorrektur-UI | C |
+| 4.7 | Audio: Busse, Solo/PFL, EQ/Dynamik-UI, Delay pro Kanal | C |
+
+### M5 — Robustheit (wie geplant)
+
+8-h-Soak, `kill -9` der GUI, CI grün. Zusätzlich: Show mit 16 Inputs,
+2 Streams, MultiCorder als Soak-Last.
+
+### M5b — Hersteller-Abnahme AMD/Intel (sobald Hardware da ist)
+
+- M1b-Abnahme auf je einer AMD- und Intel-Maschine wiederholen, Werte in
+  `docs/LATENCY.md`, `unverified`-Markierungen entfernen oder Pfade fixen.
+- Idealerweise als CI-Runner, damit "max. Inputs @ Budget" pro Hersteller
+  regressionsgeschützt ist.
+
+### M6 — Steuerung & Remote (Vorschlag, nach Freigabe)
+
+- Shortcut-Editor, Trigger (OnTransitionIn/Out, OnCountdown) — **C**
+- Tally über WS-Events (Ausgabe an einfache HTTP-Tally-Geräte) — **C**
+- Gäste per Browser-WHIP (vMix-Call-Ersatz); braucht erreichbaren
+  Media-Port, klärt die offene RTSP-/Bind-Frage aus `DECISIONS.md` mit — **C**
+- Scopes (Waveform, Vectorscope) auf PGM — **C**
+- PTZ über VISCA-IP — **C**, optional
+
+---
+
+## 4. Bewusst nicht
+
+Aus `claude.md` ausgeschlossen, bleibt so: Windows/macOS, XAML-Titel
+(Ersatz: HTML), Control-Surfaces (MIDI/Stream Deck), 4K-Optimierung,
+Web-UI als Produkt. Zusätzlich nicht geplant: Zoom-, PowerPoint-, DVD-Input,
+Virtual Sets, Scripting-Sprache (REST/MCP genügt), VST3 (Windows-zentrisch;
+LV2 ggf. später).
+
+## 5. Offene Entscheidungen
+
+1. Live-Monitore: WHEP vs. Thumbnail-Intervall-PR (M1-Rest).
+2. M2b als eigener Meilenstein vor M3 (Empfehlung) — ändert die Reihenfolge
+   in `claude.md`.
+3. Lizenz CEF-Pfad: `gstcefsrc`-Lizenz prüfen (vermutlich LGPL) — als Laufzeit-Plugin außerhalb des
+   Repos vereinbar mit Entscheidung 6? Vor M4 klären.
+4. ~~Testhardware AMD/Intel~~ — entschieden 2026-09-27: derzeit keine
+   verfügbar; herstellerneutral bauen, Abnahme später (M5b).
+
+Quellen: vMix-Features <https://www.vmix.com/software/features.aspx>,
+vMix 29 <https://blog.vmix.com/vmix-29-is-available-now/>, strom-Doku
+`workspace/strom/docs/VISION_MIXER_OPERATOR_GUIDE.md`,
+`AUDIO_MIXER_OPERATOR_GUIDE.md`, `FEATURE_SUGGESTIONS.md`.
