@@ -111,6 +111,13 @@ Speicherpfad srtsrc → decodebin (NVDEC) → CUDA → Mixer, kein Download,
 kein Deinterlacer (progressiv). PGM-Alter nach Encode 198 ms: enthält die
 konfigurierte SRT-Latenz; Budget von 167 ms gilt für lokale Quellen.
 
+**Interlaced über SRT** (1 × 1080i, H.264 Main 8-Bit 4:2:0, MBAFF/Field,
+plus 1 Testbild): NVDEC dekodiert, der Deinterlacer wird nur für diese
+Quelle eingefügt (`cudadownload ! deinterlace`, yadif auf der CPU, weil
+GStreamer keinen CUDA-Deinterlacer hat). Input 30 fps, Bild korrekt.
+Offen: Deinterlacing auf der GPU (NVDEC selbst kann es, `nvh264dec`
+bietet es nicht an).
+
 ## AMD / Intel
 
 Nicht gemessen, keine Hardware (M5b). Pfade: GL-Mixer, VA-API.
