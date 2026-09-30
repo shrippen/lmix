@@ -117,9 +117,8 @@ Quelle eingefügt. Erst `cudadownload ! deinterlace` (yadif, CPU): Backend
 50 % CPU. Seit strom "Deinterlace NVDEC frames on the GPU" auf der GPU
 (`cudaconvert` → RGBA → `cudadownload` nach GL → `gldeinterlace
 greedyh`): 23 %, Bild korrekt.
-**Entscheidungspunkt**: yadif verdoppelte auf Halbbildrate (1080i50 →
-50p), `gldeinterlace` behält die Bildrate (→ 25p). Gewählt: GPU
-(Performance zuerst); bei Bedarf an 50p-Bewegung neu abwägen.
+yadif verdoppelte auf Halbbildrate (1080i50 → 50p), `gldeinterlace`
+behält die Bildrate (→ 25p). Entschieden 2026-09-30: GPU bleibt.
 
 ## AMD / Intel
 

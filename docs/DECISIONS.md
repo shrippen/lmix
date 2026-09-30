@@ -352,3 +352,12 @@ Damit wäre (a) für 16 Monitore à 320×180 bei 10–15 fps billig; offen
 bleiben REST-Polling-Last pro Bild und egui-Texturupload in der Console.
 (b) WHEP bleibt die Variante für einen großen PGM-Monitor in voller
 Framerate.
+
+## 2026-09-30 — M1b freigegeben; GPU-Deinterlacing bleibt
+
+**Entscheidung** (User):
+1. M1b (GPU-Pipeline) ist abgenommen. Branch `m1-rest` wird in `main`
+   übernommen.
+2. Interlaced Quellen auf NVIDIA werden auf der GPU deinterlaced
+   (`gldeinterlace`, Bildrate bleibt: 1080i50 → 25p), nicht per CPU-yadif
+   (50p). Grund: Performance zuerst.
