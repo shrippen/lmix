@@ -292,3 +292,30 @@ messbar schneller"):
    lädt nur 320×180 herunter.
 
 Messwerte der Abnahme: `docs/LATENCY.md`.
+
+## 2026-09-30 — M1b: weitere Befunde und Fixes (strom)
+
+1. **Thumbnail-Tap pausierte die Pipeline**: Der `appsink` des Taps war
+   async; jedes Einhängen warf die laufende Pipeline auf PAUSED, bis er
+   prerollte (~1 s). Andere Taps warteten → Inputs erschienen seriell
+   (16 Inputs: 15 s). Fix `async=false`: 2,3 s.
+2. **Buffer-Age-Probes hinter SRT stumm**: Puffer vor der Uhr wurden
+   verworfen (auch aus der Zählung). Jetzt Alter 0.
+3. **GL-Mixer mit Hardware-Decodern startete nicht**: `glupload` nimmt kein
+   CUDA/VA. Brücke (`cudadownload` bzw. `vapostproc`) per Caps-Probe; betrifft
+   AMD/Intel (VA ist dort Standard) und NVIDIA mit `--mixer-backend gl`.
+4. **Mixer-Kappung 16 → 32 Inputs** (weiche Grenze laut strom-Kommentar).
+5. **NVENC `rate-control` → `rc-mode`** in 1.28 (Panic bei
+   `nvautogpuh264enc`).
+6. **Vorbestehend, nicht behoben**: `vision_mixer_fx_test::
+   wipe_between_letterboxed_sources_animates` schlägt auf diesem Host schon
+   auf dem Ausgangsstand fehl (GL-FX, "PGM should start mostly white, got
+   0"). Betrifft nur das GL-Backend mit FX.
+
+**Offen (M1b-Rest / M5b)**:
+- VA-Encode aus GL-Speicher (DMABuf-Export) — ohne AMD/Intel nicht
+  prüfbar. Heute scheitert GL-Mixer → `videoenc` auf Hosts ohne NVENC laut
+  (`videoconvert` nimmt kein GLMemory) statt still über die CPU zu kopieren.
+- V4L2-MJPEG auf GPU (`nvjpegdec`/`vajpegdec`): strom-`devicesrc` nimmt nur
+  Rohformate an (dokumentierte Einschränkung dort).
+- 32 × 720p: einzelne Inputs verhungern sporadisch, Ursache unbekannt.

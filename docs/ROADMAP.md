@@ -155,6 +155,22 @@ Latenz < 5 Frames, keine Drops über 10 min; Pipeline-Graph zeigt keinen
 Download im Hot-Path; Messwerte in `docs/LATENCY.md`. Danach Kapazitätsgrenze
 ausreizen (32+ Inputs) und dokumentieren.
 
+**Stand 2026-09-30** (Details `DECISIONS.md`, Messwerte `LATENCY.md`):
+
+| # | Stand |
+|---|---|
+| G.1 | ✅ Ursachen: GL-Probe (1.28), GLES/CUDA, Thumbnail-Tap pausierte Pipeline. `run.sh` ohne Override |
+| G.2 | ✅ Console setzt Backend immer explizit, `auto` ohne GPU bricht ab |
+| G.3 | ◐ Console: `gpu_profile.rs`. strom: EFP-Decoder nach Rang statt `nvh264dec`. Offen: Elementwahl als eigene Schicht in strom |
+| G.4 | ◐ NVDEC aus Datei und SRT → CUDA ohne Kopie; Deinterlacer nur bei interlaced; GL-Mixer nimmt CUDA/VA (Brücke). Offen: V4L2-MJPEG, NDI, OMT (M2) |
+| G.5 | ◐ NVENC aus CUDA ✅. VA-Encode aus GL (DMABuf): offen, ohne Hardware nicht prüfbar |
+| G.6 | ◐ Skalierung auf GPU (CUDA, GL, VA unverifiziert). JPEG noch CPU |
+| G.7 | ✅ `cudacompositor` auf NVIDIA (6 % vs. 108 % CPU) → Backend `cuda` |
+| G.8 | ✅ Selftest: fps je Input/Ausgang, Alter, CPU, GPU/NVDEC/NVENC, VRAM. AMD/Intel-fdinfo offen |
+
+Abnahme NVIDIA ✅: 16 × 1080p30, 10 min, alle Budgets. Kapazität: 24 ×
+1080p30 im Budget; 32 × 720p sporadisch einzelne Inputs < 29 fps (offen).
+
 ### M1-Rest — Console abschließen
 
 | # | Punkt | Ort |
