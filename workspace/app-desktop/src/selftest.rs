@@ -51,10 +51,11 @@ const MIN_OUTPUT_FPS: f64 = 29.0;
 const MAX_PGM_AGE_MS: f64 = 167.0;
 /// Output picture check: poll interval, minimum picture changes over the
 /// run and minimum luma standard deviation of the busiest frame (black or
-/// a flat colour is ~0; the ball clip ~40).
+/// a flat colour is ~0; the mostly black "ball" pattern ~6, the ball clip
+/// ~40).
 const OUTPUT_PICTURE_EVERY: Duration = Duration::from_millis(500);
 const MIN_OUTPUT_CHANGES: u64 = 3;
-const MIN_OUTPUT_LUMA_STD: f64 = 8.0;
+const MIN_OUTPUT_LUMA_STD: f64 = 3.0;
 /// Probes outlive the load phase by this much, then the backend drops them.
 const PROBE_GRACE_S: u64 = 10;
 
