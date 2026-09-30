@@ -353,6 +353,24 @@ bleiben REST-Polling-Last pro Bild und egui-Texturupload in der Console.
 (b) WHEP bleibt die Variante für einen großen PGM-Monitor in voller
 Framerate.
 
+## 2026-09-30 — M1-Rest (Branch `m1-rest`): Audio, AFV, Monitore
+
+Autonom umgesetzt, wartet auf Freigabe (M1b zuerst).
+
+1. **Audio im Console-Flow**: ein `builtin.mixer`, Kanal `i + 1` = Input
+   `i`. Testbilder bekommen einen Testton (Quinte je Input), Dateien den
+   Player-Ton; SRT/Geräte vorerst ohne Ton. Mixer-Summe → `vm:pgm_audio_in`
+   (Multiview-Meter). Kein Audio-Ausgang zu Encodern (M3).
+2. **AFV** clientseitig: AFV-Kanäle sind nur live, solange ihr Input auf
+   PGM ist; folgt dem PGM aus den WS-Events (wirkt auch bei Takes über API
+   oder andere Clients). Harter Schnitt ohne Audio-Blende; vMix blendet mit.
+   Geprüft über die Mixer-Properties der Engine, weil die Kanal-Meter vor
+   Fader/Mute messen.
+3. **PROGRAM-Monitor** = Thumbnail-Tap am PGM-Ausgang (1 fps). Vorher
+   zeigte er das Input-Thumbnail und damit weder FTB noch Blenden.
+4. strom-Takes nehmen immer den aktuellen PVW, unabhängig von `to_input`
+   im Request.
+
 ## 2026-09-30 — M1b freigegeben; GPU-Deinterlacing bleibt
 
 **Entscheidung** (User):

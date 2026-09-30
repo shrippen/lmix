@@ -184,6 +184,16 @@ Budget; 32 × 1080p30 NVDEC-begrenzt. Offen: sporadischer Startfehler bei
 
 **Abnahme**: PGM-Monitor ≥ 25 fps sichtbar; Take mit AFV; Akzeptanz M1 erfüllt.
 
+**Stand 2026-09-30** (Branch `m1-rest`, nicht in `main`, wartet auf
+M1b-Freigabe):
+
+| # | Stand |
+|---|---|
+| 1.1 | ◐ Entscheidung offen (Messdaten in `DECISIONS.md`). Vorarbeit: PROGRAM-Monitor zeigt jetzt das echte PGM (Tap am Ausgang, 1 fps) statt des Input-Thumbnails |
+| 1.2 | ✅ Audio pro Input (Testton/Dateiton) → Audio-Mixer; AFV-Schalter pro Kanal, folgt PGM aus WS |
+| 1.3 | ✅ FTB (mit AUTO-Dauer) und DSK-Toggles; Selftest: FTB macht PGM schwarz |
+| 1.4 | ✅ `--selftest-dropout`: Quelle stoppt mitten in der Blende; Blende schließt ab, Cut zurück, Ausgänge ohne Einbruch; WS-Spiegel = Engine-Zustand |
+
 ### M2 — OMT (wie geplant) + Interop
 
 - OmtBlock Input (Option a, entschieden). **B**
