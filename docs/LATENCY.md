@@ -113,10 +113,13 @@ konfigurierte SRT-Latenz; Budget von 167 ms gilt für lokale Quellen.
 
 **Interlaced über SRT** (1 × 1080i, H.264 Main 8-Bit 4:2:0, MBAFF/Field,
 plus 1 Testbild): NVDEC dekodiert, der Deinterlacer wird nur für diese
-Quelle eingefügt (`cudadownload ! deinterlace`, yadif auf der CPU, weil
-GStreamer keinen CUDA-Deinterlacer hat). Input 30 fps, Bild korrekt.
-Offen: Deinterlacing auf der GPU (NVDEC selbst kann es, `nvh264dec`
-bietet es nicht an).
+Quelle eingefügt. Erst `cudadownload ! deinterlace` (yadif, CPU): Backend
+50 % CPU. Seit strom "Deinterlace NVDEC frames on the GPU" auf der GPU
+(`cudaconvert` → RGBA → `cudadownload` nach GL → `gldeinterlace
+greedyh`): 23 %, Bild korrekt.
+**Entscheidungspunkt**: yadif verdoppelte auf Halbbildrate (1080i50 →
+50p), `gldeinterlace` behält die Bildrate (→ 25p). Gewählt: GPU
+(Performance zuerst); bei Bedarf an 50p-Bewegung neu abwägen.
 
 ## AMD / Intel
 
