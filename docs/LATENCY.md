@@ -5,6 +5,15 @@ Messwerte der Performance-Abnahmen. Neueste oben.
 ## Messmethode
 
 Werkzeug: Selftest der Console (headless), gegen ein Release-Backend.
+Abnahme in einem Schritt (baut, erzeugt den Testclip, startet ein eigenes
+Backend auf Port 8199):
+
+```bash
+scripts/acceptance-m1b.sh            # 16 Inputs, 600 s
+scripts/acceptance-m1b.sh 24 60      # Kapazität
+```
+
+Von Hand:
 
 ```bash
 cd workspace/strom && cargo build --release --features no-gui
