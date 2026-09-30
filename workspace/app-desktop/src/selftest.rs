@@ -96,6 +96,49 @@ pub enum OutputLoad {
     Encode,
 }
 
+/// GPU load samples from the engine's `SystemStats` events (first GPU).
+#[derive(Default)]
+struct GpuLoad {
+    gpu: Vec<f32>,
+    decoder: Vec<f32>,
+    encoder: Vec<f32>,
+    vram_max: u64,
+}
+
+impl GpuLoad {
+    fn record(&mut self, stats: &strom_types::SystemStats) {
+        let Some(g) = stats.gpu_stats.first() else {
+            return;
+        };
+        self.gpu.push(g.utilization);
+        self.decoder.extend(g.decoder_utilization);
+        self.encoder.extend(g.encoder_utilization);
+        self.vram_max = self.vram_max.max(g.used_memory);
+    }
+
+    fn report(&self) {
+        if self.gpu.is_empty() {
+            println!("gpu: no stats from engine");
+            return;
+        }
+        let mean_max = |v: &[f32]| {
+            if v.is_empty() {
+                return "n/a".to_string();
+            }
+            let mean = v.iter().sum::<f32>() / v.len() as f32;
+            let max = v.iter().copied().fold(0.0, f32::max);
+            format!("mean {mean:.0} %  max {max:.0} %")
+        };
+        println!(
+            "gpu: {}; decoder: {}; encoder: {}; vram max {:.1} GB",
+            mean_max(&self.gpu),
+            mean_max(&self.decoder),
+            mean_max(&self.encoder),
+            self.vram_max as f64 / 1e9
+        );
+    }
+}
+
 /// Where a probe sits.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum ProbePoint {
@@ -326,6 +369,7 @@ async fn run_flow(
     println!("all inputs live after {:.1} s", started.elapsed().as_secs_f64());
 
     let mut outputs = start_output_probes(api, flow_id, opts, &thumbs).await;
+    let mut gpu_load = GpuLoad::default();
 
     // Switcher task: preview + take at a fixed cadence until `stop`.
     let switcher = {
@@ -362,6 +406,7 @@ async fn run_flow(
         while let Ok((_, msg)) = rx.try_recv() {
             match msg {
                 AppMessage::Event(StromEvent::VisionMixerStateChanged { .. }) => perf.take_confirmed(),
+                AppMessage::Event(StromEvent::SystemStats(stats)) => gpu_load.record(&stats),
                 AppMessage::Event(StromEvent::BufferAgeProbe { probe_id, age_ms, sample_number, .. }) => {
                     if let Some(p) = outputs.get_mut(&probe_id) {
                         p.record(age_ms, sample_number);
@@ -401,6 +446,7 @@ async fn run_flow(
         .map(|f| f.running)
         .unwrap_or(false);
 
+    gpu_load.report();
     let ok = check_outputs(opts, &outputs);
     verdict(perf, &probes, inputs, switches, switch_failures, still_playing, &cpu_samples, rss_kb_max) && ok
 }
