@@ -3,6 +3,7 @@
 //! (see claude.md, "Feststehende Entscheidung 4").
 
 mod api;
+mod gpu_profile;
 mod perf;
 mod selftest;
 mod source_ui;
@@ -22,6 +23,7 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc;
 use std::sync::Arc;
+use gpu_profile::{BackendChoice, MixerBackend};
 use strom_types::{Flow, StromEvent};
 
 /// lmix Console
@@ -70,6 +72,10 @@ struct Args {
     /// Thumbnail poll interval per input, in milliseconds.
     #[arg(long, default_value_t = DEFAULT_THUMB_MS)]
     thumb_ms: u64,
+
+    /// Vision mixer backend for new flows (auto = fastest for the engine's GPU).
+    #[arg(long, value_enum, default_value_t = BackendChoice::Auto)]
+    mixer_backend: BackendChoice,
 }
 
 /// A background task tags every message it sends with the session it was
@@ -85,6 +91,7 @@ const IDLE_REPAINT_MS: u64 = 250;
 const PERF_REPAINT_MS: u64 = 16;
 const DEFAULT_THUMB_MS: u64 = 250;
 const LATENCY_POLL_MS: u64 = 2000;
+const GPU_INFO_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
 const DEFAULT_AUTO_MS: u64 = 300;
 const AUTO_MS_RANGE: std::ops::RangeInclusive<u64> = 100..=5000;
 
@@ -111,6 +118,7 @@ struct ConsoleApp {
     last_frame: Option<std::time::Instant>,
     builder: SourceBuilder,
     devices: Vec<strom_types::discovery::DeviceResponse>,
+    backend_choice: BackendChoice,
 }
 
 impl ConsoleApp {
@@ -137,6 +145,7 @@ impl ConsoleApp {
             last_frame: None,
             builder: SourceBuilder::new(),
             devices: Vec::new(),
+            backend_choice: args.mixer_backend,
         };
         app.refresh_flows();
         app.refresh_devices();
@@ -177,17 +186,25 @@ impl ConsoleApp {
     /// Build a flow from the user's source list, create it on the backend
     /// and report it back so the Console can open it.
     fn create_flow(&self, request: source_ui::CreateRequest) {
-        let flow = match sources::build_flow(&request.name, &request.sources) {
-            Ok(flow) => flow,
-            Err(e) => {
-                let _ = self.tx.send((0, AppMessage::Error(e.to_string())));
-                return;
-            }
-        };
         let api = self.api.clone();
         let tx = self.tx.clone();
         let session = self.session.load(Ordering::SeqCst);
+        let choice = self.backend_choice;
         tokio::spawn(async move {
+            let backend = match resolve_backend(&api, choice).await {
+                Ok(backend) => backend,
+                Err(e) => {
+                    let _ = tx.send((session, AppMessage::Error(e)));
+                    return;
+                }
+            };
+            let flow = match sources::build_flow(&request.name, &request.sources, backend) {
+                Ok(flow) => flow,
+                Err(e) => {
+                    let _ = tx.send((session, AppMessage::Error(e.to_string())));
+                    return;
+                }
+            };
             let msg = match api.create_flow(&flow).await {
                 Ok(created) => AppMessage::FlowCreated(created),
                 Err(e) => AppMessage::Error(format!("Failed to create flow: {e}")),
@@ -327,13 +344,7 @@ impl ConsoleApp {
         spawn_latency_poller(self.perf.clone(), self.api.clone(), self.session.clone(), session, flow_id);
 
         // WS event stream for live PVW/PGM state.
-        let ws_url = self
-            .api
-            .base_url()
-            .replacen("http://", "ws://", 1)
-            .replacen("https://", "wss://", 1)
-            + "/api/ws";
-        ws::connect(ws_url, self.tx.clone(), ctx.clone(), session, self.perf.clone());
+        ws::connect(self.api.ws_url(), self.tx.clone(), ctx.clone(), session, self.perf.clone());
     }
 
     /// Put an input on PVW (click a tile, or a number hotkey).
@@ -948,6 +959,18 @@ impl eframe::App for ConsoleApp {
     }
 }
 
+/// Mixer backend for a new flow, from the engine's GPU (see `gpu_profile`).
+async fn resolve_backend(api: &ApiClient, choice: BackendChoice) -> Result<MixerBackend, String> {
+    if choice != BackendChoice::Auto {
+        return MixerBackend::resolve(choice, None);
+    }
+    let stats = ws::first_system_stats(&api.ws_url(), GPU_INFO_TIMEOUT).await;
+    let gl = stats.and_then(|s| s.gl_renderer);
+    let backend = MixerBackend::resolve(choice, gl.as_ref())?;
+    tracing::info!("mixer backend {:?} for GPU {:?}", backend, gl.map(|g| g.renderer));
+    Ok(backend)
+}
+
 fn main() -> eframe::Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(
@@ -974,6 +997,7 @@ fn main() -> eframe::Result<()> {
             seconds: args.selftest_secs,
             thumb_ms: args.thumb_ms,
             perf_log: args.perf_log.clone(),
+            backend: args.mixer_backend,
         };
         let passed = runtime.block_on(selftest::run(opts));
         std::process::exit(if passed { 0 } else { 1 });

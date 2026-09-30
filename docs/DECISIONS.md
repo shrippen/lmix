@@ -234,3 +234,61 @@ Hardwaregrenze.
    markieren; Abnahme auf echter Hardware später (M5b).
 
 Details: `docs/ROADMAP.md`.
+
+## 2026-09-30 — M1b: Ursachen des CPU-Pfads, CUDA-Mixer auf NVIDIA
+
+**Kontext**: M1b G.1 (Diagnose), G.7 (GL vs. herstellereigener
+Compositor), G.3 (Backendwahl). Host: RTX 3090, GStreamer 1.28.7,
+Treiber 615.71.
+
+**Befunde G.1** (Ursachen für "kein GL"/CPU-Compositor):
+1. stroms GL-Probe (`gpu.rs`) endete in einem unbeschränkten `appsink`.
+   `glupload` verhandelt in 1.28 dann DMABuf statt GLMemory, der Puffer
+   trägt keinen GL-Kontext → `has_hardware_gl()` = false → "auto" wählt
+   still den CPU-Compositor. Fix: Caps-Filter `memory:GLMemory`
+   (strom-Commit, upstream-tauglich). Allein das: 8 Testbilder 700 → 92 %
+   CPU, 16 → 1700 → 160 %.
+2. GStreamer wählt auf diesem Host GLES (EGL). GLES-Kontexte sind nicht
+   CUDA-kompatibel (`OpenGL context could not support PBO download`):
+   NVDEC fällt dann still auf Systemspeicher zurück. Mit
+   `GST_GL_API=opengl3` gibt NVDEC GLMemory aus.
+3. GL-Speicher aus einer anderen Pipeline (Media-Player dekodiert in einer
+   eigenen) scheitert in `glcolorconvert`, wenn das `GstGLDisplay` nicht
+   geteilt ist.
+4. `autovideoconvert` `not-negotiated` (2026-09-19) betraf nur den
+   CPU-Builder; mit GPU-Backend tritt es nicht auf.
+   `STROM_FORCE_SOFTWARE_CONVERT` bleibt in strom, `run.sh` braucht es
+   nicht mehr.
+
+**Messung G.7** (gst-launch, 16 × 1080p30 H.264 aus Datei, NVDEC,
+4×4-Raster 1080p30, `bench.sh` im Scratchpad):
+
+| Pfad | fps | CPU | GPU | VRAM |
+|---|---:|---:|---:|---:|
+| NVDEC → GLMemory → `glvideomixer` | 25 | 108 % | 17 % | 5,7 GB |
+| NVDEC → System → `glupload` → `glvideomixer` | 30 | 89 % | 24 % | 5,5 GB |
+| NVDEC → CUDA → `cudacompositor` | 30 | 6 % | 1 % | 4,7 GB |
+| NVDEC → System → `compositor` (CPU) | 30 | 240 % | 12 % | 4,1 GB |
+
+32 Inputs: NVDEC bei 100 % (Hardwaregrenze dieser Karte für diesen
+Inhalt); `cudacompositor` 28 fps/28 % CPU, GL 27 fps/186 %.
+
+**Entscheidung** (nach Leitprinzip "herstellereigener Pfad nur, wenn
+messbar schneller"):
+1. NVIDIA: Vision Mixer mit neuem Backend `cuda` (`cudacompositor`),
+   Frames bleiben von NVDEC bis NVENC im CUDA-Speicher. strom-Patch,
+   upstream-tauglich: gleiche Topologie wie der CPU-Builder, `cudaupload`
+   statt `videoconvert`, Crop über `videocrop`-Meta.
+   Einschränkung: keine Shader-FX (Wipes fallen wie auf CPU auf Fade
+   zurück, Looks/Master-FX fehlen). Wer FX braucht, wählt `gl`.
+2. AMD/Intel: GL-Mixer (`gpu`), unverifiziert (M5b).
+3. Backendwahl in der Console (`gpu_profile.rs`): Hersteller aus stroms
+   GL-Renderer (WS `SystemStats`), `--mixer-backend auto|cuda|gl|cpu`.
+   `auto` ohne Hardware-GPU bricht ab; CPU nur explizit.
+4. strom teilt einen CUDA-Kontext über alle Pipelines
+   (`gpu::share_gpu_contexts`). Ohne: pro Media-Player-Pipeline ein
+   Kontext; 16 Inputs 9,6 GB VRAM/4,1 GB RSS, mit: 4,6 GB/1,0 GB.
+5. Thumbnail-Tap skaliert CUDA-Frames auf der GPU (`cudaconvertscale`),
+   lädt nur 320×180 herunter.
+
+Messwerte der Abnahme: `docs/LATENCY.md`.

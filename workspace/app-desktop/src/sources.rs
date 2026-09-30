@@ -16,6 +16,8 @@ use strom_types::block::{BlockInstance, Position};
 use strom_types::element::{Element, Link};
 use strom_types::{Flow, PropertyValue};
 
+use crate::gpu_profile::MixerBackend;
+
 pub const MIN_SOURCES: usize = 2;
 pub const MAX_SOURCES: usize = 16;
 
@@ -27,6 +29,7 @@ const MEDIA_PLAYER_BLOCK: &str = "builtin.media_player";
 const LOCAL_INPUT_BLOCK: &str = "builtin.local_input";
 const THUMBNAIL_BLOCK: &str = "builtin.thumbnail";
 const VISION_MIXER_BLOCK: &str = "builtin.vision_mixer";
+
 
 const COLUMN_SPACING: f32 = 240.0;
 const ROW_SPACING: f32 = 120.0;
@@ -258,7 +261,11 @@ fn add_source(flow: &mut Flow, i: usize, spec: &SourceSpec) -> String {
 }
 
 /// Build the complete flow: sources -> thumbnail taps -> vision mixer.
-pub fn build_flow(name: &str, sources: &[SourceSpec]) -> Result<Flow, FlowBuildError> {
+pub fn build_flow(
+    name: &str,
+    sources: &[SourceSpec],
+    backend: MixerBackend,
+) -> Result<Flow, FlowBuildError> {
     if sources.len() < MIN_SOURCES {
         return Err(FlowBuildError::TooFew);
     }
@@ -287,7 +294,13 @@ pub fn build_flow(name: &str, sources: &[SourceSpec]) -> Result<Flow, FlowBuildE
         mixer_id,
         VISION_MIXER_BLOCK,
         pos(3, 0),
-        vec![("num_inputs", PropertyValue::Int(sources.len() as i64))],
+        vec![
+            ("num_inputs", PropertyValue::Int(sources.len() as i64)),
+            (
+                "compositor_preference",
+                PropertyValue::String(backend.property().to_string()),
+            ),
+        ],
     ));
 
     Ok(flow)
@@ -305,13 +318,24 @@ mod tests {
 
     #[test]
     fn rejects_out_of_range_counts() {
-        assert_eq!(build_flow("f", &patterns(1)).unwrap_err(), FlowBuildError::TooFew);
-        assert_eq!(build_flow("f", &patterns(17)).unwrap_err(), FlowBuildError::TooMany);
+        assert_eq!(build_flow("f", &patterns(1), MixerBackend::Cuda).unwrap_err(), FlowBuildError::TooFew);
+        assert_eq!(build_flow("f", &patterns(17), MixerBackend::Cuda).unwrap_err(), FlowBuildError::TooMany);
+    }
+
+    #[test]
+    fn mixer_gets_the_chosen_backend() {
+        let flow = build_flow("f", &patterns(2), MixerBackend::Gl).unwrap();
+        let mixer = flow.blocks.iter().find(|b| b.block_definition_id == VISION_MIXER_BLOCK).unwrap();
+
+        assert!(matches!(
+            mixer.properties.get("compositor_preference"),
+            Some(PropertyValue::String(s)) if s == "gpu"
+        ));
     }
 
     #[test]
     fn every_input_gets_a_thumbnail_tap_into_the_mixer() {
-        let flow = build_flow("f", &patterns(4)).unwrap();
+        let flow = build_flow("f", &patterns(4), MixerBackend::Cuda).unwrap();
 
         for i in 0..4 {
             let target = format!("vm:video_in_{i}");
@@ -331,7 +355,7 @@ mod tests {
                 name: "Cam".into(),
             },
         ];
-        let flow = build_flow("f", &sources).unwrap();
+        let flow = build_flow("f", &sources, MixerBackend::Cuda).unwrap();
 
         assert_eq!(flow.elements.len(), 2);
         assert!(flow.links.iter().any(|l| l.to == "thumb1:video_in" && l.from == "media1:video_out"));
@@ -340,7 +364,7 @@ mod tests {
 
     #[test]
     fn file_playlist_is_json_array() {
-        let flow = build_flow("f", &[SourceSpec::File("/a b.mp4".into()), SourceSpec::File("c".into())]).unwrap();
+        let flow = build_flow("f", &[SourceSpec::File("/a b.mp4".into()), SourceSpec::File("c".into())], MixerBackend::Cuda).unwrap();
         let player = flow.blocks.iter().find(|b| b.id == "media0").unwrap();
 
         assert!(matches!(

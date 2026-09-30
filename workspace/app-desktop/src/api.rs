@@ -41,6 +41,14 @@ impl ApiClient {
         &self.base_url
     }
 
+    /// WebSocket event stream URL of the same server.
+    pub fn ws_url(&self) -> String {
+        self.base_url
+            .replacen("http://", "ws://", 1)
+            .replacen("https://", "wss://", 1)
+            + "/api/ws"
+    }
+
     async fn check_status(resp: reqwest::Response) -> ApiResult<reqwest::Response> {
         if resp.status().is_success() {
             return Ok(resp);

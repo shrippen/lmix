@@ -77,3 +77,21 @@ async fn connection_loop(
         attempt += 1;
     }
 }
+
+/// Connect once and return the engine's first `SystemStats` event (the
+/// server sends one right after connecting), or `None` after `timeout`.
+pub async fn first_system_stats(url: &str, timeout: Duration) -> Option<strom_types::SystemStats> {
+    let wait = async {
+        let (mut ws_stream, _) = connect_async(url).await.ok()?;
+        while let Some(Ok(msg)) = ws_stream.next().await {
+            let Message::Text(text) = msg else {
+                continue;
+            };
+            if let Ok(StromEvent::SystemStats(stats)) = serde_json::from_str::<StromEvent>(&text) {
+                return Some(stats);
+            }
+        }
+        None
+    };
+    tokio::time::timeout(timeout, wait).await.ok().flatten()
+}

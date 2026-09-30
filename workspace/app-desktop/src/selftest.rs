@@ -17,6 +17,7 @@
 //! (thumbnail gaps, take latency, flow leaving Playing).
 
 use crate::api::ApiClient;
+use crate::gpu_profile::BackendChoice;
 use crate::perf::{Metric, Perf};
 use crate::sources::{build_flow, SourceSpec, TestPattern};
 use crate::state::{find_switchable_flows, find_thumbnail_block, AppMessage};
@@ -75,6 +76,7 @@ pub struct Options {
     pub seconds: u64,
     pub thumb_ms: u64,
     pub perf_log: Option<std::path::PathBuf>,
+    pub backend: BackendChoice,
 }
 
 #[derive(Default)]
@@ -136,7 +138,14 @@ pub async fn run(opts: Options) -> bool {
     let devices = api.list_video_devices().await.unwrap_or_default();
     let sources = sources_for(&opts, &devices);
     let name = format!("selftest-{}", std::process::id());
-    let flow = match build_flow(&name, &sources) {
+    let backend = match crate::resolve_backend(&api, opts.backend).await {
+        Ok(b) => b,
+        Err(e) => {
+            eprintln!("FAIL: {e}");
+            return false;
+        }
+    };
+    let flow = match build_flow(&name, &sources, backend) {
         Ok(f) => f,
         Err(e) => {
             eprintln!("cannot build flow: {e}");
@@ -144,7 +153,7 @@ pub async fn run(opts: Options) -> bool {
         }
     };
 
-    println!("selftest: {} inputs, {} s", sources.len(), opts.seconds);
+    println!("selftest: {} inputs, {} s, mixer backend {:?}", sources.len(), opts.seconds, backend);
     for (i, s) in sources.iter().enumerate() {
         println!("  input {i}: {}", s.label());
     }
@@ -188,8 +197,7 @@ async fn run_flow(
 
     // WS listener: pacing + take confirmation.
     let (tx, rx) = mpsc::channel::<(u64, AppMessage)>();
-    let ws_url = opts.server.replacen("http://", "ws://", 1) + "/api/ws";
-    crate::ws::connect(ws_url, tx, egui::Context::default(), 0, perf.clone());
+    crate::ws::connect(api.ws_url(), tx, egui::Context::default(), 0, perf.clone());
 
     let probes: Arc<Mutex<Vec<InputProbe>>> =
         Arc::new(Mutex::new((0..inputs).map(|_| InputProbe::default()).collect()));
