@@ -50,8 +50,9 @@ Multiview 720p30 → 2 × NVENC, 10 min Dauerlauf, Take alle 1,5 s
 - GPU 2 %, NVDEC 54 %, VRAM 4,8 GB (inkl. Desktop).
 - Speicherpfad (pad-caps): NVDEC → CUDA → `cudacompositor` → CUDA → NVENC.
   Einzige Downloads: 16 Thumbnail-Taps, 320×180 bei 1 fps.
-- **Offen**: Start bis alle Inputs Bild zeigen 5–19 s, streut; Inputs
-  starten seriell (~1 s Abstand). Budget 15 s mehrfach gerissen.
+- Start bis alle Inputs Bild zeigen: im Dauerlauf 15,3 s (seriell, ~1 s
+  Abstand). Ursache: jeder Thumbnail-Tap warf die Pipeline kurz auf PAUSED.
+  Behoben (strom `Keep the pipeline PLAYING…`): 16 Inputs nach 2,3 s.
 
 **Vergleich derselbe Host, andere Pfade** (Selftest, 30 s):
 
