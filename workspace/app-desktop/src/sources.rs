@@ -330,6 +330,8 @@ pub fn build_flow(
 /// One hardware-encoded mixer output: `vm:<mixer_pad> -> <encoder> -> <sink>`.
 pub struct EncodedOutput {
     pub mixer_pad: &'static str,
+    /// Thumbnail tap on the mixer output: proves it carries a picture.
+    pub tap: &'static str,
     /// Encoder block id; a probe on it measures frames entering the encoder.
     pub encoder: &'static str,
     /// Terminating `fakesink`; a probe on it measures encoded frames.
@@ -341,17 +343,20 @@ pub struct EncodedOutput {
 pub const ENCODED_OUTPUTS: [EncodedOutput; 2] = [
     EncodedOutput {
         mixer_pad: "pgm_out",
+        tap: "tap_pgm",
         encoder: "enc_pgm",
         sink: "sink_pgm",
     },
     EncodedOutput {
         mixer_pad: "multiview_out",
+        tap: "tap_mv",
         encoder: "enc_mv",
         sink: "sink_mv",
     },
 ];
 
-/// Terminate the mixer outputs in hardware encoders (see [`ENCODED_OUTPUTS`]).
+/// Terminate the mixer outputs in hardware encoders (see [`ENCODED_OUTPUTS`]),
+/// each behind a thumbnail tap.
 /// `sync=true` on the sinks, so frames are consumed at real time like a
 /// network or file output would.
 pub fn add_encoders(flow: &mut Flow) {
@@ -372,8 +377,14 @@ pub fn add_encoders(flow: &mut Flow) {
             pad_properties: Default::default(),
             position: (5.0 * COLUMN_SPACING, row as f32 * ROW_SPACING),
         });
+        flow.blocks
+            .push(block(out.tap.to_string(), THUMBNAIL_BLOCK, pos(4, row + ENCODED_OUTPUTS.len()), vec![]));
         flow.links.push(link(
             format!("{MIXER_ID}:{}", out.mixer_pad),
+            format!("{}:video_in", out.tap),
+        ));
+        flow.links.push(link(
+            format!("{}:video_out", out.tap),
             format!("{}:video_in", out.encoder),
         ));
         flow.links
@@ -404,8 +415,11 @@ mod tests {
 
         for out in &ENCODED_OUTPUTS {
             let from = format!("vm:{}", out.mixer_pad);
+            let tap_in = format!("{}:video_in", out.tap);
+            let tap_out = format!("{}:video_out", out.tap);
             let to = format!("{}:video_in", out.encoder);
-            assert!(flow.links.iter().any(|l| l.from == from && l.to == to));
+            assert!(flow.links.iter().any(|l| l.from == from && l.to == tap_in));
+            assert!(flow.links.iter().any(|l| l.from == tap_out && l.to == to));
             assert!(flow.links.iter().any(|l| l.to == out.sink));
         }
     }

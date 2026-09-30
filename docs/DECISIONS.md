@@ -258,7 +258,9 @@ Treiber 615.71.
 4. `autovideoconvert` `not-negotiated` (2026-09-19) betraf nur den
    CPU-Builder; mit GPU-Backend tritt es nicht auf.
    `STROM_FORCE_SOFTWARE_CONVERT` bleibt in strom, `run.sh` braucht es
-   nicht mehr.
+   nicht mehr. Nachtrag: Das CPU-Backend startete ohne Override gar nicht
+   und lieferte sonst schwarzes PGM; seit strom `b38ace4` nutzt es
+   `videoconvert` + Speicherbrücke und läuft ohne Override.
 
 **Messung G.7** (gst-launch, 16 × 1080p30 H.264 aus Datei, NVDEC,
 4×4-Raster 1080p30, `bench.sh` im Scratchpad):
@@ -307,10 +309,18 @@ Messwerte der Abnahme: `docs/LATENCY.md`.
 4. **Mixer-Kappung 16 → 32 Inputs** (weiche Grenze laut strom-Kommentar).
 5. **NVENC `rate-control` → `rc-mode`** in 1.28 (Panic bei
    `nvautogpuh264enc`).
-6. **Vorbestehend, nicht behoben**: `vision_mixer_fx_test::
-   wipe_between_letterboxed_sources_animates` schlägt auf diesem Host schon
-   auf dem Ausgangsstand fehl (GL-FX, "PGM should start mostly white, got
-   0"). Betrifft nur das GL-Backend mit FX.
+6. **GL-Mixer schwarz bei direkt verlinkten Quellen (NVIDIA)**:
+   `glupload` (1.28) schlägt der Quelle udmabuf-Speicher vor; der NVIDIA-
+   Treiber importiert den DMABuf als leere Textur. Auch reines gst-launch
+   zeigt das. Fix nur für NVIDIA: Allocation-Query am Mixer-Eingang nicht
+   weiterreichen. Damit ist der vorbestehend rote
+   `vision_mixer_fx_test::wipe_between_letterboxed_sources_animates` grün
+   und die strom-Testsuite auf diesem Host erstmals vollständig grün.
+   Console-Flows waren nicht betroffen (Thumbnail-Tee vor dem Mixer).
+7. **Selftest prüft jetzt das Bild**: Thumbnail-Taps auf PGM und
+   Multiview; ohne sie waren schwarze Ausgänge unsichtbar, weil nur
+   fps/Alter gemessen wurden. Alle drei Backends (cuda, gl, cpu) zeigen
+   Bildinhalt.
 
 **Offen (M1b-Rest / M5b)**:
 - VA-Encode aus GL-Speicher (DMABuf-Export) — ohne AMD/Intel nicht

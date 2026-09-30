@@ -49,6 +49,12 @@ const MAX_STARTUP_S: f64 = 15.0;
 const MIN_OUTPUT_FPS: f64 = 29.0;
 /// PGM buffer age after the encoder: 5 frames at 30 fps (M1b budget).
 const MAX_PGM_AGE_MS: f64 = 167.0;
+/// Output picture check: poll interval, minimum picture changes over the
+/// run and minimum luma standard deviation of the busiest frame (black or
+/// a flat colour is ~0; the ball clip ~40).
+const OUTPUT_PICTURE_EVERY: Duration = Duration::from_millis(500);
+const MIN_OUTPUT_CHANGES: u64 = 3;
+const MIN_OUTPUT_LUMA_STD: f64 = 8.0;
 /// Probes outlive the load phase by this much, then the backend drops them.
 const PROBE_GRACE_S: u64 = 10;
 
@@ -137,6 +143,65 @@ impl GpuLoad {
             self.vram_max as f64 / 1e9
         );
     }
+}
+
+/// What the thumbnail tap on one mixer output showed during the run.
+#[derive(Default)]
+struct OutputPicture {
+    polls: u64,
+    changes: u64,
+    last_hash: Option<u64>,
+    max_luma_std: f64,
+}
+
+impl OutputPicture {
+    fn record(&mut self, jpeg: &[u8]) {
+        self.polls += 1;
+        let hash = hash_bytes(jpeg);
+        self.changes += u64::from(self.last_hash.is_some_and(|h| h != hash));
+        self.last_hash = Some(hash);
+        if let Some(std) = luma_std(jpeg) {
+            self.max_luma_std = self.max_luma_std.max(std);
+        }
+    }
+
+    fn ok(&self) -> bool {
+        self.changes >= MIN_OUTPUT_CHANGES && self.max_luma_std >= MIN_OUTPUT_LUMA_STD
+    }
+}
+
+/// Standard deviation of the luma of a JPEG, `None` if it does not decode.
+fn luma_std(jpeg: &[u8]) -> Option<f64> {
+    let img = image::load_from_memory(jpeg).ok()?.to_luma8();
+    let n = img.pixels().len() as f64;
+    let mean = img.pixels().map(|p| p.0[0] as f64).sum::<f64>() / n;
+    let var = img.pixels().map(|p| (p.0[0] as f64 - mean).powi(2)).sum::<f64>() / n;
+    Some(var.sqrt())
+}
+
+/// Poll each mixer output's thumbnail tap until `stop`.
+fn watch_output_pictures(
+    api: &ApiClient,
+    flow_id: strom_types::FlowId,
+    stop: &Arc<AtomicU64>,
+) -> Vec<(&'static str, tokio::task::JoinHandle<OutputPicture>)> {
+    ENCODED_OUTPUTS
+        .iter()
+        .map(|out| {
+            let (api, stop) = (api.clone(), stop.clone());
+            let task = tokio::spawn(async move {
+                let mut picture = OutputPicture::default();
+                while stop.load(Ordering::SeqCst) == 0 {
+                    if let Ok(jpeg) = api.get_thumbnail(flow_id, out.tap).await {
+                        picture.record(&jpeg);
+                    }
+                    tokio::time::sleep(OUTPUT_PICTURE_EVERY).await;
+                }
+                picture
+            });
+            (out.mixer_pad, task)
+        })
+        .collect()
 }
 
 /// Where a probe sits.
@@ -369,6 +434,11 @@ async fn run_flow(
     println!("all inputs live after {:.1} s", started.elapsed().as_secs_f64());
 
     let mut outputs = start_output_probes(api, flow_id, opts, &thumbs).await;
+    let pictures = if opts.outputs == OutputLoad::Encode {
+        watch_output_pictures(api, flow_id, &stop)
+    } else {
+        Vec::new()
+    };
     let mut gpu_load = GpuLoad::default();
 
     // Switcher task: preview + take at a fixed cadence until `stop`.
@@ -439,6 +509,19 @@ async fn run_flow(
         let _ = p.await;
     }
     let (switches, switch_failures) = switcher.await.unwrap_or((0, 1));
+    let mut pictures_ok = true;
+    for (pad, task) in pictures {
+        let picture = task.await.unwrap_or_default();
+        let ok = picture.ok();
+        pictures_ok &= ok;
+        println!(
+            "{} {pad} picture: {} changes in {} polls, max luma std {:.1} (>= {MIN_OUTPUT_CHANGES}, >= {MIN_OUTPUT_LUMA_STD:.0})",
+            if ok { "PASS" } else { "FAIL" },
+            picture.changes,
+            picture.polls,
+            picture.max_luma_std
+        );
+    }
 
     let still_playing = api
         .get_flow(flow_id)
@@ -447,7 +530,7 @@ async fn run_flow(
         .unwrap_or(false);
 
     gpu_load.report();
-    let ok = check_outputs(opts, &outputs);
+    let ok = check_outputs(opts, &outputs) && pictures_ok;
     verdict(perf, &probes, inputs, switches, switch_failures, still_playing, &cpu_samples, rss_kb_max) && ok
 }
 
