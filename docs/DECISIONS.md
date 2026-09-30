@@ -319,3 +319,24 @@ Messwerte der Abnahme: `docs/LATENCY.md`.
 - V4L2-MJPEG auf GPU (`nvjpegdec`/`vajpegdec`): strom-`devicesrc` nimmt nur
   Rohformate an (dokumentierte Einschränkung dort).
 - 32 × 720p: einzelne Inputs verhungern sporadisch, Ursache unbekannt.
+
+## 2026-09-30 — Messdaten zur offenen Entscheidung "Live-Monitore" (M1-Rest 1.1)
+
+Keine Entscheidung, nur Daten (Entscheidung beim User, `ROADMAP.md` §5.1).
+Option (a) "Thumbnail-Intervall konfigurierbar" gemessen mit temporärem
+Patch (nicht committet), 16 × 1080p30 NVDEC, CUDA-Mixer, Console pollt
+im selben Takt:
+
+| Thumbnail-Rate | JPEG | Backend-CPU | geliefert |
+|---|---|---:|---|
+| 1 fps (heute) | CPU | 17 % | 1 fps |
+| 1 fps | NVJPEG | 15 % | 1 fps |
+| 10 fps | CPU | 39 % | 10 fps |
+| 10 fps | NVJPEG | 18 % | 10 fps |
+| 25 fps angefragt | NVJPEG | 21 % | ~15 fps (Ratenbegrenzung gegen 30-fps-Quelle) |
+
+NVJPEG ist seit heute Standard im CUDA-Zweig des Thumbnail-Taps (G.6).
+Damit wäre (a) für 16 Monitore à 320×180 bei 10–15 fps billig; offen
+bleiben REST-Polling-Last pro Bild und egui-Texturupload in der Console.
+(b) WHEP bleibt die Variante für einen großen PGM-Monitor in voller
+Framerate.
