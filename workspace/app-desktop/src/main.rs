@@ -73,6 +73,11 @@ struct Args {
     #[arg(long)]
     selftest_encode: bool,
 
+    /// Self-test: stop a file input's player in the middle of a fade (needs
+    /// a --selftest-file input at index >= 1).
+    #[arg(long)]
+    selftest_dropout: bool,
+
     /// Create and open the 8-pattern preset flow right away (for testing).
     #[arg(long)]
     auto_open: bool,
@@ -1104,6 +1109,11 @@ fn main() -> eframe::Result<()> {
             thumb_ms: args.thumb_ms,
             perf_log: args.perf_log.clone(),
             backend: args.mixer_backend,
+            dropout: if args.selftest_dropout {
+                selftest::Dropout::DuringFade
+            } else {
+                selftest::Dropout::None
+            },
             outputs: if args.selftest_encode {
                 selftest::OutputLoad::Encode
             } else {

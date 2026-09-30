@@ -37,6 +37,12 @@ const LATENCY_EVERY: Duration = Duration::from_secs(2);
 const CPU_EVERY: Duration = Duration::from_secs(1);
 const SETTLE: Duration = Duration::from_millis(500);
 const FTB_MS: u64 = 300;
+/// Dropout scenario: fade length, when the source stops, time left at the end.
+const DROPOUT_FADE_MS: u64 = 1000;
+const DROPOUT_AFTER: Duration = Duration::from_millis(300);
+const DROPOUT_PHASE: Duration = Duration::from_secs(8);
+/// No 0.5 s probe window may fall below this: a stall, not jitter.
+const MIN_WINDOW_FPS: f64 = 20.0;
 const TRANSITIONS: [&str; 4] = ["cut", "fade", "dip_to_black", "wipe_left"];
 const BACKEND_COMM: &str = "strom";
 
@@ -93,6 +99,15 @@ pub struct Options {
     pub perf_log: Option<std::path::PathBuf>,
     pub backend: BackendChoice,
     pub outputs: OutputLoad,
+    pub dropout: Dropout,
+}
+
+/// Source failure scenario run at the end of the load phase.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Dropout {
+    None,
+    /// A file input's player stops while a fade to it is running.
+    DuringFade,
 }
 
 /// What hangs off the mixer outputs during the test.
@@ -222,18 +237,32 @@ struct OutputProbe {
     ages_ms: Vec<f64>,
     first: Option<(u64, Instant)>,
     last: Option<(u64, Instant)>,
+    /// Slowest frame rate between two consecutive probe events.
+    min_window_fps: Option<f64>,
 }
 
 impl OutputProbe {
     fn new(point: ProbePoint, label: String) -> Self {
-        Self { point, label, ages_ms: Vec::new(), first: None, last: None }
+        Self { point, label, ages_ms: Vec::new(), first: None, last: None, min_window_fps: None }
     }
 
     fn record(&mut self, age_ms: u64, sample: u64) {
         let now = Instant::now();
+        self.record_window(sample, now);
         self.ages_ms.push(age_ms as f64);
         self.first.get_or_insert((sample, now));
         self.last = Some((sample, now));
+    }
+
+    fn record_window(&mut self, sample: u64, now: Instant) {
+        let Some((s0, t0)) = self.last else {
+            return;
+        };
+        let secs = now.duration_since(t0).as_secs_f64();
+        if secs > 0.0 {
+            let fps = (sample - s0) as f64 / secs;
+            self.min_window_fps = Some(self.min_window_fps.map_or(fps, |m| m.min(fps)));
+        }
     }
 
     fn fps(&self) -> f64 {
@@ -349,7 +378,23 @@ pub async fn run(opts: Options) -> bool {
     };
     let flow_id = created.id;
 
-    let ok = run_flow(&opts, &api, &perf, &created, sources.len()).await;
+    // First file input after input 0: its player is what the dropout stops.
+    let dropout_input = (opts.dropout == Dropout::DuringFade)
+        .then(|| {
+            sources
+                .iter()
+                .enumerate()
+                .skip(1)
+                .find(|(_, s)| matches!(s, SourceSpec::File(_) | SourceSpec::Url(_)))
+                .map(|(i, _)| i)
+        })
+        .flatten();
+    if opts.dropout == Dropout::DuringFade && dropout_input.is_none() {
+        eprintln!("FAIL: dropout needs a file input at index >= 1");
+        return false;
+    }
+
+    let ok = run_flow(&opts, &api, &perf, &created, sources.len(), dropout_input).await;
 
     let _ = api.stop_flow(flow_id).await;
     let _ = api.delete_flow(flow_id).await;
@@ -363,6 +408,7 @@ async fn run_flow(
     perf: &Arc<Perf>,
     flow: &strom_types::Flow,
     inputs: usize,
+    dropout_input: Option<usize>,
 ) -> bool {
     let flow_id = flow.id;
     let Some(target) = find_switchable_flows(std::slice::from_ref(flow)).pop() else {
@@ -444,8 +490,10 @@ async fn run_flow(
     let mut gpu_load = GpuLoad::default();
 
     // Switcher task: preview + take at a fixed cadence until `stop`.
+    // Own stop flag: the dropout scenario halts switching before the end.
+    let switch_stop = Arc::new(AtomicU64::new(0));
     let switcher = {
-        let (api, perf, vm, stop) = (api.clone(), perf.clone(), vm.clone(), stop.clone());
+        let (api, perf, vm, stop) = (api.clone(), perf.clone(), vm.clone(), switch_stop.clone());
         tokio::spawn(async move {
             let (mut switches, mut failures, mut target) = (0u32, 0u32, 1usize);
             while stop.load(Ordering::SeqCst) == 0 {
@@ -468,16 +516,31 @@ async fn run_flow(
     let mut next_cpu = Instant::now() + CPU_EVERY;
     let end = Instant::now() + Duration::from_secs(opts.seconds);
 
+    let mut dropout = None;
+    // PGM/PVW as a WS-only client (the Console) sees them.
+    let mut ws_state = None;
     let mut loop_prev = Instant::now();
     while Instant::now() < end {
         let now = Instant::now();
+        if let Some(input) = dropout_input.filter(|_| dropout.is_none() && now + DROPOUT_PHASE >= end) {
+            switch_stop.store(1, Ordering::SeqCst);
+            let (api, vm) = (api.clone(), vm.clone());
+            dropout = Some(tokio::spawn(async move { dropout_during_fade(&api, flow_id, &vm, input).await }));
+        }
         // Scheduler stall: this loop should tick at ~10 ms.
         perf.record(Metric::UiFrame, now.duration_since(loop_prev).as_secs_f64() * 1000.0);
         loop_prev = now;
 
         while let Ok((_, msg)) = rx.try_recv() {
             match msg {
-                AppMessage::Event(StromEvent::VisionMixerStateChanged { .. }) => perf.take_confirmed(),
+                AppMessage::Event(StromEvent::VisionMixerStateChanged {
+                    program_input,
+                    preview_input,
+                    ..
+                }) => {
+                    perf.take_confirmed();
+                    ws_state = Some((program_input, preview_input));
+                }
                 AppMessage::Event(StromEvent::SystemStats(stats)) => gpu_load.record(&stats),
                 AppMessage::Event(StromEvent::BufferAgeProbe { probe_id, age_ms, sample_number, .. }) => {
                     if let Some(p) = outputs.get_mut(&probe_id) {
@@ -507,6 +570,7 @@ async fn run_flow(
     }
 
     stop.store(1, Ordering::SeqCst);
+    switch_stop.store(1, Ordering::SeqCst);
     for p in pollers {
         let _ = p.await;
     }
@@ -525,6 +589,29 @@ async fn run_flow(
         );
     }
 
+    let dropout_ok = match dropout {
+        Some(task) => {
+            let ok = task.await.unwrap_or(false);
+            println!("{} source stopped during a fade: take completed, cut back, source resumed", if ok { "PASS" } else { "FAIL" });
+            ok
+        }
+        None => true,
+    };
+
+    let engine_state = api
+        .get_vision_mixer_state(flow_id, &vm)
+        .await
+        .ok()
+        .flatten()
+        .map(|s| (s.program_input, s.preview_input));
+    let mirror_ok = ws_state.is_some() && ws_state == engine_state;
+    println!(
+        "{} WS mirror {:?} matches engine {:?} (PGM, PVW)",
+        if mirror_ok { "PASS" } else { "FAIL" },
+        ws_state,
+        engine_state
+    );
+
     let ftb_ok = ftb_round_trip(api, flow_id, &vm).await;
 
     let still_playing = api
@@ -535,7 +622,7 @@ async fn run_flow(
 
     gpu_load.report();
     println!("{} FTB on and off round trip", if ftb_ok { "PASS" } else { "FAIL" });
-    let ok = check_outputs(opts, &outputs) && pictures_ok && ftb_ok;
+    let ok = check_outputs(opts, &outputs, dropout_input) && pictures_ok && ftb_ok && dropout_ok && mirror_ok;
     verdict(perf, &probes, inputs, switches, switch_failures, still_playing, &cpu_samples, rss_kb_max) && ok
 }
 
@@ -579,29 +666,40 @@ async fn start_output_probes(
 
 /// Print the output table; every probed point must hold the frame rate,
 /// and PGM after encode must stay inside the latency budget.
-fn check_outputs(opts: &Options, outputs: &std::collections::HashMap<String, OutputProbe>) -> bool {
+/// `stopped` is the input the dropout scenario stops on purpose; its rate
+/// is not judged.
+fn check_outputs(
+    opts: &Options,
+    outputs: &std::collections::HashMap<String, OutputProbe>,
+    stopped: Option<usize>,
+) -> bool {
     if opts.outputs == OutputLoad::None {
         return true;
     }
 
     let mut rows: Vec<&OutputProbe> = outputs.values().filter(|p| p.point == ProbePoint::Output).collect();
     rows.sort_by(|a, b| a.label.cmp(&b.label));
-    println!("\noutput                   fps   age p50   p95   max (ms)");
+    println!("\noutput                   fps  min-win   age p50   p95   max (ms)");
     let mut ok = rows.len() == 2 * ENCODED_OUTPUTS.len();
     for p in rows {
         let (p50, p95, max) = p.ages();
-        println!("{:<22} {:>5.1}  {:>7.0} {:>5.0} {:>5.0}", p.label, p.fps(), p50, p95, max);
-        ok &= p.fps() >= MIN_OUTPUT_FPS;
+        let min_window = p.min_window_fps.unwrap_or(0.0);
+        println!("{:<22} {:>5.1}  {:>7.1}  {:>7.0} {:>5.0} {:>5.0}", p.label, p.fps(), min_window, p50, p95, max);
+        ok &= p.fps() >= MIN_OUTPUT_FPS && min_window >= MIN_WINDOW_FPS;
         if p.label == "pgm_out encoded" {
             ok &= p95 <= MAX_PGM_AGE_MS;
         }
     }
     println!(
-        "{} outputs >= {MIN_OUTPUT_FPS:.0} fps, PGM encoded age p95 <= {MAX_PGM_AGE_MS:.0} ms",
+        "{} outputs >= {MIN_OUTPUT_FPS:.0} fps (no window < {MIN_WINDOW_FPS:.0}), PGM encoded age p95 <= {MAX_PGM_AGE_MS:.0} ms",
         if ok { "PASS" } else { "FAIL" }
     );
 
-    let mut inputs: Vec<&OutputProbe> = outputs.values().filter(|p| p.point == ProbePoint::Input).collect();
+    let stopped_label = stopped.map(|i| format!("input {i}"));
+    let mut inputs: Vec<&OutputProbe> = outputs
+        .values()
+        .filter(|p| p.point == ProbePoint::Input && Some(&p.label) != stopped_label.as_ref())
+        .collect();
     inputs.sort_by(|a, b| a.fps().total_cmp(&b.fps()));
     for p in inputs.iter().filter(|p| p.fps() < MIN_OUTPUT_FPS) {
         let samples = p.last.map_or(0, |l| l.0) - p.first.map_or(0, |f| f.0);
@@ -620,6 +718,64 @@ fn check_outputs(opts: &Options, outputs: &std::collections::HashMap<String, Out
         );
     }
     ok && inputs_ok
+}
+
+/// Fade from the current PGM to `input`, stop `input`'s player mid-fade:
+/// the fade must still complete, a cut back must work, and the player
+/// must resume. Output continuity is checked by the probe windows.
+async fn dropout_during_fade(api: &ApiClient, flow_id: strom_types::FlowId, vm: &str, input: usize) -> bool {
+    // Let the switcher's last take finish.
+    tokio::time::sleep(SWITCH_EVERY + SETTLE).await;
+    let player = crate::sources::media_player_id(input);
+    let pgm_is = |want: usize| async move {
+        matches!(api.get_vision_mixer_state(flow_id, vm).await, Ok(Some(s)) if s.program_input == Some(want))
+    };
+
+    let Ok(Some(state)) = api.get_vision_mixer_state(flow_id, vm).await else {
+        return false;
+    };
+    // `input` is >= 1, so input 0 is always a valid other source.
+    let pgm = match state.program_input {
+        Some(p) if p != input => p,
+        _ => 0,
+    };
+    if state.program_input == Some(input) && api.trigger_transition(flow_id, vm, input, pgm, "cut", 0).await.is_err() {
+        return false;
+    }
+    if api.select_preview(flow_id, vm, Source::Input(input)).await.is_err() {
+        return false;
+    }
+
+    if api.trigger_transition(flow_id, vm, pgm, input, "fade", DROPOUT_FADE_MS).await.is_err() {
+        eprintln!("dropout: fade request failed");
+        return false;
+    }
+    tokio::time::sleep(DROPOUT_AFTER).await;
+    if let Err(e) = api.player_control(flow_id, &player, "stop").await {
+        eprintln!("dropout: stopping {player} failed: {e}");
+        return false;
+    }
+    tokio::time::sleep(Duration::from_millis(DROPOUT_FADE_MS) + SETTLE).await;
+    if !pgm_is(input).await {
+        eprintln!("dropout: fade to the stopped source did not complete");
+        return false;
+    }
+
+    if api.trigger_transition(flow_id, vm, input, pgm, "cut", 0).await.is_err() {
+        eprintln!("dropout: cut back failed");
+        return false;
+    }
+    tokio::time::sleep(SETTLE).await;
+    if !pgm_is(pgm).await {
+        eprintln!("dropout: cut back did not land");
+        return false;
+    }
+
+    if let Err(e) = api.player_control(flow_id, &player, "play").await {
+        eprintln!("dropout: restarting {player} failed: {e}");
+        return false;
+    }
+    true
 }
 
 /// Fade to black and back; the mixer state must follow each toggle.

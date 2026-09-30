@@ -234,6 +234,18 @@ impl ApiClient {
         Ok(resp.json().await?)
     }
 
+    /// Media player transport: `action` is play, pause or stop.
+    pub async fn player_control(&self, flow_id: FlowId, block_id: &str, action: &str) -> ApiResult<()> {
+        let url = format!(
+            "{}/api/flows/{}/blocks/{}/player/control",
+            self.base_url, flow_id, block_id
+        );
+        let body = serde_json::json!({ "action": action });
+        let resp = self.http.post(url).json(&body).send().await?;
+        Self::check_status(resp).await?;
+        Ok(())
+    }
+
     /// Toggle Fade to Black; the response carries the new state.
     pub async fn toggle_ftb(
         &self,

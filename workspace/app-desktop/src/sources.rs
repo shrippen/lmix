@@ -251,7 +251,7 @@ fn add_source(flow: &mut Flow, i: usize, spec: &SourceSpec) -> String {
             format!("{dev_id}:video_out")
         }
         SourceSpec::File(location) | SourceSpec::Url(location) => {
-            let player_id = format!("media{i}");
+            let player_id = media_player_id(i);
             let playlist = serde_json::to_string(&[location]).unwrap_or_default();
             flow.blocks.push(block(
                 player_id.clone(),
@@ -282,6 +282,11 @@ fn add_source(flow: &mut Flow, i: usize, spec: &SourceSpec) -> String {
             format!("{srt_id}:video_out")
         }
     }
+}
+
+/// Block id of input `i`'s media player (file and URL sources).
+pub fn media_player_id(i: usize) -> String {
+    format!("media{i}")
 }
 
 /// Build the complete flow: sources -> thumbnail taps -> vision mixer.
