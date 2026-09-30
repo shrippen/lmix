@@ -19,7 +19,7 @@ use strom_types::{Flow, PropertyValue};
 use crate::gpu_profile::MixerBackend;
 
 pub const MIN_SOURCES: usize = 2;
-pub const MAX_SOURCES: usize = 16;
+pub const MAX_SOURCES: usize = strom_types::vision_mixer::MAX_NUM_INPUTS;
 
 const TEST_WIDTH: u32 = 1280;
 const TEST_HEIGHT: u32 = 720;
@@ -374,7 +374,7 @@ mod tests {
     #[test]
     fn rejects_out_of_range_counts() {
         assert_eq!(build_flow("f", &patterns(1), MixerBackend::Cuda).unwrap_err(), FlowBuildError::TooFew);
-        assert_eq!(build_flow("f", &patterns(17), MixerBackend::Cuda).unwrap_err(), FlowBuildError::TooMany);
+        assert_eq!(build_flow("f", &patterns(MAX_SOURCES + 1), MixerBackend::Cuda).unwrap_err(), FlowBuildError::TooMany);
     }
 
     #[test]

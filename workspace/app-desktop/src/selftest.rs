@@ -95,8 +95,18 @@ pub enum OutputLoad {
     Encode,
 }
 
+/// Where a probe sits.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ProbePoint {
+    /// A source, at its thumbnail tap in front of the mixer.
+    Input,
+    /// A mixer output, before or after its encoder.
+    Output,
+}
+
 /// fps and buffer age at one probed point, from `BufferAgeProbe` events.
 struct OutputProbe {
+    point: ProbePoint,
     label: String,
     ages_ms: Vec<f64>,
     first: Option<(u64, Instant)>,
@@ -104,8 +114,8 @@ struct OutputProbe {
 }
 
 impl OutputProbe {
-    fn new(label: String) -> Self {
-        Self { label, ages_ms: Vec::new(), first: None, last: None }
+    fn new(point: ProbePoint, label: String) -> Self {
+        Self { point, label, ages_ms: Vec::new(), first: None, last: None }
     }
 
     fn record(&mut self, age_ms: u64, sample: u64) {
@@ -264,11 +274,13 @@ async fn run_flow(
     let stop = Arc::new(AtomicU64::new(0));
 
     let mut pollers = Vec::new();
+    let mut thumbs = Vec::new();
     for idx in 0..inputs {
         let Some(thumb) = find_thumbnail_block(flow, &vm, idx) else {
             eprintln!("input {idx} has no thumbnail tap");
             return false;
         };
+        thumbs.push(thumb.clone());
         let (api, perf, probes, stop) = (api.clone(), perf.clone(), probes.clone(), stop.clone());
         let thumb_ms = opts.thumb_ms;
         pollers.push(tokio::spawn(async move {
@@ -311,7 +323,7 @@ async fn run_flow(
     }
     println!("all inputs live after {:.1} s", started.elapsed().as_secs_f64());
 
-    let mut outputs = start_output_probes(api, flow_id, opts).await;
+    let mut outputs = start_output_probes(api, flow_id, opts, &thumbs).await;
 
     // Switcher task: preview + take at a fixed cadence until `stop`.
     let switcher = {
@@ -396,6 +408,7 @@ async fn start_output_probes(
     api: &ApiClient,
     flow_id: strom_types::FlowId,
     opts: &Options,
+    thumbs: &[String],
 ) -> std::collections::HashMap<String, OutputProbe> {
     let mut probes = std::collections::HashMap::new();
     if opts.outputs == OutputLoad::None {
@@ -407,10 +420,22 @@ async fn start_output_probes(
         for (element, stage) in [(out.encoder, "enc_in"), (out.sink, "encoded")] {
             match api.activate_probe(flow_id, element, timeout).await {
                 Ok(r) => {
-                    probes.insert(r.probe_id, OutputProbe::new(format!("{} {stage}", out.mixer_pad)));
+                    let label = format!("{} {stage}", out.mixer_pad);
+                    probes.insert(r.probe_id, OutputProbe::new(ProbePoint::Output, label));
                 }
                 Err(e) => eprintln!("probe on {element} failed: {e}"),
             }
+        }
+    }
+
+    // Source frame rate: the mixer keeps its output rate by repeating
+    // frames, so a starved decoder only shows up here.
+    for (i, thumb) in thumbs.iter().enumerate() {
+        match api.activate_probe(flow_id, thumb, timeout).await {
+            Ok(r) => {
+                probes.insert(r.probe_id, OutputProbe::new(ProbePoint::Input, format!("input {i}")));
+            }
+            Err(e) => eprintln!("probe on {thumb} failed: {e}"),
         }
     }
     probes
@@ -423,10 +448,9 @@ fn check_outputs(opts: &Options, outputs: &std::collections::HashMap<String, Out
         return true;
     }
 
-    let mut rows: Vec<&OutputProbe> = outputs.values().collect();
+    let mut rows: Vec<&OutputProbe> = outputs.values().filter(|p| p.point == ProbePoint::Output).collect();
     rows.sort_by(|a, b| a.label.cmp(&b.label));
-    println!("
-output                   fps   age p50   p95   max (ms)");
+    println!("\noutput                   fps   age p50   p95   max (ms)");
     let mut ok = rows.len() == 2 * ENCODED_OUTPUTS.len();
     for p in rows {
         let (p50, p95, max) = p.ages();
@@ -440,7 +464,26 @@ output                   fps   age p50   p95   max (ms)");
         "{} outputs >= {MIN_OUTPUT_FPS:.0} fps, PGM encoded age p95 <= {MAX_PGM_AGE_MS:.0} ms",
         if ok { "PASS" } else { "FAIL" }
     );
-    ok
+
+    let mut inputs: Vec<&OutputProbe> = outputs.values().filter(|p| p.point == ProbePoint::Input).collect();
+    inputs.sort_by(|a, b| a.fps().total_cmp(&b.fps()));
+    for p in inputs.iter().filter(|p| p.fps() < MIN_OUTPUT_FPS) {
+        let samples = p.last.map_or(0, |l| l.0) - p.first.map_or(0, |f| f.0);
+        println!("  slow {:<9} {:>5.1} fps ({samples} frames, {} events)", p.label, p.fps(), p.ages_ms.len());
+    }
+    let slowest = inputs.iter().min_by(|a, b| a.fps().total_cmp(&b.fps()));
+    let inputs_ok = slowest.is_some_and(|p| p.fps() >= MIN_OUTPUT_FPS);
+    if let Some(p) = slowest {
+        let mean = inputs.iter().map(|p| p.fps()).sum::<f64>() / inputs.len() as f64;
+        println!(
+            "{} {} inputs: mean {mean:.1} fps, slowest {} {:.1} fps >= {MIN_OUTPUT_FPS:.0}",
+            if inputs_ok { "PASS" } else { "FAIL" },
+            inputs.len(),
+            p.label,
+            p.fps()
+        );
+    }
+    ok && inputs_ok
 }
 
 /// PVW <- next input, then take; returns whether the mixer ended up with

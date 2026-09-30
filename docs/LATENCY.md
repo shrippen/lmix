@@ -64,9 +64,25 @@ Multiview 720p30 → 2 × NVENC, 10 min Dauerlauf, Take alle 1,5 s
 | CUDA-Mixer, eigener Kontext je Pipeline | 16 × 1080p NVDEC | 69 % | 4,1 GB | 9,6 GB VRAM |
 | CUDA-Mixer, geteilter Kontext | 16 × 1080p NVDEC | 17 % | 1,0 GB | 4,6 GB VRAM |
 
-**Kapazitätsgrenze** (gst-launch, nur Decode + Compositing): bei 32 ×
-1080p30 ist NVDEC zu 100 % ausgelastet (28 fps). Grenze dieser Karte für
-diesen Inhalt ≈ 30 Streams; strom erlaubt derzeit max. 16 Mixer-Inputs.
+**Kapazitätsgrenze** (Selftest mit Encodern, 30 s, fps je Input per Probe
+am Thumbnail-Tap; strom-Kappung auf 32 Inputs angehoben):
+
+| Inputs | NVDEC | Backend-CPU | Inputs fps (min) | Ausgänge | Ergebnis |
+|---|---:|---:|---:|---|---|
+| 16 × 1080p30 | 54 % | 17 % | 30,0 | 30,0 fps, PGM 60 ms | PASS |
+| 24 × 1080p30 | 81 % | 25 % | 30,0 | 30,0 fps, PGM 60 ms | PASS |
+| 24 × 720p30 | 38 % | 25 % | 30,0 | 30,0 fps, PGM 60 ms | PASS |
+| 32 × 1080p30 | 100 % | 53 % | 27,5 | 30,0 fps, PGM 74 ms | FAIL (NVDEC voll) |
+| 32 × 720p30 | ~50 % | 33 % | 0,3–25 (1–2 Inputs) | 30,0 fps | FAIL, sporadisch |
+
+- Grenze auf diesem Host: **24 Inputs** 1080p30 im Budget.
+- 32 × 720p: einzelne, wechselnde Inputs verhungern, obwohl NVDEC nicht
+  voll ist; 32 Decoder allein (gst-launch) schaffen je 30 fps. Ursache
+  offen (Media-Player-Brücke/Mixer-Rückstau vermutet). Ohne geteilten
+  CUDA-Kontext schlechter (15 GB VRAM, Ausgänge brechen ein).
+- Die Ausgänge halten 30 fps auch bei verhungernden Inputs (der Mixer
+  wiederholt Frames); deshalb misst der Selftest seit 2026-09-30 jeden
+  Input.
 
 ## AMD / Intel
 
