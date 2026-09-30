@@ -770,7 +770,8 @@ async fn dropout_during_fade(api: &ApiClient, flow_id: strom_types::FlowId, vm: 
         Some(p) if p != input => p,
         _ => 0,
     };
-    if state.program_input == Some(input) && api.trigger_transition(flow_id, vm, input, pgm, "cut", 0).await.is_err() {
+    // A take always puts the current PVW on PGM: select before each take.
+    if state.program_input != Some(pgm) && !take_to(api, flow_id, vm, state.program_input, pgm).await {
         return false;
     }
     if api.select_preview(flow_id, vm, Source::Input(input)).await.is_err() {
@@ -792,7 +793,7 @@ async fn dropout_during_fade(api: &ApiClient, flow_id: strom_types::FlowId, vm: 
         return false;
     }
 
-    if api.trigger_transition(flow_id, vm, input, pgm, "cut", 0).await.is_err() {
+    if !take_to(api, flow_id, vm, Some(input), pgm).await {
         eprintln!("dropout: cut back failed");
         return false;
     }
@@ -845,6 +846,15 @@ async fn check_afv(api: &ApiClient, flow_id: strom_types::FlowId, afv: &Afv, pgm
     afv.mutes(pgm).into_iter().all(|(ch, muted)| {
         matches!(properties.get(&mute_property(ch)), Some(strom_types::PropertyValue::Bool(m)) if *m == muted)
     })
+}
+
+/// Cut `to` onto PGM: select it on PVW, then take.
+async fn take_to(api: &ApiClient, flow_id: strom_types::FlowId, vm: &str, from: Option<usize>, to: usize) -> bool {
+    if api.select_preview(flow_id, vm, Source::Input(to)).await.is_err() {
+        return false;
+    }
+    let from = from.unwrap_or(to);
+    api.trigger_transition(flow_id, vm, from, to, "cut", 0).await.is_ok()
 }
 
 /// Fade to black and back; the mixer state must follow each toggle.
