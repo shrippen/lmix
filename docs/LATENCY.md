@@ -96,10 +96,11 @@ am Thumbnail-Tap; strom-Kappung auf 32 Inputs angehoben):
 - **Offen**: Einmal in ~20 Läufen (4 Inputs, direkt nach einem Neubau)
   froren alle Quellen nach dem ersten Bild ein, Ausgänge liefen weiter
   (Mixer wiederholt Frames); Flow meldete PLAYING. Nicht reproduziert.
-- **Offen**: Mit 32 Media-Playern scheitert der Start sporadisch
-  (2 von ~12 Läufen): ein einzelner Input meldet `not-negotiated` an
-  seinem appsrc, der Flow startet nicht. Mit GStreamer-Debug nicht
-  reproduziert (timing-abhängig). Bis 24 Inputs nicht beobachtet.
+- Startfehler mit 32 Media-Playern (2 von ~12 Läufen am Vormittag: ein
+  Input meldet `not-negotiated` an seinem appsrc, Flow startet nicht):
+  seit dem NVJPEG-Thumbnail-Zweig in 26 Läufen (davon 20 × 32 × 720p)
+  nicht mehr aufgetreten. Ursache nicht belegt; Verdacht auf den früheren
+  `cudadownload`-Thumbnail-Zweig unter Last.
 - Die Ausgänge halten 30 fps auch bei verhungernden Inputs (der Mixer
   wiederholt Frames); deshalb misst der Selftest seit 2026-09-30 jeden
   Input.
