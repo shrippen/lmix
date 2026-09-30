@@ -32,7 +32,16 @@ const LOCAL_INPUT_BLOCK: &str = "builtin.local_input";
 const THUMBNAIL_BLOCK: &str = "builtin.thumbnail";
 const VISION_MIXER_BLOCK: &str = "builtin.vision_mixer";
 const VIDEO_ENCODER_BLOCK: &str = "builtin.videoenc";
+const AUDIO_MIXER_BLOCK: &str = "builtin.mixer";
 const MIXER_ID: &str = "vm";
+/// Audio mixer: channel `i + 1` carries input `i` (see [`audio_channel`]).
+pub const AUDIO_MIXER_ID: &str = "mix";
+
+/// Test tone per pattern input: A4 plus a fifth per input, so channels
+/// are told apart by ear.
+const TONE_BASE_HZ: f64 = 440.0;
+const TONE_STEP: f64 = 1.5;
+const AUDIO_CAPS: &str = "audio/x-raw,rate=48000,channels=2";
 
 const COLUMN_SPACING: f32 = 240.0;
 const ROW_SPACING: f32 = 120.0;
@@ -284,6 +293,48 @@ fn add_source(flow: &mut Flow, i: usize, spec: &SourceSpec) -> String {
     }
 }
 
+/// Audio mixer channel (1-based) of input `i`.
+pub fn audio_channel(input: usize) -> usize {
+    input + 1
+}
+
+/// Add input `i`'s audio source, if its kind has one, and return the pad
+/// that feeds the audio mixer. Patterns get a test tone; files and URLs
+/// use the player's audio (unlinked if the file has none); devices and
+/// SRT are video-only here.
+fn add_audio(flow: &mut Flow, i: usize, spec: &SourceSpec) -> Option<String> {
+    match spec {
+        SourceSpec::Pattern(_) => {
+            let src_id = format!("asrc{i}");
+            let caps_id = format!("acaps{i}");
+            let freq = TONE_BASE_HZ * TONE_STEP.powi(i as i32 % 4);
+            flow.elements.push(Element {
+                id: src_id.clone(),
+                element_type: "audiotestsrc".to_string(),
+                properties: [
+                    ("is-live".to_string(), PropertyValue::Bool(true)),
+                    ("freq".to_string(), PropertyValue::Float(freq)),
+                    ("volume".to_string(), PropertyValue::Float(0.1)),
+                ]
+                .into(),
+                pad_properties: Default::default(),
+                position: (0.0, i as f32 * ROW_SPACING + ROW_SPACING / 2.0),
+            });
+            flow.elements.push(Element {
+                id: caps_id.clone(),
+                element_type: "capsfilter".to_string(),
+                properties: [("caps".to_string(), PropertyValue::String(AUDIO_CAPS.into()))].into(),
+                pad_properties: Default::default(),
+                position: (COLUMN_SPACING, i as f32 * ROW_SPACING + ROW_SPACING / 2.0),
+            });
+            flow.links.push(link(src_id, caps_id.clone()));
+            Some(caps_id)
+        }
+        SourceSpec::File(_) | SourceSpec::Url(_) => Some(format!("{}:audio_out", media_player_id(i))),
+        SourceSpec::Device { .. } | SourceSpec::Srt(_) => None,
+    }
+}
+
 /// Block id of input `i`'s media player (file and URL sources).
 pub fn media_player_id(i: usize) -> String {
     format!("media{i}")
@@ -305,8 +356,12 @@ pub fn build_flow(
     let mut flow = Flow::new(name);
     let mixer_id = MIXER_ID.to_string();
 
+    let mut audio = Vec::new();
     for (i, spec) in sources.iter().enumerate() {
         let source_out = add_source(&mut flow, i, spec);
+        if let Some(pad) = add_audio(&mut flow, i, spec) {
+            audio.push((i, pad));
+        }
         let thumb_id = format!("thumb{i}");
 
         flow.blocks
@@ -331,6 +386,25 @@ pub fn build_flow(
             ),
         ],
     ));
+
+    // Audio mixer: one channel per input, sum into the vision mixer's PGM
+    // audio (its multiview meters).
+    if !audio.is_empty() {
+        flow.blocks.push(block(
+            AUDIO_MIXER_ID.to_string(),
+            AUDIO_MIXER_BLOCK,
+            pos(3, sources.len()),
+            vec![("num_channels", PropertyValue::UInt(sources.len() as u64))],
+        ));
+        for (i, pad) in audio {
+            flow.links
+                .push(link(pad, format!("{AUDIO_MIXER_ID}:input_{}", audio_channel(i))));
+        }
+        flow.links.push(link(
+            format!("{AUDIO_MIXER_ID}:main_out"),
+            format!("{MIXER_ID}:pgm_audio_in"),
+        ));
+    }
 
     Ok(flow)
 }
@@ -433,6 +507,22 @@ mod tests {
     }
 
     #[test]
+    fn audio_sources_feed_their_mixer_channel() {
+        let sources = vec![
+            SourceSpec::Pattern(TestPattern::Black),
+            SourceSpec::Srt("srt://:9000?mode=listener".into()),
+            SourceSpec::File("/a.mp4".into()),
+        ];
+        let flow = build_flow("f", &sources, MixerBackend::Cuda).unwrap();
+        let to = |ch: usize| format!("mix:input_{ch}");
+
+        assert!(flow.links.iter().any(|l| l.from == "acaps0" && l.to == to(1)));
+        assert!(!flow.links.iter().any(|l| l.to == to(2)));
+        assert!(flow.links.iter().any(|l| l.from == "media2:audio_out" && l.to == to(3)));
+        assert!(flow.links.iter().any(|l| l.from == "mix:main_out" && l.to == "vm:pgm_audio_in"));
+    }
+
+    #[test]
     fn mixer_gets_the_chosen_backend() {
         let flow = build_flow("f", &patterns(2), MixerBackend::Gl).unwrap();
         let mixer = flow.blocks.iter().find(|b| b.block_definition_id == VISION_MIXER_BLOCK).unwrap();
@@ -468,7 +558,8 @@ mod tests {
         ];
         let flow = build_flow("f", &sources, MixerBackend::Cuda).unwrap();
 
-        assert_eq!(flow.elements.len(), 2);
+        // Pattern input: video src + caps, tone src + caps.
+        assert_eq!(flow.elements.len(), 4);
         assert!(flow.links.iter().any(|l| l.to == "thumb1:video_in" && l.from == "media1:video_out"));
         assert!(flow.links.iter().any(|l| l.to == "thumb3:video_in" && l.from == "dev3:video_out"));
         assert!(flow.links.iter().any(|l| l.to == "thumb4:video_in" && l.from == "srt4:video_out"));

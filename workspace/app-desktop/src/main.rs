@@ -2,6 +2,7 @@
 //! REST/WS API. Runs as its own OS process, separate from the strom server
 //! (see claude.md, "Feststehende Entscheidung 4").
 
+mod afv;
 mod api;
 mod gpu_profile;
 mod perf;
@@ -829,6 +830,7 @@ impl ConsoleApp {
     /// `builtin.mixer` block. Not the full X32-style panel
     /// `frontend/src/mixer/` has - just what M1 asks for.
     fn render_audio_strip(&mut self, ui: &mut egui::Ui) {
+        let pgm = self.mixer.program_input;
         let audio = self.audio.as_mut().expect("checked by caller");
         let mut changes: Vec<(String, strom_types::PropertyValue)> = Vec::new();
 
@@ -864,12 +866,37 @@ impl ConsoleApp {
                                     strom_types::PropertyValue::Bool(*muted),
                                 ));
                             }
+
+                            let afv_on = audio.afv.is_on(ch);
+                            if ui.selectable_label(afv_on, "AFV").clicked() {
+                                audio.afv.set(ch, !afv_on);
+                            }
                         });
                         ui.add_space(10.0);
                     }
                 });
             });
 
+        for (name, value) in changes {
+            self.patch_audio_property(name, value);
+        }
+        self.apply_afv(pgm);
+    }
+
+    /// Bring every AFV channel's mute in line with `pgm`; patches only
+    /// channels whose mute actually changes.
+    fn apply_afv(&mut self, pgm: Option<usize>) {
+        let Some(audio) = self.audio.as_mut() else {
+            return;
+        };
+        let mut changes = Vec::new();
+        for (ch, muted) in audio.afv.mutes(pgm) {
+            if audio.mutes.get(&ch) == Some(&muted) {
+                continue;
+            }
+            audio.mutes.insert(ch, muted);
+            changes.push((afv::mute_property(ch), strom_types::PropertyValue::Bool(muted)));
+        }
         for (name, value) in changes {
             self.patch_audio_property(name, value);
         }

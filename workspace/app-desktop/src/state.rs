@@ -110,6 +110,7 @@ pub struct AudioMixerState {
     /// 1-based channel index -> latest peak in dB (max over the channel's
     /// audio channels), from `MeterData` WS events.
     pub peaks_db: HashMap<usize, f64>,
+    pub afv: crate::afv::Afv,
 }
 
 impl AudioMixerState {
@@ -129,6 +130,7 @@ impl AudioMixerState {
             faders,
             mutes,
             peaks_db: HashMap::new(),
+            afv: Default::default(),
         }
     }
 }

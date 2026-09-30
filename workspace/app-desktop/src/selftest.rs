@@ -16,10 +16,11 @@
 //! stalled or failed multiview branch shows up as pipeline error / stall
 //! (thumbnail gaps, take latency, flow leaving Playing).
 
+use crate::afv::{mute_property, Afv};
 use crate::api::ApiClient;
 use crate::gpu_profile::BackendChoice;
 use crate::perf::{Metric, Perf};
-use crate::sources::{add_encoders, build_flow, SourceSpec, TestPattern, ENCODED_OUTPUTS};
+use crate::sources::{add_encoders, build_flow, SourceSpec, TestPattern, AUDIO_MIXER_ID, ENCODED_OUTPUTS};
 use crate::state::{find_switchable_flows, find_thumbnail_block, AppMessage};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -519,6 +520,14 @@ async fn run_flow(
     let mut dropout = None;
     // PGM/PVW as a WS-only client (the Console) sees them.
     let mut ws_state = None;
+    // AFV on every channel, applied in PGM order by one task.
+    let has_audio = flow.blocks.iter().any(|b| b.id == AUDIO_MIXER_ID);
+    let (afv_tx, afv_task) = if has_audio {
+        let (tx, task) = start_afv(api.clone(), flow_id, inputs);
+        (Some(tx), Some(task))
+    } else {
+        (None, None)
+    };
     let mut loop_prev = Instant::now();
     while Instant::now() < end {
         let now = Instant::now();
@@ -540,6 +549,9 @@ async fn run_flow(
                 }) => {
                     perf.take_confirmed();
                     ws_state = Some((program_input, preview_input));
+                    if let Some(tx) = &afv_tx {
+                        let _ = tx.send(program_input);
+                    }
                 }
                 AppMessage::Event(StromEvent::SystemStats(stats)) => gpu_load.record(&stats),
                 AppMessage::Event(StromEvent::BufferAgeProbe { probe_id, age_ms, sample_number, .. }) => {
@@ -612,6 +624,20 @@ async fn run_flow(
         engine_state
     );
 
+    let afv_ok = match afv_task {
+        Some(task) => {
+            // A take right at the end may have its WS event still in flight.
+            if let Some(tx) = afv_tx {
+                let _ = tx.send(engine_state.and_then(|s| s.0));
+            }
+            let afv = task.await.unwrap_or_default();
+            let ok = check_afv(api, flow_id, &afv, engine_state.and_then(|s| s.0)).await;
+            println!("{} AFV: engine mutes follow PGM on every channel", if ok { "PASS" } else { "FAIL" });
+            ok
+        }
+        None => true,
+    };
+
     let ftb_ok = ftb_round_trip(api, flow_id, &vm).await;
 
     let still_playing = api
@@ -622,7 +648,12 @@ async fn run_flow(
 
     gpu_load.report();
     println!("{} FTB on and off round trip", if ftb_ok { "PASS" } else { "FAIL" });
-    let ok = check_outputs(opts, &outputs, dropout_input) && pictures_ok && ftb_ok && dropout_ok && mirror_ok;
+    let ok = check_outputs(opts, &outputs, dropout_input)
+        && pictures_ok
+        && ftb_ok
+        && dropout_ok
+        && mirror_ok
+        && afv_ok;
     verdict(perf, &probes, inputs, switches, switch_failures, still_playing, &cpu_samples, rss_kb_max) && ok
 }
 
@@ -776,6 +807,44 @@ async fn dropout_during_fade(api: &ApiClient, flow_id: strom_types::FlowId, vm: 
         return false;
     }
     true
+}
+
+/// AFV on channels 1..=inputs; applies the mutes for each PGM received,
+/// in order, and returns the AFV set once the sender is dropped.
+fn start_afv(
+    api: ApiClient,
+    flow_id: strom_types::FlowId,
+    inputs: usize,
+) -> (tokio::sync::mpsc::UnboundedSender<Option<usize>>, tokio::task::JoinHandle<Afv>) {
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<Option<usize>>();
+    let task = tokio::spawn(async move {
+        let mut afv = Afv::default();
+        for ch in 1..=inputs {
+            afv.set(crate::sources::audio_channel(ch - 1), true);
+        }
+        while let Some(pgm) = rx.recv().await {
+            let properties = afv
+                .mutes(pgm)
+                .into_iter()
+                .map(|(ch, muted)| (mute_property(ch), strom_types::PropertyValue::Bool(muted)))
+                .collect();
+            if let Err(e) = api.patch_block_properties(flow_id, AUDIO_MIXER_ID, properties).await {
+                eprintln!("AFV patch failed: {e}");
+            }
+        }
+        afv
+    });
+    (tx, task)
+}
+
+/// The engine's mixer mutes must match AFV for the final PGM.
+async fn check_afv(api: &ApiClient, flow_id: strom_types::FlowId, afv: &Afv, pgm: Option<usize>) -> bool {
+    let Ok(properties) = api.get_block_properties(flow_id, AUDIO_MIXER_ID).await else {
+        return false;
+    };
+    afv.mutes(pgm).into_iter().all(|(ch, muted)| {
+        matches!(properties.get(&mute_property(ch)), Some(strom_types::PropertyValue::Bool(m)) if *m == muted)
+    })
 }
 
 /// Fade to black and back; the mixer state must follow each toggle.
