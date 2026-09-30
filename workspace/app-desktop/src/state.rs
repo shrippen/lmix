@@ -68,7 +68,7 @@ pub enum AppMessage {
     Event(StromEvent),
     /// A decoded thumbnail for one Vision Mixer input, ready to upload as a
     /// texture on the UI thread.
-    ThumbnailDecoded(usize, egui::ColorImage),
+    ThumbnailDecoded(ThumbTarget, egui::ColorImage),
     /// Authoritative PVW/PGM state returned directly by a `preview` or
     /// `transition` REST call - applied immediately for snappy feedback,
     /// the WS event that follows just confirms the same values.
@@ -246,6 +246,25 @@ pub fn find_thumbnail_block(
     flow.blocks
         .iter()
         .find(|b| b.id == from_id && b.block_definition_id == THUMBNAIL_BLOCK)
+        .map(|b| b.id.clone())
+}
+
+/// What a thumbnail poller feeds: an input tile or the PROGRAM monitor.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum ThumbTarget {
+    Input(usize),
+    Program,
+}
+
+/// The thumbnail block fed by the vision mixer's PGM output, if the flow
+/// taps it (flows from the Console's builder do).
+pub fn find_program_tap(flow: &Flow, vision_mixer_block_id: &str) -> Option<String> {
+    let source = format!("{vision_mixer_block_id}:pgm_out");
+    let link = flow.links.iter().find(|l| l.from == source)?;
+    let (to_id, _pad) = link.to.split_once(':')?;
+    flow.blocks
+        .iter()
+        .find(|b| b.id == to_id && b.block_definition_id == THUMBNAIL_BLOCK)
         .map(|b| b.id.clone())
 }
 

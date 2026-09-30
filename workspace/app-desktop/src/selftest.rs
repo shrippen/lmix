@@ -20,7 +20,9 @@ use crate::afv::{mute_property, Afv};
 use crate::api::ApiClient;
 use crate::gpu_profile::BackendChoice;
 use crate::perf::{Metric, Perf};
-use crate::sources::{add_encoders, build_flow, SourceSpec, TestPattern, AUDIO_MIXER_ID, ENCODED_OUTPUTS};
+use crate::sources::{
+    add_encoders, build_flow, SourceSpec, TestPattern, AUDIO_MIXER_ID, ENCODED_OUTPUTS, PGM_TAP_ID,
+};
 use crate::state::{find_switchable_flows, find_thumbnail_block, AppMessage};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -38,6 +40,10 @@ const LATENCY_EVERY: Duration = Duration::from_secs(2);
 const CPU_EVERY: Duration = Duration::from_secs(1);
 const SETTLE: Duration = Duration::from_millis(500);
 const FTB_MS: u64 = 300;
+/// A thumbnail tap refreshes once a second (strom default).
+const THUMB_REFRESH: Duration = Duration::from_millis(1200);
+/// Black after JPEG: limited range and ringing stay far below this.
+const MAX_BLACK_LUMA: f64 = 20.0;
 /// Dropout scenario: fade length, when the source stops, time left at the end.
 const DROPOUT_FADE_MS: u64 = 1000;
 const DROPOUT_AFTER: Duration = Duration::from_millis(300);
@@ -186,6 +192,13 @@ impl OutputPicture {
     fn ok(&self) -> bool {
         self.changes >= MIN_OUTPUT_CHANGES && self.max_luma_std >= MIN_OUTPUT_LUMA_STD
     }
+}
+
+/// Mean luma of a JPEG, `None` if it does not decode.
+fn luma_mean(jpeg: &[u8]) -> Option<f64> {
+    let img = image::load_from_memory(jpeg).ok()?.to_luma8();
+    let n = img.pixels().len() as f64;
+    Some(img.pixels().map(|p| p.0[0] as f64).sum::<f64>() / n)
 }
 
 /// Standard deviation of the luma of a JPEG, `None` if it does not decode.
@@ -858,6 +871,7 @@ async fn take_to(api: &ApiClient, flow_id: strom_types::FlowId, vm: &str, from: 
 }
 
 /// Fade to black and back; the mixer state must follow each toggle.
+/// While black, the PGM tap must show black too.
 async fn ftb_round_trip(api: &ApiClient, flow_id: strom_types::FlowId, vm: &str) -> bool {
     for expected in [true, false] {
         let Ok(resp) = api.toggle_ftb(flow_id, vm, FTB_MS).await else {
@@ -869,8 +883,21 @@ async fn ftb_round_trip(api: &ApiClient, flow_id: strom_types::FlowId, vm: &str)
         if resp.active != expected || !active {
             return false;
         }
+        if expected && !pgm_is_black(api, flow_id).await {
+            eprintln!("FTB: state is black but the PGM picture is not");
+            return false;
+        }
     }
     true
+}
+
+/// Mean PGM luma below `MAX_BLACK_LUMA`, after the tap caught a new frame.
+async fn pgm_is_black(api: &ApiClient, flow_id: strom_types::FlowId) -> bool {
+    tokio::time::sleep(THUMB_REFRESH).await;
+    let Ok(jpeg) = api.get_thumbnail(flow_id, PGM_TAP_ID).await else {
+        return false;
+    };
+    luma_mean(&jpeg).is_some_and(|m| m < MAX_BLACK_LUMA)
 }
 
 /// PVW <- next input, then take; returns whether the mixer ended up with

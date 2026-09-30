@@ -18,7 +18,7 @@ use source_ui::SourceBuilder;
 use clap::Parser;
 use state::{
     find_switchable_flows, find_thumbnail_block, meter_channel, AppMessage, AudioMixerState, AutoTransition,
-    EngineLoad, MixerState, Selection, SwitchableFlow,
+    find_program_tap, EngineLoad, MixerState, Selection, SwitchableFlow, ThumbTarget,
 };
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -124,6 +124,8 @@ struct ConsoleApp {
     mixer: MixerState,
     audio: Option<AudioMixerState>,
     textures: HashMap<usize, egui::TextureHandle>,
+    /// Latest frame from the flow's PGM tap (the PROGRAM monitor).
+    program_texture: Option<egui::TextureHandle>,
     auto_transition: AutoTransition,
     auto_duration_ms: u64,
 
@@ -154,6 +156,7 @@ impl ConsoleApp {
             mixer: MixerState::default(),
             audio: None,
             textures: HashMap::new(),
+            program_texture: None,
             auto_transition: AutoTransition::Fade,
             auto_duration_ms: DEFAULT_AUTO_MS,
             perf: Arc::new(Perf::new(args.perf_log.as_deref())),
@@ -240,6 +243,7 @@ impl ConsoleApp {
         self.mixer = MixerState::default();
         self.audio = None;
         self.textures.clear();
+        self.program_texture = None;
         self.error = None;
 
         self.selection = Some(Selection {
@@ -309,9 +313,23 @@ impl ConsoleApp {
                 if !full_flow.blocks.iter().any(|b| b.id == vm_block) {
                     return;
                 }
-                // Try a generous upper bound on input count; unused indices
-                // simply find no thumbnail block and are skipped.
-                for idx in 0..16 {
+                // Every possible input; unused indices find no thumbnail
+                // block and are skipped.
+                if let Some(tap) = find_program_tap(&full_flow, &vm_block) {
+                    spawn_thumbnail_poller(
+                        perf.clone(),
+                        thumb_ms,
+                        api.clone(),
+                        tx.clone(),
+                        ctx.clone(),
+                        session_counter.clone(),
+                        session,
+                        flow_id,
+                        ThumbTarget::Program,
+                        tap,
+                    );
+                }
+                for idx in 0..sources::MAX_SOURCES {
                     if let Some(thumb_block) =
                         find_thumbnail_block(&full_flow, &vm_block, idx)
                     {
@@ -324,7 +342,7 @@ impl ConsoleApp {
                             session_counter.clone(),
                             session,
                             flow_id,
-                            idx,
+                            ThumbTarget::Input(idx),
                             thumb_block,
                         );
                     }
@@ -645,13 +663,18 @@ impl ConsoleApp {
                 } if session == current_session => {
                     self.audio = Some(AudioMixerState::from_properties(num_channels, &properties));
                 }
-                AppMessage::ThumbnailDecoded(idx, image) if session == current_session => {
+                AppMessage::ThumbnailDecoded(target, image) if session == current_session => {
                     let handle = ctx.load_texture(
-                        format!("thumb-{idx}"),
+                        format!("thumb-{target:?}"),
                         image,
                         egui::TextureOptions::LINEAR,
                     );
-                    self.textures.insert(idx, handle);
+                    match target {
+                        ThumbTarget::Input(idx) => {
+                            self.textures.insert(idx, handle);
+                        }
+                        ThumbTarget::Program => self.program_texture = Some(handle),
+                    }
                 }
                 // Anything else (stale VisionMixerStateLoaded/Event/ThumbnailDecoded
                 // from a session we've since left, or an unhandled event kind) is
@@ -714,7 +737,12 @@ impl ConsoleApp {
         const PREVIEW_COLOR: egui::Color32 = egui::Color32::from_rgb(40, 200, 80);
         const PROGRAM_COLOR: egui::Color32 = egui::Color32::from_rgb(220, 40, 40);
         let preview_tex = self.mixer.preview_input.and_then(|idx| self.textures.get(&idx));
-        let program_tex = self.mixer.program_input.and_then(|idx| self.textures.get(&idx));
+        // The real PGM picture when the flow taps it; the PGM input's tile
+        // otherwise (flows not built by the Console).
+        let program_tex = self
+            .program_texture
+            .as_ref()
+            .or_else(|| self.mixer.program_input.and_then(|idx| self.textures.get(&idx)));
         ui.columns(2, |columns| {
             render_monitor(&mut columns[0], "PREVIEW", PREVIEW_COLOR, preview_tex);
             render_monitor(&mut columns[1], "PROGRAM", PROGRAM_COLOR, program_tex);
@@ -977,7 +1005,7 @@ fn spawn_thumbnail_poller(
     session_counter: Arc<AtomicU64>,
     session: Session,
     flow_id: strom_types::FlowId,
-    input_index: usize,
+    target: ThumbTarget,
     thumbnail_block_id: String,
 ) {
     tokio::spawn(async move {
@@ -987,9 +1015,9 @@ fn spawn_thumbnail_poller(
             }
             let started = std::time::Instant::now();
             let result = api.get_thumbnail(flow_id, &thumbnail_block_id).await;
-            if result.is_ok() {
+            if let (Ok(_), ThumbTarget::Input(idx)) = (&result, target) {
                 perf.record(Metric::ThumbRtt, started.elapsed().as_secs_f64() * 1000.0);
-                perf.thumb_arrived(input_index);
+                perf.thumb_arrived(idx);
             }
             match result {
                 Ok(bytes) => {
@@ -1000,7 +1028,7 @@ fn spawn_thumbnail_poller(
                             egui::ColorImage::from_rgba_unmultiplied([w, h], &rgba);
                         let _ = tx.send((
                             session,
-                            AppMessage::ThumbnailDecoded(input_index, color_image),
+                            AppMessage::ThumbnailDecoded(target, color_image),
                         ));
                         ctx.request_repaint();
                     }
@@ -1010,7 +1038,7 @@ fn spawn_thumbnail_poller(
                     // branch, no frame yet - retry on the next tick.
                 }
                 Err(e) => {
-                    tracing::trace!("thumbnail poll for input {input_index} failed: {e}");
+                    tracing::trace!("thumbnail poll for {target:?} failed: {e}");
                 }
             }
             tokio::time::sleep(std::time::Duration::from_millis(thumb_ms)).await;
