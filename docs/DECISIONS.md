@@ -318,7 +318,9 @@ Messwerte der Abnahme: `docs/LATENCY.md`.
   (`videoconvert` nimmt kein GLMemory) statt still über die CPU zu kopieren.
 - V4L2-MJPEG auf GPU (`nvjpegdec`/`vajpegdec`): strom-`devicesrc` nimmt nur
   Rohformate an (dokumentierte Einschränkung dort).
-- 32 × 720p: einzelne Inputs verhungern sporadisch, Ursache unbekannt.
+- 32 × 720p: frühere Aussetzer waren ein Probe-Messartefakt (behoben).
+  Offen bleibt ein sporadischer Startfehler (`not-negotiated` an einem
+  Media-Player-appsrc) bei 32 Inputs, siehe `LATENCY.md`.
 
 ## 2026-09-30 — Messdaten zur offenen Entscheidung "Live-Monitore" (M1-Rest 1.1)
 

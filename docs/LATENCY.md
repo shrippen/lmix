@@ -82,13 +82,17 @@ am Thumbnail-Tap; strom-Kappung auf 32 Inputs angehoben):
 | 24 × 1080p30 | 81 % | 25 % | 30,0 | 30,0 fps, PGM 60 ms | PASS |
 | 24 × 720p30 | 38 % | 25 % | 30,0 | 30,0 fps, PGM 60 ms | PASS |
 | 32 × 1080p30 | 100 % | 53 % | 27,5 | 30,0 fps, PGM 74 ms | FAIL (NVDEC voll) |
-| 32 × 720p30 | ~50 % | 33 % | 0,3–25 (1–2 Inputs) | 30,0 fps | FAIL, sporadisch |
+| 32 × 720p30 | ~50 % | 33 % | 30,0 | 30,0 fps | PASS (3/3 nach Probe-Fix) |
 
-- Grenze auf diesem Host: **24 Inputs** 1080p30 im Budget.
-- 32 × 720p: einzelne, wechselnde Inputs verhungern, obwohl NVDEC nicht
-  voll ist; 32 Decoder allein (gst-launch) schaffen je 30 fps. Ursache
-  offen (Media-Player-Brücke/Mixer-Rückstau vermutet). Ohne geteilten
-  CUDA-Kontext schlechter (15 GB VRAM, Ausgänge brechen ein).
+- Grenze auf diesem Host: **24 Inputs** 1080p30 im Budget; 32 × 720p30
+  ebenfalls. 32 × 1080p30 scheitert real an NVDEC (Mittel 97 %).
+- Frühere Aussetzer einzelner Inputs bei 32 × 720p waren ein Messartefakt:
+  Die Probes zählten Puffer vor der Pipeline-Uhr nicht (strom-Fix "Count
+  buffer-age samples…"). Nach dem Fix 3 von 3 Läufen ohne Befund.
+- **Offen**: Mit 32 Media-Playern scheitert der Start sporadisch
+  (2 von ~12 Läufen): ein einzelner Input meldet `not-negotiated` an
+  seinem appsrc, der Flow startet nicht. Mit GStreamer-Debug nicht
+  reproduziert (timing-abhängig). Bis 24 Inputs nicht beobachtet.
 - Die Ausgänge halten 30 fps auch bei verhungernden Inputs (der Mixer
   wiederholt Frames); deshalb misst der Selftest seit 2026-09-30 jeden
   Input.

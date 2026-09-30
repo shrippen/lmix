@@ -168,8 +168,10 @@ ausreizen (32+ Inputs) und dokumentieren.
 | G.7 | ✅ `cudacompositor` auf NVIDIA (6 % vs. 108 % CPU) → Backend `cuda` |
 | G.8 | ✅ Selftest: fps je Input/Ausgang, Alter, CPU, GPU/NVDEC/NVENC, VRAM. AMD/Intel-fdinfo offen |
 
-Abnahme NVIDIA ✅: 16 × 1080p30, 10 min, alle Budgets. Kapazität: 24 ×
-1080p30 im Budget; 32 × 720p sporadisch einzelne Inputs < 29 fps (offen).
+Abnahme NVIDIA ✅: 16 × 1080p30, 10 min, alle Budgets
+(`scripts/acceptance-m1b.sh`). Kapazität: 24 × 1080p30 und 32 × 720p30 im
+Budget; 32 × 1080p30 NVDEC-begrenzt. Offen: sporadischer Startfehler bei
+32 Media-Playern.
 
 ### M1-Rest — Console abschließen
 
