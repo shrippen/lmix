@@ -7,6 +7,7 @@ use strom_types::{Flow, FlowId, PropertyValue, StromEvent};
 
 pub const VISION_MIXER_BLOCK: &str = "builtin.vision_mixer";
 pub const AUDIO_MIXER_BLOCK: &str = "builtin.mixer";
+const COMPOSITOR_PREFERENCE: &str = "compositor_preference";
 pub const THUMBNAIL_BLOCK: &str = "builtin.thumbnail";
 
 /// Timed transitions offered by the Console's AUTO button. The wire names
@@ -135,17 +136,23 @@ pub struct SwitchableFlow {
     pub running: bool,
     pub vision_mixer_block_id: String,
     pub audio_mixer_block_id: Option<String>,
+    /// The vision mixer's `compositor_preference` ("cuda", "gpu", ...).
+    pub mixer_backend: Option<String>,
 }
 
 pub fn find_switchable_flows(flows: &[Flow]) -> Vec<SwitchableFlow> {
     flows
         .iter()
         .filter_map(|flow| {
-            let vision_mixer_block_id = flow
+            let vision_mixer = flow
                 .blocks
                 .iter()
-                .find(|b| b.block_definition_id == VISION_MIXER_BLOCK)
-                .map(|b| b.id.clone())?;
+                .find(|b| b.block_definition_id == VISION_MIXER_BLOCK)?;
+            let vision_mixer_block_id = vision_mixer.id.clone();
+            let mixer_backend = match vision_mixer.properties.get(COMPOSITOR_PREFERENCE) {
+                Some(PropertyValue::String(s)) => Some(s.clone()),
+                _ => None,
+            };
             let audio_mixer_block_id = flow
                 .blocks
                 .iter()
@@ -157,6 +164,7 @@ pub fn find_switchable_flows(flows: &[Flow]) -> Vec<SwitchableFlow> {
                 running: flow.running,
                 vision_mixer_block_id,
                 audio_mixer_block_id,
+                mixer_backend,
             })
         })
         .collect()
@@ -170,6 +178,50 @@ pub struct Selection {
     pub flow_name: String,
     pub vision_mixer_block_id: String,
     pub audio_mixer_block_id: Option<String>,
+    pub mixer_backend: Option<String>,
+}
+
+/// Engine load for the status line, from the latest `SystemStats` event.
+#[derive(Clone, Debug)]
+pub struct EngineLoad {
+    pub cpu: f32,
+    pub gpu_name: String,
+    pub gpu: f32,
+    pub decoder: Option<f32>,
+    pub encoder: Option<f32>,
+    pub vram_used: u64,
+    pub vram_total: u64,
+}
+
+impl EngineLoad {
+    /// `None` when the engine reports no GPU.
+    pub fn from_stats(stats: &strom_types::SystemStats) -> Option<Self> {
+        let g = stats.gpu_stats.first()?;
+        Some(Self {
+            cpu: stats.cpu_usage,
+            gpu_name: g.name.clone(),
+            gpu: g.utilization,
+            decoder: g.decoder_utilization,
+            encoder: g.encoder_utilization,
+            vram_used: g.used_memory,
+            vram_total: g.total_memory,
+        })
+    }
+
+    /// One line, e.g. `RTX 3090 · GPU 2% · DEC 54% · ENC 5% · VRAM 4.8/24.0 GB · CPU 3%`.
+    pub fn summary(&self) -> String {
+        let pct = |v: Option<f32>| v.map_or("-".to_string(), |v| format!("{v:.0}%"));
+        format!(
+            "{} · GPU {:.0}% · DEC {} · ENC {} · VRAM {:.1}/{:.1} GB · CPU {:.0}%",
+            self.gpu_name,
+            self.gpu,
+            pct(self.decoder),
+            pct(self.encoder),
+            self.vram_used as f64 / 1e9,
+            self.vram_total as f64 / 1e9,
+            self.cpu
+        )
+    }
 }
 
 /// Find the `builtin.thumbnail` block feeding a given Vision Mixer input
@@ -216,6 +268,23 @@ impl From<VisionMixerState> for MixerState {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn engine_load_summary() {
+        let load = EngineLoad {
+            cpu: 3.2,
+            gpu_name: "RTX 3090".into(),
+            gpu: 2.0,
+            decoder: Some(54.0),
+            encoder: None,
+            vram_used: 4_800_000_000,
+            vram_total: 24_000_000_000,
+        };
+        assert_eq!(
+            load.summary(),
+            "RTX 3090 · GPU 2% · DEC 54% · ENC - · VRAM 4.8/24.0 GB · CPU 3%"
+        );
+    }
 
     #[test]
     fn meter_channel_parses_channels_only() {

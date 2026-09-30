@@ -17,7 +17,7 @@ use source_ui::SourceBuilder;
 use clap::Parser;
 use state::{
     find_switchable_flows, find_thumbnail_block, meter_channel, AppMessage, AudioMixerState, AutoTransition,
-    MixerState, Selection, SwitchableFlow,
+    EngineLoad, MixerState, Selection, SwitchableFlow,
 };
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -127,6 +127,8 @@ struct ConsoleApp {
     builder: SourceBuilder,
     devices: Vec<strom_types::discovery::DeviceResponse>,
     backend_choice: BackendChoice,
+    /// Engine CPU/GPU load, from `SystemStats` WS events.
+    engine: Option<EngineLoad>,
 }
 
 impl ConsoleApp {
@@ -154,6 +156,7 @@ impl ConsoleApp {
             builder: SourceBuilder::new(),
             devices: Vec::new(),
             backend_choice: args.mixer_backend,
+            engine: None,
         };
         app.refresh_flows();
         app.refresh_devices();
@@ -237,6 +240,7 @@ impl ConsoleApp {
             flow_name: flow.name.clone(),
             vision_mixer_block_id: flow.vision_mixer_block_id.clone(),
             audio_mixer_block_id: flow.audio_mixer_block_id.clone(),
+            mixer_backend: flow.mixer_backend.clone(),
         });
 
         let vm_block = flow.vision_mixer_block_id.clone();
@@ -539,6 +543,9 @@ impl ConsoleApp {
                     let loudest = peak.iter().copied().fold(f64::NEG_INFINITY, f64::max);
                     audio.peaks_db.insert(ch, loudest);
                 }
+                AppMessage::Event(StromEvent::SystemStats(stats)) => {
+                    self.engine = EngineLoad::from_stats(&stats);
+                }
                 AppMessage::MixerUpdate {
                     preview_input,
                     program_input,
@@ -578,7 +585,14 @@ impl ConsoleApp {
                 self.selection = None;
             }
         });
-        ui.label(format!("Vision Mixer block: {}", selection.vision_mixer_block_id));
+        ui.horizontal(|ui| {
+            ui.label(format!("Vision Mixer block: {}", selection.vision_mixer_block_id));
+            let backend = selection.mixer_backend.as_deref().unwrap_or("auto");
+            ui.label(format!("· backend: {backend}"));
+            if let Some(load) = &self.engine {
+                ui.label(format!("· {}", load.summary()));
+            }
+        });
 
         if self.mixer.num_inputs == 0 {
             ui.weak("Waiting for Vision Mixer state...");
