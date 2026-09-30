@@ -61,6 +61,10 @@ struct Args {
     #[arg(long)]
     selftest_url: Vec<String>,
 
+    /// Self-test: add an SRT (MPEG-TS) input by URI (repeatable).
+    #[arg(long)]
+    selftest_srt: Vec<String>,
+
     /// Self-test: add every discovered video capture device.
     #[arg(long)]
     selftest_devices: bool,
@@ -997,6 +1001,7 @@ fn main() -> eframe::Result<()> {
             patterns: args.selftest_patterns,
             files: args.selftest_file.clone(),
             urls: args.selftest_url.clone(),
+            srts: args.selftest_srt.clone(),
             devices: args.selftest_devices,
             seconds: args.selftest_secs,
             thumb_ms: args.thumb_ms,

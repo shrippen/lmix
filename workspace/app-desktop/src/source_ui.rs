@@ -20,6 +20,7 @@ pub struct SourceBuilder {
     device: Option<usize>,
     file: String,
     url: String,
+    srt: String,
 }
 
 impl SourceBuilder {
@@ -31,6 +32,7 @@ impl SourceBuilder {
             device: None,
             file: String::new(),
             url: String::new(),
+            srt: String::new(),
         }
     }
 
@@ -125,6 +127,10 @@ impl SourceBuilder {
         if Self::add_text_row(ui, &mut self.url, "https://... or rtsp://...", "Add URL") {
             self.sources.push(SourceSpec::Url(self.url.trim().to_string()));
             self.url.clear();
+        }
+        if Self::add_text_row(ui, &mut self.srt, "srt://:9000?mode=listener", "Add SRT") {
+            self.sources.push(SourceSpec::Srt(self.srt.trim().to_string()));
+            self.srt.clear();
         }
 
         let mut remove = None;

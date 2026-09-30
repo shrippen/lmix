@@ -84,6 +84,12 @@ am Thumbnail-Tap; strom-Kappung auf 32 Inputs angehoben):
   wiederholt Frames); deshalb misst der Selftest seit 2026-09-30 jeden
   Input.
 
+**SRT-Eingänge** (4 × 1080p30 H.264 in MPEG-TS über SRT, Loopback,
+SRT-Latenz 125 ms Standard, 30 s): alle Inputs 30,0 fps, Backend-CPU 9 %.
+Speicherpfad srtsrc → decodebin (NVDEC) → CUDA → Mixer, kein Download,
+kein Deinterlacer (progressiv). PGM-Alter nach Encode 198 ms: enthält die
+konfigurierte SRT-Latenz; Budget von 167 ms gilt für lokale Quellen.
+
 ## AMD / Intel
 
 Nicht gemessen, keine Hardware (M5b). Pfade: GL-Mixer, VA-API.

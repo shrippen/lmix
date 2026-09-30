@@ -26,6 +26,7 @@ const TEST_HEIGHT: u32 = 720;
 const TEST_FPS: u32 = 30;
 
 const MEDIA_PLAYER_BLOCK: &str = "builtin.media_player";
+const SRT_INPUT_BLOCK: &str = "builtin.mpegtssrt_input";
 const LOCAL_INPUT_BLOCK: &str = "builtin.local_input";
 const THUMBNAIL_BLOCK: &str = "builtin.thumbnail";
 const VISION_MIXER_BLOCK: &str = "builtin.vision_mixer";
@@ -130,6 +131,9 @@ pub enum SourceSpec {
     File(String),
     /// http(s)/rtsp/... URL, handled by strom's media player.
     Url(String),
+    /// MPEG-TS over SRT, decoded on the engine's GPU (e.g.
+    /// `srt://:9000?mode=listener`).
+    Srt(String),
 }
 
 impl SourceSpec {
@@ -139,6 +143,7 @@ impl SourceSpec {
             Self::Device { name, .. } => format!("Device: {name}"),
             Self::File(path) => format!("File: {path}"),
             Self::Url(url) => format!("URL: {url}"),
+            Self::Srt(uri) => format!("SRT: {uri}"),
         }
     }
 }
@@ -257,6 +262,21 @@ fn add_source(flow: &mut Flow, i: usize, spec: &SourceSpec) -> String {
                 ],
             ));
             format!("{player_id}:video_out")
+        }
+        SourceSpec::Srt(uri) => {
+            let srt_id = format!("srt{i}");
+            flow.blocks.push(block(
+                srt_id.clone(),
+                SRT_INPUT_BLOCK,
+                pos(0, i),
+                vec![
+                    ("srt_uri", PropertyValue::String(uri.clone())),
+                    ("decode", PropertyValue::Bool(true)),
+                    ("num_video_tracks", PropertyValue::UInt(1)),
+                    ("num_audio_tracks", PropertyValue::UInt(0)),
+                ],
+            ));
+            format!("{srt_id}:video_out")
         }
     }
 }
@@ -422,12 +442,14 @@ mod tests {
                 id: "dev-1".into(),
                 name: "Cam".into(),
             },
+            SourceSpec::Srt("srt://:9000?mode=listener".into()),
         ];
         let flow = build_flow("f", &sources, MixerBackend::Cuda).unwrap();
 
         assert_eq!(flow.elements.len(), 2);
         assert!(flow.links.iter().any(|l| l.to == "thumb1:video_in" && l.from == "media1:video_out"));
         assert!(flow.links.iter().any(|l| l.to == "thumb3:video_in" && l.from == "dev3:video_out"));
+        assert!(flow.links.iter().any(|l| l.to == "thumb4:video_in" && l.from == "srt4:video_out"));
     }
 
     #[test]

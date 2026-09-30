@@ -78,6 +78,7 @@ pub struct Options {
     pub patterns: usize,
     pub files: Vec<String>,
     pub urls: Vec<String>,
+    pub srts: Vec<String>,
     pub devices: bool,
     pub seconds: u64,
     pub thumb_ms: u64,
@@ -187,6 +188,7 @@ fn sources_for(opts: &Options, devices: &[strom_types::discovery::DeviceResponse
         .collect();
     sources.extend(opts.files.iter().cloned().map(SourceSpec::File));
     sources.extend(opts.urls.iter().cloned().map(SourceSpec::Url));
+    sources.extend(opts.srts.iter().cloned().map(SourceSpec::Srt));
     if opts.devices {
         sources.extend(devices.iter().map(|d| SourceSpec::Device {
             id: d.id.clone(),
