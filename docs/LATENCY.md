@@ -89,6 +89,9 @@ am Thumbnail-Tap; strom-Kappung auf 32 Inputs angehoben):
 - Frühere Aussetzer einzelner Inputs bei 32 × 720p waren ein Messartefakt:
   Die Probes zählten Puffer vor der Pipeline-Uhr nicht (strom-Fix "Count
   buffer-age samples…"). Nach dem Fix 3 von 3 Läufen ohne Befund.
+- **Offen**: Einmal in ~20 Läufen (4 Inputs, direkt nach einem Neubau)
+  froren alle Quellen nach dem ersten Bild ein, Ausgänge liefen weiter
+  (Mixer wiederholt Frames); Flow meldete PLAYING. Nicht reproduziert.
 - **Offen**: Mit 32 Media-Playern scheitert der Start sporadisch
   (2 von ~12 Läufen): ein einzelner Input meldet `not-negotiated` an
   seinem appsrc, der Flow startet nicht. Mit GStreamer-Debug nicht

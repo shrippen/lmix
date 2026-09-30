@@ -134,3 +134,30 @@ cargo run -p strom-frontend
 Erwartet: natives Fenster "Strom" öffnet sich, verbindet per WebSocket
 (`ws://localhost:8080/api/ws`) und REST, zeigt die Elementpalette und die
 oben angelegten Flows.
+
+## lmix Console und Selftest (Stand M1b)
+
+Immer Release-Builds: Debug-Builds sind für Live-Video zu langsam.
+
+```bash
+./run.sh                                # Backend (127.0.0.1:8099) + Console
+scripts/acceptance-m1b.sh [N] [SEK]     # M1b-Abnahme, eigenes Backend auf 8199
+```
+
+Die Console wählt das Mixer-Backend nach der GPU der Engine (`gpu_profile.rs`):
+NVIDIA → `cuda`, AMD/Intel → `gl` (unverifiziert), ohne Hardware-GPU Abbruch.
+Übersteuern mit `--mixer-backend cuda|gl|cpu`.
+
+Selftest (headless) gegen ein laufendes Backend, wichtigste Schalter:
+
+| Schalter | Wirkung |
+|---|---|
+| `--selftest-patterns N` | N Testbild-Inputs (mit Testton) |
+| `--selftest-file PFAD` | Datei-Input (NVDEC), wiederholbar |
+| `--selftest-srt URI` | SRT-Input (MPEG-TS), wiederholbar |
+| `--selftest-encode` | PGM + Multiview → HW-Encoder; misst fps/Alter je Input und Ausgang, prüft Bildinhalt |
+| `--selftest-secs S` | Dauer der Lastphase |
+| `--mixer-backend B` | Backend erzwingen |
+
+Kein `STROM_FORCE_SOFTWARE_CONVERT` mehr nötig (auch nicht für `cpu`).
+Messwerte und Methode: `docs/LATENCY.md`.
