@@ -379,3 +379,18 @@ Autonom umgesetzt, wartet auf Freigabe (M1b zuerst).
 2. Interlaced Quellen auf NVIDIA werden auf der GPU deinterlaced
    (`gldeinterlace`, Bildrate bleibt: 1080i50 → 25p), nicht per CPU-yadif
    (50p). Grund: Performance zuerst.
+
+## 2026-09-30 — Live-Monitore: Eingänge immer flüssig (umsetzen später)
+
+**Entscheidung** (User): Alle Eingänge müssen in der Console immer
+flüssig dargestellt werden, wie bei vMix — nicht nur PGM/PVW. Umsetzung
+später, nicht jetzt.
+
+**Folge für die Wahl (M1-Rest 1.1)**: Das Thumbnail-Polling (auch mit
+konfigurierbarer Rate, gemessen max. ~15 fps) reicht für die Eingänge
+nicht. Kandidaten, wenn es umgesetzt wird:
+- WHEP-Empfang des Multiview-Ausgangs (alle Eingänge + PGM/PVW in einem
+  NVENC-Stream, eine GPU-Dekodierung in der Console).
+- Oder je Eingang ein kleiner Vorschau-Stream in Videorate.
+Vorher messen: Kosten pro Eingang (Encode/Decode, Latenz) gegen das
+Leitprinzip "max. Inputs @ Budget".
