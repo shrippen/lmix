@@ -69,7 +69,9 @@ Multiview 720p30 → 2 × NVENC, 10 min Dauerlauf, Take alle 1,5 s
 |---|---|---:|---:|---|
 | CPU-Compositor (2026-09-19) | 16 × 720p Testbild | ~1700 % | 2,4 GB | 2,2 s Latenz |
 | GL-Mixer nach Probe-Fix | 16 × 720p Testbild | 160 % | 2,2 GB | |
-| CUDA-Mixer | 16 × 720p Testbild | 154 % | 0,8 GB | Kosten: Testbild-Erzeugung auf CPU |
+| CUDA-Mixer | 16 × 720p Testbild | 154 % | 0,8 GB | Testbild in 10-Bit-RGB (`cudaupload` wählte BGR10A2) |
+| CUDA-Mixer, Testbild als NV12 | 16 × 720p Testbild | 68 % | 0,6 GB | Console fordert NV12 an |
+| GL-Mixer, Testbild als NV12 | 16 × 720p Testbild | 113 % | 0,7 GB | |
 | CUDA-Mixer, eigener Kontext je Pipeline | 16 × 1080p NVDEC | 69 % | 4,1 GB | 9,6 GB VRAM |
 | CUDA-Mixer, geteilter Kontext | 16 × 1080p NVDEC | 17 % | 1,0 GB | 4,6 GB VRAM |
 
@@ -89,6 +91,8 @@ am Thumbnail-Tap; strom-Kappung auf 32 Inputs angehoben):
 - Frühere Aussetzer einzelner Inputs bei 32 × 720p waren ein Messartefakt:
   Die Probes zählten Puffer vor der Pipeline-Uhr nicht (strom-Fix "Count
   buffer-age samples…"). Nach dem Fix 3 von 3 Läufen ohne Befund.
+- Stresslauf: 30 × (2 Testbilder + 14 Dateien, Encoder, 10 s),
+  30/30 ohne Befund.
 - **Offen**: Einmal in ~20 Läufen (4 Inputs, direkt nach einem Neubau)
   froren alle Quellen nach dem ersten Bild ein, Ausgänge liefen weiter
   (Mixer wiederholt Frames); Flow meldete PLAYING. Nicht reproduziert.

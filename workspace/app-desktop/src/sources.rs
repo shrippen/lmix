@@ -24,6 +24,7 @@ pub const MAX_SOURCES: usize = strom_types::vision_mixer::MAX_NUM_INPUTS;
 const TEST_WIDTH: u32 = 1280;
 const TEST_HEIGHT: u32 = 720;
 const TEST_FPS: u32 = 30;
+const TEST_FORMAT: &str = "NV12";
 
 const MEDIA_PLAYER_BLOCK: &str = "builtin.media_player";
 const SRT_INPUT_BLOCK: &str = "builtin.mpegtssrt_input";
@@ -208,14 +209,16 @@ fn add_source(flow: &mut Flow, i: usize, spec: &SourceSpec) -> String {
                 pad_properties: Default::default(),
                 position: (0.0, i as f32 * ROW_SPACING),
             });
-            // Pin resolution/rate so every pattern input looks alike to the mixer.
+            // Pin resolution/rate so every pattern input looks alike to the
+            // mixer, and NV12: unpinned, the CUDA mixer's cudaupload lets
+            // videotestsrc render 10-bit RGB (BGR10A2_LE), 2.7x the bytes.
             flow.elements.push(Element {
                 id: caps_id.clone(),
                 element_type: "capsfilter".to_string(),
                 properties: [(
                     "caps".to_string(),
                     PropertyValue::String(format!(
-                        "video/x-raw,width={TEST_WIDTH},height={TEST_HEIGHT},framerate={TEST_FPS}/1"
+                        "video/x-raw,format={TEST_FORMAT},width={TEST_WIDTH},height={TEST_HEIGHT},framerate={TEST_FPS}/1"
                     )),
                 )]
                 .into(),
