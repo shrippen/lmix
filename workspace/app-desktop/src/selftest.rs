@@ -36,6 +36,7 @@ const SWITCH_EVERY: Duration = Duration::from_millis(1500);
 const LATENCY_EVERY: Duration = Duration::from_secs(2);
 const CPU_EVERY: Duration = Duration::from_secs(1);
 const SETTLE: Duration = Duration::from_millis(500);
+const FTB_MS: u64 = 300;
 const TRANSITIONS: [&str; 4] = ["cut", "fade", "dip_to_black", "wipe_left"];
 const BACKEND_COMM: &str = "strom";
 
@@ -524,6 +525,8 @@ async fn run_flow(
         );
     }
 
+    let ftb_ok = ftb_round_trip(api, flow_id, &vm).await;
+
     let still_playing = api
         .get_flow(flow_id)
         .await
@@ -531,7 +534,8 @@ async fn run_flow(
         .unwrap_or(false);
 
     gpu_load.report();
-    let ok = check_outputs(opts, &outputs) && pictures_ok;
+    println!("{} FTB on and off round trip", if ftb_ok { "PASS" } else { "FAIL" });
+    let ok = check_outputs(opts, &outputs) && pictures_ok && ftb_ok;
     verdict(perf, &probes, inputs, switches, switch_failures, still_playing, &cpu_samples, rss_kb_max) && ok
 }
 
@@ -616,6 +620,22 @@ fn check_outputs(opts: &Options, outputs: &std::collections::HashMap<String, Out
         );
     }
     ok && inputs_ok
+}
+
+/// Fade to black and back; the mixer state must follow each toggle.
+async fn ftb_round_trip(api: &ApiClient, flow_id: strom_types::FlowId, vm: &str) -> bool {
+    for expected in [true, false] {
+        let Ok(resp) = api.toggle_ftb(flow_id, vm, FTB_MS).await else {
+            return false;
+        };
+        tokio::time::sleep(Duration::from_millis(FTB_MS) + SETTLE).await;
+        let state = api.get_vision_mixer_state(flow_id, vm).await;
+        let active = matches!(state, Ok(Some(s)) if s.ftb_active == expected);
+        if resp.active != expected || !active {
+            return false;
+        }
+    }
+    true
 }
 
 /// PVW <- next input, then take; returns whether the mixer ended up with

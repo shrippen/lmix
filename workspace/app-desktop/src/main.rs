@@ -101,6 +101,7 @@ const DEFAULT_THUMB_MS: u64 = 250;
 const LATENCY_POLL_MS: u64 = 2000;
 const GPU_INFO_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
 const DEFAULT_AUTO_MS: u64 = 300;
+const FTB_ACTIVE_COLOR: egui::Color32 = egui::Color32::from_rgb(220, 40, 40);
 const AUTO_MS_RANGE: std::ops::RangeInclusive<u64> = 100..=5000;
 
 struct ConsoleApp {
@@ -392,6 +393,69 @@ impl ConsoleApp {
         });
     }
 
+    fn is_selected_mixer(&self, block_id: &str) -> bool {
+        self.selection
+            .as_ref()
+            .is_some_and(|s| s.vision_mixer_block_id == block_id)
+    }
+
+    /// FTB (lit while black) and one toggle per DSK layer, like vMix's
+    /// row under the transition buttons.
+    fn draw_ftb_dsk(&mut self, ui: &mut egui::Ui) {
+        let ftb = egui::Button::new(egui::RichText::new("FTB").strong())
+            .fill(if self.mixer.ftb_active { FTB_ACTIVE_COLOR } else { ui.visuals().widgets.inactive.bg_fill });
+        if ui.add_sized([90.0, 28.0], ftb).clicked() {
+            self.toggle_ftb();
+        }
+
+        let layers = self.mixer.dsk_enabled.clone();
+        for (i, enabled) in layers.into_iter().enumerate() {
+            let dsk = i + 1;
+            if ui.selectable_label(enabled, format!("DSK {dsk}")).clicked() {
+                self.set_dsk(dsk, !enabled);
+            }
+        }
+    }
+
+    /// Toggle Fade to Black with the AUTO duration.
+    fn toggle_ftb(&self) {
+        let Some(selection) = self.selection.clone() else {
+            return;
+        };
+        let (api, tx) = (self.api.clone(), self.tx.clone());
+        let session = self.session.load(Ordering::SeqCst);
+        let duration_ms = self.auto_duration_ms;
+        tokio::spawn(async move {
+            let msg = match api
+                .toggle_ftb(selection.flow_id, &selection.vision_mixer_block_id, duration_ms)
+                .await
+            {
+                Ok(resp) => AppMessage::FtbUpdate(resp.active),
+                Err(e) => AppMessage::Error(format!("FTB failed: {e}")),
+            };
+            let _ = tx.send((session, msg));
+        });
+    }
+
+    /// Switch DSK layer `dsk` (1-based) to `enabled`.
+    fn set_dsk(&self, dsk: usize, enabled: bool) {
+        let Some(selection) = self.selection.clone() else {
+            return;
+        };
+        let (api, tx) = (self.api.clone(), self.tx.clone());
+        let session = self.session.load(Ordering::SeqCst);
+        tokio::spawn(async move {
+            let msg = match api
+                .set_dsk(selection.flow_id, &selection.vision_mixer_block_id, dsk, enabled)
+                .await
+            {
+                Ok(resp) => AppMessage::DskUpdate { dsk: resp.dsk, enabled: resp.enabled },
+                Err(e) => AppMessage::Error(format!("DSK {dsk} failed: {e}")),
+            };
+            let _ = tx.send((session, msg));
+        });
+    }
+
     /// Take the current PVW to PGM (CUT, or a timed transition).
     fn take(&self, transition_type: &'static str, duration_ms: u64) {
         let Some(selection) = self.selection.clone() else {
@@ -553,6 +617,22 @@ impl ConsoleApp {
                     self.mixer.preview_input = preview_input;
                     self.mixer.program_input = program_input;
                 }
+                AppMessage::FtbUpdate(active) if session == current_session => {
+                    self.mixer.ftb_active = active;
+                }
+                AppMessage::DskUpdate { dsk, enabled } if session == current_session => {
+                    self.mixer.set_dsk(dsk, enabled);
+                }
+                AppMessage::Event(StromEvent::VisionMixerFtbChanged { block_id, active, .. })
+                    if session == current_session && self.is_selected_mixer(&block_id) =>
+                {
+                    self.mixer.ftb_active = active;
+                }
+                AppMessage::Event(StromEvent::VisionMixerDskChanged { block_id, dsk, enabled, .. })
+                    if session == current_session && self.is_selected_mixer(&block_id) =>
+                {
+                    self.mixer.set_dsk(dsk, enabled);
+                }
                 AppMessage::AudioMixerLoaded {
                     num_channels,
                     properties,
@@ -668,6 +748,9 @@ impl ConsoleApp {
                             .suffix(" ms"),
                     );
                 });
+            });
+            ui.horizontal(|ui| {
+                self.draw_ftb_dsk(ui);
             });
             ui.add_space(6.0);
         });

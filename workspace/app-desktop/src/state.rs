@@ -76,6 +76,10 @@ pub enum AppMessage {
         preview_input: Option<usize>,
         program_input: Option<usize>,
     },
+    /// Authoritative FTB state from the `ftb` REST call.
+    FtbUpdate(bool),
+    /// Authoritative DSK layer state (1-based) from the `dsk` REST call.
+    DskUpdate { dsk: usize, enabled: bool },
     /// Initial audio mixer channel count + current fader/mute values.
     AudioMixerLoaded {
         num_channels: usize,
@@ -253,6 +257,19 @@ pub struct MixerState {
     pub program_input: Option<usize>,
     pub preview_input: Option<usize>,
     pub num_inputs: usize,
+    pub ftb_active: bool,
+    /// One entry per DSK layer the mixer was built with (index = layer - 1).
+    pub dsk_enabled: Vec<bool>,
+}
+
+impl MixerState {
+    /// Record DSK layer `dsk` (1-based); ignores layers the mixer lacks.
+    pub fn set_dsk(&mut self, dsk: usize, enabled: bool) {
+        let Some(slot) = dsk.checked_sub(1).and_then(|i| self.dsk_enabled.get_mut(i)) else {
+            return;
+        };
+        *slot = enabled;
+    }
 }
 
 impl From<VisionMixerState> for MixerState {
@@ -261,6 +278,8 @@ impl From<VisionMixerState> for MixerState {
             program_input: s.program_input,
             preview_input: s.preview_input,
             num_inputs: s.input_resolutions.len(),
+            ftb_active: s.ftb_active,
+            dsk_enabled: s.dsk_enabled,
         }
     }
 }
@@ -284,6 +303,19 @@ mod tests {
             load.summary(),
             "RTX 3090 · GPU 2% · DEC 54% · ENC - · VRAM 4.8/24.0 GB · CPU 3%"
         );
+    }
+
+    #[test]
+    fn dsk_layers_are_one_based() {
+        let mut mixer = MixerState {
+            dsk_enabled: vec![false, false],
+            ..Default::default()
+        };
+        mixer.set_dsk(2, true);
+        mixer.set_dsk(0, true);
+        mixer.set_dsk(3, true);
+
+        assert_eq!(mixer.dsk_enabled, vec![false, true]);
     }
 
     #[test]

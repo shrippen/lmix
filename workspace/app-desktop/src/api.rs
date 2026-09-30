@@ -5,7 +5,8 @@
 
 use std::collections::HashMap;
 use strom_types::api::{
-    ActivateProbeRequest, BlockPropertiesResponse, ProbeResponse, FlowListResponse, FlowResponse, LatencyResponse, SelectPreviewRequest,
+    ActivateProbeRequest, BlockPropertiesResponse, DskToggleRequest, DskToggleResponse,
+    FadeToBlackRequest, FadeToBlackResponse, ProbeResponse, FlowListResponse, FlowResponse, LatencyResponse, SelectPreviewRequest,
     SelectPreviewResponse, TransitionResponse, TriggerTransitionRequest,
     UpdateBlockPropertiesRequest, VisionMixerState,
 };
@@ -229,6 +230,43 @@ impl ApiClient {
     pub async fn get_latency(&self, flow_id: FlowId) -> ApiResult<LatencyResponse> {
         let url = format!("{}/api/flows/{}/latency", self.base_url, flow_id);
         let resp = self.http.get(url).send().await?;
+        let resp = Self::check_status(resp).await?;
+        Ok(resp.json().await?)
+    }
+
+    /// Toggle Fade to Black; the response carries the new state.
+    pub async fn toggle_ftb(
+        &self,
+        flow_id: FlowId,
+        block_id: &str,
+        duration_ms: u64,
+    ) -> ApiResult<FadeToBlackResponse> {
+        let url = format!("{}/api/flows/{}/blocks/{}/ftb", self.base_url, flow_id, block_id);
+        let resp = self
+            .http
+            .post(url)
+            .json(&FadeToBlackRequest { duration_ms })
+            .send()
+            .await?;
+        let resp = Self::check_status(resp).await?;
+        Ok(resp.json().await?)
+    }
+
+    /// Switch DSK layer `dsk` (1-based) on or off.
+    pub async fn set_dsk(
+        &self,
+        flow_id: FlowId,
+        block_id: &str,
+        dsk: usize,
+        enabled: bool,
+    ) -> ApiResult<DskToggleResponse> {
+        let url = format!("{}/api/flows/{}/blocks/{}/dsk", self.base_url, flow_id, block_id);
+        let resp = self
+            .http
+            .post(url)
+            .json(&DskToggleRequest { dsk, enabled })
+            .send()
+            .await?;
         let resp = Self::check_status(resp).await?;
         Ok(resp.json().await?)
     }
