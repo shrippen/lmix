@@ -10,6 +10,10 @@
 //! hotkey, API, another client), because it follows the WS state.
 
 use crate::sources::audio_channel;
+
+/// Ramp for AFV switches that are not a timed transition (cuts, takes
+/// from elsewhere): short, just enough to avoid a click.
+pub const ANTI_CLICK_MS: u32 = 20;
 use std::collections::BTreeSet;
 
 /// Channels (1-based) with AFV switched on.

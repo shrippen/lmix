@@ -124,6 +124,9 @@ struct ConsoleApp {
     mixer: MixerState,
     audio: Option<AudioMixerState>,
     textures: HashMap<usize, egui::TextureHandle>,
+    /// Fade length for the next AFV switch: the transition duration after a
+    /// local AUTO take, the anti-click ramp otherwise.
+    afv_ramp_ms: std::cell::Cell<u32>,
     /// Latest frame from the flow's PGM tap (the PROGRAM monitor).
     program_texture: Option<egui::TextureHandle>,
     auto_transition: AutoTransition,
@@ -157,6 +160,7 @@ impl ConsoleApp {
             audio: None,
             textures: HashMap::new(),
             program_texture: None,
+            afv_ramp_ms: std::cell::Cell::new(afv::ANTI_CLICK_MS),
             auto_transition: AutoTransition::Fade,
             auto_duration_ms: DEFAULT_AUTO_MS,
             perf: Arc::new(Perf::new(args.perf_log.as_deref())),
@@ -495,6 +499,9 @@ impl ConsoleApp {
         let api = self.api.clone();
         let tx = self.tx.clone();
         let perf = self.perf.clone();
+        // AFV fades its audio with the picture.
+        self.afv_ramp_ms
+            .set((duration_ms as u32).max(afv::ANTI_CLICK_MS));
         perf.take_started();
         tokio::spawn(async move {
             let started = std::time::Instant::now();
@@ -917,17 +924,35 @@ impl ConsoleApp {
         let Some(audio) = self.audio.as_mut() else {
             return;
         };
-        let mut changes = Vec::new();
+        let mut changes = HashMap::new();
         for (ch, muted) in audio.afv.mutes(pgm) {
             if audio.mutes.get(&ch) == Some(&muted) {
                 continue;
             }
             audio.mutes.insert(ch, muted);
-            changes.push((afv::mute_property(ch), strom_types::PropertyValue::Bool(muted)));
+            changes.insert(afv::mute_property(ch), strom_types::PropertyValue::Bool(muted));
         }
-        for (name, value) in changes {
-            self.patch_audio_property(name, value);
+        if changes.is_empty() {
+            return;
         }
+
+        // One PATCH: outgoing and incoming channels ramp together (crossfade).
+        let ramp_ms = self.afv_ramp_ms.replace(afv::ANTI_CLICK_MS);
+        let (Some(selection), api) = (self.selection.clone(), self.api.clone()) else {
+            return;
+        };
+        let Some(audio_block) = selection.audio_mixer_block_id.clone() else {
+            return;
+        };
+        let (tx, session) = (self.tx.clone(), self.session.load(Ordering::SeqCst));
+        tokio::spawn(async move {
+            let result = api
+                .patch_block_properties_ramped(selection.flow_id, &audio_block, changes, Some(ramp_ms))
+                .await;
+            if let Err(e) = result {
+                let _ = tx.send((session, AppMessage::Error(format!("AFV failed: {e}"))));
+            }
+        });
     }
 }
 

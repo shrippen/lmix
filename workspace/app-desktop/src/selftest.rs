@@ -42,6 +42,8 @@ const SETTLE: Duration = Duration::from_millis(500);
 const FTB_MS: u64 = 300;
 /// A thumbnail tap refreshes once a second (strom default).
 const THUMB_REFRESH: Duration = Duration::from_millis(1200);
+/// How long an idle thumbnail tap may take to deliver its first frame.
+const TAP_WAKEUP: Duration = Duration::from_secs(3);
 /// Black after JPEG: limited range and ringing stay far below this.
 const MAX_BLACK_LUMA: f64 = 20.0;
 /// Dropout scenario: fade length, when the source stops, time left at the end.
@@ -842,7 +844,8 @@ fn start_afv(
                 .into_iter()
                 .map(|(ch, muted)| (mute_property(ch), strom_types::PropertyValue::Bool(muted)))
                 .collect();
-            if let Err(e) = api.patch_block_properties(flow_id, AUDIO_MIXER_ID, properties).await {
+            let ramp = Some(crate::afv::ANTI_CLICK_MS);
+            if let Err(e) = api.patch_block_properties_ramped(flow_id, AUDIO_MIXER_ID, properties, ramp).await {
                 eprintln!("AFV patch failed: {e}");
             }
         }
@@ -892,12 +895,19 @@ async fn ftb_round_trip(api: &ApiClient, flow_id: strom_types::FlowId, vm: &str)
 }
 
 /// Mean PGM luma below `MAX_BLACK_LUMA`, after the tap caught a new frame.
+/// The first request may only activate the tap (504): retry for a while.
 async fn pgm_is_black(api: &ApiClient, flow_id: strom_types::FlowId) -> bool {
     tokio::time::sleep(THUMB_REFRESH).await;
-    let Ok(jpeg) = api.get_thumbnail(flow_id, PGM_TAP_ID).await else {
-        return false;
-    };
-    luma_mean(&jpeg).is_some_and(|m| m < MAX_BLACK_LUMA)
+    let deadline = Instant::now() + TAP_WAKEUP;
+    loop {
+        if let Ok(jpeg) = api.get_thumbnail(flow_id, PGM_TAP_ID).await {
+            return luma_mean(&jpeg).is_some_and(|m| m < MAX_BLACK_LUMA);
+        }
+        if Instant::now() > deadline {
+            return false;
+        }
+        tokio::time::sleep(READY_POLL).await;
+    }
 }
 
 /// PVW <- next input, then take; returns whether the mixer ended up with

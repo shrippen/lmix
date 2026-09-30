@@ -159,6 +159,19 @@ impl ApiClient {
         block_id: &str,
         properties: HashMap<String, PropertyValue>,
     ) -> ApiResult<HashMap<String, PropertyValue>> {
+        self.patch_block_properties_ramped(flow_id, block_id, properties, None)
+            .await
+    }
+
+    /// Like `patch_block_properties`; audio volume/mute changes fade over
+    /// `ramp_ms` (all properties of the batch together).
+    pub async fn patch_block_properties_ramped(
+        &self,
+        flow_id: FlowId,
+        block_id: &str,
+        properties: HashMap<String, PropertyValue>,
+        ramp_ms: Option<u32>,
+    ) -> ApiResult<HashMap<String, PropertyValue>> {
         let url = format!(
             "{}/api/flows/{}/blocks/{}/properties",
             self.base_url, flow_id, block_id
@@ -168,7 +181,7 @@ impl ApiClient {
             .patch(url)
             .json(&UpdateBlockPropertiesRequest {
                 properties,
-                ramp_ms: None,
+                ramp_ms,
                 ramp_ms_overrides: None,
             })
             .send()
