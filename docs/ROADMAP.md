@@ -164,7 +164,7 @@ ausreizen (32+ Inputs) und dokumentieren.
 | G.3 | ◐ Console: `gpu_profile.rs`. strom: EFP-Decoder nach Rang statt `nvh264dec`. Offen: Elementwahl als eigene Schicht in strom |
 | G.4 | ◐ NVDEC aus Datei und SRT → CUDA ohne Kopie; Deinterlacer nur bei interlaced; GL-Mixer nimmt CUDA/VA (Brücke). Offen: V4L2-MJPEG, NDI, OMT (M2) |
 | G.5 | ◐ NVENC aus CUDA ✅. VA-Encode aus GL (DMABuf): offen, ohne Hardware nicht prüfbar |
-| G.6 | ◐ Skalierung auf GPU (CUDA, GL, VA unverifiziert). JPEG noch CPU |
+| G.6 | ◐ Skalierung auf GPU (CUDA, GL, VA unverifiziert); JPEG per NVJPEG auf NVIDIA (10 fps × 16: 18 % statt 39 % CPU). VA-JPEG offen |
 | G.7 | ✅ `cudacompositor` auf NVIDIA (6 % vs. 108 % CPU) → Backend `cuda` |
 | G.8 | ✅ Selftest: fps je Input/Ausgang, Alter, CPU, GPU/NVDEC/NVENC, VRAM. AMD/Intel-fdinfo offen |
 
