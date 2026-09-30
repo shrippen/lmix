@@ -19,7 +19,7 @@
 use crate::api::ApiClient;
 use crate::gpu_profile::BackendChoice;
 use crate::perf::{Metric, Perf};
-use crate::sources::{build_flow, SourceSpec, TestPattern};
+use crate::sources::{add_encoders, build_flow, SourceSpec, TestPattern, ENCODED_OUTPUTS};
 use crate::state::{find_switchable_flows, find_thumbnail_block, AppMessage};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -45,6 +45,12 @@ const MAX_TAKE_EVENT_P95_MS: f64 = 500.0;
 const MAX_UI_STALL_MS: f64 = 1000.0;
 const MAX_PIPELINE_LATENCY_MS: f64 = 1000.0;
 const MAX_STARTUP_S: f64 = 15.0;
+/// Output frame rate floor: 97 % of the mixer's 30 fps.
+const MIN_OUTPUT_FPS: f64 = 29.0;
+/// PGM buffer age after the encoder: 5 frames at 30 fps (M1b budget).
+const MAX_PGM_AGE_MS: f64 = 167.0;
+/// Probes outlive the load phase by this much, then the backend drops them.
+const PROBE_GRACE_S: u64 = 10;
 
 /// Moving patterns first, so inputs 0 and 1 must show changing pictures.
 const MOTION_INPUTS: usize = 2;
@@ -77,6 +83,56 @@ pub struct Options {
     pub thumb_ms: u64,
     pub perf_log: Option<std::path::PathBuf>,
     pub backend: BackendChoice,
+    pub outputs: OutputLoad,
+}
+
+/// What hangs off the mixer outputs during the test.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum OutputLoad {
+    /// Nothing: outputs unlinked.
+    None,
+    /// PGM and multiview through hardware encoders, probed for fps and age.
+    Encode,
+}
+
+/// fps and buffer age at one probed point, from `BufferAgeProbe` events.
+struct OutputProbe {
+    label: String,
+    ages_ms: Vec<f64>,
+    first: Option<(u64, Instant)>,
+    last: Option<(u64, Instant)>,
+}
+
+impl OutputProbe {
+    fn new(label: String) -> Self {
+        Self { label, ages_ms: Vec::new(), first: None, last: None }
+    }
+
+    fn record(&mut self, age_ms: u64, sample: u64) {
+        let now = Instant::now();
+        self.ages_ms.push(age_ms as f64);
+        self.first.get_or_insert((sample, now));
+        self.last = Some((sample, now));
+    }
+
+    fn fps(&self) -> f64 {
+        let (Some((s0, t0)), Some((s1, t1))) = (self.first, self.last) else {
+            return 0.0;
+        };
+        let secs = t1.duration_since(t0).as_secs_f64();
+        if secs <= 0.0 {
+            return 0.0;
+        }
+        (s1 - s0) as f64 / secs
+    }
+
+    /// (p50, p95, max) of the sampled ages.
+    fn ages(&self) -> (f64, f64, f64) {
+        let mut v = self.ages_ms.clone();
+        v.sort_by(|a, b| a.total_cmp(b));
+        let at = |q: f64| v.get(((v.len() as f64 - 1.0) * q).round() as usize).copied().unwrap_or(f64::NAN);
+        (at(0.5), at(0.95), v.last().copied().unwrap_or(f64::NAN))
+    }
 }
 
 #[derive(Default)]
@@ -145,13 +201,17 @@ pub async fn run(opts: Options) -> bool {
             return false;
         }
     };
-    let flow = match build_flow(&name, &sources, backend) {
+    let mut flow = match build_flow(&name, &sources, backend) {
         Ok(f) => f,
         Err(e) => {
             eprintln!("cannot build flow: {e}");
             return false;
         }
     };
+
+    if opts.outputs == OutputLoad::Encode {
+        add_encoders(&mut flow);
+    }
 
     println!("selftest: {} inputs, {} s, mixer backend {:?}", sources.len(), opts.seconds, backend);
     for (i, s) in sources.iter().enumerate() {
@@ -251,6 +311,8 @@ async fn run_flow(
     }
     println!("all inputs live after {:.1} s", started.elapsed().as_secs_f64());
 
+    let mut outputs = start_output_probes(api, flow_id, opts).await;
+
     // Switcher task: preview + take at a fixed cadence until `stop`.
     let switcher = {
         let (api, perf, vm, stop) = (api.clone(), perf.clone(), vm.clone(), stop.clone());
@@ -284,8 +346,14 @@ async fn run_flow(
         loop_prev = now;
 
         while let Ok((_, msg)) = rx.try_recv() {
-            if let AppMessage::Event(StromEvent::VisionMixerStateChanged { .. }) = msg {
-                perf.take_confirmed();
+            match msg {
+                AppMessage::Event(StromEvent::VisionMixerStateChanged { .. }) => perf.take_confirmed(),
+                AppMessage::Event(StromEvent::BufferAgeProbe { probe_id, age_ms, sample_number, .. }) => {
+                    if let Some(p) = outputs.get_mut(&probe_id) {
+                        p.record(age_ms, sample_number);
+                    }
+                }
+                _ => {}
             }
         }
 
@@ -319,7 +387,60 @@ async fn run_flow(
         .map(|f| f.running)
         .unwrap_or(false);
 
-    verdict(perf, &probes, inputs, switches, switch_failures, still_playing, &cpu_samples, rss_kb_max)
+    let ok = check_outputs(opts, &outputs);
+    verdict(perf, &probes, inputs, switches, switch_failures, still_playing, &cpu_samples, rss_kb_max) && ok
+}
+
+/// Probe each encoder's input and its sink; keyed by probe id.
+async fn start_output_probes(
+    api: &ApiClient,
+    flow_id: strom_types::FlowId,
+    opts: &Options,
+) -> std::collections::HashMap<String, OutputProbe> {
+    let mut probes = std::collections::HashMap::new();
+    if opts.outputs == OutputLoad::None {
+        return probes;
+    }
+
+    let timeout = (opts.seconds + PROBE_GRACE_S) as u32;
+    for out in &ENCODED_OUTPUTS {
+        for (element, stage) in [(out.encoder, "enc_in"), (out.sink, "encoded")] {
+            match api.activate_probe(flow_id, element, timeout).await {
+                Ok(r) => {
+                    probes.insert(r.probe_id, OutputProbe::new(format!("{} {stage}", out.mixer_pad)));
+                }
+                Err(e) => eprintln!("probe on {element} failed: {e}"),
+            }
+        }
+    }
+    probes
+}
+
+/// Print the output table; every probed point must hold the frame rate,
+/// and PGM after encode must stay inside the latency budget.
+fn check_outputs(opts: &Options, outputs: &std::collections::HashMap<String, OutputProbe>) -> bool {
+    if opts.outputs == OutputLoad::None {
+        return true;
+    }
+
+    let mut rows: Vec<&OutputProbe> = outputs.values().collect();
+    rows.sort_by(|a, b| a.label.cmp(&b.label));
+    println!("
+output                   fps   age p50   p95   max (ms)");
+    let mut ok = rows.len() == 2 * ENCODED_OUTPUTS.len();
+    for p in rows {
+        let (p50, p95, max) = p.ages();
+        println!("{:<22} {:>5.1}  {:>7.0} {:>5.0} {:>5.0}", p.label, p.fps(), p50, p95, max);
+        ok &= p.fps() >= MIN_OUTPUT_FPS;
+        if p.label == "pgm_out encoded" {
+            ok &= p95 <= MAX_PGM_AGE_MS;
+        }
+    }
+    println!(
+        "{} outputs >= {MIN_OUTPUT_FPS:.0} fps, PGM encoded age p95 <= {MAX_PGM_AGE_MS:.0} ms",
+        if ok { "PASS" } else { "FAIL" }
+    );
+    ok
 }
 
 /// PVW <- next input, then take; returns whether the mixer ended up with

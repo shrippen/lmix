@@ -5,7 +5,7 @@
 
 use std::collections::HashMap;
 use strom_types::api::{
-    BlockPropertiesResponse, FlowListResponse, FlowResponse, LatencyResponse, SelectPreviewRequest,
+    ActivateProbeRequest, BlockPropertiesResponse, ProbeResponse, FlowListResponse, FlowResponse, LatencyResponse, SelectPreviewRequest,
     SelectPreviewResponse, TransitionResponse, TriggerTransitionRequest,
     UpdateBlockPropertiesRequest, VisionMixerState,
 };
@@ -229,6 +229,25 @@ impl ApiClient {
     pub async fn get_latency(&self, flow_id: FlowId) -> ApiResult<LatencyResponse> {
         let url = format!("{}/api/flows/{}/latency", self.base_url, flow_id);
         let resp = self.http.get(url).send().await?;
+        let resp = Self::check_status(resp).await?;
+        Ok(resp.json().await?)
+    }
+
+    /// Start a buffer-age probe on an element or block; results arrive as
+    /// `BufferAgeProbe` WS events until `timeout_secs` passes.
+    pub async fn activate_probe(
+        &self,
+        flow_id: FlowId,
+        element_id: &str,
+        timeout_secs: u32,
+    ) -> ApiResult<ProbeResponse> {
+        let url = format!("{}/api/flows/{}/probes", self.base_url, flow_id);
+        let request = ActivateProbeRequest {
+            element_id: element_id.to_string(),
+            sample_interval: Some(1),
+            timeout_secs: Some(timeout_secs),
+        };
+        let resp = self.http.post(url).json(&request).send().await?;
         let resp = Self::check_status(resp).await?;
         Ok(resp.json().await?)
     }

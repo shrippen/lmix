@@ -65,6 +65,10 @@ struct Args {
     #[arg(long)]
     selftest_devices: bool,
 
+    /// Self-test: encode PGM and multiview on hardware and check fps/latency.
+    #[arg(long)]
+    selftest_encode: bool,
+
     /// Create and open the 8-pattern preset flow right away (for testing).
     #[arg(long)]
     auto_open: bool,
@@ -998,6 +1002,11 @@ fn main() -> eframe::Result<()> {
             thumb_ms: args.thumb_ms,
             perf_log: args.perf_log.clone(),
             backend: args.mixer_backend,
+            outputs: if args.selftest_encode {
+                selftest::OutputLoad::Encode
+            } else {
+                selftest::OutputLoad::None
+            },
         };
         let passed = runtime.block_on(selftest::run(opts));
         std::process::exit(if passed { 0 } else { 1 });
