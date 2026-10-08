@@ -9,6 +9,7 @@ use lmix_types::Device;
 use crate::switcher::Command;
 
 pub mod flows;
+pub mod meters;
 pub mod null;
 pub mod strom;
 
@@ -44,4 +45,7 @@ pub trait Engine: Send + Sync {
 
     /// Video capture devices the engine can open.
     async fn devices(&self) -> Result<Vec<Device>, EngineError>;
+
+    /// Audio levels, updated as the engine measures them.
+    fn levels(&self) -> tokio::sync::watch::Receiver<meters::EngineLevels>;
 }

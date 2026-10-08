@@ -8,7 +8,7 @@
 //! ```
 
 use lmix_types::action::TRANSITION_SLOTS;
-use lmix_types::input::{REF_PREVIEW, REF_PROGRAM};
+use lmix_types::input::{REF_PREVIEW, REF_PROGRAM, VOLUME_MAX};
 use lmix_types::state::API_VERSION;
 use lmix_types::{
     Action, ActionError, Effect, Input, InputColor, InputId, InputRef, InputStatus, ShowState, SourceSpec,
@@ -37,6 +37,31 @@ pub enum Command {
     },
     /// Toggle fade to black.
     FadeToBlack { duration_ms: u32 },
+    /// Set the audio channel of `slot`: linear gain (1.0 = unity) and
+    /// mute, faded over `ramp_ms`.
+    SetAudio {
+        slot: usize,
+        gain: f64,
+        muted: bool,
+        ramp_ms: u32,
+    },
+}
+
+/// Anti-click fade for audio changes outside a transition.
+pub const AUDIO_RAMP_MS: u32 = 20;
+
+/// What one audio channel is set to.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Mix {
+    gain: f64,
+    muted: bool,
+}
+
+/// Fader gain of a volume: squared, so the scale feels even to the ear
+/// (50 ≈ -12 dB, 100 = unity).
+pub fn fader_gain(volume: u8) -> f64 {
+    let v = f64::from(volume) / f64::from(VOLUME_MAX);
+    v * v
 }
 
 /// Show plus runtime state that is not saved.
@@ -46,6 +71,8 @@ pub struct Switcher {
     path: Option<String>,
     fade_to_black: bool,
     status: HashMap<InputId, InputStatus>,
+    /// Audio channel settings the engine has, per slot.
+    mix: HashMap<usize, Mix>,
 }
 
 impl Switcher {
@@ -56,6 +83,7 @@ impl Switcher {
             path: None,
             fade_to_black: false,
             status: HashMap::new(),
+            mix: HashMap::new(),
         }
     }
 
@@ -79,12 +107,22 @@ impl Switcher {
     /// Apply one action. File actions (new/open/save) are handled by the
     /// service, which needs I/O; it calls [`Self::replace`] for them.
     pub fn apply(&mut self, action: Action) -> Result<Vec<Command>, ActionError> {
+        let ramp_ms = self.audio_ramp(&action);
+        let mut commands = self.apply_action(action)?;
+        commands.extend(self.audio_commands(ramp_ms));
+        Ok(commands)
+    }
+
+    fn apply_action(&mut self, action: Action) -> Result<Vec<Command>, ActionError> {
         match action {
             Action::AddInput { source, name } => self.add(source, name),
             Action::RemoveInput { input } => self.remove(&input),
             Action::ReplaceSource { input, source } => self.replace_source(&input, source),
             Action::RenameInput { input, name } => self.rename(&input, name),
             Action::SetInputColor { input, color } => self.set_color(&input, color),
+            Action::SetAudio { input, on } => self.set_audio(&input, |a| a.on = on),
+            Action::SetAudioFollow { input, follow } => self.set_audio(&input, |a| a.follow_video = follow),
+            Action::SetVolume { input, volume } => self.set_volume(&input, volume),
             Action::MoveInput { input, number } => self.move_input(&input, number),
             Action::PreviewInput { input } => self.preview(&input),
             Action::Cut => self.take(Effect::Cut, 0),
@@ -120,8 +158,15 @@ impl Switcher {
     }
 
     /// Commands that rebuild the engine from the current show (start-up,
-    /// engine restart).
-    pub fn restore_commands(&self) -> Vec<Command> {
+    /// engine restart): slots, program, preview, then every audio channel.
+    pub fn restore_commands(&mut self) -> Vec<Command> {
+        let mut commands = self.picture_commands();
+        self.mix.clear();
+        commands.extend(self.audio_commands(AUDIO_RAMP_MS));
+        commands
+    }
+
+    fn picture_commands(&self) -> Vec<Command> {
         let mut commands: Vec<Command> = self
             .show
             .inputs
@@ -157,6 +202,8 @@ impl Switcher {
                 slot: input.slot,
                 status: self.status.get(&input.id).copied().unwrap_or_default(),
                 color: input.color,
+                audio: input.audio,
+                has_audio: input.source.has_audio(),
             })
             .collect();
 
@@ -198,6 +245,7 @@ impl Switcher {
             source: source.clone(),
             slot,
             color: None,
+            audio: Default::default(),
         });
         self.status.insert(id, InputStatus::Starting);
 
@@ -333,6 +381,74 @@ impl Switcher {
         Ok(Vec::new())
     }
 
+    // ---- Audio ----
+
+    fn set_audio(
+        &mut self,
+        input: &InputRef,
+        change: impl FnOnce(&mut lmix_types::InputAudio),
+    ) -> Result<Vec<Command>, ActionError> {
+        let index = self.find(input)?;
+        change(&mut self.show.inputs[index].audio);
+        Ok(Vec::new())
+    }
+
+    fn set_volume(&mut self, input: &InputRef, volume: u8) -> Result<Vec<Command>, ActionError> {
+        if volume > VOLUME_MAX {
+            return Err(ActionError::BadVolume {
+                volume,
+                max: VOLUME_MAX,
+            });
+        }
+        self.set_audio(input, |a| a.volume = volume)
+    }
+
+    /// Audio follows the picture: a take fades sound as long as the
+    /// transition; everything else only de-clicks.
+    fn audio_ramp(&self, action: &Action) -> u32 {
+        let Action::Transition { slot } = action else {
+            return AUDIO_RAMP_MS;
+        };
+        self.button(*slot)
+            .map_or(AUDIO_RAMP_MS, |b| b.duration_ms.max(AUDIO_RAMP_MS))
+    }
+
+    /// Channels whose wanted setting differs from what the engine has.
+    fn audio_commands(&mut self, ramp_ms: u32) -> Vec<Command> {
+        let wanted: Vec<(usize, Mix)> = self
+            .show
+            .inputs
+            .iter()
+            .filter(|i| i.source.has_audio())
+            .map(|i| (i.slot, self.mix_of(i)))
+            .collect();
+        self.mix.retain(|slot, _| wanted.iter().any(|(s, _)| s == slot));
+
+        let mut commands = Vec::new();
+        for (slot, mix) in wanted {
+            if self.mix.get(&slot) == Some(&mix) {
+                continue;
+            }
+            self.mix.insert(slot, mix);
+            commands.push(Command::SetAudio {
+                slot,
+                gain: mix.gain,
+                muted: mix.muted,
+                ramp_ms,
+            });
+        }
+        commands
+    }
+
+    fn mix_of(&self, input: &ShowInput) -> Mix {
+        let audio = input.audio;
+        let off_air = audio.follow_video && self.show.program != Some(input.id);
+        Mix {
+            gain: fader_gain(audio.volume),
+            muted: !audio.on || off_air,
+        }
+    }
+
     fn toggle_ftb(&mut self, duration_ms: u32) -> Vec<Command> {
         self.fade_to_black = !self.fade_to_black;
         vec![Command::FadeToBlack { duration_ms }]
@@ -462,6 +578,70 @@ mod tests {
         assert_eq!(sw.state().inputs[1].color, Some(InputColor::Teal));
     }
 
+    fn audio_of(cmds: &[Command]) -> Vec<(usize, bool, u32)> {
+        cmds.iter()
+            .filter_map(|c| match c {
+                Command::SetAudio {
+                    slot, muted, ramp_ms, ..
+                } => Some((*slot, *muted, *ramp_ms)),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn follow_video_is_heard_only_on_program() {
+        let mut sw = two_inputs();
+        sw.apply(Action::SetTransition {
+            slot: TransitionSlot(1),
+            effect: Effect::Fade,
+            duration_ms: 800,
+        })
+        .unwrap();
+
+        let cmds = sw
+            .apply(Action::SetAudioFollow { input: named("B"), follow: true })
+            .unwrap();
+        assert_eq!(audio_of(&cmds), [(1, true, AUDIO_RAMP_MS)]);
+
+        sw.apply(Action::PreviewInput { input: named("B") }).unwrap();
+        let cmds = sw.apply(Action::Transition { slot: TransitionSlot(1) }).unwrap();
+        assert_eq!(audio_of(&cmds), [(1, false, 800)], "fades in with the picture");
+
+        sw.apply(Action::PreviewInput { input: named("A") }).unwrap();
+        let cmds = sw.apply(Action::Cut).unwrap();
+        assert_eq!(audio_of(&cmds), [(1, true, AUDIO_RAMP_MS)]);
+    }
+
+    #[test]
+    fn audio_off_and_volume() {
+        let mut sw = two_inputs();
+
+        let cmds = sw.apply(Action::SetAudio { input: named("A"), on: false }).unwrap();
+        assert_eq!(audio_of(&cmds), [(0, true, AUDIO_RAMP_MS)]);
+
+        let cmds = sw.apply(Action::SetVolume { input: named("A"), volume: 50 }).unwrap();
+        assert!(matches!(cmds[..], [Command::SetAudio { gain, .. }] if gain == 0.25));
+
+        let err = sw.apply(Action::SetVolume { input: named("A"), volume: 101 }).unwrap_err();
+        assert!(matches!(err, ActionError::BadVolume { .. }));
+    }
+
+    #[test]
+    fn devices_get_no_audio_commands() {
+        let mut sw = Switcher::new(SLOTS);
+
+        let cmds = sw
+            .apply(Action::AddInput {
+                source: SourceSpec::Device { id: "cam".into() },
+                name: None,
+            })
+            .unwrap();
+
+        assert!(audio_of(&cmds).is_empty());
+        assert!(!sw.state().inputs[0].has_audio);
+    }
+
     #[test]
     fn add_takes_lowest_free_slot() {
         let mut sw = two_inputs();
@@ -476,10 +656,18 @@ mod tests {
 
         assert_eq!(
             cmds,
-            vec![Command::SetSlot {
-                slot: 0,
-                source: Some(pattern(TestPattern::Ball))
-            }]
+            vec![
+                Command::SetSlot {
+                    slot: 0,
+                    source: Some(pattern(TestPattern::Ball))
+                },
+                Command::SetAudio {
+                    slot: 0,
+                    gain: 1.0,
+                    muted: false,
+                    ramp_ms: AUDIO_RAMP_MS
+                },
+            ]
         );
     }
 
@@ -612,9 +800,10 @@ mod tests {
 
         let cmds = fresh.replace(show, Some("x.lmix".into()));
 
-        assert_eq!(cmds.len(), 4, "{cmds:?}");
+        assert_eq!(cmds.len(), 6, "slots, program, preview, audio × 2: {cmds:?}");
         assert!(matches!(cmds[2], Command::Program { slot: None, .. }));
         assert_eq!(cmds[3], Command::Preview { slot: 1 });
+        assert!(matches!(cmds[4], Command::SetAudio { slot: 0, .. }));
         assert_eq!(fresh.state().path.as_deref(), Some("x.lmix"));
     }
 

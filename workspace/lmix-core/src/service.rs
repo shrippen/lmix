@@ -12,16 +12,20 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use lmix_types::{Action, ActionError, Event, InputRef, InputStatus, ShowState};
+use lmix_types::{Action, ActionError, Event, InputLevel, InputRef, InputStatus, Levels, ShowState};
 use tokio::sync::{broadcast, Mutex};
 
-use crate::engine::{Engine, EngineError, Picture};
+use crate::engine::{meters, Engine, EngineError, Picture};
 use crate::recent::Recent;
 use crate::show::{self, Show};
 use crate::switcher::{Command, Switcher};
 
 /// Events kept for slow subscribers before they miss some.
 const EVENT_BUFFER: usize = 256;
+/// At most this often a `Levels` event (strom measures every 100 ms).
+const LEVELS_INTERVAL: std::time::Duration = std::time::Duration::from_millis(100);
+/// Silence: also stands in for "no reading" (JSON has no infinity).
+pub const LEVEL_FLOOR_DB: f32 = -100.0;
 
 pub struct Service {
     switcher: Mutex<Switcher>,
@@ -81,6 +85,39 @@ impl Service {
 
     pub async fn program_picture(&self) -> Result<Vec<u8>, EngineError> {
         self.engine.picture(Picture::Program).await
+    }
+
+    /// Current levels per input (by slot) and of program.
+    pub async fn levels(&self) -> Levels {
+        let engine = self.engine.levels().borrow().clone();
+        let fresh = |(db, at): (f32, std::time::Instant)| {
+            (at.elapsed() < meters::STALE).then_some(db.max(LEVEL_FLOOR_DB))
+        };
+        let sw = self.switcher.lock().await;
+        let inputs = sw
+            .show()
+            .inputs
+            .iter()
+            .filter(|i| i.source.has_audio())
+            .map(|i| InputLevel {
+                input: i.id,
+                peak_db: engine.slots.get(&i.slot).copied().and_then(fresh).unwrap_or(LEVEL_FLOOR_DB),
+            })
+            .collect();
+        Levels {
+            inputs,
+            program_peak_db: engine.main.and_then(fresh),
+        }
+    }
+
+    /// Publish levels while the engine measures; runs for the process life.
+    pub async fn forward_levels(self: Arc<Self>) {
+        let mut readings = self.engine.levels();
+        while readings.changed().await.is_ok() {
+            let levels = self.levels().await;
+            let _ = self.events.send(Event::Levels { levels });
+            tokio::time::sleep(LEVELS_INTERVAL).await;
+        }
     }
 
     pub async fn recent(&self) -> Vec<String> {
@@ -225,7 +262,7 @@ mod tests {
         let state = service.handle(bars()).await.unwrap();
 
         assert_eq!(state.inputs[0].status, InputStatus::Online);
-        assert_eq!(engine.log().len(), 1);
+        assert_eq!(engine.log().len(), 2, "slot, audio: {:?}", engine.log());
         assert!(matches!(events.recv().await.unwrap(), Event::State { .. }));
         assert!(matches!(events.recv().await.unwrap(), Event::Tally { .. }));
     }
@@ -262,7 +299,7 @@ mod tests {
 
         assert_eq!(opened.inputs, saved.inputs);
         assert_eq!(opened.preview, saved.preview);
-        assert_eq!(engine.log().len(), 3, "slot, program, preview: {:?}", engine.log());
+        assert_eq!(engine.log().len(), 4, "slot, program, preview, audio: {:?}", engine.log());
     }
 
     #[tokio::test]
@@ -280,7 +317,7 @@ mod tests {
         assert!(resumed);
         assert_eq!(second.state().await.inputs.len(), 1);
         assert_eq!(second.state().await.path, None);
-        assert_eq!(engine.log().len(), 2, "slot, program: {:?}", engine.log());
+        assert_eq!(engine.log().len(), 3, "slot, program, audio: {:?}", engine.log());
     }
 
     #[tokio::test]

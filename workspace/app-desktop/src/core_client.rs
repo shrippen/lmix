@@ -3,7 +3,7 @@
 //! (LASTENHEFT E.4: the GUI is one client among many).
 
 use futures_util::stream::StreamExt;
-use lmix_types::{Action, Device, Event, InputId, ShowState};
+use lmix_types::{Action, Device, Event, InputId, Levels, ShowState};
 use std::sync::mpsc::Sender;
 use std::time::Duration;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
@@ -15,6 +15,7 @@ const RECONNECT: Duration = Duration::from_secs(1);
 pub enum CoreMessage {
     Connected(bool),
     State(ShowState),
+    Levels(Levels),
     /// Answer to an action: `None` when it ran, the reason otherwise.
     ActionDone(Option<String>),
     Picture(PictureTarget, egui::ColorImage),
@@ -119,10 +120,13 @@ impl CoreClient {
                         let Message::Text(text) = message else {
                             continue;
                         };
-                        if let Ok(Event::State { state }) = serde_json::from_str(&text) {
-                            let _ = tx.send(CoreMessage::State(state));
-                            ctx.request_repaint();
-                        }
+                        let message = match serde_json::from_str(&text) {
+                            Ok(Event::State { state }) => CoreMessage::State(state),
+                            Ok(Event::Levels { levels }) => CoreMessage::Levels(levels),
+                            _ => continue,
+                        };
+                        let _ = tx.send(message);
+                        ctx.request_repaint();
                     }
                 }
                 let _ = tx.send(CoreMessage::Connected(false));

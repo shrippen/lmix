@@ -11,6 +11,8 @@ use crate::switcher::Command;
 #[derive(Default)]
 pub struct NullEngine {
     log: Mutex<Vec<Command>>,
+    /// Never measures anything.
+    levels: tokio::sync::watch::Sender<super::meters::EngineLevels>,
 }
 
 impl NullEngine {
@@ -38,5 +40,9 @@ impl Engine for NullEngine {
 
     async fn devices(&self) -> Result<Vec<Device>, EngineError> {
         Ok(Vec::new())
+    }
+
+    fn levels(&self) -> tokio::sync::watch::Receiver<super::meters::EngineLevels> {
+        self.levels.subscribe()
     }
 }

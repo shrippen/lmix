@@ -10,7 +10,7 @@
 use std::path::Path;
 
 use lmix_types::action::TRANSITION_SLOTS;
-use lmix_types::{Effect, InputColor, InputId, SourceSpec, Transition, TransitionSlot};
+use lmix_types::{Effect, InputAudio, InputColor, InputId, SourceSpec, Transition, TransitionSlot};
 use serde::{Deserialize, Serialize};
 
 /// Marker of a show file.
@@ -29,6 +29,8 @@ pub struct ShowInput {
     pub slot: usize,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub color: Option<InputColor>,
+    #[serde(default)]
+    pub audio: InputAudio,
 }
 
 /// Everything a show file holds.
@@ -150,6 +152,11 @@ mod tests {
                 },
                 slot: 0,
                 color: Some(InputColor::Blue),
+                audio: InputAudio {
+                    on: false,
+                    follow_video: true,
+                    volume: 40,
+                },
             }],
             preview: Some(id),
             program: None,

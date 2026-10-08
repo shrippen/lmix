@@ -90,6 +90,14 @@ pub enum Action {
         #[serde(default)]
         color: Option<InputColor>,
     },
+    // ---- Audio (AUD) ----
+    /// Switch an input's sound on or off.
+    SetAudio { input: InputRef, on: bool },
+    /// Audio follows video: the input is heard only while on program.
+    SetAudioFollow { input: InputRef, follow: bool },
+    /// Set an input's volume, 0–100 (100 = unity gain).
+    SetVolume { input: InputRef, volume: u8 },
+
     /// Move an input to a 1-based position in the input bar (INP.3).
     MoveInput { input: InputRef, number: u32 },
 
@@ -150,6 +158,8 @@ pub enum ActionError {
     OnProgram { reference: String },
     #[error("position {number} is outside 1–{max}")]
     BadPosition { number: u32, max: u32 },
+    #[error("volume {volume} is outside 0–{max}")]
+    BadVolume { volume: u8, max: u8 },
     #[error("show has no file yet; give a path")]
     NoShowPath,
     #[error("show file: {message}")]

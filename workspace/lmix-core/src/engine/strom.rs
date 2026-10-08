@@ -7,15 +7,18 @@
 //! | `Preview` | vision mixer: select preview |
 //! | `Program` | vision mixer: transition from its current program (`cut` for hard cuts); no slot = black input |
 //! | `FadeToBlack` | vision mixer: toggle FTB |
+//! | `SetAudio` | audio mixer: channel fader and mute, ramped |
 
 use async_trait::async_trait;
 use lmix_types::{Device, Effect};
 use strom_types::discovery::DeviceResponse;
 use reqwest::StatusCode;
 use serde::Serialize;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use tokio::sync::watch;
 use strom_types::api::{
-    FadeToBlackRequest, SelectPreviewRequest, TriggerTransitionRequest, VisionMixerState,
+    FadeToBlackRequest, SelectPreviewRequest, TriggerTransitionRequest, UpdateBlockPropertiesRequest,
+    VisionMixerState,
 };
 use strom_types::vision_mixer::Source;
 use strom_types::{Flow, FlowId, PipelineState, PropertyValue};
@@ -27,7 +30,8 @@ const PLAYING_POLLS: u32 = 50;
 /// strom's answer to a transition before the pipeline has a position.
 const NOT_RUNNING_YET: &str = "query pipeline position";
 
-use super::flows::{self, MixerBackend, MIXER_BLOCK, PGM_TAP, SLOT_TAP};
+use super::flows::{self, MixerBackend, AUDIO_MIXER, MIXER_BLOCK, PGM_TAP, SLOT_TAP};
+use super::meters::{self, EngineLevels};
 use super::{Engine, EngineError, Picture};
 use crate::switcher::Command;
 
@@ -37,6 +41,9 @@ pub struct StromEngine {
     backend: MixerBackend,
     /// Mixer input that shows black; set by `start`.
     black: AtomicUsize,
+    levels: watch::Sender<EngineLevels>,
+    /// The meter reader runs once, from the first `start`.
+    metering: AtomicBool,
 }
 
 impl StromEngine {
@@ -46,6 +53,8 @@ impl StromEngine {
             http: reqwest::Client::new(),
             backend,
             black: AtomicUsize::new(0),
+            levels: watch::Sender::default(),
+            metering: AtomicBool::new(false),
         }
     }
 
@@ -149,6 +158,31 @@ impl StromEngine {
         }
     }
 
+    /// Fader and mute of a slot's audio mixer channel. strom maps both to
+    /// one volume element and restores the pre-mute volume on unmute, so a
+    /// batch with both loses the fader: unmute before the fader, mute after.
+    async fn set_channel(&self, slot: usize, gain: f64, muted: bool, ramp_ms: u32) -> Result<(), EngineError> {
+        let channel = flows::audio_channel(slot);
+        let fader = (format!("ch{channel}_fader"), PropertyValue::Float(gain));
+        let mute = (format!("ch{channel}_mute"), PropertyValue::Bool(muted));
+        let order = if muted { [fader, mute] } else { [mute, fader] };
+        for property in order {
+            self.patch_audio_mixer(property, ramp_ms).await?;
+        }
+        Ok(())
+    }
+
+    async fn patch_audio_mixer(&self, property: (String, PropertyValue), ramp_ms: u32) -> Result<(), EngineError> {
+        let body = UpdateBlockPropertiesRequest {
+            properties: [property].into_iter().collect(),
+            ramp_ms: Some(ramp_ms),
+            ramp_ms_overrides: None,
+        };
+        let path = format!("/flows/{}/blocks/{AUDIO_MIXER}/properties", flows::mixer_id());
+        let resp = self.http.patch(self.url(&path)).json(&body).send().await.map_err(net)?;
+        check(resp).await.map(|_| ())
+    }
+
     async fn post_empty(&self, path: &str) -> Result<(), EngineError> {
         let resp = self.http.post(self.url(path)).send().await.map_err(net)?;
         check(resp).await.map(|_| ())
@@ -160,6 +194,11 @@ impl Engine for StromEngine {
     /// Keep a running mixer with the right slot count (no picture drop when
     /// lmix-core restarts); rebuild it otherwise.
     async fn start(&self, slots: usize) -> Result<(), EngineError> {
+        if !self.metering.swap(true, Ordering::Relaxed) {
+            let ws_url = self.base_url.replacen("http", "ws", 1) + "/api/ws";
+            tokio::spawn(meters::follow(ws_url, flows::mixer_id(), AUDIO_MIXER, self.levels.clone()));
+        }
+
         let black = flows::black_input(slots);
         self.black.store(black, Ordering::Relaxed);
 
@@ -200,6 +239,12 @@ impl Engine for StromEngine {
                 };
                 self.mixer_call("ftb", &body).await
             }
+            Command::SetAudio {
+                slot,
+                gain,
+                muted,
+                ramp_ms,
+            } => self.set_channel(*slot, *gain, *muted, *ramp_ms).await,
         }
     }
 
@@ -217,6 +262,10 @@ impl Engine for StromEngine {
         }
         let bytes = check(resp).await?.bytes().await.map_err(net)?;
         Ok(bytes.to_vec())
+    }
+
+    fn levels(&self) -> watch::Receiver<EngineLevels> {
+        self.levels.subscribe()
     }
 
     async fn devices(&self) -> Result<Vec<Device>, EngineError> {

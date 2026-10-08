@@ -34,6 +34,23 @@ pub struct ShowState {
 /// Current API version (API.10: additive changes within one version).
 pub const API_VERSION: u32 = 1;
 
+/// Peak level of one input, before its fader and mute (what arrives).
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct InputLevel {
+    pub input: InputId,
+    /// Loudest channel, dBFS.
+    pub peak_db: f32,
+}
+
+/// Audio levels, sent about ten times a second while sound flows.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct Levels {
+    pub inputs: Vec<InputLevel>,
+    /// Program mix after faders and mutes, dBFS; `None` before the first
+    /// measurement.
+    pub program_peak_db: Option<f32>,
+}
+
 /// Pushed to every subscriber (API.5, API.6).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "event", rename_all = "snake_case")]
@@ -42,4 +59,6 @@ pub enum Event {
     State { state: ShowState },
     /// Tally per input in input-bar order: 0 off, 1 program, 2 preview.
     Tally { tally: Vec<u8> },
+    /// Audio levels (AUD), about ten times a second.
+    Levels { levels: Levels },
 }

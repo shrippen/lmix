@@ -83,6 +83,13 @@ pub enum SourceSpec {
 }
 
 impl SourceSpec {
+    /// Whether the source can carry sound: test patterns bring a tone,
+    /// files, URLs and SRT their audio track; devices are video only
+    /// (a camera's sound is its own audio device).
+    pub fn has_audio(&self) -> bool {
+        !matches!(self, Self::Device { .. })
+    }
+
     /// Default input name for a new source.
     pub fn default_name(&self) -> String {
         match self {
@@ -115,6 +122,30 @@ pub enum InputStatus {
 }
 
 /// One input as clients see it.
+/// Highest input volume (vMix scale, 100 = unity gain).
+pub const VOLUME_MAX: u8 = 100;
+
+/// Audio settings of an input (AUD).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct InputAudio {
+    /// Sound on (vMix "M" button).
+    pub on: bool,
+    /// Audio follows video: heard only while on program.
+    pub follow_video: bool,
+    /// 0–100, 100 = unity gain.
+    pub volume: u8,
+}
+
+impl Default for InputAudio {
+    fn default() -> Self {
+        Self {
+            on: true,
+            follow_video: false,
+            volume: VOLUME_MAX,
+        }
+    }
+}
+
 /// Color tag of an input tile, for grouping (cameras, clips, graphics).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -154,6 +185,12 @@ pub struct Input {
     pub status: InputStatus,
     #[serde(default)]
     pub color: Option<InputColor>,
+    #[serde(default)]
+    pub audio: InputAudio,
+    /// False when the source has no sound (devices); audio settings are
+    /// kept but do nothing.
+    #[serde(default)]
+    pub has_audio: bool,
 }
 
 /// A capture device the engine found (camera, capture card), for

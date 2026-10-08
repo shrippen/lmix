@@ -241,7 +241,7 @@ GPU-Punkte in `HARDWARE-TODO.md`):
 | 2b.4 | ✅ Show-Datei v1, Autosave, Wiederaufnahme nach Absturz (ohne Audio/Ausgänge/Hotkeys, die es noch nicht gibt) |
 | 2b.2 | ✅ Console `--core`: Kacheln mit Bild, Tally, Typ, Farbmarke, Klick/Doppelklick, Menü; Dateidialog, letzte Shows (B24), Geräteliste (B25); ⚠ Audio der Kachel fehlt (B23) |
 | 2b.3 | ⬜ weitere Quellentypen |
-| B23 | ⬜ Ton über die Slots |
+| B23 | ✅ Ton über die Slots: Kanal je Slot, an/aus, AFV, Lautstärke, Pegel (VM, CPU); ⚠ reine Audio-Inputs (Mikrofon) fehlen (B29) |
 | 2b.5 | ⬜ nur auf GPU messbar (H.1) |
 
 ### M3 — Ausgänge + Robustheit (wie geplant, konkretisiert; GPU liegt jetzt in M1b)

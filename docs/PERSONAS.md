@@ -260,3 +260,24 @@ letzten Shows aus `lmix-core`, für alle Bedienplätze gleich), B25 behoben
 Typ-Kennung je Kachel (`set_input_color`). P2 (zweiter Platz auf anderem
 Rechner): Dialog zeigt die lokalen Dateien, `lmix-core` öffnet den Pfad auf
 seinem Rechner; Hinweis am Button, echte Lösung mit Datei-Upload später.
+
+---
+
+## Durchlauf 4: M2b Schritt 5, Ton (2026-10-08, VM-Test + Console auf Xvfb)
+
+Neu: Ton je Slot in einen Audio-Mischer; je Input an/aus ("M"), AFV,
+Lautstärke; Pegel auf Kacheln und unter PROGRAM.
+
+| Persona | Schritt | Ergebnis |
+|---|---|---|
+| P1 Ehrenamt | Kameraton nur hören, wenn die Kamera auf Sendung ist | ✅ AFV an der Kachel, blendet mit dem Übergang |
+| P1 Ehrenamt | Zuspieler leiser machen | ⚠ Regler nur im Kachel-Menü, schwer zu finden (B28) |
+| P6 Hörsaal | Mikrofon der Lehrkraft immer an | ⚠ geht nur, wenn das Mikrofon Ton eines Inputs ist; reine Audio-Inputs fehlen (B29) |
+| P3 Sport | Kommentar-Mikrofon dauerhaft, Stadionton per AFV | ⚠ wie B29; AFV für Stadionkameras ✅ |
+| P4 Streamer | Sehen, ob Ton ankommt | ✅ Pegel je Kachel und Programm |
+| P5 Broadcast | Pegel in eigenes Monitoring | ✅ `GET /api/audio/levels`, WS `levels`; ⚠ nur Spitzenpegel, keine Lautheit (LUFS, AUD) |
+| P7 Theater | Zuspieler-Ton mit dem Bild einblenden | ✅ AFV + Übergang (800 ms im Test) |
+
+**Befunde**: B28 Lautstärke direkt an der Kachel bzw. Audio-Mischpult-
+Ansicht (vMix-Audiomixer, M4); B29 reine Audio-Inputs (Mikrofon,
+Line-In) als eigener Quellentyp (2b.3, AUD).

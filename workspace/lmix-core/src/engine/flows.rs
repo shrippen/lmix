@@ -2,8 +2,10 @@
 //!
 //! ```text
 //!   slot flow 0: source ─► [caps] ─► tap ─► inter_output "out" ┐
-//!   slot flow 1: source ─► [caps] ─► tap ─► inter_output "out" ├─► mixer flow:
+//!                     └─ sound ─────────► inter_output "out_audio" ┐
+//!   slot flow 1: …                                                 ├─► mixer flow:
 //!   …                                                          ┘   inter_input × N ─► vision mixer
+//!                                               inter_input × N ─► audio mixer ─► vm PGM audio
 //! ```
 //!
 //! Flow ids are fixed per slot (UUID v5), so the `inter` channel name
@@ -28,9 +30,14 @@ const INTER_OUTPUT_BLOCK: &str = "builtin.inter_output";
 const INTER_INPUT_BLOCK: &str = "builtin.inter_input";
 const VISION_MIXER_BLOCK: &str = "builtin.vision_mixer";
 const THUMBNAIL_BLOCK: &str = "builtin.thumbnail";
+const AUDIO_MIXER_BLOCK: &str = "builtin.mixer";
 
 /// Block id of every slot flow's inter output.
 const SLOT_OUT: &str = "out";
+/// Block id of a slot flow's inter output for sound.
+const SLOT_AUDIO_OUT: &str = "out_audio";
+/// Block id of the audio mixer in the mixer flow: one channel per slot.
+pub const AUDIO_MIXER: &str = "mix";
 /// Block id of the vision mixer in the mixer flow.
 pub const MIXER_BLOCK: &str = "vm";
 /// Thumbnail tap on the program output: GUI monitor and picture checks.
@@ -42,6 +49,12 @@ pub const SLOT_TAP: &str = "tap";
 /// Subscriber buffer of the mixer's inter inputs: low latency, some jitter
 /// headroom (strom offers 100–2000 ms).
 const INTER_BUFFER_MS: &str = "100";
+
+/// Test tone of patterns: a different pitch per slot, quiet.
+const TONE_BASE_HZ: f64 = 440.0;
+const TONE_STEP: f64 = 1.25;
+const TONE_VOLUME: f64 = 0.1;
+const AUDIO_CAPS: &str = "audio/x-raw,rate=48000,channels=2";
 
 /// Format test patterns are rendered in; real sources keep theirs.
 const PATTERN_WIDTH: u32 = 1280;
@@ -81,6 +94,15 @@ pub fn slot_id(slot: usize) -> FlowId {
 /// `inter` channel a slot flow publishes on (see strom `inter.rs`).
 fn slot_channel(slot: usize) -> String {
     format!("strom_{}_{}", slot_id(slot), SLOT_OUT)
+}
+
+fn slot_audio_channel(slot: usize) -> String {
+    format!("strom_{}_{}", slot_id(slot), SLOT_AUDIO_OUT)
+}
+
+/// Audio mixer channel of a slot (strom counts from 1).
+pub fn audio_channel(slot: usize) -> usize {
+    slot + 1
 }
 
 /// Mixer input that always shows black: program when lmix has nothing on
@@ -145,6 +167,8 @@ pub fn mixer_flow(slots: usize, backend: MixerBackend) -> Flow {
         ],
     ));
 
+    add_audio_mixer(&mut flow, slots);
+
     flow.blocks.push(block(PGM_TAP, THUMBNAIL_BLOCK, vec![]));
     flow.links.push(link(
         format!("{MIXER_BLOCK}:pgm_out"),
@@ -163,6 +187,38 @@ pub fn mixer_flow(slots: usize, backend: MixerBackend) -> Flow {
     flow
 }
 
+/// Sound of every slot into one audio mixer; its main mix is program
+/// audio (into the vision mixer, which meters it on the multiview).
+fn add_audio_mixer(flow: &mut Flow, slots: usize) {
+    for slot in 0..slots {
+        let input = format!("ain{slot}");
+        flow.blocks.push(block(
+            &input,
+            INTER_INPUT_BLOCK,
+            vec![
+                ("channel", PropertyValue::String(slot_audio_channel(slot))),
+                ("max_time", PropertyValue::String(INTER_BUFFER_MS.into())),
+            ],
+        ));
+        flow.links.push(link(
+            format!("{input}:src"),
+            format!("{AUDIO_MIXER}:input_{}", audio_channel(slot)),
+        ));
+    }
+    flow.blocks.push(block(
+        AUDIO_MIXER,
+        AUDIO_MIXER_BLOCK,
+        vec![
+            ("num_channels", PropertyValue::UInt(slots as u64)),
+            ("start_time_selection", PropertyValue::String("first".into())),
+        ],
+    ));
+    flow.links.push(link(
+        format!("{AUDIO_MIXER}:main_out"),
+        format!("{MIXER_BLOCK}:pgm_audio_in"),
+    ));
+}
+
 /// One slot: the source, published on the slot's inter channel.
 pub fn slot_flow(slot: usize, source: &SourceSpec) -> Flow {
     let mut flow = Flow::new(format!("lmix slot {slot}"));
@@ -174,6 +230,11 @@ pub fn slot_flow(slot: usize, source: &SourceSpec) -> Flow {
     flow.links.push(link(out, format!("{SLOT_TAP}:video_in")));
     flow.blocks.push(block(SLOT_OUT, INTER_OUTPUT_BLOCK, vec![]));
     flow.links.push(link(format!("{SLOT_TAP}:video_out"), format!("{SLOT_OUT}:sink")));
+
+    if let Some(sound) = add_audio(&mut flow, slot, source) {
+        flow.blocks.push(block(SLOT_AUDIO_OUT, INTER_OUTPUT_BLOCK, vec![]));
+        flow.links.push(link(sound, format!("{SLOT_AUDIO_OUT}:sink")));
+    }
     flow
 }
 
@@ -218,7 +279,7 @@ fn add_source(flow: &mut Flow, source: &SourceSpec) -> String {
                     ("srt_uri", PropertyValue::String(uri.clone())),
                     ("decode", PropertyValue::Bool(true)),
                     ("num_video_tracks", PropertyValue::UInt(1)),
-                    ("num_audio_tracks", PropertyValue::UInt(0)),
+                    ("num_audio_tracks", PropertyValue::UInt(1)),
                 ],
             ));
             "srt:video_out".into()
@@ -234,6 +295,39 @@ fn add_source(flow: &mut Flow, source: &SourceSpec) -> String {
             ));
             "dev:video_out".into()
         }
+    }
+}
+
+/// Add the source's sound and return its pad; `None` without sound
+/// (see `SourceSpec::has_audio`). A file without an audio track leaves
+/// the player pad silent.
+fn add_audio(flow: &mut Flow, slot: usize, source: &SourceSpec) -> Option<String> {
+    if !source.has_audio() {
+        return None;
+    }
+    match source {
+        SourceSpec::Pattern { .. } => {
+            let freq = TONE_BASE_HZ * TONE_STEP.powi(slot as i32 % 8);
+            flow.elements.push(element(
+                "tone",
+                "audiotestsrc",
+                vec![
+                    ("is-live", PropertyValue::Bool(true)),
+                    ("freq", PropertyValue::Float(freq)),
+                    ("volume", PropertyValue::Float(TONE_VOLUME)),
+                ],
+            ));
+            flow.elements.push(element(
+                "tone_caps",
+                "capsfilter",
+                vec![("caps", PropertyValue::String(AUDIO_CAPS.into()))],
+            ));
+            flow.links.push(link("tone".into(), "tone_caps".into()));
+            Some("tone_caps".into())
+        }
+        SourceSpec::File { .. } | SourceSpec::Url { .. } => Some("player:audio_out".into()),
+        SourceSpec::Srt { .. } => Some("srt:audio_out_0".into()),
+        SourceSpec::Device { .. } => None,
     }
 }
 
@@ -326,6 +420,31 @@ mod tests {
         assert!(flow.links.iter().any(|l| l.from == "caps" && l.to == "tap:video_in"));
         assert!(flow.links.iter().any(|l| l.from == "tap:video_out" && l.to == "out:sink"));
         assert_eq!(slot_channel(2), format!("strom_{}_out", flow.id));
+    }
+
+    #[test]
+    fn pattern_slot_publishes_a_tone() {
+        let flow = slot_flow(1, &SourceSpec::Pattern { pattern: TestPattern::Bars });
+
+        assert!(flow.links.iter().any(|l| l.from == "tone_caps" && l.to == "out_audio:sink"));
+    }
+
+    #[test]
+    fn device_slot_has_no_sound() {
+        let flow = slot_flow(0, &SourceSpec::Device { id: "cam".into() });
+
+        assert!(flow.blocks.iter().all(|b| b.id != SLOT_AUDIO_OUT));
+    }
+
+    #[test]
+    fn mixer_mixes_every_slot_sound() {
+        let flow = mixer_flow(3, MixerBackend::Cpu);
+
+        for slot in 0..3 {
+            let to = format!("mix:input_{}", slot + 1);
+            assert!(flow.links.iter().any(|l| l.from == format!("ain{slot}:src") && l.to == to));
+        }
+        assert!(flow.links.iter().any(|l| l.from == "mix:main_out" && l.to == "vm:pgm_audio_in"));
     }
 
     #[test]

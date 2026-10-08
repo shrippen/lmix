@@ -19,6 +19,9 @@ WORK="$(mktemp -d)"
 SLOTS=4
 # Mean brightness (0-100) bars or snow exceed; black is 0.
 MIN_BRIGHTNESS=30
+# Audio levels (dBFS): a test tone is above, silence below.
+AUDIBLE_DB=-40
+SILENT_DB=-60
 # Thumbnail taps refresh about once a second.
 TAP_INTERVAL=1.5
 
@@ -132,6 +135,28 @@ program_moves || fail "program frozen after source swap"
 [[ $(brightness "$WORK/b.jpg") -gt $MIN_BRIGHTNESS ]] || fail "program dark after source swap"
 pass "program source swapped on air: mixer kept running, new picture moves"
 
+# --- sound over the slots (B23): mute, audio follows video, volume ---
+# Patterns carry a test tone (about -21 dBFS). Program is Bars (now snow),
+# Ball is in preview. Levels refresh every 100 ms.
+pgm_db() { curl -sf "$CORE/audio/levels" | jq '.program_peak_db // -100 | floor'; }
+input_db() { curl -sf "$CORE/audio/levels" | jq ".inputs[$1].peak_db | floor"; }
+settle() { sleep 1; }
+settle
+[[ $(input_db 0) -gt $AUDIBLE_DB && $(input_db 1) -gt $AUDIBLE_DB ]] || fail "no sound from the slots"
+[[ $(pgm_db) -gt $AUDIBLE_DB ]] || fail "no program sound"
+act '{"action":"set_audio","input":"Bars","on":false}' >/dev/null
+act '{"action":"set_audio_follow","input":"Ball","follow":true}' >/dev/null
+settle
+[[ $(pgm_db) -lt $SILENT_DB ]] || fail "program not silent: Bars off, Ball follows video off air ($(pgm_db) dB)"
+act '{"action":"cut_direct","input":"Ball"}' >/dev/null
+settle
+full=$(pgm_db)
+[[ $full -gt $AUDIBLE_DB ]] || fail "Ball not heard on air ($full dB)"
+act '{"action":"set_volume","input":"Ball","volume":50}' >/dev/null
+settle
+[[ $(pgm_db) -lt $((full - 6)) ]] || fail "volume 50 did not lower program ($full -> $(pgm_db) dB)"
+pass "sound: slots heard, mute, audio follows video, volume"
+
 # --- input color, device list ---
 act '{"action":"set_input_color","input":"Ball","color":"teal"}' >/dev/null
 [[ "$(curl -sf "$CORE/state" | jq -r '.inputs[1].color')" == teal ]] || fail "color not set"
@@ -171,6 +196,7 @@ running="$(curl -sf "$STROM/api/flows/$MIXER_ID" | jq -r '.flow.running')"
 start_core
 sleep 2
 [[ "$(curl -sf "$CORE/state" | jq '.inputs | length')" == 2 ]] || fail "autosave not resumed"
+[[ "$(curl -sf "$CORE/state" | jq '.inputs[1].audio.volume')" == 50 ]] || fail "audio settings not resumed"
 pass "lmix-core killed and restarted: mixer kept running, show resumed"
 
 criticals="$(grep -c 'GStreamer-CRITICAL' "$WORK/strom.log" || true)"

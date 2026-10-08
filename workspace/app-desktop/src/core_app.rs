@@ -17,8 +17,8 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use lmix_types::{
-    Action, Device, Effect, InputColor, InputId, InputRef, InputStatus, ShowState, SourceSpec, TestPattern,
-    TransitionSlot,
+    Action, Device, Effect, InputColor, InputId, InputRef, InputStatus, Levels, ShowState, SourceSpec,
+    TestPattern, TransitionSlot,
 };
 
 use crate::core_client::{CoreClient, CoreMessage, FilePurpose, PictureTarget};
@@ -31,6 +31,13 @@ const TILE_WIDTH: f32 = 160.0;
 const TILE_STROKE: f32 = 3.0;
 const STATUS_DOT: f32 = 10.0;
 const COLOR_BAND: f32 = 4.0;
+const METER_FLOOR_DB: f32 = -60.0;
+const METER_HOT_DB: f32 = -6.0;
+const METER_HEIGHT: f32 = 6.0;
+const METER_COLOR: egui::Color32 = egui::Color32::from_rgb(60, 190, 90);
+const METER_HOT_COLOR: egui::Color32 = egui::Color32::from_rgb(230, 60, 50);
+const AUDIO_OFF_COLOR: egui::Color32 = egui::Color32::from_rgb(200, 50, 50);
+const AFV_COLOR: egui::Color32 = egui::Color32::from_rgb(220, 160, 40);
 const SHOW_FILTER: (&str, &[&str]) = ("lmix show", &["lmix"]);
 const REMOTE_HINT: &str = "Paths are opened by lmix-core: on another machine, they must exist there.";
 const TRANSITION_HINT: &str = "Click: take preview. Right click: effect and length.";
@@ -184,6 +191,9 @@ pub struct CoreApp {
     renaming: Option<(InputId, String)>,
     devices: Vec<Device>,
     recent: Vec<String>,
+    levels: Levels,
+    /// Volume slider value per input while it is dragged.
+    volume_drag: HashMap<InputId, u8>,
 }
 
 impl CoreApp {
@@ -213,6 +223,8 @@ impl CoreApp {
             renaming: None,
             devices: Vec::new(),
             recent: Vec::new(),
+            levels: Levels::default(),
+            volume_drag: HashMap::new(),
         };
         app.refresh_lists();
         app
@@ -258,6 +270,7 @@ impl CoreApp {
             match message {
                 CoreMessage::Connected(connected) => self.connected = connected,
                 CoreMessage::State(state) => self.set_state(state),
+                CoreMessage::Levels(levels) => self.levels = levels,
                 CoreMessage::ActionDone(error) => self.error = error,
                 CoreMessage::Picture(target, image) => self.set_picture(ctx, target, image),
                 CoreMessage::Devices(devices) => self.devices = devices,
@@ -365,9 +378,10 @@ impl CoreApp {
         let program = self.pictures.get(&PictureTarget::Program);
 
         ui.columns(3, |columns| {
-            monitor(&mut columns[0], "PREVIEW", PREVIEW_COLOR, preview);
+            monitor(&mut columns[0], "PREVIEW", PREVIEW_COLOR, preview, None);
             transition_bar(&mut columns[1], state, actions);
-            monitor(&mut columns[2], "PROGRAM", PROGRAM_COLOR, program);
+            let program_level = Some(self.levels.program_peak_db.unwrap_or(METER_FLOOR_DB));
+            monitor(&mut columns[2], "PROGRAM", PROGRAM_COLOR, program, program_level);
         });
     }
 
@@ -381,8 +395,9 @@ impl CoreApp {
                 for input in &state.inputs {
                     let picture = self.pictures.get(&PictureTarget::Input(input.id));
                     let tally = tally(state, input.id);
-                    let response = tile(ui, input, tally, picture);
                     let reference = InputRef::Text(input.id.to_string());
+                    let level = self.level_of(input.id);
+                    let response = tile(ui, input, tally, picture, level, actions);
 
                     if response.double_clicked() && tally == Tally::Preview {
                         actions.push(Action::Transition { slot: TAKE_SLOT });
@@ -404,6 +419,9 @@ impl CoreApp {
                                 source: replacement.clone().expect("enabled only with a source"),
                             });
                             ui.close();
+                        }
+                        if input.has_audio {
+                            self.volume_slider(ui, input, &reference, actions);
                         }
                         ui.menu_button("Color", |ui| {
                             for color in InputColor::ALL {
@@ -436,6 +454,32 @@ impl CoreApp {
                 }
             });
         });
+    }
+
+    fn level_of(&self, id: InputId) -> Option<f32> {
+        self.levels.inputs.iter().find(|l| l.input == id).map(|l| l.peak_db)
+    }
+
+    /// Volume 0–100; sent when the drag ends, not on every step.
+    fn volume_slider(
+        &mut self,
+        ui: &mut egui::Ui,
+        input: &lmix_types::Input,
+        reference: &InputRef,
+        actions: &mut Vec<Action>,
+    ) {
+        let value = self.volume_drag.entry(input.id).or_insert(input.audio.volume);
+        let slider = egui::Slider::new(value, 0..=lmix_types::input::VOLUME_MAX).text("Volume");
+        let response = ui.add(slider);
+        if response.drag_stopped() || (response.changed() && !response.dragged()) {
+            actions.push(Action::SetVolume {
+                input: reference.clone(),
+                volume: *value,
+            });
+        }
+        if !response.dragged() && !response.has_focus() {
+            self.volume_drag.remove(&input.id);
+        }
     }
 
     fn add_row(&mut self, ui: &mut egui::Ui, state: &ShowState, actions: &mut Vec<Action>) {
@@ -574,8 +618,15 @@ impl eframe::App for CoreApp {
 
 // ---- Widgets ----
 
-/// Monitor: label bar in the tally color over a 16:9 picture.
-fn monitor(ui: &mut egui::Ui, label: &str, color: egui::Color32, picture: Option<&egui::TextureHandle>) {
+/// Monitor: label bar in the tally color over a 16:9 picture; a level
+/// meter under it when `level` is given (program).
+fn monitor(
+    ui: &mut egui::Ui,
+    label: &str,
+    color: egui::Color32,
+    picture: Option<&egui::TextureHandle>,
+    level: Option<f32>,
+) {
     egui::Frame::new()
         .stroke(egui::Stroke::new(TILE_STROKE, color))
         .inner_margin(4.0)
@@ -583,6 +634,9 @@ fn monitor(ui: &mut egui::Ui, label: &str, color: egui::Color32, picture: Option
             ui.label(egui::RichText::new(label).strong().color(color));
             let width = ui.available_width();
             picture_area(ui, egui::vec2(width, width * 9.0 / 16.0), picture);
+            if let Some(level) = level {
+                meter(ui, level);
+            }
         });
 }
 
@@ -650,6 +704,8 @@ fn tile(
     input: &lmix_types::Input,
     tally: Tally,
     picture: Option<&egui::TextureHandle>,
+    level: Option<f32>,
+    actions: &mut Vec<Action>,
 ) -> egui::Response {
     let frame = egui::Frame::new()
         .stroke(egui::Stroke::new(TILE_STROKE, tally.color()))
@@ -669,9 +725,49 @@ fn tile(
                         ui.weak(format!("{:?}", input.status).to_lowercase());
                     }
                 });
+                if input.has_audio {
+                    audio_row(ui, input, level, actions);
+                }
             });
         });
     ui.interact(frame.response.rect, ui.id().with(input.id), egui::Sense::click())
+}
+
+/// "M" (sound on/off), "AFV" (audio follows video) and the input level.
+fn audio_row(ui: &mut egui::Ui, input: &lmix_types::Input, level: Option<f32>, actions: &mut Vec<Action>) {
+    let reference = || InputRef::Text(input.id.to_string());
+    let audio = input.audio;
+    ui.horizontal(|ui| {
+        let mute = egui::Button::new(egui::RichText::new("M").small())
+            .selected(!audio.on)
+            .fill(if audio.on { egui::Color32::TRANSPARENT } else { AUDIO_OFF_COLOR });
+        if ui.add(mute).on_hover_text("Sound on/off").clicked() {
+            actions.push(Action::SetAudio {
+                input: reference(),
+                on: !audio.on,
+            });
+        }
+        let follow = egui::Button::new(egui::RichText::new("AFV").small())
+            .fill(if audio.follow_video { AFV_COLOR } else { egui::Color32::TRANSPARENT });
+        if ui.add(follow).on_hover_text("Audio follows video: heard only on program").clicked() {
+            actions.push(Action::SetAudioFollow {
+                input: reference(),
+                follow: !audio.follow_video,
+            });
+        }
+        meter(ui, level.unwrap_or(METER_FLOOR_DB));
+    });
+}
+
+/// Peak meter filling the rest of the row.
+fn meter(ui: &mut egui::Ui, peak_db: f32) {
+    let width = ui.available_width();
+    let (rect, _) = ui.allocate_exact_size(egui::vec2(width, METER_HEIGHT), egui::Sense::hover());
+    ui.painter().rect_filled(rect, 0.0, EMPTY_PICTURE);
+    let fill = ((peak_db - METER_FLOOR_DB) / -METER_FLOOR_DB).clamp(0.0, 1.0);
+    let color = if peak_db > METER_HOT_DB { METER_HOT_COLOR } else { METER_COLOR };
+    let bar = egui::Rect::from_min_size(rect.min, egui::vec2(width * fill, METER_HEIGHT));
+    ui.painter().rect_filled(bar, 0.0, color);
 }
 
 fn device_label(device: &Device) -> String {

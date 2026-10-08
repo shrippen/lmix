@@ -6,6 +6,7 @@
 //! | `POST /api/actions` | run one [`Action`] (JSON) |
 //! | `GET /api/actions` | action catalog as JSON schema |
 //! | `GET /api/tally` | tally per input: 0 off, 1 program, 2 preview |
+//! | `GET /api/audio/levels` | audio levels per input and of program (dBFS) |
 //! | `GET /api/shows/recent` | recently opened or saved show files, newest first |
 //! | `GET /api/devices` | capture devices for `SourceSpec::Device` |
 //! | `GET /api/pictures/program` | program picture, JPEG |
@@ -38,6 +39,7 @@ pub fn router(service: Arc<Service>) -> Router {
         .route("/api/tally", get(tally))
         .route("/api/actions", get(catalog).post(action))
         .route("/api/events", get(events))
+        .route("/api/audio/levels", get(levels))
         .route("/api/shows/recent", get(recent))
         .route("/api/devices", get(devices))
         .route("/api/pictures/program", get(program_picture))
@@ -51,6 +53,10 @@ async fn state(State(service): State<Arc<Service>>) -> impl IntoResponse {
 
 async fn tally(State(service): State<Arc<Service>>) -> impl IntoResponse {
     Json(service.tally().await)
+}
+
+async fn levels(State(service): State<Arc<Service>>) -> impl IntoResponse {
+    Json(service.levels().await)
 }
 
 async fn recent(State(service): State<Arc<Service>>) -> impl IntoResponse {

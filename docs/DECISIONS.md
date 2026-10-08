@@ -482,3 +482,30 @@ oder wartet auf "Zukunft".
 **Nachtrag**: Die CRITICALs kamen von der `fakesink` hinter dem PGM-Abgriff
 (QoS-Events, die eine strom-Probe verwirft, siehe ROADMAP §5 Punkt 6). Die
 Senke läuft jetzt mit `qos=false`; der VM-Test verlangt null CRITICALs.
+
+## 2026-10-08 — M2b Schritt 5: Ton über die Slots (B23)
+
+**Umsetzung**:
+- Jeder Slot-Flow veröffentlicht seinen Ton auf einem zweiten
+  `inter`-Kanal (`out_audio`). Testbilder bringen einen leisen Ton (Tonhöhe
+  je Slot), Dateien/URLs ihre Tonspur, SRT die erste Tonspur. Geräte sind
+  Bild ohne Ton; Ton einer Kamera ist ein eigenes Audiogerät (später,
+  Audio-Inputs).
+- Der Mischer-Flow hat einen strom-Audio-Mischer (`builtin.mixer`) mit
+  einem Kanal je Slot; seine Summe geht als Programmton in den
+  Vision-Mixer. Der strom-Patch `start_time_selection` gilt auch für ihn
+  (gleiches Zeitproblem wie beim Bild).
+- Je Input: Ton an/aus, Audio-folgt-Bild (AFV), Lautstärke 0–100. Der
+  Switcher berechnet daraus Fader und Mute je Kanal und schickt nur
+  Änderungen. AFV blendet so lange wie der Übergang, sonst 20 ms gegen
+  Knacken.
+- Lautstärke wird quadratisch auf den Fader abgebildet (50 ≈ −12 dB), wie
+  ein Pegelsteller sich anfühlt.
+- Pegel: `lmix-core` liest die Meter-Events von strom, ordnet sie den
+  Inputs zu und sendet `levels` (10/s) über den WebSocket, dazu
+  `GET /api/audio/levels`. Kanalpegel vor Fader/Mute, Programm danach.
+**strom-Eigenheit**: Fader und Mute eines Kanals stellen dasselbe
+`volume`-Element; strom merkt sich beim Stummschalten die Lautstärke und
+stellt sie beim Aufheben wieder her. Beides in einem PATCH verliert den
+Fader. lmix schickt deshalb getrennt: Aufheben vor Fader, Fader vor
+Stummschalten. Kandidat für einen Fehlerbericht an strom.
