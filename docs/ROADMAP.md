@@ -273,6 +273,10 @@ Aussetzer; Show speichern, Neustart, Show laden → identischer Zustand.
 
 ### M7 — Titel & Daten (HTML), direkt nach M4
 
+**M7.0 Benchmark** vor der Engine-Wahl (E.9): CEF, WPE WebKit, Servo mit
+8 animierten Titeln 1080p60 (CSS, Canvas, lottie-web), Alpha; messen:
+GPU/CPU je Titel, Drops, Latenz, Speicher, Kopien bis in den Mischer.
+
 Titel sind Muss (`LASTENHEFT.md` §3.11): HTML-Vorlagen mit Feld-API,
 Animationen per CSS/JS und Lottie, Vorlagen-SDK, Datenquellen. Ersetzt M4.4.
 IDs: GFX.1–15, DAT.1–5, SWI.7, OVL.7. Entscheidungen E.9 (Engine), E.10 (Lottie).
@@ -300,6 +304,21 @@ OUT.4/5 (Karte, Key+Fill), PER.2–5 (PTZ, Uhren), UI.3–12, SHW.6–9.
 
 Zurückgestellt (User 2026-10-08): RPL.1–10, SRC.19–20, CAL.1–6, SRC.24.
 Ersetzt M4.5 und den Gäste-Punkt in M6.
+
+---
+
+## 3b. Lösungsansätze (angenommen 2026-10-08)
+
+| Baustelle | Ansatz | Meilenstein |
+|---|---|---|
+| Input-Modell | Ein Flow je Quelle, feste Mischer-Slots, Slot tauschen statt neu bauen; vorher messen, ob die Kopplung GPU-Speicher hält, sonst dynamische Pads; Offline-Input mit Ersatzbild | M2b |
+| Steuerkern | `lmix-core` hält Show, Aktionskatalog, Auslöser, Ablauflisten; Aktionskatalog als ein Rust-Enum mit Metadaten, daraus API-Doku, Tastenbelegungs-Dialog, Mappings | M2b |
+| Live-Monitore | Bilder lokal per DMABuf/Shared Memory als GPU-Textur in die GUI, Kacheln als ein Mosaik-Frame; WHEP nur für entfernte Clients | M1-Rest/M3 |
+| Overlays, Stinger, T-Bar | Ein strom-Patch: Übergangsfortschritt 0–1 setzbar; Overlay-Kanal = Ebene mit eigenem Übergangszustand; Stinger-Schnitt framegenau im Mischer | M4 |
+| API für Fremdprogramme | Eigene versionierte API, Aktionen parametrisiert, eigenes Companion-Modul; Prüfstein: was das Companion-vMix-Modul kann | M8 |
+| Controller | MIDI, HID, Gamepad, Stream Deck direkt; Rückmeldungen aus Zustandsereignissen | M6 |
+| GUI-Shell | Entscheidung nach Prototyp (32 flüssige Kacheln, zweiter Monitor); Vollbild-Ausgänge nie in der GUI | M3 |
+| Titel | offen (T.1, E.9) | M7 |
 
 ---
 

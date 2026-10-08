@@ -115,10 +115,12 @@ workspace/
   (GUI kill -9 → Engine unverändert weiter), vollständige CI-Grüne.
 
 ## Exkludierte Ziele (explizit NICHT in diesem Scope)
-- Open Live, Node/TS, CouchDB, Kubernetes, Web-UI als Produktziel
+- Open Live, Node/TS, CouchDB, Kubernetes, Web-UI als Haupt-GUI
+  (Web-Fernbedienung ist erlaubt, `docs/LASTENHEFT.md` E.1)
 - Windows/macOS
-- XAML-Titel-Engine, OBS-Plugin-Ökosystem, Control-Surfaces
-- 4K-Optimierung, GPU-FX-Neuentwicklung jenseits des Bestehenden
+- XAML-Titel-Engine, OBS-Plugin-Ökosystem
+- GPU-FX-Neuentwicklung jenseits des Bestehenden
+- Aufgehoben 2026-10-08 (E.1): Control-Surfaces und 4K sind wieder im Scope
 
 ## Sofort-Start-Weisung
 Beginne AUSCHLIESSLICH mit M0. Beende jede Meile mit einer klaren

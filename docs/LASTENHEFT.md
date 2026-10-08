@@ -178,7 +178,7 @@ kann es, Console nicht.
 | SRC.20 | Wiederholungskanal | §3.10 | L | – |
 | SRC.21 | Mix | §3.6 | S | – |
 | SRC.22 | Program als Input | Ausgang 1 als Input (nur einmal; Selbstbezug liefert Standbild) | S | – |
-| SRC.23 | Preview als Input | aktuelle Preview als Input | K | – |
+| SRC.23 | Preview als Input | aktuelle Preview als Input | S | – |
 | SRC.24 | Gast | §3.14 | L | – |
 | SRC.25 | Zeichenebene | transparente Ebene, im Browser bemalbar (§3.17) | K | – |
 | SRC.26 | Produktionsuhren | §3.18 als Input | K | – |
@@ -229,7 +229,7 @@ kann es, Console nicht.
 | SWI.7 | Stinger 1–8: Animations-Input, Dauer, Schnittpunkt, Zusatzeffekt, unter oder über Overlays; Dauer/Schnittpunkt aus Titelanimation übernehmbar | S | – (ROADMAP 4.2) |
 | SWI.8 | Schnellstart: Take mit eigenem Effekt (Standard ½ s Blende) und Start der Wiedergabe; optional per Klick ins Preview-Fenster | S | – |
 | SWI.9 | FTB: blendet Senken auf Schwarz (optional mit Ton), Program-Anzeige bleibt bedienbar | M | ✅ |
-| SWI.10 | Mix-Inputs: bis 15 zusätzliche Mischer mit PVW/PGM, Cut/Übergang, Overlays und Stinger je Mix wählbar; "nur Ausgang"-Ansicht; Mix in Mix ohne Verzögerung bei aufsteigender Reihenfolge | S | – |
+| SWI.10 | Mix-Inputs (Umfang offen, E.11): bis 15 zusätzliche Mischer mit PVW/PGM, Cut/Übergang, Overlays und Stinger je Mix wählbar; "nur Ausgang"-Ansicht; Mix in Mix ohne Verzögerung bei aufsteigender Reihenfolge | S | – |
 | SWI.11 | Alle Wiedergabe-Inputs halten während Übergang ihr Timing (keine Ruckler, keine Ton-Lücke) | M | ✅ |
 | SWI.12 | Interne Latenz Input → Program ≤ 2 Frames (ohne Quell- und Senkenlatenz) | M | ◐ (< 5 Frames gemessen) |
 
@@ -260,7 +260,7 @@ kann es, Console nicht.
 | AUD.8 | Kanalmischer bis 16 Kanäle mit Pegel und Anzeige | S | – |
 | AUD.9 | Kanalmatrix 16 × 16 (Quelle → Bus-Kanal), Presets speichern/anwenden | S | – |
 | AUD.10 | EQ, Kompressor, Noise Gate je Input und Bus | M | ✅ (E), UI – |
-| AUD.11 | Plugins je Input und Bus (VST3; LV2, CLAP lmix), Reihenfolge, an/aus, Editor-Fenster | K | – |
+| AUD.11 | Plugins je Input und Bus: LV2, VST3, CLAP (E.8), Reihenfolge, an/aus, Editor-Fenster | S | – |
 | AUD.12 | Pegelanzeigen in dBFS, 5 Farbbänder, Spitzenwert über ~2 s, vor/nach Fader, gedämpft-Anzeige | M | ◐ |
 | AUD.13 | Bus-Übersicht: Matrix Inputs × Busse in einem Fenster, filterbar | S | – |
 | AUD.14 | Pegel-Fades per Aktion (Ziel, Dauer) für Input, Master, Busse | S | – |
@@ -285,12 +285,12 @@ kann es, Console nicht.
 | OUT.8 | SRT-Ausgang je Ausgang: Modus, Latenz, Verschlüsselung, Stream-ID, H.264/HEVC, Bitrate, CBR mit Füllung, Stereo-Paare als eigene Spuren, HW-Encode | M | ◐ (E) |
 | OUT.9 | Virtuelle Kamera und virtuelles Audiogerät für andere Programme (v4l2loopback, PipeWire) | S | – |
 | OUT.10 | Multiview 1 und 2, je eigenes Layout: PVW/PGM + 2/8/14 Inputs, nur Inputs, Reihenfolge nach Nummer oder Typ, Titel oben/unten, Pegel, Tally-Rahmen, Klick wählt Preview | M | ◐ (Multiview E) |
-| OUT.11 | Live-Monitore in der GUI: PVW, PGM, alle Input-Kacheln flüssig (volle Bildrate) | M | ◐ (Entscheidung 2026-09-30) |
+| OUT.11 | Live-Monitore in der GUI: PVW, PGM, alle Input-Kacheln flüssig (volle Bildrate); Bilder lokal direkt über GPU-Speicher aus der Engine (G.2) | M | ◐ (Entscheidung 2026-09-30) |
 | OUT.12 | Schutzbereiche: EBU/SMPTE, 80/90 %, Raster, 4:3, 1:1, 9:16 | S | – |
 | OUT.13 | Messinstrumente: Waveform Y/RGB, Parade, Vektorskop (75/100 %-Marken), neben Bild | S | – |
 | OUT.14 | Hinweise über PGM-Anzeige (nicht in Senken): zu leise, FTB aktiv, keine Aufnahme | K | – |
 | OUT.15 | Snapshot des Programs | K | – |
-| OUT.16 | Interlaced-Ausgabe (Aufnahme, Karte), Halbbildreihenfolge nach Norm | K | – |
+| OUT.16 | Interlaced-Ausgabe (Aufnahme, Karte), Halbbildreihenfolge nach Norm | S | – |
 
 ### 3.9 Aufnahme, Einzelaufnahme, Streaming (REC, STR)
 
@@ -440,7 +440,7 @@ Zurückgestellt (User 2026-10-08).
 | PER.2 | PTZ je Input über Netzwerk (Protokolle VISCA-over-IP, NDI, ONVIF: lmix); Bewegen, Zoom, Fokus, Home, Tempo | S | – |
 | PER.3 | PTZ-Positionen als virtuelle Inputs: Preview fährt die Position an, Standbild außerhalb PVW/PGM, aktualisieren | S | – |
 | PER.4 | Virtuelles PTZ: digitaler Zoom/Schwenk auf beliebigem Input | K | – |
-| PER.5 | 2 Produktionsuhren: Uhrzeit (+Offset, 12/24 h), Ereignis (vor/während/nach in Bernstein/Grün/Rot), Aufnahme-, Streamdauer, Restzeit Program; Genauigkeit wählbar; als Input | K | – |
+| PER.5 | 2 Produktionsuhren: Uhrzeit (+Offset, 12/24 h), Ereignis (vor/während/nach in Bernstein/Grün/Rot), Aufnahme-, Streamdauer, Restzeit Program; Genauigkeit wählbar; als Input | S | – |
 | PER.6 | Statistik je Live-Input: Quell-Drops, Render-Drops, Resync, Frame-Abstände, Ton-Puffer/Drops/Resample; Encoder (CPU/GPU), SRT (Bandbreite, Verlust, RTT) | M | ◐ (Selftest) |
 | PER.7 | Warnung bei Überlast (Renderzeit, CPU) | S | ◐ |
 | PER.8 | Takt-Korrektur gegenüber externer Hardware | K | – |
@@ -457,7 +457,7 @@ Zurückgestellt (User 2026-10-08).
 | SHW.6 | Paket: Show + Medien + Titel in einer Datei | S | – |
 | SHW.7 | Formatwechsel beim Laden bestätigen | S | – |
 | SHW.8 | Globale Einstellungen getrennt ex-/importieren, Werkseinstellungen | S | – |
-| SHW.9 | Import von vMix-Presets (siehe E.3) | K | – |
+| SHW.9 | Import von vMix-Presets (E.3: nie) | X | – |
 
 ### 3.20 Bedienoberfläche (UI)
 
@@ -546,20 +546,33 @@ nicht nach, sondern ersetzt sie durch Heutiges oder lässt sie weg
 
 ---
 
-## 6. Offene Entscheidungen
+## 6. Entscheidungen
 
-| # | Frage | Empfehlung |
+### 6.1 Entschieden (User, 2026-10-08)
+
+| # | Frage | Entscheidung |
 |---|---|---|
-| E.1 | Widerspruch zu `claude.md` "Exkludierte Ziele": Control-Surfaces (MIDI/Stream Deck), 4K-Optimierung, Web-Oberfläche. Für Gleichstand nötig sind AUT.1/AUT.6 (Controller), NFA.2 4K-Ziel, WEB (Fernbedienung, nicht Haupt-GUI). Ausschlüsse aufheben? | Aufheben, Haupt-GUI bleibt nativ |
-| E.2 | ~~API-Kompatibilität zu vMix~~ — entschieden 2026-10-08 (User): eigene API, funktional mindestens gleichwertig (API.9); Kompatibilitätsmodus optional (API.8, K); sauberer Schnitt zu vMix zulässig | — |
-| E.3 | Import von `.vmix`-Presets: Format undokumentiert, nur aus eigenen Testdateien ableitbar | Später (K), nur Inputs + Grundeinstellungen |
-| E.4 | Wo leben Show-Zustand, Aktionskatalog und APIs? Heute in `app-desktop` → stirbt mit der GUI (verletzt NFA.6). Optionen: (a) eigener Steuer-Dienst zwischen GUI und strom, (b) als strom-Erweiterung, (c) in der GUI | (a): `lmix-core` als eigener Prozess, GUI und APIs sind Clients |
-| E.5 | ~~Titelformat~~ — entschieden 2026-10-08 (User): HTML-Vorlagen mit Feld-API, Animation per CSS/JS und Lottie, nicht vMix-kompatibel (§3.11) | — |
-| E.9 | Browser-Engine für HTML-Titel und Webseiten-Input: (a) Chromium/CEF (volle Web-Kompatibilität, schwer, eigener Build), (b) WPE WebKit (für Embedded gemacht, GStreamer-Element `wpesrc`, LGPL als Laufzeitbibliothek), (c) Servo (Rust, noch unreif) | (a) CEF, wegen Kompatibilität mit beliebigen HTML-Quellen; Lizenzprüfung `gstcefsrc` (ROADMAP §5.3) |
-| E.10 | Lottie-Wiedergabe: (a) lottie-web im Browser der Vorlage, (b) nativ mit ThorVG oder rlottie auf der GPU als eigener Input | (a) für Vorlagen, (b) später für Lottie-Inputs ohne Browser |
-| E.6 | Skriptsprache (AUT.9): Lua, Rhai, JavaScript (QuickJS) | Rhai (Rust, MIT/Apache) oder Lua |
-| E.7 | Gäste (CAL, später): Signalisierung/TURN selbst betreiben, kein zentraler Dienst | Eigener Signalisierungsdienst im Programm, TURN optional |
-| E.8 | `ROADMAP.md` §4 schließt Scripting, VST3, Zoom, PowerPoint, Virtual Sets aus. Lastenheft: Scripting K, Plugins K (LV2/VST3-Linux/CLAP), Rest X | Übernehmen |
+| E.1 | Ausschlüsse in `claude.md` (Control-Surfaces, 4K, Web-Oberfläche) | Aufgehoben; Haupt-GUI bleibt nativ, Web nur als Fernbedienung |
+| E.2 | API | Eigene API, mindestens so mächtig wie die vMix-API für Fremdprogramme (API.9); vMix-Kompatibilität optional (API.8) |
+| E.3 | Import von vMix-Presets | Nie (SHW.9 = X) |
+| E.4 | Ort von Show-Zustand, Aktionskatalog, APIs | Eigener Prozess `lmix-core`; GUI und APIs sind Clients |
+| E.5 | Titelformat | HTML-Vorlagen mit Feld-API, Animation per CSS/JS und Lottie, nicht vMix-kompatibel (§3.11) |
+| E.8 | Audio-Plugins | LV2, VST3 und CLAP (AUD.11 = S) |
+| E.10 | Lottie | lottie-web in Vorlagen jetzt, nativer Lottie-Input (ThorVG) später |
+| G.1 | GUI-Toolkit | Entscheidung nach Prototyp in M3 |
+| G.2 | Live-Monitore | Bilder lokal über GPU-Speicher (DMABuf) aus der Engine; WHEP nur für entfernte Clients |
+| — | Wiederholung, Gäste | Später (Priorität L) |
+| — | Prioritäten | AUD.11, OUT.16, PER.5, SRC.23 auf S; SHW.9 auf X |
+
+### 6.2 Offen
+
+| # | Frage | Stand |
+|---|---|---|
+| E.6 | Skriptsprache (AUT.9): Rhai, Lua, JavaScript (QuickJS), keine | Vor-/Nachteile vorgelegt; neue Empfehlung JavaScript (gleiche Sprache wie die HTML-Titel) |
+| E.9 | Browser-Engine für HTML-Titel: CEF, WPE WebKit, Servo | Nach Benchmark (M7.0): 8 animierte Titel 1080p60 mit Alpha, GPU/CPU, Drops, Latenz, Speicher, Kopien in die Pipeline, Kompatibilität (CSS-Animation, WebGL, lottie-web) |
+| T.1 | Titelsystem neben HTML (Godot, eigene Engine, Lottie nativ) | Vergleich vorgelegt; Empfehlung: HTML bleibt Hauptweg, Feld-API kompatibel zur offenen CasparCG-HTML-Konvention, Godot-Szenen später als Input über NDI/OMT |
+| E.11 | Submixe: weitere Mischebenen mit vollen Mischfähigkeiten für Beamer, Saal, Stream | Vorschlag: vollwertige Mischebenen (siehe SWI.10) statt der eingeschränkten vMix-Mix-Inputs |
+| E.7 | Gäste: Signalisierung/TURN selbst betreiben | Später |
 
 ---
 
