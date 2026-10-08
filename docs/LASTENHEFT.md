@@ -183,7 +183,7 @@ kann es, Console nicht.
 | SRC.25 | Zeichenebene | transparente Ebene, im Browser bemalbar (§3.17) | K | – |
 | SRC.26 | Produktionsuhren | §3.18 als Input | K | – |
 | SRC.27 | Virtuelles Set | Keying-Talent in 3D-Szene mit Kamerafahrten | X | – |
-| SRC.28 | Präsentation | Folien als Bilder (über LibreOffice-Export) | K | – |
+| SRC.28 | Präsentation | Folien als Bilder (über LibreOffice-Export) | S | – |
 | SRC.29 | DVD, Flash, WMV, DirectShow, XAML/WPF | | X | – |
 | SRC.30 | Zoom-Meeting | | X | – |
 | SRC.31 | Bildschirm teilen per Browser | Vortragende teilen Bildschirm oder Fenster über eine Webseite von lmix (WebRTC), ohne Installation; Zugang per Link/Code (P2) | S | – |
@@ -488,7 +488,7 @@ Zurückgestellt (User 2026-10-08).
 | UI.4 | Kontextmenüs je Input-Typ (Liste-Einträge, Fotos, Titel-Presets, NDI-Quelle, Browser …) | S | – |
 | UI.5 | Transportleiste unter PVW/PGM für Wiedergabe-Inputs | M | – |
 | UI.6 | Andockbare Bereiche (Audio, Wiederholung, Liste) und abdockbare Fenster für zweiten Monitor | S | – |
-| UI.7 | Einfacher und erweiterter Modus | K | – |
+| UI.7 | Einfacher und erweiterter Modus | S | – |
 | UI.8 | Input-Einstellungen in Reitern: Allgemein, Farbe, Key, Farbkorrektur, Effekte, Position, Ebenen, Auslöser, Tally, PTZ, Erweitert | M | – |
 | UI.9 | Themes hell/dunkel, Sprachen de/en (erweiterbar) | S | – |
 | UI.10 | Bestätigung vor Stopp von Aufnahme/Stream (abschaltbar) | S | – |
@@ -599,7 +599,7 @@ nicht nach, sondern ersetzt sie durch Heutiges oder lässt sie weg
 | E.12 | Lizenz | lmix bleibt MIT-kompatibel (`claude.md` Entscheidung 6 unverändert) |
 | E.11 | Submixe | Wie vMix: bis 15 Mix-Inputs mit Preview/Program, Cut/Übergang, Overlays, Stinger; als Quelle für Ausgänge und Vollbild (SWI.10) |
 | — | Wiederholung, Gäste | Später (Priorität L) |
-| — | Prioritäten | AUD.11, OUT.16, PER.5, SRC.23 auf S; SHW.9 auf X |
+| — | Prioritäten | AUD.11, OUT.16, PER.5, SRC.23 auf S; SHW.9 auf X; aus Persona-Durchlauf UI.7, SRC.28 auf S |
 
 ### 6.2 Offen
 
@@ -655,7 +655,8 @@ Hochschul-Medienzentrum, Theater-Video.
 Erster Durchlauf (2026-10-08, gegen Lastenheft): 21 Befunde (B1–B21),
 daraus neu SRC.31, OUT.17–18, REC.9, STR.10, AUT.12–14, PER.9, SHW.10,
 UI.13, GFX.21, OPS.1–4; präzisiert PER.1, NFA.7. Prioritätsänderungen bereits
-entschiedener Punkte (UI.7, SRC.18, SRC.19, SRC.28, M5b) sind Vorschläge.
+entschiedener Punkte, entschieden 2026-10-08 (User): UI.7 und SRC.28 auf S;
+SRC.18 bleibt K (SRC.31 genügt), SRC.19 bleibt L, M5b wie geplant.
 
 ## 8. Quellen
 

@@ -185,19 +185,19 @@ B18 OSC.
 
 | # | Befund | Personas | Umsetzung im Lastenheft |
 |---|---|---|---|
-| B1 | Einfacher Modus für Ungeübte | P1, P6 | Vorschlag: UI.7 von K auf S |
-| B2 | Textfolien/Präsentation (PDF, Liedtexte) | P1 | Vorschlag: SRC.28 von K auf S; neue GFX.21 Textfolien |
+| B1 | Einfacher Modus für Ungeübte | P1, P6 | UI.7 auf S (entschieden) |
+| B2 | Textfolien/Präsentation (PDF, Liedtexte) | P1 | SRC.28 auf S (entschieden); neu GFX.21 Textfolien |
 | B3 | Show-Vorlagen und Einrichtungsassistent | P1, P6 | neu UI.13 |
 | B4 | Bühnenmonitor für Sprechende | P2 | neu OUT.17 |
-| B5 | Bildschirm vom Notebook per Browser teilen | P2 | Vorschlag: SRC.18 von K auf S; neu SRC.31 |
+| B5 | Bildschirm vom Notebook per Browser teilen | P2 | neu SRC.31; SRC.18 bleibt K (entschieden) |
 | B6 | Dateinamen aus Daten/Zeitplan | P2, P6 | neu REC.9 |
 | B7 | Mehrere Bedienplätze gleichzeitig | P2, P5 | neu OPS.2 |
 | B8 | Dauerbetrieb mehrere Tage | P2 | NFA.7 erweitert |
-| B9 | Einfache Wiederholung über Video-Verzögerung | P3 | Vorschlag: SRC.19 von L auf S |
+| B9 | Einfache Wiederholung über Video-Verzögerung | P3 | SRC.19 bleibt L (entschieden) |
 | B10 | Adaptive Bitrate | P3 | neu STR.10 |
 | B11 | Globale Tastenkürzel | P4 | neu AUT.12 |
 | B12 | Import von OBS-Szenen | P4 | neu SHW.10 (K) |
-| B13 | AMD früher abnehmen | P4 | Vorschlag: M5b vorziehen, sobald Hardware da |
+| B13 | AMD früher abnehmen | P4 | M5b wie geplant (entschieden) |
 | B14 | Headless-Betrieb | P5 | neu OPS.1 |
 | B15 | Monitoring-Schnittstelle | P5 | neu OPS.3 |
 | B16 | Timecode | P5 | neu PER.9 |
