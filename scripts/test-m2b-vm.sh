@@ -281,6 +281,25 @@ streams="$(timeout 20 gst-launch-1.0 -v filesrc location="$recording" ! qtdemux 
 [[ "$streams" == 2 ]] || fail "recording lacks H.264 or AAC"
 pass "outputs: recording (H.264 + AAC, finalized MP4), SRT stream received, start/stop"
 
+# MultiCorder: ISO recordings of single inputs, with and without sound.
+input_id() { curl -sf "$CORE/state" | jq -r ".inputs[] | select(.name==\"$1\") | .id"; }
+for iso in Orange Clips; do
+    act "{\"action\":\"add_output\",\"spec\":{\"kind\":\"record\",\"folder\":\"iso-$iso\",\"container\":\"mp4\"},\"source\":{\"from\":\"input\",\"input\":\"$(input_id $iso)\"},\"name\":\"ISO $iso\"}" >/dev/null
+    act "{\"action\":\"start_output\",\"output\":\"ISO $iso\"}" >/dev/null
+done
+sleep 4
+for iso in Orange Clips; do act "{\"action\":\"stop_output\",\"output\":\"ISO $iso\"}" >/dev/null; done
+tracks() {
+    local file
+    file="$(find "$WORK/strom-data" -path "*iso-$1/*" -name '*.mp4' | head -1)"
+    [[ -n "$file" ]] || { echo 0; return; }
+    timeout 20 gst-launch-1.0 -v filesrc location="$file" ! qtdemux name=d d. ! queue ! fakesink d. ! queue ! fakesink 2>&1 \
+        | grep -oE 'caps = (video/x-h264|audio/mpeg)' | sort -u | wc -l
+}
+[[ "$(tracks Orange)" == 1 ]] || fail "ISO of a silent input: expected video only, got $(tracks Orange) tracks"
+[[ "$(tracks Clips)" == 2 ]] || fail "ISO of the playlist: expected video and audio"
+pass "MultiCorder: ISO recordings per input (silent input video only, playlist with sound)"
+
 # --- input color, device list ---
 act '{"action":"set_input_color","input":"Ball","color":"teal"}' >/dev/null
 [[ "$(curl -sf "$CORE/state" | jq -r '.inputs[1].color')" == teal ]] || fail "color not set"

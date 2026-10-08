@@ -412,8 +412,8 @@ impl Engine for StromEngine {
             Command::SetListen { slot, listen } => self.set_listen(*slot, *listen).await,
             Command::Transport { slot, transport } => self.transport(*slot, *transport).await,
             Command::SetSignalLoss { slot, mode } => self.set_signal_loss(*slot, *mode).await,
-            Command::StartOutput { id, spec } => {
-                self.put_flow(&flows::output_flow(*id, spec)).await
+            Command::StartOutput { id, spec, feed } => {
+                self.put_flow(&flows::output_flow(*id, spec, *feed)).await
             }
             Command::StopOutput { id } => self.drop_flow(flows::output_flow_id(*id)).await,
         }

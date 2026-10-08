@@ -590,3 +590,14 @@ Vorher war eine MP4-Aufnahme nach dem Stopp unlesbar.
 **Mischer-Layout**: Der Flow heißt jetzt "lmix mixer 2"; ein laufender
 Mischer eines älteren Layouts wird beim Start neu gebaut statt
 übernommen.
+
+## 2026-10-08 — M3 Schritt 2: MultiCorder und ISO-Ausgänge (3.2)
+
+Statt eines eigenen MultiCorders hat jeder Ausgang eine Quelle: Programm
+(Standard) oder ein Input (`source`). Ein ISO-Ausgang abonniert den
+`inter`-Kanal des Slots direkt, vor dem Mischer. Damit gibt es neben der
+Aufnahme je Input auch ISO-Streams (SRT) und ISO-NDI ohne Zusatzaufwand.
+- Ein Input ohne Ton bekommt keine Tonspur: der Recorder (splitmuxsink)
+  würde sonst ewig auf eine Spur warten.
+- Audio-Inputs (ohne Bild) können keine ISO-Quelle sein.
+- Wird der Input entfernt, stoppt sein ISO-Ausgang und steht auf Fehler.

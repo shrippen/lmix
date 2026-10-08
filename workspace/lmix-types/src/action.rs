@@ -14,7 +14,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::input::{InputColor, InputRef, Listen, SignalLoss, SourceSpec, Transport};
-use crate::output::{OutputRef, OutputSpec};
+use crate::output::{OutputRef, OutputSource, OutputSpec};
 
 /// One of the four transition buttons (SWI.3), 1-based.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -103,6 +103,9 @@ pub enum Action {
     /// Add an output to the show; it starts stopped.
     AddOutput {
         spec: OutputSpec,
+        /// Program (default) or one input (ISO, MultiCorder).
+        #[serde(default)]
+        source: OutputSource,
         #[serde(default)]
         name: Option<String>,
     },

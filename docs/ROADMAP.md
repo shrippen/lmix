@@ -259,7 +259,7 @@ GPU-Punkte in `HARDWARE-TODO.md`):
 | # | Stand |
 |---|---|
 | 3.1 | ✅ Ausgänge SRT, Aufnahme (MKV/MP4/TS), NDI als eigene Flows; Start/Stopp, Status mit Laufzeit und Fehler; ⚠ Bitrate/Drops fehlen, RTMP wartet auf strom #771, OMT ohne strom-Block |
-| 3.2 | ⬜ MultiCorder |
+| 3.2 | ✅ MultiCorder als Ausgangsquelle "Input": Aufnahme, SRT oder NDI je Input (ISO) |
 | 3.3 | ⬜ Vollbild-Ausgang |
 | 3.4 | ⬜ Failover, Latenz-CI |
 | 3.5 | ⬜ GUI-Shell-Entscheidung |

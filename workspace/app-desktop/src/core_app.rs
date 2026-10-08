@@ -18,8 +18,8 @@ use std::time::Duration;
 
 use lmix_types::{
     Action, Container, Device, DeviceKind, Effect, InputColor, InputId, InputRef, InputStatus,
-    Levels, Listen, OutputRef, OutputSpec, OutputStatus, ShowState, SignalLoss, SourceSpec,
-    TestPattern, TransitionSlot, Transport,
+    Levels, Listen, OutputRef, OutputSource, OutputSpec, OutputStatus, ShowState, SignalLoss,
+    SourceSpec, TestPattern, TransitionSlot, Transport,
 };
 
 use crate::core_client::{CoreClient, CoreMessage, FilePurpose, PictureTarget};
@@ -313,6 +313,8 @@ impl OutputKind {
 /// The "+ Output" form.
 struct OutputForm {
     kind: OutputKind,
+    /// Program, or one input (ISO, MultiCorder).
+    source: OutputSource,
     text: String,
     container: Container,
     video_kbps: u32,
@@ -378,6 +380,7 @@ impl CoreApp {
             volume_drag: HashMap::new(),
             new_output: OutputForm {
                 kind: OutputKind::Record,
+                source: OutputSource::Program,
                 text: String::new(),
                 container: Container::default(),
                 video_kbps: lmix_types::output::DEFAULT_VIDEO_KBPS,
@@ -754,12 +757,29 @@ impl CoreApp {
                     }
                 });
             }
-            ui.menu_button("+ Output", |ui| self.output_form(ui, actions));
+            ui.menu_button("+ Output", |ui| self.output_form(ui, state, actions));
         });
     }
 
-    fn output_form(&mut self, ui: &mut egui::Ui, actions: &mut Vec<Action>) {
+    fn output_form(&mut self, ui: &mut egui::Ui, state: &ShowState, actions: &mut Vec<Action>) {
         let form = &mut self.new_output;
+        let source_name = |source: OutputSource| match source {
+            OutputSource::Program => "Program".to_string(),
+            OutputSource::Input(id) => state
+                .inputs
+                .iter()
+                .find(|i| i.id == id)
+                .map_or("?".into(), |i| format!("{} {}", i.number, i.name)),
+        };
+        egui::ComboBox::from_id_salt("output_source")
+            .selected_text(source_name(form.source))
+            .show_ui(ui, |ui| {
+                ui.selectable_value(&mut form.source, OutputSource::Program, "Program");
+                for input in state.inputs.iter().filter(|i| i.source.has_video()) {
+                    let source = OutputSource::Input(input.id);
+                    ui.selectable_value(&mut form.source, source, source_name(source));
+                }
+            });
         egui::ComboBox::from_id_salt("output_kind")
             .selected_text(form.kind.label())
             .show_ui(ui, |ui| {
@@ -795,6 +815,7 @@ impl CoreApp {
         {
             actions.push(Action::AddOutput {
                 spec: spec.expect("enabled only with a spec"),
+                source: form.source,
                 name: None,
             });
             form.text.clear();
@@ -1433,6 +1454,7 @@ mod tests {
     fn output_form_needs_a_target() {
         let mut form = OutputForm {
             kind: OutputKind::Srt,
+            source: OutputSource::Program,
             text: " ".into(),
             container: Container::Mkv,
             video_kbps: 6000,

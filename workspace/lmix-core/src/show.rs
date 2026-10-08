@@ -11,8 +11,8 @@ use std::path::Path;
 
 use lmix_types::action::TRANSITION_SLOTS;
 use lmix_types::{
-    Effect, InputAudio, InputColor, InputId, OutputId, OutputSpec, SignalLoss, SourceSpec,
-    Transition, TransitionSlot,
+    Effect, InputAudio, InputColor, InputId, OutputId, OutputSource, OutputSpec, SignalLoss,
+    SourceSpec, Transition, TransitionSlot,
 };
 use serde::{Deserialize, Serialize};
 
@@ -57,6 +57,8 @@ pub struct ShowOutput {
     pub id: OutputId,
     pub name: String,
     pub spec: OutputSpec,
+    #[serde(default)]
+    pub source: OutputSource,
 }
 
 impl Default for Show {
@@ -196,6 +198,7 @@ mod tests {
                     uri: "srt://cdn:9000".into(),
                     video_kbps: 6000,
                 },
+                source: OutputSource::Input(id),
             }],
         }
     }

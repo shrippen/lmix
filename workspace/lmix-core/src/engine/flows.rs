@@ -21,6 +21,8 @@ use uuid::Uuid;
 use lmix_types::input::color_rgb;
 use lmix_types::{OutputId, OutputSpec, SourceSpec};
 
+use crate::switcher::Feed;
+
 /// Namespace of all lmix flow ids.
 const FLOW_NAMESPACE: Uuid = Uuid::from_u128(0x6c6d_6978_2d63_6f72_652d_666c_6f77_7321);
 
@@ -244,23 +246,35 @@ pub fn output_flow_id(id: OutputId) -> FlowId {
 ///   Record: pgm ─► videoenc ─► rec:video_in      pgm_audio ─► aac ─► rec:audio_in_0
 ///   NDI:    pgm ─────────────► ndi:video_in      pgm_audio ─► ndi:audio_in
 /// ```
-pub fn output_flow(id: OutputId, spec: &OutputSpec) -> Flow {
+pub fn output_flow(id: OutputId, spec: &OutputSpec, feed: Feed) -> Flow {
     let mut flow = Flow::new(format!("lmix output {id}"));
     flow.id = output_flow_id(id);
     share_timing(&mut flow);
     // Stopping drains with EOS: recordings get their trailer (MP4 needs it).
     flow.properties.eos_on_stop = Some(true);
 
-    for (block_id, channel) in [("pgm", PGM_OUT), ("pgm_audio", PGM_AUDIO_OUT)] {
+    // Program, or one slot as it arrives (ISO, MultiCorder). A slot
+    // without sound gets no audio branch: a recorder would wait forever
+    // for a track that never comes.
+    let (video, audio) = match feed {
+        Feed::Program => (pgm_channel(PGM_OUT), Some(pgm_channel(PGM_AUDIO_OUT))),
+        Feed::Slot { slot, audio } => (slot_channel(slot), audio.then(|| slot_audio_channel(slot))),
+    };
+    let channels = [("pgm", Some(video)), ("pgm_audio", audio.clone())];
+    for (block_id, channel) in channels {
+        let Some(channel) = channel else {
+            continue;
+        };
         flow.blocks.push(block(
             block_id,
             INTER_INPUT_BLOCK,
             vec![
-                ("channel", PropertyValue::String(pgm_channel(channel))),
+                ("channel", PropertyValue::String(channel)),
                 ("max_time", PropertyValue::String(OUTPUT_BUFFER_MS.into())),
             ],
         ));
     }
+    let sound = audio.is_some();
 
     match spec {
         OutputSpec::Srt { uri, video_kbps } => {
@@ -276,8 +290,10 @@ pub fn output_flow(id: OutputId, spec: &OutputSpec) -> Flow {
             ));
             flow.links
                 .push(link("enc:encoded_out".into(), "srt:video_in".into()));
-            flow.links
-                .push(link("pgm_audio:src".into(), "srt:audio_in_0".into()));
+            if sound {
+                flow.links
+                    .push(link("pgm_audio:src".into(), "srt:audio_in_0".into()));
+            }
         }
         OutputSpec::Record {
             folder,
@@ -285,9 +301,6 @@ pub fn output_flow(id: OutputId, spec: &OutputSpec) -> Flow {
             video_kbps,
         } => {
             add_encoder(&mut flow, *video_kbps);
-            flow.elements.push(element("aconv", "audioconvert", vec![]));
-            flow.elements.push(element("aac", "avenc_aac", vec![]));
-            flow.elements.push(element("aacparse", "aacparse", vec![]));
             flow.blocks.push(block(
                 "rec",
                 RECORDER_BLOCK,
@@ -298,16 +311,14 @@ pub fn output_flow(id: OutputId, spec: &OutputSpec) -> Flow {
                         "filename_prefix",
                         PropertyValue::String(RECORDING_PREFIX.into()),
                     ),
+                    ("num_audio_tracks", PropertyValue::UInt(u64::from(sound))),
                 ],
             ));
             flow.links
                 .push(link("enc:encoded_out".into(), "rec:video_in_0".into()));
-            flow.links
-                .push(link("pgm_audio:src".into(), "aconv".into()));
-            flow.links.push(link("aconv".into(), "aac".into()));
-            flow.links.push(link("aac".into(), "aacparse".into()));
-            flow.links
-                .push(link("aacparse".into(), "rec:audio_in_0".into()));
+            if sound {
+                add_aac(&mut flow, "rec:audio_in_0");
+            }
         }
         OutputSpec::Ndi { name } => {
             flow.blocks.push(block(
@@ -317,11 +328,25 @@ pub fn output_flow(id: OutputId, spec: &OutputSpec) -> Flow {
             ));
             flow.links
                 .push(link("pgm:src".into(), "ndi:video_in".into()));
-            flow.links
-                .push(link("pgm_audio:src".into(), "ndi:audio_in".into()));
+            if sound {
+                flow.links
+                    .push(link("pgm_audio:src".into(), "ndi:audio_in".into()));
+            }
         }
     }
     flow
+}
+
+/// Program sound as AAC into `to` (the recorder takes encoded audio only).
+fn add_aac(flow: &mut Flow, to: &str) {
+    flow.elements.push(element("aconv", "audioconvert", vec![]));
+    flow.elements.push(element("aac", "avenc_aac", vec![]));
+    flow.elements.push(element("aacparse", "aacparse", vec![]));
+    flow.links
+        .push(link("pgm_audio:src".into(), "aconv".into()));
+    flow.links.push(link("aconv".into(), "aac".into()));
+    flow.links.push(link("aac".into(), "aacparse".into()));
+    flow.links.push(link("aacparse".into(), to.into()));
 }
 
 /// H.264 from program: hardware when the engine has one, else software.
@@ -862,7 +887,7 @@ mod tests {
             container: lmix_types::Container::Mkv,
             video_kbps: 8000,
         };
-        let flow = output_flow(OutputId::new(), &spec);
+        let flow = output_flow(OutputId::new(), &spec, Feed::Program);
 
         let pgm = flow.blocks.iter().find(|b| b.id == "pgm").unwrap();
         assert!(matches!(
@@ -877,6 +902,31 @@ mod tests {
             .links
             .iter()
             .any(|l| l.from == "aacparse" && l.to == "rec:audio_in_0"));
+    }
+
+    #[test]
+    fn iso_recording_of_a_silent_input_has_no_audio_track() {
+        let spec = OutputSpec::Record {
+            folder: "iso".into(),
+            container: lmix_types::Container::Mkv,
+            video_kbps: 8000,
+        };
+        let flow = output_flow(
+            OutputId::new(),
+            &spec,
+            Feed::Slot {
+                slot: 3,
+                audio: false,
+            },
+        );
+
+        let pgm = flow.blocks.iter().find(|b| b.id == "pgm").unwrap();
+        assert!(matches!(
+            pgm.properties.get("channel"),
+            Some(PropertyValue::String(c)) if *c == slot_channel(3)
+        ));
+        assert!(flow.blocks.iter().all(|b| b.id != "pgm_audio"));
+        assert!(flow.links.iter().all(|l| l.to != "rec:audio_in_0"));
     }
 
     #[test]

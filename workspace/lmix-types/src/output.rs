@@ -7,6 +7,8 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::input::InputId;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
 #[serde(transparent)]
 pub struct OutputId(pub Uuid);
@@ -60,6 +62,18 @@ impl Container {
             Self::Ts => "mpegts",
         }
     }
+}
+
+/// What an output carries.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "from", content = "input", rename_all = "snake_case")]
+pub enum OutputSource {
+    /// The program mix (default).
+    #[default]
+    Program,
+    /// One input as it arrives, before the mixer: ISO recording
+    /// (MultiCorder, REC.4) or an ISO feed.
+    Input(InputId),
 }
 
 /// Default video bitrate of encoded outputs.
@@ -124,5 +138,7 @@ pub struct Output {
     pub number: u32,
     pub name: String,
     pub spec: OutputSpec,
+    #[serde(default)]
+    pub source: OutputSource,
     pub status: OutputStatus,
 }
