@@ -240,8 +240,8 @@ GPU-Punkte in `HARDWARE-TODO.md`):
 | 2b.1 | ✅ Slot-Flows über `inter`, Quellentausch auf Sendung (VM, CPU); Zeitbasis 0 + strom-Patch `start_time_selection` (`DECISIONS.md`) |
 | 2b.4 | ✅ Show-Datei v1, Autosave, Wiederaufnahme nach Absturz (ohne Audio/Ausgänge/Hotkeys, die es noch nicht gibt) |
 | 2b.2 | ✅ Console `--core`: Kacheln mit Bild, Tally, Typ, Farbmarke, Klick/Doppelklick, Menü; Dateidialog, letzte Shows (B24), Geräteliste (B25); ⚠ Audio der Kachel fehlt (B23) |
-| 2b.3 | ⬜ weitere Quellentypen |
-| B23 | ✅ Ton über die Slots: Kanal je Slot, an/aus, AFV, Lautstärke, Pegel (VM, CPU); ⚠ reine Audio-Inputs (Mikrofon) fehlen (B29) |
+| 2b.3 | ✅ Farbe, Bild, Playlist mit Transport, NDI, WHIP, Audio-Gerät; Signalverlust halten/schwarz je Input; ⚠ OMT fehlt (kein strom-Block), NDI/WHIP/Geräte nur auf Hardware prüfbar (H.14–H.16) |
+| B23 | ✅ Ton über die Slots: Kanal je Slot, an/aus, AFV, Lautstärke (an der Kachel, B28), PFL/AFL, Pegel; Audio-Inputs (B29) |
 | 2b.5 | ⬜ nur auf GPU messbar (H.1) |
 
 ### M3 — Ausgänge + Robustheit (wie geplant, konkretisiert; GPU liegt jetzt in M1b)

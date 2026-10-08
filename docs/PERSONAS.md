@@ -287,3 +287,23 @@ stummen Kommentar-Input per PFL vorhören, bevor er auf Sendung geht ✅;
 P7 Theater prüft per AFL, wie ein Zuspieler im Programm klingt ✅. ⚠ Der
 Monitor ist nur auf der Engine-Maschine hörbar; ein Bedienplatz an einem
 anderen Rechner hört ihn noch nicht (mit OUT, M3).
+
+---
+
+## Durchlauf 5: M2b Schritt 6 (2026-10-08, VM-Test + Console auf Xvfb)
+
+Neu: Farbe, Bild, Playlist mit Transport, NDI, WHIP, Audio-Gerät;
+Signalverlust halten/schwarz; Lautstärke an der Kachel; PFL/AFL.
+
+| Persona | Schritt | Ergebnis |
+|---|---|---|
+| P1 Ehrenamt | Liedtext-Folie als Bild, Begrüßungsvideo als Playlist | ✅ Bild, Playlist mit Play/Pause an der Kachel |
+| P1 Ehrenamt | Zuspieler leiser | ✅ Regler direkt an der Kachel (B28 behoben) |
+| P6 Hörsaal | Mikrofon der Lehrkraft dauerhaft | ✅ Audio-Input (Mikrofon), Ton an, kein AFV (B29 behoben); ⚠ Gerät nur auf Hardware prüfbar |
+| P4 Streamer | Gast per Browser (WHIP) | ✅ WHIP-Input; ⚠ Link zum Teilen fehlt in der Console (B30) |
+| P5 Broadcast | Kamera fällt aus | ✅ je Input "letztes Bild halten" oder "schwarz" |
+| P7 Theater | Zuspieler pausiert, Bild soll stehen bleiben | ✅ Standard "halten" |
+| P3 Sport | NDI-Kamera eines zweiten Rechners | ✅ NDI-Input und Geräteliste; ⚠ nur mit NDI-SDK (H.14) |
+
+**Befunde**: B30 WHIP: Console soll die Ingest-Adresse anzeigen und
+kopieren lassen. Sonst keine neuen Lücken für M2b.

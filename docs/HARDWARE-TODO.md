@@ -23,3 +23,7 @@ Hardware: **NV** = NVIDIA-Host (RTX 3090), **AMD**, **INTEL**,
 | H.11 | Console als Client: Bildabruf über `lmix-core` bei 16 Inputs (Last, Verzögerung der Kacheln), Doppelklick-Take am echten Bildschirm | NV | M2b Schritt 4 | offen |
 | H.12 | Dateidialog der Console über xdg-portal auf KDE Plasma (nativer Breeze-Dialog), Geräteliste mit echter Kamera (Auswahl → Input online) | CAP | M2b, B24/B25 | offen |
 | H.13 | Monitor-Bus auf Kopfhörer (`--monitor-out auto`): PFL/AFL hörbar, Umschalten ohne Knacken, kein Drift gegen das Programm über 1 h | NV | PFL/AFL | offen |
+| H.14 | NDI-Quelle (NDI-SDK fehlt in der VM): Bild und Ton, Geräteliste zeigt NDI-Quellen im Netz | NET | 2b.3 | offen |
+| H.15 | WHIP-Ingest von Browser und OBS auf `/whip/<endpoint>`: Bild, Ton, Latenz | NET | 2b.3 | offen |
+| H.16 | Audio-Gerät (Mikrofon, Line-In) als Input: Pegel, Lippensynchronität zur Kamera, Signalverlust beim Abziehen | CAP | B29 | offen |
+| H.17 | Signalverlust halten/schwarz auf CUDA- und GL-Mischer (Pad-Namen `sink_N` dort gleich?), Kamera abziehen statt Clip pausieren | NV, CAP | 2b.3 | offen |

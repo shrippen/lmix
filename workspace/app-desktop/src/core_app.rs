@@ -17,8 +17,8 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use lmix_types::{
-    Action, Device, Effect, InputColor, InputId, InputRef, InputStatus, Levels, Listen, ShowState,
-    SourceSpec, TestPattern, TransitionSlot,
+    Action, Device, DeviceKind, Effect, InputColor, InputId, InputRef, InputStatus, Levels, Listen,
+    ShowState, SignalLoss, SourceSpec, TestPattern, TransitionSlot, Transport,
 };
 
 use crate::core_client::{CoreClient, CoreMessage, FilePurpose, PictureTarget};
@@ -31,6 +31,15 @@ const TILE_WIDTH: f32 = 160.0;
 const TILE_STROKE: f32 = 3.0;
 const STATUS_DOT: f32 = 10.0;
 const COLOR_BAND: f32 = 4.0;
+const TRANSPORT_BUTTONS: [(Transport, &str, &str); 5] = [
+    (Transport::Restart, "|◀", "Restart"),
+    (Transport::Previous, "◀◀", "Previous item"),
+    (Transport::Play, "▶", "Play"),
+    (Transport::Pause, "||", "Pause"),
+    (Transport::Next, "▶▶", "Next item"),
+];
+/// Color picker start: a calm blue.
+const DEFAULT_COLOR: [u8; 3] = [0x20, 0x60, 0xc0];
 const METER_FLOOR_DB: f32 = -60.0;
 const METER_HOT_DB: f32 = -6.0;
 const METER_HEIGHT: f32 = 6.0;
@@ -107,6 +116,12 @@ fn source_badge(source: &SourceSpec) -> &'static str {
         SourceSpec::Url { .. } => "URL",
         SourceSpec::Srt { .. } => "SRT",
         SourceSpec::Device { .. } => "CAM",
+        SourceSpec::Color { .. } => "COL",
+        SourceSpec::Image { .. } => "IMG",
+        SourceSpec::Playlist { .. } => "LIST",
+        SourceSpec::Ndi { .. } => "NDI",
+        SourceSpec::Whip { .. } => "WHIP",
+        SourceSpec::AudioDevice { .. } => "MIC",
     }
 }
 
@@ -124,19 +139,31 @@ pub fn tally(state: &ShowState, id: InputId) -> Tally {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum SourceKind {
     Pattern,
+    Color,
+    Image,
     File,
+    Playlist,
     Url,
     Srt,
+    Ndi,
+    Whip,
     Device,
+    AudioDevice,
 }
 
 impl SourceKind {
-    const ALL: [SourceKind; 5] = [
+    const ALL: [SourceKind; 11] = [
         Self::Pattern,
+        Self::Color,
+        Self::Image,
         Self::File,
+        Self::Playlist,
         Self::Url,
         Self::Srt,
+        Self::Ndi,
+        Self::Whip,
         Self::Device,
+        Self::AudioDevice,
     ];
 
     fn label(self) -> &'static str {
@@ -145,8 +172,29 @@ impl SourceKind {
             Self::File => "File",
             Self::Url => "URL",
             Self::Srt => "SRT",
-            Self::Device => "Device",
+            Self::Device => "Camera / capture",
+            Self::Color => "Color",
+            Self::Image => "Image",
+            Self::Playlist => "Playlist",
+            Self::Ndi => "NDI",
+            Self::Whip => "WHIP (browser, OBS)",
+            Self::AudioDevice => "Audio (mic, line)",
         }
+    }
+
+    /// Kind of device offered in the picker, if this source uses one.
+    fn device_kind(self) -> Option<DeviceKind> {
+        match self {
+            Self::Device => Some(DeviceKind::Video),
+            Self::AudioDevice => Some(DeviceKind::Audio),
+            Self::Ndi => Some(DeviceKind::Ndi),
+            _ => None,
+        }
+    }
+
+    /// Picked from files with the "…" button.
+    fn picks_files(self) -> bool {
+        matches!(self, Self::File | Self::Image | Self::Playlist)
     }
 
     fn hint(self) -> &'static str {
@@ -155,7 +203,12 @@ impl SourceKind {
             Self::File => "/path/to/clip.mp4",
             Self::Url => "https://…",
             Self::Srt => "srt://host:port",
-            Self::Device => "device id (none found)",
+            Self::Device | Self::AudioDevice => "device id (none found)",
+            Self::Color => "",
+            Self::Image => "/path/to/logo.png",
+            Self::Playlist => "/clips/a.mp4; /clips/b.mp4",
+            Self::Ndi => "HOST (Source name)",
+            Self::Whip => "endpoint name, e.g. stage",
         }
     }
 }
@@ -164,6 +217,7 @@ impl SourceKind {
 struct AddForm {
     kind: SourceKind,
     pattern: TestPattern,
+    color: [u8; 3],
     text: String,
     name: String,
 }
@@ -172,7 +226,8 @@ impl AddForm {
     /// The source to add; `None` while the text field is empty.
     fn source(&self) -> Option<SourceSpec> {
         let text = self.text.trim().to_string();
-        if self.kind != SourceKind::Pattern && text.is_empty() {
+        let needs_text = !matches!(self.kind, SourceKind::Pattern | SourceKind::Color);
+        if needs_text && text.is_empty() {
             return None;
         }
         Some(match self.kind {
@@ -183,6 +238,24 @@ impl AddForm {
             SourceKind::Url => SourceSpec::Url { url: text },
             SourceKind::Srt => SourceSpec::Srt { uri: text },
             SourceKind::Device => SourceSpec::Device { id: text },
+            SourceKind::AudioDevice => SourceSpec::AudioDevice { id: text },
+            SourceKind::Color => {
+                let [r, g, b] = self.color;
+                SourceSpec::Color {
+                    color: format!("#{r:02x}{g:02x}{b:02x}"),
+                }
+            }
+            SourceKind::Image => SourceSpec::Image { path: text },
+            SourceKind::Playlist => SourceSpec::Playlist {
+                paths: text
+                    .split(';')
+                    .map(str::trim)
+                    .filter(|p| !p.is_empty())
+                    .map(str::to_string)
+                    .collect(),
+            },
+            SourceKind::Ndi => SourceSpec::Ndi { name: text },
+            SourceKind::Whip => SourceSpec::Whip { endpoint: text },
         })
     }
 }
@@ -233,6 +306,7 @@ impl CoreApp {
             add: AddForm {
                 kind: SourceKind::Pattern,
                 pattern: TestPattern::Bars,
+                color: DEFAULT_COLOR,
                 text: String::new(),
                 name: String::new(),
             },
@@ -276,6 +350,13 @@ impl CoreApp {
                         .await
                 }
                 FilePurpose::AddFile => dialog.pick_file().await,
+                FilePurpose::AddPlaylist => {
+                    for file in dialog.pick_files().await.unwrap_or_default() {
+                        let path = file.path().display().to_string();
+                        let _ = tx.send(CoreMessage::Picked(purpose, path));
+                    }
+                    return;
+                }
             };
             let Some(file) = file else {
                 return;
@@ -314,9 +395,12 @@ impl CoreApp {
         match purpose {
             FilePurpose::OpenShow => self.send(Action::OpenShow { path }),
             FilePurpose::SaveShow => self.send(Action::SaveShow { path: Some(path) }),
-            FilePurpose::AddFile => {
-                self.add.kind = SourceKind::File;
-                self.add.text = path;
+            FilePurpose::AddFile => self.add.text = path,
+            FilePurpose::AddPlaylist => {
+                if !self.add.text.trim().is_empty() {
+                    self.add.text.push_str("; ");
+                }
+                self.add.text.push_str(&path);
             }
         }
     }
@@ -458,11 +542,21 @@ impl CoreApp {
                     let tally = tally(state, input.id);
                     let reference = InputRef::Text(input.id.to_string());
                     let level = self.level_of(input.id);
-                    let response = tile(ui, input, tally, picture, level, actions);
+                    let response = tile(
+                        ui,
+                        input,
+                        tally,
+                        picture,
+                        level,
+                        &mut self.volume_drag,
+                        actions,
+                    );
 
+                    // Audio inputs have no picture: no preview, no take.
+                    let has_video = input.source.has_video();
                     if response.double_clicked() && tally == Tally::Preview {
                         actions.push(Action::Transition { slot: TAKE_SLOT });
-                    } else if response.clicked() && tally == Tally::Off {
+                    } else if response.clicked() && tally == Tally::Off && has_video {
                         actions.push(Action::PreviewInput {
                             input: reference.clone(),
                         });
@@ -486,9 +580,23 @@ impl CoreApp {
                             });
                             ui.close();
                         }
-                        if input.has_audio {
-                            self.volume_slider(ui, input, &reference, actions);
-                        }
+                        ui.menu_button("On signal loss", |ui| {
+                            for (mode, label) in [
+                                (SignalLoss::Hold, "Hold last frame"),
+                                (SignalLoss::Black, "Black"),
+                            ] {
+                                if ui
+                                    .selectable_label(input.signal_loss == mode, label)
+                                    .clicked()
+                                {
+                                    actions.push(Action::SetSignalLoss {
+                                        input: reference.clone(),
+                                        mode,
+                                    });
+                                    ui.close();
+                                }
+                            }
+                        });
                         ui.menu_button("Color", |ui| {
                             for color in InputColor::ALL {
                                 let label = egui::RichText::new(format!("■ {color:?}"))
@@ -536,31 +644,6 @@ impl CoreApp {
             .map(|l| l.peak_db)
     }
 
-    /// Volume 0–100; sent when the drag ends, not on every step.
-    fn volume_slider(
-        &mut self,
-        ui: &mut egui::Ui,
-        input: &lmix_types::Input,
-        reference: &InputRef,
-        actions: &mut Vec<Action>,
-    ) {
-        let value = self
-            .volume_drag
-            .entry(input.id)
-            .or_insert(input.audio.volume);
-        let slider = egui::Slider::new(value, 0..=lmix_types::input::VOLUME_MAX).text("Volume");
-        let response = ui.add(slider);
-        if response.drag_stopped() || (response.changed() && !response.dragged()) {
-            actions.push(Action::SetVolume {
-                input: reference.clone(),
-                volume: *value,
-            });
-        }
-        if !response.dragged() && !response.has_focus() {
-            self.volume_drag.remove(&input.id);
-        }
-    }
-
     fn add_row(&mut self, ui: &mut egui::Ui, state: &ShowState, actions: &mut Vec<Action>) {
         ui.horizontal(|ui| {
             ui.label("Add input");
@@ -583,20 +666,28 @@ impl CoreApp {
                             );
                         }
                     });
-            } else if self.add.kind == SourceKind::Device && !self.devices.is_empty() {
-                let selected = self
-                    .devices
+            } else if self.add.kind == SourceKind::Color {
+                ui.color_edit_button_srgb(&mut self.add.color);
+            } else if let Some(kind) = self
+                .add
+                .kind
+                .device_kind()
+                .filter(|k| self.devices.iter().any(|d| d.kind == *k))
+            {
+                let offered: Vec<&Device> =
+                    self.devices.iter().filter(|d| d.kind == kind).collect();
+                let selected = offered
                     .iter()
-                    .find(|d| d.id == self.add.text)
-                    .map_or("choose a device".to_string(), device_label);
+                    .find(|d| device_value(d) == self.add.text)
+                    .map_or("choose a device".to_string(), |d| device_label(d));
                 egui::ComboBox::from_id_salt("add_device")
                     .selected_text(selected)
                     .width(320.0)
                     .show_ui(ui, |ui| {
-                        for device in &self.devices {
+                        for device in offered {
                             ui.selectable_value(
                                 &mut self.add.text,
-                                device.id.clone(),
+                                device_value(device),
                                 device_label(device),
                             );
                         }
@@ -609,12 +700,16 @@ impl CoreApp {
                         .desired_width(320.0),
                 );
             }
-            if self.add.kind == SourceKind::File
-                && ui.button("…").on_hover_text(REMOTE_HINT).clicked()
+            if self.add.kind.picks_files() && ui.button("…").on_hover_text(REMOTE_HINT).clicked()
             {
-                self.pick_file(FilePurpose::AddFile);
+                let purpose = if self.add.kind == SourceKind::Playlist {
+                    FilePurpose::AddPlaylist
+                } else {
+                    FilePurpose::AddFile
+                };
+                self.pick_file(purpose);
             }
-            if self.add.kind == SourceKind::Device
+            if self.add.kind.device_kind().is_some()
                 && ui
                     .button("↻")
                     .on_hover_text("Search devices again")
@@ -829,12 +924,14 @@ fn transition_bar(ui: &mut egui::Ui, state: &ShowState, actions: &mut Vec<Action
 }
 
 /// Input tile: picture, number and name, frame in the tally color.
+#[allow(clippy::too_many_arguments)]
 fn tile(
     ui: &mut egui::Ui,
     input: &lmix_types::Input,
     tally: Tally,
     picture: Option<&egui::TextureHandle>,
     level: Option<f32>,
+    volume_drag: &mut HashMap<InputId, u8>,
     actions: &mut Vec<Action>,
 ) -> egui::Response {
     let frame = egui::Frame::new()
@@ -847,7 +944,12 @@ fn tile(
                 let (rect, _) = ui
                     .allocate_exact_size(egui::vec2(TILE_WIDTH, COLOR_BAND), egui::Sense::hover());
                 ui.painter().rect_filled(rect, 0.0, band);
-                picture_area(ui, egui::vec2(TILE_WIDTH, TILE_WIDTH * 9.0 / 16.0), picture);
+                let size = egui::vec2(TILE_WIDTH, TILE_WIDTH * 9.0 / 16.0);
+                if input.source.has_video() {
+                    picture_area(ui, size, picture);
+                } else {
+                    audio_only_area(ui, size);
+                }
                 ui.horizontal(|ui| {
                     ui.label(egui::RichText::new(input.number.to_string()).strong());
                     ui.label(
@@ -860,8 +962,12 @@ fn tile(
                         ui.weak(format!("{:?}", input.status).to_lowercase());
                     }
                 });
+                if input.source.has_transport() {
+                    transport_row(ui, input, actions);
+                }
                 if input.has_audio {
                     audio_row(ui, input, level, actions);
+                    volume_control(ui, input, volume_drag, actions);
                 }
             });
         });
@@ -870,6 +976,57 @@ fn tile(
         ui.id().with(input.id),
         egui::Sense::click(),
     )
+}
+
+/// Picture area of an audio input: no picture, a label instead.
+fn audio_only_area(ui: &mut egui::Ui, size: egui::Vec2) {
+    let (_, rect) = ui.allocate_space(size);
+    ui.painter().rect_filled(rect, 0.0, EMPTY_PICTURE);
+    ui.painter().text(
+        rect.center(),
+        egui::Align2::CENTER_CENTER,
+        "AUDIO",
+        egui::FontId::proportional(14.0),
+        egui::Color32::GRAY,
+    );
+}
+
+/// Restart, previous, play, pause, next for files, URLs and playlists.
+fn transport_row(ui: &mut egui::Ui, input: &lmix_types::Input, actions: &mut Vec<Action>) {
+    ui.horizontal(|ui| {
+        for (transport, label, hint) in TRANSPORT_BUTTONS {
+            if ui.small_button(label).on_hover_text(hint).clicked() {
+                actions.push(Action::TransportInput {
+                    input: InputRef::Text(input.id.to_string()),
+                    transport,
+                });
+            }
+        }
+    });
+}
+
+/// Volume 0–100 on the tile (B28); sent when the drag ends, not on every
+/// step, so the core and other clients see one change.
+fn volume_control(
+    ui: &mut egui::Ui,
+    input: &lmix_types::Input,
+    volume_drag: &mut HashMap<InputId, u8>,
+    actions: &mut Vec<Action>,
+) {
+    let value = volume_drag.entry(input.id).or_insert(input.audio.volume);
+    let slider = egui::Slider::new(value, 0..=lmix_types::input::VOLUME_MAX).show_value(true);
+    let response = ui
+        .add_sized([TILE_WIDTH, METER_HEIGHT * 3.0], slider)
+        .on_hover_text("Volume");
+    if response.drag_stopped() || (response.changed() && !response.dragged()) {
+        actions.push(Action::SetVolume {
+            input: InputRef::Text(input.id.to_string()),
+            volume: *value,
+        });
+    }
+    if !response.dragged() && !response.has_focus() {
+        volume_drag.remove(&input.id);
+    }
 }
 
 /// "M" (sound on/off), "AFV" (audio follows video), "PFL"/"AFL" (solo on
@@ -962,6 +1119,14 @@ fn meter(ui: &mut egui::Ui, peak_db: f32) {
     ui.painter().rect_filled(bar, 0.0, color);
 }
 
+/// What the picker puts into the source: the name for NDI, else the id.
+fn device_value(device: &Device) -> String {
+    match device.kind {
+        DeviceKind::Ndi => device.name.clone(),
+        DeviceKind::Video | DeviceKind::Audio => device.id.clone(),
+    }
+}
+
 fn device_label(device: &Device) -> String {
     format!("{} ({})", device.name, device.api)
 }
@@ -1041,10 +1206,28 @@ mod tests {
     }
 
     #[test]
+    fn add_form_builds_color_and_playlist() {
+        let mut form = AddForm {
+            kind: SourceKind::Color,
+            pattern: TestPattern::Bars,
+            color: [0xff, 0x80, 0x00],
+            text: String::new(),
+            name: String::new(),
+        };
+        assert_eq!(form.source(), Some(SourceSpec::Color { color: "#ff8000".into() }));
+
+        form.kind = SourceKind::Playlist;
+        form.text = "/a.mp4; ;/b.mp4 ".into();
+        let paths = vec!["/a.mp4".to_string(), "/b.mp4".to_string()];
+        assert_eq!(form.source(), Some(SourceSpec::Playlist { paths }));
+    }
+
+    #[test]
     fn add_form_needs_text_except_for_patterns() {
         let mut form = AddForm {
             kind: SourceKind::File,
             pattern: TestPattern::Bars,
+            color: DEFAULT_COLOR,
             text: "  ".into(),
             name: String::new(),
         };

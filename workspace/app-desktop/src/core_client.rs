@@ -31,6 +31,8 @@ pub enum FilePurpose {
     OpenShow,
     SaveShow,
     AddFile,
+    /// Several files, appended to the playlist field.
+    AddPlaylist,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

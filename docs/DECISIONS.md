@@ -529,3 +529,31 @@ lmix setzt je Input `listen: off | pfl | afl` (Aktionen `set_listen`,
   laufen. Pegel des Monitor-Busses in `levels.monitor_peak_db`.
 **Offen**: Monitor-Ausgang wählbar (Gerät, NDI, an den Bedienplatz
 streamen) mit den Ausgängen (OUT, M3).
+
+## 2026-10-08 — M2b Schritt 6: Quellen, Transport, Signalverlust
+
+**Quellentypen (2b.3, B29)**: Farbe (`#rrggbb`), Standbild (decodebin →
+imagefreeze, live), Playlist (Media-Player, Schleife), NDI (`ndi_input`),
+WHIP (`whip_input`, strom nimmt unter `/whip/<endpoint>` an), Audio-Gerät
+(nur Ton). Audio-Inputs haben kein Bild; Vorschau und Programm lehnen sie
+ab (`no_video`). Ton jedes Slots wird vor dem `inter`-Ausgang auf ein
+Format gebracht (F32, 48 kHz, Stereo): der Audio-Mischer nimmt das Format
+seines ersten Eingangs, ein abweichender Slot scheiterte (not-negotiated).
+**Transport**: Play, Pause, Neustart (Seek 0), Weiter, Zurück für Datei,
+URL, Playlist (`transport_input`).
+**Signalverlust je Input** (User): letztes Bild halten (Standard) oder
+Schwarz. Umsetzung über `max-last-buffer-repeat` der Compositor-Pads im
+Vision-Mixer (PGM und Multiview): unendlich = halten, 400 ms = danach
+Schwarz. Gespeichert in der Show-Datei. Die Kachelbilder von `lmix-core`
+folgen dem (halten = letztes Bild weiterreichen). Eine Umstellung wirkt ab
+dem nächsten Frame der Quelle; bei bereits stehender Quelle erst, wenn sie
+wieder läuft.
+**Fehler aus Schritt 2 behoben**: strom übernimmt bei `transition` immer
+seine Vorschau ins Programm und ignoriert `to_input`. Ein `cut_direct` auf
+einen Input außerhalb der Vorschau und das Schalten auf Schwarz trafen
+den falschen Eingang. Der Treiber setzt das Ziel jetzt zuerst in die
+Vorschau und gibt die alte Vorschau danach zurück; der VM-Test prüft das
+Programm direkt im Mischer.
+**strom-Patch** (Branch `lmix-start-time`, PR #1): Der Media-Player rief
+`add_signal_watch` nicht auf, der Abbau entfernte einen Watch zu viel
+(CRITICAL je gestopptem Player).
