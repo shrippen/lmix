@@ -1,7 +1,7 @@
 # Übergabe: Stand M3, lokale Übernahme
 
-Stand 2026-10-08. Die Arbeit in der Cloud-Session endet hier. Weiter geht es
-lokal mit Abnahme auf echter Hardware.
+Stand 2026-10-09. Die Arbeit läuft lokal weiter (Arch, RTX 3090), Abnahme
+auf echter Hardware.
 
 ## Branches und PRs (Gitea, gestapelt)
 
@@ -17,10 +17,16 @@ strom-Fork (`shrippen/strom`):
   `eos_on_stop`. Submodul von `m2b`/`m3` zeigt hierher.
 - `lmix-dsk-fade` (auf `lmix-start-time`, kein PR): DSK-Blende mit
   `duration_ms`, nur für `m4`.
-- `lmix-sample-rate` (auf `lmix-start-time`, kein PR): Mischer-Eigenschaft
+- `lmix-sample-rate` (auf `lmix-start-time`, PR #2): Mischer-Eigenschaft
   `sample_rate`. Submodul von `m3` zeigt seit 2026-10-09 hierher.
 
-Merge-Reihenfolge: strom #1, dann lmix #1, #2, #3 (jeweils auf Gitea).
+Merge-Reihenfolge: strom #1, #2, dann lmix #1, #2, #3 (jeweils auf Gitea).
+
+Seit 2026-10-09 lokal auf `m3`: Live-Bilder über Unix-Sockets
+(`/api/live/…`), Qt-Console-Prototyp `workspace/console-qt`
+(`GUI-SHELL.md`, Schritt 1, gemessen), CUDA-Programm für Bildschirm/NDI/
+Live heruntergeladen, Aktionen vor „Engine bereit“ gehen nicht mehr
+verloren.
 
 ## Lokal einrichten
 
@@ -44,8 +50,15 @@ no-gui`, 20–25 min kalt). Mischer-Backend wählt `lmix-core --mixer`
 STROM="$(scripts/fetch-strom.sh)"
 "$STROM" --host 127.0.0.1 --port 8099 --no-auto-restart &          # Engine
 (cd workspace/lmix-core && cargo run --release -- --strom http://127.0.0.1:8099) &   # Steuerung, API :8200
-(cd workspace/app-desktop && cargo run --release -- --core http://127.0.0.1:8200)    # Console
+(cd workspace/console-qt && cargo run --release)                   # Qt-Console (Prototyp)
+(cd workspace/app-desktop && cargo run --release -- --core http://127.0.0.1:8200)    # egui-Console
 ```
+
+Die Qt-Console braucht Qt 6 mit Kirigami und das GStreamer-Plugin `qml6`
+(Arch `gst-plugin-qml6`, Ubuntu `gstreamer1.0-qt6`); sie muss auf dem
+Rechner der Engine laufen (Live-Bilder über Unix-Sockets in
+`$XDG_RUNTIME_DIR/lmix/live`). Kante aktualisieren:
+`scripts/sync-kante.sh`.
 
 Kopfhörer für PFL/AFL: `lmix-core --monitor-out auto`. Externe Adresse
 für WHIP-Links: `--public-url`.
@@ -66,12 +79,7 @@ für WHIP-Links: `--public-url`.
 
 ## Offen beim User
 
-- **Entscheidung 3.5 GUI-Shell**: `docs/GUI-SHELL.md` (Empfehlung Qt
-  Quick/Kirigami; `claude.md` sagt bisher egui).
-- **Repo-Secret** `REGISTRY_TOKEN` (lmix, `read:repository`,
-  `write:package`): ohne es laufen die Workflows `strom` und `vm-check`
-  nicht.
-- **Merges** strom #1, lmix #1–#3.
+- **Merges** strom #1, #2, lmix #1–#3.
 - B31 RTMP-Ausgang wartet auf strom #771.
 
 ## Bekannte Befunde
