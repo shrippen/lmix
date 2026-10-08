@@ -13,6 +13,7 @@ pub struct NullEngine {
     log: Mutex<Vec<Command>>,
     /// Never measures anything.
     levels: tokio::sync::watch::Sender<super::meters::EngineLevels>,
+    errors: Option<tokio::sync::broadcast::Sender<super::meters::FlowError>>,
 }
 
 impl NullEngine {
@@ -44,5 +45,16 @@ impl Engine for NullEngine {
 
     fn levels(&self) -> tokio::sync::watch::Receiver<super::meters::EngineLevels> {
         self.levels.subscribe()
+    }
+
+    fn flow_errors(&self) -> tokio::sync::broadcast::Receiver<super::meters::FlowError> {
+        match &self.errors {
+            Some(errors) => errors.subscribe(),
+            None => tokio::sync::broadcast::channel(1).1,
+        }
+    }
+
+    async fn output_running(&self, _id: lmix_types::OutputId) -> bool {
+        false
     }
 }

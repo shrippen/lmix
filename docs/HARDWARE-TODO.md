@@ -27,3 +27,5 @@ Hardware: **NV** = NVIDIA-Host (RTX 3090), **AMD**, **INTEL**,
 | H.15 | WHIP-Ingest von Browser und OBS auf `/whip/<endpoint>`: Bild, Ton, Latenz | NET | 2b.3 | offen |
 | H.16 | Audio-Gerät (Mikrofon, Line-In) als Input: Pegel, Lippensynchronität zur Kamera, Signalverlust beim Abziehen | CAP | B29 | offen |
 | H.17 | Signalverlust halten/schwarz auf CUDA- und GL-Mischer (Pad-Namen `sink_N` dort gleich?), Kamera abziehen statt Clip pausieren | NV, CAP | 2b.3 | offen |
+| H.18 | Ausgänge auf Hardware-Encoder (NVENC über `videoenc` auto): Last, Latenz, SRT zu echtem Ziel über 1 h, Aufnahme 1 h ohne Drop | NV, NET | M3 3.1 | offen |
+| H.19 | NDI-Ausgang (NDI-SDK): in NDI Studio Monitor sichtbar mit Ton | NET | M3 3.1 | offen |

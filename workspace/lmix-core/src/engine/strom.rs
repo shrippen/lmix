@@ -10,10 +10,11 @@
 //! | `SetAudio` | audio mixer: channel fader and mute, ramped |
 //! | `SetListen` | audio mixer: channel PFL/AFL (monitor bus) |
 //! | `SetSignalLoss` | vision mixer compositor pads: `max-last-buffer-repeat` |
+//! | `StartOutput` / `StopOutput` | output flow (own flow per output) built and started / deleted |
 //! | `Transport` | slot's media player: play, pause, seek 0, next, previous |
 
 use async_trait::async_trait;
-use lmix_types::{Device, DeviceKind, Effect, Listen, SignalLoss, Transport};
+use lmix_types::{Device, DeviceKind, Effect, Listen, OutputId, SignalLoss, Transport};
 use reqwest::StatusCode;
 use serde::Serialize;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -25,11 +26,13 @@ use strom_types::api::{
 use strom_types::discovery::DeviceResponse;
 use strom_types::vision_mixer::Source;
 use strom_types::{Flow, FlowId, PipelineState, PropertyValue};
-use tokio::sync::watch;
+use tokio::sync::{broadcast, watch};
 
 /// How often and how long `start` waits for the mixer to play.
 const PLAYING_POLL: Duration = Duration::from_millis(200);
 const PLAYING_POLLS: u32 = 50;
+/// Flow errors kept for a slow reader.
+const ERROR_BUFFER: usize = 64;
 /// Vision mixer compositors whose input pads follow `SignalLoss`.
 const MIXER_COMPOSITORS: [&str; 2] = ["mixer", "mv_comp"];
 /// `max-last-buffer-repeat` default: repeat until end of stream.
@@ -48,7 +51,7 @@ const DEVICE_CATEGORIES: [(&str, DeviceKind); 3] = [
 const NOT_RUNNING_YET: &str = "query pipeline position";
 
 use super::flows::{self, MixerBackend, MonitorOut, AUDIO_MIXER, MIXER_BLOCK, PGM_TAP, SLOT_TAP};
-use super::meters::{self, EngineLevels};
+use super::meters::{self, EngineLevels, FlowError};
 use super::{Engine, EngineError, Picture};
 use crate::switcher::{Command, AUDIO_RAMP_MS};
 
@@ -60,6 +63,7 @@ pub struct StromEngine {
     /// Mixer input that shows black; set by `start`.
     black: AtomicUsize,
     levels: watch::Sender<EngineLevels>,
+    errors: broadcast::Sender<FlowError>,
     /// The meter reader runs once, from the first `start`.
     metering: AtomicBool,
 }
@@ -73,6 +77,7 @@ impl StromEngine {
             monitor,
             black: AtomicUsize::new(0),
             levels: watch::Sender::default(),
+            errors: broadcast::channel(ERROR_BUFFER).0,
             metering: AtomicBool::new(false),
         }
     }
@@ -356,6 +361,7 @@ impl Engine for StromEngine {
                 flows::mixer_id(),
                 AUDIO_MIXER,
                 self.levels.clone(),
+                self.errors.clone(),
             ));
         }
 
@@ -364,9 +370,9 @@ impl Engine for StromEngine {
 
         let wanted = flows::mixer_flow(slots, self.backend, self.monitor);
         let current = self.get_flow(wanted.id).await?;
-        let reusable = current
-            .as_ref()
-            .is_some_and(|f| f.running && slot_count(f) == Some(black + 1));
+        let reusable = current.as_ref().is_some_and(|f| {
+            f.running && f.name == flows::MIXER_NAME && slot_count(f) == Some(black + 1)
+        });
         if reusable {
             return Ok(());
         }
@@ -406,6 +412,10 @@ impl Engine for StromEngine {
             Command::SetListen { slot, listen } => self.set_listen(*slot, *listen).await,
             Command::Transport { slot, transport } => self.transport(*slot, *transport).await,
             Command::SetSignalLoss { slot, mode } => self.set_signal_loss(*slot, *mode).await,
+            Command::StartOutput { id, spec } => {
+                self.put_flow(&flows::output_flow(*id, spec)).await
+            }
+            Command::StopOutput { id } => self.drop_flow(flows::output_flow_id(*id)).await,
         }
     }
 
@@ -427,6 +437,14 @@ impl Engine for StromEngine {
 
     fn levels(&self) -> watch::Receiver<EngineLevels> {
         self.levels.subscribe()
+    }
+
+    fn flow_errors(&self) -> broadcast::Receiver<FlowError> {
+        self.errors.subscribe()
+    }
+
+    async fn output_running(&self, id: OutputId) -> bool {
+        matches!(self.get_flow(flows::output_flow_id(id)).await, Ok(Some(flow)) if flow.running)
     }
 
     /// Cameras, microphones and NDI sources, in that order.

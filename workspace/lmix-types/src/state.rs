@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::action::{Effect, TransitionSlot};
 use crate::input::{Input, InputId};
+use crate::output::Output;
 
 /// One transition button.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -29,6 +30,9 @@ pub struct ShowState {
     pub fade_to_black: bool,
     /// Mixer slots available for inputs.
     pub slots: usize,
+    /// Outputs in order (OUT).
+    #[serde(default)]
+    pub outputs: Vec<Output>,
 }
 
 /// Current API version (API.10: additive changes within one version).

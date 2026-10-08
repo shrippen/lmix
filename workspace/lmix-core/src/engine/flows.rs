@@ -19,7 +19,7 @@ use strom_types::{Flow, FlowId, PropertyValue};
 use uuid::Uuid;
 
 use lmix_types::input::color_rgb;
-use lmix_types::SourceSpec;
+use lmix_types::{OutputId, OutputSpec, SourceSpec};
 
 /// Namespace of all lmix flow ids.
 const FLOW_NAMESPACE: Uuid = Uuid::from_u128(0x6c6d_6978_2d63_6f72_652d_666c_6f77_7321);
@@ -28,6 +28,10 @@ const MEDIA_PLAYER_BLOCK: &str = "builtin.media_player";
 const SRT_INPUT_BLOCK: &str = "builtin.mpegtssrt_input";
 const LOCAL_INPUT_BLOCK: &str = "builtin.local_input";
 const NDI_INPUT_BLOCK: &str = "builtin.ndi_input";
+const NDI_OUTPUT_BLOCK: &str = "builtin.ndi_output";
+const SRT_OUTPUT_BLOCK: &str = "builtin.mpegtssrt_output";
+const RECORDER_BLOCK: &str = "builtin.recorder";
+const VIDEO_ENCODER_BLOCK: &str = "builtin.videoenc";
 const WHIP_INPUT_BLOCK: &str = "builtin.whip_input";
 const INTER_OUTPUT_BLOCK: &str = "builtin.inter_output";
 const INTER_INPUT_BLOCK: &str = "builtin.inter_input";
@@ -47,12 +51,21 @@ const SLOT_AUDIO_OUT: &str = "out_audio";
 const MONITOR_SINK: &str = "monitor_sink";
 /// Block id of the audio mixer in the mixer flow: one channel per slot.
 pub const AUDIO_MIXER: &str = "mix";
+/// Mixer flow name; a new layout gets a new name, so `start` rebuilds a
+/// running mixer of an older lmix instead of reusing it.
+pub const MIXER_NAME: &str = "lmix mixer 2";
 /// Block id of the vision mixer in the mixer flow.
 pub const MIXER_BLOCK: &str = "vm";
 /// Thumbnail tap on the program output: GUI monitor and picture checks.
 pub const PGM_TAP: &str = "tap_pgm";
-/// Real-time sink behind the program tap.
-const PGM_SINK: &str = "pgm_sink";
+/// Program picture and sound for the output flows (`inter`).
+const PGM_OUT: &str = "pgm_out";
+const PGM_AUDIO_OUT: &str = "pgm_audio_out";
+/// Outputs buffer a little more than the mixer: they are not on the
+/// switching path, an encoder hiccup must not drop frames.
+const OUTPUT_BUFFER_MS: &str = "500";
+/// Recording files: `<folder>/lmix_00001.mkv`, …
+const RECORDING_PREFIX: &str = "lmix";
 /// Thumbnail tap in every slot flow: input bar pictures and preview monitor.
 pub const SLOT_TAP: &str = "tap";
 /// Subscriber buffer of the mixer's inter inputs: low latency, some jitter
@@ -133,7 +146,7 @@ pub fn black_input(slots: usize) -> usize {
 
 /// Mixer: one inter input per slot, plus black, into the vision mixer.
 pub fn mixer_flow(slots: usize, backend: MixerBackend, monitor: MonitorOut) -> Flow {
-    let mut flow = Flow::new("lmix mixer");
+    let mut flow = Flow::new(MIXER_NAME);
     flow.id = mixer_id();
     share_timing(&mut flow);
 
@@ -197,21 +210,133 @@ pub fn mixer_flow(slots: usize, backend: MixerBackend, monitor: MonitorOut) -> F
         format!("{MIXER_BLOCK}:pgm_out"),
         format!("{PGM_TAP}:video_in"),
     ));
-    // An open tap output stalls the branch after the first frame; this sink
-    // consumes program until outputs (OUT) take its place. qos=false: strom
-    // drops upstream QoS at sinks with a probe that GStreamer 1.24 answers
-    // with a CRITICAL per frame.
-    flow.elements.push(element(
-        PGM_SINK,
-        "fakesink",
+    // Program for the outputs, each in its own flow (crash isolation): the
+    // inter sink also consumes program when no output listens, so the tap
+    // branch never stalls.
+    flow.blocks.push(block(PGM_OUT, INTER_OUTPUT_BLOCK, vec![]));
+    flow.links.push(link(
+        format!("{PGM_TAP}:video_out"),
+        format!("{PGM_OUT}:sink"),
+    ));
+    flow.blocks
+        .push(block(PGM_AUDIO_OUT, INTER_OUTPUT_BLOCK, vec![]));
+    flow.links.push(link(
+        format!("{AUDIO_MIXER}:main_out"),
+        format!("{PGM_AUDIO_OUT}:sink"),
+    ));
+    flow
+}
+
+/// `inter` channels of program in the mixer flow.
+fn pgm_channel(block: &str) -> String {
+    format!("strom_{}_{block}", mixer_id())
+}
+
+pub fn output_flow_id(id: OutputId) -> FlowId {
+    Uuid::new_v5(&FLOW_NAMESPACE, format!("output-{id}").as_bytes())
+}
+
+/// One output: program picture and sound from the mixer, encoded where
+/// the target needs it.
+///
+/// ```text
+///   SRT:    pgm ─► videoenc ─► srt:video_in      pgm_audio ─► srt:audio_in_0 (AAC inside)
+///   Record: pgm ─► videoenc ─► rec:video_in      pgm_audio ─► aac ─► rec:audio_in_0
+///   NDI:    pgm ─────────────► ndi:video_in      pgm_audio ─► ndi:audio_in
+/// ```
+pub fn output_flow(id: OutputId, spec: &OutputSpec) -> Flow {
+    let mut flow = Flow::new(format!("lmix output {id}"));
+    flow.id = output_flow_id(id);
+    share_timing(&mut flow);
+    // Stopping drains with EOS: recordings get their trailer (MP4 needs it).
+    flow.properties.eos_on_stop = Some(true);
+
+    for (block_id, channel) in [("pgm", PGM_OUT), ("pgm_audio", PGM_AUDIO_OUT)] {
+        flow.blocks.push(block(
+            block_id,
+            INTER_INPUT_BLOCK,
+            vec![
+                ("channel", PropertyValue::String(pgm_channel(channel))),
+                ("max_time", PropertyValue::String(OUTPUT_BUFFER_MS.into())),
+            ],
+        ));
+    }
+
+    match spec {
+        OutputSpec::Srt { uri, video_kbps } => {
+            add_encoder(&mut flow, *video_kbps);
+            flow.blocks.push(block(
+                "srt",
+                SRT_OUTPUT_BLOCK,
+                vec![
+                    ("srt_uri", PropertyValue::String(uri.clone())),
+                    ("auto_reconnect", PropertyValue::Bool(true)),
+                    ("wait_for_connection", PropertyValue::Bool(false)),
+                ],
+            ));
+            flow.links
+                .push(link("enc:encoded_out".into(), "srt:video_in".into()));
+            flow.links
+                .push(link("pgm_audio:src".into(), "srt:audio_in_0".into()));
+        }
+        OutputSpec::Record {
+            folder,
+            container,
+            video_kbps,
+        } => {
+            add_encoder(&mut flow, *video_kbps);
+            flow.elements.push(element("aconv", "audioconvert", vec![]));
+            flow.elements.push(element("aac", "avenc_aac", vec![]));
+            flow.elements.push(element("aacparse", "aacparse", vec![]));
+            flow.blocks.push(block(
+                "rec",
+                RECORDER_BLOCK,
+                vec![
+                    ("container", PropertyValue::String(container.nick().into())),
+                    ("output_dir", PropertyValue::String(folder.clone())),
+                    (
+                        "filename_prefix",
+                        PropertyValue::String(RECORDING_PREFIX.into()),
+                    ),
+                ],
+            ));
+            flow.links
+                .push(link("enc:encoded_out".into(), "rec:video_in_0".into()));
+            flow.links
+                .push(link("pgm_audio:src".into(), "aconv".into()));
+            flow.links.push(link("aconv".into(), "aac".into()));
+            flow.links.push(link("aac".into(), "aacparse".into()));
+            flow.links
+                .push(link("aacparse".into(), "rec:audio_in_0".into()));
+        }
+        OutputSpec::Ndi { name } => {
+            flow.blocks.push(block(
+                "ndi",
+                NDI_OUTPUT_BLOCK,
+                vec![("ndi_name", PropertyValue::String(name.clone()))],
+            ));
+            flow.links
+                .push(link("pgm:src".into(), "ndi:video_in".into()));
+            flow.links
+                .push(link("pgm_audio:src".into(), "ndi:audio_in".into()));
+        }
+    }
+    flow
+}
+
+/// H.264 from program: hardware when the engine has one, else software.
+fn add_encoder(flow: &mut Flow, video_kbps: u32) {
+    flow.blocks.push(block(
+        "enc",
+        VIDEO_ENCODER_BLOCK,
         vec![
-            ("sync", PropertyValue::Bool(false)),
-            ("qos", PropertyValue::Bool(false)),
+            ("codec", PropertyValue::String("h264".into())),
+            ("encoder_preference", PropertyValue::String("auto".into())),
+            ("bitrate", PropertyValue::UInt(u64::from(video_kbps))),
         ],
     ));
     flow.links
-        .push(link(format!("{PGM_TAP}:video_out"), PGM_SINK.into()));
-    flow
+        .push(link("pgm:src".into(), "enc:video_in".into()));
 }
 
 /// Sound of every slot into one audio mixer; its main mix is program
@@ -714,6 +839,51 @@ mod tests {
             .links
             .iter()
             .any(|l| l.from == "mix:monitor_out" && l.to == MONITOR_SINK));
+    }
+
+    #[test]
+    fn mixer_publishes_program_for_outputs() {
+        let flow = mixer_flow(2, MixerBackend::Cpu, MonitorOut::None);
+
+        assert!(flow
+            .links
+            .iter()
+            .any(|l| l.from == "tap_pgm:video_out" && l.to == "pgm_out:sink"));
+        assert!(flow
+            .links
+            .iter()
+            .any(|l| l.from == "mix:main_out" && l.to == "pgm_audio_out:sink"));
+    }
+
+    #[test]
+    fn recording_encodes_picture_and_sound() {
+        let spec = OutputSpec::Record {
+            folder: "show".into(),
+            container: lmix_types::Container::Mkv,
+            video_kbps: 8000,
+        };
+        let flow = output_flow(OutputId::new(), &spec);
+
+        let pgm = flow.blocks.iter().find(|b| b.id == "pgm").unwrap();
+        assert!(matches!(
+            pgm.properties.get("channel"),
+            Some(PropertyValue::String(c)) if *c == format!("strom_{}_pgm_out", mixer_id())
+        ));
+        assert!(flow
+            .links
+            .iter()
+            .any(|l| l.from == "enc:encoded_out" && l.to == "rec:video_in_0"));
+        assert!(flow
+            .links
+            .iter()
+            .any(|l| l.from == "aacparse" && l.to == "rec:audio_in_0"));
+    }
+
+    #[test]
+    fn output_flows_have_their_own_ids() {
+        let (a, b) = (OutputId::new(), OutputId::new());
+        assert_ne!(output_flow_id(a), output_flow_id(b));
+        assert_eq!(output_flow_id(a), output_flow_id(a));
     }
 
     #[test]

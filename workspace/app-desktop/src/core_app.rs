@@ -17,8 +17,9 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use lmix_types::{
-    Action, Device, DeviceKind, Effect, InputColor, InputId, InputRef, InputStatus, Levels, Listen,
-    ShowState, SignalLoss, SourceSpec, TestPattern, TransitionSlot, Transport,
+    Action, Container, Device, DeviceKind, Effect, InputColor, InputId, InputRef, InputStatus,
+    Levels, Listen, OutputRef, OutputSpec, OutputStatus, ShowState, SignalLoss, SourceSpec,
+    TestPattern, TransitionSlot, Transport,
 };
 
 use crate::core_client::{CoreClient, CoreMessage, FilePurpose, PictureTarget};
@@ -31,6 +32,7 @@ const TILE_WIDTH: f32 = 160.0;
 const TILE_STROKE: f32 = 3.0;
 const STATUS_DOT: f32 = 10.0;
 const COLOR_BAND: f32 = 4.0;
+const VIDEO_KBPS_RANGE: std::ops::RangeInclusive<u32> = 1000..=50000;
 const TRANSPORT_BUTTONS: [(Transport, &str, &str); 5] = [
     (Transport::Restart, "|◀", "Restart"),
     (Transport::Previous, "◀◀", "Previous item"),
@@ -278,6 +280,64 @@ pub struct CoreApp {
     levels: Levels,
     /// Volume slider value per input while it is dragged.
     volume_drag: HashMap<InputId, u8>,
+    new_output: OutputForm,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum OutputKind {
+    Srt,
+    Record,
+    Ndi,
+}
+
+impl OutputKind {
+    const ALL: [OutputKind; 3] = [Self::Srt, Self::Record, Self::Ndi];
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::Srt => "SRT stream",
+            Self::Record => "Recording",
+            Self::Ndi => "NDI",
+        }
+    }
+
+    fn hint(self) -> &'static str {
+        match self {
+            Self::Srt => "srt://host:9000",
+            Self::Record => "folder in the engine's media directory",
+            Self::Ndi => "NDI name, e.g. lmix PGM",
+        }
+    }
+}
+
+/// The "+ Output" form.
+struct OutputForm {
+    kind: OutputKind,
+    text: String,
+    container: Container,
+    video_kbps: u32,
+}
+
+impl OutputForm {
+    /// The output to add; `None` while the text field is empty.
+    fn spec(&self) -> Option<OutputSpec> {
+        let text = self.text.trim().to_string();
+        if text.is_empty() {
+            return None;
+        }
+        Some(match self.kind {
+            OutputKind::Srt => OutputSpec::Srt {
+                uri: text,
+                video_kbps: self.video_kbps,
+            },
+            OutputKind::Record => OutputSpec::Record {
+                folder: text,
+                container: self.container,
+                video_kbps: self.video_kbps,
+            },
+            OutputKind::Ndi => OutputSpec::Ndi { name: text },
+        })
+    }
 }
 
 impl CoreApp {
@@ -316,6 +376,12 @@ impl CoreApp {
             recent: Vec::new(),
             levels: Levels::default(),
             volume_drag: HashMap::new(),
+            new_output: OutputForm {
+                kind: OutputKind::Record,
+                text: String::new(),
+                container: Container::default(),
+                video_kbps: lmix_types::output::DEFAULT_VIDEO_KBPS,
+            },
         };
         app.refresh_lists();
         app
@@ -647,6 +713,95 @@ impl CoreApp {
             .map(|l| l.peak_db)
     }
 
+    /// Outputs like vMix's bottom bar: click starts or stops, right click
+    /// removes; "+ Output" adds one.
+    fn output_bar(&mut self, ui: &mut egui::Ui, state: &ShowState, actions: &mut Vec<Action>) {
+        // Running times tick even when nothing else changes.
+        if state
+            .outputs
+            .iter()
+            .any(|o| matches!(o.status, OutputStatus::Running { .. }))
+        {
+            ui.ctx()
+                .request_repaint_after(std::time::Duration::from_secs(1));
+        }
+        ui.horizontal_wrapped(|ui| {
+            ui.label("Outputs");
+            for output in &state.outputs {
+                let reference = OutputRef::Text(output.id.to_string());
+                let (fill, text, hint) = output_face(output);
+                let button =
+                    egui::Button::new(egui::RichText::new(text).color(egui::Color32::WHITE))
+                        .fill(fill);
+                let response = ui.add(button).on_hover_text(hint);
+                if response.clicked() {
+                    let running = matches!(output.status, OutputStatus::Running { .. });
+                    actions.push(match running {
+                        true => Action::StopOutput {
+                            output: reference.clone(),
+                        },
+                        false => Action::StartOutput {
+                            output: reference.clone(),
+                        },
+                    });
+                }
+                response.context_menu(|ui| {
+                    if ui.button("Remove").clicked() {
+                        actions.push(Action::RemoveOutput {
+                            output: reference.clone(),
+                        });
+                        ui.close();
+                    }
+                });
+            }
+            ui.menu_button("+ Output", |ui| self.output_form(ui, actions));
+        });
+    }
+
+    fn output_form(&mut self, ui: &mut egui::Ui, actions: &mut Vec<Action>) {
+        let form = &mut self.new_output;
+        egui::ComboBox::from_id_salt("output_kind")
+            .selected_text(form.kind.label())
+            .show_ui(ui, |ui| {
+                for kind in OutputKind::ALL {
+                    ui.selectable_value(&mut form.kind, kind, kind.label());
+                }
+            });
+        ui.add(
+            egui::TextEdit::singleline(&mut form.text)
+                .hint_text(form.kind.hint())
+                .desired_width(280.0),
+        );
+        if form.kind != OutputKind::Ndi {
+            ui.add(egui::Slider::new(&mut form.video_kbps, VIDEO_KBPS_RANGE).text("video kbit/s"));
+        }
+        if form.kind == OutputKind::Record {
+            egui::ComboBox::from_id_salt("output_container")
+                .selected_text(format!("{:?}", form.container))
+                .show_ui(ui, |ui| {
+                    for container in Container::ALL {
+                        ui.selectable_value(
+                            &mut form.container,
+                            container,
+                            format!("{container:?}"),
+                        );
+                    }
+                });
+        }
+        let spec = form.spec();
+        if ui
+            .add_enabled(spec.is_some(), egui::Button::new("Add"))
+            .clicked()
+        {
+            actions.push(Action::AddOutput {
+                spec: spec.expect("enabled only with a spec"),
+                name: None,
+            });
+            form.text.clear();
+            ui.close();
+        }
+    }
+
     fn add_row(&mut self, ui: &mut egui::Ui, state: &ShowState, actions: &mut Vec<Action>) {
         ui.horizontal(|ui| {
             ui.label("Add input");
@@ -808,7 +963,11 @@ impl eframe::App for CoreApp {
         };
 
         self.hotkeys(&ctx, &state, &mut actions);
-        egui::Panel::bottom("add").show_inside(ui, |ui| self.add_row(ui, &state, &mut actions));
+        egui::Panel::bottom("add").show_inside(ui, |ui| {
+            self.output_bar(ui, &state, &mut actions);
+            ui.separator();
+            self.add_row(ui, &state, &mut actions);
+        });
         egui::CentralPanel::default().show_inside(ui, |ui| {
             self.monitors(ui, &state, &mut actions);
             ui.separator();
@@ -998,6 +1157,38 @@ fn ingest_menu(ui: &mut egui::Ui, ingest: &lmix_types::Ingest) {
             });
         }
     });
+}
+
+/// Button color, text and hover text of an output.
+fn output_face(output: &lmix_types::Output) -> (egui::Color32, String, String) {
+    match &output.status {
+        OutputStatus::Stopped => (
+            IDLE_COLOR,
+            output.name.clone(),
+            "Stopped: click to start".into(),
+        ),
+        OutputStatus::Running { since_ms } => {
+            let text = format!("{} {}", output.name, running_time(*since_ms));
+            (PROGRAM_COLOR, text, "Running: click to stop".into())
+        }
+        OutputStatus::Failed { message } => {
+            let text = format!("! {}", output.name);
+            (
+                AFV_COLOR,
+                text,
+                format!("Failed: {message}\nClick to start again"),
+            )
+        }
+    }
+}
+
+/// `h:mm:ss` since `since_ms` (Unix ms).
+fn running_time(since_ms: u64) -> String {
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_millis() as u64);
+    let secs = now_ms.saturating_sub(since_ms) / 1000;
+    format!("{}:{:02}:{:02}", secs / 3600, secs / 60 % 60, secs % 60)
 }
 
 /// Picture area of an audio input: no picture, a label instead.
@@ -1214,6 +1405,7 @@ mod tests {
             transitions: Vec::new(),
             fade_to_black: false,
             slots: 4,
+            outputs: Vec::new(),
         }
     }
 
@@ -1225,6 +1417,36 @@ mod tests {
         assert_eq!(tally(&s, a), Tally::Preview);
         assert_eq!(tally(&s, b), Tally::Program);
         assert_eq!(tally(&s, c), Tally::Off);
+    }
+
+    #[test]
+    fn running_time_counts_hours_minutes_seconds() {
+        let now_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64;
+
+        assert_eq!(running_time(now_ms - 3_725_000), "1:02:05");
+    }
+
+    #[test]
+    fn output_form_needs_a_target() {
+        let mut form = OutputForm {
+            kind: OutputKind::Srt,
+            text: " ".into(),
+            container: Container::Mkv,
+            video_kbps: 6000,
+        };
+        assert_eq!(form.spec(), None);
+
+        form.text = "srt://cdn:9000".into();
+        assert!(matches!(
+            form.spec(),
+            Some(OutputSpec::Srt {
+                video_kbps: 6000,
+                ..
+            })
+        ));
     }
 
     #[test]

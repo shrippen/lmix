@@ -62,7 +62,7 @@ STROM_BIN="$("$ROOT/scripts/fetch-strom.sh")"
 CORE_BIN="${CARGO_TARGET_DIR:-$ROOT/workspace/lmix-core/target}/debug/lmix-core"
 
 # --- start ---
-(cd "$WORK" && exec "$STROM_BIN" --host 127.0.0.1 --port "$STROM_PORT" --no-auto-restart >"$WORK/strom.log" 2>&1) &
+(cd "$WORK" && exec "$STROM_BIN" --host 127.0.0.1 --port "$STROM_PORT" --no-auto-restart --data-dir "$WORK/strom-data" >"$WORK/strom.log" 2>&1) &
 PIDS+=($!)
 wait_up "$STROM/health" strom
 
@@ -94,7 +94,7 @@ sleep 1
 [[ "$(curl -sf "$CORE/tally")" == "[2,1]" ]] || fail "tally $(curl -sf "$CORE/tally")"
 pass "preview, cut, fade; tally"
 
-MIXER_ID="$(curl -sf "$STROM/api/flows" | jq -r '.flows[] | select(.name=="lmix mixer") | .id')"
+MIXER_ID="$(curl -sf "$STROM/api/flows" | jq -r '.flows[] | select(.name | startswith("lmix mixer")) | .id')"
 # Pictures through lmix-core (503 until the tap has a frame; the first
 # request switches it on).
 picture() {
@@ -261,6 +261,26 @@ act '{"action":"set_signal_loss","input":"Clips","mode":"hold"}' >/dev/null
 act '{"action":"transport_input","input":"Clips","transport":"play"}' >/dev/null
 pass "signal loss: paused clip held on program, black when set"
 
+# --- outputs (M3): recording and SRT, each in its own flow ---
+# MP4: unreadable unless the stop drained the recorder with EOS.
+act '{"action":"add_output","spec":{"kind":"record","folder":"rec","container":"mp4"},"name":"Rec"}' >/dev/null
+act '{"action":"add_output","spec":{"kind":"srt","uri":"srt://:9911?mode=listener"},"name":"Stream"}' >/dev/null
+act '{"action":"start_output","output":"Rec"}' >/dev/null
+act '{"action":"start_output","output":"Stream"}' >/dev/null
+output_state() { curl -sf "$CORE/state" | jq -r ".outputs[] | select(.name==\"$1\") | .status.state"; }
+[[ "$(output_state Rec)" == running && "$(output_state Stream)" == running ]] || fail "outputs not running"
+timeout 5 gst-launch-1.0 -q srtsrc uri="srt://127.0.0.1:9911" ! filesink location="$WORK/srt.ts" || true
+[[ $(stat -c %s "$WORK/srt.ts" 2>/dev/null || echo 0) -gt 50000 ]] || fail "SRT output delivered nothing"
+act '{"action":"stop_output","output":"Rec"}' >/dev/null
+sleep 2
+[[ "$(output_state Rec)" == stopped ]] || fail "recording did not stop"
+recording="$(find "$WORK/strom-data" -path '*rec/*' -name '*.mp4' | head -1)"
+[[ -n "$recording" ]] || fail "no recording file"
+streams="$(timeout 20 gst-launch-1.0 -v filesrc location="$recording" ! qtdemux name=d \
+    d.video_0 ! queue ! fakesink d.audio_0 ! queue ! fakesink 2>&1 | grep -oE 'caps = (video/x-h264|audio/mpeg)' | sort -u | wc -l)"
+[[ "$streams" == 2 ]] || fail "recording lacks H.264 or AAC"
+pass "outputs: recording (H.264 + AAC, finalized MP4), SRT stream received, start/stop"
+
 # --- input color, device list ---
 act '{"action":"set_input_color","input":"Ball","color":"teal"}' >/dev/null
 [[ "$(curl -sf "$CORE/state" | jq -r '.inputs[1].color')" == teal ]] || fail "color not set"
@@ -278,6 +298,7 @@ if [[ -n "${CONSOLE_SHOT:-}" ]]; then
     PIDS+=($!)
     sleep "${CONSOLE_WAIT:-8}"
     act '{"action":"set_listen","input":"Bars","listen":"pfl"}' >/dev/null   # show a solo
+    act '{"action":"start_output","output":"Stream"}' >/dev/null           # and a running output
     sleep 2
     DISPLAY=:93 import -window root "$CONSOLE_SHOT"
     act '{"action":"clear_listen"}' >/dev/null
@@ -295,6 +316,11 @@ state="$(curl -sf "$CORE/state")"
 [[ "$(jq '.inputs | length' <<<"$state")" == 6 ]] || fail "show not restored: $state"
 pass "show saved, cleared, reopened"
 
+# An output running across the crash below must be adopted, not restarted.
+act '{"action":"start_output","output":"Stream"}' >/dev/null
+output_starts() { grep -c "Starting pipeline: lmix output" "$WORK/strom.log" || true; }
+starts_before="$(output_starts)"
+
 # --- crash of lmix-core: engine keeps running, show comes back ---
 kill -9 "$CORE_PID"
 sleep 1
@@ -304,7 +330,12 @@ start_core
 sleep 2
 [[ "$(curl -sf "$CORE/state" | jq '.inputs | length')" == 6 ]] || fail "autosave not resumed"
 [[ "$(curl -sf "$CORE/state" | jq '.inputs[1].audio.volume')" == 50 ]] || fail "audio settings not resumed"
-pass "lmix-core killed and restarted: mixer kept running, show resumed"
+sleep 2
+[[ "$(output_state Stream)" == running ]] || fail "running output not adopted after lmix-core restart"
+[[ "$(curl -sf "$STROM/api/flows" | jq '[.flows[] | select(.name | startswith("lmix output"))] | length')" == 1 ]] \
+    || fail "output flow duplicated"
+[[ "$(output_starts)" == "$starts_before" ]] || fail "output restarted instead of adopted"
+pass "lmix-core killed and restarted: mixer kept running, show resumed, output adopted"
 
 criticals="$(grep -c 'GStreamer-CRITICAL' "$WORK/strom.log" || true)"
 [[ "$criticals" == 0 ]] || fail "$criticals GStreamer CRITICALs in strom.log"

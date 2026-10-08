@@ -254,6 +254,16 @@ GPU-Punkte in `HARDWARE-TODO.md`):
 | 3.4 | Failover, Latenz-CI (wie `claude.md`) | C |
 | 3.5 | GUI-Shell-Entscheidung egui vs. Qt/Tauri — Kriterien jetzt: Video-Textur-Performance (1.1, GPU-Decode direkt in Textur), Multi-Display (3.3), Dichte der Input-Leiste (2b.2), Kante-Anbindung mit Kante Light und Breeze-Rückfall (`agent.md`, GUI-Regel) | — |
 
+**Stand 2026-10-08** (Branch `m3`):
+
+| # | Stand |
+|---|---|
+| 3.1 | ✅ Ausgänge SRT, Aufnahme (MKV/MP4/TS), NDI als eigene Flows; Start/Stopp, Status mit Laufzeit und Fehler; ⚠ Bitrate/Drops fehlen, RTMP wartet auf strom #771, OMT ohne strom-Block |
+| 3.2 | ⬜ MultiCorder |
+| 3.3 | ⬜ Vollbild-Ausgang |
+| 3.4 | ⬜ Failover, Latenz-CI |
+| 3.5 | ⬜ GUI-Shell-Entscheidung |
+
 ### M4 — Produktionswerkzeuge (wie geplant, erweitert)
 
 | # | Punkt | Ort |

@@ -11,11 +11,13 @@
 
 pub mod action;
 pub mod input;
+pub mod output;
 pub mod state;
 
 pub use action::{Action, ActionError, Effect, TransitionSlot};
 pub use input::{
-    Device, DeviceKind, Ingest, Input, InputAudio, InputColor, InputId, InputRef, InputStatus, Listen,
-    SignalLoss, SourceSpec, TestPattern, Transport,
+    Device, DeviceKind, Ingest, Input, InputAudio, InputColor, InputId, InputRef, InputStatus,
+    Listen, SignalLoss, SourceSpec, TestPattern, Transport,
 };
+pub use output::{Container, Output, OutputId, OutputRef, OutputSpec, OutputStatus};
 pub use state::{Event, InputLevel, Levels, ShowState, Transition};

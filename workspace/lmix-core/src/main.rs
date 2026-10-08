@@ -131,6 +131,7 @@ async fn main() -> anyhow::Result<()> {
     // The engine may come up after us: keep trying, then feed it the show.
     tokio::spawn(connect(engine, service.clone(), args.slots));
     tokio::spawn(service.clone().forward_levels());
+    tokio::spawn(service.clone().watch_output_errors());
 
     let listener = tokio::net::TcpListener::bind(args.listen)
         .await
@@ -161,4 +162,8 @@ async fn connect(engine: Arc<dyn Engine>, service: Arc<Service>, slots: usize) {
     if let Err(e) = service.restore().await {
         tracing::error!(error = %e, "restoring show to engine failed");
     }
+    // After restore: it restarts outputs lmix-core knew as running (engine
+    // restarted); outputs that kept running while lmix-core was gone are
+    // only adopted, never restarted (no gap in a recording).
+    service.adopt_running_outputs().await;
 }

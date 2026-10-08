@@ -48,4 +48,11 @@ pub trait Engine: Send + Sync {
 
     /// Audio levels, updated as the engine measures them.
     fn levels(&self) -> tokio::sync::watch::Receiver<meters::EngineLevels>;
+
+    /// Errors of running flows (outputs failing).
+    fn flow_errors(&self) -> tokio::sync::broadcast::Receiver<meters::FlowError>;
+
+    /// Whether output `id` runs in the engine (lmix-core restarted while
+    /// it kept streaming or recording).
+    async fn output_running(&self, id: lmix_types::OutputId) -> bool;
 }

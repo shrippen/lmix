@@ -566,3 +566,27 @@ Meilenstein-Ende hinaus). Jeder Zwischenstand wird automatisch gepusht und
 als PR hinterlegt: ein Branch je Meilenstein, auf dem vorigen aufgesetzt
 (`lastenheft` ← `m2b` ← `m3` …), PR mit Basis auf den Vorgänger-Branch.
 Abnahme später gesammelt auf der Zielhardware (`HARDWARE-TODO.md`).
+
+## 2026-10-08 — M3 Schritt 1: Ausgänge (3.1)
+
+**Aufbau**: Der Mischer-Flow veröffentlicht Programmbild und -ton auf
+`inter` (`pgm_out`, `pgm_audio_out`). Jeder Ausgang ist ein eigener
+strom-Flow (feste ID je Ausgang): ein abstürzender oder neu gestarteter
+Ausgang berührt den Mischer nicht (Crash-Isolation, 3.3-Prinzip).
+- SRT: H.264 (`videoenc`, Hardware zuerst, sonst Software) + AAC in
+  MPEG-TS, Wiederverbinden an.
+- Aufnahme: H.264 + AAC in MKV (Standard, übersteht Absturz), MP4 oder TS,
+  im Medienverzeichnis der Engine.
+- NDI: unkomprimiert (NDI-SDK nötig).
+**Bedienung**: Ausgänge stehen in der Show-Datei, laufen aber erst auf
+Start (wie vMix). Status je Ausgang: gestoppt, läuft (seit), Fehler (mit
+Meldung aus den Pipeline-Fehlern von strom).
+**Robustheit**: Ein Neustart von strom startet laufende Ausgänge neu; ein
+Neustart von `lmix-core` übernimmt Ausgänge, die in strom weiterlaufen,
+ohne sie neu zu starten (keine Lücke in einer Aufnahme).
+**strom-Patch** `eos_on_stop` (Flow-Eigenschaft, Standard aus): Stoppen
+schickt EOS und wartet höchstens 5 s, damit Muxer ihre Datei abschließen.
+Vorher war eine MP4-Aufnahme nach dem Stopp unlesbar.
+**Mischer-Layout**: Der Flow heißt jetzt "lmix mixer 2"; ein laufender
+Mischer eines älteren Layouts wird beim Start neu gebaut statt
+übernommen.

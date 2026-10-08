@@ -313,3 +313,19 @@ kopieren lassen. Sonst keine neuen Lücken für M2b.
 Browser); die Console zeigt sie im Kachel-Menü "Send to this input" mit
 Kopierknopf. Die Adresse, unter der Sender die Engine erreichen, setzt
 `--public-url` (Standard: die `--strom`-Adresse).
+
+---
+
+## Durchlauf 6: M3 Schritt 1, Ausgänge (2026-10-08, VM-Test + Console)
+
+| Persona | Schritt | Ergebnis |
+|---|---|---|
+| P1 Ehrenamt | Gottesdienst streamen und aufnehmen | ✅ zwei Knöpfe unten, Laufzeit sichtbar; ⚠ RTMP (YouTube) fehlt, nur SRT (B31) |
+| P2 Konferenz | Aufnahme je Raum in eigenen Ordner | ✅ Ordner je Aufnahme-Ausgang |
+| P4 Streamer | Stream bricht ab, merkt es sofort | ✅ Ausgang wird orange mit Meldung; ⚠ keine Bitrate/Drops (B32) |
+| P5 Broadcast | Steuerung neu gestartet während Sendung | ✅ Stream und Aufnahme laufen weiter und werden übernommen |
+| P6 Hörsaal | Aufnahme als MP4 für das Lernportal | ✅ MP4, sauber abgeschlossen beim Stopp |
+| P7 Theater | Programm per NDI an die Projektion | ✅ NDI-Ausgang; ⚠ nur mit NDI-SDK (H.19) |
+
+**Befunde**: B31 RTMP-Ausgang für YouTube/Twitch (strom #771 abwarten
+oder eigener Block); B32 Bitrate und verlorene Pakete je Ausgang anzeigen.

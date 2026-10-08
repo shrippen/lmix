@@ -14,10 +14,12 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use lmix_types::{
-    Action, ActionError, Event, InputLevel, InputRef, InputStatus, Levels, ShowState, SignalLoss,
+    Action, ActionError, Event, InputLevel, InputRef, InputStatus, Levels, OutputStatus, ShowState,
+    SignalLoss,
 };
 use tokio::sync::{broadcast, Mutex};
 
+use crate::engine::flows::output_flow_id;
 use crate::engine::{meters, Engine, EngineError, Picture};
 use crate::recent::Recent;
 use crate::show::{self, Show};
@@ -153,6 +155,55 @@ impl Service {
         }
     }
 
+    /// Outputs still running in the engine after lmix-core restarted count
+    /// as running again (their start time is unknown: now).
+    pub async fn adopt_running_outputs(&self) {
+        let ids = self.switcher.lock().await.output_ids();
+        let mut running = Vec::new();
+        for id in ids {
+            if self.engine.output_running(id).await {
+                running.push(id);
+            }
+        }
+        if running.is_empty() {
+            return;
+        }
+        let mut sw = self.switcher.lock().await;
+        for id in running {
+            sw.set_output_status(id, OutputStatus::Running { since_ms: now_ms() });
+        }
+        self.publish(&sw);
+    }
+
+    /// Mark outputs whose flow failed in the engine; runs for the process
+    /// life.
+    pub async fn watch_output_errors(self: Arc<Self>) {
+        let mut errors = self.engine.flow_errors();
+        loop {
+            let error = match errors.recv().await {
+                Ok(error) => error,
+                Err(broadcast::error::RecvError::Lagged(_)) => continue,
+                Err(broadcast::error::RecvError::Closed) => return,
+            };
+            let mut sw = self.switcher.lock().await;
+            let failed = sw
+                .output_ids()
+                .into_iter()
+                .find(|id| output_flow_id(*id) == error.flow);
+            let Some(id) = failed else {
+                continue;
+            };
+            tracing::warn!(output = %id, message = %error.message, "output failed");
+            sw.set_output_status(
+                id,
+                OutputStatus::Failed {
+                    message: error.message,
+                },
+            );
+            self.publish(&sw);
+        }
+    }
+
     /// Publish levels while the engine measures; runs for the process life.
     pub async fn forward_levels(self: Arc<Self>) {
         let mut readings = self.engine.levels();
@@ -233,6 +284,7 @@ impl Service {
             }
             let outcome = self.engine.run(command).await;
             mark_slot(sw, command, outcome.is_ok());
+            mark_output(sw, command, &outcome);
 
             let Err(e) = outcome else {
                 continue;
@@ -258,6 +310,30 @@ impl Service {
         let _ = self.events.send(Event::State { state: sw.state() });
         let _ = self.events.send(Event::Tally { tally: sw.tally() });
     }
+}
+
+/// Reflect a start or stop in the output's status.
+fn mark_output(sw: &mut Switcher, command: &Command, outcome: &Result<(), EngineError>) {
+    let (id, status) = match (command, outcome) {
+        (Command::StartOutput { id, .. }, Ok(())) => {
+            (*id, OutputStatus::Running { since_ms: now_ms() })
+        }
+        (Command::StopOutput { id }, Ok(())) => (*id, OutputStatus::Stopped),
+        (Command::StartOutput { id, .. } | Command::StopOutput { id }, Err(e)) => (
+            *id,
+            OutputStatus::Failed {
+                message: e.to_string(),
+            },
+        ),
+        _ => return,
+    };
+    sw.set_output_status(id, status);
+}
+
+fn now_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_millis() as u64)
 }
 
 /// Reflect a `SetSlot` outcome in the input's status.
