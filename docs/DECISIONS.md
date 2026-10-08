@@ -394,3 +394,17 @@ nicht. Kandidaten, wenn es umgesetzt wird:
 - Oder je Eingang ein kleiner Vorschau-Stream in Videorate.
 Vorher messen: Kosten pro Eingang (Encode/Decode, Latenz) gegen das
 Leitprinzip "max. Inputs @ Budget".
+
+## 2026-10-08 — Lastenheft: Clean-Room-Ziel, CasparCG, GPL
+
+**Kontext**: Ziel ist eine Clean-Room-Reimplementierung von vMix
+(`docs/LASTENHEFT.md`, Grundlage vMix-Handbuch 29).
+**Entscheidungen** (User, über die Entscheidungsseite, Details
+`LASTENHEFT.md` §6): eigene API mindestens auf vMix-Niveau, Kompatibilität
+optional; `lmix-core` als eigener Prozess; Titel HTML über komplette
+CasparCG-Integration; Wiederholung und Gäste später; Ausschlüsse
+Control-Surfaces/4K aufgehoben; Skripte in JavaScript; Submixe wie vMix.
+**Lizenz**: GPL ist okay. `claude.md` Entscheidung 6 geändert:
+GPL-3.0-or-later-verträgliche Abhängigkeiten erlaubt; lmix wird
+GPL-3.0-or-later, sobald GPL-Code ins Repo kommt; NDI nur zur Laufzeit
+laden. CasparCG bleibt eigener Prozess (Crash-Isolation, NFA.6).

@@ -38,7 +38,16 @@ mindestens leisten muss. Nur als Anforderungsreferenz gelesen, kein Code
 | Tally-Software, z. B. Tally Arbiter <https://github.com/josephdadams/TallyArbiter> | Tally-Abo, Inputnummer/-name | Schlanker Ereigniskanal, auch für Mikrocontroller |
 | Skript-Bibliotheken, z. B. vmix-js-utils <https://github.com/jensstigaard/vmix-js-utils> | Zustand lesen, Aktionen senden | Dokumentiertes, versioniertes Schema (API.10) |
 
-## 3. Nicht im Handbuch 29, an echter Installation zu klären
+## 3. CasparCG (T.1)
+
+| Quelle | Inhalt |
+|---|---|
+| <https://github.com/CasparCG/server> | GPL-3.0; Windows und Linux (Ubuntu 24.04 empfohlen) |
+| <https://casparcg.com/docs/wiki/server/consumers/ndi-consumer> | NDI-Consumer seit 2.3 |
+| <https://casparcg.com/docs/wiki/server/producers/> | Producer, u. a. HTML (CEF) |
+| <https://github.com/CasparCG/server/releases> | 2.4.0 stabil; 2.5 in Arbeit |
+
+## 4. Nicht im Handbuch 29, an echter Installation zu klären
 
 1. Vollständiges aktuelles XML-Zustandsschema (nur für den optionalen Kompatibilitätsmodus API.8).
 2. Vollständige Liste der Übergangseffekte (Handbuch nennt sie nur im Überblick).

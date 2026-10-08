@@ -24,9 +24,12 @@ Kommuniziere auf Deutsch, Code/Commits auf Englisch.
    Adapter-Repo (omtpw-bridge: OMT-Receive → NDI- oder SRT-Out → bestehender
    NDI/SRT-Block). Entscheidung erst in M2 nach Aufwand-Vergleich.
    HARD CONSTRAINT: Das OMT-Protokoll wird NICHT neu implementiert, immer gegen libomt.
-6. Lizenzkompatibilität: Projekt muss MIT-kompatibel bleiben (kommerzielle Nutzung
-   möglich). Kein GPL-Code (weder 2 noch 3) in das Repo. Jede neue Abhängigkeit
-   prifen, Lizenz in der Commit-Meldung dokumentieren.
+6. Lizenzkompatibilität (geändert 2026-10-08, `docs/LASTENHEFT.md` E.12): GPL-3.0
+   ist erlaubt (wegen CasparCG). Abhängigkeiten müssen mit GPL-3.0-or-later
+   vereinbar sein (MIT, Apache-2.0, BSD, LGPL, MPL, GPL-3). Sobald GPL-Code ins
+   Repo kommt, wird lmix GPL-3.0-or-later. Proprietäre SDKs (NDI) nur zur
+   Laufzeit dynamisch laden, nie mitliefern. Jede neue Abhängigkeit prüfen,
+   Lizenz in der Commit-Meldung dokumentieren.
 
 ## Repo-Struktur
 workspace/
