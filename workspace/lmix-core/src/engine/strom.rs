@@ -14,14 +14,16 @@
 //! | `Transport` | slot's media player: play, pause, seek 0, next, previous |
 
 use async_trait::async_trait;
-use lmix_types::{Device, DeviceKind, Effect, Listen, OutputId, SignalLoss, Transport};
+use lmix_types::{
+    Device, DeviceKind, Effect, Listen, OutputId, OutputStats, SignalLoss, Transport,
+};
 use reqwest::StatusCode;
 use serde::Serialize;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::Duration;
 use strom_types::api::{
-    FadeToBlackRequest, SelectPreviewRequest, TriggerTransitionRequest,
-    UpdateBlockPropertiesRequest, VisionMixerState,
+    FadeToBlackRequest, SelectPreviewRequest, SrtRole, SrtStats, SrtStatsResponse,
+    TriggerTransitionRequest, UpdateBlockPropertiesRequest, VisionMixerState,
 };
 use strom_types::discovery::DeviceResponse;
 use strom_types::vision_mixer::Source;
@@ -473,6 +475,15 @@ impl Engine for StromEngine {
         matches!(self.get_flow(flows::output_flow_id(id)).await, Ok(Some(flow)) if flow.running)
     }
 
+    /// SRT sender statistics of the output's flow, summed over its
+    /// receivers (a listener may serve several).
+    async fn output_stats(&self, id: OutputId) -> Option<OutputStats> {
+        let path = format!("/flows/{}/srt-stats", flows::output_flow_id(id));
+        let resp = self.http.get(self.url(&path)).send().await.ok()?;
+        let stats: SrtStatsResponse = check(resp).await.ok()?.json().await.ok()?;
+        Some(sender_stats(id, &stats.stats))
+    }
+
     /// Cameras, microphones and NDI sources, in that order.
     async fn devices(&self) -> Result<Vec<Device>, EngineError> {
         let mut devices = Vec::new();
@@ -488,6 +499,32 @@ impl Engine for StromEngine {
             }));
         }
         Ok(devices)
+    }
+}
+
+/// One output's view of strom's SRT statistics.
+fn sender_stats(id: OutputId, stats: &SrtStats) -> OutputStats {
+    let callers: Vec<_> = stats
+        .connections
+        .values()
+        .filter(|c| c.role == SrtRole::Sink)
+        .flat_map(|c| &c.callers)
+        .collect();
+    let rate_mbps: f64 = callers.iter().filter_map(|c| c.send_rate_mbps).sum();
+    OutputStats {
+        output: id,
+        connected: stats
+            .connections
+            .values()
+            .any(|c| c.role == SrtRole::Sink && c.connected),
+        kbps: (rate_mbps * 1000.0).round() as u32,
+        packets_lost: callers.iter().filter_map(|c| c.packets_sent_lost).sum(),
+        packets_dropped: callers.iter().filter_map(|c| c.packets_sent_dropped).sum(),
+        rtt_ms: callers
+            .iter()
+            .filter_map(|c| c.rtt_ms)
+            .reduce(f64::max)
+            .map(|ms| ms.round() as u32),
     }
 }
 
@@ -527,4 +564,66 @@ async fn check(resp: reqwest::Response) -> Result<reqwest::Response, EngineError
     let status = resp.status();
     let body = resp.text().await.unwrap_or_default();
     Err(EngineError::Refused(format!("{status}: {body}")))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use strom_types::api::{SrtCallerStats, SrtConnectionStats};
+
+    fn caller(rate_mbps: f64, lost: u64, rtt_ms: f64) -> SrtCallerStats {
+        SrtCallerStats {
+            send_rate_mbps: Some(rate_mbps),
+            packets_sent_lost: Some(lost),
+            packets_sent_dropped: Some(1),
+            rtt_ms: Some(rtt_ms),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn sender_stats_sum_receivers_and_ignore_inputs() {
+        let sink = SrtConnectionStats {
+            role: SrtRole::Sink,
+            connected: true,
+            callers: vec![caller(4.0, 2, 12.4), caller(2.5, 3, 30.6)],
+            ..Default::default()
+        };
+        let source = SrtConnectionStats {
+            role: SrtRole::Source,
+            connected: true,
+            callers: vec![caller(9.0, 100, 99.0)],
+            ..Default::default()
+        };
+        let stats = SrtStats {
+            connections: [("srt:srtsink".into(), sink), ("in:srtsrc".into(), source)].into(),
+        };
+        let id = OutputId::new();
+
+        let out = sender_stats(id, &stats);
+
+        assert_eq!(
+            out,
+            OutputStats {
+                output: id,
+                connected: true,
+                kbps: 6500,
+                packets_lost: 5,
+                packets_dropped: 2,
+                rtt_ms: Some(31),
+            }
+        );
+    }
+
+    #[test]
+    fn sender_stats_without_receiver() {
+        let stats = SrtStats {
+            connections: [("srt:srtsink".into(), SrtConnectionStats::default())].into(),
+        };
+
+        let out = sender_stats(OutputId::new(), &stats);
+
+        assert!(!out.connected);
+        assert_eq!((out.kbps, out.rtt_ms), (0, None));
+    }
 }

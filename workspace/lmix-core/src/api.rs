@@ -9,6 +9,7 @@
 //! | `POST /api/latency/measure?seconds=N` | measure capture-to-program latency for N s (default 10) |
 //! | `GET /api/latency` | latest latency statistics (NFA.3) |
 //! | `GET /api/audio/levels` | audio levels per input and of program (dBFS) |
+//! | `GET /api/outputs/stats` | link health of running SRT outputs (rate, lost, dropped, RTT) |
 //! | `GET /api/shows/recent` | recently opened or saved show files, newest first |
 //! | `GET /api/devices` | capture devices for `SourceSpec::Device` |
 //! | `GET /api/pictures/program` | program picture, JPEG |
@@ -42,6 +43,7 @@ pub fn router(service: Arc<Service>) -> Router {
         .route("/api/actions", get(catalog).post(action))
         .route("/api/events", get(events))
         .route("/api/audio/levels", get(levels))
+        .route("/api/outputs/stats", get(output_stats))
         .route("/api/latency", get(latency))
         .route("/api/latency/measure", post(measure_latency))
         .route("/api/shows/recent", get(recent))
@@ -84,6 +86,10 @@ async fn measure_latency(
         Ok(()) => StatusCode::ACCEPTED.into_response(),
         Err(error) => (StatusCode::BAD_GATEWAY, error.to_string()).into_response(),
     }
+}
+
+async fn output_stats(State(service): State<Arc<Service>>) -> impl IntoResponse {
+    Json(service.output_stats())
 }
 
 async fn levels(State(service): State<Arc<Service>>) -> impl IntoResponse {

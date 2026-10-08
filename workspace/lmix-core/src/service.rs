@@ -16,7 +16,7 @@ use std::time::Instant;
 
 use lmix_types::{
     Action, ActionError, Event, InputLevel, InputRef, InputStatus, Latency, Levels, OutputId,
-    OutputStatus, ShowState, SignalLoss,
+    OutputSpec, OutputStats, OutputStatus, ShowState, SignalLoss,
 };
 use strom_types::FlowId;
 use tokio::sync::{broadcast, Mutex};
@@ -39,6 +39,8 @@ const FAILBACK_MAX: std::time::Duration = std::time::Duration::from_secs(10);
 const EVENT_BUFFER: usize = 256;
 /// At most this often a `Levels` event (strom measures every 100 ms).
 const LEVELS_INTERVAL: std::time::Duration = std::time::Duration::from_millis(100);
+/// How often network outputs report their link health.
+const OUTPUT_STATS_INTERVAL: std::time::Duration = std::time::Duration::from_secs(1);
 /// Silence: also stands in for "no reading" (JSON has no infinity).
 pub const LEVEL_FLOOR_DB: f32 = -100.0;
 
@@ -56,6 +58,8 @@ pub struct Service {
     touched: std::sync::Mutex<HashMap<FlowId, Instant>>,
     /// Slots with a failback running.
     failing_back: std::sync::Mutex<HashSet<FlowId>>,
+    /// Latest link health of the running network outputs.
+    output_stats: std::sync::Mutex<Vec<OutputStats>>,
 }
 
 impl Service {
@@ -69,6 +73,7 @@ impl Service {
             pictures: std::sync::Mutex::new(HashMap::new()),
             touched: std::sync::Mutex::new(HashMap::new()),
             failing_back: std::sync::Mutex::new(HashSet::new()),
+            output_stats: std::sync::Mutex::new(Vec::new()),
             autosave,
         })
     }
@@ -339,6 +344,42 @@ impl Service {
             let _ = self.events.send(Event::Levels { levels });
             tokio::time::sleep(LEVELS_INTERVAL).await;
         }
+    }
+
+    /// Publish the link health of running SRT outputs once a second;
+    /// runs for the process life.
+    pub async fn forward_output_stats(self: Arc<Self>) {
+        loop {
+            tokio::time::sleep(OUTPUT_STATS_INTERVAL).await;
+            let running: Vec<OutputId> = {
+                let sw = self.switcher.lock().await;
+                sw.show()
+                    .outputs
+                    .iter()
+                    .filter(|o| matches!(o.spec, OutputSpec::Srt { .. }))
+                    .filter(|o| sw.output_is_running(o.id))
+                    .map(|o| o.id)
+                    .collect()
+            };
+            let mut stats = Vec::with_capacity(running.len());
+            for id in running {
+                stats.extend(self.engine.output_stats(id).await);
+            }
+            let unchanged = {
+                let mut last = self.output_stats.lock().expect("output stats lock");
+                let unchanged = stats.is_empty() && last.is_empty();
+                *last = stats.clone();
+                unchanged
+            };
+            if !unchanged {
+                let _ = self.events.send(Event::Outputs { stats });
+            }
+        }
+    }
+
+    /// Latest link health of the running network outputs.
+    pub fn output_stats(&self) -> Vec<OutputStats> {
+        self.output_stats.lock().expect("output stats lock").clone()
     }
 
     pub async fn measure_latency(&self, seconds: u32) -> Result<(), EngineError> {

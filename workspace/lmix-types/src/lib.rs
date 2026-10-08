@@ -20,6 +20,6 @@ pub use input::{
     Listen, SignalLoss, SourceSpec, TestPattern, Transport,
 };
 pub use output::{
-    Container, DisplayMode, Output, OutputId, OutputRef, OutputSource, OutputSpec, OutputStatus,
+    Container, DisplayMode, Output, OutputId, OutputRef, OutputSource, OutputSpec, OutputStats, OutputStatus,
 };
 pub use state::{Event, InputLevel, Latency, Levels, ShowState, Transition};

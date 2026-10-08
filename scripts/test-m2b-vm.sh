@@ -195,6 +195,13 @@ for clip in "a ball 330" "b smpte 660"; do
         audiotestsrc num-buffers=470 freq="$3" volume=0.2 ! audioconvert ! avenc_aac ! aacparse ! m.
 done
 rgb() { convert "$1" -format "%[fx:int(mean.$2*255)]" info:; }
+# is <state function> <name> <state>: evaluated anew on every try.
+is() { [[ "$("$1" "$2")" == "$3" ]]; }
+wait_for() {   # wait_for <seconds> <command…>: until the command succeeds
+    local seconds="$1"; shift
+    for _ in $(seq 1 "$((seconds * 2))"); do "$@" && return 0; sleep 0.5; done
+    return 1
+}
 
 act '{"action":"add_input","source":{"kind":"color","color":"#ff8000"},"name":"Orange"}' >/dev/null
 act "{\"action\":\"add_input\",\"source\":{\"kind\":\"image\",\"path\":\"$MEDIA/logo.png\"},\"name\":\"Logo\"}" >/dev/null
@@ -278,7 +285,12 @@ act '{"action":"start_output","output":"Rec"}' >/dev/null
 act '{"action":"start_output","output":"Stream"}' >/dev/null
 output_state() { curl -sf "$CORE/state" | jq -r ".outputs[] | select(.name==\"$1\") | .status.state"; }
 [[ "$(output_state Rec)" == running && "$(output_state Stream)" == running ]] || fail "outputs not running"
-timeout 5 gst-launch-1.0 -q srtsrc uri="srt://127.0.0.1:9911" ! filesink location="$WORK/srt.ts" || true
+timeout 5 gst-launch-1.0 -q srtsrc uri="srt://127.0.0.1:9911" ! filesink location="$WORK/srt.ts" &
+receiver=$!
+# Link health while the receiver is connected (B32).
+stream_link() { curl -sf "$CORE/outputs/stats" | jq -e '.[] | select(.connected and .kbps > 0)' >/dev/null; }
+wait_for 4 stream_link || fail "no link health for the SRT output: $(curl -sf "$CORE/outputs/stats")"
+wait "$receiver" || true
 [[ $(stat -c %s "$WORK/srt.ts" 2>/dev/null || echo 0) -gt 50000 ]] || fail "SRT output delivered nothing"
 act '{"action":"stop_output","output":"Rec"}' >/dev/null
 sleep 2
@@ -286,7 +298,7 @@ sleep 2
 recording="$(find "$WORK/strom-data" -path '*rec/*' -name '*.mp4' | head -1)"
 [[ -n "$recording" ]] || fail "no recording file"
 [[ "$(codecs "$recording")" == "aac,h264" ]] || fail "recording lacks H.264 or AAC: $(codecs "$recording")"
-pass "outputs: recording (H.264 + AAC, finalized MP4), SRT stream received, start/stop"
+pass "outputs: recording (H.264 + AAC, finalized MP4), SRT stream received with link health, start/stop"
 
 # MultiCorder: ISO recordings of single inputs, with and without sound.
 input_id() { curl -sf "$CORE/state" | jq -r ".inputs[] | select(.name==\"$1\") | .id"; }
@@ -318,13 +330,6 @@ pass "display output: program in a window on the engine screen"
 # --- failover (3.4): a source dies mid-transition, a stream breaks ---
 input_state() { curl -sf "$CORE/state" | jq -r ".inputs[] | select(.name==\"$1\") | .status"; }
 flow_id() { curl -sf "$STROM/api/flows" | jq -r ".flows[] | select(.name==\"$1\") | .id"; }
-# is <state function> <name> <state>: evaluated anew on every try.
-is() { [[ "$("$1" "$2")" == "$3" ]]; }
-wait_for() {   # wait_for <seconds> <command…>: until the command succeeds
-    local seconds="$1"; shift
-    for _ in $(seq 1 "$((seconds * 2))"); do "$@" && return 0; sleep 0.5; done
-    return 1
-}
 act '{"action":"cut_direct","input":"Ball"}' >/dev/null
 act '{"action":"preview_input","input":"Orange"}' >/dev/null
 act '{"action":"set_transition","slot":1,"effect":"fade","duration_ms":3000}' >/dev/null

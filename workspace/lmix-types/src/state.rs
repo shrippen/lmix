@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::action::{Effect, TransitionSlot};
 use crate::input::{Input, InputId};
-use crate::output::Output;
+use crate::output::{Output, OutputStats};
 
 /// One transition button.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -97,6 +97,8 @@ pub enum Event {
     Tally { tally: Vec<u8> },
     /// Audio levels (AUD), about ten times a second.
     Levels { levels: Levels },
+    /// Link health of the running network outputs, about once a second.
+    Outputs { stats: Vec<OutputStats> },
 }
 
 #[cfg(test)]

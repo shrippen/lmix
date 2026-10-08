@@ -18,8 +18,9 @@ use std::time::Duration;
 
 use lmix_types::{
     Action, Container, Device, DeviceKind, DisplayMode, Effect, InputColor, InputId, InputRef,
-    InputStatus, Levels, Listen, OutputRef, OutputSource, OutputSpec, OutputStatus, ShowState,
-    SignalLoss, SourceSpec, TestPattern, TransitionSlot, Transport,
+    InputStatus, Latency, Levels, Listen, OutputId, OutputRef, OutputSource, OutputSpec,
+    OutputStats, OutputStatus, ShowState, SignalLoss, SourceSpec, TestPattern, TransitionSlot,
+    Transport,
 };
 
 use crate::core_client::{CoreClient, CoreMessage, FilePurpose, PictureTarget};
@@ -278,6 +279,11 @@ pub struct CoreApp {
     devices: Vec<Device>,
     recent: Vec<String>,
     levels: Levels,
+    /// Latest latency measurement and whether one runs.
+    latency: Option<Latency>,
+    measuring_latency: bool,
+    /// Link health per running network output.
+    output_stats: HashMap<OutputId, OutputStats>,
     /// Volume slider value per input while it is dragged.
     volume_drag: HashMap<InputId, u8>,
     new_output: OutputForm,
@@ -408,6 +414,9 @@ impl CoreApp {
             devices: Vec::new(),
             recent: Vec::new(),
             levels: Levels::default(),
+            latency: None,
+            measuring_latency: false,
+            output_stats: HashMap::new(),
             volume_drag: HashMap::new(),
             new_output: OutputForm {
                 kind: OutputKind::Record,
@@ -428,6 +437,15 @@ impl CoreApp {
         tokio::spawn(async move {
             let _ = tx.send(CoreMessage::Devices(client.devices().await));
             let _ = tx.send(CoreMessage::Recent(client.recent().await));
+        });
+    }
+
+    fn measure_latency(&mut self) {
+        self.measuring_latency = true;
+        let client = self.client.clone();
+        let tx = self.tx.clone();
+        tokio::spawn(async move {
+            let _ = tx.send(CoreMessage::Latency(client.measure_latency().await));
         });
     }
 
@@ -482,10 +500,20 @@ impl CoreApp {
                 CoreMessage::Connected(connected) => self.connected = connected,
                 CoreMessage::State(state) => self.set_state(state),
                 CoreMessage::Levels(levels) => self.levels = levels,
+                CoreMessage::Outputs(stats) => {
+                    self.output_stats = stats.into_iter().map(|s| (s.output, s)).collect();
+                }
                 CoreMessage::ActionDone(error) => self.error = error,
                 CoreMessage::Picture(target, image) => self.set_picture(ctx, target, image),
                 CoreMessage::Devices(devices) => self.devices = devices,
                 CoreMessage::Recent(recent) => self.recent = recent,
+                CoreMessage::Latency(latency) => {
+                    self.measuring_latency = false;
+                    if latency.is_none() {
+                        self.error = Some("latency measurement failed".into());
+                    }
+                    self.latency = latency;
+                }
                 CoreMessage::Picked(purpose, path) => self.picked(purpose, path),
             }
         }
@@ -584,6 +612,8 @@ impl CoreApp {
                     }
                 });
             });
+            ui.separator();
+            self.latency_button(ui);
         });
 
         let Some(error) = self.error.clone() else {
@@ -595,6 +625,28 @@ impl CoreApp {
                 self.error = None;
             }
         });
+    }
+
+    /// Measure capture-to-program latency (NFA.3) and show the result.
+    fn latency_button(&mut self, ui: &mut egui::Ui) {
+        let label = match self.measuring_latency {
+            true => "Measuring…",
+            false => "Latency",
+        };
+        let hint = format!(
+            "Measure source-to-program latency for {} s",
+            crate::core_client::LATENCY_SECONDS
+        );
+        if ui
+            .add_enabled(!self.measuring_latency, egui::Button::new(label))
+            .on_hover_text(hint)
+            .clicked()
+        {
+            self.measure_latency();
+        }
+        if let Some(latency) = &self.latency {
+            ui.label(latency_text(latency));
+        }
     }
 
     fn monitors(&self, ui: &mut egui::Ui, state: &ShowState, actions: &mut Vec<Action>) {
@@ -763,7 +815,7 @@ impl CoreApp {
             ui.label("Outputs");
             for output in &state.outputs {
                 let reference = OutputRef::Text(output.id.to_string());
-                let (fill, text, hint) = output_face(output);
+                let (fill, text, hint) = output_face(output, self.output_stats.get(&output.id));
                 let button =
                     egui::Button::new(egui::RichText::new(text).color(egui::Color32::WHITE))
                         .fill(fill);
@@ -1213,8 +1265,12 @@ fn ingest_menu(ui: &mut egui::Ui, ingest: &lmix_types::Ingest) {
     });
 }
 
-/// Button color, text and hover text of an output.
-fn output_face(output: &lmix_types::Output) -> (egui::Color32, String, String) {
+/// Button color, text and hover text of an output; network outputs add
+/// their link health while running.
+fn output_face(
+    output: &lmix_types::Output,
+    stats: Option<&OutputStats>,
+) -> (egui::Color32, String, String) {
     match &output.status {
         OutputStatus::Stopped => (
             IDLE_COLOR,
@@ -1222,8 +1278,13 @@ fn output_face(output: &lmix_types::Output) -> (egui::Color32, String, String) {
             "Stopped: click to start".into(),
         ),
         OutputStatus::Running { since_ms } => {
-            let text = format!("{} {}", output.name, running_time(*since_ms));
-            (PROGRAM_COLOR, text, "Running: click to stop".into())
+            let mut text = format!("{} {}", output.name, running_time(*since_ms));
+            let mut hint = "Running: click to stop".to_string();
+            if let Some(stats) = stats {
+                text.push_str(&format!(" {}", link_rate(stats)));
+                hint.push_str(&format!("\n{}", link_detail(stats)));
+            }
+            (PROGRAM_COLOR, text, hint)
         }
         OutputStatus::Failed { message } => {
             let text = format!("! {}", output.name);
@@ -1234,6 +1295,35 @@ fn output_face(output: &lmix_types::Output) -> (egui::Color32, String, String) {
             )
         }
     }
+}
+
+/// Latency result in the toolbar.
+fn latency_text(latency: &Latency) -> String {
+    match (latency.median_ms, latency.p95_ms) {
+        (Some(median), Some(p95)) => format!("PGM {median} ms (p95 {p95} ms)"),
+        _ => "PGM latency –".into(),
+    }
+}
+
+/// Short link state on the button: rate, or that nobody receives.
+fn link_rate(stats: &OutputStats) -> String {
+    if !stats.connected {
+        return "no receiver".into();
+    }
+    format!("{:.1} Mb/s", f64::from(stats.kbps) / 1000.0)
+}
+
+/// Link details for the hover text.
+fn link_detail(stats: &OutputStats) -> String {
+    let rtt = stats
+        .rtt_ms
+        .map_or("RTT –".to_string(), |ms| format!("RTT {ms} ms"));
+    format!(
+        "{} · lost {} · dropped {} · {rtt}",
+        link_rate(stats),
+        stats.packets_lost,
+        stats.packets_dropped
+    )
 }
 
 /// `h:mm:ss` since `since_ms` (Unix ms).
@@ -1461,6 +1551,35 @@ mod tests {
             slots: 4,
             outputs: Vec::new(),
         }
+    }
+
+    #[test]
+    fn latency_in_the_toolbar() {
+        let ages: Vec<u64> = (100..=120).collect();
+
+        assert_eq!(latency_text(&Latency::of(&ages)), "PGM 110 ms (p95 119 ms)");
+        assert_eq!(latency_text(&Latency::of(&[])), "PGM latency –");
+    }
+
+    #[test]
+    fn link_health_on_the_output_button() {
+        let mut stats = OutputStats {
+            output: OutputId::new(),
+            connected: true,
+            kbps: 5960,
+            packets_lost: 3,
+            packets_dropped: 0,
+            rtt_ms: Some(18),
+        };
+
+        assert_eq!(link_rate(&stats), "6.0 Mb/s");
+        assert_eq!(
+            link_detail(&stats),
+            "6.0 Mb/s · lost 3 · dropped 0 · RTT 18 ms"
+        );
+
+        stats.connected = false;
+        assert_eq!(link_rate(&stats), "no receiver");
     }
 
     #[test]

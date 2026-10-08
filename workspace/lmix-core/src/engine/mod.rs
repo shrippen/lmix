@@ -59,4 +59,10 @@ pub trait Engine: Send + Sync {
     /// Whether output `id` runs in the engine (lmix-core restarted while
     /// it kept streaming or recording).
     async fn output_running(&self, id: lmix_types::OutputId) -> bool;
+
+    /// Link health of a running network output; `None` for other kinds
+    /// or while unknown.
+    async fn output_stats(&self, _id: lmix_types::OutputId) -> Option<lmix_types::OutputStats> {
+        None
+    }
 }

@@ -258,11 +258,11 @@ GPU-Punkte in `HARDWARE-TODO.md`):
 
 | # | Stand |
 |---|---|
-| 3.1 | ✅ Ausgänge SRT, Aufnahme (MKV/MP4/TS), NDI als eigene Flows; Start/Stopp, Status mit Laufzeit und Fehler; ⚠ Bitrate/Drops fehlen, RTMP wartet auf strom #771, OMT ohne strom-Block |
+| 3.1 | ✅ Ausgänge SRT, Aufnahme (MKV/MP4/TS), NDI als eigene Flows; Start/Stopp, Status mit Laufzeit und Fehler; Senderate, Paketverluste und RTT für SRT (B32); RTMP wartet auf strom #771, OMT ohne strom-Block |
 | 3.2 | ✅ MultiCorder als Ausgangsquelle "Input": Aufnahme, SRT oder NDI je Input (ISO) |
 | 3.3 | ✅ Bildschirm-Ausgang im Engine-Prozess: Fenster, Vollbild (Wayland), DRM-Anschluss; ⚠ Vollbild/DRM nur auf Hardware prüfbar (H.20) |
 | 3.4 | ✅ Failover: Quelle weg → Input offline, PGM hält, Slot kommt von selbst wieder (2–10 s Backoff); Ausgang bricht → Fehler, Neustart; Latenz-API und Budget-Check im VM-Test, CI `vm-check`; ⚠ SRT-Input in strom unzuverlässig (H.23) |
-| 3.5 | ⬜ GUI-Shell-Entscheidung |
+| 3.5 | 🟡 Bewertung und Empfehlung (Qt Quick/Kirigami über cxx-qt) in `GUI-SHELL.md`; Entscheidung beim User |
 
 ### M4 — Produktionswerkzeuge (wie geplant, erweitert)
 

@@ -132,6 +132,7 @@ async fn main() -> anyhow::Result<()> {
     tokio::spawn(connect(engine, service.clone(), args.slots));
     tokio::spawn(service.clone().forward_levels());
     tokio::spawn(service.clone().watch_failures());
+    tokio::spawn(service.clone().forward_output_stats());
 
     let listener = tokio::net::TcpListener::bind(args.listen)
         .await

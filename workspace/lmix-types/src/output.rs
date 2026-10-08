@@ -164,3 +164,21 @@ pub struct Output {
     pub source: OutputSource,
     pub status: OutputStatus,
 }
+
+/// Link health of a running network output (SRT), about once a second
+/// (STR.1: the streamer sees a weak link before the stream breaks).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct OutputStats {
+    pub output: OutputId,
+    /// A receiver is connected.
+    pub connected: bool,
+    /// Current send rate.
+    pub kbps: u32,
+    /// Packets lost on the way (reported by the receiver), since start.
+    pub packets_lost: u64,
+    /// Packets dropped before sending because they were too late, since
+    /// start: the link is too slow for the bitrate.
+    pub packets_dropped: u64,
+    /// Round-trip time to the receiver.
+    pub rtt_ms: Option<u32>,
+}

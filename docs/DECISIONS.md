@@ -644,3 +644,27 @@ Befund für strom, nicht in lmix umgangen; lmix setzt nur
 `wait_for_connection` und `keep_listening`. Prüfung mit echter Quelle: H.23.
 **MP4-Aufnahme**: strom reserviert je Datei ~93 MB für den moov-Kopf
 (Absturzsicherheit); MKV bleibt Standard.
+
+## 2026-10-08 — Verbindungszustand der Ausgänge (B32)
+
+Für SRT-Ausgänge liest `lmix-core` jede Sekunde die Statistik des
+`srtsink` aus strom (`/flows/{id}/srt-stats`) und schickt sie als Ereignis
+`outputs` an alle Clients (auch `GET /api/outputs/stats`):
+- Empfänger verbunden ja/nein, Senderate, seit Start verlorene Pakete
+  (vom Empfänger gemeldet), lokal verworfene Pakete (Leitung zu langsam
+  für die Bitrate), RTT.
+- Ein Listener mit mehreren Empfängern: Raten und Zähler summiert, RTT
+  der langsamste.
+Die Console zeigt am laufenden Ausgang die Rate oder „no receiver“,
+Details im Tooltip. Die Werte stehen nicht im Show-Zustand (kein
+Speichern, kein Zustandsereignis je Sekunde). Aufnahme und NDI haben keine
+Leitung; Füllstand der Platte folgt mit den Aufnahme-Einstellungen.
+
+## 2026-10-08 — GUI-Shell (3.5): Vorschlag, offen
+
+Bewertung egui gegen Qt Quick/Kirigami (Tauri scheidet aus: keine
+Web-GUI) in `GUI-SHELL.md`. **Empfehlung**: Qt Quick/Kirigami über cxx-qt,
+weil Video ohne Kopie (`qml6glsink`) und die Kante/Breeze-Gestaltung
+(`qml/Kante`) dort fertig sind, in egui Eigenentwicklung. **Nicht
+entschieden**: `claude.md` legt egui fest, ein Wechsel ist Sache des
+Users. Bis dahin bleibt die egui-Console die Oberfläche.

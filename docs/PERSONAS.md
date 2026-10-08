@@ -329,3 +329,26 @@ Kopierknopf. Die Adresse, unter der Sender die Engine erreichen, setzt
 
 **Befunde**: B31 RTMP-Ausgang für YouTube/Twitch (strom #771 abwarten
 oder eigener Block); B32 Bitrate und verlorene Pakete je Ausgang anzeigen.
+
+**Nachtrag B32 (2026-10-08)**: behoben für SRT. Der laufende Ausgang zeigt
+die Senderate oder „no receiver“, der Tooltip verlorene und verworfene
+Pakete und die RTT (jede Sekunde aus strom).
+
+---
+
+## Durchlauf 7: M3 Schritte 2–4, ISO, Bildschirm, Ausfälle (2026-10-08, VM-Test + Console)
+
+| Persona | Schritt | Ergebnis |
+|---|---|---|
+| P2 Konferenz | Jede Kamera zusätzlich einzeln aufnehmen | ✅ Ausgang mit Quelle „Input“ je Kamera (MultiCorder) |
+| P4 Streamer | Leitung wird schwach, bevor der Stream abbricht | ✅ Rate und verlorene Pakete am Knopf; bricht er doch ab: „Fehler“, Neustart von selbst |
+| P5 Broadcast | Kamera fällt mitten in der Blende aus | ✅ Input „offline“, PGM hält das letzte Bild, Kamera kommt von selbst zurück; ⚠ in der VM teils ein schwarzer Frame beim Ausfall (H.21) |
+| P5 Broadcast | Verzögerung Quelle → Programm prüfen | ✅ `GET /api/latency` (VM 116–119 ms Median, CPU); ⚠ keine Anzeige in der Console |
+| P6 Hörsaal | Programm auf den Beamer | ✅ Ausgang „Fullscreen“ oder DRM-Anschluss; ⚠ Bildschirmwahl unter Wayland nur per Fensterregel (H.20) |
+| P7 Theater | Kontrollbild einer Kamera im Regieraum | ✅ Bildschirm-Ausgang mit Quelle „Input“ (Fenster) |
+
+**Befunde**: B33 Latenz in der Console anzeigen (Messknopf, Median/p95);
+B34 SRT-Kamera als Input in strom unzuverlässig (H.23, strom-Befund).
+
+**Nachtrag B33 (2026-10-08)**: behoben. Knopf „Latency“ in der
+Werkzeugleiste der Console misst 5 s und zeigt Median und p95 (PGM).
