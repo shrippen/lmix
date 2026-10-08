@@ -50,7 +50,15 @@ Nur Funktionsreferenz; kein Code übernommen.
 | <https://casparcg.com/docs/wiki/server/producers/> | Producer, u. a. HTML (CEF) |
 | <https://github.com/CasparCG/server/releases> | 2.4.0 stabil; 2.5 in Arbeit |
 
-## 4. Nicht im Handbuch 29, an echter Installation zu klären
+## 4. Lizenzen der Titel-Kette
+
+| Komponente | Lizenz | Quelle |
+|---|---|---|
+| gstcefsrc (`cefsrc`, `cefbin`, `cefdemux`) | LGPL-2.1-or-later | <https://github.com/centricular/gstcefsrc> (`LICENSE`, `gstcef.cc`, `gstcefloader.cc`) |
+| CEF | BSD-3-Clause | <https://bitbucket.org/chromiumembedded/cef> |
+| GStreamer | LGPL-2.1-or-later | <https://gstreamer.freedesktop.org> |
+
+## 5. Nicht im Handbuch 29, an echter Installation zu klären
 
 1. Vollständiges aktuelles XML-Zustandsschema (nur für den optionalen Kompatibilitätsmodus API.8).
 2. Vollständige Liste der Übergangseffekte (Handbuch nennt sie nur im Überblick).

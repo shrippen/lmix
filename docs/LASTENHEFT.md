@@ -497,7 +497,7 @@ Zurückgestellt (User 2026-10-08).
 | NFA.6 | Crash-Isolation: GUI-Absturz stoppt weder Engine noch Senken noch API (siehe E.4) | M |
 | NFA.7 | Dauerlauf: 8 h Soak mit Last (16 Inputs, 2 Streams, Einzelaufnahme) ohne Speicher-/Latenzdrift | M |
 | NFA.8 | Bildraten 23,976/24/25/29,97/30/50/59,94/60 p, 50/59,94/60 i; Auflösungen 640×360 bis 3840×2160 | M |
-| NFA.9 | Lizenz: Repo MIT-kompatibel, keine GPL-Abhängigkeit im Repo (`claude.md` Entscheidung 6); Laufzeit-Plugins Dritter getrennt | M |
+| NFA.9 | Lizenz: Repo MIT-kompatibel, keine GPL-Abhängigkeit im Repo (`claude.md` Entscheidung 6); Laufzeit-Plugins Dritter getrennt (LGPL wie GStreamer und `gstcefsrc` nur dynamisch geladen, nie im Repo; ROADMAP §5.3) | M |
 | NFA.10 | Bedienbarkeit unter Last: GUI-Reaktion < 50 ms, Tastenaktion → Program < 1 Frame + interne Latenz | M |
 | NFA.11 | Lokalisierung: alle Texte aus Katalogen, de/en | S |
 | NFA.12 | Sicherheit: APIs standardmäßig nur LAN/Loopback; keine Telemetrie; keine Herstellerdienste für Gäste | M |

@@ -358,8 +358,15 @@ Virtual Sets.
 1. Live-Monitore: WHEP vs. Thumbnail-Intervall-PR (M1-Rest).
 2. M2b als eigener Meilenstein vor M3 (Empfehlung) — ändert die Reihenfolge
    in `claude.md`.
-3. Lizenz CEF-Pfad: `gstcefsrc`-Lizenz prüfen (vermutlich LGPL) — als Laufzeit-Plugin außerhalb des
-   Repos vereinbar mit Entscheidung 6? Vor M7 klären (Titel hängen daran).
+3. ~~Lizenz CEF-Pfad~~ — geprüft 2026-10-08: `gstcefsrc` ist LGPL-2.1-or-later
+   (`LICENSE`, Datei-Header, Plugin-Metadaten "LGPL", Commit `204b01b`), CEF
+   BSD-3-Clause. strom lädt `cefsrc` zur Laufzeit als GStreamer-Plugin, kein
+   Linken, kein Quellcode im Repo → vereinbar mit Entscheidung 6 (wie
+   GStreamer selbst, ebenfalls LGPL). Regeln: gstcefsrc-Code nie ins Repo
+   kopieren (Änderungen upstream oder eigenes Repo); beim Ausliefern von
+   Paketen LGPL-Text, Quellverweis und CEF-/Chromium-Hinweise beilegen.
+   Standard-CEF-Builds spielen kein H.264/AAC ab (Patente); Video in Titeln
+   als VP9/AV1/WebM.
 4. ~~Testhardware AMD/Intel~~ — entschieden 2026-09-27: derzeit keine
    verfügbar; herstellerneutral bauen, Abnahme später (M5b).
 5. Clean-Room-Fragen E.1–E.8 in `LASTENHEFT.md` §6.
