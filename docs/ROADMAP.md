@@ -262,7 +262,7 @@ GPU-Punkte in `HARDWARE-TODO.md`):
 | 3.2 | ✅ MultiCorder als Ausgangsquelle "Input": Aufnahme, SRT oder NDI je Input (ISO) |
 | 3.3 | ✅ Bildschirm-Ausgang im Engine-Prozess: Fenster, Vollbild (Wayland), DRM-Anschluss; ⚠ Vollbild/DRM nur auf Hardware prüfbar (H.20) |
 | 3.4 | ✅ Failover: Quelle weg → Input offline, PGM hält, Slot kommt von selbst wieder (2–10 s Backoff); Ausgang bricht → Fehler, Neustart; Latenz-API und Budget-Check im VM-Test, CI `vm-check`; ⚠ SRT-Input in strom unzuverlässig (H.23) |
-| 3.5 | 🟡 Bewertung und Empfehlung (Qt Quick/Kirigami über cxx-qt) in `GUI-SHELL.md`; Entscheidung beim User |
+| 3.5 | ✅ Qt Quick/Kirigami über cxx-qt (User, 2026-10-09); Umstieg schrittweise nach `GUI-SHELL.md` |
 
 ### M4 — Produktionswerkzeuge (wie geplant, erweitert)
 

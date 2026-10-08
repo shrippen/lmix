@@ -668,3 +668,15 @@ weil Video ohne Kopie (`qml6glsink`) und die Kante/Breeze-Gestaltung
 (`qml/Kante`) dort fertig sind, in egui Eigenentwicklung. **Nicht
 entschieden**: `claude.md` legt egui fest, ein Wechsel ist Sache des
 Users. Bis dahin bleibt die egui-Console die Oberfläche.
+
+## 2026-10-09 — GUI-Shell (3.5): Qt Quick/Kirigami
+
+**Entscheidung** (User): Die Console wechselt auf Qt Quick/Kirigami über
+cxx-qt, wie in `GUI-SHELL.md` empfohlen. `claude.md` Entscheidung 3
+angepasst. Vorgehen: Prototyp (QML-Fenster im Kante-Stil, PGM-Monitor über
+`qml6glsink`, Bild aus strom über `unixfdsink`/`unixfdsrc`), messen
+(H.11), dann Funktionen übertragen. Die egui-Console bleibt bis zur
+Gleichwertigkeit für Selftest und VM-Screenshot.
+**Offen**: Kante steht unter „All rights reserved“; die QML-Module dürfen
+erst in lmix ausgeliefert werden, wenn Kante eine Lizenz bekommt, die zur
+lmix-Lizenz passt.

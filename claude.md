@@ -12,8 +12,9 @@ Kommuniziere auf Deutsch, Code/Commits auf Englisch.
 1. Basis = STROM-Workspace (Crate: strom, strom-frontend, strom-types, strom-mcp-server).
 2. Open Live (Eyevinn open-live / open-live-studio) wird NICHT verwendet: kein Node/TS,
    keine CouchDB, kein K8s. Dieses Repo ignorieren vollständig.
-3. GUI = NATIV (kein Web-Interface als Produktziel). strom-frontend ist egui-basiert
-   ("Native or Web"); wir bauen auf der nativen egui-Variante auf.
+3. GUI = NATIV (kein Web-Interface als Produktziel). Shell = Qt Quick/Kirigami über
+   cxx-qt (Entscheidung User 2026-10-09, docs/GUI-SHELL.md); die egui-Console bleibt
+   bis zur Gleichwertigkeit als Werkzeug (Selftest, VM-Screenshot).
 4. Prozessmodell (hart): strom läuft als eigenständiger Headless-Server auf
    127.0.0.1; GUI = separater Prozess; Kommunikation ausschliesslich über
    REST + WebSocket, Typen aus strom-types. NICHTS in-Process: kein Linken des

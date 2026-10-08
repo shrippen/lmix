@@ -1,8 +1,7 @@
 # GUI-Shell: egui oder Qt Quick (ROADMAP 3.5, G.1)
 
-Stand 2026-10-08. **Vorschlag, Entscheidung beim User** (die Vorgabe in
-`claude.md` „native egui-Variante“ stammt vom User; ein Wechsel ist seine
-Entscheidung).
+Stand 2026-10-09. **Entschieden (User): Qt Quick/Kirigami über cxx-qt**,
+Umstieg in den drei Schritten der Empfehlung unten.
 
 ## Ausgangslage
 
