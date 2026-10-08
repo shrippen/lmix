@@ -701,3 +701,27 @@ Kanalzug wandelt nur das Format, nicht die Rate: `not-negotiated` an
 Bus, Resampler je Kanal; Standard 0 lässt alles wie bisher. lmix-core
 setzt 48 kHz. Dazu auf `lmix-start-time` der fehlende OpenAPI-Snapshot
 für `eos_on_stop` (sonst rot in strom-CI).
+
+## 2026-10-09 — Qt-Console: Aufbau des Prototyps
+
+**Kontext**: GUI-SHELL Schritt 1. **Entscheidung**: eigenes Crate
+`console-qt` neben `app-desktop`. Ein Rust-QObject (`Core`, cxx-qt 0.10)
+hält Zustand und Aktionen; die Bilder baut Rust mit gstreamer-rs und
+übergibt `qml6glsink` das QML-Item als `widget` (die QML-Seite ruft
+`core.showLive(item, source)`, sobald `itemInitialized`). Kein eigener
+C++-Code. Kante liegt als Kopie im Crate (README von Kante: kopieren oder
+qrc) und geht über eine generierte `.qrc` in die Ressourcen.
+**Verworfen**: C++-QObject für die Pipeline (mehr Build-Aufwand, kein
+Vorteil); Kante über Importpfad zur Laufzeit (Paket hinge an einem Pfad).
+**Offen**: die egui-Console wird erst nach Gleichwertigkeit entfernt.
+
+## 2026-10-09 — CUDA-Programm für CPU-Abnehmer herunterladen
+
+**Befund** (RTX 3090): Mit `--mixer cuda` trägt der `inter`-Kanal des
+Programms `memory:CUDAMemory`. Aufnahme und SRT (NVENC) liefen, Bildschirm-
+Ausgang und Live-Socket nicht (`not-negotiated`). **Entscheidung**:
+`cudadownload` plus Capsfilter `video/x-raw` nur in Flows, die das
+Programm auf der CPU lesen (Bildschirm, NDI, Live-Socket). Ein Download
+schon im Mischer-Flow wäre einfacher, kostete aber den Encodern den
+Weg ohne Kopie. **Offen**: Mit `--mixer gl` ist noch ungeprüft, ob der
+Kanal `GLMemory` trägt (H.22, AMD/Intel).

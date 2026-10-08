@@ -53,3 +53,65 @@ Sendung laufen) bleibt unverändert, weil die Grenze die lmix-API ist.
 Bleibt es bei egui, ist der nächste Schritt eine egui-Anbindung in Kante
 (Theme aus `palette.json`, Stil-Umschaltung) und ein eigener
 Textur-Importpfad für Live-Monitore (H.4).
+
+## Schritt 1: Prototyp (Stand 2026-10-09)
+
+`workspace/console-qt` (Binary `lmix-console`), Client von `lmix-core` wie
+die egui-Console:
+
+- Kirigami-Fenster mit Kante (Stil per `--style kante|kante-light|system`,
+  Standard Kante). `scripts/sync-kante.sh` kopiert `Kante/qml/Kante`
+  unverändert nach `console-qt/qml/Kante`, `build.rs` legt es unter
+  `qrc:/qt/qml/Kante` in die Ressourcen, also `import Kante` ohne Pfad.
+- Vorschau- und Programm-Monitor, Übergangsknöpfe (Cut, Slot 1–4),
+  Input-Leiste als `GridView`: jede Kachel live, Klick = Vorschau,
+  Doppelklick = direkt auf Programm, Tally als Balken plus Wort (PGM/PRV).
+- Bilder: `GET /api/live/program` bzw. `/api/live/inputs/{id}` liefert den
+  Socket; `unixfdsrc ! queue(leaky) ! glupload ! glcolorconvert !
+  qml6glsink(sync=false)` zeichnet in ein `GstGLQt6VideoItem`. Bricht der
+  Socket (Engine-Neustart, neuer Flow), fragt die Kachel nach 1 s neu.
+- Rust-Backend (cxx-qt, `src/bridge.rs`): Zustand über WebSocket, Aktionen
+  über HTTP, eine Pipeline je Item.
+- Messsonde: mit `RUST_LOG=lmix_console=debug` meldet jede Ansicht alle
+  5 s fps und Bildalter (Engine-Zeitstempel bis GUI-Sink, ohne Anzeige).
+
+### Messung (H.11), RTX 3090, Wayland (Plasma), CUDA-Mischer, 16 Inputs
+
+| Größe | Wert |
+|---|---|
+| Ansichten | 18 (16 Kacheln 640×360, Vorschau, Programm 1080p) |
+| Bildrate je Ansicht | 30,0 fps, keine Abbrüche in 35 s |
+| Bildalter Programm | p50 93 ms, p95 97 ms (Mischer-Latenz; Transport ≈ 0) |
+| Bildalter Kacheln | p50 0–1 ms, p95 ≤ 3 ms (einige 54 ms, siehe unten) |
+| CPU Console | 34 % eines Kerns |
+| RAM Console | 386 MB RSS |
+| GPU gesamt | 11–12 % statt 8 % ohne Console |
+| CPU strom für die 17 Live-Flows | +38 % eines Kerns (videoscale auf der CPU) |
+
+Zum Vergleich: die egui-Console holt JPEG-Thumbnails über HTTP.
+
+Einordnung:
+- Flüssige Kacheln für alle Inputs sind damit erreicht (Ziel aus
+  `fluid-input-monitors`), bei geringer Last auf beiden Seiten.
+- Die Kacheln lädt die Console noch als Systemspeicher hoch (memfd über
+  den Socket, `glupload`). DMABuf ohne Kopie (H.4) bleibt der nächste
+  Schritt, lohnt aber erst bei mehr oder größeren Ansichten.
+- Einige Kacheln zeigen konstant 54 ms Alter: vermutlich die Phase
+  zwischen Quelle und Slot-Flow; kein Wachstum, kein Einfluss auf die
+  Bildrate. Klären, wenn echte Kameras dran sind.
+- Die 93 ms beim Programm sind die Latenz des Mischers selbst (gleich mit
+  CPU- und CUDA-Mischer), nicht des Monitors; siehe `LATENCY.md`.
+
+Gefundene Fehler (behoben, lmix-core):
+- Mit dem CUDA-Mischer trägt der Programmkanal CUDA-Speicher. Bildschirm-
+  und NDI-Ausgang sowie der Live-Socket lasen ihn auf der CPU und
+  scheiterten mit `not-negotiated`; jetzt `cudadownload` plus Capsfilter
+  auf Systemspeicher davor. Encoder nehmen weiter GPU-Speicher.
+- Aktionen zwischen „API bereit“ und „Engine bereit“ änderten die Show,
+  meldeten aber 502. Jetzt merkt sich lmix-core sie, `restore` gibt sie
+  der Engine (auch gestartete Ausgänge).
+
+Nächste Schritte (Schritt 2): Console-Funktionen aus der egui-Console
+übertragen (Inputs anlegen/Quellen, Ton, Ausgänge, Show-Datei, Latenz),
+Demo-Modus mit den gemeinsamen Demodaten (`claude.md`-Regel), Tastatur
+(vMix-Kürzel), Mehrfachauswahl und Drag & Drop in der Leiste.
