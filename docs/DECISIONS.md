@@ -479,7 +479,6 @@ oder wartet auf "Zukunft".
 - Console: `--core URL` startet den Client-Modus (Input-Leiste, Monitore,
   Übergänge, Show-Datei). Der direkte strom-Modus (M1b: Ton, DSK,
   Selbsttest) bleibt, bis `lmix-core` ihn abdeckt.
-**Offen**: strom meldet im Mischer-Thread rund 30 GStreamer-CRITICALs je
-Sekunde (`gst_mini_object_unref` mit NULL in einem Event-Pfad), auch ohne
-Inputs und schon vor dem Patch. Bild läuft trotzdem; Ursache in strom
-klären (ROADMAP §5).
+**Nachtrag**: Die CRITICALs kamen von der `fakesink` hinter dem PGM-Abgriff
+(QoS-Events, die eine strom-Probe verwirft, siehe ROADMAP §5 Punkt 6). Die
+Senke läuft jetzt mit `qos=false`; der VM-Test verlangt null CRITICALs.

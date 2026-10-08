@@ -150,9 +150,15 @@ pub fn mixer_flow(slots: usize, backend: MixerBackend) -> Flow {
         format!("{MIXER_BLOCK}:pgm_out"),
         format!("{PGM_TAP}:video_in"),
     ));
-    // An open tap output stalls the branch after the first frame; consume
-    // program in real time until outputs (OUT) take this place.
-    flow.elements.push(element(PGM_SINK, "fakesink", vec![("sync", PropertyValue::Bool(false))]));
+    // An open tap output stalls the branch after the first frame; this sink
+    // consumes program until outputs (OUT) take its place. qos=false: strom
+    // drops upstream QoS at sinks with a probe that GStreamer 1.24 answers
+    // with a CRITICAL per frame.
+    flow.elements.push(element(
+        PGM_SINK,
+        "fakesink",
+        vec![("sync", PropertyValue::Bool(false)), ("qos", PropertyValue::Bool(false))],
+    ));
     flow.links.push(link(format!("{PGM_TAP}:video_out"), PGM_SINK.into()));
     flow
 }

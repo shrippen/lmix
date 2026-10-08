@@ -166,4 +166,8 @@ sleep 2
 [[ "$(curl -sf "$CORE/state" | jq '.inputs | length')" == 2 ]] || fail "autosave not resumed"
 pass "lmix-core killed and restarted: mixer kept running, show resumed"
 
+criticals="$(grep -c 'GStreamer-CRITICAL' "$WORK/strom.log" || true)"
+[[ "$criticals" == 0 ]] || fail "$criticals GStreamer CRITICALs in strom.log"
+pass "no GStreamer CRITICALs"
+
 echo "M2b VM check passed"

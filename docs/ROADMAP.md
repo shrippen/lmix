@@ -402,9 +402,11 @@ Virtual Sets.
 4. ~~Testhardware AMD/Intel~~ — entschieden 2026-09-27: derzeit keine
    verfügbar; herstellerneutral bauen, Abnahme später (M5b).
 5. Clean-Room-Fragen E.1–E.8 in `LASTENHEFT.md` §6.
-6. strom: rund 30 GStreamer-CRITICALs je Sekunde aus dem Mischer-Thread
-   (`gst_mini_object_unref` mit NULL in einem Event-Pfad), auch ohne lmix.
-   Bild läuft; Ursache klären, bevor M3 auf Dauerbetrieb prüft.
+6. ~~strom-CRITICALs~~ — geklärt 2026-10-08: strom verwirft Upstream-QoS
+   an Sinks mit `PadProbeReturn::Drop`; gstreamer-rs leert dabei die Daten,
+   GStreamer 1.24 gibt dann NULL frei (eine CRITICAL je Frame). lmix
+   schaltet QoS an seiner PGM-Senke ab. In strom trifft es jede Sink mit
+   QoS: als Fehler an strom melden (Probe `drop_upstream_qos_events`).
 7. strom-Patch `lmix-start-time` (Branch im strom-Fork) nach `dev` mergen;
    das Submodul zeigt bis dahin auf den Branch.
 
