@@ -13,7 +13,7 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::input::{InputColor, InputRef, Listen, SourceSpec};
+use crate::input::{InputColor, InputRef, Listen, SignalLoss, SourceSpec, Transport};
 
 /// One of the four transition buttons (SWI.3), 1-based.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -90,6 +90,14 @@ pub enum Action {
         #[serde(default)]
         color: Option<InputColor>,
     },
+    /// Choose last frame or black for when the input's source stalls.
+    SetSignalLoss { input: InputRef, mode: SignalLoss },
+    /// Play, pause, restart or step a file, URL or playlist input.
+    TransportInput {
+        input: InputRef,
+        transport: Transport,
+    },
+
     // ---- Audio (AUD) ----
     /// Switch an input's sound on or off.
     SetAudio { input: InputRef, on: bool },
@@ -164,6 +172,12 @@ pub enum ActionError {
     OnProgram { reference: String },
     #[error("position {number} is outside 1–{max}")]
     BadPosition { number: u32, max: u32 },
+    #[error("{reference} has no picture (audio input)")]
+    NoVideo { reference: String },
+    #[error("{reference} has no transport (not a file, URL or playlist)")]
+    NoTransport { reference: String },
+    #[error("color {color} is not #rrggbb")]
+    BadColor { color: String },
     #[error("volume {volume} is outside 0–{max}")]
     BadVolume { volume: u8, max: u8 },
     #[error("show has no file yet; give a path")]

@@ -8,11 +8,11 @@
 //! ```
 
 use lmix_types::action::TRANSITION_SLOTS;
-use lmix_types::input::{REF_PREVIEW, REF_PROGRAM, VOLUME_MAX};
+use lmix_types::input::{color_rgb, REF_PREVIEW, REF_PROGRAM, VOLUME_MAX};
 use lmix_types::state::API_VERSION;
 use lmix_types::{
     Action, ActionError, Effect, Input, InputColor, InputId, InputRef, InputStatus, Listen,
-    ShowState, SourceSpec, Transition, TransitionSlot,
+    ShowState, SignalLoss, SourceSpec, Transition, TransitionSlot, Transport,
 };
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -39,6 +39,10 @@ pub enum Command {
     FadeToBlack { duration_ms: u32 },
     /// Solo `slot` on the monitor bus, or end its solo.
     SetListen { slot: usize, listen: Listen },
+    /// Last frame (`Hold`) or black when the source of `slot` stalls.
+    SetSignalLoss { slot: usize, mode: SignalLoss },
+    /// Play, pause, restart or step the media player of `slot`.
+    Transport { slot: usize, transport: Transport },
     /// Set the audio channel of `slot`: linear gain (1.0 = unity) and
     /// mute, faded over `ramp_ms`.
     SetAudio {
@@ -131,6 +135,8 @@ impl Switcher {
             }
             Action::SetVolume { input, volume } => self.set_volume(&input, volume),
             Action::SetListen { input, listen } => self.set_listen(&input, listen),
+            Action::TransportInput { input, transport } => self.transport(&input, transport),
+            Action::SetSignalLoss { input, mode } => self.set_signal_loss(&input, mode),
             Action::ClearListen => Ok(self.clear_listen()),
             Action::MoveInput { input, number } => self.move_input(&input, number),
             Action::PreviewInput { input } => self.preview(&input),
@@ -175,6 +181,10 @@ impl Switcher {
         commands.extend(self.audio_commands(AUDIO_RAMP_MS));
         // A reused mixer may still hold solos from before.
         commands.extend(self.listen_commands());
+        commands.extend(self.show.inputs.iter().map(|i| Command::SetSignalLoss {
+            slot: i.slot,
+            mode: i.signal_loss,
+        }));
         commands
     }
 
@@ -234,6 +244,7 @@ impl Switcher {
                 audio: input.audio,
                 has_audio: input.source.has_audio(),
                 listen: self.listen_of(input.id),
+                signal_loss: input.signal_loss,
             })
             .collect();
 
@@ -269,6 +280,7 @@ impl Switcher {
         source: SourceSpec,
         name: Option<String>,
     ) -> Result<Vec<Command>, ActionError> {
+        check_source(&source)?;
         let slot = self
             .free_slot()
             .ok_or(ActionError::SlotsFull { slots: self.slots })?;
@@ -282,13 +294,21 @@ impl Switcher {
             slot,
             color: None,
             audio: Default::default(),
+            signal_loss: SignalLoss::default(),
         });
         self.status.insert(id, InputStatus::Starting);
 
-        Ok(vec![Command::SetSlot {
-            slot,
-            source: Some(source),
-        }])
+        // The mixer input may still carry the previous occupant's setting.
+        Ok(vec![
+            Command::SetSlot {
+                slot,
+                source: Some(source),
+            },
+            Command::SetSignalLoss {
+                slot,
+                mode: SignalLoss::default(),
+            },
+        ])
     }
 
     fn remove(&mut self, input: &InputRef) -> Result<Vec<Command>, ActionError> {
@@ -333,8 +353,14 @@ impl Switcher {
         input: &InputRef,
         source: SourceSpec,
     ) -> Result<Vec<Command>, ActionError> {
+        check_source(&source)?;
         let index = self.find(input)?;
         let entry = &mut self.show.inputs[index];
+        if !source.has_video() && [self.show.preview, self.show.program].contains(&Some(entry.id)) {
+            return Err(ActionError::NoVideo {
+                reference: entry.name.clone(),
+            });
+        }
         entry.source = source.clone();
         self.status.insert(entry.id, InputStatus::Starting);
 
@@ -377,6 +403,7 @@ impl Switcher {
     fn preview(&mut self, input: &InputRef) -> Result<Vec<Command>, ActionError> {
         let index = self.find(input)?;
         let entry = &self.show.inputs[index];
+        no_video_check(entry)?;
         if self.show.program == Some(entry.id) {
             return Err(ActionError::OnProgram {
                 reference: entry.name.clone(),
@@ -408,6 +435,7 @@ impl Switcher {
     fn cut_direct(&mut self, input: &InputRef) -> Result<Vec<Command>, ActionError> {
         let index = self.find(input)?;
         let entry = &self.show.inputs[index];
+        no_video_check(entry)?;
         let (id, to) = (entry.id, entry.slot);
 
         if self.show.preview != Some(id) {
@@ -459,6 +487,47 @@ impl Switcher {
             });
         }
         self.set_audio(input, |a| a.volume = volume)
+    }
+
+    fn set_signal_loss(
+        &mut self,
+        input: &InputRef,
+        mode: SignalLoss,
+    ) -> Result<Vec<Command>, ActionError> {
+        let index = self.find(input)?;
+        let entry = &mut self.show.inputs[index];
+        entry.signal_loss = mode;
+        Ok(vec![Command::SetSignalLoss {
+            slot: entry.slot,
+            mode,
+        }])
+    }
+
+    /// Signal-loss mode of the input in `slot`; hold for an empty slot.
+    pub fn signal_loss_of(&self, slot: usize) -> SignalLoss {
+        self.show
+            .inputs
+            .iter()
+            .find(|i| i.slot == slot)
+            .map_or_else(SignalLoss::default, |i| i.signal_loss)
+    }
+
+    fn transport(
+        &mut self,
+        input: &InputRef,
+        transport: Transport,
+    ) -> Result<Vec<Command>, ActionError> {
+        let index = self.find(input)?;
+        let entry = &self.show.inputs[index];
+        if !entry.source.has_transport() {
+            return Err(ActionError::NoTransport {
+                reference: entry.name.clone(),
+            });
+        }
+        Ok(vec![Command::Transport {
+            slot: entry.slot,
+            transport,
+        }])
     }
 
     fn set_listen(
@@ -626,6 +695,29 @@ fn program_then_preview(
     commands
 }
 
+/// Reject sources the engine cannot build (a color that is not `#rrggbb`).
+fn check_source(source: &SourceSpec) -> Result<(), ActionError> {
+    let SourceSpec::Color { color } = source else {
+        return Ok(());
+    };
+    match color_rgb(color) {
+        Some(_) => Ok(()),
+        None => Err(ActionError::BadColor {
+            color: color.clone(),
+        }),
+    }
+}
+
+/// Audio inputs have no picture for preview or program.
+fn no_video_check(entry: &ShowInput) -> Result<(), ActionError> {
+    if entry.source.has_video() {
+        return Ok(());
+    }
+    Err(ActionError::NoVideo {
+        reference: entry.name.clone(),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -752,6 +844,112 @@ mod tests {
     }
 
     #[test]
+    fn audio_inputs_stay_off_the_buses() {
+        let mut sw = two_inputs();
+        sw.apply(Action::AddInput {
+            source: SourceSpec::AudioDevice { id: "mic".into() },
+            name: Some("Mic".into()),
+        })
+        .unwrap();
+
+        for action in [
+            Action::PreviewInput {
+                input: named("Mic"),
+            },
+            Action::CutDirect {
+                input: named("Mic"),
+            },
+        ] {
+            assert!(matches!(sw.apply(action), Err(ActionError::NoVideo { .. })));
+        }
+        sw.apply(Action::PreviewInput { input: named("A") })
+            .unwrap();
+        let swap = Action::ReplaceSource {
+            input: named("A"),
+            source: SourceSpec::AudioDevice { id: "mic".into() },
+        };
+        assert!(matches!(sw.apply(swap), Err(ActionError::NoVideo { .. })));
+    }
+
+    #[test]
+    fn signal_loss_defaults_to_hold_and_is_kept() {
+        let mut sw = two_inputs();
+        assert_eq!(sw.state().inputs[0].signal_loss, SignalLoss::Hold);
+
+        let cmds = sw
+            .apply(Action::SetSignalLoss {
+                input: named("B"),
+                mode: SignalLoss::Black,
+            })
+            .unwrap();
+
+        assert_eq!(
+            cmds,
+            [Command::SetSignalLoss {
+                slot: 1,
+                mode: SignalLoss::Black
+            }]
+        );
+        assert_eq!(sw.signal_loss_of(1), SignalLoss::Black);
+        let restored = sw.restore_commands();
+        assert!(restored.contains(&Command::SetSignalLoss {
+            slot: 1,
+            mode: SignalLoss::Black
+        }));
+    }
+
+    #[test]
+    fn bad_colors_are_refused() {
+        let mut sw = Switcher::new(SLOTS);
+        let add = |color: &str| Action::AddInput {
+            source: SourceSpec::Color {
+                color: color.into(),
+            },
+            name: None,
+        };
+
+        assert!(matches!(
+            sw.apply(add("red")),
+            Err(ActionError::BadColor { .. })
+        ));
+        assert!(sw.apply(add("#204080")).is_ok());
+    }
+
+    #[test]
+    fn transport_only_for_media_players() {
+        let mut sw = two_inputs();
+        sw.apply(Action::AddInput {
+            source: SourceSpec::File {
+                path: "/clip.mp4".into(),
+            },
+            name: Some("Clip".into()),
+        })
+        .unwrap();
+
+        let cmds = sw
+            .apply(Action::TransportInput {
+                input: named("Clip"),
+                transport: Transport::Pause,
+            })
+            .unwrap();
+        assert_eq!(
+            cmds,
+            [Command::Transport {
+                slot: 2,
+                transport: Transport::Pause
+            }]
+        );
+
+        let err = sw
+            .apply(Action::TransportInput {
+                input: named("A"),
+                transport: Transport::Play,
+            })
+            .unwrap_err();
+        assert!(matches!(err, ActionError::NoTransport { .. }));
+    }
+
+    #[test]
     fn listen_is_kept_per_input_and_cleared_together() {
         let mut sw = two_inputs();
 
@@ -830,6 +1028,10 @@ mod tests {
                 Command::SetSlot {
                     slot: 0,
                     source: Some(pattern(TestPattern::Ball))
+                },
+                Command::SetSignalLoss {
+                    slot: 0,
+                    mode: SignalLoss::Hold
                 },
                 Command::SetAudio {
                     slot: 0,
@@ -989,11 +1191,9 @@ mod tests {
 
         let cmds = fresh.replace(show, Some("x.lmix".into()));
 
-        assert_eq!(
-            cmds.len(),
-            8,
-            "slots, program, preview, audio × 2, listen × 2: {cmds:?}"
-        );
+        // Picture first (slots, program, preview), then audio and the rest.
+        assert!(matches!(cmds[0], Command::SetSlot { slot: 0, .. }));
+        assert!(matches!(cmds[1], Command::SetSlot { slot: 1, .. }));
         assert!(matches!(cmds[2], Command::Program { slot: None, .. }));
         assert_eq!(cmds[3], Command::Preview { slot: 1 });
         assert!(matches!(cmds[4], Command::SetAudio { slot: 0, .. }));

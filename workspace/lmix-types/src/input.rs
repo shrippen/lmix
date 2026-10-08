@@ -80,6 +80,31 @@ pub enum SourceSpec {
     Srt { uri: String },
     /// Capture device id from discovery (SRC.1).
     Device { id: String },
+    /// Solid color, `#rrggbb` (SRC.7).
+    Color { color: String },
+    /// Still image file, shown until replaced (SRC.4).
+    Image { path: String },
+    /// Media files played one after another, looped (SRC.3).
+    Playlist { paths: Vec<String> },
+    /// NDI source by its name, e.g. `HOST (Camera 1)` (SRC.10).
+    Ndi { name: String },
+    /// WHIP ingest: browsers, OBS or encoders push to the engine at
+    /// `/whip/<endpoint>` (SRC.14).
+    Whip { endpoint: String },
+    /// Audio-only input: microphone or line-in by device id (AUD.1).
+    AudioDevice { id: String },
+}
+
+/// What a transport button does to a file, URL or playlist input (SRC.3).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Transport {
+    Play,
+    Pause,
+    /// Back to the start of the current item and play.
+    Restart,
+    Next,
+    Previous,
 }
 
 impl SourceSpec {
@@ -87,7 +112,24 @@ impl SourceSpec {
     /// files, URLs and SRT their audio track; devices are video only
     /// (a camera's sound is its own audio device).
     pub fn has_audio(&self) -> bool {
-        !matches!(self, Self::Device { .. })
+        !matches!(
+            self,
+            Self::Device { .. } | Self::Color { .. } | Self::Image { .. }
+        )
+    }
+
+    /// Whether the source has a picture; audio inputs have none and cannot
+    /// go to preview or program.
+    pub fn has_video(&self) -> bool {
+        !matches!(self, Self::AudioDevice { .. })
+    }
+
+    /// Whether play/pause/next apply (media player sources).
+    pub fn has_transport(&self) -> bool {
+        matches!(
+            self,
+            Self::File { .. } | Self::Url { .. } | Self::Playlist { .. }
+        )
     }
 
     /// Default input name for a new source.
@@ -97,9 +139,26 @@ impl SourceSpec {
             Self::File { path } => file_stem(path),
             Self::Url { url } => url.clone(),
             Self::Srt { uri } => uri.clone(),
-            Self::Device { id } => id.clone(),
+            Self::Device { id } | Self::AudioDevice { id } => id.clone(),
+            Self::Color { color } => format!("Color {color}"),
+            Self::Image { path } => file_stem(path),
+            Self::Playlist { paths } => match paths.first() {
+                Some(first) => format!("{} (+{})", file_stem(first), paths.len() - 1),
+                None => "Playlist".into(),
+            },
+            Self::Ndi { name } => name.clone(),
+            Self::Whip { endpoint } => format!("WHIP {endpoint}"),
         }
     }
+}
+
+/// `#rrggbb` as `0xrrggbb`; `None` when malformed.
+pub fn color_rgb(color: &str) -> Option<u32> {
+    let hex = color.strip_prefix('#')?;
+    if hex.len() != 6 {
+        return None;
+    }
+    u32::from_str_radix(hex, 16).ok()
 }
 
 fn file_stem(path: &str) -> String {
@@ -122,6 +181,18 @@ pub enum InputStatus {
 }
 
 /// One input as clients see it.
+/// What an input shows when its source delivers no new frames (paused
+/// clip, lost camera or stream).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum SignalLoss {
+    /// Keep the last frame.
+    #[default]
+    Hold,
+    /// Go black shortly after the last frame.
+    Black,
+}
+
 /// Highest input volume (vMix scale, 100 = unity gain).
 pub const VOLUME_MAX: u8 = 100;
 
@@ -203,18 +274,50 @@ pub struct Input {
     /// kept but do nothing.
     #[serde(default)]
     pub has_audio: bool,
+    /// Last frame or black when the source stalls.
+    #[serde(default)]
+    pub signal_loss: SignalLoss,
     /// Solo on the monitor bus; not saved in the show file.
     #[serde(default)]
     pub listen: Listen,
 }
 
-/// A capture device the engine found (camera, capture card), for
-/// [`SourceSpec::Device`].
+/// What a discovered device delivers.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum DeviceKind {
+    /// Camera, capture card: [`SourceSpec::Device`].
+    Video,
+    /// Microphone, line-in: [`SourceSpec::AudioDevice`].
+    Audio,
+    /// NDI source on the network: [`SourceSpec::Ndi`] with the name.
+    Ndi,
+}
+
+/// A device the engine found.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Device {
-    /// Goes into `SourceSpec::Device { id }`.
+    /// Goes into the source (`id`, or `name` for NDI).
     pub id: String,
     pub name: String,
     /// OS media API, e.g. "V4L2"; the same camera can appear once per API.
     pub api: String,
+    pub kind: DeviceKind,
+}
+
+impl Device {
+    /// The source that shows this device.
+    pub fn source(&self) -> SourceSpec {
+        match self.kind {
+            DeviceKind::Video => SourceSpec::Device {
+                id: self.id.clone(),
+            },
+            DeviceKind::Audio => SourceSpec::AudioDevice {
+                id: self.id.clone(),
+            },
+            DeviceKind::Ndi => SourceSpec::Ndi {
+                name: self.name.clone(),
+            },
+        }
+    }
 }

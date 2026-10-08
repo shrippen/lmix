@@ -18,6 +18,7 @@ use strom_types::flow::GStreamerClockType;
 use strom_types::{Flow, FlowId, PropertyValue};
 use uuid::Uuid;
 
+use lmix_types::input::color_rgb;
 use lmix_types::SourceSpec;
 
 /// Namespace of all lmix flow ids.
@@ -26,12 +27,18 @@ const FLOW_NAMESPACE: Uuid = Uuid::from_u128(0x6c6d_6978_2d63_6f72_652d_666c_6f7
 const MEDIA_PLAYER_BLOCK: &str = "builtin.media_player";
 const SRT_INPUT_BLOCK: &str = "builtin.mpegtssrt_input";
 const LOCAL_INPUT_BLOCK: &str = "builtin.local_input";
+const NDI_INPUT_BLOCK: &str = "builtin.ndi_input";
+const WHIP_INPUT_BLOCK: &str = "builtin.whip_input";
 const INTER_OUTPUT_BLOCK: &str = "builtin.inter_output";
 const INTER_INPUT_BLOCK: &str = "builtin.inter_input";
 const VISION_MIXER_BLOCK: &str = "builtin.vision_mixer";
 const THUMBNAIL_BLOCK: &str = "builtin.thumbnail";
 const AUDIO_MIXER_BLOCK: &str = "builtin.mixer";
 
+/// Block id of the media player in file, URL and playlist slots.
+pub const PLAYER: &str = "player";
+/// Alpha of `Color` sources: fully opaque.
+const OPAQUE: u32 = 0xff00_0000;
 /// Block id of every slot flow's inter output.
 const SLOT_OUT: &str = "out";
 /// Block id of a slot flow's inter output for sound.
@@ -56,7 +63,9 @@ const INTER_BUFFER_MS: &str = "100";
 const TONE_BASE_HZ: f64 = 440.0;
 const TONE_STEP: f64 = 1.25;
 const TONE_VOLUME: f64 = 0.1;
-const AUDIO_CAPS: &str = "audio/x-raw,rate=48000,channels=2";
+/// One audio format for every slot: the audio mixer takes the format of
+/// its first input, a slot that differs fails with not-negotiated.
+const AUDIO_CAPS: &str = "audio/x-raw,format=F32LE,layout=interleaved,rate=48000,channels=2";
 
 /// Format test patterns are rendered in; real sources keep theirs.
 const PATTERN_WIDTH: u32 = 1280;
@@ -256,17 +265,20 @@ pub fn slot_flow(slot: usize, source: &SourceSpec) -> Flow {
     flow.id = slot_id(slot);
     share_timing(&mut flow);
 
-    let out = add_source(&mut flow, source);
-    flow.blocks.push(block(SLOT_TAP, THUMBNAIL_BLOCK, vec![]));
-    flow.links.push(link(out, format!("{SLOT_TAP}:video_in")));
-    flow.blocks
-        .push(block(SLOT_OUT, INTER_OUTPUT_BLOCK, vec![]));
-    flow.links.push(link(
-        format!("{SLOT_TAP}:video_out"),
-        format!("{SLOT_OUT}:sink"),
-    ));
+    // Sound-only sources publish no picture: their mixer input stays empty.
+    if let Some(out) = add_source(&mut flow, source) {
+        flow.blocks.push(block(SLOT_TAP, THUMBNAIL_BLOCK, vec![]));
+        flow.links.push(link(out, format!("{SLOT_TAP}:video_in")));
+        flow.blocks
+            .push(block(SLOT_OUT, INTER_OUTPUT_BLOCK, vec![]));
+        flow.links.push(link(
+            format!("{SLOT_TAP}:video_out"),
+            format!("{SLOT_OUT}:sink"),
+        ));
+    }
 
     if let Some(sound) = add_audio(&mut flow, slot, source) {
+        let sound = add_audio_format(&mut flow, sound);
         flow.blocks
             .push(block(SLOT_AUDIO_OUT, INTER_OUTPUT_BLOCK, vec![]));
         flow.links
@@ -275,39 +287,29 @@ pub fn slot_flow(slot: usize, source: &SourceSpec) -> Flow {
     flow
 }
 
-/// Add the source and return the pad that carries its video.
-fn add_source(flow: &mut Flow, source: &SourceSpec) -> String {
-    match source {
+/// Add the source and return the pad that carries its video; `None` for
+/// sound-only sources (see `SourceSpec::has_video`).
+fn add_source(flow: &mut Flow, source: &SourceSpec) -> Option<String> {
+    let pad = match source {
         SourceSpec::Pattern { pattern } => {
-            flow.elements.push(element(
-                "src",
-                "videotestsrc",
-                vec![
-                    ("pattern", PropertyValue::String(pattern.nick().into())),
-                    ("is-live", PropertyValue::Bool(true)),
-                ],
-            ));
-            flow.elements.push(element(
-                "caps",
-                "capsfilter",
-                vec![("caps", PropertyValue::String(pattern_caps()))],
-            ));
-            flow.links.push(link("src".into(), "caps".into()));
-            "caps".into()
+            let pattern = pattern.nick().into();
+            add_test_picture(flow, vec![("pattern", PropertyValue::String(pattern))])
         }
-        SourceSpec::File { path: location } | SourceSpec::Url { url: location } => {
-            let playlist = serde_json::to_string(&[location]).expect("playlist serializes");
-            flow.blocks.push(block(
-                "player",
-                MEDIA_PLAYER_BLOCK,
+        SourceSpec::Color { color } => {
+            // The switcher rejects malformed colors; black as last resort.
+            let argb = OPAQUE | color_rgb(color).unwrap_or_default();
+            add_test_picture(
+                flow,
                 vec![
-                    ("playlist", PropertyValue::String(playlist)),
-                    ("decode", PropertyValue::Bool(true)),
-                    ("loop_playlist", PropertyValue::Bool(true)),
+                    ("pattern", PropertyValue::String("solid-color".into())),
+                    ("foreground-color", PropertyValue::UInt(u64::from(argb))),
                 ],
-            ));
-            "player:video_out".into()
+            )
         }
+        SourceSpec::Image { path } => add_still(flow, path),
+        SourceSpec::File { path } => add_player(flow, std::slice::from_ref(path)),
+        SourceSpec::Url { url } => add_player(flow, std::slice::from_ref(url)),
+        SourceSpec::Playlist { paths } => add_player(flow, paths),
         SourceSpec::Srt { uri } => {
             flow.blocks.push(block(
                 "srt",
@@ -321,6 +323,26 @@ fn add_source(flow: &mut Flow, source: &SourceSpec) -> String {
             ));
             "srt:video_out".into()
         }
+        SourceSpec::Ndi { name } => {
+            flow.blocks.push(block(
+                "ndi",
+                NDI_INPUT_BLOCK,
+                vec![("ndi_name", PropertyValue::String(name.clone()))],
+            ));
+            "ndi:video_out".into()
+        }
+        SourceSpec::Whip { endpoint } => {
+            flow.blocks.push(block(
+                "whip",
+                WHIP_INPUT_BLOCK,
+                vec![
+                    ("endpoint_id", PropertyValue::String(endpoint.clone())),
+                    ("mode", PropertyValue::String("audio_video".into())),
+                    ("decode", PropertyValue::Bool(true)),
+                ],
+            ));
+            "whip:video_out".into()
+        }
         SourceSpec::Device { id } => {
             flow.blocks.push(block(
                 "dev",
@@ -332,17 +354,83 @@ fn add_source(flow: &mut Flow, source: &SourceSpec) -> String {
             ));
             "dev:video_out".into()
         }
+        SourceSpec::AudioDevice { .. } => return None,
+    };
+    Some(pad)
+}
+
+/// `videotestsrc` with `properties`, live, in the pattern format.
+fn add_test_picture(flow: &mut Flow, mut properties: Vec<(&str, PropertyValue)>) -> String {
+    properties.push(("is-live", PropertyValue::Bool(true)));
+    flow.elements
+        .push(element("src", "videotestsrc", properties));
+    flow.elements.push(element(
+        "caps",
+        "capsfilter",
+        vec![("caps", PropertyValue::String(pattern_caps()))],
+    ));
+    flow.links.push(link("src".into(), "caps".into()));
+    "caps".into()
+}
+
+/// Still image: decoded once, repeated live in the pattern format.
+fn add_still(flow: &mut Flow, path: &str) -> String {
+    flow.elements.push(element(
+        "file",
+        "filesrc",
+        vec![("location", PropertyValue::String(path.into()))],
+    ));
+    flow.elements.push(element("decode", "decodebin", vec![]));
+    flow.elements
+        .push(element("convert", "videoconvert", vec![]));
+    flow.elements.push(element("scale", "videoscale", vec![]));
+    flow.elements.push(element(
+        "freeze",
+        "imagefreeze",
+        vec![("is-live", PropertyValue::Bool(true))],
+    ));
+    flow.elements.push(element(
+        "caps",
+        "capsfilter",
+        vec![("caps", PropertyValue::String(pattern_caps()))],
+    ));
+    // decodebin's picture pad appears at runtime (src_0); strom links
+    // dynamic pads only with both pad names given.
+    for (from, to) in [
+        ("file", "decode"),
+        ("decode:src", "convert:sink"),
+        ("convert", "scale"),
+        ("scale", "freeze"),
+        ("freeze", "caps"),
+    ] {
+        flow.links.push(link(from.into(), to.into()));
     }
+    "caps".into()
+}
+
+/// Media player with `items`, looped; carries picture and sound.
+fn add_player(flow: &mut Flow, items: &[String]) -> String {
+    let playlist = serde_json::to_string(items).expect("playlist serializes");
+    flow.blocks.push(block(
+        PLAYER,
+        MEDIA_PLAYER_BLOCK,
+        vec![
+            ("playlist", PropertyValue::String(playlist)),
+            ("decode", PropertyValue::Bool(true)),
+            ("loop_playlist", PropertyValue::Bool(true)),
+        ],
+    ));
+    format!("{PLAYER}:video_out")
 }
 
 /// Add the source's sound and return its pad; `None` without sound
-/// (see `SourceSpec::has_audio`). A file without an audio track leaves
-/// the player pad silent.
+/// (see `SourceSpec::has_audio`). Blocks shared with the picture come
+/// from `add_source`. A file without an audio track leaves the pad silent.
 fn add_audio(flow: &mut Flow, slot: usize, source: &SourceSpec) -> Option<String> {
     if !source.has_audio() {
         return None;
     }
-    match source {
+    let pad = match source {
         SourceSpec::Pattern { .. } => {
             let freq = TONE_BASE_HZ * TONE_STEP.powi(slot as i32 % 8);
             flow.elements.push(element(
@@ -360,12 +448,45 @@ fn add_audio(flow: &mut Flow, slot: usize, source: &SourceSpec) -> Option<String
                 vec![("caps", PropertyValue::String(AUDIO_CAPS.into()))],
             ));
             flow.links.push(link("tone".into(), "tone_caps".into()));
-            Some("tone_caps".into())
+            "tone_caps".into()
         }
-        SourceSpec::File { .. } | SourceSpec::Url { .. } => Some("player:audio_out".into()),
-        SourceSpec::Srt { .. } => Some("srt:audio_out_0".into()),
-        SourceSpec::Device { .. } => None,
-    }
+        SourceSpec::File { .. } | SourceSpec::Url { .. } | SourceSpec::Playlist { .. } => {
+            format!("{PLAYER}:audio_out")
+        }
+        SourceSpec::Srt { .. } => "srt:audio_out_0".into(),
+        SourceSpec::Ndi { .. } => "ndi:audio_out".into(),
+        SourceSpec::Whip { .. } => "whip:audio_out".into(),
+        SourceSpec::AudioDevice { id } => {
+            flow.blocks.push(block(
+                "adev",
+                LOCAL_INPUT_BLOCK,
+                vec![
+                    ("stream_mode", PropertyValue::String("audio".into())),
+                    ("audio_device", PropertyValue::String(id.clone())),
+                ],
+            ));
+            "adev:audio_out".into()
+        }
+        SourceSpec::Device { .. } | SourceSpec::Color { .. } | SourceSpec::Image { .. } => {
+            return None
+        }
+    };
+    Some(pad)
+}
+
+/// Convert and resample `sound` to [`AUDIO_CAPS`]; returns the new pad.
+fn add_audio_format(flow: &mut Flow, sound: String) -> String {
+    flow.elements.push(element("aconv", "audioconvert", vec![]));
+    flow.elements.push(element("ares", "audioresample", vec![]));
+    flow.elements.push(element(
+        "aformat",
+        "capsfilter",
+        vec![("caps", PropertyValue::String(AUDIO_CAPS.into()))],
+    ));
+    flow.links.push(link(sound, "aconv".into()));
+    flow.links.push(link("aconv".into(), "ares".into()));
+    flow.links.push(link("ares".into(), "aformat".into()));
+    "aformat".into()
 }
 
 /// Same clock and base time 0 in every lmix flow: `inter` hands buffers
@@ -495,7 +616,73 @@ mod tests {
         assert!(flow
             .links
             .iter()
-            .any(|l| l.from == "tone_caps" && l.to == "out_audio:sink"));
+            .any(|l| l.from == "tone_caps" && l.to == "aconv"));
+    }
+
+    #[test]
+    fn color_is_opaque_argb() {
+        let flow = slot_flow(
+            0,
+            &SourceSpec::Color {
+                color: "#ff8000".into(),
+            },
+        );
+        let src = flow.elements.iter().find(|e| e.id == "src").unwrap();
+
+        assert!(matches!(
+            src.properties.get("foreground-color"),
+            Some(PropertyValue::UInt(0xffff_8000))
+        ));
+    }
+
+    #[test]
+    fn playlist_shares_one_player_for_picture_and_sound() {
+        let paths = vec!["/a.mp4".to_string(), "/b.mp4".to_string()];
+        let flow = slot_flow(0, &SourceSpec::Playlist { paths });
+
+        assert_eq!(flow.blocks.iter().filter(|b| b.id == PLAYER).count(), 1);
+        assert!(flow
+            .links
+            .iter()
+            .any(|l| l.from == "player:audio_out" && l.to == "aconv"));
+        assert!(matches!(
+            flow.blocks[0].properties.get("playlist"),
+            Some(PropertyValue::String(p)) if p == "[\"/a.mp4\",\"/b.mp4\"]"
+        ));
+    }
+
+    #[test]
+    fn audio_device_publishes_sound_only() {
+        let flow = slot_flow(0, &SourceSpec::AudioDevice { id: "mic".into() });
+
+        assert!(flow
+            .blocks
+            .iter()
+            .all(|b| b.id != SLOT_OUT && b.id != SLOT_TAP));
+        assert!(flow
+            .links
+            .iter()
+            .any(|l| l.from == "adev:audio_out" && l.to == "aconv"));
+    }
+
+    #[test]
+    fn image_is_frozen_live_in_pattern_format() {
+        let flow = slot_flow(
+            0,
+            &SourceSpec::Image {
+                path: "/logo.png".into(),
+            },
+        );
+
+        assert!(flow
+            .elements
+            .iter()
+            .any(|e| e.element_type == "imagefreeze"));
+        assert!(flow
+            .links
+            .iter()
+            .any(|l| l.from == "caps" && l.to == "tap:video_in"));
+        assert!(flow.blocks.iter().all(|b| b.id != SLOT_AUDIO_OUT));
     }
 
     #[test]

@@ -9,11 +9,12 @@
 //! Actions run one after another (the switcher lock is held while the
 //! engine works), so every client sees the same order.
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use lmix_types::{
-    Action, ActionError, Event, InputLevel, InputRef, InputStatus, Levels, ShowState,
+    Action, ActionError, Event, InputLevel, InputRef, InputStatus, Levels, ShowState, SignalLoss,
 };
 use tokio::sync::{broadcast, Mutex};
 
@@ -36,6 +37,9 @@ pub struct Service {
     /// Written after every change, read back after a crash (SHW.5).
     autosave: Option<PathBuf>,
     recent: Mutex<Recent>,
+    /// Last good frame per picture: a paused clip or still keeps its
+    /// picture while the engine's tap has no new frame.
+    pictures: std::sync::Mutex<HashMap<Picture, Vec<u8>>>,
 }
 
 impl Service {
@@ -46,6 +50,7 @@ impl Service {
             engine,
             events,
             recent: Mutex::new(Recent::load(autosave.as_deref())),
+            pictures: std::sync::Mutex::new(HashMap::new()),
             autosave,
         })
     }
@@ -84,12 +89,34 @@ impl Service {
         &self,
         input: &InputRef,
     ) -> Result<Result<Vec<u8>, EngineError>, ActionError> {
-        let slot = self.switcher.lock().await.slot_for(input)?;
-        Ok(self.engine.picture(Picture::Slot(slot)).await)
+        let (slot, loss) = {
+            let sw = self.switcher.lock().await;
+            let slot = sw.slot_for(input)?;
+            (slot, sw.signal_loss_of(slot))
+        };
+        Ok(self.picture(Picture::Slot(slot), loss).await)
     }
 
     pub async fn program_picture(&self) -> Result<Vec<u8>, EngineError> {
-        self.engine.picture(Picture::Program).await
+        // Program never stalls; holding only bridges the tap's gaps.
+        self.picture(Picture::Program, SignalLoss::Hold).await
+    }
+
+    /// Fresh frame; while the engine has none, the last one (`Hold`) or
+    /// nothing (`Black`), as the mixer shows it.
+    async fn picture(&self, which: Picture, loss: SignalLoss) -> Result<Vec<u8>, EngineError> {
+        let fresh = self.engine.picture(which).await;
+        let mut last = self.pictures.lock().expect("picture cache lock");
+        match fresh {
+            Ok(jpeg) => {
+                last.insert(which, jpeg.clone());
+                Ok(jpeg)
+            }
+            Err(EngineError::NotReady) if loss == SignalLoss::Hold => {
+                last.get(&which).cloned().ok_or(EngineError::NotReady)
+            }
+            Err(e) => Err(e),
+        }
     }
 
     /// Current levels per input (by slot) and of program.
@@ -195,6 +222,10 @@ impl Service {
         let mut first_error = None;
 
         for command in commands {
+            // A new or emptied slot must not show the old source's frame.
+            if let Command::SetSlot { slot, .. } = command {
+                self.forget_picture(Picture::Slot(*slot));
+            }
             let outcome = self.engine.run(command).await;
             mark_slot(sw, command, outcome.is_ok());
 
@@ -208,6 +239,13 @@ impl Service {
         }
 
         first_error.map_or(Ok(()), Err)
+    }
+
+    fn forget_picture(&self, which: Picture) {
+        self.pictures
+            .lock()
+            .expect("picture cache lock")
+            .remove(&which);
     }
 
     fn publish(&self, sw: &Switcher) {
@@ -267,6 +305,24 @@ mod tests {
     use crate::engine::null::NullEngine;
     use lmix_types::{InputRef, SourceSpec, TestPattern};
 
+    /// Slots the engine was told to build (other commands vary as
+    /// features grow: audio, solo, signal loss).
+    fn slot_commands(engine: &NullEngine) -> usize {
+        engine
+            .log()
+            .iter()
+            .filter(|c| {
+                matches!(
+                    c,
+                    Command::SetSlot {
+                        source: Some(_),
+                        ..
+                    }
+                )
+            })
+            .count()
+    }
+
     fn bars() -> Action {
         Action::AddInput {
             source: SourceSpec::Pattern {
@@ -285,7 +341,7 @@ mod tests {
         let state = service.handle(bars()).await.unwrap();
 
         assert_eq!(state.inputs[0].status, InputStatus::Online);
-        assert_eq!(engine.log().len(), 2, "slot, audio: {:?}", engine.log());
+        assert_eq!(slot_commands(&engine), 1, "{:?}", engine.log());
         assert!(matches!(events.recv().await.unwrap(), Event::State { .. }));
         assert!(matches!(events.recv().await.unwrap(), Event::Tally { .. }));
     }
@@ -334,11 +390,11 @@ mod tests {
 
         assert_eq!(opened.inputs, saved.inputs);
         assert_eq!(opened.preview, saved.preview);
-        assert_eq!(
-            engine.log().len(),
-            5,
-            "slot, program, preview, audio, listen: {:?}",
-            engine.log()
+        let log = engine.log();
+        assert_eq!(slot_commands(&engine), 1, "{log:?}");
+        assert!(
+            log.iter().any(|c| matches!(c, Command::Preview { .. })),
+            "{log:?}"
         );
     }
 
@@ -357,11 +413,11 @@ mod tests {
         assert!(resumed);
         assert_eq!(second.state().await.inputs.len(), 1);
         assert_eq!(second.state().await.path, None);
-        assert_eq!(
-            engine.log().len(),
-            4,
-            "slot, program, audio, listen: {:?}",
-            engine.log()
+        let log = engine.log();
+        assert_eq!(slot_commands(&engine), 1, "{log:?}");
+        assert!(
+            log.iter().any(|c| matches!(c, Command::Program { .. })),
+            "{log:?}"
         );
     }
 

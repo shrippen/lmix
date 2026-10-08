@@ -5,13 +5,15 @@
 //! | `SetSlot` with source | replace slot flow (fixed id), start it |
 //! | `SetSlot` empty | stop and delete slot flow |
 //! | `Preview` | vision mixer: select preview |
-//! | `Program` | vision mixer: transition from its current program (`cut` for hard cuts); no slot = black input |
+//! | `Program` | vision mixer: target into its preview (strom takes preview, not `to_input`), transition (`cut` for hard cuts), old preview back; no slot = black input |
 //! | `FadeToBlack` | vision mixer: toggle FTB |
 //! | `SetAudio` | audio mixer: channel fader and mute, ramped |
 //! | `SetListen` | audio mixer: channel PFL/AFL (monitor bus) |
+//! | `SetSignalLoss` | vision mixer compositor pads: `max-last-buffer-repeat` |
+//! | `Transport` | slot's media player: play, pause, seek 0, next, previous |
 
 use async_trait::async_trait;
-use lmix_types::{Device, Effect, Listen};
+use lmix_types::{Device, DeviceKind, Effect, Listen, SignalLoss, Transport};
 use reqwest::StatusCode;
 use serde::Serialize;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -28,6 +30,20 @@ use tokio::sync::watch;
 /// How often and how long `start` waits for the mixer to play.
 const PLAYING_POLL: Duration = Duration::from_millis(200);
 const PLAYING_POLLS: u32 = 50;
+/// Vision mixer compositors whose input pads follow `SignalLoss`.
+const MIXER_COMPOSITORS: [&str; 2] = ["mixer", "mv_comp"];
+/// `max-last-buffer-repeat` default: repeat until end of stream.
+const REPEAT_FOREVER_NS: u64 = u64::MAX;
+/// `SignalLoss::Black`: this long without a frame, then black.
+const BLACK_AFTER: Duration = Duration::from_millis(400);
+
+/// strom discovery categories and what lmix makes of them.
+const DEVICE_CATEGORIES: [(&str, DeviceKind); 3] = [
+    ("video_source", DeviceKind::Video),
+    ("audio_source", DeviceKind::Audio),
+    ("network_source", DeviceKind::Ndi),
+];
+
 /// strom's answer to a transition before the pipeline has a position.
 const NOT_RUNNING_YET: &str = "query pipeline position";
 
@@ -158,9 +174,17 @@ impl StromEngine {
         duration_ms: u32,
     ) -> Result<(), EngineError> {
         let to = slot.unwrap_or_else(|| self.black.load(Ordering::Relaxed));
-        let from = self.mixer_state().await?.program_input;
+        let state = self.mixer_state().await?;
+        let from = state.program_input;
         if from == Some(to) {
             return Ok(());
+        }
+
+        // strom takes whatever is in its preview and ignores `to_input`:
+        // put the target there first and give the old preview back after.
+        let borrowed = state.preview_input.filter(|p| *p != to);
+        if borrowed.is_some() || state.preview_input.is_none() {
+            self.select_preview(to).await?;
         }
 
         let body = TriggerTransitionRequest {
@@ -179,10 +203,23 @@ impl StromEngine {
                 matches!(&result, Err(EngineError::Refused(m)) if m.contains(NOT_RUNNING_YET));
             attempt += 1;
             if !warming_up || attempt >= PLAYING_POLLS {
-                return result;
+                result?;
+                break;
             }
             tokio::time::sleep(PLAYING_POLL).await;
         }
+
+        match borrowed {
+            Some(preview) => self.select_preview(preview).await,
+            None => Ok(()),
+        }
+    }
+
+    async fn select_preview(&self, input: usize) -> Result<(), EngineError> {
+        let body = SelectPreviewRequest {
+            source: Source::Input(input),
+        };
+        self.mixer_call("preview", &body).await
     }
 
     /// Fader and mute of a slot's audio mixer channel. strom maps both to
@@ -203,6 +240,61 @@ impl StromEngine {
             self.patch_audio_mixer(vec![property], ramp_ms).await?;
         }
         Ok(())
+    }
+
+    /// How long a compositor pad repeats its last frame: forever (hold)
+    /// or briefly, then the mixer's black background shows (PGM and
+    /// multiview alike).
+    async fn set_signal_loss(&self, slot: usize, mode: SignalLoss) -> Result<(), EngineError> {
+        let repeat_ns = match mode {
+            SignalLoss::Hold => REPEAT_FOREVER_NS,
+            SignalLoss::Black => BLACK_AFTER.as_nanos() as u64,
+        };
+        let body = serde_json::json!({
+            "property_name": "max-last-buffer-repeat",
+            "value": PropertyValue::UInt(repeat_ns),
+        });
+        for compositor in MIXER_COMPOSITORS {
+            let path = format!(
+                "/flows/{}/elements/{MIXER_BLOCK}:{compositor}/pads/sink_{slot}/properties",
+                flows::mixer_id()
+            );
+            let resp = self
+                .http
+                .patch(self.url(&path))
+                .json(&body)
+                .send()
+                .await
+                .map_err(net)?;
+            check(resp).await?;
+        }
+        Ok(())
+    }
+
+    /// Media player control; restart is a seek to 0 plus play.
+    async fn transport(&self, slot: usize, transport: Transport) -> Result<(), EngineError> {
+        let player = format!(
+            "/flows/{}/blocks/{}/player",
+            flows::slot_id(slot),
+            flows::PLAYER
+        );
+        let action = match transport {
+            Transport::Play => "play",
+            Transport::Pause => "pause",
+            Transport::Next => "next",
+            Transport::Previous => "previous",
+            Transport::Restart => {
+                let body = serde_json::json!({ "position_ns": 0 });
+                let url = self.url(&format!("{player}/seek"));
+                let resp = self.http.post(url).json(&body).send().await.map_err(net)?;
+                check(resp).await?;
+                "play"
+            }
+        };
+        let body = serde_json::json!({ "action": action });
+        let url = self.url(&format!("{player}/control"));
+        let resp = self.http.post(url).json(&body).send().await.map_err(net)?;
+        check(resp).await.map(|_| ())
     }
 
     /// PFL and AFL of a channel (separate volume elements: one batch).
@@ -293,12 +385,7 @@ impl Engine for StromEngine {
                 source: Some(source),
             } => self.put_flow(&flows::slot_flow(*slot, source)).await,
             Command::SetSlot { slot, source: None } => self.drop_flow(flows::slot_id(*slot)).await,
-            Command::Preview { slot } => {
-                let body = SelectPreviewRequest {
-                    source: Source::Input(*slot),
-                };
-                self.mixer_call("preview", &body).await
-            }
+            Command::Preview { slot } => self.select_preview(*slot).await,
             Command::Program {
                 slot,
                 effect,
@@ -317,6 +404,8 @@ impl Engine for StromEngine {
                 ramp_ms,
             } => self.set_channel(*slot, *gain, *muted, *ramp_ms).await,
             Command::SetListen { slot, listen } => self.set_listen(*slot, *listen).await,
+            Command::Transport { slot, transport } => self.transport(*slot, *transport).await,
+            Command::SetSignalLoss { slot, mode } => self.set_signal_loss(*slot, *mode).await,
         }
     }
 
@@ -340,18 +429,20 @@ impl Engine for StromEngine {
         self.levels.subscribe()
     }
 
+    /// Cameras, microphones and NDI sources, in that order.
     async fn devices(&self) -> Result<Vec<Device>, EngineError> {
-        let url = self.url("/discovery/devices?category=video_source");
-        let resp = self.http.get(url).send().await.map_err(net)?;
-        let found: Vec<DeviceResponse> = check(resp).await?.json().await.map_err(net)?;
-        let devices = found
-            .into_iter()
-            .map(|d| Device {
+        let mut devices = Vec::new();
+        for (category, kind) in DEVICE_CATEGORIES {
+            let url = self.url(&format!("/discovery/devices?category={category}"));
+            let resp = self.http.get(url).send().await.map_err(net)?;
+            let found: Vec<DeviceResponse> = check(resp).await?.json().await.map_err(net)?;
+            devices.extend(found.into_iter().map(|d| Device {
                 api: d.api_label(),
                 id: d.id,
                 name: d.name,
-            })
-            .collect();
+                kind,
+            }));
+        }
         Ok(devices)
     }
 }

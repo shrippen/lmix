@@ -16,7 +16,7 @@ STROM="http://127.0.0.1:${STROM_PORT}"
 CORE="http://127.0.0.1:${CORE_PORT}/api"
 WORK="$(mktemp -d)"
 # Mixer slots for the test; small to fit a VM.
-SLOTS=4
+SLOTS=6
 # Mean brightness (0-100) bars or snow exceed; black is 0.
 MIN_BRIGHTNESS=30
 # Audio levels (dBFS): a test tone is above, silence below.
@@ -30,6 +30,7 @@ cleanup() {
     for pid in "${PIDS[@]}"; do
         kill "$pid" 2>/dev/null || true
     done
+    [[ -n "${KEEP_WORK:-}" ]] && { echo "work kept: $WORK" >&2; return; }
     rm -rf "$WORK"
 }
 trap cleanup EXIT
@@ -175,6 +176,85 @@ settle
 [[ $(mon_db) -gt $AUDIBLE_DB ]] || fail "monitor not back on program after clearing solos"
 pass "solo: PFL hears a muted input, AFL does not, monitor back on program"
 
+# --- more sources (2b.3): color, still image, playlist with transport ---
+MEDIA="$WORK/media"
+mkdir -p "$MEDIA"
+convert -size 1280x720 xc:'#2060c0' "$MEDIA/logo.png"
+# Two clips with sound: a dark (ball), b bright (bars).
+for clip in "a ball 330" "b smpte 660"; do
+    set -- $clip
+    gst-launch-1.0 -q videotestsrc num-buffers=300 pattern="$2" ! video/x-raw,width=640,height=360,framerate=30/1 \
+        ! x264enc tune=zerolatency ! h264parse ! mp4mux name=m ! filesink location="$MEDIA/$1.mp4" \
+        audiotestsrc num-buffers=470 freq="$3" volume=0.2 ! audioconvert ! avenc_aac ! aacparse ! m.
+done
+rgb() { convert "$1" -format "%[fx:int(mean.$2*255)]" info:; }
+
+act '{"action":"add_input","source":{"kind":"color","color":"#ff8000"},"name":"Orange"}' >/dev/null
+act "{\"action\":\"add_input\",\"source\":{\"kind\":\"image\",\"path\":\"$MEDIA/logo.png\"},\"name\":\"Logo\"}" >/dev/null
+act "{\"action\":\"add_input\",\"source\":{\"kind\":\"playlist\",\"paths\":[\"$MEDIA/a.mp4\",\"$MEDIA/b.mp4\"]},\"name\":\"Clips\"}" >/dev/null
+code="$(curl -s -o /dev/null -w '%{http_code}' -X POST "$CORE/actions" -H 'content-type: application/json' \
+    -d '{"action":"add_input","source":{"kind":"color","color":"orange"}}')"
+[[ "$code" == 422 ]] || fail "malformed color accepted ($code)"
+sleep 3
+picture inputs/Orange "$WORK/orange.jpg"
+[[ $(rgb "$WORK/orange.jpg" r) -gt 200 && $(rgb "$WORK/orange.jpg" b) -lt 50 ]] || fail "color input not orange"
+picture inputs/Logo "$WORK/logo.jpg"
+[[ $(rgb "$WORK/logo.jpg" b) -gt 150 && $(rgb "$WORK/logo.jpg" r) -lt 80 ]] || fail "image input not the logo"
+clips_id="$(curl -sf "$CORE/state" | jq -r '.inputs[] | select(.name=="Clips") | .id')"
+clips_db="$(curl -sf "$CORE/audio/levels" | jq --arg id "$clips_id" '.inputs[] | select(.input==$id) | .peak_db | floor')"
+[[ $clips_db -gt $AUDIBLE_DB ]] || fail "playlist silent ($clips_db dB)"
+pass "sources: color, still image, playlist with sound; bad color refused"
+
+clips_still() {
+    picture inputs/Clips "$WORK/c1.jpg"
+    sleep "$TAP_INTERVAL"
+    picture inputs/Clips "$WORK/c2.jpg"
+    cmp -s "$WORK/c1.jpg" "$WORK/c2.jpg"
+}
+picture inputs/Clips "$WORK/c0.jpg"   # switches the tap on before pausing
+act '{"action":"transport_input","input":"Clips","transport":"pause"}' >/dev/null
+sleep 1
+clips_still || fail "paused playlist still moves"
+act '{"action":"transport_input","input":"Clips","transport":"play"}' >/dev/null
+sleep 1
+! clips_still || fail "playlist does not play again"
+# a is dark, b bright: next must flip the brightness either way.
+picture inputs/Clips "$WORK/before.jpg"
+act '{"action":"transport_input","input":"Clips","transport":"next"}' >/dev/null
+sleep 2
+picture inputs/Clips "$WORK/next.jpg"
+change=$(( $(brightness "$WORK/next.jpg") - $(brightness "$WORK/before.jpg") ))
+[[ ${change#-} -gt $MIN_BRIGHTNESS ]] || fail "next did not switch clips (brightness change $change)"
+pass "transport: pause, play, next"
+
+# --- signal loss: hold the last frame (default) or black, per input ---
+act '{"action":"cut_direct","input":"Clips"}' >/dev/null
+# Straight to program from outside preview: the mixer must follow lmix.
+mixer_pgm="$(curl -sf "$STROM/api/flows/$MIXER_ID/blocks/vm/state" | jq '.program_input')"
+[[ "$mixer_pgm" == 4 ]] || fail "cut_direct: mixer program is input $mixer_pgm, not Clips (4)"
+# Make sure the bright clip b plays (next from a, previous from b).
+sleep "$TAP_INTERVAL"
+picture inputs/Clips "$WORK/now.jpg"
+if [[ $(brightness "$WORK/now.jpg") -lt $MIN_BRIGHTNESS ]]; then
+    act '{"action":"transport_input","input":"Clips","transport":"next"}' >/dev/null
+    sleep 2
+fi
+act '{"action":"transport_input","input":"Clips","transport":"pause"}' >/dev/null
+sleep 2
+picture program "$WORK/hold.jpg"
+[[ $(brightness "$WORK/hold.jpg") -gt $MIN_BRIGHTNESS ]] || fail "paused clip not held on program"
+# The mode applies from the next frame on: set it while the clip plays.
+act '{"action":"transport_input","input":"Clips","transport":"play"}' >/dev/null
+act '{"action":"set_signal_loss","input":"Clips","mode":"black"}' >/dev/null
+sleep 1
+act '{"action":"transport_input","input":"Clips","transport":"pause"}' >/dev/null
+sleep 2
+picture program "$WORK/black.jpg"
+[[ $(brightness "$WORK/black.jpg") -lt 5 ]] || fail "paused clip not black on program ($(brightness "$WORK/black.jpg"))"
+act '{"action":"set_signal_loss","input":"Clips","mode":"hold"}' >/dev/null
+act '{"action":"transport_input","input":"Clips","transport":"play"}' >/dev/null
+pass "signal loss: paused clip held on program, black when set"
+
 # --- input color, device list ---
 act '{"action":"set_input_color","input":"Ball","color":"teal"}' >/dev/null
 [[ "$(curl -sf "$CORE/state" | jq -r '.inputs[1].color')" == teal ]] || fail "color not set"
@@ -206,7 +286,7 @@ act '{"action":"new_show"}' >/dev/null
 act "{\"action\":\"open_show\",\"path\":\"$WORK/test.lmix\"}" >/dev/null
 sleep 2
 state="$(curl -sf "$CORE/state")"
-[[ "$(jq '.inputs | length' <<<"$state")" == 2 ]] || fail "show not restored: $state"
+[[ "$(jq '.inputs | length' <<<"$state")" == 5 ]] || fail "show not restored: $state"
 pass "show saved, cleared, reopened"
 
 # --- crash of lmix-core: engine keeps running, show comes back ---
@@ -216,7 +296,7 @@ running="$(curl -sf "$STROM/api/flows/$MIXER_ID" | jq -r '.flow.running')"
 [[ "$running" == true ]] || fail "mixer died with lmix-core"
 start_core
 sleep 2
-[[ "$(curl -sf "$CORE/state" | jq '.inputs | length')" == 2 ]] || fail "autosave not resumed"
+[[ "$(curl -sf "$CORE/state" | jq '.inputs | length')" == 5 ]] || fail "autosave not resumed"
 [[ "$(curl -sf "$CORE/state" | jq '.inputs[1].audio.volume')" == 50 ]] || fail "audio settings not resumed"
 pass "lmix-core killed and restarted: mixer kept running, show resumed"
 

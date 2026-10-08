@@ -26,7 +26,7 @@ pub enum EngineError {
 }
 
 /// Which picture to grab.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Picture {
     Program,
     Slot(usize),
