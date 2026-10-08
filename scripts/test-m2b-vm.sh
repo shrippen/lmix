@@ -62,7 +62,11 @@ STROM_BIN="$("$ROOT/scripts/fetch-strom.sh")"
 CORE_BIN="${CARGO_TARGET_DIR:-$ROOT/workspace/lmix-core/target}/debug/lmix-core"
 
 # --- start ---
-(cd "$WORK" && exec "$STROM_BIN" --host 127.0.0.1 --port "$STROM_PORT" --no-auto-restart --data-dir "$WORK/strom-data" >"$WORK/strom.log" 2>&1) &
+# A screen for display outputs (engine side).
+ENGINE_DISPLAY=:94
+Xvfb "$ENGINE_DISPLAY" -screen 0 1280x720x24 >/dev/null 2>&1 &
+PIDS+=($!)
+(cd "$WORK" && DISPLAY="$ENGINE_DISPLAY" LIBGL_ALWAYS_SOFTWARE=1 exec "$STROM_BIN" --host 127.0.0.1 --port "$STROM_PORT" --no-auto-restart --data-dir "$WORK/strom-data" >"$WORK/strom.log" 2>&1) &
 PIDS+=($!)
 wait_up "$STROM/health" strom
 
@@ -299,6 +303,17 @@ tracks() {
 [[ "$(tracks Orange)" == 1 ]] || fail "ISO of a silent input: expected video only, got $(tracks Orange) tracks"
 [[ "$(tracks Clips)" == 2 ]] || fail "ISO of the playlist: expected video and audio"
 pass "MultiCorder: ISO recordings per input (silent input video only, playlist with sound)"
+
+# Display output: program in a window on the engine's screen.
+DISPLAY="$ENGINE_DISPLAY" import -window root "$WORK/screen-before.png"
+act '{"action":"add_output","spec":{"kind":"display","mode":{"mode":"window"}},"name":"Screen"}' >/dev/null
+act '{"action":"start_output","output":"Screen"}' >/dev/null
+sleep 3
+DISPLAY="$ENGINE_DISPLAY" import -window root "$WORK/screen.png"
+spread="$(convert "$WORK/screen.png" -colorspace gray -format '%[fx:int(standard_deviation*100)]' info:)"
+[[ "$(output_state Screen)" == running && $spread -gt 5 ]] || fail "display output shows nothing (spread $spread)"
+act '{"action":"stop_output","output":"Screen"}' >/dev/null
+pass "display output: program in a window on the engine screen"
 
 # --- input color, device list ---
 act '{"action":"set_input_color","input":"Ball","color":"teal"}' >/dev/null

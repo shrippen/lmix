@@ -601,3 +601,18 @@ Aufnahme je Input auch ISO-Streams (SRT) und ISO-NDI ohne Zusatzaufwand.
   würde sonst ewig auf eine Spur warten.
 - Audio-Inputs (ohne Bild) können keine ISO-Quelle sein.
 - Wird der Input entfernt, stoppt sein ISO-Ausgang und steht auf Fehler.
+
+## 2026-10-08 — M3 Schritt 3: Bildschirm-Ausgang (3.3)
+
+Ausgangsart "Display", Sink im Engine-Prozess (Absturz der GUI lässt den
+Beamer weiterlaufen). Drei Wege zum Bildschirm:
+- Fenster (`glimagesink`): Kontrollmonitor, auch in der VM prüfbar.
+- Vollbild (`waylandsink fullscreen`): welcher Bildschirm, entscheidet der
+  Compositor (KDE: Fensterregel). Ein Wayland-Client kann den Ausgang nicht
+  selbst wählen.
+- DRM-Anschluss (`kmssink connector-id`): ohne Desktop, z. B. Beamer an
+  einer Engine-Maschine ohne Sitzung.
+Nur Bild; Ton über HDMI folgt mit Audio-Ausgängen. Die Sink läuft mit
+`sync=false` (Frames kommen schon um die Mischer-Latenz gealtert, eine
+synchronisierende Sink verwarf sie alle) und `qos=false` (CRITICAL-Probe).
+Quelle wie alle Ausgänge: Programm oder ein Input (ISO-Kontrollbild).

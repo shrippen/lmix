@@ -105,6 +105,23 @@ pub enum OutputSpec {
     },
     /// NDI on the network, uncompressed program (OUT.6).
     Ndi { name: String },
+    /// Picture on a screen of the engine machine (OUT.3): projector, LED
+    /// wall, confidence monitor. Picture only.
+    Display { mode: DisplayMode },
+}
+
+/// How a display output reaches its screen.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "mode", rename_all = "snake_case")]
+pub enum DisplayMode {
+    /// A normal window on the desktop (also a confidence monitor).
+    Window,
+    /// Fullscreen on the desktop (Wayland; the compositor picks the
+    /// screen, e.g. a KDE window rule).
+    Fullscreen,
+    /// Straight to a screen connector without desktop (DRM/KMS), e.g. a
+    /// projector on a headless engine.
+    Drm { connector: u32 },
 }
 
 impl OutputSpec {
@@ -113,6 +130,11 @@ impl OutputSpec {
             Self::Srt { uri, .. } => format!("SRT {uri}"),
             Self::Record { folder, .. } => format!("Record {folder}"),
             Self::Ndi { name } => format!("NDI {name}"),
+            Self::Display { mode } => match mode {
+                DisplayMode::Window => "Window".into(),
+                DisplayMode::Fullscreen => "Fullscreen".into(),
+                DisplayMode::Drm { connector } => format!("Screen {connector}"),
+            },
         }
     }
 }

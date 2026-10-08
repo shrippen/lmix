@@ -29,3 +29,4 @@ Hardware: **NV** = NVIDIA-Host (RTX 3090), **AMD**, **INTEL**,
 | H.17 | Signalverlust halten/schwarz auf CUDA- und GL-Mischer (Pad-Namen `sink_N` dort gleich?), Kamera abziehen statt Clip pausieren | NV, CAP | 2b.3 | offen |
 | H.18 | Ausgänge auf Hardware-Encoder (NVENC über `videoenc` auto): Last, Latenz, SRT zu echtem Ziel über 1 h, Aufnahme 1 h ohne Drop | NV, NET | M3 3.1 | offen |
 | H.19 | NDI-Ausgang (NDI-SDK): in NDI Studio Monitor sichtbar mit Ton | NET | M3 3.1 | offen |
+| H.20 | Bildschirm-Ausgang: Vollbild unter KDE Plasma auf zweitem Monitor (Fensterregel), DRM-Anschluss ohne Desktop, Tearing, Latenz zum PGM | NV, Beamer | M3 3.3 | offen |

@@ -17,9 +17,9 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use lmix_types::{
-    Action, Container, Device, DeviceKind, Effect, InputColor, InputId, InputRef, InputStatus,
-    Levels, Listen, OutputRef, OutputSource, OutputSpec, OutputStatus, ShowState, SignalLoss,
-    SourceSpec, TestPattern, TransitionSlot, Transport,
+    Action, Container, Device, DeviceKind, DisplayMode, Effect, InputColor, InputId, InputRef,
+    InputStatus, Levels, Listen, OutputRef, OutputSource, OutputSpec, OutputStatus, ShowState,
+    SignalLoss, SourceSpec, TestPattern, TransitionSlot, Transport,
 };
 
 use crate::core_client::{CoreClient, CoreMessage, FilePurpose, PictureTarget};
@@ -288,16 +288,34 @@ enum OutputKind {
     Srt,
     Record,
     Ndi,
+    Window,
+    Fullscreen,
+    Drm,
 }
 
 impl OutputKind {
-    const ALL: [OutputKind; 3] = [Self::Srt, Self::Record, Self::Ndi];
+    const ALL: [OutputKind; 6] = [
+        Self::Srt,
+        Self::Record,
+        Self::Ndi,
+        Self::Window,
+        Self::Fullscreen,
+        Self::Drm,
+    ];
+
+    /// Whether the form needs the text field.
+    fn needs_text(self) -> bool {
+        !matches!(self, Self::Window | Self::Fullscreen)
+    }
 
     fn label(self) -> &'static str {
         match self {
             Self::Srt => "SRT stream",
             Self::Record => "Recording",
             Self::Ndi => "NDI",
+            Self::Window => "Screen: window",
+            Self::Fullscreen => "Screen: fullscreen (Wayland)",
+            Self::Drm => "Screen: connector (no desktop)",
         }
     }
 
@@ -306,6 +324,8 @@ impl OutputKind {
             Self::Srt => "srt://host:9000",
             Self::Record => "folder in the engine's media directory",
             Self::Ndi => "NDI name, e.g. lmix PGM",
+            Self::Window | Self::Fullscreen => "",
+            Self::Drm => "DRM connector id",
         }
     }
 }
@@ -324,7 +344,7 @@ impl OutputForm {
     /// The output to add; `None` while the text field is empty.
     fn spec(&self) -> Option<OutputSpec> {
         let text = self.text.trim().to_string();
-        if text.is_empty() {
+        if self.kind.needs_text() && text.is_empty() {
             return None;
         }
         Some(match self.kind {
@@ -338,6 +358,17 @@ impl OutputForm {
                 video_kbps: self.video_kbps,
             },
             OutputKind::Ndi => OutputSpec::Ndi { name: text },
+            OutputKind::Window => OutputSpec::Display {
+                mode: DisplayMode::Window,
+            },
+            OutputKind::Fullscreen => OutputSpec::Display {
+                mode: DisplayMode::Fullscreen,
+            },
+            OutputKind::Drm => OutputSpec::Display {
+                mode: DisplayMode::Drm {
+                    connector: text.parse().ok()?,
+                },
+            },
         })
     }
 }
@@ -787,12 +818,14 @@ impl CoreApp {
                     ui.selectable_value(&mut form.kind, kind, kind.label());
                 }
             });
-        ui.add(
-            egui::TextEdit::singleline(&mut form.text)
-                .hint_text(form.kind.hint())
-                .desired_width(280.0),
-        );
-        if form.kind != OutputKind::Ndi {
+        if form.kind.needs_text() {
+            ui.add(
+                egui::TextEdit::singleline(&mut form.text)
+                    .hint_text(form.kind.hint())
+                    .desired_width(280.0),
+            );
+        }
+        if matches!(form.kind, OutputKind::Srt | OutputKind::Record) {
             ui.add(egui::Slider::new(&mut form.video_kbps, VIDEO_KBPS_RANGE).text("video kbit/s"));
         }
         if form.kind == OutputKind::Record {
@@ -1448,6 +1481,31 @@ mod tests {
             .as_millis() as u64;
 
         assert_eq!(running_time(now_ms - 3_725_000), "1:02:05");
+    }
+
+    #[test]
+    fn screen_outputs_need_no_text_except_a_connector() {
+        let mut form = OutputForm {
+            kind: OutputKind::Window,
+            source: OutputSource::Program,
+            text: String::new(),
+            container: Container::Mkv,
+            video_kbps: 6000,
+        };
+        assert_eq!(
+            form.spec(),
+            Some(OutputSpec::Display {
+                mode: DisplayMode::Window
+            })
+        );
+
+        form.kind = OutputKind::Drm;
+        assert_eq!(form.spec(), None);
+        form.text = "42".into();
+        let spec = Some(OutputSpec::Display {
+            mode: DisplayMode::Drm { connector: 42 },
+        });
+        assert_eq!(form.spec(), spec);
     }
 
     #[test]

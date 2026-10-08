@@ -19,7 +19,7 @@ use strom_types::{Flow, FlowId, PropertyValue};
 use uuid::Uuid;
 
 use lmix_types::input::color_rgb;
-use lmix_types::{OutputId, OutputSpec, SourceSpec};
+use lmix_types::{DisplayMode, OutputId, OutputSpec, SourceSpec};
 
 use crate::switcher::Feed;
 
@@ -260,6 +260,8 @@ pub fn output_flow(id: OutputId, spec: &OutputSpec, feed: Feed) -> Flow {
         Feed::Program => (pgm_channel(PGM_OUT), Some(pgm_channel(PGM_AUDIO_OUT))),
         Feed::Slot { slot, audio } => (slot_channel(slot), audio.then(|| slot_audio_channel(slot))),
     };
+    // Screens show picture only.
+    let audio = audio.filter(|_| !matches!(spec, OutputSpec::Display { .. }));
     let channels = [("pgm", Some(video)), ("pgm_audio", audio.clone())];
     for (block_id, channel) in channels {
         let Some(channel) = channel else {
@@ -320,6 +322,7 @@ pub fn output_flow(id: OutputId, spec: &OutputSpec, feed: Feed) -> Flow {
                 add_aac(&mut flow, "rec:audio_in_0");
             }
         }
+        OutputSpec::Display { mode } => add_display(&mut flow, *mode),
         OutputSpec::Ndi { name } => {
             flow.blocks.push(block(
                 "ndi",
@@ -335,6 +338,33 @@ pub fn output_flow(id: OutputId, spec: &OutputSpec, feed: Feed) -> Flow {
         }
     }
     flow
+}
+
+/// Picture to a screen. qos=false: strom drops upstream QoS at sinks with
+/// a probe that GStreamer 1.24 answers with a CRITICAL per frame.
+/// sync=false: frames come live from the mixer, already as old as its
+/// latency; a syncing sink would drop them all as late.
+fn add_display(flow: &mut Flow, mode: DisplayMode) {
+    let mut properties = vec![
+        ("qos", PropertyValue::Bool(false)),
+        ("sync", PropertyValue::Bool(false)),
+    ];
+    let sink = match mode {
+        DisplayMode::Window => "glimagesink",
+        DisplayMode::Fullscreen => {
+            properties.push(("fullscreen", PropertyValue::Bool(true)));
+            "waylandsink"
+        }
+        DisplayMode::Drm { connector } => {
+            properties.push(("connector-id", PropertyValue::Int(i64::from(connector))));
+            "kmssink"
+        }
+    };
+    flow.elements
+        .push(element("convert", "videoconvert", vec![]));
+    flow.elements.push(element("screen", sink, properties));
+    flow.links.push(link("pgm:src".into(), "convert".into()));
+    flow.links.push(link("convert".into(), "screen".into()));
 }
 
 /// Program sound as AAC into `to` (the recorder takes encoded audio only).
@@ -927,6 +957,22 @@ mod tests {
         ));
         assert!(flow.blocks.iter().all(|b| b.id != "pgm_audio"));
         assert!(flow.links.iter().all(|l| l.to != "rec:audio_in_0"));
+    }
+
+    #[test]
+    fn display_output_is_picture_only_without_qos() {
+        let spec = OutputSpec::Display {
+            mode: DisplayMode::Drm { connector: 42 },
+        };
+        let flow = output_flow(OutputId::new(), &spec, Feed::Program);
+
+        let screen = flow.elements.iter().find(|e| e.id == "screen").unwrap();
+        assert_eq!(screen.element_type, "kmssink");
+        assert!(matches!(
+            screen.properties.get("qos"),
+            Some(PropertyValue::Bool(false))
+        ));
+        assert!(flow.links.iter().all(|l| !l.from.starts_with("pgm_audio")));
     }
 
     #[test]
