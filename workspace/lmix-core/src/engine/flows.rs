@@ -390,8 +390,16 @@ fn add_download(flow: &mut Flow, from: &str, on_gpu: bool) -> String {
     }
     flow.elements
         .push(element("download", "cudadownload", vec![]));
+    // cudadownload passes GPU memory through to anything that accepts it,
+    // and unixfdsink accepts any caps.
+    flow.elements.push(element(
+        "sysmem",
+        "capsfilter",
+        vec![("caps", PropertyValue::String("video/x-raw".into()))],
+    ));
     flow.links.push(link(from.into(), "download".into()));
-    "download".into()
+    flow.links.push(link("download".into(), "sysmem".into()));
+    "sysmem".into()
 }
 
 /// Program sound as AAC into `to` (the recorder takes encoded audio only).
@@ -1128,13 +1136,13 @@ mod tests {
         assert!(flow
             .links
             .iter()
-            .any(|l| l.from == "download" && l.to == "convert"));
+            .any(|l| l.from == "sysmem" && l.to == "convert"));
 
         let live = live_flow(Picture::Program, "/run/x/program.sock", MixerBackend::Cuda);
         assert!(live
             .links
             .iter()
-            .any(|l| l.from == "download" && l.to == "sock"));
+            .any(|l| l.from == "sysmem" && l.to == "sock"));
 
         let record = OutputSpec::Record {
             folder: "show".into(),
