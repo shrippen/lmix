@@ -229,7 +229,7 @@ kann es, Console nicht.
 | SWI.7 | Stinger 1–8: Animations-Input, Dauer, Schnittpunkt, Zusatzeffekt, unter oder über Overlays; Dauer/Schnittpunkt aus Titelanimation übernehmbar | S | – (ROADMAP 4.2) |
 | SWI.8 | Schnellstart: Take mit eigenem Effekt (Standard ½ s Blende) und Start der Wiedergabe; optional per Klick ins Preview-Fenster | S | – |
 | SWI.9 | FTB: blendet Senken auf Schwarz (optional mit Ton), Program-Anzeige bleibt bedienbar | M | ✅ |
-| SWI.10 | Mix-Inputs (Umfang offen, E.11): bis 15 zusätzliche Mischer mit PVW/PGM, Cut/Übergang, Overlays und Stinger je Mix wählbar; "nur Ausgang"-Ansicht; Mix in Mix ohne Verzögerung bei aufsteigender Reihenfolge | S | – |
+| SWI.10 | Mix-Inputs (E.11: Umfang wie vMix): bis 15 zusätzliche Mischer mit PVW/PGM, Cut/Übergang, Overlays und Stinger je Mix wählbar; "nur Ausgang"-Ansicht; Mix in Mix ohne Verzögerung bei aufsteigender Reihenfolge | S | – |
 | SWI.11 | Alle Wiedergabe-Inputs halten während Übergang ihr Timing (keine Ruckler, keine Ton-Lücke) | M | ✅ |
 | SWI.12 | Interne Latenz Input → Program ≤ 2 Frames (ohne Quell- und Senkenlatenz) | M | ◐ (< 5 Frames gemessen) |
 
@@ -381,7 +381,7 @@ Animationen per CSS/JavaScript und Lottie.
 | AUT.6 | Rückmeldungen an Controller: Lampen, Farben, Motorfader nach Zustand (Input auf PGM/PVW/spielt, Pegel, Mute, Solo, Bus, FTB, Aufnahme, Stream, …) | S | – |
 | AUT.7 | Auslöser je Input: beim Ein-/Ausblenden (Take, Overlay), Ende, Wiedergabezeit/Restzeit, Countdown 0, Gast verbunden/getrennt, Wiederholung fertig → Aktionsliste mit Verzögerung (max. 30 s je Schritt) | S | – |
 | AUT.8 | Ablaufliste: Inputs mit Startposition, Dauer, Übergang, Anzeigeart (Vollbild/Overlay); Start, Stopp, vor/zurück, Schleife, manuell; mehrere benannte Listen in der Show | S | – |
-| AUT.9 | Skripte: benannte Skripte (global/lokal), Start/Stopp per Aktion; Sprache mit Zugriff auf Aktionen, Zustand, Warten, Netzwerk; einfache Zeilen-Syntax (Aktion + Pause) | K | – |
+| AUT.9 | Skripte: benannte Skripte (global/lokal), Start/Stopp per Aktion; Sprache JavaScript (E.6) mit Zugriff auf Aktionen, Zustand, Warten, Netzwerk; einfache Zeilen-Syntax (Aktion + Pause) | K | – |
 | AUT.10 | Rückgängig für Input schließen | S | – |
 | AUT.11 | Schutzschloss: Schließen, Show laden, Aufnahme-/Stream-/Ausgabe-Stopp sperren | S | – |
 
@@ -561,6 +561,9 @@ nicht nach, sondern ersetzt sie durch Heutiges oder lässt sie weg
 | E.10 | Lottie | lottie-web in Vorlagen jetzt, nativer Lottie-Input (ThorVG) später |
 | G.1 | GUI-Toolkit | Entscheidung nach Prototyp in M3 |
 | G.2 | Live-Monitore | Bilder lokal über GPU-Speicher (DMABuf) aus der Engine; WHEP nur für entfernte Clients |
+| E.6 | Skriptsprache | JavaScript (QuickJS), gleiche Sprache wie die HTML-Titel |
+| E.9 | Browser-Engine für HTML-Titel | Wahl nach Benchmark M7.0 (CEF, WPE WebKit, Servo; Kriterien in ROADMAP M7) |
+| E.11 | Submixe | Wie vMix: bis 15 Mix-Inputs mit Preview/Program, Cut/Übergang, Overlays, Stinger; als Quelle für Ausgänge und Vollbild (SWI.10) |
 | — | Wiederholung, Gäste | Später (Priorität L) |
 | — | Prioritäten | AUD.11, OUT.16, PER.5, SRC.23 auf S; SHW.9 auf X |
 
@@ -568,10 +571,7 @@ nicht nach, sondern ersetzt sie durch Heutiges oder lässt sie weg
 
 | # | Frage | Stand |
 |---|---|---|
-| E.6 | Skriptsprache (AUT.9): Rhai, Lua, JavaScript (QuickJS), keine | Vor-/Nachteile vorgelegt; neue Empfehlung JavaScript (gleiche Sprache wie die HTML-Titel) |
-| E.9 | Browser-Engine für HTML-Titel: CEF, WPE WebKit, Servo | Nach Benchmark (M7.0): 8 animierte Titel 1080p60 mit Alpha, GPU/CPU, Drops, Latenz, Speicher, Kopien in die Pipeline, Kompatibilität (CSS-Animation, WebGL, lottie-web) |
 | T.1 | Titelsystem neben HTML (Godot, eigene Engine, Lottie nativ) | Vergleich vorgelegt; Empfehlung: HTML bleibt Hauptweg, Feld-API kompatibel zur offenen CasparCG-HTML-Konvention, Godot-Szenen später als Input über NDI/OMT |
-| E.11 | Submixe: weitere Mischebenen mit vollen Mischfähigkeiten für Beamer, Saal, Stream | Vorschlag: vollwertige Mischebenen (siehe SWI.10) statt der eingeschränkten vMix-Mix-Inputs |
 | E.7 | Gäste: Signalisierung/TURN selbst betreiben | Später |
 
 ---
