@@ -19,6 +19,7 @@ use lmix_types::{
 };
 use reqwest::StatusCode;
 use serde::Serialize;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::Duration;
 use strom_types::api::{
@@ -28,7 +29,7 @@ use strom_types::api::{
 use strom_types::discovery::DeviceResponse;
 use strom_types::vision_mixer::Source;
 use strom_types::{Flow, FlowId, PipelineState, PropertyValue};
-use tokio::sync::{broadcast, watch};
+use tokio::sync::{broadcast, watch, Mutex};
 
 /// How often and how long `start` waits for the mixer to play.
 const PLAYING_POLL: Duration = Duration::from_millis(200);
@@ -68,6 +69,10 @@ pub struct StromEngine {
     errors: broadcast::Sender<FlowError>,
     /// The meter reader runs once, from the first `start`.
     metering: AtomicBool,
+    /// Directory of the live picture sockets (see [`Engine::live`]).
+    live_dir: PathBuf,
+    /// One live flow is set up at a time (two Consoles asking at once).
+    live_setup: Mutex<()>,
 }
 
 impl StromEngine {
@@ -81,7 +86,15 @@ impl StromEngine {
             levels: watch::Sender::default(),
             errors: broadcast::channel(ERROR_BUFFER).0,
             metering: AtomicBool::new(false),
+            live_dir: default_live_dir(),
+            live_setup: Mutex::new(()),
         }
+    }
+
+    /// Live picture sockets in `dir` instead of [`default_live_dir`].
+    pub fn with_live_dir(mut self, dir: PathBuf) -> Self {
+        self.live_dir = dir;
+        self
     }
 
     fn url(&self, path: &str) -> String {
@@ -426,6 +439,25 @@ impl Engine for StromEngine {
         }
     }
 
+    async fn live(&self, picture: Picture) -> Result<PathBuf, EngineError> {
+        let socket = self.live_dir.join(flows::live_socket_name(picture));
+        let id = flows::live_flow_id(picture);
+        let _setup = self.live_setup.lock().await;
+        let running = self.get_flow(id).await?.is_some_and(|f| f.running);
+        if running && socket.exists() {
+            return Ok(socket);
+        }
+        std::fs::create_dir_all(&self.live_dir).map_err(|e| {
+            EngineError::Refused(format!("live directory {}: {e}", self.live_dir.display()))
+        })?;
+        let path = socket
+            .to_str()
+            .ok_or_else(|| EngineError::Refused("live directory is not UTF-8".into()))?;
+        self.put_flow(&flows::live_flow(picture, path)).await?;
+        self.wait_playing(id).await?;
+        Ok(socket)
+    }
+
     /// strom answers 504 while a tap has no frame yet (the first request
     /// switches it on).
     async fn picture(&self, picture: Picture) -> Result<Vec<u8>, EngineError> {
@@ -564,6 +596,16 @@ async fn check(resp: reqwest::Response) -> Result<reqwest::Response, EngineError
     let status = resp.status();
     let body = resp.text().await.unwrap_or_default();
     Err(EngineError::Refused(format!("{status}: {body}")))
+}
+
+/// `$XDG_RUNTIME_DIR/lmix/live` (private to the user), else the temp dir.
+/// strom and the Console run as the same user on the engine machine.
+pub fn default_live_dir() -> PathBuf {
+    std::env::var_os("XDG_RUNTIME_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(std::env::temp_dir)
+        .join("lmix")
+        .join("live")
 }
 
 #[cfg(test)]

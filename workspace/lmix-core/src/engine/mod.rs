@@ -60,6 +60,12 @@ pub trait Engine: Send + Sync {
     /// it kept streaming or recording).
     async fn output_running(&self, id: lmix_types::OutputId) -> bool;
 
+    /// Live picture for a Console on the engine's machine: path of a Unix
+    /// socket with raw frames (`unixfdsrc`), started on the first call.
+    async fn live(&self, _picture: Picture) -> Result<std::path::PathBuf, EngineError> {
+        Err(EngineError::NoPictures)
+    }
+
     /// Link health of a running network output; `None` for other kinds
     /// or while unknown.
     async fn output_stats(&self, _id: lmix_types::OutputId) -> Option<lmix_types::OutputStats> {

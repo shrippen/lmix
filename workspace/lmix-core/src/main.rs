@@ -69,6 +69,11 @@ struct Args {
     #[arg(long, env = "LMIX_MONITOR_OUT", value_enum, default_value_t = MonitorOut::None)]
     monitor_out: MonitorOut,
 
+    /// Directory for the live picture sockets of Consoles on this machine;
+    /// default `$XDG_RUNTIME_DIR/lmix/live`.
+    #[arg(long, env = "LMIX_LIVE_DIR")]
+    live_dir: Option<PathBuf>,
+
     /// Mixer slots (inputs fed at the same time).
     #[arg(long, default_value_t = DEFAULT_SLOTS)]
     slots: usize,
@@ -101,11 +106,13 @@ async fn main() -> anyhow::Result<()> {
 
     let args = Args::parse();
     let engine: Arc<dyn Engine> = match args.engine {
-        EngineKind::Strom => Arc::new(StromEngine::new(
-            args.strom.clone(),
-            args.mixer,
-            args.monitor_out,
-        )),
+        EngineKind::Strom => {
+            let engine = StromEngine::new(args.strom.clone(), args.mixer, args.monitor_out);
+            Arc::new(match args.live_dir.clone() {
+                Some(dir) => engine.with_live_dir(dir),
+                None => engine,
+            })
+        }
         EngineKind::None => Arc::new(NullEngine::default()),
     };
 

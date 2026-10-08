@@ -125,6 +125,19 @@ impl Service {
         Ok(self.picture(Picture::Slot(slot), loss).await)
     }
 
+    /// Live picture socket of an input's slot (see [`Engine::live`]).
+    pub async fn live_input(
+        &self,
+        input: &InputRef,
+    ) -> Result<Result<std::path::PathBuf, EngineError>, ActionError> {
+        let slot = self.switcher.lock().await.slot_for(input)?;
+        Ok(self.engine.live(Picture::Slot(slot)).await)
+    }
+
+    pub async fn live_program(&self) -> Result<std::path::PathBuf, EngineError> {
+        self.engine.live(Picture::Program).await
+    }
+
     pub async fn program_picture(&self) -> Result<Vec<u8>, EngineError> {
         // Program never stalls; holding only bridges the tap's gaps.
         self.picture(Picture::Program, SignalLoss::Hold).await

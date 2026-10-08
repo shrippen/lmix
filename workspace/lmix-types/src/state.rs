@@ -58,6 +58,14 @@ pub struct Levels {
     pub monitor_peak_db: Option<f32>,
 }
 
+/// Live picture for a client on the engine's machine (`GET /api/live/…`):
+/// a Unix socket with raw frames, read with GStreamer's `unixfdsrc`.
+/// Clients elsewhere use the JPEG pictures.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct LiveFeed {
+    pub socket: String,
+}
+
 /// Latency from capture at a source to the program output of the mixer
 /// (NFA.3), from the last measurement.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]

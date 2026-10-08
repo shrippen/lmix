@@ -21,6 +21,7 @@ use uuid::Uuid;
 use lmix_types::input::color_rgb;
 use lmix_types::{DisplayMode, OutputId, OutputSpec, SourceSpec};
 
+use super::Picture;
 use crate::switcher::Feed;
 
 /// Namespace of all lmix flow ids.
@@ -70,6 +71,12 @@ const OUTPUT_BUFFER_MS: &str = "500";
 const RECORDING_PREFIX: &str = "lmix";
 /// Thumbnail tap in every slot flow: input bar pictures and preview monitor.
 pub const SLOT_TAP: &str = "tap";
+/// Subscriber buffer of a live picture: as short as the mixer's, it
+/// shows now or nothing.
+const LIVE_BUFFER_MS: &str = "100";
+/// Size of an input's live picture; program goes at full size.
+const LIVE_INPUT_CAPS: &str = "video/x-raw,width=640,height=360";
+
 /// Subscriber buffer of the mixer's inter inputs: low latency, some jitter
 /// headroom (strom offers 100–2000 ms).
 const INTER_BUFFER_MS: &str = "100";
@@ -380,6 +387,69 @@ fn add_aac(flow: &mut Flow, to: &str) {
     flow.links.push(link("aconv".into(), "aac".into()));
     flow.links.push(link("aac".into(), "aacparse".into()));
     flow.links.push(link("aacparse".into(), to.into()));
+}
+
+pub fn live_flow_id(which: Picture) -> FlowId {
+    let name = match which {
+        Picture::Program => "live-program".to_string(),
+        Picture::Slot(slot) => format!("live-slot-{slot}"),
+    };
+    Uuid::new_v5(&FLOW_NAMESPACE, name.as_bytes())
+}
+
+/// Socket file name of a live picture, inside the live directory.
+pub fn live_socket_name(which: Picture) -> String {
+    match which {
+        Picture::Program => "program.sock".into(),
+        Picture::Slot(slot) => format!("slot-{slot}.sock"),
+    }
+}
+
+/// Live picture for a Console on the engine's machine: raw frames over a
+/// Unix socket, no encoding (the Console reads it with `unixfdsrc`).
+/// Inputs at monitor size, program at full size.
+///
+/// ```text
+///   pgm ─► [videoscale ─► caps] ─► unixfdsink
+/// ```
+pub fn live_flow(which: Picture, socket: &str) -> Flow {
+    let (name, channel) = match which {
+        Picture::Program => ("program".to_string(), pgm_channel(PGM_OUT)),
+        Picture::Slot(slot) => (format!("slot {slot}"), slot_channel(slot)),
+    };
+    let mut flow = Flow::new(format!("lmix live {name}"));
+    flow.id = live_flow_id(which);
+    share_timing(&mut flow);
+    flow.blocks.push(block(
+        "pgm",
+        INTER_INPUT_BLOCK,
+        vec![
+            ("channel", PropertyValue::String(channel)),
+            ("max_time", PropertyValue::String(LIVE_BUFFER_MS.into())),
+        ],
+    ));
+    flow.elements.push(element(
+        "sock",
+        "unixfdsink",
+        vec![
+            ("socket-path", PropertyValue::String(socket.into())),
+            ("sync", PropertyValue::Bool(false)),
+        ],
+    ));
+    if matches!(which, Picture::Slot(_)) {
+        flow.elements.push(element("scale", "videoscale", vec![]));
+        flow.elements.push(element(
+            "size",
+            "capsfilter",
+            vec![("caps", PropertyValue::String(LIVE_INPUT_CAPS.into()))],
+        ));
+        flow.links.push(link("pgm:src".into(), "scale".into()));
+        flow.links.push(link("scale".into(), "size".into()));
+        flow.links.push(link("size".into(), "sock".into()));
+    } else {
+        flow.links.push(link("pgm:src".into(), "sock".into()));
+    }
+    flow
 }
 
 /// H.264 from program: hardware when the engine has one, else software.
@@ -965,6 +1035,40 @@ mod tests {
         ));
         assert!(flow.blocks.iter().all(|b| b.id != "pgm_audio"));
         assert!(flow.links.iter().all(|l| l.to != "rec:audio_in_0"));
+    }
+
+    #[test]
+    fn live_program_goes_raw_to_its_socket() {
+        let flow = live_flow(Picture::Program, "/run/x/program.sock");
+
+        let sock = flow.elements.iter().find(|e| e.id == "sock").unwrap();
+        assert_eq!(sock.element_type, "unixfdsink");
+        assert!(matches!(
+            sock.properties.get("socket-path"),
+            Some(PropertyValue::String(path)) if path == "/run/x/program.sock"
+        ));
+        assert!(flow
+            .links
+            .iter()
+            .any(|l| l.from == "pgm:src" && l.to == "sock"));
+        assert_ne!(flow.id, live_flow_id(Picture::Slot(0)));
+    }
+
+    #[test]
+    fn live_input_is_scaled_down() {
+        let flow = live_flow(Picture::Slot(3), "/run/x/slot-3.sock");
+
+        let pgm = flow.blocks.iter().find(|b| b.id == "pgm").unwrap();
+        assert!(matches!(
+            pgm.properties.get("channel"),
+            Some(PropertyValue::String(c)) if *c == slot_channel(3)
+        ));
+        assert!(flow.elements.iter().any(|e| e.element_type == "videoscale"));
+        assert!(flow
+            .links
+            .iter()
+            .any(|l| l.from == "size" && l.to == "sock"));
+        assert_eq!(live_socket_name(Picture::Slot(3)), "slot-3.sock");
     }
 
     #[test]

@@ -26,7 +26,7 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use lmix_types::{Action, ActionError, Event, InputRef};
+use lmix_types::{Action, ActionError, Event, InputRef, LiveFeed};
 use tokio::sync::broadcast::error::RecvError;
 
 use crate::engine::EngineError;
@@ -50,6 +50,8 @@ pub fn router(service: Arc<Service>) -> Router {
         .route("/api/devices", get(devices))
         .route("/api/pictures/program", get(program_picture))
         .route("/api/pictures/inputs/{input}", get(input_picture))
+        .route("/api/live/program", get(live_program))
+        .route("/api/live/inputs/{input}", get(live_input))
         .with_state(service)
 }
 
@@ -120,6 +122,33 @@ async fn input_picture(State(service): State<Arc<Service>>, Path(input): Path<St
     match service.input_picture(&input).await {
         Ok(picture) => picture_response(picture),
         Err(error) => error_response(error),
+    }
+}
+
+async fn live_program(State(service): State<Arc<Service>>) -> Response {
+    live_response(service.live_program().await)
+}
+
+async fn live_input(State(service): State<Arc<Service>>, Path(input): Path<String>) -> Response {
+    let input = match input.parse::<u32>() {
+        Ok(number) => InputRef::Number(number),
+        Err(_) => InputRef::Text(input),
+    };
+    match service.live_input(&input).await {
+        Ok(feed) => live_response(feed),
+        Err(error) => error_response(error),
+    }
+}
+
+/// Socket of a live picture; 404 when the engine has none (no engine).
+fn live_response(feed: Result<std::path::PathBuf, EngineError>) -> Response {
+    match feed {
+        Ok(socket) => Json(LiveFeed {
+            socket: socket.to_string_lossy().into_owned(),
+        })
+        .into_response(),
+        Err(EngineError::NoPictures) => StatusCode::NOT_FOUND.into_response(),
+        Err(error) => (StatusCode::BAD_GATEWAY, error.to_string()).into_response(),
     }
 }
 
@@ -243,6 +272,26 @@ mod tests {
         assert_eq!(status, StatusCode::NOT_FOUND);
         assert_eq!(body["error"]["error"], "unknown_input");
         assert_eq!(body["message"], "no input matches 7");
+    }
+
+    #[tokio::test]
+    async fn live_without_engine_is_404() {
+        let req = Request::get("/api/live/program")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app().oneshot(req).await.unwrap();
+
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn live_of_unknown_input_is_404() {
+        let req = Request::get("/api/live/inputs/3")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app().oneshot(req).await.unwrap();
+
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
     }
 
     #[tokio::test]
