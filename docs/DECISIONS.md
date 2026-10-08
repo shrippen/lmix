@@ -440,3 +440,13 @@ strom-Workspace (strom-Diff bleibt null):
   die API meldet 502 mit Grund.
 - Fehlt strom beim Start, versucht `lmix-core` alle 2 s neu und spielt dann
   die Show ein.
+
+## 2026-10-08 — GUI-Gestaltung: Kante, Kante Light, Rückfall Breeze
+
+**Entscheidung** (User): Die lmix-GUI folgt dem Kante Design System
+(`../Kante`, Regel aus `AGENT-RULE.md` in `agent.md`). Stilwahl Kante
+(Standard), Kante Light, System (KDE Plasma/Breeze) als Rückfall.
+**Folge**: Kante hat Anbindungen für Web (CSS) und Qt Quick/Kirigami
+(`qml/Kante`, mit System-Modus = Breeze). Für egui gibt es keine; sie
+müsste zuerst in Kante entstehen. Das ist ein Kriterium für G.1
+(GUI-Toolkit, Entscheidung nach Prototyp in M3).

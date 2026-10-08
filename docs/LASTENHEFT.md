@@ -490,7 +490,7 @@ Zurückgestellt (User 2026-10-08).
 | UI.6 | Andockbare Bereiche (Audio, Wiederholung, Liste) und abdockbare Fenster für zweiten Monitor | S | – |
 | UI.7 | Einfacher und erweiterter Modus | S | – |
 | UI.8 | Input-Einstellungen in Reitern: Allgemein, Farbe, Key, Farbkorrektur, Effekte, Position, Ebenen, Auslöser, Tally, PTZ, Erweitert | M | – |
-| UI.9 | Themes hell/dunkel, Sprachen de/en (erweiterbar) | S | – |
+| UI.9 | Gestaltung nach dem Kante Design System (`agent.md`, GUI-Regel): Stilwahl Kante (Standard, dunkel), Kante Light (hell), System als Rückfall (KDE Plasma/Breeze, folgt dem Plasma-Farbschema); Bildflächen bleiben dunkel; Sprachen de/en (erweiterbar) | M | – |
 | UI.10 | Bestätigung vor Stopp von Aufnahme/Stream (abschaltbar) | S | – |
 | UI.11 | Hochkant-Produktion: Vorlagen für 9:16, Schutzbereich, Quellrotation | K | – |
 | UI.12 | Startoptionen: maximiert, erweiterter Modus, Vollbild/Kartenausgang/SRT starten, letzte Show | S | – |
@@ -591,7 +591,7 @@ nicht nach, sondern ersetzt sie durch Heutiges oder lässt sie weg
 | E.5 | Titelformat | HTML-Vorlagen mit Feld-API, Animation per CSS/JS und Lottie, nicht vMix-kompatibel (§3.11) |
 | E.8 | Audio-Plugins | LV2, VST3 und CLAP (AUD.11 = S) |
 | E.10 | Lottie | lottie-web in Vorlagen jetzt, nativer Lottie-Input (ThorVG) später |
-| G.1 | GUI-Toolkit | Entscheidung nach Prototyp in M3 |
+| G.1 | GUI-Toolkit | Entscheidung nach Prototyp in M3; Kriterium dazu: Kante-Anbindung (Qt Quick/Kirigami hat `qml/Kante` und Breeze-Rückfall, egui bräuchte eine neue Kante-Anbindung) |
 | G.2 | Live-Monitore | Bilder lokal über GPU-Speicher (DMABuf) aus der Engine; WHEP nur für entfernte Clients |
 | E.6 | Skriptsprache | JavaScript (QuickJS), gleiche Sprache wie die HTML-Titel |
 | E.9 | Browser-Engine für HTML-Titel | Wahl nach Benchmark M7.0; Ausgangspunkt `cefsrc` (in strom vorhanden), Vergleich WPE WebKit (`wpesrc`), Testplan `BENCH-HTML.md`. Hartes Kriterium GFX.20 (H.264/AAC): Standard-CEF kann es nicht, nur ein eigener CEF-Build (`proprietary_codecs`, `ffmpeg_branding=Chrome`) mit Patentfragen beim Verteilen; WPE spielt Medien über GStreamer und nutzt die installierten Decoder (wie der Rest von lmix) |
