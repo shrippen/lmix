@@ -433,7 +433,8 @@ impl Engine for StromEngine {
             Command::Transport { slot, transport } => self.transport(*slot, *transport).await,
             Command::SetSignalLoss { slot, mode } => self.set_signal_loss(*slot, *mode).await,
             Command::StartOutput { id, spec, feed } => {
-                self.put_flow(&flows::output_flow(*id, spec, *feed)).await
+                self.put_flow(&flows::output_flow(*id, spec, *feed, self.backend))
+                    .await
             }
             Command::StopOutput { id } => self.drop_flow(flows::output_flow_id(*id)).await,
         }
@@ -458,7 +459,8 @@ impl Engine for StromEngine {
                 "live socket path longer than {MAX_SOCKET_PATH} bytes, choose a shorter --live-dir: {path}"
             )));
         }
-        self.put_flow(&flows::live_flow(picture, path)).await?;
+        self.put_flow(&flows::live_flow(picture, path, self.backend))
+            .await?;
         self.wait_playing(id).await?;
         Ok(socket)
     }

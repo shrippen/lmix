@@ -479,6 +479,10 @@ impl Service {
     /// the rest still run; the first error is returned.
     async fn execute(&self, sw: &mut Switcher, commands: &[Command]) -> Result<(), ActionError> {
         if !self.engine_ready.load(Ordering::SeqCst) {
+            // Outputs keep what was asked, so restore starts them.
+            for command in commands {
+                mark_output(sw, command, &Ok(()));
+            }
             return Ok(());
         }
         let mut first_error = None;
@@ -630,7 +634,9 @@ async fn save(sw: &mut Switcher, path: Option<String>) -> Result<(), ActionError
 mod tests {
     use super::*;
     use crate::engine::null::NullEngine;
-    use lmix_types::{InputRef, SourceSpec, TestPattern};
+    use lmix_types::{
+        DisplayMode, InputRef, OutputRef, OutputSource, OutputSpec, SourceSpec, TestPattern,
+    };
 
     /// Slots the engine was told to build (other commands vary as
     /// features grow: audio, solo, signal loss).
@@ -747,8 +753,33 @@ mod tests {
         assert_eq!(service.state().await.inputs.len(), 1, "in the show");
         assert!(engine.log().is_empty(), "nothing sent before the engine");
 
+        service
+            .handle(Action::AddOutput {
+                spec: OutputSpec::Display {
+                    mode: DisplayMode::Window,
+                },
+                source: OutputSource::default(),
+                name: Some("Screen".into()),
+            })
+            .await
+            .unwrap();
+        service
+            .handle(Action::StartOutput {
+                output: OutputRef::Text("Screen".into()),
+            })
+            .await
+            .unwrap();
+        assert!(engine.log().is_empty(), "nothing sent before the engine");
+
         service.restore().await.unwrap();
         assert_eq!(slot_commands(&engine), 1, "restore hands it over");
+        assert!(
+            engine
+                .log()
+                .iter()
+                .any(|c| matches!(c, Command::StartOutput { .. })),
+            "and starts the output asked for"
+        );
         service.handle(bars()).await.unwrap();
         assert_eq!(slot_commands(&engine), 2, "later actions run directly");
     }

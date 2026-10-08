@@ -256,7 +256,7 @@ pub fn output_flow_id(id: OutputId) -> FlowId {
 ///   Record: pgm ─► videoenc ─► rec:video_in      pgm_audio ─► aac ─► rec:audio_in_0
 ///   NDI:    pgm ─────────────► ndi:video_in      pgm_audio ─► ndi:audio_in
 /// ```
-pub fn output_flow(id: OutputId, spec: &OutputSpec, feed: Feed) -> Flow {
+pub fn output_flow(id: OutputId, spec: &OutputSpec, feed: Feed, backend: MixerBackend) -> Flow {
     let mut flow = Flow::new(format!("lmix output {id}"));
     flow.id = output_flow_id(id);
     share_timing(&mut flow);
@@ -287,6 +287,8 @@ pub fn output_flow(id: OutputId, spec: &OutputSpec, feed: Feed) -> Flow {
         ));
     }
     let sound = audio.is_some();
+    // Screens and NDI read frames on the CPU; the encoders take GPU memory.
+    let on_gpu = matches!(feed, Feed::Program) && backend == MixerBackend::Cuda;
 
     match spec {
         OutputSpec::Srt { uri, video_kbps } => {
@@ -332,15 +334,18 @@ pub fn output_flow(id: OutputId, spec: &OutputSpec, feed: Feed) -> Flow {
                 add_aac(&mut flow, "rec:audio_in_0");
             }
         }
-        OutputSpec::Display { mode } => add_display(&mut flow, *mode),
+        OutputSpec::Display { mode } => {
+            let from = add_download(&mut flow, "pgm:src", on_gpu);
+            add_display(&mut flow, &from, *mode);
+        }
         OutputSpec::Ndi { name } => {
             flow.blocks.push(block(
                 "ndi",
                 NDI_OUTPUT_BLOCK,
                 vec![("ndi_name", PropertyValue::String(name.clone()))],
             ));
-            flow.links
-                .push(link("pgm:src".into(), "ndi:video_in".into()));
+            let from = add_download(&mut flow, "pgm:src", on_gpu);
+            flow.links.push(link(from, "ndi:video_in".into()));
             if sound {
                 flow.links
                     .push(link("pgm_audio:src".into(), "ndi:audio_in".into()));
@@ -354,7 +359,7 @@ pub fn output_flow(id: OutputId, spec: &OutputSpec, feed: Feed) -> Flow {
 /// a probe that GStreamer 1.24 answers with a CRITICAL per frame.
 /// sync=false: frames come live from the mixer, already as old as its
 /// latency; a syncing sink would drop them all as late.
-fn add_display(flow: &mut Flow, mode: DisplayMode) {
+fn add_display(flow: &mut Flow, from: &str, mode: DisplayMode) {
     let mut properties = vec![
         ("qos", PropertyValue::Bool(false)),
         ("sync", PropertyValue::Bool(false)),
@@ -373,8 +378,20 @@ fn add_display(flow: &mut Flow, mode: DisplayMode) {
     flow.elements
         .push(element("convert", "videoconvert", vec![]));
     flow.elements.push(element("screen", sink, properties));
-    flow.links.push(link("pgm:src".into(), "convert".into()));
+    flow.links.push(link(from.into(), "convert".into()));
     flow.links.push(link("convert".into(), "screen".into()));
+}
+
+/// Program leaves the CUDA mixer in GPU memory: elements that read frames
+/// on the CPU get them downloaded first. Returns what to link from.
+fn add_download(flow: &mut Flow, from: &str, on_gpu: bool) -> String {
+    if !on_gpu {
+        return from.to_string();
+    }
+    flow.elements
+        .push(element("download", "cudadownload", vec![]));
+    flow.links.push(link(from.into(), "download".into()));
+    "download".into()
 }
 
 /// Program sound as AAC into `to` (the recorder takes encoded audio only).
@@ -410,9 +427,10 @@ pub fn live_socket_name(which: Picture) -> String {
 /// Inputs at monitor size, program at full size.
 ///
 /// ```text
-///   pgm ─► [videoscale ─► caps] ─► unixfdsink
+///   pgm ─► [videoscale ─► caps] ─► unixfdsink        input
+///   pgm ─► [cudadownload] ─► unixfdsink                program
 /// ```
-pub fn live_flow(which: Picture, socket: &str) -> Flow {
+pub fn live_flow(which: Picture, socket: &str, backend: MixerBackend) -> Flow {
     let (name, channel) = match which {
         Picture::Program => ("program".to_string(), pgm_channel(PGM_OUT)),
         Picture::Slot(slot) => (format!("slot {slot}"), slot_channel(slot)),
@@ -447,7 +465,8 @@ pub fn live_flow(which: Picture, socket: &str) -> Flow {
         flow.links.push(link("scale".into(), "size".into()));
         flow.links.push(link("size".into(), "sock".into()));
     } else {
-        flow.links.push(link("pgm:src".into(), "sock".into()));
+        let from = add_download(&mut flow, "pgm:src", backend == MixerBackend::Cuda);
+        flow.links.push(link(from, "sock".into()));
     }
     flow
 }
@@ -995,7 +1014,7 @@ mod tests {
             container: lmix_types::Container::Mkv,
             video_kbps: 8000,
         };
-        let flow = output_flow(OutputId::new(), &spec, Feed::Program);
+        let flow = output_flow(OutputId::new(), &spec, Feed::Program, MixerBackend::Cpu);
 
         let pgm = flow.blocks.iter().find(|b| b.id == "pgm").unwrap();
         assert!(matches!(
@@ -1026,6 +1045,7 @@ mod tests {
                 slot: 3,
                 audio: false,
             },
+            MixerBackend::Cuda,
         );
 
         let pgm = flow.blocks.iter().find(|b| b.id == "pgm").unwrap();
@@ -1039,7 +1059,7 @@ mod tests {
 
     #[test]
     fn live_program_goes_raw_to_its_socket() {
-        let flow = live_flow(Picture::Program, "/run/x/program.sock");
+        let flow = live_flow(Picture::Program, "/run/x/program.sock", MixerBackend::Cpu);
 
         let sock = flow.elements.iter().find(|e| e.id == "sock").unwrap();
         assert_eq!(sock.element_type, "unixfdsink");
@@ -1056,7 +1076,7 @@ mod tests {
 
     #[test]
     fn live_input_is_scaled_down() {
-        let flow = live_flow(Picture::Slot(3), "/run/x/slot-3.sock");
+        let flow = live_flow(Picture::Slot(3), "/run/x/slot-3.sock", MixerBackend::Cuda);
 
         let pgm = flow.blocks.iter().find(|b| b.id == "pgm").unwrap();
         assert!(matches!(
@@ -1064,6 +1084,10 @@ mod tests {
             Some(PropertyValue::String(c)) if *c == slot_channel(3)
         ));
         assert!(flow.elements.iter().any(|e| e.element_type == "videoscale"));
+        assert!(flow
+            .elements
+            .iter()
+            .all(|e| e.element_type != "cudadownload"));
         assert!(flow
             .links
             .iter()
@@ -1076,7 +1100,7 @@ mod tests {
         let spec = OutputSpec::Display {
             mode: DisplayMode::Drm { connector: 42 },
         };
-        let flow = output_flow(OutputId::new(), &spec, Feed::Program);
+        let flow = output_flow(OutputId::new(), &spec, Feed::Program, MixerBackend::Cpu);
 
         let screen = flow.elements.iter().find(|e| e.id == "screen").unwrap();
         assert_eq!(screen.element_type, "kmssink");
@@ -1085,6 +1109,45 @@ mod tests {
             Some(PropertyValue::Bool(false))
         ));
         assert!(flow.links.iter().all(|l| !l.from.starts_with("pgm_audio")));
+        assert!(flow
+            .elements
+            .iter()
+            .all(|e| e.element_type != "cudadownload"));
+    }
+
+    #[test]
+    fn cpu_readers_of_cuda_program_download_it() {
+        let screen = OutputSpec::Display {
+            mode: DisplayMode::Window,
+        };
+        let flow = output_flow(OutputId::new(), &screen, Feed::Program, MixerBackend::Cuda);
+        assert!(flow
+            .links
+            .iter()
+            .any(|l| l.from == "pgm:src" && l.to == "download"));
+        assert!(flow
+            .links
+            .iter()
+            .any(|l| l.from == "download" && l.to == "convert"));
+
+        let live = live_flow(Picture::Program, "/run/x/program.sock", MixerBackend::Cuda);
+        assert!(live
+            .links
+            .iter()
+            .any(|l| l.from == "download" && l.to == "sock"));
+
+        let record = OutputSpec::Record {
+            folder: "show".into(),
+            container: lmix_types::Container::Mkv,
+            video_kbps: 8000,
+        };
+        let flow = output_flow(OutputId::new(), &record, Feed::Program, MixerBackend::Cuda);
+        assert!(
+            flow.elements
+                .iter()
+                .all(|e| e.element_type != "cudadownload"),
+            "the encoder takes GPU memory"
+        );
     }
 
     #[test]
