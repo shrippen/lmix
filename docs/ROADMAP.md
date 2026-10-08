@@ -281,6 +281,7 @@ WPE WebKit (`wpesrc`) mit 8 animierten Titeln 1080p60 (CSS, Canvas,
 lottie-web), Alpha; messen: GPU/CPU je Titel, Drops, Latenz, Speicher,
 Kopien bis in den Mischer. Pflicht-Test GFX.20: H.264/AAC-Video, HLS über
 MSE, Twitch- und YouTube-Einbettung (§5.3).
+Testplan: `BENCH-HTML.md`.
 
 Titel-Fähigkeiten nach dem Vorbild CasparCG (`LASTENHEFT.md` §3.11):
 Vorlagen-Konvention, Lebenszyklus, Titel-Ebenen, Datensätze.

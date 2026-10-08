@@ -594,7 +594,7 @@ nicht nach, sondern ersetzt sie durch Heutiges oder lässt sie weg
 | G.1 | GUI-Toolkit | Entscheidung nach Prototyp in M3 |
 | G.2 | Live-Monitore | Bilder lokal über GPU-Speicher (DMABuf) aus der Engine; WHEP nur für entfernte Clients |
 | E.6 | Skriptsprache | JavaScript (QuickJS), gleiche Sprache wie die HTML-Titel |
-| E.9 | Browser-Engine für HTML-Titel | Wahl nach Benchmark M7.0; Ausgangspunkt `cefsrc` (in strom vorhanden), Vergleich WPE WebKit (`wpesrc`). Hartes Kriterium GFX.20 (H.264/AAC): Standard-CEF kann es nicht, nur ein eigener CEF-Build (`proprietary_codecs`, `ffmpeg_branding=Chrome`) mit Patentfragen beim Verteilen; WPE spielt Medien über GStreamer und nutzt die installierten Decoder (wie der Rest von lmix) |
+| E.9 | Browser-Engine für HTML-Titel | Wahl nach Benchmark M7.0; Ausgangspunkt `cefsrc` (in strom vorhanden), Vergleich WPE WebKit (`wpesrc`), Testplan `BENCH-HTML.md`. Hartes Kriterium GFX.20 (H.264/AAC): Standard-CEF kann es nicht, nur ein eigener CEF-Build (`proprietary_codecs`, `ffmpeg_branding=Chrome`) mit Patentfragen beim Verteilen; WPE spielt Medien über GStreamer und nutzt die installierten Decoder (wie der Rest von lmix) |
 | T.1/T.2 | Titelsystem | Kein CasparCG-Server (nach Analyse: zweite Engine, zweiter Takt, Bild per NDI). Titel-Fähigkeiten nach dem Vorbild CasparCG, gerendert in strom (§3.11) |
 | E.12 | Lizenz | lmix bleibt MIT-kompatibel (`claude.md` Entscheidung 6 unverändert) |
 | E.11 | Submixe | Wie vMix: bis 15 Mix-Inputs mit Preview/Program, Cut/Übergang, Overlays, Stinger; als Quelle für Ausgänge und Vollbild (SWI.10) |
