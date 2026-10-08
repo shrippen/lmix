@@ -453,6 +453,11 @@ impl Engine for StromEngine {
         let path = socket
             .to_str()
             .ok_or_else(|| EngineError::Refused("live directory is not UTF-8".into()))?;
+        if path.len() > MAX_SOCKET_PATH {
+            return Err(EngineError::Refused(format!(
+                "live socket path longer than {MAX_SOCKET_PATH} bytes, choose a shorter --live-dir: {path}"
+            )));
+        }
         self.put_flow(&flows::live_flow(picture, path)).await?;
         self.wait_playing(id).await?;
         Ok(socket)
@@ -597,6 +602,9 @@ async fn check(resp: reqwest::Response) -> Result<reqwest::Response, EngineError
     let body = resp.text().await.unwrap_or_default();
     Err(EngineError::Refused(format!("{status}: {body}")))
 }
+
+/// Longest Unix socket path (`sun_path` holds 108 bytes with the NUL).
+const MAX_SOCKET_PATH: usize = 107;
 
 /// `$XDG_RUNTIME_DIR/lmix/live` (private to the user), else the temp dir.
 /// strom and the Console run as the same user on the engine machine.
