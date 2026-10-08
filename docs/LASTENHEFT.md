@@ -7,6 +7,11 @@ dort stehen in §6 zur Entscheidung, nicht stillschweigend.
 Dieses Dokument beschreibt **was** lmix können muss, nicht **wie**. Es ist
 die einzige Funktionsquelle für die Umsetzung (siehe §0).
 
+**Leitlinie**: vMix ist die Vorlage, kein Zwang. lmix weicht ab, wo es
+sinnvoll ist: Altlasten fallen weg oder werden durch Heutiges ersetzt
+(§5a), ein sauberer Schnitt zu vMix-Namen und -Formaten ist zulässig. Jede
+Abweichung steht mit Grund in diesem Dokument.
+
 ---
 
 ## 0. Clean-Room-Regeln
@@ -15,12 +20,12 @@ Ziel: funktional gleichwertig, rechtlich unabhängig.
 
 | # | Regel |
 |---|---|
-| CR.1 | Quelle für dieses Lastenheft: nur das öffentliche vMix-29-Handbuch. Andere Handbuchversionen, Herstellerseiten, Foren und Drittsoftware werden nicht ausgewertet. Kein Disassemblieren, Dekompilieren oder Debuggen von vMix-Programmen, kein Mitschnitt interner Protokolle von vMix-Komponenten untereinander. |
+| CR.1 | Quelle für dieses Lastenheft: nur das öffentliche vMix-29-Handbuch. Andere Handbuchversionen, Herstellerseiten, Foren und Drittsoftware werden nicht ausgewertet. Kein Disassemblieren, Dekompilieren oder Debuggen von vMix-Programmen, kein Mitschnitt interner Protokolle von vMix-Komponenten untereinander. Ausnahme: Programme, die an vMix andocken (Bitfocus Companion, Stream-Deck-Plugins, Tally-Software), dienen als Referenz dafür, was die lmix-API leisten muss (API.9); sie sind keine Quelle für vMix-Verhalten, Code wird nicht übernommen. |
 | CR.2 | Anforderungen in eigenen Worten. Kein Handbuchtext, keine Screenshots, keine vMix-Grafiken im Repo. Die heruntergeladene Hilfe bleibt außerhalb des Repos. |
 | CR.3 | Umsetzung arbeitet nur gegen dieses Lastenheft, `ROADMAP.md` und offene Standards. Wer Code schreibt, liest dafür nicht im vMix-Handbuch nach; Lücken im Lastenheft werden hier ergänzt (mit Quelle), dann umgesetzt. |
 | CR.4 | Keine vMix-Assets: keine Titelvorlagen, Stinger, LUTs, Virtual Sets, Icons, Sounds, Shortcut-Vorlagen. Eigene Vorlagen werden neu gestaltet. |
 | CR.5 | Eigene Namen in Oberfläche und Dateien: kein "vMix", "GT", "vMix Call", "MultiCorder", ".vmix". Begriffe siehe §1. Der Vergleich mit vMix steht nur in Doku. |
-| CR.6 | Schnittstellen-Kompatibilität (API-Funktionsnamen, XML-Zustand, TCP-Protokoll) nur aus den Handbuchseiten dazu, und nur nach Entscheidung E.2/E.3. |
+| CR.6 | lmix hat eine eigene API (§3.15). Ein vMix-Kompatibilitätsmodus ist optional (API.8, K); falls gebaut, nur aus den Handbuchseiten zu HTTP-/TCP-API und Funktionsreferenz. |
 | CR.8 | Ergänzungen, die nicht aus dem Handbuch stammen (Linux-Ersatz für Windows-Technik, eigene Ziele), sind mit **(lmix)** markiert. |
 | CR.7 | Jede Anforderung trägt eine ID. Commits, die eine Anforderung umsetzen, nennen sie (`Implements AUD.12`). |
 
@@ -385,13 +390,16 @@ kann es, Console nicht.
 | ID | Anforderung | Prio | Stand |
 |---|---|---|---|
 | API.1 | Ein Aktionskatalog für alle Bedienwege (§2.3); jede Aktion: Name, Gruppe, Parameter (Input, Wert, Dauer, Feldname, Index, Mix, Kanal), Beschreibung; maschinenlesbar exportierbar | M | – |
-| API.2 | Umfang: alle Bedienfunktionen dieses Lastenhefts; Gruppen wie vMix: Allgemein, Audio, Übergang, Ausgang, Titel, Input, Overlay, Ablaufliste, Skript, Wiederholung, NDI/OMT, PTZ, Show, Datenquellen, Browser (vMix 29: rund 800 Aktionen inkl. nummerierter Varianten) | S | – |
-| API.3 | HTTP: Aktion per GET/POST mit Parametern; ohne Aktion → vollständiger Zustand (XML; zusätzlich JSON) | M | ◐ (strom-REST, andere Ebene) |
+| API.2 | Umfang: alle Bedienfunktionen dieses Lastenhefts, mindestens alles, was die vMix-Funktionsreferenz steuern kann; Gruppen wie vMix: Allgemein, Audio, Übergang, Ausgang, Titel, Input, Overlay, Ablaufliste, Skript, Wiederholung, NDI/OMT, PTZ, Show, Datenquellen, Browser (vMix 29: rund 800 Aktionen inkl. nummerierter Varianten; lmix darf sie parametrisieren statt durchnummerieren, z. B. `overlay.in {channel}` statt `OverlayInput1In…8In`) | M | – |
+| API.3 | HTTP: Aktion per Aufruf mit Parametern; vollständiger Zustand abrufbar (JSON) | M | ◐ (strom-REST, andere Ebene) |
 | API.4 | Zustand enthält: Version, Inputs (ID, Nummer, Typ, Titel, Zustand, Position, Dauer, Schleife, Ton, Pegel, Busse, Ebenen, Titelfelder, Listeneinträge), Overlays, Preview, Program, FTB, Übergänge, Aufnahme/Stream/Ausgaben/Ablaufliste/Einzelaufnahme, Audio-Busse, dynamische Werte, Mixe | M | – |
-| API.5 | TCP-Textprotokoll: Zeilen, UTF-8, `BEFEHL STATUS [Text]`; Befehle Aktion, Tally (0/1/2 je Input), Rückmeldungszustand, XML, XPath-Abfrage, Abonnieren/Abbestellen von Tally/Rückmeldungen | S | – |
+| API.5 | Ereigniskanal mit Abo: Tally (aus/PGM/PVW je Input), Rückmeldungszustände, Zustandsänderungen; Aktionen über denselben Kanal; leichtgewichtig genug für Mikrocontroller (Textzeilen über TCP oder WebSocket) | M | – |
 | API.6 | WebSocket mit Zustandsdiffs für eigene Clients | S | ◐ (strom-WS) |
 | API.7 | Sicherheit: nur LAN (Standard), Passwort, Ausnahmen je Seite, lokale Programme ohne Anmeldung, "erhöhte Sicherheit" sperrt Skripte | M | – |
-| API.8 | Kompatibilitätsmodus: vMix-Funktionsnamen, XML-Schema, Port 8088/8099 (siehe E.2); Input-Adressierung über Nummer (0 = Preview, -1 = Program), Name oder ID | S | – |
+| API.8 | Optionaler Kompatibilitätsmodus: vMix-Funktionsnamen, XML-Zustand, TCP-Protokoll, Ports 8088/8099 | K | – |
+| API.9 | Integrationsziel: alles, was Fremdprogramme an vMix nutzen, geht auch mit der lmix-API: Aktionen mit allen Parametern, Inputs über Nummer, Name oder ID (plus Kurzformen "Preview", "Program"), vollständiger Zustand, Ereignis-Abo (API.5), Pegel live, Titelfelder lesen/schreiben, Live-Vorschaubild je Input für Tasten-Displays, Fehler mit Grund. Referenz: Bitfocus Companion, Stream-Deck-Plugins, Tally-Software (`LASTENHEFT-QUELLEN.md` §2) | M | – |
+| API.10 | Schnittstelle dokumentiert und versioniert (maschinenlesbare Beschreibung, Änderungen nur additiv innerhalb einer Hauptversion) | M | – |
+| API.11 | Eigenes Companion-Modul für lmix, Beispiel-Clients (Tally auf Mikrocontroller, Skript) | S | – |
 
 ### 3.16 Web-Fernbedienung (WEB)
 
@@ -491,12 +499,46 @@ kann es, Console nicht.
 
 ---
 
+## 5a. Abweichungen von vMix: Altlasten
+
+vMix trägt Funktionen aus vielen Jahren Windows-Geschichte. lmix baut sie
+nicht nach, sondern ersetzt sie durch Heutiges oder lässt sie weg
+(Leitlinie). Ausgeschlossenes steht zusätzlich in §5.
+
+| vMix-Funktion | Warum Altlast | lmix stattdessen |
+|---|---|---|
+| DVD-Input mit Menüs | Optisches Laufwerk, MPEG-2-Decoder-Wahl, Menünavigation | Nicht übernehmen. DVD vorher in eine Datei umwandeln; Datei-Input deckt MPEG-2/VOB ab. |
+| Flash (SWF, FLV) | Flash ist seit 2020 tot | Nicht übernehmen. Animationen als Bildsequenz, Video mit Alpha oder HTML-Titel; FLV spielt der Datei-Input. |
+| PowerPoint-Input | Braucht installiertes Office, nur statische Folien | Folien als PDF oder Bildordner in den Fotos-Input. Kann-Funktion: Import über LibreOffice. |
+| XAML/WPF-Titel, eigene WPF-Steuerelemente | Windows-only, in vMix selbst seit v24 abgekündigt | Nicht übernehmen. Eigenes Titelformat + HTML-Titel. |
+| VB.NET-Skripte | Bindet an .NET Framework und Windows | Eingebettete Skriptsprache (Rhai oder Lua) mit Zugriff auf den Aktionskatalog; einfache Zeilen-Syntax „Aktion + Pause“ bleibt. |
+| WMV-Aufnahme und WMV-Streaming | Veraltet, im Handbuch schon nicht mehr unterstützt | Nicht übernehmen. MP4/MKV/MOV mit H.264/HEVC/AV1. |
+| FMLE als Streaming-Encoder, MP3 im Stream | Externes Adobe-Programm von 2012 | Nur eingebauter Encoder. Ton AAC/Opus. |
+| DirectShow-Decoderwahl, Filtersperrliste, Renderer EVR/VMR9, FlipEx, Display-Methode „Legacy“ | Windows-Videostack, Fehlerquelle für Anwender | Keine Einstellung. GStreamer wählt Decoder nach Rang, GPU-Profil wählt Hardwarepfad. |
+| VLC-Variante für Netzstreams | Sonderbuild eines Fremdprogramms | Nicht übernehmen. RTSP, RTMP, TS, RTP und HLS nativ über GStreamer. |
+| Eigenes AVI-Zwischenformat | Proprietärer Codec, nur mit installiertem vMix schneidbar | Offene Schnittformate: ProRes, DNxHR, FFV1 in MOV/MKV; ausfallsicher als fragmentierte Datei. |
+| Virtuelle 3D-Sets (fest eingebaut) | Starre Vorlagen, wenig genutzt | Nicht übernehmen. Ebenen + Chroma-Key + Ebenen-Editor; animierte Ebenen-Wechsel (SetLayerAnimated) decken Kamerafahrten ab. |
+| Virtuelles Gerät „vMix Video“ für Skype/FMLE | Gedacht für Programme von 2010 | Moderne Entsprechung behalten: virtuelle Kamera über v4l2loopback/PipeWire, für Browser-Konferenzen. |
+| Arduino-Tally mit Firmata, Pin-Reihenfolge „2012“ | Bastellösung, feste Pins | Standard-Tally-Protokolle: TSL UMD 3.1/5.0, HTTP-Webhooks, OSC, Web-Tally; Firmata nur als Kann. |
+| Hardware-Pult des Herstellers | Eingestellt | Nicht übernehmen. Generische MIDI/HID-Pulte, Stream Deck, Companion. |
+| Manuelle Takt-Korrektur (Formel mit Drop-Zählern) | Anwender rechnet Clock-Drift selbst aus | Automatisch: Drift je Quelle messen und per Resampling/Frame-Wiederholung ausgleichen; nur Anzeige in der Statistik. |
+| Schalter 16–235 → 0–255, Preview-Skip, Low-Latency-Capture, High-Input-Performance-Modus | Workarounds für alte GPUs/Treiber | Automatisch aus Farbraum-Metadaten und GPU-Profil; keine Anwender-Schalter. |
+| Aufnahme-Puffer „Wert 10“, Anwendungspriorität, Windows-Update-Sperre | Windows-Tuning | Entfällt. Puffer automatisch nach Schreibrate; Echtzeit-Priorität für Engine-Threads per Systemd/rtkit. |
+| Sprachen per Google Translate | Maschinell, ungeprüft | Eigene Kataloge de/en, Community-Übersetzungen. |
+| Sprachbefehle (Windows-Spracherkennung) | Experimentell | Nicht übernehmen. |
+| Datenquellen aus XLS, PDF, XPS | Unzuverlässige Tabellenquellen | CSV, XLSX/ODS, Google Sheets, JSON, XML, RSS, Text. |
+| Interlaced-Verarbeitung als Standardpfad, SD/Composite | Broadcast-Altlast | Progressiv als Standard; Interlaced nur an Ein- und Ausgang (Deinterlace, SDI-Ausgabe 50i), Kann. |
+| Plattform-Logins für Streamziele | Pflege fremder APIs, bricht regelmäßig | URL + Schlüssel genügen; Profile je Plattform als Vorlage. |
+| Editionen und Lizenzschlüssel | Kommerzielle Staffelung | Entfällt; immer der volle Funktionsumfang. |
+
+---
+
 ## 6. Offene Entscheidungen
 
 | # | Frage | Empfehlung |
 |---|---|---|
 | E.1 | Widerspruch zu `claude.md` "Exkludierte Ziele": Control-Surfaces (MIDI/Stream Deck), 4K-Optimierung, Web-Oberfläche. Für Gleichstand nötig sind AUT.1/AUT.6 (Controller), NFA.2 4K-Ziel, WEB (Fernbedienung, nicht Haupt-GUI). Ausschlüsse aufheben? | Aufheben, Haupt-GUI bleibt nativ |
-| E.2 | API-Kompatibilität zu vMix (Funktionsnamen, XML, TCP-Protokoll, Ports): Bestehende Werkzeuge (Bitfocus Companion, Stream-Deck-Plugins, Tally-Apps) liefen ohne Anpassung. Rechtlich: Schnittstellen aus öffentlicher Doku, keine Kopie von Code | Ja, als abschaltbarer Kompatibilitätsmodus neben eigener API |
+| E.2 | ~~API-Kompatibilität zu vMix~~ — entschieden 2026-10-08 (User): eigene API, funktional mindestens gleichwertig (API.9); Kompatibilitätsmodus optional (API.8, K); sauberer Schnitt zu vMix zulässig | — |
 | E.3 | Import von `.vmix`-Presets: Format undokumentiert, nur aus eigenen Testdateien ableitbar | Später (K), nur Inputs + Grundeinstellungen |
 | E.4 | Wo leben Show-Zustand, Aktionskatalog und APIs? Heute in `app-desktop` → stirbt mit der GUI (verletzt NFA.6). Optionen: (a) eigener Steuer-Dienst zwischen GUI und strom, (b) als strom-Erweiterung, (c) in der GUI | (a): `lmix-core` als eigener Prozess, GUI und APIs sind Clients |
 | E.5 | Titelformat: eigenes Szenenformat (JSON + eigener Renderer auf GPU) vs. HTML/CEF | Eigenes Format für Leistung und Animationen; HTML zusätzlich (GFX.10) |

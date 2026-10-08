@@ -25,9 +25,22 @@ Kein Handbuchtext im Repo (CR.2).
 | SHW | PresetsMenu, NewPreset, OpenPreset, SavePreset, LastPreset, PresetBundle, ImportExport |
 | UI | GettingStarted, VideoControls, RightClickMenus, CogIconMenu, Options, Display |
 
-## Nicht im Handbuch 29, an echter Installation zu klären
+## 2. Integrationsreferenzen (API.9)
 
-1. Vollständiges aktuelles XML-Zustandsschema (die API-Seite zeigt nur ein altes Beispiel).
+Fremdprogramme, die heute an vMix andocken. Sie zeigen, was die lmix-API
+mindestens leisten muss. Nur als Anforderungsreferenz gelesen, kein Code
+übernommen, keine Quelle für vMix-Verhalten (CR.1).
+
+| Programm | Nutzt | Folgt für lmix |
+|---|---|---|
+| Bitfocus Companion, vMix-Modul <https://github.com/bitfocus/companion-module-studiocoast-vmix> | Aktionen per HTTP/TCP mit Input, Wert, Dauer, Mix; Zustand zyklisch als Ganzes; Abo von Tally und Rückmeldungen per TCP; Feedback auf Tasten (PGM/PVW, Pegel, Mute, Aufnahme) | Vollständiger Aktionskatalog, Zustand + Ereignis-Abo, Pegel live; eigenes Companion-Modul (API.11) |
+| Stream-Deck-Plugin (Handbuch 29: ControllerOptions) | Aktionen je Taste, Live-Vorschaubild eines Inputs etwa 4×/s | Vorschaubild je Input über die API |
+| Tally-Software, z. B. Tally Arbiter <https://github.com/josephdadams/TallyArbiter> | Tally-Abo, Inputnummer/-name | Schlanker Ereigniskanal, auch für Mikrocontroller |
+| Skript-Bibliotheken, z. B. vmix-js-utils <https://github.com/jensstigaard/vmix-js-utils> | Zustand lesen, Aktionen senden | Dokumentiertes, versioniertes Schema (API.10) |
+
+## 3. Nicht im Handbuch 29, an echter Installation zu klären
+
+1. Vollständiges aktuelles XML-Zustandsschema (nur für den optionalen Kompatibilitätsmodus API.8).
 2. Vollständige Liste der Übergangseffekte (Handbuch nennt sie nur im Überblick).
 3. Titelformat und Animationsmodell im Detail (Verweis auf separate Designer-Hilfe).
 4. Auswahlliste Master-Bildraten und Abtastraten.

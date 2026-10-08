@@ -289,10 +289,10 @@ auf Program, automatisch zurück; Ereignis als MP4.
 
 ### M9 — Gäste, Fernbedienung, API-Gleichstand
 
-IDs: CAL.1–6, WEB.1–5, TEL.1–3, API.2–8, STR.8.
+IDs: CAL.1–6, WEB.1–5, TEL.1–3, API.2–11, STR.8.
 
 **Abnahme**: 2 Browser-Gäste mit Mix-Minus; Bitfocus Companion steuert lmix
-im Kompatibilitätsmodus (falls E.2 = ja); Tally auf dem Handy.
+über das eigene Modul (API.9, API.11); Tally auf dem Handy.
 
 ### M10 — Gleichstand
 
@@ -317,7 +317,7 @@ OUT.4/5 (Karte, Key+Fill), PER.2–5 (PTZ, Uhren), UI.3–12, SHW.6–9.
 | AUT.1–11, PER.1, PER.6–7, OUT.12–13 | M6 |
 | GFX, DAT | M7 |
 | RPL, SRC.19 | M8 |
-| CAL, WEB, TEL, API.2–8 | M9 |
+| CAL, WEB, TEL, API.2–11 | M9 |
 | Rest S, dann K | M10 |
 
 ---
