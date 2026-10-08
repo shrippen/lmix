@@ -419,3 +419,24 @@ HTML-Vorlagen; strom rendert HTML bereits (`cefsrc`).
 (`claude.md` Entscheidung 6 wieder wie vorher). Titel-Fähigkeiten
 orientieren sich an CasparCG (Vorlagen-Konvention, Ebenen, Datensätze),
 Rendering in strom.
+
+## 2026-10-08 — M2b Schritt 1: `lmix-core` und `lmix-types`
+
+**Kontext**: E.4 (eigener Steuerprozess), API.1 (ein Aktionskatalog).
+**Umsetzung**: zwei neue Crates neben `app-desktop`, außerhalb des
+strom-Workspace (strom-Diff bleibt null):
+- `lmix-types`: API-Typen (Action, Input, ShowState, Event), geteilt mit
+  GUI und Fremdprogrammen. Katalog = JSON-Schema von `Action` (schemars).
+- `lmix-core`: Prozess mit Switcher (reine Zustandsmaschine → Engine-
+  Kommandos), Engine-Trait (`strom`, `none`), Show-Datei (JSON, Version 1,
+  atomisch geschrieben), HTTP/WS-API auf `127.0.0.1:8200`.
+**Entscheidungen im Detail**:
+- Inputs belegen feste Mischer-Slots (Standard 16). Ein Slot wird ein
+  strom-Flow mit fester ID, damit der `inter`-Kanalname gleich bleibt und
+  der Mischer beim Quellentausch nicht neu startet.
+- Aktionen laufen nacheinander (ein Lock über Switcher und Engine), damit
+  alle Clients dieselbe Reihenfolge sehen.
+- Engine-Fehler machen den Input offline, der Rest der Aktion läuft weiter;
+  die API meldet 502 mit Grund.
+- Fehlt strom beim Start, versucht `lmix-core` alle 2 s neu und spielt dann
+  die Show ein.

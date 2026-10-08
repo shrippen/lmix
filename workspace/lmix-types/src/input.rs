@@ -1,0 +1,128 @@
+//! Inputs: every source in a show (camera, file, network, test pattern).
+
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
+
+/// Stable identity of an input; survives renaming and reordering (INP.2).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
+#[serde(transparent)]
+pub struct InputId(pub Uuid);
+
+impl InputId {
+    pub fn new() -> Self {
+        Self(Uuid::new_v4())
+    }
+}
+
+impl Default for InputId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl std::fmt::Display for InputId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+/// How an action names an input (INP.2, API.9).
+///
+/// JSON: a number (`3`, 1-based position), `"preview"`, `"program"`, an id
+/// (`"7d0c…"`), or a name (`"Camera 1"`). Ids win over names.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(untagged)]
+pub enum InputRef {
+    Number(u32),
+    Text(String),
+}
+
+/// Reserved words of [`InputRef::Text`].
+pub const REF_PREVIEW: &str = "preview";
+pub const REF_PROGRAM: &str = "program";
+
+/// `videotestsrc` patterns offered as test sources.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum TestPattern {
+    Bars,
+    Ball,
+    Black,
+    Snow,
+    Checkers,
+}
+
+impl TestPattern {
+    /// `videotestsrc` `pattern` nick.
+    pub fn nick(self) -> &'static str {
+        match self {
+            Self::Bars => "smpte100",
+            Self::Ball => "ball",
+            Self::Black => "black",
+            Self::Snow => "snow",
+            Self::Checkers => "checkers-8",
+        }
+    }
+}
+
+/// What an input shows. Engine specifics stay in `lmix-core`.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum SourceSpec {
+    /// Test pattern with a test tone (SRC.7).
+    Pattern { pattern: TestPattern },
+    /// Local media file, looped (SRC.2).
+    File { path: String },
+    /// Network stream handled by the media player: http(s), rtsp, … (SRC.13).
+    Url { url: String },
+    /// MPEG-TS over SRT, e.g. `srt://:9000?mode=listener` (SRC.12).
+    Srt { uri: String },
+    /// Capture device id from discovery (SRC.1).
+    Device { id: String },
+}
+
+impl SourceSpec {
+    /// Default input name for a new source.
+    pub fn default_name(&self) -> String {
+        match self {
+            Self::Pattern { pattern } => format!("Pattern {pattern:?}"),
+            Self::File { path } => file_stem(path),
+            Self::Url { url } => url.clone(),
+            Self::Srt { uri } => uri.clone(),
+            Self::Device { id } => id.clone(),
+        }
+    }
+}
+
+fn file_stem(path: &str) -> String {
+    std::path::Path::new(path)
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_else(|| path.to_string())
+}
+
+/// Runtime health of an input (INP.13).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum InputStatus {
+    /// Engine flow being built or started.
+    #[default]
+    Starting,
+    Online,
+    /// Source missing or failed; the slot shows a substitute frame.
+    Offline,
+}
+
+/// One input as clients see it.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct Input {
+    pub id: InputId,
+    /// 1-based position in the input bar (INP.3).
+    pub number: u32,
+    pub name: String,
+    pub source: SourceSpec,
+    /// Mixer slot the input feeds (0-based).
+    pub slot: usize,
+    pub status: InputStatus,
+}

@@ -161,3 +161,16 @@ Selftest (headless) gegen ein laufendes Backend, wichtigste Schalter:
 
 Kein `STROM_FORCE_SOFTWARE_CONVERT` mehr nötig (auch nicht für `cpu`).
 Messwerte und Methode: `docs/LATENCY.md`.
+
+## lmix-core (Steuerprozess)
+
+```bash
+cd workspace/lmix-core
+cargo test                       # Switcher, Show-Datei, API
+cargo run -- --engine none       # ohne Engine, nur Zustand und API
+cargo run -- --strom http://127.0.0.1:8099   # gegen laufendes strom
+```
+
+API auf `127.0.0.1:8200`: `GET /api/state`, `POST /api/actions`,
+`GET /api/actions` (Katalog als JSON-Schema), `GET /api/tally`,
+WebSocket `GET /api/events`.
