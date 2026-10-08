@@ -17,7 +17,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use lmix_types::{
-    Action, Device, Effect, InputColor, InputId, InputRef, InputStatus, Levels, ShowState, SourceSpec,
+    Action, Device, Effect, InputColor, InputId, InputRef, InputStatus, Levels, Listen, ShowState, SourceSpec,
     TestPattern, TransitionSlot,
 };
 
@@ -38,6 +38,8 @@ const METER_COLOR: egui::Color32 = egui::Color32::from_rgb(60, 190, 90);
 const METER_HOT_COLOR: egui::Color32 = egui::Color32::from_rgb(230, 60, 50);
 const AUDIO_OFF_COLOR: egui::Color32 = egui::Color32::from_rgb(200, 50, 50);
 const AFV_COLOR: egui::Color32 = egui::Color32::from_rgb(220, 160, 40);
+/// Solo buttons, like the yellow PFL/AFL keys on a desk.
+const SOLO_COLOR: egui::Color32 = egui::Color32::from_rgb(230, 200, 40);
 const SHOW_FILTER: (&str, &[&str]) = ("lmix show", &["lmix"]);
 const REMOTE_HINT: &str = "Paths are opened by lmix-core: on another machine, they must exist there.";
 const TRANSITION_HINT: &str = "Click: take preview. Right click: effect and length.";
@@ -379,9 +381,15 @@ impl CoreApp {
 
         ui.columns(3, |columns| {
             monitor(&mut columns[0], "PREVIEW", PREVIEW_COLOR, preview, None);
+            let soloed = state.inputs.iter().any(|i| i.listen != Listen::Off);
+            if soloed {
+                let clear = egui::Button::new(egui::RichText::new("Clear solo").color(egui::Color32::BLACK)).fill(SOLO_COLOR);
+                if columns[0].add(clear).on_hover_text("End all PFL/AFL: monitor follows program").clicked() {
+                    actions.push(Action::ClearListen);
+                }
+            }
             transition_bar(&mut columns[1], state, actions);
-            let program_level = Some(self.levels.program_peak_db.unwrap_or(METER_FLOOR_DB));
-            monitor(&mut columns[2], "PROGRAM", PROGRAM_COLOR, program, program_level);
+            monitor(&mut columns[2], "PROGRAM", PROGRAM_COLOR, program, Some(&self.levels));
         });
     }
 
@@ -618,14 +626,14 @@ impl eframe::App for CoreApp {
 
 // ---- Widgets ----
 
-/// Monitor: label bar in the tally color over a 16:9 picture; a level
-/// meter under it when `level` is given (program).
+/// Monitor: label bar in the tally color over a 16:9 picture; program
+/// and monitor-bus meters under it when `levels` is given (program).
 fn monitor(
     ui: &mut egui::Ui,
     label: &str,
     color: egui::Color32,
     picture: Option<&egui::TextureHandle>,
-    level: Option<f32>,
+    levels: Option<&Levels>,
 ) {
     egui::Frame::new()
         .stroke(egui::Stroke::new(TILE_STROKE, color))
@@ -634,8 +642,14 @@ fn monitor(
             ui.label(egui::RichText::new(label).strong().color(color));
             let width = ui.available_width();
             picture_area(ui, egui::vec2(width, width * 9.0 / 16.0), picture);
-            if let Some(level) = level {
-                meter(ui, level);
+            let Some(levels) = levels else {
+                return;
+            };
+            for (name, level) in [("PGM", levels.program_peak_db), ("MON", levels.monitor_peak_db)] {
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new(name).small().weak());
+                    meter(ui, level.unwrap_or(METER_FLOOR_DB));
+                });
             }
         });
 }
@@ -733,7 +747,8 @@ fn tile(
     ui.interact(frame.response.rect, ui.id().with(input.id), egui::Sense::click())
 }
 
-/// "M" (sound on/off), "AFV" (audio follows video) and the input level.
+/// "M" (sound on/off), "AFV" (audio follows video), "PFL"/"AFL" (solo on
+/// the monitor bus) and the input level.
 fn audio_row(ui: &mut egui::Ui, input: &lmix_types::Input, level: Option<f32>, actions: &mut Vec<Action>) {
     let reference = || InputRef::Text(input.id.to_string());
     let audio = input.audio;
@@ -754,6 +769,21 @@ fn audio_row(ui: &mut egui::Ui, input: &lmix_types::Input, level: Option<f32>, a
                 input: reference(),
                 follow: !audio.follow_video,
             });
+        }
+        for (listen, label, hint) in [
+            (Listen::Pfl, "PFL", "Pre-fader listen on the monitor bus (even when muted)"),
+            (Listen::Afl, "AFL", "After-fader listen on the monitor bus (as on program)"),
+        ] {
+            let active = input.listen == listen;
+            let text = egui::RichText::new(label).small();
+            let text = if active { text.color(egui::Color32::BLACK) } else { text };
+            let button = egui::Button::new(text).fill(if active { SOLO_COLOR } else { egui::Color32::TRANSPARENT });
+            if ui.add(button).on_hover_text(hint).clicked() {
+                actions.push(Action::SetListen {
+                    input: reference(),
+                    listen: if active { Listen::Off } else { listen },
+                });
+            }
         }
         meter(ui, level.unwrap_or(METER_FLOOR_DB));
     });

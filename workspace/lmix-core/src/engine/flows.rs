@@ -36,6 +36,8 @@ const AUDIO_MIXER_BLOCK: &str = "builtin.mixer";
 const SLOT_OUT: &str = "out";
 /// Block id of a slot flow's inter output for sound.
 const SLOT_AUDIO_OUT: &str = "out_audio";
+/// Headphone output of the monitor bus (`MonitorOut::Auto`).
+const MONITOR_SINK: &str = "monitor_sink";
 /// Block id of the audio mixer in the mixer flow: one channel per slot.
 pub const AUDIO_MIXER: &str = "mix";
 /// Block id of the vision mixer in the mixer flow.
@@ -61,6 +63,15 @@ const PATTERN_WIDTH: u32 = 1280;
 const PATTERN_HEIGHT: u32 = 720;
 const PATTERN_FPS: u32 = 30;
 const PATTERN_FORMAT: &str = "NV12";
+
+/// Where the monitor bus (solo listening, headphones) goes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum)]
+pub enum MonitorOut {
+    /// Nowhere: levels only (headless engine, tests).
+    None,
+    /// The engine machine's default audio output (`autoaudiosink`).
+    Auto,
+}
 
 /// Vision mixer compositor (`compositor_preference`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum)]
@@ -112,7 +123,7 @@ pub fn black_input(slots: usize) -> usize {
 }
 
 /// Mixer: one inter input per slot, plus black, into the vision mixer.
-pub fn mixer_flow(slots: usize, backend: MixerBackend) -> Flow {
+pub fn mixer_flow(slots: usize, backend: MixerBackend, monitor: MonitorOut) -> Flow {
     let mut flow = Flow::new("lmix mixer");
     flow.id = mixer_id();
     share_timing(&mut flow);
@@ -167,7 +178,7 @@ pub fn mixer_flow(slots: usize, backend: MixerBackend) -> Flow {
         ],
     ));
 
-    add_audio_mixer(&mut flow, slots);
+    add_audio_mixer(&mut flow, slots, monitor);
 
     flow.blocks.push(block(PGM_TAP, THUMBNAIL_BLOCK, vec![]));
     flow.links.push(link(
@@ -189,7 +200,7 @@ pub fn mixer_flow(slots: usize, backend: MixerBackend) -> Flow {
 
 /// Sound of every slot into one audio mixer; its main mix is program
 /// audio (into the vision mixer, which meters it on the multiview).
-fn add_audio_mixer(flow: &mut Flow, slots: usize) {
+fn add_audio_mixer(flow: &mut Flow, slots: usize, monitor: MonitorOut) {
     for slot in 0..slots {
         let input = format!("ain{slot}");
         flow.blocks.push(block(
@@ -217,6 +228,12 @@ fn add_audio_mixer(flow: &mut Flow, slots: usize) {
         format!("{AUDIO_MIXER}:main_out"),
         format!("{MIXER_BLOCK}:pgm_audio_in"),
     ));
+
+    // strom switches the monitor bus between program and the solos.
+    if monitor == MonitorOut::Auto {
+        flow.elements.push(element(MONITOR_SINK, "autoaudiosink", vec![]));
+        flow.links.push(link(format!("{AUDIO_MIXER}:monitor_out"), MONITOR_SINK.into()));
+    }
 }
 
 /// One slot: the source, published on the slot's inter channel.
@@ -391,7 +408,7 @@ mod tests {
 
     #[test]
     fn mixer_subscribes_each_slot_channel() {
-        let flow = mixer_flow(3, MixerBackend::Cpu);
+        let flow = mixer_flow(3, MixerBackend::Cpu, MonitorOut::None);
 
         for slot in 0..3 {
             let input = flow.blocks.iter().find(|b| b.id == format!("in{slot}")).unwrap();
@@ -405,7 +422,7 @@ mod tests {
 
     #[test]
     fn mixer_has_black_after_slots() {
-        let flow = mixer_flow(3, MixerBackend::Cpu);
+        let flow = mixer_flow(3, MixerBackend::Cpu, MonitorOut::None);
 
         assert_eq!(black_input(3), 3);
         assert!(flow.links.iter().any(|l| l.from == "black_caps" && l.to == "vm:video_in_3"));
@@ -438,20 +455,24 @@ mod tests {
 
     #[test]
     fn mixer_mixes_every_slot_sound() {
-        let flow = mixer_flow(3, MixerBackend::Cpu);
+        let flow = mixer_flow(3, MixerBackend::Cpu, MonitorOut::None);
 
         for slot in 0..3 {
             let to = format!("mix:input_{}", slot + 1);
             assert!(flow.links.iter().any(|l| l.from == format!("ain{slot}:src") && l.to == to));
         }
         assert!(flow.links.iter().any(|l| l.from == "mix:main_out" && l.to == "vm:pgm_audio_in"));
+        assert!(flow.elements.iter().all(|e| e.id != MONITOR_SINK));
+
+        let heard = mixer_flow(3, MixerBackend::Cpu, MonitorOut::Auto);
+        assert!(heard.links.iter().any(|l| l.from == "mix:monitor_out" && l.to == MONITOR_SINK));
     }
 
     #[test]
     fn all_flows_share_timing() {
         let slot = slot_flow(0, &SourceSpec::Pattern { pattern: TestPattern::Bars });
 
-        for flow in [mixer_flow(2, MixerBackend::Cpu), slot] {
+        for flow in [mixer_flow(2, MixerBackend::Cpu, MonitorOut::None), slot] {
             assert_eq!(flow.properties.clock_type, GStreamerClockType::Monotonic);
             assert!(flow.properties.effective_direct_media_timing());
         }

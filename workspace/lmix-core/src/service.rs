@@ -107,6 +107,7 @@ impl Service {
         Levels {
             inputs,
             program_peak_db: engine.main.and_then(fresh),
+            monitor_peak_db: engine.monitor.and_then(fresh),
         }
     }
 
@@ -299,7 +300,7 @@ mod tests {
 
         assert_eq!(opened.inputs, saved.inputs);
         assert_eq!(opened.preview, saved.preview);
-        assert_eq!(engine.log().len(), 4, "slot, program, preview, audio: {:?}", engine.log());
+        assert_eq!(engine.log().len(), 5, "slot, program, preview, audio, listen: {:?}", engine.log());
     }
 
     #[tokio::test]
@@ -317,7 +318,7 @@ mod tests {
         assert!(resumed);
         assert_eq!(second.state().await.inputs.len(), 1);
         assert_eq!(second.state().await.path, None);
-        assert_eq!(engine.log().len(), 3, "slot, program, audio: {:?}", engine.log());
+        assert_eq!(engine.log().len(), 4, "slot, program, audio, listen: {:?}", engine.log());
     }
 
     #[tokio::test]

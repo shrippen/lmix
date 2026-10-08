@@ -157,6 +157,24 @@ settle
 [[ $(pgm_db) -lt $((full - 6)) ]] || fail "volume 50 did not lower program ($full -> $(pgm_db) dB)"
 pass "sound: slots heard, mute, audio follows video, volume"
 
+# --- solo listening on the monitor bus: PFL before, AFL after the fader ---
+mon_db() { curl -sf "$CORE/audio/levels" | jq '.monitor_peak_db // -100 | floor'; }
+settle
+[[ $(mon_db) -gt $AUDIBLE_DB ]] || fail "monitor does not follow program without solo"
+act '{"action":"set_audio","input":"Ball","on":false}' >/dev/null   # program now silent
+act '{"action":"set_listen","input":"Bars","listen":"pfl"}' >/dev/null
+settle
+[[ $(pgm_db) -lt $SILENT_DB ]] || fail "program not silent for the solo check"
+[[ $(mon_db) -gt $AUDIBLE_DB ]] || fail "PFL of a muted input not heard ($(mon_db) dB)"
+act '{"action":"set_listen","input":"Bars","listen":"afl"}' >/dev/null
+settle
+[[ $(mon_db) -lt $SILENT_DB ]] || fail "AFL of a muted input heard ($(mon_db) dB)"
+act '{"action":"clear_listen"}' >/dev/null
+act '{"action":"set_audio","input":"Ball","on":true}' >/dev/null
+settle
+[[ $(mon_db) -gt $AUDIBLE_DB ]] || fail "monitor not back on program after clearing solos"
+pass "solo: PFL hears a muted input, AFL does not, monitor back on program"
+
 # --- input color, device list ---
 act '{"action":"set_input_color","input":"Ball","color":"teal"}' >/dev/null
 [[ "$(curl -sf "$CORE/state" | jq -r '.inputs[1].color')" == teal ]] || fail "color not set"
@@ -173,7 +191,10 @@ if [[ -n "${CONSOLE_SHOT:-}" ]]; then
     DISPLAY=:93 WAYLAND_DISPLAY= LIBGL_ALWAYS_SOFTWARE=1 "$CONSOLE_BIN" --core "${CORE%/api}" >"$WORK/console.log" 2>&1 &
     PIDS+=($!)
     sleep "${CONSOLE_WAIT:-8}"
+    act '{"action":"set_listen","input":"Bars","listen":"pfl"}' >/dev/null   # show a solo
+    sleep 2
     DISPLAY=:93 import -window root "$CONSOLE_SHOT"
+    act '{"action":"clear_listen"}' >/dev/null
     pass "Console screenshot: $CONSOLE_SHOT"
 fi
 

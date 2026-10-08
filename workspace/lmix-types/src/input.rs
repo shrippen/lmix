@@ -146,6 +146,18 @@ impl Default for InputAudio {
     }
 }
 
+/// Solo listening on the monitor bus (headphones), not on program.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Listen {
+    #[default]
+    Off,
+    /// Pre-fader listen: the input as it arrives, even when muted.
+    Pfl,
+    /// After-fader listen: the input as it goes to program.
+    Afl,
+}
+
 /// Color tag of an input tile, for grouping (cameras, clips, graphics).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -191,6 +203,9 @@ pub struct Input {
     /// kept but do nothing.
     #[serde(default)]
     pub has_audio: bool,
+    /// Solo on the monitor bus; not saved in the show file.
+    #[serde(default)]
+    pub listen: Listen,
 }
 
 /// A capture device the engine found (camera, capture card), for

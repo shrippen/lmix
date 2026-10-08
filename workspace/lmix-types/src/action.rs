@@ -13,7 +13,7 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::input::{InputColor, InputRef, SourceSpec};
+use crate::input::{InputColor, InputRef, Listen, SourceSpec};
 
 /// One of the four transition buttons (SWI.3), 1-based.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -97,6 +97,12 @@ pub enum Action {
     SetAudioFollow { input: InputRef, follow: bool },
     /// Set an input's volume, 0–100 (100 = unity gain).
     SetVolume { input: InputRef, volume: u8 },
+    /// Listen to an input on the monitor bus, before or after its fader.
+    /// While any input is soloed, the monitor bus carries only the solos;
+    /// otherwise it follows program.
+    SetListen { input: InputRef, listen: Listen },
+    /// End every solo: the monitor bus follows program again.
+    ClearListen,
 
     /// Move an input to a 1-based position in the input bar (INP.3).
     MoveInput { input: InputRef, number: u32 },

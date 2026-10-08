@@ -24,7 +24,7 @@ mod service;
 mod show;
 mod switcher;
 
-use engine::flows::MixerBackend;
+use engine::flows::{MixerBackend, MonitorOut};
 use engine::null::NullEngine;
 use engine::strom::StromEngine;
 use engine::Engine;
@@ -59,6 +59,11 @@ struct Args {
     #[arg(long, value_enum, default_value_t = MixerBackend::Cuda)]
     mixer: MixerBackend,
 
+    /// Monitor bus (solo listening): `auto` plays it on the engine
+    /// machine's default audio output.
+    #[arg(long, env = "LMIX_MONITOR_OUT", value_enum, default_value_t = MonitorOut::None)]
+    monitor_out: MonitorOut,
+
     /// Mixer slots (inputs fed at the same time).
     #[arg(long, default_value_t = DEFAULT_SLOTS)]
     slots: usize,
@@ -91,7 +96,7 @@ async fn main() -> anyhow::Result<()> {
 
     let args = Args::parse();
     let engine: Arc<dyn Engine> = match args.engine {
-        EngineKind::Strom => Arc::new(StromEngine::new(args.strom.clone(), args.mixer)),
+        EngineKind::Strom => Arc::new(StromEngine::new(args.strom.clone(), args.mixer, args.monitor_out)),
         EngineKind::None => Arc::new(NullEngine::default()),
     };
 

@@ -8,9 +8,10 @@
 //! | `Program` | vision mixer: transition from its current program (`cut` for hard cuts); no slot = black input |
 //! | `FadeToBlack` | vision mixer: toggle FTB |
 //! | `SetAudio` | audio mixer: channel fader and mute, ramped |
+//! | `SetListen` | audio mixer: channel PFL/AFL (monitor bus) |
 
 use async_trait::async_trait;
-use lmix_types::{Device, Effect};
+use lmix_types::{Device, Effect, Listen};
 use strom_types::discovery::DeviceResponse;
 use reqwest::StatusCode;
 use serde::Serialize;
@@ -30,15 +31,16 @@ const PLAYING_POLLS: u32 = 50;
 /// strom's answer to a transition before the pipeline has a position.
 const NOT_RUNNING_YET: &str = "query pipeline position";
 
-use super::flows::{self, MixerBackend, AUDIO_MIXER, MIXER_BLOCK, PGM_TAP, SLOT_TAP};
+use super::flows::{self, MixerBackend, MonitorOut, AUDIO_MIXER, MIXER_BLOCK, PGM_TAP, SLOT_TAP};
 use super::meters::{self, EngineLevels};
 use super::{Engine, EngineError, Picture};
-use crate::switcher::Command;
+use crate::switcher::{Command, AUDIO_RAMP_MS};
 
 pub struct StromEngine {
     base_url: String,
     http: reqwest::Client,
     backend: MixerBackend,
+    monitor: MonitorOut,
     /// Mixer input that shows black; set by `start`.
     black: AtomicUsize,
     levels: watch::Sender<EngineLevels>,
@@ -47,11 +49,12 @@ pub struct StromEngine {
 }
 
 impl StromEngine {
-    pub fn new(base_url: String, backend: MixerBackend) -> Self {
+    pub fn new(base_url: String, backend: MixerBackend, monitor: MonitorOut) -> Self {
         Self {
             base_url,
             http: reqwest::Client::new(),
             backend,
+            monitor,
             black: AtomicUsize::new(0),
             levels: watch::Sender::default(),
             metering: AtomicBool::new(false),
@@ -167,14 +170,25 @@ impl StromEngine {
         let mute = (format!("ch{channel}_mute"), PropertyValue::Bool(muted));
         let order = if muted { [fader, mute] } else { [mute, fader] };
         for property in order {
-            self.patch_audio_mixer(property, ramp_ms).await?;
+            self.patch_audio_mixer(vec![property], ramp_ms).await?;
         }
         Ok(())
     }
 
-    async fn patch_audio_mixer(&self, property: (String, PropertyValue), ramp_ms: u32) -> Result<(), EngineError> {
+    /// PFL and AFL of a channel (separate volume elements: one batch).
+    /// strom flips the monitor bus between program and solos itself.
+    async fn set_listen(&self, slot: usize, listen: Listen) -> Result<(), EngineError> {
+        let channel = flows::audio_channel(slot);
+        let properties = vec![
+            (format!("ch{channel}_pfl"), PropertyValue::Bool(listen == Listen::Pfl)),
+            (format!("ch{channel}_afl"), PropertyValue::Bool(listen == Listen::Afl)),
+        ];
+        self.patch_audio_mixer(properties, AUDIO_RAMP_MS).await
+    }
+
+    async fn patch_audio_mixer(&self, properties: Vec<(String, PropertyValue)>, ramp_ms: u32) -> Result<(), EngineError> {
         let body = UpdateBlockPropertiesRequest {
-            properties: [property].into_iter().collect(),
+            properties: properties.into_iter().collect(),
             ramp_ms: Some(ramp_ms),
             ramp_ms_overrides: None,
         };
@@ -202,7 +216,7 @@ impl Engine for StromEngine {
         let black = flows::black_input(slots);
         self.black.store(black, Ordering::Relaxed);
 
-        let wanted = flows::mixer_flow(slots, self.backend);
+        let wanted = flows::mixer_flow(slots, self.backend, self.monitor);
         let current = self.get_flow(wanted.id).await?;
         let reusable = current.as_ref().is_some_and(|f| f.running && slot_count(f) == Some(black + 1));
         if reusable {
@@ -245,6 +259,7 @@ impl Engine for StromEngine {
                 muted,
                 ramp_ms,
             } => self.set_channel(*slot, *gain, *muted, *ramp_ms).await,
+            Command::SetListen { slot, listen } => self.set_listen(*slot, *listen).await,
         }
     }
 

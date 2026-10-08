@@ -22,3 +22,4 @@ Hardware: **NV** = NVIDIA-Host (RTX 3090), **AMD**, **INTEL**,
 | H.10 | Kopplung mit Basiszeit 0 und `start_time_selection=first` auf CUDA- und GL-Mischer (VM: nur CPU geprüft): PGM bewegt sich, kein Aufholen, keine wachsende Latenz über 1 h | NV, AMD | M2b Schritt 4 | offen |
 | H.11 | Console als Client: Bildabruf über `lmix-core` bei 16 Inputs (Last, Verzögerung der Kacheln), Doppelklick-Take am echten Bildschirm | NV | M2b Schritt 4 | offen |
 | H.12 | Dateidialog der Console über xdg-portal auf KDE Plasma (nativer Breeze-Dialog), Geräteliste mit echter Kamera (Auswahl → Input online) | CAP | M2b, B24/B25 | offen |
+| H.13 | Monitor-Bus auf Kopfhörer (`--monitor-out auto`): PFL/AFL hörbar, Umschalten ohne Knacken, kein Drift gegen das Programm über 1 h | NV | PFL/AFL | offen |

@@ -49,6 +49,9 @@ pub struct Levels {
     /// Program mix after faders and mutes, dBFS; `None` before the first
     /// measurement.
     pub program_peak_db: Option<f32>,
+    /// Monitor bus (program, or the solos while any input is soloed).
+    #[serde(default)]
+    pub monitor_peak_db: Option<f32>,
 }
 
 /// Pushed to every subscriber (API.5, API.6).

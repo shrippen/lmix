@@ -11,7 +11,7 @@ use lmix_types::action::TRANSITION_SLOTS;
 use lmix_types::input::{REF_PREVIEW, REF_PROGRAM, VOLUME_MAX};
 use lmix_types::state::API_VERSION;
 use lmix_types::{
-    Action, ActionError, Effect, Input, InputColor, InputId, InputRef, InputStatus, ShowState, SourceSpec,
+    Action, ActionError, Effect, Input, InputColor, InputId, InputRef, InputStatus, Listen, ShowState, SourceSpec,
     Transition, TransitionSlot,
 };
 use std::collections::HashMap;
@@ -37,6 +37,8 @@ pub enum Command {
     },
     /// Toggle fade to black.
     FadeToBlack { duration_ms: u32 },
+    /// Solo `slot` on the monitor bus, or end its solo.
+    SetListen { slot: usize, listen: Listen },
     /// Set the audio channel of `slot`: linear gain (1.0 = unity) and
     /// mute, faded over `ramp_ms`.
     SetAudio {
@@ -73,6 +75,8 @@ pub struct Switcher {
     status: HashMap<InputId, InputStatus>,
     /// Audio channel settings the engine has, per slot.
     mix: HashMap<usize, Mix>,
+    /// Solos; runtime only, like a desk's solo buttons.
+    listen: HashMap<InputId, Listen>,
 }
 
 impl Switcher {
@@ -84,6 +88,7 @@ impl Switcher {
             fade_to_black: false,
             status: HashMap::new(),
             mix: HashMap::new(),
+            listen: HashMap::new(),
         }
     }
 
@@ -123,6 +128,8 @@ impl Switcher {
             Action::SetAudio { input, on } => self.set_audio(&input, |a| a.on = on),
             Action::SetAudioFollow { input, follow } => self.set_audio(&input, |a| a.follow_video = follow),
             Action::SetVolume { input, volume } => self.set_volume(&input, volume),
+            Action::SetListen { input, listen } => self.set_listen(&input, listen),
+            Action::ClearListen => Ok(self.clear_listen()),
             Action::MoveInput { input, number } => self.move_input(&input, number),
             Action::PreviewInput { input } => self.preview(&input),
             Action::Cut => self.take(Effect::Cut, 0),
@@ -150,6 +157,7 @@ impl Switcher {
             })
             .collect();
 
+        commands.extend(self.clear_listen());
         self.show = show;
         self.path = path;
         self.status.clear();
@@ -163,7 +171,26 @@ impl Switcher {
         let mut commands = self.picture_commands();
         self.mix.clear();
         commands.extend(self.audio_commands(AUDIO_RAMP_MS));
+        // A reused mixer may still hold solos from before.
+        commands.extend(self.listen_commands());
         commands
+    }
+
+    /// Solo state of every input with sound, as the engine should have it.
+    fn listen_commands(&self) -> Vec<Command> {
+        self.show
+            .inputs
+            .iter()
+            .filter(|i| i.source.has_audio())
+            .map(|i| Command::SetListen {
+                slot: i.slot,
+                listen: self.listen_of(i.id),
+            })
+            .collect()
+    }
+
+    fn listen_of(&self, id: InputId) -> Listen {
+        self.listen.get(&id).copied().unwrap_or_default()
     }
 
     fn picture_commands(&self) -> Vec<Command> {
@@ -204,6 +231,7 @@ impl Switcher {
                 color: input.color,
                 audio: input.audio,
                 has_audio: input.source.has_audio(),
+                listen: self.listen_of(input.id),
             })
             .collect();
 
@@ -273,6 +301,13 @@ impl Switcher {
             });
         }
         self.status.remove(&removed.id);
+        // A solo left on an empty channel would keep the monitor on silence.
+        if self.listen.remove(&removed.id).is_some_and(|l| l != Listen::Off) {
+            commands.push(Command::SetListen {
+                slot: removed.slot,
+                listen: Listen::Off,
+            });
+        }
 
         commands.push(Command::SetSlot {
             slot: removed.slot,
@@ -401,6 +436,31 @@ impl Switcher {
             });
         }
         self.set_audio(input, |a| a.volume = volume)
+    }
+
+    fn set_listen(&mut self, input: &InputRef, listen: Listen) -> Result<Vec<Command>, ActionError> {
+        let index = self.find(input)?;
+        let entry = &self.show.inputs[index];
+        self.listen.insert(entry.id, listen);
+        Ok(vec![Command::SetListen { slot: entry.slot, listen }])
+    }
+
+    fn clear_listen(&mut self) -> Vec<Command> {
+        let soloed: Vec<usize> = self
+            .show
+            .inputs
+            .iter()
+            .filter(|i| self.listen_of(i.id) != Listen::Off)
+            .map(|i| i.slot)
+            .collect();
+        self.listen.clear();
+        soloed
+            .into_iter()
+            .map(|slot| Command::SetListen {
+                slot,
+                listen: Listen::Off,
+            })
+            .collect()
     }
 
     /// Audio follows the picture: a take fades sound as long as the
@@ -628,6 +688,30 @@ mod tests {
     }
 
     #[test]
+    fn listen_is_kept_per_input_and_cleared_together() {
+        let mut sw = two_inputs();
+
+        let cmds = sw.apply(Action::SetListen { input: named("A"), listen: Listen::Pfl }).unwrap();
+        assert_eq!(cmds, [Command::SetListen { slot: 0, listen: Listen::Pfl }]);
+        sw.apply(Action::SetListen { input: named("B"), listen: Listen::Afl }).unwrap();
+        assert_eq!(sw.state().inputs[1].listen, Listen::Afl);
+
+        let cmds = sw.apply(Action::ClearListen).unwrap();
+        assert_eq!(cmds.len(), 2);
+        assert!(sw.state().inputs.iter().all(|i| i.listen == Listen::Off));
+    }
+
+    #[test]
+    fn removing_a_soloed_input_ends_its_solo() {
+        let mut sw = two_inputs();
+        sw.apply(Action::SetListen { input: named("B"), listen: Listen::Pfl }).unwrap();
+
+        let cmds = sw.apply(Action::RemoveInput { input: named("B") }).unwrap();
+
+        assert!(cmds.contains(&Command::SetListen { slot: 1, listen: Listen::Off }));
+    }
+
+    #[test]
     fn devices_get_no_audio_commands() {
         let mut sw = Switcher::new(SLOTS);
 
@@ -800,7 +884,7 @@ mod tests {
 
         let cmds = fresh.replace(show, Some("x.lmix".into()));
 
-        assert_eq!(cmds.len(), 6, "slots, program, preview, audio × 2: {cmds:?}");
+        assert_eq!(cmds.len(), 8, "slots, program, preview, audio × 2, listen × 2: {cmds:?}");
         assert!(matches!(cmds[2], Command::Program { slot: None, .. }));
         assert_eq!(cmds[3], Command::Preview { slot: 1 });
         assert!(matches!(cmds[4], Command::SetAudio { slot: 0, .. }));

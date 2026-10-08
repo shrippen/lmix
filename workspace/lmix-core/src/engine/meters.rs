@@ -22,6 +22,7 @@ const RECONNECT: Duration = Duration::from_secs(2);
 pub struct EngineLevels {
     pub slots: HashMap<usize, (f32, Instant)>,
     pub main: Option<(f32, Instant)>,
+    pub monitor: Option<(f32, Instant)>,
 }
 
 /// Which meter a strom element id names.
@@ -29,12 +30,15 @@ pub struct EngineLevels {
 enum Meter {
     Slot(usize),
     Main,
+    Monitor,
 }
 
 fn parse_meter(element_id: &str, mixer_block: &str) -> Option<Meter> {
     let name = element_id.strip_prefix(mixer_block)?.strip_prefix(":meter:")?;
-    if name == "main" {
-        return Some(Meter::Main);
+    match name {
+        "main" => return Some(Meter::Main),
+        "monitor" => return Some(Meter::Monitor),
+        _ => {}
     }
     // Channels count from 1, slots from 0.
     let channel: usize = name.parse().ok()?;
@@ -75,6 +79,7 @@ pub async fn follow(ws_url: String, mixer: FlowId, mixer_block: &'static str, le
                         l.slots.insert(slot, reading);
                     }
                     Meter::Main => l.main = Some(reading),
+                    Meter::Monitor => l.monitor = Some(reading),
                 });
             }
         }
@@ -90,6 +95,7 @@ mod tests {
     fn meter_names() {
         assert_eq!(parse_meter("mix:meter:3", "mix"), Some(Meter::Slot(2)));
         assert_eq!(parse_meter("mix:meter:main", "mix"), Some(Meter::Main));
+        assert_eq!(parse_meter("mix:meter:monitor", "mix"), Some(Meter::Monitor));
         assert_eq!(parse_meter("mix:meter:aux1", "mix"), None);
         assert_eq!(parse_meter("mix:meter:0", "mix"), None);
         assert_eq!(parse_meter("other:meter:1", "mix"), None);

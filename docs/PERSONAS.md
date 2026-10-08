@@ -281,3 +281,9 @@ Lautstärke; Pegel auf Kacheln und unter PROGRAM.
 **Befunde**: B28 Lautstärke direkt an der Kachel bzw. Audio-Mischpult-
 Ansicht (vMix-Audiomixer, M4); B29 reine Audio-Inputs (Mikrofon,
 Line-In) als eigener Quellentyp (2b.3, AUD).
+
+**Nachtrag PFL/AFL (2026-10-08)**: P5 Broadcast und P3 Sport können einen
+stummen Kommentar-Input per PFL vorhören, bevor er auf Sendung geht ✅;
+P7 Theater prüft per AFL, wie ein Zuspieler im Programm klingt ✅. ⚠ Der
+Monitor ist nur auf der Engine-Maschine hörbar; ein Bedienplatz an einem
+anderen Rechner hört ihn noch nicht (mit OUT, M3).

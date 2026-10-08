@@ -509,3 +509,23 @@ Senke läuft jetzt mit `qos=false`; der VM-Test verlangt null CRITICALs.
 stellt sie beim Aufheben wieder her. Beides in einem PATCH verliert den
 Fader. lmix schickt deshalb getrennt: Aufheben vor Fader, Fader vor
 Stummschalten. Kandidat für einen Fehlerbericht an strom.
+
+## 2026-10-08 — Abhören: PFL und AFL je Input
+
+**Anforderung** (User): Jede Audiospur hat Pre-Fader-Listen und
+After-Fader-Listen.
+**Umsetzung**: strom bringt beides je Mischerkanal mit (`chN_pfl`,
+`chN_afl`) samt Solo-Bus und Monitor-Bus; der Monitor folgt dem Programm
+und schaltet auf die Solos, sobald eines aktiv ist (strom schaltet selbst).
+lmix setzt je Input `listen: off | pfl | afl` (Aktionen `set_listen`,
+`clear_listen`), mehrere Solos summieren sich wie am Pult.
+- PFL hört den Input vor Fader und Mute (auch stummgeschaltet), AFL so,
+  wie er ins Programm geht.
+- Solos sind Laufzeitzustand, nicht in der Show-Datei (wie strom und
+  übliche Pulte). Nach einem Neustart von `lmix-core` werden sie im
+  Mischer zurückgesetzt, ein entfernter Input gibt sein Solo frei.
+- Monitor-Bus hörbar über `--monitor-out auto` (Standard-Audioausgang der
+  Engine-Maschine); Standard `none`, weil `lmix-core`/strom oft headless
+  laufen. Pegel des Monitor-Busses in `levels.monitor_peak_db`.
+**Offen**: Monitor-Ausgang wählbar (Gerät, NDI, an den Bedienplatz
+streamen) mit den Ausgängen (OUT, M3).
