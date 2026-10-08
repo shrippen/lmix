@@ -677,6 +677,13 @@ angepasst. Vorgehen: Prototyp (QML-Fenster im Kante-Stil, PGM-Monitor über
 `qml6glsink`, Bild aus strom über `unixfdsink`/`unixfdsrc`), messen
 (H.11), dann Funktionen übertragen. Die egui-Console bleibt bis zur
 Gleichwertigkeit für Selftest und VM-Screenshot.
-**Offen**: Kante steht unter „All rights reserved“; die QML-Module dürfen
-erst in lmix ausgeliefert werden, wenn Kante eine Lizenz bekommt, die zur
-lmix-Lizenz passt.
+
+## 2026-10-09 — Lizenz: MIT, auch für Kante
+
+**Entscheidung** (User): lmix steht unter MIT (`LICENSE` im Repo, bisher
+fehlte die Datei; Crates von `MIT OR Apache-2.0` auf `MIT`). Kante kommt
+ebenfalls unter MIT (Kante-PR #35; `kimai/` bleibt GPL-3.0-or-later,
+Schriften OFL-1.1), damit lmix die QML-Module ausliefern darf.
+Abhängigkeiten wie bisher (`claude.md` Entscheidung 6): Qt, Kirigami,
+GStreamer und gstcefsrc (LGPL) nur dynamisch, kein GPL-Code im Repo oder
+Paket (z. B. kein `x264enc` mitliefern), NDI-SDK zur Laufzeit.
