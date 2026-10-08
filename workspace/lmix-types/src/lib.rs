@@ -14,5 +14,8 @@ pub mod input;
 pub mod state;
 
 pub use action::{Action, ActionError, Effect, TransitionSlot};
-pub use input::{Device, Input, InputAudio, InputColor, Listen, InputId, InputRef, InputStatus, SourceSpec, TestPattern};
+pub use input::{
+    Device, Input, InputAudio, InputColor, InputId, InputRef, InputStatus, Listen, SourceSpec,
+    TestPattern,
+};
 pub use state::{Event, InputLevel, Levels, ShowState, Transition};

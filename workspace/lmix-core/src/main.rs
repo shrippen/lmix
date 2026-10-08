@@ -96,13 +96,20 @@ async fn main() -> anyhow::Result<()> {
 
     let args = Args::parse();
     let engine: Arc<dyn Engine> = match args.engine {
-        EngineKind::Strom => Arc::new(StromEngine::new(args.strom.clone(), args.mixer, args.monitor_out)),
+        EngineKind::Strom => Arc::new(StromEngine::new(
+            args.strom.clone(),
+            args.mixer,
+            args.monitor_out,
+        )),
         EngineKind::None => Arc::new(NullEngine::default()),
     };
 
     let service = Service::new(args.slots, engine.clone(), Some(args.autosave));
     let opened = match args.show {
-        Some(path) => service.handle(Action::OpenShow { path }).await.map(|_| true),
+        Some(path) => service
+            .handle(Action::OpenShow { path })
+            .await
+            .map(|_| true),
         None => service.resume().await,
     };
     match opened {

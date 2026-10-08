@@ -15,7 +15,9 @@ pub struct Recent {
 impl Recent {
     /// List stored beside `autosave`; none without autosave (tests).
     pub fn load(autosave: Option<&Path>) -> Self {
-        let file = autosave.and_then(Path::parent).map(|dir| dir.join(RECENT_FILE));
+        let file = autosave
+            .and_then(Path::parent)
+            .map(|dir| dir.join(RECENT_FILE));
         let paths = file
             .as_ref()
             .and_then(|f| std::fs::read(f).ok())
@@ -74,8 +76,13 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let autosave = dir.path().join("autosave.lmix");
 
-        Recent::load(Some(&autosave)).touch("/shows/sunday.lmix").await;
+        Recent::load(Some(&autosave))
+            .touch("/shows/sunday.lmix")
+            .await;
 
-        assert_eq!(Recent::load(Some(&autosave)).paths(), ["/shows/sunday.lmix"]);
+        assert_eq!(
+            Recent::load(Some(&autosave)).paths(),
+            ["/shows/sunday.lmix"]
+        );
     }
 }

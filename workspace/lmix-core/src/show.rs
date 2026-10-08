@@ -56,7 +56,12 @@ impl Default for Show {
 
 /// Buttons 1–4: fade, cut, dip to black, wipe.
 fn default_transitions() -> Vec<Transition> {
-    let effects = [Effect::Fade, Effect::Cut, Effect::DipToBlack, Effect::WipeLeft];
+    let effects = [
+        Effect::Fade,
+        Effect::Cut,
+        Effect::DipToBlack,
+        Effect::WipeLeft,
+    ];
 
     (1..=TRANSITION_SLOTS)
         .zip(effects)
@@ -78,9 +83,15 @@ struct ShowFile {
 #[derive(Debug, thiserror::Error)]
 pub enum ShowFileError {
     #[error("cannot read {path}: {source}")]
-    Read { path: String, source: std::io::Error },
+    Read {
+        path: String,
+        source: std::io::Error,
+    },
     #[error("cannot write {path}: {source}")]
-    Write { path: String, source: std::io::Error },
+    Write {
+        path: String,
+        source: std::io::Error,
+    },
     #[error("{path} is not an lmix show: {reason}")]
     Format { path: String, reason: String },
     #[error("{path} has show version {found}, this lmix reads up to {FILE_VERSION}")]
@@ -120,8 +131,7 @@ pub async fn load(path: &Path) -> Result<Show, ShowFileError> {
         path: shown.clone(),
         reason,
     };
-    let file: ShowFile =
-        serde_json::from_slice(&bytes).map_err(|e| format_err(e.to_string()))?;
+    let file: ShowFile = serde_json::from_slice(&bytes).map_err(|e| format_err(e.to_string()))?;
 
     if file.format != FILE_FORMAT {
         return Err(format_err(format!("format is \"{}\"", file.format)));

@@ -11,8 +11,8 @@ use lmix_types::action::TRANSITION_SLOTS;
 use lmix_types::input::{REF_PREVIEW, REF_PROGRAM, VOLUME_MAX};
 use lmix_types::state::API_VERSION;
 use lmix_types::{
-    Action, ActionError, Effect, Input, InputColor, InputId, InputRef, InputStatus, Listen, ShowState, SourceSpec,
-    Transition, TransitionSlot,
+    Action, ActionError, Effect, Input, InputColor, InputId, InputRef, InputStatus, Listen,
+    ShowState, SourceSpec, Transition, TransitionSlot,
 };
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -126,7 +126,9 @@ impl Switcher {
             Action::RenameInput { input, name } => self.rename(&input, name),
             Action::SetInputColor { input, color } => self.set_color(&input, color),
             Action::SetAudio { input, on } => self.set_audio(&input, |a| a.on = on),
-            Action::SetAudioFollow { input, follow } => self.set_audio(&input, |a| a.follow_video = follow),
+            Action::SetAudioFollow { input, follow } => {
+                self.set_audio(&input, |a| a.follow_video = follow)
+            }
             Action::SetVolume { input, volume } => self.set_volume(&input, volume),
             Action::SetListen { input, listen } => self.set_listen(&input, listen),
             Action::ClearListen => Ok(self.clear_listen()),
@@ -262,8 +264,14 @@ impl Switcher {
 
     // ---- Inputs ----
 
-    fn add(&mut self, source: SourceSpec, name: Option<String>) -> Result<Vec<Command>, ActionError> {
-        let slot = self.free_slot().ok_or(ActionError::SlotsFull { slots: self.slots })?;
+    fn add(
+        &mut self,
+        source: SourceSpec,
+        name: Option<String>,
+    ) -> Result<Vec<Command>, ActionError> {
+        let slot = self
+            .free_slot()
+            .ok_or(ActionError::SlotsFull { slots: self.slots })?;
         let id = InputId::new();
         let name = name.unwrap_or_else(|| source.default_name());
 
@@ -302,7 +310,11 @@ impl Switcher {
         }
         self.status.remove(&removed.id);
         // A solo left on an empty channel would keep the monitor on silence.
-        if self.listen.remove(&removed.id).is_some_and(|l| l != Listen::Off) {
+        if self
+            .listen
+            .remove(&removed.id)
+            .is_some_and(|l| l != Listen::Off)
+        {
             commands.push(Command::SetListen {
                 slot: removed.slot,
                 listen: Listen::Off,
@@ -338,7 +350,11 @@ impl Switcher {
         Ok(Vec::new())
     }
 
-    fn set_color(&mut self, input: &InputRef, color: Option<InputColor>) -> Result<Vec<Command>, ActionError> {
+    fn set_color(
+        &mut self,
+        input: &InputRef,
+        color: Option<InputColor>,
+    ) -> Result<Vec<Command>, ActionError> {
         let index = self.find(input)?;
         self.show.inputs[index].color = color;
         Ok(Vec::new())
@@ -373,11 +389,18 @@ impl Switcher {
 
     /// Preview to program; the old program goes to preview (classic swap).
     fn take(&mut self, effect: Effect, duration_ms: u32) -> Result<Vec<Command>, ActionError> {
-        let to = self.slot_of(self.show.preview).ok_or(ActionError::NoPreview)?;
+        let to = self
+            .slot_of(self.show.preview)
+            .ok_or(ActionError::NoPreview)?;
         let old_program = self.slot_of(self.show.program);
 
         std::mem::swap(&mut self.show.preview, &mut self.show.program);
-        Ok(program_then_preview(Some(to), old_program, effect, duration_ms))
+        Ok(program_then_preview(
+            Some(to),
+            old_program,
+            effect,
+            duration_ms,
+        ))
     }
 
     /// Input straight to program. If it was in preview, the old program
@@ -438,11 +461,18 @@ impl Switcher {
         self.set_audio(input, |a| a.volume = volume)
     }
 
-    fn set_listen(&mut self, input: &InputRef, listen: Listen) -> Result<Vec<Command>, ActionError> {
+    fn set_listen(
+        &mut self,
+        input: &InputRef,
+        listen: Listen,
+    ) -> Result<Vec<Command>, ActionError> {
         let index = self.find(input)?;
         let entry = &self.show.inputs[index];
         self.listen.insert(entry.id, listen);
-        Ok(vec![Command::SetListen { slot: entry.slot, listen }])
+        Ok(vec![Command::SetListen {
+            slot: entry.slot,
+            listen,
+        }])
     }
 
     fn clear_listen(&mut self) -> Vec<Command> {
@@ -482,7 +512,8 @@ impl Switcher {
             .filter(|i| i.source.has_audio())
             .map(|i| (i.slot, self.mix_of(i)))
             .collect();
-        self.mix.retain(|slot, _| wanted.iter().any(|(s, _)| s == slot));
+        self.mix
+            .retain(|slot, _| wanted.iter().any(|(s, _)| s == slot));
 
         let mut commands = Vec::new();
         for (slot, mix) in wanted {
@@ -552,7 +583,9 @@ impl Switcher {
         };
 
         let index = match input {
-            InputRef::Number(n) => (*n as usize).checked_sub(1).filter(|i| *i < self.show.inputs.len()),
+            InputRef::Number(n) => (*n as usize)
+                .checked_sub(1)
+                .filter(|i| *i < self.show.inputs.len()),
             InputRef::Text(text) => self.find_text(text),
         };
         index.ok_or_else(unknown)
@@ -642,7 +675,10 @@ mod tests {
         cmds.iter()
             .filter_map(|c| match c {
                 Command::SetAudio {
-                    slot, muted, ramp_ms, ..
+                    slot,
+                    muted,
+                    ramp_ms,
+                    ..
                 } => Some((*slot, *muted, *ramp_ms)),
                 _ => None,
             })
@@ -660,15 +696,28 @@ mod tests {
         .unwrap();
 
         let cmds = sw
-            .apply(Action::SetAudioFollow { input: named("B"), follow: true })
+            .apply(Action::SetAudioFollow {
+                input: named("B"),
+                follow: true,
+            })
             .unwrap();
         assert_eq!(audio_of(&cmds), [(1, true, AUDIO_RAMP_MS)]);
 
-        sw.apply(Action::PreviewInput { input: named("B") }).unwrap();
-        let cmds = sw.apply(Action::Transition { slot: TransitionSlot(1) }).unwrap();
-        assert_eq!(audio_of(&cmds), [(1, false, 800)], "fades in with the picture");
+        sw.apply(Action::PreviewInput { input: named("B") })
+            .unwrap();
+        let cmds = sw
+            .apply(Action::Transition {
+                slot: TransitionSlot(1),
+            })
+            .unwrap();
+        assert_eq!(
+            audio_of(&cmds),
+            [(1, false, 800)],
+            "fades in with the picture"
+        );
 
-        sw.apply(Action::PreviewInput { input: named("A") }).unwrap();
+        sw.apply(Action::PreviewInput { input: named("A") })
+            .unwrap();
         let cmds = sw.apply(Action::Cut).unwrap();
         assert_eq!(audio_of(&cmds), [(1, true, AUDIO_RAMP_MS)]);
     }
@@ -677,13 +726,28 @@ mod tests {
     fn audio_off_and_volume() {
         let mut sw = two_inputs();
 
-        let cmds = sw.apply(Action::SetAudio { input: named("A"), on: false }).unwrap();
+        let cmds = sw
+            .apply(Action::SetAudio {
+                input: named("A"),
+                on: false,
+            })
+            .unwrap();
         assert_eq!(audio_of(&cmds), [(0, true, AUDIO_RAMP_MS)]);
 
-        let cmds = sw.apply(Action::SetVolume { input: named("A"), volume: 50 }).unwrap();
+        let cmds = sw
+            .apply(Action::SetVolume {
+                input: named("A"),
+                volume: 50,
+            })
+            .unwrap();
         assert!(matches!(cmds[..], [Command::SetAudio { gain, .. }] if gain == 0.25));
 
-        let err = sw.apply(Action::SetVolume { input: named("A"), volume: 101 }).unwrap_err();
+        let err = sw
+            .apply(Action::SetVolume {
+                input: named("A"),
+                volume: 101,
+            })
+            .unwrap_err();
         assert!(matches!(err, ActionError::BadVolume { .. }));
     }
 
@@ -691,9 +755,24 @@ mod tests {
     fn listen_is_kept_per_input_and_cleared_together() {
         let mut sw = two_inputs();
 
-        let cmds = sw.apply(Action::SetListen { input: named("A"), listen: Listen::Pfl }).unwrap();
-        assert_eq!(cmds, [Command::SetListen { slot: 0, listen: Listen::Pfl }]);
-        sw.apply(Action::SetListen { input: named("B"), listen: Listen::Afl }).unwrap();
+        let cmds = sw
+            .apply(Action::SetListen {
+                input: named("A"),
+                listen: Listen::Pfl,
+            })
+            .unwrap();
+        assert_eq!(
+            cmds,
+            [Command::SetListen {
+                slot: 0,
+                listen: Listen::Pfl
+            }]
+        );
+        sw.apply(Action::SetListen {
+            input: named("B"),
+            listen: Listen::Afl,
+        })
+        .unwrap();
         assert_eq!(sw.state().inputs[1].listen, Listen::Afl);
 
         let cmds = sw.apply(Action::ClearListen).unwrap();
@@ -704,11 +783,18 @@ mod tests {
     #[test]
     fn removing_a_soloed_input_ends_its_solo() {
         let mut sw = two_inputs();
-        sw.apply(Action::SetListen { input: named("B"), listen: Listen::Pfl }).unwrap();
+        sw.apply(Action::SetListen {
+            input: named("B"),
+            listen: Listen::Pfl,
+        })
+        .unwrap();
 
         let cmds = sw.apply(Action::RemoveInput { input: named("B") }).unwrap();
 
-        assert!(cmds.contains(&Command::SetListen { slot: 1, listen: Listen::Off }));
+        assert!(cmds.contains(&Command::SetListen {
+            slot: 1,
+            listen: Listen::Off
+        }));
     }
 
     #[test]
@@ -775,7 +861,10 @@ mod tests {
     fn refs_resolve_by_number_name_id_and_role() {
         let mut sw = two_inputs();
         let b = sw.state().inputs[1].id;
-        sw.apply(Action::PreviewInput { input: InputRef::Number(2) }).unwrap();
+        sw.apply(Action::PreviewInput {
+            input: InputRef::Number(2),
+        })
+        .unwrap();
 
         assert_eq!(sw.find(&named("B")), Ok(1));
         assert_eq!(sw.find(&InputRef::Text(b.to_string())), Ok(1));
@@ -790,7 +879,8 @@ mod tests {
         let mut sw = two_inputs();
         let (a, b) = (sw.state().inputs[0].id, sw.state().inputs[1].id);
         sw.apply(Action::CutDirect { input: named("A") }).unwrap();
-        sw.apply(Action::PreviewInput { input: named("B") }).unwrap();
+        sw.apply(Action::PreviewInput { input: named("B") })
+            .unwrap();
 
         let cmds = sw.apply(Action::Cut).unwrap();
 
@@ -813,7 +903,8 @@ mod tests {
     #[test]
     fn transition_uses_button_settings() {
         let mut sw = two_inputs();
-        sw.apply(Action::PreviewInput { input: named("B") }).unwrap();
+        sw.apply(Action::PreviewInput { input: named("B") })
+            .unwrap();
         sw.apply(Action::SetTransition {
             slot: TransitionSlot(3),
             effect: Effect::SlideLeft,
@@ -821,7 +912,11 @@ mod tests {
         })
         .unwrap();
 
-        let cmds = sw.apply(Action::Transition { slot: TransitionSlot(3) }).unwrap();
+        let cmds = sw
+            .apply(Action::Transition {
+                slot: TransitionSlot(3),
+            })
+            .unwrap();
 
         assert_eq!(
             cmds,
@@ -843,7 +938,11 @@ mod tests {
     fn bad_transition_slot_fails() {
         let mut sw = two_inputs();
         for slot in [0, TRANSITION_SLOTS + 1] {
-            let err = sw.apply(Action::Transition { slot: TransitionSlot(slot) }).unwrap_err();
+            let err = sw
+                .apply(Action::Transition {
+                    slot: TransitionSlot(slot),
+                })
+                .unwrap_err();
             assert!(matches!(err, ActionError::BadTransitionSlot { .. }));
         }
     }
@@ -872,19 +971,29 @@ mod tests {
 
         let names: Vec<_> = sw.state().inputs.iter().map(|i| i.name.clone()).collect();
         assert_eq!(names, ["B", "A"]);
-        assert!(sw.apply(Action::MoveInput { input: named("A"), number: 3 }).is_err());
+        assert!(sw
+            .apply(Action::MoveInput {
+                input: named("A"),
+                number: 3
+            })
+            .is_err());
     }
 
     #[test]
     fn replace_rebuilds_slots() {
         let mut sw = two_inputs();
-        sw.apply(Action::PreviewInput { input: named("B") }).unwrap();
+        sw.apply(Action::PreviewInput { input: named("B") })
+            .unwrap();
         let show = sw.show().clone();
         let mut fresh = Switcher::new(SLOTS);
 
         let cmds = fresh.replace(show, Some("x.lmix".into()));
 
-        assert_eq!(cmds.len(), 8, "slots, program, preview, audio × 2, listen × 2: {cmds:?}");
+        assert_eq!(
+            cmds.len(),
+            8,
+            "slots, program, preview, audio × 2, listen × 2: {cmds:?}"
+        );
         assert!(matches!(cmds[2], Command::Program { slot: None, .. }));
         assert_eq!(cmds[3], Command::Preview { slot: 1 });
         assert!(matches!(cmds[4], Command::SetAudio { slot: 0, .. }));
@@ -896,7 +1005,9 @@ mod tests {
         let mut sw = two_inputs();
         sw.apply(Action::CutDirect { input: named("A") }).unwrap();
 
-        let err = sw.apply(Action::PreviewInput { input: named("A") }).unwrap_err();
+        let err = sw
+            .apply(Action::PreviewInput { input: named("A") })
+            .unwrap_err();
 
         assert!(matches!(err, ActionError::OnProgram { .. }));
     }
@@ -906,7 +1017,8 @@ mod tests {
         let mut sw = two_inputs();
         let (a, b) = (sw.state().inputs[0].id, sw.state().inputs[1].id);
         sw.apply(Action::CutDirect { input: named("A") }).unwrap();
-        sw.apply(Action::PreviewInput { input: named("B") }).unwrap();
+        sw.apply(Action::PreviewInput { input: named("B") })
+            .unwrap();
 
         let cmds = sw.apply(Action::CutDirect { input: named("B") }).unwrap();
 

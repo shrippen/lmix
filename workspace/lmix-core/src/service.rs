@@ -12,7 +12,9 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use lmix_types::{Action, ActionError, Event, InputLevel, InputRef, InputStatus, Levels, ShowState};
+use lmix_types::{
+    Action, ActionError, Event, InputLevel, InputRef, InputStatus, Levels, ShowState,
+};
 use tokio::sync::{broadcast, Mutex};
 
 use crate::engine::{meters, Engine, EngineError, Picture};
@@ -58,9 +60,9 @@ impl Service {
             return Ok(false);
         }
 
-        let show = show::load(path)
-            .await
-            .map_err(|e| ActionError::ShowFile { message: e.to_string() })?;
+        let show = show::load(path).await.map_err(|e| ActionError::ShowFile {
+            message: e.to_string(),
+        })?;
         let mut sw = self.switcher.lock().await;
         let commands = sw.replace(show, None);
         let result = self.execute(&mut sw, &commands).await;
@@ -78,7 +80,10 @@ impl Service {
 
     /// Latest frame of an input; the switcher lock is not held while the
     /// engine fetches it.
-    pub async fn input_picture(&self, input: &InputRef) -> Result<Result<Vec<u8>, EngineError>, ActionError> {
+    pub async fn input_picture(
+        &self,
+        input: &InputRef,
+    ) -> Result<Result<Vec<u8>, EngineError>, ActionError> {
         let slot = self.switcher.lock().await.slot_for(input)?;
         Ok(self.engine.picture(Picture::Slot(slot)).await)
     }
@@ -101,7 +106,12 @@ impl Service {
             .filter(|i| i.source.has_audio())
             .map(|i| InputLevel {
                 input: i.id,
-                peak_db: engine.slots.get(&i.slot).copied().and_then(fresh).unwrap_or(LEVEL_FLOOR_DB),
+                peak_db: engine
+                    .slots
+                    .get(&i.slot)
+                    .copied()
+                    .and_then(fresh)
+                    .unwrap_or(LEVEL_FLOOR_DB),
             })
             .collect();
         Levels {
@@ -209,21 +219,31 @@ impl Service {
 
 /// Reflect a `SetSlot` outcome in the input's status.
 fn mark_slot(sw: &mut Switcher, command: &Command, ok: bool) {
-    let Command::SetSlot { slot, source: Some(_) } = command else {
+    let Command::SetSlot {
+        slot,
+        source: Some(_),
+    } = command
+    else {
         return;
     };
     let Some(input) = sw.show().inputs.iter().find(|i| i.slot == *slot) else {
         return;
     };
 
-    let status = if ok { InputStatus::Online } else { InputStatus::Offline };
+    let status = if ok {
+        InputStatus::Online
+    } else {
+        InputStatus::Offline
+    };
     sw.set_status(input.id, status);
 }
 
 async fn open(sw: &mut Switcher, path: String) -> Result<Vec<Command>, ActionError> {
     let show = show::load(&PathBuf::from(&path))
         .await
-        .map_err(|e| ActionError::ShowFile { message: e.to_string() })?;
+        .map_err(|e| ActionError::ShowFile {
+            message: e.to_string(),
+        })?;
     Ok(sw.replace(show, Some(path)))
 }
 
@@ -234,7 +254,9 @@ async fn save(sw: &mut Switcher, path: Option<String>) -> Result<(), ActionError
 
     show::save(sw.show(), &PathBuf::from(&path))
         .await
-        .map_err(|e| ActionError::ShowFile { message: e.to_string() })?;
+        .map_err(|e| ActionError::ShowFile {
+            message: e.to_string(),
+        })?;
     sw.set_path(path);
     Ok(())
 }
@@ -275,7 +297,12 @@ mod tests {
         let path = dir.path().join("s.lmix").display().to_string();
         let service = Service::new(4, Arc::new(NullEngine::default()), Some(autosave));
 
-        service.handle(Action::SaveShow { path: Some(path.clone()) }).await.unwrap();
+        service
+            .handle(Action::SaveShow {
+                path: Some(path.clone()),
+            })
+            .await
+            .unwrap();
         service.handle(bars()).await.unwrap();
 
         assert_eq!(service.recent().await, [path]);
@@ -288,10 +315,17 @@ mod tests {
         let service = Service::new(4, Arc::new(NullEngine::default()), None);
         service.handle(bars()).await.unwrap();
         service
-            .handle(Action::PreviewInput { input: InputRef::Number(1) })
+            .handle(Action::PreviewInput {
+                input: InputRef::Number(1),
+            })
             .await
             .unwrap();
-        service.handle(Action::SaveShow { path: Some(path.clone()) }).await.unwrap();
+        service
+            .handle(Action::SaveShow {
+                path: Some(path.clone()),
+            })
+            .await
+            .unwrap();
         let saved = service.state().await;
 
         let engine = Arc::new(NullEngine::default());
@@ -300,7 +334,12 @@ mod tests {
 
         assert_eq!(opened.inputs, saved.inputs);
         assert_eq!(opened.preview, saved.preview);
-        assert_eq!(engine.log().len(), 5, "slot, program, preview, audio, listen: {:?}", engine.log());
+        assert_eq!(
+            engine.log().len(),
+            5,
+            "slot, program, preview, audio, listen: {:?}",
+            engine.log()
+        );
     }
 
     #[tokio::test]
@@ -318,20 +357,32 @@ mod tests {
         assert!(resumed);
         assert_eq!(second.state().await.inputs.len(), 1);
         assert_eq!(second.state().await.path, None);
-        assert_eq!(engine.log().len(), 4, "slot, program, audio, listen: {:?}", engine.log());
+        assert_eq!(
+            engine.log().len(),
+            4,
+            "slot, program, audio, listen: {:?}",
+            engine.log()
+        );
     }
 
     #[tokio::test]
     async fn resume_without_autosave_is_noop() {
         let dir = tempfile::tempdir().unwrap();
-        let service = Service::new(4, Arc::new(NullEngine::default()), Some(dir.path().join("none.lmix")));
+        let service = Service::new(
+            4,
+            Arc::new(NullEngine::default()),
+            Some(dir.path().join("none.lmix")),
+        );
         assert!(!service.resume().await.unwrap());
     }
 
     #[tokio::test]
     async fn save_without_path_fails() {
         let service = Service::new(4, Arc::new(NullEngine::default()), None);
-        let err = service.handle(Action::SaveShow { path: None }).await.unwrap_err();
+        let err = service
+            .handle(Action::SaveShow { path: None })
+            .await
+            .unwrap_err();
         assert_eq!(err, ActionError::NoShowPath);
     }
 }

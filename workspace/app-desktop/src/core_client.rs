@@ -66,7 +66,13 @@ impl CoreClient {
 
     /// Run an action; the reason when lmix-core refused it.
     pub async fn act(&self, action: &Action) -> Option<String> {
-        let resp = match self.http.post(format!("{}/api/actions", self.base_url)).json(action).send().await {
+        let resp = match self
+            .http
+            .post(format!("{}/api/actions", self.base_url))
+            .json(action)
+            .send()
+            .await
+        {
             Ok(resp) => resp,
             Err(e) => return Some(e.to_string()),
         };
@@ -84,7 +90,12 @@ impl CoreClient {
             PictureTarget::Program => "program".to_string(),
             PictureTarget::Input(id) => format!("inputs/{id}"),
         };
-        let resp = self.http.get(format!("{}/api/pictures/{path}", self.base_url)).send().await.ok()?;
+        let resp = self
+            .http
+            .get(format!("{}/api/pictures/{path}", self.base_url))
+            .send()
+            .await
+            .ok()?;
         if !resp.status().is_success() {
             return None;
         }
@@ -102,7 +113,12 @@ impl CoreClient {
     }
 
     async fn get_json<T: serde::de::DeserializeOwned>(&self, path: &str) -> Option<T> {
-        let resp = self.http.get(format!("{}{path}", self.base_url)).send().await.ok()?;
+        let resp = self
+            .http
+            .get(format!("{}{path}", self.base_url))
+            .send()
+            .await
+            .ok()?;
         if !resp.status().is_success() {
             return None;
         }
@@ -162,7 +178,13 @@ mod tests {
 
     #[test]
     fn events_url_follows_the_scheme() {
-        assert_eq!(CoreClient::new("http://h:8200/".into()).events_url(), "ws://h:8200/api/events");
-        assert_eq!(CoreClient::new("https://h".into()).events_url(), "wss://h/api/events");
+        assert_eq!(
+            CoreClient::new("http://h:8200/".into()).events_url(),
+            "ws://h:8200/api/events"
+        );
+        assert_eq!(
+            CoreClient::new("https://h".into()).events_url(),
+            "wss://h/api/events"
+        );
     }
 }

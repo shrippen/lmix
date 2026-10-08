@@ -174,7 +174,10 @@ pub fn mixer_flow(slots: usize, backend: MixerBackend, monitor: MonitorOut) -> F
                 PropertyValue::String(backend.property().into()),
             ),
             // Base time 0 (share_timing): output starts at the first frame.
-            ("start_time_selection", PropertyValue::String("first".into())),
+            (
+                "start_time_selection",
+                PropertyValue::String("first".into()),
+            ),
         ],
     ));
 
@@ -192,9 +195,13 @@ pub fn mixer_flow(slots: usize, backend: MixerBackend, monitor: MonitorOut) -> F
     flow.elements.push(element(
         PGM_SINK,
         "fakesink",
-        vec![("sync", PropertyValue::Bool(false)), ("qos", PropertyValue::Bool(false))],
+        vec![
+            ("sync", PropertyValue::Bool(false)),
+            ("qos", PropertyValue::Bool(false)),
+        ],
     ));
-    flow.links.push(link(format!("{PGM_TAP}:video_out"), PGM_SINK.into()));
+    flow.links
+        .push(link(format!("{PGM_TAP}:video_out"), PGM_SINK.into()));
     flow
 }
 
@@ -221,7 +228,10 @@ fn add_audio_mixer(flow: &mut Flow, slots: usize, monitor: MonitorOut) {
         AUDIO_MIXER_BLOCK,
         vec![
             ("num_channels", PropertyValue::UInt(slots as u64)),
-            ("start_time_selection", PropertyValue::String("first".into())),
+            (
+                "start_time_selection",
+                PropertyValue::String("first".into()),
+            ),
         ],
     ));
     flow.links.push(link(
@@ -231,8 +241,12 @@ fn add_audio_mixer(flow: &mut Flow, slots: usize, monitor: MonitorOut) {
 
     // strom switches the monitor bus between program and the solos.
     if monitor == MonitorOut::Auto {
-        flow.elements.push(element(MONITOR_SINK, "autoaudiosink", vec![]));
-        flow.links.push(link(format!("{AUDIO_MIXER}:monitor_out"), MONITOR_SINK.into()));
+        flow.elements
+            .push(element(MONITOR_SINK, "autoaudiosink", vec![]));
+        flow.links.push(link(
+            format!("{AUDIO_MIXER}:monitor_out"),
+            MONITOR_SINK.into(),
+        ));
     }
 }
 
@@ -245,12 +259,18 @@ pub fn slot_flow(slot: usize, source: &SourceSpec) -> Flow {
     let out = add_source(&mut flow, source);
     flow.blocks.push(block(SLOT_TAP, THUMBNAIL_BLOCK, vec![]));
     flow.links.push(link(out, format!("{SLOT_TAP}:video_in")));
-    flow.blocks.push(block(SLOT_OUT, INTER_OUTPUT_BLOCK, vec![]));
-    flow.links.push(link(format!("{SLOT_TAP}:video_out"), format!("{SLOT_OUT}:sink")));
+    flow.blocks
+        .push(block(SLOT_OUT, INTER_OUTPUT_BLOCK, vec![]));
+    flow.links.push(link(
+        format!("{SLOT_TAP}:video_out"),
+        format!("{SLOT_OUT}:sink"),
+    ));
 
     if let Some(sound) = add_audio(&mut flow, slot, source) {
-        flow.blocks.push(block(SLOT_AUDIO_OUT, INTER_OUTPUT_BLOCK, vec![]));
-        flow.links.push(link(sound, format!("{SLOT_AUDIO_OUT}:sink")));
+        flow.blocks
+            .push(block(SLOT_AUDIO_OUT, INTER_OUTPUT_BLOCK, vec![]));
+        flow.links
+            .push(link(sound, format!("{SLOT_AUDIO_OUT}:sink")));
     }
     flow
 }
@@ -411,12 +431,19 @@ mod tests {
         let flow = mixer_flow(3, MixerBackend::Cpu, MonitorOut::None);
 
         for slot in 0..3 {
-            let input = flow.blocks.iter().find(|b| b.id == format!("in{slot}")).unwrap();
+            let input = flow
+                .blocks
+                .iter()
+                .find(|b| b.id == format!("in{slot}"))
+                .unwrap();
             assert!(matches!(
                 input.properties.get("channel"),
                 Some(PropertyValue::String(c)) if *c == slot_channel(slot)
             ));
-            assert!(flow.links.iter().any(|l| l.to == format!("vm:video_in_{slot}")));
+            assert!(flow
+                .links
+                .iter()
+                .any(|l| l.to == format!("vm:video_in_{slot}")));
         }
     }
 
@@ -425,25 +452,50 @@ mod tests {
         let flow = mixer_flow(3, MixerBackend::Cpu, MonitorOut::None);
 
         assert_eq!(black_input(3), 3);
-        assert!(flow.links.iter().any(|l| l.from == "black_caps" && l.to == "vm:video_in_3"));
+        assert!(flow
+            .links
+            .iter()
+            .any(|l| l.from == "black_caps" && l.to == "vm:video_in_3"));
     }
 
     #[test]
     fn slot_publishes_on_its_channel() {
-        let flow = slot_flow(2, &SourceSpec::Pattern { pattern: TestPattern::Ball });
+        let flow = slot_flow(
+            2,
+            &SourceSpec::Pattern {
+                pattern: TestPattern::Ball,
+            },
+        );
 
         assert_eq!(flow.id, slot_id(2));
-        assert!(flow.blocks.iter().any(|b| b.id == SLOT_OUT && b.block_definition_id == INTER_OUTPUT_BLOCK));
-        assert!(flow.links.iter().any(|l| l.from == "caps" && l.to == "tap:video_in"));
-        assert!(flow.links.iter().any(|l| l.from == "tap:video_out" && l.to == "out:sink"));
+        assert!(flow
+            .blocks
+            .iter()
+            .any(|b| b.id == SLOT_OUT && b.block_definition_id == INTER_OUTPUT_BLOCK));
+        assert!(flow
+            .links
+            .iter()
+            .any(|l| l.from == "caps" && l.to == "tap:video_in"));
+        assert!(flow
+            .links
+            .iter()
+            .any(|l| l.from == "tap:video_out" && l.to == "out:sink"));
         assert_eq!(slot_channel(2), format!("strom_{}_out", flow.id));
     }
 
     #[test]
     fn pattern_slot_publishes_a_tone() {
-        let flow = slot_flow(1, &SourceSpec::Pattern { pattern: TestPattern::Bars });
+        let flow = slot_flow(
+            1,
+            &SourceSpec::Pattern {
+                pattern: TestPattern::Bars,
+            },
+        );
 
-        assert!(flow.links.iter().any(|l| l.from == "tone_caps" && l.to == "out_audio:sink"));
+        assert!(flow
+            .links
+            .iter()
+            .any(|l| l.from == "tone_caps" && l.to == "out_audio:sink"));
     }
 
     #[test]
@@ -459,18 +511,32 @@ mod tests {
 
         for slot in 0..3 {
             let to = format!("mix:input_{}", slot + 1);
-            assert!(flow.links.iter().any(|l| l.from == format!("ain{slot}:src") && l.to == to));
+            assert!(flow
+                .links
+                .iter()
+                .any(|l| l.from == format!("ain{slot}:src") && l.to == to));
         }
-        assert!(flow.links.iter().any(|l| l.from == "mix:main_out" && l.to == "vm:pgm_audio_in"));
+        assert!(flow
+            .links
+            .iter()
+            .any(|l| l.from == "mix:main_out" && l.to == "vm:pgm_audio_in"));
         assert!(flow.elements.iter().all(|e| e.id != MONITOR_SINK));
 
         let heard = mixer_flow(3, MixerBackend::Cpu, MonitorOut::Auto);
-        assert!(heard.links.iter().any(|l| l.from == "mix:monitor_out" && l.to == MONITOR_SINK));
+        assert!(heard
+            .links
+            .iter()
+            .any(|l| l.from == "mix:monitor_out" && l.to == MONITOR_SINK));
     }
 
     #[test]
     fn all_flows_share_timing() {
-        let slot = slot_flow(0, &SourceSpec::Pattern { pattern: TestPattern::Bars });
+        let slot = slot_flow(
+            0,
+            &SourceSpec::Pattern {
+                pattern: TestPattern::Bars,
+            },
+        );
 
         for flow in [mixer_flow(2, MixerBackend::Cpu, MonitorOut::None), slot] {
             assert_eq!(flow.properties.clock_type, GStreamerClockType::Monotonic);
@@ -480,7 +546,12 @@ mod tests {
 
     #[test]
     fn file_source_uses_player() {
-        let flow = slot_flow(0, &SourceSpec::File { path: "/a b.mp4".into() });
+        let flow = slot_flow(
+            0,
+            &SourceSpec::File {
+                path: "/a b.mp4".into(),
+            },
+        );
         let player = flow.blocks.iter().find(|b| b.id == "player").unwrap();
 
         assert!(matches!(

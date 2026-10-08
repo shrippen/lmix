@@ -90,9 +90,11 @@ async fn input_picture(State(service): State<Arc<Service>>, Path(input): Path<St
 fn picture_response(picture: Result<Vec<u8>, EngineError>) -> Response {
     match picture {
         Ok(jpeg) => ([(header::CONTENT_TYPE, "image/jpeg")], jpeg).into_response(),
-        Err(EngineError::NotReady) => {
-            (StatusCode::SERVICE_UNAVAILABLE, [(header::RETRY_AFTER, PICTURE_RETRY_SECS)]).into_response()
-        }
+        Err(EngineError::NotReady) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            [(header::RETRY_AFTER, PICTURE_RETRY_SECS)],
+        )
+            .into_response(),
         Err(EngineError::NoPictures) => StatusCode::NOT_FOUND.into_response(),
         Err(error) => (StatusCode::BAD_GATEWAY, error.to_string()).into_response(),
     }
@@ -208,7 +210,9 @@ mod tests {
 
     #[tokio::test]
     async fn picture_of_unknown_input_is_404() {
-        let req = Request::get("/api/pictures/inputs/3").body(Body::empty()).unwrap();
+        let req = Request::get("/api/pictures/inputs/3")
+            .body(Body::empty())
+            .unwrap();
         let resp = app().oneshot(req).await.unwrap();
 
         assert_eq!(resp.status(), StatusCode::NOT_FOUND);
@@ -221,7 +225,13 @@ mod tests {
         let bytes = resp.into_body().collect().await.unwrap().to_bytes();
         let text = String::from_utf8(bytes.to_vec()).unwrap();
 
-        for name in ["add_input", "cut", "transition", "fade_to_black", "open_show"] {
+        for name in [
+            "add_input",
+            "cut",
+            "transition",
+            "fade_to_black",
+            "open_show",
+        ] {
             assert!(text.contains(&format!("\"{name}\"")), "missing {name}");
         }
     }

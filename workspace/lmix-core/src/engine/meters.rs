@@ -34,7 +34,9 @@ enum Meter {
 }
 
 fn parse_meter(element_id: &str, mixer_block: &str) -> Option<Meter> {
-    let name = element_id.strip_prefix(mixer_block)?.strip_prefix(":meter:")?;
+    let name = element_id
+        .strip_prefix(mixer_block)?
+        .strip_prefix(":meter:")?;
     match name {
         "main" => return Some(Meter::Main),
         "monitor" => return Some(Meter::Monitor),
@@ -51,7 +53,12 @@ fn loudest(peaks: &[f64]) -> f32 {
 }
 
 /// Read strom's event stream forever and keep `levels` current.
-pub async fn follow(ws_url: String, mixer: FlowId, mixer_block: &'static str, levels: watch::Sender<EngineLevels>) {
+pub async fn follow(
+    ws_url: String,
+    mixer: FlowId,
+    mixer_block: &'static str,
+    levels: watch::Sender<EngineLevels>,
+) {
     loop {
         if let Ok((mut stream, _)) = tokio_tungstenite::connect_async(&ws_url).await {
             while let Some(Ok(message)) = stream.next().await {
@@ -95,7 +102,10 @@ mod tests {
     fn meter_names() {
         assert_eq!(parse_meter("mix:meter:3", "mix"), Some(Meter::Slot(2)));
         assert_eq!(parse_meter("mix:meter:main", "mix"), Some(Meter::Main));
-        assert_eq!(parse_meter("mix:meter:monitor", "mix"), Some(Meter::Monitor));
+        assert_eq!(
+            parse_meter("mix:meter:monitor", "mix"),
+            Some(Meter::Monitor)
+        );
         assert_eq!(parse_meter("mix:meter:aux1", "mix"), None);
         assert_eq!(parse_meter("mix:meter:0", "mix"), None);
         assert_eq!(parse_meter("other:meter:1", "mix"), None);

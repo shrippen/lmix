@@ -17,8 +17,8 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use lmix_types::{
-    Action, Device, Effect, InputColor, InputId, InputRef, InputStatus, Levels, Listen, ShowState, SourceSpec,
-    TestPattern, TransitionSlot,
+    Action, Device, Effect, InputColor, InputId, InputRef, InputStatus, Levels, Listen, ShowState,
+    SourceSpec, TestPattern, TransitionSlot,
 };
 
 use crate::core_client::{CoreClient, CoreMessage, FilePurpose, PictureTarget};
@@ -41,7 +41,8 @@ const AFV_COLOR: egui::Color32 = egui::Color32::from_rgb(220, 160, 40);
 /// Solo buttons, like the yellow PFL/AFL keys on a desk.
 const SOLO_COLOR: egui::Color32 = egui::Color32::from_rgb(230, 200, 40);
 const SHOW_FILTER: (&str, &[&str]) = ("lmix show", &["lmix"]);
-const REMOTE_HINT: &str = "Paths are opened by lmix-core: on another machine, they must exist there.";
+const REMOTE_HINT: &str =
+    "Paths are opened by lmix-core: on another machine, they must exist there.";
 const TRANSITION_HINT: &str = "Click: take preview. Right click: effect and length.";
 const BUTTON_SIZE: [f32; 2] = [80.0, 36.0];
 const DURATION_PRESETS_MS: [u32; 4] = [250, 500, 1000, 2000];
@@ -130,7 +131,13 @@ enum SourceKind {
 }
 
 impl SourceKind {
-    const ALL: [SourceKind; 5] = [Self::Pattern, Self::File, Self::Url, Self::Srt, Self::Device];
+    const ALL: [SourceKind; 5] = [
+        Self::Pattern,
+        Self::File,
+        Self::Url,
+        Self::Srt,
+        Self::Device,
+    ];
 
     fn label(self) -> &'static str {
         match self {
@@ -169,7 +176,9 @@ impl AddForm {
             return None;
         }
         Some(match self.kind {
-            SourceKind::Pattern => SourceSpec::Pattern { pattern: self.pattern },
+            SourceKind::Pattern => SourceSpec::Pattern {
+                pattern: self.pattern,
+            },
             SourceKind::File => SourceSpec::File { path: text },
             SourceKind::Url => SourceSpec::Url { url: text },
             SourceKind::Srt => SourceSpec::Srt { uri: text },
@@ -204,7 +213,13 @@ impl CoreApp {
         let client = CoreClient::new(url);
         let wanted = Arc::new(Mutex::new(vec![PictureTarget::Program]));
         client.follow(tx.clone(), ctx.clone());
-        poll_pictures(client.clone(), wanted.clone(), tx.clone(), ctx.clone(), picture_ms);
+        poll_pictures(
+            client.clone(),
+            wanted.clone(),
+            tx.clone(),
+            ctx.clone(),
+            picture_ms,
+        );
 
         let app = Self {
             client,
@@ -248,14 +263,27 @@ impl CoreApp {
         tokio::spawn(async move {
             let dialog = rfd::AsyncFileDialog::new();
             let file = match purpose {
-                FilePurpose::OpenShow => dialog.add_filter(SHOW_FILTER.0, SHOW_FILTER.1).pick_file().await,
-                FilePurpose::SaveShow => dialog.add_filter(SHOW_FILTER.0, SHOW_FILTER.1).save_file().await,
+                FilePurpose::OpenShow => {
+                    dialog
+                        .add_filter(SHOW_FILTER.0, SHOW_FILTER.1)
+                        .pick_file()
+                        .await
+                }
+                FilePurpose::SaveShow => {
+                    dialog
+                        .add_filter(SHOW_FILTER.0, SHOW_FILTER.1)
+                        .save_file()
+                        .await
+                }
                 FilePurpose::AddFile => dialog.pick_file().await,
             };
             let Some(file) = file else {
                 return;
             };
-            let _ = tx.send(CoreMessage::Picked(purpose, file.path().display().to_string()));
+            let _ = tx.send(CoreMessage::Picked(
+                purpose,
+                file.path().display().to_string(),
+            ));
         });
     }
 
@@ -337,9 +365,17 @@ impl CoreApp {
             if ui.button("New").clicked() {
                 actions.push(Action::NewShow);
             }
-            ui.add(egui::TextEdit::singleline(&mut self.show_path).hint_text("show.lmix").desired_width(260.0));
+            ui.add(
+                egui::TextEdit::singleline(&mut self.show_path)
+                    .hint_text("show.lmix")
+                    .desired_width(260.0),
+            );
             let path = self.show_path.trim().to_string();
-            if ui.add_enabled(!path.is_empty(), egui::Button::new("Open")).on_hover_text(REMOTE_HINT).clicked() {
+            if ui
+                .add_enabled(!path.is_empty(), egui::Button::new("Open"))
+                .on_hover_text(REMOTE_HINT)
+                .clicked()
+            {
                 actions.push(Action::OpenShow { path: path.clone() });
             }
             if ui.button("Save").clicked() {
@@ -356,7 +392,9 @@ impl CoreApp {
                 ui.menu_button("Recent", |ui| {
                     for recent in &self.recent {
                         if ui.button(recent).clicked() {
-                            actions.push(Action::OpenShow { path: recent.clone() });
+                            actions.push(Action::OpenShow {
+                                path: recent.clone(),
+                            });
                             ui.close();
                         }
                     }
@@ -376,20 +414,35 @@ impl CoreApp {
     }
 
     fn monitors(&self, ui: &mut egui::Ui, state: &ShowState, actions: &mut Vec<Action>) {
-        let preview = state.preview.and_then(|id| self.pictures.get(&PictureTarget::Input(id)));
+        let preview = state
+            .preview
+            .and_then(|id| self.pictures.get(&PictureTarget::Input(id)));
         let program = self.pictures.get(&PictureTarget::Program);
 
         ui.columns(3, |columns| {
             monitor(&mut columns[0], "PREVIEW", PREVIEW_COLOR, preview, None);
             let soloed = state.inputs.iter().any(|i| i.listen != Listen::Off);
             if soloed {
-                let clear = egui::Button::new(egui::RichText::new("Clear solo").color(egui::Color32::BLACK)).fill(SOLO_COLOR);
-                if columns[0].add(clear).on_hover_text("End all PFL/AFL: monitor follows program").clicked() {
+                let clear = egui::Button::new(
+                    egui::RichText::new("Clear solo").color(egui::Color32::BLACK),
+                )
+                .fill(SOLO_COLOR);
+                if columns[0]
+                    .add(clear)
+                    .on_hover_text("End all PFL/AFL: monitor follows program")
+                    .clicked()
+                {
                     actions.push(Action::ClearListen);
                 }
             }
             transition_bar(&mut columns[1], state, actions);
-            monitor(&mut columns[2], "PROGRAM", PROGRAM_COLOR, program, Some(&self.levels));
+            monitor(
+                &mut columns[2],
+                "PROGRAM",
+                PROGRAM_COLOR,
+                program,
+                Some(&self.levels),
+            );
         });
     }
 
@@ -410,17 +463,22 @@ impl CoreApp {
                     if response.double_clicked() && tally == Tally::Preview {
                         actions.push(Action::Transition { slot: TAKE_SLOT });
                     } else if response.clicked() && tally == Tally::Off {
-                        actions.push(Action::PreviewInput { input: reference.clone() });
+                        actions.push(Action::PreviewInput {
+                            input: reference.clone(),
+                        });
                     }
                     let replacement = self.add.source();
                     response.context_menu(|ui| {
                         if ui.button("Cut to program").clicked() {
-                            actions.push(Action::CutDirect { input: reference.clone() });
+                            actions.push(Action::CutDirect {
+                                input: reference.clone(),
+                            });
                             ui.close();
                         }
                         // Swap what the input shows for the source set up in
                         // the "add input" row; name and position stay.
-                        let replace = egui::Button::new("Replace source with \"Add input\" selection");
+                        let replace =
+                            egui::Button::new("Replace source with \"Add input\" selection");
                         if ui.add_enabled(replacement.is_some(), replace).clicked() {
                             actions.push(Action::ReplaceSource {
                                 input: reference.clone(),
@@ -433,8 +491,12 @@ impl CoreApp {
                         }
                         ui.menu_button("Color", |ui| {
                             for color in InputColor::ALL {
-                                let label = egui::RichText::new(format!("■ {color:?}")).color(tag_color(color));
-                                if ui.selectable_label(input.color == Some(color), label).clicked() {
+                                let label = egui::RichText::new(format!("■ {color:?}"))
+                                    .color(tag_color(color));
+                                if ui
+                                    .selectable_label(input.color == Some(color), label)
+                                    .clicked()
+                                {
                                     actions.push(Action::SetInputColor {
                                         input: reference.clone(),
                                         color: Some(color),
@@ -455,7 +517,9 @@ impl CoreApp {
                             ui.close();
                         }
                         if ui.button("Remove").clicked() {
-                            actions.push(Action::RemoveInput { input: reference.clone() });
+                            actions.push(Action::RemoveInput {
+                                input: reference.clone(),
+                            });
                             ui.close();
                         }
                     });
@@ -465,7 +529,11 @@ impl CoreApp {
     }
 
     fn level_of(&self, id: InputId) -> Option<f32> {
-        self.levels.inputs.iter().find(|l| l.input == id).map(|l| l.peak_db)
+        self.levels
+            .inputs
+            .iter()
+            .find(|l| l.input == id)
+            .map(|l| l.peak_db)
     }
 
     /// Volume 0–100; sent when the drag ends, not on every step.
@@ -476,7 +544,10 @@ impl CoreApp {
         reference: &InputRef,
         actions: &mut Vec<Action>,
     ) {
-        let value = self.volume_drag.entry(input.id).or_insert(input.audio.volume);
+        let value = self
+            .volume_drag
+            .entry(input.id)
+            .or_insert(input.audio.volume);
         let slider = egui::Slider::new(value, 0..=lmix_types::input::VOLUME_MAX).text("Volume");
         let response = ui.add(slider);
         if response.drag_stopped() || (response.changed() && !response.dragged()) {
@@ -505,7 +576,11 @@ impl CoreApp {
                     .selected_text(format!("{:?}", self.add.pattern))
                     .show_ui(ui, |ui| {
                         for pattern in PATTERNS {
-                            ui.selectable_value(&mut self.add.pattern, pattern, format!("{pattern:?}"));
+                            ui.selectable_value(
+                                &mut self.add.pattern,
+                                pattern,
+                                format!("{pattern:?}"),
+                            );
                         }
                     });
             } else if self.add.kind == SourceKind::Device && !self.devices.is_empty() {
@@ -519,24 +594,46 @@ impl CoreApp {
                     .width(320.0)
                     .show_ui(ui, |ui| {
                         for device in &self.devices {
-                            ui.selectable_value(&mut self.add.text, device.id.clone(), device_label(device));
+                            ui.selectable_value(
+                                &mut self.add.text,
+                                device.id.clone(),
+                                device_label(device),
+                            );
                         }
                     });
             } else {
                 let hint = self.add.kind.hint();
-                ui.add(egui::TextEdit::singleline(&mut self.add.text).hint_text(hint).desired_width(320.0));
+                ui.add(
+                    egui::TextEdit::singleline(&mut self.add.text)
+                        .hint_text(hint)
+                        .desired_width(320.0),
+                );
             }
-            if self.add.kind == SourceKind::File && ui.button("…").on_hover_text(REMOTE_HINT).clicked() {
+            if self.add.kind == SourceKind::File
+                && ui.button("…").on_hover_text(REMOTE_HINT).clicked()
+            {
                 self.pick_file(FilePurpose::AddFile);
             }
-            if self.add.kind == SourceKind::Device && ui.button("↻").on_hover_text("Search devices again").clicked() {
+            if self.add.kind == SourceKind::Device
+                && ui
+                    .button("↻")
+                    .on_hover_text("Search devices again")
+                    .clicked()
+            {
                 self.refresh_lists();
             }
-            ui.add(egui::TextEdit::singleline(&mut self.add.name).hint_text("name (optional)").desired_width(160.0));
+            ui.add(
+                egui::TextEdit::singleline(&mut self.add.name)
+                    .hint_text("name (optional)")
+                    .desired_width(160.0),
+            );
 
             let free = state.inputs.len() < state.slots;
             let source = self.add.source();
-            if ui.add_enabled(free && source.is_some(), egui::Button::new("Add")).clicked() {
+            if ui
+                .add_enabled(free && source.is_some(), egui::Button::new("Add"))
+                .clicked()
+            {
                 let name = self.add.name.trim().to_string();
                 actions.push(Action::AddInput {
                     source: source.expect("button enabled only with a source"),
@@ -554,22 +651,25 @@ impl CoreApp {
             return;
         };
         let mut done = false;
-        egui::Window::new("Rename input").collapsible(false).resizable(false).show(ctx, |ui| {
-            let edit = ui.text_edit_singleline(name);
-            let enter = edit.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
-            ui.horizontal(|ui| {
-                if ui.button("OK").clicked() || enter {
-                    actions.push(Action::RenameInput {
-                        input: InputRef::Text(id.to_string()),
-                        name: name.trim().to_string(),
-                    });
-                    done = true;
-                }
-                if ui.button("Cancel").clicked() {
-                    done = true;
-                }
+        egui::Window::new("Rename input")
+            .collapsible(false)
+            .resizable(false)
+            .show(ctx, |ui| {
+                let edit = ui.text_edit_singleline(name);
+                let enter = edit.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+                ui.horizontal(|ui| {
+                    if ui.button("OK").clicked() || enter {
+                        actions.push(Action::RenameInput {
+                            input: InputRef::Text(id.to_string()),
+                            name: name.trim().to_string(),
+                        });
+                        done = true;
+                    }
+                    if ui.button("Cancel").clicked() {
+                        done = true;
+                    }
+                });
             });
-        });
         if done {
             self.renaming = None;
         }
@@ -645,7 +745,10 @@ fn monitor(
             let Some(levels) = levels else {
                 return;
             };
-            for (name, level) in [("PGM", levels.program_peak_db), ("MON", levels.monitor_peak_db)] {
+            for (name, level) in [
+                ("PGM", levels.program_peak_db),
+                ("MON", levels.monitor_peak_db),
+            ] {
                 ui.horizontal(|ui| {
                     ui.label(egui::RichText::new(name).small().weak());
                     meter(ui, level.unwrap_or(METER_FLOOR_DB));
@@ -661,7 +764,10 @@ fn transition_bar(ui: &mut egui::Ui, state: &ShowState, actions: &mut Vec<Action
     ui.vertical_centered(|ui| {
         ui.add_space(24.0);
         let cut = egui::Button::new(egui::RichText::new("CUT").strong());
-        if ui.add_enabled(can_take, cut.min_size(BUTTON_SIZE.into())).clicked() {
+        if ui
+            .add_enabled(can_take, cut.min_size(BUTTON_SIZE.into()))
+            .clicked()
+        {
             actions.push(Action::Cut);
         }
 
@@ -673,13 +779,20 @@ fn transition_bar(ui: &mut egui::Ui, state: &ShowState, actions: &mut Vec<Action
                 transition.duration_ms
             );
             let button = egui::Button::new(text).min_size(BUTTON_SIZE.into());
-            let response = ui.add_enabled(can_take, button).on_hover_text(TRANSITION_HINT);
+            let response = ui
+                .add_enabled(can_take, button)
+                .on_hover_text(TRANSITION_HINT);
             if response.clicked() {
-                actions.push(Action::Transition { slot: transition.slot });
+                actions.push(Action::Transition {
+                    slot: transition.slot,
+                });
             }
             response.context_menu(|ui| {
                 for effect in Effect::ALL {
-                    if ui.selectable_label(effect == transition.effect, effect.label()).clicked() {
+                    if ui
+                        .selectable_label(effect == transition.effect, effect.label())
+                        .clicked()
+                    {
                         actions.push(Action::SetTransition {
                             slot: transition.slot,
                             effect,
@@ -689,7 +802,10 @@ fn transition_bar(ui: &mut egui::Ui, state: &ShowState, actions: &mut Vec<Action
                 }
                 ui.separator();
                 for ms in DURATION_PRESETS_MS {
-                    if ui.selectable_label(ms == transition.duration_ms, format!("{ms} ms")).clicked() {
+                    if ui
+                        .selectable_label(ms == transition.duration_ms, format!("{ms} ms"))
+                        .clicked()
+                    {
                         actions.push(Action::SetTransition {
                             slot: transition.slot,
                             effect: transition.effect,
@@ -728,12 +844,17 @@ fn tile(
             ui.vertical(|ui| {
                 ui.set_width(TILE_WIDTH);
                 let band = input.color.map_or(EMPTY_PICTURE, tag_color);
-                let (rect, _) = ui.allocate_exact_size(egui::vec2(TILE_WIDTH, COLOR_BAND), egui::Sense::hover());
+                let (rect, _) = ui
+                    .allocate_exact_size(egui::vec2(TILE_WIDTH, COLOR_BAND), egui::Sense::hover());
                 ui.painter().rect_filled(rect, 0.0, band);
                 picture_area(ui, egui::vec2(TILE_WIDTH, TILE_WIDTH * 9.0 / 16.0), picture);
                 ui.horizontal(|ui| {
                     ui.label(egui::RichText::new(input.number.to_string()).strong());
-                    ui.label(egui::RichText::new(source_badge(&input.source)).small().weak());
+                    ui.label(
+                        egui::RichText::new(source_badge(&input.source))
+                            .small()
+                            .weak(),
+                    );
                     ui.label(&input.name);
                     if input.status != InputStatus::Online {
                         ui.weak(format!("{:?}", input.status).to_lowercase());
@@ -744,40 +865,77 @@ fn tile(
                 }
             });
         });
-    ui.interact(frame.response.rect, ui.id().with(input.id), egui::Sense::click())
+    ui.interact(
+        frame.response.rect,
+        ui.id().with(input.id),
+        egui::Sense::click(),
+    )
 }
 
 /// "M" (sound on/off), "AFV" (audio follows video), "PFL"/"AFL" (solo on
 /// the monitor bus) and the input level.
-fn audio_row(ui: &mut egui::Ui, input: &lmix_types::Input, level: Option<f32>, actions: &mut Vec<Action>) {
+fn audio_row(
+    ui: &mut egui::Ui,
+    input: &lmix_types::Input,
+    level: Option<f32>,
+    actions: &mut Vec<Action>,
+) {
     let reference = || InputRef::Text(input.id.to_string());
     let audio = input.audio;
     ui.horizontal(|ui| {
         let mute = egui::Button::new(egui::RichText::new("M").small())
             .selected(!audio.on)
-            .fill(if audio.on { egui::Color32::TRANSPARENT } else { AUDIO_OFF_COLOR });
+            .fill(if audio.on {
+                egui::Color32::TRANSPARENT
+            } else {
+                AUDIO_OFF_COLOR
+            });
         if ui.add(mute).on_hover_text("Sound on/off").clicked() {
             actions.push(Action::SetAudio {
                 input: reference(),
                 on: !audio.on,
             });
         }
-        let follow = egui::Button::new(egui::RichText::new("AFV").small())
-            .fill(if audio.follow_video { AFV_COLOR } else { egui::Color32::TRANSPARENT });
-        if ui.add(follow).on_hover_text("Audio follows video: heard only on program").clicked() {
+        let follow =
+            egui::Button::new(egui::RichText::new("AFV").small()).fill(if audio.follow_video {
+                AFV_COLOR
+            } else {
+                egui::Color32::TRANSPARENT
+            });
+        if ui
+            .add(follow)
+            .on_hover_text("Audio follows video: heard only on program")
+            .clicked()
+        {
             actions.push(Action::SetAudioFollow {
                 input: reference(),
                 follow: !audio.follow_video,
             });
         }
         for (listen, label, hint) in [
-            (Listen::Pfl, "PFL", "Pre-fader listen on the monitor bus (even when muted)"),
-            (Listen::Afl, "AFL", "After-fader listen on the monitor bus (as on program)"),
+            (
+                Listen::Pfl,
+                "PFL",
+                "Pre-fader listen on the monitor bus (even when muted)",
+            ),
+            (
+                Listen::Afl,
+                "AFL",
+                "After-fader listen on the monitor bus (as on program)",
+            ),
         ] {
             let active = input.listen == listen;
             let text = egui::RichText::new(label).small();
-            let text = if active { text.color(egui::Color32::BLACK) } else { text };
-            let button = egui::Button::new(text).fill(if active { SOLO_COLOR } else { egui::Color32::TRANSPARENT });
+            let text = if active {
+                text.color(egui::Color32::BLACK)
+            } else {
+                text
+            };
+            let button = egui::Button::new(text).fill(if active {
+                SOLO_COLOR
+            } else {
+                egui::Color32::TRANSPARENT
+            });
             if ui.add(button).on_hover_text(hint).clicked() {
                 actions.push(Action::SetListen {
                     input: reference(),
@@ -795,7 +953,11 @@ fn meter(ui: &mut egui::Ui, peak_db: f32) {
     let (rect, _) = ui.allocate_exact_size(egui::vec2(width, METER_HEIGHT), egui::Sense::hover());
     ui.painter().rect_filled(rect, 0.0, EMPTY_PICTURE);
     let fill = ((peak_db - METER_FLOOR_DB) / -METER_FLOOR_DB).clamp(0.0, 1.0);
-    let color = if peak_db > METER_HOT_DB { METER_HOT_COLOR } else { METER_COLOR };
+    let color = if peak_db > METER_HOT_DB {
+        METER_HOT_COLOR
+    } else {
+        METER_COLOR
+    };
     let bar = egui::Rect::from_min_size(rect.min, egui::vec2(width * fill, METER_HEIGHT));
     ui.painter().rect_filled(bar, 0.0, color);
 }
@@ -806,8 +968,10 @@ fn device_label(device: &Device) -> String {
 
 /// Filled circle; the default font has no "●".
 fn status_dot(ui: &mut egui::Ui, color: egui::Color32) {
-    let (rect, _) = ui.allocate_exact_size(egui::vec2(STATUS_DOT, STATUS_DOT), egui::Sense::hover());
-    ui.painter().circle_filled(rect.center(), STATUS_DOT / 2.0, color);
+    let (rect, _) =
+        ui.allocate_exact_size(egui::vec2(STATUS_DOT, STATUS_DOT), egui::Sense::hover());
+    ui.painter()
+        .circle_filled(rect.center(), STATUS_DOT / 2.0, color);
 }
 
 fn picture_area(ui: &mut egui::Ui, size: egui::Vec2, picture: Option<&egui::TextureHandle>) {
@@ -887,9 +1051,19 @@ mod tests {
         assert_eq!(form.source(), None);
 
         form.text = " /a.mp4 ".into();
-        assert_eq!(form.source(), Some(SourceSpec::File { path: "/a.mp4".into() }));
+        assert_eq!(
+            form.source(),
+            Some(SourceSpec::File {
+                path: "/a.mp4".into()
+            })
+        );
 
         form.kind = SourceKind::Pattern;
-        assert_eq!(form.source(), Some(SourceSpec::Pattern { pattern: TestPattern::Bars }));
+        assert_eq!(
+            form.source(),
+            Some(SourceSpec::Pattern {
+                pattern: TestPattern::Bars
+            })
+        );
     }
 }

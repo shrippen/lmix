@@ -12,18 +12,18 @@
 
 use async_trait::async_trait;
 use lmix_types::{Device, Effect, Listen};
-use strom_types::discovery::DeviceResponse;
 use reqwest::StatusCode;
 use serde::Serialize;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use tokio::sync::watch;
+use std::time::Duration;
 use strom_types::api::{
-    FadeToBlackRequest, SelectPreviewRequest, TriggerTransitionRequest, UpdateBlockPropertiesRequest,
-    VisionMixerState,
+    FadeToBlackRequest, SelectPreviewRequest, TriggerTransitionRequest,
+    UpdateBlockPropertiesRequest, VisionMixerState,
 };
+use strom_types::discovery::DeviceResponse;
 use strom_types::vision_mixer::Source;
 use strom_types::{Flow, FlowId, PipelineState, PropertyValue};
-use std::time::Duration;
+use tokio::sync::watch;
 
 /// How often and how long `start` waits for the mixer to play.
 const PLAYING_POLL: Duration = Duration::from_millis(200);
@@ -68,7 +68,12 @@ impl StromEngine {
     // ---- Flows ----
 
     async fn get_flow(&self, id: FlowId) -> Result<Option<Flow>, EngineError> {
-        let resp = self.http.get(self.url(&format!("/flows/{id}"))).send().await.map_err(net)?;
+        let resp = self
+            .http
+            .get(self.url(&format!("/flows/{id}")))
+            .send()
+            .await
+            .map_err(net)?;
         if resp.status() == StatusCode::NOT_FOUND {
             return Ok(None);
         }
@@ -85,14 +90,25 @@ impl StromEngine {
     /// Replace a flow under its fixed id and start it.
     async fn put_flow(&self, flow: &Flow) -> Result<(), EngineError> {
         self.drop_flow(flow.id).await?;
-        let resp = self.http.post(self.url("/flows")).json(flow).send().await.map_err(net)?;
+        let resp = self
+            .http
+            .post(self.url("/flows"))
+            .json(flow)
+            .send()
+            .await
+            .map_err(net)?;
         check(resp).await?;
         self.post_empty(&format!("/flows/{}/start", flow.id)).await
     }
 
     /// Stop and delete; a missing flow is fine.
     async fn drop_flow(&self, id: FlowId) -> Result<(), EngineError> {
-        let resp = self.http.delete(self.url(&format!("/flows/{id}"))).send().await.map_err(net)?;
+        let resp = self
+            .http
+            .delete(self.url(&format!("/flows/{id}")))
+            .send()
+            .await
+            .map_err(net)?;
         if resp.status() == StatusCode::NOT_FOUND {
             return Ok(());
         }
@@ -123,7 +139,9 @@ impl StromEngine {
             }
             tokio::time::sleep(PLAYING_POLL).await;
         }
-        Err(EngineError::Refused(format!("flow {id} did not reach PLAYING")))
+        Err(EngineError::Refused(format!(
+            "flow {id} did not reach PLAYING"
+        )))
     }
 
     async fn mixer_state(&self) -> Result<VisionMixerState, EngineError> {
@@ -133,7 +151,12 @@ impl StromEngine {
     }
 
     /// Transition from whatever the engine has on program to `slot`.
-    async fn program(&self, slot: Option<usize>, effect: Effect, duration_ms: u32) -> Result<(), EngineError> {
+    async fn program(
+        &self,
+        slot: Option<usize>,
+        effect: Effect,
+        duration_ms: u32,
+    ) -> Result<(), EngineError> {
         let to = slot.unwrap_or_else(|| self.black.load(Ordering::Relaxed));
         let from = self.mixer_state().await?.program_input;
         if from == Some(to) {
@@ -152,7 +175,8 @@ impl StromEngine {
         let mut attempt = 0;
         loop {
             let result = self.mixer_call("transition", &body).await;
-            let warming_up = matches!(&result, Err(EngineError::Refused(m)) if m.contains(NOT_RUNNING_YET));
+            let warming_up =
+                matches!(&result, Err(EngineError::Refused(m)) if m.contains(NOT_RUNNING_YET));
             attempt += 1;
             if !warming_up || attempt >= PLAYING_POLLS {
                 return result;
@@ -164,7 +188,13 @@ impl StromEngine {
     /// Fader and mute of a slot's audio mixer channel. strom maps both to
     /// one volume element and restores the pre-mute volume on unmute, so a
     /// batch with both loses the fader: unmute before the fader, mute after.
-    async fn set_channel(&self, slot: usize, gain: f64, muted: bool, ramp_ms: u32) -> Result<(), EngineError> {
+    async fn set_channel(
+        &self,
+        slot: usize,
+        gain: f64,
+        muted: bool,
+        ramp_ms: u32,
+    ) -> Result<(), EngineError> {
         let channel = flows::audio_channel(slot);
         let fader = (format!("ch{channel}_fader"), PropertyValue::Float(gain));
         let mute = (format!("ch{channel}_mute"), PropertyValue::Bool(muted));
@@ -180,20 +210,39 @@ impl StromEngine {
     async fn set_listen(&self, slot: usize, listen: Listen) -> Result<(), EngineError> {
         let channel = flows::audio_channel(slot);
         let properties = vec![
-            (format!("ch{channel}_pfl"), PropertyValue::Bool(listen == Listen::Pfl)),
-            (format!("ch{channel}_afl"), PropertyValue::Bool(listen == Listen::Afl)),
+            (
+                format!("ch{channel}_pfl"),
+                PropertyValue::Bool(listen == Listen::Pfl),
+            ),
+            (
+                format!("ch{channel}_afl"),
+                PropertyValue::Bool(listen == Listen::Afl),
+            ),
         ];
         self.patch_audio_mixer(properties, AUDIO_RAMP_MS).await
     }
 
-    async fn patch_audio_mixer(&self, properties: Vec<(String, PropertyValue)>, ramp_ms: u32) -> Result<(), EngineError> {
+    async fn patch_audio_mixer(
+        &self,
+        properties: Vec<(String, PropertyValue)>,
+        ramp_ms: u32,
+    ) -> Result<(), EngineError> {
         let body = UpdateBlockPropertiesRequest {
             properties: properties.into_iter().collect(),
             ramp_ms: Some(ramp_ms),
             ramp_ms_overrides: None,
         };
-        let path = format!("/flows/{}/blocks/{AUDIO_MIXER}/properties", flows::mixer_id());
-        let resp = self.http.patch(self.url(&path)).json(&body).send().await.map_err(net)?;
+        let path = format!(
+            "/flows/{}/blocks/{AUDIO_MIXER}/properties",
+            flows::mixer_id()
+        );
+        let resp = self
+            .http
+            .patch(self.url(&path))
+            .json(&body)
+            .send()
+            .await
+            .map_err(net)?;
         check(resp).await.map(|_| ())
     }
 
@@ -210,7 +259,12 @@ impl Engine for StromEngine {
     async fn start(&self, slots: usize) -> Result<(), EngineError> {
         if !self.metering.swap(true, Ordering::Relaxed) {
             let ws_url = self.base_url.replacen("http", "ws", 1) + "/api/ws";
-            tokio::spawn(meters::follow(ws_url, flows::mixer_id(), AUDIO_MIXER, self.levels.clone()));
+            tokio::spawn(meters::follow(
+                ws_url,
+                flows::mixer_id(),
+                AUDIO_MIXER,
+                self.levels.clone(),
+            ));
         }
 
         let black = flows::black_input(slots);
@@ -218,7 +272,9 @@ impl Engine for StromEngine {
 
         let wanted = flows::mixer_flow(slots, self.backend, self.monitor);
         let current = self.get_flow(wanted.id).await?;
-        let reusable = current.as_ref().is_some_and(|f| f.running && slot_count(f) == Some(black + 1));
+        let reusable = current
+            .as_ref()
+            .is_some_and(|f| f.running && slot_count(f) == Some(black + 1));
         if reusable {
             return Ok(());
         }
@@ -232,9 +288,10 @@ impl Engine for StromEngine {
 
     async fn run(&self, command: &Command) -> Result<(), EngineError> {
         match command {
-            Command::SetSlot { slot, source: Some(source) } => {
-                self.put_flow(&flows::slot_flow(*slot, source)).await
-            }
+            Command::SetSlot {
+                slot,
+                source: Some(source),
+            } => self.put_flow(&flows::slot_flow(*slot, source)).await,
             Command::SetSlot { slot, source: None } => self.drop_flow(flows::slot_id(*slot)).await,
             Command::Preview { slot } => {
                 let body = SelectPreviewRequest {
