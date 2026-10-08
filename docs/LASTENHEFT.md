@@ -1,0 +1,544 @@
+# Lastenheft: lmix als Clean-Room-Reimplementierung von vMix
+
+Stand 2026-10-08. Bezug: vMix 29 (Benutzerhandbuch 23 und 29, öffentliche
+Herstellerseiten). Ergänzt `claude.md` und `ROADMAP.md`; Abweichungen von
+dort stehen in §6 zur Entscheidung, nicht stillschweigend.
+
+Dieses Dokument beschreibt **was** lmix können muss, nicht **wie**. Es ist
+die einzige Funktionsquelle für die Umsetzung (siehe §0).
+
+---
+
+## 0. Clean-Room-Regeln
+
+Ziel: funktional gleichwertig, rechtlich unabhängig.
+
+| # | Regel |
+|---|---|
+| CR.1 | Quellen für dieses Lastenheft: nur öffentliche Dokumentation (Handbuch, Herstellerseiten, Blog, Foren) und Beobachtung des Verhaltens. Kein Disassemblieren, Dekompilieren oder Debuggen von vMix-Programmen, kein Mitschnitt interner Protokolle von vMix-Komponenten untereinander. |
+| CR.2 | Anforderungen in eigenen Worten. Kein Handbuchtext, keine Screenshots, keine vMix-Grafiken im Repo. Die heruntergeladene Hilfe bleibt außerhalb des Repos. |
+| CR.3 | Umsetzung arbeitet nur gegen dieses Lastenheft, `ROADMAP.md` und offene Standards. Wer Code schreibt, liest dafür nicht im vMix-Handbuch nach; Lücken im Lastenheft werden hier ergänzt (mit Quelle), dann umgesetzt. |
+| CR.4 | Keine vMix-Assets: keine Titelvorlagen, Stinger, LUTs, Virtual Sets, Icons, Sounds, Shortcut-Vorlagen. Eigene Vorlagen werden neu gestaltet. |
+| CR.5 | Eigene Namen in Oberfläche und Dateien: kein "vMix", "GT", "vMix Call", "MultiCorder", ".vmix". Begriffe siehe §1. Der Vergleich mit vMix steht nur in Doku. |
+| CR.6 | Schnittstellen-Kompatibilität (API-Funktionsnamen, XML-Zustand, TCP-Protokoll, Dateiimport) nur aus öffentlicher Doku oder eigenen Testdateien, und nur nach Entscheidung E.2/E.3. |
+| CR.7 | Jede Anforderung trägt eine ID. Commits, die eine Anforderung umsetzen, nennen sie (`Implements AUD.12`). |
+
+---
+
+## 1. Begriffe
+
+| lmix-Begriff | Bedeutung | vMix-Pendant |
+|---|---|---|
+| Input | Jede Quelle im Projekt: Kamera, Datei, Netz, Titel, Mix, Gast … Hat Nummer, Name, feste ID, Bild, Ton, Einstellungen | Input |
+| Preview (PVW) | Nächster Input, vorbereitet | Preview |
+| Program (PGM) | Sichtbarer Haupt-Input | Output / Active |
+| Take | Preview → Program mit Übergang | Transition |
+| Übergang | Effekt + Dauer für einen Take | Transition Effect |
+| Stinger | Übergang aus einer Animation mit Schnittpunkt | Stinger |
+| Overlay-Kanal | Eine von 8 Ebenen über Program | Overlay 1–8 |
+| Ebene (Layer) | Ein Input als Teil eines anderen Inputs, mit Position/Crop | Layer / MultiView (alt) |
+| Mix | Zusätzlicher Mini-Mischer mit eigenem PVW/PGM, als Input nutzbar | Mix Input |
+| Ausgang 1–4 | Gerenderte Signale mit wählbarer Quelle | Output 1–4 |
+| Senke | Ziel eines Ausgangs: Vollbild, Karte, Stream, Aufnahme, Netz | Fullscreen, External, … |
+| Bus | Audio-Summe: Master, A–G | Bus M, A–G |
+| Abhörweg | Kopfhörer-Summe mit Solo | Headphones |
+| Einzelaufnahme | Rohaufnahme je Input | MultiCorder |
+| Wiederholung | Ringpuffer-Aufnahme + Ereignisse + Abspielkanäle | Instant Replay |
+| Aktion | Benannte Funktion mit Parametern; alles Steuerbare ist eine Aktion | Shortcut Function |
+| Tastenbelegung | Eingabe (Taste, MIDI, …) → Aktionen | Shortcut |
+| Rückmeldung | Zustand → Lampe/Motorfader am Controller | Activator |
+| Auslöser | Ereignis eines Inputs → Aktionen | Trigger |
+| Ablaufliste | Zeitgesteuerte Folge von Inputs | PlayList |
+| Titel | Grafikvorlage mit Feldern und Animationen | Title / GT |
+| Datenquelle | Tabelle aus Datei/Netz, an Titelfelder gebunden | Data Source |
+| Gast | Entfernter Teilnehmer per Browser | vMix Call |
+| Show | Projektdatei mit allen Inputs und Einstellungen | Preset |
+| Tally | Signal "auf Sendung"/"in Vorschau" je Input | Tally |
+
+---
+
+## 2. Systemmodell
+
+### 2.1 Bild
+
+```
+ Quellen ─► Input ─► Input-Verarbeitung ─────────────┐
+            (Decode,   (Deinterlace, Spiegeln,      │ als Ebene in anderen
+             Formate)   Farbe, Key, Effekte,        │ Inputs (bis 10, 2 Ebenen
+                        Position/Crop, Ebenen)      │ tief), in Mix-Inputs,
+                                                    ▼ in Overlays
+   ┌──────────── Hauptmischer ─────────────┐   ┌── Mix 2…16 ──┐
+   │ PVW ──[Cut/Übergang/T-Bar/Stinger]─► PGM │   │ PVW ─► PGM   │──► als Input
+   └───────────────┬────────────────────────┘   └──────────────┘
+                   ▼
+         Overlay-Kanäle 1–8 (je Ein-/Ausblendung, PiP)
+                   ▼
+         FTB (wirkt auf Senken, nicht auf die PGM-Anzeige)
+                   ▼
+   Ausgang 1 (= Program)   Ausgang 2–4 (Quelle wählbar:
+                           Program, Preview, Multiview 1/2, Mix n, Input n;
+                           Overlays je Ausgang abwählbar = "clean feed")
+                   ▼
+   Senken: Vollbild 1–2 · Karte (SDI/HDMI, Key+Fill) · Stream 1–5 ·
+           Aufnahme 1–2 · NDI/OMT/SRT · virtuelle Kamera · Gäste-Rückweg
+```
+
+### 2.2 Ton
+
+```
+ Input-Ton (bis 16 Kanäle) ─► Kanalmischer ─► Matrix 16×16 ─► Gain/EQ/Comp/Gate/Plugins
+                                                   │
+                                Fader, Mute, Balance, Delay
+                                                   ▼
+                     Sends je Bus: M · A · B · C · D · E · F · G
+                         │                    │
+                         ▼                    └─► Bus A–G optional → Master
+                 Master ─► Aufnahme/Stream/Karte (Mehrkanal-Kombis M, MA, MAB …)
+                 Abhörweg = Master, außer Solo (AFL/PFL)
+                 Gäste-Rückweg = gewählter Bus minus eigener Gast (automatisch)
+```
+
+### 2.3 Steuerung
+
+Alle Bedienwege rufen dieselben Aktionen auf:
+
+```
+ GUI · Tastatur · MIDI/HID · Web-Fernbedienung · HTTP-API · TCP-API ·
+ Auslöser · Ablaufliste · Skript
+        └──────────────► Aktionskatalog ──► Show-Zustand ──► Engine
+                                                │
+                       Zustandsereignisse ◄─────┘ (Tally, Rückmeldung,
+                                                   XML/JSON-Zustand, GUI)
+```
+
+Folge: Der Aktionskatalog (§3.15) ist die zentrale Schnittstelle. Die GUI
+ist ein Client dieses Katalogs, kein Sonderweg.
+
+---
+
+## 3. Funktionale Anforderungen
+
+Priorität: **M** Muss (Kern für Live-Produktion), **S** Soll (Gleichstand
+mit vMix), **K** Kann, **X** ausgeschlossen (§5).
+Stand lmix: ✅ vorhanden · ◐ teilweise · – fehlt. "E" = Engine (strom)
+kann es, Console nicht.
+
+### 3.1 Input-Modell (INP)
+
+| ID | Anforderung | Prio | Stand |
+|---|---|---|---|
+| INP.1 | Inputs zur Laufzeit hinzufügen, entfernen, ersetzen, ohne Aussetzer auf Program | M | – (ROADMAP M2b) |
+| INP.2 | Jeder Input hat laufende Nummer (1…n), Namen (änderbar), feste ID (UUID); Ansprache in Aktionen über alle drei | M | – |
+| INP.3 | Reihenfolge per Drag & Drop ändern; Nummern folgen der Reihenfolge | M | – |
+| INP.4 | "Quelle ändern": neue Quelle, alle Einstellungen bleiben | S | – |
+| INP.5 | Virtueller Input: Kopie, die Bild der Quelle teilt, eigene Einstellungen hat | S | – |
+| INP.6 | Input schließen mit Rückgängig | S | – |
+| INP.7 | Kategorien: 6 feste Farben + 16 eigene, Beschriftung, Filter in der Input-Leiste, Suchkategorie nach Namen | S | – |
+| INP.8 | Klick-Aktion je Input wählbar (Standard: in Preview) | S | – |
+| INP.9 | GO-Aktion je Input wählbar (Standard: Schnellstart, §3.6) | S | – |
+| INP.10 | Wiedergabe-Inputs: Play, Pause, Neustart, Positionieren, Schleife, Geschwindigkeit, In-/Out-Marke | M | ◐ (Playlist-Block E) |
+| INP.11 | Automatik je Input: bei Take abspielen / von vorn starten / nach Wegschalten pausieren | S | – |
+| INP.12 | Live-Pause: Live-Quelle einfrieren, ohne Aufnahme/Wiederholung/Ton anzuhalten | S | – |
+| INP.13 | Offline-Zustand bei fehlender Quelle; Wiederverbinden; Datei neu zuordnen | M | – |
+| INP.14 | Seitenverhältnis je Input überschreiben | S | – |
+| INP.15 | Feste Bildverzögerung je Live-Input in Frames | S | – |
+| INP.16 | Input als Schnappschuss (PNG/JPEG, Alpha erhalten) | K | – |
+| INP.17 | Bis 1000 Inputs im Projekt (vMix-Obergrenze); Live-Dekodierung nur durch Hardware begrenzt, Ziel ≥ 16 Live-Quellen gleichzeitig | M | ◐ (16 × 1080p30 gemessen) |
+
+### 3.2 Quelltypen (SRC)
+
+| ID | Quelle | Details | Prio | Stand |
+|---|---|---|---|---|
+| SRC.1 | Capture-Gerät | V4L2, DeckLink (SDI/HDMI), Format/Auflösung/Bildrate/Interlaced/PsF wählbar, eingebetteter Ton bis 16 Kanäle | M | ◐ V4L2 |
+| SRC.2 | Videodatei | gängige Container/Codecs (MP4, MOV, MXF, MKV, TS, AVI), Alpha (ProRes 4444, QT-Animation, VP9), Interlaced erkannt | M | ✅ |
+| SRC.3 | Liste | mehrere Video-/Audiodateien als ein Input; Auto-Weiter, Auto-Erstes, Schleife, Mischen, Einträge abwählen/umsortieren, Gesamtrestzeit, M3U ein/aus | S | ◐ (Playlist-Block E) |
+| SRC.4 | Bild | PNG, JPEG, TIFF, BMP, WebP; Alpha | M | – |
+| SRC.5 | Fotos | Ordner als ein Input; vor/zurück; Diashow mit Intervall und Übergang | S | – |
+| SRC.6 | Bildsequenz | nummerierte Bilder als Animation mit Alpha; Begleitton gleichen Namens; bei Interlaced ein Bild je Halbbild | S | – |
+| SRC.7 | Farbe, Testbild | Volltonfarbe, transparent (leerer Input), Farbbalken, Testton | M | ◐ Testbild |
+| SRC.8 | Audiodatei | MP3, WAV, FLAC, AAC | M | – |
+| SRC.9 | Audiogerät | ALSA/PipeWire/JACK; Kanal oder Stereopaar; System-Ton; Ton einer Anwendung | M | ◐ (PipeWire E) |
+| SRC.10 | NDI | Suche mit Vorschaubildern, nach Gerät gruppiert; niedrige Bandbreite; nur Ton; Puffer erhöhen; Alpha; Quelle per Menü wechseln | M | ◐ (E) |
+| SRC.11 | OMT | wie NDI; zusätzlich Qualitätswunsch an Sender | M | – (ROADMAP M2) |
+| SRC.12 | SRT | Caller/Listener/Rendezvous, Latenz, Decoder-Verzögerung, Passphrase + Schlüssellänge, Stream-ID, HW-Decode, H.264/HEVC + AAC in TS, Mehrspur-Ton zu Mehrkanal | M | ◐ (E) |
+| SRC.13 | Netzstreams | RTSP (UDP/TCP), RTMP, TS über UDP/TCP (Server und Pull), HLS; Puffer; Niedriglatenz-Modus | S | ◐ (E: RTSP, WHEP) |
+| SRC.14 | WebRTC/WHIP | eingehender WHIP-Stream | S | ◐ (E) |
+| SRC.15 | Webseite | Chromium-Rendering, URL, Größe, eigenes CSS, transparenter Hintergrund, Ton, Maus/Tastatur-Bedienung, zurück/vor/neu laden | S | ◐ (CEF E, eigener Build) |
+| SRC.16 | Titel | §3.11 | M | – |
+| SRC.17 | Bildschirm lokal | Bildschirm oder Fenster dieses Rechners (PipeWire-Portal) | S | – |
+| SRC.18 | Bildschirm entfernt | Fenster/Bildschirm anderer Rechner per NDI/OMT (Fremdwerkzeug genügt) | K | – |
+| SRC.19 | Video-Verzögerung | Ringpuffer eines Inputs oder von Program, Länge in s, Abspieltempo (Zeitlupe), Ausschnitt als Clip speichern → Liste oder neuer Input | S | – |
+| SRC.20 | Wiederholungskanal | §3.10 | S | – |
+| SRC.21 | Mix | §3.6 | S | – |
+| SRC.22 | Program als Input | Ausgang 1 als Input (nur einmal; Selbstbezug liefert Standbild) | S | – |
+| SRC.23 | Preview als Input | aktuelle Preview als Input | K | – |
+| SRC.24 | Gast | §3.14 | S | – |
+| SRC.25 | Zeichenebene | transparente Ebene, im Browser bemalbar (§3.17) | K | – |
+| SRC.26 | Produktionsuhren | §3.18 als Input | K | – |
+| SRC.27 | Virtuelles Set | Keying-Talent in 3D-Szene mit Kamerafahrten | X | – |
+| SRC.28 | Präsentation | Folien als Bilder (über LibreOffice-Export) | K | – |
+| SRC.29 | DVD, Flash, WMV, DirectShow, XAML/WPF | | X | – |
+| SRC.30 | Zoom-Meeting | | X | – |
+
+### 3.3 Input-Verarbeitung (PRC)
+
+| ID | Anforderung | Prio | Stand |
+|---|---|---|---|
+| PRC.1 | Position: Zoom, Pan X/Y, Rotation (auch 3D-Achsen), Crop links/rechts/oben/unten; auflösungsunabhängig gespeichert (Zoom 1 = 100 %, Pan in Bildbreiten) | M | ◐ (Mixer-Pads E) |
+| PRC.2 | Quellrotation in 90°-Schritten mit Auto-Zoom (Hochkant-Kameras) | S | – |
+| PRC.3 | Spiegeln, Deinterlace (Blend/Verwerfen/besser), Schärfen | S | ◐ (Deinterlace GPU) |
+| PRC.4 | Farbanpassung: Schwarz/Weiß-Dehnung, R/G/B, Alpha, Sättigung, vormultipliziertes Alpha, 16–235 → 0–255 | S | – |
+| PRC.5 | Farbkorrektur: Lift/Gamma/Gain je Kanal + Luma, Farbton, Sättigung, Auto-Korrektur, Reset, Presets ex-/importieren | S | ◐ (Looks E) |
+| PRC.6 | Farbkey + Chroma-Key mit Auto-Farbwahl, Toleranz, Spill-Unterdrückung, Kantenglättung, Presets | M | ◐ (E, GPU) |
+| PRC.7 | Luma-Key | S | – |
+| PRC.8 | Key/Fill: anderer Input liefert Alpha | S | – |
+| PRC.9 | Effektkette je Input, sortierbar, einzeln abschaltbar, je Effekt Ausschnitt: Weichzeichner, 3D-LUT (.cube, PNG-LUT) mit Stärke, Alpha-Maske aus PNG | S | – |
+| PRC.10 | Ränder um Input/Ebene: Farbe, Dicke, Eckradius | S | – |
+| PRC.11 | Einstellungen von anderem Input kopieren (Auswahl der Bereiche); Position kopieren/einfügen | S | – |
+| PRC.12 | Alle Parameter per Aktion setzbar, Position/Zoom/Crop auch animiert über Zeit | M | – |
+
+### 3.4 Ebenen (LAY)
+
+| ID | Anforderung | Prio | Stand |
+|---|---|---|---|
+| LAY.1 | Bis 10 Ebenen je Input, jede ein anderer Input; Z-Reihenfolge per Nummer | M | ◐ (4 PiPs E) |
+| LAY.2 | Je Ebene Position, Crop, Rand, sichtbar an/aus, Rotation 90° | M | ◐ |
+| LAY.3 | Verschachtelung: Ebenen von Ebenen werden gerendert (mind. 2 Stufen) | S | – |
+| LAY.4 | "Ebenen flach rechnen": Input samt Ebenen als ein Bild für Weiterverwendung | K | – |
+| LAY.5 | Layout-Vorlagen: speichern, laden, ex-/importieren, außerhalb der Show | S | – |
+| LAY.6 | Ebenen-Editor: Maus verschieben/skalieren/croppen, Mehrfachauswahl, Fangen an Kanten/Mitte/Schutzbereichen/anderen Ebenen, Sperre, Rückgängig/Wiederholen, Pixelwerte zur Ausgabegröße | S | – |
+| LAY.7 | Ebene ein/aus, tauschen, Inhalt wechseln und Rechteck setzen per Aktion, auch animiert | S | – |
+
+### 3.5 Schalten (SWI)
+
+| ID | Anforderung | Prio | Stand |
+|---|---|---|---|
+| SWI.1 | Preview/Program-Paar; Input in Preview per Klick, Taste, Aktion | M | ✅ |
+| SWI.2 | Cut (Tausch PVW/PGM) und Cut direkt (Input sofort auf PGM) | M | ✅ |
+| SWI.3 | 4 Übergangstasten, je Effekt + Dauer einstellbar; Taste 1 steuert T-Bar | M | ◐ (Auswahl + Dauer) |
+| SWI.4 | Effektkatalog: Cut, Blende, Alpha-Blende (Alpha zu Alpha), Zoom, Wischen, Schieben, vertikal Wischen/Schieben, Fliegen, Fliegen+Drehen, Kreuzzoom, Würfel, Würfelzoom, Verschmelzen (SWI.6), Stinger 1–8; umgekehrte Richtungen und Tür/Rolltor (nur Drittquellen, Quellen §3) | M | ◐ (Fade, Slide, Push, Dip) |
+| SWI.5 | T-Bar: manueller Fortschritt 0–100 %, per Maus, MIDI-Fader, Aktion | M | – (ROADMAP 4.3) |
+| SWI.6 | Verschmelzen: Ebenen, die in PVW und PGM vorkommen, wandern an ihre neue Position; Rest blendet | S | – |
+| SWI.7 | Stinger 1–8: Animations-Input, Dauer, Schnittpunkt, Zusatzeffekt, unter oder über Overlays; Dauer/Schnittpunkt aus Titelanimation übernehmbar | S | – (ROADMAP 4.2) |
+| SWI.8 | Schnellstart: Take mit eigenem Effekt (Standard ½ s Blende) und Start der Wiedergabe; optional per Klick ins Preview-Fenster | S | – |
+| SWI.9 | FTB: blendet Senken auf Schwarz (optional mit Ton), Program-Anzeige bleibt bedienbar | M | ✅ |
+| SWI.10 | Mix-Inputs: bis 15 zusätzliche Mischer mit PVW/PGM, Cut/Übergang, Overlays und Stinger je Mix wählbar; "nur Ausgang"-Ansicht; Mix in Mix ohne Verzögerung bei aufsteigender Reihenfolge | S | – |
+| SWI.11 | Alle Wiedergabe-Inputs halten während Übergang ihr Timing (keine Ruckler, keine Ton-Lücke) | M | ✅ |
+| SWI.12 | Interne Latenz Input → Program ≤ 2 Frames (ohne Quell- und Senkenlatenz) | M | ◐ (< 5 Frames gemessen) |
+
+### 3.6 Overlays (OVL)
+
+| ID | Anforderung | Prio | Stand |
+|---|---|---|---|
+| OVL.1 | 8 Overlay-Kanäle über Program; ein Input je Kanal; Alpha und Key des Inputs gelten | M | ◐ (DSK 0–4, an/aus) |
+| OVL.2 | Je Kanal: Typ (Vollbild/PiP mit Position), Ein-/Ausblendeffekt + Dauer (rückwärts beim Ausblenden), Auto-Aus nach Zeit, Rand | M | – |
+| OVL.3 | Overlay in Preview vorbereiten; geht beim nächsten Take mit auf Program | S | – |
+| OVL.4 | PiP-Overlay per Aktion auf Vollbild vergrößern und zurück | K | – |
+| OVL.5 | Overlay je Ausgang abwählbar (Clean Feed) | M | – |
+| OVL.6 | Overlays auch auf Mix-Inputs (Aktion mit Mix-Liste) | S | – |
+| OVL.7 | Titel als Overlay: Ein-/Ausblendung nutzt die Titelanimation statt Kanaleffekt | S | – |
+| OVL.8 | "Alle Overlays aus"; letzter Input je Kanal wiederholen | S | – |
+
+### 3.7 Audio (AUD)
+
+| ID | Anforderung | Prio | Stand |
+|---|---|---|---|
+| AUD.1 | Jeder Input mit Ton erscheint als Kanalzug: Fader, Mute, Pegelanzeige L/R | M | ✅ |
+| AUD.2 | Busse: Master + A–G, Zuweisung je Input per Taste; Bus A–G optional in Master; Bus-Ausgang auf Gerät oder nur intern | M | ◐ (Aux E) |
+| AUD.3 | Sendepegel je Input und Bus (Bus-Mixer) | S | – |
+| AUD.4 | Abhörweg mit eigener Lautstärke je Input und gesamt; Solo AFL (Standard) / PFL, mehrfach-Solo, zerstörungsfrei | M | ◐ (PFL/AFL E) |
+| AUD.5 | Audio folgt Video: Take schaltet Ton der beteiligten Inputs; je Input an/aus; global an/aus | M | ✅ |
+| AUD.6 | Gain (dB), Balance, Delay (ms), Standard-Delay für neue Inputs | M | ◐ |
+| AUD.7 | Kanalwahl: Mono links/rechts, Stereo, getrennt Mono mit eigenen Fadern | S | – |
+| AUD.8 | Kanalmischer bis 16 Kanäle mit Pegel und Anzeige | S | – |
+| AUD.9 | Kanalmatrix 16 × 16 (Quelle → Bus-Kanal), Presets speichern/anwenden | S | – |
+| AUD.10 | EQ, Kompressor, Noise Gate je Input und Bus | M | ✅ (E), UI – |
+| AUD.11 | Plugins je Input und Bus (LV2, VST3 für Linux, CLAP), Reihenfolge, an/aus, Editor-Fenster | K | – |
+| AUD.12 | Pegelanzeigen in dBFS, 5 Farbbänder, Spitzenwert über ~2 s, vor/nach Fader, gedämpft-Anzeige | M | ◐ |
+| AUD.13 | Bus-Übersicht: Matrix Inputs × Busse in einem Fenster, filterbar | S | – |
+| AUD.14 | Pegel-Fades per Aktion (Ziel, Dauer) für Input, Master, Busse | S | – |
+| AUD.15 | Mehrkanal-Kombinationen für Senken: einzelne Busse, MA, MAB, MABC, AB, CD, DE, ABCD, DEFG, alle 16 Kanäle; > 6 Kanäle zusätzlich als WAV | S |
+| AUD.21 | Busse benennbar | S | – |
+| AUD.16 | Taktabweichung je Quelle: Lücke füllen oder resamplen (wählbar) | M | – |
+| AUD.17 | Abtastrate 48 kHz (44,1 kHz wählbar); intern Gleitkomma | M | ✅ |
+| AUD.18 | -20-dB-Pad je Input; +20 dB je Netzausgang | K | – |
+| AUD.19 | Mixer-Fenster abdockbar; Kanalzüge ein-/ausblendbar; nach Kategorie filtern | S | – |
+| AUD.20 | Sprachbefehle als Tastenbelegung | X | – |
+
+### 3.8 Ausgänge und Monitoring (OUT)
+
+| ID | Anforderung | Prio | Stand |
+|---|---|---|---|
+| OUT.1 | Master-Format: Auflösung (SD bis 4K, Hochkant 1080×1920, frei), Bildrate (23,976–60, 50i/59,94i, optional 100/120), Seitenverhältnis | M | ◐ |
+| OUT.2 | Ausgang 1 = Program; Ausgang 2–4 mit Quelle Program/Preview/Multiview 1–2/Mix n/Input n; Overlay-Auswahl je Ausgang; Quelle live umschaltbar | M | – |
+| OUT.3 | Vollbild 1–2 auf Monitoren (Monitor, Rechteck, Cursor aus, immer oben); Quelle wie OUT.2 oder Wiederholungs-Multiview | M | – (ROADMAP 3.3) |
+| OUT.4 | Kartenausgang SDI/HDMI (DeckLink, AJA wenn Treiber), eigenes Format, Ton-Kanäle, Ton-Delay | S | – |
+| OUT.5 | Key+Fill-Ausgang (zwei Ports, gerade/vormultipliziert) | K | – |
+| OUT.6 | NDI- und OMT-Ausgang je Ausgang 1–4, mit Alpha, Ton-Bus, Skalierung, OMT-Qualität | M | ◐ (NDI E) |
+| OUT.7 | Alle Kameras, Gäste und Audio-Inputs automatisch als NDI/OMT; Busse als reine Ton-Streams | S | – |
+| OUT.8 | SRT-Ausgang je Ausgang: Modus, Latenz, Verschlüsselung, Stream-ID, H.264/HEVC, Bitrate, CBR mit Füllung, Stereo-Paare als eigene Spuren, HW-Encode | M | ◐ (E) |
+| OUT.9 | Virtuelle Kamera und virtuelles Audiogerät für andere Programme (v4l2loopback, PipeWire) | S | – |
+| OUT.10 | Multiview 1 und 2, je eigenes Layout: PVW/PGM + 2/8/14 Inputs, nur Inputs, Reihenfolge nach Nummer oder Typ, Titel oben/unten, Pegel, Tally-Rahmen, Klick wählt Preview | M | ◐ (Multiview E) |
+| OUT.11 | Live-Monitore in der GUI: PVW, PGM, alle Input-Kacheln flüssig (volle Bildrate) | M | ◐ (Entscheidung 2026-09-30) |
+| OUT.12 | Schutzbereiche: EBU/SMPTE, 80/90 %, Raster, 4:3, 1:1, 9:16 | S | – |
+| OUT.13 | Messinstrumente: Waveform Y/RGB, Parade, Vektorskop (75/100 %-Marken), neben Bild | S | – |
+| OUT.14 | Hinweise über PGM-Anzeige (nicht in Senken): zu leise, FTB aktiv, keine Aufnahme | K | – |
+| OUT.15 | Snapshot des Programs | K | – |
+| OUT.16 | Interlaced-Ausgabe (Aufnahme, Karte), Halbbildreihenfolge nach Norm | K | – |
+
+### 3.9 Aufnahme, Einzelaufnahme, Streaming (REC, STR)
+
+| ID | Anforderung | Prio | Stand |
+|---|---|---|---|
+| REC.1 | Aufnahme von Ausgang 1–4 mit Ton-Bus-Wahl; Start/Stopp; Laufzeit + verworfene Frames | M | ◐ (Recorder E) |
+| REC.2 | Formate: MP4/MOV/MKV/MXF/TS; Codecs H.264/HEVC/AV1 (HW), ProRes, DNxHR, FFV1/verlustfrei; Ton AAC/PCM | M | – |
+| REC.3 | Ausfallsicher: unterbrochene Datei bleibt lesbar (fragmentiertes MP4, MKV, MXF, TS) | M | – |
+| REC.4 | Neue Datei alle n Minuten, nahtlos | S | – |
+| REC.5 | Dateinamensmuster mit Datum/Zeit; Standardordner | S | – |
+| REC.6 | Zweiter Recorder mit eigenem Format/Quelle, startet mit dem ersten | S | – |
+| REC.7 | WAV-Begleitaufnahme (PCM) | K | – |
+| REC.8 | Aufnahmeprotokoll: Zeitmarke per Aktion ins Log schreiben | K | – |
+| MCR.1 | Einzelaufnahme: beliebige Live-Inputs und Ausgänge 1–4 gleichzeitig roh in getrennte Dateien | S | – (ROADMAP 3.2) |
+| MCR.2 | Bereits komprimierte Quellen (SRT, NDI-HX, OMT) ohne Neukodierung sichern | S | – |
+| MCR.3 | Ordner je Quelle, Split, Ton je Quelle (eigener oder Bus) | S | – |
+| STR.1 | Bis 5 Streamziele, einzeln und gemeinsam startbar; Fehler eines Ziels stoppt nur dieses | M | – |
+| STR.2 | Protokolle RTMP, RTMPS, SRT, WHIP; Ziel = URL + Schlüssel; Profile (benannte Zielsätze) | M | ◐ (SRT, WHIP E) |
+| STR.3 | Qualitätsprofile: Auflösung, Bitrate, Codec H.264/HEVC/AV1, Profil/Level/Preset, Keyframe-Abstand, CBR, Ton-Bitrate/-Kanäle; Ziele teilen Profil oder eigenes | M | – |
+| STR.4 | Multi-Bitrate: ein Ziel mit mehreren Qualitäten, keyframe-ausgerichtet | K | – |
+| STR.5 | Sendeverzögerung n s (Puffer im RAM, Countdown) | S | – |
+| STR.6 | Beschnitt auf 1:1 oder 9:16 je Stream | S | – |
+| STR.7 | Status: Bitrate, Puffer, verworfene Frames, Laufzeit, Encoder CPU/GPU | M | – |
+| STR.8 | Lokales Mitschauen im LAN per HLS-Seite (≈ 10 s Verzug, ~100 Zuschauer) | K | – |
+| STR.9 | Anmeldung bei Plattformen (YouTube, Twitch …) mit Kanalwahl | X | – |
+
+### 3.10 Wiederholung (RPL)
+
+| ID | Anforderung | Prio | Stand |
+|---|---|---|---|
+| RPL.1 | Daueraufnahme von bis 8 Live-Inputs (oder Program) in Sitzungsordner, Ton bis 4 Kanäle; Split alle 20 min; ältestes Material bei Platzmangel löschen (wählbar); mehrere Laufwerke | S | – (ROADMAP 4.5) |
+| RPL.2 | Ereignisse: In/Out, Dauer, Tempo, aktivierte Kameras, Text je Kamera, Tags; 20 Ereignislisten mit Namen; ID mit fester Stellenzahl | S | – |
+| RPL.3 | Live- und Rückschau-Modus für Markierungen; Markieren per Taste ("letzte 5/10/20 s"), In/Out einzeln, Abbruch | S | – |
+| RPL.4 | Abspielkanäle A und B (gekoppelt oder getrennt), optional C/D als Vierfachansicht; Kamera je Kanal live wechseln | S | – |
+| RPL.5 | Tempo 0–100 % (+ schneller), rückwärts, Einzelbild, Jog/Shuttle, Mausrad; Ton bei Zeitlupe gedehnt | S | – |
+| RPL.6 | Abspielen: letztes/gewähltes/alle Ereignisse, mit Ein-/Aus-/Zwischenübergang (Tempo-angepasst), Musikbett, automatisch auf Program und zurück | S | – |
+| RPL.7 | Ereignisse kopieren/verschieben/löschen, In/Out frameweise nachstellen | S | – |
+| RPL.8 | Export eines Ereignisses als MP4 | S | – |
+| RPL.9 | Wiederholungs-Multiview: Kanäle + Live-Kameras | S | – |
+| RPL.10 | Vor-/Nachlauf, Doppelklick spielt, Sortierung nach Zeit | K | – |
+
+### 3.11 Titel und Grafik (GFX)
+
+| ID | Anforderung | Prio | Stand |
+|---|---|---|---|
+| GFX.1 | Offenes Titelformat (eigene Spezifikation): Objekte Text, 3D-Text, Bild, Bildsequenz, Rechteck/Ellipse/Dreieck, Laufschrift (4 Richtungen), QR-Code, Gruppe; Füllung/Kontur Farbe/Verlauf/Bild; Schatten, Leuchten, Spiegelung, Scherung, Maske, Crop mit weicher Kante; Anker; benannte Felder (Text, Bild, Farbe); Zeiten in Sekunden (bildratenunabhängig) | M | – |
+| GFX.2 | Animationsabläufe je Titel: Einblenden, Ausblenden, Seiten 1–10 (vor/zurück), Dauerschleife, Datenwechsel aus/ein; je Objekt und Ablauf bis 3 Animationen mit Richtung, Verzögerung, Dauer, Easing (linear, kubisch ein/aus/beides, Federn); Abspielen per Aktion | S | – |
+| GFX.3 | Titel-Editor in der GUI: Felder live oder per "Übernehmen", Schrift, Größe, Farbe, Sichtbarkeit je Feld | M | – |
+| GFX.4 | Titel-Presets: Feldwerte als Satz speichern, wählen, vor/zurück; CSV ex-/import | S | – |
+| GFX.5 | Countdown/Stoppuhr: Dauer, Ziel-/Startzeit, Richtung, Format, Start/Stopp/Pause/Anpassen per Aktion, Ereignis bei 0 | S | – |
+| GFX.6 | Laufschrift: Tempo (px/Frame), Anhängen vs. Ersetzen | S | – |
+| GFX.7 | Titel als Stinger (Schnittpunkt aus Animation) | S | – |
+| GFX.8 | Vorlagensatz (eigen gestaltet): Bauchbinde, Name+Funktion, Laufschrift, Uhr, Countdown, Spielstand, Vollbild-Karte; Hochkant-Varianten | S | – |
+| GFX.9 | Gestaltungswerkzeug für Titel (eigene App oder HTML-Workflow) | S | – |
+| GFX.10 | HTML-Titel als Alternative (Webseite mit Feld-API) | S | ◐ (CEF E) |
+| GFX.11 | Rendering auf GPU ohne Neustart der Pipeline; Rendern pausieren/fortsetzen; Budget: ≥ 20 Titel je Show | M |
+| GFX.12 | Import fremder Vorlagen (PSD-Ebenen, Bilder) | K | – |
+
+### 3.12 Datenquellen (DAT)
+
+| ID | Anforderung | Prio | Stand |
+|---|---|---|---|
+| DAT.1 | Typen: CSV, XLSX/ODS, Google Sheets (öffentlich + API-Schlüssel), RSS, Text, XML (XPath), JSON (Array von Objekten) | S | – |
+| DAT.2 | Lokal, im Netz, im Internet; automatische Aktualisierung bei Änderung | S | – |
+| DAT.3 | Optionen: erste Zeile = Spaltennamen, Zeilen zu Spalten | K | – |
+| DAT.4 | Zuordnung Titelfeld ← Quelle/Tabelle/Spalte (oder automatisch nach Name/Index)/Zeile (fest oder "gewählt"), Formatmuster `…{0}…`; Bilder per Pfad/URL | S | – |
+| DAT.5 | Datenquellen-Fenster: Zeile wählen, Auto-Weiter mit Intervall, Schleife; Aktionen nächste/vorige/bestimmte Zeile | S | – |
+
+### 3.13 Automatisierung (AUT)
+
+| ID | Anforderung | Prio | Stand |
+|---|---|---|---|
+| AUT.1 | Tastenbelegung: Tastatur, MIDI (Note, CC, Wert, Jog-Typen), HID-Controller (X-keys, Shuttle), Gamepad (inkl. Druck/Analog), Stream-Deck-Anbindung | S | ◐ (Tasten 1–8, Take) |
+| AUT.2 | Je Belegung: Aktion, Input (fest oder "Input-Nummer"), Wert, Dauer, Beschriftung für Fernbedienung, Anzeige (Farbe/Bild/Live-Bild) | S | – |
+| AUT.3 | Mehrere Aktionen je Taste in fester Reihenfolge; global (Einstellungen) oder lokal (Show), lokal gewinnt | S | – |
+| AUT.4 | Vorlagen für Belegungen ex-/importieren | K | – |
+| AUT.5 | Dynamische Inputs/Werte 1–4: Taste A wählt Input/Wert, Taste B wirkt darauf | K | – |
+| AUT.6 | Rückmeldungen an Controller: Lampen, Farben, Motorfader nach Zustand (Input auf PGM/PVW/spielt, Pegel, Mute, Solo, Bus, FTB, Aufnahme, Stream, …) | S | – |
+| AUT.7 | Auslöser je Input: beim Ein-/Ausblenden (Take, Overlay), Ende, Wiedergabezeit/Restzeit, Countdown 0 bzw. bei Zeit/Restzeit, Gast verbunden/getrennt, Wiederholung fertig → Aktionsliste mit Verzögerung (max. 30 s je Schritt) | S | – |
+| AUT.8 | Ablaufliste: Inputs mit Startposition, Dauer, Übergang, Anzeigeart (Vollbild/Overlay); Start, Stopp, vor/zurück, Schleife, manuell; mehrere benannte Listen in der Show | S | – |
+| AUT.9 | Skripte: benannte Skripte (global/lokal), Start/Stopp per Aktion; Sprache mit Zugriff auf Aktionen, Zustand, Warten, Netzwerk; einfache Zeilen-Syntax (Aktion + Pause) | K | – |
+| AUT.10 | Rückgängig für Input schließen | S | – |
+| AUT.11 | Schutzschloss: Schließen, Show laden, Aufnahme-/Stream-/Ausgabe-Stopp sperren | S | – |
+
+### 3.14 Gäste (CAL)
+
+| ID | Anforderung | Prio | Stand |
+|---|---|---|---|
+| CAL.1 | Gast tritt per Browser bei (Link + Kennwort/Token), Kamera + Mikrofon; ein Input je Gast; bis 8 Gäste | S | – (ROADMAP M6) |
+| CAL.2 | Rückweg je Gast: Bild (Ausgang n oder keins), Ton (Master, Abhörweg, Bus A–G) mit automatischem Mix-Minus | S | – |
+| CAL.3 | Bandbreite Rückweg wählbar (bis 1080p); Gast-Bandbreite automatisch oder fest | S | – |
+| CAL.4 | Verbindungsmanager: Status grün/gelb/rot, Statistik (Auflösung, Bitrate, fps, Jitterpuffer), Text-Chat mit allen Gästen | S | – |
+| CAL.5 | Nur Direktverbindung erzwingen; TURN-Server konfigurierbar (eigener Server, kein Herstellerdienst) | S | – |
+| CAL.6 | Gäste automatisch als NDI/OMT | K | – |
+
+### 3.15 Aktionskatalog und APIs (API)
+
+| ID | Anforderung | Prio | Stand |
+|---|---|---|---|
+| API.1 | Ein Aktionskatalog für alle Bedienwege (§2.3); jede Aktion: Name, Gruppe, Parameter (Input, Wert, Dauer, Feldname, Index, Mix, Kanal), Beschreibung; maschinenlesbar exportierbar | M | – |
+| API.2 | Umfang: alle Bedienfunktionen dieses Lastenhefts; Gruppen wie vMix: Allgemein, Audio, Übergang, Ausgang, Titel, Input, Overlay, Ablaufliste, Skript, Wiederholung, NDI/OMT, PTZ, Show, Datenquellen, Browser (vMix 29: rund 800 Aktionen inkl. nummerierter Varianten) | S | – |
+| API.3 | HTTP: Aktion per GET/POST mit Parametern; ohne Aktion → vollständiger Zustand (XML; zusätzlich JSON) | M | ◐ (strom-REST, andere Ebene) |
+| API.4 | Zustand enthält: Version, Inputs (ID, Nummer, Typ, Titel, Zustand, Position, Dauer, Schleife, Ton, Pegel, Busse, Ebenen, Titelfelder, Listeneinträge), Overlays, Preview, Program, FTB, Übergänge, Aufnahme/Stream/Ausgaben/Ablaufliste/Einzelaufnahme, Audio-Busse, dynamische Werte, Mixe | M | – |
+| API.5 | TCP-Textprotokoll: Zeilen, UTF-8, `BEFEHL STATUS [Text]`; Befehle Aktion, Tally (0/1/2 je Input), Rückmeldungszustand, XML, XPath-Abfrage, Abonnieren/Abbestellen von Tally/Rückmeldungen | S | – |
+| API.6 | WebSocket mit Zustandsdiffs für eigene Clients | S | ◐ (strom-WS) |
+| API.7 | Sicherheit: nur LAN (Standard), Passwort, Ausnahmen je Seite, lokale Programme ohne Anmeldung, "erhöhte Sicherheit" sperrt Skripte | M | – |
+| API.8 | Kompatibilitätsmodus: vMix-Funktionsnamen, XML-Schema, Port 8088/8099 (siehe E.2); Input-Adressierung über Nummer (0 = Preview, -1 = Program), Name oder ID; Pegel im Zustand als Amplitude, Fader-Stellung = Amplitude^¼ | S | – |
+
+### 3.16 Web-Fernbedienung (WEB)
+
+| ID | Anforderung | Prio | Stand |
+|---|---|---|---|
+| WEB.1 | Seite "Tasten": alle als sichtbar markierten Belegungen als Raster | S | – |
+| WEB.2 | Seite "Mischer": Inputs, PVW/PGM, Übergangstasten | S | – |
+| WEB.3 | Seite "Tally": Input wählen, ganzer Bildschirm in PGM-/PVW-Farbe | S | – |
+| WEB.4 | Seite "Titel": Felder bearbeiten, Presets anwenden/anlegen | S | – |
+| WEB.5 | Seite "Mitschauen" (STR.8) und "Zeichnen" (§3.17) | K | – |
+
+### 3.17 Zeichenebene (TEL)
+
+| ID | Anforderung | Prio | Stand |
+|---|---|---|---|
+| TEL.1 | Browserseite mit Hintergrundvideo (wählbarer Ausgang, Latenz normal/niedrig); Zeichnen mit Maus/Finger/Stift erscheint live im Zeichen-Input | K | – |
+| TEL.2 | Werkzeuge: Farbe, Stärke, Freihand, Rechteck, Kreis, Bild-Stempel (eigene PNGs), fortlaufende Nummern, Laserpunkt, Rückgängig, Löschen, Zeichnen an/aus | K | – |
+| TEL.3 | 10 Belegungstasten auf der Seite; Klick in Multiview wählt Preview | K | – |
+
+### 3.18 Tally, PTZ, Uhren, Statistik (PER)
+
+| ID | Anforderung | Prio | Stand |
+|---|---|---|---|
+| PER.1 | Tally an: Web-Seite, TCP-API, Rückmeldungen, USB-/Netz-Tally-Geräte (generisch, z. B. HTTP/OSC/GPIO), Arduino/Firmata | S | – (ROADMAP M6) |
+| PER.2 | PTZ je Input: Netzprotokolle VISCA-over-IP, NDI-PTZ, ONVIF; Bewegen, Zoom, Fokus, Home, Tempo | S | – |
+| PER.3 | PTZ-Positionen als virtuelle Inputs: Preview fährt die Position an, Standbild außerhalb PVW/PGM, aktualisieren | S | – |
+| PER.4 | Virtuelles PTZ: digitaler Zoom/Schwenk auf beliebigem Input | K | – |
+| PER.5 | 2 Produktionsuhren: Uhrzeit (+Offset, 12/24 h), Ereignis (vor/während/nach in Bernstein/Grün/Rot), Aufnahme-, Streamdauer, Restzeit Program; Genauigkeit wählbar; als Input | K | – |
+| PER.6 | Statistik je Live-Input: Quell-Drops, Render-Drops, Resync, Frame-Abstände, Ton-Puffer/Drops/Resample; Encoder (CPU/GPU), SRT (Bandbreite, Verlust, RTT) | M | ◐ (Selftest) |
+| PER.7 | Warnung bei Überlast (Renderzeit, CPU) | S | ◐ |
+| PER.8 | Takt-Korrektur gegenüber externer Hardware | K | – |
+
+### 3.19 Show-Datei (SHW)
+
+| ID | Anforderung | Prio | Stand |
+|---|---|---|---|
+| SHW.1 | Show enthält: Inputs mit allen Einstellungen, Overlays, Übergänge, Audio (Inputs + Busse), Ablauflisten, Kategorien, lokale Belegungen/Rückmeldungen/Skripte, Aufnahme, Streaming, Ausgänge, Karte, Datenquellen, Master-Format | M | – (ROADMAP 2b.4) |
+| SHW.2 | Offenes, versioniertes, lesbares Format (JSON); Medien per Pfad | M | – |
+| SHW.3 | Neu (mit Formatwahl), Öffnen (ersetzt), Anhängen (nur gewählte Inputs), Speichern, Speichern unter, zuletzt geöffnet | M | – |
+| SHW.4 | Fehlende Dateien: markieren, suchen lassen, sonst Input offline | M | – |
+| SHW.5 | Automatische Sicherung, "letzte Show" wiederherstellen (auch nach Absturz) | M | – |
+| SHW.6 | Paket: Show + Medien + Titel in einer Datei | S | – |
+| SHW.7 | Formatwechsel beim Laden bestätigen | S | – |
+| SHW.8 | Globale Einstellungen getrennt ex-/importieren, Werkseinstellungen | S | – |
+| SHW.9 | Import von vMix-Presets (siehe E.3) | K | – |
+
+### 3.20 Bedienoberfläche (UI)
+
+| ID | Anforderung | Prio | Stand |
+|---|---|---|---|
+| UI.1 | Hauptfenster: Preview links, Program rechts (Farbcodes einstellbar), Übergangsspalte dazwischen, Input-Leiste unten mit Live-Kacheln, Fußleiste mit Senken-Tasten | M | ◐ (Console) |
+| UI.2 | Input-Kachel: Titelzeile (Nummer, Name, Kategoriefarbe), Bild, Tasten: Schließen, Cut, Schleife, Overlay 1–8, GO, Ton, Großansicht, Einstellungen; Tally-Farbe | M | ◐ |
+| UI.3 | Mehrere Input-Reihen, Kachelgröße einstellbar, Einklappen einzelner Inputs, Bildlauf | S | – |
+| UI.4 | Kontextmenüs je Input-Typ (Liste-Einträge, Fotos, Titel-Presets, NDI-Quelle, Browser …) | S | – |
+| UI.5 | Transportleiste unter PVW/PGM für Wiedergabe-Inputs | M | – |
+| UI.6 | Andockbare Bereiche (Audio, Wiederholung, Liste) und abdockbare Fenster für zweiten Monitor | S | – |
+| UI.7 | Einfacher und erweiterter Modus | K | – |
+| UI.8 | Input-Einstellungen in Reitern: Allgemein, Farbe, Key, Farbkorrektur, Effekte, Position, Ebenen, Auslöser, Tally, PTZ, Erweitert | M | – |
+| UI.9 | Themes hell/dunkel, Sprachen de/en (erweiterbar) | S | – |
+| UI.10 | Bestätigung vor Stopp von Aufnahme/Stream (abschaltbar) | S | – |
+| UI.11 | Hochkant-Produktion: Vorlagen für 9:16, Schutzbereich, Quellrotation | K | – |
+| UI.12 | Startoptionen: maximiert, erweiterter Modus, Vollbild/Kartenausgang/SRT starten, letzte Show | S | – |
+
+---
+
+## 4. Nichtfunktionale Anforderungen (NFA)
+
+| ID | Anforderung | Prio |
+|---|---|---|
+| NFA.1 | Plattform: Linux x86-64 (aktuelle Ubuntu LTS, Fedora, Arch); NVIDIA, AMD, Intel gleichrangig, kein Rückfall auf CPU im Hot-Path | M |
+| NFA.2 | Kapazität (Kennzahl "max. Inputs @ Budget", `ROADMAP.md`): 16 × 1080p30 Live + PGM + Multiview + 2 Encodes ohne Drop; Ziel 4K30 mit 4 Live-Inputs | M |
+| NFA.3 | Latenz: intern ≤ 2 Frames; GUI-Monitor ≤ 3 Frames hinter Program | M |
+| NFA.4 | A/V-Synchronität ± ½ Frame über 8 h | M |
+| NFA.5 | Robustheit: Quelle fällt aus, Stream bricht ab, Datei fehlt → Program läuft weiter; Wiederverbinden automatisch | M |
+| NFA.6 | Crash-Isolation: GUI-Absturz stoppt weder Engine noch Senken noch API (siehe E.4) | M |
+| NFA.7 | Dauerlauf: 8 h Soak mit Last (16 Inputs, 2 Streams, Einzelaufnahme) ohne Speicher-/Latenzdrift | M |
+| NFA.8 | Bildraten 23,976/24/25/29,97/30/50/59,94/60 p, 50/59,94/60 i; Auflösungen 640×360 bis 3840×2160 | M |
+| NFA.9 | Lizenz: Repo MIT-kompatibel, keine GPL-Abhängigkeit im Repo (`claude.md` Entscheidung 6); Laufzeit-Plugins Dritter getrennt | M |
+| NFA.10 | Bedienbarkeit unter Last: GUI-Reaktion < 50 ms, Tastenaktion → Program < 1 Frame + interne Latenz | M |
+| NFA.11 | Lokalisierung: alle Texte aus Katalogen, de/en | S |
+| NFA.12 | Sicherheit: APIs standardmäßig nur LAN/Loopback; keine Telemetrie; keine Herstellerdienste für Gäste | M |
+| NFA.13 | Prüfbarkeit: jede M-Anforderung hat einen automatischen Test (Selftest, API-Test) oder einen dokumentierten Abnahmebefehl | M |
+| NFA.14 | Bildverarbeitung intern in Gleitkomma 4:4:4; 10 Bit/HDR-Durchgang (vMix kann das nicht) | K |
+
+---
+
+## 5. Bewusst ausgeschlossen (X)
+
+| Was | Grund |
+|---|---|
+| DVD, Flash/SWF, WMV-Streaming, DirectShow-Filter, FMLE | Windows-/Altformat, ohne Nutzen unter Linux |
+| XAML/WPF-Titel, VB.NET-Skripte | Windows-Technik; Ersatz: offenes Titelformat (GFX), eigene Skriptsprache (AUT.9) |
+| Zoom-Integration | proprietäres SDK, Lizenz- und Kontobindung |
+| Virtuelle 3D-Sets | Aufwand hoch, Nutzen gering; Ersatz: Ebenen + Key |
+| Plattform-Logins für Streamziele | Pflege fremder APIs; URL + Schlüssel genügt |
+| Sprachbefehle | experimentell, plattformabhängig |
+| Hersteller-Hardware-Pult (eingestellt), Windows-Update-Sperre, Lizenzschlüssel/Editionen | entfällt |
+
+---
+
+## 6. Offene Entscheidungen
+
+| # | Frage | Empfehlung |
+|---|---|---|
+| E.1 | Widerspruch zu `claude.md` "Exkludierte Ziele": Control-Surfaces (MIDI/Stream Deck), 4K-Optimierung, Web-Oberfläche. Für Gleichstand nötig sind AUT.1/AUT.6 (Controller), NFA.2 4K-Ziel, WEB (Fernbedienung, nicht Haupt-GUI). Ausschlüsse aufheben? | Aufheben, Haupt-GUI bleibt nativ |
+| E.2 | API-Kompatibilität zu vMix (Funktionsnamen, XML, TCP-Protokoll, Ports): Bestehende Werkzeuge (Bitfocus Companion, Stream-Deck-Plugins, Tally-Apps) liefen ohne Anpassung. Rechtlich: Schnittstellen aus öffentlicher Doku, keine Kopie von Code | Ja, als abschaltbarer Kompatibilitätsmodus neben eigener API |
+| E.3 | Import von `.vmix`-Presets: Format undokumentiert, nur aus eigenen Testdateien ableitbar | Später (K), nur Inputs + Grundeinstellungen |
+| E.4 | Wo leben Show-Zustand, Aktionskatalog und APIs? Heute in `app-desktop` → stirbt mit der GUI (verletzt NFA.6). Optionen: (a) eigener Steuer-Dienst zwischen GUI und strom, (b) als strom-Erweiterung, (c) in der GUI | (a): `lmix-core` als eigener Prozess, GUI und APIs sind Clients |
+| E.5 | Titelformat: eigenes Szenenformat (JSON + eigener Renderer auf GPU) vs. HTML/CEF | Eigenes Format für Leistung und Animationen; HTML zusätzlich (GFX.10) |
+| E.6 | Skriptsprache (AUT.9): Lua, Rhai, JavaScript (QuickJS) | Rhai (Rust, MIT/Apache) oder Lua |
+| E.7 | Gäste (CAL): Signalisierung/TURN selbst betreiben, kein zentraler Dienst | Eigener Signalisierungsdienst im Programm, TURN optional |
+| E.8 | `ROADMAP.md` §4 schließt Scripting, VST3, Zoom, PowerPoint, Virtual Sets aus. Lastenheft: Scripting K, Plugins K (LV2/VST3-Linux/CLAP), Rest X | Übernehmen |
+
+---
+
+## 7. Mengengerüst (Referenz vMix 29, höchste Edition)
+
+| Größe | Wert |
+|---|---|
+| Overlay-Kanäle | 8 |
+| Ebenen je Input | 10 |
+| Übergangstasten / Stinger | 4 / 8 |
+| Mix-Inputs | 15 (+ Hauptmischer) |
+| Ausgänge / Vollbild | 4 / 2 |
+| Streamziele | 5 |
+| Recorder | 2 |
+| Audio-Busse | 8 (M, A–G) + Abhörweg |
+| Kanäle je Input | 16 (Matrix 16 × 16) |
+| Wiederholung | 8 Kameras, 20 Ereignislisten, 2 (4) Kanäle |
+| Gäste | 8 |
+| Multiviews | 2 (+ Wiederholungs-Multiview) |
+| Kategorien | 6 fest + 16 eigen |
+| Dynamische Inputs/Werte | je 4 |
+| Auslöser-Verzögerung | ≤ 30 s je Schritt |
+| Aktionen im Katalog | rund 800 (davon viele nummerierte Varianten) |
+| Inputs je Projekt | 1000 |
+| SRT-Ausgänge | 4 |
+
+vMix begrenzt vieles nach Edition (Basic HD bis Max); lmix kennt keine
+Editionen. Tabelle in `LASTENHEFT-QUELLEN.md`.
+
+---
+
+## 8. Quellen
+
+- vMix User Guide 23 und 29, `https://www.vmix.com/help23/`, `https://www.vmix.com/help29/`
+  (abgerufen 2026-10-08; lokal außerhalb des Repos)
+- Shortcut Function Reference, ebd.
+- `https://www.vmix.com/software/features.aspx`
+- Weitere Quellen je Abschnitt in `docs/LASTENHEFT-QUELLEN.md`

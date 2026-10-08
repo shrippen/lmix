@@ -4,6 +4,10 @@ Stand 2026-09-27. Grundlage: vMix 29 (Feb. 2026), strom `dev` (`bd86930`),
 app-desktop `23e0606`. Ergänzt die Meilensteine in `claude.md`, ersetzt sie
 nicht. Feststehende Entscheidungen und Ausschlüsse von dort gelten weiter.
 
+Ziel seit 2026-10-08: Clean-Room-Reimplementierung von vMix. Was lmix können
+muss, steht mit IDs in `LASTENHEFT.md`; diese Roadmap ordnet die IDs
+Meilensteinen zu (§3a).
+
 Legende Aufwandsort: **C** = nur app-desktop, **S** = strom-Patch
 (upstream-PR), **B** = neuer Block.
 
@@ -218,6 +222,7 @@ vMix-Grundprinzip: Inputs kommen und gehen, ohne dass Program stockt.
 | 2b.2 | Input-Leiste im vMix-Stil: Kacheln mit Typ, Label, Farbe, Audio, Klick = PVW, Doppelklick = Take | C |
 | 2b.3 | Quellentypen im Builder: NDI, SRT, OMT, WHIP, Bild, Farbe, Playlist (mit Transport: Play/Pause/Seek/Loop) | C |
 | 2b.4 | **Show-Datei** (`.lmix`, JSON): Inputs, Mixer-Konfig, Audio, Ausgänge, Hotkeys; Laden baut alle Flows | C |
+| 2b.6 | **Steuerkern** (`LASTENHEFT.md` E.4): Show-Zustand und Aktionskatalog (API.1) in eigenem Prozess `lmix-core`; GUI wird Client. Voraussetzung für NFA.6 und alle APIs | C (neues Crate) |
 | 2b.5 | Vorab messen: bleibt GPU-Speicher über `intersink`/`intersrc` erhalten (geteilter GL-/CUDA-Kontext) oder erzwingt die Kopplung Download/Upload? Falls Kopie: Kopplung ändern (geteilter Kontext, ein Flow mit dynamischen Pads), nicht Performance opfern. Ergebnis in `DECISIONS.md` | S? |
 
 **Abnahme**: Input während laufender Sendung hinzufügen/entfernen, PGM ohne
@@ -266,15 +271,65 @@ Aussetzer; Show speichern, Neustart, Show laden → identischer Zustand.
 - Scopes (Waveform, Vectorscope) auf PGM — **C**
 - PTZ über VISCA-IP — **C**, optional
 
+### M7 — Grafik & Daten
+
+Titelformat, Renderer, Editor, Vorlagen, Datenquellen. Ersetzt M4.4.
+IDs: GFX.1–11, DAT.1–5, SWI.7 (Titel als Stinger), OVL.7.
+
+**Abnahme**: Bauchbinde aus CSV-Zeile, Ein-/Ausblendanimation als Overlay,
+Countdown mit Auslöser bei 0.
+
+### M8 — Wiederholung
+
+Ringpuffer-Aufnahme, Ereignisse, Abspielkanäle, Export. Ersetzt M4.5.
+IDs: RPL.1–10, SRC.19 (Video-Verzögerung), OUT.3 (Wiederholungs-Multiview).
+
+**Abnahme**: 4 Kameras 1080p50 aufnehmen, "letzte 10 s" markieren, mit 50 %
+auf Program, automatisch zurück; Ereignis als MP4.
+
+### M9 — Gäste, Fernbedienung, API-Gleichstand
+
+IDs: CAL.1–6, WEB.1–5, TEL.1–3, API.2–8, STR.8.
+
+**Abnahme**: 2 Browser-Gäste mit Mix-Minus; Bitfocus Companion steuert lmix
+im Kompatibilitätsmodus (falls E.2 = ja); Tally auf dem Handy.
+
+### M10 — Gleichstand
+
+Restliche S-Anforderungen: SWI.6 (Verschmelzen), SWI.10 (Mix-Inputs),
+LAY.6 (Ebenen-Editor), PRC.9 (Effektkette), AUD.9/11 (Matrix, Plugins),
+OUT.4/5 (Karte, Key+Fill), PER.2–5 (PTZ, Uhren), UI.3–12, SHW.6–9.
+
+**Abnahme**: Abdeckungsmatrix (`LASTENHEFT.md`) ohne offene M/S.
+
+---
+
+## 3a. Lastenheft → Meilenstein
+
+| Bereich (`LASTENHEFT.md`) | Meilenstein |
+|---|---|
+| INP.1–3, INP.13, SRC.2–9, SHW.1–5, API.1, UI.1/2/5/8 | M2b |
+| SRC.10–12 (NDI, OMT, SRT ein) | M2 / M2b |
+| OUT.1–3, OUT.6–11, REC.1–6, MCR.1–3, STR.1–7 | M3 |
+| OVL.1–6, SWI.3–5, LAY.1–2, PRC.1–8, AUD.2–16 | M4 |
+| NFA.5–7, NFA.13 | M5 |
+| NFA.1–2 (AMD/Intel) | M5b |
+| AUT.1–11, PER.1, PER.6–7, OUT.12–13 | M6 |
+| GFX, DAT | M7 |
+| RPL, SRC.19 | M8 |
+| CAL, WEB, TEL, API.2–8 | M9 |
+| Rest S, dann K | M10 |
+
 ---
 
 ## 4. Bewusst nicht
 
-Aus `claude.md` ausgeschlossen, bleibt so: Windows/macOS, XAML-Titel
-(Ersatz: HTML), Control-Surfaces (MIDI/Stream Deck), 4K-Optimierung,
-Web-UI als Produkt. Zusätzlich nicht geplant: Zoom-, PowerPoint-, DVD-Input,
-Virtual Sets, Scripting-Sprache (REST/MCP genügt), VST3 (Windows-zentrisch;
-LV2 ggf. später).
+Maßgeblich ist `LASTENHEFT.md` §5. Änderungen gegenüber dem Stand
+2026-09-27, offen in `LASTENHEFT.md` E.1/E.8: Control-Surfaces, 4K und
+Web-Fernbedienung werden für den Gleichstand gebraucht; Scripting und
+Audio-Plugins (LV2, VST3 für Linux, CLAP) sind K statt ausgeschlossen.
+Weiter ausgeschlossen: Windows/macOS, XAML-Titel, Zoom-, DVD-, Flash-Input,
+Virtual Sets.
 
 ## 5. Offene Entscheidungen
 
@@ -285,6 +340,7 @@ LV2 ggf. später).
    Repos vereinbar mit Entscheidung 6? Vor M4 klären.
 4. ~~Testhardware AMD/Intel~~ — entschieden 2026-09-27: derzeit keine
    verfügbar; herstellerneutral bauen, Abnahme später (M5b).
+5. Clean-Room-Fragen E.1–E.8 in `LASTENHEFT.md` §6.
 
 Quellen: vMix-Features <https://www.vmix.com/software/features.aspx>,
 vMix 29 <https://blog.vmix.com/vmix-29-is-available-now/>, strom-Doku
