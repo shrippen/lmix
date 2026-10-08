@@ -117,6 +117,7 @@ async fn main() -> anyhow::Result<()> {
     };
 
     let service = Service::new(args.slots, engine.clone(), Some(args.autosave));
+    service.await_engine();
     let public_url = args
         .public_url
         .clone()

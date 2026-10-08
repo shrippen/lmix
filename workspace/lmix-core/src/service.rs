@@ -11,6 +11,7 @@
 
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -60,6 +61,9 @@ pub struct Service {
     failing_back: std::sync::Mutex<HashSet<FlowId>>,
     /// Latest link health of the running network outputs.
     output_stats: std::sync::Mutex<Vec<OutputStats>>,
+    /// False until the engine is up and fed the show: changes before that
+    /// only touch the show, and `restore` hands the engine all of them.
+    engine_ready: AtomicBool,
 }
 
 impl Service {
@@ -74,8 +78,16 @@ impl Service {
             touched: std::sync::Mutex::new(HashMap::new()),
             failing_back: std::sync::Mutex::new(HashSet::new()),
             output_stats: std::sync::Mutex::new(Vec::new()),
+            engine_ready: AtomicBool::new(true),
             autosave,
         })
+    }
+
+    /// The engine is not there yet: keep changes in the show until
+    /// `restore` runs (start-up, where clients may act before the engine
+    /// answers).
+    pub fn await_engine(&self) {
+        self.engine_ready.store(false, Ordering::SeqCst);
     }
 
     /// Reopen the autosave of the last run, if any. The show keeps no file
@@ -456,6 +468,7 @@ impl Service {
     /// Feed the engine the whole show (start-up, engine restart).
     pub async fn restore(&self) -> Result<(), ActionError> {
         let mut sw = self.switcher.lock().await;
+        self.engine_ready.store(true, Ordering::SeqCst);
         let commands = sw.restore_commands();
         let result = self.execute(&mut sw, &commands).await;
         self.publish(&sw);
@@ -465,6 +478,9 @@ impl Service {
     /// Run commands in order. A failing slot marks its input offline and
     /// the rest still run; the first error is returned.
     async fn execute(&self, sw: &mut Switcher, commands: &[Command]) -> Result<(), ActionError> {
+        if !self.engine_ready.load(Ordering::SeqCst) {
+            return Ok(());
+        }
         let mut first_error = None;
 
         for command in commands {
@@ -719,6 +735,22 @@ mod tests {
 
         assert_eq!(service.state().await.inputs[0].status, InputStatus::Online);
         assert_eq!(slot_commands(&engine), 1, "no failback rebuild");
+    }
+
+    #[tokio::test]
+    async fn actions_before_the_engine_wait_for_restore() {
+        let engine = Arc::new(NullEngine::default());
+        let service = Service::new(4, engine.clone(), None);
+        service.await_engine();
+
+        service.handle(bars()).await.unwrap();
+        assert_eq!(service.state().await.inputs.len(), 1, "in the show");
+        assert!(engine.log().is_empty(), "nothing sent before the engine");
+
+        service.restore().await.unwrap();
+        assert_eq!(slot_commands(&engine), 1, "restore hands it over");
+        service.handle(bars()).await.unwrap();
+        assert_eq!(slot_commands(&engine), 2, "later actions run directly");
     }
 
     #[tokio::test]
