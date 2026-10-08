@@ -47,9 +47,9 @@ wait_up() {
 }
 
 # --- build ---
-(cd "$ROOT/workspace/strom" && env -u CARGO_TARGET_DIR cargo build --release --features no-gui --bin strom)
+# Prebuilt strom from CI when available (scripts/fetch-strom.sh).
+STROM_BIN="$("$ROOT/scripts/fetch-strom.sh")"
 (cd "$ROOT/workspace/lmix-core" && cargo build)
-STROM_BIN="$ROOT/workspace/strom/target/release/strom"
 CORE_BIN="${CARGO_TARGET_DIR:-$ROOT/workspace/lmix-core/target}/debug/lmix-core"
 
 # --- start ---

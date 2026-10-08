@@ -175,6 +175,23 @@ API auf `127.0.0.1:8200`: `GET /api/state`, `POST /api/actions`,
 `GET /api/actions` (Katalog als JSON-Schema), `GET /api/tally`,
 WebSocket `GET /api/events`.
 
+### strom fertig gebaut (CI)
+
+Ein kalter Release-Build von strom dauert 20–25 min. Die CI
+(`.gitea/workflows/strom.yml`) baut ihn einmal je Submodul-Commit in
+`ubuntu:24.04` und legt ihn als Generic-Paket `strom/<sha>` ab.
+`scripts/fetch-strom.sh` holt ihn (Sekunden) und baut nur lokal, wenn es
+kein Paket gibt oder `GITEA_TOKEN` fehlt.
+
+| Wo | Was | Rechte |
+|---|---|---|
+| Repo-Secret `REGISTRY_TOKEN` (lmix) | CI: privates Submodul lesen, Paket schreiben | `read:repository`, `write:package` |
+| Umgebungsvariable `GITEA_TOKEN` (Cloud-Umgebung) | Klonen, Paket laden | `read:repository`, `read:package` |
+
+Cloud-Umgebung: Inhalt von `scripts/cloud-setup.sh` als Setup-Skript
+eintragen. Es installiert GStreamer und Werkzeuge, klont lmix nach
+`/root/work/lmix` und lädt strom.
+
 ### Hinweis: Swagger UI ohne GitHub
 
 strom lädt beim Bauen `swagger-ui` von GitHub. Ist GitHub gesperrt, das
