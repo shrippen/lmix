@@ -29,10 +29,9 @@ pub enum Command {
     },
     /// Show `slot` in preview.
     Preview { slot: usize },
-    /// Bring `to` on program, from `from`; `Effect::Cut` for a hard cut.
-    Take {
-        from: usize,
-        to: usize,
+    /// Bring `slot` on program; `None` is black. `Effect::Cut` for a hard cut.
+    Program {
+        slot: Option<usize>,
         effect: Effect,
         duration_ms: u32,
     },
@@ -132,14 +131,11 @@ impl Switcher {
             })
             .collect();
 
-        if let Some(slot) = self.slot_of(self.show.program) {
-            commands.push(Command::Take {
-                from: slot,
-                to: slot,
-                effect: Effect::Cut,
-                duration_ms: 0,
-            });
-        }
+        commands.push(Command::Program {
+            slot: self.slot_of(self.show.program),
+            effect: Effect::Cut,
+            duration_ms: 0,
+        });
         if let Some(slot) = self.slot_of(self.show.preview) {
             commands.push(Command::Preview { slot });
         }
@@ -211,20 +207,27 @@ impl Switcher {
     fn remove(&mut self, input: &InputRef) -> Result<Vec<Command>, ActionError> {
         let index = self.find(input)?;
         let removed = self.show.inputs.remove(index);
+        let mut commands = Vec::new();
 
-        // A removed input leaves preview/program empty, never pointing nowhere.
+        // A removed input leaves preview empty and program black.
         if self.show.preview == Some(removed.id) {
             self.show.preview = None;
         }
         if self.show.program == Some(removed.id) {
             self.show.program = None;
+            commands.push(Command::Program {
+                slot: None,
+                effect: Effect::Cut,
+                duration_ms: 0,
+            });
         }
         self.status.remove(&removed.id);
 
-        Ok(vec![Command::SetSlot {
+        commands.push(Command::SetSlot {
             slot: removed.slot,
             source: None,
-        }])
+        });
+        Ok(commands)
     }
 
     fn replace_source(
@@ -266,6 +269,12 @@ impl Switcher {
     fn preview(&mut self, input: &InputRef) -> Result<Vec<Command>, ActionError> {
         let index = self.find(input)?;
         let entry = &self.show.inputs[index];
+        if self.show.program == Some(entry.id) {
+            return Err(ActionError::OnProgram {
+                reference: entry.name.clone(),
+            });
+        }
+
         self.show.preview = Some(entry.id);
         Ok(vec![Command::Preview { slot: entry.slot }])
     }
@@ -273,31 +282,28 @@ impl Switcher {
     /// Preview to program; the old program goes to preview (classic swap).
     fn take(&mut self, effect: Effect, duration_ms: u32) -> Result<Vec<Command>, ActionError> {
         let to = self.slot_of(self.show.preview).ok_or(ActionError::NoPreview)?;
-        let from = self.slot_of(self.show.program).unwrap_or(to);
+        let old_program = self.slot_of(self.show.program);
 
         std::mem::swap(&mut self.show.preview, &mut self.show.program);
-
-        Ok(vec![Command::Take {
-            from,
-            to,
-            effect,
-            duration_ms,
-        }])
+        Ok(program_then_preview(Some(to), old_program, effect, duration_ms))
     }
 
+    /// Input straight to program. If it was in preview, the old program
+    /// takes its place there.
     fn cut_direct(&mut self, input: &InputRef) -> Result<Vec<Command>, ActionError> {
         let index = self.find(input)?;
         let entry = &self.show.inputs[index];
-        let to = entry.slot;
-        let from = self.slot_of(self.show.program).unwrap_or(to);
-        self.show.program = Some(entry.id);
+        let (id, to) = (entry.id, entry.slot);
 
-        Ok(vec![Command::Take {
-            from,
-            to,
-            effect: Effect::Cut,
-            duration_ms: 0,
-        }])
+        if self.show.preview != Some(id) {
+            self.show.program = Some(id);
+            return Ok(program_then_preview(Some(to), None, Effect::Cut, 0));
+        }
+
+        let old_program = self.slot_of(self.show.program);
+        self.show.preview = self.show.program;
+        self.show.program = Some(id);
+        Ok(program_then_preview(Some(to), old_program, Effect::Cut, 0))
     }
 
     fn transition(&mut self, slot: TransitionSlot) -> Result<Vec<Command>, ActionError> {
@@ -375,6 +381,25 @@ impl Switcher {
         }
         self.show.inputs.iter().position(|i| i.name == text)
     }
+}
+
+/// Program change, then the new preview (if any). Preview comes second:
+/// the engine refuses a preview that is still on program.
+fn program_then_preview(
+    program: Option<usize>,
+    preview: Option<usize>,
+    effect: Effect,
+    duration_ms: u32,
+) -> Vec<Command> {
+    let mut commands = vec![Command::Program {
+        slot: program,
+        effect,
+        duration_ms,
+    }];
+    if let Some(slot) = preview {
+        commands.push(Command::Preview { slot });
+    }
+    commands
 }
 
 #[cfg(test)]
@@ -469,12 +494,14 @@ mod tests {
 
         assert_eq!(
             cmds,
-            vec![Command::Take {
-                from: 0,
-                to: 1,
-                effect: Effect::Cut,
-                duration_ms: 0
-            }]
+            vec![
+                Command::Program {
+                    slot: Some(1),
+                    effect: Effect::Cut,
+                    duration_ms: 0
+                },
+                Command::Preview { slot: 0 },
+            ]
         );
         assert_eq!(sw.state().program, Some(b));
         assert_eq!(sw.state().preview, Some(a));
@@ -496,9 +523,8 @@ mod tests {
 
         assert_eq!(
             cmds,
-            vec![Command::Take {
-                from: 1,
-                to: 1,
+            vec![Command::Program {
+                slot: Some(1),
                 effect: Effect::SlideLeft,
                 duration_ms: 750
             }]
@@ -525,9 +551,10 @@ mod tests {
         let mut sw = two_inputs();
         sw.apply(Action::CutDirect { input: named("A") }).unwrap();
 
-        sw.apply(Action::RemoveInput { input: named("A") }).unwrap();
+        let cmds = sw.apply(Action::RemoveInput { input: named("A") }).unwrap();
 
         assert_eq!(sw.state().program, None);
+        assert!(matches!(cmds[0], Command::Program { slot: None, .. }));
         assert_eq!(sw.state().inputs[0].number, 1);
     }
 
@@ -555,9 +582,33 @@ mod tests {
 
         let cmds = fresh.replace(show, Some("x.lmix".into()));
 
-        assert_eq!(cmds.len(), 3, "{cmds:?}");
-        assert_eq!(cmds[2], Command::Preview { slot: 1 });
+        assert_eq!(cmds.len(), 4, "{cmds:?}");
+        assert!(matches!(cmds[2], Command::Program { slot: None, .. }));
+        assert_eq!(cmds[3], Command::Preview { slot: 1 });
         assert_eq!(fresh.state().path.as_deref(), Some("x.lmix"));
+    }
+
+    #[test]
+    fn program_input_cannot_be_previewed() {
+        let mut sw = two_inputs();
+        sw.apply(Action::CutDirect { input: named("A") }).unwrap();
+
+        let err = sw.apply(Action::PreviewInput { input: named("A") }).unwrap_err();
+
+        assert!(matches!(err, ActionError::OnProgram { .. }));
+    }
+
+    #[test]
+    fn cut_direct_of_preview_swaps() {
+        let mut sw = two_inputs();
+        let (a, b) = (sw.state().inputs[0].id, sw.state().inputs[1].id);
+        sw.apply(Action::CutDirect { input: named("A") }).unwrap();
+        sw.apply(Action::PreviewInput { input: named("B") }).unwrap();
+
+        let cmds = sw.apply(Action::CutDirect { input: named("B") }).unwrap();
+
+        assert_eq!((sw.state().program, sw.state().preview), (Some(b), Some(a)));
+        assert_eq!(cmds[1], Command::Preview { slot: 0 });
     }
 
     #[test]

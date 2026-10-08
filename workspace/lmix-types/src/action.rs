@@ -111,6 +111,8 @@ pub enum ActionError {
     BadTransitionSlot { slot: u8, max: u8 },
     #[error("nothing in preview")]
     NoPreview,
+    #[error("{reference} is on program; it cannot be in preview at the same time")]
+    OnProgram { reference: String },
     #[error("position {number} is outside 1–{max}")]
     BadPosition { number: u32, max: u32 },
     #[error("show has no file yet; give a path")]

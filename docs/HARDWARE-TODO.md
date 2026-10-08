@@ -17,3 +17,5 @@ Hardware: **NV** = NVIDIA-Host (RTX 3090), **AMD**, **INTEL**,
 | H.5 | Benchmark WPE gegen CEF (`BENCH-HTML.md`), inkl. H.264/AAC über NVDEC | NV | M7.0, E.9 | offen |
 | H.6 | M1b-Abnahme auf AMD und Intel | AMD, INTEL | M5b | offen |
 | H.7 | Echte Quellen: V4L2-Kamera, DeckLink SDI ein/aus | CAP | SRC.1, OUT.4 | offen |
+| H.8 | Ton über die Slot-Kopplung (sobald gebaut, B23): Lippensynchronität PGM, Drift über 1 h | NV | M2b | offen |
+| H.9 | Warmlauf des Mischers: Zeit vom Start bis zum ersten möglichen Übergang (VM: wenige Sekunden, CPU) | NV | M2b Schritt 2 | offen |

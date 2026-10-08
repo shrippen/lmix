@@ -56,7 +56,9 @@ fn error_response(error: ActionError) -> Response {
     let status = match error {
         ActionError::UnknownInput { .. } => StatusCode::NOT_FOUND,
         ActionError::Engine { .. } => StatusCode::BAD_GATEWAY,
-        ActionError::SlotsFull { .. } | ActionError::NoPreview => StatusCode::CONFLICT,
+        ActionError::SlotsFull { .. } | ActionError::NoPreview | ActionError::OnProgram { .. } => {
+            StatusCode::CONFLICT
+        }
         _ => StatusCode::UNPROCESSABLE_ENTITY,
     };
     let body = serde_json::json!({ "error": error, "message": error.to_string() });
@@ -107,7 +109,7 @@ mod tests {
     use tower::ServiceExt;
 
     fn app() -> Router {
-        router(Service::new(2, Arc::new(NullEngine::default())))
+        router(Service::new(2, Arc::new(NullEngine::default()), None))
     }
 
     async fn post(app: &Router, body: &str) -> (StatusCode, serde_json::Value) {

@@ -206,3 +206,24 @@ B18 OSC.
 | B19 | Zeitplan | P6 | neu OPS.4 |
 | B20 | Cue-Liste mit Aktionen je Zeile | P7 | neu AUT.14 |
 | B21 | Ausgangs-Warping, Kantenblende | P7 | neu OUT.18 (K) |
+
+---
+
+## Durchlauf 2: M2b Schritte 1–3 (2026-10-08, VM-Test + Schreibtisch)
+
+Neu: `lmix-core` (headless Steuerprozess, API, Slot-Mischer über strom,
+Show-Datei, Autosave). Geprüft mit `scripts/test-m2b-vm.sh` (CPU-Mischer,
+Testbilder) und gegen die Szenarien.
+
+| Persona | Schritt | Ergebnis |
+|---|---|---|
+| P1 Ehrenamt | Absturz während des Gottesdienstes, Neustart | ✅ letzte Show kommt aus der Autosave zurück, Mischer lief weiter (SHW.5, NFA.6) |
+| P1 Ehrenamt | Show "Gottesdienst" öffnen | ✅ Show-Datei; ⚠ noch keine GUI dafür (Console spricht strom direkt) |
+| P2 Konferenz | Zweiter Bedienplatz | ✅ Grundlage: API und WebSocket für beliebig viele Clients; ⚠ Rechte je Platz fehlen (OPS.2) |
+| P3 Sport | Spielstand per Stream Deck | ⚠ Aktionen über API da; Titel fehlen (M7) |
+| P5 Broadcast | Headless-Betrieb | ✅ `lmix-core` ohne GUI; ⚠ kein systemd-Dienst, keine Metriken (OPS.1, OPS.3) |
+| P5 Broadcast | Steuerung durch Automation | ✅ Aktionen per HTTP, Katalog als JSON-Schema; ⚠ kein schlanker TCP-Ereigniskanal (API.5) |
+| P7 Theater | Quelle tauschen während Vorstellung | ✅ Slot-Flow wird ersetzt, Mischer läuft weiter; ⚠ Bild ohne Aussetzer nur auf GPU prüfbar (H.3) |
+
+**Befunde**: B22 Console muss Client von `lmix-core` werden (2b.2), bevor
+Bediener davon etwas haben; B23 Ton fehlt in den Slots (nur Video gekoppelt).

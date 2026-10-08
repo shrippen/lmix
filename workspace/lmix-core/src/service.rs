@@ -26,16 +26,39 @@ pub struct Service {
     switcher: Mutex<Switcher>,
     engine: Arc<dyn Engine>,
     events: broadcast::Sender<Event>,
+    /// Written after every change, read back after a crash (SHW.5).
+    autosave: Option<PathBuf>,
 }
 
 impl Service {
-    pub fn new(slots: usize, engine: Arc<dyn Engine>) -> Arc<Self> {
+    pub fn new(slots: usize, engine: Arc<dyn Engine>, autosave: Option<PathBuf>) -> Arc<Self> {
         let (events, _) = broadcast::channel(EVENT_BUFFER);
         Arc::new(Self {
             switcher: Mutex::new(Switcher::new(slots)),
             engine,
             events,
+            autosave,
         })
+    }
+
+    /// Reopen the autosave of the last run, if any. The show keeps no file
+    /// path, so a later save asks for one.
+    pub async fn resume(&self) -> Result<bool, ActionError> {
+        let Some(path) = &self.autosave else {
+            return Ok(false);
+        };
+        if !path.exists() {
+            return Ok(false);
+        }
+
+        let show = show::load(path)
+            .await
+            .map_err(|e| ActionError::ShowFile { message: e.to_string() })?;
+        let mut sw = self.switcher.lock().await;
+        let commands = sw.replace(show, None);
+        let result = self.execute(&mut sw, &commands).await;
+        self.publish(&sw);
+        result.map(|()| true)
     }
 
     pub fn subscribe(&self) -> broadcast::Receiver<Event> {
@@ -66,7 +89,21 @@ impl Service {
 
         let result = self.execute(&mut sw, &commands).await;
         self.publish(&sw);
+        self.write_autosave(&sw).await;
         result.map(|()| sw.state())
+    }
+
+    /// Best effort: a failed autosave must not fail the action.
+    async fn write_autosave(&self, sw: &Switcher) {
+        let Some(path) = &self.autosave else {
+            return;
+        };
+        if let Some(dir) = path.parent() {
+            let _ = tokio::fs::create_dir_all(dir).await;
+        }
+        if let Err(e) = show::save(sw.show(), path).await {
+            tracing::warn!(error = %e, "autosave failed");
+        }
     }
 
     /// Feed the engine the whole show (start-up, engine restart).
@@ -156,7 +193,7 @@ mod tests {
     #[tokio::test]
     async fn add_marks_input_online_and_publishes() {
         let engine = Arc::new(NullEngine::default());
-        let service = Service::new(4, engine.clone());
+        let service = Service::new(4, engine.clone(), None);
         let mut events = service.subscribe();
 
         let state = service.handle(bars()).await.unwrap();
@@ -171,7 +208,7 @@ mod tests {
     async fn save_open_restores_identical_show() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("s.lmix").display().to_string();
-        let service = Service::new(4, Arc::new(NullEngine::default()));
+        let service = Service::new(4, Arc::new(NullEngine::default()), None);
         service.handle(bars()).await.unwrap();
         service
             .handle(Action::PreviewInput { input: InputRef::Number(1) })
@@ -181,17 +218,42 @@ mod tests {
         let saved = service.state().await;
 
         let engine = Arc::new(NullEngine::default());
-        let fresh = Service::new(4, engine.clone());
+        let fresh = Service::new(4, engine.clone(), None);
         let opened = fresh.handle(Action::OpenShow { path }).await.unwrap();
 
         assert_eq!(opened.inputs, saved.inputs);
         assert_eq!(opened.preview, saved.preview);
-        assert_eq!(engine.log().len(), 2, "slot + preview: {:?}", engine.log());
+        assert_eq!(engine.log().len(), 3, "slot, program, preview: {:?}", engine.log());
+    }
+
+    #[tokio::test]
+    async fn crash_recovery_resumes_autosave() {
+        let dir = tempfile::tempdir().unwrap();
+        let autosave = dir.path().join("auto").join("autosave.lmix");
+        let first = Service::new(4, Arc::new(NullEngine::default()), Some(autosave.clone()));
+        first.handle(bars()).await.unwrap();
+
+        // "Crash": a new service over the same autosave file.
+        let engine = Arc::new(NullEngine::default());
+        let second = Service::new(4, engine.clone(), Some(autosave));
+        let resumed = second.resume().await.unwrap();
+
+        assert!(resumed);
+        assert_eq!(second.state().await.inputs.len(), 1);
+        assert_eq!(second.state().await.path, None);
+        assert_eq!(engine.log().len(), 2, "slot, program: {:?}", engine.log());
+    }
+
+    #[tokio::test]
+    async fn resume_without_autosave_is_noop() {
+        let dir = tempfile::tempdir().unwrap();
+        let service = Service::new(4, Arc::new(NullEngine::default()), Some(dir.path().join("none.lmix")));
+        assert!(!service.resume().await.unwrap());
     }
 
     #[tokio::test]
     async fn save_without_path_fails() {
-        let service = Service::new(4, Arc::new(NullEngine::default()));
+        let service = Service::new(4, Arc::new(NullEngine::default()), None);
         let err = service.handle(Action::SaveShow { path: None }).await.unwrap_err();
         assert_eq!(err, ActionError::NoShowPath);
     }

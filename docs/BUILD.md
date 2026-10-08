@@ -174,3 +174,21 @@ cargo run -- --strom http://127.0.0.1:8099   # gegen laufendes strom
 API auf `127.0.0.1:8200`: `GET /api/state`, `POST /api/actions`,
 `GET /api/actions` (Katalog als JSON-Schema), `GET /api/tally`,
 WebSocket `GET /api/events`.
+
+### Hinweis: Swagger UI ohne GitHub
+
+strom lädt beim Bauen `swagger-ui` von GitHub. Ist GitHub gesperrt, das
+gleiche Paket von npm holen und als Zip anbieten:
+
+```bash
+curl -sSL -o sud.tgz https://registry.npmjs.org/swagger-ui-dist/-/swagger-ui-dist-5.17.14.tgz
+mkdir -p z/swagger-ui-5.17.14/dist && tar xzf sud.tgz -C z && cp -r z/package/* z/swagger-ui-5.17.14/dist/
+(cd z && zip -qr ../swagger-ui-5.17.14.zip swagger-ui-5.17.14)
+export SWAGGER_UI_DOWNLOAD_URL=file://$PWD/swagger-ui-5.17.14.zip
+```
+
+### M2b-Test ohne GPU
+
+```bash
+scripts/test-m2b-vm.sh   # strom (CPU-Mischer) + lmix-core, Testbilder
+```

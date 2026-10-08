@@ -7,6 +7,7 @@ use async_trait::async_trait;
 
 use crate::switcher::Command;
 
+pub mod flows;
 pub mod null;
 pub mod strom;
 

@@ -9,6 +9,7 @@
 //! Runs without any GUI (OPS.1); a GUI crash never touches it (NFA.6).
 
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -22,6 +23,7 @@ mod service;
 mod show;
 mod switcher;
 
+use engine::flows::MixerBackend;
 use engine::null::NullEngine;
 use engine::strom::StromEngine;
 use engine::Engine;
@@ -52,13 +54,30 @@ struct Args {
     #[arg(long, value_enum, default_value_t = EngineKind::Strom)]
     engine: EngineKind,
 
+    /// Vision mixer compositor; `cpu` only for tests without GPU.
+    #[arg(long, value_enum, default_value_t = MixerBackend::Cuda)]
+    mixer: MixerBackend,
+
     /// Mixer slots (inputs fed at the same time).
     #[arg(long, default_value_t = DEFAULT_SLOTS)]
     slots: usize,
 
-    /// Show file to open at start.
+    /// Show file to open at start; without it the last autosave is resumed.
     #[arg(long)]
     show: Option<String>,
+
+    /// Autosave file, written after every change.
+    #[arg(long, env = "LMIX_AUTOSAVE", default_value_os_t = default_autosave())]
+    autosave: PathBuf,
+}
+
+/// `$XDG_DATA_HOME/lmix/autosave.lmix`, else `~/.local/share/…`.
+fn default_autosave() -> PathBuf {
+    let base = std::env::var_os("XDG_DATA_HOME")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/share")))
+        .unwrap_or_else(|| PathBuf::from("."));
+    base.join("lmix").join("autosave.lmix")
 }
 
 #[tokio::main]
@@ -71,15 +90,19 @@ async fn main() -> anyhow::Result<()> {
 
     let args = Args::parse();
     let engine: Arc<dyn Engine> = match args.engine {
-        EngineKind::Strom => Arc::new(StromEngine::new(args.strom.clone())),
+        EngineKind::Strom => Arc::new(StromEngine::new(args.strom.clone(), args.mixer)),
         EngineKind::None => Arc::new(NullEngine::default()),
     };
 
-    let service = Service::new(args.slots, engine.clone());
-    if let Some(path) = args.show {
-        if let Err(e) = service.handle(Action::OpenShow { path }).await {
-            tracing::error!(error = %e, "opening show failed");
-        }
+    let service = Service::new(args.slots, engine.clone(), Some(args.autosave));
+    let opened = match args.show {
+        Some(path) => service.handle(Action::OpenShow { path }).await.map(|_| true),
+        None => service.resume().await,
+    };
+    match opened {
+        Ok(true) => tracing::info!("show loaded"),
+        Ok(false) => tracing::info!("starting with an empty show"),
+        Err(e) => tracing::error!(error = %e, "loading show failed"),
     }
 
     // The engine may come up after us: keep trying, then feed it the show.
