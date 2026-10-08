@@ -271,19 +271,19 @@ Aussetzer; Show speichern, Neustart, Show laden → identischer Zustand.
 - Scopes (Waveform, Vectorscope) auf PGM — **C**
 - PTZ über VISCA-IP — **C**, optional
 
-### M7 — CasparCG, Titel & Daten, direkt nach M4
+### M7 — Titel & Daten (HTML), direkt nach M4
 
-**M7.0 Benchmark**: CasparCG mit 8 animierten HTML-Titeln 1080p60 (CSS,
-Canvas, lottie-web) per NDI in lmix; messen: Latenz, CPU/GPU auf beiden
-Seiten, Drops, Speicher. Ergebnis entscheidet, wann CCG.9 (Shared-Memory-
-Consumer) nötig wird.
+**M7.0 Benchmark** vor der Engine-Wahl (E.9): `cefsrc` (vorhanden) gegen
+WPE WebKit (`wpesrc`) mit 8 animierten Titeln 1080p60 (CSS, Canvas,
+lottie-web), Alpha; messen: GPU/CPU je Titel, Drops, Latenz, Speicher,
+Kopien bis in den Mischer.
 
-CasparCG-Integration (`LASTENHEFT.md` §3.11a): Prozess verwalten, Kanäle als
-Inputs, AMCP-Aktionen, OSC-Zustand. IDs: CCG.1–11.
+Titel-Fähigkeiten nach dem Vorbild CasparCG (`LASTENHEFT.md` §3.11):
+Vorlagen-Konvention, Lebenszyklus, Titel-Ebenen, Datensätze.
 
 Titel sind Muss (`LASTENHEFT.md` §3.11): HTML-Vorlagen mit Feld-API,
 Animationen per CSS/JS und Lottie, Vorlagen-SDK, Datenquellen. Ersetzt M4.4.
-IDs: GFX.1–15, DAT.1–5, SWI.7, OVL.7. Entscheidungen E.9 (Engine), E.10 (Lottie).
+IDs: GFX.1–19, DAT.1–5, SWI.7, OVL.7. Entscheidungen E.9 (Engine), E.10 (Lottie).
 
 **Abnahme**: Bauchbinde aus CSV-Zeile, Ein-/Ausblendanimation als Overlay,
 Lottie-Bauchbinde mit Textfeld, Countdown mit Auslöser bei 0, 8 animierte
@@ -322,7 +322,7 @@ Ersetzt M4.5 und den Gäste-Punkt in M6.
 | API für Fremdprogramme | Eigene versionierte API, Aktionen parametrisiert, eigenes Companion-Modul; Prüfstein: was das Companion-vMix-Modul kann | M8 |
 | Controller | MIDI, HID, Gamepad, Stream Deck direkt; Rückmeldungen aus Zustandsereignissen | M6 |
 | GUI-Shell | Entscheidung nach Prototyp (32 flüssige Kacheln, zweiter Monitor); Vollbild-Ausgänge nie in der GUI | M3 |
-| Titel | CasparCG als verwalteter Prozess, Steuerung AMCP, Zustand OSC, Bild per NDI, später Shared Memory (T.1, E.12; GPL erlaubt) | M7 |
+| Titel | HTML in strom (`cefsrc`), Konvention und Fähigkeiten nach CasparCG, kein CasparCG-Server (T.2) | M7 |
 
 ---
 
@@ -337,7 +337,7 @@ Ersetzt M4.5 und den Gäste-Punkt in M6.
 | NFA.5–7, NFA.13 | M5 |
 | NFA.1–2 (AMD/Intel) | M5b |
 | AUT.1–11, PER.1, PER.6–7, OUT.12–13 | M6 |
-| CCG, GFX, DAT | M7 (nach M4) |
+| GFX, DAT | M7 (nach M4) |
 | WEB, TEL, API.2–11 | M8 |
 | Rest S, dann K | M9 |
 | RPL, CAL | Später |
@@ -358,8 +358,8 @@ Virtual Sets.
 1. Live-Monitore: WHEP vs. Thumbnail-Intervall-PR (M1-Rest).
 2. M2b als eigener Meilenstein vor M3 (Empfehlung) — ändert die Reihenfolge
    in `claude.md`.
-3. ~~Lizenz CEF-Pfad~~ — erledigt 2026-10-08: GPL-3.0 ist erlaubt (`LASTENHEFT.md`
-   E.12); Titel und HTML rendert CasparCG.
+3. Lizenz CEF-Pfad: `gstcefsrc`-Lizenz prüfen (vermutlich LGPL) — als Laufzeit-Plugin außerhalb des
+   Repos vereinbar mit Entscheidung 6? Vor M7 klären (Titel hängen daran).
 4. ~~Testhardware AMD/Intel~~ — entschieden 2026-09-27: derzeit keine
    verfügbar; herstellerneutral bauen, Abnahme später (M5b).
 5. Clean-Room-Fragen E.1–E.8 in `LASTENHEFT.md` §6.

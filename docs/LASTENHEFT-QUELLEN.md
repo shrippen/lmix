@@ -38,11 +38,14 @@ mindestens leisten muss. Nur als Anforderungsreferenz gelesen, kein Code
 | Tally-Software, z. B. Tally Arbiter <https://github.com/josephdadams/TallyArbiter> | Tally-Abo, Inputnummer/-name | Schlanker Ereigniskanal, auch für Mikrocontroller |
 | Skript-Bibliotheken, z. B. vmix-js-utils <https://github.com/jensstigaard/vmix-js-utils> | Zustand lesen, Aktionen senden | Dokumentiertes, versioniertes Schema (API.10) |
 
-## 3. CasparCG (T.1)
+## 3. CasparCG (Vorbild für Titel, §3.11)
+
+Nur Funktionsreferenz; kein Code übernommen.
 
 | Quelle | Inhalt |
 |---|---|
-| <https://github.com/CasparCG/server> | GPL-3.0; Windows und Linux (Ubuntu 24.04 empfohlen) |
+| <https://github.com/CasparCG/help/wiki/AMCP-Protocol> | CG-Befehle (ADD, PLAY, STOP, NEXT, UPDATE, INVOKE, REMOVE, INFO), MIXER-Befehle mit Tween, Datenspeicher, TLS/CLS |
+| <https://github.com/CasparCG/server> | GPL-3.0, daher kein Code in lmix |
 | <https://casparcg.com/docs/wiki/server/consumers/ndi-consumer> | NDI-Consumer seit 2.3 |
 | <https://casparcg.com/docs/wiki/server/producers/> | Producer, u. a. HTML (CEF) |
 | <https://github.com/CasparCG/server/releases> | 2.4.0 stabil; 2.5 in Arbeit |

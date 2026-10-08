@@ -408,3 +408,14 @@ Control-Surfaces/4K aufgehoben; Skripte in JavaScript; Submixe wie vMix.
 GPL-3.0-or-later-verträgliche Abhängigkeiten erlaubt; lmix wird
 GPL-3.0-or-later, sobald GPL-Code ins Repo kommt; NDI nur zur Laufzeit
 laden. CasparCG bleibt eigener Prozess (Crash-Isolation, NFA.6).
+
+## 2026-10-08 — Korrektur: kein CasparCG, MIT bleibt
+
+**Kontext**: Analyse der CasparCG-Integration (Entscheidungsseite T.2):
+zweite vollständige Engine neben strom, zweiter Bildtakt, Bild nur per NDI
+(Kodierung, CPU-Kopien, 1–2 Frames), Nutzen liegt fast ganz in den
+HTML-Vorlagen; strom rendert HTML bereits (`cefsrc`).
+**Entscheidung** (User): CasparCG gestrichen, lmix bleibt MIT
+(`claude.md` Entscheidung 6 wieder wie vorher). Titel-Fähigkeiten
+orientieren sich an CasparCG (Vorlagen-Konvention, Ebenen, Datensätze),
+Rendering in strom.

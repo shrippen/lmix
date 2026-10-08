@@ -337,58 +337,34 @@ Zurückgestellt (User 2026-10-08). Anforderungen bleiben als Ziel erhalten.
 ### 3.11 Titel und Grafik (GFX)
 
 Entscheidung 2026-10-08 (User): Titel sind Muss, auf HTML-Basis, nicht
-kompatibel zu vMix-Titeln. Damit lassen sich beliebige HTML-Quellen einbinden;
-Animationen per CSS/JavaScript und Lottie. Titel laufen über die
-CasparCG-Integration (T.1, §3.11a): CasparCG rendert die HTML-Vorlagen, lmix
-steuert und bindet die Kanäle als Inputs ein.
+kompatibel zu vMix-Titeln; Animationen per CSS/JavaScript und Lottie. Kein
+CasparCG-Server (T.2), aber die Titel-Fähigkeiten orientieren sich an
+CasparCG: dessen offene Vorlagen-Konvention, Ebenen-Modell und Steuerbefehle
+dienen als Vorbild. strom rendert die Vorlagen selbst (Chromium über
+`cefsrc`), also ein Takt und ein GPU-Pfad. CasparCG dient nur als
+Funktionsreferenz, kein Code (MIT, `claude.md` Entscheidung 6).
 
 | ID | Anforderung | Prio | Stand |
 |---|---|---|---|
-| GFX.1 | Titel = CasparCG-HTML-Vorlage (offene Konvention: `update(data)`, `play()`, `next()`, `stop()`), ergänzt um ein lmix-Manifest; Paket aus HTML, CSS, JS, Assets und Manifest (Name, Größe, Felder mit Typ Text/Bild/Farbe/Zahl/Schalter, Abläufe, Dauer der Animationen) (lmix) | M | – |
-| GFX.2 | Rendering durch CasparCG (HTML-Producer) mit Alpha in Ausgabeauflösung und -bildrate, ohne Neustart der lmix-Pipeline; Rendern pausieren/fortsetzen (CCG) | M | ◐ (CEF E) |
-| GFX.3 | Feld-API: Felder per Aktion setzen und lesen; Vorlage erhält Änderungen ohne Neuladen als Ereignis; Sichtbarkeit je Feld | M | – |
-| GFX.4 | Animations-Lebenszyklus: Einblenden, Ausblenden, nächste/vorige Seite, Datenwechsel, frei benannte Abläufe; Vorlage meldet Ende; Overlay-Kanal wartet auf Ende der Ausblendung | M | – |
-| GFX.5 | Lottie: Lottie-Animationen (JSON, .lottie) in Vorlagen und als eigener Input; Textebenen als Felder; Marker als Abläufe (Ein/Aus/Schleife) (E.10) | S | – |
-| GFX.6 | Beliebige HTML-Quellen (eigene Seiten, URLs, Widgets) als Titel nutzbar; Feldbindung, wenn die Seite die Feld-API einbindet | S | – |
-| GFX.7 | Titel-Editor in der GUI: Formular aus dem Manifest, Felder live oder per "Übernehmen" | M | – |
-| GFX.8 | Titel-Presets: Feldwerte als Satz speichern, wählen, vor/zurück; CSV ex-/import | S | – |
+| GFX.1 | Titel = HTML-Vorlage nach der offenen CasparCG-Konvention: globale Funktionen `play()`, `stop()`, `next()`, `update(data)` und beliebige weitere per Aufruf; bestehende CasparCG-HTML-Vorlagen laufen unverändert. Optional ein lmix-Manifest (Name, Größe, Felder mit Typ Text/Bild/Farbe/Zahl/Schalter, Animationsdauern) | M | – |
+| GFX.2 | Rendering in der Engine (Chromium, `cefsrc`; E.9) mit Alpha in Ausgabeauflösung und -bildrate, ohne Neustart der Pipeline; Rendern pausieren/fortsetzen; ein hängender Titel nimmt Program nicht mit | M | ◐ (cefsrc E) |
+| GFX.3 | Daten: `update` mit Datensatz als JSON oder als XML im CasparCG-Format (`templateData` mit `componentData`/`data`); Felder einzeln per Aktion setzen und lesen | M | – |
+| GFX.4 | Lebenszyklus wie CasparCG: laden (vorbereitet, unsichtbar), laden und sofort abspielen, abspielen, weiter (mehrstufige Animation), stoppen mit Ausblend-Animation, sofort entfernen, Funktion aufrufen; Vorlage meldet Ende; Overlay-Kanal wartet auf Ende der Ausblendung | M | – |
+| GFX.5 | Lottie: Lottie-Animationen (JSON, .lottie) in Vorlagen (lottie-web) und später als eigener Input (E.10); Textebenen als Felder; Marker als Abläufe | S | – |
+| GFX.6 | Beliebige Webseiten (URL) als Input mit Ton, Größe und eigenem CSS; JavaScript-Funktion der Seite per Aktion aufrufen | S | ◐ (cefsrc E) |
+| GFX.7 | Titel-Editor in der GUI: Formular aus Manifest oder Datensatz, Felder live oder per "Übernehmen" | M | – |
+| GFX.8 | Datensätze speichern, benennen, abrufen, auflisten (wie CasparCG-Datenspeicher); vor/zurück; CSV ex-/import | S | – |
 | GFX.9 | Countdown/Stoppuhr/Uhr als Vorlagenbaustein: Dauer, Ziel-/Startzeit, Richtung, Format, Start/Stopp/Pause/Anpassen per Aktion, Ereignis bei 0 | S | – |
 | GFX.10 | Laufschrift: Tempo, Richtung, Anhängen vs. Ersetzen | S | – |
-| GFX.11 | Titel als Stinger: Schnittpunkt und Dauer aus dem Manifest | S | – |
+| GFX.11 | Titel als Stinger: Schnittpunkt und Dauer aus Manifest oder Aktion | S | – |
 | GFX.12 | Vorlagensatz (eigen gestaltet): Bauchbinde, Name+Funktion, Laufschrift, Uhr, Countdown, Spielstand, Vollbild-Karte; Hochkant-Varianten | M | – |
-| GFX.13 | Vorlagen-SDK: kleine JS-Bibliothek (Feld-API, Lebenszyklus), Vorlagen-Gerüst, Vorschau im normalen Browser mit Testfeldern; Gestaltung mit üblichen Web-Werkzeugen statt eigenem Designer | S | – |
-| GFX.14 | Titel neu laden bei Dateiänderung; im Programm gesetzte Werte bleiben erhalten | S | – |
+| GFX.13 | Vorlagen-SDK: kleine JS-Bibliothek für die Konvention, Vorlagen-Gerüst, Vorschau im normalen Browser mit Testdaten; Gestaltung mit üblichen Web-Werkzeugen | S | – |
+| GFX.14 | Vorlage neu laden bei Dateiänderung; gesetzte Daten bleiben erhalten | S | – |
 | GFX.15 | Leistungsbudget: ≥ 8 aktive animierte Titel 1080p60 gleichzeitig ohne Drop | M | – |
 | GFX.16 | Import von vMix-Titeln (.gtzip, XAML) | X | – |
-
-### 3.11a CasparCG-Integration (CCG)
-
-Entscheidung 2026-10-08 (User, T.1): komplette Integration von CasparCG,
-darüber auch die Titel. CasparCG Server steht unter GPL-3.0;
-GPL ist für lmix erlaubt (E.12). CasparCG läuft trotzdem als eigener, von
-lmix verwalteter Prozess, wegen Crash-Isolation (NFA.6): ein hängender Titel
-darf Program nicht mitnehmen. Für den Bediener ist es Teil von lmix, kein
-zweites Programm.
-
-```
- lmix-core ──AMCP (TCP)──► CasparCG-Server ──NDI (später: Shared Memory)──► lmix-Inputs
-     ▲                       Kanäle 1…n (HTML-Titel, Medien, Ebenen)
-     └──────OSC (Zustand)────┘
-```
-
-| ID | Anforderung | Prio | Stand |
-|---|---|---|---|
-| CCG.1 | lmix startet, überwacht und beendet CasparCG als eigenen Prozess; Konfiguration (Kanäle, Format = Master-Format, Ausgänge) erzeugt lmix aus der Show; geprüfte CasparCG-Version | M | – |
-| CCG.2 | Jeder CasparCG-Kanal erscheint als lmix-Input mit Alpha; Transport zuerst über NDI (CasparCG-NDI-Consumer, ab 2.3) | M | – |
-| CCG.3 | Steuerung über AMCP aus `lmix-core`; CasparCG-Befehle (Vorlage laden/abspielen/aktualisieren/weiter/stoppen, Medien laden/abspielen, Ebenen, Mixer) sind Aktionen im Aktionskatalog | M | – |
-| CCG.4 | Zustand über OSC zurück (Ebenen, Wiedergabezeit, Vorlagenstatus) → Tally, Auslöser, API-Zustand | M | – |
-| CCG.5 | Vorlagen-Verwaltung in der lmix-GUI: Vorlagen-Ordner, Feld-Formular aus Manifest oder Vorlagen-Definition, Presets (GFX.7–8) | M | – |
-| CCG.6 | Vorhandene CasparCG-HTML-Vorlagen (z. B. aus SPX, Loopic) laufen ohne Änderung | S | – |
-| CCG.7 | Absturz oder Hänger von CasparCG: automatischer Neustart, betroffene Inputs offline mit Ersatzbild, Program läuft weiter (NFA.5) | M | – |
-| CCG.8 | Zusätzliche Latenz CasparCG → Program ≤ 2 Frames; Bildtakt synchron zum Master-Format | M | – |
-| CCG.9 | Verlustfreier Transport ohne Kodierung (Shared Memory/DMABuf) über einen eigenen CasparCG-Consumer im lmix-Repo; bei Bedarf als Patch upstream angeboten | S | – |
-| CCG.10 | Weitere CasparCG-Fähigkeiten (Medien-Wiedergabe, Ebenen-Mixer, Routen, Webseiten) über Aktionen nutzbar | K | – |
-| CCG.11 | CasparCG-Ausgänge (DeckLink, Bildschirm) bleiben aus; Ausgabe ausschließlich über lmix | M | – |
+| GFX.17 | Titel-Ebenen: mehrere Vorlagen gleichzeitig in einem Grafik-Input (z. B. Bauchbinde, Logo, Uhr), je Ebene unabhängig steuerbar; Grafik-Input als Overlay nutzbar | S | – |
+| GFX.18 | Ebenen-Transformation je Titel-Ebene: Position, Größe, Crop, Deckkraft, Drehung, Perspektive, Helligkeit/Kontrast/Sättigung, Blend-Modus; animiert mit Dauer und Easing; mehrere Änderungen gemeinsam auf einen Frame anwenden | S | – |
+| GFX.19 | Vorlagen- und Medienliste mit Infos (Felder, Größe, Dauer) und Vorschaubild über die API abfragbar | S | – |
 
 ### 3.12 Datenquellen (DAT)
 
@@ -521,7 +497,7 @@ Zurückgestellt (User 2026-10-08).
 | NFA.6 | Crash-Isolation: GUI-Absturz stoppt weder Engine noch Senken noch API (siehe E.4) | M |
 | NFA.7 | Dauerlauf: 8 h Soak mit Last (16 Inputs, 2 Streams, Einzelaufnahme) ohne Speicher-/Latenzdrift | M |
 | NFA.8 | Bildraten 23,976/24/25/29,97/30/50/59,94/60 p, 50/59,94/60 i; Auflösungen 640×360 bis 3840×2160 | M |
-| NFA.9 | Lizenz: GPL-3.0-or-later-verträglich (E.12, `claude.md` Entscheidung 6); proprietäre SDKs (NDI) nur zur Laufzeit geladen, nie mitgeliefert | M |
+| NFA.9 | Lizenz: Repo MIT-kompatibel, keine GPL-Abhängigkeit im Repo (`claude.md` Entscheidung 6); Laufzeit-Plugins Dritter getrennt | M |
 | NFA.10 | Bedienbarkeit unter Last: GUI-Reaktion < 50 ms, Tastenaktion → Program < 1 Frame + interne Latenz | M |
 | NFA.11 | Lokalisierung: alle Texte aus Katalogen, de/en | S |
 | NFA.12 | Sicherheit: APIs standardmäßig nur LAN/Loopback; keine Telemetrie; keine Herstellerdienste für Gäste | M |
@@ -593,9 +569,9 @@ nicht nach, sondern ersetzt sie durch Heutiges oder lässt sie weg
 | G.1 | GUI-Toolkit | Entscheidung nach Prototyp in M3 |
 | G.2 | Live-Monitore | Bilder lokal über GPU-Speicher (DMABuf) aus der Engine; WHEP nur für entfernte Clients |
 | E.6 | Skriptsprache | JavaScript (QuickJS), gleiche Sprache wie die HTML-Titel |
-| E.9 | Browser-Engine für HTML-Titel | Entfällt für Titel: CasparCG rendert sie (CEF). Benchmark M7.0 misst stattdessen den Weg CasparCG → lmix (Latenz, CPU/GPU, Drops bei 8 animierten Titeln 1080p60) |
-| T.1 | Titelsystem | Komplette Integration von CasparCG, Titel darüber (§3.11a) |
-| E.12 | Lizenz | GPL ist okay: lmix wird GPL-3.0-or-later, sobald GPL-Code ins Repo kommt; `claude.md` Entscheidung 6 angepasst. CasparCG bleibt aus Gründen der Crash-Isolation ein eigener Prozess |
+| E.9 | Browser-Engine für HTML-Titel | Wahl nach Benchmark M7.0; Ausgangspunkt `cefsrc` (in strom vorhanden), Vergleich WPE WebKit (`wpesrc`) |
+| T.1/T.2 | Titelsystem | Kein CasparCG-Server (nach Analyse: zweite Engine, zweiter Takt, Bild per NDI). Titel-Fähigkeiten nach dem Vorbild CasparCG, gerendert in strom (§3.11) |
+| E.12 | Lizenz | lmix bleibt MIT-kompatibel (`claude.md` Entscheidung 6 unverändert) |
 | E.11 | Submixe | Wie vMix: bis 15 Mix-Inputs mit Preview/Program, Cut/Übergang, Overlays, Stinger; als Quelle für Ausgänge und Vollbild (SWI.10) |
 | — | Wiederholung, Gäste | Später (Priorität L) |
 | — | Prioritäten | AUD.11, OUT.16, PER.5, SRC.23 auf S; SHW.9 auf X |
