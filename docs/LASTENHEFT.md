@@ -186,6 +186,7 @@ kann es, Console nicht.
 | SRC.28 | Präsentation | Folien als Bilder (über LibreOffice-Export) | K | – |
 | SRC.29 | DVD, Flash, WMV, DirectShow, XAML/WPF | | X | – |
 | SRC.30 | Zoom-Meeting | | X | – |
+| SRC.31 | Bildschirm teilen per Browser | Vortragende teilen Bildschirm oder Fenster über eine Webseite von lmix (WebRTC), ohne Installation; Zugang per Link/Code (P2) | S | – |
 
 ### 3.3 Input-Verarbeitung (PRC)
 
@@ -291,6 +292,8 @@ kann es, Console nicht.
 | OUT.14 | Hinweise über PGM-Anzeige (nicht in Senken): zu leise, FTB aktiv, keine Aufnahme | K | – |
 | OUT.15 | Snapshot des Programs | K | – |
 | OUT.16 | Interlaced-Ausgabe (Aufnahme, Karte), Halbbildreihenfolge nach Norm | S | – |
+| OUT.17 | Bühnenmonitor: Ausgang für Sprechende mit Uhr, Restzeit (aus Countdown oder Ablaufliste), Nachricht der Regie, optional Bild des Programs (P2) | S | – |
+| OUT.18 | Ausgangs-Geometrie: Eckpunkt-Verzerrung und Kantenblende je Vollbild-Ausgang (P7) | K | – |
 
 ### 3.9 Aufnahme, Einzelaufnahme, Streaming (REC, STR)
 
@@ -304,6 +307,7 @@ kann es, Console nicht.
 | REC.6 | Zweiter Recorder mit eigenem Format/Quelle, startet mit dem ersten | S | – |
 | REC.7 | WAV-Begleitaufnahme (PCM) | K | – |
 | REC.8 | Aufnahmeprotokoll: Zeitmarke per Aktion ins Log schreiben | K | – |
+| REC.9 | Dateiname aus Datenquelle, Titelfeld oder Zeitplan-Eintrag (z. B. Vortrag, Kurs) (P2, P6) | S | – |
 | MCR.1 | Einzelaufnahme: beliebige Live-Inputs und Ausgänge 1–4 gleichzeitig roh in getrennte Dateien | S | – (ROADMAP 3.2) |
 | MCR.2 | Bereits komprimierte Quellen ohne Neukodierung sichern: SRT als TS, NDI im Original-Format | S | – |
 | MCR.3 | Ordner je Quelle, Split, Ton je Quelle (eigener oder Bus) | S | – |
@@ -316,6 +320,7 @@ kann es, Console nicht.
 | STR.7 | Status: Bitrate, Puffer, verworfene Frames, Laufzeit, Encoder CPU/GPU | M | – |
 | STR.8 | Lokales Mitschauen im LAN per HLS-Seite (≈ 10 s Verzug, ~100 Zuschauer) | K | – |
 | STR.9 | Anmeldung bei Plattformen (YouTube, Twitch …) mit Kanalwahl | X | – |
+| STR.10 | Adaptive Bitrate: bei schwankender Leitung Bitrate automatisch senken und wieder anheben, ohne Stream-Abbruch (P3) | S | – |
 
 ### 3.10 Wiederholung (RPL)
 
@@ -352,6 +357,7 @@ Funktionsreferenz, kein Code (MIT, `claude.md` Entscheidung 6).
 | GFX.4 | Lebenszyklus wie CasparCG: laden (vorbereitet, unsichtbar), laden und sofort abspielen, abspielen, weiter (mehrstufige Animation), stoppen mit Ausblend-Animation, sofort entfernen, Funktion aufrufen; Vorlage meldet Ende; Overlay-Kanal wartet auf Ende der Ausblendung | M | – |
 | GFX.5 | Lottie: Lottie-Animationen (JSON, .lottie) in Vorlagen (lottie-web) und später als eigener Input (E.10); Textebenen als Felder; Marker als Abläufe | S | – |
 | GFX.6 | Beliebige Webseiten (URL) als Input mit Ton, Größe und eigenem CSS; JavaScript-Funktion der Seite per Aktion aufrufen | S | ◐ (cefsrc E) |
+| GFX.21 | Textfolien: Liste von Texten (Liedtexte, Zitate) aus Datei als Titel, mit Taste weiterschalten; im Programm und auf Beamer (P1) | S | – |
 | GFX.20 | Webseiten und Vorlagen spielen H.264 und AAC ab, auch über Media Source Extensions (HLS-Player, Streaming-Einbettungen wie Twitch, YouTube); bevorzugt mit Hardware-Dekodierung. DRM-geschützte Inhalte (EME/Widevine) sind nicht gefordert | M | – |
 | GFX.7 | Titel-Editor in der GUI: Formular aus Manifest oder Datensatz, Felder live oder per "Übernehmen" | M | – |
 | GFX.8 | Datensätze speichern, benennen, abrufen, auflisten (wie CasparCG-Datenspeicher); vor/zurück; CSV ex-/import | S | – |
@@ -392,6 +398,9 @@ Funktionsreferenz, kein Code (MIT, `claude.md` Entscheidung 6).
 | AUT.9 | Skripte: benannte Skripte (global/lokal), Start/Stopp per Aktion; Sprache JavaScript (E.6) mit Zugriff auf Aktionen, Zustand, Warten, Netzwerk; einfache Zeilen-Syntax (Aktion + Pause) | K | – |
 | AUT.10 | Rückgängig für Input schließen | S | – |
 | AUT.11 | Schutzschloss: Schließen, Show laden, Aufnahme-/Stream-/Ausgabe-Stopp sperren | S | – |
+| AUT.12 | Globale Tastenkürzel, auch wenn ein anderes Programm im Vordergrund ist (P4) | S | – |
+| AUT.13 | OSC als Steuerweg: Aktionen per OSC empfangen, Zustand per OSC senden (P5, P7) | S | – |
+| AUT.14 | Cue-Liste: jede Zeile führt mehrere Aktionen aus (Inputs, Ebenen, Overlays, Ton, Übergang); GO, zurück, springen; auslösbar per Taste, MIDI, OSC (P7) | S | – |
 
 ### 3.14 Gäste (CAL)
 
@@ -444,7 +453,7 @@ Zurückgestellt (User 2026-10-08).
 
 | ID | Anforderung | Prio | Stand |
 |---|---|---|---|
-| PER.1 | Tally an: Web-Seite, TCP-API, Rückmeldungen, USB-/Netz-Tally-Geräte (generisch, z. B. HTTP/OSC/GPIO), Arduino/Firmata | S | – (ROADMAP M6) |
+| PER.1 | Tally an: Web-Seite, TCP-API, Rückmeldungen, TSL UMD 3.1/5.0 (P5), USB-/Netz-Tally-Geräte (generisch, z. B. HTTP/OSC/GPIO), Arduino/Firmata | S | – (ROADMAP M6) |
 | PER.2 | PTZ je Input über Netzwerk (Protokolle VISCA-over-IP, NDI, ONVIF: lmix); Bewegen, Zoom, Fokus, Home, Tempo | S | – |
 | PER.3 | PTZ-Positionen als virtuelle Inputs: Preview fährt die Position an, Standbild außerhalb PVW/PGM, aktualisieren | S | – |
 | PER.4 | Virtuelles PTZ: digitaler Zoom/Schwenk auf beliebigem Input | K | – |
@@ -452,6 +461,7 @@ Zurückgestellt (User 2026-10-08).
 | PER.6 | Statistik je Live-Input: Quell-Drops, Render-Drops, Resync, Frame-Abstände, Ton-Puffer/Drops/Resample; Encoder (CPU/GPU), SRT (Bandbreite, Verlust, RTT) | M | ◐ (Selftest) |
 | PER.7 | Warnung bei Überlast (Renderzeit, CPU) | S | ◐ |
 | PER.8 | Takt-Korrektur gegenüber externer Hardware | K | – |
+| PER.9 | Timecode: LTC/MTC einlesen, Systemzeit oder Timecode in Aufnahmen schreiben (P5) | K | – |
 
 ### 3.19 Show-Datei (SHW)
 
@@ -466,6 +476,7 @@ Zurückgestellt (User 2026-10-08).
 | SHW.7 | Formatwechsel beim Laden bestätigen | S | – |
 | SHW.8 | Globale Einstellungen getrennt ex-/importieren, Werkseinstellungen | S | – |
 | SHW.9 | Import von vMix-Presets (E.3: nie) | X | – |
+| SHW.10 | Import von OBS-Szenen (Quellen, Anordnung) als Starthilfe beim Umstieg (P4) | K | – |
 
 ### 3.20 Bedienoberfläche (UI)
 
@@ -483,8 +494,20 @@ Zurückgestellt (User 2026-10-08).
 | UI.10 | Bestätigung vor Stopp von Aufnahme/Stream (abschaltbar) | S | – |
 | UI.11 | Hochkant-Produktion: Vorlagen für 9:16, Schutzbereich, Quellrotation | K | – |
 | UI.12 | Startoptionen: maximiert, erweiterter Modus, Vollbild/Kartenausgang/SRT starten, letzte Show | S | – |
+| UI.13 | Show-Vorlagen (z. B. Gottesdienst, Konferenz, Hörsaal) und Einrichtungsassistent: Kameras finden, Ton wählen, Stream-Ziel eintragen (P1, P6) | S | – |
 
 ---
+
+### 3.21 Betrieb (OPS)
+
+Aus den Persona-Durchläufen (`PERSONAS.md`).
+
+| ID | Anforderung | Prio | Stand |
+|---|---|---|---|
+| OPS.1 | Headless-Betrieb: `lmix-core` und Engine laufen ohne GUI und ohne Monitor, Show wird beim Start geladen (systemd-Dienst) (P5) | S | – |
+| OPS.2 | Mehrere Bedienplätze gleichzeitig, auch über Netz: z. B. Bildregie und Tonregie an getrennten Rechnern; Rechte je Platz (P2, P5) | S | – |
+| OPS.3 | Monitoring: Gesundheitszustand und Metriken (Drops, Latenz, Encoder, Pegel, Speicher) über HTTP, Prometheus-Format (P5) | S | – |
+| OPS.4 | Zeitplan: Show laden, Aufnahme und Stream starten/stoppen zu festen Zeiten, mit Namen für Dateien (REC.9) (P6) | K | – |
 
 ## 4. Nichtfunktionale Anforderungen (NFA)
 
@@ -496,13 +519,14 @@ Zurückgestellt (User 2026-10-08).
 | NFA.4 | A/V-Synchronität ± ½ Frame über 8 h | M |
 | NFA.5 | Robustheit: Quelle fällt aus, Stream bricht ab, Datei fehlt → Program läuft weiter; Wiederverbinden automatisch | M |
 | NFA.6 | Crash-Isolation: GUI-Absturz stoppt weder Engine noch Senken noch API (siehe E.4) | M |
-| NFA.7 | Dauerlauf: 8 h Soak mit Last (16 Inputs, 2 Streams, Einzelaufnahme) ohne Speicher-/Latenzdrift | M |
+| NFA.7 | Dauerlauf: 8 h Soak mit Last (16 Inputs, 2 Streams, Einzelaufnahme) ohne Speicher-/Latenzdrift; zusätzlich 48 h Betrieb ohne Neustart (P2) | M |
 | NFA.8 | Bildraten 23,976/24/25/29,97/30/50/59,94/60 p, 50/59,94/60 i; Auflösungen 640×360 bis 3840×2160 | M |
 | NFA.9 | Lizenz: Repo MIT-kompatibel, keine GPL-Abhängigkeit im Repo (`claude.md` Entscheidung 6); Laufzeit-Plugins Dritter getrennt (LGPL wie GStreamer und `gstcefsrc` nur dynamisch geladen, nie im Repo; ROADMAP §5.3) | M |
 | NFA.10 | Bedienbarkeit unter Last: GUI-Reaktion < 50 ms, Tastenaktion → Program < 1 Frame + interne Latenz | M |
 | NFA.11 | Lokalisierung: alle Texte aus Katalogen, de/en | S |
 | NFA.12 | Sicherheit: APIs standardmäßig nur LAN/Loopback; keine Telemetrie; keine Herstellerdienste für Gäste | M |
 | NFA.13 | Prüfbarkeit: jede M-Anforderung hat einen automatischen Test (Selftest, API-Test) oder einen dokumentierten Abnahmebefehl | M |
+| NFA.15 | Persona-Durchläufe (§9): jede Meilenstein-Abnahme spielt die betroffenen Personas aus `PERSONAS.md` durch, mindestens 5; neue oder geänderte Funktionen werden gegen die Personas geprüft, bevor sie als fertig gelten | M |
 
 ---
 
@@ -612,6 +636,26 @@ Das Handbuch begrenzt vieles nach Edition (HD, 4K, Pro, Max); lmix kennt
 keine Editionen, es gilt immer der höchste Wert.
 
 ---
+
+## 9. Testmethode: Persona-Durchläufe
+
+Neben automatischen Tests (NFA.13) wird lmix gegen typische Nutzer geprüft.
+Sieben Personas stehen in `PERSONAS.md`: Ehrenamt in der Kirchengemeinde,
+Konferenztechnik, Amateur-Sport, Twitch-Streamerin, Broadcast-Ingenieur,
+Hochschul-Medienzentrum, Theater-Video.
+
+| Schritt | Inhalt |
+|---|---|
+| Wann | Am Ende jedes Meilensteins (Teil der Abnahme) und bei jeder neuen oder geänderten Funktion im Rahmen der Entwicklung; mindestens 5 Personas je Durchlauf, ausgewählt nach Betroffenheit |
+| Wie | Szenario Schritt für Schritt durchspielen: bis M2b gegen Lastenheft (Schreibtischtest), ab M3 am laufenden Programm mit Testquellen |
+| Bewertung | je Schritt ✅ abgedeckt, ⚠ Lücke/Hürde, ✗ fehlt, ⏸ später; dazu Zeit bis zum Ziel und Anzahl der Bedienschritte |
+| Ergebnis | Befunde mit Nummer in `PERSONAS.md`; daraus neue Anforderungen hier oder Vorschläge zur Entscheidung |
+| Pflege | Personas bei neuen Zielgruppen ergänzen; Erfolgskriterien je Persona bleiben stabil, damit Durchläufe vergleichbar sind |
+
+Erster Durchlauf (2026-10-08, gegen Lastenheft): 21 Befunde (B1–B21),
+daraus neu SRC.31, OUT.17–18, REC.9, STR.10, AUT.12–14, PER.9, SHW.10,
+UI.13, GFX.21, OPS.1–4; präzisiert PER.1, NFA.7. Prioritätsänderungen bereits
+entschiedener Punkte (UI.7, SRC.18, SRC.19, SRC.28, M5b) sind Vorschläge.
 
 ## 8. Quellen
 

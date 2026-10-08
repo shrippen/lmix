@@ -98,6 +98,9 @@ stroms Erkennung oder dem Konvertierungs-Workaround, nicht von der Hardware.
 
 ## 3. Roadmap
 
+Jede Abnahme enthält einen Persona-Durchlauf (`PERSONAS.md`, mindestens 5
+Personas, `LASTENHEFT.md` NFA.15).
+
 Reihenfolge nach Wert für den Kern-Workflow
 (Input → Preview → Take → Output). Jede Stufe endet abnahmefähig.
 
@@ -340,6 +343,7 @@ Ersetzt M4.5 und den Gäste-Punkt in M6.
 | AUT.1–11, PER.1, PER.6–7, OUT.12–13 | M6 |
 | GFX, DAT | M7 (nach M4) |
 | WEB, TEL, API.2–11 | M8 |
+| OPS.1–3, AUT.12–14, OUT.17, UI.13, GFX.21 | M6/M7 (nach Thema) |
 | Rest S, dann K | M9 |
 | RPL, CAL | Später |
 

@@ -46,6 +46,9 @@ workspace/
   app-desktop/ oder einen OmtBlock. Nur wenn ein Feature ohne Server-Änderung
   nicht machbar ist: Server-Änderung, und dann ein eigener, sauberer, upstream-
   tauglicher Commit dafür (mit Begründung im Commit, PR-fähig).
+- Persona-Durchläufe (`docs/PERSONAS.md`, `docs/LASTENHEFT.md` §9): jede neue
+  oder geänderte Funktion gegen die betroffenen Personas prüfen; jede
+  Meilenstein-Abnahme spielt mindestens 5 Personas durch, Befunde in PERSONAS.md.
 - Alle Meilensteine enden in einem lauffähigen, vom User abnahmefähigen Zustand
   mit dokumentierten Akzeptanzbefehlen. Nach jeder Meile: STOPP und auf User-
   Freigabe warten.
