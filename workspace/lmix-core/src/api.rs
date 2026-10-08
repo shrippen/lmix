@@ -6,6 +6,8 @@
 //! | `POST /api/actions` | run one [`Action`] (JSON) |
 //! | `GET /api/actions` | action catalog as JSON schema |
 //! | `GET /api/tally` | tally per input: 0 off, 1 program, 2 preview |
+//! | `POST /api/latency/measure?seconds=N` | measure capture-to-program latency for N s (default 10) |
+//! | `GET /api/latency` | latest latency statistics (NFA.3) |
 //! | `GET /api/audio/levels` | audio levels per input and of program (dBFS) |
 //! | `GET /api/shows/recent` | recently opened or saved show files, newest first |
 //! | `GET /api/devices` | capture devices for `SourceSpec::Device` |
@@ -17,11 +19,11 @@
 use std::sync::Arc;
 
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::http::header;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use axum::routing::get;
+use axum::routing::{get, post};
 use axum::{Json, Router};
 use lmix_types::{Action, ActionError, Event, InputRef};
 use tokio::sync::broadcast::error::RecvError;
@@ -40,6 +42,8 @@ pub fn router(service: Arc<Service>) -> Router {
         .route("/api/actions", get(catalog).post(action))
         .route("/api/events", get(events))
         .route("/api/audio/levels", get(levels))
+        .route("/api/latency", get(latency))
+        .route("/api/latency/measure", post(measure_latency))
         .route("/api/shows/recent", get(recent))
         .route("/api/devices", get(devices))
         .route("/api/pictures/program", get(program_picture))
@@ -53,6 +57,33 @@ async fn state(State(service): State<Arc<Service>>) -> impl IntoResponse {
 
 async fn tally(State(service): State<Arc<Service>>) -> impl IntoResponse {
     Json(service.tally().await)
+}
+
+async fn latency(State(service): State<Arc<Service>>) -> impl IntoResponse {
+    Json(service.latency())
+}
+
+#[derive(serde::Deserialize)]
+struct MeasureQuery {
+    #[serde(default = "default_measure_secs")]
+    seconds: u32,
+}
+
+/// Long enough for a few hundred frames.
+const DEFAULT_MEASURE_SECS: u32 = 10;
+
+fn default_measure_secs() -> u32 {
+    DEFAULT_MEASURE_SECS
+}
+
+async fn measure_latency(
+    State(service): State<Arc<Service>>,
+    Query(query): Query<MeasureQuery>,
+) -> Response {
+    match service.measure_latency(query.seconds).await {
+        Ok(()) => StatusCode::ACCEPTED.into_response(),
+        Err(error) => (StatusCode::BAD_GATEWAY, error.to_string()).into_response(),
+    }
 }
 
 async fn levels(State(service): State<Arc<Service>>) -> impl IntoResponse {

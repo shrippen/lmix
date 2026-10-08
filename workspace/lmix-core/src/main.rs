@@ -131,7 +131,7 @@ async fn main() -> anyhow::Result<()> {
     // The engine may come up after us: keep trying, then feed it the show.
     tokio::spawn(connect(engine, service.clone(), args.slots));
     tokio::spawn(service.clone().forward_levels());
-    tokio::spawn(service.clone().watch_output_errors());
+    tokio::spawn(service.clone().watch_failures());
 
     let listener = tokio::net::TcpListener::bind(args.listen)
         .await

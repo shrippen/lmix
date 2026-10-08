@@ -22,4 +22,4 @@ pub use input::{
 pub use output::{
     Container, DisplayMode, Output, OutputId, OutputRef, OutputSource, OutputSpec, OutputStatus,
 };
-pub use state::{Event, InputLevel, Levels, ShowState, Transition};
+pub use state::{Event, InputLevel, Latency, Levels, ShowState, Transition};

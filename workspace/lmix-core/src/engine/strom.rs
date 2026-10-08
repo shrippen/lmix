@@ -251,27 +251,32 @@ impl StromEngine {
     /// or briefly, then the mixer's black background shows (PGM and
     /// multiview alike).
     async fn set_signal_loss(&self, slot: usize, mode: SignalLoss) -> Result<(), EngineError> {
-        let repeat_ns = match mode {
-            SignalLoss::Hold => REPEAT_FOREVER_NS,
-            SignalLoss::Black => BLACK_AFTER.as_nanos() as u64,
+        // A stopped source ends its stream (EOS): without
+        // `repeat-after-eos` the pad then drops its last frame.
+        let (repeat_ns, after_eos) = match mode {
+            SignalLoss::Hold => (REPEAT_FOREVER_NS, true),
+            SignalLoss::Black => (BLACK_AFTER.as_nanos() as u64, false),
         };
-        let body = serde_json::json!({
-            "property_name": "max-last-buffer-repeat",
-            "value": PropertyValue::UInt(repeat_ns),
-        });
+        let properties = [
+            ("max-last-buffer-repeat", PropertyValue::UInt(repeat_ns)),
+            ("repeat-after-eos", PropertyValue::Bool(after_eos)),
+        ];
         for compositor in MIXER_COMPOSITORS {
             let path = format!(
                 "/flows/{}/elements/{MIXER_BLOCK}:{compositor}/pads/sink_{slot}/properties",
                 flows::mixer_id()
             );
-            let resp = self
-                .http
-                .patch(self.url(&path))
-                .json(&body)
-                .send()
-                .await
-                .map_err(net)?;
-            check(resp).await?;
+            for (name, value) in &properties {
+                let body = serde_json::json!({ "property_name": name, "value": value });
+                let resp = self
+                    .http
+                    .patch(self.url(&path))
+                    .json(&body)
+                    .send()
+                    .await
+                    .map_err(net)?;
+                check(resp).await?;
+            }
         }
         Ok(())
     }
@@ -441,6 +446,27 @@ impl Engine for StromEngine {
 
     fn flow_errors(&self) -> broadcast::Receiver<FlowError> {
         self.errors.subscribe()
+    }
+
+    /// Buffer-age probe on the mixer's program output: with base time 0
+    /// in every flow and timestamps kept over `inter`, a buffer's age there
+    /// is the time since its source captured it.
+    async fn measure_latency(&self, seconds: u32) -> Result<(), EngineError> {
+        self.levels.send_modify(|l| l.program_ages_ms.clear());
+        let body = serde_json::json!({
+            "element_id": flows::PGM_OUT,
+            "sample_interval": 1,
+            "timeout_secs": seconds,
+        });
+        let path = format!("/flows/{}/probes", flows::mixer_id());
+        let resp = self
+            .http
+            .post(self.url(&path))
+            .json(&body)
+            .send()
+            .await
+            .map_err(net)?;
+        check(resp).await.map(|_| ())
     }
 
     async fn output_running(&self, id: OutputId) -> bool {

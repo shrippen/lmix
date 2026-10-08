@@ -49,6 +49,10 @@ pub trait Engine: Send + Sync {
     /// Audio levels, updated as the engine measures them.
     fn levels(&self) -> tokio::sync::watch::Receiver<meters::EngineLevels>;
 
+    /// Start measuring capture-to-program latency for `seconds`; results
+    /// arrive in `levels().program_ages_ms` (earlier samples are dropped).
+    async fn measure_latency(&self, seconds: u32) -> Result<(), EngineError>;
+
     /// Errors of running flows (outputs failing).
     fn flow_errors(&self) -> tokio::sync::broadcast::Receiver<meters::FlowError>;
 

@@ -24,7 +24,13 @@ pub struct EngineLevels {
     pub slots: HashMap<usize, (f32, Instant)>,
     pub main: Option<(f32, Instant)>,
     pub monitor: Option<(f32, Instant)>,
+    /// Buffer ages at the mixer's program output from the latest latency
+    /// measurement, ms (newest last, at most `LATENCY_SAMPLES`).
+    pub program_ages_ms: Vec<u64>,
 }
+
+/// Latency samples kept per measurement.
+pub const LATENCY_SAMPLES: usize = 600;
 
 /// Which meter a strom element id names.
 #[derive(Debug, PartialEq, Eq)]
@@ -58,6 +64,16 @@ fn loudest(peaks: &[f64]) -> f32 {
 pub struct FlowError {
     pub flow: FlowId,
     pub message: String,
+    pub kind: FlowFailure,
+}
+
+/// How a flow went down.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FlowFailure {
+    /// A pipeline error (source gone, disk full, …).
+    Error,
+    /// The flow stopped; lmix-core's own rebuilds stop flows too.
+    Stopped,
 }
 
 /// Read strom's event stream forever: keep `levels` current and pass on
@@ -84,11 +100,29 @@ pub async fn follow(
                     }) if flow_id == mixer => {
                         record_meter(&levels, &element_id, mixer_block, &peak)
                     }
+                    Ok(StromEvent::BufferAgeProbe {
+                        flow_id, age_ms, ..
+                    }) if flow_id == mixer => {
+                        levels.send_modify(|l| {
+                            if l.program_ages_ms.len() >= LATENCY_SAMPLES {
+                                l.program_ages_ms.remove(0);
+                            }
+                            l.program_ages_ms.push(age_ms);
+                        });
+                    }
                     Ok(StromEvent::PipelineError { flow_id, error, .. }) => {
                         // Nobody listening is fine.
                         let _ = errors.send(FlowError {
                             flow: flow_id,
                             message: error,
+                            kind: FlowFailure::Error,
+                        });
+                    }
+                    Ok(StromEvent::FlowStopped { flow_id }) => {
+                        let _ = errors.send(FlowError {
+                            flow: flow_id,
+                            message: "stopped".into(),
+                            kind: FlowFailure::Stopped,
                         });
                     }
                     _ => {}

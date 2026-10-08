@@ -122,6 +122,10 @@ impl Switcher {
         }
     }
 
+    pub fn slots(&self) -> usize {
+        self.slots
+    }
+
     pub fn show(&self) -> &Show {
         &self.show
     }
@@ -694,6 +698,30 @@ impl Switcher {
             self.output_status.get(&id),
             Some(OutputStatus::Running { .. })
         )
+    }
+
+    pub fn output_is_running(&self, id: OutputId) -> bool {
+        self.output_running(id)
+    }
+
+    /// Start command for a failed output; `None` when it was stopped or
+    /// removed meanwhile, or its input is gone.
+    pub fn restart_command(&self, id: OutputId) -> Option<Command> {
+        let failed = matches!(
+            self.output_status.get(&id),
+            Some(OutputStatus::Failed { .. })
+        );
+        let output = self
+            .show
+            .outputs
+            .iter()
+            .find(|o| o.id == id)
+            .filter(|_| failed)?;
+        Some(Command::StartOutput {
+            id,
+            spec: output.spec.clone(),
+            feed: self.feed_of(output).ok()?,
+        })
     }
 
     /// The engine reports what an output does.

@@ -616,3 +616,31 @@ Nur Bild; Ton über HDMI folgt mit Audio-Ausgängen. Die Sink läuft mit
 `sync=false` (Frames kommen schon um die Mischer-Latenz gealtert, eine
 synchronisierende Sink verwarf sie alle) und `qos=false` (CRITICAL-Probe).
 Quelle wie alle Ausgänge: Programm oder ein Input (ISO-Kontrollbild).
+
+## 2026-10-08 — M3 Schritt 4: Failover und Latenz-CI (3.4)
+
+**Ausfälle erkennen**: `lmix-core` folgt den strom-Ereignissen
+`PipelineError` und `FlowStopped`. Eigene Umbauten stoppen Flows auch; ein
+Stopp bis 1 s nach einem eigenen Kommando auf denselben Flow zählt nicht
+als Ausfall.
+- **Input**: Slot-Flow fällt aus → Input „offline“, der Mischer hält das
+  letzte Bild (Signalverlust „halten“, jetzt mit `repeat-after-eos`, sonst
+  verwarf der Compositor das Bild beim Stream-Ende) oder zeigt schwarz.
+  Failback: Slot neu bauen nach 2 s, dann mit Verdopplung bis 10 s, bis er
+  läuft oder der Input entfernt ist. Kein Umschalten auf ein Ersatzbild:
+  der Operator sieht „offline“ und entscheidet.
+- **Ausgang**: Fehler oder unerwarteter Stopp → Status „Fehler“, dann
+  automatischer Neustart.
+**Latenz**: `POST /api/latency/measure` setzt eine strom-Buffer-Age-Probe
+auf den Programm-Ausgang des Mischers, `GET /api/latency` liefert Median,
+p95, Maximum. Der VM-Test prüft ein Budget (`LATENCY_BUDGET_MS`, 150 ms
+CPU); der Gitea-Workflow `vm-check` fährt den ganzen Test bei jeder
+Änderung an lmix-core, Typen, Console oder strom (Messwerte: LATENCY.md).
+**SRT-Input**: Der strom-Block `srt_input` mit `decode` liefert in der VM
+aus `srt-live-transmit`/ffmpeg kein Bild: mit `ignore_pcr` (Standard)
+„No valid frames before EOS“, ohne legt decodebin keine Pads an, und der
+Schutz wird bei erneutem Plug nicht zurückgesetzt (Failback unmöglich).
+Befund für strom, nicht in lmix umgangen; lmix setzt nur
+`wait_for_connection` und `keep_listening`. Prüfung mit echter Quelle: H.23.
+**MP4-Aufnahme**: strom reserviert je Datei ~93 MB für den moov-Kopf
+(Absturzsicherheit); MKV bleibt Standard.

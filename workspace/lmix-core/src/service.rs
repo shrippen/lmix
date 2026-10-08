@@ -9,21 +9,31 @@
 //! Actions run one after another (the switcher lock is held while the
 //! engine works), so every client sees the same order.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Instant;
 
 use lmix_types::{
-    Action, ActionError, Event, InputLevel, InputRef, InputStatus, Levels, OutputStatus, ShowState,
-    SignalLoss,
+    Action, ActionError, Event, InputLevel, InputRef, InputStatus, Latency, Levels, OutputId,
+    OutputStatus, ShowState, SignalLoss,
 };
+use strom_types::FlowId;
 use tokio::sync::{broadcast, Mutex};
 
-use crate::engine::flows::output_flow_id;
+use crate::engine::flows::{output_flow_id, slot_id};
+use crate::engine::meters::{FlowError, FlowFailure};
 use crate::engine::{meters, Engine, EngineError, Picture};
 use crate::recent::Recent;
 use crate::show::{self, Show};
 use crate::switcher::{Command, Switcher};
+
+/// A flow stopping this soon after lmix-core started, rebuilt or stopped
+/// it is its own doing, not a failure.
+const OWN_STOP_WINDOW: std::time::Duration = std::time::Duration::from_secs(1);
+/// Failback retries: first after 2 s, doubling up to 10 s.
+const FAILBACK_FIRST: std::time::Duration = std::time::Duration::from_secs(2);
+const FAILBACK_MAX: std::time::Duration = std::time::Duration::from_secs(10);
 
 /// Events kept for slow subscribers before they miss some.
 const EVENT_BUFFER: usize = 256;
@@ -42,6 +52,10 @@ pub struct Service {
     /// Last good frame per picture: a paused clip or still keeps its
     /// picture while the engine's tap has no new frame.
     pictures: std::sync::Mutex<HashMap<Picture, Vec<u8>>>,
+    /// When lmix-core last changed each flow: its own stops are no failure.
+    touched: std::sync::Mutex<HashMap<FlowId, Instant>>,
+    /// Slots with a failback running.
+    failing_back: std::sync::Mutex<HashSet<FlowId>>,
 }
 
 impl Service {
@@ -53,6 +67,8 @@ impl Service {
             events,
             recent: Mutex::new(Recent::load(autosave.as_deref())),
             pictures: std::sync::Mutex::new(HashMap::new()),
+            touched: std::sync::Mutex::new(HashMap::new()),
+            failing_back: std::sync::Mutex::new(HashSet::new()),
             autosave,
         })
     }
@@ -175,9 +191,10 @@ impl Service {
         self.publish(&sw);
     }
 
-    /// Mark outputs whose flow failed in the engine; runs for the process
-    /// life.
-    pub async fn watch_output_errors(self: Arc<Self>) {
+    /// Follow engine failures for the process life: failed outputs are
+    /// marked, failed inputs go offline and come back by themselves
+    /// (failback) once their source returns.
+    pub async fn watch_failures(self: Arc<Self>) {
         let mut errors = self.engine.flow_errors();
         loop {
             let error = match errors.recv().await {
@@ -185,23 +202,133 @@ impl Service {
                 Err(broadcast::error::RecvError::Lagged(_)) => continue,
                 Err(broadcast::error::RecvError::Closed) => return,
             };
-            let mut sw = self.switcher.lock().await;
-            let failed = sw
-                .output_ids()
-                .into_iter()
-                .find(|id| output_flow_id(*id) == error.flow);
-            let Some(id) = failed else {
+            let own_change = self
+                .touched
+                .lock()
+                .expect("touched lock")
+                .get(&error.flow)
+                .is_some_and(|at| at.elapsed() < OWN_STOP_WINDOW);
+            if error.kind == FlowFailure::Stopped && own_change {
                 continue;
-            };
-            tracing::warn!(output = %id, message = %error.message, "output failed");
-            sw.set_output_status(
-                id,
-                OutputStatus::Failed {
-                    message: error.message,
-                },
-            );
-            self.publish(&sw);
+            }
+            if self.output_failed(&error).await {
+                continue;
+            }
+            self.slot_failed(&error).await;
         }
+    }
+
+    /// A running output that fails or is stopped behind lmix-core's back is
+    /// marked failed and restarted (failback).
+    async fn output_failed(self: &Arc<Self>, error: &FlowError) -> bool {
+        let mut sw = self.switcher.lock().await;
+        let failed = sw
+            .output_ids()
+            .into_iter()
+            .find(|id| output_flow_id(*id) == error.flow);
+        let Some(id) = failed else {
+            return false;
+        };
+        if !sw.output_is_running(id) {
+            return true;
+        }
+        tracing::warn!(output = %id, message = %error.message, "output failed, restarting");
+        sw.set_output_status(
+            id,
+            OutputStatus::Failed {
+                message: error.message.clone(),
+            },
+        );
+        self.publish(&sw);
+        drop(sw);
+
+        if self
+            .failing_back
+            .lock()
+            .expect("failback lock")
+            .insert(error.flow)
+        {
+            tokio::spawn(self.clone().restart_output(id));
+        }
+        true
+    }
+
+    /// Start a failed output again until it runs, or the operator stopped
+    /// or removed it.
+    async fn restart_output(self: Arc<Self>, id: OutputId) {
+        let mut wait = FAILBACK_FIRST;
+        loop {
+            tokio::time::sleep(wait).await;
+            wait = (wait * 2).min(FAILBACK_MAX);
+            let mut sw = self.switcher.lock().await;
+            let Some(command) = sw.restart_command(id) else {
+                break;
+            };
+            if self.execute(&mut sw, &[command]).await.is_ok() {
+                tracing::info!(output = %id, "output back");
+                self.publish(&sw);
+                break;
+            }
+        }
+        self.failing_back
+            .lock()
+            .expect("failback lock")
+            .remove(&output_flow_id(id));
+    }
+
+    async fn slot_failed(self: &Arc<Self>, error: &FlowError) {
+        let mut sw = self.switcher.lock().await;
+        let Some(slot) = (0..sw.slots()).find(|s| slot_id(*s) == error.flow) else {
+            return;
+        };
+        let Some(input) = sw
+            .show()
+            .inputs
+            .iter()
+            .find(|i| i.slot == slot)
+            .map(|i| i.id)
+        else {
+            return;
+        };
+        tracing::warn!(slot, message = %error.message, "input failed, failing back");
+        sw.set_status(input, InputStatus::Offline);
+        self.publish(&sw);
+        drop(sw);
+
+        if self
+            .failing_back
+            .lock()
+            .expect("failback lock")
+            .insert(error.flow)
+        {
+            tokio::spawn(self.clone().fail_back(slot));
+        }
+    }
+
+    /// Rebuild a failed slot until it runs again or its input is gone.
+    async fn fail_back(self: Arc<Self>, slot: usize) {
+        let mut wait = FAILBACK_FIRST;
+        loop {
+            tokio::time::sleep(wait).await;
+            wait = (wait * 2).min(FAILBACK_MAX);
+            let mut sw = self.switcher.lock().await;
+            let Some(input) = sw.show().inputs.iter().find(|i| i.slot == slot).cloned() else {
+                break;
+            };
+            let command = Command::SetSlot {
+                slot,
+                source: Some(input.source.clone()),
+            };
+            if self.execute(&mut sw, &[command]).await.is_ok() {
+                tracing::info!(slot, "input back");
+                self.publish(&sw);
+                break;
+            }
+        }
+        self.failing_back
+            .lock()
+            .expect("failback lock")
+            .remove(&slot_id(slot));
     }
 
     /// Publish levels while the engine measures; runs for the process life.
@@ -212,6 +339,15 @@ impl Service {
             let _ = self.events.send(Event::Levels { levels });
             tokio::time::sleep(LEVELS_INTERVAL).await;
         }
+    }
+
+    pub async fn measure_latency(&self, seconds: u32) -> Result<(), EngineError> {
+        self.engine.measure_latency(seconds).await
+    }
+
+    /// Capture-to-program latency from the latest measurement.
+    pub fn latency(&self) -> Latency {
+        Latency::of(&self.engine.levels().borrow().program_ages_ms)
     }
 
     pub async fn recent(&self) -> Vec<String> {
@@ -282,7 +418,21 @@ impl Service {
             if let Command::SetSlot { slot, .. } = command {
                 self.forget_picture(Picture::Slot(*slot));
             }
+            if let Some(flow) = flow_of(command) {
+                self.touched
+                    .lock()
+                    .expect("touched lock")
+                    .insert(flow, Instant::now());
+            }
             let outcome = self.engine.run(command).await;
+            // The window counts from the end: a rebuild's stop event may
+            // trail the command.
+            if let Some(flow) = flow_of(command) {
+                self.touched
+                    .lock()
+                    .expect("touched lock")
+                    .insert(flow, Instant::now());
+            }
             mark_slot(sw, command, outcome.is_ok());
             mark_output(sw, command, &outcome);
 
@@ -309,6 +459,15 @@ impl Service {
         // No subscribers is fine.
         let _ = self.events.send(Event::State { state: sw.state() });
         let _ = self.events.send(Event::Tally { tally: sw.tally() });
+    }
+}
+
+/// Engine flow a command builds or stops.
+fn flow_of(command: &Command) -> Option<FlowId> {
+    match command {
+        Command::SetSlot { slot, .. } => Some(slot_id(*slot)),
+        Command::StartOutput { id, .. } | Command::StopOutput { id } => Some(output_flow_id(*id)),
+        _ => None,
     }
 }
 
@@ -425,6 +584,46 @@ mod tests {
         assert_eq!(slot_commands(&engine), 1, "{:?}", engine.log());
         assert!(matches!(events.recv().await.unwrap(), Event::State { .. }));
         assert!(matches!(events.recv().await.unwrap(), Event::Tally { .. }));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn failed_input_goes_offline_and_fails_back() {
+        let engine = Arc::new(NullEngine::failing());
+        let service = Service::new(4, engine.clone(), None);
+        service.handle(bars()).await.unwrap();
+        tokio::spawn(service.clone().watch_failures());
+        tokio::task::yield_now().await;
+        let builds = slot_commands(&engine);
+
+        engine.fail(FlowError {
+            flow: slot_id(0),
+            message: "source gone".into(),
+            kind: FlowFailure::Error,
+        });
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        assert_eq!(service.state().await.inputs[0].status, InputStatus::Offline);
+
+        tokio::time::sleep(FAILBACK_FIRST).await;
+        assert_eq!(service.state().await.inputs[0].status, InputStatus::Online);
+        assert_eq!(slot_commands(&engine), builds + 1, "slot rebuilt once");
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn own_rebuild_stop_is_no_failure() {
+        let engine = Arc::new(NullEngine::failing());
+        let service = Service::new(4, engine.clone(), None);
+        service.handle(bars()).await.unwrap();
+        tokio::spawn(service.clone().watch_failures());
+        tokio::task::yield_now().await;
+
+        engine.fail(FlowError {
+            flow: slot_id(0),
+            message: "stopped".into(),
+            kind: FlowFailure::Stopped,
+        });
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+        assert_eq!(service.state().await.inputs[0].status, InputStatus::Online);
     }
 
     #[tokio::test]

@@ -17,6 +17,22 @@ pub struct NullEngine {
 }
 
 impl NullEngine {
+    /// An engine whose flows can be made to fail (tests).
+    #[cfg(test)]
+    pub fn failing() -> Self {
+        Self {
+            errors: Some(tokio::sync::broadcast::channel(16).0),
+            ..Self::default()
+        }
+    }
+
+    /// Report a flow failure as the engine would.
+    #[cfg(test)]
+    pub fn fail(&self, error: super::meters::FlowError) {
+        let errors = self.errors.as_ref().expect("engine built with failing()");
+        let _ = errors.send(error);
+    }
+
     /// Commands received so far.
     #[cfg(test)]
     pub fn log(&self) -> Vec<Command> {
@@ -56,5 +72,9 @@ impl Engine for NullEngine {
 
     async fn output_running(&self, _id: lmix_types::OutputId) -> bool {
         false
+    }
+
+    async fn measure_latency(&self, _seconds: u32) -> Result<(), EngineError> {
+        Ok(())
     }
 }

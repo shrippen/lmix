@@ -61,7 +61,7 @@ pub const MIXER_BLOCK: &str = "vm";
 /// Thumbnail tap on the program output: GUI monitor and picture checks.
 pub const PGM_TAP: &str = "tap_pgm";
 /// Program picture and sound for the output flows (`inter`).
-const PGM_OUT: &str = "pgm_out";
+pub const PGM_OUT: &str = "pgm_out";
 const PGM_AUDIO_OUT: &str = "pgm_audio_out";
 /// Outputs buffer a little more than the mixer: they are not on the
 /// switching path, an encoder hiccup must not drop frames.
@@ -497,6 +497,10 @@ fn add_source(flow: &mut Flow, source: &SourceSpec) -> Option<String> {
                 vec![
                     ("srt_uri", PropertyValue::String(uri.clone())),
                     ("decode", PropertyValue::Bool(true)),
+                    // Wait for the sender instead of ending at once, and keep
+                    // listening when it drops: it can come back (failback).
+                    ("wait_for_connection", PropertyValue::Bool(true)),
+                    ("keep_listening", PropertyValue::Bool(true)),
                     ("num_video_tracks", PropertyValue::UInt(1)),
                     ("num_audio_tracks", PropertyValue::UInt(1)),
                 ],

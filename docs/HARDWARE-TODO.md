@@ -30,3 +30,6 @@ Hardware: **NV** = NVIDIA-Host (RTX 3090), **AMD**, **INTEL**,
 | H.18 | Ausgänge auf Hardware-Encoder (NVENC über `videoenc` auto): Last, Latenz, SRT zu echtem Ziel über 1 h, Aufnahme 1 h ohne Drop | NV, NET | M3 3.1 | offen |
 | H.19 | NDI-Ausgang (NDI-SDK): in NDI Studio Monitor sichtbar mit Ton | NET | M3 3.1 | offen |
 | H.20 | Bildschirm-Ausgang: Vollbild unter KDE Plasma auf zweitem Monitor (Fensterregel), DRM-Anschluss ohne Desktop, Tearing, Latenz zum PGM | NV, Beamer | M3 3.3 | offen |
+| H.21 | Signalverlust „halten“ beim echten Abbruch (Kamera ab, SRT-Sender weg): kein schwarzer Frame im Moment des Verlusts (VM-CPU-Compositor zeigt teils einen), Failback ohne Aussetzer auf PGM | NV, CAP | M3 3.4 | offen |
+| H.22 | Latenz Quelle → PGM über `GET /api/latency` auf CUDA- und GL-Mischer (VM: 116 ms Median, CPU); Budget im CI-Test auf Hardware-Wert senken | NV, AMD | M3 3.4 | offen |
+| H.23 | SRT-Input (Kamera-Encoder, OBS) mit echter Quelle: Bild, Ton, Abbruch und Wiederkehr des Senders (VM: strom-Block decodiert MPEG-TS aus `srt-live-transmit` nicht, siehe DECISIONS) | NET | M3 3.4 | offen |

@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
 # M2b check without GPU: strom (CPU mixer) + lmix-core, driven over the
 # lmix API. Proves slot flows, preview/take, source swap and show file.
-# Picture quality, latency and GPU paths: docs/HARDWARE-TODO.md.
+# Picture quality, real latency and GPU paths: docs/HARDWARE-TODO.md.
 #
 #   scripts/test-m2b-vm.sh            # builds, runs, cleans up
 #   CONSOLE_SHOT=out.png scripts/test-m2b-vm.sh
 #                                     # also screenshots the Console
 #                                     # (lmix-core client) on Xvfb
+#   KEEP_WORK=1                       # keep logs and pictures
+#   LATENCY_BUDGET_MS=150             # p95 capture-to-program budget
+#   STROM_GST_DEBUG=compositor:4      # GST_DEBUG for strom (gst.log)
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -66,7 +69,7 @@ CORE_BIN="${CARGO_TARGET_DIR:-$ROOT/workspace/lmix-core/target}/debug/lmix-core"
 ENGINE_DISPLAY=:94
 Xvfb "$ENGINE_DISPLAY" -screen 0 1280x720x24 >/dev/null 2>&1 &
 PIDS+=($!)
-(cd "$WORK" && DISPLAY="$ENGINE_DISPLAY" LIBGL_ALWAYS_SOFTWARE=1 exec "$STROM_BIN" --host 127.0.0.1 --port "$STROM_PORT" --no-auto-restart --data-dir "$WORK/strom-data" >"$WORK/strom.log" 2>&1) &
+(cd "$WORK" && GST_DEBUG="${STROM_GST_DEBUG:-}" GST_DEBUG_FILE="$WORK/gst.log" GST_DEBUG_NO_COLOR=1 DISPLAY="$ENGINE_DISPLAY" LIBGL_ALWAYS_SOFTWARE=1 exec "$STROM_BIN" --host 127.0.0.1 --port "$STROM_PORT" --no-auto-restart --data-dir "$WORK/strom-data" >"$WORK/strom.log" 2>&1) &
 PIDS+=($!)
 wait_up "$STROM/health" strom
 
@@ -266,6 +269,8 @@ act '{"action":"transport_input","input":"Clips","transport":"play"}' >/dev/null
 pass "signal loss: paused clip held on program, black when set"
 
 # --- outputs (M3): recording and SRT, each in its own flow ---
+# Codecs of a media file, sorted and comma separated (needs a finalized file).
+codecs() { ffprobe -v error -show_entries stream=codec_name -of csv=p=0 "$1" 2>/dev/null | sort | paste -sd, -; }
 # MP4: unreadable unless the stop drained the recorder with EOS.
 act '{"action":"add_output","spec":{"kind":"record","folder":"rec","container":"mp4"},"name":"Rec"}' >/dev/null
 act '{"action":"add_output","spec":{"kind":"srt","uri":"srt://:9911?mode=listener"},"name":"Stream"}' >/dev/null
@@ -280,9 +285,7 @@ sleep 2
 [[ "$(output_state Rec)" == stopped ]] || fail "recording did not stop"
 recording="$(find "$WORK/strom-data" -path '*rec/*' -name '*.mp4' | head -1)"
 [[ -n "$recording" ]] || fail "no recording file"
-streams="$(timeout 20 gst-launch-1.0 -v filesrc location="$recording" ! qtdemux name=d \
-    d.video_0 ! queue ! fakesink d.audio_0 ! queue ! fakesink 2>&1 | grep -oE 'caps = (video/x-h264|audio/mpeg)' | sort -u | wc -l)"
-[[ "$streams" == 2 ]] || fail "recording lacks H.264 or AAC"
+[[ "$(codecs "$recording")" == "aac,h264" ]] || fail "recording lacks H.264 or AAC: $(codecs "$recording")"
 pass "outputs: recording (H.264 + AAC, finalized MP4), SRT stream received, start/stop"
 
 # MultiCorder: ISO recordings of single inputs, with and without sound.
@@ -293,27 +296,81 @@ for iso in Orange Clips; do
 done
 sleep 4
 for iso in Orange Clips; do act "{\"action\":\"stop_output\",\"output\":\"ISO $iso\"}" >/dev/null; done
-tracks() {
-    local file
-    file="$(find "$WORK/strom-data" -path "*iso-$1/*" -name '*.mp4' | head -1)"
-    [[ -n "$file" ]] || { echo 0; return; }
-    timeout 20 gst-launch-1.0 -v filesrc location="$file" ! qtdemux name=d d. ! queue ! fakesink d. ! queue ! fakesink 2>&1 \
-        | grep -oE 'caps = (video/x-h264|audio/mpeg)' | sort -u | wc -l
-}
-[[ "$(tracks Orange)" == 1 ]] || fail "ISO of a silent input: expected video only, got $(tracks Orange) tracks"
-[[ "$(tracks Clips)" == 2 ]] || fail "ISO of the playlist: expected video and audio"
+iso_file() { find "$WORK/strom-data" -path "*iso-$1/*" -name '*.mp4' | head -1; }
+[[ "$(codecs "$(iso_file Orange)")" == "h264" ]] || fail "ISO of a silent input: $(codecs "$(iso_file Orange)")"
+[[ "$(codecs "$(iso_file Clips)")" == "aac,h264" ]] || fail "ISO of the playlist: $(codecs "$(iso_file Clips)")"
 pass "MultiCorder: ISO recordings per input (silent input video only, playlist with sound)"
 
-# Display output: program in a window on the engine's screen.
-DISPLAY="$ENGINE_DISPLAY" import -window root "$WORK/screen-before.png"
+# Display output: program in a window on the engine's screen. Orange on
+# program makes the window easy to recognize.
+act '{"action":"cut_direct","input":"Orange"}' >/dev/null
 act '{"action":"add_output","spec":{"kind":"display","mode":{"mode":"window"}},"name":"Screen"}' >/dev/null
 act '{"action":"start_output","output":"Screen"}' >/dev/null
-sleep 3
-DISPLAY="$ENGINE_DISPLAY" import -window root "$WORK/screen.png"
-spread="$(convert "$WORK/screen.png" -colorspace gray -format '%[fx:int(standard_deviation*100)]' info:)"
-[[ "$(output_state Screen)" == running && $spread -gt 5 ]] || fail "display output shows nothing (spread $spread)"
+screen_orange() {
+    DISPLAY="$ENGINE_DISPLAY" import -window root "$WORK/screen.png"
+    [[ $(rgb "$WORK/screen.png" r) -gt 200 && $(rgb "$WORK/screen.png" b) -lt 60 ]]
+}
+for _ in $(seq 1 20); do screen_orange && break; sleep 0.5; done
+[[ "$(output_state Screen)" == running ]] && screen_orange || fail "display output does not show program"
 act '{"action":"stop_output","output":"Screen"}' >/dev/null
 pass "display output: program in a window on the engine screen"
+
+# --- failover (3.4): a source dies mid-transition, a stream breaks ---
+input_state() { curl -sf "$CORE/state" | jq -r ".inputs[] | select(.name==\"$1\") | .status"; }
+flow_id() { curl -sf "$STROM/api/flows" | jq -r ".flows[] | select(.name==\"$1\") | .id"; }
+# is <state function> <name> <state>: evaluated anew on every try.
+is() { [[ "$("$1" "$2")" == "$3" ]]; }
+wait_for() {   # wait_for <seconds> <command…>: until the command succeeds
+    local seconds="$1"; shift
+    for _ in $(seq 1 "$((seconds * 2))"); do "$@" && return 0; sleep 0.5; done
+    return 1
+}
+act '{"action":"cut_direct","input":"Ball"}' >/dev/null
+act '{"action":"preview_input","input":"Orange"}' >/dev/null
+act '{"action":"set_transition","slot":1,"effect":"fade","duration_ms":3000}' >/dev/null
+act '{"action":"transition","slot":1}' >/dev/null
+sleep 1
+orange_slot="lmix slot $(curl -sf "$CORE/state" | jq '.inputs[] | select(.name=="Orange") | .slot')"
+curl -sf -X POST "$STROM/api/flows/$(flow_id "$orange_slot")/stop" >/dev/null
+wait_for 2 is input_state Orange offline || fail "dead source not marked offline"
+# Hold: while the input is offline, program keeps fading to its last
+# frame (CPU compositor in the VM may show one black frame at the loss,
+# HARDWARE-TODO).
+held_orange() {
+    picture program "$WORK/held.jpg"
+    [[ "$(input_state Orange)" == offline && $(rgb "$WORK/held.jpg" r) -gt 150 ]]
+}
+wait_for 2 held_orange || fail "program lost the orange while the source was gone"
+running="$(curl -sf "$STROM/api/flows/$MIXER_ID" | jq -r '.flow.running')"
+[[ "$running" == true ]] || fail "mixer stopped after source loss"
+wait_for 15 is input_state Orange online || fail "source did not fail back"
+picture inputs/Orange "$WORK/back.jpg"
+[[ $(rgb "$WORK/back.jpg" r) -gt 200 ]] || fail "orange not back after failback"
+pass "failover: source died mid-transition, program held its last frame, input failed back"
+
+act '{"action":"start_output","output":"Stream"}' >/dev/null
+sleep 2   # running for a while, then the link breaks
+stream_flow="$(curl -sf "$STROM/api/flows" | jq -r '[.flows[] | select(.name | startswith("lmix output")) | select(.running)][0].id')"
+curl -sf -X POST "$STROM/api/flows/$stream_flow/stop" >/dev/null
+wait_for 2 is output_state Stream failed || fail "broken stream not marked failed"
+wait_for 15 is output_state Stream running || fail "stream did not restart"
+act '{"action":"stop_output","output":"Stream"}' >/dev/null
+pass "failover: stream broke, was marked failed and restarted itself"
+
+# --- latency (NFA.3): capture-to-program, CPU mixer in a VM ---
+# Budget here is generous (software compositing, no GPU); the real target
+# of two frames is checked on hardware (HARDWARE-TODO).
+LATENCY_BUDGET_MS="${LATENCY_BUDGET_MS:-150}"
+act '{"action":"cut_direct","input":"Ball"}' >/dev/null
+curl -sf -X POST "$CORE/latency/measure?seconds=5" >/dev/null || fail "latency measurement not started"
+sleep 6
+latency="$(curl -sf "$CORE/latency")"
+samples="$(jq -r '.samples' <<<"$latency")"
+median="$(jq -r '.median_ms' <<<"$latency")"
+p95="$(jq -r '.p95_ms' <<<"$latency")"
+[[ "$samples" -ge 3 ]] || fail "too few latency samples: $latency"
+[[ "$p95" -le "$LATENCY_BUDGET_MS" ]] || fail "latency p95 ${p95} ms over ${LATENCY_BUDGET_MS} ms: $latency"
+pass "latency: median ${median} ms, p95 ${p95} ms from ${samples} samples (budget ${LATENCY_BUDGET_MS} ms)"
 
 # --- input color, device list ---
 act '{"action":"set_input_color","input":"Ball","color":"teal"}' >/dev/null
