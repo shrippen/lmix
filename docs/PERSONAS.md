@@ -227,3 +227,29 @@ Testbilder) und gegen die Szenarien.
 
 **Befunde**: B22 Console muss Client von `lmix-core` werden (2b.2), bevor
 Bediener davon etwas haben; B23 Ton fehlt in den Slots (nur Video gekoppelt).
+
+---
+
+## Durchlauf 3: M2b Schritt 4 (2026-10-08, VM-Test + Console auf Xvfb)
+
+Neu: Console als Client von `lmix-core` (`--core`): Input-Leiste mit
+Bildern und Tally, Klick = PVW, Doppelklick = Take, Tasten 1–9, vier
+Übergangs-Buttons, FTB, Input hinzufügen, umbenennen, entfernen,
+Show-Datei. Geprüft mit `CONSOLE_SHOT=… scripts/test-m2b-vm.sh`.
+
+| Persona | Schritt | Ergebnis |
+|---|---|---|
+| P1 Ehrenamt | Kamera in Vorschau, dann auf Sendung | ✅ Klick, Doppelklick; Rahmen grün/rot wie gewohnt |
+| P1 Ehrenamt | Show "Gottesdienst" öffnen | ⚠ Pfad eintippen, kein Dateidialog, keine Liste letzter Shows (B24) |
+| P2 Konferenz | Zweiter Bedienplatz mit eigener Console | ✅ beide sehen denselben Zustand (WebSocket); ⚠ Rechte je Platz (OPS.2) |
+| P3 Sport | Input "Kamera 2" in "Torkamera" umbenennen | ✅ Kachel-Menü |
+| P4 Streamer | Webcam hinzufügen | ⚠ Geräte-ID eintippen, keine Geräteliste über `lmix-core` (B25) |
+| P6 Hörsaal | Übergang von Fade auf Cut umstellen | ✅ nach Fix: Hinweis am Button, Rechtsklick (B26 behoben) |
+| P7 Theater | Zuspieler während der Vorstellung austauschen | ✅ nach Fix: Kachel-Menü "Quelle ersetzen" (B27 behoben); Bild auf PGM läuft weiter (VM, CPU) |
+| P5 Broadcast | Bild eines Inputs in eigenes Tool holen | ✅ `GET /api/pictures/inputs/{n}` |
+
+**Befunde**: B24 Dateidialog und letzte Shows; B25 Geräteliste über
+`lmix-core` (SRC.1); B26 Übergangs-Einstellung nicht auffindbar (behoben:
+Hinweis); B27 Quelle ersetzen fehlte in der GUI (behoben). Nebenbei: der
+Test fand einen echten Fehler (PGM schwarz bei Kopplung), siehe
+`DECISIONS.md`.

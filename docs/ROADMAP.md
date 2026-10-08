@@ -231,6 +231,19 @@ vMix-Grundprinzip: Inputs kommen und gehen, ohne dass Program stockt.
 **Abnahme**: Input während laufender Sendung hinzufügen/entfernen, PGM ohne
 Aussetzer; Show speichern, Neustart, Show laden → identischer Zustand.
 
+**Stand 2026-10-08** (Branch `m2b`, VM-Test `scripts/test-m2b-vm.sh` grün,
+GPU-Punkte in `HARDWARE-TODO.md`):
+
+| # | Stand |
+|---|---|
+| 2b.6 | ✅ `lmix-core` + `lmix-types`, Aktionskatalog, HTTP/WS-API, Bilder je Input/PGM |
+| 2b.1 | ✅ Slot-Flows über `inter`, Quellentausch auf Sendung (VM, CPU); Zeitbasis 0 + strom-Patch `start_time_selection` (`DECISIONS.md`) |
+| 2b.4 | ✅ Show-Datei v1, Autosave, Wiederaufnahme nach Absturz (ohne Audio/Ausgänge/Hotkeys, die es noch nicht gibt) |
+| 2b.2 | ✅ Console `--core`: Kacheln mit Bild, Tally, Klick/Doppelklick, Menü; ⚠ Typ, Farbe, Audio der Kachel fehlen |
+| 2b.3 | ⬜ weitere Quellentypen; offen B24 Dateidialog, B25 Geräteliste |
+| B23 | ⬜ Ton über die Slots |
+| 2b.5 | ⬜ nur auf GPU messbar (H.1) |
+
 ### M3 — Ausgänge + Robustheit (wie geplant, konkretisiert; GPU liegt jetzt in M1b)
 
 | # | Punkt | Ort |
@@ -389,6 +402,11 @@ Virtual Sets.
 4. ~~Testhardware AMD/Intel~~ — entschieden 2026-09-27: derzeit keine
    verfügbar; herstellerneutral bauen, Abnahme später (M5b).
 5. Clean-Room-Fragen E.1–E.8 in `LASTENHEFT.md` §6.
+6. strom: rund 30 GStreamer-CRITICALs je Sekunde aus dem Mischer-Thread
+   (`gst_mini_object_unref` mit NULL in einem Event-Pfad), auch ohne lmix.
+   Bild läuft; Ursache klären, bevor M3 auf Dauerbetrieb prüft.
+7. strom-Patch `lmix-start-time` (Branch im strom-Fork) nach `dev` mergen;
+   das Submodul zeigt bis dahin auf den Branch.
 
 Quellen: vMix-Features <https://www.vmix.com/software/features.aspx>,
 vMix 29 <https://blog.vmix.com/vmix-29-is-available-now/>, strom-Doku

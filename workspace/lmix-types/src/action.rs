@@ -38,6 +38,35 @@ pub enum Effect {
     WipeRight,
 }
 
+impl Effect {
+    pub const ALL: [Effect; 9] = [
+        Effect::Cut,
+        Effect::Fade,
+        Effect::DipToBlack,
+        Effect::SlideLeft,
+        Effect::SlideRight,
+        Effect::PushLeft,
+        Effect::PushRight,
+        Effect::WipeLeft,
+        Effect::WipeRight,
+    ];
+
+    /// Short button label.
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Cut => "Cut",
+            Self::Fade => "Fade",
+            Self::DipToBlack => "Dip",
+            Self::SlideLeft => "Slide ◀",
+            Self::SlideRight => "Slide ▶",
+            Self::PushLeft => "Push ◀",
+            Self::PushRight => "Push ▶",
+            Self::WipeLeft => "Wipe ◀",
+            Self::WipeRight => "Wipe ▶",
+        }
+    }
+}
+
 /// Every operation, whatever triggered it.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "action", rename_all = "snake_case")]

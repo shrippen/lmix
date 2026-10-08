@@ -208,4 +208,16 @@ export SWAGGER_UI_DOWNLOAD_URL=file://$PWD/swagger-ui-5.17.14.zip
 
 ```bash
 scripts/test-m2b-vm.sh   # strom (CPU-Mischer) + lmix-core, Testbilder
+CONSOLE_SHOT=console.png scripts/test-m2b-vm.sh   # plus Console auf Xvfb
 ```
+
+Prüft Bildinhalt (Helligkeit, Bewegung) über ImageMagick `convert`.
+
+## Console als Client von lmix-core
+
+```bash
+cd workspace/app-desktop
+cargo run -- --core http://127.0.0.1:8200    # oder LMIX_CORE=…
+```
+
+Ohne `--core` spricht die Console wie in M1b direkt mit strom.

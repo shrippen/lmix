@@ -450,3 +450,36 @@ strom-Workspace (strom-Diff bleibt null):
 (`qml/Kante`, mit System-Modus = Breeze). Für egui gibt es keine; sie
 müsste zuerst in Kante entstehen. Das ist ein Kriterium für G.1
 (GUI-Toolkit, Entscheidung nach Prototyp in M3).
+
+## 2026-10-08 — M2b Schritt 4: Console als Client, Zeitbasis der Kopplung
+
+**Kontext**: Persona-Befund B22 (Console muss Client von `lmix-core`
+werden). Beim Bau fiel auf: PGM blieb schwarz, sobald die Quellen über
+`inter` kamen. Der VM-Test von Schritt 2 hatte das nicht bemerkt, er prüfte
+nur die JPEG-Größe (ein schwarzes Bild ist ebenso groß).
+**Ursache**: `inter` reicht Puffer mit der Laufzeit des erzeugenden Flows
+weiter. Jeder strom-Flow hat eine eigene Basiszeit, also passen die Zeiten
+von Slot und Mischer nicht zusammen; der Mischer verwirft alles als zu alt
+oder wartet auf "Zukunft".
+**Entscheidung**:
+- Alle lmix-Flows laufen mit Monotonic-Uhr und Basiszeit 0
+  (`direct_media_timing`), dann ist die Laufzeit überall die Uhrzeit.
+- Der Mischer startet seine Ausgabe beim ersten Puffer statt bei null.
+  Dafür ein kleiner strom-Patch (Branch `lmix-start-time`, 69 Zeilen):
+  neue Block-Eigenschaft `start_time_selection` (`zero` Standard wie
+  bisher, `first`). Kein Umbau von strom, Verhalten anderer Flows gleich.
+- Bilder für GUI und Fremdprogramme liefert `lmix-core` selbst
+  (`/api/pictures/program`, `/api/pictures/inputs/{input}`), jeder Slot hat
+  dafür einen Thumbnail-Abgriff. Clients brauchen strom nicht zu kennen.
+- Hinter dem PGM-Abgriff hängt eine `fakesink` (sync=false), sonst bleibt
+  der Zweig nach dem ersten Bild stehen. Echte Ausgänge (OUT) ersetzen sie.
+- Der VM-Test prüft Bildinhalt (Helligkeit) und Bewegung (zwei Bilder
+  unterscheiden sich), nie mehr Bytes. Er schlägt gegen den alten Stand
+  fehl und läuft mit dem Fix durch.
+- Console: `--core URL` startet den Client-Modus (Input-Leiste, Monitore,
+  Übergänge, Show-Datei). Der direkte strom-Modus (M1b: Ton, DSK,
+  Selbsttest) bleibt, bis `lmix-core` ihn abdeckt.
+**Offen**: strom meldet im Mischer-Thread rund 30 GStreamer-CRITICALs je
+Sekunde (`gst_mini_object_unref` mit NULL in einem Event-Pfad), auch ohne
+Inputs und schon vor dem Patch. Bild läuft trotzdem; Ursache in strom
+klären (ROADMAP §5).
