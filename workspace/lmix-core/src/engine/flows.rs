@@ -78,9 +78,12 @@ const INTER_BUFFER_MS: &str = "100";
 const TONE_BASE_HZ: f64 = 440.0;
 const TONE_STEP: f64 = 1.25;
 const TONE_VOLUME: f64 = 0.1;
-/// One audio format for every slot: the audio mixer takes the format of
-/// its first input, a slot that differs fails with not-negotiated.
+/// One audio format for every slot, at the audio mixer's bus rate.
 const AUDIO_CAPS: &str = "audio/x-raw,format=F32LE,layout=interleaved,rate=48000,channels=2";
+/// Bus rate of the audio mixer (Hz), as in [`AUDIO_CAPS`]. Without it the
+/// mixer, running before the first slot sounds, settles on 44.1 kHz and
+/// refuses the slots.
+const AUDIO_RATE: u64 = 48_000;
 
 /// Format test patterns are rendered in; real sources keep theirs.
 const PATTERN_WIDTH: u32 = 1280;
@@ -417,6 +420,7 @@ fn add_audio_mixer(flow: &mut Flow, slots: usize, monitor: MonitorOut) {
         AUDIO_MIXER_BLOCK,
         vec![
             ("num_channels", PropertyValue::UInt(slots as u64)),
+            ("sample_rate", PropertyValue::UInt(AUDIO_RATE)),
             (
                 "start_time_selection",
                 PropertyValue::String("first".into()),

@@ -687,3 +687,17 @@ Schriften OFL-1.1), damit lmix die QML-Module ausliefern darf.
 Abhängigkeiten wie bisher (`claude.md` Entscheidung 6): Qt, Kirigami,
 GStreamer und gstcefsrc (LGPL) nur dynamisch, kein GPL-Code im Repo oder
 Paket (z. B. kein `x264enc` mitliefern), NDI-SDK zur Laufzeit.
+
+## 2026-10-09 — Ton der Slots: Mischer fest auf 48 kHz
+
+**Befund** (lokal, Arch, GStreamer 1.28.7): Gesamttest „no sound from the
+slots“. Der Audiomischer in strom läuft mit `force-live` und mischt nach
+Timeout auch ohne Eingang; startet er vor dem ersten Slot-Ton, legt er
+sich auf 44,1 kHz fest. Die Slots liefern 48 kHz (`AUDIO_CAPS`), der
+Kanalzug wandelt nur das Format, nicht die Rate: `not-negotiated` an
+`ain*`. In der Cloud kam der Ton offenbar vor dem Timeout an.
+**Entscheidung**: strom-Mischer bekommt die Eigenschaft `sample_rate`
+(strom `lmix-sample-rate`, auf `lmix-start-time`): Capsfilter hinter jedem
+Bus, Resampler je Kanal; Standard 0 lässt alles wie bisher. lmix-core
+setzt 48 kHz. Dazu auf `lmix-start-time` der fehlende OpenAPI-Snapshot
+für `eos_on_stop` (sonst rot in strom-CI).

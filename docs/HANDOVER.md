@@ -17,6 +17,8 @@ strom-Fork (`shrippen/strom`):
   `eos_on_stop`. Submodul von `m2b`/`m3` zeigt hierher.
 - `lmix-dsk-fade` (auf `lmix-start-time`, kein PR): DSK-Blende mit
   `duration_ms`, nur für `m4`.
+- `lmix-sample-rate` (auf `lmix-start-time`, kein PR): Mischer-Eigenschaft
+  `sample_rate`. Submodul von `m3` zeigt seit 2026-10-09 hierher.
 
 Merge-Reihenfolge: strom #1, dann lmix #1, #2, #3 (jeweils auf Gitea).
 
