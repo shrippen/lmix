@@ -266,41 +266,40 @@ Aussetzer; Show speichern, Neustart, Show laden → identischer Zustand.
 
 - Shortcut-Editor, Trigger (OnTransitionIn/Out, OnCountdown) — **C**
 - Tally über WS-Events (Ausgabe an einfache HTTP-Tally-Geräte) — **C**
-- Gäste per Browser-WHIP (vMix-Call-Ersatz); braucht erreichbaren
+- (später) Gäste per Browser-WHIP (vMix-Call-Ersatz); braucht erreichbaren
   Media-Port, klärt die offene RTSP-/Bind-Frage aus `DECISIONS.md` mit — **C**
 - Scopes (Waveform, Vectorscope) auf PGM — **C**
 - PTZ über VISCA-IP — **C**, optional
 
-### M7 — Grafik & Daten
+### M7 — Titel & Daten (HTML), direkt nach M4
 
-Titelformat, Renderer, Editor, Vorlagen, Datenquellen. Ersetzt M4.4.
-IDs: GFX.1–11, DAT.1–5, SWI.7 (Titel als Stinger), OVL.7.
+Titel sind Muss (`LASTENHEFT.md` §3.11): HTML-Vorlagen mit Feld-API,
+Animationen per CSS/JS und Lottie, Vorlagen-SDK, Datenquellen. Ersetzt M4.4.
+IDs: GFX.1–15, DAT.1–5, SWI.7, OVL.7. Entscheidungen E.9 (Engine), E.10 (Lottie).
 
 **Abnahme**: Bauchbinde aus CSV-Zeile, Ein-/Ausblendanimation als Overlay,
-Countdown mit Auslöser bei 0.
+Lottie-Bauchbinde mit Textfeld, Countdown mit Auslöser bei 0, 8 animierte
+Titel 1080p60 ohne Drop.
 
-### M8 — Wiederholung
+### M8 — Fernbedienung, API-Gleichstand
 
-Ringpuffer-Aufnahme, Ereignisse, Abspielkanäle, Export. Ersetzt M4.5.
-IDs: RPL.1–10, SRC.19 (Video-Verzögerung), OUT.3 (Wiederholungs-Multiview).
+IDs: WEB.1–5, TEL.1–3, API.2–11, STR.8.
 
-**Abnahme**: 4 Kameras 1080p50 aufnehmen, "letzte 10 s" markieren, mit 50 %
-auf Program, automatisch zurück; Ereignis als MP4.
+**Abnahme**: Bitfocus Companion steuert lmix über das eigene Modul
+(API.9, API.11); Tally auf dem Handy.
 
-### M9 — Gäste, Fernbedienung, API-Gleichstand
-
-IDs: CAL.1–6, WEB.1–5, TEL.1–3, API.2–11, STR.8.
-
-**Abnahme**: 2 Browser-Gäste mit Mix-Minus; Bitfocus Companion steuert lmix
-über das eigene Modul (API.9, API.11); Tally auf dem Handy.
-
-### M10 — Gleichstand
+### M9 — Gleichstand
 
 Restliche S-Anforderungen: SWI.6 (Verschmelzen), SWI.10 (Mix-Inputs),
 LAY.6 (Ebenen-Editor), PRC.9 (Effektkette), AUD.9/11 (Matrix, Plugins),
 OUT.4/5 (Karte, Key+Fill), PER.2–5 (PTZ, Uhren), UI.3–12, SHW.6–9.
 
 **Abnahme**: Abdeckungsmatrix (`LASTENHEFT.md`) ohne offene M/S.
+
+### Später — Wiederholung, Gäste
+
+Zurückgestellt (User 2026-10-08): RPL.1–10, SRC.19–20, CAL.1–6, SRC.24.
+Ersetzt M4.5 und den Gäste-Punkt in M6.
 
 ---
 
@@ -315,10 +314,10 @@ OUT.4/5 (Karte, Key+Fill), PER.2–5 (PTZ, Uhren), UI.3–12, SHW.6–9.
 | NFA.5–7, NFA.13 | M5 |
 | NFA.1–2 (AMD/Intel) | M5b |
 | AUT.1–11, PER.1, PER.6–7, OUT.12–13 | M6 |
-| GFX, DAT | M7 |
-| RPL, SRC.19 | M8 |
-| CAL, WEB, TEL, API.2–11 | M9 |
-| Rest S, dann K | M10 |
+| GFX, DAT | M7 (nach M4) |
+| WEB, TEL, API.2–11 | M8 |
+| Rest S, dann K | M9 |
+| RPL, CAL | Später |
 
 ---
 

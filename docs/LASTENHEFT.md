@@ -125,7 +125,8 @@ ist ein Client dieses Katalogs, kein Sonderweg.
 ## 3. Funktionale Anforderungen
 
 Priorität: **M** Muss (Kern für Live-Produktion), **S** Soll (Gleichstand
-mit vMix), **K** Kann, **X** ausgeschlossen (§5).
+mit vMix), **K** Kann, **L** später (bewusst zurückgestellt, Entscheidung
+2026-10-08), **X** ausgeschlossen (§5).
 Stand lmix: ✅ vorhanden · ◐ teilweise · – fehlt. "E" = Engine (strom)
 kann es, Console nicht.
 
@@ -173,12 +174,12 @@ kann es, Console nicht.
 | SRC.16 | Titel | §3.11 | M | – |
 | SRC.17 | Bildschirm lokal | Bildschirm oder Fenster dieses Rechners (PipeWire-Portal) | S | – |
 | SRC.18 | Bildschirm entfernt | Fenster/Bildschirm anderer Rechner per NDI/OMT (Fremdwerkzeug genügt) | K | – |
-| SRC.19 | Video-Verzögerung | Ringpuffer eines Inputs oder von Program, Länge in s, Abspieltempo (Zeitlupe), Ausschnitt als Clip speichern → Liste oder neuer Input | S | – |
-| SRC.20 | Wiederholungskanal | §3.10 | S | – |
+| SRC.19 | Video-Verzögerung | Ringpuffer eines Inputs oder von Program, Länge in s, Abspieltempo (Zeitlupe), Ausschnitt als Clip speichern → Liste oder neuer Input | L | – |
+| SRC.20 | Wiederholungskanal | §3.10 | L | – |
 | SRC.21 | Mix | §3.6 | S | – |
 | SRC.22 | Program als Input | Ausgang 1 als Input (nur einmal; Selbstbezug liefert Standbild) | S | – |
 | SRC.23 | Preview als Input | aktuelle Preview als Input | K | – |
-| SRC.24 | Gast | §3.14 | S | – |
+| SRC.24 | Gast | §3.14 | L | – |
 | SRC.25 | Zeichenebene | transparente Ebene, im Browser bemalbar (§3.17) | K | – |
 | SRC.26 | Produktionsuhren | §3.18 als Input | K | – |
 | SRC.27 | Virtuelles Set | Keying-Talent in 3D-Szene mit Kamerafahrten | X | – |
@@ -318,35 +319,45 @@ kann es, Console nicht.
 
 ### 3.10 Wiederholung (RPL)
 
+Zurückgestellt (User 2026-10-08). Anforderungen bleiben als Ziel erhalten.
+
 | ID | Anforderung | Prio | Stand |
 |---|---|---|---|
-| RPL.1 | Daueraufnahme von bis 8 Live-Inputs (oder Program) in Sitzungsordner, Ton bis 4 Kanäle; Split alle 20 min; ältestes Material bei Platzmangel löschen (wählbar); mehrere Laufwerke | S | – (ROADMAP 4.5) |
-| RPL.2 | Ereignisse: In/Out, Dauer, Tempo, aktivierte Kameras, Text je Kamera, Tags; 20 Ereignislisten mit Namen; ID mit fester Stellenzahl | S | – |
-| RPL.3 | Live- und Rückschau-Modus für Markierungen; Markieren per Taste ("letzte 5/10/20 s"), In/Out einzeln, Abbruch | S | – |
-| RPL.4 | Abspielkanäle A und B (gekoppelt oder getrennt), optional C/D als Vierfachansicht; Kamera je Kanal live wechseln | S | – |
-| RPL.5 | Tempo 0–100 % (+ schneller), rückwärts, Einzelbild, Jog/Shuttle, Mausrad; Ton bei Zeitlupe gedehnt | S | – |
-| RPL.6 | Abspielen: letztes/gewähltes/alle Ereignisse, mit Ein-/Aus-/Zwischenübergang (Tempo-angepasst), Musikbett, automatisch auf Program und zurück | S | – |
-| RPL.7 | Ereignisse kopieren/verschieben/löschen, In/Out frameweise nachstellen | S | – |
-| RPL.8 | Export eines Ereignisses als MP4 | S | – |
-| RPL.9 | Wiederholungs-Multiview: Kanäle + Live-Kameras | S | – |
-| RPL.10 | Vor-/Nachlauf, Doppelklick spielt, Sortierung nach Zeit | K | – |
+| RPL.1 | Daueraufnahme von bis 8 Live-Inputs (oder Program) in Sitzungsordner, Ton bis 4 Kanäle; Split alle 20 min; ältestes Material bei Platzmangel löschen (wählbar); mehrere Laufwerke | L | – (ROADMAP 4.5) |
+| RPL.2 | Ereignisse: In/Out, Dauer, Tempo, aktivierte Kameras, Text je Kamera, Tags; 20 Ereignislisten mit Namen; ID mit fester Stellenzahl | L | – |
+| RPL.3 | Live- und Rückschau-Modus für Markierungen; Markieren per Taste ("letzte 5/10/20 s"), In/Out einzeln, Abbruch | L | – |
+| RPL.4 | Abspielkanäle A und B (gekoppelt oder getrennt), optional C/D als Vierfachansicht; Kamera je Kanal live wechseln | L | – |
+| RPL.5 | Tempo 0–100 % (+ schneller), rückwärts, Einzelbild, Jog/Shuttle, Mausrad; Ton bei Zeitlupe gedehnt | L | – |
+| RPL.6 | Abspielen: letztes/gewähltes/alle Ereignisse, mit Ein-/Aus-/Zwischenübergang (Tempo-angepasst), Musikbett, automatisch auf Program und zurück | L | – |
+| RPL.7 | Ereignisse kopieren/verschieben/löschen, In/Out frameweise nachstellen | L | – |
+| RPL.8 | Export eines Ereignisses als MP4 | L | – |
+| RPL.9 | Wiederholungs-Multiview: Kanäle + Live-Kameras | L | – |
+| RPL.10 | Vor-/Nachlauf, Doppelklick spielt, Sortierung nach Zeit | L | – |
 
 ### 3.11 Titel und Grafik (GFX)
 
+Entscheidung 2026-10-08 (User): Titel sind Muss, auf HTML-Basis, nicht
+kompatibel zu vMix-Titeln. Damit lassen sich beliebige HTML-Quellen einbinden;
+Animationen per CSS/JavaScript und Lottie.
+
 | ID | Anforderung | Prio | Stand |
 |---|---|---|---|
-| GFX.1 | Offenes Titelformat (eigene Spezifikation, lmix): Objekte Text, Bild, Farbflächen, Laufschrift, Countdown; benannte Felder für Text, Bild und Farbe, von außen setzbar; Sichtbarkeit je Feld | M | – |
-| GFX.2 | Animationen je Titel: Einblenden und Ausblenden (genutzt von Overlay-Kanal und Stinger), weitere benannte Abläufe per Aktion startbar | S | – |
-| GFX.3 | Titel-Editor in der GUI: Felder live oder per "Übernehmen", Schrift, Größe, Farbe, Sichtbarkeit je Feld | M | – |
-| GFX.4 | Titel-Presets: Feldwerte als Satz speichern, wählen, vor/zurück; CSV ex-/import | S | – |
-| GFX.5 | Countdown/Stoppuhr: Dauer, Ziel-/Startzeit, Richtung, Format, Start/Stopp/Pause/Anpassen per Aktion, Ereignis bei 0 | S | – |
-| GFX.6 | Laufschrift: Tempo (px/Frame), Anhängen vs. Ersetzen | S | – |
-| GFX.7 | Titel als Stinger (Schnittpunkt aus Animation) | S | – |
-| GFX.8 | Vorlagensatz (eigen gestaltet): Bauchbinde, Name+Funktion, Laufschrift, Uhr, Countdown, Spielstand, Vollbild-Karte; Hochkant-Varianten | S | – |
-| GFX.9 | Gestaltungswerkzeug für Titel (eigene App oder HTML-Workflow) | S | – |
-| GFX.10 | HTML-Titel als Alternative (Webseite mit Feld-API) | S | ◐ (CEF E) |
-| GFX.11 | Rendering auf GPU ohne Neustart der Pipeline; Rendern pausieren/fortsetzen | M |
-| GFX.12 | Titel neu laden nach Änderung im Gestaltungswerkzeug; im Programm gesetzte Werte haben Vorrang | S | – |
+| GFX.1 | Titel = HTML-Vorlage: Paket aus HTML, CSS, JS, Assets und Manifest (Name, Größe, Felder mit Typ Text/Bild/Farbe/Zahl/Schalter, Abläufe, Dauer der Animationen) (lmix) | M | – |
+| GFX.2 | Rendering offscreen mit Alpha in Ausgabeauflösung und -bildrate, auf GPU, ohne Neustart der Pipeline; Rendern pausieren/fortsetzen (E.9) | M | ◐ (CEF E) |
+| GFX.3 | Feld-API: Felder per Aktion setzen und lesen; Vorlage erhält Änderungen ohne Neuladen als Ereignis; Sichtbarkeit je Feld | M | – |
+| GFX.4 | Animations-Lebenszyklus: Einblenden, Ausblenden, nächste/vorige Seite, Datenwechsel, frei benannte Abläufe; Vorlage meldet Ende; Overlay-Kanal wartet auf Ende der Ausblendung | M | – |
+| GFX.5 | Lottie: Lottie-Animationen (JSON, .lottie) in Vorlagen und als eigener Input; Textebenen als Felder; Marker als Abläufe (Ein/Aus/Schleife) (E.10) | S | – |
+| GFX.6 | Beliebige HTML-Quellen (eigene Seiten, URLs, Widgets) als Titel nutzbar; Feldbindung, wenn die Seite die Feld-API einbindet | S | – |
+| GFX.7 | Titel-Editor in der GUI: Formular aus dem Manifest, Felder live oder per "Übernehmen" | M | – |
+| GFX.8 | Titel-Presets: Feldwerte als Satz speichern, wählen, vor/zurück; CSV ex-/import | S | – |
+| GFX.9 | Countdown/Stoppuhr/Uhr als Vorlagenbaustein: Dauer, Ziel-/Startzeit, Richtung, Format, Start/Stopp/Pause/Anpassen per Aktion, Ereignis bei 0 | S | – |
+| GFX.10 | Laufschrift: Tempo, Richtung, Anhängen vs. Ersetzen | S | – |
+| GFX.11 | Titel als Stinger: Schnittpunkt und Dauer aus dem Manifest | S | – |
+| GFX.12 | Vorlagensatz (eigen gestaltet): Bauchbinde, Name+Funktion, Laufschrift, Uhr, Countdown, Spielstand, Vollbild-Karte; Hochkant-Varianten | M | – |
+| GFX.13 | Vorlagen-SDK: kleine JS-Bibliothek (Feld-API, Lebenszyklus), Vorlagen-Gerüst, Vorschau im normalen Browser mit Testfeldern; Gestaltung mit üblichen Web-Werkzeugen statt eigenem Designer | S | – |
+| GFX.14 | Titel neu laden bei Dateiänderung; im Programm gesetzte Werte bleiben erhalten | S | – |
+| GFX.15 | Leistungsbudget: ≥ 8 aktive animierte Titel 1080p60 gleichzeitig ohne Drop | M | – |
+| GFX.16 | Import von vMix-Titeln (.gtzip, XAML) | X | – |
 
 ### 3.12 Datenquellen (DAT)
 
@@ -376,14 +387,16 @@ kann es, Console nicht.
 
 ### 3.14 Gäste (CAL)
 
+Zurückgestellt (User 2026-10-08).
+
 | ID | Anforderung | Prio | Stand |
 |---|---|---|---|
-| CAL.1 | Gast tritt per Browser bei (Link + Kennwort/Token), Kamera + Mikrofon; ein Input je Gast; bis 8 Gäste | S | – (ROADMAP M6) |
-| CAL.2 | Rückweg je Gast: Bild (Ausgang n oder keins), Ton (Master, Abhörweg, Bus A–G) mit automatischem Mix-Minus | S | – |
-| CAL.3 | Bandbreite Rückweg wählbar (bis 1080p); Gast-Bandbreite automatisch oder fest | S | – |
-| CAL.4 | Verbindungsmanager: Status grün/gelb/rot, Statistik (Auflösung, Bitrate, fps, Jitterpuffer), Text-Chat mit allen Gästen | S | – |
-| CAL.5 | Nur Direktverbindung erzwingen; Vermittlungsserver selbst betrieben, kein Herstellerdienst (lmix) | S | – |
-| CAL.6 | Gäste automatisch als NDI/OMT | K | – |
+| CAL.1 | Gast tritt per Browser bei (Link + Kennwort/Token), Kamera + Mikrofon; ein Input je Gast; bis 8 Gäste | L | – (ROADMAP M6) |
+| CAL.2 | Rückweg je Gast: Bild (Ausgang n oder keins), Ton (Master, Abhörweg, Bus A–G) mit automatischem Mix-Minus | L | – |
+| CAL.3 | Bandbreite Rückweg wählbar (bis 1080p); Gast-Bandbreite automatisch oder fest | L | – |
+| CAL.4 | Verbindungsmanager: Status grün/gelb/rot, Statistik (Auflösung, Bitrate, fps, Jitterpuffer), Text-Chat mit allen Gästen | L | – |
+| CAL.5 | Nur Direktverbindung erzwingen; Vermittlungsserver selbst betrieben, kein Herstellerdienst (lmix) | L | – |
+| CAL.6 | Gäste automatisch als NDI/OMT | L | – |
 
 ### 3.15 Aktionskatalog und APIs (API)
 
@@ -541,9 +554,11 @@ nicht nach, sondern ersetzt sie durch Heutiges oder lässt sie weg
 | E.2 | ~~API-Kompatibilität zu vMix~~ — entschieden 2026-10-08 (User): eigene API, funktional mindestens gleichwertig (API.9); Kompatibilitätsmodus optional (API.8, K); sauberer Schnitt zu vMix zulässig | — |
 | E.3 | Import von `.vmix`-Presets: Format undokumentiert, nur aus eigenen Testdateien ableitbar | Später (K), nur Inputs + Grundeinstellungen |
 | E.4 | Wo leben Show-Zustand, Aktionskatalog und APIs? Heute in `app-desktop` → stirbt mit der GUI (verletzt NFA.6). Optionen: (a) eigener Steuer-Dienst zwischen GUI und strom, (b) als strom-Erweiterung, (c) in der GUI | (a): `lmix-core` als eigener Prozess, GUI und APIs sind Clients |
-| E.5 | Titelformat: eigenes Szenenformat (JSON + eigener Renderer auf GPU) vs. HTML/CEF | Eigenes Format für Leistung und Animationen; HTML zusätzlich (GFX.10) |
+| E.5 | ~~Titelformat~~ — entschieden 2026-10-08 (User): HTML-Vorlagen mit Feld-API, Animation per CSS/JS und Lottie, nicht vMix-kompatibel (§3.11) | — |
+| E.9 | Browser-Engine für HTML-Titel und Webseiten-Input: (a) Chromium/CEF (volle Web-Kompatibilität, schwer, eigener Build), (b) WPE WebKit (für Embedded gemacht, GStreamer-Element `wpesrc`, LGPL als Laufzeitbibliothek), (c) Servo (Rust, noch unreif) | (a) CEF, wegen Kompatibilität mit beliebigen HTML-Quellen; Lizenzprüfung `gstcefsrc` (ROADMAP §5.3) |
+| E.10 | Lottie-Wiedergabe: (a) lottie-web im Browser der Vorlage, (b) nativ mit ThorVG oder rlottie auf der GPU als eigener Input | (a) für Vorlagen, (b) später für Lottie-Inputs ohne Browser |
 | E.6 | Skriptsprache (AUT.9): Lua, Rhai, JavaScript (QuickJS) | Rhai (Rust, MIT/Apache) oder Lua |
-| E.7 | Gäste (CAL): Signalisierung/TURN selbst betreiben, kein zentraler Dienst | Eigener Signalisierungsdienst im Programm, TURN optional |
+| E.7 | Gäste (CAL, später): Signalisierung/TURN selbst betreiben, kein zentraler Dienst | Eigener Signalisierungsdienst im Programm, TURN optional |
 | E.8 | `ROADMAP.md` §4 schließt Scripting, VST3, Zoom, PowerPoint, Virtual Sets aus. Lastenheft: Scripting K, Plugins K (LV2/VST3-Linux/CLAP), Rest X | Übernehmen |
 
 ---
