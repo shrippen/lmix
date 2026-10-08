@@ -276,7 +276,8 @@ Aussetzer; Show speichern, Neustart, Show laden → identischer Zustand.
 **M7.0 Benchmark** vor der Engine-Wahl (E.9): `cefsrc` (vorhanden) gegen
 WPE WebKit (`wpesrc`) mit 8 animierten Titeln 1080p60 (CSS, Canvas,
 lottie-web), Alpha; messen: GPU/CPU je Titel, Drops, Latenz, Speicher,
-Kopien bis in den Mischer.
+Kopien bis in den Mischer. Pflicht-Test GFX.20: H.264/AAC-Video, HLS über
+MSE, Twitch- und YouTube-Einbettung (§5.3).
 
 Titel-Fähigkeiten nach dem Vorbild CasparCG (`LASTENHEFT.md` §3.11):
 Vorlagen-Konvention, Lebenszyklus, Titel-Ebenen, Datensätze.
@@ -365,8 +366,21 @@ Virtual Sets.
    GStreamer selbst, ebenfalls LGPL). Regeln: gstcefsrc-Code nie ins Repo
    kopieren (Änderungen upstream oder eigenes Repo); beim Ausliefern von
    Paketen LGPL-Text, Quellverweis und CEF-/Chromium-Hinweise beilegen.
-   Standard-CEF-Builds spielen kein H.264/AAC ab (Patente); Video in Titeln
-   als VP9/AV1/WebM.
+   Standard-CEF-Builds spielen kein H.264/AAC ab (Patente). Gebraucht wird es
+   aber (`LASTENHEFT.md` GFX.20, Webseiten als Quellen). Wege, im Benchmark
+   M7.0 zu prüfen:
+   (a) WPE WebKit (`wpesrc`, LGPL): Medien laufen über GStreamer, also über
+       die installierten Decoder (NVDEC, VA-API, gst-libav); lmix liefert
+       keinen Patent-Codec selbst aus. Kompatibilität mit fremden Seiten
+       prüfen.
+   (b) Eigener CEF-Build mit `proprietary_codecs=true`,
+       `ffmpeg_branding=Chrome`: volle Chromium-Kompatibilität, aber
+       Software-Decoder für H.264/AAC im ausgelieferten Paket (Patentlizenz
+       beim Verteilen), großer Build.
+   (c) CEF-Build nur mit Hardware-Dekodierung: ohne Patent-Software, aber
+       ohne passende GPU kein H.264.
+   Empfehlung: (a) als Favorit, (b) als Rückfall, falls WPE an fremden
+   Seiten scheitert.
 4. ~~Testhardware AMD/Intel~~ — entschieden 2026-09-27: derzeit keine
    verfügbar; herstellerneutral bauen, Abnahme später (M5b).
 5. Clean-Room-Fragen E.1–E.8 in `LASTENHEFT.md` §6.
