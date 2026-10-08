@@ -4,6 +4,7 @@
 //! inside `strom.rs` (layer rule: no holes through the driver layer).
 
 use async_trait::async_trait;
+use lmix_types::Device;
 
 use crate::switcher::Command;
 
@@ -40,4 +41,7 @@ pub trait Engine: Send + Sync {
 
     /// Latest frame as JPEG.
     async fn picture(&self, picture: Picture) -> Result<Vec<u8>, EngineError>;
+
+    /// Video capture devices the engine can open.
+    async fn devices(&self) -> Result<Vec<Device>, EngineError>;
 }

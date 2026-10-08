@@ -13,7 +13,7 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::input::{InputRef, SourceSpec};
+use crate::input::{InputColor, InputRef, SourceSpec};
 
 /// One of the four transition buttons (SWI.3), 1-based.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -84,6 +84,12 @@ pub enum Action {
     ReplaceSource { input: InputRef, source: SourceSpec },
     /// Rename an input.
     RenameInput { input: InputRef, name: String },
+    /// Set or clear the color tag of an input (INP.3).
+    SetInputColor {
+        input: InputRef,
+        #[serde(default)]
+        color: Option<InputColor>,
+    },
     /// Move an input to a 1-based position in the input bar (INP.3).
     MoveInput { input: InputRef, number: u32 },
 

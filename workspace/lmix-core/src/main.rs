@@ -19,6 +19,7 @@ use lmix_types::Action;
 
 mod api;
 mod engine;
+mod recent;
 mod service;
 mod show;
 mod switcher;

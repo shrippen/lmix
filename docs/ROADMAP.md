@@ -239,8 +239,8 @@ GPU-Punkte in `HARDWARE-TODO.md`):
 | 2b.6 | ✅ `lmix-core` + `lmix-types`, Aktionskatalog, HTTP/WS-API, Bilder je Input/PGM |
 | 2b.1 | ✅ Slot-Flows über `inter`, Quellentausch auf Sendung (VM, CPU); Zeitbasis 0 + strom-Patch `start_time_selection` (`DECISIONS.md`) |
 | 2b.4 | ✅ Show-Datei v1, Autosave, Wiederaufnahme nach Absturz (ohne Audio/Ausgänge/Hotkeys, die es noch nicht gibt) |
-| 2b.2 | ✅ Console `--core`: Kacheln mit Bild, Tally, Klick/Doppelklick, Menü; ⚠ Typ, Farbe, Audio der Kachel fehlen |
-| 2b.3 | ⬜ weitere Quellentypen; offen B24 Dateidialog, B25 Geräteliste |
+| 2b.2 | ✅ Console `--core`: Kacheln mit Bild, Tally, Typ, Farbmarke, Klick/Doppelklick, Menü; Dateidialog, letzte Shows (B24), Geräteliste (B25); ⚠ Audio der Kachel fehlt (B23) |
+| 2b.3 | ⬜ weitere Quellentypen |
 | B23 | ⬜ Ton über die Slots |
 | 2b.5 | ⬜ nur auf GPU messbar (H.1) |
 

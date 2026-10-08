@@ -16,6 +16,7 @@ use lmix_types::{Action, ActionError, Event, InputRef, InputStatus, ShowState};
 use tokio::sync::{broadcast, Mutex};
 
 use crate::engine::{Engine, EngineError, Picture};
+use crate::recent::Recent;
 use crate::show::{self, Show};
 use crate::switcher::{Command, Switcher};
 
@@ -28,6 +29,7 @@ pub struct Service {
     events: broadcast::Sender<Event>,
     /// Written after every change, read back after a crash (SHW.5).
     autosave: Option<PathBuf>,
+    recent: Mutex<Recent>,
 }
 
 impl Service {
@@ -37,6 +39,7 @@ impl Service {
             switcher: Mutex::new(Switcher::new(slots)),
             engine,
             events,
+            recent: Mutex::new(Recent::load(autosave.as_deref())),
             autosave,
         })
     }
@@ -80,6 +83,14 @@ impl Service {
         self.engine.picture(Picture::Program).await
     }
 
+    pub async fn recent(&self) -> Vec<String> {
+        self.recent.lock().await.paths().to_vec()
+    }
+
+    pub async fn devices(&self) -> Result<Vec<lmix_types::Device>, EngineError> {
+        self.engine.devices().await
+    }
+
     pub async fn tally(&self) -> Vec<u8> {
         self.switcher.lock().await.tally()
     }
@@ -87,6 +98,7 @@ impl Service {
     /// Run one action to the end; publishes the new state.
     pub async fn handle(&self, action: Action) -> Result<ShowState, ActionError> {
         let mut sw = self.switcher.lock().await;
+        let file_action = matches!(action, Action::OpenShow { .. } | Action::SaveShow { .. });
 
         let commands = match action {
             Action::NewShow => sw.replace(Show::default(), None),
@@ -97,6 +109,9 @@ impl Service {
             }
             other => sw.apply(other)?,
         };
+        if let (true, Some(path)) = (file_action, sw.path().map(str::to_string)) {
+            self.recent.lock().await.touch(&path).await;
+        }
 
         let result = self.execute(&mut sw, &commands).await;
         self.publish(&sw);
@@ -213,6 +228,19 @@ mod tests {
         assert_eq!(engine.log().len(), 1);
         assert!(matches!(events.recv().await.unwrap(), Event::State { .. }));
         assert!(matches!(events.recv().await.unwrap(), Event::Tally { .. }));
+    }
+
+    #[tokio::test]
+    async fn save_and_open_fill_recent_shows() {
+        let dir = tempfile::tempdir().unwrap();
+        let autosave = dir.path().join("autosave.lmix");
+        let path = dir.path().join("s.lmix").display().to_string();
+        let service = Service::new(4, Arc::new(NullEngine::default()), Some(autosave));
+
+        service.handle(Action::SaveShow { path: Some(path.clone()) }).await.unwrap();
+        service.handle(bars()).await.unwrap();
+
+        assert_eq!(service.recent().await, [path]);
     }
 
     #[tokio::test]

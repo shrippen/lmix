@@ -2,6 +2,7 @@
 //! without a media engine (`--engine none`).
 
 use async_trait::async_trait;
+use lmix_types::Device;
 use std::sync::Mutex;
 
 use super::{Engine, EngineError, Picture};
@@ -33,5 +34,9 @@ impl Engine for NullEngine {
 
     async fn picture(&self, _picture: Picture) -> Result<Vec<u8>, EngineError> {
         Err(EngineError::NoPictures)
+    }
+
+    async fn devices(&self) -> Result<Vec<Device>, EngineError> {
+        Ok(Vec::new())
     }
 }

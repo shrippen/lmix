@@ -115,6 +115,33 @@ pub enum InputStatus {
 }
 
 /// One input as clients see it.
+/// Color tag of an input tile, for grouping (cameras, clips, graphics).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum InputColor {
+    Red,
+    Orange,
+    Yellow,
+    Green,
+    Teal,
+    Blue,
+    Purple,
+    Pink,
+}
+
+impl InputColor {
+    pub const ALL: [InputColor; 8] = [
+        Self::Red,
+        Self::Orange,
+        Self::Yellow,
+        Self::Green,
+        Self::Teal,
+        Self::Blue,
+        Self::Purple,
+        Self::Pink,
+    ];
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Input {
     pub id: InputId,
@@ -125,4 +152,17 @@ pub struct Input {
     /// Mixer slot the input feeds (0-based).
     pub slot: usize,
     pub status: InputStatus,
+    #[serde(default)]
+    pub color: Option<InputColor>,
+}
+
+/// A capture device the engine found (camera, capture card), for
+/// [`SourceSpec::Device`].
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct Device {
+    /// Goes into `SourceSpec::Device { id }`.
+    pub id: String,
+    pub name: String,
+    /// OS media API, e.g. "V4L2"; the same camera can appear once per API.
+    pub api: String,
 }

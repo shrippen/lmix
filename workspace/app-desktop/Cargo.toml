@@ -30,3 +30,4 @@ thiserror = "2"
 image = { version = "0.25", default-features = false, features = ["jpeg"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+rfd = { version = "0.15", default-features = false, features = ["xdg-portal", "tokio"] }

@@ -3,7 +3,7 @@
 //! (LASTENHEFT E.4: the GUI is one client among many).
 
 use futures_util::stream::StreamExt;
-use lmix_types::{Action, Event, InputId, ShowState};
+use lmix_types::{Action, Device, Event, InputId, ShowState};
 use std::sync::mpsc::Sender;
 use std::time::Duration;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
@@ -18,6 +18,18 @@ pub enum CoreMessage {
     /// Answer to an action: `None` when it ran, the reason otherwise.
     ActionDone(Option<String>),
     Picture(PictureTarget, egui::ColorImage),
+    Devices(Vec<Device>),
+    Recent(Vec<String>),
+    /// A file dialog returned a path.
+    Picked(FilePurpose, String),
+}
+
+/// What a file dialog was opened for.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FilePurpose {
+    OpenShow,
+    SaveShow,
+    AddFile,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -76,6 +88,24 @@ impl CoreClient {
             return None;
         }
         resp.bytes().await.ok().map(|b| b.to_vec())
+    }
+
+    /// Capture devices; empty when lmix-core or the engine has none.
+    pub async fn devices(&self) -> Vec<Device> {
+        self.get_json("/api/devices").await.unwrap_or_default()
+    }
+
+    /// Recently opened or saved show files, newest first.
+    pub async fn recent(&self) -> Vec<String> {
+        self.get_json("/api/shows/recent").await.unwrap_or_default()
+    }
+
+    async fn get_json<T: serde::de::DeserializeOwned>(&self, path: &str) -> Option<T> {
+        let resp = self.http.get(format!("{}{path}", self.base_url)).send().await.ok()?;
+        if !resp.status().is_success() {
+            return None;
+        }
+        resp.json().await.ok()
     }
 
     /// Follow the event stream forever, reconnecting when it drops.

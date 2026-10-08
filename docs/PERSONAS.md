@@ -253,3 +253,10 @@ Show-Datei. Geprüft mit `CONSOLE_SHOT=… scripts/test-m2b-vm.sh`.
 Hinweis); B27 Quelle ersetzen fehlte in der GUI (behoben). Nebenbei: der
 Test fand einen echten Fehler (PGM schwarz bei Kopplung), siehe
 `DECISIONS.md`.
+
+**Nachtrag 2026-10-08**: B24 behoben (Dateidialog über xdg-portal, Liste der
+letzten Shows aus `lmix-core`, für alle Bedienplätze gleich), B25 behoben
+(Geräteliste `GET /api/devices`, Auswahl in der Console). Dazu Farbmarke und
+Typ-Kennung je Kachel (`set_input_color`). P2 (zweiter Platz auf anderem
+Rechner): Dialog zeigt die lokalen Dateien, `lmix-core` öffnet den Pfad auf
+seinem Rechner; Hinweis am Button, echte Lösung mit Datei-Upload später.

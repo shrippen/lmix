@@ -132,6 +132,12 @@ program_moves || fail "program frozen after source swap"
 [[ $(brightness "$WORK/b.jpg") -gt $MIN_BRIGHTNESS ]] || fail "program dark after source swap"
 pass "program source swapped on air: mixer kept running, new picture moves"
 
+# --- input color, device list ---
+act '{"action":"set_input_color","input":"Ball","color":"teal"}' >/dev/null
+[[ "$(curl -sf "$CORE/state" | jq -r '.inputs[1].color')" == teal ]] || fail "color not set"
+curl -sf "$CORE/devices" | jq -e 'type == "array"' >/dev/null || fail "device list"
+pass "color tag; device list ($(curl -sf "$CORE/devices" | jq length) found)"
+
 # --- Console as lmix-core client, on a virtual display ---
 if [[ -n "${CONSOLE_SHOT:-}" ]]; then
     (cd "$ROOT/workspace/app-desktop" && cargo build)
@@ -148,6 +154,7 @@ fi
 
 # --- show file ---
 act "{\"action\":\"save_show\",\"path\":\"$WORK/test.lmix\"}" >/dev/null
+[[ "$(curl -sf "$CORE/shows/recent" | jq -r '.[0]')" == "$WORK/test.lmix" ]] || fail "recent shows"
 act '{"action":"new_show"}' >/dev/null
 [[ "$(curl -sf "$CORE/state" | jq '.inputs | length')" == 0 ]] || fail "new show not empty"
 act "{\"action\":\"open_show\",\"path\":\"$WORK/test.lmix\"}" >/dev/null

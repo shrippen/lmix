@@ -11,7 +11,7 @@ use lmix_types::action::TRANSITION_SLOTS;
 use lmix_types::input::{REF_PREVIEW, REF_PROGRAM};
 use lmix_types::state::API_VERSION;
 use lmix_types::{
-    Action, ActionError, Effect, Input, InputId, InputRef, InputStatus, ShowState, SourceSpec,
+    Action, ActionError, Effect, Input, InputColor, InputId, InputRef, InputStatus, ShowState, SourceSpec,
     Transition, TransitionSlot,
 };
 use std::collections::HashMap;
@@ -84,6 +84,7 @@ impl Switcher {
             Action::RemoveInput { input } => self.remove(&input),
             Action::ReplaceSource { input, source } => self.replace_source(&input, source),
             Action::RenameInput { input, name } => self.rename(&input, name),
+            Action::SetInputColor { input, color } => self.set_color(&input, color),
             Action::MoveInput { input, number } => self.move_input(&input, number),
             Action::PreviewInput { input } => self.preview(&input),
             Action::Cut => self.take(Effect::Cut, 0),
@@ -155,6 +156,7 @@ impl Switcher {
                 source: input.source.clone(),
                 slot: input.slot,
                 status: self.status.get(&input.id).copied().unwrap_or_default(),
+                color: input.color,
             })
             .collect();
 
@@ -195,6 +197,7 @@ impl Switcher {
             name,
             source: source.clone(),
             slot,
+            color: None,
         });
         self.status.insert(id, InputStatus::Starting);
 
@@ -249,6 +252,12 @@ impl Switcher {
     fn rename(&mut self, input: &InputRef, name: String) -> Result<Vec<Command>, ActionError> {
         let index = self.find(input)?;
         self.show.inputs[index].name = name;
+        Ok(Vec::new())
+    }
+
+    fn set_color(&mut self, input: &InputRef, color: Option<InputColor>) -> Result<Vec<Command>, ActionError> {
+        let index = self.find(input)?;
+        self.show.inputs[index].color = color;
         Ok(Vec::new())
     }
 
@@ -439,6 +448,21 @@ mod tests {
     }
 
     #[test]
+    fn color_tags_an_input_without_engine_work() {
+        let mut sw = two_inputs();
+
+        let cmds = sw
+            .apply(Action::SetInputColor {
+                input: named("B"),
+                color: Some(InputColor::Teal),
+            })
+            .unwrap();
+
+        assert!(cmds.is_empty());
+        assert_eq!(sw.state().inputs[1].color, Some(InputColor::Teal));
+    }
+
+    #[test]
     fn add_takes_lowest_free_slot() {
         let mut sw = two_inputs();
         sw.apply(Action::RemoveInput { input: named("A") }).unwrap();
@@ -622,6 +646,10 @@ mod tests {
         let mut sw = two_inputs();
         let before = sw.state();
 
+        let _ = sw.apply(Action::SetInputColor {
+            input: named("missing"),
+            color: Some(InputColor::Red),
+        });
         let _ = sw.apply(Action::RenameInput {
             input: named("missing"),
             name: "X".into(),

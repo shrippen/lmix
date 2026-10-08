@@ -9,7 +9,8 @@
 //! | `FadeToBlack` | vision mixer: toggle FTB |
 
 use async_trait::async_trait;
-use lmix_types::Effect;
+use lmix_types::{Device, Effect};
+use strom_types::discovery::DeviceResponse;
 use reqwest::StatusCode;
 use serde::Serialize;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -216,6 +217,21 @@ impl Engine for StromEngine {
         }
         let bytes = check(resp).await?.bytes().await.map_err(net)?;
         Ok(bytes.to_vec())
+    }
+
+    async fn devices(&self) -> Result<Vec<Device>, EngineError> {
+        let url = self.url("/discovery/devices?category=video_source");
+        let resp = self.http.get(url).send().await.map_err(net)?;
+        let found: Vec<DeviceResponse> = check(resp).await?.json().await.map_err(net)?;
+        let devices = found
+            .into_iter()
+            .map(|d| Device {
+                api: d.api_label(),
+                id: d.id,
+                name: d.name,
+            })
+            .collect();
+        Ok(devices)
     }
 }
 

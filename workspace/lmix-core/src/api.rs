@@ -6,6 +6,8 @@
 //! | `POST /api/actions` | run one [`Action`] (JSON) |
 //! | `GET /api/actions` | action catalog as JSON schema |
 //! | `GET /api/tally` | tally per input: 0 off, 1 program, 2 preview |
+//! | `GET /api/shows/recent` | recently opened or saved show files, newest first |
+//! | `GET /api/devices` | capture devices for `SourceSpec::Device` |
 //! | `GET /api/pictures/program` | program picture, JPEG |
 //! | `GET /api/pictures/inputs/{input}` | input picture (number, name, id, `preview`, `program`) |
 //! | `GET /api/events` | WebSocket: state first, then every event |
@@ -36,6 +38,8 @@ pub fn router(service: Arc<Service>) -> Router {
         .route("/api/tally", get(tally))
         .route("/api/actions", get(catalog).post(action))
         .route("/api/events", get(events))
+        .route("/api/shows/recent", get(recent))
+        .route("/api/devices", get(devices))
         .route("/api/pictures/program", get(program_picture))
         .route("/api/pictures/inputs/{input}", get(input_picture))
         .with_state(service)
@@ -47,6 +51,17 @@ async fn state(State(service): State<Arc<Service>>) -> impl IntoResponse {
 
 async fn tally(State(service): State<Arc<Service>>) -> impl IntoResponse {
     Json(service.tally().await)
+}
+
+async fn recent(State(service): State<Arc<Service>>) -> impl IntoResponse {
+    Json(service.recent().await)
+}
+
+async fn devices(State(service): State<Arc<Service>>) -> Response {
+    match service.devices().await {
+        Ok(devices) => Json(devices).into_response(),
+        Err(error) => (StatusCode::BAD_GATEWAY, error.to_string()).into_response(),
+    }
 }
 
 async fn program_picture(State(service): State<Arc<Service>>) -> Response {

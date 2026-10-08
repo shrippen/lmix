@@ -2,7 +2,7 @@
 //! finding B22): input bar, PREVIEW/PROGRAM monitors, transition buttons.
 //!
 //! ```text
-//!   ┌ toolbar: lmix-core ● · show file · New / Open / Save ┐
+//!   ┌ toolbar: lmix-core ● · show file · New / Open / Save / Recent ┐
 //!   │  PREVIEW monitor   │ CUT 1 2 3 4 FTB │ PROGRAM monitor │
 //!   │  input bar: tiles (click = preview, double click = take, menu) │
 //!   └ add input: kind · source · name · Add ┘
@@ -16,9 +16,12 @@ use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use lmix_types::{Action, Effect, InputId, InputRef, InputStatus, ShowState, SourceSpec, TestPattern, TransitionSlot};
+use lmix_types::{
+    Action, Device, Effect, InputColor, InputId, InputRef, InputStatus, ShowState, SourceSpec, TestPattern,
+    TransitionSlot,
+};
 
-use crate::core_client::{CoreClient, CoreMessage, PictureTarget};
+use crate::core_client::{CoreClient, CoreMessage, FilePurpose, PictureTarget};
 
 const PREVIEW_COLOR: egui::Color32 = egui::Color32::from_rgb(40, 200, 80);
 const PROGRAM_COLOR: egui::Color32 = egui::Color32::from_rgb(220, 40, 40);
@@ -27,6 +30,9 @@ const EMPTY_PICTURE: egui::Color32 = egui::Color32::from_gray(20);
 const TILE_WIDTH: f32 = 160.0;
 const TILE_STROKE: f32 = 3.0;
 const STATUS_DOT: f32 = 10.0;
+const COLOR_BAND: f32 = 4.0;
+const SHOW_FILTER: (&str, &[&str]) = ("lmix show", &["lmix"]);
+const REMOTE_HINT: &str = "Paths are opened by lmix-core: on another machine, they must exist there.";
 const TRANSITION_HINT: &str = "Click: take preview. Right click: effect and length.";
 const BUTTON_SIZE: [f32; 2] = [80.0, 36.0];
 const DURATION_PRESETS_MS: [u32; 4] = [250, 500, 1000, 2000];
@@ -69,6 +75,31 @@ impl Tally {
     }
 }
 
+/// Tile band of a color tag.
+fn tag_color(color: InputColor) -> egui::Color32 {
+    match color {
+        InputColor::Red => egui::Color32::from_rgb(230, 70, 70),
+        InputColor::Orange => egui::Color32::from_rgb(240, 150, 50),
+        InputColor::Yellow => egui::Color32::from_rgb(235, 210, 60),
+        InputColor::Green => egui::Color32::from_rgb(80, 190, 90),
+        InputColor::Teal => egui::Color32::from_rgb(50, 180, 170),
+        InputColor::Blue => egui::Color32::from_rgb(70, 130, 230),
+        InputColor::Purple => egui::Color32::from_rgb(150, 90, 220),
+        InputColor::Pink => egui::Color32::from_rgb(230, 100, 180),
+    }
+}
+
+/// Short type badge of a tile.
+fn source_badge(source: &SourceSpec) -> &'static str {
+    match source {
+        SourceSpec::Pattern { .. } => "PAT",
+        SourceSpec::File { .. } => "FILE",
+        SourceSpec::Url { .. } => "URL",
+        SourceSpec::Srt { .. } => "SRT",
+        SourceSpec::Device { .. } => "CAM",
+    }
+}
+
 /// Program wins when an input is on both (it never is, the core refuses).
 pub fn tally(state: &ShowState, id: InputId) -> Tally {
     if state.program == Some(id) {
@@ -108,7 +139,7 @@ impl SourceKind {
             Self::File => "/path/to/clip.mp4",
             Self::Url => "https://…",
             Self::Srt => "srt://host:port",
-            Self::Device => "device id",
+            Self::Device => "device id (none found)",
         }
     }
 }
@@ -151,6 +182,8 @@ pub struct CoreApp {
     add: AddForm,
     show_path: String,
     renaming: Option<(InputId, String)>,
+    devices: Vec<Device>,
+    recent: Vec<String>,
 }
 
 impl CoreApp {
@@ -161,7 +194,7 @@ impl CoreApp {
         client.follow(tx.clone(), ctx.clone());
         poll_pictures(client.clone(), wanted.clone(), tx.clone(), ctx.clone(), picture_ms);
 
-        Self {
+        let app = Self {
             client,
             tx,
             rx,
@@ -178,7 +211,38 @@ impl CoreApp {
             },
             show_path: String::new(),
             renaming: None,
-        }
+            devices: Vec::new(),
+            recent: Vec::new(),
+        };
+        app.refresh_lists();
+        app
+    }
+
+    /// Devices and recent shows: at start, after file actions, on request.
+    fn refresh_lists(&self) {
+        let client = self.client.clone();
+        let tx = self.tx.clone();
+        tokio::spawn(async move {
+            let _ = tx.send(CoreMessage::Devices(client.devices().await));
+            let _ = tx.send(CoreMessage::Recent(client.recent().await));
+        });
+    }
+
+    /// Native file dialog (xdg portal: KDE's own on Plasma).
+    fn pick_file(&self, purpose: FilePurpose) {
+        let tx = self.tx.clone();
+        tokio::spawn(async move {
+            let dialog = rfd::AsyncFileDialog::new();
+            let file = match purpose {
+                FilePurpose::OpenShow => dialog.add_filter(SHOW_FILTER.0, SHOW_FILTER.1).pick_file().await,
+                FilePurpose::SaveShow => dialog.add_filter(SHOW_FILTER.0, SHOW_FILTER.1).save_file().await,
+                FilePurpose::AddFile => dialog.pick_file().await,
+            };
+            let Some(file) = file else {
+                return;
+            };
+            let _ = tx.send(CoreMessage::Picked(purpose, file.path().display().to_string()));
+        });
     }
 
     fn send(&self, action: Action) {
@@ -196,11 +260,32 @@ impl CoreApp {
                 CoreMessage::State(state) => self.set_state(state),
                 CoreMessage::ActionDone(error) => self.error = error,
                 CoreMessage::Picture(target, image) => self.set_picture(ctx, target, image),
+                CoreMessage::Devices(devices) => self.devices = devices,
+                CoreMessage::Recent(recent) => self.recent = recent,
+                CoreMessage::Picked(purpose, path) => self.picked(purpose, path),
+            }
+        }
+    }
+
+    fn picked(&mut self, purpose: FilePurpose, path: String) {
+        match purpose {
+            FilePurpose::OpenShow => self.send(Action::OpenShow { path }),
+            FilePurpose::SaveShow => self.send(Action::SaveShow { path: Some(path) }),
+            FilePurpose::AddFile => {
+                self.add.kind = SourceKind::File;
+                self.add.text = path;
             }
         }
     }
 
     fn set_state(&mut self, state: ShowState) {
+        // A new show path means a file was opened or saved: the recent
+        // list changed.
+        let old_path = self.state.as_ref().and_then(|s| s.path.clone());
+        if state.path.is_some() && state.path != old_path {
+            self.refresh_lists();
+        }
+
         let mut wanted = vec![PictureTarget::Program];
         wanted.extend(state.inputs.iter().map(|i| PictureTarget::Input(i.id)));
         self.pictures.retain(|target, _| wanted.contains(target));
@@ -239,13 +324,29 @@ impl CoreApp {
             }
             ui.add(egui::TextEdit::singleline(&mut self.show_path).hint_text("show.lmix").desired_width(260.0));
             let path = self.show_path.trim().to_string();
-            if ui.add_enabled(!path.is_empty(), egui::Button::new("Open")).clicked() {
+            if ui.add_enabled(!path.is_empty(), egui::Button::new("Open")).on_hover_text(REMOTE_HINT).clicked() {
                 actions.push(Action::OpenShow { path: path.clone() });
             }
             if ui.button("Save").clicked() {
                 let path = (!path.is_empty()).then_some(path);
                 actions.push(Action::SaveShow { path });
             }
+            if ui.button("Open…").on_hover_text(REMOTE_HINT).clicked() {
+                self.pick_file(FilePurpose::OpenShow);
+            }
+            if ui.button("Save as…").clicked() {
+                self.pick_file(FilePurpose::SaveShow);
+            }
+            ui.add_enabled_ui(!self.recent.is_empty(), |ui| {
+                ui.menu_button("Recent", |ui| {
+                    for recent in &self.recent {
+                        if ui.button(recent).clicked() {
+                            actions.push(Action::OpenShow { path: recent.clone() });
+                            ui.close();
+                        }
+                    }
+                });
+            });
         });
 
         let Some(error) = self.error.clone() else {
@@ -304,6 +405,25 @@ impl CoreApp {
                             });
                             ui.close();
                         }
+                        ui.menu_button("Color", |ui| {
+                            for color in InputColor::ALL {
+                                let label = egui::RichText::new(format!("■ {color:?}")).color(tag_color(color));
+                                if ui.selectable_label(input.color == Some(color), label).clicked() {
+                                    actions.push(Action::SetInputColor {
+                                        input: reference.clone(),
+                                        color: Some(color),
+                                    });
+                                    ui.close();
+                                }
+                            }
+                            if ui.button("None").clicked() {
+                                actions.push(Action::SetInputColor {
+                                    input: reference.clone(),
+                                    color: None,
+                                });
+                                ui.close();
+                            }
+                        });
                         if ui.button("Rename…").clicked() {
                             self.renaming = Some((input.id, input.name.clone()));
                             ui.close();
@@ -336,9 +456,29 @@ impl CoreApp {
                             ui.selectable_value(&mut self.add.pattern, pattern, format!("{pattern:?}"));
                         }
                     });
+            } else if self.add.kind == SourceKind::Device && !self.devices.is_empty() {
+                let selected = self
+                    .devices
+                    .iter()
+                    .find(|d| d.id == self.add.text)
+                    .map_or("choose a device".to_string(), device_label);
+                egui::ComboBox::from_id_salt("add_device")
+                    .selected_text(selected)
+                    .width(320.0)
+                    .show_ui(ui, |ui| {
+                        for device in &self.devices {
+                            ui.selectable_value(&mut self.add.text, device.id.clone(), device_label(device));
+                        }
+                    });
             } else {
                 let hint = self.add.kind.hint();
                 ui.add(egui::TextEdit::singleline(&mut self.add.text).hint_text(hint).desired_width(320.0));
+            }
+            if self.add.kind == SourceKind::File && ui.button("…").on_hover_text(REMOTE_HINT).clicked() {
+                self.pick_file(FilePurpose::AddFile);
+            }
+            if self.add.kind == SourceKind::Device && ui.button("↻").on_hover_text("Search devices again").clicked() {
+                self.refresh_lists();
             }
             ui.add(egui::TextEdit::singleline(&mut self.add.name).hint_text("name (optional)").desired_width(160.0));
 
@@ -517,9 +657,13 @@ fn tile(
         .show(ui, |ui| {
             ui.vertical(|ui| {
                 ui.set_width(TILE_WIDTH);
+                let band = input.color.map_or(EMPTY_PICTURE, tag_color);
+                let (rect, _) = ui.allocate_exact_size(egui::vec2(TILE_WIDTH, COLOR_BAND), egui::Sense::hover());
+                ui.painter().rect_filled(rect, 0.0, band);
                 picture_area(ui, egui::vec2(TILE_WIDTH, TILE_WIDTH * 9.0 / 16.0), picture);
                 ui.horizontal(|ui| {
                     ui.label(egui::RichText::new(input.number.to_string()).strong());
+                    ui.label(egui::RichText::new(source_badge(&input.source)).small().weak());
                     ui.label(&input.name);
                     if input.status != InputStatus::Online {
                         ui.weak(format!("{:?}", input.status).to_lowercase());
@@ -528,6 +672,10 @@ fn tile(
             });
         });
     ui.interact(frame.response.rect, ui.id().with(input.id), egui::Sense::click())
+}
+
+fn device_label(device: &Device) -> String {
+    format!("{} ({})", device.name, device.api)
 }
 
 /// Filled circle; the default font has no "●".
