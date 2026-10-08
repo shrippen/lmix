@@ -14,6 +14,10 @@ pub struct NullEngine {
     /// Never measures anything.
     levels: tokio::sync::watch::Sender<super::meters::EngineLevels>,
     errors: Option<tokio::sync::broadcast::Sender<super::meters::FlowError>>,
+    /// Next command takes this long and reports this failure halfway
+    /// (a stop that drains, as strom's `eos_on_stop` does).
+    #[cfg(test)]
+    slow: Mutex<Option<(std::time::Duration, super::meters::FlowError)>>,
 }
 
 impl NullEngine {
@@ -33,6 +37,12 @@ impl NullEngine {
         let _ = errors.send(error);
     }
 
+    /// Make the next command slow, reporting `error` halfway through.
+    #[cfg(test)]
+    pub fn slow_next(&self, takes: std::time::Duration, error: super::meters::FlowError) {
+        *self.slow.lock().expect("slow lock") = Some((takes, error));
+    }
+
     /// Commands received so far.
     #[cfg(test)]
     pub fn log(&self) -> Vec<Command> {
@@ -48,6 +58,15 @@ impl Engine for NullEngine {
 
     async fn run(&self, command: &Command) -> Result<(), EngineError> {
         self.log.lock().expect("log lock").push(command.clone());
+        #[cfg(test)]
+        {
+            let slow = self.slow.lock().expect("slow lock").take();
+            if let Some((takes, error)) = slow {
+                tokio::time::sleep(takes / 2).await;
+                self.fail(error);
+                tokio::time::sleep(takes / 2).await;
+            }
+        }
         Ok(())
     }
 

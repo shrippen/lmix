@@ -65,11 +65,12 @@ STROM_BIN="$("$ROOT/scripts/fetch-strom.sh")"
 CORE_BIN="${CARGO_TARGET_DIR:-$ROOT/workspace/lmix-core/target}/debug/lmix-core"
 
 # --- start ---
-# A screen for display outputs (engine side).
+# A screen for display outputs (engine side). On a desktop the engine
+# would open its windows there (Wayland first), so it only gets this one.
 ENGINE_DISPLAY=:94
 Xvfb "$ENGINE_DISPLAY" -screen 0 1280x720x24 >/dev/null 2>&1 &
 PIDS+=($!)
-(cd "$WORK" && GST_DEBUG="${STROM_GST_DEBUG:-}" GST_DEBUG_FILE="$WORK/gst.log" GST_DEBUG_NO_COLOR=1 DISPLAY="$ENGINE_DISPLAY" LIBGL_ALWAYS_SOFTWARE=1 exec "$STROM_BIN" --host 127.0.0.1 --port "$STROM_PORT" --no-auto-restart --data-dir "$WORK/strom-data" >"$WORK/strom.log" 2>&1) &
+(cd "$WORK" && unset WAYLAND_DISPLAY && GST_GL_WINDOW=x11 GST_DEBUG="${STROM_GST_DEBUG:-}" GST_DEBUG_FILE="$WORK/gst.log" GST_DEBUG_NO_COLOR=1 DISPLAY="$ENGINE_DISPLAY" LIBGL_ALWAYS_SOFTWARE=1 exec "$STROM_BIN" --host 127.0.0.1 --port "$STROM_PORT" --no-auto-restart --data-dir "$WORK/strom-data" >"$WORK/strom.log" 2>&1) &
 PIDS+=($!)
 wait_up "$STROM/health" strom
 

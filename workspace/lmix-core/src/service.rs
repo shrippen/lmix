@@ -55,7 +55,7 @@ pub struct Service {
     /// picture while the engine's tap has no new frame.
     pictures: std::sync::Mutex<HashMap<Picture, Vec<u8>>>,
     /// When lmix-core last changed each flow: its own stops are no failure.
-    touched: std::sync::Mutex<HashMap<FlowId, Instant>>,
+    touched: std::sync::Mutex<HashMap<FlowId, Touch>>,
     /// Slots with a failback running.
     failing_back: std::sync::Mutex<HashSet<FlowId>>,
     /// Latest link health of the running network outputs.
@@ -212,7 +212,7 @@ impl Service {
                 .lock()
                 .expect("touched lock")
                 .get(&error.flow)
-                .is_some_and(|at| at.elapsed() < OWN_STOP_WINDOW);
+                .is_some_and(Touch::is_recent);
             if error.kind == FlowFailure::Stopped && own_change {
                 continue;
             }
@@ -463,16 +463,16 @@ impl Service {
                 self.touched
                     .lock()
                     .expect("touched lock")
-                    .insert(flow, Instant::now());
+                    .insert(flow, Touch::Running);
             }
             let outcome = self.engine.run(command).await;
             // The window counts from the end: a rebuild's stop event may
-            // trail the command.
+            // trail the command (a drained stop takes over a second).
             if let Some(flow) = flow_of(command) {
                 self.touched
                     .lock()
                     .expect("touched lock")
-                    .insert(flow, Instant::now());
+                    .insert(flow, Touch::Done(Instant::now()));
             }
             mark_slot(sw, command, outcome.is_ok());
             mark_output(sw, command, &outcome);
@@ -500,6 +500,23 @@ impl Service {
         // No subscribers is fine.
         let _ = self.events.send(Event::State { state: sw.state() });
         let _ = self.events.send(Event::Tally { tally: sw.tally() });
+    }
+}
+
+/// lmix-core's last change of a flow.
+#[derive(Clone, Copy, Debug)]
+enum Touch {
+    /// A command on it is still running.
+    Running,
+    Done(Instant),
+}
+
+impl Touch {
+    fn is_recent(&self) -> bool {
+        match self {
+            Touch::Running => true,
+            Touch::Done(at) => at.elapsed() < OWN_STOP_WINDOW,
+        }
     }
 }
 
@@ -665,6 +682,30 @@ mod tests {
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
         assert_eq!(service.state().await.inputs[0].status, InputStatus::Online);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn stop_during_a_slow_own_rebuild_is_no_failure() {
+        let engine = Arc::new(NullEngine::failing());
+        let service = Service::new(4, engine.clone(), None);
+        tokio::spawn(service.clone().watch_failures());
+        tokio::task::yield_now().await;
+
+        // The old flow drains for longer than the window while the
+        // command still runs; its stop must not count as a failure.
+        engine.slow_next(
+            OWN_STOP_WINDOW * 3,
+            FlowError {
+                flow: slot_id(0),
+                message: "stopped".into(),
+                kind: FlowFailure::Stopped,
+            },
+        );
+        service.handle(bars()).await.unwrap();
+        tokio::time::sleep(FAILBACK_FIRST * 2).await;
+
+        assert_eq!(service.state().await.inputs[0].status, InputStatus::Online);
+        assert_eq!(slot_commands(&engine), 1, "no failback rebuild");
     }
 
     #[tokio::test]
