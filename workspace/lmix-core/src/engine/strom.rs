@@ -26,8 +26,8 @@ const PLAYING_POLLS: u32 = 50;
 /// strom's answer to a transition before the pipeline has a position.
 const NOT_RUNNING_YET: &str = "query pipeline position";
 
-use super::flows::{self, MixerBackend, MIXER_BLOCK};
-use super::{Engine, EngineError};
+use super::flows::{self, MixerBackend, MIXER_BLOCK, PGM_TAP, SLOT_TAP};
+use super::{Engine, EngineError, Picture};
 use crate::switcher::Command;
 
 pub struct StromEngine {
@@ -200,6 +200,22 @@ impl Engine for StromEngine {
                 self.mixer_call("ftb", &body).await
             }
         }
+    }
+
+    /// strom answers 504 while a tap has no frame yet (the first request
+    /// switches it on).
+    async fn picture(&self, picture: Picture) -> Result<Vec<u8>, EngineError> {
+        let (flow, block) = match picture {
+            Picture::Program => (flows::mixer_id(), PGM_TAP),
+            Picture::Slot(slot) => (flows::slot_id(slot), SLOT_TAP),
+        };
+        let path = format!("/flows/{flow}/blocks/{block}/thumbnail");
+        let resp = self.http.get(self.url(&path)).send().await.map_err(net)?;
+        if resp.status() == StatusCode::GATEWAY_TIMEOUT {
+            return Err(EngineError::NotReady);
+        }
+        let bytes = check(resp).await?.bytes().await.map_err(net)?;
+        Ok(bytes.to_vec())
     }
 }
 

@@ -4,6 +4,9 @@
 # Picture quality, latency and GPU paths: docs/HARDWARE-TODO.md.
 #
 #   scripts/test-m2b-vm.sh            # builds, runs, cleans up
+#   CONSOLE_SHOT=out.png scripts/test-m2b-vm.sh
+#                                     # also screenshots the Console
+#                                     # (lmix-core client) on Xvfb
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -14,8 +17,10 @@ CORE="http://127.0.0.1:${CORE_PORT}/api"
 WORK="$(mktemp -d)"
 # Mixer slots for the test; small to fit a VM.
 SLOTS=4
-# Frames the PGM thumbnail must deliver as proof of a picture.
-MIN_JPEG_BYTES=1000
+# Mean brightness (0-100) bars or snow exceed; black is 0.
+MIN_BRIGHTNESS=30
+# Thumbnail taps refresh about once a second.
+TAP_INTERVAL=1.5
 
 PIDS=()
 cleanup() {
@@ -86,21 +91,60 @@ sleep 1
 pass "preview, cut, fade; tally"
 
 MIXER_ID="$(curl -sf "$STROM/api/flows" | jq -r '.flows[] | select(.name=="lmix mixer") | .id')"
-# The first request switches the tap on; frames follow within a second or two.
-for _ in $(seq 1 10); do
-    curl -sf "$STROM/api/flows/$MIXER_ID/blocks/tap_pgm/thumbnail" -o "$WORK/pgm.jpg" && break
-    sleep 1
-done
-[[ -s "$WORK/pgm.jpg" ]] || fail "no PGM thumbnail"
-[[ $(stat -c %s "$WORK/pgm.jpg") -gt $MIN_JPEG_BYTES ]] || fail "PGM thumbnail empty"
-pass "PGM carries a picture"
+# Pictures through lmix-core (503 until the tap has a frame; the first
+# request switches it on).
+picture() {
+    local path="$1" out="$2"
+    rm -f "$out"
+    for _ in $(seq 1 10); do
+        curl -sf "$CORE/pictures/$path" -o "$out" && break
+        sleep 1
+    done
+    [[ -s "$out" ]] || fail "no picture $path"
+}
+# Mean brightness 0-100. A black frame is a valid JPEG of normal size,
+# so pictures are judged by content, never by bytes.
+brightness() { convert "$1" -colorspace gray -format '%[fx:int(mean*100)]' info:; }
+# Program changes between two pictures: live frames, not a still.
+program_moves() {
+    picture program "$WORK/a.jpg"
+    sleep "$TAP_INTERVAL"
+    picture program "$WORK/b.jpg"
+    ! cmp -s "$WORK/a.jpg" "$WORK/b.jpg"
+}
 
-# --- swap source while on air ---
-act '{"action":"replace_source","input":"Ball","source":{"kind":"pattern","pattern":"checkers"}}' >/dev/null
+program_moves || fail "program frozen or black with Ball on air"
+pass "program moves (Ball over inter)"
+picture inputs/preview "$WORK/pvw.jpg"
+[[ $(brightness "$WORK/pvw.jpg") -gt $MIN_BRIGHTNESS ]] || fail "preview picture dark"
+act '{"action":"cut_direct","input":"Bars"}' >/dev/null
+sleep "$TAP_INTERVAL"
+picture program "$WORK/pgm.jpg"
+[[ $(brightness "$WORK/pgm.jpg") -gt $MIN_BRIGHTNESS ]] || fail "program dark with Bars on air"
+pass "pictures show content (preview, program)"
+
+# --- swap the program source while on air ---
+act '{"action":"replace_source","input":"Bars","source":{"kind":"pattern","pattern":"snow"}}' >/dev/null
 sleep 2
 running="$(curl -sf "$STROM/api/flows/$MIXER_ID" | jq -r '.flow.running')"
 [[ "$running" == true ]] || fail "mixer stopped after source swap"
-pass "source swapped, mixer kept running"
+program_moves || fail "program frozen after source swap"
+[[ $(brightness "$WORK/b.jpg") -gt $MIN_BRIGHTNESS ]] || fail "program dark after source swap"
+pass "program source swapped on air: mixer kept running, new picture moves"
+
+# --- Console as lmix-core client, on a virtual display ---
+if [[ -n "${CONSOLE_SHOT:-}" ]]; then
+    (cd "$ROOT/workspace/app-desktop" && cargo build)
+    CONSOLE_BIN="${CARGO_TARGET_DIR:-$ROOT/workspace/app-desktop/target}/debug/app-desktop"
+    Xvfb :93 -screen 0 1280x860x24 >/dev/null 2>&1 &
+    PIDS+=($!)
+    sleep 1
+    DISPLAY=:93 WAYLAND_DISPLAY= LIBGL_ALWAYS_SOFTWARE=1 "$CONSOLE_BIN" --core "${CORE%/api}" >"$WORK/console.log" 2>&1 &
+    PIDS+=($!)
+    sleep "${CONSOLE_WAIT:-8}"
+    DISPLAY=:93 import -window root "$CONSOLE_SHOT"
+    pass "Console screenshot: $CONSOLE_SHOT"
+fi
 
 # --- show file ---
 act "{\"action\":\"save_show\",\"path\":\"$WORK/test.lmix\"}" >/dev/null

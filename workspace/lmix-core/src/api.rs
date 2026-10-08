@@ -6,21 +6,28 @@
 //! | `POST /api/actions` | run one [`Action`] (JSON) |
 //! | `GET /api/actions` | action catalog as JSON schema |
 //! | `GET /api/tally` | tally per input: 0 off, 1 program, 2 preview |
+//! | `GET /api/pictures/program` | program picture, JPEG |
+//! | `GET /api/pictures/inputs/{input}` | input picture (number, name, id, `preview`, `program`) |
 //! | `GET /api/events` | WebSocket: state first, then every event |
 //! | `GET /health` | liveness |
 
 use std::sync::Arc;
 
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
-use axum::extract::State;
+use axum::extract::{Path, State};
+use axum::http::header;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::{Json, Router};
-use lmix_types::{Action, ActionError, Event};
+use lmix_types::{Action, ActionError, Event, InputRef};
 use tokio::sync::broadcast::error::RecvError;
 
+use crate::engine::EngineError;
 use crate::service::Service;
+
+/// Seconds a client waits before asking again for a picture not ready yet.
+const PICTURE_RETRY_SECS: &str = "1";
 
 pub fn router(service: Arc<Service>) -> Router {
     Router::new()
@@ -29,6 +36,8 @@ pub fn router(service: Arc<Service>) -> Router {
         .route("/api/tally", get(tally))
         .route("/api/actions", get(catalog).post(action))
         .route("/api/events", get(events))
+        .route("/api/pictures/program", get(program_picture))
+        .route("/api/pictures/inputs/{input}", get(input_picture))
         .with_state(service)
 }
 
@@ -38,6 +47,34 @@ async fn state(State(service): State<Arc<Service>>) -> impl IntoResponse {
 
 async fn tally(State(service): State<Arc<Service>>) -> impl IntoResponse {
     Json(service.tally().await)
+}
+
+async fn program_picture(State(service): State<Arc<Service>>) -> Response {
+    picture_response(service.program_picture().await)
+}
+
+async fn input_picture(State(service): State<Arc<Service>>, Path(input): Path<String>) -> Response {
+    // A path segment is text; numbers mean the input bar position.
+    let input = match input.parse::<u32>() {
+        Ok(number) => InputRef::Number(number),
+        Err(_) => InputRef::Text(input),
+    };
+    match service.input_picture(&input).await {
+        Ok(picture) => picture_response(picture),
+        Err(error) => error_response(error),
+    }
+}
+
+/// JPEG; 503 with Retry-After while the engine has no frame yet.
+fn picture_response(picture: Result<Vec<u8>, EngineError>) -> Response {
+    match picture {
+        Ok(jpeg) => ([(header::CONTENT_TYPE, "image/jpeg")], jpeg).into_response(),
+        Err(EngineError::NotReady) => {
+            (StatusCode::SERVICE_UNAVAILABLE, [(header::RETRY_AFTER, PICTURE_RETRY_SECS)]).into_response()
+        }
+        Err(EngineError::NoPictures) => StatusCode::NOT_FOUND.into_response(),
+        Err(error) => (StatusCode::BAD_GATEWAY, error.to_string()).into_response(),
+    }
 }
 
 async fn catalog() -> impl IntoResponse {
@@ -146,6 +183,14 @@ mod tests {
         assert_eq!(status, StatusCode::NOT_FOUND);
         assert_eq!(body["error"]["error"], "unknown_input");
         assert_eq!(body["message"], "no input matches 7");
+    }
+
+    #[tokio::test]
+    async fn picture_of_unknown_input_is_404() {
+        let req = Request::get("/api/pictures/inputs/3").body(Body::empty()).unwrap();
+        let resp = app().oneshot(req).await.unwrap();
+
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
     }
 
     #[tokio::test]

@@ -4,7 +4,7 @@
 use async_trait::async_trait;
 use std::sync::Mutex;
 
-use super::{Engine, EngineError};
+use super::{Engine, EngineError, Picture};
 use crate::switcher::Command;
 
 #[derive(Default)]
@@ -29,5 +29,9 @@ impl Engine for NullEngine {
     async fn run(&self, command: &Command) -> Result<(), EngineError> {
         self.log.lock().expect("log lock").push(command.clone());
         Ok(())
+    }
+
+    async fn picture(&self, _picture: Picture) -> Result<Vec<u8>, EngineError> {
+        Err(EngineError::NoPictures)
     }
 }

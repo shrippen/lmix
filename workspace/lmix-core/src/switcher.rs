@@ -346,6 +346,12 @@ impl Switcher {
         (0..self.slots).find(|s| !self.show.inputs.iter().any(|i| i.slot == *s))
     }
 
+    /// Slot that carries `input`.
+    pub fn slot_for(&self, input: &InputRef) -> Result<usize, ActionError> {
+        let index = self.find(input)?;
+        Ok(self.show.inputs[index].slot)
+    }
+
     fn slot_of(&self, id: Option<InputId>) -> Option<usize> {
         let id = id?;
         self.show.inputs.iter().find(|i| i.id == id).map(|i| i.slot)

@@ -17,6 +17,17 @@ pub enum EngineError {
     Unreachable(String),
     #[error("engine refused: {0}")]
     Refused(String),
+    #[error("no picture yet")]
+    NotReady,
+    #[error("engine has no pictures")]
+    NoPictures,
+}
+
+/// Which picture to grab.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Picture {
+    Program,
+    Slot(usize),
 }
 
 #[async_trait]
@@ -26,4 +37,7 @@ pub trait Engine: Send + Sync {
 
     /// Carry out one command.
     async fn run(&self, command: &Command) -> Result<(), EngineError>;
+
+    /// Latest frame as JPEG.
+    async fn picture(&self, picture: Picture) -> Result<Vec<u8>, EngineError>;
 }

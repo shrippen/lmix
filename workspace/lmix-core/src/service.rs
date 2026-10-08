@@ -12,10 +12,10 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use lmix_types::{Action, ActionError, Event, InputStatus, ShowState};
+use lmix_types::{Action, ActionError, Event, InputRef, InputStatus, ShowState};
 use tokio::sync::{broadcast, Mutex};
 
-use crate::engine::Engine;
+use crate::engine::{Engine, EngineError, Picture};
 use crate::show::{self, Show};
 use crate::switcher::{Command, Switcher};
 
@@ -67,6 +67,17 @@ impl Service {
 
     pub async fn state(&self) -> ShowState {
         self.switcher.lock().await.state()
+    }
+
+    /// Latest frame of an input; the switcher lock is not held while the
+    /// engine fetches it.
+    pub async fn input_picture(&self, input: &InputRef) -> Result<Result<Vec<u8>, EngineError>, ActionError> {
+        let slot = self.switcher.lock().await.slot_for(input)?;
+        Ok(self.engine.picture(Picture::Slot(slot)).await)
+    }
+
+    pub async fn program_picture(&self) -> Result<Vec<u8>, EngineError> {
+        self.engine.picture(Picture::Program).await
     }
 
     pub async fn tally(&self) -> Vec<u8> {

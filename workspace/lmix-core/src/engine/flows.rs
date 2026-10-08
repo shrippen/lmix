@@ -1,9 +1,9 @@
 //! strom flows of a show.
 //!
 //! ```text
-//!   slot flow 0: source ─► [caps] ─► inter_output "out" ┐
-//!   slot flow 1: source ─► [caps] ─► inter_output "out" ├─► mixer flow:
-//!   …                                                   ┘   inter_input × N ─► vision mixer
+//!   slot flow 0: source ─► [caps] ─► tap ─► inter_output "out" ┐
+//!   slot flow 1: source ─► [caps] ─► tap ─► inter_output "out" ├─► mixer flow:
+//!   …                                                          ┘   inter_input × N ─► vision mixer
 //! ```
 //!
 //! Flow ids are fixed per slot (UUID v5), so the `inter` channel name
@@ -12,6 +12,7 @@
 
 use strom_types::block::{BlockInstance, Position};
 use strom_types::element::{Element, Link};
+use strom_types::flow::GStreamerClockType;
 use strom_types::{Flow, FlowId, PropertyValue};
 use uuid::Uuid;
 
@@ -34,6 +35,10 @@ const SLOT_OUT: &str = "out";
 pub const MIXER_BLOCK: &str = "vm";
 /// Thumbnail tap on the program output: GUI monitor and picture checks.
 pub const PGM_TAP: &str = "tap_pgm";
+/// Real-time sink behind the program tap.
+const PGM_SINK: &str = "pgm_sink";
+/// Thumbnail tap in every slot flow: input bar pictures and preview monitor.
+pub const SLOT_TAP: &str = "tap";
 /// Subscriber buffer of the mixer's inter inputs: low latency, some jitter
 /// headroom (strom offers 100–2000 ms).
 const INTER_BUFFER_MS: &str = "100";
@@ -88,6 +93,7 @@ pub fn black_input(slots: usize) -> usize {
 pub fn mixer_flow(slots: usize, backend: MixerBackend) -> Flow {
     let mut flow = Flow::new("lmix mixer");
     flow.id = mixer_id();
+    share_timing(&mut flow);
 
     for slot in 0..slots {
         let input = format!("in{slot}");
@@ -134,6 +140,8 @@ pub fn mixer_flow(slots: usize, backend: MixerBackend) -> Flow {
                 "compositor_preference",
                 PropertyValue::String(backend.property().into()),
             ),
+            // Base time 0 (share_timing): output starts at the first frame.
+            ("start_time_selection", PropertyValue::String("first".into())),
         ],
     ));
 
@@ -142,6 +150,10 @@ pub fn mixer_flow(slots: usize, backend: MixerBackend) -> Flow {
         format!("{MIXER_BLOCK}:pgm_out"),
         format!("{PGM_TAP}:video_in"),
     ));
+    // An open tap output stalls the branch after the first frame; consume
+    // program in real time until outputs (OUT) take this place.
+    flow.elements.push(element(PGM_SINK, "fakesink", vec![("sync", PropertyValue::Bool(false))]));
+    flow.links.push(link(format!("{PGM_TAP}:video_out"), PGM_SINK.into()));
     flow
 }
 
@@ -149,10 +161,13 @@ pub fn mixer_flow(slots: usize, backend: MixerBackend) -> Flow {
 pub fn slot_flow(slot: usize, source: &SourceSpec) -> Flow {
     let mut flow = Flow::new(format!("lmix slot {slot}"));
     flow.id = slot_id(slot);
+    share_timing(&mut flow);
 
     let out = add_source(&mut flow, source);
+    flow.blocks.push(block(SLOT_TAP, THUMBNAIL_BLOCK, vec![]));
+    flow.links.push(link(out, format!("{SLOT_TAP}:video_in")));
     flow.blocks.push(block(SLOT_OUT, INTER_OUTPUT_BLOCK, vec![]));
-    flow.links.push(link(out, format!("{SLOT_OUT}:sink")));
+    flow.links.push(link(format!("{SLOT_TAP}:video_out"), format!("{SLOT_OUT}:sink")));
     flow
 }
 
@@ -214,6 +229,14 @@ fn add_source(flow: &mut Flow, source: &SourceSpec) -> String {
             "dev:video_out".into()
         }
     }
+}
+
+/// Same clock and base time 0 in every lmix flow: `inter` hands buffers
+/// over with their timestamps, so running times must match across flows,
+/// or the mixer drops every coupled frame as late (black program).
+fn share_timing(flow: &mut Flow) {
+    flow.properties.clock_type = GStreamerClockType::Monotonic;
+    flow.properties.direct_media_timing = Some(true);
 }
 
 fn pattern_caps() -> String {
@@ -294,8 +317,19 @@ mod tests {
 
         assert_eq!(flow.id, slot_id(2));
         assert!(flow.blocks.iter().any(|b| b.id == SLOT_OUT && b.block_definition_id == INTER_OUTPUT_BLOCK));
-        assert!(flow.links.iter().any(|l| l.from == "caps" && l.to == "out:sink"));
+        assert!(flow.links.iter().any(|l| l.from == "caps" && l.to == "tap:video_in"));
+        assert!(flow.links.iter().any(|l| l.from == "tap:video_out" && l.to == "out:sink"));
         assert_eq!(slot_channel(2), format!("strom_{}_out", flow.id));
+    }
+
+    #[test]
+    fn all_flows_share_timing() {
+        let slot = slot_flow(0, &SourceSpec::Pattern { pattern: TestPattern::Bars });
+
+        for flow in [mixer_flow(2, MixerBackend::Cpu), slot] {
+            assert_eq!(flow.properties.clock_type, GStreamerClockType::Monotonic);
+            assert!(flow.properties.effective_direct_media_timing());
+        }
     }
 
     #[test]
