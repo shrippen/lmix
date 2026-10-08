@@ -307,3 +307,9 @@ Signalverlust halten/schwarz; Lautstärke an der Kachel; PFL/AFL.
 
 **Befunde**: B30 WHIP: Console soll die Ingest-Adresse anzeigen und
 kopieren lassen. Sonst keine neuen Lücken für M2b.
+
+**Nachtrag B30 (2026-10-08)**: behoben. WHIP-Inputs tragen ihre Links
+(`ingest.whip_url` für OBS/Encoder, `ingest.browser_url` für Gäste im
+Browser); die Console zeigt sie im Kachel-Menü "Send to this input" mit
+Kopierknopf. Die Adresse, unter der Sender die Engine erreichen, setzt
+`--public-url` (Standard: die `--strom`-Adresse).

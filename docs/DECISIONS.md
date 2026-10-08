@@ -557,3 +557,12 @@ Programm direkt im Mischer.
 **strom-Patch** (Branch `lmix-start-time`, PR #1): Der Media-Player rief
 `add_signal_watch` nicht auf, der Abbau entfernte einen Watch zu viel
 (CRITICAL je gestopptem Player).
+
+## 2026-10-08 — Arbeitsweise: ohne Zwischenabnahme, Zwischenstände als PR
+
+**Entscheidung** (User): Abnahmen sind nur auf anderer Hardware möglich.
+In dieser Session geht die Arbeit ohne Zwischenabnahme weiter (über das
+Meilenstein-Ende hinaus). Jeder Zwischenstand wird automatisch gepusht und
+als PR hinterlegt: ein Branch je Meilenstein, auf dem vorigen aufgesetzt
+(`lastenheft` ← `m2b` ← `m3` …), PR mit Basis auf den Vorgänger-Branch.
+Abnahme später gesammelt auf der Zielhardware (`HARDWARE-TODO.md`).

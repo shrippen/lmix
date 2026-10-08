@@ -75,6 +75,11 @@ impl Service {
         result.map(|()| true)
     }
 
+    /// Engine address as WHIP senders reach it (see `--public-url`).
+    pub async fn set_ingest_base(&self, url: String) {
+        self.switcher.lock().await.set_ingest_base(url);
+    }
+
     pub fn subscribe(&self) -> broadcast::Receiver<Event> {
         self.events.subscribe()
     }

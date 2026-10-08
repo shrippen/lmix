@@ -59,6 +59,11 @@ struct Args {
     #[arg(long, value_enum, default_value_t = MixerBackend::Cuda)]
     mixer: MixerBackend,
 
+    /// Engine address as remote senders reach it (WHIP links); default:
+    /// the `--strom` address.
+    #[arg(long, env = "LMIX_PUBLIC_URL")]
+    public_url: Option<String>,
+
     /// Monitor bus (solo listening): `auto` plays it on the engine
     /// machine's default audio output.
     #[arg(long, env = "LMIX_MONITOR_OUT", value_enum, default_value_t = MonitorOut::None)]
@@ -105,6 +110,11 @@ async fn main() -> anyhow::Result<()> {
     };
 
     let service = Service::new(args.slots, engine.clone(), Some(args.autosave));
+    let public_url = args
+        .public_url
+        .clone()
+        .unwrap_or_else(|| args.strom.clone());
+    service.set_ingest_base(public_url).await;
     let opened = match args.show {
         Some(path) => service
             .handle(Action::OpenShow { path })

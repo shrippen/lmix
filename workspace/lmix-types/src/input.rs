@@ -229,6 +229,15 @@ pub enum Listen {
     Afl,
 }
 
+/// Where a push source (WHIP) is sent to, for sharing with the sender.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct Ingest {
+    /// WHIP endpoint for OBS and encoders.
+    pub whip_url: String,
+    /// Web page a guest opens in the browser to send camera and microphone.
+    pub browser_url: String,
+}
+
 /// Color tag of an input tile, for grouping (cameras, clips, graphics).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -274,6 +283,9 @@ pub struct Input {
     /// kept but do nothing.
     #[serde(default)]
     pub has_audio: bool,
+    /// Where to send a WHIP source (B30); `None` for other sources.
+    #[serde(default)]
+    pub ingest: Option<Ingest>,
     /// Last frame or black when the source stalls.
     #[serde(default)]
     pub signal_loss: SignalLoss,

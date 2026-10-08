@@ -580,6 +580,9 @@ impl CoreApp {
                             });
                             ui.close();
                         }
+                        if let Some(ingest) = &input.ingest {
+                            ingest_menu(ui, ingest);
+                        }
                         ui.menu_button("On signal loss", |ui| {
                             for (mode, label) in [
                                 (SignalLoss::Hold, "Hold last frame"),
@@ -978,6 +981,25 @@ fn tile(
     )
 }
 
+/// WHIP links to hand to the sender (B30): copy with one click.
+fn ingest_menu(ui: &mut egui::Ui, ingest: &lmix_types::Ingest) {
+    ui.menu_button("Send to this input", |ui| {
+        for (label, url) in [
+            ("WHIP (OBS, encoder)", &ingest.whip_url),
+            ("Browser page (guest)", &ingest.browser_url),
+        ] {
+            ui.horizontal(|ui| {
+                ui.label(label);
+                ui.monospace(url);
+                if ui.small_button("Copy").clicked() {
+                    ui.ctx().copy_text(url.clone());
+                    ui.close();
+                }
+            });
+        }
+    });
+}
+
 /// Picture area of an audio input: no picture, a label instead.
 fn audio_only_area(ui: &mut egui::Ui, size: egui::Vec2) {
     let (_, rect) = ui.allocate_space(size);
@@ -1214,7 +1236,12 @@ mod tests {
             text: String::new(),
             name: String::new(),
         };
-        assert_eq!(form.source(), Some(SourceSpec::Color { color: "#ff8000".into() }));
+        assert_eq!(
+            form.source(),
+            Some(SourceSpec::Color {
+                color: "#ff8000".into()
+            })
+        );
 
         form.kind = SourceKind::Playlist;
         form.text = "/a.mp4; ;/b.mp4 ".into();

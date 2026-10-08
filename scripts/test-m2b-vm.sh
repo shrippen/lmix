@@ -205,6 +205,12 @@ clips_db="$(curl -sf "$CORE/audio/levels" | jq --arg id "$clips_id" '.inputs[] |
 [[ $clips_db -gt $AUDIBLE_DB ]] || fail "playlist silent ($clips_db dB)"
 pass "sources: color, still image, playlist with sound; bad color refused"
 
+act '{"action":"add_input","source":{"kind":"whip","endpoint":"guest"},"name":"Guest"}' >/dev/null
+whip_url="$(curl -sf "$CORE/state" | jq -r '.inputs[] | select(.name=="Guest") | .ingest.whip_url')"
+[[ "$whip_url" == "$STROM/whip/guest" ]] || fail "WHIP link: $whip_url"
+[[ "$(curl -s -o /dev/null -w '%{http_code}' -X OPTIONS "$whip_url")" == 200 ]] || fail "WHIP endpoint not served"
+pass "WHIP input: ingest link in state, endpoint served"
+
 clips_still() {
     picture inputs/Clips "$WORK/c1.jpg"
     sleep "$TAP_INTERVAL"
@@ -286,7 +292,7 @@ act '{"action":"new_show"}' >/dev/null
 act "{\"action\":\"open_show\",\"path\":\"$WORK/test.lmix\"}" >/dev/null
 sleep 2
 state="$(curl -sf "$CORE/state")"
-[[ "$(jq '.inputs | length' <<<"$state")" == 5 ]] || fail "show not restored: $state"
+[[ "$(jq '.inputs | length' <<<"$state")" == 6 ]] || fail "show not restored: $state"
 pass "show saved, cleared, reopened"
 
 # --- crash of lmix-core: engine keeps running, show comes back ---
@@ -296,7 +302,7 @@ running="$(curl -sf "$STROM/api/flows/$MIXER_ID" | jq -r '.flow.running')"
 [[ "$running" == true ]] || fail "mixer died with lmix-core"
 start_core
 sleep 2
-[[ "$(curl -sf "$CORE/state" | jq '.inputs | length')" == 5 ]] || fail "autosave not resumed"
+[[ "$(curl -sf "$CORE/state" | jq '.inputs | length')" == 6 ]] || fail "autosave not resumed"
 [[ "$(curl -sf "$CORE/state" | jq '.inputs[1].audio.volume')" == 50 ]] || fail "audio settings not resumed"
 pass "lmix-core killed and restarted: mixer kept running, show resumed"
 

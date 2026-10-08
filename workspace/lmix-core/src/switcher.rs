@@ -11,7 +11,7 @@ use lmix_types::action::TRANSITION_SLOTS;
 use lmix_types::input::{color_rgb, REF_PREVIEW, REF_PROGRAM, VOLUME_MAX};
 use lmix_types::state::API_VERSION;
 use lmix_types::{
-    Action, ActionError, Effect, Input, InputColor, InputId, InputRef, InputStatus, Listen,
+    Action, ActionError, Effect, Ingest, Input, InputColor, InputId, InputRef, InputStatus, Listen,
     ShowState, SignalLoss, SourceSpec, Transition, TransitionSlot, Transport,
 };
 use std::collections::HashMap;
@@ -81,6 +81,8 @@ pub struct Switcher {
     mix: HashMap<usize, Mix>,
     /// Solos; runtime only, like a desk's solo buttons.
     listen: HashMap<InputId, Listen>,
+    /// Engine address as senders reach it, for WHIP ingest links.
+    ingest_base: Option<String>,
 }
 
 impl Switcher {
@@ -93,6 +95,7 @@ impl Switcher {
             status: HashMap::new(),
             mix: HashMap::new(),
             listen: HashMap::new(),
+            ingest_base: None,
         }
     }
 
@@ -106,6 +109,21 @@ impl Switcher {
 
     pub fn set_path(&mut self, path: String) {
         self.path = Some(path);
+    }
+
+    pub fn set_ingest_base(&mut self, url: String) {
+        self.ingest_base = Some(url.trim_end_matches('/').to_string());
+    }
+
+    /// Ingest links of a WHIP source.
+    fn ingest_of(&self, source: &SourceSpec) -> Option<Ingest> {
+        let (SourceSpec::Whip { endpoint }, Some(base)) = (source, &self.ingest_base) else {
+            return None;
+        };
+        Some(Ingest {
+            whip_url: format!("{base}/whip/{endpoint}"),
+            browser_url: format!("{base}/player/whip-ingest"),
+        })
     }
 
     /// Engine reports an input's health.
@@ -245,6 +263,7 @@ impl Switcher {
                 has_audio: input.source.has_audio(),
                 listen: self.listen_of(input.id),
                 signal_loss: input.signal_loss,
+                ingest: self.ingest_of(&input.source),
             })
             .collect();
 
@@ -896,6 +915,23 @@ mod tests {
             slot: 1,
             mode: SignalLoss::Black
         }));
+    }
+
+    #[test]
+    fn whip_inputs_carry_their_ingest_links() {
+        let mut sw = Switcher::new(SLOTS);
+        sw.set_ingest_base("http://studio:8080/".into());
+        sw.apply(Action::AddInput {
+            source: SourceSpec::Whip {
+                endpoint: "guest".into(),
+            },
+            name: None,
+        })
+        .unwrap();
+
+        let ingest = sw.state().inputs[0].ingest.clone().unwrap();
+        assert_eq!(ingest.whip_url, "http://studio:8080/whip/guest");
+        assert_eq!(ingest.browser_url, "http://studio:8080/player/whip-ingest");
     }
 
     #[test]
