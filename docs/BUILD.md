@@ -250,6 +250,10 @@ dem Rechner der Engine laufen: Live-Bilder kommen über Unix-Sockets in
 `RUST_LOG=lmix_console=debug`. Läuft die Console ohne Terminal, landen
 Qt-Meldungen im Journal; `QT_FORCE_STDERR_LOGGING=1` holt sie nach stderr.
 
+Automatischer Test (Xvfb, CPU-Mischer, keine GPU nötig):
+`scripts/test-console-qt.sh` prüft bewegte Monitore und Kacheln, Klick =
+Vorschau, Cut und dass QML keine Warnungen schreibt.
+
 ## Dauertest auf Hardware
 
 ```bash
