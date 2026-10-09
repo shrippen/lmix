@@ -446,11 +446,35 @@ pub fn live_socket_name(which: LivePicture) -> String {
 ///
 /// ```text
 ///   pgm ─► [cudadownload ─► caps] ─► videoscale ─► caps ─► unixfdsink   input (tile)
-///   pgm ─► [cudadownload ─► caps] ─► unixfdsink                         input (full), program
+///   pgm ─► [cudadownload ─► caps] ─► [compositor] ─► unixfdsink         input (full), program
 ///
-/// The download only with the CUDA mixer.
+/// The download only with the CUDA mixer, the copy only before GStreamer
+/// 1.28 (see [`FdSink`]).
 /// ```
-pub fn live_flow(which: LivePicture, socket: &str, backend: MixerBackend) -> Flow {
+/// Whether `unixfdsink` takes frames that are not in fd memory: it copies
+/// them itself only from GStreamer 1.28 on; before, a full-size live
+/// picture (nothing scales it into the sink's memory) needs a copy.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FdSink {
+    CopiesItself,
+    NeedsFdMemory,
+}
+
+impl FdSink {
+    /// First GStreamer version whose `unixfdsink` copies.
+    const COPIES_FROM: (u32, u32) = (1, 28);
+
+    /// From strom's GStreamer version, e.g. "1.24.2"; unknown counts as old.
+    pub fn for_gstreamer(version: &str) -> Self {
+        let mut parts = version.split('.').map(|p| p.parse::<u32>().ok());
+        match (parts.next().flatten(), parts.next().flatten()) {
+            (Some(major), Some(minor)) if (major, minor) >= Self::COPIES_FROM => Self::CopiesItself,
+            _ => Self::NeedsFdMemory,
+        }
+    }
+}
+
+pub fn live_flow(which: LivePicture, socket: &str, backend: MixerBackend, sink: FdSink) -> Flow {
     let (name, channel) = match which {
         LivePicture::Program => ("program".to_string(), pgm_channel(PGM_OUT)),
         LivePicture::Slot(slot) => (format!("slot {slot}"), slot_channel(slot)),
@@ -488,6 +512,21 @@ pub fn live_flow(which: LivePicture, socket: &str, backend: MixerBackend) -> Flo
         flow.links.push(link(from, "scale".into()));
         flow.links.push(link("scale".into(), "size".into()));
         flow.links.push(link("size".into(), "sock".into()));
+    } else if sink == FdSink::NeedsFdMemory {
+        // A compositor with one input writes every frame anew, into the
+        // memfd memory unixfdsink offers.
+        // Frames carry the producer's running time (base time 0): start
+        // at the first one, as the mixer does.
+        flow.elements.push(element(
+            "copy",
+            "compositor",
+            vec![
+                ("start-time-selection", PropertyValue::String("first".into())),
+                ("background", PropertyValue::String("black".into())),
+            ],
+        ));
+        flow.links.push(link(from, "copy".into()));
+        flow.links.push(link("copy".into(), "sock".into()));
     } else {
         flow.links.push(link(from, "sock".into()));
     }
@@ -1120,6 +1159,7 @@ mod tests {
             LivePicture::Program,
             "/run/x/program.sock",
             MixerBackend::Cpu,
+            FdSink::CopiesItself,
         );
 
         let sock = flow.elements.iter().find(|e| e.id == "sock").unwrap();
@@ -1141,6 +1181,7 @@ mod tests {
             LivePicture::Slot(3),
             "/run/x/slot-3.sock",
             MixerBackend::Cuda,
+            FdSink::CopiesItself,
         );
 
         let pgm = flow.blocks.iter().find(|b| b.id == "pgm").unwrap();
@@ -1171,6 +1212,7 @@ mod tests {
             LivePicture::SlotFull(3),
             "/run/x/slot-3-full.sock",
             MixerBackend::Cuda,
+            FdSink::CopiesItself,
         );
 
         assert!(flow.elements.iter().all(|e| e.element_type != "videoscale"));
@@ -1227,6 +1269,7 @@ mod tests {
             LivePicture::Program,
             "/run/x/program.sock",
             MixerBackend::Cuda,
+            FdSink::CopiesItself,
         );
         assert!(live
             .links
@@ -1271,8 +1314,54 @@ mod tests {
     }
 
     #[test]
+    fn full_size_live_picture_is_copied_before_gstreamer_1_28() {
+        let old = live_flow(
+            LivePicture::Program,
+            "/run/x/program.sock",
+            MixerBackend::Cpu,
+            FdSink::NeedsFdMemory,
+        );
+        let new = live_flow(
+            LivePicture::Program,
+            "/run/x/program.sock",
+            MixerBackend::Cpu,
+            FdSink::CopiesItself,
+        );
+        let tile = live_flow(
+            LivePicture::Slot(0),
+            "/run/x/slot-0.sock",
+            MixerBackend::Cpu,
+            FdSink::NeedsFdMemory,
+        );
+        let has_copy = |f: &Flow| f.elements.iter().any(|e| e.element_type == "compositor");
+
+        assert!(has_copy(&old));
+        assert!(old.links.iter().any(|l| l.from == "copy" && l.to == "sock"));
+        assert!(!has_copy(&new));
+        assert!(
+            !has_copy(&tile),
+            "videoscale already writes into the sink's memory"
+        );
+    }
+
+    #[test]
+    fn fd_sink_by_gstreamer_version() {
+        assert_eq!(FdSink::for_gstreamer("1.24.2"), FdSink::NeedsFdMemory);
+        assert_eq!(FdSink::for_gstreamer("1.26.7"), FdSink::NeedsFdMemory);
+        assert_eq!(FdSink::for_gstreamer("1.28.0"), FdSink::CopiesItself);
+        assert_eq!(FdSink::for_gstreamer("1.28.7.1"), FdSink::CopiesItself);
+        assert_eq!(FdSink::for_gstreamer("2.0.0"), FdSink::CopiesItself);
+        assert_eq!(FdSink::for_gstreamer(""), FdSink::NeedsFdMemory);
+    }
+
+    #[test]
     fn live_input_of_a_cpu_mixer_needs_no_download() {
-        let flow = live_flow(LivePicture::Slot(1), "/run/x/s.sock", MixerBackend::Gl);
+        let flow = live_flow(
+            LivePicture::Slot(1),
+            "/run/x/s.sock",
+            MixerBackend::Gl,
+            FdSink::NeedsFdMemory,
+        );
 
         assert!(flow
             .elements
