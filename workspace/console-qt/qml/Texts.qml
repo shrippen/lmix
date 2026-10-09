@@ -45,6 +45,7 @@ QtObject {
             case "push_right": return qsTr("Push ▶")
             case "wipe_left": return qsTr("Wipe ◀")
             case "wipe_right": return qsTr("Wipe ▶")
+            case "stinger": return qsTr("Stinger")
             }
             break
         case "colors":

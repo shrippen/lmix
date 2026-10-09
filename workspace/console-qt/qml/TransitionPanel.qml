@@ -31,6 +31,28 @@ ColumnLayout {
         return Texts.label("effects", name)
     }
 
+    /** `set_transition` for `button` with a new length; a stinger keeps
+     *  its clip, its cut point at most the new length. */
+    function withLength(button, ms) {
+        var action = { action: "set_transition", slot: button.slot, effect: button.effect, duration_ms: ms }
+        if (button.effect === "stinger" && button.stinger)
+            action.stinger = { input: button.stinger.input, cut_ms: Math.min(button.stinger.cut_ms, ms) }
+        return action
+    }
+
+    function editStinger(button) {
+        stingerDialog.button = button
+        stingerDialog.open()
+    }
+
+    StingerDialog {
+        id: stingerDialog
+        parent: QQC2.Overlay.overlay
+        anchors.centerIn: parent
+        act: panel.act
+        inputs: panel.show ? panel.show.inputs : []
+    }
+
     spacing: Kirigami.Units.smallSpacing
 
     KanteButton {
@@ -45,21 +67,30 @@ ColumnLayout {
     Repeater {
         model: panel.transitions
 
-        KanteButton {
+        // The right click sits on this item: a disabled button (nothing in
+        // preview) passes it through, so effect and length stay settable.
+        Item {
             id: button
             required property string key
             readonly property var modelData: panel.transitionBySlot(key) || ({ slot: Number(key), effect: "cut", duration_ms: 0 })
 
             Layout.fillWidth: true
-            size: KanteButton.Size.Large
-            text: modelData.slot + " " + panel.effectLabel(modelData.effect) + "\n" + modelData.duration_ms + " ms"
-            enabled: panel.core.connected && panel.canTake
-            onClicked: panel.act({ action: "transition", slot: modelData.slot })
-            QQC2.ToolTip.visible: hovered
-            QQC2.ToolTip.text: qsTr("Click: take preview. Right click: effect and length.")
+            implicitHeight: take.implicitHeight
+
+            KanteButton {
+                id: take
+                anchors.fill: parent
+                size: KanteButton.Size.Large
+                text: button.modelData.slot + " " + panel.effectLabel(button.modelData.effect) + "\n" + button.modelData.duration_ms + " ms"
+                enabled: panel.core.connected && panel.canTake
+                onClicked: panel.act({ action: "transition", slot: button.modelData.slot })
+                QQC2.ToolTip.visible: hovered
+                QQC2.ToolTip.text: qsTr("Click: take preview. Right click: effect and length.")
+            }
 
             TapHandler {
                 acceptedButtons: Qt.RightButton
+                enabled: panel.core.connected
                 onTapped: menu.popup()
             }
 
@@ -71,13 +102,25 @@ ColumnLayout {
                     title: qsTr("Effect")
                     choices: panel.effects
                     current: button.modelData.effect
-                    onPicked: value => panel.act({ action: "set_transition", slot: button.modelData.slot, effect: value, duration_ms: button.modelData.duration_ms })
+                    onPicked: value => {
+                        // A stinger needs its clip and cut point first.
+                        if (value === "stinger")
+                            panel.editStinger(button.modelData)
+                        else
+                            panel.act({ action: "set_transition", slot: button.modelData.slot, effect: value, duration_ms: button.modelData.duration_ms })
+                    }
                 }
                 ChoiceMenu {
                     title: qsTr("Length")
                     choices: panel.durations.map(ms => ({ value: ms, label: Texts.label("durations", ms) }))
                     current: button.modelData.duration_ms
-                    onPicked: value => panel.act({ action: "set_transition", slot: button.modelData.slot, effect: button.modelData.effect, duration_ms: value })
+                    onPicked: value => panel.act(panel.withLength(button.modelData, value))
+                }
+                QQC2.MenuItem {
+                    text: qsTr("Stinger clip and cut point…")
+                    visible: button.modelData.effect === "stinger"
+                    height: visible ? implicitHeight : 0
+                    onTriggered: panel.editStinger(button.modelData)
                 }
             }
         }

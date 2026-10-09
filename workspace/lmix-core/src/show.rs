@@ -103,6 +103,7 @@ fn default_transitions() -> Vec<Transition> {
             slot: TransitionSlot(slot),
             effect,
             duration_ms: DEFAULT_TRANSITION_MS,
+            stinger: None,
         })
         .collect()
 }

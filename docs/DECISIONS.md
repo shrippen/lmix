@@ -999,3 +999,35 @@ acht Einzelargumente verletzten den Clippy-Standard).
 **Offen**: mehr Busse und umschaltbares vor/nach (strom-Patch, Neuverknüpfen
 im Betrieb); Aux als Kopfhörerquelle (Monitorbus hört heute Programm oder
 Solos); Hardware-Prüfung mit echtem Rückweg (H.26).
+
+## 2026-10-09 — M4 Schritt 5: Stinger (4.2)
+
+**Entscheidung**: Stinger in lmix-core, ohne die Übergangs-Engine von strom
+anzufassen. Eine Übergangstaste mit Effekt `stinger` nennt einen Clip-Input
+(Datei, URL oder Playlist; WebM/VP9 mit Alpha lässt das Programm
+drumherum sehen), ihre Länge und einen Cut-Punkt. Beim Drücken:
+1. Clip von vorn starten und auf eine eigene DSK-Ebene unter den Overlays legen,
+2. am Cut-Punkt Cut von Vorschau auf Programm darunter (Ton mit
+   Audio-follows-Video schaltet hier),
+3. nach der Länge Ebene weg und Clip pausieren.
+Die Wartezeiten laufen im Service in einer eigenen Task (`Command::Wait`),
+der Switcher bleibt frei (Zustand, Pegel). Cut, Übergänge, Direkt-Cut und
+T-Bar lehnt er ab, solange ein Stinger läuft (`stinger_playing`).
+Programm und Tally springen beim Drücken, das Bild erst am Cut-Punkt.
+**Ebene**: strom erlaubte 4 DSK-Ebenen, alle für Overlays. strom-Patch
+`lmix-stinger-layer`: bis zu 8 Ebenen (nur die Grenze). Ebene 0 ist der
+Stinger, 1–4 die Overlays (Mischer-Flow `lmix mixer 5`, inter-Eingänge
+`dsk0`–`dsk4`).
+**Clip im Leerlauf**: pausiert, sobald er einer Taste zugewiesen ist und
+nach jedem Neustart; sonst liefe er unsichtbar in Schleife. Entfällt sein
+Input, wird die Taste ein Cut.
+**Geprüft**: Alpha kommt auf dem CPU-Mischer bis ins Programm. Eine erste
+Testdatei war überall durchsichtig (`drawbox` schreibt keine Alpha-Ebene);
+mit `overlay` gebaut stimmt sie.
+**Console**: Effekt „Stinger“ im Menü der Übergangstaste öffnet einen
+Dialog (Clip, Länge, Cut-Punkt). Nebenbei behoben: das Menü ging bei leerer
+Vorschau nicht auf, weil die gesperrte Taste auch den Rechtsklick schluckte;
+er liegt jetzt auf einer Fläche um die Taste.
+**Offen**: Länge aus der Clip-Dauer übernehmen; Stinger auf CUDA/GL mit
+Alpha prüfen (H.27); Ton des Clips (spielt nach seinen Ton-Einstellungen);
+die Kachel eines gleich nach dem Anlegen pausierten Clips bleibt leer.

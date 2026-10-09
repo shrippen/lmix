@@ -202,4 +202,12 @@ DE = {
     'As carried': 'Wie die Quelle',
     'Aux 1 (before the faders)': 'Aux 1 (vor den Fadern)',
     'Aux 2 (after the faders)': 'Aux 2 (nach den Fadern)',
+    'Stinger': 'Stinger',
+    'Stinger on button %1': 'Stinger auf Taste %1',
+    'Clip': 'Clip',
+    'Add the stinger clip as an input first (file, URL or playlist; WebM with alpha shows program around it).': 'Erst den Stinger-Clip als Input anlegen (Datei, URL oder Playlist; bei WebM mit Alpha bleibt das Programm drumherum sichtbar).',
+    'How long the clip plays': 'Wie lange der Clip läuft',
+    'Cut point': 'Cut-Punkt',
+    'When program cuts underneath, best where the clip covers the picture': 'Wann darunter geschnitten wird, am besten, wo der Clip das Bild verdeckt',
+    'Stinger clip and cut point…': 'Stinger-Clip und Cut-Punkt…',
 }

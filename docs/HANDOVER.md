@@ -3,27 +3,23 @@
 Stand 2026-10-09. Die Arbeit läuft lokal weiter (Arch, RTX 3090), Abnahme
 auf echter Hardware.
 
-## Branches und PRs (Gitea, gestapelt)
+## Branches und PRs (Gitea)
 
 | PR | Branch | Basis | Inhalt | Stand |
 |---|---|---|---|---|
-| #1 | `lastenheft` | `main` | Lastenheft, Roadmap | gemergt |
-| #2 | `m2b` | `lastenheft` | lmix-core, Slot-Mischer, Show-Datei, Console als Client, Ton, Quellen | gemergt |
-| #3 | `m3` | `m2b` | Ausgänge, MultiCorder, Bildschirm, Failover, Latenz, Leitungszustand | gemergt |
-| #4 | `claude-todo` | `console-qt` | Restart-502, Selbsttest, Qt-Console statt egui | fertig, Merge offen |
-| #5 | `m4` | `claude-todo` | M4: Overlays (4.1), T-Bar (4.3), Kanalzug und Aux-Busse (4.7) | in Arbeit |
+| #1–#3 | `lastenheft`, `m2b`, `m3` | `main` | Lastenheft bis M3 | gemergt |
+| #4 | `claude-todo` (mit `console-qt`) | `main` | Restart-502, Selbsttest, Qt-Console statt egui | gemergt |
+| #5 | `m4` | `main` | M4: Overlays (4.1), T-Bar (4.3), Kanalzug und Aux-Busse (4.7) | gemergt |
+| #6 | `m4-stinger` | `main` | M4: Stinger (4.2) | offen |
 
-strom-Fork (`shrippen/strom`):
-- `lmix-start-time` (PR #1): Startzeit `first`, Media-Player-Bus-Watch,
-  `eos_on_stop`. Submodul von `m2b`/`m3` zeigt hierher.
-- `lmix-player-sysmem` (PR #3): Media-Player gibt Systemspeicher aus.
-- `lmix-dsk-fade` (auf #3, PR #4): DSK-Blende mit `duration_ms`.
-- `lmix-live-offset` (auf #4, PR #5): `identity ts-offset` im Betrieb
-  änderbar (Ton-Verzögerung 4.7). Submodul von `m4` zeigt hierher.
-- `lmix-sample-rate` (auf `lmix-start-time`, PR #2): Mischer-Eigenschaft
-  `sample_rate`. Submodul von `m3` zeigt seit 2026-10-09 hierher.
+strom-Fork (`shrippen/strom`), Ziel `dev`:
+- Gemergt: #1 `lmix-start-time`, #2 `lmix-sample-rate`, #3
+  `lmix-player-sysmem`, #5 `lmix-live-offset` (enthält #4
+  `lmix-dsk-fade`, daher geschlossen).
+- Offen: #6 `lmix-stinger-layer` (bis zu 8 DSK-Ebenen, Stinger-Ebene).
+  Submodul von `m4-stinger` zeigt hierher.
 
-Gemergt: strom #1, #2, lmix #1–#3. Offen in dieser Reihenfolge: strom #3, #4, #5, dann lmix #4, #5 (jeweils auf Gitea).
+Offen in dieser Reihenfolge: strom #6, dann lmix #6.
 
 Seit 2026-10-09 auf `console-qt` und `claude-todo`:
 - Live-Bilder über Unix-Sockets (`/api/live/…`, `?size=full` für die
@@ -40,7 +36,7 @@ Seit 2026-10-09 auf `console-qt` und `claude-todo`:
 
 ```bash
 git clone https://git.arianw.de/shrippen/lmix.git && cd lmix
-git checkout m4
+git checkout main
 git submodule update --init workspace/strom
 ```
 
@@ -86,7 +82,7 @@ für WHIP-Links: `--public-url`.
 
 ## Offen beim User
 
-- **Merges** strom #3–#5, lmix #4, #5.
+- **Merges** strom #6, lmix #6.
 - B31 RTMP-Ausgang wartet auf strom #771.
 
 ## Bekannte Befunde

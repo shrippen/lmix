@@ -14,14 +14,14 @@ pub mod input;
 pub mod output;
 pub mod state;
 
-pub use action::{Action, ActionError, Effect, TransitionSlot};
+pub use action::{Action, ActionError, Effect, StingerSpec, TransitionSlot};
 pub use input::{
-    AuxBus, ChannelStrip, Compressor, Device, DeviceKind, Eq4, Gate, Hpf, Ingest, Input, InputAudio,
-    InputColor, InputId, InputRef, InputStatus, Listen, SignalLoss, SourceSpec, TestPattern,
-    Transport,
+    AuxBus, ChannelStrip, Compressor, Device, DeviceKind, Eq4, Gate, Hpf, Ingest, Input,
+    InputAudio, InputColor, InputId, InputRef, InputStatus, Listen, SignalLoss, SourceSpec,
+    TestPattern, Transport,
 };
 pub use output::{
     Container, DisplayMode, Output, OutputId, OutputRef, OutputSource, OutputSpec, OutputStats,
     OutputStatus,
 };
-pub use state::{Event, InputLevel, Latency, Levels, LiveFeed, ShowState, Transition};
+pub use state::{Event, InputLevel, Latency, Levels, LiveFeed, ShowState, Stinger, Transition};

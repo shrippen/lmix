@@ -52,7 +52,7 @@
       <translation>Ausgang hinzufügen</translation>
     </message>
     <message>
-      <location line="+29" />
+      <location line="+37" />
       <source>Output</source>
       <translation>Ausgang</translation>
     </message>
@@ -695,6 +695,44 @@
     </message>
   </context>
   <context>
+    <name>StingerDialog</name>
+    <message>
+      <location filename="../qml/StingerDialog.qml" line="+22" />
+      <source>Stinger on button %1</source>
+      <translation>Stinger auf Taste %1</translation>
+    </message>
+    <message>
+      <location line="+31" />
+      <source>Clip</source>
+      <translation>Clip</translation>
+    </message>
+    <message>
+      <location line="+12" />
+      <source>Add the stinger clip as an input first (file, URL or playlist; WebM with alpha shows program around it).</source>
+      <translation>Erst den Stinger-Clip als Input anlegen (Datei, URL oder Playlist; bei WebM mit Alpha bleibt das Programm drumherum sichtbar).</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Length</source>
+      <translation>Dauer</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>How long the clip plays</source>
+      <translation>Wie lange der Clip läuft</translation>
+    </message>
+    <message>
+      <location line="+15" />
+      <source>Cut point</source>
+      <translation>Cut-Punkt</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>When program cuts underneath, best where the clip covers the picture</source>
+      <translation>Wann darunter geschnitten wird, am besten, wo der Clip das Bild verdeckt</translation>
+    </message>
+  </context>
+  <context>
     <name>Texts</name>
     <message>
       <location filename="../qml/Texts.qml" line="+15" />
@@ -733,12 +771,12 @@
     </message>
     <message>
       <location line="+1" />
-      <location line="+50" />
+      <location line="+51" />
       <source>NDI</source>
       <translation>NDI</translation>
     </message>
     <message>
-      <location line="-49" />
+      <location line="-50" />
       <source>WHIP (browser, OBS)</source>
       <translation>WHIP (Browser, OBS)</translation>
     </message>
@@ -821,6 +859,11 @@
       <location line="+1" />
       <source>Wipe ▶</source>
       <translation>Wischen ▶</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Stinger</source>
+      <translation>Stinger</translation>
     </message>
     <message>
       <location line="+5" />
@@ -1038,7 +1081,7 @@
   <context>
     <name>TransitionPanel</name>
     <message>
-      <location filename="../qml/TransitionPanel.qml" line="+38" />
+      <location filename="../qml/TransitionPanel.qml" line="+51" />
       <source>Cut</source>
       <translation>Cut</translation>
     </message>
@@ -1053,9 +1096,14 @@
       <translation>Effekt</translation>
     </message>
     <message>
-      <location line="+6" />
+      <location line="+12" />
       <source>Length</source>
       <translation>Dauer</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Stinger clip and cut point…</source>
+      <translation>Stinger-Clip und Cut-Punkt…</translation>
     </message>
     <message>
       <location line="+12" />
