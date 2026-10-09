@@ -242,9 +242,31 @@ Kirigami.ApplicationWindow {
                 boundsBehavior: Flickable.StopAtBounds
                 model: inputModel
                 QQC2.ScrollBar.vertical: QQC2.ScrollBar {}
+                /** The tile being dragged to a new place, and where it would land. */
+                property var dragged: null
+                property int dropIndex: -1
+                function indexAtScene(point) {
+                    var p = bar.mapFromItem(null, point.x, point.y)
+                    return bar.indexAt(p.x + bar.contentX, p.y + bar.contentY)
+                }
+
                 delegate: InputTile {
                     id: tileDelegate
                     required property string key
+                    required property int index
+                    dropTarget: bar.dragged !== null && bar.dropIndex === index && bar.dragged.id !== key
+                    onDragMoved: point => {
+                        bar.dragged = tileDelegate.input
+                        bar.dropIndex = bar.indexAtScene(point)
+                    }
+                    onDragEnded: point => {
+                        var target = bar.indexAtScene(point)
+                        if (bar.dragged && target >= 0 && root.inputs[target] && root.inputs[target].id !== bar.dragged.id) {
+                            root.act({ action: "move_input", input: bar.dragged.number, number: root.inputs[target].number })
+                        }
+                        bar.dragged = null
+                        bar.dropIndex = -1
+                    }
                     width: bar.cellWidth - Kirigami.Units.smallSpacing
                     height: bar.cellHeight - Kirigami.Units.smallSpacing
                     core: backend

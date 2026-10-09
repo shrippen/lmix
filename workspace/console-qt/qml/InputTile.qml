@@ -19,7 +19,12 @@ KanteCard {
     property bool onProgram: false
     property bool onPreview: false
     property var peakDb: undefined
+    /** Another tile is dragged over this one: it would land here. */
+    property bool dropTarget: false
     signal replaceRequested()
+    /** Drag to reorder: where the pointer is, in the window. */
+    signal dragMoved(point scenePosition)
+    signal dragEnded(point scenePosition)
 
     readonly property var audio: input.audio
     readonly property bool hasAudio: input.has_audio
@@ -30,6 +35,15 @@ KanteCard {
 
     barColor: onProgram ? KanteStyle.negativeTextColor
         : (onPreview ? KanteStyle.positiveTextColor : "transparent")
+    borderColor: dropTarget ? KanteStyle.focusColor : "transparent"
+    opacity: drag.active ? 0.5 : 1
+
+    DragHandler {
+        id: drag
+        target: null
+        onCentroidChanged: if (active) tile.dragMoved(centroid.scenePosition)
+        onActiveChanged: if (!active) tile.dragEnded(centroid.scenePosition)
+    }
 
     ColumnLayout {
         anchors.fill: parent
