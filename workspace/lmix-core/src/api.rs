@@ -16,6 +16,7 @@
 //! | `GET /api/pictures/inputs/{input}` | input picture (number, name, id, `preview`, `program`) |
 //! | `GET /api/events` | WebSocket: state first, then every event |
 //! | `GET /health` | liveness |
+//! | `GET /`, `/mixer`, `/tally` | browser pages (`web.rs`) |
 
 use std::sync::Arc;
 
@@ -52,6 +53,7 @@ pub fn router(service: Arc<Service>) -> Router {
         .route("/api/pictures/inputs/{input}", get(input_picture))
         .route("/api/live/program", get(live_program))
         .route("/api/live/inputs/{input}", get(live_input))
+        .merge(crate::web::routes())
         .with_state(service)
 }
 

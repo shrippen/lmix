@@ -23,6 +23,7 @@ mod recent;
 mod service;
 mod show;
 mod switcher;
+mod web;
 
 use engine::flows::{MixerBackend, MonitorOut};
 use engine::null::NullEngine;
