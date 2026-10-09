@@ -12,8 +12,8 @@ use std::path::Path;
 use lmix_types::action::{OVERLAY_CHANNELS, TRANSITION_SLOTS};
 use lmix_types::input::AUX_BUSES;
 use lmix_types::{
-    AuxBus, ChannelStrip, Effect, InputAudio, InputColor, InputId, LayoutBox, Look, OutputId,
-    OutputSource, OutputSpec, SignalLoss, SourceSpec, Transition, TransitionSlot,
+    Action, AuxBus, ChannelStrip, Effect, InputAudio, InputColor, InputId, LayoutBox, Look,
+    OutputId, OutputSource, OutputSpec, SignalLoss, SourceSpec, Transition, TransitionSlot,
 };
 use serde::{Deserialize, Serialize};
 
@@ -63,6 +63,22 @@ pub struct Show {
     pub aux_buses: [AuxBus; AUX_BUSES],
     #[serde(default)]
     pub layouts: Vec<ShowLayout>,
+    #[serde(default)]
+    pub shortcuts: Vec<ShowShortcut>,
+}
+
+/// One shortcut as saved.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ShowShortcut {
+    pub id: InputId,
+    pub label: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub key: Option<String>,
+    #[serde(default)]
+    pub web: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color: Option<InputColor>,
+    pub actions: Vec<Action>,
 }
 
 /// One layout as saved.
@@ -102,6 +118,7 @@ impl Default for Show {
             overlays: Default::default(),
             aux_buses: Default::default(),
             layouts: Vec::new(),
+            shortcuts: Vec::new(),
         }
     }
 }
@@ -235,6 +252,14 @@ mod tests {
             program: None,
             transitions: default_transitions(),
             overlays: [None, Some(id), None, None],
+            shortcuts: vec![ShowShortcut {
+                id: InputId::new(),
+                label: "Bars".into(),
+                key: Some("F1".into()),
+                web: true,
+                color: None,
+                actions: vec![Action::Cut],
+            }],
             layouts: vec![ShowLayout {
                 id: InputId::new(),
                 name: "Interview".into(),

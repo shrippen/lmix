@@ -18,6 +18,7 @@ use crate::input::{
 };
 use crate::layout::BoxSpec;
 use crate::output::{OutputRef, OutputSource, OutputSpec};
+use crate::shortcut::ShortcutSpec;
 
 /// 0-based index of aux bus `bus` (1-based, as in actions).
 pub fn aux_index(bus: u8) -> Result<usize, ActionError> {
@@ -201,6 +202,20 @@ pub enum Action {
     /// Put a layout into preview.
     PreviewLayout { layout: InputRef },
 
+    // ---- Shortcuts (AUT.1–3) ----
+    /// Add a shortcut: a key and label for a list of actions.
+    AddShortcut { shortcut: ShortcutSpec },
+    /// Replace a shortcut (by number, label or id).
+    SetShortcut {
+        target: InputRef,
+        shortcut: ShortcutSpec,
+    },
+    /// Remove a shortcut.
+    RemoveShortcut { target: InputRef },
+    /// Run a shortcut's actions in order; the first failing one stops
+    /// the rest.
+    RunShortcut { target: InputRef },
+
     // ---- Switching (SWI) ----
     /// Put an input into preview.
     PreviewInput { input: InputRef },
@@ -290,6 +305,10 @@ pub enum ActionError {
     UnknownLayout { reference: String },
     #[error("layout: {reason}")]
     BadLayout { reason: String },
+    #[error("no shortcut {reference}")]
+    UnknownShortcut { reference: String },
+    #[error("shortcut: {reason}")]
+    BadShortcut { reason: String },
     #[error("a stinger is playing")]
     StingerPlaying,
     #[error("stinger: {reason}")]

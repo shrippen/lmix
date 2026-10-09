@@ -33,6 +33,7 @@ for _ in $(seq 1 60); do curl -sf "$CORE/health" >/dev/null && break; sleep 0.5;
 act '{"action":"add_input","source":{"kind":"pattern","pattern":"bars"},"name":"Bars"}'
 act '{"action":"add_input","source":{"kind":"pattern","pattern":"ball"},"name":"Ball"}'
 act '{"action":"cut_direct","input":1}'
+act '{"action":"add_shortcut","shortcut":{"label":"Ball on air","key":"F2","web":true,"color":"red","actions":[{"action":"preview_input","input":2},{"action":"cut"}]}}'
 
 export NODE_PATH="${NODE_PATH:-$(npm root -g)}"
 SHOT_DIR="$WORK" node "$ROOT/scripts/web-check.cjs" "$CORE" || fail "web pages"

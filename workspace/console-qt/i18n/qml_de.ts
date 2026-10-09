@@ -705,7 +705,7 @@
       <translation>Layout %1 %2</translation>
     </message>
     <message>
-      <location line="+25" />
+      <location line="+39" />
       <source>Open show</source>
       <translation>Show öffnen</translation>
     </message>
@@ -726,7 +726,7 @@
       <translation>Show speichern</translation>
     </message>
     <message>
-      <location line="+45" />
+      <location line="+66" />
       <source>lmix-core</source>
       <translation>lmix-core</translation>
     </message>
@@ -822,6 +822,11 @@
     </message>
     <message>
       <location line="+5" />
+      <source>Shortcuts…</source>
+      <translation>Belegungen…</translation>
+    </message>
+    <message>
+      <location line="+5" />
       <source>Aux…</source>
       <translation>Aux…</translation>
     </message>
@@ -867,6 +872,157 @@
       <location line="+8" />
       <source>+ Output</source>
       <translation>+ Ausgang</translation>
+    </message>
+  </context>
+  <context>
+    <name>ShortcutEditDialog</name>
+    <message>
+      <location filename="../qml/ShortcutEditDialog.qml" line="+24" />
+      <source>—</source>
+      <translation>—</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Cut</source>
+      <translation>Cut</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Transition button</source>
+      <translation>Übergangstaste</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Input into preview</source>
+      <translation>Input in die Vorschau</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Input onto program</source>
+      <translation>Input auf Programm</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Overlay 1 on with input</source>
+      <translation>Overlay 1 an mit Input</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Overlay 1 off</source>
+      <translation>Overlay 1 aus</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Fade to black</source>
+      <translation>Schwarzblende</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Start output</source>
+      <translation>Ausgang starten</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Stop output</source>
+      <translation>Ausgang stoppen</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Sound of input on</source>
+      <translation>Ton des Inputs an</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Sound of input off</source>
+      <translation>Ton des Inputs aus</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Other (JSON)</source>
+      <translation>Andere (JSON)</translation>
+    </message>
+    <message>
+      <location line="+53" />
+      <source>Shortcut %1</source>
+      <translation>Belegung %1</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>New shortcut</source>
+      <translation>Neue Belegung</translation>
+    </message>
+    <message>
+      <location line="+31" />
+      <source>Action %1 is not valid JSON</source>
+      <translation>Aktion %1 ist kein gültiges JSON</translation>
+    </message>
+    <message>
+      <location line="+34" />
+      <source>Label</source>
+      <translation>Beschriftung</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Press a key…</source>
+      <translation>Taste drücken…</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>No key</source>
+      <translation>Keine Taste</translation>
+    </message>
+    <message>
+      <location line="+35" />
+      <source>Web page</source>
+      <translation>Web-Seite</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Actions, in this order</source>
+      <translation>Aktionen, in dieser Reihenfolge</translation>
+    </message>
+    <message>
+      <location line="+23" />
+      <source>Action %1</source>
+      <translation>Aktion %1</translation>
+    </message>
+  </context>
+  <context>
+    <name>ShortcutsDialog</name>
+    <message>
+      <location filename="../qml/ShortcutsDialog.qml" line="+18" />
+      <source>Shortcuts</source>
+      <translation>Belegungen</translation>
+    </message>
+    <message>
+      <location line="+17" />
+      <source>No shortcuts yet. A shortcut runs a list of actions from a key, the web page "Keys" or the API.</source>
+      <translation>Noch keine Belegungen. Eine Belegung führt eine Liste von Aktionen aus, per Taste, über die Web-Seite „Tasten“ oder die API.</translation>
+    </message>
+    <message>
+      <location line="+22" />
+      <source>Actions: %1</source>
+      <translation>Aktionen: %1</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Run</source>
+      <translation>Ausführen</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Edit…</source>
+      <translation>Bearbeiten…</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Remove</source>
+      <translation>Entfernen</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>+ Shortcut</source>
+      <translation>+ Belegung</translation>
     </message>
   </context>
   <context>

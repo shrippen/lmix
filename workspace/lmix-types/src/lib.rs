@@ -13,6 +13,7 @@ pub mod action;
 pub mod input;
 pub mod layout;
 pub mod output;
+pub mod shortcut;
 pub mod state;
 
 pub use action::{Action, ActionError, Effect, StingerSpec, TransitionSlot};
@@ -26,4 +27,5 @@ pub use output::{
     Container, DisplayMode, Output, OutputId, OutputRef, OutputSource, OutputSpec, OutputStats,
     OutputStatus,
 };
+pub use shortcut::{Shortcut, ShortcutSpec};
 pub use state::{Event, InputLevel, Latency, Levels, LiveFeed, ShowState, Stinger, Transition};

@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>lmix keys</title>
+<link rel="stylesheet" href="/web/lmix.css">
+<style>
+  #keys { display: grid; gap: .8rem; grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr)); }
+  #keys .btn { min-height: 6rem; font-size: 1rem; white-space: normal; text-align: center; }
+  #keys .btn small { display: block; color: var(--fg3); font-size: .7rem; margin-top: .3rem; }
+  #keys .btn.done { outline: 2px solid var(--aqua); }
+  #error { color: var(--red); font-family: var(--font-mono); font-size: .8rem; min-height: 1.2em; margin-bottom: .6rem; }
+  .empty { color: var(--fg3); }
+</style>
+</head>
+<body>
+<header class="bar"><h1>lmix keys</h1><span class="state">…</span></header>
+<main>
+  <div id="error"></div>
+  <div id="keys"></div>
+</main>
+<script src="/web/lmix.js"></script>
+<script>
+"use strict";
+// Keys page (WEB.1): the show's shortcuts marked for the web, as buttons.
+const COLORS = { red: "#cc241d", orange: "#d65d0e", yellow: "#d79921", green: "#98971a", cyan: "#3f9a94",
+  blue: "#458588", purple: "#b16286" };
+function esc(text) { return String(text).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]); }
+
+function render(shortcuts) {
+  const keys = shortcuts.filter(s => s.web);
+  document.getElementById("keys").innerHTML = keys.length === 0
+    ? '<p class="empty">No shortcuts marked for the web page. Add them in the Console: Shortcuts…</p>'
+    : keys.map(s => `<button class="btn" data-shortcut="${s.number}"` +
+        (s.color ? ` style="background:${COLORS[s.color] || ""}"` : "") +
+        `>${esc(s.label)}${s.key ? `<small>${esc(s.key)}</small>` : ""}</button>`).join("");
+}
+
+document.addEventListener("click", e => {
+  const button = e.target.closest("[data-shortcut]");
+  if (!button) return;
+  lmixAct({ action: "run_shortcut", target: Number(button.dataset.shortcut) })
+    .then(() => {
+      document.getElementById("error").textContent = "";
+      button.classList.add("done");
+      setTimeout(() => button.classList.remove("done"), 400);
+    })
+    .catch(err => {
+      let text = err.message;
+      try { const e = JSON.parse(text).error; text = e.message || e.error || text; } catch (_) {}
+      document.getElementById("error").textContent = text;
+    });
+});
+
+lmixEvents(event => { if (event.event === "state") render(event.state.shortcuts || []); }, lmixLinkState);
+</script>
+</body>
+</html>

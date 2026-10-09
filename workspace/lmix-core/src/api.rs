@@ -16,7 +16,7 @@
 //! | `GET /api/pictures/inputs/{input}` | input picture (number, name, id, `preview`, `program`) |
 //! | `GET /api/events` | WebSocket: state first, then every event |
 //! | `GET /health` | liveness |
-//! | `GET /`, `/mixer`, `/tally` | browser pages (`web.rs`) |
+//! | `GET /`, `/mixer`, `/tally`, `/keys` | browser pages (`web.rs`) |
 
 use std::sync::Arc;
 

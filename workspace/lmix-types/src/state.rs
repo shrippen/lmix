@@ -7,6 +7,7 @@ use crate::action::{Effect, TransitionSlot, OVERLAY_CHANNELS};
 use crate::input::{AuxBus, Input, InputId, AUX_BUSES};
 use crate::layout::Layout;
 use crate::output::{Output, OutputStats};
+use crate::shortcut::Shortcut;
 
 /// One transition button.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -61,6 +62,9 @@ pub struct ShowState {
     /// Layouts; `preview` and `program` may name one.
     #[serde(default)]
     pub layouts: Vec<Layout>,
+    /// Shortcuts of the show.
+    #[serde(default)]
+    pub shortcuts: Vec<Shortcut>,
 }
 
 /// Current API version (API.10: additive changes within one version).

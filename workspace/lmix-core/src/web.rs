@@ -1,4 +1,4 @@
-//! Browser pages served by lmix-core (WEB.1–3): mixer, tally. They use the
+//! Browser pages served by lmix-core (WEB.1–3): mixer, tally, keys. They use the
 //! same API as every other client (`/api/events`, `/api/actions`).
 
 use axum::http::header;
@@ -14,6 +14,7 @@ pub fn routes<S: Clone + Send + Sync + 'static>() -> Router<S> {
         .route("/", get(|| page(include_str!("../web/index.html"))))
         .route("/mixer", get(|| page(include_str!("../web/mixer.html"))))
         .route("/tally", get(|| page(include_str!("../web/tally.html"))))
+        .route("/keys", get(|| page(include_str!("../web/keys.html"))))
         .route(
             "/web/lmix.css",
             get(|| asset("text/css; charset=utf-8", include_str!("../web/lmix.css"))),

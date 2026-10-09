@@ -10,18 +10,19 @@
 use lmix_types::action::{aux_index, OVERLAY_CHANNELS, TRANSITION_SLOTS};
 use lmix_types::input::{color_rgb, AUX_BUSES, REF_PREVIEW, REF_PROGRAM, VOLUME_MAX};
 use lmix_types::layout::{BORDER_MAX_PX, LAYOUTS, LAYOUT_BOXES};
+use lmix_types::shortcut::SHORTCUT_ACTIONS;
 use lmix_types::state::API_VERSION;
 use lmix_types::{
     Action, ActionError, AuxBus, BoxRect, BoxSpec, ChannelStrip, Effect, Ingest, Input, InputColor,
     InputId, InputRef, InputStatus, Layout, LayoutBox, Listen, Look, Output, OutputId, OutputRef,
-    OutputSource, OutputSpec, OutputStatus, ShowState, SignalLoss, SourceSpec, Stinger,
-    StingerSpec, Transition, TransitionSlot, Transport,
+    OutputSource, OutputSpec, OutputStatus, Shortcut, ShortcutSpec, ShowState, SignalLoss,
+    SourceSpec, Stinger, StingerSpec, Transition, TransitionSlot, Transport,
 };
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 use uuid::Uuid;
 
-use crate::show::{Show, ShowInput, ShowLayout, ShowOutput};
+use crate::show::{Show, ShowInput, ShowLayout, ShowOutput, ShowShortcut};
 
 /// What the engine has to do after an action.
 #[derive(Clone, Debug, PartialEq)]
@@ -290,6 +291,17 @@ impl Switcher {
             } => self.set_layout(&layout, background, boxes),
             Action::RemoveLayout { layout } => self.remove_layout(&layout),
             Action::PreviewLayout { layout } => self.preview_layout(&layout),
+            Action::AddShortcut { shortcut } => self.add_shortcut(shortcut),
+            Action::SetShortcut { target, shortcut } => self.set_shortcut(&target, shortcut),
+            Action::RemoveShortcut { target } => {
+                let index = self.find_shortcut(&target)?;
+                self.show.shortcuts.remove(index);
+                Ok(Vec::new())
+            }
+            // The service runs a shortcut's actions one by one.
+            Action::RunShortcut { .. } => Err(ActionError::BadShortcut {
+                reason: "run through the service".into(),
+            }),
             Action::Transition { slot } => self.transition(slot),
             Action::SetTransition {
                 slot,
@@ -479,6 +491,21 @@ impl Switcher {
             t_bar: self.t_bar,
             aux_buses: self.show.aux_buses,
             looks_available: self.looks_available,
+            shortcuts: self
+                .show
+                .shortcuts
+                .iter()
+                .enumerate()
+                .map(|(i, s)| Shortcut {
+                    id: s.id,
+                    number: i as u32 + 1,
+                    label: s.label.clone(),
+                    key: s.key.clone(),
+                    web: s.web,
+                    color: s.color,
+                    actions: s.actions.clone(),
+                })
+                .collect(),
             layouts: self
                 .show
                 .layouts
@@ -854,6 +881,99 @@ impl Switcher {
         self.stinger_until =
             Some(Instant::now() + Duration::from_millis(u64::from(button.duration_ms)));
         Ok(commands)
+    }
+
+    // ---- Shortcuts ----
+
+    fn add_shortcut(&mut self, spec: ShortcutSpec) -> Result<Vec<Command>, ActionError> {
+        self.check_shortcut(&spec, None)?;
+        self.show.shortcuts.push(ShowShortcut {
+            id: InputId::new(),
+            label: spec.label,
+            key: spec.key,
+            web: spec.web,
+            color: spec.color,
+            actions: spec.actions,
+        });
+        Ok(Vec::new())
+    }
+
+    fn set_shortcut(
+        &mut self,
+        target: &InputRef,
+        spec: ShortcutSpec,
+    ) -> Result<Vec<Command>, ActionError> {
+        let index = self.find_shortcut(target)?;
+        self.check_shortcut(&spec, Some(index))?;
+        let entry = &mut self.show.shortcuts[index];
+        entry.label = spec.label;
+        entry.key = spec.key;
+        entry.web = spec.web;
+        entry.color = spec.color;
+        entry.actions = spec.actions;
+        Ok(Vec::new())
+    }
+
+    /// A label, a free key, and actions that do not manage or run
+    /// shortcuts themselves (no loops).
+    fn check_shortcut(&self, spec: &ShortcutSpec, own: Option<usize>) -> Result<(), ActionError> {
+        let bad = |reason: String| Err(ActionError::BadShortcut { reason });
+        if spec.label.trim().is_empty() {
+            return bad("it needs a label".into());
+        }
+        if spec.actions.is_empty() || spec.actions.len() > SHORTCUT_ACTIONS {
+            return bad(format!("1–{SHORTCUT_ACTIONS} actions"));
+        }
+        let nested = spec.actions.iter().any(|a| {
+            matches!(
+                a,
+                Action::AddShortcut { .. }
+                    | Action::SetShortcut { .. }
+                    | Action::RemoveShortcut { .. }
+                    | Action::RunShortcut { .. }
+            )
+        });
+        if nested {
+            return bad("a shortcut cannot run or change shortcuts".into());
+        }
+        let key_taken = spec.key.as_ref().is_some_and(|key| {
+            self.show
+                .shortcuts
+                .iter()
+                .enumerate()
+                .any(|(i, s)| Some(i) != own && s.key.as_ref() == Some(key))
+        });
+        if key_taken {
+            return bad("another shortcut has that key".into());
+        }
+        Ok(())
+    }
+
+    /// Actions of a shortcut, for the service to run.
+    pub fn shortcut_actions(&self, target: &InputRef) -> Result<Vec<Action>, ActionError> {
+        Ok(self.show.shortcuts[self.find_shortcut(target)?]
+            .actions
+            .clone())
+    }
+
+    /// A shortcut by number (1-based), id or label.
+    fn find_shortcut(&self, target: &InputRef) -> Result<usize, ActionError> {
+        let shortcuts = &self.show.shortcuts;
+        let index = match target {
+            InputRef::Number(n) => (*n as usize)
+                .checked_sub(1)
+                .filter(|i| *i < shortcuts.len()),
+            InputRef::Text(text) => shortcuts
+                .iter()
+                .position(|s| s.id.to_string() == *text)
+                .or_else(|| shortcuts.iter().position(|s| s.label == *text)),
+        };
+        index.ok_or_else(|| ActionError::UnknownShortcut {
+            reference: match target {
+                InputRef::Number(n) => n.to_string(),
+                InputRef::Text(t) => format!("\"{t}\""),
+            },
+        })
     }
 
     // ---- Layouts ----
@@ -2629,6 +2749,65 @@ mod tests {
             boxes: Vec::new()
         }));
         assert!(sw.state().layouts[0].boxes.is_empty());
+    }
+
+    fn shortcut(label: &str, key: Option<&str>, actions: Vec<Action>) -> ShortcutSpec {
+        ShortcutSpec {
+            label: label.into(),
+            key: key.map(Into::into),
+            web: true,
+            color: None,
+            actions,
+        }
+    }
+
+    #[test]
+    fn shortcuts_are_kept_and_checked() {
+        let mut sw = two_inputs();
+        let take_b = vec![Action::PreviewInput { input: named("B") }, Action::Cut];
+        sw.apply(Action::AddShortcut {
+            shortcut: shortcut("B on air", Some("F2"), take_b.clone()),
+        })
+        .unwrap();
+
+        let state = sw.state();
+        assert_eq!(state.shortcuts[0].label, "B on air");
+        assert_eq!(state.shortcuts[0].number, 1);
+        assert_eq!(
+            sw.shortcut_actions(&InputRef::Text("B on air".into()))
+                .unwrap(),
+            take_b
+        );
+
+        for spec in [
+            shortcut("Other", Some("F2"), vec![Action::Cut]),
+            shortcut(" ", None, vec![Action::Cut]),
+            shortcut("Empty", None, Vec::new()),
+            shortcut(
+                "Loop",
+                None,
+                vec![Action::RunShortcut {
+                    target: InputRef::Number(1),
+                }],
+            ),
+        ] {
+            assert!(matches!(
+                sw.apply(Action::AddShortcut { shortcut: spec }),
+                Err(ActionError::BadShortcut { .. })
+            ));
+        }
+
+        // Its own key is fine when changing it.
+        sw.apply(Action::SetShortcut {
+            target: InputRef::Number(1),
+            shortcut: shortcut("B now", Some("F2"), vec![Action::Cut]),
+        })
+        .unwrap();
+        sw.apply(Action::RemoveShortcut {
+            target: InputRef::Text("B now".into()),
+        })
+        .unwrap();
+        assert!(sw.state().shortcuts.is_empty());
     }
 
     #[test]

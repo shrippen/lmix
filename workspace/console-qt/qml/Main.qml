@@ -86,6 +86,19 @@ Kirigami.ApplicationWindow {
         return decodeURIComponent(url.toString().replace(/^file:\/\//, ""))
     }
 
+    readonly property var shortcuts: show && show.shortcuts ? show.shortcuts : []
+    readonly property var shortcutKeys: shortcuts.filter(s => s.key).map(s => s.key)
+
+    // The show's shortcuts (AUT.1–3); they win over the keys below.
+    Instantiator {
+        model: root.shortcuts.filter(s => s.key)
+        delegate: Shortcut {
+            required property var modelData
+            sequence: modelData.key
+            onActivated: root.act({ action: "run_shortcut", target: modelData.id })
+        }
+    }
+
     // Keys 1–9: that input into preview (not while a text field has focus:
     // fields take printable keys first).
     Instantiator {
@@ -93,6 +106,7 @@ Kirigami.ApplicationWindow {
         delegate: Shortcut {
             required property int index
             sequence: String(index + 1)
+            enabled: root.shortcutKeys.indexOf(String(index + 1)) < 0
             onActivated: {
                 var input = root.inputs[index]
                 if (input && input.id !== root.show.program && input.id !== root.show.preview) {
@@ -122,6 +136,27 @@ Kirigami.ApplicationWindow {
         id: addInputDialog
         parent: QQC2.Overlay.overlay
         core: backend
+    }
+
+    ShortcutsDialog {
+        id: shortcutsDialog
+        parent: QQC2.Overlay.overlay
+        anchors.centerIn: parent
+        act: root.act
+        shortcuts: root.shortcuts
+        onEditRequested: shortcut => {
+            shortcutEditDialog.shortcut = shortcut
+            shortcutEditDialog.open()
+        }
+    }
+
+    ShortcutEditDialog {
+        id: shortcutEditDialog
+        parent: QQC2.Overlay.overlay
+        anchors.centerIn: parent
+        act: root.act
+        inputs: root.inputs
+        outputs: root.show ? root.show.outputs : []
     }
 
     LayoutDialog {
@@ -267,6 +302,11 @@ Kirigami.ApplicationWindow {
                     text: qsTr("Clear solo")
                     visible: root.inputs.some(i => i.listen !== "off")
                     onClicked: root.act({ action: "clear_listen" })
+                }
+                KanteButton {
+                    text: qsTr("Shortcuts…")
+                    enabled: backend.connected
+                    onClicked: shortcutsDialog.open()
                 }
                 KanteButton {
                     text: qsTr("Aux…")
