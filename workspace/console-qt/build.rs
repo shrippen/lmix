@@ -42,6 +42,14 @@ fn main() {
         "qml/Main.qml",
         "qml/LiveView.qml",
         "qml/InputTile.qml",
+        "qml/SourceFields.qml",
+        "qml/AddInputDialog.qml",
+        "qml/AddOutputDialog.qml",
+        "qml/LevelMeter.qml",
+        "qml/TransitionPanel.qml",
+        "qml/OutputBar.qml",
+        "qml/ChoiceMenu.qml",
+        "qml/KeyedModel.qml",
     ]))
     .files(["src/bridge.rs"])
     .qrc(kante_qrc())

@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls as QQC2
+import QtQuick.Dialogs
 import org.kde.kirigami as Kirigami
 import Kante
 import org.lmix.console
@@ -8,9 +9,9 @@ import org.lmix.console
 Kirigami.ApplicationWindow {
     id: root
 
-    title: "lmix"
+    title: show && show.path ? "lmix — " + show.path : "lmix"
     width: Kirigami.Units.gridUnit * 80
-    height: Kirigami.Units.gridUnit * 48
+    height: Kirigami.Units.gridUnit * 50
     color: KanteStyle.backgroundColor
 
     Core {
@@ -29,18 +30,87 @@ Kirigami.ApplicationWindow {
 
     readonly property var show: backend.state.length > 0 ? JSON.parse(backend.state) : null
     readonly property var inputs: show ? show.inputs : []
+    readonly property var levels: backend.levels.length > 0 ? JSON.parse(backend.levels) : ({})
+    readonly property var recent: backend.recent.length > 0 ? JSON.parse(backend.recent) : []
+
+    /** Send an lmix action (the API's JSON, as an object). */
+    function act(action) {
+        backend.act(JSON.stringify(action))
+    }
 
     function inputById(id) {
-        for (var i = 0; i < inputs.length; i++) {
-            if (inputs[i].id === id) {
-                return inputs[i]
-            }
-        }
-        return null
+        return inputs.find(i => i.id === id) || null
+    }
+
+    KeyedModel { id: inputModel }
+    KeyedModel { id: outputModel }
+    KeyedModel { id: transitionModel }
+    // Reads `show` itself: `inputs` may not have followed it yet here.
+    onShowChanged: {
+        inputModel.sync(show ? show.inputs.map(i => i.id) : [])
+        outputModel.sync(show ? show.outputs.map(o => o.id) : [])
+        transitionModel.sync(show ? show.transitions.map(t => String(t.slot)) : [])
+    }
+
+    function outputById(id) {
+        return show ? show.outputs.find(o => o.id === id) || null : null
+    }
+
+    function transitionBySlot(slot) {
+        return show ? show.transitions.find(t => String(t.slot) === slot) || null : null
     }
 
     readonly property var previewInput: show && show.preview ? inputById(show.preview) : null
     readonly property var programInput: show && show.program ? inputById(show.program) : null
+
+    function localPath(url) {
+        return decodeURIComponent(url.toString().replace(/^file:\/\//, ""))
+    }
+
+    // Keys 1–9: that input into preview (not while a text field has focus:
+    // fields take printable keys first).
+    Instantiator {
+        model: 9
+        delegate: Shortcut {
+            required property int index
+            sequence: String(index + 1)
+            onActivated: {
+                var input = root.inputs[index]
+                if (input && input.id !== root.show.program && input.id !== root.show.preview) {
+                    root.act({ action: "preview_input", input: input.number })
+                }
+            }
+        }
+    }
+
+    FileDialog {
+        id: openDialog
+        title: qsTr("Open show")
+        nameFilters: [qsTr("lmix shows (*.lmix)"), qsTr("All files (*)")]
+        onAccepted: root.act({ action: "open_show", path: root.localPath(selectedFile) })
+    }
+
+    FileDialog {
+        id: saveDialog
+        title: qsTr("Save show")
+        fileMode: FileDialog.SaveFile
+        defaultSuffix: "lmix"
+        nameFilters: [qsTr("lmix shows (*.lmix)")]
+        onAccepted: root.act({ action: "save_show", path: root.localPath(selectedFile) })
+    }
+
+    AddInputDialog {
+        id: addInputDialog
+        parent: QQC2.Overlay.overlay
+        core: backend
+    }
+
+    AddOutputDialog {
+        id: addOutputDialog
+        parent: QQC2.Overlay.overlay
+        core: backend
+        inputs: root.inputs
+    }
 
     pageStack.initialPage: Kirigami.Page {
         title: "lmix"
@@ -61,6 +131,57 @@ Kirigami.ApplicationWindow {
 
             RowLayout {
                 Layout.fillWidth: true
+                spacing: Kirigami.Units.smallSpacing
+
+                KanteButton {
+                    text: qsTr("New")
+                    enabled: backend.connected
+                    onClicked: root.act({ action: "new_show" })
+                }
+                KanteButton {
+                    text: qsTr("Open…")
+                    enabled: backend.connected
+                    onClicked: openDialog.open()
+                }
+                KanteButton {
+                    id: recentButton
+                    text: qsTr("Recent")
+                    enabled: backend.connected && root.recent.length > 0
+                    onClicked: recentMenu.popup(recentButton, 0, recentButton.height)
+                    ChoiceMenu {
+                        id: recentMenu
+                        choices: root.recent.map(path => ({ value: path, label: path }))
+                        onPicked: value => root.act({ action: "open_show", path: value })
+                    }
+                }
+                KanteButton {
+                    text: qsTr("Save")
+                    enabled: backend.connected
+                    onClicked: root.show && root.show.path ? root.act({ action: "save_show" }) : saveDialog.open()
+                }
+                KanteButton {
+                    text: qsTr("Save as…")
+                    enabled: backend.connected
+                    onClicked: saveDialog.open()
+                }
+                Item { Layout.fillWidth: true }
+                QQC2.Label {
+                    text: backend.latency
+                    font.family: KanteStyle.monoFamily
+                    color: KanteStyle.mutedTextColor
+                }
+                KanteButton {
+                    text: qsTr("Latency")
+                    busy: backend.measuring
+                    enabled: backend.connected && !backend.measuring
+                    onClicked: backend.measureLatency()
+                    QQC2.ToolTip.visible: hovered
+                    QQC2.ToolTip.text: qsTr("Measure capture to program for a few seconds")
+                }
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
                 Layout.fillHeight: true
                 spacing: Kirigami.Units.largeSpacing
 
@@ -71,30 +192,15 @@ Kirigami.ApplicationWindow {
                     source: root.previewInput ? root.previewInput.id : ""
                 }
 
-                ColumnLayout {
+                TransitionPanel {
                     Layout.alignment: Qt.AlignVCenter
                     Layout.fillWidth: false
                     Layout.preferredWidth: Kirigami.Units.gridUnit * 8
-                    spacing: Kirigami.Units.smallSpacing
-
-                    KanteButton {
-                        Layout.fillWidth: true
-                        text: qsTr("Cut")
-                        emphasis: KanteButton.Emphasis.Primary
-                        size: KanteButton.Size.Large
-                        enabled: backend.connected
-                        onClicked: backend.cut()
-                    }
-                    Repeater {
-                        model: 4
-                        KanteButton {
-                            required property int index
-                            Layout.fillWidth: true
-                            text: root.show && root.show.transitions[index] ? backend.effectLabel(root.show.transitions[index].effect) : (index + 1)
-                            enabled: backend.connected
-                            onClicked: backend.transition(index + 1)
-                        }
-                    }
+                    core: backend
+                    show: root.show
+                    act: root.act
+                    transitions: transitionModel
+                    transitionBySlot: root.transitionBySlot
                 }
 
                 Monitor {
@@ -102,28 +208,65 @@ Kirigami.ApplicationWindow {
                     detail: root.programInput ? root.programInput.number + " " + root.programInput.name : ""
                     tally: KanteStyle.negativeTextColor
                     source: "program"
+                    peakDb: root.levels.program
+                }
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                KanteSectionLabel { text: qsTr("Inputs") }
+                Item { Layout.fillWidth: true }
+                KanteButton {
+                    text: qsTr("Clear solo")
+                    visible: root.inputs.some(i => i.listen !== "off")
+                    onClicked: root.act({ action: "clear_listen" })
+                }
+                KanteButton {
+                    text: qsTr("+ Input")
+                    enabled: backend.connected
+                    onClicked: {
+                        addInputDialog.replacing = null
+                        addInputDialog.open()
+                    }
                 }
             }
 
             GridView {
                 id: bar
                 Layout.fillWidth: true
-                Layout.preferredHeight: cellHeight * Math.min(2, Math.ceil(count / Math.max(1, Math.floor(width / cellWidth))))
+                Layout.preferredHeight: cellHeight * Math.max(1, Math.min(2, Math.ceil(count / Math.max(1, Math.floor(width / cellWidth)))))
                 cellWidth: Kirigami.Units.gridUnit * 12 + Kirigami.Units.smallSpacing
-                cellHeight: Kirigami.Units.gridUnit * 9
+                cellHeight: Kirigami.Units.gridUnit * 11
                 clip: true
                 boundsBehavior: Flickable.StopAtBounds
-                model: root.inputs
+                model: inputModel
                 QQC2.ScrollBar.vertical: QQC2.ScrollBar {}
                 delegate: InputTile {
-                    required property var modelData
+                    id: tileDelegate
+                    required property string key
                     width: bar.cellWidth - Kirigami.Units.smallSpacing
                     height: bar.cellHeight - Kirigami.Units.smallSpacing
                     core: backend
-                    input: modelData
-                    onProgram: root.show !== null && root.show.program === modelData.id
-                    onPreview: root.show !== null && root.show.preview === modelData.id
+                    input: root.inputById(key) || ({ id: key, number: 0, name: "", source: { kind: "pattern" }, status: "starting", audio: { on: false, follow_video: false, volume: 0 }, has_audio: false, listen: "off", signal_loss: "hold", color: null })
+                    act: root.act
+                    onProgram: root.show !== null && root.show.program === key
+                    onPreview: root.show !== null && root.show.preview === key
+                    peakDb: root.levels[key]
+                    onReplaceRequested: {
+                        addInputDialog.replacing = tileDelegate.input
+                        addInputDialog.open()
+                    }
                 }
+            }
+
+            OutputBar {
+                Layout.fillWidth: true
+                core: backend
+                show: root.show
+                act: root.act
+                outputs: outputModel
+                outputById: root.outputById
+                onAddRequested: addOutputDialog.open()
             }
 
             QQC2.Label {
@@ -143,6 +286,7 @@ Kirigami.ApplicationWindow {
         property string detail
         property color tally
         property alias source: view.source
+        property var peakDb: undefined
 
         Layout.fillWidth: true
         Layout.fillHeight: true
@@ -170,6 +314,11 @@ Kirigami.ApplicationWindow {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 core: backend
+            }
+            LevelMeter {
+                Layout.fillWidth: true
+                visible: monitor.peakDb !== undefined
+                peakDb: monitor.peakDb
             }
         }
     }
