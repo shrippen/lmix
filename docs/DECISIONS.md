@@ -846,3 +846,35 @@ ohne Präfix (`--patterns`, `--file`, `--encode`, `--secs`, …);
 `--selftest` und den nur dafür genutzten Code. **Verworfen**: die Module
 als gemeinsame Bibliothek beider Crates (Aufwand für Code, der mit der
 egui-Console verschwindet; danach gibt es nur noch eine Kopie).
+
+## 2026-10-09 — strom-Speicher (H.24): Eingrenzung in der VM
+
+**Läufe** (Cloud-VM, CPU-Mischer, 4 Testbild-Inputs, Programmwechsel
+alle 30 s, RSS von strom jede Minute, je 40 min):
+
+| Lauf | Ausgänge | RSS nach 2 min → 40 min |
+|---|---|---|
+| A | keine | 389 → 394 MB, ab Minute 7 flach |
+| B | MKV-Aufnahme + SRT mit Empfänger | 375 → 392 MB, in Stufen |
+| C | nur MKV-Aufnahme | 422 → 422 MB (schwankt 418–433) |
+| D | nur SRT | 420 → 434 MB (schwankt bis 442) |
+| F | nur SRT | 382 → 424 MB, Stufen bis Minute 12, dann flach |
+| G | nur SRT, `MALLOC_ARENA_MAX=2` | 332 → 388 MB, Stufen bis Minute 12, dann flach |
+
+`/srt-stats` 50-mal je Sekunde über 5 min (≈12 000 Abfragen) ließ den
+Speicher nicht stetig steigen (325 → 327 MB, ein einzelner Sprung am
+Ende): die Leitungsanzeige (B32) leckt nicht.
+
+**Befund**: In der VM wächst strom in den ersten ~12 min in Stufen (in B,
+F und G jeweils um Minute 8) und bleibt danach flach; das sieht nach
+Puffern und Verläufen aus, die sich bis zu ihrer Grenze füllen, nicht nach
+einem Leck. `MALLOC_ARENA_MAX=2` senkt das Niveau um ~35 MB, ändert den
+Verlauf nicht. Das stetige Wachstum der Hardware-Läufe (~32 MB/h über 5 h)
+ist hier nicht nachstellbar. heaptrack taugt nicht: strom stürzt darunter
+beim Start eines Ausgangs-Flows ab (Stack-Überlauf in einem Tokio-Worker,
+einmal Segfault).
+
+**Nächste Schritte auf Hardware** (`scripts/soak-hardware.sh`, je 60 min):
+ohne ISO-Aufnahme; mit 8 statt 16 Inputs; mit `--mixer gl` statt `cuda`;
+einmal mit `MALLOC_ARENA_MAX=2`. Wächst nur der CUDA-Lauf, liegt die
+Ursache im CUDA-Pfad (Speicherpools, `cudadownload`).
