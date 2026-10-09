@@ -18,7 +18,8 @@ use strom_types::flow::GStreamerClockType;
 use strom_types::{Flow, FlowId, PropertyValue};
 use uuid::Uuid;
 
-use lmix_types::input::color_rgb;
+use lmix_types::action::OVERLAY_CHANNELS;
+use lmix_types::input::{color_rgb, AUX_BUSES, AUX_PRE_FADER};
 use lmix_types::{DisplayMode, OutputId, OutputSpec, SourceSpec};
 
 use super::LivePicture;
@@ -56,7 +57,7 @@ const MONITOR_SINK: &str = "monitor_sink";
 pub const AUDIO_MIXER: &str = "mix";
 /// Mixer flow name; a new layout gets a new name, so `start` rebuilds a
 /// running mixer of an older lmix instead of reusing it.
-pub const MIXER_NAME: &str = "lmix mixer 2";
+pub const MIXER_NAME: &str = "lmix mixer 4";
 /// Block id of the vision mixer in the mixer flow.
 pub const MIXER_BLOCK: &str = "vm";
 /// Thumbnail tap on the program output: GUI monitor and picture checks.
@@ -137,7 +138,7 @@ pub fn slot_id(slot: usize) -> FlowId {
 }
 
 /// `inter` channel a slot flow publishes on (see strom `inter.rs`).
-fn slot_channel(slot: usize) -> String {
+pub fn slot_channel(slot: usize) -> String {
     format!("strom_{}_{}", slot_id(slot), SLOT_OUT)
 }
 
@@ -178,6 +179,25 @@ pub fn mixer_flow(slots: usize, backend: MixerBackend, monitor: MonitorOut) -> F
         ));
     }
 
+    // Overlays: one DSK layer each, fed over `inter`. The channel is
+    // pointed at a slot when an overlay goes on; until then it waits on a
+    // channel nobody publishes.
+    for channel in 0..OVERLAY_CHANNELS as usize {
+        let input = overlay_input(channel);
+        flow.blocks.push(block(
+            &input,
+            INTER_INPUT_BLOCK,
+            vec![
+                ("channel", PropertyValue::String(OVERLAY_IDLE.into())),
+                ("max_time", PropertyValue::String(INTER_BUFFER_MS.into())),
+            ],
+        ));
+        flow.links.push(link(
+            format!("{input}:src"),
+            format!("{MIXER_BLOCK}:dsk_in_{channel}"),
+        ));
+    }
+
     let black = black_input(slots);
     flow.elements.push(element(
         "black",
@@ -206,6 +226,10 @@ pub fn mixer_flow(slots: usize, backend: MixerBackend, monitor: MonitorOut) -> F
             (
                 "compositor_preference",
                 PropertyValue::String(backend.property().into()),
+            ),
+            (
+                "num_dsk_inputs",
+                PropertyValue::String(OVERLAY_CHANNELS.to_string()),
             ),
             // Base time 0 (share_timing): output starts at the first frame.
             (
@@ -247,6 +271,14 @@ pub fn mixer_flow(slots: usize, backend: MixerBackend, monitor: MonitorOut) -> F
     flow
 }
 
+/// Block id of the `inter` input feeding overlay `channel` (0-based).
+pub fn overlay_input(channel: usize) -> String {
+    format!("ovl{channel}")
+}
+
+/// `inter` channel of an idle overlay: nobody publishes it.
+const OVERLAY_IDLE: &str = "lmix_overlay_idle";
+
 /// `inter` channels of program in the mixer flow.
 fn pgm_channel(block: &str) -> String {
     format!("strom_{}_{block}", mixer_id())
@@ -264,7 +296,13 @@ pub fn output_flow_id(id: OutputId) -> FlowId {
 ///   Record: pgm ─► videoenc ─► rec:video_in      pgm_audio ─► aac ─► rec:audio_in_0
 ///   NDI:    pgm ─────────────► ndi:video_in      pgm_audio ─► ndi:audio_in
 /// ```
-pub fn output_flow(id: OutputId, spec: &OutputSpec, feed: Feed, backend: MixerBackend) -> Flow {
+pub fn output_flow(
+    id: OutputId,
+    spec: &OutputSpec,
+    feed: Feed,
+    aux: Option<usize>,
+    backend: MixerBackend,
+) -> Flow {
     let mut flow = Flow::new(format!("lmix output {id}"));
     flow.id = output_flow_id(id);
     share_timing(&mut flow);
@@ -277,6 +315,11 @@ pub fn output_flow(id: OutputId, spec: &OutputSpec, feed: Feed, backend: MixerBa
     let (video, audio) = match feed {
         Feed::Program => (pgm_channel(PGM_OUT), Some(pgm_channel(PGM_AUDIO_OUT))),
         Feed::Slot { slot, audio } => (slot_channel(slot), audio.then(|| slot_audio_channel(slot))),
+    };
+    // An aux bus replaces the feed's sound (e.g. a mix-minus stream).
+    let audio = match aux {
+        Some(bus) => Some(pgm_channel(&aux_out(bus))),
+        None => audio,
     };
     // Screens show picture only.
     let audio = audio.filter(|_| !matches!(spec, OutputSpec::Display { .. }));
@@ -524,7 +567,10 @@ pub fn live_flow(which: LivePicture, socket: &str, backend: MixerBackend, sink: 
             "copy",
             "compositor",
             vec![
-                ("start-time-selection", PropertyValue::String("first".into())),
+                (
+                    "start-time-selection",
+                    PropertyValue::String("first".into()),
+                ),
                 ("background", PropertyValue::String("black".into())),
             ],
         ));
@@ -551,6 +597,19 @@ fn add_encoder(flow: &mut Flow, video_kbps: u32) {
         .push(link("pgm:src".into(), "enc:video_in".into()));
 }
 
+/// Element in the mixer flow that delays the sound of `slot`.
+pub fn audio_delay(slot: usize) -> String {
+    format!("adelay{slot}")
+}
+
+/// Inter output of aux bus `bus` (0-based) in the mixer flow.
+fn aux_out(bus: usize) -> String {
+    format!("aux{}_out", bus + 1)
+}
+
+/// `inter` buffer of slot sound in the mixer: holds the longest delay.
+const AUDIO_INTER_BUFFER_MS: &str = "1000";
+
 /// Sound of every slot into one audio mixer; its main mix is program
 /// audio (into the vision mixer, which meters it on the multiview).
 fn add_audio_mixer(flow: &mut Flow, slots: usize, monitor: MonitorOut) {
@@ -561,30 +620,70 @@ fn add_audio_mixer(flow: &mut Flow, slots: usize, monitor: MonitorOut) {
             INTER_INPUT_BLOCK,
             vec![
                 ("channel", PropertyValue::String(slot_audio_channel(slot))),
-                ("max_time", PropertyValue::String(INTER_BUFFER_MS.into())),
+                // Room for the channel delay (ChannelStrip::DELAY_MAX_MS).
+                (
+                    "max_time",
+                    PropertyValue::String(AUDIO_INTER_BUFFER_MS.into()),
+                ),
             ],
         ));
+        // Channel delay (lip sync): later timestamps, the mixer plays the
+        // sound that much later. Stays when the slot is rebuilt.
+        let delay = audio_delay(slot);
+        flow.elements.push(element(
+            &delay,
+            "identity",
+            vec![("ts-offset", PropertyValue::Int(0))],
+        ));
+        flow.links.push(link(format!("{input}:src"), delay.clone()));
         flow.links.push(link(
-            format!("{input}:src"),
+            delay,
             format!("{AUDIO_MIXER}:input_{}", audio_channel(slot)),
         ));
     }
-    flow.blocks.push(block(
-        AUDIO_MIXER,
-        AUDIO_MIXER_BLOCK,
-        vec![
-            ("num_channels", PropertyValue::UInt(slots as u64)),
-            ("sample_rate", PropertyValue::UInt(AUDIO_RATE)),
-            (
-                "start_time_selection",
-                PropertyValue::String("first".into()),
-            ),
-        ],
-    ));
+    let mut properties = vec![
+        (
+            "num_channels".to_string(),
+            PropertyValue::UInt(slots as u64),
+        ),
+        ("sample_rate".to_string(), PropertyValue::UInt(AUDIO_RATE)),
+        (
+            "start_time_selection".to_string(),
+            PropertyValue::String("first".into()),
+        ),
+        (
+            "num_aux_buses".to_string(),
+            PropertyValue::UInt(AUX_BUSES as u64),
+        ),
+    ];
+    // Pre or post fader is fixed when strom builds the mixer.
+    for slot in 0..slots {
+        for (bus, pre) in AUX_PRE_FADER.iter().enumerate() {
+            properties.push((
+                format!("ch{}_aux{}_pre", audio_channel(slot), bus + 1),
+                PropertyValue::Bool(*pre),
+            ));
+        }
+    }
+    let properties = properties
+        .iter()
+        .map(|(name, value)| (name.as_str(), value.clone()))
+        .collect();
+    flow.blocks
+        .push(block(AUDIO_MIXER, AUDIO_MIXER_BLOCK, properties));
     flow.links.push(link(
         format!("{AUDIO_MIXER}:main_out"),
         format!("{MIXER_BLOCK}:pgm_audio_in"),
     ));
+    // Aux buses on inter channels, for outputs that carry a bus's sound.
+    for bus in 0..AUX_BUSES {
+        let out = aux_out(bus);
+        flow.blocks.push(block(&out, INTER_OUTPUT_BLOCK, vec![]));
+        flow.links.push(link(
+            format!("{AUDIO_MIXER}:aux_out_{}", bus + 1),
+            format!("{out}:sink"),
+        ));
+    }
 
     // strom switches the monitor bus between program and the solos.
     if monitor == MonitorOut::Auto {
@@ -1074,10 +1173,12 @@ mod tests {
 
         for slot in 0..3 {
             let to = format!("mix:input_{}", slot + 1);
+            let delay = audio_delay(slot);
             assert!(flow
                 .links
                 .iter()
-                .any(|l| l.from == format!("ain{slot}:src") && l.to == to));
+                .any(|l| l.from == format!("ain{slot}:src") && l.to == delay));
+            assert!(flow.links.iter().any(|l| l.from == delay && l.to == to));
         }
         assert!(flow
             .links
@@ -1107,13 +1208,63 @@ mod tests {
     }
 
     #[test]
+    fn mixer_publishes_its_aux_buses() {
+        let flow = mixer_flow(2, MixerBackend::Cpu, MonitorOut::None);
+
+        let mix = flow.blocks.iter().find(|b| b.id == AUDIO_MIXER).unwrap();
+        assert!(matches!(
+            mix.properties.get("num_aux_buses"),
+            Some(PropertyValue::UInt(2))
+        ));
+        assert!(matches!(
+            mix.properties.get("ch2_aux1_pre"),
+            Some(PropertyValue::Bool(true))
+        ));
+        assert!(matches!(
+            mix.properties.get("ch2_aux2_pre"),
+            Some(PropertyValue::Bool(false))
+        ));
+        assert!(flow
+            .links
+            .iter()
+            .any(|l| l.from == "mix:aux_out_2" && l.to == "aux2_out:sink"));
+    }
+
+    #[test]
+    fn an_aux_bus_replaces_the_output_sound() {
+        let spec = OutputSpec::Srt {
+            uri: "srt://cdn:9000".into(),
+            video_kbps: 6000,
+        };
+        let flow = output_flow(
+            OutputId::new(),
+            &spec,
+            Feed::Program,
+            Some(0),
+            MixerBackend::Cpu,
+        );
+
+        let audio = flow.blocks.iter().find(|b| b.id == "pgm_audio").unwrap();
+        assert!(matches!(
+            audio.properties.get("channel"),
+            Some(PropertyValue::String(c)) if *c == format!("strom_{}_aux1_out", mixer_id())
+        ));
+    }
+
+    #[test]
     fn recording_encodes_picture_and_sound() {
         let spec = OutputSpec::Record {
             folder: "show".into(),
             container: lmix_types::Container::Mkv,
             video_kbps: 8000,
         };
-        let flow = output_flow(OutputId::new(), &spec, Feed::Program, MixerBackend::Cpu);
+        let flow = output_flow(
+            OutputId::new(),
+            &spec,
+            Feed::Program,
+            None,
+            MixerBackend::Cpu,
+        );
 
         let pgm = flow.blocks.iter().find(|b| b.id == "pgm").unwrap();
         assert!(matches!(
@@ -1144,6 +1295,7 @@ mod tests {
                 slot: 3,
                 audio: false,
             },
+            None,
             MixerBackend::Cuda,
         );
 
@@ -1238,7 +1390,13 @@ mod tests {
         let spec = OutputSpec::Display {
             mode: DisplayMode::Drm { connector: 42 },
         };
-        let flow = output_flow(OutputId::new(), &spec, Feed::Program, MixerBackend::Cpu);
+        let flow = output_flow(
+            OutputId::new(),
+            &spec,
+            Feed::Program,
+            None,
+            MixerBackend::Cpu,
+        );
 
         let screen = flow.elements.iter().find(|e| e.id == "screen").unwrap();
         assert_eq!(screen.element_type, "kmssink");
@@ -1258,7 +1416,13 @@ mod tests {
         let screen = OutputSpec::Display {
             mode: DisplayMode::Window,
         };
-        let flow = output_flow(OutputId::new(), &screen, Feed::Program, MixerBackend::Cuda);
+        let flow = output_flow(
+            OutputId::new(),
+            &screen,
+            Feed::Program,
+            None,
+            MixerBackend::Cuda,
+        );
         assert!(flow
             .links
             .iter()
@@ -1284,7 +1448,13 @@ mod tests {
             container: lmix_types::Container::Mkv,
             video_kbps: 8000,
         };
-        let flow = output_flow(OutputId::new(), &record, Feed::Program, MixerBackend::Cuda);
+        let flow = output_flow(
+            OutputId::new(),
+            &record,
+            Feed::Program,
+            None,
+            MixerBackend::Cuda,
+        );
         assert!(
             flow.elements
                 .iter()

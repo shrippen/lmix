@@ -24,6 +24,8 @@ pub struct EngineLevels {
     pub slots: HashMap<usize, (f32, Instant)>,
     pub main: Option<(f32, Instant)>,
     pub monitor: Option<(f32, Instant)>,
+    /// Aux buses, 0-based.
+    pub aux: HashMap<usize, (f32, Instant)>,
     /// Buffer ages at the mixer's program output from the latest latency
     /// measurement, ms (newest last, at most `LATENCY_SAMPLES`).
     pub program_ages_ms: Vec<u64>,
@@ -38,6 +40,7 @@ enum Meter {
     Slot(usize),
     Main,
     Monitor,
+    Aux(usize),
 }
 
 fn parse_meter(element_id: &str, mixer_block: &str) -> Option<Meter> {
@@ -48,6 +51,10 @@ fn parse_meter(element_id: &str, mixer_block: &str) -> Option<Meter> {
         "main" => return Some(Meter::Main),
         "monitor" => return Some(Meter::Monitor),
         _ => {}
+    }
+    // Aux buses count from 1 as well.
+    if let Some(bus) = name.strip_prefix("aux") {
+        return bus.parse::<usize>().ok()?.checked_sub(1).map(Meter::Aux);
     }
     // Channels count from 1, slots from 0.
     let channel: usize = name.parse().ok()?;
@@ -149,6 +156,9 @@ fn record_meter(
         }
         Meter::Main => l.main = Some(reading),
         Meter::Monitor => l.monitor = Some(reading),
+        Meter::Aux(bus) => {
+            l.aux.insert(bus, reading);
+        }
     });
 }
 
@@ -164,7 +174,8 @@ mod tests {
             parse_meter("mix:meter:monitor", "mix"),
             Some(Meter::Monitor)
         );
-        assert_eq!(parse_meter("mix:meter:aux1", "mix"), None);
+        assert_eq!(parse_meter("mix:meter:aux1", "mix"), Some(Meter::Aux(0)));
+        assert_eq!(parse_meter("mix:meter:aux0", "mix"), None);
         assert_eq!(parse_meter("mix:meter:0", "mix"), None);
         assert_eq!(parse_meter("other:meter:1", "mix"), None);
     }

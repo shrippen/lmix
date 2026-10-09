@@ -113,6 +113,15 @@ Kirigami.ApplicationWindow {
         core: backend
     }
 
+    AuxBusDialog {
+        id: auxDialog
+        parent: QQC2.Overlay.overlay
+        anchors.centerIn: parent
+        act: root.act
+        buses: root.show ? root.show.aux_buses : []
+        levels: root.levels
+    }
+
     AddOutputDialog {
         id: addOutputDialog
         parent: QQC2.Overlay.overlay
@@ -241,6 +250,11 @@ Kirigami.ApplicationWindow {
                     onClicked: root.act({ action: "clear_listen" })
                 }
                 KanteButton {
+                    text: qsTr("Aux…")
+                    enabled: backend.connected
+                    onClicked: auxDialog.open()
+                }
+                KanteButton {
                     text: qsTr("+ Input")
                     enabled: backend.connected
                     onClicked: {
@@ -292,6 +306,7 @@ Kirigami.ApplicationWindow {
                     act: root.act
                     onProgram: root.show !== null && root.show.program === key
                     onPreview: root.show !== null && root.show.preview === key
+                    overlays: root.show && root.show.overlays ? root.show.overlays : []
                     peakDb: root.levels[key]
                     onReplaceRequested: {
                         addInputDialog.replacing = tileDelegate.input

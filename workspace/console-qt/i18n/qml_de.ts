@@ -32,7 +32,7 @@
   <context>
     <name>AddOutputDialog</name>
     <message>
-      <location filename="../qml/AddOutputDialog.qml" line="+21" />
+      <location filename="../qml/AddOutputDialog.qml" line="+23" />
       <source>folder in the engine's media directory</source>
       <translation>Ordner im Medienverzeichnis der Engine</translation>
     </message>
@@ -52,7 +52,7 @@
       <translation>Ausgang hinzufügen</translation>
     </message>
     <message>
-      <location line="+28" />
+      <location line="+29" />
       <source>Output</source>
       <translation>Ausgang</translation>
     </message>
@@ -65,6 +65,26 @@
       <location line="+4" />
       <source>Program</source>
       <translation>Programm</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Sound</source>
+      <translation>Ton</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>As carried</source>
+      <translation>Wie die Quelle</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Aux 1 (before the faders)</source>
+      <translation>Aux 1 (vor den Fadern)</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Aux 2 (after the faders)</source>
+      <translation>Aux 2 (nach den Fadern)</translation>
     </message>
     <message>
       <location line="+6" />
@@ -83,9 +103,134 @@
     </message>
   </context>
   <context>
+    <name>AuxBusDialog</name>
+    <message>
+      <location filename="../qml/AuxBusDialog.qml" line="+21" />
+      <source>Aux buses</source>
+      <translation>Aux-Busse</translation>
+    </message>
+    <message>
+      <location line="+24" />
+      <source>Aux 1 · before the faders</source>
+      <translation>Aux 1 · vor den Fadern</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Aux 2 · after the faders</source>
+      <translation>Aux 2 · nach den Fadern</translation>
+    </message>
+    <message>
+      <location line="+16" />
+      <source>Volume of aux %1</source>
+      <translation>Lautstärke von Aux %1</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>Mute</source>
+      <translation>Stumm</translation>
+    </message>
+  </context>
+  <context>
+    <name>ChannelStripDialog</name>
+    <message>
+      <location filename="../qml/ChannelStripDialog.qml" line="+39" />
+      <source>Channel strip of %1 %2</source>
+      <translation>Kanalzug von %1 %2</translation>
+    </message>
+    <message>
+      <location line="+80" />
+      <source>Input</source>
+      <translation>Eingang</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Gain</source>
+      <translation>Verstärkung</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Pan</source>
+      <translation>Panorama</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Left −1, centre 0, right 1</source>
+      <translation>Links −1, Mitte 0, rechts 1</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Delay</source>
+      <translation>Verzögerung</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Sound later than the picture (lip sync)</source>
+      <translation>Ton später als das Bild (Lippensynchronität)</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Aux 1 (before the fader)</source>
+      <translation>Aux 1 (vor dem Fader)</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Aux 2 (after the fader)</source>
+      <translation>Aux 2 (nach dem Fader)</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Aux sends</source>
+      <translation>Aux-Sends</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>High-pass</source>
+      <translation>Hochpass</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <location line="+16" />
+      <location line="+21" />
+      <location line="+16" />
+      <source>On</source>
+      <translation>An</translation>
+    </message>
+    <message>
+      <location line="-47" />
+      <source>Cutoff</source>
+      <translation>Grenzfrequenz</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>EQ</source>
+      <translation>EQ</translation>
+    </message>
+    <message>
+      <location line="+21" />
+      <source>Gate</source>
+      <translation>Gate</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <location line="+16" />
+      <source>Threshold</source>
+      <translation>Schwelle</translation>
+    </message>
+    <message>
+      <location line="-7" />
+      <source>Compressor</source>
+      <translation>Kompressor</translation>
+    </message>
+    <message>
+      <location line="+15" />
+      <source>Ratio</source>
+      <translation>Verhältnis</translation>
+    </message>
+  </context>
+  <context>
     <name>InputTile</name>
     <message>
-      <location filename="../qml/InputTile.qml" line="+41" />
+      <location filename="../qml/InputTile.qml" line="+47" />
       <source>Input %1 %2</source>
       <translation>Input %1 %2</translation>
     </message>
@@ -121,6 +266,11 @@
     </message>
     <message>
       <location line="+5" />
+      <source>OVL %1</source>
+      <translation>OVL %1</translation>
+    </message>
+    <message>
+      <location line="+5" />
       <source>offline</source>
       <translation>offline</translation>
     </message>
@@ -130,7 +280,27 @@
       <translation>startet</translation>
     </message>
     <message>
-      <location line="+15" />
+      <location line="+11" />
+      <source>Overlay</source>
+      <translation>Overlay</translation>
+    </message>
+    <message>
+      <location line="+12" />
+      <source>Overlay %1</source>
+      <translation>Overlay %1</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Take off overlay %1</source>
+      <translation>Overlay %1 abnehmen</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Show on overlay %1</source>
+      <translation>Auf Overlay %1 zeigen</translation>
+    </message>
+    <message>
+      <location line="+17" />
       <source>Mute</source>
       <translation>Stumm</translation>
     </message>
@@ -193,6 +363,11 @@
       <location line="+8" />
       <source>Audio</source>
       <translation>Ton</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Channel strip…</source>
+      <translation>Kanalzug …</translation>
     </message>
     <message>
       <location line="+4" />
@@ -260,7 +435,7 @@
       <translation>Entfernen</translation>
     </message>
     <message>
-      <location line="+16" />
+      <location line="+24" />
       <source>Rename input %1</source>
       <translation>Input %1 umbenennen</translation>
     </message>
@@ -347,7 +522,7 @@
       <translation>Show speichern</translation>
     </message>
     <message>
-      <location line="+28" />
+      <location line="+37" />
       <source>lmix-core</source>
       <translation>lmix-core</translation>
     </message>
@@ -440,6 +615,11 @@
       <location line="+3" />
       <source>Clear solo</source>
       <translation>Solo aus</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Aux…</source>
+      <translation>Aux…</translation>
     </message>
     <message>
       <location line="+5" />
@@ -858,7 +1038,7 @@
   <context>
     <name>TransitionPanel</name>
     <message>
-      <location filename="../qml/TransitionPanel.qml" line="+32" />
+      <location filename="../qml/TransitionPanel.qml" line="+38" />
       <source>Cut</source>
       <translation>Cut</translation>
     </message>
@@ -878,7 +1058,18 @@
       <translation>Dauer</translation>
     </message>
     <message>
-      <location line="+11" />
+      <location line="+12" />
+      <location line="+10" />
+      <source>T-bar</source>
+      <translation>T-Bar</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Pull to mix preview in; at the end it goes to program.</source>
+      <translation>Ziehen blendet die Vorschau ein; am Ende geht sie auf Programm.</translation>
+    </message>
+    <message>
+      <location line="+16" />
       <source>FTB on</source>
       <translation>FTB an</translation>
     </message>
@@ -886,6 +1077,31 @@
       <location line="+0" />
       <source>FTB</source>
       <translation>FTB</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Overlays</source>
+      <translation>Overlays</translation>
+    </message>
+    <message>
+      <location line="+19" />
+      <source>Overlay %1: %2, click to take off</source>
+      <translation>Overlay %1: %2, Klick nimmt es ab</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Overlay %1: empty, click to show preview</source>
+      <translation>Overlay %1: leer, Klick zeigt die Vorschau</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Overlay %1 shows %2 %3. Click: take off.</source>
+      <translation>Overlay %1 zeigt %2 %3. Klick: abnehmen.</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Overlay %1 is empty. Click: show the preview input.</source>
+      <translation>Overlay %1 ist leer. Klick: Vorschau-Input zeigen.</translation>
     </message>
   </context>
 </TS>

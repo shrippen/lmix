@@ -15,7 +15,7 @@
 
 use async_trait::async_trait;
 use lmix_types::{
-    Device, DeviceKind, Effect, Listen, OutputId, OutputStats, SignalLoss, Transport,
+    ChannelStrip, Device, DeviceKind, Effect, Listen, OutputId, OutputStats, SignalLoss, Transport,
 };
 use reqwest::StatusCode;
 use serde::Serialize;
@@ -27,7 +27,7 @@ use strom_types::api::{
     TriggerTransitionRequest, UpdateBlockPropertiesRequest, VisionMixerState,
 };
 use strom_types::discovery::DeviceResponse;
-use strom_types::vision_mixer::Source;
+use strom_types::vision_mixer::{Source, TRANSITION_FOREGROUND_ZORDER};
 use strom_types::{Flow, FlowId, PipelineState, PropertyValue};
 use tokio::sync::{broadcast, watch, Mutex};
 
@@ -307,6 +307,97 @@ impl StromEngine {
         Ok(())
     }
 
+    /// Channel strip: the audio mixer's channel properties, then the
+    /// channel delay on its own element.
+    async fn set_strip(&self, slot: usize, strip: &ChannelStrip) -> Result<(), EngineError> {
+        self.patch_audio_mixer(strip_properties(flows::audio_channel(slot), strip), 0)
+            .await?;
+        let path = format!(
+            "/flows/{}/elements/{}/properties",
+            flows::mixer_id(),
+            flows::audio_delay(slot)
+        );
+        let delay_ns = i64::from(strip.delay_ms) * 1_000_000;
+        let body = serde_json::json!({
+            "property_name": "ts-offset",
+            "value": PropertyValue::Int(delay_ns),
+        });
+        let resp = self
+            .http
+            .patch(self.url(&path))
+            .json(&body)
+            .send()
+            .await
+            .map_err(net)?;
+        check(resp).await.map(|_| ())
+    }
+
+    /// T-bar: the preview input's pad on the program compositor comes in
+    /// front (below the overlays) with the bar's position as opacity. The
+    /// take at the end, a cut, sets every pad back (strom resets them on
+    /// each take).
+    async fn t_bar(&self, slot: usize, position: f32) -> Result<(), EngineError> {
+        let path = format!(
+            "/flows/{}/elements/{MIXER_BLOCK}:mixer/pads/sink_{slot}/properties",
+            flows::mixer_id()
+        );
+        let properties = [
+            (
+                "zorder",
+                PropertyValue::UInt(u64::from(TRANSITION_FOREGROUND_ZORDER)),
+            ),
+            ("alpha", PropertyValue::Float(f64::from(position))),
+        ];
+        for (name, value) in properties {
+            let body = serde_json::json!({ "property_name": name, "value": value });
+            let resp = self
+                .http
+                .patch(self.url(&path))
+                .json(&body)
+                .send()
+                .await
+                .map_err(net)?;
+            check(resp).await?;
+        }
+        Ok(())
+    }
+
+    /// Overlay `channel` is DSK layer `channel + 1` of the vision mixer,
+    /// fed by its own `inter` input: point that input at the slot, then
+    /// fade the layer in; off fades it out and leaves the input as is.
+    async fn overlay(
+        &self,
+        channel: usize,
+        slot: Option<usize>,
+        duration_ms: u32,
+    ) -> Result<(), EngineError> {
+        if let Some(slot) = slot {
+            let path = format!(
+                "/flows/{}/elements/{}:intersrc/properties",
+                flows::mixer_id(),
+                flows::overlay_input(channel)
+            );
+            let body = serde_json::json!({
+                "property_name": "producer-name",
+                "value": PropertyValue::String(flows::slot_channel(slot)),
+            });
+            let resp = self
+                .http
+                .patch(self.url(&path))
+                .json(&body)
+                .send()
+                .await
+                .map_err(net)?;
+            check(resp).await?;
+        }
+        let body = serde_json::json!({
+            "dsk": channel + 1,
+            "enabled": slot.is_some(),
+            "duration_ms": duration_ms,
+        });
+        self.mixer_call("dsk", &body).await
+    }
+
     /// Media player control; restart is a seek to 0 plus play.
     async fn transport(&self, slot: usize, transport: Transport) -> Result<(), EngineError> {
         let player = format!(
@@ -457,11 +548,36 @@ impl Engine for StromEngine {
             Command::SetListen { slot, listen } => self.set_listen(*slot, *listen).await,
             Command::Transport { slot, transport } => self.transport(*slot, *transport).await,
             Command::SetSignalLoss { slot, mode } => self.set_signal_loss(*slot, *mode).await,
-            Command::StartOutput { id, spec, feed } => {
-                self.put_flow(&flows::output_flow(*id, spec, *feed, self.backend))
+            Command::StartOutput {
+                id,
+                spec,
+                feed,
+                aux,
+            } => {
+                self.put_flow(&flows::output_flow(*id, spec, *feed, *aux, self.backend))
                     .await
             }
             Command::StopOutput { id } => self.drop_flow(flows::output_flow_id(*id)).await,
+            Command::Overlay {
+                channel,
+                slot,
+                duration_ms,
+            } => self.overlay(*channel, *slot, *duration_ms).await,
+            Command::TBar { slot, position } => self.t_bar(*slot, *position).await,
+            Command::SetStrip { slot, strip } => self.set_strip(*slot, strip).await,
+            Command::SetAuxSend { slot, bus, gain } => {
+                let channel = flows::audio_channel(*slot);
+                let name = format!("ch{channel}_aux{}_level", bus + 1);
+                self.patch_audio_mixer(vec![(name, PropertyValue::Float(*gain))], AUDIO_RAMP_MS)
+                    .await
+            }
+            Command::SetAuxBus { bus, gain, mute } => {
+                let properties = vec![
+                    (format!("aux{}_fader", bus + 1), PropertyValue::Float(*gain)),
+                    (format!("aux{}_mute", bus + 1), PropertyValue::Bool(*mute)),
+                ];
+                self.patch_audio_mixer(properties, AUDIO_RAMP_MS).await
+            }
         }
     }
 
@@ -566,6 +682,28 @@ impl Engine for StromEngine {
         }
         Ok(devices)
     }
+}
+
+/// strom audio mixer properties of channel `channel` (1-based) for a strip.
+fn strip_properties(channel: usize, strip: &ChannelStrip) -> Vec<(String, PropertyValue)> {
+    let f = |v: f32| PropertyValue::Float(f64::from(v));
+    let ch = |name: &str| format!("ch{channel}_{name}");
+    let mut properties = vec![
+        (ch("gain"), f(strip.gain_db)),
+        (ch("pan"), f(strip.pan)),
+        (ch("hpf_enabled"), PropertyValue::Bool(strip.hpf.on)),
+        (ch("hpf_freq"), f(strip.hpf.hz)),
+        (ch("eq_enabled"), PropertyValue::Bool(strip.eq.on)),
+        (ch("gate_enabled"), PropertyValue::Bool(strip.gate.on)),
+        (ch("gate_threshold"), f(strip.gate.threshold_db)),
+        (ch("comp_enabled"), PropertyValue::Bool(strip.compressor.on)),
+        (ch("comp_threshold"), f(strip.compressor.threshold_db)),
+        (ch("comp_ratio"), f(strip.compressor.ratio)),
+    ];
+    for (band, gain) in strip.eq.gain_db.iter().enumerate() {
+        properties.push((ch(&format!("eq{}_gain", band + 1)), f(*gain)));
+    }
+    properties
 }
 
 /// One output's view of strom's SRT statistics.
@@ -692,6 +830,29 @@ mod tests {
                 rtt_ms: Some(31),
             }
         );
+    }
+
+    #[test]
+    fn strip_maps_to_the_mixer_channel() {
+        let mut strip = ChannelStrip::default();
+        strip.eq.on = true;
+        strip.eq.gain_db[2] = -3.0;
+        strip.pan = -0.5;
+
+        let properties: std::collections::HashMap<_, _> =
+            strip_properties(3, &strip).into_iter().collect();
+
+        assert!(matches!(
+            properties["ch3_eq_enabled"],
+            PropertyValue::Bool(true)
+        ));
+        assert!(matches!(properties["ch3_eq3_gain"], PropertyValue::Float(g) if g == -3.0));
+        assert!(matches!(properties["ch3_pan"], PropertyValue::Float(p) if p == -0.5));
+        assert!(matches!(
+            properties["ch3_hpf_enabled"],
+            PropertyValue::Bool(false)
+        ));
+        assert!(properties.keys().all(|k| k.starts_with("ch3_")));
     }
 
     #[test]

@@ -108,7 +108,7 @@ MIXER_ID="$(curl -sf "$STROM/api/flows" | jq -r '.flows[] | select(.name | start
 picture() {
     local path="$1" out="$2"
     rm -f "$out"
-    for _ in $(seq 1 10); do
+    for _ in $(seq 1 20); do
         curl -sf "$CORE/pictures/$path" -o "$out" && break
         sleep 1
     done
@@ -183,6 +183,40 @@ act '{"action":"set_audio","input":"Ball","on":true}' >/dev/null
 settle
 [[ $(mon_db) -gt $AUDIBLE_DB ]] || fail "monitor not back on program after clearing solos"
 pass "solo: PFL hears a muted input, AFL does not, monitor back on program"
+
+# --- channel strip (4.7): trim lowers program, delay set while playing ---
+act '{"action":"set_volume","input":"Ball","volume":100}' >/dev/null
+settle
+full=$(pgm_db)
+act '{"action":"set_channel_strip","input":"Ball","strip":{"gain_db":-20,"delay_ms":200}}' >/dev/null
+settle
+[[ $(pgm_db) -lt $((full - 15)) ]] || fail "strip gain -20 dB did not lower program ($full -> $(pgm_db) dB)"
+ball_slot="$(curl -sf "$CORE/state" | jq '.inputs[] | select(.name=="Ball") | .slot')"
+offset="$(curl -sf "$STROM/api/flows/$MIXER_ID/elements/adelay$ball_slot/properties" | jq '.properties["ts-offset"]')"
+[[ "$offset" == 200000000 ]] || fail "strip delay not in the engine (ts-offset $offset)"
+[[ $(pgm_db) -gt $SILENT_DB ]] || fail "program silent after the delay change"
+act '{"action":"set_channel_strip","input":"Ball","strip":{}}' >/dev/null
+settle
+[[ $(pgm_db) -ge $((full - 2)) ]] || fail "strip reset did not restore program ($full -> $(pgm_db) dB)"
+act '{"action":"set_volume","input":"Ball","volume":50}' >/dev/null   # checked after the crash below
+pass "channel strip: gain lowers program, delay changed on air, reset"
+
+# --- aux buses (4.7): bus 1 before the fader, bus 2 after it ---
+aux_db() { curl -sf "$CORE/audio/levels" | jq ".aux_peak_db[$1] // -100 | floor"; }
+act '{"action":"set_aux_send","input":"Ball","bus":1,"level":100}' >/dev/null
+act '{"action":"set_aux_send","input":"Ball","bus":2,"level":100}' >/dev/null
+settle
+[[ $(aux_db 0) -gt $AUDIBLE_DB && $(aux_db 1) -gt $AUDIBLE_DB ]] || fail "aux buses silent with sends up ($(aux_db 0), $(aux_db 1) dB)"
+act '{"action":"set_audio","input":"Ball","on":false}' >/dev/null
+settle
+[[ $(aux_db 0) -gt $AUDIBLE_DB ]] || fail "aux 1 (before the fader) lost a muted input"
+[[ $(aux_db 1) -lt $SILENT_DB ]] || fail "aux 2 (after the fader) hears a muted input ($(aux_db 1) dB)"
+act '{"action":"set_aux_bus","bus":1,"volume":100,"mute":true}' >/dev/null
+settle
+[[ $(aux_db 0) -lt $SILENT_DB ]] || fail "muted aux 1 still sounds ($(aux_db 0) dB)"
+act '{"action":"set_aux_bus","bus":1,"volume":100,"mute":false}' >/dev/null
+act '{"action":"set_audio","input":"Ball","on":true}' >/dev/null
+pass "aux buses: sends heard, before/after the fader, master mute"
 
 # --- more sources (2b.3): color, still image, playlist with transport ---
 MEDIA="$WORK/media"
@@ -362,6 +396,35 @@ wait_for 2 is output_state Stream failed || fail "broken stream not marked faile
 wait_for 15 is output_state Stream running || fail "stream did not restart"
 act '{"action":"stop_output","output":"Stream"}' >/dev/null
 pass "failover: stream broke, was marked failed and restarted itself"
+
+# --- overlays (4.1): an input above program, tally, take off ---
+act '{"action":"cut_direct","input":"Ball"}' >/dev/null
+act '{"action":"overlay_in","channel":1,"input":"Orange","duration_ms":0}' >/dev/null
+overlay_shown() { picture program "$WORK/ovl.jpg"; [[ $(rgb "$WORK/ovl.jpg" r) -gt 200 ]]; }
+wait_for 4 overlay_shown || fail "overlay 1 not on program"
+orange_number="$(curl -sf "$CORE/state" | jq '.inputs[] | select(.name=="Orange") | .number')"
+[[ "$(curl -sf "$CORE/tally" | jq ".[$((orange_number - 1))]")" == 1 ]] || fail "overlay input has no program tally"
+[[ "$(curl -sf "$CORE/state" | jq -r '.overlays[0] != null')" == true ]] || fail "overlay not in state"
+act '{"action":"overlay_out","channel":1,"duration_ms":500}' >/dev/null
+overlay_gone() { picture program "$WORK/ovl.jpg"; [[ $(rgb "$WORK/ovl.jpg" r) -lt 60 ]]; }
+wait_for 4 overlay_gone || fail "overlay 1 not taken off"
+pass "overlays: input above program, red tally, faded off"
+code="$(curl -s -o /dev/null -w '%{http_code}' -X POST "$CORE/actions" -H 'content-type: application/json' \
+    -d '{"action":"set_channel_strip","input":"Orange","strip":{}}')"
+[[ "$code" != 200 ]] || fail "channel strip accepted for an input without sound"
+
+# --- T-bar (4.3): preview mixed in by hand, taken at the end ---
+act '{"action":"cut_direct","input":"Ball"}' >/dev/null
+act '{"action":"preview_input","input":"Orange"}' >/dev/null
+act '{"action":"t_bar","position":0.5}' >/dev/null
+half_mixed() { picture program "$WORK/tbar.jpg"; local r; r=$(rgb "$WORK/tbar.jpg" r); ((r > 80 && r < 200)); }
+wait_for 4 half_mixed || fail "T-bar at half: program red $(rgb "$WORK/tbar.jpg" r), not a mix"
+[[ "$(curl -sf "$CORE/state" | jq '.t_bar')" == 0.5 ]] || fail "T-bar position not in state"
+act '{"action":"t_bar","position":1}' >/dev/null
+[[ "$(curl -sf "$CORE/state" | jq -r '[.inputs[] | select(.name=="Orange") | .id][0] == .program')" == true ]] \
+    || fail "T-bar at the end did not take preview to program"
+wait_for 4 overlay_shown || fail "program not orange after the T-bar take"
+pass "T-bar: preview mixed in by half, taken at the end"
 
 # --- latency (NFA.3): capture-to-program, CPU mixer in a VM ---
 # Budget here is generous (software compositing, no GPU); the real target

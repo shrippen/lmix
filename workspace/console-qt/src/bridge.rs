@@ -74,19 +74,11 @@ pub mod qobject {
             value: &QString,
         ) -> bool;
 
-        /// Add an output from the form; `source` is "program" or an input
-        /// id. False while a needed field is empty.
+        /// Add an output from the form, as JSON (`forms::OutputForm`).
+        /// False while a needed field is empty.
         #[qinvokable]
         #[cxx_name = "addOutput"]
-        fn add_output(
-            self: Pin<&mut Core>,
-            kind: &QString,
-            text: &QString,
-            source: &QString,
-            container: &QString,
-            video_kbps: i32,
-            name: &QString,
-        ) -> bool;
+        fn add_output(self: Pin<&mut Core>, form: &QString) -> bool;
 
         /// Fetch devices and recent shows again.
         #[qinvokable]
@@ -204,7 +196,7 @@ async fn follow(thread: cxx_qt::CxxQtThread<qobject::Core>) {
     }
 }
 
-/// `{ "<input id>": peak, "program": peak }`.
+/// `{ "<input id>": peak, "program": peak, "aux1": peak, … }`.
 fn levels_json(levels: &Levels) -> String {
     let mut map = serde_json::Map::new();
     for level in &levels.inputs {
@@ -212,6 +204,11 @@ fn levels_json(levels: &Levels) -> String {
     }
     if let Some(peak) = levels.program_peak_db {
         map.insert("program".into(), peak.into());
+    }
+    for (bus, peak) in levels.aux_peak_db.iter().enumerate() {
+        if let Some(peak) = peak {
+            map.insert(format!("aux{}", bus + 1), (*peak).into());
+        }
     }
     serde_json::Value::Object(map).to_string()
 }
@@ -262,30 +259,20 @@ impl qobject::Core {
         true
     }
 
-    #[allow(clippy::too_many_arguments)]
-    fn add_output(
-        self: Pin<&mut Self>,
-        kind: &QString,
-        text: &QString,
-        source: &QString,
-        container: &QString,
-        video_kbps: i32,
-        name: &QString,
-    ) -> bool {
-        let spec = forms::output_of(
-            &kind.to_string(),
-            &text.to_string(),
-            &container.to_string(),
-            video_kbps.max(0) as u32,
-        );
-        let Some(spec) = spec else {
+    fn add_output(self: Pin<&mut Self>, form: &QString) -> bool {
+        let Ok(form) = serde_json::from_str::<forms::OutputForm>(&form.to_string()) else {
             return false;
         };
-        let name = name.to_string().trim().to_string();
+        let Some(spec) = forms::output_of(&form.kind, &form.text, &form.container, form.video_kbps)
+        else {
+            return false;
+        };
+        let name = form.name.trim().to_string();
         self.send(Action::AddOutput {
             spec,
-            source: forms::output_source_of(&source.to_string()),
+            source: forms::output_source_of(&form.source),
             name: (!name.is_empty()).then_some(name),
+            aux: (form.aux > 0).then_some(form.aux),
         });
         true
     }

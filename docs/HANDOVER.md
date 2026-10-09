@@ -1,4 +1,4 @@
-# Übergabe: Stand M3, lokale Übernahme
+# Übergabe: Stand M4 (in Arbeit), lokale Übernahme
 
 Stand 2026-10-09. Die Arbeit läuft lokal weiter (Arch, RTX 3090), Abnahme
 auf echter Hardware.
@@ -7,22 +7,25 @@ auf echter Hardware.
 
 | PR | Branch | Basis | Inhalt | Stand |
 |---|---|---|---|---|
-| #1 | `lastenheft` | `main` | Lastenheft, Roadmap | fertig, Merge offen |
-| #2 | `m2b` | `lastenheft` | lmix-core, Slot-Mischer, Show-Datei, Console als Client, Ton, Quellen | fertig, Merge offen |
-| #3 | `m3` | `m2b` | Ausgänge, MultiCorder, Bildschirm, Failover, Latenz, Leitungszustand | fertig bis auf 3.5 (Entscheidung) |
-| — | `m4` | `m3` | **WIP** Overlays (4.1), nicht getestet, kein PR | angehalten |
+| #1 | `lastenheft` | `main` | Lastenheft, Roadmap | gemergt |
+| #2 | `m2b` | `lastenheft` | lmix-core, Slot-Mischer, Show-Datei, Console als Client, Ton, Quellen | gemergt |
+| #3 | `m3` | `m2b` | Ausgänge, MultiCorder, Bildschirm, Failover, Latenz, Leitungszustand | gemergt |
+| #4 | `claude-todo` | `console-qt` | Restart-502, Selbsttest, Qt-Console statt egui | fertig, Merge offen |
+| #5 | `m4` | `claude-todo` | M4: Overlays (4.1), T-Bar (4.3), Kanalzug und Aux-Busse (4.7) | in Arbeit |
 
 strom-Fork (`shrippen/strom`):
 - `lmix-start-time` (PR #1): Startzeit `first`, Media-Player-Bus-Watch,
   `eos_on_stop`. Submodul von `m2b`/`m3` zeigt hierher.
-- `lmix-dsk-fade` (auf `lmix-start-time`, kein PR): DSK-Blende mit
-  `duration_ms`, nur für `m4`.
+- `lmix-player-sysmem` (PR #3): Media-Player gibt Systemspeicher aus.
+- `lmix-dsk-fade` (auf #3, PR #4): DSK-Blende mit `duration_ms`.
+- `lmix-live-offset` (auf #4, PR #5): `identity ts-offset` im Betrieb
+  änderbar (Ton-Verzögerung 4.7). Submodul von `m4` zeigt hierher.
 - `lmix-sample-rate` (auf `lmix-start-time`, PR #2): Mischer-Eigenschaft
   `sample_rate`. Submodul von `m3` zeigt seit 2026-10-09 hierher.
 
-Merge-Reihenfolge: strom #1, #2, dann lmix #1, #2, #3 (jeweils auf Gitea).
+Gemergt: strom #1, #2, lmix #1–#3. Offen in dieser Reihenfolge: strom #3, #4, #5, dann lmix #4, #5 (jeweils auf Gitea).
 
-Seit 2026-10-09 lokal auf `m3` (nicht gepusht):
+Seit 2026-10-09 auf `console-qt` und `claude-todo`:
 - Live-Bilder über Unix-Sockets (`/api/live/…`, `?size=full` für die
   Vorschau).
 - Qt-Console `workspace/console-qt`: Schritt 1 gemessen, Schritt 2 (Funktionen
@@ -37,7 +40,7 @@ Seit 2026-10-09 lokal auf `m3` (nicht gepusht):
 
 ```bash
 git clone https://git.arianw.de/shrippen/lmix.git && cd lmix
-git checkout m3
+git checkout m4
 git submodule update --init workspace/strom
 ```
 
@@ -83,7 +86,7 @@ für WHIP-Links: `--public-url`.
 
 ## Offen beim User
 
-- **Merges** strom #1, #2, lmix #1–#3.
+- **Merges** strom #3–#5, lmix #4, #5.
 - B31 RTMP-Ausgang wartet auf strom #771.
 
 ## Bekannte Befunde
@@ -95,3 +98,5 @@ für WHIP-Links: `--public-url`.
   „M3 Schritt 4“).
 - Halten bei Quellverlust: in der VM teils ein schwarzer Frame (H.21).
 - MP4-Aufnahme reserviert ~93 MB moov; MKV ist Standard.
+- Qt-Console: Standardknöpfe der Dialoge („Close“, „OK“, „Cancel“) bleiben
+  englisch, die Qt-eigenen Übersetzungen (qtbase) werden nicht geladen.

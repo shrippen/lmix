@@ -900,3 +900,102 @@ einem Eingang (Start beim ersten Bild) vor den Sink; Kacheln brauchen das
 nicht, `videoscale` schreibt schon in den Speicher des Sinks. Außerdem
 sendet der Live-Sink kein QoS mehr (strom-QoS-Probe: CRITICAL je Bild).
 
+## 2026-10-09 — M4 Schritt 1: Overlays (4.1)
+
+**Entscheidung**: Ein Overlay-Kanal ist eine DSK-Ebene des strom-Mischers
+(über Programm und seinen Übergängen). Der Mischer-Flow bekommt vier
+DSK-Eingänge, jeder über einen eigenen `inter`-Eingang; geht ein Overlay
+auf Sendung, stellt lmix-core dessen `producer-name` auf den Kanal des
+Slots um und blendet die Ebene ein. Damit braucht ein Overlay keinen
+zweiten Slot-Flow und keinen Mischer-Umbau.
+- **4 statt 8 Kanäle**: strom erlaubt höchstens 4 DSK-Ebenen, vMix hat
+  ebenfalls 4. Mehr wären ein strom-Umbau ohne Bedarf.
+- **Blende**: strom-Patch `lmix-dsk-fade` (DSK-Toggle mit `duration_ms`,
+  Alpha mit denselben Keyframes wie Übergänge und FTB). Standard 500 ms.
+- **Zustand**: Overlays stehen in der Show (wie Programm), Neustart und
+  Wiederherstellen setzen sie ohne Blende. Entfernter Input → sein Overlay
+  geht ab. Tally: ein Overlay auf Sendung zählt als Programm (rot).
+- **Console**: Knöpfe 1–4 je Kachel (an/aus für diesen Input), Leiste
+  „Overlays“ unter FTB (frei: Vorschau-Input drauf; belegt: ab).
+- **Offen**: Position und Größe (bildfüllend wie ein Vollbild-Input; PiP
+  mit 4.6); Multiview-Anzeige der Overlays prüfen.
+
+## 2026-10-09 — M4 Schritt 2: T-Bar (4.3)
+
+**Entscheidung**: ohne strom-Patch. Während die T-Bar gezogen wird, setzt
+lmix-core am Programm-Compositor (`vm:mixer`) das Pad des Vorschau-Inputs
+nach vorn (strom-Konstante `TRANSITION_FOREGROUND_ZORDER`, unter den
+Overlay-Ebenen) und seine Deckkraft auf die Position. Bei 1 folgt ein Take
+als Cut: strom setzt dabei alle Pads zurück (Alpha, Lage, Ebene), so dass
+kein Rest der Handmischung bleibt. Zurück auf 0 nimmt das Pad wieder weg.
+Aktion `t_bar { position }` (0–1), Position im Zustand (`t_bar`, nicht in
+der Show-Datei). Die Console schickt Bewegungen höchstens ~30-mal je
+Sekunde; ab 98 % gilt das Loslassen als Ende.
+**Verworfen**: strom-Patch „Übergangsfortschritt setzbar“ (ROADMAP 3b):
+die Übergänge sind dort zeitgesteuerte Keyframes; für eine Blende reicht
+die direkte Deckkraft, und sie kostet keine Änderung an strom.
+**Offen**: andere Effekte als Blende von Hand (Wipe, Slide); Ton während
+des Ziehens (AFV-Inputs kommen erst mit dem Take); Richtungswechsel wie bei
+vMix (Hebel bleibt am Ende stehen).
+
+
+## 2026-10-09 — M4 Schritt 3: Kanalzug (4.7, ohne Busse)
+
+**Entscheidung**: Kanalzug je Input mit Ton: Gain (±20 dB), Pan,
+Hochpass, 4-Band-EQ (80 Hz, 400 Hz, 2 kHz, 8 kHz), Gate, Kompressor,
+Verzögerung (0–500 ms). Gain bis Kompressor sind die Kanaleigenschaften
+des strom-Audiomischers (`ch{N}_…`, Block-PATCH); lmix stellt nur die
+nötigen Regler bereit (EQ-Frequenzen fest wie strom-Standard, Gate und
+Kompressor mit Schwelle und Verhältnis). Aktion
+`set_channel_strip { input, strip }` mit dem ganzen Zug; er steht in der
+Show-Datei und folgt dem Input über Slot-Wechsel und Neustarts (beim
+Zuweisen und Wiederherstellen gesetzt). Inputs ohne Ton lehnt lmix-core
+ab („has no sound“).
+**Verzögerung**: ein `identity` je Slot vor dem Mischer-Eingang, `ts-offset`
+verschiebt die Zeitstempel, der Mischer spielt den Ton entsprechend später.
+Der inter-Puffer der Slot-Tonspur wächst dafür auf 1 s. strom lehnt
+Eigenschaften ohne `MUTABLE_PLAYING` im laufenden Betrieb ab, `ts-offset`
+hat das Flag nicht, ist aber live unkritisch: strom-Patch
+`lmix-live-offset` (Liste live sicherer Eigenschaften, ein Eintrag).
+**Verworfen**: Verzögerung nur beim Aufbau des Mischers (Regler wirkt
+nicht live, Lippensynchronität wird während der Probe eingestellt);
+`audioecho` (live änderbar, aber mischt das trockene Signal immer bei).
+**Console**: Menü „Ton“ der Kachel → „Kanalzug…“, Dialog mit Schiebern,
+höchstens alle 100 ms eine Aktion.
+**VM-Befund nebenbei**: der Qt-Console-Test wackelte, weil Software-GL der
+Console (1,4 Kerne) und der CPU-Mischer (2,2 Kerne) die 4 Kerne der VM
+ausschöpfen; das Programmbild kam dann nur alle 5–50 s, Klicks wirkten
+verspätet. Die Engine lieferte dabei auf allen Live-Sockets 30 fps. Der
+Test nimmt jetzt 2 Slots und wartet auf Bewegung und Zustand statt fester
+Pausen.
+**Offen**: Aux-Busse (Sends je Kanal, eigene Ausgänge), Pegelanzeige für
+Gate/Kompressor-Wirkung, Hardware-Prüfung der Verzögerung (H.25).
+
+## 2026-10-09 — M4 Schritt 4: Aux-Busse (4.7)
+
+**Entscheidung**: zwei Aux-Busse im strom-Audiomischer (`num_aux_buses`),
+mit festen Rollen: **Aux 1 vor dem Fader** (Monitormix, In-Ear: hört ein
+Input auch, wenn er stumm oder nicht auf Sendung ist), **Aux 2 nach dem
+Fader** (zweiter Sendemix, folgt Fader und An/Aus). Je Input ein Send-Pegel
+pro Bus (0–100, 0 = aus, gleiche Kurve wie die Lautstärke), je Bus Master
+mit Lautstärke und Stumm. Aktionen `set_aux_send { input, bus, level }`,
+`set_aux_bus { bus, volume, mute }`; Sends und Master stehen in der
+Show-Datei und werden beim Wiederherstellen gesetzt. Ein Ausgang kann
+seinen Ton von einem Bus nehmen (`add_output … aux: 1|2`, z. B.
+Mix-Minus für eine Schalte); das Bild bleibt Programm oder der Input.
+Pegel je Bus in `GET /api/audio/levels` (`aux_peak_db`).
+**Warum feste Rollen**: strom setzt vor/nach dem Fader (`chX_auxY_pre`)
+nur beim Aufbau des Mischers. Umschalten hieße, den laufenden Mischer
+(Bild und Ton) neu aufzubauen. Pegel, Master und Stumm sind live.
+**Mischer**: Flow heißt jetzt `lmix mixer 4`, damit ein laufender Mischer
+ohne Busse neu gebaut wird. Jeder Bus geht auf einen eigenen
+inter-Kanal (`aux1_out`, `aux2_out`), Ausgänge abonnieren ihn statt des
+Programmtons.
+**Console**: Kanalzug-Dialog mit Abschnitt „Aux-Sends“, Knopf „Aux…“ über
+den Inputs (Pegel, Lautstärke, Stumm je Bus), im Ausgangsdialog „Ton“
+(wie die Quelle, Aux 1, Aux 2). Der Ausgangsdialog übergibt sein Formular
+jetzt als ein JSON-Objekt (cxx-qt erlaubt an der Bridge keine Attribute,
+acht Einzelargumente verletzten den Clippy-Standard).
+**Offen**: mehr Busse und umschaltbares vor/nach (strom-Patch, Neuverknüpfen
+im Betrieb); Aux als Kopfhörerquelle (Monitorbus hört heute Programm oder
+Solos); Hardware-Prüfung mit echtem Rückweg (H.26).

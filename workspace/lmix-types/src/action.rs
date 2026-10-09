@@ -13,8 +13,19 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::input::{InputColor, InputRef, Listen, SignalLoss, SourceSpec, Transport};
+use crate::input::{
+    ChannelStrip, InputColor, InputRef, Listen, SignalLoss, SourceSpec, Transport, AUX_BUSES,
+};
 use crate::output::{OutputRef, OutputSource, OutputSpec};
+
+/// 0-based index of aux bus `bus` (1-based, as in actions).
+pub fn aux_index(bus: u8) -> Result<usize, ActionError> {
+    let max = AUX_BUSES as u8;
+    if bus == 0 || bus > max {
+        return Err(ActionError::BadAuxBus { bus, max });
+    }
+    Ok(usize::from(bus - 1))
+}
 
 /// One of the four transition buttons (SWI.3), 1-based.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -23,6 +34,10 @@ pub struct TransitionSlot(pub u8);
 
 /// Number of transition buttons.
 pub const TRANSITION_SLOTS: u8 = 4;
+/// Overlay channels above program (OVL.1), numbered 1–4.
+pub const OVERLAY_CHANNELS: u8 = 4;
+/// Default fade of an overlay in or out.
+pub const DEFAULT_OVERLAY_MS: u32 = 500;
 
 /// Transition effects the engine can render (SWI.4, subset so far).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -106,6 +121,9 @@ pub enum Action {
         /// Program (default) or one input (ISO, MultiCorder).
         #[serde(default)]
         source: OutputSource,
+        /// Sound from aux bus 1–2 instead of the source's own.
+        #[serde(default)]
+        aux: Option<u8>,
         #[serde(default)]
         name: Option<String>,
     },
@@ -123,6 +141,17 @@ pub enum Action {
     SetAudioFollow { input: InputRef, follow: bool },
     /// Set an input's volume, 0–100 (100 = unity gain).
     SetVolume { input: InputRef, volume: u8 },
+    /// Set an input's channel strip: trim, pan, filter, EQ, dynamics,
+    /// delay.
+    SetChannelStrip {
+        input: InputRef,
+        strip: ChannelStrip,
+    },
+    /// Send an input to aux bus `bus` (1–2) at `level`, 0–100; 0 stops
+    /// the send.
+    SetAuxSend { input: InputRef, bus: u8, level: u8 },
+    /// Master of aux bus `bus` (1–2): volume 0–100 and mute.
+    SetAuxBus { bus: u8, volume: u8, mute: bool },
     /// Listen to an input on the monitor bus, before or after its fader.
     /// While any input is soloed, the monitor bus carries only the solos;
     /// otherwise it follows program.
@@ -153,6 +182,26 @@ pub enum Action {
         #[serde(default = "default_ftb_ms")]
         duration_ms: u32,
     },
+    /// Move the T-bar (SWI.3): mix preview over program by `position`
+    /// (0–1). Reaching 1 takes preview to program; back at 0 leaves both
+    /// as they were.
+    TBar { position: f32 },
+
+    // ---- Overlays (OVL) ----
+    /// Show `input` on overlay `channel` (1–4), above program and its
+    /// transitions; replaces what the channel showed.
+    OverlayIn {
+        channel: u8,
+        input: InputRef,
+        #[serde(default = "default_overlay_ms")]
+        duration_ms: u32,
+    },
+    /// Take overlay `channel` off.
+    OverlayOut {
+        channel: u8,
+        #[serde(default = "default_overlay_ms")]
+        duration_ms: u32,
+    },
 
     // ---- Show (SHW) ----
     /// Start an empty show.
@@ -171,6 +220,10 @@ pub const DEFAULT_FTB_MS: u32 = 1000;
 
 fn default_ftb_ms() -> u32 {
     DEFAULT_FTB_MS
+}
+
+fn default_overlay_ms() -> u32 {
+    DEFAULT_OVERLAY_MS
 }
 
 /// Why an action was refused. Clients show `message` (API.9: errors with
@@ -194,12 +247,22 @@ pub enum ActionError {
     BadPosition { number: u32, max: u32 },
     #[error("{reference} has no picture (audio input)")]
     NoVideo { reference: String },
+    #[error("{reference} has no sound")]
+    NoAudio { reference: String },
     #[error("{reference} has no transport (not a file, URL or playlist)")]
     NoTransport { reference: String },
     #[error("color {color} is not #rrggbb")]
     BadColor { color: String },
     #[error("volume {volume} is outside 0–{max}")]
     BadVolume { volume: u8, max: u8 },
+    #[error("overlay channel {channel} does not exist (1–{max})")]
+    BadOverlay { channel: u8, max: u8 },
+    #[error("T-bar position is outside 0–1")]
+    BadTBar,
+    #[error("aux bus {bus} does not exist (1–{max})")]
+    BadAuxBus { bus: u8, max: u8 },
+    #[error("channel strip: {field} is out of range")]
+    BadStrip { field: String },
     #[error("show has no file yet; give a path")]
     NoShowPath,
     #[error("show file: {message}")]

@@ -196,6 +196,31 @@ pub enum SignalLoss {
 /// Highest input volume (vMix scale, 100 = unity gain).
 pub const VOLUME_MAX: u8 = 100;
 
+/// Aux buses of the audio mixer, numbered 1–2 in actions.
+pub const AUX_BUSES: usize = 2;
+
+/// Which aux buses take their sends before the channel fader (and its
+/// on/off): bus 1 is the monitor mix (in-ear, presenters hear
+/// themselves whatever is on air), bus 2 a second mix after the fader.
+pub const AUX_PRE_FADER: [bool; AUX_BUSES] = [true, false];
+
+/// Master of an aux bus.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct AuxBus {
+    /// 0–100, 100 = unity gain.
+    pub volume: u8,
+    pub mute: bool,
+}
+
+impl Default for AuxBus {
+    fn default() -> Self {
+        Self {
+            volume: VOLUME_MAX,
+            mute: false,
+        }
+    }
+}
+
 /// Audio settings of an input (AUD).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct InputAudio {
@@ -214,6 +239,117 @@ impl Default for InputAudio {
             follow_video: false,
             volume: VOLUME_MAX,
         }
+    }
+}
+
+/// Channel strip of an input with sound (AUD.3–7): what the audio mixer
+/// does to it before the fader. Every section keeps its values while off.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(default)]
+pub struct ChannelStrip {
+    /// Input trim, dB (−20…+20).
+    pub gain_db: f32,
+    /// −1 left … 0 centre … 1 right.
+    pub pan: f32,
+    /// High-pass filter against rumble.
+    pub hpf: Hpf,
+    /// Four-band EQ.
+    pub eq: Eq4,
+    /// Noise gate.
+    pub gate: Gate,
+    pub compressor: Compressor,
+    /// Sound later than the picture, ms (0…500): lip sync for a camera
+    /// whose picture arrives late.
+    pub delay_ms: u32,
+}
+
+impl Default for ChannelStrip {
+    fn default() -> Self {
+        Self {
+            gain_db: 0.0,
+            pan: 0.0,
+            hpf: Hpf {
+                on: false,
+                hz: 80.0,
+            },
+            eq: Eq4 {
+                on: false,
+                gain_db: [0.0; 4],
+            },
+            gate: Gate {
+                on: false,
+                threshold_db: -40.0,
+            },
+            compressor: Compressor {
+                on: false,
+                threshold_db: -20.0,
+                ratio: 4.0,
+            },
+            delay_ms: 0,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct Hpf {
+    pub on: bool,
+    /// Cutoff, Hz (20…500).
+    pub hz: f32,
+}
+
+/// Bands at 80 Hz, 400 Hz, 2 kHz and 8 kHz.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct Eq4 {
+    pub on: bool,
+    /// Gain per band, dB (−15…+15), low band first.
+    pub gain_db: [f32; 4],
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct Gate {
+    pub on: bool,
+    /// Below this the gate closes, dB (−60…0).
+    pub threshold_db: f32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct Compressor {
+    pub on: bool,
+    /// dB (−60…0).
+    pub threshold_db: f32,
+    /// 1…20 (n:1).
+    pub ratio: f32,
+}
+
+impl ChannelStrip {
+    /// Longest audio delay.
+    pub const DELAY_MAX_MS: u32 = 500;
+
+    /// The first value outside its range, by field name.
+    pub fn out_of_range(&self) -> Option<&'static str> {
+        let within = |v: f32, lo: f32, hi: f32| (lo..=hi).contains(&v);
+        [
+            (within(self.gain_db, -20.0, 20.0), "gain_db"),
+            (within(self.pan, -1.0, 1.0), "pan"),
+            (within(self.hpf.hz, 20.0, 500.0), "hpf.hz"),
+            (
+                self.eq.gain_db.iter().all(|g| within(*g, -15.0, 15.0)),
+                "eq.gain_db",
+            ),
+            (
+                within(self.gate.threshold_db, -60.0, 0.0),
+                "gate.threshold_db",
+            ),
+            (
+                within(self.compressor.threshold_db, -60.0, 0.0),
+                "compressor.threshold_db",
+            ),
+            (within(self.compressor.ratio, 1.0, 20.0), "compressor.ratio"),
+            (self.delay_ms <= Self::DELAY_MAX_MS, "delay_ms"),
+        ]
+        .into_iter()
+        .find(|(ok, _)| !ok)
+        .map(|(_, field)| field)
     }
 }
 
@@ -293,6 +429,12 @@ pub struct Input {
     /// Solo on the monitor bus; not saved in the show file.
     #[serde(default)]
     pub listen: Listen,
+    /// Channel strip (inputs with sound).
+    #[serde(default)]
+    pub strip: ChannelStrip,
+    /// Send level to each aux bus, 0–100 (100 = unity); 0 sends nothing.
+    #[serde(default)]
+    pub sends: [u8; AUX_BUSES],
 }
 
 /// What a discovered device delivers.
@@ -346,6 +488,9 @@ mod tests {
             colours,
             [InputColor::Cyan, InputColor::Purple, InputColor::Cyan]
         );
-        assert_eq!(serde_json::to_string(&InputColor::Cyan).unwrap(), r#""cyan""#);
+        assert_eq!(
+            serde_json::to_string(&InputColor::Cyan).unwrap(),
+            r#""cyan""#
+        );
     }
 }
