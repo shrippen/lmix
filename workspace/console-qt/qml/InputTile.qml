@@ -216,11 +216,30 @@ KanteCard {
             ]
             onPicked: value => tile.act({ action: "transport_input", input: tile.ref(), transport: value })
         }
+        ChoiceMenu {
+            title: qsTr("Send to this input (copy link)")
+            enabled: tile.input.ingest !== null && tile.input.ingest !== undefined
+            choices: tile.input.ingest ? [
+                { value: tile.input.ingest.whip_url, label: qsTr("WHIP (OBS, encoder): %1").arg(tile.input.ingest.whip_url) },
+                { value: tile.input.ingest.browser_url, label: qsTr("Browser page (guest): %1").arg(tile.input.ingest.browser_url) }
+            ] : []
+            onPicked: value => {
+                clipboard.text = value
+                clipboard.selectAll()
+                clipboard.copy()
+            }
+        }
         QQC2.MenuSeparator {}
         QQC2.MenuItem {
             text: qsTr("Remove")
             onTriggered: tile.act({ action: "remove_input", input: tile.ref() })
         }
+    }
+
+    // QML has no clipboard API; a hidden text edit copies.
+    TextEdit {
+        id: clipboard
+        visible: false
     }
 
     KanteDialog {

@@ -129,12 +129,24 @@ async fn live_program(State(service): State<Arc<Service>>) -> Response {
     live_response(service.live_program().await)
 }
 
-async fn live_input(State(service): State<Arc<Service>>, Path(input): Path<String>) -> Response {
+/// `?size=full`: the input as it arrives (preview monitor); else tile size.
+#[derive(serde::Deserialize)]
+struct LiveQuery {
+    #[serde(default)]
+    size: Option<String>,
+}
+
+async fn live_input(
+    State(service): State<Arc<Service>>,
+    Path(input): Path<String>,
+    Query(query): Query<LiveQuery>,
+) -> Response {
     let input = match input.parse::<u32>() {
         Ok(number) => InputRef::Number(number),
         Err(_) => InputRef::Text(input),
     };
-    match service.live_input(&input).await {
+    let full = query.size.as_deref() == Some("full");
+    match service.live_input(&input, full).await {
         Ok(feed) => live_response(feed),
         Err(error) => error_response(error),
     }
@@ -286,12 +298,12 @@ mod tests {
 
     #[tokio::test]
     async fn live_of_unknown_input_is_404() {
-        let req = Request::get("/api/live/inputs/3")
-            .body(Body::empty())
-            .unwrap();
-        let resp = app().oneshot(req).await.unwrap();
+        for uri in ["/api/live/inputs/3", "/api/live/inputs/3?size=full"] {
+            let req = Request::get(uri).body(Body::empty()).unwrap();
+            let resp = app().oneshot(req).await.unwrap();
 
-        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+            assert_eq!(resp.status(), StatusCode::NOT_FOUND, "{uri}");
+        }
     }
 
     #[tokio::test]

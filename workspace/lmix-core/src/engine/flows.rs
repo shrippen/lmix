@@ -21,7 +21,7 @@ use uuid::Uuid;
 use lmix_types::input::color_rgb;
 use lmix_types::{DisplayMode, OutputId, OutputSpec, SourceSpec};
 
-use super::Picture;
+use super::LivePicture;
 use crate::switcher::Feed;
 
 /// Namespace of all lmix flow ids.
@@ -414,34 +414,38 @@ fn add_aac(flow: &mut Flow, to: &str) {
     flow.links.push(link("aacparse".into(), to.into()));
 }
 
-pub fn live_flow_id(which: Picture) -> FlowId {
+pub fn live_flow_id(which: LivePicture) -> FlowId {
     let name = match which {
-        Picture::Program => "live-program".to_string(),
-        Picture::Slot(slot) => format!("live-slot-{slot}"),
+        LivePicture::Program => "live-program".to_string(),
+        LivePicture::Slot(slot) => format!("live-slot-{slot}"),
+        LivePicture::SlotFull(slot) => format!("live-slot-{slot}-full"),
     };
     Uuid::new_v5(&FLOW_NAMESPACE, name.as_bytes())
 }
 
 /// Socket file name of a live picture, inside the live directory.
-pub fn live_socket_name(which: Picture) -> String {
+pub fn live_socket_name(which: LivePicture) -> String {
     match which {
-        Picture::Program => "program.sock".into(),
-        Picture::Slot(slot) => format!("slot-{slot}.sock"),
+        LivePicture::Program => "program.sock".into(),
+        LivePicture::Slot(slot) => format!("slot-{slot}.sock"),
+        LivePicture::SlotFull(slot) => format!("slot-{slot}-full.sock"),
     }
 }
 
 /// Live picture for a Console on the engine's machine: raw frames over a
 /// Unix socket, no encoding (the Console reads it with `unixfdsrc`).
-/// Inputs at monitor size, program at full size.
+/// Inputs at tile size or as they arrive, program at full size.
 ///
 /// ```text
-///   pgm ─► [videoscale ─► caps] ─► unixfdsink        input
-///   pgm ─► [cudadownload] ─► unixfdsink                program
+///   pgm ─► videoscale ─► caps ─► unixfdsink          input (tile)
+///   pgm ─► unixfdsink                                 input (full)
+///   pgm ─► [cudadownload ─► caps] ─► unixfdsink       program
 /// ```
-pub fn live_flow(which: Picture, socket: &str, backend: MixerBackend) -> Flow {
+pub fn live_flow(which: LivePicture, socket: &str, backend: MixerBackend) -> Flow {
     let (name, channel) = match which {
-        Picture::Program => ("program".to_string(), pgm_channel(PGM_OUT)),
-        Picture::Slot(slot) => (format!("slot {slot}"), slot_channel(slot)),
+        LivePicture::Program => ("program".to_string(), pgm_channel(PGM_OUT)),
+        LivePicture::Slot(slot) => (format!("slot {slot}"), slot_channel(slot)),
+        LivePicture::SlotFull(slot) => (format!("slot {slot} full"), slot_channel(slot)),
     };
     let mut flow = Flow::new(format!("lmix live {name}"));
     flow.id = live_flow_id(which);
@@ -462,7 +466,7 @@ pub fn live_flow(which: Picture, socket: &str, backend: MixerBackend) -> Flow {
             ("sync", PropertyValue::Bool(false)),
         ],
     ));
-    if matches!(which, Picture::Slot(_)) {
+    if let LivePicture::Slot(_) = which {
         flow.elements.push(element("scale", "videoscale", vec![]));
         flow.elements.push(element(
             "size",
@@ -473,7 +477,9 @@ pub fn live_flow(which: Picture, socket: &str, backend: MixerBackend) -> Flow {
         flow.links.push(link("scale".into(), "size".into()));
         flow.links.push(link("size".into(), "sock".into()));
     } else {
-        let from = add_download(&mut flow, "pgm:src", backend == MixerBackend::Cuda);
+        // Slots come from their own flows in system memory.
+        let on_gpu = which == LivePicture::Program && backend == MixerBackend::Cuda;
+        let from = add_download(&mut flow, "pgm:src", on_gpu);
         flow.links.push(link(from, "sock".into()));
     }
     flow
@@ -1067,7 +1073,11 @@ mod tests {
 
     #[test]
     fn live_program_goes_raw_to_its_socket() {
-        let flow = live_flow(Picture::Program, "/run/x/program.sock", MixerBackend::Cpu);
+        let flow = live_flow(
+            LivePicture::Program,
+            "/run/x/program.sock",
+            MixerBackend::Cpu,
+        );
 
         let sock = flow.elements.iter().find(|e| e.id == "sock").unwrap();
         assert_eq!(sock.element_type, "unixfdsink");
@@ -1079,12 +1089,16 @@ mod tests {
             .links
             .iter()
             .any(|l| l.from == "pgm:src" && l.to == "sock"));
-        assert_ne!(flow.id, live_flow_id(Picture::Slot(0)));
+        assert_ne!(flow.id, live_flow_id(LivePicture::Slot(0)));
     }
 
     #[test]
     fn live_input_is_scaled_down() {
-        let flow = live_flow(Picture::Slot(3), "/run/x/slot-3.sock", MixerBackend::Cuda);
+        let flow = live_flow(
+            LivePicture::Slot(3),
+            "/run/x/slot-3.sock",
+            MixerBackend::Cuda,
+        );
 
         let pgm = flow.blocks.iter().find(|b| b.id == "pgm").unwrap();
         assert!(matches!(
@@ -1100,7 +1114,34 @@ mod tests {
             .links
             .iter()
             .any(|l| l.from == "size" && l.to == "sock"));
-        assert_eq!(live_socket_name(Picture::Slot(3)), "slot-3.sock");
+        assert_eq!(live_socket_name(LivePicture::Slot(3)), "slot-3.sock");
+    }
+
+    #[test]
+    fn full_live_input_is_not_scaled() {
+        let flow = live_flow(
+            LivePicture::SlotFull(3),
+            "/run/x/slot-3-full.sock",
+            MixerBackend::Cuda,
+        );
+
+        assert!(flow.elements.iter().all(|e| e.element_type != "videoscale"));
+        assert!(flow
+            .elements
+            .iter()
+            .all(|e| e.element_type != "cudadownload"));
+        assert!(flow
+            .links
+            .iter()
+            .any(|l| l.from == "pgm:src" && l.to == "sock"));
+        assert_ne!(
+            live_flow_id(LivePicture::SlotFull(3)),
+            live_flow_id(LivePicture::Slot(3))
+        );
+        assert_eq!(
+            live_socket_name(LivePicture::SlotFull(3)),
+            "slot-3-full.sock"
+        );
     }
 
     #[test]
@@ -1138,7 +1179,11 @@ mod tests {
             .iter()
             .any(|l| l.from == "sysmem" && l.to == "convert"));
 
-        let live = live_flow(Picture::Program, "/run/x/program.sock", MixerBackend::Cuda);
+        let live = live_flow(
+            LivePicture::Program,
+            "/run/x/program.sock",
+            MixerBackend::Cuda,
+        );
         assert!(live
             .links
             .iter()

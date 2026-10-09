@@ -106,7 +106,7 @@ pub mod qobject {
     }
 
     unsafe extern "RustQt" {
-        /// Show `source` ("program" or an input id) in `item`, a
+        /// Show `source` ("program", an input id, or "full:<id>") in `item`, a
         /// `GstGLQt6VideoItem` whose scene graph is up.
         #[qinvokable]
         #[cxx_name = "showLive"]
@@ -380,13 +380,16 @@ impl qobject::Core {
             rust.next_generation += 1;
             rust.next_generation
         };
+        // Dropped with the request (new source, item released): ends the
+        // wait for the socket below.
+        let (tx, mut rx) = tokio::sync::oneshot::channel();
         let old = self.as_mut().rust_mut().live.insert(
             item,
             Live {
                 source: source.clone(),
                 generation,
                 pipeline: None,
-                stop: None,
+                stop: Some(tx),
             },
         );
         if let Some(old) = old {
@@ -396,15 +399,16 @@ impl qobject::Core {
         let thread = self.qt_thread();
         config::runtime().spawn(async move {
             let socket = loop {
-                match live_socket(&source).await {
-                    Ok(socket) => break socket,
-                    Err(e) => {
-                        tracing::debug!(%source, error = %e, "no live picture yet");
-                        tokio::time::sleep(RETRY).await;
-                    }
+                tokio::select! {
+                    _ = &mut rx => return,
+                    found = live_socket(&source) => match found {
+                        Ok(socket) => break socket,
+                        Err(e) => tracing::debug!(%source, error = %e, "no live picture yet"),
+                    },
                 }
-                if thread.is_destroyed() {
-                    return;
+                tokio::select! {
+                    _ = &mut rx => return,
+                    _ = tokio::time::sleep(RETRY) => {}
                 }
             };
             let _ = thread.queue(move |core| core.attach(item, generation, socket));
@@ -613,10 +617,15 @@ async fn live_socket(source: &str) -> Result<String, String> {
     Ok(feed.socket)
 }
 
+/// `program`, an input id (tile size), or `full:<input id>` (as it
+/// arrives, for the preview monitor).
 fn live_path(source: &str) -> String {
     match source {
         "program" => "/api/live/program".to_string(),
-        input => format!("/api/live/inputs/{input}"),
+        _ => match source.strip_prefix("full:") {
+            Some(input) => format!("/api/live/inputs/{input}?size=full"),
+            None => format!("/api/live/inputs/{source}"),
+        },
     }
 }
 
@@ -628,5 +637,6 @@ mod tests {
     fn live_path_of_program_and_inputs() {
         assert_eq!(live_path("program"), "/api/live/program");
         assert_eq!(live_path("7d0c"), "/api/live/inputs/7d0c");
+        assert_eq!(live_path("full:7d0c"), "/api/live/inputs/7d0c?size=full");
     }
 }

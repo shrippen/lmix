@@ -189,7 +189,8 @@ Kirigami.ApplicationWindow {
                     label: qsTr("Preview")
                     detail: root.previewInput ? root.previewInput.number + " " + root.previewInput.name : ""
                     tally: KanteStyle.positiveTextColor
-                    source: root.previewInput ? root.previewInput.id : ""
+                    // As the input arrives, not the tile's small picture.
+                    source: root.previewInput ? "full:" + root.previewInput.id : ""
                 }
 
                 TransitionPanel {

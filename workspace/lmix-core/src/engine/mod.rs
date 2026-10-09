@@ -32,6 +32,16 @@ pub enum Picture {
     Slot(usize),
 }
 
+/// Which live picture a Console reads (`Engine::live`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum LivePicture {
+    Program,
+    /// A slot at tile size.
+    Slot(usize),
+    /// A slot as it arrives (the preview monitor).
+    SlotFull(usize),
+}
+
 #[async_trait]
 pub trait Engine: Send + Sync {
     /// Build the mixer with `slots` inputs; idempotent.
@@ -62,7 +72,7 @@ pub trait Engine: Send + Sync {
 
     /// Live picture for a Console on the engine's machine: path of a Unix
     /// socket with raw frames (`unixfdsrc`), started on the first call.
-    async fn live(&self, _picture: Picture) -> Result<std::path::PathBuf, EngineError> {
+    async fn live(&self, _picture: LivePicture) -> Result<std::path::PathBuf, EngineError> {
         Err(EngineError::NoPictures)
     }
 

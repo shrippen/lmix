@@ -55,7 +55,7 @@ const NOT_RUNNING_YET: &str = "query pipeline position";
 
 use super::flows::{self, MixerBackend, MonitorOut, AUDIO_MIXER, MIXER_BLOCK, PGM_TAP, SLOT_TAP};
 use super::meters::{self, EngineLevels, FlowError};
-use super::{Engine, EngineError, Picture};
+use super::{Engine, EngineError, LivePicture, Picture};
 use crate::switcher::{Command, AUDIO_RAMP_MS};
 
 pub struct StromEngine {
@@ -440,7 +440,7 @@ impl Engine for StromEngine {
         }
     }
 
-    async fn live(&self, picture: Picture) -> Result<PathBuf, EngineError> {
+    async fn live(&self, picture: LivePicture) -> Result<PathBuf, EngineError> {
         let socket = self.live_dir.join(flows::live_socket_name(picture));
         let id = flows::live_flow_id(picture);
         let _setup = self.live_setup.lock().await;

@@ -24,7 +24,7 @@ use tokio::sync::{broadcast, Mutex};
 
 use crate::engine::flows::{output_flow_id, slot_id};
 use crate::engine::meters::{FlowError, FlowFailure};
-use crate::engine::{meters, Engine, EngineError, Picture};
+use crate::engine::{meters, Engine, EngineError, LivePicture, Picture};
 use crate::recent::Recent;
 use crate::show::{self, Show};
 use crate::switcher::{Command, Switcher};
@@ -138,16 +138,23 @@ impl Service {
     }
 
     /// Live picture socket of an input's slot (see [`Engine::live`]).
+    /// Live picture of an input: tile size, or as it arrives (`full`).
     pub async fn live_input(
         &self,
         input: &InputRef,
+        full: bool,
     ) -> Result<Result<std::path::PathBuf, EngineError>, ActionError> {
         let slot = self.switcher.lock().await.slot_for(input)?;
-        Ok(self.engine.live(Picture::Slot(slot)).await)
+        let picture = if full {
+            LivePicture::SlotFull(slot)
+        } else {
+            LivePicture::Slot(slot)
+        };
+        Ok(self.engine.live(picture).await)
     }
 
     pub async fn live_program(&self) -> Result<std::path::PathBuf, EngineError> {
-        self.engine.live(Picture::Program).await
+        self.engine.live(LivePicture::Program).await
     }
 
     pub async fn program_picture(&self) -> Result<Vec<u8>, EngineError> {
