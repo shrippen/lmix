@@ -770,3 +770,15 @@ an, dann steht der Zweig; der Encoder davor ist derselbe wie in der
 funktionierenden Aufnahme. Verdacht: die dynamische Parser-Einfügung im
 strom-Block `mpegtssrt_output` (Pad-Probe) bleibt beim GL-Timing hängen.
 Offen, Fix gehört nach strom.
+
+## 2026-10-09 — Dauerlauf NFA.7 (Teil): Speicherwachstum in strom
+
+**Messung** (`scripts/soak-hardware.sh`, 295 min, CUDA-Mischer, 16 Inputs,
+MKV- und ISO-Aufnahme, 2 × SRT lokal, Werte in `LATENCY.md`): Latenz
+56–63 ms ohne Anstieg, keine Bilder verloren, keine CRITICALs. Das Skript
+schlägt fehl, weil der Speicher von strom gleichmäßig wächst: 763 MB nach
+10 min, 998 MB am Ende (~32 MB/h, rund 0,8 GB am Tag). Für 8 h unkritisch,
+für den 48-h-Betrieb (NFA.7) nicht. **Offen**: Ursache eingrenzen (Läufe
+ohne Ausgänge, ohne Programmwechsel, mit `heaptrack`), der Fix gehört
+wahrscheinlich nach strom. lmix-core blieb ohne Fehler.
+
