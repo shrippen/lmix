@@ -420,7 +420,10 @@ impl Engine for StromEngine {
             Command::SetSlot {
                 slot,
                 source: Some(source),
-            } => self.put_flow(&flows::slot_flow(*slot, source)).await,
+            } => {
+                self.put_flow(&flows::slot_flow(*slot, source, self.backend))
+                    .await
+            }
             Command::SetSlot { slot, source: None } => self.drop_flow(flows::slot_id(*slot)).await,
             Command::Preview { slot } => self.select_preview(*slot).await,
             Command::Program {

@@ -782,3 +782,29 @@ für den 48-h-Betrieb (NFA.7) nicht. **Offen**: Ursache eingrenzen (Läufe
 ohne Ausgänge, ohne Programmwechsel, mit `heaptrack`), der Fix gehört
 wahrscheinlich nach strom. lmix-core blieb ohne Fehler.
 
+## 2026-10-09 — Hardware-Decoder: GPU-Speicher im Slot-Kanal
+
+**Befund** (beim Demo-Modus): Auf einem NVIDIA-Rechner dekodiert der
+Media Player Dateien mit NVDEC und legt CUDA-Speicher in den Slot-Kanal
+(`intersink` nimmt alles). Kacheln und Vorschau von Datei-Inputs blieben
+leer (`videoscale`: not-negotiated); bisher unbemerkt, weil die
+Hardware-Tests nur Testbilder nutzten. Ein Capsfilter im Slot-Flow hilft
+nicht: der Player dekodiert in einer eigenen Pipeline hinter `appsrc`.
+**Entscheidung**: strom-Player bekommt `system_memory` (strom-Branch
+`lmix-player-sysmem`): mit CPU-/GL-Mischer übergibt er Systemspeicher, mit
+CUDA-Mischer bleibt CUDA-Speicher (ohne Kopie in den Mischer), und die
+Live-Flows der Slots laden dann wie Programm per `cudadownload` herunter.
+**Offen**: andere dekodierende Quellen (SRT, NDI, Gerät) auf demselben Weg
+prüfen; VA-API (AMD/Intel) ungetestet.
+
+## 2026-10-09 — Demo-Modus
+
+**Entscheidung**: Die Demo-Show ist der Sendehaus-Stream von „Graufeld nach
+Mitternacht“ (Studio-Weber-Welt, `graufeld.stream`). `demo/start.sh [de|en]`
+rendert je Input einen synthetischen Clip (videotestsrc-Muster, Name, Ton;
+VP8/Opus), startet strom, lmix-core und die Qt-Console mit eigener
+Konfiguration und baut die Show über die API. Screenshots über
+`shrippen.github.io/demo/tools/screenshots.py lmix` (`demo/shots.json`,
+Xvfb, dunkles Farbschema). Der Demo-Modus liegt nur in `demo/`, in keinem
+Crate; ein Release-Build muss `demo/` ausschließen und das prüfen.
+

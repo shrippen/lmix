@@ -1,0 +1,11 @@
+{
+  "kind": "command",
+  "start": "demo/start.sh {lang}",
+  "timeout": 900,
+  "viewport": [1440, 900],
+  "shots": [
+    {
+      "name": "console"
+    }
+  ]
+}

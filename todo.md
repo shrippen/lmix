@@ -4,6 +4,7 @@ Erledigtes abhaken (`[x]`, Datum) und nach einer Weile löschen; Details stehen 
 
 ## Für dich
 
+- [ ] strom PR #3 (`lmix-player-sysmem`, Player in Systemspeicher) mergen.
 - [ ] Kante PR #36 mergen (Farb-Labels, `KanteLevelMeter`), danach in `shrippen.github.io` `./build.sh` committen (liegt schon gebaut, uncommittet).
 - [ ] Vorschau-Lücke ansehen (`scripts/run-local.sh`, Kachel anklicken) und entscheiden: Vorschau-Ausgang im strom-Mischer oder alte Ansicht halten, bis die neue ein Bild hat.
 - [ ] Breeze-Bug melden (siehe unten).
@@ -44,7 +45,9 @@ enabled: !(/\&[^\&]/.test(control.text))
 
 ## Offen (Claude)
 
-- [ ] Demo-Modus mit Studio-Weber-Daten (Welt in `shrippen.github.io/demo/world/` erweitern, `demo/shots.json`, nie in Releases).
+- [x] Demo-Modus mit Studio-Weber-Daten (2026-10-09, `demo/start.sh`).
+- [ ] Release-Build (wenn es einen gibt): `demo/` ausschließen und prüfen.
+- [ ] Andere dekodierende Quellen (SRT, NDI, Gerät) auf GPU-Speicher im Slot-Kanal prüfen (DECISIONS „Hardware-Decoder“).
 - [ ] egui-Console entfernen: Client-Funktionen sind gleichauf (`docs/GUI-SHELL.md`, „Parität“). Vorher Selbsttest als eigenes kopfloses Binary herauslösen und VM-Test/Screenshots auf die Qt-Console umstellen.
 - [ ] strom-Speicher wächst ~32 MB/h (H.24, DECISIONS): Ursache eingrenzen.
 - [ ] GL-Mischer: SRT-Ausgang ohne Video (Fix in strom, DECISIONS „Hardware-Läufe“).

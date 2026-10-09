@@ -445,9 +445,10 @@ pub fn live_socket_name(which: LivePicture) -> String {
 /// Inputs at tile size or as they arrive, program at full size.
 ///
 /// ```text
-///   pgm ─► videoscale ─► caps ─► unixfdsink          input (tile)
-///   pgm ─► unixfdsink                                 input (full)
-///   pgm ─► [cudadownload ─► caps] ─► unixfdsink       program
+///   pgm ─► [cudadownload ─► caps] ─► videoscale ─► caps ─► unixfdsink   input (tile)
+///   pgm ─► [cudadownload ─► caps] ─► unixfdsink                         input (full), program
+///
+/// The download only with the CUDA mixer.
 /// ```
 pub fn live_flow(which: LivePicture, socket: &str, backend: MixerBackend) -> Flow {
     let (name, channel) = match which {
@@ -474,6 +475,9 @@ pub fn live_flow(which: LivePicture, socket: &str, backend: MixerBackend) -> Flo
             ("sync", PropertyValue::Bool(false)),
         ],
     ));
+    // With the CUDA mixer, program and decoded inputs may be in GPU
+    // memory (`add_player`); cudadownload passes system memory through.
+    let from = add_download(&mut flow, "pgm:src", backend == MixerBackend::Cuda);
     if let LivePicture::Slot(_) = which {
         flow.elements.push(element("scale", "videoscale", vec![]));
         flow.elements.push(element(
@@ -481,13 +485,10 @@ pub fn live_flow(which: LivePicture, socket: &str, backend: MixerBackend) -> Flo
             "capsfilter",
             vec![("caps", PropertyValue::String(LIVE_INPUT_CAPS.into()))],
         ));
-        flow.links.push(link("pgm:src".into(), "scale".into()));
+        flow.links.push(link(from, "scale".into()));
         flow.links.push(link("scale".into(), "size".into()));
         flow.links.push(link("size".into(), "sock".into()));
     } else {
-        // Slots come from their own flows in system memory.
-        let on_gpu = which == LivePicture::Program && backend == MixerBackend::Cuda;
-        let from = add_download(&mut flow, "pgm:src", on_gpu);
         flow.links.push(link(from, "sock".into()));
     }
     flow
@@ -555,13 +556,13 @@ fn add_audio_mixer(flow: &mut Flow, slots: usize, monitor: MonitorOut) {
 }
 
 /// One slot: the source, published on the slot's inter channel.
-pub fn slot_flow(slot: usize, source: &SourceSpec) -> Flow {
+pub fn slot_flow(slot: usize, source: &SourceSpec, backend: MixerBackend) -> Flow {
     let mut flow = Flow::new(format!("lmix slot {slot}"));
     flow.id = slot_id(slot);
     share_timing(&mut flow);
 
     // Sound-only sources publish no picture: their mixer input stays empty.
-    if let Some(out) = add_source(&mut flow, source) {
+    if let Some(out) = add_source(&mut flow, source, backend) {
         flow.blocks.push(block(SLOT_TAP, THUMBNAIL_BLOCK, vec![]));
         flow.links.push(link(out, format!("{SLOT_TAP}:video_in")));
         flow.blocks
@@ -584,7 +585,7 @@ pub fn slot_flow(slot: usize, source: &SourceSpec) -> Flow {
 
 /// Add the source and return the pad that carries its video; `None` for
 /// sound-only sources (see `SourceSpec::has_video`).
-fn add_source(flow: &mut Flow, source: &SourceSpec) -> Option<String> {
+fn add_source(flow: &mut Flow, source: &SourceSpec, backend: MixerBackend) -> Option<String> {
     let pad = match source {
         SourceSpec::Pattern { pattern } => {
             let pattern = pattern.nick().into();
@@ -602,9 +603,9 @@ fn add_source(flow: &mut Flow, source: &SourceSpec) -> Option<String> {
             )
         }
         SourceSpec::Image { path } => add_still(flow, path),
-        SourceSpec::File { path } => add_player(flow, std::slice::from_ref(path)),
-        SourceSpec::Url { url } => add_player(flow, std::slice::from_ref(url)),
-        SourceSpec::Playlist { paths } => add_player(flow, paths),
+        SourceSpec::File { path } => add_player(flow, std::slice::from_ref(path), backend),
+        SourceSpec::Url { url } => add_player(flow, std::slice::from_ref(url), backend),
+        SourceSpec::Playlist { paths } => add_player(flow, paths, backend),
         SourceSpec::Srt { uri } => {
             flow.blocks.push(block(
                 "srt",
@@ -708,7 +709,10 @@ fn add_still(flow: &mut Flow, path: &str) -> String {
 }
 
 /// Media player with `items`, looped; carries picture and sound.
-fn add_player(flow: &mut Flow, items: &[String]) -> String {
+/// A hardware decoder (NVDEC, VA-API) keeps frames in GPU memory, and the
+/// inter channel passes any caps on. Only the CUDA mixer reads them, so for
+/// the others the player hands over system memory.
+fn add_player(flow: &mut Flow, items: &[String], backend: MixerBackend) -> String {
     let playlist = serde_json::to_string(items).expect("playlist serializes");
     flow.blocks.push(block(
         PLAYER,
@@ -717,6 +721,10 @@ fn add_player(flow: &mut Flow, items: &[String]) -> String {
             ("playlist", PropertyValue::String(playlist)),
             ("decode", PropertyValue::Bool(true)),
             ("loop_playlist", PropertyValue::Bool(true)),
+            (
+                "system_memory",
+                PropertyValue::Bool(backend != MixerBackend::Cuda),
+            ),
         ],
     ));
     format!("{PLAYER}:video_out")
@@ -900,6 +908,7 @@ mod tests {
             &SourceSpec::Pattern {
                 pattern: TestPattern::Ball,
             },
+            MixerBackend::Cuda,
         );
 
         assert_eq!(flow.id, slot_id(2));
@@ -925,6 +934,7 @@ mod tests {
             &SourceSpec::Pattern {
                 pattern: TestPattern::Bars,
             },
+            MixerBackend::Cpu,
         );
 
         assert!(flow
@@ -940,6 +950,7 @@ mod tests {
             &SourceSpec::Color {
                 color: "#ff8000".into(),
             },
+            MixerBackend::Cpu,
         );
         let src = flow.elements.iter().find(|e| e.id == "src").unwrap();
 
@@ -952,7 +963,7 @@ mod tests {
     #[test]
     fn playlist_shares_one_player_for_picture_and_sound() {
         let paths = vec!["/a.mp4".to_string(), "/b.mp4".to_string()];
-        let flow = slot_flow(0, &SourceSpec::Playlist { paths });
+        let flow = slot_flow(0, &SourceSpec::Playlist { paths }, MixerBackend::Cpu);
 
         assert_eq!(flow.blocks.iter().filter(|b| b.id == PLAYER).count(), 1);
         assert!(flow
@@ -967,7 +978,11 @@ mod tests {
 
     #[test]
     fn audio_device_publishes_sound_only() {
-        let flow = slot_flow(0, &SourceSpec::AudioDevice { id: "mic".into() });
+        let flow = slot_flow(
+            0,
+            &SourceSpec::AudioDevice { id: "mic".into() },
+            MixerBackend::Cpu,
+        );
 
         assert!(flow
             .blocks
@@ -986,6 +1001,7 @@ mod tests {
             &SourceSpec::Image {
                 path: "/logo.png".into(),
             },
+            MixerBackend::Cuda,
         );
 
         assert!(flow
@@ -1001,7 +1017,11 @@ mod tests {
 
     #[test]
     fn device_slot_has_no_sound() {
-        let flow = slot_flow(0, &SourceSpec::Device { id: "cam".into() });
+        let flow = slot_flow(
+            0,
+            &SourceSpec::Device { id: "cam".into() },
+            MixerBackend::Cpu,
+        );
 
         assert!(flow.blocks.iter().all(|b| b.id != SLOT_AUDIO_OUT));
     }
@@ -1129,10 +1149,15 @@ mod tests {
             Some(PropertyValue::String(c)) if *c == slot_channel(3)
         ));
         assert!(flow.elements.iter().any(|e| e.element_type == "videoscale"));
+        // A decoder may have left the slot in CUDA memory (NVDEC).
         assert!(flow
-            .elements
+            .links
             .iter()
-            .all(|e| e.element_type != "cudadownload"));
+            .any(|l| l.from == "pgm:src" && l.to == "download"));
+        assert!(flow
+            .links
+            .iter()
+            .any(|l| l.from == "sysmem" && l.to == "scale"));
         assert!(flow
             .links
             .iter()
@@ -1150,13 +1175,9 @@ mod tests {
 
         assert!(flow.elements.iter().all(|e| e.element_type != "videoscale"));
         assert!(flow
-            .elements
-            .iter()
-            .all(|e| e.element_type != "cudadownload"));
-        assert!(flow
             .links
             .iter()
-            .any(|l| l.from == "pgm:src" && l.to == "sock"));
+            .any(|l| l.from == "sysmem" && l.to == "sock"));
         assert_ne!(
             live_flow_id(LivePicture::SlotFull(3)),
             live_flow_id(LivePicture::Slot(3))
@@ -1240,6 +1261,7 @@ mod tests {
             &SourceSpec::Pattern {
                 pattern: TestPattern::Bars,
             },
+            MixerBackend::Cpu,
         );
 
         for flow in [mixer_flow(2, MixerBackend::Cpu, MonitorOut::None), slot] {
@@ -1249,12 +1271,49 @@ mod tests {
     }
 
     #[test]
+    fn live_input_of_a_cpu_mixer_needs_no_download() {
+        let flow = live_flow(LivePicture::Slot(1), "/run/x/s.sock", MixerBackend::Gl);
+
+        assert!(flow
+            .elements
+            .iter()
+            .all(|e| e.element_type != "cudadownload"));
+        assert!(flow
+            .links
+            .iter()
+            .any(|l| l.from == "pgm:src" && l.to == "scale"));
+    }
+
+    #[test]
+    fn players_hand_over_system_memory_unless_the_mixer_is_cuda() {
+        let file = SourceSpec::File {
+            path: "/clip.webm".into(),
+        };
+        let system_memory = |backend| {
+            let flow = slot_flow(0, &file, backend);
+            let player = flow.blocks.iter().find(|b| b.id == "player").unwrap();
+            matches!(
+                player.properties.get("system_memory"),
+                Some(PropertyValue::Bool(true))
+            )
+        };
+
+        // NVDEC or VA-API would put GPU memory on the inter channel, which
+        // the GL and CPU mixers and the live pictures cannot read.
+        assert!(system_memory(MixerBackend::Gl));
+        assert!(system_memory(MixerBackend::Cpu));
+        // The CUDA mixer takes decoded frames without a copy.
+        assert!(!system_memory(MixerBackend::Cuda));
+    }
+
+    #[test]
     fn file_source_uses_player() {
         let flow = slot_flow(
             0,
             &SourceSpec::File {
                 path: "/a b.mp4".into(),
             },
+            MixerBackend::Cpu,
         );
         let player = flow.blocks.iter().find(|b| b.id == "player").unwrap();
 
