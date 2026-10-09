@@ -231,6 +231,19 @@ vMix-Grundprinzip: Inputs kommen und gehen, ohne dass Program stockt.
 **Abnahme**: Input während laufender Sendung hinzufügen/entfernen, PGM ohne
 Aussetzer; Show speichern, Neustart, Show laden → identischer Zustand.
 
+**Stand 2026-10-08** (Branch `m2b`, VM-Test `scripts/test-m2b-vm.sh` grün,
+GPU-Punkte in `HARDWARE-TODO.md`):
+
+| # | Stand |
+|---|---|
+| 2b.6 | ✅ `lmix-core` + `lmix-types`, Aktionskatalog, HTTP/WS-API, Bilder je Input/PGM |
+| 2b.1 | ✅ Slot-Flows über `inter`, Quellentausch auf Sendung (VM, CPU); Zeitbasis 0 + strom-Patch `start_time_selection` (`DECISIONS.md`) |
+| 2b.4 | ✅ Show-Datei v1, Autosave, Wiederaufnahme nach Absturz (ohne Audio/Ausgänge/Hotkeys, die es noch nicht gibt) |
+| 2b.2 | ✅ Console `--core`: Kacheln mit Bild, Tally, Typ, Farbmarke, Klick/Doppelklick, Menü; Dateidialog, letzte Shows (B24), Geräteliste (B25); ⚠ Audio der Kachel fehlt (B23) |
+| 2b.3 | ✅ Farbe, Bild, Playlist mit Transport, NDI, WHIP, Audio-Gerät; Signalverlust halten/schwarz je Input; ⚠ OMT fehlt (kein strom-Block), NDI/WHIP/Geräte nur auf Hardware prüfbar (H.14–H.16) |
+| B23 | ✅ Ton über die Slots: Kanal je Slot, an/aus, AFV, Lautstärke (an der Kachel, B28), PFL/AFL, Pegel; Audio-Inputs (B29) |
+| 2b.5 | ⬜ nur auf GPU messbar (H.1) |
+
 ### M3 — Ausgänge + Robustheit (wie geplant, konkretisiert; GPU liegt jetzt in M1b)
 
 | # | Punkt | Ort |
@@ -239,7 +252,17 @@ Aussetzer; Show speichern, Neustart, Show laden → identischer Zustand.
 | 3.2 | MultiCorder: Recorder pro Input am `inter`-Bus | C |
 | 3.3 | Fullscreen-Output auf zweitem Monitor (Sink im Engine-Prozess, nicht in der GUI — Crash-Isolation) | C |
 | 3.4 | Failover, Latenz-CI (wie `claude.md`) | C |
-| 3.5 | GUI-Shell-Entscheidung egui vs. Qt/Tauri — Kriterien jetzt: Video-Textur-Performance (1.1, GPU-Decode direkt in Textur), Multi-Display (3.3), Dichte der Input-Leiste (2b.2) | — |
+| 3.5 | GUI-Shell-Entscheidung egui vs. Qt/Tauri — Kriterien jetzt: Video-Textur-Performance (1.1, GPU-Decode direkt in Textur), Multi-Display (3.3), Dichte der Input-Leiste (2b.2), Kante-Anbindung mit Kante Light und Breeze-Rückfall (`agent.md`, GUI-Regel) | — |
+
+**Stand 2026-10-08** (Branch `m3`):
+
+| # | Stand |
+|---|---|
+| 3.1 | ✅ Ausgänge SRT, Aufnahme (MKV/MP4/TS), NDI als eigene Flows; Start/Stopp, Status mit Laufzeit und Fehler; Senderate, Paketverluste und RTT für SRT (B32); RTMP wartet auf strom #771, OMT ohne strom-Block |
+| 3.2 | ✅ MultiCorder als Ausgangsquelle "Input": Aufnahme, SRT oder NDI je Input (ISO) |
+| 3.3 | ✅ Bildschirm-Ausgang im Engine-Prozess: Fenster, Vollbild (Wayland), DRM-Anschluss; ⚠ Vollbild/DRM nur auf Hardware prüfbar (H.20) |
+| 3.4 | ✅ Failover: Quelle weg → Input offline, PGM hält, Slot kommt von selbst wieder (2–10 s Backoff); Ausgang bricht → Fehler, Neustart; Latenz-API und Budget-Check im VM-Test, CI `vm-check`; ⚠ SRT-Input in strom unzuverlässig (H.23) |
+| 3.5 | ✅ Qt Quick/Kirigami über cxx-qt (User, 2026-10-09); Umstieg schrittweise nach `GUI-SHELL.md` |
 
 ### M4 — Produktionswerkzeuge (wie geplant, erweitert)
 
@@ -389,6 +412,13 @@ Virtual Sets.
 4. ~~Testhardware AMD/Intel~~ — entschieden 2026-09-27: derzeit keine
    verfügbar; herstellerneutral bauen, Abnahme später (M5b).
 5. Clean-Room-Fragen E.1–E.8 in `LASTENHEFT.md` §6.
+6. ~~strom-CRITICALs~~ — geklärt 2026-10-08: strom verwirft Upstream-QoS
+   an Sinks mit `PadProbeReturn::Drop`; gstreamer-rs leert dabei die Daten,
+   GStreamer 1.24 gibt dann NULL frei (eine CRITICAL je Frame). lmix
+   schaltet QoS an seiner PGM-Senke ab. In strom trifft es jede Sink mit
+   QoS: als Fehler an strom melden (Probe `drop_upstream_qos_events`).
+7. strom-Patch `lmix-start-time` (Branch im strom-Fork) nach `dev` mergen;
+   das Submodul zeigt bis dahin auf den Branch.
 
 Quellen: vMix-Features <https://www.vmix.com/software/features.aspx>,
 vMix 29 <https://blog.vmix.com/vmix-29-is-available-now/>, strom-Doku

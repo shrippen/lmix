@@ -2,13 +2,14 @@
 name = "app-desktop"
 version = "0.1.0"
 edition = "2021"
-license = "MIT OR Apache-2.0"
+license = "MIT"
 publish = false
 
 [dependencies]
 strom-types = { path = "../strom/types" }
+lmix-types = { path = "../lmix-types" }
 
-clap = { version = "4", features = ["derive"] }
+clap = { version = "4", features = ["derive", "env"] }
 egui = "0.34"
 eframe = { version = "0.34", default-features = false, features = [
   "default_fonts",
@@ -29,3 +30,4 @@ thiserror = "2"
 image = { version = "0.25", default-features = false, features = ["jpeg"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+rfd = { version = "0.15", default-features = false, features = ["xdg-portal", "tokio"] }

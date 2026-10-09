@@ -1,9 +1,15 @@
-//! lmix Console - vMix-style switcher UI, driven entirely over strom's
-//! REST/WS API. Runs as its own OS process, separate from the strom server
-//! (see claude.md, "Feststehende Entscheidung 4").
+//! lmix Console - vMix-style switcher UI. Runs as its own OS process,
+//! separate from the engine (see claude.md, "Feststehende Entscheidung 4").
+//!
+//! Two modes:
+//! - `--core URL`: client of lmix-core (show state, input bar; `core_app`).
+//! - otherwise: M1b console straight on strom's REST/WS API (one flow,
+//!   audio, DSK, self-test), until lmix-core covers it.
 
 mod afv;
 mod api;
+mod core_app;
+mod core_client;
 mod gpu_profile;
 mod perf;
 mod selftest;
@@ -30,6 +36,10 @@ use strom_types::{Flow, StromEvent};
 /// lmix Console
 #[derive(Parser, Debug)]
 struct Args {
+    /// Run as a client of lmix-core at this URL (e.g. http://127.0.0.1:8200).
+    #[arg(long, env = "LMIX_CORE")]
+    core: Option<String>,
+
     /// Base URL of the strom backend to connect to.
     #[arg(long, default_value = "http://127.0.0.1:8080")]
     server: String,
@@ -1210,6 +1220,15 @@ fn main() -> eframe::Result<()> {
             .with_title("lmix Console"),
         ..Default::default()
     };
+
+    if let Some(url) = args.core.clone() {
+        let picture_ms = args.thumb_ms;
+        return eframe::run_native(
+            "lmix Console",
+            native_options,
+            Box::new(move |cc| Ok(Box::new(core_app::CoreApp::new(url, picture_ms, &cc.egui_ctx)))),
+        );
+    }
 
     eframe::run_native(
         "lmix Console",

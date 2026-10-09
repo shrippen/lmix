@@ -206,3 +206,149 @@ B18 OSC.
 | B19 | Zeitplan | P6 | neu OPS.4 |
 | B20 | Cue-Liste mit Aktionen je Zeile | P7 | neu AUT.14 |
 | B21 | Ausgangs-Warping, Kantenblende | P7 | neu OUT.18 (K) |
+
+---
+
+## Durchlauf 2: M2b Schritte 1–3 (2026-10-08, VM-Test + Schreibtisch)
+
+Neu: `lmix-core` (headless Steuerprozess, API, Slot-Mischer über strom,
+Show-Datei, Autosave). Geprüft mit `scripts/test-m2b-vm.sh` (CPU-Mischer,
+Testbilder) und gegen die Szenarien.
+
+| Persona | Schritt | Ergebnis |
+|---|---|---|
+| P1 Ehrenamt | Absturz während des Gottesdienstes, Neustart | ✅ letzte Show kommt aus der Autosave zurück, Mischer lief weiter (SHW.5, NFA.6) |
+| P1 Ehrenamt | Show "Gottesdienst" öffnen | ✅ Show-Datei; ⚠ noch keine GUI dafür (Console spricht strom direkt) |
+| P2 Konferenz | Zweiter Bedienplatz | ✅ Grundlage: API und WebSocket für beliebig viele Clients; ⚠ Rechte je Platz fehlen (OPS.2) |
+| P3 Sport | Spielstand per Stream Deck | ⚠ Aktionen über API da; Titel fehlen (M7) |
+| P5 Broadcast | Headless-Betrieb | ✅ `lmix-core` ohne GUI; ⚠ kein systemd-Dienst, keine Metriken (OPS.1, OPS.3) |
+| P5 Broadcast | Steuerung durch Automation | ✅ Aktionen per HTTP, Katalog als JSON-Schema; ⚠ kein schlanker TCP-Ereigniskanal (API.5) |
+| P7 Theater | Quelle tauschen während Vorstellung | ✅ Slot-Flow wird ersetzt, Mischer läuft weiter; ⚠ Bild ohne Aussetzer nur auf GPU prüfbar (H.3) |
+
+**Befunde**: B22 Console muss Client von `lmix-core` werden (2b.2), bevor
+Bediener davon etwas haben; B23 Ton fehlt in den Slots (nur Video gekoppelt).
+
+---
+
+## Durchlauf 3: M2b Schritt 4 (2026-10-08, VM-Test + Console auf Xvfb)
+
+Neu: Console als Client von `lmix-core` (`--core`): Input-Leiste mit
+Bildern und Tally, Klick = PVW, Doppelklick = Take, Tasten 1–9, vier
+Übergangs-Buttons, FTB, Input hinzufügen, umbenennen, entfernen,
+Show-Datei. Geprüft mit `CONSOLE_SHOT=… scripts/test-m2b-vm.sh`.
+
+| Persona | Schritt | Ergebnis |
+|---|---|---|
+| P1 Ehrenamt | Kamera in Vorschau, dann auf Sendung | ✅ Klick, Doppelklick; Rahmen grün/rot wie gewohnt |
+| P1 Ehrenamt | Show "Gottesdienst" öffnen | ⚠ Pfad eintippen, kein Dateidialog, keine Liste letzter Shows (B24) |
+| P2 Konferenz | Zweiter Bedienplatz mit eigener Console | ✅ beide sehen denselben Zustand (WebSocket); ⚠ Rechte je Platz (OPS.2) |
+| P3 Sport | Input "Kamera 2" in "Torkamera" umbenennen | ✅ Kachel-Menü |
+| P4 Streamer | Webcam hinzufügen | ⚠ Geräte-ID eintippen, keine Geräteliste über `lmix-core` (B25) |
+| P6 Hörsaal | Übergang von Fade auf Cut umstellen | ✅ nach Fix: Hinweis am Button, Rechtsklick (B26 behoben) |
+| P7 Theater | Zuspieler während der Vorstellung austauschen | ✅ nach Fix: Kachel-Menü "Quelle ersetzen" (B27 behoben); Bild auf PGM läuft weiter (VM, CPU) |
+| P5 Broadcast | Bild eines Inputs in eigenes Tool holen | ✅ `GET /api/pictures/inputs/{n}` |
+
+**Befunde**: B24 Dateidialog und letzte Shows; B25 Geräteliste über
+`lmix-core` (SRC.1); B26 Übergangs-Einstellung nicht auffindbar (behoben:
+Hinweis); B27 Quelle ersetzen fehlte in der GUI (behoben). Nebenbei: der
+Test fand einen echten Fehler (PGM schwarz bei Kopplung), siehe
+`DECISIONS.md`.
+
+**Nachtrag 2026-10-08**: B24 behoben (Dateidialog über xdg-portal, Liste der
+letzten Shows aus `lmix-core`, für alle Bedienplätze gleich), B25 behoben
+(Geräteliste `GET /api/devices`, Auswahl in der Console). Dazu Farbmarke und
+Typ-Kennung je Kachel (`set_input_color`). P2 (zweiter Platz auf anderem
+Rechner): Dialog zeigt die lokalen Dateien, `lmix-core` öffnet den Pfad auf
+seinem Rechner; Hinweis am Button, echte Lösung mit Datei-Upload später.
+
+---
+
+## Durchlauf 4: M2b Schritt 5, Ton (2026-10-08, VM-Test + Console auf Xvfb)
+
+Neu: Ton je Slot in einen Audio-Mischer; je Input an/aus ("M"), AFV,
+Lautstärke; Pegel auf Kacheln und unter PROGRAM.
+
+| Persona | Schritt | Ergebnis |
+|---|---|---|
+| P1 Ehrenamt | Kameraton nur hören, wenn die Kamera auf Sendung ist | ✅ AFV an der Kachel, blendet mit dem Übergang |
+| P1 Ehrenamt | Zuspieler leiser machen | ⚠ Regler nur im Kachel-Menü, schwer zu finden (B28) |
+| P6 Hörsaal | Mikrofon der Lehrkraft immer an | ⚠ geht nur, wenn das Mikrofon Ton eines Inputs ist; reine Audio-Inputs fehlen (B29) |
+| P3 Sport | Kommentar-Mikrofon dauerhaft, Stadionton per AFV | ⚠ wie B29; AFV für Stadionkameras ✅ |
+| P4 Streamer | Sehen, ob Ton ankommt | ✅ Pegel je Kachel und Programm |
+| P5 Broadcast | Pegel in eigenes Monitoring | ✅ `GET /api/audio/levels`, WS `levels`; ⚠ nur Spitzenpegel, keine Lautheit (LUFS, AUD) |
+| P7 Theater | Zuspieler-Ton mit dem Bild einblenden | ✅ AFV + Übergang (800 ms im Test) |
+
+**Befunde**: B28 Lautstärke direkt an der Kachel bzw. Audio-Mischpult-
+Ansicht (vMix-Audiomixer, M4); B29 reine Audio-Inputs (Mikrofon,
+Line-In) als eigener Quellentyp (2b.3, AUD).
+
+**Nachtrag PFL/AFL (2026-10-08)**: P5 Broadcast und P3 Sport können einen
+stummen Kommentar-Input per PFL vorhören, bevor er auf Sendung geht ✅;
+P7 Theater prüft per AFL, wie ein Zuspieler im Programm klingt ✅. ⚠ Der
+Monitor ist nur auf der Engine-Maschine hörbar; ein Bedienplatz an einem
+anderen Rechner hört ihn noch nicht (mit OUT, M3).
+
+---
+
+## Durchlauf 5: M2b Schritt 6 (2026-10-08, VM-Test + Console auf Xvfb)
+
+Neu: Farbe, Bild, Playlist mit Transport, NDI, WHIP, Audio-Gerät;
+Signalverlust halten/schwarz; Lautstärke an der Kachel; PFL/AFL.
+
+| Persona | Schritt | Ergebnis |
+|---|---|---|
+| P1 Ehrenamt | Liedtext-Folie als Bild, Begrüßungsvideo als Playlist | ✅ Bild, Playlist mit Play/Pause an der Kachel |
+| P1 Ehrenamt | Zuspieler leiser | ✅ Regler direkt an der Kachel (B28 behoben) |
+| P6 Hörsaal | Mikrofon der Lehrkraft dauerhaft | ✅ Audio-Input (Mikrofon), Ton an, kein AFV (B29 behoben); ⚠ Gerät nur auf Hardware prüfbar |
+| P4 Streamer | Gast per Browser (WHIP) | ✅ WHIP-Input; ⚠ Link zum Teilen fehlt in der Console (B30) |
+| P5 Broadcast | Kamera fällt aus | ✅ je Input "letztes Bild halten" oder "schwarz" |
+| P7 Theater | Zuspieler pausiert, Bild soll stehen bleiben | ✅ Standard "halten" |
+| P3 Sport | NDI-Kamera eines zweiten Rechners | ✅ NDI-Input und Geräteliste; ⚠ nur mit NDI-SDK (H.14) |
+
+**Befunde**: B30 WHIP: Console soll die Ingest-Adresse anzeigen und
+kopieren lassen. Sonst keine neuen Lücken für M2b.
+
+**Nachtrag B30 (2026-10-08)**: behoben. WHIP-Inputs tragen ihre Links
+(`ingest.whip_url` für OBS/Encoder, `ingest.browser_url` für Gäste im
+Browser); die Console zeigt sie im Kachel-Menü "Send to this input" mit
+Kopierknopf. Die Adresse, unter der Sender die Engine erreichen, setzt
+`--public-url` (Standard: die `--strom`-Adresse).
+
+---
+
+## Durchlauf 6: M3 Schritt 1, Ausgänge (2026-10-08, VM-Test + Console)
+
+| Persona | Schritt | Ergebnis |
+|---|---|---|
+| P1 Ehrenamt | Gottesdienst streamen und aufnehmen | ✅ zwei Knöpfe unten, Laufzeit sichtbar; ⚠ RTMP (YouTube) fehlt, nur SRT (B31) |
+| P2 Konferenz | Aufnahme je Raum in eigenen Ordner | ✅ Ordner je Aufnahme-Ausgang |
+| P4 Streamer | Stream bricht ab, merkt es sofort | ✅ Ausgang wird orange mit Meldung; ⚠ keine Bitrate/Drops (B32) |
+| P5 Broadcast | Steuerung neu gestartet während Sendung | ✅ Stream und Aufnahme laufen weiter und werden übernommen |
+| P6 Hörsaal | Aufnahme als MP4 für das Lernportal | ✅ MP4, sauber abgeschlossen beim Stopp |
+| P7 Theater | Programm per NDI an die Projektion | ✅ NDI-Ausgang; ⚠ nur mit NDI-SDK (H.19) |
+
+**Befunde**: B31 RTMP-Ausgang für YouTube/Twitch (strom #771 abwarten
+oder eigener Block); B32 Bitrate und verlorene Pakete je Ausgang anzeigen.
+
+**Nachtrag B32 (2026-10-08)**: behoben für SRT. Der laufende Ausgang zeigt
+die Senderate oder „no receiver“, der Tooltip verlorene und verworfene
+Pakete und die RTT (jede Sekunde aus strom).
+
+---
+
+## Durchlauf 7: M3 Schritte 2–4, ISO, Bildschirm, Ausfälle (2026-10-08, VM-Test + Console)
+
+| Persona | Schritt | Ergebnis |
+|---|---|---|
+| P2 Konferenz | Jede Kamera zusätzlich einzeln aufnehmen | ✅ Ausgang mit Quelle „Input“ je Kamera (MultiCorder) |
+| P4 Streamer | Leitung wird schwach, bevor der Stream abbricht | ✅ Rate und verlorene Pakete am Knopf; bricht er doch ab: „Fehler“, Neustart von selbst |
+| P5 Broadcast | Kamera fällt mitten in der Blende aus | ✅ Input „offline“, PGM hält das letzte Bild, Kamera kommt von selbst zurück; ⚠ in der VM teils ein schwarzer Frame beim Ausfall (H.21) |
+| P5 Broadcast | Verzögerung Quelle → Programm prüfen | ✅ `GET /api/latency` (VM 116–119 ms Median, CPU); ⚠ keine Anzeige in der Console |
+| P6 Hörsaal | Programm auf den Beamer | ✅ Ausgang „Fullscreen“ oder DRM-Anschluss; ⚠ Bildschirmwahl unter Wayland nur per Fensterregel (H.20) |
+| P7 Theater | Kontrollbild einer Kamera im Regieraum | ✅ Bildschirm-Ausgang mit Quelle „Input“ (Fenster) |
+
+**Befunde**: B33 Latenz in der Console anzeigen (Messknopf, Median/p95);
+B34 SRT-Kamera als Input in strom unzuverlässig (H.23, strom-Befund).
+
+**Nachtrag B33 (2026-10-08)**: behoben. Knopf „Latency“ in der
+Werkzeugleiste der Console misst 5 s und zeigt Median und p95 (PGM).

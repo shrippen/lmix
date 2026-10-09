@@ -1,0 +1,33 @@
+[package]
+name = "lmix-core"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+publish = false
+description = "lmix control core: show state, action catalog, APIs; drives the strom engine"
+
+[dependencies]
+lmix-types = { path = "../lmix-types" }
+strom-types = { path = "../strom/types" }
+
+anyhow = "1"
+async-trait = "0.1"
+axum = { version = "0.8", features = ["ws"] }
+clap = { version = "4", features = ["derive", "env"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+schemars = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "signal", "fs"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+uuid = { version = "1", features = ["v4", "v5", "serde"] }
+tokio-tungstenite = "0.29"
+futures-util = "0.3"
+
+[dev-dependencies]
+tempfile = "3"
+tokio = { version = "1", features = ["test-util"] }
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
