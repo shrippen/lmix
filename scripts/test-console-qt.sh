@@ -51,6 +51,11 @@ moved() {
     compare -metric AE -fuzz 5% "$WORK/m1.png" "$WORK/m2.png" null: 2>&1 | awk '{ printf "%d", $1 }' || true
 }
 click() { DISPLAY="$DISPLAY_NO" xdotool mousemove "$1" "$2" click "${3:-1}"; }
+# Waits up to 60 s until the input in `preview`/`program` has number $2
+# (a busy VM handles clicks late).
+becomes() {
+    for _ in $(seq 1 120); do [[ "$(number_of "$1")" == "$2" ]] && return 0; sleep 0.5; done
+}
 
 STROM_BIN="$("$ROOT/scripts/fetch-strom.sh")"
 (cd "$ROOT/workspace/lmix-core" && cargo build --release >/dev/null 2>&1)
@@ -66,7 +71,7 @@ PIDS+=($!)
 PIDS+=($!)
 wait_up "http://127.0.0.1:${STROM_PORT}/health" strom
 "$CORE_BIN" --strom "http://127.0.0.1:${STROM_PORT}" --listen "127.0.0.1:${CORE_PORT}" --mixer cpu \
-    --slots 4 --autosave "$WORK/autosave.lmix" --live-dir "$LIVE_DIR" >"$WORK/core.log" 2>&1 &
+    --slots 2 --autosave "$WORK/autosave.lmix" --live-dir "$LIVE_DIR" >"$WORK/core.log" 2>&1 &
 PIDS+=($!)
 wait_up "$CORE/state" lmix-core
 
@@ -80,23 +85,40 @@ unset WAYLAND_DISPLAY
 DISPLAY="$DISPLAY_NO" QT_QPA_PLATFORM=xcb QT_FORCE_STDERR_LOGGING=1 LMIX_CORE="http://127.0.0.1:${CORE_PORT}" \
     "$CONSOLE_BIN" >"$WORK/console.log" 2>&1 &
 PIDS+=($!)
-sleep 10
-shot a
-sleep 1
-shot b
-
 PROGRAM_AREA="600x340+810+180"
+PREVIEW_AREA="600x340+20+180"
 TILE_1="200x110+12+660"
 TILE_2="200x110+232+660"
-(($(moved a b "$PROGRAM_AREA") > 50)) && pass "program monitor moves" || fail "program monitor still"
-(($(moved a b "$TILE_1") > 10)) && pass "tile 1 moves (ball)" || fail "tile 1 still"
-awk "BEGIN { exit !($(spread a "$TILE_2") > 0.05) }" && pass "tile 2 shows its picture" || fail "tile 2 blank"
+# The live flows start a few seconds after the Console, and on a VM
+# software GL shares four cores with the CPU mixer: pictures can stall
+# for seconds. Each check needs to hold once within LIVE_WAIT seconds.
+sleep 5
+program_moves="" tile_1_moves="" tile_2_shows=""
+deadline=$((SECONDS + ${LIVE_WAIT:-60}))
+while ((SECONDS < deadline)); do
+    shot a
+    sleep 1
+    shot b
+    (($(moved a b "$PROGRAM_AREA") > 50)) && program_moves=1
+    (($(moved a b "$TILE_1") > 10)) && tile_1_moves=1
+    awk "BEGIN { exit !($(spread a "$TILE_2") > 0.05) }" && tile_2_shows=1
+    [[ -n "$program_moves" && -n "$tile_1_moves" && -n "$tile_2_shows" ]] && break
+done
+[[ -n "$program_moves" ]] && pass "program monitor moves" || fail "program monitor still"
+[[ -n "$tile_1_moves" ]] && pass "tile 1 moves (ball)" || fail "tile 1 still"
+[[ -n "$tile_2_shows" ]] && pass "tile 2 shows its picture" || fail "tile 2 blank"
 
 click 330 710
-sleep 1.5
+becomes preview 2
 [[ "$(number_of preview)" == 2 ]] && pass "click on a tile: preview" || fail "preview is $(number_of preview), not 2"
+# Cut acts on what the Console shows: wait until its preview has the picture.
+for _ in $(seq 1 60); do
+    shot p
+    awk "BEGIN { exit !($(spread p "$PREVIEW_AREA") > 0.05) }" && break
+    sleep 1
+done
 click 720 220
-sleep 1.5
+becomes program 2
 [[ "$(number_of program)" == 2 ]] && pass "Cut: program" || fail "program is $(number_of program) after Cut"
 shot c
 awk "BEGIN { exit !($(spread c "$PROGRAM_AREA") > 0.05) }" && pass "program monitor shows the new input" \
