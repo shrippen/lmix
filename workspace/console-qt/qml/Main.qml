@@ -159,6 +159,25 @@ Kirigami.ApplicationWindow {
         outputs: root.show ? root.show.outputs : []
     }
 
+    TriggersDialog {
+        id: triggersDialog
+        parent: QQC2.Overlay.overlay
+        anchors.centerIn: parent
+        act: root.act
+        inputs: root.inputs
+        outputs: root.show ? root.show.outputs : []
+    }
+
+    CueListsDialog {
+        id: cueListsDialog
+        parent: QQC2.Overlay.overlay
+        anchors.centerIn: parent
+        act: root.act
+        inputs: root.inputs
+        outputs: root.show ? root.show.outputs : []
+        lists: root.show && root.show.cue_lists ? root.show.cue_lists : []
+    }
+
     LayoutDialog {
         id: layoutDialog
         parent: QQC2.Overlay.overlay
@@ -323,6 +342,11 @@ Kirigami.ApplicationWindow {
                     onClicked: shortcutsDialog.open()
                 }
                 KanteButton {
+                    text: qsTr("Cues…")
+                    enabled: backend.connected
+                    onClicked: cueListsDialog.open()
+                }
+                KanteButton {
                     text: qsTr("Aux…")
                     enabled: backend.connected
                     onClicked: auxDialog.open()
@@ -382,6 +406,10 @@ Kirigami.ApplicationWindow {
                     overlays: root.show && root.show.overlays ? root.show.overlays : []
                     looksAvailable: root.show !== null && root.show.looks_available === true
                     peakDb: root.levels[key]
+                    onTriggersRequested: {
+                        triggersDialog.input = tileDelegate.input
+                        triggersDialog.open()
+                    }
                     onReplaceRequested: {
                         addInputDialog.replacing = tileDelegate.input
                         addInputDialog.open()

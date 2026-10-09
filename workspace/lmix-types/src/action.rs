@@ -213,8 +213,8 @@ pub enum Action {
     },
     /// Add a cue list.
     AddCueList { name: String, cues: Vec<Cue> },
-    /// Replace a cue list's name and cues (by number, name or id); GO
-    /// starts from the first cue again.
+    /// Replace a cue list's name and cues (by number, name or id); the
+    /// next cue stays where it was, at most one past the last.
     SetCueList {
         list: InputRef,
         name: String,

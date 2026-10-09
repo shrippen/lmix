@@ -339,7 +339,10 @@ impl Switcher {
                 let entry = &mut self.show.cue_lists[index];
                 entry.name = name;
                 entry.cues = cues;
-                self.cue_next.remove(&entry.id);
+                // Editing during the show keeps the place in the list.
+                if let Some(next) = self.cue_next.get_mut(&entry.id) {
+                    *next = (*next).min(entry.cues.len());
+                }
                 Ok(Vec::new())
             }
             Action::RemoveCueList { list } => {
@@ -3218,6 +3221,24 @@ mod tests {
         .unwrap();
         go(&mut sw).unwrap();
         assert!(matches!(go(&mut sw), Err(ActionError::BadCueList { .. })));
+
+        // Editing keeps the place, at most one past the last cue.
+        sw.apply(Action::SetCueList {
+            list: list.clone(),
+            name: "Opening".into(),
+            cues: vec![
+                cue("A", Action::CutDirect { input: named("A") }),
+                cue("B", Action::CutDirect { input: named("B") }),
+            ],
+        })
+        .unwrap();
+        assert_eq!(sw.state().cue_lists[0].next, 3);
+        assert_eq!(
+            sw.cue_step(&list, true).unwrap(),
+            [Action::CutDirect { input: named("A") }]
+        );
+        assert_eq!(sw.state().cue_lists[0].next, 2);
+
         assert!(matches!(
             sw.apply(Action::AddCueList {
                 name: "Loop".into(),
