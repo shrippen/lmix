@@ -1,7 +1,7 @@
 # Build
 
 Reproduzierbare Build-/Run-Kommandos für unseren Anwendungsfall: Server headless
-auf 127.0.0.1, nativer egui-Client als eigener Prozess. Für alles, was hier
+auf 127.0.0.1, native Qt-Console als eigener Prozess. Für alles, was hier
 nicht steht (Docker, PostgreSQL, TLS, ...), siehe `workspace/strom/docs/`.
 
 ## Systemabhängigkeiten
@@ -76,7 +76,7 @@ cargo run -p strom-frontend
 
 Er verbindet sich fest gegen `strom_types::DEFAULT_PORT` (8080) auf
 `localhost` (`frontend/src/main.rs`) — für M0 reicht das; ein konfigurierbarer
-Zielport für `app-desktop` ist ein M1-Thema.
+Zielport für die Console war ein M1-Thema.
 
 ## `--host` / `STROM_HOST` (unser Patch, `dev`-Branch)
 
@@ -135,18 +135,17 @@ Erwartet: natives Fenster "Strom" öffnet sich, verbindet per WebSocket
 (`ws://localhost:8080/api/ws`) und REST, zeigt die Elementpalette und die
 oben angelegten Flows.
 
-## lmix Console und Selftest (Stand M1b)
+## Selbsttest und M1b-Abnahme
 
 Immer Release-Builds: Debug-Builds sind für Live-Video zu langsam.
 
 ```bash
-./run.sh                                # Backend (127.0.0.1:8099) + Console
 scripts/acceptance-m1b.sh [N] [SEK]     # M1b-Abnahme, eigenes Backend auf 8199
 ```
 
-Die Console wählt das Mixer-Backend nach der GPU der Engine (`gpu_profile.rs`):
-NVIDIA → `cuda`, AMD/Intel → `gl` (unverifiziert), ohne Hardware-GPU Abbruch.
-Übersteuern mit `--mixer-backend cuda|gl|cpu`.
+Der Selbsttest wählt das Mixer-Backend nach der GPU der Engine
+(`gpu_profile.rs`): NVIDIA → `cuda`, AMD/Intel → `gl` (unverifiziert), ohne
+Hardware-GPU Abbruch. Übersteuern mit `--mixer-backend cuda|gl|cpu`.
 
 Selbsttest (kopflos, eigenes Binary `lmix-selftest` in `workspace/selftest`)
 gegen ein laufendes Backend, wichtigste Schalter:
@@ -214,19 +213,10 @@ export SWAGGER_UI_DOWNLOAD_URL=file://$PWD/swagger-ui-5.17.14.zip
 
 ```bash
 scripts/test-m2b-vm.sh   # strom (CPU-Mischer) + lmix-core, Testbilder
-CONSOLE_SHOT=console.png scripts/test-m2b-vm.sh   # plus Console auf Xvfb
+CONSOLE_SHOT=console.png scripts/test-m2b-vm.sh   # plus Qt-Console auf Xvfb (braucht Qt 6, Kirigami)
 ```
 
 Prüft Bildinhalt (Helligkeit, Bewegung) über ImageMagick `convert`.
-
-## Console als Client von lmix-core
-
-```bash
-cd workspace/app-desktop
-cargo run -- --core http://127.0.0.1:8200    # oder LMIX_CORE=…
-```
-
-Ohne `--core` spricht die Console wie in M1b direkt mit strom.
 
 ## Qt-Console (`workspace/console-qt`, Prototyp)
 
@@ -248,9 +238,29 @@ sudo apt-get install qt6-declarative-dev qt6-l10n-tools qml6-module-org-kde-kiri
   qml6-module-qtquick-dialogs gstreamer1.0-qt6
 ```
 
-**Ungeeignet** (zu alt, ohne Backports): Ubuntu 24.04 und Debian 12 (Plasma 5,
-kein Kirigami 6; Debian 12 auch GStreamer 1.22). Andere Distributionen mit KF6
-und GStreamer ≥ 1.24 sollten gehen; wer eine prüft, trägt sie hier ein.
+**Ubuntu 24.04** (geprüft in der Cloud-VM, 2026-10-09): Qt 6 und Kirigami
+aus KDE neon, gepinnt, damit nur Qt-, KF6- und ihre neueren
+Grundbibliotheken (libwayland, libinput, libpcre2) von dort kommen;
+GStreamer bleibt das von Ubuntu (~100 MB Download, ~550 MB Platte):
+
+```bash
+sudo curl -sSo /etc/apt/keyrings/neon-archive.asc https://archive.neon.kde.org/public.key
+echo "deb [signed-by=/etc/apt/keyrings/neon-archive.asc] https://archive.neon.kde.org/user noble main" \
+  | sudo tee /etc/apt/sources.list.d/neon.list
+printf 'Package: *\nPin: origin archive.neon.kde.org\nPin-Priority: 100\n\nPackage: qt6-* libqt6* qml6-* kf6-* libkf6* gstreamer1.0-qt6 qmake6* qt6-l10n-tools libwayland* libinput* libpcre2*\nPin: origin archive.neon.kde.org\nPin-Priority: 600\n' \
+  | sudo tee /etc/apt/preferences.d/neon-qt6
+sudo apt-get update
+sudo apt-get install --no-install-recommends qt6-base-dev qt6-declarative-dev qt6-l10n-tools \
+  qt6-tools-dev-tools qt6-qpa-plugins qml6-module-org-kde-kirigami kf6-kirigami-dev gstreamer1.0-qt6
+PATH=/usr/lib/qt6/bin:$PATH   # lrelease
+```
+
+GStreamer vor 1.28: `unixfdsink` kopiert erst ab 1.28 selbst; lmix-core legt
+für Programm und volle Vorschau dann einen Kopierschritt davor (DECISIONS).
+
+**Ungeeignet** (zu alt): Debian 12 (kein Kirigami 6, GStreamer 1.22).
+Andere Distributionen mit KF6 und GStreamer ≥ 1.24 sollten gehen; wer eine
+prüft, trägt sie hier ein.
 
 ```bash
 scripts/sync-kante.sh                 # Kante-QML ins Crate kopieren (nach Kante-Änderungen)

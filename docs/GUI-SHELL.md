@@ -142,7 +142,6 @@ scheitert; Menüs aus Listen baut deshalb `ChoiceMenu` ohne Repeater.
 Offen:
 - Demo-Modus mit den gemeinsamen Demodaten (`claude.md`-Regel).
 - Vorschau-Wechsel baut eine neue Pipeline (kurze Lücke).
-- VM-Test und Screenshots laufen noch über die egui-Console.
 
 ## Schritt 3: Sprache, Kante, Parität (Stand 2026-10-09)
 
@@ -173,10 +172,9 @@ Client von lmix-core konnte (Entscheidung des Users).
 | Ausgänge: hinzufügen, Start/Stopp, Laufzeit, Leitungszustand, entfernen | ja |
 | Tasten 1–9 | ja |
 
-Nicht Teil der Console, aber nur in `app-desktop`: der M1b-Modus direkt an
-strom, das Leistungs-Overlay (F3, `--perf-log`) und das GPU-Profil. Der
-kopflose Selbsttest ist seit 2026-10-09 ein eigenes Binary
-(`workspace/selftest`, `lmix-selftest`, mit eigener Kopie von `perf` und
-`gpu_profile`). Vor dem Entfernen der egui-Console: VM-Test
-(`test-m2b-vm.sh`, Screenshot) auf die Qt-Console umstellen; den M1b-Modus
-und das Overlay mit ihr streichen.
+**Entfernt am 2026-10-09** (`app-desktop`, `run.sh`): Der kopflose
+Selbsttest ist ein eigenes Binary (`workspace/selftest`, `lmix-selftest`),
+VM-Test und Screenshot laufen über die Qt-Console (`test-m2b-vm.sh`
+`CONSOLE_SHOT`, `test-console-qt.sh`). Mit der egui-Console gingen der
+M1b-Modus direkt an strom und das Leistungs-Overlay (F3); Messwerte je
+Ansicht liefert die Qt-Console mit `RUST_LOG=lmix_console=debug`.

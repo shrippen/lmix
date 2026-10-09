@@ -13,8 +13,8 @@ Kommuniziere auf Deutsch, Code/Commits auf Englisch.
 2. Open Live (Eyevinn open-live / open-live-studio) wird NICHT verwendet: kein Node/TS,
    keine CouchDB, kein K8s. Dieses Repo ignorieren vollständig.
 3. GUI = NATIV (kein Web-Interface als Produktziel). Shell = Qt Quick/Kirigami über
-   cxx-qt (Entscheidung User 2026-10-09, docs/GUI-SHELL.md); die egui-Console bleibt
-   bis zur Gleichwertigkeit als Werkzeug (Selftest, VM-Screenshot).
+   cxx-qt (Entscheidung User 2026-10-09, docs/GUI-SHELL.md); die egui-Console ist seit
+   2026-10-09 entfernt (Selbsttest jetzt `workspace/selftest`).
 4. Prozessmodell (hart): strom läuft als eigenständiger Headless-Server auf
    127.0.0.1; GUI = separater Prozess; Kommunikation ausschliesslich über
    REST + WebSocket, Typen aus strom-types. NICHTS in-Process: kein Linken des
@@ -32,7 +32,9 @@ Kommuniziere auf Deutsch, Code/Commits auf Englisch.
 ## Repo-Struktur
 workspace/
   strom/          ← Upstream-Klon (eigene Branch "dev", nur minimaler Diff erlaubt)
-  app-desktop/    ← UNSER Client (Fork/Neuaufbau auf Basis strom-frontend, native egui)
+  lmix-core/      ← Steuerprozess (Show, Aktionen, API), headless
+  console-qt/     ← UNSER Client: Qt Quick/Kirigami über cxx-qt (Entscheidung 3.5)
+  selftest/       ← kopfloser Last- und Abnahmetest direkt an strom (M1b)
   omtpw-bridge/   ← nur falls Options (b) für OMT gewählt wird (eigenes Repo, stabile API)
   docs/           ← Build-Doku, Architektur-Anatomie, Latenz-Messungen, Entscheide-Log
 
@@ -44,7 +46,7 @@ workspace/
   dann Client.
 - Commits: klein, thematisch, 1 Feature = 1 Commit-Stack. Nie Mega-Diffs.
 - Unser Diff gegen strom/ halten = minimal: alles was nur kann, gehört in
-  app-desktop/ oder einen OmtBlock. Nur wenn ein Feature ohne Server-Änderung
+  lmix-core/, console-qt/ oder einen OmtBlock. Nur wenn ein Feature ohne Server-Änderung
   nicht machbar ist: Server-Änderung, und dann ein eigener, sauberer, upstream-
   tauglicher Commit dafür (mit Begründung im Commit, PR-fähig).
 - Persona-Durchläufe (`docs/PERSONAS.md`, `docs/LASTENHEFT.md` §9): jede neue

@@ -878,3 +878,25 @@ einmal Segfault).
 ohne ISO-Aufnahme; mit 8 statt 16 Inputs; mit `--mixer gl` statt `cuda`;
 einmal mit `MALLOC_ARENA_MAX=2`. Wächst nur der CUDA-Lauf, liegt die
 Ursache im CUDA-Pfad (Speicherpools, `cudadownload`).
+
+## 2026-10-09 — egui-Console entfernt, Qt-Console in der Cloud-VM
+
+**Entscheidung**: `app-desktop` (egui) und `run.sh` sind weg. Der
+Selbsttest lebt als `lmix-selftest` weiter, VM-Test und Screenshot nutzen
+die Qt-Console. Mit ihr gingen der M1b-Modus direkt an strom und das
+Leistungs-Overlay; beides hatte keinen Nutzer mehr.
+**Qt in der Cloud-VM** (Ubuntu 24.04 hat weder Qt ≥ 6.5 noch Kirigami 6):
+KDE neon als zusätzliche apt-Quelle, gepinnt auf Qt-, KF6- und qml6-Pakete
+plus die neueren Grundbibliotheken, die sie verlangen (libwayland 1.26,
+libinput 1.29, libpcre2 10.45); GStreamer bleibt das von Ubuntu.
+`scripts/cloud-setup.sh` richtet das ein. **Verworfen**: Arch-chroot (mehr
+Platz, root-Mounts), Qt und Kirigami aus Quellen (Stunden Bauzeit).
+**Befund dabei**: `unixfdsink` sendet vor GStreamer 1.28 nur Bilder in
+fd-Speicher. Programm und volle Vorschau eines CPU-/GL-Mischers kamen als
+gewöhnlicher Systemspeicher, der Live-Flow brach ab, der Programm-Monitor
+blieb leer (auf Arch mit 1.28 unbemerkt). lmix-core liest die
+GStreamer-Version von strom und setzt unter 1.28 einen `compositor` mit
+einem Eingang (Start beim ersten Bild) vor den Sink; Kacheln brauchen das
+nicht, `videoscale` schreibt schon in den Speicher des Sinks. Außerdem
+sendet der Live-Sink kein QoS mehr (strom-QoS-Probe: CRITICAL je Bild).
+

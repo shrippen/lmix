@@ -11,7 +11,8 @@ on:
     paths:
       - workspace/lmix-core/**
       - workspace/lmix-types/**
-      - workspace/app-desktop/**
+      - workspace/console-qt/**
+      - workspace/selftest/**
       - workspace/strom
       - scripts/test-m2b-vm.sh
       - .gitea/workflows/vm-check.yml
