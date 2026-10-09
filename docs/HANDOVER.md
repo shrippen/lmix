@@ -22,11 +22,16 @@ strom-Fork (`shrippen/strom`):
 
 Merge-Reihenfolge: strom #1, #2, dann lmix #1, #2, #3 (jeweils auf Gitea).
 
-Seit 2026-10-09 lokal auf `m3`: Live-Bilder über Unix-Sockets
-(`/api/live/…`), Qt-Console-Prototyp `workspace/console-qt`
-(`GUI-SHELL.md`, Schritt 1, gemessen), CUDA-Programm für Bildschirm/NDI/
-Live heruntergeladen, Aktionen vor „Engine bereit“ gehen nicht mehr
-verloren.
+Seit 2026-10-09 lokal auf `m3` (nicht gepusht):
+- Live-Bilder über Unix-Sockets (`/api/live/…`, `?size=full` für die
+  Vorschau).
+- Qt-Console `workspace/console-qt`: Schritt 1 gemessen, Schritt 2 (Funktionen
+  der egui-Console) übertragen, Test `scripts/test-console-qt.sh`.
+- lmix-core: CUDA-Programm für Bildschirm/NDI/Live heruntergeladen,
+  GL-Mischer gibt Systemspeicher aus, Aktionen vor „Engine bereit“ warten auf
+  den Restore, ein neu gestartetes strom bekommt die Show zurück.
+- `scripts/soak-hardware.sh`: 60 min CUDA bestanden (DECISIONS,
+  „Hardware-Läufe“).
 
 ## Lokal einrichten
 
@@ -83,6 +88,9 @@ für WHIP-Links: `--public-url`.
 - B31 RTMP-Ausgang wartet auf strom #771.
 
 ## Bekannte Befunde
+
+- GL-Mischer: SRT-Ausgang ohne Video (DECISIONS, „Hardware-Läufe“).
+- Ubuntu 24.04 hat kein Kirigami 6: Qt-Console braucht 26.04 (BUILD.md).
 
 - SRT-Input-Block in strom decodiert in der VM nicht (DECISIONS,
   „M3 Schritt 4“).
