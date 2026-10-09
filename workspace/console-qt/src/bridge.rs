@@ -33,7 +33,8 @@ pub mod qobject {
         #[qproperty(bool, connected)]
         #[qproperty(QString, state)]
         #[qproperty(QString, message)]
-        /// `KanteStyle.kind`: 0 System, 1 Kante, 2 Kante Light.
+        /// `KanteStyle.kind` from the command line (0 System, 1 Kante,
+        /// 2 Kante Light), or -1: the one saved in the Console.
         #[qproperty(i32, style)]
         /// Peak dBFS per input id, and `program` (JSON object).
         #[qproperty(QString, levels)]

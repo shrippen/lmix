@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls as QQC2
 import QtQuick.Dialogs
+import QtCore
 import org.kde.kirigami as Kirigami
 import Kante
 import org.lmix.console
@@ -18,10 +19,17 @@ Kirigami.ApplicationWindow {
         id: backend
     }
 
+    Settings {
+        id: settings
+        category: "appearance"
+        /** KanteStyle.Kind; Kante unless chosen otherwise. */
+        property int style: KanteStyle.Kind.Kante
+    }
+
     Binding {
         target: KanteStyle
         property: "kind"
-        value: backend.style
+        value: backend.style >= 0 ? backend.style : settings.style
     }
 
     KanteScope {
@@ -165,6 +173,16 @@ Kirigami.ApplicationWindow {
                     onClicked: saveDialog.open()
                 }
                 Item { Layout.fillWidth: true }
+                KanteSegmented {
+                    readonly property var kinds: [KanteStyle.Kind.Kante, KanteStyle.Kind.KanteLight, KanteStyle.Kind.System]
+                    model: [qsTr("Kante"), qsTr("Kante Light"), qsTr("System")]
+                    currentIndex: kinds.indexOf(KanteStyle.kind)
+                    tooltips: [qsTr("Kante style"), qsTr("Kante shapes on the system colours"), qsTr("System style (Breeze)")]
+                    onActivated: index => {
+                        settings.style = kinds[index]
+                        backend.style = -1
+                    }
+                }
                 QQC2.Label {
                     text: backend.latency
                     font.family: KanteStyle.monoFamily

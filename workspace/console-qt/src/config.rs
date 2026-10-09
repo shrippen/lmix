@@ -27,6 +27,7 @@ pub fn core_url() -> &'static str {
     &config().core_url
 }
 
+/// `KanteStyle.Kind` asked for on the command line, or -1.
 pub fn style() -> i32 {
     config().style
 }

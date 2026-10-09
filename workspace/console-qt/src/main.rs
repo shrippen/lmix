@@ -3,7 +3,7 @@
 //! straight into QML items.
 
 use clap::{Parser, ValueEnum};
-use cxx_qt_lib::{QGuiApplication, QQmlApplicationEngine, QUrl};
+use cxx_qt_lib::{QGuiApplication, QQmlApplicationEngine, QString, QUrl};
 use gstreamer as gst;
 
 mod bridge;
@@ -38,8 +38,10 @@ struct Args {
     #[arg(long, env = "LMIX_CORE", default_value = "http://127.0.0.1:8200")]
     core: String,
 
-    #[arg(long, value_enum, default_value_t = Style::Kante)]
-    style: Style,
+    /// Style for this run; without it the one chosen in the Console
+    /// (Kante at first).
+    #[arg(long, value_enum)]
+    style: Option<Style>,
 }
 
 fn main() {
@@ -49,7 +51,7 @@ fn main() {
         )
         .init();
     let args = Args::parse();
-    config::init(&args.core, args.style.kind());
+    config::init(&args.core, args.style.map_or(-1, Style::kind));
 
     // qml6glsink draws with the scene graph's OpenGL context.
     std::env::set_var("QSG_RHI_BACKEND", "opengl");
@@ -64,6 +66,13 @@ fn main() {
     }
 
     let mut app = QGuiApplication::new();
+    if let Some(mut app) = app.as_mut() {
+        // Where Qt keeps the Console's settings (style), and the Wayland
+        // app id for window rules.
+        app.as_mut().set_organization_name(&QString::from("lmix"));
+        app.as_mut().set_application_name(&QString::from("console"));
+        QGuiApplication::set_desktop_file_name(&QString::from("lmix-console"));
+    }
     let mut engine = QQmlApplicationEngine::new();
     if let Some(engine) = engine.as_mut() {
         engine.load(&QUrl::from("qrc:/qt/qml/org/lmix/console/qml/Main.qml"));
