@@ -371,11 +371,22 @@ impl StromEngine {
         slot: Option<usize>,
         duration_ms: u32,
     ) -> Result<(), EngineError> {
+        self.dsk_layer(flows::overlay_layer(channel), slot, duration_ms)
+            .await
+    }
+
+    /// Show `slot` on DSK `layer` (0-based) or take the layer off.
+    async fn dsk_layer(
+        &self,
+        layer: usize,
+        slot: Option<usize>,
+        duration_ms: u32,
+    ) -> Result<(), EngineError> {
         if let Some(slot) = slot {
             let path = format!(
                 "/flows/{}/elements/{}:intersrc/properties",
                 flows::mixer_id(),
-                flows::overlay_input(channel)
+                flows::layer_input(layer)
             );
             let body = serde_json::json!({
                 "property_name": "producer-name",
@@ -391,11 +402,22 @@ impl StromEngine {
             check(resp).await?;
         }
         let body = serde_json::json!({
-            "dsk": channel + 1,
+            "dsk": layer + 1,
             "enabled": slot.is_some(),
             "duration_ms": duration_ms,
         });
         self.mixer_call("dsk", &body).await
+    }
+
+    /// Stinger on: its clip from the start on the stinger layer; off:
+    /// layer away, clip paused (it would loop unseen otherwise).
+    async fn stinger(&self, slot: usize, on: bool) -> Result<(), EngineError> {
+        if !on {
+            self.dsk_layer(flows::STINGER_LAYER, None, 0).await?;
+            return self.transport(slot, Transport::Pause).await;
+        }
+        self.transport(slot, Transport::Restart).await?;
+        self.dsk_layer(flows::STINGER_LAYER, Some(slot), 0).await
     }
 
     /// Media player control; restart is a seek to 0 plus play.
@@ -565,6 +587,9 @@ impl Engine for StromEngine {
             } => self.overlay(*channel, *slot, *duration_ms).await,
             Command::TBar { slot, position } => self.t_bar(*slot, *position).await,
             Command::SetStrip { slot, strip } => self.set_strip(*slot, strip).await,
+            Command::Stinger { slot, on } => self.stinger(*slot, *on).await,
+            // The service waits; nothing for the engine to do.
+            Command::Wait { .. } => Ok(()),
             Command::SetAuxSend { slot, bus, gain } => {
                 let channel = flows::audio_channel(*slot);
                 let name = format!("ch{channel}_aux{}_level", bus + 1);
@@ -744,6 +769,8 @@ fn wire_name(effect: Effect) -> &'static str {
         Effect::PushRight => "push_right",
         Effect::WipeLeft => "wipe_left",
         Effect::WipeRight => "wipe_right",
+        // lmix-core plays stingers itself and cuts underneath.
+        Effect::Stinger => "cut",
     }
 }
 

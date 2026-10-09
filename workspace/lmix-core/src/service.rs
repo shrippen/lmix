@@ -504,8 +504,10 @@ impl Service {
         self.switcher.lock().await.tally()
     }
 
-    /// Run one action to the end; publishes the new state.
-    pub async fn handle(&self, action: Action) -> Result<ShowState, ActionError> {
+    /// Run one action; publishes the new state. Commands after a
+    /// `Command::Wait` (a stinger's cut and end) run later in the
+    /// background.
+    pub async fn handle(self: &Arc<Self>, action: Action) -> Result<ShowState, ActionError> {
         let mut sw = self.switcher.lock().await;
         let file_action = matches!(action, Action::OpenShow { .. } | Action::SaveShow { .. });
 
@@ -522,10 +524,41 @@ impl Service {
             self.recent.lock().await.touch(&path).await;
         }
 
-        let result = self.execute(&mut sw, &commands).await;
+        let wait = commands
+            .iter()
+            .position(|c| matches!(c, Command::Wait { .. }))
+            .unwrap_or(commands.len());
+        let (now, later) = commands.split_at(wait);
+        let result = self.execute(&mut sw, now).await;
         self.publish(&sw);
         self.write_autosave(&sw).await;
+        if !later.is_empty() {
+            self.run_later(later.to_vec());
+        }
         result.map(|()| sw.state())
+    }
+
+    /// Run `commands`, which start with a `Command::Wait`: each wait, then
+    /// the commands up to the next one.
+    fn run_later(self: &Arc<Self>, commands: Vec<Command>) {
+        let service = Arc::clone(self);
+        tokio::spawn(async move {
+            let mut rest = commands.as_slice();
+            while let [Command::Wait { ms }, tail @ ..] = rest {
+                tokio::time::sleep(std::time::Duration::from_millis(u64::from(*ms))).await;
+                let end = tail
+                    .iter()
+                    .position(|c| matches!(c, Command::Wait { .. }))
+                    .unwrap_or(tail.len());
+                let mut sw = service.switcher.lock().await;
+                if let Err(e) = service.execute(&mut sw, &tail[..end]).await {
+                    tracing::warn!(error = %e, "delayed engine commands failed");
+                }
+                service.publish(&sw);
+                drop(sw);
+                rest = &tail[end..];
+            }
+        });
     }
 
     /// Best effort: a failed autosave must not fail the action.
@@ -748,6 +781,69 @@ mod tests {
             },
             name: Some("Bars".into()),
         }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_stinger_cuts_and_ends_later_without_holding_the_switcher() {
+        use lmix_types::{action::StingerSpec, Effect, InputRef, TransitionSlot};
+        let engine = Arc::new(NullEngine::default());
+        let service = Service::new(4, engine.clone(), None);
+        service.handle(bars()).await.unwrap();
+        let clip = SourceSpec::File {
+            path: "sting.webm".into(),
+        };
+        service
+            .handle(Action::AddInput {
+                source: clip,
+                name: Some("Sting".into()),
+            })
+            .await
+            .unwrap();
+        service
+            .handle(Action::PreviewInput {
+                input: InputRef::Text("Bars".into()),
+            })
+            .await
+            .unwrap();
+        service
+            .handle(Action::SetTransition {
+                slot: TransitionSlot(1),
+                effect: Effect::Stinger,
+                duration_ms: 1000,
+                stinger: Some(StingerSpec {
+                    input: InputRef::Text("Sting".into()),
+                    cut_ms: 400,
+                }),
+            })
+            .await
+            .unwrap();
+        let cut = || {
+            engine
+                .log()
+                .iter()
+                .any(|c| matches!(c, Command::Program { slot: Some(0), .. }))
+        };
+        let ended = || {
+            engine
+                .log()
+                .iter()
+                .any(|c| matches!(c, Command::Stinger { on: false, .. }))
+        };
+
+        service
+            .handle(Action::Transition {
+                slot: TransitionSlot(1),
+            })
+            .await
+            .unwrap();
+        assert!(!cut(), "no cut before the cut point");
+        // The switcher stays free meanwhile.
+        service.state().await;
+
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        assert!(cut() && !ended());
+        tokio::time::sleep(std::time::Duration::from_millis(700)).await;
+        assert!(ended());
     }
 
     #[tokio::test]

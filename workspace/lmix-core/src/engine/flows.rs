@@ -57,7 +57,7 @@ const MONITOR_SINK: &str = "monitor_sink";
 pub const AUDIO_MIXER: &str = "mix";
 /// Mixer flow name; a new layout gets a new name, so `start` rebuilds a
 /// running mixer of an older lmix instead of reusing it.
-pub const MIXER_NAME: &str = "lmix mixer 4";
+pub const MIXER_NAME: &str = "lmix mixer 5";
 /// Block id of the vision mixer in the mixer flow.
 pub const MIXER_BLOCK: &str = "vm";
 /// Thumbnail tap on the program output: GUI monitor and picture checks.
@@ -179,11 +179,11 @@ pub fn mixer_flow(slots: usize, backend: MixerBackend, monitor: MonitorOut) -> F
         ));
     }
 
-    // Overlays: one DSK layer each, fed over `inter`. The channel is
-    // pointed at a slot when an overlay goes on; until then it waits on a
-    // channel nobody publishes.
-    for channel in 0..OVERLAY_CHANNELS as usize {
-        let input = overlay_input(channel);
+    // DSK layers, fed over `inter`: the stinger at the bottom, then one
+    // per overlay. The channel is pointed at a slot when a layer goes on;
+    // until then it waits on a channel nobody publishes.
+    for layer in 0..DSK_LAYERS {
+        let input = layer_input(layer);
         flow.blocks.push(block(
             &input,
             INTER_INPUT_BLOCK,
@@ -194,7 +194,7 @@ pub fn mixer_flow(slots: usize, backend: MixerBackend, monitor: MonitorOut) -> F
         ));
         flow.links.push(link(
             format!("{input}:src"),
-            format!("{MIXER_BLOCK}:dsk_in_{channel}"),
+            format!("{MIXER_BLOCK}:dsk_in_{layer}"),
         ));
     }
 
@@ -229,7 +229,7 @@ pub fn mixer_flow(slots: usize, backend: MixerBackend, monitor: MonitorOut) -> F
             ),
             (
                 "num_dsk_inputs",
-                PropertyValue::String(OVERLAY_CHANNELS.to_string()),
+                PropertyValue::String(DSK_LAYERS.to_string()),
             ),
             // Base time 0 (share_timing): output starts at the first frame.
             (
@@ -271,9 +271,20 @@ pub fn mixer_flow(slots: usize, backend: MixerBackend, monitor: MonitorOut) -> F
     flow
 }
 
-/// Block id of the `inter` input feeding overlay `channel` (0-based).
-pub fn overlay_input(channel: usize) -> String {
-    format!("ovl{channel}")
+/// DSK layer of the stinger, below the overlays.
+pub const STINGER_LAYER: usize = 0;
+
+/// DSK layers in the mixer: the stinger, then the overlays.
+const DSK_LAYERS: usize = 1 + OVERLAY_CHANNELS as usize;
+
+/// DSK layer of overlay `channel` (0-based).
+pub fn overlay_layer(channel: usize) -> usize {
+    channel + 1
+}
+
+/// Block id of the `inter` input feeding DSK `layer` (0-based).
+pub fn layer_input(layer: usize) -> String {
+    format!("dsk{layer}")
 }
 
 /// `inter` channel of an idle overlay: nobody publishes it.
@@ -1205,6 +1216,23 @@ mod tests {
             .links
             .iter()
             .any(|l| l.from == "mix:main_out" && l.to == "pgm_audio_out:sink"));
+    }
+
+    #[test]
+    fn mixer_has_a_stinger_layer_below_the_overlays() {
+        let flow = mixer_flow(2, MixerBackend::Cpu, MonitorOut::None);
+
+        let vm = flow.blocks.iter().find(|b| b.id == MIXER_BLOCK).unwrap();
+        assert!(matches!(
+            vm.properties.get("num_dsk_inputs"),
+            Some(PropertyValue::String(n)) if n == "5"
+        ));
+        assert_eq!(layer_input(STINGER_LAYER), "dsk0");
+        assert!(flow
+            .links
+            .iter()
+            .any(|l| l.from == "dsk4:src" && l.to == "vm:dsk_in_4"));
+        assert_eq!(overlay_layer(3), 4);
     }
 
     #[test]

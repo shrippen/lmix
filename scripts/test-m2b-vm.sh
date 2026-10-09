@@ -19,7 +19,7 @@ STROM="http://127.0.0.1:${STROM_PORT}"
 CORE="http://127.0.0.1:${CORE_PORT}/api"
 WORK="$(mktemp -d)"
 # Mixer slots for the test; small to fit a VM.
-SLOTS=6
+SLOTS=7   # six inputs plus a stinger clip
 # Mean brightness (0-100) bars or snow exceed; black is 0.
 MIN_BRIGHTNESS=30
 # Audio levels (dBFS): a test tone is above, silence below.
@@ -425,6 +425,37 @@ act '{"action":"t_bar","position":1}' >/dev/null
     || fail "T-bar at the end did not take preview to program"
 wait_for 4 overlay_shown || fail "program not orange after the T-bar take"
 pass "T-bar: preview mixed in by half, taken at the end"
+
+# --- stinger (4.2): a clip with alpha over program, cut underneath ---
+# Blue square in the middle, the rest transparent; 2 s.
+ffmpeg -loglevel error -y -f lavfi -i "color=c=black@0.0:s=1280x720:r=30:d=2,format=yuva420p[bg];color=c=blue:s=400x400:r=30:d=2,format=yuva420p[box];[bg][box]overlay=440:160:format=yuv420" \
+    -c:v libvpx-vp9 -pix_fmt yuva420p -auto-alt-ref 0 "$MEDIA/sting.webm"
+act "{\"action\":\"add_input\",\"source\":{\"kind\":\"file\",\"path\":\"$MEDIA/sting.webm\"},\"name\":\"Sting\"}" >/dev/null
+act '{"action":"set_transition","slot":4,"effect":"stinger","duration_ms":3000,"stinger":{"input":"Sting","cut_ms":1500}}' >/dev/null
+act '{"action":"preview_input","input":"Ball"}' >/dev/null   # program is Orange
+sleep 2
+act '{"action":"transition","slot":4}' >/dev/null
+[[ "$(curl -sf "$CORE/state" | jq -r '[.inputs[] | select(.name=="Ball") | .id][0] == .program')" == true ]] \
+    || fail "stinger did not take preview to program"
+code="$(curl -s -o /dev/null -w '%{http_code}' -X POST "$CORE/actions" -H 'content-type: application/json' -d '{"action":"cut"}')"
+[[ "$code" != 200 ]] || fail "cut accepted while the stinger plays"
+middle() { convert "$1" -gravity center -crop 10x10+0+0 +repage -format "%[fx:int(mean.b*255)] %[fx:int(mean.r*255)]" info:; }
+corner_red() { convert "$1" -crop 10x10+0+0 +repage -format "%[fx:int(mean.r*255)]" info:; }
+stinger_over_orange() {
+    picture program "$WORK/sting.jpg"
+    local b r; read -r b r <<<"$(middle "$WORK/sting.jpg")"
+    ((b > 180 && r < 80)) && [[ $(corner_red "$WORK/sting.jpg") -gt 200 ]]
+}
+wait_for 3 stinger_over_orange || fail "stinger clip not over program (alpha around it)"
+stinger_gone() {
+    picture program "$WORK/sting.jpg"
+    local b r; read -r b r <<<"$(middle "$WORK/sting.jpg")"
+    ((b < 120)) && [[ $(rgb "$WORK/sting.jpg" r) -lt 60 ]]
+}
+wait_for 8 stinger_gone || fail "stinger did not end on the new program"
+act '{"action":"remove_input","input":"Sting"}' >/dev/null
+[[ "$(curl -sf "$CORE/state" | jq -r '.transitions[3].effect')" == cut ]] || fail "stinger button kept a removed clip"
+pass "stinger: clip with alpha over program, cut underneath, locked while it plays"
 
 # --- latency (NFA.3): capture-to-program, CPU mixer in a VM ---
 # Budget here is generous (software compositing, no GPU); the real target

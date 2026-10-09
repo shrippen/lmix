@@ -13,9 +13,11 @@ use lmix_types::state::API_VERSION;
 use lmix_types::{
     Action, ActionError, AuxBus, ChannelStrip, Effect, Ingest, Input, InputColor, InputId,
     InputRef, InputStatus, Listen, Output, OutputId, OutputRef, OutputSource, OutputSpec,
-    OutputStatus, ShowState, SignalLoss, SourceSpec, Transition, TransitionSlot, Transport,
+    OutputStatus, ShowState, SignalLoss, SourceSpec, Stinger, StingerSpec, Transition,
+    TransitionSlot, Transport,
 };
 use std::collections::HashMap;
+use std::time::{Duration, Instant};
 use uuid::Uuid;
 
 use crate::show::{Show, ShowInput, ShowOutput};
@@ -54,6 +56,12 @@ pub enum Command {
     StopOutput { id: OutputId },
     /// Channel strip of the audio mixer channel of `slot`.
     SetStrip { slot: usize, strip: ChannelStrip },
+    /// Stinger clip of `slot` on the stinger layer from its start; off:
+    /// layer away and the clip paused.
+    Stinger { slot: usize, on: bool },
+    /// Hold the commands after it back by `ms`; the service runs them
+    /// later, without blocking other actions.
+    Wait { ms: u32 },
     /// Send of `slot` to aux bus `bus` (0-based), linear gain.
     SetAuxSend { slot: usize, bus: usize, gain: f64 },
     /// Master of aux bus `bus` (0-based).
@@ -116,6 +124,8 @@ pub struct Switcher {
     fade_to_black: bool,
     /// T-bar position while it is pulled; runtime only.
     t_bar: f32,
+    /// When a running stinger ends; switching waits for it.
+    stinger_until: Option<Instant>,
     status: HashMap<InputId, InputStatus>,
     /// Audio channel settings the engine has, per slot.
     mix: HashMap<usize, Mix>,
@@ -135,6 +145,7 @@ impl Switcher {
             path: None,
             fade_to_black: false,
             t_bar: 0.0,
+            stinger_until: None,
             status: HashMap::new(),
             mix: HashMap::new(),
             listen: HashMap::new(),
@@ -184,7 +195,17 @@ impl Switcher {
     pub fn apply(&mut self, action: Action) -> Result<Vec<Command>, ActionError> {
         let ramp_ms = self.audio_ramp(&action);
         let mut commands = self.apply_action(action)?;
-        commands.extend(self.audio_commands(ramp_ms));
+        let audio = self.audio_commands(ramp_ms);
+        // A stinger switches sound at its cut, not once the clip ends.
+        match commands
+            .iter()
+            .rposition(|c| matches!(c, Command::Wait { .. }))
+        {
+            Some(at) => {
+                commands.splice(at..at, audio);
+            }
+            None => commands.extend(audio),
+        }
         Ok(commands)
     }
 
@@ -225,7 +246,8 @@ impl Switcher {
                 slot,
                 effect,
                 duration_ms,
-            } => self.set_transition(slot, effect, duration_ms),
+                stinger,
+            } => self.set_transition(slot, effect, duration_ms, stinger),
             Action::FadeToBlack { duration_ms } => Ok(self.toggle_ftb(duration_ms)),
             Action::TBar { position } => self.t_bar(position),
             Action::OverlayIn {
@@ -276,6 +298,7 @@ impl Switcher {
             mode: i.signal_loss,
         }));
         commands.extend(self.overlay_commands());
+        commands.extend(self.stinger_pause_commands());
         for input in self.show.inputs.iter().filter(|i| i.source.has_audio()) {
             commands.push(Command::SetStrip {
                 slot: input.slot,
@@ -477,6 +500,13 @@ impl Switcher {
             });
         }
         self.status.remove(&removed.id);
+        // A button whose stinger clip goes becomes a cut.
+        for button in &mut self.show.transitions {
+            if button.stinger.is_some_and(|s| s.input == removed.id) {
+                button.effect = Effect::Cut;
+                button.stinger = None;
+            }
+        }
         for (channel, shown) in self.show.overlays.iter_mut().enumerate() {
             if *shown == Some(removed.id) {
                 *shown = None;
@@ -613,6 +643,7 @@ impl Switcher {
 
     /// Preview to program; the old program goes to preview (classic swap).
     fn take(&mut self, effect: Effect, duration_ms: u32) -> Result<Vec<Command>, ActionError> {
+        self.check_no_stinger()?;
         let to = self
             .slot_of(self.show.preview)
             .ok_or(ActionError::NoPreview)?;
@@ -630,6 +661,7 @@ impl Switcher {
     /// Input straight to program. If it was in preview, the old program
     /// takes its place there.
     fn cut_direct(&mut self, input: &InputRef) -> Result<Vec<Command>, ActionError> {
+        self.check_no_stinger()?;
         let index = self.find(input)?;
         let entry = &self.show.inputs[index];
         no_video_check(entry)?;
@@ -652,6 +684,7 @@ impl Switcher {
         if !(0.0..=1.0).contains(&position) {
             return Err(ActionError::BadTBar);
         }
+        self.check_no_stinger()?;
         let slot = self
             .slot_of(self.show.preview)
             .ok_or(ActionError::NoPreview)?;
@@ -665,7 +698,44 @@ impl Switcher {
 
     fn transition(&mut self, slot: TransitionSlot) -> Result<Vec<Command>, ActionError> {
         let button = *self.button(slot)?;
-        self.take(button.effect, button.duration_ms)
+        if button.effect != Effect::Stinger {
+            return self.take(button.effect, button.duration_ms);
+        }
+        let bad = |reason: &str| ActionError::BadStinger {
+            reason: reason.into(),
+        };
+        let stinger = button.stinger.ok_or_else(|| bad("no clip set"))?;
+        let clip = self
+            .slot_of(Some(stinger.input))
+            .ok_or_else(|| bad("its clip input is gone"))?;
+
+        // Clip on, cut underneath at the cut point, clip off at the end.
+        let cut = self.take(Effect::Cut, 0)?;
+        let mut commands = vec![
+            Command::Stinger {
+                slot: clip,
+                on: true,
+            },
+            Command::Wait { ms: stinger.cut_ms },
+        ];
+        commands.extend(cut);
+        commands.push(Command::Wait {
+            ms: button.duration_ms.saturating_sub(stinger.cut_ms),
+        });
+        commands.push(Command::Stinger {
+            slot: clip,
+            on: false,
+        });
+        self.stinger_until =
+            Some(Instant::now() + Duration::from_millis(u64::from(button.duration_ms)));
+        Ok(commands)
+    }
+
+    fn check_no_stinger(&self) -> Result<(), ActionError> {
+        match self.stinger_until {
+            Some(until) if Instant::now() < until => Err(ActionError::StingerPlaying),
+            _ => Ok(()),
+        }
     }
 
     fn set_transition(
@@ -673,12 +743,71 @@ impl Switcher {
         slot: TransitionSlot,
         effect: Effect,
         duration_ms: u32,
+        stinger: Option<StingerSpec>,
     ) -> Result<Vec<Command>, ActionError> {
         self.button(slot)?;
+        let mut commands = Vec::new();
+        let stinger = match (effect, stinger) {
+            (Effect::Stinger, Some(spec)) => {
+                let (stinger, clip) = self.stinger_of(&spec, duration_ms)?;
+                // Paused until the button is pressed; it would loop unseen.
+                commands.push(Command::Transport {
+                    slot: clip,
+                    transport: Transport::Pause,
+                });
+                Some(stinger)
+            }
+            (Effect::Stinger, None) => {
+                return Err(ActionError::BadStinger {
+                    reason: "choose a clip input".into(),
+                })
+            }
+            _ => None,
+        };
         let button = &mut self.show.transitions[slot.0 as usize - 1];
         button.effect = effect;
         button.duration_ms = duration_ms;
-        Ok(Vec::new())
+        button.stinger = stinger;
+        Ok(commands)
+    }
+
+    /// A stinger clip must be a file, URL or playlist with a picture; the
+    /// cut point lies within the button's duration.
+    fn stinger_of(
+        &self,
+        spec: &StingerSpec,
+        duration_ms: u32,
+    ) -> Result<(Stinger, usize), ActionError> {
+        let entry = &self.show.inputs[self.find(&spec.input)?];
+        no_video_check(entry)?;
+        if !entry.source.has_transport() {
+            return Err(ActionError::BadStinger {
+                reason: format!("{} is not a clip (file, URL or playlist)", entry.name),
+            });
+        }
+        if spec.cut_ms > duration_ms {
+            return Err(ActionError::BadStinger {
+                reason: "the cut point lies after the end".into(),
+            });
+        }
+        let stinger = Stinger {
+            input: entry.id,
+            cut_ms: spec.cut_ms,
+        };
+        Ok((stinger, entry.slot))
+    }
+
+    /// Clips of stinger buttons, paused (start-up, restore).
+    fn stinger_pause_commands(&self) -> Vec<Command> {
+        self.show
+            .transitions
+            .iter()
+            .filter_map(|t| self.slot_of(Some(t.stinger?.input)))
+            .map(|slot| Command::Transport {
+                slot,
+                transport: Transport::Pause,
+            })
+            .collect()
     }
 
     // ---- Audio ----
@@ -1305,6 +1434,7 @@ mod tests {
             slot: TransitionSlot(1),
             effect: Effect::Fade,
             duration_ms: 800,
+            stinger: None,
         })
         .unwrap();
 
@@ -1785,6 +1915,123 @@ mod tests {
         assert_eq!(sw.state().outputs[0].aux, Some(1));
     }
 
+    /// A and B, B in preview, A on program, and the clip "Sting" (slot 2)
+    /// on button 2: 1000 ms, cut at 400 ms.
+    fn with_stinger() -> Switcher {
+        let mut sw = two_inputs();
+        sw.apply(Action::AddInput {
+            source: SourceSpec::File {
+                path: "sting.webm".into(),
+            },
+            name: Some("Sting".into()),
+        })
+        .unwrap();
+        sw.apply(Action::CutDirect { input: named("A") }).unwrap();
+        sw.apply(Action::PreviewInput { input: named("B") })
+            .unwrap();
+        let cmds = sw
+            .apply(Action::SetTransition {
+                slot: TransitionSlot(2),
+                effect: Effect::Stinger,
+                duration_ms: 1000,
+                stinger: Some(StingerSpec {
+                    input: named("Sting"),
+                    cut_ms: 400,
+                }),
+            })
+            .unwrap();
+        assert_eq!(
+            cmds,
+            [Command::Transport {
+                slot: 2,
+                transport: Transport::Pause
+            }],
+            "the clip waits paused"
+        );
+        sw
+    }
+
+    #[test]
+    fn a_stinger_cuts_underneath_at_its_cut_point() {
+        let mut sw = with_stinger();
+
+        let cmds = sw
+            .apply(Action::Transition {
+                slot: TransitionSlot(2),
+            })
+            .unwrap();
+
+        assert_eq!(
+            cmds[..4],
+            [
+                Command::Stinger { slot: 2, on: true },
+                Command::Wait { ms: 400 },
+                Command::Program {
+                    slot: Some(1),
+                    effect: Effect::Cut,
+                    duration_ms: 0
+                },
+                Command::Preview { slot: 0 },
+            ]
+        );
+        assert_eq!(
+            cmds[cmds.len() - 2..],
+            [
+                Command::Wait { ms: 600 },
+                Command::Stinger { slot: 2, on: false }
+            ]
+        );
+        assert_eq!(sw.state().program, Some(sw.state().inputs[1].id));
+        assert_eq!(sw.apply(Action::Cut), Err(ActionError::StingerPlaying));
+    }
+
+    #[test]
+    fn stinger_settings_are_checked() {
+        let mut sw = with_stinger();
+        let set = |input: &str, cut_ms| Action::SetTransition {
+            slot: TransitionSlot(1),
+            effect: Effect::Stinger,
+            duration_ms: 1000,
+            stinger: Some(StingerSpec {
+                input: named(input),
+                cut_ms,
+            }),
+        };
+
+        for action in [set("A", 400), set("Sting", 1200)] {
+            assert!(matches!(
+                sw.apply(action),
+                Err(ActionError::BadStinger { .. })
+            ));
+        }
+        assert!(matches!(
+            sw.apply(Action::SetTransition {
+                slot: TransitionSlot(1),
+                effect: Effect::Stinger,
+                duration_ms: 1000,
+                stinger: None,
+            }),
+            Err(ActionError::BadStinger { .. })
+        ));
+    }
+
+    #[test]
+    fn stinger_clips_wait_paused_and_leave_with_their_input() {
+        let mut sw = with_stinger();
+
+        assert!(sw.restore_commands().contains(&Command::Transport {
+            slot: 2,
+            transport: Transport::Pause
+        }));
+
+        sw.apply(Action::RemoveInput {
+            input: named("Sting"),
+        })
+        .unwrap();
+        let button = sw.state().transitions[1];
+        assert_eq!((button.effect, button.stinger), (Effect::Cut, None));
+    }
+
     #[test]
     fn whip_inputs_carry_their_ingest_links() {
         let mut sw = Switcher::new(SLOTS);
@@ -2134,6 +2381,7 @@ mod tests {
             slot: TransitionSlot(3),
             effect: Effect::SlideLeft,
             duration_ms: 750,
+            stinger: None,
         })
         .unwrap();
 

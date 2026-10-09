@@ -27,6 +27,14 @@ pub fn aux_index(bus: u8) -> Result<usize, ActionError> {
     Ok(usize::from(bus - 1))
 }
 
+/// Clip and cut point of a stinger as an action names them.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct StingerSpec {
+    pub input: InputRef,
+    /// Cut point, ms into the clip; at most the button's duration.
+    pub cut_ms: u32,
+}
+
 /// One of the four transition buttons (SWI.3), 1-based.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(transparent)]
@@ -52,10 +60,12 @@ pub enum Effect {
     PushRight,
     WipeLeft,
     WipeRight,
+    /// A clip over program, cut underneath (lmix-core, not the engine).
+    Stinger,
 }
 
 impl Effect {
-    pub const ALL: [Effect; 9] = [
+    pub const ALL: [Effect; 10] = [
         Effect::Cut,
         Effect::Fade,
         Effect::DipToBlack,
@@ -65,6 +75,7 @@ impl Effect {
         Effect::PushRight,
         Effect::WipeLeft,
         Effect::WipeRight,
+        Effect::Stinger,
     ];
 
     /// Short button label.
@@ -79,6 +90,7 @@ impl Effect {
             Self::PushRight => "Push ▶",
             Self::WipeLeft => "Wipe ◀",
             Self::WipeRight => "Wipe ▶",
+            Self::Stinger => "Stinger",
         }
     }
 }
@@ -176,6 +188,10 @@ pub enum Action {
         slot: TransitionSlot,
         effect: Effect,
         duration_ms: u32,
+        /// Clip and cut point for `effect` stinger; the clip is paused
+        /// until the button is pressed.
+        #[serde(default)]
+        stinger: Option<StingerSpec>,
     },
     /// Toggle fade to black of all sinks (SWI.9).
     FadeToBlack {
@@ -241,6 +257,10 @@ pub enum ActionError {
     BadTransitionSlot { slot: u8, max: u8 },
     #[error("nothing in preview")]
     NoPreview,
+    #[error("a stinger is playing")]
+    StingerPlaying,
+    #[error("stinger: {reason}")]
+    BadStinger { reason: String },
     #[error("{reference} is on program; it cannot be in preview at the same time")]
     OnProgram { reference: String },
     #[error("position {number} is outside 1–{max}")]

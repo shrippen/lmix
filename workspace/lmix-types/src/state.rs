@@ -13,6 +13,18 @@ pub struct Transition {
     pub slot: TransitionSlot,
     pub effect: Effect,
     pub duration_ms: u32,
+    /// The clip and cut point of a stinger (`effect` stinger).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stinger: Option<Stinger>,
+}
+
+/// A stinger: a clip (with alpha) played over program; at `cut_ms` into
+/// it program cuts to preview underneath. It plays for the button's
+/// `duration_ms`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct Stinger {
+    pub input: InputId,
+    pub cut_ms: u32,
 }
 
 /// Complete state of the running show (API.3, API.4).
