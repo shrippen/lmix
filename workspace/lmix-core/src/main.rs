@@ -175,4 +175,5 @@ async fn connect(engine: Arc<dyn Engine>, service: Arc<Service>, slots: usize) {
     // restarted); outputs that kept running while lmix-core was gone are
     // only adopted, never restarted (no gap in a recording).
     service.adopt_running_outputs().await;
+    service.watch_engine(slots).await;
 }

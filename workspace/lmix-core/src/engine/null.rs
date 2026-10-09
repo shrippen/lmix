@@ -18,6 +18,9 @@ pub struct NullEngine {
     /// (a stop that drains, as strom's `eos_on_stop` does).
     #[cfg(test)]
     slow: Mutex<Option<(std::time::Duration, super::meters::FlowError)>>,
+    /// Engine process identity (`instance`); tests change it to restart.
+    #[cfg(test)]
+    instance: Mutex<Option<String>>,
 }
 
 impl NullEngine {
@@ -43,6 +46,12 @@ impl NullEngine {
         *self.slow.lock().expect("slow lock") = Some((takes, error));
     }
 
+    /// Pretend the engine process is `instance` (a new one: restarted).
+    #[cfg(test)]
+    pub fn set_instance(&self, instance: &str) {
+        *self.instance.lock().expect("instance lock") = Some(instance.into());
+    }
+
     /// Commands received so far.
     #[cfg(test)]
     pub fn log(&self) -> Vec<Command> {
@@ -54,6 +63,11 @@ impl NullEngine {
 impl Engine for NullEngine {
     async fn start(&self, _slots: usize) -> Result<(), EngineError> {
         Ok(())
+    }
+
+    #[cfg(test)]
+    async fn instance(&self) -> Option<String> {
+        self.instance.lock().expect("instance lock").clone()
     }
 
     async fn run(&self, command: &Command) -> Result<(), EngineError> {

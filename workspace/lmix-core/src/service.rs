@@ -29,6 +29,8 @@ use crate::recent::Recent;
 use crate::show::{self, Show};
 use crate::switcher::{Command, Switcher};
 
+/// How often lmix-core asks the engine whether it restarted.
+const ENGINE_CHECK: std::time::Duration = std::time::Duration::from_secs(2);
 /// A flow stopping this soon after lmix-core started, rebuilt or stopped
 /// it is its own doing, not a failure.
 const OWN_STOP_WINDOW: std::time::Duration = std::time::Duration::from_secs(1);
@@ -205,6 +207,38 @@ impl Service {
             inputs,
             program_peak_db: engine.main.and_then(fresh),
             monitor_peak_db: engine.monitor.and_then(fresh),
+        }
+    }
+
+    /// Notice when the engine process changes (crash and restart) and feed
+    /// the new one the whole show, running outputs included. Runs for the
+    /// process life once the engine was first fed.
+    pub async fn watch_engine(self: Arc<Self>, slots: usize) {
+        let mut known = self.engine.instance().await;
+        loop {
+            tokio::time::sleep(ENGINE_CHECK).await;
+            let Some(current) = self.engine.instance().await else {
+                continue;
+            };
+            match &known {
+                Some(known) if *known == current => continue,
+                None => {
+                    known = Some(current);
+                    continue;
+                }
+                Some(_) => {}
+            }
+            tracing::warn!("engine restarted, feeding it the show again");
+            // Changes until the restore only touch the show.
+            self.await_engine();
+            while let Err(e) = self.engine.start(slots).await {
+                tracing::warn!(error = %e, "engine not ready, retrying");
+                tokio::time::sleep(ENGINE_CHECK).await;
+            }
+            if let Err(e) = self.restore().await {
+                tracing::error!(error = %e, "restoring show to the restarted engine failed");
+            }
+            known = Some(current);
         }
     }
 
@@ -748,6 +782,28 @@ mod tests {
 
         assert_eq!(service.state().await.inputs[0].status, InputStatus::Online);
         assert_eq!(slot_commands(&engine), 1, "no failback rebuild");
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_restarted_engine_gets_the_show_again() {
+        let engine = Arc::new(NullEngine::default());
+        engine.set_instance("first");
+        let service = Service::new(4, engine.clone(), None);
+        service.handle(bars()).await.unwrap();
+        tokio::spawn(service.clone().watch_engine(4));
+        tokio::time::sleep(ENGINE_CHECK * 3).await;
+        assert_eq!(slot_commands(&engine), 1, "same engine: nothing again");
+
+        engine.set_instance("second");
+        tokio::time::sleep(ENGINE_CHECK * 2).await;
+
+        assert_eq!(
+            slot_commands(&engine),
+            2,
+            "restarted engine: show fed again"
+        );
+        service.handle(bars()).await.unwrap();
+        assert_eq!(slot_commands(&engine), 3, "and actions run directly after");
     }
 
     #[tokio::test]

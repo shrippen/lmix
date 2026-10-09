@@ -371,6 +371,17 @@ impl StromEngine {
 
 #[async_trait]
 impl Engine for StromEngine {
+    /// strom's process start time (`/api/version`).
+    async fn instance(&self) -> Option<String> {
+        #[derive(serde::Deserialize)]
+        struct Version {
+            process_started_at: String,
+        }
+        let resp = self.http.get(self.url("/version")).send().await.ok()?;
+        let version: Version = check(resp).await.ok()?.json().await.ok()?;
+        Some(version.process_started_at)
+    }
+
     /// Keep a running mixer with the right slot count (no picture drop when
     /// lmix-core restarts); rebuild it otherwise.
     async fn start(&self, slots: usize) -> Result<(), EngineError> {

@@ -212,6 +212,14 @@ pub fn mixer_flow(slots: usize, backend: MixerBackend, monitor: MonitorOut) -> F
                 "start_time_selection",
                 PropertyValue::String("first".into()),
             ),
+            // GL memory is bound to the mixer's GL context, which the
+            // output flows do not share: program leaves in system memory.
+            // CUDA program stays on the GPU for the encoders; the flows
+            // that read it on the CPU download it themselves.
+            (
+                "gl_download",
+                PropertyValue::Bool(backend == MixerBackend::Gl),
+            ),
         ],
     ));
 
@@ -868,6 +876,21 @@ mod tests {
             .links
             .iter()
             .any(|l| l.from == "black_caps" && l.to == "vm:video_in_3"));
+    }
+
+    #[test]
+    fn only_the_gl_mixer_downloads_program() {
+        let download = |backend| {
+            let flow = mixer_flow(2, backend, MonitorOut::None);
+            let vm = flow.blocks.iter().find(|b| b.id == "vm").unwrap();
+            matches!(
+                vm.properties.get("gl_download"),
+                Some(PropertyValue::Bool(true))
+            )
+        };
+
+        assert!(download(MixerBackend::Gl));
+        assert!(!download(MixerBackend::Cuda));
     }
 
     #[test]

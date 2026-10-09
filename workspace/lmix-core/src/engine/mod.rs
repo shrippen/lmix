@@ -47,6 +47,12 @@ pub trait Engine: Send + Sync {
     /// Build the mixer with `slots` inputs; idempotent.
     async fn start(&self, slots: usize) -> Result<(), EngineError>;
 
+    /// Identity of the running engine process; a new one means the engine
+    /// restarted and lost the show. `None`: the engine cannot tell.
+    async fn instance(&self) -> Option<String> {
+        None
+    }
+
     /// Carry out one command.
     async fn run(&self, command: &Command) -> Result<(), EngineError>;
 
