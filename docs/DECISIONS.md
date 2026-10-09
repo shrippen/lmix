@@ -818,3 +818,17 @@ Start nur für die Show (Antwort OK), und der Watcher spielt die Show
 sofort ein statt nach der nächsten Abfrage. Eine Engine, die gar nicht
 antwortet, bleibt ein Fehler (502): dann weiß lmix-core nicht, ob sie
 wiederkommt.
+
+## 2026-10-09 — GL-Mischer und SRT: in der VM nicht nachstellbar
+
+**Versuch** (Cloud-VM, Xvfb, Mesa llvmpipe): Stack mit `--mixer gl`,
+Input `ball`, SRT-Ausgang, `srtsrc ! filesink` 8 s. Ergebnis: gar keine
+Daten (auch kein Ton), aber der Mischer selbst läuft hier 9 s hinter der
+Zeit (Bildalter am Programm-Ausgang Median 9,3 s, `vm:queue_0` voll),
+während ein nackter `glvideomixer` mit llvmpipe 1080p mit ~46 fps schafft.
+Die VM zeigt also ein eigenes Problem (Software-GL im Mischer mit Looks und
+Multiview zu langsam) und sagt über den Hardware-Befund nichts. Der Fix
+bleibt an echter Hardware zu suchen (AMD/Intel oder NVIDIA mit `gl`).
+**Nebenbefund** (CPU-Mischer, VM): der SRT-Ausgang trägt Video, aber nur
+~42 Pakete in 8 s, weil `x264enc` in der VM mit QoS Bilder verwirft; der
+VM-Test prüfte bisher nur die Dateigröße.
