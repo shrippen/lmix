@@ -764,5 +764,9 @@ CPU-Mischer zum Vergleich: 88 ms.
 Ton (~200 kbit/s), Audio-Queue im Ausgangs-Flow voll (2 s), der Muxer
 wartet auf Video. Mit CUDA derselbe Flow fehlerfrei. Nachstellen: Stack mit
 `--mixer gl`, Input `ball`, SRT-Ausgang starten, `srtsrc ! filesink`, dann
-`ffmpeg -i x.ts -map 0:v -f null -` → 0 Bilder. Vermutlich im strom-Block
-`mpegtssrt_output` (dynamischer Parser) bei RGBA-Quelle; offen.
+`ffmpeg -i x.ts -map 0:v -f null -` → 0 Bilder. `GST_DEBUG=basetsmux:6`:
+am Video-Pad des Muxers (`srt:mpegtsmux:sink_66`) kommen genau zwei Bilder
+an, dann steht der Zweig; der Encoder davor ist derselbe wie in der
+funktionierenden Aufnahme. Verdacht: die dynamische Parser-Einfügung im
+strom-Block `mpegtssrt_output` (Pad-Probe) bleibt beim GL-Timing hängen.
+Offen, Fix gehört nach strom.
