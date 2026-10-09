@@ -12,7 +12,7 @@ use std::path::Path;
 use lmix_types::action::{OVERLAY_CHANNELS, TRANSITION_SLOTS};
 use lmix_types::input::AUX_BUSES;
 use lmix_types::{
-    AuxBus, ChannelStrip, Effect, InputAudio, InputColor, InputId, OutputId, OutputSource,
+    AuxBus, ChannelStrip, Effect, InputAudio, InputColor, InputId, Look, OutputId, OutputSource,
     OutputSpec, SignalLoss, SourceSpec, Transition, TransitionSlot,
 };
 use serde::{Deserialize, Serialize};
@@ -41,6 +41,8 @@ pub struct ShowInput {
     pub strip: ChannelStrip,
     #[serde(default)]
     pub sends: [u8; AUX_BUSES],
+    #[serde(default)]
+    pub look: Look,
 }
 
 /// Everything a show file holds.
@@ -208,6 +210,10 @@ mod tests {
                     ..Default::default()
                 },
                 sends: [70, 0],
+                look: Look {
+                    saturation: 0.5,
+                    ..Default::default()
+                },
             }],
             preview: Some(id),
             program: None,

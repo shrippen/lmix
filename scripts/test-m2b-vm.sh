@@ -457,6 +457,13 @@ act '{"action":"remove_input","input":"Sting"}' >/dev/null
 [[ "$(curl -sf "$CORE/state" | jq -r '.transitions[3].effect')" == cut ]] || fail "stinger button kept a removed clip"
 pass "stinger: clip with alpha over program, cut underneath, locked while it plays"
 
+# --- looks (4.6): the CPU mixer has none; the action says so ---
+[[ "$(curl -sf "$CORE/state" | jq '.looks_available')" == false ]] || fail "CPU mixer claims looks"
+code="$(curl -s -o "$WORK/look.json" -w '%{http_code}' -X POST "$CORE/actions" -H 'content-type: application/json' \
+    -d '{"action":"set_look","input":"Ball","look":{"brightness":0.3}}')"
+[[ "$code" != 200 ]] && grep -q "GL mixer" "$WORK/look.json" || fail "look on the CPU mixer: $code $(cat "$WORK/look.json")"
+pass "looks: refused with a reason on the CPU mixer (GL check: scripts/test-looks-gl.sh)"
+
 # --- latency (NFA.3): capture-to-program, CPU mixer in a VM ---
 # Budget here is generous (software compositing, no GPU); the real target
 # of two frames is checked on hardware (HARDWARE-TODO).

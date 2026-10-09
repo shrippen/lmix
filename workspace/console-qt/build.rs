@@ -112,6 +112,7 @@ fn main() {
                 "qml/ChannelStripDialog.qml",
                 "qml/AuxBusDialog.qml",
                 "qml/StingerDialog.qml",
+                "qml/LookDialog.qml",
                 "qml/OutputBar.qml",
                 "qml/ChoiceMenu.qml",
                 "qml/KeyedModel.qml",

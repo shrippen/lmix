@@ -12,7 +12,7 @@ use lmix_types::input::{color_rgb, AUX_BUSES, REF_PREVIEW, REF_PROGRAM, VOLUME_M
 use lmix_types::state::API_VERSION;
 use lmix_types::{
     Action, ActionError, AuxBus, ChannelStrip, Effect, Ingest, Input, InputColor, InputId,
-    InputRef, InputStatus, Listen, Output, OutputId, OutputRef, OutputSource, OutputSpec,
+    InputRef, InputStatus, Listen, Look, Output, OutputId, OutputRef, OutputSource, OutputSpec,
     OutputStatus, ShowState, SignalLoss, SourceSpec, Stinger, StingerSpec, Transition,
     TransitionSlot, Transport,
 };
@@ -56,6 +56,8 @@ pub enum Command {
     StopOutput { id: OutputId },
     /// Channel strip of the audio mixer channel of `slot`.
     SetStrip { slot: usize, strip: ChannelStrip },
+    /// Colour correction of the picture of `slot`.
+    SetLook { slot: usize, look: Look },
     /// Stinger clip of `slot` on the stinger layer from its start; off:
     /// layer away and the clip paused.
     Stinger { slot: usize, on: bool },
@@ -126,6 +128,8 @@ pub struct Switcher {
     t_bar: f32,
     /// When a running stinger ends; switching waits for it.
     stinger_until: Option<Instant>,
+    /// The engine can apply looks (GL mixer).
+    looks_available: bool,
     status: HashMap<InputId, InputStatus>,
     /// Audio channel settings the engine has, per slot.
     mix: HashMap<usize, Mix>,
@@ -146,6 +150,7 @@ impl Switcher {
             fade_to_black: false,
             t_bar: 0.0,
             stinger_until: None,
+            looks_available: false,
             status: HashMap::new(),
             mix: HashMap::new(),
             listen: HashMap::new(),
@@ -222,6 +227,7 @@ impl Switcher {
             }
             Action::SetVolume { input, volume } => self.set_volume(&input, volume),
             Action::SetChannelStrip { input, strip } => self.set_strip(&input, strip),
+            Action::SetLook { input, look } => self.set_look(&input, look),
             Action::SetAuxSend { input, bus, level } => self.set_aux_send(&input, bus, level),
             Action::SetAuxBus { bus, volume, mute } => self.set_aux_bus(bus, volume, mute),
             Action::SetListen { input, listen } => self.set_listen(&input, listen),
@@ -299,6 +305,7 @@ impl Switcher {
         }));
         commands.extend(self.overlay_commands());
         commands.extend(self.stinger_pause_commands());
+        commands.extend(self.look_commands());
         for input in self.show.inputs.iter().filter(|i| i.source.has_audio()) {
             commands.push(Command::SetStrip {
                 slot: input.slot,
@@ -396,6 +403,7 @@ impl Switcher {
                 signal_loss: input.signal_loss,
                 strip: input.strip,
                 sends: input.sends,
+                look: input.look,
                 ingest: self.ingest_of(&input.source),
             })
             .collect();
@@ -413,6 +421,7 @@ impl Switcher {
             overlays: self.show.overlays,
             t_bar: self.t_bar,
             aux_buses: self.show.aux_buses,
+            looks_available: self.looks_available,
         }
     }
 
@@ -454,6 +463,7 @@ impl Switcher {
             signal_loss: SignalLoss::default(),
             strip: ChannelStrip::default(),
             sends: [0; AUX_BUSES],
+            look: Look::default(),
         });
         self.status.insert(id, InputStatus::Starting);
 
@@ -468,6 +478,12 @@ impl Switcher {
                 mode: SignalLoss::default(),
             },
         ];
+        if self.looks_available && source.has_video() {
+            commands.push(Command::SetLook {
+                slot,
+                look: Look::default(),
+            });
+        }
         if source.has_audio() {
             commands.push(Command::SetStrip {
                 slot,
@@ -888,6 +904,50 @@ impl Switcher {
             gain: fader_gain(volume),
             mute,
         }])
+    }
+
+    /// The engine says whether it can apply looks.
+    pub fn set_looks_available(&mut self, available: bool) {
+        self.looks_available = available;
+    }
+
+    fn set_look(&mut self, input: &InputRef, look: Look) -> Result<Vec<Command>, ActionError> {
+        if let Some(field) = look.out_of_range() {
+            return Err(ActionError::BadLook {
+                field: field.into(),
+            });
+        }
+        if !self.looks_available && !look.is_neutral() {
+            return Err(ActionError::NoLooks);
+        }
+        let index = self.find(input)?;
+        let entry = &mut self.show.inputs[index];
+        no_video_check(entry)?;
+        entry.look = look;
+        if !self.looks_available {
+            return Ok(Vec::new());
+        }
+        Ok(vec![Command::SetLook {
+            slot: entry.slot,
+            look,
+        }])
+    }
+
+    /// Every picture's look, for an engine that can apply them; a slot
+    /// may still carry the look of a former input.
+    fn look_commands(&self) -> Vec<Command> {
+        if !self.looks_available {
+            return Vec::new();
+        }
+        self.show
+            .inputs
+            .iter()
+            .filter(|i| i.source.has_video())
+            .map(|i| Command::SetLook {
+                slot: i.slot,
+                look: i.look,
+            })
+            .collect()
     }
 
     fn set_signal_loss(
@@ -2030,6 +2090,76 @@ mod tests {
         .unwrap();
         let button = sw.state().transitions[1];
         assert_eq!((button.effect, button.stinger), (Effect::Cut, None));
+    }
+
+    #[test]
+    fn looks_need_an_engine_that_can_apply_them() {
+        let mut sw = two_inputs();
+        let warm = Look {
+            temperature: 0.3,
+            ..Default::default()
+        };
+
+        assert_eq!(
+            sw.apply(Action::SetLook {
+                input: named("A"),
+                look: warm,
+            }),
+            Err(ActionError::NoLooks)
+        );
+
+        sw.set_looks_available(true);
+        let cmds = sw
+            .apply(Action::SetLook {
+                input: named("A"),
+                look: warm,
+            })
+            .unwrap();
+        assert_eq!(
+            cmds,
+            [Command::SetLook {
+                slot: 0,
+                look: warm
+            }]
+        );
+        assert_eq!(sw.state().inputs[0].look, warm);
+        assert!(sw.state().looks_available);
+        assert!(sw.restore_commands().contains(&Command::SetLook {
+            slot: 0,
+            look: warm
+        }));
+
+        let wild = Look {
+            gamma: 5.0,
+            ..Default::default()
+        };
+        assert_eq!(
+            sw.apply(Action::SetLook {
+                input: named("A"),
+                look: wild,
+            }),
+            Err(ActionError::BadLook {
+                field: "gamma".into()
+            })
+        );
+    }
+
+    #[test]
+    fn a_new_input_clears_the_look_of_its_slot() {
+        let mut sw = Switcher::new(SLOTS);
+        sw.set_looks_available(true);
+
+        let cmds = sw
+            .apply(Action::AddInput {
+                source: pattern(TestPattern::Ball),
+                name: None,
+            })
+            .unwrap();
+
+        assert!(cmds.contains(&Command::SetLook {
+            slot: 0,
+            look: Look::default()
+        }));
     }
 
     #[test]

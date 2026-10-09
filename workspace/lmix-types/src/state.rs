@@ -54,6 +54,9 @@ pub struct ShowState {
     /// Masters of the aux buses (bus 1 first).
     #[serde(default)]
     pub aux_buses: [AuxBus; AUX_BUSES],
+    /// Whether the engine can apply looks (the GL mixer can).
+    #[serde(default)]
+    pub looks_available: bool,
 }
 
 /// Current API version (API.10: additive changes within one version).

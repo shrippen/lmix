@@ -230,7 +230,7 @@
   <context>
     <name>InputTile</name>
     <message>
-      <location filename="../qml/InputTile.qml" line="+47" />
+      <location filename="../qml/InputTile.qml" line="+49" />
       <source>Input %1 %2</source>
       <translation>Input %1 %2</translation>
     </message>
@@ -336,6 +336,16 @@
     </message>
     <message>
       <location line="+4" />
+      <source>Colour correction…</source>
+      <translation>Farbkorrektur…</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Colour correction (needs the GL mixer)</source>
+      <translation>Farbkorrektur (braucht den GL-Mischer)</translation>
+    </message>
+    <message>
+      <location line="+5" />
       <source>Colour tag</source>
       <translation>Farbmarke</translation>
     </message>
@@ -435,7 +445,7 @@
       <translation>Entfernen</translation>
     </message>
     <message>
-      <location line="+24" />
+      <location line="+32" />
       <source>Rename input %1</source>
       <translation>Input %1 umbenennen</translation>
     </message>
@@ -496,6 +506,64 @@
       <location line="+1" />
       <source>Minute</source>
       <translation>Minute</translation>
+    </message>
+  </context>
+  <context>
+    <name>LookDialog</name>
+    <message>
+      <location filename="../qml/LookDialog.qml" line="+30" />
+      <source>Colour of %1 %2</source>
+      <translation>Farbe von %1 %2</translation>
+    </message>
+    <message>
+      <location line="+22" />
+      <source>Brightness</source>
+      <translation>Helligkeit</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Contrast</source>
+      <translation>Kontrast</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Saturation</source>
+      <translation>Sättigung</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Hue</source>
+      <translation>Farbton</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Gamma</source>
+      <translation>Gamma</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Temperature</source>
+      <translation>Farbtemperatur</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Cooler to warmer</source>
+      <translation>Kühler bis wärmer</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Tint</source>
+      <translation>Tönung</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Green to magenta</source>
+      <translation>Grün bis Magenta</translation>
+    </message>
+    <message>
+      <location line="+35" />
+      <source>Reset</source>
+      <translation>Zurücksetzen</translation>
     </message>
   </context>
   <context>
@@ -1081,17 +1149,17 @@
   <context>
     <name>TransitionPanel</name>
     <message>
-      <location filename="../qml/TransitionPanel.qml" line="+51" />
+      <location filename="../qml/TransitionPanel.qml" line="+60" />
       <source>Cut</source>
       <translation>Cut</translation>
     </message>
     <message>
-      <location line="+21" />
+      <location line="+28" />
       <source>Click: take preview. Right click: effect and length.</source>
       <translation>Klick: Vorschau übernehmen. Rechtsklick: Effekt und Dauer.</translation>
     </message>
     <message>
-      <location line="+12" />
+      <location line="+14" />
       <source>Effect</source>
       <translation>Effekt</translation>
     </message>
@@ -1101,7 +1169,7 @@
       <translation>Dauer</translation>
     </message>
     <message>
-      <location line="+7" />
+      <location line="+6" />
       <source>Stinger clip and cut point…</source>
       <translation>Stinger-Clip und Cut-Punkt…</translation>
     </message>

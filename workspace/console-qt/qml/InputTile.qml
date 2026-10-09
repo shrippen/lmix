@@ -20,6 +20,8 @@ KanteCard {
     property bool onPreview: false
     /** What each overlay channel shows (input ids), channel 1 first. */
     property var overlays: []
+    /** The engine can apply looks (GL mixer). */
+    property bool looksAvailable: false
     property var peakDb: undefined
     /** Another tile is dragged over this one: it would land here. */
     property bool dropTarget: false
@@ -230,6 +232,11 @@ KanteCard {
             text: qsTr("Replace source…")
             onTriggered: tile.replaceRequested()
         }
+        QQC2.MenuItem {
+            text: tile.looksAvailable ? qsTr("Colour correction…") : qsTr("Colour correction (needs the GL mixer)")
+            enabled: tile.looksAvailable && tile.hasPicture
+            onTriggered: lookDialog.open()
+        }
         ChoiceMenu {
             title: qsTr("Colour tag")
             choices: [{ value: null, label: qsTr("None") }].concat(Texts.choices("colors", tile.core.choices("colors")))
@@ -317,6 +324,14 @@ KanteCard {
     TextEdit {
         id: clipboard
         visible: false
+    }
+
+    LookDialog {
+        id: lookDialog
+        parent: QQC2.Overlay.overlay
+        anchors.centerIn: parent
+        act: tile.act
+        input: tile.input
     }
 
     ChannelStripDialog {

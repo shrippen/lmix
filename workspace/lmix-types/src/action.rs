@@ -14,7 +14,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::input::{
-    ChannelStrip, InputColor, InputRef, Listen, SignalLoss, SourceSpec, Transport, AUX_BUSES,
+    ChannelStrip, InputColor, InputRef, Listen, Look, SignalLoss, SourceSpec, Transport, AUX_BUSES,
 };
 use crate::output::{OutputRef, OutputSource, OutputSpec};
 
@@ -118,6 +118,8 @@ pub enum Action {
         #[serde(default)]
         color: Option<InputColor>,
     },
+    /// Set an input's colour correction (needs the GL mixer).
+    SetLook { input: InputRef, look: Look },
     /// Choose last frame or black for when the input's source stalls.
     SetSignalLoss { input: InputRef, mode: SignalLoss },
     /// Play, pause, restart or step a file, URL or playlist input.
@@ -281,6 +283,10 @@ pub enum ActionError {
     BadTBar,
     #[error("aux bus {bus} does not exist (1–{max})")]
     BadAuxBus { bus: u8, max: u8 },
+    #[error("look: {field} is out of range")]
+    BadLook { field: String },
+    #[error("looks need the GL mixer (lmix-core --mixer gl)")]
+    NoLooks,
     #[error("channel strip: {field} is out of range")]
     BadStrip { field: String },
     #[error("show has no file yet; give a path")]

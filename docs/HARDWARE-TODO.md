@@ -37,3 +37,4 @@ Hardware: **NV** = NVIDIA-Host (RTX 3090), **AMD**, **INTEL**,
 | H.25 | Kanalzug mit echtem Mikrofon und Kamera: Verzögerung lippensynchron einstellen (Regler während der Sendung, kein Knacken/Aussetzer), Gate und Kompressor hörbar, EQ/Hochpass gegen Rumpeln | CAP | M4 4.7 | offen |
 | H.26 | Aux-Busse mit echtem Rückweg: Aux 1 als In-Ear-Mix eines Moderators (hört sich auch stumm), Aux 2 als Mix-Minus per SRT an eine Gegenstelle ohne Echo, Latenz des Aux-Ausgangs | NET | M4 4.7 | offen |
 | H.27 | Stinger auf CUDA- und GL-Mischer: Alpha des Clips bleibt erhalten (Programm rund um den Clip sichtbar), Cut-Punkt bildgenau, kein Ruckeln beim Start des Clips; ProRes 4444 und WebM/VP9 mit Alpha | NV | M4 4.2 | offen |
+| H.28 | Looks auf dem GL-Mischer (AMD/Intel oder NVIDIA mit `--mixer gl`): Kamera mit warmem/kaltem Weißabgleich angleichen, Regler ruckelfrei, Last je Input; Entscheidung, ob CUDA Looks braucht | NV | M4 4.6 | offen |

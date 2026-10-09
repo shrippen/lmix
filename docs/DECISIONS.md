@@ -1031,3 +1031,23 @@ er liegt jetzt auf einer Fläche um die Taste.
 **Offen**: Länge aus der Clip-Dauer übernehmen; Stinger auf CUDA/GL mit
 Alpha prüfen (H.27); Ton des Clips (spielt nach seinen Ton-Einstellungen);
 die Kachel eines gleich nach dem Anlegen pausierten Clips bleibt leer.
+
+## 2026-10-09 — M4 Schritt 6a: Looks (4.6, Farbkorrektur)
+
+**Entscheidung**: Farbkorrektur je Input über den Shader-Look von strom
+(`POST /effect`, `color_correct`): Helligkeit, Kontrast, Sättigung, Farbton,
+Gamma, Farbtemperatur, Tönung. Der Look sitzt vor dem Verteiler des Inputs,
+gilt also für Programm, Vorschau, Kacheln und Layouts. Aktion
+`set_look { input, look }`; er steht in der Show-Datei, wird beim
+Wiederherstellen gesetzt, und ein neuer Input auf einem Slot räumt den Look
+des Vorgängers ab. Neutraler Look nimmt den Shader weg (`none`).
+**Nur GL-Mischer**: strom hat Shader-Looks nur im GL-Backend; CUDA und CPU
+haben keine Farbkorrektur. Der Zustand meldet `looks_available`; ohne GL
+lehnt lmix-core einen Look mit Grund ab („looks need the GL mixer“), die
+Console sperrt den Menüeintrag mit diesem Hinweis.
+**Geprüft**: `scripts/test-looks-gl.sh` (Software-GL in der VM): Grau 128,
+Helligkeit +0,4 → 230, neutral → 128. Unterwegs: Das Vorschaubild schläft
+nach einer Pause, lmix-core liefert dann das letzte Bild; Tests wecken den
+Abgriff vor dem Messen.
+**Offen**: Looks auf CUDA (strom-Patch mit `cudaconvert`/Shader oder
+GL-Umweg; H.28); Looks als Vorlagen speichern und auf mehrere Inputs legen.

@@ -15,7 +15,8 @@
 
 use async_trait::async_trait;
 use lmix_types::{
-    ChannelStrip, Device, DeviceKind, Effect, Listen, OutputId, OutputStats, SignalLoss, Transport,
+    ChannelStrip, Device, DeviceKind, Effect, Listen, Look, OutputId, OutputStats, SignalLoss,
+    Transport,
 };
 use reqwest::StatusCode;
 use serde::Serialize;
@@ -409,6 +410,27 @@ impl StromEngine {
         self.mixer_call("dsk", &body).await
     }
 
+    /// Colour correction of `slot` as strom's per-input shader look; a
+    /// neutral look takes the shader away.
+    async fn set_look(&self, slot: usize, look: &Look) -> Result<(), EngineError> {
+        let effect = if look.is_neutral() {
+            serde_json::json!({ "type": "none" })
+        } else {
+            serde_json::json!({
+                "type": "color_correct",
+                "brightness": look.brightness,
+                "contrast": look.contrast,
+                "saturation": look.saturation,
+                "hue": look.hue,
+                "gamma": look.gamma,
+                "temperature": look.temperature,
+                "tint": look.tint,
+            })
+        };
+        let body = serde_json::json!({ "target": { "input": slot }, "effect": effect });
+        self.mixer_call("effect", &body).await
+    }
+
     /// Stinger on: its clip from the start on the stinger layer; off:
     /// layer away, clip paused (it would loop unseen otherwise).
     async fn stinger(&self, slot: usize, on: bool) -> Result<(), EngineError> {
@@ -495,6 +517,10 @@ impl StromEngine {
 
 #[async_trait]
 impl Engine for StromEngine {
+    fn looks_available(&self) -> bool {
+        self.backend == MixerBackend::Gl
+    }
+
     /// strom's process start time (`/api/version`).
     async fn instance(&self) -> Option<String> {
         #[derive(serde::Deserialize)]
@@ -588,6 +614,7 @@ impl Engine for StromEngine {
             Command::TBar { slot, position } => self.t_bar(*slot, *position).await,
             Command::SetStrip { slot, strip } => self.set_strip(*slot, strip).await,
             Command::Stinger { slot, on } => self.stinger(*slot, *on).await,
+            Command::SetLook { slot, look } => self.set_look(*slot, look).await,
             // The service waits; nothing for the engine to do.
             Command::Wait { .. } => Ok(()),
             Command::SetAuxSend { slot, bus, gain } => {
