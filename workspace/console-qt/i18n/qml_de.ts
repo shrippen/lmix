@@ -110,7 +110,7 @@
       <translation>Nur Ton</translation>
     </message>
     <message>
-      <location line="+44" />
+      <location line="+48" />
       <source>PGM</source>
       <translation>PGM</translation>
     </message>
@@ -151,6 +151,11 @@
     </message>
     <message>
       <location line="+11" />
+      <source>Cut to program</source>
+      <translation>Direkt auf Programm</translation>
+    </message>
+    <message>
+      <location line="+5" />
       <source>Rename…</source>
       <translation>Umbenennen…</translation>
     </message>
@@ -279,7 +284,7 @@
   <context>
     <name>KanteLevelMeter</name>
     <message>
-      <location filename="../qml/Kante/KanteLevelMeter.qml" line="+122" />
+      <location filename="../qml/Kante/KanteLevelMeter.qml" line="+146" />
       <source>No signal</source>
       <translation>Kein Signal</translation>
     </message>
@@ -499,9 +504,14 @@
       <translation>Farbe wählen…</translation>
     </message>
     <message>
-      <location line="+39" />
+      <location line="+41" />
       <source>No devices found</source>
       <translation>Keine Geräte gefunden</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Search devices again</source>
+      <translation>Geräte neu suchen</translation>
     </message>
   </context>
   <context>
@@ -696,6 +706,48 @@
       <location line="+4" />
       <source>%1 ms</source>
       <translation>%1 ms</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>PAT</source>
+      <comment>source badge: test pattern</comment>
+      <translation>TEST</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>FILE</source>
+      <comment>source badge</comment>
+      <translation>DATEI</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>CAM</source>
+      <comment>source badge: camera</comment>
+      <translation>KAM</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>COL</source>
+      <comment>source badge: colour</comment>
+      <translation>FARBE</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>IMG</source>
+      <comment>source badge: image</comment>
+      <translation>BILD</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>LIST</source>
+      <comment>source badge: playlist</comment>
+      <translation>LISTE</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>MIC</source>
+      <comment>source badge: microphone, line in</comment>
+      <translation>MIK</translation>
     </message>
     <message>
       <location line="+14" />

@@ -90,7 +90,7 @@ für WHIP-Links: `--public-url`.
 ## Bekannte Befunde
 
 - GL-Mischer: SRT-Ausgang ohne Video (DECISIONS, „Hardware-Läufe“).
-- Ubuntu 24.04 hat kein Kirigami 6: Qt-Console braucht 26.04 (BUILD.md).
+- Qt-Console: Ziel Linux allgemein; ungeeignet Ubuntu 24.04 und Debian 12 (kein Kirigami 6, BUILD.md).
 
 - SRT-Input-Block in strom decodiert in der VM nicht (DECISIONS,
   „M3 Schritt 4“).

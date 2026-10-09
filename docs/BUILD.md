@@ -224,25 +224,41 @@ Ohne `--core` spricht die Console wie in M1b direkt mit strom.
 
 ## Qt-Console (`workspace/console-qt`, Prototyp)
 
-Systempakete: Qt 6 (Quick, QuickControls2, Dialogs) mit Entwicklungsdateien,
-Kirigami 6, das GStreamer-Plugin `qml6` und gstreamer-rs-Abhängigkeiten.
+Ziel ist Linux allgemein, keine einzelne Distribution; entwickelt wird auf
+Arch. Gebraucht werden:
+
+| Was | Mindestens | Wofür |
+|---|---|---|
+| Qt 6 (Quick, QuickControls2, Dialogs) mit Entwicklungsdateien | 6.x (entwickelt mit 6.12, ältere ungetestet) | Oberfläche, `cxx-qt-build` findet Qt über `qmake6` bzw. `QMAKE=…` |
+| Kirigami (KDE Frameworks 6) | KF6 | Fenster, Kante |
+| GStreamer mit Plugin `qml6` (`qml6glsink`) | 1.24 | Live-Bilder |
+| Qt Linguist-Werkzeuge (`lrelease`) | – | deutsche Übersetzung; ohne sie baut die Console nur englisch (Build-Warnung) |
 
 ```bash
-# Arch
-sudo pacman -S qt6-declarative kirigami gst-plugin-qml6
-# Ubuntu 26.04 LTS / Kubuntu (Plasma 6)
-sudo apt-get install qt6-declarative-dev qml6-module-org-kde-kirigami \
+# Arch (Entwicklungssystem, geprüft)
+sudo pacman -S qt6-declarative qt6-tools kirigami gst-plugin-qml6
+# Debian 13 / Ubuntu ab 25.04 (ungeprüft)
+sudo apt-get install qt6-declarative-dev qt6-l10n-tools qml6-module-org-kde-kirigami \
   qml6-module-qtquick-dialogs gstreamer1.0-qt6
 ```
 
-Ubuntu 24.04 hat noch Plasma 5 und damit kein Kirigami 6: dort baut die
-Qt-Console nicht ohne Backports (offen, siehe HANDOVER).
+**Ungeeignet** (zu alt, ohne Backports): Ubuntu 24.04 und Debian 12 (Plasma 5,
+kein Kirigami 6; Debian 12 auch GStreamer 1.22). Andere Distributionen mit KF6
+und GStreamer ≥ 1.24 sollten gehen; wer eine prüft, trägt sie hier ein.
 
 ```bash
 scripts/sync-kante.sh                 # Kante-QML ins Crate kopieren (nach Kante-Änderungen)
 cd workspace/console-qt
 cargo run --release -- --core http://127.0.0.1:8200 [--style kante|kante-light|system]
 ```
+
+Oder alles zusammen (strom, lmix-core, Console mit Testbildern; Schließen
+beendet alles): `scripts/run-local.sh` (`MIXER=gl`, `INPUTS=8`).
+
+Sprache: Quelltexte englisch, Deutsch als Übersetzung; die Console folgt der
+Systemsprache (`LANGUAGE=en LANG=en_US.UTF-8` erzwingt Englisch). Neue oder geänderte
+Texte: `scripts/update-translations.sh` sammelt sie (`lupdate`) und trägt die
+deutschen Texte aus `workspace/console-qt/i18n/de.py` ein; fehlende meldet es.
 
 `cxx-qt-build` findet Qt über `qmake6` (bzw. `QMAKE=…`). Die Console muss auf
 dem Rechner der Engine laufen: Live-Bilder kommen über Unix-Sockets in

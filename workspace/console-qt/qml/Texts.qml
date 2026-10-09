@@ -81,6 +81,24 @@ QtObject {
         return String(value)
     }
 
+    /** Short kind of a source on a tile (`SourceSpec.kind`). */
+    function sourceBadge(kind) {
+        switch (kind) {
+        case "pattern": return qsTr("PAT", "source badge: test pattern")
+        case "file": return qsTr("FILE", "source badge")
+        case "url": return "URL"
+        case "srt": return "SRT"
+        case "device": return qsTr("CAM", "source badge: camera")
+        case "color": return qsTr("COL", "source badge: colour")
+        case "image": return qsTr("IMG", "source badge: image")
+        case "playlist": return qsTr("LIST", "source badge: playlist")
+        case "ndi": return "NDI"
+        case "whip": return "WHIP"
+        case "audio_device": return qsTr("MIC", "source badge: microphone, line in")
+        }
+        return ""
+    }
+
     /** `[{value, label}]` of a form list, from the values Core.choices gives. */
     function choices(list, valuesJson) {
         return JSON.parse(valuesJson).map(v => ({ value: v, label: label(list, v) }))

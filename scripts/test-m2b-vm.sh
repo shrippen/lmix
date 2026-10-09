@@ -379,8 +379,8 @@ p95="$(jq -r '.p95_ms' <<<"$latency")"
 pass "latency: median ${median} ms, p95 ${p95} ms from ${samples} samples (budget ${LATENCY_BUDGET_MS} ms)"
 
 # --- input color, device list ---
-act '{"action":"set_input_color","input":"Ball","color":"teal"}' >/dev/null
-[[ "$(curl -sf "$CORE/state" | jq -r '.inputs[1].color')" == teal ]] || fail "color not set"
+act '{"action":"set_input_color","input":"Ball","color":"cyan"}' >/dev/null
+[[ "$(curl -sf "$CORE/state" | jq -r '.inputs[1].color')" == cyan ]] || fail "color not set"
 curl -sf "$CORE/devices" | jq -e 'type == "array"' >/dev/null || fail "device list"
 pass "color tag; device list ($(curl -sf "$CORE/devices" | jq length) found)"
 

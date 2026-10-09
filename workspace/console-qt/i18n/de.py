@@ -153,4 +153,13 @@ DE = {
     'Length': 'Dauer',
     'FTB on': 'FTB an',
     'FTB': 'FTB',
+    'Cut to program': 'Direkt auf Programm',
+    'Search devices again': 'Geräte neu suchen',
+    'PAT': 'TEST',
+    'FILE': 'DATEI',
+    'CAM': 'KAM',
+    'COL': 'FARBE',
+    'IMG': 'BILD',
+    'LIST': 'LISTE',
+    'MIC': 'MIK',
 }

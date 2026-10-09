@@ -132,7 +132,8 @@ Neu gegenüber egui: Kacheln per Drag & Drop umsortieren; Vorschau-Monitor
 in voller Größe (`/api/live/inputs/{id}?size=full`).
 
 Technik: QML schickt Aktionen im JSON der API, Rust prüft sie
-(`Core.act`); Formulare baut Rust (`forms.rs`, getestet). Inputs,
+(`Core.act`); Formulare baut Rust (`forms.rs`, getestet), Texte liegen in
+QML (`Texts.qml`, übersetzbar). Inputs,
 Ausgänge und Übergänge liegen in Modellen mit fester ID (`KeyedModel`),
 damit ein Zustands-Update nicht jede Kachel samt Pipeline neu baut.
 Breeze-`MenuItem` ruft `RegExp()`, was in Delegates mit JS-Array-Modell
@@ -140,7 +141,42 @@ scheitert; Menüs aus Listen baut deshalb `ChoiceMenu` ohne Repeater.
 
 Offen:
 - Demo-Modus mit den gemeinsamen Demodaten (`claude.md`-Regel).
-- Sprache: Texte englisch, Qt-Standardknöpfe folgen der Systemsprache.
-- Farbmarken der Inputs nur als Wort (Kante-QML hat keine Label-Farben).
 - Vorschau-Wechsel baut eine neue Pipeline (kurze Lücke).
 - VM-Test und Screenshots laufen noch über die egui-Console.
+
+## Schritt 3: Sprache, Kante, Parität (Stand 2026-10-09)
+
+- Sprache: Quelltexte englisch, Deutsch als Übersetzung
+  (`i18n/qml_de.ts`, in das Binary gebaut, folgt der Systemsprache). Rust
+  liefert nur Werte; Fehler von lmix-core übersetzt die Console anhand des
+  Codes (`error.error`).
+- Kante erweitert (PR #36): sieben Farb-Labels (`KanteStyle.labelColor`),
+  `KanteLevelMeter` mit Skala. lmix-Farbmarken sind diese sieben (alte Shows:
+  teal → cyan, pink → purple).
+
+### Parität mit der egui-Console
+
+Die egui-Console fliegt raus, sobald die Qt-Console alles kann, was sie als
+Client von lmix-core konnte (Entscheidung des Users).
+
+| egui (Client von lmix-core) | Qt-Console |
+|---|---|
+| Show neu, öffnen, zuletzt, speichern (unter) | ja |
+| Latenzmessung | ja |
+| Monitore Vorschau/Programm, Pegel | ja, live statt Bildabruf |
+| Übergänge 1–4, Effekt und Länge, Cut, FTB | ja |
+| Kachel: Nummer, Quellart-Kürzel, Name, Farbmarke, Tally, Status | ja |
+| Kachel: Klick Vorschau, Doppelklick Programm, Menü „Cut to program“ | ja |
+| Kachel-Menü: Umbenennen, Quelle ersetzen, Farbe, Signalverlust, Ton, PFL/AFL, Wiedergabe, Senden an, Entfernen | ja |
+| Ton: Mute, Lautstärke, Pegel, PFL/AFL, Solo aus | ja |
+| „+ Input“ mit allen Quellarten, Datei-/Farbwahl, Geräteliste mit „neu suchen“ | ja |
+| Ausgänge: hinzufügen, Start/Stopp, Laufzeit, Leitungszustand, entfernen | ja |
+| Tasten 1–9 | ja |
+
+Nicht Teil der Console, aber nur in `app-desktop`: der M1b-Modus direkt an
+strom, der kopflose Selbsttest (`--selftest`, `scripts/acceptance-m1b.sh`),
+das Leistungs-Overlay (F3, `--perf-log`) und das GPU-Profil. Vorschlag: den
+Selbsttest samt `perf`/`gpu_profile` als eigenes kopfloses Binary behalten,
+den M1b-Modus und das Overlay mit der egui-Console streichen. Vor dem
+Entfernen: VM-Test (`test-m2b-vm.sh`, Screenshot) auf die Qt-Console
+umstellen.

@@ -97,6 +97,10 @@ KanteCard {
                 font.family: KanteStyle.monoFamily
             }
             KanteSectionLabel {
+                text: Texts.sourceBadge(tile.input.source.kind)
+                color: KanteStyle.mutedTextColor
+            }
+            KanteSectionLabel {
                 Layout.fillWidth: true
                 text: tile.input.name
                 elide: Text.ElideRight
@@ -174,6 +178,11 @@ KanteCard {
         id: menu
         KantePopupSkin { popup: menu }
 
+        QQC2.MenuItem {
+            text: qsTr("Cut to program")
+            enabled: !tile.onProgram
+            onTriggered: tile.act({ action: "cut_direct", input: tile.ref() })
+        }
         QQC2.MenuItem {
             text: qsTr("Rename…")
             onTriggered: renameDialog.open()
