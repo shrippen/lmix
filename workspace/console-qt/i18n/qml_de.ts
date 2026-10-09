@@ -822,6 +822,26 @@
     </message>
     <message>
       <location line="+5" />
+      <source>Bring back %1</source>
+      <translation>%1 zurückholen</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Locked</source>
+      <translation>Gesperrt</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Lock</source>
+      <translation>Sperren</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>While locked, closing inputs, loading a show and stopping outputs are refused.</source>
+      <translation>Gesperrt lassen sich keine Inputs schließen, keine Show laden und keine Ausgänge stoppen.</translation>
+    </message>
+    <message>
+      <location line="+4" />
       <source>Shortcuts…</source>
       <translation>Belegungen…</translation>
     </message>

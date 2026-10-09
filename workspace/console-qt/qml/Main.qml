@@ -304,6 +304,20 @@ Kirigami.ApplicationWindow {
                     onClicked: root.act({ action: "clear_listen" })
                 }
                 KanteButton {
+                    text: qsTr("Bring back %1").arg(root.show ? root.show.restorable : "")
+                    visible: root.show !== null && !!root.show.restorable
+                    onClicked: root.act({ action: "restore_input" })
+                }
+                KanteButton {
+                    readonly property bool locked: root.show !== null && root.show.locked === true
+                    text: locked ? qsTr("Locked") : qsTr("Lock")
+                    emphasis: locked ? KanteButton.Emphasis.Destructive : KanteButton.Emphasis.Normal
+                    enabled: backend.connected
+                    QQC2.ToolTip.visible: hovered
+                    QQC2.ToolTip.text: qsTr("While locked, closing inputs, loading a show and stopping outputs are refused.")
+                    onClicked: root.act({ action: "set_lock", on: !locked })
+                }
+                KanteButton {
                     text: qsTr("Shortcuts…")
                     enabled: backend.connected
                     onClicked: shortcutsDialog.open()

@@ -133,6 +133,9 @@ pub enum Feed {
     },
 }
 
+/// Closed inputs kept for `restore_input`.
+const REMOVED_KEPT: usize = 10;
+
 /// Anti-click fade for audio changes outside a transition.
 pub const AUDIO_RAMP_MS: u32 = 20;
 
@@ -162,6 +165,10 @@ pub struct Switcher {
     stinger_until: Option<Instant>,
     /// The engine can apply looks (GL mixer).
     looks_available: bool,
+    /// Locked against closing, loading and stopping (AUT.11).
+    locked: bool,
+    /// Inputs closed last, with their place in the bar (AUT.10).
+    removed: Vec<(usize, ShowInput)>,
     status: HashMap<InputId, InputStatus>,
     /// Audio channel settings the engine has, per slot.
     mix: HashMap<usize, Mix>,
@@ -183,6 +190,8 @@ impl Switcher {
             t_bar: 0.0,
             stinger_until: None,
             looks_available: false,
+            locked: false,
+            removed: Vec::new(),
             status: HashMap::new(),
             mix: HashMap::new(),
             listen: HashMap::new(),
@@ -249,7 +258,15 @@ impl Switcher {
     fn apply_action(&mut self, action: Action) -> Result<Vec<Command>, ActionError> {
         match action {
             Action::AddInput { source, name } => self.add(source, name),
-            Action::RemoveInput { input } => self.remove(&input),
+            Action::RemoveInput { input } => {
+                self.check_unlocked()?;
+                self.remove(&input)
+            }
+            Action::RestoreInput => self.restore_input(),
+            Action::SetLock { on } => {
+                self.locked = on;
+                Ok(Vec::new())
+            }
             Action::ReplaceSource { input, source } => self.replace_source(&input, source),
             Action::RenameInput { input, name } => self.rename(&input, name),
             Action::SetInputColor { input, color } => self.set_color(&input, color),
@@ -271,9 +288,15 @@ impl Switcher {
                 name,
                 aux,
             } => self.add_output(spec, source, name, aux),
-            Action::RemoveOutput { output } => self.remove_output(&output),
+            Action::RemoveOutput { output } => {
+                self.check_unlocked()?;
+                self.remove_output(&output)
+            }
             Action::StartOutput { output } => self.start_output(&output),
-            Action::StopOutput { output } => self.stop_output(&output),
+            Action::StopOutput { output } => {
+                self.check_unlocked()?;
+                self.stop_output(&output)
+            }
             Action::ClearListen => Ok(self.clear_listen()),
             Action::MoveInput { input, number } => self.move_input(&input, number),
             Action::PreviewInput { input } => self.preview(&input),
@@ -345,6 +368,8 @@ impl Switcher {
         commands.extend(self.stop_all_outputs());
         self.show = show;
         self.path = path;
+        // Closed inputs belong to the old show.
+        self.removed.clear();
         self.status.clear();
         commands.extend(self.restore_commands());
         commands
@@ -491,6 +516,8 @@ impl Switcher {
             t_bar: self.t_bar,
             aux_buses: self.show.aux_buses,
             looks_available: self.looks_available,
+            locked: self.locked,
+            restorable: self.removed.last().map(|(_, input)| input.name.clone()),
             shortcuts: self
                 .show
                 .shortcuts
@@ -603,6 +630,10 @@ impl Switcher {
     fn remove(&mut self, input: &InputRef) -> Result<Vec<Command>, ActionError> {
         let index = self.find(input)?;
         let removed = self.show.inputs.remove(index);
+        self.removed.push((index, removed.clone()));
+        if self.removed.len() > REMOVED_KEPT {
+            self.removed.remove(0);
+        }
         let mut commands = Vec::new();
 
         // A removed input leaves preview empty and program black.
@@ -880,6 +911,57 @@ impl Switcher {
         });
         self.stinger_until =
             Some(Instant::now() + Duration::from_millis(u64::from(button.duration_ms)));
+        Ok(commands)
+    }
+
+    // ---- Safety ----
+
+    /// Whether the lock holds (closing, loading, stopping refused).
+    pub fn check_unlocked(&self) -> Result<(), ActionError> {
+        if self.locked {
+            return Err(ActionError::Locked);
+        }
+        Ok(())
+    }
+
+    /// The input closed last, back with its settings: in its old slot
+    /// when that is free, at its old place in the bar.
+    fn restore_input(&mut self) -> Result<Vec<Command>, ActionError> {
+        let (index, mut input) = self.removed.pop().ok_or(ActionError::NothingToRestore)?;
+        let slot_free = !self.show.inputs.iter().any(|i| i.slot == input.slot);
+        if !slot_free {
+            let Some(slot) = self.free_slot() else {
+                self.removed.push((index, input));
+                return Err(ActionError::SlotsFull { slots: self.slots });
+            };
+            input.slot = slot;
+        }
+        let mut commands = vec![
+            Command::SetSlot {
+                slot: input.slot,
+                source: Some(input.source.clone()),
+            },
+            Command::SetSignalLoss {
+                slot: input.slot,
+                mode: input.signal_loss,
+            },
+        ];
+        if input.source.has_audio() {
+            commands.push(Command::SetStrip {
+                slot: input.slot,
+                strip: input.strip,
+            });
+            commands.extend(send_commands(&input));
+        }
+        if self.looks_available && input.source.has_video() {
+            commands.push(Command::SetLook {
+                slot: input.slot,
+                look: input.look,
+            });
+        }
+        self.status.insert(input.id, InputStatus::Starting);
+        let at = index.min(self.show.inputs.len());
+        self.show.inputs.insert(at, input);
         Ok(commands)
     }
 
@@ -2808,6 +2890,57 @@ mod tests {
         })
         .unwrap();
         assert!(sw.state().shortcuts.is_empty());
+    }
+
+    #[test]
+    fn a_closed_input_comes_back_with_its_settings() {
+        let mut sw = two_inputs();
+        sw.apply(Action::SetVolume {
+            input: named("A"),
+            volume: 40,
+        })
+        .unwrap();
+        let a = sw.state().inputs[0].clone();
+        sw.apply(Action::RemoveInput { input: named("A") }).unwrap();
+        assert_eq!(sw.state().restorable.as_deref(), Some("A"));
+
+        let cmds = sw.apply(Action::RestoreInput).unwrap();
+
+        let back = &sw.state().inputs[0];
+        assert_eq!((back.id, back.number, back.slot), (a.id, 1, 0));
+        assert_eq!(back.audio.volume, 40);
+        assert!(cmds.contains(&Command::SetSlot {
+            slot: 0,
+            source: Some(a.source.clone())
+        }));
+        assert_eq!(sw.state().restorable, None);
+        assert_eq!(
+            sw.apply(Action::RestoreInput),
+            Err(ActionError::NothingToRestore)
+        );
+    }
+
+    #[test]
+    fn the_lock_refuses_closing_and_stopping() {
+        let mut sw = two_inputs();
+        sw.apply(Action::SetLock { on: true }).unwrap();
+        assert!(sw.state().locked);
+
+        assert_eq!(
+            sw.apply(Action::RemoveInput { input: named("A") }),
+            Err(ActionError::Locked)
+        );
+        assert_eq!(
+            sw.apply(Action::StopOutput {
+                output: OutputRef::Number(1)
+            }),
+            Err(ActionError::Locked)
+        );
+        // Switching still works.
+        sw.apply(Action::CutDirect { input: named("A") }).unwrap();
+
+        sw.apply(Action::SetLock { on: false }).unwrap();
+        sw.apply(Action::RemoveInput { input: named("A") }).unwrap();
     }
 
     #[test]

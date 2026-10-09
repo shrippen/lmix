@@ -271,4 +271,8 @@ DE = {
     'Run': 'Ausführen',
     '+ Shortcut': '+ Belegung',
     'Actions: %1': 'Aktionen: %1',
+    'Bring back %1': '%1 zurückholen',
+    'Locked': 'Gesperrt',
+    'Lock': 'Sperren',
+    'While locked, closing inputs, loading a show and stopping outputs are refused.': 'Gesperrt lassen sich keine Inputs schließen, keine Show laden und keine Ausgänge stoppen.',
 }

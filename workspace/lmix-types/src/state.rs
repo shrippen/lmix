@@ -65,6 +65,12 @@ pub struct ShowState {
     /// Shortcuts of the show.
     #[serde(default)]
     pub shortcuts: Vec<Shortcut>,
+    /// Locked against closing, loading and stopping (AUT.11).
+    #[serde(default)]
+    pub locked: bool,
+    /// Name of the input `restore_input` would bring back.
+    #[serde(default)]
+    pub restorable: Option<String>,
 }
 
 /// Current API version (API.10: additive changes within one version).

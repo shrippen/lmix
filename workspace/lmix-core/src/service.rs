@@ -520,6 +520,9 @@ impl Service {
         }
         let mut sw = self.switcher.lock().await;
         let file_action = matches!(action, Action::OpenShow { .. } | Action::SaveShow { .. });
+        if matches!(action, Action::OpenShow { .. } | Action::NewShow) {
+            sw.check_unlocked()?;
+        }
 
         let commands = match action {
             Action::NewShow => sw.replace(Show::default(), None),

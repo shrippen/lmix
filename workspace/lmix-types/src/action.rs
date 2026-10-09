@@ -110,6 +110,8 @@ pub enum Action {
     },
     /// Close an input.
     RemoveInput { input: InputRef },
+    /// Bring back the input closed last, with its settings (AUT.10).
+    RestoreInput,
     /// Change what an input shows, keeping its settings (INP.4).
     ReplaceSource { input: InputRef, source: SourceSpec },
     /// Rename an input.
@@ -201,6 +203,11 @@ pub enum Action {
     RemoveLayout { layout: InputRef },
     /// Put a layout into preview.
     PreviewLayout { layout: InputRef },
+
+    // ---- Safety ----
+    /// Lock or unlock (AUT.11): while locked, closing inputs, opening or
+    /// clearing the show and stopping or removing outputs are refused.
+    SetLock { on: bool },
 
     // ---- Shortcuts (AUT.1–3) ----
     /// Add a shortcut: a key and label for a list of actions.
@@ -305,6 +312,10 @@ pub enum ActionError {
     UnknownLayout { reference: String },
     #[error("layout: {reason}")]
     BadLayout { reason: String },
+    #[error("locked: unlock first")]
+    Locked,
+    #[error("no closed input to bring back")]
+    NothingToRestore,
     #[error("no shortcut {reference}")]
     UnknownShortcut { reference: String },
     #[error("shortcut: {reason}")]
