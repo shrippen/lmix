@@ -497,6 +497,9 @@ pub fn live_flow(which: LivePicture, socket: &str, backend: MixerBackend, sink: 
         vec![
             ("socket-path", PropertyValue::String(socket.into())),
             ("sync", PropertyValue::Bool(false)),
+            // strom's QoS drop probe raises a CRITICAL per frame on sinks
+            // that send QoS (see the display sink).
+            ("qos", PropertyValue::Bool(false)),
         ],
     ));
     // With the CUDA mixer, program and decoded inputs may be in GPU
