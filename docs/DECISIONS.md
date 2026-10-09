@@ -566,3 +566,219 @@ Meilenstein-Ende hinaus). Jeder Zwischenstand wird automatisch gepusht und
 als PR hinterlegt: ein Branch je Meilenstein, auf dem vorigen aufgesetzt
 (`lastenheft` ← `m2b` ← `m3` …), PR mit Basis auf den Vorgänger-Branch.
 Abnahme später gesammelt auf der Zielhardware (`HARDWARE-TODO.md`).
+
+## 2026-10-08 — M3 Schritt 1: Ausgänge (3.1)
+
+**Aufbau**: Der Mischer-Flow veröffentlicht Programmbild und -ton auf
+`inter` (`pgm_out`, `pgm_audio_out`). Jeder Ausgang ist ein eigener
+strom-Flow (feste ID je Ausgang): ein abstürzender oder neu gestarteter
+Ausgang berührt den Mischer nicht (Crash-Isolation, 3.3-Prinzip).
+- SRT: H.264 (`videoenc`, Hardware zuerst, sonst Software) + AAC in
+  MPEG-TS, Wiederverbinden an.
+- Aufnahme: H.264 + AAC in MKV (Standard, übersteht Absturz), MP4 oder TS,
+  im Medienverzeichnis der Engine.
+- NDI: unkomprimiert (NDI-SDK nötig).
+**Bedienung**: Ausgänge stehen in der Show-Datei, laufen aber erst auf
+Start (wie vMix). Status je Ausgang: gestoppt, läuft (seit), Fehler (mit
+Meldung aus den Pipeline-Fehlern von strom).
+**Robustheit**: Ein Neustart von strom startet laufende Ausgänge neu; ein
+Neustart von `lmix-core` übernimmt Ausgänge, die in strom weiterlaufen,
+ohne sie neu zu starten (keine Lücke in einer Aufnahme).
+**strom-Patch** `eos_on_stop` (Flow-Eigenschaft, Standard aus): Stoppen
+schickt EOS und wartet höchstens 5 s, damit Muxer ihre Datei abschließen.
+Vorher war eine MP4-Aufnahme nach dem Stopp unlesbar.
+**Mischer-Layout**: Der Flow heißt jetzt "lmix mixer 2"; ein laufender
+Mischer eines älteren Layouts wird beim Start neu gebaut statt
+übernommen.
+
+## 2026-10-08 — M3 Schritt 2: MultiCorder und ISO-Ausgänge (3.2)
+
+Statt eines eigenen MultiCorders hat jeder Ausgang eine Quelle: Programm
+(Standard) oder ein Input (`source`). Ein ISO-Ausgang abonniert den
+`inter`-Kanal des Slots direkt, vor dem Mischer. Damit gibt es neben der
+Aufnahme je Input auch ISO-Streams (SRT) und ISO-NDI ohne Zusatzaufwand.
+- Ein Input ohne Ton bekommt keine Tonspur: der Recorder (splitmuxsink)
+  würde sonst ewig auf eine Spur warten.
+- Audio-Inputs (ohne Bild) können keine ISO-Quelle sein.
+- Wird der Input entfernt, stoppt sein ISO-Ausgang und steht auf Fehler.
+
+## 2026-10-08 — M3 Schritt 3: Bildschirm-Ausgang (3.3)
+
+Ausgangsart "Display", Sink im Engine-Prozess (Absturz der GUI lässt den
+Beamer weiterlaufen). Drei Wege zum Bildschirm:
+- Fenster (`glimagesink`): Kontrollmonitor, auch in der VM prüfbar.
+- Vollbild (`waylandsink fullscreen`): welcher Bildschirm, entscheidet der
+  Compositor (KDE: Fensterregel). Ein Wayland-Client kann den Ausgang nicht
+  selbst wählen.
+- DRM-Anschluss (`kmssink connector-id`): ohne Desktop, z. B. Beamer an
+  einer Engine-Maschine ohne Sitzung.
+Nur Bild; Ton über HDMI folgt mit Audio-Ausgängen. Die Sink läuft mit
+`sync=false` (Frames kommen schon um die Mischer-Latenz gealtert, eine
+synchronisierende Sink verwarf sie alle) und `qos=false` (CRITICAL-Probe).
+Quelle wie alle Ausgänge: Programm oder ein Input (ISO-Kontrollbild).
+
+## 2026-10-08 — M3 Schritt 4: Failover und Latenz-CI (3.4)
+
+**Ausfälle erkennen**: `lmix-core` folgt den strom-Ereignissen
+`PipelineError` und `FlowStopped`. Eigene Umbauten stoppen Flows auch; ein
+Stopp bis 1 s nach einem eigenen Kommando auf denselben Flow zählt nicht
+als Ausfall.
+- **Input**: Slot-Flow fällt aus → Input „offline“, der Mischer hält das
+  letzte Bild (Signalverlust „halten“, jetzt mit `repeat-after-eos`, sonst
+  verwarf der Compositor das Bild beim Stream-Ende) oder zeigt schwarz.
+  Failback: Slot neu bauen nach 2 s, dann mit Verdopplung bis 10 s, bis er
+  läuft oder der Input entfernt ist. Kein Umschalten auf ein Ersatzbild:
+  der Operator sieht „offline“ und entscheidet.
+- **Ausgang**: Fehler oder unerwarteter Stopp → Status „Fehler“, dann
+  automatischer Neustart.
+**Latenz**: `POST /api/latency/measure` setzt eine strom-Buffer-Age-Probe
+auf den Programm-Ausgang des Mischers, `GET /api/latency` liefert Median,
+p95, Maximum. Der VM-Test prüft ein Budget (`LATENCY_BUDGET_MS`, 150 ms
+CPU); der Gitea-Workflow `vm-check` fährt den ganzen Test bei jeder
+Änderung an lmix-core, Typen, Console oder strom (Messwerte: LATENCY.md).
+**SRT-Input**: Der strom-Block `srt_input` mit `decode` liefert in der VM
+aus `srt-live-transmit`/ffmpeg kein Bild: mit `ignore_pcr` (Standard)
+„No valid frames before EOS“, ohne legt decodebin keine Pads an, und der
+Schutz wird bei erneutem Plug nicht zurückgesetzt (Failback unmöglich).
+Befund für strom, nicht in lmix umgangen; lmix setzt nur
+`wait_for_connection` und `keep_listening`. Prüfung mit echter Quelle: H.23.
+**MP4-Aufnahme**: strom reserviert je Datei ~93 MB für den moov-Kopf
+(Absturzsicherheit); MKV bleibt Standard.
+
+## 2026-10-08 — Verbindungszustand der Ausgänge (B32)
+
+Für SRT-Ausgänge liest `lmix-core` jede Sekunde die Statistik des
+`srtsink` aus strom (`/flows/{id}/srt-stats`) und schickt sie als Ereignis
+`outputs` an alle Clients (auch `GET /api/outputs/stats`):
+- Empfänger verbunden ja/nein, Senderate, seit Start verlorene Pakete
+  (vom Empfänger gemeldet), lokal verworfene Pakete (Leitung zu langsam
+  für die Bitrate), RTT.
+- Ein Listener mit mehreren Empfängern: Raten und Zähler summiert, RTT
+  der langsamste.
+Die Console zeigt am laufenden Ausgang die Rate oder „no receiver“,
+Details im Tooltip. Die Werte stehen nicht im Show-Zustand (kein
+Speichern, kein Zustandsereignis je Sekunde). Aufnahme und NDI haben keine
+Leitung; Füllstand der Platte folgt mit den Aufnahme-Einstellungen.
+
+## 2026-10-08 — GUI-Shell (3.5): Vorschlag, offen
+
+Bewertung egui gegen Qt Quick/Kirigami (Tauri scheidet aus: keine
+Web-GUI) in `GUI-SHELL.md`. **Empfehlung**: Qt Quick/Kirigami über cxx-qt,
+weil Video ohne Kopie (`qml6glsink`) und die Kante/Breeze-Gestaltung
+(`qml/Kante`) dort fertig sind, in egui Eigenentwicklung. **Nicht
+entschieden**: `claude.md` legt egui fest, ein Wechsel ist Sache des
+Users. Bis dahin bleibt die egui-Console die Oberfläche.
+
+## 2026-10-09 — GUI-Shell (3.5): Qt Quick/Kirigami
+
+**Entscheidung** (User): Die Console wechselt auf Qt Quick/Kirigami über
+cxx-qt, wie in `GUI-SHELL.md` empfohlen. `claude.md` Entscheidung 3
+angepasst. Vorgehen: Prototyp (QML-Fenster im Kante-Stil, PGM-Monitor über
+`qml6glsink`, Bild aus strom über `unixfdsink`/`unixfdsrc`), messen
+(H.11), dann Funktionen übertragen. Die egui-Console bleibt bis zur
+Gleichwertigkeit für Selftest und VM-Screenshot.
+
+## 2026-10-09 — Lizenz: MIT, auch für Kante
+
+**Entscheidung** (User): lmix steht unter MIT (`LICENSE` im Repo, bisher
+fehlte die Datei; Crates von `MIT OR Apache-2.0` auf `MIT`). Kante kommt
+ebenfalls unter MIT (Kante-PR #35; `kimai/` bleibt GPL-3.0-or-later,
+Schriften OFL-1.1), damit lmix die QML-Module ausliefern darf.
+Abhängigkeiten wie bisher (`claude.md` Entscheidung 6): Qt, Kirigami,
+GStreamer und gstcefsrc (LGPL) nur dynamisch, kein GPL-Code im Repo oder
+Paket (z. B. kein `x264enc` mitliefern), NDI-SDK zur Laufzeit.
+
+## 2026-10-09 — Ton der Slots: Mischer fest auf 48 kHz
+
+**Befund** (lokal, Arch, GStreamer 1.28.7): Gesamttest „no sound from the
+slots“. Der Audiomischer in strom läuft mit `force-live` und mischt nach
+Timeout auch ohne Eingang; startet er vor dem ersten Slot-Ton, legt er
+sich auf 44,1 kHz fest. Die Slots liefern 48 kHz (`AUDIO_CAPS`), der
+Kanalzug wandelt nur das Format, nicht die Rate: `not-negotiated` an
+`ain*`. In der Cloud kam der Ton offenbar vor dem Timeout an.
+**Entscheidung**: strom-Mischer bekommt die Eigenschaft `sample_rate`
+(strom `lmix-sample-rate`, auf `lmix-start-time`): Capsfilter hinter jedem
+Bus, Resampler je Kanal; Standard 0 lässt alles wie bisher. lmix-core
+setzt 48 kHz. Dazu auf `lmix-start-time` der fehlende OpenAPI-Snapshot
+für `eos_on_stop` (sonst rot in strom-CI).
+
+## 2026-10-09 — Qt-Console: Aufbau des Prototyps
+
+**Kontext**: GUI-SHELL Schritt 1. **Entscheidung**: eigenes Crate
+`console-qt` neben `app-desktop`. Ein Rust-QObject (`Core`, cxx-qt 0.10)
+hält Zustand und Aktionen; die Bilder baut Rust mit gstreamer-rs und
+übergibt `qml6glsink` das QML-Item als `widget` (die QML-Seite ruft
+`core.showLive(item, source)`, sobald `itemInitialized`). Kein eigener
+C++-Code. Kante liegt als Kopie im Crate (README von Kante: kopieren oder
+qrc) und geht über eine generierte `.qrc` in die Ressourcen.
+**Verworfen**: C++-QObject für die Pipeline (mehr Build-Aufwand, kein
+Vorteil); Kante über Importpfad zur Laufzeit (Paket hinge an einem Pfad).
+**Offen**: die egui-Console wird erst nach Gleichwertigkeit entfernt.
+
+## 2026-10-09 — CUDA-Programm für CPU-Abnehmer herunterladen
+
+**Befund** (RTX 3090): Mit `--mixer cuda` trägt der `inter`-Kanal des
+Programms `memory:CUDAMemory`. Aufnahme und SRT (NVENC) liefen, Bildschirm-
+Ausgang und Live-Socket nicht (`not-negotiated`). **Entscheidung**:
+`cudadownload` plus Capsfilter `video/x-raw` nur in Flows, die das
+Programm auf der CPU lesen (Bildschirm, NDI, Live-Socket). Ein Download
+schon im Mischer-Flow wäre einfacher, kostete aber den Encodern den
+Weg ohne Kopie. **Offen**: Mit `--mixer gl` ist noch ungeprüft, ob der
+Kanal `GLMemory` trägt (H.22, AMD/Intel).
+
+## 2026-10-09 — Neustart der Engine erkennen
+
+**Befund**: lmix-core speiste die Show nur beim eigenen Start ein. Stürzte
+strom ab und startete neu, blieb Programm leer, bis auch lmix-core neu
+startete. **Entscheidung**: lmix-core fragt alle 2 s `/api/version` und
+vergleicht `process_started_at`; ein neuer Wert heißt neue Engine: Mischer
+aufbauen, Show samt laufender Ausgänge einspielen. Aktionen bis dahin
+ändern nur die Show (wie beim Start). Geprüft mit `kill -9` auf strom:
+Flows, SRT-Ausgang und Programmbild kamen zurück. **Verworfen**:
+Neustart an Flow-Fehlern erkennen (ein Absturz meldet sich nicht über den
+eigenen Bus); den Mischer-Flow abfragen (ein leerer Mischer nach Neustart
+wäre nicht von einem gerade gebauten zu unterscheiden). **Offen**: eine
+Aktion in den bis zu 2 s bis zur Erkennung antwortet noch 502.
+
+## 2026-10-09 — Qt-Console: Stil, Reihenfolge, Vorschau
+
+**Entscheidung**: Stilwahl Kante / Kante Light / System in der
+Werkzeugleiste, gespeichert mit QSettings (`agent.md`: Stilwahl in den
+Einstellungen); `--style` gilt für einen Lauf. Inputs per Drag & Drop
+umsortieren (`move_input`). Der Vorschau-Monitor liest den Input in
+voller Größe (`?size=full`, eigener Flow je Slot, nur auf Abruf), die
+Kacheln weiter 640×360.
+
+## 2026-10-09 — Hardware-Läufe auf RTX 3090 (H.10, H.18, H.22)
+
+**Messung** (`scripts/soak-hardware.sh`, 60 min, CUDA-Mischer, 8 Inputs,
+Programmwechsel alle 30 s, MKV-Aufnahme und SRT an lokalen Empfänger):
+Latenz Quelle → PGM 56–66 ms (einmal 78 ms), kein Anstieg; Aufnahme
+108 800 Bilder in 3624 s (lückenlos), SRT 108 737 Bilder empfangen, kein
+Paketverlust, strom 90–125 % eines Kerns, GPU 4–7 %, keine CRITICALs.
+CPU-Mischer zum Vergleich: 88 ms.
+
+**Befund GL-Mischer** (`--mixer gl`, auf derselben NVIDIA-Karte): mit
+`gl_download` laufen Aufnahme (MKV und TS), Bildschirm und Live-Socket
+(RGBA), Latenz 56–67 ms. Der **SRT-Ausgang sendet aber kein Video**: nur
+Ton (~200 kbit/s), Audio-Queue im Ausgangs-Flow voll (2 s), der Muxer
+wartet auf Video. Mit CUDA derselbe Flow fehlerfrei. Nachstellen: Stack mit
+`--mixer gl`, Input `ball`, SRT-Ausgang starten, `srtsrc ! filesink`, dann
+`ffmpeg -i x.ts -map 0:v -f null -` → 0 Bilder. `GST_DEBUG=basetsmux:6`:
+am Video-Pad des Muxers (`srt:mpegtsmux:sink_66`) kommen genau zwei Bilder
+an, dann steht der Zweig; der Encoder davor ist derselbe wie in der
+funktionierenden Aufnahme. Verdacht: die dynamische Parser-Einfügung im
+strom-Block `mpegtssrt_output` (Pad-Probe) bleibt beim GL-Timing hängen.
+Offen, Fix gehört nach strom.
+
+## 2026-10-09 — Dauerlauf NFA.7 (Teil): Speicherwachstum in strom
+
+**Messung** (`scripts/soak-hardware.sh`, 295 min, CUDA-Mischer, 16 Inputs,
+MKV- und ISO-Aufnahme, 2 × SRT lokal, Werte in `LATENCY.md`): Latenz
+56–63 ms ohne Anstieg, keine Bilder verloren, keine CRITICALs. Das Skript
+schlägt fehl, weil der Speicher von strom gleichmäßig wächst: 763 MB nach
+10 min, 998 MB am Ende (~32 MB/h, rund 0,8 GB am Tag). Für 8 h unkritisch,
+für den 48-h-Betrieb (NFA.7) nicht. **Offen**: Ursache eingrenzen (Läufe
+ohne Ausgänge, ohne Programmwechsel, mit `heaptrack`), der Fix gehört
+wahrscheinlich nach strom. lmix-core blieb ohne Fehler.
+

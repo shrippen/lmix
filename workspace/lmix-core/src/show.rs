@@ -11,7 +11,8 @@ use std::path::Path;
 
 use lmix_types::action::TRANSITION_SLOTS;
 use lmix_types::{
-    Effect, InputAudio, InputColor, InputId, SignalLoss, SourceSpec, Transition, TransitionSlot,
+    Effect, InputAudio, InputColor, InputId, OutputId, OutputSource, OutputSpec, SignalLoss,
+    SourceSpec, Transition, TransitionSlot,
 };
 use serde::{Deserialize, Serialize};
 
@@ -45,6 +46,19 @@ pub struct Show {
     pub preview: Option<InputId>,
     pub program: Option<InputId>,
     pub transitions: Vec<Transition>,
+    /// Outputs; whether they run is not saved.
+    #[serde(default)]
+    pub outputs: Vec<ShowOutput>,
+}
+
+/// One output as saved.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ShowOutput {
+    pub id: OutputId,
+    pub name: String,
+    pub spec: OutputSpec,
+    #[serde(default)]
+    pub source: OutputSource,
 }
 
 impl Default for Show {
@@ -54,6 +68,7 @@ impl Default for Show {
             preview: None,
             program: None,
             transitions: default_transitions(),
+            outputs: Vec::new(),
         }
     }
 }
@@ -176,6 +191,15 @@ mod tests {
             preview: Some(id),
             program: None,
             transitions: default_transitions(),
+            outputs: vec![ShowOutput {
+                id: OutputId::new(),
+                name: "Stream".into(),
+                spec: OutputSpec::Srt {
+                    uri: "srt://cdn:9000".into(),
+                    video_kbps: 6000,
+                },
+                source: OutputSource::Input(id),
+            }],
         }
     }
 

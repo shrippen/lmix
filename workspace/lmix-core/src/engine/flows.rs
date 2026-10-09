@@ -19,7 +19,10 @@ use strom_types::{Flow, FlowId, PropertyValue};
 use uuid::Uuid;
 
 use lmix_types::input::color_rgb;
-use lmix_types::SourceSpec;
+use lmix_types::{DisplayMode, OutputId, OutputSpec, SourceSpec};
+
+use super::LivePicture;
+use crate::switcher::Feed;
 
 /// Namespace of all lmix flow ids.
 const FLOW_NAMESPACE: Uuid = Uuid::from_u128(0x6c6d_6978_2d63_6f72_652d_666c_6f77_7321);
@@ -28,6 +31,10 @@ const MEDIA_PLAYER_BLOCK: &str = "builtin.media_player";
 const SRT_INPUT_BLOCK: &str = "builtin.mpegtssrt_input";
 const LOCAL_INPUT_BLOCK: &str = "builtin.local_input";
 const NDI_INPUT_BLOCK: &str = "builtin.ndi_input";
+const NDI_OUTPUT_BLOCK: &str = "builtin.ndi_output";
+const SRT_OUTPUT_BLOCK: &str = "builtin.mpegtssrt_output";
+const RECORDER_BLOCK: &str = "builtin.recorder";
+const VIDEO_ENCODER_BLOCK: &str = "builtin.videoenc";
 const WHIP_INPUT_BLOCK: &str = "builtin.whip_input";
 const INTER_OUTPUT_BLOCK: &str = "builtin.inter_output";
 const INTER_INPUT_BLOCK: &str = "builtin.inter_input";
@@ -47,14 +54,29 @@ const SLOT_AUDIO_OUT: &str = "out_audio";
 const MONITOR_SINK: &str = "monitor_sink";
 /// Block id of the audio mixer in the mixer flow: one channel per slot.
 pub const AUDIO_MIXER: &str = "mix";
+/// Mixer flow name; a new layout gets a new name, so `start` rebuilds a
+/// running mixer of an older lmix instead of reusing it.
+pub const MIXER_NAME: &str = "lmix mixer 2";
 /// Block id of the vision mixer in the mixer flow.
 pub const MIXER_BLOCK: &str = "vm";
 /// Thumbnail tap on the program output: GUI monitor and picture checks.
 pub const PGM_TAP: &str = "tap_pgm";
-/// Real-time sink behind the program tap.
-const PGM_SINK: &str = "pgm_sink";
+/// Program picture and sound for the output flows (`inter`).
+pub const PGM_OUT: &str = "pgm_out";
+const PGM_AUDIO_OUT: &str = "pgm_audio_out";
+/// Outputs buffer a little more than the mixer: they are not on the
+/// switching path, an encoder hiccup must not drop frames.
+const OUTPUT_BUFFER_MS: &str = "500";
+/// Recording files: `<folder>/lmix_00001.mkv`, …
+const RECORDING_PREFIX: &str = "lmix";
 /// Thumbnail tap in every slot flow: input bar pictures and preview monitor.
 pub const SLOT_TAP: &str = "tap";
+/// Subscriber buffer of a live picture: as short as the mixer's, it
+/// shows now or nothing.
+const LIVE_BUFFER_MS: &str = "100";
+/// Size of an input's live picture; program goes at full size.
+const LIVE_INPUT_CAPS: &str = "video/x-raw,width=640,height=360";
+
 /// Subscriber buffer of the mixer's inter inputs: low latency, some jitter
 /// headroom (strom offers 100–2000 ms).
 const INTER_BUFFER_MS: &str = "100";
@@ -63,9 +85,12 @@ const INTER_BUFFER_MS: &str = "100";
 const TONE_BASE_HZ: f64 = 440.0;
 const TONE_STEP: f64 = 1.25;
 const TONE_VOLUME: f64 = 0.1;
-/// One audio format for every slot: the audio mixer takes the format of
-/// its first input, a slot that differs fails with not-negotiated.
+/// One audio format for every slot, at the audio mixer's bus rate.
 const AUDIO_CAPS: &str = "audio/x-raw,format=F32LE,layout=interleaved,rate=48000,channels=2";
+/// Bus rate of the audio mixer (Hz), as in [`AUDIO_CAPS`]. Without it the
+/// mixer, running before the first slot sounds, settles on 44.1 kHz and
+/// refuses the slots.
+const AUDIO_RATE: u64 = 48_000;
 
 /// Format test patterns are rendered in; real sources keep theirs.
 const PATTERN_WIDTH: u32 = 1280;
@@ -133,7 +158,7 @@ pub fn black_input(slots: usize) -> usize {
 
 /// Mixer: one inter input per slot, plus black, into the vision mixer.
 pub fn mixer_flow(slots: usize, backend: MixerBackend, monitor: MonitorOut) -> Flow {
-    let mut flow = Flow::new("lmix mixer");
+    let mut flow = Flow::new(MIXER_NAME);
     flow.id = mixer_id();
     share_timing(&mut flow);
 
@@ -187,6 +212,14 @@ pub fn mixer_flow(slots: usize, backend: MixerBackend, monitor: MonitorOut) -> F
                 "start_time_selection",
                 PropertyValue::String("first".into()),
             ),
+            // GL memory is bound to the mixer's GL context, which the
+            // output flows do not share: program leaves in system memory.
+            // CUDA program stays on the GPU for the encoders; the flows
+            // that read it on the CPU download it themselves.
+            (
+                "gl_download",
+                PropertyValue::Bool(backend == MixerBackend::Gl),
+            ),
         ],
     ));
 
@@ -197,21 +230,282 @@ pub fn mixer_flow(slots: usize, backend: MixerBackend, monitor: MonitorOut) -> F
         format!("{MIXER_BLOCK}:pgm_out"),
         format!("{PGM_TAP}:video_in"),
     ));
-    // An open tap output stalls the branch after the first frame; this sink
-    // consumes program until outputs (OUT) take its place. qos=false: strom
-    // drops upstream QoS at sinks with a probe that GStreamer 1.24 answers
-    // with a CRITICAL per frame.
+    // Program for the outputs, each in its own flow (crash isolation): the
+    // inter sink also consumes program when no output listens, so the tap
+    // branch never stalls.
+    flow.blocks.push(block(PGM_OUT, INTER_OUTPUT_BLOCK, vec![]));
+    flow.links.push(link(
+        format!("{PGM_TAP}:video_out"),
+        format!("{PGM_OUT}:sink"),
+    ));
+    flow.blocks
+        .push(block(PGM_AUDIO_OUT, INTER_OUTPUT_BLOCK, vec![]));
+    flow.links.push(link(
+        format!("{AUDIO_MIXER}:main_out"),
+        format!("{PGM_AUDIO_OUT}:sink"),
+    ));
+    flow
+}
+
+/// `inter` channels of program in the mixer flow.
+fn pgm_channel(block: &str) -> String {
+    format!("strom_{}_{block}", mixer_id())
+}
+
+pub fn output_flow_id(id: OutputId) -> FlowId {
+    Uuid::new_v5(&FLOW_NAMESPACE, format!("output-{id}").as_bytes())
+}
+
+/// One output: program picture and sound from the mixer, encoded where
+/// the target needs it.
+///
+/// ```text
+///   SRT:    pgm ─► videoenc ─► srt:video_in      pgm_audio ─► srt:audio_in_0 (AAC inside)
+///   Record: pgm ─► videoenc ─► rec:video_in      pgm_audio ─► aac ─► rec:audio_in_0
+///   NDI:    pgm ─────────────► ndi:video_in      pgm_audio ─► ndi:audio_in
+/// ```
+pub fn output_flow(id: OutputId, spec: &OutputSpec, feed: Feed, backend: MixerBackend) -> Flow {
+    let mut flow = Flow::new(format!("lmix output {id}"));
+    flow.id = output_flow_id(id);
+    share_timing(&mut flow);
+    // Stopping drains with EOS: recordings get their trailer (MP4 needs it).
+    flow.properties.eos_on_stop = Some(true);
+
+    // Program, or one slot as it arrives (ISO, MultiCorder). A slot
+    // without sound gets no audio branch: a recorder would wait forever
+    // for a track that never comes.
+    let (video, audio) = match feed {
+        Feed::Program => (pgm_channel(PGM_OUT), Some(pgm_channel(PGM_AUDIO_OUT))),
+        Feed::Slot { slot, audio } => (slot_channel(slot), audio.then(|| slot_audio_channel(slot))),
+    };
+    // Screens show picture only.
+    let audio = audio.filter(|_| !matches!(spec, OutputSpec::Display { .. }));
+    let channels = [("pgm", Some(video)), ("pgm_audio", audio.clone())];
+    for (block_id, channel) in channels {
+        let Some(channel) = channel else {
+            continue;
+        };
+        flow.blocks.push(block(
+            block_id,
+            INTER_INPUT_BLOCK,
+            vec![
+                ("channel", PropertyValue::String(channel)),
+                ("max_time", PropertyValue::String(OUTPUT_BUFFER_MS.into())),
+            ],
+        ));
+    }
+    let sound = audio.is_some();
+    // Screens and NDI read frames on the CPU; the encoders take GPU memory.
+    let on_gpu = matches!(feed, Feed::Program) && backend == MixerBackend::Cuda;
+
+    match spec {
+        OutputSpec::Srt { uri, video_kbps } => {
+            add_encoder(&mut flow, *video_kbps);
+            flow.blocks.push(block(
+                "srt",
+                SRT_OUTPUT_BLOCK,
+                vec![
+                    ("srt_uri", PropertyValue::String(uri.clone())),
+                    ("auto_reconnect", PropertyValue::Bool(true)),
+                    ("wait_for_connection", PropertyValue::Bool(false)),
+                ],
+            ));
+            flow.links
+                .push(link("enc:encoded_out".into(), "srt:video_in".into()));
+            if sound {
+                flow.links
+                    .push(link("pgm_audio:src".into(), "srt:audio_in_0".into()));
+            }
+        }
+        OutputSpec::Record {
+            folder,
+            container,
+            video_kbps,
+        } => {
+            add_encoder(&mut flow, *video_kbps);
+            flow.blocks.push(block(
+                "rec",
+                RECORDER_BLOCK,
+                vec![
+                    ("container", PropertyValue::String(container.nick().into())),
+                    ("output_dir", PropertyValue::String(folder.clone())),
+                    (
+                        "filename_prefix",
+                        PropertyValue::String(RECORDING_PREFIX.into()),
+                    ),
+                    ("num_audio_tracks", PropertyValue::UInt(u64::from(sound))),
+                ],
+            ));
+            flow.links
+                .push(link("enc:encoded_out".into(), "rec:video_in_0".into()));
+            if sound {
+                add_aac(&mut flow, "rec:audio_in_0");
+            }
+        }
+        OutputSpec::Display { mode } => {
+            let from = add_download(&mut flow, "pgm:src", on_gpu);
+            add_display(&mut flow, &from, *mode);
+        }
+        OutputSpec::Ndi { name } => {
+            flow.blocks.push(block(
+                "ndi",
+                NDI_OUTPUT_BLOCK,
+                vec![("ndi_name", PropertyValue::String(name.clone()))],
+            ));
+            let from = add_download(&mut flow, "pgm:src", on_gpu);
+            flow.links.push(link(from, "ndi:video_in".into()));
+            if sound {
+                flow.links
+                    .push(link("pgm_audio:src".into(), "ndi:audio_in".into()));
+            }
+        }
+    }
+    flow
+}
+
+/// Picture to a screen. qos=false: strom drops upstream QoS at sinks with
+/// a probe that GStreamer 1.24 answers with a CRITICAL per frame.
+/// sync=false: frames come live from the mixer, already as old as its
+/// latency; a syncing sink would drop them all as late.
+fn add_display(flow: &mut Flow, from: &str, mode: DisplayMode) {
+    let mut properties = vec![
+        ("qos", PropertyValue::Bool(false)),
+        ("sync", PropertyValue::Bool(false)),
+    ];
+    let sink = match mode {
+        DisplayMode::Window => "glimagesink",
+        DisplayMode::Fullscreen => {
+            properties.push(("fullscreen", PropertyValue::Bool(true)));
+            "waylandsink"
+        }
+        DisplayMode::Drm { connector } => {
+            properties.push(("connector-id", PropertyValue::Int(i64::from(connector))));
+            "kmssink"
+        }
+    };
+    flow.elements
+        .push(element("convert", "videoconvert", vec![]));
+    flow.elements.push(element("screen", sink, properties));
+    flow.links.push(link(from.into(), "convert".into()));
+    flow.links.push(link("convert".into(), "screen".into()));
+}
+
+/// Program leaves the CUDA mixer in GPU memory: elements that read frames
+/// on the CPU get them downloaded first. Returns what to link from.
+fn add_download(flow: &mut Flow, from: &str, on_gpu: bool) -> String {
+    if !on_gpu {
+        return from.to_string();
+    }
+    flow.elements
+        .push(element("download", "cudadownload", vec![]));
+    // cudadownload passes GPU memory through to anything that accepts it,
+    // and unixfdsink accepts any caps.
     flow.elements.push(element(
-        PGM_SINK,
-        "fakesink",
+        "sysmem",
+        "capsfilter",
+        vec![("caps", PropertyValue::String("video/x-raw".into()))],
+    ));
+    flow.links.push(link(from.into(), "download".into()));
+    flow.links.push(link("download".into(), "sysmem".into()));
+    "sysmem".into()
+}
+
+/// Program sound as AAC into `to` (the recorder takes encoded audio only).
+fn add_aac(flow: &mut Flow, to: &str) {
+    flow.elements.push(element("aconv", "audioconvert", vec![]));
+    flow.elements.push(element("aac", "avenc_aac", vec![]));
+    flow.elements.push(element("aacparse", "aacparse", vec![]));
+    flow.links
+        .push(link("pgm_audio:src".into(), "aconv".into()));
+    flow.links.push(link("aconv".into(), "aac".into()));
+    flow.links.push(link("aac".into(), "aacparse".into()));
+    flow.links.push(link("aacparse".into(), to.into()));
+}
+
+pub fn live_flow_id(which: LivePicture) -> FlowId {
+    let name = match which {
+        LivePicture::Program => "live-program".to_string(),
+        LivePicture::Slot(slot) => format!("live-slot-{slot}"),
+        LivePicture::SlotFull(slot) => format!("live-slot-{slot}-full"),
+    };
+    Uuid::new_v5(&FLOW_NAMESPACE, name.as_bytes())
+}
+
+/// Socket file name of a live picture, inside the live directory.
+pub fn live_socket_name(which: LivePicture) -> String {
+    match which {
+        LivePicture::Program => "program.sock".into(),
+        LivePicture::Slot(slot) => format!("slot-{slot}.sock"),
+        LivePicture::SlotFull(slot) => format!("slot-{slot}-full.sock"),
+    }
+}
+
+/// Live picture for a Console on the engine's machine: raw frames over a
+/// Unix socket, no encoding (the Console reads it with `unixfdsrc`).
+/// Inputs at tile size or as they arrive, program at full size.
+///
+/// ```text
+///   pgm ─► videoscale ─► caps ─► unixfdsink          input (tile)
+///   pgm ─► unixfdsink                                 input (full)
+///   pgm ─► [cudadownload ─► caps] ─► unixfdsink       program
+/// ```
+pub fn live_flow(which: LivePicture, socket: &str, backend: MixerBackend) -> Flow {
+    let (name, channel) = match which {
+        LivePicture::Program => ("program".to_string(), pgm_channel(PGM_OUT)),
+        LivePicture::Slot(slot) => (format!("slot {slot}"), slot_channel(slot)),
+        LivePicture::SlotFull(slot) => (format!("slot {slot} full"), slot_channel(slot)),
+    };
+    let mut flow = Flow::new(format!("lmix live {name}"));
+    flow.id = live_flow_id(which);
+    share_timing(&mut flow);
+    flow.blocks.push(block(
+        "pgm",
+        INTER_INPUT_BLOCK,
         vec![
+            ("channel", PropertyValue::String(channel)),
+            ("max_time", PropertyValue::String(LIVE_BUFFER_MS.into())),
+        ],
+    ));
+    flow.elements.push(element(
+        "sock",
+        "unixfdsink",
+        vec![
+            ("socket-path", PropertyValue::String(socket.into())),
             ("sync", PropertyValue::Bool(false)),
-            ("qos", PropertyValue::Bool(false)),
+        ],
+    ));
+    if let LivePicture::Slot(_) = which {
+        flow.elements.push(element("scale", "videoscale", vec![]));
+        flow.elements.push(element(
+            "size",
+            "capsfilter",
+            vec![("caps", PropertyValue::String(LIVE_INPUT_CAPS.into()))],
+        ));
+        flow.links.push(link("pgm:src".into(), "scale".into()));
+        flow.links.push(link("scale".into(), "size".into()));
+        flow.links.push(link("size".into(), "sock".into()));
+    } else {
+        // Slots come from their own flows in system memory.
+        let on_gpu = which == LivePicture::Program && backend == MixerBackend::Cuda;
+        let from = add_download(&mut flow, "pgm:src", on_gpu);
+        flow.links.push(link(from, "sock".into()));
+    }
+    flow
+}
+
+/// H.264 from program: hardware when the engine has one, else software.
+fn add_encoder(flow: &mut Flow, video_kbps: u32) {
+    flow.blocks.push(block(
+        "enc",
+        VIDEO_ENCODER_BLOCK,
+        vec![
+            ("codec", PropertyValue::String("h264".into())),
+            ("encoder_preference", PropertyValue::String("auto".into())),
+            ("bitrate", PropertyValue::UInt(u64::from(video_kbps))),
         ],
     ));
     flow.links
-        .push(link(format!("{PGM_TAP}:video_out"), PGM_SINK.into()));
-    flow
+        .push(link("pgm:src".into(), "enc:video_in".into()));
 }
 
 /// Sound of every slot into one audio mixer; its main mix is program
@@ -237,6 +531,7 @@ fn add_audio_mixer(flow: &mut Flow, slots: usize, monitor: MonitorOut) {
         AUDIO_MIXER_BLOCK,
         vec![
             ("num_channels", PropertyValue::UInt(slots as u64)),
+            ("sample_rate", PropertyValue::UInt(AUDIO_RATE)),
             (
                 "start_time_selection",
                 PropertyValue::String("first".into()),
@@ -317,6 +612,10 @@ fn add_source(flow: &mut Flow, source: &SourceSpec) -> Option<String> {
                 vec![
                     ("srt_uri", PropertyValue::String(uri.clone())),
                     ("decode", PropertyValue::Bool(true)),
+                    // Wait for the sender instead of ending at once, and keep
+                    // listening when it drops: it can come back (failback).
+                    ("wait_for_connection", PropertyValue::Bool(true)),
+                    ("keep_listening", PropertyValue::Bool(true)),
                     ("num_video_tracks", PropertyValue::UInt(1)),
                     ("num_audio_tracks", PropertyValue::UInt(1)),
                 ],
@@ -580,6 +879,21 @@ mod tests {
     }
 
     #[test]
+    fn only_the_gl_mixer_downloads_program() {
+        let download = |backend| {
+            let flow = mixer_flow(2, backend, MonitorOut::None);
+            let vm = flow.blocks.iter().find(|b| b.id == "vm").unwrap();
+            matches!(
+                vm.properties.get("gl_download"),
+                Some(PropertyValue::Bool(true))
+            )
+        };
+
+        assert!(download(MixerBackend::Gl));
+        assert!(!download(MixerBackend::Cuda));
+    }
+
+    #[test]
     fn slot_publishes_on_its_channel() {
         let flow = slot_flow(
             2,
@@ -714,6 +1028,209 @@ mod tests {
             .links
             .iter()
             .any(|l| l.from == "mix:monitor_out" && l.to == MONITOR_SINK));
+    }
+
+    #[test]
+    fn mixer_publishes_program_for_outputs() {
+        let flow = mixer_flow(2, MixerBackend::Cpu, MonitorOut::None);
+
+        assert!(flow
+            .links
+            .iter()
+            .any(|l| l.from == "tap_pgm:video_out" && l.to == "pgm_out:sink"));
+        assert!(flow
+            .links
+            .iter()
+            .any(|l| l.from == "mix:main_out" && l.to == "pgm_audio_out:sink"));
+    }
+
+    #[test]
+    fn recording_encodes_picture_and_sound() {
+        let spec = OutputSpec::Record {
+            folder: "show".into(),
+            container: lmix_types::Container::Mkv,
+            video_kbps: 8000,
+        };
+        let flow = output_flow(OutputId::new(), &spec, Feed::Program, MixerBackend::Cpu);
+
+        let pgm = flow.blocks.iter().find(|b| b.id == "pgm").unwrap();
+        assert!(matches!(
+            pgm.properties.get("channel"),
+            Some(PropertyValue::String(c)) if *c == format!("strom_{}_pgm_out", mixer_id())
+        ));
+        assert!(flow
+            .links
+            .iter()
+            .any(|l| l.from == "enc:encoded_out" && l.to == "rec:video_in_0"));
+        assert!(flow
+            .links
+            .iter()
+            .any(|l| l.from == "aacparse" && l.to == "rec:audio_in_0"));
+    }
+
+    #[test]
+    fn iso_recording_of_a_silent_input_has_no_audio_track() {
+        let spec = OutputSpec::Record {
+            folder: "iso".into(),
+            container: lmix_types::Container::Mkv,
+            video_kbps: 8000,
+        };
+        let flow = output_flow(
+            OutputId::new(),
+            &spec,
+            Feed::Slot {
+                slot: 3,
+                audio: false,
+            },
+            MixerBackend::Cuda,
+        );
+
+        let pgm = flow.blocks.iter().find(|b| b.id == "pgm").unwrap();
+        assert!(matches!(
+            pgm.properties.get("channel"),
+            Some(PropertyValue::String(c)) if *c == slot_channel(3)
+        ));
+        assert!(flow.blocks.iter().all(|b| b.id != "pgm_audio"));
+        assert!(flow.links.iter().all(|l| l.to != "rec:audio_in_0"));
+    }
+
+    #[test]
+    fn live_program_goes_raw_to_its_socket() {
+        let flow = live_flow(
+            LivePicture::Program,
+            "/run/x/program.sock",
+            MixerBackend::Cpu,
+        );
+
+        let sock = flow.elements.iter().find(|e| e.id == "sock").unwrap();
+        assert_eq!(sock.element_type, "unixfdsink");
+        assert!(matches!(
+            sock.properties.get("socket-path"),
+            Some(PropertyValue::String(path)) if path == "/run/x/program.sock"
+        ));
+        assert!(flow
+            .links
+            .iter()
+            .any(|l| l.from == "pgm:src" && l.to == "sock"));
+        assert_ne!(flow.id, live_flow_id(LivePicture::Slot(0)));
+    }
+
+    #[test]
+    fn live_input_is_scaled_down() {
+        let flow = live_flow(
+            LivePicture::Slot(3),
+            "/run/x/slot-3.sock",
+            MixerBackend::Cuda,
+        );
+
+        let pgm = flow.blocks.iter().find(|b| b.id == "pgm").unwrap();
+        assert!(matches!(
+            pgm.properties.get("channel"),
+            Some(PropertyValue::String(c)) if *c == slot_channel(3)
+        ));
+        assert!(flow.elements.iter().any(|e| e.element_type == "videoscale"));
+        assert!(flow
+            .elements
+            .iter()
+            .all(|e| e.element_type != "cudadownload"));
+        assert!(flow
+            .links
+            .iter()
+            .any(|l| l.from == "size" && l.to == "sock"));
+        assert_eq!(live_socket_name(LivePicture::Slot(3)), "slot-3.sock");
+    }
+
+    #[test]
+    fn full_live_input_is_not_scaled() {
+        let flow = live_flow(
+            LivePicture::SlotFull(3),
+            "/run/x/slot-3-full.sock",
+            MixerBackend::Cuda,
+        );
+
+        assert!(flow.elements.iter().all(|e| e.element_type != "videoscale"));
+        assert!(flow
+            .elements
+            .iter()
+            .all(|e| e.element_type != "cudadownload"));
+        assert!(flow
+            .links
+            .iter()
+            .any(|l| l.from == "pgm:src" && l.to == "sock"));
+        assert_ne!(
+            live_flow_id(LivePicture::SlotFull(3)),
+            live_flow_id(LivePicture::Slot(3))
+        );
+        assert_eq!(
+            live_socket_name(LivePicture::SlotFull(3)),
+            "slot-3-full.sock"
+        );
+    }
+
+    #[test]
+    fn display_output_is_picture_only_without_qos() {
+        let spec = OutputSpec::Display {
+            mode: DisplayMode::Drm { connector: 42 },
+        };
+        let flow = output_flow(OutputId::new(), &spec, Feed::Program, MixerBackend::Cpu);
+
+        let screen = flow.elements.iter().find(|e| e.id == "screen").unwrap();
+        assert_eq!(screen.element_type, "kmssink");
+        assert!(matches!(
+            screen.properties.get("qos"),
+            Some(PropertyValue::Bool(false))
+        ));
+        assert!(flow.links.iter().all(|l| !l.from.starts_with("pgm_audio")));
+        assert!(flow
+            .elements
+            .iter()
+            .all(|e| e.element_type != "cudadownload"));
+    }
+
+    #[test]
+    fn cpu_readers_of_cuda_program_download_it() {
+        let screen = OutputSpec::Display {
+            mode: DisplayMode::Window,
+        };
+        let flow = output_flow(OutputId::new(), &screen, Feed::Program, MixerBackend::Cuda);
+        assert!(flow
+            .links
+            .iter()
+            .any(|l| l.from == "pgm:src" && l.to == "download"));
+        assert!(flow
+            .links
+            .iter()
+            .any(|l| l.from == "sysmem" && l.to == "convert"));
+
+        let live = live_flow(
+            LivePicture::Program,
+            "/run/x/program.sock",
+            MixerBackend::Cuda,
+        );
+        assert!(live
+            .links
+            .iter()
+            .any(|l| l.from == "sysmem" && l.to == "sock"));
+
+        let record = OutputSpec::Record {
+            folder: "show".into(),
+            container: lmix_types::Container::Mkv,
+            video_kbps: 8000,
+        };
+        let flow = output_flow(OutputId::new(), &record, Feed::Program, MixerBackend::Cuda);
+        assert!(
+            flow.elements
+                .iter()
+                .all(|e| e.element_type != "cudadownload"),
+            "the encoder takes GPU memory"
+        );
+    }
+
+    #[test]
+    fn output_flows_have_their_own_ids() {
+        let (a, b) = (OutputId::new(), OutputId::new());
+        assert_ne!(output_flow_id(a), output_flow_id(b));
+        assert_eq!(output_flow_id(a), output_flow_id(a));
     }
 
     #[test]

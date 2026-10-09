@@ -254,6 +254,16 @@ GPU-Punkte in `HARDWARE-TODO.md`):
 | 3.4 | Failover, Latenz-CI (wie `claude.md`) | C |
 | 3.5 | GUI-Shell-Entscheidung egui vs. Qt/Tauri — Kriterien jetzt: Video-Textur-Performance (1.1, GPU-Decode direkt in Textur), Multi-Display (3.3), Dichte der Input-Leiste (2b.2), Kante-Anbindung mit Kante Light und Breeze-Rückfall (`agent.md`, GUI-Regel) | — |
 
+**Stand 2026-10-08** (Branch `m3`):
+
+| # | Stand |
+|---|---|
+| 3.1 | ✅ Ausgänge SRT, Aufnahme (MKV/MP4/TS), NDI als eigene Flows; Start/Stopp, Status mit Laufzeit und Fehler; Senderate, Paketverluste und RTT für SRT (B32); RTMP wartet auf strom #771, OMT ohne strom-Block |
+| 3.2 | ✅ MultiCorder als Ausgangsquelle "Input": Aufnahme, SRT oder NDI je Input (ISO) |
+| 3.3 | ✅ Bildschirm-Ausgang im Engine-Prozess: Fenster, Vollbild (Wayland), DRM-Anschluss; ⚠ Vollbild/DRM nur auf Hardware prüfbar (H.20) |
+| 3.4 | ✅ Failover: Quelle weg → Input offline, PGM hält, Slot kommt von selbst wieder (2–10 s Backoff); Ausgang bricht → Fehler, Neustart; Latenz-API und Budget-Check im VM-Test, CI `vm-check`; ⚠ SRT-Input in strom unzuverlässig (H.23) |
+| 3.5 | ✅ Qt Quick/Kirigami über cxx-qt (User, 2026-10-09); Umstieg schrittweise nach `GUI-SHELL.md` |
+
 ### M4 — Produktionswerkzeuge (wie geplant, erweitert)
 
 | # | Punkt | Ort |

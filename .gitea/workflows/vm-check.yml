@@ -1,0 +1,59 @@
+name: vm-check
+
+# End-to-end check of lmix-core against a real strom (CPU mixer, no GPU):
+# switching, sound, sources, outputs, failover and the latency budget
+# (scripts/test-m2b-vm.sh). The latency regression check of ROADMAP 3.4.
+#
+# Uses the prebuilt strom package (strom.yml); without one for the
+# submodule commit it builds strom here (slow).
+on:
+  push:
+    paths:
+      - workspace/lmix-core/**
+      - workspace/lmix-types/**
+      - workspace/app-desktop/**
+      - workspace/strom
+      - scripts/test-m2b-vm.sh
+      - .gitea/workflows/vm-check.yml
+  workflow_dispatch:
+
+concurrency:
+  group: vm-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  vm-check:
+    timeout-minutes: 120
+    runs-on: ubuntu-latest
+    container: ubuntu:24.04
+    steps:
+      - name: Tools
+        run: |
+          apt-get update -qq
+          DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git curl ca-certificates \
+            jq zstd nodejs imagemagick xvfb ffmpeg build-essential mold clang pkg-config \
+            libssl-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+            libgstreamer-plugins-bad1.0-dev gstreamer1.0-plugins-base \
+            gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly \
+            gstreamer1.0-libav gstreamer1.0-tools gstreamer1.0-gl gstreamer1.0-nice \
+            libnice-dev libcairo2-dev
+          curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable
+
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      # Private submodule: see strom.yml.
+      - name: strom submodule
+        env:
+          TOKEN: ${{ secrets.REGISTRY_TOKEN }}
+        run: |
+          git config --global --add safe.directory '*'
+          git -c http.extraheader="Authorization: token $TOKEN" \
+            submodule update --init --depth 50 workspace/strom
+
+      - name: VM check
+        env:
+          GITEA_TOKEN: ${{ secrets.REGISTRY_TOKEN }}
+          RUSTFLAGS: -C link-arg=-fuse-ld=mold
+        run: |
+          . "$HOME/.cargo/env"
+          scripts/test-m2b-vm.sh

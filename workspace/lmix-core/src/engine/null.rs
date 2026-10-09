@@ -13,9 +13,45 @@ pub struct NullEngine {
     log: Mutex<Vec<Command>>,
     /// Never measures anything.
     levels: tokio::sync::watch::Sender<super::meters::EngineLevels>,
+    errors: Option<tokio::sync::broadcast::Sender<super::meters::FlowError>>,
+    /// Next command takes this long and reports this failure halfway
+    /// (a stop that drains, as strom's `eos_on_stop` does).
+    #[cfg(test)]
+    slow: Mutex<Option<(std::time::Duration, super::meters::FlowError)>>,
+    /// Engine process identity (`instance`); tests change it to restart.
+    #[cfg(test)]
+    instance: Mutex<Option<String>>,
 }
 
 impl NullEngine {
+    /// An engine whose flows can be made to fail (tests).
+    #[cfg(test)]
+    pub fn failing() -> Self {
+        Self {
+            errors: Some(tokio::sync::broadcast::channel(16).0),
+            ..Self::default()
+        }
+    }
+
+    /// Report a flow failure as the engine would.
+    #[cfg(test)]
+    pub fn fail(&self, error: super::meters::FlowError) {
+        let errors = self.errors.as_ref().expect("engine built with failing()");
+        let _ = errors.send(error);
+    }
+
+    /// Make the next command slow, reporting `error` halfway through.
+    #[cfg(test)]
+    pub fn slow_next(&self, takes: std::time::Duration, error: super::meters::FlowError) {
+        *self.slow.lock().expect("slow lock") = Some((takes, error));
+    }
+
+    /// Pretend the engine process is `instance` (a new one: restarted).
+    #[cfg(test)]
+    pub fn set_instance(&self, instance: &str) {
+        *self.instance.lock().expect("instance lock") = Some(instance.into());
+    }
+
     /// Commands received so far.
     #[cfg(test)]
     pub fn log(&self) -> Vec<Command> {
@@ -29,8 +65,22 @@ impl Engine for NullEngine {
         Ok(())
     }
 
+    #[cfg(test)]
+    async fn instance(&self) -> Option<String> {
+        self.instance.lock().expect("instance lock").clone()
+    }
+
     async fn run(&self, command: &Command) -> Result<(), EngineError> {
         self.log.lock().expect("log lock").push(command.clone());
+        #[cfg(test)]
+        {
+            let slow = self.slow.lock().expect("slow lock").take();
+            if let Some((takes, error)) = slow {
+                tokio::time::sleep(takes / 2).await;
+                self.fail(error);
+                tokio::time::sleep(takes / 2).await;
+            }
+        }
         Ok(())
     }
 
@@ -44,5 +94,20 @@ impl Engine for NullEngine {
 
     fn levels(&self) -> tokio::sync::watch::Receiver<super::meters::EngineLevels> {
         self.levels.subscribe()
+    }
+
+    fn flow_errors(&self) -> tokio::sync::broadcast::Receiver<super::meters::FlowError> {
+        match &self.errors {
+            Some(errors) => errors.subscribe(),
+            None => tokio::sync::broadcast::channel(1).1,
+        }
+    }
+
+    async fn output_running(&self, _id: lmix_types::OutputId) -> bool {
+        false
+    }
+
+    async fn measure_latency(&self, _seconds: u32) -> Result<(), EngineError> {
+        Ok(())
     }
 }

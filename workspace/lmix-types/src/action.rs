@@ -14,6 +14,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::input::{InputColor, InputRef, Listen, SignalLoss, SourceSpec, Transport};
+use crate::output::{OutputRef, OutputSource, OutputSpec};
 
 /// One of the four transition buttons (SWI.3), 1-based.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -98,6 +99,23 @@ pub enum Action {
         transport: Transport,
     },
 
+    // ---- Outputs (OUT, REC, STR) ----
+    /// Add an output to the show; it starts stopped.
+    AddOutput {
+        spec: OutputSpec,
+        /// Program (default) or one input (ISO, MultiCorder).
+        #[serde(default)]
+        source: OutputSource,
+        #[serde(default)]
+        name: Option<String>,
+    },
+    /// Remove an output (stops it first).
+    RemoveOutput { output: OutputRef },
+    /// Start streaming / recording / sending.
+    StartOutput { output: OutputRef },
+    /// Stop it.
+    StopOutput { output: OutputRef },
+
     // ---- Audio (AUD) ----
     /// Switch an input's sound on or off.
     SetAudio { input: InputRef, on: bool },
@@ -160,6 +178,8 @@ fn default_ftb_ms() -> u32 {
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "error", rename_all = "snake_case")]
 pub enum ActionError {
+    #[error("no output matches {reference}")]
+    UnknownOutput { reference: String },
     #[error("no input matches {reference}")]
     UnknownInput { reference: String },
     #[error("all {slots} mixer slots are in use")]

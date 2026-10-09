@@ -3,24 +3,30 @@
 //! (LASTENHEFT E.4: the GUI is one client among many).
 
 use futures_util::stream::StreamExt;
-use lmix_types::{Action, Device, Event, InputId, Levels, ShowState};
+use lmix_types::{Action, Device, Event, InputId, Latency, Levels, OutputStats, ShowState};
 use std::sync::mpsc::Sender;
 use std::time::Duration;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 
 /// Wait between reconnect attempts.
 const RECONNECT: Duration = Duration::from_secs(1);
+/// Length of a latency measurement started from the Console.
+pub const LATENCY_SECONDS: u64 = 5;
 
 /// What the background tasks report to the UI.
 pub enum CoreMessage {
     Connected(bool),
     State(ShowState),
     Levels(Levels),
+    /// Link health of the running network outputs.
+    Outputs(Vec<OutputStats>),
     /// Answer to an action: `None` when it ran, the reason otherwise.
     ActionDone(Option<String>),
     Picture(PictureTarget, egui::ColorImage),
     Devices(Vec<Device>),
     Recent(Vec<String>),
+    /// A latency measurement finished; `None` when it failed.
+    Latency(Option<Latency>),
     /// A file dialog returned a path.
     Picked(FilePurpose, String),
 }
@@ -114,6 +120,27 @@ impl CoreClient {
         self.get_json("/api/shows/recent").await.unwrap_or_default()
     }
 
+    /// Measure capture-to-program latency for `LATENCY_SECONDS`; `None`
+    /// when lmix-core or the engine cannot.
+    pub async fn measure_latency(&self) -> Option<Latency> {
+        let resp = self
+            .http
+            .post(format!(
+                "{}/api/latency/measure?seconds={LATENCY_SECONDS}",
+                self.base_url
+            ))
+            .send()
+            .await
+            .ok()?;
+        if !resp.status().is_success() {
+            return None;
+        }
+        tokio::time::sleep(Duration::from_secs(LATENCY_SECONDS + 1)).await;
+        self.get_json::<Latency>("/api/latency")
+            .await
+            .filter(|l| l.samples > 0)
+    }
+
     async fn get_json<T: serde::de::DeserializeOwned>(&self, path: &str) -> Option<T> {
         let resp = self
             .http
@@ -141,6 +168,7 @@ impl CoreClient {
                         let message = match serde_json::from_str(&text) {
                             Ok(Event::State { state }) => CoreMessage::State(state),
                             Ok(Event::Levels { levels }) => CoreMessage::Levels(levels),
+                            Ok(Event::Outputs { stats }) => CoreMessage::Outputs(stats),
                             _ => continue,
                         };
                         let _ = tx.send(message);

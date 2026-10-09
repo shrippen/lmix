@@ -10,26 +10,32 @@
 //! | `SetAudio` | audio mixer: channel fader and mute, ramped |
 //! | `SetListen` | audio mixer: channel PFL/AFL (monitor bus) |
 //! | `SetSignalLoss` | vision mixer compositor pads: `max-last-buffer-repeat` |
+//! | `StartOutput` / `StopOutput` | output flow (own flow per output) built and started / deleted |
 //! | `Transport` | slot's media player: play, pause, seek 0, next, previous |
 
 use async_trait::async_trait;
-use lmix_types::{Device, DeviceKind, Effect, Listen, SignalLoss, Transport};
+use lmix_types::{
+    Device, DeviceKind, Effect, Listen, OutputId, OutputStats, SignalLoss, Transport,
+};
 use reqwest::StatusCode;
 use serde::Serialize;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::Duration;
 use strom_types::api::{
-    FadeToBlackRequest, SelectPreviewRequest, TriggerTransitionRequest,
-    UpdateBlockPropertiesRequest, VisionMixerState,
+    FadeToBlackRequest, SelectPreviewRequest, SrtRole, SrtStats, SrtStatsResponse,
+    TriggerTransitionRequest, UpdateBlockPropertiesRequest, VisionMixerState,
 };
 use strom_types::discovery::DeviceResponse;
 use strom_types::vision_mixer::Source;
 use strom_types::{Flow, FlowId, PipelineState, PropertyValue};
-use tokio::sync::watch;
+use tokio::sync::{broadcast, watch, Mutex};
 
 /// How often and how long `start` waits for the mixer to play.
 const PLAYING_POLL: Duration = Duration::from_millis(200);
 const PLAYING_POLLS: u32 = 50;
+/// Flow errors kept for a slow reader.
+const ERROR_BUFFER: usize = 64;
 /// Vision mixer compositors whose input pads follow `SignalLoss`.
 const MIXER_COMPOSITORS: [&str; 2] = ["mixer", "mv_comp"];
 /// `max-last-buffer-repeat` default: repeat until end of stream.
@@ -48,8 +54,8 @@ const DEVICE_CATEGORIES: [(&str, DeviceKind); 3] = [
 const NOT_RUNNING_YET: &str = "query pipeline position";
 
 use super::flows::{self, MixerBackend, MonitorOut, AUDIO_MIXER, MIXER_BLOCK, PGM_TAP, SLOT_TAP};
-use super::meters::{self, EngineLevels};
-use super::{Engine, EngineError, Picture};
+use super::meters::{self, EngineLevels, FlowError};
+use super::{Engine, EngineError, LivePicture, Picture};
 use crate::switcher::{Command, AUDIO_RAMP_MS};
 
 pub struct StromEngine {
@@ -60,8 +66,13 @@ pub struct StromEngine {
     /// Mixer input that shows black; set by `start`.
     black: AtomicUsize,
     levels: watch::Sender<EngineLevels>,
+    errors: broadcast::Sender<FlowError>,
     /// The meter reader runs once, from the first `start`.
     metering: AtomicBool,
+    /// Directory of the live picture sockets (see [`Engine::live`]).
+    live_dir: PathBuf,
+    /// One live flow is set up at a time (two Consoles asking at once).
+    live_setup: Mutex<()>,
 }
 
 impl StromEngine {
@@ -73,8 +84,17 @@ impl StromEngine {
             monitor,
             black: AtomicUsize::new(0),
             levels: watch::Sender::default(),
+            errors: broadcast::channel(ERROR_BUFFER).0,
             metering: AtomicBool::new(false),
+            live_dir: default_live_dir(),
+            live_setup: Mutex::new(()),
         }
+    }
+
+    /// Live picture sockets in `dir` instead of [`default_live_dir`].
+    pub fn with_live_dir(mut self, dir: PathBuf) -> Self {
+        self.live_dir = dir;
+        self
     }
 
     fn url(&self, path: &str) -> String {
@@ -246,27 +266,32 @@ impl StromEngine {
     /// or briefly, then the mixer's black background shows (PGM and
     /// multiview alike).
     async fn set_signal_loss(&self, slot: usize, mode: SignalLoss) -> Result<(), EngineError> {
-        let repeat_ns = match mode {
-            SignalLoss::Hold => REPEAT_FOREVER_NS,
-            SignalLoss::Black => BLACK_AFTER.as_nanos() as u64,
+        // A stopped source ends its stream (EOS): without
+        // `repeat-after-eos` the pad then drops its last frame.
+        let (repeat_ns, after_eos) = match mode {
+            SignalLoss::Hold => (REPEAT_FOREVER_NS, true),
+            SignalLoss::Black => (BLACK_AFTER.as_nanos() as u64, false),
         };
-        let body = serde_json::json!({
-            "property_name": "max-last-buffer-repeat",
-            "value": PropertyValue::UInt(repeat_ns),
-        });
+        let properties = [
+            ("max-last-buffer-repeat", PropertyValue::UInt(repeat_ns)),
+            ("repeat-after-eos", PropertyValue::Bool(after_eos)),
+        ];
         for compositor in MIXER_COMPOSITORS {
             let path = format!(
                 "/flows/{}/elements/{MIXER_BLOCK}:{compositor}/pads/sink_{slot}/properties",
                 flows::mixer_id()
             );
-            let resp = self
-                .http
-                .patch(self.url(&path))
-                .json(&body)
-                .send()
-                .await
-                .map_err(net)?;
-            check(resp).await?;
+            for (name, value) in &properties {
+                let body = serde_json::json!({ "property_name": name, "value": value });
+                let resp = self
+                    .http
+                    .patch(self.url(&path))
+                    .json(&body)
+                    .send()
+                    .await
+                    .map_err(net)?;
+                check(resp).await?;
+            }
         }
         Ok(())
     }
@@ -346,6 +371,17 @@ impl StromEngine {
 
 #[async_trait]
 impl Engine for StromEngine {
+    /// strom's process start time (`/api/version`).
+    async fn instance(&self) -> Option<String> {
+        #[derive(serde::Deserialize)]
+        struct Version {
+            process_started_at: String,
+        }
+        let resp = self.http.get(self.url("/version")).send().await.ok()?;
+        let version: Version = check(resp).await.ok()?.json().await.ok()?;
+        Some(version.process_started_at)
+    }
+
     /// Keep a running mixer with the right slot count (no picture drop when
     /// lmix-core restarts); rebuild it otherwise.
     async fn start(&self, slots: usize) -> Result<(), EngineError> {
@@ -356,6 +392,7 @@ impl Engine for StromEngine {
                 flows::mixer_id(),
                 AUDIO_MIXER,
                 self.levels.clone(),
+                self.errors.clone(),
             ));
         }
 
@@ -364,9 +401,9 @@ impl Engine for StromEngine {
 
         let wanted = flows::mixer_flow(slots, self.backend, self.monitor);
         let current = self.get_flow(wanted.id).await?;
-        let reusable = current
-            .as_ref()
-            .is_some_and(|f| f.running && slot_count(f) == Some(black + 1));
+        let reusable = current.as_ref().is_some_and(|f| {
+            f.running && f.name == flows::MIXER_NAME && slot_count(f) == Some(black + 1)
+        });
         if reusable {
             return Ok(());
         }
@@ -406,7 +443,37 @@ impl Engine for StromEngine {
             Command::SetListen { slot, listen } => self.set_listen(*slot, *listen).await,
             Command::Transport { slot, transport } => self.transport(*slot, *transport).await,
             Command::SetSignalLoss { slot, mode } => self.set_signal_loss(*slot, *mode).await,
+            Command::StartOutput { id, spec, feed } => {
+                self.put_flow(&flows::output_flow(*id, spec, *feed, self.backend))
+                    .await
+            }
+            Command::StopOutput { id } => self.drop_flow(flows::output_flow_id(*id)).await,
         }
+    }
+
+    async fn live(&self, picture: LivePicture) -> Result<PathBuf, EngineError> {
+        let socket = self.live_dir.join(flows::live_socket_name(picture));
+        let id = flows::live_flow_id(picture);
+        let _setup = self.live_setup.lock().await;
+        let running = self.get_flow(id).await?.is_some_and(|f| f.running);
+        if running && socket.exists() {
+            return Ok(socket);
+        }
+        std::fs::create_dir_all(&self.live_dir).map_err(|e| {
+            EngineError::Refused(format!("live directory {}: {e}", self.live_dir.display()))
+        })?;
+        let path = socket
+            .to_str()
+            .ok_or_else(|| EngineError::Refused("live directory is not UTF-8".into()))?;
+        if path.len() > MAX_SOCKET_PATH {
+            return Err(EngineError::Refused(format!(
+                "live socket path longer than {MAX_SOCKET_PATH} bytes, choose a shorter --live-dir: {path}"
+            )));
+        }
+        self.put_flow(&flows::live_flow(picture, path, self.backend))
+            .await?;
+        self.wait_playing(id).await?;
+        Ok(socket)
     }
 
     /// strom answers 504 while a tap has no frame yet (the first request
@@ -429,6 +496,44 @@ impl Engine for StromEngine {
         self.levels.subscribe()
     }
 
+    fn flow_errors(&self) -> broadcast::Receiver<FlowError> {
+        self.errors.subscribe()
+    }
+
+    /// Buffer-age probe on the mixer's program output: with base time 0
+    /// in every flow and timestamps kept over `inter`, a buffer's age there
+    /// is the time since its source captured it.
+    async fn measure_latency(&self, seconds: u32) -> Result<(), EngineError> {
+        self.levels.send_modify(|l| l.program_ages_ms.clear());
+        let body = serde_json::json!({
+            "element_id": flows::PGM_OUT,
+            "sample_interval": 1,
+            "timeout_secs": seconds,
+        });
+        let path = format!("/flows/{}/probes", flows::mixer_id());
+        let resp = self
+            .http
+            .post(self.url(&path))
+            .json(&body)
+            .send()
+            .await
+            .map_err(net)?;
+        check(resp).await.map(|_| ())
+    }
+
+    async fn output_running(&self, id: OutputId) -> bool {
+        matches!(self.get_flow(flows::output_flow_id(id)).await, Ok(Some(flow)) if flow.running)
+    }
+
+    /// SRT sender statistics of the output's flow, summed over its
+    /// receivers (a listener may serve several).
+    async fn output_stats(&self, id: OutputId) -> Option<OutputStats> {
+        let path = format!("/flows/{}/srt-stats", flows::output_flow_id(id));
+        let resp = self.http.get(self.url(&path)).send().await.ok()?;
+        let stats: SrtStatsResponse = check(resp).await.ok()?.json().await.ok()?;
+        Some(sender_stats(id, &stats.stats))
+    }
+
     /// Cameras, microphones and NDI sources, in that order.
     async fn devices(&self) -> Result<Vec<Device>, EngineError> {
         let mut devices = Vec::new();
@@ -444,6 +549,32 @@ impl Engine for StromEngine {
             }));
         }
         Ok(devices)
+    }
+}
+
+/// One output's view of strom's SRT statistics.
+fn sender_stats(id: OutputId, stats: &SrtStats) -> OutputStats {
+    let callers: Vec<_> = stats
+        .connections
+        .values()
+        .filter(|c| c.role == SrtRole::Sink)
+        .flat_map(|c| &c.callers)
+        .collect();
+    let rate_mbps: f64 = callers.iter().filter_map(|c| c.send_rate_mbps).sum();
+    OutputStats {
+        output: id,
+        connected: stats
+            .connections
+            .values()
+            .any(|c| c.role == SrtRole::Sink && c.connected),
+        kbps: (rate_mbps * 1000.0).round() as u32,
+        packets_lost: callers.iter().filter_map(|c| c.packets_sent_lost).sum(),
+        packets_dropped: callers.iter().filter_map(|c| c.packets_sent_dropped).sum(),
+        rtt_ms: callers
+            .iter()
+            .filter_map(|c| c.rtt_ms)
+            .reduce(f64::max)
+            .map(|ms| ms.round() as u32),
     }
 }
 
@@ -483,4 +614,79 @@ async fn check(resp: reqwest::Response) -> Result<reqwest::Response, EngineError
     let status = resp.status();
     let body = resp.text().await.unwrap_or_default();
     Err(EngineError::Refused(format!("{status}: {body}")))
+}
+
+/// Longest Unix socket path (`sun_path` holds 108 bytes with the NUL).
+const MAX_SOCKET_PATH: usize = 107;
+
+/// `$XDG_RUNTIME_DIR/lmix/live` (private to the user), else the temp dir.
+/// strom and the Console run as the same user on the engine machine.
+pub fn default_live_dir() -> PathBuf {
+    std::env::var_os("XDG_RUNTIME_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(std::env::temp_dir)
+        .join("lmix")
+        .join("live")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use strom_types::api::{SrtCallerStats, SrtConnectionStats};
+
+    fn caller(rate_mbps: f64, lost: u64, rtt_ms: f64) -> SrtCallerStats {
+        SrtCallerStats {
+            send_rate_mbps: Some(rate_mbps),
+            packets_sent_lost: Some(lost),
+            packets_sent_dropped: Some(1),
+            rtt_ms: Some(rtt_ms),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn sender_stats_sum_receivers_and_ignore_inputs() {
+        let sink = SrtConnectionStats {
+            role: SrtRole::Sink,
+            connected: true,
+            callers: vec![caller(4.0, 2, 12.4), caller(2.5, 3, 30.6)],
+            ..Default::default()
+        };
+        let source = SrtConnectionStats {
+            role: SrtRole::Source,
+            connected: true,
+            callers: vec![caller(9.0, 100, 99.0)],
+            ..Default::default()
+        };
+        let stats = SrtStats {
+            connections: [("srt:srtsink".into(), sink), ("in:srtsrc".into(), source)].into(),
+        };
+        let id = OutputId::new();
+
+        let out = sender_stats(id, &stats);
+
+        assert_eq!(
+            out,
+            OutputStats {
+                output: id,
+                connected: true,
+                kbps: 6500,
+                packets_lost: 5,
+                packets_dropped: 2,
+                rtt_ms: Some(31),
+            }
+        );
+    }
+
+    #[test]
+    fn sender_stats_without_receiver() {
+        let stats = SrtStats {
+            connections: [("srt:srtsink".into(), SrtConnectionStats::default())].into(),
+        };
+
+        let out = sender_stats(OutputId::new(), &stats);
+
+        assert!(!out.connected);
+        assert_eq!((out.kbps, out.rtt_ms), (0, None));
+    }
 }

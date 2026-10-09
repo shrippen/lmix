@@ -69,6 +69,11 @@ struct Args {
     #[arg(long, env = "LMIX_MONITOR_OUT", value_enum, default_value_t = MonitorOut::None)]
     monitor_out: MonitorOut,
 
+    /// Directory for the live picture sockets of Consoles on this machine;
+    /// default `$XDG_RUNTIME_DIR/lmix/live`.
+    #[arg(long, env = "LMIX_LIVE_DIR")]
+    live_dir: Option<PathBuf>,
+
     /// Mixer slots (inputs fed at the same time).
     #[arg(long, default_value_t = DEFAULT_SLOTS)]
     slots: usize,
@@ -101,15 +106,18 @@ async fn main() -> anyhow::Result<()> {
 
     let args = Args::parse();
     let engine: Arc<dyn Engine> = match args.engine {
-        EngineKind::Strom => Arc::new(StromEngine::new(
-            args.strom.clone(),
-            args.mixer,
-            args.monitor_out,
-        )),
+        EngineKind::Strom => {
+            let engine = StromEngine::new(args.strom.clone(), args.mixer, args.monitor_out);
+            Arc::new(match args.live_dir.clone() {
+                Some(dir) => engine.with_live_dir(dir),
+                None => engine,
+            })
+        }
         EngineKind::None => Arc::new(NullEngine::default()),
     };
 
     let service = Service::new(args.slots, engine.clone(), Some(args.autosave));
+    service.await_engine();
     let public_url = args
         .public_url
         .clone()
@@ -131,6 +139,8 @@ async fn main() -> anyhow::Result<()> {
     // The engine may come up after us: keep trying, then feed it the show.
     tokio::spawn(connect(engine, service.clone(), args.slots));
     tokio::spawn(service.clone().forward_levels());
+    tokio::spawn(service.clone().watch_failures());
+    tokio::spawn(service.clone().forward_output_stats());
 
     let listener = tokio::net::TcpListener::bind(args.listen)
         .await
@@ -161,4 +171,9 @@ async fn connect(engine: Arc<dyn Engine>, service: Arc<Service>, slots: usize) {
     if let Err(e) = service.restore().await {
         tracing::error!(error = %e, "restoring show to engine failed");
     }
+    // After restore: it restarts outputs lmix-core knew as running (engine
+    // restarted); outputs that kept running while lmix-core was gone are
+    // only adopted, never restarted (no gap in a recording).
+    service.adopt_running_outputs().await;
+    service.watch_engine(slots).await;
 }

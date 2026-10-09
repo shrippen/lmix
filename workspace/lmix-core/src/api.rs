@@ -6,7 +6,10 @@
 //! | `POST /api/actions` | run one [`Action`] (JSON) |
 //! | `GET /api/actions` | action catalog as JSON schema |
 //! | `GET /api/tally` | tally per input: 0 off, 1 program, 2 preview |
+//! | `POST /api/latency/measure?seconds=N` | measure capture-to-program latency for N s (default 10) |
+//! | `GET /api/latency` | latest latency statistics (NFA.3) |
 //! | `GET /api/audio/levels` | audio levels per input and of program (dBFS) |
+//! | `GET /api/outputs/stats` | link health of running SRT outputs (rate, lost, dropped, RTT) |
 //! | `GET /api/shows/recent` | recently opened or saved show files, newest first |
 //! | `GET /api/devices` | capture devices for `SourceSpec::Device` |
 //! | `GET /api/pictures/program` | program picture, JPEG |
@@ -17,13 +20,13 @@
 use std::sync::Arc;
 
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::http::header;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use axum::routing::get;
+use axum::routing::{get, post};
 use axum::{Json, Router};
-use lmix_types::{Action, ActionError, Event, InputRef};
+use lmix_types::{Action, ActionError, Event, InputRef, LiveFeed};
 use tokio::sync::broadcast::error::RecvError;
 
 use crate::engine::EngineError;
@@ -40,10 +43,15 @@ pub fn router(service: Arc<Service>) -> Router {
         .route("/api/actions", get(catalog).post(action))
         .route("/api/events", get(events))
         .route("/api/audio/levels", get(levels))
+        .route("/api/outputs/stats", get(output_stats))
+        .route("/api/latency", get(latency))
+        .route("/api/latency/measure", post(measure_latency))
         .route("/api/shows/recent", get(recent))
         .route("/api/devices", get(devices))
         .route("/api/pictures/program", get(program_picture))
         .route("/api/pictures/inputs/{input}", get(input_picture))
+        .route("/api/live/program", get(live_program))
+        .route("/api/live/inputs/{input}", get(live_input))
         .with_state(service)
 }
 
@@ -53,6 +61,37 @@ async fn state(State(service): State<Arc<Service>>) -> impl IntoResponse {
 
 async fn tally(State(service): State<Arc<Service>>) -> impl IntoResponse {
     Json(service.tally().await)
+}
+
+async fn latency(State(service): State<Arc<Service>>) -> impl IntoResponse {
+    Json(service.latency())
+}
+
+#[derive(serde::Deserialize)]
+struct MeasureQuery {
+    #[serde(default = "default_measure_secs")]
+    seconds: u32,
+}
+
+/// Long enough for a few hundred frames.
+const DEFAULT_MEASURE_SECS: u32 = 10;
+
+fn default_measure_secs() -> u32 {
+    DEFAULT_MEASURE_SECS
+}
+
+async fn measure_latency(
+    State(service): State<Arc<Service>>,
+    Query(query): Query<MeasureQuery>,
+) -> Response {
+    match service.measure_latency(query.seconds).await {
+        Ok(()) => StatusCode::ACCEPTED.into_response(),
+        Err(error) => (StatusCode::BAD_GATEWAY, error.to_string()).into_response(),
+    }
+}
+
+async fn output_stats(State(service): State<Arc<Service>>) -> impl IntoResponse {
+    Json(service.output_stats())
 }
 
 async fn levels(State(service): State<Arc<Service>>) -> impl IntoResponse {
@@ -83,6 +122,45 @@ async fn input_picture(State(service): State<Arc<Service>>, Path(input): Path<St
     match service.input_picture(&input).await {
         Ok(picture) => picture_response(picture),
         Err(error) => error_response(error),
+    }
+}
+
+async fn live_program(State(service): State<Arc<Service>>) -> Response {
+    live_response(service.live_program().await)
+}
+
+/// `?size=full`: the input as it arrives (preview monitor); else tile size.
+#[derive(serde::Deserialize)]
+struct LiveQuery {
+    #[serde(default)]
+    size: Option<String>,
+}
+
+async fn live_input(
+    State(service): State<Arc<Service>>,
+    Path(input): Path<String>,
+    Query(query): Query<LiveQuery>,
+) -> Response {
+    let input = match input.parse::<u32>() {
+        Ok(number) => InputRef::Number(number),
+        Err(_) => InputRef::Text(input),
+    };
+    let full = query.size.as_deref() == Some("full");
+    match service.live_input(&input, full).await {
+        Ok(feed) => live_response(feed),
+        Err(error) => error_response(error),
+    }
+}
+
+/// Socket of a live picture; 404 when the engine has none (no engine).
+fn live_response(feed: Result<std::path::PathBuf, EngineError>) -> Response {
+    match feed {
+        Ok(socket) => Json(LiveFeed {
+            socket: socket.to_string_lossy().into_owned(),
+        })
+        .into_response(),
+        Err(EngineError::NoPictures) => StatusCode::NOT_FOUND.into_response(),
+        Err(error) => (StatusCode::BAD_GATEWAY, error.to_string()).into_response(),
     }
 }
 
@@ -206,6 +284,26 @@ mod tests {
         assert_eq!(status, StatusCode::NOT_FOUND);
         assert_eq!(body["error"]["error"], "unknown_input");
         assert_eq!(body["message"], "no input matches 7");
+    }
+
+    #[tokio::test]
+    async fn live_without_engine_is_404() {
+        let req = Request::get("/api/live/program")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app().oneshot(req).await.unwrap();
+
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn live_of_unknown_input_is_404() {
+        for uri in ["/api/live/inputs/3", "/api/live/inputs/3?size=full"] {
+            let req = Request::get(uri).body(Body::empty()).unwrap();
+            let resp = app().oneshot(req).await.unwrap();
+
+            assert_eq!(resp.status(), StatusCode::NOT_FOUND, "{uri}");
+        }
     }
 
     #[tokio::test]

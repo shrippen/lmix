@@ -12,12 +12,13 @@ use lmix_types::input::{color_rgb, REF_PREVIEW, REF_PROGRAM, VOLUME_MAX};
 use lmix_types::state::API_VERSION;
 use lmix_types::{
     Action, ActionError, Effect, Ingest, Input, InputColor, InputId, InputRef, InputStatus, Listen,
-    ShowState, SignalLoss, SourceSpec, Transition, TransitionSlot, Transport,
+    Output, OutputId, OutputRef, OutputSource, OutputSpec, OutputStatus, ShowState, SignalLoss,
+    SourceSpec, Transition, TransitionSlot, Transport,
 };
 use std::collections::HashMap;
 use uuid::Uuid;
 
-use crate::show::{Show, ShowInput};
+use crate::show::{Show, ShowInput, ShowOutput};
 
 /// What the engine has to do after an action.
 #[derive(Clone, Debug, PartialEq)]
@@ -41,6 +42,14 @@ pub enum Command {
     SetListen { slot: usize, listen: Listen },
     /// Last frame (`Hold`) or black when the source of `slot` stalls.
     SetSignalLoss { slot: usize, mode: SignalLoss },
+    /// Start output `id` (replaces a running one).
+    StartOutput {
+        id: OutputId,
+        spec: OutputSpec,
+        feed: Feed,
+    },
+    /// Stop output `id`; stopping a stopped one is fine.
+    StopOutput { id: OutputId },
     /// Play, pause, restart or step the media player of `slot`.
     Transport { slot: usize, transport: Transport },
     /// Set the audio channel of `slot`: linear gain (1.0 = unity) and
@@ -50,6 +59,17 @@ pub enum Command {
         gain: f64,
         muted: bool,
         ramp_ms: u32,
+    },
+}
+
+/// What an output flow subscribes to.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Feed {
+    Program,
+    /// One input's slot; `audio` when its source has sound.
+    Slot {
+        slot: usize,
+        audio: bool,
     },
 }
 
@@ -83,6 +103,8 @@ pub struct Switcher {
     listen: HashMap<InputId, Listen>,
     /// Engine address as senders reach it, for WHIP ingest links.
     ingest_base: Option<String>,
+    /// Output states; runtime only.
+    output_status: HashMap<OutputId, OutputStatus>,
 }
 
 impl Switcher {
@@ -96,7 +118,12 @@ impl Switcher {
             mix: HashMap::new(),
             listen: HashMap::new(),
             ingest_base: None,
+            output_status: HashMap::new(),
         }
+    }
+
+    pub fn slots(&self) -> usize {
+        self.slots
     }
 
     pub fn show(&self) -> &Show {
@@ -155,6 +182,10 @@ impl Switcher {
             Action::SetListen { input, listen } => self.set_listen(&input, listen),
             Action::TransportInput { input, transport } => self.transport(&input, transport),
             Action::SetSignalLoss { input, mode } => self.set_signal_loss(&input, mode),
+            Action::AddOutput { spec, source, name } => self.add_output(spec, source, name),
+            Action::RemoveOutput { output } => self.remove_output(&output),
+            Action::StartOutput { output } => self.start_output(&output),
+            Action::StopOutput { output } => self.stop_output(&output),
             Action::ClearListen => Ok(self.clear_listen()),
             Action::MoveInput { input, number } => self.move_input(&input, number),
             Action::PreviewInput { input } => self.preview(&input),
@@ -184,6 +215,7 @@ impl Switcher {
             .collect();
 
         commands.extend(self.clear_listen());
+        commands.extend(self.stop_all_outputs());
         self.show = show;
         self.path = path;
         self.status.clear();
@@ -199,6 +231,7 @@ impl Switcher {
         commands.extend(self.audio_commands(AUDIO_RAMP_MS));
         // A reused mixer may still hold solos from before.
         commands.extend(self.listen_commands());
+        commands.extend(self.running_output_commands());
         commands.extend(self.show.inputs.iter().map(|i| Command::SetSignalLoss {
             slot: i.slot,
             mode: i.signal_loss,
@@ -276,6 +309,7 @@ impl Switcher {
             transitions: self.show.transitions.clone(),
             fade_to_black: self.fade_to_black,
             slots: self.slots,
+            outputs: self.outputs_state(),
         }
     }
 
@@ -348,6 +382,36 @@ impl Switcher {
             });
         }
         self.status.remove(&removed.id);
+        // ISO outputs of the input end with it.
+        for output in self
+            .show
+            .outputs
+            .iter()
+            .filter(|o| o.source == OutputSource::Input(removed.id))
+        {
+            if self
+                .output_status
+                .get(&output.id)
+                .is_some_and(|s| matches!(s, OutputStatus::Running { .. }))
+            {
+                commands.push(Command::StopOutput { id: output.id });
+            }
+        }
+        let fed: Vec<OutputId> = self
+            .show
+            .outputs
+            .iter()
+            .filter(|o| o.source == OutputSource::Input(removed.id))
+            .map(|o| o.id)
+            .collect();
+        for id in fed {
+            self.output_status.insert(
+                id,
+                OutputStatus::Failed {
+                    message: format!("input {} was removed", removed.name),
+                },
+            );
+        }
         // A solo left on an empty channel would keep the monitor on silence.
         if self
             .listen
@@ -520,6 +584,188 @@ impl Switcher {
             slot: entry.slot,
             mode,
         }])
+    }
+
+    // ---- Outputs ----
+
+    fn add_output(
+        &mut self,
+        spec: OutputSpec,
+        source: OutputSource,
+        name: Option<String>,
+    ) -> Result<Vec<Command>, ActionError> {
+        let output = ShowOutput {
+            id: OutputId::new(),
+            name: name.unwrap_or_default(),
+            spec,
+            source,
+        };
+        self.feed_of(&output)?;
+        let name = match (output.name.is_empty(), source) {
+            (false, _) => output.name.clone(),
+            (true, OutputSource::Program) => output.spec.default_name(),
+            (true, OutputSource::Input(id)) => {
+                let input = self
+                    .show
+                    .inputs
+                    .iter()
+                    .find(|i| i.id == id)
+                    .map_or("", |i| &i.name);
+                format!("{} ({input})", output.spec.default_name())
+            }
+        };
+        self.show.outputs.push(ShowOutput { name, ..output });
+        Ok(Vec::new())
+    }
+
+    /// Program, or the slot of the output's input; ISO outputs need an
+    /// input with a picture.
+    fn feed_of(&self, output: &ShowOutput) -> Result<Feed, ActionError> {
+        let OutputSource::Input(id) = output.source else {
+            return Ok(Feed::Program);
+        };
+        let input = self
+            .show
+            .inputs
+            .iter()
+            .find(|i| i.id == id)
+            .ok_or_else(|| ActionError::UnknownInput {
+                reference: id.to_string(),
+            })?;
+        no_video_check(input)?;
+        Ok(Feed::Slot {
+            slot: input.slot,
+            audio: input.source.has_audio(),
+        })
+    }
+
+    fn remove_output(&mut self, output: &OutputRef) -> Result<Vec<Command>, ActionError> {
+        let index = self.find_output(output)?;
+        let removed = self.show.outputs.remove(index);
+        self.output_status.remove(&removed.id);
+        Ok(vec![Command::StopOutput { id: removed.id }])
+    }
+
+    /// Starting a running output restarts it (e.g. after a failure).
+    fn start_output(&mut self, output: &OutputRef) -> Result<Vec<Command>, ActionError> {
+        let entry = &self.show.outputs[self.find_output(output)?];
+        Ok(vec![Command::StartOutput {
+            id: entry.id,
+            spec: entry.spec.clone(),
+            feed: self.feed_of(entry)?,
+        }])
+    }
+
+    fn stop_output(&mut self, output: &OutputRef) -> Result<Vec<Command>, ActionError> {
+        let id = self.show.outputs[self.find_output(output)?].id;
+        Ok(vec![Command::StopOutput { id }])
+    }
+
+    fn stop_all_outputs(&mut self) -> Vec<Command> {
+        let running: Vec<OutputId> = self
+            .show
+            .outputs
+            .iter()
+            .filter(|o| self.output_running(o.id))
+            .map(|o| o.id)
+            .collect();
+        self.output_status.clear();
+        running
+            .into_iter()
+            .map(|id| Command::StopOutput { id })
+            .collect()
+    }
+
+    /// Outputs that were running before an engine restart, to start again.
+    fn running_output_commands(&self) -> Vec<Command> {
+        self.show
+            .outputs
+            .iter()
+            .filter(|o| self.output_running(o.id))
+            .filter_map(|o| {
+                let feed = self.feed_of(o).ok()?;
+                Some(Command::StartOutput {
+                    id: o.id,
+                    spec: o.spec.clone(),
+                    feed,
+                })
+            })
+            .collect()
+    }
+
+    fn output_running(&self, id: OutputId) -> bool {
+        matches!(
+            self.output_status.get(&id),
+            Some(OutputStatus::Running { .. })
+        )
+    }
+
+    pub fn output_is_running(&self, id: OutputId) -> bool {
+        self.output_running(id)
+    }
+
+    /// Start command for a failed output; `None` when it was stopped or
+    /// removed meanwhile, or its input is gone.
+    pub fn restart_command(&self, id: OutputId) -> Option<Command> {
+        let failed = matches!(
+            self.output_status.get(&id),
+            Some(OutputStatus::Failed { .. })
+        );
+        let output = self
+            .show
+            .outputs
+            .iter()
+            .find(|o| o.id == id)
+            .filter(|_| failed)?;
+        Some(Command::StartOutput {
+            id,
+            spec: output.spec.clone(),
+            feed: self.feed_of(output).ok()?,
+        })
+    }
+
+    /// The engine reports what an output does.
+    pub fn set_output_status(&mut self, id: OutputId, status: OutputStatus) {
+        if self.show.outputs.iter().any(|o| o.id == id) {
+            self.output_status.insert(id, status);
+        }
+    }
+
+    pub fn output_ids(&self) -> Vec<OutputId> {
+        self.show.outputs.iter().map(|o| o.id).collect()
+    }
+
+    fn outputs_state(&self) -> Vec<Output> {
+        self.show
+            .outputs
+            .iter()
+            .enumerate()
+            .map(|(i, o)| Output {
+                id: o.id,
+                number: i as u32 + 1,
+                name: o.name.clone(),
+                spec: o.spec.clone(),
+                source: o.source,
+                status: self.output_status.get(&o.id).cloned().unwrap_or_default(),
+            })
+            .collect()
+    }
+
+    fn find_output(&self, output: &OutputRef) -> Result<usize, ActionError> {
+        let unknown = || ActionError::UnknownOutput {
+            reference: match output {
+                OutputRef::Number(n) => n.to_string(),
+                OutputRef::Text(t) => format!("\"{t}\""),
+            },
+        };
+        let outputs = &self.show.outputs;
+        let index = match output {
+            OutputRef::Number(n) => (*n as usize).checked_sub(1).filter(|i| *i < outputs.len()),
+            OutputRef::Text(text) => outputs
+                .iter()
+                .position(|o| o.name == *text || o.id.to_string() == *text),
+        };
+        index.ok_or_else(unknown)
     }
 
     /// Signal-loss mode of the input in `slot`; hold for an empty slot.
@@ -932,6 +1178,107 @@ mod tests {
         let ingest = sw.state().inputs[0].ingest.clone().unwrap();
         assert_eq!(ingest.whip_url, "http://studio:8080/whip/guest");
         assert_eq!(ingest.browser_url, "http://studio:8080/player/whip-ingest");
+    }
+
+    #[test]
+    fn outputs_start_stop_and_restart_after_engine_loss() {
+        let mut sw = Switcher::new(SLOTS);
+        let srt = OutputSpec::Srt {
+            uri: "srt://cdn:9000".into(),
+            video_kbps: 6000,
+        };
+        sw.apply(Action::AddOutput {
+            spec: srt.clone(),
+            source: OutputSource::Program,
+            name: Some("Stream".into()),
+        })
+        .unwrap();
+        let id = sw.state().outputs[0].id;
+
+        let cmds = sw
+            .apply(Action::StartOutput {
+                output: OutputRef::Text("Stream".into()),
+            })
+            .unwrap();
+        assert_eq!(
+            cmds,
+            [Command::StartOutput {
+                id,
+                spec: srt.clone(),
+                feed: Feed::Program
+            }]
+        );
+        sw.set_output_status(id, OutputStatus::Running { since_ms: 1 });
+
+        // Engine restart: running outputs come back, stopped ones do not.
+        assert!(sw.restore_commands().contains(&Command::StartOutput {
+            id,
+            spec: srt,
+            feed: Feed::Program
+        }));
+
+        let cmds = sw
+            .apply(Action::RemoveOutput {
+                output: OutputRef::Number(1),
+            })
+            .unwrap();
+        assert_eq!(cmds, [Command::StopOutput { id }]);
+        assert!(sw.state().outputs.is_empty());
+        let err = sw
+            .apply(Action::StopOutput {
+                output: OutputRef::Number(1),
+            })
+            .unwrap_err();
+        assert!(matches!(err, ActionError::UnknownOutput { .. }));
+    }
+
+    #[test]
+    fn iso_output_follows_its_input() {
+        let mut sw = two_inputs();
+        let b = sw.state().inputs[1].id;
+        let rec = OutputSpec::Record {
+            folder: "iso".into(),
+            container: lmix_types::Container::Mkv,
+            video_kbps: 8000,
+        };
+        sw.apply(Action::AddOutput {
+            spec: rec,
+            source: OutputSource::Input(b),
+            name: None,
+        })
+        .unwrap();
+        let output = sw.state().outputs[0].clone();
+        assert_eq!(output.name, "Record iso (B)");
+
+        let cmds = sw
+            .apply(Action::StartOutput {
+                output: OutputRef::Number(1),
+            })
+            .unwrap();
+        assert!(matches!(
+            cmds[0],
+            Command::StartOutput {
+                feed: Feed::Slot {
+                    slot: 1,
+                    audio: true
+                },
+                ..
+            }
+        ));
+        sw.set_output_status(output.id, OutputStatus::Running { since_ms: 1 });
+
+        let cmds = sw.apply(Action::RemoveInput { input: named("B") }).unwrap();
+        assert!(cmds.contains(&Command::StopOutput { id: output.id }));
+        assert!(matches!(
+            sw.state().outputs[0].status,
+            OutputStatus::Failed { .. }
+        ));
+        let err = sw
+            .apply(Action::StartOutput {
+                output: OutputRef::Number(1),
+            })
+            .unwrap_err();
+        assert!(matches!(err, ActionError::UnknownInput { .. }));
     }
 
     #[test]

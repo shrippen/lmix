@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::action::{Effect, TransitionSlot};
 use crate::input::{Input, InputId};
+use crate::output::{Output, OutputStats};
 
 /// One transition button.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -29,6 +30,9 @@ pub struct ShowState {
     pub fade_to_black: bool,
     /// Mixer slots available for inputs.
     pub slots: usize,
+    /// Outputs in order (OUT).
+    #[serde(default)]
+    pub outputs: Vec<Output>,
 }
 
 /// Current API version (API.10: additive changes within one version).
@@ -54,6 +58,43 @@ pub struct Levels {
     pub monitor_peak_db: Option<f32>,
 }
 
+/// Live picture for a client on the engine's machine (`GET /api/live/…`):
+/// a Unix socket with raw frames, read with GStreamer's `unixfdsrc`.
+/// Clients elsewhere use the JPEG pictures.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct LiveFeed {
+    pub socket: String,
+}
+
+/// Latency from capture at a source to the program output of the mixer
+/// (NFA.3), from the last measurement.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct Latency {
+    pub samples: usize,
+    pub median_ms: Option<u64>,
+    pub p95_ms: Option<u64>,
+    pub max_ms: Option<u64>,
+}
+
+impl Latency {
+    /// Statistics of `ages_ms` (unsorted).
+    pub fn of(ages_ms: &[u64]) -> Self {
+        let mut sorted = ages_ms.to_vec();
+        sorted.sort_unstable();
+        let at = |q: usize| {
+            sorted
+                .get((sorted.len() * q / 100).min(sorted.len().saturating_sub(1)))
+                .copied()
+        };
+        Self {
+            samples: sorted.len(),
+            median_ms: at(50),
+            p95_ms: at(95),
+            max_ms: sorted.last().copied(),
+        }
+    }
+}
+
 /// Pushed to every subscriber (API.5, API.6).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "event", rename_all = "snake_case")]
@@ -64,4 +105,23 @@ pub enum Event {
     Tally { tally: Vec<u8> },
     /// Audio levels (AUD), about ten times a second.
     Levels { levels: Levels },
+    /// Link health of the running network outputs, about once a second.
+    Outputs { stats: Vec<OutputStats> },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn latency_statistics() {
+        let ages: Vec<u64> = (1..=100).rev().collect();
+        let latency = Latency::of(&ages);
+
+        assert_eq!(latency.samples, 100);
+        assert_eq!(latency.median_ms, Some(51));
+        assert_eq!(latency.p95_ms, Some(96));
+        assert_eq!(latency.max_ms, Some(100));
+        assert_eq!(Latency::of(&[]).median_ms, None);
+    }
 }

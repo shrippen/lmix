@@ -38,6 +38,48 @@ cd ../app-desktop && cargo build --release
 - Testdatei: 1080p30 H.264 (Constrained Baseline, 8 Mbit/s, GOP 60,
   `videotestsrc pattern=ball` + `timeoverlay`, per NVENC erzeugt).
 
+## 2026-10-09 — M3, Dauerlauf NFA.7, NVIDIA RTX 3090, CUDA-Mischer
+
+`scripts/soak-hardware.sh`, 295 min, 16 Inputs (Testbilder), Programmwechsel
+alle 30 s, MKV-Aufnahme, ISO-Aufnahme eines Inputs, 2 × SRT an lokale
+Empfänger, Messung alle 5 min über `GET /api/latency`.
+
+| Zeit | Median | p95 | strom CPU | strom RSS | GPU |
+|---|---|---|---|---|---|
+| 0 min | 84 ms | 89 ms | 183 % | 828 MB | 10 % |
+| 10 min | 56 ms | 56 ms | – | 763 MB | – |
+| 60 min | 56 ms | 56 ms | 181 % | 869 MB | 9 % |
+| 120 min | 56 ms | 56 ms | 176 % | 903 MB | 9 % |
+| 180–230 min | 63 ms | 63–65 ms | 173–192 % | 937–959 MB | 9–11 % |
+| 295 min | 56 ms | 56 ms | 177 % | 998 MB | 10 % |
+
+Latenz ohne Drift (der erste Wert fällt in den Anlauf). Aufnahme und
+ISO je 531 254 Bilder in 17 707 s, SRT 531 190 bzw. 531 192 empfangen,
+0 verloren. **strom-RSS wächst gleichmäßig um ~32 MB/h**, Ursache offen
+(keine Warnungen im Log).
+
+## 2026-10-08 — M3, Slot-Mischer über `lmix-core`, VM (CPU)
+
+Messung im Betrieb über die API von `lmix-core`, ohne Console:
+
+```bash
+curl -X POST 'http://127.0.0.1:8200/api/latency/measure?seconds=10'
+sleep 11; curl http://127.0.0.1:8200/api/latency
+# {"samples":10,"median_ms":116,"p95_ms":120,"max_ms":120}
+```
+
+- Messstelle: Ausgang `pgm_out` des Mischers (strom-Buffer-Age-Probe).
+  Alle lmix-Flows laufen mit Basiszeit 0, `inter` behält die
+  Zeitstempel: das Alter dort ist die Zeit seit der Aufnahme in der
+  Quelle (Slot-Flow), über Slot-Flow, Kopplung und Compositor hinweg.
+- strom meldet etwa einen Wert je Sekunde (jüngster Puffer), daher
+  „samples“ = Sekunden der Messung.
+- VM ohne GPU, CPU-Compositor 1080p30, 3 Slots plus Ausgänge:
+  **Median 116 ms, p95 120 ms**.
+- Regression: `scripts/test-m2b-vm.sh` misst 5 s und scheitert über
+  `LATENCY_BUDGET_MS` (Standard 150 ms, VM); CI-Workflow `vm-check`.
+- Ziel auf Hardware: ≤ 2 Frames Quelle → PGM (H.2).
+
 ## 2026-09-30 — M1b, NVIDIA RTX 3090, CUDA-Mixer
 
 Host: RTX 3090, Treiber 615.71, GStreamer 1.28.7, 24 Threads.
