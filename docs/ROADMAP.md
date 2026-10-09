@@ -4,6 +4,10 @@ Stand 2026-09-27. Grundlage: vMix 29 (Feb. 2026), strom `dev` (`bd86930`),
 app-desktop `23e0606`. Ergänzt die Meilensteine in `claude.md`, ersetzt sie
 nicht. Feststehende Entscheidungen und Ausschlüsse von dort gelten weiter.
 
+Ziel seit 2026-10-08: Clean-Room-Reimplementierung von vMix. Was lmix können
+muss, steht mit IDs in `LASTENHEFT.md`; diese Roadmap ordnet die IDs
+Meilensteinen zu (§3a).
+
 Legende Aufwandsort: **C** = nur app-desktop, **S** = strom-Patch
 (upstream-PR), **B** = neuer Block.
 
@@ -93,6 +97,9 @@ stroms Erkennung oder dem Konvertierungs-Workaround, nicht von der Hardware.
 ---
 
 ## 3. Roadmap
+
+Jede Abnahme enthält einen Persona-Durchlauf (`PERSONAS.md`, mindestens 5
+Personas, `LASTENHEFT.md` NFA.15).
 
 Reihenfolge nach Wert für den Kern-Workflow
 (Input → Preview → Take → Output). Jede Stufe endet abnahmefähig.
@@ -218,6 +225,7 @@ vMix-Grundprinzip: Inputs kommen und gehen, ohne dass Program stockt.
 | 2b.2 | Input-Leiste im vMix-Stil: Kacheln mit Typ, Label, Farbe, Audio, Klick = PVW, Doppelklick = Take | C |
 | 2b.3 | Quellentypen im Builder: NDI, SRT, OMT, WHIP, Bild, Farbe, Playlist (mit Transport: Play/Pause/Seek/Loop) | C |
 | 2b.4 | **Show-Datei** (`.lmix`, JSON): Inputs, Mixer-Konfig, Audio, Ausgänge, Hotkeys; Laden baut alle Flows | C |
+| 2b.6 | **Steuerkern** (`LASTENHEFT.md` E.4): Show-Zustand und Aktionskatalog (API.1) in eigenem Prozess `lmix-core`; GUI wird Client. Voraussetzung für NFA.6 und alle APIs | C (neues Crate) |
 | 2b.5 | Vorab messen: bleibt GPU-Speicher über `intersink`/`intersrc` erhalten (geteilter GL-/CUDA-Kontext) oder erzwingt die Kopplung Download/Upload? Falls Kopie: Kopplung ändern (geteilter Kontext, ein Flow mit dynamischen Pads), nicht Performance opfern. Ergebnis in `DECISIONS.md` | S? |
 
 **Abnahme**: Input während laufender Sendung hinzufügen/entfernen, PGM ohne
@@ -261,30 +269,126 @@ Aussetzer; Show speichern, Neustart, Show laden → identischer Zustand.
 
 - Shortcut-Editor, Trigger (OnTransitionIn/Out, OnCountdown) — **C**
 - Tally über WS-Events (Ausgabe an einfache HTTP-Tally-Geräte) — **C**
-- Gäste per Browser-WHIP (vMix-Call-Ersatz); braucht erreichbaren
+- (später) Gäste per Browser-WHIP (vMix-Call-Ersatz); braucht erreichbaren
   Media-Port, klärt die offene RTSP-/Bind-Frage aus `DECISIONS.md` mit — **C**
 - Scopes (Waveform, Vectorscope) auf PGM — **C**
 - PTZ über VISCA-IP — **C**, optional
+
+### M7 — Titel & Daten (HTML), direkt nach M4
+
+**M7.0 Benchmark** vor der Engine-Wahl (E.9): `cefsrc` (vorhanden) gegen
+WPE WebKit (`wpesrc`) mit 8 animierten Titeln 1080p60 (CSS, Canvas,
+lottie-web), Alpha; messen: GPU/CPU je Titel, Drops, Latenz, Speicher,
+Kopien bis in den Mischer. Pflicht-Test GFX.20: H.264/AAC-Video, HLS über
+MSE, Twitch- und YouTube-Einbettung (§5.3).
+Testplan: `BENCH-HTML.md`.
+
+Titel-Fähigkeiten nach dem Vorbild CasparCG (`LASTENHEFT.md` §3.11):
+Vorlagen-Konvention, Lebenszyklus, Titel-Ebenen, Datensätze.
+
+Titel sind Muss (`LASTENHEFT.md` §3.11): HTML-Vorlagen mit Feld-API,
+Animationen per CSS/JS und Lottie, Vorlagen-SDK, Datenquellen. Ersetzt M4.4.
+IDs: GFX.1–19, DAT.1–5, SWI.7, OVL.7. Entscheidungen E.9 (Engine), E.10 (Lottie).
+
+**Abnahme**: Bauchbinde aus CSV-Zeile, Ein-/Ausblendanimation als Overlay,
+Lottie-Bauchbinde mit Textfeld, Countdown mit Auslöser bei 0, 8 animierte
+Titel 1080p60 ohne Drop.
+
+### M8 — Fernbedienung, API-Gleichstand
+
+IDs: WEB.1–5, TEL.1–3, API.2–11, STR.8.
+
+**Abnahme**: Bitfocus Companion steuert lmix über das eigene Modul
+(API.9, API.11); Tally auf dem Handy.
+
+### M9 — Gleichstand
+
+Restliche S-Anforderungen: SWI.6 (Verschmelzen), SWI.10 (Mix-Inputs),
+LAY.6 (Ebenen-Editor), PRC.9 (Effektkette), AUD.9/11 (Matrix, Plugins),
+OUT.4/5 (Karte, Key+Fill), PER.2–5 (PTZ, Uhren), UI.3–12, SHW.6–9.
+
+**Abnahme**: Abdeckungsmatrix (`LASTENHEFT.md`) ohne offene M/S.
+
+### Später — Wiederholung, Gäste
+
+Zurückgestellt (User 2026-10-08): RPL.1–10, SRC.19–20, CAL.1–6, SRC.24.
+Ersetzt M4.5 und den Gäste-Punkt in M6.
+
+---
+
+## 3b. Lösungsansätze (angenommen 2026-10-08)
+
+| Baustelle | Ansatz | Meilenstein |
+|---|---|---|
+| Input-Modell | Ein Flow je Quelle, feste Mischer-Slots, Slot tauschen statt neu bauen; vorher messen, ob die Kopplung GPU-Speicher hält, sonst dynamische Pads; Offline-Input mit Ersatzbild | M2b |
+| Steuerkern | `lmix-core` hält Show, Aktionskatalog, Auslöser, Ablauflisten; Aktionskatalog als ein Rust-Enum mit Metadaten, daraus API-Doku, Tastenbelegungs-Dialog, Mappings | M2b |
+| Live-Monitore | Bilder lokal per DMABuf/Shared Memory als GPU-Textur in die GUI, Kacheln als ein Mosaik-Frame; WHEP nur für entfernte Clients | M1-Rest/M3 |
+| Overlays, Stinger, T-Bar | Ein strom-Patch: Übergangsfortschritt 0–1 setzbar; Overlay-Kanal = Ebene mit eigenem Übergangszustand; Stinger-Schnitt framegenau im Mischer | M4 |
+| API für Fremdprogramme | Eigene versionierte API, Aktionen parametrisiert, eigenes Companion-Modul; Prüfstein: was das Companion-vMix-Modul kann | M8 |
+| Controller | MIDI, HID, Gamepad, Stream Deck direkt; Rückmeldungen aus Zustandsereignissen | M6 |
+| GUI-Shell | Entscheidung nach Prototyp (32 flüssige Kacheln, zweiter Monitor); Vollbild-Ausgänge nie in der GUI | M3 |
+| Titel | HTML in strom (`cefsrc`), Konvention und Fähigkeiten nach CasparCG, kein CasparCG-Server (T.2) | M7 |
+
+---
+
+## 3a. Lastenheft → Meilenstein
+
+| Bereich (`LASTENHEFT.md`) | Meilenstein |
+|---|---|
+| INP.1–3, INP.13, SRC.2–9, SHW.1–5, API.1, UI.1/2/5/8 | M2b |
+| SRC.10–12 (NDI, OMT, SRT ein) | M2 / M2b |
+| OUT.1–3, OUT.6–11, REC.1–6, MCR.1–3, STR.1–7 | M3 |
+| OVL.1–6, SWI.3–5, LAY.1–2, PRC.1–8, AUD.2–16 | M4 |
+| NFA.5–7, NFA.13 | M5 |
+| NFA.1–2 (AMD/Intel) | M5b |
+| AUT.1–11, PER.1, PER.6–7, OUT.12–13 | M6 |
+| GFX, DAT | M7 (nach M4) |
+| WEB, TEL, API.2–11 | M8 |
+| OPS.1–3, AUT.12–14, OUT.17, UI.13, GFX.21 | M6/M7 (nach Thema) |
+| Rest S, dann K | M9 |
+| RPL, CAL | Später |
 
 ---
 
 ## 4. Bewusst nicht
 
-Aus `claude.md` ausgeschlossen, bleibt so: Windows/macOS, XAML-Titel
-(Ersatz: HTML), Control-Surfaces (MIDI/Stream Deck), 4K-Optimierung,
-Web-UI als Produkt. Zusätzlich nicht geplant: Zoom-, PowerPoint-, DVD-Input,
-Virtual Sets, Scripting-Sprache (REST/MCP genügt), VST3 (Windows-zentrisch;
-LV2 ggf. später).
+Maßgeblich ist `LASTENHEFT.md` §5. Änderungen gegenüber dem Stand
+2026-09-27, offen in `LASTENHEFT.md` E.1/E.8: Control-Surfaces, 4K und
+Web-Fernbedienung werden für den Gleichstand gebraucht; Scripting und
+Audio-Plugins (LV2, VST3 für Linux, CLAP) sind K statt ausgeschlossen.
+Weiter ausgeschlossen: Windows/macOS, XAML-Titel, Zoom-, DVD-, Flash-Input,
+Virtual Sets.
 
 ## 5. Offene Entscheidungen
 
 1. Live-Monitore: WHEP vs. Thumbnail-Intervall-PR (M1-Rest).
 2. M2b als eigener Meilenstein vor M3 (Empfehlung) — ändert die Reihenfolge
    in `claude.md`.
-3. Lizenz CEF-Pfad: `gstcefsrc`-Lizenz prüfen (vermutlich LGPL) — als Laufzeit-Plugin außerhalb des
-   Repos vereinbar mit Entscheidung 6? Vor M4 klären.
+3. ~~Lizenz CEF-Pfad~~ — geprüft 2026-10-08: `gstcefsrc` ist LGPL-2.1-or-later
+   (`LICENSE`, Datei-Header, Plugin-Metadaten "LGPL", Commit `204b01b`), CEF
+   BSD-3-Clause. strom lädt `cefsrc` zur Laufzeit als GStreamer-Plugin, kein
+   Linken, kein Quellcode im Repo → vereinbar mit Entscheidung 6 (wie
+   GStreamer selbst, ebenfalls LGPL). Regeln: gstcefsrc-Code nie ins Repo
+   kopieren (Änderungen upstream oder eigenes Repo); beim Ausliefern von
+   Paketen LGPL-Text, Quellverweis und CEF-/Chromium-Hinweise beilegen.
+   Standard-CEF-Builds spielen kein H.264/AAC ab (Patente). Gebraucht wird es
+   aber (`LASTENHEFT.md` GFX.20, Webseiten als Quellen). Wege, im Benchmark
+   M7.0 zu prüfen:
+   (a) WPE WebKit (`wpesrc`, LGPL): Medien laufen über GStreamer, also über
+       die installierten Decoder (NVDEC, VA-API, gst-libav); lmix liefert
+       keinen Patent-Codec selbst aus. Kompatibilität mit fremden Seiten
+       prüfen.
+   (b) Eigener CEF-Build mit `proprietary_codecs=true`,
+       `ffmpeg_branding=Chrome`: volle Chromium-Kompatibilität, aber
+       Software-Decoder für H.264/AAC im ausgelieferten Paket (Patentlizenz
+       beim Verteilen), großer Build.
+   (c) CEF-Build nur mit Hardware-Dekodierung: ohne Patent-Software, aber
+       ohne passende GPU kein H.264.
+   Empfehlung: (a) als Favorit, (b) als Rückfall, falls WPE an fremden
+   Seiten scheitert.
 4. ~~Testhardware AMD/Intel~~ — entschieden 2026-09-27: derzeit keine
    verfügbar; herstellerneutral bauen, Abnahme später (M5b).
+5. Clean-Room-Fragen E.1–E.8 in `LASTENHEFT.md` §6.
 
 Quellen: vMix-Features <https://www.vmix.com/software/features.aspx>,
 vMix 29 <https://blog.vmix.com/vmix-29-is-available-now/>, strom-Doku
