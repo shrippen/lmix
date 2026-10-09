@@ -108,7 +108,7 @@ MIXER_ID="$(curl -sf "$STROM/api/flows" | jq -r '.flows[] | select(.name | start
 picture() {
     local path="$1" out="$2"
     rm -f "$out"
-    for _ in $(seq 1 10); do
+    for _ in $(seq 1 20); do
         curl -sf "$CORE/pictures/$path" -o "$out" && break
         sleep 1
     done
@@ -183,6 +183,23 @@ act '{"action":"set_audio","input":"Ball","on":true}' >/dev/null
 settle
 [[ $(mon_db) -gt $AUDIBLE_DB ]] || fail "monitor not back on program after clearing solos"
 pass "solo: PFL hears a muted input, AFL does not, monitor back on program"
+
+# --- channel strip (4.7): trim lowers program, delay set while playing ---
+act '{"action":"set_volume","input":"Ball","volume":100}' >/dev/null
+settle
+full=$(pgm_db)
+act '{"action":"set_channel_strip","input":"Ball","strip":{"gain_db":-20,"delay_ms":200}}' >/dev/null
+settle
+[[ $(pgm_db) -lt $((full - 15)) ]] || fail "strip gain -20 dB did not lower program ($full -> $(pgm_db) dB)"
+ball_slot="$(curl -sf "$CORE/state" | jq '.inputs[] | select(.name=="Ball") | .slot')"
+offset="$(curl -sf "$STROM/api/flows/$MIXER_ID/elements/adelay$ball_slot/properties" | jq '.properties["ts-offset"]')"
+[[ "$offset" == 200000000 ]] || fail "strip delay not in the engine (ts-offset $offset)"
+[[ $(pgm_db) -gt $SILENT_DB ]] || fail "program silent after the delay change"
+act '{"action":"set_channel_strip","input":"Ball","strip":{}}' >/dev/null
+settle
+[[ $(pgm_db) -ge $((full - 2)) ]] || fail "strip reset did not restore program ($full -> $(pgm_db) dB)"
+act '{"action":"set_volume","input":"Ball","volume":50}' >/dev/null   # checked after the crash below
+pass "channel strip: gain lowers program, delay changed on air, reset"
 
 # --- more sources (2b.3): color, still image, playlist with transport ---
 MEDIA="$WORK/media"
@@ -375,6 +392,9 @@ act '{"action":"overlay_out","channel":1,"duration_ms":500}' >/dev/null
 overlay_gone() { picture program "$WORK/ovl.jpg"; [[ $(rgb "$WORK/ovl.jpg" r) -lt 60 ]]; }
 wait_for 4 overlay_gone || fail "overlay 1 not taken off"
 pass "overlays: input above program, red tally, faded off"
+code="$(curl -s -o /dev/null -w '%{http_code}' -X POST "$CORE/actions" -H 'content-type: application/json' \
+    -d '{"action":"set_channel_strip","input":"Orange","strip":{}}')"
+[[ "$code" != 200 ]] || fail "channel strip accepted for an input without sound"
 
 # --- T-bar (4.3): preview mixed in by hand, taken at the end ---
 act '{"action":"cut_direct","input":"Ball"}' >/dev/null

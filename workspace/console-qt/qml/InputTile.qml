@@ -259,6 +259,10 @@ KanteCard {
             enabled: tile.hasAudio
             KantePopupSkin { popup: audioMenu }
             QQC2.MenuItem {
+                text: qsTr("Channel strip…")
+                onTriggered: stripDialog.open()
+            }
+            QQC2.MenuItem {
                 text: qsTr("Audio follows video")
                 checkable: true
                 checked: tile.audio.follow_video
@@ -313,6 +317,14 @@ KanteCard {
     TextEdit {
         id: clipboard
         visible: false
+    }
+
+    ChannelStripDialog {
+        id: stripDialog
+        parent: QQC2.Overlay.overlay
+        anchors.centerIn: parent
+        act: tile.act
+        input: tile.input
     }
 
     KanteDialog {

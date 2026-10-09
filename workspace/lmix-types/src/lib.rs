@@ -16,10 +16,12 @@ pub mod state;
 
 pub use action::{Action, ActionError, Effect, TransitionSlot};
 pub use input::{
-    Device, DeviceKind, Ingest, Input, InputAudio, InputColor, InputId, InputRef, InputStatus,
-    Listen, SignalLoss, SourceSpec, TestPattern, Transport,
+    ChannelStrip, Compressor, Device, DeviceKind, Eq4, Gate, Hpf, Ingest, Input, InputAudio,
+    InputColor, InputId, InputRef, InputStatus, Listen, SignalLoss, SourceSpec, TestPattern,
+    Transport,
 };
 pub use output::{
-    Container, DisplayMode, Output, OutputId, OutputRef, OutputSource, OutputSpec, OutputStats, OutputStatus,
+    Container, DisplayMode, Output, OutputId, OutputRef, OutputSource, OutputSpec, OutputStats,
+    OutputStatus,
 };
 pub use state::{Event, InputLevel, Latency, Levels, LiveFeed, ShowState, Transition};

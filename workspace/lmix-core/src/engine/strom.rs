@@ -15,7 +15,7 @@
 
 use async_trait::async_trait;
 use lmix_types::{
-    Device, DeviceKind, Effect, Listen, OutputId, OutputStats, SignalLoss, Transport,
+    ChannelStrip, Device, DeviceKind, Effect, Listen, OutputId, OutputStats, SignalLoss, Transport,
 };
 use reqwest::StatusCode;
 use serde::Serialize;
@@ -307,6 +307,31 @@ impl StromEngine {
         Ok(())
     }
 
+    /// Channel strip: the audio mixer's channel properties, then the
+    /// channel delay on its own element.
+    async fn set_strip(&self, slot: usize, strip: &ChannelStrip) -> Result<(), EngineError> {
+        self.patch_audio_mixer(strip_properties(flows::audio_channel(slot), strip), 0)
+            .await?;
+        let path = format!(
+            "/flows/{}/elements/{}/properties",
+            flows::mixer_id(),
+            flows::audio_delay(slot)
+        );
+        let delay_ns = i64::from(strip.delay_ms) * 1_000_000;
+        let body = serde_json::json!({
+            "property_name": "ts-offset",
+            "value": PropertyValue::Int(delay_ns),
+        });
+        let resp = self
+            .http
+            .patch(self.url(&path))
+            .json(&body)
+            .send()
+            .await
+            .map_err(net)?;
+        check(resp).await.map(|_| ())
+    }
+
     /// T-bar: the preview input's pad on the program compositor comes in
     /// front (below the overlays) with the bar's position as opacity. The
     /// take at the end, a cut, sets every pad back (strom resets them on
@@ -534,6 +559,7 @@ impl Engine for StromEngine {
                 duration_ms,
             } => self.overlay(*channel, *slot, *duration_ms).await,
             Command::TBar { slot, position } => self.t_bar(*slot, *position).await,
+            Command::SetStrip { slot, strip } => self.set_strip(*slot, strip).await,
         }
     }
 
@@ -638,6 +664,28 @@ impl Engine for StromEngine {
         }
         Ok(devices)
     }
+}
+
+/// strom audio mixer properties of channel `channel` (1-based) for a strip.
+fn strip_properties(channel: usize, strip: &ChannelStrip) -> Vec<(String, PropertyValue)> {
+    let f = |v: f32| PropertyValue::Float(f64::from(v));
+    let ch = |name: &str| format!("ch{channel}_{name}");
+    let mut properties = vec![
+        (ch("gain"), f(strip.gain_db)),
+        (ch("pan"), f(strip.pan)),
+        (ch("hpf_enabled"), PropertyValue::Bool(strip.hpf.on)),
+        (ch("hpf_freq"), f(strip.hpf.hz)),
+        (ch("eq_enabled"), PropertyValue::Bool(strip.eq.on)),
+        (ch("gate_enabled"), PropertyValue::Bool(strip.gate.on)),
+        (ch("gate_threshold"), f(strip.gate.threshold_db)),
+        (ch("comp_enabled"), PropertyValue::Bool(strip.compressor.on)),
+        (ch("comp_threshold"), f(strip.compressor.threshold_db)),
+        (ch("comp_ratio"), f(strip.compressor.ratio)),
+    ];
+    for (band, gain) in strip.eq.gain_db.iter().enumerate() {
+        properties.push((ch(&format!("eq{}_gain", band + 1)), f(*gain)));
+    }
+    properties
 }
 
 /// One output's view of strom's SRT statistics.
@@ -764,6 +812,29 @@ mod tests {
                 rtt_ms: Some(31),
             }
         );
+    }
+
+    #[test]
+    fn strip_maps_to_the_mixer_channel() {
+        let mut strip = ChannelStrip::default();
+        strip.eq.on = true;
+        strip.eq.gain_db[2] = -3.0;
+        strip.pan = -0.5;
+
+        let properties: std::collections::HashMap<_, _> =
+            strip_properties(3, &strip).into_iter().collect();
+
+        assert!(matches!(
+            properties["ch3_eq_enabled"],
+            PropertyValue::Bool(true)
+        ));
+        assert!(matches!(properties["ch3_eq3_gain"], PropertyValue::Float(g) if g == -3.0));
+        assert!(matches!(properties["ch3_pan"], PropertyValue::Float(p) if p == -0.5));
+        assert!(matches!(
+            properties["ch3_hpf_enabled"],
+            PropertyValue::Bool(false)
+        ));
+        assert!(properties.keys().all(|k| k.starts_with("ch3_")));
     }
 
     #[test]

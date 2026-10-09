@@ -83,6 +83,88 @@
     </message>
   </context>
   <context>
+    <name>ChannelStripDialog</name>
+    <message>
+      <location filename="../qml/ChannelStripDialog.qml" line="+29" />
+      <source>Channel strip of %1 %2</source>
+      <translation>Kanalzug von %1 %2</translation>
+    </message>
+    <message>
+      <location line="+67" />
+      <source>Input</source>
+      <translation>Eingang</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Gain</source>
+      <translation>Verstärkung</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Pan</source>
+      <translation>Panorama</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Left −1, centre 0, right 1</source>
+      <translation>Links −1, Mitte 0, rechts 1</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Delay</source>
+      <translation>Verzögerung</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Sound later than the picture (lip sync)</source>
+      <translation>Ton später als das Bild (Lippensynchronität)</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>High-pass</source>
+      <translation>Hochpass</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <location line="+16" />
+      <location line="+21" />
+      <location line="+16" />
+      <source>On</source>
+      <translation>An</translation>
+    </message>
+    <message>
+      <location line="-47" />
+      <source>Cutoff</source>
+      <translation>Grenzfrequenz</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>EQ</source>
+      <translation>EQ</translation>
+    </message>
+    <message>
+      <location line="+21" />
+      <source>Gate</source>
+      <translation>Gate</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <location line="+16" />
+      <source>Threshold</source>
+      <translation>Schwelle</translation>
+    </message>
+    <message>
+      <location line="-7" />
+      <source>Compressor</source>
+      <translation>Kompressor</translation>
+    </message>
+    <message>
+      <location line="+15" />
+      <source>Ratio</source>
+      <translation>Verhältnis</translation>
+    </message>
+  </context>
+  <context>
     <name>InputTile</name>
     <message>
       <location filename="../qml/InputTile.qml" line="+47" />
@@ -221,6 +303,11 @@
     </message>
     <message>
       <location line="+4" />
+      <source>Channel strip…</source>
+      <translation>Kanalzug …</translation>
+    </message>
+    <message>
+      <location line="+4" />
       <source>Audio follows video</source>
       <translation>Ton folgt Bild</translation>
     </message>
@@ -285,7 +372,7 @@
       <translation>Entfernen</translation>
     </message>
     <message>
-      <location line="+16" />
+      <location line="+24" />
       <source>Rename input %1</source>
       <translation>Input %1 umbenennen</translation>
     </message>

@@ -11,8 +11,8 @@ use std::path::Path;
 
 use lmix_types::action::{OVERLAY_CHANNELS, TRANSITION_SLOTS};
 use lmix_types::{
-    Effect, InputAudio, InputColor, InputId, OutputId, OutputSource, OutputSpec, SignalLoss,
-    SourceSpec, Transition, TransitionSlot,
+    ChannelStrip, Effect, InputAudio, InputColor, InputId, OutputId, OutputSource, OutputSpec,
+    SignalLoss, SourceSpec, Transition, TransitionSlot,
 };
 use serde::{Deserialize, Serialize};
 
@@ -36,6 +36,8 @@ pub struct ShowInput {
     pub audio: InputAudio,
     #[serde(default)]
     pub signal_loss: SignalLoss,
+    #[serde(default)]
+    pub strip: ChannelStrip,
 }
 
 /// Everything a show file holds.
@@ -191,6 +193,10 @@ mod tests {
                     volume: 40,
                 },
                 signal_loss: SignalLoss::Black,
+                strip: ChannelStrip {
+                    delay_ms: 40,
+                    ..Default::default()
+                },
             }],
             preview: Some(id),
             program: None,

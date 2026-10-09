@@ -11,9 +11,9 @@ use lmix_types::action::{OVERLAY_CHANNELS, TRANSITION_SLOTS};
 use lmix_types::input::{color_rgb, REF_PREVIEW, REF_PROGRAM, VOLUME_MAX};
 use lmix_types::state::API_VERSION;
 use lmix_types::{
-    Action, ActionError, Effect, Ingest, Input, InputColor, InputId, InputRef, InputStatus, Listen,
-    Output, OutputId, OutputRef, OutputSource, OutputSpec, OutputStatus, ShowState, SignalLoss,
-    SourceSpec, Transition, TransitionSlot, Transport,
+    Action, ActionError, ChannelStrip, Effect, Ingest, Input, InputColor, InputId, InputRef,
+    InputStatus, Listen, Output, OutputId, OutputRef, OutputSource, OutputSpec, OutputStatus,
+    ShowState, SignalLoss, SourceSpec, Transition, TransitionSlot, Transport,
 };
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -50,6 +50,8 @@ pub enum Command {
     },
     /// Stop output `id`; stopping a stopped one is fine.
     StopOutput { id: OutputId },
+    /// Channel strip of the audio mixer channel of `slot`.
+    SetStrip { slot: usize, strip: ChannelStrip },
     /// Mix `slot` (preview) over program by `position` (0–1), as the
     /// T-bar stands; 0 hides it again.
     TBar { slot: usize, position: f32 },
@@ -192,6 +194,7 @@ impl Switcher {
                 self.set_audio(&input, |a| a.follow_video = follow)
             }
             Action::SetVolume { input, volume } => self.set_volume(&input, volume),
+            Action::SetChannelStrip { input, strip } => self.set_strip(&input, strip),
             Action::SetListen { input, listen } => self.set_listen(&input, listen),
             Action::TransportInput { input, transport } => self.transport(&input, transport),
             Action::SetSignalLoss { input, mode } => self.set_signal_loss(&input, mode),
@@ -260,6 +263,16 @@ impl Switcher {
             mode: i.signal_loss,
         }));
         commands.extend(self.overlay_commands());
+        commands.extend(
+            self.show
+                .inputs
+                .iter()
+                .filter(|i| i.source.has_audio())
+                .map(|i| Command::SetStrip {
+                    slot: i.slot,
+                    strip: i.strip,
+                }),
+        );
         commands
     }
 
@@ -334,6 +347,7 @@ impl Switcher {
                 has_audio: input.source.has_audio(),
                 listen: self.listen_of(input.id),
                 signal_loss: input.signal_loss,
+                strip: input.strip,
                 ingest: self.ingest_of(&input.source),
             })
             .collect();
@@ -389,20 +403,28 @@ impl Switcher {
             color: None,
             audio: Default::default(),
             signal_loss: SignalLoss::default(),
+            strip: ChannelStrip::default(),
         });
         self.status.insert(id, InputStatus::Starting);
 
         // The mixer input may still carry the previous occupant's setting.
-        Ok(vec![
+        let mut commands = vec![
             Command::SetSlot {
                 slot,
-                source: Some(source),
+                source: Some(source.clone()),
             },
             Command::SetSignalLoss {
                 slot,
                 mode: SignalLoss::default(),
             },
-        ])
+        ];
+        if source.has_audio() {
+            commands.push(Command::SetStrip {
+                slot,
+                strip: ChannelStrip::default(),
+            });
+        }
+        Ok(commands)
     }
 
     fn remove(&mut self, input: &InputRef) -> Result<Vec<Command>, ActionError> {
@@ -498,10 +520,18 @@ impl Switcher {
         entry.source = source.clone();
         self.status.insert(entry.id, InputStatus::Starting);
 
-        Ok(vec![Command::SetSlot {
+        let mut commands = vec![Command::SetSlot {
             slot: entry.slot,
-            source: Some(source),
-        }])
+            source: Some(source.clone()),
+        }];
+        // After a source without sound the channel may hold anything.
+        if source.has_audio() {
+            commands.push(Command::SetStrip {
+                slot: entry.slot,
+                strip: entry.strip,
+            });
+        }
+        Ok(commands)
     }
 
     fn rename(&mut self, input: &InputRef, name: String) -> Result<Vec<Command>, ActionError> {
@@ -638,6 +668,30 @@ impl Switcher {
             });
         }
         self.set_audio(input, |a| a.volume = volume)
+    }
+
+    fn set_strip(
+        &mut self,
+        input: &InputRef,
+        strip: ChannelStrip,
+    ) -> Result<Vec<Command>, ActionError> {
+        if let Some(field) = strip.out_of_range() {
+            return Err(ActionError::BadStrip {
+                field: field.into(),
+            });
+        }
+        let index = self.find(input)?;
+        let entry = &mut self.show.inputs[index];
+        if !entry.source.has_audio() {
+            return Err(ActionError::NoAudio {
+                reference: entry.name.clone(),
+            });
+        }
+        entry.strip = strip;
+        Ok(vec![Command::SetStrip {
+            slot: entry.slot,
+            strip,
+        }])
     }
 
     fn set_signal_loss(
@@ -1435,6 +1489,104 @@ mod tests {
     }
 
     #[test]
+    fn channel_strip_is_checked_kept_and_restored() {
+        let mut sw = Switcher::new(SLOTS);
+        sw.apply(Action::AddInput {
+            source: SourceSpec::AudioDevice { id: "mic".into() },
+            name: Some("Mic".into()),
+        })
+        .unwrap();
+        sw.apply(Action::AddInput {
+            source: SourceSpec::Color {
+                color: "#ff0000".into(),
+            },
+            name: Some("Red".into()),
+        })
+        .unwrap();
+        let mut strip = ChannelStrip {
+            gain_db: 6.0,
+            delay_ms: 80,
+            ..Default::default()
+        };
+        strip.compressor.on = true;
+
+        let cmds = sw
+            .apply(Action::SetChannelStrip {
+                input: named("Mic"),
+                strip,
+            })
+            .unwrap();
+
+        assert_eq!(cmds, [Command::SetStrip { slot: 0, strip }]);
+        assert_eq!(sw.state().inputs[0].strip, strip);
+        assert!(sw
+            .restore_commands()
+            .contains(&Command::SetStrip { slot: 0, strip }));
+
+        let loud = ChannelStrip {
+            gain_db: 30.0,
+            ..Default::default()
+        };
+        assert_eq!(
+            sw.apply(Action::SetChannelStrip {
+                input: named("Mic"),
+                strip: loud,
+            }),
+            Err(ActionError::BadStrip {
+                field: "gain_db".into()
+            })
+        );
+        assert!(matches!(
+            sw.apply(Action::SetChannelStrip {
+                input: named("Red"),
+                strip,
+            }),
+            Err(ActionError::NoAudio { .. })
+        ));
+    }
+
+    #[test]
+    fn a_new_input_with_sound_resets_its_channel() {
+        let mut sw = Switcher::new(SLOTS);
+
+        let cmds = sw
+            .apply(Action::AddInput {
+                source: SourceSpec::AudioDevice { id: "mic".into() },
+                name: None,
+            })
+            .unwrap();
+
+        assert!(cmds.contains(&Command::SetStrip {
+            slot: 0,
+            strip: ChannelStrip::default()
+        }));
+    }
+
+    #[test]
+    fn a_source_with_sound_gets_the_inputs_strip() {
+        let mut sw = Switcher::new(SLOTS);
+        sw.apply(Action::AddInput {
+            source: SourceSpec::Color {
+                color: "#ff0000".into(),
+            },
+            name: Some("Red".into()),
+        })
+        .unwrap();
+
+        let cmds = sw
+            .apply(Action::ReplaceSource {
+                input: named("Red"),
+                source: SourceSpec::AudioDevice { id: "mic".into() },
+            })
+            .unwrap();
+
+        assert!(cmds.contains(&Command::SetStrip {
+            slot: 0,
+            strip: ChannelStrip::default()
+        }));
+    }
+
+    #[test]
     fn whip_inputs_carry_their_ingest_links() {
         let mut sw = Switcher::new(SLOTS);
         sw.set_ingest_base("http://studio:8080/".into());
@@ -1686,6 +1838,10 @@ mod tests {
                 Command::SetSignalLoss {
                     slot: 0,
                     mode: SignalLoss::Hold
+                },
+                Command::SetStrip {
+                    slot: 0,
+                    strip: ChannelStrip::default()
                 },
                 Command::SetAudio {
                     slot: 0,

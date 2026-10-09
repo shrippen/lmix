@@ -13,7 +13,7 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::input::{InputColor, InputRef, Listen, SignalLoss, SourceSpec, Transport};
+use crate::input::{ChannelStrip, InputColor, InputRef, Listen, SignalLoss, SourceSpec, Transport};
 use crate::output::{OutputRef, OutputSource, OutputSpec};
 
 /// One of the four transition buttons (SWI.3), 1-based.
@@ -127,6 +127,12 @@ pub enum Action {
     SetAudioFollow { input: InputRef, follow: bool },
     /// Set an input's volume, 0–100 (100 = unity gain).
     SetVolume { input: InputRef, volume: u8 },
+    /// Set an input's channel strip: trim, pan, filter, EQ, dynamics,
+    /// delay.
+    SetChannelStrip {
+        input: InputRef,
+        strip: ChannelStrip,
+    },
     /// Listen to an input on the monitor bus, before or after its fader.
     /// While any input is soloed, the monitor bus carries only the solos;
     /// otherwise it follows program.
@@ -222,6 +228,8 @@ pub enum ActionError {
     BadPosition { number: u32, max: u32 },
     #[error("{reference} has no picture (audio input)")]
     NoVideo { reference: String },
+    #[error("{reference} has no sound")]
+    NoAudio { reference: String },
     #[error("{reference} has no transport (not a file, URL or playlist)")]
     NoTransport { reference: String },
     #[error("color {color} is not #rrggbb")]
@@ -232,6 +240,8 @@ pub enum ActionError {
     BadOverlay { channel: u8, max: u8 },
     #[error("T-bar position is outside 0–1")]
     BadTBar,
+    #[error("channel strip: {field} is out of range")]
+    BadStrip { field: String },
     #[error("show has no file yet; give a path")]
     NoShowPath,
     #[error("show file: {message}")]

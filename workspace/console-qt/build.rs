@@ -70,9 +70,8 @@ fn translations_qrc() -> Option<PathBuf> {
     };
     let out = PathBuf::from(std::env::var("OUT_DIR").unwrap()).join("i18n");
     std::fs::create_dir_all(&out).expect("create i18n dir");
-    let mut qrc = String::from(
-        "<RCC>\n  <qresource prefix=\"/qt/qml/org/lmix/console/qml/i18n\">\n",
-    );
+    let mut qrc =
+        String::from("<RCC>\n  <qresource prefix=\"/qt/qml/org/lmix/console/qml/i18n\">\n");
     let mut sources: Vec<PathBuf> = std::fs::read_dir("i18n")
         .expect("i18n dir")
         .map(|entry| entry.expect("dir entry").path())
@@ -100,19 +99,23 @@ fn translations_qrc() -> Option<PathBuf> {
 }
 
 fn main() {
-    let mut builder = CxxQtBuilder::new_qml_module(QmlModule::new("org.lmix.console").qml_files([
-        "qml/Main.qml",
-        "qml/LiveView.qml",
-        "qml/InputTile.qml",
-        "qml/SourceFields.qml",
-        "qml/AddInputDialog.qml",
-        "qml/AddOutputDialog.qml",
-        "qml/TransitionPanel.qml",
-        "qml/OutputBar.qml",
-        "qml/ChoiceMenu.qml",
-        "qml/KeyedModel.qml",
-    ])
-    .qml_file(QmlFile::from("qml/Texts.qml").singleton(true)))
+    let mut builder = CxxQtBuilder::new_qml_module(
+        QmlModule::new("org.lmix.console")
+            .qml_files([
+                "qml/Main.qml",
+                "qml/LiveView.qml",
+                "qml/InputTile.qml",
+                "qml/SourceFields.qml",
+                "qml/AddInputDialog.qml",
+                "qml/AddOutputDialog.qml",
+                "qml/TransitionPanel.qml",
+                "qml/ChannelStripDialog.qml",
+                "qml/OutputBar.qml",
+                "qml/ChoiceMenu.qml",
+                "qml/KeyedModel.qml",
+            ])
+            .qml_file(QmlFile::from("qml/Texts.qml").singleton(true)),
+    )
     .files(["src/bridge.rs"])
     .qrc(kante_qrc());
     if let Some(qrc) = translations_qrc() {

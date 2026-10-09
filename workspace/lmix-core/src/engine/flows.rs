@@ -586,6 +586,14 @@ fn add_encoder(flow: &mut Flow, video_kbps: u32) {
         .push(link("pgm:src".into(), "enc:video_in".into()));
 }
 
+/// Element in the mixer flow that delays the sound of `slot`.
+pub fn audio_delay(slot: usize) -> String {
+    format!("adelay{slot}")
+}
+
+/// `inter` buffer of slot sound in the mixer: holds the longest delay.
+const AUDIO_INTER_BUFFER_MS: &str = "1000";
+
 /// Sound of every slot into one audio mixer; its main mix is program
 /// audio (into the vision mixer, which meters it on the multiview).
 fn add_audio_mixer(flow: &mut Flow, slots: usize, monitor: MonitorOut) {
@@ -596,11 +604,24 @@ fn add_audio_mixer(flow: &mut Flow, slots: usize, monitor: MonitorOut) {
             INTER_INPUT_BLOCK,
             vec![
                 ("channel", PropertyValue::String(slot_audio_channel(slot))),
-                ("max_time", PropertyValue::String(INTER_BUFFER_MS.into())),
+                // Room for the channel delay (ChannelStrip::DELAY_MAX_MS).
+                (
+                    "max_time",
+                    PropertyValue::String(AUDIO_INTER_BUFFER_MS.into()),
+                ),
             ],
         ));
+        // Channel delay (lip sync): later timestamps, the mixer plays the
+        // sound that much later. Stays when the slot is rebuilt.
+        let delay = audio_delay(slot);
+        flow.elements.push(element(
+            &delay,
+            "identity",
+            vec![("ts-offset", PropertyValue::Int(0))],
+        ));
+        flow.links.push(link(format!("{input}:src"), delay.clone()));
         flow.links.push(link(
-            format!("{input}:src"),
+            delay,
             format!("{AUDIO_MIXER}:input_{}", audio_channel(slot)),
         ));
     }
@@ -1109,10 +1130,12 @@ mod tests {
 
         for slot in 0..3 {
             let to = format!("mix:input_{}", slot + 1);
+            let delay = audio_delay(slot);
             assert!(flow
                 .links
                 .iter()
-                .any(|l| l.from == format!("ain{slot}:src") && l.to == to));
+                .any(|l| l.from == format!("ain{slot}:src") && l.to == delay));
+            assert!(flow.links.iter().any(|l| l.from == delay && l.to == to));
         }
         assert!(flow
             .links

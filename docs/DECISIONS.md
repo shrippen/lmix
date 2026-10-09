@@ -938,3 +938,35 @@ die direkte Deckkraft, und sie kostet keine Änderung an strom.
 des Ziehens (AFV-Inputs kommen erst mit dem Take); Richtungswechsel wie bei
 vMix (Hebel bleibt am Ende stehen).
 
+
+## 2026-10-09 — M4 Schritt 3: Kanalzug (4.7, ohne Busse)
+
+**Entscheidung**: Kanalzug je Input mit Ton: Gain (±20 dB), Pan,
+Hochpass, 4-Band-EQ (80 Hz, 400 Hz, 2 kHz, 8 kHz), Gate, Kompressor,
+Verzögerung (0–500 ms). Gain bis Kompressor sind die Kanaleigenschaften
+des strom-Audiomischers (`ch{N}_…`, Block-PATCH); lmix stellt nur die
+nötigen Regler bereit (EQ-Frequenzen fest wie strom-Standard, Gate und
+Kompressor mit Schwelle und Verhältnis). Aktion
+`set_channel_strip { input, strip }` mit dem ganzen Zug; er steht in der
+Show-Datei und folgt dem Input über Slot-Wechsel und Neustarts (beim
+Zuweisen und Wiederherstellen gesetzt). Inputs ohne Ton lehnt lmix-core
+ab („has no sound“).
+**Verzögerung**: ein `identity` je Slot vor dem Mischer-Eingang, `ts-offset`
+verschiebt die Zeitstempel, der Mischer spielt den Ton entsprechend später.
+Der inter-Puffer der Slot-Tonspur wächst dafür auf 1 s. strom lehnt
+Eigenschaften ohne `MUTABLE_PLAYING` im laufenden Betrieb ab, `ts-offset`
+hat das Flag nicht, ist aber live unkritisch: strom-Patch
+`lmix-live-offset` (Liste live sicherer Eigenschaften, ein Eintrag).
+**Verworfen**: Verzögerung nur beim Aufbau des Mischers (Regler wirkt
+nicht live, Lippensynchronität wird während der Probe eingestellt);
+`audioecho` (live änderbar, aber mischt das trockene Signal immer bei).
+**Console**: Menü „Ton“ der Kachel → „Kanalzug…“, Dialog mit Schiebern,
+höchstens alle 100 ms eine Aktion.
+**VM-Befund nebenbei**: der Qt-Console-Test wackelte, weil Software-GL der
+Console (1,4 Kerne) und der CPU-Mischer (2,2 Kerne) die 4 Kerne der VM
+ausschöpfen; das Programmbild kam dann nur alle 5–50 s, Klicks wirkten
+verspätet. Die Engine lieferte dabei auf allen Live-Sockets 30 fps. Der
+Test nimmt jetzt 2 Slots und wartet auf Bewegung und Zustand statt fester
+Pausen.
+**Offen**: Aux-Busse (Sends je Kanal, eigene Ausgänge), Pegelanzeige für
+Gate/Kompressor-Wirkung, Hardware-Prüfung der Verzögerung (H.25).
