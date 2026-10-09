@@ -49,7 +49,7 @@ enabled: !(/\&[^\&]/.test(control.text))
 - [x] Demo-Modus mit Studio-Weber-Daten (2026-10-09, `demo/start.sh`).
 - [ ] Release-Build (wenn es einen gibt): `demo/` ausschließen und prüfen.
 - [ ] Andere dekodierende Quellen (SRT, NDI, Gerät) auf GPU-Speicher im Slot-Kanal prüfen (DECISIONS „Hardware-Decoder“).
-- [ ] egui-Console entfernen: Client-Funktionen sind gleichauf (`docs/GUI-SHELL.md`, „Parität“). Vorher Selbsttest als eigenes kopfloses Binary herauslösen und VM-Test/Screenshots auf die Qt-Console umstellen.
+- [ ] egui-Console entfernen: Client-Funktionen sind gleichauf (`docs/GUI-SHELL.md`, „Parität“). Selbsttest ist herausgelöst (2026-10-09, `lmix-selftest`); offen: VM-Test/Screenshots auf die Qt-Console umstellen (in der Cloud-VM fehlt Kirigami für Qt 6, Ubuntu 24.04).
 - [ ] strom-Speicher wächst ~32 MB/h (H.24, DECISIONS): Ursache eingrenzen.
 - [ ] GL-Mischer: SRT-Ausgang ohne Video (Fix in strom, DECISIONS „Hardware-Läufe“); in der VM nicht nachstellbar (2026-10-09, DECISIONS „GL-Mischer und SRT“), braucht Hardware.
 - [x] Aktion in den ersten 2 s nach Engine-Neustart antwortet 502 (2026-10-09: neue Engine erkannt, Aktion geht in die Show, Restore sofort).

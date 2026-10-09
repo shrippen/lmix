@@ -56,7 +56,7 @@ trap cleanup EXIT
 
 echo "Building release binaries ..."
 (cd "$ROOT/workspace/strom" && cargo build --release --features no-gui)
-(cd "$ROOT/workspace/app-desktop" && cargo build --release)
+(cd "$ROOT/workspace/selftest" && cargo build --release)
 make_clip
 
 echo "Starting backend on ${BASE_URL} ..."
@@ -70,9 +70,9 @@ done
 
 files=()
 for _ in $(seq 1 "$INPUTS"); do
-    files+=(--selftest-file "$CLIP")
+    files+=(--file "$CLIP")
 done
 
-"$ROOT/workspace/app-desktop/target/release/app-desktop" --server "$BASE_URL" \
-    --selftest --selftest-patterns 0 "${files[@]}" \
-    --selftest-encode --selftest-secs "$SECONDS_LOAD"
+"$ROOT/workspace/selftest/target/release/lmix-selftest" --server "$BASE_URL" \
+    --patterns 0 "${files[@]}" \
+    --encode --secs "$SECONDS_LOAD"

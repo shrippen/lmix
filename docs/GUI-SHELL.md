@@ -174,9 +174,9 @@ Client von lmix-core konnte (Entscheidung des Users).
 | Tasten 1–9 | ja |
 
 Nicht Teil der Console, aber nur in `app-desktop`: der M1b-Modus direkt an
-strom, der kopflose Selbsttest (`--selftest`, `scripts/acceptance-m1b.sh`),
-das Leistungs-Overlay (F3, `--perf-log`) und das GPU-Profil. Vorschlag: den
-Selbsttest samt `perf`/`gpu_profile` als eigenes kopfloses Binary behalten,
-den M1b-Modus und das Overlay mit der egui-Console streichen. Vor dem
-Entfernen: VM-Test (`test-m2b-vm.sh`, Screenshot) auf die Qt-Console
-umstellen.
+strom, das Leistungs-Overlay (F3, `--perf-log`) und das GPU-Profil. Der
+kopflose Selbsttest ist seit 2026-10-09 ein eigenes Binary
+(`workspace/selftest`, `lmix-selftest`, mit eigener Kopie von `perf` und
+`gpu_profile`). Vor dem Entfernen der egui-Console: VM-Test
+(`test-m2b-vm.sh`, Screenshot) auf die Qt-Console umstellen; den M1b-Modus
+und das Overlay mit ihr streichen.

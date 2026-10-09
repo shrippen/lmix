@@ -148,15 +148,21 @@ Die Console wählt das Mixer-Backend nach der GPU der Engine (`gpu_profile.rs`):
 NVIDIA → `cuda`, AMD/Intel → `gl` (unverifiziert), ohne Hardware-GPU Abbruch.
 Übersteuern mit `--mixer-backend cuda|gl|cpu`.
 
-Selftest (headless) gegen ein laufendes Backend, wichtigste Schalter:
+Selbsttest (kopflos, eigenes Binary `lmix-selftest` in `workspace/selftest`)
+gegen ein laufendes Backend, wichtigste Schalter:
+
+```bash
+cd workspace/selftest && cargo run --release -- --server http://127.0.0.1:8099 --patterns 8
+```
 
 | Schalter | Wirkung |
 |---|---|
-| `--selftest-patterns N` | N Testbild-Inputs (mit Testton) |
-| `--selftest-file PFAD` | Datei-Input (NVDEC), wiederholbar |
-| `--selftest-srt URI` | SRT-Input (MPEG-TS), wiederholbar |
-| `--selftest-encode` | PGM + Multiview → HW-Encoder; misst fps/Alter je Input und Ausgang, prüft Bildinhalt |
-| `--selftest-secs S` | Dauer der Lastphase |
+| `--patterns N` | N Testbild-Inputs (mit Testton) |
+| `--file PFAD` | Datei-Input (NVDEC), wiederholbar |
+| `--srt URI` | SRT-Input (MPEG-TS), wiederholbar |
+| `--encode` | PGM + Multiview → HW-Encoder; misst fps/Alter je Input und Ausgang, prüft Bildinhalt |
+| `--secs S` | Dauer der Lastphase |
+| `--dropout` | Datei-Input stoppt mitten in der Blende |
 | `--mixer-backend B` | Backend erzwingen |
 
 Kein `STROM_FORCE_SOFTWARE_CONVERT` mehr nötig (auch nicht für `cpu`).

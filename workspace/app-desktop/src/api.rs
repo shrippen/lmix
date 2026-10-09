@@ -5,8 +5,8 @@
 
 use std::collections::HashMap;
 use strom_types::api::{
-    ActivateProbeRequest, BlockPropertiesResponse, DskToggleRequest, DskToggleResponse,
-    FadeToBlackRequest, FadeToBlackResponse, ProbeResponse, FlowListResponse, FlowResponse, LatencyResponse, SelectPreviewRequest,
+    BlockPropertiesResponse, DskToggleRequest, DskToggleResponse,
+    FadeToBlackRequest, FadeToBlackResponse, FlowListResponse, FlowResponse, LatencyResponse, SelectPreviewRequest,
     SelectPreviewResponse, TransitionResponse, TriggerTransitionRequest,
     UpdateBlockPropertiesRequest, VisionMixerState,
 };
@@ -218,20 +218,6 @@ impl ApiClient {
         Ok(resp.json::<FlowResponse>().await?.flow)
     }
 
-    pub async fn delete_flow(&self, flow_id: FlowId) -> ApiResult<()> {
-        let url = format!("{}/api/flows/{}", self.base_url, flow_id);
-        let resp = self.http.delete(url).send().await?;
-        Self::check_status(resp).await?;
-        Ok(())
-    }
-
-    pub async fn stop_flow(&self, flow_id: FlowId) -> ApiResult<()> {
-        let url = format!("{}/api/flows/{}/stop", self.base_url, flow_id);
-        let resp = self.http.post(url).send().await?;
-        Self::check_status(resp).await?;
-        Ok(())
-    }
-
     /// Video capture devices known to the backend's discovery.
     pub async fn list_video_devices(&self) -> ApiResult<Vec<DeviceResponse>> {
         let url = format!("{}/api/discovery/devices?category=video_source", self.base_url);
@@ -245,18 +231,6 @@ impl ApiClient {
         let resp = self.http.get(url).send().await?;
         let resp = Self::check_status(resp).await?;
         Ok(resp.json().await?)
-    }
-
-    /// Media player transport: `action` is play, pause or stop.
-    pub async fn player_control(&self, flow_id: FlowId, block_id: &str, action: &str) -> ApiResult<()> {
-        let url = format!(
-            "{}/api/flows/{}/blocks/{}/player/control",
-            self.base_url, flow_id, block_id
-        );
-        let body = serde_json::json!({ "action": action });
-        let resp = self.http.post(url).json(&body).send().await?;
-        Self::check_status(resp).await?;
-        Ok(())
     }
 
     /// Toggle Fade to Black; the response carries the new state.
@@ -296,22 +270,4 @@ impl ApiClient {
         Ok(resp.json().await?)
     }
 
-    /// Start a buffer-age probe on an element or block; results arrive as
-    /// `BufferAgeProbe` WS events until `timeout_secs` passes.
-    pub async fn activate_probe(
-        &self,
-        flow_id: FlowId,
-        element_id: &str,
-        timeout_secs: u32,
-    ) -> ApiResult<ProbeResponse> {
-        let url = format!("{}/api/flows/{}/probes", self.base_url, flow_id);
-        let request = ActivateProbeRequest {
-            element_id: element_id.to_string(),
-            sample_interval: Some(1),
-            timeout_secs: Some(timeout_secs),
-        };
-        let resp = self.http.post(url).json(&request).send().await?;
-        let resp = Self::check_status(resp).await?;
-        Ok(resp.json().await?)
-    }
 }

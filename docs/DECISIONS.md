@@ -832,3 +832,17 @@ bleibt an echter Hardware zu suchen (AMD/Intel oder NVIDIA mit `gl`).
 **Nebenbefund** (CPU-Mischer, VM): der SRT-Ausgang trägt Video, aber nur
 ~42 Pakete in 8 s, weil `x264enc` in der VM mit QoS Bilder verwirft; der
 VM-Test prüfte bisher nur die Dateigröße.
+
+## 2026-10-09 — Selbsttest als eigenes Binary
+
+**Kontext**: Die egui-Console soll gehen (GUI-SHELL, „Parität“), ihr
+kopfloser Selbsttest (`--selftest`, M1b-Abnahme) bleibt gebraucht.
+**Entscheidung**: neues Crate `workspace/selftest`, Binary
+`lmix-selftest`, ohne GUI-Abhängigkeit. Es nimmt den Selbsttest und eine
+Kopie der strom-Client-Module (`api`, `sources`, `afv`, `perf`,
+`gpu_profile`, `ws`) mit, ohne die egui-Teile (Overlay, Repaint). Schalter
+ohne Präfix (`--patterns`, `--file`, `--encode`, `--secs`, …);
+`scripts/acceptance-m1b.sh` ruft es auf. `app-desktop` verliert
+`--selftest` und den nur dafür genutzten Code. **Verworfen**: die Module
+als gemeinsame Bibliothek beider Crates (Aufwand für Code, der mit der
+egui-Console verschwindet; danach gibt es nur noch eine Kopie).

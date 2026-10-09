@@ -12,7 +12,6 @@ mod core_app;
 mod core_client;
 mod gpu_profile;
 mod perf;
-mod selftest;
 mod source_ui;
 mod sources;
 mod state;
@@ -51,43 +50,6 @@ struct Args {
     /// Write every latency/jitter sample to this CSV file.
     #[arg(long)]
     perf_log: Option<std::path::PathBuf>,
-
-    /// Run the headless multiview/switching self-test instead of the GUI.
-    #[arg(long)]
-    selftest: bool,
-
-    /// Self-test: number of generated test-pattern inputs.
-    #[arg(long, default_value_t = 8)]
-    selftest_patterns: usize,
-
-    /// Self-test: duration of the load phase in seconds.
-    #[arg(long, default_value_t = 20)]
-    selftest_secs: u64,
-
-    /// Self-test: add a file input (repeatable).
-    #[arg(long)]
-    selftest_file: Vec<String>,
-
-    /// Self-test: add a URL input (repeatable).
-    #[arg(long)]
-    selftest_url: Vec<String>,
-
-    /// Self-test: add an SRT (MPEG-TS) input by URI (repeatable).
-    #[arg(long)]
-    selftest_srt: Vec<String>,
-
-    /// Self-test: add every discovered video capture device.
-    #[arg(long)]
-    selftest_devices: bool,
-
-    /// Self-test: encode PGM and multiview on hardware and check fps/latency.
-    #[arg(long)]
-    selftest_encode: bool,
-
-    /// Self-test: stop a file input's player in the middle of a fade (needs
-    /// a --selftest-file input at index >= 1).
-    #[arg(long)]
-    selftest_dropout: bool,
 
     /// Create and open the 8-pattern preset flow right away (for testing).
     #[arg(long)]
@@ -1186,33 +1148,6 @@ fn main() -> eframe::Result<()> {
     // workspace/strom/frontend/src/main.rs (M0).
     let runtime = tokio::runtime::Runtime::new().expect("failed to create Tokio runtime");
     let _runtime_guard = runtime.enter();
-
-    if args.selftest {
-        let opts = selftest::Options {
-            server: args.server.clone(),
-            patterns: args.selftest_patterns,
-            files: args.selftest_file.clone(),
-            urls: args.selftest_url.clone(),
-            srts: args.selftest_srt.clone(),
-            devices: args.selftest_devices,
-            seconds: args.selftest_secs,
-            thumb_ms: args.thumb_ms,
-            perf_log: args.perf_log.clone(),
-            backend: args.mixer_backend,
-            dropout: if args.selftest_dropout {
-                selftest::Dropout::DuringFade
-            } else {
-                selftest::Dropout::None
-            },
-            outputs: if args.selftest_encode {
-                selftest::OutputLoad::Encode
-            } else {
-                selftest::OutputLoad::None
-            },
-        };
-        let passed = runtime.block_on(selftest::run(opts));
-        std::process::exit(if passed { 0 } else { 1 });
-    }
 
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()

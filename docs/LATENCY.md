@@ -4,7 +4,7 @@ Messwerte der Performance-Abnahmen. Neueste oben.
 
 ## Messmethode
 
-Werkzeug: Selftest der Console (headless), gegen ein Release-Backend.
+Werkzeug: Selbsttest `lmix-selftest` (kopflos, früher Teil der Console), gegen ein Release-Backend.
 Abnahme in einem Schritt (baut, erzeugt den Testclip, startet ein eigenes
 Backend auf Port 8199):
 
@@ -17,14 +17,14 @@ Von Hand:
 
 ```bash
 cd workspace/strom && cargo build --release --features no-gui
-cd ../app-desktop && cargo build --release
+cd ../selftest && cargo build --release
 ../strom/target/release/strom --host 127.0.0.1 --port 8111 --no-auto-restart &
-./target/release/app-desktop --server http://127.0.0.1:8111 --selftest \
-  --selftest-patterns 0 --selftest-file /pfad/1080p30.mp4 [... 16×] \
-  --selftest-encode --selftest-secs 600
+./target/release/lmix-selftest --server http://127.0.0.1:8111 \
+  --patterns 0 --file /pfad/1080p30.mp4 [... 16×] \
+  --encode --secs 600
 ```
 
-- `--selftest-encode`: PGM und Multiview laufen je durch einen
+- `--encode`: PGM und Multiview laufen je durch einen
   Hardware-Encoder (`builtin.videoenc`, H.264, `hardware`) in einen
   `fakesink sync=true`.
 - **fps**: strom-Buffer-Age-Probes am Encoder-Eingang und an der Senke,

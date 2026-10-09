@@ -31,7 +31,6 @@ const SRT_INPUT_BLOCK: &str = "builtin.mpegtssrt_input";
 const LOCAL_INPUT_BLOCK: &str = "builtin.local_input";
 const THUMBNAIL_BLOCK: &str = "builtin.thumbnail";
 const VISION_MIXER_BLOCK: &str = "builtin.vision_mixer";
-const VIDEO_ENCODER_BLOCK: &str = "builtin.videoenc";
 const AUDIO_MIXER_BLOCK: &str = "builtin.mixer";
 const MIXER_ID: &str = "vm";
 /// Thumbnail tap on the vision mixer's PGM output (the Console's PROGRAM
@@ -420,74 +419,6 @@ pub fn build_flow(
     Ok(flow)
 }
 
-/// One hardware-encoded mixer output: `vm:<mixer_pad> -> <encoder> -> <sink>`.
-pub struct EncodedOutput {
-    pub mixer_pad: &'static str,
-    /// Thumbnail tap on the mixer output: proves it carries a picture.
-    pub tap: &'static str,
-    /// Encoder block id; a probe on it measures frames entering the encoder.
-    pub encoder: &'static str,
-    /// Terminating `fakesink`; a probe on it measures encoded frames.
-    pub sink: &'static str,
-}
-
-/// PGM and multiview, each through its own hardware H.264 encoder: the
-/// output load the M1b budget is measured against.
-pub const ENCODED_OUTPUTS: [EncodedOutput; 2] = [
-    EncodedOutput {
-        mixer_pad: "pgm_out",
-        tap: PGM_TAP_ID,
-        encoder: "enc_pgm",
-        sink: "sink_pgm",
-    },
-    EncodedOutput {
-        mixer_pad: "multiview_out",
-        tap: "tap_mv",
-        encoder: "enc_mv",
-        sink: "sink_mv",
-    },
-];
-
-/// Terminate the mixer outputs in hardware encoders (see [`ENCODED_OUTPUTS`]),
-/// each behind a thumbnail tap.
-/// `sync=true` on the sinks, so frames are consumed at real time like a
-/// network or file output would.
-pub fn add_encoders(flow: &mut Flow) {
-    for (row, out) in ENCODED_OUTPUTS.iter().enumerate() {
-        flow.blocks.push(block(
-            out.encoder.to_string(),
-            VIDEO_ENCODER_BLOCK,
-            pos(4, row),
-            vec![
-                ("codec", PropertyValue::String("h264".into())),
-                ("encoder_preference", PropertyValue::String("hardware".into())),
-            ],
-        ));
-        flow.elements.push(Element {
-            id: out.sink.to_string(),
-            element_type: "fakesink".to_string(),
-            properties: [("sync".to_string(), PropertyValue::Bool(true))].into(),
-            pad_properties: Default::default(),
-            position: (5.0 * COLUMN_SPACING, row as f32 * ROW_SPACING),
-        });
-        // build_flow already taps PGM.
-        if !flow.blocks.iter().any(|b| b.id == out.tap) {
-            flow.blocks
-                .push(block(out.tap.to_string(), THUMBNAIL_BLOCK, pos(4, row + ENCODED_OUTPUTS.len()), vec![]));
-            flow.links.push(link(
-                format!("{MIXER_ID}:{}", out.mixer_pad),
-                format!("{}:video_in", out.tap),
-            ));
-        }
-        flow.links.push(link(
-            format!("{}:video_out", out.tap),
-            format!("{}:video_in", out.encoder),
-        ));
-        flow.links
-            .push(link(format!("{}:encoded_out", out.encoder), out.sink.to_string()));
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -505,22 +436,6 @@ mod tests {
     }
 
     #[test]
-    fn encoders_terminate_both_mixer_outputs() {
-        let mut flow = build_flow("f", &patterns(2), MixerBackend::Cuda).unwrap();
-        add_encoders(&mut flow);
-
-        for out in &ENCODED_OUTPUTS {
-            let from = format!("vm:{}", out.mixer_pad);
-            let tap_in = format!("{}:video_in", out.tap);
-            let tap_out = format!("{}:video_out", out.tap);
-            let to = format!("{}:video_in", out.encoder);
-            assert!(flow.links.iter().any(|l| l.from == from && l.to == tap_in));
-            assert!(flow.links.iter().any(|l| l.from == tap_out && l.to == to));
-            assert!(flow.links.iter().any(|l| l.to == out.sink));
-        }
-    }
-
-    #[test]
     fn audio_sources_feed_their_mixer_channel() {
         let sources = vec![
             SourceSpec::Pattern(TestPattern::Black),
@@ -534,15 +449,6 @@ mod tests {
         assert!(!flow.links.iter().any(|l| l.to == to(2)));
         assert!(flow.links.iter().any(|l| l.from == "media2:audio_out" && l.to == to(3)));
         assert!(flow.links.iter().any(|l| l.from == "mix:main_out" && l.to == "vm:pgm_audio_in"));
-    }
-
-    #[test]
-    fn pgm_is_tapped_once_with_encoders() {
-        let mut flow = build_flow("f", &patterns(2), MixerBackend::Cuda).unwrap();
-        add_encoders(&mut flow);
-
-        assert_eq!(flow.blocks.iter().filter(|b| b.id == PGM_TAP_ID).count(), 1);
-        assert_eq!(flow.links.iter().filter(|l| l.from == "vm:pgm_out").count(), 1);
     }
 
     #[test]
