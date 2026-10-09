@@ -111,7 +111,36 @@ Gefundene Fehler (behoben, lmix-core):
   meldeten aber 502. Jetzt merkt sich lmix-core sie, `restore` gibt sie
   der Engine (auch gestartete Ausgänge).
 
-Nächste Schritte (Schritt 2): Console-Funktionen aus der egui-Console
-übertragen (Inputs anlegen/Quellen, Ton, Ausgänge, Show-Datei, Latenz),
-Demo-Modus mit den gemeinsamen Demodaten (`claude.md`-Regel), Tastatur
-(vMix-Kürzel), Mehrfachauswahl und Drag & Drop in der Leiste.
+## Schritt 2: Funktionen übertragen (Stand 2026-10-09)
+
+Übertragen aus der egui-Console:
+- Show: Neu, Öffnen (Portal-Dialog), Zuletzt, Speichern, Speichern unter.
+- Latenzmessung in der Werkzeugleiste.
+- Übergänge: Cut, vier Knöpfe (Rechtsklick: Effekt, Länge), FTB.
+- Kacheln: Mute, Lautstärke, Pegel (grün bis −18, gelb bis −6, rot
+  darüber; Tooltip mit dBFS), PFL; Menü: Umbenennen, Quelle ersetzen,
+  Farbmarke, Signalverlust, Audio folgt Video, PFL/AFL, Wiedergabe,
+  WHIP-/Browser-Link kopieren, Entfernen.
+- Dialoge „+ Input“ (alle Quellarten, Geräteliste, Dateiwahl,
+  Farbwahl) und „+ Output“ (SRT, Aufnahme, NDI, Bildschirm; Programm oder
+  ein Input).
+- Ausgangsleiste: Start/Stopp per Klick, Laufzeit, Datenrate,
+  Leitungszustand im Tooltip, Entfernen per Rechtsklick.
+- Tasten 1–9: Vorschau.
+
+Neu gegenüber egui: Kacheln per Drag & Drop umsortieren; Vorschau-Monitor
+in voller Größe (`/api/live/inputs/{id}?size=full`).
+
+Technik: QML schickt Aktionen im JSON der API, Rust prüft sie
+(`Core.act`); Formulare baut Rust (`forms.rs`, getestet). Inputs,
+Ausgänge und Übergänge liegen in Modellen mit fester ID (`KeyedModel`),
+damit ein Zustands-Update nicht jede Kachel samt Pipeline neu baut.
+Breeze-`MenuItem` ruft `RegExp()`, was in Delegates mit JS-Array-Modell
+scheitert; Menüs aus Listen baut deshalb `ChoiceMenu` ohne Repeater.
+
+Offen:
+- Demo-Modus mit den gemeinsamen Demodaten (`claude.md`-Regel).
+- Sprache: Texte englisch, Qt-Standardknöpfe folgen der Systemsprache.
+- Farbmarken der Inputs nur als Wort (Kante-QML hat keine Label-Farben).
+- Vorschau-Wechsel baut eine neue Pipeline (kurze Lücke).
+- VM-Test und Screenshots laufen noch über die egui-Console.
