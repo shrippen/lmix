@@ -725,3 +725,26 @@ Programm auf der CPU lesen (Bildschirm, NDI, Live-Socket). Ein Download
 schon im Mischer-Flow wäre einfacher, kostete aber den Encodern den
 Weg ohne Kopie. **Offen**: Mit `--mixer gl` ist noch ungeprüft, ob der
 Kanal `GLMemory` trägt (H.22, AMD/Intel).
+
+## 2026-10-09 — Neustart der Engine erkennen
+
+**Befund**: lmix-core speiste die Show nur beim eigenen Start ein. Stürzte
+strom ab und startete neu, blieb Programm leer, bis auch lmix-core neu
+startete. **Entscheidung**: lmix-core fragt alle 2 s `/api/version` und
+vergleicht `process_started_at`; ein neuer Wert heißt neue Engine: Mischer
+aufbauen, Show samt laufender Ausgänge einspielen. Aktionen bis dahin
+ändern nur die Show (wie beim Start). Geprüft mit `kill -9` auf strom:
+Flows, SRT-Ausgang und Programmbild kamen zurück. **Verworfen**:
+Neustart an Flow-Fehlern erkennen (ein Absturz meldet sich nicht über den
+eigenen Bus); den Mischer-Flow abfragen (ein leerer Mischer nach Neustart
+wäre nicht von einem gerade gebauten zu unterscheiden). **Offen**: eine
+Aktion in den bis zu 2 s bis zur Erkennung antwortet noch 502.
+
+## 2026-10-09 — Qt-Console: Stil, Reihenfolge, Vorschau
+
+**Entscheidung**: Stilwahl Kante / Kante Light / System in der
+Werkzeugleiste, gespeichert mit QSettings (`agent.md`: Stilwahl in den
+Einstellungen); `--style` gilt für einen Lauf. Inputs per Drag & Drop
+umsortieren (`move_input`). Der Vorschau-Monitor liest den Input in
+voller Größe (`?size=full`, eigener Flow je Slot, nur auf Abruf), die
+Kacheln weiter 640×360.
