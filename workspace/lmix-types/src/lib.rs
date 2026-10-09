@@ -16,7 +16,7 @@ pub mod state;
 
 pub use action::{Action, ActionError, Effect, TransitionSlot};
 pub use input::{
-    ChannelStrip, Compressor, Device, DeviceKind, Eq4, Gate, Hpf, Ingest, Input, InputAudio,
+    AuxBus, ChannelStrip, Compressor, Device, DeviceKind, Eq4, Gate, Hpf, Ingest, Input, InputAudio,
     InputColor, InputId, InputRef, InputStatus, Listen, SignalLoss, SourceSpec, TestPattern,
     Transport,
 };

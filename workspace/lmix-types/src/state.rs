@@ -4,7 +4,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::action::{Effect, TransitionSlot, OVERLAY_CHANNELS};
-use crate::input::{Input, InputId};
+use crate::input::{AuxBus, Input, InputId, AUX_BUSES};
 use crate::output::{Output, OutputStats};
 
 /// One transition button.
@@ -39,6 +39,9 @@ pub struct ShowState {
     /// T-bar position (0 = at rest, below 1 = preview partly mixed in).
     #[serde(default)]
     pub t_bar: f32,
+    /// Masters of the aux buses (bus 1 first).
+    #[serde(default)]
+    pub aux_buses: [AuxBus; AUX_BUSES],
 }
 
 /// Current API version (API.10: additive changes within one version).
@@ -62,6 +65,9 @@ pub struct Levels {
     /// Monitor bus (program, or the solos while any input is soloed).
     #[serde(default)]
     pub monitor_peak_db: Option<f32>,
+    /// Each aux bus after its master (bus 1 first).
+    #[serde(default)]
+    pub aux_peak_db: [Option<f32>; AUX_BUSES],
 }
 
 /// Live picture for a client on the engine's machine (`GET /api/live/…`):

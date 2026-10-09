@@ -32,7 +32,7 @@
   <context>
     <name>AddOutputDialog</name>
     <message>
-      <location filename="../qml/AddOutputDialog.qml" line="+21" />
+      <location filename="../qml/AddOutputDialog.qml" line="+23" />
       <source>folder in the engine's media directory</source>
       <translation>Ordner im Medienverzeichnis der Engine</translation>
     </message>
@@ -52,7 +52,7 @@
       <translation>Ausgang hinzufügen</translation>
     </message>
     <message>
-      <location line="+28" />
+      <location line="+29" />
       <source>Output</source>
       <translation>Ausgang</translation>
     </message>
@@ -65,6 +65,26 @@
       <location line="+4" />
       <source>Program</source>
       <translation>Programm</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Sound</source>
+      <translation>Ton</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>As carried</source>
+      <translation>Wie die Quelle</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Aux 1 (before the faders)</source>
+      <translation>Aux 1 (vor den Fadern)</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Aux 2 (after the faders)</source>
+      <translation>Aux 2 (nach den Fadern)</translation>
     </message>
     <message>
       <location line="+6" />
@@ -83,14 +103,42 @@
     </message>
   </context>
   <context>
+    <name>AuxBusDialog</name>
+    <message>
+      <location filename="../qml/AuxBusDialog.qml" line="+21" />
+      <source>Aux buses</source>
+      <translation>Aux-Busse</translation>
+    </message>
+    <message>
+      <location line="+24" />
+      <source>Aux 1 · before the faders</source>
+      <translation>Aux 1 · vor den Fadern</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Aux 2 · after the faders</source>
+      <translation>Aux 2 · nach den Fadern</translation>
+    </message>
+    <message>
+      <location line="+16" />
+      <source>Volume of aux %1</source>
+      <translation>Lautstärke von Aux %1</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>Mute</source>
+      <translation>Stumm</translation>
+    </message>
+  </context>
+  <context>
     <name>ChannelStripDialog</name>
     <message>
-      <location filename="../qml/ChannelStripDialog.qml" line="+29" />
+      <location filename="../qml/ChannelStripDialog.qml" line="+39" />
       <source>Channel strip of %1 %2</source>
       <translation>Kanalzug von %1 %2</translation>
     </message>
     <message>
-      <location line="+67" />
+      <location line="+80" />
       <source>Input</source>
       <translation>Eingang</translation>
     </message>
@@ -120,7 +168,22 @@
       <translation>Ton später als das Bild (Lippensynchronität)</translation>
     </message>
     <message>
-      <location line="+8" />
+      <location line="+7" />
+      <source>Aux 1 (before the fader)</source>
+      <translation>Aux 1 (vor dem Fader)</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Aux 2 (after the fader)</source>
+      <translation>Aux 2 (nach dem Fader)</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Aux sends</source>
+      <translation>Aux-Sends</translation>
+    </message>
+    <message>
+      <location line="+10" />
       <source>High-pass</source>
       <translation>Hochpass</translation>
     </message>
@@ -459,7 +522,7 @@
       <translation>Show speichern</translation>
     </message>
     <message>
-      <location line="+28" />
+      <location line="+37" />
       <source>lmix-core</source>
       <translation>lmix-core</translation>
     </message>
@@ -552,6 +615,11 @@
       <location line="+3" />
       <source>Clear solo</source>
       <translation>Solo aus</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Aux…</source>
+      <translation>Aux…</translation>
     </message>
     <message>
       <location line="+5" />

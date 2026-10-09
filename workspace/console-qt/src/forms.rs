@@ -6,7 +6,7 @@
 use lmix_types::{
     Container, DisplayMode, Effect, InputColor, OutputSource, OutputSpec, SourceSpec, TestPattern,
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 /// Transition lengths offered on the transition buttons.
 pub const DURATION_PRESETS_MS: [u32; 4] = [250, 500, 1000, 2000];
@@ -108,6 +108,24 @@ fn valid_color(text: &str) -> Option<String> {
     rgb.chars()
         .all(|c| c.is_ascii_hexdigit())
         .then(|| format!("#{}", rgb.to_lowercase()))
+}
+
+/// The add-output form as the Console sends it.
+#[derive(Debug, Deserialize)]
+pub struct OutputForm {
+    pub kind: String,
+    #[serde(default)]
+    pub text: String,
+    /// "program" or an input id.
+    pub source: String,
+    #[serde(default)]
+    pub container: String,
+    pub video_kbps: u32,
+    #[serde(default)]
+    pub name: String,
+    /// Aux bus for the sound; 0 keeps the source's own.
+    #[serde(default)]
+    pub aux: u8,
 }
 
 /// The output the "add output" form describes; `None` while a needed

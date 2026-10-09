@@ -7,13 +7,13 @@
 //!   Action ──► Switcher::apply ──► new state + [Command] ──► engine driver
 //! ```
 
-use lmix_types::action::{OVERLAY_CHANNELS, TRANSITION_SLOTS};
-use lmix_types::input::{color_rgb, REF_PREVIEW, REF_PROGRAM, VOLUME_MAX};
+use lmix_types::action::{aux_index, OVERLAY_CHANNELS, TRANSITION_SLOTS};
+use lmix_types::input::{color_rgb, AUX_BUSES, REF_PREVIEW, REF_PROGRAM, VOLUME_MAX};
 use lmix_types::state::API_VERSION;
 use lmix_types::{
-    Action, ActionError, ChannelStrip, Effect, Ingest, Input, InputColor, InputId, InputRef,
-    InputStatus, Listen, Output, OutputId, OutputRef, OutputSource, OutputSpec, OutputStatus,
-    ShowState, SignalLoss, SourceSpec, Transition, TransitionSlot, Transport,
+    Action, ActionError, AuxBus, ChannelStrip, Effect, Ingest, Input, InputColor, InputId,
+    InputRef, InputStatus, Listen, Output, OutputId, OutputRef, OutputSource, OutputSpec,
+    OutputStatus, ShowState, SignalLoss, SourceSpec, Transition, TransitionSlot, Transport,
 };
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -42,16 +42,22 @@ pub enum Command {
     SetListen { slot: usize, listen: Listen },
     /// Last frame (`Hold`) or black when the source of `slot` stalls.
     SetSignalLoss { slot: usize, mode: SignalLoss },
-    /// Start output `id` (replaces a running one).
+    /// Start output `id` (replaces a running one); its sound from aux
+    /// bus `aux` (0-based) instead of the feed's.
     StartOutput {
         id: OutputId,
         spec: OutputSpec,
         feed: Feed,
+        aux: Option<usize>,
     },
     /// Stop output `id`; stopping a stopped one is fine.
     StopOutput { id: OutputId },
     /// Channel strip of the audio mixer channel of `slot`.
     SetStrip { slot: usize, strip: ChannelStrip },
+    /// Send of `slot` to aux bus `bus` (0-based), linear gain.
+    SetAuxSend { slot: usize, bus: usize, gain: f64 },
+    /// Master of aux bus `bus` (0-based).
+    SetAuxBus { bus: usize, gain: f64, mute: bool },
     /// Mix `slot` (preview) over program by `position` (0–1), as the
     /// T-bar stands; 0 hides it again.
     TBar { slot: usize, position: f32 },
@@ -195,10 +201,17 @@ impl Switcher {
             }
             Action::SetVolume { input, volume } => self.set_volume(&input, volume),
             Action::SetChannelStrip { input, strip } => self.set_strip(&input, strip),
+            Action::SetAuxSend { input, bus, level } => self.set_aux_send(&input, bus, level),
+            Action::SetAuxBus { bus, volume, mute } => self.set_aux_bus(bus, volume, mute),
             Action::SetListen { input, listen } => self.set_listen(&input, listen),
             Action::TransportInput { input, transport } => self.transport(&input, transport),
             Action::SetSignalLoss { input, mode } => self.set_signal_loss(&input, mode),
-            Action::AddOutput { spec, source, name } => self.add_output(spec, source, name),
+            Action::AddOutput {
+                spec,
+                source,
+                name,
+                aux,
+            } => self.add_output(spec, source, name, aux),
             Action::RemoveOutput { output } => self.remove_output(&output),
             Action::StartOutput { output } => self.start_output(&output),
             Action::StopOutput { output } => self.stop_output(&output),
@@ -263,17 +276,28 @@ impl Switcher {
             mode: i.signal_loss,
         }));
         commands.extend(self.overlay_commands());
-        commands.extend(
-            self.show
-                .inputs
-                .iter()
-                .filter(|i| i.source.has_audio())
-                .map(|i| Command::SetStrip {
-                    slot: i.slot,
-                    strip: i.strip,
-                }),
-        );
+        for input in self.show.inputs.iter().filter(|i| i.source.has_audio()) {
+            commands.push(Command::SetStrip {
+                slot: input.slot,
+                strip: input.strip,
+            });
+            commands.extend(send_commands(input));
+        }
+        commands.extend(self.aux_bus_commands());
         commands
+    }
+
+    fn aux_bus_commands(&self) -> Vec<Command> {
+        self.show
+            .aux_buses
+            .iter()
+            .enumerate()
+            .map(|(bus, master)| Command::SetAuxBus {
+                bus,
+                gain: fader_gain(master.volume),
+                mute: master.mute,
+            })
+            .collect()
     }
 
     /// Every overlay channel as the engine should have it, without fade.
@@ -348,6 +372,7 @@ impl Switcher {
                 listen: self.listen_of(input.id),
                 signal_loss: input.signal_loss,
                 strip: input.strip,
+                sends: input.sends,
                 ingest: self.ingest_of(&input.source),
             })
             .collect();
@@ -364,6 +389,7 @@ impl Switcher {
             outputs: self.outputs_state(),
             overlays: self.show.overlays,
             t_bar: self.t_bar,
+            aux_buses: self.show.aux_buses,
         }
     }
 
@@ -404,6 +430,7 @@ impl Switcher {
             audio: Default::default(),
             signal_loss: SignalLoss::default(),
             strip: ChannelStrip::default(),
+            sends: [0; AUX_BUSES],
         });
         self.status.insert(id, InputStatus::Starting);
 
@@ -423,6 +450,11 @@ impl Switcher {
                 slot,
                 strip: ChannelStrip::default(),
             });
+            commands.extend((0..AUX_BUSES).map(|bus| Command::SetAuxSend {
+                slot,
+                bus,
+                gain: 0.0,
+            }));
         }
         Ok(commands)
     }
@@ -530,6 +562,7 @@ impl Switcher {
                 slot: entry.slot,
                 strip: entry.strip,
             });
+            commands.extend(send_commands(entry));
         }
         Ok(commands)
     }
@@ -661,12 +694,7 @@ impl Switcher {
     }
 
     fn set_volume(&mut self, input: &InputRef, volume: u8) -> Result<Vec<Command>, ActionError> {
-        if volume > VOLUME_MAX {
-            return Err(ActionError::BadVolume {
-                volume,
-                max: VOLUME_MAX,
-            });
-        }
+        check_volume(volume)?;
         self.set_audio(input, |a| a.volume = volume)
     }
 
@@ -691,6 +719,45 @@ impl Switcher {
         Ok(vec![Command::SetStrip {
             slot: entry.slot,
             strip,
+        }])
+    }
+
+    fn set_aux_send(
+        &mut self,
+        input: &InputRef,
+        bus: u8,
+        level: u8,
+    ) -> Result<Vec<Command>, ActionError> {
+        let bus = aux_index(bus)?;
+        check_volume(level)?;
+        let index = self.find(input)?;
+        let entry = &mut self.show.inputs[index];
+        if !entry.source.has_audio() {
+            return Err(ActionError::NoAudio {
+                reference: entry.name.clone(),
+            });
+        }
+        entry.sends[bus] = level;
+        Ok(vec![Command::SetAuxSend {
+            slot: entry.slot,
+            bus,
+            gain: fader_gain(level),
+        }])
+    }
+
+    fn set_aux_bus(
+        &mut self,
+        bus: u8,
+        volume: u8,
+        mute: bool,
+    ) -> Result<Vec<Command>, ActionError> {
+        let bus = aux_index(bus)?;
+        check_volume(volume)?;
+        self.show.aux_buses[bus] = AuxBus { volume, mute };
+        Ok(vec![Command::SetAuxBus {
+            bus,
+            gain: fader_gain(volume),
+            mute,
         }])
     }
 
@@ -747,12 +814,17 @@ impl Switcher {
         spec: OutputSpec,
         source: OutputSource,
         name: Option<String>,
+        aux: Option<u8>,
     ) -> Result<Vec<Command>, ActionError> {
+        if let Some(bus) = aux {
+            aux_index(bus)?;
+        }
         let output = ShowOutput {
             id: OutputId::new(),
             name: name.unwrap_or_default(),
             spec,
             source,
+            aux,
         };
         self.feed_of(&output)?;
         let name = match (output.name.is_empty(), source) {
@@ -803,11 +875,17 @@ impl Switcher {
     /// Starting a running output restarts it (e.g. after a failure).
     fn start_output(&mut self, output: &OutputRef) -> Result<Vec<Command>, ActionError> {
         let entry = &self.show.outputs[self.find_output(output)?];
-        Ok(vec![Command::StartOutput {
-            id: entry.id,
-            spec: entry.spec.clone(),
-            feed: self.feed_of(entry)?,
-        }])
+        Ok(vec![self.start_command(entry)?])
+    }
+
+    fn start_command(&self, output: &ShowOutput) -> Result<Command, ActionError> {
+        Ok(Command::StartOutput {
+            id: output.id,
+            spec: output.spec.clone(),
+            feed: self.feed_of(output)?,
+            // Checked when the output was added.
+            aux: output.aux.and_then(|bus| aux_index(bus).ok()),
+        })
     }
 
     fn stop_output(&mut self, output: &OutputRef) -> Result<Vec<Command>, ActionError> {
@@ -836,14 +914,7 @@ impl Switcher {
             .outputs
             .iter()
             .filter(|o| self.output_running(o.id))
-            .filter_map(|o| {
-                let feed = self.feed_of(o).ok()?;
-                Some(Command::StartOutput {
-                    id: o.id,
-                    spec: o.spec.clone(),
-                    feed,
-                })
-            })
+            .filter_map(|o| self.start_command(o).ok())
             .collect()
     }
 
@@ -871,11 +942,7 @@ impl Switcher {
             .iter()
             .find(|o| o.id == id)
             .filter(|_| failed)?;
-        Some(Command::StartOutput {
-            id,
-            spec: output.spec.clone(),
-            feed: self.feed_of(output).ok()?,
-        })
+        self.start_command(output).ok()
     }
 
     /// The engine reports what an output does.
@@ -900,6 +967,7 @@ impl Switcher {
                 name: o.name.clone(),
                 spec: o.spec.clone(),
                 source: o.source,
+                aux: o.aux,
                 status: self.output_status.get(&o.id).cloned().unwrap_or_default(),
             })
             .collect()
@@ -1137,6 +1205,29 @@ fn overlay_index(channel: u8) -> Result<usize, ActionError> {
         });
     }
     Ok(usize::from(channel - 1))
+}
+
+fn check_volume(volume: u8) -> Result<(), ActionError> {
+    if volume > VOLUME_MAX {
+        return Err(ActionError::BadVolume {
+            volume,
+            max: VOLUME_MAX,
+        });
+    }
+    Ok(())
+}
+
+/// Every aux send of an input with sound, as the show has them.
+fn send_commands(input: &ShowInput) -> impl Iterator<Item = Command> + '_ {
+    input
+        .sends
+        .iter()
+        .enumerate()
+        .map(|(bus, level)| Command::SetAuxSend {
+            slot: input.slot,
+            bus,
+            gain: fader_gain(*level),
+        })
 }
 
 fn no_video_check(entry: &ShowInput) -> Result<(), ActionError> {
@@ -1587,6 +1678,114 @@ mod tests {
     }
 
     #[test]
+    fn aux_sends_and_masters_are_kept_and_restored() {
+        let mut sw = two_inputs();
+
+        let cmds = sw
+            .apply(Action::SetAuxSend {
+                input: named("B"),
+                bus: 2,
+                level: 50,
+            })
+            .unwrap();
+        assert_eq!(
+            cmds,
+            [Command::SetAuxSend {
+                slot: 1,
+                bus: 1,
+                gain: fader_gain(50)
+            }]
+        );
+        assert_eq!(sw.state().inputs[1].sends, [0, 50]);
+
+        sw.apply(Action::SetAuxBus {
+            bus: 1,
+            volume: 80,
+            mute: true,
+        })
+        .unwrap();
+        assert_eq!(
+            sw.state().aux_buses[0],
+            AuxBus {
+                volume: 80,
+                mute: true
+            }
+        );
+
+        let restore = sw.restore_commands();
+        assert!(restore.contains(&Command::SetAuxSend {
+            slot: 1,
+            bus: 1,
+            gain: fader_gain(50)
+        }));
+        assert!(restore.contains(&Command::SetAuxBus {
+            bus: 0,
+            gain: fader_gain(80),
+            mute: true
+        }));
+    }
+
+    #[test]
+    fn aux_bus_numbers_are_checked() {
+        let mut sw = two_inputs();
+        for bus in [0, 3] {
+            assert!(matches!(
+                sw.apply(Action::SetAuxBus {
+                    bus,
+                    volume: 50,
+                    mute: false
+                }),
+                Err(ActionError::BadAuxBus { .. })
+            ));
+        }
+        let srt = OutputSpec::Srt {
+            uri: "srt://cdn:9000".into(),
+            video_kbps: 6000,
+        };
+        assert!(matches!(
+            sw.apply(Action::AddOutput {
+                spec: srt,
+                source: OutputSource::Program,
+                name: None,
+                aux: Some(3),
+            }),
+            Err(ActionError::BadAuxBus { .. })
+        ));
+    }
+
+    #[test]
+    fn an_output_takes_its_sound_from_an_aux_bus() {
+        let mut sw = two_inputs();
+        let srt = OutputSpec::Srt {
+            uri: "srt://cdn:9000".into(),
+            video_kbps: 6000,
+        };
+        sw.apply(Action::AddOutput {
+            spec: srt,
+            source: OutputSource::Program,
+            name: Some("Mix minus".into()),
+            aux: Some(1),
+        })
+        .unwrap();
+
+        let cmds = sw
+            .apply(Action::StartOutput {
+                output: OutputRef::Number(1),
+            })
+            .unwrap();
+
+        assert!(matches!(
+            cmds[..],
+            [Command::StartOutput {
+                feed: Feed::Program,
+                aux: Some(0),
+                ..
+            }]
+        ));
+        assert_eq!(sw.state().outputs[0].aux, Some(1));
+    }
+
+    #[test]
     fn whip_inputs_carry_their_ingest_links() {
         let mut sw = Switcher::new(SLOTS);
         sw.set_ingest_base("http://studio:8080/".into());
@@ -1614,6 +1813,7 @@ mod tests {
             spec: srt.clone(),
             source: OutputSource::Program,
             name: Some("Stream".into()),
+            aux: None,
         })
         .unwrap();
         let id = sw.state().outputs[0].id;
@@ -1628,7 +1828,8 @@ mod tests {
             [Command::StartOutput {
                 id,
                 spec: srt.clone(),
-                feed: Feed::Program
+                feed: Feed::Program,
+                aux: None,
             }]
         );
         sw.set_output_status(id, OutputStatus::Running { since_ms: 1 });
@@ -1637,7 +1838,8 @@ mod tests {
         assert!(sw.restore_commands().contains(&Command::StartOutput {
             id,
             spec: srt,
-            feed: Feed::Program
+            feed: Feed::Program,
+            aux: None,
         }));
 
         let cmds = sw
@@ -1668,6 +1870,7 @@ mod tests {
             spec: rec,
             source: OutputSource::Input(b),
             name: None,
+            aux: None,
         })
         .unwrap();
         let output = sw.state().outputs[0].clone();
@@ -1842,6 +2045,16 @@ mod tests {
                 Command::SetStrip {
                     slot: 0,
                     strip: ChannelStrip::default()
+                },
+                Command::SetAuxSend {
+                    slot: 0,
+                    bus: 0,
+                    gain: 0.0
+                },
+                Command::SetAuxSend {
+                    slot: 0,
+                    bus: 1,
+                    gain: 0.0
                 },
                 Command::SetAudio {
                     slot: 0,

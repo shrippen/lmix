@@ -201,6 +201,23 @@ settle
 act '{"action":"set_volume","input":"Ball","volume":50}' >/dev/null   # checked after the crash below
 pass "channel strip: gain lowers program, delay changed on air, reset"
 
+# --- aux buses (4.7): bus 1 before the fader, bus 2 after it ---
+aux_db() { curl -sf "$CORE/audio/levels" | jq ".aux_peak_db[$1] // -100 | floor"; }
+act '{"action":"set_aux_send","input":"Ball","bus":1,"level":100}' >/dev/null
+act '{"action":"set_aux_send","input":"Ball","bus":2,"level":100}' >/dev/null
+settle
+[[ $(aux_db 0) -gt $AUDIBLE_DB && $(aux_db 1) -gt $AUDIBLE_DB ]] || fail "aux buses silent with sends up ($(aux_db 0), $(aux_db 1) dB)"
+act '{"action":"set_audio","input":"Ball","on":false}' >/dev/null
+settle
+[[ $(aux_db 0) -gt $AUDIBLE_DB ]] || fail "aux 1 (before the fader) lost a muted input"
+[[ $(aux_db 1) -lt $SILENT_DB ]] || fail "aux 2 (after the fader) hears a muted input ($(aux_db 1) dB)"
+act '{"action":"set_aux_bus","bus":1,"volume":100,"mute":true}' >/dev/null
+settle
+[[ $(aux_db 0) -lt $SILENT_DB ]] || fail "muted aux 1 still sounds ($(aux_db 0) dB)"
+act '{"action":"set_aux_bus","bus":1,"volume":100,"mute":false}' >/dev/null
+act '{"action":"set_audio","input":"Ball","on":true}' >/dev/null
+pass "aux buses: sends heard, before/after the fader, master mute"
+
 # --- more sources (2b.3): color, still image, playlist with transport ---
 MEDIA="$WORK/media"
 mkdir -p "$MEDIA"

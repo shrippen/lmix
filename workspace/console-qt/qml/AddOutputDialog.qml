@@ -16,6 +16,8 @@ KanteDialog {
     readonly property string kind: kinds[kindBox.currentIndex] ? kinds[kindBox.currentIndex].value : "srt"
     readonly property bool needsText: kind !== "window" && kind !== "fullscreen"
     readonly property bool encodes: kind === "srt" || kind === "record"
+    /** Screens show picture only. */
+    readonly property bool carriesSound: kind !== "window" && kind !== "fullscreen" && kind !== "drm"
     readonly property var hints: ({
         srt: "srt://host:9000",
         record: qsTr("folder in the engine's media directory"),
@@ -32,12 +34,21 @@ KanteDialog {
     onOpened: {
         textField.text = ""
         nameField.text = ""
+        soundBox.currentIndex = 0
     }
 
     onAccepted: {
         var source = sourceBox.currentIndex <= 0 ? "program" : dialog.inputs[sourceBox.currentIndex - 1].id
         var container = dialog.containers[containerBox.currentIndex] ? dialog.containers[containerBox.currentIndex].value : "mkv"
-        core.addOutput(dialog.kind, textField.text, source, container, kbps.value, nameField.text)
+        core.addOutput(JSON.stringify({
+            kind: dialog.kind,
+            text: textField.text,
+            source: source,
+            container: container,
+            video_kbps: kbps.value,
+            name: nameField.text,
+            aux: dialog.carriesSound ? soundBox.currentIndex : 0
+        }))
     }
 
     Component.onCompleted: standardButton(QQC2.Dialog.Ok).enabled = Qt.binding(() => !dialog.needsText || textField.text.trim().length > 0)
@@ -72,6 +83,19 @@ KanteDialog {
             Layout.fillWidth: true
             model: [qsTr("Program")].concat(dialog.inputs.map(i => i.number + " " + i.name))
             KanteFieldSkin { control: sourceBox }
+        }
+
+        KanteSectionLabel {
+            visible: dialog.carriesSound
+            text: qsTr("Sound")
+        }
+        QQC2.ComboBox {
+            id: soundBox
+            visible: dialog.carriesSound
+            Layout.fillWidth: true
+            // Index = aux bus number; 0 keeps the source's own sound.
+            model: [qsTr("As carried"), qsTr("Aux 1 (before the faders)"), qsTr("Aux 2 (after the faders)")]
+            KanteFieldSkin { control: soundBox }
         }
 
         RowLayout {

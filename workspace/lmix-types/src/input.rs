@@ -196,6 +196,31 @@ pub enum SignalLoss {
 /// Highest input volume (vMix scale, 100 = unity gain).
 pub const VOLUME_MAX: u8 = 100;
 
+/// Aux buses of the audio mixer, numbered 1–2 in actions.
+pub const AUX_BUSES: usize = 2;
+
+/// Which aux buses take their sends before the channel fader (and its
+/// on/off): bus 1 is the monitor mix (in-ear, presenters hear
+/// themselves whatever is on air), bus 2 a second mix after the fader.
+pub const AUX_PRE_FADER: [bool; AUX_BUSES] = [true, false];
+
+/// Master of an aux bus.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct AuxBus {
+    /// 0–100, 100 = unity gain.
+    pub volume: u8,
+    pub mute: bool,
+}
+
+impl Default for AuxBus {
+    fn default() -> Self {
+        Self {
+            volume: VOLUME_MAX,
+            mute: false,
+        }
+    }
+}
+
 /// Audio settings of an input (AUD).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct InputAudio {
@@ -407,6 +432,9 @@ pub struct Input {
     /// Channel strip (inputs with sound).
     #[serde(default)]
     pub strip: ChannelStrip,
+    /// Send level to each aux bus, 0–100 (100 = unity); 0 sends nothing.
+    #[serde(default)]
+    pub sends: [u8; AUX_BUSES],
 }
 
 /// What a discovered device delivers.

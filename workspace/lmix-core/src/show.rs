@@ -10,9 +10,10 @@
 use std::path::Path;
 
 use lmix_types::action::{OVERLAY_CHANNELS, TRANSITION_SLOTS};
+use lmix_types::input::AUX_BUSES;
 use lmix_types::{
-    ChannelStrip, Effect, InputAudio, InputColor, InputId, OutputId, OutputSource, OutputSpec,
-    SignalLoss, SourceSpec, Transition, TransitionSlot,
+    AuxBus, ChannelStrip, Effect, InputAudio, InputColor, InputId, OutputId, OutputSource,
+    OutputSpec, SignalLoss, SourceSpec, Transition, TransitionSlot,
 };
 use serde::{Deserialize, Serialize};
 
@@ -38,6 +39,8 @@ pub struct ShowInput {
     pub signal_loss: SignalLoss,
     #[serde(default)]
     pub strip: ChannelStrip,
+    #[serde(default)]
+    pub sends: [u8; AUX_BUSES],
 }
 
 /// Everything a show file holds.
@@ -54,6 +57,8 @@ pub struct Show {
     /// What each overlay channel shows, as program is kept too.
     #[serde(default)]
     pub overlays: [Option<InputId>; OVERLAY_CHANNELS as usize],
+    #[serde(default)]
+    pub aux_buses: [AuxBus; AUX_BUSES],
 }
 
 /// One output as saved.
@@ -64,6 +69,9 @@ pub struct ShowOutput {
     pub spec: OutputSpec,
     #[serde(default)]
     pub source: OutputSource,
+    /// Sound from this aux bus (1–2) instead of the source's own.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub aux: Option<u8>,
 }
 
 impl Default for Show {
@@ -75,6 +83,7 @@ impl Default for Show {
             transitions: default_transitions(),
             outputs: Vec::new(),
             overlays: Default::default(),
+            aux_buses: Default::default(),
         }
     }
 }
@@ -197,11 +206,19 @@ mod tests {
                     delay_ms: 40,
                     ..Default::default()
                 },
+                sends: [70, 0],
             }],
             preview: Some(id),
             program: None,
             transitions: default_transitions(),
             overlays: [None, Some(id), None, None],
+            aux_buses: [
+                AuxBus::default(),
+                AuxBus {
+                    volume: 60,
+                    mute: true,
+                },
+            ],
             outputs: vec![ShowOutput {
                 id: OutputId::new(),
                 name: "Stream".into(),
@@ -210,6 +227,7 @@ mod tests {
                     video_kbps: 6000,
                 },
                 source: OutputSource::Input(id),
+                aux: Some(2),
             }],
         }
     }

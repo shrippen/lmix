@@ -5,10 +5,10 @@ import org.kde.kirigami as Kirigami
 import Kante
 
 /**
- * Channel strip of an input with sound: trim, pan, high-pass, four-band
- * EQ, gate, compressor and delay (lip sync). Every change goes to
+ * Channel strip of an input with sound: trim, pan, delay (lip sync), aux
+ * sends, high-pass, four-band EQ, gate and compressor. Strip changes go to
  * lmix-core as the whole strip, at most every 100 ms; sections switched
- * off keep their values.
+ * off keep their values. Aux sends are actions of their own.
  */
 KanteDialog {
     id: dialog
@@ -18,6 +18,16 @@ KanteDialog {
     property var input: null
     /** Working copy, sent as a whole. */
     property var strip: null
+
+    /** Aux send levels, set apart from the strip. */
+    property var sends: [0, 0]
+
+    function sendTo(bus, level) {
+        var s = sends.slice()
+        s[bus - 1] = level
+        sends = s
+        dialog.act({ action: "set_aux_send", input: dialog.input.number, bus: bus, level: level })
+    }
 
     function edit(change) {
         var s = JSON.parse(JSON.stringify(strip))
@@ -33,7 +43,10 @@ KanteDialog {
     // KanteDialog has a child of its own (KanteScope), so the popup does not
     // size itself; the strip is taller than small windows and scrolls.
     contentHeight: Math.min(column.implicitHeight, (parent ? parent.height : 800) * 0.7)
-    onOpened: strip = JSON.parse(JSON.stringify(input.strip))
+    onOpened: {
+        strip = JSON.parse(JSON.stringify(input.strip))
+        sends = input.sends ? input.sends.slice() : [0, 0]
+    }
 
     Timer {
         id: send
@@ -124,6 +137,20 @@ KanteDialog {
                 from: 0; to: 500; step: 10; unit: "ms"
                 value: dialog.strip ? dialog.strip.delay_ms : 0
                 onMoved: v => dialog.edit(s => s.delay_ms = Math.round(v))
+            }
+
+            Repeater {
+                model: [qsTr("Aux 1 (before the fader)"), qsTr("Aux 2 (after the fader)")]
+                SliderRow {
+                    required property int index
+                    required property string modelData
+                    Layout.fillWidth: true
+                    section: index === 0 ? qsTr("Aux sends") : ""
+                    title: modelData
+                    from: 0; to: 100; step: 1
+                    value: dialog.sends[index]
+                    onMoved: v => dialog.sendTo(index + 1, Math.round(v))
+                }
             }
 
             OnRow {

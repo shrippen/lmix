@@ -214,6 +214,7 @@ impl Service {
             inputs,
             program_peak_db: engine.main.and_then(fresh),
             monitor_peak_db: engine.monitor.and_then(fresh),
+            aux_peak_db: std::array::from_fn(|bus| engine.aux.get(&bus).copied().and_then(fresh)),
         }
     }
 
@@ -890,6 +891,7 @@ mod tests {
                 },
                 source: OutputSource::default(),
                 name: Some("Screen".into()),
+                aux: None,
             })
             .await
             .unwrap();

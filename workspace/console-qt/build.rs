@@ -110,6 +110,7 @@ fn main() {
                 "qml/AddOutputDialog.qml",
                 "qml/TransitionPanel.qml",
                 "qml/ChannelStripDialog.qml",
+                "qml/AuxBusDialog.qml",
                 "qml/OutputBar.qml",
                 "qml/ChoiceMenu.qml",
                 "qml/KeyedModel.qml",

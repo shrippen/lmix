@@ -11,7 +11,7 @@ auf echter Hardware.
 | #2 | `m2b` | `lastenheft` | lmix-core, Slot-Mischer, Show-Datei, Console als Client, Ton, Quellen | gemergt |
 | #3 | `m3` | `m2b` | Ausgänge, MultiCorder, Bildschirm, Failover, Latenz, Leitungszustand | gemergt |
 | #4 | `claude-todo` | `console-qt` | Restart-502, Selbsttest, Qt-Console statt egui | fertig, Merge offen |
-| #5 | `m4` | `claude-todo` | M4: Overlays (4.1), T-Bar (4.3), Kanalzug (4.7 ohne Busse) | in Arbeit |
+| #5 | `m4` | `claude-todo` | M4: Overlays (4.1), T-Bar (4.3), Kanalzug und Aux-Busse (4.7) | in Arbeit |
 
 strom-Fork (`shrippen/strom`):
 - `lmix-start-time` (PR #1): Startzeit `first`, Media-Player-Bus-Watch,

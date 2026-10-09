@@ -13,8 +13,19 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::input::{ChannelStrip, InputColor, InputRef, Listen, SignalLoss, SourceSpec, Transport};
+use crate::input::{
+    ChannelStrip, InputColor, InputRef, Listen, SignalLoss, SourceSpec, Transport, AUX_BUSES,
+};
 use crate::output::{OutputRef, OutputSource, OutputSpec};
+
+/// 0-based index of aux bus `bus` (1-based, as in actions).
+pub fn aux_index(bus: u8) -> Result<usize, ActionError> {
+    let max = AUX_BUSES as u8;
+    if bus == 0 || bus > max {
+        return Err(ActionError::BadAuxBus { bus, max });
+    }
+    Ok(usize::from(bus - 1))
+}
 
 /// One of the four transition buttons (SWI.3), 1-based.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -110,6 +121,9 @@ pub enum Action {
         /// Program (default) or one input (ISO, MultiCorder).
         #[serde(default)]
         source: OutputSource,
+        /// Sound from aux bus 1–2 instead of the source's own.
+        #[serde(default)]
+        aux: Option<u8>,
         #[serde(default)]
         name: Option<String>,
     },
@@ -133,6 +147,11 @@ pub enum Action {
         input: InputRef,
         strip: ChannelStrip,
     },
+    /// Send an input to aux bus `bus` (1–2) at `level`, 0–100; 0 stops
+    /// the send.
+    SetAuxSend { input: InputRef, bus: u8, level: u8 },
+    /// Master of aux bus `bus` (1–2): volume 0–100 and mute.
+    SetAuxBus { bus: u8, volume: u8, mute: bool },
     /// Listen to an input on the monitor bus, before or after its fader.
     /// While any input is soloed, the monitor bus carries only the solos;
     /// otherwise it follows program.
@@ -240,6 +259,8 @@ pub enum ActionError {
     BadOverlay { channel: u8, max: u8 },
     #[error("T-bar position is outside 0–1")]
     BadTBar,
+    #[error("aux bus {bus} does not exist (1–{max})")]
+    BadAuxBus { bus: u8, max: u8 },
     #[error("channel strip: {field} is out of range")]
     BadStrip { field: String },
     #[error("show has no file yet; give a path")]

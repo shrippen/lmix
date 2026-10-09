@@ -970,3 +970,32 @@ Test nimmt jetzt 2 Slots und wartet auf Bewegung und Zustand statt fester
 Pausen.
 **Offen**: Aux-Busse (Sends je Kanal, eigene Ausgänge), Pegelanzeige für
 Gate/Kompressor-Wirkung, Hardware-Prüfung der Verzögerung (H.25).
+
+## 2026-10-09 — M4 Schritt 4: Aux-Busse (4.7)
+
+**Entscheidung**: zwei Aux-Busse im strom-Audiomischer (`num_aux_buses`),
+mit festen Rollen: **Aux 1 vor dem Fader** (Monitormix, In-Ear: hört ein
+Input auch, wenn er stumm oder nicht auf Sendung ist), **Aux 2 nach dem
+Fader** (zweiter Sendemix, folgt Fader und An/Aus). Je Input ein Send-Pegel
+pro Bus (0–100, 0 = aus, gleiche Kurve wie die Lautstärke), je Bus Master
+mit Lautstärke und Stumm. Aktionen `set_aux_send { input, bus, level }`,
+`set_aux_bus { bus, volume, mute }`; Sends und Master stehen in der
+Show-Datei und werden beim Wiederherstellen gesetzt. Ein Ausgang kann
+seinen Ton von einem Bus nehmen (`add_output … aux: 1|2`, z. B.
+Mix-Minus für eine Schalte); das Bild bleibt Programm oder der Input.
+Pegel je Bus in `GET /api/audio/levels` (`aux_peak_db`).
+**Warum feste Rollen**: strom setzt vor/nach dem Fader (`chX_auxY_pre`)
+nur beim Aufbau des Mischers. Umschalten hieße, den laufenden Mischer
+(Bild und Ton) neu aufzubauen. Pegel, Master und Stumm sind live.
+**Mischer**: Flow heißt jetzt `lmix mixer 4`, damit ein laufender Mischer
+ohne Busse neu gebaut wird. Jeder Bus geht auf einen eigenen
+inter-Kanal (`aux1_out`, `aux2_out`), Ausgänge abonnieren ihn statt des
+Programmtons.
+**Console**: Kanalzug-Dialog mit Abschnitt „Aux-Sends“, Knopf „Aux…“ über
+den Inputs (Pegel, Lautstärke, Stumm je Bus), im Ausgangsdialog „Ton“
+(wie die Quelle, Aux 1, Aux 2). Der Ausgangsdialog übergibt sein Formular
+jetzt als ein JSON-Objekt (cxx-qt erlaubt an der Bridge keine Attribute,
+acht Einzelargumente verletzten den Clippy-Standard).
+**Offen**: mehr Busse und umschaltbares vor/nach (strom-Patch, Neuverknüpfen
+im Betrieb); Aux als Kopfhörerquelle (Monitorbus hört heute Programm oder
+Solos); Hardware-Prüfung mit echtem Rückweg (H.26).

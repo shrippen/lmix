@@ -548,8 +548,13 @@ impl Engine for StromEngine {
             Command::SetListen { slot, listen } => self.set_listen(*slot, *listen).await,
             Command::Transport { slot, transport } => self.transport(*slot, *transport).await,
             Command::SetSignalLoss { slot, mode } => self.set_signal_loss(*slot, *mode).await,
-            Command::StartOutput { id, spec, feed } => {
-                self.put_flow(&flows::output_flow(*id, spec, *feed, self.backend))
+            Command::StartOutput {
+                id,
+                spec,
+                feed,
+                aux,
+            } => {
+                self.put_flow(&flows::output_flow(*id, spec, *feed, *aux, self.backend))
                     .await
             }
             Command::StopOutput { id } => self.drop_flow(flows::output_flow_id(*id)).await,
@@ -560,6 +565,19 @@ impl Engine for StromEngine {
             } => self.overlay(*channel, *slot, *duration_ms).await,
             Command::TBar { slot, position } => self.t_bar(*slot, *position).await,
             Command::SetStrip { slot, strip } => self.set_strip(*slot, strip).await,
+            Command::SetAuxSend { slot, bus, gain } => {
+                let channel = flows::audio_channel(*slot);
+                let name = format!("ch{channel}_aux{}_level", bus + 1);
+                self.patch_audio_mixer(vec![(name, PropertyValue::Float(*gain))], AUDIO_RAMP_MS)
+                    .await
+            }
+            Command::SetAuxBus { bus, gain, mute } => {
+                let properties = vec![
+                    (format!("aux{}_fader", bus + 1), PropertyValue::Float(*gain)),
+                    (format!("aux{}_mute", bus + 1), PropertyValue::Bool(*mute)),
+                ];
+                self.patch_audio_mixer(properties, AUDIO_RAMP_MS).await
+            }
         }
     }
 

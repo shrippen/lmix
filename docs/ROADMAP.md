@@ -282,7 +282,7 @@ Stand:
 |---|---|
 | 4.1 | ✅ 4 Overlay-Kanäle (wie vMix; strom-DSK hat höchstens 4) über die DSK-Ebenen des Mischers, Ein-/Ausblenden (strom-Patch `lmix-dsk-fade`), Tally rot, in Show-Datei; Console: Knöpfe 1–4 je Kachel und Overlay-Leiste; ⚠ Position/Größe eines Overlays (PiP) mit 4.6 |
 | 4.3 | ✅ T-Bar: Vorschau wird beim Ziehen über Programm eingeblendet (Mischung), am Ende Take, zurück auf 0 ohne Wirkung; Position im Zustand; Console-Schieber; ⚠ nur Blende (andere Effekte am Ende als Cut), Ton folgt erst beim Take |
-| 4.7 | ◐ Kanalzug je Input: Gain, Pan, Hochpass, 4-Band-EQ, Gate, Kompressor, Verzögerung (live, strom-Patch `lmix-live-offset`), in Show-Datei; Console-Dialog „Kanalzug…“; Solo/PFL/AFL seit M2b; ⚠ Aux-Busse offen |
+| 4.7 | ✅ Kanalzug je Input: Gain, Pan, Hochpass, 4-Band-EQ, Gate, Kompressor, Verzögerung (live, strom-Patch `lmix-live-offset`); 2 Aux-Busse (1 vor, 2 nach dem Fader) mit Sends je Input, Master, Pegel, Ausgang mit Aux-Ton (Mix-Minus); alles in Show-Datei; Console: „Kanalzug…“, „Aux…“, Ausgangsdialog „Ton“; Solo/PFL/AFL seit M2b; ⚠ vor/nach fest je Bus |
 | 4.4 | → M7 (Titel) |
 | 4.5 | → „Später“ (Wiederholung) |
 
