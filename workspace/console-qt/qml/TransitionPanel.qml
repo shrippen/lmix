@@ -46,6 +46,7 @@ ColumnLayout {
             readonly property var modelData: panel.transitionBySlot(key) || ({ slot: Number(key), effect: "cut", duration_ms: 0 })
 
             Layout.fillWidth: true
+            size: KanteButton.Size.Large
             text: modelData.slot + " " + panel.effectLabel(modelData.effect) + "\n" + modelData.duration_ms + " ms"
             enabled: panel.core.connected && panel.canTake
             onClicked: panel.act({ action: "transition", slot: modelData.slot })

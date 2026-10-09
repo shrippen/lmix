@@ -221,3 +221,43 @@ cargo run -- --core http://127.0.0.1:8200    # oder LMIX_CORE=…
 ```
 
 Ohne `--core` spricht die Console wie in M1b direkt mit strom.
+
+## Qt-Console (`workspace/console-qt`, Prototyp)
+
+Systempakete: Qt 6 (Quick, QuickControls2, Dialogs) mit Entwicklungsdateien,
+Kirigami 6, das GStreamer-Plugin `qml6` und gstreamer-rs-Abhängigkeiten.
+
+```bash
+# Arch
+sudo pacman -S qt6-declarative kirigami gst-plugin-qml6
+# Ubuntu 26.04 LTS / Kubuntu (Plasma 6)
+sudo apt-get install qt6-declarative-dev qml6-module-org-kde-kirigami \
+  qml6-module-qtquick-dialogs gstreamer1.0-qt6
+```
+
+Ubuntu 24.04 hat noch Plasma 5 und damit kein Kirigami 6: dort baut die
+Qt-Console nicht ohne Backports (offen, siehe HANDOVER).
+
+```bash
+scripts/sync-kante.sh                 # Kante-QML ins Crate kopieren (nach Kante-Änderungen)
+cd workspace/console-qt
+cargo run --release -- --core http://127.0.0.1:8200 [--style kante|kante-light|system]
+```
+
+`cxx-qt-build` findet Qt über `qmake6` (bzw. `QMAKE=…`). Die Console muss auf
+dem Rechner der Engine laufen: Live-Bilder kommen über Unix-Sockets in
+`$XDG_RUNTIME_DIR/lmix/live` (`lmix-core --live-dir`). Messwerte je Ansicht:
+`RUST_LOG=lmix_console=debug`. Läuft die Console ohne Terminal, landen
+Qt-Meldungen im Journal; `QT_FORCE_STDERR_LOGGING=1` holt sie nach stderr.
+
+## Dauertest auf Hardware
+
+```bash
+scripts/soak-hardware.sh                       # 60 min, CUDA-Mischer
+MINUTES=10 MIXER=gl scripts/soak-hardware.sh   # AMD/Intel
+```
+
+Misst alle 5 min die Latenz Quelle → PGM, CPU von strom, GPU-Last und den
+SRT-Leitungszustand, schaltet alle 30 s das Programm um und prüft am Ende:
+Latenz nicht gewachsen, Ausgänge nie ausgefallen, Aufnahme und empfangener
+SRT-Strom lückenlos (Bilder ≥ 98 % von 30 fps × Laufzeit).
