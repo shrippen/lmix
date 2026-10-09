@@ -101,9 +101,14 @@ KanteCard {
                 text: tile.input.name
                 elide: Text.ElideRight
             }
+            KanteSwatch {
+                visible: tile.input.color !== null
+                size: KanteSwatch.Size.Dense
+                swatchColor: KanteStyle.labelColor(tile.input.color)
+            }
             KanteSectionLabel {
                 visible: tile.input.color !== null
-                text: tile.input.color || ""
+                text: Texts.label("colors", tile.input.color)
                 color: KanteStyle.mutedTextColor
             }
             KanteSectionLabel {
@@ -136,9 +141,10 @@ KanteCard {
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: 0
-                LevelMeter {
+                KanteLevelMeter {
                     Layout.fillWidth: true
-                    peakDb: tile.peakDb
+                    level: tile.peakDb
+                    scale: true
                 }
                 QQC2.Slider {
                     id: volume
@@ -178,7 +184,7 @@ KanteCard {
         }
         ChoiceMenu {
             title: qsTr("Colour tag")
-            choices: [{ value: null, label: qsTr("None") }].concat(JSON.parse(tile.core.choices("colors")))
+            choices: [{ value: null, label: qsTr("None") }].concat(Texts.choices("colors", tile.core.choices("colors")))
             current: tile.input.color
             onPicked: value => tile.act({ action: "set_input_color", input: tile.ref(), color: value })
         }

@@ -1020,12 +1020,12 @@ mod tests {
         let cmds = sw
             .apply(Action::SetInputColor {
                 input: named("B"),
-                color: Some(InputColor::Teal),
+                color: Some(InputColor::Cyan),
             })
             .unwrap();
 
         assert!(cmds.is_empty());
-        assert_eq!(sw.state().inputs[1].color, Some(InputColor::Teal));
+        assert_eq!(sw.state().inputs[1].color, Some(InputColor::Cyan));
     }
 
     fn audio_of(cmds: &[Command]) -> Vec<(usize, bool, u32)> {

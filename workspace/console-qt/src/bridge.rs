@@ -32,19 +32,22 @@ pub mod qobject {
         #[qml_element]
         #[qproperty(bool, connected)]
         #[qproperty(QString, state)]
+        /// Last refusal or error as JSON: lmix-core's `{error, message}`
+        /// (Texts.qml translates by `error.error`), or `{message}`; empty
+        /// when the last action went through.
         #[qproperty(QString, message)]
         /// `KanteStyle.kind` from the command line (0 System, 1 Kante,
         /// 2 Kante Light), or -1: the one saved in the Console.
         #[qproperty(i32, style)]
         /// Peak dBFS per input id, and `program` (JSON object).
         #[qproperty(QString, levels)]
-        /// Link health per output id: `{rate, detail}` (JSON object).
+        /// Link health per output id: lmix `OutputStats` (JSON object).
         #[qproperty(QString, links)]
         /// Capture devices (JSON list of lmix `Device`).
         #[qproperty(QString, devices)]
         /// Recently opened or saved show files (JSON list).
         #[qproperty(QString, recent)]
-        /// Last latency measurement, as the toolbar shows it.
+        /// Last latency measurement: lmix `Latency` as JSON, or empty.
         #[qproperty(QString, latency)]
         #[qproperty(bool, measuring)]
         type Core = super::CoreRust;
@@ -95,7 +98,7 @@ pub mod qobject {
         #[cxx_name = "measureLatency"]
         fn measure_latency(self: Pin<&mut Core>);
 
-        /// Choices of a form list as JSON `[{value, label}]`: sources,
+        /// Values of a form list as JSON (Texts.qml names them): sources,
         /// patterns, effects, colors, containers, outputs, durations.
         #[qinvokable]
         fn choices(self: &Core, list: &QString) -> QString;
@@ -158,8 +161,6 @@ pub struct CoreRust {
 impl cxx_qt::Initialize for qobject::Core {
     fn initialize(mut self: Pin<&mut Self>) {
         self.as_mut().set_style(config::style());
-        self.as_mut()
-            .set_latency(QString::from(&forms::latency_text(None)));
         let thread = self.qt_thread();
         config::runtime().spawn(follow(thread));
         self.refresh_lists();
@@ -215,19 +216,11 @@ fn levels_json(levels: &Levels) -> String {
     serde_json::Value::Object(map).to_string()
 }
 
-/// `{ "<output id>": {rate, detail} }`.
+/// `{ "<output id>": OutputStats }`.
 fn links_json(stats: &[OutputStats]) -> String {
     let map: serde_json::Map<String, serde_json::Value> = stats
         .iter()
-        .map(|s| {
-            (
-                s.output.to_string(),
-                serde_json::json!({
-                    "rate": forms::link_rate(s),
-                    "detail": forms::link_detail(s),
-                }),
-            )
-        })
+        .filter_map(|s| Some((s.output.to_string(), serde_json::to_value(s).ok()?)))
         .collect();
     serde_json::Value::Object(map).to_string()
 }
@@ -323,7 +316,9 @@ impl qobject::Core {
         let thread = self.qt_thread();
         config::runtime().spawn(async move {
             let latency = measure().await;
-            let text = forms::latency_text(latency.as_ref());
+            let text = latency
+                .and_then(|l| serde_json::to_string(&l).ok())
+                .unwrap_or_default();
             let _ = thread.queue(move |mut core| {
                 core.as_mut().set_latency(QString::from(&text));
                 core.set_measuring(false);
@@ -332,17 +327,7 @@ impl qobject::Core {
     }
 
     fn choices(&self, list: &QString) -> QString {
-        let json = match list.to_string().as_str() {
-            "sources" => forms::source_kinds(),
-            "patterns" => forms::patterns(),
-            "effects" => forms::effects(),
-            "colors" => forms::input_colors(),
-            "containers" => forms::containers(),
-            "outputs" => forms::output_kinds(),
-            "durations" => serde_json::to_string(&forms::DURATION_PRESETS_MS).unwrap_or_default(),
-            _ => "[]".into(),
-        };
-        QString::from(&json)
+        QString::from(&forms::values(&list.to_string()).unwrap_or_else(|| "[]".into()))
     }
 
     fn running_time(&self, since_ms: f64) -> QString {
@@ -430,7 +415,7 @@ impl qobject::Core {
             Ok(pipeline) => pipeline,
             Err(e) => {
                 tracing::warn!(%socket, error = %e, "live pipeline failed");
-                self.as_mut().set_message(QString::from(&e));
+                self.as_mut().set_message(QString::from(&plain_message(&e)));
                 return;
             }
         };
@@ -547,7 +532,13 @@ fn measure_frames(sink: &gst::Element, socket: String) {
     });
 }
 
-/// Run an action; the reason when lmix-core refused it.
+/// `{message}` for an error the Console found itself.
+fn plain_message(text: &str) -> String {
+    serde_json::json!({ "message": text }).to_string()
+}
+
+/// Run an action; when lmix-core refused it, the reason as JSON
+/// (`{error, message}` from lmix-core, else `{message}`).
 async fn post_action(action: &Action) -> Option<String> {
     let resp = match config::http()
         .post(format!("{}/api/actions", config::core_url()))
@@ -556,17 +547,17 @@ async fn post_action(action: &Action) -> Option<String> {
         .await
     {
         Ok(resp) => resp,
-        Err(e) => return Some(e.to_string()),
+        Err(e) => return Some(plain_message(&e.to_string())),
     };
     if resp.status().is_success() {
         return None;
     }
     let status = resp.status();
     let body = resp.text().await.unwrap_or_default();
-    let message = serde_json::from_str::<serde_json::Value>(&body)
-        .ok()
-        .and_then(|v| v["message"].as_str().map(str::to_string));
-    Some(message.unwrap_or_else(|| format!("lmix-core {status}: {body}")))
+    match serde_json::from_str::<serde_json::Value>(&body) {
+        Ok(v) if v["message"].is_string() => Some(body),
+        _ => Some(plain_message(&format!("lmix-core {status}: {body}"))),
+    }
 }
 
 async fn get_json<T: serde::de::DeserializeOwned>(path: &str) -> Option<T> {

@@ -31,6 +31,7 @@ KanteHeatmap 1.0 KanteHeatmap.qml
 KanteHud 1.0 KanteHud.qml
 KanteKpi 1.0 KanteKpi.qml
 KanteLamp 1.0 KanteLamp.qml
+KanteLevelMeter 1.0 KanteLevelMeter.qml
 KanteLineChart 1.0 KanteLineChart.qml
 KanteListRow 1.0 KanteListRow.qml
 KanteLiveLine 1.0 KanteLiveLine.qml

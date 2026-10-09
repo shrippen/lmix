@@ -83,6 +83,24 @@ QtObject {
     readonly property color infoColor: themed ? palette.info : Kirigami.Theme.linkColor
     /** Tags, topics, categories (purple in Kante; the visited-link colour of the platform otherwise). */
     readonly property color tagColor: themed ? palette.tag : Kirigami.Theme.visitedLinkColor
+    /**
+     * Colour labels: a named colour that is the data itself (a colour tag on an input,
+     * a darktable label), so "yellow" stays yellow in every kind; light or dark follows
+     * the theme. Web: `data-label`. Never the only sign: name the label beside it.
+     */
+    readonly property var labels: ["red", "orange", "yellow", "green", "cyan", "blue", "purple"]
+    function labelColor(name) {
+        switch (name) {
+        case "red": return palette.labelRed
+        case "orange": return palette.labelOrange
+        case "yellow": return palette.labelYellow
+        case "green": return palette.labelGreen
+        case "cyan": return palette.labelCyan
+        case "blue": return palette.labelBlue
+        case "purple": return palette.labelPurple
+        }
+        return "transparent"
+    }
     // Warnings below "neutral" (e.g. stale dates, dead links); the platform has no own role, so neutral.
     readonly property color warningColor: themed ? palette.warning : Kirigami.Theme.neutralTextColor
     /** Focus ring, brackets, data lines (cyan; the platform's focus color otherwise). */

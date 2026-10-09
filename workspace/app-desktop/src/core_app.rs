@@ -104,10 +104,9 @@ fn tag_color(color: InputColor) -> egui::Color32 {
         InputColor::Orange => egui::Color32::from_rgb(240, 150, 50),
         InputColor::Yellow => egui::Color32::from_rgb(235, 210, 60),
         InputColor::Green => egui::Color32::from_rgb(80, 190, 90),
-        InputColor::Teal => egui::Color32::from_rgb(50, 180, 170),
+        InputColor::Cyan => egui::Color32::from_rgb(50, 180, 170),
         InputColor::Blue => egui::Color32::from_rgb(70, 130, 230),
         InputColor::Purple => egui::Color32::from_rgb(150, 90, 220),
-        InputColor::Pink => egui::Color32::from_rgb(230, 100, 180),
     }
 }
 

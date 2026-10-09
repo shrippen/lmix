@@ -177,14 +177,14 @@ Kirigami.ApplicationWindow {
                     readonly property var kinds: [KanteStyle.Kind.Kante, KanteStyle.Kind.KanteLight, KanteStyle.Kind.System]
                     model: [qsTr("Kante"), qsTr("Kante Light"), qsTr("System")]
                     currentIndex: kinds.indexOf(KanteStyle.kind)
-                    tooltips: [qsTr("Kante style"), qsTr("Kante shapes on the system colours"), qsTr("System style (Breeze)")]
+                    tooltips: [qsTr("Kante: Gruvbox dark, Leinen when the system theme is light"), qsTr("Kante Light: only the shapes of Kante, on the system colours"), qsTr("System style (Breeze)")]
                     onActivated: index => {
                         settings.style = kinds[index]
                         backend.style = -1
                     }
                 }
                 QQC2.Label {
-                    text: backend.latency
+                    text: Texts.latency(backend.latency)
                     font.family: KanteStyle.monoFamily
                     color: KanteStyle.mutedTextColor
                 }
@@ -313,7 +313,7 @@ Kirigami.ApplicationWindow {
             QQC2.Label {
                 Layout.fillWidth: true
                 visible: backend.message.length > 0
-                text: backend.message
+                text: Texts.message(backend.message)
                 color: KanteStyle.negativeTextColor
                 wrapMode: Text.Wrap
             }
@@ -358,10 +358,11 @@ Kirigami.ApplicationWindow {
                 Layout.fillHeight: true
                 core: backend
             }
-            LevelMeter {
+            KanteLevelMeter {
                 Layout.fillWidth: true
                 visible: monitor.peakDb !== undefined
-                peakDb: monitor.peakDb
+                level: monitor.peakDb
+                scale: true
             }
         }
     }

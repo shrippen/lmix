@@ -1,10 +1,10 @@
-//! What the Console's forms and labels make of their fields: sources and
-//! outputs to add, and the short texts on buttons. Pure, so it is tested
-//! here and QML only passes strings.
+//! What the Console's forms make of their fields: sources and outputs to
+//! add, and the values their lists offer. Texts live in QML (`Texts.qml`),
+//! so they can be translated. Pure, so it is tested here and QML only
+//! passes strings.
 
 use lmix_types::{
-    Container, DisplayMode, Effect, InputColor, Latency, OutputSource, OutputSpec, OutputStats,
-    SourceSpec, TestPattern,
+    Container, DisplayMode, Effect, InputColor, OutputSource, OutputSpec, SourceSpec, TestPattern,
 };
 use serde::Serialize;
 
@@ -12,13 +12,6 @@ use serde::Serialize;
 pub const DURATION_PRESETS_MS: [u32; 4] = [250, 500, 1000, 2000];
 
 use lmix_types::output::DEFAULT_VIDEO_KBPS;
-
-/// One choice in a QML list: the value the bridge takes, and its text.
-#[derive(Serialize)]
-struct Choice {
-    value: String,
-    label: String,
-}
 
 /// Serde name of a unit enum value (`"dip_to_black"`).
 fn name_of<T: Serialize>(value: T) -> String {
@@ -28,83 +21,45 @@ fn name_of<T: Serialize>(value: T) -> String {
         .unwrap_or_default()
 }
 
-fn choices(items: impl IntoIterator<Item = (String, String)>) -> String {
-    let list: Vec<Choice> = items
-        .into_iter()
-        .map(|(value, label)| Choice { value, label })
-        .collect();
-    serde_json::to_string(&list).unwrap_or_default()
-}
-
-/// Kinds of source the "add input" form offers, as JSON choices.
-pub fn source_kinds() -> String {
-    choices(
-        SOURCE_KINDS
-            .iter()
-            .map(|(k, l)| (k.to_string(), l.to_string())),
-    )
-}
-
-const SOURCE_KINDS: [(&str, &str); 11] = [
-    ("pattern", "Test pattern"),
-    ("color", "Color"),
-    ("image", "Image"),
-    ("file", "File"),
-    ("playlist", "Playlist"),
-    ("url", "URL"),
-    ("srt", "SRT"),
-    ("ndi", "NDI"),
-    ("whip", "WHIP (browser, OBS)"),
-    ("device", "Camera / capture"),
-    ("audio_device", "Audio (mic, line)"),
-];
-
-/// Test patterns, as JSON choices.
-pub fn patterns() -> String {
-    choices(
-        [
+/// Values of a form list as JSON, in order; QML gives them their
+/// (translated) texts. `None` for an unknown list.
+pub fn values(list: &str) -> Option<String> {
+    let names: Vec<String> = match list {
+        "sources" => SOURCE_KINDS.iter().map(|k| k.to_string()).collect(),
+        "patterns" => [
             TestPattern::Bars,
             TestPattern::Ball,
             TestPattern::Black,
             TestPattern::Snow,
             TestPattern::Checkers,
         ]
-        .map(|p| (name_of(p), name_of(p))),
-    )
+        .map(name_of)
+        .to_vec(),
+        "effects" => Effect::ALL.map(name_of).to_vec(),
+        "colors" => InputColor::ALL.map(name_of).to_vec(),
+        "containers" => Container::ALL.map(name_of).to_vec(),
+        "outputs" => OUTPUT_KINDS.iter().map(|k| k.to_string()).collect(),
+        "durations" => return serde_json::to_string(&DURATION_PRESETS_MS).ok(),
+        _ => return None,
+    };
+    serde_json::to_string(&names).ok()
 }
 
-/// Transition effects, as JSON choices.
-pub fn effects() -> String {
-    choices(Effect::ALL.map(|e| (name_of(e), e.label().to_string())))
-}
-
-/// Colour tags of inputs, as JSON choices.
-pub fn input_colors() -> String {
-    choices(InputColor::ALL.map(|c| (name_of(c), name_of(c))))
-}
-
-/// Recording containers, as JSON choices.
-pub fn containers() -> String {
-    choices(Container::ALL.map(|c| (name_of(c), c.nick().to_uppercase())))
-}
-
-/// Kinds of output the "add output" form offers, as JSON choices.
-pub fn output_kinds() -> String {
-    choices(
-        OUTPUT_KINDS
-            .iter()
-            .map(|(k, l)| (k.to_string(), l.to_string())),
-    )
-}
-
-const OUTPUT_KINDS: [(&str, &str); 6] = [
-    ("srt", "SRT stream"),
-    ("record", "Recording"),
-    ("ndi", "NDI"),
-    ("window", "Screen: window"),
-    ("fullscreen", "Screen: fullscreen (Wayland)"),
-    ("drm", "Screen: connector (no desktop)"),
+const SOURCE_KINDS: [&str; 11] = [
+    "pattern",
+    "color",
+    "image",
+    "file",
+    "playlist",
+    "url",
+    "srt",
+    "ndi",
+    "whip",
+    "device",
+    "audio_device",
 ];
+
+const OUTPUT_KINDS: [&str; 6] = ["srt", "record", "ndi", "window", "fullscreen", "drm"];
 
 /// The source the "add input" form describes; `None` while a needed field
 /// is empty. `value` is the pattern name, the colour (`#rrggbb`), or the
@@ -205,37 +160,6 @@ pub fn output_source_of(input: &str) -> OutputSource {
     }
 }
 
-/// Latency result in the toolbar.
-pub fn latency_text(latency: Option<&Latency>) -> String {
-    match latency.map(|l| (l.median_ms, l.p95_ms)) {
-        Some((Some(median), Some(p95))) => format!("PGM {median} ms (p95 {p95} ms)"),
-        _ => "PGM latency –".into(),
-    }
-}
-
-/// Short link state on an output button: rate, or that nobody receives.
-/// "Mbit": Kante writes button text in capitals, and "MB/S" would read as
-/// bytes.
-pub fn link_rate(stats: &OutputStats) -> String {
-    if !stats.connected {
-        return "no receiver".into();
-    }
-    format!("{:.1} Mbit/s", f64::from(stats.kbps) / 1000.0)
-}
-
-/// Link details for the tooltip.
-pub fn link_detail(stats: &OutputStats) -> String {
-    let rtt = stats
-        .rtt_ms
-        .map_or("RTT –".to_string(), |ms| format!("RTT {ms} ms"));
-    format!(
-        "{} · lost {} · dropped {} · {rtt}",
-        link_rate(stats),
-        stats.packets_lost,
-        stats.packets_dropped
-    )
-}
-
 /// `h:mm:ss` from `since_ms` to `now_ms` (Unix ms).
 pub fn running_time(since_ms: u64, now_ms: u64) -> String {
     let secs = now_ms.saturating_sub(since_ms) / 1000;
@@ -312,37 +236,18 @@ mod tests {
     }
 
     #[test]
-    fn choices_carry_serde_names_and_labels() {
-        let effects: serde_json::Value = serde_json::from_str(&effects()).unwrap();
-        assert_eq!(effects[2]["value"], "dip_to_black");
-        assert_eq!(effects[2]["label"], "Dip");
-        assert!(source_kinds().contains("\"audio_device\""));
-        assert!(containers().contains("\"MKV\""));
+    fn lists_carry_serde_names() {
+        let effects: Vec<String> = serde_json::from_str(&values("effects").unwrap()).unwrap();
+        assert_eq!(effects[2], "dip_to_black");
+        assert!(values("sources").unwrap().contains("\"audio_device\""));
+        assert!(values("containers").unwrap().contains("\"mkv\""));
+        assert_eq!(values("durations").unwrap(), "[250,500,1000,2000]");
+        assert_eq!(values("nope"), None);
     }
 
     #[test]
     fn running_time_counts_hours_minutes_seconds() {
         assert_eq!(running_time(0, 3_723_000), "1:02:03");
         assert_eq!(running_time(10, 5), "0:00:00");
-    }
-
-    #[test]
-    fn link_texts() {
-        let mut stats = OutputStats {
-            output: lmix_types::OutputId::new(),
-            connected: true,
-            kbps: 6200,
-            packets_lost: 0,
-            packets_dropped: 0,
-            rtt_ms: Some(12),
-        };
-        assert_eq!(link_rate(&stats), "6.2 Mbit/s");
-        assert_eq!(
-            link_detail(&stats),
-            "6.2 Mbit/s · lost 0 · dropped 0 · RTT 12 ms"
-        );
-        stats.connected = false;
-        assert_eq!(link_rate(&stats), "no receiver");
-        assert_eq!(latency_text(None), "PGM latency –");
     }
 }

@@ -11,8 +11,8 @@ KanteDialog {
     required property var core
     required property var inputs
 
-    readonly property var kinds: JSON.parse(core.choices("outputs"))
-    readonly property var containers: JSON.parse(core.choices("containers"))
+    readonly property var kinds: Texts.choices("outputs", core.choices("outputs"))
+    readonly property var containers: Texts.choices("containers", core.choices("containers"))
     readonly property string kind: kinds[kindBox.currentIndex] ? kinds[kindBox.currentIndex].value : "srt"
     readonly property bool needsText: kind !== "window" && kind !== "fullscreen"
     readonly property bool encodes: kind === "srt" || kind === "record"

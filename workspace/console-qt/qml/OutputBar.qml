@@ -37,7 +37,7 @@ RowLayout {
 
             // Running time ticks with the clock below.
             property string elapsed: ""
-            text: modelData.name + (running ? "  " + elapsed : "") + (link ? "  " + link.rate : "")
+            text: modelData.name + (running ? "  " + elapsed : "") + (link ? "  " + Texts.linkRate(link) : "")
             emphasis: running ? KanteButton.Emphasis.Primary
                 : (status.state === "failed" ? KanteButton.Emphasis.Destructive : KanteButton.Emphasis.Normal)
             enabled: bar.core.connected
@@ -46,7 +46,7 @@ RowLayout {
             QQC2.ToolTip.visible: hovered
             QQC2.ToolTip.text: {
                 var state = running ? qsTr("Running") : (status.state === "failed" ? qsTr("Failed: %1").arg(status.message) : qsTr("Stopped"))
-                return state + (link ? "\n" + link.detail : "") + "\n" + qsTr("Click: start or stop. Right click: remove.")
+                return state + (link ? "\n" + Texts.linkDetail(link) : "") + "\n" + qsTr("Click: start or stop. Right click: remove.")
             }
 
             Timer {
