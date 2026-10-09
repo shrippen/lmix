@@ -510,15 +510,33 @@ impl Service {
     /// `Command::Wait` (a stinger's cut and end) run later in the
     /// background.
     pub async fn handle(self: &Arc<Self>, action: Action) -> Result<ShowState, ActionError> {
-        if let Action::RunShortcut { target } = &action {
-            let actions = self.switcher.lock().await.shortcut_actions(target)?;
-            for action in actions {
-                // Shortcuts hold no shortcut actions, so this recursion ends.
-                Box::pin(self.handle(action)).await?;
+        self.handle_as(action, Origin::Operator).await
+    }
+
+    async fn handle_as(
+        self: &Arc<Self>,
+        action: Action,
+        origin: Origin,
+    ) -> Result<ShowState, ActionError> {
+        match &action {
+            Action::RunShortcut { target } => {
+                let actions = self.switcher.lock().await.shortcut_actions(target)?;
+                return self.run_all(actions, origin).await;
             }
-            return Ok(self.state().await);
+            Action::CueGo { list } | Action::CueBack { list } => {
+                let back = matches!(action, Action::CueBack { .. });
+                let actions = {
+                    let mut sw = self.switcher.lock().await;
+                    let actions = sw.cue_step(list, back)?;
+                    self.publish(&sw);
+                    actions
+                };
+                return self.run_all(actions, origin).await;
+            }
+            _ => {}
         }
         let mut sw = self.switcher.lock().await;
+        let before = sw.on_air();
         let file_action = matches!(action, Action::OpenShow { .. } | Action::SaveShow { .. });
         if matches!(action, Action::OpenShow { .. } | Action::NewShow) {
             sw.check_unlocked()?;
@@ -548,7 +566,40 @@ impl Service {
         if !later.is_empty() {
             self.run_later(later.to_vec());
         }
+        // Triggered actions fire no triggers themselves (no loops).
+        if origin == Origin::Operator && result.is_ok() {
+            for (delay_ms, actions) in sw.fired_triggers(&before) {
+                self.run_triggered(delay_ms, actions);
+            }
+        }
         result.map(|()| sw.state())
+    }
+
+    /// Actions of a shortcut or cue in order; the first error stops them.
+    async fn run_all(
+        self: &Arc<Self>,
+        actions: Vec<Action>,
+        origin: Origin,
+    ) -> Result<ShowState, ActionError> {
+        for action in actions {
+            // Shortcuts and cues hold none of themselves, so this ends.
+            Box::pin(self.handle_as(action, origin)).await?;
+        }
+        Ok(self.state().await)
+    }
+
+    /// A trigger's actions after its delay, in the background.
+    fn run_triggered(self: &Arc<Self>, delay_ms: u32, actions: Vec<Action>) {
+        let service = Arc::clone(self);
+        tokio::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_millis(u64::from(delay_ms))).await;
+            for action in actions {
+                if let Err(e) = service.handle_as(action, Origin::Trigger).await {
+                    tracing::warn!(error = %e, "trigger action failed; the rest is skipped");
+                    break;
+                }
+            }
+        });
     }
 
     /// Run `commands`, which start with a `Command::Wait`: each wait, then
@@ -665,6 +716,13 @@ impl Service {
         let _ = self.events.send(Event::State { state: sw.state() });
         let _ = self.events.send(Event::Tally { tally: sw.tally() });
     }
+}
+
+/// Who started an action: triggers fire only for the operator's.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Origin {
+    Operator,
+    Trigger,
 }
 
 /// lmix-core's last change of a flow.
@@ -857,6 +915,35 @@ mod tests {
         assert!(cut() && !ended());
         tokio::time::sleep(std::time::Duration::from_millis(700)).await;
         assert!(ended());
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_trigger_runs_after_its_delay_and_fires_no_more() {
+        use lmix_types::{InputRef, Trigger, TriggerOn};
+        let engine = Arc::new(NullEngine::default());
+        let service = Service::new(4, engine.clone(), None);
+        service.handle(bars()).await.unwrap();
+        let bars = InputRef::Text("Bars".into());
+        service
+            .handle(Action::SetTriggers {
+                input: bars.clone(),
+                triggers: vec![Trigger {
+                    on: TriggerOn::Program,
+                    delay_ms: 2000,
+                    actions: vec![Action::FadeToBlack { duration_ms: 0 }],
+                }],
+            })
+            .await
+            .unwrap();
+
+        service
+            .handle(Action::CutDirect { input: bars })
+            .await
+            .unwrap();
+        assert!(!service.state().await.fade_to_black);
+
+        tokio::time::sleep(std::time::Duration::from_millis(2500)).await;
+        assert!(service.state().await.fade_to_black, "trigger ran");
     }
 
     #[tokio::test]

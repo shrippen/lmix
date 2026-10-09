@@ -8,6 +8,7 @@
 //! ```
 
 use lmix_types::action::{aux_index, OVERLAY_CHANNELS, TRANSITION_SLOTS};
+use lmix_types::automation::{AUTOMATION_ACTIONS, CUES, TRIGGERS, TRIGGER_DELAY_MAX_MS};
 use lmix_types::input::{color_rgb, AUX_BUSES, REF_PREVIEW, REF_PROGRAM, VOLUME_MAX};
 use lmix_types::layout::{BORDER_MAX_PX, LAYOUTS, LAYOUT_BOXES};
 use lmix_types::shortcut::SHORTCUT_ACTIONS;
@@ -18,11 +19,12 @@ use lmix_types::{
     OutputSource, OutputSpec, OutputStatus, Shortcut, ShortcutSpec, ShowState, SignalLoss,
     SourceSpec, Stinger, StingerSpec, Transition, TransitionSlot, Transport,
 };
+use lmix_types::{Cue, CueList, Trigger, TriggerOn};
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 use uuid::Uuid;
 
-use crate::show::{Show, ShowInput, ShowLayout, ShowOutput, ShowShortcut};
+use crate::show::{Show, ShowCueList, ShowInput, ShowLayout, ShowOutput, ShowShortcut};
 
 /// What the engine has to do after an action.
 #[derive(Clone, Debug, PartialEq)]
@@ -133,6 +135,61 @@ pub enum Feed {
     },
 }
 
+/// What is on air, before and after an action (triggers).
+#[derive(Clone, Debug, PartialEq)]
+pub struct OnAir {
+    program: Option<InputId>,
+    preview: Option<InputId>,
+    overlays: Vec<Option<InputId>>,
+}
+
+/// Actions that manage or run shortcuts.
+fn changes_shortcuts(action: &Action) -> bool {
+    matches!(
+        action,
+        Action::AddShortcut { .. }
+            | Action::SetShortcut { .. }
+            | Action::RemoveShortcut { .. }
+            | Action::RunShortcut { .. }
+    )
+}
+
+/// Actions a cue or trigger may not hold: they run or change shortcuts,
+/// cues or triggers (no loops).
+fn runs_automation(action: &Action) -> bool {
+    changes_shortcuts(action)
+        || matches!(
+            action,
+            Action::SetTriggers { .. }
+                | Action::AddCueList { .. }
+                | Action::SetCueList { .. }
+                | Action::RemoveCueList { .. }
+                | Action::CueGo { .. }
+                | Action::CueBack { .. }
+                | Action::CueJump { .. }
+        )
+}
+
+/// A name, at most `CUES` cues, each with 1–16 safe actions.
+fn check_cues(name: &str, cues: &[Cue]) -> Result<(), ActionError> {
+    let bad = |reason: String| Err(ActionError::BadCueList { reason });
+    if name.trim().is_empty() {
+        return bad("it needs a name".into());
+    }
+    if cues.len() > CUES {
+        return bad(format!("at most {CUES} cues"));
+    }
+    for cue in cues {
+        if cue.actions.is_empty() || cue.actions.len() > AUTOMATION_ACTIONS {
+            return bad(format!("1–{AUTOMATION_ACTIONS} actions per cue"));
+        }
+        if cue.actions.iter().any(runs_automation) {
+            return bad("cues cannot run shortcuts, cues or change automation".into());
+        }
+    }
+    Ok(())
+}
+
 /// Closed inputs kept for `restore_input`.
 const REMOVED_KEPT: usize = 10;
 
@@ -169,6 +226,8 @@ pub struct Switcher {
     locked: bool,
     /// Inputs closed last, with their place in the bar (AUT.10).
     removed: Vec<(usize, ShowInput)>,
+    /// Next cue per list (0-based); a list missing here starts at 0.
+    cue_next: HashMap<InputId, usize>,
     status: HashMap<InputId, InputStatus>,
     /// Audio channel settings the engine has, per slot.
     mix: HashMap<usize, Mix>,
@@ -192,6 +251,7 @@ impl Switcher {
             looks_available: false,
             locked: false,
             removed: Vec::new(),
+            cue_next: HashMap::new(),
             status: HashMap::new(),
             mix: HashMap::new(),
             listen: HashMap::new(),
@@ -263,6 +323,47 @@ impl Switcher {
                 self.remove(&input)
             }
             Action::RestoreInput => self.restore_input(),
+            Action::SetTriggers { input, triggers } => self.set_triggers(&input, triggers),
+            Action::AddCueList { name, cues } => {
+                check_cues(&name, &cues)?;
+                self.show.cue_lists.push(ShowCueList {
+                    id: InputId::new(),
+                    name,
+                    cues,
+                });
+                Ok(Vec::new())
+            }
+            Action::SetCueList { list, name, cues } => {
+                let index = self.find_cue_list(&list)?;
+                check_cues(&name, &cues)?;
+                let entry = &mut self.show.cue_lists[index];
+                entry.name = name;
+                entry.cues = cues;
+                self.cue_next.remove(&entry.id);
+                Ok(Vec::new())
+            }
+            Action::RemoveCueList { list } => {
+                let index = self.find_cue_list(&list)?;
+                let removed = self.show.cue_lists.remove(index);
+                self.cue_next.remove(&removed.id);
+                Ok(Vec::new())
+            }
+            Action::CueJump { list, cue } => {
+                let index = self.find_cue_list(&list)?;
+                let entry = &self.show.cue_lists[index];
+                let next = (cue as usize)
+                    .checked_sub(1)
+                    .filter(|c| *c < entry.cues.len())
+                    .ok_or_else(|| ActionError::BadCueList {
+                        reason: format!("no cue {cue}"),
+                    })?;
+                self.cue_next.insert(entry.id, next);
+                Ok(Vec::new())
+            }
+            // The service runs a cue's actions one by one.
+            Action::CueGo { .. } | Action::CueBack { .. } => Err(ActionError::BadCueList {
+                reason: "run through the service".into(),
+            }),
             Action::SetLock { on } => {
                 self.locked = on;
                 Ok(Vec::new())
@@ -498,6 +599,7 @@ impl Switcher {
                 strip: input.strip,
                 sends: input.sends,
                 look: input.look,
+                triggers: input.triggers.clone(),
                 ingest: self.ingest_of(&input.source),
             })
             .collect();
@@ -517,6 +619,19 @@ impl Switcher {
             aux_buses: self.show.aux_buses,
             looks_available: self.looks_available,
             locked: self.locked,
+            cue_lists: self
+                .show
+                .cue_lists
+                .iter()
+                .enumerate()
+                .map(|(i, l)| CueList {
+                    id: l.id,
+                    number: i as u32 + 1,
+                    name: l.name.clone(),
+                    cues: l.cues.clone(),
+                    next: self.cue_next.get(&l.id).copied().unwrap_or(0) as u32 + 1,
+                })
+                .collect(),
             restorable: self.removed.last().map(|(_, input)| input.name.clone()),
             shortcuts: self
                 .show
@@ -593,6 +708,7 @@ impl Switcher {
             strip: ChannelStrip::default(),
             sends: [0; AUX_BUSES],
             look: Look::default(),
+            triggers: Vec::new(),
         });
         self.status.insert(id, InputStatus::Starting);
 
@@ -914,6 +1030,128 @@ impl Switcher {
         Ok(commands)
     }
 
+    // ---- Automation ----
+
+    fn set_triggers(
+        &mut self,
+        input: &InputRef,
+        triggers: Vec<Trigger>,
+    ) -> Result<Vec<Command>, ActionError> {
+        let bad = |reason: String| Err(ActionError::BadTriggers { reason });
+        if triggers.len() > TRIGGERS {
+            return bad(format!("at most {TRIGGERS} per input"));
+        }
+        for trigger in &triggers {
+            if trigger.delay_ms > TRIGGER_DELAY_MAX_MS {
+                return bad(format!("delays are at most {TRIGGER_DELAY_MAX_MS} ms"));
+            }
+            if trigger.actions.is_empty() || trigger.actions.len() > AUTOMATION_ACTIONS {
+                return bad(format!("1–{AUTOMATION_ACTIONS} actions each"));
+            }
+            if trigger.actions.iter().any(runs_automation) {
+                return bad("triggers cannot run shortcuts, cues or change automation".into());
+            }
+        }
+        let index = self.find(input)?;
+        self.show.inputs[index].triggers = triggers;
+        Ok(Vec::new())
+    }
+
+    /// Triggers that fire for what changed between `before` and now, as
+    /// (delay, actions).
+    pub fn fired_triggers(&self, before: &OnAir) -> Vec<(u32, Vec<Action>)> {
+        let now = self.on_air();
+        let mut fired = Vec::new();
+        for input in self.show.inputs.iter().filter(|i| !i.triggers.is_empty()) {
+            let id = Some(input.id);
+            let events = [
+                (
+                    TriggerOn::Program,
+                    now.program == id && before.program != id,
+                ),
+                (
+                    TriggerOn::ProgramOff,
+                    before.program == id && now.program != id,
+                ),
+                (
+                    TriggerOn::Preview,
+                    now.preview == id && before.preview != id,
+                ),
+                (
+                    TriggerOn::OverlayIn,
+                    now.overlays.contains(&id) && !before.overlays.contains(&id),
+                ),
+                (
+                    TriggerOn::OverlayOut,
+                    before.overlays.contains(&id) && !now.overlays.contains(&id),
+                ),
+            ];
+            for (on, happened) in events {
+                if !happened {
+                    continue;
+                }
+                fired.extend(
+                    input
+                        .triggers
+                        .iter()
+                        .filter(|t| t.on == on)
+                        .map(|t| (t.delay_ms, t.actions.clone())),
+                );
+            }
+        }
+        fired
+    }
+
+    /// What is on air, to compare after an action.
+    pub fn on_air(&self) -> OnAir {
+        OnAir {
+            program: self.show.program,
+            preview: self.show.preview,
+            overlays: self.show.overlays.to_vec(),
+        }
+    }
+
+    /// Actions of the cue GO (or back) runs; moves the list on.
+    pub fn cue_step(&mut self, list: &InputRef, back: bool) -> Result<Vec<Action>, ActionError> {
+        let index = self.find_cue_list(list)?;
+        let entry = &self.show.cue_lists[index];
+        let next = self.cue_next.get(&entry.id).copied().unwrap_or(0);
+        let (run, after) = if back {
+            let run = next.checked_sub(2).ok_or_else(|| ActionError::BadCueList {
+                reason: "already at the first cue".into(),
+            })?;
+            (run, next - 1)
+        } else {
+            if next >= entry.cues.len() {
+                return Err(ActionError::BadCueList {
+                    reason: "no cues left; jump back first".into(),
+                });
+            }
+            (next, next + 1)
+        };
+        let actions = entry.cues[run].actions.clone();
+        self.cue_next.insert(entry.id, after);
+        Ok(actions)
+    }
+
+    /// A cue list by number (1-based), id or name.
+    fn find_cue_list(&self, list: &InputRef) -> Result<usize, ActionError> {
+        let lists = &self.show.cue_lists;
+        let index = match list {
+            InputRef::Number(n) => (*n as usize).checked_sub(1).filter(|i| *i < lists.len()),
+            InputRef::Text(text) => lists
+                .iter()
+                .position(|l| l.id.to_string() == *text)
+                .or_else(|| lists.iter().position(|l| l.name == *text)),
+        };
+        index.ok_or_else(|| ActionError::UnknownCueList {
+            reference: match list {
+                InputRef::Number(n) => n.to_string(),
+                InputRef::Text(t) => format!("\"{t}\""),
+            },
+        })
+    }
+
     // ---- Safety ----
 
     /// Whether the lock holds (closing, loading, stopping refused).
@@ -1006,16 +1244,7 @@ impl Switcher {
         if spec.actions.is_empty() || spec.actions.len() > SHORTCUT_ACTIONS {
             return bad(format!("1–{SHORTCUT_ACTIONS} actions"));
         }
-        let nested = spec.actions.iter().any(|a| {
-            matches!(
-                a,
-                Action::AddShortcut { .. }
-                    | Action::SetShortcut { .. }
-                    | Action::RemoveShortcut { .. }
-                    | Action::RunShortcut { .. }
-            )
-        });
-        if nested {
+        if spec.actions.iter().any(changes_shortcuts) {
             return bad("a shortcut cannot run or change shortcuts".into());
         }
         let key_taken = spec.key.as_ref().is_some_and(|key| {
@@ -2941,6 +3170,105 @@ mod tests {
 
         sw.apply(Action::SetLock { on: false }).unwrap();
         sw.apply(Action::RemoveInput { input: named("A") }).unwrap();
+    }
+
+    fn cue(label: &str, action: Action) -> Cue {
+        Cue {
+            label: label.into(),
+            actions: vec![action],
+        }
+    }
+
+    #[test]
+    fn cue_lists_go_back_and_jump() {
+        let mut sw = two_inputs();
+        let list = InputRef::Text("Opening".into());
+        sw.apply(Action::AddCueList {
+            name: "Opening".into(),
+            cues: vec![
+                cue("A", Action::CutDirect { input: named("A") }),
+                cue("B", Action::CutDirect { input: named("B") }),
+                cue("Black", Action::FadeToBlack { duration_ms: 500 }),
+            ],
+        })
+        .unwrap();
+        assert_eq!(sw.state().cue_lists[0].next, 1);
+
+        let go = |sw: &mut Switcher| sw.cue_step(&list, false);
+        assert_eq!(
+            go(&mut sw).unwrap(),
+            [Action::CutDirect { input: named("A") }]
+        );
+        assert_eq!(
+            go(&mut sw).unwrap(),
+            [Action::CutDirect { input: named("B") }]
+        );
+        assert_eq!(sw.state().cue_lists[0].next, 3);
+        assert_eq!(
+            sw.cue_step(&list, true).unwrap(),
+            [Action::CutDirect { input: named("A") }],
+            "back runs the cue before the last one"
+        );
+        assert_eq!(sw.state().cue_lists[0].next, 2);
+
+        sw.apply(Action::CueJump {
+            list: list.clone(),
+            cue: 3,
+        })
+        .unwrap();
+        go(&mut sw).unwrap();
+        assert!(matches!(go(&mut sw), Err(ActionError::BadCueList { .. })));
+        assert!(matches!(
+            sw.apply(Action::AddCueList {
+                name: "Loop".into(),
+                cues: vec![cue("Again", Action::CueGo { list })],
+            }),
+            Err(ActionError::BadCueList { .. })
+        ));
+    }
+
+    #[test]
+    fn triggers_fire_for_what_went_on_or_off_air() {
+        let mut sw = two_inputs();
+        sw.apply(Action::SetTriggers {
+            input: named("B"),
+            triggers: vec![
+                Trigger {
+                    on: TriggerOn::Program,
+                    delay_ms: 1000,
+                    actions: vec![Action::FadeToBlack { duration_ms: 500 }],
+                },
+                Trigger {
+                    on: TriggerOn::ProgramOff,
+                    delay_ms: 0,
+                    actions: vec![Action::Cut],
+                },
+            ],
+        })
+        .unwrap();
+
+        let before = sw.on_air();
+        sw.apply(Action::CutDirect { input: named("B") }).unwrap();
+        assert_eq!(
+            sw.fired_triggers(&before),
+            [(1000, vec![Action::FadeToBlack { duration_ms: 500 }])]
+        );
+
+        let before = sw.on_air();
+        sw.apply(Action::CutDirect { input: named("A") }).unwrap();
+        assert_eq!(sw.fired_triggers(&before), [(0, vec![Action::Cut])]);
+
+        assert!(matches!(
+            sw.apply(Action::SetTriggers {
+                input: named("A"),
+                triggers: vec![Trigger {
+                    on: TriggerOn::Preview,
+                    delay_ms: 60_000,
+                    actions: vec![Action::Cut],
+                }],
+            }),
+            Err(ActionError::BadTriggers { .. })
+        ));
     }
 
     #[test]

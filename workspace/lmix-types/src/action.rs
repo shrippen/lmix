@@ -13,6 +13,7 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+use crate::automation::{Cue, Trigger};
 use crate::input::{
     ChannelStrip, InputColor, InputRef, Listen, Look, SignalLoss, SourceSpec, Transport, AUX_BUSES,
 };
@@ -204,6 +205,30 @@ pub enum Action {
     /// Put a layout into preview.
     PreviewLayout { layout: InputRef },
 
+    // ---- Automation (AUT.7, AUT.14) ----
+    /// Replace an input's triggers.
+    SetTriggers {
+        input: InputRef,
+        triggers: Vec<Trigger>,
+    },
+    /// Add a cue list.
+    AddCueList { name: String, cues: Vec<Cue> },
+    /// Replace a cue list's name and cues (by number, name or id); GO
+    /// starts from the first cue again.
+    SetCueList {
+        list: InputRef,
+        name: String,
+        cues: Vec<Cue>,
+    },
+    /// Remove a cue list.
+    RemoveCueList { list: InputRef },
+    /// Run the list's next cue and move on.
+    CueGo { list: InputRef },
+    /// Run the cue before the last one run and step back.
+    CueBack { list: InputRef },
+    /// Make cue `cue` (1-based) the next one, without running it.
+    CueJump { list: InputRef, cue: u32 },
+
     // ---- Safety ----
     /// Lock or unlock (AUT.11): while locked, closing inputs, opening or
     /// clearing the show and stopping or removing outputs are refused.
@@ -312,6 +337,12 @@ pub enum ActionError {
     UnknownLayout { reference: String },
     #[error("layout: {reason}")]
     BadLayout { reason: String },
+    #[error("no cue list {reference}")]
+    UnknownCueList { reference: String },
+    #[error("cue list: {reason}")]
+    BadCueList { reason: String },
+    #[error("triggers: {reason}")]
+    BadTriggers { reason: String },
     #[error("locked: unlock first")]
     Locked,
     #[error("no closed input to bring back")]
