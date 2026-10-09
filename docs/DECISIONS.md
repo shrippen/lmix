@@ -782,3 +782,121 @@ für den 48-h-Betrieb (NFA.7) nicht. **Offen**: Ursache eingrenzen (Läufe
 ohne Ausgänge, ohne Programmwechsel, mit `heaptrack`), der Fix gehört
 wahrscheinlich nach strom. lmix-core blieb ohne Fehler.
 
+## 2026-10-09 — Hardware-Decoder: GPU-Speicher im Slot-Kanal
+
+**Befund** (beim Demo-Modus): Auf einem NVIDIA-Rechner dekodiert der
+Media Player Dateien mit NVDEC und legt CUDA-Speicher in den Slot-Kanal
+(`intersink` nimmt alles). Kacheln und Vorschau von Datei-Inputs blieben
+leer (`videoscale`: not-negotiated); bisher unbemerkt, weil die
+Hardware-Tests nur Testbilder nutzten. Ein Capsfilter im Slot-Flow hilft
+nicht: der Player dekodiert in einer eigenen Pipeline hinter `appsrc`.
+**Entscheidung**: strom-Player bekommt `system_memory` (strom-Branch
+`lmix-player-sysmem`): mit CPU-/GL-Mischer übergibt er Systemspeicher, mit
+CUDA-Mischer bleibt CUDA-Speicher (ohne Kopie in den Mischer), und die
+Live-Flows der Slots laden dann wie Programm per `cudadownload` herunter.
+**Offen**: andere dekodierende Quellen (SRT, NDI, Gerät) auf demselben Weg
+prüfen; VA-API (AMD/Intel) ungetestet.
+
+## 2026-10-09 — Demo-Modus
+
+**Entscheidung**: Die Demo-Show ist der Sendehaus-Stream von „Graufeld nach
+Mitternacht“ (Studio-Weber-Welt, `graufeld.stream`). `demo/start.sh [de|en]`
+rendert je Input einen synthetischen Clip (videotestsrc-Muster, Name, Ton;
+VP8/Opus), startet strom, lmix-core und die Qt-Console mit eigener
+Konfiguration und baut die Show über die API. Screenshots über
+`shrippen.github.io/demo/tools/screenshots.py lmix` (`demo/shots.json`,
+Xvfb, dunkles Farbschema). Der Demo-Modus liegt nur in `demo/`, in keinem
+Crate; ein Release-Build muss `demo/` ausschließen und das prüfen.
+
+## 2026-10-09 — Aktion während eines Engine-Neustarts
+
+**Befund**: Zwischen Neustart von strom und der nächsten Abfrage (bis
+2 s) scheiterte eine Aktion mit 502, weil der neuen Engine der Mischer
+fehlt. **Entscheidung**: Scheitert ein Engine-Kommando, fragt lmix-core
+sofort die Prozess-Kennung ab. Ist sie neu, gilt die Aktion wie beim
+Start nur für die Show (Antwort OK), und der Watcher spielt die Show
+sofort ein statt nach der nächsten Abfrage. Eine Engine, die gar nicht
+antwortet, bleibt ein Fehler (502): dann weiß lmix-core nicht, ob sie
+wiederkommt.
+
+## 2026-10-09 — GL-Mischer und SRT: in der VM nicht nachstellbar
+
+**Versuch** (Cloud-VM, Xvfb, Mesa llvmpipe): Stack mit `--mixer gl`,
+Input `ball`, SRT-Ausgang, `srtsrc ! filesink` 8 s. Ergebnis: gar keine
+Daten (auch kein Ton), aber der Mischer selbst läuft hier 9 s hinter der
+Zeit (Bildalter am Programm-Ausgang Median 9,3 s, `vm:queue_0` voll),
+während ein nackter `glvideomixer` mit llvmpipe 1080p mit ~46 fps schafft.
+Die VM zeigt also ein eigenes Problem (Software-GL im Mischer mit Looks und
+Multiview zu langsam) und sagt über den Hardware-Befund nichts. Der Fix
+bleibt an echter Hardware zu suchen (AMD/Intel oder NVIDIA mit `gl`).
+**Nebenbefund** (CPU-Mischer, VM): der SRT-Ausgang trägt Video, aber nur
+~42 Pakete in 8 s, weil `x264enc` in der VM mit QoS Bilder verwirft; der
+VM-Test prüfte bisher nur die Dateigröße.
+
+## 2026-10-09 — Selbsttest als eigenes Binary
+
+**Kontext**: Die egui-Console soll gehen (GUI-SHELL, „Parität“), ihr
+kopfloser Selbsttest (`--selftest`, M1b-Abnahme) bleibt gebraucht.
+**Entscheidung**: neues Crate `workspace/selftest`, Binary
+`lmix-selftest`, ohne GUI-Abhängigkeit. Es nimmt den Selbsttest und eine
+Kopie der strom-Client-Module (`api`, `sources`, `afv`, `perf`,
+`gpu_profile`, `ws`) mit, ohne die egui-Teile (Overlay, Repaint). Schalter
+ohne Präfix (`--patterns`, `--file`, `--encode`, `--secs`, …);
+`scripts/acceptance-m1b.sh` ruft es auf. `app-desktop` verliert
+`--selftest` und den nur dafür genutzten Code. **Verworfen**: die Module
+als gemeinsame Bibliothek beider Crates (Aufwand für Code, der mit der
+egui-Console verschwindet; danach gibt es nur noch eine Kopie).
+
+## 2026-10-09 — strom-Speicher (H.24): Eingrenzung in der VM
+
+**Läufe** (Cloud-VM, CPU-Mischer, 4 Testbild-Inputs, Programmwechsel
+alle 30 s, RSS von strom jede Minute, je 40 min):
+
+| Lauf | Ausgänge | RSS nach 2 min → 40 min |
+|---|---|---|
+| A | keine | 389 → 394 MB, ab Minute 7 flach |
+| B | MKV-Aufnahme + SRT mit Empfänger | 375 → 392 MB, in Stufen |
+| C | nur MKV-Aufnahme | 422 → 422 MB (schwankt 418–433) |
+| D | nur SRT | 420 → 434 MB (schwankt bis 442) |
+| F | nur SRT | 382 → 424 MB, Stufen bis Minute 12, dann flach |
+| G | nur SRT, `MALLOC_ARENA_MAX=2` | 332 → 388 MB, Stufen bis Minute 12, dann flach |
+
+`/srt-stats` 50-mal je Sekunde über 5 min (≈12 000 Abfragen) ließ den
+Speicher nicht stetig steigen (325 → 327 MB, ein einzelner Sprung am
+Ende): die Leitungsanzeige (B32) leckt nicht.
+
+**Befund**: In der VM wächst strom in den ersten ~12 min in Stufen (in B,
+F und G jeweils um Minute 8) und bleibt danach flach; das sieht nach
+Puffern und Verläufen aus, die sich bis zu ihrer Grenze füllen, nicht nach
+einem Leck. `MALLOC_ARENA_MAX=2` senkt das Niveau um ~35 MB, ändert den
+Verlauf nicht. Das stetige Wachstum der Hardware-Läufe (~32 MB/h über 5 h)
+ist hier nicht nachstellbar. heaptrack taugt nicht: strom stürzt darunter
+beim Start eines Ausgangs-Flows ab (Stack-Überlauf in einem Tokio-Worker,
+einmal Segfault).
+
+**Nächste Schritte auf Hardware** (`scripts/soak-hardware.sh`, je 60 min):
+ohne ISO-Aufnahme; mit 8 statt 16 Inputs; mit `--mixer gl` statt `cuda`;
+einmal mit `MALLOC_ARENA_MAX=2`. Wächst nur der CUDA-Lauf, liegt die
+Ursache im CUDA-Pfad (Speicherpools, `cudadownload`).
+
+## 2026-10-09 — egui-Console entfernt, Qt-Console in der Cloud-VM
+
+**Entscheidung**: `app-desktop` (egui) und `run.sh` sind weg. Der
+Selbsttest lebt als `lmix-selftest` weiter, VM-Test und Screenshot nutzen
+die Qt-Console. Mit ihr gingen der M1b-Modus direkt an strom und das
+Leistungs-Overlay; beides hatte keinen Nutzer mehr.
+**Qt in der Cloud-VM** (Ubuntu 24.04 hat weder Qt ≥ 6.5 noch Kirigami 6):
+KDE neon als zusätzliche apt-Quelle, gepinnt auf Qt-, KF6- und qml6-Pakete
+plus die neueren Grundbibliotheken, die sie verlangen (libwayland 1.26,
+libinput 1.29, libpcre2 10.45); GStreamer bleibt das von Ubuntu.
+`scripts/cloud-setup.sh` richtet das ein. **Verworfen**: Arch-chroot (mehr
+Platz, root-Mounts), Qt und Kirigami aus Quellen (Stunden Bauzeit).
+**Befund dabei**: `unixfdsink` sendet vor GStreamer 1.28 nur Bilder in
+fd-Speicher. Programm und volle Vorschau eines CPU-/GL-Mischers kamen als
+gewöhnlicher Systemspeicher, der Live-Flow brach ab, der Programm-Monitor
+blieb leer (auf Arch mit 1.28 unbemerkt). lmix-core liest die
+GStreamer-Version von strom und setzt unter 1.28 einen `compositor` mit
+einem Eingang (Start beim ersten Bild) vor den Sink; Kacheln brauchen das
+nicht, `videoscale` schreibt schon in den Speicher des Sinks. Außerdem
+sendet der Live-Sink kein QoS mehr (strom-QoS-Probe: CRITICAL je Bild).
+

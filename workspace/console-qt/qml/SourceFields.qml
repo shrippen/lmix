@@ -15,8 +15,8 @@ ColumnLayout {
 
     required property var core
 
-    readonly property var kinds: JSON.parse(core.choices("sources"))
-    readonly property var patterns: JSON.parse(core.choices("patterns"))
+    readonly property var kinds: Texts.choices("sources", core.choices("sources"))
+    readonly property var patterns: Texts.choices("patterns", core.choices("patterns"))
     readonly property var allDevices: core.devices.length > 0 ? JSON.parse(core.devices) : []
 
     readonly property string kind: kinds[kindBox.currentIndex] ? kinds[kindBox.currentIndex].value : "pattern"
@@ -105,16 +105,27 @@ ColumnLayout {
         }
     }
 
-    QQC2.ComboBox {
-        id: deviceBox
+    RowLayout {
         Layout.fillWidth: true
         visible: fields.deviceKind !== ""
-        enabled: fields.deviceChoices.length > 0
-        model: fields.deviceChoices
-        textRole: "name"
-        displayText: fields.deviceChoices.length > 0 ? currentText : qsTr("No devices found")
-        onActivated: index => textField.text = fields.deviceChoices[index].id
-        KanteFieldSkin { control: deviceBox }
+        QQC2.ComboBox {
+            id: deviceBox
+            Layout.fillWidth: true
+            enabled: fields.deviceChoices.length > 0
+            model: fields.deviceChoices
+            textRole: "name"
+            displayText: fields.deviceChoices.length > 0 ? currentText : qsTr("No devices found")
+            onActivated: index => textField.text = fields.deviceChoices[index].id
+            KanteFieldSkin { control: deviceBox }
+        }
+        KanteToolButton {
+            icon.name: "view-refresh"
+            text: qsTr("Search devices again")
+            display: QQC2.AbstractButton.IconOnly
+            QQC2.ToolTip.visible: hovered
+            QQC2.ToolTip.text: text
+            onClicked: fields.core.refreshLists()
+        }
     }
 
     ColorDialog {

@@ -62,8 +62,10 @@ Rule 7: Use the body to explain what and why vs. how. Assume the code explains t
 
 ### lmix: Stil der Bedienoberfläche
 
-- Stilwahl in den Einstellungen: **Kante** (Standard, dunkel), **Kante Light**
-  ("Leinen", hell), **System** (Rückfall: KDE Plasma / Breeze, folgt dem
+- Stilwahl in den Einstellungen: **Kante** (Standard: Gruvbox dunkel, bei
+  hellem Systemthema das helle Schema „Leinen“), **Kante Light** (abgespeckt:
+  nur die Formsprache von Kante, ohne Gruvbox-Farben, auf den Farben des
+  Systems), **System** (Rückfall: KDE Plasma / Breeze, folgt dem
   Plasma-Farbschema). Wie das `kind` von `KanteStyle` (`qml/Kante`).
 - Fehlt Kante für das gewählte GUI-Toolkit (z. B. egui), wird die Anbindung
   zuerst in Kante gebaut (aus `tokens/palette.json` generiert), nicht in lmix.

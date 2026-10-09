@@ -21,8 +21,6 @@ use std::time::Instant;
 const WINDOW: usize = 600;
 const JITTER_GAIN: f64 = 16.0;
 const P95: f64 = 0.95;
-const OVERLAY_ALPHA: u8 = 200;
-const OVERLAY_FONT: f32 = 11.0;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Metric {
@@ -248,24 +246,6 @@ impl Perf {
         if let Some(t) = started {
             self.record(Metric::TakeToEvent, t.elapsed().as_secs_f64() * 1000.0);
         }
-    }
-
-    /// Semi-transparent stats table in the top-right corner (F3).
-    pub fn overlay(&self, ctx: &egui::Context) {
-        egui::Area::new(egui::Id::new("perf_overlay"))
-            .anchor(egui::Align2::RIGHT_BOTTOM, egui::vec2(-8.0, -8.0))
-            .interactable(false)
-            .show(ctx, |ui| {
-                egui::Frame::popup(ui.style())
-                    .fill(egui::Color32::from_black_alpha(OVERLAY_ALPHA))
-                    .show(ui, |ui| {
-                        ui.label(
-                            egui::RichText::new(self.report())
-                                .monospace()
-                                .size(OVERLAY_FONT),
-                        );
-                    });
-            });
     }
 
     /// One text table with every metric that has samples.

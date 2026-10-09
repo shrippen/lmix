@@ -1,4 +1,4 @@
-use cxx_qt_build::{CxxQtBuilder, QmlModule};
+use cxx_qt_build::{CxxQtBuilder, QmlFile, QmlModule};
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
@@ -37,22 +37,86 @@ fn kante_qrc() -> PathBuf {
     out
 }
 
+/// Qt's lrelease: `$LRELEASE`, Qt's host binaries, or the PATH.
+fn lrelease() -> Option<PathBuf> {
+    if let Ok(path) = std::env::var("LRELEASE") {
+        return Some(path.into());
+    }
+    let host_bins = std::process::Command::new("qtpaths6")
+        .args(["--query", "QT_HOST_BINS"])
+        .output()
+        .ok()
+        .map(|out| PathBuf::from(String::from_utf8_lossy(&out.stdout).trim()));
+    host_bins
+        .map(|dir| dir.join("lrelease"))
+        .into_iter()
+        .chain(["lrelease", "lrelease-qt6"].map(PathBuf::from))
+        .find(|tool| {
+            std::process::Command::new(tool)
+                .arg("-version")
+                .output()
+                .is_ok_and(|out| out.status.success())
+        })
+}
+
+/// The translations (i18n/qml_<lang>.ts) as .qm files in a .qrc beside
+/// Main.qml, where QQmlApplicationEngine looks for them (`i18n/qml_<lang>.qm`).
+/// Without lrelease the Console builds in English only.
+fn translations_qrc() -> Option<PathBuf> {
+    println!("cargo::rerun-if-changed=i18n");
+    let Some(tool) = lrelease() else {
+        println!("cargo::warning=lrelease (Qt Linguist tools) not found: the Console is built in English only");
+        return None;
+    };
+    let out = PathBuf::from(std::env::var("OUT_DIR").unwrap()).join("i18n");
+    std::fs::create_dir_all(&out).expect("create i18n dir");
+    let mut qrc = String::from(
+        "<RCC>\n  <qresource prefix=\"/qt/qml/org/lmix/console/qml/i18n\">\n",
+    );
+    let mut sources: Vec<PathBuf> = std::fs::read_dir("i18n")
+        .expect("i18n dir")
+        .map(|entry| entry.expect("dir entry").path())
+        .filter(|path| path.extension().is_some_and(|ext| ext == "ts"))
+        .collect();
+    sources.sort();
+    for ts in sources {
+        let qm = out.join(ts.with_extension("qm").file_name().unwrap());
+        let status = std::process::Command::new(&tool)
+            .args(["-silent"])
+            .arg(&ts)
+            .arg("-qm")
+            .arg(&qm)
+            .status()
+            .expect("run lrelease");
+        assert!(status.success(), "lrelease failed on {}", ts.display());
+        println!("cargo::rerun-if-changed={}", ts.display());
+        let alias = qm.file_name().unwrap().to_string_lossy().into_owned();
+        writeln!(qrc, "    <file alias=\"{alias}\">{}</file>", qm.display()).unwrap();
+    }
+    qrc.push_str("  </qresource>\n</RCC>\n");
+    let path = out.join("i18n.qrc");
+    std::fs::write(&path, qrc).expect("write i18n.qrc");
+    Some(path)
+}
+
 fn main() {
-    CxxQtBuilder::new_qml_module(QmlModule::new("org.lmix.console").qml_files([
+    let mut builder = CxxQtBuilder::new_qml_module(QmlModule::new("org.lmix.console").qml_files([
         "qml/Main.qml",
         "qml/LiveView.qml",
         "qml/InputTile.qml",
         "qml/SourceFields.qml",
         "qml/AddInputDialog.qml",
         "qml/AddOutputDialog.qml",
-        "qml/LevelMeter.qml",
         "qml/TransitionPanel.qml",
         "qml/OutputBar.qml",
         "qml/ChoiceMenu.qml",
         "qml/KeyedModel.qml",
-    ]))
+    ])
+    .qml_file(QmlFile::from("qml/Texts.qml").singleton(true)))
     .files(["src/bridge.rs"])
-    .qrc(kante_qrc())
-    .qt_module("Quick")
-    .build();
+    .qrc(kante_qrc());
+    if let Some(qrc) = translations_qrc() {
+        builder = builder.qrc(qrc);
+    }
+    builder.qt_module("Quick").build();
 }

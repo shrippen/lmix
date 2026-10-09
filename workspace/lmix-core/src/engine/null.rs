@@ -21,6 +21,9 @@ pub struct NullEngine {
     /// Engine process identity (`instance`); tests change it to restart.
     #[cfg(test)]
     instance: Mutex<Option<String>>,
+    /// Refuse every command, as a fresh engine without the mixer does.
+    #[cfg(test)]
+    refusing: std::sync::atomic::AtomicBool,
 }
 
 impl NullEngine {
@@ -52,6 +55,13 @@ impl NullEngine {
         *self.instance.lock().expect("instance lock") = Some(instance.into());
     }
 
+    /// Refuse (`true`) or run every following command.
+    #[cfg(test)]
+    pub fn refuse(&self, refusing: bool) {
+        self.refusing
+            .store(refusing, std::sync::atomic::Ordering::SeqCst);
+    }
+
     /// Commands received so far.
     #[cfg(test)]
     pub fn log(&self) -> Vec<Command> {
@@ -74,6 +84,9 @@ impl Engine for NullEngine {
         self.log.lock().expect("log lock").push(command.clone());
         #[cfg(test)]
         {
+            if self.refusing.load(std::sync::atomic::Ordering::SeqCst) {
+                return Err(EngineError::Refused("no mixer yet".into()));
+            }
             let slow = self.slow.lock().expect("slow lock").take();
             if let Some((takes, error)) = slow {
                 tokio::time::sleep(takes / 2).await;

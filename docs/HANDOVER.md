@@ -56,7 +56,6 @@ STROM="$(scripts/fetch-strom.sh)"
 "$STROM" --host 127.0.0.1 --port 8099 --no-auto-restart &          # Engine
 (cd workspace/lmix-core && cargo run --release -- --strom http://127.0.0.1:8099) &   # Steuerung, API :8200
 (cd workspace/console-qt && cargo run --release)                   # Qt-Console (Prototyp)
-(cd workspace/app-desktop && cargo run --release -- --core http://127.0.0.1:8200)    # egui-Console
 ```
 
 Die Qt-Console braucht Qt 6 mit Kirigami und das GStreamer-Plugin `qml6`
@@ -90,7 +89,7 @@ für WHIP-Links: `--public-url`.
 ## Bekannte Befunde
 
 - GL-Mischer: SRT-Ausgang ohne Video (DECISIONS, „Hardware-Läufe“).
-- Ubuntu 24.04 hat kein Kirigami 6: Qt-Console braucht 26.04 (BUILD.md).
+- Qt-Console: Ziel Linux allgemein; Ubuntu 24.04 über gepinntes KDE neon (BUILD.md), ungeeignet Debian 12.
 
 - SRT-Input-Block in strom decodiert in der VM nicht (DECISIONS,
   „M3 Schritt 4“).

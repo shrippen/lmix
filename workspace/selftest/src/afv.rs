@@ -23,10 +23,6 @@ pub struct Afv {
 }
 
 impl Afv {
-    pub fn is_on(&self, channel: usize) -> bool {
-        self.channels.contains(&channel)
-    }
-
     pub fn set(&mut self, channel: usize, on: bool) {
         if on {
             self.channels.insert(channel);

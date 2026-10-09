@@ -5,10 +5,9 @@
 
 use std::collections::HashMap;
 use strom_types::api::{
-    ActivateProbeRequest, BlockPropertiesResponse, DskToggleRequest, DskToggleResponse,
-    FadeToBlackRequest, FadeToBlackResponse, ProbeResponse, FlowListResponse, FlowResponse, LatencyResponse, SelectPreviewRequest,
-    SelectPreviewResponse, TransitionResponse, TriggerTransitionRequest,
-    UpdateBlockPropertiesRequest, VisionMixerState,
+    ActivateProbeRequest, BlockPropertiesResponse, FadeToBlackRequest, FadeToBlackResponse,
+    FlowResponse, LatencyResponse, ProbeResponse, SelectPreviewRequest, SelectPreviewResponse,
+    TransitionResponse, TriggerTransitionRequest, UpdateBlockPropertiesRequest, VisionMixerState,
 };
 use strom_types::discovery::DeviceResponse;
 use strom_types::vision_mixer::Source;
@@ -38,10 +37,6 @@ impl ApiClient {
         }
     }
 
-    pub fn base_url(&self) -> &str {
-        &self.base_url
-    }
-
     /// WebSocket event stream URL of the same server.
     pub fn ws_url(&self) -> String {
         self.base_url
@@ -57,13 +52,6 @@ impl ApiClient {
         let status = resp.status().as_u16();
         let body = resp.text().await.unwrap_or_default();
         Err(ApiError::Server { status, body })
-    }
-
-    pub async fn list_flows(&self) -> ApiResult<Vec<Flow>> {
-        let url = format!("{}/api/flows", self.base_url);
-        let resp = self.http.get(url).send().await?;
-        let resp = Self::check_status(resp).await?;
-        Ok(resp.json::<FlowListResponse>().await?.flows)
     }
 
     pub async fn get_flow(&self, flow_id: FlowId) -> ApiResult<Flow> {
@@ -153,16 +141,6 @@ impl ApiClient {
         Ok(resp.json::<BlockPropertiesResponse>().await?.properties)
     }
 
-    pub async fn patch_block_properties(
-        &self,
-        flow_id: FlowId,
-        block_id: &str,
-        properties: HashMap<String, PropertyValue>,
-    ) -> ApiResult<HashMap<String, PropertyValue>> {
-        self.patch_block_properties_ramped(flow_id, block_id, properties, None)
-            .await
-    }
-
     /// Like `patch_block_properties`; audio volume/mute changes fade over
     /// `ramp_ms` (all properties of the batch together).
     pub async fn patch_block_properties_ramped(
@@ -234,7 +212,10 @@ impl ApiClient {
 
     /// Video capture devices known to the backend's discovery.
     pub async fn list_video_devices(&self) -> ApiResult<Vec<DeviceResponse>> {
-        let url = format!("{}/api/discovery/devices?category=video_source", self.base_url);
+        let url = format!(
+            "{}/api/discovery/devices?category=video_source",
+            self.base_url
+        );
         let resp = self.http.get(url).send().await?;
         let resp = Self::check_status(resp).await?;
         Ok(resp.json().await?)
@@ -248,7 +229,12 @@ impl ApiClient {
     }
 
     /// Media player transport: `action` is play, pause or stop.
-    pub async fn player_control(&self, flow_id: FlowId, block_id: &str, action: &str) -> ApiResult<()> {
+    pub async fn player_control(
+        &self,
+        flow_id: FlowId,
+        block_id: &str,
+        action: &str,
+    ) -> ApiResult<()> {
         let url = format!(
             "{}/api/flows/{}/blocks/{}/player/control",
             self.base_url, flow_id, block_id
@@ -266,30 +252,14 @@ impl ApiClient {
         block_id: &str,
         duration_ms: u64,
     ) -> ApiResult<FadeToBlackResponse> {
-        let url = format!("{}/api/flows/{}/blocks/{}/ftb", self.base_url, flow_id, block_id);
+        let url = format!(
+            "{}/api/flows/{}/blocks/{}/ftb",
+            self.base_url, flow_id, block_id
+        );
         let resp = self
             .http
             .post(url)
             .json(&FadeToBlackRequest { duration_ms })
-            .send()
-            .await?;
-        let resp = Self::check_status(resp).await?;
-        Ok(resp.json().await?)
-    }
-
-    /// Switch DSK layer `dsk` (1-based) on or off.
-    pub async fn set_dsk(
-        &self,
-        flow_id: FlowId,
-        block_id: &str,
-        dsk: usize,
-        enabled: bool,
-    ) -> ApiResult<DskToggleResponse> {
-        let url = format!("{}/api/flows/{}/blocks/{}/dsk", self.base_url, flow_id, block_id);
-        let resp = self
-            .http
-            .post(url)
-            .json(&DskToggleRequest { dsk, enabled })
             .send()
             .await?;
         let resp = Self::check_status(resp).await?;

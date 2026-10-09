@@ -238,7 +238,8 @@ pub struct Ingest {
     pub browser_url: String,
 }
 
-/// Color tag of an input tile, for grouping (cameras, clips, graphics).
+/// Color tag of an input tile, for grouping (cameras, clips, graphics):
+/// the colour labels of Kante. Older shows said teal and pink.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum InputColor {
@@ -246,22 +247,22 @@ pub enum InputColor {
     Orange,
     Yellow,
     Green,
-    Teal,
+    #[serde(alias = "teal")]
+    Cyan,
     Blue,
+    #[serde(alias = "pink")]
     Purple,
-    Pink,
 }
 
 impl InputColor {
-    pub const ALL: [InputColor; 8] = [
+    pub const ALL: [InputColor; 7] = [
         Self::Red,
         Self::Orange,
         Self::Yellow,
         Self::Green,
-        Self::Teal,
+        Self::Cyan,
         Self::Blue,
         Self::Purple,
-        Self::Pink,
     ];
 }
 
@@ -331,5 +332,20 @@ impl Device {
                 name: self.name.clone(),
             },
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn old_colour_names_still_load() {
+        let colours: Vec<InputColor> = serde_json::from_str(r#"["teal","pink","cyan"]"#).unwrap();
+        assert_eq!(
+            colours,
+            [InputColor::Cyan, InputColor::Purple, InputColor::Cyan]
+        );
+        assert_eq!(serde_json::to_string(&InputColor::Cyan).unwrap(), r#""cyan""#);
     }
 }

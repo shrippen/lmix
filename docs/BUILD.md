@@ -1,7 +1,7 @@
 # Build
 
 Reproduzierbare Build-/Run-Kommandos für unseren Anwendungsfall: Server headless
-auf 127.0.0.1, nativer egui-Client als eigener Prozess. Für alles, was hier
+auf 127.0.0.1, native Qt-Console als eigener Prozess. Für alles, was hier
 nicht steht (Docker, PostgreSQL, TLS, ...), siehe `workspace/strom/docs/`.
 
 ## Systemabhängigkeiten
@@ -76,7 +76,7 @@ cargo run -p strom-frontend
 
 Er verbindet sich fest gegen `strom_types::DEFAULT_PORT` (8080) auf
 `localhost` (`frontend/src/main.rs`) — für M0 reicht das; ein konfigurierbarer
-Zielport für `app-desktop` ist ein M1-Thema.
+Zielport für die Console war ein M1-Thema.
 
 ## `--host` / `STROM_HOST` (unser Patch, `dev`-Branch)
 
@@ -135,28 +135,33 @@ Erwartet: natives Fenster "Strom" öffnet sich, verbindet per WebSocket
 (`ws://localhost:8080/api/ws`) und REST, zeigt die Elementpalette und die
 oben angelegten Flows.
 
-## lmix Console und Selftest (Stand M1b)
+## Selbsttest und M1b-Abnahme
 
 Immer Release-Builds: Debug-Builds sind für Live-Video zu langsam.
 
 ```bash
-./run.sh                                # Backend (127.0.0.1:8099) + Console
 scripts/acceptance-m1b.sh [N] [SEK]     # M1b-Abnahme, eigenes Backend auf 8199
 ```
 
-Die Console wählt das Mixer-Backend nach der GPU der Engine (`gpu_profile.rs`):
-NVIDIA → `cuda`, AMD/Intel → `gl` (unverifiziert), ohne Hardware-GPU Abbruch.
-Übersteuern mit `--mixer-backend cuda|gl|cpu`.
+Der Selbsttest wählt das Mixer-Backend nach der GPU der Engine
+(`gpu_profile.rs`): NVIDIA → `cuda`, AMD/Intel → `gl` (unverifiziert), ohne
+Hardware-GPU Abbruch. Übersteuern mit `--mixer-backend cuda|gl|cpu`.
 
-Selftest (headless) gegen ein laufendes Backend, wichtigste Schalter:
+Selbsttest (kopflos, eigenes Binary `lmix-selftest` in `workspace/selftest`)
+gegen ein laufendes Backend, wichtigste Schalter:
+
+```bash
+cd workspace/selftest && cargo run --release -- --server http://127.0.0.1:8099 --patterns 8
+```
 
 | Schalter | Wirkung |
 |---|---|
-| `--selftest-patterns N` | N Testbild-Inputs (mit Testton) |
-| `--selftest-file PFAD` | Datei-Input (NVDEC), wiederholbar |
-| `--selftest-srt URI` | SRT-Input (MPEG-TS), wiederholbar |
-| `--selftest-encode` | PGM + Multiview → HW-Encoder; misst fps/Alter je Input und Ausgang, prüft Bildinhalt |
-| `--selftest-secs S` | Dauer der Lastphase |
+| `--patterns N` | N Testbild-Inputs (mit Testton) |
+| `--file PFAD` | Datei-Input (NVDEC), wiederholbar |
+| `--srt URI` | SRT-Input (MPEG-TS), wiederholbar |
+| `--encode` | PGM + Multiview → HW-Encoder; misst fps/Alter je Input und Ausgang, prüft Bildinhalt |
+| `--secs S` | Dauer der Lastphase |
+| `--dropout` | Datei-Input stoppt mitten in der Blende |
 | `--mixer-backend B` | Backend erzwingen |
 
 Kein `STROM_FORCE_SOFTWARE_CONVERT` mehr nötig (auch nicht für `cpu`).
@@ -208,41 +213,68 @@ export SWAGGER_UI_DOWNLOAD_URL=file://$PWD/swagger-ui-5.17.14.zip
 
 ```bash
 scripts/test-m2b-vm.sh   # strom (CPU-Mischer) + lmix-core, Testbilder
-CONSOLE_SHOT=console.png scripts/test-m2b-vm.sh   # plus Console auf Xvfb
+CONSOLE_SHOT=console.png scripts/test-m2b-vm.sh   # plus Qt-Console auf Xvfb (braucht Qt 6, Kirigami)
 ```
 
 Prüft Bildinhalt (Helligkeit, Bewegung) über ImageMagick `convert`.
 
-## Console als Client von lmix-core
-
-```bash
-cd workspace/app-desktop
-cargo run -- --core http://127.0.0.1:8200    # oder LMIX_CORE=…
-```
-
-Ohne `--core` spricht die Console wie in M1b direkt mit strom.
-
 ## Qt-Console (`workspace/console-qt`, Prototyp)
 
-Systempakete: Qt 6 (Quick, QuickControls2, Dialogs) mit Entwicklungsdateien,
-Kirigami 6, das GStreamer-Plugin `qml6` und gstreamer-rs-Abhängigkeiten.
+Ziel ist Linux allgemein, keine einzelne Distribution; entwickelt wird auf
+Arch. Gebraucht werden:
+
+| Was | Mindestens | Wofür |
+|---|---|---|
+| Qt 6 (Quick, QuickControls2, Dialogs) mit Entwicklungsdateien | 6.x (entwickelt mit 6.12, ältere ungetestet) | Oberfläche, `cxx-qt-build` findet Qt über `qmake6` bzw. `QMAKE=…` |
+| Kirigami (KDE Frameworks 6) | KF6 | Fenster, Kante |
+| GStreamer mit Plugin `qml6` (`qml6glsink`) | 1.24 | Live-Bilder |
+| Qt Linguist-Werkzeuge (`lrelease`) | – | deutsche Übersetzung; ohne sie baut die Console nur englisch (Build-Warnung) |
 
 ```bash
-# Arch
-sudo pacman -S qt6-declarative kirigami gst-plugin-qml6
-# Ubuntu 26.04 LTS / Kubuntu (Plasma 6)
-sudo apt-get install qt6-declarative-dev qml6-module-org-kde-kirigami \
+# Arch (Entwicklungssystem, geprüft)
+sudo pacman -S qt6-declarative qt6-tools kirigami gst-plugin-qml6
+# Debian 13 / Ubuntu ab 25.04 (ungeprüft)
+sudo apt-get install qt6-declarative-dev qt6-l10n-tools qml6-module-org-kde-kirigami \
   qml6-module-qtquick-dialogs gstreamer1.0-qt6
 ```
 
-Ubuntu 24.04 hat noch Plasma 5 und damit kein Kirigami 6: dort baut die
-Qt-Console nicht ohne Backports (offen, siehe HANDOVER).
+**Ubuntu 24.04** (geprüft in der Cloud-VM, 2026-10-09): Qt 6 und Kirigami
+aus KDE neon, gepinnt, damit nur Qt-, KF6- und ihre neueren
+Grundbibliotheken (libwayland, libinput, libpcre2) von dort kommen;
+GStreamer bleibt das von Ubuntu (~100 MB Download, ~550 MB Platte):
+
+```bash
+sudo curl -sSo /etc/apt/keyrings/neon-archive.asc https://archive.neon.kde.org/public.key
+echo "deb [signed-by=/etc/apt/keyrings/neon-archive.asc] https://archive.neon.kde.org/user noble main" \
+  | sudo tee /etc/apt/sources.list.d/neon.list
+printf 'Package: *\nPin: origin archive.neon.kde.org\nPin-Priority: 100\n\nPackage: qt6-* libqt6* qml6-* kf6-* libkf6* gstreamer1.0-qt6 qmake6* qt6-l10n-tools libwayland* libinput* libpcre2*\nPin: origin archive.neon.kde.org\nPin-Priority: 600\n' \
+  | sudo tee /etc/apt/preferences.d/neon-qt6
+sudo apt-get update
+sudo apt-get install --no-install-recommends qt6-base-dev qt6-declarative-dev qt6-l10n-tools \
+  qt6-tools-dev-tools qt6-qpa-plugins qml6-module-org-kde-kirigami kf6-kirigami-dev gstreamer1.0-qt6
+PATH=/usr/lib/qt6/bin:$PATH   # lrelease
+```
+
+GStreamer vor 1.28: `unixfdsink` kopiert erst ab 1.28 selbst; lmix-core legt
+für Programm und volle Vorschau dann einen Kopierschritt davor (DECISIONS).
+
+**Ungeeignet** (zu alt): Debian 12 (kein Kirigami 6, GStreamer 1.22).
+Andere Distributionen mit KF6 und GStreamer ≥ 1.24 sollten gehen; wer eine
+prüft, trägt sie hier ein.
 
 ```bash
 scripts/sync-kante.sh                 # Kante-QML ins Crate kopieren (nach Kante-Änderungen)
 cd workspace/console-qt
 cargo run --release -- --core http://127.0.0.1:8200 [--style kante|kante-light|system]
 ```
+
+Oder alles zusammen (strom, lmix-core, Console mit Testbildern; Schließen
+beendet alles): `scripts/run-local.sh` (`MIXER=gl`, `INPUTS=8`).
+
+Sprache: Quelltexte englisch, Deutsch als Übersetzung; die Console folgt der
+Systemsprache (`LANGUAGE=en LANG=en_US.UTF-8` erzwingt Englisch). Neue oder geänderte
+Texte: `scripts/update-translations.sh` sammelt sie (`lupdate`) und trägt die
+deutschen Texte aus `workspace/console-qt/i18n/de.py` ein; fehlende meldet es.
 
 `cxx-qt-build` findet Qt über `qmake6` (bzw. `QMAKE=…`). Die Console muss auf
 dem Rechner der Engine laufen: Live-Bilder kommen über Unix-Sockets in

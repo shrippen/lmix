@@ -106,4 +106,7 @@ if grep -E 'qrc:|\.qml:[0-9]+' "$WORK/console.log" >/dev/null; then
     fail "QML warnings: $(grep -E 'qrc:|\.qml:[0-9]+' "$WORK/console.log" | head -3)"
 fi
 pass "no QML warnings"
+criticals="$(grep -c 'GStreamer-CRITICAL' "$WORK/strom.log" || true)"
+[[ "$criticals" == 0 ]] || fail "$criticals GStreamer CRITICALs in strom.log"
+pass "no GStreamer CRITICALs (live flows)"
 echo "Qt Console check passed"

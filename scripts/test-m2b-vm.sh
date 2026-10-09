@@ -5,7 +5,7 @@
 #
 #   scripts/test-m2b-vm.sh            # builds, runs, cleans up
 #   CONSOLE_SHOT=out.png scripts/test-m2b-vm.sh
-#                                     # also screenshots the Console
+#                                     # also screenshots the Qt Console
 #                                     # (lmix-core client) on Xvfb
 #   KEEP_WORK=1                       # keep logs and pictures
 #   LATENCY_BUDGET_MS=150             # p95 capture-to-program budget
@@ -379,21 +379,23 @@ p95="$(jq -r '.p95_ms' <<<"$latency")"
 pass "latency: median ${median} ms, p95 ${p95} ms from ${samples} samples (budget ${LATENCY_BUDGET_MS} ms)"
 
 # --- input color, device list ---
-act '{"action":"set_input_color","input":"Ball","color":"teal"}' >/dev/null
-[[ "$(curl -sf "$CORE/state" | jq -r '.inputs[1].color')" == teal ]] || fail "color not set"
+act '{"action":"set_input_color","input":"Ball","color":"cyan"}' >/dev/null
+[[ "$(curl -sf "$CORE/state" | jq -r '.inputs[1].color')" == cyan ]] || fail "color not set"
 curl -sf "$CORE/devices" | jq -e 'type == "array"' >/dev/null || fail "device list"
 pass "color tag; device list ($(curl -sf "$CORE/devices" | jq length) found)"
 
 # --- Console as lmix-core client, on a virtual display ---
 if [[ -n "${CONSOLE_SHOT:-}" ]]; then
-    (cd "$ROOT/workspace/app-desktop" && cargo build)
-    CONSOLE_BIN="${CARGO_TARGET_DIR:-$ROOT/workspace/app-desktop/target}/debug/app-desktop"
-    Xvfb :93 -screen 0 1280x860x24 >/dev/null 2>&1 &
+    # Qt Console (needs Qt 6 with Kirigami and gst-plugin-qml6, BUILD.md).
+    (cd "$ROOT/workspace/console-qt" && cargo build --release)
+    CONSOLE_BIN="${CARGO_TARGET_DIR:-$ROOT/workspace/console-qt/target}/release/lmix-console"
+    Xvfb :93 -screen 0 1440x900x24 >/dev/null 2>&1 &
     PIDS+=($!)
     sleep 1
-    DISPLAY=:93 WAYLAND_DISPLAY= LIBGL_ALWAYS_SOFTWARE=1 "$CONSOLE_BIN" --core "${CORE%/api}" >"$WORK/console.log" 2>&1 &
+    DISPLAY=:93 WAYLAND_DISPLAY= QT_QPA_PLATFORM=xcb QT_FORCE_STDERR_LOGGING=1 \
+        LMIX_CORE="${CORE%/api}" "$CONSOLE_BIN" >"$WORK/console.log" 2>&1 &
     PIDS+=($!)
-    sleep "${CONSOLE_WAIT:-8}"
+    sleep "${CONSOLE_WAIT:-25}"   # live flows start one after another
     act '{"action":"set_listen","input":"Bars","listen":"pfl"}' >/dev/null   # show a solo
     act '{"action":"start_output","output":"Stream"}' >/dev/null           # and a running output
     sleep 2

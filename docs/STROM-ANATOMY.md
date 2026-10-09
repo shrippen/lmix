@@ -169,8 +169,8 @@ Betroffen: alles was Property-Werte aus einem `Flow`/`BlockInstance` (nicht
 aus einer Live-`GET .../properties`-Antwort, die eigene Regeln hat, siehe
 unten) liest. Workaround: entweder beide Varianten matchen, oder — robuster —
 den Wert aus einer Live-Quelle ableiten statt aus dem gespeicherten JSON zu
-raten (siehe `workspace/app-desktop/src/main.rs`, `num_channels`-Herleitung
-aus den tatsächlich zurückgegebenen `ch{N}_fader`-Keys).
+raten (so machte es die frühere egui-Console: `num_channels` aus den
+tatsächlich zurückgegebenen `ch{N}_fader`-Keys).
 
 ## Property-System
 

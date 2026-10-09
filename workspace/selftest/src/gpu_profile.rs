@@ -123,7 +123,10 @@ mod tests {
     #[test]
     fn detects_vendors() {
         let nvidia = gl("NVIDIA Corporation", "NVIDIA GeForce RTX 3090/PCIe/SSE2");
-        let amd = gl("AMD", "AMD Radeon RX 7900 XTX (radeonsi, navi31, LLVM 17.0.6, DRM 3.57)");
+        let amd = gl(
+            "AMD",
+            "AMD Radeon RX 7900 XTX (radeonsi, navi31, LLVM 17.0.6, DRM 3.57)",
+        );
         let intel = gl("Intel", "Mesa Intel(R) Arc(tm) A770 Graphics (DG2)");
         let llvmpipe = gl("Mesa", "llvmpipe (LLVM 17.0.6, 256 bits)");
 
@@ -138,8 +141,14 @@ mod tests {
         let nvidia = gl("NVIDIA Corporation", "NVIDIA GeForce RTX 3090/PCIe/SSE2");
         let intel = gl("Intel", "Mesa Intel(R) UHD Graphics 770 (ADL-S GT1)");
 
-        assert_eq!(MixerBackend::resolve(BackendChoice::Auto, Some(&nvidia)), Ok(MixerBackend::Cuda));
-        assert_eq!(MixerBackend::resolve(BackendChoice::Auto, Some(&intel)), Ok(MixerBackend::Gl));
+        assert_eq!(
+            MixerBackend::resolve(BackendChoice::Auto, Some(&nvidia)),
+            Ok(MixerBackend::Cuda)
+        );
+        assert_eq!(
+            MixerBackend::resolve(BackendChoice::Auto, Some(&intel)),
+            Ok(MixerBackend::Gl)
+        );
     }
 
     #[test]
@@ -148,6 +157,9 @@ mod tests {
 
         assert!(MixerBackend::resolve(BackendChoice::Auto, None).is_err());
         assert!(MixerBackend::resolve(BackendChoice::Auto, Some(&llvmpipe)).is_err());
-        assert_eq!(MixerBackend::resolve(BackendChoice::Cpu, None), Ok(MixerBackend::Cpu));
+        assert_eq!(
+            MixerBackend::resolve(BackendChoice::Cpu, None),
+            Ok(MixerBackend::Cpu)
+        );
     }
 }

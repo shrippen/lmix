@@ -18,12 +18,11 @@ ColumnLayout {
     required property var transitionBySlot
 
     readonly property bool canTake: show !== null && show.preview !== null
-    readonly property var effects: JSON.parse(core.choices("effects"))
+    readonly property var effects: Texts.choices("effects", core.choices("effects"))
     readonly property var durations: JSON.parse(core.choices("durations"))
 
     function effectLabel(name) {
-        var match = effects.find(e => e.value === name)
-        return match ? match.label : name
+        return Texts.label("effects", name)
     }
 
     spacing: Kirigami.Units.smallSpacing
@@ -70,7 +69,7 @@ ColumnLayout {
                 }
                 ChoiceMenu {
                     title: qsTr("Length")
-                    choices: panel.durations.map(ms => ({ value: ms, label: qsTr("%1 ms").arg(ms) }))
+                    choices: panel.durations.map(ms => ({ value: ms, label: Texts.label("durations", ms) }))
                     current: button.modelData.duration_ms
                     onPicked: value => panel.act({ action: "set_transition", slot: button.modelData.slot, effect: button.modelData.effect, duration_ms: value })
                 }

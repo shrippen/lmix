@@ -71,25 +71,6 @@ pub enum TestPattern {
 }
 
 impl TestPattern {
-    pub const ALL: [Self; 16] = [
-        Self::Smpte100,
-        Self::Smpte75,
-        Self::ColorChart,
-        Self::Black,
-        Self::White,
-        Self::Red,
-        Self::Green,
-        Self::Blue,
-        Self::Ramp,
-        Self::Checkers,
-        Self::ZonePlate,
-        Self::Circular,
-        Self::Pinwheel,
-        Self::Ball,
-        Self::Snow,
-        Self::Blink,
-    ];
-
     /// `videotestsrc` `pattern` enum nick.
     fn nick(self) -> &'static str {
         match self {
@@ -139,7 +120,10 @@ impl TestPattern {
 pub enum SourceSpec {
     Pattern(TestPattern),
     /// Capture device, `id` as returned by `/api/discovery/devices`.
-    Device { id: String, name: String },
+    Device {
+        id: String,
+        name: String,
+    },
     /// Local file path, looped.
     File(String),
     /// http(s)/rtsp/... URL, handled by strom's media player.
@@ -333,7 +317,9 @@ fn add_audio(flow: &mut Flow, i: usize, spec: &SourceSpec) -> Option<String> {
             flow.links.push(link(src_id, caps_id.clone()));
             Some(caps_id)
         }
-        SourceSpec::File(_) | SourceSpec::Url(_) => Some(format!("{}:audio_out", media_player_id(i))),
+        SourceSpec::File(_) | SourceSpec::Url(_) => {
+            Some(format!("{}:audio_out", media_player_id(i)))
+        }
         SourceSpec::Device { .. } | SourceSpec::Srt(_) => None,
     }
 }
@@ -391,8 +377,12 @@ pub fn build_flow(
     ));
 
     // PGM tap: the real program picture, including FTB, fades and DSK.
-    flow.blocks
-        .push(block(PGM_TAP_ID.to_string(), THUMBNAIL_BLOCK, pos(4, 0), vec![]));
+    flow.blocks.push(block(
+        PGM_TAP_ID.to_string(),
+        THUMBNAIL_BLOCK,
+        pos(4, 0),
+        vec![],
+    ));
     flow.links.push(link(
         format!("{MIXER_ID}:pgm_out"),
         format!("{PGM_TAP_ID}:video_in"),
@@ -408,8 +398,10 @@ pub fn build_flow(
             vec![("num_channels", PropertyValue::UInt(sources.len() as u64))],
         ));
         for (i, pad) in audio {
-            flow.links
-                .push(link(pad, format!("{AUDIO_MIXER_ID}:input_{}", audio_channel(i))));
+            flow.links.push(link(
+                pad,
+                format!("{AUDIO_MIXER_ID}:input_{}", audio_channel(i)),
+            ));
         }
         flow.links.push(link(
             format!("{AUDIO_MIXER_ID}:main_out"),
@@ -460,7 +452,10 @@ pub fn add_encoders(flow: &mut Flow) {
             pos(4, row),
             vec![
                 ("codec", PropertyValue::String("h264".into())),
-                ("encoder_preference", PropertyValue::String("hardware".into())),
+                (
+                    "encoder_preference",
+                    PropertyValue::String("hardware".into()),
+                ),
             ],
         ));
         flow.elements.push(Element {
@@ -472,8 +467,12 @@ pub fn add_encoders(flow: &mut Flow) {
         });
         // build_flow already taps PGM.
         if !flow.blocks.iter().any(|b| b.id == out.tap) {
-            flow.blocks
-                .push(block(out.tap.to_string(), THUMBNAIL_BLOCK, pos(4, row + ENCODED_OUTPUTS.len()), vec![]));
+            flow.blocks.push(block(
+                out.tap.to_string(),
+                THUMBNAIL_BLOCK,
+                pos(4, row + ENCODED_OUTPUTS.len()),
+                vec![],
+            ));
             flow.links.push(link(
                 format!("{MIXER_ID}:{}", out.mixer_pad),
                 format!("{}:video_in", out.tap),
@@ -483,8 +482,10 @@ pub fn add_encoders(flow: &mut Flow) {
             format!("{}:video_out", out.tap),
             format!("{}:video_in", out.encoder),
         ));
-        flow.links
-            .push(link(format!("{}:encoded_out", out.encoder), out.sink.to_string()));
+        flow.links.push(link(
+            format!("{}:encoded_out", out.encoder),
+            out.sink.to_string(),
+        ));
     }
 }
 
@@ -493,15 +494,23 @@ mod tests {
     use super::*;
 
     fn patterns(n: usize) -> Vec<SourceSpec> {
+        const SOME: [TestPattern; 3] =
+            [TestPattern::Ball, TestPattern::Snow, TestPattern::Smpte100];
         (0..n)
-            .map(|i| SourceSpec::Pattern(TestPattern::ALL[i % TestPattern::ALL.len()]))
+            .map(|i| SourceSpec::Pattern(SOME[i % SOME.len()]))
             .collect()
     }
 
     #[test]
     fn rejects_out_of_range_counts() {
-        assert_eq!(build_flow("f", &patterns(1), MixerBackend::Cuda).unwrap_err(), FlowBuildError::TooFew);
-        assert_eq!(build_flow("f", &patterns(MAX_SOURCES + 1), MixerBackend::Cuda).unwrap_err(), FlowBuildError::TooMany);
+        assert_eq!(
+            build_flow("f", &patterns(1), MixerBackend::Cuda).unwrap_err(),
+            FlowBuildError::TooFew
+        );
+        assert_eq!(
+            build_flow("f", &patterns(MAX_SOURCES + 1), MixerBackend::Cuda).unwrap_err(),
+            FlowBuildError::TooMany
+        );
     }
 
     #[test]
@@ -530,10 +539,19 @@ mod tests {
         let flow = build_flow("f", &sources, MixerBackend::Cuda).unwrap();
         let to = |ch: usize| format!("mix:input_{ch}");
 
-        assert!(flow.links.iter().any(|l| l.from == "acaps0" && l.to == to(1)));
+        assert!(flow
+            .links
+            .iter()
+            .any(|l| l.from == "acaps0" && l.to == to(1)));
         assert!(!flow.links.iter().any(|l| l.to == to(2)));
-        assert!(flow.links.iter().any(|l| l.from == "media2:audio_out" && l.to == to(3)));
-        assert!(flow.links.iter().any(|l| l.from == "mix:main_out" && l.to == "vm:pgm_audio_in"));
+        assert!(flow
+            .links
+            .iter()
+            .any(|l| l.from == "media2:audio_out" && l.to == to(3)));
+        assert!(flow
+            .links
+            .iter()
+            .any(|l| l.from == "mix:main_out" && l.to == "vm:pgm_audio_in"));
     }
 
     #[test]
@@ -542,13 +560,20 @@ mod tests {
         add_encoders(&mut flow);
 
         assert_eq!(flow.blocks.iter().filter(|b| b.id == PGM_TAP_ID).count(), 1);
-        assert_eq!(flow.links.iter().filter(|l| l.from == "vm:pgm_out").count(), 1);
+        assert_eq!(
+            flow.links.iter().filter(|l| l.from == "vm:pgm_out").count(),
+            1
+        );
     }
 
     #[test]
     fn mixer_gets_the_chosen_backend() {
         let flow = build_flow("f", &patterns(2), MixerBackend::Gl).unwrap();
-        let mixer = flow.blocks.iter().find(|b| b.block_definition_id == VISION_MIXER_BLOCK).unwrap();
+        let mixer = flow
+            .blocks
+            .iter()
+            .find(|b| b.block_definition_id == VISION_MIXER_BLOCK)
+            .unwrap();
 
         assert!(matches!(
             mixer.properties.get("compositor_preference"),
@@ -583,14 +608,31 @@ mod tests {
 
         // Pattern input: video src + caps, tone src + caps.
         assert_eq!(flow.elements.len(), 4);
-        assert!(flow.links.iter().any(|l| l.to == "thumb1:video_in" && l.from == "media1:video_out"));
-        assert!(flow.links.iter().any(|l| l.to == "thumb3:video_in" && l.from == "dev3:video_out"));
-        assert!(flow.links.iter().any(|l| l.to == "thumb4:video_in" && l.from == "srt4:video_out"));
+        assert!(flow
+            .links
+            .iter()
+            .any(|l| l.to == "thumb1:video_in" && l.from == "media1:video_out"));
+        assert!(flow
+            .links
+            .iter()
+            .any(|l| l.to == "thumb3:video_in" && l.from == "dev3:video_out"));
+        assert!(flow
+            .links
+            .iter()
+            .any(|l| l.to == "thumb4:video_in" && l.from == "srt4:video_out"));
     }
 
     #[test]
     fn file_playlist_is_json_array() {
-        let flow = build_flow("f", &[SourceSpec::File("/a b.mp4".into()), SourceSpec::File("c".into())], MixerBackend::Cuda).unwrap();
+        let flow = build_flow(
+            "f",
+            &[
+                SourceSpec::File("/a b.mp4".into()),
+                SourceSpec::File("c".into()),
+            ],
+            MixerBackend::Cuda,
+        )
+        .unwrap();
         let player = flow.blocks.iter().find(|b| b.id == "media0").unwrap();
 
         assert!(matches!(

@@ -18,12 +18,12 @@
 
 use crate::afv::{mute_property, Afv};
 use crate::api::ApiClient;
+use crate::flows::{find_thumbnail_block, vision_mixer_block};
 use crate::gpu_profile::BackendChoice;
 use crate::perf::{Metric, Perf};
 use crate::sources::{
     add_encoders, build_flow, SourceSpec, TestPattern, AUDIO_MIXER_ID, ENCODED_OUTPUTS, PGM_TAP_ID,
 };
-use crate::state::{find_switchable_flows, find_thumbnail_block, AppMessage};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -208,7 +208,11 @@ fn luma_std(jpeg: &[u8]) -> Option<f64> {
     let img = image::load_from_memory(jpeg).ok()?.to_luma8();
     let n = img.pixels().len() as f64;
     let mean = img.pixels().map(|p| p.0[0] as f64).sum::<f64>() / n;
-    let var = img.pixels().map(|p| (p.0[0] as f64 - mean).powi(2)).sum::<f64>() / n;
+    let var = img
+        .pixels()
+        .map(|p| (p.0[0] as f64 - mean).powi(2))
+        .sum::<f64>()
+        / n;
     Some(var.sqrt())
 }
 
@@ -259,7 +263,14 @@ struct OutputProbe {
 
 impl OutputProbe {
     fn new(point: ProbePoint, label: String) -> Self {
-        Self { point, label, ages_ms: Vec::new(), first: None, last: None, min_window_fps: None }
+        Self {
+            point,
+            label,
+            ages_ms: Vec::new(),
+            first: None,
+            last: None,
+            min_window_fps: None,
+        }
     }
 
     fn record(&mut self, age_ms: u64, sample: u64) {
@@ -296,7 +307,11 @@ impl OutputProbe {
     fn ages(&self) -> (f64, f64, f64) {
         let mut v = self.ages_ms.clone();
         v.sort_by(|a, b| a.total_cmp(b));
-        let at = |q: f64| v.get(((v.len() as f64 - 1.0) * q).round() as usize).copied().unwrap_or(f64::NAN);
+        let at = |q: f64| {
+            v.get(((v.len() as f64 - 1.0) * q).round() as usize)
+                .copied()
+                .unwrap_or(f64::NAN)
+        };
         (at(0.5), at(0.95), v.last().copied().unwrap_or(f64::NAN))
     }
 }
@@ -337,7 +352,10 @@ fn backend_proc_sample() -> Option<(u64, u64)> {
 const TICKS_PER_SEC: f64 = 100.0;
 const PAGE_KB: f64 = 4.0;
 
-fn sources_for(opts: &Options, devices: &[strom_types::discovery::DeviceResponse]) -> Vec<SourceSpec> {
+fn sources_for(
+    opts: &Options,
+    devices: &[strom_types::discovery::DeviceResponse],
+) -> Vec<SourceSpec> {
     let mut sources: Vec<SourceSpec> = (0..opts.patterns)
         .map(|i| SourceSpec::Pattern(PATTERN_ORDER[i % PATTERN_ORDER.len()]))
         .collect();
@@ -380,7 +398,12 @@ pub async fn run(opts: Options) -> bool {
         add_encoders(&mut flow);
     }
 
-    println!("selftest: {} inputs, {} s, mixer backend {:?}", sources.len(), opts.seconds, backend);
+    println!(
+        "selftest: {} inputs, {} s, mixer backend {:?}",
+        sources.len(),
+        opts.seconds,
+        backend
+    );
     for (i, s) in sources.iter().enumerate() {
         println!("  input {i}: {}", s.label());
     }
@@ -427,11 +450,10 @@ async fn run_flow(
     dropout_input: Option<usize>,
 ) -> bool {
     let flow_id = flow.id;
-    let Some(target) = find_switchable_flows(std::slice::from_ref(flow)).pop() else {
+    let Some(vm) = vision_mixer_block(flow) else {
         eprintln!("flow has no vision mixer");
         return false;
     };
-    let vm = target.vision_mixer_block_id;
 
     let started = Instant::now();
     if let Err(e) = api.start_flow(flow_id).await {
@@ -440,11 +462,12 @@ async fn run_flow(
     }
 
     // WS listener: pacing + take confirmation.
-    let (tx, rx) = mpsc::channel::<(u64, AppMessage)>();
-    crate::ws::connect(api.ws_url(), tx, egui::Context::default(), 0, perf.clone());
+    let (tx, rx) = mpsc::channel::<StromEvent>();
+    crate::ws::connect(api.ws_url(), tx, perf.clone());
 
-    let probes: Arc<Mutex<Vec<InputProbe>>> =
-        Arc::new(Mutex::new((0..inputs).map(|_| InputProbe::default()).collect()));
+    let probes: Arc<Mutex<Vec<InputProbe>>> = Arc::new(Mutex::new(
+        (0..inputs).map(|_| InputProbe::default()).collect(),
+    ));
     let stop = Arc::new(AtomicU64::new(0));
 
     let mut pollers = Vec::new();
@@ -495,7 +518,10 @@ async fn run_flow(
         }
         tokio::time::sleep(READY_POLL).await;
     }
-    println!("all inputs live after {:.1} s", started.elapsed().as_secs_f64());
+    println!(
+        "all inputs live after {:.1} s",
+        started.elapsed().as_secs_f64()
+    );
 
     let mut outputs = start_output_probes(api, flow_id, opts, &thumbs).await;
     let pictures = if opts.outputs == OutputLoad::Encode {
@@ -546,30 +572,42 @@ async fn run_flow(
     let mut loop_prev = Instant::now();
     while Instant::now() < end {
         let now = Instant::now();
-        if let Some(input) = dropout_input.filter(|_| dropout.is_none() && now + DROPOUT_PHASE >= end) {
+        if let Some(input) =
+            dropout_input.filter(|_| dropout.is_none() && now + DROPOUT_PHASE >= end)
+        {
             switch_stop.store(1, Ordering::SeqCst);
             let (api, vm) = (api.clone(), vm.clone());
-            dropout = Some(tokio::spawn(async move { dropout_during_fade(&api, flow_id, &vm, input).await }));
+            dropout = Some(tokio::spawn(async move {
+                dropout_during_fade(&api, flow_id, &vm, input).await
+            }));
         }
         // Scheduler stall: this loop should tick at ~10 ms.
-        perf.record(Metric::UiFrame, now.duration_since(loop_prev).as_secs_f64() * 1000.0);
+        perf.record(
+            Metric::UiFrame,
+            now.duration_since(loop_prev).as_secs_f64() * 1000.0,
+        );
         loop_prev = now;
 
-        while let Ok((_, msg)) = rx.try_recv() {
-            match msg {
-                AppMessage::Event(StromEvent::VisionMixerStateChanged {
+        while let Ok(event) = rx.try_recv() {
+            match event {
+                StromEvent::VisionMixerStateChanged {
                     program_input,
                     preview_input,
                     ..
-                }) => {
+                } => {
                     perf.take_confirmed();
                     ws_state = Some((program_input, preview_input));
                     if let Some(tx) = &afv_tx {
                         let _ = tx.send(program_input);
                     }
                 }
-                AppMessage::Event(StromEvent::SystemStats(stats)) => gpu_load.record(&stats),
-                AppMessage::Event(StromEvent::BufferAgeProbe { probe_id, age_ms, sample_number, .. }) => {
+                StromEvent::SystemStats(stats) => gpu_load.record(&stats),
+                StromEvent::BufferAgeProbe {
+                    probe_id,
+                    age_ms,
+                    sample_number,
+                    ..
+                } => {
                     if let Some(p) = outputs.get_mut(&probe_id) {
                         p.record(age_ms, sample_number);
                     }
@@ -619,7 +657,10 @@ async fn run_flow(
     let dropout_ok = match dropout {
         Some(task) => {
             let ok = task.await.unwrap_or(false);
-            println!("{} source stopped during a fade: take completed, cut back, source resumed", if ok { "PASS" } else { "FAIL" });
+            println!(
+                "{} source stopped during a fade: take completed, cut back, source resumed",
+                if ok { "PASS" } else { "FAIL" }
+            );
             ok
         }
         None => true,
@@ -647,7 +688,10 @@ async fn run_flow(
             }
             let afv = task.await.unwrap_or_default();
             let ok = check_afv(api, flow_id, &afv, engine_state.and_then(|s| s.0)).await;
-            println!("{} AFV: engine mutes follow PGM on every channel", if ok { "PASS" } else { "FAIL" });
+            println!(
+                "{} AFV: engine mutes follow PGM on every channel",
+                if ok { "PASS" } else { "FAIL" }
+            );
             ok
         }
         None => true,
@@ -662,14 +706,26 @@ async fn run_flow(
         .unwrap_or(false);
 
     gpu_load.report();
-    println!("{} FTB on and off round trip", if ftb_ok { "PASS" } else { "FAIL" });
+    println!(
+        "{} FTB on and off round trip",
+        if ftb_ok { "PASS" } else { "FAIL" }
+    );
     let ok = check_outputs(opts, &outputs, dropout_input)
         && pictures_ok
         && ftb_ok
         && dropout_ok
         && mirror_ok
         && afv_ok;
-    verdict(perf, &probes, inputs, switches, switch_failures, still_playing, &cpu_samples, rss_kb_max) && ok
+    verdict(
+        perf,
+        &probes,
+        inputs,
+        switches,
+        switch_failures,
+        still_playing,
+        &cpu_samples,
+        rss_kb_max,
+    ) && ok
 }
 
 /// Probe each encoder's input and its sink; keyed by probe id.
@@ -702,7 +758,10 @@ async fn start_output_probes(
     for (i, thumb) in thumbs.iter().enumerate() {
         match api.activate_probe(flow_id, thumb, timeout).await {
             Ok(r) => {
-                probes.insert(r.probe_id, OutputProbe::new(ProbePoint::Input, format!("input {i}")));
+                probes.insert(
+                    r.probe_id,
+                    OutputProbe::new(ProbePoint::Input, format!("input {i}")),
+                );
             }
             Err(e) => eprintln!("probe on {thumb} failed: {e}"),
         }
@@ -723,14 +782,25 @@ fn check_outputs(
         return true;
     }
 
-    let mut rows: Vec<&OutputProbe> = outputs.values().filter(|p| p.point == ProbePoint::Output).collect();
+    let mut rows: Vec<&OutputProbe> = outputs
+        .values()
+        .filter(|p| p.point == ProbePoint::Output)
+        .collect();
     rows.sort_by(|a, b| a.label.cmp(&b.label));
     println!("\noutput                   fps  min-win   age p50   p95   max (ms)");
     let mut ok = rows.len() == 2 * ENCODED_OUTPUTS.len();
     for p in rows {
         let (p50, p95, max) = p.ages();
         let min_window = p.min_window_fps.unwrap_or(0.0);
-        println!("{:<22} {:>5.1}  {:>7.1}  {:>7.0} {:>5.0} {:>5.0}", p.label, p.fps(), min_window, p50, p95, max);
+        println!(
+            "{:<22} {:>5.1}  {:>7.1}  {:>7.0} {:>5.0} {:>5.0}",
+            p.label,
+            p.fps(),
+            min_window,
+            p50,
+            p95,
+            max
+        );
         ok &= p.fps() >= MIN_OUTPUT_FPS && min_window >= MIN_WINDOW_FPS;
         if p.label == "pgm_out encoded" {
             ok &= p95 <= MAX_PGM_AGE_MS;
@@ -749,7 +819,12 @@ fn check_outputs(
     inputs.sort_by(|a, b| a.fps().total_cmp(&b.fps()));
     for p in inputs.iter().filter(|p| p.fps() < MIN_OUTPUT_FPS) {
         let samples = p.last.map_or(0, |l| l.0) - p.first.map_or(0, |f| f.0);
-        println!("  slow {:<9} {:>5.1} fps ({samples} frames, {} events)", p.label, p.fps(), p.ages_ms.len());
+        println!(
+            "  slow {:<9} {:>5.1} fps ({samples} frames, {} events)",
+            p.label,
+            p.fps(),
+            p.ages_ms.len()
+        );
     }
     let slowest = inputs.iter().min_by(|a, b| a.fps().total_cmp(&b.fps()));
     let inputs_ok = slowest.is_some_and(|p| p.fps() >= MIN_OUTPUT_FPS);
@@ -769,7 +844,12 @@ fn check_outputs(
 /// Fade from the current PGM to `input`, stop `input`'s player mid-fade:
 /// the fade must still complete, a cut back must work, and the player
 /// must resume. Output continuity is checked by the probe windows.
-async fn dropout_during_fade(api: &ApiClient, flow_id: strom_types::FlowId, vm: &str, input: usize) -> bool {
+async fn dropout_during_fade(
+    api: &ApiClient,
+    flow_id: strom_types::FlowId,
+    vm: &str,
+    input: usize,
+) -> bool {
     // Let the switcher's last take finish.
     tokio::time::sleep(SWITCH_EVERY + SETTLE).await;
     let player = crate::sources::media_player_id(input);
@@ -786,14 +866,24 @@ async fn dropout_during_fade(api: &ApiClient, flow_id: strom_types::FlowId, vm: 
         _ => 0,
     };
     // A take always puts the current PVW on PGM: select before each take.
-    if state.program_input != Some(pgm) && !take_to(api, flow_id, vm, state.program_input, pgm).await {
+    if state.program_input != Some(pgm)
+        && !take_to(api, flow_id, vm, state.program_input, pgm).await
+    {
         return false;
     }
-    if api.select_preview(flow_id, vm, Source::Input(input)).await.is_err() {
+    if api
+        .select_preview(flow_id, vm, Source::Input(input))
+        .await
+        .is_err()
+    {
         return false;
     }
 
-    if api.trigger_transition(flow_id, vm, pgm, input, "fade", DROPOUT_FADE_MS).await.is_err() {
+    if api
+        .trigger_transition(flow_id, vm, pgm, input, "fade", DROPOUT_FADE_MS)
+        .await
+        .is_err()
+    {
         eprintln!("dropout: fade request failed");
         return false;
     }
@@ -831,7 +921,10 @@ fn start_afv(
     api: ApiClient,
     flow_id: strom_types::FlowId,
     inputs: usize,
-) -> (tokio::sync::mpsc::UnboundedSender<Option<usize>>, tokio::task::JoinHandle<Afv>) {
+) -> (
+    tokio::sync::mpsc::UnboundedSender<Option<usize>>,
+    tokio::task::JoinHandle<Afv>,
+) {
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<Option<usize>>();
     let task = tokio::spawn(async move {
         let mut afv = Afv::default();
@@ -845,7 +938,10 @@ fn start_afv(
                 .map(|(ch, muted)| (mute_property(ch), strom_types::PropertyValue::Bool(muted)))
                 .collect();
             let ramp = Some(crate::afv::ANTI_CLICK_MS);
-            if let Err(e) = api.patch_block_properties_ramped(flow_id, AUDIO_MIXER_ID, properties, ramp).await {
+            if let Err(e) = api
+                .patch_block_properties_ramped(flow_id, AUDIO_MIXER_ID, properties, ramp)
+                .await
+            {
                 eprintln!("AFV patch failed: {e}");
             }
         }
@@ -855,7 +951,12 @@ fn start_afv(
 }
 
 /// The engine's mixer mutes must match AFV for the final PGM.
-async fn check_afv(api: &ApiClient, flow_id: strom_types::FlowId, afv: &Afv, pgm: Option<usize>) -> bool {
+async fn check_afv(
+    api: &ApiClient,
+    flow_id: strom_types::FlowId,
+    afv: &Afv,
+    pgm: Option<usize>,
+) -> bool {
     let Ok(properties) = api.get_block_properties(flow_id, AUDIO_MIXER_ID).await else {
         return false;
     };
@@ -865,12 +966,24 @@ async fn check_afv(api: &ApiClient, flow_id: strom_types::FlowId, afv: &Afv, pgm
 }
 
 /// Cut `to` onto PGM: select it on PVW, then take.
-async fn take_to(api: &ApiClient, flow_id: strom_types::FlowId, vm: &str, from: Option<usize>, to: usize) -> bool {
-    if api.select_preview(flow_id, vm, Source::Input(to)).await.is_err() {
+async fn take_to(
+    api: &ApiClient,
+    flow_id: strom_types::FlowId,
+    vm: &str,
+    from: Option<usize>,
+    to: usize,
+) -> bool {
+    if api
+        .select_preview(flow_id, vm, Source::Input(to))
+        .await
+        .is_err()
+    {
         return false;
     }
     let from = from.unwrap_or(to);
-    api.trigger_transition(flow_id, vm, from, to, "cut", 0).await.is_ok()
+    api.trigger_transition(flow_id, vm, from, to, "cut", 0)
+        .await
+        .is_ok()
 }
 
 /// Fade to black and back; the mixer state must follow each toggle.
@@ -927,10 +1040,18 @@ async fn switch_once(
     let Some(pgm) = state.and_then(|s| s.program_input) else {
         return false;
     };
-    let next = if *target == pgm { (pgm + 1) % inputs } else { *target };
+    let next = if *target == pgm {
+        (pgm + 1) % inputs
+    } else {
+        *target
+    };
     *target = (next + 1) % inputs;
 
-    if api.select_preview(flow_id, vm, Source::Input(next)).await.is_err() {
+    if api
+        .select_preview(flow_id, vm, Source::Input(next))
+        .await
+        .is_err()
+    {
         return false;
     }
 
@@ -972,7 +1093,14 @@ fn verdict(
         ok &= pass;
     };
 
-    let probes = probes.lock().map(|p| p.iter().map(|x| (x.polls, x.changes, x.first_frame)).collect::<Vec<_>>()).unwrap_or_default();
+    let probes = probes
+        .lock()
+        .map(|p| {
+            p.iter()
+                .map(|x| (x.polls, x.changes, x.first_frame))
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
     println!("\ninput   polls  changed  first_frame");
     for (i, (polls, changes, first)) in probes.iter().enumerate() {
         println!(
@@ -988,7 +1116,10 @@ fn verdict(
     if !cpu.is_empty() {
         let mean = cpu.iter().sum::<f64>() / cpu.len() as f64;
         let max = cpu.iter().copied().fold(0.0, f64::max);
-        println!("backend cpu: mean {mean:.0} %  max {max:.0} % (100 % = one core), rss max {:.0} MB", rss_kb_max / 1024.0);
+        println!(
+            "backend cpu: mean {mean:.0} %  max {max:.0} % (100 % = one core), rss max {:.0} MB",
+            rss_kb_max / 1024.0
+        );
     }
 
     check(still_playing, "flow still running at the end".into());
@@ -996,28 +1127,46 @@ fn verdict(
         switch_failures == 0,
         format!("{switches} switches, {switch_failures} failed"),
     );
-    let motion_ok = probes.iter().take(MOTION_INPUTS.min(inputs)).all(|(_, c, _)| *c > 0);
-    check(motion_ok, "motion inputs delivered changing pictures".into());
+    let motion_ok = probes
+        .iter()
+        .take(MOTION_INPUTS.min(inputs))
+        .all(|(_, c, _)| *c > 0);
+    check(
+        motion_ok,
+        "motion inputs delivered changing pictures".into(),
+    );
 
     let thumb = perf.stats(Metric::ThumbRtt);
     check(
         thumb.p95 <= MAX_THUMB_RTT_P95_MS,
-        format!("thumb_rtt p95 {:.0} ms <= {MAX_THUMB_RTT_P95_MS:.0} ms", thumb.p95),
+        format!(
+            "thumb_rtt p95 {:.0} ms <= {MAX_THUMB_RTT_P95_MS:.0} ms",
+            thumb.p95
+        ),
     );
     let take = perf.stats(Metric::TakeToEvent);
     check(
         take.count > 0 && take.p95 <= MAX_TAKE_EVENT_P95_MS,
-        format!("take_to_event p95 {:.0} ms <= {MAX_TAKE_EVENT_P95_MS:.0} ms ({} samples)", take.p95, take.count),
+        format!(
+            "take_to_event p95 {:.0} ms <= {MAX_TAKE_EVENT_P95_MS:.0} ms ({} samples)",
+            take.p95, take.count
+        ),
     );
     let stall = perf.stats(Metric::UiFrame);
     check(
         stall.max <= MAX_UI_STALL_MS,
-        format!("client loop stall max {:.0} ms <= {MAX_UI_STALL_MS:.0} ms", stall.max),
+        format!(
+            "client loop stall max {:.0} ms <= {MAX_UI_STALL_MS:.0} ms",
+            stall.max
+        ),
     );
     let latency = perf.stats(Metric::PipelineLatency);
     check(
         latency.max <= MAX_PIPELINE_LATENCY_MS,
-        format!("pipeline latency max {:.0} ms <= {MAX_PIPELINE_LATENCY_MS:.0} ms", latency.max),
+        format!(
+            "pipeline latency max {:.0} ms <= {MAX_PIPELINE_LATENCY_MS:.0} ms",
+            latency.max
+        ),
     );
     let startup = probes
         .iter()

@@ -10,27 +10,14 @@ use tokio::time::{sleep, Duration};
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 
 use crate::perf::Perf;
-use crate::state::AppMessage;
 
-pub fn connect(
-    url: String,
-    tx: Sender<(u64, AppMessage)>,
-    ctx: egui::Context,
-    session: u64,
-    perf: Arc<Perf>,
-) {
+pub fn connect(url: String, tx: Sender<StromEvent>, perf: Arc<Perf>) {
     tokio::spawn(async move {
-        connection_loop(url, tx, ctx, session, perf).await;
+        connection_loop(url, tx, perf).await;
     });
 }
 
-async fn connection_loop(
-    url: String,
-    tx: Sender<(u64, AppMessage)>,
-    ctx: egui::Context,
-    session: u64,
-    perf: Arc<Perf>,
-) {
+async fn connection_loop(url: String, tx: Sender<StromEvent>, perf: Arc<Perf>) {
     let mut attempt: u32 = 1;
 
     loop {
@@ -43,17 +30,17 @@ async fn connection_loop(
 
                 while let Some(msg_result) = ws_stream.next().await {
                     match msg_result {
-                        Ok(Message::Text(text)) => match serde_json::from_str::<StromEvent>(&text)
-                        {
-                            Ok(event) => {
-                                perf.ws_event();
-                                let _ = tx.send((session, AppMessage::Event(event)));
-                                ctx.request_repaint();
+                        Ok(Message::Text(text)) => {
+                            match serde_json::from_str::<StromEvent>(&text) {
+                                Ok(event) => {
+                                    perf.ws_event();
+                                    let _ = tx.send(event);
+                                }
+                                Err(err) => {
+                                    tracing::warn!("Failed to parse WS event: {err}");
+                                }
                             }
-                            Err(err) => {
-                                tracing::warn!("Failed to parse WS event: {err}");
-                            }
-                        },
+                        }
                         Ok(Message::Close(_)) => {
                             tracing::info!("WebSocket closed by server");
                             break;

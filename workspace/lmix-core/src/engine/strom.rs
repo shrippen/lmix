@@ -97,6 +97,17 @@ impl StromEngine {
         self
     }
 
+    /// GStreamer version strom runs on (`/api/version`).
+    async fn gstreamer_version(&self) -> Option<String> {
+        #[derive(serde::Deserialize)]
+        struct Version {
+            gstreamer_version: String,
+        }
+        let resp = self.http.get(self.url("/version")).send().await.ok()?;
+        let version: Version = check(resp).await.ok()?.json().await.ok()?;
+        Some(version.gstreamer_version)
+    }
+
     fn url(&self, path: &str) -> String {
         format!("{}/api{}", self.base_url, path)
     }
@@ -420,7 +431,10 @@ impl Engine for StromEngine {
             Command::SetSlot {
                 slot,
                 source: Some(source),
-            } => self.put_flow(&flows::slot_flow(*slot, source)).await,
+            } => {
+                self.put_flow(&flows::slot_flow(*slot, source, self.backend))
+                    .await
+            }
             Command::SetSlot { slot, source: None } => self.drop_flow(flows::slot_id(*slot)).await,
             Command::Preview { slot } => self.select_preview(*slot).await,
             Command::Program {
@@ -470,7 +484,9 @@ impl Engine for StromEngine {
                 "live socket path longer than {MAX_SOCKET_PATH} bytes, choose a shorter --live-dir: {path}"
             )));
         }
-        self.put_flow(&flows::live_flow(picture, path, self.backend))
+        let sink =
+            flows::FdSink::for_gstreamer(&self.gstreamer_version().await.unwrap_or_default());
+        self.put_flow(&flows::live_flow(picture, path, self.backend, sink))
             .await?;
         self.wait_playing(id).await?;
         Ok(socket)

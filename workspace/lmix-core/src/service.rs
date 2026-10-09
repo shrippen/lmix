@@ -20,7 +20,7 @@ use lmix_types::{
     OutputSpec, OutputStats, OutputStatus, ShowState, SignalLoss,
 };
 use strom_types::FlowId;
-use tokio::sync::{broadcast, Mutex};
+use tokio::sync::{broadcast, Mutex, Notify};
 
 use crate::engine::flows::{output_flow_id, slot_id};
 use crate::engine::meters::{FlowError, FlowFailure};
@@ -66,6 +66,11 @@ pub struct Service {
     /// False until the engine is up and fed the show: changes before that
     /// only touch the show, and `restore` hands the engine all of them.
     engine_ready: AtomicBool,
+    /// Engine process the show was last fed to (`watch_engine`).
+    engine_instance: std::sync::Mutex<Option<String>>,
+    /// A failed command found a new engine process: check now, not at the
+    /// next poll.
+    engine_changed: Notify,
 }
 
 impl Service {
@@ -81,6 +86,8 @@ impl Service {
             failing_back: std::sync::Mutex::new(HashSet::new()),
             output_stats: std::sync::Mutex::new(Vec::new()),
             engine_ready: AtomicBool::new(true),
+            engine_instance: std::sync::Mutex::new(None),
+            engine_changed: Notify::new(),
             autosave,
         })
     }
@@ -214,19 +221,18 @@ impl Service {
     /// the new one the whole show, running outputs included. Runs for the
     /// process life once the engine was first fed.
     pub async fn watch_engine(self: Arc<Self>, slots: usize) {
-        let mut known = self.engine.instance().await;
+        let first = self.engine.instance().await;
+        self.set_instance(first);
         loop {
-            tokio::time::sleep(ENGINE_CHECK).await;
+            tokio::select! {
+                _ = tokio::time::sleep(ENGINE_CHECK) => {}
+                _ = self.engine_changed.notified() => {}
+            }
             let Some(current) = self.engine.instance().await else {
                 continue;
             };
-            match &known {
-                Some(known) if *known == current => continue,
-                None => {
-                    known = Some(current);
-                    continue;
-                }
-                Some(_) => {}
+            if !self.is_new_instance(&current) {
+                continue;
             }
             tracing::warn!("engine restarted, feeding it the show again");
             // Changes until the restore only touch the show.
@@ -238,8 +244,36 @@ impl Service {
             if let Err(e) = self.restore().await {
                 tracing::error!(error = %e, "restoring show to the restarted engine failed");
             }
-            known = Some(current);
+            self.set_instance(Some(current));
         }
+    }
+
+    fn set_instance(&self, instance: Option<String>) {
+        *self.engine_instance.lock().expect("engine instance lock") = instance;
+    }
+
+    /// `current` differs from the engine the show was fed to; the first
+    /// instance seen counts as known.
+    fn is_new_instance(&self, current: &str) -> bool {
+        let mut known = self.engine_instance.lock().expect("engine instance lock");
+        match known.as_deref() {
+            Some(known) => known != current,
+            None => {
+                *known = Some(current.to_string());
+                false
+            }
+        }
+    }
+
+    /// After a failed command: did the engine restart under us? Then the
+    /// show waits for the restore like at start-up (instead of an error in
+    /// the up to `ENGINE_CHECK` before the watcher notices).
+    async fn engine_restarted(&self) -> bool {
+        let Some(current) = self.engine.instance().await else {
+            return false;
+        };
+        let known = self.engine_instance.lock().expect("engine instance lock");
+        known.as_deref().is_some_and(|known| known != current)
     }
 
     /// Outputs still running in the engine after lmix-core restarted count
@@ -560,6 +594,15 @@ impl Service {
             });
         }
 
+        if first_error.is_some() && self.engine_restarted().await {
+            tracing::warn!("engine restarted during an action; it gets the show on restore");
+            self.await_engine();
+            self.engine_changed.notify_one();
+            for command in commands {
+                mark_output(sw, command, &Ok(()));
+            }
+            return Ok(());
+        }
         first_error.map_or(Ok(()), Err)
     }
 
@@ -804,6 +847,30 @@ mod tests {
         );
         service.handle(bars()).await.unwrap();
         assert_eq!(slot_commands(&engine), 3, "and actions run directly after");
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn action_right_after_an_engine_restart_waits_for_restore() {
+        let engine = Arc::new(NullEngine::default());
+        engine.set_instance("first");
+        let service = Service::new(4, engine.clone(), None);
+        tokio::spawn(service.clone().watch_engine(4));
+        tokio::task::yield_now().await;
+
+        // strom restarted; the watcher has not polled yet.
+        engine.set_instance("second");
+        engine.refuse(true);
+        let answer = service.handle(bars()).await;
+
+        assert!(answer.is_ok(), "no 502: {answer:?}");
+        assert_eq!(service.state().await.inputs.len(), 1, "in the show");
+        engine.refuse(false);
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        assert_eq!(
+            slot_commands(&engine),
+            2,
+            "refused once, then fed by the restore at once"
+        );
     }
 
     #[tokio::test]
