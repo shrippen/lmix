@@ -900,3 +900,41 @@ einem Eingang (Start beim ersten Bild) vor den Sink; Kacheln brauchen das
 nicht, `videoscale` schreibt schon in den Speicher des Sinks. Außerdem
 sendet der Live-Sink kein QoS mehr (strom-QoS-Probe: CRITICAL je Bild).
 
+## 2026-10-09 — M4 Schritt 1: Overlays (4.1)
+
+**Entscheidung**: Ein Overlay-Kanal ist eine DSK-Ebene des strom-Mischers
+(über Programm und seinen Übergängen). Der Mischer-Flow bekommt vier
+DSK-Eingänge, jeder über einen eigenen `inter`-Eingang; geht ein Overlay
+auf Sendung, stellt lmix-core dessen `producer-name` auf den Kanal des
+Slots um und blendet die Ebene ein. Damit braucht ein Overlay keinen
+zweiten Slot-Flow und keinen Mischer-Umbau.
+- **4 statt 8 Kanäle**: strom erlaubt höchstens 4 DSK-Ebenen, vMix hat
+  ebenfalls 4. Mehr wären ein strom-Umbau ohne Bedarf.
+- **Blende**: strom-Patch `lmix-dsk-fade` (DSK-Toggle mit `duration_ms`,
+  Alpha mit denselben Keyframes wie Übergänge und FTB). Standard 500 ms.
+- **Zustand**: Overlays stehen in der Show (wie Programm), Neustart und
+  Wiederherstellen setzen sie ohne Blende. Entfernter Input → sein Overlay
+  geht ab. Tally: ein Overlay auf Sendung zählt als Programm (rot).
+- **Console**: Knöpfe 1–4 je Kachel (an/aus für diesen Input), Leiste
+  „Overlays“ unter FTB (frei: Vorschau-Input drauf; belegt: ab).
+- **Offen**: Position und Größe (bildfüllend wie ein Vollbild-Input; PiP
+  mit 4.6); Multiview-Anzeige der Overlays prüfen.
+
+## 2026-10-09 — M4 Schritt 2: T-Bar (4.3)
+
+**Entscheidung**: ohne strom-Patch. Während die T-Bar gezogen wird, setzt
+lmix-core am Programm-Compositor (`vm:mixer`) das Pad des Vorschau-Inputs
+nach vorn (strom-Konstante `TRANSITION_FOREGROUND_ZORDER`, unter den
+Overlay-Ebenen) und seine Deckkraft auf die Position. Bei 1 folgt ein Take
+als Cut: strom setzt dabei alle Pads zurück (Alpha, Lage, Ebene), so dass
+kein Rest der Handmischung bleibt. Zurück auf 0 nimmt das Pad wieder weg.
+Aktion `t_bar { position }` (0–1), Position im Zustand (`t_bar`, nicht in
+der Show-Datei). Die Console schickt Bewegungen höchstens ~30-mal je
+Sekunde; ab 98 % gilt das Loslassen als Ende.
+**Verworfen**: strom-Patch „Übergangsfortschritt setzbar“ (ROADMAP 3b):
+die Übergänge sind dort zeitgesteuerte Keyframes; für eine Blende reicht
+die direkte Deckkraft, und sie kostet keine Änderung an strom.
+**Offen**: andere Effekte als Blende von Hand (Wipe, Slide); Ton während
+des Ziehens (AFV-Inputs kommen erst mit dem Take); Richtungswechsel wie bei
+vMix (Hebel bleibt am Ende stehen).
+

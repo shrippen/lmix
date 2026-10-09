@@ -276,6 +276,15 @@ GPU-Punkte in `HARDWARE-TODO.md`):
 | 4.6 | PiP-/Layer-Editor, Looks/Farbkorrektur-UI | C |
 | 4.7 | Audio: Busse, Solo/PFL, EQ/Dynamik-UI, Delay pro Kanal | C |
 
+Stand:
+
+| # | Stand |
+|---|---|
+| 4.1 | ✅ 4 Overlay-Kanäle (wie vMix; strom-DSK hat höchstens 4) über die DSK-Ebenen des Mischers, Ein-/Ausblenden (strom-Patch `lmix-dsk-fade`), Tally rot, in Show-Datei; Console: Knöpfe 1–4 je Kachel und Overlay-Leiste; ⚠ Position/Größe eines Overlays (PiP) mit 4.6 |
+| 4.3 | ✅ T-Bar: Vorschau wird beim Ziehen über Programm eingeblendet (Mischung), am Ende Take, zurück auf 0 ohne Wirkung; Position im Zustand; Console-Schieber; ⚠ nur Blende (andere Effekte am Ende als Cut), Ton folgt erst beim Take |
+| 4.4 | → M7 (Titel) |
+| 4.5 | → „Später“ (Wiederholung) |
+
 ### M5 — Robustheit (wie geplant)
 
 8-h-Soak, `kill -9` der GUI, CI grün. Zusätzlich: Show mit 16 Inputs,

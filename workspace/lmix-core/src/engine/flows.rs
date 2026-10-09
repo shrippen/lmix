@@ -18,6 +18,7 @@ use strom_types::flow::GStreamerClockType;
 use strom_types::{Flow, FlowId, PropertyValue};
 use uuid::Uuid;
 
+use lmix_types::action::OVERLAY_CHANNELS;
 use lmix_types::input::color_rgb;
 use lmix_types::{DisplayMode, OutputId, OutputSpec, SourceSpec};
 
@@ -56,7 +57,7 @@ const MONITOR_SINK: &str = "monitor_sink";
 pub const AUDIO_MIXER: &str = "mix";
 /// Mixer flow name; a new layout gets a new name, so `start` rebuilds a
 /// running mixer of an older lmix instead of reusing it.
-pub const MIXER_NAME: &str = "lmix mixer 2";
+pub const MIXER_NAME: &str = "lmix mixer 3";
 /// Block id of the vision mixer in the mixer flow.
 pub const MIXER_BLOCK: &str = "vm";
 /// Thumbnail tap on the program output: GUI monitor and picture checks.
@@ -137,7 +138,7 @@ pub fn slot_id(slot: usize) -> FlowId {
 }
 
 /// `inter` channel a slot flow publishes on (see strom `inter.rs`).
-fn slot_channel(slot: usize) -> String {
+pub fn slot_channel(slot: usize) -> String {
     format!("strom_{}_{}", slot_id(slot), SLOT_OUT)
 }
 
@@ -178,6 +179,25 @@ pub fn mixer_flow(slots: usize, backend: MixerBackend, monitor: MonitorOut) -> F
         ));
     }
 
+    // Overlays: one DSK layer each, fed over `inter`. The channel is
+    // pointed at a slot when an overlay goes on; until then it waits on a
+    // channel nobody publishes.
+    for channel in 0..OVERLAY_CHANNELS as usize {
+        let input = overlay_input(channel);
+        flow.blocks.push(block(
+            &input,
+            INTER_INPUT_BLOCK,
+            vec![
+                ("channel", PropertyValue::String(OVERLAY_IDLE.into())),
+                ("max_time", PropertyValue::String(INTER_BUFFER_MS.into())),
+            ],
+        ));
+        flow.links.push(link(
+            format!("{input}:src"),
+            format!("{MIXER_BLOCK}:dsk_in_{channel}"),
+        ));
+    }
+
     let black = black_input(slots);
     flow.elements.push(element(
         "black",
@@ -206,6 +226,10 @@ pub fn mixer_flow(slots: usize, backend: MixerBackend, monitor: MonitorOut) -> F
             (
                 "compositor_preference",
                 PropertyValue::String(backend.property().into()),
+            ),
+            (
+                "num_dsk_inputs",
+                PropertyValue::String(OVERLAY_CHANNELS.to_string()),
             ),
             // Base time 0 (share_timing): output starts at the first frame.
             (
@@ -246,6 +270,14 @@ pub fn mixer_flow(slots: usize, backend: MixerBackend, monitor: MonitorOut) -> F
     ));
     flow
 }
+
+/// Block id of the `inter` input feeding overlay `channel` (0-based).
+pub fn overlay_input(channel: usize) -> String {
+    format!("ovl{channel}")
+}
+
+/// `inter` channel of an idle overlay: nobody publishes it.
+const OVERLAY_IDLE: &str = "lmix_overlay_idle";
 
 /// `inter` channels of program in the mixer flow.
 fn pgm_channel(block: &str) -> String {
@@ -524,7 +556,10 @@ pub fn live_flow(which: LivePicture, socket: &str, backend: MixerBackend, sink: 
             "copy",
             "compositor",
             vec![
-                ("start-time-selection", PropertyValue::String("first".into())),
+                (
+                    "start-time-selection",
+                    PropertyValue::String("first".into()),
+                ),
                 ("background", PropertyValue::String("black".into())),
             ],
         ));

@@ -3,7 +3,7 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::action::{Effect, TransitionSlot};
+use crate::action::{Effect, TransitionSlot, OVERLAY_CHANNELS};
 use crate::input::{Input, InputId};
 use crate::output::{Output, OutputStats};
 
@@ -33,6 +33,12 @@ pub struct ShowState {
     /// Outputs in order (OUT).
     #[serde(default)]
     pub outputs: Vec<Output>,
+    /// What each overlay channel shows, channel 1 first.
+    #[serde(default)]
+    pub overlays: [Option<InputId>; OVERLAY_CHANNELS as usize],
+    /// T-bar position (0 = at rest, below 1 = preview partly mixed in).
+    #[serde(default)]
+    pub t_bar: f32,
 }
 
 /// Current API version (API.10: additive changes within one version).

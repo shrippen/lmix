@@ -18,6 +18,8 @@ KanteCard {
     required property var act
     property bool onProgram: false
     property bool onPreview: false
+    /** What each overlay channel shows (input ids), channel 1 first. */
+    property var overlays: []
     property var peakDb: undefined
     /** Another tile is dragged over this one: it would land here. */
     property bool dropTarget: false
@@ -32,6 +34,10 @@ KanteCard {
     readonly property bool hasPicture: input.source.kind !== "audio_device"
 
     function ref() { return input.number }
+    /** Overlay channels (1-based) this input is on. */
+    readonly property var overlayChannels: overlays
+        .map((id, i) => id === input.id ? i + 1 : 0)
+        .filter(channel => channel > 0)
 
     barColor: onProgram ? KanteStyle.negativeTextColor
         : (onPreview ? KanteStyle.positiveTextColor : "transparent")
@@ -121,9 +127,42 @@ KanteCard {
                 color: tile.barColor
             }
             KanteSectionLabel {
+                visible: tile.overlayChannels.length > 0
+                text: qsTr("OVL %1").arg(tile.overlayChannels.join(" "))
+                color: KanteStyle.negativeTextColor
+            }
+            KanteSectionLabel {
                 visible: tile.input.status !== "online"
                 text: tile.input.status === "offline" ? qsTr("offline") : qsTr("starting")
                 color: tile.input.status === "offline" ? KanteStyle.negativeTextColor : KanteStyle.mutedTextColor
+            }
+        }
+
+        RowLayout {
+            Layout.fillWidth: true
+            visible: tile.hasPicture && tile.overlays.length > 0
+            spacing: Kirigami.Units.smallSpacing
+
+            KanteSectionLabel {
+                text: qsTr("Overlay")
+                color: KanteStyle.mutedTextColor
+            }
+            Repeater {
+                model: tile.overlays.length
+                KanteToolButton {
+                    required property int index
+                    readonly property int channel: index + 1
+                    readonly property bool on: tile.overlays[index] === tile.input.id
+                    text: channel
+                    checkable: true
+                    checked: on
+                    Accessible.name: qsTr("Overlay %1").arg(channel)
+                    QQC2.ToolTip.visible: hovered
+                    QQC2.ToolTip.text: on ? qsTr("Take off overlay %1").arg(channel)
+                        : qsTr("Show on overlay %1").arg(channel)
+                    onClicked: tile.act(on ? { action: "overlay_out", channel: channel }
+                        : { action: "overlay_in", channel: channel, input: tile.ref() })
+                }
             }
         }
 

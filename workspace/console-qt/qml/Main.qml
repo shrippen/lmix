@@ -292,6 +292,7 @@ Kirigami.ApplicationWindow {
                     act: root.act
                     onProgram: root.show !== null && root.show.program === key
                     onPreview: root.show !== null && root.show.preview === key
+                    overlays: root.show && root.show.overlays ? root.show.overlays : []
                     peakDb: root.levels[key]
                     onReplaceRequested: {
                         addInputDialog.replacing = tileDelegate.input

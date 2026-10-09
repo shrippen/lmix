@@ -363,6 +363,32 @@ wait_for 15 is output_state Stream running || fail "stream did not restart"
 act '{"action":"stop_output","output":"Stream"}' >/dev/null
 pass "failover: stream broke, was marked failed and restarted itself"
 
+# --- overlays (4.1): an input above program, tally, take off ---
+act '{"action":"cut_direct","input":"Ball"}' >/dev/null
+act '{"action":"overlay_in","channel":1,"input":"Orange","duration_ms":0}' >/dev/null
+overlay_shown() { picture program "$WORK/ovl.jpg"; [[ $(rgb "$WORK/ovl.jpg" r) -gt 200 ]]; }
+wait_for 4 overlay_shown || fail "overlay 1 not on program"
+orange_number="$(curl -sf "$CORE/state" | jq '.inputs[] | select(.name=="Orange") | .number')"
+[[ "$(curl -sf "$CORE/tally" | jq ".[$((orange_number - 1))]")" == 1 ]] || fail "overlay input has no program tally"
+[[ "$(curl -sf "$CORE/state" | jq -r '.overlays[0] != null')" == true ]] || fail "overlay not in state"
+act '{"action":"overlay_out","channel":1,"duration_ms":500}' >/dev/null
+overlay_gone() { picture program "$WORK/ovl.jpg"; [[ $(rgb "$WORK/ovl.jpg" r) -lt 60 ]]; }
+wait_for 4 overlay_gone || fail "overlay 1 not taken off"
+pass "overlays: input above program, red tally, faded off"
+
+# --- T-bar (4.3): preview mixed in by hand, taken at the end ---
+act '{"action":"cut_direct","input":"Ball"}' >/dev/null
+act '{"action":"preview_input","input":"Orange"}' >/dev/null
+act '{"action":"t_bar","position":0.5}' >/dev/null
+half_mixed() { picture program "$WORK/tbar.jpg"; local r; r=$(rgb "$WORK/tbar.jpg" r); ((r > 80 && r < 200)); }
+wait_for 4 half_mixed || fail "T-bar at half: program red $(rgb "$WORK/tbar.jpg" r), not a mix"
+[[ "$(curl -sf "$CORE/state" | jq '.t_bar')" == 0.5 ]] || fail "T-bar position not in state"
+act '{"action":"t_bar","position":1}' >/dev/null
+[[ "$(curl -sf "$CORE/state" | jq -r '[.inputs[] | select(.name=="Orange") | .id][0] == .program')" == true ]] \
+    || fail "T-bar at the end did not take preview to program"
+wait_for 4 overlay_shown || fail "program not orange after the T-bar take"
+pass "T-bar: preview mixed in by half, taken at the end"
+
 # --- latency (NFA.3): capture-to-program, CPU mixer in a VM ---
 # Budget here is generous (software compositing, no GPU); the real target
 # of two frames is checked on hardware (HARDWARE-TODO).

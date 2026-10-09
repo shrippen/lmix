@@ -85,7 +85,7 @@
   <context>
     <name>InputTile</name>
     <message>
-      <location filename="../qml/InputTile.qml" line="+41" />
+      <location filename="../qml/InputTile.qml" line="+47" />
       <source>Input %1 %2</source>
       <translation>Input %1 %2</translation>
     </message>
@@ -121,6 +121,11 @@
     </message>
     <message>
       <location line="+5" />
+      <source>OVL %1</source>
+      <translation>OVL %1</translation>
+    </message>
+    <message>
+      <location line="+5" />
       <source>offline</source>
       <translation>offline</translation>
     </message>
@@ -130,7 +135,27 @@
       <translation>startet</translation>
     </message>
     <message>
-      <location line="+15" />
+      <location line="+11" />
+      <source>Overlay</source>
+      <translation>Overlay</translation>
+    </message>
+    <message>
+      <location line="+12" />
+      <source>Overlay %1</source>
+      <translation>Overlay %1</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Take off overlay %1</source>
+      <translation>Overlay %1 abnehmen</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Show on overlay %1</source>
+      <translation>Auf Overlay %1 zeigen</translation>
+    </message>
+    <message>
+      <location line="+17" />
       <source>Mute</source>
       <translation>Stumm</translation>
     </message>
@@ -858,7 +883,7 @@
   <context>
     <name>TransitionPanel</name>
     <message>
-      <location filename="../qml/TransitionPanel.qml" line="+32" />
+      <location filename="../qml/TransitionPanel.qml" line="+38" />
       <source>Cut</source>
       <translation>Cut</translation>
     </message>
@@ -878,7 +903,18 @@
       <translation>Dauer</translation>
     </message>
     <message>
-      <location line="+11" />
+      <location line="+12" />
+      <location line="+10" />
+      <source>T-bar</source>
+      <translation>T-Bar</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Pull to mix preview in; at the end it goes to program.</source>
+      <translation>Ziehen blendet die Vorschau ein; am Ende geht sie auf Programm.</translation>
+    </message>
+    <message>
+      <location line="+16" />
       <source>FTB on</source>
       <translation>FTB an</translation>
     </message>
@@ -886,6 +922,31 @@
       <location line="+0" />
       <source>FTB</source>
       <translation>FTB</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Overlays</source>
+      <translation>Overlays</translation>
+    </message>
+    <message>
+      <location line="+19" />
+      <source>Overlay %1: %2, click to take off</source>
+      <translation>Overlay %1: %2, Klick nimmt es ab</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Overlay %1: empty, click to show preview</source>
+      <translation>Overlay %1: leer, Klick zeigt die Vorschau</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Overlay %1 shows %2 %3. Click: take off.</source>
+      <translation>Overlay %1 zeigt %2 %3. Klick: abnehmen.</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Overlay %1 is empty. Click: show the preview input.</source>
+      <translation>Overlay %1 ist leer. Klick: Vorschau-Input zeigen.</translation>
     </message>
   </context>
 </TS>

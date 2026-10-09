@@ -9,7 +9,7 @@
 
 use std::path::Path;
 
-use lmix_types::action::TRANSITION_SLOTS;
+use lmix_types::action::{OVERLAY_CHANNELS, TRANSITION_SLOTS};
 use lmix_types::{
     Effect, InputAudio, InputColor, InputId, OutputId, OutputSource, OutputSpec, SignalLoss,
     SourceSpec, Transition, TransitionSlot,
@@ -49,6 +49,9 @@ pub struct Show {
     /// Outputs; whether they run is not saved.
     #[serde(default)]
     pub outputs: Vec<ShowOutput>,
+    /// What each overlay channel shows, as program is kept too.
+    #[serde(default)]
+    pub overlays: [Option<InputId>; OVERLAY_CHANNELS as usize],
 }
 
 /// One output as saved.
@@ -69,6 +72,7 @@ impl Default for Show {
             program: None,
             transitions: default_transitions(),
             outputs: Vec::new(),
+            overlays: Default::default(),
         }
     }
 }
@@ -191,6 +195,7 @@ mod tests {
             preview: Some(id),
             program: None,
             transitions: default_transitions(),
+            overlays: [None, Some(id), None, None],
             outputs: vec![ShowOutput {
                 id: OutputId::new(),
                 name: "Stream".into(),

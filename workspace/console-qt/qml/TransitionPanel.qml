@@ -6,7 +6,8 @@ import Kante
 
 /**
  * Cut, the four transition buttons (click: take preview; right click:
- * effect and length) and fade to black.
+ * effect and length), fade to black and the overlay channels (click: the
+ * preview input on, or the overlay off).
  */
 ColumnLayout {
     id: panel
@@ -18,6 +19,11 @@ ColumnLayout {
     required property var transitionBySlot
 
     readonly property bool canTake: show !== null && show.preview !== null
+    readonly property var overlays: show && show.overlays ? show.overlays : []
+
+    function inputById(id) {
+        return show ? show.inputs.find(i => i.id === id) || null : null
+    }
     readonly property var effects: Texts.choices("effects", core.choices("effects"))
     readonly property var durations: JSON.parse(core.choices("durations"))
 
@@ -77,11 +83,72 @@ ColumnLayout {
         }
     }
 
+    // T-bar: preview fades in over program while pulled; at the end it is
+    // taken. Moves are sent at most about 30 times a second.
+    KanteSectionLabel {
+        text: qsTr("T-bar")
+        color: KanteStyle.mutedTextColor
+    }
+    QQC2.Slider {
+        id: tBar
+        Layout.fillWidth: true
+        from: 0
+        to: 1
+        enabled: panel.core.connected && panel.canTake
+        value: pressed ? value : (panel.show ? panel.show.t_bar : 0)
+        Accessible.name: qsTr("T-bar")
+        QQC2.ToolTip.visible: hovered
+        QQC2.ToolTip.text: qsTr("Pull to mix preview in; at the end it goes to program.")
+        KanteSliderSkin { control: tBar }
+        onMoved: tBarSend.restart()
+        onPressedChanged: if (!pressed) {
+            tBarSend.stop()
+            panel.act({ action: "t_bar", position: value >= 0.98 ? 1 : value })
+        }
+        Timer {
+            id: tBarSend
+            interval: 33
+            onTriggered: panel.act({ action: "t_bar", position: Math.min(tBar.value, 0.99) })
+        }
+    }
+
     KanteButton {
         Layout.fillWidth: true
         text: panel.show && panel.show.fade_to_black ? qsTr("FTB on") : qsTr("FTB")
         emphasis: panel.show && panel.show.fade_to_black ? KanteButton.Emphasis.Destructive : KanteButton.Emphasis.Normal
         enabled: panel.core.connected
         onClicked: panel.act({ action: "fade_to_black" })
+    }
+
+    KanteSectionLabel {
+        visible: overlayRow.visible
+        text: qsTr("Overlays")
+        color: KanteStyle.mutedTextColor
+    }
+    RowLayout {
+        id: overlayRow
+        Layout.fillWidth: true
+        visible: panel.overlays.length > 0
+        spacing: Kirigami.Units.smallSpacing
+
+        Repeater {
+            model: panel.overlays.length
+            KanteButton {
+                required property int index
+                readonly property int channel: index + 1
+                readonly property var shown: panel.overlays[index] ? panel.inputById(panel.overlays[index]) : null
+                Layout.fillWidth: true
+                text: shown ? channel + "\n" + shown.number : channel
+                emphasis: shown ? KanteButton.Emphasis.Destructive : KanteButton.Emphasis.Normal
+                enabled: panel.core.connected && (shown !== null || panel.canTake)
+                Accessible.name: shown ? qsTr("Overlay %1: %2, click to take off").arg(channel).arg(shown.name)
+                    : qsTr("Overlay %1: empty, click to show preview").arg(channel)
+                QQC2.ToolTip.visible: hovered
+                QQC2.ToolTip.text: shown ? qsTr("Overlay %1 shows %2 %3. Click: take off.").arg(channel).arg(shown.number).arg(shown.name)
+                    : qsTr("Overlay %1 is empty. Click: show the preview input.").arg(channel)
+                onClicked: panel.act(shown ? { action: "overlay_out", channel: channel }
+                    : { action: "overlay_in", channel: channel, input: panel.show.preview })
+            }
+        }
     }
 }

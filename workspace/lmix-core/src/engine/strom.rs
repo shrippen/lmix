@@ -27,7 +27,7 @@ use strom_types::api::{
     TriggerTransitionRequest, UpdateBlockPropertiesRequest, VisionMixerState,
 };
 use strom_types::discovery::DeviceResponse;
-use strom_types::vision_mixer::Source;
+use strom_types::vision_mixer::{Source, TRANSITION_FOREGROUND_ZORDER};
 use strom_types::{Flow, FlowId, PipelineState, PropertyValue};
 use tokio::sync::{broadcast, watch, Mutex};
 
@@ -307,6 +307,72 @@ impl StromEngine {
         Ok(())
     }
 
+    /// T-bar: the preview input's pad on the program compositor comes in
+    /// front (below the overlays) with the bar's position as opacity. The
+    /// take at the end, a cut, sets every pad back (strom resets them on
+    /// each take).
+    async fn t_bar(&self, slot: usize, position: f32) -> Result<(), EngineError> {
+        let path = format!(
+            "/flows/{}/elements/{MIXER_BLOCK}:mixer/pads/sink_{slot}/properties",
+            flows::mixer_id()
+        );
+        let properties = [
+            (
+                "zorder",
+                PropertyValue::UInt(u64::from(TRANSITION_FOREGROUND_ZORDER)),
+            ),
+            ("alpha", PropertyValue::Float(f64::from(position))),
+        ];
+        for (name, value) in properties {
+            let body = serde_json::json!({ "property_name": name, "value": value });
+            let resp = self
+                .http
+                .patch(self.url(&path))
+                .json(&body)
+                .send()
+                .await
+                .map_err(net)?;
+            check(resp).await?;
+        }
+        Ok(())
+    }
+
+    /// Overlay `channel` is DSK layer `channel + 1` of the vision mixer,
+    /// fed by its own `inter` input: point that input at the slot, then
+    /// fade the layer in; off fades it out and leaves the input as is.
+    async fn overlay(
+        &self,
+        channel: usize,
+        slot: Option<usize>,
+        duration_ms: u32,
+    ) -> Result<(), EngineError> {
+        if let Some(slot) = slot {
+            let path = format!(
+                "/flows/{}/elements/{}:intersrc/properties",
+                flows::mixer_id(),
+                flows::overlay_input(channel)
+            );
+            let body = serde_json::json!({
+                "property_name": "producer-name",
+                "value": PropertyValue::String(flows::slot_channel(slot)),
+            });
+            let resp = self
+                .http
+                .patch(self.url(&path))
+                .json(&body)
+                .send()
+                .await
+                .map_err(net)?;
+            check(resp).await?;
+        }
+        let body = serde_json::json!({
+            "dsk": channel + 1,
+            "enabled": slot.is_some(),
+            "duration_ms": duration_ms,
+        });
+        self.mixer_call("dsk", &body).await
+    }
+
     /// Media player control; restart is a seek to 0 plus play.
     async fn transport(&self, slot: usize, transport: Transport) -> Result<(), EngineError> {
         let player = format!(
@@ -462,6 +528,12 @@ impl Engine for StromEngine {
                     .await
             }
             Command::StopOutput { id } => self.drop_flow(flows::output_flow_id(*id)).await,
+            Command::Overlay {
+                channel,
+                slot,
+                duration_ms,
+            } => self.overlay(*channel, *slot, *duration_ms).await,
+            Command::TBar { slot, position } => self.t_bar(*slot, *position).await,
         }
     }
 

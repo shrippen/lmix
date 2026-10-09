@@ -7,7 +7,7 @@
 //!   Action ──► Switcher::apply ──► new state + [Command] ──► engine driver
 //! ```
 
-use lmix_types::action::TRANSITION_SLOTS;
+use lmix_types::action::{OVERLAY_CHANNELS, TRANSITION_SLOTS};
 use lmix_types::input::{color_rgb, REF_PREVIEW, REF_PROGRAM, VOLUME_MAX};
 use lmix_types::state::API_VERSION;
 use lmix_types::{
@@ -50,6 +50,16 @@ pub enum Command {
     },
     /// Stop output `id`; stopping a stopped one is fine.
     StopOutput { id: OutputId },
+    /// Mix `slot` (preview) over program by `position` (0–1), as the
+    /// T-bar stands; 0 hides it again.
+    TBar { slot: usize, position: f32 },
+    /// Show `slot` on overlay `channel` (0-based) or take it off, faded
+    /// over `duration_ms`.
+    Overlay {
+        channel: usize,
+        slot: Option<usize>,
+        duration_ms: u32,
+    },
     /// Play, pause, restart or step the media player of `slot`.
     Transport { slot: usize, transport: Transport },
     /// Set the audio channel of `slot`: linear gain (1.0 = unity) and
@@ -96,6 +106,8 @@ pub struct Switcher {
     slots: usize,
     path: Option<String>,
     fade_to_black: bool,
+    /// T-bar position while it is pulled; runtime only.
+    t_bar: f32,
     status: HashMap<InputId, InputStatus>,
     /// Audio channel settings the engine has, per slot.
     mix: HashMap<usize, Mix>,
@@ -114,6 +126,7 @@ impl Switcher {
             slots,
             path: None,
             fade_to_black: false,
+            t_bar: 0.0,
             status: HashMap::new(),
             mix: HashMap::new(),
             listen: HashMap::new(),
@@ -198,6 +211,16 @@ impl Switcher {
                 duration_ms,
             } => self.set_transition(slot, effect, duration_ms),
             Action::FadeToBlack { duration_ms } => Ok(self.toggle_ftb(duration_ms)),
+            Action::TBar { position } => self.t_bar(position),
+            Action::OverlayIn {
+                channel,
+                input,
+                duration_ms,
+            } => self.overlay_in(channel, &input, duration_ms),
+            Action::OverlayOut {
+                channel,
+                duration_ms,
+            } => self.overlay_out(channel, duration_ms),
             Action::NewShow | Action::SaveShow { .. } | Action::OpenShow { .. } => Ok(Vec::new()),
         }
     }
@@ -236,7 +259,22 @@ impl Switcher {
             slot: i.slot,
             mode: i.signal_loss,
         }));
+        commands.extend(self.overlay_commands());
         commands
+    }
+
+    /// Every overlay channel as the engine should have it, without fade.
+    fn overlay_commands(&self) -> Vec<Command> {
+        self.show
+            .overlays
+            .iter()
+            .enumerate()
+            .map(|(channel, input)| Command::Overlay {
+                channel,
+                slot: self.slot_of(*input),
+                duration_ms: 0,
+            })
+            .collect()
     }
 
     /// Solo state of every input with sound, as the engine should have it.
@@ -310,6 +348,8 @@ impl Switcher {
             fade_to_black: self.fade_to_black,
             slots: self.slots,
             outputs: self.outputs_state(),
+            overlays: self.show.overlays,
+            t_bar: self.t_bar,
         }
     }
 
@@ -319,7 +359,8 @@ impl Switcher {
             .inputs
             .iter()
             .map(|i| match Some(i.id) {
-                id if id == self.show.program => 1,
+                // An overlay is on air like program.
+                id if id == self.show.program || self.show.overlays.contains(&id) => 1,
                 id if id == self.show.preview => 2,
                 _ => 0,
             })
@@ -382,6 +423,16 @@ impl Switcher {
             });
         }
         self.status.remove(&removed.id);
+        for (channel, shown) in self.show.overlays.iter_mut().enumerate() {
+            if *shown == Some(removed.id) {
+                *shown = None;
+                commands.push(Command::Overlay {
+                    channel,
+                    slot: None,
+                    duration_ms: 0,
+                });
+            }
+        }
         // ISO outputs of the input end with it.
         for output in self
             .show
@@ -532,6 +583,23 @@ impl Switcher {
         Ok(program_then_preview(Some(to), old_program, Effect::Cut, 0))
     }
 
+    /// T-bar (SWI.3): preview fades in over program as it is pulled; at
+    /// the end it is a take, back at the start nothing happened.
+    fn t_bar(&mut self, position: f32) -> Result<Vec<Command>, ActionError> {
+        if !(0.0..=1.0).contains(&position) {
+            return Err(ActionError::BadTBar);
+        }
+        let slot = self
+            .slot_of(self.show.preview)
+            .ok_or(ActionError::NoPreview)?;
+        if position >= 1.0 {
+            self.t_bar = 0.0;
+            return self.take(Effect::Cut, 0);
+        }
+        self.t_bar = position;
+        Ok(vec![Command::TBar { slot, position }])
+    }
+
     fn transition(&mut self, slot: TransitionSlot) -> Result<Vec<Command>, ActionError> {
         let button = *self.button(slot)?;
         self.take(button.effect, button.duration_ms)
@@ -583,6 +651,38 @@ impl Switcher {
         Ok(vec![Command::SetSignalLoss {
             slot: entry.slot,
             mode,
+        }])
+    }
+
+    // ---- Overlays ----
+
+    fn overlay_in(
+        &mut self,
+        channel: u8,
+        input: &InputRef,
+        duration_ms: u32,
+    ) -> Result<Vec<Command>, ActionError> {
+        let index = overlay_index(channel)?;
+        let entry = &self.show.inputs[self.find(input)?];
+        no_video_check(entry)?;
+        let (id, slot) = (entry.id, entry.slot);
+        self.show.overlays[index] = Some(id);
+        Ok(vec![Command::Overlay {
+            channel: index,
+            slot: Some(slot),
+            duration_ms,
+        }])
+    }
+
+    fn overlay_out(&mut self, channel: u8, duration_ms: u32) -> Result<Vec<Command>, ActionError> {
+        let index = overlay_index(channel)?;
+        if self.show.overlays[index].take().is_none() {
+            return Ok(Vec::new());
+        }
+        Ok(vec![Command::Overlay {
+            channel: index,
+            slot: None,
+            duration_ms,
         }])
     }
 
@@ -974,6 +1074,17 @@ fn check_source(source: &SourceSpec) -> Result<(), ActionError> {
 }
 
 /// Audio inputs have no picture for preview or program.
+/// 0-based index of overlay `channel` (1–4).
+fn overlay_index(channel: u8) -> Result<usize, ActionError> {
+    if !(1..=OVERLAY_CHANNELS).contains(&channel) {
+        return Err(ActionError::BadOverlay {
+            channel,
+            max: OVERLAY_CHANNELS,
+        });
+    }
+    Ok(usize::from(channel - 1))
+}
+
 fn no_video_check(entry: &ShowInput) -> Result<(), ActionError> {
     if entry.source.has_video() {
         return Ok(());
@@ -1161,6 +1272,166 @@ mod tests {
             slot: 1,
             mode: SignalLoss::Black
         }));
+    }
+
+    fn overlay_in(sw: &mut Switcher, channel: u8, input: &str) -> Vec<Command> {
+        sw.apply(Action::OverlayIn {
+            channel,
+            input: named(input),
+            duration_ms: 500,
+        })
+        .unwrap()
+    }
+
+    #[test]
+    fn overlay_goes_on_and_off_with_tally() {
+        let mut sw = two_inputs();
+
+        let cmds = overlay_in(&mut sw, 2, "B");
+
+        assert_eq!(
+            cmds,
+            [Command::Overlay {
+                channel: 1,
+                slot: Some(1),
+                duration_ms: 500
+            }]
+        );
+        let b = sw.state().inputs[1].id;
+        assert_eq!(sw.state().overlays, [None, Some(b), None, None]);
+        assert_eq!(sw.tally(), [0, 1]);
+
+        let cmds = sw
+            .apply(Action::OverlayOut {
+                channel: 2,
+                duration_ms: 0,
+            })
+            .unwrap();
+
+        assert_eq!(
+            cmds,
+            [Command::Overlay {
+                channel: 1,
+                slot: None,
+                duration_ms: 0
+            }]
+        );
+        assert_eq!(sw.tally(), [0, 0]);
+        let again = sw.apply(Action::OverlayOut {
+            channel: 2,
+            duration_ms: 0,
+        });
+        assert_eq!(again, Ok(Vec::new()));
+    }
+
+    #[test]
+    fn overlay_channel_and_source_are_checked() {
+        let mut sw = two_inputs();
+        sw.apply(Action::AddInput {
+            source: SourceSpec::AudioDevice { id: "mic".into() },
+            name: Some("Mic".into()),
+        })
+        .unwrap();
+
+        let bad = sw.apply(Action::OverlayIn {
+            channel: 5,
+            input: named("A"),
+            duration_ms: 0,
+        });
+        let sound_only = sw.apply(Action::OverlayIn {
+            channel: 1,
+            input: named("Mic"),
+            duration_ms: 0,
+        });
+
+        assert_eq!(bad, Err(ActionError::BadOverlay { channel: 5, max: 4 }));
+        assert!(matches!(sound_only, Err(ActionError::NoVideo { .. })));
+    }
+
+    #[test]
+    fn removed_input_leaves_its_overlay_and_restore_keeps_overlays() {
+        let mut sw = two_inputs();
+        overlay_in(&mut sw, 1, "A");
+        overlay_in(&mut sw, 3, "B");
+
+        let restored = sw.restore_commands();
+        assert!(restored.contains(&Command::Overlay {
+            channel: 2,
+            slot: Some(1),
+            duration_ms: 0
+        }));
+        assert!(restored.contains(&Command::Overlay {
+            channel: 1,
+            slot: None,
+            duration_ms: 0
+        }));
+
+        let cmds = sw.apply(Action::RemoveInput { input: named("A") }).unwrap();
+
+        assert!(cmds.contains(&Command::Overlay {
+            channel: 0,
+            slot: None,
+            duration_ms: 0
+        }));
+        assert_eq!(sw.state().overlays[0], None);
+    }
+
+    #[test]
+    fn t_bar_mixes_preview_in_and_takes_at_the_end() {
+        let mut sw = two_inputs();
+        sw.apply(Action::CutDirect { input: named("A") }).unwrap();
+        sw.apply(Action::PreviewInput { input: named("B") })
+            .unwrap();
+
+        let half = sw.apply(Action::TBar { position: 0.5 }).unwrap();
+
+        assert_eq!(
+            half,
+            [Command::TBar {
+                slot: 1,
+                position: 0.5
+            }]
+        );
+        assert_eq!(sw.state().t_bar, 0.5);
+        assert_eq!(sw.tally(), [1, 2], "nothing taken yet");
+
+        let end = sw.apply(Action::TBar { position: 1.0 }).unwrap();
+
+        assert!(matches!(
+            end.first(),
+            Some(Command::Program {
+                slot: Some(1),
+                effect: Effect::Cut,
+                ..
+            })
+        ));
+        assert_eq!(sw.tally(), [2, 1], "preview went to program");
+        assert_eq!(sw.state().t_bar, 0.0);
+    }
+
+    #[test]
+    fn t_bar_back_to_zero_and_bad_positions() {
+        let mut sw = two_inputs();
+        assert_eq!(
+            sw.apply(Action::TBar { position: 0.3 }),
+            Err(ActionError::NoPreview)
+        );
+        sw.apply(Action::PreviewInput { input: named("B") })
+            .unwrap();
+
+        let back = sw.apply(Action::TBar { position: 0.0 }).unwrap();
+
+        assert_eq!(
+            back,
+            [Command::TBar {
+                slot: 1,
+                position: 0.0
+            }]
+        );
+        assert_eq!(
+            sw.apply(Action::TBar { position: 1.5 }),
+            Err(ActionError::BadTBar)
+        );
     }
 
     #[test]
