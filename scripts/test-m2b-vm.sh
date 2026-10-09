@@ -464,6 +464,29 @@ code="$(curl -s -o "$WORK/look.json" -w '%{http_code}' -X POST "$CORE/actions" -
 [[ "$code" != 200 ]] && grep -q "GL mixer" "$WORK/look.json" || fail "look on the CPU mixer: $code $(cat "$WORK/look.json")"
 pass "looks: refused with a reason on the CPU mixer (GL check: scripts/test-looks-gl.sh)"
 
+# --- layouts (4.6): Orange behind, Ball in the top right quarter ---
+act '{"action":"add_layout","name":"Interview","background":"Orange","boxes":[{"rect":{"x":0.5,"y":0.0,"w":0.5,"h":0.5},"input":"Ball","border_px":4}]}' >/dev/null
+act '{"action":"cut_direct","input":"Bars"}' >/dev/null
+act '{"action":"preview_layout","layout":"Interview"}' >/dev/null
+act '{"action":"cut"}' >/dev/null
+layout_id="$(curl -sf "$CORE/state" | jq -r '.layouts[0].id')"
+[[ "$(curl -sf "$CORE/state" | jq -r '.program')" == "$layout_id" ]] || fail "layout not on program"
+on_air() { curl -sf "$CORE/tally" | jq ".[$(($(curl -sf "$CORE/state" | jq ".inputs[] | select(.name==\"$1\") | .number") - 1))]"; }
+[[ "$(on_air Orange)" == 1 && "$(on_air Ball)" == 1 ]] || fail "inputs of the layout on program have no red tally"
+quarter() { convert "$1" -crop "$2" +repage -format '%[fx:int(mean.r*255)]' info:; }
+layout_shown() {
+    picture program "$WORK/layout.jpg"
+    local w h; read -r w h <<<"$(identify -format '%w %h' "$WORK/layout.jpg")"
+    # Bottom left: the orange background; top right: the ball (dark).
+    [[ $(quarter "$WORK/layout.jpg" "$((w / 4))x$((h / 4))+0+$((h * 3 / 4))") -gt 200 ]] \
+        && [[ $(quarter "$WORK/layout.jpg" "$((w / 4))x$((h / 4))+$((w * 5 / 8))+$((h / 8))") -lt 100 ]]
+}
+wait_for 8 layout_shown || fail "layout picture: background and box not where they belong"
+act '{"action":"cut_direct","input":"Ball"}' >/dev/null
+act '{"action":"remove_layout","layout":1}' >/dev/null
+[[ "$(curl -sf "$CORE/state" | jq '.layouts | length')" == 0 ]] || fail "layout not removed"
+pass "layouts: background and box on program, red tally for both inputs, removed"
+
 # --- latency (NFA.3): capture-to-program, CPU mixer in a VM ---
 # Budget here is generous (software compositing, no GPU); the real target
 # of two frames is checked on hardware (HARDWARE-TODO).

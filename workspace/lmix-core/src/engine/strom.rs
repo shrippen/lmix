@@ -28,7 +28,7 @@ use strom_types::api::{
     TriggerTransitionRequest, UpdateBlockPropertiesRequest, VisionMixerState,
 };
 use strom_types::discovery::DeviceResponse;
-use strom_types::vision_mixer::{Source, TRANSITION_FOREGROUND_ZORDER};
+use strom_types::vision_mixer::{NormRect, Source, Zone, ZoneBorder, TRANSITION_FOREGROUND_ZORDER};
 use strom_types::{Flow, FlowId, PipelineState, PropertyValue};
 use tokio::sync::{broadcast, watch, Mutex};
 
@@ -54,10 +54,13 @@ const DEVICE_CATEGORIES: [(&str, DeviceKind); 3] = [
 /// strom's answer to a transition before the pipeline has a position.
 const NOT_RUNNING_YET: &str = "query pipeline position";
 
+/// Frame colour of layout boxes.
+const LAYOUT_BORDER_COLOR: &str = "#FFFFFF";
+
 use super::flows::{self, MixerBackend, MonitorOut, AUDIO_MIXER, MIXER_BLOCK, PGM_TAP, SLOT_TAP};
 use super::meters::{self, EngineLevels, FlowError};
 use super::{Engine, EngineError, LivePicture, Picture};
-use crate::switcher::{Command, AUDIO_RAMP_MS};
+use crate::switcher::{Command, EngineBox, AUDIO_RAMP_MS};
 
 pub struct StromEngine {
     base_url: String,
@@ -206,22 +209,38 @@ impl StromEngine {
         duration_ms: u32,
     ) -> Result<(), EngineError> {
         let to = slot.unwrap_or_else(|| self.black.load(Ordering::Relaxed));
+        self.take_source(Source::Input(to), effect, duration_ms)
+            .await
+    }
+
+    /// Transition from what is on program to `to` (an input or a
+    /// composition). strom takes whatever is in its preview: put `to`
+    /// there first and give the old preview back after.
+    async fn take_source(
+        &self,
+        to: Source,
+        effect: Effect,
+        duration_ms: u32,
+    ) -> Result<(), EngineError> {
         let state = self.mixer_state().await?;
-        let from = state.program_input;
+        let on = |pip: Option<usize>, input: Option<usize>| match pip {
+            Some(pip) => Some(Source::Pip(pip)),
+            None => input.map(Source::Input),
+        };
+        let from = on(state.program_pip, state.program_input);
         if from == Some(to) {
             return Ok(());
         }
-
-        // strom takes whatever is in its preview and ignores `to_input`:
-        // put the target there first and give the old preview back after.
-        let borrowed = state.preview_input.filter(|p| *p != to);
-        if borrowed.is_some() || state.preview_input.is_none() {
-            self.select_preview(to).await?;
+        let preview = on(state.preview_pip, state.preview_input);
+        let borrowed = preview.filter(|p| *p != to);
+        if borrowed.is_some() || preview.is_none() {
+            self.select_source(to).await?;
         }
 
+        // strom reads the inputs only when no composition is involved.
         let body = TriggerTransitionRequest {
-            from_input: from.unwrap_or(to),
-            to_input: to,
+            from_input: state.program_input.unwrap_or(0),
+            to_input: to.as_input().unwrap_or(0),
             transition_type: wire_name(effect).into(),
             duration_ms: u64::from(duration_ms),
         };
@@ -242,16 +261,58 @@ impl StromEngine {
         }
 
         match borrowed {
-            Some(preview) => self.select_preview(preview).await,
+            Some(preview) => self.select_source(preview).await,
             None => Ok(()),
         }
     }
 
     async fn select_preview(&self, input: usize) -> Result<(), EngineError> {
-        let body = SelectPreviewRequest {
-            source: Source::Input(input),
-        };
+        self.select_source(Source::Input(input)).await
+    }
+
+    async fn select_source(&self, source: Source) -> Result<(), EngineError> {
+        let body = SelectPreviewRequest { source };
         self.mixer_call("preview", &body).await
+    }
+
+    /// A layout as strom composition `pip`: the background, then one
+    /// zone per box (bottom to top) holding just its input.
+    async fn set_layout(
+        &self,
+        pip: usize,
+        background: Option<usize>,
+        boxes: &[EngineBox],
+    ) -> Result<(), EngineError> {
+        let zones: Vec<Zone> = boxes
+            .iter()
+            .map(|b| Zone {
+                rect: Some(NormRect {
+                    x: b.rect.x,
+                    y: b.rect.y,
+                    w: b.rect.w,
+                    h: b.rect.h,
+                }),
+                capacity: Some(1),
+                sources: vec![b.slot],
+                border: (b.border_px > 0).then(|| ZoneBorder {
+                    color: LAYOUT_BORDER_COLOR.into(),
+                    width: f32::from(b.border_px),
+                }),
+            })
+            .collect();
+        let body = serde_json::json!({ "bg": background, "zones": zones, "transforms": {} });
+        let path = format!(
+            "/flows/{}/blocks/{MIXER_BLOCK}/pip/{pip}",
+            flows::mixer_id()
+        );
+        let resp = self
+            .http
+            .put(self.url(&path))
+            .json(&body)
+            .send()
+            .await
+            .map_err(net)?;
+        check(resp).await.map(|_| ())
     }
 
     /// Fader and mute of a slot's audio mixer channel. strom maps both to
@@ -614,6 +675,20 @@ impl Engine for StromEngine {
             Command::TBar { slot, position } => self.t_bar(*slot, *position).await,
             Command::SetStrip { slot, strip } => self.set_strip(*slot, strip).await,
             Command::Stinger { slot, on } => self.stinger(*slot, *on).await,
+            Command::SetLayout {
+                pip,
+                background,
+                boxes,
+            } => self.set_layout(*pip, *background, boxes).await,
+            Command::PreviewLayout { pip } => self.select_source(Source::Pip(*pip)).await,
+            Command::ProgramLayout {
+                pip,
+                effect,
+                duration_ms,
+            } => {
+                self.take_source(Source::Pip(*pip), *effect, *duration_ms)
+                    .await
+            }
             Command::SetLook { slot, look } => self.set_look(*slot, look).await,
             // The service waits; nothing for the engine to do.
             Command::Wait { .. } => Ok(()),

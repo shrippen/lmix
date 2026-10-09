@@ -9,18 +9,19 @@
 
 use lmix_types::action::{aux_index, OVERLAY_CHANNELS, TRANSITION_SLOTS};
 use lmix_types::input::{color_rgb, AUX_BUSES, REF_PREVIEW, REF_PROGRAM, VOLUME_MAX};
+use lmix_types::layout::{BORDER_MAX_PX, LAYOUTS, LAYOUT_BOXES};
 use lmix_types::state::API_VERSION;
 use lmix_types::{
-    Action, ActionError, AuxBus, ChannelStrip, Effect, Ingest, Input, InputColor, InputId,
-    InputRef, InputStatus, Listen, Look, Output, OutputId, OutputRef, OutputSource, OutputSpec,
-    OutputStatus, ShowState, SignalLoss, SourceSpec, Stinger, StingerSpec, Transition,
-    TransitionSlot, Transport,
+    Action, ActionError, AuxBus, BoxRect, BoxSpec, ChannelStrip, Effect, Ingest, Input, InputColor,
+    InputId, InputRef, InputStatus, Layout, LayoutBox, Listen, Look, Output, OutputId, OutputRef,
+    OutputSource, OutputSpec, OutputStatus, ShowState, SignalLoss, SourceSpec, Stinger,
+    StingerSpec, Transition, TransitionSlot, Transport,
 };
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 use uuid::Uuid;
 
-use crate::show::{Show, ShowInput, ShowOutput};
+use crate::show::{Show, ShowInput, ShowLayout, ShowOutput};
 
 /// What the engine has to do after an action.
 #[derive(Clone, Debug, PartialEq)]
@@ -56,6 +57,20 @@ pub enum Command {
     StopOutput { id: OutputId },
     /// Channel strip of the audio mixer channel of `slot`.
     SetStrip { slot: usize, strip: ChannelStrip },
+    /// Layout on engine composition `pip`: background slot and boxes.
+    SetLayout {
+        pip: usize,
+        background: Option<usize>,
+        boxes: Vec<EngineBox>,
+    },
+    /// Show composition `pip` in preview.
+    PreviewLayout { pip: usize },
+    /// Bring composition `pip` on program.
+    ProgramLayout {
+        pip: usize,
+        effect: Effect,
+        duration_ms: u32,
+    },
     /// Colour correction of the picture of `slot`.
     SetLook { slot: usize, look: Look },
     /// Stinger clip of `slot` on the stinger layer from its start; off:
@@ -88,6 +103,22 @@ pub enum Command {
         muted: bool,
         ramp_ms: u32,
     },
+}
+
+/// A layout box as the engine places it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct EngineBox {
+    pub rect: BoxRect,
+    pub slot: usize,
+    pub border_px: u8,
+}
+
+/// What stands in preview or program: an input's slot or a layout's
+/// composition.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Bus {
+    Slot(usize),
+    Layout(usize),
 }
 
 /// What an output flow subscribes to.
@@ -247,6 +278,18 @@ impl Switcher {
             Action::PreviewInput { input } => self.preview(&input),
             Action::Cut => self.take(Effect::Cut, 0),
             Action::CutDirect { input } => self.cut_direct(&input),
+            Action::AddLayout {
+                name,
+                background,
+                boxes,
+            } => self.add_layout(name, background, boxes),
+            Action::SetLayout {
+                layout,
+                background,
+                boxes,
+            } => self.set_layout(&layout, background, boxes),
+            Action::RemoveLayout { layout } => self.remove_layout(&layout),
+            Action::PreviewLayout { layout } => self.preview_layout(&layout),
             Action::Transition { slot } => self.transition(slot),
             Action::SetTransition {
                 slot,
@@ -281,6 +324,11 @@ impl Switcher {
             })
             .collect();
 
+        commands.extend(self.show.layouts.iter().map(|l| Command::SetLayout {
+            pip: l.pip,
+            background: None,
+            boxes: Vec::new(),
+        }));
         commands.extend(self.clear_listen());
         commands.extend(self.stop_all_outputs());
         self.show = show;
@@ -372,14 +420,23 @@ impl Switcher {
             })
             .collect();
 
-        commands.push(Command::Program {
-            slot: self.slot_of(self.show.program),
-            effect: Effect::Cut,
-            duration_ms: 0,
-        });
-        if let Some(slot) = self.slot_of(self.show.preview) {
-            commands.push(Command::Preview { slot });
+        // Compositions are lost with the engine; set them before use.
+        commands.extend(self.show.layouts.iter().map(|l| self.layout_command(l)));
+        let program = self.bus_of(self.show.program);
+        commands.extend(bus_commands(program, None, Effect::Cut, 0));
+        if program.is_none() {
+            commands.push(Command::Program {
+                slot: None,
+                effect: Effect::Cut,
+                duration_ms: 0,
+            });
         }
+        commands.extend(bus_commands(
+            None,
+            self.bus_of(self.show.preview),
+            Effect::Cut,
+            0,
+        ));
         commands
     }
 
@@ -422,6 +479,19 @@ impl Switcher {
             t_bar: self.t_bar,
             aux_buses: self.show.aux_buses,
             looks_available: self.looks_available,
+            layouts: self
+                .show
+                .layouts
+                .iter()
+                .enumerate()
+                .map(|(i, l)| Layout {
+                    id: l.id,
+                    number: i as u32 + 1,
+                    name: l.name.clone(),
+                    background: l.background,
+                    boxes: l.boxes.clone(),
+                })
+                .collect(),
         }
     }
 
@@ -431,9 +501,14 @@ impl Switcher {
             .inputs
             .iter()
             .map(|i| match Some(i.id) {
-                // An overlay is on air like program.
-                id if id == self.show.program || self.show.overlays.contains(&id) => 1,
-                id if id == self.show.preview => 2,
+                // An overlay or a layout's input is on air like program.
+                id if id == self.show.program
+                    || self.show.overlays.contains(&id)
+                    || self.in_layout(self.show.program, i.id) =>
+                {
+                    1
+                }
+                id if id == self.show.preview || self.in_layout(self.show.preview, i.id) => 2,
                 _ => 0,
             })
             .collect()
@@ -516,6 +591,21 @@ impl Switcher {
             });
         }
         self.status.remove(&removed.id);
+        // Layouts lose the input and are set anew.
+        let mut changed = Vec::new();
+        for (index, layout) in self.show.layouts.iter_mut().enumerate() {
+            let before = (layout.background, layout.boxes.len());
+            if layout.background == Some(removed.id) {
+                layout.background = None;
+            }
+            layout.boxes.retain(|b| b.input != removed.id);
+            if before != (layout.background, layout.boxes.len()) {
+                changed.push(index);
+            }
+        }
+        for index in changed {
+            commands.push(self.layout_command(&self.show.layouts[index]));
+        }
         // A button whose stinger clip goes becomes a cut.
         for button in &mut self.show.transitions {
             if button.stinger.is_some_and(|s| s.input == removed.id) {
@@ -661,11 +751,18 @@ impl Switcher {
     fn take(&mut self, effect: Effect, duration_ms: u32) -> Result<Vec<Command>, ActionError> {
         self.check_no_stinger()?;
         let to = self
-            .slot_of(self.show.preview)
+            .bus_of(self.show.preview)
             .ok_or(ActionError::NoPreview)?;
-        let old_program = self.slot_of(self.show.program);
+        let old_program = self.bus_of(self.show.program);
 
         std::mem::swap(&mut self.show.preview, &mut self.show.program);
+        let (Bus::Slot(to), Some(Bus::Slot(_)) | None) = (to, old_program) else {
+            return Ok(bus_commands(Some(to), old_program, effect, duration_ms));
+        };
+        let old_program = match old_program {
+            Some(Bus::Slot(slot)) => Some(slot),
+            _ => None,
+        };
         Ok(program_then_preview(
             Some(to),
             old_program,
@@ -688,10 +785,15 @@ impl Switcher {
             return Ok(program_then_preview(Some(to), None, Effect::Cut, 0));
         }
 
-        let old_program = self.slot_of(self.show.program);
+        let old_program = self.bus_of(self.show.program);
         self.show.preview = self.show.program;
         self.show.program = Some(id);
-        Ok(program_then_preview(Some(to), old_program, Effect::Cut, 0))
+        Ok(bus_commands(
+            Some(Bus::Slot(to)),
+            old_program,
+            Effect::Cut,
+            0,
+        ))
     }
 
     /// T-bar (SWI.3): preview fades in over program as it is pulled; at
@@ -701,13 +803,20 @@ impl Switcher {
             return Err(ActionError::BadTBar);
         }
         self.check_no_stinger()?;
-        let slot = self
-            .slot_of(self.show.preview)
-            .ok_or(ActionError::NoPreview)?;
         if position >= 1.0 {
             self.t_bar = 0.0;
             return self.take(Effect::Cut, 0);
         }
+        let slot = match self.bus_of(self.show.preview) {
+            Some(Bus::Slot(slot)) => slot,
+            Some(Bus::Layout(_)) => {
+                return Err(ActionError::BadLayout {
+                    reason: "the T-bar mixes inputs only; take a layout with Cut or a transition"
+                        .into(),
+                })
+            }
+            None => return Err(ActionError::NoPreview),
+        };
         self.t_bar = position;
         Ok(vec![Command::TBar { slot, position }])
     }
@@ -745,6 +854,179 @@ impl Switcher {
         self.stinger_until =
             Some(Instant::now() + Duration::from_millis(u64::from(button.duration_ms)));
         Ok(commands)
+    }
+
+    // ---- Layouts ----
+
+    fn add_layout(
+        &mut self,
+        name: Option<String>,
+        background: Option<InputRef>,
+        boxes: Vec<BoxSpec>,
+    ) -> Result<Vec<Command>, ActionError> {
+        let pip = (0..LAYOUTS)
+            .find(|p| !self.show.layouts.iter().any(|l| l.pip == *p))
+            .ok_or(ActionError::LayoutsFull { max: LAYOUTS })?;
+        let (background, boxes) = self.layout_parts(background.as_ref(), &boxes)?;
+        let layout = ShowLayout {
+            id: InputId::new(),
+            name: name.unwrap_or_else(|| format!("Layout {}", self.show.layouts.len() + 1)),
+            pip,
+            background,
+            boxes,
+        };
+        let command = self.layout_command(&layout);
+        self.show.layouts.push(layout);
+        Ok(vec![command])
+    }
+
+    /// A layout on air changes there at once (the engine morphs it).
+    fn set_layout(
+        &mut self,
+        layout: &InputRef,
+        background: Option<InputRef>,
+        boxes: Vec<BoxSpec>,
+    ) -> Result<Vec<Command>, ActionError> {
+        let index = self.find_layout(layout)?;
+        let (background, boxes) = self.layout_parts(background.as_ref(), &boxes)?;
+        let entry = &mut self.show.layouts[index];
+        entry.background = background;
+        entry.boxes = boxes;
+        Ok(vec![self.layout_command(&self.show.layouts[index])])
+    }
+
+    fn remove_layout(&mut self, layout: &InputRef) -> Result<Vec<Command>, ActionError> {
+        let index = self.find_layout(layout)?;
+        let id = self.show.layouts[index].id;
+        if self.show.program == Some(id) {
+            return Err(ActionError::BadLayout {
+                reason: "it is on program; take something else first".into(),
+            });
+        }
+        if self.show.preview == Some(id) {
+            self.show.preview = None;
+        }
+        let removed = self.show.layouts.remove(index);
+        Ok(vec![Command::SetLayout {
+            pip: removed.pip,
+            background: None,
+            boxes: Vec::new(),
+        }])
+    }
+
+    fn preview_layout(&mut self, layout: &InputRef) -> Result<Vec<Command>, ActionError> {
+        let entry = &self.show.layouts[self.find_layout(layout)?];
+        if self.show.program == Some(entry.id) {
+            return Err(ActionError::OnProgram {
+                reference: entry.name.clone(),
+            });
+        }
+        self.show.preview = Some(entry.id);
+        Ok(vec![Command::PreviewLayout { pip: entry.pip }])
+    }
+
+    /// Background and boxes of a layout from an action: inputs with a
+    /// picture, each at most once, boxes inside the picture.
+    fn layout_parts(
+        &self,
+        background: Option<&InputRef>,
+        boxes: &[BoxSpec],
+    ) -> Result<(Option<InputId>, Vec<LayoutBox>), ActionError> {
+        let bad = |reason: String| ActionError::BadLayout { reason };
+        if boxes.len() > LAYOUT_BOXES {
+            return Err(bad(format!("at most {LAYOUT_BOXES} boxes")));
+        }
+        let picture = |input: &InputRef| -> Result<InputId, ActionError> {
+            let entry = &self.show.inputs[self.find(input)?];
+            no_video_check(entry)?;
+            Ok(entry.id)
+        };
+        let background = background.map(picture).transpose()?;
+        let mut used: Vec<InputId> = background.into_iter().collect();
+        let mut parts = Vec::with_capacity(boxes.len());
+        for spec in boxes {
+            let input = picture(&spec.input)?;
+            if used.contains(&input) {
+                return Err(bad("an input can be in a layout only once".into()));
+            }
+            if !spec.rect.is_valid() {
+                return Err(bad("a box lies outside the picture".into()));
+            }
+            if spec.border_px > BORDER_MAX_PX {
+                return Err(bad(format!("frames are at most {BORDER_MAX_PX} px")));
+            }
+            used.push(input);
+            parts.push(LayoutBox {
+                rect: spec.rect,
+                input,
+                border_px: spec.border_px,
+            });
+        }
+        Ok((background, parts))
+    }
+
+    /// The engine composition of a layout, its inputs by slot.
+    fn layout_command(&self, layout: &ShowLayout) -> Command {
+        Command::SetLayout {
+            pip: layout.pip,
+            background: self.slot_of(layout.background),
+            boxes: layout
+                .boxes
+                .iter()
+                .filter_map(|b| {
+                    Some(EngineBox {
+                        rect: b.rect,
+                        slot: self.slot_of(Some(b.input))?,
+                        border_px: b.border_px,
+                    })
+                })
+                .collect(),
+        }
+    }
+
+    /// A layout by number (1-based), id or name.
+    fn find_layout(&self, layout: &InputRef) -> Result<usize, ActionError> {
+        let index = match layout {
+            InputRef::Number(n) => (*n as usize)
+                .checked_sub(1)
+                .filter(|i| *i < self.show.layouts.len()),
+            InputRef::Text(text) => self
+                .show
+                .layouts
+                .iter()
+                .position(|l| l.id.to_string() == *text)
+                .or_else(|| self.show.layouts.iter().position(|l| l.name == *text)),
+        };
+        index.ok_or_else(|| ActionError::UnknownLayout {
+            reference: match layout {
+                InputRef::Number(n) => n.to_string(),
+                InputRef::Text(t) => format!("\"{t}\""),
+            },
+        })
+    }
+
+    /// Slot of an input or composition of a layout.
+    fn bus_of(&self, id: Option<InputId>) -> Option<Bus> {
+        let id = id?;
+        if let Some(slot) = self.slot_of(Some(id)) {
+            return Some(Bus::Slot(slot));
+        }
+        self.show
+            .layouts
+            .iter()
+            .find(|l| l.id == id)
+            .map(|l| Bus::Layout(l.pip))
+    }
+
+    /// Whether layout `layout` (if it is one) shows `input`.
+    fn in_layout(&self, layout: Option<InputId>, input: InputId) -> bool {
+        self.show
+            .layouts
+            .iter()
+            .find(|l| Some(l.id) == layout)
+            .is_some_and(|l| {
+                l.background == Some(input) || l.boxes.iter().any(|b| b.input == input)
+            })
     }
 
     fn check_no_stinger(&self) -> Result<(), ActionError> {
@@ -1354,6 +1636,35 @@ impl Switcher {
 
 /// Program change, then the new preview (if any). Preview comes second:
 /// the engine refuses a preview that is still on program.
+/// Program and preview as commands, inputs or layouts.
+fn bus_commands(
+    program: Option<Bus>,
+    preview: Option<Bus>,
+    effect: Effect,
+    duration_ms: u32,
+) -> Vec<Command> {
+    let mut commands = Vec::new();
+    match program {
+        Some(Bus::Slot(slot)) => commands.push(Command::Program {
+            slot: Some(slot),
+            effect,
+            duration_ms,
+        }),
+        Some(Bus::Layout(pip)) => commands.push(Command::ProgramLayout {
+            pip,
+            effect,
+            duration_ms,
+        }),
+        None => {}
+    }
+    match preview {
+        Some(Bus::Slot(slot)) => commands.push(Command::Preview { slot }),
+        Some(Bus::Layout(pip)) => commands.push(Command::PreviewLayout { pip }),
+        None => {}
+    }
+    commands
+}
+
 fn program_then_preview(
     program: Option<usize>,
     preview: Option<usize>,
@@ -2160,6 +2471,164 @@ mod tests {
             slot: 0,
             look: Look::default()
         }));
+    }
+
+    const TOP_RIGHT: BoxRect = BoxRect {
+        x: 0.5,
+        y: 0.0,
+        w: 0.5,
+        h: 0.5,
+    };
+
+    /// A, B; layout 1 = A behind, B top right; A on program.
+    fn with_layout() -> Switcher {
+        let mut sw = two_inputs();
+        sw.apply(Action::CutDirect { input: named("A") }).unwrap();
+        let cmds = sw
+            .apply(Action::AddLayout {
+                name: Some("Interview".into()),
+                background: Some(named("A")),
+                boxes: vec![BoxSpec {
+                    rect: TOP_RIGHT,
+                    input: named("B"),
+                    border_px: 4,
+                }],
+            })
+            .unwrap();
+        assert_eq!(
+            cmds,
+            [Command::SetLayout {
+                pip: 0,
+                background: Some(0),
+                boxes: vec![EngineBox {
+                    rect: TOP_RIGHT,
+                    slot: 1,
+                    border_px: 4
+                }]
+            }]
+        );
+        sw
+    }
+
+    #[test]
+    fn a_layout_goes_through_preview_to_program() {
+        let mut sw = with_layout();
+        let layout = sw.state().layouts[0].id;
+
+        let cmds = sw
+            .apply(Action::PreviewLayout {
+                layout: InputRef::Number(1),
+            })
+            .unwrap();
+        assert_eq!(cmds, [Command::PreviewLayout { pip: 0 }]);
+        assert_eq!(sw.tally(), [1, 2], "A on air, B only in the layout");
+
+        let cmds = sw.apply(Action::Cut).unwrap();
+        assert_eq!(
+            cmds[..2],
+            [
+                Command::ProgramLayout {
+                    pip: 0,
+                    effect: Effect::Cut,
+                    duration_ms: 0
+                },
+                Command::Preview { slot: 0 },
+            ]
+        );
+        assert_eq!(sw.state().program, Some(layout));
+        assert_eq!(sw.tally(), [1, 1], "both inputs of the layout on air");
+
+        // Restore sets the composition before it goes on program.
+        let restore = sw.restore_commands();
+        let set = restore
+            .iter()
+            .position(|c| matches!(c, Command::SetLayout { pip: 0, .. }))
+            .unwrap();
+        let program = restore
+            .iter()
+            .position(|c| matches!(c, Command::ProgramLayout { pip: 0, .. }))
+            .unwrap();
+        assert!(set < program);
+
+        assert!(matches!(
+            sw.apply(Action::RemoveLayout {
+                layout: InputRef::Number(1)
+            }),
+            Err(ActionError::BadLayout { .. })
+        ));
+    }
+
+    #[test]
+    fn the_t_bar_mixes_inputs_only() {
+        let mut sw = with_layout();
+        sw.apply(Action::PreviewLayout {
+            layout: InputRef::Text("Interview".into()),
+        })
+        .unwrap();
+
+        assert!(matches!(
+            sw.apply(Action::TBar { position: 0.5 }),
+            Err(ActionError::BadLayout { .. })
+        ));
+    }
+
+    #[test]
+    fn layouts_are_checked() {
+        let mut sw = with_layout();
+        let spec = |input: &str, rect| BoxSpec {
+            rect,
+            input: named(input),
+            border_px: 0,
+        };
+        let outside = BoxRect {
+            x: 0.8,
+            ..TOP_RIGHT
+        };
+
+        for boxes in [
+            vec![spec("A", TOP_RIGHT)],
+            vec![spec("B", outside)],
+            vec![spec("B", TOP_RIGHT), spec("B", TOP_RIGHT)],
+        ] {
+            assert!(matches!(
+                sw.apply(Action::SetLayout {
+                    layout: InputRef::Number(1),
+                    background: Some(named("A")),
+                    boxes,
+                }),
+                Err(ActionError::BadLayout { .. })
+            ));
+        }
+        for _ in 1..LAYOUTS {
+            sw.apply(Action::AddLayout {
+                name: None,
+                background: None,
+                boxes: Vec::new(),
+            })
+            .unwrap();
+        }
+        assert_eq!(
+            sw.apply(Action::AddLayout {
+                name: None,
+                background: None,
+                boxes: Vec::new(),
+            }),
+            Err(ActionError::LayoutsFull { max: LAYOUTS })
+        );
+    }
+
+    #[test]
+    fn a_removed_input_leaves_its_layouts() {
+        let mut sw = with_layout();
+
+        let cmds = sw.apply(Action::RemoveInput { input: named("B") }).unwrap();
+
+        assert!(cmds.contains(&Command::SetLayout {
+            pip: 0,
+            background: Some(0),
+            boxes: Vec::new()
+        }));
+        assert!(sw.state().layouts[0].boxes.is_empty());
     }
 
     #[test]

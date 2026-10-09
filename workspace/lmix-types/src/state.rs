@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::action::{Effect, TransitionSlot, OVERLAY_CHANNELS};
 use crate::input::{AuxBus, Input, InputId, AUX_BUSES};
+use crate::layout::Layout;
 use crate::output::{Output, OutputStats};
 
 /// One transition button.
@@ -57,6 +58,9 @@ pub struct ShowState {
     /// Whether the engine can apply looks (the GL mixer can).
     #[serde(default)]
     pub looks_available: bool,
+    /// Layouts; `preview` and `program` may name one.
+    #[serde(default)]
+    pub layouts: Vec<Layout>,
 }
 
 /// Current API version (API.10: additive changes within one version).

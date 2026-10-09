@@ -12,8 +12,8 @@ use std::path::Path;
 use lmix_types::action::{OVERLAY_CHANNELS, TRANSITION_SLOTS};
 use lmix_types::input::AUX_BUSES;
 use lmix_types::{
-    AuxBus, ChannelStrip, Effect, InputAudio, InputColor, InputId, Look, OutputId, OutputSource,
-    OutputSpec, SignalLoss, SourceSpec, Transition, TransitionSlot,
+    AuxBus, ChannelStrip, Effect, InputAudio, InputColor, InputId, LayoutBox, Look, OutputId,
+    OutputSource, OutputSpec, SignalLoss, SourceSpec, Transition, TransitionSlot,
 };
 use serde::{Deserialize, Serialize};
 
@@ -61,6 +61,21 @@ pub struct Show {
     pub overlays: [Option<InputId>; OVERLAY_CHANNELS as usize],
     #[serde(default)]
     pub aux_buses: [AuxBus; AUX_BUSES],
+    #[serde(default)]
+    pub layouts: Vec<ShowLayout>,
+}
+
+/// One layout as saved.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ShowLayout {
+    pub id: InputId,
+    pub name: String,
+    /// Engine composition it lives on (0-based).
+    pub pip: usize,
+    #[serde(default)]
+    pub background: Option<InputId>,
+    #[serde(default)]
+    pub boxes: Vec<LayoutBox>,
 }
 
 /// One output as saved.
@@ -86,6 +101,7 @@ impl Default for Show {
             outputs: Vec::new(),
             overlays: Default::default(),
             aux_buses: Default::default(),
+            layouts: Vec::new(),
         }
     }
 }
@@ -219,6 +235,13 @@ mod tests {
             program: None,
             transitions: default_transitions(),
             overlays: [None, Some(id), None, None],
+            layouts: vec![ShowLayout {
+                id: InputId::new(),
+                name: "Interview".into(),
+                pip: 0,
+                background: Some(id),
+                boxes: Vec::new(),
+            }],
             aux_buses: [
                 AuxBus::default(),
                 AuxBus {

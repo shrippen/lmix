@@ -11,6 +11,7 @@
 
 pub mod action;
 pub mod input;
+pub mod layout;
 pub mod output;
 pub mod state;
 
@@ -20,6 +21,7 @@ pub use input::{
     InputAudio, InputColor, InputId, InputRef, InputStatus, Listen, Look, SignalLoss, SourceSpec,
     TestPattern, Transport,
 };
+pub use layout::{BoxRect, BoxSpec, Layout, LayoutBox};
 pub use output::{
     Container, DisplayMode, Output, OutputId, OutputRef, OutputSource, OutputSpec, OutputStats,
     OutputStatus,

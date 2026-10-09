@@ -113,6 +113,8 @@ fn main() {
                 "qml/AuxBusDialog.qml",
                 "qml/StingerDialog.qml",
                 "qml/LookDialog.qml",
+                "qml/LayoutBar.qml",
+                "qml/LayoutDialog.qml",
                 "qml/OutputBar.qml",
                 "qml/ChoiceMenu.qml",
                 "qml/KeyedModel.qml",
