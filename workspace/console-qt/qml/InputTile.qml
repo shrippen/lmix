@@ -36,6 +36,11 @@ KanteCard {
     barColor: onProgram ? KanteStyle.negativeTextColor
         : (onPreview ? KanteStyle.positiveTextColor : "transparent")
     borderColor: dropTarget ? KanteStyle.focusColor : "transparent"
+
+    Accessible.role: Accessible.Button
+    Accessible.name: qsTr("Input %1 %2").arg(input.number).arg(input.name)
+        + (onProgram ? ", " + qsTr("on program") : (onPreview ? ", " + qsTr("in preview") : ""))
+    Accessible.description: qsTr("Click: preview. Double click: program. Right click: more.")
     opacity: drag.active ? 0.5 : 1
 
     DragHandler {

@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
-# Long run on real hardware (HARDWARE-TODO H.10, H.18, H.22): engine with
-# the GPU mixer, inputs that move, program switched every 30 s, a recording
-# and an SRT stream to a local receiver. Every 5 minutes it measures the
-# latency source → program and reads the link health; at the end it checks
-# that the latency did not grow, the outputs never failed, and that the
-# recording and the received stream cover the whole run without gaps.
+# Long run on real hardware (HARDWARE-TODO H.10, H.18, H.22; LASTENHEFT
+# NFA.7): engine with the GPU mixer, inputs that move, program switched
+# every 30 s, a recording, SRT streams to local receivers and an ISO
+# recording of input 1. Every 5 minutes it measures the latency source →
+# program, the link health and strom's memory; at the end it checks that
+# latency and memory did not grow, the outputs never failed, and that the
+# recordings and the received streams cover the whole run without gaps.
 #
-#   scripts/soak-hardware.sh                 # 60 min, CUDA mixer
+#   scripts/soak-hardware.sh                 # 60 min, CUDA mixer, 8 inputs
+#   MINUTES=480 INPUTS=16 STREAMS=2 ISO=1 scripts/soak-hardware.sh   # NFA.7
 #   MINUTES=10 MIXER=gl scripts/soak-hardware.sh
-#   KEEP_WORK=1 …                            # keep logs, recording, stream
+#   KEEP_WORK=1 …                            # keep logs, recordings, streams
 #
 # Needs: strom (scripts/fetch-strom.sh), jq, ffprobe, gst-launch-1.0 with
 # srtsrc. Report: $WORK/report.txt (path printed at the end).
@@ -17,6 +19,8 @@ set -euo pipefail
 MINUTES="${MINUTES:-60}"
 MIXER="${MIXER:-cuda}"
 INPUTS="${INPUTS:-8}"
+STREAMS="${STREAMS:-1}"
+ISO="${ISO:-0}"
 EVERY_S=300
 STROM_PORT=8599
 CORE_PORT=8699
@@ -53,7 +57,7 @@ STROM_BIN="$("$ROOT/scripts/fetch-strom.sh")"
 (cd "$ROOT/workspace/lmix-core" && cargo build --release >/dev/null 2>&1)
 CORE_BIN="${CARGO_TARGET_DIR:-$ROOT/workspace/lmix-core/target}/release/lmix-core"
 
-log "soak: ${MINUTES} min, mixer ${MIXER}, ${INPUTS} inputs, work ${WORK}"
+log "soak: ${MINUTES} min, mixer ${MIXER}, ${INPUTS} inputs, ${STREAMS} streams, ISO ${ISO}, work ${WORK}"
 (cd "$WORK" && exec "$STROM_BIN" --host 127.0.0.1 --port "$STROM_PORT" --no-auto-restart \
     --data-dir "$WORK/strom-data" >"$WORK/strom.log" 2>&1) &
 STROM_PID=$!
@@ -74,22 +78,39 @@ online="$(curl -sf "$CORE/state" | jq '[.inputs[] | select(.status=="online")] |
 act '{"action":"cut_direct","input":1}'
 
 mkdir -p "$WORK/rec"
+OUTPUTS=(Rec)
 act "{\"action\":\"add_output\",\"spec\":{\"kind\":\"record\",\"folder\":\"$WORK/rec\",\"container\":\"mkv\"},\"name\":\"Rec\"}"
-act "{\"action\":\"add_output\",\"spec\":{\"kind\":\"srt\",\"uri\":\"srt://:${SRT_PORT}?mode=listener\"},\"name\":\"Stream\"}"
-act '{"action":"start_output","output":"Rec"}'
-act '{"action":"start_output","output":"Stream"}'
+if [[ "$ISO" == 1 ]]; then
+    mkdir -p "$WORK/iso"
+    first="$(curl -sf "$CORE/state" | jq -r '.inputs[0].id')"
+    act "{\"action\":\"add_output\",\"spec\":{\"kind\":\"record\",\"folder\":\"$WORK/iso\",\"container\":\"mkv\"},\"source\":{\"from\":\"input\",\"input\":\"$first\"},\"name\":\"ISO\"}"
+    OUTPUTS+=(ISO)
+fi
+for n in $(seq 1 "$STREAMS"); do
+    act "{\"action\":\"add_output\",\"spec\":{\"kind\":\"srt\",\"uri\":\"srt://:$((SRT_PORT + n))?mode=listener\"},\"name\":\"Stream $n\"}"
+    OUTPUTS+=("Stream $n")
+done
+for name in "${OUTPUTS[@]}"; do
+    act "{\"action\":\"start_output\",\"output\":\"$name\"}"
+done
 sleep 2
-# Receiver: the stream as it arrives, checked with ffprobe at the end.
-gst-launch-1.0 -q srtsrc "uri=srt://127.0.0.1:${SRT_PORT}?mode=caller" ! \
-    filesink location="$WORK/received.ts" >"$WORK/receiver.log" 2>&1 &
-RECEIVER_PID=$!
-PIDS+=("$RECEIVER_PID")
+# Receivers: each stream as it arrives, checked with ffprobe at the end.
+RECEIVERS=()
+for n in $(seq 1 "$STREAMS"); do
+    gst-launch-1.0 -q srtsrc "uri=srt://127.0.0.1:$((SRT_PORT + n))?mode=caller" ! \
+        filesink location="$WORK/received-$n.ts" >"$WORK/receiver-$n.log" 2>&1 &
+    RECEIVERS+=($!)
+    PIDS+=($!)
+done
 START=$(date +%s)
 END=$((START + MINUTES * 60))
 
 cpu_ticks() { awk '{print $14+$15}' "/proc/$1/stat"; }
 TK=$(getconf CLK_TCK)
 medians=()
+rss_at_10=""
+rss_last=""
+rss_mb() { awk '/VmRSS/ { printf "%d", $2 / 1024 }' "/proc/$1/status"; }
 measure() {
     local now
     now=$(date +%s)
@@ -101,10 +122,14 @@ measure() {
     median="$(jq -r '.median_ms // "null"' <<<"$latency")"
     p95="$(jq -r '.p95_ms // "null"' <<<"$latency")"
     stats="$(curl -sf "$CORE/outputs/stats" || echo '[]')"
-    link="$(jq -r '.[0] | "\(.kbps) kbit/s, lost \(.packets_lost), dropped \(.packets_dropped), rtt \(.rtt_ms)"' <<<"$stats" 2>/dev/null || echo -)"
+    link="$(jq -r 'map("\(.kbps) kbit/s lost \(.packets_lost) dropped \(.packets_dropped)") | join("; ")' <<<"$stats" 2>/dev/null || echo -)"
     states="$(curl -sf "$CORE/state" | jq -r '[.outputs[] | "\(.name)=\(.status.state)"] | join(" ")')"
     gpu="$(nvidia-smi --query-gpu=utilization.gpu,memory.used --format=csv,noheader 2>/dev/null | tr -d ' ' || echo -)"
-    log "t=$(((now - START) / 60))min latency median ${median} ms p95 ${p95} ms; strom cpu ${cpu}%; gpu ${gpu}; ${states}; srt ${link}"
+    rss_last="$(rss_mb "$STROM_PID")"
+    if [[ -z "$rss_at_10" ]] && ((now - START >= 600)); then
+        rss_at_10="$rss_last"
+    fi
+    log "t=$(((now - START) / 60))min latency median ${median} ms p95 ${p95} ms; strom cpu ${cpu}% rss ${rss_last} MB; gpu ${gpu}; ${states}; srt ${link}"
     if [[ "$median" != null ]]; then
         medians+=("$median")
     fi
@@ -129,10 +154,20 @@ done
 measure
 ELAPSED=$(($(date +%s) - START))
 
-act '{"action":"stop_output","output":"Rec"}'
-act '{"action":"stop_output","output":"Stream"}'
+for name in "${OUTPUTS[@]}"; do
+    act "{\"action\":\"stop_output\",\"output\":\"$name\"}"
+done
 sleep 5
-kill "$RECEIVER_PID" 2>/dev/null || true
+for pid in "${RECEIVERS[@]}"; do kill "$pid" 2>/dev/null || true; done
+
+# strom's memory after warm-up (10 min) against the end.
+if [[ -n "$rss_at_10" ]]; then
+    if ((rss_last <= rss_at_10 * 125 / 100)); then
+        pass "strom memory steady: ${rss_at_10} MB at 10 min, ${rss_last} MB at the end"
+    else
+        fail "strom memory grew: ${rss_at_10} MB at 10 min, ${rss_last} MB at the end"
+    fi
+fi
 
 # Latency: no growth over the run.
 if ((${#medians[@]} >= 2)); then
@@ -154,17 +189,26 @@ probe_frames() {
     ffprobe -v error -select_streams v:0 -count_packets -show_entries stream=nb_read_packets \
         -of csv=p=0 "$1" 2>/dev/null | head -1
 }
-rec="$(find "$WORK/rec" -type f | head -1)"
-if [[ -n "$rec" ]]; then
-    frames="$(probe_frames "$rec")"
-    ((${frames:-0} >= expect)) && pass "recording: ${frames} frames for ${ELAPSED} s ($(du -h "$rec" | cut -f1))" \
-        || fail "recording short: ${frames:-0} frames, expected ≥ ${expect}"
-else
-    fail "no recording file"
+check_file() {
+    local what="$1" file="$2" frames
+    if [[ -z "$file" || ! -s "$file" ]]; then
+        fail "$what: no file"
+        return
+    fi
+    frames="$(probe_frames "$file" | tr -cd 0-9)"
+    if ((${frames:-0} >= expect)); then
+        pass "$what: ${frames} frames for ${ELAPSED} s ($(du -h "$file" | cut -f1))"
+    else
+        fail "$what short: ${frames:-0} frames, expected ≥ ${expect}"
+    fi
+}
+check_file recording "$(find "$WORK/rec" -type f | head -1)"
+if [[ "$ISO" == 1 ]]; then
+    check_file "ISO recording" "$(find "$WORK/iso" -type f | head -1)"
 fi
-frames="$(probe_frames "$WORK/received.ts")"
-((${frames:-0} >= expect)) && pass "SRT received: ${frames} frames for ${ELAPSED} s" \
-    || fail "SRT received short: ${frames:-0} frames, expected ≥ ${expect}"
+for n in $(seq 1 "$STREAMS"); do
+    check_file "SRT $n received" "$WORK/received-$n.ts"
+done
 
 grep -q CRITICAL "$WORK/strom.log" && fail "GStreamer CRITICALs in strom.log" || pass "no GStreamer CRITICALs"
 [[ "$FAILED" == 0 ]] && log "soak passed" || log "soak FAILED (work kept: $WORK)"

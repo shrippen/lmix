@@ -748,3 +748,21 @@ Einstellungen); `--style` gilt für einen Lauf. Inputs per Drag & Drop
 umsortieren (`move_input`). Der Vorschau-Monitor liest den Input in
 voller Größe (`?size=full`, eigener Flow je Slot, nur auf Abruf), die
 Kacheln weiter 640×360.
+
+## 2026-10-09 — Hardware-Läufe auf RTX 3090 (H.10, H.18, H.22)
+
+**Messung** (`scripts/soak-hardware.sh`, 60 min, CUDA-Mischer, 8 Inputs,
+Programmwechsel alle 30 s, MKV-Aufnahme und SRT an lokalen Empfänger):
+Latenz Quelle → PGM 56–66 ms (einmal 78 ms), kein Anstieg; Aufnahme
+108 800 Bilder in 3624 s (lückenlos), SRT 108 737 Bilder empfangen, kein
+Paketverlust, strom 90–125 % eines Kerns, GPU 4–7 %, keine CRITICALs.
+CPU-Mischer zum Vergleich: 88 ms.
+
+**Befund GL-Mischer** (`--mixer gl`, auf derselben NVIDIA-Karte): mit
+`gl_download` laufen Aufnahme (MKV und TS), Bildschirm und Live-Socket
+(RGBA), Latenz 56–67 ms. Der **SRT-Ausgang sendet aber kein Video**: nur
+Ton (~200 kbit/s), Audio-Queue im Ausgangs-Flow voll (2 s), der Muxer
+wartet auf Video. Mit CUDA derselbe Flow fehlerfrei. Nachstellen: Stack mit
+`--mixer gl`, Input `ball`, SRT-Ausgang starten, `srtsrc ! filesink`, dann
+`ffmpeg -i x.ts -map 0:v -f null -` → 0 Bilder. Vermutlich im strom-Block
+`mpegtssrt_output` (dynamischer Parser) bei RGBA-Quelle; offen.

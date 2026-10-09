@@ -23,6 +23,9 @@ KanteProgressBar {
         { value: Math.max(0, level - yellowTop), color: KanteStyle.negativeTextColor }
     ]
 
+    Accessible.role: Accessible.ProgressBar
+    Accessible.name: QQC2.ToolTip.text
+
     HoverHandler { id: hover }
     QQC2.ToolTip.visible: hover.hovered
     QQC2.ToolTip.text: peakDb === undefined ? qsTr("No sound measured")

@@ -333,6 +333,8 @@ Kirigami.ApplicationWindow {
         Layout.fillHeight: true
         Layout.preferredWidth: 1
         barColor: tally
+        Accessible.role: Accessible.Graphic
+        Accessible.name: label + (detail ? ": " + detail : "")
 
         ColumnLayout {
             anchors.fill: parent
