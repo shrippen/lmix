@@ -52,5 +52,5 @@ enabled: !(/\&[^\&]/.test(control.text))
 - [ ] egui-Console entfernen: Client-Funktionen sind gleichauf (`docs/GUI-SHELL.md`, „Parität“). Vorher Selbsttest als eigenes kopfloses Binary herauslösen und VM-Test/Screenshots auf die Qt-Console umstellen.
 - [ ] strom-Speicher wächst ~32 MB/h (H.24, DECISIONS): Ursache eingrenzen.
 - [ ] GL-Mischer: SRT-Ausgang ohne Video (Fix in strom, DECISIONS „Hardware-Läufe“).
-- [ ] Aktion in den ersten 2 s nach Engine-Neustart antwortet 502.
+- [x] Aktion in den ersten 2 s nach Engine-Neustart antwortet 502 (2026-10-09: neue Engine erkannt, Aktion geht in die Show, Restore sofort).
 - [ ] Konstantes Bildalter 54 ms bei einigen Kacheln klären.

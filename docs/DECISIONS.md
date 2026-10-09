@@ -808,3 +808,13 @@ Konfiguration und baut die Show über die API. Screenshots über
 Xvfb, dunkles Farbschema). Der Demo-Modus liegt nur in `demo/`, in keinem
 Crate; ein Release-Build muss `demo/` ausschließen und das prüfen.
 
+## 2026-10-09 — Aktion während eines Engine-Neustarts
+
+**Befund**: Zwischen Neustart von strom und der nächsten Abfrage (bis
+2 s) scheiterte eine Aktion mit 502, weil der neuen Engine der Mischer
+fehlt. **Entscheidung**: Scheitert ein Engine-Kommando, fragt lmix-core
+sofort die Prozess-Kennung ab. Ist sie neu, gilt die Aktion wie beim
+Start nur für die Show (Antwort OK), und der Watcher spielt die Show
+sofort ein statt nach der nächsten Abfrage. Eine Engine, die gar nicht
+antwortet, bleibt ein Fehler (502): dann weiß lmix-core nicht, ob sie
+wiederkommt.
