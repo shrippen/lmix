@@ -5,8 +5,11 @@ name: pr-agent
 # A comment of the owner runs it again: /review, /improve, /ask "…".
 #
 # Needs the secret PR_AGENT_LLM_KEY and the variable PR_AGENT_MODEL (a
-# LiteLLM model name, e.g. gpt-5.6, gemini/gemini-3.5-pro). Comments come
-# from the Actions bot; the secret PR_AGENT_GITEA_TOKEN sets an own user.
+# LiteLLM model name, e.g. gpt-5.6, gemini/gemini-3.5-pro, or through
+# OpenRouter openrouter/<vendor>/<model>). For a model PR-Agent does not
+# know, the variable PR_AGENT_MODEL_TOKENS gives its context size.
+# Comments come from the Actions bot; the secret PR_AGENT_GITEA_TOKEN sets
+# an own user.
 # Settings: .gitea/pr-agent/config.toml.
 on:
   pull_request:
@@ -44,6 +47,7 @@ jobs:
           PR_URL: ${{ github.server_url }}/${{ github.repository }}/pulls/${{ github.event.pull_request.number || github.event.issue.number }}
           COMMAND: ${{ github.event.comment.body || '/review' }}
           MODEL: ${{ vars.PR_AGENT_MODEL }}
+          MODEL_TOKENS: ${{ vars.PR_AGENT_MODEL_TOKENS }}
           LLM_KEY: ${{ secrets.PR_AGENT_LLM_KEY }}
           GITEA_URL: ${{ github.server_url }}
           GITEA_TOKEN: ${{ secrets.PR_AGENT_GITEA_TOKEN || github.token }}

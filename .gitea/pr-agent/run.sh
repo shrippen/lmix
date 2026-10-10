@@ -23,6 +23,12 @@ fi
 # LiteLLM picks the key by the model's provider.
 export CONFIG__MODEL="$MODEL"
 export OPENAI__KEY="$LLM_KEY" ANTHROPIC__KEY="$LLM_KEY" GOOGLE_AI_STUDIO__GEMINI_API_KEY="$LLM_KEY"
+export OPENROUTER__KEY="$LLM_KEY"
+
+# Context size of a model PR-Agent does not know (most openrouter/… names).
+if [[ -n "${MODEL_TOKENS:-}" ]]; then
+    export CONFIG__CUSTOM_MODEL_MAX_TOKENS="$MODEL_TOKENS"
+fi
 export GITEA__URL="$GITEA_URL" GITEA__PERSONAL_ACCESS_TOKEN="$GITEA_TOKEN"
 
 # Settings beyond the defaults: config.toml.
