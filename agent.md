@@ -70,3 +70,7 @@ Rule 7: Use the body to explain what and why vs. how. Assume the code explains t
 - Fehlt Kante für das gewählte GUI-Toolkit (z. B. egui), wird die Anbindung
   zuerst in Kante gebaut (aus `tokens/palette.json` generiert), nicht in lmix.
 - Monitore und Bildflächen bleiben in allen Stilen dunkel (Farbbeurteilung).
+
+## Repository rule
+
+- PR-Agent (`.gitea/workflows/pr-agent.yml`) reviews every PR before it is merged. Wait for its comment on the PR's latest commit; after further pushes, ask for a new one with a `/review` comment. Fix or answer each finding in the PR, then merge. Without a review (the run skipped for lack of `PR_AGENT_LLM_KEY` or `PR_AGENT_MODEL`, or it failed), do not merge: ask the owner.
