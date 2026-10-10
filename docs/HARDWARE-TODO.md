@@ -6,7 +6,7 @@ automatisch bei jeder Arbeit, die es betrifft. Erledigtes wird mit Datum und
 Messwert abgehakt, Messwerte gehen nach `LATENCY.md`.
 
 Hardware: **NV** = NVIDIA-Host (RTX 3090), **AMD**, **INTEL**,
-**CAP** = Capture-Karte/Kamera, **NET** = zweiter Rechner im LAN.
+**CAP** = Capture-Karte/Kamera, **NET** = zweiter Rechner im LAN, **MIDI** = MIDI-Controller, **KDE** = Desktop mit KDE Plasma.
 
 | # | Was | Hardware | Herkunft | Stand |
 |---|---|---|---|---|
@@ -38,5 +38,7 @@ Hardware: **NV** = NVIDIA-Host (RTX 3090), **AMD**, **INTEL**,
 | H.26 | Aux-Busse mit echtem Rückweg: Aux 1 als In-Ear-Mix eines Moderators (hört sich auch stumm), Aux 2 als Mix-Minus per SRT an eine Gegenstelle ohne Echo, Latenz des Aux-Ausgangs | NET | M4 4.7 | offen |
 | H.27 | Stinger auf CUDA- und GL-Mischer: Alpha des Clips bleibt erhalten (Programm rund um den Clip sichtbar), Cut-Punkt bildgenau, kein Ruckeln beim Start des Clips; ProRes 4444 und WebM/VP9 mit Alpha | NV | M4 4.2 | offen |
 | H.28 | Looks auf dem GL-Mischer (AMD/Intel oder NVIDIA mit `--mixer gl`): Kamera mit warmem/kaltem Weißabgleich angleichen, Regler ruckelfrei, Last je Input; Entscheidung, ob CUDA Looks braucht | NV | M4 4.6 | offen |
-| H.29 | Layouts auf CUDA- und GL-Mischer: Boxen und Rahmen am richtigen Platz, Inhalt sofort nach dem Start (strom-Patch `lmix-live-underlays`), Latenz unverändert, Last mit 4 Layouts à 4 Boxen | NV | M4 4.6 | offen |
+| H.29 | Layouts auf CUDA- und GL-Mischer: Boxen, Rahmen und Zuschnitt am richtigen Platz, Inhalt sofort nach dem Start (strom-Patch `lmix-live-underlays`), Latenz unverändert, Last mit 4 Layouts à 4 Boxen | NV | M4 4.6 | offen |
 | H.30 | Headless-Betrieb mit systemd-Units auf einer Maschine ohne Anmeldung (`loginctl enable-linger`): Start nach Neustart, Show geladen, Ausgänge laufen; Companion/Lichtpult per OSC und Tally-Box per TCP im LAN | NV, NET | M6/M8 | offen |
+| H.31 | MIDI mit echtem Controller (z. B. Akai APC, Korg nanoKONTROL) über `/dev/snd/midiC*D*`: Pads lösen Kurzbefehle aus, Fader bewegt die T-Bar ohne Ruckeln, Abziehen und Wiederanstecken | MIDI | AUT.4 | offen |
+| H.32 | Globale Tasten unter KDE Plasma (Wayland): Bestätigungsdialog, Tasten wirken mit einem Spiel im Vollbild vorn, Änderung der Tasten in den Systemeinstellungen | KDE | AUT.12 | offen |

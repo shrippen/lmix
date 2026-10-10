@@ -1156,3 +1156,46 @@ Start, Textprotokoll, OSC, Metriken.
 **Offen**: Metriken von strom (Drops, Encoder, Speicher) durchreichen;
 Units auf einer echten Maschine ohne Anmeldung (H.30).
 
+## 2026-10-10 — Offene Punkte ohne Hardware: Layouts, Metriken, MIDI, globale Tasten
+
+**Layout-Boxen frei** (4.6): Der Layout-Dialog zeigt eine 16:9-Fläche.
+Boxen zieht man an ihren Platz, die Ecke ändert die Größe (16:9, mit
+Umschalt frei), Pfeiltasten verschieben (mit Umschalt: Größe), Raster 1 %.
+Beim Ziehen bewegt sich nur das Element; die Box ändert sich beim
+Loslassen, denn ein neues `boxes` baut die Delegates neu und bräche das
+Ziehen ab. Die festen Plätze bleiben als Schnellwahl, bis zu 8 Boxen.
+**Zuschnitt** je Box (`crop`: Anteil links/oben/rechts/unten, mindestens
+5 % bleiben sichtbar) geht an strom als `transforms` der Quelle. strom
+passt den Ausschnitt mit seinem Seitenverhältnis in die Box ein
+(Ränder schwarz, wenn die Formen nicht passen). VM-Test: rechte Hälfte
+von Orange in einer Vollbild-Box, linker Rand schwarz.
+**Metriken der Engine** (OPS.3): lmix-core liest `SystemStats` und
+`QoSStats` aus dem Ereignisstrom von strom mit: CPU, Speicher, GPU-Last,
+-Speicher, Encoder/Decoder der Maschine; QoS je Flow (späte Puffer,
+Meldungen „fällt zurück“, letzter Anteil), beschriftet als Mischer, Input
+oder Ausgang. strom-Patch `lmix-process-memory` (strom-PR #8):
+`SystemStats.process_memory`, der eigene Speicher von strom, damit ein
+Leck (H.24) von anderem Verbrauch zu trennen ist. Geprüft: 263 MB in der VM.
+**MIDI** (AUT.4): lmix-core liest rohe Bytes aus Gerätedateien
+(`--midi /dev/snd/midiC1D0`, mehrere mit Komma), ohne ALSA-Bibliothek;
+fehlt das Gerät, versucht es alle 2 s neu. Der Parser kennt Running
+Status und überspringt SysEx und Echtzeit-Bytes. Ein Kurzbefehl kann eine
+Note oder einen Regler tragen (Kanal fest oder beliebig); er läuft bei
+Note an bzw. wenn ein Regler über 64 steigt. `set_midi_tbar` legt einen
+Regler auf die T-Bar (0–127 → 0–1). Bindungen sind eindeutig. Jede
+Nachricht geht als `Event::Midi` an die Clients (Textprotokoll: Thema
+`MIDI`), so lernt die Console: Knopf „No MIDI“ im Kurzbefehl-Editor und
+„T-bar from MIDI“ in der Liste. Geprüft mit einer FIFO statt Gerät
+(Headless-Test, Console unter Xvfb). Rückmeldung an Controller (LEDs)
+fehlt.
+**Globale Tasten** (AUT.12): Die Console bindet die Tasten der
+Kurzbefehle über das Portal `org.freedesktop.portal.GlobalShortcuts`
+(KDE Plasma, GNOME 48+, Hyprland; unter X11 ohne Portal nicht). Der
+Desktop fragt einmal und meldet Drücke, auch wenn ein Spiel vorne ist.
+Einstellung der Console („Keys also work when the Console is not in
+front“), der Dialog zeigt den Stand. Bei jeder Änderung wird die Sitzung
+geschlossen und neu gebunden. Geprüft gegen ein nachgebautes Portal
+(`workspace/tools/fake-portal`, `scripts/test-global-keys.sh`).
+**Offen**: Bewegung zwischen Layouts; MIDI-Rückmeldung; globale Tasten
+am echten KDE prüfen (H.32), MIDI mit echtem Controller (H.31).
+
