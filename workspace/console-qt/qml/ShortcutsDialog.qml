@@ -16,6 +16,11 @@ KanteDialog {
     required property var shortcuts
     /** The show's T-bar controller binding, or `null`. */
     property var midiTbar: null
+    /** Keys also work outside the Console (a Console setting). */
+    property bool globalKeys: false
+    /** `Core.globalKeys`: "", "on:<count>" or "off:<reason>". */
+    property string globalStatus: ""
+    signal globalKeysToggled(bool on)
     signal editRequested(var shortcut)
 
     title: qsTr("Shortcuts")
@@ -78,6 +83,26 @@ KanteDialog {
                     text: qsTr("Remove")
                     onClicked: dialog.act({ action: "remove_shortcut", target: entry.modelData.number })
                 }
+            }
+        }
+
+        RowLayout {
+            Layout.fillWidth: true
+            QQC2.CheckBox {
+                id: globalBox
+                text: qsTr("Keys also work when the Console is not in front")
+                checked: dialog.globalKeys
+                onToggled: dialog.globalKeysToggled(checked)
+                KanteCheckSkin { control: globalBox }
+            }
+            QQC2.Label {
+                Layout.fillWidth: true
+                elide: Text.ElideRight
+                color: dialog.globalStatus.startsWith("off:") ? KanteStyle.negativeTextColor : KanteStyle.mutedTextColor
+                text: !dialog.globalKeys ? ""
+                    : dialog.globalStatus.startsWith("on:") ? qsTr("Bound by the desktop: %1").arg(dialog.globalStatus.slice(3))
+                    : dialog.globalStatus.startsWith("off:") ? qsTr("Not available: %1").arg(dialog.globalStatus.slice(4))
+                    : qsTr("Asking the desktop…")
             }
         }
 

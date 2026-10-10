@@ -50,7 +50,21 @@ pub mod qobject {
         /// Last latency measurement: lmix `Latency` as JSON, or empty.
         #[qproperty(QString, latency)]
         #[qproperty(bool, measuring)]
+        /// Global shortcuts: "" off, "on:<count>" bound, "off:<reason>"
+        /// when the desktop has no portal or refused.
+        #[qproperty(QString, global_keys, cxx_name = "globalKeys")]
         type Core = super::CoreRust;
+
+        /// A global shortcut was pressed: the lmix shortcut id.
+        #[qsignal]
+        #[cxx_name = "globalShortcut"]
+        fn global_shortcut(self: Pin<&mut Core>, id: QString);
+
+        /// Bind these shortcuts globally (JSON list of `{id, label, key}`);
+        /// an empty list unbinds.
+        #[qinvokable]
+        #[cxx_name = "setGlobalShortcuts"]
+        fn set_global_shortcuts(self: Pin<&mut Core>, json: &QString);
 
         /// A note or controller from a MIDI controller at lmix-core: lmix
         /// `MidiMessage` as JSON (to learn a binding).
@@ -151,6 +165,9 @@ pub struct CoreRust {
     recent: QString,
     latency: QString,
     measuring: bool,
+    global_keys: QString,
+    /// Feeds the global shortcut binder; started on first use.
+    global: Option<tokio::sync::watch::Sender<Vec<crate::portal::Bind>>>,
     /// Keyed by the item's address.
     live: HashMap<usize, Live>,
     next_generation: u64,
@@ -321,6 +338,48 @@ impl qobject::Core {
                 core.set_measuring(false);
             });
         });
+    }
+
+    fn set_global_shortcuts(mut self: Pin<&mut Self>, json: &QString) {
+        #[derive(serde::Deserialize)]
+        struct Entry {
+            id: String,
+            label: String,
+            key: String,
+        }
+        let binds: Vec<crate::portal::Bind> = serde_json::from_str::<Vec<Entry>>(&json.to_string())
+            .unwrap_or_default()
+            .into_iter()
+            .map(|e| crate::portal::Bind {
+                id: e.id,
+                label: e.label,
+                key: e.key,
+            })
+            .collect();
+        if let Some(sender) = &self.rust().global {
+            sender.send_if_modified(|now| {
+                let changed = *now != binds;
+                *now = binds;
+                changed
+            });
+            return;
+        }
+        if binds.is_empty() {
+            return;
+        }
+        let (sender, receiver) = tokio::sync::watch::channel(binds);
+        let pressed = self.qt_thread();
+        let status = self.qt_thread();
+        config::runtime().spawn(crate::portal::run(
+            receiver,
+            move |id| {
+                let _ = pressed.queue(move |core| core.global_shortcut(QString::from(&id)));
+            },
+            move |text| {
+                let _ = status.queue(move |core| core.set_global_keys(QString::from(&text)));
+            },
+        ));
+        self.as_mut().rust_mut().global = Some(sender);
     }
 
     fn choices(&self, list: &QString) -> QString {
