@@ -513,8 +513,8 @@ impl Service {
         }
     }
 
-    /// Fire `clip_end` triggers as the media players report their
-    /// position; forever.
+    /// Fire `clip_end` triggers and note clip lengths as the media players
+    /// report their position; forever.
     pub async fn watch_players(self: Arc<Self>) {
         let mut reports = self.engine.players();
         let mut watch = crate::clips::ClipWatch::default();
@@ -525,15 +525,17 @@ impl Service {
                 Err(broadcast::error::RecvError::Closed) => return,
             };
             let change = watch.update(report);
-            if change == crate::clips::ClipChange::default() {
-                continue;
-            }
             let fired = {
-                let sw = self.switcher.lock().await;
-                (0..sw.slots())
+                let mut sw = self.switcher.lock().await;
+                let Some(slot) = (0..sw.slots())
                     .find(|slot| crate::engine::flows::slot_id(*slot) == report.flow)
-                    .map(|slot| sw.clip_triggers(slot, &change))
-                    .unwrap_or_default()
+                else {
+                    continue;
+                };
+                if report.duration_ms > 0 && sw.set_clip_length(slot, report.duration_ms) {
+                    self.publish(&sw);
+                }
+                sw.clip_triggers(slot, &change)
             };
             for (delay_ms, actions) in fired {
                 self.run_triggered(delay_ms, actions);

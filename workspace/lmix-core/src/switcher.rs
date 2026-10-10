@@ -241,6 +241,8 @@ pub struct Switcher {
     ingest_base: Option<String>,
     /// Output states; runtime only.
     output_status: HashMap<OutputId, OutputStatus>,
+    /// Length of the item each player plays, by slot; runtime only.
+    clip_ms: HashMap<usize, u64>,
 }
 
 impl Switcher {
@@ -260,6 +262,7 @@ impl Switcher {
             mix: HashMap::new(),
             listen: HashMap::new(),
             ingest_base: None,
+            clip_ms: HashMap::new(),
             output_status: HashMap::new(),
         }
     }
@@ -628,6 +631,11 @@ impl Switcher {
                 look: input.look,
                 triggers: input.triggers.clone(),
                 ingest: self.ingest_of(&input.source),
+                clip_ms: input
+                    .source
+                    .has_transport()
+                    .then(|| self.clip_ms.get(&input.slot).copied())
+                    .flatten(),
             })
             .collect();
 
@@ -1097,6 +1105,14 @@ impl Switcher {
         }
         self.show.inputs[index].triggers = triggers;
         Ok(Vec::new())
+    }
+
+    /// Note the length of what the player in `slot` plays; true when it
+    /// changed by more than a frame or two (clients hear of it).
+    pub fn set_clip_length(&mut self, slot: usize, ms: u64) -> bool {
+        const SAME_MS: u64 = 50;
+        let old = self.clip_ms.insert(slot, ms);
+        old.is_none_or(|old| old.abs_diff(ms) > SAME_MS)
     }
 
     /// `clip_end` triggers of the input in `slot` that `change` fires, as
