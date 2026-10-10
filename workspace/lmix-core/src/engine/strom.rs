@@ -22,6 +22,7 @@ use reqwest::StatusCode;
 use serde::Serialize;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 use strom_types::api::{
     FadeToBlackRequest, SelectPreviewRequest, SrtRole, SrtStats, SrtStatsResponse,
@@ -58,7 +59,7 @@ const NOT_RUNNING_YET: &str = "query pipeline position";
 const LAYOUT_BORDER_COLOR: &str = "#FFFFFF";
 
 use super::flows::{self, MixerBackend, MonitorOut, AUDIO_MIXER, MIXER_BLOCK, PGM_TAP, SLOT_TAP};
-use super::meters::{self, EngineLevels, FlowError};
+use super::meters::{self, EngineHealth, EngineLevels, FlowError};
 use super::{Engine, EngineError, LivePicture, Picture};
 use crate::switcher::{Command, EngineBox, AUDIO_RAMP_MS};
 
@@ -71,6 +72,7 @@ pub struct StromEngine {
     black: AtomicUsize,
     levels: watch::Sender<EngineLevels>,
     errors: broadcast::Sender<FlowError>,
+    health: Arc<std::sync::Mutex<EngineHealth>>,
     /// The meter reader runs once, from the first `start`.
     metering: AtomicBool,
     /// Directory of the live picture sockets (see [`Engine::live`]).
@@ -89,6 +91,7 @@ impl StromEngine {
             black: AtomicUsize::new(0),
             levels: watch::Sender::default(),
             errors: broadcast::channel(ERROR_BUFFER).0,
+            health: Arc::default(),
             metering: AtomicBool::new(false),
             live_dir: default_live_dir(),
             live_setup: Mutex::new(()),
@@ -617,6 +620,7 @@ impl Engine for StromEngine {
                 AUDIO_MIXER,
                 self.levels.clone(),
                 self.errors.clone(),
+                self.health.clone(),
             ));
         }
 
@@ -766,6 +770,10 @@ impl Engine for StromEngine {
 
     fn levels(&self) -> watch::Receiver<EngineLevels> {
         self.levels.subscribe()
+    }
+
+    fn health(&self) -> EngineHealth {
+        self.health.lock().expect("health lock").clone()
     }
 
     fn flow_errors(&self) -> broadcast::Receiver<FlowError> {

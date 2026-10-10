@@ -87,6 +87,12 @@ pub trait Engine: Send + Sync {
         Err(EngineError::NoPictures)
     }
 
+    /// Machine statistics and QoS per flow, as far as the engine reports
+    /// them.
+    fn health(&self) -> meters::EngineHealth {
+        meters::EngineHealth::default()
+    }
+
     /// Link health of a running network output; `None` for other kinds
     /// or while unknown.
     async fn output_stats(&self, _id: lmix_types::OutputId) -> Option<lmix_types::OutputStats> {

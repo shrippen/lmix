@@ -489,6 +489,11 @@ impl Service {
         self.engine.measure_latency(seconds).await
     }
 
+    /// What the engine reports about its machine and flows.
+    pub fn engine_health(&self) -> crate::engine::meters::EngineHealth {
+        self.engine.health()
+    }
+
     /// Capture-to-program latency from the latest measurement.
     pub fn latency(&self) -> Latency {
         Latency::of(&self.engine.levels().borrow().program_ages_ms)
