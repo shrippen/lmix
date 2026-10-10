@@ -1156,7 +1156,7 @@ Start, Textprotokoll, OSC, Metriken.
 **Offen**: Metriken von strom (Drops, Encoder, Speicher) durchreichen;
 Units auf einer echten Maschine ohne Anmeldung (H.30).
 
-## 2026-10-10 — Offene Punkte ohne Hardware: Layouts, Metriken, MIDI, globale Tasten
+## 2026-10-10 — Offene Punkte ohne Hardware: Layouts, Metriken, MIDI, globale Tasten, Clip-Ende
 
 **Layout-Boxen frei** (4.6): Der Layout-Dialog zeigt eine 16:9-Fläche.
 Boxen zieht man an ihren Platz, die Ecke ändert die Größe (16:9, mit
@@ -1196,6 +1196,16 @@ Einstellung der Console („Keys also work when the Console is not in
 front“), der Dialog zeigt den Stand. Bei jeder Änderung wird die Sitzung
 geschlossen und neu gebunden. Geprüft gegen ein nachgebautes Portal
 (`workspace/tools/fake-portal`, `scripts/test-global-keys.sh`).
+**Clip-Ende** (AUT.7): Auslöser `clip_end` für Datei-, URL- und
+Playlist-Inputs feuert, wenn das letzte Stück endet (der Player beginnt
+von vorn), oder mit `before_ms` (bis 60 s) so lange vor dem Ende
+(Countdown, um rechtzeitig weiterzuschalten). lmix-core liest dazu die
+Positionsmeldungen der Mediaplayer von strom (alle 200 ms) und erkennt
+Ende und Schwelle aus zwei aufeinanderfolgenden Meldungen; ein
+Zurückspringen um mehr als 1 s zählt bei einer Einzeldatei als Ende.
+Die Aktionen laufen wie andere Auslöser und lösen keine weiteren aus.
+Console: „Clip ends“ mit „ms before“ im Auslöser-Dialog eines Clips.
+VM-Test: Countdown 2 s vor dem Ende und Ende einer Playlist.
 **Offen**: Bewegung zwischen Layouts; MIDI-Rückmeldung; globale Tasten
 am echten KDE prüfen (H.32), MIDI mit echtem Controller (H.31).
 

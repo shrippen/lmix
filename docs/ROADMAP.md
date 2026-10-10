@@ -314,7 +314,7 @@ Stand:
 | # | Stand |
 |---|---|
 | AUT.1–3 | ✅ Kurzbefehle (Taste, bis 16 Aktionen) in der Show; Console-Editor, Web-Seite `/keys` |
-| AUT.7 | ✅ Auslöser je Input: Programm an/aus, Vorschau, Overlay ein/aus, mit Verzögerung; ⚠ Countdown/Clip-Ende fehlen |
+| AUT.7 | ✅ Auslöser je Input: Programm an/aus, Vorschau, Overlay ein/aus, Clip-Ende und Countdown davor, mit Verzögerung |
 | AUT.10, AUT.11 | ✅ Geschlossenen Input zurückholen; Sperre gegen Schließen/Stoppen |
 | AUT.13 | ✅ OSC: Aktionen per Adresse oder JSON, Tally an Abonnenten; ⚠ kein voller Zustand per OSC |
 | AUT.14 | ✅ Cue-Listen mit GO, Zurück, Sprung; Console-Dialog |
