@@ -191,6 +191,9 @@ fn check_cues(name: &str, cues: &[Cue]) -> Result<(), ActionError> {
     Ok(())
 }
 
+/// Longest countdown of a `clip_end` trigger.
+const CLIP_COUNTDOWN_MAX_MS: u32 = 60_000;
+
 /// Closed inputs kept for `restore_input`.
 const REMOVED_KEPT: usize = 10;
 
@@ -1077,10 +1080,45 @@ impl Switcher {
             if trigger.actions.iter().any(runs_automation) {
                 return bad("triggers cannot run shortcuts, cues or change automation".into());
             }
+            match (trigger.on, trigger.before_ms) {
+                (TriggerOn::ClipEnd, Some(ms)) if ms > CLIP_COUNTDOWN_MAX_MS => {
+                    return bad(format!(
+                        "a countdown is at most {CLIP_COUNTDOWN_MAX_MS} ms before the end"
+                    ));
+                }
+                (TriggerOn::ClipEnd, _) | (_, None) => {}
+                (_, Some(_)) => return bad("only clip_end has a time before the end".into()),
+            }
         }
         let index = self.find(input)?;
+        let plays = self.show.inputs[index].source.has_transport();
+        if !plays && triggers.iter().any(|t| t.on == TriggerOn::ClipEnd) {
+            return bad("clip_end needs a file, URL or playlist input".into());
+        }
         self.show.inputs[index].triggers = triggers;
         Ok(Vec::new())
+    }
+
+    /// `clip_end` triggers of the input in `slot` that `change` fires, as
+    /// (delay, actions).
+    pub fn clip_triggers(
+        &self,
+        slot: usize,
+        change: &crate::clips::ClipChange,
+    ) -> Vec<(u32, Vec<Action>)> {
+        let Some(input) = self.show.inputs.iter().find(|i| i.slot == slot) else {
+            return Vec::new();
+        };
+        input
+            .triggers
+            .iter()
+            .filter(|t| t.on == TriggerOn::ClipEnd)
+            .filter(|t| match t.before_ms {
+                None => change.ended,
+                Some(ms) => change.crosses(u64::from(ms)),
+            })
+            .map(|t| (t.delay_ms, t.actions.clone()))
+            .collect()
     }
 
     /// Triggers that fire for what changed between `before` and now, as
@@ -3398,6 +3436,61 @@ mod tests {
     }
 
     #[test]
+    fn clip_end_triggers_need_a_clip_and_fire_at_the_end() {
+        let mut sw = two_inputs();
+        sw.apply(Action::AddInput {
+            source: SourceSpec::File {
+                path: "/clips/intro.mp4".into(),
+            },
+            name: Some("Intro".into()),
+        })
+        .unwrap();
+        let at_end = |before_ms| Trigger {
+            on: TriggerOn::ClipEnd,
+            delay_ms: 0,
+            before_ms,
+            actions: vec![Action::Cut],
+        };
+        assert!(matches!(
+            sw.apply(Action::SetTriggers {
+                input: named("A"),
+                triggers: vec![at_end(None)],
+            }),
+            Err(ActionError::BadTriggers { .. })
+        ));
+        assert!(matches!(
+            sw.apply(Action::SetTriggers {
+                input: named("Intro"),
+                triggers: vec![Trigger {
+                    on: TriggerOn::Program,
+                    ..at_end(Some(500))
+                }],
+            }),
+            Err(ActionError::BadTriggers { .. })
+        ));
+        sw.apply(Action::SetTriggers {
+            input: named("Intro"),
+            triggers: vec![at_end(None), at_end(Some(3_000))],
+        })
+        .unwrap();
+
+        let slot = sw.state().inputs[2].slot;
+        let ended = crate::clips::ClipChange {
+            ended: true,
+            left_ms: None,
+        };
+        let counting = crate::clips::ClipChange {
+            ended: false,
+            left_ms: Some((3_100, 2_900)),
+        };
+        assert_eq!(sw.clip_triggers(slot, &ended).len(), 1);
+        assert_eq!(sw.clip_triggers(slot, &counting).len(), 1);
+        assert!(sw
+            .clip_triggers(sw.state().inputs[0].slot, &ended)
+            .is_empty());
+    }
+
+    #[test]
     fn triggers_fire_for_what_went_on_or_off_air() {
         let mut sw = two_inputs();
         sw.apply(Action::SetTriggers {
@@ -3406,11 +3499,13 @@ mod tests {
                 Trigger {
                     on: TriggerOn::Program,
                     delay_ms: 1000,
+                    before_ms: None,
                     actions: vec![Action::FadeToBlack { duration_ms: 500 }],
                 },
                 Trigger {
                     on: TriggerOn::ProgramOff,
                     delay_ms: 0,
+                    before_ms: None,
                     actions: vec![Action::Cut],
                 },
             ],
@@ -3434,6 +3529,7 @@ mod tests {
                 triggers: vec![Trigger {
                     on: TriggerOn::Preview,
                     delay_ms: 60_000,
+                    before_ms: None,
                     actions: vec![Action::Cut],
                 }],
             }),

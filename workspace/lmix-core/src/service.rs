@@ -513,6 +513,34 @@ impl Service {
         }
     }
 
+    /// Fire `clip_end` triggers as the media players report their
+    /// position; forever.
+    pub async fn watch_players(self: Arc<Self>) {
+        let mut reports = self.engine.players();
+        let mut watch = crate::clips::ClipWatch::default();
+        loop {
+            let report = match reports.recv().await {
+                Ok(report) => report,
+                Err(broadcast::error::RecvError::Lagged(_)) => continue,
+                Err(broadcast::error::RecvError::Closed) => return,
+            };
+            let change = watch.update(report);
+            if change == crate::clips::ClipChange::default() {
+                continue;
+            }
+            let fired = {
+                let sw = self.switcher.lock().await;
+                (0..sw.slots())
+                    .find(|slot| crate::engine::flows::slot_id(*slot) == report.flow)
+                    .map(|slot| sw.clip_triggers(slot, &change))
+                    .unwrap_or_default()
+            };
+            for (delay_ms, actions) in fired {
+                self.run_triggered(delay_ms, actions);
+            }
+        }
+    }
+
     /// What the engine reports about its machine and flows.
     pub fn engine_health(&self) -> crate::engine::meters::EngineHealth {
         self.engine.health()
@@ -959,6 +987,7 @@ mod tests {
                 triggers: vec![Trigger {
                     on: TriggerOn::Program,
                     delay_ms: 2000,
+                    before_ms: None,
                     actions: vec![Action::FadeToBlack { duration_ms: 0 }],
                 }],
             })

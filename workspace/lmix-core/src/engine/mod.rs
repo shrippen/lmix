@@ -87,6 +87,11 @@ pub trait Engine: Send + Sync {
         Err(EngineError::NoPictures)
     }
 
+    /// Position reports of the media players (clips and playlists).
+    fn players(&self) -> tokio::sync::broadcast::Receiver<crate::clips::PlayerProgress> {
+        tokio::sync::broadcast::channel(1).1
+    }
+
     /// Machine statistics and QoS per flow, as far as the engine reports
     /// them.
     fn health(&self) -> meters::EngineHealth {

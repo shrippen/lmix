@@ -18,6 +18,7 @@ use clap::{Parser, ValueEnum};
 use lmix_types::Action;
 
 mod api;
+mod clips;
 mod engine;
 mod metrics;
 mod midi;
@@ -159,6 +160,7 @@ async fn main() -> anyhow::Result<()> {
     tokio::spawn(service.clone().forward_levels());
     tokio::spawn(service.clone().watch_failures());
     tokio::spawn(service.clone().forward_output_stats());
+    tokio::spawn(service.clone().watch_players());
     if !args.midi.is_empty() {
         tokio::spawn(midi::serve(args.midi.clone(), service.clone()));
     }

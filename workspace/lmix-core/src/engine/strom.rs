@@ -38,6 +38,9 @@ const PLAYING_POLL: Duration = Duration::from_millis(200);
 const PLAYING_POLLS: u32 = 50;
 /// Flow errors kept for a slow reader.
 const ERROR_BUFFER: usize = 64;
+
+/// Player position reports kept for a slow reader (16 players, 1 s).
+const PLAYER_BUFFER: usize = 128;
 /// Vision mixer compositors whose input pads follow `SignalLoss`.
 const MIXER_COMPOSITORS: [&str; 2] = ["mixer", "mv_comp"];
 /// `max-last-buffer-repeat` default: repeat until end of stream.
@@ -73,6 +76,7 @@ pub struct StromEngine {
     levels: watch::Sender<EngineLevels>,
     errors: broadcast::Sender<FlowError>,
     health: Arc<std::sync::Mutex<EngineHealth>>,
+    players: broadcast::Sender<crate::clips::PlayerProgress>,
     /// The meter reader runs once, from the first `start`.
     metering: AtomicBool,
     /// Directory of the live picture sockets (see [`Engine::live`]).
@@ -92,6 +96,7 @@ impl StromEngine {
             levels: watch::Sender::default(),
             errors: broadcast::channel(ERROR_BUFFER).0,
             health: Arc::default(),
+            players: broadcast::channel(PLAYER_BUFFER).0,
             metering: AtomicBool::new(false),
             live_dir: default_live_dir(),
             live_setup: Mutex::new(()),
@@ -621,6 +626,7 @@ impl Engine for StromEngine {
                 self.levels.clone(),
                 self.errors.clone(),
                 self.health.clone(),
+                self.players.clone(),
             ));
         }
 
@@ -770,6 +776,10 @@ impl Engine for StromEngine {
 
     fn levels(&self) -> watch::Receiver<EngineLevels> {
         self.levels.subscribe()
+    }
+
+    fn players(&self) -> broadcast::Receiver<crate::clips::PlayerProgress> {
+        self.players.subscribe()
     }
 
     fn health(&self) -> EngineHealth {

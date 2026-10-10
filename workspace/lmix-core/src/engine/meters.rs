@@ -114,6 +114,7 @@ pub async fn follow(
     levels: watch::Sender<EngineLevels>,
     errors: broadcast::Sender<FlowError>,
     health: Arc<Mutex<EngineHealth>>,
+    players: broadcast::Sender<crate::clips::PlayerProgress>,
 ) {
     loop {
         if let Ok((mut stream, _)) = tokio_tungstenite::connect_async(&ws_url).await {
@@ -146,6 +147,22 @@ pub async fn follow(
                             flow: flow_id,
                             message: error,
                             kind: FlowFailure::Error,
+                        });
+                    }
+                    Ok(StromEvent::MediaPlayerPosition {
+                        flow_id,
+                        position_ns,
+                        duration_ns,
+                        current_file_index,
+                        total_files,
+                        ..
+                    }) => {
+                        let _ = players.send(crate::clips::PlayerProgress {
+                            flow: flow_id,
+                            position_ms: position_ns / 1_000_000,
+                            duration_ms: duration_ns / 1_000_000,
+                            index: current_file_index,
+                            items: total_files,
                         });
                     }
                     Ok(StromEvent::SystemStats(stats)) => {
