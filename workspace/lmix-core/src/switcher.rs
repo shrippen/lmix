@@ -19,7 +19,7 @@ use lmix_types::{
     OutputRef, OutputSource, OutputSpec, OutputStatus, Shortcut, ShortcutSpec, ShowState,
     SignalLoss, SourceSpec, Stinger, StingerSpec, Transition, TransitionSlot, Transport,
 };
-use lmix_types::{Cue, CueList, Trigger, TriggerOn};
+use lmix_types::{Cue, CueList, MidiKind, MidiMessage, Trigger, TriggerOn};
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 use uuid::Uuid;
@@ -372,6 +372,26 @@ impl Switcher {
                 self.locked = on;
                 Ok(Vec::new())
             }
+            Action::SetMidiTbar { midi } => {
+                if let Some(m) = &midi {
+                    let bad = |reason: &str| ActionError::BadMidi {
+                        reason: reason.into(),
+                    };
+                    if m.kind != MidiKind::Cc || !m.is_valid() {
+                        return Err(bad("the T-bar needs a controller (cc 0–127, channel 1–16)"));
+                    }
+                    if self
+                        .show
+                        .shortcuts
+                        .iter()
+                        .any(|s| s.midi.is_some_and(|b| b.overlaps(m)))
+                    {
+                        return Err(bad("a shortcut has that controller"));
+                    }
+                }
+                self.show.midi_tbar = midi;
+                Ok(Vec::new())
+            }
             Action::ReplaceSource { input, source } => self.replace_source(&input, source),
             Action::RenameInput { input, name } => self.rename(&input, name),
             Action::SetInputColor { input, color } => self.set_color(&input, color),
@@ -649,9 +669,11 @@ impl Switcher {
                     key: s.key.clone(),
                     web: s.web,
                     color: s.color,
+                    midi: s.midi,
                     actions: s.actions.clone(),
                 })
                 .collect(),
+            midi_tbar: self.show.midi_tbar,
             layouts: self
                 .show
                 .layouts
@@ -1217,6 +1239,7 @@ impl Switcher {
             key: spec.key,
             web: spec.web,
             color: spec.color,
+            midi: spec.midi,
             actions: spec.actions,
         });
         Ok(Vec::new())
@@ -1234,6 +1257,7 @@ impl Switcher {
         entry.key = spec.key;
         entry.web = spec.web;
         entry.color = spec.color;
+        entry.midi = spec.midi;
         entry.actions = spec.actions;
         Ok(Vec::new())
     }
@@ -1261,7 +1285,37 @@ impl Switcher {
         if key_taken {
             return bad("another shortcut has that key".into());
         }
+        if let Some(midi) = &spec.midi {
+            if !midi.is_valid() {
+                return bad("MIDI channel 1–16, number 0–127".into());
+            }
+            let taken = self
+                .show
+                .shortcuts
+                .iter()
+                .enumerate()
+                .any(|(i, s)| Some(i) != own && s.midi.is_some_and(|m| m.overlaps(midi)));
+            if taken || self.show.midi_tbar.is_some_and(|m| m.overlaps(midi)) {
+                return bad(
+                    "another shortcut or the T-bar has that MIDI note or controller".into(),
+                );
+            }
+        }
         Ok(())
+    }
+
+    /// The shortcut a MIDI message runs.
+    pub fn midi_shortcut(&self, message: &MidiMessage) -> Option<InputId> {
+        self.show
+            .shortcuts
+            .iter()
+            .find(|s| s.midi.is_some_and(|m| m.matches(message)))
+            .map(|s| s.id)
+    }
+
+    /// Whether a MIDI message moves the T-bar.
+    pub fn midi_moves_tbar(&self, message: &MidiMessage) -> bool {
+        self.show.midi_tbar.is_some_and(|m| m.matches(message))
     }
 
     /// Actions of a shortcut, for the service to run.
@@ -2182,7 +2236,7 @@ fn no_video_check(entry: &ShowInput) -> Result<(), ActionError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use lmix_types::TestPattern;
+    use lmix_types::{MidiBinding, TestPattern};
 
     const SLOTS: usize = 4;
 
@@ -3097,8 +3151,77 @@ mod tests {
             key: key.map(Into::into),
             web: true,
             color: None,
+            midi: None,
             actions,
         }
+    }
+
+    #[test]
+    fn midi_bindings_are_unique_and_found() {
+        let mut sw = two_inputs();
+        let note = |channel| MidiBinding {
+            kind: MidiKind::Note,
+            channel,
+            number: 36,
+        };
+        let spec = |label: &str, midi| ShortcutSpec {
+            midi: Some(midi),
+            ..shortcut(label, None, vec![Action::Cut])
+        };
+        sw.apply(Action::AddShortcut {
+            shortcut: spec("Pad", note(Some(10))),
+        })
+        .unwrap();
+        // Any channel overlaps channel 10.
+        assert!(matches!(
+            sw.apply(Action::AddShortcut {
+                shortcut: spec("Other", note(None)),
+            }),
+            Err(ActionError::BadShortcut { .. })
+        ));
+        sw.apply(Action::AddShortcut {
+            shortcut: spec("Other", note(Some(1))),
+        })
+        .unwrap();
+        let hit = MidiMessage {
+            kind: MidiKind::Note,
+            channel: 10,
+            number: 36,
+            value: 90,
+        };
+        assert_eq!(sw.midi_shortcut(&hit), Some(sw.state().shortcuts[0].id));
+
+        let fader = MidiBinding {
+            kind: MidiKind::Cc,
+            channel: None,
+            number: 7,
+        };
+        assert!(matches!(
+            sw.apply(Action::SetMidiTbar {
+                midi: Some(note(Some(2)))
+            }),
+            Err(ActionError::BadMidi { .. })
+        ));
+        sw.apply(Action::SetMidiTbar { midi: Some(fader) }).unwrap();
+        assert_eq!(sw.state().midi_tbar, Some(fader));
+        assert!(sw.midi_moves_tbar(&MidiMessage {
+            kind: MidiKind::Cc,
+            channel: 3,
+            number: 7,
+            value: 10,
+        }));
+        assert!(matches!(
+            sw.apply(Action::AddShortcut {
+                shortcut: spec(
+                    "Fader",
+                    MidiBinding {
+                        channel: Some(1),
+                        ..fader
+                    }
+                ),
+            }),
+            Err(ActionError::BadShortcut { .. })
+        ));
     }
 
     #[test]

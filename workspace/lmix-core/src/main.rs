@@ -20,6 +20,7 @@ use lmix_types::Action;
 mod api;
 mod engine;
 mod metrics;
+mod midi;
 mod osc;
 mod recent;
 mod service;
@@ -85,6 +86,10 @@ struct Args {
     /// Address of the text protocol over TCP (API.5); off without it.
     #[arg(long, env = "LMIX_TCP")]
     tcp: Option<SocketAddr>,
+
+    /// MIDI device files to read (`/dev/snd/midiC1D0`); repeat for more.
+    #[arg(long, env = "LMIX_MIDI", value_delimiter = ',')]
+    midi: Vec<PathBuf>,
 
     /// UDP address for OSC (AUT.13); off without it.
     #[arg(long, env = "LMIX_OSC")]
@@ -154,6 +159,9 @@ async fn main() -> anyhow::Result<()> {
     tokio::spawn(service.clone().forward_levels());
     tokio::spawn(service.clone().watch_failures());
     tokio::spawn(service.clone().forward_output_stats());
+    if !args.midi.is_empty() {
+        tokio::spawn(midi::serve(args.midi.clone(), service.clone()));
+    }
     if let Some(listen) = args.osc {
         let service = service.clone();
         tokio::spawn(async move {

@@ -13,8 +13,8 @@ use lmix_types::action::{OVERLAY_CHANNELS, TRANSITION_SLOTS};
 use lmix_types::input::AUX_BUSES;
 use lmix_types::{
     Action, AuxBus, ChannelStrip, Cue, Effect, InputAudio, InputColor, InputId, LayoutBox, Look,
-    OutputId, OutputSource, OutputSpec, SignalLoss, SourceSpec, Transition, TransitionSlot,
-    Trigger,
+    MidiBinding, OutputId, OutputSource, OutputSpec, SignalLoss, SourceSpec, Transition,
+    TransitionSlot, Trigger,
 };
 use serde::{Deserialize, Serialize};
 
@@ -70,6 +70,9 @@ pub struct Show {
     pub shortcuts: Vec<ShowShortcut>,
     #[serde(default)]
     pub cue_lists: Vec<ShowCueList>,
+    /// MIDI controller on the T-bar.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub midi_tbar: Option<MidiBinding>,
 }
 
 /// One cue list as saved; where GO stands is not saved.
@@ -91,6 +94,8 @@ pub struct ShowShortcut {
     pub web: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub color: Option<InputColor>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub midi: Option<MidiBinding>,
     pub actions: Vec<Action>,
 }
 
@@ -133,6 +138,7 @@ impl Default for Show {
             layouts: Vec::new(),
             shortcuts: Vec::new(),
             cue_lists: Vec::new(),
+            midi_tbar: None,
         }
     }
 }
@@ -286,8 +292,18 @@ mod tests {
                 key: Some("F1".into()),
                 web: true,
                 color: None,
+                midi: Some(MidiBinding {
+                    kind: lmix_types::MidiKind::Note,
+                    channel: Some(10),
+                    number: 36,
+                }),
                 actions: vec![Action::Cut],
             }],
+            midi_tbar: Some(MidiBinding {
+                kind: lmix_types::MidiKind::Cc,
+                channel: None,
+                number: 7,
+            }),
             layouts: vec![ShowLayout {
                 id: InputId::new(),
                 name: "Interview".into(),

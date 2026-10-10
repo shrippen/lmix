@@ -143,7 +143,9 @@ Kirigami.ApplicationWindow {
         parent: QQC2.Overlay.overlay
         anchors.centerIn: parent
         act: root.act
+        core: backend
         shortcuts: root.shortcuts
+        midiTbar: root.show ? root.show.midi_tbar : null
         onEditRequested: shortcut => {
             shortcutEditDialog.shortcut = shortcut
             shortcutEditDialog.open()
@@ -155,6 +157,7 @@ Kirigami.ApplicationWindow {
         parent: QQC2.Overlay.overlay
         anchors.centerIn: parent
         act: root.act
+        core: backend
         inputs: root.inputs
         outputs: root.show ? root.show.outputs : []
     }

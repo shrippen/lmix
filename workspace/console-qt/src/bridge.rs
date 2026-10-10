@@ -52,6 +52,12 @@ pub mod qobject {
         #[qproperty(bool, measuring)]
         type Core = super::CoreRust;
 
+        /// A note or controller from a MIDI controller at lmix-core: lmix
+        /// `MidiMessage` as JSON (to learn a binding).
+        #[qsignal]
+        #[cxx_name = "midiReceived"]
+        fn midi_received(self: Pin<&mut Core>, message: QString);
+
         /// Run an lmix action given as its JSON (the API's own format);
         /// false when it is no valid action.
         #[qinvokable]
@@ -181,6 +187,10 @@ async fn follow(thread: cxx_qt::CxxQtThread<qobject::Core>) {
                     Ok(Event::Outputs { stats }) => {
                         let json = links_json(&stats);
                         thread.queue(move |core| core.set_links(QString::from(&json)))
+                    }
+                    Ok(Event::Midi { midi }) => {
+                        let json = serde_json::to_string(&midi).unwrap_or_default();
+                        thread.queue(move |core| core.midi_received(QString::from(&json)))
                     }
                     _ => continue,
                 };

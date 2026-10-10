@@ -489,6 +489,30 @@ impl Service {
         self.engine.measure_latency(seconds).await
     }
 
+    /// A message from a MIDI controller: pass it on to clients, then run
+    /// what it is bound to (`pressed`: a note on, or a controller crossing
+    /// to pressed).
+    pub async fn midi(
+        self: &Arc<Self>,
+        message: lmix_types::MidiMessage,
+        pressed: bool,
+    ) -> Result<(), ActionError> {
+        let _ = self.events.send(Event::Midi { midi: message });
+        let action = {
+            let sw = self.switcher.lock().await;
+            crate::midi::action_for(
+                &message,
+                pressed,
+                sw.midi_shortcut(&message),
+                sw.midi_moves_tbar(&message),
+            )
+        };
+        match action {
+            Some(action) => self.handle(action).await.map(|_| ()),
+            None => Ok(()),
+        }
+    }
+
     /// What the engine reports about its machine and flows.
     pub fn engine_health(&self) -> crate::engine::meters::EngineHealth {
         self.engine.health()
@@ -962,6 +986,7 @@ mod tests {
             key: None,
             web: false,
             color: None,
+            midi: None,
             actions: vec![
                 Action::PreviewInput {
                     input: InputRef::Text("Bars".into()),
