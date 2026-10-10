@@ -281,7 +281,7 @@ Stand:
 | # | Stand |
 |---|---|
 | 4.1 | ✅ 4 Overlay-Kanäle (wie vMix; strom-DSK hat höchstens 4) über die DSK-Ebenen des Mischers, Ein-/Ausblenden (strom-Patch `lmix-dsk-fade`), Tally rot, in Show-Datei; Console: Knöpfe 1–4 je Kachel und Overlay-Leiste; ⚠ Position/Größe eines Overlays: über ein Layout (4.6) |
-| 4.2 | ✅ Stinger: Clip-Input (Alpha, z. B. WebM/VP9) auf eigener DSK-Ebene unter den Overlays, Cut darunter am Cut-Punkt, Länge je Taste; gesperrt solange er läuft; strom-Patch `lmix-stinger-layer` (8 DSK); Console: Effekt „Stinger“ mit Dialog; ⚠ Länge noch von Hand |
+| 4.2 | ✅ Stinger: Clip-Input (Alpha, z. B. WebM/VP9) auf eigener DSK-Ebene unter den Overlays, Cut darunter am Cut-Punkt, Länge je Taste; gesperrt solange er läuft; strom-Patch `lmix-stinger-layer` (8 DSK); Console: Effekt „Stinger“ mit Dialog, Länge aus dem Clip |
 | 4.3 | ✅ T-Bar: Vorschau wird beim Ziehen über Programm eingeblendet (Mischung), am Ende Take, zurück auf 0 ohne Wirkung; Position im Zustand; Console-Schieber; ⚠ nur Blende (andere Effekte am Ende als Cut), Ton folgt erst beim Take |
 | 4.6 | ✅ Looks je Input (Farbkorrektur, nur GL-Mischer, sonst Ablehnung mit Grund); Layouts: Hintergrund und bis zu 8 Boxen mit Rahmen als PiP-Komposition, in Vorschau/Programm wie ein Input, Tally für alle Inputs darin; strom-Patch `lmix-live-underlays`; Boxen frei ziehen und zuschneiden; Console: „Farbkorrektur…“ je Kachel, Layout-Leiste und -Dialog mit Fläche; ⚠ keine Bewegung zwischen Layouts |
 | 4.7 | ✅ Kanalzug je Input: Gain, Pan, Hochpass, 4-Band-EQ, Gate, Kompressor, Verzögerung (live, strom-Patch `lmix-live-offset`); 2 Aux-Busse (1 vor, 2 nach dem Fader) mit Sends je Input, Master, Pegel, Ausgang mit Aux-Ton (Mix-Minus); alles in Show-Datei; Console: „Kanalzug…“, „Aux…“, Ausgangsdialog „Ton“; Solo/PFL/AFL seit M2b; ⚠ vor/nach fest je Bus |
@@ -316,7 +316,7 @@ Stand:
 | AUT.1–3 | ✅ Kurzbefehle (Taste, bis 16 Aktionen) in der Show; Console-Editor, Web-Seite `/keys` |
 | AUT.7 | ✅ Auslöser je Input: Programm an/aus, Vorschau, Overlay ein/aus, Clip-Ende und Countdown davor, mit Verzögerung |
 | AUT.10, AUT.11 | ✅ Geschlossenen Input zurückholen; Sperre gegen Schließen/Stoppen |
-| AUT.13 | ✅ OSC: Aktionen per Adresse oder JSON, Tally an Abonnenten; ⚠ kein voller Zustand per OSC |
+| AUT.13 | ✅ OSC: Aktionen per Adresse oder JSON; Tally, Programm, Vorschau, T-Bar, FTB, nächster Cue an Abonnenten; ganzer Zustand auf Anfrage |
 | AUT.14 | ✅ Cue-Listen mit GO, Zurück, Sprung; Console-Dialog |
 | AUT.4 | ✅ MIDI aus Gerätedateien: Note/Regler je Kurzbefehl, Regler auf T-Bar, Lernen in der Console; ⚠ keine Rückmeldung an den Controller |
 | AUT.12 | ✅ Globale Tasten über das GlobalShortcuts-Portal (KDE, GNOME 48+); ⚠ nicht unter X11 ohne Portal |

@@ -1156,7 +1156,7 @@ Start, Textprotokoll, OSC, Metriken.
 **Offen**: Metriken von strom (Drops, Encoder, Speicher) durchreichen;
 Units auf einer echten Maschine ohne Anmeldung (H.30).
 
-## 2026-10-10 — Offene Punkte ohne Hardware: Layouts, Metriken, MIDI, globale Tasten, Clip-Ende
+## 2026-10-10 — Offene Punkte ohne Hardware: Layouts, Metriken, MIDI, globale Tasten, Clip-Ende, Stinger-Länge, OSC
 
 **Layout-Boxen frei** (4.6): Der Layout-Dialog zeigt eine 16:9-Fläche.
 Boxen zieht man an ihren Platz, die Ecke ändert die Größe (16:9, mit
@@ -1206,6 +1206,14 @@ Zurückspringen um mehr als 1 s zählt bei einer Einzeldatei als Ende.
 Die Aktionen laufen wie andere Auslöser und lösen keine weiteren aus.
 Console: „Clip ends“ mit „ms before“ im Auslöser-Dialog eines Clips.
 VM-Test: Countdown 2 s vor dem Ende und Ende einer Playlist.
+**Stinger-Länge**: Inputs mit Player melden `clip_ms`, die Länge des
+laufenden Stücks (aus den Positionsmeldungen). Der Stinger-Dialog nimmt
+sie für einen neuen Stinger und bietet „Clip length (2.0 s)“ an.
+**OSC mit Zustand** (AUT.13): Abonnenten bekommen außer der Tally
+`/lmix/program` und `/lmix/preview` (Name, Nummer; 0 für ein Layout),
+`/lmix/tbar`, `/lmix/ftb` und `/lmix/cue/next` je Liste, gleich nach dem
+Abo und danach nur Änderungen. `/lmix/state` beantwortet den ganzen
+Zustand als JSON.
 **Offen**: Bewegung zwischen Layouts; MIDI-Rückmeldung; globale Tasten
 am echten KDE prüfen (H.32), MIDI mit echtem Controller (H.31).
 
