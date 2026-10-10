@@ -168,9 +168,9 @@ Lichtpult sendet OSC/MIDI. Ziel: Szenenwechsel exakt auf Zuruf.
 
 | # | Schritt | Anforderung | Bewertung |
 |---|---|---|---|
-| 1 | Cue-Liste: jede Zeile setzt Inputs, Ebenen, Überblendung, Ton | AUT.8, AUT.7 | ⚠ Ablaufliste kennt Inputs, keine Mehrfach-Aktionen je Cue |
+| 1 | Cue-Liste: jede Zeile setzt Inputs, Ebenen, Überblendung, Ton | AUT.14, AUT.7 | ✅ Cue-Listen mit bis zu 16 Aktionen je Cue |
 | 2 | "GO" springt zur nächsten Zeile, auch rückwärts | AUT.8 | ✅ (manueller Modus) |
-| 3 | Lichtpult löst Cues per OSC oder MIDI aus | AUT.1, — | ⚠ MIDI ja, OSC fehlt (B18) |
+| 3 | Lichtpult löst Cues per OSC oder MIDI aus | AUT.1, AUT.13 | ✅ OSC (`/lmix/cue/go`); ⚠ MIDI noch offen |
 | 4 | Videos mit In/Out-Punkt und Schleife | INP.10 | ✅ |
 | 5 | Projektor 2 zeigt Kamera, Projektor 1 Zuspieler | OUT.3, SWI.10 | ✅ |
 | 6 | Bild auf schräge Leinwand anpassen (Eckpunkte, Kantenblende) | — | ✗ kein Warping (vMix kann das auch nicht) |
@@ -221,8 +221,8 @@ Testbilder) und gegen die Szenarien.
 | P1 Ehrenamt | Show "Gottesdienst" öffnen | ✅ Show-Datei; ⚠ noch keine GUI dafür (Console spricht strom direkt) |
 | P2 Konferenz | Zweiter Bedienplatz | ✅ Grundlage: API und WebSocket für beliebig viele Clients; ⚠ Rechte je Platz fehlen (OPS.2) |
 | P3 Sport | Spielstand per Stream Deck | ⚠ Aktionen über API da; Titel fehlen (M7) |
-| P5 Broadcast | Headless-Betrieb | ✅ `lmix-core` ohne GUI; ⚠ kein systemd-Dienst, keine Metriken (OPS.1, OPS.3) |
-| P5 Broadcast | Steuerung durch Automation | ✅ Aktionen per HTTP, Katalog als JSON-Schema; ⚠ kein schlanker TCP-Ereigniskanal (API.5) |
+| P5 Broadcast | Headless-Betrieb | ✅ `lmix-core` ohne GUI; ✅ systemd-Units, Show beim Start, `/metrics` (OPS.1, OPS.3) |
+| P5 Broadcast | Steuerung durch Automation | ✅ Aktionen per HTTP, Katalog als JSON-Schema; ✅ Textzeilen über TCP mit Abo (API.5) |
 | P7 Theater | Quelle tauschen während Vorstellung | ✅ Slot-Flow wird ersetzt, Mischer läuft weiter; ⚠ Bild ohne Aussetzer nur auf GPU prüfbar (H.3) |
 
 **Befunde**: B22 Console muss Client von `lmix-core` werden (2b.2), bevor

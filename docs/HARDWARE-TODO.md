@@ -39,3 +39,4 @@ Hardware: **NV** = NVIDIA-Host (RTX 3090), **AMD**, **INTEL**,
 | H.27 | Stinger auf CUDA- und GL-Mischer: Alpha des Clips bleibt erhalten (Programm rund um den Clip sichtbar), Cut-Punkt bildgenau, kein Ruckeln beim Start des Clips; ProRes 4444 und WebM/VP9 mit Alpha | NV | M4 4.2 | offen |
 | H.28 | Looks auf dem GL-Mischer (AMD/Intel oder NVIDIA mit `--mixer gl`): Kamera mit warmem/kaltem Weißabgleich angleichen, Regler ruckelfrei, Last je Input; Entscheidung, ob CUDA Looks braucht | NV | M4 4.6 | offen |
 | H.29 | Layouts auf CUDA- und GL-Mischer: Boxen und Rahmen am richtigen Platz, Inhalt sofort nach dem Start (strom-Patch `lmix-live-underlays`), Latenz unverändert, Last mit 4 Layouts à 4 Boxen | NV | M4 4.6 | offen |
+| H.30 | Headless-Betrieb mit systemd-Units auf einer Maschine ohne Anmeldung (`loginctl enable-linger`): Start nach Neustart, Show geladen, Ausgänge laufen; Companion/Lichtpult per OSC und Tally-Box per TCP im LAN | NV, NET | M6/M8 | offen |

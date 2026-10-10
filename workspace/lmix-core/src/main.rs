@@ -20,6 +20,7 @@ use lmix_types::Action;
 mod api;
 mod engine;
 mod metrics;
+mod osc;
 mod recent;
 mod service;
 mod show;
@@ -85,6 +86,10 @@ struct Args {
     #[arg(long, env = "LMIX_TCP")]
     tcp: Option<SocketAddr>,
 
+    /// UDP address for OSC (AUT.13); off without it.
+    #[arg(long, env = "LMIX_OSC")]
+    osc: Option<SocketAddr>,
+
     /// Show file to open at start; without it the last autosave is resumed.
     #[arg(long, env = "LMIX_SHOW")]
     show: Option<String>,
@@ -149,6 +154,14 @@ async fn main() -> anyhow::Result<()> {
     tokio::spawn(service.clone().forward_levels());
     tokio::spawn(service.clone().watch_failures());
     tokio::spawn(service.clone().forward_output_stats());
+    if let Some(listen) = args.osc {
+        let service = service.clone();
+        tokio::spawn(async move {
+            if let Err(error) = osc::serve(listen, service).await {
+                tracing::error!(%error, "OSC stopped");
+            }
+        });
+    }
     if let Some(listen) = args.tcp {
         let service = service.clone();
         tokio::spawn(async move {
