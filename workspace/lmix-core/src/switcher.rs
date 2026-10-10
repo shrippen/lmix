@@ -14,10 +14,10 @@ use lmix_types::layout::{BORDER_MAX_PX, LAYOUTS, LAYOUT_BOXES};
 use lmix_types::shortcut::SHORTCUT_ACTIONS;
 use lmix_types::state::API_VERSION;
 use lmix_types::{
-    Action, ActionError, AuxBus, BoxRect, BoxSpec, ChannelStrip, Effect, Ingest, Input, InputColor,
-    InputId, InputRef, InputStatus, Layout, LayoutBox, Listen, Look, Output, OutputId, OutputRef,
-    OutputSource, OutputSpec, OutputStatus, Shortcut, ShortcutSpec, ShowState, SignalLoss,
-    SourceSpec, Stinger, StingerSpec, Transition, TransitionSlot, Transport,
+    Action, ActionError, AuxBus, BoxCrop, BoxRect, BoxSpec, ChannelStrip, Effect, Ingest, Input,
+    InputColor, InputId, InputRef, InputStatus, Layout, LayoutBox, Listen, Look, Output, OutputId,
+    OutputRef, OutputSource, OutputSpec, OutputStatus, Shortcut, ShortcutSpec, ShowState,
+    SignalLoss, SourceSpec, Stinger, StingerSpec, Transition, TransitionSlot, Transport,
 };
 use lmix_types::{Cue, CueList, Trigger, TriggerOn};
 use std::collections::HashMap;
@@ -114,6 +114,7 @@ pub struct EngineBox {
     pub rect: BoxRect,
     pub slot: usize,
     pub border_px: u8,
+    pub crop: BoxCrop,
 }
 
 /// What stands in preview or program: an input's slot or a layout's
@@ -1389,11 +1390,15 @@ impl Switcher {
             if spec.border_px > BORDER_MAX_PX {
                 return Err(bad(format!("frames are at most {BORDER_MAX_PX} px")));
             }
+            if !spec.crop.is_valid() {
+                return Err(bad("a crop must leave some of the input visible".into()));
+            }
             used.push(input);
             parts.push(LayoutBox {
                 rect: spec.rect,
                 input,
                 border_px: spec.border_px,
+                crop: spec.crop,
             });
         }
         Ok((background, parts))
@@ -1412,6 +1417,7 @@ impl Switcher {
                         rect: b.rect,
                         slot: self.slot_of(Some(b.input))?,
                         border_px: b.border_px,
+                        crop: b.crop,
                     })
                 })
                 .collect(),
@@ -2914,7 +2920,15 @@ mod tests {
         h: 0.5,
     };
 
-    /// A, B; layout 1 = A behind, B top right; A on program.
+    /// Shows the middle of an input.
+    const ZOOM: BoxCrop = BoxCrop {
+        left: 0.25,
+        top: 0.25,
+        right: 0.25,
+        bottom: 0.25,
+    };
+
+    /// A, B; layout 1 = A behind, B top right zoomed in; A on program.
     fn with_layout() -> Switcher {
         let mut sw = two_inputs();
         sw.apply(Action::CutDirect { input: named("A") }).unwrap();
@@ -2926,6 +2940,7 @@ mod tests {
                     rect: TOP_RIGHT,
                     input: named("B"),
                     border_px: 4,
+                    crop: ZOOM,
                 }],
             })
             .unwrap();
@@ -2937,7 +2952,8 @@ mod tests {
                 boxes: vec![EngineBox {
                     rect: TOP_RIGHT,
                     slot: 1,
-                    border_px: 4
+                    border_px: 4,
+                    crop: ZOOM,
                 }]
             }]
         );
@@ -3013,6 +3029,15 @@ mod tests {
             rect,
             input: named(input),
             border_px: 0,
+            crop: BoxCrop::default(),
+        };
+        let nothing_left = BoxSpec {
+            crop: BoxCrop {
+                left: 0.6,
+                right: 0.4,
+                ..BoxCrop::default()
+            },
+            ..spec("B", TOP_RIGHT)
         };
         let outside = BoxRect {
             x: 0.8,
@@ -3023,6 +3048,7 @@ mod tests {
             vec![spec("A", TOP_RIGHT)],
             vec![spec("B", outside)],
             vec![spec("B", TOP_RIGHT), spec("B", TOP_RIGHT)],
+            vec![nothing_left],
         ] {
             assert!(matches!(
                 sw.apply(Action::SetLayout {

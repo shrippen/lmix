@@ -300,7 +300,20 @@ impl StromEngine {
                 }),
             })
             .collect();
-        let body = serde_json::json!({ "bg": background, "zones": zones, "transforms": {} });
+        // strom crops per source, wherever it shows in the composition.
+        let transforms: serde_json::Map<String, serde_json::Value> = boxes
+            .iter()
+            .filter(|b| !b.crop.is_zero())
+            .map(|b| {
+                let c = b.crop;
+                let crop = serde_json::json!({
+                    "left": c.left, "top": c.top, "right": c.right, "bottom": c.bottom
+                });
+                (b.slot.to_string(), crop)
+            })
+            .collect();
+        let body =
+            serde_json::json!({ "bg": background, "zones": zones, "transforms": transforms });
         let path = format!(
             "/flows/{}/blocks/{MIXER_BLOCK}/pip/{pip}",
             flows::mixer_id()

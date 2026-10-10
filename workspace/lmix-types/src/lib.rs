@@ -24,7 +24,7 @@ pub use input::{
     InputAudio, InputColor, InputId, InputRef, InputStatus, Listen, Look, SignalLoss, SourceSpec,
     TestPattern, Transport,
 };
-pub use layout::{BoxRect, BoxSpec, Layout, LayoutBox};
+pub use layout::{BoxCrop, BoxRect, BoxSpec, Layout, LayoutBox};
 pub use output::{
     Container, DisplayMode, Output, OutputId, OutputRef, OutputSource, OutputSpec, OutputStats,
     OutputStatus,
