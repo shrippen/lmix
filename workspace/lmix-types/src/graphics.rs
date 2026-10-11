@@ -162,7 +162,9 @@ pub struct Dataset {
     pub data: TitleData,
 }
 
-/// Where a data source reads from (DAT.1, so far CSV and JSON files).
+/// Where a data source reads from (DAT.1, DAT.2): a file, or an
+/// `http(s)://` address read again every few seconds (a public Google
+/// Sheet as CSV: `…/export?format=csv`).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum DataSourceSpec {
@@ -177,6 +179,9 @@ pub enum DataSourceSpec {
     },
     /// A JSON array of objects; keys become columns.
     Json { path: String },
+    /// Plain text: each line that is not empty is a row of one column,
+    /// `text` (ticker items, slides).
+    Text { path: String },
 }
 
 fn yes() -> bool {
@@ -186,7 +191,7 @@ fn yes() -> bool {
 impl DataSourceSpec {
     pub fn path(&self) -> &str {
         match self {
-            Self::Csv { path, .. } | Self::Json { path } => path,
+            Self::Csv { path, .. } | Self::Json { path } | Self::Text { path } => path,
         }
     }
 }

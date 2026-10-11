@@ -377,8 +377,8 @@ Funktionsreferenz, kein Code (MIT, `claude.md` Entscheidung 6).
 
 | ID | Anforderung | Prio | Stand |
 |---|---|---|---|
-| DAT.1 | Typen: CSV, XLSX/ODS, Google Sheets (öffentlich + API-Schlüssel), RSS, Text, XML (XPath), JSON (Array von Objekten) | S | ◐ (CSV, JSON) |
-| DAT.2 | Lokal, im Netz, im Internet; automatische Aktualisierung bei Änderung | S | ◐ (lokal) |
+| DAT.1 | Typen: CSV, XLSX/ODS, Google Sheets (öffentlich + API-Schlüssel), RSS, Text, XML (XPath), JSON (Array von Objekten) | S | ◐ (CSV, JSON, Text; Google Sheets öffentlich als CSV) |
+| DAT.2 | Lokal, im Netz, im Internet; automatische Aktualisierung bei Änderung | S | ✅ |
 | DAT.3 | Optionen: erste Zeile = Spaltennamen, Zeilen zu Spalten | K | ◐ (Kopfzeile) |
 | DAT.4 | Zuordnung Titelfeld ← Quelle/Tabelle/Spalte (oder automatisch nach Name/Index)/Zeile (fest oder "gewählt"), Formatmuster `…{0}…`; Bilder per Pfad/URL | S | ◐ (gewählte Zeile) |
 | DAT.5 | Datenquellen-Fenster: Zeile wählen, Auto-Weiter mit Intervall, Schleife; Aktionen nächste/vorige/bestimmte Zeile | S | ✅ |

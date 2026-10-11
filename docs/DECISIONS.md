@@ -1296,10 +1296,17 @@ Zahlenfeldern, als Kurzbefehl auf jede Taste oder Stream-Deck-Taste.
 Leerzeilen getrennt; `next` zeigt die nächste, Funktion `back` die
 vorige, die letzte meldet `last`; Layout unten (Stream) oder ganzes Bild
 (Beamer).
+**Quellen im Netz und Text** (DAT.1, DAT.2): eine Quelle darf eine
+`http(s)://`-Adresse sein (öffentliches Google Sheet über den CSV-Export
+`…/export?format=csv`); lmix-core holt sie alle 10 s (höchstens 16 MB,
+10 s Zeitlimit) und meldet nur Änderungen. Typ `text`: jede nicht leere
+Zeile eine Zeile mit der Spalte `text` (Laufschrift, Folien). Dateien
+und Adressen laufen in einer eigenen Schleife, damit ein langsamer
+Abruf das Weiterschalten nicht aufhält.
 **Offen**: Rendern in strom (GFX.2, nach M7.0), Grafikkanal als Input
 und Overlay (GFX.17), Overlay wartet auf das Ende der Ausblendung
 (GFX.4), eine neu
 geladene Seite spielt laufende Titel von vorn (Countdown beginnt neu),
 Lottie (GFX.5), Titel als Stinger (GFX.11), Ebenen-Transformation
-(GFX.18), XLSX/ODS, Google Sheets, RSS, XML (DAT.1), Zeilen zu Spalten
+(GFX.18), XLSX/ODS, Google Sheets mit API-Schlüssel, RSS, XML (DAT.1), Zeilen zu Spalten
 (DAT.3), Bilder aus lokalen Pfaden außerhalb des Vorlagenordners.

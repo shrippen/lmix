@@ -135,6 +135,11 @@ impl Switcher {
         self.titles.rows.insert(source, rows);
     }
 
+    /// Rows of a data source as last read.
+    pub fn rows(&self, source: InputId) -> Option<&Rows> {
+        self.titles.rows.get(&source)
+    }
+
     /// Data sources whose rows were never read (just added or opened).
     pub fn unread_sources(&self) -> Vec<(InputId, lmix_types::DataSourceSpec)> {
         self.show

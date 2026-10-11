@@ -180,6 +180,26 @@ async function act(action) {
   await frame.waitForFunction(() => document.getElementById("text").textContent === "(Role C)", null, { timeout: 5000 });
   pass("data source: edited file reaches the title");
 
+  // A source at an address (read again every 10 s) and a text source.
+  let sheet = "name,role\nName A,Role X\n";
+  const http = require("http");
+  const server = http.createServer((req, res) => { res.setHeader("content-type", "text/csv"); res.end(sheet); });
+  await new Promise((r) => server.listen(0, "127.0.0.1", r));
+  const sheetUrl = `http://127.0.0.1:${server.address().port}/export?format=csv`;
+  await act({ action: "add_data_source", spec: { kind: "csv", path: sheetUrl }, name: "Sheet" });
+  await act({ action: "title_bind", graphics: 1, layer: 5, field: "headline", binding: { source: "Sheet", column: "role" } });
+  await frame.waitForFunction(() => document.getElementById("head").textContent === "Role X", null, { timeout: 3000 });
+  sheet = "name,role\nName A,Role Y\n";
+  await frame.waitForFunction(() => document.getElementById("head").textContent === "Role Y", null, { timeout: 15000 });
+  server.close();
+  pass("data source at an address: read again");
+  const notes = path.join(work, "notes.txt");
+  fs.writeFileSync(notes, "first\n\nsecond\n");
+  state = await act({ action: "add_data_source", spec: { kind: "text", path: notes }, name: "Notes" });
+  const textSource = state.data_sources.find((d) => d.name === "Notes");
+  if (JSON.stringify(textSource.rows) !== JSON.stringify([["first"], ["second"]])) fail("text rows: " + JSON.stringify(textSource));
+  pass("text source: one row per line");
+
   // A preview page shows the same, but reports nothing (the countdown
   // starts again there and reaches zero a second time).
   const zeros = await page.evaluate(() => window.__reports.filter((r) => r.report === "zero").length);

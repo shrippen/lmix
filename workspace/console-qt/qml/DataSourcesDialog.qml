@@ -5,10 +5,10 @@ import org.kde.kirigami as Kirigami
 import Kante
 
 /**
- * Data sources (DAT.1–5): CSV or JSON files whose selected row feeds title
- * fields. A click on a row selects it; previous / next, or moving on by
+ * Data sources (DAT.1–5): CSV, JSON or text files or addresses whose
+ * selected row feeds title fields. A click on a row selects it; previous / next, or moving on by
  * itself every few seconds, looping if wanted. lmix-core reads a file
- * again when it changes.
+ * again when it changes, an address every 10 s.
  */
 KanteDialog {
     id: dialog
@@ -19,6 +19,14 @@ KanteDialog {
 
     property int current: 0
     readonly property var source: sources.length > 0 ? sources[Math.min(current, sources.length - 1)] : null
+    /** Kind of source by its name: JSON, text (one row per line), else CSV
+     * (also a Google Sheet's CSV export). */
+    function kindOf(file) {
+        var name = file.trim().toLowerCase().split("?")[0]
+        if (name.endsWith(".json")) return "json"
+        if (name.endsWith(".txt")) return "text"
+        return "csv"
+    }
     /** Auto-advance choices in seconds; 0 off. */
     readonly property var intervals: [0, 3, 5, 10, 15, 30, 60]
 
@@ -56,13 +64,13 @@ KanteDialog {
             KanteTextField {
                 id: path
                 Layout.fillWidth: true
-                placeholderText: qsTr("CSV or JSON file (path; relative to the show file)")
+                placeholderText: qsTr("CSV, JSON or text file (relative to the show file), or http(s) address")
             }
             QQC2.CheckBox {
                 id: header
                 text: qsTr("First row names columns")
                 checked: true
-                visible: !path.text.trim().toLowerCase().endsWith(".json")
+                visible: dialog.kindOf(path.text) === "csv"
                 KanteCheckSkin { control: header }
             }
             KanteButton {
@@ -70,9 +78,8 @@ KanteDialog {
                 enabled: path.text.trim() !== ""
                 onClicked: {
                     var file = path.text.trim()
-                    var spec = file.toLowerCase().endsWith(".json")
-                        ? { kind: "json", path: file }
-                        : { kind: "csv", path: file, header: header.checked }
+                    var kind = dialog.kindOf(file)
+                    var spec = kind === "csv" ? { kind: kind, path: file, header: header.checked } : { kind: kind, path: file }
                     dialog.act({ action: "add_data_source", spec: spec })
                     dialog.current = dialog.sources.length
                     path.text = ""

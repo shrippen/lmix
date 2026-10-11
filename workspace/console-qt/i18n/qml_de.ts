@@ -405,7 +405,7 @@
   <context>
     <name>DataSourcesDialog</name>
     <message>
-      <location filename="../qml/DataSourcesDialog.qml" line="+25" />
+      <location filename="../qml/DataSourcesDialog.qml" line="+33" />
       <source>Data sources</source>
       <translation>Datenquellen</translation>
     </message>
@@ -416,8 +416,8 @@
     </message>
     <message>
       <location line="+11" />
-      <source>CSV or JSON file (path; relative to the show file)</source>
-      <translation>CSV- oder JSON-Datei (Pfad; relativ zur Show-Datei)</translation>
+      <source>CSV, JSON or text file (relative to the show file), or http(s) address</source>
+      <translation>CSV-, JSON- oder Textdatei (relativ zur Show-Datei) oder http(s)-Adresse</translation>
     </message>
     <message>
       <location line="+4" />
@@ -430,7 +430,7 @@
       <translation>+ Quelle</translation>
     </message>
     <message>
-      <location line="+18" />
+      <location line="+17" />
       <source>No data sources yet. A data source is a table (CSV, JSON) whose selected row fills title fields, e.g. names and roles of guests.</source>
       <translation>Noch keine Datenquellen. Eine Datenquelle ist eine Tabelle (CSV, JSON), deren gewählte Zeile Titelfelder füllt, z. B. Namen und Funktionen von Gästen.</translation>
     </message>
@@ -1832,7 +1832,7 @@
   <context>
     <name>TitleField</name>
     <message>
-      <location filename="../qml/TitleField.qml" line="+57" />
+      <location filename="../qml/TitleField.qml" line="+71" />
       <source>Data…</source>
       <translation>Daten…</translation>
     </message>
@@ -1960,7 +1960,7 @@
       <translation>Laden und abspielen</translation>
     </message>
     <message>
-      <location line="+30" />
+      <location line="+35" />
       <source>Live</source>
       <translation>Live</translation>
     </message>

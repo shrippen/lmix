@@ -76,15 +76,27 @@ pub struct Service {
     templates_dir: std::sync::Mutex<Option<PathBuf>>,
     /// Built-in and folder templates as last scanned.
     templates: std::sync::Mutex<Vec<Template>>,
-    /// When each data source's file had changed when it was read.
-    source_times: std::sync::Mutex<HashMap<InputId, Option<SystemTime>>>,
+    /// When each data source was read: its file's time, or when an
+    /// address was fetched.
+    source_times: std::sync::Mutex<HashMap<InputId, Seen>>,
+    /// Fetches data sources from addresses.
+    http: reqwest::Client,
 }
 
-/// How often lmix-core looks at the templates folder, the data source
-/// files and auto-advancing sources.
-const TITLES_CHECK: std::time::Duration = std::time::Duration::from_millis(250);
-/// Files are looked at every this many checks.
-const FILES_EVERY: u32 = 4;
+/// What lmix-core knew of a data source when it read it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Seen {
+    File(Option<SystemTime>),
+    Url(Instant),
+}
+
+/// Data sources at an address are fetched again this often.
+const URL_REFRESH: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// How often lmix-core looks at the templates folder and data sources.
+const FILES_CHECK: std::time::Duration = std::time::Duration::from_secs(1);
+/// How often it moves auto-advancing data sources on when due.
+const AUTO_CHECK: std::time::Duration = std::time::Duration::from_millis(250);
 
 impl Service {
     pub fn new(slots: usize, engine: Arc<dyn Engine>, autosave: Option<PathBuf>) -> Arc<Self> {
@@ -108,6 +120,7 @@ impl Service {
             templates_dir: std::sync::Mutex::new(None),
             templates: std::sync::Mutex::new(templates),
             source_times: std::sync::Mutex::new(HashMap::new()),
+            http: datasource::client(),
             autosave,
         })
     }
@@ -154,75 +167,105 @@ impl Service {
         self.publish(&sw);
     }
 
-    /// Read the files of data sources never read (just added, or a show
-    /// just opened).
+    /// Read the data sources never read (just added, or a show just
+    /// opened).
     async fn read_new_sources(&self, sw: &mut Switcher) {
         for (id, spec) in sw.unread_sources() {
-            let path = datasource::resolve(&spec, sw.path());
-            let time = datasource::modified(&path).await;
-            sw.set_rows(id, datasource::read(&spec, &path).await);
+            let place = datasource::resolve(&spec, sw.path());
+            let seen = self.seen(&place).await;
+            sw.set_rows(id, datasource::read(&spec, &place, &self.http).await);
             self.source_times
                 .lock()
                 .expect("source times lock")
-                .insert(id, time);
+                .insert(id, seen);
         }
     }
 
-    /// Read again the data source files that changed (DAT.2).
+    async fn seen(&self, place: &datasource::Place) -> Seen {
+        if place.is_url() {
+            Seen::Url(Instant::now())
+        } else {
+            Seen::File(datasource::modified(place).await)
+        }
+    }
+
+    /// Read again the files that changed and the addresses due (DAT.2).
     async fn reread_changed_sources(&self) {
-        let (files, show) = {
+        let (sources, show) = {
             let sw = self.switcher.lock().await;
             (sw.source_files(), sw.path().map(str::to_string))
         };
-        let mut changed = Vec::new();
-        for (id, spec) in files {
-            let path = datasource::resolve(&spec, show.as_deref());
-            let time = datasource::modified(&path).await;
+        let mut read = Vec::new();
+        for (id, spec) in sources {
+            let place = datasource::resolve(&spec, show.as_deref());
             let known = self
                 .source_times
                 .lock()
                 .expect("source times lock")
                 .get(&id)
                 .copied();
-            if known.is_some_and(|known| known != time) {
-                changed.push((id, datasource::read(&spec, &path).await, time));
+            let now = self.seen(&place).await;
+            let due = match (known, now) {
+                (Some(Seen::File(then)), Seen::File(time)) => then != time,
+                (Some(Seen::Url(then)), Seen::Url(_)) => then.elapsed() >= URL_REFRESH,
+                // Not read yet (handled with the action) or changed kind.
+                _ => false,
+            };
+            if due {
+                read.push((id, datasource::read(&spec, &place, &self.http).await, now));
             }
         }
-        if changed.is_empty() {
+        if read.is_empty() {
             return;
         }
         let mut sw = self.switcher.lock().await;
-        for (id, rows, time) in changed {
-            sw.set_rows(id, rows);
+        let mut changed = false;
+        for (id, rows, seen) in read {
+            if sw.rows(id) != Some(&rows) {
+                sw.set_rows(id, rows);
+                changed = true;
+            }
             self.source_times
                 .lock()
                 .expect("source times lock")
-                .insert(id, time);
+                .insert(id, seen);
         }
-        self.publish(&sw);
+        if changed {
+            self.publish(&sw);
+        }
     }
 
     /// Follow the templates folder and data source files, and move
     /// auto-advancing data sources on (DAT.5).
     pub async fn watch_titles(self: Arc<Self>) {
-        let mut tick = tokio::time::interval(TITLES_CHECK);
-        let mut turn = 0u32;
-        loop {
-            tick.tick().await;
-            turn = turn.wrapping_add(1);
-            if turn.is_multiple_of(FILES_EVERY) {
-                self.rescan_templates().await;
-                self.reread_changed_sources().await;
+        // Files and addresses on their own: a slow download must not hold
+        // up the rows moving on.
+        let files = {
+            let service = self.clone();
+            async move {
+                let mut tick = tokio::time::interval(FILES_CHECK);
+                loop {
+                    tick.tick().await;
+                    service.rescan_templates().await;
+                    service.reread_changed_sources().await;
+                }
             }
-            let due = self.switcher.lock().await.due_sources(Instant::now());
-            for id in due {
-                let next = Action::DataNext {
-                    source: InputRef::Text(id.to_string()),
-                };
-                // At the last row without looping it just stays there.
-                let _ = self.handle_as(next, Origin::Trigger).await;
+        };
+        let rows = async move {
+            let mut tick = tokio::time::interval(AUTO_CHECK);
+            loop {
+                tick.tick().await;
+                let due = self.switcher.lock().await.due_sources(Instant::now());
+                for id in due {
+                    let next = Action::DataNext {
+                        source: InputRef::Text(id.to_string()),
+                    };
+                    // At the last row without looping it just stays there.
+                    let _ = self.handle_as(next, Origin::Trigger).await;
+                }
             }
-        }
+        };
+        tokio::join!(files, rows);
     }
 
     /// The engine is not there yet: keep changes in the show until

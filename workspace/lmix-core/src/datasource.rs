@@ -1,60 +1,127 @@
-//! Reading data sources (DAT.1–3): CSV and JSON files into columns and
-//! rows of text.
+//! Reading data sources (DAT.1–3): CSV, JSON and text, from a file or an
+//! address on the network, into columns and rows of text.
 
 use std::path::{Path, PathBuf};
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 
 use lmix_types::DataSourceSpec;
 
 use crate::switcher::Rows;
 
-/// Largest file read.
+/// Largest file or download read.
 const MAX_BYTES: u64 = 16 * 1024 * 1024;
+/// How long a download may take.
+const FETCH_TIMEOUT: Duration = Duration::from_secs(10);
 
-/// The file's path; relative paths count from the show file's folder.
-pub fn resolve(spec: &DataSourceSpec, show: Option<&str>) -> PathBuf {
-    let path = Path::new(spec.path());
-    match show.and_then(|s| Path::new(s).parent()) {
+/// Where the data comes from.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Place {
+    File(PathBuf),
+    /// `http://` or `https://`.
+    Url(String),
+}
+
+impl Place {
+    pub fn is_url(&self) -> bool {
+        matches!(self, Self::Url(_))
+    }
+}
+
+/// The source's place; relative paths count from the show file's folder.
+pub fn resolve(spec: &DataSourceSpec, show: Option<&str>) -> Place {
+    let text = spec.path();
+    if text.starts_with("http://") || text.starts_with("https://") {
+        return Place::Url(text.to_string());
+    }
+    let path = Path::new(text);
+    Place::File(match show.and_then(|s| Path::new(s).parent()) {
         Some(dir) if path.is_relative() => dir.join(path),
         _ => path.to_path_buf(),
+    })
+}
+
+/// When a file last changed, if it can be read (addresses: none).
+pub async fn modified(place: &Place) -> Option<SystemTime> {
+    match place {
+        Place::File(path) => tokio::fs::metadata(path).await.ok()?.modified().ok(),
+        Place::Url(_) => None,
     }
 }
 
-/// When the file last changed, if it can be read.
-pub async fn modified(path: &Path) -> Option<SystemTime> {
-    tokio::fs::metadata(path).await.ok()?.modified().ok()
+/// A client for addresses.
+pub fn client() -> reqwest::Client {
+    reqwest::Client::builder()
+        .timeout(FETCH_TIMEOUT)
+        .build()
+        .expect("HTTP client")
 }
 
-/// Columns and rows of the file, or why it could not be read.
-pub async fn read(spec: &DataSourceSpec, path: &Path) -> Rows {
-    let failed = |error: String| Rows {
-        error: Some(error),
-        ..Rows::default()
-    };
-    match tokio::fs::metadata(path).await {
-        Ok(meta) if meta.len() > MAX_BYTES => {
-            return failed(format!("{} is larger than 16 MB", path.display()))
+async fn bytes(place: &Place, http: &reqwest::Client) -> Result<Vec<u8>, String> {
+    match place {
+        Place::File(path) => {
+            let shown = path.display();
+            let meta = tokio::fs::metadata(path)
+                .await
+                .map_err(|e| format!("{shown}: {e}"))?;
+            if meta.len() > MAX_BYTES {
+                return Err(format!("{shown} is larger than 16 MB"));
+            }
+            tokio::fs::read(path)
+                .await
+                .map_err(|e| format!("{shown}: {e}"))
         }
-        Ok(_) => {}
-        Err(e) => return failed(format!("{}: {e}", path.display())),
+        Place::Url(url) => {
+            let resp = http
+                .get(url)
+                .send()
+                .await
+                .and_then(reqwest::Response::error_for_status)
+                .map_err(|e| format!("{url}: {e}"))?;
+            if resp.content_length().is_some_and(|n| n > MAX_BYTES) {
+                return Err(format!("{url} is larger than 16 MB"));
+            }
+            let body = resp.bytes().await.map_err(|e| format!("{url}: {e}"))?;
+            if body.len() as u64 > MAX_BYTES {
+                return Err(format!("{url} is larger than 16 MB"));
+            }
+            Ok(body.to_vec())
+        }
     }
-    let text = match tokio::fs::read(path).await {
-        Ok(bytes) => String::from_utf8_lossy(&bytes).into_owned(),
-        Err(e) => return failed(format!("{}: {e}", path.display())),
-    };
-    let text = text.strip_prefix('\u{feff}').unwrap_or(&text);
-    let parsed = match spec {
-        DataSourceSpec::Csv { header, .. } => Ok(csv(text, *header)),
-        DataSourceSpec::Json { .. } => json(text),
-    };
+}
+
+/// Columns and rows of the source, or why it could not be read.
+pub async fn read(spec: &DataSourceSpec, place: &Place, http: &reqwest::Client) -> Rows {
+    let parsed = bytes(place, http).await.and_then(|bytes| {
+        let text = String::from_utf8_lossy(&bytes);
+        let text = text.strip_prefix('\u{feff}').unwrap_or(&text);
+        match spec {
+            DataSourceSpec::Csv { header, .. } => Ok(csv(text, *header)),
+            DataSourceSpec::Json { .. } => json(text),
+            DataSourceSpec::Text { .. } => Ok(lines(text)),
+        }
+    });
     match parsed {
         Ok((columns, rows)) => Rows {
             columns,
             rows,
             error: None,
         },
-        Err(error) => failed(error),
+        Err(error) => Rows {
+            error: Some(error),
+            ..Rows::default()
+        },
     }
+}
+
+/// One row per line that is not empty, in the column `text`.
+fn lines(text: &str) -> (Vec<String>, Vec<Vec<String>>) {
+    let rows = text
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .map(|l| vec![l.to_string()])
+        .collect();
+    (vec!["text".to_string()], rows)
 }
 
 /// The separator the first line uses most, outside quotes.
@@ -247,6 +314,14 @@ mod tests {
         assert!(json("[1]").is_err());
     }
 
+    #[test]
+    fn text_lines_are_rows() {
+        let (columns, rows) = lines("one\n\n  two \r\n");
+
+        assert_eq!(columns, s(&["text"]));
+        assert_eq!(rows, [s(&["one"]), s(&["two"])]);
+    }
+
     #[tokio::test]
     async fn reads_files_relative_to_the_show() {
         let dir = tempfile::tempdir().unwrap();
@@ -258,12 +333,46 @@ mod tests {
             header: true,
         };
         let show = dir.path().join("show.lmix").display().to_string();
+        let http = client();
 
-        let path = resolve(&spec, Some(&show));
-        let rows = read(&spec, &path).await;
+        let place = resolve(&spec, Some(&show));
+        let rows = read(&spec, &place, &http).await;
 
         assert_eq!((rows.columns, rows.rows), (s(&["name"]), vec![s(&["A"])]));
-        let missing = read(&spec, &dir.path().join("nope.csv")).await;
+        let missing = read(&spec, &Place::File(dir.path().join("nope.csv")), &http).await;
         assert!(missing.error.is_some());
+    }
+
+    #[tokio::test]
+    async fn reads_addresses() {
+        // A one-shot HTTP server with a CSV body.
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        tokio::spawn(async move {
+            use tokio::io::{AsyncReadExt, AsyncWriteExt};
+            let (mut stream, _) = listener.accept().await.unwrap();
+            let mut buf = [0u8; 1024];
+            let _ = stream.read(&mut buf).await;
+            let body = "a,b\n1,2\n";
+            let reply = format!(
+                "HTTP/1.1 200 OK\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{body}",
+                body.len()
+            );
+            stream.write_all(reply.as_bytes()).await.unwrap();
+        });
+        let spec = DataSourceSpec::Csv {
+            path: format!("http://127.0.0.1:{port}/sheet.csv"),
+            header: true,
+        };
+
+        let place = resolve(&spec, Some("/shows/x.lmix"));
+        assert!(place.is_url());
+        let rows = read(&spec, &place, &client()).await;
+
+        assert_eq!(rows.error, None);
+        assert_eq!(
+            (rows.columns, rows.rows),
+            (s(&["a", "b"]), vec![s(&["1", "2"])])
+        );
     }
 }
