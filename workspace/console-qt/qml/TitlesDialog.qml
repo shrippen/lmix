@@ -111,7 +111,8 @@ KanteDialog {
     modal: true
     width: Kirigami.Units.gridUnit * 46
     standardButtons: QQC2.Dialog.Close
-    contentHeight: column.implicitHeight
+    // Taller than the window: the content scrolls.
+    contentHeight: scroller.implicitHeight
 
     TriggersDialog {
         id: triggersDialog
@@ -137,9 +138,17 @@ KanteDialog {
             field: dialog.binding, binding: value === "" ? null : JSON.parse(value) })
     }
 
+    QQC2.ScrollView {
+        id: scroller
+        anchors.fill: parent
+        implicitHeight: Math.min(column.implicitHeight,
+            (dialog.parent ? dialog.parent.height : column.implicitHeight) * 0.8 - dialog.implicitHeaderHeight - dialog.implicitFooterHeight)
+        contentWidth: availableWidth
+        QQC2.ScrollBar.horizontal.policy: QQC2.ScrollBar.AlwaysOff
+
     ColumnLayout {
         id: column
-        width: parent.width
+        width: scroller.availableWidth
         spacing: Kirigami.Units.smallSpacing
 
         RowLayout {
@@ -275,6 +284,23 @@ KanteDialog {
         RowLayout {
             Layout.fillWidth: true
             visible: dialog.channel !== null
+            // The template's still (GFX.19), on a sunken ground: titles are
+            // drawn for a picture, mostly transparent.
+            Rectangle {
+                visible: thumb.source.toString() !== ""
+                implicitWidth: Kirigami.Units.gridUnit * 8
+                implicitHeight: implicitWidth * 9 / 16
+                color: KanteStyle.sunkenColor
+                border.color: KanteStyle.frameColor
+                Image {
+                    id: thumb
+                    anchors.fill: parent
+                    anchors.margins: 1
+                    fillMode: Image.PreserveAspectFit
+                    asynchronous: true
+                    source: dialog.template && dialog.template.thumbnail ? dialog.coreUrl + dialog.template.thumbnail : ""
+                }
+            }
             QQC2.ComboBox {
                 id: templateBox
                 Layout.fillWidth: true
@@ -506,5 +532,6 @@ KanteDialog {
                     template: dialog.template ? dialog.template.id : null })
             }
         }
+    }
     }
 }

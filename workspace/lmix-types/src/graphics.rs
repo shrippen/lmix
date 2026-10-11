@@ -433,6 +433,10 @@ pub struct Template {
     pub functions: Vec<String>,
     /// Changes with the template's files.
     pub revision: u64,
+    /// Address of a still of the template (its `thumbnail.png`), if it
+    /// has one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub thumbnail: Option<String>,
     /// Name, labels and choices in other languages.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub i18n: BTreeMap<String, TemplateTexts>,

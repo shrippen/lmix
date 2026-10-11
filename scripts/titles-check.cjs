@@ -49,6 +49,15 @@ async function act(action) {
     return frame;
   };
 
+  // Every built-in template has a still (GFX.19).
+  const list = await (await fetch(base + "/api/templates")).json();
+  for (const t of list.filter((t) => t.builtin)) {
+    if (!t.thumbnail) fail(`${t.id} has no thumbnail`);
+    const resp = await fetch(base + t.thumbnail);
+    if (resp.headers.get("content-type") !== "image/png") fail(`${t.thumbnail}: ${resp.status}`);
+  }
+  pass("templates: stills for the built-in set");
+
   // Built-in name and role: load hidden, play, update, stop and done.
   await act({ action: "title_load", graphics: "Titles", layer: 2, template: "lmix/name-role",
     data: { name: "Name A", role: "Role A" } });

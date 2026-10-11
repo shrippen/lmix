@@ -10,10 +10,12 @@
 //!     kante/                   Kante tokens and fonts (scripts/sync-kante.sh)
 //!     lmix/<name>/index.html   built-in templates, id "lmix/<name>"
 //!                 manifest.json
+//!                 thumbnail.png  a still (scripts/make-title-thumbnails.cjs)
 //!   <templates folder>/
-//!     <name>/index.html        id "<name>", manifest.json beside it
+//!     <name>/index.html        id "<name>", manifest.json and
+//!                              thumbnail.png beside it
 //!     <name>.html              id "<name>" (e.g. a CasparCG template),
-//!     <name>.json              its manifest, if any
+//!     <name>.json, <name>.png  its manifest and still, if any
 //! ```
 //!
 //! A manifest is optional: name, fields (id, label, kind, default,
@@ -82,6 +84,7 @@ fn template(
     builtin: bool,
     manifest: Option<&[u8]>,
     revision: u64,
+    thumbnail: Option<String>,
 ) -> Template {
     let manifest: Manifest = match manifest.map(serde_json::from_slice::<Manifest>) {
         Some(Ok(m)) => m,
@@ -112,6 +115,7 @@ fn template(
         url,
         builtin,
         revision,
+        thumbnail,
     }
 }
 
@@ -123,12 +127,15 @@ fn builtin_templates() -> Vec<Template> {
             let name = path.strip_prefix("lmix/")?.strip_suffix("/index.html")?;
             let id = format!("lmix/{name}");
             let manifest = builtin(&format!("{id}/manifest.json"));
+            let thumbnail = builtin(&format!("{id}/thumbnail.png"))
+                .map(|_| format!("/titles/{id}/thumbnail.png"));
             Some(template(
                 id.clone(),
                 format!("/titles/{id}/index.html"),
                 true,
                 manifest,
                 0,
+                thumbnail,
             ))
         })
         .collect()
@@ -185,12 +192,17 @@ fn folder_templates(dir: &Path) -> Vec<Template> {
             let mut files = Vec::new();
             files_below(&path, &mut files);
             let manifest = std::fs::read(path.join("manifest.json")).ok();
+            let thumbnail = path
+                .join("thumbnail.png")
+                .is_file()
+                .then(|| format!("/titles/{name}/thumbnail.png"));
             found.push(template(
                 name.clone(),
                 format!("/titles/{name}/index.html"),
                 false,
                 manifest.as_deref(),
                 revision(&files),
+                thumbnail,
             ));
         } else if let Some(stem) = name.strip_suffix(".html") {
             if RESERVED.contains(&stem) {
@@ -198,12 +210,17 @@ fn folder_templates(dir: &Path) -> Vec<Template> {
             }
             let manifest_path = dir.join(format!("{stem}.json"));
             let manifest = std::fs::read(&manifest_path).ok();
+            let thumbnail = dir
+                .join(format!("{stem}.png"))
+                .is_file()
+                .then(|| format!("/titles/{stem}.png"));
             found.push(template(
                 stem.to_string(),
                 format!("/titles/{name}"),
                 false,
                 manifest.as_deref(),
                 revision(&[path.clone(), manifest_path]),
+                thumbnail,
             ));
         }
     }
@@ -346,6 +363,7 @@ mod tests {
         assert_eq!(score.fields[0].kind, lmix_types::FieldKind::Number);
         assert_eq!(score.steps, 2);
         assert!(score.revision > 0);
+        assert_eq!(score.thumbnail, None);
         assert_eq!(found[0].url, "/titles/caspar.html");
         assert_eq!(found[0].data_format, DataFormat::Xml);
     }

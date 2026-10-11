@@ -1341,6 +1341,12 @@ dort weiter. Eine Pause vor dem Neuladen kennt die Seite nicht.
 **Feste Zeile** (DAT.4): eine Bindung kann `row` tragen und bleibt dann
 bei dieser Zeile, gleich welche gewählt ist (etwa Heim- und Gastteam aus
 Zeile 1 und 2 derselben Tabelle).
+**Vorschaubild** (GFX.19): liegt `thumbnail.png` neben einer Vorlage
+(bei einzelnen `.html`: `<name>.png`), nennt `GET /api/templates` die
+Adresse. Die eingebauten erzeugt `scripts/make-title-thumbnails.cjs`
+(Chromium, Feldbezeichnungen als Text, transparent, 480×270); die
+Console zeigt das Bild neben der Vorlagenwahl. Der Titel-Dialog scrollt,
+wenn er höher als das Fenster wird.
 **Offen**: Rendern in strom (GFX.2, nach M7.0), Grafikkanal als Input
 und Overlay (GFX.17), Overlay wartet auf das Ende der Ausblendung
 (GFX.4), Titel als Stinger (GFX.11), XLSX/ODS, Google Sheets mit API-Schlüssel, RSS, XML (DAT.1), Zeilen zu Spalten
