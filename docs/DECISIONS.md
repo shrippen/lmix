@@ -1308,10 +1308,17 @@ Abruf das Weiterschalten nicht aufhält.
 ihre Sprache, die Vorschauleiste die des Browsers. Der eingebaute Satz
 hat Deutsch (ein Test prüft, dass kein Feld fehlt); die Werte selbst
 bleiben die englischen Schlüssel (`left`, `down`).
+**Ebenen-Transformation** (GFX.18): `title_transform` setzt alle Werte
+einer Ebene zugleich (Verschiebung, Größe, Drehung, Neigung mit
+Perspektive, Zuschnitt, Deckkraft, Helligkeit/Kontrast/Sättigung,
+Blend-Modus) und bewegt sie in `duration_ms` mit Easing dorthin. Die
+Grafikseite setzt es per CSS auf das iframe der Ebene, also für jede
+Vorlage und jede Engine gleich; die Transformation gehört zur Ebene und
+bleibt beim Laden einer anderen Vorlage (wie CasparCGs MIXER). Console:
+Bereich „Place“ mit den häufigsten Werten.
 **Offen**: Rendern in strom (GFX.2, nach M7.0), Grafikkanal als Input
 und Overlay (GFX.17), Overlay wartet auf das Ende der Ausblendung
 (GFX.4), eine neu
 geladene Seite spielt laufende Titel von vorn (Countdown beginnt neu),
-Lottie (GFX.5), Titel als Stinger (GFX.11), Ebenen-Transformation
-(GFX.18), XLSX/ODS, Google Sheets mit API-Schlüssel, RSS, XML (DAT.1), Zeilen zu Spalten
+Lottie (GFX.5), Titel als Stinger (GFX.11), XLSX/ODS, Google Sheets mit API-Schlüssel, RSS, XML (DAT.1), Zeilen zu Spalten
 (DAT.3), Bilder aus lokalen Pfaden außerhalb des Vorlagenordners.

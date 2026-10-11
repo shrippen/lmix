@@ -83,6 +83,123 @@ pub struct BindingSpec {
     pub format: Option<String>,
 }
 
+/// How a title layer sits in the picture (GFX.18), applied by the
+/// graphics page around the template. All at rest by default.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(default)]
+pub struct LayerTransform {
+    /// Shift as fractions of the picture's width and height.
+    pub x: f32,
+    pub y: f32,
+    /// Size, 1 = as the template draws it (0.05–10).
+    pub scale: f32,
+    /// Turn in the picture plane, degrees.
+    pub rotation: f32,
+    /// Tilt for perspective, degrees around the horizontal and the
+    /// vertical axis (−89–89).
+    pub tilt_x: f32,
+    pub tilt_y: f32,
+    /// Hidden part at each edge, fractions.
+    pub crop: crate::layout::BoxCrop,
+    /// 0–1.
+    pub opacity: f32,
+    /// 1 = unchanged (0–4 each).
+    pub brightness: f32,
+    pub contrast: f32,
+    pub saturation: f32,
+    /// How the layer mixes with the layers below it.
+    pub blend: Blend,
+}
+
+impl Default for LayerTransform {
+    fn default() -> Self {
+        Self {
+            x: 0.0,
+            y: 0.0,
+            scale: 1.0,
+            rotation: 0.0,
+            tilt_x: 0.0,
+            tilt_y: 0.0,
+            crop: crate::layout::BoxCrop::default(),
+            opacity: 1.0,
+            brightness: 1.0,
+            contrast: 1.0,
+            saturation: 1.0,
+            blend: Blend::Normal,
+        }
+    }
+}
+
+impl LayerTransform {
+    pub fn is_rest(&self) -> bool {
+        *self == Self::default()
+    }
+
+    /// The first value out of its range, if any.
+    pub fn bad_field(&self) -> Option<&'static str> {
+        let tilt = -89.0..=89.0;
+        let finite = [
+            self.x,
+            self.y,
+            self.scale,
+            self.rotation,
+            self.tilt_x,
+            self.tilt_y,
+            self.opacity,
+            self.brightness,
+            self.contrast,
+            self.saturation,
+        ]
+        .iter()
+        .all(|v| v.is_finite());
+        if !finite {
+            return Some("a number");
+        }
+        [
+            ("x", (-2.0..=2.0).contains(&self.x)),
+            ("y", (-2.0..=2.0).contains(&self.y)),
+            ("scale", (0.05..=10.0).contains(&self.scale)),
+            ("tilt_x", tilt.contains(&self.tilt_x)),
+            ("tilt_y", tilt.contains(&self.tilt_y)),
+            ("crop", self.crop.is_zero() || self.crop.is_valid()),
+            ("opacity", (0.0..=1.0).contains(&self.opacity)),
+            ("brightness", (0.0..=4.0).contains(&self.brightness)),
+            ("contrast", (0.0..=4.0).contains(&self.contrast)),
+            ("saturation", (0.0..=4.0).contains(&self.saturation)),
+        ]
+        .into_iter()
+        .find_map(|(field, ok)| (!ok).then_some(field))
+    }
+}
+
+/// CSS blend modes a layer can use.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Blend {
+    #[default]
+    Normal,
+    Multiply,
+    Screen,
+    Overlay,
+    Darken,
+    Lighten,
+    Difference,
+}
+
+/// Easing of an animated change.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Easing {
+    Linear,
+    EaseIn,
+    EaseOut,
+    #[default]
+    EaseInOut,
+}
+
+/// Longest animated transform change.
+pub const TRANSFORM_MS_MAX: u32 = 10_000;
+
 /// One layer of a graphics channel.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct TitleLayer {
@@ -111,6 +228,14 @@ pub struct TitleLayer {
     /// Last function call, if any.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub call: Option<TitleCall>,
+    /// Where the layer sits; the last change moves there in
+    /// `transform_ms` with `easing`.
+    #[serde(default)]
+    pub transform: LayerTransform,
+    #[serde(default)]
+    pub transform_ms: u32,
+    #[serde(default)]
+    pub easing: Easing,
 }
 
 /// Actions run when a template of the channel reports something
@@ -350,6 +475,22 @@ mod tests {
         assert!(!trigger(Some("zero"), None).fires_on(3, "done"));
         assert!(trigger(Some("zero"), Some(3)).fires_on(3, "zero"));
         assert!(!trigger(Some("zero"), Some(2)).fires_on(3, "zero"));
+    }
+
+    #[test]
+    fn transform_ranges() {
+        assert_eq!(LayerTransform::default().bad_field(), None);
+        let t = |f: fn(&mut LayerTransform)| {
+            let mut t = LayerTransform::default();
+            f(&mut t);
+            t.bad_field()
+        };
+        assert_eq!(t(|t| t.scale = 0.0), Some("scale"));
+        assert_eq!(t(|t| t.opacity = 1.5), Some("opacity"));
+        assert_eq!(t(|t| t.tilt_x = 90.0), Some("tilt_x"));
+        assert_eq!(t(|t| t.crop.left = 0.99), Some("crop"));
+        assert_eq!(t(|t| t.x = f32::NAN), Some("a number"));
+        assert_eq!(t(|t| t.rotation = 720.0), None);
     }
 
     #[test]

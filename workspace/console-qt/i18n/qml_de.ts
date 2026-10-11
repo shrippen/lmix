@@ -1832,7 +1832,7 @@
   <context>
     <name>TitleField</name>
     <message>
-      <location filename="../qml/TitleField.qml" line="+71" />
+      <location filename="../qml/TitleField.qml" line="+74" />
       <source>Data…</source>
       <translation>Daten…</translation>
     </message>
@@ -1850,7 +1850,7 @@
   <context>
     <name>TitlesDialog</name>
     <message>
-      <location filename="../qml/TitlesDialog.qml" line="+46" />
+      <location filename="../qml/TitlesDialog.qml" line="+53" />
       <source>Ready</source>
       <translation>Bereit</translation>
     </message>
@@ -1960,7 +1960,7 @@
       <translation>Laden und abspielen</translation>
     </message>
     <message>
-      <location line="+35" />
+      <location line="+36" />
       <source>Live</source>
       <translation>Live</translation>
     </message>
@@ -1980,7 +1980,57 @@
       <translation>Funktion %1 der Vorlage aufrufen</translation>
     </message>
     <message>
-      <location line="+19" />
+      <location line="+11" />
+      <source>Place</source>
+      <translation>Platz</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>X %</source>
+      <translation>X %</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Y %</source>
+      <translation>Y %</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Size %</source>
+      <translation>Größe %</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Turn °</source>
+      <translation>Drehung °</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Opacity %</source>
+      <translation>Deckkraft %</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Colour %</source>
+      <translation>Farbe %</translation>
+    </message>
+    <message>
+      <location line="+29" />
+      <source>Move time, ms</source>
+      <translation>Bewegungszeit, ms</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Move</source>
+      <translation>Bewegen</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Reset</source>
+      <translation>Zurücksetzen</translation>
+    </message>
+    <message>
+      <location line="+23" />
       <source>Use set</source>
       <translation>Datensatz nutzen</translation>
     </message>

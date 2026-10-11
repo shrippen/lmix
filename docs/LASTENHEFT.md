@@ -370,7 +370,7 @@ Funktionsreferenz, kein Code (MIT, `claude.md` Entscheidung 6).
 | GFX.15 | Leistungsbudget: ≥ 8 aktive animierte Titel 1080p60 gleichzeitig ohne Drop | M | – |
 | GFX.16 | Import von vMix-Titeln (.gtzip, XAML) | X | – |
 | GFX.17 | Titel-Ebenen: mehrere Vorlagen gleichzeitig in einem Grafik-Input (z. B. Bauchbinde, Logo, Uhr), je Ebene unabhängig steuerbar; Grafik-Input als Overlay nutzbar | S | ◐ (Ebenen; Input/Overlay mit GFX.2) |
-| GFX.18 | Ebenen-Transformation je Titel-Ebene: Position, Größe, Crop, Deckkraft, Drehung, Perspektive, Helligkeit/Kontrast/Sättigung, Blend-Modus; animiert mit Dauer und Easing; mehrere Änderungen gemeinsam auf einen Frame anwenden | S | – |
+| GFX.18 | Ebenen-Transformation je Titel-Ebene: Position, Größe, Crop, Deckkraft, Drehung, Perspektive, Helligkeit/Kontrast/Sättigung, Blend-Modus; animiert mit Dauer und Easing; mehrere Änderungen gemeinsam auf einen Frame anwenden | S | ✅ (Console: Platz, Größe, Drehung, Deckkraft, Farbe) |
 | GFX.19 | Vorlagen- und Medienliste mit Infos (Felder, Größe, Dauer) und Vorschaubild über die API abfragbar | S | ◐ (ohne Vorschaubild) |
 
 ### 3.12 Datenquellen (DAT)

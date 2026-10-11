@@ -66,6 +66,25 @@ async function act(action) {
   await page.waitForTimeout(800);
   await page.screenshot({ path: path.join(work, "name-role.png") });
 
+  // Layer transform (GFX.18): all values in one change, animated.
+  await act({ action: "title_transform", graphics: "Titles", layer: 2, duration_ms: 300, easing: "ease_out",
+    transform: { x: 0.25, y: -0.1, scale: 0.5, rotation: 5, opacity: 0.8, saturation: 0, blend: "screen",
+      crop: { left: 0.1, top: 0, right: 0, bottom: 0 } } });
+  await page.waitForFunction(() => {
+    const f = document.querySelector('#stage iframe[style*="z-index: 2"]');
+    return f && f.style.transform.includes("scale(0.5)") && f.style.transform.includes("translate(480px, -108px)")
+      && f.style.opacity === "0.8" && f.style.transition.includes("300ms ease-out")
+      && f.style.filter.includes("saturate(0)") && f.style.mixBlendMode === "screen" && f.style.clipPath.startsWith("inset(0");
+  }, null, { timeout: 3000 });
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: path.join(work, "transform.png") });
+  await act({ action: "title_transform", graphics: "Titles", layer: 2, transform: {} });
+  await page.waitForFunction(() => {
+    const f = document.querySelector('#stage iframe[style*="z-index: 2"]');
+    return f.style.transform.includes("scale(1)") && f.style.transition === "none";
+  }, null, { timeout: 3000 });
+  pass("transform: place, size, turn, crop, colour, blend; animated and back at once");
+
   await act({ action: "title_stop", graphics: "Titles", layer: 2 });
   await frame.waitForSelector("#name:not(.is-in)", { timeout: 3000 });
   await page.waitForFunction(() => window.__reports.some((r) => r.layer === 2 && r.report === "done"), null, { timeout: 3000 });

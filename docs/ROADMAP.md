@@ -351,6 +351,7 @@ Stand (2026-10-11, Teil A ohne Render-Engine, DECISIONS „M7 Teil A“):
 | Console: Titel- und Datenquellen-Dialog | ✅ GFX.7 |
 | M7.0 Benchmark, Rendern in strom (GFX.2), Kanal als Input/Overlay | offen (GPU, `cefsrc`/`wpesrc`) |
 | Auslöser auf Titelmeldungen (Countdown bei 0) | ✅ GFX.9 |
+| Ebenen-Transformation, animiert | ✅ GFX.18 |
 | Lottie, Titel als Stinger | offen |
 
 ### M8 — Fernbedienung, API-Gleichstand

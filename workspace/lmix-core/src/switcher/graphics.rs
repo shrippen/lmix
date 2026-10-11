@@ -9,11 +9,12 @@
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
+use lmix_types::graphics::TRANSFORM_MS_MAX;
 use lmix_types::graphics::{
     cell, formatted, DATASETS, DATA_AUTO_MIN_MS, DATA_ROWS, DATA_SOURCES, GRAPHICS, GRAPHICS_LAYERS,
 };
 use lmix_types::{
-    Action, ActionError, BindingSpec, DataSource, Dataset, FieldBinding, Graphics, InputId,
+    Action, ActionError, BindingSpec, DataSource, Dataset, Easing, FieldBinding, Graphics, InputId,
     InputRef, TitleCall, TitleData, TitleLayer, TitlePhase,
 };
 
@@ -51,6 +52,8 @@ pub struct TitleRuntime {
     call_seq: u64,
     /// Plays per graphics channel and layer.
     plays: HashMap<(InputId, u32), u64>,
+    /// How the last transform change of a layer moves.
+    transform_moves: HashMap<(InputId, u32), (u32, Easing)>,
     /// When each auto-advancing data source moves on next.
     due: HashMap<InputId, Instant>,
 }
@@ -61,6 +64,7 @@ impl TitleRuntime {
         self.rows.clear();
         self.calls.clear();
         self.plays.clear();
+        self.transform_moves.clear();
         self.due.clear();
     }
 }
@@ -214,10 +218,17 @@ impl Switcher {
                     return Err(ActionError::UnknownTemplate { template });
                 }
                 let channel = &mut self.show.graphics[index];
+                let transform = channel
+                    .layers
+                    .iter()
+                    .find(|t| t.layer == layer)
+                    .map(|t| t.transform)
+                    .unwrap_or_default();
                 let title = ShowTitle {
                     layer,
                     template,
                     data,
+                    transform,
                     bindings: Vec::new(),
                     phase: if play {
                         TitlePhase::Playing
@@ -284,6 +295,29 @@ impl Switcher {
                 layer,
                 data,
             } => merge(&mut self.title_mut(&graphics, layer)?.data, data),
+            Action::TitleTransform {
+                graphics,
+                layer,
+                transform,
+                duration_ms,
+                easing,
+            } => {
+                if let Some(field) = transform.bad_field() {
+                    return Err(ActionError::BadTitle {
+                        reason: format!("transform: {field} is out of range"),
+                    });
+                }
+                if duration_ms > TRANSFORM_MS_MAX {
+                    return Err(ActionError::BadTitle {
+                        reason: format!("a move takes at most {TRANSFORM_MS_MAX} ms"),
+                    });
+                }
+                let id = self.show.graphics[self.find_graphics(&graphics)?].id;
+                self.title_mut(&graphics, layer)?.transform = transform;
+                self.titles
+                    .transform_moves
+                    .insert((id, layer), (duration_ms, easing));
+            }
             Action::TitleAdd {
                 graphics,
                 layer,
@@ -626,6 +660,12 @@ impl Switcher {
                     .iter()
                     .map(|t| {
                         let template = self.titles.templates.get(&t.template);
+                        let move_of = self
+                            .titles
+                            .transform_moves
+                            .get(&(g.id, t.layer))
+                            .copied()
+                            .unwrap_or_default();
                         TitleLayer {
                             layer: t.layer,
                             template: t.template.clone(),
@@ -643,6 +683,9 @@ impl Switcher {
                             step: t.step,
                             revision: template.map_or(0, |t| t.revision),
                             call: self.titles.calls.get(&(g.id, t.layer)).cloned(),
+                            transform: t.transform,
+                            transform_ms: move_of.0,
+                            easing: move_of.1,
                         }
                     })
                     .collect(),
@@ -858,6 +901,48 @@ mod tests {
         .unwrap();
 
         assert_eq!(layer(&sw, 1).data, data(&[("role", "R")]));
+    }
+
+    #[test]
+    fn transform_is_checked_and_kept_across_loads() {
+        let mut sw = switcher();
+        load(&mut sw, 2);
+        let transform = lmix_types::LayerTransform {
+            x: 0.25,
+            scale: 0.5,
+            ..Default::default()
+        };
+        let set = |sw: &mut Switcher, transform, duration_ms| {
+            sw.apply(Action::TitleTransform {
+                graphics: InputRef::Number(1),
+                layer: 2,
+                transform,
+                duration_ms,
+                easing: Easing::EaseOut,
+            })
+        };
+
+        set(&mut sw, transform, 400).unwrap();
+        let title = layer(&sw, 2);
+        assert_eq!(
+            (title.transform, title.transform_ms, title.easing),
+            (transform, 400, Easing::EaseOut)
+        );
+
+        load(&mut sw, 2);
+        assert_eq!(
+            layer(&sw, 2).transform,
+            transform,
+            "a new template keeps the place"
+        );
+
+        let mut bad = transform;
+        bad.opacity = 2.0;
+        assert!(matches!(
+            set(&mut sw, bad, 0),
+            Err(ActionError::BadTitle { .. })
+        ));
+        assert!(set(&mut sw, transform, TRANSFORM_MS_MAX + 1).is_err());
     }
 
     #[test]

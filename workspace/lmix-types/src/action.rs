@@ -14,7 +14,9 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::automation::{Cue, Trigger};
-use crate::graphics::{BindingSpec, DataSourceSpec, TitleData, TitleTrigger};
+use crate::graphics::{
+    BindingSpec, DataSourceSpec, Easing, LayerTransform, TitleData, TitleTrigger,
+};
 use crate::input::{
     ChannelStrip, InputColor, InputRef, Listen, Look, SignalLoss, SourceSpec, Transport, AUX_BUSES,
 };
@@ -364,6 +366,19 @@ pub enum Action {
         field: String,
         #[serde(default = "one")]
         amount: f64,
+    },
+    /// Place the layer (GFX.18): position, size, turn, tilt, crop,
+    /// opacity, colour, blend; all values together, moving there in
+    /// `duration_ms` (0: at once).
+    TitleTransform {
+        graphics: InputRef,
+        #[serde(default = "first_layer")]
+        layer: u32,
+        transform: LayerTransform,
+        #[serde(default)]
+        duration_ms: u32,
+        #[serde(default)]
+        easing: Easing,
     },
     /// Call a function of the template (CasparCG `CG INVOKE`).
     TitleCall {

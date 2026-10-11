@@ -16,7 +16,8 @@
 <style>
   html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: transparent; }
   #stage { position: absolute; left: 50%; top: 50%; transform-origin: 0 0; }
-  #stage iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: transparent; pointer-events: none; }
+  #stage iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: transparent; pointer-events: none;
+    transform-origin: 50% 50%; }
   .preview body { background: repeating-conic-gradient(var(--bg1) 0 25%, var(--bg0) 0 50%) 0 0 / 32px 32px; }
   .preview #stage { outline: 1px solid var(--bg2); }
   #note { display: none; position: fixed; left: 8px; top: 8px; padding: 4px 8px; z-index: 1;
@@ -131,6 +132,31 @@ function sync(entry) {
   }
 }
 
+const EASING = { linear: "linear", ease_in: "ease-in", ease_out: "ease-out", ease_in_out: "ease-in-out" };
+
+/** Where the layer sits (GFX.18): one change of all values, moving there
+ *  in transform_ms. */
+function place(entry, want, animate) {
+  const t = want.transform || {};
+  const key = JSON.stringify(t);
+  if (entry.placed === key) return;
+  entry.placed = key;
+  const f = entry.frame;
+  const ms = animate ? want.transform_ms || 0 : 0;
+  const ease = EASING[want.easing] || "ease-in-out";
+  f.style.transition = ms > 0
+    ? ["transform", "opacity", "clip-path", "filter"].map((p) => `${p} ${ms}ms ${ease}`).join(", ")
+    : "none";
+  const crop = t.crop || {};
+  const pct = (v) => `${((v || 0) * 100).toFixed(3)}%`;
+  f.style.transform = `translate(${(t.x || 0) * width}px, ${(t.y || 0) * height}px) perspective(${width}px) ` +
+    `rotateX(${t.tilt_x || 0}deg) rotateY(${t.tilt_y || 0}deg) rotate(${t.rotation || 0}deg) scale(${t.scale ?? 1})`;
+  f.style.clipPath = `inset(${pct(crop.top)} ${pct(crop.right)} ${pct(crop.bottom)} ${pct(crop.left)})`;
+  f.style.opacity = String(t.opacity ?? 1);
+  f.style.filter = `brightness(${t.brightness ?? 1}) contrast(${t.contrast ?? 1}) saturate(${t.saturation ?? 1})`;
+  f.style.mixBlendMode = (t.blend || "normal").replace(/_/g, "-");
+}
+
 function frameFor(entry) {
   const frame = document.createElement("iframe");
   frame.setAttribute("aria-hidden", "true");
@@ -141,6 +167,8 @@ function frameFor(entry) {
   frame.src = entry.url;
   if (entry.frame) entry.frame.replaceWith(frame); else stage.appendChild(frame);
   entry.frame = frame;
+  entry.placed = null;
+  place(entry, entry.want, false);
 }
 
 async function follow(state) {
@@ -173,6 +201,7 @@ async function follow(state) {
       // with the same data (GFX.14).
       frameFor(entry);
     } else {
+      place(entry, want, true);
       sync(entry);
     }
   }

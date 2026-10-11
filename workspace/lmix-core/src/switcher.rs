@@ -364,6 +364,7 @@ impl Switcher {
             | Action::TitleClear { .. }
             | Action::TitleUpdate { .. }
             | Action::TitleAdd { .. }
+            | Action::TitleTransform { .. }
             | Action::TitleCall { .. }
             | Action::TitleBind { .. }
             | Action::TitleReport { .. }

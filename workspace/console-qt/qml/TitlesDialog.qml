@@ -39,6 +39,8 @@ KanteDialog {
     property var pending: ({})
     /** Field the data source menu binds. */
     property string binding: ""
+    /** Working copy of the layer's place (lmix `LayerTransform`). */
+    property var place: loaded && loaded.transform ? Object.assign({}, loaded.transform) : ({})
 
     /** Language of the Console, for the templates' own texts. */
     readonly property string lang: Qt.locale().name.split("_")[0]
@@ -353,6 +355,75 @@ KanteDialog {
                     QQC2.ToolTip.visible: hovered
                     QQC2.ToolTip.text: qsTr("Call the template's function %1").arg(modelData)
                     onClicked: dialog.act({ action: "title_call", graphics: dialog.ref(), layer: dialog.layer, function: modelData })
+                }
+            }
+        }
+
+        // Where the layer sits (GFX.18): edited as a copy, Move sends all of it.
+        KanteSectionLabel {
+            visible: dialog.loaded !== null
+            text: qsTr("Place")
+        }
+        Flow {
+            Layout.fillWidth: true
+            visible: dialog.loaded !== null
+            spacing: Kirigami.Units.smallSpacing
+
+            Repeater {
+                model: [
+                    { key: "x", label: qsTr("X %"), from: -200, to: 200, scale: 100 },
+                    { key: "y", label: qsTr("Y %"), from: -200, to: 200, scale: 100 },
+                    { key: "scale", label: qsTr("Size %"), from: 5, to: 1000, scale: 100 },
+                    { key: "rotation", label: qsTr("Turn °"), from: -360, to: 360, scale: 1 },
+                    { key: "opacity", label: qsTr("Opacity %"), from: 0, to: 100, scale: 100 },
+                    { key: "saturation", label: qsTr("Colour %"), from: 0, to: 400, scale: 100 }
+                ]
+                RowLayout {
+                    required property var modelData
+                    spacing: 2
+                    QQC2.Label { text: modelData.label; color: KanteStyle.mutedTextColor }
+                    QQC2.SpinBox {
+                        id: placeBox
+                        from: modelData.from
+                        to: modelData.to
+                        editable: true
+                        value: Math.round((dialog.place[modelData.key] ?? (modelData.key === "x" || modelData.key === "y" || modelData.key === "rotation" ? 0 : 1)) * modelData.scale)
+                        Accessible.name: modelData.label
+                        onValueModified: {
+                            const p = Object.assign({}, dialog.place)
+                            p[modelData.key] = value / modelData.scale
+                            dialog.place = p
+                        }
+                        KanteFieldSkin { control: placeBox }
+                    }
+                }
+            }
+            RowLayout {
+            spacing: 2
+            QQC2.SpinBox {
+                id: moveMs
+                from: 0
+                to: 10000
+                stepSize: 100
+                editable: true
+                value: 500
+                Accessible.name: qsTr("Move time, ms")
+                KanteFieldSkin { control: moveMs }
+            }
+            QQC2.Label { text: "ms" }
+            }
+            KanteButton {
+                text: qsTr("Move")
+                onClicked: dialog.act({ action: "title_transform", graphics: dialog.ref(), layer: dialog.layer,
+                    transform: dialog.place, duration_ms: moveMs.value })
+            }
+            KanteButton {
+                text: qsTr("Reset")
+                emphasis: KanteButton.Emphasis.Quiet
+                onClicked: {
+                    dialog.place = {}
+                    dialog.act({ action: "title_transform", graphics: dialog.ref(), layer: dialog.layer,
+                        transform: {}, duration_ms: moveMs.value })
                 }
             }
         }

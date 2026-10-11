@@ -13,9 +13,9 @@ use lmix_types::action::{OVERLAY_CHANNELS, TRANSITION_SLOTS};
 use lmix_types::input::AUX_BUSES;
 use lmix_types::{
     Action, AuxBus, ChannelStrip, Cue, DataSourceSpec, Dataset, Effect, FieldBinding, InputAudio,
-    InputColor, InputId, LayoutBox, Look, MidiBinding, OutputId, OutputSource, OutputSpec,
-    SignalLoss, SourceSpec, TitleData, TitlePhase, TitleTrigger, Transition, TransitionSlot,
-    Trigger,
+    InputColor, InputId, LayerTransform, LayoutBox, Look, MidiBinding, OutputId, OutputSource,
+    OutputSpec, SignalLoss, SourceSpec, TitleData, TitlePhase, TitleTrigger, Transition,
+    TransitionSlot, Trigger,
 };
 use serde::{Deserialize, Serialize};
 
@@ -108,6 +108,9 @@ pub struct ShowTitle {
     pub phase: TitlePhase,
     #[serde(default)]
     pub step: u32,
+    /// Where the layer sits (kept when another template is loaded).
+    #[serde(default, skip_serializing_if = "LayerTransform::is_rest")]
+    pub transform: LayerTransform,
 }
 
 /// One data source as saved.
@@ -397,6 +400,11 @@ mod tests {
                     }],
                     phase: TitlePhase::Playing,
                     step: 1,
+                    transform: LayerTransform {
+                        x: 0.1,
+                        opacity: 0.5,
+                        ..Default::default()
+                    },
                 }],
                 triggers: vec![TitleTrigger {
                     report: Some("zero".into()),

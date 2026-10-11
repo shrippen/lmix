@@ -385,4 +385,13 @@ DE = {
     'Layer of trigger %1': 'Ebene von Auslöser %1',
     'Run actions when a title reports, e.g. a countdown at zero': 'Aktionen ausführen, wenn ein Titel etwas meldet, z. B. ein Countdown bei null',
     'CSV, JSON or text file (relative to the show file), or http(s) address': 'CSV-, JSON- oder Textdatei (relativ zur Show-Datei) oder http(s)-Adresse',
+    'Place': 'Platz',
+    'X %': 'X %',
+    'Y %': 'Y %',
+    'Size %': 'Größe %',
+    'Turn °': 'Drehung °',
+    'Opacity %': 'Deckkraft %',
+    'Colour %': 'Farbe %',
+    'Move time, ms': 'Bewegungszeit, ms',
+    'Move': 'Bewegen',
 }
