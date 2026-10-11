@@ -1353,6 +1353,15 @@ den Elementen eines Pfads (`scores/game`, mit `//` irgendwo) eine Zeile
 mit Attributen (`@id`) und Kindelementen als Spalten. Parser `roxmltree`
 0.21 (MIT/Apache-2.0, ohne eigene Abhängigkeiten außer `memchr`), kein
 volles XPath. Console: Art der Quelle wählbar, aus dem Namen vorbelegt.
+**Webseite „Titel“** (WEB.4): `/titles` zeigt die Ebenen eines Kanals
+mit Play/Next/Stop, das Formular der gewählten Ebene (gebundene Felder
+gesperrt) mit „Apply“, die Datensätze der Vorlage und „Save as set“; Werte
+nur über DOM-Knoten, nie als HTML (sie können aus fremden Quellen kommen).
+**Review**: ein unabhängiger Durchgang über den Branch fand sechs Fehler
+(geleertes Feld blieb sichtbar, Laden auf eine laufende Ebene ging auf
+Sendung, Netzabruf unter der Switcher-Sperre, Auslöser-Schleife über
+`title_report`, Datensatz-Index nach Löschen, Ebenenprüfung der Auslöser),
+alle behoben und mit Tests abgedeckt.
 **Offen**: Rendern in strom (GFX.2, nach M7.0), Grafikkanal als Input
 und Overlay (GFX.17), Overlay wartet auf das Ende der Ausblendung
 (GFX.4), Titel als Stinger (GFX.11), XLSX/ODS, Google Sheets mit API-Schlüssel (DAT.1), Zeilen zu Spalten

@@ -20,7 +20,7 @@
 //! | `GET /api/events` | WebSocket: state first, then every event |
 //! | `GET /health` | liveness |
 //! | `GET /metrics` | health and metrics, Prometheus text format (OPS.3) |
-//! | `GET /`, `/mixer`, `/tally`, `/keys` | browser pages (`web.rs`) |
+//! | `GET /`, `/mixer`, `/tally`, `/keys`, `/titles` | browser pages (`web.rs`) |
 
 use std::sync::Arc;
 

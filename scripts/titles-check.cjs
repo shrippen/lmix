@@ -72,6 +72,11 @@ async function act(action) {
   await frame.waitForFunction(() => document.getElementById("role").textContent === "Role B");
   if ((await frame.textContent("#name")) !== "Name A") fail("update lost a field");
   pass("play and update: in, field changed, others kept");
+  await act({ action: "title_update", graphics: "Titles", layer: 2, data: { role: "" } });
+  await frame.waitForFunction(() => document.getElementById("role").textContent === "", null, { timeout: 3000 });
+  await act({ action: "title_update", graphics: "Titles", layer: 2, data: { role: "Role B" } });
+  await frame.waitForFunction(() => document.getElementById("role").textContent === "Role B");
+  pass("a cleared field leaves the picture");
   await page.waitForTimeout(800);
   await page.screenshot({ path: path.join(work, "name-role.png") });
 
@@ -98,6 +103,18 @@ async function act(action) {
   await frame.waitForSelector("#name:not(.is-in)", { timeout: 3000 });
   await page.waitForFunction(() => window.__reports.some((r) => r.layer === 2 && r.report === "done"), null, { timeout: 3000 });
   pass("stop: out animation, template reports done");
+
+  // Loading onto a layer that plays: the new title waits unseen.
+  await act({ action: "title_play", graphics: "Titles", layer: 2 });
+  await frame.waitForSelector("#name.is-in", { timeout: 3000 });
+  await act({ action: "title_load", graphics: "Titles", layer: 2, template: "lmix/name-role", data: { name: "Next guest" } });
+  await page.waitForFunction(() => {
+    const f = document.querySelector('#stage iframe[style*="z-index: 2"]');
+    const d = f && f.contentDocument;
+    const n = d && d.getElementById("name");
+    return n && n.textContent === "Next guest" && !n.classList.contains("is-in");
+  }, null, { timeout: 3000 });
+  pass("load onto a playing layer: the new title is not on air");
 
   // A multi-step title: next reveals the text.
   await act({ action: "title_load", graphics: 1, layer: 1, template: "lmix/card",
@@ -263,9 +280,15 @@ async function act(action) {
   sheet = "name,role\nName A,Role Y\n";
   await frame.waitForFunction(() => document.getElementById("head").textContent === "Role Y", null, { timeout: 15000 });
   pass("data source at an address: read again");
-  state = await act({ action: "add_data_source", spec: { kind: "feed", path: sheetUrl.replace("/export?format=csv", "/feed.xml") }, name: "News" });
-  const news = state.data_sources.find((d) => d.name === "News");
-  if (news.error || news.rows.map((r) => r[0]).join("|") !== "News one|News two") fail("feed: " + JSON.stringify(news));
+  await act({ action: "add_data_source", spec: { kind: "feed", path: sheetUrl.replace("/export?format=csv", "/feed.xml") }, name: "News" });
+  // Addresses are fetched in the background.
+  for (let i = 0; ; i++) {
+    const s = await (await fetch(base + "/api/state")).json();
+    const news = s.data_sources.find((d) => d.name === "News");
+    if (news && news.rows.map((r) => r[0]).join("|") === "News one|News two") break;
+    if (i > 50) fail("feed: " + JSON.stringify(news));
+    await new Promise((r) => setTimeout(r, 100));
+  }
   server.close();
   pass("feed source: a row per item");
   const notes = path.join(work, "notes.txt");
@@ -301,6 +324,28 @@ async function act(action) {
   const after = await page.evaluate(() => window.__reports.filter((r) => r.report === "zero").length);
   if (after !== zeros) fail(`preview page reported (${zeros} -> ${after} zeros)`);
   pass("preview page: same picture, no reports");
+
+  // The titles web page (WEB.4): play, edit a field, apply. (A bound
+  // field is locked there: unbind it first.)
+  await act({ action: "title_bind", graphics: 1, layer: 5, field: "text", binding: null });
+  const web = await browser.newPage({ viewport: { width: 900, height: 900 } });
+  web.on("pageerror", (e) => errors.push(e.message));
+  await web.goto(base + "/titles");
+  await web.waitForSelector(".layer", { timeout: 5000 });
+  await web.click('.layer:has(.num:text-is("5")) .name');
+  await web.waitForSelector('form.fields [name="text"]', { timeout: 3000 });
+  await web.fill('form.fields [name="text"]', "From the web");
+  await web.click("form.fields button[type=submit]");
+  for (let i = 0; ; i++) {
+    const s = await (await fetch(base + "/api/state")).json();
+    const l = s.graphics[0].layers.find((x) => x.layer === 5);
+    if (l && l.data.text === "From the web") break;
+    if (i > 30) fail("web page did not apply the field");
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  await web.screenshot({ path: path.join(work, "web-titles.png") });
+  await web.close();
+  pass("titles web page: edit a field and apply");
 
   // The template alone in a browser: its preview bar.
   const alone = await browser.newPage({ viewport: { width: 1280, height: 720 } });

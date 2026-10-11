@@ -438,7 +438,7 @@ Zurückgestellt (User 2026-10-08).
 | WEB.1 | Seite "Tasten": alle als sichtbar markierten Belegungen als Raster | S | – |
 | WEB.2 | Seite "Mischer": Inputs, PVW/PGM, Übergangstasten | S | – |
 | WEB.3 | Seite "Tally": Input wählen, ganzer Bildschirm in PGM-/PVW-Farbe | S | – |
-| WEB.4 | Seite "Titel": Felder bearbeiten, Presets anwenden/anlegen | S | – |
+| WEB.4 | Seite "Titel": Felder bearbeiten, Presets anwenden/anlegen | S | ✅ |
 | WEB.5 | Seite "Mitschauen" (STR.8) und "Zeichnen" (§3.17) | K | – |
 
 ### 3.17 Zeichenebene (TEL)
