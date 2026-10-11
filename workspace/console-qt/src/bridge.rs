@@ -41,6 +41,8 @@ pub mod qobject {
         #[qproperty(i32, style)]
         /// Peak dBFS per input id, and `program` (JSON object).
         #[qproperty(QString, levels)]
+        /// Where clips play: `{input id: [position ms, length ms]}`.
+        #[qproperty(QString, positions)]
         /// Link health per output id: lmix `OutputStats` (JSON object).
         #[qproperty(QString, links)]
         /// Capture devices (JSON list of lmix `Device`).
@@ -168,6 +170,7 @@ pub struct CoreRust {
     message: QString,
     style: i32,
     levels: QString,
+    positions: QString,
     links: QString,
     devices: QString,
     recent: QString,
@@ -205,6 +208,7 @@ async fn follow(thread: cxx_qt::CxxQtThread<qobject::Core>) {
     loop {
         if let Ok((mut stream, _)) = connect_async(&url).await {
             let _ = thread.queue(|core| core.set_connected(true));
+            let mut positions: HashMap<String, (u64, u64)> = HashMap::new();
             while let Some(Ok(message)) = stream.next().await {
                 let Message::Text(text) = message else {
                     continue;
@@ -213,6 +217,15 @@ async fn follow(thread: cxx_qt::CxxQtThread<qobject::Core>) {
                     Ok(Event::State { state }) => {
                         let json = serde_json::to_string(&state).unwrap_or_default();
                         thread.queue(move |core| core.set_state(QString::from(&json)))
+                    }
+                    Ok(Event::Position {
+                        input,
+                        position_ms,
+                        duration_ms,
+                    }) => {
+                        positions.insert(input.to_string(), (position_ms, duration_ms));
+                        let json = serde_json::to_string(&positions).unwrap_or_default();
+                        thread.queue(move |core| core.set_positions(QString::from(&json)))
                     }
                     Ok(Event::Levels { levels }) => {
                         let json = levels_json(&levels);

@@ -16,6 +16,8 @@ RowLayout {
     /** lmix `Input` on the monitor, or null. */
     required property var input
     required property var act
+    /** `[position ms, length ms]` of the input while it plays, else null. */
+    property var position: null
 
     readonly property string kind: input ? input.source.kind : ""
     readonly property bool playlist: kind === "playlist"
@@ -46,10 +48,20 @@ RowLayout {
     Key { text: "▶"; transport: "play"; hint: qsTr("Play"); emphasis: KanteButton.Emphasis.Primary }
     Key { text: "⏸"; transport: "pause"; hint: qsTr("Pause") }
     Key { text: "⏭"; transport: "next"; hint: qsTr("Next"); visible: bar.playlist }
-    Item { Layout.fillWidth: true }
+    // Where it plays (B39); the length alone until the player reports.
+    KanteProgressBar {
+        Layout.fillWidth: true
+        visible: bar.position !== null && bar.position[1] > 0
+        value: bar.position && bar.position[1] > 0 ? bar.position[0] / bar.position[1] : 0
+    }
+    Item {
+        Layout.fillWidth: true
+        visible: !(bar.position !== null && bar.position[1] > 0)
+    }
     QQC2.Label {
-        visible: bar.input !== null && !!bar.input.clip_ms
-        text: bar.input && bar.input.clip_ms ? bar.length(bar.input.clip_ms) : ""
+        readonly property real total: bar.position && bar.position[1] > 0 ? bar.position[1] : (bar.input && bar.input.clip_ms ? bar.input.clip_ms : 0)
+        visible: total > 0
+        text: (bar.position ? bar.length(bar.position[0]) + " / " : "") + bar.length(total)
         font.family: KanteStyle.monoFamily
         color: KanteStyle.mutedTextColor
         Accessible.name: qsTr("Length %1").arg(text)

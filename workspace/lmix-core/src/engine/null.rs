@@ -24,9 +24,29 @@ pub struct NullEngine {
     /// Refuse every command, as a fresh engine without the mixer does.
     #[cfg(test)]
     refusing: std::sync::atomic::AtomicBool,
+    /// Media player reports a test sends.
+    #[cfg(test)]
+    players: Option<tokio::sync::broadcast::Sender<crate::clips::PlayerProgress>>,
 }
 
 impl NullEngine {
+    /// An engine whose media players a test can report for.
+    #[cfg(test)]
+    pub fn playing() -> Self {
+        Self {
+            players: Some(tokio::sync::broadcast::channel(16).0),
+            ..Self::default()
+        }
+    }
+
+    /// Report a media player's position as the engine would.
+    #[cfg(test)]
+    pub fn report(&self, progress: crate::clips::PlayerProgress) {
+        if let Some(tx) = &self.players {
+            let _ = tx.send(progress);
+        }
+    }
+
     /// An engine whose flows can be made to fail (tests).
     #[cfg(test)]
     pub fn failing() -> Self {
@@ -73,6 +93,14 @@ impl NullEngine {
 impl Engine for NullEngine {
     async fn start(&self, _slots: usize) -> Result<(), EngineError> {
         Ok(())
+    }
+
+    fn players(&self) -> tokio::sync::broadcast::Receiver<crate::clips::PlayerProgress> {
+        #[cfg(test)]
+        if let Some(tx) = &self.players {
+            return tx.subscribe();
+        }
+        tokio::sync::broadcast::channel(1).1
     }
 
     #[cfg(test)]

@@ -8,7 +8,7 @@
 //! | `{"action": …}` | `OK` or `ER <error> <message>` |
 //! | `TALLY` | `TALLY <digits>`: per input 0 off, 1 program, 2 preview |
 //! | `STATE` | `STATE <json>` |
-//! | `SUB <topic>` | `OK`, then a line per change; topics `TALLY`, `STATE`, `LEVELS`, `OUTPUTS`, `MIDI`, `TITLE`, `ALL` |
+//! | `SUB <topic>` | `OK`, then a line per change; topics `TALLY`, `STATE`, `LEVELS`, `OUTPUTS`, `MIDI`, `TITLE`, `POSITION`, `ALL` |
 //! | `UNSUB <topic>` | `OK` |
 //! | `QUIT` | closes |
 //!
@@ -47,8 +47,14 @@ impl Topics {
     const OUTPUTS: u8 = 8;
     const MIDI: u8 = 16;
     const TITLE: u8 = 32;
-    const ALL: u8 =
-        Self::TALLY | Self::STATE | Self::LEVELS | Self::OUTPUTS | Self::MIDI | Self::TITLE;
+    const POSITION: u8 = 64;
+    const ALL: u8 = Self::TALLY
+        | Self::STATE
+        | Self::LEVELS
+        | Self::OUTPUTS
+        | Self::MIDI
+        | Self::TITLE
+        | Self::POSITION;
 
     fn parse(name: &str) -> Option<u8> {
         match name.to_ascii_uppercase().as_str() {
@@ -58,6 +64,7 @@ impl Topics {
             "OUTPUTS" => Some(Self::OUTPUTS),
             "MIDI" => Some(Self::MIDI),
             "TITLE" => Some(Self::TITLE),
+            "POSITION" => Some(Self::POSITION),
             "ALL" => Some(Self::ALL),
             _ => None,
         }
@@ -71,6 +78,7 @@ impl Topics {
             Event::Outputs { .. } => Self::OUTPUTS,
             Event::Midi { .. } => Self::MIDI,
             Event::Title { .. } => Self::TITLE,
+            Event::Position { .. } => Self::POSITION,
         };
         self.0 & bit != 0
     }
@@ -228,6 +236,7 @@ fn event_line(event: &Event) -> String {
         Event::Outputs { stats } => format!("OUTPUTS {}\n", json(stats)),
         Event::Midi { midi } => format!("MIDI {}\n", json(midi)),
         Event::Title { .. } => format!("TITLE {}\n", json(event)),
+        Event::Position { .. } => format!("POSITION {}\n", json(event)),
     }
 }
 

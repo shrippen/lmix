@@ -174,6 +174,13 @@ pub enum Event {
     /// A note or controller message from a MIDI controller (to learn a
     /// binding).
     Midi { midi: crate::midi::MidiMessage },
+    /// Where a clip or playlist input plays, about five times a second
+    /// while it plays (UI.5).
+    Position {
+        input: InputId,
+        position_ms: u64,
+        duration_ms: u64,
+    },
     /// A title template reported something (`title_report`), e.g.
     /// `done` or `zero`.
     Title {

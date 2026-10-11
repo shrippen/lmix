@@ -756,6 +756,14 @@ impl Service {
                 if report.duration_ms > 0 && sw.set_clip_length(slot, report.duration_ms) {
                     self.publish(&sw);
                 }
+                // For the transport bars; no state change, no autosave.
+                if let Some(input) = sw.input_at_slot(slot) {
+                    let _ = self.events.send(Event::Position {
+                        input,
+                        position_ms: report.position_ms,
+                        duration_ms: report.duration_ms,
+                    });
+                }
                 sw.clip_triggers(slot, &change)
             };
             for (delay_ms, actions) in fired {
@@ -1743,6 +1751,49 @@ mod tests {
             })
             .await
             .is_err());
+    }
+
+    #[tokio::test]
+    async fn player_positions_go_out_as_events() {
+        let engine = Arc::new(NullEngine::playing());
+        let service = Service::new(2, engine.clone(), None);
+        service
+            .handle(Action::AddInput {
+                source: lmix_types::SourceSpec::File {
+                    path: "/media/clip.webm".into(),
+                },
+                name: None,
+            })
+            .await
+            .unwrap();
+        let mut events = service.subscribe();
+        tokio::spawn(service.clone().watch_players());
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+        engine.report(crate::clips::PlayerProgress {
+            flow: crate::engine::flows::slot_id(0),
+            position_ms: 1500,
+            duration_ms: 9000,
+            index: 0,
+            items: 1,
+        });
+
+        let id = service.state().await.inputs[0].id;
+        let position = tokio::time::timeout(std::time::Duration::from_secs(2), async {
+            loop {
+                if let Ok(Event::Position {
+                    input,
+                    position_ms,
+                    duration_ms,
+                }) = events.recv().await
+                {
+                    return (input, position_ms, duration_ms);
+                }
+            }
+        })
+        .await
+        .unwrap();
+        assert_eq!(position, (id, 1500, 9000));
     }
 
     #[tokio::test]

@@ -1457,3 +1457,9 @@ Slot, Zustand, WHIP-Adresse). Farbe und Ton sind die Inhalte der
 bisherigen Dialoge, herausgelöst als `LookPanel` und `ChannelStripPanel`;
 die Dialoge gibt es weiter. Key, Effekte, Position, Ebenen und Tally
 fehlen, solange die Engine sie nicht hat.
+**Position im Clip** (B39, UI.5): die Positionsmeldungen der Player
+(alle 200 ms) gehen als `Event::Position` an die Clients (Textprotokoll
+`POSITION`), nicht als Zustandsänderung (kein Autosave, kein ganzer
+Zustand je Meldung). Die Transportleiste zeigt Fortschritt und
+„Position / Länge“. Springen im Clip fehlt (strom hat dafür keine Aktion
+in lmix).

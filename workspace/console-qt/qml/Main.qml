@@ -68,6 +68,7 @@ Kirigami.ApplicationWindow {
     readonly property var inputs: show ? show.inputs : []
     readonly property var levels: backend.levels.length > 0 ? JSON.parse(backend.levels) : ({})
     readonly property var recent: backend.recent.length > 0 ? JSON.parse(backend.recent) : []
+    readonly property var positions: backend.positions.length > 0 ? JSON.parse(backend.positions) : ({})
 
     /** Send an lmix action (the API's JSON, as an object). */
     function act(action) {
@@ -707,6 +708,7 @@ Kirigami.ApplicationWindow {
                 Layout.fillWidth: true
                 input: monitor.input
                 act: root.act
+                position: monitor.input && root.positions[monitor.input.id] ? root.positions[monitor.input.id] : null
             }
             KanteLevelMeter {
                 Layout.fillWidth: true

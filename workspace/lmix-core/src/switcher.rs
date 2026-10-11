@@ -2272,6 +2272,15 @@ impl Switcher {
         action
     }
 
+    /// The input that feeds mixer slot `slot`.
+    pub fn input_at_slot(&self, slot: usize) -> Option<InputId> {
+        self.show
+            .inputs
+            .iter()
+            .find(|i| i.slot == slot)
+            .map(|i| i.id)
+    }
+
     /// PTZ address of the input `input` names.
     pub fn ptz_of(&self, input: &InputRef) -> Result<lmix_types::PtzSpec, ActionError> {
         let entry = &self.show.inputs[self.find(input)?];
