@@ -1392,3 +1392,17 @@ vergessen stumme Quellen). TSL 3.1 hat 127 Adressen und 16 ASCII-Zeichen;
 5.0 bekommt alle Inputs in einem Paket (bis 32 je Paket). TCP-Rahmen
 (DLE/STX) fehlt noch. Geprüft mit Paket-Tests nach der Spezifikation und
 einem UDP-Empfänger im Test; an echter Hardware nicht.
+**PTZ** (PER.2, PER.3 teils): ein Input kann eine PTZ-Adresse haben
+(`set_ptz`, in der Show): VISCA over IP nach Sony (UDP, 8-Byte-Kopf,
+Port 52381) oder VISCA direkt in UDP (PTZOptics u. a.). Aktionen
+`ptz_move` (Schwenken/Neigen mit Tempo −1…1, 0 0 hält an), `ptz_zoom`,
+`ptz_focus` (auto, manuell, nah, fern, stopp), `ptz_home`, `ptz_preset`
+(anfahren oder speichern, 0–127). Der Service schickt sie, die Show
+ändert sich nicht; Antworten der Kamera wertet lmix nicht aus.
+Kameraadresse 1. Positionen als virtuelle Inputs (PER.3) noch nicht:
+eine Position als Auslöser „geht in die Vorschau“ fährt die Kamera an.
+Console: „PTZ…“ im Kachelmenü (Adresse, Steuerkreuz beim Halten, Tempo,
+Zoom, Fokus, Home, Positionen 1–8 anfahren oder speichern). Geprüft mit
+Byte-Tests nach der VISCA-Spezifikation, einem UDP-Empfänger im Test
+und der Console gegen eine nachgebaute Kamera; an einer echten Kamera
+nicht.

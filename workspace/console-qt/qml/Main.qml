@@ -226,6 +226,14 @@ Kirigami.ApplicationWindow {
         outputs: root.show ? root.show.outputs : []
     }
 
+    PtzDialog {
+        id: ptzDialog
+        parent: QQC2.Overlay.overlay
+        anchors.centerIn: parent
+        act: root.act
+        inputs: root.inputs
+    }
+
     DataSourcesDialog {
         id: dataSourcesDialog
         parent: QQC2.Overlay.overlay
@@ -482,6 +490,10 @@ Kirigami.ApplicationWindow {
                     onReplaceRequested: {
                         addInputDialog.replacing = tileDelegate.input
                         addInputDialog.open()
+                    }
+                    onPtzRequested: {
+                        ptzDialog.inputId = tileDelegate.input.id
+                        ptzDialog.open()
                     }
                 }
             }

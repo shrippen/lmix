@@ -302,6 +302,33 @@ pub enum Action {
         duration_ms: u32,
     },
 
+    // ---- PTZ (PER.2) ----
+    /// Set or clear (null) the PTZ address of an input's camera.
+    SetPtz {
+        input: InputRef,
+        #[serde(default)]
+        ptz: Option<crate::ptz::PtzSpec>,
+    },
+    /// Pan and tilt at a speed: −1 (left, down) to 1 (right, up); 0 0
+    /// stops.
+    PtzMove { input: InputRef, pan: f32, tilt: f32 },
+    /// Zoom at a speed: −1 (wide) to 1 (tele); 0 stops.
+    PtzZoom { input: InputRef, speed: f32 },
+    /// Focus: auto, manual, near, far, stop.
+    PtzFocus {
+        input: InputRef,
+        focus: crate::ptz::PtzFocus,
+    },
+    /// Back to the camera's home position.
+    PtzHome { input: InputRef },
+    /// Go to preset `preset` (0–127), or store the position there.
+    PtzPreset {
+        input: InputRef,
+        preset: u8,
+        #[serde(default)]
+        store: bool,
+    },
+
     // ---- Titles (GFX) ----
     /// Add a graphics channel: a page of title layers to render as an
     /// input or overlay.
@@ -578,6 +605,8 @@ pub enum ActionError {
     NoLooks,
     #[error("channel strip: {field} is out of range")]
     BadStrip { field: String },
+    #[error("PTZ: {reason}")]
+    BadPtz { reason: String },
     #[error("no graphics channel {reference}")]
     UnknownGraphics { reference: String },
     #[error("all {max} graphics channels are in use")]

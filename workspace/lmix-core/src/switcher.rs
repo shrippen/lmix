@@ -513,6 +513,27 @@ impl Switcher {
             Action::RunShortcut { .. } => Err(ActionError::BadShortcut {
                 reason: "run through the service".into(),
             }),
+            Action::SetPtz { input, ptz } => {
+                if let Some(spec) = &ptz {
+                    let port = spec.address.rsplit_once(':').map(|(_, p)| p.parse::<u16>());
+                    if !matches!(port, Some(Ok(p)) if p > 0) {
+                        return Err(ActionError::BadPtz {
+                            reason: format!("\"{}\" is no host:port", spec.address),
+                        });
+                    }
+                }
+                let index = self.find(&input)?;
+                self.show.inputs[index].ptz = ptz;
+                Ok(Vec::new())
+            }
+            // The service sends these to the camera (`ptz_of`).
+            Action::PtzMove { .. }
+            | Action::PtzZoom { .. }
+            | Action::PtzFocus { .. }
+            | Action::PtzHome { .. }
+            | Action::PtzPreset { .. } => Err(ActionError::BadPtz {
+                reason: "sent by the service".into(),
+            }),
             Action::Transition { slot } => self.transition(slot),
             Action::SetTransition {
                 slot,
@@ -699,6 +720,7 @@ impl Switcher {
                     .has_transport()
                     .then(|| self.clip_ms.get(&input.slot).copied())
                     .flatten(),
+                ptz: input.ptz.clone(),
             })
             .collect();
 
@@ -812,6 +834,7 @@ impl Switcher {
             sends: [0; AUX_BUSES],
             look: Look::default(),
             triggers: Vec::new(),
+            ptz: None,
         });
         self.status.insert(id, InputStatus::Starting);
 
@@ -2193,6 +2216,14 @@ impl Switcher {
     }
 
     /// Slot that carries `input`.
+    /// PTZ address of the input `input` names.
+    pub fn ptz_of(&self, input: &InputRef) -> Result<lmix_types::PtzSpec, ActionError> {
+        let entry = &self.show.inputs[self.find(input)?];
+        entry.ptz.clone().ok_or_else(|| ActionError::BadPtz {
+            reason: format!("{} has no PTZ address", entry.name),
+        })
+    }
+
     pub fn slot_for(&self, input: &InputRef) -> Result<usize, ActionError> {
         let index = self.find(input)?;
         Ok(self.show.inputs[index].slot)

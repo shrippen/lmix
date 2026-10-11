@@ -83,6 +83,10 @@ pub struct Service {
     fetching: std::sync::Mutex<HashSet<InputId>>,
     /// Fetches data sources from addresses.
     http: reqwest::Client,
+    /// Sends PTZ commands; opened at the first one.
+    ptz_socket: tokio::sync::OnceCell<tokio::net::UdpSocket>,
+    /// Numbers VISCA-over-IP packets.
+    ptz_seq: std::sync::atomic::AtomicU32,
 }
 
 /// What lmix-core knew of a data source when it read it.
@@ -124,6 +128,8 @@ impl Service {
             source_times: std::sync::Mutex::new(HashMap::new()),
             fetching: std::sync::Mutex::new(HashSet::new()),
             http: datasource::client(),
+            ptz_socket: tokio::sync::OnceCell::new(),
+            ptz_seq: std::sync::atomic::AtomicU32::new(0),
             autosave,
         })
     }
@@ -779,11 +785,48 @@ impl Service {
         self.handle_as(action, Origin::Operator).await
     }
 
+    /// Send a PTZ action to the input's camera (PER.2). Nothing in the
+    /// show changes; the camera does not answer back here.
+    async fn ptz(&self, action: &Action, message: Vec<u8>) -> Result<(), ActionError> {
+        let input = match action {
+            Action::PtzMove { input, .. }
+            | Action::PtzZoom { input, .. }
+            | Action::PtzFocus { input, .. }
+            | Action::PtzHome { input }
+            | Action::PtzPreset { input, .. } => input,
+            _ => unreachable!("a PTZ action"),
+        };
+        let spec = self.switcher.lock().await.ptz_of(input)?;
+        let failed = |e: std::io::Error| ActionError::BadPtz {
+            reason: format!("{}: {e}", spec.address),
+        };
+        let target = tokio::net::lookup_host(&spec.address)
+            .await
+            .map_err(failed)?
+            .next()
+            .ok_or_else(|| failed(std::io::Error::other("no address")))?;
+        let socket = self
+            .ptz_socket
+            .get_or_try_init(|| tokio::net::UdpSocket::bind(("0.0.0.0", 0)))
+            .await
+            .map_err(failed)?;
+        let seq = self.ptz_seq.fetch_add(1, Ordering::Relaxed);
+        socket
+            .send_to(&crate::ptz::frame(spec.protocol, seq, &message), target)
+            .await
+            .map_err(failed)?;
+        Ok(())
+    }
+
     async fn handle_as(
         self: &Arc<Self>,
         action: Action,
         origin: Origin,
     ) -> Result<ShowState, ActionError> {
+        if let Some(message) = crate::ptz::message(&action) {
+            self.ptz(&action, message?).await?;
+            return Ok(self.state().await);
+        }
         match &action {
             Action::RunShortcut { target } => {
                 let actions = self.switcher.lock().await.shortcut_actions(target)?;
@@ -1576,6 +1619,60 @@ mod tests {
             Some(dir.path().join("none.lmix")),
         );
         assert!(!service.resume().await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn ptz_actions_reach_the_camera() {
+        let camera = tokio::net::UdpSocket::bind("127.0.0.1:0").await.unwrap();
+        let address = camera.local_addr().unwrap().to_string();
+        let service = Service::new(2, Arc::new(NullEngine::default()), None);
+        service.handle(bars()).await.unwrap();
+        let input = || InputRef::Number(1);
+
+        // No address yet: refused with a reason.
+        assert!(matches!(
+            service.handle(Action::PtzHome { input: input() }).await,
+            Err(ActionError::BadPtz { .. })
+        ));
+        service
+            .handle(Action::SetPtz {
+                input: input(),
+                ptz: Some(lmix_types::PtzSpec {
+                    address,
+                    protocol: lmix_types::PtzProtocol::ViscaIp,
+                }),
+            })
+            .await
+            .unwrap();
+        service
+            .handle(Action::PtzPreset {
+                input: input(),
+                preset: 3,
+                store: false,
+            })
+            .await
+            .unwrap();
+
+        let mut buf = [0u8; 64];
+        let (n, _) = tokio::time::timeout(
+            std::time::Duration::from_secs(2),
+            camera.recv_from(&mut buf),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        assert_eq!(&buf[..2], &[0x01, 0x00], "VISCA over IP command");
+        assert_eq!(&buf[8..n], &[0x81, 0x01, 0x04, 0x3F, 0x02, 0x03, 0xFF]);
+        assert!(service
+            .handle(Action::SetPtz {
+                input: input(),
+                ptz: Some(lmix_types::PtzSpec {
+                    address: "camera".into(),
+                    protocol: lmix_types::PtzProtocol::ViscaUdp,
+                }),
+            })
+            .await
+            .is_err());
     }
 
     #[tokio::test]

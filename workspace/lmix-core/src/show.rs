@@ -47,6 +47,9 @@ pub struct ShowInput {
     pub look: Look,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub triggers: Vec<Trigger>,
+    /// The camera's PTZ address (PER.2).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ptz: Option<lmix_types::PtzSpec>,
 }
 
 /// Everything a show file holds.
@@ -330,6 +333,10 @@ mod tests {
                     before_ms: None,
                     actions: vec![Action::FadeToBlack { duration_ms: 500 }],
                 }],
+                ptz: Some(lmix_types::PtzSpec {
+                    address: "10.0.0.20:52381".into(),
+                    protocol: lmix_types::PtzProtocol::ViscaIp,
+                }),
             }],
             preview: Some(id),
             program: None,

@@ -454,8 +454,8 @@ Zurückgestellt (User 2026-10-08).
 | ID | Anforderung | Prio | Stand |
 |---|---|---|---|
 | PER.1 | Tally an: Web-Seite, TCP-API, Rückmeldungen, TSL UMD 3.1/5.0 (P5), USB-/Netz-Tally-Geräte (generisch, z. B. HTTP/OSC/GPIO), Arduino/Firmata | S | ◐ (Webseite, TCP, OSC, TSL 3.1/5.0 per UDP; ohne GPIO/Firmata) |
-| PER.2 | PTZ je Input über Netzwerk (Protokolle VISCA-over-IP, NDI, ONVIF: lmix); Bewegen, Zoom, Fokus, Home, Tempo | S | – |
-| PER.3 | PTZ-Positionen als virtuelle Inputs: Preview fährt die Position an, Standbild außerhalb PVW/PGM, aktualisieren | S | – |
+| PER.2 | PTZ je Input über Netzwerk (Protokolle VISCA-over-IP, NDI, ONVIF: lmix); Bewegen, Zoom, Fokus, Home, Tempo | S | ◐ (VISCA over IP und in UDP; ohne NDI, ONVIF) |
+| PER.3 | PTZ-Positionen als virtuelle Inputs: Preview fährt die Position an, Standbild außerhalb PVW/PGM, aktualisieren | S | ◐ (Positionen per Auslöser; ohne virtuelle Inputs, Standbild) |
 | PER.4 | Virtuelles PTZ: digitaler Zoom/Schwenk auf beliebigem Input | K | – |
 | PER.5 | 2 Produktionsuhren: Uhrzeit (+Offset, 12/24 h), Ereignis (vor/während/nach in Bernstein/Grün/Rot), Aufnahme-, Streamdauer, Restzeit Program; Genauigkeit wählbar; als Input | S | – |
 | PER.6 | Statistik je Live-Input: Quell-Drops, Render-Drops, Resync, Frame-Abstände, Ton-Puffer/Drops/Resample; Encoder (CPU/GPU), SRT (Bandbreite, Verlust, RTT) | M | ◐ (Selftest) |

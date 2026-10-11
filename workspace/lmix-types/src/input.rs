@@ -504,6 +504,9 @@ pub struct Input {
     /// reports it; `None` until then and for other sources.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub clip_ms: Option<u64>,
+    /// The camera's PTZ address, if it has one (PER.2).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ptz: Option<crate::ptz::PtzSpec>,
 }
 
 /// What a discovered device delivers.

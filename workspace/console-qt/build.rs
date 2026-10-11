@@ -129,6 +129,7 @@ fn main() {
                 "qml/TitlesDialog.qml",
                 "qml/DataSourcesDialog.qml",
                 "qml/TransportBar.qml",
+                "qml/PtzDialog.qml",
             ])
             .qml_file(QmlFile::from("qml/Texts.qml").singleton(true)),
     )

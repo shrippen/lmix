@@ -156,6 +156,7 @@ QtObject {
         case "no_show_path": return qsTr("The show has no file yet; give a path")
         case "show_file": return qsTr("Show file: %1").arg(e.message)
         case "engine": return qsTr("Engine: %1").arg(e.message)
+        case "bad_ptz": return qsTr("PTZ: %1").arg(e.reason)
         case "unknown_graphics": return qsTr("No graphics channel matches %1").arg(e.reference)
         case "graphics_full": return qsTr("All %1 graphics channels are in use").arg(e.max)
         case "unknown_template": return qsTr("No template %1").arg(e.template)

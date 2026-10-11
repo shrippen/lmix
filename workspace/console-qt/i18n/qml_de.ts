@@ -503,7 +503,7 @@
   <context>
     <name>InputTile</name>
     <message>
-      <location filename="../qml/InputTile.qml" line="+50" />
+      <location filename="../qml/InputTile.qml" line="+51" />
       <source>Input %1 %2</source>
       <translation>Input %1 %2</translation>
     </message>
@@ -629,6 +629,11 @@
     </message>
     <message>
       <location line="+4" />
+      <source>PTZ…</source>
+      <translation>PTZ…</translation>
+    </message>
+    <message>
+      <location line="+5" />
       <source>Colour tag</source>
       <translation>Farbmarke</translation>
     </message>
@@ -1089,7 +1094,7 @@
       <translation>Show speichern</translation>
     </message>
     <message>
-      <location line="+114" />
+      <location line="+122" />
       <source>lmix-core</source>
       <translation>lmix-core</translation>
     </message>
@@ -1310,7 +1315,7 @@
       <translation>%1 stoppen?</translation>
     </message>
     <message>
-      <location line="+11" />
+      <location line="+17" />
       <source>A stopped recording or stream cannot go on where it was.</source>
       <translation>Eine gestoppte Aufnahme oder ein gestoppter Stream lässt sich nicht an derselben Stelle fortsetzen.</translation>
     </message>
@@ -1323,6 +1328,136 @@
       <location line="+7" />
       <source>+ Output</source>
       <translation>+ Ausgang</translation>
+    </message>
+  </context>
+  <context>
+    <name>PtzDialog</name>
+    <message>
+      <location filename="../qml/PtzDialog.qml" line="+32" />
+      <source>PTZ of %1 %2</source>
+      <translation>PTZ von %1 %2</translation>
+    </message>
+    <message>
+      <location line="+36" />
+      <source>Camera host:port, e.g. 192.168.1.20:52381</source>
+      <translation>Kamera Host:Port, z. B. 192.168.1.20:52381</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>VISCA over IP (Sony)</source>
+      <translation>VISCA over IP (Sony)</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>VISCA in UDP</source>
+      <translation>VISCA in UDP</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Set</source>
+      <translation>Setzen</translation>
+    </message>
+    <message>
+      <location line="+15" />
+      <source>Up</source>
+      <translation>Hoch</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Left</source>
+      <translation>Links</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <location line="+2" />
+      <source>Home</source>
+      <translation>Grundstellung</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Right</source>
+      <translation>Rechts</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Down</source>
+      <translation>Runter</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <location line="+7" />
+      <source>Speed</source>
+      <translation>Tempo</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Zoom</source>
+      <translation>Zoom</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Zoom out</source>
+      <translation>Herauszoomen</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Zoom in</source>
+      <translation>Hineinzoomen</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Focus</source>
+      <translation>Fokus</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Auto</source>
+      <translation>Auto</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Near</source>
+      <translation>Nah</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Far</source>
+      <translation>Fern</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>Presets</source>
+      <translation>Positionen</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Store preset %1</source>
+      <translation>Position %1 speichern</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Go to preset %1</source>
+      <translation>Position %1 anfahren</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>Pick a preset…</source>
+      <translation>Position wählen…</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Store</source>
+      <translation>Speichern</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Store where the camera is on the next preset pressed</source>
+      <translation>Die aktuelle Stellung auf der nächsten gedrückten Position speichern</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>A preset as a trigger of this input (goes into preview) moves the camera before it is taken.</source>
+      <translation>Eine Position als Auslöser dieses Inputs (geht in die Vorschau) fährt die Kamera an, bevor er genommen wird.</translation>
     </message>
   </context>
   <context>
@@ -1837,6 +1972,11 @@
       <location line="+1" />
       <source>Engine: %1</source>
       <translation>Engine: %1</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>PTZ: %1</source>
+      <translation>PTZ: %1</translation>
     </message>
     <message>
       <location line="+1" />

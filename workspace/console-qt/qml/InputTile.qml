@@ -27,6 +27,7 @@ KanteCard {
     property bool dropTarget: false
     signal replaceRequested()
     signal triggersRequested()
+    signal ptzRequested()
     /** Drag to reorder: where the pointer is, in the window. */
     signal dragMoved(point scenePosition)
     signal dragEnded(point scenePosition)
@@ -241,6 +242,11 @@ KanteCard {
         QQC2.MenuItem {
             text: tile.input.triggers && tile.input.triggers.length > 0 ? qsTr("Triggers (%1)…").arg(tile.input.triggers.length) : qsTr("Triggers…")
             onTriggered: tile.triggersRequested()
+        }
+        QQC2.MenuItem {
+            text: qsTr("PTZ…")
+            enabled: tile.hasPicture
+            onTriggered: tile.ptzRequested()
         }
         ChoiceMenu {
             title: qsTr("Colour tag")
