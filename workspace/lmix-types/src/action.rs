@@ -14,7 +14,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::automation::{Cue, Trigger};
-use crate::graphics::{BindingSpec, DataSourceSpec, TitleData};
+use crate::graphics::{BindingSpec, DataSourceSpec, TitleData, TitleTrigger};
 use crate::input::{
     ChannelStrip, InputColor, InputRef, Listen, Look, SignalLoss, SourceSpec, Transport, AUX_BUSES,
 };
@@ -372,6 +372,11 @@ pub enum Action {
         field: String,
         #[serde(default)]
         binding: Option<BindingSpec>,
+    },
+    /// Replace the channel's triggers on template reports.
+    SetTitleTriggers {
+        graphics: InputRef,
+        triggers: Vec<TitleTrigger>,
     },
     /// Sent by the graphics page: the template reported `event` (e.g.
     /// `done` after its out animation, `zero` of a countdown).

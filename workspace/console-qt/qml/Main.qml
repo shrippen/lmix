@@ -215,6 +215,8 @@ Kirigami.ApplicationWindow {
         sources: root.show && root.show.data_sources ? root.show.data_sources : []
         templates: backend.templates.length > 0 ? JSON.parse(backend.templates) : []
         coreUrl: backend.coreUrl
+        inputs: root.inputs
+        outputs: root.show ? root.show.outputs : []
     }
 
     DataSourcesDialog {
@@ -464,6 +466,7 @@ Kirigami.ApplicationWindow {
                     looksAvailable: root.show !== null && root.show.looks_available === true
                     peakDb: root.levels[key]
                     onTriggersRequested: {
+                        triggersDialog.graphics = null
                         triggersDialog.input = tileDelegate.input
                         triggersDialog.open()
                     }

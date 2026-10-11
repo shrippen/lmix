@@ -371,3 +371,7 @@ der Operator tut und was die Grafikseite daraus macht.
 **Befunde**: B35 Zahl in einem Feld per Aktion erhöhen (Spielstand +1);
 B36 Auslöser auf Titelmeldungen (`zero`, `done`); B37 Uhr/Countdown nach
 Neuladen der Grafikseite weiterlaufen lassen statt neu zu beginnen.
+
+**Nachtrag B36 (2026-10-11)**: behoben. Ein Grafikkanal hat Auslöser auf
+Meldungen seiner Titel (`zero`, `done`, wahlweise je Ebene); P7s
+Countdown bis Vorstellungsbeginn kann bei 0 den Saallicht-Cue fahren.

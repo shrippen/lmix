@@ -440,7 +440,7 @@
       <translation>Die Datei lässt sich nicht lesen</translation>
     </message>
     <message>
-      <location line="+78" />
+      <location line="+79" />
       <source>Previous</source>
       <translation>Zurück</translation>
     </message>
@@ -1059,7 +1059,7 @@
       <translation>Show speichern</translation>
     </message>
     <message>
-      <location line="+112" />
+      <location line="+114" />
       <source>lmix-core</source>
       <translation>lmix-core</translation>
     </message>
@@ -1850,7 +1850,7 @@
   <context>
     <name>TitlesDialog</name>
     <message>
-      <location filename="../qml/TitlesDialog.qml" line="+43" />
+      <location filename="../qml/TitlesDialog.qml" line="+46" />
       <source>Ready</source>
       <translation>Bereit</translation>
     </message>
@@ -1870,7 +1870,7 @@
       <translation>Titel</translation>
     </message>
     <message>
-      <location line="+9" />
+      <location line="+18" />
       <source>Not bound</source>
       <translation>Nicht verbunden</translation>
     </message>
@@ -1895,7 +1895,22 @@
       <translation>Bild des Kanals im Webbrowser öffnen</translation>
     </message>
     <message>
-      <location line="+4" />
+      <location line="+5" />
+      <source>Triggers (%1)…</source>
+      <translation>Auslöser (%1)…</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Triggers…</source>
+      <translation>Auslöser…</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Run actions when a title reports, e.g. a countdown at zero</source>
+      <translation>Aktionen ausführen, wenn ein Titel etwas meldet, z. B. ein Countdown bei null</translation>
+    </message>
+    <message>
+      <location line="+8" />
       <source>Remove</source>
       <translation>Entfernen</translation>
     </message>
@@ -2062,7 +2077,7 @@
   <context>
     <name>TriggersDialog</name>
     <message>
-      <location filename="../qml/TriggersDialog.qml" line="+25" />
+      <location filename="../qml/TriggersDialog.qml" line="+30" />
       <source>Goes on program</source>
       <translation>Geht auf Programm</translation>
     </message>
@@ -2093,21 +2108,56 @@
     </message>
     <message>
       <location line="+16" />
+      <source>Triggers of graphics %1 %2</source>
+      <translation>Auslöser von Grafik %1 %2</translation>
+    </message>
+    <message>
+      <location line="+1" />
       <source>Triggers of %1 %2</source>
       <translation>Auslöser von %1 %2</translation>
     </message>
     <message>
-      <location line="+17" />
+      <location line="+19" />
       <source>Actions of trigger %1</source>
       <translation>Aktionen von Auslöser %1</translation>
     </message>
     <message>
-      <location line="+19" />
+      <location line="+22" />
+      <source>No triggers. A trigger runs actions when a title reports something, e.g. a countdown reaching zero (zero) or a title gone after stop (done).</source>
+      <translation>Keine Auslöser. Ein Auslöser führt Aktionen aus, wenn ein Titel etwas meldet, etwa ein Countdown bei null (zero) oder ein Titel nach Stopp ausgeblendet (done).</translation>
+    </message>
+    <message>
+      <location line="+1" />
       <source>No triggers. A trigger runs actions when this input goes on air or off air, also after a delay. Actions run by triggers fire no triggers themselves.</source>
       <translation>Keine Auslöser. Ein Auslöser führt Aktionen aus, wenn dieser Input auf Sendung geht oder sie verlässt, auch verzögert. Von Auslösern ausgeführte Aktionen lösen selbst nichts aus.</translation>
     </message>
     <message>
-      <location line="+17" />
+      <location line="+18" />
+      <source>Any report</source>
+      <translation>Jede Meldung</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Report of trigger %1</source>
+      <translation>Meldung von Auslöser %1</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>from layer</source>
+      <translation>von Ebene</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>any</source>
+      <translation>jede</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Layer of trigger %1</source>
+      <translation>Ebene von Auslöser %1</translation>
+    </message>
+    <message>
+      <location line="+10" />
       <source>When trigger %1 fires</source>
       <translation>Wenn Auslöser %1 auslöst</translation>
     </message>

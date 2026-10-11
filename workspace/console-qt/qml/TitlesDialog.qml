@@ -22,6 +22,9 @@ KanteDialog {
     required property var sources
     /** lmix `Template` list. */
     required property var templates
+    /** For actions of triggers. */
+    required property var inputs
+    required property var outputs
     required property string coreUrl
 
     property int current: 0
@@ -103,6 +106,15 @@ KanteDialog {
     standardButtons: QQC2.Dialog.Close
     contentHeight: column.implicitHeight
 
+    TriggersDialog {
+        id: triggersDialog
+        parent: QQC2.Overlay.overlay
+        anchors.centerIn: parent
+        act: dialog.act
+        inputs: dialog.inputs
+        outputs: dialog.outputs
+    }
+
     ChoiceMenu {
         id: bindMenu
         choices: {
@@ -153,6 +165,18 @@ KanteDialog {
                 QQC2.ToolTip.visible: hovered
                 QQC2.ToolTip.text: qsTr("Open the channel's picture in the web browser")
                 onClicked: Qt.openUrlExternally(dialog.coreUrl + dialog.channel.page + "?preview")
+            }
+            KanteButton {
+                text: dialog.channel && dialog.channel.triggers && dialog.channel.triggers.length > 0
+                    ? qsTr("Triggers (%1)…").arg(dialog.channel.triggers.length) : qsTr("Triggers…")
+                visible: dialog.channel !== null
+                QQC2.ToolTip.visible: hovered
+                QQC2.ToolTip.text: qsTr("Run actions when a title reports, e.g. a countdown at zero")
+                onClicked: {
+                    triggersDialog.input = null
+                    triggersDialog.graphics = dialog.channel
+                    triggersDialog.open()
+                }
             }
             KanteButton {
                 text: qsTr("Remove")

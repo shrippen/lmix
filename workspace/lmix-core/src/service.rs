@@ -765,7 +765,17 @@ impl Service {
         let (now, later) = commands.split_at(wait);
         let result = self.execute(&mut sw, now).await;
         self.read_new_sources(&mut sw).await;
-        if let Some(report) = report {
+        if let (Some(report), Ok(())) = (report, &result) {
+            if let Event::Title {
+                graphics,
+                layer,
+                report: what,
+            } = &report
+            {
+                for (delay_ms, actions) in sw.title_triggers(*graphics, *layer, what) {
+                    self.run_triggered(delay_ms, actions);
+                }
+            }
             let _ = self.events.send(report);
         }
         self.publish(&sw);

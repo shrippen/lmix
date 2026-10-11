@@ -183,6 +183,7 @@ impl Switcher {
                     id: InputId::new(),
                     name: name.unwrap_or_else(|| format!("Graphics {number}")),
                     layers: Vec::new(),
+                    triggers: Vec::new(),
                 });
             }
             Action::RemoveGraphics { graphics } => {
@@ -334,11 +335,19 @@ impl Switcher {
                 title.bindings.retain(|b| b.field != field);
                 title.bindings.extend(binding);
             }
-            // The service passes the report on to subscribers.
+            // The service passes the report on and runs its triggers.
             Action::TitleReport {
                 graphics, layer, ..
             } => {
                 self.title_mut(&graphics, layer)?;
+            }
+            Action::SetTitleTriggers { graphics, triggers } => {
+                super::check_triggers(triggers.iter().map(|t| (t.delay_ms, t.actions.as_slice())))?;
+                if let Some(layer) = triggers.iter().find_map(|t| t.layer) {
+                    check_layer(layer)?;
+                }
+                let index = self.find_graphics(&graphics)?;
+                self.show.graphics[index].triggers = triggers;
             }
             Action::SaveDataset {
                 name,
@@ -482,6 +491,23 @@ impl Switcher {
         Ok(Vec::new())
     }
 
+    /// Triggers a template's report fires: (delay, actions).
+    pub fn title_triggers(
+        &self,
+        graphics: InputId,
+        layer: u32,
+        report: &str,
+    ) -> Vec<(u32, Vec<Action>)> {
+        self.show
+            .graphics
+            .iter()
+            .filter(|g| g.id == graphics)
+            .flat_map(|g| &g.triggers)
+            .filter(|t| t.fires_on(layer, report))
+            .map(|t| (t.delay_ms, t.actions.clone()))
+            .collect()
+    }
+
     /// Id of the graphics channel `graphics` names.
     pub fn graphics_id(&self, graphics: &InputRef) -> Option<InputId> {
         let at = self.find_graphics(graphics).ok()?;
@@ -570,6 +596,7 @@ impl Switcher {
                 number: i as u32 + 1,
                 name: g.name.clone(),
                 page: format!("/graphics/{}", i + 1),
+                triggers: g.triggers.clone(),
                 layers: g
                     .layers
                     .iter()
@@ -999,6 +1026,47 @@ mod tests {
         );
         let source = &sw.state().data_sources[0];
         assert_eq!((source.row, source.error.as_deref()), (0, Some("gone")));
+    }
+
+    #[test]
+    fn title_triggers_fire_on_their_report() {
+        let mut sw = switcher();
+        load(&mut sw, 3);
+        let id = sw.state().graphics[0].id;
+        let trigger = |report: &str, actions: Vec<Action>| lmix_types::TitleTrigger {
+            report: Some(report.into()),
+            layer: None,
+            delay_ms: 500,
+            actions,
+        };
+        sw.apply(Action::SetTitleTriggers {
+            graphics: InputRef::Number(1),
+            triggers: vec![trigger("zero", vec![Action::Cut])],
+        })
+        .unwrap();
+
+        assert_eq!(sw.title_triggers(id, 3, "zero"), [(500, vec![Action::Cut])]);
+        assert!(sw.title_triggers(id, 3, "done").is_empty());
+        assert_eq!(sw.state().graphics[0].triggers.len(), 1);
+
+        // The same checks as an input's triggers.
+        for bad in [
+            vec![trigger("zero", Vec::new())],
+            vec![trigger(
+                "zero",
+                vec![Action::CueGo {
+                    list: InputRef::Number(1),
+                }],
+            )],
+        ] {
+            assert!(matches!(
+                sw.apply(Action::SetTitleTriggers {
+                    graphics: InputRef::Number(1),
+                    triggers: bad
+                }),
+                Err(ActionError::BadTriggers { .. })
+            ));
+        }
     }
 
     #[test]

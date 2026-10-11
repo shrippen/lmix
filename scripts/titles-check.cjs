@@ -84,11 +84,20 @@ async function act(action) {
   await page.waitForFunction(() => !document.querySelector('#stage iframe[style*="z-index: 1"]'), null, { timeout: 3000 });
   pass("clear: layer gone at once");
 
-  // Countdown: one second, reports zero.
+  // Countdown: one second, reports zero, and its trigger loads a title.
+  await act({ action: "set_title_triggers", graphics: 1, triggers: [{ report: "zero", layer: 3,
+    actions: [{ action: "title_load", graphics: 1, layer: 6, template: "lmix/clock", play: true }] }] });
   await act({ action: "title_load", graphics: 1, layer: 3, template: "lmix/countdown",
     data: { duration: "0:01" }, play: true });
   await page.waitForFunction(() => window.__reports.some((r) => r.layer === 3 && r.report === "zero"), null, { timeout: 5000 });
   pass("countdown: reports zero");
+  for (let i = 0; ; i++) {
+    const state = await (await fetch(base + "/api/state")).json();
+    if (state.graphics[0].layers.some((l) => l.layer === 6 && l.phase === "playing")) break;
+    if (i > 20) fail("trigger on zero did not run");
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  pass("trigger: zero runs its actions");
 
   // A CasparCG-style template from the folder, XML data; edited while it
   // plays, it reloads with the same data.

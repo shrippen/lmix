@@ -113,6 +113,30 @@ pub struct TitleLayer {
     pub call: Option<TitleCall>,
 }
 
+/// Actions run when a template of the channel reports something
+/// (GFX.9: a countdown's `zero`; GFX.4: `done` after the out animation).
+/// They fire no triggers themselves.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct TitleTrigger {
+    /// The report, e.g. `zero`; any report without one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub report: Option<String>,
+    /// Only from this layer; any layer without one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub layer: Option<u32>,
+    /// 0–30 000 ms.
+    #[serde(default)]
+    pub delay_ms: u32,
+    pub actions: Vec<crate::action::Action>,
+}
+
+impl TitleTrigger {
+    /// Whether a report of `layer` fires it.
+    pub fn fires_on(&self, layer: u32, report: &str) -> bool {
+        self.report.as_deref().is_none_or(|r| r == report) && self.layer.is_none_or(|l| l == layer)
+    }
+}
+
 /// A graphics channel as clients see it.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Graphics {
@@ -124,6 +148,8 @@ pub struct Graphics {
     pub page: String,
     /// Loaded layers, lowest first.
     pub layers: Vec<TitleLayer>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub triggers: Vec<TitleTrigger>,
 }
 
 /// A saved set of field values (GFX.8).
@@ -286,6 +312,22 @@ mod tests {
         assert_eq!(cell(&columns, &row, "3"), None);
         assert_eq!(cell(&columns, &row, "0"), None);
         assert_eq!(cell(&columns, &row, "x"), None);
+    }
+
+    #[test]
+    fn title_triggers_match_report_and_layer() {
+        let trigger = |report: Option<&str>, layer| TitleTrigger {
+            report: report.map(str::to_string),
+            layer,
+            delay_ms: 0,
+            actions: Vec::new(),
+        };
+
+        assert!(trigger(None, None).fires_on(3, "done"));
+        assert!(trigger(Some("zero"), None).fires_on(3, "zero"));
+        assert!(!trigger(Some("zero"), None).fires_on(3, "done"));
+        assert!(trigger(Some("zero"), Some(3)).fires_on(3, "zero"));
+        assert!(!trigger(Some("zero"), Some(2)).fires_on(3, "zero"));
     }
 
     #[test]

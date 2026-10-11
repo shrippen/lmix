@@ -376,4 +376,12 @@ DE = {
     'every %1 s': 'alle %1 s',
     'ms before,': 'ms vorher,',
     'off': 'aus',
+    'Triggers of graphics %1 %2': 'Auslöser von Grafik %1 %2',
+    'No triggers. A trigger runs actions when a title reports something, e.g. a countdown reaching zero (zero) or a title gone after stop (done).': 'Keine Auslöser. Ein Auslöser führt Aktionen aus, wenn ein Titel etwas meldet, etwa ein Countdown bei null (zero) oder ein Titel nach Stopp ausgeblendet (done).',
+    'Any report': 'Jede Meldung',
+    'Report of trigger %1': 'Meldung von Auslöser %1',
+    'from layer': 'von Ebene',
+    'any': 'jede',
+    'Layer of trigger %1': 'Ebene von Auslöser %1',
+    'Run actions when a title reports, e.g. a countdown at zero': 'Aktionen ausführen, wenn ein Titel etwas meldet, z. B. ein Countdown bei null',
 }

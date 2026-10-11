@@ -165,6 +165,7 @@ fn runs_automation(action: &Action) -> bool {
         || matches!(
             action,
             Action::SetTriggers { .. }
+                | Action::SetTitleTriggers { .. }
                 | Action::AddCueList { .. }
                 | Action::SetCueList { .. }
                 | Action::RemoveCueList { .. }
@@ -172,6 +173,29 @@ fn runs_automation(action: &Action) -> bool {
                 | Action::CueBack { .. }
                 | Action::CueJump { .. }
         )
+}
+
+/// At most `TRIGGERS` triggers (delay, actions), each waiting at most 30 s
+/// with 1–16 actions that run no automation.
+pub(crate) fn check_triggers<'a>(
+    triggers: impl ExactSizeIterator<Item = (u32, &'a [Action])>,
+) -> Result<(), ActionError> {
+    let bad = |reason: String| Err(ActionError::BadTriggers { reason });
+    if triggers.len() > TRIGGERS {
+        return bad(format!("at most {TRIGGERS} triggers"));
+    }
+    for (delay_ms, actions) in triggers {
+        if delay_ms > TRIGGER_DELAY_MAX_MS {
+            return bad(format!("delays are at most {TRIGGER_DELAY_MAX_MS} ms"));
+        }
+        if actions.is_empty() || actions.len() > AUTOMATION_ACTIONS {
+            return bad(format!("1–{AUTOMATION_ACTIONS} actions each"));
+        }
+        if actions.iter().any(runs_automation) {
+            return bad("triggers cannot run shortcuts, cues or change automation".into());
+        }
+    }
+    Ok(())
 }
 
 /// A name, at most `CUES` cues, each with 1–16 safe actions.
@@ -342,6 +366,7 @@ impl Switcher {
             | Action::TitleCall { .. }
             | Action::TitleBind { .. }
             | Action::TitleReport { .. }
+            | Action::SetTitleTriggers { .. }
             | Action::SaveDataset { .. }
             | Action::RemoveDataset { .. }
             | Action::ApplyDataset { .. }
@@ -1106,19 +1131,8 @@ impl Switcher {
         triggers: Vec<Trigger>,
     ) -> Result<Vec<Command>, ActionError> {
         let bad = |reason: String| Err(ActionError::BadTriggers { reason });
-        if triggers.len() > TRIGGERS {
-            return bad(format!("at most {TRIGGERS} per input"));
-        }
+        check_triggers(triggers.iter().map(|t| (t.delay_ms, t.actions.as_slice())))?;
         for trigger in &triggers {
-            if trigger.delay_ms > TRIGGER_DELAY_MAX_MS {
-                return bad(format!("delays are at most {TRIGGER_DELAY_MAX_MS} ms"));
-            }
-            if trigger.actions.is_empty() || trigger.actions.len() > AUTOMATION_ACTIONS {
-                return bad(format!("1–{AUTOMATION_ACTIONS} actions each"));
-            }
-            if trigger.actions.iter().any(runs_automation) {
-                return bad("triggers cannot run shortcuts, cues or change automation".into());
-            }
             match (trigger.on, trigger.before_ms) {
                 (TriggerOn::ClipEnd, Some(ms)) if ms > CLIP_COUNTDOWN_MAX_MS => {
                     return bad(format!(

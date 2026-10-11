@@ -1282,9 +1282,16 @@ aufruf, Datei geändert → neu geladen mit Daten, CSV-Feld folgt Zeile und
 Datei, Vorschau meldet nichts, Vorlage allein mit Vorschauleiste. Console
 unter Xvfb per Klick (Abspielen, Feld live, Zeile wählen).
 **Keine neue Abhängigkeit** (CSV und geordnetes JSON von Hand).
+**Auslöser auf Meldungen** (GFX.9, B36): ein Grafikkanal hat eigene
+Auslöser (`set_title_triggers`): Meldung (`zero`, `done`, leer = jede),
+wahlweise nur von einer Ebene, Verzögerung, 1–16 Aktionen; dieselben
+Grenzen wie bei Input-Auslösern (höchstens 8, keine Automatik in den
+Aktionen). Console: „Triggers…“ im Titel-Dialog (der Auslöser-Dialog der
+Inputs mit Meldung und Ebene statt Ereignis). Browser-Test: Countdown bei
+0 lädt einen Titel.
 **Offen**: Rendern in strom (GFX.2, nach M7.0), Grafikkanal als Input
 und Overlay (GFX.17), Overlay wartet auf das Ende der Ausblendung
-(GFX.4), Auslöser auf Titelmeldungen (`zero` → Aktion), eine neu
+(GFX.4), eine neu
 geladene Seite spielt laufende Titel von vorn (Countdown beginnt neu),
 Lottie (GFX.5), Titel als Stinger (GFX.11), Ebenen-Transformation
 (GFX.18), XLSX/ODS, Google Sheets, RSS, XML (DAT.1), Zeilen zu Spalten

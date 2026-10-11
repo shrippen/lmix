@@ -14,7 +14,8 @@ use lmix_types::input::AUX_BUSES;
 use lmix_types::{
     Action, AuxBus, ChannelStrip, Cue, DataSourceSpec, Dataset, Effect, FieldBinding, InputAudio,
     InputColor, InputId, LayoutBox, Look, MidiBinding, OutputId, OutputSource, OutputSpec,
-    SignalLoss, SourceSpec, TitleData, TitlePhase, Transition, TransitionSlot, Trigger,
+    SignalLoss, SourceSpec, TitleData, TitlePhase, TitleTrigger, Transition, TransitionSlot,
+    Trigger,
 };
 use serde::{Deserialize, Serialize};
 
@@ -90,6 +91,8 @@ pub struct ShowGraphics {
     pub name: String,
     #[serde(default)]
     pub layers: Vec<ShowTitle>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub triggers: Vec<TitleTrigger>,
 }
 
 /// One title layer as saved.
@@ -394,6 +397,12 @@ mod tests {
                     }],
                     phase: TitlePhase::Playing,
                     step: 1,
+                }],
+                triggers: vec![TitleTrigger {
+                    report: Some("zero".into()),
+                    layer: Some(2),
+                    delay_ms: 0,
+                    actions: vec![Action::Cut],
                 }],
             }],
             datasets: vec![Dataset {

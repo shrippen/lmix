@@ -361,7 +361,7 @@ Funktionsreferenz, kein Code (MIT, `claude.md` Entscheidung 6).
 | GFX.20 | Webseiten und Vorlagen spielen H.264 und AAC ab, auch über Media Source Extensions (HLS-Player, Streaming-Einbettungen wie Twitch, YouTube); bevorzugt mit Hardware-Dekodierung. DRM-geschützte Inhalte (EME/Widevine) sind nicht gefordert | M | – |
 | GFX.7 | Titel-Editor in der GUI: Formular aus Manifest oder Datensatz, Felder live oder per "Übernehmen" | M | ✅ |
 | GFX.8 | Datensätze speichern, benennen, abrufen, auflisten (wie CasparCG-Datenspeicher); vor/zurück; CSV ex-/import | S | ◐ (ohne vor/zurück, CSV) |
-| GFX.9 | Countdown/Stoppuhr/Uhr als Vorlagenbaustein: Dauer, Ziel-/Startzeit, Richtung, Format, Start/Stopp/Pause/Anpassen per Aktion, Ereignis bei 0 | S | ◐ (meldet `zero`, kein Auslöser) |
+| GFX.9 | Countdown/Stoppuhr/Uhr als Vorlagenbaustein: Dauer, Ziel-/Startzeit, Richtung, Format, Start/Stopp/Pause/Anpassen per Aktion, Ereignis bei 0 | S | ✅ |
 | GFX.10 | Laufschrift: Tempo, Richtung, Anhängen vs. Ersetzen | S | ✅ |
 | GFX.11 | Titel als Stinger: Schnittpunkt und Dauer aus Manifest oder Aktion | S | – |
 | GFX.12 | Vorlagensatz (eigen gestaltet): Bauchbinde, Name+Funktion, Laufschrift, Uhr, Countdown, Spielstand, Vollbild-Karte; Hochkant-Varianten | M | ✅ |
