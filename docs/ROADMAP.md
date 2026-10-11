@@ -379,6 +379,18 @@ OUT.4/5 (Karte, Key+Fill), PER.2–5 (PTZ, Uhren), UI.3–12, SHW.6–9.
 
 **Abnahme**: Abdeckungsmatrix (`LASTENHEFT.md`) ohne offene M/S.
 
+Stand (2026-10-12, ohne GPU; DECISIONS „M9 Anfang“):
+
+| Teil | Stand |
+|---|---|
+| Transportleiste, Stopp-Rückfrage, Startoptionen, Kachelgröße/Reihen, einfacher Modus | ✅ UI.5 teils, UI.10, UI.12 teils, UI.3 teils, UI.7 |
+| Input-Einstellungen in Reitern | ◐ UI.8 (ohne Key, Effekte, Position, Ebenen, Tally) |
+| Dynamische Inputs/Werte | ✅ AUT.5 |
+| Tally über TSL UMD 3.1/5.0 | ✅ PER.1 teils (ohne GPIO) |
+| PTZ über VISCA (IP, UDP), Positionen per Auslöser | ◐ PER.2, PER.3 (an echter Kamera ungeprüft) |
+| Show-Paket mit Medien, Daten, Vorlagen | ✅ SHW.6 |
+| Verschmelzen, Mix-Inputs, Ebenen-Editor, Effektkette, Karten-Ausgang, Key+Fill | offen (Engine/Hardware) |
+
 ### Später — Wiederholung, Gäste
 
 Zurückgestellt (User 2026-10-08): RPL.1–10, SRC.19–20, CAL.1–6, SRC.24.
