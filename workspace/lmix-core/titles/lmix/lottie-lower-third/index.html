@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lower third (Lottie)</title>
+<!--
+  A Lottie animation as a title (GFX.5): animation.json drawn by lottie-web,
+  its text layers "name" and "role" are the fields, markers "in" and "out"
+  the animations of play and stop. Copy this folder into the templates
+  folder and replace animation.json with an own Bodymovin export to make
+  another one (scripts/make-lottie-lower-third.py writes this one).
+-->
+<link rel="stylesheet" href="/titles/sdk/lmix-title.css">
+<style>
+  #anim { position: absolute; inset: 0; }
+</style>
+</head>
+<body>
+<div id="anim"></div>
+<script src="/titles/sdk/lottie/lottie_svg.min.js"></script>
+<script src="/titles/sdk/lmix-title.js"></script>
+<script src="/titles/sdk/lmix-lottie.js"></script>
+<script>
+  lmixTitle(lmixLottie({ container: document.getElementById("anim"), animation: "animation.json" }));
+</script>
+</body>
+</html>

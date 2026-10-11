@@ -352,7 +352,8 @@ Stand (2026-10-11, Teil A ohne Render-Engine, DECISIONS „M7 Teil A“):
 | M7.0 Benchmark, Rendern in strom (GFX.2), Kanal als Input/Overlay | offen (GPU, `cefsrc`/`wpesrc`) |
 | Auslöser auf Titelmeldungen (Countdown bei 0) | ✅ GFX.9 |
 | Ebenen-Transformation, animiert | ✅ GFX.18 |
-| Lottie, Titel als Stinger | offen |
+| Lottie in Vorlagen (Bauchbinde mit Textfeldern) | ✅ GFX.5 teils |
+| Titel als Stinger | offen (Engine) |
 
 ### M8 — Fernbedienung, API-Gleichstand
 

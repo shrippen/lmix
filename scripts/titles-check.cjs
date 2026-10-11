@@ -120,6 +120,30 @@ async function act(action) {
   await act({ action: "title_clear", graphics: 1, layer: 7 });
   pass("text slides: next, back, last");
 
+  // A Lottie lower third: text layers as fields, in and out markers.
+  await act({ action: "title_load", graphics: 1, layer: 7, template: "lmix/lottie-lower-third",
+    data: { name: "Lottie A", role: "Role L" }, play: true });
+  frame = await layerFrame(7);
+  // Texts of the animation's text layers (lottie draws them letter by letter).
+  await frame.evaluate(() => {
+    window.lottieTexts = () => {
+      const a = window.lmixLottieAnimation;
+      return a ? a.renderer.elements.filter((e) => e && e.data.ty === 5).map((e) => e.textProperty.currentData.t) : [];
+    };
+  });
+  await frame.waitForFunction(() => {
+    const texts = window.lottieTexts();
+    return texts.includes("Lottie A") && texts.includes("Role L") && document.getElementById("anim").style.opacity === "1";
+  }, null, { timeout: 5000 });
+  await act({ action: "title_update", graphics: 1, layer: 7, data: { name: "Lottie B" } });
+  await frame.waitForFunction(() => window.lottieTexts().includes("Lottie B"), null, { timeout: 3000 });
+  await page.waitForTimeout(800);
+  await page.screenshot({ path: path.join(work, "lottie.png") });
+  await act({ action: "title_stop", graphics: 1, layer: 7 });
+  await page.waitForFunction(() => window.__reports.some((r) => r.layer === 7 && r.report === "done"), null, { timeout: 3000 });
+  await act({ action: "title_clear", graphics: 1, layer: 7 });
+  pass("lottie: text layers as fields, in and out, done");
+
   // Scoreboard +1 (title_add).
   await act({ action: "title_load", graphics: 1, layer: 7, template: "lmix/scoreboard",
     data: { home: "A", away: "B" }, play: true });

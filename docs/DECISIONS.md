@@ -1316,9 +1316,21 @@ Grafikseite setzt es per CSS auf das iframe der Ebene, also für jede
 Vorlage und jede Engine gleich; die Transformation gehört zur Ebene und
 bleibt beim Laden einer anderen Vorlage (wie CasparCGs MIXER). Console:
 Bereich „Place“ mit den häufigsten Werten.
+**Lottie** (GFX.5, E.10 erster Teil): lottie-web 5.12.2 (MIT, nur der
+SVG-Build, 240 KB, npm-Integrität geprüft) liegt im SDK
+(`sdk/lottie/`), `sdk/lmix-lottie.js` macht aus einer Bodymovin-
+Animation eine Vorlage: Textebenen sind Felder (Ebenenname = Feld),
+Marker `in` und `out` die Ein- und Ausblendung, übrige Marker die
+Schritte für `next`. Ebenen `kante:<token>` nehmen Füllung oder
+Textfarbe aus den Kante-Tokens, also keine festen Farben in der
+Animation. Die Schriften der Animation werden vor dem Messen geladen
+(sonst falsche Abstände nach einem Textwechsel). Eingebaut:
+`lmix/lottie-lower-third` (erzeugt von
+`scripts/make-lottie-lower-third.py`). Nativer Lottie-Input (ThorVG)
+bleibt später.
 **Offen**: Rendern in strom (GFX.2, nach M7.0), Grafikkanal als Input
 und Overlay (GFX.17), Overlay wartet auf das Ende der Ausblendung
 (GFX.4), eine neu
 geladene Seite spielt laufende Titel von vorn (Countdown beginnt neu),
-Lottie (GFX.5), Titel als Stinger (GFX.11), XLSX/ODS, Google Sheets mit API-Schlüssel, RSS, XML (DAT.1), Zeilen zu Spalten
+Titel als Stinger (GFX.11), XLSX/ODS, Google Sheets mit API-Schlüssel, RSS, XML (DAT.1), Zeilen zu Spalten
 (DAT.3), Bilder aus lokalen Pfaden außerhalb des Vorlagenordners.

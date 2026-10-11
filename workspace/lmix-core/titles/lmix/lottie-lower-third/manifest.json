@@ -1,0 +1,16 @@
+{
+  "name": "Lower third (Lottie)",
+  "fields": [
+    {"id": "name", "label": "Name"},
+    {"id": "role", "label": "Role"}
+  ],
+  "i18n": {
+    "de": {
+      "name": "Bauchbinde (Lottie)",
+      "fields": {
+        "name": "Name",
+        "role": "Funktion"
+      }
+    }
+  }
+}

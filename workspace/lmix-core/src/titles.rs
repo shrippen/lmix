@@ -5,6 +5,7 @@
 //!   titles/                    built into the binary (build.rs)
 //!     host.html                the graphics page (/graphics/<n>)
 //!     sdk/lmix-title.js, .css  helper and Kante look for templates (optional)
+//!     sdk/lmix-lottie.js       Lottie animations as templates (sdk/lottie: lottie-web, MIT)
 //!     sdk/skeleton/            a template to copy into the folder
 //!     kante/                   Kante tokens and fonts (scripts/sync-kante.sh)
 //!     lmix/<name>/index.html   built-in templates, id "lmix/<name>"
@@ -295,6 +296,7 @@ mod tests {
             "lmix/scoreboard",
             "lmix/card",
             "lmix/text-slides",
+            "lmix/lottie-lower-third",
         ] {
             assert!(ids.contains(&id.to_string()), "missing {id}: {ids:?}");
         }
