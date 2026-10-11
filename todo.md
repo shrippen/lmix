@@ -12,6 +12,7 @@ Erledigtes abhaken (`[x]`, Datum) und nach einer Weile löschen; Details stehen 
 - [ ] Hardware mit dir: H.13 Kopfhörer, H.20 Vollbild auf zweitem Monitor/Beamer, H.21 Kabel ziehen (`docs/HARDWARE-TODO.md`).
 - [ ] NFA.7: 8-h- und 48-h-Lauf, nachdem das Speicherwachstum in strom geklärt ist (H.24).
 - [ ] PRs der Nacht 11./12.10. ansehen und mergen: lmix #15 (H.24-Vergleich, Todo), #16 (Qt-eigene Übersetzungen), Kante #53 (Dialog ohne Hintergrund in Kante Light, danach `scripts/sync-kante.sh` in lmix), lmix #17 (M7 Teil A, gestapelt auf #9, also erst #7–#9 und strom #7/#8).
+- [ ] CI für die Tests: `cargo test` (lmix-core, lmix-types, console-qt), `scripts/test-titles.sh` und `scripts/test-web.sh` laufen in keiner CI (nur `vm-check`). Nach dem Token-Fix (lmix-core braucht das Submodul `strom` für `strom-types`) einen Workflow `tests.yml` anlegen, in `.gitea/` und `.github/`, Chromium über Playwright.
 - [ ] M7.0 Benchmark CEF gegen WPE: braucht freie GPU und `cefsrc`/`wpesrc` (beide fehlen auf dem Rechner, Installation mit sudo); danach rendert strom den Grafikkanal (GFX.2).
 
 ### Breeze-Bug „MenuItem RegExp“ melden
