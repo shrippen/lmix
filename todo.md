@@ -4,7 +4,7 @@ Erledigtes abhaken (`[x]`, Datum) und nach einer Weile löschen; Details stehen 
 
 ## Für dich
 
-- [ ] strom PR #3 (`lmix-player-sysmem`, Player in Systemspeicher) mergen.
+- [x] strom PR #3 (`lmix-player-sysmem`) gemergt.
 - [ ] Demo-Welt-Kopien in 15 anderen Projekten veraltet (neuer Abschnitt `graufeld.stream`): `python3 shrippen.github.io/demo/tools/sync-demo.py`, dann je Projekt committen — soll ich?
 - [ ] Kante PR #36 mergen (Farb-Labels, `KanteLevelMeter`), danach in `shrippen.github.io` `./build.sh` committen (liegt schon gebaut, uncommittet).
 - [ ] Vorschau-Lücke ansehen (`scripts/run-local.sh`, Kachel anklicken) und entscheiden: Vorschau-Ausgang im strom-Mischer oder alte Ansicht halten, bis die neue ein Bild hat.
@@ -50,7 +50,9 @@ enabled: !(/\&[^\&]/.test(control.text))
 - [ ] Release-Build (wenn es einen gibt): `demo/` ausschließen und prüfen.
 - [ ] Andere dekodierende Quellen (SRT, NDI, Gerät) auf GPU-Speicher im Slot-Kanal prüfen (DECISIONS „Hardware-Decoder“).
 - [x] egui-Console entfernen (2026-10-09): Selbsttest als `lmix-selftest`, VM-Test und Screenshot über die Qt-Console (Cloud-VM: Qt 6 aus KDE neon).
-- [ ] strom-Speicher wächst ~32 MB/h (H.24, DECISIONS): in der VM eingegrenzt (2026-10-09: kein Leck ohne Ausgänge, SRT-Statistik leckt nicht, nach 12 min flach); offen: Vergleichsläufe auf Hardware (ohne ISO, 8 Inputs, `gl`, `MALLOC_ARENA_MAX=2`).
+- [ ] strom-Speicher wächst ~32 MB/h (H.24, DECISIONS): Vergleichsläufe 2026-10-11 zeigen Wachstum nur mit ISO-Aufnahme; bestätigen mit ≥ 3 h Grundlage gegen ohne ISO (GPU frei), dann im ISO-Flow suchen.
+- [ ] CUDA-Latenz 106 ms statt 56–63 ms (seit M4?), mit `MALLOC_ARENA_MAX=2` 87 ms: Ursache finden (DECISIONS 2026-10-11).
+- [ ] GL-Mischer mit hängendem SRT-Ausgang: strom wächst ~580 MB/h.
 - [ ] GL-Mischer: SRT-Ausgang ohne Video (Fix in strom, DECISIONS „Hardware-Läufe“); in der VM nicht nachstellbar (2026-10-09, DECISIONS „GL-Mischer und SRT“), braucht Hardware.
 - [x] Aktion in den ersten 2 s nach Engine-Neustart antwortet 502 (2026-10-09: neue Engine erkannt, Aktion geht in die Show, Restore sofort).
 - [ ] Konstantes Bildalter 54 ms bei einigen Kacheln klären.

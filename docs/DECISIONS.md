@@ -1086,3 +1086,33 @@ rechts, beide mit rotem Tally, wieder entfernt.
 Übergänge zwischen Layouts als Bewegung (strom kann morphen); Layouts auf
 CUDA/GL prüfen (H.29).
 
+## 2026-10-11 — strom-Speicher (H.24): Vergleichsläufe auf Hardware
+
+**Läufe** (`scripts/soak-hardware.sh`, RTX 3090, je 60 min, RSS von strom
+jede Minute in `rss.csv`; Grundlage wie am 2026-10-09: CUDA, 16 Inputs,
+ISO-Aufnahme, 2 × SRT; je Lauf eine Änderung):
+
+| Lauf | RSS 15 → 60 min | Verlauf ab Minute 25 | Latenz |
+|---|---|---|---|
+| Grundlage | 999 → 1004 MB | 985 → 1004 MB, stetig (~33 MB/h) | 106–107 ms |
+| ohne ISO | 773 → 759 MB | flach (760–775 MB) | 106–107 ms |
+| 8 Inputs | 679 → 729 MB | 709 → 729 MB, stetig (~30 MB/h) | 106–108 ms |
+| `MALLOC_ARENA_MAX=2` | 809 → 947 MB | Sprung um Minute 37 (818 → 940), danach ~20 MB/h | 86–89 ms |
+| `--mixer gl` | 1531 → 1945 MB | ~580 MB/h | 112–892 ms |
+
+**Störung**: Ab ~13:45 lief ein fremder Prozess auf der GPU (bis 22 GB,
+oft 95–100 %). Die Läufe „8 Inputs“, GL und `MALLOC_ARENA_MAX=2` sind
+dadurch nur eingeschränkt vergleichbar.
+
+**Befund**: Nur der Lauf ohne ISO-Aufnahme bleibt flach, alle Läufe mit
+ISO wachsen gleichmäßig um 20–33 MB/h, unabhängig von der Zahl der
+Inputs. Verdacht: der Ausgangs-Flow mit Input-Quelle (ISO). 60 min sind
+für diese Rate knapp; bestätigen mit einem längeren Paar (Grundlage gegen
+ohne ISO, je ≥ 3 h, GPU sonst frei).
+**GL**: Mit dem GL-Mischer kommt über SRT weiter kein Video an (Befund
+vom 2026-10-09), und strom wächst dabei um ~580 MB/h; der hängende
+SRT-Zweig staut offenbar nicht nur die 2-s-Audio-Queue. Erst nach dem Fix
+in strom erneut messen.
+**Latenz**: Mit CUDA jetzt 106–107 ms statt 56–63 ms am 2026-10-09
+(seitdem M4: Overlays, T-Bar, Kanalzug, Aux-Busse, Stinger). Der Lauf mit
+`MALLOC_ARENA_MAX=2` lag bei 87 ms; Ursache für beides offen.

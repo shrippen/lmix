@@ -11,9 +11,11 @@
 #   MINUTES=480 INPUTS=16 STREAMS=2 ISO=1 scripts/soak-hardware.sh   # NFA.7
 #   MINUTES=10 MIXER=gl scripts/soak-hardware.sh
 #   KEEP_WORK=1 …                            # keep logs, recordings, streams
+#   MALLOC_ARENA_MAX=2 …                     # passed on to strom
 #
 # Needs: strom (scripts/fetch-strom.sh), jq, ffprobe, gst-launch-1.0 with
-# srtsrc. Report: $WORK/report.txt (path printed at the end).
+# srtsrc. Report: $WORK/report.txt (path printed at the end); strom's
+# memory once a minute in $WORK/rss.csv (seconds, MB).
 set -euo pipefail
 
 MINUTES="${MINUTES:-60}"
@@ -38,7 +40,7 @@ cleanup() {
     wait 2>/dev/null || true
     if [[ "${KEEP_WORK:-}" != 1 && "$FAILED" == 0 ]]; then
         # Keep only the report.
-        find "$WORK" -mindepth 1 ! -name report.txt -delete 2>/dev/null || true
+        find "$WORK" -mindepth 1 ! -name report.txt ! -name rss.csv -delete 2>/dev/null || true
     fi
 }
 trap cleanup EXIT
@@ -104,6 +106,14 @@ for n in $(seq 1 "$STREAMS"); do
 done
 START=$(date +%s)
 END=$((START + MINUTES * 60))
+(
+    while kill -0 "$STROM_PID" 2>/dev/null; do
+        awk -v t=$(($(date +%s) - START)) '/VmRSS/ { printf "%d,%d\n", t, $2 / 1024 }' \
+            "/proc/$STROM_PID/status" >>"$WORK/rss.csv" 2>/dev/null || true
+        sleep 60
+    done
+) &
+PIDS+=($!)
 
 cpu_ticks() { awk '{print $14+$15}' "/proc/$1/stat"; }
 TK=$(getconf CLK_TCK)
