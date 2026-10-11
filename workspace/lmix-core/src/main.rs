@@ -21,6 +21,7 @@ mod api;
 mod clips;
 mod datasource;
 mod engine;
+mod feedback;
 mod metrics;
 mod midi;
 mod osc;
@@ -96,6 +97,16 @@ struct Args {
     /// MIDI device files to read (`/dev/snd/midiC1D0`); repeat for more.
     #[arg(long, env = "LMIX_MIDI", value_delimiter = ',')]
     midi: Vec<PathBuf>,
+
+    /// Light the shortcuts' MIDI notes and controllers on the `--midi`
+    /// devices as their inputs stand (AUT.6).
+    #[arg(long, env = "LMIX_MIDI_FEEDBACK")]
+    midi_feedback: bool,
+
+    /// Lamp values for program, preview and off (colours on some
+    /// controllers, e.g. APC mini 3,1,0).
+    #[arg(long, env = "LMIX_MIDI_LAMPS", default_value = "127,64,0")]
+    midi_lamps: feedback::Lamps,
 
     /// UDP address for OSC (AUT.13); off without it.
     #[arg(long, env = "LMIX_OSC")]
@@ -207,6 +218,13 @@ async fn main() -> anyhow::Result<()> {
     tokio::spawn(service.clone().watch_titles());
     if !args.midi.is_empty() {
         tokio::spawn(midi::serve(args.midi.clone(), service.clone()));
+        if args.midi_feedback {
+            tokio::spawn(feedback::serve(
+                args.midi.clone(),
+                args.midi_lamps,
+                service.clone(),
+            ));
+        }
     }
     if let Some(listen) = args.osc {
         let service = service.clone();

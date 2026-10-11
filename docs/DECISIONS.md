@@ -1482,3 +1482,11 @@ Kanten und Mitten anderer Boxen ein (näher als 1,5 % des Bildes); mit
 Alt frei. Rückgängig/Wiederholen (Knöpfe, Strg+Z, Strg+Umschalt+Z) über
 bis zu 100 Schritte, solange der Dialog offen ist; Pixelwerte der
 gewählten Box für 1920 × 1080. Mehrfachauswahl und Sperre fehlen.
+**Lampen an MIDI-Controllern** (AUT.6): mit `--midi-feedback` schreibt
+lmix-core auf die `--midi`-Geräte: die Note oder der Regler eines
+Kurzbefehls zeigt den Stand seiner ersten Aktion (Input auf Programm, in
+der Vorschau, aus; FTB; Ausgang läuft; Sperre). Nur Änderungen, kurz
+gesammelt (eine Blende ergibt einen Schwung). Werte für Programm,
+Vorschau und aus mit `--midi-lamps` (Farben je Controller, APC mini
+3,1,0). Pegel und Motorfader fehlen. Geprüft mit einer Datei statt
+Gerät; an einem echten Controller nicht.
