@@ -397,6 +397,7 @@ mod tests {
                         source: id,
                         column: "2".into(),
                         format: Some("({0})".into()),
+                        row: Some(3),
                     }],
                     phase: TitlePhase::Playing,
                     step: 1,

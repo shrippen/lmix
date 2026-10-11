@@ -1865,7 +1865,12 @@
       <translation>Gestoppt</translation>
     </message>
     <message>
-      <location line="+55" />
+      <location line="+21" />
+      <source>row %1</source>
+      <translation>Zeile %1</translation>
+    </message>
+    <message>
+      <location line="+34" />
       <source>Titles</source>
       <translation>Titel</translation>
     </message>

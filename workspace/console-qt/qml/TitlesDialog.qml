@@ -73,7 +73,7 @@ KanteDialog {
         var b = dialog.loaded.bindings.find(x => x.field === field.id)
         if (!b) return ""
         var s = dialog.sources.find(x => x.id === b.source)
-        return (s ? s.name : "?") + ": " + b.column
+        return (s ? s.name : "?") + ": " + b.column + (b.row ? " · " + qsTr("row %1").arg(b.row) : "")
     }
     /** Field values of the form, for loading or saving a set. */
     function formData() {

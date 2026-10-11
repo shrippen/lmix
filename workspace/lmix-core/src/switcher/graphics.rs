@@ -389,13 +389,20 @@ impl Switcher {
                         source,
                         column,
                         format,
+                        row,
                     }) => {
                         let at = self.find_source(&source)?;
+                        if row == Some(0) {
+                            return Err(ActionError::BadDataSource {
+                                reason: "rows count from 1".into(),
+                            });
+                        }
                         Some(FieldBinding {
                             field: field.clone(),
                             source: self.show.data_sources[at].id,
                             column,
                             format,
+                            row,
                         })
                     }
                     None => None,
@@ -758,7 +765,7 @@ impl Switcher {
             let Some(rows) = self.titles.rows.get(&source.id) else {
                 continue;
             };
-            let row = (source.row as usize)
+            let row = (binding.row.unwrap_or(source.row) as usize)
                 .checked_sub(1)
                 .and_then(|i| rows.rows.get(i));
             if let Some(value) = row.and_then(|row| cell(&rows.columns, row, &binding.column)) {
@@ -1243,6 +1250,7 @@ mod tests {
                 source: InputRef::Text("guests".into()),
                 column: "role".into(),
                 format: Some("– {0}".into()),
+                row: None,
             }),
         })
         .unwrap();
@@ -1258,6 +1266,21 @@ mod tests {
                 source: InputRef::Number(1)
             })
             .is_err());
+
+        // A fixed row stays whatever row is selected.
+        sw.apply(Action::TitleBind {
+            graphics: InputRef::Number(1),
+            layer: 1,
+            field: "name".into(),
+            binding: Some(BindingSpec {
+                source: InputRef::Number(1),
+                column: "name".into(),
+                format: None,
+                row: Some(1),
+            }),
+        })
+        .unwrap();
+        assert_eq!(layer(&sw, 1).values["name"], "A");
 
         // Removing the source keeps what the field showed.
         sw.apply(Action::RemoveDataSource {

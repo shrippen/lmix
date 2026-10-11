@@ -72,6 +72,9 @@ pub struct FieldBinding {
     /// Pattern with `{0}` for the value, e.g. `"{0} km/h"`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub format: Option<String>,
+    /// Always this row (1-based) instead of the selected one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub row: Option<u32>,
 }
 
 /// How an action binds a field.
@@ -81,6 +84,9 @@ pub struct BindingSpec {
     pub column: String,
     #[serde(default)]
     pub format: Option<String>,
+    /// A fixed row (1-based); without it the selected one (DAT.4).
+    #[serde(default)]
+    pub row: Option<u32>,
 }
 
 /// How a title layer sits in the picture (GFX.18), applied by the

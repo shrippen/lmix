@@ -1338,6 +1338,9 @@ relativ zur Show-Datei). Console: ◀/▶ und Import/Export im Titel-Dialog.
 eine Grafikseite, während ein Titel läuft, gibt sie der Vorlage mit, wie
 lange er schon spielt (`lmixTitle.resumedMs()`), der Countdown zählt von
 dort weiter. Eine Pause vor dem Neuladen kennt die Seite nicht.
+**Feste Zeile** (DAT.4): eine Bindung kann `row` tragen und bleibt dann
+bei dieser Zeile, gleich welche gewählt ist (etwa Heim- und Gastteam aus
+Zeile 1 und 2 derselben Tabelle).
 **Offen**: Rendern in strom (GFX.2, nach M7.0), Grafikkanal als Input
 und Overlay (GFX.17), Overlay wartet auf das Ende der Ausblendung
 (GFX.4), Titel als Stinger (GFX.11), XLSX/ODS, Google Sheets mit API-Schlüssel, RSS, XML (DAT.1), Zeilen zu Spalten

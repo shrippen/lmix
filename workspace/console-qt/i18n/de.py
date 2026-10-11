@@ -399,4 +399,5 @@ DE = {
     'CSV file of sets (column name, then fields)': 'CSV-Datei mit Datensätzen (Spalte name, dann Felder)',
     'Import': 'Importieren',
     'Export': 'Exportieren',
+    'row %1': 'Zeile %1',
 }
