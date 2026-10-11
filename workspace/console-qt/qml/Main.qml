@@ -373,7 +373,7 @@ Kirigami.ApplicationWindow {
                 Layout.fillHeight: true
                 core: backend
             }
-            KanteLevelMeter {
+            KanteAudioMeter {
                 Layout.fillWidth: true
                 visible: monitor.peakDb !== undefined
                 level: monitor.peakDb

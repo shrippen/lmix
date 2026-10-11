@@ -441,25 +441,9 @@
     </message>
   </context>
   <context>
-    <name>KanteChip</name>
+    <name>KanteAudioMeter</name>
     <message>
-      <location filename="../qml/Kante/KanteChip.qml" line="+34" />
-      <source>Remove %1</source>
-      <translation>%1 entfernen</translation>
-    </message>
-  </context>
-  <context>
-    <name>KanteDateField</name>
-    <message>
-      <location filename="../qml/Kante/KanteDateField.qml" line="+26" />
-      <source>Today</source>
-      <translation>Heute</translation>
-    </message>
-  </context>
-  <context>
-    <name>KanteLevelMeter</name>
-    <message>
-      <location filename="../qml/Kante/KanteLevelMeter.qml" line="+146" />
+      <location filename="../qml/Kante/KanteAudioMeter.qml" line="+146" />
       <source>No signal</source>
       <translation>Kein Signal</translation>
     </message>
@@ -470,9 +454,25 @@
     </message>
   </context>
   <context>
+    <name>KanteChip</name>
+    <message>
+      <location filename="../qml/Kante/KanteChip.qml" line="+34" />
+      <source>Remove %1</source>
+      <translation>%1 entfernen</translation>
+    </message>
+  </context>
+  <context>
+    <name>KanteDateField</name>
+    <message>
+      <location filename="../qml/Kante/KanteDateField.qml" line="+25" />
+      <source>Today</source>
+      <translation>Heute</translation>
+    </message>
+  </context>
+  <context>
     <name>KanteSearchCombo</name>
     <message>
-      <location filename="../qml/Kante/KanteSearchCombo.qml" line="+40" />
+      <location filename="../qml/Kante/KanteSearchCombo.qml" line="+39" />
       <source>Add “%1”</source>
       <translation>„%1“ hinzufügen</translation>
     </message>
@@ -480,7 +480,7 @@
   <context>
     <name>KanteTagPicker</name>
     <message>
-      <location filename="../qml/Kante/KanteTagPicker.qml" line="+25" />
+      <location filename="../qml/Kante/KanteTagPicker.qml" line="+24" />
       <source>Remove %1</source>
       <translation>%1 entfernen</translation>
     </message>
@@ -488,7 +488,7 @@
   <context>
     <name>KanteTimeField</name>
     <message>
-      <location filename="../qml/Kante/KanteTimeField.qml" line="+33" />
+      <location filename="../qml/Kante/KanteTimeField.qml" line="+32" />
       <source>Hour</source>
       <translation>Stunde</translation>
     </message>
@@ -1081,17 +1081,17 @@
   <context>
     <name>TransitionPanel</name>
     <message>
-      <location filename="../qml/TransitionPanel.qml" line="+51" />
+      <location filename="../qml/TransitionPanel.qml" line="+60" />
       <source>Cut</source>
       <translation>Cut</translation>
     </message>
     <message>
-      <location line="+21" />
+      <location line="+28" />
       <source>Click: take preview. Right click: effect and length.</source>
       <translation>Klick: Vorschau übernehmen. Rechtsklick: Effekt und Dauer.</translation>
     </message>
     <message>
-      <location line="+12" />
+      <location line="+14" />
       <source>Effect</source>
       <translation>Effekt</translation>
     </message>
@@ -1101,7 +1101,7 @@
       <translation>Dauer</translation>
     </message>
     <message>
-      <location line="+7" />
+      <location line="+6" />
       <source>Stinger clip and cut point…</source>
       <translation>Stinger-Clip und Cut-Punkt…</translation>
     </message>
