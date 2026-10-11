@@ -15,8 +15,8 @@ pub mod graphics;
 pub mod input;
 pub mod layout;
 pub mod midi;
-pub mod ptz;
 pub mod output;
+pub mod ptz;
 pub mod shortcut;
 pub mod state;
 
@@ -34,10 +34,10 @@ pub use input::{
 };
 pub use layout::{BoxCrop, BoxRect, BoxSpec, Layout, LayoutBox};
 pub use midi::{MidiBinding, MidiKind, MidiMessage};
-pub use ptz::{PtzFocus, PtzProtocol, PtzSpec};
 pub use output::{
     Container, DisplayMode, Output, OutputId, OutputRef, OutputSource, OutputSpec, OutputStats,
     OutputStatus,
 };
+pub use ptz::{PtzFocus, PtzProtocol, PtzSpec};
 pub use shortcut::{Shortcut, ShortcutSpec};
 pub use state::{Event, InputLevel, Latency, Levels, LiveFeed, ShowState, Stinger, Transition};

@@ -326,7 +326,11 @@ pub enum Action {
     },
     /// Pan and tilt at a speed: −1 (left, down) to 1 (right, up); 0 0
     /// stops.
-    PtzMove { input: InputRef, pan: f32, tilt: f32 },
+    PtzMove {
+        input: InputRef,
+        pan: f32,
+        tilt: f32,
+    },
     /// Zoom at a speed: −1 (wide) to 1 (tele); 0 stops.
     PtzZoom { input: InputRef, speed: f32 },
     /// Focus: auto, manual, near, far, stop.
