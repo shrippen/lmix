@@ -121,11 +121,14 @@
     const bar = document.createElement("form");
     bar.className = "lmix-preview-bar";
     const fields = manifest.fields || [];
+    // Labels in the browser's language, if the manifest has them.
+    const texts = ((manifest.i18n || {})[(navigator.language || "").slice(0, 2)] || {}).fields || {};
     for (const field of fields) {
+      const label = texts[field.id] || field.label || field.id;
       const input = document.createElement(field.kind === "long_text" ? "textarea" : "input");
       input.name = field.id;
-      input.placeholder = field.label || field.id;
-      input.value = field.default !== undefined ? field.default : field.label || field.id;
+      input.placeholder = label;
+      input.value = field.default !== undefined ? field.default : label;
       if (field.kind === "color") input.type = "color";
       if (field.kind === "number") input.type = "number";
       bar.appendChild(input);

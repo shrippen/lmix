@@ -23,7 +23,7 @@ pub use action::{Action, ActionError, Effect, StingerSpec, TransitionSlot};
 pub use automation::{Cue, CueList, Trigger, TriggerOn};
 pub use graphics::{
     BindingSpec, DataFormat, DataSource, DataSourceSpec, Dataset, FieldBinding, FieldKind,
-    Graphics, Template, TemplateField, TitleCall, TitleData, TitleLayer, TitlePhase, TitleTrigger,
+    Graphics, Template, TemplateField, TemplateTexts, TitleCall, TitleData, TitleLayer, TitlePhase, TitleTrigger,
 };
 pub use input::{
     AuxBus, ChannelStrip, Compressor, Device, DeviceKind, Eq4, Gate, Hpf, Ingest, Input,

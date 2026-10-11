@@ -3,8 +3,22 @@
   "steps": 200,
   "functions": ["back"],
   "fields": [
-    { "id": "title", "label": "Title" },
-    { "id": "text", "label": "Slides (blank line between them)", "kind": "long_text" },
-    { "id": "layout", "label": "Layout", "kind": "choice", "default": "lower", "choices": ["lower", "full"] }
-  ]
+    {"id": "title", "label": "Title"},
+    {"id": "text", "label": "Slides (blank line between them)", "kind": "long_text"},
+    {"id": "layout", "label": "Layout", "kind": "choice", "default": "lower", "choices": ["lower", "full"]}
+  ],
+  "i18n": {
+    "de": {
+      "name": "Textfolien",
+      "fields": {
+        "title": "Titel",
+        "text": "Folien (Leerzeile dazwischen)",
+        "layout": "Anordnung"
+      },
+      "choices": {
+        "full": "ganzes Bild",
+        "lower": "unten"
+      }
+    }
+  }
 }

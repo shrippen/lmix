@@ -1303,6 +1303,11 @@ vorige, die letzte meldet `last`; Layout unten (Stream) oder ganzes Bild
 Zeile eine Zeile mit der Spalte `text` (Laufschrift, Folien). Dateien
 und Adressen laufen in einer eigenen Schleife, damit ein langsamer
 Abruf das Weiterschalten nicht aufhält.
+**Sprachen der Vorlagen**: ein Manifest kann `i18n` je Sprache haben
+(Name, Feldbezeichnungen, Anzeige der Auswahlwerte); die Console nimmt
+ihre Sprache, die Vorschauleiste die des Browsers. Der eingebaute Satz
+hat Deutsch (ein Test prüft, dass kein Feld fehlt); die Werte selbst
+bleiben die englischen Schlüssel (`left`, `down`).
 **Offen**: Rendern in strom (GFX.2, nach M7.0), Grafikkanal als Input
 und Overlay (GFX.17), Overlay wartet auf das Ende der Ausblendung
 (GFX.4), eine neu

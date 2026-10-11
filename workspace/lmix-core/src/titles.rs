@@ -17,7 +17,7 @@
 //!
 //! A manifest is optional: name, fields (id, label, kind, default,
 //! choices), `data_format` (`json` or CasparCG `xml`), `steps`,
-//! `functions`. Folder templates get a revision from their files' times,
+//! `functions`, and `i18n` with name, labels and choices per language. Folder templates get a revision from their files' times,
 //! so the graphics page reloads them when they change (GFX.14).
 
 use std::collections::HashMap;
@@ -59,6 +59,7 @@ struct Manifest {
     data_format: DataFormat,
     steps: u32,
     functions: Vec<String>,
+    i18n: std::collections::BTreeMap<String, lmix_types::TemplateTexts>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -105,6 +106,7 @@ fn template(
         data_format: manifest.data_format,
         steps: manifest.steps,
         functions: manifest.functions,
+        i18n: manifest.i18n,
         id,
         url,
         builtin,
@@ -299,6 +301,18 @@ mod tests {
         for t in builtin_templates() {
             assert!(!t.fields.is_empty(), "{} has no fields", t.id);
             assert!(builtin(&format!("{}/manifest.json", t.id)).is_some());
+            // German texts for every field and choice (UI in German too).
+            let de = t
+                .i18n
+                .get("de")
+                .unwrap_or_else(|| panic!("{} has no German", t.id));
+            assert!(de.name.is_some(), "{}", t.id);
+            for f in &t.fields {
+                assert!(de.fields.contains_key(&f.id), "{} {}", t.id, f.id);
+                for c in &f.choices {
+                    assert!(de.choices.contains_key(c), "{} {c}", t.id);
+                }
+            }
         }
     }
 

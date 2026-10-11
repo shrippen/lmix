@@ -18,6 +18,9 @@ RowLayout {
     property string value: ""
     /** "Source: column" when a data source feeds the field. */
     property string boundTo: ""
+    /** The template's texts in the Console's language (lmix
+     * `TemplateTexts`), if it has them. */
+    property var texts: ({})
     signal edited(string value)
     signal typed(string value)
     signal bindRequested(var button)
@@ -30,7 +33,7 @@ RowLayout {
         Layout.preferredWidth: Kirigami.Units.gridUnit * 9
         Layout.alignment: Qt.AlignTop
         Layout.topMargin: Kirigami.Units.smallSpacing
-        text: row.field.label
+        text: (row.texts.fields && row.texts.fields[row.field.id]) || row.field.label
         elide: Text.ElideRight
     }
 
@@ -116,7 +119,7 @@ RowLayout {
         id: choice
         QQC2.ComboBox {
             id: box
-            model: row.field.choices
+            model: row.field.choices.map(c => (row.texts.choices && row.texts.choices[c]) || c)
             currentIndex: Math.max(0, row.field.choices.indexOf(row.value))
             onActivated: index => {
                 row.typed(row.field.choices[index])

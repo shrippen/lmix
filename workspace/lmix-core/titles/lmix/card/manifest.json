@@ -2,9 +2,20 @@
   "name": "Full-screen card",
   "steps": 1,
   "fields": [
-    { "id": "kicker", "label": "Kicker" },
-    { "id": "title", "label": "Title" },
-    { "id": "text", "label": "Text", "kind": "long_text" },
-    { "id": "image", "label": "Image", "kind": "image" }
-  ]
+    {"id": "kicker", "label": "Kicker"},
+    {"id": "title", "label": "Title"},
+    {"id": "text", "label": "Text", "kind": "long_text"},
+    {"id": "image", "label": "Image", "kind": "image"}
+  ],
+  "i18n": {
+    "de": {
+      "name": "Vollbild-Karte",
+      "fields": {
+        "kicker": "Dachzeile",
+        "title": "Titel",
+        "text": "Text",
+        "image": "Bild"
+      }
+    }
+  }
 }

@@ -2,10 +2,26 @@
   "name": "Countdown",
   "functions": ["start", "pause", "reset", "adjust"],
   "fields": [
-    { "id": "label", "label": "Label" },
-    { "id": "duration", "label": "Duration (m:ss or h:mm:ss)", "default": "5:00" },
-    { "id": "target", "label": "Until (HH:MM, instead of duration)" },
-    { "id": "direction", "label": "Direction", "kind": "choice", "default": "down", "choices": ["down", "up"] },
-    { "id": "autostart", "label": "Start on play", "kind": "toggle", "default": "true" }
-  ]
+    {"id": "label", "label": "Label"},
+    {"id": "duration", "label": "Duration (m:ss or h:mm:ss)", "default": "5:00"},
+    {"id": "target", "label": "Until (HH:MM, instead of duration)"},
+    {"id": "direction", "label": "Direction", "kind": "choice", "default": "down", "choices": ["down", "up"]},
+    {"id": "autostart", "label": "Start on play", "kind": "toggle", "default": "true"}
+  ],
+  "i18n": {
+    "de": {
+      "name": "Countdown",
+      "fields": {
+        "label": "Etikett",
+        "duration": "Dauer (m:ss oder h:mm:ss)",
+        "target": "Bis (HH:MM, statt Dauer)",
+        "direction": "Richtung",
+        "autostart": "Beim Abspielen starten"
+      },
+      "choices": {
+        "down": "abwärts",
+        "up": "aufwärts"
+      }
+    }
+  }
 }

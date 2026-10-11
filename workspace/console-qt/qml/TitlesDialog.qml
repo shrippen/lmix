@@ -40,6 +40,11 @@ KanteDialog {
     /** Field the data source menu binds. */
     property string binding: ""
 
+    /** Language of the Console, for the templates' own texts. */
+    readonly property string lang: Qt.locale().name.split("_")[0]
+    function texts(t) { return (t && t.i18n && t.i18n[dialog.lang]) || {} }
+    function templateName(t) { return dialog.texts(t).name || t.name }
+
     function ref() { return dialog.channel.number }
     function phaseText(phase) {
         switch (phase) {
@@ -223,7 +228,7 @@ KanteDialog {
                     }
                     QQC2.Label {
                         Layout.fillWidth: true
-                        text: layerRow.title ? (layerRow.info ? layerRow.info.name : layerRow.title.template) : "—"
+                        text: layerRow.title ? (layerRow.info ? dialog.templateName(layerRow.info) : layerRow.title.template) : "—"
                         color: layerRow.title ? Kirigami.Theme.textColor : KanteStyle.mutedTextColor
                         elide: Text.ElideRight
                     }
@@ -271,7 +276,7 @@ KanteDialog {
             QQC2.ComboBox {
                 id: templateBox
                 Layout.fillWidth: true
-                model: dialog.templates.map(t => t.name + (t.builtin ? "" : "  (" + t.id + ")"))
+                model: dialog.templates.map(t => dialog.templateName(t) + (t.builtin ? "" : "  (" + t.id + ")"))
                 currentIndex: Math.max(0, dialog.templates.findIndex(t => t.id === (dialog.loaded ? dialog.loaded.template : dialog.pickedTemplate)))
                 onActivated: index => {
                     dialog.pickedTemplate = dialog.templates[index].id
@@ -300,6 +305,7 @@ KanteDialog {
                 required property var modelData
                 Layout.fillWidth: true
                 field: modelData
+                texts: dialog.texts(dialog.template)
                 value: dialog.fieldValue(modelData)
                 boundTo: dialog.boundTo(modelData)
                 onEdited: value => { if (dialog.live) dialog.setField(modelData.id, value) }

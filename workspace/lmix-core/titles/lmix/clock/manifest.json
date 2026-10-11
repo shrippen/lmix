@@ -1,9 +1,24 @@
 {
   "name": "Clock",
   "fields": [
-    { "id": "label", "label": "Label" },
-    { "id": "seconds", "label": "Seconds", "kind": "toggle", "default": "true" },
-    { "id": "corner", "label": "Corner", "kind": "choice", "default": "top-right",
-      "choices": ["top-right", "top-left", "bottom-right", "bottom-left"] }
-  ]
+    {"id": "label", "label": "Label"},
+    {"id": "seconds", "label": "Seconds", "kind": "toggle", "default": "true"},
+    {"id": "corner", "label": "Corner", "kind": "choice", "default": "top-right", "choices": ["top-right", "top-left", "bottom-right", "bottom-left"]}
+  ],
+  "i18n": {
+    "de": {
+      "name": "Uhr",
+      "fields": {
+        "label": "Etikett",
+        "seconds": "Sekunden",
+        "corner": "Ecke"
+      },
+      "choices": {
+        "bottom-left": "unten links",
+        "bottom-right": "unten rechts",
+        "top-left": "oben links",
+        "top-right": "oben rechts"
+      }
+    }
+  }
 }

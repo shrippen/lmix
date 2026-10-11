@@ -1,14 +1,34 @@
 {
   "name": "Scoreboard",
   "fields": [
-    { "id": "home", "label": "Home" },
-    { "id": "away", "label": "Away" },
-    { "id": "home_score", "label": "Home score", "kind": "number", "default": "0" },
-    { "id": "away_score", "label": "Away score", "kind": "number", "default": "0" },
-    { "id": "period", "label": "Period" },
-    { "id": "home_colour", "label": "Home colour", "kind": "choice", "default": "red",
-      "choices": ["red", "orange", "yellow", "aqua", "blue", "purple"] },
-    { "id": "away_colour", "label": "Away colour", "kind": "choice", "default": "blue",
-      "choices": ["red", "orange", "yellow", "aqua", "blue", "purple"] }
-  ]
+    {"id": "home", "label": "Home"},
+    {"id": "away", "label": "Away"},
+    {"id": "home_score", "label": "Home score", "kind": "number", "default": "0"},
+    {"id": "away_score", "label": "Away score", "kind": "number", "default": "0"},
+    {"id": "period", "label": "Period"},
+    {"id": "home_colour", "label": "Home colour", "kind": "choice", "default": "red", "choices": ["red", "orange", "yellow", "aqua", "blue", "purple"]},
+    {"id": "away_colour", "label": "Away colour", "kind": "choice", "default": "blue", "choices": ["red", "orange", "yellow", "aqua", "blue", "purple"]}
+  ],
+  "i18n": {
+    "de": {
+      "name": "Spielstand",
+      "fields": {
+        "home": "Heim",
+        "away": "Gast",
+        "home_score": "Tore Heim",
+        "away_score": "Tore Gast",
+        "period": "Spielabschnitt",
+        "home_colour": "Farbe Heim",
+        "away_colour": "Farbe Gast"
+      },
+      "choices": {
+        "aqua": "Grün",
+        "blue": "Blau",
+        "orange": "Orange",
+        "purple": "Lila",
+        "red": "Rot",
+        "yellow": "Gelb"
+      }
+    }
+  }
 }

@@ -252,6 +252,20 @@ pub enum FieldKind {
     Choice,
 }
 
+/// A template's texts in another language (manifest `i18n`, keyed by
+/// language code such as `de`); what is missing stays as written.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct TemplateTexts {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// Field labels by field id.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub fields: BTreeMap<String, String>,
+    /// Shown text of choice values, by value.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub choices: BTreeMap<String, String>,
+}
+
 /// How the template wants `update`'s argument (GFX.3).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -284,6 +298,9 @@ pub struct Template {
     pub functions: Vec<String>,
     /// Changes with the template's files.
     pub revision: u64,
+    /// Name, labels and choices in other languages.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub i18n: BTreeMap<String, TemplateTexts>,
 }
 
 /// Value of `column` in `row` (by name, else 1-based number).
