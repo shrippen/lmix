@@ -75,6 +75,74 @@ KanteDialog {
         edit(index, { rect: { x: Math.min(Math.max(snap(x), 0), 1 - r.w), y: Math.min(Math.max(snap(y), 0), 1 - r.h), w: r.w, h: r.h } })
     }
 
+    /** How near (of the picture) a box edge or centre has to come to catch. */
+    readonly property real catchDistance: 0.015
+    /** Action-safe margin, as the titles keep it (5 %). */
+    readonly property real safe: 0.05
+
+    /** Where box `index` (width `w`) would start along one axis to catch
+     *  `pos` on an edge or centre of the picture, the safe area or another
+     *  box (LAY.6); `pos` when nothing is near. `axis` "x" or "y". */
+    function caught(index, pos, w, axis) {
+        const targets = [0, 0.5, 1, safe, 1 - safe]
+        boxes.forEach((b, i) => {
+            if (i === index)
+                return
+            const start = axis === "x" ? b.rect.x : b.rect.y
+            const size = axis === "x" ? b.rect.w : b.rect.h
+            targets.push(start, start + size, start + size / 2)
+        })
+        let best = pos, distance = catchDistance
+        for (const t of targets) {
+            // The box's start, end and centre on the target.
+            for (const p of [t, t - w, t - w / 2]) {
+                if (Math.abs(p - pos) < distance) {
+                    distance = Math.abs(p - pos)
+                    best = p
+                }
+            }
+        }
+        return best
+    }
+
+    /** Moves box `index` to (x, y), catching edges and centres unless
+     *  `free` (Alt held). */
+    function placeAt(index, x, y, free) {
+        const r = boxes[index].rect
+        if (free) {
+            moveTo(index, x, y)
+            return
+        }
+        const cx = caught(index, x, r.w, "x"), cy = caught(index, y, r.h, "y")
+        edit(index, { rect: { x: Math.min(Math.max(cx, 0), 1 - r.w), y: Math.min(Math.max(cy, 0), 1 - r.h), w: r.w, h: r.h } })
+    }
+
+    // Undo and redo (LAY.6): every change of the boxes is a step.
+    property var history: []
+    property int historyAt: -1
+    property bool restoring: false
+    onBoxesChanged: {
+        if (restoring)
+            return
+        const steps = history.slice(0, historyAt + 1)
+        steps.push(JSON.stringify(boxes))
+        history = steps.slice(-100)
+        historyAt = history.length - 1
+    }
+    function undo() { stepTo(historyAt - 1) }
+    function redo() { stepTo(historyAt + 1) }
+    function stepTo(at) {
+        if (at < 0 || at >= history.length)
+            return
+        restoring = true
+        historyAt = at
+        boxes = JSON.parse(history[at])
+        selected = Math.min(selected, boxes.length - 1)
+        restoring = false
+    }
+    /** Output pixels of a fraction (1920×1080 picture). */
+    function px(v, axis) { return Math.round(v * (axis === "x" ? 1920 : 1080)) }
+
     /** Sizes box `index` from its top left corner, kept inside the picture. */
     function sizeTo(index, w, h) {
         var r = boxes[index].rect
@@ -110,6 +178,8 @@ KanteDialog {
             crop: Object.assign({}, noCrop, b.crop || {})
         })) : []
         selected = boxes.length > 0 ? 0 : -1
+        history = [JSON.stringify(boxes)]
+        historyAt = 0
     }
 
     onAccepted: {
@@ -173,6 +243,16 @@ KanteDialog {
             }
 
             Keys.onPressed: event => {
+                if (event.matches(StandardKey.Undo)) {
+                    dialog.undo()
+                    event.accepted = true
+                    return
+                }
+                if (event.matches(StandardKey.Redo)) {
+                    dialog.redo()
+                    event.accepted = true
+                    return
+                }
                 var i = dialog.selected
                 if (i < 0)
                     return
@@ -230,9 +310,10 @@ KanteDialog {
                             dialog.selected = boxItem.index
                             area.forceActiveFocus()
                         }
-                        onReleased: {
+                        onReleased: mouse => {
                             if (drag.active || boxItem.x !== boxItem.modelData.rect.x * area.width || boxItem.y !== boxItem.modelData.rect.y * area.height)
-                                dialog.moveTo(boxItem.index, boxItem.x / area.width, boxItem.y / area.height)
+                                dialog.placeAt(boxItem.index, boxItem.x / area.width, boxItem.y / area.height,
+                                    (mouse.modifiers & Qt.AltModifier) !== 0)
                         }
                     }
 
@@ -269,6 +350,31 @@ KanteDialog {
                         }
                     }
                 }
+            }
+        }
+
+        RowLayout {
+            Layout.fillWidth: true
+            QQC2.Label {
+                Layout.fillWidth: true
+                font.family: KanteStyle.monoFamily
+                color: KanteStyle.mutedTextColor
+                readonly property var r: dialog.selected >= 0 && dialog.selected < dialog.boxes.length ? dialog.boxes[dialog.selected].rect : null
+                text: r ? qsTr("Box %1: %2, %3 px · %4 × %5 px (1920 × 1080)").arg(dialog.selected + 1)
+                    .arg(dialog.px(r.x, "x")).arg(dialog.px(r.y, "y")).arg(dialog.px(r.w, "x")).arg(dialog.px(r.h, "y")) : ""
+                QQC2.ToolTip.visible: posArea.containsMouse
+                QQC2.ToolTip.text: qsTr("Boxes catch edges, the centre, the safe area and other boxes; hold Alt to place freely.")
+                MouseArea { id: posArea; anchors.fill: parent; hoverEnabled: true; acceptedButtons: Qt.NoButton }
+            }
+            KanteButton {
+                text: qsTr("Undo")
+                enabled: dialog.historyAt > 0
+                onClicked: dialog.undo()
+            }
+            KanteButton {
+                text: qsTr("Redo")
+                enabled: dialog.historyAt < dialog.history.length - 1
+                onClicked: dialog.redo()
             }
         }
 

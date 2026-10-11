@@ -1476,3 +1476,9 @@ TCP, TSL 5.0 mit DLE/STX-Rahmen (0xFE im Paket verdoppelt), TSL 3.1
 unverändert. Die Verbindung entsteht beim Senden und nach einem Fehler
 neu; ein nicht erreichbarer Empfänger wird 2 s lang übersprungen, damit
 er die übrigen Pakete nicht aufhält.
+**Layout-Editor** (LAY.6): eine gezogene Box rastet mit Anfang, Ende
+oder Mitte an Bildkanten, Bildmitte, dem Schutzbereich (5 %) und den
+Kanten und Mitten anderer Boxen ein (näher als 1,5 % des Bildes); mit
+Alt frei. Rückgängig/Wiederholen (Knöpfe, Strg+Z, Strg+Umschalt+Z) über
+bis zu 100 Schritte, solange der Dialog offen ist; Pixelwerte der
+gewählten Box für 1920 × 1080. Mehrfachauswahl und Sperre fehlen.

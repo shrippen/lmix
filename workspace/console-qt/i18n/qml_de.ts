@@ -541,7 +541,7 @@
       <translation>Einstellungen von %1 %2</translation>
     </message>
     <message>
-      <location line="+40" />
+      <location line="+53" />
       <source>Name</source>
       <translation>Name</translation>
     </message>
@@ -556,7 +556,7 @@
       <translation>Keine</translation>
     </message>
     <message>
-      <location line="+10" />
+      <location line="+9" />
       <source>When the signal is lost</source>
       <translation>Bei Signalverlust</translation>
     </message>
@@ -571,7 +571,7 @@
       <translation>Schwarz</translation>
     </message>
     <message>
-      <location line="+8" />
+      <location line="+7" />
       <source>Source</source>
       <translation>Quelle</translation>
     </message>
@@ -1038,7 +1038,7 @@
       <translation>Klein, unten links</translation>
     </message>
     <message>
-      <location line="+47" />
+      <location line="+115" />
       <source>Layout %1 %2</source>
       <translation>Layout %1 %2</translation>
     </message>
@@ -1048,7 +1048,7 @@
       <translation>Neues Layout</translation>
     </message>
     <message>
-      <location line="+46" />
+      <location line="+48" />
       <source>Name</source>
       <translation>Name</translation>
     </message>
@@ -1078,12 +1078,32 @@
       <translation>Box hinzufügen, dann an ihren Platz ziehen</translation>
     </message>
     <message>
-      <location line="+43" />
+      <location line="+53" />
       <source> (cropped)</source>
       <translation> (beschnitten)</translation>
     </message>
     <message>
-      <location line="+60" />
+      <location line="+68" />
+      <source>Box %1: %2, %3 px · %4 × %5 px (1920 × 1080)</source>
+      <translation>Box %1: %2, %3 px · %4 × %5 px (1920 × 1080)</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Boxes catch edges, the centre, the safe area and other boxes; hold Alt to place freely.</source>
+      <translation>Boxen rasten an Kanten, der Mitte, dem Schutzbereich und anderen Boxen ein; mit Alt frei platzieren.</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Undo</source>
+      <translation>Rückgängig</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Redo</source>
+      <translation>Wiederholen</translation>
+    </message>
+    <message>
+      <location line="+6" />
       <source>Boxes (bottom to top)</source>
       <translation>Boxen (von unten nach oben)</translation>
     </message>
@@ -1138,12 +1158,12 @@
       <translation>+ Box</translation>
     </message>
     <message>
-      <location line="-325" />
+      <location line="-431" />
       <source>Empty</source>
       <translation>Leer</translation>
     </message>
     <message>
-      <location line="+230" />
+      <location line="+336" />
       <source>Select box %1</source>
       <translation>Box %1 wählen</translation>
     </message>
@@ -1237,7 +1257,7 @@
   <context>
     <name>Main</name>
     <message>
-      <location filename="../qml/Main.qml" line="+110" />
+      <location filename="../qml/Main.qml" line="+111" />
       <source>Layout %1 %2</source>
       <translation>Layout %1 %2</translation>
     </message>
@@ -2595,7 +2615,7 @@
   <context>
     <name>TransportBar</name>
     <message>
-      <location filename="../qml/TransportBar.qml" line="+44" />
+      <location filename="../qml/TransportBar.qml" line="+46" />
       <source>Previous</source>
       <translation>Zurück</translation>
     </message>
@@ -2620,7 +2640,7 @@
       <translation>Weiter</translation>
     </message>
     <message>
-      <location line="+7" />
+      <location line="+17" />
       <source>Length %1</source>
       <translation>Länge %1</translation>
     </message>

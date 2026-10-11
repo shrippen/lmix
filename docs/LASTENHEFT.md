@@ -214,7 +214,7 @@ kann es, Console nicht.
 | LAY.3 | Verschachtelung: Ebenen von Ebenen werden gerendert (mind. 2 Stufen) | S | – |
 | LAY.4 | "Ebenen flach rechnen": Input samt Ebenen als ein Bild für Weiterverwendung | K | – |
 | LAY.5 | Layout-Vorlagen: speichern, laden, ex-/importieren, außerhalb der Show | S | – |
-| LAY.6 | Ebenen-Editor: Maus verschieben/skalieren/croppen, Mehrfachauswahl, Fangen an Kanten/Mitte/Schutzbereichen/anderen Ebenen, Sperre, Rückgängig/Wiederholen, Pixelwerte zur Ausgabegröße | S | – |
+| LAY.6 | Ebenen-Editor: Maus verschieben/skalieren/croppen, Mehrfachauswahl, Fangen an Kanten/Mitte/Schutzbereichen/anderen Ebenen, Sperre, Rückgängig/Wiederholen, Pixelwerte zur Ausgabegröße | S | ◐ (Ziehen, Größe, Zuschnitt, Fangen, Rückgängig, Pixelwerte; ohne Mehrfachauswahl, Sperre) |
 | LAY.7 | Ebene ein/aus, tauschen, Inhalt wechseln und Rechteck setzen per Aktion, auch animiert | S | – |
 
 ### 3.5 Schalten (SWI)
