@@ -209,6 +209,26 @@ mkdir -p z/swagger-ui-5.17.14/dist && tar xzf sud.tgz -C z && cp -r z/package/* 
 export SWAGGER_UI_DOWNLOAD_URL=file://$PWD/swagger-ui-5.17.14.zip
 ```
 
+### Titel (M7)
+
+```bash
+scripts/test-titles.sh   # lmix-core ohne Engine + Chromium: Vorlagen, Daten, Neuladen
+```
+
+Eigene Vorlagen liegen im Ordner `--templates` (Standard
+`$XDG_DATA_HOME/lmix/templates`); die eingebauten (Kante) stecken im
+Binary (`workspace/lmix-core/titles/`, Kante-Teil über
+`scripts/sync-kante.sh`). Ein Grafikkanal ist die Seite
+`http://127.0.0.1:8200/graphics/<Nummer>` (`?preview` im Browser: Karo-
+Grund, meldet nichts). Eine Vorlage allein im Browser
+(`/titles/lmix/<name>/index.html`) zeigt eine Leiste mit Play/Next/Stop.
+Gerüst für eigene Vorlagen: `workspace/lmix-core/titles/sdk/skeleton/` in
+den Vorlagenordner kopieren.
+
+Braucht node mit playwright (Chromium). Ohne globales playwright geht
+auch der Node-Treiber aus Pythons playwright:
+`NODE_PATH=<dir mit node_modules/playwright → …/site-packages/playwright/driver/package>`.
+
 ### M2b-Test ohne GPU
 
 ```bash

@@ -341,6 +341,17 @@ IDs: GFX.1–19, DAT.1–5, SWI.7, OVL.7. Entscheidungen E.9 (Engine), E.10 (Lot
 Lottie-Bauchbinde mit Textfeld, Countdown mit Auslöser bei 0, 8 animierte
 Titel 1080p60 ohne Drop.
 
+Stand (2026-10-11, Teil A ohne Render-Engine, DECISIONS „M7 Teil A“):
+
+| Teil | Stand |
+|---|---|
+| Grafikkanal als Seite, CasparCG-Lebenszyklus, JSON/XML-Daten | ✅ GFX.1, 3, 4 (ohne Overlay-Warten) |
+| Vorlagen eingebaut (Kante-Satz) und aus Ordner, Neuladen | ✅ GFX.12, 13, 14; GFX.19 ohne Vorschaubild |
+| Datensätze, Datenquellen CSV/JSON mit Bindung, Auto-Weiter | ✅ GFX.8 teils, DAT.1–5 teils |
+| Console: Titel- und Datenquellen-Dialog | ✅ GFX.7 |
+| M7.0 Benchmark, Rendern in strom (GFX.2), Kanal als Input/Overlay | offen (GPU, `cefsrc`/`wpesrc`) |
+| Auslöser auf Titelmeldungen, Lottie, Titel als Stinger | offen |
+
 ### M8 — Fernbedienung, API-Gleichstand
 
 IDs: WEB.1–5, TEL.1–3, API.2–11, STR.8.

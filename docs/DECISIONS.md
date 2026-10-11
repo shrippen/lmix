@@ -1217,3 +1217,75 @@ Zustand als JSON.
 **Offen**: Bewegung zwischen Layouts; MIDI-Rückmeldung; globale Tasten
 am echten KDE prüfen (H.32), MIDI mit echtem Controller (H.31).
 
+## 2026-10-11 — M7 Teil A: Titel und Datenquellen ohne Render-Engine
+
+**Kontext**: Titel sind Muss (§3.11, GFX). Die Engine-Wahl (E.9, CEF
+gegen WPE) hängt am Benchmark M7.0, der eine freie GPU braucht; auf dem
+Entwicklungsrechner gibt es zudem weder `cefsrc` noch `wpesrc`. Alles,
+was nicht von der Engine abhängt, sollte trotzdem fertig werden.
+**Optionen**: (a) Vorlagen über eine Engine-Schnittstelle direkt
+ansteuern (cefsrc: `listen-for-js-signals`, WPE: `run-javascript`), je
+Engine eigener Code; (b) eine Seite je Grafikkanal, die lmix-core selbst
+ausliefert und die dem Zustand über `/api/events` folgt; die Engine
+rendert nur eine URL.
+**Entscheidung**: (b). Ein **Grafikkanal** (`add_graphics`, bis 8) ist
+die Seite `/graphics/<n>`: bis zu 8 Ebenen, je ein `iframe` mit einer
+Vorlage, transparent, 1920×1080 (oder `?size=1080x1920`). Die Seite
+gleicht Zustand und Vorlage ab: neue Vorlage oder neue Revision → laden,
+`update()`; andere Werte → `update()`; Phase/`played`/`step` → `play()`,
+`next()`, `stop()`; neue `call.seq` → Funktion aufrufen. Damit gilt die
+CasparCG-Konvention unverändert (GFX.1), CasparCG-XML wählt das Manifest
+(`data_format: xml`, GFX.3). Dieselbe Seite ist im Browser die Vorschau
+(GFX.13) und läuft in CEF wie in WPE: E.9 bleibt offen, GFX.2 braucht
+nur noch „URL als Input“ in strom.
+**Lebenszyklus** (GFX.4): `title_load` (mit `play`), `title_play`,
+`title_next`, `title_stop`, `title_clear`, `title_update` (Felder
+mischen, leer entfernt), `title_call`. Die Vorlage meldet über das SDK
+(`lmixTitle.report`), die Seite schickt `title_report`, lmix-core gibt
+es als `Event::Title` weiter (Textprotokoll `TITLE`). Nur die
+Renderer-Seite meldet, `?preview`-Seiten nicht (sonst doppelt).
+**Vorlagen**: eingebaut (Kante-Satz, im Binary über `build.rs`, Kante-
+Tokens und Schriften per `scripts/sync-kante.sh`, offline) und ein
+Ordner (`--templates`), je Vorlage `index.html` + `manifest.json` oder
+eine einzelne `.html` (+ `.json`). Das Manifest beschreibt Felder (Text,
+mehrzeilig, Zahl, Farbe, Bild, Schalter, Auswahl), `steps`,
+`functions`. Ordner-Vorlagen bekommen eine Revision aus den Dateizeiten;
+ändert sich eine Datei, lädt die Seite die Vorlage neu und gibt ihr die
+gleichen Daten (GFX.14). Pfade bleiben im Ordner (auch über Links).
+**Vorlagensatz** (GFX.12): Bauchbinde, Name+Funktion, Laufschrift
+(Tempo, Richtung, `append`), Uhr, Countdown (Dauer oder Uhrzeit, ab-
+oder aufwärts, `start`/`pause`/`reset`/`adjust`, meldet `zero`, GFX.9),
+Spielstand, Vollbild-Karte (zweiter Schritt). Hochkant über
+`orientation: portrait`. Kante: Schnittecke, Akzentleiste, Rajdhani,
+JetBrains Mono, Bewegung aus den Kante-Dauern; die Wischblende ist eine
+Maske, damit die Schnittecke (clip-path) bleibt.
+**Datensätze** (GFX.8): `save_dataset`, `apply_dataset`,
+`remove_dataset`, in der Show.
+**Datenquellen** (DAT.1 teils, DAT.2–5): CSV (Trennzeichen geraten,
+Anführungszeichen, Kopfzeile wahlweise) und JSON (Array von Objekten,
+Spalten in Dateireihenfolge); Pfade relativ zur Show-Datei. lmix-core
+liest neu, wenn sich die Datei ändert. `title_bind` legt ein Feld auf
+eine Spalte (Name oder Nummer, Muster `{0}`); `data_row`, `data_next`,
+`data_previous`, `set_data_auto` (ab 500 ms, Schleife). Wird eine Quelle
+entfernt, behalten gebundene Felder ihren letzten Wert.
+**Console**: „Titles…“ (Kanäle, Ebenen 1–8 mit Stand, Vorlage laden,
+Formular aus dem Manifest, Live oder „Apply“, Funktionen, Datensätze,
+Feld an Spalte binden, Vorschau im Browser) und „Data…“ (Tabelle, Zeile
+per Klick, vor/zurück, Weiterschalten mit Schleife).
+**Demo**: die Sendehaus-Show bekommt einen Grafikkanal mit Sendung,
+Gast und Uhr aus der Studio-Weber-Welt.
+**Geprüft**: Rust-Tests (Switcher, Show-Datei, API, Vorlagen, CSV/JSON);
+`scripts/test-titles.sh` in Chromium (ohne GPU): laden unsichtbar,
+spielen, Feld ändern, stoppen mit `done`, zweiter Schritt, entfernen,
+Countdown meldet `zero`, Ordner-Vorlage mit XML-Daten und Funktions-
+aufruf, Datei geändert → neu geladen mit Daten, CSV-Feld folgt Zeile und
+Datei, Vorschau meldet nichts, Vorlage allein mit Vorschauleiste. Console
+unter Xvfb per Klick (Abspielen, Feld live, Zeile wählen).
+**Keine neue Abhängigkeit** (CSV und geordnetes JSON von Hand).
+**Offen**: Rendern in strom (GFX.2, nach M7.0), Grafikkanal als Input
+und Overlay (GFX.17), Overlay wartet auf das Ende der Ausblendung
+(GFX.4), Auslöser auf Titelmeldungen (`zero` → Aktion), eine neu
+geladene Seite spielt laufende Titel von vorn (Countdown beginnt neu),
+Lottie (GFX.5), Titel als Stinger (GFX.11), Ebenen-Transformation
+(GFX.18), XLSX/ODS, Google Sheets, RSS, XML (DAT.1), Zeilen zu Spalten
+(DAT.3), Bilder aus lokalen Pfaden außerhalb des Vorlagenordners.

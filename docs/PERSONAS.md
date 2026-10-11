@@ -352,3 +352,22 @@ B34 SRT-Kamera als Input in strom unzuverlässig (H.23, strom-Befund).
 
 **Nachtrag B33 (2026-10-08)**: behoben. Knopf „Latency“ in der
 Werkzeugleiste der Console misst 5 s und zeigt Median und p95 (PGM).
+
+## Durchlauf 8: M7 Teil A, Titel ohne Render-Engine (2026-10-11, Browser-Test + Console auf Xvfb)
+
+Titel erscheinen noch nicht im Programm (GFX.2 offen); geprüft wurde, was
+der Operator tut und was die Grafikseite daraus macht.
+
+| Persona | Schritt | Ergebnis |
+|---|---|---|
+| P1 Kirche | Liedtexte Strophe für Strophe weiterschalten | ⚠ Datenquelle mit einer Strophe je Zeile und „Weiter“ geht (Bauchbinde, Feld an Spalte); eigene Textfolien-Vorlage (GFX.21) fehlt |
+| P2 Konferenz | Sprecher aus der Tagesordnung (CSV) nacheinander einblenden | ✅ CSV als Datenquelle, Name+Funktion an Spalten gebunden, „Weiter“ wählt die nächste Zeile; geänderte Datei kommt von selbst |
+| P3 Fußball | Spielstand mit Teamnamen, Tor per Taste | ✅ Vorlage Spielstand; Tor als Kurzbefehl mit `title_update` (Stream Deck über API); ⚠ der Kurzbefehl setzt eine feste Zahl, „+1“ gibt es nicht |
+| P3 Fußball | Spieluhr, Halbzeit stoppt | ✅ Countdown aufwärts, `pause`/`start` als Knöpfe im Titel-Dialog; ⚠ eine neu geladene Grafikseite beginnt die Uhr von vorn |
+| P4 Streamer | Eigene Grafik im gewohnten Web-Werkzeug bauen | ✅ Gerüst kopieren, im Browser mit Vorschauleiste testen, Datei speichern → lmix lädt neu |
+| P5 Broadcast | Vorhandene CasparCG-Vorlagen weiter nutzen | ✅ einzelne `.html` mit XML-Daten im Vorlagenordner, `update`/`play`/`stop` und eigene Funktionen |
+| P7 Theater | Countdown bis Vorstellungsbeginn, bei 0 Saallicht-Cue | ⚠ Countdown bis Uhrzeit meldet `zero`, löst aber noch keine Aktion aus |
+
+**Befunde**: B35 Zahl in einem Feld per Aktion erhöhen (Spielstand +1);
+B36 Auslöser auf Titelmeldungen (`zero`, `done`); B37 Uhr/Countdown nach
+Neuladen der Grafikseite weiterlaufen lassen statt neu zu beginnen.

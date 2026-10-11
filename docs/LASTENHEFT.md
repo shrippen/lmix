@@ -351,37 +351,37 @@ Funktionsreferenz, kein Code (MIT, `claude.md` Entscheidung 6).
 
 | ID | Anforderung | Prio | Stand |
 |---|---|---|---|
-| GFX.1 | Titel = HTML-Vorlage nach der offenen CasparCG-Konvention: globale Funktionen `play()`, `stop()`, `next()`, `update(data)` und beliebige weitere per Aufruf; bestehende CasparCG-HTML-Vorlagen laufen unverändert. Optional ein lmix-Manifest (Name, Größe, Felder mit Typ Text/Bild/Farbe/Zahl/Schalter, Animationsdauern) | M | – |
+| GFX.1 | Titel = HTML-Vorlage nach der offenen CasparCG-Konvention: globale Funktionen `play()`, `stop()`, `next()`, `update(data)` und beliebige weitere per Aufruf; bestehende CasparCG-HTML-Vorlagen laufen unverändert. Optional ein lmix-Manifest (Name, Größe, Felder mit Typ Text/Bild/Farbe/Zahl/Schalter, Animationsdauern) | M | ◐ (Konvention, Manifest ohne Größe/Dauern) |
 | GFX.2 | Rendering in der Engine (Chromium, `cefsrc`; E.9) mit Alpha in Ausgabeauflösung und -bildrate, ohne Neustart der Pipeline; Rendern pausieren/fortsetzen; ein hängender Titel nimmt Program nicht mit | M | ◐ (cefsrc E) |
-| GFX.3 | Daten: `update` mit Datensatz als JSON oder als XML im CasparCG-Format (`templateData` mit `componentData`/`data`); Felder einzeln per Aktion setzen und lesen | M | – |
-| GFX.4 | Lebenszyklus wie CasparCG: laden (vorbereitet, unsichtbar), laden und sofort abspielen, abspielen, weiter (mehrstufige Animation), stoppen mit Ausblend-Animation, sofort entfernen, Funktion aufrufen; Vorlage meldet Ende; Overlay-Kanal wartet auf Ende der Ausblendung | M | – |
+| GFX.3 | Daten: `update` mit Datensatz als JSON oder als XML im CasparCG-Format (`templateData` mit `componentData`/`data`); Felder einzeln per Aktion setzen und lesen | M | ✅ |
+| GFX.4 | Lebenszyklus wie CasparCG: laden (vorbereitet, unsichtbar), laden und sofort abspielen, abspielen, weiter (mehrstufige Animation), stoppen mit Ausblend-Animation, sofort entfernen, Funktion aufrufen; Vorlage meldet Ende; Overlay-Kanal wartet auf Ende der Ausblendung | M | ◐ (Overlay wartet noch nicht) |
 | GFX.5 | Lottie: Lottie-Animationen (JSON, .lottie) in Vorlagen (lottie-web) und später als eigener Input (E.10); Textebenen als Felder; Marker als Abläufe | S | – |
 | GFX.6 | Beliebige Webseiten (URL) als Input mit Ton, Größe und eigenem CSS; JavaScript-Funktion der Seite per Aktion aufrufen | S | ◐ (cefsrc E) |
 | GFX.21 | Textfolien: Liste von Texten (Liedtexte, Zitate) aus Datei als Titel, mit Taste weiterschalten; im Programm und auf Beamer (P1) | S | – |
 | GFX.20 | Webseiten und Vorlagen spielen H.264 und AAC ab, auch über Media Source Extensions (HLS-Player, Streaming-Einbettungen wie Twitch, YouTube); bevorzugt mit Hardware-Dekodierung. DRM-geschützte Inhalte (EME/Widevine) sind nicht gefordert | M | – |
-| GFX.7 | Titel-Editor in der GUI: Formular aus Manifest oder Datensatz, Felder live oder per "Übernehmen" | M | – |
-| GFX.8 | Datensätze speichern, benennen, abrufen, auflisten (wie CasparCG-Datenspeicher); vor/zurück; CSV ex-/import | S | – |
-| GFX.9 | Countdown/Stoppuhr/Uhr als Vorlagenbaustein: Dauer, Ziel-/Startzeit, Richtung, Format, Start/Stopp/Pause/Anpassen per Aktion, Ereignis bei 0 | S | – |
-| GFX.10 | Laufschrift: Tempo, Richtung, Anhängen vs. Ersetzen | S | – |
+| GFX.7 | Titel-Editor in der GUI: Formular aus Manifest oder Datensatz, Felder live oder per "Übernehmen" | M | ✅ |
+| GFX.8 | Datensätze speichern, benennen, abrufen, auflisten (wie CasparCG-Datenspeicher); vor/zurück; CSV ex-/import | S | ◐ (ohne vor/zurück, CSV) |
+| GFX.9 | Countdown/Stoppuhr/Uhr als Vorlagenbaustein: Dauer, Ziel-/Startzeit, Richtung, Format, Start/Stopp/Pause/Anpassen per Aktion, Ereignis bei 0 | S | ◐ (meldet `zero`, kein Auslöser) |
+| GFX.10 | Laufschrift: Tempo, Richtung, Anhängen vs. Ersetzen | S | ✅ |
 | GFX.11 | Titel als Stinger: Schnittpunkt und Dauer aus Manifest oder Aktion | S | – |
-| GFX.12 | Vorlagensatz (eigen gestaltet): Bauchbinde, Name+Funktion, Laufschrift, Uhr, Countdown, Spielstand, Vollbild-Karte; Hochkant-Varianten | M | – |
-| GFX.13 | Vorlagen-SDK: kleine JS-Bibliothek für die Konvention, Vorlagen-Gerüst, Vorschau im normalen Browser mit Testdaten; Gestaltung mit üblichen Web-Werkzeugen | S | – |
-| GFX.14 | Vorlage neu laden bei Dateiänderung; gesetzte Daten bleiben erhalten | S | – |
+| GFX.12 | Vorlagensatz (eigen gestaltet): Bauchbinde, Name+Funktion, Laufschrift, Uhr, Countdown, Spielstand, Vollbild-Karte; Hochkant-Varianten | M | ✅ |
+| GFX.13 | Vorlagen-SDK: kleine JS-Bibliothek für die Konvention, Vorlagen-Gerüst, Vorschau im normalen Browser mit Testdaten; Gestaltung mit üblichen Web-Werkzeugen | S | ✅ |
+| GFX.14 | Vorlage neu laden bei Dateiänderung; gesetzte Daten bleiben erhalten | S | ✅ |
 | GFX.15 | Leistungsbudget: ≥ 8 aktive animierte Titel 1080p60 gleichzeitig ohne Drop | M | – |
 | GFX.16 | Import von vMix-Titeln (.gtzip, XAML) | X | – |
-| GFX.17 | Titel-Ebenen: mehrere Vorlagen gleichzeitig in einem Grafik-Input (z. B. Bauchbinde, Logo, Uhr), je Ebene unabhängig steuerbar; Grafik-Input als Overlay nutzbar | S | – |
+| GFX.17 | Titel-Ebenen: mehrere Vorlagen gleichzeitig in einem Grafik-Input (z. B. Bauchbinde, Logo, Uhr), je Ebene unabhängig steuerbar; Grafik-Input als Overlay nutzbar | S | ◐ (Ebenen; Input/Overlay mit GFX.2) |
 | GFX.18 | Ebenen-Transformation je Titel-Ebene: Position, Größe, Crop, Deckkraft, Drehung, Perspektive, Helligkeit/Kontrast/Sättigung, Blend-Modus; animiert mit Dauer und Easing; mehrere Änderungen gemeinsam auf einen Frame anwenden | S | – |
-| GFX.19 | Vorlagen- und Medienliste mit Infos (Felder, Größe, Dauer) und Vorschaubild über die API abfragbar | S | – |
+| GFX.19 | Vorlagen- und Medienliste mit Infos (Felder, Größe, Dauer) und Vorschaubild über die API abfragbar | S | ◐ (ohne Vorschaubild) |
 
 ### 3.12 Datenquellen (DAT)
 
 | ID | Anforderung | Prio | Stand |
 |---|---|---|---|
-| DAT.1 | Typen: CSV, XLSX/ODS, Google Sheets (öffentlich + API-Schlüssel), RSS, Text, XML (XPath), JSON (Array von Objekten) | S | – |
-| DAT.2 | Lokal, im Netz, im Internet; automatische Aktualisierung bei Änderung | S | – |
-| DAT.3 | Optionen: erste Zeile = Spaltennamen, Zeilen zu Spalten | K | – |
-| DAT.4 | Zuordnung Titelfeld ← Quelle/Tabelle/Spalte (oder automatisch nach Name/Index)/Zeile (fest oder "gewählt"), Formatmuster `…{0}…`; Bilder per Pfad/URL | S | – |
-| DAT.5 | Datenquellen-Fenster: Zeile wählen, Auto-Weiter mit Intervall, Schleife; Aktionen nächste/vorige/bestimmte Zeile | S | – |
+| DAT.1 | Typen: CSV, XLSX/ODS, Google Sheets (öffentlich + API-Schlüssel), RSS, Text, XML (XPath), JSON (Array von Objekten) | S | ◐ (CSV, JSON) |
+| DAT.2 | Lokal, im Netz, im Internet; automatische Aktualisierung bei Änderung | S | ◐ (lokal) |
+| DAT.3 | Optionen: erste Zeile = Spaltennamen, Zeilen zu Spalten | K | ◐ (Kopfzeile) |
+| DAT.4 | Zuordnung Titelfeld ← Quelle/Tabelle/Spalte (oder automatisch nach Name/Index)/Zeile (fest oder "gewählt"), Formatmuster `…{0}…`; Bilder per Pfad/URL | S | ◐ (gewählte Zeile) |
+| DAT.5 | Datenquellen-Fenster: Zeile wählen, Auto-Weiter mit Intervall, Schleife; Aktionen nächste/vorige/bestimmte Zeile | S | ✅ |
 
 ### 3.13 Automatisierung (AUT)
 
