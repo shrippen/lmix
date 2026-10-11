@@ -252,6 +252,21 @@ async function act(action) {
   await frame.waitForFunction(() => document.getElementById("text").textContent === "(Role C)", null, { timeout: 5000 });
   pass("data source: edited file reaches the title");
 
+  // Text slides from a file (GFX.21): a row per paragraph, bound to the
+  // slide text, moved on like any source.
+  const song = path.join(work, "song.txt");
+  fs.writeFileSync(song, "First verse\nline two\n\nChorus\nline two\n");
+  await act({ action: "add_data_source", spec: { kind: "text", path: song, paragraphs: true }, name: "Song" });
+  await act({ action: "title_load", graphics: 1, layer: 7, template: "lmix/text-slides", play: true });
+  await act({ action: "title_bind", graphics: 1, layer: 7, field: "text", binding: { source: "Song", column: "text" } });
+  const slides = await layerFrame(7);
+  const verse = (t) => slides.waitForFunction((x) => document.getElementById("text").textContent === x, t, { timeout: 3000 });
+  await verse("First verse\nline two");
+  await act({ action: "data_next", source: "Song" });
+  await verse("Chorus\nline two");
+  await act({ action: "title_clear", graphics: 1, layer: 7 });
+  pass("text slides from a file: a paragraph per slide");
+
   // Data sets from a CSV table, stepped through, written back (GFX.8).
   fs.writeFileSync(path.join(work, "sets.csv"), "name,headline\nOne,Set one\nTwo,Set two\n");
   await act({ action: "import_datasets", path: path.join(work, "sets.csv"), template: "lmix/lower-third" });

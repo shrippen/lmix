@@ -1498,3 +1498,40 @@ kannten `dynamicN` nicht und merkten sich ungeschriebene Stände (ein
 wieder angesteckter Controller blieb dunkel); im Layout-Editor fehlte
 ohne Einrasten das Raster, Alt kollidierte mit KWin, und Rückgängig
 übersah den Hintergrund und speicherte leere Schritte. Alle behoben.
+
+## 2026-10-12 — Tabellen, Folien aus Datei, eingeklappte Inputs (DAT.1, DAT.3, GFX.21, UI.3)
+
+**Kontext**: Rest von M7 und M9, der weder GPU noch Engine braucht.
+
+**Entscheidung**:
+- **Tabellenkalkulationen** (DAT.1): neue Quellenart `sheet` für XLSX,
+  XLSM, XLS und ODS über `calamine` (ohne Standard-Features, kein
+  `chrono`), ein Blatt (`sheet`, sonst das erste), sonst wie CSV
+  (Kopfzeile). Datumszellen werden ISO-Daten (`2026-10-01`, mit Uhrzeit,
+  wenn eine dabei ist); Dateien mit dem 1904-Kalender (altes Excel für
+  Mac) lägen vier Jahre daneben, `calamine` verrät ihn ohne `dates`
+  nicht. Ein Google Sheet als XLSX-Export geht auch (`format=xlsx`).
+- **Zeilen zu Spalten** (DAT.3): `transpose` bei CSV und Tabellen dreht
+  die Tabelle vor der Kopfzeile: Namen in der ersten Spalte, je weitere
+  Spalte ein Eintrag (Formulare, Spielberichte). Ganz leere Zeilen zählen
+  nicht als Eintrag (Tabellen haben sie oft im benutzten Bereich).
+- **Textfolien aus Datei** (GFX.21): `text` mit `paragraphs` macht jeden
+  Block zwischen Leerzeilen zu einem Eintrag, Zeilenumbrüche bleiben.
+  An das Feld `text` der Vorlage „Textfolien“ gebunden zeigt sie eine
+  Folie, die Quelle schaltet weiter (`data_next` auf einer Taste); der
+  Wechsel blendet wie `next()`. Kein eigener Folienzähler in der
+  Vorlage: Vor/zurück, Auto-Weiter und Zeilenwahl gibt es bei Quellen
+  schon. Beamer erst mit GFX.2.
+- **Einklappen** (UI.3): ein Input lässt sich im Kachelmenü einklappen;
+  er steht dann als Knopf in der Zeile „Eingeklappt“ (Klick Vorschau,
+  Doppelklick Schnitt, Rechtsklick ausklappen), rot/hervorgehoben wie die
+  Layout-Knöpfe. Gespeichert je Console (Einstellung `view/collapsed`,
+  Input-Ids), nicht in der Show: es ist die Ansicht eines Bedieners. Die
+  Kachelliste bleibt ein `GridView` (nur sichtbare Kacheln leben,
+  Performance), eingeklappte Inputs fehlen in ihrem Modell; Ziehen zum
+  Umsortieren rechnet über die Ids, nicht über Positionen.
+
+**Geprüft**: Tests für Tabellen (XLSX und ODS aus LibreOffice in
+`lmix-core/testdata`), Datum, Drehen, Absätze; `scripts/test-titles.sh`
+mit Folien aus Datei; Datenquellen-Dialog und Einklappen auf Xvfb.
+

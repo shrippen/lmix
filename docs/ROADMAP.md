@@ -346,8 +346,8 @@ Stand (2026-10-11, Teil A ohne Render-Engine, DECISIONS „M7 Teil A“):
 | Teil | Stand |
 |---|---|
 | Grafikkanal als Seite, CasparCG-Lebenszyklus, JSON/XML-Daten, Feld hochzählen | ✅ GFX.1, 3, 4 (ohne Overlay-Warten) |
-| Vorlagen eingebaut (Kante-Satz, Textfolien) und aus Ordner, Neuladen | ✅ GFX.12, 13, 14, 19; GFX.21 teils |
-| Datensätze (vor/zurück, CSV), Datenquellen CSV/JSON/Text/Adresse mit Bindung, Auto-Weiter | ✅ GFX.8, DAT.2, DAT.5; DAT.1, 3, 4 teils |
+| Vorlagen eingebaut (Kante-Satz, Textfolien) und aus Ordner, Neuladen | ✅ GFX.12, 13, 14, 19; GFX.21 teils (Folien aus Datei, Beamer fehlt) |
+| Datensätze (vor/zurück, CSV), Datenquellen CSV/XLSX/ODS/JSON/Text/Adresse mit Bindung, Zeilen zu Spalten, Auto-Weiter | ✅ GFX.8, DAT.2, DAT.3, DAT.5; DAT.1, 4 teils |
 | Console: Titel- und Datenquellen-Dialog | ✅ GFX.7 |
 | M7.0 Benchmark, Rendern in strom (GFX.2), Kanal als Input/Overlay | offen (GPU, `cefsrc`/`wpesrc`) |
 | Auslöser auf Titelmeldungen (Countdown bei 0) | ✅ GFX.9 |
@@ -383,7 +383,7 @@ Stand (2026-10-12, ohne GPU; DECISIONS „M9 Anfang“):
 
 | Teil | Stand |
 |---|---|
-| Transportleiste, Stopp-Rückfrage, Startoptionen, Kachelgröße/Reihen, einfacher Modus | ✅ UI.5 teils, UI.10, UI.12 teils, UI.3 teils, UI.7 |
+| Transportleiste, Stopp-Rückfrage, Startoptionen, Kachelgröße/Reihen/Einklappen, einfacher Modus | ✅ UI.5 teils, UI.10, UI.12 teils, UI.3, UI.7 |
 | Input-Einstellungen in Reitern | ◐ UI.8 (ohne Key, Effekte, Position, Ebenen, Tally) |
 | Dynamische Inputs/Werte | ✅ AUT.5 |
 | Tally über TSL UMD 3.1/5.0 | ✅ PER.1 teils (ohne GPIO) |

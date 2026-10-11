@@ -1,6 +1,6 @@
-//! Reading data sources (DAT.1–3): CSV, JSON, text, RSS/Atom and XML,
-//! from a file or an address on the network, into columns and rows of
-//! text.
+//! Reading data sources (DAT.1–3): CSV, spreadsheets (XLSX, ODS), JSON,
+//! text, RSS/Atom and XML, from a file or an address on the network, into
+//! columns and rows of text.
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
@@ -93,12 +93,25 @@ async fn bytes(place: &Place, http: &reqwest::Client) -> Result<Vec<u8>, String>
 /// Columns and rows of the source, or why it could not be read.
 pub async fn read(spec: &DataSourceSpec, place: &Place, http: &reqwest::Client) -> Rows {
     let parsed = bytes(place, http).await.and_then(|bytes| {
+        if let DataSourceSpec::Sheet {
+            sheet,
+            header,
+            transpose,
+            ..
+        } = spec
+        {
+            return spreadsheet(bytes, sheet.as_deref())
+                .map(|records| table(records, *header, *transpose));
+        }
         let text = String::from_utf8_lossy(&bytes);
         let text = text.strip_prefix('\u{feff}').unwrap_or(&text);
         match spec {
-            DataSourceSpec::Csv { header, .. } => Ok(csv(text, *header)),
+            DataSourceSpec::Csv {
+                header, transpose, ..
+            } => Ok(csv(text, *header, *transpose)),
+            DataSourceSpec::Sheet { .. } => unreachable!("read above"),
             DataSourceSpec::Json { .. } => json(text),
-            DataSourceSpec::Text { .. } => Ok(lines(text)),
+            DataSourceSpec::Text { paragraphs, .. } => Ok(lines(text, *paragraphs)),
             DataSourceSpec::Feed { .. } => feed(text),
             DataSourceSpec::Xml { rows, .. } => xml(text, rows),
         }
@@ -262,15 +275,44 @@ fn xml(text: &str, path: &str) -> Result<(Vec<String>, Vec<Vec<String>>), String
     Ok((columns, rows))
 }
 
-/// One row per line that is not empty, in the column `text`.
-fn lines(text: &str) -> (Vec<String>, Vec<Vec<String>>) {
-    let rows = text
-        .lines()
-        .map(str::trim)
-        .filter(|l| !l.is_empty())
-        .map(|l| vec![l.to_string()])
-        .collect();
+/// One row per line that is not empty, or per block of lines between
+/// empty ones, in the column `text`.
+fn lines(text: &str, paragraphs: bool) -> (Vec<String>, Vec<Vec<String>>) {
+    let mut rows: Vec<Vec<String>> = Vec::new();
+    let mut block: Vec<&str> = Vec::new();
+    for line in text.lines().map(str::trim).chain([""]) {
+        if !line.is_empty() {
+            block.push(line);
+        }
+        if !block.is_empty() && (line.is_empty() || !paragraphs) {
+            rows.push(vec![block.join("\n")]);
+            block.clear();
+        }
+    }
     (vec!["text".to_string()], rows)
+}
+
+/// The cells of a sheet (the first without a name), as text.
+fn spreadsheet(bytes: Vec<u8>, name: Option<&str>) -> Result<Vec<Vec<String>>, String> {
+    use calamine::{Data, Reader};
+    let mut book = calamine::open_workbook_auto_from_rs(std::io::Cursor::new(bytes))
+        .map_err(|e| format!("not a spreadsheet: {e}"))?;
+    let name = match name {
+        Some(name) => name.to_string(),
+        None => book
+            .sheet_names()
+            .first()
+            .cloned()
+            .ok_or("the spreadsheet has no sheets")?,
+    };
+    let range = book
+        .worksheet_range(&name)
+        .map_err(|e| format!("sheet {name}: {e}"))?;
+    let cell = |c: &Data| match c {
+        Data::DateTime(d) => excel_date(d.as_f64()),
+        _ => c.to_string(),
+    };
+    Ok(range.rows().map(|r| r.iter().map(cell).collect()).collect())
 }
 
 /// The separator the first line uses most, outside quotes.
@@ -336,9 +378,60 @@ fn records(text: &str, sep: char) -> Vec<Vec<String>> {
     records
 }
 
+/// An Excel date (days since 1899-12-30) as an ISO date, with the time
+/// if there is one; below one day a time alone (files with the 1904
+/// calendar are four years off).
+fn excel_date(serial: f64) -> String {
+    if (0.0..1.0).contains(&serial) {
+        let s = (serial * 86_400.0).round() as i64;
+        return format!("{:02}:{:02}:{:02}", s / 3600, s / 60 % 60, s % 60);
+    }
+    let days = serial.floor() as i64;
+    let seconds = ((serial - serial.floor()) * 86_400.0).round() as i64;
+    let (days, seconds) = (days + seconds / 86_400, seconds % 86_400);
+    // Days since 1970-01-01 to a civil date (Howard Hinnant's algorithm).
+    let z = days - 25_569 + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z.rem_euclid(146_097);
+    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let day = doy - (153 * mp + 2) / 5 + 1;
+    let month = if mp < 10 { mp + 3 } else { mp - 9 };
+    let year = yoe + era * 400 + i64::from(month <= 2);
+    let date = format!("{year:04}-{month:02}-{day:02}");
+    if seconds == 0 {
+        date
+    } else {
+        let (h, m, s) = (seconds / 3600, seconds / 60 % 60, seconds % 60);
+        format!("{date} {h:02}:{m:02}:{s:02}")
+    }
+}
+
 /// Column names (from the first row, or numbered) and rows.
-fn csv(text: &str, header: bool) -> (Vec<String>, Vec<Vec<String>>) {
-    let mut rows = records(text, separator(text));
+fn csv(text: &str, header: bool, transpose: bool) -> (Vec<String>, Vec<Vec<String>>) {
+    table(records(text, separator(text)), header, transpose)
+}
+
+/// Records as a table: turned (rows to columns) if asked, then the
+/// column names from the first row, or numbered; empty rows left out.
+fn table(
+    mut rows: Vec<Vec<String>>,
+    header: bool,
+    transpose: bool,
+) -> (Vec<String>, Vec<Vec<String>>) {
+    rows.retain(|r| r.iter().any(|c| !c.trim().is_empty()));
+    if transpose {
+        let width = rows.iter().map(Vec::len).max().unwrap_or(0);
+        rows = (0..width)
+            .map(|i| {
+                rows.iter()
+                    .map(|r| r.get(i).cloned().unwrap_or_default())
+                    .collect()
+            })
+            .collect();
+        rows.retain(|r: &Vec<String>| r.iter().any(|c| !c.trim().is_empty()));
+    }
     let width = rows.iter().map(Vec::len).max().unwrap_or(0);
     let columns: Vec<String> = if header && !rows.is_empty() {
         let mut names = rows.remove(0);
@@ -432,6 +525,7 @@ mod tests {
         let (columns, rows) = csv(
             "name,role\r\n\"A, B\",\"says \"\"hi\"\"\"\n\"two\nlines\",x\n\n",
             true,
+            false,
         );
 
         assert_eq!(columns, s(&["name", "role"]));
@@ -440,13 +534,67 @@ mod tests {
 
     #[test]
     fn csv_guesses_semicolon_and_tab() {
-        assert_eq!(csv("a;b\n1;2", true).1, [s(&["1", "2"])]);
-        assert_eq!(csv("a\tb\n1\t2", true).1, [s(&["1", "2"])]);
+        assert_eq!(csv("a;b\n1;2", true, false).1, [s(&["1", "2"])]);
+        assert_eq!(csv("a\tb\n1\t2", true, false).1, [s(&["1", "2"])]);
+    }
+
+    #[test]
+    fn rows_to_columns() {
+        // A form: names down the first column, a row per further column.
+        let (columns, rows) = csv("name,Anna,Ben\nscore,3,4\n", true, true);
+
+        assert_eq!(columns, s(&["name", "score"]));
+        assert_eq!(rows, [s(&["Anna", "3"]), s(&["Ben", "4"])]);
+    }
+
+    #[test]
+    fn text_lines_or_paragraphs() {
+        let text = "One\nline two\n\n\nVerse\nsecond line\n  \nLast";
+
+        assert_eq!(lines(text, false).1.len(), 5);
+        assert_eq!(
+            lines(text, true).1,
+            [
+                s(&["One\nline two"]),
+                s(&["Verse\nsecond line"]),
+                s(&["Last"])
+            ]
+        );
+    }
+
+    #[test]
+    fn spreadsheets() {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("testdata");
+        for file in ["table.xlsx", "table.ods"] {
+            let bytes = std::fs::read(dir.join(file)).unwrap();
+            let (columns, rows) = table(spreadsheet(bytes, None).unwrap(), true, false);
+
+            assert_eq!(columns, s(&["name", "score", "date"]), "{file}");
+            assert_eq!(
+                rows,
+                [
+                    s(&["Anna", "3", "2026-10-01"]),
+                    s(&["Ben", "4.5", "2026-10-02"])
+                ],
+                "{file}"
+            );
+        }
+        let bytes = std::fs::read(dir.join("table.xlsx")).unwrap();
+        assert!(spreadsheet(bytes, Some("Missing")).is_err());
+        assert!(spreadsheet(b"name,score".to_vec(), None).is_err());
+    }
+
+    #[test]
+    fn excel_dates() {
+        assert_eq!(excel_date(46_296.0), "2026-10-01");
+        assert_eq!(excel_date(46_296.5), "2026-10-01 12:00:00");
+        assert_eq!(excel_date(1.0), "1899-12-31");
+        assert_eq!(excel_date(0.75), "18:00:00");
     }
 
     #[test]
     fn csv_without_header_numbers_columns_and_pads_rows() {
-        let (columns, rows) = csv("1,2,3\n4", false);
+        let (columns, rows) = csv("1,2,3\n4", false, false);
 
         assert_eq!(columns, s(&["1", "2", "3"]));
         assert_eq!(rows[1], s(&["4", "", ""]));
@@ -474,6 +622,7 @@ mod tests {
         let spec = DataSourceSpec::Csv {
             path: path.display().to_string(),
             header: true,
+            transpose: false,
         };
         let back = read(&spec, &Place::File(path), &client()).await;
 
@@ -520,7 +669,7 @@ mod tests {
 
     #[test]
     fn text_lines_are_rows() {
-        let (columns, rows) = lines("one\n\n  two \r\n");
+        let (columns, rows) = lines("one\n\n  two \r\n", false);
 
         assert_eq!(columns, s(&["text"]));
         assert_eq!(rows, [s(&["one"]), s(&["two"])]);
@@ -535,6 +684,7 @@ mod tests {
         let spec = DataSourceSpec::Csv {
             path: "g.csv".into(),
             header: true,
+            transpose: false,
         };
         let show = dir.path().join("show.lmix").display().to_string();
         let http = client();
@@ -567,6 +717,7 @@ mod tests {
         let spec = DataSourceSpec::Csv {
             path: format!("http://127.0.0.1:{port}/sheet.csv"),
             header: true,
+            transpose: false,
         };
 
         let place = resolve(&spec, Some("/shows/x.lmix"));

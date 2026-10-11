@@ -114,6 +114,7 @@ fn main() {
                 "qml/StingerDialog.qml",
                 "qml/LookDialog.qml",
                 "qml/LayoutBar.qml",
+                "qml/CollapsedBar.qml",
                 "qml/LayoutDialog.qml",
                 "qml/ShortcutsDialog.qml",
                 "qml/ShortcutEditDialog.qml",

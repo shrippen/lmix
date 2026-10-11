@@ -357,7 +357,7 @@ Funktionsreferenz, kein Code (MIT, `claude.md` Entscheidung 6).
 | GFX.4 | Lebenszyklus wie CasparCG: laden (vorbereitet, unsichtbar), laden und sofort abspielen, abspielen, weiter (mehrstufige Animation), stoppen mit Ausblend-Animation, sofort entfernen, Funktion aufrufen; Vorlage meldet Ende; Overlay-Kanal wartet auf Ende der Ausblendung | M | ◐ (Overlay wartet noch nicht) |
 | GFX.5 | Lottie: Lottie-Animationen (JSON, .lottie) in Vorlagen (lottie-web) und später als eigener Input (E.10); Textebenen als Felder; Marker als Abläufe | S | ◐ (in Vorlagen; eigener Input später, E.10) |
 | GFX.6 | Beliebige Webseiten (URL) als Input mit Ton, Größe und eigenem CSS; JavaScript-Funktion der Seite per Aktion aufrufen | S | ◐ (cefsrc E) |
-| GFX.21 | Textfolien: Liste von Texten (Liedtexte, Zitate) aus Datei als Titel, mit Taste weiterschalten; im Programm und auf Beamer (P1) | S | ◐ (Text im Feld, nicht aus Datei; Beamer mit GFX.2) |
+| GFX.21 | Textfolien: Liste von Texten (Liedtexte, Zitate) aus Datei als Titel, mit Taste weiterschalten; im Programm und auf Beamer (P1) | S | ◐ (Text im Feld oder aus Datei, ein Absatz je Folie; Beamer mit GFX.2) |
 | GFX.20 | Webseiten und Vorlagen spielen H.264 und AAC ab, auch über Media Source Extensions (HLS-Player, Streaming-Einbettungen wie Twitch, YouTube); bevorzugt mit Hardware-Dekodierung. DRM-geschützte Inhalte (EME/Widevine) sind nicht gefordert | M | – |
 | GFX.7 | Titel-Editor in der GUI: Formular aus Manifest oder Datensatz, Felder live oder per "Übernehmen" | M | ✅ |
 | GFX.8 | Datensätze speichern, benennen, abrufen, auflisten (wie CasparCG-Datenspeicher); vor/zurück; CSV ex-/import | S | ✅ |
@@ -377,9 +377,9 @@ Funktionsreferenz, kein Code (MIT, `claude.md` Entscheidung 6).
 
 | ID | Anforderung | Prio | Stand |
 |---|---|---|---|
-| DAT.1 | Typen: CSV, XLSX/ODS, Google Sheets (öffentlich + API-Schlüssel), RSS, Text, XML (XPath), JSON (Array von Objekten) | S | ◐ (CSV, JSON, Text, RSS/Atom, XML-Pfad, Google Sheets öffentlich; ohne XLSX/ODS, Sheets-API) |
+| DAT.1 | Typen: CSV, XLSX/ODS, Google Sheets (öffentlich + API-Schlüssel), RSS, Text, XML (XPath), JSON (Array von Objekten) | S | ◐ (CSV, XLSX/ODS, JSON, Text, RSS/Atom, XML-Pfad, Google Sheets öffentlich; ohne Sheets-API) |
 | DAT.2 | Lokal, im Netz, im Internet; automatische Aktualisierung bei Änderung | S | ✅ |
-| DAT.3 | Optionen: erste Zeile = Spaltennamen, Zeilen zu Spalten | K | ◐ (Kopfzeile) |
+| DAT.3 | Optionen: erste Zeile = Spaltennamen, Zeilen zu Spalten | K | ✅ |
 | DAT.4 | Zuordnung Titelfeld ← Quelle/Tabelle/Spalte (oder automatisch nach Name/Index)/Zeile (fest oder "gewählt"), Formatmuster `…{0}…`; Bilder per Pfad/URL | S | ✅ |
 | DAT.5 | Datenquellen-Fenster: Zeile wählen, Auto-Weiter mit Intervall, Schleife; Aktionen nächste/vorige/bestimmte Zeile | S | ✅ |
 
@@ -484,7 +484,7 @@ Zurückgestellt (User 2026-10-08).
 |---|---|---|---|
 | UI.1 | Hauptfenster: Preview links, Program rechts (Farbcodes einstellbar), Übergangsspalte dazwischen, Input-Leiste unten mit Live-Kacheln, Fußleiste mit Senken-Tasten | M | ◐ (Console) |
 | UI.2 | Input-Kachel: Titelzeile (Nummer, Name, Kategoriefarbe), Bild, Tasten: Schließen, Cut, Schleife, Overlay 1–8, GO, Ton, Großansicht, Einstellungen; Tally-Farbe | M | ◐ |
-| UI.3 | Mehrere Input-Reihen, Kachelgröße einstellbar, Einklappen einzelner Inputs, Bildlauf | S | ◐ (Kachelgröße, Reihen, Bildlauf; ohne Einklappen) |
+| UI.3 | Mehrere Input-Reihen, Kachelgröße einstellbar, Einklappen einzelner Inputs, Bildlauf | S | ✅ (Kachelgröße, Reihen, Bildlauf, Einklappen je Console) |
 | UI.4 | Kontextmenüs je Input-Typ (Liste-Einträge, Fotos, Titel-Presets, NDI-Quelle, Browser …) | S | – |
 | UI.5 | Transportleiste unter PVW/PGM für Wiedergabe-Inputs | M | ◐ (Tasten, Position, Länge; ohne Springen) |
 | UI.6 | Andockbare Bereiche (Audio, Wiederholung, Liste) und abdockbare Fenster für zweiten Monitor | S | – |

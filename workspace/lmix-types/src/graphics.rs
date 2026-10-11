@@ -311,12 +311,33 @@ pub enum DataSourceSpec {
         /// numbered.
         #[serde(default = "yes")]
         header: bool,
+        /// Rows become columns (DAT.3): the first column holds the
+        /// names, each further column is a row.
+        #[serde(default, skip_serializing_if = "is_false")]
+        transpose: bool,
+    },
+    /// A spreadsheet (XLSX, XLSM, XLS, ODS): one sheet, by default the
+    /// first, read like CSV.
+    Sheet {
+        path: String,
+        /// Name of the sheet; the first if none.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        sheet: Option<String>,
+        #[serde(default = "yes")]
+        header: bool,
+        #[serde(default, skip_serializing_if = "is_false")]
+        transpose: bool,
     },
     /// A JSON array of objects; keys become columns.
     Json { path: String },
-    /// Plain text: each line that is not empty is a row of one column,
-    /// `text` (ticker items, slides).
-    Text { path: String },
+    /// Plain text in the column `text`: each line that is not empty is a
+    /// row (ticker items), or with `paragraphs` each block between empty
+    /// lines, line breaks kept (song lyrics, slides; GFX.21).
+    Text {
+        path: String,
+        #[serde(default, skip_serializing_if = "is_false")]
+        paragraphs: bool,
+    },
     /// An RSS or Atom feed: a row per item, columns `title`, `text`,
     /// `link`, `date`, `author`.
     Feed { path: String },
@@ -329,12 +350,17 @@ fn yes() -> bool {
     true
 }
 
+fn is_false(v: &bool) -> bool {
+    !v
+}
+
 impl DataSourceSpec {
     pub fn path(&self) -> &str {
         match self {
             Self::Csv { path, .. }
+            | Self::Sheet { path, .. }
             | Self::Json { path }
-            | Self::Text { path }
+            | Self::Text { path, .. }
             | Self::Feed { path }
             | Self::Xml { path, .. } => path,
         }
@@ -549,7 +575,8 @@ mod tests {
             spec,
             DataSourceSpec::Csv {
                 path: "a.csv".into(),
-                header: true
+                header: true,
+                transpose: false,
             }
         );
     }

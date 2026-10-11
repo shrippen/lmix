@@ -4,8 +4,8 @@
 # would, and the check drives titles through the API: the built-in Kante
 # templates, a CasparCG-style template with XML data from a templates
 # folder that is edited while it plays (reload, data kept), a countdown
-# reporting zero, and a CSV data source feeding a field. Needs node with
-# playwright (Chromium); no GPU, no strom.
+# reporting zero, a CSV data source feeding a field and text slides
+# from a file. Needs node with playwright (Chromium); no GPU, no strom.
 #
 #   scripts/test-titles.sh
 #   KEEP_WORK=1 scripts/test-titles.sh   # keep logs and screenshots

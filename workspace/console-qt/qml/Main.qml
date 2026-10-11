@@ -42,7 +42,28 @@ Kirigami.ApplicationWindow {
         property int rows: 2
         /** Only the switching essentials (UI.7). */
         property bool simple: false
+        /** Ids of collapsed inputs, as JSON (UI.3). */
+        property string collapsed: "[]"
     }
+    readonly property var collapsedIds: {
+        try {
+            const ids = JSON.parse(viewSettings.collapsed)
+            return Array.isArray(ids) ? ids : []
+        } catch (e) {
+            return []
+        }
+    }
+    function setCollapsed(id, on) {
+        // Ids of inputs gone from the show are dropped on the way.
+        const ids = collapsedIds.filter(i => i !== id && inputById(i) !== null)
+        if (on)
+            ids.push(id)
+        viewSettings.collapsed = JSON.stringify(ids)
+    }
+    function syncInputs() {
+        inputModel.sync(show ? show.inputs.filter(i => collapsedIds.indexOf(i.id) < 0).map(i => i.id) : [])
+    }
+    onCollapsedIdsChanged: syncInputs()
     /** Simple mode: `--mode` for this run, else the saved choice. */
     readonly property bool simple: backend.uiMode === "simple" || (backend.uiMode === "" && viewSettings.simple)
     readonly property var tileUnits: [[10, 9.5], [12, 11], [16, 14]][Math.max(0, Math.min(2, viewSettings.tileSize))]
@@ -84,7 +105,7 @@ Kirigami.ApplicationWindow {
     KeyedModel { id: transitionModel }
     // Reads `show` itself: `inputs` may not have followed it yet here.
     onShowChanged: {
-        inputModel.sync(show ? show.inputs.map(i => i.id) : [])
+        syncInputs()
         outputModel.sync(show ? show.outputs.map(o => o.id) : [])
         transitionModel.sync(show ? show.transitions.map(t => String(t.slot)) : [])
     }
@@ -591,9 +612,11 @@ Kirigami.ApplicationWindow {
                         bar.dropIndex = bar.indexAtScene(point)
                     }
                     onDragEnded: point => {
-                        var target = bar.indexAtScene(point)
-                        if (bar.dragged && target >= 0 && root.inputs[target] && root.inputs[target].id !== bar.dragged.id) {
-                            root.act({ action: "move_input", input: bar.dragged.number, number: root.inputs[target].number })
+                        // Collapsed inputs have no tile: the model's key, not the index into the inputs.
+                        var index = bar.indexAtScene(point)
+                        var target = index >= 0 && index < inputModel.count ? root.inputById(inputModel.get(index).key) : null
+                        if (bar.dragged && target && target.id !== bar.dragged.id) {
+                            root.act({ action: "move_input", input: bar.dragged.number, number: target.number })
                         }
                         bar.dragged = null
                         bar.dropIndex = -1
@@ -627,7 +650,17 @@ Kirigami.ApplicationWindow {
                         ptzDialog.inputId = tileDelegate.input.id
                         ptzDialog.open()
                     }
+                    onCollapseRequested: root.setCollapsed(tileDelegate.input.id, true)
                 }
+            }
+
+            CollapsedBar {
+                Layout.fillWidth: true
+                core: backend
+                show: root.show
+                act: root.act
+                inputs: root.inputs.filter(i => root.collapsedIds.indexOf(i.id) >= 0)
+                onExpandRequested: id => root.setCollapsed(id, false)
             }
 
             LayoutBar {

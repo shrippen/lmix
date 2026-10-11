@@ -228,8 +228,9 @@ fn set_path(spec: &mut lmix_types::DataSourceSpec, to: String) {
     use lmix_types::DataSourceSpec as D;
     match spec {
         D::Csv { path, .. }
+        | D::Sheet { path, .. }
         | D::Json { path }
-        | D::Text { path }
+        | D::Text { path, .. }
         | D::Feed { path }
         | D::Xml { path, .. } => *path = to,
     }
@@ -389,6 +390,7 @@ mod tests {
                 spec: DataSourceSpec::Csv {
                     path: "guests.csv".into(),
                     header: true,
+                    transpose: false,
                 },
                 row: 1,
                 auto_ms: None,

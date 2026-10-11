@@ -1258,6 +1258,7 @@ mod tests {
             spec: DataSourceSpec::Csv {
                 path: "/x/guests.csv".into(),
                 header: true,
+                transpose: false,
             },
             name: None,
         })

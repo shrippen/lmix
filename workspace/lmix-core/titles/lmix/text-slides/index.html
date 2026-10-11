@@ -27,17 +27,22 @@
 <script src="/titles/sdk/lmix-title.js"></script>
 <script>
   // GFX.21: next() shows the next slide, back() the one before; reports
-  // "last" on the last slide.
+  // "last" on the last slide. Bound to a data source (text, a row per
+  // paragraph), the field holds one slide and the source moves on: the
+  // new text fades in the same way.
   const el = (id) => document.getElementById(id);
   let slides = [], at = 0;
-  function show(index) {
-    at = Math.max(0, Math.min(index, slides.length - 1));
+  function swap(value) {
     const text = el("text");
     text.classList.add("swap");
     setTimeout(() => {
-      text.textContent = slides[at] || "";
+      text.textContent = value;
       text.classList.remove("swap");
     }, lmixTitle.duration("--dur"));
+  }
+  function show(index) {
+    at = Math.max(0, Math.min(index, slides.length - 1));
+    swap(slides[at] || "");
     if (slides.length > 0 && at === slides.length - 1) lmixTitle.report("last");
   }
   lmixTitle({
@@ -45,7 +50,9 @@
       el("title").textContent = d.title || "";
       slides = (d.text || "").split(/\n\s*\n/).map((s) => s.trim()).filter(Boolean);
       el("slides").classList.toggle("full", d.layout === "full");
-      el("text").textContent = slides[Math.min(at, slides.length - 1)] || "";
+      const value = slides[Math.min(at, slides.length - 1)] || "";
+      if (el("slides").classList.contains("is-in") && el("text").textContent !== value) swap(value);
+      else el("text").textContent = value;
     },
     play() { at = 0; el("text").textContent = slides[0] || ""; el("slides").classList.add("is-in"); },
     next() { show(at + 1); },

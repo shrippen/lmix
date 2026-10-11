@@ -47,16 +47,21 @@ KanteDialog {
     /** Kinds of source, as lmix names them. */
     readonly property var kinds: [
         { kind: "csv", label: qsTr("CSV table") },
+        { kind: "sheet", label: qsTr("Spreadsheet (XLSX, ODS)") },
         { kind: "json", label: qsTr("JSON") },
         { kind: "text", label: qsTr("Text, a row per line") },
+        { kind: "slides", label: qsTr("Text, a row per paragraph (lyrics, slides)") },
         { kind: "feed", label: qsTr("RSS / Atom feed") },
         { kind: "xml", label: qsTr("XML") }
     ]
+    readonly property string kind: kinds[kindBox.currentIndex].kind
+    readonly property bool tabular: kind === "csv" || kind === "sheet"
     /** Kind of source guessed from its name (the operator can change it);
      * CSV also for a Google Sheet's CSV export. */
     function kindOf(file) {
         const name = file.trim().toLowerCase().split("?")[0]
         if (name.endsWith(".json")) return "json"
+        if (/\.(xlsx|xlsm|xlsb|xls|ods)$/.test(name) || /format=xlsx|format=ods/.test(file)) return "sheet"
         if (name.endsWith(".txt")) return "text"
         if (name.endsWith(".rss") || name.endsWith(".atom") || /(rss|feed|atom)/.test(name)) return "feed"
         if (name.endsWith(".xml")) return "xml"
@@ -83,7 +88,8 @@ KanteDialog {
                 Layout.fillWidth: true
                 visible: dialog.sources.length > 0
                 model: dialog.sources.map(s => s.number + " " + s.name)
-                currentIndex: dialog.current
+                // A new source is selected before it arrives.
+                currentIndex: Math.min(dialog.current, dialog.sources.length - 1)
                 onActivated: index => dialog.current = index
                 KanteFieldSkin { control: sourceBox }
             }
@@ -104,29 +110,22 @@ KanteDialog {
             }
             QQC2.ComboBox {
                 id: kindBox
+                Layout.preferredWidth: Kirigami.Units.gridUnit * 14
                 model: dialog.kinds.map(k => k.label)
                 KanteFieldSkin { control: kindBox }
             }
-            QQC2.CheckBox {
-                id: header
-                text: qsTr("First row names columns")
-                checked: true
-                visible: dialog.kinds[kindBox.currentIndex].kind === "csv"
-                KanteCheckSkin { control: header }
-            }
-            KanteTextField {
-                id: xmlRows
-                visible: dialog.kinds[kindBox.currentIndex].kind === "xml"
-                placeholderText: qsTr("Rows, e.g. scores/game")
-            }
             KanteButton {
                 text: qsTr("+ Source")
-                enabled: path.text.trim() !== "" && (dialog.kinds[kindBox.currentIndex].kind !== "xml" || xmlRows.text.trim() !== "")
+                enabled: path.text.trim() !== "" && (dialog.kind !== "xml" || xmlRows.text.trim() !== "")
                 onClicked: {
-                    const file = path.text.trim()
-                    const kind = dialog.kinds[kindBox.currentIndex].kind
-                    const spec = { kind: kind, path: file }
-                    if (kind === "csv") spec.header = header.checked
+                    const kind = dialog.kind
+                    const spec = { kind: kind === "slides" ? "text" : kind, path: path.text.trim() }
+                    if (dialog.tabular) {
+                        spec.header = header.checked
+                        spec.transpose = transpose.checked
+                    }
+                    if (kind === "sheet" && sheetName.text.trim() !== "") spec.sheet = sheetName.text.trim()
+                    if (kind === "slides") spec.paragraphs = true
                     if (kind === "xml") spec.rows = xmlRows.text.trim()
                     dialog.act({ action: "add_data_source", spec: spec })
                     dialog.current = dialog.sources.length
@@ -134,12 +133,44 @@ KanteDialog {
                 }
             }
         }
+        // Options of the kind.
+        RowLayout {
+            Layout.fillWidth: true
+            visible: dialog.tabular || dialog.kind === "xml"
+            KanteTextField {
+                id: sheetName
+                visible: dialog.kind === "sheet"
+                placeholderText: qsTr("Sheet (the first if empty)")
+            }
+            QQC2.CheckBox {
+                id: header
+                text: qsTr("First row names columns")
+                checked: true
+                visible: dialog.tabular
+                KanteCheckSkin { control: header }
+            }
+            QQC2.CheckBox {
+                id: transpose
+                text: qsTr("Rows become columns")
+                visible: dialog.tabular
+                QQC2.ToolTip.visible: hovered
+                QQC2.ToolTip.text: qsTr("For tables that list the names down the first column and an entry per further column.")
+                KanteCheckSkin { control: transpose }
+            }
+            KanteTextField {
+                id: xmlRows
+                Layout.fillWidth: true
+                visible: dialog.kind === "xml"
+                placeholderText: qsTr("Rows, e.g. scores/game")
+            }
+            Item { Layout.fillWidth: true; visible: dialog.kind !== "xml" }
+        }
 
         QQC2.Label {
             Layout.fillWidth: true
             visible: dialog.source === null
             wrapMode: Text.WordWrap
-            text: qsTr("No data sources yet. A data source is a table (CSV, JSON, a feed, …) whose selected row fills title fields, e.g. names and roles of guests.")
+            text: qsTr("No data sources yet. A data source is a table (CSV, a spreadsheet, JSON, a feed, …) whose selected row fills title fields, e.g. names and roles of guests.")
         }
 
         KanteCallout {

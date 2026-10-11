@@ -322,6 +322,34 @@
     </message>
   </context>
   <context>
+    <name>CollapsedBar</name>
+    <message>
+      <location filename="../qml/CollapsedBar.qml" line="+28" />
+      <source>Collapsed</source>
+      <translation>Eingeklappt</translation>
+    </message>
+    <message>
+      <location line="+24" />
+      <source>Input %1 %2, collapsed</source>
+      <translation>Input %1 %2, eingeklappt</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Click: into preview. Double click: cut. Right click: expand.</source>
+      <translation>Klick: in die Vorschau. Doppelklick: schneiden. Rechtsklick: ausklappen.</translation>
+    </message>
+    <message>
+      <location line="+13" />
+      <source>Expand</source>
+      <translation>Ausklappen</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Cut to program</source>
+      <translation>Direkt auf Programm</translation>
+    </message>
+  </context>
+  <context>
     <name>CueListsDialog</name>
     <message>
       <location filename="../qml/CueListsDialog.qml" line="+30" />
@@ -408,29 +436,34 @@
   <context>
     <name>DataSourcesDialog</name>
     <message>
-      <location filename="../qml/DataSourcesDialog.qml" line="+68" />
+      <location filename="../qml/DataSourcesDialog.qml" line="+73" />
       <source>Data sources</source>
       <translation>Datenquellen</translation>
     </message>
     <message>
-      <location line="+23" />
+      <location line="+24" />
       <source>Remove</source>
       <translation>Entfernen</translation>
     </message>
     <message>
-      <location line="+21" />
+      <location line="+50" />
       <source>First row names columns</source>
       <translation>Erste Zeile benennt die Spalten</translation>
     </message>
     <message>
-      <location line="+11" />
+      <location line="-29" />
       <source>+ Source</source>
       <translation>+ Quelle</translation>
     </message>
     <message>
-      <location line="-74" />
+      <location line="-69" />
       <source>CSV table</source>
       <translation>CSV-Tabelle</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Spreadsheet (XLSX, ODS)</source>
+      <translation>Tabellenkalkulation (XLSX, ODS)</translation>
     </message>
     <message>
       <location line="+1" />
@@ -444,6 +477,11 @@
     </message>
     <message>
       <location line="+1" />
+      <source>Text, a row per paragraph (lyrics, slides)</source>
+      <translation>Text, ein Absatz je Eintrag (Liedtexte, Folien)</translation>
+    </message>
+    <message>
+      <location line="+1" />
       <source>RSS / Atom feed</source>
       <translation>RSS-/Atom-Feed</translation>
     </message>
@@ -453,19 +491,34 @@
       <translation>XML</translation>
     </message>
     <message>
-      <location line="+49" />
+      <location line="+53" />
       <source>File (relative to the show file) or http(s) address</source>
       <translation>Datei (relativ zur Show-Datei) oder http(s)-Adresse</translation>
     </message>
     <message>
-      <location line="+18" />
+      <location line="+35" />
+      <source>Sheet (the first if empty)</source>
+      <translation>Blatt (leer: das erste)</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>Rows become columns</source>
+      <translation>Zeilen zu Spalten</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>For tables that list the names down the first column and an entry per further column.</source>
+      <translation>Für Tabellen, die die Namen in der ersten Spalte untereinander führen und je weitere Spalte einen Eintrag.</translation>
+    </message>
+    <message>
+      <location line="+7" />
       <source>Rows, e.g. scores/game</source>
       <translation>Zeilen, z. B. scores/game</translation>
     </message>
     <message>
-      <location line="+22" />
-      <source>No data sources yet. A data source is a table (CSV, JSON, a feed, …) whose selected row fills title fields, e.g. names and roles of guests.</source>
-      <translation>Noch keine Datenquellen. Eine Datenquelle ist eine Tabelle (CSV, JSON, ein Feed, …), deren gewählte Zeile Titelfelder füllt, z. B. Namen und Funktionen von Gästen.</translation>
+      <location line="+9" />
+      <source>No data sources yet. A data source is a table (CSV, a spreadsheet, JSON, a feed, …) whose selected row fills title fields, e.g. names and roles of guests.</source>
+      <translation>Noch keine Datenquellen. Eine Datenquelle ist eine Tabelle (CSV, eine Tabellenkalkulation, JSON, ein Feed, …), deren gewählte Zeile Titelfelder füllt, z. B. Namen und Funktionen von Gästen.</translation>
     </message>
     <message>
       <location line="+7" />
@@ -644,7 +697,7 @@
   <context>
     <name>InputTile</name>
     <message>
-      <location filename="../qml/InputTile.qml" line="+56" />
+      <location filename="../qml/InputTile.qml" line="+57" />
       <source>Input %1 %2</source>
       <translation>Input %1 %2</translation>
     </message>
@@ -750,6 +803,11 @@
     </message>
     <message>
       <location line="+5" />
+      <source>Collapse</source>
+      <translation>Einklappen</translation>
+    </message>
+    <message>
+      <location line="+4" />
       <source>Rename…</source>
       <translation>Umbenennen…</translation>
     </message>
@@ -1257,7 +1315,7 @@
   <context>
     <name>Main</name>
     <message>
-      <location filename="../qml/Main.qml" line="+111" />
+      <location filename="../qml/Main.qml" line="+132" />
       <source>Layout %1 %2</source>
       <translation>Layout %1 %2</translation>
     </message>

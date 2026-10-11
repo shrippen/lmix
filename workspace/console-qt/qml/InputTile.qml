@@ -31,6 +31,7 @@ KanteCard {
     signal triggersRequested()
     signal ptzRequested()
     signal settingsRequested()
+    signal collapseRequested()
     /** Dynamic slots (1–4) that name this input (AUT.5). */
     property var dynamicSlots: []
     /** Drag to reorder: where the pointer is, in the window. */
@@ -243,6 +244,10 @@ KanteCard {
             text: qsTr("Cut to program")
             enabled: !tile.onProgram
             onTriggered: tile.act({ action: "cut_direct", input: tile.ref() })
+        }
+        QQC2.MenuItem {
+            text: qsTr("Collapse")
+            onTriggered: tile.collapseRequested()
         }
         QQC2.MenuItem {
             text: qsTr("Rename…")

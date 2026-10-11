@@ -440,6 +440,7 @@ mod tests {
                 spec: DataSourceSpec::Csv {
                     path: "guests.csv".into(),
                     header: true,
+                    transpose: false,
                 },
                 row: 2,
                 auto_ms: Some(5000),

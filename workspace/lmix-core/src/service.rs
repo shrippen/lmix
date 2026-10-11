@@ -922,6 +922,7 @@ impl Service {
                 let spec = lmix_types::DataSourceSpec::Csv {
                     path: path.clone(),
                     header: true,
+                    transpose: false,
                 };
                 let place = datasource::resolve(&spec, show.as_deref());
                 Some(datasource::read(&spec, &place, &self.http).await)
@@ -972,6 +973,7 @@ impl Service {
                 let spec = lmix_types::DataSourceSpec::Csv {
                     path: path.clone(),
                     header: true,
+                    transpose: false,
                 };
                 let datasource::Place::File(file) = datasource::resolve(&spec, sw.path()) else {
                     return Err(ActionError::BadTitle {
