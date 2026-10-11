@@ -204,6 +204,27 @@ Kirigami.ApplicationWindow {
         lists: root.show && root.show.cue_lists ? root.show.cue_lists : []
     }
 
+    TitlesDialog {
+        id: titlesDialog
+        parent: QQC2.Overlay.overlay
+        anchors.centerIn: parent
+        act: root.act
+        core: backend
+        graphics: root.show && root.show.graphics ? root.show.graphics : []
+        datasets: root.show && root.show.datasets ? root.show.datasets : []
+        sources: root.show && root.show.data_sources ? root.show.data_sources : []
+        templates: backend.templates.length > 0 ? JSON.parse(backend.templates) : []
+        coreUrl: backend.coreUrl
+    }
+
+    DataSourcesDialog {
+        id: dataSourcesDialog
+        parent: QQC2.Overlay.overlay
+        anchors.centerIn: parent
+        act: root.act
+        sources: root.show && root.show.data_sources ? root.show.data_sources : []
+    }
+
     LayoutDialog {
         id: layoutDialog
         parent: QQC2.Overlay.overlay
@@ -376,6 +397,16 @@ Kirigami.ApplicationWindow {
                     text: qsTr("Aux…")
                     enabled: backend.connected
                     onClicked: auxDialog.open()
+                }
+                KanteButton {
+                    text: qsTr("Titles…")
+                    enabled: backend.connected
+                    onClicked: titlesDialog.open()
+                }
+                KanteButton {
+                    text: qsTr("Data…")
+                    enabled: backend.connected
+                    onClicked: dataSourcesDialog.open()
                 }
                 KanteButton {
                     text: qsTr("+ Input")

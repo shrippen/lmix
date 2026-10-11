@@ -125,6 +125,9 @@ fn main() {
                 "qml/OutputBar.qml",
                 "qml/ChoiceMenu.qml",
                 "qml/KeyedModel.qml",
+                "qml/TitleField.qml",
+                "qml/TitlesDialog.qml",
+                "qml/DataSourcesDialog.qml",
             ])
             .qml_file(QmlFile::from("qml/Texts.qml").singleton(true)),
     )

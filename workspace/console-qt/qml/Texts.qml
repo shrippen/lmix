@@ -156,6 +156,13 @@ QtObject {
         case "no_show_path": return qsTr("The show has no file yet; give a path")
         case "show_file": return qsTr("Show file: %1").arg(e.message)
         case "engine": return qsTr("Engine: %1").arg(e.message)
+        case "unknown_graphics": return qsTr("No graphics channel matches %1").arg(e.reference)
+        case "graphics_full": return qsTr("All %1 graphics channels are in use").arg(e.max)
+        case "unknown_template": return qsTr("No template %1").arg(e.template)
+        case "bad_title": return qsTr("Title: %1").arg(e.reason)
+        case "unknown_dataset": return qsTr("No data set %1").arg(e.name)
+        case "unknown_data_source": return qsTr("No data source matches %1").arg(e.reference)
+        case "bad_data_source": return qsTr("Data source: %1").arg(e.reason)
         }
         return m.message || json
     }

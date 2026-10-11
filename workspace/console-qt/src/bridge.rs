@@ -47,6 +47,10 @@ pub mod qobject {
         #[qproperty(QString, devices)]
         /// Recently opened or saved show files (JSON list).
         #[qproperty(QString, recent)]
+        /// Title templates (JSON list of lmix `Template`).
+        #[qproperty(QString, templates)]
+        /// lmix-core's address, for its pages (graphics preview).
+        #[qproperty(QString, core_url, cxx_name = "coreUrl")]
         /// Last latency measurement: lmix `Latency` as JSON, or empty.
         #[qproperty(QString, latency)]
         #[qproperty(bool, measuring)]
@@ -100,7 +104,7 @@ pub mod qobject {
         #[cxx_name = "addOutput"]
         fn add_output(self: Pin<&mut Core>, form: &QString) -> bool;
 
-        /// Fetch devices and recent shows again.
+        /// Fetch devices, recent shows and templates again.
         #[qinvokable]
         #[cxx_name = "refreshLists"]
         fn refresh_lists(self: Pin<&mut Core>);
@@ -163,6 +167,8 @@ pub struct CoreRust {
     links: QString,
     devices: QString,
     recent: QString,
+    templates: QString,
+    core_url: QString,
     latency: QString,
     measuring: bool,
     global_keys: QString,
@@ -176,6 +182,8 @@ pub struct CoreRust {
 impl cxx_qt::Initialize for qobject::Core {
     fn initialize(mut self: Pin<&mut Self>) {
         self.as_mut().set_style(config::style());
+        self.as_mut()
+            .set_core_url(QString::from(config::core_url()));
         let thread = self.qt_thread();
         config::runtime().spawn(follow(thread));
         self.refresh_lists();
@@ -315,8 +323,13 @@ impl qobject::Core {
                 .await
                 .unwrap_or_else(|| serde_json::json!([]))
                 .to_string();
+            let templates = get_json::<serde_json::Value>("/api/templates")
+                .await
+                .unwrap_or_else(|| serde_json::json!([]))
+                .to_string();
             let _ = thread.queue(move |mut core| {
                 core.as_mut().set_devices(QString::from(&devices));
+                core.as_mut().set_templates(QString::from(&templates));
                 core.set_recent(QString::from(&recent));
             });
         });
