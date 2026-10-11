@@ -1478,9 +1478,10 @@ neu; ein nicht erreichbarer Empfänger wird 2 s lang übersprungen, damit
 er die übrigen Pakete nicht aufhält.
 **Layout-Editor** (LAY.6): eine gezogene Box rastet mit Anfang, Ende
 oder Mitte an Bildkanten, Bildmitte, dem Schutzbereich (5 %) und den
-Kanten und Mitten anderer Boxen ein (näher als 1,5 % des Bildes); mit
-Alt frei. Rückgängig/Wiederholen (Knöpfe, Strg+Z, Strg+Umschalt+Z) über
-bis zu 100 Schritte, solange der Dialog offen ist; Pixelwerte der
+Kanten und Mitten anderer Boxen ein (näher als 1,5 % des Bildes), sonst
+ins 1-%-Raster; mit Strg frei (Alt verschiebt unter KWin das Fenster).
+Rückgängig/Wiederholen (Knöpfe, Strg+Z, Strg+Umschalt+Z) über bis zu 100
+Schritte samt Hintergrund, solange der Dialog offen ist; Pixelwerte der
 gewählten Box für 1920 × 1080. Mehrfachauswahl und Sperre fehlen.
 **Lampen an MIDI-Controllern** (AUT.6): mit `--midi-feedback` schreibt
 lmix-core auf die `--midi`-Geräte: die Note oder der Regler eines
@@ -1490,3 +1491,10 @@ gesammelt (eine Blende ergibt einen Schwung). Werte für Programm,
 Vorschau und aus mit `--midi-lamps` (Farben je Controller, APC mini
 3,1,0). Pegel und Motorfader fehlen. Geprüft mit einer Datei statt
 Gerät; an einem echten Controller nicht.
+**Review, vierter Durchgang**: TSL über TCP konnte bei einem Empfänger,
+der nicht liest, beim Schreiben hängen (jetzt 1 s Frist, dann neu
+verbinden); MIDI-Lampen blieben nach dem Entfernen eines Kurzbefehls an,
+kannten `dynamicN` nicht und merkten sich ungeschriebene Stände (ein
+wieder angesteckter Controller blieb dunkel); im Layout-Editor fehlte
+ohne Einrasten das Raster, Alt kollidierte mit KWin, und Rückgängig
+übersah den Hintergrund und speicherte leere Schritte. Alle behoben.

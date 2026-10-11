@@ -63,6 +63,15 @@ impl std::str::FromStr for Lamps {
 
 /// The input an action's reference names in `state`.
 fn input_of(state: &ShowState, input: &InputRef) -> Option<InputId> {
+    // "dynamic1"…, as the switcher reads them.
+    let dynamic = |t: &str| {
+        let n = t.strip_prefix("dynamic")?.parse::<usize>().ok()?;
+        state
+            .dynamic_inputs
+            .get(n.checked_sub(1)?)
+            .copied()
+            .flatten()
+    };
     match input {
         InputRef::Number(n) => state
             .inputs
@@ -70,6 +79,7 @@ fn input_of(state: &ShowState, input: &InputRef) -> Option<InputId> {
             .map(|i| i.id),
         InputRef::Text(t) if t == "preview" => state.preview,
         InputRef::Text(t) if t == "program" => state.program,
+        InputRef::Text(t) if dynamic(t).is_some() => dynamic(t),
         InputRef::Text(t) => state
             .inputs
             .iter()
@@ -80,7 +90,9 @@ fn input_of(state: &ShowState, input: &InputRef) -> Option<InputId> {
 
 fn output_running(state: &ShowState, output: &OutputRef) -> bool {
     let found = match output {
-        OutputRef::Number(n) => state.outputs.get((*n as usize).saturating_sub(1)),
+        OutputRef::Number(n) => (*n as usize)
+            .checked_sub(1)
+            .and_then(|i| state.outputs.get(i)),
         OutputRef::Text(t) => state
             .outputs
             .iter()
@@ -139,11 +151,20 @@ pub async fn serve(devices: Vec<PathBuf>, values: Lamps, service: Arc<Service>) 
                 .iter()
                 .filter(|(b, v)| shown.get(b) != Some(v))
                 .flat_map(|(b, v)| message(b, *v))
+                // A binding gone (shortcut removed or rebound) goes dark.
+                .chain(
+                    shown
+                        .keys()
+                        .filter(|b| !now.contains_key(b))
+                        .flat_map(|b| message(b, values.off)),
+                )
                 .collect();
+            let mut all_written = true;
             if !changes.is_empty() {
                 let devices = devices.clone();
                 // Device files block: written off the runtime.
-                let _ = tokio::task::spawn_blocking(move || {
+                all_written = tokio::task::spawn_blocking(move || {
+                    let mut ok = true;
                     for device in &devices {
                         let written = std::fs::OpenOptions::new()
                             .append(true)
@@ -151,12 +172,17 @@ pub async fn serve(devices: Vec<PathBuf>, values: Lamps, service: Arc<Service>) 
                             .and_then(|mut f| f.write_all(&changes));
                         if let Err(error) = written {
                             tracing::debug!(device = %device.display(), %error, "MIDI lamps not written");
+                            ok = false;
                         }
                     }
+                    ok
                 })
-                .await;
+                .await
+                .unwrap_or(false);
             }
-            shown = now;
+            // Not written (controller unplugged): all lamps again next
+            // time, so a controller plugged back in lights up.
+            shown = if all_written { now } else { HashMap::new() };
         }
         state = match events.recv().await {
             Ok(Event::State { state }) => Some(state),
@@ -305,5 +331,38 @@ mod tests {
             written.windows(3).any(|w| w == [0x90, 2, 64]),
             "{written:?}"
         );
+
+        // Shortcut 1 removed: its pad goes dark.
+        service
+            .handle(Action::RemoveShortcut {
+                target: InputRef::Number(1),
+            })
+            .await
+            .unwrap();
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        let written = std::fs::read(file.path()).unwrap();
+        assert_eq!(&written[written.len() - 3..], &[0x90, 1, 0]);
+    }
+
+    #[test]
+    fn dynamic_and_numbered_references() {
+        let mut sw = crate::switcher::Switcher::new(2);
+        sw.apply(Action::AddInput {
+            source: SourceSpec::Pattern {
+                pattern: TestPattern::Bars,
+            },
+            name: None,
+        })
+        .unwrap();
+        let mut state = sw.state();
+        let id = state.inputs[0].id;
+        state.dynamic_inputs[0] = Some(id);
+
+        assert_eq!(
+            input_of(&state, &InputRef::Text("dynamic1".into())),
+            Some(id)
+        );
+        assert_eq!(input_of(&state, &InputRef::Text("dynamic2".into())), None);
+        assert!(!output_running(&state, &OutputRef::Number(0)));
     }
 }

@@ -1038,7 +1038,7 @@
       <translation>Klein, unten links</translation>
     </message>
     <message>
-      <location line="+115" />
+      <location line="+128" />
       <source>Layout %1 %2</source>
       <translation>Layout %1 %2</translation>
     </message>
@@ -1068,7 +1068,7 @@
       <translation>Schwarz</translation>
     </message>
     <message>
-      <location line="+15" />
+      <location line="+16" />
       <source>Layout area: arrow keys move the selected box, with Shift they size it</source>
       <translation>Layout-Fläche: Pfeiltasten verschieben die gewählte Box, mit Umschalt ändern sie ihre Größe</translation>
     </message>
@@ -1088,12 +1088,7 @@
       <translation>Box %1: %2, %3 px · %4 × %5 px (1920 × 1080)</translation>
     </message>
     <message>
-      <location line="+3" />
-      <source>Boxes catch edges, the centre, the safe area and other boxes; hold Alt to place freely.</source>
-      <translation>Boxen rasten an Kanten, der Mitte, dem Schutzbereich und anderen Boxen ein; mit Alt frei platzieren.</translation>
-    </message>
-    <message>
-      <location line="+4" />
+      <location line="+7" />
       <source>Undo</source>
       <translation>Rückgängig</translation>
     </message>
@@ -1158,12 +1153,17 @@
       <translation>+ Box</translation>
     </message>
     <message>
-      <location line="-431" />
+      <location line="-445" />
       <source>Empty</source>
       <translation>Leer</translation>
     </message>
     <message>
-      <location line="+336" />
+      <location line="+322" />
+      <source>Boxes catch edges, the centre, the safe area and other boxes; hold Ctrl to place freely.</source>
+      <translation>Boxen rasten an Kanten, der Mitte, dem Schutzbereich und anderen Boxen ein; mit Strg frei platzieren.</translation>
+    </message>
+    <message>
+      <location line="+28" />
       <source>Select box %1</source>
       <translation>Box %1 wählen</translation>
     </message>

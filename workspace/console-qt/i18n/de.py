@@ -473,7 +473,7 @@ DE = {
     'State': 'Zustand',
     'WHIP': 'WHIP',
     'Box %1: %2, %3 px · %4 × %5 px (1920 × 1080)': 'Box %1: %2, %3 px · %4 × %5 px (1920 × 1080)',
-    'Boxes catch edges, the centre, the safe area and other boxes; hold Alt to place freely.': 'Boxen rasten an Kanten, der Mitte, dem Schutzbereich und anderen Boxen ein; mit Alt frei platzieren.',
+    'Boxes catch edges, the centre, the safe area and other boxes; hold Ctrl to place freely.': 'Boxen rasten an Kanten, der Mitte, dem Schutzbereich und anderen Boxen ein; mit Strg frei platzieren.',
     'Undo': 'Rückgängig',
     'Redo': 'Wiederholen',
 }

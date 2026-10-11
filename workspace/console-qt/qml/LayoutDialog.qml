@@ -105,15 +105,17 @@ KanteDialog {
         return best
     }
 
-    /** Moves box `index` to (x, y), catching edges and centres unless
-     *  `free` (Alt held). */
+    /** Moves box `index` to (x, y): catching edges and centres, else on
+     *  the 1 % grid; `free` (Ctrl held) exactly where it was let go. */
     function placeAt(index, x, y, free) {
         const r = boxes[index].rect
-        if (free) {
-            moveTo(index, x, y)
-            return
+        const along = (v, w, axis) => {
+            if (free)
+                return v
+            const c = caught(index, v, w, axis)
+            return c === v ? snap(v) : c
         }
-        const cx = caught(index, x, r.w, "x"), cy = caught(index, y, r.h, "y")
+        const cx = along(x, r.w, "x"), cy = along(y, r.h, "y")
         edit(index, { rect: { x: Math.min(Math.max(cx, 0), 1 - r.w), y: Math.min(Math.max(cy, 0), 1 - r.h), w: r.w, h: r.h } })
     }
 
@@ -121,14 +123,23 @@ KanteDialog {
     property var history: []
     property int historyAt: -1
     property bool restoring: false
-    onBoxesChanged: {
+    /** The boxes and the background as one step. */
+    function snapshot() {
+        return JSON.stringify({ boxes: boxes, background: background.currentIndex })
+    }
+    function record() {
         if (restoring)
             return
+        const step = snapshot()
+        // A drag caught back where it was is no step.
+        if (history[historyAt] === step)
+            return
         const steps = history.slice(0, historyAt + 1)
-        steps.push(JSON.stringify(boxes))
+        steps.push(step)
         history = steps.slice(-100)
         historyAt = history.length - 1
     }
+    onBoxesChanged: record()
     function undo() { stepTo(historyAt - 1) }
     function redo() { stepTo(historyAt + 1) }
     function stepTo(at) {
@@ -136,7 +147,9 @@ KanteDialog {
             return
         restoring = true
         historyAt = at
-        boxes = JSON.parse(history[at])
+        const step = JSON.parse(history[at])
+        boxes = step.boxes
+        background.currentIndex = step.background
         selected = Math.min(selected, boxes.length - 1)
         restoring = false
     }
@@ -178,7 +191,7 @@ KanteDialog {
             crop: Object.assign({}, noCrop, b.crop || {})
         })) : []
         selected = boxes.length > 0 ? 0 : -1
-        history = [JSON.stringify(boxes)]
+        history = [snapshot()]
         historyAt = 0
     }
 
@@ -219,6 +232,7 @@ KanteDialog {
                 id: background
                 Layout.fillWidth: true
                 model: [qsTr("Black")].concat(dialog.pictures.map(i => i.number + " " + i.name))
+                onActivated: dialog.record()
                 KanteFieldSkin { control: background }
             }
         }
@@ -313,7 +327,7 @@ KanteDialog {
                         onReleased: mouse => {
                             if (drag.active || boxItem.x !== boxItem.modelData.rect.x * area.width || boxItem.y !== boxItem.modelData.rect.y * area.height)
                                 dialog.placeAt(boxItem.index, boxItem.x / area.width, boxItem.y / area.height,
-                                    (mouse.modifiers & Qt.AltModifier) !== 0)
+                                    (mouse.modifiers & Qt.ControlModifier) !== 0)
                         }
                     }
 
@@ -363,7 +377,7 @@ KanteDialog {
                 text: r ? qsTr("Box %1: %2, %3 px · %4 × %5 px (1920 × 1080)").arg(dialog.selected + 1)
                     .arg(dialog.px(r.x, "x")).arg(dialog.px(r.y, "y")).arg(dialog.px(r.w, "x")).arg(dialog.px(r.h, "y")) : ""
                 QQC2.ToolTip.visible: posArea.containsMouse
-                QQC2.ToolTip.text: qsTr("Boxes catch edges, the centre, the safe area and other boxes; hold Alt to place freely.")
+                QQC2.ToolTip.text: qsTr("Boxes catch edges, the centre, the safe area and other boxes; hold Ctrl to place freely.")
                 MouseArea { id: posArea; anchors.fill: parent; hoverEnabled: true; acceptedButtons: Qt.NoButton }
             }
             KanteButton {

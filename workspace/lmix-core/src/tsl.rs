@@ -171,7 +171,10 @@ impl TcpTarget {
             }
         }
         if let Some(stream) = &mut self.stream {
-            if stream.write_all(bytes).await.is_err() {
+            // A receiver that stops reading must not hold up the others.
+            let written =
+                tokio::time::timeout(Duration::from_secs(1), stream.write_all(bytes)).await;
+            if !matches!(written, Ok(Ok(()))) {
                 // Reconnect at the next send (every change, or 5 s).
                 self.stream = None;
             }
