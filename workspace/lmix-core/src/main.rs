@@ -117,6 +117,12 @@ struct Args {
     #[arg(long, env = "LMIX_TSL_VERSION", value_enum, default_value_t = tsl::Version::V50)]
     tsl_version: tsl::Version,
 
+    /// Outputs to start once the engine is up (number or name; repeat or
+    /// separate with commas), e.g. the stream and the recording (UI.12).
+    /// One already running is left as it is.
+    #[arg(long, env = "LMIX_START_OUTPUTS", value_delimiter = ',')]
+    start_outputs: Vec<String>,
+
     /// Folder of own title templates, besides the built-in ones.
     #[arg(long, env = "LMIX_TEMPLATES", default_value_os_t = default_templates())]
     templates: PathBuf,
@@ -183,7 +189,12 @@ async fn main() -> anyhow::Result<()> {
     }
 
     // The engine may come up after us: keep trying, then feed it the show.
-    tokio::spawn(connect(engine, service.clone(), args.slots));
+    tokio::spawn(connect(
+        engine,
+        service.clone(),
+        args.slots,
+        args.start_outputs.clone(),
+    ));
     tokio::spawn(service.clone().forward_levels());
     tokio::spawn(service.clone().watch_failures());
     tokio::spawn(service.clone().forward_output_stats());
@@ -243,7 +254,7 @@ async fn stopped() {
 /// Wait between engine start attempts.
 const ENGINE_RETRY: Duration = Duration::from_secs(2);
 
-async fn connect(engine: Arc<dyn Engine>, service: Arc<Service>, slots: usize) {
+async fn connect(engine: Arc<dyn Engine>, service: Arc<Service>, slots: usize, start: Vec<String>) {
     loop {
         match engine.start(slots).await {
             Ok(()) => break,
@@ -260,5 +271,32 @@ async fn connect(engine: Arc<dyn Engine>, service: Arc<Service>, slots: usize) {
     // restarted); outputs that kept running while lmix-core was gone are
     // only adopted, never restarted (no gap in a recording).
     service.adopt_running_outputs().await;
+    start_outputs(&service, &start).await;
     service.watch_engine(slots).await;
+}
+
+/// Start the outputs `--start-outputs` names, unless they run already.
+async fn start_outputs(service: &Arc<Service>, names: &[String]) {
+    for name in names {
+        let output = match name.parse::<u32>() {
+            Ok(number) => lmix_types::OutputRef::Number(number),
+            Err(_) => lmix_types::OutputRef::Text(name.clone()),
+        };
+        let state = service.state().await;
+        let running = state.outputs.iter().enumerate().any(|(i, o)| {
+            let named = match &output {
+                lmix_types::OutputRef::Number(n) => *n as usize == i + 1,
+                lmix_types::OutputRef::Text(t) => o.name == *t || o.id.to_string() == *t,
+            };
+            named && matches!(o.status, lmix_types::OutputStatus::Running { .. })
+        });
+        if running {
+            tracing::info!(output = %name, "already running");
+            continue;
+        }
+        match service.handle(Action::StartOutput { output }).await {
+            Ok(_) => tracing::info!(output = %name, "started"),
+            Err(error) => tracing::error!(output = %name, %error, "could not start"),
+        }
+    }
 }

@@ -34,6 +34,20 @@ Kirigami.ApplicationWindow {
     }
 
     Settings {
+        id: viewSettings
+        category: "view"
+        /** Input tiles: 0 small, 1 medium, 2 large (UI.3). */
+        property int tileSize: 1
+        /** Rows of input tiles before the bar scrolls (UI.3). */
+        property int rows: 2
+        /** Only the switching essentials (UI.7). */
+        property bool simple: false
+    }
+    /** Simple mode: `--mode` for this run, else the saved choice. */
+    readonly property bool simple: backend.uiMode === "simple" || (backend.uiMode === "" && viewSettings.simple)
+    readonly property var tileUnits: [[10, 9.5], [12, 11], [16, 14]][Math.max(0, Math.min(2, viewSettings.tileSize))]
+
+    Settings {
         id: safetySettings
         category: "safety"
         /** Ask before a running output (recording, stream) stops (UI.10). */
@@ -118,7 +132,14 @@ Kirigami.ApplicationWindow {
     readonly property string globalShortcutList: JSON.stringify(keySettings.global
         ? shortcuts.filter(s => s.key).map(s => ({ id: s.id, label: s.label, key: s.key })) : [])
     onGlobalShortcutListChanged: backend.setGlobalShortcuts(globalShortcutList)
-    Component.onCompleted: backend.setGlobalShortcuts(globalShortcutList)
+    Component.onCompleted: {
+        backend.setGlobalShortcuts(globalShortcutList)
+        // Start options (UI.12): `lmix-console --window maximized|fullscreen`.
+        if (backend.windowMode === "maximized")
+            root.showMaximized()
+        else if (backend.windowMode === "fullscreen")
+            root.showFullScreen()
+    }
     Connections {
         target: backend
         function onGlobalShortcut(id) {
@@ -335,6 +356,7 @@ Kirigami.ApplicationWindow {
                     color: KanteStyle.mutedTextColor
                 }
                 KanteButton {
+                    visible: !root.simple
                     text: qsTr("Latency")
                     busy: backend.measuring
                     enabled: backend.connected && !backend.measuring
@@ -382,6 +404,35 @@ Kirigami.ApplicationWindow {
             RowLayout {
                 Layout.fillWidth: true
                 KanteSectionLabel { text: qsTr("Inputs") }
+                KanteButton {
+                    id: viewButton
+                    text: qsTr("View")
+                    emphasis: KanteButton.Emphasis.Quiet
+                    onClicked: viewMenu.popup(viewButton, 0, viewButton.height)
+                    QQC2.Menu {
+                        id: viewMenu
+                        KantePopupSkin { popup: viewMenu }
+                        ChoiceMenu {
+                            title: qsTr("Tile size")
+                            current: viewSettings.tileSize
+                            choices: [{ value: 0, label: qsTr("Small") }, { value: 1, label: qsTr("Medium") }, { value: 2, label: qsTr("Large") }]
+                            onPicked: value => viewSettings.tileSize = value
+                        }
+                        ChoiceMenu {
+                            title: qsTr("Rows")
+                            current: viewSettings.rows
+                            choices: [1, 2, 3, 4].map(n => ({ value: n, label: String(n) }))
+                            onPicked: value => viewSettings.rows = value
+                        }
+                        QQC2.MenuItem {
+                            text: qsTr("Simple mode")
+                            checkable: true
+                            checked: root.simple
+                            enabled: backend.uiMode === ""
+                            onTriggered: viewSettings.simple = !viewSettings.simple
+                        }
+                    }
+                }
                 Item { Layout.fillWidth: true }
                 KanteButton {
                     text: qsTr("Clear solo")
@@ -403,26 +454,31 @@ Kirigami.ApplicationWindow {
                     onClicked: root.act({ action: "set_lock", on: !locked })
                 }
                 KanteButton {
+                    visible: !root.simple
                     text: qsTr("Shortcuts…")
                     enabled: backend.connected
                     onClicked: shortcutsDialog.open()
                 }
                 KanteButton {
+                    visible: !root.simple
                     text: qsTr("Cues…")
                     enabled: backend.connected
                     onClicked: cueListsDialog.open()
                 }
                 KanteButton {
+                    visible: !root.simple
                     text: qsTr("Aux…")
                     enabled: backend.connected
                     onClicked: auxDialog.open()
                 }
                 KanteButton {
+                    visible: !root.simple
                     text: qsTr("Titles…")
                     enabled: backend.connected
                     onClicked: titlesDialog.open()
                 }
                 KanteButton {
+                    visible: !root.simple
                     text: qsTr("Data…")
                     enabled: backend.connected
                     onClicked: dataSourcesDialog.open()
@@ -440,9 +496,9 @@ Kirigami.ApplicationWindow {
             GridView {
                 id: bar
                 Layout.fillWidth: true
-                Layout.preferredHeight: cellHeight * Math.max(1, Math.min(2, Math.ceil(count / Math.max(1, Math.floor(width / cellWidth)))))
-                cellWidth: Kirigami.Units.gridUnit * 12 + Kirigami.Units.smallSpacing
-                cellHeight: Kirigami.Units.gridUnit * 11
+                Layout.preferredHeight: cellHeight * Math.max(1, Math.min(viewSettings.rows, Math.ceil(count / Math.max(1, Math.floor(width / cellWidth)))))
+                cellWidth: Kirigami.Units.gridUnit * root.tileUnits[0] + Kirigami.Units.smallSpacing
+                cellHeight: Kirigami.Units.gridUnit * root.tileUnits[1]
                 clip: true
                 boundsBehavior: Flickable.StopAtBounds
                 model: inputModel
@@ -499,6 +555,7 @@ Kirigami.ApplicationWindow {
             }
 
             LayoutBar {
+                visible: !root.simple
                 Layout.fillWidth: true
                 core: backend
                 show: root.show

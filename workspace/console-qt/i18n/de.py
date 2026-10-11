@@ -434,4 +434,11 @@ DE = {
     'Store where the camera is on the next preset pressed': 'Die aktuelle Stellung auf der nächsten gedrückten Position speichern',
     'A preset as a trigger of this input (goes into preview) moves the camera before it is taken.': 'Eine Position als Auslöser dieses Inputs (geht in die Vorschau) fährt die Kamera an, bevor er genommen wird.',
     'PTZ: %1': 'PTZ: %1',
+    'View': 'Ansicht',
+    'Tile size': 'Kachelgröße',
+    'Small': 'Klein',
+    'Medium': 'Mittel',
+    'Large': 'Groß',
+    'Rows': 'Reihen',
+    'Simple mode': 'Einfacher Modus',
 }

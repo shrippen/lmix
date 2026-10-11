@@ -12,6 +12,8 @@ import Kante
  */
 KanteCard {
     id: tile
+    // Small tiles (UI.3) never draw into their neighbours.
+    clip: true
 
     required property var core
     required property var input
@@ -148,6 +150,8 @@ KanteCard {
             spacing: Kirigami.Units.smallSpacing
 
             KanteSectionLabel {
+                // Small tiles (UI.3): the buttons alone.
+                visible: tile.width >= Kirigami.Units.gridUnit * 11
                 text: qsTr("Overlay")
                 color: KanteStyle.mutedTextColor
             }

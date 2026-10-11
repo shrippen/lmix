@@ -1406,3 +1406,13 @@ Zoom, Fokus, Home, Positionen 1–8 anfahren oder speichern). Geprüft mit
 Byte-Tests nach der VISCA-Spezifikation, einem UDP-Empfänger im Test
 und der Console gegen eine nachgebaute Kamera; an einer echten Kamera
 nicht.
+**Startoptionen** (UI.12): Console `--window normal|maximized|fullscreen`
+und `--mode simple|advanced`; lmix-core `--start-outputs` startet
+genannte Ausgänge (Nummer oder Name), sobald die Engine bereit ist, einen
+schon laufenden (übernommenen) nicht neu, also keine Lücke in einer
+Aufnahme. Die letzte Show öffnet lmix-core ohnehin (Autosave, `--show`).
+**Ansicht** (UI.3, UI.7): Menü „View“ neben „Inputs“: Kachelgröße klein,
+mittel, groß; sichtbare Reihen 1–4, darüber Bildlauf; „Simple mode“
+blendet Kurzbefehle, Cues, Aux, Titel, Daten, Layouts und die
+Latenzmessung aus (Umschalten, Overlays, FTB, Ausgänge, Sperre bleiben).
+Gespeichert unter `view/…`. Einzelne Inputs einklappen fehlt noch.

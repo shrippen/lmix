@@ -484,16 +484,16 @@ Zurückgestellt (User 2026-10-08).
 |---|---|---|---|
 | UI.1 | Hauptfenster: Preview links, Program rechts (Farbcodes einstellbar), Übergangsspalte dazwischen, Input-Leiste unten mit Live-Kacheln, Fußleiste mit Senken-Tasten | M | ◐ (Console) |
 | UI.2 | Input-Kachel: Titelzeile (Nummer, Name, Kategoriefarbe), Bild, Tasten: Schließen, Cut, Schleife, Overlay 1–8, GO, Ton, Großansicht, Einstellungen; Tally-Farbe | M | ◐ |
-| UI.3 | Mehrere Input-Reihen, Kachelgröße einstellbar, Einklappen einzelner Inputs, Bildlauf | S | – |
+| UI.3 | Mehrere Input-Reihen, Kachelgröße einstellbar, Einklappen einzelner Inputs, Bildlauf | S | ◐ (Kachelgröße, Reihen, Bildlauf; ohne Einklappen) |
 | UI.4 | Kontextmenüs je Input-Typ (Liste-Einträge, Fotos, Titel-Presets, NDI-Quelle, Browser …) | S | – |
 | UI.5 | Transportleiste unter PVW/PGM für Wiedergabe-Inputs | M | ◐ (Tasten und Länge; ohne Position) |
 | UI.6 | Andockbare Bereiche (Audio, Wiederholung, Liste) und abdockbare Fenster für zweiten Monitor | S | – |
-| UI.7 | Einfacher und erweiterter Modus | S | – |
+| UI.7 | Einfacher und erweiterter Modus | S | ✅ |
 | UI.8 | Input-Einstellungen in Reitern: Allgemein, Farbe, Key, Farbkorrektur, Effekte, Position, Ebenen, Auslöser, Tally, PTZ, Erweitert | M | – |
 | UI.9 | Gestaltung nach dem Kante Design System (`agent.md`, GUI-Regel): Stilwahl Kante (Standard, dunkel; hell „Leinen“ bei hellem Systemthema), Kante Light (nur Formsprache, Farben des Systems), System als Rückfall (KDE Plasma/Breeze, folgt dem Plasma-Farbschema); Bildflächen bleiben dunkel; Sprachen en (Quelle) und de (erweiterbar) | M | – |
 | UI.10 | Bestätigung vor Stopp von Aufnahme/Stream (abschaltbar) | S | ✅ |
 | UI.11 | Hochkant-Produktion: Vorlagen für 9:16, Schutzbereich, Quellrotation | K | – |
-| UI.12 | Startoptionen: maximiert, erweiterter Modus, Vollbild/Kartenausgang/SRT starten, letzte Show | S | – |
+| UI.12 | Startoptionen: maximiert, erweiterter Modus, Vollbild/Kartenausgang/SRT starten, letzte Show | S | ◐ (Fenster, Modus, Ausgänge starten, letzte Show; Vollbild-Ausgang über `--start-outputs`) |
 | UI.13 | Show-Vorlagen (z. B. Gottesdienst, Konferenz, Hörsaal) und Einrichtungsassistent: Kameras finden, Ton wählen, Stream-Ziel eintragen (P1, P6) | S | – |
 
 ---

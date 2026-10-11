@@ -51,6 +51,10 @@ pub mod qobject {
         #[qproperty(QString, templates)]
         /// lmix-core's address, for its pages (graphics preview).
         #[qproperty(QString, core_url, cxx_name = "coreUrl")]
+        /// How the window opens: normal, maximized, fullscreen.
+        #[qproperty(QString, window_mode, cxx_name = "windowMode")]
+        /// `simple` or `advanced` from the command line, or empty.
+        #[qproperty(QString, ui_mode, cxx_name = "uiMode")]
         /// Last latency measurement: lmix `Latency` as JSON, or empty.
         #[qproperty(QString, latency)]
         #[qproperty(bool, measuring)]
@@ -169,6 +173,8 @@ pub struct CoreRust {
     recent: QString,
     templates: QString,
     core_url: QString,
+    window_mode: QString,
+    ui_mode: QString,
     latency: QString,
     measuring: bool,
     global_keys: QString,
@@ -184,6 +190,9 @@ impl cxx_qt::Initialize for qobject::Core {
         self.as_mut().set_style(config::style());
         self.as_mut()
             .set_core_url(QString::from(config::core_url()));
+        self.as_mut()
+            .set_window_mode(QString::from(config::window()));
+        self.as_mut().set_ui_mode(QString::from(config::mode()));
         let thread = self.qt_thread();
         config::runtime().spawn(follow(thread));
         self.refresh_lists();

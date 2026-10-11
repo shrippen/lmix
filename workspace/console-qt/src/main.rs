@@ -43,6 +43,28 @@ struct Args {
     /// (Kante at first).
     #[arg(long, value_enum)]
     style: Option<Style>,
+
+    /// How the window opens (UI.12).
+    #[arg(long, value_enum, default_value_t = Window::Normal)]
+    window: Window,
+
+    /// Simple (switching essentials) or advanced for this run; without it
+    /// the one chosen in the Console (UI.7, UI.12).
+    #[arg(long, value_enum)]
+    mode: Option<Mode>,
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+enum Mode {
+    Simple,
+    Advanced,
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+enum Window {
+    Normal,
+    Maximized,
+    Fullscreen,
 }
 
 fn main() {
@@ -52,7 +74,17 @@ fn main() {
         )
         .init();
     let args = Args::parse();
-    config::init(&args.core, args.style.map_or(-1, Style::kind));
+    let window = match args.window {
+        Window::Normal => "normal",
+        Window::Maximized => "maximized",
+        Window::Fullscreen => "fullscreen",
+    };
+    let mode = match args.mode {
+        None => "",
+        Some(Mode::Simple) => "simple",
+        Some(Mode::Advanced) => "advanced",
+    };
+    config::init(&args.core, args.style.map_or(-1, Style::kind), window, mode);
 
     // qml6glsink draws with the scene graph's OpenGL context.
     std::env::set_var("QSG_RHI_BACKEND", "opengl");

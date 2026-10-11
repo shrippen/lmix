@@ -1068,12 +1068,12 @@
   <context>
     <name>Main</name>
     <message>
-      <location filename="../qml/Main.qml" line="+96" />
+      <location filename="../qml/Main.qml" line="+110" />
       <source>Layout %1 %2</source>
       <translation>Layout %1 %2</translation>
     </message>
     <message>
-      <location line="+52" />
+      <location line="+59" />
       <source>Open show</source>
       <translation>Show öffnen</translation>
     </message>
@@ -1159,7 +1159,7 @@
       <translation>Kante Light: nur die Formen von Kante, auf den Systemfarben</translation>
     </message>
     <message>
-      <location line="+12" />
+      <location line="+13" />
       <source>Latency</source>
       <translation>Latenz</translation>
     </message>
@@ -1185,6 +1185,41 @@
     </message>
     <message>
       <location line="+3" />
+      <source>View</source>
+      <translation>Ansicht</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Tile size</source>
+      <translation>Kachelgröße</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Small</source>
+      <translation>Klein</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Medium</source>
+      <translation>Mittel</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Large</source>
+      <translation>Groß</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Rows</source>
+      <translation>Reihen</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Simple mode</source>
+      <translation>Einfacher Modus</translation>
+    </message>
+    <message>
+      <location line="+10" />
       <source>Clear solo</source>
       <translation>Solo aus</translation>
     </message>
@@ -1209,27 +1244,27 @@
       <translation>Gesperrt lassen sich keine Inputs schließen, keine Show laden und keine Ausgänge stoppen.</translation>
     </message>
     <message>
-      <location line="+4" />
+      <location line="+5" />
       <source>Shortcuts…</source>
       <translation>Belegungen…</translation>
     </message>
     <message>
-      <location line="+5" />
+      <location line="+6" />
       <source>Cues…</source>
       <translation>Cues…</translation>
     </message>
     <message>
-      <location line="+5" />
+      <location line="+6" />
       <source>Aux…</source>
       <translation>Aux…</translation>
     </message>
     <message>
-      <location line="+5" />
+      <location line="+6" />
       <source>Titles…</source>
       <translation>Titel…</translation>
     </message>
     <message>
-      <location line="+5" />
+      <location line="+6" />
       <source>Data…</source>
       <translation>Daten…</translation>
     </message>
