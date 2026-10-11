@@ -381,3 +381,19 @@ Countdown bis Vorstellungsbeginn kann bei 0 den Saallicht-Cue fahren.
 **Nachtrag B37 (2026-10-11)**: behoben. Eine Grafikseite, die lädt,
 während ein Titel läuft, lässt Countdown und Spieluhr dort weiterlaufen
 (nur eine Pause davor geht verloren).
+
+## Durchlauf 9: M9 Anfang ohne GPU (2026-10-12, Console auf Xvfb, Tests)
+
+| Persona | Schritt | Ergebnis |
+|---|---|---|
+| P1 Kirche | Drei PTZ-Kameras über NDI/IP, Positionen „Kanzel“, „Altar“, „Band“ | ◐ VISCA über IP: Positionen 1–8 speichern und anfahren, als Auslöser „geht in die Vorschau“; ⚠ Positionen als eigene virtuelle Inputs (PER.3) fehlen, NDI-PTZ fehlt |
+| P1 Kirche | Wenig Knöpfe, keine Angst vor Fehlbedienung | ✅ einfacher Modus (nur Umschalten, Overlays, FTB, Ausgänge, Sperre); Rückfrage vor dem Stoppen des Streams |
+| P2 Konferenz | Show auf dem Laptop vorbereiten, beim Kunden öffnen | ✅ Show-Paket mit Clips, Datenquellen und eigenen Titeln, Import in einen Ordner |
+| P3 Fußball | Stream Deck: Taste wählt Kamera, „Cut“-Taste schneidet sie | ✅ dynamische Inputs (`dynamic1`) |
+| P4 Streamer | Clip im Programm anhalten, neu starten | ✅ Transportleiste unter dem Monitor; ⚠ keine Positionsanzeige |
+| P5 Broadcast | Tally an Multiviewer und Kamera-Lampen | ✅ TSL UMD 5.0/3.1 per UDP; ⚠ TSL über TCP (DLE/STX) fehlt; an echter Hardware ungeprüft |
+| P5 Broadcast | Beim Booten Stream und Aufnahme von selbst | ✅ `--start-outputs` (laufende werden nicht neu gestartet) |
+| P7 Theater | Alle Einstellungen eines Inputs an einer Stelle | ◐ Einstellungen in Reitern; Key, Effekte, Position, Ebenen fehlen (Engine) |
+
+**Befunde**: B38 PTZ-Positionen als virtuelle Inputs mit Standbild (PER.3);
+B39 Positionsanzeige und Springen im Clip (UI.5); B40 TSL über TCP.
