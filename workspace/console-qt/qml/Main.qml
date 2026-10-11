@@ -71,6 +71,17 @@ Kirigami.ApplicationWindow {
     readonly property var previewInput: show && show.preview ? inputById(show.preview) : null
     readonly property var programInput: show && show.program ? inputById(show.program) : null
 
+    /** Monitor caption: an input's number and name, or a layout's. */
+    function busLabel(id) {
+        if (!show || !id)
+            return ""
+        var input = inputById(id)
+        if (input)
+            return input.number + " " + input.name
+        var layout = (show.layouts || []).find(l => l.id === id)
+        return layout ? qsTr("Layout %1 %2").arg(layout.number).arg(layout.name) : ""
+    }
+
     function localPath(url) {
         return decodeURIComponent(url.toString().replace(/^file:\/\//, ""))
     }
@@ -111,6 +122,14 @@ Kirigami.ApplicationWindow {
         id: addInputDialog
         parent: QQC2.Overlay.overlay
         core: backend
+    }
+
+    LayoutDialog {
+        id: layoutDialog
+        parent: QQC2.Overlay.overlay
+        anchors.centerIn: parent
+        act: root.act
+        inputs: root.inputs
     }
 
     AuxBusDialog {
@@ -214,7 +233,7 @@ Kirigami.ApplicationWindow {
 
                 Monitor {
                     label: qsTr("Preview")
-                    detail: root.previewInput ? root.previewInput.number + " " + root.previewInput.name : ""
+                    detail: root.busLabel(root.show ? root.show.preview : null)
                     tally: KanteStyle.positiveTextColor
                     // As the input arrives, not the tile's small picture.
                     source: root.previewInput ? "full:" + root.previewInput.id : ""
@@ -233,7 +252,7 @@ Kirigami.ApplicationWindow {
 
                 Monitor {
                     label: qsTr("Program")
-                    detail: root.programInput ? root.programInput.number + " " + root.programInput.name : ""
+                    detail: root.busLabel(root.show ? root.show.program : null)
                     tally: KanteStyle.negativeTextColor
                     source: "program"
                     peakDb: root.levels.program
@@ -307,11 +326,23 @@ Kirigami.ApplicationWindow {
                     onProgram: root.show !== null && root.show.program === key
                     onPreview: root.show !== null && root.show.preview === key
                     overlays: root.show && root.show.overlays ? root.show.overlays : []
+                    looksAvailable: root.show !== null && root.show.looks_available === true
                     peakDb: root.levels[key]
                     onReplaceRequested: {
                         addInputDialog.replacing = tileDelegate.input
                         addInputDialog.open()
                     }
+                }
+            }
+
+            LayoutBar {
+                Layout.fillWidth: true
+                core: backend
+                show: root.show
+                act: root.act
+                onEditRequested: layout => {
+                    layoutDialog.layout = layout
+                    layoutDialog.open()
                 }
             }
 

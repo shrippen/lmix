@@ -1031,3 +1031,58 @@ er liegt jetzt auf einer Fläche um die Taste.
 **Offen**: Länge aus der Clip-Dauer übernehmen; Stinger auf CUDA/GL mit
 Alpha prüfen (H.27); Ton des Clips (spielt nach seinen Ton-Einstellungen);
 die Kachel eines gleich nach dem Anlegen pausierten Clips bleibt leer.
+
+## 2026-10-09 — M4 Schritt 6a: Looks (4.6, Farbkorrektur)
+
+**Entscheidung**: Farbkorrektur je Input über den Shader-Look von strom
+(`POST /effect`, `color_correct`): Helligkeit, Kontrast, Sättigung, Farbton,
+Gamma, Farbtemperatur, Tönung. Der Look sitzt vor dem Verteiler des Inputs,
+gilt also für Programm, Vorschau, Kacheln und Layouts. Aktion
+`set_look { input, look }`; er steht in der Show-Datei, wird beim
+Wiederherstellen gesetzt, und ein neuer Input auf einem Slot räumt den Look
+des Vorgängers ab. Neutraler Look nimmt den Shader weg (`none`).
+**Nur GL-Mischer**: strom hat Shader-Looks nur im GL-Backend; CUDA und CPU
+haben keine Farbkorrektur. Der Zustand meldet `looks_available`; ohne GL
+lehnt lmix-core einen Look mit Grund ab („looks need the GL mixer“), die
+Console sperrt den Menüeintrag mit diesem Hinweis.
+**Geprüft**: `scripts/test-looks-gl.sh` (Software-GL in der VM): Grau 128,
+Helligkeit +0,4 → 230, neutral → 128. Unterwegs: Das Vorschaubild schläft
+nach einer Pause, lmix-core liefert dann das letzte Bild; Tests wecken den
+Abgriff vor dem Messen.
+**Offen**: Looks auf CUDA (strom-Patch mit `cudaconvert`/Shader oder
+GL-Umweg; H.28); Looks als Vorlagen speichern und auf mehrere Inputs legen.
+
+## 2026-10-09 — M4 Schritt 6b: Layouts (4.6, Bild im Bild)
+
+**Entscheidung**: Ein Layout ist ein Hintergrund-Input (oder Schwarz) und
+bis zu acht Boxen darüber, jede ein Input in einem Rechteck (Bruchteile des
+Bildes) mit optionalem weißem Rahmen. Es läuft als PiP-Komposition des
+strom-Mischers (`PUT …/blocks/vm/pip/{n}`), der Mischer-Flow hat dafür vier
+(`num_pips`, Flow `lmix mixer 6`). Die Id eines Layouts steht in Vorschau
+und Programm wie die eines Inputs: Cut, Übergänge und Stinger nehmen es
+(`take_source`), die T-Bar lehnt ein Layout in der Vorschau ab. Die Inputs
+eines Layouts auf Programm haben rotes Tally; ein entfernter Input
+verschwindet aus den Layouts. Aktionen `add_layout`, `set_layout`,
+`remove_layout`, `preview_layout`; Layouts stehen in der Show-Datei.
+**Fehler in strom** (strom-PR #7, `lmix-live-underlays`): Nach dem Start
+zeigte ein Layout minutenlang nur seine Rahmen auf Schwarz, auch ein
+einfacher Take war in der Zeit schwarz. Die Rahmen kommen aus kleinen
+`videotestsrc` (nicht live), die ihre Puffer ab 0 stempeln und schon beim
+Vorrollen schieben. Mit `start_time_selection=first` (Basiszeit 0, Inputs
+mit Uhrzeit) nahm der Compositor deshalb 0 als Start seiner Ausgabe und
+lief der Uhr um die Laufzeit der Maschine hinterher; die Bilder der Inputs
+galten als „Zukunft“ und wurden nicht gezeichnet, bis er aufgeholt hatte
+(50 s bis mehrere Minuten). Patch: mit Startzeit „first“ laufen die
+Rahmenquellen live in der Bildrate des Programms (höchstens ein Bild mehr
+Latenz, gemessen: unverändert 126,67 ms); andere Flows unverändert.
+Gefunden mit `GST_DEBUG=aggregator:5` („Selecting start time 0“ beim
+Bildmischer, Uhrzeit bei den Tonmischern).
+**Console**: Leiste „Layouts“ unter den Inputs (Klick: Vorschau,
+Rechtsklick: bearbeiten, entfernen) und ein Dialog mit Hintergrund, vier
+Boxen an festen Plätzen (Viertel, Hälften, klein in einer Ecke) und Rahmen.
+**Geprüft**: VM-Test, Abschnitt Layouts: Orange als Hintergrund, Ball oben
+rechts, beide mit rotem Tally, wieder entfernt.
+**Offen**: Boxen frei ziehen statt fester Plätze, Zuschnitt einer Box,
+Übergänge zwischen Layouts als Bewegung (strom kann morphen); Layouts auf
+CUDA/GL prüfen (H.29).
+

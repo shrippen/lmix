@@ -230,7 +230,7 @@
   <context>
     <name>InputTile</name>
     <message>
-      <location filename="../qml/InputTile.qml" line="+47" />
+      <location filename="../qml/InputTile.qml" line="+49" />
       <source>Input %1 %2</source>
       <translation>Input %1 %2</translation>
     </message>
@@ -336,6 +336,16 @@
     </message>
     <message>
       <location line="+4" />
+      <source>Colour correction…</source>
+      <translation>Farbkorrektur…</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Colour correction (needs the GL mixer)</source>
+      <translation>Farbkorrektur (braucht den GL-Mischer)</translation>
+    </message>
+    <message>
+      <location line="+5" />
       <source>Colour tag</source>
       <translation>Farbmarke</translation>
     </message>
@@ -435,7 +445,7 @@
       <translation>Entfernen</translation>
     </message>
     <message>
-      <location line="+24" />
+      <location line="+32" />
       <source>Rename input %1</source>
       <translation>Input %1 umbenennen</translation>
     </message>
@@ -499,9 +509,203 @@
     </message>
   </context>
   <context>
+    <name>LayoutBar</name>
+    <message>
+      <location filename="../qml/LayoutBar.qml" line="+24" />
+      <source>Layouts</source>
+      <translation>Layouts</translation>
+    </message>
+    <message>
+      <location line="+23" />
+      <source>Click: into preview. Right click: edit or remove.</source>
+      <translation>Klick: in die Vorschau. Rechtsklick: bearbeiten oder entfernen.</translation>
+    </message>
+    <message>
+      <location line="+14" />
+      <source>Edit…</source>
+      <translation>Bearbeiten…</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Remove</source>
+      <translation>Entfernen</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>+ Layout</source>
+      <translation>+ Layout</translation>
+    </message>
+  </context>
+  <context>
+    <name>LayoutDialog</name>
+    <message>
+      <location filename="../qml/LayoutDialog.qml" line="+26" />
+      <source>Top right quarter</source>
+      <translation>Viertel oben rechts</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Top left quarter</source>
+      <translation>Viertel oben links</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Bottom right quarter</source>
+      <translation>Viertel unten rechts</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Bottom left quarter</source>
+      <translation>Viertel unten links</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Left half</source>
+      <translation>Linke Hälfte</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Right half</source>
+      <translation>Rechte Hälfte</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Small, top right</source>
+      <translation>Klein, oben rechts</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Small, bottom right</source>
+      <translation>Klein, unten rechts</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Small, bottom left</source>
+      <translation>Klein, unten links</translation>
+    </message>
+    <message>
+      <location line="+13" />
+      <source>Layout %1 %2</source>
+      <translation>Layout %1 %2</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>New layout</source>
+      <translation>Neues Layout</translation>
+    </message>
+    <message>
+      <location line="+47" />
+      <source>Name</source>
+      <translation>Name</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>optional</source>
+      <translation>optional</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Background</source>
+      <translation>Hintergrund</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Black</source>
+      <translation>Schwarz</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Boxes (bottom to top)</source>
+      <translation>Boxen (von unten nach oben)</translation>
+    </message>
+    <message>
+      <location line="+16" />
+      <source>Empty</source>
+      <translation>Leer</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Input of box %1</source>
+      <translation>Input von Box %1</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Place of box %1</source>
+      <translation>Lage von Box %1</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Frame</source>
+      <translation>Rahmen</translation>
+    </message>
+  </context>
+  <context>
+    <name>LookDialog</name>
+    <message>
+      <location filename="../qml/LookDialog.qml" line="+30" />
+      <source>Colour of %1 %2</source>
+      <translation>Farbe von %1 %2</translation>
+    </message>
+    <message>
+      <location line="+22" />
+      <source>Brightness</source>
+      <translation>Helligkeit</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Contrast</source>
+      <translation>Kontrast</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Saturation</source>
+      <translation>Sättigung</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Hue</source>
+      <translation>Farbton</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Gamma</source>
+      <translation>Gamma</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Temperature</source>
+      <translation>Farbtemperatur</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Cooler to warmer</source>
+      <translation>Kühler bis wärmer</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Tint</source>
+      <translation>Tönung</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Green to magenta</source>
+      <translation>Grün bis Magenta</translation>
+    </message>
+    <message>
+      <location line="+35" />
+      <source>Reset</source>
+      <translation>Zurücksetzen</translation>
+    </message>
+  </context>
+  <context>
     <name>Main</name>
     <message>
-      <location filename="../qml/Main.qml" line="+96" />
+      <location filename="../qml/Main.qml" line="+82" />
+      <source>Layout %1 %2</source>
+      <translation>Layout %1 %2</translation>
+    </message>
+    <message>
+      <location line="+25" />
       <source>Open show</source>
       <translation>Show öffnen</translation>
     </message>
@@ -522,7 +726,7 @@
       <translation>Show speichern</translation>
     </message>
     <message>
-      <location line="+37" />
+      <location line="+45" />
       <source>lmix-core</source>
       <translation>lmix-core</translation>
     </message>
@@ -1081,17 +1285,17 @@
   <context>
     <name>TransitionPanel</name>
     <message>
-      <location filename="../qml/TransitionPanel.qml" line="+51" />
+      <location filename="../qml/TransitionPanel.qml" line="+60" />
       <source>Cut</source>
       <translation>Cut</translation>
     </message>
     <message>
-      <location line="+21" />
+      <location line="+28" />
       <source>Click: take preview. Right click: effect and length.</source>
       <translation>Klick: Vorschau übernehmen. Rechtsklick: Effekt und Dauer.</translation>
     </message>
     <message>
-      <location line="+12" />
+      <location line="+14" />
       <source>Effect</source>
       <translation>Effekt</translation>
     </message>
@@ -1101,7 +1305,7 @@
       <translation>Dauer</translation>
     </message>
     <message>
-      <location line="+7" />
+      <location line="+6" />
       <source>Stinger clip and cut point…</source>
       <translation>Stinger-Clip und Cut-Punkt…</translation>
     </message>

@@ -353,6 +353,65 @@ impl ChannelStrip {
     }
 }
 
+/// Colour correction of an input's picture (a "look"), applied before
+/// everything else: program, preview, tiles and layouts see it.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(default)]
+pub struct Look {
+    /// -1–1, 0 = unchanged.
+    pub brightness: f32,
+    /// 0–2, 1 = unchanged.
+    pub contrast: f32,
+    /// 0–2, 1 = unchanged, 0 = grey.
+    pub saturation: f32,
+    /// -1–1 (±180°), 0 = unchanged.
+    pub hue: f32,
+    /// 0.1–3, 1 = unchanged.
+    pub gamma: f32,
+    /// -1–1, cooler to warmer, 0 = unchanged.
+    pub temperature: f32,
+    /// -1–1, green to magenta, 0 = unchanged.
+    pub tint: f32,
+}
+
+impl Default for Look {
+    fn default() -> Self {
+        Self {
+            brightness: 0.0,
+            contrast: 1.0,
+            saturation: 1.0,
+            hue: 0.0,
+            gamma: 1.0,
+            temperature: 0.0,
+            tint: 0.0,
+        }
+    }
+}
+
+impl Look {
+    /// Whether the look leaves the picture as it is.
+    pub fn is_neutral(&self) -> bool {
+        *self == Self::default()
+    }
+
+    /// The first field outside its range, if any.
+    pub fn out_of_range(&self) -> Option<&'static str> {
+        let within = |v: f32, lo: f32, hi: f32| (lo..=hi).contains(&v);
+        [
+            (within(self.brightness, -1.0, 1.0), "brightness"),
+            (within(self.contrast, 0.0, 2.0), "contrast"),
+            (within(self.saturation, 0.0, 2.0), "saturation"),
+            (within(self.hue, -1.0, 1.0), "hue"),
+            (within(self.gamma, 0.1, 3.0), "gamma"),
+            (within(self.temperature, -1.0, 1.0), "temperature"),
+            (within(self.tint, -1.0, 1.0), "tint"),
+        ]
+        .into_iter()
+        .find(|(ok, _)| !ok)
+        .map(|(_, field)| field)
+    }
+}
+
 /// Solo listening on the monitor bus (headphones), not on program.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -435,6 +494,9 @@ pub struct Input {
     /// Send level to each aux bus, 0–100 (100 = unity); 0 sends nothing.
     #[serde(default)]
     pub sends: [u8; AUX_BUSES],
+    /// Colour correction (inputs with a picture).
+    #[serde(default)]
+    pub look: Look,
 }
 
 /// What a discovered device delivers.

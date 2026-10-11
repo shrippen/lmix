@@ -53,6 +53,11 @@ pub trait Engine: Send + Sync {
         None
     }
 
+    /// Whether the engine can colour-correct inputs (looks).
+    fn looks_available(&self) -> bool {
+        false
+    }
+
     /// Carry out one command.
     async fn run(&self, command: &Command) -> Result<(), EngineError>;
 

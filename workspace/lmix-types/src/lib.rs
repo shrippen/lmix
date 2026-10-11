@@ -11,15 +11,17 @@
 
 pub mod action;
 pub mod input;
+pub mod layout;
 pub mod output;
 pub mod state;
 
 pub use action::{Action, ActionError, Effect, StingerSpec, TransitionSlot};
 pub use input::{
     AuxBus, ChannelStrip, Compressor, Device, DeviceKind, Eq4, Gate, Hpf, Ingest, Input,
-    InputAudio, InputColor, InputId, InputRef, InputStatus, Listen, SignalLoss, SourceSpec,
+    InputAudio, InputColor, InputId, InputRef, InputStatus, Listen, Look, SignalLoss, SourceSpec,
     TestPattern, Transport,
 };
+pub use layout::{BoxRect, BoxSpec, Layout, LayoutBox};
 pub use output::{
     Container, DisplayMode, Output, OutputId, OutputRef, OutputSource, OutputSpec, OutputStats,
     OutputStatus,

@@ -280,9 +280,10 @@ Stand:
 
 | # | Stand |
 |---|---|
-| 4.1 | ✅ 4 Overlay-Kanäle (wie vMix; strom-DSK hat höchstens 4) über die DSK-Ebenen des Mischers, Ein-/Ausblenden (strom-Patch `lmix-dsk-fade`), Tally rot, in Show-Datei; Console: Knöpfe 1–4 je Kachel und Overlay-Leiste; ⚠ Position/Größe eines Overlays (PiP) mit 4.6 |
+| 4.1 | ✅ 4 Overlay-Kanäle (wie vMix; strom-DSK hat höchstens 4) über die DSK-Ebenen des Mischers, Ein-/Ausblenden (strom-Patch `lmix-dsk-fade`), Tally rot, in Show-Datei; Console: Knöpfe 1–4 je Kachel und Overlay-Leiste; ⚠ Position/Größe eines Overlays: über ein Layout (4.6) |
 | 4.2 | ✅ Stinger: Clip-Input (Alpha, z. B. WebM/VP9) auf eigener DSK-Ebene unter den Overlays, Cut darunter am Cut-Punkt, Länge je Taste; gesperrt solange er läuft; strom-Patch `lmix-stinger-layer` (8 DSK); Console: Effekt „Stinger“ mit Dialog; ⚠ Länge noch von Hand |
 | 4.3 | ✅ T-Bar: Vorschau wird beim Ziehen über Programm eingeblendet (Mischung), am Ende Take, zurück auf 0 ohne Wirkung; Position im Zustand; Console-Schieber; ⚠ nur Blende (andere Effekte am Ende als Cut), Ton folgt erst beim Take |
+| 4.6 | ✅ Looks je Input (Farbkorrektur, nur GL-Mischer, sonst Ablehnung mit Grund); Layouts: Hintergrund und bis zu 8 Boxen mit Rahmen als PiP-Komposition, in Vorschau/Programm wie ein Input, Tally für alle Inputs darin; strom-Patch `lmix-live-underlays`; Console: „Farbkorrektur…“ je Kachel, Layout-Leiste und -Dialog; ⚠ Boxen nur an festen Plätzen, keine Bewegung zwischen Layouts |
 | 4.7 | ✅ Kanalzug je Input: Gain, Pan, Hochpass, 4-Band-EQ, Gate, Kompressor, Verzögerung (live, strom-Patch `lmix-live-offset`); 2 Aux-Busse (1 vor, 2 nach dem Fader) mit Sends je Input, Master, Pegel, Ausgang mit Aux-Ton (Mix-Minus); alles in Show-Datei; Console: „Kanalzug…“, „Aux…“, Ausgangsdialog „Ton“; Solo/PFL/AFL seit M2b; ⚠ vor/nach fest je Bus |
 | 4.4 | → M7 (Titel) |
 | 4.5 | → „Später“ (Wiederholung) |

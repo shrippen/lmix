@@ -14,8 +14,9 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::input::{
-    ChannelStrip, InputColor, InputRef, Listen, SignalLoss, SourceSpec, Transport, AUX_BUSES,
+    ChannelStrip, InputColor, InputRef, Listen, Look, SignalLoss, SourceSpec, Transport, AUX_BUSES,
 };
+use crate::layout::BoxSpec;
 use crate::output::{OutputRef, OutputSource, OutputSpec};
 
 /// 0-based index of aux bus `bus` (1-based, as in actions).
@@ -118,6 +119,8 @@ pub enum Action {
         #[serde(default)]
         color: Option<InputColor>,
     },
+    /// Set an input's colour correction (needs the GL mixer).
+    SetLook { input: InputRef, look: Look },
     /// Choose last frame or black for when the input's source stalls.
     SetSignalLoss { input: InputRef, mode: SignalLoss },
     /// Play, pause, restart or step a file, URL or playlist input.
@@ -173,6 +176,30 @@ pub enum Action {
 
     /// Move an input to a 1-based position in the input bar (INP.3).
     MoveInput { input: InputRef, number: u32 },
+
+    // ---- Layouts (picture in picture) ----
+    /// Add a layout: a background input with input boxes on top. It can
+    /// stand in preview and program like an input.
+    AddLayout {
+        #[serde(default)]
+        name: Option<String>,
+        #[serde(default)]
+        background: Option<InputRef>,
+        #[serde(default)]
+        boxes: Vec<BoxSpec>,
+    },
+    /// Change a layout (by number, name or id); on air it moves there.
+    SetLayout {
+        layout: InputRef,
+        #[serde(default)]
+        background: Option<InputRef>,
+        #[serde(default)]
+        boxes: Vec<BoxSpec>,
+    },
+    /// Remove a layout (not while it is on program).
+    RemoveLayout { layout: InputRef },
+    /// Put a layout into preview.
+    PreviewLayout { layout: InputRef },
 
     // ---- Switching (SWI) ----
     /// Put an input into preview.
@@ -257,6 +284,12 @@ pub enum ActionError {
     BadTransitionSlot { slot: u8, max: u8 },
     #[error("nothing in preview")]
     NoPreview,
+    #[error("all {max} layouts are in use")]
+    LayoutsFull { max: usize },
+    #[error("no layout {reference}")]
+    UnknownLayout { reference: String },
+    #[error("layout: {reason}")]
+    BadLayout { reason: String },
     #[error("a stinger is playing")]
     StingerPlaying,
     #[error("stinger: {reason}")]
@@ -281,6 +314,10 @@ pub enum ActionError {
     BadTBar,
     #[error("aux bus {bus} does not exist (1–{max})")]
     BadAuxBus { bus: u8, max: u8 },
+    #[error("look: {field} is out of range")]
+    BadLook { field: String },
+    #[error("looks need the GL mixer (lmix-core --mixer gl)")]
+    NoLooks,
     #[error("channel strip: {field} is out of range")]
     BadStrip { field: String },
     #[error("show has no file yet; give a path")]

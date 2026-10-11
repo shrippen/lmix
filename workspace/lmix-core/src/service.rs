@@ -76,8 +76,10 @@ pub struct Service {
 impl Service {
     pub fn new(slots: usize, engine: Arc<dyn Engine>, autosave: Option<PathBuf>) -> Arc<Self> {
         let (events, _) = broadcast::channel(EVENT_BUFFER);
+        let mut switcher = Switcher::new(slots);
+        switcher.set_looks_available(engine.looks_available());
         Arc::new(Self {
-            switcher: Mutex::new(Switcher::new(slots)),
+            switcher: Mutex::new(switcher),
             engine,
             events,
             recent: Mutex::new(Recent::load(autosave.as_deref())),

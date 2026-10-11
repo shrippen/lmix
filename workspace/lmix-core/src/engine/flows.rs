@@ -20,6 +20,7 @@ use uuid::Uuid;
 
 use lmix_types::action::OVERLAY_CHANNELS;
 use lmix_types::input::{color_rgb, AUX_BUSES, AUX_PRE_FADER};
+use lmix_types::layout::LAYOUTS;
 use lmix_types::{DisplayMode, OutputId, OutputSpec, SourceSpec};
 
 use super::LivePicture;
@@ -57,7 +58,7 @@ const MONITOR_SINK: &str = "monitor_sink";
 pub const AUDIO_MIXER: &str = "mix";
 /// Mixer flow name; a new layout gets a new name, so `start` rebuilds a
 /// running mixer of an older lmix instead of reusing it.
-pub const MIXER_NAME: &str = "lmix mixer 5";
+pub const MIXER_NAME: &str = "lmix mixer 6";
 /// Block id of the vision mixer in the mixer flow.
 pub const MIXER_BLOCK: &str = "vm";
 /// Thumbnail tap on the program output: GUI monitor and picture checks.
@@ -231,6 +232,8 @@ pub fn mixer_flow(slots: usize, backend: MixerBackend, monitor: MonitorOut) -> F
                 "num_dsk_inputs",
                 PropertyValue::String(DSK_LAYERS.to_string()),
             ),
+            // One composition per layout.
+            ("num_pips", PropertyValue::String(LAYOUTS.to_string())),
             // Base time 0 (share_timing): output starts at the first frame.
             (
                 "start_time_selection",
