@@ -547,6 +547,8 @@ Kirigami.ApplicationWindow {
                         addInputDialog.replacing = tileDelegate.input
                         addInputDialog.open()
                     }
+                    dynamicSlots: root.show && root.show.dynamic_inputs
+                        ? [1, 2, 3, 4].filter(n => root.show.dynamic_inputs[n - 1] === key) : []
                     onPtzRequested: {
                         ptzDialog.inputId = tileDelegate.input.id
                         ptzDialog.open()

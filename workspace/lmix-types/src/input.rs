@@ -29,8 +29,9 @@ impl std::fmt::Display for InputId {
 
 /// How an action names an input (INP.2, API.9).
 ///
-/// JSON: a number (`3`, 1-based position), `"preview"`, `"program"`, an id
-/// (`"7d0c…"`), or a name (`"Camera 1"`). Ids win over names.
+/// JSON: a number (`3`, 1-based position), `"preview"`, `"program"`,
+/// `"dynamic1"`–`"dynamic4"` (AUT.5), an id (`"7d0c…"`), or a name
+/// (`"Camera 1"`). Ids win over names.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(untagged)]
 pub enum InputRef {
@@ -41,6 +42,8 @@ pub enum InputRef {
 /// Reserved words of [`InputRef::Text`].
 pub const REF_PREVIEW: &str = "preview";
 pub const REF_PROGRAM: &str = "program";
+/// `"dynamic1"`…: the input a dynamic slot holds (AUT.5).
+pub const REF_DYNAMIC: &str = "dynamic";
 
 /// `videotestsrc` patterns offered as test sources.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]

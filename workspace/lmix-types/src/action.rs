@@ -46,6 +46,9 @@ pub struct StingerSpec {
 #[serde(transparent)]
 pub struct TransitionSlot(pub u8);
 
+/// Dynamic inputs and values, numbered 1–4 (AUT.5).
+pub const DYNAMIC_SLOTS: u8 = 4;
+
 /// Number of transition buttons.
 pub const TRANSITION_SLOTS: u8 = 4;
 /// Overlay channels above program (OVL.1), numbered 1–4.
@@ -301,6 +304,18 @@ pub enum Action {
         #[serde(default = "default_overlay_ms")]
         duration_ms: u32,
     },
+
+    // ---- Dynamic inputs and values (AUT.5) ----
+    /// Let `"dynamic<slot>"` (1–4) name `input` in later actions; null
+    /// empties it. One key picks the input, another acts on it.
+    SetDynamicInput {
+        slot: u8,
+        #[serde(default)]
+        input: Option<InputRef>,
+    },
+    /// Set dynamic value `slot` (1–4); title texts and function arguments
+    /// show it where they say `{value<slot>}`.
+    SetDynamicValue { slot: u8, value: String },
 
     // ---- PTZ (PER.2) ----
     /// Set or clear (null) the PTZ address of an input's camera.
@@ -605,6 +620,8 @@ pub enum ActionError {
     NoLooks,
     #[error("channel strip: {field} is out of range")]
     BadStrip { field: String },
+    #[error("dynamic slot {slot} does not exist (1–{max})")]
+    BadDynamic { slot: u8, max: u8 },
     #[error("PTZ: {reason}")]
     BadPtz { reason: String },
     #[error("no graphics channel {reference}")]

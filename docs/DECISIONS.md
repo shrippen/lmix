@@ -1416,3 +1416,10 @@ mittel, groß; sichtbare Reihen 1–4, darüber Bildlauf; „Simple mode“
 blendet Kurzbefehle, Cues, Aux, Titel, Daten, Layouts und die
 Latenzmessung aus (Umschalten, Overlays, FTB, Ausgänge, Sperre bleiben).
 Gespeichert unter `view/…`. Einzelne Inputs einklappen fehlt noch.
+**Dynamische Inputs und Werte** (AUT.5): `set_dynamic_input` (Platz
+1–4) lässt `"dynamic1"`…`"dynamic4"` in jeder späteren Aktion einen Input
+bezeichnen (wie `"preview"`, `"program"`): eine Taste wählt, eine andere
+wirkt. `set_dynamic_value` setzt Werte 1–4, die in Titeltexten und
+Funktionsargumenten für `{value1}`… stehen. Beides gilt zur Laufzeit,
+nicht in der Show; eine neue Show leert die Inputs. Console: „Dynamic
+input“ im Kachelmenü, Kennzeichen „D1“… auf der Kachel.

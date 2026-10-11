@@ -30,6 +30,8 @@ KanteCard {
     signal replaceRequested()
     signal triggersRequested()
     signal ptzRequested()
+    /** Dynamic slots (1–4) that name this input (AUT.5). */
+    property var dynamicSlots: []
     /** Drag to reorder: where the pointer is, in the window. */
     signal dragMoved(point scenePosition)
     signal dragEnded(point scenePosition)
@@ -131,6 +133,12 @@ KanteCard {
                 visible: tile.onProgram || tile.onPreview
                 text: tile.onProgram ? qsTr("PGM") : qsTr("PRV")
                 color: tile.barColor
+            }
+            KanteSectionLabel {
+                visible: tile.dynamicSlots.length > 0
+                text: tile.dynamicSlots.map(n => "D" + n).join(" ")
+                color: KanteStyle.infoColor
+                Accessible.name: qsTr("Dynamic input %1").arg(tile.dynamicSlots.join(", "))
             }
             KanteSectionLabel {
                 visible: tile.overlayChannels.length > 0
@@ -246,6 +254,13 @@ KanteCard {
         QQC2.MenuItem {
             text: tile.input.triggers && tile.input.triggers.length > 0 ? qsTr("Triggers (%1)…").arg(tile.input.triggers.length) : qsTr("Triggers…")
             onTriggered: tile.triggersRequested()
+        }
+        ChoiceMenu {
+            title: qsTr("Dynamic input")
+            choices: [1, 2, 3, 4].map(n => ({ value: n, label: tile.dynamicSlots.indexOf(n) >= 0
+                ? qsTr("Clear dynamic %1").arg(n) : qsTr("Make it dynamic %1").arg(n) }))
+            onPicked: value => tile.act({ action: "set_dynamic_input", slot: value,
+                input: tile.dynamicSlots.indexOf(value) >= 0 ? null : tile.ref() })
         }
         QQC2.MenuItem {
             text: qsTr("PTZ…")

@@ -86,6 +86,12 @@ pub struct ShowState {
     /// Data sources for title fields.
     #[serde(default)]
     pub data_sources: Vec<crate::graphics::DataSource>,
+    /// What `"dynamic1"`–`"dynamic4"` name (AUT.5).
+    #[serde(default)]
+    pub dynamic_inputs: [Option<InputId>; 4],
+    /// Dynamic values 1–4.
+    #[serde(default)]
+    pub dynamic_values: [String; 4],
 }
 
 /// Current API version (API.10: additive changes within one version).

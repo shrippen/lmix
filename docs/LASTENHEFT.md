@@ -391,7 +391,7 @@ Funktionsreferenz, kein Code (MIT, `claude.md` Entscheidung 6).
 | AUT.2 | Je Belegung: Aktion, Input (fest oder "Input-Nummer"), Wert, Dauer, Beschriftung für Fernbedienung, Anzeige (Farbe/Bild/Live-Bild) | S | ◐ (Aktionen mit Parametern, Beschriftung, Farbe; ohne Bild) |
 | AUT.3 | Mehrere Aktionen je Taste in fester Reihenfolge; global (Einstellungen) oder lokal (Show), lokal gewinnt | S | ◐ (mehrere Aktionen; nur in der Show) |
 | AUT.4 | Vorlagen für Belegungen ex-/importieren | K | – |
-| AUT.5 | Dynamische Inputs/Werte 1–4: Taste A wählt Input/Wert, Taste B wirkt darauf | K | – |
+| AUT.5 | Dynamische Inputs/Werte 1–4: Taste A wählt Input/Wert, Taste B wirkt darauf | K | ✅ |
 | AUT.6 | Rückmeldungen an Controller: Lampen, Farben, Motorfader nach Zustand (Input auf PGM/PVW/spielt, Pegel, Mute, Solo, Bus, FTB, Aufnahme, Stream, …) | S | – |
 | AUT.7 | Auslöser je Input: beim Ein-/Ausblenden (Take, Overlay), Ende, Wiedergabezeit/Restzeit, Countdown 0, Gast verbunden/getrennt, Wiederholung fertig → Aktionsliste mit Verzögerung (max. 30 s je Schritt) | S | ◐ (PGM/PVW/Overlay, Clip-Ende mit Vorlauf, Titelmeldungen; ohne Gast, Wiederholung) |
 | AUT.8 | Ablaufliste: Inputs mit Startposition, Dauer, Übergang, Anzeigeart (Vollbild/Overlay); Start, Stopp, vor/zurück, Schleife, manuell; mehrere benannte Listen in der Show | S | – |

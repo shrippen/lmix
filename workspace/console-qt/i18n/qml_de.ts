@@ -503,7 +503,7 @@
   <context>
     <name>InputTile</name>
     <message>
-      <location filename="../qml/InputTile.qml" line="+51" />
+      <location filename="../qml/InputTile.qml" line="+55" />
       <source>Input %1 %2</source>
       <translation>Input %1 %2</translation>
     </message>
@@ -538,7 +538,12 @@
       <translation>PRV</translation>
     </message>
     <message>
-      <location line="+5" />
+      <location line="+7" />
+      <source>Dynamic input %1</source>
+      <translation>Dynamischer Input %1</translation>
+    </message>
+    <message>
+      <location line="+4" />
       <source>OVL %1</source>
       <translation>OVL %1</translation>
     </message>
@@ -553,7 +558,7 @@
       <translation>startet</translation>
     </message>
     <message>
-      <location line="+11" />
+      <location line="+13" />
       <source>Overlay</source>
       <translation>Overlay</translation>
     </message>
@@ -629,6 +634,21 @@
     </message>
     <message>
       <location line="+4" />
+      <source>Dynamic input</source>
+      <translation>Dynamischer Input</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Clear dynamic %1</source>
+      <translation>Dynamisch %1 leeren</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Make it dynamic %1</source>
+      <translation>Als dynamisch %1 setzen</translation>
+    </message>
+    <message>
+      <location line="+5" />
       <source>PTZ…</source>
       <translation>PTZ…</translation>
     </message>
@@ -2012,6 +2032,11 @@
       <location line="+1" />
       <source>PTZ: %1</source>
       <translation>PTZ: %1</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Dynamic slot %1 does not exist (1–%2)</source>
+      <translation>Dynamischen Platz %1 gibt es nicht (1–%2)</translation>
     </message>
     <message>
       <location line="+1" />

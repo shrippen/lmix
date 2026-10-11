@@ -157,6 +157,7 @@ QtObject {
         case "show_file": return qsTr("Show file: %1").arg(e.message)
         case "engine": return qsTr("Engine: %1").arg(e.message)
         case "bad_ptz": return qsTr("PTZ: %1").arg(e.reason)
+        case "bad_dynamic": return qsTr("Dynamic slot %1 does not exist (1–%2)").arg(e.slot).arg(e.max)
         case "unknown_graphics": return qsTr("No graphics channel matches %1").arg(e.reference)
         case "graphics_full": return qsTr("All %1 graphics channels are in use").arg(e.max)
         case "unknown_template": return qsTr("No template %1").arg(e.template)

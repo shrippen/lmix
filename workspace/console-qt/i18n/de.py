@@ -441,4 +441,9 @@ DE = {
     'Large': 'Groß',
     'Rows': 'Reihen',
     'Simple mode': 'Einfacher Modus',
+    'Dynamic input %1': 'Dynamischer Input %1',
+    'Dynamic input': 'Dynamischer Input',
+    'Clear dynamic %1': 'Dynamisch %1 leeren',
+    'Make it dynamic %1': 'Als dynamisch %1 setzen',
+    'Dynamic slot %1 does not exist (1–%2)': 'Dynamischen Platz %1 gibt es nicht (1–%2)',
 }

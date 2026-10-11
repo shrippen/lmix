@@ -7,9 +7,9 @@
 //!   Action ──► Switcher::apply ──► new state + [Command] ──► engine driver
 //! ```
 
-use lmix_types::action::{aux_index, OVERLAY_CHANNELS, TRANSITION_SLOTS};
+use lmix_types::action::{aux_index, DYNAMIC_SLOTS, OVERLAY_CHANNELS, TRANSITION_SLOTS};
 use lmix_types::automation::{AUTOMATION_ACTIONS, CUES, TRIGGERS, TRIGGER_DELAY_MAX_MS};
-use lmix_types::input::{color_rgb, AUX_BUSES, REF_PREVIEW, REF_PROGRAM, VOLUME_MAX};
+use lmix_types::input::{color_rgb, AUX_BUSES, REF_DYNAMIC, REF_PREVIEW, REF_PROGRAM, VOLUME_MAX};
 use lmix_types::layout::{BORDER_MAX_PX, LAYOUTS, LAYOUT_BOXES};
 use lmix_types::shortcut::SHORTCUT_ACTIONS;
 use lmix_types::state::API_VERSION;
@@ -199,6 +199,17 @@ pub(crate) fn check_triggers<'a>(
     Ok(())
 }
 
+/// 0-based index of dynamic slot `slot` (1–4).
+fn dynamic_index(slot: u8) -> Result<usize, ActionError> {
+    if slot == 0 || slot > DYNAMIC_SLOTS {
+        return Err(ActionError::BadDynamic {
+            slot,
+            max: DYNAMIC_SLOTS,
+        });
+    }
+    Ok(usize::from(slot - 1))
+}
+
 /// A name, at most `CUES` cues, each with 1–16 safe actions.
 fn check_cues(name: &str, cues: &[Cue]) -> Result<(), ActionError> {
     let bad = |reason: String| Err(ActionError::BadCueList { reason });
@@ -273,6 +284,9 @@ pub struct Switcher {
     clip_ms: HashMap<usize, u64>,
     /// Templates, data source rows, title calls; runtime only.
     titles: graphics::TitleRuntime,
+    /// What `"dynamic1"`… name, and the dynamic values (AUT.5); runtime.
+    dynamic_inputs: [Option<InputId>; DYNAMIC_SLOTS as usize],
+    dynamic_values: [String; DYNAMIC_SLOTS as usize],
 }
 
 impl Switcher {
@@ -295,6 +309,8 @@ impl Switcher {
             clip_ms: HashMap::new(),
             output_status: HashMap::new(),
             titles: graphics::TitleRuntime::default(),
+            dynamic_inputs: Default::default(),
+            dynamic_values: Default::default(),
         }
     }
 
@@ -380,7 +396,22 @@ impl Switcher {
             | Action::DataRow { .. }
             | Action::DataNext { .. }
             | Action::DataPrevious { .. }
-            | Action::SetDataAuto { .. }) => self.apply_title(action),
+            | Action::SetDataAuto { .. }) => {
+                let action = self.with_dynamic_values(action);
+                self.apply_title(action)
+            }
+            Action::SetDynamicInput { slot, input } => {
+                let at = dynamic_index(slot)?;
+                self.dynamic_inputs[at] = match input {
+                    Some(input) => Some(self.show.inputs[self.find(&input)?].id),
+                    None => None,
+                };
+                Ok(Vec::new())
+            }
+            Action::SetDynamicValue { slot, value } => {
+                self.dynamic_values[dynamic_index(slot)?] = value;
+                Ok(Vec::new())
+            }
             Action::AddInput { source, name } => self.add(source, name),
             Action::RemoveInput { input } => {
                 self.check_unlocked()?;
@@ -586,6 +617,7 @@ impl Switcher {
         self.removed.clear();
         self.status.clear();
         self.titles.reset();
+        self.dynamic_inputs = Default::default();
         commands.extend(self.restore_commands());
         commands
     }
@@ -783,6 +815,8 @@ impl Switcher {
                     boxes: l.boxes.clone(),
                 })
                 .collect(),
+            dynamic_inputs: self.dynamic_inputs,
+            dynamic_values: self.dynamic_values.clone(),
             graphics: self.graphics_state(),
             datasets: self.show.datasets.clone(),
             data_sources: self.data_sources_state(),
@@ -2216,6 +2250,26 @@ impl Switcher {
     }
 
     /// Slot that carries `input`.
+    /// `{value1}`… in title texts and function arguments replaced by the
+    /// dynamic values (AUT.5).
+    fn with_dynamic_values(&self, mut action: Action) -> Action {
+        let fill = |text: &mut String| {
+            if text.contains("{value") {
+                for (i, value) in self.dynamic_values.iter().enumerate() {
+                    *text = text.replace(&format!("{{value{}}}", i + 1), value);
+                }
+            }
+        };
+        match &mut action {
+            Action::TitleLoad { data, .. } | Action::TitleUpdate { data, .. } => {
+                data.values_mut().for_each(fill)
+            }
+            Action::TitleCall { args, .. } => args.iter_mut().for_each(fill),
+            _ => {}
+        }
+        action
+    }
+
     /// PTZ address of the input `input` names.
     pub fn ptz_of(&self, input: &InputRef) -> Result<lmix_types::PtzSpec, ActionError> {
         let entry = &self.show.inputs[self.find(input)?];
@@ -2260,6 +2314,13 @@ impl Switcher {
         }
         if text == REF_PROGRAM {
             return by_id(self.show.program);
+        }
+        if let Some(slot) = text
+            .strip_prefix(REF_DYNAMIC)
+            .and_then(|n| n.parse::<u8>().ok())
+            .filter(|n| (1..=DYNAMIC_SLOTS).contains(n))
+        {
+            return by_id(self.dynamic_inputs[usize::from(slot - 1)]);
         }
         if let Ok(uuid) = Uuid::parse_str(text) {
             return by_id(Some(InputId(uuid)));
@@ -2401,6 +2462,77 @@ mod tests {
         add(&mut sw, "A");
         add(&mut sw, "B");
         sw
+    }
+
+    #[test]
+    fn dynamic_inputs_pick_then_act() {
+        let mut sw = two_inputs();
+        let dynamic = || InputRef::Text("dynamic2".into());
+
+        assert!(matches!(
+            sw.apply(Action::PreviewInput { input: dynamic() }),
+            Err(ActionError::UnknownInput { .. })
+        ));
+        sw.apply(Action::SetDynamicInput {
+            slot: 2,
+            input: Some(named("B")),
+        })
+        .unwrap();
+        sw.apply(Action::PreviewInput { input: dynamic() }).unwrap();
+        let state = sw.state();
+        assert_eq!(state.preview, Some(state.inputs[1].id));
+        assert_eq!(state.dynamic_inputs[1], Some(state.inputs[1].id));
+
+        sw.apply(Action::SetDynamicInput {
+            slot: 2,
+            input: None,
+        })
+        .unwrap();
+        assert!(sw.apply(Action::PreviewInput { input: dynamic() }).is_err());
+        for slot in [0, 5] {
+            assert!(matches!(
+                sw.apply(Action::SetDynamicValue {
+                    slot,
+                    value: "x".into()
+                }),
+                Err(ActionError::BadDynamic { .. })
+            ));
+        }
+    }
+
+    #[test]
+    fn dynamic_values_fill_title_texts() {
+        let mut sw = two_inputs();
+        sw.set_templates(std::collections::HashMap::from([(
+            "t".to_string(),
+            TemplateRef {
+                url: "/t".into(),
+                revision: 0,
+            },
+        )]));
+        sw.apply(Action::AddGraphics { name: None }).unwrap();
+        sw.apply(Action::SetDynamicValue {
+            slot: 1,
+            value: "Guest".into(),
+        })
+        .unwrap();
+        sw.apply(Action::TitleLoad {
+            graphics: InputRef::Number(1),
+            layer: 1,
+            template: "t".into(),
+            data: lmix_types::TitleData::from([(
+                "name".to_string(),
+                "Hello {value1}!".to_string(),
+            )]),
+            play: false,
+        })
+        .unwrap();
+
+        assert_eq!(
+            sw.state().graphics[0].layers[0].data["name"],
+            "Hello Guest!"
+        );
+        assert_eq!(sw.state().dynamic_values[0], "Guest");
     }
 
     #[test]
