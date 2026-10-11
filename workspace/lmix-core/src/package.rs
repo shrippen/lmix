@@ -141,10 +141,8 @@ pub fn export(
         }
     }
     let mut extra = Vec::new();
-    let mut ids: Vec<&str> = show
-        .graphics
-        .iter()
-        .flat_map(|g| g.layers.iter().map(|t| t.template.as_str()))
+    let mut ids: Vec<&str> = templates_used(show)
+        .into_iter()
         .filter(|id| !id.starts_with("lmix/"))
         .collect();
     ids.sort();
@@ -187,9 +185,43 @@ pub fn export(
         tar.into_inner()?.sync_all()?;
         Ok(packed)
     };
-    let packed = write().map_err(|e| format!("{}: {e}", out.display()))?;
+    let packed = write().map_err(|e| {
+        // A half-written package may be gigabytes.
+        let _ = std::fs::remove_file(&tmp);
+        format!("{}: {e}", out.display())
+    })?;
     std::fs::rename(&tmp, out).map_err(|e| format!("{}: {e}", out.display()))?;
     Ok(packed)
+}
+
+/// Templates the show uses: loaded on layers, or loaded by actions of
+/// shortcuts, cues and triggers.
+fn templates_used(show: &Show) -> Vec<&str> {
+    let mut actions: Vec<&lmix_types::Action> = Vec::new();
+    actions.extend(show.shortcuts.iter().flat_map(|s| &s.actions));
+    actions.extend(
+        show.cue_lists
+            .iter()
+            .flat_map(|l| l.cues.iter().flat_map(|c| &c.actions)),
+    );
+    actions.extend(
+        show.inputs
+            .iter()
+            .flat_map(|i| i.triggers.iter().flat_map(|t| &t.actions)),
+    );
+    actions.extend(
+        show.graphics
+            .iter()
+            .flat_map(|g| g.triggers.iter().flat_map(|t| &t.actions)),
+    );
+    show.graphics
+        .iter()
+        .flat_map(|g| g.layers.iter().map(|t| t.template.as_str()))
+        .chain(actions.into_iter().filter_map(|a| match a {
+            lmix_types::Action::TitleLoad { template, .. } => Some(template.as_str()),
+            _ => None,
+        }))
+        .collect()
 }
 
 fn set_path(spec: &mut lmix_types::DataSourceSpec, to: String) {
@@ -233,17 +265,40 @@ pub fn import(
     let bytes = std::fs::read(&show_file).map_err(|e| format!("{}: {e}", show_file.display()))?;
     let mut show =
         show::from_bytes(&bytes, &show_file.display().to_string()).map_err(|e| e.to_string())?;
-    let inside = |path: &mut String| {
-        if !is_address(path) && Path::new(path.as_str()).is_relative() {
-            *path = folder.join(path.as_str()).display().to_string();
+    // Paths of the package stay in its folder.
+    let mut outside = Vec::new();
+    let mut inside = |path: &mut String| {
+        let p = Path::new(path.as_str());
+        if is_address(path) || p.is_absolute() {
+            return;
         }
+        if p.components()
+            .any(|c| matches!(c, std::path::Component::ParentDir))
+        {
+            outside.push(path.clone());
+            return;
+        }
+        *path = folder.join(path.as_str()).display().to_string();
     };
     for input in &mut show.inputs {
         match &mut input.source {
             SourceSpec::File { path } | SourceSpec::Image { path } => inside(path),
-            SourceSpec::Playlist { paths } => paths.iter_mut().for_each(inside),
+            SourceSpec::Playlist { paths } => paths.iter_mut().for_each(&mut inside),
             _ => {}
         }
+    }
+    for source in &show.data_sources {
+        let path = source.spec.path();
+        if !is_address(path)
+            && Path::new(path)
+                .components()
+                .any(|c| matches!(c, std::path::Component::ParentDir))
+        {
+            outside.push(path.to_string());
+        }
+    }
+    if !outside.is_empty() {
+        return Err(format!("paths leave the package: {}", outside.join(", ")));
     }
     std::fs::write(&show_file, show::to_bytes(&show))
         .map_err(|e| format!("{}: {e}", show_file.display()))?;
@@ -391,6 +446,32 @@ mod tests {
         let data = elsewhere.join(opened.data_sources[0].spec.path());
         assert_eq!(std::fs::read_to_string(data).unwrap(), "name\nA\n");
         assert!(other_templates.join("own/index.html").is_file());
+
+        // A template only a shortcut loads comes along too.
+        let mut with_key = show.clone();
+        with_key.graphics[0].layers.retain(|t| t.template != "own");
+        with_key.shortcuts.push(crate::show::ShowShortcut {
+            id: InputId::new(),
+            label: "k".into(),
+            key: None,
+            web: false,
+            color: None,
+            midi: None,
+            actions: vec![lmix_types::Action::TitleLoad {
+                graphics: lmix_types::InputRef::Number(1),
+                layer: 1,
+                template: "own".into(),
+                data: Default::default(),
+                play: true,
+            }],
+        });
+        let p2 = here.path().join("k.lmixpkg");
+        assert_eq!(
+            export(&with_key, Some(&show_path), Some(&templates), &p2)
+                .unwrap()
+                .files,
+            4
+        );
 
         // Not into a folder with something in it; a template there is kept.
         assert!(import(&package, &elsewhere, None).is_err());

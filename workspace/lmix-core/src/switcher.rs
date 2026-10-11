@@ -2255,12 +2255,34 @@ impl Switcher {
     /// `{value1}`… in title texts and function arguments replaced by the
     /// dynamic values (AUT.5).
     fn with_dynamic_values(&self, mut action: Action) -> Action {
+        // One pass: a value that says `{value2}` stays as it is.
         let fill = |text: &mut String| {
-            if text.contains("{value") {
-                for (i, value) in self.dynamic_values.iter().enumerate() {
-                    *text = text.replace(&format!("{{value{}}}", i + 1), value);
+            if !text.contains("{value") {
+                return;
+            }
+            let mut out = String::new();
+            let mut rest = text.as_str();
+            while let Some(at) = rest.find("{value") {
+                out.push_str(&rest[..at]);
+                let tail = &rest[at..];
+                let slot = tail
+                    .get(6..8)
+                    .filter(|t| t.ends_with('}'))
+                    .and_then(|t| t[..1].parse::<usize>().ok())
+                    .filter(|n| (1..=self.dynamic_values.len()).contains(n));
+                match slot {
+                    Some(n) => {
+                        out.push_str(&self.dynamic_values[n - 1]);
+                        rest = &tail[8..];
+                    }
+                    None => {
+                        out.push_str("{value");
+                        rest = &tail[6..];
+                    }
                 }
             }
+            out.push_str(rest);
+            *text = out;
         };
         match &mut action {
             Action::TitleLoad { data, .. } | Action::TitleUpdate { data, .. } => {
@@ -2544,6 +2566,25 @@ mod tests {
             "Hello Guest!"
         );
         assert_eq!(sw.state().dynamic_values[0], "Guest");
+        // One pass: a value naming another slot stays literal.
+        sw.apply(Action::SetDynamicValue {
+            slot: 2,
+            value: "{value1}".into(),
+        })
+        .unwrap();
+        sw.apply(Action::TitleUpdate {
+            graphics: InputRef::Number(1),
+            layer: 1,
+            data: lmix_types::TitleData::from([(
+                "name".to_string(),
+                "{value2} {value9} {value".to_string(),
+            )]),
+        })
+        .unwrap();
+        assert_eq!(
+            sw.state().graphics[0].layers[0].data["name"],
+            "{value1} {value9} {value"
+        );
     }
 
     #[test]

@@ -1463,3 +1463,11 @@ fehlen, solange die Engine sie nicht hat.
 Zustand je Meldung). Die Transportleiste zeigt Fortschritt und
 „Position / Länge“. Springen im Clip fehlt (strom hat dafür keine Aktion
 in lmix).
+**Review der späteren M9-Teile**: ein dritter Durchgang fand: Import
+packte vor der Sperrprüfung aus (jetzt vorher geprüft); Vorlagen, die nur
+in Aktionen (Kurzbefehle, Cues, Auslöser) geladen werden, fehlten im
+Paket; Pfade mit `..` in einem fremden Paket zeigten aus dem Ordner
+(jetzt abgelehnt); eine halbe Paketdatei blieb nach einem Fehler liegen;
+dynamische Werte wurden zweimal ersetzt (jetzt in einem Durchgang);
+Reiterleiste und Auswahlfelder der Input-Einstellungen zeigten nach dem
+Wiederöffnen den alten Stand. Alle behoben.

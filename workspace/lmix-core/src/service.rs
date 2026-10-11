@@ -889,6 +889,8 @@ impl Service {
         }
         let mut unpacked = match &action {
             Action::ImportPackage { path, folder } => {
+                // Refused before gigabytes are unpacked (checked again below).
+                self.switcher.lock().await.check_unlocked()?;
                 let templates = self
                     .templates_dir
                     .lock()

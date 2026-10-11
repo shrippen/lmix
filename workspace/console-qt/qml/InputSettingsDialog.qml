@@ -39,8 +39,20 @@ KanteDialog {
     standardButtons: QQC2.Dialog.Close
     contentHeight: Math.min(column.implicitHeight, (parent ? parent.height : 800) * 0.75)
 
+    /** Combo boxes lose their bindings once used: set them from the
+     *  input when the dialog opens and whenever the input changes. */
+    function sync() {
+        if (!input)
+            return
+        colourBox.currentIndex = Math.max(0, colourBox.choices.findIndex(c => c.value === input.color))
+        lossBox.currentIndex = Math.max(0, lossBox.modes.indexOf(input.signal_loss))
+    }
+    onInputChanged: sync()
+
     onOpened: {
         tab = 0
+        tabBar.currentIndex = 0
+        sync()
         name.text = input ? input.name : ""
         look.load()
         if (input && input.has_audio)
@@ -59,6 +71,7 @@ KanteDialog {
             spacing: Kirigami.Units.smallSpacing
 
             KanteTabBar {
+                id: tabBar
                 Layout.fillWidth: true
                 model: dialog.tabs
                 currentIndex: dialog.tab
@@ -89,7 +102,6 @@ KanteDialog {
                             readonly property var choices: [{ value: null, label: qsTr("None") }]
                                 .concat(Texts.choices("colors", dialog.core.choices("colors")))
                             model: choices.map(c => c.label)
-                            currentIndex: dialog.input ? Math.max(0, choices.findIndex(c => c.value === dialog.input.color)) : 0
                             onActivated: index => dialog.act({ action: "set_input_color", input: dialog.ref(), color: choices[index].value })
                             KanteFieldSkin { control: colourBox }
                         }
@@ -102,7 +114,6 @@ KanteDialog {
                             id: lossBox
                             readonly property var modes: ["hold", "black"]
                             model: [qsTr("Hold last frame"), qsTr("Black")]
-                            currentIndex: dialog.input ? Math.max(0, modes.indexOf(dialog.input.signal_loss)) : 0
                             onActivated: index => dialog.act({ action: "set_signal_loss", input: dialog.ref(), mode: modes[index] })
                             KanteFieldSkin { control: lossBox }
                         }
