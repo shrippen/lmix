@@ -11,7 +11,7 @@ Erledigtes abhaken (`[x]`, Datum) und nach einer Weile löschen; Details stehen 
 - [ ] Breeze-Bug melden (siehe unten).
 - [ ] Hardware mit dir: H.13 Kopfhörer, H.20 Vollbild auf zweitem Monitor/Beamer, H.21 Kabel ziehen (`docs/HARDWARE-TODO.md`).
 - [ ] NFA.7: 8-h- und 48-h-Lauf, nachdem das Speicherwachstum in strom geklärt ist (H.24).
-- [ ] PRs der Nacht 11./12.10. ansehen und mergen: lmix #15 (H.24-Vergleich, Todo), #16 (Qt-eigene Übersetzungen), Kante #53 (Dialog ohne Hintergrund in Kante Light, danach `scripts/sync-kante.sh` in lmix), lmix #17 (M7 Teil A, gestapelt auf #9, also erst #7–#9 und strom #7/#8).
+- [ ] PRs der Nacht 11./12.10. ansehen und mergen: lmix #15 (H.24-Vergleich, Todo), #16 (Qt-eigene Übersetzungen), Kante #53 (Dialog ohne Hintergrund in Kante Light, danach `scripts/sync-kante.sh` in lmix), lmix #17 (M7 Teil A, gestapelt auf #9, also erst #7–#9 und strom #7/#8), lmix #18 (M9 Anfang, gestapelt auf #17).
 - [ ] CI für die Tests: `cargo test` (lmix-core, lmix-types, console-qt), `scripts/test-titles.sh` und `scripts/test-web.sh` laufen in keiner CI (nur `vm-check`). Nach dem Token-Fix (lmix-core braucht das Submodul `strom` für `strom-types`) einen Workflow `tests.yml` anlegen, in `.gitea/` und `.github/`, Chromium über Playwright.
 - [ ] M7.0 Benchmark CEF gegen WPE: braucht freie GPU und `cefsrc`/`wpesrc` (beide fehlen auf dem Rechner, Installation mit sudo); danach rendert strom den Grafikkanal (GFX.2).
 
@@ -58,4 +58,5 @@ enabled: !(/\&[^\&]/.test(control.text))
 - [x] Aktion in den ersten 2 s nach Engine-Neustart antwortet 502 (2026-10-09: neue Engine erkannt, Aktion geht in die Show, Restore sofort).
 - [ ] Konstantes Bildalter 54 ms bei einigen Kacheln klären.
 - [ ] M7 Rest (DECISIONS „M7 Teil A“): Grafikkanal als Input und Overlay (GFX.2, GFX.17, nach M7.0), Overlay wartet auf die Ausblendung (GFX.4), Titel als Stinger (GFX.11), Textfolien aus Datei (GFX.21), XLSX/ODS und Sheets-API (DAT.1), Zeilen zu Spalten (DAT.3), M7-Abnahme mit 5 Personas.
+- [ ] M9 Rest (DECISIONS „M9 Anfang“): PTZ-Positionen als virtuelle Inputs mit Standbild (PER.3, B38), PTZ und TSL an echter Hardware prüfen, Springen im Clip (UI.5), Inputs einklappen (UI.3), Mehrfachauswahl und Sperre im Layout-Editor (LAY.6), Key/Effekte/Position/Ebenen in den Input-Einstellungen (UI.8, braucht Engine), HID/Gamepad/Stream Deck direkt (AUT.1).
 - [x] Lastenheft-Stand der M6/M8-Punkte (AUT.*, API.*, WEB.*, OPS.*) nachgetragen (2026-10-11).
