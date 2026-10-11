@@ -292,6 +292,7 @@ mod tests {
             "lmix/countdown",
             "lmix/scoreboard",
             "lmix/card",
+            "lmix/text-slides",
         ] {
             assert!(ids.contains(&id.to_string()), "missing {id}: {ids:?}");
         }

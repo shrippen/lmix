@@ -279,6 +279,25 @@ impl Switcher {
                 layer,
                 data,
             } => merge(&mut self.title_mut(&graphics, layer)?.data, data),
+            Action::TitleAdd {
+                graphics,
+                layer,
+                field,
+                amount,
+            } => {
+                if !amount.is_finite() {
+                    return Err(ActionError::BadTitle {
+                        reason: "the amount is no number".into(),
+                    });
+                }
+                let title = self.title_mut(&graphics, layer)?;
+                let now = title
+                    .data
+                    .get(&field)
+                    .and_then(|v| v.trim().parse::<f64>().ok())
+                    .unwrap_or(0.0);
+                title.data.insert(field, number_text(now + amount));
+            }
             Action::TitleCall {
                 graphics,
                 layer,
@@ -650,6 +669,15 @@ impl Switcher {
     }
 }
 
+/// A number as a field shows it: whole numbers without a point.
+fn number_text(n: f64) -> String {
+    if n.fract() == 0.0 && n.abs() < 1e15 {
+        format!("{}", n as i64)
+    } else {
+        format!("{n}")
+    }
+}
+
 /// File name without folder and extension.
 fn file_name(path: &str) -> String {
     std::path::Path::new(path)
@@ -825,6 +853,29 @@ mod tests {
         .unwrap();
 
         assert_eq!(layer(&sw, 1).data, data(&[("role", "R")]));
+    }
+
+    #[test]
+    fn add_counts_a_number_field() {
+        let mut sw = switcher();
+        load(&mut sw, 1);
+        let add = |sw: &mut Switcher, field: &str, amount: f64| {
+            sw.apply(Action::TitleAdd {
+                graphics: InputRef::Number(1),
+                layer: 1,
+                field: field.into(),
+                amount,
+            })
+        };
+
+        add(&mut sw, "home_score", 1.0).unwrap();
+        add(&mut sw, "home_score", 2.0).unwrap();
+        add(&mut sw, "name", 1.5).unwrap(); // "A" is no number: from 0
+        assert_eq!(layer(&sw, 1).data["home_score"], "3");
+        assert_eq!(layer(&sw, 1).data["name"], "1.5");
+        add(&mut sw, "home_score", -4.0).unwrap();
+        assert_eq!(layer(&sw, 1).data["home_score"], "-1");
+        assert!(add(&mut sw, "home_score", f64::NAN).is_err());
     }
 
     #[test]

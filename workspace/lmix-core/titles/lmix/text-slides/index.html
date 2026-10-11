@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Text slides</title>
+<link rel="stylesheet" href="/titles/sdk/lmix-title.css">
+<style>
+  /* lower: a band in the lower third over the picture (stream);
+     full: the whole picture, for a projector in the room (P1). */
+  .slides { position: absolute; left: var(--safe-x); right: var(--safe-x); bottom: var(--safe-y);
+    padding: calc(24 * var(--u)) calc(40 * var(--u)); background: var(--bg-void); }
+  .slides.full { inset: 0; padding: var(--safe-y) var(--safe-x); display: flex; flex-direction: column; justify-content: center; }
+  .slides .title { font-size: calc(22 * var(--u)); color: var(--yellow); margin-bottom: calc(12 * var(--u)); }
+  .slides .title:empty { display: none; }
+  .slides .text { font-family: var(--font-heading); font-weight: 600; color: var(--fg0);
+    font-size: calc(44 * var(--u)); line-height: 1.3; white-space: pre-line; text-align: center; }
+  .slides.full .text { font-size: calc(72 * var(--u)); }
+  .slides .text.swap { opacity: 0; }
+  .slides .text { transition: opacity var(--dur) var(--ease-out); }
+</style>
+</head>
+<body>
+<div class="slides k-fade" id="slides">
+  <div class="title k-label" id="title"></div>
+  <div class="text" id="text"></div>
+</div>
+<script src="/titles/sdk/lmix-title.js"></script>
+<script>
+  // GFX.21: next() shows the next slide, back() the one before; reports
+  // "last" on the last slide.
+  const el = (id) => document.getElementById(id);
+  let slides = [], at = 0;
+  function show(index) {
+    at = Math.max(0, Math.min(index, slides.length - 1));
+    const text = el("text");
+    text.classList.add("swap");
+    setTimeout(() => {
+      text.textContent = slides[at] || "";
+      text.classList.remove("swap");
+    }, lmixTitle.duration("--dur"));
+    if (slides.length > 0 && at === slides.length - 1) lmixTitle.report("last");
+  }
+  lmixTitle({
+    update(d) {
+      el("title").textContent = d.title || "";
+      slides = (d.text || "").split(/\n\s*\n/).map((s) => s.trim()).filter(Boolean);
+      el("slides").classList.toggle("full", d.layout === "full");
+      el("text").textContent = slides[Math.min(at, slides.length - 1)] || "";
+    },
+    play() { at = 0; el("text").textContent = slides[0] || ""; el("slides").classList.add("is-in"); },
+    next() { show(at + 1); },
+    stop() { el("slides").classList.remove("is-in"); return lmixTitle.duration("--dur"); },
+    functions: { back() { show(at - 1); } },
+  });
+</script>
+</body>
+</html>

@@ -363,6 +363,7 @@ impl Switcher {
             | Action::TitleStop { .. }
             | Action::TitleClear { .. }
             | Action::TitleUpdate { .. }
+            | Action::TitleAdd { .. }
             | Action::TitleCall { .. }
             | Action::TitleBind { .. }
             | Action::TitleReport { .. }

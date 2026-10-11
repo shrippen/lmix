@@ -1,0 +1,10 @@
+{
+  "name": "Text slides",
+  "steps": 200,
+  "functions": ["back"],
+  "fields": [
+    { "id": "title", "label": "Title" },
+    { "id": "text", "label": "Slides (blank line between them)", "kind": "long_text" },
+    { "id": "layout", "label": "Layout", "kind": "choice", "default": "lower", "choices": ["lower", "full"] }
+  ]
+}

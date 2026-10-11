@@ -375,3 +375,6 @@ Neuladen der Grafikseite weiterlaufen lassen statt neu zu beginnen.
 **Nachtrag B36 (2026-10-11)**: behoben. Ein Grafikkanal hat Auslöser auf
 Meldungen seiner Titel (`zero`, `done`, wahlweise je Ebene); P7s
 Countdown bis Vorstellungsbeginn kann bei 0 den Saallicht-Cue fahren.
+**Nachtrag B35 (2026-10-11)**: behoben. `title_add` zählt ein Feld hoch
+(Spielstand +1 auf einer Taste); P1 bekommt die Vorlage „Text slides“
+(Strophen mit Weiter/Zurück, Layout fürs ganze Bild für den Beamer).

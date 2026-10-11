@@ -355,6 +355,16 @@ pub enum Action {
         layer: u32,
         data: TitleData,
     },
+    /// Add `amount` to a number field (a score +1); an empty or
+    /// non-number field counts as 0.
+    TitleAdd {
+        graphics: InputRef,
+        #[serde(default = "first_layer")]
+        layer: u32,
+        field: String,
+        #[serde(default = "one")]
+        amount: f64,
+    },
     /// Call a function of the template (CasparCG `CG INVOKE`).
     TitleCall {
         graphics: InputRef,
@@ -453,6 +463,10 @@ fn default_overlay_ms() -> u32 {
 
 fn first_layer() -> u32 {
     1
+}
+
+fn one() -> f64 {
+    1.0
 }
 
 /// Why an action was refused. Clients show `message` (API.9: errors with

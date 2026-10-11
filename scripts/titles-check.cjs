@@ -84,6 +84,33 @@ async function act(action) {
   await page.waitForFunction(() => !document.querySelector('#stage iframe[style*="z-index: 1"]'), null, { timeout: 3000 });
   pass("clear: layer gone at once");
 
+  // Text slides: next and back step through, the last one reports.
+  await act({ action: "title_load", graphics: 1, layer: 7, template: "lmix/text-slides",
+    data: { text: "One\n\nTwo\n\nThree" }, play: true });
+  frame = await layerFrame(7);
+  const slide = (t) => frame.waitForFunction((x) => document.getElementById("text").textContent === x, t, { timeout: 3000 });
+  await slide("One");
+  await act({ action: "title_next", graphics: 1, layer: 7 });
+  await slide("Two");
+  await act({ action: "title_call", graphics: 1, layer: 7, function: "back" });
+  await slide("One");
+  await act({ action: "title_next", graphics: 1, layer: 7 });
+  await act({ action: "title_next", graphics: 1, layer: 7 });
+  await slide("Three");
+  await page.waitForFunction(() => window.__reports.some((r) => r.layer === 7 && r.report === "last"), null, { timeout: 3000 });
+  await act({ action: "title_clear", graphics: 1, layer: 7 });
+  pass("text slides: next, back, last");
+
+  // Scoreboard +1 (title_add).
+  await act({ action: "title_load", graphics: 1, layer: 7, template: "lmix/scoreboard",
+    data: { home: "A", away: "B" }, play: true });
+  await act({ action: "title_add", graphics: 1, layer: 7, field: "home_score" });
+  await act({ action: "title_add", graphics: 1, layer: 7, field: "home_score", amount: 2 });
+  frame = await layerFrame(7);
+  await frame.waitForFunction(() => document.querySelector("#home .score").textContent === "3", null, { timeout: 3000 });
+  await act({ action: "title_clear", graphics: 1, layer: 7 });
+  pass("scoreboard: score +1 and +2");
+
   // Countdown: one second, reports zero, and its trigger loads a title.
   await act({ action: "set_title_triggers", graphics: 1, triggers: [{ report: "zero", layer: 3,
     actions: [{ action: "title_load", graphics: 1, layer: 6, template: "lmix/clock", play: true }] }] });

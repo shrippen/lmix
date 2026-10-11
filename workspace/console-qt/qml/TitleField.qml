@@ -21,6 +21,8 @@ RowLayout {
     signal edited(string value)
     signal typed(string value)
     signal bindRequested(var button)
+    /** −1 / +1 on a number field (title_add). */
+    signal stepped(real amount)
 
     spacing: Kirigami.Units.smallSpacing
 
@@ -43,6 +45,18 @@ RowLayout {
             default: return line
             }
         }
+    }
+
+    KanteButton {
+        visible: row.field.kind === "number" && row.boundTo === ""
+        text: "−1"
+        emphasis: KanteButton.Emphasis.Quiet
+        onClicked: row.stepped(-1)
+    }
+    KanteButton {
+        visible: row.field.kind === "number" && row.boundTo === ""
+        text: "+1"
+        onClicked: row.stepped(1)
     }
 
     QQC2.Label {

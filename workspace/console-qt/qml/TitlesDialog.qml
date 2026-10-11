@@ -304,6 +304,11 @@ KanteDialog {
                 boundTo: dialog.boundTo(modelData)
                 onEdited: value => { if (dialog.live) dialog.setField(modelData.id, value) }
                 onTyped: value => { if (!dialog.live) dialog.setField(modelData.id, value) }
+                onStepped: amount => {
+                    if (dialog.loaded)
+                        dialog.act({ action: "title_add", graphics: dialog.ref(), layer: dialog.layer,
+                            field: modelData.id, amount: amount })
+                }
                 onBindRequested: button => {
                     dialog.binding = modelData.id
                     bindMenu.popup(button, 0, button.height)

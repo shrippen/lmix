@@ -1289,6 +1289,13 @@ Grenzen wie bei Input-Auslösern (höchstens 8, keine Automatik in den
 Aktionen). Console: „Triggers…“ im Titel-Dialog (der Auslöser-Dialog der
 Inputs mit Meldung und Ebene statt Ereignis). Browser-Test: Countdown bei
 0 lädt einen Titel.
+**Zahl hochzählen** (B35): `title_add` addiert auf ein Feld (Standard
++1; leer oder keine Zahl zählt als 0), in der Console „−1“/„+1“ an
+Zahlenfeldern, als Kurzbefehl auf jede Taste oder Stream-Deck-Taste.
+**Textfolien** (GFX.21): Vorlage `lmix/text-slides`, Folien durch
+Leerzeilen getrennt; `next` zeigt die nächste, Funktion `back` die
+vorige, die letzte meldet `last`; Layout unten (Stream) oder ganzes Bild
+(Beamer).
 **Offen**: Rendern in strom (GFX.2, nach M7.0), Grafikkanal als Input
 und Overlay (GFX.17), Overlay wartet auf das Ende der Ausblendung
 (GFX.4), eine neu
