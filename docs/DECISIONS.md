@@ -1353,6 +1353,12 @@ den Elementen eines Pfads (`scores/game`, mit `//` irgendwo) eine Zeile
 mit Attributen (`@id`) und Kindelementen als Spalten. Parser `roxmltree`
 0.21 (MIT/Apache-2.0, ohne eigene Abhängigkeiten außer `memchr`), kein
 volles XPath. Console: Art der Quelle wählbar, aus dem Namen vorbelegt.
+**Zeilen nicht im Zustand**: der Zustand geht bei jeder Änderung (auch
+jeder T-Bar-Bewegung) als Ganzes an alle Clients; mit bis zu 10 000
+Zeilen je Datenquelle wären das Megabytes je Ereignis. Er trägt deshalb
+nur Spalten, Zeilenzahl, die gewählte Zeile und eine Revision; die
+Tabelle liefert `GET /api/data/<quelle>`, die Console holt sie, wenn sich
+die Revision ändert.
 **Webseite „Titel“** (WEB.4): `/titles` zeigt die Ebenen eines Kanals
 mit Play/Next/Stop, das Formular der gewählten Ebene (gebundene Felder
 gesperrt) mit „Apply“, die Datensätze der Vorlage und „Save as set“; Werte

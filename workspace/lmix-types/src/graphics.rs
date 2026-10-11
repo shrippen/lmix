@@ -341,7 +341,9 @@ impl DataSourceSpec {
     }
 }
 
-/// A data source as clients see it (DAT.5).
+/// A data source as clients see it (DAT.5). The rows themselves are not
+/// in the state (it goes to every client on every change): they come from
+/// `GET /api/data/<source>`, again when `revision` changes.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct DataSource {
     pub id: InputId,
@@ -349,9 +351,15 @@ pub struct DataSource {
     pub name: String,
     pub spec: DataSourceSpec,
     pub columns: Vec<String>,
-    pub rows: Vec<Vec<String>>,
+    pub row_count: u32,
     /// Selected row, 1-based; 0 while there are no rows.
     pub row: u32,
+    /// Cells of the selected row.
+    #[serde(default)]
+    pub current: Vec<String>,
+    /// Changes whenever the rows are read again.
+    #[serde(default)]
+    pub revision: u64,
     /// Move to the next row this often.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub auto_ms: Option<u32>,
@@ -361,6 +369,14 @@ pub struct DataSource {
     /// Why the file could not be read, if it could not.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+}
+
+/// The rows of a data source (`GET /api/data/<source>`).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct DataTable {
+    pub columns: Vec<String>,
+    pub rows: Vec<Vec<String>>,
+    pub revision: u64,
 }
 
 /// One field of a template, from its manifest.
