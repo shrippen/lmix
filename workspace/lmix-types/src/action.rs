@@ -428,6 +428,33 @@ pub enum Action {
         name: String,
     },
 
+    /// Apply the next saved set to the layer (sets of its template, or
+    /// of none); after the last, the first again.
+    DatasetNext {
+        graphics: InputRef,
+        #[serde(default = "first_layer")]
+        layer: u32,
+    },
+    /// Apply the set before.
+    DatasetPrevious {
+        graphics: InputRef,
+        #[serde(default = "first_layer")]
+        layer: u32,
+    },
+    /// Read sets from a CSV file: a column `name`, the others are fields;
+    /// sets of the same name are replaced.
+    ImportDatasets {
+        path: String,
+        #[serde(default)]
+        template: Option<String>,
+    },
+    /// Write the sets (of `template`, or all) to a CSV file.
+    ExportDatasets {
+        path: String,
+        #[serde(default)]
+        template: Option<String>,
+    },
+
     // ---- Data sources (DAT) ----
     /// Add a data source; lmix-core reads the file and follows changes.
     AddDataSource {

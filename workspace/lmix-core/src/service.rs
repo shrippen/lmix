@@ -791,6 +791,37 @@ impl Service {
         let commands = match action {
             Action::NewShow => sw.replace(Show::default(), None),
             Action::OpenShow { path } => open(&mut sw, path).await?,
+            Action::ImportDatasets { path, template } => {
+                let spec = lmix_types::DataSourceSpec::Csv {
+                    path: path.clone(),
+                    header: true,
+                };
+                let place = datasource::resolve(&spec, sw.path());
+                let table = datasource::read(&spec, &place, &self.http).await;
+                if let Some(error) = table.error {
+                    return Err(ActionError::BadTitle { reason: error });
+                }
+                sw.import_datasets(&table.columns, &table.rows, template)?;
+                Vec::new()
+            }
+            Action::ExportDatasets { path, template } => {
+                let spec = lmix_types::DataSourceSpec::Csv {
+                    path: path.clone(),
+                    header: true,
+                };
+                let datasource::Place::File(file) = datasource::resolve(&spec, sw.path()) else {
+                    return Err(ActionError::BadTitle {
+                        reason: "data sets go to a file, not an address".into(),
+                    });
+                };
+                let (columns, rows) = sw.export_datasets(template.as_deref());
+                datasource::write_csv(&file, &columns, &rows)
+                    .await
+                    .map_err(|e| ActionError::BadTitle {
+                        reason: format!("{path}: {e}"),
+                    })?;
+                Vec::new()
+            }
             Action::SaveShow { path } => {
                 save(&mut sw, path).await?;
                 Vec::new()

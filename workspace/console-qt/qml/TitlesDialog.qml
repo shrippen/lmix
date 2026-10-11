@@ -457,6 +457,22 @@ KanteDialog {
                 placeholderText: qsTr("Set name")
             }
             KanteButton {
+                text: "◀"
+                enabled: dialog.loaded !== null && dialog.datasets.length > 0
+                Accessible.name: qsTr("Previous set")
+                QQC2.ToolTip.visible: hovered
+                QQC2.ToolTip.text: qsTr("Previous set")
+                onClicked: dialog.act({ action: "dataset_previous", graphics: dialog.ref(), layer: dialog.layer })
+            }
+            KanteButton {
+                text: "▶"
+                enabled: dialog.loaded !== null && dialog.datasets.length > 0
+                Accessible.name: qsTr("Next set")
+                QQC2.ToolTip.visible: hovered
+                QQC2.ToolTip.text: qsTr("Next set")
+                onClicked: dialog.act({ action: "dataset_next", graphics: dialog.ref(), layer: dialog.layer })
+            }
+            KanteButton {
                 text: qsTr("Save set")
                 enabled: setName.text.trim() !== ""
                 onClicked: {
@@ -464,6 +480,30 @@ KanteDialog {
                         template: dialog.template ? dialog.template.id : null, data: dialog.formData() })
                     setName.text = ""
                 }
+            }
+        }
+
+        // Sets to and from a CSV table: a column "name", the others are fields.
+        RowLayout {
+            Layout.fillWidth: true
+            visible: dialog.channel !== null && dialog.template !== null
+
+            KanteTextField {
+                id: setFile
+                Layout.fillWidth: true
+                placeholderText: qsTr("CSV file of sets (column name, then fields)")
+            }
+            KanteButton {
+                text: qsTr("Import")
+                enabled: setFile.text.trim() !== ""
+                onClicked: dialog.act({ action: "import_datasets", path: setFile.text.trim(),
+                    template: dialog.template ? dialog.template.id : null })
+            }
+            KanteButton {
+                text: qsTr("Export")
+                enabled: setFile.text.trim() !== ""
+                onClicked: dialog.act({ action: "export_datasets", path: setFile.text.trim(),
+                    template: dialog.template ? dialog.template.id : null })
             }
         }
     }

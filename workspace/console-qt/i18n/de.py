@@ -394,4 +394,9 @@ DE = {
     'Colour %': 'Farbe %',
     'Move time, ms': 'Bewegungszeit, ms',
     'Move': 'Bewegen',
+    'Previous set': 'Voriger Datensatz',
+    'Next set': 'Nächster Datensatz',
+    'CSV file of sets (column name, then fields)': 'CSV-Datei mit Datensätzen (Spalte name, dann Felder)',
+    'Import': 'Importieren',
+    'Export': 'Exportieren',
 }

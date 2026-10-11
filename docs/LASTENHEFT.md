@@ -360,7 +360,7 @@ Funktionsreferenz, kein Code (MIT, `claude.md` Entscheidung 6).
 | GFX.21 | Textfolien: Liste von Texten (Liedtexte, Zitate) aus Datei als Titel, mit Taste weiterschalten; im Programm und auf Beamer (P1) | S | ◐ (Text im Feld, nicht aus Datei; Beamer mit GFX.2) |
 | GFX.20 | Webseiten und Vorlagen spielen H.264 und AAC ab, auch über Media Source Extensions (HLS-Player, Streaming-Einbettungen wie Twitch, YouTube); bevorzugt mit Hardware-Dekodierung. DRM-geschützte Inhalte (EME/Widevine) sind nicht gefordert | M | – |
 | GFX.7 | Titel-Editor in der GUI: Formular aus Manifest oder Datensatz, Felder live oder per "Übernehmen" | M | ✅ |
-| GFX.8 | Datensätze speichern, benennen, abrufen, auflisten (wie CasparCG-Datenspeicher); vor/zurück; CSV ex-/import | S | ◐ (ohne vor/zurück, CSV) |
+| GFX.8 | Datensätze speichern, benennen, abrufen, auflisten (wie CasparCG-Datenspeicher); vor/zurück; CSV ex-/import | S | ✅ |
 | GFX.9 | Countdown/Stoppuhr/Uhr als Vorlagenbaustein: Dauer, Ziel-/Startzeit, Richtung, Format, Start/Stopp/Pause/Anpassen per Aktion, Ereignis bei 0 | S | ✅ |
 | GFX.10 | Laufschrift: Tempo, Richtung, Anhängen vs. Ersetzen | S | ✅ |
 | GFX.11 | Titel als Stinger: Schnittpunkt und Dauer aus Manifest oder Aktion | S | – |

@@ -113,6 +113,29 @@ pub async fn read(spec: &DataSourceSpec, place: &Place, http: &reqwest::Client) 
     }
 }
 
+/// A table as CSV (comma, quotes where needed), written atomically.
+pub async fn write_csv(
+    path: &Path,
+    columns: &[String],
+    rows: &[Vec<String>],
+) -> std::io::Result<()> {
+    let field = |v: &String| {
+        if v.contains([',', '"', '\n', '\r']) {
+            format!("\"{}\"", v.replace('"', "\"\""))
+        } else {
+            v.clone()
+        }
+    };
+    let mut text = String::new();
+    for row in std::iter::once(columns).chain(rows.iter().map(Vec::as_slice)) {
+        text.push_str(&row.iter().map(field).collect::<Vec<_>>().join(","));
+        text.push('\n');
+    }
+    let tmp = path.with_extension("csv.tmp");
+    tokio::fs::write(&tmp, text).await?;
+    tokio::fs::rename(&tmp, path).await
+}
+
 /// One row per line that is not empty, in the column `text`.
 fn lines(text: &str) -> (Vec<String>, Vec<Vec<String>>) {
     let rows = text
@@ -312,6 +335,23 @@ mod tests {
         assert_eq!(rows, [s(&["A", "1", ""]), s(&["B", "", "true"])]);
         assert!(json(r#"{"a":1}"#).is_err());
         assert!(json("[1]").is_err());
+    }
+
+    #[tokio::test]
+    async fn written_csv_reads_back() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("sets.csv");
+        let columns = s(&["name", "text"]);
+        let rows = vec![s(&["A", "says \"hi\", twice"]), s(&["B", "two\nlines"])];
+
+        write_csv(&path, &columns, &rows).await.unwrap();
+        let spec = DataSourceSpec::Csv {
+            path: path.display().to_string(),
+            header: true,
+        };
+        let back = read(&spec, &Place::File(path), &client()).await;
+
+        assert_eq!((back.columns, back.rows), (columns, rows));
     }
 
     #[test]

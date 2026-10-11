@@ -1980,12 +1980,12 @@
       <translation>Funktion %1 der Vorlage aufrufen</translation>
     </message>
     <message>
-      <location line="+11" />
+      <location line="+9" />
       <source>Place</source>
       <translation>Platz</translation>
     </message>
     <message>
-      <location line="+3" />
+      <location line="+9" />
       <source>X %</source>
       <translation>X %</translation>
     </message>
@@ -2015,12 +2015,12 @@
       <translation>Farbe %</translation>
     </message>
     <message>
-      <location line="+29" />
+      <location line="+31" />
       <source>Move time, ms</source>
       <translation>Bewegungszeit, ms</translation>
     </message>
     <message>
-      <location line="+5" />
+      <location line="+6" />
       <source>Move</source>
       <translation>Bewegen</translation>
     </message>
@@ -2045,9 +2045,36 @@
       <translation>Name des Datensatzes</translation>
     </message>
     <message>
-      <location line="+3" />
+      <location line="+5" />
+      <location line="+2" />
+      <source>Previous set</source>
+      <translation>Voriger Datensatz</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <location line="+2" />
+      <source>Next set</source>
+      <translation>Nächster Datensatz</translation>
+    </message>
+    <message>
+      <location line="+4" />
       <source>Save set</source>
       <translation>Datensatz speichern</translation>
+    </message>
+    <message>
+      <location line="+18" />
+      <source>CSV file of sets (column name, then fields)</source>
+      <translation>CSV-Datei mit Datensätzen (Spalte name, dann Felder)</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Import</source>
+      <translation>Importieren</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Export</source>
+      <translation>Exportieren</translation>
     </message>
   </context>
   <context>

@@ -347,7 +347,7 @@ Stand (2026-10-11, Teil A ohne Render-Engine, DECISIONS „M7 Teil A“):
 |---|---|
 | Grafikkanal als Seite, CasparCG-Lebenszyklus, JSON/XML-Daten, Feld hochzählen | ✅ GFX.1, 3, 4 (ohne Overlay-Warten) |
 | Vorlagen eingebaut (Kante-Satz, Textfolien) und aus Ordner, Neuladen | ✅ GFX.12, 13, 14; GFX.19 ohne Vorschaubild; GFX.21 teils |
-| Datensätze, Datenquellen CSV/JSON mit Bindung, Auto-Weiter | ✅ GFX.8 teils, DAT.1–5 teils |
+| Datensätze (vor/zurück, CSV), Datenquellen CSV/JSON/Text/Adresse mit Bindung, Auto-Weiter | ✅ GFX.8, DAT.2, DAT.5; DAT.1, 3, 4 teils |
 | Console: Titel- und Datenquellen-Dialog | ✅ GFX.7 |
 | M7.0 Benchmark, Rendern in strom (GFX.2), Kanal als Input/Overlay | offen (GPU, `cefsrc`/`wpesrc`) |
 | Auslöser auf Titelmeldungen (Countdown bei 0) | ✅ GFX.9 |

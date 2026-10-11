@@ -54,6 +54,8 @@ pub struct TitleRuntime {
     plays: HashMap<(InputId, u32), u64>,
     /// How the last transform change of a layer moves.
     transform_moves: HashMap<(InputId, u32), (u32, Easing)>,
+    /// Data set last applied to a layer (index into the show's sets).
+    dataset_at: HashMap<(InputId, u32), usize>,
     /// When each auto-advancing data source moves on next.
     due: HashMap<InputId, Instant>,
 }
@@ -65,6 +67,7 @@ impl TitleRuntime {
         self.calls.clear();
         self.plays.clear();
         self.transform_moves.clear();
+        self.dataset_at.clear();
         self.due.clear();
     }
 }
@@ -442,9 +445,11 @@ impl Switcher {
                 layer,
                 name,
             } => {
-                let data = self.show.datasets[self.find_dataset(&name)?].data.clone();
-                self.title_mut(&graphics, layer)?.data = data;
+                let at = self.find_dataset(&name)?;
+                self.apply_set(&graphics, layer, at)?;
             }
+            Action::DatasetNext { graphics, layer } => self.step_set(&graphics, layer, false)?,
+            Action::DatasetPrevious { graphics, layer } => self.step_set(&graphics, layer, true)?,
             Action::AddDataSource { spec, name } => {
                 if self.show.data_sources.len() >= DATA_SOURCES {
                     return Err(ActionError::BadDataSource {
@@ -564,6 +569,120 @@ impl Switcher {
             .filter(|t| t.fires_on(layer, report))
             .map(|t| (t.delay_ms, t.actions.clone()))
             .collect()
+    }
+
+    /// Apply the next (or previous) saved set of the layer's template.
+    fn step_set(&mut self, graphics: &InputRef, layer: u32, back: bool) -> Result<(), ActionError> {
+        let template = self.title_mut(graphics, layer)?.template.clone();
+        let id = self.show.graphics[self.find_graphics(graphics)?].id;
+        // Sets of this template or of none, in their order.
+        let fitting: Vec<usize> = (0..self.show.datasets.len())
+            .filter(|&i| {
+                self.show.datasets[i]
+                    .template
+                    .as_ref()
+                    .is_none_or(|t| *t == template)
+            })
+            .collect();
+        if fitting.is_empty() {
+            return Err(ActionError::BadTitle {
+                reason: "no data sets for this template".into(),
+            });
+        }
+        let now = self
+            .titles
+            .dataset_at
+            .get(&(id, layer))
+            .and_then(|at| fitting.iter().position(|i| i == at));
+        let next = match (now, back) {
+            (None, false) => 0,
+            (None, true) => fitting.len() - 1,
+            (Some(n), false) => (n + 1) % fitting.len(),
+            (Some(n), true) => (n + fitting.len() - 1) % fitting.len(),
+        };
+        self.apply_set(graphics, layer, fitting[next])
+    }
+
+    /// Put saved set `at` on the layer and remember it for next/previous.
+    fn apply_set(&mut self, graphics: &InputRef, layer: u32, at: usize) -> Result<(), ActionError> {
+        let data = self.show.datasets[at].data.clone();
+        let id = self.show.graphics[self.find_graphics(graphics)?].id;
+        self.title_mut(graphics, layer)?.data = data;
+        self.titles.dataset_at.insert((id, layer), at);
+        Ok(())
+    }
+
+    /// Sets from a table (GFX.8): the column `name` names a set, the
+    /// others are its fields; a set of the same name is replaced.
+    pub fn import_datasets(
+        &mut self,
+        columns: &[String],
+        rows: &[Vec<String>],
+        template: Option<String>,
+    ) -> Result<usize, ActionError> {
+        let name_at =
+            columns
+                .iter()
+                .position(|c| c == "name")
+                .ok_or_else(|| ActionError::BadTitle {
+                    reason: "the table needs a column \"name\"".into(),
+                })?;
+        let mut count = 0;
+        for row in rows {
+            let name = row.get(name_at).map(|n| n.trim()).unwrap_or_default();
+            if name.is_empty() {
+                continue;
+            }
+            let data = columns
+                .iter()
+                .zip(row)
+                .enumerate()
+                .filter(|(i, (_, value))| *i != name_at && !value.is_empty())
+                .map(|(_, (column, value))| (column.clone(), value.clone()))
+                .collect();
+            self.apply_title(Action::SaveDataset {
+                name: name.to_string(),
+                template: template.clone(),
+                data,
+            })?;
+            count += 1;
+        }
+        Ok(count)
+    }
+
+    /// The sets (of `template`, or all) as a table: `name`, then every
+    /// field any of them has.
+    pub fn export_datasets(&self, template: Option<&str>) -> (Vec<String>, Vec<Vec<String>>) {
+        let sets: Vec<&Dataset> = self
+            .show
+            .datasets
+            .iter()
+            .filter(|d| template.is_none_or(|t| d.template.as_deref() == Some(t)))
+            .collect();
+        let mut fields: Vec<String> = Vec::new();
+        for set in &sets {
+            for field in set.data.keys() {
+                if !fields.contains(field) {
+                    fields.push(field.clone());
+                }
+            }
+        }
+        let columns = std::iter::once("name".to_string())
+            .chain(fields.iter().cloned())
+            .collect();
+        let rows = sets
+            .iter()
+            .map(|set| {
+                std::iter::once(set.name.clone())
+                    .chain(
+                        fields
+                            .iter()
+                            .map(|f| set.data.get(f).cloned().unwrap_or_default()),
+                    )
+                    .collect()
+            })
+            .collect();
+        (columns, rows)
     }
 
     /// Id of the graphics channel `graphics` names.
@@ -989,6 +1108,56 @@ mod tests {
         for bad in ["", "alert(1)", "1go", "a b"] {
             assert!(call(&mut sw, bad).is_err(), "{bad}");
         }
+    }
+
+    #[test]
+    fn datasets_step_and_go_through_tables() {
+        let mut sw = switcher();
+        load(&mut sw, 1);
+        let columns: Vec<String> = ["name", "name_field", "role"].map(String::from).to_vec();
+        let rows: Vec<Vec<String>> = vec![
+            ["A", "Name A", "Host"].map(String::from).to_vec(),
+            ["B", "Name B", ""].map(String::from).to_vec(),
+            ["", "skipped", ""].map(String::from).to_vec(),
+        ];
+        let template = Some("lmix/name-role".to_string());
+        assert_eq!(sw.import_datasets(&columns, &rows, template.clone()), Ok(2));
+        // Another template's set is not stepped through.
+        sw.apply(Action::SaveDataset {
+            name: "Other".into(),
+            template: Some("lmix/clock".into()),
+            data: TitleData::new(),
+        })
+        .unwrap();
+
+        let step = |sw: &mut Switcher, back: bool| {
+            let graphics = InputRef::Number(1);
+            sw.apply(if back {
+                Action::DatasetPrevious { graphics, layer: 1 }
+            } else {
+                Action::DatasetNext { graphics, layer: 1 }
+            })
+            .unwrap();
+            layer(sw, 1)
+                .data
+                .get("name_field")
+                .cloned()
+                .unwrap_or_default()
+        };
+        assert_eq!(step(&mut sw, false), "Name A");
+        assert_eq!(
+            layer(&sw, 1).data.get("role").map(String::as_str),
+            Some("Host")
+        );
+        assert_eq!(step(&mut sw, false), "Name B");
+        assert_eq!(step(&mut sw, false), "Name A", "after the last the first");
+        assert_eq!(step(&mut sw, true), "Name B");
+
+        let (columns, rows) = sw.export_datasets(template.as_deref());
+        assert_eq!(columns, ["name", "name_field", "role"]);
+        assert_eq!(rows[1], ["B", "Name B", ""]);
+        assert_eq!(sw.export_datasets(None).1.len(), 3);
+        assert!(sw.import_datasets(&["x".to_string()], &[], None).is_err());
     }
 
     #[test]

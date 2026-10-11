@@ -372,6 +372,8 @@ impl Switcher {
             | Action::SaveDataset { .. }
             | Action::RemoveDataset { .. }
             | Action::ApplyDataset { .. }
+            | Action::DatasetNext { .. }
+            | Action::DatasetPrevious { .. }
             | Action::AddDataSource { .. }
             | Action::RemoveDataSource { .. }
             | Action::DataRow { .. }
@@ -528,7 +530,12 @@ impl Switcher {
                 channel,
                 duration_ms,
             } => self.overlay_out(channel, duration_ms),
-            Action::NewShow | Action::SaveShow { .. } | Action::OpenShow { .. } => Ok(Vec::new()),
+            // The service reads and writes these files.
+            Action::NewShow
+            | Action::SaveShow { .. }
+            | Action::OpenShow { .. }
+            | Action::ImportDatasets { .. }
+            | Action::ExportDatasets { .. } => Ok(Vec::new()),
         }
     }
 

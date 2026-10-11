@@ -1328,6 +1328,12 @@ Animation. Die Schriften der Animation werden vor dem Messen geladen
 `lmix/lottie-lower-third` (erzeugt von
 `scripts/make-lottie-lower-third.py`). Nativer Lottie-Input (ThorVG)
 bleibt später.
+**Datensätze vor/zurück, CSV** (GFX.8): `dataset_next` /
+`dataset_previous` gehen durch die Sätze der Vorlage einer Ebene (und die
+ohne Vorlage), nach dem letzten wieder zum ersten; `import_datasets`
+liest eine CSV-Tabelle (Spalte `name`, übrige Spalten Felder; gleiche
+Namen ersetzt), `export_datasets` schreibt sie zurück (atomar, Pfade
+relativ zur Show-Datei). Console: ◀/▶ und Import/Export im Titel-Dialog.
 **Offen**: Rendern in strom (GFX.2, nach M7.0), Grafikkanal als Input
 und Overlay (GFX.17), Overlay wartet auf das Ende der Ausblendung
 (GFX.4), eine neu

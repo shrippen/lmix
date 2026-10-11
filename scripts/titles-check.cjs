@@ -223,6 +223,19 @@ async function act(action) {
   await frame.waitForFunction(() => document.getElementById("text").textContent === "(Role C)", null, { timeout: 5000 });
   pass("data source: edited file reaches the title");
 
+  // Data sets from a CSV table, stepped through, written back (GFX.8).
+  fs.writeFileSync(path.join(work, "sets.csv"), "name,headline\nOne,Set one\nTwo,Set two\n");
+  await act({ action: "import_datasets", path: path.join(work, "sets.csv"), template: "lmix/lower-third" });
+  await act({ action: "title_bind", graphics: 1, layer: 5, field: "headline", binding: null });
+  await act({ action: "dataset_next", graphics: 1, layer: 5 });
+  await frame.waitForFunction(() => document.getElementById("head").textContent === "Set one", null, { timeout: 3000 });
+  await act({ action: "dataset_previous", graphics: 1, layer: 5 });
+  await frame.waitForFunction(() => document.getElementById("head").textContent === "Set two", null, { timeout: 3000 });
+  await act({ action: "export_datasets", path: path.join(work, "out.csv"), template: "lmix/lower-third" });
+  const exported = fs.readFileSync(path.join(work, "out.csv"), "utf8");
+  if (exported !== "name,headline\nOne,Set one\nTwo,Set two\n") fail("exported sets: " + JSON.stringify(exported));
+  pass("data sets: CSV in, next and previous, CSV out");
+
   // A source at an address (read again every 10 s) and a text source.
   let sheet = "name,role\nName A,Role X\n";
   const http = require("http");
