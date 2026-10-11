@@ -92,30 +92,28 @@ async fn bytes(place: &Place, http: &reqwest::Client) -> Result<Vec<u8>, String>
 
 /// Columns and rows of the source, or why it could not be read.
 pub async fn read(spec: &DataSourceSpec, place: &Place, http: &reqwest::Client) -> Rows {
-    let parsed = bytes(place, http).await.and_then(|bytes| {
-        if let DataSourceSpec::Sheet {
-            sheet,
-            header,
-            transpose,
-            ..
-        } = spec
-        {
-            return spreadsheet(bytes, sheet.as_deref())
-                .map(|records| table(records, *header, *transpose));
+    let bytes = bytes(place, http).await;
+    let parsed = if let DataSourceSpec::Sheet {
+        sheet,
+        header,
+        transpose,
+        ..
+    } = spec
+    {
+        // Unpacking a workbook takes a while: off the runtime.
+        let (sheet, header, transpose) = (sheet.clone(), *header, *transpose);
+        match bytes {
+            Ok(bytes) => tokio::task::spawn_blocking(move || {
+                spreadsheet(bytes, sheet.as_deref())
+                    .map(|records| table(blank_rows_dropped(records), header, transpose))
+            })
+            .await
+            .unwrap_or_else(|e| Err(format!("reading the spreadsheet failed: {e}"))),
+            Err(e) => Err(e),
         }
-        let text = String::from_utf8_lossy(&bytes);
-        let text = text.strip_prefix('\u{feff}').unwrap_or(&text);
-        match spec {
-            DataSourceSpec::Csv {
-                header, transpose, ..
-            } => Ok(csv(text, *header, *transpose)),
-            DataSourceSpec::Sheet { .. } => unreachable!("read above"),
-            DataSourceSpec::Json { .. } => json(text),
-            DataSourceSpec::Text { paragraphs, .. } => Ok(lines(text, *paragraphs)),
-            DataSourceSpec::Feed { .. } => feed(text),
-            DataSourceSpec::Xml { rows, .. } => xml(text, rows),
-        }
-    });
+    } else {
+        bytes.and_then(|bytes| parse_text(spec, &bytes))
+    };
     match parsed {
         Ok((columns, rows)) => Rows {
             columns,
@@ -126,6 +124,25 @@ pub async fn read(spec: &DataSourceSpec, place: &Place, http: &reqwest::Client) 
             error: Some(error),
             ..Rows::default()
         },
+    }
+}
+
+/// Columns and rows of a source in text.
+fn parse_text(
+    spec: &DataSourceSpec,
+    bytes: &[u8],
+) -> Result<(Vec<String>, Vec<Vec<String>>), String> {
+    let text = String::from_utf8_lossy(bytes);
+    let text = text.strip_prefix('\u{feff}').unwrap_or(&text);
+    match spec {
+        DataSourceSpec::Csv {
+            header, transpose, ..
+        } => Ok(csv(text, *header, *transpose)),
+        DataSourceSpec::Sheet { .. } => Err("a spreadsheet is no text".into()),
+        DataSourceSpec::Json { .. } => json(text),
+        DataSourceSpec::Text { paragraphs, .. } => Ok(lines(text, *paragraphs)),
+        DataSourceSpec::Feed { .. } => feed(text),
+        DataSourceSpec::Xml { rows, .. } => xml(text, rows),
     }
 }
 
@@ -310,6 +327,9 @@ fn spreadsheet(bytes: Vec<u8>, name: Option<&str>) -> Result<Vec<Vec<String>>, S
         .map_err(|e| format!("sheet {name}: {e}"))?;
     let cell = |c: &Data| match c {
         Data::DateTime(d) => excel_date(d.as_f64()),
+        // ODS: ISO date and time, durations as `PT18H30M00S`.
+        Data::DateTimeIso(t) => t.replacen('T', " ", 1),
+        Data::DurationIso(t) => iso_duration(t).unwrap_or_else(|| t.clone()),
         _ => c.to_string(),
     };
     Ok(range.rows().map(|r| r.iter().map(cell).collect()).collect())
@@ -386,7 +406,9 @@ fn excel_date(serial: f64) -> String {
         let s = (serial * 86_400.0).round() as i64;
         return format!("{:02}:{:02}:{:02}", s / 3600, s / 60 % 60, s % 60);
     }
-    let days = serial.floor() as i64;
+    // Excel counts a 29 February 1900 that never was: before it, a day
+    // more.
+    let days = serial.floor() as i64 + i64::from(serial < 60.0);
     let seconds = ((serial - serial.floor()) * 86_400.0).round() as i64;
     let (days, seconds) = (days + seconds / 86_400, seconds % 86_400);
     // Days since 1970-01-01 to a civil date (Howard Hinnant's algorithm).
@@ -408,20 +430,59 @@ fn excel_date(serial: f64) -> String {
     }
 }
 
+/// `PT18H30M00S` (ODS) as `18:30:00`.
+fn iso_duration(text: &str) -> Option<String> {
+    let rest = text.strip_prefix("PT")?;
+    let (mut h, mut m, mut s) = (0.0, 0.0, 0.0);
+    let mut number = String::new();
+    for c in rest.chars() {
+        match c {
+            'H' | 'M' | 'S' => {
+                let v: f64 = number.parse().ok()?;
+                match c {
+                    'H' => h = v,
+                    'M' => m = v,
+                    _ => s = v,
+                }
+                number.clear();
+            }
+            _ => number.push(c),
+        }
+    }
+    if !number.is_empty() {
+        return None;
+    }
+    let total = (h * 3600.0 + m * 60.0 + s).round() as i64;
+    Some(format!(
+        "{:02}:{:02}:{:02}",
+        total / 3600,
+        total / 60 % 60,
+        total % 60
+    ))
+}
+
 /// Column names (from the first row, or numbered) and rows.
 fn csv(text: &str, header: bool, transpose: bool) -> (Vec<String>, Vec<Vec<String>>) {
     table(records(text, separator(text)), header, transpose)
 }
 
+/// Rows with something in them: a workbook's used range has empty rows
+/// in between. A CSV line `;;;` stays a row, so a saved row number keeps
+/// pointing at the same entry.
+fn blank_rows_dropped(mut rows: Vec<Vec<String>>) -> Vec<Vec<String>> {
+    rows.retain(|r| r.iter().any(|c| !c.trim().is_empty()));
+    rows
+}
+
 /// Records as a table: turned (rows to columns) if asked, then the
-/// column names from the first row, or numbered; empty rows left out.
+/// column names from the first row, or numbered.
 fn table(
     mut rows: Vec<Vec<String>>,
     header: bool,
     transpose: bool,
 ) -> (Vec<String>, Vec<Vec<String>>) {
-    rows.retain(|r| r.iter().any(|c| !c.trim().is_empty()));
     if transpose {
+        rows = blank_rows_dropped(rows);
         let width = rows.iter().map(Vec::len).max().unwrap_or(0);
         rows = (0..width)
             .map(|i| {
@@ -430,7 +491,7 @@ fn table(
                     .collect()
             })
             .collect();
-        rows.retain(|r: &Vec<String>| r.iter().any(|c| !c.trim().is_empty()));
+        rows = blank_rows_dropped(rows);
     }
     let width = rows.iter().map(Vec::len).max().unwrap_or(0);
     let columns: Vec<String> = if header && !rows.is_empty() {
@@ -585,10 +646,24 @@ mod tests {
     }
 
     #[test]
+    fn ods_durations() {
+        assert_eq!(iso_duration("PT18H30M00S").as_deref(), Some("18:30:00"));
+        assert_eq!(iso_duration("PT1H0M0.5S").as_deref(), Some("01:00:01"));
+        assert_eq!(iso_duration("P1D"), None);
+    }
+
+    #[test]
+    fn blank_csv_rows_stay_rows() {
+        // A spacer line keeps the rows after it where they were.
+        assert_eq!(csv("a;b\n1;2\n;\n3;4", true, false).1.len(), 3);
+    }
+
+    #[test]
     fn excel_dates() {
         assert_eq!(excel_date(46_296.0), "2026-10-01");
         assert_eq!(excel_date(46_296.5), "2026-10-01 12:00:00");
-        assert_eq!(excel_date(1.0), "1899-12-31");
+        assert_eq!(excel_date(1.0), "1900-01-01");
+        assert_eq!(excel_date(61.0), "1900-03-01");
         assert_eq!(excel_date(0.75), "18:00:00");
     }
 

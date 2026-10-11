@@ -659,7 +659,8 @@ Kirigami.ApplicationWindow {
                 core: backend
                 show: root.show
                 act: root.act
-                inputs: root.inputs.filter(i => root.collapsedIds.indexOf(i.id) >= 0)
+                inputs: root.inputs
+                collapsed: root.collapsedIds
                 onExpandRequested: id => root.setCollapsed(id, false)
             }
 

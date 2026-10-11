@@ -264,6 +264,11 @@ async function act(action) {
   await verse("First verse\nline two");
   await act({ action: "data_next", source: "Song" });
   await verse("Chorus\nline two");
+  // Back and forth within one fade: it ends on the slide the data holds.
+  await act({ action: "data_previous", source: "Song" });
+  await act({ action: "data_next", source: "Song" });
+  await new Promise((r) => setTimeout(r, 1500));
+  await verse("Chorus\nline two");
   await act({ action: "title_clear", graphics: 1, layer: 7 });
   pass("text slides from a file: a paragraph per slide");
 

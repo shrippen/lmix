@@ -1508,13 +1508,20 @@ ohne Einrasten das Raster, Alt kollidierte mit KWin, und Rückgängig
   XLSM, XLS und ODS über `calamine` (ohne Standard-Features, kein
   `chrono`), ein Blatt (`sheet`, sonst das erste), sonst wie CSV
   (Kopfzeile). Datumszellen werden ISO-Daten (`2026-10-01`, mit Uhrzeit,
-  wenn eine dabei ist); Dateien mit dem 1904-Kalender (altes Excel für
-  Mac) lägen vier Jahre daneben, `calamine` verrät ihn ohne `dates`
-  nicht. Ein Google Sheet als XLSX-Export geht auch (`format=xlsx`).
+  wenn eine dabei ist, Zeiten unter einem Tag als `18:30:00`, aus ODS
+  ebenso). Grenzen: Dateien mit dem 1904-Kalender (altes Excel für Mac)
+  lägen vier Jahre daneben und XLSX-Dauern ab 24 h (`[h]:mm`) erscheinen
+  als Datum, beides verrät `calamine` ohne `dates` nicht; verbundene
+  Zellen haben den Wert nur oben links; Zahlenformate (Prozent, Währung)
+  gehen verloren, es kommt die Zahl. Tabellen werden im Hintergrund und
+  außerhalb der Laufzeit gelesen (Entpacken dauert), wie Adressen. Ein
+  Google Sheet als XLSX-Export geht auch (`format=xlsx`).
 - **Zeilen zu Spalten** (DAT.3): `transpose` bei CSV und Tabellen dreht
   die Tabelle vor der Kopfzeile: Namen in der ersten Spalte, je weitere
   Spalte ein Eintrag (Formulare, Spielberichte). Ganz leere Zeilen zählen
-  nicht als Eintrag (Tabellen haben sie oft im benutzten Bereich).
+  bei Tabellen und beim Drehen nicht (Tabellen haben sie oft im benutzten
+  Bereich); in CSV bleibt eine Zeile `;;;` eine Zeile wie bisher, damit
+  eine gespeicherte Zeilennummer auf denselben Eintrag zeigt.
 - **Textfolien aus Datei** (GFX.21): `text` mit `paragraphs` macht jeden
   Block zwischen Leerzeilen zu einem Eintrag, Zeilenumbrüche bleiben.
   An das Feld `text` der Vorlage „Textfolien“ gebunden zeigt sie eine
@@ -1534,4 +1541,13 @@ ohne Einrasten das Raster, Alt kollidierte mit KWin, und Rückgängig
 **Geprüft**: Tests für Tabellen (XLSX und ODS aus LibreOffice in
 `lmix-core/testdata`), Datum, Drehen, Absätze; `scripts/test-titles.sh`
 mit Folien aus Datei; Datenquellen-Dialog und Einklappen auf Xvfb.
+
+**Review**: ein Durchgang fand: schnelles Vor und Zurück in den Folien
+endete auf der falschen (eine laufende Blende wurde nicht ersetzt; jetzt
+mit Test in `test-titles.sh`); CSV verlor Leerzeilen (siehe oben);
+ODS-Zeiten kamen roh (`PT18H30M00S`), Excel-Daten vor dem 1. März 1900
+lagen einen Tag daneben; große Tabellen hielten den Mischer auf; die
+eingeklappten Knöpfe wurden bei jeder Zustandsmeldung neu gebaut (ein
+offenes Menü ging zu; jetzt ein Modell mit Schlüsseln wie bei den
+Kacheln). Alle behoben.
 

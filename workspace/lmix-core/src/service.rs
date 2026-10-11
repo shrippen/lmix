@@ -185,13 +185,13 @@ impl Service {
     }
 
     /// Read the data sources never read (just added, or a show just
-    /// opened). Files at once (local, quick); addresses in the background,
-    /// so a slow server never holds up switching: the switcher is locked
-    /// while this runs.
+    /// opened). Text files at once (local, quick); addresses and
+    /// spreadsheets (unpacking takes a while) in the background, so they
+    /// never hold up switching: the switcher is locked while this runs.
     async fn read_new_sources(self: &Arc<Self>, sw: &mut Switcher) {
         for (id, spec) in sw.unread_sources() {
             let place = datasource::resolve(&spec, sw.path());
-            if place.is_url() {
+            if place.is_url() || matches!(spec, lmix_types::DataSourceSpec::Sheet { .. }) {
                 if self.fetching.lock().expect("fetching lock").insert(id) {
                     tokio::spawn(self.clone().fetch_new_source(id, spec, place));
                 }
@@ -206,13 +206,15 @@ impl Service {
         }
     }
 
-    /// A data source at an address, fetched without the switcher locked.
+    /// A data source at an address or a spreadsheet, read without the
+    /// switcher locked.
     async fn fetch_new_source(
         self: Arc<Self>,
         id: InputId,
         spec: lmix_types::DataSourceSpec,
         place: datasource::Place,
     ) {
+        let seen = self.seen(&place).await;
         let rows = datasource::read(&spec, &place, &self.http).await;
         let mut sw = self.switcher.lock().await;
         // Gone or read meanwhile (the show changed): nothing to do.
@@ -221,7 +223,7 @@ impl Service {
             self.source_times
                 .lock()
                 .expect("source times lock")
-                .insert(id, Seen::Url(Instant::now()));
+                .insert(id, seen);
             self.publish(&sw);
         }
         self.fetching.lock().expect("fetching lock").remove(&id);

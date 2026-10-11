@@ -15,12 +15,23 @@ Flow {
     required property var core
     required property var show
     required property var act
-    /** lmix `Input`s that are collapsed, in input order. */
+    /** lmix `Input`s of the show. */
     required property var inputs
+    /** Ids of the collapsed ones. */
+    required property var collapsed
     signal expandRequested(string id)
 
+    // Keyed: buttons (and an open menu) survive state updates.
+    KeyedModel { id: keys }
+    function sync() {
+        keys.sync(inputs.filter(i => collapsed.indexOf(i.id) >= 0).map(i => i.id))
+    }
+    onInputsChanged: sync()
+    onCollapsedChanged: sync()
+    Component.onCompleted: sync()
+
     spacing: Kirigami.Units.smallSpacing
-    visible: inputs.length > 0
+    visible: keys.count > 0
 
     KanteSectionLabel {
         height: Kirigami.Units.gridUnit * 2
@@ -29,11 +40,12 @@ Flow {
     }
 
     Repeater {
-        model: bar.inputs
+        model: keys
 
         Item {
             id: entry
-            required property var modelData
+            required property string key
+            readonly property var modelData: bar.inputs.find(i => i.id === key) || ({ id: key, number: 0, name: "" })
             readonly property bool onProgram: bar.show !== null && bar.show.program === modelData.id
             readonly property bool onPreview: bar.show !== null && bar.show.preview === modelData.id
 
