@@ -140,6 +140,14 @@ impl Service {
         self.rescan_templates().await;
     }
 
+    /// All rows of a data source.
+    pub async fn data_table(
+        &self,
+        source: &InputRef,
+    ) -> Result<lmix_types::DataTable, ActionError> {
+        self.switcher.lock().await.data_table(source)
+    }
+
     /// Built-in and folder templates (GFX.19).
     pub fn templates(&self) -> Vec<Template> {
         self.templates.lock().expect("templates lock").clone()

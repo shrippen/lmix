@@ -15,6 +15,7 @@
 //! | `GET /api/pictures/program` | program picture, JPEG |
 //! | `GET /api/pictures/inputs/{input}` | input picture (number, name, id, `preview`, `program`) |
 //! | `GET /api/templates` | title templates: built-in and from the folder (GFX.19) |
+//! | `GET /api/data/{source}` | all rows of a data source (number, name or id) |
 //! | `GET /titles/{path}` | template files, the title SDK, Kante's tokens and fonts |
 //! | `GET /graphics/{graphics}` | the page a graphics channel renders (number, name or id) |
 //! | `GET /api/events` | WebSocket: state first, then every event |
@@ -59,6 +60,7 @@ pub fn router(service: Arc<Service>) -> Router {
         .route("/api/live/program", get(live_program))
         .route("/api/live/inputs/{input}", get(live_input))
         .route("/api/templates", get(templates))
+        .route("/api/data/{source}", get(data_table))
         .route("/titles/{*path}", get(title_file))
         .route("/graphics/{graphics}", get(graphics_page))
         .merge(crate::web::routes())
@@ -201,6 +203,17 @@ fn picture_response(picture: Result<Vec<u8>, EngineError>) -> Response {
             .into_response(),
         Err(EngineError::NoPictures) => StatusCode::NOT_FOUND.into_response(),
         Err(error) => (StatusCode::BAD_GATEWAY, error.to_string()).into_response(),
+    }
+}
+
+async fn data_table(State(service): State<Arc<Service>>, Path(source): Path<String>) -> Response {
+    let source = match source.parse::<u32>() {
+        Ok(number) => InputRef::Number(number),
+        Err(_) => InputRef::Text(source),
+    };
+    match service.data_table(&source).await {
+        Ok(table) => Json(table).into_response(),
+        Err(error) => error_response(error),
     }
 }
 

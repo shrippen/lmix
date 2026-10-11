@@ -23,9 +23,9 @@ pub mod state;
 pub use action::{Action, ActionError, Effect, StingerSpec, TransitionSlot};
 pub use automation::{Cue, CueList, Trigger, TriggerOn};
 pub use graphics::{
-    BindingSpec, Blend, DataFormat, DataSource, DataSourceSpec, Dataset, Easing, FieldBinding,
-    FieldKind, Graphics, LayerTransform, Template, TemplateField, TemplateTexts, TitleCall,
-    TitleData, TitleLayer, TitlePhase, TitleTrigger,
+    BindingSpec, Blend, DataFormat, DataSource, DataSourceSpec, DataTable, Dataset, Easing,
+    FieldBinding, FieldKind, Graphics, LayerTransform, Template, TemplateField, TemplateTexts,
+    TitleCall, TitleData, TitleLayer, TitlePhase, TitleTrigger,
 };
 pub use input::{
     AuxBus, ChannelStrip, Compressor, Device, DeviceKind, Eq4, Gate, Hpf, Ingest, Input,

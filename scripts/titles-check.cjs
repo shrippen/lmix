@@ -238,7 +238,10 @@ async function act(action) {
   await act({ action: "add_data_source", spec: { kind: "csv", path: csv }, name: "Guests" });
   let state = await act({ action: "title_bind", graphics: 1, layer: 5, field: "text",
     binding: { source: "Guests", column: "role", format: "({0})" } });
-  if (state.data_sources[0].rows.length !== 2) fail("CSV rows: " + JSON.stringify(state.data_sources[0]));
+  if (state.data_sources[0].row_count !== 2) fail("CSV rows: " + JSON.stringify(state.data_sources[0]));
+  const table = await (await fetch(base + "/api/data/Guests")).json();
+  if (table.rows[1][1] !== "Role B") fail("table: " + JSON.stringify(table));
+  if ("rows" in state.data_sources[0]) fail("rows went out with the state");
   frame = await layerFrame(5);
   await frame.waitForFunction(() => document.getElementById("text").textContent === "(Role A)", null, { timeout: 3000 });
   await act({ action: "data_next", source: "Guests" });
@@ -285,7 +288,8 @@ async function act(action) {
   for (let i = 0; ; i++) {
     const s = await (await fetch(base + "/api/state")).json();
     const news = s.data_sources.find((d) => d.name === "News");
-    if (news && news.rows.map((r) => r[0]).join("|") === "News one|News two") break;
+    const rows = news && news.row_count === 2 ? (await (await fetch(base + "/api/data/News")).json()).rows : [];
+    if (rows.map((r) => r[0]).join("|") === "News one|News two") break;
     if (i > 50) fail("feed: " + JSON.stringify(news));
     await new Promise((r) => setTimeout(r, 100));
   }
@@ -294,8 +298,8 @@ async function act(action) {
   const notes = path.join(work, "notes.txt");
   fs.writeFileSync(notes, "first\n\nsecond\n");
   state = await act({ action: "add_data_source", spec: { kind: "text", path: notes }, name: "Notes" });
-  const textSource = state.data_sources.find((d) => d.name === "Notes");
-  if (JSON.stringify(textSource.rows) !== JSON.stringify([["first"], ["second"]])) fail("text rows: " + JSON.stringify(textSource));
+  const notes_ = await (await fetch(base + "/api/data/Notes")).json();
+  if (JSON.stringify(notes_.rows) !== JSON.stringify([["first"], ["second"]])) fail("text rows: " + JSON.stringify(notes_));
   pass("text source: one row per line");
 
   // A page that loads while a countdown runs goes on from there (B37).

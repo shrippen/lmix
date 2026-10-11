@@ -16,6 +16,31 @@ KanteDialog {
     required property var act
     /** `ShowState.data_sources`. */
     required property var sources
+    /** lmix-core's address: the rows come from `/api/data/<source>`. */
+    required property string coreUrl
+    /** Rows of the shown source (lmix `DataTable`). */
+    property var table: ({ columns: [], rows: [], revision: -1, source: "" })
+
+    /** Fetch the rows again when the source or its revision changed. */
+    function loadTable() {
+        const s = dialog.source
+        if (!s || !dialog.visible || (dialog.table.source === s.id && dialog.table.revision === s.revision))
+            return
+        const request = new XMLHttpRequest()
+        request.onreadystatechange = function () {
+            if (request.readyState !== XMLHttpRequest.DONE || request.status !== 200)
+                return
+            const t = JSON.parse(request.responseText)
+            t.source = s.id
+            dialog.table = t
+        }
+        request.open("GET", dialog.coreUrl + "/api/data/" + s.id)
+        request.send()
+    }
+    onSourceChanged: loadTable()
+    onOpened: loadTable()
+    readonly property var revision: source ? source.revision : -1
+    onRevisionChanged: loadTable()
 
     property int current: 0
     readonly property var source: sources.length > 0 ? sources[Math.min(current, sources.length - 1)] : null
@@ -129,7 +154,7 @@ KanteDialog {
             id: scroll
             Layout.fillWidth: true
             Layout.preferredHeight: Math.min(rows.implicitHeight, Kirigami.Units.gridUnit * 16)
-            visible: dialog.source !== null && dialog.source.rows.length > 0
+            visible: dialog.source !== null && dialog.source.row_count > 0
 
             ColumnLayout {
                 id: rows
@@ -155,7 +180,7 @@ KanteDialog {
                 }
 
                 Repeater {
-                    model: dialog.source ? dialog.source.rows : []
+                    model: dialog.source && dialog.table.source === dialog.source.id ? dialog.table.rows : []
 
                     Rectangle {
                         id: rowEntry
@@ -207,7 +232,7 @@ KanteDialog {
             KanteButton {
                 text: qsTr("Next")
                 emphasis: KanteButton.Emphasis.Primary
-                enabled: dialog.source !== null && (dialog.source.row < dialog.source.rows.length || dialog.source.loop_rows)
+                enabled: dialog.source !== null && (dialog.source.row < dialog.source.row_count || dialog.source.loop_rows)
                 onClicked: dialog.act({ action: "data_next", source: dialog.source.number })
             }
             Item { Layout.fillWidth: true }

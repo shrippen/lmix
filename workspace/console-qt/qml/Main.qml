@@ -260,6 +260,7 @@ Kirigami.ApplicationWindow {
         parent: QQC2.Overlay.overlay
         anchors.centerIn: parent
         act: root.act
+        coreUrl: backend.coreUrl
         sources: root.show && root.show.data_sources ? root.show.data_sources : []
     }
 

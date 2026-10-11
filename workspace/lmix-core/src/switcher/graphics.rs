@@ -45,8 +45,10 @@ pub struct Rows {
 pub struct TitleRuntime {
     /// Templates by id (built in and from the folder).
     templates: HashMap<String, TemplateRef>,
-    /// Rows per data source.
+    /// Rows per data source, and their revision.
     rows: HashMap<InputId, Rows>,
+    revisions: HashMap<InputId, u64>,
+    rows_seq: u64,
     /// Last function call per graphics channel and layer.
     calls: HashMap<(InputId, u32), TitleCall>,
     call_seq: u64,
@@ -81,6 +83,7 @@ impl TitleRuntime {
     /// After a new or opened show: nothing of the old one is kept.
     pub fn reset(&mut self) {
         self.rows.clear();
+        self.revisions.clear();
         self.calls.clear();
         self.plays.clear();
         self.transform_moves.clear();
@@ -157,6 +160,19 @@ impl Switcher {
             };
         }
         self.titles.rows.insert(source, rows);
+        self.titles.rows_seq += 1;
+        self.titles.revisions.insert(source, self.titles.rows_seq);
+    }
+
+    /// All rows of the data source `source` names.
+    pub fn data_table(&self, source: &InputRef) -> Result<lmix_types::DataTable, ActionError> {
+        let id = self.show.data_sources[self.find_source(source)?].id;
+        let rows = self.titles.rows.get(&id);
+        Ok(lmix_types::DataTable {
+            columns: rows.map(|r| r.columns.clone()).unwrap_or_default(),
+            rows: rows.map(|r| r.rows.clone()).unwrap_or_default(),
+            revision: self.titles.revisions.get(&id).copied().unwrap_or(0),
+        })
     }
 
     /// Rows of a data source as last read.
@@ -522,6 +538,7 @@ impl Switcher {
                     }
                 }
                 self.titles.rows.remove(&removed.id);
+                self.titles.revisions.remove(&removed.id);
                 self.titles.due.remove(&removed.id);
             }
             Action::DataRow { source, row } => {
@@ -848,8 +865,13 @@ impl Switcher {
                     name: s.name.clone(),
                     spec: s.spec.clone(),
                     columns: rows.map(|r| r.columns.clone()).unwrap_or_default(),
-                    rows: rows.map(|r| r.rows.clone()).unwrap_or_default(),
+                    row_count: rows.map_or(0, |r| r.rows.len() as u32),
                     row: s.row,
+                    current: rows
+                        .and_then(|r| (s.row as usize).checked_sub(1).and_then(|i| r.rows.get(i)))
+                        .cloned()
+                        .unwrap_or_default(),
+                    revision: self.titles.revisions.get(&s.id).copied().unwrap_or(0),
                     auto_ms: s.auto_ms,
                     loop_rows: s.loop_rows,
                     error: rows.and_then(|r| r.error.clone()),
