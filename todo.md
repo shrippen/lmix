@@ -57,4 +57,4 @@ enabled: !(/\&[^\&]/.test(control.text))
 - [x] Aktion in den ersten 2 s nach Engine-Neustart antwortet 502 (2026-10-09: neue Engine erkannt, Aktion geht in die Show, Restore sofort).
 - [ ] Konstantes Bildalter 54 ms bei einigen Kacheln klären.
 - [ ] M7 Rest (DECISIONS „M7 Teil A“): Grafikkanal als Input und Overlay (GFX.2, GFX.17, nach M7.0), Overlay wartet auf die Ausblendung (GFX.4), Titel als Stinger (GFX.11), Textfolien aus Datei (GFX.21), XLSX/ODS und Sheets-API (DAT.1), Zeilen zu Spalten (DAT.3), M7-Abnahme mit 5 Personas.
-- [ ] Lastenheft-Stand der M6/M8-Punkte (AUT.*, API.*, WEB.*) nachtragen, steht noch auf „–“.
+- [x] Lastenheft-Stand der M6/M8-Punkte (AUT.*, API.*, WEB.*, OPS.*) nachgetragen (2026-10-11).

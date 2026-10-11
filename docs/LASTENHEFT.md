@@ -387,20 +387,20 @@ Funktionsreferenz, kein Code (MIT, `claude.md` Entscheidung 6).
 
 | ID | Anforderung | Prio | Stand |
 |---|---|---|---|
-| AUT.1 | Tastenbelegung: Tastatur, MIDI (Note, CC, Wert, Jog-Typen), HID-Controller (X-keys, Shuttle), Gamepad (inkl. Druck/Analog), Stream-Deck-Anbindung | S | ◐ (Tasten 1–8, Take) |
-| AUT.2 | Je Belegung: Aktion, Input (fest oder "Input-Nummer"), Wert, Dauer, Beschriftung für Fernbedienung, Anzeige (Farbe/Bild/Live-Bild) | S | – |
-| AUT.3 | Mehrere Aktionen je Taste in fester Reihenfolge; global (Einstellungen) oder lokal (Show), lokal gewinnt | S | – |
+| AUT.1 | Tastenbelegung: Tastatur, MIDI (Note, CC, Wert, Jog-Typen), HID-Controller (X-keys, Shuttle), Gamepad (inkl. Druck/Analog), Stream-Deck-Anbindung | S | ◐ (Tastatur, MIDI Note/CC; ohne HID, Gamepad, Stream Deck direkt) |
+| AUT.2 | Je Belegung: Aktion, Input (fest oder "Input-Nummer"), Wert, Dauer, Beschriftung für Fernbedienung, Anzeige (Farbe/Bild/Live-Bild) | S | ◐ (Aktionen mit Parametern, Beschriftung, Farbe; ohne Bild) |
+| AUT.3 | Mehrere Aktionen je Taste in fester Reihenfolge; global (Einstellungen) oder lokal (Show), lokal gewinnt | S | ◐ (mehrere Aktionen; nur in der Show) |
 | AUT.4 | Vorlagen für Belegungen ex-/importieren | K | – |
 | AUT.5 | Dynamische Inputs/Werte 1–4: Taste A wählt Input/Wert, Taste B wirkt darauf | K | – |
 | AUT.6 | Rückmeldungen an Controller: Lampen, Farben, Motorfader nach Zustand (Input auf PGM/PVW/spielt, Pegel, Mute, Solo, Bus, FTB, Aufnahme, Stream, …) | S | – |
-| AUT.7 | Auslöser je Input: beim Ein-/Ausblenden (Take, Overlay), Ende, Wiedergabezeit/Restzeit, Countdown 0, Gast verbunden/getrennt, Wiederholung fertig → Aktionsliste mit Verzögerung (max. 30 s je Schritt) | S | – |
+| AUT.7 | Auslöser je Input: beim Ein-/Ausblenden (Take, Overlay), Ende, Wiedergabezeit/Restzeit, Countdown 0, Gast verbunden/getrennt, Wiederholung fertig → Aktionsliste mit Verzögerung (max. 30 s je Schritt) | S | ◐ (PGM/PVW/Overlay, Clip-Ende mit Vorlauf, Titelmeldungen; ohne Gast, Wiederholung) |
 | AUT.8 | Ablaufliste: Inputs mit Startposition, Dauer, Übergang, Anzeigeart (Vollbild/Overlay); Start, Stopp, vor/zurück, Schleife, manuell; mehrere benannte Listen in der Show | S | – |
 | AUT.9 | Skripte: benannte Skripte (global/lokal), Start/Stopp per Aktion; Sprache JavaScript (E.6) mit Zugriff auf Aktionen, Zustand, Warten, Netzwerk; einfache Zeilen-Syntax (Aktion + Pause) | K | – |
-| AUT.10 | Rückgängig für Input schließen | S | – |
-| AUT.11 | Schutzschloss: Schließen, Show laden, Aufnahme-/Stream-/Ausgabe-Stopp sperren | S | – |
-| AUT.12 | Globale Tastenkürzel, auch wenn ein anderes Programm im Vordergrund ist (P4) | S | – |
-| AUT.13 | OSC als Steuerweg: Aktionen per OSC empfangen, Zustand per OSC senden (P5, P7) | S | – |
-| AUT.14 | Cue-Liste: jede Zeile führt mehrere Aktionen aus (Inputs, Ebenen, Overlays, Ton, Übergang); GO, zurück, springen; auslösbar per Taste, MIDI, OSC (P7) | S | – |
+| AUT.10 | Rückgängig für Input schließen | S | ✅ |
+| AUT.11 | Schutzschloss: Schließen, Show laden, Aufnahme-/Stream-/Ausgabe-Stopp sperren | S | ✅ |
+| AUT.12 | Globale Tastenkürzel, auch wenn ein anderes Programm im Vordergrund ist (P4) | S | ◐ (über das Portal; Plasma-Prüfung H.32) |
+| AUT.13 | OSC als Steuerweg: Aktionen per OSC empfangen, Zustand per OSC senden (P5, P7) | S | ✅ |
+| AUT.14 | Cue-Liste: jede Zeile führt mehrere Aktionen aus (Inputs, Ebenen, Overlays, Ton, Übergang); GO, zurück, springen; auslösbar per Taste, MIDI, OSC (P7) | S | ✅ |
 
 ### 3.14 Gäste (CAL)
 
@@ -419,25 +419,25 @@ Zurückgestellt (User 2026-10-08).
 
 | ID | Anforderung | Prio | Stand |
 |---|---|---|---|
-| API.1 | Ein Aktionskatalog für alle Bedienwege (§2.3); jede Aktion: Name, Gruppe, Parameter (Input, Wert, Dauer, Feldname, Index, Mix, Kanal), Beschreibung; maschinenlesbar exportierbar | M | – |
+| API.1 | Ein Aktionskatalog für alle Bedienwege (§2.3); jede Aktion: Name, Gruppe, Parameter (Input, Wert, Dauer, Feldname, Index, Mix, Kanal), Beschreibung; maschinenlesbar exportierbar | M | ◐ (JSON-Schema mit Beschreibungen; ohne Gruppen) |
 | API.2 | Umfang: alle Bedienfunktionen dieses Lastenhefts, mindestens alles, was die vMix-Funktionsreferenz steuern kann; Gruppen wie vMix: Allgemein, Audio, Übergang, Ausgang, Titel, Input, Overlay, Ablaufliste, Skript, Wiederholung, NDI/OMT, PTZ, Show, Datenquellen, Browser (vMix 29: rund 800 Aktionen inkl. nummerierter Varianten; lmix darf sie parametrisieren statt durchnummerieren, z. B. `overlay.in {channel}` statt `OverlayInput1In…8In`) | M | – |
-| API.3 | HTTP: Aktion per Aufruf mit Parametern; vollständiger Zustand abrufbar (JSON) | M | ◐ (strom-REST, andere Ebene) |
-| API.4 | Zustand enthält: Version, Inputs (ID, Nummer, Typ, Titel, Zustand, Position, Dauer, Schleife, Ton, Pegel, Busse, Ebenen, Titelfelder, Listeneinträge), Overlays, Preview, Program, FTB, Übergänge, Aufnahme/Stream/Ausgaben/Ablaufliste/Einzelaufnahme, Audio-Busse, dynamische Werte, Mixe | M | – |
-| API.5 | Ereigniskanal mit Abo: Tally (aus/PGM/PVW je Input), Rückmeldungszustände, Zustandsänderungen; Aktionen über denselben Kanal; leichtgewichtig genug für Mikrocontroller (Textzeilen über TCP oder WebSocket) | M | – |
-| API.6 | WebSocket mit Zustandsdiffs für eigene Clients | S | ◐ (strom-WS) |
+| API.3 | HTTP: Aktion per Aufruf mit Parametern; vollständiger Zustand abrufbar (JSON) | M | ✅ |
+| API.4 | Zustand enthält: Version, Inputs (ID, Nummer, Typ, Titel, Zustand, Position, Dauer, Schleife, Ton, Pegel, Busse, Ebenen, Titelfelder, Listeneinträge), Overlays, Preview, Program, FTB, Übergänge, Aufnahme/Stream/Ausgaben/Ablaufliste/Einzelaufnahme, Audio-Busse, dynamische Werte, Mixe | M | ◐ |
+| API.5 | Ereigniskanal mit Abo: Tally (aus/PGM/PVW je Input), Rückmeldungszustände, Zustandsänderungen; Aktionen über denselben Kanal; leichtgewichtig genug für Mikrocontroller (Textzeilen über TCP oder WebSocket) | M | ✅ |
+| API.6 | WebSocket mit Zustandsdiffs für eigene Clients | S | ◐ (ganzer Zustand statt Diffs) |
 | API.7 | Sicherheit: nur LAN (Standard), Passwort, Ausnahmen je Seite, lokale Programme ohne Anmeldung, "erhöhte Sicherheit" sperrt Skripte | M | – |
 | API.8 | Optionaler Kompatibilitätsmodus: vMix-Funktionsnamen, XML-Zustand, TCP-Protokoll, Ports 8088/8099 | K | – |
-| API.9 | Integrationsziel: alles, was Fremdprogramme an vMix nutzen, geht auch mit der lmix-API: Aktionen mit allen Parametern, Inputs über Nummer, Name oder ID (plus Kurzformen "Preview", "Program"), vollständiger Zustand, Ereignis-Abo (API.5), Pegel live, Titelfelder lesen/schreiben, Live-Vorschaubild je Input für Tasten-Displays, Fehler mit Grund. Referenz: Bitfocus Companion, Stream-Deck-Plugins, Tally-Software (`LASTENHEFT-QUELLEN.md` §2) | M | – |
-| API.10 | Schnittstelle dokumentiert und versioniert (maschinenlesbare Beschreibung, Änderungen nur additiv innerhalb einer Hauptversion) | M | – |
+| API.9 | Integrationsziel: alles, was Fremdprogramme an vMix nutzen, geht auch mit der lmix-API: Aktionen mit allen Parametern, Inputs über Nummer, Name oder ID (plus Kurzformen "Preview", "Program"), vollständiger Zustand, Ereignis-Abo (API.5), Pegel live, Titelfelder lesen/schreiben, Live-Vorschaubild je Input für Tasten-Displays, Fehler mit Grund. Referenz: Bitfocus Companion, Stream-Deck-Plugins, Tally-Software (`LASTENHEFT-QUELLEN.md` §2) | M | ◐ |
+| API.10 | Schnittstelle dokumentiert und versioniert (maschinenlesbare Beschreibung, Änderungen nur additiv innerhalb einer Hauptversion) | M | ◐ (JSON-Schema, `api_version`) |
 | API.11 | Eigenes Companion-Modul für lmix, Beispiel-Clients (Tally auf Mikrocontroller, Skript) | S | – |
 
 ### 3.16 Web-Fernbedienung (WEB)
 
 | ID | Anforderung | Prio | Stand |
 |---|---|---|---|
-| WEB.1 | Seite "Tasten": alle als sichtbar markierten Belegungen als Raster | S | – |
-| WEB.2 | Seite "Mischer": Inputs, PVW/PGM, Übergangstasten | S | – |
-| WEB.3 | Seite "Tally": Input wählen, ganzer Bildschirm in PGM-/PVW-Farbe | S | – |
+| WEB.1 | Seite "Tasten": alle als sichtbar markierten Belegungen als Raster | S | ✅ |
+| WEB.2 | Seite "Mischer": Inputs, PVW/PGM, Übergangstasten | S | ✅ |
+| WEB.3 | Seite "Tally": Input wählen, ganzer Bildschirm in PGM-/PVW-Farbe | S | ✅ |
 | WEB.4 | Seite "Titel": Felder bearbeiten, Presets anwenden/anlegen | S | ✅ |
 | WEB.5 | Seite "Mitschauen" (STR.8) und "Zeichnen" (§3.17) | K | – |
 
@@ -504,9 +504,9 @@ Aus den Persona-Durchläufen (`PERSONAS.md`).
 
 | ID | Anforderung | Prio | Stand |
 |---|---|---|---|
-| OPS.1 | Headless-Betrieb: `lmix-core` und Engine laufen ohne GUI und ohne Monitor, Show wird beim Start geladen (systemd-Dienst) (P5) | S | – |
+| OPS.1 | Headless-Betrieb: `lmix-core` und Engine laufen ohne GUI und ohne Monitor, Show wird beim Start geladen (systemd-Dienst) (P5) | S | ✅ |
 | OPS.2 | Mehrere Bedienplätze gleichzeitig, auch über Netz: z. B. Bildregie und Tonregie an getrennten Rechnern; Rechte je Platz (P2, P5) | S | – |
-| OPS.3 | Monitoring: Gesundheitszustand und Metriken (Drops, Latenz, Encoder, Pegel, Speicher) über HTTP, Prometheus-Format (P5) | S | – |
+| OPS.3 | Monitoring: Gesundheitszustand und Metriken (Drops, Latenz, Encoder, Pegel, Speicher) über HTTP, Prometheus-Format (P5) | S | ✅ |
 | OPS.4 | Zeitplan: Show laden, Aufnahme und Stream starten/stoppen zu festen Zeiten, mit Namen für Dateien (REC.9) (P6) | K | – |
 
 ## 4. Nichtfunktionale Anforderungen (NFA)
