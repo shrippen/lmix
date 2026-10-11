@@ -248,7 +248,13 @@ async function act(action) {
   // A source at an address (read again every 10 s) and a text source.
   let sheet = "name,role\nName A,Role X\n";
   const http = require("http");
-  const server = http.createServer((req, res) => { res.setHeader("content-type", "text/csv"); res.end(sheet); });
+  const rss = '<?xml version="1.0"?><rss version="2.0"><channel><item><title>News one</title></item>' +
+    "<item><title>News two</title></item></channel></rss>";
+  const server = http.createServer((req, res) => {
+    const feed = req.url.startsWith("/feed.xml");
+    res.setHeader("content-type", feed ? "application/rss+xml" : "text/csv");
+    res.end(feed ? rss : sheet);
+  });
   await new Promise((r) => server.listen(0, "127.0.0.1", r));
   const sheetUrl = `http://127.0.0.1:${server.address().port}/export?format=csv`;
   await act({ action: "add_data_source", spec: { kind: "csv", path: sheetUrl }, name: "Sheet" });
@@ -256,8 +262,12 @@ async function act(action) {
   await frame.waitForFunction(() => document.getElementById("head").textContent === "Role X", null, { timeout: 3000 });
   sheet = "name,role\nName A,Role Y\n";
   await frame.waitForFunction(() => document.getElementById("head").textContent === "Role Y", null, { timeout: 15000 });
-  server.close();
   pass("data source at an address: read again");
+  state = await act({ action: "add_data_source", spec: { kind: "feed", path: sheetUrl.replace("/export?format=csv", "/feed.xml") }, name: "News" });
+  const news = state.data_sources.find((d) => d.name === "News");
+  if (news.error || news.rows.map((r) => r[0]).join("|") !== "News one|News two") fail("feed: " + JSON.stringify(news));
+  server.close();
+  pass("feed source: a row per item");
   const notes = path.join(work, "notes.txt");
   fs.writeFileSync(notes, "first\n\nsecond\n");
   state = await act({ action: "add_data_source", spec: { kind: "text", path: notes }, name: "Notes" });

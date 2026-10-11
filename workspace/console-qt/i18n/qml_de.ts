@@ -405,7 +405,7 @@
   <context>
     <name>DataSourcesDialog</name>
     <message>
-      <location filename="../qml/DataSourcesDialog.qml" line="+33" />
+      <location filename="../qml/DataSourcesDialog.qml" line="+43" />
       <source>Data sources</source>
       <translation>Datenquellen</translation>
     </message>
@@ -415,24 +415,54 @@
       <translation>Entfernen</translation>
     </message>
     <message>
-      <location line="+11" />
-      <source>CSV, JSON or text file (relative to the show file), or http(s) address</source>
-      <translation>CSV-, JSON- oder Textdatei (relativ zur Show-Datei) oder http(s)-Adresse</translation>
-    </message>
-    <message>
-      <location line="+4" />
+      <location line="+21" />
       <source>First row names columns</source>
       <translation>Erste Zeile benennt die Spalten</translation>
     </message>
     <message>
-      <location line="+6" />
+      <location line="+11" />
       <source>+ Source</source>
       <translation>+ Quelle</translation>
     </message>
     <message>
-      <location line="+17" />
-      <source>No data sources yet. A data source is a table (CSV, JSON) whose selected row fills title fields, e.g. names and roles of guests.</source>
-      <translation>Noch keine Datenquellen. Eine Datenquelle ist eine Tabelle (CSV, JSON), deren gewählte Zeile Titelfelder füllt, z. B. Namen und Funktionen von Gästen.</translation>
+      <location line="-74" />
+      <source>CSV table</source>
+      <translation>CSV-Tabelle</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>JSON</source>
+      <translation>JSON</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Text, a row per line</source>
+      <translation>Text, eine Zeile je Eintrag</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>RSS / Atom feed</source>
+      <translation>RSS-/Atom-Feed</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>XML</source>
+      <translation>XML</translation>
+    </message>
+    <message>
+      <location line="+49" />
+      <source>File (relative to the show file) or http(s) address</source>
+      <translation>Datei (relativ zur Show-Datei) oder http(s)-Adresse</translation>
+    </message>
+    <message>
+      <location line="+18" />
+      <source>Rows, e.g. scores/game</source>
+      <translation>Zeilen, z. B. scores/game</translation>
+    </message>
+    <message>
+      <location line="+22" />
+      <source>No data sources yet. A data source is a table (CSV, JSON, a feed, …) whose selected row fills title fields, e.g. names and roles of guests.</source>
+      <translation>Noch keine Datenquellen. Eine Datenquelle ist eine Tabelle (CSV, JSON, ein Feed, …), deren gewählte Zeile Titelfelder füllt, z. B. Namen und Funktionen von Gästen.</translation>
     </message>
     <message>
       <location line="+7" />
@@ -1875,12 +1905,12 @@
       <translation>Titel</translation>
     </message>
     <message>
-      <location line="+18" />
+      <location line="+19" />
       <source>Not bound</source>
       <translation>Nicht verbunden</translation>
     </message>
     <message>
-      <location line="+31" />
+      <location line="+39" />
       <source>New graphics channel</source>
       <translation>Neuer Grafikkanal</translation>
     </message>
@@ -1950,7 +1980,7 @@
       <translation>Ebene %1</translation>
     </message>
     <message>
-      <location line="+18" />
+      <location line="+35" />
       <source>Load</source>
       <translation>Laden</translation>
     </message>

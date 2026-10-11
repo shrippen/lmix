@@ -19,12 +19,22 @@ KanteDialog {
 
     property int current: 0
     readonly property var source: sources.length > 0 ? sources[Math.min(current, sources.length - 1)] : null
-    /** Kind of source by its name: JSON, text (one row per line), else CSV
-     * (also a Google Sheet's CSV export). */
+    /** Kinds of source, as lmix names them. */
+    readonly property var kinds: [
+        { kind: "csv", label: qsTr("CSV table") },
+        { kind: "json", label: qsTr("JSON") },
+        { kind: "text", label: qsTr("Text, a row per line") },
+        { kind: "feed", label: qsTr("RSS / Atom feed") },
+        { kind: "xml", label: qsTr("XML") }
+    ]
+    /** Kind of source guessed from its name (the operator can change it);
+     * CSV also for a Google Sheet's CSV export. */
     function kindOf(file) {
-        var name = file.trim().toLowerCase().split("?")[0]
+        const name = file.trim().toLowerCase().split("?")[0]
         if (name.endsWith(".json")) return "json"
         if (name.endsWith(".txt")) return "text"
+        if (name.endsWith(".rss") || name.endsWith(".atom") || /(rss|feed|atom)/.test(name)) return "feed"
+        if (name.endsWith(".xml")) return "xml"
         return "csv"
     }
     /** Auto-advance choices in seconds; 0 off. */
@@ -64,22 +74,35 @@ KanteDialog {
             KanteTextField {
                 id: path
                 Layout.fillWidth: true
-                placeholderText: qsTr("CSV, JSON or text file (relative to the show file), or http(s) address")
+                placeholderText: qsTr("File (relative to the show file) or http(s) address")
+                onTextEdited: kindBox.currentIndex = dialog.kinds.findIndex(k => k.kind === dialog.kindOf(text))
+            }
+            QQC2.ComboBox {
+                id: kindBox
+                model: dialog.kinds.map(k => k.label)
+                KanteFieldSkin { control: kindBox }
             }
             QQC2.CheckBox {
                 id: header
                 text: qsTr("First row names columns")
                 checked: true
-                visible: dialog.kindOf(path.text) === "csv"
+                visible: dialog.kinds[kindBox.currentIndex].kind === "csv"
                 KanteCheckSkin { control: header }
+            }
+            KanteTextField {
+                id: xmlRows
+                visible: dialog.kinds[kindBox.currentIndex].kind === "xml"
+                placeholderText: qsTr("Rows, e.g. scores/game")
             }
             KanteButton {
                 text: qsTr("+ Source")
-                enabled: path.text.trim() !== ""
+                enabled: path.text.trim() !== "" && (dialog.kinds[kindBox.currentIndex].kind !== "xml" || xmlRows.text.trim() !== "")
                 onClicked: {
-                    var file = path.text.trim()
-                    var kind = dialog.kindOf(file)
-                    var spec = kind === "csv" ? { kind: kind, path: file, header: header.checked } : { kind: kind, path: file }
+                    const file = path.text.trim()
+                    const kind = dialog.kinds[kindBox.currentIndex].kind
+                    const spec = { kind: kind, path: file }
+                    if (kind === "csv") spec.header = header.checked
+                    if (kind === "xml") spec.rows = xmlRows.text.trim()
                     dialog.act({ action: "add_data_source", spec: spec })
                     dialog.current = dialog.sources.length
                     path.text = ""
@@ -91,7 +114,7 @@ KanteDialog {
             Layout.fillWidth: true
             visible: dialog.source === null
             wrapMode: Text.WordWrap
-            text: qsTr("No data sources yet. A data source is a table (CSV, JSON) whose selected row fills title fields, e.g. names and roles of guests.")
+            text: qsTr("No data sources yet. A data source is a table (CSV, JSON, a feed, …) whose selected row fills title fields, e.g. names and roles of guests.")
         }
 
         KanteCallout {

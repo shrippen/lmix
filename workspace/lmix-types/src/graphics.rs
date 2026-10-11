@@ -317,6 +317,12 @@ pub enum DataSourceSpec {
     /// Plain text: each line that is not empty is a row of one column,
     /// `text` (ticker items, slides).
     Text { path: String },
+    /// An RSS or Atom feed: a row per item, columns `title`, `text`,
+    /// `link`, `date`, `author`.
+    Feed { path: String },
+    /// XML: every element at `rows` (a path like `scores/game`) is a row;
+    /// its attributes and child elements are the columns.
+    Xml { path: String, rows: String },
 }
 
 fn yes() -> bool {
@@ -326,7 +332,11 @@ fn yes() -> bool {
 impl DataSourceSpec {
     pub fn path(&self) -> &str {
         match self {
-            Self::Csv { path, .. } | Self::Json { path } | Self::Text { path } => path,
+            Self::Csv { path, .. }
+            | Self::Json { path }
+            | Self::Text { path }
+            | Self::Feed { path }
+            | Self::Xml { path, .. } => path,
         }
     }
 }

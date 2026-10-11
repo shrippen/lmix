@@ -1347,7 +1347,13 @@ Adresse. Die eingebauten erzeugt `scripts/make-title-thumbnails.cjs`
 (Chromium, Feldbezeichnungen als Text, transparent, 480×270); die
 Console zeigt das Bild neben der Vorlagenwahl. Der Titel-Dialog scrollt,
 wenn er höher als das Fenster wird.
+**RSS/Atom und XML** (DAT.1): Typ `feed` macht aus jedem `item`/`entry`
+eine Zeile (`title`, `text`, `link`, `date`, `author`), Typ `xml` aus
+den Elementen eines Pfads (`scores/game`, mit `//` irgendwo) eine Zeile
+mit Attributen (`@id`) und Kindelementen als Spalten. Parser `roxmltree`
+0.21 (MIT/Apache-2.0, ohne eigene Abhängigkeiten außer `memchr`), kein
+volles XPath. Console: Art der Quelle wählbar, aus dem Namen vorbelegt.
 **Offen**: Rendern in strom (GFX.2, nach M7.0), Grafikkanal als Input
 und Overlay (GFX.17), Overlay wartet auf das Ende der Ausblendung
-(GFX.4), Titel als Stinger (GFX.11), XLSX/ODS, Google Sheets mit API-Schlüssel, RSS, XML (DAT.1), Zeilen zu Spalten
+(GFX.4), Titel als Stinger (GFX.11), XLSX/ODS, Google Sheets mit API-Schlüssel (DAT.1), Zeilen zu Spalten
 (DAT.3), Bilder aus lokalen Pfaden außerhalb des Vorlagenordners.
