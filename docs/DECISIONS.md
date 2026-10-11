@@ -1438,3 +1438,14 @@ an (jetzt auch beim Schließen des Dialogs); TSL ließ verschwundene
 Anzeigen in ihrem letzten Tally stehen und schickte vor der ersten
 Änderung nichts; der Stopp-Dialog nannte den Ausgang über seine Nummer
 (jetzt über die Id).
+**Show-Paket** (SHW.6): `export_package` schreibt ein Tar (`.lmixpkg`,
+unkomprimiert: Medien sind es schon) mit der Show, den Dateien der
+Inputs (Datei, Standbild, Playlist), den Dateien der Datenquellen und
+den eigenen Titelvorlagen; die Pfade in der Show zeigen ins Paket.
+Fehlt eine Datei, nennt der Fehler sie. `import_package` entpackt in
+einen neuen oder leeren Ordner (nur Dateien und Ordner, nichts außerhalb),
+setzt die Inputs auf absolute Pfade dort, übernimmt Vorlagen, die der
+Vorlagenordner nicht hat (vorhandene bleiben), und öffnet die Show. Beides
+läuft ohne Switcher-Sperre (Medien können Gigabytes sein); die Sperre
+(AUT.11) verhindert den Import. Abhängigkeit `tar` 0.4 (MIT OR
+Apache-2.0, ohne xattr). Console: „Package“ → Export…/Import….

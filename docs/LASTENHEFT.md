@@ -472,7 +472,7 @@ Zurückgestellt (User 2026-10-08).
 | SHW.3 | Neu (mit Formatwahl), Öffnen (ersetzt), Anhängen (nur gewählte Inputs), Speichern, Speichern unter, zuletzt geöffnet | M | – |
 | SHW.4 | Fehlende Dateien: markieren, suchen lassen, sonst Input offline | M | – |
 | SHW.5 | Automatische Sicherung, "letzte Show" wiederherstellen (auch nach Absturz) | M | – |
-| SHW.6 | Paket: Show + Medien + Titel in einer Datei | S | – |
+| SHW.6 | Paket: Show + Medien + Titel in einer Datei | S | ✅ |
 | SHW.7 | Formatwechsel beim Laden bestätigen | S | – |
 | SHW.8 | Globale Einstellungen getrennt ex-/importieren, Werkseinstellungen | S | – |
 | SHW.9 | Import von vMix-Presets (E.3: nie) | X | – |

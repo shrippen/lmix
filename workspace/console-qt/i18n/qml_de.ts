@@ -405,7 +405,7 @@
   <context>
     <name>DataSourcesDialog</name>
     <message>
-      <location filename="../qml/DataSourcesDialog.qml" line="+43" />
+      <location filename="../qml/DataSourcesDialog.qml" line="+68" />
       <source>Data sources</source>
       <translation>Datenquellen</translation>
     </message>
@@ -1105,16 +1105,38 @@
     </message>
     <message>
       <location line="-9" />
+      <location line="+25" />
       <source>All files (*)</source>
       <translation>Alle Dateien (*)</translation>
     </message>
     <message>
-      <location line="+6" />
+      <location line="-19" />
       <source>Save show</source>
       <translation>Show speichern</translation>
     </message>
     <message>
-      <location line="+122" />
+      <location line="+10" />
+      <source>Export show package</source>
+      <translation>Show-Paket exportieren</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <location line="+6" />
+      <source>lmix packages (*.lmixpkg)</source>
+      <translation>lmix-Pakete (*.lmixpkg)</translation>
+    </message>
+    <message>
+      <location line="-1" />
+      <source>Import show package</source>
+      <translation>Show-Paket importieren</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>Empty folder for the package's show and media</source>
+      <translation>Leerer Ordner für Show und Medien des Pakets</translation>
+    </message>
+    <message>
+      <location line="+120" />
       <source>lmix-core</source>
       <translation>lmix-core</translation>
     </message>
@@ -1149,7 +1171,27 @@
       <translation>Speichern unter…</translation>
     </message>
     <message>
-      <location line="+7" />
+      <location line="+6" />
+      <source>Package</source>
+      <translation>Paket</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>The show with its media in one file, to move it to another machine</source>
+      <translation>Die Show mit ihren Medien in einer Datei, um sie auf einen anderen Rechner zu bringen</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Export…</source>
+      <translation>Exportieren…</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Import…</source>
+      <translation>Importieren…</translation>
+    </message>
+    <message>
+      <location line="+8" />
       <source>Kante</source>
       <translation>Kante</translation>
     </message>
@@ -1370,7 +1412,7 @@
       <translation>%1 stoppen?</translation>
     </message>
     <message>
-      <location line="+17" />
+      <location line="+18" />
       <source>A stopped recording or stream cannot go on where it was.</source>
       <translation>Eine gestoppte Aufnahme oder ein gestoppter Stream lässt sich nicht an derselben Stelle fortsetzen.</translation>
     </message>
@@ -1388,7 +1430,7 @@
   <context>
     <name>PtzDialog</name>
     <message>
-      <location filename="../qml/PtzDialog.qml" line="+32" />
+      <location filename="../qml/PtzDialog.qml" line="+51" />
       <source>PTZ of %1 %2</source>
       <translation>PTZ von %1 %2</translation>
     </message>
@@ -1455,12 +1497,12 @@
       <translation>Herauszoomen</translation>
     </message>
     <message>
-      <location line="+7" />
+      <location line="+8" />
       <source>Zoom in</source>
       <translation>Hineinzoomen</translation>
     </message>
     <message>
-      <location line="+6" />
+      <location line="+7" />
       <source>Focus</source>
       <translation>Fokus</translation>
     </message>
@@ -1475,12 +1517,12 @@
       <translation>Nah</translation>
     </message>
     <message>
-      <location line="+6" />
+      <location line="+7" />
       <source>Far</source>
       <translation>Fern</translation>
     </message>
     <message>
-      <location line="+11" />
+      <location line="+12" />
       <source>Presets</source>
       <translation>Positionen</translation>
     </message>

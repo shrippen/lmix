@@ -588,7 +588,9 @@ impl Switcher {
             | Action::SaveShow { .. }
             | Action::OpenShow { .. }
             | Action::ImportDatasets { .. }
-            | Action::ExportDatasets { .. } => Ok(Vec::new()),
+            | Action::ExportDatasets { .. }
+            | Action::ExportPackage { .. }
+            | Action::ImportPackage { .. } => Ok(Vec::new()),
         }
     }
 

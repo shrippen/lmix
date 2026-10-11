@@ -247,15 +247,39 @@ pub enum ShowFileError {
     TooNew { path: String, found: u32 },
 }
 
-/// Write atomically: temp file next to the target, then rename, so a crash
-/// never leaves a half-written show (SHW.5).
-pub async fn save(show: &Show, path: &Path) -> Result<(), ShowFileError> {
+/// The show as a file's bytes.
+pub fn to_bytes(show: &Show) -> Vec<u8> {
     let file = ShowFile {
         format: FILE_FORMAT.to_string(),
         version: FILE_VERSION,
         show: show.clone(),
     };
-    let json = serde_json::to_vec_pretty(&file).expect("show serializes");
+    serde_json::to_vec_pretty(&file).expect("show serializes")
+}
+
+/// A show from a file's bytes; `name` for errors.
+pub fn from_bytes(bytes: &[u8], name: &str) -> Result<Show, ShowFileError> {
+    let format_err = |reason: String| ShowFileError::Format {
+        path: name.to_string(),
+        reason,
+    };
+    let file: ShowFile = serde_json::from_slice(bytes).map_err(|e| format_err(e.to_string()))?;
+    if file.format != FILE_FORMAT {
+        return Err(format_err(format!("format is \"{}\"", file.format)));
+    }
+    if file.version > FILE_VERSION {
+        return Err(ShowFileError::TooNew {
+            path: name.to_string(),
+            found: file.version,
+        });
+    }
+    Ok(file.show)
+}
+
+/// Write atomically: temp file next to the target, then rename, so a crash
+/// never leaves a half-written show (SHW.5).
+pub async fn save(show: &Show, path: &Path) -> Result<(), ShowFileError> {
+    let json = to_bytes(show);
     let shown = path.display().to_string();
     let write_err = |source| ShowFileError::Write {
         path: shown.clone(),
@@ -276,23 +300,7 @@ pub async fn load(path: &Path) -> Result<Show, ShowFileError> {
             source,
         })?;
 
-    let format_err = |reason: String| ShowFileError::Format {
-        path: shown.clone(),
-        reason,
-    };
-    let file: ShowFile = serde_json::from_slice(&bytes).map_err(|e| format_err(e.to_string()))?;
-
-    if file.format != FILE_FORMAT {
-        return Err(format_err(format!("format is \"{}\"", file.format)));
-    }
-    if file.version > FILE_VERSION {
-        return Err(ShowFileError::TooNew {
-            path: shown,
-            found: file.version,
-        });
-    }
-
-    Ok(file.show)
+    from_bytes(&bytes, &shown)
 }
 
 #[cfg(test)]

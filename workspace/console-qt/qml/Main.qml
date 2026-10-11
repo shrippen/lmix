@@ -180,6 +180,31 @@ Kirigami.ApplicationWindow {
         onAccepted: root.act({ action: "save_show", path: root.localPath(selectedFile) })
     }
 
+    // Show packages (SHW.6): show, media, data files, own templates.
+    FileDialog {
+        id: exportDialog
+        title: qsTr("Export show package")
+        fileMode: FileDialog.SaveFile
+        defaultSuffix: "lmixpkg"
+        nameFilters: [qsTr("lmix packages (*.lmixpkg)")]
+        onAccepted: root.act({ action: "export_package", path: root.localPath(selectedFile) })
+    }
+    FileDialog {
+        id: importDialog
+        title: qsTr("Import show package")
+        nameFilters: [qsTr("lmix packages (*.lmixpkg)"), qsTr("All files (*)")]
+        onAccepted: {
+            importFolderDialog.packagePath = root.localPath(selectedFile)
+            importFolderDialog.open()
+        }
+    }
+    FolderDialog {
+        id: importFolderDialog
+        property string packagePath
+        title: qsTr("Empty folder for the package's show and media")
+        onAccepted: root.act({ action: "import_package", path: packagePath, folder: root.localPath(selectedFolder) })
+    }
+
     AddInputDialog {
         id: addInputDialog
         parent: QQC2.Overlay.overlay
@@ -339,6 +364,26 @@ Kirigami.ApplicationWindow {
                     text: qsTr("Save as…")
                     enabled: backend.connected
                     onClicked: saveDialog.open()
+                }
+                KanteButton {
+                    id: packageButton
+                    text: qsTr("Package")
+                    enabled: backend.connected
+                    QQC2.ToolTip.visible: hovered
+                    QQC2.ToolTip.text: qsTr("The show with its media in one file, to move it to another machine")
+                    onClicked: packageMenu.popup(packageButton, 0, packageButton.height)
+                    QQC2.Menu {
+                        id: packageMenu
+                        KantePopupSkin { popup: packageMenu }
+                        QQC2.MenuItem {
+                            text: qsTr("Export…")
+                            onTriggered: exportDialog.open()
+                        }
+                        QQC2.MenuItem {
+                            text: qsTr("Import…")
+                            onTriggered: importDialog.open()
+                        }
+                    }
                 }
                 Item { Layout.fillWidth: true }
                 KanteSegmented {

@@ -446,4 +446,12 @@ DE = {
     'Clear dynamic %1': 'Dynamisch %1 leeren',
     'Make it dynamic %1': 'Als dynamisch %1 setzen',
     'Dynamic slot %1 does not exist (1–%2)': 'Dynamischen Platz %1 gibt es nicht (1–%2)',
+    'Export show package': 'Show-Paket exportieren',
+    'lmix packages (*.lmixpkg)': 'lmix-Pakete (*.lmixpkg)',
+    'Import show package': 'Show-Paket importieren',
+    "Empty folder for the package's show and media": 'Leerer Ordner für Show und Medien des Pakets',
+    'Package': 'Paket',
+    'The show with its media in one file, to move it to another machine': 'Die Show mit ihren Medien in einer Datei, um sie auf einen anderen Rechner zu bringen',
+    'Export…': 'Exportieren…',
+    'Import…': 'Importieren…',
 }

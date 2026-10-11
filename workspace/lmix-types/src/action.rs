@@ -532,6 +532,11 @@ pub enum Action {
     },
     /// Open a show file, replacing the current show.
     OpenShow { path: String },
+    /// Write the show with its media, data files and own title templates
+    /// into one package file (SHW.6).
+    ExportPackage { path: String },
+    /// Unpack a package into `folder` (new or empty) and open its show.
+    ImportPackage { path: String, folder: String },
 }
 
 /// Default FTB fade.

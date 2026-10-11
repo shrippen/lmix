@@ -856,6 +856,54 @@ impl Service {
             }
             _ => {}
         }
+        // Packages copy media (gigabytes): without the switcher locked.
+        if let Action::ExportPackage { path } = &action {
+            let (show, show_path) = {
+                let sw = self.switcher.lock().await;
+                (sw.show().clone(), sw.path().map(str::to_string))
+            };
+            let templates = self
+                .templates_dir
+                .lock()
+                .expect("templates dir lock")
+                .clone();
+            let out = PathBuf::from(path);
+            let packed = tokio::task::spawn_blocking(move || {
+                crate::package::export(&show, show_path.as_deref(), templates.as_deref(), &out)
+            })
+            .await
+            .map_err(|e| ActionError::ShowFile {
+                message: e.to_string(),
+            })?
+            .map_err(|message| ActionError::ShowFile { message })?;
+            tracing::info!(%path, files = packed.files, bytes = packed.bytes, "package written");
+            return Ok(self.state().await);
+        }
+        let mut unpacked = match &action {
+            Action::ImportPackage { path, folder } => {
+                let templates = self
+                    .templates_dir
+                    .lock()
+                    .expect("templates dir lock")
+                    .clone();
+                let (package, folder) = (PathBuf::from(path), PathBuf::from(folder));
+                let (show, file, notes) = tokio::task::spawn_blocking(move || {
+                    crate::package::import(&package, &folder, templates.as_deref())
+                })
+                .await
+                .map_err(|e| ActionError::ShowFile {
+                    message: e.to_string(),
+                })?
+                .map_err(|message| ActionError::ShowFile { message })?;
+                for note in notes {
+                    tracing::info!(%note, "package import");
+                }
+                // Templates it brought.
+                self.rescan_templates().await;
+                Some((show, file))
+            }
+            _ => None,
+        };
         // A table to import is read before the switcher is locked: it may
         // come from an address.
         let mut imported = match &action {
@@ -872,7 +920,10 @@ impl Service {
         };
         let mut sw = self.switcher.lock().await;
         let before = sw.on_air();
-        let file_action = matches!(action, Action::OpenShow { .. } | Action::SaveShow { .. });
+        let file_action = matches!(
+            action,
+            Action::OpenShow { .. } | Action::SaveShow { .. } | Action::ImportPackage { .. }
+        );
         let report = match &action {
             Action::TitleReport {
                 graphics,
@@ -885,13 +936,20 @@ impl Service {
             }),
             _ => None,
         };
-        if matches!(action, Action::OpenShow { .. } | Action::NewShow) {
+        if matches!(
+            action,
+            Action::OpenShow { .. } | Action::NewShow | Action::ImportPackage { .. }
+        ) {
             sw.check_unlocked()?;
         }
 
         let commands = match action {
             Action::NewShow => sw.replace(Show::default(), None),
             Action::OpenShow { path } => open(&mut sw, path).await?,
+            Action::ImportPackage { .. } => {
+                let (show, file) = unpacked.take().expect("unpacked above");
+                sw.replace(show, Some(file.display().to_string()))
+            }
             Action::ImportDatasets { template, .. } => {
                 let table = imported.take().unwrap_or_default();
                 if let Some(error) = table.error {
