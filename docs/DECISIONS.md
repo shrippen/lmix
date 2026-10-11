@@ -1383,3 +1383,12 @@ der harte Schutz.
 **Geprüft**: Console unter Xvfb gegen lmix-core ohne Engine: Leiste mit
 Playlist auf Programm; Abbrechen lässt laufen, OK stoppt, abgeschaltet
 stoppt ohne Frage; keine QML-Warnungen.
+**TSL-Tally** (PER.1): `--tsl <host:port>` (mehrere mit Komma) schickt
+per UDP TSL UMD 5.0 (Standard) oder mit `--tsl-version 3` 3.1 an
+Multiviewer und Tally-Systeme: je Input mit Bild Name und Tally
+(Programm rot = Tally 1, Vorschau grün = Tally 2), Adresse/Index = Nummer
+in der Leiste. Gesendet bei jeder Änderung und alle 5 s (Empfänger
+vergessen stumme Quellen). TSL 3.1 hat 127 Adressen und 16 ASCII-Zeichen;
+5.0 bekommt alle Inputs in einem Paket (bis 32 je Paket). TCP-Rahmen
+(DLE/STX) fehlt noch. Geprüft mit Paket-Tests nach der Spezifikation und
+einem UDP-Empfänger im Test; an echter Hardware nicht.

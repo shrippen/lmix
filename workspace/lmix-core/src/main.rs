@@ -30,6 +30,7 @@ mod show;
 mod switcher;
 mod tcp;
 mod titles;
+mod tsl;
 mod web;
 
 use engine::flows::{MixerBackend, MonitorOut};
@@ -105,6 +106,15 @@ struct Args {
     /// Autosave file, written after every change.
     #[arg(long, env = "LMIX_AUTOSAVE", default_value_os_t = default_autosave())]
     autosave: PathBuf,
+
+    /// Send tally to TSL UMD receivers (multiviewers, tally systems) at
+    /// these UDP addresses (PER.1); repeat or separate with commas.
+    #[arg(long, env = "LMIX_TSL", value_delimiter = ',')]
+    tsl: Vec<SocketAddr>,
+
+    /// TSL UMD version: 5 (5.0) or 3 (3.1).
+    #[arg(long, env = "LMIX_TSL_VERSION", value_enum, default_value_t = tsl::Version::V50)]
+    tsl_version: tsl::Version,
 
     /// Folder of own title templates, besides the built-in ones.
     #[arg(long, env = "LMIX_TEMPLATES", default_value_os_t = default_templates())]
@@ -186,6 +196,15 @@ async fn main() -> anyhow::Result<()> {
         tokio::spawn(async move {
             if let Err(error) = osc::serve(listen, service).await {
                 tracing::error!(%error, "OSC stopped");
+            }
+        });
+    }
+    if !args.tsl.is_empty() {
+        let service = service.clone();
+        let (targets, version) = (args.tsl.clone(), args.tsl_version);
+        tokio::spawn(async move {
+            if let Err(error) = tsl::serve(targets, version, service).await {
+                tracing::error!(%error, "TSL tally stopped");
             }
         });
     }
