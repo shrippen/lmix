@@ -276,11 +276,12 @@ pub fn content_type(path: &str) -> &'static str {
     }
 }
 
-/// A path below `/titles/` that cannot leave its folder.
+/// A path below `/titles/` that cannot leave its folder; hidden files and
+/// folders (`.git`) stay hidden.
 fn safe(path: &str) -> Option<PathBuf> {
     let path = Path::new(path);
     path.components()
-        .all(|c| matches!(c, Component::Normal(_)))
+        .all(|c| matches!(c, Component::Normal(name) if !name.to_string_lossy().starts_with('.')))
         .then(|| path.to_path_buf())
 }
 
@@ -379,6 +380,9 @@ mod tests {
         assert_eq!(file(Some(&inner), "a.css").as_deref(), Some(&b"x"[..]));
         assert_eq!(file(Some(&inner), "../secret"), None);
         assert_eq!(file(Some(&inner), "/etc/passwd"), None);
+        std::fs::create_dir(inner.join(".git")).unwrap();
+        std::fs::write(inner.join(".git/config"), "x").unwrap();
+        assert_eq!(file(Some(&inner), ".git/config"), None);
         assert!(file(None, "kante/variables.css").is_some());
         assert!(file(None, "sdk/lmix-title.js").is_some());
         assert_eq!(file(None, "a.css"), None);

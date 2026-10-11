@@ -166,6 +166,7 @@ fn runs_automation(action: &Action) -> bool {
             action,
             Action::SetTriggers { .. }
                 | Action::SetTitleTriggers { .. }
+                | Action::TitleReport { .. }
                 | Action::AddCueList { .. }
                 | Action::SetCueList { .. }
                 | Action::RemoveCueList { .. }

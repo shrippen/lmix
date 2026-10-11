@@ -58,7 +58,7 @@
 
   function lmixLottie(options) {
     let anim = null, json = null;
-    const pending = {};
+    let pending = {};
     const ready = (async () => {
       const resp = await fetch(options.animation, { cache: "no-store" });
       json = await resp.json();
@@ -66,7 +66,7 @@
       // Texts set before the animation exists go into it directly.
       for (const layer of json.layers || []) {
         const field = fieldOf(layer);
-        if (layer.ty === 5 && field in pending) layer.t.d.k[0].s.t = pending[field];
+        if (layer.ty === 5) layer.t.d.k[0].s.t = String(pending[field] ?? "");
       }
       // lottie measures each letter with the font once; it has to be
       // there before (fonts load only when something uses them).
@@ -95,13 +95,14 @@
     const playMarker = (m) => anim.playSegments([m.tm, m.tm + m.dr], true);
 
     return {
+      // All values each time: a text layer without one is emptied.
       update(data) {
-        Object.assign(pending, data);
+        pending = data;
         ready.then(() => {
           for (const element of anim.renderer.elements || []) {
             const layer = element && element.data;
-            if (!layer || layer.ty !== 5 || !(fieldOf(layer) in data)) continue;
-            element.updateDocumentData({ t: String(data[fieldOf(layer)]) }, 0);
+            if (!layer || layer.ty !== 5) continue;
+            element.updateDocumentData({ t: String(data[fieldOf(layer)] ?? "") }, 0);
           }
           // Paused animations draw the new text on the next frame.
           if (anim.isPaused) anim.goToAndStop(anim.currentFrame, true);

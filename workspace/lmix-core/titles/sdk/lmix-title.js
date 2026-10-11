@@ -59,11 +59,10 @@
   function lmixTitle(impl) {
     let step = 0;
     let doneTimer = null;
-    const data = {};
 
+    // lmix sends all values each time: a field left out was cleared.
     window.update = function (text) {
-      Object.assign(data, parseData(text));
-      if (impl.update) impl.update(Object.assign({}, data));
+      if (impl.update) impl.update(parseData(text));
     };
     window.play = function () {
       clearTimeout(doneTimer);

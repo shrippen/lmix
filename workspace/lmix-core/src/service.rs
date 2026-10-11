@@ -79,6 +79,8 @@ pub struct Service {
     /// When each data source was read: its file's time, or when an
     /// address was fetched.
     source_times: std::sync::Mutex<HashMap<InputId, Seen>>,
+    /// Data sources at an address being fetched for the first time.
+    fetching: std::sync::Mutex<HashSet<InputId>>,
     /// Fetches data sources from addresses.
     http: reqwest::Client,
 }
@@ -120,6 +122,7 @@ impl Service {
             templates_dir: std::sync::Mutex::new(None),
             templates: std::sync::Mutex::new(templates),
             source_times: std::sync::Mutex::new(HashMap::new()),
+            fetching: std::sync::Mutex::new(HashSet::new()),
             http: datasource::client(),
             autosave,
         })
@@ -168,10 +171,18 @@ impl Service {
     }
 
     /// Read the data sources never read (just added, or a show just
-    /// opened).
-    async fn read_new_sources(&self, sw: &mut Switcher) {
+    /// opened). Files at once (local, quick); addresses in the background,
+    /// so a slow server never holds up switching: the switcher is locked
+    /// while this runs.
+    async fn read_new_sources(self: &Arc<Self>, sw: &mut Switcher) {
         for (id, spec) in sw.unread_sources() {
             let place = datasource::resolve(&spec, sw.path());
+            if place.is_url() {
+                if self.fetching.lock().expect("fetching lock").insert(id) {
+                    tokio::spawn(self.clone().fetch_new_source(id, spec, place));
+                }
+                continue;
+            }
             let seen = self.seen(&place).await;
             sw.set_rows(id, datasource::read(&spec, &place, &self.http).await);
             self.source_times
@@ -179,6 +190,27 @@ impl Service {
                 .expect("source times lock")
                 .insert(id, seen);
         }
+    }
+
+    /// A data source at an address, fetched without the switcher locked.
+    async fn fetch_new_source(
+        self: Arc<Self>,
+        id: InputId,
+        spec: lmix_types::DataSourceSpec,
+        place: datasource::Place,
+    ) {
+        let rows = datasource::read(&spec, &place, &self.http).await;
+        let mut sw = self.switcher.lock().await;
+        // Gone or read meanwhile (the show changed): nothing to do.
+        if sw.unread_sources().iter().any(|(s, _)| *s == id) {
+            sw.set_rows(id, rows);
+            self.source_times
+                .lock()
+                .expect("source times lock")
+                .insert(id, Seen::Url(Instant::now()));
+            self.publish(&sw);
+        }
+        self.fetching.lock().expect("fetching lock").remove(&id);
     }
 
     async fn seen(&self, place: &datasource::Place) -> Seen {
@@ -277,7 +309,7 @@ impl Service {
 
     /// Reopen the autosave of the last run, if any. The show keeps no file
     /// path, so a later save asks for one.
-    pub async fn resume(&self) -> Result<bool, ActionError> {
+    pub async fn resume(self: &Arc<Self>) -> Result<bool, ActionError> {
         let Some(path) = &self.autosave else {
             return Ok(false);
         };
@@ -769,6 +801,20 @@ impl Service {
             }
             _ => {}
         }
+        // A table to import is read before the switcher is locked: it may
+        // come from an address.
+        let mut imported = match &action {
+            Action::ImportDatasets { path, .. } => {
+                let show = self.switcher.lock().await.path().map(str::to_string);
+                let spec = lmix_types::DataSourceSpec::Csv {
+                    path: path.clone(),
+                    header: true,
+                };
+                let place = datasource::resolve(&spec, show.as_deref());
+                Some(datasource::read(&spec, &place, &self.http).await)
+            }
+            _ => None,
+        };
         let mut sw = self.switcher.lock().await;
         let before = sw.on_air();
         let file_action = matches!(action, Action::OpenShow { .. } | Action::SaveShow { .. });
@@ -791,13 +837,8 @@ impl Service {
         let commands = match action {
             Action::NewShow => sw.replace(Show::default(), None),
             Action::OpenShow { path } => open(&mut sw, path).await?,
-            Action::ImportDatasets { path, template } => {
-                let spec = lmix_types::DataSourceSpec::Csv {
-                    path: path.clone(),
-                    header: true,
-                };
-                let place = datasource::resolve(&spec, sw.path());
-                let table = datasource::read(&spec, &place, &self.http).await;
+            Action::ImportDatasets { template, .. } => {
+                let table = imported.take().unwrap_or_default();
                 if let Some(error) = table.error {
                     return Err(ActionError::BadTitle { reason: error });
                 }
@@ -840,11 +881,15 @@ impl Service {
         let result = self.execute(&mut sw, now).await;
         self.read_new_sources(&mut sw).await;
         if let (Some(report), Ok(())) = (report, &result) {
-            if let Event::Title {
-                graphics,
-                layer,
-                report: what,
-            } = &report
+            // Like an input's triggers: none for what a trigger did.
+            if let (
+                Origin::Operator,
+                Event::Title {
+                    graphics,
+                    layer,
+                    report: what,
+                },
+            ) = (origin, &report)
             {
                 for (delay_ms, actions) in sw.title_triggers(*graphics, *layer, what) {
                     self.run_triggered(delay_ms, actions);

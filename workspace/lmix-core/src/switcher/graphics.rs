@@ -54,13 +54,22 @@ pub struct TitleRuntime {
     plays: HashMap<(InputId, u32), (u64, u64)>,
     /// How the last transform change of a layer moves.
     transform_moves: HashMap<(InputId, u32), (u32, Easing)>,
-    /// Data set last applied to a layer (index into the show's sets).
-    dataset_at: HashMap<(InputId, u32), usize>,
+    /// Name of the data set last applied to a layer.
+    dataset_at: HashMap<(InputId, u32), String>,
     /// When each auto-advancing data source moves on next.
     due: HashMap<InputId, Instant>,
 }
 
 impl TitleRuntime {
+    /// Drop what is kept of a channel's layer (all layers without one).
+    fn forget(&mut self, graphics: InputId, layer: Option<u32>) {
+        let gone = |key: &(InputId, u32)| key.0 == graphics && layer.is_none_or(|l| l == key.1);
+        self.calls.retain(|k, _| !gone(k));
+        self.plays.retain(|k, _| !gone(k));
+        self.transform_moves.retain(|k, _| !gone(k));
+        self.dataset_at.retain(|k, _| !gone(k));
+    }
+
     fn played(&mut self, graphics: InputId, layer: u32) {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -210,7 +219,7 @@ impl Switcher {
                 self.check_unlocked()?;
                 let index = self.find_graphics(&graphics)?;
                 let removed = self.show.graphics.remove(index);
-                self.titles.calls.retain(|(id, _), _| *id != removed.id);
+                self.titles.forget(removed.id, None);
             }
             Action::RenameGraphics { graphics, name } => {
                 let index = self.find_graphics(&graphics)?;
@@ -292,12 +301,13 @@ impl Switcher {
                             .position(|t| t.layer == layer)
                             .ok_or_else(|| no_title(layer))?;
                         channel.layers.remove(at);
-                        self.titles.calls.remove(&(channel.id, layer));
+                        let id = channel.id;
+                        self.titles.forget(id, Some(layer));
                     }
                     None => {
                         channel.layers.clear();
                         let id = channel.id;
-                        self.titles.calls.retain(|(g, _), _| *g != id);
+                        self.titles.forget(id, None);
                     }
                 }
             }
@@ -419,7 +429,7 @@ impl Switcher {
             }
             Action::SetTitleTriggers { graphics, triggers } => {
                 super::check_triggers(triggers.iter().map(|t| (t.delay_ms, t.actions.as_slice())))?;
-                if let Some(layer) = triggers.iter().find_map(|t| t.layer) {
+                for layer in triggers.iter().filter_map(|t| t.layer) {
                     check_layer(layer)?;
                 }
                 let index = self.find_graphics(&graphics)?;
@@ -604,11 +614,11 @@ impl Switcher {
                 reason: "no data sets for this template".into(),
             });
         }
-        let now = self
-            .titles
-            .dataset_at
-            .get(&(id, layer))
-            .and_then(|at| fitting.iter().position(|i| i == at));
+        let now = self.titles.dataset_at.get(&(id, layer)).and_then(|name| {
+            fitting
+                .iter()
+                .position(|&i| self.show.datasets[i].name == *name)
+        });
         let next = match (now, back) {
             (None, false) => 0,
             (None, true) => fitting.len() - 1,
@@ -623,7 +633,8 @@ impl Switcher {
         let data = self.show.datasets[at].data.clone();
         let id = self.show.graphics[self.find_graphics(graphics)?].id;
         self.title_mut(graphics, layer)?.data = data;
-        self.titles.dataset_at.insert((id, layer), at);
+        let name = self.show.datasets[at].name.clone();
+        self.titles.dataset_at.insert((id, layer), name);
         Ok(())
     }
 
@@ -1166,9 +1177,20 @@ mod tests {
         assert_eq!(step(&mut sw, false), "Name A", "after the last the first");
         assert_eq!(step(&mut sw, true), "Name B");
 
+        // Sets A, B, C, B shown: removing A must not move the place.
+        sw.apply(Action::SaveDataset {
+            name: "C".into(),
+            template: template.clone(),
+            data: data(&[("name_field", "Name C")]),
+        })
+        .unwrap();
+        sw.apply(Action::RemoveDataset { name: "A".into() })
+            .unwrap();
+        assert_eq!(step(&mut sw, false), "Name C");
+
         let (columns, rows) = sw.export_datasets(template.as_deref());
-        assert_eq!(columns, ["name", "name_field", "role"]);
-        assert_eq!(rows[1], ["B", "Name B", ""]);
+        assert_eq!(columns, ["name", "name_field"]);
+        assert_eq!(rows[0], ["B", "Name B"]);
         assert_eq!(sw.export_datasets(None).1.len(), 3);
         assert!(sw.import_datasets(&["x".to_string()], &[], None).is_err());
     }
@@ -1395,6 +1417,15 @@ mod tests {
                 "zero",
                 vec![Action::CueGo {
                     list: InputRef::Number(1),
+                }],
+            )],
+            // A report from a trigger would fire it again and again.
+            vec![trigger(
+                "done",
+                vec![Action::TitleReport {
+                    graphics: InputRef::Number(1),
+                    layer: 3,
+                    event: "done".into(),
                 }],
             )],
         ] {

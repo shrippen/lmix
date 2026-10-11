@@ -198,7 +198,10 @@ async function follow(state) {
       entry = { layer: number };
       layers.set(number, entry);
     }
-    const reload = entry.url !== want.url || entry.revision !== want.revision || entry.template !== want.template;
+    // Loaded again (title_load) on a layer that played: the new title
+    // starts unseen, so the frame starts over too.
+    const reloaded = want.phase === "loaded" && entry.applied && entry.applied.phase !== "loaded";
+    const reload = reloaded || entry.url !== want.url || entry.revision !== want.revision || entry.template !== want.template;
     entry.want = want;
     if (reload) {
       entry.url = want.url;
