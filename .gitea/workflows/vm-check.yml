@@ -41,6 +41,10 @@ jobs:
           curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable
 
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          # Otherwise checkout's own header for git.arianw.de wins over
+          # REGISTRY_TOKEN below, and the Actions token cannot read strom.
+          persist-credentials: false
 
       # Private submodule: see strom.yml.
       - name: strom submodule
