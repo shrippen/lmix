@@ -33,6 +33,13 @@ Kirigami.ApplicationWindow {
         property bool global: false
     }
 
+    Settings {
+        id: safetySettings
+        category: "safety"
+        /** Ask before a running output (recording, stream) stops (UI.10). */
+        property bool confirmStop: true
+    }
+
     Binding {
         target: KanteStyle
         property: "kind"
@@ -340,6 +347,7 @@ Kirigami.ApplicationWindow {
                     tally: KanteStyle.positiveTextColor
                     // As the input arrives, not the tile's small picture.
                     source: root.previewInput ? "full:" + root.previewInput.id : ""
+                    input: root.previewInput
                 }
 
                 TransitionPanel {
@@ -359,6 +367,7 @@ Kirigami.ApplicationWindow {
                     tally: KanteStyle.negativeTextColor
                     source: "program"
                     peakDb: root.levels.program
+                    input: root.programInput
                 }
             }
 
@@ -495,6 +504,8 @@ Kirigami.ApplicationWindow {
                 act: root.act
                 outputs: outputModel
                 outputById: root.outputById
+                confirmStop: safetySettings.confirmStop
+                onConfirmStopChanged: safetySettings.confirmStop = confirmStop
                 onAddRequested: addOutputDialog.open()
             }
 
@@ -516,6 +527,8 @@ Kirigami.ApplicationWindow {
         property color tally
         property alias source: view.source
         property var peakDb: undefined
+        /** The input shown, for its transport; null for layouts. */
+        property var input: null
 
         Layout.fillWidth: true
         Layout.fillHeight: true
@@ -545,6 +558,11 @@ Kirigami.ApplicationWindow {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 core: backend
+            }
+            TransportBar {
+                Layout.fillWidth: true
+                input: monitor.input
+                act: root.act
             }
             KanteLevelMeter {
                 Layout.fillWidth: true

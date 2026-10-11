@@ -1366,3 +1366,20 @@ alle behoben und mit Tests abgedeckt.
 und Overlay (GFX.17), Overlay wartet auf das Ende der Ausblendung
 (GFX.4), Titel als Stinger (GFX.11), XLSX/ODS, Google Sheets mit API-Schlüssel (DAT.1), Zeilen zu Spalten
 (DAT.3), Bilder aus lokalen Pfaden außerhalb des Vorlagenordners.
+
+## 2026-10-11 — M9 Anfang: Console ohne GPU (UI.5, UI.10)
+
+**Kontext**: M7 wartet für den Rest auf die Render-Engine (M7.0, GPU);
+der User hat neue Meilensteine freigegeben. Aus M9 zuerst Console-Punkte,
+die ohne GPU prüfbar sind.
+**Transportleiste** (UI.5): unter Vorschau und Programm, sobald dort ein
+Datei-, URL- oder Playlist-Input steht: Neustart, Abspielen, Pause, bei
+Playlists Voriges/Nächstes, daneben die Länge des laufenden Stücks
+(`clip_ms`). Eine Positionsanzeige fehlt: der Zustand kennt nur die Länge.
+**Stopp-Rückfrage** (UI.10): ein laufender Ausgang (Aufnahme, Stream)
+stoppt erst nach „OK“; „Ask before stopping“ im Dialog schaltet die Frage
+ab (Console-Einstellung `safety/confirmStop`). Die Sperre (AUT.11) bleibt
+der harte Schutz.
+**Geprüft**: Console unter Xvfb gegen lmix-core ohne Engine: Leiste mit
+Playlist auf Programm; Abbrechen lässt laufen, OK stoppt, abgeschaltet
+stoppt ohne Frage; keine QML-Warnungen.

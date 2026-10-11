@@ -405,4 +405,8 @@ DE = {
     'File (relative to the show file) or http(s) address': 'Datei (relativ zur Show-Datei) oder http(s)-Adresse',
     'Rows, e.g. scores/game': 'Zeilen, z. B. scores/game',
     'No data sources yet. A data source is a table (CSV, JSON, a feed, …) whose selected row fills title fields, e.g. names and roles of guests.': 'Noch keine Datenquellen. Eine Datenquelle ist eine Tabelle (CSV, JSON, ein Feed, …), deren gewählte Zeile Titelfelder füllt, z. B. Namen und Funktionen von Gästen.',
+    'Length %1': 'Länge %1',
+    'Stop %1?': '%1 stoppen?',
+    'A stopped recording or stream cannot go on where it was.': 'Eine gestoppte Aufnahme oder ein gestoppter Stream lässt sich nicht an derselben Stelle fortsetzen.',
+    'Ask before stopping': 'Vor dem Stoppen fragen',
 }

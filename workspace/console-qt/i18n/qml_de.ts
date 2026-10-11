@@ -1063,7 +1063,7 @@
   <context>
     <name>Main</name>
     <message>
-      <location filename="../qml/Main.qml" line="+89" />
+      <location filename="../qml/Main.qml" line="+96" />
       <source>Layout %1 %2</source>
       <translation>Layout %1 %2</translation>
     </message>
@@ -1169,12 +1169,12 @@
       <translation>Vorschau</translation>
     </message>
     <message>
-      <location line="+19" />
+      <location line="+20" />
       <source>Program</source>
       <translation>Programm</translation>
     </message>
     <message>
-      <location line="+10" />
+      <location line="+11" />
       <source>Inputs</source>
       <translation>Inputs</translation>
     </message>
@@ -1275,12 +1275,12 @@
   <context>
     <name>OutputBar</name>
     <message>
-      <location filename="../qml/OutputBar.qml" line="+25" />
+      <location filename="../qml/OutputBar.qml" line="+29" />
       <source>Outputs</source>
       <translation>Ausgänge</translation>
     </message>
     <message>
-      <location line="+23" />
+      <location line="+32" />
       <source>Running</source>
       <translation>Läuft</translation>
     </message>
@@ -1305,7 +1305,22 @@
       <translation>%1 entfernen</translation>
     </message>
     <message>
-      <location line="+8" />
+      <location line="+14" />
+      <source>Stop %1?</source>
+      <translation>%1 stoppen?</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>A stopped recording or stream cannot go on where it was.</source>
+      <translation>Eine gestoppte Aufnahme oder ein gestoppter Stream lässt sich nicht an derselben Stelle fortsetzen.</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Ask before stopping</source>
+      <translation>Vor dem Stoppen fragen</translation>
+    </message>
+    <message>
+      <location line="+7" />
       <source>+ Output</source>
       <translation>+ Ausgang</translation>
     </message>
@@ -2184,6 +2199,39 @@
       <location line="+1" />
       <source>Overlay %1 is empty. Click: show the preview input.</source>
       <translation>Overlay %1 ist leer. Klick: Vorschau-Input zeigen.</translation>
+    </message>
+  </context>
+  <context>
+    <name>TransportBar</name>
+    <message>
+      <location filename="../qml/TransportBar.qml" line="+44" />
+      <source>Previous</source>
+      <translation>Zurück</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Restart</source>
+      <translation>Von vorn</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Play</source>
+      <translation>Abspielen</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Pause</source>
+      <translation>Pause</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Next</source>
+      <translation>Weiter</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Length %1</source>
+      <translation>Länge %1</translation>
     </message>
   </context>
   <context>
