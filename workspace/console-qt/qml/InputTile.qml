@@ -30,6 +30,7 @@ KanteCard {
     signal replaceRequested()
     signal triggersRequested()
     signal ptzRequested()
+    signal settingsRequested()
     /** Dynamic slots (1–4) that name this input (AUT.5). */
     property var dynamicSlots: []
     /** Drag to reorder: where the pointer is, in the window. */
@@ -232,6 +233,11 @@ KanteCard {
     QQC2.Menu {
         id: menu
         KantePopupSkin { popup: menu }
+
+        QQC2.MenuItem {
+            text: qsTr("Settings…")
+            onTriggered: tile.settingsRequested()
+        }
 
         QQC2.MenuItem {
             text: qsTr("Cut to program")

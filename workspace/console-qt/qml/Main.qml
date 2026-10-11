@@ -272,6 +272,29 @@ Kirigami.ApplicationWindow {
         outputs: root.show ? root.show.outputs : []
     }
 
+    InputSettingsDialog {
+        id: inputSettingsDialog
+        parent: QQC2.Overlay.overlay
+        anchors.centerIn: parent
+        act: root.act
+        core: backend
+        inputs: root.inputs
+        looksAvailable: root.show !== null && root.show.looks_available === true
+        onReplaceRequested: input => {
+            addInputDialog.replacing = input
+            addInputDialog.open()
+        }
+        onTriggersRequested: input => {
+            triggersDialog.graphics = null
+            triggersDialog.input = input
+            triggersDialog.open()
+        }
+        onPtzRequested: input => {
+            ptzDialog.inputId = input.id
+            ptzDialog.open()
+        }
+    }
+
     PtzDialog {
         id: ptzDialog
         parent: QQC2.Overlay.overlay
@@ -595,6 +618,10 @@ Kirigami.ApplicationWindow {
                     }
                     dynamicSlots: root.show && root.show.dynamic_inputs
                         ? [1, 2, 3, 4].filter(n => root.show.dynamic_inputs[n - 1] === key) : []
+                    onSettingsRequested: {
+                        inputSettingsDialog.inputId = tileDelegate.input.id
+                        inputSettingsDialog.open()
+                    }
                     onPtzRequested: {
                         ptzDialog.inputId = tileDelegate.input.id
                         ptzDialog.open()

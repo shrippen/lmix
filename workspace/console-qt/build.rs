@@ -130,6 +130,9 @@ fn main() {
                 "qml/DataSourcesDialog.qml",
                 "qml/TransportBar.qml",
                 "qml/PtzDialog.qml",
+                "qml/LookPanel.qml",
+                "qml/ChannelStripPanel.qml",
+                "qml/InputSettingsDialog.qml",
             ])
             .qml_file(QmlFile::from("qml/Texts.qml").singleton(true)),
     )

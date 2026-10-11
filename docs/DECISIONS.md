@@ -1449,3 +1449,11 @@ Vorlagenordner nicht hat (vorhandene bleiben), und öffnet die Show. Beides
 läuft ohne Switcher-Sperre (Medien können Gigabytes sein); die Sperre
 (AUT.11) verhindert den Import. Abhängigkeit `tar` 0.4 (MIT OR
 Apache-2.0, ohne xattr). Console: „Package“ → Export…/Import….
+**Input-Einstellungen in Reitern** (UI.8): „Settings…“ oben im
+Kachelmenü öffnet einen Dialog mit „General“ (Name, Farbmarke, Signal-
+verlust, Quelle mit „Replace…“), „Colour“ (Look), „Audio“ (Kanalzug und
+Aux-Sends), „Triggers“, „PTZ“ (Adresse, „Controls…“) und „Advanced“ (Id,
+Slot, Zustand, WHIP-Adresse). Farbe und Ton sind die Inhalte der
+bisherigen Dialoge, herausgelöst als `LookPanel` und `ChannelStripPanel`;
+die Dialoge gibt es weiter. Key, Effekte, Position, Ebenen und Tally
+fehlen, solange die Engine sie nicht hat.

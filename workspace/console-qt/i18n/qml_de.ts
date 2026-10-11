@@ -224,12 +224,15 @@
   <context>
     <name>ChannelStripDialog</name>
     <message>
-      <location filename="../qml/ChannelStripDialog.qml" line="+39" />
+      <location filename="../qml/ChannelStripDialog.qml" line="+17" />
       <source>Channel strip of %1 %2</source>
       <translation>Kanalzug von %1 %2</translation>
     </message>
+  </context>
+  <context>
+    <name>ChannelStripPanel</name>
     <message>
-      <location line="+80" />
+      <location filename="../qml/ChannelStripPanel.qml" line="+107" />
       <source>Input</source>
       <translation>Eingang</translation>
     </message>
@@ -501,9 +504,147 @@
     </message>
   </context>
   <context>
+    <name>InputSettingsDialog</name>
+    <message>
+      <location filename="../qml/InputSettingsDialog.qml" line="+31" />
+      <source>General</source>
+      <translation>Allgemein</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Colour</source>
+      <translation>Farbe</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Audio</source>
+      <translation>Ton</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Triggers</source>
+      <translation>Auslöser</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>PTZ</source>
+      <translation>PTZ</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Advanced</source>
+      <translation>Erweitert</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Settings of %1 %2</source>
+      <translation>Einstellungen von %1 %2</translation>
+    </message>
+    <message>
+      <location line="+40" />
+      <source>Name</source>
+      <translation>Name</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>Colour tag</source>
+      <translation>Farbmarke</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>None</source>
+      <translation>Keine</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>When the signal is lost</source>
+      <translation>Bei Signalverlust</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Hold last frame</source>
+      <translation>Letztes Bild halten</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Black</source>
+      <translation>Schwarz</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Source</source>
+      <translation>Quelle</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Replace…</source>
+      <translation>Ersetzen…</translation>
+    </message>
+    <message>
+      <location line="+14" />
+      <source>Colour correction needs the GL mixer (lmix-core --mixer gl).</source>
+      <translation>Farbkorrektur braucht den GL-Mischer (lmix-core --mixer gl).</translation>
+    </message>
+    <message>
+      <location line="+16" />
+      <source>This input has no sound.</source>
+      <translation>Dieser Input hat keinen Ton.</translation>
+    </message>
+    <message>
+      <location line="+18" />
+      <source>%1 triggers run actions when this input goes on air, off air or ends.</source>
+      <translation>%1 Auslöser führen Aktionen aus, wenn dieser Input auf Sendung geht, sie verlässt oder endet.</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>No triggers.</source>
+      <translation>Keine Auslöser.</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Edit triggers…</source>
+      <translation>Auslöser bearbeiten…</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>Camera address</source>
+      <translation>Kameraadresse</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Set</source>
+      <translation>Setzen</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Controls…</source>
+      <translation>Steuerung…</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>Id</source>
+      <translation>Id</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Mixer slot</source>
+      <translation>Mischer-Slot</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>State</source>
+      <translation>Zustand</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>WHIP</source>
+      <translation>WHIP</translation>
+    </message>
+  </context>
+  <context>
     <name>InputTile</name>
     <message>
-      <location filename="../qml/InputTile.qml" line="+55" />
+      <location filename="../qml/InputTile.qml" line="+56" />
       <source>Input %1 %2</source>
       <translation>Input %1 %2</translation>
     </message>
@@ -599,6 +740,11 @@
     </message>
     <message>
       <location line="+11" />
+      <source>Settings…</source>
+      <translation>Einstellungen…</translation>
+    </message>
+    <message>
+      <location line="+5" />
       <source>Cut to program</source>
       <translation>Direkt auf Programm</translation>
     </message>
@@ -1030,12 +1176,15 @@
   <context>
     <name>LookDialog</name>
     <message>
-      <location filename="../qml/LookDialog.qml" line="+30" />
+      <location filename="../qml/LookDialog.qml" line="+17" />
       <source>Colour of %1 %2</source>
       <translation>Farbe von %1 %2</translation>
     </message>
+  </context>
+  <context>
+    <name>LookPanel</name>
     <message>
-      <location line="+22" />
+      <location filename="../qml/LookPanel.qml" line="+43" />
       <source>Brightness</source>
       <translation>Helligkeit</translation>
     </message>
@@ -1136,7 +1285,7 @@
       <translation>Leerer Ordner für Show und Medien des Pakets</translation>
     </message>
     <message>
-      <location line="+120" />
+      <location line="+143" />
       <source>lmix-core</source>
       <translation>lmix-core</translation>
     </message>
