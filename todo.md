@@ -5,6 +5,7 @@ Erledigtes abhaken (`[x]`, Datum) und nach einer Weile löschen; Details stehen 
 ## Für dich
 
 - [x] strom PR #3 (`lmix-player-sysmem`) gemergt.
+- [ ] CI `strom.yml`/`vm-check.yml` seit Einführung rot (403 beim Submodul `strom`): neuen Gitea-Token mit `read:repository` + `write:package` als Secret `REGISTRY_TOKEN` hinterlegen, dann Lauf von PR #14 (`ci-submodule-token`, `persist-credentials: false`) neu starten und bei grün mergen. Der jetzige Token kommt an (Lauf 1859), darf `strom` aber nicht lesen.
 - [ ] Demo-Welt-Kopien in 15 anderen Projekten veraltet (neuer Abschnitt `graufeld.stream`): `python3 shrippen.github.io/demo/tools/sync-demo.py`, dann je Projekt committen — soll ich?
 - [ ] Kante PR #36 mergen (Farb-Labels, `KanteLevelMeter`), danach in `shrippen.github.io` `./build.sh` committen (liegt schon gebaut, uncommittet).
 - [ ] Vorschau-Lücke ansehen (`scripts/run-local.sh`, Kachel anklicken) und entscheiden: Vorschau-Ausgang im strom-Mischer oder alte Ansicht halten, bis die neue ein Bild hat.
