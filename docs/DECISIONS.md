@@ -1551,3 +1551,22 @@ eingeklappten Knöpfe wurden bei jeder Zustandsmeldung neu gebaut (ein
 offenes Menü ging zu; jetzt ein Modell mit Schlüsseln wie bei den
 Kacheln). Alle behoben.
 
+## 2026-10-12 — Layout-Editor: Mehrfachauswahl und Sperre (LAY.6)
+
+**Entscheidung**: Umschalt+Klick nimmt eine Box zur Auswahl hinzu (oder
+heraus); gewählte Boxen tragen einen Fokusrahmen. Ziehen einer gewählten
+Box zieht die anderen sichtbar mit, gefangen wird an der gezogenen Box
+(gegen Bild, Schutzbereich und nicht gewählte Boxen), die anderen
+verschieben sich um gleich viel; Pfeiltasten verschieben alle gewählten,
+zusammen im Bild gehalten, als ein Schritt fürs Rückgängig. Umschalt
+gehört damit beim Klick der Auswahl, Strg dem freien Platzieren, Umschalt
+am Eckgriff dem freien Seitenverhältnis wie bisher.
+**Sperre** je Box (Häkchen „Sperren“): die Box zieht und skaliert nicht,
+die Ortswahl ist aus, Pfeiltasten lassen sie stehen; Eingang, Rahmen und
+Zuschnitt bleiben änderbar. Die Sperre wird mit dem Layout gespeichert
+(`locked` an `BoxSpec`/`LayoutBox`, fehlt sie, ist sie aus); die Engine
+sieht sie nicht.
+**Geprüft**: Switcher-Test (Sperre bleibt am Layout); auf Xvfb zwei
+Boxen gewählt und gezogen (gesperrte bleibt), Pfeiltasten, Strg+Z,
+gespeichert.
+

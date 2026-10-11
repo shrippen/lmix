@@ -1051,7 +1051,7 @@
   <context>
     <name>LayoutDialog</name>
     <message>
-      <location filename="../qml/LayoutDialog.qml" line="+36" />
+      <location filename="../qml/LayoutDialog.qml" line="+69" />
       <source>Top right quarter</source>
       <translation>Viertel oben rechts</translation>
     </message>
@@ -1096,7 +1096,7 @@
       <translation>Klein, unten links</translation>
     </message>
     <message>
-      <location line="+128" />
+      <location line="+149" />
       <source>Layout %1 %2</source>
       <translation>Layout %1 %2</translation>
     </message>
@@ -1106,7 +1106,7 @@
       <translation>Neues Layout</translation>
     </message>
     <message>
-      <location line="+48" />
+      <location line="+50" />
       <source>Name</source>
       <translation>Name</translation>
     </message>
@@ -1127,8 +1127,8 @@
     </message>
     <message>
       <location line="+16" />
-      <source>Layout area: arrow keys move the selected box, with Shift they size it</source>
-      <translation>Layout-Fläche: Pfeiltasten verschieben die gewählte Box, mit Umschalt ändern sie ihre Größe</translation>
+      <source>Layout area: arrow keys move the chosen boxes, with Shift they size the selected one</source>
+      <translation>Layout-Fläche: Pfeiltasten verschieben die gewählten Boxen, mit Umschalt ändern sie die Größe der markierten</translation>
     </message>
     <message>
       <location line="+6" />
@@ -1136,17 +1136,27 @@
       <translation>Box hinzufügen, dann an ihren Platz ziehen</translation>
     </message>
     <message>
-      <location line="+53" />
+      <location line="+68" />
       <source> (cropped)</source>
       <translation> (beschnitten)</translation>
     </message>
     <message>
-      <location line="+68" />
+      <location line="+1" />
+      <source> (locked)</source>
+      <translation> (gesperrt)</translation>
+    </message>
+    <message>
+      <location line="+81" />
       <source>Box %1: %2, %3 px · %4 × %5 px (1920 × 1080)</source>
       <translation>Box %1: %2, %3 px · %4 × %5 px (1920 × 1080)</translation>
     </message>
     <message>
-      <location line="+7" />
+      <location line="+3" />
+      <source>Boxes catch edges, the centre, the safe area and other boxes; hold Ctrl to place freely. Shift+click chooses more boxes to move together.</source>
+      <translation>Boxen rasten an Kanten, der Mitte, dem Schutzbereich und anderen Boxen ein; mit Strg frei platzieren. Umschalt+Klick wählt weitere Boxen, die sich gemeinsam bewegen.</translation>
+    </message>
+    <message>
+      <location line="+4" />
       <source>Undo</source>
       <translation>Rückgängig</translation>
     </message>
@@ -1161,7 +1171,17 @@
       <translation>Boxen (von unten nach oben)</translation>
     </message>
     <message>
-      <location line="+45" />
+      <location line="+47" />
+      <source>Lock</source>
+      <translation>Sperren</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Lock box %1 in place</source>
+      <translation>Box %1 an ihrem Platz sperren</translation>
+    </message>
+    <message>
+      <location line="+5" />
       <source>Remove</source>
       <translation>Entfernen</translation>
     </message>
@@ -1211,17 +1231,12 @@
       <translation>+ Box</translation>
     </message>
     <message>
-      <location line="-445" />
+      <location line="-506" />
       <source>Empty</source>
       <translation>Leer</translation>
     </message>
     <message>
-      <location line="+322" />
-      <source>Boxes catch edges, the centre, the safe area and other boxes; hold Ctrl to place freely.</source>
-      <translation>Boxen rasten an Kanten, der Mitte, dem Schutzbereich und anderen Boxen ein; mit Strg frei platzieren.</translation>
-    </message>
-    <message>
-      <location line="+28" />
+      <location line="+402" />
       <source>Select box %1</source>
       <translation>Box %1 wählen</translation>
     </message>
@@ -1241,7 +1256,7 @@
       <translation>Eigener Platz</translation>
     </message>
     <message>
-      <location line="+2" />
+      <location line="+3" />
       <source>Place of box %1</source>
       <translation>Lage von Box %1</translation>
     </message>

@@ -1621,6 +1621,7 @@ impl Switcher {
                 input,
                 border_px: spec.border_px,
                 crop: spec.crop,
+                locked: spec.locked,
             });
         }
         Ok((background, parts))
@@ -3319,9 +3320,12 @@ mod tests {
                     input: named("B"),
                     border_px: 4,
                     crop: ZOOM,
+                    locked: true,
                 }],
             })
             .unwrap();
+        // The editor's lock stays with the layout, the engine never sees it.
+        assert!(sw.state().layouts[0].boxes[0].locked);
         assert_eq!(
             cmds,
             [Command::SetLayout {
@@ -3408,6 +3412,7 @@ mod tests {
             input: named(input),
             border_px: 0,
             crop: BoxCrop::default(),
+            locked: false,
         };
         let nothing_left = BoxSpec {
             crop: BoxCrop {

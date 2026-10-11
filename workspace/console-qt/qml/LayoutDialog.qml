@@ -7,8 +7,9 @@ import Kante
 /**
  * A layout: background input and up to eight boxes. Boxes are placed by
  * dragging them on a 16:9 area (corner handle: size; arrow keys: move,
- * with Shift: size) or from preset places; each can be framed and
- * cropped (zoom into its input). New layouts get a name.
+ * with Shift: size) or from preset places; each can be framed, cropped
+ * (zoom into its input) and locked in place. Shift+click chooses more
+ * boxes, which then move together. New layouts get a name.
  */
 KanteDialog {
     id: dialog
@@ -27,9 +28,41 @@ KanteDialog {
     /** Smallest box side, fraction of the picture. */
     readonly property real minSide: 0.05
 
-    /** Working copy: [{ input, rect: {x,y,w,h}, framed, crop: {left,top,right,bottom} }]. */
+    /** Working copy: [{ input, rect: {x,y,w,h}, framed, crop: {left,top,right,bottom}, locked }]. */
     property var boxes: []
+    /** The box the crop and pixel values are for; -1 none. */
     property int selected: -1
+    /** Indices of all chosen boxes (LAY.6), `selected` among them. */
+    property var chosen: []
+    /** How far the box being dragged has moved, in area pixels: the other
+     *  chosen boxes follow it. */
+    property point dragDelta: Qt.point(0, 0)
+
+    function isChosen(index) {
+        return chosen.indexOf(index) >= 0
+    }
+    /** Selects box `index` alone, or with `add` adds it to (or takes it
+     *  from) the chosen boxes. */
+    function select(index, add) {
+        if (!add || index < 0) {
+            selected = index
+            chosen = index >= 0 ? [index] : []
+            return
+        }
+        if (isChosen(index) && chosen.length > 1) {
+            chosen = chosen.filter(i => i !== index)
+            if (selected === index)
+                selected = chosen[chosen.length - 1]
+        } else {
+            if (!isChosen(index))
+                chosen = chosen.concat([index])
+            selected = index
+        }
+    }
+    /** Chosen boxes that may move. */
+    function movable() {
+        return chosen.filter(i => i < boxes.length && !boxes[i].locked)
+    }
 
     /** Places a box can take, as fractions of the picture. */
     readonly property var places: [
@@ -69,10 +102,24 @@ KanteDialog {
         boxes = list
     }
 
-    /** Moves box `index` to (x, y), kept inside the picture. */
-    function moveTo(index, x, y) {
-        var r = boxes[index].rect
-        edit(index, { rect: { x: Math.min(Math.max(snap(x), 0), 1 - r.w), y: Math.min(Math.max(snap(y), 0), 1 - r.h), w: r.w, h: r.h } })
+    /** Moves the chosen boxes that are not locked by (dx, dy), on the
+     *  grid and together kept inside the picture: one step. */
+    function moveChosen(dx, dy) {
+        const moving = movable()
+        if (moving.length === 0)
+            return
+        const rects = moving.map(i => boxes[i].rect)
+        const fit = (d, starts, ends) => Math.min(Math.max(d, -Math.min(...starts)), 1 - Math.max(...ends))
+        dx = fit(dx, rects.map(r => r.x), rects.map(r => r.x + r.w))
+        dy = fit(dy, rects.map(r => r.y), rects.map(r => r.y + r.h))
+        const list = boxes.slice()
+        for (const i of moving) {
+            const r = list[i].rect
+            const x = Math.min(Math.max(snap(r.x + dx), 0), 1 - r.w)
+            const y = Math.min(Math.max(snap(r.y + dy), 0), 1 - r.h)
+            list[i] = Object.assign({}, list[i], { rect: { x: x, y: y, w: r.w, h: r.h } })
+        }
+        boxes = list
     }
 
     /** How near (of the picture) a box edge or centre has to come to catch. */
@@ -85,8 +132,10 @@ KanteDialog {
      *  box (LAY.6); `pos` when nothing is near. `axis` "x" or "y". */
     function caught(index, pos, w, axis) {
         const targets = [0, 0.5, 1, safe, 1 - safe]
+        // Boxes moving along do not catch.
+        const moving = isChosen(index) ? movable() : [index]
         boxes.forEach((b, i) => {
-            if (i === index)
+            if (i === index || moving.indexOf(i) >= 0)
                 return
             const start = axis === "x" ? b.rect.x : b.rect.y
             const size = axis === "x" ? b.rect.w : b.rect.h
@@ -106,7 +155,8 @@ KanteDialog {
     }
 
     /** Moves box `index` to (x, y): catching edges and centres, else on
-     *  the 1 % grid; `free` (Ctrl held) exactly where it was let go. */
+     *  the 1 % grid; `free` (Ctrl held) exactly where it was let go. The
+     *  other chosen boxes move by as much. */
     function placeAt(index, x, y, free) {
         const r = boxes[index].rect
         const along = (v, w, axis) => {
@@ -116,6 +166,10 @@ KanteDialog {
             return c === v ? snap(v) : c
         }
         const cx = along(x, r.w, "x"), cy = along(y, r.h, "y")
+        if (isChosen(index) && movable().length > 1) {
+            moveChosen(cx - r.x, cy - r.y)
+            return
+        }
         edit(index, { rect: { x: Math.min(Math.max(cx, 0), 1 - r.w), y: Math.min(Math.max(cy, 0), 1 - r.h), w: r.w, h: r.h } })
     }
 
@@ -150,7 +204,7 @@ KanteDialog {
         const step = JSON.parse(history[at])
         boxes = step.boxes
         background.currentIndex = step.background
-        selected = Math.min(selected, boxes.length - 1)
+        select(Math.min(selected, boxes.length - 1), false)
         restoring = false
     }
     /** Output pixels of a fraction (1920×1080 picture). */
@@ -188,9 +242,10 @@ KanteDialog {
             input: b.input,
             rect: Object.assign({}, b.rect),
             framed: b.border_px > 0,
-            crop: Object.assign({}, noCrop, b.crop || {})
+            crop: Object.assign({}, noCrop, b.crop || {}),
+            locked: b.locked === true
         })) : []
-        selected = boxes.length > 0 ? 0 : -1
+        select(boxes.length > 0 ? 0 : -1, false)
         history = [snapshot()]
         historyAt = 0
     }
@@ -200,7 +255,8 @@ KanteDialog {
             rect: b.rect,
             input: b.input,
             border_px: b.framed ? frameWidth : 0,
-            crop: b.crop
+            crop: b.crop,
+            locked: b.locked
         }))
         var bg = background.currentIndex > 0 ? pictures[background.currentIndex - 1].id : null
         if (layout)
@@ -247,7 +303,7 @@ KanteDialog {
             focus: true
             activeFocusOnTab: true
             Accessible.role: Accessible.Pane
-            Accessible.name: qsTr("Layout area: arrow keys move the selected box, with Shift they size it")
+            Accessible.name: qsTr("Layout area: arrow keys move the chosen boxes, with Shift they size the selected one")
 
             QQC2.Label {
                 anchors.centerIn: parent
@@ -275,10 +331,12 @@ KanteDialog {
                 if (dx === 0 && dy === 0)
                     return
                 var r = dialog.boxes[i].rect
-                if (event.modifiers & Qt.ShiftModifier)
-                    dialog.sizeTo(i, r.w + dx, r.h + dy)
-                else
-                    dialog.moveTo(i, r.x + dx, r.y + dy)
+                if (event.modifiers & Qt.ShiftModifier) {
+                    if (!dialog.boxes[i].locked)
+                        dialog.sizeTo(i, r.w + dx, r.h + dy)
+                } else {
+                    dialog.moveChosen(dx, dy)
+                }
                 event.accepted = true
             }
 
@@ -290,15 +348,28 @@ KanteDialog {
                     required property var modelData
                     required property int index
                     readonly property bool isSelected: dialog.selected === index
+                    readonly property bool isChosen: dialog.chosen.indexOf(index) >= 0
+                    /** Moves along while another chosen box is dragged. */
+                    readonly property bool follows: isChosen && !modelData.locked && !dragArea.drag.active
                     readonly property var crop: modelData.crop
-                    x: modelData.rect.x * area.width
-                    y: modelData.rect.y * area.height
+                    x: modelData.rect.x * area.width + (follows ? dialog.dragDelta.x : 0)
+                    y: modelData.rect.y * area.height + (follows ? dialog.dragDelta.y : 0)
                     width: modelData.rect.w * area.width
                     height: modelData.rect.h * area.height
                     z: index
-                    color: Qt.rgba(KanteStyle.accentColor.r, KanteStyle.accentColor.g, KanteStyle.accentColor.b, isSelected ? 0.55 : 0.3)
+                    color: Qt.rgba(KanteStyle.accentColor.r, KanteStyle.accentColor.g, KanteStyle.accentColor.b, isSelected ? 0.55 : isChosen ? 0.45 : 0.3)
                     border.width: modelData.framed ? 3 : 1
                     border.color: modelData.framed ? "white" : KanteStyle.frameColor
+
+                    // Chosen: a focus outline around the box.
+                    Rectangle {
+                        anchors.fill: parent
+                        anchors.margins: -3
+                        visible: boxItem.isChosen
+                        color: "transparent"
+                        border.width: 2
+                        border.color: KanteStyle.focusColor
+                    }
 
                     QQC2.Label {
                         anchors.centerIn: parent
@@ -307,25 +378,39 @@ KanteDialog {
                         elide: Text.ElideRight
                         text: (boxItem.index + 1) + ": " + dialog.inputLabel(boxItem.modelData.input)
                             + (boxItem.crop.left + boxItem.crop.top + boxItem.crop.right + boxItem.crop.bottom > 0 ? qsTr(" (cropped)") : "")
+                            + (boxItem.modelData.locked ? qsTr(" (locked)") : "")
                     }
 
                     // Dragging moves the item itself; the box changes on
                     // release (changing `boxes` rebuilds the delegates).
                     MouseArea {
+                        id: dragArea
                         anchors.fill: parent
-                        cursorShape: Qt.SizeAllCursor
-                        drag.target: boxItem
+                        cursorShape: boxItem.modelData.locked ? Qt.ArrowCursor : Qt.SizeAllCursor
+                        drag.target: boxItem.modelData.locked ? null : boxItem
                         drag.minimumX: 0
                         drag.minimumY: 0
                         drag.maximumX: area.width - boxItem.width
                         drag.maximumY: area.height - boxItem.height
                         drag.threshold: 2
-                        onPressed: {
-                            dialog.selected = boxItem.index
+                        onPressed: mouse => {
+                            // Shift: one more (or one fewer); a chosen box keeps the others to drag them along.
+                            if (mouse.modifiers & Qt.ShiftModifier)
+                                dialog.select(boxItem.index, true)
+                            else if (boxItem.isChosen)
+                                dialog.selected = boxItem.index
+                            else
+                                dialog.select(boxItem.index, false)
                             area.forceActiveFocus()
                         }
+                        onPositionChanged: {
+                            if (drag.active)
+                                dialog.dragDelta = Qt.point(boxItem.x - boxItem.modelData.rect.x * area.width,
+                                    boxItem.y - boxItem.modelData.rect.y * area.height)
+                        }
                         onReleased: mouse => {
-                            if (drag.active || boxItem.x !== boxItem.modelData.rect.x * area.width || boxItem.y !== boxItem.modelData.rect.y * area.height)
+                            dialog.dragDelta = Qt.point(0, 0)
+                            if (!boxItem.modelData.locked && (drag.active || boxItem.x !== boxItem.modelData.rect.x * area.width || boxItem.y !== boxItem.modelData.rect.y * area.height))
                                 dialog.placeAt(boxItem.index, boxItem.x / area.width, boxItem.y / area.height,
                                     (mouse.modifiers & Qt.ControlModifier) !== 0)
                         }
@@ -337,7 +422,7 @@ KanteDialog {
                         height: width
                         anchors.right: parent.right
                         anchors.bottom: parent.bottom
-                        visible: boxItem.isSelected
+                        visible: boxItem.isSelected && !boxItem.modelData.locked
                         color: KanteStyle.focusColor
                         MouseArea {
                             anchors.fill: parent
@@ -377,7 +462,7 @@ KanteDialog {
                 text: r ? qsTr("Box %1: %2, %3 px · %4 × %5 px (1920 × 1080)").arg(dialog.selected + 1)
                     .arg(dialog.px(r.x, "x")).arg(dialog.px(r.y, "y")).arg(dialog.px(r.w, "x")).arg(dialog.px(r.h, "y")) : ""
                 QQC2.ToolTip.visible: posArea.containsMouse
-                QQC2.ToolTip.text: qsTr("Boxes catch edges, the centre, the safe area and other boxes; hold Ctrl to place freely.")
+                QQC2.ToolTip.text: qsTr("Boxes catch edges, the centre, the safe area and other boxes; hold Ctrl to place freely. Shift+click chooses more boxes to move together.")
                 MouseArea { id: posArea; anchors.fill: parent; hoverEnabled: true; acceptedButtons: Qt.NoButton }
             }
             KanteButton {
@@ -406,7 +491,7 @@ KanteDialog {
                     checked: dialog.selected === boxRow.index
                     text: boxRow.index + 1
                     Accessible.name: qsTr("Select box %1").arg(boxRow.index + 1)
-                    onClicked: dialog.selected = boxRow.index
+                    onClicked: dialog.select(boxRow.index, false)
                 }
                 QQC2.ComboBox {
                     id: inputBox
@@ -422,6 +507,7 @@ KanteDialog {
                     Layout.preferredWidth: Kirigami.Units.gridUnit * 10
                     model: [qsTr("Own place")].concat(dialog.places.map(p => p.label))
                     currentIndex: dialog.placeOf(boxRow.modelData.rect) + 1
+                    enabled: !boxRow.modelData.locked
                     Accessible.name: qsTr("Place of box %1").arg(boxRow.index + 1)
                     onActivated: index => {
                         if (index > 0)
@@ -436,13 +522,21 @@ KanteDialog {
                     onToggled: dialog.edit(boxRow.index, { framed: checked })
                     KanteCheckSkin { control: frame }
                 }
+                QQC2.CheckBox {
+                    id: lock
+                    text: qsTr("Lock")
+                    checked: boxRow.modelData.locked
+                    Accessible.name: qsTr("Lock box %1 in place").arg(boxRow.index + 1)
+                    onToggled: dialog.edit(boxRow.index, { locked: checked })
+                    KanteCheckSkin { control: lock }
+                }
                 KanteButton {
                     text: qsTr("Remove")
                     onClicked: {
                         var list = dialog.boxes.slice()
                         list.splice(boxRow.index, 1)
                         dialog.boxes = list
-                        dialog.selected = Math.min(dialog.selected, list.length - 1)
+                        dialog.select(Math.min(dialog.selected, list.length - 1), false)
                     }
                 }
             }
@@ -510,9 +604,10 @@ KanteDialog {
                         input: null,
                         rect: { x: 0.7, y: y, w: 0.25, h: 0.25 },
                         framed: false,
-                        crop: { left: 0, top: 0, right: 0, bottom: 0 }
+                        crop: { left: 0, top: 0, right: 0, bottom: 0 },
+                        locked: false
                     }])
-                    dialog.selected = n
+                    dialog.select(n, false)
                 }
             }
         }

@@ -389,7 +389,8 @@ Stand (2026-10-12, ohne GPU; DECISIONS „M9 Anfang“):
 | Tally über TSL UMD 3.1/5.0 | ✅ PER.1 teils (ohne GPIO) |
 | PTZ über VISCA (IP, UDP), Positionen per Auslöser | ◐ PER.2, PER.3 (an echter Kamera ungeprüft) |
 | Show-Paket mit Medien, Daten, Vorlagen | ✅ SHW.6 |
-| Verschmelzen, Mix-Inputs, Ebenen-Editor, Effektkette, Karten-Ausgang, Key+Fill | offen (Engine/Hardware) |
+| Layout-Editor: Ziehen, Fangen, Mehrfachauswahl, Sperre, Rückgängig | ✅ LAY.6 |
+| Verschmelzen, Mix-Inputs, Effektkette, Karten-Ausgang, Key+Fill | offen (Engine/Hardware) |
 
 ### Später — Wiederholung, Gäste
 
