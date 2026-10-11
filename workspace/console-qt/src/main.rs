@@ -9,6 +9,7 @@ use gstreamer as gst;
 mod bridge;
 mod config;
 mod forms;
+mod qt_translations;
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
 enum Style {
@@ -72,6 +73,7 @@ fn main() {
         app.as_mut().set_organization_name(&QString::from("lmix"));
         app.as_mut().set_application_name(&QString::from("console"));
         QGuiApplication::set_desktop_file_name(&QString::from("lmix-console"));
+        qt_translations::ffi::install_qt_translations();
     }
     let mut engine = QQmlApplicationEngine::new();
     if let Some(engine) = engine.as_mut() {

@@ -121,7 +121,8 @@ fn main() {
             ])
             .qml_file(QmlFile::from("qml/Texts.qml").singleton(true)),
     )
-    .files(["src/bridge.rs"])
+    .files(["src/bridge.rs", "src/qt_translations.rs"])
+    .cpp_file("cpp/qt_translations.cpp")
     .qrc(kante_qrc());
     if let Some(qrc) = translations_qrc() {
         builder = builder.qrc(qrc);
