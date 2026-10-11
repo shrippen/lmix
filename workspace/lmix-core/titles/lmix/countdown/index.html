@@ -72,7 +72,13 @@
       up = d.direction === "up";
       autostart = d.autostart !== "false";
     },
-    play() { el("count").classList.add("is-in"); control.reset(); if (autostart) control.start(); },
+    play() {
+      el("count").classList.add("is-in");
+      control.reset();
+      // On air since before this page: go on from there (paused is lost).
+      elapsed = lmixTitle.resumedMs() / 1000;
+      if (autostart) control.start();
+    },
     stop() { el("count").classList.remove("is-in"); control.pause(); return lmixTitle.duration("--dur"); },
     functions: control,
   });

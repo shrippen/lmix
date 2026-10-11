@@ -220,6 +220,10 @@ pub struct TitleLayer {
     /// title that is playing already.
     #[serde(default)]
     pub played: u64,
+    /// When the title was last played (Unix ms): a page that loads it
+    /// later lets clocks and countdowns go on from there.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub played_at_ms: Option<u64>,
     /// `next` calls since the last play.
     pub step: u32,
     /// Changes when the template's files change; the page reloads it and

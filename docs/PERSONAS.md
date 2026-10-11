@@ -378,3 +378,6 @@ Countdown bis Vorstellungsbeginn kann bei 0 den Saallicht-Cue fahren.
 **Nachtrag B35 (2026-10-11)**: behoben. `title_add` zählt ein Feld hoch
 (Spielstand +1 auf einer Taste); P1 bekommt die Vorlage „Text slides“
 (Strophen mit Weiter/Zurück, Layout fürs ganze Bild für den Beamer).
+**Nachtrag B37 (2026-10-11)**: behoben. Eine Grafikseite, die lädt,
+während ein Titel läuft, lässt Countdown und Spieluhr dort weiterlaufen
+(nur eine Pause davor geht verloren).

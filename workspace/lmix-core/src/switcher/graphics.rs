@@ -50,8 +50,8 @@ pub struct TitleRuntime {
     /// Last function call per graphics channel and layer.
     calls: HashMap<(InputId, u32), TitleCall>,
     call_seq: u64,
-    /// Plays per graphics channel and layer.
-    plays: HashMap<(InputId, u32), u64>,
+    /// Plays per graphics channel and layer, and when the last was (ms).
+    plays: HashMap<(InputId, u32), (u64, u64)>,
     /// How the last transform change of a layer moves.
     transform_moves: HashMap<(InputId, u32), (u32, Easing)>,
     /// Data set last applied to a layer (index into the show's sets).
@@ -61,6 +61,14 @@ pub struct TitleRuntime {
 }
 
 impl TitleRuntime {
+    fn played(&mut self, graphics: InputId, layer: u32) {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_millis() as u64);
+        let entry = self.plays.entry((graphics, layer)).or_default();
+        *entry = (entry.0 + 1, now);
+    }
+
     /// After a new or opened show: nothing of the old one is kept.
     pub fn reset(&mut self) {
         self.rows.clear();
@@ -250,7 +258,7 @@ impl Switcher {
                 let id = channel.id;
                 self.titles.calls.remove(&(id, layer));
                 if play {
-                    *self.titles.plays.entry((id, layer)).or_default() += 1;
+                    self.titles.played(id, layer);
                 }
             }
             Action::TitlePlay { graphics, layer } => {
@@ -258,7 +266,7 @@ impl Switcher {
                 title.phase = TitlePhase::Playing;
                 title.step = 0;
                 let id = self.show.graphics[self.find_graphics(&graphics)?].id;
-                *self.titles.plays.entry((id, layer)).or_default() += 1;
+                self.titles.played(id, layer);
             }
             Action::TitleNext { graphics, layer } => {
                 let title = self.title_mut(&graphics, layer)?;
@@ -779,6 +787,7 @@ impl Switcher {
                     .iter()
                     .map(|t| {
                         let template = self.titles.templates.get(&t.template);
+                        let plays = self.titles.plays.get(&(g.id, t.layer));
                         let move_of = self
                             .titles
                             .transform_moves
@@ -793,12 +802,8 @@ impl Switcher {
                             bindings: t.bindings.clone(),
                             values: self.values_of(t),
                             phase: t.phase,
-                            played: self
-                                .titles
-                                .plays
-                                .get(&(g.id, t.layer))
-                                .copied()
-                                .unwrap_or(0),
+                            played: plays.map_or(0, |p| p.0),
+                            played_at_ms: plays.map(|p| p.1),
                             step: t.step,
                             revision: template.map_or(0, |t| t.revision),
                             call: self.titles.calls.get(&(g.id, t.layer)).cloned(),
@@ -937,6 +942,7 @@ mod tests {
         })
         .unwrap();
         assert_eq!((layer(&sw, 1).step, layer(&sw, 1).played), (0, 2));
+        assert!(layer(&sw, 1).played_at_ms.is_some_and(|ms| ms > 0));
 
         sw.apply(Action::TitleStop {
             graphics: g(),

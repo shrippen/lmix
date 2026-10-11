@@ -16,6 +16,8 @@
 // CasparCG's <templateData> XML; the SDK hands the template an object.
 // After stop() it reports "done" once the out animation is over.
 // lmixTitle.report(name) reports something else (e.g. "zero").
+// lmixTitle.resumedMs() in play() says how long the title has played when
+// the page loaded while it was on air (clocks go on from there).
 //
 // Opened on its own (not inside the graphics page), the template shows a
 // bar with Play / Next / Stop and its fields from manifest.json (styled by
@@ -102,7 +104,17 @@
     return px || 1;
   }
 
+  /** How long the title has been playing when play() is a page catching
+   *  up (the graphics page loaded while it was on air), else 0. Read it
+   *  in play(); it counts once. */
+  function resumedMs() {
+    const ms = Number(window.lmixResumeMs) || 0;
+    window.lmixResumeMs = 0;
+    return ms;
+  }
+
   lmixTitle.report = report;
+  lmixTitle.resumedMs = resumedMs;
   lmixTitle.unit = unit;
   lmixTitle.parseData = parseData;
   lmixTitle.duration = duration;

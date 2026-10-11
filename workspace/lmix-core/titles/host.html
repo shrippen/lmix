@@ -105,6 +105,13 @@ function sync(entry) {
     // repeated.
     call(entry, "update", payload(want));
     if (want.phase === "playing") {
+      // Playing since before this page: clocks go on from there
+      // (lmixTitle.resumedMs in the SDK).
+      try {
+        entry.frame.contentWindow.lmixResumeMs = want.played_at_ms ? Math.max(0, Date.now() - want.played_at_ms) : 0;
+      } catch (e) {
+        // A template from another origin keeps its own time.
+      }
       call(entry, "play");
       for (let i = 0; i < want.step; i++) call(entry, "next");
     }

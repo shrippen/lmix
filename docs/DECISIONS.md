@@ -1334,9 +1334,11 @@ ohne Vorlage), nach dem letzten wieder zum ersten; `import_datasets`
 liest eine CSV-Tabelle (Spalte `name`, übrige Spalten Felder; gleiche
 Namen ersetzt), `export_datasets` schreibt sie zurück (atomar, Pfade
 relativ zur Show-Datei). Console: ◀/▶ und Import/Export im Titel-Dialog.
+**Spät geladene Seite** (B37): der Zustand trägt `played_at_ms`; lädt
+eine Grafikseite, während ein Titel läuft, gibt sie der Vorlage mit, wie
+lange er schon spielt (`lmixTitle.resumedMs()`), der Countdown zählt von
+dort weiter. Eine Pause vor dem Neuladen kennt die Seite nicht.
 **Offen**: Rendern in strom (GFX.2, nach M7.0), Grafikkanal als Input
 und Overlay (GFX.17), Overlay wartet auf das Ende der Ausblendung
-(GFX.4), eine neu
-geladene Seite spielt laufende Titel von vorn (Countdown beginnt neu),
-Titel als Stinger (GFX.11), XLSX/ODS, Google Sheets mit API-Schlüssel, RSS, XML (DAT.1), Zeilen zu Spalten
+(GFX.4), Titel als Stinger (GFX.11), XLSX/ODS, Google Sheets mit API-Schlüssel, RSS, XML (DAT.1), Zeilen zu Spalten
 (DAT.3), Bilder aus lokalen Pfaden außerhalb des Vorlagenordners.

@@ -256,6 +256,20 @@ async function act(action) {
   if (JSON.stringify(textSource.rows) !== JSON.stringify([["first"], ["second"]])) fail("text rows: " + JSON.stringify(textSource));
   pass("text source: one row per line");
 
+  // A page that loads while a countdown runs goes on from there (B37).
+  await act({ action: "title_load", graphics: 1, layer: 8, template: "lmix/countdown",
+    data: { duration: "10:00" }, play: true });
+  await page.waitForTimeout(2500);
+  const late = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
+  await late.goto(base + "/graphics/1?preview");
+  const lateHandle = await late.waitForSelector('#stage iframe[style*="z-index: 8"]', { timeout: 5000 });
+  const lateFrame = await lateHandle.contentFrame();
+  await lateFrame.waitForFunction(() => ["09:57", "09:56", "09:55"].includes(document.getElementById("time").textContent),
+    null, { timeout: 5000 });
+  await late.close();
+  await act({ action: "title_clear", graphics: 1, layer: 8 });
+  pass("late page: countdown goes on, not from the start");
+
   // A preview page shows the same, but reports nothing (the countdown
   // starts again there and reaches zero a second time).
   const zeros = await page.evaluate(() => window.__reports.filter((r) => r.report === "zero").length);
