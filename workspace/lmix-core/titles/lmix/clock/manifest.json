@@ -1,0 +1,9 @@
+{
+  "name": "Clock",
+  "fields": [
+    { "id": "label", "label": "Label" },
+    { "id": "seconds", "label": "Seconds", "kind": "toggle", "default": "true" },
+    { "id": "corner", "label": "Corner", "kind": "choice", "default": "top-right",
+      "choices": ["top-right", "top-left", "bottom-right", "bottom-left"] }
+  ]
+}

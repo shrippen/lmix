@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Countdown</title>
+<link rel="stylesheet" href="/titles/sdk/lmix-title.css">
+<style>
+  .count { position: absolute; right: var(--safe-x); bottom: var(--safe-y); display: flex; flex-direction: column; align-items: flex-end; }
+  .count .label { padding: calc(8 * var(--u)) calc(20 * var(--u)); font-size: calc(22 * var(--u)); background: var(--bg-void); }
+  .count .label:empty { display: none; }
+  .count .time { padding: calc(8 * var(--u)) calc(36 * var(--u)) calc(8 * var(--u)) calc(28 * var(--u)); font-size: calc(96 * var(--u)); }
+  .count.zero .time { --accent-colour: var(--red); color: var(--red); }
+</style>
+</head>
+<body>
+<div class="count k-wipe" id="count">
+  <div class="label k-label" id="label"></div>
+  <div class="time k-panel k-accent k-figure" id="time"></div>
+</div>
+<script src="/titles/sdk/lmix-title.js"></script>
+<script>
+  // GFX.9: duration or target time, down or up; start, pause, reset and
+  // adjust(seconds) by title_call; reports "zero" when it reaches 0.
+  const el = (id) => document.getElementById(id);
+  let total = 300, target = null, up = false, autostart = true;
+  let elapsed = 0, since = null, zeroed = false;
+
+  function seconds(text) {
+    const parts = String(text || "").split(":").map(Number);
+    if (parts.some(Number.isNaN)) return 0;
+    return parts.reduce((acc, n) => acc * 60 + n, 0);
+  }
+  function untilTarget() {
+    const [h, m] = target.split(":").map(Number);
+    const now = new Date(), then = new Date(now);
+    then.setHours(h, m || 0, 0, 0);
+    if (then < now) then.setDate(then.getDate() + 1);
+    return (then - now) / 1000;
+  }
+  const running = () => elapsed + (since === null ? 0 : (performance.now() - since) / 1000);
+  function shown() {
+    if (target) return untilTarget();
+    return up ? running() : Math.max(0, total - running());
+  }
+  function format(s) {
+    s = Math.ceil(s - 1e-6);
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+    const two = (n) => String(n).padStart(2, "0");
+    return h > 0 ? `${h}:${two(m)}:${two(sec)}` : `${two(m)}:${two(sec)}`;
+  }
+  function frame() {
+    const s = shown();
+    el("time").textContent = format(s);
+    const atZero = !up && s <= 0 && (target || since !== null || elapsed > 0);
+    el("count").classList.toggle("zero", atZero);
+    if (atZero && !zeroed) { zeroed = true; lmixTitle.report("zero"); }
+    requestAnimationFrame(frame);
+  }
+
+  const control = {
+    start() { if (since === null) since = performance.now(); },
+    pause() { if (since !== null) { elapsed = running(); since = null; } },
+    reset() { elapsed = 0; since = since === null ? null : performance.now(); zeroed = false; },
+    adjust(delta) { elapsed -= Number(delta) || 0; if (shown() > 0) zeroed = false; },
+  };
+
+  lmixTitle({
+    update(d) {
+      el("label").textContent = d.label || "";
+      total = seconds(d.duration || "5:00");
+      target = /^\d{1,2}:\d{2}$/.test(d.target || "") ? d.target : null;
+      up = d.direction === "up";
+      autostart = d.autostart !== "false";
+    },
+    play() { el("count").classList.add("is-in"); control.reset(); if (autostart) control.start(); },
+    stop() { el("count").classList.remove("is-in"); control.pause(); return lmixTitle.duration("--dur"); },
+    functions: control,
+  });
+  requestAnimationFrame(frame);
+</script>
+</body>
+</html>

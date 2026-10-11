@@ -1,0 +1,8 @@
+{
+  "name": "My title",
+  "steps": 0,
+  "functions": [],
+  "fields": [
+    { "id": "text", "label": "Text" }
+  ]
+}

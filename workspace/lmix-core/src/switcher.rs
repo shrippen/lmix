@@ -26,6 +26,9 @@ use uuid::Uuid;
 
 use crate::show::{Show, ShowCueList, ShowInput, ShowLayout, ShowOutput, ShowShortcut};
 
+mod graphics;
+pub use graphics::{Rows, TemplateRef};
+
 /// What the engine has to do after an action.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Command {
@@ -243,6 +246,8 @@ pub struct Switcher {
     output_status: HashMap<OutputId, OutputStatus>,
     /// Length of the item each player plays, by slot; runtime only.
     clip_ms: HashMap<usize, u64>,
+    /// Templates, data source rows, title calls; runtime only.
+    titles: graphics::TitleRuntime,
 }
 
 impl Switcher {
@@ -264,6 +269,7 @@ impl Switcher {
             ingest_base: None,
             clip_ms: HashMap::new(),
             output_status: HashMap::new(),
+            titles: graphics::TitleRuntime::default(),
         }
     }
 
@@ -324,6 +330,27 @@ impl Switcher {
 
     fn apply_action(&mut self, action: Action) -> Result<Vec<Command>, ActionError> {
         match action {
+            action @ (Action::AddGraphics { .. }
+            | Action::RemoveGraphics { .. }
+            | Action::RenameGraphics { .. }
+            | Action::TitleLoad { .. }
+            | Action::TitlePlay { .. }
+            | Action::TitleNext { .. }
+            | Action::TitleStop { .. }
+            | Action::TitleClear { .. }
+            | Action::TitleUpdate { .. }
+            | Action::TitleCall { .. }
+            | Action::TitleBind { .. }
+            | Action::TitleReport { .. }
+            | Action::SaveDataset { .. }
+            | Action::RemoveDataset { .. }
+            | Action::ApplyDataset { .. }
+            | Action::AddDataSource { .. }
+            | Action::RemoveDataSource { .. }
+            | Action::DataRow { .. }
+            | Action::DataNext { .. }
+            | Action::DataPrevious { .. }
+            | Action::SetDataAuto { .. }) => self.apply_title(action),
             Action::AddInput { source, name } => self.add(source, name),
             Action::RemoveInput { input } => {
                 self.check_unlocked()?;
@@ -502,6 +529,7 @@ impl Switcher {
         // Closed inputs belong to the old show.
         self.removed.clear();
         self.status.clear();
+        self.titles.reset();
         commands.extend(self.restore_commands());
         commands
     }
@@ -698,6 +726,9 @@ impl Switcher {
                     boxes: l.boxes.clone(),
                 })
                 .collect(),
+            graphics: self.graphics_state(),
+            datasets: self.show.datasets.clone(),
+            data_sources: self.data_sources_state(),
         }
     }
 

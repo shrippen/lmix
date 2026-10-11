@@ -1,0 +1,8 @@
+{
+  "name": "Name and role",
+  "fields": [
+    { "id": "name", "label": "Name" },
+    { "id": "role", "label": "Role" },
+    { "id": "side", "label": "Side", "kind": "choice", "default": "left", "choices": ["left", "right"] }
+  ]
+}

@@ -14,6 +14,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::automation::{Cue, Trigger};
+use crate::graphics::{BindingSpec, DataSourceSpec, TitleData};
 use crate::input::{
     ChannelStrip, InputColor, InputRef, Listen, Look, SignalLoss, SourceSpec, Transport, AUX_BUSES,
 };
@@ -299,6 +300,129 @@ pub enum Action {
         duration_ms: u32,
     },
 
+    // ---- Titles (GFX) ----
+    /// Add a graphics channel: a page of title layers to render as an
+    /// input or overlay.
+    AddGraphics {
+        #[serde(default)]
+        name: Option<String>,
+    },
+    /// Remove a graphics channel and its layers.
+    RemoveGraphics { graphics: InputRef },
+    /// Rename a graphics channel.
+    RenameGraphics { graphics: InputRef, name: String },
+    /// Load `template` on `layer` (1–8) with `data`, replacing what the
+    /// layer held; `play` plays it at once (CasparCG `CG ADD`).
+    TitleLoad {
+        graphics: InputRef,
+        #[serde(default = "first_layer")]
+        layer: u32,
+        template: String,
+        #[serde(default)]
+        data: TitleData,
+        #[serde(default)]
+        play: bool,
+    },
+    /// Play the layer's title (in animation); again from the start if it
+    /// played already.
+    TitlePlay {
+        graphics: InputRef,
+        #[serde(default = "first_layer")]
+        layer: u32,
+    },
+    /// Next step of a multi-step title.
+    TitleNext {
+        graphics: InputRef,
+        #[serde(default = "first_layer")]
+        layer: u32,
+    },
+    /// Stop the title: it plays its out animation.
+    TitleStop {
+        graphics: InputRef,
+        #[serde(default = "first_layer")]
+        layer: u32,
+    },
+    /// Remove the title at once; without `layer` all layers.
+    TitleClear {
+        graphics: InputRef,
+        #[serde(default)]
+        layer: Option<u32>,
+    },
+    /// Set fields (others keep their values); an empty value clears one.
+    TitleUpdate {
+        graphics: InputRef,
+        #[serde(default = "first_layer")]
+        layer: u32,
+        data: TitleData,
+    },
+    /// Call a function of the template (CasparCG `CG INVOKE`).
+    TitleCall {
+        graphics: InputRef,
+        #[serde(default = "first_layer")]
+        layer: u32,
+        function: String,
+        #[serde(default)]
+        args: Vec<String>,
+    },
+    /// Feed a field from a data source column; `binding` null unbinds.
+    TitleBind {
+        graphics: InputRef,
+        #[serde(default = "first_layer")]
+        layer: u32,
+        field: String,
+        #[serde(default)]
+        binding: Option<BindingSpec>,
+    },
+    /// Sent by the graphics page: the template reported `event` (e.g.
+    /// `done` after its out animation, `zero` of a countdown).
+    TitleReport {
+        graphics: InputRef,
+        layer: u32,
+        event: String,
+    },
+    /// Save field values under `name` (GFX.8); replaces a set of that
+    /// name.
+    SaveDataset {
+        name: String,
+        #[serde(default)]
+        template: Option<String>,
+        data: TitleData,
+    },
+    /// Remove a saved set.
+    RemoveDataset { name: String },
+    /// Set a layer's fields from a saved set.
+    ApplyDataset {
+        graphics: InputRef,
+        #[serde(default = "first_layer")]
+        layer: u32,
+        name: String,
+    },
+
+    // ---- Data sources (DAT) ----
+    /// Add a data source; lmix-core reads the file and follows changes.
+    AddDataSource {
+        spec: DataSourceSpec,
+        #[serde(default)]
+        name: Option<String>,
+    },
+    /// Remove a data source; fields bound to it keep their last values.
+    RemoveDataSource { source: InputRef },
+    /// Select row `row` (1-based).
+    DataRow { source: InputRef, row: u32 },
+    /// Select the next row (the first after the last with `loop_rows`).
+    DataNext { source: InputRef },
+    /// Select the previous row.
+    DataPrevious { source: InputRef },
+    /// Move on every `interval_ms` (null stops), and whether to start
+    /// again after the last row.
+    SetDataAuto {
+        source: InputRef,
+        #[serde(default)]
+        interval_ms: Option<u32>,
+        #[serde(default)]
+        loop_rows: bool,
+    },
+
     // ---- Show (SHW) ----
     /// Start an empty show.
     NewShow,
@@ -320,6 +444,10 @@ fn default_ftb_ms() -> u32 {
 
 fn default_overlay_ms() -> u32 {
     DEFAULT_OVERLAY_MS
+}
+
+fn first_layer() -> u32 {
+    1
 }
 
 /// Why an action was refused. Clients show `message` (API.9: errors with
@@ -389,6 +517,20 @@ pub enum ActionError {
     NoLooks,
     #[error("channel strip: {field} is out of range")]
     BadStrip { field: String },
+    #[error("no graphics channel {reference}")]
+    UnknownGraphics { reference: String },
+    #[error("all {max} graphics channels are in use")]
+    GraphicsFull { max: usize },
+    #[error("no template {template}")]
+    UnknownTemplate { template: String },
+    #[error("title: {reason}")]
+    BadTitle { reason: String },
+    #[error("no data set {name}")]
+    UnknownDataset { name: String },
+    #[error("no data source {reference}")]
+    UnknownDataSource { reference: String },
+    #[error("data source: {reason}")]
+    BadDataSource { reason: String },
     #[error("show has no file yet; give a path")]
     NoShowPath,
     #[error("show file: {message}")]

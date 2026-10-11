@@ -77,6 +77,15 @@ pub struct ShowState {
     /// Name of the input `restore_input` would bring back.
     #[serde(default)]
     pub restorable: Option<String>,
+    /// Graphics channels (titles).
+    #[serde(default)]
+    pub graphics: Vec<crate::graphics::Graphics>,
+    /// Saved title data sets, by name.
+    #[serde(default)]
+    pub datasets: Vec<crate::graphics::Dataset>,
+    /// Data sources for title fields.
+    #[serde(default)]
+    pub data_sources: Vec<crate::graphics::DataSource>,
 }
 
 /// Current API version (API.10: additive changes within one version).
@@ -159,6 +168,13 @@ pub enum Event {
     /// A note or controller message from a MIDI controller (to learn a
     /// binding).
     Midi { midi: crate::midi::MidiMessage },
+    /// A title template reported something (`title_report`), e.g.
+    /// `done` or `zero`.
+    Title {
+        graphics: InputId,
+        layer: u32,
+        report: String,
+    },
 }
 
 #[cfg(test)]

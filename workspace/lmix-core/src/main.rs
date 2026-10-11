@@ -19,6 +19,7 @@ use lmix_types::Action;
 
 mod api;
 mod clips;
+mod datasource;
 mod engine;
 mod metrics;
 mod midi;
@@ -28,6 +29,7 @@ mod service;
 mod show;
 mod switcher;
 mod tcp;
+mod titles;
 mod web;
 
 use engine::flows::{MixerBackend, MonitorOut};
@@ -103,15 +105,27 @@ struct Args {
     /// Autosave file, written after every change.
     #[arg(long, env = "LMIX_AUTOSAVE", default_value_os_t = default_autosave())]
     autosave: PathBuf,
+
+    /// Folder of own title templates, besides the built-in ones.
+    #[arg(long, env = "LMIX_TEMPLATES", default_value_os_t = default_templates())]
+    templates: PathBuf,
+}
+
+/// `$XDG_DATA_HOME/lmix/templates`, else `~/.local/share/…`.
+fn default_templates() -> PathBuf {
+    data_home().join("lmix").join("templates")
 }
 
 /// `$XDG_DATA_HOME/lmix/autosave.lmix`, else `~/.local/share/…`.
 fn default_autosave() -> PathBuf {
-    let base = std::env::var_os("XDG_DATA_HOME")
+    data_home().join("lmix").join("autosave.lmix")
+}
+
+fn data_home() -> PathBuf {
+    std::env::var_os("XDG_DATA_HOME")
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/share")))
-        .unwrap_or_else(|| PathBuf::from("."));
-    base.join("lmix").join("autosave.lmix")
+        .unwrap_or_else(|| PathBuf::from("."))
 }
 
 #[tokio::main]
@@ -142,6 +156,8 @@ async fn main() -> anyhow::Result<()> {
         .clone()
         .unwrap_or_else(|| args.strom.clone());
     service.set_ingest_base(public_url).await;
+    // Before the show: its titles name templates from the folder.
+    service.use_templates(args.templates.clone()).await;
     let opened = match args.show {
         Some(path) => service
             .handle(Action::OpenShow { path })
@@ -161,6 +177,7 @@ async fn main() -> anyhow::Result<()> {
     tokio::spawn(service.clone().watch_failures());
     tokio::spawn(service.clone().forward_output_stats());
     tokio::spawn(service.clone().watch_players());
+    tokio::spawn(service.clone().watch_titles());
     if !args.midi.is_empty() {
         tokio::spawn(midi::serve(args.midi.clone(), service.clone()));
     }

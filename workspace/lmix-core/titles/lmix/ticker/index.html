@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Ticker</title>
+<link rel="stylesheet" href="/titles/sdk/lmix-title.css">
+<style>
+  .ticker { position: absolute; left: 0; right: 0; bottom: var(--safe-y); height: calc(64 * var(--u)); display: flex; background: var(--bg0); }
+  .ticker .label { flex: none; display: flex; align-items: center; padding: 0 calc(32 * var(--u)) 0 var(--safe-x);
+    background: var(--yellow); color: var(--bg-void); font-size: calc(26 * var(--u));
+    clip-path: polygon(0 0, 100% 0, calc(100% - 24 * var(--u)) 100%, 0 100%); }
+  .ticker .label:empty { display: none; }
+  .ticker .lane { position: relative; flex: 1; overflow: hidden; }
+  .ticker .run { position: absolute; top: 0; height: 100%; display: flex; align-items: center; white-space: nowrap; will-change: transform; }
+  .ticker .item { font-size: calc(32 * var(--u)); color: var(--fg0); font-family: var(--font-heading); font-weight: 600; }
+  .ticker .item::after { content: ""; display: inline-block; width: calc(10 * var(--u)); height: calc(10 * var(--u));
+    margin: 0 calc(36 * var(--u)); background: var(--yellow); transform: rotate(45deg) translateY(-15%); }
+</style>
+</head>
+<body>
+<div class="ticker k-wipe" id="ticker">
+  <div class="label k-label" id="label"></div>
+  <div class="lane" id="lane"><div class="run" id="run"></div></div>
+</div>
+<script src="/titles/sdk/lmix-title.js"></script>
+<script>
+  // GFX.10: speed, direction; update replaces the items, append() adds one.
+  const el = (id) => document.getElementById(id);
+  let items = [], speed = 140, direction = "left", offset = null, last = null, unitPx = 1;
+  addEventListener("resize", () => { unitPx = lmixTitle.unit(); });
+
+  function render() {
+    el("run").replaceChildren(...items.map((text) => {
+      const span = document.createElement("span");
+      span.className = "item";
+      span.textContent = text;
+      return span;
+    }));
+  }
+
+  function frame(now) {
+    const lane = el("lane").clientWidth, run = el("run").scrollWidth;
+    if (offset === null) offset = direction === "left" ? lane : -run;
+    if (last !== null) offset += (direction === "left" ? -1 : 1) * speed * unitPx * ((now - last) / 1000);
+    last = now;
+    // Off the far edge: in again from the start.
+    if (direction === "left" && offset < -run) offset = lane;
+    if (direction === "right" && offset > lane) offset = -run;
+    el("run").style.transform = `translateX(${offset}px)`;
+    requestAnimationFrame(frame);
+  }
+
+  lmixTitle({
+    update(d) {
+      el("label").textContent = d.label || "";
+      items = (d.items || "").split("\n").map((s) => s.trim()).filter(Boolean);
+      speed = Number(d.speed) > 0 ? Number(d.speed) : 140;
+      if ((d.direction || "left") !== direction) { direction = d.direction || "left"; offset = null; }
+      render();
+    },
+    play() { offset = null; el("ticker").classList.add("is-in"); },
+    stop() { el("ticker").classList.remove("is-in"); return lmixTitle.duration("--dur"); },
+    functions: {
+      append(text) { if (text) { items.push(String(text)); render(); } },
+    },
+  });
+  unitPx = lmixTitle.unit();
+  requestAnimationFrame(frame);
+</script>
+</body>
+</html>

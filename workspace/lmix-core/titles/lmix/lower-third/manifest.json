@@ -1,0 +1,9 @@
+{
+  "name": "Lower third",
+  "fields": [
+    { "id": "headline", "label": "Headline" },
+    { "id": "text", "label": "Text" },
+    { "id": "accent", "label": "Accent", "kind": "choice", "default": "yellow",
+      "choices": ["yellow", "orange", "red", "aqua", "blue", "purple"] }
+  ]
+}

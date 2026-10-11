@@ -1,0 +1,94 @@
+/* Shared look of lmix's built-in titles: Kante on air. Colours, fonts,
+   cuts and motion come from Kante's tokens (kante/, scripts/sync-kante.sh);
+   nothing here invents its own. Sizes count in --u, a pixel of a 1080p
+   picture, so a title fills any output size the same way (portrait:
+   1080 wide). */
+@import url("../kante/variables.css");
+@import url("../kante/fonts.css");
+
+:root {
+  --u: calc(min(100vw, 100vh * 16 / 9) / 1920);
+  /* Action safe area: 5 % of the picture at each side. */
+  --safe-x: calc(96 * var(--u));
+  --safe-y: calc(54 * var(--u));
+  --title-in: var(--dur-slow) var(--ease-out);
+  --title-out: var(--dur) var(--ease-out);
+}
+@media (orientation: portrait) {
+  :root { --u: calc(100vw / 1080); --safe-y: calc(96 * var(--u)); --safe-x: calc(54 * var(--u)); }
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 100%; height: 100%; overflow: hidden; background: transparent; }
+body { color: var(--fg1); font-family: var(--font-sans); -webkit-font-smoothing: antialiased; }
+
+/* A panel with Kante's cut corner (top right). */
+.k-panel {
+  background: var(--bg0);
+  color: var(--fg1);
+  clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, 0 100%);
+  --cut: calc(24 * var(--u));
+}
+.k-panel.k-raised { background: var(--bg1); }
+/* The accent bar on a panel's left edge. */
+.k-accent { border-left: calc(8 * var(--u)) solid var(--accent-colour, var(--yellow)); }
+
+.k-name {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .02em;
+  color: var(--fg0);
+  line-height: 1.05;
+}
+.k-label {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: .14em;
+  color: var(--fg2);
+}
+.k-figure { font-family: var(--font-mono); font-weight: 500; font-variant-numeric: tabular-nums; color: var(--fg0); }
+
+/* In and out: a title starts hidden; .is-in wipes it in from the left,
+   removing it wipes it out. A mask, so the panel keeps its cut corner
+   (clip-path). The gradient's colours only say opaque or not. */
+.k-wipe {
+  -webkit-mask-image: linear-gradient(90deg, #000 50%, transparent 50%);
+  mask-image: linear-gradient(90deg, #000 50%, transparent 50%);
+  -webkit-mask-size: 200% 100%;
+  mask-size: 200% 100%;
+  -webkit-mask-position: 100% 0;
+  mask-position: 100% 0;
+  transition: -webkit-mask-position var(--title-out), mask-position var(--title-out);
+}
+.k-wipe.is-in {
+  -webkit-mask-position: 0 0;
+  mask-position: 0 0;
+  transition: -webkit-mask-position var(--title-in), mask-position var(--title-in);
+}
+.k-rise {
+  opacity: 0;
+  transform: translateY(calc(24 * var(--u)));
+  transition: opacity var(--title-out), transform var(--title-out);
+}
+.k-rise.is-in { opacity: 1; transform: none; transition: opacity var(--title-in), transform var(--title-in); }
+.k-rise.is-in.k-later { transition-delay: calc(var(--dur) * .6); }
+.k-fade { opacity: 0; transition: opacity var(--title-out); }
+.k-fade.is-in { opacity: 1; transition: opacity var(--title-in); }
+
+/* Preview outside lmix (sdk/lmix-title.js). */
+.lmix-preview body {
+  background: repeating-conic-gradient(var(--bg1) 0 25%, var(--bg0) 0 50%) 0 0 / 32px 32px;
+}
+.lmix-preview-bar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 2147483647;
+  display: flex; flex-wrap: wrap; gap: 6px; padding: 8px;
+  background: var(--bg-void); color: var(--fg1);
+  font: 14px var(--font-mono);
+}
+.lmix-preview-bar input, .lmix-preview-bar textarea, .lmix-preview-bar button {
+  font: inherit; padding: 4px 8px; background: var(--bg1); color: var(--fg0); border: 1px solid var(--bg2);
+}
+.lmix-preview-bar button { cursor: pointer; }
+.lmix-preview-bar button:hover { background: var(--bg2); }

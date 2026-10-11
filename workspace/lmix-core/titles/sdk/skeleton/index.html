@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>My title</title>
+<!--
+  Starting point for an own title (GFX.13). Copy this folder into the
+  templates folder (lmix-core --templates, default
+  ~/.local/share/lmix/templates/<name>/) and change it with any web tools;
+  lmix reloads it when a file changes. Opened on its own in a browser
+  (http://127.0.0.1:8200/titles/<name>/index.html) it shows a bar to try
+  it with the manifest's fields.
+
+  Sizes in --u (a pixel of a 1080p picture), colours and fonts from Kante
+  (/titles/kante/variables.css, through lmix-title.css).
+-->
+<link rel="stylesheet" href="/titles/sdk/lmix-title.css">
+<style>
+  .box { position: absolute; left: var(--safe-x); bottom: var(--safe-y); padding: calc(16 * var(--u)) calc(32 * var(--u)); font-size: calc(48 * var(--u)); }
+</style>
+</head>
+<body>
+<div class="box k-panel k-accent k-name k-wipe" id="box"></div>
+<script src="/titles/sdk/lmix-title.js"></script>
+<script>
+  const box = document.getElementById("box");
+  lmixTitle({
+    update(data) { box.textContent = data.text || ""; },
+    play() { box.classList.add("is-in"); },
+    next(step) {},
+    stop() { box.classList.remove("is-in"); return lmixTitle.duration("--dur"); },
+    functions: {},
+  });
+</script>
+</body>
+</html>

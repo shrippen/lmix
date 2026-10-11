@@ -13,11 +13,11 @@ use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Instant, SystemTime};
 
 use lmix_types::{
-    Action, ActionError, Event, InputLevel, InputRef, InputStatus, Latency, Levels, OutputId,
-    OutputSpec, OutputStats, OutputStatus, ShowState, SignalLoss,
+    Action, ActionError, Event, InputId, InputLevel, InputRef, InputStatus, Latency, Levels,
+    OutputId, OutputSpec, OutputStats, OutputStatus, ShowState, SignalLoss, Template,
 };
 use strom_types::FlowId;
 use tokio::sync::{broadcast, Mutex, Notify};
@@ -28,6 +28,7 @@ use crate::engine::{meters, Engine, EngineError, LivePicture, Picture};
 use crate::recent::Recent;
 use crate::show::{self, Show};
 use crate::switcher::{Command, Switcher};
+use crate::{datasource, titles};
 
 /// How often lmix-core asks the engine whether it restarted.
 const ENGINE_CHECK: std::time::Duration = std::time::Duration::from_secs(2);
@@ -71,13 +72,27 @@ pub struct Service {
     /// A failed command found a new engine process: check now, not at the
     /// next poll.
     engine_changed: Notify,
+    /// The templates folder (`--templates`), if any.
+    templates_dir: std::sync::Mutex<Option<PathBuf>>,
+    /// Built-in and folder templates as last scanned.
+    templates: std::sync::Mutex<Vec<Template>>,
+    /// When each data source's file had changed when it was read.
+    source_times: std::sync::Mutex<HashMap<InputId, Option<SystemTime>>>,
 }
+
+/// How often lmix-core looks at the templates folder, the data source
+/// files and auto-advancing sources.
+const TITLES_CHECK: std::time::Duration = std::time::Duration::from_millis(250);
+/// Files are looked at every this many checks.
+const FILES_EVERY: u32 = 4;
 
 impl Service {
     pub fn new(slots: usize, engine: Arc<dyn Engine>, autosave: Option<PathBuf>) -> Arc<Self> {
         let (events, _) = broadcast::channel(EVENT_BUFFER);
         let mut switcher = Switcher::new(slots);
         switcher.set_looks_available(engine.looks_available());
+        let templates = titles::scan(None);
+        switcher.set_templates(titles::catalog(&templates));
         Arc::new(Self {
             switcher: Mutex::new(switcher),
             engine,
@@ -90,8 +105,124 @@ impl Service {
             engine_ready: AtomicBool::new(true),
             engine_instance: std::sync::Mutex::new(None),
             engine_changed: Notify::new(),
+            templates_dir: std::sync::Mutex::new(None),
+            templates: std::sync::Mutex::new(templates),
+            source_times: std::sync::Mutex::new(HashMap::new()),
             autosave,
         })
+    }
+
+    /// Take templates from `dir` as well (`--templates`).
+    pub async fn use_templates(&self, dir: PathBuf) {
+        *self.templates_dir.lock().expect("templates dir lock") = Some(dir);
+        self.rescan_templates().await;
+    }
+
+    /// Built-in and folder templates (GFX.19).
+    pub fn templates(&self) -> Vec<Template> {
+        self.templates.lock().expect("templates lock").clone()
+    }
+
+    /// A file below `/titles/` (templates, SDK, Kante).
+    pub fn title_file(&self, path: &str) -> Option<Vec<u8>> {
+        let dir = self
+            .templates_dir
+            .lock()
+            .expect("templates dir lock")
+            .clone();
+        titles::file(dir.as_deref(), path)
+    }
+
+    /// Scan the folder again; a changed template reaches the graphics
+    /// pages through the state (GFX.14).
+    async fn rescan_templates(&self) {
+        let dir = self
+            .templates_dir
+            .lock()
+            .expect("templates dir lock")
+            .clone();
+        let Ok(found) = tokio::task::spawn_blocking(move || titles::scan(dir.as_deref())).await
+        else {
+            return;
+        };
+        if *self.templates.lock().expect("templates lock") == found {
+            return;
+        }
+        let mut sw = self.switcher.lock().await;
+        sw.set_templates(titles::catalog(&found));
+        *self.templates.lock().expect("templates lock") = found;
+        self.publish(&sw);
+    }
+
+    /// Read the files of data sources never read (just added, or a show
+    /// just opened).
+    async fn read_new_sources(&self, sw: &mut Switcher) {
+        for (id, spec) in sw.unread_sources() {
+            let path = datasource::resolve(&spec, sw.path());
+            let time = datasource::modified(&path).await;
+            sw.set_rows(id, datasource::read(&spec, &path).await);
+            self.source_times
+                .lock()
+                .expect("source times lock")
+                .insert(id, time);
+        }
+    }
+
+    /// Read again the data source files that changed (DAT.2).
+    async fn reread_changed_sources(&self) {
+        let (files, show) = {
+            let sw = self.switcher.lock().await;
+            (sw.source_files(), sw.path().map(str::to_string))
+        };
+        let mut changed = Vec::new();
+        for (id, spec) in files {
+            let path = datasource::resolve(&spec, show.as_deref());
+            let time = datasource::modified(&path).await;
+            let known = self
+                .source_times
+                .lock()
+                .expect("source times lock")
+                .get(&id)
+                .copied();
+            if known.is_some_and(|known| known != time) {
+                changed.push((id, datasource::read(&spec, &path).await, time));
+            }
+        }
+        if changed.is_empty() {
+            return;
+        }
+        let mut sw = self.switcher.lock().await;
+        for (id, rows, time) in changed {
+            sw.set_rows(id, rows);
+            self.source_times
+                .lock()
+                .expect("source times lock")
+                .insert(id, time);
+        }
+        self.publish(&sw);
+    }
+
+    /// Follow the templates folder and data source files, and move
+    /// auto-advancing data sources on (DAT.5).
+    pub async fn watch_titles(self: Arc<Self>) {
+        let mut tick = tokio::time::interval(TITLES_CHECK);
+        let mut turn = 0u32;
+        loop {
+            tick.tick().await;
+            turn = turn.wrapping_add(1);
+            if turn.is_multiple_of(FILES_EVERY) {
+                self.rescan_templates().await;
+                self.reread_changed_sources().await;
+            }
+            let due = self.switcher.lock().await.due_sources(Instant::now());
+            for id in due {
+                let next = Action::DataNext {
+                    source: InputRef::Text(id.to_string()),
+                };
+                // At the last row without looping it just stays there.
+                let _ = self.handle_as(next, Origin::Trigger).await;
+            }
+        }
     }
 
     /// The engine is not there yet: keep changes in the show until
@@ -117,6 +248,7 @@ impl Service {
         let mut sw = self.switcher.lock().await;
         let commands = sw.replace(show, None);
         let result = self.execute(&mut sw, &commands).await;
+        self.read_new_sources(&mut sw).await;
         self.publish(&sw);
         result.map(|()| true)
     }
@@ -597,6 +729,18 @@ impl Service {
         let mut sw = self.switcher.lock().await;
         let before = sw.on_air();
         let file_action = matches!(action, Action::OpenShow { .. } | Action::SaveShow { .. });
+        let report = match &action {
+            Action::TitleReport {
+                graphics,
+                layer,
+                event,
+            } => sw.graphics_id(graphics).map(|id| Event::Title {
+                graphics: id,
+                layer: *layer,
+                report: event.clone(),
+            }),
+            _ => None,
+        };
         if matches!(action, Action::OpenShow { .. } | Action::NewShow) {
             sw.check_unlocked()?;
         }
@@ -620,6 +764,10 @@ impl Service {
             .unwrap_or(commands.len());
         let (now, later) = commands.split_at(wait);
         let result = self.execute(&mut sw, now).await;
+        self.read_new_sources(&mut sw).await;
+        if let Some(report) = report {
+            let _ = self.events.send(report);
+        }
         self.publish(&sw);
         self.write_autosave(&sw).await;
         if !later.is_empty() {

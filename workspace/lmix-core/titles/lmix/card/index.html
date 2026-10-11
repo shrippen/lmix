@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Full-screen card</title>
+<link rel="stylesheet" href="/titles/sdk/lmix-title.css">
+<style>
+  .card { position: absolute; inset: 0; background: var(--bg-void); display: grid; grid-template-columns: 1fr 1fr; }
+  .card.no-image { grid-template-columns: 1fr; }
+  .card .copy { align-self: center; padding: 0 calc(var(--safe-x) * 1.5); }
+  .card .kicker { font-size: calc(26 * var(--u)); color: var(--yellow); margin-bottom: calc(24 * var(--u)); }
+  .card .title { font-size: calc(112 * var(--u)); }
+  .card .text { margin-top: calc(40 * var(--u)); font-size: calc(36 * var(--u)); line-height: 1.45; color: var(--fg1); white-space: pre-line; max-width: 30em; }
+  .card .image { background: center / cover no-repeat; }
+  .card.no-image .image { display: none; }
+  @media (orientation: portrait) {
+    .card { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; }
+    .card .image { grid-row: 1; }
+  }
+</style>
+</head>
+<body>
+<div class="card k-fade" id="card">
+  <div class="copy">
+    <div class="kicker k-label" id="kicker"></div>
+    <div class="title k-name k-wipe" id="title"></div>
+    <div class="text k-rise" id="text"></div>
+  </div>
+  <div class="image" id="image"></div>
+</div>
+<script src="/titles/sdk/lmix-title.js"></script>
+<script>
+  const el = (id) => document.getElementById(id);
+  lmixTitle({
+    update(d) {
+      el("kicker").textContent = d.kicker || "";
+      el("title").textContent = d.title || "";
+      el("text").textContent = d.text || "";
+      el("image").style.backgroundImage = d.image ? `url("${encodeURI(d.image)}")` : "";
+      el("card").classList.toggle("no-image", !d.image);
+    },
+    play() {
+      el("text").classList.remove("is-in");
+      el("card").classList.add("is-in");
+      el("title").classList.add("is-in");
+    },
+    // Step 1: the text.
+    next(step) { if (step === 1) el("text").classList.add("is-in"); },
+    stop() {
+      for (const id of ["card", "title", "text"]) el(id).classList.remove("is-in");
+      return lmixTitle.duration("--dur");
+    },
+  });
+</script>
+</body>
+</html>

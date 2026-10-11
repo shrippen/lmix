@@ -14,6 +14,9 @@
 //! | `GET /api/devices` | capture devices for `SourceSpec::Device` |
 //! | `GET /api/pictures/program` | program picture, JPEG |
 //! | `GET /api/pictures/inputs/{input}` | input picture (number, name, id, `preview`, `program`) |
+//! | `GET /api/templates` | title templates: built-in and from the folder (GFX.19) |
+//! | `GET /titles/{path}` | template files, the title SDK, Kante's tokens and fonts |
+//! | `GET /graphics/{graphics}` | the page a graphics channel renders (number, name or id) |
 //! | `GET /api/events` | WebSocket: state first, then every event |
 //! | `GET /health` | liveness |
 //! | `GET /metrics` | health and metrics, Prometheus text format (OPS.3) |
@@ -55,6 +58,9 @@ pub fn router(service: Arc<Service>) -> Router {
         .route("/api/pictures/inputs/{input}", get(input_picture))
         .route("/api/live/program", get(live_program))
         .route("/api/live/inputs/{input}", get(live_input))
+        .route("/api/templates", get(templates))
+        .route("/titles/{*path}", get(title_file))
+        .route("/graphics/{graphics}", get(graphics_page))
         .merge(crate::web::routes())
         .with_state(service)
 }
@@ -198,6 +204,38 @@ fn picture_response(picture: Result<Vec<u8>, EngineError>) -> Response {
     }
 }
 
+async fn templates(State(service): State<Arc<Service>>) -> impl IntoResponse {
+    Json(service.templates())
+}
+
+/// Template files change while a show runs: never cached.
+async fn title_file(State(service): State<Arc<Service>>, Path(path): Path<String>) -> Response {
+    match service.title_file(&path) {
+        Some(bytes) => (
+            [
+                (header::CONTENT_TYPE, crate::titles::content_type(&path)),
+                (header::CACHE_CONTROL, "no-cache"),
+            ],
+            bytes,
+        )
+            .into_response(),
+        None => StatusCode::NOT_FOUND.into_response(),
+    }
+}
+
+/// The page finds its channel from the address; it shows an empty
+/// transparent picture until the channel exists.
+async fn graphics_page(Path(_graphics): Path<String>) -> Response {
+    (
+        [
+            (header::CONTENT_TYPE, "text/html; charset=utf-8"),
+            (header::CACHE_CONTROL, "no-cache"),
+        ],
+        crate::titles::host_page(),
+    )
+        .into_response()
+}
+
 async fn catalog() -> impl IntoResponse {
     Json(schemars::schema_for!(Action))
 }
@@ -334,6 +372,71 @@ mod tests {
         let resp = app().oneshot(req).await.unwrap();
 
         assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    }
+
+    async fn get(app: &Router, uri: &str) -> (StatusCode, String, Vec<u8>) {
+        let resp = app
+            .clone()
+            .oneshot(Request::get(uri).body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        let status = resp.status();
+        let kind = resp
+            .headers()
+            .get(header::CONTENT_TYPE)
+            .map(|v| v.to_str().unwrap().to_string())
+            .unwrap_or_default();
+        let bytes = resp.into_body().collect().await.unwrap().to_bytes();
+        (status, kind, bytes.to_vec())
+    }
+
+    #[tokio::test]
+    async fn titles_pages_and_templates() {
+        let app = app();
+
+        let (status, _, body) = get(&app, "/api/templates").await;
+        assert_eq!(status, StatusCode::OK);
+        let list: Vec<lmix_types::Template> = serde_json::from_slice(&body).unwrap();
+        let lower = list.iter().find(|t| t.id == "lmix/lower-third").unwrap();
+        assert!(lower.builtin);
+
+        let (status, kind, _) = get(&app, &lower.url).await;
+        assert_eq!(
+            (status, kind.as_str()),
+            (StatusCode::OK, "text/html; charset=utf-8")
+        );
+        let (status, kind, _) = get(&app, "/titles/kante/fonts/Rajdhani-700.ttf").await;
+        assert_eq!((status, kind.as_str()), (StatusCode::OK, "font/ttf"));
+        let (status, _, page) = get(&app, "/graphics/1").await;
+        assert_eq!(status, StatusCode::OK);
+        assert!(String::from_utf8(page).unwrap().contains("/api/events"));
+        let (status, _, _) = get(&app, "/titles/nothing.html").await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn title_actions_over_http() {
+        let app = app();
+        post(&app, r#"{"action":"add_graphics","name":"Titles"}"#).await;
+
+        let (status, state) = post(
+            &app,
+            r#"{"action":"title_load","graphics":"Titles","template":"lmix/name-role","data":{"name":"N"},"play":true}"#,
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(state["graphics"][0]["layers"][0]["phase"], "playing");
+        assert_eq!(state["graphics"][0]["layers"][0]["values"]["name"], "N");
+
+        let (status, body) = post(
+            &app,
+            r#"{"action":"title_load","graphics":1,"template":"nope"}"#,
+        )
+        .await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+        assert_eq!(body["error"]["error"], "unknown_template");
+        let (status, _) = post(&app, r#"{"action":"title_play","graphics":2}"#).await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
     }
 
     #[tokio::test]

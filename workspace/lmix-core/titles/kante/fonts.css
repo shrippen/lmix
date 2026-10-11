@@ -1,0 +1,10 @@
+/* Kante fonts as @font-face (Spectral: Kante Gold titles), for apps that must work offline (the landing pages load them from Google Fonts).
+   Link it in addition to shrippen.css: https://shrippen.github.io/v1/fonts.css (fonts live in ./fonts/). SIL OFL, see fonts/OFL.txt. */
+@font-face{font-family:'Rajdhani';font-weight:600;font-style:normal;font-display:swap;src:url("fonts/Rajdhani-600.ttf") format("truetype")}
+@font-face{font-family:'Rajdhani';font-weight:700;font-style:normal;font-display:swap;src:url("fonts/Rajdhani-700.ttf") format("truetype")}
+@font-face{font-family:'JetBrains Mono';font-weight:400;font-style:normal;font-display:swap;src:url("fonts/JetBrainsMono-400.ttf") format("truetype")}
+@font-face{font-family:'JetBrains Mono';font-weight:500;font-style:normal;font-display:swap;src:url("fonts/JetBrainsMono-500.ttf") format("truetype")}
+@font-face{font-family:'Spectral';font-weight:400;font-style:normal;font-display:swap;src:url("fonts/Spectral-400-normal.woff2") format("woff2")}
+@font-face{font-family:'Spectral';font-weight:500;font-style:normal;font-display:swap;src:url("fonts/Spectral-500-normal.woff2") format("woff2")}
+@font-face{font-family:'Spectral';font-weight:600;font-style:normal;font-display:swap;src:url("fonts/Spectral-600-normal.woff2") format("woff2")}
+@font-face{font-family:'Spectral';font-weight:400;font-style:italic;font-display:swap;src:url("fonts/Spectral-400-italic.woff2") format("woff2")}

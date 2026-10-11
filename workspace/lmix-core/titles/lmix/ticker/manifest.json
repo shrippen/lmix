@@ -1,0 +1,10 @@
+{
+  "name": "Ticker",
+  "functions": ["append"],
+  "fields": [
+    { "id": "label", "label": "Label" },
+    { "id": "items", "label": "Items (one per line)", "kind": "long_text" },
+    { "id": "speed", "label": "Speed (px/s)", "kind": "number", "default": "140" },
+    { "id": "direction", "label": "Direction", "kind": "choice", "default": "left", "choices": ["left", "right"] }
+  ]
+}

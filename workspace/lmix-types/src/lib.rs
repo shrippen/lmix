@@ -11,6 +11,7 @@
 
 pub mod action;
 pub mod automation;
+pub mod graphics;
 pub mod input;
 pub mod layout;
 pub mod midi;
@@ -20,6 +21,10 @@ pub mod state;
 
 pub use action::{Action, ActionError, Effect, StingerSpec, TransitionSlot};
 pub use automation::{Cue, CueList, Trigger, TriggerOn};
+pub use graphics::{
+    BindingSpec, DataFormat, DataSource, DataSourceSpec, Dataset, FieldBinding, FieldKind,
+    Graphics, Template, TemplateField, TitleCall, TitleData, TitleLayer, TitlePhase,
+};
 pub use input::{
     AuxBus, ChannelStrip, Compressor, Device, DeviceKind, Eq4, Gate, Hpf, Ingest, Input,
     InputAudio, InputColor, InputId, InputRef, InputStatus, Listen, Look, SignalLoss, SourceSpec,
