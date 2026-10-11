@@ -1471,3 +1471,8 @@ Paket; Pfade mit `..` in einem fremden Paket zeigten aus dem Ordner
 dynamische Werte wurden zweimal ersetzt (jetzt in einem Durchgang);
 Reiterleiste und Auswahlfelder der Input-Einstellungen zeigten nach dem
 Wiederöffnen den alten Stand. Alle behoben.
+**TSL über TCP** (B40): `--tsl-tcp <host:port>` schickt dasselbe über
+TCP, TSL 5.0 mit DLE/STX-Rahmen (0xFE im Paket verdoppelt), TSL 3.1
+unverändert. Die Verbindung entsteht beim Senden und nach einem Fehler
+neu; ein nicht erreichbarer Empfänger wird 2 s lang übersprungen, damit
+er die übrigen Pakete nicht aufhält.

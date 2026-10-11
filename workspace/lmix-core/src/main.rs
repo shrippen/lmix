@@ -114,6 +114,10 @@ struct Args {
     #[arg(long, env = "LMIX_TSL", value_delimiter = ',')]
     tsl: Vec<SocketAddr>,
 
+    /// The same over TCP to these addresses (TSL 5.0 framed with DLE/STX).
+    #[arg(long, env = "LMIX_TSL_TCP", value_delimiter = ',')]
+    tsl_tcp: Vec<SocketAddr>,
+
     /// TSL UMD version: 5 (5.0) or 3 (3.1).
     #[arg(long, env = "LMIX_TSL_VERSION", value_enum, default_value_t = tsl::Version::V50)]
     tsl_version: tsl::Version,
@@ -212,11 +216,11 @@ async fn main() -> anyhow::Result<()> {
             }
         });
     }
-    if !args.tsl.is_empty() {
+    if !args.tsl.is_empty() || !args.tsl_tcp.is_empty() {
         let service = service.clone();
-        let (targets, version) = (args.tsl.clone(), args.tsl_version);
+        let (targets, tcp, version) = (args.tsl.clone(), args.tsl_tcp.clone(), args.tsl_version);
         tokio::spawn(async move {
-            if let Err(error) = tsl::serve(targets, version, service).await {
+            if let Err(error) = tsl::serve(targets, tcp, version, service).await {
                 tracing::error!(%error, "TSL tally stopped");
             }
         });

@@ -123,6 +123,62 @@ pub fn packets(version: Version, displays: &[Display]) -> Vec<Vec<u8>> {
     }
 }
 
+/// A TSL 5.0 packet framed for TCP: DLE/STX first, every DLE (0xFE)
+/// inside doubled. TSL 3.1 goes over TCP as it is.
+pub fn tcp_frame(version: Version, packet: &[u8]) -> Vec<u8> {
+    match version {
+        Version::V31 => packet.to_vec(),
+        Version::V50 => {
+            let mut framed = vec![0xFE, 0x02];
+            for &byte in packet {
+                framed.push(byte);
+                if byte == 0xFE {
+                    framed.push(0xFE);
+                }
+            }
+            framed
+        }
+    }
+}
+
+/// A TCP receiver, connected when needed and again after a failure.
+struct TcpTarget {
+    address: SocketAddr,
+    stream: Option<tokio::net::TcpStream>,
+    /// After a failed connect, no new try before this: one receiver that
+    /// is down must not hold up every packet.
+    retry_after: Option<tokio::time::Instant>,
+}
+
+impl TcpTarget {
+    async fn send(&mut self, bytes: &[u8]) {
+        use tokio::io::AsyncWriteExt;
+        if self.stream.is_none() {
+            if self
+                .retry_after
+                .is_some_and(|t| tokio::time::Instant::now() < t)
+            {
+                return;
+            }
+            let connect = tokio::net::TcpStream::connect(self.address);
+            match tokio::time::timeout(Duration::from_secs(1), connect).await {
+                Ok(Ok(stream)) => self.stream = Some(stream),
+                _ => {
+                    tracing::debug!(address = %self.address, "TSL TCP receiver not reachable");
+                    self.retry_after = Some(tokio::time::Instant::now() + Duration::from_secs(2));
+                    return;
+                }
+            }
+        }
+        if let Some(stream) = &mut self.stream {
+            if stream.write_all(bytes).await.is_err() {
+                // Reconnect at the next send (every change, or 5 s).
+                self.stream = None;
+            }
+        }
+    }
+}
+
 /// Displays of the inputs with a picture, from the show state.
 fn displays(state: &lmix_types::ShowState) -> Vec<Display> {
     state
@@ -141,11 +197,20 @@ fn displays(state: &lmix_types::ShowState) -> Vec<Display> {
 /// Send tally to `targets` until the process ends.
 pub async fn serve(
     targets: Vec<SocketAddr>,
+    tcp: Vec<SocketAddr>,
     version: Version,
     service: Arc<Service>,
 ) -> anyhow::Result<()> {
     let socket = UdpSocket::bind(("0.0.0.0", 0)).await?;
-    tracing::info!(?targets, ?version, "TSL tally up");
+    let mut tcp: Vec<TcpTarget> = tcp
+        .into_iter()
+        .map(|address| TcpTarget {
+            address,
+            stream: None,
+            retry_after: None,
+        })
+        .collect();
+    tracing::info!(?targets, tcp = tcp.len(), ?version, "TSL tally up");
     let mut events = service.subscribe();
     // From the state now: the show may be on air before the first change.
     let mut last = displays(&service.state().await);
@@ -187,6 +252,10 @@ pub async fn serve(
                 if let Err(error) = socket.send_to(&packet, target).await {
                     tracing::debug!(%target, %error, "TSL send failed");
                 }
+            }
+            let framed = tcp_frame(version, &packet);
+            for target in &mut tcp {
+                target.send(&framed).await;
             }
         }
     }
@@ -242,12 +311,62 @@ mod tests {
         assert_eq!(&p[21..23], b"PV");
     }
 
+    #[test]
+    fn tcp_framing() {
+        assert_eq!(
+            tcp_frame(Version::V50, &[1, 0xFE, 2]),
+            [0xFE, 0x02, 1, 0xFE, 0xFE, 2]
+        );
+        assert_eq!(tcp_frame(Version::V31, &[1, 0xFE]), [1, 0xFE]);
+    }
+
+    #[tokio::test]
+    async fn tcp_receivers_get_framed_packets() {
+        use tokio::io::AsyncReadExt;
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let service = Service::new(2, Arc::new(NullEngine::default()), None);
+        service
+            .handle(Action::AddInput {
+                source: SourceSpec::Pattern {
+                    pattern: TestPattern::Bars,
+                },
+                name: Some("Bars".into()),
+            })
+            .await
+            .unwrap();
+        tokio::spawn(serve(
+            Vec::new(),
+            vec![address],
+            Version::V50,
+            service.clone(),
+        ));
+
+        // The first send (from the state at start) connects.
+        let (mut stream, _) = tokio::time::timeout(Duration::from_secs(7), listener.accept())
+            .await
+            .unwrap()
+            .unwrap();
+        let mut buf = [0u8; 64];
+        let n = tokio::time::timeout(Duration::from_secs(7), stream.read(&mut buf))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(&buf[..2], &[0xFE, 0x02]);
+        assert!(buf[..n].windows(4).any(|w| w == b"Bars"));
+    }
+
     #[tokio::test]
     async fn sends_on_change() {
         let receiver = UdpSocket::bind("127.0.0.1:0").await.unwrap();
         let target = receiver.local_addr().unwrap();
         let service = Service::new(2, Arc::new(NullEngine::default()), None);
-        tokio::spawn(serve(vec![target], Version::V31, service.clone()));
+        tokio::spawn(serve(
+            vec![target],
+            Vec::new(),
+            Version::V31,
+            service.clone(),
+        ));
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         service
