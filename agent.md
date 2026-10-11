@@ -38,6 +38,8 @@ Rule 7: Use the body to explain what and why vs. how. Assume the code explains t
 
 - If the prompt indicates that a bug is being fixed, don't write the fix right away. First write the test. Observe it failing. Then write the fix. And observe the test passing.
 
+- PR-Agent (where set up): If the review fails (an error, no result, e.g. a key or cost limit), ask for it once more with `/review`; if that fails too, green CI is enough to merge (owner, 11.10.2026).
+
 ## GUI rule
 
 - Every GUI of this project is generated from Kante, not inspired by it: landing pages,
