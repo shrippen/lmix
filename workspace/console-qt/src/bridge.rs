@@ -417,14 +417,7 @@ impl qobject::Core {
 
     fn send(self: Pin<&mut Self>, action: Action) {
         let thread = self.qt_thread();
-        config::runtime().spawn(async move {
-            let refused = post_action(&action).await;
-            if let Some(reason) = &refused {
-                tracing::info!(?action, %reason, "lmix-core refused");
-            }
-            let text = refused.unwrap_or_default();
-            let _ = thread.queue(move |core| core.set_message(QString::from(&text)));
-        });
+        let _ = actions().send((action, thread));
     }
 
     unsafe fn show_live(self: Pin<&mut Self>, item: *mut qobject::QQuickItem, source: &QString) {
@@ -608,6 +601,32 @@ fn measure_frames(sink: &gst::Element, socket: String) {
         }
         gst::PadProbeReturn::Ok
     });
+}
+
+/// Actions and the Core to answer, in the order the operator gave them.
+type Queued = (Action, cxx_qt::CxxQtThread<qobject::Core>);
+
+static ACTIONS: std::sync::OnceLock<tokio::sync::mpsc::UnboundedSender<Queued>> =
+    std::sync::OnceLock::new();
+
+/// Actions go to lmix-core one after another: a held PTZ key's stop must
+/// never overtake its move (two requests in parallel can arrive either
+/// way round).
+fn actions() -> &'static tokio::sync::mpsc::UnboundedSender<Queued> {
+    ACTIONS.get_or_init(|| {
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<Queued>();
+        config::runtime().spawn(async move {
+            while let Some((action, thread)) = rx.recv().await {
+                let refused = post_action(&action).await;
+                if let Some(reason) = &refused {
+                    tracing::info!(?action, %reason, "lmix-core refused");
+                }
+                let text = refused.unwrap_or_default();
+                let _ = thread.queue(move |core| core.set_message(QString::from(&text)));
+            }
+        });
+        tx
+    })
 }
 
 /// `{message}` for an error the Console found itself.

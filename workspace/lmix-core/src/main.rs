@@ -277,7 +277,8 @@ async fn connect(engine: Arc<dyn Engine>, service: Arc<Service>, slots: usize, s
 
 /// Start the outputs `--start-outputs` names, unless they run already.
 async fn start_outputs(service: &Arc<Service>, names: &[String]) {
-    for name in names {
+    for name in names.iter().map(|n| n.trim()).filter(|n| !n.is_empty()) {
+        let name = &name.to_string();
         let output = match name.parse::<u32>() {
             Ok(number) => lmix_types::OutputRef::Number(number),
             Err(_) => lmix_types::OutputRef::Text(name.clone()),

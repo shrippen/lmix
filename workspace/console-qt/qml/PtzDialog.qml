@@ -28,6 +28,25 @@ KanteDialog {
     function move(pan, tilt) {
         send({ action: "ptz_move", pan: pan * speed.value, tilt: tilt * speed.value })
     }
+    /** A stop, and once more shortly after: UDP may lose one, and a camera
+     *  that missed it keeps moving. */
+    property var lastStop: null
+    function stop(action) {
+        send(action)
+        lastStop = action
+        stopAgain.restart()
+    }
+    Timer {
+        id: stopAgain
+        interval: 150
+        onTriggered: if (dialog.lastStop) dialog.send(dialog.lastStop)
+    }
+    // Closing the dialog while a key is held ends the move as well.
+    onClosed: if (input && input.ptz) {
+        stop({ action: "ptz_move", pan: 0, tilt: 0 })
+        send({ action: "ptz_zoom", speed: 0 })
+        send({ action: "ptz_focus", focus: "stop" })
+    }
 
     title: input ? qsTr("PTZ of %1 %2").arg(input.number).arg(input.name) : ""
     modal: true
@@ -51,8 +70,8 @@ KanteDialog {
         enabled: dialog.input !== null && !!dialog.input.ptz
         Accessible.name: hint
         onPressed: dialog.move(pan, tilt)
-        onReleased: dialog.move(0, 0)
-        onCanceled: dialog.move(0, 0)
+        onReleased: dialog.stop({ action: "ptz_move", pan: 0, tilt: 0 })
+        onCanceled: dialog.stop({ action: "ptz_move", pan: 0, tilt: 0 })
     }
 
     ColumnLayout {
@@ -128,14 +147,16 @@ KanteDialog {
                         enabled: dialog.input !== null && !!dialog.input.ptz
                         Accessible.name: qsTr("Zoom out")
                         onPressed: dialog.send({ action: "ptz_zoom", speed: -speed.value })
-                        onReleased: dialog.send({ action: "ptz_zoom", speed: 0 })
+                        onReleased: dialog.stop({ action: "ptz_zoom", speed: 0 })
+                        onCanceled: dialog.stop({ action: "ptz_zoom", speed: 0 })
                     }
                     KanteButton {
                         text: "+"
                         enabled: dialog.input !== null && !!dialog.input.ptz
                         Accessible.name: qsTr("Zoom in")
                         onPressed: dialog.send({ action: "ptz_zoom", speed: speed.value })
-                        onReleased: dialog.send({ action: "ptz_zoom", speed: 0 })
+                        onReleased: dialog.stop({ action: "ptz_zoom", speed: 0 })
+                        onCanceled: dialog.stop({ action: "ptz_zoom", speed: 0 })
                     }
                 }
                 RowLayout {
@@ -149,13 +170,15 @@ KanteDialog {
                         text: qsTr("Near")
                         enabled: dialog.input !== null && !!dialog.input.ptz
                         onPressed: dialog.send({ action: "ptz_focus", focus: "near" })
-                        onReleased: dialog.send({ action: "ptz_focus", focus: "stop" })
+                        onReleased: dialog.stop({ action: "ptz_focus", focus: "stop" })
+                        onCanceled: dialog.stop({ action: "ptz_focus", focus: "stop" })
                     }
                     KanteButton {
                         text: qsTr("Far")
                         enabled: dialog.input !== null && !!dialog.input.ptz
                         onPressed: dialog.send({ action: "ptz_focus", focus: "far" })
-                        onReleased: dialog.send({ action: "ptz_focus", focus: "stop" })
+                        onReleased: dialog.stop({ action: "ptz_focus", focus: "stop" })
+                        onCanceled: dialog.stop({ action: "ptz_focus", focus: "stop" })
                     }
                 }
             }

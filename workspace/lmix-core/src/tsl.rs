@@ -147,16 +147,16 @@ pub async fn serve(
     let socket = UdpSocket::bind(("0.0.0.0", 0)).await?;
     tracing::info!(?targets, ?version, "TSL tally up");
     let mut events = service.subscribe();
-    let mut last: Vec<Display> = Vec::new();
+    // From the state now: the show may be on air before the first change.
+    let mut last = displays(&service.state().await);
     let mut tick = tokio::time::interval(REFRESH);
     loop {
+        let before = last.clone();
         let changed = tokio::select! {
             event = events.recv() => match event {
                 Ok(Event::State { state }) => {
-                    let now = displays(&state);
-                    let changed = now != last;
-                    last = now;
-                    changed
+                    last = displays(&state);
+                    last != before
                 }
                 Ok(_) => false,
                 Err(RecvError::Lagged(_)) => {
@@ -170,7 +170,19 @@ pub async fn serve(
         if !changed {
             continue;
         }
-        for packet in packets(version, &last) {
+        // Displays whose input went away are put out once, blank, or the
+        // receiver keeps their last tally.
+        let gone = before
+            .iter()
+            .filter(|d| !last.iter().any(|n| n.number == d.number))
+            .map(|d| Display {
+                number: d.number,
+                name: String::new(),
+                program: false,
+                preview: false,
+            });
+        let sent: Vec<Display> = last.iter().cloned().chain(gone).collect();
+        for packet in packets(version, &sent) {
             for target in &targets {
                 if let Err(error) = socket.send_to(&packet, target).await {
                     tracing::debug!(%target, %error, "TSL send failed");
@@ -267,5 +279,23 @@ mod tests {
         .expect("a program tally");
         assert_eq!(program[0], 0x81);
         assert_eq!(&program[2..6], b"Bars");
+
+        // Removed: display 1 goes blank and off.
+        service
+            .handle(Action::RemoveInput {
+                input: InputRef::Number(1),
+            })
+            .await
+            .unwrap();
+        let blank = tokio::time::timeout(Duration::from_secs(3), async {
+            loop {
+                let (n, _) = receiver.recv_from(&mut buf).await.unwrap();
+                if n == 18 && buf[0] == 0x81 && buf[1] & 0b11 == 0 && buf[2] == b' ' {
+                    return true;
+                }
+            }
+        })
+        .await;
+        assert!(blank.is_ok(), "a blank display 1");
     }
 }

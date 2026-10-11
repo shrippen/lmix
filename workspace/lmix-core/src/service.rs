@@ -808,11 +808,15 @@ impl Service {
         let failed = |e: std::io::Error| ActionError::BadPtz {
             reason: format!("{}: {e}", spec.address),
         };
-        let target = tokio::net::lookup_host(&spec.address)
-            .await
-            .map_err(failed)?
-            .next()
-            .ok_or_else(|| failed(std::io::Error::other("no address")))?;
+        // An IP needs no lookup (a held key must not wait for DNS).
+        let target = match spec.address.parse::<std::net::SocketAddr>() {
+            Ok(address) => address,
+            Err(_) => tokio::net::lookup_host(&spec.address)
+                .await
+                .map_err(failed)?
+                .next()
+                .ok_or_else(|| failed(std::io::Error::other("no address")))?,
+        };
         let socket = self
             .ptz_socket
             .get_or_try_init(|| tokio::net::UdpSocket::bind(("0.0.0.0", 0)))

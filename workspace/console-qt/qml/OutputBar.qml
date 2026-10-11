@@ -101,7 +101,8 @@ RowLayout {
         onOpened: askAgain.checked = true
         onAccepted: {
             bar.confirmStop = askAgain.checked
-            bar.act({ action: "stop_output", output: output.number })
+            // By id: another Console may renumber the outputs meanwhile.
+            bar.act({ action: "stop_output", output: output.id })
         }
 
         ColumnLayout {

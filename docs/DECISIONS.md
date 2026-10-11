@@ -1429,3 +1429,12 @@ wirkt. `set_dynamic_value` setzt Werte 1–4, die in Titeltexten und
 Funktionsargumenten für `{value1}`… stehen. Beides gilt zur Laufzeit,
 nicht in der Show; eine neue Show leert die Inputs. Console: „Dynamic
 input“ im Kachelmenü, Kennzeichen „D1“… auf der Kachel.
+**Review M9**: ein unabhängiger Durchgang fand vier Fehler, alle behoben:
+ein kurzer Tipp auf eine PTZ-Taste konnte den Stopp vor der Bewegung
+ankommen lassen (die Console schickte Aktionen parallel; jetzt der Reihe
+nach, eine IP-Adresse braucht keine DNS-Abfrage, der Stopp geht nach
+150 ms ein zweites Mal raus); Zoom und Fokus hielten beim Abbrechen nicht
+an (jetzt auch beim Schließen des Dialogs); TSL ließ verschwundene
+Anzeigen in ihrem letzten Tally stehen und schickte vor der ersten
+Änderung nichts; der Stopp-Dialog nannte den Ausgang über seine Nummer
+(jetzt über die Id).
