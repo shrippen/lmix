@@ -297,3 +297,16 @@ Misst alle 5 min die Latenz Quelle → PGM, CPU von strom, GPU-Last und den
 SRT-Leitungszustand, schaltet alle 30 s das Programm um und prüft am Ende:
 Latenz nicht gewachsen, Ausgänge nie ausgefallen, Aufnahme und empfangener
 SRT-Strom lückenlos (Bilder ≥ 98 % von 30 fps × Laufzeit).
+
+### NVENC fehlt nach einem Treiber-Update
+
+Zeigt das strom-Log `NVENC not available` und `Using software fallback
+encoder: x264enc`, obwohl eine NVIDIA-Karte steckt, und brechen alle
+Programm-Ausgänge mit `not-negotiated` ab: GStreamer hat beim Update (noch
+mit dem alten Kernelmodul) eine Registry ohne NVENC-Encoder gespeichert und
+prüft sie nicht neu, solange sich die Plugin-Dateien nicht ändern. Nach dem
+Neustart:
+
+```bash
+gst-inspect-1.0 nvh264enc >/dev/null || rm ~/.cache/gstreamer-1.0/registry.*.bin
+```

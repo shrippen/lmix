@@ -11,7 +11,9 @@ Erledigtes abhaken (`[x]`, Datum) und nach einer Weile löschen; Details stehen 
 - [ ] Vorschau-Lücke ansehen (`scripts/run-local.sh`, Kachel anklicken) und entscheiden: Vorschau-Ausgang im strom-Mischer oder alte Ansicht halten, bis die neue ein Bild hat.
 - [ ] Breeze-Bug melden (siehe unten).
 - [ ] Hardware mit dir: H.13 Kopfhörer, H.20 Vollbild auf zweitem Monitor/Beamer, H.21 Kabel ziehen (`docs/HARDWARE-TODO.md`).
-- [ ] NFA.7: 8-h- und 48-h-Lauf, nachdem das Speicherwachstum in strom geklärt ist (H.24).
+- [ ] strom-Branches als PR auf `dev` (lokal in `strom-encfix`, nicht gepusht): `lmix-encoder-cuda-download` (Programm-Ausgänge ohne NVENC, DECISIONS 2026-10-12) und `lmix-ignore-inactive-pads` (Latenz 107 → 56 ms); danach Submodul in lmix anheben — soll ich?
+- [ ] Stinger-Rest entscheiden: nach dem ersten Stinger 87 statt 56 ms, Wege (a)/(b)/(c) in DECISIONS „CUDA-Latenz 106 ms“.
+- [x] NFA.7 8-h-Lauf (2026-10-12): ohne Ausfall, Latenz stabil; 48-h-Lauf nach dem Speicher-Fix (H.24).
 
 ### Breeze-Bug „MenuItem RegExp“ melden
 
@@ -51,8 +53,8 @@ enabled: !(/\&[^\&]/.test(control.text))
 - [ ] Release-Build (wenn es einen gibt): `demo/` ausschließen und prüfen.
 - [ ] Andere dekodierende Quellen (SRT, NDI, Gerät) auf GPU-Speicher im Slot-Kanal prüfen (DECISIONS „Hardware-Decoder“).
 - [x] egui-Console entfernen (2026-10-09): Selbsttest als `lmix-selftest`, VM-Test und Screenshot über die Qt-Console (Cloud-VM: Qt 6 aus KDE neon).
-- [ ] strom-Speicher wächst ~32 MB/h (H.24, DECISIONS): Vergleichsläufe 2026-10-11 zeigen Wachstum nur mit ISO-Aufnahme; bestätigen mit ≥ 3 h Grundlage gegen ohne ISO (GPU frei), dann im ISO-Flow suchen.
-- [ ] CUDA-Latenz 106 ms statt 56–63 ms (seit M4?), mit `MALLOC_ARENA_MAX=2` 87 ms: Ursache finden (DECISIONS 2026-10-11).
+- [ ] strom-Speicher wächst ~31 MB/h (H.24): eingegrenzt auf ISO über `autovideoconvert` → NVENC (mit `videoconvert` flach, DECISIONS „NFA.7: 8-h-Soak“); Fix in strom (`videoconvert`/`cudaconvert` vor NVENC), dann ISO ≥ 3 h und 48 h.
+- [x] CUDA-Latenz 106 ms statt 56 ms (2026-10-12): leere DSK-Ebenen seit `dde8237`, Fix strom `lmix-ignore-inactive-pads` (DECISIONS „CUDA-Latenz 106 ms“).
 - [ ] GL-Mischer mit hängendem SRT-Ausgang: strom wächst ~580 MB/h.
 - [ ] GL-Mischer: SRT-Ausgang ohne Video (Fix in strom, DECISIONS „Hardware-Läufe“); in der VM nicht nachstellbar (2026-10-09, DECISIONS „GL-Mischer und SRT“), braucht Hardware.
 - [x] Aktion in den ersten 2 s nach Engine-Neustart antwortet 502 (2026-10-09: neue Engine erkannt, Aktion geht in die Show, Restore sofort).

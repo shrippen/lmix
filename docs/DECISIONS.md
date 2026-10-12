@@ -1116,3 +1116,106 @@ in strom erneut messen.
 **Latenz**: Mit CUDA jetzt 106–107 ms statt 56–63 ms am 2026-10-09
 (seitdem M4: Overlays, T-Bar, Kanalzug, Aux-Busse, Stinger). Der Lauf mit
 `MALLOC_ARENA_MAX=2` lag bei 87 ms; Ursache für beides offen.
+
+## 2026-10-12 — Ohne NVENC fallen alle Programm-Ausgänge aus
+
+**Befund** (Start des 8-h-Soaks): Aufnahme und beide SRT-Ausgänge sofort
+`failed`, alle 7 s neu gestartet, nur die ISO-Aufnahme lief. strom:
+`NVENC not available`, `Using software fallback encoder: x264enc`, dann
+`not-negotiated` am `pgm`-intersrc (`enc:videoconvert` kann
+`memory:CUDAMemory` nicht wandeln). Ursache 1, am Rechner: Das
+Treiber-Update 615.71 → 615.78 lief um 08:09 mit dem alten Kernelmodul;
+GStreamer speicherte dabei eine Registry ohne NVENC-Encoder und prüfte sie
+nach dem Neustart nicht neu (Abhilfe in `BUILD.md`). Ursache 2, in strom:
+Im Software-Modus setzt der Encoder-Block ein `videoconvert` vor den
+Encoder; der CUDA-Mischer liefert das Programm aber im GPU-Speicher (die
+Ausgänge holen es bewusst nicht herunter, damit NVENC es direkt nimmt).
+**Fix** (strom-Branch `lmix-encoder-cuda-download`, auf `dev`): Im
+Software-Modus ist der Wandler ein Bin `cudadownload ! videoconvert`, wenn
+`cudadownload` existiert (Systemspeicher läuft unverändert durch).
+Nachgestellt mit einer leeren `libnvidia-encode.so.1` vor der echten
+(CUDA da, NVENC nicht): vorher Aufnahme und SRT `failed`, danach laufen
+Aufnahme, ISO und SRT mit x264 (480 Bilder in 16 s). Test
+`test_software_convert_accepts_cuda_memory` (ignoriert ohne CUDA).
+Betrifft jeden Rechner mit CUDA-Mischer, aber ohne NVENC in der Registry
+(Treiber ohne `libnvidia-encode`, Rechenkarten ohne NVENC wie A100/H100).
+
+
+## 2026-10-12 — CUDA-Latenz 106 ms: leere DSK-Ebenen im Mischer
+
+**Bisect** (RTX 3090, CUDA-Mischer, 4 Testbild-Inputs, Aufnahme läuft,
+viermal `POST /api/latency/measure?seconds=5`; jede lmix-core-Version mit
+ihrem strom-Pin, parallel zum 8-h-Soak):
+
+| Stand | strom | Median |
+|---|---|---|
+| `70458ac` (Soak 2026-10-09) | `ed647f2` | 56 ms |
+| `e49e4cd`, `f370d79` | `ed647f2`, `1dbe229` | 56 ms |
+| `f370d79` (lmix-core alt) | `401053c` (strom neu) | 56 ms |
+| `dde8237` Overlays und T-Bar | `d47a50a` | 107 ms |
+| `f851798`, `60fb92d`, `619760d`, `ad3657f`, `6ce0d2b` | … `9274bbd` | 86–107 ms |
+
+**Ursache**: Seit `dde8237` hängen am Bildmischer vier DSK-Ebenen für
+die Overlays (später fünf mit dem Stinger), gespeist über `inter` von
+einem Kanal, den niemand füttert. Ein Live-Aggregator wartet bei jedem
+Bild bis zu seiner Frist, solange ein Pad keine Daten hat; das Programm
+kommt dadurch um das ganze Latenzbudget (`latency` + `min-upstream-latency`
+je 20 ms, plus Vorlauf) später. Die Werte springen zwischen 86 und 107 ms
+je nach Lage der Frist zum Bildtakt.
+**Fix** (strom-Branch `lmix-ignore-inactive-pads`, auf `dev`):
+`ignore-inactive-pads=true` an den Compositoren des Bildmischers. Pads ohne
+je ein Bild zählen nicht mehr, ab ihrem ersten Bild wieder. Gemessen mit
+dem heutigen lmix-core: **56 ms** statt 87–107 ms, auch mit Overlay an und
+wieder aus (der Kanal zeigt danach weiter auf den Slot, das Pad bekommt
+Bilder).
+**Rest**: Nach dem ersten Stinger 87 ms. lmix-core pausiert den Clip nach
+dem Übergang, die Stinger-Ebene ist dann aktiv und bekommt keine Bilder
+mehr. Gleiches gilt für ein Overlay, dessen Input ausfällt, und für jeden
+Input, dessen Quelle wegfällt (das war auch vor M4 so). Wege:
+(a) die Ebene nach dem Stinger an einen Kanal hängen, der immer Bilder
+liefert (eigener Leerlauf-Kanal mit kleinem transparentem Bild im
+Mischer-Flow); (b) in strom das Pad beim Ausschalten der Ebene spülen (ungeprüft, ob
+GstAggregator ein Pad nach einem Flush wieder als inaktiv zählt); (c) den Clip nach
+dem Stinger nicht pausieren, sondern auf das letzte Bild stehen lassen und
+weiter senden. Offen, Entscheidung steht aus.
+
+## 2026-10-12 — NFA.7: 8-h-Soak und strom-Speicher (H.24)
+
+**Lauf** (`MINUTES=480 INPUTS=16 STREAMS=2 ISO=1 scripts/soak-hardware.sh`,
+RTX 3090, CUDA-Mischer, lmix `511460a`, strom `9274bbd`, 08:42–16:42):
+kein Ausfall. Aufnahme 864 919 Bilder in 28 828 s (30,0 fps), ISO 864 617,
+beide SRT-Empfänger je 864 809, 0 verlorene und 0 verworfene Pakete.
+Latenz durchgehend 106–107 ms (p95 einmal 111 ms; Ursache der 107 ms:
+Eintrag „CUDA-Latenz 106 ms“). Zwei FAILs im Bericht:
+- **strom-Speicher**: 1027 MB nach 10 min, 1387 MB am Ende. In den ersten
+  2 h liefen parallel Builds und die Läufe unten; ab Stunde 3 ruhig und
+  gleichmäßig: 1232 → 1387 MB in 5 h, **~31 MB/h** (wie am 2026-10-09).
+- **CRITICALs**: 28 Meldungen `gst_value_collect_int_range` beim Start
+  (ein Zeitpunkt, danach keine). Sie kommen aus dem PipeWire-Geräteanbieter
+  von GStreamer (`libgstpipewire`, Backtrace über `gst_caps_set_simple`),
+  den strom für die Geräteerkennung startet; `gst-device-monitor-1.0`
+  zeigt dieselben 28 ohne strom. Umgebung des Rechners, nicht lmix.
+
+**Eingrenzung des Wachstums** (CPU-Mischer, 1 Testbild-Input, nur eine
+ISO-Aufnahme als MKV, RSS von strom jede Minute):
+
+| Lauf | Wandler vor dem Encoder | Verlauf |
+|---|---|---|
+| ISO + NVENC (2 ×, 60 und 90 min) | `autovideoconvert` | stetig ~21–36 MB/h |
+| wie oben, `MALLOC_ARENA_MAX=2` | `autovideoconvert` | stetig ~28 MB/h |
+| ISO + NVENC, `STROM_FORCE_SOFTWARE_CONVERT=1` (40 min) | `videoconvert` | flach (544 MB von Minute 10 bis 30, dann 486) |
+| ISO + x264 (90 min) | `videoconvert` | flach |
+| ohne ISO (90 min) | – | flach |
+
+Reines GStreamer (je 60 min, ohne strom) wächst mit keiner Variante:
+`nvh264enc` direkt aus Systemspeicher, mit `cudaupload`, mit
+`autovideoconvert` und mit den Encoder-Einstellungen von strom.
+**Befund**: Das Wachstum hängt am Weg Systemspeicher → `autovideoconvert`
+→ NVENC in strom. `autovideoconvert` lädt dort jedes Bild über OpenGL
+hoch (`glupload ! glcolorconvert`, RGBA in GL-Speicher), NVENC nimmt es
+per CUDA-GL-Interop. Die Programm-Ausgänge kommen beim CUDA-Mischer schon
+im GPU-Speicher und wachsen nicht. In strom selbst nicht weiter verfolgt
+(was in der GL-Kette leckt, ist offen; ohne strom nicht nachstellbar).
+**Vorschlag** (strom, ungeprüft): Für NVENC-Encoder mit Systemspeicher
+`videoconvert` (oder `cudaupload ! cudaconvert`) statt `autovideoconvert`;
+den GL-Umweg braucht NVENC nicht. Danach ISO-Lauf ≥ 3 h, dann 48 h (H.24).
