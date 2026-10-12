@@ -1168,16 +1168,11 @@ je ein Bild zählen nicht mehr, ab ihrem ersten Bild wieder. Gemessen mit
 dem heutigen lmix-core: **56 ms** statt 87–107 ms, auch mit Overlay an und
 wieder aus (der Kanal zeigt danach weiter auf den Slot, das Pad bekommt
 Bilder).
-**Rest**: Nach dem ersten Stinger 87 ms. lmix-core pausiert den Clip nach
-dem Übergang, die Stinger-Ebene ist dann aktiv und bekommt keine Bilder
-mehr. Gleiches gilt für ein Overlay, dessen Input ausfällt, und für jeden
-Input, dessen Quelle wegfällt (das war auch vor M4 so). Wege:
-(a) die Ebene nach dem Stinger an einen Kanal hängen, der immer Bilder
-liefert (eigener Leerlauf-Kanal mit kleinem transparentem Bild im
-Mischer-Flow); (b) in strom das Pad beim Ausschalten der Ebene spülen (ungeprüft, ob
-GstAggregator ein Pad nach einem Flush wieder als inaktiv zählt); (c) den Clip nach
-dem Stinger nicht pausieren, sondern auf das letzte Bild stehen lassen und
-weiter senden. Offen, Entscheidung steht aus.
+**Rest**: Nach dem ersten Stinger 87 ms. Ursache ist nicht die
+Stinger-Ebene, sondern der Input des Clips selbst: Schon das Hinzufügen
+des Stinger-Clips (ohne Übergang) ergibt 86 ms. Ein pausierter Player
+liefert keine Bilder mehr, sein Pad am Mischer hatte aber schon eins und
+gilt als aktiv. Gelöst am 2026-10-13 (Eintrag „strom-Fixes“).
 
 ## 2026-10-12 — NFA.7: 8-h-Soak und strom-Speicher (H.24)
 
@@ -1219,3 +1214,36 @@ im GPU-Speicher und wachsen nicht. In strom selbst nicht weiter verfolgt
 **Vorschlag** (strom, ungeprüft): Für NVENC-Encoder mit Systemspeicher
 `videoconvert` (oder `cudaupload ! cudaconvert`) statt `autovideoconvert`;
 den GL-Umweg braucht NVENC nicht. Danach ISO-Lauf ≥ 3 h, dann 48 h (H.24).
+
+
+## 2026-10-13 — strom-Fixes: Encoder, pausierter Player, Speicher
+
+**Stand** (Submodul `strom` auf `8e8da6f`, Branch `lmix-pin-1013`: Pin
+vom 2026-10-12 plus strom-PRs #9–#12):
+- **#9** Encoder im Software-Modus nimmt GPU-Speicher
+  (`cudadownload ! videoconvert`), Programm-Ausgänge laufen ohne NVENC.
+- **#10** `ignore-inactive-pads` am Bildmischer: 107 → 56 ms.
+- **#11** Vor NVENC `cudaupload ! cudaconvert` statt `autovideoconvert`
+  (kein Umweg über OpenGL). Erster Versuch mit `videoconvert`: Aufnahme
+  und SRT `not-negotiated`, NVENC nimmt I420 nicht aus CUDA-Speicher, und
+  `videoconvert` kann CUDA-Speicher nicht wandeln.
+- **#12** Pausierter Player wiederholt sein letztes Bild in der Bildrate
+  (auch am Ende der Playlist), mit der Laufzeit des Slot-Flows. Ein
+  pausierter Clip kostet das Programm keine 30 ms mehr.
+
+**Stinger** (Entscheidung „b“ vom 2026-10-12, verworfen): Die Stinger-Ebene
+beim Ausschalten zu spülen, wirkt im Test (Pad zählt danach wieder als
+inaktiv), lässt die Latenz aber bei 86 ms: Wartet hat das Input-Pad des
+pausierten Clips. Das Standbild (#12) ist Weg „c“ in strom statt in lmix
+und deckt jeden pausierten Clip ab, nicht nur Stinger.
+**Gemessen** (CUDA, 4 Inputs, Aufnahme): 56 ms vor dem Stinger, mit
+hinzugefügtem Clip, nach dem ersten und zweiten Stinger, Overlay an und
+aus.
+**Soak** (3 h, CUDA, 16 Inputs, Aufnahme + ISO + 2 × SRT, mit #9–#11):
+strom-RSS 1091 → 1101 MB von Minute 90 bis 180 (vorher ~31 MB/h), Latenz
+56 ms (einmal p95 85 ms), alle Bilder angekommen, 0 Pakete verloren. In
+der Zeit lief ComfyUI auf der GPU (bis 16 GB, zeitweise 100 %).
+**`soak-hardware.sh`** zählt die PipeWire-CRITICALs vom Start (Eintrag
+„NFA.7: 8-h-Soak“) nicht mehr als Fehler.
+**Offen**: Ton eines pausierten Clips (das Pad am Tonmischer hungert
+genauso; nicht gemessen); 8-h- und 48-h-Lauf mit diesem Stand (H.24).

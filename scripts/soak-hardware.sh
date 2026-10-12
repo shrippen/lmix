@@ -239,7 +239,14 @@ for n in $(seq 1 "$STREAMS"); do
     check_file "SRT $n received" "$WORK/received-$n.ts"
 done
 
-grep -q CRITICAL "$WORK/strom.log" && fail "GStreamer CRITICALs in strom.log" || pass "no GStreamer CRITICALs"
+# GStreamer's PipeWire device provider (strom's device discovery at start)
+# trips over degenerate int ranges on some desktops; not lmix or strom.
+PIPEWIRE_RANGES='gst_value_collect_int_range|range start is not smaller than end'
+if grep CRITICAL "$WORK/strom.log" | grep -Evq "$PIPEWIRE_RANGES"; then
+    fail "GStreamer CRITICALs in strom.log"
+else
+    pass "no GStreamer CRITICALs"
+fi
 [[ "$FAILED" == 0 ]] && log "soak passed" || log "soak FAILED (work kept: $WORK)"
 echo "report: $REPORT"
 exit "$FAILED"
