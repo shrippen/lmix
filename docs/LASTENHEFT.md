@@ -419,7 +419,7 @@ Zurückgestellt (User 2026-10-08).
 
 | ID | Anforderung | Prio | Stand |
 |---|---|---|---|
-| API.1 | Ein Aktionskatalog für alle Bedienwege (§2.3); jede Aktion: Name, Gruppe, Parameter (Input, Wert, Dauer, Feldname, Index, Mix, Kanal), Beschreibung; maschinenlesbar exportierbar | M | ◐ (JSON-Schema mit Beschreibungen; ohne Gruppen) |
+| API.1 | Ein Aktionskatalog für alle Bedienwege (§2.3); jede Aktion: Name, Gruppe, Parameter (Input, Wert, Dauer, Feldname, Index, Mix, Kanal), Beschreibung; maschinenlesbar exportierbar | M | ✅ (JSON-Schema mit Beschreibungen und Gruppen `x-group`) |
 | API.2 | Umfang: alle Bedienfunktionen dieses Lastenhefts, mindestens alles, was die vMix-Funktionsreferenz steuern kann; Gruppen wie vMix: Allgemein, Audio, Übergang, Ausgang, Titel, Input, Overlay, Ablaufliste, Skript, Wiederholung, NDI/OMT, PTZ, Show, Datenquellen, Browser (vMix 29: rund 800 Aktionen inkl. nummerierter Varianten; lmix darf sie parametrisieren statt durchnummerieren, z. B. `overlay.in {channel}` statt `OverlayInput1In…8In`) | M | – |
 | API.3 | HTTP: Aktion per Aufruf mit Parametern; vollständiger Zustand abrufbar (JSON) | M | ✅ |
 | API.4 | Zustand enthält: Version, Inputs (ID, Nummer, Typ, Titel, Zustand, Position, Dauer, Schleife, Ton, Pegel, Busse, Ebenen, Titelfelder, Listeneinträge), Overlays, Preview, Program, FTB, Übergänge, Aufnahme/Stream/Ausgaben/Ablaufliste/Einzelaufnahme, Audio-Busse, dynamische Werte, Mixe | M | ◐ |
@@ -429,7 +429,7 @@ Zurückgestellt (User 2026-10-08).
 | API.8 | Optionaler Kompatibilitätsmodus: vMix-Funktionsnamen, XML-Zustand, TCP-Protokoll, Ports 8088/8099 | K | – |
 | API.9 | Integrationsziel: alles, was Fremdprogramme an vMix nutzen, geht auch mit der lmix-API: Aktionen mit allen Parametern, Inputs über Nummer, Name oder ID (plus Kurzformen "Preview", "Program"), vollständiger Zustand, Ereignis-Abo (API.5), Pegel live, Titelfelder lesen/schreiben, Live-Vorschaubild je Input für Tasten-Displays, Fehler mit Grund. Referenz: Bitfocus Companion, Stream-Deck-Plugins, Tally-Software (`LASTENHEFT-QUELLEN.md` §2) | M | ◐ |
 | API.10 | Schnittstelle dokumentiert und versioniert (maschinenlesbare Beschreibung, Änderungen nur additiv innerhalb einer Hauptversion) | M | ◐ (JSON-Schema, `api_version`) |
-| API.11 | Eigenes Companion-Modul für lmix, Beispiel-Clients (Tally auf Mikrocontroller, Skript) | S | – |
+| API.11 | Eigenes Companion-Modul für lmix, Beispiel-Clients (Tally auf Mikrocontroller, Skript) | S | ◐ (Beispiele in `examples/`: Python, ESP32-Tally; ohne Companion-Modul) |
 
 ### 3.16 Web-Fernbedienung (WEB)
 

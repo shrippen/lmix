@@ -250,7 +250,34 @@ async fn graphics_page(Path(_graphics): Path<String>) -> Response {
 }
 
 async fn catalog() -> impl IntoResponse {
-    Json(schemars::schema_for!(Action))
+    Json(catalog_schema())
+}
+
+/// The actions' JSON schema, each marked with its group (`x-group`,
+/// API.1).
+fn catalog_schema() -> serde_json::Value {
+    let mut schema = serde_json::to_value(schemars::schema_for!(Action)).expect("schema");
+    if let Some(variants) = schema.get_mut("oneOf").and_then(|v| v.as_array_mut()) {
+        for variant in variants {
+            if let Some(group) = action_name(variant).and_then(lmix_types::action_group) {
+                variant["x-group"] = group.into();
+            }
+        }
+    }
+    schema["x-groups"] = lmix_types::ACTION_GROUPS
+        .iter()
+        .map(|(group, _)| *group)
+        .collect::<Vec<_>>()
+        .into();
+    schema
+}
+
+/// The `action` name a variant of the schema stands for.
+fn action_name(variant: &serde_json::Value) -> Option<&str> {
+    let tag = &variant["properties"]["action"];
+    tag["const"]
+        .as_str()
+        .or_else(|| tag["enum"].get(0).and_then(|v| v.as_str()))
 }
 
 async fn action(State(service): State<Arc<Service>>, Json(action): Json<Action>) -> Response {
@@ -518,6 +545,41 @@ mod tests {
         assert_eq!(body["error"]["error"], "unknown_template");
         let (status, _) = post(&app, r#"{"action":"title_play","graphics":2}"#).await;
         assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    }
+
+    #[test]
+    fn every_action_is_in_one_group() {
+        let schema = catalog_schema();
+        let names: Vec<&str> = schema["oneOf"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|v| action_name(v).expect("tagged variant"))
+            .collect();
+        let missing: Vec<_> = names
+            .iter()
+            .filter(|n| lmix_types::action_group(n).is_none())
+            .collect();
+        assert!(missing.is_empty(), "no group: {missing:?}");
+        let grouped: Vec<&str> = lmix_types::ACTION_GROUPS
+            .iter()
+            .flat_map(|(_, n)| n.iter().copied())
+            .collect();
+        let unknown: Vec<_> = grouped.iter().filter(|n| !names.contains(n)).collect();
+        assert!(unknown.is_empty(), "not an action: {unknown:?}");
+        let mut unique = grouped.clone();
+        unique.sort();
+        unique.dedup();
+        assert_eq!(unique.len(), grouped.len(), "an action in two groups");
+        assert_eq!(
+            schema["oneOf"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|v| action_name(v) == Some("cut"))
+                .unwrap()["x-group"],
+            "switching"
+        );
     }
 
     #[tokio::test]

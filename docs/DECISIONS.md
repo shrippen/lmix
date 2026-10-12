@@ -1694,3 +1694,20 @@ feuern auch Zeiten am Anfang eines Eintrags.
 **Geprüft**: Tests für Durchlauf, Schleife, nächsten Eintrag und die
 Prüfung der Felder; Dialog auf Xvfb (Wert bleibt erhalten).
 
+## 2026-10-12 — Aktionsgruppen und Beispiel-Clients (API.1, API.11)
+
+**Entscheidung**: Jede Aktion gehört einer Gruppe (`switching`, `input`,
+`overlay`, `layout`, `audio`, `output`, `title`, `data`, `automation`,
+`ptz`, `show`, `safety`), angelehnt an die Funktionsgruppen von vMix;
+`GET /api/actions` markiert jede Variante mit `x-group` und listet die
+Gruppen in `x-groups` (additiv, Schema sonst unverändert). Die Tabelle
+steht in `lmix-types` (`ACTION_GROUPS`); ein Test verlangt, dass jede
+Aktion in genau einer Gruppe steht, eine neue Aktion ohne Gruppe fällt
+also auf.
+`examples/`: `python/lmix_client.py` (Aktion, Tally lesen und folgen,
+nur Standardbibliothek) und `tally-micropython/main.py` (Tally-Licht für
+einen Input auf einem ESP32, ohne `machine` auf dem Rechner zum
+Ausprobieren). Beide gegen lmix-core mit `--tcp` geprüft (Schnitt,
+Vorschau, Fehler), der ESP32 selbst nicht. Ein Companion-Modul bleibt
+offen (eigenes Repo, eigene Sprache).
+

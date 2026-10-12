@@ -104,6 +104,153 @@ impl Effect {
     }
 }
 
+/// Groups of actions (API.1), like vMix's function groups, for catalogs
+/// and controller software: `GET /api/actions` marks each action with
+/// `x-group`. A test keeps every action in exactly one group.
+pub const ACTION_GROUPS: &[(&str, &[&str])] = &[
+    (
+        "switching",
+        &[
+            "preview_input",
+            "cut",
+            "cut_direct",
+            "transition",
+            "set_transition",
+            "fade_to_black",
+            "t_bar",
+            "set_midi_tbar",
+        ],
+    ),
+    (
+        "input",
+        &[
+            "add_input",
+            "remove_input",
+            "restore_input",
+            "replace_source",
+            "rename_input",
+            "set_input_color",
+            "set_look",
+            "set_signal_loss",
+            "transport_input",
+            "move_input",
+        ],
+    ),
+    ("overlay", &["overlay_in", "overlay_out"]),
+    (
+        "layout",
+        &[
+            "add_layout",
+            "set_layout",
+            "remove_layout",
+            "preview_layout",
+        ],
+    ),
+    (
+        "audio",
+        &[
+            "set_audio",
+            "set_audio_follow",
+            "set_volume",
+            "set_channel_strip",
+            "set_aux_send",
+            "set_aux_bus",
+            "set_listen",
+            "clear_listen",
+        ],
+    ),
+    (
+        "output",
+        &["add_output", "remove_output", "start_output", "stop_output"],
+    ),
+    (
+        "title",
+        &[
+            "add_graphics",
+            "remove_graphics",
+            "rename_graphics",
+            "title_load",
+            "title_play",
+            "title_next",
+            "title_stop",
+            "title_clear",
+            "title_update",
+            "title_add",
+            "title_transform",
+            "title_call",
+            "title_bind",
+            "set_title_triggers",
+            "title_report",
+            "save_dataset",
+            "remove_dataset",
+            "apply_dataset",
+            "dataset_next",
+            "dataset_previous",
+            "import_datasets",
+            "export_datasets",
+        ],
+    ),
+    (
+        "data",
+        &[
+            "add_data_source",
+            "remove_data_source",
+            "data_row",
+            "data_next",
+            "data_previous",
+            "set_data_auto",
+        ],
+    ),
+    (
+        "automation",
+        &[
+            "set_triggers",
+            "add_cue_list",
+            "set_cue_list",
+            "remove_cue_list",
+            "cue_go",
+            "cue_back",
+            "cue_jump",
+            "add_shortcut",
+            "set_shortcut",
+            "remove_shortcut",
+            "run_shortcut",
+            "set_dynamic_input",
+            "set_dynamic_value",
+        ],
+    ),
+    (
+        "ptz",
+        &[
+            "set_ptz",
+            "ptz_move",
+            "ptz_zoom",
+            "ptz_focus",
+            "ptz_home",
+            "ptz_preset",
+        ],
+    ),
+    (
+        "show",
+        &[
+            "new_show",
+            "save_show",
+            "open_show",
+            "export_package",
+            "import_package",
+        ],
+    ),
+    ("safety", &["set_lock"]),
+];
+
+/// The group of an action by its name (`cut`, `title_load`).
+pub fn action_group(name: &str) -> Option<&'static str> {
+    ACTION_GROUPS
+        .iter()
+        .find(|(_, names)| names.contains(&name))
+        .map(|(group, _)| *group)
+}
+
 /// Every operation, whatever triggered it.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "action", rename_all = "snake_case")]

@@ -20,7 +20,9 @@ pub mod ptz;
 pub mod shortcut;
 pub mod state;
 
-pub use action::{Action, ActionError, Effect, StingerSpec, TransitionSlot};
+pub use action::{
+    action_group, Action, ActionError, Effect, StingerSpec, TransitionSlot, ACTION_GROUPS,
+};
 pub use automation::{Cue, CueList, Trigger, TriggerOn};
 pub use graphics::{
     BindingSpec, Blend, DataFormat, DataSource, DataSourceSpec, DataTable, Dataset, Easing,
