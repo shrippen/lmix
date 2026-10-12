@@ -291,6 +291,8 @@ pub struct Switcher {
     all_shows: Vec<ShowShortcut>,
     /// `all_shows` changed since the service last saved it.
     all_shows_changed: bool,
+    /// Media files not found per input (SHW.4); the service checks.
+    missing: HashMap<InputId, Vec<String>>,
 }
 
 /// Where a shortcut is kept.
@@ -324,7 +326,52 @@ impl Switcher {
             dynamic_values: Default::default(),
             all_shows: Vec::new(),
             all_shows_changed: false,
+            missing: HashMap::new(),
         }
+    }
+
+    /// Media files of each input with files (file, playlist), for the
+    /// service to look for.
+    pub fn media_files(&self) -> Vec<(InputId, Vec<String>)> {
+        self.show
+            .inputs
+            .iter()
+            .filter_map(|i| match &i.source {
+                SourceSpec::File { path } => Some((i.id, vec![path.clone()])),
+                SourceSpec::Playlist { paths } => Some((i.id, paths.clone())),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// Which media files are missing now; true if that changed.
+    pub fn set_missing(&mut self, missing: HashMap<InputId, Vec<String>>) -> bool {
+        let missing: HashMap<_, _> = missing
+            .into_iter()
+            .filter(|(_, files)| !files.is_empty())
+            .collect();
+        if missing == self.missing {
+            return false;
+        }
+        self.missing = missing;
+        true
+    }
+
+    /// Missing files per input, as last checked.
+    pub fn missing_media(&self) -> Vec<(InputId, Vec<String>)> {
+        self.missing
+            .iter()
+            .map(|(id, files)| (*id, files.clone()))
+            .collect()
+    }
+
+    /// The source of input `id` (for relocating its files).
+    pub fn source_of(&self, id: InputId) -> Option<&SourceSpec> {
+        self.show
+            .inputs
+            .iter()
+            .find(|i| i.id == id)
+            .map(|i| &i.source)
     }
 
     /// Shortcuts for all shows, as the settings hold them.
@@ -641,6 +688,7 @@ impl Switcher {
             | Action::SaveShow { .. }
             | Action::OpenShow { .. }
             | Action::AppendShow { .. }
+            | Action::RelocateMedia { .. }
             | Action::ImportDatasets { .. }
             | Action::ExportDatasets { .. }
             | Action::ExportPackage { .. }
@@ -810,6 +858,7 @@ impl Switcher {
                     .then(|| self.clip_ms.get(&input.slot).copied())
                     .flatten(),
                 ptz: input.ptz.clone(),
+                missing: self.missing.get(&input.id).cloned().unwrap_or_default(),
             })
             .collect();
 

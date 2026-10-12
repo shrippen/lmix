@@ -121,6 +121,17 @@ KanteCard {
                 text: tile.input.name
                 elide: Text.ElideRight
             }
+            // Media files not found (SHW.4).
+            KanteSectionLabel {
+                readonly property var missing: tile.input.missing || []
+                visible: missing.length > 0
+                text: qsTr("Missing")
+                color: KanteStyle.negativeTextColor
+                Accessible.name: qsTr("Missing files: %1").arg(missing.join(", "))
+                QQC2.ToolTip.visible: missingHover.containsMouse
+                QQC2.ToolTip.text: qsTr("Not found:") + "\n" + missing.join("\n")
+                MouseArea { id: missingHover; anchors.fill: parent; hoverEnabled: true; acceptedButtons: Qt.NoButton }
+            }
             KanteSwatch {
                 visible: tile.input.color !== null
                 size: KanteSwatch.Size.Dense

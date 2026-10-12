@@ -510,6 +510,10 @@ pub struct Input {
     /// The camera's PTZ address, if it has one (PER.2).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ptz: Option<crate::ptz::PtzSpec>,
+    /// Media files of the source that are not there (SHW.4), checked
+    /// every few seconds.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub missing: Vec<String>,
 }
 
 /// What a discovered device delivers.

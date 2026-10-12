@@ -237,6 +237,7 @@ pub const ACTION_GROUPS: &[(&str, &[&str])] = &[
             "save_show",
             "open_show",
             "append_show",
+            "relocate_media",
             "export_package",
             "import_package",
         ],
@@ -684,6 +685,9 @@ pub enum Action {
     },
     /// Open a show file, replacing the current show.
     OpenShow { path: String },
+    /// Look for the missing media files of all inputs in `folder` (by
+    /// file name) and use those found (SHW.4).
+    RelocateMedia { folder: String },
     /// Add inputs of another show file to this one, with their settings
     /// (SHW.3): `inputs` by number in that show, all if empty.
     AppendShow {

@@ -1726,3 +1726,16 @@ nach dem Dateidialog „Aus Show…“, welche übernommen werden.
 Slots, falsche Nummer); Console auf Xvfb (Datei gewählt, einen Input
 abgewählt, nur der andere kam).
 
+## 2026-10-12 — Fehlende Mediendateien (SHW.4)
+
+**Entscheidung**: lmix-core sieht alle 3 s nach, ob die Dateien der
+Datei- und Playlist-Inputs da sind (ohne den Mischer zu sperren); fehlende
+stehen je Input in `missing`. Die Console zeigt „Fehlt“ auf der Kachel
+(Tooltip mit den Pfaden) und, solange etwas fehlt, „Fehlende Dateien
+suchen…“: ein Ordner, in dem `relocate_media` nach den Dateinamen sucht
+und gefundene einsetzt (Quelle ersetzt, wie „Quelle ersetzen“). Findet
+es keine, meldet es das. Adressen (URL) prüft es nicht.
+**Geprüft**: Service-Test (Datei und Playlist markiert, falscher Ordner
+abgelehnt, richtiger eingesetzt, danach nichts mehr fehlend); Console
+auf Xvfb (Markierung, Knopf).
+

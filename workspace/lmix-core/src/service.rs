@@ -103,6 +103,9 @@ const URL_REFRESH: std::time::Duration = std::time::Duration::from_secs(10);
 
 /// How often lmix-core looks at the templates folder and data sources.
 const FILES_CHECK: std::time::Duration = std::time::Duration::from_secs(1);
+/// How often the inputs' media files are looked for (SHW.4).
+const MEDIA_CHECK: std::time::Duration = std::time::Duration::from_secs(3);
+
 /// How often it moves auto-advancing data sources on when due.
 const AUTO_CHECK: std::time::Duration = std::time::Duration::from_millis(250);
 
@@ -587,6 +590,35 @@ impl Service {
         self.publish(&sw);
     }
 
+    /// Look for the inputs' media files every few seconds (SHW.4): the
+    /// state lists the missing ones per input. Checked without the
+    /// switcher locked.
+    pub async fn watch_media(self: Arc<Self>) {
+        let mut tick = tokio::time::interval(MEDIA_CHECK);
+        loop {
+            tick.tick().await;
+            self.check_media().await;
+        }
+    }
+
+    async fn check_media(&self) {
+        let files = self.switcher.lock().await.media_files();
+        let mut missing = HashMap::new();
+        for (id, paths) in files {
+            let mut gone = Vec::new();
+            for path in paths {
+                if !tokio::fs::try_exists(&path).await.unwrap_or(false) {
+                    gone.push(path);
+                }
+            }
+            missing.insert(id, gone);
+        }
+        let mut sw = self.switcher.lock().await;
+        if sw.set_missing(missing) {
+            self.publish(&sw);
+        }
+    }
+
     /// Follow engine failures for the process life: failed outputs are
     /// marked, failed inputs go offline and come back by themselves
     /// (failback) once their source returns.
@@ -1059,6 +1091,7 @@ impl Service {
                 save(&mut sw, path).await?;
                 Vec::new()
             }
+            Action::RelocateMedia { folder } => relocate(&mut sw, &folder).await?,
             Action::AppendShow { path, inputs } => {
                 let other =
                     show::load(&PathBuf::from(&path))
@@ -1341,6 +1374,52 @@ async fn open(sw: &mut Switcher, path: String) -> Result<Vec<Command>, ActionErr
             message: e.to_string(),
         })?;
     Ok(sw.replace(show, Some(path)))
+}
+
+/// Missing media files found in `folder` by name take the old paths'
+/// place, input by input (SHW.4).
+async fn relocate(sw: &mut Switcher, folder: &str) -> Result<Vec<Command>, ActionError> {
+    let folder = std::path::Path::new(folder);
+    let mut commands = Vec::new();
+    let mut found = 0;
+    for (id, gone) in sw.missing_media() {
+        let Some(source) = sw.source_of(id).cloned() else {
+            continue;
+        };
+        let mut moved = |path: &mut String| {
+            let candidate = std::path::Path::new(path.as_str())
+                .file_name()
+                .map(|name| folder.join(name))
+                .filter(|c| gone.contains(path) && c.is_file());
+            if let Some(candidate) = candidate {
+                *path = candidate.display().to_string();
+                found += 1;
+            }
+        };
+        let source = match source {
+            lmix_types::SourceSpec::File { mut path } => {
+                moved(&mut path);
+                lmix_types::SourceSpec::File { path }
+            }
+            lmix_types::SourceSpec::Playlist { mut paths } => {
+                paths.iter_mut().for_each(&mut moved);
+                lmix_types::SourceSpec::Playlist { paths }
+            }
+            _ => continue,
+        };
+        if Some(&source) != sw.source_of(id) {
+            commands.extend(sw.apply(Action::ReplaceSource {
+                input: lmix_types::InputRef::Text(id.to_string()),
+                source,
+            })?);
+        }
+    }
+    if found == 0 {
+        return Err(ActionError::ShowFile {
+            message: format!("none of the missing files is in {}", folder.display()),
+        });
+    }
+    Ok(commands)
 }
 
 async fn save(sw: &mut Switcher, path: Option<String>) -> Result<(), ActionError> {
@@ -1986,6 +2065,75 @@ mod tests {
             Err(ActionError::UnknownInput { .. })
         ));
         assert_eq!(service.state().await.inputs.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn missing_media_are_marked_and_found_again() {
+        use lmix_types::SourceSpec;
+        let dir = tempfile::tempdir().unwrap();
+        let moved = dir.path().join("moved");
+        std::fs::create_dir(&moved).unwrap();
+        std::fs::write(moved.join("intro.mp4"), b"x").unwrap();
+        let there = dir.path().join("there.mp4");
+        std::fs::write(&there, b"x").unwrap();
+        let gone = dir
+            .path()
+            .join("old")
+            .join("intro.mp4")
+            .display()
+            .to_string();
+
+        let service = Service::new(4, Arc::new(NullEngine::default()), None);
+        for (name, source) in [
+            ("Intro", SourceSpec::File { path: gone.clone() }),
+            (
+                "List",
+                SourceSpec::Playlist {
+                    paths: vec![there.display().to_string(), gone.clone()],
+                },
+            ),
+        ] {
+            service
+                .handle(Action::AddInput {
+                    source,
+                    name: Some(name.into()),
+                })
+                .await
+                .unwrap();
+        }
+        service.check_media().await;
+        let state = service.state().await;
+        assert_eq!(state.inputs[0].missing, std::slice::from_ref(&gone));
+        assert_eq!(state.inputs[1].missing, std::slice::from_ref(&gone));
+
+        assert!(service
+            .handle(Action::RelocateMedia {
+                folder: dir.path().join("nothing").display().to_string(),
+            })
+            .await
+            .is_err());
+        service
+            .handle(Action::RelocateMedia {
+                folder: moved.display().to_string(),
+            })
+            .await
+            .unwrap();
+        service.check_media().await;
+        let state = service.state().await;
+        let found = moved.join("intro.mp4").display().to_string();
+        assert_eq!(
+            state.inputs[0].source,
+            SourceSpec::File {
+                path: found.clone()
+            }
+        );
+        assert_eq!(
+            state.inputs[1].source,
+            SourceSpec::Playlist {
+                paths: vec![there.display().to_string(), found]
+            }
+        );
+        assert!(state.inputs.iter().all(|i| i.missing.is_empty()));
     }
 
     #[tokio::test]

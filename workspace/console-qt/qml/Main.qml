@@ -242,6 +242,11 @@ Kirigami.ApplicationWindow {
         }
     }
     FolderDialog {
+        id: relocateDialog
+        title: qsTr("Folder with the missing files")
+        onAccepted: root.act({ action: "relocate_media", folder: root.localPath(selectedFolder) })
+    }
+    FolderDialog {
         id: importFolderDialog
         property string packagePath
         title: qsTr("Empty folder for the package's show and media")
@@ -553,6 +558,15 @@ Kirigami.ApplicationWindow {
                     }
                 }
                 Item { Layout.fillWidth: true }
+                KanteButton {
+                    readonly property int count: root.inputs.filter(i => i.missing && i.missing.length > 0).length
+                    visible: count > 0
+                    text: qsTr("Find missing files…")
+                    emphasis: KanteButton.Emphasis.Destructive
+                    QQC2.ToolTip.visible: hovered
+                    QQC2.ToolTip.text: qsTr("%1 inputs miss media files: pick the folder they are in now.").arg(count)
+                    onClicked: relocateDialog.open()
+                }
                 KanteButton {
                     text: qsTr("Clear solo")
                     visible: root.inputs.some(i => i.listen !== "off")

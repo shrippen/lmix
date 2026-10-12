@@ -750,7 +750,22 @@
       <translation>Nur Ton</translation>
     </message>
     <message>
-      <location line="+48" />
+      <location line="+40" />
+      <source>Missing</source>
+      <translation>Fehlt</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Missing files: %1</source>
+      <translation>Fehlende Dateien: %1</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Not found:</source>
+      <translation>Nicht gefunden:</translation>
+    </message>
+    <message>
+      <location line="+15" />
       <source>PGM</source>
       <translation>PGM</translation>
     </message>
@@ -1408,7 +1423,12 @@
       <translation>Show-Paket importieren</translation>
     </message>
     <message>
-      <location line="+10" />
+      <location line="+9" />
+      <source>Folder with the missing files</source>
+      <translation>Ordner mit den fehlenden Dateien</translation>
+    </message>
+    <message>
+      <location line="+6" />
       <source>Empty folder for the package's show and media</source>
       <translation>Leerer Ordner für Show und Medien des Pakets</translation>
     </message>
@@ -1568,7 +1588,17 @@
       <translation>Einfacher Modus</translation>
     </message>
     <message>
-      <location line="+10" />
+      <location line="+12" />
+      <source>Find missing files…</source>
+      <translation>Fehlende Dateien suchen…</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>%1 inputs miss media files: pick the folder they are in now.</source>
+      <translation>%1 Inputs fehlen Mediendateien: den Ordner wählen, in dem sie jetzt liegen.</translation>
+    </message>
+    <message>
+      <location line="+4" />
       <source>Clear solo</source>
       <translation>Solo aus</translation>
     </message>
