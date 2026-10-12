@@ -1813,5 +1813,5 @@ Fortschrittsbalken; das Kachelmenü einer Playlist hat „Eintrag
 abspielen“ mit den Dateinamen. (Die Notiz „strom hat dafür keine
 Aktion“ in „M9 Anfang“ war falsch: lmix hatte keine.)
 **Geprüft**: Switcher-Test (Befehle, Bereich, nur Playlist); Menü auf
-Xvfb. Gegen strom an echter Hardware nicht (H-Liste: zusammen mit H.29).
+Xvfb. Gegen ein laufendes strom nicht geprüft (Pfad und Felder aus strom-types `SeekRequest`, `GotoRequest`).
 
