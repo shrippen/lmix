@@ -50,9 +50,9 @@ const pass = (message) => console.log("ok   " + message);
   pass("tally: program red, preview green, input picker");
 
   await page.goto(base + "/keys");
-  await page.waitForSelector('#keys .btn[data-shortcut="1"]', { timeout: 5000 });
+  await page.waitForSelector("#keys .btn[data-shortcut]", { timeout: 5000 });
   await page.screenshot({ path: process.env.SHOT_DIR + "/keys.png" });
-  await page.click('#keys .btn[data-shortcut="1"]');
+  await page.click("#keys .btn[data-shortcut]");
   await page.waitForFunction(async () => {
     const s = await (await fetch("/api/state")).json();
     return s.program === s.inputs[1].id;
