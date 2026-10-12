@@ -12,6 +12,12 @@
 #   MINUTES=10 MIXER=gl scripts/soak-hardware.sh
 #   KEEP_WORK=1 …                            # keep logs, recordings, streams
 #   MALLOC_ARENA_MAX=2 …                     # passed on to strom
+#   WORK=/big/disk/soak …                    # where recordings go (see below)
+#   STROM_BIN=…/strom …                      # skip scripts/fetch-strom.sh
+#
+# Recordings and received streams take ~2.7 GB per file and hour (6 Mbit/s;
+# 8 h NFA.7 ~90 GB, 48 h ~520 GB). The run refuses to start when WORK has
+# less room, and when WORK is on tmpfs (/tmp here: RAM).
 #
 # Needs: strom (scripts/fetch-strom.sh), jq, ffprobe, gst-launch-1.0 with
 # srtsrc. Report: $WORK/report.txt (path printed at the end); strom's
@@ -55,7 +61,20 @@ wait_up() {
     exit 1
 }
 
-STROM_BIN="$("$ROOT/scripts/fetch-strom.sh")"
+# Room for the recording, the ISO recording and each received stream.
+FILES=$((1 + ISO + STREAMS))
+NEED_MB=$((FILES * 6000 / 8 * MINUTES * 60 * 12 / 10 / 1000))
+if [[ "$(findmnt -no FSTYPE --target "$WORK")" == tmpfs ]]; then
+    echo "WORK=$WORK is on tmpfs (RAM); set WORK to a folder on disk" >&2
+    exit 1
+fi
+FREE_MB=$(($(df --output=avail -k "$WORK" | tail -1) / 1024))
+if ((FREE_MB < NEED_MB)); then
+    echo "WORK=$WORK has ${FREE_MB} MB free, the run needs ~${NEED_MB} MB" >&2
+    exit 1
+fi
+
+STROM_BIN="${STROM_BIN:-$("$ROOT/scripts/fetch-strom.sh")}"
 (cd "$ROOT/workspace/lmix-core" && cargo build --release >/dev/null 2>&1)
 CORE_BIN="${CARGO_TARGET_DIR:-$ROOT/workspace/lmix-core/target}/release/lmix-core"
 
