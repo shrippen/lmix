@@ -287,6 +287,17 @@ pub struct Switcher {
     /// What `"dynamic1"`… name, and the dynamic values (AUT.5); runtime.
     dynamic_inputs: [Option<InputId>; DYNAMIC_SLOTS as usize],
     dynamic_values: [String; DYNAMIC_SLOTS as usize],
+    /// Shortcuts for all shows (AUT.3), from lmix-core's settings.
+    all_shows: Vec<ShowShortcut>,
+    /// `all_shows` changed since the service last saved it.
+    all_shows_changed: bool,
+}
+
+/// Where a shortcut is kept.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Scope {
+    Show(usize),
+    AllShows(usize),
 }
 
 impl Switcher {
@@ -311,7 +322,25 @@ impl Switcher {
             titles: graphics::TitleRuntime::default(),
             dynamic_inputs: Default::default(),
             dynamic_values: Default::default(),
+            all_shows: Vec::new(),
+            all_shows_changed: false,
         }
+    }
+
+    /// Shortcuts for all shows, as the settings hold them.
+    pub fn all_shows_shortcuts(&self) -> &[ShowShortcut] {
+        &self.all_shows
+    }
+
+    /// Take shortcuts for all shows from the settings (start-up).
+    pub fn set_all_shows_shortcuts(&mut self, shortcuts: Vec<ShowShortcut>) {
+        self.all_shows = shortcuts;
+        self.all_shows_changed = false;
+    }
+
+    /// Whether shortcuts for all shows changed since the last call.
+    pub fn take_all_shows_changed(&mut self) -> bool {
+        std::mem::take(&mut self.all_shows_changed)
     }
 
     pub fn slots(&self) -> usize {
@@ -536,8 +565,15 @@ impl Switcher {
             Action::AddShortcut { shortcut } => self.add_shortcut(shortcut),
             Action::SetShortcut { target, shortcut } => self.set_shortcut(&target, shortcut),
             Action::RemoveShortcut { target } => {
-                let index = self.find_shortcut(&target)?;
-                self.show.shortcuts.remove(index);
+                match self.find_shortcut(&target)? {
+                    Scope::Show(i) => {
+                        self.show.shortcuts.remove(i);
+                    }
+                    Scope::AllShows(i) => {
+                        self.all_shows.remove(i);
+                        self.all_shows_changed = true;
+                    }
+                }
                 Ok(Vec::new())
             }
             // The service runs a shortcut's actions one by one.
@@ -791,8 +827,10 @@ impl Switcher {
                 .show
                 .shortcuts
                 .iter()
+                .map(|s| (s, false))
+                .chain(self.all_shows.iter().map(|s| (s, true)))
                 .enumerate()
-                .map(|(i, s)| Shortcut {
+                .map(|(i, (s, all_shows))| Shortcut {
                     id: s.id,
                     number: i as u32 + 1,
                     label: s.label.clone(),
@@ -801,6 +839,9 @@ impl Switcher {
                     color: s.color,
                     midi: s.midi,
                     actions: s.actions.clone(),
+                    all_shows,
+                    key_shadowed: all_shows && self.key_shadowed(s),
+                    midi_shadowed: all_shows && self.midi_shadowed(s),
                 })
                 .collect(),
             midi_tbar: self.show.midi_tbar,
@@ -1401,16 +1442,27 @@ impl Switcher {
 
     fn add_shortcut(&mut self, spec: ShortcutSpec) -> Result<Vec<Command>, ActionError> {
         self.check_shortcut(&spec, None)?;
-        self.show.shortcuts.push(ShowShortcut {
-            id: InputId::new(),
+        self.keep_shortcut(spec, InputId::new());
+        Ok(Vec::new())
+    }
+
+    /// Puts a checked shortcut at the end of its list.
+    fn keep_shortcut(&mut self, spec: ShortcutSpec, id: InputId) {
+        let entry = ShowShortcut {
+            id,
             label: spec.label,
             key: spec.key,
             web: spec.web,
             color: spec.color,
             midi: spec.midi,
             actions: spec.actions,
-        });
-        Ok(Vec::new())
+        };
+        if spec.all_shows {
+            self.all_shows.push(entry);
+            self.all_shows_changed = true;
+        } else {
+            self.show.shortcuts.push(entry);
+        }
     }
 
     fn set_shortcut(
@@ -1418,9 +1470,27 @@ impl Switcher {
         target: &InputRef,
         spec: ShortcutSpec,
     ) -> Result<Vec<Command>, ActionError> {
-        let index = self.find_shortcut(target)?;
-        self.check_shortcut(&spec, Some(index))?;
-        let entry = &mut self.show.shortcuts[index];
+        let scope = self.find_shortcut(target)?;
+        self.check_shortcut(&spec, Some(scope))?;
+        let entry = match scope {
+            Scope::Show(i) if !spec.all_shows => &mut self.show.shortcuts[i],
+            Scope::AllShows(i) if spec.all_shows => {
+                self.all_shows_changed = true;
+                &mut self.all_shows[i]
+            }
+            // Moved between the show and the settings: same id, at the end.
+            Scope::Show(i) => {
+                let id = self.show.shortcuts.remove(i).id;
+                self.keep_shortcut(spec, id);
+                return Ok(Vec::new());
+            }
+            Scope::AllShows(i) => {
+                let id = self.all_shows.remove(i).id;
+                self.all_shows_changed = true;
+                self.keep_shortcut(spec, id);
+                return Ok(Vec::new());
+            }
+        };
         entry.label = spec.label;
         entry.key = spec.key;
         entry.web = spec.web;
@@ -1430,9 +1500,27 @@ impl Switcher {
         Ok(Vec::new())
     }
 
-    /// A label, a free key, and actions that do not manage or run
-    /// shortcuts themselves (no loops).
-    fn check_shortcut(&self, spec: &ShortcutSpec, own: Option<usize>) -> Result<(), ActionError> {
+    /// A shortcut for all shows whose key one of the show's has: the
+    /// show's wins.
+    fn key_shadowed(&self, shortcut: &ShowShortcut) -> bool {
+        shortcut.key.is_some() && self.show.shortcuts.iter().any(|s| s.key == shortcut.key)
+    }
+
+    /// The same for its MIDI note or controller, also against the T-bar.
+    fn midi_shadowed(&self, shortcut: &ShowShortcut) -> bool {
+        shortcut.midi.is_some_and(|m| {
+            self.show
+                .shortcuts
+                .iter()
+                .any(|s| s.midi.is_some_and(|o| o.overlaps(&m)))
+                || self.show.midi_tbar.is_some_and(|t| t.overlaps(&m))
+        })
+    }
+
+    /// A label, a key and MIDI note free among the shortcuts it is kept
+    /// with (a show's may take those of one for all shows), and actions
+    /// that do not manage or run shortcuts themselves (no loops).
+    fn check_shortcut(&self, spec: &ShortcutSpec, own: Option<Scope>) -> Result<(), ActionError> {
         let bad = |reason: String| Err(ActionError::BadShortcut { reason });
         if spec.label.trim().is_empty() {
             return bad("it needs a label".into());
@@ -1443,10 +1531,22 @@ impl Switcher {
         if spec.actions.iter().any(changes_shortcuts) {
             return bad("a shortcut cannot run or change shortcuts".into());
         }
+        // The others it is kept with.
+        let (list, own) = if spec.all_shows {
+            let own = match own {
+                Some(Scope::AllShows(i)) => Some(i),
+                _ => None,
+            };
+            (&self.all_shows, own)
+        } else {
+            let own = match own {
+                Some(Scope::Show(i)) => Some(i),
+                _ => None,
+            };
+            (&self.show.shortcuts, own)
+        };
         let key_taken = spec.key.as_ref().is_some_and(|key| {
-            self.show
-                .shortcuts
-                .iter()
+            list.iter()
                 .enumerate()
                 .any(|(i, s)| Some(i) != own && s.key.as_ref() == Some(key))
         });
@@ -1457,13 +1557,13 @@ impl Switcher {
             if !midi.is_valid() {
                 return bad("MIDI channel 1–16, number 0–127".into());
             }
-            let taken = self
-                .show
-                .shortcuts
+            let taken = list
                 .iter()
                 .enumerate()
                 .any(|(i, s)| Some(i) != own && s.midi.is_some_and(|m| m.overlaps(midi)));
-            if taken || self.show.midi_tbar.is_some_and(|m| m.overlaps(midi)) {
+            // A show's T-bar only shadows a shortcut for all shows.
+            let tbar = !spec.all_shows && self.show.midi_tbar.is_some_and(|m| m.overlaps(midi));
+            if taken || tbar {
                 return bad(
                     "another shortcut or the T-bar has that MIDI note or controller".into(),
                 );
@@ -1474,10 +1574,18 @@ impl Switcher {
 
     /// The shortcut a MIDI message runs.
     pub fn midi_shortcut(&self, message: &MidiMessage) -> Option<InputId> {
+        let hit = |s: &&ShowShortcut| s.midi.is_some_and(|m| m.matches(message));
+        // The show's first, then those for all shows it does not shadow.
         self.show
             .shortcuts
             .iter()
-            .find(|s| s.midi.is_some_and(|m| m.matches(message)))
+            .find(hit)
+            .or_else(|| {
+                self.all_shows
+                    .iter()
+                    .filter(|s| !self.midi_shadowed(s))
+                    .find(hit)
+            })
             .map(|s| s.id)
     }
 
@@ -1488,29 +1596,40 @@ impl Switcher {
 
     /// Actions of a shortcut, for the service to run.
     pub fn shortcut_actions(&self, target: &InputRef) -> Result<Vec<Action>, ActionError> {
-        Ok(self.show.shortcuts[self.find_shortcut(target)?]
-            .actions
-            .clone())
+        Ok(match self.find_shortcut(target)? {
+            Scope::Show(i) => &self.show.shortcuts[i],
+            Scope::AllShows(i) => &self.all_shows[i],
+        }
+        .actions
+        .clone())
     }
 
-    /// A shortcut by number (1-based), id or label.
-    fn find_shortcut(&self, target: &InputRef) -> Result<usize, ActionError> {
-        let shortcuts = &self.show.shortcuts;
+    /// A shortcut by number (1-based, the show's first), id or label (the
+    /// show's first).
+    fn find_shortcut(&self, target: &InputRef) -> Result<Scope, ActionError> {
+        let local = self.show.shortcuts.len();
+        let all: Vec<&ShowShortcut> = self.show.shortcuts.iter().chain(&self.all_shows).collect();
         let index = match target {
-            InputRef::Number(n) => (*n as usize)
-                .checked_sub(1)
-                .filter(|i| *i < shortcuts.len()),
-            InputRef::Text(text) => shortcuts
+            InputRef::Number(n) => (*n as usize).checked_sub(1).filter(|i| *i < all.len()),
+            InputRef::Text(text) => all
                 .iter()
                 .position(|s| s.id.to_string() == *text)
-                .or_else(|| shortcuts.iter().position(|s| s.label == *text)),
+                .or_else(|| all.iter().position(|s| s.label == *text)),
         };
-        index.ok_or_else(|| ActionError::UnknownShortcut {
-            reference: match target {
-                InputRef::Number(n) => n.to_string(),
-                InputRef::Text(t) => format!("\"{t}\""),
-            },
-        })
+        index
+            .map(|i| {
+                if i < local {
+                    Scope::Show(i)
+                } else {
+                    Scope::AllShows(i - local)
+                }
+            })
+            .ok_or_else(|| ActionError::UnknownShortcut {
+                reference: match target {
+                    InputRef::Number(n) => n.to_string(),
+                    InputRef::Text(t) => format!("\"{t}\""),
+                },
+            })
     }
 
     // ---- Layouts ----
@@ -3482,6 +3601,7 @@ mod tests {
             color: None,
             midi: None,
             actions,
+            all_shows: false,
         }
     }
 
@@ -3600,6 +3720,89 @@ mod tests {
         })
         .unwrap();
         assert!(sw.state().shortcuts.is_empty());
+    }
+
+    #[test]
+    fn shortcuts_for_all_shows_stay_and_give_way() {
+        let mut sw = two_inputs();
+        let everywhere = |label: &str, key: &str, note: u8| ShortcutSpec {
+            all_shows: true,
+            midi: Some(MidiBinding {
+                kind: MidiKind::Note,
+                channel: Some(1),
+                number: note,
+            }),
+            ..shortcut(label, Some(key), vec![Action::Cut])
+        };
+        sw.apply(Action::AddShortcut {
+            shortcut: everywhere("Cut", "F1", 36),
+        })
+        .unwrap();
+        assert!(sw.take_all_shows_changed());
+        // A show's shortcut may take the same key: it wins.
+        sw.apply(Action::AddShortcut {
+            shortcut: shortcut("Show cut", Some("F1"), vec![Action::Cut]),
+        })
+        .unwrap();
+        let state = sw.state();
+        assert_eq!(
+            state
+                .shortcuts
+                .iter()
+                .map(|s| (s.number, s.all_shows, s.key_shadowed, s.midi_shadowed))
+                .collect::<Vec<_>>(),
+            [(1, false, false, false), (2, true, true, false)]
+        );
+        // Two for all shows may not share a key.
+        assert!(matches!(
+            sw.apply(Action::AddShortcut {
+                shortcut: everywhere("Again", "F1", 37)
+            }),
+            Err(ActionError::BadShortcut { .. })
+        ));
+        let note = |n| MidiMessage {
+            kind: MidiKind::Note,
+            channel: 1,
+            number: n,
+            value: 100,
+        };
+        assert_eq!(sw.midi_shortcut(&note(36)), Some(state.shortcuts[1].id));
+
+        // Moved into the show: same id, out of the settings.
+        let id = state.shortcuts[1].id;
+        sw.apply(Action::SetShortcut {
+            target: InputRef::Number(2),
+            shortcut: ShortcutSpec {
+                key: Some("F3".into()),
+                ..shortcut("Cut", None, vec![Action::Cut])
+            },
+        })
+        .unwrap();
+        assert!(sw.take_all_shows_changed());
+        assert!(sw.all_shows_shortcuts().is_empty());
+        assert_eq!(sw.state().shortcuts[1].id, id);
+        assert!(!sw.state().shortcuts[1].all_shows);
+
+        // A new show keeps the ones for all shows.
+        sw.set_all_shows_shortcuts(vec![crate::show::ShowShortcut {
+            id,
+            label: "Cut".into(),
+            key: Some("F1".into()),
+            web: false,
+            color: None,
+            midi: None,
+            actions: vec![Action::Cut],
+        }]);
+        sw.replace(crate::show::Show::default(), None);
+        let state = sw.state();
+        assert_eq!(state.shortcuts.len(), 1);
+        assert!(state.shortcuts[0].all_shows && !state.shortcuts[0].key_shadowed);
+        sw.apply(Action::RemoveShortcut {
+            target: InputRef::Number(1),
+        })
+        .unwrap();
+        assert!(sw.take_all_shows_changed());
+        assert!(sw.all_shows_shortcuts().is_empty());
     }
 
     #[test]

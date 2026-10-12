@@ -107,6 +107,8 @@ pub fn lamps(state: &ShowState, values: Lamps) -> HashMap<MidiBinding, u8> {
     state
         .shortcuts
         .iter()
+        // A shadowed one's note belongs to the show's shortcut.
+        .filter(|s| !s.midi_shadowed)
         .filter_map(|s| {
             let binding = s.midi?;
             let value = match s.actions.first()? {
@@ -219,6 +221,7 @@ mod tests {
                     number,
                 }),
                 actions,
+                all_shows: false,
             },
         }
     }

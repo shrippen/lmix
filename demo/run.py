@@ -216,7 +216,10 @@ def main():
         procs.append(subprocess.Popen([core, "--strom", f"http://127.0.0.1:{STROM_PORT}",
                                        "--listen", f"127.0.0.1:{CORE_PORT}", "--mixer", mixer(),
                                        "--slots", str(len(STREAM["inputs"])),
-                                       "--autosave", str(work / "autosave.lmix"), "--live-dir", str(live)],
+                                       "--autosave", str(work / "autosave.lmix"),
+                                       # Not the operator's shortcuts for all shows.
+                                       "--shortcuts", str(work / "shortcuts.json"),
+                                       "--live-dir", str(live)],
                                       env=env, stdout=log, stderr=log))
         wait_up(f"{CORE}/state", "lmix-core")
         stage(lang, work)

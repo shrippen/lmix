@@ -137,11 +137,14 @@ Kirigami.ApplicationWindow {
     }
 
     readonly property var shortcuts: show && show.shortcuts ? show.shortcuts : []
-    readonly property var shortcutKeys: shortcuts.filter(s => s.key).map(s => s.key)
+    /** Shortcuts whose key runs them: one for all shows gives way to the
+     *  show's with the same key (AUT.3). */
+    readonly property var keyedShortcuts: shortcuts.filter(s => s.key && !s.key_shadowed)
+    readonly property var shortcutKeys: keyedShortcuts.map(s => s.key)
 
-    // The show's shortcuts (AUT.1–3); they win over the keys below.
+    // The shortcuts (AUT.1–3); they win over the keys below.
     Instantiator {
-        model: root.shortcuts.filter(s => s.key)
+        model: root.keyedShortcuts
         delegate: Shortcut {
             required property var modelData
             sequence: modelData.key
@@ -152,7 +155,7 @@ Kirigami.ApplicationWindow {
     // Global shortcuts (AUT.12): the desktop binds the keys (it may ask
     // once) and reports presses even while another window is in front.
     readonly property string globalShortcutList: JSON.stringify(keySettings.global
-        ? shortcuts.filter(s => s.key).map(s => ({ id: s.id, label: s.label, key: s.key })) : [])
+        ? keyedShortcuts.map(s => ({ id: s.id, label: s.label, key: s.key })) : [])
     onGlobalShortcutListChanged: backend.setGlobalShortcuts(globalShortcutList)
     Component.onCompleted: {
         backend.setGlobalShortcuts(globalShortcutList)

@@ -31,7 +31,7 @@ fail() {
 mkdir -p "$WORK/templates"
 (cd "$ROOT/workspace/lmix-core" && cargo build --release >/dev/null 2>&1)
 CORE_BIN="${CARGO_TARGET_DIR:-$ROOT/workspace/lmix-core/target}/release/lmix-core"
-"$CORE_BIN" --engine none --listen "127.0.0.1:${PORT}" --autosave "$WORK/autosave.lmix" \
+"$CORE_BIN" --engine none --listen "127.0.0.1:${PORT}" --autosave "$WORK/autosave.lmix" --shortcuts "$WORK/shortcuts.json" \
     --templates "$WORK/templates" >"$WORK/core.log" 2>&1 &
 PIDS+=($!)
 for _ in $(seq 1 60); do curl -sf "$CORE/health" >/dev/null && break; sleep 0.5; done

@@ -54,6 +54,8 @@ pub struct Service {
     events: broadcast::Sender<Event>,
     /// Written after every change, read back after a crash (SHW.5).
     autosave: Option<PathBuf>,
+    /// Settings file of the shortcuts for all shows (AUT.3).
+    all_shows_file: std::sync::Mutex<Option<PathBuf>>,
     recent: Mutex<Recent>,
     /// Last good frame per picture: a paused clip or still keeps its
     /// picture while the engine's tap has no new frame.
@@ -131,7 +133,61 @@ impl Service {
             ptz_socket: tokio::sync::OnceCell::new(),
             ptz_seq: std::sync::atomic::AtomicU32::new(0),
             autosave,
+            all_shows_file: std::sync::Mutex::new(None),
         })
+    }
+
+    /// Keep shortcuts for all shows in `path` (`--shortcuts`): read now,
+    /// written after each change. A file that cannot be read is left alone
+    /// (renamed aside if it is broken) and the list starts empty.
+    pub async fn use_shortcuts_file(&self, path: PathBuf) {
+        let shortcuts = match tokio::fs::read(&path).await {
+            Ok(bytes) => match serde_json::from_slice::<Vec<crate::show::ShowShortcut>>(&bytes) {
+                Ok(list) => list,
+                Err(e) => {
+                    let aside = path.with_extension("json.broken");
+                    tracing::warn!(error = %e, file = %path.display(), aside = %aside.display(), "shortcuts for all shows unreadable, set aside");
+                    let _ = tokio::fs::rename(&path, &aside).await;
+                    Vec::new()
+                }
+            },
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+            Err(e) => {
+                tracing::warn!(error = %e, file = %path.display(), "shortcuts for all shows not read");
+                Vec::new()
+            }
+        };
+        let mut sw = self.switcher.lock().await;
+        sw.set_all_shows_shortcuts(shortcuts);
+        *self.all_shows_file.lock().expect("shortcuts file lock") = Some(path);
+        self.publish(&sw);
+    }
+
+    /// Best effort, like the autosave.
+    async fn write_all_shows(&self, sw: &mut Switcher) {
+        if !sw.take_all_shows_changed() {
+            return;
+        }
+        let Some(path) = self
+            .all_shows_file
+            .lock()
+            .expect("shortcuts file lock")
+            .clone()
+        else {
+            return;
+        };
+        let written = async {
+            if let Some(dir) = path.parent() {
+                tokio::fs::create_dir_all(dir).await?;
+            }
+            let text = serde_json::to_vec_pretty(sw.all_shows_shortcuts())?;
+            let tmp = path.with_extension("json.tmp");
+            tokio::fs::write(&tmp, text).await?;
+            tokio::fs::rename(&tmp, &path).await
+        };
+        if let Err(e) = written.await {
+            tracing::warn!(error = %e, file = %path.display(), "shortcuts for all shows not saved");
+        }
     }
 
     /// Take templates from `dir` as well (`--templates`).
@@ -1026,6 +1082,7 @@ impl Service {
         }
         self.publish(&sw);
         self.write_autosave(&sw).await;
+        self.write_all_shows(&mut sw).await;
         if !later.is_empty() {
             self.run_later(later.to_vec());
         }
@@ -1417,6 +1474,7 @@ mod tests {
         let service = Service::new(4, engine.clone(), None);
         service.handle(bars()).await.unwrap();
         let shortcut = ShortcutSpec {
+            all_shows: false,
             label: "Bars on air".into(),
             key: None,
             web: false,
@@ -1692,6 +1750,52 @@ mod tests {
             log.iter().any(|c| matches!(c, Command::Program { .. })),
             "{log:?}"
         );
+    }
+
+    #[tokio::test]
+    async fn shortcuts_for_all_shows_are_kept_in_the_settings() {
+        use lmix_types::{InputRef, ShortcutSpec};
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("config").join("shortcuts.json");
+        let first = Service::new(4, Arc::new(NullEngine::default()), None);
+        first.use_shortcuts_file(file.clone()).await;
+        first
+            .handle(Action::AddShortcut {
+                shortcut: ShortcutSpec {
+                    label: "Cut".into(),
+                    key: Some("F12".into()),
+                    web: false,
+                    color: None,
+                    midi: None,
+                    actions: vec![Action::Cut],
+                    all_shows: true,
+                },
+            })
+            .await
+            .unwrap();
+        first.handle(Action::NewShow).await.unwrap();
+
+        // Another run (or a new show): still there.
+        let second = Service::new(4, Arc::new(NullEngine::default()), None);
+        second.use_shortcuts_file(file.clone()).await;
+        let state = second.state().await;
+        assert_eq!(state.shortcuts.len(), 1);
+        assert!(state.shortcuts[0].all_shows);
+
+        second
+            .handle(Action::RemoveShortcut {
+                target: InputRef::Number(1),
+            })
+            .await
+            .unwrap();
+        assert_eq!(std::fs::read_to_string(&file).unwrap().trim(), "[]");
+
+        // A broken file is set aside, not overwritten.
+        std::fs::write(&file, "{").unwrap();
+        let third = Service::new(4, Arc::new(NullEngine::default()), None);
+        third.use_shortcuts_file(file.clone()).await;
+        assert!(third.state().await.shortcuts.is_empty());
+        assert!(file.with_extension("json.broken").exists());
     }
 
     #[tokio::test]

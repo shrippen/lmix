@@ -36,7 +36,7 @@ up() { for _ in $(seq 1 60); do curl -sf "$CORE/health" >/dev/null && return 0; 
 CORE_BIN="${CARGO_TARGET_DIR:-$ROOT/workspace/lmix-core/target}/release/lmix-core"
 start() {
     "$CORE_BIN" --engine none --listen "127.0.0.1:${PORT}" --tcp "127.0.0.1:${TCP_PORT}" --osc "127.0.0.1:${OSC_PORT}" --midi "$WORK/midi" \
-        --autosave "$WORK/autosave.lmix" "$@" >>"$WORK/core.log" 2>&1 &
+        --autosave "$WORK/autosave.lmix" --shortcuts "$WORK/shortcuts.json" "$@" >>"$WORK/core.log" 2>&1 &
     PIDS+=($!)
     up || fail "lmix-core did not come up"
 }

@@ -1,5 +1,7 @@
 //! Shortcuts (AUT.1–3): a key and a button label for a list of actions
-//! run in order, from the keyboard, the web page "Keys" or the API.
+//! run in order, from the keyboard, the web page "Keys" or the API. A
+//! shortcut belongs to the show or, `all_shows`, to lmix-core's settings;
+//! where both bind a key or MIDI note, the show's wins.
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -34,6 +36,20 @@ pub struct Shortcut {
     pub midi: Option<MidiBinding>,
     /// Run in this order; the first failing one stops the rest.
     pub actions: Vec<Action>,
+    /// From the settings, in every show (listed after the show's own).
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub all_shows: bool,
+    /// For all shows, but a shortcut of the show has its key: that one
+    /// runs on the key.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub key_shadowed: bool,
+    /// The same for its MIDI note or controller (also the show's T-bar).
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub midi_shadowed: bool,
+}
+
+fn is_false(v: &bool) -> bool {
+    !v
 }
 
 /// A shortcut as an action describes it.
@@ -49,4 +65,7 @@ pub struct ShortcutSpec {
     #[serde(default)]
     pub midi: Option<MidiBinding>,
     pub actions: Vec<Action>,
+    /// Kept in the settings for every show instead of in this show.
+    #[serde(default)]
+    pub all_shows: bool,
 }

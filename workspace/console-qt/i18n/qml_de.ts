@@ -1345,7 +1345,7 @@
       <translation>Layout %1 %2</translation>
     </message>
     <message>
-      <location line="+59" />
+      <location line="+62" />
       <source>Open show</source>
       <translation>Show öffnen</translation>
     </message>
@@ -1822,7 +1822,7 @@
       <translation>Neue Belegung</translation>
     </message>
     <message>
-      <location line="+36" />
+      <location line="+38" />
       <source>Label</source>
       <translation>Beschriftung</translation>
     </message>
@@ -1841,6 +1841,16 @@
       <source>Web page</source>
       <translation>Web-Seite</translation>
     </message>
+    <message>
+      <location line="+5" />
+      <source>All shows</source>
+      <translation>Alle Shows</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Kept in lmix-core's settings and in every show; a shortcut of the show with the same key or MIDI note wins.</source>
+      <translation>In den Einstellungen von lmix-core und in jeder Show; ein Kurzbefehl der Show mit derselben Taste oder MIDI-Note hat Vorrang.</translation>
+    </message>
   </context>
   <context>
     <name>ShortcutsDialog</name>
@@ -1855,7 +1865,17 @@
       <translation>Noch keine Belegungen. Eine Belegung führt eine Liste von Aktionen aus, per Taste, über die Web-Seite „Tasten“ oder die API.</translation>
     </message>
     <message>
-      <location line="+28" />
+      <location line="+17" />
+      <source>A shortcut of the show has this key.</source>
+      <translation>Ein Kurzbefehl der Show hat diese Taste.</translation>
+    </message>
+    <message>
+      <location line="+17" />
+      <source>All shows</source>
+      <translation>Alle Shows</translation>
+    </message>
+    <message>
+      <location line="+3" />
       <source>Actions: %1</source>
       <translation>Aktionen: %1</translation>
     </message>

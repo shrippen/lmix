@@ -1594,3 +1594,27 @@ Sheets.
 **Geprüft**: Adresse aus URL/Id und Bereich, Antwort mit leeren Zeilen
 und Zahlen (Test); gegen die echte API nicht (kein Schlüssel hier).
 
+## 2026-10-12 — Kurzbefehle für alle Shows (AUT.3)
+
+**Entscheidung**: Ein Kurzbefehl gehört der Show oder, mit „Alle Shows“
+(`all_shows`), den Einstellungen von lmix-core: Datei `--shortcuts`
+(`LMIX_SHORTCUTS`, Standard `~/.config/lmix/shortcuts.json`), gelesen beim
+Start, nach jeder Änderung atomar geschrieben; eine kaputte Datei wird
+als `.json.broken` beiseitegelegt statt überschrieben. Sie gelten in
+jeder Show (auch nach „Neu“ und „Öffnen“) und stehen im Zustand nach den
+Kurzbefehlen der Show (Nummern danach). **Die Show gewinnt**: belegt einer
+der Show dieselbe Taste, läuft auf der Taste der der Show
+(`key_shadowed`, in der Liste durchgestrichen); ebenso je MIDI-Note oder
+-Regler und gegen den T-Bar der Show (`midi_shadowed`, auch keine Lampe).
+Verdeckt wird je Belegung, nicht der ganze Kurzbefehl: Knopf, Nummer und
+die andere Belegung gehen weiter. Innerhalb derselben Ebene bleiben
+Tasten und Noten eindeutig. Ändern verschiebt einen Kurzbefehl zwischen
+Show und Einstellungen (gleiche Id, ans Ende). „Global“ heißt in lmix
+schon „Taste auch, wenn die Console nicht vorn ist“ (AUT.12), daher der
+Name „Alle Shows“. Testskripte und die Demo geben eine eigene Datei im
+Arbeitsordner an, damit sie nie die des Bedieners lesen oder schreiben.
+**Geprüft**: Switcher-Test (Vorrang, Noten, Verschieben, neue Show),
+Service-Test (Datei geschrieben, neu gelesen, kaputte beiseitegelegt);
+Console auf Xvfb: Liste mit „Alle Shows“ und durchgestrichener Taste, F2
+führt den der Show aus, Häkchen im Bearbeiten-Dialog.
+

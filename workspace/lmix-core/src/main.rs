@@ -112,6 +112,10 @@ struct Args {
     #[arg(long, env = "LMIX_OSC")]
     osc: Option<SocketAddr>,
 
+    /// Shortcuts for all shows (AUT.3), kept apart from show files.
+    #[arg(long, env = "LMIX_SHORTCUTS", default_value_os_t = default_shortcuts())]
+    shortcuts: PathBuf,
+
     /// Key for the Google Sheets API (data sources `google_sheet`,
     /// DAT.1); kept out of show files.
     #[arg(long, env = "LMIX_GOOGLE_API_KEY", hide_env_values = true)]
@@ -159,6 +163,15 @@ fn default_autosave() -> PathBuf {
     data_home().join("lmix").join("autosave.lmix")
 }
 
+fn default_shortcuts() -> PathBuf {
+    std::env::var_os("XDG_CONFIG_HOME")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("lmix")
+        .join("shortcuts.json")
+}
+
 fn data_home() -> PathBuf {
     std::env::var_os("XDG_DATA_HOME")
         .map(PathBuf::from)
@@ -199,6 +212,7 @@ async fn main() -> anyhow::Result<()> {
     service.set_ingest_base(public_url).await;
     // Before the show: its titles name templates from the folder.
     service.use_templates(args.templates.clone()).await;
+    service.use_shortcuts_file(args.shortcuts.clone()).await;
     let opened = match args.show {
         Some(path) => service
             .handle(Action::OpenShow { path })

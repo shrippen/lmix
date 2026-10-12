@@ -389,7 +389,7 @@ Funktionsreferenz, kein Code (MIT, `claude.md` Entscheidung 6).
 |---|---|---|---|
 | AUT.1 | Tastenbelegung: Tastatur, MIDI (Note, CC, Wert, Jog-Typen), HID-Controller (X-keys, Shuttle), Gamepad (inkl. Druck/Analog), Stream-Deck-Anbindung | S | ◐ (Tastatur, MIDI Note/CC; ohne HID, Gamepad, Stream Deck direkt) |
 | AUT.2 | Je Belegung: Aktion, Input (fest oder "Input-Nummer"), Wert, Dauer, Beschriftung für Fernbedienung, Anzeige (Farbe/Bild/Live-Bild) | S | ◐ (Aktionen mit Parametern, Beschriftung, Farbe; ohne Bild) |
-| AUT.3 | Mehrere Aktionen je Taste in fester Reihenfolge; global (Einstellungen) oder lokal (Show), lokal gewinnt | S | ◐ (mehrere Aktionen; nur in der Show) |
+| AUT.3 | Mehrere Aktionen je Taste in fester Reihenfolge; global (Einstellungen) oder lokal (Show), lokal gewinnt | S | ✅ |
 | AUT.4 | Vorlagen für Belegungen ex-/importieren | K | – |
 | AUT.5 | Dynamische Inputs/Werte 1–4: Taste A wählt Input/Wert, Taste B wirkt darauf | K | ✅ |
 | AUT.6 | Rückmeldungen an Controller: Lampen, Farben, Motorfader nach Zustand (Input auf PGM/PVW/spielt, Pegel, Mute, Solo, Bus, FTB, Aufnahme, Stream, …) | S | ◐ (MIDI-Lampen: PGM/PVW, FTB, Ausgang, Sperre; ohne Pegel, Motorfader) |
