@@ -1618,3 +1618,24 @@ Service-Test (Datei geschrieben, neu gelesen, kaputte beiseitegelegt);
 Console auf Xvfb: Liste mit „Alle Shows“ und durchgestrichener Taste, F2
 führt den der Show aus, Häkchen im Bearbeiten-Dialog.
 
+## 2026-10-12 — Zustand als Diff (API.6)
+
+**Entscheidung**: `/api/events?diff=true` schickt nach dem ersten ganzen
+Zustand jede Änderung als `{"event":"state_diff","ops":[…]}`: JSON Patch
+(RFC 6902, nur `add`, `remove`, `replace`), Objekte je Schlüssel,
+Listen je Eintrag (hinten angefügt oder entfernt), sonst ersetzt. Ist der
+Patch länger als der ganze Zustand, kommt der ganze; nach einem
+Rückstand (Lagged) auch. Ohne `diff` bleibt alles wie bisher (Console,
+eigene Clients, TCP-Protokoll unverändert, nur additiv). Die Webseiten
+nutzen es über `lmixEvents` in `web/lmix.js`, das die Diffs anwendet und
+den Seiten ganze Zustände gibt: kopiert wird nur entlang geänderter
+Pfade, ältere Zustände, die eine Seite hält (Titel-Seite), ändern sich
+nicht. Passt ein Diff nicht, verbindet die Seite neu und beginnt mit dem
+ganzen Zustand. Nutzen: Handy-Tally und Fernbedienung im WLAN bekommen
+bei einem Statuswechsel einige hundert Byte statt des ganzen Zustands.
+Die Console bekommt weiter den ganzen Zustand (lokal, ihr Modell hängt
+an ganzen Zuständen); das ist ein eigener Schritt, wenn es sich messbar
+lohnt.
+**Geprüft**: Diff und Anwenden (Rust-Test, auch Escapes `~0`/`~1`);
+`test-web.sh` zählt Diffs, `test-titles.sh` läuft mit Diffs.
+

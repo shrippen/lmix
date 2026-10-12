@@ -424,7 +424,7 @@ Zurückgestellt (User 2026-10-08).
 | API.3 | HTTP: Aktion per Aufruf mit Parametern; vollständiger Zustand abrufbar (JSON) | M | ✅ |
 | API.4 | Zustand enthält: Version, Inputs (ID, Nummer, Typ, Titel, Zustand, Position, Dauer, Schleife, Ton, Pegel, Busse, Ebenen, Titelfelder, Listeneinträge), Overlays, Preview, Program, FTB, Übergänge, Aufnahme/Stream/Ausgaben/Ablaufliste/Einzelaufnahme, Audio-Busse, dynamische Werte, Mixe | M | ◐ |
 | API.5 | Ereigniskanal mit Abo: Tally (aus/PGM/PVW je Input), Rückmeldungszustände, Zustandsänderungen; Aktionen über denselben Kanal; leichtgewichtig genug für Mikrocontroller (Textzeilen über TCP oder WebSocket) | M | ✅ |
-| API.6 | WebSocket mit Zustandsdiffs für eigene Clients | S | ◐ (ganzer Zustand statt Diffs) |
+| API.6 | WebSocket mit Zustandsdiffs für eigene Clients | S | ✅ (auf Wunsch, `?diff=true`) |
 | API.7 | Sicherheit: nur LAN (Standard), Passwort, Ausnahmen je Seite, lokale Programme ohne Anmeldung, "erhöhte Sicherheit" sperrt Skripte | M | – |
 | API.8 | Optionaler Kompatibilitätsmodus: vMix-Funktionsnamen, XML-Zustand, TCP-Protokoll, Ports 8088/8099 | K | – |
 | API.9 | Integrationsziel: alles, was Fremdprogramme an vMix nutzen, geht auch mit der lmix-API: Aktionen mit allen Parametern, Inputs über Nummer, Name oder ID (plus Kurzformen "Preview", "Program"), vollständiger Zustand, Ereignis-Abo (API.5), Pegel live, Titelfelder lesen/schreiben, Live-Vorschaubild je Input für Tasten-Displays, Fehler mit Grund. Referenz: Bitfocus Companion, Stream-Deck-Plugins, Tally-Software (`LASTENHEFT-QUELLEN.md` §2) | M | ◐ |

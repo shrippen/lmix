@@ -18,7 +18,7 @@
 //! | `GET /api/data/{source}` | all rows of a data source (number, name or id) |
 //! | `GET /titles/{path}` | template files, the title SDK, Kante's tokens and fonts |
 //! | `GET /graphics/{graphics}` | the page a graphics channel renders (number, name or id) |
-//! | `GET /api/events` | WebSocket: state first, then every event |
+//! | `GET /api/events` | WebSocket: state first, then every event (`?diff=true`: state changes as JSON Patch) |
 //! | `GET /health` | liveness |
 //! | `GET /metrics` | health and metrics, Prometheus text format (OPS.3) |
 //! | `GET /`, `/mixer`, `/tally`, `/keys`, `/titles` | browser pages (`web.rs`) |
@@ -274,16 +274,34 @@ fn error_response(error: ActionError) -> Response {
     (status, Json(body)).into_response()
 }
 
-async fn events(State(service): State<Arc<Service>>, ws: WebSocketUpgrade) -> Response {
-    ws.on_upgrade(move |socket| stream(socket, service))
+#[derive(serde::Deserialize)]
+struct EventsQuery {
+    /// State changes as `state_diff` events (API.6) instead of the whole
+    /// state each time.
+    #[serde(default)]
+    diff: bool,
+}
+
+async fn events(
+    State(service): State<Arc<Service>>,
+    Query(query): Query<EventsQuery>,
+    ws: WebSocketUpgrade,
+) -> Response {
+    ws.on_upgrade(move |socket| stream(socket, service, query.diff))
 }
 
 /// Current state first, so a client never starts blind; then live events.
-async fn stream(mut socket: WebSocket, service: Arc<Service>) {
+/// With `diff`, a state after the first goes out as
+/// `{"event":"state_diff","ops":[…]}`: JSON Patch operations (RFC 6902)
+/// on the last state sent; the whole state again when that is shorter or
+/// the client fell behind.
+async fn stream(mut socket: WebSocket, service: Arc<Service>, diff: bool) {
     let mut rx = service.subscribe();
     let first = Event::State {
         state: service.state().await,
     };
+    // The state this client holds, for diffs.
+    let mut held = diff.then(|| serde_json::to_value(&first).expect("state serializes"));
     if send(&mut socket, &first).await.is_err() {
         return;
     }
@@ -292,12 +310,45 @@ async fn stream(mut socket: WebSocket, service: Arc<Service>) {
         let event = match rx.recv().await {
             Ok(event) => event,
             // Fell behind: resend the full state instead of the lost diffs.
-            Err(RecvError::Lagged(_)) => Event::State {
-                state: service.state().await,
-            },
+            Err(RecvError::Lagged(_)) => {
+                let full = Event::State {
+                    state: service.state().await,
+                };
+                if let Some(held) = &mut held {
+                    *held = serde_json::to_value(&full).expect("state serializes");
+                }
+                if send(&mut socket, &full).await.is_err() {
+                    return;
+                }
+                continue;
+            }
             Err(RecvError::Closed) => return,
         };
-        if send(&mut socket, &event).await.is_err() {
+        let sent = match (&mut held, &event) {
+            (Some(held), Event::State { .. }) => {
+                let now = serde_json::to_value(&event).expect("state serializes");
+                let ops = crate::patch::diff(&held["state"], &now["state"]);
+                let text = if ops.is_empty() {
+                    None
+                } else {
+                    let patch =
+                        serde_json::json!({ "event": "state_diff", "ops": ops }).to_string();
+                    let whole = now.to_string();
+                    Some(if patch.len() < whole.len() {
+                        patch
+                    } else {
+                        whole
+                    })
+                };
+                *held = now;
+                match text {
+                    Some(text) => socket.send(Message::Text(text.into())).await,
+                    None => Ok(()),
+                }
+            }
+            _ => send(&mut socket, &event).await,
+        };
+        if sent.is_err() {
             return;
         }
     }

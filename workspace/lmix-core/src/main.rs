@@ -26,6 +26,7 @@ mod metrics;
 mod midi;
 mod osc;
 mod package;
+mod patch;
 mod ptz;
 mod recent;
 mod service;
