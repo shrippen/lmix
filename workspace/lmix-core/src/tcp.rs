@@ -34,6 +34,9 @@ use crate::service::Service;
 /// Protocol version in the greeting.
 const VERSION: u32 = 1;
 
+/// How long a client from the network has to send `AUTH`.
+const AUTH_WAIT: std::time::Duration = std::time::Duration::from_secs(10);
+
 /// Longest line a client may send.
 const MAX_LINE: u64 = 64 * 1024;
 
@@ -134,8 +137,15 @@ async fn client(
     let (tx, mut lines) = mpsc::channel::<Line>(LINES_QUEUED);
     tokio::spawn(read_lines(read, tx));
 
+    // The password comes first and soon; a silent connection is closed.
+    let auth_deadline = tokio::time::sleep(AUTH_WAIT);
+    tokio::pin!(auth_deadline);
     loop {
         tokio::select! {
+            () = &mut auth_deadline, if password.is_some() => {
+                write.write_all(b"ER auth password needed (AUTH <password>)\n").await?;
+                return Ok(());
+            }
             line = lines.recv() => {
                 let line = match line {
                     Some(Line::Text(line)) => line,
@@ -147,8 +157,8 @@ async fn client(
                 };
                 if let Some(access) = &password {
                     // Nothing before the password; a wrong one ends it.
-                    match line.trim().strip_prefix("AUTH ") {
-                        Some(given) if access.password_ok(given.trim()) => {
+                    match line.trim_end_matches(['\r', '\n']).strip_prefix("AUTH ") {
+                        Some(given) if access.password_ok(given) => {
                             password = None;
                             write.write_all(b"OK\n").await?;
                             continue;

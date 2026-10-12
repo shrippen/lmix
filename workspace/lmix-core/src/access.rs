@@ -8,11 +8,20 @@
 //!   protocol takes `AUTH <password>` as its first line;
 //! - `--open-page` makes a browser page usable without the password: the
 //!   page, its files and what it reads (state, events, tally, pictures),
-//!   and only the actions the page itself sends: `tally` none, `keys` the
-//!   shortcuts marked for the web, `mixer` switching (preview, cut,
-//!   transitions, FTB, layouts), `titles` title and data actions.
+//!   and only the actions the page itself sends, listed one by one: `tally`
+//!   none, `keys` the shortcuts marked for the web, `mixer` preview, cut,
+//!   transition, FTB, layout preview, `titles` play, next, stop, update and
+//!   data sets of titles (never files, data sources or addresses);
+//! - a browser may not send requests across sites: a request whose
+//!   `Origin` is not the address it was sent to is refused, and on this
+//!   machine only `localhost` or an IP address counts as the address (no
+//!   DNS rebinding);
+//! - a request forwarded by a proxy (`Forwarded`, `X-Forwarded-For`,
+//!   `X-Real-IP`) counts as coming from the network even when the proxy is
+//!   on this machine.
 //!
-//! OSC (UDP) carries no password: it obeys the local-network rule only.
+//! OSC (UDP) carries no password: with one set, it takes messages from
+//! this machine only.
 
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
@@ -169,20 +178,15 @@ impl Access {
             "/" | "/health" | "/api/state" | "/api/events" | "/api/tally"
         ) || path.starts_with("/web/")
             || path.starts_with("/api/pictures/");
-        let titles = self.opened(Page::Titles)
-            && (path == "/api/templates"
-                || path.starts_with("/api/data/")
-                || path.starts_with("/titles/"));
+        let titles = self.opened(Page::Titles) && path == "/api/templates";
         pages || reads || titles
     }
 }
 
 /// Actions an open page sends (checked without the password).
-async fn open_action(access: &Access, service: &Service, action: &Action) -> bool {
-    let group = serde_json::to_value(action)
-        .ok()
-        .and_then(|v| v["action"].as_str().map(str::to_string))
-        .and_then(|name| lmix_types::action_group(&name));
+/// The action as it may run, or None. A shortcut run from the keys page
+/// is pinned to its id (the list may change before it runs).
+async fn open_action(access: &Access, service: &Service, action: &Action) -> Option<Action> {
     let mixer = access.opened(Page::Mixer)
         && matches!(
             action,
@@ -193,24 +197,77 @@ async fn open_action(access: &Access, service: &Service, action: &Action) -> boo
                 | Action::FadeToBlack { .. }
                 | Action::PreviewLayout { .. }
         );
-    let titles = access.opened(Page::Titles) && matches!(group, Some("title" | "data"));
-    let keys = access.opened(Page::Keys)
-        && match action {
-            Action::RunShortcut { target } => {
-                let state = service.state().await;
-                let text = match target {
-                    InputRef::Number(n) => n.to_string(),
-                    InputRef::Text(t) => t.clone(),
-                };
-                state.shortcuts.iter().any(|s| {
-                    s.web
-                        && (s.id.to_string() == text
-                            || matches!(target, InputRef::Number(n) if s.number == *n))
-                })
-            }
-            _ => false,
+    // What titles.html sends; data sets live in the show, no files.
+    let titles = access.opened(Page::Titles)
+        && matches!(
+            action,
+            Action::TitlePlay { .. }
+                | Action::TitleNext { .. }
+                | Action::TitleStop { .. }
+                | Action::TitleUpdate { .. }
+                | Action::SaveDataset { .. }
+                | Action::ApplyDataset { .. }
+        );
+    if mixer || titles {
+        return Some(action.clone());
+    }
+    if let (true, Action::RunShortcut { target }) = (access.opened(Page::Keys), action) {
+        let state = service.state().await;
+        let text = match target {
+            InputRef::Number(n) => n.to_string(),
+            InputRef::Text(t) => t.clone(),
         };
-    mixer || titles || keys
+        return state
+            .shortcuts
+            .iter()
+            .find(|s| {
+                s.web
+                    && (s.id.to_string() == text
+                        || matches!(target, InputRef::Number(n) if s.number == *n))
+            })
+            .map(|s| Action::RunShortcut {
+                target: InputRef::Text(s.id.to_string()),
+            });
+    }
+    None
+}
+
+/// Host part of an authority (`host:port`, `[v6]:port`).
+fn host_of(authority: &str) -> &str {
+    if let Some(rest) = authority.strip_prefix('[') {
+        return rest.split(']').next().unwrap_or_default();
+    }
+    authority.split(':').next().unwrap_or_default()
+}
+
+/// `localhost` or an IP address: what a request on this machine is sent
+/// to (a name that resolves here may be DNS rebinding).
+fn local_host(host: &str) -> bool {
+    host.eq_ignore_ascii_case("localhost") || host.parse::<IpAddr>().is_ok()
+}
+
+/// Refuses requests across sites: an `Origin` other than the `Host`, and
+/// on this machine a `Host` that is a name.
+fn cross_site(request: &Request<Body>, local_peer: bool) -> bool {
+    let header = |name| request.headers().get(name).and_then(|v| v.to_str().ok());
+    let host = header(header::HOST).unwrap_or_default();
+    if local_peer && !host.is_empty() && !local_host(host_of(host)) {
+        return true;
+    }
+    match header(header::ORIGIN) {
+        // `null` (files, sandboxes) or another site.
+        Some(origin) => origin
+            .split_once("://")
+            .is_none_or(|(_, authority)| !authority.eq_ignore_ascii_case(host)),
+        None => false,
+    }
+}
+
+/// Sent on by a proxy: the peer address is the proxy's, not the client's.
+fn forwarded(request: &Request<Body>) -> bool {
+    ["forwarded", "x-forwarded-for", "x-real-ip"]
+        .iter()
+        .any(|h| request.headers().contains_key(*h))
 }
 
 /// The rules as middleware for the HTTP API and pages.
@@ -220,7 +277,15 @@ pub async fn guard(
     request: Request<Body>,
     next: Next,
 ) -> Response {
-    match access.peer(peer.ip()) {
+    let mut seen = access.peer(peer.ip());
+    if seen == Peer::Local && forwarded(&request) {
+        // A proxy on this machine: the client is elsewhere.
+        seen = Peer::Network;
+    }
+    if cross_site(&request, seen == Peer::Local) {
+        return (StatusCode::FORBIDDEN, "requests across sites are refused").into_response();
+    }
+    match seen {
         Peer::Local => return next.run(request).await,
         Peer::Refused => {
             return (
@@ -245,10 +310,11 @@ pub async fn guard(
             return StatusCode::PAYLOAD_TOO_LARGE.into_response();
         };
         if let Ok(action) = serde_json::from_slice::<Action>(&bytes) {
-            if open_action(&access, &service, &action).await {
-                return next
-                    .run(Request::from_parts(parts, Body::from(bytes)))
-                    .await;
+            if let Some(allowed) = open_action(&access, &service, &action).await {
+                let body = serde_json::to_vec(&allowed).expect("action serializes");
+                let mut parts = parts;
+                parts.headers.remove(header::CONTENT_LENGTH);
+                return next.run(Request::from_parts(parts, Body::from(body))).await;
             }
         }
         return unauthorized();
@@ -430,6 +496,100 @@ mod tests {
         assert_eq!(
             call(Access::default(), "10.1.1.1", post(cut, None)).await.0,
             StatusCode::OK
+        );
+    }
+
+    #[tokio::test]
+    async fn browsers_and_proxies_cannot_get_around_it() {
+        let rules = || Access {
+            password: Some("p".into()),
+            open_pages: vec![Page::Titles],
+            internet: false,
+        };
+        let ftb = r#"{"action":"fade_to_black","duration_ms":0}"#;
+        let with = |headers: &[(&str, &str)], body: &str| {
+            let mut request =
+                Request::post("/api/actions").header(header::CONTENT_TYPE, "application/json");
+            for (name, value) in headers {
+                request = request.header(*name, *value);
+            }
+            request.body(Body::from(body.to_string())).unwrap()
+        };
+        // A proxy on this machine: the client still needs the password.
+        assert_eq!(
+            call(
+                rules(),
+                "127.0.0.1",
+                with(&[("x-forwarded-for", "8.8.8.8")], ftb)
+            )
+            .await
+            .0,
+            StatusCode::UNAUTHORIZED
+        );
+        // Another site's page, and a name that points here (rebinding).
+        assert_eq!(
+            call(
+                rules(),
+                "127.0.0.1",
+                with(
+                    &[
+                        ("host", "127.0.0.1:8200"),
+                        ("origin", "https://evil.example")
+                    ],
+                    ftb
+                )
+            )
+            .await
+            .0,
+            StatusCode::FORBIDDEN
+        );
+        assert_eq!(
+            call(
+                rules(),
+                "127.0.0.1",
+                with(&[("host", "evil.example:8200")], ftb)
+            )
+            .await
+            .0,
+            StatusCode::FORBIDDEN
+        );
+        // lmix's own pages send their own origin.
+        assert_eq!(
+            call(
+                rules(),
+                "127.0.0.1",
+                with(
+                    &[
+                        ("host", "localhost:8200"),
+                        ("origin", "http://localhost:8200")
+                    ],
+                    ftb
+                )
+            )
+            .await
+            .0,
+            StatusCode::OK
+        );
+        // The open titles page: title actions, never files.
+        let export = r#"{"action":"export_datasets","path":"/tmp/x.csv"}"#;
+        assert_eq!(
+            call(rules(), "192.168.1.9", with(&[], export)).await.0,
+            StatusCode::UNAUTHORIZED
+        );
+        let source = r#"{"action":"add_data_source","spec":{"kind":"text","path":"/etc/passwd"}}"#;
+        assert_eq!(
+            call(rules(), "192.168.1.9", with(&[], source)).await.0,
+            StatusCode::UNAUTHORIZED
+        );
+        let save = r#"{"action":"save_dataset","name":"A","data":{"name":"x"}}"#;
+        assert_eq!(
+            call(rules(), "192.168.1.9", with(&[], save)).await.0,
+            StatusCode::OK
+        );
+        let get = |path: &str| Request::get(path).body(Body::empty()).unwrap();
+        assert_eq!(
+            call(rules(), "192.168.1.9", get("/api/data/1")).await.0,
+            StatusCode::UNAUTHORIZED
         );
     }
 

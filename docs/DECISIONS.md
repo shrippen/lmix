@@ -1771,19 +1771,35 @@ dieselbe Datei; nicht lesbare Dateien gelten als fehlend.
 - **Passwort** `--password` (`LMIX_PASSWORD`, in `--help` verdeckt): aus
   dem Netz HTTP Basic (Benutzername egal, der Browser fragt einmal; auch
   der WebSocket geht so) oder `Authorization: Bearer`; Textprotokoll
-  erste Zeile `AUTH <passwort>`, sonst Fehler und Ende. Vergleich in
-  konstanter Zeit. Ohne Passwort bleibt es im LAN wie bisher.
+  erste Zeile `AUTH <passwort>` innerhalb von 10 s, sonst Fehler und
+  Ende. Vergleich in konstanter Zeit. Ohne Passwort bleibt es im LAN wie bisher.
 - **Offene Seiten** `--open-page tally,keys,mixer,titles`: die Seite,
   ihre Dateien und was Seiten lesen (Zustand, Ereignisse, Tally, Bilder)
-  ohne Passwort, und nur die Aktionen der Seite: `tally` keine, `keys`
-  Kurzbefehle mit Häkchen „Webseite“, `mixer` Vorschau, Schnitt,
-  Übergänge, FTB, Layouts, `titles` Titel- und Datenaktionen. Eine offene
-  Seite macht damit den Zustand lesbar (Namen der Inputs), nicht mehr.
-- **OSC** hat kein Passwort (UDP, Controller): es gilt nur die LAN-Regel;
-  mit Passwort und OSC im Netz warnt lmix-core beim Start.
+  ohne Passwort, und nur die Aktionen, die die Seite sendet, einzeln
+  aufgezählt: `tally` keine, `keys` Kurzbefehle mit Häkchen „Webseite“
+  (auf ihre Id festgelegt), `mixer` Vorschau, Schnitt, Übergang, FTB,
+  Layout-Vorschau, `titles` Abspielen, Weiter, Stopp, Felder und
+  Datensätze (nie Dateien, Datenquellen, Adressen). Eine offene Seite
+  macht damit den Zustand lesbar (Namen der Inputs), nicht mehr.
+- **Browser**: eine Anfrage mit einem `Origin`, der nicht die Adresse
+  ist, an die sie geht, wird abgewiesen (eine fremde Webseite kann nicht
+  über den Browser des Bedieners schalten); auf diesem Rechner zählt nur
+  `localhost` oder eine IP-Adresse als Adresse (DNS-Rebinding).
+- **Reverse-Proxy**: trägt eine Anfrage `Forwarded`, `X-Forwarded-For`
+  oder `X-Real-IP`, gilt sie als aus dem Netz, auch wenn der Proxy auf
+  diesem Rechner läuft (sonst wäre hinter ihm jeder „lokal“). Der Proxy
+  muss diese Kopfzeilen setzen (nginx, Caddy tun es üblicherweise).
+- **OSC** hat kein Passwort (UDP, Controller): es gilt die LAN-Regel, und
+  mit Passwort nimmt OSC nur noch Nachrichten von diesem Rechner an.
 - „Erhöhte Sicherheit sperrt Skripte“: lmix hat keine Skripte.
 **Geprüft**: Tests für Adressen, Passwörter, offene Seiten, den Wächter
 mit simulierter Adresse und `AUTH` im Textprotokoll; echt über die
 LAN-Adresse: ohne Passwort 401, mit 200, offene Tally-Seite ohne,
 Mixer-Seite im Browser mit Basic-Anmeldung samt WebSocket.
+**Review** (Sicherheit): die offene Titel-Seite ließ alle Titel- und
+Datenaktionen zu, darunter Datensätze in beliebige Dateien schreiben und
+Dateien als Datenquelle lesen (jetzt nur die Aktionen der Seite, einzeln);
+OSC umging das Passwort; ein Proxy auf demselben Rechner machte jeden
+lokal; fremde Seiten im Browser des Bedieners hätten über loopback
+schalten können; `AUTH` ohne Frist. Alle behoben, mit Tests.
 

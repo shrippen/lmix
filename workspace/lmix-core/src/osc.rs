@@ -298,11 +298,13 @@ pub fn request(message: &Message) -> Result<Request, String> {
 
 /// Receive messages and send tally until the process ends.
 /// OSC carries no password: senders outside the local network are
-/// ignored unless `internet` (API.7).
+/// ignored unless `internet`, and with a password (`local_only`) all but
+/// this machine (API.7).
 pub async fn serve(
     listen: SocketAddr,
     service: Arc<Service>,
     internet: bool,
+    local_only: bool,
 ) -> anyhow::Result<()> {
     let access = crate::access::Access {
         internet,
@@ -320,8 +322,10 @@ pub async fn serve(
     let mut buf = vec![0u8; MAX_PACKET];
     loop {
         let (len, peer) = socket.recv_from(&mut buf).await?;
-        if access.peer(peer.ip()) == crate::access::Peer::Refused {
-            continue;
+        match access.peer(peer.ip()) {
+            crate::access::Peer::Refused => continue,
+            crate::access::Peer::Network if local_only => continue,
+            _ => {}
         }
         for message in decode(&buf[..len]) {
             match request(&message) {

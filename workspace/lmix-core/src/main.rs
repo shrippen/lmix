@@ -277,8 +277,13 @@ async fn main() -> anyhow::Result<()> {
     if let Some(listen) = args.osc {
         let service = service.clone();
         let internet = args.allow_internet;
+        // No password over OSC: with one set, only this machine may send.
+        let local_only = args.password.as_deref().is_some_and(|p| !p.is_empty());
+        if local_only {
+            tracing::info!("OSC takes messages from this machine only (it has no password)");
+        }
         tokio::spawn(async move {
-            if let Err(error) = osc::serve(listen, service, internet).await {
+            if let Err(error) = osc::serve(listen, service, internet, local_only).await {
                 tracing::error!(%error, "OSC stopped");
             }
         });
@@ -300,9 +305,6 @@ async fn main() -> anyhow::Result<()> {
         open_pages: args.open_page.clone(),
         internet: args.allow_internet,
     });
-    if rules.password.is_some() && args.osc.is_some_and(|a| !a.ip().is_loopback()) {
-        tracing::warn!("OSC has no password: anyone on the local network can send it actions");
-    }
     if let Some(listen) = args.tcp {
         let service = service.clone();
         let rules = rules.clone();
