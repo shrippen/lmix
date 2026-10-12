@@ -7,6 +7,7 @@
 #   LMIX_LISTEN=0.0.0.0:8200
 #   LMIX_TCP=0.0.0.0:8201
 #   LMIX_SHORTCUTS=…/shortcuts.json   (shortcuts for all shows; default ~/.config/lmix/)
+#   LMIX_TALLY_HTTP=http://192.168.1.60/tally   (tally lights over HTTP)
 #   LMIX_GOOGLE_API_KEY=…   (Google Sheets as data sources; keep core.env private)
 [Unit]
 Description=lmix control core

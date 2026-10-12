@@ -32,6 +32,7 @@ mod recent;
 mod service;
 mod show;
 mod switcher;
+mod tally_http;
 mod tcp;
 mod titles;
 mod tsl;
@@ -138,6 +139,12 @@ struct Args {
     /// The same over TCP to these addresses (TSL 5.0 framed with DLE/STX).
     #[arg(long, env = "LMIX_TSL_TCP", value_delimiter = ',')]
     tsl_tcp: Vec<SocketAddr>,
+
+    /// Call these addresses with the tally on every change (tally lights
+    /// over HTTP, PER.1): POST JSON, or GET with `{program}`, `{preview}`,
+    /// `{tally}` filled in; repeat for more.
+    #[arg(long, env = "LMIX_TALLY_HTTP")]
+    tally_http: Vec<String>,
 
     /// TSL UMD version: 5 (5.0) or 3 (3.1).
     #[arg(long, env = "LMIX_TSL_VERSION", value_enum, default_value_t = tsl::Version::V50)]
@@ -265,6 +272,9 @@ async fn main() -> anyhow::Result<()> {
                 tracing::error!(%error, "TSL tally stopped");
             }
         });
+    }
+    if !args.tally_http.is_empty() {
+        tokio::spawn(tally_http::serve(args.tally_http.clone(), service.clone()));
     }
     if let Some(listen) = args.tcp {
         let service = service.clone();

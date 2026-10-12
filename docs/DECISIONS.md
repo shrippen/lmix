@@ -1652,3 +1652,20 @@ lohnt.
 **Geprüft**: Diff und Anwenden (Rust-Test, auch Escapes `~0`/`~1`);
 `test-web.sh` zählt Diffs, `test-titles.sh` läuft mit Diffs.
 
+## 2026-10-12 — Tally über HTTP (PER.1)
+
+**Entscheidung**: `--tally-http <Adresse>` (mehrfach, `LMIX_TALLY_HTTP`)
+ruft bei jeder Tally-Änderung und alle 30 s (ein neu gestartetes Gerät
+holt auf) jede Adresse auf: ohne Platzhalter POST mit JSON
+`{"tally":[…],"program":[…],"preview":[…]}` (Tally je Input wie die
+TCP-API: 0 aus, 1 Programm samt Overlays und Layout-Boxen, 2 Vorschau;
+dann die Nummern), mit Platzhaltern `{program}`, `{preview}`, `{tally}`
+ein GET mit eingesetzten Werten, für einfache Geräte (ESP32-Tally,
+Shelly, Hausautomation), die nur eine Adresse aufrufen können. Alle
+Geräte parallel, 1 s Frist je Gerät; eine Blende (viele Änderungen kurz
+hintereinander) endet auf dem letzten Stand; ein nicht erreichbares Gerät
+wird einmal gemeldet, bis es wieder antwortet. GPIO und Firmata bleiben
+offen (Hardware).
+**Geprüft**: Test mit einem kleinen HTTP-Empfänger (erster Stand, Schnitt
+auf Programm), Platzhalter und JSON; an einem echten Tally-Gerät nicht.
+
