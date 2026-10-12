@@ -1588,14 +1588,14 @@
       <translation>Einfacher Modus</translation>
     </message>
     <message>
-      <location line="+12" />
+      <location line="+11" />
       <source>Find missing files…</source>
       <translation>Fehlende Dateien suchen…</translation>
     </message>
     <message>
       <location line="+3" />
-      <source>%1 inputs miss media files: pick the folder they are in now.</source>
-      <translation>%1 Inputs fehlen Mediendateien: den Ordner wählen, in dem sie jetzt liegen.</translation>
+      <source>Inputs marked "Missing" lack media files: pick the folder they are in now. Inputs on program are left alone.</source>
+      <translation>Den mit „Fehlt“ markierten Inputs fehlen Mediendateien: den Ordner wählen, in dem sie jetzt liegen. Inputs auf Programm bleiben unverändert.</translation>
     </message>
     <message>
       <location line="+4" />

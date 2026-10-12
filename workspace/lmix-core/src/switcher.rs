@@ -341,13 +341,41 @@ impl Switcher {
                 SourceSpec::Playlist { paths } => Some((i.id, paths.clone())),
                 _ => None,
             })
+            // Addresses are no files.
+            .map(|(id, paths)| {
+                (
+                    id,
+                    paths.into_iter().filter(|p| !p.contains("://")).collect(),
+                )
+            })
             .collect()
+    }
+
+    /// What is on program now, for the service.
+    pub fn state_program(&self) -> Option<InputId> {
+        self.show.program
+    }
+
+    /// Input `id` got a new source: nothing known missing until checked.
+    pub fn forget_missing(&mut self, id: InputId) {
+        self.missing.remove(&id);
     }
 
     /// Which media files are missing now; true if that changed.
     pub fn set_missing(&mut self, missing: HashMap<InputId, Vec<String>>) -> bool {
+        // A check that started before a change (relocated, replaced) keeps
+        // only paths the input still has.
+        let now: HashMap<InputId, Vec<String>> = self.media_files().into_iter().collect();
         let missing: HashMap<_, _> = missing
             .into_iter()
+            .map(|(id, files)| {
+                let current = now.get(&id);
+                let files: Vec<String> = files
+                    .into_iter()
+                    .filter(|f| current.is_some_and(|c| c.contains(f)))
+                    .collect();
+                (id, files)
+            })
             .filter(|(_, files)| !files.is_empty())
             .collect();
         if missing == self.missing {

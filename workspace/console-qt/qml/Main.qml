@@ -559,12 +559,11 @@ Kirigami.ApplicationWindow {
                 }
                 Item { Layout.fillWidth: true }
                 KanteButton {
-                    readonly property int count: root.inputs.filter(i => i.missing && i.missing.length > 0).length
-                    visible: count > 0
+                    visible: root.inputs.some(i => i.missing && i.missing.length > 0)
                     text: qsTr("Find missing files…")
-                    emphasis: KanteButton.Emphasis.Destructive
+                    emphasis: KanteButton.Emphasis.Primary
                     QQC2.ToolTip.visible: hovered
-                    QQC2.ToolTip.text: qsTr("%1 inputs miss media files: pick the folder they are in now.").arg(count)
+                    QQC2.ToolTip.text: qsTr("Inputs marked \"Missing\" lack media files: pick the folder they are in now. Inputs on program are left alone.")
                     onClicked: relocateDialog.open()
                 }
                 KanteButton {

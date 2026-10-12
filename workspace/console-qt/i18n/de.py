@@ -414,7 +414,7 @@ DE = {
     'Not found:': 'Nicht gefunden:',
     'Folder with the missing files': 'Ordner mit den fehlenden Dateien',
     'Find missing files…': 'Fehlende Dateien suchen…',
-    '%1 inputs miss media files: pick the folder they are in now.': '%1 Inputs fehlen Mediendateien: den Ordner wählen, in dem sie jetzt liegen.',
+    'Inputs marked "Missing" lack media files: pick the folder they are in now. Inputs on program are left alone.': 'Den mit „Fehlt“ markierten Inputs fehlen Mediendateien: den Ordner wählen, in dem sie jetzt liegen. Inputs auf Programm bleiben unverändert.',
     'Inputs from %1': 'Inputs aus %1',
     'This show has no inputs.': 'Diese Show hat keine Inputs.',
     'They are added at the end with their settings; their triggers stay behind (they name inputs of the other show).': 'Sie kommen mit ihren Einstellungen ans Ende; ihre Auslöser bleiben zurück (sie nennen Inputs der anderen Show).',

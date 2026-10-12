@@ -590,6 +590,29 @@ impl Service {
         self.publish(&sw);
     }
 
+    /// Where missing media files are in `folder`, by file name: old path
+    /// to new. Looked up without the mixer locked, each with a time limit.
+    async fn find_moved_media(&self, folder: &str) -> HashMap<String, String> {
+        let missing = self.switcher.lock().await.missing_media();
+        let mut found = HashMap::new();
+        for path in missing.into_iter().flat_map(|(_, files)| files) {
+            let Some(name) = std::path::Path::new(&path).file_name() else {
+                continue;
+            };
+            let candidate = std::path::Path::new(folder).join(name);
+            let is_file = tokio::time::timeout(
+                std::time::Duration::from_secs(2),
+                tokio::fs::metadata(&candidate),
+            )
+            .await
+            .is_ok_and(|m| m.is_ok_and(|m| m.is_file()));
+            if is_file {
+                found.insert(path, candidate.display().to_string());
+            }
+        }
+        found
+    }
+
     /// Look for the inputs' media files every few seconds (SHW.4): the
     /// state lists the missing ones per input. Checked without the
     /// switcher locked.
@@ -986,6 +1009,12 @@ impl Service {
             tracing::info!(%path, files = packed.files, bytes = packed.bytes, "package written");
             return Ok(self.state().await);
         }
+        // Missing files looked up in the folder before the mixer is locked
+        // (a slow network folder must not hold up switching).
+        let mut relocated = match &action {
+            Action::RelocateMedia { folder } => Some(self.find_moved_media(folder).await),
+            _ => None,
+        };
         let mut unpacked = match &action {
             Action::ImportPackage { path, folder } => {
                 // Refused before gigabytes are unpacked (checked again below).
@@ -1091,7 +1120,9 @@ impl Service {
                 save(&mut sw, path).await?;
                 Vec::new()
             }
-            Action::RelocateMedia { folder } => relocate(&mut sw, &folder).await?,
+            Action::RelocateMedia { folder } => {
+                relocate(&mut sw, &folder, relocated.take().unwrap_or_default())?
+            }
             Action::AppendShow { path, inputs } => {
                 let other =
                     show::load(&PathBuf::from(&path))
@@ -1376,47 +1407,61 @@ async fn open(sw: &mut Switcher, path: String) -> Result<Vec<Command>, ActionErr
     Ok(sw.replace(show, Some(path)))
 }
 
-/// Missing media files found in `folder` by name take the old paths'
-/// place, input by input (SHW.4).
-async fn relocate(sw: &mut Switcher, folder: &str) -> Result<Vec<Command>, ActionError> {
-    let folder = std::path::Path::new(folder);
+/// Found media files (old path, new path) take the old paths' place,
+/// input by input (SHW.4). Inputs on program are left alone (a new source
+/// restarts them); the error says so if nothing else was found.
+fn relocate(
+    sw: &mut Switcher,
+    folder: &str,
+    found: HashMap<String, String>,
+) -> Result<Vec<Command>, ActionError> {
+    let program = sw.state_program();
     let mut commands = Vec::new();
-    let mut found = 0;
+    let (mut moved, mut on_air) = (0, 0);
     for (id, gone) in sw.missing_media() {
         let Some(source) = sw.source_of(id).cloned() else {
             continue;
         };
-        let mut moved = |path: &mut String| {
-            let candidate = std::path::Path::new(path.as_str())
-                .file_name()
-                .map(|name| folder.join(name))
-                .filter(|c| gone.contains(path) && c.is_file());
-            if let Some(candidate) = candidate {
-                *path = candidate.display().to_string();
-                found += 1;
+        let mut hits = 0;
+        let mut swap = |path: &mut String| {
+            if let Some(new) = found.get(path.as_str()).filter(|_| gone.contains(path)) {
+                *path = new.clone();
+                hits += 1;
             }
         };
         let source = match source {
             lmix_types::SourceSpec::File { mut path } => {
-                moved(&mut path);
+                swap(&mut path);
                 lmix_types::SourceSpec::File { path }
             }
             lmix_types::SourceSpec::Playlist { mut paths } => {
-                paths.iter_mut().for_each(&mut moved);
+                paths.iter_mut().for_each(&mut swap);
                 lmix_types::SourceSpec::Playlist { paths }
             }
             _ => continue,
         };
-        if Some(&source) != sw.source_of(id) {
-            commands.extend(sw.apply(Action::ReplaceSource {
-                input: lmix_types::InputRef::Text(id.to_string()),
-                source,
-            })?);
+        if hits == 0 {
+            continue;
         }
+        if program == Some(id) {
+            on_air += 1;
+            continue;
+        }
+        moved += hits;
+        commands.extend(sw.apply(Action::ReplaceSource {
+            input: lmix_types::InputRef::Text(id.to_string()),
+            source,
+        })?);
+        sw.forget_missing(id);
     }
-    if found == 0 {
+    if moved == 0 {
         return Err(ActionError::ShowFile {
-            message: format!("none of the missing files is in {}", folder.display()),
+            message: if on_air > 0 {
+                "the files were found, but their input is on program: take it off and try again"
+                    .into()
+            } else {
+                format!("none of the missing files is in {folder}")
+            },
         });
     }
     Ok(commands)
@@ -2111,6 +2156,12 @@ mod tests {
         for (name, source) in [
             ("Intro", SourceSpec::File { path: gone.clone() }),
             (
+                "Stream",
+                SourceSpec::File {
+                    path: "https://example.org/live.m3u8".into(),
+                },
+            ),
+            (
                 "List",
                 SourceSpec::Playlist {
                     paths: vec![there.display().to_string(), gone.clone()],
@@ -2128,7 +2179,8 @@ mod tests {
         service.check_media().await;
         let state = service.state().await;
         assert_eq!(state.inputs[0].missing, std::slice::from_ref(&gone));
-        assert_eq!(state.inputs[1].missing, std::slice::from_ref(&gone));
+        assert!(state.inputs[1].missing.is_empty(), "an address is no file");
+        assert_eq!(state.inputs[2].missing, std::slice::from_ref(&gone));
 
         assert!(service
             .handle(Action::RelocateMedia {
@@ -2136,15 +2188,40 @@ mod tests {
             })
             .await
             .is_err());
+        // On program: left alone (a new source would restart it).
         service
-            .handle(Action::RelocateMedia {
-                folder: moved.display().to_string(),
+            .handle(Action::CutDirect {
+                input: lmix_types::InputRef::Number(1),
             })
             .await
             .unwrap();
+        let relocate = || Action::RelocateMedia {
+            folder: moved.display().to_string(),
+        };
+        service.handle(relocate()).await.unwrap();
+        let found = moved.join("intro.mp4").display().to_string();
+        let state = service.state().await;
+        assert_eq!(
+            state.inputs[0].source,
+            SourceSpec::File { path: gone.clone() }
+        );
+        assert!(
+            state.inputs[2].missing.is_empty(),
+            "found ones are no longer missing"
+        );
+        assert!(
+            service.handle(relocate()).await.is_err(),
+            "only the one on program is left"
+        );
+        service
+            .handle(Action::CutDirect {
+                input: lmix_types::InputRef::Number(2),
+            })
+            .await
+            .unwrap();
+        service.handle(relocate()).await.unwrap();
         service.check_media().await;
         let state = service.state().await;
-        let found = moved.join("intro.mp4").display().to_string();
         assert_eq!(
             state.inputs[0].source,
             SourceSpec::File {
@@ -2152,7 +2229,7 @@ mod tests {
             }
         );
         assert_eq!(
-            state.inputs[1].source,
+            state.inputs[2].source,
             SourceSpec::Playlist {
                 paths: vec![there.display().to_string(), found]
             }

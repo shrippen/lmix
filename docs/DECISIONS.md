@@ -1747,4 +1747,13 @@ es keine, meldet es das. Adressen (URL) prüft es nicht.
 **Geprüft**: Service-Test (Datei und Playlist markiert, falscher Ordner
 abgelehnt, richtiger eingesetzt, danach nichts mehr fehlend); Console
 auf Xvfb (Markierung, Knopf).
+**Review**: das Suchen im Ordner lief blockierend unter der Sperre des
+Mischers (ein hängendes Netzlaufwerk hätte das Schalten angehalten; jetzt
+vorher, asynchron, 2 s je Datei); ein Input auf Programm würde durch die
+neue Quelle neu starten (jetzt bleibt er, die Meldung sagt es);
+Adressen in Datei-Inputs galten als fehlend; nach dem Einsetzen stand
+„Fehlt“ noch bis zur nächsten Prüfung, und eine laufende Prüfung konnte
+alte Pfade zurückschreiben (jetzt nur Pfade, die der Input noch hat).
+Zwei fehlende Dateien gleichen Namens in verschiedenen Ordnern finden
+dieselbe Datei; nicht lesbare Dateien gelten als fehlend.
 
