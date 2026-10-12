@@ -19,6 +19,7 @@ des nächsten wird danach `main`, Gitea stellt sie beim Mergen um):
 | #20 | `m9-layout` | `m9-data` | Layout-Editor: Mehrfachauswahl, Sperre |
 | #21 | `m9-keys` | `m9-layout` | Google Sheets API, Kurzbefehle für alle Shows, Zustand als Diff, Tally über HTTP, Wiedergabezeit-Auslöser, Tasten mit Bild, Inputs anhängen, fehlende Dateien, Beispiel-Clients |
 | #22 | `m9-security` | `m9-keys` | Zugriff: nur LAN, Passwort, offene Seiten (API.7) |
+| #23 | `m9-transport` | `m9-security` | Springen im Clip, Playlist-Eintrag abspielen (UI.5, UI.4) |
 
 Unabhängig von `main`: #14 (CI-Token fürs strom-Submodul; der Token
 braucht noch Leserechte, siehe `todo.md`), #15 (H.24-Vergleich), #16
