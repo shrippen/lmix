@@ -467,11 +467,11 @@ Zurückgestellt (User 2026-10-08).
 
 | ID | Anforderung | Prio | Stand |
 |---|---|---|---|
-| SHW.1 | Show enthält: Inputs mit allen Einstellungen, Overlays, Übergänge, Audio (Inputs + Busse), Ablauflisten, Kategorien, lokale Belegungen/Rückmeldungen/Skripte, Aufnahme, Streaming, Ausgänge, Karte, Datenquellen, Master-Format | M | – (ROADMAP 2b.4) |
-| SHW.2 | Offenes, versioniertes, lesbares Format (JSON); Medien per Pfad | M | – |
-| SHW.3 | Neu (mit Formatwahl), Öffnen (ersetzt), Anhängen (nur gewählte Inputs), Speichern, Speichern unter, zuletzt geöffnet | M | – |
-| SHW.4 | Fehlende Dateien: markieren, suchen lassen, sonst Input offline | M | – |
-| SHW.5 | Automatische Sicherung, "letzte Show" wiederherstellen (auch nach Absturz) | M | – |
+| SHW.1 | Show enthält: Inputs mit allen Einstellungen, Overlays, Übergänge, Audio (Inputs + Busse), Ablauflisten, Kategorien, lokale Belegungen/Rückmeldungen/Skripte, Aufnahme, Streaming, Ausgänge, Karte, Datenquellen, Master-Format | M | ◐ (Inputs mit Einstellungen und Farb-Kategorien, Overlays, Übergänge, Audio samt Aux-Bussen, Layouts, Ablauflisten, Kurzbefehle, Auslöser, Ausgänge, Titel, Datenquellen; ohne Master-Format, Karte) |
+| SHW.2 | Offenes, versioniertes, lesbares Format (JSON); Medien per Pfad | M | ✅ (JSON `lmix-show`, Version 1, Medien per Pfad) |
+| SHW.3 | Neu (mit Formatwahl), Öffnen (ersetzt), Anhängen (nur gewählte Inputs), Speichern, Speichern unter, zuletzt geöffnet | M | ◐ (Neu, Öffnen, Speichern, Speichern unter, zuletzt geöffnet; ohne Formatwahl, Anhängen) |
+| SHW.4 | Fehlende Dateien: markieren, suchen lassen, sonst Input offline | M | ◐ (fehlende Quelle: Input offline, kommt von selbst zurück; ohne Markieren und Suchen lassen) |
+| SHW.5 | Automatische Sicherung, "letzte Show" wiederherstellen (auch nach Absturz) | M | ✅ (Autosave nach jeder Änderung, Fortsetzen nach Absturz) |
 | SHW.6 | Paket: Show + Medien + Titel in einer Datei | S | ✅ |
 | SHW.7 | Formatwechsel beim Laden bestätigen | S | – |
 | SHW.8 | Globale Einstellungen getrennt ex-/importieren, Werkseinstellungen | S | – |
