@@ -12,20 +12,23 @@ function lmixEvents(onEvent, onLink) {
     const ws = new WebSocket(url);
     ws.onopen = () => { retry = 500; onLink && onLink(true); };
     ws.onmessage = (m) => {
+      let event;
       try {
-        let event = JSON.parse(m.data);
+        event = JSON.parse(m.data);
         if (event.event === "state_diff") {
           if (!state) throw new Error("diff before a state");
           event = { event: "state", state: lmixPatch(state, event.ops) };
         }
         if (event.event === "state") state = event.state;
-        onEvent(event);
       } catch (e) {
         console.warn(e);
         // Out of step: start over with a whole state.
         state = null;
         ws.close();
+        return;
       }
+      // A page's own error does not drop the link.
+      try { onEvent(event); } catch (e) { console.warn(e); }
     };
     ws.onclose = () => {
       onLink && onLink(false);
@@ -40,14 +43,21 @@ function lmixEvents(onEvent, onLink) {
  *  and arrays on a changed path are copied, the rest is shared: a page may
  *  keep an older state, it never changes under it. */
 function lmixPatch(doc, ops) {
-  const copy = (v) => (Array.isArray(v) ? v.slice() : Object.assign({}, v));
+  // Own properties only, set as data (a key `__proto__` stays a key).
+  const put = (o, k, v) => Object.defineProperty(o, k, { value: v, writable: true, enumerable: true, configurable: true });
+  const copy = (v) => {
+    if (Array.isArray(v)) return v.slice();
+    const c = {};
+    for (const k of Object.keys(v)) put(c, k, v[k]);
+    return c;
+  };
   for (const op of ops) {
     const tokens = op.path.split("/").slice(1).map((t) => t.replace(/~1/g, "/").replace(/~0/g, "~"));
     if (tokens.length === 0) { doc = op.value; continue; }
     const root = copy(doc);
     let at = root;
     for (const t of tokens.slice(0, -1)) {
-      at[t] = copy(at[t]);
+      put(at, t, copy(at[t]));
       at = at[t];
     }
     const last = tokens[tokens.length - 1];
@@ -59,7 +69,7 @@ function lmixPatch(doc, ops) {
     } else if (op.op === "remove") {
       delete at[last];
     } else {
-      at[last] = op.value;
+      put(at, last, op.value);
     }
     doc = root;
   }

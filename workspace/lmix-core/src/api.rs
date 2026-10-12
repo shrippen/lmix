@@ -277,9 +277,15 @@ fn error_response(error: ActionError) -> Response {
 #[derive(serde::Deserialize)]
 struct EventsQuery {
     /// State changes as `state_diff` events (API.6) instead of the whole
-    /// state each time.
+    /// state each time: `?diff`, `?diff=true`, `?diff=1`.
     #[serde(default)]
-    diff: bool,
+    diff: Option<String>,
+}
+
+impl EventsQuery {
+    fn diff(&self) -> bool {
+        matches!(self.diff.as_deref(), Some("" | "1" | "true" | "yes"))
+    }
 }
 
 async fn events(
@@ -287,7 +293,8 @@ async fn events(
     Query(query): Query<EventsQuery>,
     ws: WebSocketUpgrade,
 ) -> Response {
-    ws.on_upgrade(move |socket| stream(socket, service, query.diff))
+    let diff = query.diff();
+    ws.on_upgrade(move |socket| stream(socket, service, diff))
 }
 
 /// Current state first, so a client never starts blind; then live events.
@@ -302,6 +309,9 @@ async fn stream(mut socket: WebSocket, service: Arc<Service>, diff: bool) {
     };
     // The state this client holds, for diffs.
     let mut held = diff.then(|| serde_json::to_value(&first).expect("state serializes"));
+    // Length of the last whole state sent: a diff about as long goes out
+    // whole instead.
+    let mut whole_len = held.as_ref().map_or(0, |v| v.to_string().len());
     if send(&mut socket, &first).await.is_err() {
         return;
     }
@@ -333,12 +343,19 @@ async fn stream(mut socket: WebSocket, service: Arc<Service>, diff: bool) {
                 } else {
                     let patch =
                         serde_json::json!({ "event": "state_diff", "ops": ops }).to_string();
-                    let whole = now.to_string();
-                    Some(if patch.len() < whole.len() {
-                        patch
+                    // The whole state is serialized only when the diff comes
+                    // near the last one's length.
+                    if patch.len() < whole_len / 2 {
+                        Some(patch)
                     } else {
-                        whole
-                    })
+                        let whole = now.to_string();
+                        whole_len = whole.len();
+                        Some(if patch.len() < whole.len() {
+                            patch
+                        } else {
+                            whole
+                        })
+                    }
                 };
                 *held = now;
                 match text {

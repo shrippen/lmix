@@ -1651,6 +1651,14 @@ an ganzen Zuständen); das ist ein eigener Schritt, wenn es sich messbar
 lohnt.
 **Geprüft**: Diff und Anwenden (Rust-Test, auch Escapes `~0`/`~1`);
 `test-web.sh` zählt Diffs, `test-titles.sh` läuft mit Diffs.
+**Review**: ein Fehler in einer Seite trennte die Verbindung (jetzt nur
+eine Warnung); der ganze Zustand wurde für jeden Diff serialisiert, nur
+um die Länge zu vergleichen (jetzt nur, wenn der Diff an die Länge des
+letzten ganzen herankommt); `?diff=1` und `?diff` gingen nicht; ein
+Schlüssel `__proto__` wäre in der Seite verloren gegangen. Kosten je
+Client und Änderung bleiben ein `serde_json::Value` des Zustands und ein
+Vergleich; den Wert einmal je Änderung statt je Client zu bauen, lohnt
+erst bei vielen Diff-Clients.
 
 ## 2026-10-12 — Tally über HTTP (PER.1)
 
