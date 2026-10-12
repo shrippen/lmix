@@ -1059,6 +1059,15 @@ impl Service {
                 save(&mut sw, path).await?;
                 Vec::new()
             }
+            Action::AppendShow { path, inputs } => {
+                let other =
+                    show::load(&PathBuf::from(&path))
+                        .await
+                        .map_err(|e| ActionError::ShowFile {
+                            message: e.to_string(),
+                        })?;
+                sw.append(other, &inputs)?
+            }
             other => sw.apply(other)?,
         };
         if let (true, Some(path)) = (file_action, sw.path().map(str::to_string)) {
@@ -1914,6 +1923,69 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(position, (id, 1500, 9000));
+    }
+
+    #[tokio::test]
+    async fn inputs_of_another_show_are_appended() {
+        use lmix_types::{InputRef, SourceSpec, TestPattern};
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("other.lmix");
+        let add = |name: &str| Action::AddInput {
+            source: SourceSpec::Pattern {
+                pattern: TestPattern::Bars,
+            },
+            name: Some(name.into()),
+        };
+        let other = Service::new(4, Arc::new(NullEngine::default()), None);
+        for name in ["Cam 1", "Cam 2"] {
+            other.handle(add(name)).await.unwrap();
+        }
+        other
+            .handle(Action::SetVolume {
+                input: InputRef::Number(2),
+                volume: 40,
+            })
+            .await
+            .unwrap();
+        other
+            .handle(Action::SaveShow {
+                path: Some(file.display().to_string()),
+            })
+            .await
+            .unwrap();
+
+        let service = Service::new(3, Arc::new(NullEngine::default()), None);
+        service.handle(add("Here")).await.unwrap();
+        let state = service
+            .handle(Action::AppendShow {
+                path: file.display().to_string(),
+                inputs: vec![2],
+            })
+            .await
+            .unwrap();
+        let names: Vec<_> = state.inputs.iter().map(|i| i.name.as_str()).collect();
+        assert_eq!(names, ["Here", "Cam 2"]);
+        assert_eq!(state.inputs[1].audio.volume, 40);
+        assert_ne!(state.inputs[1].id, other.state().await.inputs[1].id);
+
+        // All of it does not fit the one slot left: nothing is added.
+        let refused = service
+            .handle(Action::AppendShow {
+                path: file.display().to_string(),
+                inputs: vec![],
+            })
+            .await;
+        assert!(matches!(refused, Err(ActionError::SlotsFull { .. })));
+        assert!(matches!(
+            service
+                .handle(Action::AppendShow {
+                    path: file.display().to_string(),
+                    inputs: vec![9],
+                })
+                .await,
+            Err(ActionError::UnknownInput { .. })
+        ));
+        assert_eq!(service.state().await.inputs.len(), 2);
     }
 
     #[tokio::test]

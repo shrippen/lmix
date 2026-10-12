@@ -236,6 +236,7 @@ pub const ACTION_GROUPS: &[(&str, &[&str])] = &[
             "new_show",
             "save_show",
             "open_show",
+            "append_show",
             "export_package",
             "import_package",
         ],
@@ -683,6 +684,13 @@ pub enum Action {
     },
     /// Open a show file, replacing the current show.
     OpenShow { path: String },
+    /// Add inputs of another show file to this one, with their settings
+    /// (SHW.3): `inputs` by number in that show, all if empty.
+    AppendShow {
+        path: String,
+        #[serde(default)]
+        inputs: Vec<u32>,
+    },
     /// Write the show with its media, data files and own title templates
     /// into one package file (SHW.6).
     ExportPackage { path: String },

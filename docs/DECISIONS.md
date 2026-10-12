@@ -1711,3 +1711,18 @@ Ausprobieren). Beide gegen lmix-core mit `--tcp` geprüft (Schnitt,
 Vorschau, Fehler), der ESP32 selbst nicht. Ein Companion-Modul bleibt
 offen (eigenes Repo, eigene Sprache).
 
+## 2026-10-12 — Inputs aus einer anderen Show (SHW.3)
+
+**Entscheidung**: `append_show { path, inputs }` nimmt Inputs einer
+anderen Show-Datei (nach ihrer Nummer dort, leer = alle) mit ihren
+Einstellungen (Quelle, Name, Farbe, Ton, Kanalzug, Sends, Look, Signal-
+verlust, PTZ) ans Ende, mit neuen Ids und in freien Slots; Auslöser
+bleiben zurück, ihre Aktionen nennen Inputs der anderen Show. Alles
+oder nichts: reichen die Slots nicht, kommt keiner. Geht auch bei
+Sperre (nichts wird geschlossen). `GET /api/shows/inputs?path=` listet
+die Inputs einer Show-Datei (Nummer, Name, Art); die Console fragt so
+nach dem Dateidialog „Aus Show…“, welche übernommen werden.
+**Geprüft**: Service-Test (Auswahl, Einstellungen, neue Id, zu wenig
+Slots, falsche Nummer); Console auf Xvfb (Datei gewählt, einen Input
+abgewählt, nur der andere kam).
+

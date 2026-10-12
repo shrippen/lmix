@@ -197,6 +197,24 @@ Kirigami.ApplicationWindow {
     }
 
     FileDialog {
+        id: appendDialog
+        title: qsTr("Inputs from a show")
+        nameFilters: [qsTr("lmix shows (*.lmix)"), qsTr("All files (*)")]
+        onAccepted: {
+            appendShowDialog.path = root.localPath(selectedFile)
+            appendShowDialog.open()
+        }
+    }
+
+    AppendShowDialog {
+        id: appendShowDialog
+        parent: QQC2.Overlay.overlay
+        anchors.centerIn: parent
+        act: root.act
+        coreUrl: backend.coreUrl
+    }
+
+    FileDialog {
         id: saveDialog
         title: qsTr("Save show")
         fileMode: FileDialog.SaveFile
@@ -402,6 +420,13 @@ Kirigami.ApplicationWindow {
                         choices: root.recent.map(path => ({ value: path, label: path }))
                         onPicked: value => root.act({ action: "open_show", path: value })
                     }
+                }
+                KanteButton {
+                    text: qsTr("From show…")
+                    enabled: backend.connected
+                    QQC2.ToolTip.visible: hovered
+                    QQC2.ToolTip.text: qsTr("Add inputs of another show to this one")
+                    onClicked: appendDialog.open()
                 }
                 KanteButton {
                     text: qsTr("Save")

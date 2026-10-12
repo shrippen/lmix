@@ -14,6 +14,7 @@
 //! | `GET /api/devices` | capture devices for `SourceSpec::Device` |
 //! | `GET /api/pictures/program` | program picture, JPEG |
 //! | `GET /api/pictures/inputs/{input}` | input picture (number, name, id, `preview`, `program`) |
+//! | `GET /api/shows/inputs?path=` | inputs of a show file, to append some (SHW.3) |
 //! | `GET /api/templates` | title templates: built-in and from the folder (GFX.19) |
 //! | `GET /api/data/{source}` | all rows of a data source (number, name or id) |
 //! | `GET /titles/{path}` | template files, the title SDK, Kante's tokens and fonts |
@@ -54,6 +55,7 @@ pub fn router(service: Arc<Service>) -> Router {
         .route("/api/latency", get(latency))
         .route("/api/latency/measure", post(measure_latency))
         .route("/api/shows/recent", get(recent))
+        .route("/api/shows/inputs", get(show_inputs))
         .route("/api/devices", get(devices))
         .route("/api/pictures/program", get(program_picture))
         .route("/api/pictures/inputs/{input}", get(input_picture))
@@ -128,6 +130,34 @@ async fn levels(State(service): State<Arc<Service>>) -> impl IntoResponse {
 
 async fn recent(State(service): State<Arc<Service>>) -> impl IntoResponse {
     Json(service.recent().await)
+}
+
+#[derive(serde::Deserialize)]
+struct ShowQuery {
+    path: String,
+}
+
+/// Number, name and kind of each input of a show file.
+async fn show_inputs(Query(query): Query<ShowQuery>) -> Response {
+    match crate::show::load(std::path::Path::new(&query.path)).await {
+        Ok(show) => Json(
+            show.inputs
+                .iter()
+                .enumerate()
+                .map(|(i, input)| {
+                    serde_json::json!({
+                        "number": i + 1,
+                        "name": input.name,
+                        "kind": serde_json::to_value(&input.source).ok().map(|v| v["kind"].clone()),
+                    })
+                })
+                .collect::<Vec<_>>(),
+        )
+        .into_response(),
+        Err(e) => error_response(ActionError::ShowFile {
+            message: e.to_string(),
+        }),
+    }
 }
 
 async fn devices(State(service): State<Arc<Service>>) -> Response {

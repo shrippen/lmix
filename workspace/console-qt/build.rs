@@ -115,6 +115,7 @@ fn main() {
                 "qml/LookDialog.qml",
                 "qml/LayoutBar.qml",
                 "qml/CollapsedBar.qml",
+                "qml/AppendShowDialog.qml",
                 "qml/LayoutDialog.qml",
                 "qml/ShortcutsDialog.qml",
                 "qml/ShortcutEditDialog.qml",

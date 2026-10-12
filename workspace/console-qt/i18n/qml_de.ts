@@ -194,6 +194,24 @@
     </message>
   </context>
   <context>
+    <name>AppendShowDialog</name>
+    <message>
+      <location filename="../qml/AppendShowDialog.qml" line="+23" />
+      <source>Inputs from %1</source>
+      <translation>Inputs aus %1</translation>
+    </message>
+    <message>
+      <location line="+48" />
+      <source>This show has no inputs.</source>
+      <translation>Diese Show hat keine Inputs.</translation>
+    </message>
+    <message>
+      <location line="+21" />
+      <source>They are added at the end with their settings; their triggers stay behind (they name inputs of the other show).</source>
+      <translation>Sie kommen mit ihren Einstellungen ans Ende; ihre Auslöser bleiben zurück (sie nennen Inputs der anderen Show).</translation>
+    </message>
+  </context>
+  <context>
     <name>AuxBusDialog</name>
     <message>
       <location filename="../qml/AuxBusDialog.qml" line="+21" />
@@ -1351,18 +1369,25 @@
     </message>
     <message>
       <location line="+1" />
-      <location line="+9" />
+      <location line="+7" />
+      <location line="+20" />
       <source>lmix shows (*.lmix)</source>
       <translation>lmix-Shows (*.lmix)</translation>
     </message>
     <message>
-      <location line="-9" />
-      <location line="+25" />
+      <location line="-27" />
+      <location line="+7" />
+      <location line="+36" />
       <source>All files (*)</source>
       <translation>Alle Dateien (*)</translation>
     </message>
     <message>
-      <location line="-19" />
+      <location line="-37" />
+      <source>Inputs from a show</source>
+      <translation>Inputs aus einer Show</translation>
+    </message>
+    <message>
+      <location line="+18" />
       <source>Save show</source>
       <translation>Show speichern</translation>
     </message>
@@ -1414,6 +1439,16 @@
     </message>
     <message>
       <location line="+10" />
+      <source>From show…</source>
+      <translation>Aus Show…</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Add inputs of another show to this one</source>
+      <translation>Inputs einer anderen Show hierher übernehmen</translation>
+    </message>
+    <message>
+      <location line="+4" />
       <source>Save</source>
       <translation>Speichern</translation>
     </message>

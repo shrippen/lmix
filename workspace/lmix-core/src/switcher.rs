@@ -640,6 +640,7 @@ impl Switcher {
             Action::NewShow
             | Action::SaveShow { .. }
             | Action::OpenShow { .. }
+            | Action::AppendShow { .. }
             | Action::ImportDatasets { .. }
             | Action::ExportDatasets { .. }
             | Action::ExportPackage { .. }
@@ -1465,6 +1466,45 @@ impl Switcher {
         self.status.insert(input.id, InputStatus::Starting);
         let at = index.min(self.show.inputs.len());
         self.show.inputs.insert(at, input);
+        Ok(commands)
+    }
+
+    /// Add inputs of `other` (by number there, all if `numbers` is empty)
+    /// with their settings, at the end, in free slots (SHW.3). Their
+    /// triggers stay behind: their actions name inputs of the other show.
+    /// All or none: too few free slots refuses the lot.
+    pub fn append(&mut self, other: Show, numbers: &[u32]) -> Result<Vec<Command>, ActionError> {
+        let chosen: Vec<ShowInput> = if numbers.is_empty() {
+            other.inputs
+        } else {
+            numbers
+                .iter()
+                .map(|n| {
+                    (*n as usize)
+                        .checked_sub(1)
+                        .and_then(|i| other.inputs.get(i))
+                        .cloned()
+                        .ok_or_else(|| ActionError::UnknownInput {
+                            reference: n.to_string(),
+                        })
+                })
+                .collect::<Result<_, _>>()?
+        };
+        let free = (0..self.slots)
+            .filter(|s| !self.show.inputs.iter().any(|i| i.slot == *s))
+            .count();
+        if chosen.len() > free {
+            return Err(ActionError::SlotsFull { slots: self.slots });
+        }
+        let mut commands = Vec::new();
+        for mut input in chosen {
+            input.id = InputId::new();
+            input.slot = self.free_slot().expect("counted above");
+            input.triggers.clear();
+            // Back in through the same door as a closed input.
+            self.removed.push((self.show.inputs.len(), input));
+            commands.extend(self.restore_input()?);
+        }
         Ok(commands)
     }
 
