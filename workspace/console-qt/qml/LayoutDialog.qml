@@ -102,22 +102,30 @@ KanteDialog {
         boxes = list
     }
 
-    /** Moves the chosen boxes that are not locked by (dx, dy), on the
-     *  grid and together kept inside the picture: one step. */
+    /** Bounds of the chosen boxes that may move: {x0, y0, x1, y1}. */
+    function groupBounds() {
+        const rects = movable().map(i => boxes[i].rect)
+        return {
+            x0: Math.min(...rects.map(r => r.x)), y0: Math.min(...rects.map(r => r.y)),
+            x1: Math.max(...rects.map(r => r.x + r.w)), y1: Math.max(...rects.map(r => r.y + r.h))
+        }
+    }
+    /** Moves the chosen boxes that are not locked by (dx, dy), together
+     *  kept inside the picture: one step. All by the same amount, so the
+     *  gaps between them stay (no snapping per box). */
     function moveChosen(dx, dy) {
         const moving = movable()
         if (moving.length === 0)
             return
-        const rects = moving.map(i => boxes[i].rect)
-        const fit = (d, starts, ends) => Math.min(Math.max(d, -Math.min(...starts)), 1 - Math.max(...ends))
-        dx = fit(dx, rects.map(r => r.x), rects.map(r => r.x + r.w))
-        dy = fit(dy, rects.map(r => r.y), rects.map(r => r.y + r.h))
+        const b = groupBounds()
+        dx = Math.min(Math.max(dx, -b.x0), 1 - b.x1)
+        dy = Math.min(Math.max(dy, -b.y0), 1 - b.y1)
+        // Rounded to 1/10000: no float dust from repeated steps.
+        const tidy = v => Math.round(v * 10000) / 10000
         const list = boxes.slice()
         for (const i of moving) {
             const r = list[i].rect
-            const x = Math.min(Math.max(snap(r.x + dx), 0), 1 - r.w)
-            const y = Math.min(Math.max(snap(r.y + dy), 0), 1 - r.h)
-            list[i] = Object.assign({}, list[i], { rect: { x: x, y: y, w: r.w, h: r.h } })
+            list[i] = Object.assign({}, list[i], { rect: { x: tidy(r.x + dx), y: tidy(r.y + dy), w: r.w, h: r.h } })
         }
         boxes = list
     }
@@ -351,6 +359,9 @@ KanteDialog {
                     readonly property bool isChosen: dialog.chosen.indexOf(index) >= 0
                     /** Moves along while another chosen box is dragged. */
                     readonly property bool follows: isChosen && !modelData.locked && !dragArea.drag.active
+                    /** Dragged with others: the whole group stays in the picture. */
+                    readonly property bool leadsGroup: isChosen && !modelData.locked && dialog.movable().length > 1
+                    readonly property var bounds: leadsGroup ? dialog.groupBounds() : null
                     readonly property var crop: modelData.crop
                     x: modelData.rect.x * area.width + (follows ? dialog.dragDelta.x : 0)
                     y: modelData.rect.y * area.height + (follows ? dialog.dragDelta.y : 0)
@@ -388,14 +399,18 @@ KanteDialog {
                         anchors.fill: parent
                         cursorShape: boxItem.modelData.locked ? Qt.ArrowCursor : Qt.SizeAllCursor
                         drag.target: boxItem.modelData.locked ? null : boxItem
-                        drag.minimumX: 0
-                        drag.minimumY: 0
-                        drag.maximumX: area.width - boxItem.width
-                        drag.maximumY: area.height - boxItem.height
+                        readonly property var r: boxItem.modelData.rect
+                        readonly property var b: boxItem.bounds
+                        drag.minimumX: b ? (r.x - b.x0) * area.width : 0
+                        drag.minimumY: b ? (r.y - b.y0) * area.height : 0
+                        drag.maximumX: b ? (r.x + 1 - b.x1) * area.width : area.width - boxItem.width
+                        drag.maximumY: b ? (r.y + 1 - b.y1) * area.height : area.height - boxItem.height
                         drag.threshold: 2
+                        property bool shifted: false
                         onPressed: mouse => {
+                            shifted = (mouse.modifiers & Qt.ShiftModifier) !== 0
                             // Shift: one more (or one fewer); a chosen box keeps the others to drag them along.
-                            if (mouse.modifiers & Qt.ShiftModifier)
+                            if (shifted)
                                 dialog.select(boxItem.index, true)
                             else if (boxItem.isChosen)
                                 dialog.selected = boxItem.index
@@ -404,15 +419,25 @@ KanteDialog {
                             area.forceActiveFocus()
                         }
                         onPositionChanged: {
-                            if (drag.active)
+                            // Taken out with Shift: dragged alone.
+                            if (drag.active && boxItem.isChosen)
                                 dialog.dragDelta = Qt.point(boxItem.x - boxItem.modelData.rect.x * area.width,
                                     boxItem.y - boxItem.modelData.rect.y * area.height)
                         }
                         onReleased: mouse => {
                             dialog.dragDelta = Qt.point(0, 0)
-                            if (!boxItem.modelData.locked && (drag.active || boxItem.x !== boxItem.modelData.rect.x * area.width || boxItem.y !== boxItem.modelData.rect.y * area.height))
+                            const moved = drag.active || boxItem.x !== boxItem.modelData.rect.x * area.width || boxItem.y !== boxItem.modelData.rect.y * area.height
+                            if (!boxItem.modelData.locked && moved)
                                 dialog.placeAt(boxItem.index, boxItem.x / area.width, boxItem.y / area.height,
                                     (mouse.modifiers & Qt.ControlModifier) !== 0)
+                            else if (!moved && !shifted)
+                                // A plain click on one of several: that box alone.
+                                dialog.select(boxItem.index, false)
+                        }
+                        onCanceled: {
+                            // Grab taken away: everything back where it was.
+                            dialog.dragDelta = Qt.point(0, 0)
+                            dialog.boxes = dialog.boxes.slice()
                         }
                     }
 

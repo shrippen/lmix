@@ -1569,4 +1569,10 @@ sieht sie nicht.
 **Geprüft**: Switcher-Test (Sperre bleibt am Layout); auf Xvfb zwei
 Boxen gewählt und gezogen (gesperrte bleibt), Pfeiltasten, Strg+Z,
 gespeichert.
+**Review**: gemeinsam gezogene Boxen rasteten danach jede für sich ins
+Raster (das Fangen ging verloren, Abstände änderten sich; jetzt bewegen
+sich alle um denselben Betrag, ohne Raster je Box); die ganze Gruppe
+bleibt beim Ziehen im Bild; eine mit Umschalt herausgenommene Box zog
+die anderen scheinbar mit; ein abgebrochenes Ziehen ließ Boxen versetzt;
+ein einfacher Klick auf eine von mehreren gewählten wählt jetzt nur sie.
 
