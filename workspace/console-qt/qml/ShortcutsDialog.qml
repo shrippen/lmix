@@ -82,7 +82,7 @@ KanteDialog {
                 }
                 KanteButton {
                     text: qsTr("Run")
-                    onClicked: dialog.act({ action: "run_shortcut", target: entry.modelData.number })
+                    onClicked: dialog.act({ action: "run_shortcut", target: entry.modelData.id })
                 }
                 KanteButton {
                     text: qsTr("Edit…")
@@ -90,7 +90,7 @@ KanteDialog {
                 }
                 KanteButton {
                     text: qsTr("Remove")
-                    onClicked: dialog.act({ action: "remove_shortcut", target: entry.modelData.number })
+                    onClicked: dialog.act({ action: "remove_shortcut", target: entry.modelData.id })
                 }
             }
         }

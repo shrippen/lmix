@@ -336,6 +336,23 @@ impl Switcher {
     pub fn set_all_shows_shortcuts(&mut self, shortcuts: Vec<ShowShortcut>) {
         self.all_shows = shortcuts;
         self.all_shows_changed = false;
+        self.distinct_shortcut_ids();
+    }
+
+    /// A shortcut for all shows with the id of one of the show's (a show
+    /// saved before it moved) gets a new one: ids name one shortcut.
+    fn distinct_shortcut_ids(&mut self) {
+        for s in &mut self.all_shows {
+            if self.show.shortcuts.iter().any(|o| o.id == s.id) {
+                s.id = InputId::new();
+                self.all_shows_changed = true;
+            }
+        }
+    }
+
+    /// Mark the shortcuts for all shows as changed again (a save failed).
+    pub fn all_shows_unsaved(&mut self) {
+        self.all_shows_changed = true;
     }
 
     /// Whether shortcuts for all shows changed since the last call.
@@ -650,6 +667,7 @@ impl Switcher {
         commands.extend(self.clear_listen());
         commands.extend(self.stop_all_outputs());
         self.show = show;
+        self.distinct_shortcut_ids();
         self.path = path;
         // Closed inputs belong to the old show.
         self.removed.clear();
@@ -1478,16 +1496,18 @@ impl Switcher {
                 self.all_shows_changed = true;
                 &mut self.all_shows[i]
             }
-            // Moved between the show and the settings: same id, at the end.
+            // Moved between the show and the settings, at the end. A new
+            // id: an older copy of the show (file, package) may still hold
+            // the old one.
             Scope::Show(i) => {
-                let id = self.show.shortcuts.remove(i).id;
-                self.keep_shortcut(spec, id);
+                self.show.shortcuts.remove(i);
+                self.keep_shortcut(spec, InputId::new());
                 return Ok(Vec::new());
             }
             Scope::AllShows(i) => {
-                let id = self.all_shows.remove(i).id;
+                self.all_shows.remove(i);
                 self.all_shows_changed = true;
-                self.keep_shortcut(spec, id);
+                self.keep_shortcut(spec, InputId::new());
                 return Ok(Vec::new());
             }
         };
@@ -3768,7 +3788,7 @@ mod tests {
         };
         assert_eq!(sw.midi_shortcut(&note(36)), Some(state.shortcuts[1].id));
 
-        // Moved into the show: same id, out of the settings.
+        // Moved into the show: out of the settings, with a new id.
         let id = state.shortcuts[1].id;
         sw.apply(Action::SetShortcut {
             target: InputRef::Number(2),
@@ -3780,8 +3800,21 @@ mod tests {
         .unwrap();
         assert!(sw.take_all_shows_changed());
         assert!(sw.all_shows_shortcuts().is_empty());
-        assert_eq!(sw.state().shortcuts[1].id, id);
+        assert_ne!(sw.state().shortcuts[1].id, id);
         assert!(!sw.state().shortcuts[1].all_shows);
+        // Settings holding an id the show has (saved before a move): renamed.
+        let in_show = sw.state().shortcuts[1].id;
+        sw.set_all_shows_shortcuts(vec![crate::show::ShowShortcut {
+            id: in_show,
+            label: "Twin".into(),
+            key: None,
+            web: false,
+            color: None,
+            midi: None,
+            actions: vec![Action::Cut],
+        }]);
+        assert_ne!(sw.all_shows_shortcuts()[0].id, in_show);
+        assert!(sw.take_all_shows_changed());
 
         // A new show keeps the ones for all shows.
         sw.set_all_shows_shortcuts(vec![crate::show::ShowShortcut {

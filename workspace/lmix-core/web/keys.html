@@ -23,7 +23,8 @@
 <script src="/web/lmix.js"></script>
 <script>
 "use strict";
-// Keys page (WEB.1): the show's shortcuts marked for the web, as buttons.
+// Keys page (WEB.1): the shortcuts marked for the web (the show's and
+// those for all shows), as buttons.
 const COLORS = { red: "#cc241d", orange: "#d65d0e", yellow: "#d79921", green: "#98971a", cyan: "#3f9a94",
   blue: "#458588", purple: "#b16286" };
 function esc(text) { return String(text).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]); }
@@ -32,15 +33,15 @@ function render(shortcuts) {
   const keys = shortcuts.filter(s => s.web);
   document.getElementById("keys").innerHTML = keys.length === 0
     ? '<p class="empty">No shortcuts marked for the web page. Add them in the Console: Shortcuts…</p>'
-    : keys.map(s => `<button class="btn" data-shortcut="${s.number}"` +
+    : keys.map(s => `<button class="btn" data-shortcut="${esc(s.id)}"` +
         (s.color ? ` style="background:${COLORS[s.color] || ""}"` : "") +
-        `>${esc(s.label)}${s.key ? `<small>${esc(s.key)}</small>` : ""}</button>`).join("");
+        `>${esc(s.label)}${s.key && !s.key_shadowed ? `<small>${esc(s.key)}</small>` : ""}</button>`).join("");
 }
 
 document.addEventListener("click", e => {
   const button = e.target.closest("[data-shortcut]");
   if (!button) return;
-  lmixAct({ action: "run_shortcut", target: Number(button.dataset.shortcut) })
+  lmixAct({ action: "run_shortcut", target: button.dataset.shortcut })
     .then(() => {
       document.getElementById("error").textContent = "";
       button.classList.add("done");

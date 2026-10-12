@@ -104,10 +104,13 @@ async fn bytes(place: &Place, http: &reqwest::Client) -> Result<Vec<u8>, String>
 /// Columns and rows of the source, or why it could not be read.
 pub async fn read(spec: &DataSourceSpec, place: &Place, http: &reqwest::Client) -> Rows {
     if let DataSourceSpec::GoogleSheet {
-        header, transpose, ..
+        path,
+        range,
+        header,
+        transpose,
     } = spec
     {
-        let parsed = google_sheet(place, http)
+        let parsed = google_sheet(path, range.as_deref(), http)
             .await
             .map(|records| table(records, *header, *transpose));
         return rows_or_error(parsed);
@@ -151,16 +154,31 @@ fn rows_or_error(parsed: Result<(Vec<String>, Vec<Vec<String>>), String>) -> Row
     }
 }
 
-/// The Sheets API address of a sheet (its address or id) and range,
-/// without the key.
-fn sheets_api_url(sheet: &str, range: Option<&str>) -> String {
-    let id = sheet
+/// The id in a sheet's address (`…/spreadsheets/d/<id>/edit`), or the
+/// text itself.
+fn sheet_id(sheet: &str) -> &str {
+    sheet
         .split("/spreadsheets/d/")
         .nth(1)
         .unwrap_or(sheet)
         .split(['/', '?', '#'])
         .next()
-        .unwrap_or_default();
+        .unwrap_or_default()
+}
+
+/// The tab an address links to (`#gid=…` or `?gid=…`).
+fn sheet_gid(sheet: &str) -> Option<u64> {
+    let (_, rest) = sheet.split_once("gid=")?;
+    rest.split(|c: char| !c.is_ascii_digit())
+        .next()?
+        .parse()
+        .ok()
+}
+
+/// The Sheets API address of a sheet (its address or id) and range,
+/// without the key.
+fn sheets_api_url(sheet: &str, range: Option<&str>) -> String {
+    let id = sheet_id(sheet);
     // Without a sheet name the range is on the first sheet.
     let range = range
         .map(str::trim)
@@ -178,31 +196,35 @@ fn sheets_api_url(sheet: &str, range: Option<&str>) -> String {
     format!("https://sheets.googleapis.com/v4/spreadsheets/{id}/values/{encoded}")
 }
 
-/// The cells of a range from the Sheets API.
-async fn google_sheet(place: &Place, http: &reqwest::Client) -> Result<Vec<Vec<String>>, String> {
-    let Place::Url(url) = place else {
-        return Err("a Google Sheet needs its address or id".into());
-    };
+/// A Sheets API answer's body, or why there is none (the key never in
+/// the text).
+async fn sheets_api(
+    url: &str,
+    query: &[(&str, &str)],
+    http: &reqwest::Client,
+) -> Result<String, String> {
     let key = GOOGLE_API_KEY
         .get()
         .ok_or("lmix-core was started without --google-api-key; a public sheet also reads as CSV export (…/export?format=csv)")?;
     let resp = http
         .get(url)
-        .query(&[
-            ("key", key.as_str()),
-            ("valueRenderOption", "FORMATTED_VALUE"),
-        ])
+        .query(&[("key", key.as_str())])
+        .query(query)
         .send()
         .await
         .map_err(|e| format!("{url}: {}", e.without_url()))?;
+    if resp.content_length().is_some_and(|n| n > MAX_BYTES) {
+        return Err(format!("{url} is larger than 16 MB"));
+    }
     let status = resp.status();
     let body = resp
-        .text()
+        .bytes()
         .await
         .map_err(|e| format!("{url}: {}", e.without_url()))?;
     if body.len() as u64 > MAX_BYTES {
         return Err(format!("{url} is larger than 16 MB"));
     }
+    let body = String::from_utf8_lossy(&body).into_owned();
     if !status.is_success() {
         // The API says why (no access, wrong range) in `error.message`.
         let why = serde_json::from_str::<serde_json::Value>(&body)
@@ -211,7 +233,54 @@ async fn google_sheet(place: &Place, http: &reqwest::Client) -> Result<Vec<Vec<S
             .unwrap_or_else(|| status.to_string());
         return Err(format!("Google Sheet: {why}"));
     }
-    sheet_values(&body)
+    Ok(body)
+}
+
+/// The cells of a sheet through the Sheets API: the range given, else the
+/// tab the address links to, else the first sheet.
+async fn google_sheet(
+    sheet: &str,
+    range: Option<&str>,
+    http: &reqwest::Client,
+) -> Result<Vec<Vec<String>>, String> {
+    if sheet.contains("/spreadsheets/d/e/") {
+        return Err("a link published to the web has no sheet id: use the sheet's own address, or the published CSV".into());
+    }
+    let mut range = range
+        .map(str::trim)
+        .filter(|r| !r.is_empty())
+        .map(str::to_string);
+    if let (None, Some(gid)) = (&range, sheet_gid(sheet)) {
+        let meta = sheets_api(
+            &format!(
+                "https://sheets.googleapis.com/v4/spreadsheets/{}",
+                sheet_id(sheet)
+            ),
+            &[("fields", "sheets.properties(sheetId,title)")],
+            http,
+        )
+        .await?;
+        range = Some(tab_title(&meta, gid).ok_or(format!("Google Sheet: no tab with gid {gid}"))?);
+    }
+    sheet_values(
+        &sheets_api(
+            &sheets_api_url(sheet, range.as_deref()),
+            &[("valueRenderOption", "FORMATTED_VALUE")],
+            http,
+        )
+        .await?,
+    )
+}
+
+/// The quoted title of tab `gid` in a sheet's properties, as a range.
+fn tab_title(meta: &str, gid: u64) -> Option<String> {
+    let meta: serde_json::Value = serde_json::from_str(meta).ok()?;
+    let title = meta["sheets"]
+        .as_array()?
+        .iter()
+        .find(|s| s["properties"]["sheetId"].as_u64() == Some(gid))?["properties"]["title"]
+        .as_str()?;
+    Some(format!("'{}'", title.replace('\'', "''")))
 }
 
 /// `values` of a Sheets API answer, as text.
@@ -755,6 +824,19 @@ mod tests {
         let bytes = std::fs::read(dir.join("table.xlsx")).unwrap();
         assert!(spreadsheet(bytes, Some("Missing")).is_err());
         assert!(spreadsheet(b"name,score".to_vec(), None).is_err());
+    }
+
+    #[test]
+    fn google_sheet_tabs() {
+        let link = "https://docs.google.com/spreadsheets/d/abc/edit#gid=42";
+        assert_eq!(sheet_gid(link), Some(42));
+        assert_eq!(
+            sheet_gid("https://docs.google.com/spreadsheets/d/abc/edit"),
+            None
+        );
+        let meta = r#"{"sheets":[{"properties":{"sheetId":0,"title":"First"}},{"properties":{"sheetId":42,"title":"Bob's"}}]}"#;
+        assert_eq!(tab_title(meta, 42).as_deref(), Some("'Bob''s'"));
+        assert_eq!(tab_title(meta, 7), None);
     }
 
     #[test]

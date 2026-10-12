@@ -147,7 +147,14 @@ impl Service {
                 Err(e) => {
                     let aside = path.with_extension("json.broken");
                     tracing::warn!(error = %e, file = %path.display(), aside = %aside.display(), "shortcuts for all shows unreadable, set aside");
-                    let _ = tokio::fs::rename(&path, &aside).await;
+                    if let Err(e) = tokio::fs::rename(&path, &aside).await {
+                        // Not set aside: never written over either.
+                        tracing::warn!(error = %e, file = %path.display(), "shortcuts for all shows will not be saved");
+                        let mut sw = self.switcher.lock().await;
+                        sw.set_all_shows_shortcuts(Vec::new());
+                        self.publish(&sw);
+                        return;
+                    }
                     Vec::new()
                 }
             },
@@ -187,6 +194,8 @@ impl Service {
         };
         if let Err(e) = written.await {
             tracing::warn!(error = %e, file = %path.display(), "shortcuts for all shows not saved");
+            // Tried again with the next change.
+            sw.all_shows_unsaved();
         }
     }
 

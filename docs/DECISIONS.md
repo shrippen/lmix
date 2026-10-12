@@ -1590,7 +1590,10 @@ Schlüssel sagt die Quelle das und verweist auf den CSV-Export, der für
 bei einer Sheet-Adresse ohne `format=`/`output=` vor. Pakete nehmen das
 Sheet nicht mit (keine Datei). OAuth (private Sheets eines Kontos ohne
 Freigabe) fehlt; ein Schlüssel liest öffentliche und per Link geteilte
-Sheets.
+Sheets. Verweist die Adresse auf einen Reiter (`#gid=`) und ist kein
+Bereich angegeben, wird sein Titel über die Sheet-Eigenschaften
+nachgeschlagen; ein „im Web veröffentlicht“-Link (`/d/e/…`) hat keine Id
+und wird mit Hinweis abgelehnt.
 **Geprüft**: Adresse aus URL/Id und Bereich, Antwort mit leeren Zeilen
 und Zahlen (Test); gegen die echte API nicht (kein Schlüssel hier).
 
@@ -1609,10 +1612,20 @@ der Show dieselbe Taste, läuft auf der Taste der der Show
 Verdeckt wird je Belegung, nicht der ganze Kurzbefehl: Knopf, Nummer und
 die andere Belegung gehen weiter. Innerhalb derselben Ebene bleiben
 Tasten und Noten eindeutig. Ändern verschiebt einen Kurzbefehl zwischen
-Show und Einstellungen (gleiche Id, ans Ende). „Global“ heißt in lmix
+Show und Einstellungen (ans Ende, mit neuer Id: eine ältere Kopie der
+Show kann die alte noch haben; trifft eine Id der Einstellungen doch eine
+der Show, bekommt sie eine neue). Ein MIDI-Kanal „beliebig“ überdeckt
+jeden Kanal: eine Note der Show auf Kanal 1 verdeckt dieselbe Note eines
+Kurzbefehls für alle Shows auf beliebigem Kanal. „Global“ heißt in lmix
 schon „Taste auch, wenn die Console nicht vorn ist“ (AUT.12), daher der
 Name „Alle Shows“. Testskripte und die Demo geben eine eigene Datei im
 Arbeitsordner an, damit sie nie die des Bedieners lesen oder schreiben.
+Schlägt das Schreiben fehl, wird es bei der nächsten Änderung wieder
+versucht; lässt sich eine kaputte Datei nicht beiseitelegen, wird sie
+nie überschrieben (Änderungen bleiben dann bis zum Ende im Speicher).
+Webseite „Tasten“, Ausführen und Entfernen in der Console rufen
+Kurzbefehle über die Id auf, nicht über die Nummer (die verschiebt sich
+mit den Kurzbefehlen der Show).
 **Geprüft**: Switcher-Test (Vorrang, Noten, Verschieben, neue Show),
 Service-Test (Datei geschrieben, neu gelesen, kaputte beiseitegelegt);
 Console auf Xvfb: Liste mit „Alle Shows“ und durchgestrichener Taste, F2

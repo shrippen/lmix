@@ -329,9 +329,10 @@ pub enum DataSourceSpec {
         transpose: bool,
     },
     /// A Google Sheet through the Sheets API with the key lmix-core was
-    /// started with (`--google-api-key`): also private sheets shared with
-    /// the key's project, read like CSV. `path` is the sheet's address or
-    /// id; `range` a sheet name or A1 range, by default the first sheet.
+    /// started with (`--google-api-key`): public sheets and those shared
+    /// by link, read like CSV. `path` is the sheet's address (its tab,
+    /// `#gid=`, counts) or id; `range` a sheet name or A1 range, by
+    /// default the linked tab or the first sheet.
     GoogleSheet {
         path: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
