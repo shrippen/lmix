@@ -6,6 +6,7 @@
 #   LMIX_SHOW=/home/me/shows/sunday.lmix
 #   LMIX_LISTEN=0.0.0.0:8200
 #   LMIX_TCP=0.0.0.0:8201
+#   LMIX_GOOGLE_API_KEY=…   (Google Sheets as data sources; keep core.env private)
 [Unit]
 Description=lmix control core
 Wants=lmix-strom.service

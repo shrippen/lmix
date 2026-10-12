@@ -328,6 +328,19 @@ pub enum DataSourceSpec {
         #[serde(default, skip_serializing_if = "is_false")]
         transpose: bool,
     },
+    /// A Google Sheet through the Sheets API with the key lmix-core was
+    /// started with (`--google-api-key`): also private sheets shared with
+    /// the key's project, read like CSV. `path` is the sheet's address or
+    /// id; `range` a sheet name or A1 range, by default the first sheet.
+    GoogleSheet {
+        path: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        range: Option<String>,
+        #[serde(default = "yes")]
+        header: bool,
+        #[serde(default, skip_serializing_if = "is_false")]
+        transpose: bool,
+    },
     /// A JSON array of objects; keys become columns.
     Json { path: String },
     /// Plain text in the column `text`: each line that is not empty is a
@@ -359,6 +372,7 @@ impl DataSourceSpec {
         match self {
             Self::Csv { path, .. }
             | Self::Sheet { path, .. }
+            | Self::GoogleSheet { path, .. }
             | Self::Json { path }
             | Self::Text { path, .. }
             | Self::Feed { path }

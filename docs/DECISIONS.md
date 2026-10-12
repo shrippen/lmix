@@ -1576,3 +1576,21 @@ bleibt beim Ziehen im Bild; eine mit Umschalt herausgenommene Box zog
 die anderen scheinbar mit; ein abgebrochenes Ziehen ließ Boxen versetzt;
 ein einfacher Klick auf eine von mehreren gewählten wählt jetzt nur sie.
 
+## 2026-10-12 — Google Sheets über die API (DAT.1)
+
+**Entscheidung**: Quellenart `google_sheet` mit Adresse oder Id des
+Sheets und optional Blatt/Bereich (`Gäste!A1:D50`, sonst das erste Blatt,
+`A:ZZ`); gelesen über die Sheets API v4 (`values`, formatierte Werte), dann
+wie CSV (Kopfzeile, Drehen). Der **API-Schlüssel** steht nicht in der Show
+(Shows wandern als Paket weiter), sondern ist Startoption von lmix-core:
+`--google-api-key` bzw. `LMIX_GOOGLE_API_KEY` (in `core.env`), in `--help`
+verdeckt; Fehlermeldungen nennen die Adresse ohne Schlüssel. Ohne
+Schlüssel sagt die Quelle das und verweist auf den CSV-Export, der für
+öffentliche Sheets weiter ohne Schlüssel geht. Die Console schlägt die Art
+bei einer Sheet-Adresse ohne `format=`/`output=` vor. Pakete nehmen das
+Sheet nicht mit (keine Datei). OAuth (private Sheets eines Kontos ohne
+Freigabe) fehlt; ein Schlüssel liest öffentliche und per Link geteilte
+Sheets.
+**Geprüft**: Adresse aus URL/Id und Bereich, Antwort mit leeren Zeilen
+und Zahlen (Test); gegen die echte API nicht (kein Schlüssel hier).
+

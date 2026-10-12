@@ -48,6 +48,7 @@ KanteDialog {
     readonly property var kinds: [
         { kind: "csv", label: qsTr("CSV table") },
         { kind: "sheet", label: qsTr("Spreadsheet (XLSX, ODS)") },
+        { kind: "google_sheet", label: qsTr("Google Sheet (API key)") },
         { kind: "json", label: qsTr("JSON") },
         { kind: "text", label: qsTr("Text, a row per line") },
         { kind: "slides", label: qsTr("Text, a row per paragraph (lyrics, slides)") },
@@ -55,12 +56,14 @@ KanteDialog {
         { kind: "xml", label: qsTr("XML") }
     ]
     readonly property string kind: kinds[kindBox.currentIndex].kind
-    readonly property bool tabular: kind === "csv" || kind === "sheet"
+    readonly property bool tabular: kind === "csv" || kind === "sheet" || kind === "google_sheet"
     /** Kind of source guessed from its name (the operator can change it);
      * CSV also for a Google Sheet's CSV export. */
     function kindOf(file) {
         const name = file.trim().toLowerCase().split("?")[0]
         if (name.endsWith(".json")) return "json"
+        // A sheet's own address (not an export): the API.
+        if (/docs\.google\.com\/spreadsheets\/d\//.test(name) && !/(format|output)=/.test(file)) return "google_sheet"
         if (/\.(xlsx|xlsm|xlsb|xls|ods)$/.test(name) || /format=xlsx|format=ods/.test(file)) return "sheet"
         if (name.endsWith(".txt")) return "text"
         if (name.endsWith(".rss") || name.endsWith(".atom") || /(rss|feed|atom)/.test(name)) return "feed"
@@ -125,6 +128,7 @@ KanteDialog {
                         spec.transpose = transpose.checked
                     }
                     if (kind === "sheet" && sheetName.text.trim() !== "") spec.sheet = sheetName.text.trim()
+                    if (kind === "google_sheet" && sheetName.text.trim() !== "") spec.range = sheetName.text.trim()
                     if (kind === "slides") spec.paragraphs = true
                     if (kind === "xml") spec.rows = xmlRows.text.trim()
                     dialog.act({ action: "add_data_source", spec: spec })
@@ -139,8 +143,8 @@ KanteDialog {
             visible: dialog.tabular || dialog.kind === "xml"
             KanteTextField {
                 id: sheetName
-                visible: dialog.kind === "sheet"
-                placeholderText: qsTr("Sheet (the first if empty)")
+                visible: dialog.kind === "sheet" || dialog.kind === "google_sheet"
+                placeholderText: dialog.kind === "google_sheet" ? qsTr("Sheet or range, e.g. Guests!A1:D50") : qsTr("Sheet (the first if empty)")
             }
             QQC2.CheckBox {
                 id: header

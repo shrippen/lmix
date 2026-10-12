@@ -112,6 +112,11 @@ struct Args {
     #[arg(long, env = "LMIX_OSC")]
     osc: Option<SocketAddr>,
 
+    /// Key for the Google Sheets API (data sources `google_sheet`,
+    /// DAT.1); kept out of show files.
+    #[arg(long, env = "LMIX_GOOGLE_API_KEY", hide_env_values = true)]
+    google_api_key: Option<String>,
+
     /// Show file to open at start; without it the last autosave is resumed.
     #[arg(long, env = "LMIX_SHOW")]
     show: Option<String>,
@@ -170,6 +175,9 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let args = Args::parse();
+    if let Some(key) = args.google_api_key.clone().filter(|k| !k.trim().is_empty()) {
+        datasource::set_google_api_key(key.trim().to_string());
+    }
     metrics::started();
     let engine: Arc<dyn Engine> = match args.engine {
         EngineKind::Strom => {

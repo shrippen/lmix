@@ -28,9 +28,20 @@ impl Place {
     }
 }
 
+/// The Sheets API key (`--google-api-key`), set once at start.
+static GOOGLE_API_KEY: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+
+pub fn set_google_api_key(key: String) {
+    let _ = GOOGLE_API_KEY.set(key);
+}
+
 /// The source's place; relative paths count from the show file's folder.
 pub fn resolve(spec: &DataSourceSpec, show: Option<&str>) -> Place {
     let text = spec.path();
+    if let DataSourceSpec::GoogleSheet { range, .. } = spec {
+        // The API address without the key (it goes in when reading).
+        return Place::Url(sheets_api_url(text, range.as_deref()));
+    }
     if text.starts_with("http://") || text.starts_with("https://") {
         return Place::Url(text.to_string());
     }
@@ -92,6 +103,15 @@ async fn bytes(place: &Place, http: &reqwest::Client) -> Result<Vec<u8>, String>
 
 /// Columns and rows of the source, or why it could not be read.
 pub async fn read(spec: &DataSourceSpec, place: &Place, http: &reqwest::Client) -> Rows {
+    if let DataSourceSpec::GoogleSheet {
+        header, transpose, ..
+    } = spec
+    {
+        let parsed = google_sheet(place, http)
+            .await
+            .map(|records| table(records, *header, *transpose));
+        return rows_or_error(parsed);
+    }
     let bytes = bytes(place, http).await;
     let parsed = if let DataSourceSpec::Sheet {
         sheet,
@@ -114,6 +134,10 @@ pub async fn read(spec: &DataSourceSpec, place: &Place, http: &reqwest::Client) 
     } else {
         bytes.and_then(|bytes| parse_text(spec, &bytes))
     };
+    rows_or_error(parsed)
+}
+
+fn rows_or_error(parsed: Result<(Vec<String>, Vec<Vec<String>>), String>) -> Rows {
     match parsed {
         Ok((columns, rows)) => Rows {
             columns,
@@ -127,6 +151,92 @@ pub async fn read(spec: &DataSourceSpec, place: &Place, http: &reqwest::Client) 
     }
 }
 
+/// The Sheets API address of a sheet (its address or id) and range,
+/// without the key.
+fn sheets_api_url(sheet: &str, range: Option<&str>) -> String {
+    let id = sheet
+        .split("/spreadsheets/d/")
+        .nth(1)
+        .unwrap_or(sheet)
+        .split(['/', '?', '#'])
+        .next()
+        .unwrap_or_default();
+    // Without a sheet name the range is on the first sheet.
+    let range = range
+        .map(str::trim)
+        .filter(|r| !r.is_empty())
+        .unwrap_or("A:ZZ");
+    let encoded: String = range
+        .bytes()
+        .map(|b| match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' | b'!' | b':' => {
+                (b as char).to_string()
+            }
+            _ => format!("%{b:02X}"),
+        })
+        .collect();
+    format!("https://sheets.googleapis.com/v4/spreadsheets/{id}/values/{encoded}")
+}
+
+/// The cells of a range from the Sheets API.
+async fn google_sheet(place: &Place, http: &reqwest::Client) -> Result<Vec<Vec<String>>, String> {
+    let Place::Url(url) = place else {
+        return Err("a Google Sheet needs its address or id".into());
+    };
+    let key = GOOGLE_API_KEY
+        .get()
+        .ok_or("lmix-core was started without --google-api-key; a public sheet also reads as CSV export (…/export?format=csv)")?;
+    let resp = http
+        .get(url)
+        .query(&[
+            ("key", key.as_str()),
+            ("valueRenderOption", "FORMATTED_VALUE"),
+        ])
+        .send()
+        .await
+        .map_err(|e| format!("{url}: {}", e.without_url()))?;
+    let status = resp.status();
+    let body = resp
+        .text()
+        .await
+        .map_err(|e| format!("{url}: {}", e.without_url()))?;
+    if body.len() as u64 > MAX_BYTES {
+        return Err(format!("{url} is larger than 16 MB"));
+    }
+    if !status.is_success() {
+        // The API says why (no access, wrong range) in `error.message`.
+        let why = serde_json::from_str::<serde_json::Value>(&body)
+            .ok()
+            .and_then(|v| v["error"]["message"].as_str().map(str::to_string))
+            .unwrap_or_else(|| status.to_string());
+        return Err(format!("Google Sheet: {why}"));
+    }
+    sheet_values(&body)
+}
+
+/// `values` of a Sheets API answer, as text.
+fn sheet_values(body: &str) -> Result<Vec<Vec<String>>, String> {
+    #[derive(serde::Deserialize)]
+    struct Answer {
+        #[serde(default)]
+        values: Vec<Vec<serde_json::Value>>,
+    }
+    let answer: Answer =
+        serde_json::from_str(body).map_err(|e| format!("Google Sheet: unexpected answer: {e}"))?;
+    let text = |v: serde_json::Value| match v {
+        serde_json::Value::String(s) => s,
+        serde_json::Value::Null => String::new(),
+        other => other.to_string(),
+    };
+    Ok(blank_rows_dropped(
+        answer
+            .values
+            .into_iter()
+            .map(|row| row.into_iter().map(text).collect())
+            .collect(),
+    ))
+}
+
 /// Columns and rows of a source in text.
 fn parse_text(
     spec: &DataSourceSpec,
@@ -138,7 +248,9 @@ fn parse_text(
         DataSourceSpec::Csv {
             header, transpose, ..
         } => Ok(csv(text, *header, *transpose)),
-        DataSourceSpec::Sheet { .. } => Err("a spreadsheet is no text".into()),
+        DataSourceSpec::Sheet { .. } | DataSourceSpec::GoogleSheet { .. } => {
+            Err("a spreadsheet is no text".into())
+        }
         DataSourceSpec::Json { .. } => json(text),
         DataSourceSpec::Text { paragraphs, .. } => Ok(lines(text, *paragraphs)),
         DataSourceSpec::Feed { .. } => feed(text),
@@ -643,6 +755,30 @@ mod tests {
         let bytes = std::fs::read(dir.join("table.xlsx")).unwrap();
         assert!(spreadsheet(bytes, Some("Missing")).is_err());
         assert!(spreadsheet(b"name,score".to_vec(), None).is_err());
+    }
+
+    #[test]
+    fn google_sheets_api() {
+        assert_eq!(
+            sheets_api_url(
+                "https://docs.google.com/spreadsheets/d/abc_123/edit#gid=0",
+                None
+            ),
+            "https://sheets.googleapis.com/v4/spreadsheets/abc_123/values/A:ZZ"
+        );
+        assert_eq!(
+            sheets_api_url("abc", Some("Guests 2!A1:C9")),
+            "https://sheets.googleapis.com/v4/spreadsheets/abc/values/Guests%202!A1:C9"
+        );
+        let rows = sheet_values(
+            r#"{"range":"A1:C3","majorDimension":"ROWS","values":[["name","n"],["Anna",3],[],["Ben"]]}"#,
+        )
+        .unwrap();
+        let (columns, rows) = table(rows, true, false);
+        assert_eq!(columns, s(&["name", "n"]));
+        assert_eq!(rows, [s(&["Anna", "3"]), s(&["Ben", ""])]);
+        // An empty sheet has no `values`.
+        assert!(sheet_values(r#"{"range":"A:ZZ"}"#).unwrap().is_empty());
     }
 
     #[test]

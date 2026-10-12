@@ -409,6 +409,8 @@ DE = {
     'Click: into preview. Double click: cut. Right click: expand.': 'Klick: in die Vorschau. Doppelklick: schneiden. Rechtsklick: ausklappen.',
     'Spreadsheet (XLSX, ODS)': 'Tabellenkalkulation (XLSX, ODS)',
     'Text, a row per paragraph (lyrics, slides)': 'Text, ein Absatz je Eintrag (Liedtexte, Folien)',
+    'Google Sheet (API key)': 'Google Sheet (API-Schlüssel)',
+    'Sheet or range, e.g. Guests!A1:D50': 'Blatt oder Bereich, z. B. Gäste!A1:D50',
     'Sheet (the first if empty)': 'Blatt (leer: das erste)',
     'Rows become columns': 'Zeilen zu Spalten',
     'For tables that list the names down the first column and an entry per further column.': 'Für Tabellen, die die Namen in der ersten Spalte untereinander führen und je weitere Spalte einen Eintrag.',

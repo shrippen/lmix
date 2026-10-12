@@ -135,7 +135,7 @@ pub fn export(
     }
     for source in &mut packed_show.data_sources {
         let path = source.spec.path().to_string();
-        if !is_address(&path) {
+        if !is_address(&path) && !is_google_sheet(&source.spec) {
             let name = files.add("data", absolute(&path, show_path));
             set_path(&mut source.spec, name);
         }
@@ -224,11 +224,17 @@ fn templates_used(show: &Show) -> Vec<&str> {
         .collect()
 }
 
+/// A Google Sheet's path may be a bare id: no file either way.
+fn is_google_sheet(spec: &lmix_types::DataSourceSpec) -> bool {
+    matches!(spec, lmix_types::DataSourceSpec::GoogleSheet { .. })
+}
+
 fn set_path(spec: &mut lmix_types::DataSourceSpec, to: String) {
     use lmix_types::DataSourceSpec as D;
     match spec {
         D::Csv { path, .. }
         | D::Sheet { path, .. }
+        | D::GoogleSheet { path, .. }
         | D::Json { path }
         | D::Text { path, .. }
         | D::Feed { path }
@@ -291,6 +297,7 @@ pub fn import(
     for source in &show.data_sources {
         let path = source.spec.path();
         if !is_address(path)
+            && !is_google_sheet(&source.spec)
             && Path::new(path)
                 .components()
                 .any(|c| matches!(c, std::path::Component::ParentDir))

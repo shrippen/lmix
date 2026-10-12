@@ -324,12 +324,12 @@
   <context>
     <name>CollapsedBar</name>
     <message>
-      <location filename="../qml/CollapsedBar.qml" line="+28" />
+      <location filename="../qml/CollapsedBar.qml" line="+39" />
       <source>Collapsed</source>
       <translation>Eingeklappt</translation>
     </message>
     <message>
-      <location line="+24" />
+      <location line="+25" />
       <source>Input %1 %2, collapsed</source>
       <translation>Input %1 %2, eingeklappt</translation>
     </message>
@@ -436,7 +436,7 @@
   <context>
     <name>DataSourcesDialog</name>
     <message>
-      <location filename="../qml/DataSourcesDialog.qml" line="+73" />
+      <location filename="../qml/DataSourcesDialog.qml" line="+76" />
       <source>Data sources</source>
       <translation>Datenquellen</translation>
     </message>
@@ -446,17 +446,17 @@
       <translation>Entfernen</translation>
     </message>
     <message>
-      <location line="+50" />
+      <location line="+51" />
       <source>First row names columns</source>
       <translation>Erste Zeile benennt die Spalten</translation>
     </message>
     <message>
-      <location line="-29" />
+      <location line="-30" />
       <source>+ Source</source>
       <translation>+ Quelle</translation>
     </message>
     <message>
-      <location line="-69" />
+      <location line="-72" />
       <source>CSV table</source>
       <translation>CSV-Tabelle</translation>
     </message>
@@ -464,6 +464,11 @@
       <location line="+1" />
       <source>Spreadsheet (XLSX, ODS)</source>
       <translation>Tabellenkalkulation (XLSX, ODS)</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Google Sheet (API key)</source>
+      <translation>Google Sheet (API-Schlüssel)</translation>
     </message>
     <message>
       <location line="+1" />
@@ -491,14 +496,19 @@
       <translation>XML</translation>
     </message>
     <message>
-      <location line="+53" />
+      <location line="+55" />
       <source>File (relative to the show file) or http(s) address</source>
       <translation>Datei (relativ zur Show-Datei) oder http(s)-Adresse</translation>
     </message>
     <message>
-      <location line="+35" />
+      <location line="+36" />
       <source>Sheet (the first if empty)</source>
       <translation>Blatt (leer: das erste)</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Sheet or range, e.g. Guests!A1:D50</source>
+      <translation>Blatt oder Bereich, z. B. Gäste!A1:D50</translation>
     </message>
     <message>
       <location line="+11" />
@@ -1096,7 +1106,7 @@
       <translation>Klein, unten links</translation>
     </message>
     <message>
-      <location line="+149" />
+      <location line="+157" />
       <source>Layout %1 %2</source>
       <translation>Layout %1 %2</translation>
     </message>
@@ -1136,7 +1146,7 @@
       <translation>Box hinzufügen, dann an ihren Platz ziehen</translation>
     </message>
     <message>
-      <location line="+68" />
+      <location line="+71" />
       <source> (cropped)</source>
       <translation> (beschnitten)</translation>
     </message>
@@ -1146,7 +1156,7 @@
       <translation> (gesperrt)</translation>
     </message>
     <message>
-      <location line="+81" />
+      <location line="+95" />
       <source>Box %1: %2, %3 px · %4 × %5 px (1920 × 1080)</source>
       <translation>Box %1: %2, %3 px · %4 × %5 px (1920 × 1080)</translation>
     </message>
@@ -1231,12 +1241,12 @@
       <translation>+ Box</translation>
     </message>
     <message>
-      <location line="-506" />
+      <location line="-531" />
       <source>Empty</source>
       <translation>Leer</translation>
     </message>
     <message>
-      <location line="+402" />
+      <location line="+427" />
       <source>Select box %1</source>
       <translation>Box %1 wählen</translation>
     </message>

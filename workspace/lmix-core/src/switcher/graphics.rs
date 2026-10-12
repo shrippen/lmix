@@ -502,7 +502,14 @@ impl Switcher {
                         reason: "no file given".into(),
                     });
                 }
-                let name = name.unwrap_or_else(|| file_name(spec.path()));
+                let name = name.unwrap_or_else(|| match &spec {
+                    // Its address ends in `edit`: the range, if any, says more.
+                    lmix_types::DataSourceSpec::GoogleSheet { range, .. } => range
+                        .clone()
+                        .filter(|r| !r.trim().is_empty())
+                        .map_or_else(|| "Google Sheet".into(), |r| format!("Google Sheet {r}")),
+                    _ => file_name(spec.path()),
+                });
                 self.show.data_sources.push(ShowDataSource {
                     id: InputId::new(),
                     name,
