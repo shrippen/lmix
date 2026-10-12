@@ -2033,7 +2033,8 @@ mod tests {
             .await
             .unwrap();
 
-        let service = Service::new(3, Arc::new(NullEngine::default()), None);
+        let engine = Arc::new(NullEngine::default());
+        let service = Service::new(4, engine.clone(), None);
         service.handle(add("Here")).await.unwrap();
         let state = service
             .handle(Action::AppendShow {
@@ -2046,6 +2047,21 @@ mod tests {
         assert_eq!(names, ["Here", "Cam 2"]);
         assert_eq!(state.inputs[1].audio.volume, 40);
         assert_ne!(state.inputs[1].id, other.state().await.inputs[1].id);
+        // Its sound set as the mix says, in its slot.
+        let slot = state.inputs[1].slot;
+        assert!(engine
+            .log()
+            .iter()
+            .any(|c| matches!(c, Command::SetAudio { slot: s, .. } if *s == slot)));
+        // Again: a second name, not a second "Cam 2".
+        let state = service
+            .handle(Action::AppendShow {
+                path: file.display().to_string(),
+                inputs: vec![2],
+            })
+            .await
+            .unwrap();
+        assert_eq!(state.inputs[2].name, "Cam 2 (2)");
 
         // All of it does not fit the one slot left: nothing is added.
         let refused = service
@@ -2064,7 +2080,15 @@ mod tests {
                 .await,
             Err(ActionError::UnknownInput { .. })
         ));
-        assert_eq!(service.state().await.inputs.len(), 2);
+        assert_eq!(service.state().await.inputs.len(), 3);
+        // Not a show file at all.
+        assert!(service
+            .handle(Action::AppendShow {
+                path: dir.path().display().to_string(),
+                inputs: vec![],
+            })
+            .await
+            .is_err());
     }
 
     #[tokio::test]

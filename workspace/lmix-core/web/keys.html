@@ -42,10 +42,14 @@ function inputOf(shortcut, state) {
   const first = shortcut.actions[0] || {};
   if (!["preview_input", "cut_direct", "overlay_in"].includes(first.action)) return null;
   const ref = first.input;
+  const byId = (id) => state.inputs.find(i => i.id === id) || null;
   if (typeof ref === "number") return state.inputs[ref - 1] || null;
-  if (ref === "preview") return state.inputs.find(i => i.id === state.preview) || null;
-  if (ref === "program") return state.inputs.find(i => i.id === state.program) || null;
-  return state.inputs.find(i => i.id === ref || i.name === ref) || null;
+  if (ref === "preview") return byId(state.preview);
+  if (ref === "program") return byId(state.program);
+  const dynamic = /^dynamic([1-4])$/.exec(ref || "");
+  if (dynamic) return byId((state.dynamic_inputs || [])[Number(dynamic[1]) - 1]);
+  // Ids win over names, as in lmix.
+  return byId(ref) || state.inputs.find(i => i.name === ref) || null;
 }
 
 function render(state) {
@@ -55,29 +59,45 @@ function render(state) {
     const input = inputOf(s, state);
     return { s, input: input && input.source.kind !== "audio_device" ? input : null };
   });
-  // Rebuilt only when the keys change: pictures stay while tally moves.
-  const signature = JSON.stringify(shown.map(({ s, input }) => [s.id, s.label, s.color, s.key, s.key_shadowed, input && input.id]));
+  // Rebuilt only when the keys change: pictures stay while tally moves
+  // and while "preview" or a dynamic input points elsewhere.
+  const signature = JSON.stringify(shown.map(({ s, input }) => [s.id, s.label, s.color, s.key, s.key_shadowed, !!input]));
   if (grid.dataset.signature !== signature) {
     grid.dataset.signature = signature;
     grid.innerHTML = keys.length === 0
       ? '<p class="empty">No shortcuts marked for the web page. Add them in the Console: Shortcuts…</p>'
       : shown.map(({ s, input }) => `<button class="btn" data-shortcut="${esc(s.id)}"` +
-          (input ? ` data-input="${esc(input.id)}"` : "") +
           (s.color ? ` style="background:${COLORS[s.color] || ""}"` : "") + ">" +
-          (input ? `<img alt="" data-picture="${esc(input.id)}" onload="this.style.visibility='visible'" ` +
-            `onerror="this.style.visibility='hidden'">` : "") +
+          (input ? `<img alt="" onload="this.style.visibility='visible'" onerror="this.style.visibility='hidden'">` : "") +
           `${esc(s.label)}${s.key && !s.key_shadowed ? `<small>${esc(s.key)}</small>` : ""}</button>`).join("");
-    refreshPictures();
   }
-  for (const button of grid.querySelectorAll("[data-input]")) {
-    button.classList.toggle("program", state.program === button.dataset.input);
-    button.classList.toggle("preview", state.preview === button.dataset.input);
-  }
+  const buttons = grid.querySelectorAll("[data-shortcut]");
+  shown.forEach(({ input }, i) => {
+    const button = buttons[i];
+    if (!button || !input) return;
+    const img = button.querySelector("img");
+    if (img && img.dataset.picture !== input.id) {
+      img.dataset.picture = input.id;
+      img.dataset.loading = "";
+      loadPicture(img);
+    }
+    button.classList.toggle("program", state.program === input.id);
+    button.classList.toggle("preview", state.preview === input.id);
+  });
+}
+
+function loadPicture(img) {
+  img.dataset.loading = "1";
+  const done = () => { img.dataset.loading = ""; };
+  img.addEventListener("load", done, { once: true });
+  img.addEventListener("error", done, { once: true });
+  img.src = "/api/pictures/inputs/" + img.dataset.picture + "?t=" + Date.now();
 }
 
 function refreshPictures() {
+  // One request per picture at a time: a slow link finishes each.
   for (const img of document.querySelectorAll("img[data-picture]")) {
-    img.src = "/api/pictures/inputs/" + img.dataset.picture + "?t=" + Date.now();
+    if (img.dataset.loading !== "1") loadPicture(img);
   }
 }
 setInterval(() => { if (!document.hidden) refreshPictures(); }, PICTURE_MS);

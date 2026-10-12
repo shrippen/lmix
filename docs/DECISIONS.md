@@ -1725,6 +1725,15 @@ nach dem Dateidialog „Aus Show…“, welche übernommen werden.
 **Geprüft**: Service-Test (Auswahl, Einstellungen, neue Id, zu wenig
 Slots, falsche Nummer); Console auf Xvfb (Datei gewählt, einen Input
 abgewählt, nur der andere kam).
+**Review**: angehängte Inputs bekamen keinen Tonpegel (jetzt wie bei
+jeder Änderung aus dem Mix); gleiche Namen bekommen „ (2)“, weil Aktionen
+Inputs auch über den Namen finden; Show-Dateien werden nur als normale
+Datei bis 64 MB gelesen (die API sollte nicht `/dev/zero` lesen). Auf der
+Tasten-Seite: `dynamic1`–`4` zeigen ihr Bild, Tasten auf „preview“ bauen
+die Seite nicht mehr bei jedem Wechsel neu, ein Bild wird erst neu
+geladen, wenn das vorige da ist. Das ESP32-Beispiel fragt alle 5 s nach
+dem Tally und geht nach 12 s Stille dunkel (ein lmix ohne Strom ließ
+das Licht sonst an).
 
 ## 2026-10-12 — Fehlende Mediendateien (SHW.4)
 

@@ -51,23 +51,46 @@ def connect_wifi():
             time.sleep(0.2)
 
 
+KEEPALIVE_S = 5                 # ask for the tally this often
+TIMEOUT_S = 12                  # no answer this long: lmix is gone, go dark
+
+
 def follow(light):
     sock = socket.socket()
     sock.connect(socket.getaddrinfo(LMIX[0], LMIX[1])[0][-1])
-    stream = sock.makefile("rb")
+    # A connection that dies without closing (power, Wi-Fi) must not leave
+    # the light on: lmix is asked for the tally every few seconds, and
+    # silence for longer than TIMEOUT_S counts as gone.
+    sock.settimeout(KEEPALIVE_S)
+    buffer = b""
+    heard = time.time()
+    greeted = False
     try:
-        if not stream.readline().startswith(b"LMIX "):
-            raise OSError("not lmix")
-        sock.send(b"SUB TALLY\n")
-        sock.send(b"TALLY\n")
+        sock.send(b"SUB TALLY\nTALLY\n")
         while True:
-            line = stream.readline()
-            if not line:
+            try:
+                data = sock.recv(256)
+            except OSError as e:  # a read timeout: ask again
+                if "timed out" not in str(e) and getattr(e, "errno", None) not in (110, 116):
+                    raise
+                if time.time() - heard > TIMEOUT_S:
+                    raise OSError("lmix does not answer")
+                sock.send(b"TALLY\n")
+                continue
+            if not data:
                 raise OSError("closed")
-            if line.startswith(b"TALLY "):
-                digits = line[6:].strip()
-                value = digits[INPUT - 1:INPUT]
-                light.show({b"1": "program", b"2": "preview"}.get(value, "off"))
+            heard = time.time()
+            buffer += data
+            while b"\n" in buffer:
+                line, buffer = buffer.split(b"\n", 1)
+                line = line.strip()
+                if not greeted:
+                    if not line.startswith(b"LMIX "):
+                        raise OSError("not lmix")
+                    greeted = True
+                elif line.startswith(b"TALLY "):
+                    value = line[6:][INPUT - 1:INPUT]
+                    light.show({b"1": "program", b"2": "preview"}.get(value, "off"))
     finally:
         sock.close()
 

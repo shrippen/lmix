@@ -247,6 +247,9 @@ pub enum ShowFileError {
     TooNew { path: String, found: u32 },
 }
 
+/// Largest show file read.
+const MAX_SHOW_BYTES: u64 = 64 * 1024 * 1024;
+
 /// The show as a file's bytes.
 pub fn to_bytes(show: &Show) -> Vec<u8> {
     let file = ShowFile {
@@ -293,6 +296,20 @@ pub async fn save(show: &Show, path: &Path) -> Result<(), ShowFileError> {
 
 pub async fn load(path: &Path) -> Result<Show, ShowFileError> {
     let shown = path.display().to_string();
+    // A show is a regular file of reasonable size (not a device, a pipe
+    // or something huge someone points the API at).
+    let meta = tokio::fs::metadata(path)
+        .await
+        .map_err(|source| ShowFileError::Read {
+            path: shown.clone(),
+            source,
+        })?;
+    if !meta.is_file() || meta.len() > MAX_SHOW_BYTES {
+        return Err(ShowFileError::Format {
+            path: shown,
+            reason: "not a show file (a regular file up to 64 MB)".into(),
+        });
+    }
     let bytes = tokio::fs::read(path)
         .await
         .map_err(|source| ShowFileError::Read {

@@ -1550,10 +1550,19 @@ impl Switcher {
             input.id = InputId::new();
             input.slot = self.free_slot().expect("counted above");
             input.triggers.clear();
+            // Names pick inputs in actions: a second "Cam 1" becomes "Cam 1 (2)".
+            let base = input.name.clone();
+            let mut n = 2;
+            while self.show.inputs.iter().any(|i| i.name == input.name) {
+                input.name = format!("{base} ({n})");
+                n += 1;
+            }
             // Back in through the same door as a closed input.
             self.removed.push((self.show.inputs.len(), input));
             commands.extend(self.restore_input()?);
         }
+        // Their sound as the mix says (follow video, mute), like any change.
+        commands.extend(self.audio_commands(AUDIO_RAMP_MS));
         Ok(commands)
     }
 
