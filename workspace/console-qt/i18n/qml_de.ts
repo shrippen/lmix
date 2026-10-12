@@ -980,7 +980,12 @@
       <translation>Weiter</translation>
     </message>
     <message>
-      <location line="+5" />
+      <location line="+6" />
+      <source>Play item</source>
+      <translation>Eintrag abspielen</translation>
+    </message>
+    <message>
+      <location line="+8" />
       <source>Send to this input (copy link)</source>
       <translation>An diesen Input senden (Link kopieren)</translation>
     </message>
@@ -2808,7 +2813,12 @@
       <translation>Weiter</translation>
     </message>
     <message>
-      <location line="+17" />
+      <location line="+7" />
+      <source>Position; click to jump</source>
+      <translation>Position; Klick springt dorthin</translation>
+    </message>
+    <message>
+      <location line="+21" />
       <source>Length %1</source>
       <translation>Länge %1</translation>
     </message>

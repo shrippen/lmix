@@ -352,6 +352,15 @@ KanteCard {
             ]
             onPicked: value => tile.act({ action: "transport_input", input: tile.ref(), transport: value })
         }
+        // A playlist's items, to play one (UI.4).
+        ChoiceMenu {
+            title: qsTr("Play item")
+            enabled: tile.input.source.kind === "playlist"
+            choices: tile.input.source.kind === "playlist"
+                ? tile.input.source.paths.map((p, i) => ({ value: i + 1, label: (i + 1) + "  " + p.split("/").pop() }))
+                : []
+            onPicked: value => tile.act({ action: "play_item", input: tile.ref(), item: value })
+        }
         ChoiceMenu {
             title: qsTr("Send to this input (copy link)")
             enabled: tile.input.ingest !== null && tile.input.ingest !== undefined

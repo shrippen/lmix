@@ -101,6 +101,10 @@ pub enum Command {
     },
     /// Play, pause, restart or step the media player of `slot`.
     Transport { slot: usize, transport: Transport },
+    /// Jump within the item the slot's media player plays.
+    Seek { slot: usize, position_ms: u64 },
+    /// Play item `index` (0-based) of the slot's playlist.
+    PlayItem { slot: usize, index: usize },
     /// Set the audio channel of `slot`: linear gain (1.0 = unity) and
     /// mute, faded over `ramp_ms`.
     SetAudio {
@@ -621,6 +625,29 @@ impl Switcher {
             Action::SetAuxBus { bus, volume, mute } => self.set_aux_bus(bus, volume, mute),
             Action::SetListen { input, listen } => self.set_listen(&input, listen),
             Action::TransportInput { input, transport } => self.transport(&input, transport),
+            Action::SeekInput { input, position_ms } => {
+                let slot = self.transport_slot(&input)?;
+                Ok(vec![Command::Seek { slot, position_ms }])
+            }
+            Action::PlayItem { input, item } => {
+                let index = self.find(&input)?;
+                let entry = &self.show.inputs[index];
+                let SourceSpec::Playlist { paths } = &entry.source else {
+                    return Err(ActionError::NoTransport {
+                        reference: entry.name.clone(),
+                    });
+                };
+                if item == 0 || item as usize > paths.len() {
+                    return Err(ActionError::BadPosition {
+                        number: item,
+                        max: paths.len() as u32,
+                    });
+                }
+                Ok(vec![Command::PlayItem {
+                    slot: entry.slot,
+                    index: item as usize - 1,
+                }])
+            }
             Action::SetSignalLoss { input, mode } => self.set_signal_loss(&input, mode),
             Action::AddOutput {
                 spec,
@@ -2415,17 +2442,21 @@ impl Switcher {
         input: &InputRef,
         transport: Transport,
     ) -> Result<Vec<Command>, ActionError> {
-        let index = self.find(input)?;
-        let entry = &self.show.inputs[index];
+        Ok(vec![Command::Transport {
+            slot: self.transport_slot(input)?,
+            transport,
+        }])
+    }
+
+    /// Slot of a file, URL or playlist input.
+    fn transport_slot(&self, input: &InputRef) -> Result<usize, ActionError> {
+        let entry = &self.show.inputs[self.find(input)?];
         if !entry.source.has_transport() {
             return Err(ActionError::NoTransport {
                 reference: entry.name.clone(),
             });
         }
-        Ok(vec![Command::Transport {
-            slot: entry.slot,
-            transport,
-        }])
+        Ok(entry.slot)
     }
 
     fn set_listen(
@@ -4407,6 +4438,50 @@ mod tests {
             })
             .unwrap_err();
         assert!(matches!(err, ActionError::NoTransport { .. }));
+
+        // Jumping in the clip, and to an item of a playlist.
+        assert_eq!(
+            sw.apply(Action::SeekInput {
+                input: named("Clip"),
+                position_ms: 12_500,
+            })
+            .unwrap(),
+            [Command::Seek {
+                slot: 2,
+                position_ms: 12_500
+            }]
+        );
+        sw.apply(Action::AddInput {
+            source: SourceSpec::Playlist {
+                paths: vec!["/a.mp4".into(), "/b.mp4".into()],
+            },
+            name: Some("List".into()),
+        })
+        .unwrap();
+        assert_eq!(
+            sw.apply(Action::PlayItem {
+                input: named("List"),
+                item: 2,
+            })
+            .unwrap(),
+            [Command::PlayItem { slot: 3, index: 1 }]
+        );
+        for item in [0, 3] {
+            assert!(matches!(
+                sw.apply(Action::PlayItem {
+                    input: named("List"),
+                    item,
+                }),
+                Err(ActionError::BadPosition { .. })
+            ));
+        }
+        assert!(matches!(
+            sw.apply(Action::PlayItem {
+                input: named("Clip"),
+                item: 1,
+            }),
+            Err(ActionError::NoTransport { .. })
+        ));
     }
 
     #[test]

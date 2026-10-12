@@ -1803,3 +1803,15 @@ OSC umging das Passwort; ein Proxy auf demselben Rechner machte jeden
 lokal; fremde Seiten im Browser des Bedieners hätten über loopback
 schalten können; `AUTH` ohne Frist. Alle behoben, mit Tests.
 
+## 2026-10-12 — Springen im Clip, Playlist-Eintrag (UI.5, UI.4)
+
+**Entscheidung**: strom hat am Player `seek` und `goto`; lmix gibt sie
+als Aktionen `seek_input {input, position_ms}` (Datei, URL, Playlist:
+im laufenden Eintrag) und `play_item {input, item}` (Playlist, 1-basiert,
+danach Play) weiter. Die Transportleiste springt beim Klick in den
+Fortschrittsbalken; das Kachelmenü einer Playlist hat „Eintrag
+abspielen“ mit den Dateinamen. (Die Notiz „strom hat dafür keine
+Aktion“ in „M9 Anfang“ war falsch: lmix hatte keine.)
+**Geprüft**: Switcher-Test (Befehle, Bereich, nur Playlist); Menü auf
+Xvfb. Gegen strom an echter Hardware nicht (H-Liste: zusammen mit H.29).
+

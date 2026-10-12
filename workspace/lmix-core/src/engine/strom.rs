@@ -12,6 +12,7 @@
 //! | `SetSignalLoss` | vision mixer compositor pads: `max-last-buffer-repeat` |
 //! | `StartOutput` / `StopOutput` | output flow (own flow per output) built and started / deleted |
 //! | `Transport` | slot's media player: play, pause, seek 0, next, previous |
+//! | `Seek`, `PlayItem` | the player's `seek` and `goto` (then play) |
 
 use async_trait::async_trait;
 use lmix_types::{
@@ -524,6 +525,28 @@ impl StromEngine {
         self.dsk_layer(flows::STINGER_LAYER, Some(slot), 0).await
     }
 
+    /// A call on the slot's media player (`seek`, `goto`).
+    async fn player_call(
+        &self,
+        slot: usize,
+        what: &str,
+        body: serde_json::Value,
+    ) -> Result<(), EngineError> {
+        let path = format!(
+            "/flows/{}/blocks/{}/player/{what}",
+            flows::slot_id(slot),
+            flows::PLAYER
+        );
+        let resp = self
+            .http
+            .post(self.url(&path))
+            .json(&body)
+            .send()
+            .await
+            .map_err(net)?;
+        check(resp).await.map(|_| ())
+    }
+
     /// Media player control; restart is a seek to 0 plus play.
     async fn transport(&self, slot: usize, transport: Transport) -> Result<(), EngineError> {
         let player = format!(
@@ -679,6 +702,19 @@ impl Engine for StromEngine {
             } => self.set_channel(*slot, *gain, *muted, *ramp_ms).await,
             Command::SetListen { slot, listen } => self.set_listen(*slot, *listen).await,
             Command::Transport { slot, transport } => self.transport(*slot, *transport).await,
+            Command::Seek { slot, position_ms } => {
+                self.player_call(
+                    *slot,
+                    "seek",
+                    serde_json::json!({ "position_ns": position_ms.saturating_mul(1_000_000) }),
+                )
+                .await
+            }
+            Command::PlayItem { slot, index } => {
+                self.player_call(*slot, "goto", serde_json::json!({ "index": index }))
+                    .await?;
+                self.transport(*slot, Transport::Play).await
+            }
             Command::SetSignalLoss { slot, mode } => self.set_signal_loss(*slot, *mode).await,
             Command::StartOutput {
                 id,

@@ -7,8 +7,8 @@ import Kante
 /**
  * Transport under a monitor (UI.5): play, pause, back to the start and,
  * for playlists, the item before and after, for the file, URL or playlist
- * input the monitor shows; the length of what plays beside it. Hidden for
- * other inputs and layouts.
+ * input the monitor shows; the length of what plays beside it. A click in
+ * the progress bar jumps there. Hidden for other inputs and layouts.
  */
 RowLayout {
     id: bar
@@ -50,9 +50,20 @@ RowLayout {
     Key { text: "⏭"; transport: "next"; hint: qsTr("Next"); visible: bar.playlist }
     // Where it plays (B39); the length alone until the player reports.
     KanteProgressBar {
+        id: progress
         Layout.fillWidth: true
         visible: bar.position !== null && bar.position[1] > 0
         value: bar.position && bar.position[1] > 0 ? bar.position[0] / bar.position[1] : 0
+        Accessible.name: qsTr("Position; click to jump")
+        MouseArea {
+            anchors.fill: parent
+            // A taller target than the thin bar.
+            anchors.topMargin: -Kirigami.Units.smallSpacing
+            anchors.bottomMargin: -Kirigami.Units.smallSpacing
+            cursorShape: Qt.PointingHandCursor
+            onClicked: mouse => bar.act({ action: "seek_input", input: bar.input.id,
+                position_ms: Math.round(Math.max(0, Math.min(1, mouse.x / width)) * bar.position[1]) })
+        }
     }
     Item {
         Layout.fillWidth: true

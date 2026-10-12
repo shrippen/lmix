@@ -133,6 +133,8 @@ pub const ACTION_GROUPS: &[(&str, &[&str])] = &[
             "set_look",
             "set_signal_loss",
             "transport_input",
+            "seek_input",
+            "play_item",
             "move_input",
         ],
     ),
@@ -287,6 +289,11 @@ pub enum Action {
         input: InputRef,
         transport: Transport,
     },
+    /// Jump to `position_ms` in the item a file, URL or playlist input
+    /// plays (UI.5).
+    SeekInput { input: InputRef, position_ms: u64 },
+    /// Play item `item` (1-based) of a playlist input (UI.4).
+    PlayItem { input: InputRef, item: u32 },
 
     // ---- Outputs (OUT, REC, STR) ----
     /// Add an output to the show; it starts stopped.

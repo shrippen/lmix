@@ -409,6 +409,8 @@ DE = {
     'Click: into preview. Double click: cut. Right click: expand.': 'Klick: in die Vorschau. Doppelklick: schneiden. Rechtsklick: ausklappen.',
     'Spreadsheet (XLSX, ODS)': 'Tabellenkalkulation (XLSX, ODS)',
     'Text, a row per paragraph (lyrics, slides)': 'Text, ein Absatz je Eintrag (Liedtexte, Folien)',
+    'Play item': 'Eintrag abspielen',
+    'Position; click to jump': 'Position; Klick springt dorthin',
     'Missing': 'Fehlt',
     'Missing files: %1': 'Fehlende Dateien: %1',
     'Not found:': 'Nicht gefunden:',
