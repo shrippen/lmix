@@ -1250,3 +1250,45 @@ der Zeit lief ComfyUI auf der GPU (bis 16 GB, zeitweise 100 %).
 pausiert, mit altem und neuem strom; CPU-Mischer). Das Bild lag im selben
 Lauf mit altem strom bei 112 ms, mit den Fixes bei 56 ms.
 **Offen**: 8-h- und 48-h-Lauf mit diesem Stand (H.24).
+
+## 2026-10-13 — Nachtläufe auf Hardware: GL, Stinger mit Alpha, H-Punkte
+
+**Stand** (Submodul `strom` auf `d4a88e7`, Branch `lmix-pin-1013`, dazu
+strom #13). Läufe auf der RTX 3090, je eigener strom und lmix-core.
+- **GL-Latenz** (H.22): GL lag bei 88 oder 108 ms (je nach Start), CUDA bei
+  56. `glvideomixerelement` hat keine Eigenschaft `ignore-inactive-pads`,
+  #10 griff dort nicht. Jetzt über `gst_aggregator_set_ignore_inactive_pads()`
+  an jedem Mischer: GL 56–64 ms, auch nach Stingern und mit Overlay.
+  Messweg: Pufferalter je Element im Mischer (Eingänge 0–1 ms, nach dem
+  Compositor 88 ms).
+- **GL und SRT** (Befund vom 2026-10-09): mit #11 (`cudaupload ! cudaconvert`
+  statt `autovideoconvert` vor NVENC) trägt der SRT-Ausgang am GL-Mischer
+  Video, 107 996 Bilder in 60 min (30,0 fps); mit altem strom 0 Bilder.
+  Speicher in der Stunde 725 → 779 MB (Minute 15 bis 55), aber parallel zu
+  Builds und Tests gemessen; ruhig nachmessen.
+- **Stinger mit Alpha** (H.27): ProRes 4444 (`A444_10LE`) und VP9 mit Alpha
+  (`A420`) liefen auf CUDA nicht: `cudaupload` hat diese Formate nicht,
+  Slot-Eingang und DSK-Ebene standen mit not-negotiated, kein Stinger zu
+  sehen. strom #13: `videoconvert ! cudaupload` an Eingängen und
+  DSK-Ebenen des CUDA-Mischers (Durchreichen für alles andere, auch
+  CUDA-Speicher). Danach auf CUDA wie auf GL: Balken über dem Programm,
+  Umgebung sichtbar, Schnitt in der Mitte.
+- **Quelle tauschen** (H.3): Testbild → Testbild bildgenau ohne Schwarz;
+  Testbild → Datei hält 1–3 Bilder (Decoderstart), kein Schwarz.
+- **Warmlauf** (H.9): erster Schnitt nach 2,4 s (CUDA) bzw. 3,1 s (GL).
+- **Signalverlust** (H.17, H.21 teilweise): SRT-Sender 6 s weg: „halten“
+  ohne Schwarzbild, „schwarz“ nach ~0,4 s, Rückkehr nach ~0,2 s; CUDA und
+  GL gleich.
+- **Layouts** (H.29): Plätze, Inhalt und Latenz stimmen; auf GL fehlen die
+  weißen Rahmen. Geprüft: Unterlage-Pads liegen richtig (4 px größer,
+  darunter, Alpha 1), bekommen Puffer, Quelle `solid-color` weiß; größere
+  Textur (256 statt 16 px) ändert nichts. Auch mit altem strom. Offen.
+
+**Messfehler unterwegs**: Clip-Pfade relativ zum Skript (`./clip.mp4`)
+löst strom relativ zu seinem Arbeitsverzeichnis auf (leere Box); ein mit
+`drawbox` auf transparentem Grund erzeugter Alpha-Clip war ganz
+durchsichtig. Beides lag am Test, nicht an lmix.
+**Soak**: Der 8-h-Lauf ab 00:30 wurde nach 65 min abgebrochen: parallele
+Builds ließen strom von 900 auf 1082 MB springen (Warteschlangen unter
+CPU-Last), der Speicherwert wäre wertlos gewesen. Neuer Lauf ohne
+Nebenlast.
