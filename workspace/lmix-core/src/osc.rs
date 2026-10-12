@@ -297,7 +297,17 @@ pub fn request(message: &Message) -> Result<Request, String> {
 }
 
 /// Receive messages and send tally until the process ends.
-pub async fn serve(listen: SocketAddr, service: Arc<Service>) -> anyhow::Result<()> {
+/// OSC carries no password: senders outside the local network are
+/// ignored unless `internet` (API.7).
+pub async fn serve(
+    listen: SocketAddr,
+    service: Arc<Service>,
+    internet: bool,
+) -> anyhow::Result<()> {
+    let access = crate::access::Access {
+        internet,
+        ..Default::default()
+    };
     let socket = Arc::new(UdpSocket::bind(listen).await?);
     tracing::info!(%listen, "OSC up");
     let subscribers = Arc::new(Mutex::new(Vec::<SocketAddr>::new()));
@@ -310,6 +320,9 @@ pub async fn serve(listen: SocketAddr, service: Arc<Service>) -> anyhow::Result<
     let mut buf = vec![0u8; MAX_PACKET];
     loop {
         let (len, peer) = socket.recv_from(&mut buf).await?;
+        if access.peer(peer.ip()) == crate::access::Peer::Refused {
+            continue;
+        }
         for message in decode(&buf[..len]) {
             match request(&message) {
                 Ok(Request::Action(action)) => {

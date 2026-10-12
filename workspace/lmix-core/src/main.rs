@@ -17,6 +17,7 @@ use anyhow::Context;
 use clap::{Parser, ValueEnum};
 use lmix_types::Action;
 
+mod access;
 mod api;
 mod clips;
 mod datasource;
@@ -117,6 +118,21 @@ struct Args {
     /// Shortcuts for all shows (AUT.3), kept apart from show files.
     #[arg(long, env = "LMIX_SHORTCUTS", default_value_os_t = default_shortcuts())]
     shortcuts: PathBuf,
+
+    /// Password for access from the network (API.7); programs on this
+    /// machine need none. HTTP Basic or Bearer; text protocol `AUTH`.
+    #[arg(long, env = "LMIX_PASSWORD", hide_env_values = true)]
+    password: Option<String>,
+
+    /// Browser pages usable from the network without the password, with
+    /// only what they need (`tally`, `keys`, `mixer`, `titles`).
+    #[arg(long, value_enum, value_delimiter = ',', env = "LMIX_OPEN_PAGES")]
+    open_page: Vec<access::Page>,
+
+    /// Answer addresses outside the local network too (behind a reverse
+    /// proxy or VPN); by default only private and link-local ones.
+    #[arg(long, env = "LMIX_ALLOW_INTERNET")]
+    allow_internet: bool,
 
     /// Key for the Google Sheets API (data sources `google_sheet`,
     /// DAT.1); kept out of show files.
@@ -260,8 +276,9 @@ async fn main() -> anyhow::Result<()> {
     }
     if let Some(listen) = args.osc {
         let service = service.clone();
+        let internet = args.allow_internet;
         tokio::spawn(async move {
-            if let Err(error) = osc::serve(listen, service).await {
+            if let Err(error) = osc::serve(listen, service, internet).await {
                 tracing::error!(%error, "OSC stopped");
             }
         });
@@ -278,10 +295,19 @@ async fn main() -> anyhow::Result<()> {
     if !args.tally_http.is_empty() {
         tokio::spawn(tally_http::serve(args.tally_http.clone(), service.clone()));
     }
+    let rules = Arc::new(access::Access {
+        password: args.password.clone().filter(|p| !p.is_empty()),
+        open_pages: args.open_page.clone(),
+        internet: args.allow_internet,
+    });
+    if rules.password.is_some() && args.osc.is_some_and(|a| !a.ip().is_loopback()) {
+        tracing::warn!("OSC has no password: anyone on the local network can send it actions");
+    }
     if let Some(listen) = args.tcp {
         let service = service.clone();
+        let rules = rules.clone();
         tokio::spawn(async move {
-            if let Err(error) = tcp::serve(listen, service).await {
+            if let Err(error) = tcp::serve(listen, service, rules).await {
                 tracing::error!(%error, "text protocol stopped");
             }
         });
@@ -292,9 +318,16 @@ async fn main() -> anyhow::Result<()> {
         .with_context(|| format!("bind {}", args.listen))?;
     tracing::info!(listen = %args.listen, "lmix-core API up");
 
-    axum::serve(listener, api::router(service))
-        .with_graceful_shutdown(stopped())
-        .await?;
+    let app = api::router(service.clone()).layer(axum::middleware::from_fn_with_state(
+        (rules, service),
+        access::guard,
+    ));
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(stopped())
+    .await?;
     Ok(())
 }
 

@@ -366,7 +366,7 @@ Stand:
 
 | # | Stand |
 |---|---|
-| WEB.1–3 | ✅ `/mixer`, `/tally`, `/keys` aus lmix-core, Kante-Aussehen; ⚠ ohne Anmeldung (WEB.4) |
+| WEB.1–3 | ✅ `/mixer`, `/tally`, `/keys` aus lmix-core, Kante-Aussehen; Anmeldung mit `--password`, Seiten einzeln offen (API.7) |
 | API.5 | ✅ Textzeilen über TCP: Aktionen, Tally/Zustand/Pegel/Ausgänge im Abo |
 | OPS.1 | ✅ Show beim Start (`LMIX_SHOW`), SIGTERM, systemd-Benutzer-Units |
 | OPS.3 | ✅ `/metrics` (Prometheus) mit Maschine, GPU, Speicher von strom (strom-Patch `lmix-process-memory`) und QoS je Flow |

@@ -1757,3 +1757,33 @@ alte Pfade zurückschreiben (jetzt nur Pfade, die der Input noch hat).
 Zwei fehlende Dateien gleichen Namens in verschiedenen Ordnern finden
 dieselbe Datei; nicht lesbare Dateien gelten als fehlend.
 
+## 2026-10-12 — Zugriff: LAN, Passwort, offene Seiten (API.7)
+
+**Kontext**: Die Webseiten und die API hatten keine Anmeldung; mit
+`--listen 0.0.0.0` konnte jeder im Netz schalten.
+**Entscheidung** (`access.rs`):
+- **Dieser Rechner** (loopback) braucht nie ein Passwort: Console,
+  Skripte, Companion auf derselben Maschine.
+- **Nur LAN als Standard**: Anfragen von Adressen außerhalb privater,
+  link-lokaler, unique-local Netze und des VPN-Bereichs 100.64.0.0/10
+  (Tailscale) bekommen 403, auch über das Textprotokoll und OSC;
+  `--allow-internet` hebt das auf (Reverse-Proxy, VPN).
+- **Passwort** `--password` (`LMIX_PASSWORD`, in `--help` verdeckt): aus
+  dem Netz HTTP Basic (Benutzername egal, der Browser fragt einmal; auch
+  der WebSocket geht so) oder `Authorization: Bearer`; Textprotokoll
+  erste Zeile `AUTH <passwort>`, sonst Fehler und Ende. Vergleich in
+  konstanter Zeit. Ohne Passwort bleibt es im LAN wie bisher.
+- **Offene Seiten** `--open-page tally,keys,mixer,titles`: die Seite,
+  ihre Dateien und was Seiten lesen (Zustand, Ereignisse, Tally, Bilder)
+  ohne Passwort, und nur die Aktionen der Seite: `tally` keine, `keys`
+  Kurzbefehle mit Häkchen „Webseite“, `mixer` Vorschau, Schnitt,
+  Übergänge, FTB, Layouts, `titles` Titel- und Datenaktionen. Eine offene
+  Seite macht damit den Zustand lesbar (Namen der Inputs), nicht mehr.
+- **OSC** hat kein Passwort (UDP, Controller): es gilt nur die LAN-Regel;
+  mit Passwort und OSC im Netz warnt lmix-core beim Start.
+- „Erhöhte Sicherheit sperrt Skripte“: lmix hat keine Skripte.
+**Geprüft**: Tests für Adressen, Passwörter, offene Seiten, den Wächter
+mit simulierter Adresse und `AUTH` im Textprotokoll; echt über die
+LAN-Adresse: ohne Passwort 401, mit 200, offene Tally-Seite ohne,
+Mixer-Seite im Browser mit Basic-Anmeldung samt WebSocket.
+
