@@ -21,7 +21,7 @@ KanteDialog {
     property var input: null
     /** Or the graphics channel (lmix `Graphics`). */
     property var graphics: null
-    /** Working copy: [{ on, delay_ms, before_ms, actions }], for a
+    /** Working copy: [{ on, delay_ms, before_ms, at_ms, actions }], for a
      * channel [{ report, layer, delay_ms, actions }]. */
     property var triggers: []
 
@@ -32,7 +32,8 @@ KanteDialog {
         { on: "preview", label: qsTr("Goes into preview") },
         { on: "overlay_in", label: qsTr("Comes in as overlay") },
         { on: "overlay_out", label: qsTr("Goes out as overlay") },
-        { on: "clip_end", label: qsTr("Clip ends"), clip: true }
+        { on: "clip_end", label: qsTr("Clip ends"), clip: true },
+        { on: "play_time", label: qsTr("Clip has played"), clip: true }
     ]
     /** Events this input offers: clip ends only for clips and playlists. */
     readonly property bool plays: input !== null && ["file", "url", "playlist"].indexOf(input.source.kind) >= 0
@@ -136,9 +137,12 @@ KanteDialog {
                     currentIndex: Math.max(0, dialog.choices.findIndex(e => e.on === entry.modelData.on))
                     Accessible.name: qsTr("When trigger %1 fires").arg(entry.index + 1)
                     onActivated: index => {
-                        dialog.edited(entry.index, "on", dialog.choices[index].on)
-                        if (dialog.choices[index].on !== "clip_end")
+                        const on = dialog.choices[index].on
+                        dialog.edited(entry.index, "on", on)
+                        if (on !== "clip_end")
                             dialog.edited(entry.index, "before_ms", null)
+                        // Playing time: required, 1 s to start with.
+                        dialog.edited(entry.index, "at_ms", on === "play_time" ? (entry.modelData.at_ms || 1000) : null)
                     }
                     KanteFieldSkin { control: whenBox }
                 }
@@ -158,6 +162,23 @@ KanteDialog {
                 QQC2.Label {
                     visible: before.visible
                     text: qsTr("ms before,")
+                }
+                // Clip has played this long (each item, each pass).
+                QQC2.SpinBox {
+                    id: playedFor
+                    visible: entry.modelData.on === "play_time"
+                    from: 0
+                    to: 86400000
+                    stepSize: 500
+                    editable: true
+                    value: entry.modelData.at_ms || 0
+                    Accessible.name: qsTr("Playing time of trigger %1").arg(entry.index + 1)
+                    onValueModified: dialog.edited(entry.index, "at_ms", value)
+                    KanteFieldSkin { control: playedFor }
+                }
+                QQC2.Label {
+                    visible: playedFor.visible
+                    text: qsTr("ms,")
                 }
                 QQC2.Label { text: qsTr("after") }
                 QQC2.SpinBox {

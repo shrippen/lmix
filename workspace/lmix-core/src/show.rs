@@ -339,6 +339,7 @@ mod tests {
                     on: TriggerOn::Program,
                     delay_ms: 2000,
                     before_ms: None,
+                    at_ms: None,
                     actions: vec![Action::FadeToBlack { duration_ms: 500 }],
                 }],
                 ptz: Some(lmix_types::PtzSpec {

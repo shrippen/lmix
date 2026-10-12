@@ -1270,11 +1270,22 @@ impl Switcher {
                 (TriggerOn::ClipEnd, _) | (_, None) => {}
                 (_, Some(_)) => return bad("only clip_end has a time before the end".into()),
             }
+            match (trigger.on, trigger.at_ms) {
+                (TriggerOn::PlayTime, None) => {
+                    return bad("play_time needs at_ms, the playing time".into());
+                }
+                (TriggerOn::PlayTime, _) | (_, None) => {}
+                (_, Some(_)) => return bad("only play_time has a playing time".into()),
+            }
         }
         let index = self.find(input)?;
         let plays = self.show.inputs[index].source.has_transport();
-        if !plays && triggers.iter().any(|t| t.on == TriggerOn::ClipEnd) {
-            return bad("clip_end needs a file, URL or playlist input".into());
+        if !plays
+            && triggers
+                .iter()
+                .any(|t| matches!(t.on, TriggerOn::ClipEnd | TriggerOn::PlayTime))
+        {
+            return bad("clip_end and play_time need a file, URL or playlist input".into());
         }
         self.show.inputs[index].triggers = triggers;
         Ok(Vec::new())
@@ -1301,10 +1312,11 @@ impl Switcher {
         input
             .triggers
             .iter()
-            .filter(|t| t.on == TriggerOn::ClipEnd)
-            .filter(|t| match t.before_ms {
-                None => change.ended,
-                Some(ms) => change.crosses(u64::from(ms)),
+            .filter(|t| match (t.on, t.before_ms, t.at_ms) {
+                (TriggerOn::ClipEnd, None, _) => change.ended,
+                (TriggerOn::ClipEnd, Some(ms), _) => change.crosses(u64::from(ms)),
+                (TriggerOn::PlayTime, _, Some(ms)) => change.reaches(u64::from(ms)),
+                _ => false,
             })
             .map(|t| (t.delay_ms, t.actions.clone()))
             .collect()
@@ -3976,6 +3988,7 @@ mod tests {
             on: TriggerOn::ClipEnd,
             delay_ms: 0,
             before_ms,
+            at_ms: None,
             actions: vec![Action::Cut],
         };
         assert!(matches!(
@@ -4004,14 +4017,44 @@ mod tests {
         let slot = sw.state().inputs[2].slot;
         let ended = crate::clips::ClipChange {
             ended: true,
-            left_ms: None,
+            ..Default::default()
         };
         let counting = crate::clips::ClipChange {
-            ended: false,
             left_ms: Some((3_100, 2_900)),
+            played_ms: Some((6_900, 7_100)),
+            ..Default::default()
         };
         assert_eq!(sw.clip_triggers(slot, &ended).len(), 1);
         assert_eq!(sw.clip_triggers(slot, &counting).len(), 1);
+        // At 7 s of playing time.
+        sw.apply(Action::SetTriggers {
+            input: named("Intro"),
+            triggers: vec![Trigger {
+                on: TriggerOn::PlayTime,
+                at_ms: Some(7_000),
+                ..at_end(None)
+            }],
+        })
+        .unwrap();
+        assert_eq!(sw.clip_triggers(slot, &counting).len(), 1);
+        assert!(sw.clip_triggers(slot, &ended).is_empty());
+        for wrong in [
+            Trigger {
+                on: TriggerOn::PlayTime,
+                ..at_end(None)
+            },
+            Trigger {
+                at_ms: Some(1),
+                ..at_end(None)
+            },
+        ] {
+            assert!(sw
+                .apply(Action::SetTriggers {
+                    input: named("Intro"),
+                    triggers: vec![wrong],
+                })
+                .is_err());
+        }
         assert!(sw
             .clip_triggers(sw.state().inputs[0].slot, &ended)
             .is_empty());
@@ -4027,12 +4070,14 @@ mod tests {
                     on: TriggerOn::Program,
                     delay_ms: 1000,
                     before_ms: None,
+                    at_ms: None,
                     actions: vec![Action::FadeToBlack { duration_ms: 500 }],
                 },
                 Trigger {
                     on: TriggerOn::ProgramOff,
                     delay_ms: 0,
                     before_ms: None,
+                    at_ms: None,
                     actions: vec![Action::Cut],
                 },
             ],
@@ -4057,6 +4102,7 @@ mod tests {
                     on: TriggerOn::Preview,
                     delay_ms: 60_000,
                     before_ms: None,
+                    at_ms: None,
                     actions: vec![Action::Cut],
                 }],
             }),

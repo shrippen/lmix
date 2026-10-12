@@ -2781,6 +2781,11 @@
       <translation>Clip endet</translation>
     </message>
     <message>
+      <location line="+1" />
+      <source>Clip has played</source>
+      <translation>Clip ist gelaufen</translation>
+    </message>
+    <message>
       <location line="+16" />
       <source>Triggers of graphics %1 %2</source>
       <translation>Auslöser von Grafik %1 %2</translation>
@@ -2836,7 +2841,7 @@
       <translation>Wenn Auslöser %1 auslöst</translation>
     </message>
     <message>
-      <location line="+17" />
+      <location line="+20" />
       <source>Time before the clip ends, trigger %1</source>
       <translation>Zeit vor Clipende, Auslöser %1</translation>
     </message>
@@ -2844,6 +2849,16 @@
       <location line="+6" />
       <source>ms before,</source>
       <translation>ms vorher,</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>Playing time of trigger %1</source>
+      <translation>Laufzeit von Auslöser %1</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>ms,</source>
+      <translation>ms,</translation>
     </message>
     <message>
       <location line="+2" />

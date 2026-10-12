@@ -1677,3 +1677,15 @@ offen (Hardware).
 **Geprüft**: Test mit einem kleinen HTTP-Empfänger (erster Stand, Schnitt
 auf Programm), Platzhalter und JSON; an einem echten Tally-Gerät nicht.
 
+## 2026-10-12 — Auslöser auf die Wiedergabezeit (AUT.7)
+
+**Entscheidung**: neben „Clip endet“ (mit Vorlauf = Restzeit) gibt es
+`play_time` mit `at_ms`: feuert, wenn ein Eintrag die Zeit erreicht (aus
+den Positionsmeldungen der Player, alle 200 ms), bei jedem Durchlauf und
+für jeden Eintrag einer Playlist; ein Sprung zurück (Schleife, Neustart)
+feuert nicht, der nächste Durchlauf wieder. Nur für Datei, URL und
+Playlist, `at_ms` Pflicht und nur hier erlaubt. In der Console „Clip ist
+gelaufen … ms“.
+**Geprüft**: Tests für Durchlauf, Schleife, nächsten Eintrag und die
+Prüfung der Felder; Dialog auf Xvfb (Wert bleibt erhalten).
+
