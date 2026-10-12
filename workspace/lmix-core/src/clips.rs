@@ -54,6 +54,12 @@ pub struct ClipWatch {
 }
 
 impl ClipWatch {
+    /// Start over for `flow`: its next report is a new baseline (after a
+    /// jump the operator asked for, which is no end and plays no time).
+    pub fn forget(&mut self, flow: FlowId) {
+        self.last.remove(&flow);
+    }
+
     pub fn update(&mut self, now: PlayerProgress) -> ClipChange {
         let Some(before) = self.last.insert(now.flow, now) else {
             return ClipChange::default();

@@ -54,6 +54,9 @@ pub struct Service {
     events: broadcast::Sender<Event>,
     /// Written after every change, read back after a crash (SHW.5).
     autosave: Option<PathBuf>,
+    /// Players the operator moved (jump, item, restart, previous), and
+    /// when: their position reports right after are no clip end.
+    jumped: std::sync::Mutex<HashMap<strom_types::FlowId, Instant>>,
     /// Settings file of the shortcuts for all shows (AUT.3).
     all_shows_file: std::sync::Mutex<Option<PathBuf>>,
     recent: Mutex<Recent>,
@@ -103,6 +106,9 @@ const URL_REFRESH: std::time::Duration = std::time::Duration::from_secs(10);
 
 /// How often lmix-core looks at the templates folder and data sources.
 const FILES_CHECK: std::time::Duration = std::time::Duration::from_secs(1);
+/// How long after a jump in a player its reports are no clip end.
+const JUMP_SETTLE: std::time::Duration = std::time::Duration::from_millis(600);
+
 /// How often the inputs' media files are looked for (SHW.4).
 const MEDIA_CHECK: std::time::Duration = std::time::Duration::from_secs(3);
 
@@ -136,6 +142,7 @@ impl Service {
             ptz_socket: tokio::sync::OnceCell::new(),
             ptz_seq: std::sync::atomic::AtomicU32::new(0),
             autosave,
+            jumped: std::sync::Mutex::new(HashMap::new()),
             all_shows_file: std::sync::Mutex::new(None),
         })
     }
@@ -867,6 +874,16 @@ impl Service {
                 Err(broadcast::error::RecvError::Lagged(_)) => continue,
                 Err(broadcast::error::RecvError::Closed) => return,
             };
+            // Reports shortly after a jump may still show the old place.
+            let jumped = self
+                .jumped
+                .lock()
+                .expect("jumped lock")
+                .get(&report.flow)
+                .is_some_and(|at| at.elapsed() < JUMP_SETTLE);
+            if jumped {
+                watch.forget(report.flow);
+            }
             let change = watch.update(report);
             let fired = {
                 let mut sw = self.switcher.lock().await;
@@ -1274,6 +1291,21 @@ impl Service {
                     .insert(flow, Touch::Running);
             }
             let outcome = self.engine.run(command).await;
+            if let (
+                Ok(()),
+                Command::Seek { slot, .. }
+                | Command::PlayItem { slot, .. }
+                | Command::Transport {
+                    slot,
+                    transport: lmix_types::Transport::Restart | lmix_types::Transport::Previous,
+                },
+            ) = (&outcome, command)
+            {
+                self.jumped
+                    .lock()
+                    .expect("jumped lock")
+                    .insert(crate::engine::flows::slot_id(*slot), Instant::now());
+            }
             // The window counts from the end: a rebuild's stop event may
             // trail the command (a drained stop takes over a second).
             if let Some(flow) = flow_of(command) {
@@ -2235,6 +2267,66 @@ mod tests {
             }
         );
         assert!(state.inputs.iter().all(|i| i.missing.is_empty()));
+    }
+
+    #[tokio::test]
+    async fn a_jump_back_is_no_clip_end() {
+        use lmix_types::{InputRef, SourceSpec, Trigger, TriggerOn};
+        let engine = Arc::new(NullEngine::playing());
+        let service = Service::new(2, engine.clone(), None);
+        service
+            .handle(Action::AddInput {
+                source: SourceSpec::File {
+                    path: "/media/clip.webm".into(),
+                },
+                name: None,
+            })
+            .await
+            .unwrap();
+        service
+            .handle(Action::SetTriggers {
+                input: InputRef::Number(1),
+                triggers: vec![Trigger {
+                    on: TriggerOn::ClipEnd,
+                    delay_ms: 0,
+                    before_ms: None,
+                    at_ms: None,
+                    actions: vec![Action::FadeToBlack { duration_ms: 0 }],
+                }],
+            })
+            .await
+            .unwrap();
+        tokio::spawn(service.clone().watch_players());
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        let report = |position_ms| crate::clips::PlayerProgress {
+            flow: crate::engine::flows::slot_id(0),
+            position_ms,
+            duration_ms: 10_000,
+            index: 0,
+            items: 1,
+        };
+        let settle = || tokio::time::sleep(std::time::Duration::from_millis(100));
+
+        engine.report(report(8_000));
+        settle().await;
+        service
+            .handle(Action::SeekInput {
+                input: InputRef::Number(1),
+                position_ms: 1_000,
+            })
+            .await
+            .unwrap();
+        engine.report(report(1_000));
+        settle().await;
+        assert!(!service.state().await.fade_to_black, "the jump is no end");
+
+        // Played on to the end and round again: that is one.
+        tokio::time::sleep(JUMP_SETTLE).await;
+        engine.report(report(9_900));
+        settle().await;
+        engine.report(report(100));
+        settle().await;
+        assert!(service.state().await.fade_to_black);
     }
 
     #[tokio::test]

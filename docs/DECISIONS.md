@@ -1814,4 +1814,10 @@ abspielen“ mit den Dateinamen. (Die Notiz „strom hat dafür keine
 Aktion“ in „M9 Anfang“ war falsch: lmix hatte keine.)
 **Geprüft**: Switcher-Test (Befehle, Bereich, nur Playlist); Menü auf
 Xvfb. Gegen ein laufendes strom nicht geprüft (Pfad und Felder aus strom-types `SeekRequest`, `GotoRequest`).
+**Review**: ein Sprung zurück (oder zu einem früheren Eintrag, Neustart,
+Zurück) sah für die Clip-Überwachung wie ein Ende aus und löste
+„Clip endet“ und Wiedergabezeit-Auslöser aus. Jetzt gelten die
+Positionsmeldungen eines Players bis 600 ms nach so einem Befehl als
+neuer Anfang (Meldungen kommen alle 200 ms und können den alten Stand
+noch zeigen); Test dazu.
 
