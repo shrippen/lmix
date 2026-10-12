@@ -58,6 +58,10 @@ const pass = (message) => console.log("ok   " + message);
     return s.program === s.inputs[1].id;
   }, null, { timeout: 5000 });
   pass("keys: the shortcut button runs its actions");
+  // It switches input 2: its picture, red now that it is on program.
+  // The null engine has no pictures: the image is there, hidden.
+  await page.waitForSelector("#keys .btn.program img[data-picture]", { state: "attached", timeout: 5000 });
+  pass("keys: picture and tally of the input it switches");
 
   if (frames.diff === 0 || frames.diff < frames.state) fail("diffs: " + JSON.stringify(frames));
   pass(`state as diffs (${frames.diff} diffs, ${frames.state} whole)`);
