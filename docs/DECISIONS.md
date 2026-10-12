@@ -1245,5 +1245,8 @@ strom-RSS 1091 → 1101 MB von Minute 90 bis 180 (vorher ~31 MB/h), Latenz
 der Zeit lief ComfyUI auf der GPU (bis 16 GB, zeitweise 100 %).
 **`soak-hardware.sh`** zählt die PipeWire-CRITICALs vom Start (Eintrag
 „NFA.7: 8-h-Soak“) nicht mehr als Fehler.
-**Offen**: Ton eines pausierten Clips (das Pad am Tonmischer hungert
-genauso; nicht gemessen); 8-h- und 48-h-Lauf mit diesem Stand (H.24).
+**Ton**: Ein pausierter Clip mit Ton ändert das Programm-Audio nicht
+(Pufferalter an `pgm_audio_out` 80 ms vorher, beim Abspielen und
+pausiert, mit altem und neuem strom; CPU-Mischer). Das Bild lag im selben
+Lauf mit altem strom bei 112 ms, mit den Fixes bei 56 ms.
+**Offen**: 8-h- und 48-h-Lauf mit diesem Stand (H.24).
