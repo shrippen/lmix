@@ -142,8 +142,9 @@ struct Args {
 
     /// Call these addresses with the tally on every change (tally lights
     /// over HTTP, PER.1): POST JSON, or GET with `{program}`, `{preview}`,
-    /// `{tally}` filled in; repeat for more.
-    #[arg(long, env = "LMIX_TALLY_HTTP")]
+    /// `{tally}` filled in; repeat for more (in the environment variable:
+    /// separated by spaces).
+    #[arg(long, env = "LMIX_TALLY_HTTP", value_delimiter = ' ')]
     tally_http: Vec<String>,
 
     /// TSL UMD version: 5 (5.0) or 3 (3.1).

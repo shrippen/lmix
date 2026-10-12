@@ -69,10 +69,14 @@ impl ClipWatch {
         let same_item = now.index == before.index && !ended;
         let left_ms = (same_item && last_item(&now) && now.duration_ms > 0)
             .then(|| (left(&before), left(&now)));
-        // A jump back (loop, restart) plays the time again, no firing on
-        // the way back.
-        let played_ms = (same_item && now.position_ms >= before.position_ms)
-            .then_some((before.position_ms, now.position_ms));
+        // A new item, or the same again (loop, restart), plays from its
+        // start: times since then are reached too. No firing on the way
+        // back within an item.
+        let played_ms = if same_item && now.position_ms + JUMP_BACK_MS >= before.position_ms {
+            Some((before.position_ms, now.position_ms.max(before.position_ms)))
+        } else {
+            Some((0, now.position_ms))
+        };
         ClipChange {
             ended,
             left_ms,
@@ -117,10 +121,13 @@ mod tests {
         assert!(!watch.update(at(0, 1, 100)).reaches(5_000));
         watch.update(at(0, 1, 4_950));
         assert!(watch.update(at(0, 1, 5_000)).reaches(5_000));
+        // Early times fire on the report after the start, too.
+        assert!(watch.update(at(0, 1, 150)).reaches(100));
         // A new item starts its own time.
         let mut list = ClipWatch::default();
         list.update(at(0, 2, 9_900));
-        assert!(!list.update(at(1, 2, 6_000)).reaches(5_000));
+        assert!(list.update(at(1, 2, 180)).reaches(100));
+        assert!(!list.update(at(1, 2, 300)).reaches(100), "once");
     }
 
     #[test]

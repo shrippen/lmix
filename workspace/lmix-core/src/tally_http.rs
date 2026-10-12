@@ -63,7 +63,8 @@ fn request(url: &str, tally: &[u8]) -> (String, Option<serde_json::Value>) {
     }
 }
 
-/// Call `urls` with the tally until the process ends.
+/// Call `urls` with the tally until the process ends: one task per
+/// device, so a slow or missing one only falls behind itself.
 pub async fn serve(urls: Vec<String>, service: Arc<Service>) {
     let http = reqwest::Client::builder()
         .timeout(TIMEOUT)
@@ -71,61 +72,56 @@ pub async fn serve(urls: Vec<String>, service: Arc<Service>) {
         .expect("HTTP client");
     tracing::info!(targets = urls.len(), "HTTP tally up");
     let mut events = service.subscribe();
-    let mut last: Vec<u8> = service.tally().await;
-    let mut tick = tokio::time::interval(REFRESH);
-    // Devices that failed last time, logged once until they answer again.
-    let mut failing = vec![false; urls.len()];
+    let (tx, rx) = tokio::sync::watch::channel(service.tally().await);
+    for url in urls {
+        tokio::spawn(device(url, http.clone(), rx.clone()));
+    }
     loop {
-        let changed = tokio::select! {
-            event = events.recv() => match event {
-                Ok(Event::Tally { tally }) if tally != last => {
-                    last = tally;
-                    true
-                }
-                Ok(_) => false,
-                Err(RecvError::Lagged(_)) => {
-                    last = service.tally().await;
-                    true
-                }
-                Err(RecvError::Closed) => return,
-            },
-            _ = tick.tick() => true,
+        let tally = match events.recv().await {
+            Ok(Event::Tally { tally }) => tally,
+            Ok(_) => continue,
+            Err(RecvError::Lagged(_)) => service.tally().await,
+            Err(RecvError::Closed) => return,
         };
-        if !changed {
-            continue;
-        }
-        // A burst of changes (a transition) ends on its last tally.
-        while let Ok(event) = events.try_recv() {
-            if let Event::Tally { tally } = event {
-                last = tally;
-            }
-        }
-        let calls = urls.iter().map(|url| {
-            let (target, body) = request(url, &last);
-            let call = match body {
-                Some(body) => http.post(&target).json(&body),
-                None => http.get(&target),
-            };
-            async move {
-                call.send()
-                    .await
-                    .and_then(reqwest::Response::error_for_status)
-            }
+        // Only a change wakes the devices.
+        tx.send_if_modified(|last| {
+            let changed = *last != tally;
+            *last = tally;
+            changed
         });
-        for ((result, url), failed) in futures_util::future::join_all(calls)
+    }
+}
+
+/// One device: the latest tally whenever it changes (changes while a
+/// call runs end in one call with the last), and again every 30 s.
+async fn device(
+    url: String,
+    http: reqwest::Client,
+    mut tally: tokio::sync::watch::Receiver<Vec<u8>>,
+) {
+    let mut failing = false;
+    loop {
+        let now = tally.borrow_and_update().clone();
+        let (target, body) = request(&url, &now);
+        let call = match body {
+            Some(body) => http.post(&target).json(&body),
+            None => http.get(&target),
+        };
+        match call
+            .send()
             .await
-            .into_iter()
-            .zip(&urls)
-            .zip(&mut failing)
+            .and_then(reqwest::Response::error_for_status)
         {
-            match result {
-                Ok(_) => *failed = false,
-                Err(error) if !*failed => {
-                    tracing::warn!(%url, error = %error.without_url(), "HTTP tally not delivered");
-                    *failed = true;
-                }
-                Err(_) => {}
+            Ok(_) => failing = false,
+            Err(error) if !failing => {
+                tracing::warn!(%url, error = %error.without_url(), "HTTP tally not delivered");
+                failing = true;
             }
+            Err(_) => {}
+        }
+        tokio::select! {
+            changed = tally.changed() => if changed.is_err() { return },
+            _ = tokio::time::sleep(REFRESH) => {}
         }
     }
 }

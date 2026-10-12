@@ -1669,10 +1669,12 @@ holt auf) jede Adresse auf: ohne Platzhalter POST mit JSON
 TCP-API: 0 aus, 1 Programm samt Overlays und Layout-Boxen, 2 Vorschau;
 dann die Nummern), mit Platzhaltern `{program}`, `{preview}`, `{tally}`
 ein GET mit eingesetzten Werten, für einfache Geräte (ESP32-Tally,
-Shelly, Hausautomation), die nur eine Adresse aufrufen können. Alle
-Geräte parallel, 1 s Frist je Gerät; eine Blende (viele Änderungen kurz
-hintereinander) endet auf dem letzten Stand; ein nicht erreichbares Gerät
-wird einmal gemeldet, bis es wieder antwortet. GPIO und Firmata bleiben
+Shelly, Hausautomation), die nur eine Adresse aufrufen können. Jedes
+Gerät hat eine eigene Aufgabe mit 1 s Frist: ein langsames oder fehlendes
+hält nur sich selbst auf; Änderungen während eines Aufrufs enden in einem
+Aufruf mit dem letzten Stand; ein nicht erreichbares Gerät wird einmal
+gemeldet, bis es wieder antwortet. In `LMIX_TALLY_HTTP` stehen mehrere
+Adressen durch Leerzeichen getrennt (Kommas kommen in Adressen vor). GPIO und Firmata bleiben
 offen (Hardware).
 **Geprüft**: Test mit einem kleinen HTTP-Empfänger (erster Stand, Schnitt
 auf Programm), Platzhalter und JSON; an einem echten Tally-Gerät nicht.
@@ -1685,7 +1687,10 @@ den Positionsmeldungen der Player, alle 200 ms), bei jedem Durchlauf und
 für jeden Eintrag einer Playlist; ein Sprung zurück (Schleife, Neustart)
 feuert nicht, der nächste Durchlauf wieder. Nur für Datei, URL und
 Playlist, `at_ms` Pflicht und nur hier erlaubt. In der Console „Clip ist
-gelaufen … ms“.
+gelaufen … ms“. Ein neuer Eintrag oder Durchlauf zählt ab 0: Zeiten
+vor der ersten Meldung (alle 200 ms) feuern mit ihr; `at_ms` mindestens
+1 (für den Anfang gibt es „geht auf Programm“). Nach dem Review: so
+feuern auch Zeiten am Anfang eines Eintrags.
 **Geprüft**: Tests für Durchlauf, Schleife, nächsten Eintrag und die
 Prüfung der Felder; Dialog auf Xvfb (Wert bleibt erhalten).
 

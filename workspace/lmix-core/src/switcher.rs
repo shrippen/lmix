@@ -1271,8 +1271,8 @@ impl Switcher {
                 (_, Some(_)) => return bad("only clip_end has a time before the end".into()),
             }
             match (trigger.on, trigger.at_ms) {
-                (TriggerOn::PlayTime, None) => {
-                    return bad("play_time needs at_ms, the playing time".into());
+                (TriggerOn::PlayTime, None | Some(0)) => {
+                    return bad("play_time needs at_ms, the playing time (at least 1 ms)".into());
                 }
                 (TriggerOn::PlayTime, _) | (_, None) => {}
                 (_, Some(_)) => return bad("only play_time has a playing time".into()),

@@ -167,7 +167,7 @@ KanteDialog {
                 QQC2.SpinBox {
                     id: playedFor
                     visible: entry.modelData.on === "play_time"
-                    from: 0
+                    from: 1
                     to: 86400000
                     stepSize: 500
                     editable: true
