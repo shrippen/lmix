@@ -1249,12 +1249,18 @@ der Zeit lief ComfyUI auf der GPU (bis 16 GB, zeitweise 100 %).
 (Pufferalter an `pgm_audio_out` 80 ms vorher, beim Abspielen und
 pausiert, mit altem und neuem strom; CPU-Mischer). Das Bild lag im selben
 Lauf mit altem strom bei 112 ms, mit den Fixes bei 56 ms.
-**Offen**: 8-h- und 48-h-Lauf mit diesem Stand (H.24).
+**8-h-Lauf** (2026-10-13, 01:57–09:59, `d4a88e7`, ohne Nebenlast; Rest
+wie oben): Latenz durchgehend 56 ms, alle Bilder in Aufnahme, ISO und
+beiden SRT-Empfängern (864 557 bzw. 864 475/864 461 von 864 557), keine
+CRITICALs außer PipeWire. strom-RSS ab Stunde 1 von 847 auf 903 MB,
+~7,7 MB/h statt ~31, in Stufen (größte +29 MB nach 6,3 h), nicht
+gleichmäßig.
+**Offen**: 48-h-Lauf (H.24).
 
 ## 2026-10-13 — Nachtläufe auf Hardware: GL, Stinger mit Alpha, H-Punkte
 
 **Stand** (Submodul `strom` auf `d4a88e7`, Branch `lmix-pin-1013`, dazu
-strom #13). Läufe auf der RTX 3090, je eigener strom und lmix-core.
+strom #13; seit dem Rahmen-Fix `b8ea416` mit #14). Läufe auf der RTX 3090, je eigener strom und lmix-core.
 - **GL-Latenz** (H.22): GL lag bei 88 oder 108 ms (je nach Start), CUDA bei
   56. `glvideomixerelement` hat keine Eigenschaft `ignore-inactive-pads`,
   #10 griff dort nicht. Jetzt über `gst_aggregator_set_ignore_inactive_pads()`
@@ -1279,10 +1285,17 @@ strom #13). Läufe auf der RTX 3090, je eigener strom und lmix-core.
 - **Signalverlust** (H.17, H.21 teilweise): SRT-Sender 6 s weg: „halten“
   ohne Schwarzbild, „schwarz“ nach ~0,4 s, Rückkehr nach ~0,2 s; CUDA und
   GL gleich.
-- **Layouts** (H.29): Plätze, Inhalt und Latenz stimmen; auf GL fehlen die
-  weißen Rahmen. Geprüft: Unterlage-Pads liegen richtig (4 px größer,
-  darunter, Alpha 1), bekommen Puffer, Quelle `solid-color` weiß; größere
-  Textur (256 statt 16 px) ändert nichts. Auch mit altem strom. Offen.
+- **Layouts** (H.29): Plätze, Inhalt und Latenz stimmen. Auf GL fehlten
+  die weißen Rahmen, auch mit altem strom: Die Unterlage lag richtig und
+  bekam Puffer, `glupload` machte daraus aber leere Texturen. Ursache ist
+  der udmabuf-Weg von `glupload` (GStreamer 1.28) auf NVIDIA 615.78, der
+  für RGBA, BGRA und I420 leere Texturen liefert (NV12 geht); nachgestellt
+  mit `gst-launch` und mit ausgeblendetem `/dev/udmabuf`. strom umgeht das
+  schon hinter den Eingangs-Queues (`gpu::udmabuf_upload_broken`), die
+  Unterlage hängt aber ohne Queue an `glupload`. strom #14 setzt dieselbe
+  Sonde an die Unterlage: Rahmen da, Latenz 56 ms. Mit GUI gebauter strom
+  (ohne `no-gui`) beendet sich nach diesem Test auf SIGTERM nicht (hängt
+  beim Schließen der GUI); lmix baut mit `no-gui`, dort kein Hänger.
 
 **Messfehler unterwegs**: Clip-Pfade relativ zum Skript (`./clip.mp4`)
 löst strom relativ zu seinem Arbeitsverzeichnis auf (leere Box); ein mit
@@ -1291,4 +1304,4 @@ durchsichtig. Beides lag am Test, nicht an lmix.
 **Soak**: Der 8-h-Lauf ab 00:30 wurde nach 65 min abgebrochen: parallele
 Builds ließen strom von 900 auf 1082 MB springen (Warteschlangen unter
 CPU-Last), der Speicherwert wäre wertlos gewesen. Neuer Lauf ohne
-Nebenlast.
+Nebenlast (Ergebnis im Eintrag „strom-Fixes“).
