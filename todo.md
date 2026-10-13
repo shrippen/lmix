@@ -56,7 +56,7 @@ enabled: !(/\&[^\&]/.test(control.text))
 - [x] Ton eines pausierten Clips (2026-10-13): Programm-Audio unverändert 80 ms, kein Fix nötig.
 - [x] CUDA-Latenz 106 ms statt 56 ms (2026-10-12): leere DSK-Ebenen seit `dde8237`, Fix strom `lmix-ignore-inactive-pads` (DECISIONS „CUDA-Latenz 106 ms“).
 - [x] GL-Mischer: SRT-Ausgang ohne Video (2026-10-13: behoben mit strom #11, 30 fps über 1 h).
-- [ ] GL-Mischer: strom-Speicher mit SRT ruhig nachmessen (gestört gemessen 725 → 779 MB in 40 min; vorher mit hängendem Ausgang ~580 MB/h).
+- [ ] GL-Mischer: strom-Speicher wächst mit SRT ~110 MB/h (2026-10-13 ruhig gemessen, 90 min, 1 Input: 672 → 813 MB ab Minute 10, 30 fps sauber; CUDA im 8-h-Lauf ~7,7 MB/h). Ursache suchen: GL→CUDA-Übergabe vor NVENC (`cudaupload` aus GL-Speicher) oder SRT; Gegenprobe GL mit Aufnahme statt SRT.
 - [x] GL-Mischer: Layout-Rahmen fehlten (H.29): udmabuf-Upload auf NVIDIA, Fix strom #14.
 - [x] Aktion in den ersten 2 s nach Engine-Neustart antwortet 502 (2026-10-09: neue Engine erkannt, Aktion geht in die Show, Restore sofort).
 - [ ] Konstantes Bildalter 54 ms bei einigen Kacheln klären.

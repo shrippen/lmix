@@ -1270,8 +1270,10 @@ strom #13; seit dem Rahmen-Fix `b8ea416` mit #14). Läufe auf der RTX 3090, je e
 - **GL und SRT** (Befund vom 2026-10-09): mit #11 (`cudaupload ! cudaconvert`
   statt `autovideoconvert` vor NVENC) trägt der SRT-Ausgang am GL-Mischer
   Video, 107 996 Bilder in 60 min (30,0 fps); mit altem strom 0 Bilder.
-  Speicher in der Stunde 725 → 779 MB (Minute 15 bis 55), aber parallel zu
-  Builds und Tests gemessen; ruhig nachmessen.
+  Speicher in der Stunde 725 → 779 MB (Minute 15 bis 55), parallel zu
+  Builds gemessen. Ruhig nachgemessen (90 min, 1 Input, `b8ea416`):
+  672 → 813 MB ab Minute 10, ~110 MB/h, 162 053 Bilder (30 fps). Der
+  GL-Weg mit SRT wächst also weiter; CUDA im 8-h-Lauf nicht. Offen.
 - **Stinger mit Alpha** (H.27): ProRes 4444 (`A444_10LE`) und VP9 mit Alpha
   (`A420`) liefen auf CUDA nicht: `cudaupload` hat diese Formate nicht,
   Slot-Eingang und DSK-Ebene standen mit not-negotiated, kein Stinger zu
