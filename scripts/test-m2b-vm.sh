@@ -533,8 +533,8 @@ pass "automation: cues GO and back, triggers on and off program"
 # Clip end (AUT.7): Clips (two 10 s clips, looped) puts Orange on overlay 3
 # two seconds before its end and takes it off at the end.
 act '{"action":"set_triggers","input":"Clips","triggers":[{"on":"clip_end","before_ms":2000,"actions":[{"action":"overlay_in","channel":3,"input":"Orange","duration_ms":0}]},{"on":"clip_end","actions":[{"action":"overlay_out","channel":3,"duration_ms":0}]}]}' >/dev/null
-wait_for 25 state_is ".overlays[2] == \"$orange_id\"" || fail "countdown before the clip end did not fire"
-wait_for 4 state_is ".overlays[2] == null" || fail "clip end did not fire"
+wait_for "$((SETTLE_S + 20))" state_is ".overlays[2] == \"$orange_id\"" || fail "countdown before the clip end did not fire"
+wait_for "$SETTLE_S" state_is ".overlays[2] == null" || fail "clip end did not fire"
 act '{"action":"set_triggers","input":"Clips","triggers":[]}' >/dev/null
 pass "clip end: countdown and end of a playlist fire their triggers"
 
