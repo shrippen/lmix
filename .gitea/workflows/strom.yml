@@ -82,5 +82,8 @@ jobs:
           TOKEN: ${{ secrets.REGISTRY_TOKEN }}
         run: |
           tar -C workspace/strom/target/release -c strom | zstd -19 -T0 > "$FILE"
-          curl -sf -X PUT -H "Authorization: token $TOKEN" --upload-file "$FILE" \
-            "$PACKAGE_URL/${{ steps.strom.outputs.sha }}/$FILE"
+          code=$(curl -sS -o upload.txt -w '%{http_code}' -X PUT \
+            -H "Authorization: token $TOKEN" --upload-file "$FILE" \
+            "$PACKAGE_URL/${{ steps.strom.outputs.sha }}/$FILE")
+          echo "HTTP $code"; cat upload.txt; echo
+          [ "$code" -lt 400 ]
