@@ -41,6 +41,10 @@ jobs:
           curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable
 
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          # Otherwise checkout's own header for git.arianw.de wins over
+          # REGISTRY_TOKEN below, and the Actions token cannot read strom.
+          persist-credentials: false
 
       # Private submodule: see strom.yml.
       - name: strom submodule
@@ -51,10 +55,31 @@ jobs:
           git -c http.extraheader="Authorization: token $TOKEN" \
             submodule update --init --depth 50 workspace/strom
 
+      # utoipa-swagger-ui's build script downloads Swagger UI from GitHub
+      # once, without retry; a broken download stops the strom build when
+      # fetch-strom.sh finds no package. Fetch it here with retries and hand
+      # the crate the file. Version: the default of utoipa-swagger-ui 9.0.
+      - name: Swagger UI
+        run: |
+          curl -sSfL --retry 5 --retry-all-errors -o "$PWD/swagger-ui.zip" \
+            https://github.com/swagger-api/swagger-ui/archive/refs/tags/v5.17.14.zip
+          echo "SWAGGER_UI_DOWNLOAD_URL=file://$PWD/swagger-ui.zip" >> "$GITHUB_ENV"
+
       - name: VM check
         env:
           GITEA_TOKEN: ${{ secrets.REGISTRY_TOKEN }}
           RUSTFLAGS: -C link-arg=-fuse-ld=mold
+          WORK: ${{ github.workspace }}/vm-work
+          KEEP_WORK: 1
         run: |
           . "$HOME/.cargo/env"
           scripts/test-m2b-vm.sh
+
+      # Logs and pictures of a failed run.
+      - name: Keep the work folder
+        if: failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: vm-work
+          path: vm-work
+          retention-days: 7
