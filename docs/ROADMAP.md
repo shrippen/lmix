@@ -309,6 +309,17 @@ Stand:
 - Scopes (Waveform, Vectorscope) auf PGM — **C**
 - PTZ über VISCA-IP — **C**, optional
 
+Stand:
+
+| # | Stand |
+|---|---|
+| AUT.1–3 | ✅ Kurzbefehle (Taste, bis 16 Aktionen) in der Show; Console-Editor, Web-Seite `/keys` |
+| AUT.7 | ✅ Auslöser je Input: Programm an/aus, Vorschau, Overlay ein/aus, mit Verzögerung; ⚠ Countdown/Clip-Ende fehlen |
+| AUT.10, AUT.11 | ✅ Geschlossenen Input zurückholen; Sperre gegen Schließen/Stoppen |
+| AUT.13 | ✅ OSC: Aktionen per Adresse oder JSON, Tally an Abonnenten; ⚠ kein voller Zustand per OSC |
+| AUT.14 | ✅ Cue-Listen mit GO, Zurück, Sprung; Console-Dialog |
+| AUT.4, AUT.12 | offen (MIDI, globale Tasten) |
+
 ### M7 — Titel & Daten (HTML), direkt nach M4
 
 **M7.0 Benchmark** vor der Engine-Wahl (E.9): `cefsrc` (vorhanden) gegen
@@ -335,6 +346,15 @@ IDs: WEB.1–5, TEL.1–3, API.2–11, STR.8.
 
 **Abnahme**: Bitfocus Companion steuert lmix über das eigene Modul
 (API.9, API.11); Tally auf dem Handy.
+
+Stand:
+
+| # | Stand |
+|---|---|
+| WEB.1–3 | ✅ `/mixer`, `/tally`, `/keys` aus lmix-core, Kante-Aussehen; ⚠ ohne Anmeldung (WEB.4) |
+| API.5 | ✅ Textzeilen über TCP: Aktionen, Tally/Zustand/Pegel/Ausgänge im Abo |
+| OPS.1 | ✅ Show beim Start (`LMIX_SHOW`), SIGTERM, systemd-Benutzer-Units |
+| OPS.3 | ✅ `/metrics` (Prometheus); ⚠ Metriken von strom fehlen noch |
 
 ### M9 — Gleichstand
 

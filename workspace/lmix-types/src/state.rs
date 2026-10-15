@@ -7,6 +7,7 @@ use crate::action::{Effect, TransitionSlot, OVERLAY_CHANNELS};
 use crate::input::{AuxBus, Input, InputId, AUX_BUSES};
 use crate::layout::Layout;
 use crate::output::{Output, OutputStats};
+use crate::shortcut::Shortcut;
 
 /// One transition button.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -61,6 +62,18 @@ pub struct ShowState {
     /// Layouts; `preview` and `program` may name one.
     #[serde(default)]
     pub layouts: Vec<Layout>,
+    /// Shortcuts of the show.
+    #[serde(default)]
+    pub shortcuts: Vec<Shortcut>,
+    /// Cue lists of the show.
+    #[serde(default)]
+    pub cue_lists: Vec<crate::automation::CueList>,
+    /// Locked against closing, loading and stopping (AUT.11).
+    #[serde(default)]
+    pub locked: bool,
+    /// Name of the input `restore_input` would bring back.
+    #[serde(default)]
+    pub restorable: Option<String>,
 }
 
 /// Current API version (API.10: additive changes within one version).
@@ -129,6 +142,8 @@ impl Latency {
 /// Pushed to every subscriber (API.5, API.6).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "event", rename_all = "snake_case")]
+// Built once per change and shared; the size does not matter.
+#[allow(clippy::large_enum_variant)]
 pub enum Event {
     /// Full state after any change.
     State { state: ShowState },

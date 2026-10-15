@@ -1,0 +1,14 @@
+# strom, lmix's media engine, as a user service (OPS.1).
+# Install: copy both units to ~/.config/systemd/user/, then
+#   systemctl --user enable --now lmix-core.service
+# For a machine without login: `loginctl enable-linger <user>`.
+[Unit]
+Description=lmix engine (strom)
+
+[Service]
+ExecStart=%h/.local/bin/strom --host 127.0.0.1 --port 8099 --data-dir %S/lmix/strom
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=default.target

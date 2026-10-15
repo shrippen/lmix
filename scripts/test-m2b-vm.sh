@@ -500,6 +500,27 @@ act '{"action":"remove_layout","layout":1}' >/dev/null
 [[ "$(curl -sf "$CORE/state" | jq '.layouts | length')" == 0 ]] || fail "layout not removed"
 pass "layouts: background and box on program, red tally for both inputs, removed"
 
+# --- automation (AUT.7, AUT.14): a cue list whose cues fire triggers ---
+act '{"action":"set_triggers","input":"Orange","triggers":[{"on":"program","delay_ms":500,"actions":[{"action":"overlay_in","channel":2,"input":"Ball","duration_ms":0}]},{"on":"program_off","actions":[{"action":"overlay_out","channel":2,"duration_ms":0}]}]}' >/dev/null
+act '{"action":"add_cue_list","name":"Run","cues":[{"label":"Orange","actions":[{"action":"cut_direct","input":"Orange"}]},{"label":"Ball","actions":[{"action":"cut_direct","input":"Ball"}]}]}' >/dev/null
+state_is() { [[ "$(curl -sf "$CORE/state" | jq -r "$1")" == true ]]; }
+id_of() { curl -sf "$CORE/state" | jq -r ".inputs[] | select(.name==\"$1\") | .id"; }
+orange_id="$(id_of Orange)"; ball_id="$(id_of Ball)"
+act '{"action":"cue_go","list":"Run"}' >/dev/null
+state_is ".program == \"$orange_id\" and .cue_lists[0].next == 2" || fail "cue 1 did not take Orange"
+wait_for 4 state_is ".overlays[1] == \"$ball_id\"" || fail "trigger of Orange did not put Ball on overlay 2"
+act '{"action":"cue_go","list":"Run"}' >/dev/null
+state_is ".program == \"$ball_id\"" || fail "cue 2 did not take Ball"
+wait_for 4 state_is ".overlays[1] == null" || fail "leaving program did not take overlay 2 off"
+act '{"action":"cue_back","list":"Run"}' >/dev/null
+state_is ".program == \"$orange_id\" and .cue_lists[0].next == 2" || fail "back did not run cue 1"
+wait_for 4 state_is ".overlays[1] == \"$ball_id\"" || fail "trigger did not fire again after back"
+act '{"action":"cut_direct","input":"Ball"}' >/dev/null
+act '{"action":"remove_cue_list","list":"Run"}' >/dev/null
+act '{"action":"set_triggers","input":"Orange","triggers":[]}' >/dev/null
+wait_for 4 state_is ".overlays[1] == null and (.cue_lists | length) == 0" || fail "automation not cleaned up"
+pass "automation: cues GO and back, triggers on and off program"
+
 # --- latency (NFA.3): capture-to-program, CPU mixer in a VM ---
 # Budget here is generous (software compositing, no GPU); the real target
 # of two frames is checked on hardware (HARDWARE-TODO).

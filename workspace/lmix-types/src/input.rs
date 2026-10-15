@@ -497,6 +497,9 @@ pub struct Input {
     /// Colour correction (inputs with a picture).
     #[serde(default)]
     pub look: Look,
+    /// Actions when the input goes on or off air (AUT.7).
+    #[serde(default)]
+    pub triggers: Vec<crate::automation::Trigger>,
 }
 
 /// What a discovered device delivers.

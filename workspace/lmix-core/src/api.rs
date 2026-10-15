@@ -16,6 +16,8 @@
 //! | `GET /api/pictures/inputs/{input}` | input picture (number, name, id, `preview`, `program`) |
 //! | `GET /api/events` | WebSocket: state first, then every event |
 //! | `GET /health` | liveness |
+//! | `GET /metrics` | health and metrics, Prometheus text format (OPS.3) |
+//! | `GET /`, `/mixer`, `/tally`, `/keys` | browser pages (`web.rs`) |
 
 use std::sync::Arc;
 
@@ -38,6 +40,7 @@ const PICTURE_RETRY_SECS: &str = "1";
 pub fn router(service: Arc<Service>) -> Router {
     Router::new()
         .route("/health", get(|| async { "ok" }))
+        .route("/metrics", get(metrics))
         .route("/api/state", get(state))
         .route("/api/tally", get(tally))
         .route("/api/actions", get(catalog).post(action))
@@ -52,6 +55,7 @@ pub fn router(service: Arc<Service>) -> Router {
         .route("/api/pictures/inputs/{input}", get(input_picture))
         .route("/api/live/program", get(live_program))
         .route("/api/live/inputs/{input}", get(live_input))
+        .merge(crate::web::routes())
         .with_state(service)
 }
 
@@ -61,6 +65,21 @@ async fn state(State(service): State<Arc<Service>>) -> impl IntoResponse {
 
 async fn tally(State(service): State<Arc<Service>>) -> impl IntoResponse {
     Json(service.tally().await)
+}
+
+async fn metrics(State(service): State<Arc<Service>>) -> impl IntoResponse {
+    let snapshot = crate::metrics::Snapshot {
+        state: service.state().await,
+        tally: service.tally().await,
+        levels: service.levels().await,
+        outputs: service.output_stats(),
+        latency: service.latency(),
+        uptime_secs: crate::metrics::started().elapsed().as_secs(),
+    };
+    (
+        [(header::CONTENT_TYPE, "text/plain; version=0.0.4")],
+        crate::metrics::render(&snapshot, crate::metrics::resident_bytes()),
+    )
 }
 
 async fn latency(State(service): State<Arc<Service>>) -> impl IntoResponse {

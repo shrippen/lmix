@@ -13,11 +13,13 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+use crate::automation::{Cue, Trigger};
 use crate::input::{
     ChannelStrip, InputColor, InputRef, Listen, Look, SignalLoss, SourceSpec, Transport, AUX_BUSES,
 };
 use crate::layout::BoxSpec;
 use crate::output::{OutputRef, OutputSource, OutputSpec};
+use crate::shortcut::ShortcutSpec;
 
 /// 0-based index of aux bus `bus` (1-based, as in actions).
 pub fn aux_index(bus: u8) -> Result<usize, ActionError> {
@@ -109,6 +111,8 @@ pub enum Action {
     },
     /// Close an input.
     RemoveInput { input: InputRef },
+    /// Bring back the input closed last, with its settings (AUT.10).
+    RestoreInput,
     /// Change what an input shows, keeping its settings (INP.4).
     ReplaceSource { input: InputRef, source: SourceSpec },
     /// Rename an input.
@@ -201,6 +205,49 @@ pub enum Action {
     /// Put a layout into preview.
     PreviewLayout { layout: InputRef },
 
+    // ---- Automation (AUT.7, AUT.14) ----
+    /// Replace an input's triggers.
+    SetTriggers {
+        input: InputRef,
+        triggers: Vec<Trigger>,
+    },
+    /// Add a cue list.
+    AddCueList { name: String, cues: Vec<Cue> },
+    /// Replace a cue list's name and cues (by number, name or id); the
+    /// next cue stays where it was, at most one past the last.
+    SetCueList {
+        list: InputRef,
+        name: String,
+        cues: Vec<Cue>,
+    },
+    /// Remove a cue list.
+    RemoveCueList { list: InputRef },
+    /// Run the list's next cue and move on.
+    CueGo { list: InputRef },
+    /// Run the cue before the last one run and step back.
+    CueBack { list: InputRef },
+    /// Make cue `cue` (1-based) the next one, without running it.
+    CueJump { list: InputRef, cue: u32 },
+
+    // ---- Safety ----
+    /// Lock or unlock (AUT.11): while locked, closing inputs, opening or
+    /// clearing the show and stopping or removing outputs are refused.
+    SetLock { on: bool },
+
+    // ---- Shortcuts (AUT.1–3) ----
+    /// Add a shortcut: a key and label for a list of actions.
+    AddShortcut { shortcut: ShortcutSpec },
+    /// Replace a shortcut (by number, label or id).
+    SetShortcut {
+        target: InputRef,
+        shortcut: ShortcutSpec,
+    },
+    /// Remove a shortcut.
+    RemoveShortcut { target: InputRef },
+    /// Run a shortcut's actions in order; the first failing one stops
+    /// the rest.
+    RunShortcut { target: InputRef },
+
     // ---- Switching (SWI) ----
     /// Put an input into preview.
     PreviewInput { input: InputRef },
@@ -290,6 +337,20 @@ pub enum ActionError {
     UnknownLayout { reference: String },
     #[error("layout: {reason}")]
     BadLayout { reason: String },
+    #[error("no cue list {reference}")]
+    UnknownCueList { reference: String },
+    #[error("cue list: {reason}")]
+    BadCueList { reason: String },
+    #[error("triggers: {reason}")]
+    BadTriggers { reason: String },
+    #[error("locked: unlock first")]
+    Locked,
+    #[error("no closed input to bring back")]
+    NothingToRestore,
+    #[error("no shortcut {reference}")]
+    UnknownShortcut { reference: String },
+    #[error("shortcut: {reason}")]
+    BadShortcut { reason: String },
     #[error("a stinger is playing")]
     StingerPlaying,
     #[error("stinger: {reason}")]

@@ -86,6 +86,19 @@ Kirigami.ApplicationWindow {
         return decodeURIComponent(url.toString().replace(/^file:\/\//, ""))
     }
 
+    readonly property var shortcuts: show && show.shortcuts ? show.shortcuts : []
+    readonly property var shortcutKeys: shortcuts.filter(s => s.key).map(s => s.key)
+
+    // The show's shortcuts (AUT.1–3); they win over the keys below.
+    Instantiator {
+        model: root.shortcuts.filter(s => s.key)
+        delegate: Shortcut {
+            required property var modelData
+            sequence: modelData.key
+            onActivated: root.act({ action: "run_shortcut", target: modelData.id })
+        }
+    }
+
     // Keys 1–9: that input into preview (not while a text field has focus:
     // fields take printable keys first).
     Instantiator {
@@ -93,6 +106,7 @@ Kirigami.ApplicationWindow {
         delegate: Shortcut {
             required property int index
             sequence: String(index + 1)
+            enabled: root.shortcutKeys.indexOf(String(index + 1)) < 0
             onActivated: {
                 var input = root.inputs[index]
                 if (input && input.id !== root.show.program && input.id !== root.show.preview) {
@@ -122,6 +136,46 @@ Kirigami.ApplicationWindow {
         id: addInputDialog
         parent: QQC2.Overlay.overlay
         core: backend
+    }
+
+    ShortcutsDialog {
+        id: shortcutsDialog
+        parent: QQC2.Overlay.overlay
+        anchors.centerIn: parent
+        act: root.act
+        shortcuts: root.shortcuts
+        onEditRequested: shortcut => {
+            shortcutEditDialog.shortcut = shortcut
+            shortcutEditDialog.open()
+        }
+    }
+
+    ShortcutEditDialog {
+        id: shortcutEditDialog
+        parent: QQC2.Overlay.overlay
+        anchors.centerIn: parent
+        act: root.act
+        inputs: root.inputs
+        outputs: root.show ? root.show.outputs : []
+    }
+
+    TriggersDialog {
+        id: triggersDialog
+        parent: QQC2.Overlay.overlay
+        anchors.centerIn: parent
+        act: root.act
+        inputs: root.inputs
+        outputs: root.show ? root.show.outputs : []
+    }
+
+    CueListsDialog {
+        id: cueListsDialog
+        parent: QQC2.Overlay.overlay
+        anchors.centerIn: parent
+        act: root.act
+        inputs: root.inputs
+        outputs: root.show ? root.show.outputs : []
+        lists: root.show && root.show.cue_lists ? root.show.cue_lists : []
     }
 
     LayoutDialog {
@@ -269,6 +323,30 @@ Kirigami.ApplicationWindow {
                     onClicked: root.act({ action: "clear_listen" })
                 }
                 KanteButton {
+                    text: qsTr("Bring back %1").arg(root.show ? root.show.restorable : "")
+                    visible: root.show !== null && !!root.show.restorable
+                    onClicked: root.act({ action: "restore_input" })
+                }
+                KanteButton {
+                    readonly property bool locked: root.show !== null && root.show.locked === true
+                    text: locked ? qsTr("Locked") : qsTr("Lock")
+                    emphasis: locked ? KanteButton.Emphasis.Destructive : KanteButton.Emphasis.Normal
+                    enabled: backend.connected
+                    QQC2.ToolTip.visible: hovered
+                    QQC2.ToolTip.text: qsTr("While locked, closing inputs, loading a show and stopping outputs are refused.")
+                    onClicked: root.act({ action: "set_lock", on: !locked })
+                }
+                KanteButton {
+                    text: qsTr("Shortcuts…")
+                    enabled: backend.connected
+                    onClicked: shortcutsDialog.open()
+                }
+                KanteButton {
+                    text: qsTr("Cues…")
+                    enabled: backend.connected
+                    onClicked: cueListsDialog.open()
+                }
+                KanteButton {
                     text: qsTr("Aux…")
                     enabled: backend.connected
                     onClicked: auxDialog.open()
@@ -328,6 +406,10 @@ Kirigami.ApplicationWindow {
                     overlays: root.show && root.show.overlays ? root.show.overlays : []
                     looksAvailable: root.show !== null && root.show.looks_available === true
                     peakDb: root.levels[key]
+                    onTriggersRequested: {
+                        triggersDialog.input = tileDelegate.input
+                        triggersDialog.open()
+                    }
                     onReplaceRequested: {
                         addInputDialog.replacing = tileDelegate.input
                         addInputDialog.open()
