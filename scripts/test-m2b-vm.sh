@@ -8,6 +8,7 @@
 #                                     # also screenshots the Qt Console
 #                                     # (lmix-core client) on Xvfb
 #   KEEP_WORK=1                       # keep logs and pictures
+#   WORK=dir                          # put them there (default: mktemp)
 #   LATENCY_BUDGET_MS=150             # p95 capture-to-program budget
 #   STROM_GST_DEBUG=compositor:4      # GST_DEBUG for strom (gst.log)
 set -euo pipefail
@@ -17,7 +18,8 @@ STROM_PORT=8199
 CORE_PORT=8299
 STROM="http://127.0.0.1:${STROM_PORT}"
 CORE="http://127.0.0.1:${CORE_PORT}/api"
-WORK="$(mktemp -d)"
+WORK="${WORK:-$(mktemp -d)}"
+mkdir -p "$WORK"
 # Mixer slots for the test; small to fit a VM.
 SLOTS=7   # six inputs plus a stinger clip
 # Mean brightness (0-100) bars or snow exceed; black is 0.
@@ -38,7 +40,17 @@ cleanup() {
 }
 trap cleanup EXIT
 
-fail() { echo "FAIL: $*" >&2; exit 1; }
+fail() {
+    echo "FAIL: $*" >&2
+    # What the engine and lmix-core were doing (CI shows no files).
+    local log
+    for log in strom.log core.log gst.log; do
+        [[ -s "$WORK/$log" ]] || continue
+        echo "--- last 60 lines of $log" >&2
+        tail -n 60 "$WORK/$log" >&2
+    done
+    exit 1
+}
 pass() { echo "ok   $*"; }
 
 act() {
