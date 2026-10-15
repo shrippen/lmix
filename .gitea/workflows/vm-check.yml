@@ -24,6 +24,12 @@ concurrency:
 
 jobs:
   vm-check:
+    # One VM check at a time across all branches: two of them (or one next
+    # to a heavy job) starve the CPU mixer, and its timing checks fail.
+    # Not cancelled: a check of another branch is not outdated by this one.
+    concurrency:
+      group: vm-check
+      cancel-in-progress: false
     timeout-minutes: 120
     runs-on: ubuntu-latest
     container: ubuntu:24.04

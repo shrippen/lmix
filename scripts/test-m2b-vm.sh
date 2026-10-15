@@ -10,6 +10,7 @@
 #   KEEP_WORK=1                       # keep logs and pictures
 #   WORK=dir                          # put them there (default: mktemp)
 #   LATENCY_BUDGET_MS=150             # p95 capture-to-program budget
+#   SETTLE_S=10                       # how long a check waits for its state
 #   STROM_GST_DEBUG=compositor:4      # GST_DEBUG for strom (gst.log)
 set -euo pipefail
 
@@ -29,6 +30,10 @@ AUDIBLE_DB=-40
 SILENT_DB=-60
 # Thumbnail taps refresh about once a second.
 TAP_INTERVAL=1.5
+# Checks poll for the expected state up to this long. The CPU mixer in a
+# shared CI container can lag several seconds behind real time; a slow
+# engine passes, a wrong state still fails.
+SETTLE_S="${SETTLE_S:-10}"
 
 PIDS=()
 cleanup() {
@@ -52,6 +57,15 @@ fail() {
     exit 1
 }
 pass() { echo "ok   $*"; }
+wait_for() {   # wait_for <seconds> <command…>: until the command succeeds
+    local seconds="$1"; shift
+    for _ in $(seq 1 "$((seconds * 2))"); do "$@" && return 0; sleep 0.5; done
+    return 1
+}
+# settled <condition>: polls a bash condition (as for eval) until it holds.
+settled() { wait_for "$SETTLE_S" eval "$1"; }
+# is <state function> <name> <state>: evaluated anew on every try.
+is() { [[ "$("$1" "$2")" == "$3" ]]; }
 
 act() {
     local out code
@@ -100,9 +114,8 @@ pass "strom and lmix-core up"
 # --- inputs ---
 act '{"action":"add_input","source":{"kind":"pattern","pattern":"bars"},"name":"Bars"}' >/dev/null
 act '{"action":"add_input","source":{"kind":"pattern","pattern":"ball"},"name":"Ball"}' >/dev/null
-state="$(curl -sf "$CORE/state")"
-[[ "$(jq '[.inputs[] | select(.status=="online")] | length' <<<"$state")" == 2 ]] \
-    || fail "inputs not online: $state"
+online() { [[ "$(curl -sf "$CORE/state" | jq '[.inputs[] | select(.status=="online")] | length')" == "$1" ]]; }
+wait_for "$SETTLE_S" online 2 || fail "inputs not online: $(curl -sf "$CORE/state")"
 pass "two inputs online"
 
 # --- preview and take ---
@@ -110,8 +123,7 @@ act '{"action":"preview_input","input":"Bars"}' >/dev/null
 act '{"action":"cut"}' >/dev/null
 act '{"action":"preview_input","input":"Ball"}' >/dev/null
 act '{"action":"transition","slot":1}' >/dev/null
-sleep 1
-[[ "$(curl -sf "$CORE/tally")" == "[2,1]" ]] || fail "tally $(curl -sf "$CORE/tally")"
+settled '[[ "$(curl -sf "$CORE/tally")" == "[2,1]" ]]' || fail "tally $(curl -sf "$CORE/tally")"
 pass "preview, cut, fade; tally"
 
 MIXER_ID="$(curl -sf "$STROM/api/flows" | jq -r '.flows[] | select(.name | startswith("lmix mixer")) | .id')"
@@ -137,23 +149,22 @@ program_moves() {
     ! cmp -s "$WORK/a.jpg" "$WORK/b.jpg"
 }
 
-program_moves || fail "program frozen or black with Ball on air"
+# bright <picture path> <file>: the picture shows content, not black.
+bright() { picture "$1" "$2"; [[ $(brightness "$2") -gt $MIN_BRIGHTNESS ]]; }
+wait_for "$SETTLE_S" program_moves || fail "program frozen or black with Ball on air"
 pass "program moves (Ball over inter)"
-picture inputs/preview "$WORK/pvw.jpg"
-[[ $(brightness "$WORK/pvw.jpg") -gt $MIN_BRIGHTNESS ]] || fail "preview picture dark"
+wait_for "$SETTLE_S" bright inputs/preview "$WORK/pvw.jpg" || fail "preview picture dark"
 act '{"action":"cut_direct","input":"Bars"}' >/dev/null
-sleep "$TAP_INTERVAL"
-picture program "$WORK/pgm.jpg"
-[[ $(brightness "$WORK/pgm.jpg") -gt $MIN_BRIGHTNESS ]] || fail "program dark with Bars on air"
+wait_for "$SETTLE_S" bright program "$WORK/pgm.jpg" || fail "program dark with Bars on air"
 pass "pictures show content (preview, program)"
 
 # --- swap the program source while on air ---
 act '{"action":"replace_source","input":"Bars","source":{"kind":"pattern","pattern":"snow"}}' >/dev/null
-sleep 2
+sleep 2   # the mixer must stay up across the swap, not come back later
 running="$(curl -sf "$STROM/api/flows/$MIXER_ID" | jq -r '.flow.running')"
 [[ "$running" == true ]] || fail "mixer stopped after source swap"
-program_moves || fail "program frozen after source swap"
-[[ $(brightness "$WORK/b.jpg") -gt $MIN_BRIGHTNESS ]] || fail "program dark after source swap"
+moving_bright() { program_moves && [[ $(brightness "$WORK/b.jpg") -gt $MIN_BRIGHTNESS ]]; }
+wait_for "$SETTLE_S" moving_bright || fail "program frozen or dark after source swap"
 pass "program source swapped on air: mixer kept running, new picture moves"
 
 # --- sound over the slots (B23): mute, audio follows video, volume ---
@@ -161,55 +172,54 @@ pass "program source swapped on air: mixer kept running, new picture moves"
 # Ball is in preview. Levels refresh every 100 ms.
 pgm_db() { curl -sf "$CORE/audio/levels" | jq '.program_peak_db // -100 | floor'; }
 input_db() { curl -sf "$CORE/audio/levels" | jq ".inputs[$1].peak_db | floor"; }
-settle() { sleep 1; }
-settle
-[[ $(input_db 0) -gt $AUDIBLE_DB && $(input_db 1) -gt $AUDIBLE_DB ]] || fail "no sound from the slots"
-[[ $(pgm_db) -gt $AUDIBLE_DB ]] || fail "no program sound"
+# A level is read once it has settled: two readings a second apart agree
+# within 3 dB (peaks of a steady tone; a fade or a lagging engine moves).
+steady_db() {
+    local a b
+    for _ in $(seq 1 "$SETTLE_S"); do
+        a=$("$@"); sleep 1; b=$("$@")
+        (( a - b <= 3 && b - a <= 3 )) && { echo "$b"; return; }
+    done
+    echo "$b"
+}
+settled '[[ $(input_db 0) -gt $AUDIBLE_DB && $(input_db 1) -gt $AUDIBLE_DB ]]' || fail "no sound from the slots"
+settled '[[ $(pgm_db) -gt $AUDIBLE_DB ]]' || fail "no program sound"
 act '{"action":"set_audio","input":"Bars","on":false}' >/dev/null
 act '{"action":"set_audio_follow","input":"Ball","follow":true}' >/dev/null
-settle
-[[ $(pgm_db) -lt $SILENT_DB ]] || fail "program not silent: Bars off, Ball follows video off air ($(pgm_db) dB)"
+settled '[[ $(pgm_db) -lt $SILENT_DB ]]' || fail "program not silent: Bars off, Ball follows video off air ($(pgm_db) dB)"
 act '{"action":"cut_direct","input":"Ball"}' >/dev/null
-settle
-full=$(pgm_db)
-[[ $full -gt $AUDIBLE_DB ]] || fail "Ball not heard on air ($full dB)"
+settled '[[ $(pgm_db) -gt $AUDIBLE_DB ]]' || fail "Ball not heard on air ($(pgm_db) dB)"
+full=$(steady_db pgm_db)
 act '{"action":"set_volume","input":"Ball","volume":50}' >/dev/null
-settle
-[[ $(pgm_db) -lt $((full - 6)) ]] || fail "volume 50 did not lower program ($full -> $(pgm_db) dB)"
+settled '[[ $(pgm_db) -lt $((full - 6)) ]]' || fail "volume 50 did not lower program ($full -> $(pgm_db) dB)"
 pass "sound: slots heard, mute, audio follows video, volume"
 
 # --- solo listening on the monitor bus: PFL before, AFL after the fader ---
 mon_db() { curl -sf "$CORE/audio/levels" | jq '.monitor_peak_db // -100 | floor'; }
-settle
-[[ $(mon_db) -gt $AUDIBLE_DB ]] || fail "monitor does not follow program without solo"
+settled '[[ $(mon_db) -gt $AUDIBLE_DB ]]' || fail "monitor does not follow program without solo"
 act '{"action":"set_audio","input":"Ball","on":false}' >/dev/null   # program now silent
 act '{"action":"set_listen","input":"Bars","listen":"pfl"}' >/dev/null
-settle
-[[ $(pgm_db) -lt $SILENT_DB ]] || fail "program not silent for the solo check"
-[[ $(mon_db) -gt $AUDIBLE_DB ]] || fail "PFL of a muted input not heard ($(mon_db) dB)"
+settled '[[ $(pgm_db) -lt $SILENT_DB ]]' || fail "program not silent for the solo check"
+settled '[[ $(mon_db) -gt $AUDIBLE_DB ]]' || fail "PFL of a muted input not heard ($(mon_db) dB)"
 act '{"action":"set_listen","input":"Bars","listen":"afl"}' >/dev/null
-settle
-[[ $(mon_db) -lt $SILENT_DB ]] || fail "AFL of a muted input heard ($(mon_db) dB)"
+settled '[[ $(mon_db) -lt $SILENT_DB ]]' || fail "AFL of a muted input heard ($(mon_db) dB)"
 act '{"action":"clear_listen"}' >/dev/null
 act '{"action":"set_audio","input":"Ball","on":true}' >/dev/null
-settle
-[[ $(mon_db) -gt $AUDIBLE_DB ]] || fail "monitor not back on program after clearing solos"
+settled '[[ $(mon_db) -gt $AUDIBLE_DB ]]' || fail "monitor not back on program after clearing solos"
 pass "solo: PFL hears a muted input, AFL does not, monitor back on program"
 
 # --- channel strip (4.7): trim lowers program, delay set while playing ---
 act '{"action":"set_volume","input":"Ball","volume":100}' >/dev/null
-settle
-full=$(pgm_db)
+settled '[[ $(pgm_db) -gt $AUDIBLE_DB ]]' || fail "Ball not heard at volume 100 ($(pgm_db) dB)"
+full=$(steady_db pgm_db)
 act '{"action":"set_channel_strip","input":"Ball","strip":{"gain_db":-20,"delay_ms":200}}' >/dev/null
-settle
-[[ $(pgm_db) -lt $((full - 15)) ]] || fail "strip gain -20 dB did not lower program ($full -> $(pgm_db) dB)"
+settled '[[ $(pgm_db) -lt $((full - 15)) ]]' || fail "strip gain -20 dB did not lower program ($full -> $(pgm_db) dB)"
 ball_slot="$(curl -sf "$CORE/state" | jq '.inputs[] | select(.name=="Ball") | .slot')"
 offset="$(curl -sf "$STROM/api/flows/$MIXER_ID/elements/adelay$ball_slot/properties" | jq '.properties["ts-offset"]')"
 [[ "$offset" == 200000000 ]] || fail "strip delay not in the engine (ts-offset $offset)"
 [[ $(pgm_db) -gt $SILENT_DB ]] || fail "program silent after the delay change"
 act '{"action":"set_channel_strip","input":"Ball","strip":{}}' >/dev/null
-settle
-[[ $(pgm_db) -ge $((full - 2)) ]] || fail "strip reset did not restore program ($full -> $(pgm_db) dB)"
+settled '[[ $(pgm_db) -ge $((full - 2)) ]]' || fail "strip reset did not restore program ($full -> $(pgm_db) dB)"
 act '{"action":"set_volume","input":"Ball","volume":50}' >/dev/null   # checked after the crash below
 pass "channel strip: gain lowers program, delay changed on air, reset"
 
@@ -217,15 +227,12 @@ pass "channel strip: gain lowers program, delay changed on air, reset"
 aux_db() { curl -sf "$CORE/audio/levels" | jq ".aux_peak_db[$1] // -100 | floor"; }
 act '{"action":"set_aux_send","input":"Ball","bus":1,"level":100}' >/dev/null
 act '{"action":"set_aux_send","input":"Ball","bus":2,"level":100}' >/dev/null
-settle
-[[ $(aux_db 0) -gt $AUDIBLE_DB && $(aux_db 1) -gt $AUDIBLE_DB ]] || fail "aux buses silent with sends up ($(aux_db 0), $(aux_db 1) dB)"
+settled '[[ $(aux_db 0) -gt $AUDIBLE_DB && $(aux_db 1) -gt $AUDIBLE_DB ]]' || fail "aux buses silent with sends up ($(aux_db 0), $(aux_db 1) dB)"
 act '{"action":"set_audio","input":"Ball","on":false}' >/dev/null
-settle
+settled '[[ $(aux_db 1) -lt $SILENT_DB ]]' || fail "aux 2 (after the fader) hears a muted input ($(aux_db 1) dB)"
 [[ $(aux_db 0) -gt $AUDIBLE_DB ]] || fail "aux 1 (before the fader) lost a muted input"
-[[ $(aux_db 1) -lt $SILENT_DB ]] || fail "aux 2 (after the fader) hears a muted input ($(aux_db 1) dB)"
 act '{"action":"set_aux_bus","bus":1,"volume":100,"mute":true}' >/dev/null
-settle
-[[ $(aux_db 0) -lt $SILENT_DB ]] || fail "muted aux 1 still sounds ($(aux_db 0) dB)"
+settled '[[ $(aux_db 0) -lt $SILENT_DB ]]' || fail "muted aux 1 still sounds ($(aux_db 0) dB)"
 act '{"action":"set_aux_bus","bus":1,"volume":100,"mute":false}' >/dev/null
 act '{"action":"set_audio","input":"Ball","on":true}' >/dev/null
 pass "aux buses: sends heard, before/after the fader, master mute"
@@ -242,13 +249,6 @@ for clip in "a ball 330" "b smpte 660"; do
         audiotestsrc num-buffers=470 freq="$3" volume=0.2 ! audioconvert ! avenc_aac ! aacparse ! m.
 done
 rgb() { convert "$1" -format "%[fx:int(mean.$2*255)]" info:; }
-# is <state function> <name> <state>: evaluated anew on every try.
-is() { [[ "$("$1" "$2")" == "$3" ]]; }
-wait_for() {   # wait_for <seconds> <command…>: until the command succeeds
-    local seconds="$1"; shift
-    for _ in $(seq 1 "$((seconds * 2))"); do "$@" && return 0; sleep 0.5; done
-    return 1
-}
 
 act '{"action":"add_input","source":{"kind":"color","color":"#ff8000"},"name":"Orange"}' >/dev/null
 act "{\"action\":\"add_input\",\"source\":{\"kind\":\"image\",\"path\":\"$MEDIA/logo.png\"},\"name\":\"Logo\"}" >/dev/null
@@ -256,14 +256,13 @@ act "{\"action\":\"add_input\",\"source\":{\"kind\":\"playlist\",\"paths\":[\"$M
 code="$(curl -s -o /dev/null -w '%{http_code}' -X POST "$CORE/actions" -H 'content-type: application/json' \
     -d '{"action":"add_input","source":{"kind":"color","color":"orange"}}')"
 [[ "$code" == 422 ]] || fail "malformed color accepted ($code)"
-sleep 3
-picture inputs/Orange "$WORK/orange.jpg"
-[[ $(rgb "$WORK/orange.jpg" r) -gt 200 && $(rgb "$WORK/orange.jpg" b) -lt 50 ]] || fail "color input not orange"
-picture inputs/Logo "$WORK/logo.jpg"
-[[ $(rgb "$WORK/logo.jpg" b) -gt 150 && $(rgb "$WORK/logo.jpg" r) -lt 80 ]] || fail "image input not the logo"
+is_orange() { picture inputs/Orange "$WORK/orange.jpg"; [[ $(rgb "$WORK/orange.jpg" r) -gt 200 && $(rgb "$WORK/orange.jpg" b) -lt 50 ]]; }
+wait_for "$SETTLE_S" is_orange || fail "color input not orange"
+is_logo() { picture inputs/Logo "$WORK/logo.jpg"; [[ $(rgb "$WORK/logo.jpg" b) -gt 150 && $(rgb "$WORK/logo.jpg" r) -lt 80 ]]; }
+wait_for "$SETTLE_S" is_logo || fail "image input not the logo"
 clips_id="$(curl -sf "$CORE/state" | jq -r '.inputs[] | select(.name=="Clips") | .id')"
-clips_db="$(curl -sf "$CORE/audio/levels" | jq --arg id "$clips_id" '.inputs[] | select(.input==$id) | .peak_db | floor')"
-[[ $clips_db -gt $AUDIBLE_DB ]] || fail "playlist silent ($clips_db dB)"
+clips_db() { curl -sf "$CORE/audio/levels" | jq --arg id "$clips_id" '.inputs[] | select(.input==$id) | .peak_db // -100 | floor'; }
+settled '[[ $(clips_db) -gt $AUDIBLE_DB ]]' || fail "playlist silent ($(clips_db) dB)"
 pass "sources: color, still image, playlist with sound; bad color refused"
 
 act '{"action":"add_input","source":{"kind":"whip","endpoint":"guest"},"name":"Guest"}' >/dev/null
@@ -280,18 +279,19 @@ clips_still() {
 }
 picture inputs/Clips "$WORK/c0.jpg"   # switches the tap on before pausing
 act '{"action":"transport_input","input":"Clips","transport":"pause"}' >/dev/null
-sleep 1
-clips_still || fail "paused playlist still moves"
+wait_for "$SETTLE_S" clips_still || fail "paused playlist still moves"
 act '{"action":"transport_input","input":"Clips","transport":"play"}' >/dev/null
-sleep 1
-! clips_still || fail "playlist does not play again"
+clips_move() { ! clips_still; }
+wait_for "$SETTLE_S" clips_move || fail "playlist does not play again"
 # a is dark, b bright: next must flip the brightness either way.
 picture inputs/Clips "$WORK/before.jpg"
 act '{"action":"transport_input","input":"Clips","transport":"next"}' >/dev/null
-sleep 2
-picture inputs/Clips "$WORK/next.jpg"
-change=$(( $(brightness "$WORK/next.jpg") - $(brightness "$WORK/before.jpg") ))
-[[ ${change#-} -gt $MIN_BRIGHTNESS ]] || fail "next did not switch clips (brightness change $change)"
+switched() {
+    picture inputs/Clips "$WORK/next.jpg"
+    change=$(( $(brightness "$WORK/next.jpg") - $(brightness "$WORK/before.jpg") ))
+    [[ ${change#-} -gt $MIN_BRIGHTNESS ]]
+}
+wait_for "$SETTLE_S" switched || fail "next did not switch clips (brightness change $change)"
 pass "transport: pause, play, next"
 
 # --- signal loss: hold the last frame (default) or black, per input ---
@@ -300,24 +300,23 @@ act '{"action":"cut_direct","input":"Clips"}' >/dev/null
 mixer_pgm="$(curl -sf "$STROM/api/flows/$MIXER_ID/blocks/vm/state" | jq '.program_input')"
 [[ "$mixer_pgm" == 4 ]] || fail "cut_direct: mixer program is input $mixer_pgm, not Clips (4)"
 # Make sure the bright clip b plays (next from a, previous from b).
-sleep "$TAP_INTERVAL"
-picture inputs/Clips "$WORK/now.jpg"
-if [[ $(brightness "$WORK/now.jpg") -lt $MIN_BRIGHTNESS ]]; then
+if ! wait_for 3 bright inputs/Clips "$WORK/now.jpg"; then
     act '{"action":"transport_input","input":"Clips","transport":"next"}' >/dev/null
-    sleep 2
+    wait_for "$SETTLE_S" bright inputs/Clips "$WORK/now.jpg" || fail "bright clip b does not play"
 fi
+wait_for "$SETTLE_S" bright program "$WORK/hold.jpg" || fail "clip b not on program"
 act '{"action":"transport_input","input":"Clips","transport":"pause"}' >/dev/null
+wait_for "$SETTLE_S" clips_still || fail "playlist did not pause"
+# Held: still bright on program after the pause (not just before it).
 sleep 2
-picture program "$WORK/hold.jpg"
-[[ $(brightness "$WORK/hold.jpg") -gt $MIN_BRIGHTNESS ]] || fail "paused clip not held on program"
+bright program "$WORK/hold.jpg" || fail "paused clip not held on program"
 # The mode applies from the next frame on: set it while the clip plays.
 act '{"action":"transport_input","input":"Clips","transport":"play"}' >/dev/null
 act '{"action":"set_signal_loss","input":"Clips","mode":"black"}' >/dev/null
-sleep 1
+wait_for "$SETTLE_S" clips_move || fail "playlist does not play after the hold check"
 act '{"action":"transport_input","input":"Clips","transport":"pause"}' >/dev/null
-sleep 2
-picture program "$WORK/black.jpg"
-[[ $(brightness "$WORK/black.jpg") -lt 5 ]] || fail "paused clip not black on program ($(brightness "$WORK/black.jpg"))"
+black_pgm() { picture program "$WORK/black.jpg"; [[ $(brightness "$WORK/black.jpg") -lt 5 ]]; }
+wait_for "$SETTLE_S" black_pgm || fail "paused clip not black on program ($(brightness "$WORK/black.jpg"))"
 act '{"action":"set_signal_loss","input":"Clips","mode":"hold"}' >/dev/null
 act '{"action":"transport_input","input":"Clips","transport":"play"}' >/dev/null
 pass "signal loss: paused clip held on program, black when set"
@@ -331,17 +330,16 @@ act '{"action":"add_output","spec":{"kind":"srt","uri":"srt://:9911?mode=listene
 act '{"action":"start_output","output":"Rec"}' >/dev/null
 act '{"action":"start_output","output":"Stream"}' >/dev/null
 output_state() { curl -sf "$CORE/state" | jq -r ".outputs[] | select(.name==\"$1\") | .status.state"; }
-[[ "$(output_state Rec)" == running && "$(output_state Stream)" == running ]] || fail "outputs not running"
-timeout 5 gst-launch-1.0 -q srtsrc uri="srt://127.0.0.1:9911" ! filesink location="$WORK/srt.ts" &
+settled '[[ "$(output_state Rec)" == running && "$(output_state Stream)" == running ]]' || fail "outputs not running"
+timeout "$((SETTLE_S + 5))" gst-launch-1.0 -q srtsrc uri="srt://127.0.0.1:9911" ! filesink location="$WORK/srt.ts" &
 receiver=$!
 # Link health while the receiver is connected (B32).
 stream_link() { curl -sf "$CORE/outputs/stats" | jq -e '.[] | select(.connected and .kbps > 0)' >/dev/null; }
-wait_for 4 stream_link || fail "no link health for the SRT output: $(curl -sf "$CORE/outputs/stats")"
+wait_for "$SETTLE_S" stream_link || fail "no link health for the SRT output: $(curl -sf "$CORE/outputs/stats")"
 wait "$receiver" || true
 [[ $(stat -c %s "$WORK/srt.ts" 2>/dev/null || echo 0) -gt 50000 ]] || fail "SRT output delivered nothing"
 act '{"action":"stop_output","output":"Rec"}' >/dev/null
-sleep 2
-[[ "$(output_state Rec)" == stopped ]] || fail "recording did not stop"
+wait_for "$SETTLE_S" is output_state Rec stopped || fail "recording did not stop"
 recording="$(find "$WORK/strom-data" -path '*rec/*' -name '*.mp4' | head -1)"
 [[ -n "$recording" ]] || fail "no recording file"
 [[ "$(codecs "$recording")" == "aac,h264" ]] || fail "recording lacks H.264 or AAC: $(codecs "$recording")"
@@ -355,6 +353,9 @@ for iso in Orange Clips; do
 done
 sleep 4
 for iso in Orange Clips; do act "{\"action\":\"stop_output\",\"output\":\"ISO $iso\"}" >/dev/null; done
+for iso in Orange Clips; do
+    wait_for "$SETTLE_S" is output_state "ISO $iso" stopped || fail "ISO $iso did not stop"
+done
 iso_file() { find "$WORK/strom-data" -path "*iso-$1/*" -name '*.mp4' | head -1; }
 [[ "$(codecs "$(iso_file Orange)")" == "h264" ]] || fail "ISO of a silent input: $(codecs "$(iso_file Orange)")"
 [[ "$(codecs "$(iso_file Clips)")" == "aac,h264" ]] || fail "ISO of the playlist: $(codecs "$(iso_file Clips)")"
@@ -369,7 +370,7 @@ screen_orange() {
     DISPLAY="$ENGINE_DISPLAY" import -window root "$WORK/screen.png"
     [[ $(rgb "$WORK/screen.png" r) -gt 200 && $(rgb "$WORK/screen.png" b) -lt 60 ]]
 }
-for _ in $(seq 1 20); do screen_orange && break; sleep 0.5; done
+wait_for "$SETTLE_S" screen_orange || true
 [[ "$(output_state Screen)" == running ]] && screen_orange || fail "display output does not show program"
 act '{"action":"stop_output","output":"Screen"}' >/dev/null
 pass "display output: program in a window on the engine screen"
@@ -384,7 +385,7 @@ act '{"action":"transition","slot":1}' >/dev/null
 sleep 1
 orange_slot="lmix slot $(curl -sf "$CORE/state" | jq '.inputs[] | select(.name=="Orange") | .slot')"
 curl -sf -X POST "$STROM/api/flows/$(flow_id "$orange_slot")/stop" >/dev/null
-wait_for 2 is input_state Orange offline || fail "dead source not marked offline"
+wait_for "$SETTLE_S" is input_state Orange offline || fail "dead source not marked offline"
 # Hold: while the input is offline, program keeps fading to its last
 # frame (CPU compositor in the VM may show one black frame at the loss,
 # HARDWARE-TODO).
@@ -392,20 +393,20 @@ held_orange() {
     picture program "$WORK/held.jpg"
     [[ "$(input_state Orange)" == offline && $(rgb "$WORK/held.jpg" r) -gt 150 ]]
 }
-wait_for 2 held_orange || fail "program lost the orange while the source was gone"
+wait_for "$SETTLE_S" held_orange || fail "program lost the orange while the source was gone"
 running="$(curl -sf "$STROM/api/flows/$MIXER_ID" | jq -r '.flow.running')"
 [[ "$running" == true ]] || fail "mixer stopped after source loss"
-wait_for 15 is input_state Orange online || fail "source did not fail back"
-picture inputs/Orange "$WORK/back.jpg"
-[[ $(rgb "$WORK/back.jpg" r) -gt 200 ]] || fail "orange not back after failback"
+wait_for "$((SETTLE_S + 15))" is input_state Orange online || fail "source did not fail back"
+orange_back() { picture inputs/Orange "$WORK/back.jpg"; [[ $(rgb "$WORK/back.jpg" r) -gt 200 ]]; }
+wait_for "$SETTLE_S" orange_back || fail "orange not back after failback"
 pass "failover: source died mid-transition, program held its last frame, input failed back"
 
 act '{"action":"start_output","output":"Stream"}' >/dev/null
 sleep 2   # running for a while, then the link breaks
 stream_flow="$(curl -sf "$STROM/api/flows" | jq -r '[.flows[] | select(.name | startswith("lmix output")) | select(.running)][0].id')"
 curl -sf -X POST "$STROM/api/flows/$stream_flow/stop" >/dev/null
-wait_for 2 is output_state Stream failed || fail "broken stream not marked failed"
-wait_for 15 is output_state Stream running || fail "stream did not restart"
+wait_for "$SETTLE_S" is output_state Stream failed || fail "broken stream not marked failed"
+wait_for "$((SETTLE_S + 15))" is output_state Stream running || fail "stream did not restart"
 act '{"action":"stop_output","output":"Stream"}' >/dev/null
 pass "failover: stream broke, was marked failed and restarted itself"
 
@@ -413,13 +414,13 @@ pass "failover: stream broke, was marked failed and restarted itself"
 act '{"action":"cut_direct","input":"Ball"}' >/dev/null
 act '{"action":"overlay_in","channel":1,"input":"Orange","duration_ms":0}' >/dev/null
 overlay_shown() { picture program "$WORK/ovl.jpg"; [[ $(rgb "$WORK/ovl.jpg" r) -gt 200 ]]; }
-wait_for 4 overlay_shown || fail "overlay 1 not on program"
+wait_for "$SETTLE_S" overlay_shown || fail "overlay 1 not on program"
 orange_number="$(curl -sf "$CORE/state" | jq '.inputs[] | select(.name=="Orange") | .number')"
 [[ "$(curl -sf "$CORE/tally" | jq ".[$((orange_number - 1))]")" == 1 ]] || fail "overlay input has no program tally"
 [[ "$(curl -sf "$CORE/state" | jq -r '.overlays[0] != null')" == true ]] || fail "overlay not in state"
 act '{"action":"overlay_out","channel":1,"duration_ms":500}' >/dev/null
 overlay_gone() { picture program "$WORK/ovl.jpg"; [[ $(rgb "$WORK/ovl.jpg" r) -lt 60 ]]; }
-wait_for 4 overlay_gone || fail "overlay 1 not taken off"
+wait_for "$SETTLE_S" overlay_gone || fail "overlay 1 not taken off"
 pass "overlays: input above program, red tally, faded off"
 code="$(curl -s -o /dev/null -w '%{http_code}' -X POST "$CORE/actions" -H 'content-type: application/json' \
     -d '{"action":"set_channel_strip","input":"Orange","strip":{}}')"
@@ -430,12 +431,12 @@ act '{"action":"cut_direct","input":"Ball"}' >/dev/null
 act '{"action":"preview_input","input":"Orange"}' >/dev/null
 act '{"action":"t_bar","position":0.5}' >/dev/null
 half_mixed() { picture program "$WORK/tbar.jpg"; local r; r=$(rgb "$WORK/tbar.jpg" r); ((r > 80 && r < 200)); }
-wait_for 4 half_mixed || fail "T-bar at half: program red $(rgb "$WORK/tbar.jpg" r), not a mix"
+wait_for "$SETTLE_S" half_mixed || fail "T-bar at half: program red $(rgb "$WORK/tbar.jpg" r), not a mix"
 [[ "$(curl -sf "$CORE/state" | jq '.t_bar')" == 0.5 ]] || fail "T-bar position not in state"
 act '{"action":"t_bar","position":1}' >/dev/null
 [[ "$(curl -sf "$CORE/state" | jq -r '[.inputs[] | select(.name=="Orange") | .id][0] == .program')" == true ]] \
     || fail "T-bar at the end did not take preview to program"
-wait_for 4 overlay_shown || fail "program not orange after the T-bar take"
+wait_for "$SETTLE_S" overlay_shown || fail "program not orange after the T-bar take"
 pass "T-bar: preview mixed in by half, taken at the end"
 
 # --- stinger (4.2): a clip with alpha over program, cut underneath ---
@@ -458,13 +459,13 @@ stinger_over_orange() {
     local b r; read -r b r <<<"$(middle "$WORK/sting.jpg")"
     ((b > 180 && r < 80)) && [[ $(corner_red "$WORK/sting.jpg") -gt 200 ]]
 }
-wait_for 3 stinger_over_orange || fail "stinger clip not over program (alpha around it)"
+wait_for "$SETTLE_S" stinger_over_orange || fail "stinger clip not over program (alpha around it)"
 stinger_gone() {
     picture program "$WORK/sting.jpg"
     local b r; read -r b r <<<"$(middle "$WORK/sting.jpg")"
     ((b < 120)) && [[ $(rgb "$WORK/sting.jpg" r) -lt 60 ]]
 }
-wait_for 8 stinger_gone || fail "stinger did not end on the new program"
+wait_for "$SETTLE_S" stinger_gone || fail "stinger did not end on the new program"
 act '{"action":"remove_input","input":"Sting"}' >/dev/null
 [[ "$(curl -sf "$CORE/state" | jq -r '.transitions[3].effect')" == cut ]] || fail "stinger button kept a removed clip"
 pass "stinger: clip with alpha over program, cut underneath, locked while it plays"
@@ -493,7 +494,7 @@ layout_shown() {
     [[ $(quarter "$WORK/layout.jpg" "$((w / 4))x$((h / 4))+0+$((h * 3 / 4))") -gt 200 ]] \
         && [[ $(quarter "$WORK/layout.jpg" "$((w / 4))x$((h / 4))+$((w * 5 / 8))+$((h / 8))") -lt 100 ]]
 }
-wait_for 8 layout_shown || fail "layout picture: background and box not where they belong"
+wait_for "$SETTLE_S" layout_shown || fail "layout picture: background and box not where they belong"
 act '{"action":"cut_direct","input":"Ball"}' >/dev/null
 act '{"action":"remove_layout","layout":1}' >/dev/null
 [[ "$(curl -sf "$CORE/state" | jq '.layouts | length')" == 0 ]] || fail "layout not removed"
@@ -546,9 +547,7 @@ act "{\"action\":\"save_show\",\"path\":\"$WORK/test.lmix\"}" >/dev/null
 act '{"action":"new_show"}' >/dev/null
 [[ "$(curl -sf "$CORE/state" | jq '.inputs | length')" == 0 ]] || fail "new show not empty"
 act "{\"action\":\"open_show\",\"path\":\"$WORK/test.lmix\"}" >/dev/null
-sleep 2
-state="$(curl -sf "$CORE/state")"
-[[ "$(jq '.inputs | length' <<<"$state")" == 6 ]] || fail "show not restored: $state"
+settled '[[ "$(curl -sf "$CORE/state" | jq ".inputs | length")" == 6 ]]' || fail "show not restored: $(curl -sf "$CORE/state")"
 pass "show saved, cleared, reopened"
 
 # An output running across the crash below must be adopted, not restarted.
@@ -562,11 +561,9 @@ sleep 1
 running="$(curl -sf "$STROM/api/flows/$MIXER_ID" | jq -r '.flow.running')"
 [[ "$running" == true ]] || fail "mixer died with lmix-core"
 start_core
-sleep 2
-[[ "$(curl -sf "$CORE/state" | jq '.inputs | length')" == 6 ]] || fail "autosave not resumed"
+settled '[[ "$(curl -sf "$CORE/state" | jq ".inputs | length")" == 6 ]]' || fail "autosave not resumed"
 [[ "$(curl -sf "$CORE/state" | jq '.inputs[1].audio.volume')" == 50 ]] || fail "audio settings not resumed"
-sleep 2
-[[ "$(output_state Stream)" == running ]] || fail "running output not adopted after lmix-core restart"
+wait_for "$SETTLE_S" is output_state Stream running || fail "running output not adopted after lmix-core restart"
 [[ "$(curl -sf "$STROM/api/flows" | jq '[.flows[] | select(.name | startswith("lmix output"))] | length')" == 1 ]] \
     || fail "output flow duplicated"
 [[ "$(output_starts)" == "$starts_before" ]] || fail "output restarted instead of adopted"
