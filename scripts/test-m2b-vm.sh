@@ -299,15 +299,20 @@ act '{"action":"cut_direct","input":"Clips"}' >/dev/null
 # Straight to program from outside preview: the mixer must follow lmix.
 mixer_pgm="$(curl -sf "$STROM/api/flows/$MIXER_ID/blocks/vm/state" | jq '.program_input')"
 [[ "$mixer_pgm" == 4 ]] || fail "cut_direct: mixer program is input $mixer_pgm, not Clips (4)"
-# Make sure the bright clip b plays (next from a, previous from b).
-if ! wait_for 3 bright inputs/Clips "$WORK/now.jpg"; then
+# Pause in the bright clip b, well before its end: start b afresh with
+# "next" from the dark clip a (from b, "next" goes to a first). Paused
+# near its end, b would roll over to a before the pause takes hold.
+dark_clip() { picture inputs/Clips "$WORK/now.jpg"; [[ $(brightness "$WORK/now.jpg") -lt $MIN_BRIGHTNESS ]]; }
+if ! wait_for 3 dark_clip; then
     act '{"action":"transport_input","input":"Clips","transport":"next"}' >/dev/null
-    wait_for "$SETTLE_S" bright inputs/Clips "$WORK/now.jpg" || fail "bright clip b does not play"
+    wait_for "$SETTLE_S" dark_clip || fail "next did not go to the dark clip a"
 fi
-wait_for "$SETTLE_S" bright program "$WORK/hold.jpg" || fail "clip b not on program"
+act '{"action":"transport_input","input":"Clips","transport":"next"}' >/dev/null
+wait_for "$SETTLE_S" bright inputs/Clips "$WORK/now.jpg" || fail "bright clip b does not play"
 act '{"action":"transport_input","input":"Clips","transport":"pause"}' >/dev/null
 wait_for "$SETTLE_S" clips_still || fail "playlist did not pause"
-# Held: still bright on program after the pause (not just before it).
+wait_for "$SETTLE_S" bright program "$WORK/hold.jpg" || fail "paused clip not on program"
+# Held: still there two seconds later, not just passing through.
 sleep 2
 bright program "$WORK/hold.jpg" || fail "paused clip not held on program"
 # The mode applies from the next frame on: set it while the clip plays.
