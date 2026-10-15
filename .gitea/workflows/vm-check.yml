@@ -69,6 +69,17 @@ jobs:
         env:
           GITEA_TOKEN: ${{ secrets.REGISTRY_TOKEN }}
           RUSTFLAGS: -C link-arg=-fuse-ld=mold
+          WORK: ${{ github.workspace }}/vm-work
+          KEEP_WORK: 1
         run: |
           . "$HOME/.cargo/env"
           scripts/test-m2b-vm.sh
+
+      # Logs and pictures of a failed run.
+      - name: Keep the work folder
+        if: failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: vm-work
+          path: vm-work
+          retention-days: 7
