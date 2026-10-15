@@ -23,6 +23,11 @@ env:
 
 jobs:
   build:
+    # Shares the group of vm-check: a strom build next to a VM check starves
+    # the CPU mixer, and the check gets the package once the build is done.
+    concurrency:
+      group: vm-check
+      cancel-in-progress: false
     timeout-minutes: 120
     runs-on: ubuntu-latest
     container: ubuntu:24.04
