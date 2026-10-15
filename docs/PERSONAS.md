@@ -106,7 +106,7 @@ Ruckler im Spiel.
 | 5 | Mikrofon: Rauschunterdrückung | AUD.10, AUD.11 | ✅ (Plugins) |
 | 6 | AMD-Grafik: Encode und Spiel parallel | NFA.1 | ⚠ AMD erst in M5b geprüft |
 | 7 | Szenen aus OBS übernehmen | — | ✗ kein Import; Umstieg kostet Zeit |
-| 8 | Hotkeys global, auch wenn das Spiel im Vordergrund ist | AUT.1 | ⚠ globale Tasten außerhalb des Fensters nicht gefordert |
+| 8 | Hotkeys global, auch wenn das Spiel im Vordergrund ist | AUT.12 | ✅ über das GlobalShortcuts-Portal (KDE, GNOME 48+) |
 
 **Befunde**: B11 globale Tastenkürzel, B12 Import von OBS-Szenen (Kann),
 B13 AMD-Abnahme früher.
@@ -170,7 +170,7 @@ Lichtpult sendet OSC/MIDI. Ziel: Szenenwechsel exakt auf Zuruf.
 |---|---|---|---|
 | 1 | Cue-Liste: jede Zeile setzt Inputs, Ebenen, Überblendung, Ton | AUT.14, AUT.7 | ✅ Cue-Listen mit bis zu 16 Aktionen je Cue |
 | 2 | "GO" springt zur nächsten Zeile, auch rückwärts | AUT.8 | ✅ (manueller Modus) |
-| 3 | Lichtpult löst Cues per OSC oder MIDI aus | AUT.1, AUT.13 | ✅ OSC (`/lmix/cue/go`); ⚠ MIDI noch offen |
+| 3 | Lichtpult löst Cues per OSC oder MIDI aus | AUT.1, AUT.4, AUT.13 | ✅ OSC (`/lmix/cue/go`) oder MIDI-Note auf einem Kurzbefehl mit `cue_go` |
 | 4 | Videos mit In/Out-Punkt und Schleife | INP.10 | ✅ |
 | 5 | Projektor 2 zeigt Kamera, Projektor 1 Zuspieler | OUT.3, SWI.10 | ✅ |
 | 6 | Bild auf schräge Leinwand anpassen (Eckpunkte, Kantenblende) | — | ✗ kein Warping (vMix kann das auch nicht) |

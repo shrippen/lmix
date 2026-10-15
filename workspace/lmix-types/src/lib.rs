@@ -13,6 +13,7 @@ pub mod action;
 pub mod automation;
 pub mod input;
 pub mod layout;
+pub mod midi;
 pub mod output;
 pub mod shortcut;
 pub mod state;
@@ -24,7 +25,8 @@ pub use input::{
     InputAudio, InputColor, InputId, InputRef, InputStatus, Listen, Look, SignalLoss, SourceSpec,
     TestPattern, Transport,
 };
-pub use layout::{BoxRect, BoxSpec, Layout, LayoutBox};
+pub use layout::{BoxCrop, BoxRect, BoxSpec, Layout, LayoutBox};
+pub use midi::{MidiBinding, MidiKind, MidiMessage};
 pub use output::{
     Container, DisplayMode, Output, OutputId, OutputRef, OutputSource, OutputSpec, OutputStats,
     OutputStatus,

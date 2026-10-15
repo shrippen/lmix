@@ -32,6 +32,9 @@ pub enum TriggerOn {
     OverlayIn,
     /// The input leaves its overlay channel.
     OverlayOut,
+    /// A clip or playlist input reaches its end (the last item ends), or
+    /// `before_ms` before it (countdown).
+    ClipEnd,
 }
 
 /// Actions run when something happens to an input, after a delay. They
@@ -42,6 +45,10 @@ pub struct Trigger {
     /// 0–30 000 ms.
     #[serde(default)]
     pub delay_ms: u32,
+    /// With `clip_end`: fire this long before the end instead of at it,
+    /// 0–60 000 ms.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub before_ms: Option<u32>,
     pub actions: Vec<Action>,
 }
 

@@ -12,12 +12,20 @@ KanteDialog {
     id: dialog
 
     required property var act
+    required property var core
     required property var shortcuts
+    /** The show's T-bar controller binding, or `null`. */
+    property var midiTbar: null
+    /** Keys also work outside the Console (a Console setting). */
+    property bool globalKeys: false
+    /** `Core.globalKeys`: "", "on:<count>" or "off:<reason>". */
+    property string globalStatus: ""
+    signal globalKeysToggled(bool on)
     signal editRequested(var shortcut)
 
     title: qsTr("Shortcuts")
     modal: true
-    width: Kirigami.Units.gridUnit * 32
+    width: Kirigami.Units.gridUnit * 38
     standardButtons: QQC2.Dialog.Close
     // KanteDialog has a child of its own (KanteScope), so the popup does not
     // size itself to this one.
@@ -49,6 +57,12 @@ KanteDialog {
                     font.family: KanteStyle.monoFamily
                 }
                 QQC2.Label {
+                    Layout.preferredWidth: Kirigami.Units.gridUnit * 8
+                    text: entry.modelData.midi ? tbarLearn.describe(entry.modelData.midi) : ""
+                    color: KanteStyle.mutedTextColor
+                    elide: Text.ElideRight
+                }
+                QQC2.Label {
                     Layout.fillWidth: true
                     text: entry.modelData.label
                     elide: Text.ElideRight
@@ -72,10 +86,43 @@ KanteDialog {
             }
         }
 
-        KanteButton {
-            Layout.alignment: Qt.AlignRight
-            text: qsTr("+ Shortcut")
-            onClicked: dialog.editRequested(null)
+        RowLayout {
+            Layout.fillWidth: true
+            QQC2.CheckBox {
+                id: globalBox
+                text: qsTr("Keys also work when the Console is not in front")
+                checked: dialog.globalKeys
+                onToggled: dialog.globalKeysToggled(checked)
+                KanteCheckSkin { control: globalBox }
+            }
+            QQC2.Label {
+                Layout.fillWidth: true
+                elide: Text.ElideRight
+                color: dialog.globalStatus.startsWith("off:") ? KanteStyle.negativeTextColor : KanteStyle.mutedTextColor
+                text: !dialog.globalKeys ? ""
+                    : dialog.globalStatus.startsWith("on:") ? qsTr("Bound by the desktop: %1").arg(dialog.globalStatus.slice(3))
+                    : dialog.globalStatus.startsWith("off:") ? qsTr("Not available: %1").arg(dialog.globalStatus.slice(4))
+                    : qsTr("Asking the desktop…")
+            }
+        }
+
+        RowLayout {
+            Layout.fillWidth: true
+            QQC2.Label { text: qsTr("T-bar from MIDI") }
+            // Learned or cleared: lmix-core keeps it with the show.
+            MidiLearnButton {
+                id: tbarLearn
+                core: dialog.core
+                only: "cc"
+                controlled: true
+                binding: dialog.midiTbar
+                onChosen: binding => dialog.act({ action: "set_midi_tbar", midi: binding })
+            }
+            Item { Layout.fillWidth: true }
+            KanteButton {
+                text: qsTr("+ Shortcut")
+                onClicked: dialog.editRequested(null)
+            }
         }
     }
 }

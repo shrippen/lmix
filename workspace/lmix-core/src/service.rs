@@ -489,6 +489,65 @@ impl Service {
         self.engine.measure_latency(seconds).await
     }
 
+    /// A message from a MIDI controller: pass it on to clients, then run
+    /// what it is bound to (`pressed`: a note on, or a controller crossing
+    /// to pressed).
+    pub async fn midi(
+        self: &Arc<Self>,
+        message: lmix_types::MidiMessage,
+        pressed: bool,
+    ) -> Result<(), ActionError> {
+        let _ = self.events.send(Event::Midi { midi: message });
+        let action = {
+            let sw = self.switcher.lock().await;
+            crate::midi::action_for(
+                &message,
+                pressed,
+                sw.midi_shortcut(&message),
+                sw.midi_moves_tbar(&message),
+            )
+        };
+        match action {
+            Some(action) => self.handle(action).await.map(|_| ()),
+            None => Ok(()),
+        }
+    }
+
+    /// Fire `clip_end` triggers and note clip lengths as the media players
+    /// report their position; forever.
+    pub async fn watch_players(self: Arc<Self>) {
+        let mut reports = self.engine.players();
+        let mut watch = crate::clips::ClipWatch::default();
+        loop {
+            let report = match reports.recv().await {
+                Ok(report) => report,
+                Err(broadcast::error::RecvError::Lagged(_)) => continue,
+                Err(broadcast::error::RecvError::Closed) => return,
+            };
+            let change = watch.update(report);
+            let fired = {
+                let mut sw = self.switcher.lock().await;
+                let Some(slot) = (0..sw.slots())
+                    .find(|slot| crate::engine::flows::slot_id(*slot) == report.flow)
+                else {
+                    continue;
+                };
+                if report.duration_ms > 0 && sw.set_clip_length(slot, report.duration_ms) {
+                    self.publish(&sw);
+                }
+                sw.clip_triggers(slot, &change)
+            };
+            for (delay_ms, actions) in fired {
+                self.run_triggered(delay_ms, actions);
+            }
+        }
+    }
+
+    /// What the engine reports about its machine and flows.
+    pub fn engine_health(&self) -> crate::engine::meters::EngineHealth {
+        self.engine.health()
+    }
+
     /// Capture-to-program latency from the latest measurement.
     pub fn latency(&self) -> Latency {
         Latency::of(&self.engine.levels().borrow().program_ages_ms)
@@ -930,6 +989,7 @@ mod tests {
                 triggers: vec![Trigger {
                     on: TriggerOn::Program,
                     delay_ms: 2000,
+                    before_ms: None,
                     actions: vec![Action::FadeToBlack { duration_ms: 0 }],
                 }],
             })
@@ -957,6 +1017,7 @@ mod tests {
             key: None,
             web: false,
             color: None,
+            midi: None,
             actions: vec![
                 Action::PreviewInput {
                     input: InputRef::Text("Bars".into()),

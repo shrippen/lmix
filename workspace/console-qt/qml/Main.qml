@@ -26,6 +26,13 @@ Kirigami.ApplicationWindow {
         property int style: KanteStyle.Kind.Kante
     }
 
+    Settings {
+        id: keySettings
+        category: "keys"
+        /** Shortcut keys also work while the Console is not in front. */
+        property bool global: false
+    }
+
     Binding {
         target: KanteStyle
         property: "kind"
@@ -99,6 +106,19 @@ Kirigami.ApplicationWindow {
         }
     }
 
+    // Global shortcuts (AUT.12): the desktop binds the keys (it may ask
+    // once) and reports presses even while another window is in front.
+    readonly property string globalShortcutList: JSON.stringify(keySettings.global
+        ? shortcuts.filter(s => s.key).map(s => ({ id: s.id, label: s.label, key: s.key })) : [])
+    onGlobalShortcutListChanged: backend.setGlobalShortcuts(globalShortcutList)
+    Component.onCompleted: backend.setGlobalShortcuts(globalShortcutList)
+    Connections {
+        target: backend
+        function onGlobalShortcut(id) {
+            root.act({ action: "run_shortcut", target: id })
+        }
+    }
+
     // Keys 1–9: that input into preview (not while a text field has focus:
     // fields take printable keys first).
     Instantiator {
@@ -143,7 +163,12 @@ Kirigami.ApplicationWindow {
         parent: QQC2.Overlay.overlay
         anchors.centerIn: parent
         act: root.act
+        core: backend
         shortcuts: root.shortcuts
+        globalKeys: keySettings.global
+        globalStatus: backend.globalKeys
+        onGlobalKeysToggled: on => keySettings.global = on
+        midiTbar: root.show ? root.show.midi_tbar : null
         onEditRequested: shortcut => {
             shortcutEditDialog.shortcut = shortcut
             shortcutEditDialog.open()
@@ -155,6 +180,7 @@ Kirigami.ApplicationWindow {
         parent: QQC2.Overlay.overlay
         anchors.centerIn: parent
         act: root.act
+        core: backend
         inputs: root.inputs
         outputs: root.show ? root.show.outputs : []
     }

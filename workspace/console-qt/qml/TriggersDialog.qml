@@ -17,7 +17,7 @@ KanteDialog {
     required property var outputs
     /** The input whose triggers are edited; set before `open()`. */
     property var input: null
-    /** Working copy: [{ on, delay_ms, actions }]. */
+    /** Working copy: [{ on, delay_ms, before_ms, actions }]. */
     property var triggers: []
 
     readonly property int maxTriggers: 8
@@ -26,8 +26,12 @@ KanteDialog {
         { on: "program_off", label: qsTr("Leaves program") },
         { on: "preview", label: qsTr("Goes into preview") },
         { on: "overlay_in", label: qsTr("Comes in as overlay") },
-        { on: "overlay_out", label: qsTr("Goes out as overlay") }
+        { on: "overlay_out", label: qsTr("Goes out as overlay") },
+        { on: "clip_end", label: qsTr("Clip ends"), clip: true }
     ]
+    /** Events this input offers: clip ends only for clips and playlists. */
+    readonly property bool plays: input !== null && ["file", "url", "playlist"].indexOf(input.source.kind) >= 0
+    readonly property var choices: events.filter(e => !e.clip || plays)
     /** Index of the trigger whose actions are being edited; past the end
      * for a new one. */
     property int editing: -1
@@ -90,11 +94,32 @@ KanteDialog {
                 QQC2.ComboBox {
                     id: whenBox
                     Layout.fillWidth: true
-                    model: dialog.events.map(e => e.label)
-                    currentIndex: Math.max(0, dialog.events.findIndex(e => e.on === entry.modelData.on))
+                    model: dialog.choices.map(e => e.label)
+                    currentIndex: Math.max(0, dialog.choices.findIndex(e => e.on === entry.modelData.on))
                     Accessible.name: qsTr("When trigger %1 fires").arg(entry.index + 1)
-                    onActivated: index => dialog.edited(entry.index, "on", dialog.events[index].on)
+                    onActivated: index => {
+                        dialog.edited(entry.index, "on", dialog.choices[index].on)
+                        if (dialog.choices[index].on !== "clip_end")
+                            dialog.edited(entry.index, "before_ms", null)
+                    }
                     KanteFieldSkin { control: whenBox }
+                }
+                // Clip ends: also this long before the end (countdown); 0 = at it.
+                QQC2.SpinBox {
+                    id: before
+                    visible: entry.modelData.on === "clip_end"
+                    from: 0
+                    to: 60000
+                    stepSize: 500
+                    editable: true
+                    value: entry.modelData.before_ms || 0
+                    Accessible.name: qsTr("Time before the clip ends, trigger %1").arg(entry.index + 1)
+                    onValueModified: dialog.edited(entry.index, "before_ms", value > 0 ? value : null)
+                    KanteFieldSkin { control: before }
+                }
+                QQC2.Label {
+                    visible: before.visible
+                    text: qsTr("ms before,")
                 }
                 QQC2.Label { text: qsTr("after") }
                 QQC2.SpinBox {

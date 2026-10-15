@@ -8,12 +8,12 @@
 //! | `{"action": …}` | `OK` or `ER <error> <message>` |
 //! | `TALLY` | `TALLY <digits>`: per input 0 off, 1 program, 2 preview |
 //! | `STATE` | `STATE <json>` |
-//! | `SUB <topic>` | `OK`, then a line per change; topics `TALLY`, `STATE`, `LEVELS`, `OUTPUTS`, `ALL` |
+//! | `SUB <topic>` | `OK`, then a line per change; topics `TALLY`, `STATE`, `LEVELS`, `OUTPUTS`, `MIDI`, `ALL` |
 //! | `UNSUB <topic>` | `OK` |
 //! | `QUIT` | closes |
 //!
 //! Subscribed changes arrive as `TALLY <digits>`, `STATE <json>`,
-//! `LEVELS <json>` and `OUTPUTS <json>` lines. A slow client misses
+//! `LEVELS <json>`, `OUTPUTS <json>` and `MIDI <json>` lines. A slow client misses
 //! intermediate changes but never a final one: after falling behind it
 //! gets the current tally and state again.
 
@@ -44,7 +44,8 @@ impl Topics {
     const STATE: u8 = 2;
     const LEVELS: u8 = 4;
     const OUTPUTS: u8 = 8;
-    const ALL: u8 = Self::TALLY | Self::STATE | Self::LEVELS | Self::OUTPUTS;
+    const MIDI: u8 = 16;
+    const ALL: u8 = Self::TALLY | Self::STATE | Self::LEVELS | Self::OUTPUTS | Self::MIDI;
 
     fn parse(name: &str) -> Option<u8> {
         match name.to_ascii_uppercase().as_str() {
@@ -52,6 +53,7 @@ impl Topics {
             "STATE" => Some(Self::STATE),
             "LEVELS" => Some(Self::LEVELS),
             "OUTPUTS" => Some(Self::OUTPUTS),
+            "MIDI" => Some(Self::MIDI),
             "ALL" => Some(Self::ALL),
             _ => None,
         }
@@ -63,6 +65,7 @@ impl Topics {
             Event::State { .. } => Self::STATE,
             Event::Levels { .. } => Self::LEVELS,
             Event::Outputs { .. } => Self::OUTPUTS,
+            Event::Midi { .. } => Self::MIDI,
         };
         self.0 & bit != 0
     }
@@ -188,7 +191,7 @@ async fn answer(line: &str, service: &Arc<Service>, topics: &mut Topics) -> Opti
             topics.0 &= !bit;
             "OK\n".into()
         }
-        ("SUB" | "UNSUB", _) => "ER bad_topic TALLY, STATE, LEVELS, OUTPUTS or ALL\n".into(),
+        ("SUB" | "UNSUB", _) => "ER bad_topic TALLY, STATE, LEVELS, OUTPUTS, MIDI or ALL\n".into(),
         _ => "ER unknown_command JSON action, TALLY, STATE, SUB, UNSUB or QUIT\n".into(),
     })
 }
@@ -218,6 +221,7 @@ fn event_line(event: &Event) -> String {
         Event::State { state } => format!("STATE {}\n", json(state)),
         Event::Levels { levels } => format!("LEVELS {}\n", json(levels)),
         Event::Outputs { stats } => format!("OUTPUTS {}\n", json(stats)),
+        Event::Midi { midi } => format!("MIDI {}\n", json(midi)),
     }
 }
 

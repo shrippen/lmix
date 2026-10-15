@@ -12,19 +12,28 @@
 //! | `/lmix/overlay/{n}/in` | input | `overlay_in` |
 //! | `/lmix/overlay/{n}/out` | – | `overlay_out` |
 //! | `/lmix/cue/go`, `/lmix/cue/back` | list | `cue_go`, `cue_back` |
-//! | `/lmix/subscribe` | – | the sender gets tally from now on |
+//! | `/lmix/subscribe` | – | the sender gets tally and state from now on |
 //! | `/lmix/unsubscribe` | – | stops it |
+//! | `/lmix/state` | – | answers `/lmix/state s:json` (the full state) |
 //!
 //! Refused actions answer the sender with `/lmix/error s:reason`.
-//! Subscribers get `/lmix/tally s:digits` (0 off, 1 program, 2 preview per
-//! input) on every change and right after subscribing. Bundles are
-//! unpacked; their time tags are ignored (run now).
+//! Subscribers get, right after subscribing and then on every change:
+//!
+//! | Address | Arguments |
+//! |---|---|
+//! | `/lmix/tally` | digits: per input 0 off, 1 program, 2 preview |
+//! | `/lmix/program`, `/lmix/preview` | name, number (0: a layout, or none) |
+//! | `/lmix/tbar` | position (float 0–1) |
+//! | `/lmix/ftb` | 1 while faded to black |
+//! | `/lmix/cue/next` | list name, number of the cue GO runs next |
+//!
+//! Bundles are unpacked; their time tags are ignored (run now).
 
 use std::collections::HashSet;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use lmix_types::{Action, Event, InputRef};
+use lmix_types::{Action, Event, InputRef, ShowState};
 use tokio::net::UdpSocket;
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::Mutex;
@@ -128,11 +137,69 @@ fn read_string(packet: &[u8], at: &mut usize) -> Option<String> {
 
 /// A message with string arguments only.
 pub fn encode(address: &str, args: &[&str]) -> Vec<u8> {
+    let args: Vec<Arg> = args.iter().map(|a| Arg::Str((*a).to_string())).collect();
+    encode_args(address, &args)
+}
+
+/// A message with any arguments.
+pub fn encode_args(address: &str, args: &[Arg]) -> Vec<u8> {
     let mut out = Vec::new();
     write_string(&mut out, address);
-    write_string(&mut out, &format!(",{}", "s".repeat(args.len())));
+    let tags: String = args
+        .iter()
+        .map(|a| match a {
+            Arg::Int(_) => 'i',
+            Arg::Float(_) => 'f',
+            Arg::Str(_) => 's',
+        })
+        .collect();
+    write_string(&mut out, &format!(",{tags}"));
     for arg in args {
-        write_string(&mut out, arg);
+        match arg {
+            Arg::Int(i) => out.extend_from_slice(&i.to_be_bytes()),
+            Arg::Float(f) => out.extend_from_slice(&f.to_be_bytes()),
+            Arg::Str(text) => write_string(&mut out, text),
+        }
+    }
+    out
+}
+
+/// What subscribers hear about the state, keyed so that only changes
+/// are sent.
+fn state_messages(state: &ShowState) -> Vec<(String, Vec<u8>)> {
+    let source = |id: Option<lmix_types::InputId>| -> [Arg; 2] {
+        let input = id.and_then(|id| state.inputs.iter().find(|i| i.id == id));
+        let layout = id.and_then(|id| state.layouts.iter().find(|l| l.id == id));
+        match (input, layout) {
+            (Some(i), _) => [Arg::Str(i.name.clone()), Arg::Int(i.number as i32)],
+            (None, Some(l)) => [Arg::Str(l.name.clone()), Arg::Int(0)],
+            _ => [Arg::Str(String::new()), Arg::Int(0)],
+        }
+    };
+    let mut out = vec![
+        (
+            "program".to_string(),
+            encode_args("/lmix/program", &source(state.program)),
+        ),
+        (
+            "preview".to_string(),
+            encode_args("/lmix/preview", &source(state.preview)),
+        ),
+        (
+            "tbar".to_string(),
+            encode_args("/lmix/tbar", &[Arg::Float(state.t_bar)]),
+        ),
+        (
+            "ftb".to_string(),
+            encode_args("/lmix/ftb", &[Arg::Int(i32::from(state.fade_to_black))]),
+        ),
+    ];
+    for list in &state.cue_lists {
+        let next = encode_args(
+            "/lmix/cue/next",
+            &[Arg::Str(list.name.clone()), Arg::Int(list.next as i32)],
+        );
+        out.push((format!("cue/{}", list.id), next));
     }
     out
 }
@@ -149,6 +216,7 @@ pub enum Request {
     Action(Action),
     Subscribe,
     Unsubscribe,
+    State,
 }
 
 /// The request of a message, or why it makes none.
@@ -176,6 +244,7 @@ pub fn request(message: &Message) -> Result<Request, String> {
     let action = match parts.as_slice() {
         ["subscribe"] => return Ok(Request::Subscribe),
         ["unsubscribe"] => return Ok(Request::Unsubscribe),
+        ["state"] => return Ok(Request::State),
         ["action"] => match arg(0) {
             Some(Arg::Str(text)) => serde_json::from_str(text).map_err(|e| e.to_string())?,
             _ => return Err("/lmix/action needs a JSON string".into()),
@@ -232,7 +301,7 @@ pub async fn serve(listen: SocketAddr, service: Arc<Service>) -> anyhow::Result<
     let socket = Arc::new(UdpSocket::bind(listen).await?);
     tracing::info!(%listen, "OSC up");
     let subscribers = Arc::new(Mutex::new(Vec::<SocketAddr>::new()));
-    tokio::spawn(send_tally(
+    tokio::spawn(send_updates(
         socket.clone(),
         subscribers.clone(),
         service.clone(),
@@ -260,6 +329,13 @@ pub async fn serve(listen: SocketAddr, service: Arc<Service>) -> anyhow::Result<
                     drop(subs);
                     let tally = tally_message(&service.tally().await);
                     let _ = socket.send_to(&tally, peer).await;
+                    for (_, message) in state_messages(&service.state().await) {
+                        let _ = socket.send_to(&message, peer).await;
+                    }
+                }
+                Ok(Request::State) => {
+                    let json = serde_json::to_string(&service.state().await).unwrap_or_default();
+                    let _ = socket.send_to(&encode("/lmix/state", &[&json]), peer).await;
                 }
                 Ok(Request::Unsubscribe) => subscribers.lock().await.retain(|s| *s != peer),
                 Err(reason) => {
@@ -277,28 +353,41 @@ fn tally_message(tally: &[u8]) -> Vec<u8> {
     encode("/lmix/tally", &[&digits])
 }
 
-async fn send_tally(
+async fn send_updates(
     socket: Arc<UdpSocket>,
     subscribers: Arc<Mutex<Vec<SocketAddr>>>,
     service: Arc<Service>,
 ) {
     let mut events = service.subscribe();
-    let mut last: Option<Vec<u8>> = None;
+    // Last message sent per key: only changes go out.
+    let mut sent: std::collections::HashMap<String, Vec<u8>> = std::collections::HashMap::new();
     loop {
-        let tally = match events.recv().await {
-            Ok(Event::Tally { tally }) => tally,
+        let messages = match events.recv().await {
+            Ok(Event::Tally { tally }) => vec![("tally".to_string(), tally_message(&tally))],
+            Ok(Event::State { state }) => state_messages(&state),
             Ok(_) => continue,
-            Err(RecvError::Lagged(_)) => service.tally().await,
+            Err(RecvError::Lagged(_)) => {
+                let mut all = vec![("tally".to_string(), tally_message(&service.tally().await))];
+                all.extend(state_messages(&service.state().await));
+                all
+            }
             Err(RecvError::Closed) => return,
         };
-        if last.as_ref() == Some(&tally) {
+        let mut fresh = Vec::new();
+        for (key, message) in messages {
+            if sent.get(&key) != Some(&message) {
+                sent.insert(key, message.clone());
+                fresh.push(message);
+            }
+        }
+        if fresh.is_empty() {
             continue;
         }
-        let message = tally_message(&tally);
-        last = Some(tally);
         let subs: HashSet<SocketAddr> = subscribers.lock().await.iter().copied().collect();
         for peer in subs {
-            let _ = socket.send_to(&message, peer).await;
+            for message in &fresh {
+                let _ = socket.send_to(message, peer).await;
+            }
         }
     }
 }
@@ -389,6 +478,41 @@ mod tests {
         assert_eq!(req("/lmix/subscribe", vec![]), Ok(Request::Subscribe));
         assert!(req("/lmix/preview", vec![]).is_err());
         assert!(req("/lmix/frob", vec![]).is_err());
+    }
+
+    #[test]
+    fn state_goes_out_as_messages() {
+        let mut sw = crate::switcher::Switcher::new(2);
+        for name in ["Cam", "Slides"] {
+            sw.apply(
+                serde_json::from_value(serde_json::json!({
+                    "action": "add_input", "name": name,
+                    "source": {"kind": "pattern", "pattern": "bars"}
+                }))
+                .unwrap(),
+            )
+            .unwrap();
+        }
+        sw.apply(Action::CutDirect {
+            input: InputRef::Text("Slides".into()),
+        })
+        .unwrap();
+        let messages: Vec<Message> = state_messages(&sw.state())
+            .iter()
+            .flat_map(|(_, packet)| decode(packet))
+            .collect();
+        assert!(messages.contains(&Message {
+            address: "/lmix/program".into(),
+            args: vec![Arg::Str("Slides".into()), Arg::Int(2)],
+        }));
+        assert!(messages.contains(&Message {
+            address: "/lmix/preview".into(),
+            args: vec![Arg::Str(String::new()), Arg::Int(0)],
+        }));
+        assert!(messages.contains(&Message {
+            address: "/lmix/tbar".into(),
+            args: vec![Arg::Float(0.0)],
+        }));
     }
 
     #[test]

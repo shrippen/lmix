@@ -18,6 +18,15 @@ KanteDialog {
     property var button: null
 
     readonly property var clips: inputs.filter(i => ["file", "url", "playlist"].indexOf(i.source.kind) >= 0)
+    /** Length of the chosen clip as its player reports it (ms), or 0. */
+    readonly property int clipLength: clips.length > 0 && clipBox.currentIndex >= 0 && clips[clipBox.currentIndex]
+        ? Math.min(clips[clipBox.currentIndex].clip_ms || 0, length.to) : 0
+
+    /** The clip's own length, to the next 100 ms. */
+    function useClipLength() {
+        if (clipLength > 0)
+            length.value = Math.round(clipLength / 100) * 100
+    }
 
     title: button ? qsTr("Stinger on button %1").arg(button.slot) : ""
     modal: true
@@ -32,6 +41,8 @@ KanteDialog {
         var index = clips.findIndex(i => i.id === current)
         clipBox.currentIndex = index >= 0 ? index : 0
         length.value = button && button.effect === "stinger" ? button.duration_ms : 2000
+        if (!(button && button.effect === "stinger"))
+            useClipLength()
         cut.value = button && button.stinger ? button.stinger.cut_ms : 1000
     }
 
@@ -56,6 +67,7 @@ KanteDialog {
             Layout.fillWidth: true
             visible: dialog.clips.length > 0
             model: dialog.clips.map(i => i.number + " " + i.name)
+            onActivated: dialog.useClipLength()
             KanteFieldSkin { control: clipBox }
         }
         QQC2.Label {
@@ -79,6 +91,11 @@ KanteDialog {
                     KanteFieldSkin { control: length }
                 }
                 QQC2.Label { text: "ms" }
+                KanteButton {
+                    visible: dialog.clipLength > 0
+                    text: qsTr("Clip length (%1 s)").arg((dialog.clipLength / 1000).toFixed(1))
+                    onClicked: dialog.useClipLength()
+                }
             }
         }
         KanteSettingRow {

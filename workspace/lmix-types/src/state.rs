@@ -71,6 +71,9 @@ pub struct ShowState {
     /// Locked against closing, loading and stopping (AUT.11).
     #[serde(default)]
     pub locked: bool,
+    /// MIDI controller that moves the T-bar (AUT.4).
+    #[serde(default)]
+    pub midi_tbar: Option<crate::midi::MidiBinding>,
     /// Name of the input `restore_input` would bring back.
     #[serde(default)]
     pub restorable: Option<String>,
@@ -153,6 +156,9 @@ pub enum Event {
     Levels { levels: Levels },
     /// Link health of the running network outputs, about once a second.
     Outputs { stats: Vec<OutputStats> },
+    /// A note or controller message from a MIDI controller (to learn a
+    /// binding).
+    Midi { midi: crate::midi::MidiMessage },
 }
 
 #[cfg(test)]

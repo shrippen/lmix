@@ -14,12 +14,12 @@ use lmix_types::layout::{BORDER_MAX_PX, LAYOUTS, LAYOUT_BOXES};
 use lmix_types::shortcut::SHORTCUT_ACTIONS;
 use lmix_types::state::API_VERSION;
 use lmix_types::{
-    Action, ActionError, AuxBus, BoxRect, BoxSpec, ChannelStrip, Effect, Ingest, Input, InputColor,
-    InputId, InputRef, InputStatus, Layout, LayoutBox, Listen, Look, Output, OutputId, OutputRef,
-    OutputSource, OutputSpec, OutputStatus, Shortcut, ShortcutSpec, ShowState, SignalLoss,
-    SourceSpec, Stinger, StingerSpec, Transition, TransitionSlot, Transport,
+    Action, ActionError, AuxBus, BoxCrop, BoxRect, BoxSpec, ChannelStrip, Effect, Ingest, Input,
+    InputColor, InputId, InputRef, InputStatus, Layout, LayoutBox, Listen, Look, Output, OutputId,
+    OutputRef, OutputSource, OutputSpec, OutputStatus, Shortcut, ShortcutSpec, ShowState,
+    SignalLoss, SourceSpec, Stinger, StingerSpec, Transition, TransitionSlot, Transport,
 };
-use lmix_types::{Cue, CueList, Trigger, TriggerOn};
+use lmix_types::{Cue, CueList, MidiKind, MidiMessage, Trigger, TriggerOn};
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 use uuid::Uuid;
@@ -114,6 +114,7 @@ pub struct EngineBox {
     pub rect: BoxRect,
     pub slot: usize,
     pub border_px: u8,
+    pub crop: BoxCrop,
 }
 
 /// What stands in preview or program: an input's slot or a layout's
@@ -190,6 +191,9 @@ fn check_cues(name: &str, cues: &[Cue]) -> Result<(), ActionError> {
     Ok(())
 }
 
+/// Longest countdown of a `clip_end` trigger.
+const CLIP_COUNTDOWN_MAX_MS: u32 = 60_000;
+
 /// Closed inputs kept for `restore_input`.
 const REMOVED_KEPT: usize = 10;
 
@@ -237,6 +241,8 @@ pub struct Switcher {
     ingest_base: Option<String>,
     /// Output states; runtime only.
     output_status: HashMap<OutputId, OutputStatus>,
+    /// Length of the item each player plays, by slot; runtime only.
+    clip_ms: HashMap<usize, u64>,
 }
 
 impl Switcher {
@@ -256,6 +262,7 @@ impl Switcher {
             mix: HashMap::new(),
             listen: HashMap::new(),
             ingest_base: None,
+            clip_ms: HashMap::new(),
             output_status: HashMap::new(),
         }
     }
@@ -369,6 +376,26 @@ impl Switcher {
             }),
             Action::SetLock { on } => {
                 self.locked = on;
+                Ok(Vec::new())
+            }
+            Action::SetMidiTbar { midi } => {
+                if let Some(m) = &midi {
+                    let bad = |reason: &str| ActionError::BadMidi {
+                        reason: reason.into(),
+                    };
+                    if m.kind != MidiKind::Cc || !m.is_valid() {
+                        return Err(bad("the T-bar needs a controller (cc 0–127, channel 1–16)"));
+                    }
+                    if self
+                        .show
+                        .shortcuts
+                        .iter()
+                        .any(|s| s.midi.is_some_and(|b| b.overlaps(m)))
+                    {
+                        return Err(bad("a shortcut has that controller"));
+                    }
+                }
+                self.show.midi_tbar = midi;
                 Ok(Vec::new())
             }
             Action::ReplaceSource { input, source } => self.replace_source(&input, source),
@@ -604,6 +631,11 @@ impl Switcher {
                 look: input.look,
                 triggers: input.triggers.clone(),
                 ingest: self.ingest_of(&input.source),
+                clip_ms: input
+                    .source
+                    .has_transport()
+                    .then(|| self.clip_ms.get(&input.slot).copied())
+                    .flatten(),
             })
             .collect();
 
@@ -648,9 +680,11 @@ impl Switcher {
                     key: s.key.clone(),
                     web: s.web,
                     color: s.color,
+                    midi: s.midi,
                     actions: s.actions.clone(),
                 })
                 .collect(),
+            midi_tbar: self.show.midi_tbar,
             layouts: self
                 .show
                 .layouts
@@ -1054,10 +1088,53 @@ impl Switcher {
             if trigger.actions.iter().any(runs_automation) {
                 return bad("triggers cannot run shortcuts, cues or change automation".into());
             }
+            match (trigger.on, trigger.before_ms) {
+                (TriggerOn::ClipEnd, Some(ms)) if ms > CLIP_COUNTDOWN_MAX_MS => {
+                    return bad(format!(
+                        "a countdown is at most {CLIP_COUNTDOWN_MAX_MS} ms before the end"
+                    ));
+                }
+                (TriggerOn::ClipEnd, _) | (_, None) => {}
+                (_, Some(_)) => return bad("only clip_end has a time before the end".into()),
+            }
         }
         let index = self.find(input)?;
+        let plays = self.show.inputs[index].source.has_transport();
+        if !plays && triggers.iter().any(|t| t.on == TriggerOn::ClipEnd) {
+            return bad("clip_end needs a file, URL or playlist input".into());
+        }
         self.show.inputs[index].triggers = triggers;
         Ok(Vec::new())
+    }
+
+    /// Note the length of what the player in `slot` plays; true when it
+    /// changed by more than a frame or two (clients hear of it).
+    pub fn set_clip_length(&mut self, slot: usize, ms: u64) -> bool {
+        const SAME_MS: u64 = 50;
+        let old = self.clip_ms.insert(slot, ms);
+        old.is_none_or(|old| old.abs_diff(ms) > SAME_MS)
+    }
+
+    /// `clip_end` triggers of the input in `slot` that `change` fires, as
+    /// (delay, actions).
+    pub fn clip_triggers(
+        &self,
+        slot: usize,
+        change: &crate::clips::ClipChange,
+    ) -> Vec<(u32, Vec<Action>)> {
+        let Some(input) = self.show.inputs.iter().find(|i| i.slot == slot) else {
+            return Vec::new();
+        };
+        input
+            .triggers
+            .iter()
+            .filter(|t| t.on == TriggerOn::ClipEnd)
+            .filter(|t| match t.before_ms {
+                None => change.ended,
+                Some(ms) => change.crosses(u64::from(ms)),
+            })
+            .map(|t| (t.delay_ms, t.actions.clone()))
+            .collect()
     }
 
     /// Triggers that fire for what changed between `before` and now, as
@@ -1216,6 +1293,7 @@ impl Switcher {
             key: spec.key,
             web: spec.web,
             color: spec.color,
+            midi: spec.midi,
             actions: spec.actions,
         });
         Ok(Vec::new())
@@ -1233,6 +1311,7 @@ impl Switcher {
         entry.key = spec.key;
         entry.web = spec.web;
         entry.color = spec.color;
+        entry.midi = spec.midi;
         entry.actions = spec.actions;
         Ok(Vec::new())
     }
@@ -1260,7 +1339,37 @@ impl Switcher {
         if key_taken {
             return bad("another shortcut has that key".into());
         }
+        if let Some(midi) = &spec.midi {
+            if !midi.is_valid() {
+                return bad("MIDI channel 1–16, number 0–127".into());
+            }
+            let taken = self
+                .show
+                .shortcuts
+                .iter()
+                .enumerate()
+                .any(|(i, s)| Some(i) != own && s.midi.is_some_and(|m| m.overlaps(midi)));
+            if taken || self.show.midi_tbar.is_some_and(|m| m.overlaps(midi)) {
+                return bad(
+                    "another shortcut or the T-bar has that MIDI note or controller".into(),
+                );
+            }
+        }
         Ok(())
+    }
+
+    /// The shortcut a MIDI message runs.
+    pub fn midi_shortcut(&self, message: &MidiMessage) -> Option<InputId> {
+        self.show
+            .shortcuts
+            .iter()
+            .find(|s| s.midi.is_some_and(|m| m.matches(message)))
+            .map(|s| s.id)
+    }
+
+    /// Whether a MIDI message moves the T-bar.
+    pub fn midi_moves_tbar(&self, message: &MidiMessage) -> bool {
+        self.show.midi_tbar.is_some_and(|m| m.matches(message))
     }
 
     /// Actions of a shortcut, for the service to run.
@@ -1389,11 +1498,15 @@ impl Switcher {
             if spec.border_px > BORDER_MAX_PX {
                 return Err(bad(format!("frames are at most {BORDER_MAX_PX} px")));
             }
+            if !spec.crop.is_valid() {
+                return Err(bad("a crop must leave some of the input visible".into()));
+            }
             used.push(input);
             parts.push(LayoutBox {
                 rect: spec.rect,
                 input,
                 border_px: spec.border_px,
+                crop: spec.crop,
             });
         }
         Ok((background, parts))
@@ -1412,6 +1525,7 @@ impl Switcher {
                         rect: b.rect,
                         slot: self.slot_of(Some(b.input))?,
                         border_px: b.border_px,
+                        crop: b.crop,
                     })
                 })
                 .collect(),
@@ -2176,7 +2290,7 @@ fn no_video_check(entry: &ShowInput) -> Result<(), ActionError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use lmix_types::TestPattern;
+    use lmix_types::{MidiBinding, TestPattern};
 
     const SLOTS: usize = 4;
 
@@ -2914,7 +3028,15 @@ mod tests {
         h: 0.5,
     };
 
-    /// A, B; layout 1 = A behind, B top right; A on program.
+    /// Shows the middle of an input.
+    const ZOOM: BoxCrop = BoxCrop {
+        left: 0.25,
+        top: 0.25,
+        right: 0.25,
+        bottom: 0.25,
+    };
+
+    /// A, B; layout 1 = A behind, B top right zoomed in; A on program.
     fn with_layout() -> Switcher {
         let mut sw = two_inputs();
         sw.apply(Action::CutDirect { input: named("A") }).unwrap();
@@ -2926,6 +3048,7 @@ mod tests {
                     rect: TOP_RIGHT,
                     input: named("B"),
                     border_px: 4,
+                    crop: ZOOM,
                 }],
             })
             .unwrap();
@@ -2937,7 +3060,8 @@ mod tests {
                 boxes: vec![EngineBox {
                     rect: TOP_RIGHT,
                     slot: 1,
-                    border_px: 4
+                    border_px: 4,
+                    crop: ZOOM,
                 }]
             }]
         );
@@ -3013,6 +3137,15 @@ mod tests {
             rect,
             input: named(input),
             border_px: 0,
+            crop: BoxCrop::default(),
+        };
+        let nothing_left = BoxSpec {
+            crop: BoxCrop {
+                left: 0.6,
+                right: 0.4,
+                ..BoxCrop::default()
+            },
+            ..spec("B", TOP_RIGHT)
         };
         let outside = BoxRect {
             x: 0.8,
@@ -3023,6 +3156,7 @@ mod tests {
             vec![spec("A", TOP_RIGHT)],
             vec![spec("B", outside)],
             vec![spec("B", TOP_RIGHT), spec("B", TOP_RIGHT)],
+            vec![nothing_left],
         ] {
             assert!(matches!(
                 sw.apply(Action::SetLayout {
@@ -3071,8 +3205,77 @@ mod tests {
             key: key.map(Into::into),
             web: true,
             color: None,
+            midi: None,
             actions,
         }
+    }
+
+    #[test]
+    fn midi_bindings_are_unique_and_found() {
+        let mut sw = two_inputs();
+        let note = |channel| MidiBinding {
+            kind: MidiKind::Note,
+            channel,
+            number: 36,
+        };
+        let spec = |label: &str, midi| ShortcutSpec {
+            midi: Some(midi),
+            ..shortcut(label, None, vec![Action::Cut])
+        };
+        sw.apply(Action::AddShortcut {
+            shortcut: spec("Pad", note(Some(10))),
+        })
+        .unwrap();
+        // Any channel overlaps channel 10.
+        assert!(matches!(
+            sw.apply(Action::AddShortcut {
+                shortcut: spec("Other", note(None)),
+            }),
+            Err(ActionError::BadShortcut { .. })
+        ));
+        sw.apply(Action::AddShortcut {
+            shortcut: spec("Other", note(Some(1))),
+        })
+        .unwrap();
+        let hit = MidiMessage {
+            kind: MidiKind::Note,
+            channel: 10,
+            number: 36,
+            value: 90,
+        };
+        assert_eq!(sw.midi_shortcut(&hit), Some(sw.state().shortcuts[0].id));
+
+        let fader = MidiBinding {
+            kind: MidiKind::Cc,
+            channel: None,
+            number: 7,
+        };
+        assert!(matches!(
+            sw.apply(Action::SetMidiTbar {
+                midi: Some(note(Some(2)))
+            }),
+            Err(ActionError::BadMidi { .. })
+        ));
+        sw.apply(Action::SetMidiTbar { midi: Some(fader) }).unwrap();
+        assert_eq!(sw.state().midi_tbar, Some(fader));
+        assert!(sw.midi_moves_tbar(&MidiMessage {
+            kind: MidiKind::Cc,
+            channel: 3,
+            number: 7,
+            value: 10,
+        }));
+        assert!(matches!(
+            sw.apply(Action::AddShortcut {
+                shortcut: spec(
+                    "Fader",
+                    MidiBinding {
+                        channel: Some(1),
+                        ..fader
+                    }
+                ),
+            }),
+            Err(ActionError::BadShortcut { .. })
+        ));
     }
 
     #[test]
@@ -3249,6 +3452,61 @@ mod tests {
     }
 
     #[test]
+    fn clip_end_triggers_need_a_clip_and_fire_at_the_end() {
+        let mut sw = two_inputs();
+        sw.apply(Action::AddInput {
+            source: SourceSpec::File {
+                path: "/clips/intro.mp4".into(),
+            },
+            name: Some("Intro".into()),
+        })
+        .unwrap();
+        let at_end = |before_ms| Trigger {
+            on: TriggerOn::ClipEnd,
+            delay_ms: 0,
+            before_ms,
+            actions: vec![Action::Cut],
+        };
+        assert!(matches!(
+            sw.apply(Action::SetTriggers {
+                input: named("A"),
+                triggers: vec![at_end(None)],
+            }),
+            Err(ActionError::BadTriggers { .. })
+        ));
+        assert!(matches!(
+            sw.apply(Action::SetTriggers {
+                input: named("Intro"),
+                triggers: vec![Trigger {
+                    on: TriggerOn::Program,
+                    ..at_end(Some(500))
+                }],
+            }),
+            Err(ActionError::BadTriggers { .. })
+        ));
+        sw.apply(Action::SetTriggers {
+            input: named("Intro"),
+            triggers: vec![at_end(None), at_end(Some(3_000))],
+        })
+        .unwrap();
+
+        let slot = sw.state().inputs[2].slot;
+        let ended = crate::clips::ClipChange {
+            ended: true,
+            left_ms: None,
+        };
+        let counting = crate::clips::ClipChange {
+            ended: false,
+            left_ms: Some((3_100, 2_900)),
+        };
+        assert_eq!(sw.clip_triggers(slot, &ended).len(), 1);
+        assert_eq!(sw.clip_triggers(slot, &counting).len(), 1);
+        assert!(sw
+            .clip_triggers(sw.state().inputs[0].slot, &ended)
+            .is_empty());
+    }
+
+    #[test]
     fn triggers_fire_for_what_went_on_or_off_air() {
         let mut sw = two_inputs();
         sw.apply(Action::SetTriggers {
@@ -3257,11 +3515,13 @@ mod tests {
                 Trigger {
                     on: TriggerOn::Program,
                     delay_ms: 1000,
+                    before_ms: None,
                     actions: vec![Action::FadeToBlack { duration_ms: 500 }],
                 },
                 Trigger {
                     on: TriggerOn::ProgramOff,
                     delay_ms: 0,
+                    before_ms: None,
                     actions: vec![Action::Cut],
                 },
             ],
@@ -3285,6 +3545,7 @@ mod tests {
                 triggers: vec![Trigger {
                     on: TriggerOn::Preview,
                     delay_ms: 60_000,
+                    before_ms: None,
                     actions: vec![Action::Cut],
                 }],
             }),

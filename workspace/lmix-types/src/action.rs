@@ -233,6 +233,12 @@ pub enum Action {
     /// Lock or unlock (AUT.11): while locked, closing inputs, opening or
     /// clearing the show and stopping or removing outputs are refused.
     SetLock { on: bool },
+    /// Bind a MIDI controller (`cc`) to the T-bar: 0–127 moves it from
+    /// 0 to 1; `null` unbinds.
+    SetMidiTbar {
+        #[serde(default)]
+        midi: Option<crate::midi::MidiBinding>,
+    },
 
     // ---- Shortcuts (AUT.1–3) ----
     /// Add a shortcut: a key and label for a list of actions.
@@ -351,6 +357,8 @@ pub enum ActionError {
     UnknownShortcut { reference: String },
     #[error("shortcut: {reason}")]
     BadShortcut { reason: String },
+    #[error("MIDI: {reason}")]
+    BadMidi { reason: String },
     #[error("a stinger is playing")]
     StingerPlaying,
     #[error("stinger: {reason}")]

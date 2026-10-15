@@ -2,14 +2,15 @@
 //!
 //! strom posts a `MeterData` event about ten times a second per audio
 //! mixer channel (`mix:meter:<channel>`, before fader and mute) and for the
-//! main mix (`mix:meter:main`, after them) on its WebSocket. Pipeline errors
-//! come the same way.
+//! main mix (`mix:meter:main`, after them) on its WebSocket. Pipeline errors,
+//! QoS reports and system statistics come the same way.
 
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use futures_util::StreamExt;
-use strom_types::{FlowId, StromEvent};
+use strom_types::{FlowId, StromEvent, SystemStats};
 use tokio::sync::{broadcast, watch};
 use tokio_tungstenite::tungstenite::Message;
 
@@ -29,6 +30,27 @@ pub struct EngineLevels {
     /// Buffer ages at the mixer's program output from the latest latency
     /// measurement, ms (newest last, at most `LATENCY_SAMPLES`).
     pub program_ages_ms: Vec<u64>,
+}
+
+/// Health of the engine as its event stream reports it (OPS.3).
+#[derive(Clone, Debug, Default)]
+pub struct EngineHealth {
+    /// CPU, memory and GPUs of the engine machine, about once a second.
+    pub system: Option<SystemStats>,
+    /// QoS of each flow since lmix-core started.
+    pub qos: HashMap<FlowId, FlowQos>,
+}
+
+/// QoS reports of one flow, summed over its elements.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct FlowQos {
+    /// QoS events: an element got a buffer too late and dropped or
+    /// skipped work.
+    pub events: u64,
+    /// Reports in which an element was falling behind.
+    pub behind: u64,
+    /// Average proportion of the latest report (below 1: too slow).
+    pub proportion: f64,
 }
 
 /// Latency samples kept per measurement.
@@ -91,6 +113,8 @@ pub async fn follow(
     mixer_block: &'static str,
     levels: watch::Sender<EngineLevels>,
     errors: broadcast::Sender<FlowError>,
+    health: Arc<Mutex<EngineHealth>>,
+    players: broadcast::Sender<crate::clips::PlayerProgress>,
 ) {
     loop {
         if let Ok((mut stream, _)) = tokio_tungstenite::connect_async(&ws_url).await {
@@ -124,6 +148,38 @@ pub async fn follow(
                             message: error,
                             kind: FlowFailure::Error,
                         });
+                    }
+                    Ok(StromEvent::MediaPlayerPosition {
+                        flow_id,
+                        position_ns,
+                        duration_ns,
+                        current_file_index,
+                        total_files,
+                        ..
+                    }) => {
+                        let _ = players.send(crate::clips::PlayerProgress {
+                            flow: flow_id,
+                            position_ms: position_ns / 1_000_000,
+                            duration_ms: duration_ns / 1_000_000,
+                            index: current_file_index,
+                            items: total_files,
+                        });
+                    }
+                    Ok(StromEvent::SystemStats(stats)) => {
+                        health.lock().expect("health lock").system = Some(stats);
+                    }
+                    Ok(StromEvent::QoSStats {
+                        flow_id,
+                        event_count,
+                        avg_proportion,
+                        is_falling_behind,
+                        ..
+                    }) => {
+                        let mut health = health.lock().expect("health lock");
+                        let qos = health.qos.entry(flow_id).or_default();
+                        qos.events += event_count;
+                        qos.behind += u64::from(is_falling_behind);
+                        qos.proportion = avg_proportion;
                     }
                     Ok(StromEvent::FlowStopped { flow_id }) => {
                         let _ = errors.send(FlowError {

@@ -500,10 +500,20 @@ layout_shown() {
         && [[ $(quarter "$WORK/layout.jpg" "$((w / 4))x$((h / 4))+$((w * 5 / 8))+$((h / 8))") -lt 100 ]]
 }
 wait_for "$SETTLE_S" layout_shown || fail "layout picture: background and box not where they belong"
+# Crop: the right half of Orange fills a full-picture box at its own
+# aspect (strom fits it), so the left edge turns black.
+act '{"action":"set_layout","layout":1,"background":null,"boxes":[{"rect":{"x":0,"y":0,"w":1,"h":1},"input":"Orange","crop":{"left":0.5}}]}' >/dev/null
+cropped() {
+    picture program "$WORK/layout.jpg"
+    local w h; read -r w h <<<"$(identify -format '%w %h' "$WORK/layout.jpg")"
+    [[ $(quarter "$WORK/layout.jpg" "$((w / 16))x$((h / 4))+0+$((h * 3 / 8))") -lt 60 ]] \
+        && [[ $(quarter "$WORK/layout.jpg" "$((w / 8))x$((h / 4))+$((w * 7 / 16))+$((h * 3 / 8))") -gt 200 ]]
+}
+wait_for "$SETTLE_S" cropped || fail "layout crop not applied"
 act '{"action":"cut_direct","input":"Ball"}' >/dev/null
 act '{"action":"remove_layout","layout":1}' >/dev/null
 [[ "$(curl -sf "$CORE/state" | jq '.layouts | length')" == 0 ]] || fail "layout not removed"
-pass "layouts: background and box on program, red tally for both inputs, removed"
+pass "layouts: background and box on program, red tally for both inputs, crop, removed"
 
 # --- automation (AUT.7, AUT.14): a cue list whose cues fire triggers ---
 act '{"action":"set_triggers","input":"Orange","triggers":[{"on":"program","delay_ms":500,"actions":[{"action":"overlay_in","channel":2,"input":"Ball","duration_ms":0}]},{"on":"program_off","actions":[{"action":"overlay_out","channel":2,"duration_ms":0}]}]}' >/dev/null
@@ -525,6 +535,13 @@ act '{"action":"remove_cue_list","list":"Run"}' >/dev/null
 act '{"action":"set_triggers","input":"Orange","triggers":[]}' >/dev/null
 wait_for 4 state_is ".overlays[1] == null and (.cue_lists | length) == 0" || fail "automation not cleaned up"
 pass "automation: cues GO and back, triggers on and off program"
+# Clip end (AUT.7): Clips (two 10 s clips, looped) puts Orange on overlay 3
+# two seconds before its end and takes it off at the end.
+act '{"action":"set_triggers","input":"Clips","triggers":[{"on":"clip_end","before_ms":2000,"actions":[{"action":"overlay_in","channel":3,"input":"Orange","duration_ms":0}]},{"on":"clip_end","actions":[{"action":"overlay_out","channel":3,"duration_ms":0}]}]}' >/dev/null
+wait_for "$((SETTLE_S + 20))" state_is ".overlays[2] == \"$orange_id\"" || fail "countdown before the clip end did not fire"
+wait_for "$SETTLE_S" state_is ".overlays[2] == null" || fail "clip end did not fire"
+act '{"action":"set_triggers","input":"Clips","triggers":[]}' >/dev/null
+pass "clip end: countdown and end of a playlist fire their triggers"
 
 # --- latency (NFA.3): capture-to-program, CPU mixer in a VM ---
 # Budget here is generous (software compositing, no GPU); the real target

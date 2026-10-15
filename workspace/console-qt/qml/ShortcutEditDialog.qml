@@ -5,13 +5,15 @@ import org.kde.kirigami as Kirigami
 import Kante
 
 /**
- * One shortcut: label, key (pressed, not typed), shown on the web page
- * "Keys", and up to eight actions run in order.
+ * One shortcut: label, key (pressed, not typed), MIDI note or controller
+ * (learned from the controller), shown on the web page "Keys", and up to
+ * eight actions run in order.
  */
 KanteDialog {
     id: dialog
 
     required property var act
+    required property var core
     required property var inputs
     required property var outputs
     /** Shortcut being edited; `null` adds one. Set before `open()`. */
@@ -29,13 +31,14 @@ KanteDialog {
         label.text = shortcut ? shortcut.label : ""
         keyButton.sequence = shortcut && shortcut.key ? shortcut.key : ""
         web.checked = shortcut ? shortcut.web : true
+        midi.binding = shortcut && shortcut.midi ? shortcut.midi : null
         actions.load(shortcut ? shortcut.actions : [])
     }
 
-    Component.onCompleted: standardButton(QQC2.Dialog.Ok).enabled = Qt.binding(() => actions.error === "" && label.text.trim() !== "")
+    Component.onCompleted: standardButton(QQC2.Dialog.Ok).enabled = Qt.binding(() => actions.error === "" && actions.filled > 0 && label.text.trim() !== "")
 
     onAccepted: {
-        var spec = { label: label.text.trim(), key: keyButton.sequence || null, web: web.checked, actions: actions.collect() }
+        var spec = { label: label.text.trim(), key: keyButton.sequence || null, midi: midi.binding, web: web.checked, actions: actions.collect() }
         if (shortcut)
             act({ action: "set_shortcut", target: shortcut.number, shortcut: spec })
         else
@@ -91,6 +94,10 @@ KanteDialog {
                     sequence = parts.join("+")
                     listening = false
                 }
+            }
+            MidiLearnButton {
+                id: midi
+                core: dialog.core
             }
             QQC2.CheckBox {
                 id: web
