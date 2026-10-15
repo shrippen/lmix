@@ -71,7 +71,25 @@ QtObject {
     readonly property color negativeTextColor: themed ? palette.negative : Kirigami.Theme.negativeTextColor
 
     readonly property font defaultFont: Kirigami.Theme.defaultFont
-    readonly property font smallFont: Kirigami.Theme.smallFont
+    /**
+     * The platform's small font, but never larger than the default font: without a
+     * platform theme (Kirigami's basic theme, e.g. Fusion on any desktop) smallFont can come
+     * out larger than defaultFont, which turned hints and labels bigger than their titles
+     * (found in Kontra at 200 %). Then 85 % of the default font is used.
+     */
+    readonly property font smallFont: {
+        var s = Kirigami.Theme.smallFont, d = Kirigami.Theme.defaultFont
+        if (fontPixels(s) <= fontPixels(d)) {
+            return s
+        }
+        return d.pointSize > 0
+            ? Qt.font({ family: d.family, pointSize: Math.max(7, d.pointSize * 0.85) })
+            : Qt.font({ family: d.family, pixelSize: Math.max(9, Math.round(d.pixelSize * 0.85)) })
+    }
+    /** Size of a font in pixels at 96 dpi, from its point or pixel size. */
+    function fontPixels(f) {
+        return f.pointSize > 0 ? f.pointSize * 4 / 3 : f.pixelSize
+    }
 
     // ── Surfaces (System values match a plain Kirigami look) ─────────────
     readonly property color strongTextColor: themed ? palette.strongText : Kirigami.Theme.textColor
@@ -110,6 +128,17 @@ QtObject {
     /** Primary fill on hover (one step lighter) and pressed. */
     readonly property color accentHoverColor: themed ? palette.accentHover : Qt.lighter(Kirigami.Theme.highlightColor, 1.12)
     readonly property color accentPressedColor: themed ? palette.accentPressed : Qt.darker(Kirigami.Theme.highlightColor, 1.12)
+    /**
+     * The primary action (KanteButton.Emphasis.Primary, 1.27). Kante: the accent as before.
+     * Kante Light and System: the platform highlight moved in lightness (hue kept) until its
+     * label, the highlighted text colour, reads at 4.5:1 on it; Breeze's #3daee9 with white
+     * is only 2.4:1. Hover and pressed go one and two steps further from the label.
+     */
+    readonly property color primaryColor: themed ? palette.accent : readable(Kirigami.Theme.highlightColor, Kirigami.Theme.highlightedTextColor)
+    readonly property color primaryHoverColor: themed ? palette.accentHover : awayFrom(primaryColor, primaryTextColor, 0.05)
+    readonly property color primaryPressedColor: themed ? palette.accentPressed : awayFrom(primaryColor, primaryTextColor, 0.1)
+    /** Label on primaryColor. */
+    readonly property color primaryTextColor: themed ? palette.accentForeground : Kirigami.Theme.highlightedTextColor
     /** The dim behind a modal dialog. */
     readonly property color scrimColor: themed ? palette.scrim : tint(Kirigami.Theme.textColor, 0.5)
     // Tint steps for hover, drop targets, selection and outlines: translucent, so any ground shows through.
@@ -139,6 +168,84 @@ QtObject {
     readonly property color sunColor: accentColor
     readonly property color moonColor: mutedTextColor
     readonly property color workBandColor: mutedTextColor
+    // Practice roles (Kante 1.23: KanteTabLane, KanteTabStaff, KanteBassStaff, KanteNoteMark).
+    // The state of a played note. Colour is never the only sign: KanteNoteMark draws
+    // a shape for each (check, cross, hollow dashed square, arrow left / right, wave).
+    /** Every note state that draws a sign, in legend order (pending draws none). */
+    readonly property var noteStates: ["hit", "offpitch", "wrong", "missed", "early", "late"]
+    /**
+     * Colour of a note state: "hit", "wrong", "missed", "early", "late", "offpitch" (1.27:
+     * the right note, its pitch off by more than the app's cents limit); anything else
+     * (pending) the text colour. offpitch shares the warning colour with early and late
+     * (right note, not quite right) and is told apart from them by its sign, a wave.
+     */
+    function noteStateColor(state) {
+        switch (state) {
+        case "hit": return positiveTextColor
+        case "wrong": return negativeTextColor
+        case "missed": return mutedTextColor
+        case "early":
+        case "late":
+        case "offpitch": return warningColor
+        default: return textColor
+        }
+    }
+    /** Words for the note states (screen readers, legends); an app sets its translations once. */
+    property var noteStateNames: ({
+        pending: "Offen", hit: "Getroffen", wrong: "Falscher Ton",
+        missed: "Verpasst", early: "Zu früh", late: "Zu spät", offpitch: "Unsauber"
+    })
+    /** Unit after a cents value ("+32 ct"); an app may translate it. */
+    property string centsUnit: "ct"
+    /** A deviation in cents as text: "+32 ct", "−18 ct" (true minus), "0 ct"; "" when not a number. */
+    function centsText(cents) {
+        var c = Number(cents)
+        if (cents === undefined || cents === null || cents === "" || !isFinite(c)) {
+            return ""
+        }
+        var r = Math.round(c)
+        return (r < 0 ? "\u2212" : r > 0 ? "+" : "") + Math.abs(r) + " " + centsUnit
+    }
+    function noteStateName(state) {
+        var n = noteStateNames && noteStateNames[state]
+        return n !== undefined ? String(n) : String(noteStateNames && noteStateNames.pending || "")
+    }
+    /**
+     * String colours (Kante 1.28), one per string, string 0 = the lowest, kept apart from the
+     * note state colours. Presets (`stringPalettes`): "kante" six roles that differ in hue
+     * (purple, cyan, yellow, strong text, muted, info), "mono" every string in the strong
+     * text colour, "bright" the strong signal colours (orange, info, yellow, purple, cyan,
+     * strong text). `stringPalette` is the app's choice, set once; KanteTabLane, KanteTabStaff
+     * and KanteFretboard follow it where their `stringColors` leave a string out. Colour is
+     * never the only sign: strings keep their names and rows.
+     */
+    readonly property var stringPalettes: ["kante", "mono", "bright"]
+    property string stringPalette: "kante"
+    /** Colour of string s (0 = lowest) in `preset` (default `stringPalette`); repeats after six. */
+    function stringColor(s, preset) {
+        var p = preset !== undefined && preset !== null && preset !== "" ? String(preset) : stringPalette
+        var list = p === "mono" ? [strongTextColor]
+            : p === "bright" ? [warningColor, infoColor, accentTextColor, tagColor, focusColor, strongTextColor]
+            : [tagColor, focusColor, accentTextColor, strongTextColor, mutedTextColor, infoColor]
+        var i = Math.max(0, Math.floor(Number(s) || 0))
+        return list[i % list.length]
+    }
+    /** The colours of `count` strings (default 6) in `preset`, e.g. for `stringColors`. */
+    function stringColors(count, preset) {
+        var out = []
+        var n = count === undefined ? 6 : Math.max(0, Number(count) || 0)
+        for (var s = 0; s < n; s++) {
+            out.push(stringColor(s, preset))
+        }
+        return out
+    }
+    /** Text colour for a label on a filled `fill`: the ground or the strong text, whichever reads better. */
+    function inkOn(fill) {
+        var a = Qt.rgba(backgroundColor.r, backgroundColor.g, backgroundColor.b, 1)
+        var b = Qt.rgba(strongTextColor.r, strongTextColor.g, strongTextColor.b, 1)
+        var f = Qt.rgba(fill.r, fill.g, fill.b, 1)
+        return contrastOf(a, f) >= contrastOf(b, f) ? a : b
+    }
     /** Text on a filled state color (danger button, counter). */
     readonly property color onStateColor: themed ? palette.onState : Kirigami.Theme.highlightedTextColor
     readonly property color cardColor: themed ? palette.card : tint(Kirigami.Theme.textColor, 0.04)
@@ -217,6 +324,11 @@ QtObject {
             out = Qt.hsla(h, sat, l, 1)
         }
         return out
+    }
+    /** c moved by `step` in lightness away from `from` (darker next to a light label, else lighter). */
+    function awayFrom(c, from, step) {
+        var l = relLum(from) > 0.5 ? Math.max(0, c.hslLightness - step) : Math.min(1, c.hslLightness + step)
+        return Qt.hsla(Math.max(0, c.hslHue), c.hslSaturation, l, 1)
     }
     function tint(c, alpha) {
         return Qt.rgba(c.r, c.g, c.b, alpha)
