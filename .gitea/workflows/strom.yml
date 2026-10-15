@@ -67,6 +67,17 @@ jobs:
             libgstreamer-plugins-bad1.0-dev libnice-dev libcairo2-dev
           curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain none
 
+      # utoipa-swagger-ui's build script downloads Swagger UI from GitHub
+      # once, without retry; a broken download stops the strom build (run
+      # 2433). Fetch it here with retries and hand the crate the file.
+      # Version: the default of utoipa-swagger-ui 9.0.
+      - name: Swagger UI
+        if: steps.exists.outputs.found == 'no'
+        run: |
+          curl -sSfL --retry 5 --retry-all-errors -o "$PWD/swagger-ui.zip" \
+            https://github.com/swagger-api/swagger-ui/archive/refs/tags/v5.17.14.zip
+          echo "SWAGGER_UI_DOWNLOAD_URL=file://$PWD/swagger-ui.zip" >> "$GITHUB_ENV"
+
       - name: Build strom
         if: steps.exists.outputs.found == 'no'
         working-directory: workspace/strom

@@ -55,6 +55,16 @@ jobs:
           git -c http.extraheader="Authorization: token $TOKEN" \
             submodule update --init --depth 50 workspace/strom
 
+      # utoipa-swagger-ui's build script downloads Swagger UI from GitHub
+      # once, without retry; a broken download stops the strom build when
+      # fetch-strom.sh finds no package. Fetch it here with retries and hand
+      # the crate the file. Version: the default of utoipa-swagger-ui 9.0.
+      - name: Swagger UI
+        run: |
+          curl -sSfL --retry 5 --retry-all-errors -o "$PWD/swagger-ui.zip" \
+            https://github.com/swagger-api/swagger-ui/archive/refs/tags/v5.17.14.zip
+          echo "SWAGGER_UI_DOWNLOAD_URL=file://$PWD/swagger-ui.zip" >> "$GITHUB_ENV"
+
       - name: VM check
         env:
           GITEA_TOKEN: ${{ secrets.REGISTRY_TOKEN }}
