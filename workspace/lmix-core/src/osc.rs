@@ -7,6 +7,8 @@
 //! | `/lmix/preview` | input (int or string) | `preview_input` |
 //! | `/lmix/program` | input | `cut_direct` |
 //! | `/lmix/transition` | slot (int) | `transition` |
+//! | `/lmix/quickplay` | input, or none for preview | `quick_play` |
+//! | `/lmix/go` | input | `go_input` |
 //! | `/lmix/ftb` | – | `fade_to_black` |
 //! | `/lmix/tbar` | position (float 0–1) | `t_bar` |
 //! | `/lmix/overlay/{n}/in` | input | `overlay_in` |
@@ -255,6 +257,10 @@ pub fn request(message: &Message) -> Result<Request, String> {
         ["ftb"] => json(serde_json::json!({ "action": "fade_to_black" }))?,
         ["preview"] => Action::PreviewInput { input: input(0)? },
         ["program"] => Action::CutDirect { input: input(0)? },
+        ["quickplay"] => Action::QuickPlay {
+            input: arg(0).map(|_| input(0)).transpose()?,
+        },
+        ["go"] => Action::GoInput { input: input(0)? },
         ["transition"] => match arg(0) {
             Some(Arg::Int(slot)) => {
                 json(serde_json::json!({ "action": "transition", "slot": slot }))?
@@ -492,6 +498,22 @@ mod tests {
                 ..
             }))
         ));
+        assert_eq!(
+            req("/lmix/quickplay", vec![]),
+            Ok(Request::Action(Action::QuickPlay { input: None }))
+        );
+        assert_eq!(
+            req("/lmix/quickplay", vec![Arg::Int(2)]),
+            Ok(Request::Action(Action::QuickPlay {
+                input: Some(InputRef::Number(2))
+            }))
+        );
+        assert_eq!(
+            req("/lmix/go", vec![Arg::Str("Clip".into())]),
+            Ok(Request::Action(Action::GoInput {
+                input: InputRef::Text("Clip".into())
+            }))
+        );
         assert!(matches!(
             req("/lmix/overlay/3/last", vec![]),
             Ok(Request::Action(Action::OverlayLast { channel: 3, .. }))

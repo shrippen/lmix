@@ -13,9 +13,9 @@ use lmix_types::action::{OVERLAY_CHANNELS, TRANSITION_SLOTS};
 use lmix_types::input::AUX_BUSES;
 use lmix_types::{
     Action, AutoPlay, AuxBus, ChannelStrip, Cue, DataSourceSpec, Dataset, Effect, FieldBinding,
-    InputAudio, InputColor, InputId, LayerTransform, LayoutBox, Look, MidiBinding, OutputId,
-    OutputSource, OutputSpec, SignalLoss, SourceSpec, TitleData, TitlePhase, TitleTrigger,
-    Transition, TransitionSlot, Trigger,
+    InputAudio, InputColor, InputId, InputPress, LayerTransform, LayoutBox, Look, MidiBinding,
+    OutputId, OutputSource, OutputSpec, QuickPlay, SignalLoss, SourceSpec, TitleData, TitlePhase,
+    TitleTrigger, Transition, TransitionSlot, Trigger,
 };
 use serde::{Deserialize, Serialize};
 
@@ -42,6 +42,15 @@ pub struct ShowInput {
     /// Play, restart, pause on and off air (INP.11).
     #[serde(default, skip_serializing_if = "AutoPlay::is_off")]
     pub auto_play: AutoPlay,
+    /// What a click on it does (INP.8).
+    #[serde(
+        default = "InputPress::click",
+        skip_serializing_if = "InputPress::is_click"
+    )]
+    pub click: InputPress,
+    /// What its GO does (INP.9).
+    #[serde(default = "InputPress::go", skip_serializing_if = "InputPress::is_go")]
+    pub go: InputPress,
     #[serde(default)]
     pub strip: ChannelStrip,
     #[serde(default)]
@@ -63,6 +72,9 @@ pub struct Show {
     pub preview: Option<InputId>,
     pub program: Option<InputId>,
     pub transitions: Vec<Transition>,
+    /// Effect and length of quick play (SWI.8).
+    #[serde(default)]
+    pub quick_play: QuickPlay,
     /// Outputs; whether they run is not saved.
     #[serde(default)]
     pub outputs: Vec<ShowOutput>,
@@ -191,6 +203,7 @@ impl Default for Show {
             preview: None,
             program: None,
             transitions: default_transitions(),
+            quick_play: QuickPlay::default(),
             outputs: Vec::new(),
             overlays: Default::default(),
             aux_buses: Default::default(),
@@ -351,6 +364,8 @@ mod tests {
                     restart: false,
                     pause: true,
                 },
+                click: InputPress::CutDirect,
+                go: InputPress::None,
                 strip: ChannelStrip {
                     delay_ms: 40,
                     ..Default::default()
@@ -375,6 +390,10 @@ mod tests {
             preview: Some(id),
             program: None,
             transitions: default_transitions(),
+            quick_play: QuickPlay {
+                effect: Effect::WipeLeft,
+                duration_ms: 1000,
+            },
             overlays: [None, Some(id), None, None],
             cue_lists: vec![ShowCueList {
                 id: InputId::new(),

@@ -20,6 +20,24 @@ pub struct Transition {
     pub stinger: Option<Stinger>,
 }
 
+/// Quick play (SWI.8): its own effect for taking an input to program
+/// and playing it, apart from the transition buttons.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct QuickPlay {
+    pub effect: Effect,
+    pub duration_ms: u32,
+}
+
+impl Default for QuickPlay {
+    /// Half a second of fade.
+    fn default() -> Self {
+        Self {
+            effect: Effect::Fade,
+            duration_ms: 500,
+        }
+    }
+}
+
 /// A stinger: a clip (with alpha) played over program; at `cut_ms` into
 /// it program cuts to preview underneath. It plays for the button's
 /// `duration_ms`.
@@ -41,6 +59,9 @@ pub struct ShowState {
     pub preview: Option<InputId>,
     pub program: Option<InputId>,
     pub transitions: Vec<Transition>,
+    /// Effect and length of quick play (SWI.8).
+    #[serde(default)]
+    pub quick_play: QuickPlay,
     pub fade_to_black: bool,
     /// Mixer slots available for inputs.
     pub slots: usize,

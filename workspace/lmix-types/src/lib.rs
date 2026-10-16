@@ -31,8 +31,8 @@ pub use graphics::{
 };
 pub use input::{
     AutoPlay, AuxBus, ChannelStrip, Compressor, Device, DeviceKind, Eq4, Gate, Hpf, Ingest, Input,
-    InputAudio, InputColor, InputId, InputRef, InputStatus, Listen, Look, SignalLoss, SourceSpec,
-    TestPattern, Transport,
+    InputAudio, InputColor, InputId, InputPress, InputRef, InputStatus, Listen, Look, SignalLoss,
+    SourceSpec, TestPattern, Transport,
 };
 pub use layout::{BoxCrop, BoxRect, BoxSpec, Layout, LayoutBox};
 pub use midi::{MidiBinding, MidiKind, MidiMessage};
@@ -42,4 +42,6 @@ pub use output::{
 };
 pub use ptz::{PtzFocus, PtzProtocol, PtzSpec};
 pub use shortcut::{Shortcut, ShortcutSpec};
-pub use state::{Event, InputLevel, Latency, Levels, LiveFeed, ShowState, Stinger, Transition};
+pub use state::{
+    Event, InputLevel, Latency, Levels, LiveFeed, QuickPlay, ShowState, Stinger, Transition,
+};

@@ -133,6 +133,48 @@ impl AutoPlay {
     }
 }
 
+/// What a click on an input (INP.8) or its GO (INP.9) does, named as
+/// the action it runs on the input.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum InputPress {
+    /// Into preview.
+    PreviewInput,
+    /// Straight to program.
+    CutDirect,
+    /// To program with the quick play effect, and play (SWI.8).
+    QuickPlay,
+    /// Nothing.
+    None,
+}
+
+impl InputPress {
+    pub const ALL: [InputPress; 4] = [
+        InputPress::PreviewInput,
+        InputPress::CutDirect,
+        InputPress::QuickPlay,
+        InputPress::None,
+    ];
+
+    /// A click puts the input into preview unless set otherwise.
+    pub fn click() -> Self {
+        Self::PreviewInput
+    }
+
+    /// GO is quick play unless set otherwise.
+    pub fn go() -> Self {
+        Self::QuickPlay
+    }
+
+    pub fn is_click(&self) -> bool {
+        *self == Self::click()
+    }
+
+    pub fn is_go(&self) -> bool {
+        *self == Self::go()
+    }
+}
+
 impl SourceSpec {
     /// Whether the source can carry sound: test patterns bring a tone,
     /// files, URLs and SRT their audio track; devices are video only
@@ -514,6 +556,12 @@ pub struct Input {
     /// Play, restart, pause on and off air (file, URL, playlist).
     #[serde(default)]
     pub auto_play: AutoPlay,
+    /// What a click on the input does (INP.8).
+    #[serde(default = "InputPress::click")]
+    pub click: InputPress,
+    /// What its GO does (INP.9).
+    #[serde(default = "InputPress::go")]
+    pub go: InputPress,
     /// Solo on the monitor bus; not saved in the show file.
     #[serde(default)]
     pub listen: Listen,

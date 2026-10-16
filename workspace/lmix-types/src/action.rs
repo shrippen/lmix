@@ -18,8 +18,8 @@ use crate::graphics::{
     BindingSpec, DataSourceSpec, Easing, LayerTransform, TitleData, TitleTrigger,
 };
 use crate::input::{
-    AutoPlay, ChannelStrip, InputColor, InputRef, Listen, Look, SignalLoss, SourceSpec, Transport,
-    AUX_BUSES,
+    AutoPlay, ChannelStrip, InputColor, InputPress, InputRef, Listen, Look, SignalLoss, SourceSpec,
+    Transport, AUX_BUSES,
 };
 use crate::layout::BoxSpec;
 use crate::output::{OutputRef, OutputSource, OutputSpec};
@@ -117,6 +117,10 @@ pub const ACTION_GROUPS: &[(&str, &[&str])] = &[
             "cut_direct",
             "transition",
             "set_transition",
+            "quick_play",
+            "set_quick_play",
+            "click_input",
+            "go_input",
             "fade_to_black",
             "t_bar",
             "set_midi_tbar",
@@ -134,6 +138,7 @@ pub const ACTION_GROUPS: &[(&str, &[&str])] = &[
             "set_look",
             "set_signal_loss",
             "set_auto_play",
+            "set_input_press",
             "transport_input",
             "seek_input",
             "play_item",
@@ -300,6 +305,15 @@ pub enum Action {
         input: InputRef,
         auto_play: AutoPlay,
     },
+    /// Choose what a click on the input (INP.8) and its GO (INP.9) do;
+    /// one left out stays as it is.
+    SetInputPress {
+        input: InputRef,
+        #[serde(default)]
+        click: Option<InputPress>,
+        #[serde(default)]
+        go: Option<InputPress>,
+    },
     /// Play, pause, restart or step a file, URL or playlist input.
     TransportInput {
         input: InputRef,
@@ -441,6 +455,19 @@ pub enum Action {
     CutDirect { input: InputRef },
     /// Take preview to program with transition button `slot` (1–4).
     Transition { slot: TransitionSlot },
+    /// Take `input` (preview when left out) to program with the quick
+    /// play effect and play it, if it is a clip (SWI.8). Preview stays,
+    /// unless `input` was in it; on program already it only plays.
+    QuickPlay {
+        #[serde(default)]
+        input: Option<InputRef>,
+    },
+    /// Set the effect and length of quick play (no stinger).
+    SetQuickPlay { effect: Effect, duration_ms: u32 },
+    /// Do what a click on `input` does (INP.8; preview unless set).
+    ClickInput { input: InputRef },
+    /// Do what GO on `input` does (INP.9; quick play unless set).
+    GoInput { input: InputRef },
     /// Configure transition button `slot`.
     SetTransition {
         slot: TransitionSlot,
@@ -797,6 +824,8 @@ pub enum ActionError {
     StingerPlaying,
     #[error("stinger: {reason}")]
     BadStinger { reason: String },
+    #[error("quick play: {reason}")]
+    BadQuickPlay { reason: String },
     #[error("{reference} is on program; it cannot be in preview at the same time")]
     OnProgram { reference: String },
     #[error("position {number} is outside 1–{max}")]
