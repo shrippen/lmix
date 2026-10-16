@@ -20,6 +20,8 @@ ColumnLayout {
 
     /** More columns: waits and follows (SUI.13). */
     property bool advanced: false
+    /** The whole window dimmed for a dark room (SUI.6). */
+    property bool darkRoom: false
     /** Groups shown closed, by cue id (SUI.2). */
     property var closed: ({})
 
@@ -230,6 +232,15 @@ ColumnLayout {
                 view.act({ action: "set_script_folder", folder: path })
                 view.forceActiveFocus()
             }
+        }
+        KanteButton {
+            focusPolicy: Qt.NoFocus
+            checkable: true
+            checked: view.darkRoom
+            text: qsTr("Dark")
+            QQC2.ToolTip.visible: hovered
+            QQC2.ToolTip.text: qsTr("Dim the window for a dark room")
+            onToggled: view.darkRoom = checked
         }
         QQC2.CheckBox {
             id: advancedBox

@@ -1554,7 +1554,7 @@
   <context>
     <name>Main</name>
     <message>
-      <location filename="../qml/Main.qml" line="+137" />
+      <location filename="../qml/Main.qml" line="+139" />
       <source>Layout %1 %2</source>
       <translation>Layout %1 %2</translation>
     </message>
@@ -2331,7 +2331,7 @@
   <context>
     <name>ShowView</name>
     <message>
-      <location filename="../qml/ShowView.qml" line="+41" />
+      <location filename="../qml/ShowView.qml" line="+43" />
       <source>starts cue %1, which is not there</source>
       <translation>startet Cue %1, den es nicht gibt</translation>
     </message>
@@ -2468,7 +2468,17 @@
       <translation>Drehbuch-Ordner</translation>
     </message>
     <message>
-      <location line="+9" />
+      <location line="+11" />
+      <source>Dark</source>
+      <translation>Dunkel</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Dim the window for a dark room</source>
+      <translation>Das Fenster für einen dunklen Raum abdunkeln</translation>
+    </message>
+    <message>
+      <location line="+5" />
       <source>Advanced</source>
       <translation>Erweitert</translation>
     </message>
@@ -2738,7 +2748,7 @@
       <translation>Noch keine Ziele. Cues senden an ein Ziel über seinen Namen, z. B. Home Assistant für Licht oder Companion für Tasten.</translation>
     </message>
     <message>
-      <location line="+29" />
+      <location line="+30" />
       <source>with secret</source>
       <translation>mit Geheimnis</translation>
     </message>

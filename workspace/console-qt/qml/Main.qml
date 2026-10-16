@@ -48,6 +48,8 @@ Kirigami.ApplicationWindow {
         property bool showMode: false
         /** Waits and follows in the show view (SUI.13). */
         property bool showAdvanced: false
+        /** The show view dimmed for a dark room (SUI.6). */
+        property bool darkRoom: false
     }
     readonly property var collapsedIds: {
         try {
@@ -760,6 +762,8 @@ Kirigami.ApplicationWindow {
                 show: root.show
                 advanced: viewSettings.showAdvanced
                 onAdvancedChanged: viewSettings.showAdvanced = advanced
+                darkRoom: viewSettings.darkRoom
+                onDarkRoomChanged: viewSettings.darkRoom = darkRoom
             }
 
             QQC2.Label {
@@ -770,6 +774,24 @@ Kirigami.ApplicationWindow {
                 wrapMode: Text.Wrap
             }
         }
+    }
+
+    // Dark room (SUI.6): Kante's dark scheme (no white), and the window
+    // under its scrim; clicks go through.
+    Binding {
+        target: KanteStyle
+        property: "preferDark"
+        value: true
+        when: root.showMode && viewSettings.darkRoom
+        restoreMode: Binding.RestoreBindingOrValue
+    }
+    Rectangle {
+        parent: root.contentItem
+        anchors.fill: parent
+        z: 1000
+        color: KanteStyle.scrimColor
+        opacity: 0.6
+        visible: root.showMode && viewSettings.darkRoom
     }
 
     component Monitor: KanteCard {

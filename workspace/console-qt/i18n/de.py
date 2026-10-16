@@ -332,6 +332,8 @@ DE = {
     'MIDI: %1': 'MIDI: %1',
     'Make this the cue GO starts next': 'Diesen Cue auf Standby setzen: GO startet ihn als nächsten',
     'Standby': 'Standby',
+    'Dark': 'Dunkel',
+    'Dim the window for a dark room': 'Das Fenster für einen dunklen Raum abdunkeln',
     '+ Message': '+ Nachricht',
     '+ Subscriber': '+ Abonnent',
     '+ Target': '+ Ziel',
