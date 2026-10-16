@@ -318,6 +318,16 @@ bright program "$WORK/hold.jpg" || fail "paused clip not held on program"
 act '{"action":"transport_input","input":"Clips","transport":"play"}' >/dev/null
 pass "paused clip held on program"
 
+# Automatic playback (INP.11): paused once off air, plays again on air.
+act '{"action":"set_auto_play","input":"Clips","auto_play":{"play":true,"restart":false,"pause":true}}' >/dev/null
+wait_for "$SETTLE_S" clips_move || fail "playlist does not play before the automatic pause"
+act '{"action":"cut_direct","input":"Ball"}' >/dev/null
+wait_for "$SETTLE_S" clips_still || fail "clip off air not paused automatically"
+act '{"action":"cut_direct","input":"Clips"}' >/dev/null
+wait_for "$SETTLE_S" clips_move || fail "clip on air does not play automatically"
+act '{"action":"set_auto_play","input":"Clips","auto_play":{"play":false,"restart":false,"pause":false}}' >/dev/null
+pass "automatic playback: paused off air, plays on air"
+
 # --- outputs (M3): recording and SRT, each in its own flow ---
 # Codecs of a media file, sorted and comma separated (needs a finalized file).
 codecs() { ffprobe -v error -show_entries stream=codec_name -of csv=p=0 "$1" 2>/dev/null | sort | paste -sd, -; }
@@ -433,6 +443,12 @@ act '{"action":"overlay_out","channel":1,"duration_ms":500}' >/dev/null
 overlay_gone() { picture program "$WORK/ovl.jpg"; [[ $(rgb "$WORK/ovl.jpg" r) -lt 60 ]]; }
 wait_for "$SETTLE_S" overlay_gone || fail "overlay 1 not taken off"
 pass "overlays: input above program, red tally, faded off"
+# All off and the last input again (OVL.8).
+act '{"action":"overlay_last","channel":1,"duration_ms":0}' >/dev/null
+wait_for "$SETTLE_S" overlay_shown || fail "last input of overlay 1 not back"
+act '{"action":"overlay_out_all","duration_ms":0}' >/dev/null
+wait_for "$SETTLE_S" overlay_gone || fail "overlays not all off"
+pass "overlays: last input again, all off"
 code="$(curl -s -o /dev/null -w '%{http_code}' -X POST "$CORE/actions" -H 'content-type: application/json' \
     -d '{"action":"set_channel_strip","input":"Orange","strip":{}}')"
 [[ "$code" != 200 ]] || fail "channel strip accepted for an input without sound"
