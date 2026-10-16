@@ -199,7 +199,7 @@ fn runs_automation(action: &Action) -> bool {
                 | Action::CueReset
                 | Action::SetActiveCueList { .. }
                 | Action::SetGoGuard { .. }
-                | Action::CuePanic
+                | Action::CuePanic { .. }
                 | Action::CueHardStop
                 | Action::SetPanicTime { .. }
                 | Action::SetEmergencyList { .. }
@@ -244,6 +244,12 @@ fn dynamic_index(slot: u8) -> Result<usize, ActionError> {
     }
     Ok(usize::from(slot - 1))
 }
+
+/// The standby cue of a list, where an action names a cue (CTL.1).
+const CUE_STANDBY: &str = "standby";
+
+/// The active cue list, where an action names a list (CTL.1).
+const LIST_ACTIVE: &str = "active";
 
 /// A name and at most `CUES` well-formed cues (CUE.1–11, CUE.20).
 fn check_cues(name: &str, cues: &[Cue]) -> Result<(), ActionError> {
@@ -1023,7 +1029,7 @@ impl Switcher {
             | Action::CueStart { .. }
             | Action::CueStop { .. }
             | Action::CueReset
-            | Action::CuePanic
+            | Action::CuePanic { .. }
             | Action::CueHardStop => Err(bad_cues("run through the service".into())),
             Action::SetLock { on } => {
                 self.locked = on;
@@ -2183,13 +2189,24 @@ impl Switcher {
             .go(&self.show.cue_lists, index, now, self.show.go_guard_ms)
     }
 
-    /// Start cue `cue` (number or id) without moving standby.
+    /// Start cue `cue` (number, id, or `standby`: the list's standby cue)
+    /// without moving standby (CTL.1).
     pub fn cue_start(
         &mut self,
         list: Option<&InputRef>,
         cue: &str,
         now: tokio::time::Instant,
     ) -> Result<Vec<Out>, ActionError> {
+        if cue == CUE_STANDBY {
+            let index = self.cue_list_or_active(list)?;
+            let id = self
+                .cues
+                .standby_cue(&self.show.cue_lists[index])
+                .ok_or_else(|| bad_cues("no cues left; move standby back first".into()))?;
+            return self
+                .cues
+                .start(&self.show.cue_lists, Some(index), &id.to_string(), now);
+        }
         let index = list.map(|l| self.find_cue_list(l)).transpose()?;
         self.cues.start(&self.show.cue_lists, index, cue, now)
     }
@@ -2210,11 +2227,19 @@ impl Switcher {
         self.cues.reset(now)
     }
 
-    /// Panic, or a hard stop when one runs (SAF.1).
-    pub fn cue_panic(&mut self, now: tokio::time::Instant) -> Vec<Out> {
+    /// Panic over the show's panic time or `ms`, or a hard stop when one
+    /// runs (SAF.1, CTL.1).
+    pub fn cue_panic(
+        &mut self,
+        now: tokio::time::Instant,
+        ms: Option<u32>,
+    ) -> Result<Vec<Out>, ActionError> {
+        if ms.is_some_and(|ms| ms > PANIC_MAX_MS) {
+            return Err(bad_cues(format!("the panic time is 0–{PANIC_MAX_MS} ms")));
+        }
         let emergency = self.emergency_index();
-        self.cues
-            .panic(&self.show.cue_lists, emergency, now, self.show.panic_ms)
+        let ms = ms.unwrap_or(self.show.panic_ms);
+        Ok(self.cues.panic(&self.show.cue_lists, emergency, now, ms))
     }
 
     /// Hard stop (SAF.3).
@@ -2285,8 +2310,12 @@ impl Switcher {
         }
     }
 
-    /// A cue list by number (1-based), id or name.
+    /// A cue list by number (1-based), id or name; `active` is the active
+    /// list (CTL.1).
     fn find_cue_list(&self, list: &InputRef) -> Result<usize, ActionError> {
+        if matches!(list, InputRef::Text(text) if text == LIST_ACTIVE) {
+            return self.cue_list_or_active(None);
+        }
         crate::cues::find_list(&self.show.cue_lists, list).ok_or_else(|| {
             ActionError::UnknownCueList {
                 reference: match list {
@@ -6191,6 +6220,38 @@ mod tests {
             sw.cue_go(None, t),
             Err(ActionError::BadCueList { .. })
         ));
+    }
+
+    #[test]
+    fn cues_by_standby_and_lists_by_active() {
+        let mut sw = two_inputs();
+        let t = tokio::time::Instant::now();
+        for name in ["Main", "Side"] {
+            sw.apply(Action::AddCueList {
+                name: name.into(),
+                cues: vec![
+                    cue("A", Action::CutDirect { input: named("A") }),
+                    cue("B", Action::CutDirect { input: named("B") }),
+                ],
+                source: None,
+            })
+            .unwrap();
+        }
+        sw.apply(Action::SetActiveCueList {
+            list: InputRef::Text("Side".into()),
+        })
+        .unwrap();
+        sw.apply(Action::CueStandby {
+            list: Some(InputRef::Text("active".into())),
+            to: lmix_types::StandbyMove::Next,
+        })
+        .unwrap();
+        assert_eq!(sw.state().cue_lists[1].standby, 2, "active = Side");
+
+        let out = sw.cue_start(None, "standby", t).unwrap();
+        assert_eq!(ran(&out), [Action::CutDirect { input: named("B") }]);
+        assert_eq!(sw.state().cue_lists[1].standby, 2, "standby stays");
+        assert!(sw.cue_panic(t, Some(20_000)).is_err(), "panic time 0–10 s");
     }
 
     #[test]

@@ -229,7 +229,7 @@ pub fn right_of(action: &Action) -> Right {
         | Action::CueStandby { .. }
         | Action::CueReset
         | Action::SetActiveCueList { .. }
-        | Action::CuePanic
+        | Action::CuePanic { .. }
         | Action::CueHardStop
         | Action::TestTarget { .. }
         | Action::HttpRequest { .. }
@@ -384,7 +384,7 @@ impl Access {
 
     /// Whether an open page or `--open-panic` lets `action` through.
     pub fn open_for(&self, action: &Action) -> bool {
-        self.open_panic && matches!(action, Action::CuePanic | Action::CueHardStop)
+        self.open_panic && matches!(action, Action::CuePanic { .. } | Action::CueHardStop)
     }
 
     /// A wrong key from `ip`: wait longer each time, and log it.
@@ -977,7 +977,7 @@ mod tests {
     #[test]
     fn actions_need_their_right() {
         assert_eq!(right_of(&Action::Cut), Right::Control);
-        assert_eq!(right_of(&Action::CuePanic), Right::Control);
+        assert_eq!(right_of(&Action::CuePanic { ms: None }), Right::Control);
         assert_eq!(right_of(&Action::CueGo { list: None }), Right::Control);
         assert_eq!(right_of(&Action::SetLock { on: false }), Right::Edit);
         assert_eq!(

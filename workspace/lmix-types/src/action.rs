@@ -585,10 +585,13 @@ pub enum Action {
     SetGoGuard {
         ms: u32,
     },
-    /// Stop every cue of every list over the panic time; a second panic
-    /// within it is a hard stop. Standby stays; the emergency list runs
-    /// (SAF.1, SAF.4).
-    CuePanic,
+    /// Stop every cue of every list over the panic time, or over `ms`
+    /// ("panic in time x", CTL.1); a second panic within it is a hard
+    /// stop. Standby stays; the emergency list runs (SAF.1, SAF.4).
+    CuePanic {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        ms: Option<u32>,
+    },
     /// Stop every cue at once; the emergency list runs (SAF.3).
     CueHardStop,
     /// Panic time of the show, 0–10 000 ms (SAF.2).

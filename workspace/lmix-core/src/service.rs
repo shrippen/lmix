@@ -1282,7 +1282,7 @@ impl Service {
             | Action::CueStart { .. }
             | Action::CueStop { .. }
             | Action::CueReset
-            | Action::CuePanic
+            | Action::CuePanic { .. }
             | Action::CueHardStop => {
                 let out = {
                     let mut sw = self.switcher.lock().await;
@@ -1293,7 +1293,7 @@ impl Service {
                         Action::CueStop { list, cue, .. } => {
                             sw.cue_stop(list.as_ref(), cue.as_deref(), now)?
                         }
-                        Action::CuePanic => sw.cue_panic(now),
+                        Action::CuePanic { ms } => sw.cue_panic(now, *ms)?,
                         Action::CueHardStop => sw.cue_hard_stop(now),
                         _ => sw.cue_reset(now),
                     };
@@ -2163,7 +2163,7 @@ mod tests {
         .unwrap();
         assert!(running[0].remaining_ms.unwrap() > 59_000);
 
-        service.handle(Action::CuePanic).await.unwrap();
+        service.handle(Action::CuePanic { ms: None }).await.unwrap();
         let mut panic = String::new();
         for _ in 0..10 {
             panic = next().await;
@@ -2217,7 +2217,7 @@ mod tests {
         assert_eq!(first.state().await.running_cues.len(), 1, "Atmo runs");
         let mut events = first.subscribe();
 
-        let state = first.handle(Action::CuePanic).await.unwrap();
+        let state = first.handle(Action::CuePanic { ms: None }).await.unwrap();
 
         assert!(state.running_cues.is_empty());
         assert_eq!(state.cue_lists[0].standby, 3, "standby stays");

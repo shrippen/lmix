@@ -19,7 +19,7 @@
 //! | `/lmix/cue/go` | list, or none for the active one | `cue_go` |
 //! | `/lmix/cue/back` | list, or none | `cue_standby` previous |
 //! | `/lmix/cue/stop` | list, or none for every cue | `cue_stop` |
-//! | `/lmix/panic` | – | `cue_panic` (twice: hard stop) |
+//! | `/lmix/panic` | time in ms (int) or s (float), or none | `cue_panic` (twice: hard stop) |
 //! | `/lmix/stop/hard` | – | `cue_hard_stop` |
 //! | `/lmix/subscribe` | – | the sender gets tally and state from now on |
 //! | `/lmix/unsubscribe` | – | stops it |
@@ -329,7 +329,16 @@ pub fn request(message: &Message) -> Result<Request, String> {
             }
         }
         ["overlay", "out"] => json(serde_json::json!({ "action": "overlay_out_all" }))?,
-        ["panic"] => Action::CuePanic,
+        // An optional time: panic over that many ms (CTL.1).
+        ["panic"] => Action::CuePanic {
+            ms: match arg(0) {
+                Some(Arg::Int(ms)) => {
+                    Some(u32::try_from(*ms).map_err(|_| "panic time 0–10000 ms")?)
+                }
+                Some(Arg::Float(s)) => Some((s * 1000.0).round() as u32),
+                _ => None,
+            },
+        },
         ["stop", "hard"] => Action::CueHardStop,
         ["cue", step @ ("go" | "back" | "stop")] => {
             let list = arg(0).map(|_| input(0)).transpose()?;
@@ -391,7 +400,9 @@ pub async fn serve(
             let request = request(&message);
             let panic = matches!(
                 request,
-                Ok(Request::Action(Action::CuePanic | Action::CueHardStop))
+                Ok(Request::Action(
+                    Action::CuePanic { .. } | Action::CueHardStop
+                ))
             );
             if panic_only && !panic {
                 continue;
@@ -558,11 +569,15 @@ mod tests {
         assert_eq!(req("/lmix/cut", vec![]), Ok(Request::Action(Action::Cut)));
         assert_eq!(
             req("/lmix/panic", vec![]),
-            Ok(Request::Action(Action::CuePanic))
+            Ok(Request::Action(Action::CuePanic { ms: None }))
         );
         assert_eq!(
             req("/lmix/stop/hard", vec![]),
             Ok(Request::Action(Action::CueHardStop))
+        );
+        assert_eq!(
+            req("/lmix/panic", vec![Arg::Int(3000)]),
+            Ok(Request::Action(Action::CuePanic { ms: Some(3000) }))
         );
         assert_eq!(
             req("/lmix/cue/go", vec![]),
