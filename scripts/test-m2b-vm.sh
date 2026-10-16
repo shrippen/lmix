@@ -328,6 +328,18 @@ wait_for "$SETTLE_S" clips_move || fail "clip on air does not play automatically
 act '{"action":"set_auto_play","input":"Clips","auto_play":{"play":false,"restart":false,"pause":false}}' >/dev/null
 pass "automatic playback: paused off air, plays on air"
 
+# Quick play (SWI.8): the clip, paused off air, to program with its own
+# effect (half a second of fade), playing.
+act '{"action":"cut_direct","input":"Ball"}' >/dev/null
+act '{"action":"transport_input","input":"Clips","transport":"pause"}' >/dev/null
+wait_for "$SETTLE_S" clips_still || fail "clip did not pause before quick play"
+act '{"action":"quick_play","input":"Clips"}' >/dev/null
+[[ "$(curl -sf "$CORE/state" | jq -r '.program')" == "$clips_id" ]] || fail "quick play: Clips not on program"
+mixer_on_clips() { [[ "$(curl -sf "$STROM/api/flows/$MIXER_ID/blocks/vm/state" | jq '.program_input')" == 4 ]]; }
+wait_for "$SETTLE_S" mixer_on_clips || fail "quick play: mixer program is not Clips (4)"
+wait_for "$SETTLE_S" clips_move || fail "quick play: clip does not play"
+pass "quick play: paused clip off air to program, playing"
+
 # --- outputs (M3): recording and SRT, each in its own flow ---
 # Codecs of a media file, sorted and comma separated (needs a finalized file).
 codecs() { ffprobe -v error -show_entries stream=codec_name -of csv=p=0 "$1" 2>/dev/null | sort | paste -sd, -; }
