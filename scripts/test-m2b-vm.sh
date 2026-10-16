@@ -461,6 +461,34 @@ wait_for "$SETTLE_S" overlay_shown || fail "last input of overlay 1 not back"
 act '{"action":"overlay_out_all","duration_ms":0}' >/dev/null
 wait_for "$SETTLE_S" overlay_gone || fail "overlays not all off"
 pass "overlays: last input again, all off"
+# Channel settings (OVL.2) and an overlay prepared on preview (OVL.3):
+# Orange waits on channel 2 with preview tally, goes on with the cut in
+# the top right quarter (the place of its DSK pad) and off by itself.
+act '{"action":"set_overlay","channel":2,"effect":"cut","duration_ms":0,"auto_off_ms":6000,"rect":{"x":0.5,"y":0,"w":0.5,"h":0.5}}' >/dev/null
+act '{"action":"cut_direct","input":"Bars"}' >/dev/null
+act '{"action":"preview_input","input":"Ball"}' >/dev/null
+act '{"action":"overlay_preview","channel":2,"input":"Orange"}' >/dev/null
+[[ "$(curl -sf "$CORE/tally" | jq ".[$((orange_number - 1))]")" == 2 ]] || fail "prepared overlay has no preview tally"
+act '{"action":"cut"}' >/dev/null
+[[ "$(curl -sf "$CORE/state" | jq -r '.overlay_preview[1] == null and .overlays[1] != null')" == true ]] \
+    || fail "prepared overlay did not go on with the cut"
+# Mean red of a region (WxH+X+Y) of a picture.
+quarter() { convert "$1" -crop "$2" +repage -format '%[fx:int(mean.r*255)]' info:; }
+top_right() { local w h; read -r w h <<<"$(identify -format '%w %h' "$1")"; quarter "$1" "$((w / 4))x$((h / 4))+$((w * 5 / 8))+$((h / 8))"; }
+pip_shown() {
+    picture program "$WORK/pip.jpg"
+    local w h; read -r w h <<<"$(identify -format '%w %h' "$WORK/pip.jpg")"
+    # Top right: Orange; bottom left: the black around Ball.
+    [[ $(top_right "$WORK/pip.jpg") -gt 200 ]] \
+        && [[ $(quarter "$WORK/pip.jpg" "$((w / 4))x$((h / 4))+0+$((h * 3 / 4))") -lt 60 ]]
+}
+wait_for "$SETTLE_S" pip_shown || fail "prepared overlay not on program in the top right quarter"
+pass "overlays: prepared on preview with preview tally, on with the take, in a box"
+pip_gone() { picture program "$WORK/pip.jpg"; [[ $(top_right "$WORK/pip.jpg") -lt 120 ]]; }
+wait_for "$SETTLE_S" pip_gone || fail "overlay 2 did not go off by itself"
+[[ "$(curl -sf "$CORE/state" | jq -r '.overlays[1]')" == null ]] || fail "auto off not in state"
+act '{"action":"set_overlay","channel":2,"effect":"fade","duration_ms":500}' >/dev/null
+pass "overlays: off by itself after its time"
 code="$(curl -s -o /dev/null -w '%{http_code}' -X POST "$CORE/actions" -H 'content-type: application/json' \
     -d '{"action":"set_channel_strip","input":"Orange","strip":{}}')"
 [[ "$code" != 200 ]] || fail "channel strip accepted for an input without sound"
@@ -525,7 +553,6 @@ layout_id="$(curl -sf "$CORE/state" | jq -r '.layouts[0].id')"
 [[ "$(curl -sf "$CORE/state" | jq -r '.program')" == "$layout_id" ]] || fail "layout not on program"
 on_air() { curl -sf "$CORE/tally" | jq ".[$(($(curl -sf "$CORE/state" | jq ".inputs[] | select(.name==\"$1\") | .number") - 1))]"; }
 [[ "$(on_air Orange)" == 1 && "$(on_air Ball)" == 1 ]] || fail "inputs of the layout on program have no red tally"
-quarter() { convert "$1" -crop "$2" +repage -format '%[fx:int(mean.r*255)]' info:; }
 layout_shown() {
     picture program "$WORK/layout.jpg"
     local w h; read -r w h <<<"$(identify -format '%w %h' "$WORK/layout.jpg")"
