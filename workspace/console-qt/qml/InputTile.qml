@@ -7,8 +7,9 @@ import Kante
 /**
  * One input of the input bar: live picture, number and name, audio strip.
  * Program and preview are a bar in the tally colour plus the word, never
- * colour alone. Click: preview; double click: straight to program; right
- * click: everything else.
+ * colour alone. Click and double click do what the input is set to
+ * (INP.8, INP.9; by default preview, and GO: quick play); right click:
+ * everything else.
  */
 KanteCard {
     id: tile
@@ -56,7 +57,8 @@ KanteCard {
     Accessible.role: Accessible.Button
     Accessible.name: qsTr("Input %1 %2").arg(input.number).arg(input.name)
         + (onProgram ? ", " + qsTr("on program") : (onPreview ? ", " + qsTr("in preview") : ""))
-    Accessible.description: qsTr("Click: preview. Double click: program. Right click: more.")
+    Accessible.description: qsTr("Click: %1. Double click (GO): %2. Right click: more.")
+        .arg(Texts.label("presses", input.click)).arg(Texts.label("presses", input.go))
     opacity: drag.active ? 0.5 : 1
 
     DragHandler {
@@ -95,12 +97,12 @@ KanteCard {
                     if (mouse.button === Qt.RightButton) {
                         menu.popup()
                     } else {
-                        tile.act({ action: "preview_input", input: tile.ref() })
+                        tile.act({ action: "click_input", input: tile.ref() })
                     }
                 }
                 onDoubleClicked: mouse => {
                     if (mouse.button === Qt.LeftButton) {
-                        tile.act({ action: "cut_direct", input: tile.ref() })
+                        tile.act({ action: "go_input", input: tile.ref() })
                     }
                 }
             }
@@ -255,6 +257,11 @@ KanteCard {
             text: qsTr("Cut to program")
             enabled: !tile.onProgram
             onTriggered: tile.act({ action: "cut_direct", input: tile.ref() })
+        }
+        QQC2.MenuItem {
+            text: qsTr("GO: %1").arg(Texts.label("presses", tile.input.go))
+            enabled: tile.input.go !== "none"
+            onTriggered: tile.act({ action: "go_input", input: tile.ref() })
         }
         QQC2.MenuItem {
             text: qsTr("Collapse")

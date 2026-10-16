@@ -6,7 +6,7 @@ import Kante
 
 /**
  * An input's settings in tabs (UI.8): general (name, colour tag, signal
- * loss, automatic playback of clips, source), colour, audio (channel strip and aux sends), triggers,
+ * loss, click and GO, automatic playback of clips, source), colour, audio (channel strip and aux sends), triggers,
  * PTZ and advanced (id, slot, links). Colour and audio are the panels of
  * their own dialogs; triggers, PTZ controls and a new source open those.
  * Changes go to lmix-core as they are made.
@@ -57,7 +57,11 @@ KanteDialog {
             return
         colourBox.currentIndex = Math.max(0, colourBox.choices.findIndex(c => c.value === input.color))
         lossBox.currentIndex = Math.max(0, lossBox.modes.indexOf(input.signal_loss))
+        clickBox.currentIndex = Math.max(0, presses.findIndex(p => p.value === input.click))
+        goBox.currentIndex = Math.max(0, presses.findIndex(p => p.value === input.go))
     }
+    /** What a click and GO can do (INP.8, INP.9). */
+    readonly property var presses: Texts.choices("presses", core.choices("presses"))
     onInputChanged: sync()
 
     onOpened: {
@@ -127,6 +131,30 @@ KanteDialog {
                             model: [qsTr("Hold last frame"), qsTr("Black")]
                             onActivated: index => dialog.act({ action: "set_signal_loss", input: dialog.ref(), mode: modes[index] })
                             KanteFieldSkin { control: lossBox }
+                        }
+                    }
+                    KanteSettingRow {
+                        Layout.fillWidth: true
+                        title: qsTr("Click")
+                        QQC2.ComboBox {
+                            id: clickBox
+                            model: dialog.presses.map(p => p.label)
+                            onActivated: index => dialog.act({ action: "set_input_press", input: dialog.ref(), click: dialog.presses[index].value })
+                            QQC2.ToolTip.visible: hovered
+                            QQC2.ToolTip.text: qsTr("What a click on its tile does.")
+                            KanteFieldSkin { control: clickBox }
+                        }
+                    }
+                    KanteSettingRow {
+                        Layout.fillWidth: true
+                        title: qsTr("GO")
+                        QQC2.ComboBox {
+                            id: goBox
+                            model: dialog.presses.map(p => p.label)
+                            onActivated: index => dialog.act({ action: "set_input_press", input: dialog.ref(), go: dialog.presses[index].value })
+                            QQC2.ToolTip.visible: hovered
+                            QQC2.ToolTip.text: qsTr("What a double click on its tile, GO in its menu and the action go_input do. Quick play: to program with its own effect, and play.")
+                            KanteFieldSkin { control: goBox }
                         }
                     }
                     KanteSettingRow {

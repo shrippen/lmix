@@ -502,6 +502,9 @@ Kirigami.ApplicationWindow {
                     // As the input arrives, not the tile's small picture.
                     source: root.previewInput ? "full:" + root.previewInput.id : ""
                     input: root.previewInput
+                    // Quick play of preview (SWI.8).
+                    onDoubleClicked: if (backend.connected && root.show && root.show.preview)
+                        root.act({ action: "quick_play" })
                 }
 
                 TransitionPanel {
@@ -749,6 +752,8 @@ Kirigami.ApplicationWindow {
         property var peakDb: undefined
         /** The input shown, for its transport; null for layouts. */
         property var input: null
+        /** A double click into the picture. */
+        signal doubleClicked()
 
         Layout.fillWidth: true
         Layout.fillHeight: true
@@ -778,6 +783,9 @@ Kirigami.ApplicationWindow {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 core: backend
+                TapHandler {
+                    onDoubleTapped: monitor.doubleClicked()
+                }
             }
             TransportBar {
                 Layout.fillWidth: true
