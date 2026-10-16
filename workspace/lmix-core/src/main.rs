@@ -142,6 +142,17 @@ struct Args {
     #[arg(long, env = "LMIX_PASSWORD", hide_env_values = true)]
     password: Option<String>,
 
+    /// Access keys with rights, a JSON list of `{name, key, right}` with
+    /// right `view`, `control` or `edit` (show mode CTL.5); like the
+    /// password, for HTTP and the text protocol.
+    #[arg(long, env = "LMIX_ACCESS_KEYS")]
+    access_keys: Option<PathBuf>,
+
+    /// Panic and hard stop from the local network without a key (a
+    /// button by the stage), also over OSC (show mode CTL.5, SAF.5).
+    #[arg(long, env = "LMIX_OPEN_PANIC")]
+    open_panic: bool,
+
     /// Browser pages usable from the network without the password, with
     /// only what they need (`tally`, `keys`, `mixer`, `titles`).
     #[arg(long, value_enum, value_delimiter = ',', env = "LMIX_OPEN_PAGES")]
@@ -302,13 +313,17 @@ async fn main() -> anyhow::Result<()> {
     if let Some(listen) = args.osc {
         let service = service.clone();
         let internet = args.allow_internet;
-        // No password over OSC: with one set, only this machine may send.
-        let local_only = args.password.as_deref().is_some_and(|p| !p.is_empty());
+        // No password over OSC: with one set, only this machine may send
+        // (panic too from the network with --open-panic).
+        let local_only =
+            args.password.as_deref().is_some_and(|p| !p.is_empty()) || args.access_keys.is_some();
+        let open_panic = args.open_panic;
         if local_only {
             tracing::info!("OSC takes messages from this machine only (it has no password)");
         }
         tokio::spawn(async move {
-            if let Err(error) = osc::serve(listen, service, internet, local_only).await {
+            if let Err(error) = osc::serve(listen, service, internet, local_only, open_panic).await
+            {
                 tracing::error!(%error, "OSC stopped");
             }
         });
@@ -325,10 +340,17 @@ async fn main() -> anyhow::Result<()> {
     if !args.tally_http.is_empty() {
         tokio::spawn(tally_http::serve(args.tally_http.clone(), service.clone()));
     }
+    let keys = match &args.access_keys {
+        Some(path) => access::read_keys(path)?,
+        None => Vec::new(),
+    };
     let rules = Arc::new(access::Access {
         password: args.password.clone().filter(|p| !p.is_empty()),
         open_pages: args.open_page.clone(),
         internet: args.allow_internet,
+        keys,
+        open_panic: args.open_panic,
+        ..access::Access::default()
     });
     if let Some(listen) = args.tcp {
         let service = service.clone();

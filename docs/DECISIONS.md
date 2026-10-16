@@ -2550,3 +2550,37 @@ Cues mit Fortschritt und Restzeit, Escape als Panik. Console-Tests,
 lmix-core 248 Tests.
 **Offen**: dunkle Raumansicht (SUI.6), Bühnenvorschau und Zonen-Leiste
 (SUI.7, SUI.8, mit Stufe 2/3), Warnliste (SUI.5).
+
+## 2026-10-16 — Zugangsschlüssel mit Rechten (S1 Stufe 5, CTL.5)
+
+**Kontext**: Companion soll GO und Panik schicken dürfen, aber keine Show
+öffnen; ein Taster an der Bühne soll Panik ohne Schlüssel auslösen
+(Abnahme S1). Bisher (API.7): ein Passwort für alles, offene Seiten.
+
+**Entscheidungen**:
+- **Erweitern statt ersetzen**: `--access-keys` (JSON-Liste `{name, key,
+  right}`) neben `--password`; das Passwort zählt als Schlüssel mit
+  `edit`. Ohne Passwort und Schlüssel bleibt das lokale Netz offen wie
+  bisher; der eigene Rechner braucht nie einen Schlüssel.
+- **Drei Rechte**: `view` (lesen), `control` (die Show fahren: GO, Cuts,
+  Pegel, Titel, Panik, Ziele ansprechen), `edit` (Vorbereitetes ändern:
+  Inputs, Cue-Listen, Ziele, Abonnenten, Dateien, Sperre). Die Zuordnung
+  steht in `right_of` als `match` ohne Platzhalter: eine neue Aktion baut
+  erst, wenn sie ihr Recht hat.
+- **`--open-panic`**: Panik und harter Stopp gehen aus dem lokalen Netz
+  ohne Schlüssel, über HTTP, TCP (vor `AUTH`) und OSC (das sonst mit
+  Passwort nur den eigenen Rechner hört).
+- **Falsche Schlüssel bremsen**: je Adresse 100 ms, dann doppelt, höchstens
+  5 s; ein richtiger Schlüssel setzt zurück; jede Abweisung steht im Log.
+  Schlüssel unter 12 Zeichen lehnt `lmix-core` beim Start ab.
+- **Abweichung**: CTL.5 nennt eine Stufe „ohne Schlüssel“ mit eigener
+  LAN-Adressliste. Die gibt es nicht: der Rechner selbst bleibt frei, das
+  Netz braucht Passwort oder Schlüssel, sobald einer gesetzt ist. Eine
+  Adressliste kommt, wenn eine Persona sie braucht.
+
+**Geprüft**: Tests für die Einordnung, für Rechte über HTTP (Steuern darf
+schneiden, nicht `add_input`; Ansehen liest, schaltet nicht; Panik ohne
+Schlüssel nur mit `--open-panic`), für die wachsende Wartezeit (pausierte
+Zeit) und über TCP (Panik vor `AUTH`, Steuern ja, Bearbeiten nein).
+**Offen**: Rechte für die Web-Seiten jenseits der offenen Seiten, eigene
+Adressliste.

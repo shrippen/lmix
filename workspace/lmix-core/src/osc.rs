@@ -342,12 +342,14 @@ pub fn request(message: &Message) -> Result<Request, String> {
 /// Receive messages and send tally until the process ends.
 /// OSC carries no password: senders outside the local network are
 /// ignored unless `internet`, and with a password (`local_only`) all but
-/// this machine (API.7).
+/// this machine (API.7); `open_panic` lets panic and hard stop through
+/// from the network all the same (CTL.5).
 pub async fn serve(
     listen: SocketAddr,
     service: Arc<Service>,
     internet: bool,
     local_only: bool,
+    open_panic: bool,
 ) -> anyhow::Result<()> {
     let access = crate::access::Access {
         internet,
@@ -365,13 +367,22 @@ pub async fn serve(
     let mut buf = vec![0u8; MAX_PACKET];
     loop {
         let (len, peer) = socket.recv_from(&mut buf).await?;
-        match access.peer(peer.ip()) {
+        let panic_only = match access.peer(peer.ip()) {
             crate::access::Peer::Refused => continue,
-            crate::access::Peer::Network if local_only => continue,
-            _ => {}
-        }
+            crate::access::Peer::Network if local_only && !open_panic => continue,
+            crate::access::Peer::Network => local_only,
+            crate::access::Peer::Local => false,
+        };
         for message in decode(&buf[..len]) {
-            match request(&message) {
+            let request = request(&message);
+            let panic = matches!(
+                request,
+                Ok(Request::Action(Action::CuePanic | Action::CueHardStop))
+            );
+            if panic_only && !panic {
+                continue;
+            }
+            match request {
                 Ok(Request::Action(action)) => {
                     if let Err(error) = service.handle(action).await {
                         let reply = encode("/lmix/error", &[&error.to_string()]);
