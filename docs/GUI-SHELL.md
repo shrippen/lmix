@@ -150,7 +150,7 @@ Offen:
   liefert nur Werte; Fehler von lmix-core übersetzt die Console anhand des
   Codes (`error.error`).
 - Kante erweitert (PR #36): sieben Farb-Labels (`KanteStyle.labelColor`),
-  `KanteLevelMeter` mit Skala. lmix-Farbmarken sind diese sieben (alte Shows:
+  `KanteAudioMeter` mit Skala (Kante 1.29). lmix-Farbmarken sind diese sieben (alte Shows:
   teal → cyan, pink → purple).
 
 ### Parität mit der egui-Console
