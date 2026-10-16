@@ -503,10 +503,12 @@ Kirigami.ApplicationWindow {
                 }
             }
 
-            // Mixer and show view share the page (SUI.1).
+            // Mixer and show view share the page (SUI.1). Height from the
+            // page, not from the children: the monitors take what is left.
             ColumnLayout {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
+                Layout.preferredHeight: 0
                 visible: !root.showMode
                 spacing: Kirigami.Units.largeSpacing
 
@@ -757,6 +759,7 @@ Kirigami.ApplicationWindow {
             ShowView {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
+                Layout.preferredHeight: 0
                 visible: root.showMode
                 act: root.act
                 show: root.show
