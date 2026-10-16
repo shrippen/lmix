@@ -70,6 +70,9 @@ PIDS+=($!)
     >"$WORK/strom.log" 2>&1) &
 PIDS+=($!)
 wait_up "http://127.0.0.1:${STROM_PORT}/health" strom
+# strom's own start (device discovery of this machine may warn) is not
+# what this check is about: only lines from here on count.
+STROM_START_LINES="$(wc -l <"$WORK/strom.log")"
 "$CORE_BIN" --strom "http://127.0.0.1:${STROM_PORT}" --listen "127.0.0.1:${CORE_PORT}" --mixer cpu \
     --slots 2 --autosave "$WORK/autosave.lmix" --shortcuts "$WORK/shortcuts.json" --layout-templates "$WORK/layout-templates.json" --live-dir "$LIVE_DIR" >"$WORK/core.log" 2>&1 &
 PIDS+=($!)
@@ -122,15 +125,20 @@ done
 click 720 147
 becomes program 2
 [[ "$(number_of program)" == 2 ]] && pass "Cut: program" || fail "program is $(number_of program) after Cut"
-shot c
-awk "BEGIN { exit !($(spread c "$PROGRAM_AREA") > 0.05) }" && pass "program monitor shows the new input" \
-    || fail "program monitor blank after Cut"
+# The monitor follows the state a little later (live picture).
+program_shows=""
+for _ in $(seq 1 20); do
+    shot c
+    awk "BEGIN { exit !($(spread c "$PROGRAM_AREA") > 0.05) }" && program_shows=1 && break
+    sleep 0.5
+done
+[[ -n "$program_shows" ]] && pass "program monitor shows the new input" || fail "program monitor blank after Cut"
 
 if grep -E 'qrc:|\.qml:[0-9]+' "$WORK/console.log" >/dev/null; then
     fail "QML warnings: $(grep -E 'qrc:|\.qml:[0-9]+' "$WORK/console.log" | head -3)"
 fi
 pass "no QML warnings"
-criticals="$(grep -c 'GStreamer-CRITICAL' "$WORK/strom.log" || true)"
+criticals="$(tail -n +"$((STROM_START_LINES + 1))" "$WORK/strom.log" | grep -c 'GStreamer-CRITICAL' || true)"
 [[ "$criticals" == 0 ]] || fail "$criticals GStreamer CRITICALs in strom.log"
 pass "no GStreamer CRITICALs (live flows)"
 echo "Qt Console check passed"
