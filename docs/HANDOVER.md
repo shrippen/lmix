@@ -1,30 +1,47 @@
-# Übergabe: Stand M4 (in Arbeit), lokale Übernahme
+# Übergabe: Stand M9 und Show-Modus S1 (in Arbeit), lokale Übernahme
 
-Stand 2026-10-09, PR-Liste 2026-10-12. Die Arbeit läuft lokal weiter (Arch, RTX 3090), Abnahme
+Stand 2026-10-09, PR-Liste 2026-10-17. Die Arbeit läuft lokal weiter (Arch, RTX 3090), Abnahme
 auf echter Hardware.
 
-## Offene PRs, Stand 2026-10-12 (Merge-Reihenfolge)
+## Offene PRs, Stand 2026-10-17 nachts (Merge-Reihenfolge)
 
-Gestapelt, jeder auf dem davor; von unten nach oben mergen (die Basis
-des nächsten wird danach `main`, Gitea stellt sie beim Mergen um):
+CI läuft auf GitHub (Status `github / test` am Commit auf Gitea). PR-Agent
+scheitert am Kostenlimit des Schlüssels (`todo.md`), grüne CI genügt.
 
-| PR | Branch | Basis | Inhalt |
-|---|---|---|---|
-| strom #7, #8 | `lmix-live-underlays`, `lmix-process-memory` | `dev` | Layout-Underlays live, eigener Speicher in den Stats |
-| #8 | `m8-web` | `m4-pip` | M6/M8: Webseiten, Kurzbefehle, Auslöser, Cue-Listen, OSC, Textprotokoll, Metriken |
-| #9 | `m6-open` | `m8-web` | Offene Punkte ohne Hardware |
-| #17 | `m7-titles` | `m6-open` | M7 Teil A: Titel und Datenquellen ohne Render-Engine |
-| #18 | `m9-console` | `m7-titles` | M9: Transportleiste, Stopp-Rückfrage, TSL, PTZ, Pakete, Layout-Fangen, MIDI-Lampen |
-| #19 | `m9-data` | `m9-console` | XLSX/ODS, Zeilen zu Spalten, Folien aus Datei, Inputs einklappen |
-| #20 | `m9-layout` | `m9-data` | Layout-Editor: Mehrfachauswahl, Sperre |
-| #21 | `m9-keys` | `m9-layout` | Google Sheets API, Kurzbefehle für alle Shows, Zustand als Diff, Tally über HTTP, Wiedergabezeit-Auslöser, Tasten mit Bild, Inputs anhängen, fehlende Dateien, Beispiel-Clients |
-| #22 | `m9-security` | `m9-keys` | Zugriff: nur LAN, Passwort, offene Seiten (API.7) |
-| #23 | `m9-transport` | `m9-security` | Springen im Clip, Playlist-Eintrag abspielen (UI.5, UI.4) |
+Unabhängig von `main`, zuerst:
 
-Unabhängig von `main`: #14 (CI-Token fürs strom-Submodul; der Token
-braucht noch Leserechte, siehe `todo.md`), #15 (H.24-Vergleich), #16
-(Qt-eigene Übersetzungen); Kante #53 (Dialog in Kante Light), danach
-`scripts/sync-kante.sh`.
+| PR | Branch | Inhalt |
+|---|---|---|
+| #45 | `vm-failover-later` | VM-Check: Quelle stirbt später in der Blende (Failover-Prüfung wackelte) |
+| #51 | `console-test-coords` | Lokaler Console-Check: wartet auf das Bild nach dem Cut, ignoriert CRITICALs von strom beim Start |
+| #39 | `se3-measure` | S-E.3 gemessen (Klang-Cues), nur Doku und Messskript |
+
+Show-Modus S1 und Rest, gestapelt, jeder auf dem davor (von oben nach
+unten mergen; Gitea stellt die Basis des nächsten auf `main` um):
+
+| PR | Branch | Inhalt |
+|---|---|---|
+| #38 | `s1-cues` | Cue-Modell und Ablauf in lmix-core (Stufe 1) |
+| #40 | `s1-script` | Drehbuch-Import `lmix-script` (Stufe 6) |
+| #41 | `s1-targets` | Ausgabeziele HTTP, Home Assistant (Stufe 4) |
+| #42 | `s1-safety` | Panik, harter Stopp, Notfall-Liste (Stufe 5) |
+| #43 | `s1-feeds` | Restzeit als Ereignis, feste OSC-Abonnenten (CTL.2, CTL.4) |
+| #44 | `s1-show-view` | Show-Ansicht der Console (Stufe 7) |
+| #46 | `s1-timing` | Cue-Zeitgenauigkeit in `/metrics`, Zugangsschlüssel mit Rechten |
+| #47 | `s1-checks` | Warnliste, Rechner-Einstellungen im Paket, Persona-Durchlauf 10 |
+| #48 | `s1-script-folder` | Show merkt sich ihren Drehbuch-Ordner |
+| #49 | `s1-targets-ui` | Ziele und Abonnenten in der Console |
+| #50 | `s1-polish` | Dauer an Aktions-Cues, dunkler Raum, OSC-Abo-Ablauf, Übergangsleiste rollt (Fix für `main`) |
+| #52 | `m9-settings` | Älteres Show-Format beim Speichern gesichert; Einstellungen ex-/importieren (SHW.7/8) |
+
+Breaking (vor dem ersten Release erlaubt, je PR beschrieben): Cue `label`
+→ `name`, `cue_back`/`cue_jump` → `cue_standby`, `next` → `standby`,
+OSC `/lmix/cue/next` → `/lmix/cue/standby`, OSC-Abos laufen nach 60 s
+ohne Lebenszeichen ab; Show-Dateien Version 1 werden beim Öffnen
+umgewandelt (alte Datei bleibt als `.v1.bak`).
+
+Offen für S1 (DECISIONS „Show-Modus …“, PERSONAS Durchlauf 10): Klang-
+und Bild-Cues, Zonen, Bühnen (Stufen 2/3), warten auf S-E.3 und GPU.
 
 ## Branches und PRs (Gitea), Stand 2026-10-09
 
