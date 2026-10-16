@@ -2439,6 +2439,16 @@
     </message>
     <message>
       <location line="+7" />
+      <source>Targets…</source>
+      <translation>Ziele…</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Output targets (HTTP, Home Assistant, OSC) and OSC subscribers of this machine</source>
+      <translation>Ausgabeziele (HTTP, Home Assistant, OSC) und OSC-Abonnenten dieses Rechners</translation>
+    </message>
+    <message>
+      <location line="+14" />
       <source>Script…</source>
       <translation>Drehbuch…</translation>
     </message>
@@ -2678,6 +2688,204 @@
       <location line="+1" />
       <source>When program cuts underneath, best where the clip covers the picture</source>
       <translation>Wann darunter geschnitten wird, am besten, wo der Clip das Bild verdeckt</translation>
+    </message>
+  </context>
+  <context>
+    <name>TargetsDialog</name>
+    <message>
+      <location filename="../qml/TargetsDialog.qml" line="+28" />
+      <source>OSC (UDP)</source>
+      <translation>OSC (UDP)</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>OSC (TCP)</source>
+      <translation>OSC (TCP)</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>HTTP</source>
+      <translation>HTTP</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Running cue</source>
+      <translation>Laufender Cue</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Panic</source>
+      <translation>Panik</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Standby</source>
+      <translation>Standby</translation>
+    </message>
+    <message>
+      <location line="+65" />
+      <source>Targets and subscribers</source>
+      <translation>Ziele und Abonnenten</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>Output targets of this machine</source>
+      <translation>Ausgabeziele dieses Rechners</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>No targets yet. Cues send to a target by its name, e.g. Home Assistant for light, or Companion for buttons.</source>
+      <translation>Noch keine Ziele. Cues senden an ein Ziel über seinen Namen, z. B. Home Assistant für Licht oder Companion für Tasten.</translation>
+    </message>
+    <message>
+      <location line="+29" />
+      <source>with secret</source>
+      <translation>mit Geheimnis</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Test</source>
+      <translation>Testen</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Send a request to the first address; a failure shows below the window</source>
+      <translation>Eine Anfrage an die erste Adresse senden; ein Fehler erscheint unten im Fenster</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <location line="+103" />
+      <source>Edit…</source>
+      <translation>Bearbeiten…</translation>
+    </message>
+    <message>
+      <location line="-99" />
+      <location line="+103" />
+      <source>Remove</source>
+      <translation>Entfernen</translation>
+    </message>
+    <message>
+      <location line="-96" />
+      <source>+ Target</source>
+      <translation>+ Ziel</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <location line="+106" />
+      <source>Name</source>
+      <translation>Name</translation>
+    </message>
+    <message>
+      <location line="-100" />
+      <source>e.g. Haus</source>
+      <translation>z. B. Haus</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Kind</source>
+      <translation>Art</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Addresses</source>
+      <translation>Adressen</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>http://ha.local:8123, a backup after a space</source>
+      <translation>http://ha.local:8123, eine Reserve nach einem Leerzeichen</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>host:port</source>
+      <translation>host:port</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Secret</source>
+      <translation>Geheimnis</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>unchanged</source>
+      <translation>unverändert</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>token, e.g. Home Assistant's long-lived token</source>
+      <translation>Token, z. B. das langlebige Zugangs-Token von Home Assistant</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Time limit ms</source>
+      <translation>Zeitlimit ms</translation>
+    </message>
+    <message>
+      <location line="+13" />
+      <location line="+124" />
+      <source>Save</source>
+      <translation>Speichern</translation>
+    </message>
+    <message>
+      <location line="-118" />
+      <location line="+124" />
+      <source>Cancel</source>
+      <translation>Abbrechen</translation>
+    </message>
+    <message>
+      <location line="-116" />
+      <source>OSC subscribers</source>
+      <translation>OSC-Abonnenten</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>No subscribers yet. A subscriber sends standby, the running cue's remaining time and panic to an OSC (UDP) target, e.g. Companion's custom variables. Placeholders: {list} {number} {name} {note} {remaining} {elapsed} {total} {mode}.</source>
+      <translation>Noch keine Abonnenten. Ein Abonnent schickt Standby, die Restzeit des laufenden Cues und Panik an ein OSC-Ziel (UDP), z. B. an Companions eigene Variablen. Platzhalter: {list} {number} {name} {note} {remaining} {elapsed} {total} {mode}.</translation>
+    </message>
+    <message>
+      <location line="+18" />
+      <source>to %1, %2 messages</source>
+      <translation>an %1, %2 Nachrichten</translation>
+    </message>
+    <message>
+      <location line="+16" />
+      <source>+ Subscriber</source>
+      <translation>+ Abonnent</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Add an OSC (UDP) target first</source>
+      <translation>Zuerst ein OSC-Ziel (UDP) anlegen</translation>
+    </message>
+    <message>
+      <location line="+14" />
+      <source>e.g. Stream Deck</source>
+      <translation>z. B. Stream Deck</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Target</source>
+      <translation>Ziel</translation>
+    </message>
+    <message>
+      <location line="+25" />
+      <source>/address</source>
+      <translation>/adresse</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>values, comma separated: {number} {name}</source>
+      <translation>Werte, mit Komma getrennt: {number} {name}</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Remove message</source>
+      <translation>Nachricht entfernen</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>+ Message</source>
+      <translation>+ Nachricht</translation>
     </message>
   </context>
   <context>

@@ -2622,3 +2622,13 @@ beim nächsten Laden.
 einem Ersatzwerkzeug; `scripts/test-script.sh` mit echtem `lmix-script`:
 Ordner setzen lädt die Liste, eine Änderung wird übernommen, ohne Ordner
 nicht mehr.
+
+## 2026-10-16 — Ziele und Abonnenten in der Console (Befund B43)
+
+Dialog „Ziele…“ in der Show-Ansicht: Ausgabeziele anlegen, bearbeiten,
+testen (HTTP), entfernen; OSC-Abonnenten mit Nachrichten je Anlass
+(Standby, laufender Cue, Panik), Adresse und Werten mit Platzhaltern. Das
+Geheimnis zeigt die Console nie; leer gelassen bleibt es, wie es ist. Ein
+Ziel lässt sich nicht umbenennen (das Geheimnis ginge verloren): entfernen
+und neu anlegen. Geprüft auf Xvfb gegen lmix-core mit zwei Zielen und
+einem Abonnenten.

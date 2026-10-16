@@ -195,6 +195,22 @@ ColumnLayout {
         }
         KanteButton {
             focusPolicy: Qt.NoFocus
+            text: qsTr("Targets…")
+            QQC2.ToolTip.visible: hovered
+            QQC2.ToolTip.text: qsTr("Output targets (HTTP, Home Assistant, OSC) and OSC subscribers of this machine")
+            onClicked: targetsDialog.open()
+        }
+        TargetsDialog {
+            id: targetsDialog
+            parent: QQC2.Overlay.overlay
+            anchors.centerIn: parent
+            act: view.act
+            targets: view.show && view.show.targets ? view.show.targets : []
+            feeds: view.show && view.show.feeds ? view.show.feeds : []
+            onClosed: view.forceActiveFocus()
+        }
+        KanteButton {
+            focusPolicy: Qt.NoFocus
             text: qsTr("Script…")
             QQC2.ToolTip.visible: hovered
             QQC2.ToolTip.text: qsTr("A folder of Markdown files with lmix-cue blocks; its lists follow every saved change")
