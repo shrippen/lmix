@@ -23,6 +23,8 @@ KanteCard {
     property bool onPreview: false
     /** What each overlay channel shows (input ids), channel 1 first. */
     property var overlays: []
+    /** What each overlay channel gets with the next take (OVL.3). */
+    property var overlayPreview: []
     /** The engine can apply looks (GL mixer). */
     property bool looksAvailable: false
     property var peakDb: undefined
@@ -47,6 +49,10 @@ KanteCard {
     function ref() { return input.number }
     /** Overlay channels (1-based) this input is on. */
     readonly property var overlayChannels: overlays
+        .map((id, i) => id === input.id ? i + 1 : 0)
+        .filter(channel => channel > 0)
+    /** Overlay channels it goes on with the next take. */
+    readonly property var preparedChannels: overlayPreview
         .map((id, i) => id === input.id ? i + 1 : 0)
         .filter(channel => channel > 0)
 
@@ -161,6 +167,12 @@ KanteCard {
                 color: KanteStyle.negativeTextColor
             }
             KanteSectionLabel {
+                visible: tile.preparedChannels.length > 0
+                text: qsTr("next OVL %1").arg(tile.preparedChannels.join(" "))
+                color: KanteStyle.positiveTextColor
+                Accessible.name: qsTr("Goes on overlay %1 with the next take").arg(tile.preparedChannels.join(", "))
+            }
+            KanteSectionLabel {
                 visible: tile.input.status !== "online"
                 text: tile.input.status === "offline" ? qsTr("offline") : qsTr("starting")
                 color: tile.input.status === "offline" ? KanteStyle.negativeTextColor : KanteStyle.mutedTextColor
@@ -181,18 +193,28 @@ KanteCard {
             Repeater {
                 model: tile.overlays.length
                 KanteToolButton {
+                    id: overlayButton
                     required property int index
                     readonly property int channel: index + 1
                     readonly property bool on: tile.overlays[index] === tile.input.id
-                    text: channel
+                    readonly property bool prepared: tile.overlayPreview[index] === tile.input.id
+                    text: prepared ? channel + "→" : channel
                     checkable: true
                     checked: on
                     Accessible.name: qsTr("Overlay %1").arg(channel)
                     QQC2.ToolTip.visible: hovered
-                    QQC2.ToolTip.text: on ? qsTr("Take off overlay %1").arg(channel)
-                        : qsTr("Show on overlay %1").arg(channel)
+                    QQC2.ToolTip.text: (on ? qsTr("Take off overlay %1").arg(channel)
+                        : qsTr("Show on overlay %1").arg(channel))
+                        + ". " + (prepared ? qsTr("Goes on with the next take.") : qsTr("Right click: with the next take."))
                     onClicked: tile.act(on ? { action: "overlay_out", channel: channel }
                         : { action: "overlay_in", channel: channel, input: tile.ref() })
+
+                    // OVL.3: prepared now, on air with the next take of preview.
+                    TapHandler {
+                        acceptedButtons: Qt.RightButton
+                        onTapped: tile.act({ action: "overlay_preview", channel: overlayButton.channel,
+                            input: overlayButton.prepared ? null : tile.ref() })
+                    }
                 }
             }
         }

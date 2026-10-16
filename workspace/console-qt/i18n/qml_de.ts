@@ -63,6 +63,11 @@
     </message>
     <message>
       <location line="+1" />
+      <source>Overlay 1 with the next take</source>
+      <translation>Overlay 1 mit dem nächsten Take</translation>
+    </message>
+    <message>
+      <location line="+1" />
       <source>Fade to black</source>
       <translation>Schwarzblende</translation>
     </message>
@@ -92,7 +97,7 @@
       <translation>Andere (JSON)</translation>
     </message>
     <message>
-      <location line="+100" />
+      <location line="+104" />
       <source>Action %1 is not valid JSON</source>
       <translation>Aktion %1 ist kein gültiges JSON</translation>
     </message>
@@ -795,7 +800,7 @@
   <context>
     <name>InputTile</name>
     <message>
-      <location filename="../qml/InputTile.qml" line="+58" />
+      <location filename="../qml/InputTile.qml" line="+64" />
       <source>Input %1 %2</source>
       <translation>Input %1 %2</translation>
     </message>
@@ -856,6 +861,16 @@
     </message>
     <message>
       <location line="+5" />
+      <source>next OVL %1</source>
+      <translation>bereit OVL %1</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Goes on overlay %1 with the next take</source>
+      <translation>Geht mit dem nächsten Take auf Overlay %1</translation>
+    </message>
+    <message>
+      <location line="+4" />
       <source>offline</source>
       <translation>offline</translation>
     </message>
@@ -870,7 +885,7 @@
       <translation>Overlay</translation>
     </message>
     <message>
-      <location line="+12" />
+      <location line="+14" />
       <source>Overlay %1</source>
       <translation>Overlay %1</translation>
     </message>
@@ -885,7 +900,17 @@
       <translation>Auf Overlay %1 zeigen</translation>
     </message>
     <message>
-      <location line="+17" />
+      <location line="+1" />
+      <source>Goes on with the next take.</source>
+      <translation>Geht mit dem nächsten Take auf Sendung.</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Right click: with the next take.</source>
+      <translation>Rechtsklick: mit dem nächsten Take.</translation>
+    </message>
+    <message>
+      <location line="+24" />
       <source>Mute</source>
       <translation>Stumm</translation>
     </message>
@@ -1146,7 +1171,7 @@
   <context>
     <name>LayoutBar</name>
     <message>
-      <location filename="../qml/LayoutBar.qml" line="+24" />
+      <location filename="../qml/LayoutBar.qml" line="+33" />
       <source>Layouts</source>
       <translation>Layouts</translation>
     </message>
@@ -1162,6 +1187,16 @@
     </message>
     <message>
       <location line="+4" />
+      <source>Save as template</source>
+      <translation>Als Vorlage speichern</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Keeps its places for every show, under its name (one of the same name is replaced).</source>
+      <translation>Behält seine Plätze für jede Show, unter seinem Namen (eine gleichnamige wird ersetzt).</translation>
+    </message>
+    <message>
+      <location line="+3" />
       <source>Remove</source>
       <translation>Entfernen</translation>
     </message>
@@ -1169,6 +1204,57 @@
       <location line="+9" />
       <source>+ Layout</source>
       <translation>+ Layout</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Templates</source>
+      <translation>Vorlagen</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Layout templates, kept for every show: a new layout from one, import, export.</source>
+      <translation>Layout-Vorlagen, für jede Show: ein neues Layout daraus, Import, Export.</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>New layout from</source>
+      <translation>Neues Layout aus</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Remove template</source>
+      <translation>Vorlage entfernen</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Import…</source>
+      <translation>Importieren…</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Export all…</source>
+      <translation>Alle exportieren…</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>Import layout templates</source>
+      <translation>Layout-Vorlagen importieren</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <location line="+8" />
+      <source>Layout templates (*.json)</source>
+      <translation>Layout-Vorlagen (*.json)</translation>
+    </message>
+    <message>
+      <location line="-8" />
+      <source>All files (*)</source>
+      <translation>Alle Dateien (*)</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Export layout templates</source>
+      <translation>Layout-Vorlagen exportieren</translation>
     </message>
   </context>
   <context>
@@ -1822,6 +1908,143 @@
       <location line="+7" />
       <source>+ Output</source>
       <translation>+ Ausgang</translation>
+    </message>
+  </context>
+  <context>
+    <name>OverlayDialog</name>
+    <message>
+      <location filename="../qml/OverlayDialog.qml" line="+28" />
+      <source>Small, top right</source>
+      <translation>Klein, oben rechts</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Small, top left</source>
+      <translation>Klein, oben links</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Small, bottom right</source>
+      <translation>Klein, unten rechts</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Small, bottom left</source>
+      <translation>Klein, unten links</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Top right quarter</source>
+      <translation>Viertel oben rechts</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Bottom right quarter</source>
+      <translation>Viertel unten rechts</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Lower third</source>
+      <translation>Unteres Drittel</translation>
+    </message>
+    <message>
+      <location line="+15" />
+      <source>Overlay %1</source>
+      <translation>Overlay %1</translation>
+    </message>
+    <message>
+      <location line="+36" />
+      <source>Effect</source>
+      <translation>Effekt</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Used when an action gives no length of its own; going off runs it backwards</source>
+      <translation>Gilt, wenn eine Aktion keine eigene Dauer nennt; beim Ausblenden rückwärts</translation>
+    </message>
+    <message>
+      <location line="+14" />
+      <source>Length</source>
+      <translation>Dauer</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>Auto off</source>
+      <translation>Automatisch aus</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Goes off by itself this long after it went on</source>
+      <translation>Geht so lange nach dem Einblenden von selbst aus</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>After</source>
+      <translation>Nach</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>Seconds until off</source>
+      <translation>Sekunden bis aus</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>s</source>
+      <translation>s</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Picture in picture</source>
+      <translation>Bild im Bild</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Off: the overlay fills the picture</source>
+      <translation>Aus: das Overlay füllt das Bild</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>In a box</source>
+      <translation>In einer Box</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Place</source>
+      <translation>Platz</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Choose…</source>
+      <translation>Wählen…</translation>
+    </message>
+    <message>
+      <location line="+14" />
+      <location line="+10" />
+      <source>Left %</source>
+      <translation>Links %</translation>
+    </message>
+    <message>
+      <location line="-10" />
+      <location line="+16" />
+      <source>Top %</source>
+      <translation>Oben %</translation>
+    </message>
+    <message>
+      <location line="-16" />
+      <location line="+22" />
+      <source>Width %</source>
+      <translation>Breite %</translation>
+    </message>
+    <message>
+      <location line="-22" />
+      <location line="+28" />
+      <source>Height %</source>
+      <translation>Höhe %</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>The box reaches outside the picture.</source>
+      <translation>Die Box ragt aus dem Bild.</translation>
     </message>
   </context>
   <context>
@@ -2809,7 +3032,7 @@
   <context>
     <name>TransitionPanel</name>
     <message>
-      <location filename="../qml/TransitionPanel.qml" line="+64" />
+      <location filename="../qml/TransitionPanel.qml" line="+75" />
       <source>Cut</source>
       <translation>Cut</translation>
     </message>
@@ -2872,7 +3095,7 @@
       <translation>Overlays</translation>
     </message>
     <message>
-      <location line="+33" />
+      <location line="+38" />
       <source>Overlay %1: %2, click to take off</source>
       <translation>Overlay %1: %2, Klick nimmt es ab</translation>
     </message>
@@ -2897,12 +3120,37 @@
       <translation>Overlay %1 ist leer. Klick: Vorschau-Input zeigen.</translation>
     </message>
     <message>
-      <location line="+15" />
+      <location line="+1" />
+      <source>With the next take: %1 %2.</source>
+      <translation>Mit dem nächsten Take: %1 %2.</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>In a box (picture in picture).</source>
+      <translation>In einer Box (Bild im Bild).</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Right click: settings.</source>
+      <translation>Rechtsklick: Einstellungen.</translation>
+    </message>
+    <message>
+      <location line="+18" />
       <source>Show %1 %2 again</source>
       <translation>%1 %2 wieder zeigen</translation>
     </message>
     <message>
-      <location line="+10" />
+      <location line="+7" />
+      <source>Not with the next take: %1 %2</source>
+      <translation>Nicht mit dem nächsten Take: %1 %2</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Settings…</source>
+      <translation>Einstellungen…</translation>
+    </message>
+    <message>
+      <location line="+14" />
       <source>All overlays off</source>
       <translation>Alle Overlays aus</translation>
     </message>

@@ -673,6 +673,7 @@ Kirigami.ApplicationWindow {
                     onProgram: root.show !== null && root.show.program === key
                     onPreview: root.show !== null && root.show.preview === key
                     overlays: root.show && root.show.overlays ? root.show.overlays : []
+                    overlayPreview: root.show && root.show.overlay_preview ? root.show.overlay_preview : []
                     looksAvailable: root.show !== null && root.show.looks_available === true
                     peakDb: root.levels[key]
                     onTriggersRequested: {
