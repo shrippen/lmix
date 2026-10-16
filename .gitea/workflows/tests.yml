@@ -29,7 +29,7 @@ jobs:
         run: |
           apt-get update -qq
           DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git curl ca-certificates \
-            jq python3 nodejs npm build-essential mold clang pkg-config
+            jq python3 nodejs build-essential mold clang pkg-config
           curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable
 
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -59,6 +59,11 @@ jobs:
         run: |
           . "$HOME/.cargo/env"
           scripts/test-headless.sh
+
+      # Playwright needs Node 20+; Ubuntu 24.04 has 18.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
 
       # Same version as the screenshot tools (shrippen.github.io/demo/tools).
       - name: Playwright
