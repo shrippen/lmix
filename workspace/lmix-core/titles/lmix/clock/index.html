@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Clock</title>
+<link rel="stylesheet" href="/titles/sdk/lmix-title.css">
+<style>
+  .clock { position: absolute; top: var(--safe-y); right: var(--safe-x); display: flex; align-items: stretch; }
+  .clock.top-left { right: auto; left: var(--safe-x); }
+  .clock.bottom-right { top: auto; bottom: var(--safe-y); }
+  .clock.bottom-left { top: auto; bottom: var(--safe-y); right: auto; left: var(--safe-x); }
+  .clock .label { display: flex; align-items: center; padding: 0 calc(20 * var(--u)); font-size: calc(20 * var(--u)); background: var(--bg-void); }
+  .clock .label:empty { display: none; }
+  .clock .time { padding: calc(10 * var(--u)) calc(30 * var(--u)) calc(10 * var(--u)) calc(22 * var(--u)); font-size: calc(44 * var(--u)); }
+</style>
+</head>
+<body>
+<div class="clock k-wipe" id="clock">
+  <div class="label k-label" id="label"></div>
+  <div class="time k-panel k-accent k-figure" id="time"></div>
+</div>
+<script src="/titles/sdk/lmix-title.js"></script>
+<script>
+  const el = (id) => document.getElementById(id);
+  let seconds = true;
+  const two = (n) => String(n).padStart(2, "0");
+  function tick() {
+    const now = new Date();
+    el("time").textContent = `${two(now.getHours())}:${two(now.getMinutes())}` + (seconds ? `:${two(now.getSeconds())}` : "");
+    setTimeout(tick, 1000 - (Date.now() % 1000));
+  }
+  lmixTitle({
+    update(d) {
+      el("label").textContent = d.label || "";
+      seconds = d.seconds !== "false";
+      el("clock").className = `clock k-wipe ${d.corner || "top-right"}` + (el("clock").classList.contains("is-in") ? " is-in" : "");
+    },
+    play() { el("clock").classList.add("is-in"); },
+    stop() { el("clock").classList.remove("is-in"); return lmixTitle.duration("--dur"); },
+  });
+  tick();
+</script>
+</body>
+</html>

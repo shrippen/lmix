@@ -1,9 +1,32 @@
 # Übergabe: Stand M4 (in Arbeit), lokale Übernahme
 
-Stand 2026-10-09. Die Arbeit läuft lokal weiter (Arch, RTX 3090), Abnahme
+Stand 2026-10-09, PR-Liste 2026-10-12. Die Arbeit läuft lokal weiter (Arch, RTX 3090), Abnahme
 auf echter Hardware.
 
-## Branches und PRs (Gitea)
+## Offene PRs, Stand 2026-10-12 (Merge-Reihenfolge)
+
+Gestapelt, jeder auf dem davor; von unten nach oben mergen (die Basis
+des nächsten wird danach `main`, Gitea stellt sie beim Mergen um):
+
+| PR | Branch | Basis | Inhalt |
+|---|---|---|---|
+| strom #7, #8 | `lmix-live-underlays`, `lmix-process-memory` | `dev` | Layout-Underlays live, eigener Speicher in den Stats |
+| #8 | `m8-web` | `m4-pip` | M6/M8: Webseiten, Kurzbefehle, Auslöser, Cue-Listen, OSC, Textprotokoll, Metriken |
+| #9 | `m6-open` | `m8-web` | Offene Punkte ohne Hardware |
+| #17 | `m7-titles` | `m6-open` | M7 Teil A: Titel und Datenquellen ohne Render-Engine |
+| #18 | `m9-console` | `m7-titles` | M9: Transportleiste, Stopp-Rückfrage, TSL, PTZ, Pakete, Layout-Fangen, MIDI-Lampen |
+| #19 | `m9-data` | `m9-console` | XLSX/ODS, Zeilen zu Spalten, Folien aus Datei, Inputs einklappen |
+| #20 | `m9-layout` | `m9-data` | Layout-Editor: Mehrfachauswahl, Sperre |
+| #21 | `m9-keys` | `m9-layout` | Google Sheets API, Kurzbefehle für alle Shows, Zustand als Diff, Tally über HTTP, Wiedergabezeit-Auslöser, Tasten mit Bild, Inputs anhängen, fehlende Dateien, Beispiel-Clients |
+| #22 | `m9-security` | `m9-keys` | Zugriff: nur LAN, Passwort, offene Seiten (API.7) |
+| #23 | `m9-transport` | `m9-security` | Springen im Clip, Playlist-Eintrag abspielen (UI.5, UI.4) |
+
+Unabhängig von `main`: #14 (CI-Token fürs strom-Submodul; der Token
+braucht noch Leserechte, siehe `todo.md`), #15 (H.24-Vergleich), #16
+(Qt-eigene Übersetzungen); Kante #53 (Dialog in Kante Light), danach
+`scripts/sync-kante.sh`.
+
+## Branches und PRs (Gitea), Stand 2026-10-09
 
 | PR | Branch | Basis | Inhalt | Stand |
 |---|---|---|---|---|

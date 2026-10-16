@@ -41,12 +41,22 @@ pub mod qobject {
         #[qproperty(i32, style)]
         /// Peak dBFS per input id, and `program` (JSON object).
         #[qproperty(QString, levels)]
+        /// Where clips play: `{input id: [position ms, length ms]}`.
+        #[qproperty(QString, positions)]
         /// Link health per output id: lmix `OutputStats` (JSON object).
         #[qproperty(QString, links)]
         /// Capture devices (JSON list of lmix `Device`).
         #[qproperty(QString, devices)]
         /// Recently opened or saved show files (JSON list).
         #[qproperty(QString, recent)]
+        /// Title templates (JSON list of lmix `Template`).
+        #[qproperty(QString, templates)]
+        /// lmix-core's address, for its pages (graphics preview).
+        #[qproperty(QString, core_url, cxx_name = "coreUrl")]
+        /// How the window opens: normal, maximized, fullscreen.
+        #[qproperty(QString, window_mode, cxx_name = "windowMode")]
+        /// `simple` or `advanced` from the command line, or empty.
+        #[qproperty(QString, ui_mode, cxx_name = "uiMode")]
         /// Last latency measurement: lmix `Latency` as JSON, or empty.
         #[qproperty(QString, latency)]
         #[qproperty(bool, measuring)]
@@ -100,7 +110,7 @@ pub mod qobject {
         #[cxx_name = "addOutput"]
         fn add_output(self: Pin<&mut Core>, form: &QString) -> bool;
 
-        /// Fetch devices and recent shows again.
+        /// Fetch devices, recent shows and templates again.
         #[qinvokable]
         #[cxx_name = "refreshLists"]
         fn refresh_lists(self: Pin<&mut Core>);
@@ -160,9 +170,14 @@ pub struct CoreRust {
     message: QString,
     style: i32,
     levels: QString,
+    positions: QString,
     links: QString,
     devices: QString,
     recent: QString,
+    templates: QString,
+    core_url: QString,
+    window_mode: QString,
+    ui_mode: QString,
     latency: QString,
     measuring: bool,
     global_keys: QString,
@@ -176,6 +191,11 @@ pub struct CoreRust {
 impl cxx_qt::Initialize for qobject::Core {
     fn initialize(mut self: Pin<&mut Self>) {
         self.as_mut().set_style(config::style());
+        self.as_mut()
+            .set_core_url(QString::from(config::core_url()));
+        self.as_mut()
+            .set_window_mode(QString::from(config::window()));
+        self.as_mut().set_ui_mode(QString::from(config::mode()));
         let thread = self.qt_thread();
         config::runtime().spawn(follow(thread));
         self.refresh_lists();
@@ -188,6 +208,7 @@ async fn follow(thread: cxx_qt::CxxQtThread<qobject::Core>) {
     loop {
         if let Ok((mut stream, _)) = connect_async(&url).await {
             let _ = thread.queue(|core| core.set_connected(true));
+            let mut positions: HashMap<String, (u64, u64)> = HashMap::new();
             while let Some(Ok(message)) = stream.next().await {
                 let Message::Text(text) = message else {
                     continue;
@@ -196,6 +217,15 @@ async fn follow(thread: cxx_qt::CxxQtThread<qobject::Core>) {
                     Ok(Event::State { state }) => {
                         let json = serde_json::to_string(&state).unwrap_or_default();
                         thread.queue(move |core| core.set_state(QString::from(&json)))
+                    }
+                    Ok(Event::Position {
+                        input,
+                        position_ms,
+                        duration_ms,
+                    }) => {
+                        positions.insert(input.to_string(), (position_ms, duration_ms));
+                        let json = serde_json::to_string(&positions).unwrap_or_default();
+                        thread.queue(move |core| core.set_positions(QString::from(&json)))
                     }
                     Ok(Event::Levels { levels }) => {
                         let json = levels_json(&levels);
@@ -315,8 +345,13 @@ impl qobject::Core {
                 .await
                 .unwrap_or_else(|| serde_json::json!([]))
                 .to_string();
+            let templates = get_json::<serde_json::Value>("/api/templates")
+                .await
+                .unwrap_or_else(|| serde_json::json!([]))
+                .to_string();
             let _ = thread.queue(move |mut core| {
                 core.as_mut().set_devices(QString::from(&devices));
+                core.as_mut().set_templates(QString::from(&templates));
                 core.set_recent(QString::from(&recent));
             });
         });
@@ -395,14 +430,7 @@ impl qobject::Core {
 
     fn send(self: Pin<&mut Self>, action: Action) {
         let thread = self.qt_thread();
-        config::runtime().spawn(async move {
-            let refused = post_action(&action).await;
-            if let Some(reason) = &refused {
-                tracing::info!(?action, %reason, "lmix-core refused");
-            }
-            let text = refused.unwrap_or_default();
-            let _ = thread.queue(move |core| core.set_message(QString::from(&text)));
-        });
+        let _ = actions().send((action, thread));
     }
 
     unsafe fn show_live(self: Pin<&mut Self>, item: *mut qobject::QQuickItem, source: &QString) {
@@ -586,6 +614,32 @@ fn measure_frames(sink: &gst::Element, socket: String) {
         }
         gst::PadProbeReturn::Ok
     });
+}
+
+/// Actions and the Core to answer, in the order the operator gave them.
+type Queued = (Action, cxx_qt::CxxQtThread<qobject::Core>);
+
+static ACTIONS: std::sync::OnceLock<tokio::sync::mpsc::UnboundedSender<Queued>> =
+    std::sync::OnceLock::new();
+
+/// Actions go to lmix-core one after another: a held PTZ key's stop must
+/// never overtake its move (two requests in parallel can arrive either
+/// way round).
+fn actions() -> &'static tokio::sync::mpsc::UnboundedSender<Queued> {
+    ACTIONS.get_or_init(|| {
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<Queued>();
+        config::runtime().spawn(async move {
+            while let Some((action, thread)) = rx.recv().await {
+                let refused = post_action(&action).await;
+                if let Some(reason) = &refused {
+                    tracing::info!(?action, %reason, "lmix-core refused");
+                }
+                let text = refused.unwrap_or_default();
+                let _ = thread.queue(move |core| core.set_message(QString::from(&text)));
+            }
+        });
+        tx
+    })
 }
 
 /// `{message}` for an error the Console found itself.

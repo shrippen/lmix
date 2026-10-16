@@ -6,16 +6,20 @@ use std::sync::OnceLock;
 struct Config {
     core_url: String,
     style: i32,
+    window: String,
+    mode: String,
 }
 
 static CONFIG: OnceLock<Config> = OnceLock::new();
 static RUNTIME: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
 static HTTP: OnceLock<reqwest::Client> = OnceLock::new();
 
-pub fn init(core_url: &str, style: i32) {
+pub fn init(core_url: &str, style: i32, window: &str, mode: &str) {
     let _ = CONFIG.set(Config {
         core_url: core_url.trim_end_matches('/').to_string(),
         style,
+        window: window.to_string(),
+        mode: mode.to_string(),
     });
 }
 
@@ -25,6 +29,16 @@ fn config() -> &'static Config {
 
 pub fn core_url() -> &'static str {
     &config().core_url
+}
+
+/// How the window opens: `normal`, `maximized` or `fullscreen` (UI.12).
+pub fn window() -> &'static str {
+    &config().window
+}
+
+/// `simple` or `advanced` from the command line, or empty.
+pub fn mode() -> &'static str {
+    &config().mode
 }
 
 /// `KanteStyle.Kind` asked for on the command line, or -1.

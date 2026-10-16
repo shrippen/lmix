@@ -14,6 +14,12 @@ const pass = (message) => console.log("ok   " + message);
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   page.on("console", (m) => { if (m.type() === "error" && !/404|503/.test(m.text())) errors.push(m.text()); });
+  // State changes arrive as diffs (API.6), whole states only now and then.
+  const frames = { diff: 0, state: 0 };
+  page.on("websocket", (ws) => ws.on("framereceived", (f) => {
+    const kind = /^\{"event":"(state_diff|state)"/.exec(String(f.payload));
+    if (kind) frames[kind[1] === "state_diff" ? "diff" : "state"]++;
+  }));
 
   await page.goto(base + "/");
   await page.waitForSelector("header .state.online", { timeout: 5000 });
@@ -44,14 +50,21 @@ const pass = (message) => console.log("ok   " + message);
   pass("tally: program red, preview green, input picker");
 
   await page.goto(base + "/keys");
-  await page.waitForSelector('#keys .btn[data-shortcut="1"]', { timeout: 5000 });
+  await page.waitForSelector("#keys .btn[data-shortcut]", { timeout: 5000 });
   await page.screenshot({ path: process.env.SHOT_DIR + "/keys.png" });
-  await page.click('#keys .btn[data-shortcut="1"]');
+  await page.click("#keys .btn[data-shortcut]");
   await page.waitForFunction(async () => {
     const s = await (await fetch("/api/state")).json();
     return s.program === s.inputs[1].id;
   }, null, { timeout: 5000 });
   pass("keys: the shortcut button runs its actions");
+  // It switches input 2: its picture, red now that it is on program.
+  // The null engine has no pictures: the image is there, hidden.
+  await page.waitForSelector("#keys .btn.program img[data-picture]", { state: "attached", timeout: 5000 });
+  pass("keys: picture and tally of the input it switches");
+
+  if (frames.diff === 0 || frames.diff < frames.state) fail("diffs: " + JSON.stringify(frames));
+  pass(`state as diffs (${frames.diff} diffs, ${frames.state} whole)`);
 
   if (errors.length) fail("page errors: " + errors.join("; "));
   pass("no page errors");

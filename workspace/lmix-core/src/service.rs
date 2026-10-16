@@ -13,11 +13,11 @@ use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Instant, SystemTime};
 
 use lmix_types::{
-    Action, ActionError, Event, InputLevel, InputRef, InputStatus, Latency, Levels, OutputId,
-    OutputSpec, OutputStats, OutputStatus, ShowState, SignalLoss,
+    Action, ActionError, Event, InputId, InputLevel, InputRef, InputStatus, Latency, Levels,
+    OutputId, OutputSpec, OutputStats, OutputStatus, ShowState, SignalLoss, Template,
 };
 use strom_types::FlowId;
 use tokio::sync::{broadcast, Mutex, Notify};
@@ -28,6 +28,7 @@ use crate::engine::{meters, Engine, EngineError, LivePicture, Picture};
 use crate::recent::Recent;
 use crate::show::{self, Show};
 use crate::switcher::{Command, Switcher};
+use crate::{datasource, titles};
 
 /// How often lmix-core asks the engine whether it restarted.
 const ENGINE_CHECK: std::time::Duration = std::time::Duration::from_secs(2);
@@ -53,6 +54,11 @@ pub struct Service {
     events: broadcast::Sender<Event>,
     /// Written after every change, read back after a crash (SHW.5).
     autosave: Option<PathBuf>,
+    /// Players the operator moved (jump, item, restart, previous), and
+    /// when: their position reports right after are no clip end.
+    jumped: std::sync::Mutex<HashMap<strom_types::FlowId, Instant>>,
+    /// Settings file of the shortcuts for all shows (AUT.3).
+    all_shows_file: std::sync::Mutex<Option<PathBuf>>,
     recent: Mutex<Recent>,
     /// Last good frame per picture: a paused clip or still keeps its
     /// picture while the engine's tap has no new frame.
@@ -71,13 +77,51 @@ pub struct Service {
     /// A failed command found a new engine process: check now, not at the
     /// next poll.
     engine_changed: Notify,
+    /// The templates folder (`--templates`), if any.
+    templates_dir: std::sync::Mutex<Option<PathBuf>>,
+    /// Built-in and folder templates as last scanned.
+    templates: std::sync::Mutex<Vec<Template>>,
+    /// When each data source was read: its file's time, or when an
+    /// address was fetched.
+    source_times: std::sync::Mutex<HashMap<InputId, Seen>>,
+    /// Data sources at an address being fetched for the first time.
+    fetching: std::sync::Mutex<HashSet<InputId>>,
+    /// Fetches data sources from addresses.
+    http: reqwest::Client,
+    /// Sends PTZ commands; opened at the first one.
+    ptz_socket: tokio::sync::OnceCell<tokio::net::UdpSocket>,
+    /// Numbers VISCA-over-IP packets.
+    ptz_seq: std::sync::atomic::AtomicU32,
 }
+
+/// What lmix-core knew of a data source when it read it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Seen {
+    File(Option<SystemTime>),
+    Url(Instant),
+}
+
+/// Data sources at an address are fetched again this often.
+const URL_REFRESH: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// How often lmix-core looks at the templates folder and data sources.
+const FILES_CHECK: std::time::Duration = std::time::Duration::from_secs(1);
+/// How long after a jump in a player its reports are no clip end.
+const JUMP_SETTLE: std::time::Duration = std::time::Duration::from_millis(600);
+
+/// How often the inputs' media files are looked for (SHW.4).
+const MEDIA_CHECK: std::time::Duration = std::time::Duration::from_secs(3);
+
+/// How often it moves auto-advancing data sources on when due.
+const AUTO_CHECK: std::time::Duration = std::time::Duration::from_millis(250);
 
 impl Service {
     pub fn new(slots: usize, engine: Arc<dyn Engine>, autosave: Option<PathBuf>) -> Arc<Self> {
         let (events, _) = broadcast::channel(EVENT_BUFFER);
         let mut switcher = Switcher::new(slots);
         switcher.set_looks_available(engine.looks_available());
+        let templates = titles::scan(None);
+        switcher.set_templates(titles::catalog(&templates));
         Arc::new(Self {
             switcher: Mutex::new(switcher),
             engine,
@@ -90,8 +134,261 @@ impl Service {
             engine_ready: AtomicBool::new(true),
             engine_instance: std::sync::Mutex::new(None),
             engine_changed: Notify::new(),
+            templates_dir: std::sync::Mutex::new(None),
+            templates: std::sync::Mutex::new(templates),
+            source_times: std::sync::Mutex::new(HashMap::new()),
+            fetching: std::sync::Mutex::new(HashSet::new()),
+            http: datasource::client(),
+            ptz_socket: tokio::sync::OnceCell::new(),
+            ptz_seq: std::sync::atomic::AtomicU32::new(0),
             autosave,
+            jumped: std::sync::Mutex::new(HashMap::new()),
+            all_shows_file: std::sync::Mutex::new(None),
         })
+    }
+
+    /// Keep shortcuts for all shows in `path` (`--shortcuts`): read now,
+    /// written after each change. A file that cannot be read is left alone
+    /// (renamed aside if it is broken) and the list starts empty.
+    pub async fn use_shortcuts_file(&self, path: PathBuf) {
+        let shortcuts = match tokio::fs::read(&path).await {
+            Ok(bytes) => match serde_json::from_slice::<Vec<crate::show::ShowShortcut>>(&bytes) {
+                Ok(list) => list,
+                Err(e) => {
+                    let aside = path.with_extension("json.broken");
+                    tracing::warn!(error = %e, file = %path.display(), aside = %aside.display(), "shortcuts for all shows unreadable, set aside");
+                    if let Err(e) = tokio::fs::rename(&path, &aside).await {
+                        // Not set aside: never written over either.
+                        tracing::warn!(error = %e, file = %path.display(), "shortcuts for all shows will not be saved");
+                        let mut sw = self.switcher.lock().await;
+                        sw.set_all_shows_shortcuts(Vec::new());
+                        self.publish(&sw);
+                        return;
+                    }
+                    Vec::new()
+                }
+            },
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+            Err(e) => {
+                tracing::warn!(error = %e, file = %path.display(), "shortcuts for all shows not read");
+                Vec::new()
+            }
+        };
+        let mut sw = self.switcher.lock().await;
+        sw.set_all_shows_shortcuts(shortcuts);
+        *self.all_shows_file.lock().expect("shortcuts file lock") = Some(path);
+        self.publish(&sw);
+    }
+
+    /// Best effort, like the autosave.
+    async fn write_all_shows(&self, sw: &mut Switcher) {
+        if !sw.take_all_shows_changed() {
+            return;
+        }
+        let Some(path) = self
+            .all_shows_file
+            .lock()
+            .expect("shortcuts file lock")
+            .clone()
+        else {
+            return;
+        };
+        let written = async {
+            if let Some(dir) = path.parent() {
+                tokio::fs::create_dir_all(dir).await?;
+            }
+            let text = serde_json::to_vec_pretty(sw.all_shows_shortcuts())?;
+            let tmp = path.with_extension("json.tmp");
+            tokio::fs::write(&tmp, text).await?;
+            tokio::fs::rename(&tmp, &path).await
+        };
+        if let Err(e) = written.await {
+            tracing::warn!(error = %e, file = %path.display(), "shortcuts for all shows not saved");
+            // Tried again with the next change.
+            sw.all_shows_unsaved();
+        }
+    }
+
+    /// Take templates from `dir` as well (`--templates`).
+    pub async fn use_templates(&self, dir: PathBuf) {
+        *self.templates_dir.lock().expect("templates dir lock") = Some(dir);
+        self.rescan_templates().await;
+    }
+
+    /// All rows of a data source.
+    pub async fn data_table(
+        &self,
+        source: &InputRef,
+    ) -> Result<lmix_types::DataTable, ActionError> {
+        self.switcher.lock().await.data_table(source)
+    }
+
+    /// Built-in and folder templates (GFX.19).
+    pub fn templates(&self) -> Vec<Template> {
+        self.templates.lock().expect("templates lock").clone()
+    }
+
+    /// A file below `/titles/` (templates, SDK, Kante).
+    pub fn title_file(&self, path: &str) -> Option<Vec<u8>> {
+        let dir = self
+            .templates_dir
+            .lock()
+            .expect("templates dir lock")
+            .clone();
+        titles::file(dir.as_deref(), path)
+    }
+
+    /// Scan the folder again; a changed template reaches the graphics
+    /// pages through the state (GFX.14).
+    async fn rescan_templates(&self) {
+        let dir = self
+            .templates_dir
+            .lock()
+            .expect("templates dir lock")
+            .clone();
+        let Ok(found) = tokio::task::spawn_blocking(move || titles::scan(dir.as_deref())).await
+        else {
+            return;
+        };
+        if *self.templates.lock().expect("templates lock") == found {
+            return;
+        }
+        let mut sw = self.switcher.lock().await;
+        sw.set_templates(titles::catalog(&found));
+        *self.templates.lock().expect("templates lock") = found;
+        self.publish(&sw);
+    }
+
+    /// Read the data sources never read (just added, or a show just
+    /// opened). Text files at once (local, quick); addresses and
+    /// spreadsheets (unpacking takes a while) in the background, so they
+    /// never hold up switching: the switcher is locked while this runs.
+    async fn read_new_sources(self: &Arc<Self>, sw: &mut Switcher) {
+        for (id, spec) in sw.unread_sources() {
+            let place = datasource::resolve(&spec, sw.path());
+            if place.is_url() || matches!(spec, lmix_types::DataSourceSpec::Sheet { .. }) {
+                if self.fetching.lock().expect("fetching lock").insert(id) {
+                    tokio::spawn(self.clone().fetch_new_source(id, spec, place));
+                }
+                continue;
+            }
+            let seen = self.seen(&place).await;
+            sw.set_rows(id, datasource::read(&spec, &place, &self.http).await);
+            self.source_times
+                .lock()
+                .expect("source times lock")
+                .insert(id, seen);
+        }
+    }
+
+    /// A data source at an address or a spreadsheet, read without the
+    /// switcher locked.
+    async fn fetch_new_source(
+        self: Arc<Self>,
+        id: InputId,
+        spec: lmix_types::DataSourceSpec,
+        place: datasource::Place,
+    ) {
+        let seen = self.seen(&place).await;
+        let rows = datasource::read(&spec, &place, &self.http).await;
+        let mut sw = self.switcher.lock().await;
+        // Gone or read meanwhile (the show changed): nothing to do.
+        if sw.unread_sources().iter().any(|(s, _)| *s == id) {
+            sw.set_rows(id, rows);
+            self.source_times
+                .lock()
+                .expect("source times lock")
+                .insert(id, seen);
+            self.publish(&sw);
+        }
+        self.fetching.lock().expect("fetching lock").remove(&id);
+    }
+
+    async fn seen(&self, place: &datasource::Place) -> Seen {
+        if place.is_url() {
+            Seen::Url(Instant::now())
+        } else {
+            Seen::File(datasource::modified(place).await)
+        }
+    }
+
+    /// Read again the files that changed and the addresses due (DAT.2).
+    async fn reread_changed_sources(&self) {
+        let (sources, show) = {
+            let sw = self.switcher.lock().await;
+            (sw.source_files(), sw.path().map(str::to_string))
+        };
+        let mut read = Vec::new();
+        for (id, spec) in sources {
+            let place = datasource::resolve(&spec, show.as_deref());
+            let known = self
+                .source_times
+                .lock()
+                .expect("source times lock")
+                .get(&id)
+                .copied();
+            let now = self.seen(&place).await;
+            let due = match (known, now) {
+                (Some(Seen::File(then)), Seen::File(time)) => then != time,
+                (Some(Seen::Url(then)), Seen::Url(_)) => then.elapsed() >= URL_REFRESH,
+                // Not read yet (handled with the action) or changed kind.
+                _ => false,
+            };
+            if due {
+                read.push((id, datasource::read(&spec, &place, &self.http).await, now));
+            }
+        }
+        if read.is_empty() {
+            return;
+        }
+        let mut sw = self.switcher.lock().await;
+        let mut changed = false;
+        for (id, rows, seen) in read {
+            if sw.rows(id) != Some(&rows) {
+                sw.set_rows(id, rows);
+                changed = true;
+            }
+            self.source_times
+                .lock()
+                .expect("source times lock")
+                .insert(id, seen);
+        }
+        if changed {
+            self.publish(&sw);
+        }
+    }
+
+    /// Follow the templates folder and data source files, and move
+    /// auto-advancing data sources on (DAT.5).
+    pub async fn watch_titles(self: Arc<Self>) {
+        // Files and addresses on their own: a slow download must not hold
+        // up the rows moving on.
+        let files = {
+            let service = self.clone();
+            async move {
+                let mut tick = tokio::time::interval(FILES_CHECK);
+                loop {
+                    tick.tick().await;
+                    service.rescan_templates().await;
+                    service.reread_changed_sources().await;
+                }
+            }
+        };
+        let rows = async move {
+            let mut tick = tokio::time::interval(AUTO_CHECK);
+            loop {
+                tick.tick().await;
+                let due = self.switcher.lock().await.due_sources(Instant::now());
+                for id in due {
+                    let next = Action::DataNext {
+                        source: InputRef::Text(id.to_string()),
+                    };
+                    // At the last row without looping it just stays there.
+                    let _ = self.handle_as(next, Origin::Trigger).await;
+                }
+            }
+        };
+        tokio::join!(files, rows);
     }
 
     /// The engine is not there yet: keep changes in the show until
@@ -103,7 +400,7 @@ impl Service {
 
     /// Reopen the autosave of the last run, if any. The show keeps no file
     /// path, so a later save asks for one.
-    pub async fn resume(&self) -> Result<bool, ActionError> {
+    pub async fn resume(self: &Arc<Self>) -> Result<bool, ActionError> {
         let Some(path) = &self.autosave else {
             return Ok(false);
         };
@@ -117,6 +414,7 @@ impl Service {
         let mut sw = self.switcher.lock().await;
         let commands = sw.replace(show, None);
         let result = self.execute(&mut sw, &commands).await;
+        self.read_new_sources(&mut sw).await;
         self.publish(&sw);
         result.map(|()| true)
     }
@@ -297,6 +595,58 @@ impl Service {
             sw.set_output_status(id, OutputStatus::Running { since_ms: now_ms() });
         }
         self.publish(&sw);
+    }
+
+    /// Where missing media files are in `folder`, by file name: old path
+    /// to new. Looked up without the mixer locked, each with a time limit.
+    async fn find_moved_media(&self, folder: &str) -> HashMap<String, String> {
+        let missing = self.switcher.lock().await.missing_media();
+        let mut found = HashMap::new();
+        for path in missing.into_iter().flat_map(|(_, files)| files) {
+            let Some(name) = std::path::Path::new(&path).file_name() else {
+                continue;
+            };
+            let candidate = std::path::Path::new(folder).join(name);
+            let is_file = tokio::time::timeout(
+                std::time::Duration::from_secs(2),
+                tokio::fs::metadata(&candidate),
+            )
+            .await
+            .is_ok_and(|m| m.is_ok_and(|m| m.is_file()));
+            if is_file {
+                found.insert(path, candidate.display().to_string());
+            }
+        }
+        found
+    }
+
+    /// Look for the inputs' media files every few seconds (SHW.4): the
+    /// state lists the missing ones per input. Checked without the
+    /// switcher locked.
+    pub async fn watch_media(self: Arc<Self>) {
+        let mut tick = tokio::time::interval(MEDIA_CHECK);
+        loop {
+            tick.tick().await;
+            self.check_media().await;
+        }
+    }
+
+    async fn check_media(&self) {
+        let files = self.switcher.lock().await.media_files();
+        let mut missing = HashMap::new();
+        for (id, paths) in files {
+            let mut gone = Vec::new();
+            for path in paths {
+                if !tokio::fs::try_exists(&path).await.unwrap_or(false) {
+                    gone.push(path);
+                }
+            }
+            missing.insert(id, gone);
+        }
+        let mut sw = self.switcher.lock().await;
+        if sw.set_missing(missing) {
+            self.publish(&sw);
+        }
     }
 
     /// Follow engine failures for the process life: failed outputs are
@@ -524,6 +874,16 @@ impl Service {
                 Err(broadcast::error::RecvError::Lagged(_)) => continue,
                 Err(broadcast::error::RecvError::Closed) => return,
             };
+            // Reports shortly after a jump may still show the old place.
+            let jumped = self
+                .jumped
+                .lock()
+                .expect("jumped lock")
+                .get(&report.flow)
+                .is_some_and(|at| at.elapsed() < JUMP_SETTLE);
+            if jumped {
+                watch.forget(report.flow);
+            }
             let change = watch.update(report);
             let fired = {
                 let mut sw = self.switcher.lock().await;
@@ -534,6 +894,14 @@ impl Service {
                 };
                 if report.duration_ms > 0 && sw.set_clip_length(slot, report.duration_ms) {
                     self.publish(&sw);
+                }
+                // For the transport bars; no state change, no autosave.
+                if let Some(input) = sw.input_at_slot(slot) {
+                    let _ = self.events.send(Event::Position {
+                        input,
+                        position_ms: report.position_ms,
+                        duration_ms: report.duration_ms,
+                    });
                 }
                 sw.clip_triggers(slot, &change)
             };
@@ -572,11 +940,52 @@ impl Service {
         self.handle_as(action, Origin::Operator).await
     }
 
+    /// Send a PTZ action to the input's camera (PER.2). Nothing in the
+    /// show changes; the camera does not answer back here.
+    async fn ptz(&self, action: &Action, message: Vec<u8>) -> Result<(), ActionError> {
+        let input = match action {
+            Action::PtzMove { input, .. }
+            | Action::PtzZoom { input, .. }
+            | Action::PtzFocus { input, .. }
+            | Action::PtzHome { input }
+            | Action::PtzPreset { input, .. } => input,
+            _ => unreachable!("a PTZ action"),
+        };
+        let spec = self.switcher.lock().await.ptz_of(input)?;
+        let failed = |e: std::io::Error| ActionError::BadPtz {
+            reason: format!("{}: {e}", spec.address),
+        };
+        // An IP needs no lookup (a held key must not wait for DNS).
+        let target = match spec.address.parse::<std::net::SocketAddr>() {
+            Ok(address) => address,
+            Err(_) => tokio::net::lookup_host(&spec.address)
+                .await
+                .map_err(failed)?
+                .next()
+                .ok_or_else(|| failed(std::io::Error::other("no address")))?,
+        };
+        let socket = self
+            .ptz_socket
+            .get_or_try_init(|| tokio::net::UdpSocket::bind(("0.0.0.0", 0)))
+            .await
+            .map_err(failed)?;
+        let seq = self.ptz_seq.fetch_add(1, Ordering::Relaxed);
+        socket
+            .send_to(&crate::ptz::frame(spec.protocol, seq, &message), target)
+            .await
+            .map_err(failed)?;
+        Ok(())
+    }
+
     async fn handle_as(
         self: &Arc<Self>,
         action: Action,
         origin: Origin,
     ) -> Result<ShowState, ActionError> {
+        if let Some(message) = crate::ptz::message(&action) {
+            self.ptz(&action, message?).await?;
+            return Ok(self.state().await);
+        }
         match &action {
             Action::RunShortcut { target } => {
                 let actions = self.switcher.lock().await.shortcut_actions(target)?;
@@ -594,19 +1003,151 @@ impl Service {
             }
             _ => {}
         }
+        // Packages copy media (gigabytes): without the switcher locked.
+        if let Action::ExportPackage { path } = &action {
+            let (show, show_path) = {
+                let sw = self.switcher.lock().await;
+                (sw.show().clone(), sw.path().map(str::to_string))
+            };
+            let templates = self
+                .templates_dir
+                .lock()
+                .expect("templates dir lock")
+                .clone();
+            let out = PathBuf::from(path);
+            let packed = tokio::task::spawn_blocking(move || {
+                crate::package::export(&show, show_path.as_deref(), templates.as_deref(), &out)
+            })
+            .await
+            .map_err(|e| ActionError::ShowFile {
+                message: e.to_string(),
+            })?
+            .map_err(|message| ActionError::ShowFile { message })?;
+            tracing::info!(%path, files = packed.files, bytes = packed.bytes, "package written");
+            return Ok(self.state().await);
+        }
+        // Missing files looked up in the folder before the mixer is locked
+        // (a slow network folder must not hold up switching).
+        let mut relocated = match &action {
+            Action::RelocateMedia { folder } => Some(self.find_moved_media(folder).await),
+            _ => None,
+        };
+        let mut unpacked = match &action {
+            Action::ImportPackage { path, folder } => {
+                // Refused before gigabytes are unpacked (checked again below).
+                self.switcher.lock().await.check_unlocked()?;
+                let templates = self
+                    .templates_dir
+                    .lock()
+                    .expect("templates dir lock")
+                    .clone();
+                let (package, folder) = (PathBuf::from(path), PathBuf::from(folder));
+                let (show, file, notes) = tokio::task::spawn_blocking(move || {
+                    crate::package::import(&package, &folder, templates.as_deref())
+                })
+                .await
+                .map_err(|e| ActionError::ShowFile {
+                    message: e.to_string(),
+                })?
+                .map_err(|message| ActionError::ShowFile { message })?;
+                for note in notes {
+                    tracing::info!(%note, "package import");
+                }
+                // Templates it brought.
+                self.rescan_templates().await;
+                Some((show, file))
+            }
+            _ => None,
+        };
+        // A table to import is read before the switcher is locked: it may
+        // come from an address.
+        let mut imported = match &action {
+            Action::ImportDatasets { path, .. } => {
+                let show = self.switcher.lock().await.path().map(str::to_string);
+                let spec = lmix_types::DataSourceSpec::Csv {
+                    path: path.clone(),
+                    header: true,
+                    transpose: false,
+                };
+                let place = datasource::resolve(&spec, show.as_deref());
+                Some(datasource::read(&spec, &place, &self.http).await)
+            }
+            _ => None,
+        };
         let mut sw = self.switcher.lock().await;
         let before = sw.on_air();
-        let file_action = matches!(action, Action::OpenShow { .. } | Action::SaveShow { .. });
-        if matches!(action, Action::OpenShow { .. } | Action::NewShow) {
+        let file_action = matches!(
+            action,
+            Action::OpenShow { .. } | Action::SaveShow { .. } | Action::ImportPackage { .. }
+        );
+        let report = match &action {
+            Action::TitleReport {
+                graphics,
+                layer,
+                event,
+            } => sw.graphics_id(graphics).map(|id| Event::Title {
+                graphics: id,
+                layer: *layer,
+                report: event.clone(),
+            }),
+            _ => None,
+        };
+        if matches!(
+            action,
+            Action::OpenShow { .. } | Action::NewShow | Action::ImportPackage { .. }
+        ) {
             sw.check_unlocked()?;
         }
 
         let commands = match action {
             Action::NewShow => sw.replace(Show::default(), None),
             Action::OpenShow { path } => open(&mut sw, path).await?,
+            Action::ImportPackage { .. } => {
+                let (show, file) = unpacked.take().expect("unpacked above");
+                sw.replace(show, Some(file.display().to_string()))
+            }
+            Action::ImportDatasets { template, .. } => {
+                let table = imported.take().unwrap_or_default();
+                if let Some(error) = table.error {
+                    return Err(ActionError::BadTitle { reason: error });
+                }
+                sw.import_datasets(&table.columns, &table.rows, template)?;
+                Vec::new()
+            }
+            Action::ExportDatasets { path, template } => {
+                let spec = lmix_types::DataSourceSpec::Csv {
+                    path: path.clone(),
+                    header: true,
+                    transpose: false,
+                };
+                let datasource::Place::File(file) = datasource::resolve(&spec, sw.path()) else {
+                    return Err(ActionError::BadTitle {
+                        reason: "data sets go to a file, not an address".into(),
+                    });
+                };
+                let (columns, rows) = sw.export_datasets(template.as_deref());
+                datasource::write_csv(&file, &columns, &rows)
+                    .await
+                    .map_err(|e| ActionError::BadTitle {
+                        reason: format!("{path}: {e}"),
+                    })?;
+                Vec::new()
+            }
             Action::SaveShow { path } => {
                 save(&mut sw, path).await?;
                 Vec::new()
+            }
+            Action::RelocateMedia { folder } => {
+                relocate(&mut sw, &folder, relocated.take().unwrap_or_default())?
+            }
+            Action::AppendShow { path, inputs } => {
+                let other =
+                    show::load(&PathBuf::from(&path))
+                        .await
+                        .map_err(|e| ActionError::ShowFile {
+                            message: e.to_string(),
+                        })?;
+                sw.append(other, &inputs)?
             }
             other => sw.apply(other)?,
         };
@@ -620,8 +1161,27 @@ impl Service {
             .unwrap_or(commands.len());
         let (now, later) = commands.split_at(wait);
         let result = self.execute(&mut sw, now).await;
+        self.read_new_sources(&mut sw).await;
+        if let (Some(report), Ok(())) = (report, &result) {
+            // Like an input's triggers: none for what a trigger did.
+            if let (
+                Origin::Operator,
+                Event::Title {
+                    graphics,
+                    layer,
+                    report: what,
+                },
+            ) = (origin, &report)
+            {
+                for (delay_ms, actions) in sw.title_triggers(*graphics, *layer, what) {
+                    self.run_triggered(delay_ms, actions);
+                }
+            }
+            let _ = self.events.send(report);
+        }
         self.publish(&sw);
         self.write_autosave(&sw).await;
+        self.write_all_shows(&mut sw).await;
         if !later.is_empty() {
             self.run_later(later.to_vec());
         }
@@ -731,6 +1291,21 @@ impl Service {
                     .insert(flow, Touch::Running);
             }
             let outcome = self.engine.run(command).await;
+            if let (
+                Ok(()),
+                Command::Seek { slot, .. }
+                | Command::PlayItem { slot, .. }
+                | Command::Transport {
+                    slot,
+                    transport: lmix_types::Transport::Restart | lmix_types::Transport::Previous,
+                },
+            ) = (&outcome, command)
+            {
+                self.jumped
+                    .lock()
+                    .expect("jumped lock")
+                    .insert(crate::engine::flows::slot_id(*slot), Instant::now());
+            }
             // The window counts from the end: a rebuild's stop event may
             // trail the command (a drained stop takes over a second).
             if let Some(flow) = flow_of(command) {
@@ -864,6 +1439,66 @@ async fn open(sw: &mut Switcher, path: String) -> Result<Vec<Command>, ActionErr
     Ok(sw.replace(show, Some(path)))
 }
 
+/// Found media files (old path, new path) take the old paths' place,
+/// input by input (SHW.4). Inputs on program are left alone (a new source
+/// restarts them); the error says so if nothing else was found.
+fn relocate(
+    sw: &mut Switcher,
+    folder: &str,
+    found: HashMap<String, String>,
+) -> Result<Vec<Command>, ActionError> {
+    let program = sw.state_program();
+    let mut commands = Vec::new();
+    let (mut moved, mut on_air) = (0, 0);
+    for (id, gone) in sw.missing_media() {
+        let Some(source) = sw.source_of(id).cloned() else {
+            continue;
+        };
+        let mut hits = 0;
+        let mut swap = |path: &mut String| {
+            if let Some(new) = found.get(path.as_str()).filter(|_| gone.contains(path)) {
+                *path = new.clone();
+                hits += 1;
+            }
+        };
+        let source = match source {
+            lmix_types::SourceSpec::File { mut path } => {
+                swap(&mut path);
+                lmix_types::SourceSpec::File { path }
+            }
+            lmix_types::SourceSpec::Playlist { mut paths } => {
+                paths.iter_mut().for_each(&mut swap);
+                lmix_types::SourceSpec::Playlist { paths }
+            }
+            _ => continue,
+        };
+        if hits == 0 {
+            continue;
+        }
+        if program == Some(id) {
+            on_air += 1;
+            continue;
+        }
+        moved += hits;
+        commands.extend(sw.apply(Action::ReplaceSource {
+            input: lmix_types::InputRef::Text(id.to_string()),
+            source,
+        })?);
+        sw.forget_missing(id);
+    }
+    if moved == 0 {
+        return Err(ActionError::ShowFile {
+            message: if on_air > 0 {
+                "the files were found, but their input is on program: take it off and try again"
+                    .into()
+            } else {
+                format!("none of the missing files is in {folder}")
+            },
+        });
+    }
+    Ok(commands)
+}
+
 async fn save(sw: &mut Switcher, path: Option<String>) -> Result<(), ActionError> {
     let path = path
         .or_else(|| sw.path().map(str::to_string))
@@ -990,6 +1625,7 @@ mod tests {
                     on: TriggerOn::Program,
                     delay_ms: 2000,
                     before_ms: None,
+                    at_ms: None,
                     actions: vec![Action::FadeToBlack { duration_ms: 0 }],
                 }],
             })
@@ -1013,6 +1649,7 @@ mod tests {
         let service = Service::new(4, engine.clone(), None);
         service.handle(bars()).await.unwrap();
         let shortcut = ShortcutSpec {
+            all_shows: false,
             label: "Bars on air".into(),
             key: None,
             web: false,
@@ -1291,6 +1928,52 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn shortcuts_for_all_shows_are_kept_in_the_settings() {
+        use lmix_types::{InputRef, ShortcutSpec};
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("config").join("shortcuts.json");
+        let first = Service::new(4, Arc::new(NullEngine::default()), None);
+        first.use_shortcuts_file(file.clone()).await;
+        first
+            .handle(Action::AddShortcut {
+                shortcut: ShortcutSpec {
+                    label: "Cut".into(),
+                    key: Some("F12".into()),
+                    web: false,
+                    color: None,
+                    midi: None,
+                    actions: vec![Action::Cut],
+                    all_shows: true,
+                },
+            })
+            .await
+            .unwrap();
+        first.handle(Action::NewShow).await.unwrap();
+
+        // Another run (or a new show): still there.
+        let second = Service::new(4, Arc::new(NullEngine::default()), None);
+        second.use_shortcuts_file(file.clone()).await;
+        let state = second.state().await;
+        assert_eq!(state.shortcuts.len(), 1);
+        assert!(state.shortcuts[0].all_shows);
+
+        second
+            .handle(Action::RemoveShortcut {
+                target: InputRef::Number(1),
+            })
+            .await
+            .unwrap();
+        assert_eq!(std::fs::read_to_string(&file).unwrap().trim(), "[]");
+
+        // A broken file is set aside, not overwritten.
+        std::fs::write(&file, "{").unwrap();
+        let third = Service::new(4, Arc::new(NullEngine::default()), None);
+        third.use_shortcuts_file(file.clone()).await;
+        assert!(third.state().await.shortcuts.is_empty());
+        assert!(file.with_extension("json.broken").exists());
+    }
+
+    #[tokio::test]
     async fn resume_without_autosave_is_noop() {
         let dir = tempfile::tempdir().unwrap();
         let service = Service::new(
@@ -1299,6 +1982,351 @@ mod tests {
             Some(dir.path().join("none.lmix")),
         );
         assert!(!service.resume().await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn ptz_actions_reach_the_camera() {
+        let camera = tokio::net::UdpSocket::bind("127.0.0.1:0").await.unwrap();
+        let address = camera.local_addr().unwrap().to_string();
+        let service = Service::new(2, Arc::new(NullEngine::default()), None);
+        service.handle(bars()).await.unwrap();
+        let input = || InputRef::Number(1);
+
+        // No address yet: refused with a reason.
+        assert!(matches!(
+            service.handle(Action::PtzHome { input: input() }).await,
+            Err(ActionError::BadPtz { .. })
+        ));
+        service
+            .handle(Action::SetPtz {
+                input: input(),
+                ptz: Some(lmix_types::PtzSpec {
+                    address,
+                    protocol: lmix_types::PtzProtocol::ViscaIp,
+                }),
+            })
+            .await
+            .unwrap();
+        service
+            .handle(Action::PtzPreset {
+                input: input(),
+                preset: 3,
+                store: false,
+            })
+            .await
+            .unwrap();
+
+        let mut buf = [0u8; 64];
+        let (n, _) = tokio::time::timeout(
+            std::time::Duration::from_secs(2),
+            camera.recv_from(&mut buf),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        assert_eq!(&buf[..2], &[0x01, 0x00], "VISCA over IP command");
+        assert_eq!(&buf[8..n], &[0x81, 0x01, 0x04, 0x3F, 0x02, 0x03, 0xFF]);
+        assert!(service
+            .handle(Action::SetPtz {
+                input: input(),
+                ptz: Some(lmix_types::PtzSpec {
+                    address: "camera".into(),
+                    protocol: lmix_types::PtzProtocol::ViscaUdp,
+                }),
+            })
+            .await
+            .is_err());
+    }
+
+    #[tokio::test]
+    async fn player_positions_go_out_as_events() {
+        let engine = Arc::new(NullEngine::playing());
+        let service = Service::new(2, engine.clone(), None);
+        service
+            .handle(Action::AddInput {
+                source: lmix_types::SourceSpec::File {
+                    path: "/media/clip.webm".into(),
+                },
+                name: None,
+            })
+            .await
+            .unwrap();
+        let mut events = service.subscribe();
+        tokio::spawn(service.clone().watch_players());
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+        engine.report(crate::clips::PlayerProgress {
+            flow: crate::engine::flows::slot_id(0),
+            position_ms: 1500,
+            duration_ms: 9000,
+            index: 0,
+            items: 1,
+        });
+
+        let id = service.state().await.inputs[0].id;
+        let position = tokio::time::timeout(std::time::Duration::from_secs(2), async {
+            loop {
+                if let Ok(Event::Position {
+                    input,
+                    position_ms,
+                    duration_ms,
+                }) = events.recv().await
+                {
+                    return (input, position_ms, duration_ms);
+                }
+            }
+        })
+        .await
+        .unwrap();
+        assert_eq!(position, (id, 1500, 9000));
+    }
+
+    #[tokio::test]
+    async fn inputs_of_another_show_are_appended() {
+        use lmix_types::{InputRef, SourceSpec, TestPattern};
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("other.lmix");
+        let add = |name: &str| Action::AddInput {
+            source: SourceSpec::Pattern {
+                pattern: TestPattern::Bars,
+            },
+            name: Some(name.into()),
+        };
+        let other = Service::new(4, Arc::new(NullEngine::default()), None);
+        for name in ["Cam 1", "Cam 2"] {
+            other.handle(add(name)).await.unwrap();
+        }
+        other
+            .handle(Action::SetVolume {
+                input: InputRef::Number(2),
+                volume: 40,
+            })
+            .await
+            .unwrap();
+        other
+            .handle(Action::SaveShow {
+                path: Some(file.display().to_string()),
+            })
+            .await
+            .unwrap();
+
+        let engine = Arc::new(NullEngine::default());
+        let service = Service::new(4, engine.clone(), None);
+        service.handle(add("Here")).await.unwrap();
+        let state = service
+            .handle(Action::AppendShow {
+                path: file.display().to_string(),
+                inputs: vec![2],
+            })
+            .await
+            .unwrap();
+        let names: Vec<_> = state.inputs.iter().map(|i| i.name.as_str()).collect();
+        assert_eq!(names, ["Here", "Cam 2"]);
+        assert_eq!(state.inputs[1].audio.volume, 40);
+        assert_ne!(state.inputs[1].id, other.state().await.inputs[1].id);
+        // Its sound set as the mix says, in its slot.
+        let slot = state.inputs[1].slot;
+        assert!(engine
+            .log()
+            .iter()
+            .any(|c| matches!(c, Command::SetAudio { slot: s, .. } if *s == slot)));
+        // Again: a second name, not a second "Cam 2".
+        let state = service
+            .handle(Action::AppendShow {
+                path: file.display().to_string(),
+                inputs: vec![2],
+            })
+            .await
+            .unwrap();
+        assert_eq!(state.inputs[2].name, "Cam 2 (2)");
+
+        // All of it does not fit the one slot left: nothing is added.
+        let refused = service
+            .handle(Action::AppendShow {
+                path: file.display().to_string(),
+                inputs: vec![],
+            })
+            .await;
+        assert!(matches!(refused, Err(ActionError::SlotsFull { .. })));
+        assert!(matches!(
+            service
+                .handle(Action::AppendShow {
+                    path: file.display().to_string(),
+                    inputs: vec![9],
+                })
+                .await,
+            Err(ActionError::UnknownInput { .. })
+        ));
+        assert_eq!(service.state().await.inputs.len(), 3);
+        // Not a show file at all.
+        assert!(service
+            .handle(Action::AppendShow {
+                path: dir.path().display().to_string(),
+                inputs: vec![],
+            })
+            .await
+            .is_err());
+    }
+
+    #[tokio::test]
+    async fn missing_media_are_marked_and_found_again() {
+        use lmix_types::SourceSpec;
+        let dir = tempfile::tempdir().unwrap();
+        let moved = dir.path().join("moved");
+        std::fs::create_dir(&moved).unwrap();
+        std::fs::write(moved.join("intro.mp4"), b"x").unwrap();
+        let there = dir.path().join("there.mp4");
+        std::fs::write(&there, b"x").unwrap();
+        let gone = dir
+            .path()
+            .join("old")
+            .join("intro.mp4")
+            .display()
+            .to_string();
+
+        let service = Service::new(4, Arc::new(NullEngine::default()), None);
+        for (name, source) in [
+            ("Intro", SourceSpec::File { path: gone.clone() }),
+            (
+                "Stream",
+                SourceSpec::File {
+                    path: "https://example.org/live.m3u8".into(),
+                },
+            ),
+            (
+                "List",
+                SourceSpec::Playlist {
+                    paths: vec![there.display().to_string(), gone.clone()],
+                },
+            ),
+        ] {
+            service
+                .handle(Action::AddInput {
+                    source,
+                    name: Some(name.into()),
+                })
+                .await
+                .unwrap();
+        }
+        service.check_media().await;
+        let state = service.state().await;
+        assert_eq!(state.inputs[0].missing, std::slice::from_ref(&gone));
+        assert!(state.inputs[1].missing.is_empty(), "an address is no file");
+        assert_eq!(state.inputs[2].missing, std::slice::from_ref(&gone));
+
+        assert!(service
+            .handle(Action::RelocateMedia {
+                folder: dir.path().join("nothing").display().to_string(),
+            })
+            .await
+            .is_err());
+        // On program: left alone (a new source would restart it).
+        service
+            .handle(Action::CutDirect {
+                input: lmix_types::InputRef::Number(1),
+            })
+            .await
+            .unwrap();
+        let relocate = || Action::RelocateMedia {
+            folder: moved.display().to_string(),
+        };
+        service.handle(relocate()).await.unwrap();
+        let found = moved.join("intro.mp4").display().to_string();
+        let state = service.state().await;
+        assert_eq!(
+            state.inputs[0].source,
+            SourceSpec::File { path: gone.clone() }
+        );
+        assert!(
+            state.inputs[2].missing.is_empty(),
+            "found ones are no longer missing"
+        );
+        assert!(
+            service.handle(relocate()).await.is_err(),
+            "only the one on program is left"
+        );
+        service
+            .handle(Action::CutDirect {
+                input: lmix_types::InputRef::Number(2),
+            })
+            .await
+            .unwrap();
+        service.handle(relocate()).await.unwrap();
+        service.check_media().await;
+        let state = service.state().await;
+        assert_eq!(
+            state.inputs[0].source,
+            SourceSpec::File {
+                path: found.clone()
+            }
+        );
+        assert_eq!(
+            state.inputs[2].source,
+            SourceSpec::Playlist {
+                paths: vec![there.display().to_string(), found]
+            }
+        );
+        assert!(state.inputs.iter().all(|i| i.missing.is_empty()));
+    }
+
+    #[tokio::test]
+    async fn a_jump_back_is_no_clip_end() {
+        use lmix_types::{InputRef, SourceSpec, Trigger, TriggerOn};
+        let engine = Arc::new(NullEngine::playing());
+        let service = Service::new(2, engine.clone(), None);
+        service
+            .handle(Action::AddInput {
+                source: SourceSpec::File {
+                    path: "/media/clip.webm".into(),
+                },
+                name: None,
+            })
+            .await
+            .unwrap();
+        service
+            .handle(Action::SetTriggers {
+                input: InputRef::Number(1),
+                triggers: vec![Trigger {
+                    on: TriggerOn::ClipEnd,
+                    delay_ms: 0,
+                    before_ms: None,
+                    at_ms: None,
+                    actions: vec![Action::FadeToBlack { duration_ms: 0 }],
+                }],
+            })
+            .await
+            .unwrap();
+        tokio::spawn(service.clone().watch_players());
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        let report = |position_ms| crate::clips::PlayerProgress {
+            flow: crate::engine::flows::slot_id(0),
+            position_ms,
+            duration_ms: 10_000,
+            index: 0,
+            items: 1,
+        };
+        let settle = || tokio::time::sleep(std::time::Duration::from_millis(100));
+
+        engine.report(report(8_000));
+        settle().await;
+        service
+            .handle(Action::SeekInput {
+                input: InputRef::Number(1),
+                position_ms: 1_000,
+            })
+            .await
+            .unwrap();
+        engine.report(report(1_000));
+        settle().await;
+        assert!(!service.state().await.fade_to_black, "the jump is no end");
+
+        // Played on to the end and round again: that is one.
+        tokio::time::sleep(JUMP_SETTLE).await;
+        engine.report(report(9_900));
+        settle().await;
+        engine.report(report(100));
+        settle().await;
+        assert!(service.state().await.fade_to_black);
     }
 
     #[tokio::test]

@@ -8,12 +8,14 @@
 //! | `{"action": …}` | `OK` or `ER <error> <message>` |
 //! | `TALLY` | `TALLY <digits>`: per input 0 off, 1 program, 2 preview |
 //! | `STATE` | `STATE <json>` |
-//! | `SUB <topic>` | `OK`, then a line per change; topics `TALLY`, `STATE`, `LEVELS`, `OUTPUTS`, `MIDI`, `ALL` |
+//! | `SUB <topic>` | `OK`, then a line per change; topics `TALLY`, `STATE`, `LEVELS`, `OUTPUTS`, `MIDI`, `TITLE`, `POSITION`, `ALL` |
 //! | `UNSUB <topic>` | `OK` |
 //! | `QUIT` | closes |
+//! | `AUTH <password>` | `OK`; first line from the network when lmix-core has `--password` (API.7) |
 //!
 //! Subscribed changes arrive as `TALLY <digits>`, `STATE <json>`,
-//! `LEVELS <json>`, `OUTPUTS <json>` and `MIDI <json>` lines. A slow client misses
+//! `LEVELS <json>`, `OUTPUTS <json>`, `MIDI <json>` and `TITLE <json>` (a
+//! template's report) lines. A slow client misses
 //! intermediate changes but never a final one: after falling behind it
 //! gets the current tally and state again.
 
@@ -32,6 +34,9 @@ use crate::service::Service;
 /// Protocol version in the greeting.
 const VERSION: u32 = 1;
 
+/// How long a client from the network has to send `AUTH`.
+const AUTH_WAIT: std::time::Duration = std::time::Duration::from_secs(10);
+
 /// Longest line a client may send.
 const MAX_LINE: u64 = 64 * 1024;
 
@@ -45,7 +50,15 @@ impl Topics {
     const LEVELS: u8 = 4;
     const OUTPUTS: u8 = 8;
     const MIDI: u8 = 16;
-    const ALL: u8 = Self::TALLY | Self::STATE | Self::LEVELS | Self::OUTPUTS | Self::MIDI;
+    const TITLE: u8 = 32;
+    const POSITION: u8 = 64;
+    const ALL: u8 = Self::TALLY
+        | Self::STATE
+        | Self::LEVELS
+        | Self::OUTPUTS
+        | Self::MIDI
+        | Self::TITLE
+        | Self::POSITION;
 
     fn parse(name: &str) -> Option<u8> {
         match name.to_ascii_uppercase().as_str() {
@@ -54,6 +67,8 @@ impl Topics {
             "LEVELS" => Some(Self::LEVELS),
             "OUTPUTS" => Some(Self::OUTPUTS),
             "MIDI" => Some(Self::MIDI),
+            "TITLE" => Some(Self::TITLE),
+            "POSITION" => Some(Self::POSITION),
             "ALL" => Some(Self::ALL),
             _ => None,
         }
@@ -66,27 +81,50 @@ impl Topics {
             Event::Levels { .. } => Self::LEVELS,
             Event::Outputs { .. } => Self::OUTPUTS,
             Event::Midi { .. } => Self::MIDI,
+            Event::Title { .. } => Self::TITLE,
+            Event::Position { .. } => Self::POSITION,
         };
         self.0 & bit != 0
     }
 }
 
 /// Accept clients until the process ends.
-pub async fn serve(listen: SocketAddr, service: Arc<Service>) -> anyhow::Result<()> {
+pub async fn serve(
+    listen: SocketAddr,
+    service: Arc<Service>,
+    access: Arc<crate::access::Access>,
+) -> anyhow::Result<()> {
     let listener = TcpListener::bind(listen).await?;
     tracing::info!(%listen, "text protocol up");
     loop {
-        let (stream, peer) = listener.accept().await?;
+        let (mut stream, peer) = listener.accept().await?;
         let service = service.clone();
+        let access = access.clone();
         tokio::spawn(async move {
-            if let Err(error) = client(stream, service).await {
+            let password = match access.peer(peer.ip()) {
+                crate::access::Peer::Local => None,
+                crate::access::Peer::Network => access.password.is_some().then_some(access),
+                crate::access::Peer::Refused => {
+                    let _ = stream
+                        .write_all(b"ER forbidden lmix answers only on the local network\n")
+                        .await;
+                    return;
+                }
+            };
+            if let Err(error) = client(stream, service, password).await {
                 tracing::debug!(%peer, %error, "text client gone");
             }
         });
     }
 }
 
-async fn client(stream: TcpStream, service: Arc<Service>) -> std::io::Result<()> {
+/// One client; `password` holds the rules while it still has to send
+/// `AUTH`.
+async fn client(
+    stream: TcpStream,
+    service: Arc<Service>,
+    mut password: Option<Arc<crate::access::Access>>,
+) -> std::io::Result<()> {
     let (read, mut write) = stream.into_split();
     let mut events = service.subscribe();
     let mut topics = Topics::default();
@@ -99,8 +137,15 @@ async fn client(stream: TcpStream, service: Arc<Service>) -> std::io::Result<()>
     let (tx, mut lines) = mpsc::channel::<Line>(LINES_QUEUED);
     tokio::spawn(read_lines(read, tx));
 
+    // The password comes first and soon; a silent connection is closed.
+    let auth_deadline = tokio::time::sleep(AUTH_WAIT);
+    tokio::pin!(auth_deadline);
     loop {
         tokio::select! {
+            () = &mut auth_deadline, if password.is_some() => {
+                write.write_all(b"ER auth password needed (AUTH <password>)\n").await?;
+                return Ok(());
+            }
             line = lines.recv() => {
                 let line = match line {
                     Some(Line::Text(line)) => line,
@@ -110,6 +155,20 @@ async fn client(stream: TcpStream, service: Arc<Service>) -> std::io::Result<()>
                     }
                     None => return Ok(()),
                 };
+                if let Some(access) = &password {
+                    // Nothing before the password; a wrong one ends it.
+                    match line.trim_end_matches(['\r', '\n']).strip_prefix("AUTH ") {
+                        Some(given) if access.password_ok(given) => {
+                            password = None;
+                            write.write_all(b"OK\n").await?;
+                            continue;
+                        }
+                        _ => {
+                            write.write_all(b"ER auth password needed (AUTH <password>)\n").await?;
+                            return Ok(());
+                        }
+                    }
+                }
                 match answer(line.trim(), &service, &mut topics).await {
                     Some(reply) => write.write_all(reply.as_bytes()).await?,
                     None => return Ok(()),
@@ -222,6 +281,8 @@ fn event_line(event: &Event) -> String {
         Event::Levels { levels } => format!("LEVELS {}\n", json(levels)),
         Event::Outputs { stats } => format!("OUTPUTS {}\n", json(stats)),
         Event::Midi { midi } => format!("MIDI {}\n", json(midi)),
+        Event::Title { .. } => format!("TITLE {}\n", json(event)),
+        Event::Position { .. } => format!("POSITION {}\n", json(event)),
     }
 }
 
@@ -244,15 +305,49 @@ mod tests {
         tokio::io::Lines<BufReader<tokio::net::tcp::OwnedReadHalf>>,
         tokio::net::tcp::OwnedWriteHalf,
     ) {
+        connect_as(None).await
+    }
+
+    /// A client that still owes the password of `access`, if any.
+    async fn connect_as(
+        access: Option<Arc<crate::access::Access>>,
+    ) -> (
+        tokio::io::Lines<BufReader<tokio::net::tcp::OwnedReadHalf>>,
+        tokio::net::tcp::OwnedWriteHalf,
+    ) {
         let service = Service::new(2, Arc::new(NullEngine::default()), None);
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
         tokio::spawn(async move {
             let (stream, _) = listener.accept().await.unwrap();
-            client(stream, service).await.unwrap();
+            client(stream, service, access).await.unwrap();
         });
         let (read, write) = TcpStream::connect(addr).await.unwrap().into_split();
         (BufReader::new(read).lines(), write)
+    }
+
+    #[tokio::test]
+    async fn the_network_says_the_password_first() {
+        let access = Arc::new(crate::access::Access {
+            password: Some("p".into()),
+            ..Default::default()
+        });
+        let (mut lines, mut write) = connect_as(Some(access.clone())).await;
+        assert_eq!(lines.next_line().await.unwrap().unwrap(), "LMIX 1");
+        write.write_all(b"AUTH p\nTALLY\n").await.unwrap();
+        assert_eq!(lines.next_line().await.unwrap().unwrap(), "OK");
+        assert_eq!(lines.next_line().await.unwrap().unwrap(), "TALLY ");
+
+        let (mut lines, mut write) = connect_as(Some(access)).await;
+        lines.next_line().await.unwrap();
+        write.write_all(b"TALLY\n").await.unwrap();
+        assert!(lines
+            .next_line()
+            .await
+            .unwrap()
+            .unwrap()
+            .starts_with("ER auth"));
+        assert_eq!(lines.next_line().await.unwrap(), None, "closed");
     }
 
     #[tokio::test]

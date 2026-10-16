@@ -28,7 +28,7 @@ pub struct MidiMessage {
 }
 
 /// A note or controller; without a channel it matches on every channel.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
 pub struct MidiBinding {
     pub kind: MidiKind,
     #[serde(default)]

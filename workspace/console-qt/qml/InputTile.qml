@@ -12,6 +12,8 @@ import Kante
  */
 KanteCard {
     id: tile
+    // Small tiles (UI.3) never draw into their neighbours.
+    clip: true
 
     required property var core
     required property var input
@@ -27,6 +29,11 @@ KanteCard {
     property bool dropTarget: false
     signal replaceRequested()
     signal triggersRequested()
+    signal ptzRequested()
+    signal settingsRequested()
+    signal collapseRequested()
+    /** Dynamic slots (1–4) that name this input (AUT.5). */
+    property var dynamicSlots: []
     /** Drag to reorder: where the pointer is, in the window. */
     signal dragMoved(point scenePosition)
     signal dragEnded(point scenePosition)
@@ -114,6 +121,17 @@ KanteCard {
                 text: tile.input.name
                 elide: Text.ElideRight
             }
+            // Media files not found (SHW.4).
+            KanteSectionLabel {
+                readonly property var missing: tile.input.missing || []
+                visible: missing.length > 0
+                text: qsTr("Missing")
+                color: KanteStyle.negativeTextColor
+                Accessible.name: qsTr("Missing files: %1").arg(missing.join(", "))
+                QQC2.ToolTip.visible: missingHover.containsMouse
+                QQC2.ToolTip.text: qsTr("Not found:") + "\n" + missing.join("\n")
+                MouseArea { id: missingHover; anchors.fill: parent; hoverEnabled: true; acceptedButtons: Qt.NoButton }
+            }
             KanteSwatch {
                 visible: tile.input.color !== null
                 size: KanteSwatch.Size.Dense
@@ -128,6 +146,12 @@ KanteCard {
                 visible: tile.onProgram || tile.onPreview
                 text: tile.onProgram ? qsTr("PGM") : qsTr("PRV")
                 color: tile.barColor
+            }
+            KanteSectionLabel {
+                visible: tile.dynamicSlots.length > 0
+                text: tile.dynamicSlots.map(n => "D" + n).join(" ")
+                color: KanteStyle.infoColor
+                Accessible.name: qsTr("Dynamic input %1").arg(tile.dynamicSlots.join(", "))
             }
             KanteSectionLabel {
                 visible: tile.overlayChannels.length > 0
@@ -147,6 +171,8 @@ KanteCard {
             spacing: Kirigami.Units.smallSpacing
 
             KanteSectionLabel {
+                // Small tiles (UI.3): the buttons alone.
+                visible: tile.width >= Kirigami.Units.gridUnit * 11
                 text: qsTr("Overlay")
                 color: KanteStyle.mutedTextColor
             }
@@ -221,9 +247,18 @@ KanteCard {
         KantePopupSkin { popup: menu }
 
         QQC2.MenuItem {
+            text: qsTr("Settings…")
+            onTriggered: tile.settingsRequested()
+        }
+
+        QQC2.MenuItem {
             text: qsTr("Cut to program")
             enabled: !tile.onProgram
             onTriggered: tile.act({ action: "cut_direct", input: tile.ref() })
+        }
+        QQC2.MenuItem {
+            text: qsTr("Collapse")
+            onTriggered: tile.collapseRequested()
         }
         QQC2.MenuItem {
             text: qsTr("Rename…")
@@ -241,6 +276,18 @@ KanteCard {
         QQC2.MenuItem {
             text: tile.input.triggers && tile.input.triggers.length > 0 ? qsTr("Triggers (%1)…").arg(tile.input.triggers.length) : qsTr("Triggers…")
             onTriggered: tile.triggersRequested()
+        }
+        ChoiceMenu {
+            title: qsTr("Dynamic input")
+            choices: [1, 2, 3, 4].map(n => ({ value: n, label: tile.dynamicSlots.indexOf(n) >= 0
+                ? qsTr("Clear dynamic %1").arg(n) : qsTr("Make it dynamic %1").arg(n) }))
+            onPicked: value => tile.act({ action: "set_dynamic_input", slot: value,
+                input: tile.dynamicSlots.indexOf(value) >= 0 ? null : tile.ref() })
+        }
+        QQC2.MenuItem {
+            text: qsTr("PTZ…")
+            enabled: tile.hasPicture
+            onTriggered: tile.ptzRequested()
         }
         ChoiceMenu {
             title: qsTr("Colour tag")
@@ -304,6 +351,15 @@ KanteCard {
                 { value: "next", label: qsTr("Next") }
             ]
             onPicked: value => tile.act({ action: "transport_input", input: tile.ref(), transport: value })
+        }
+        // A playlist's items, to play one (UI.4).
+        ChoiceMenu {
+            title: qsTr("Play item")
+            enabled: tile.input.source.kind === "playlist"
+            choices: tile.input.source.kind === "playlist"
+                ? tile.input.source.paths.map((p, i) => ({ value: i + 1, label: (i + 1) + "  " + p.split("/").pop() }))
+                : []
+            onPicked: value => tile.act({ action: "play_item", input: tile.ref(), item: value })
         }
         ChoiceMenu {
             title: qsTr("Send to this input (copy link)")

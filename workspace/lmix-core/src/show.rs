@@ -12,8 +12,9 @@ use std::path::Path;
 use lmix_types::action::{OVERLAY_CHANNELS, TRANSITION_SLOTS};
 use lmix_types::input::AUX_BUSES;
 use lmix_types::{
-    Action, AuxBus, ChannelStrip, Cue, Effect, InputAudio, InputColor, InputId, LayoutBox, Look,
-    MidiBinding, OutputId, OutputSource, OutputSpec, SignalLoss, SourceSpec, Transition,
+    Action, AuxBus, ChannelStrip, Cue, DataSourceSpec, Dataset, Effect, FieldBinding, InputAudio,
+    InputColor, InputId, LayerTransform, LayoutBox, Look, MidiBinding, OutputId, OutputSource,
+    OutputSpec, SignalLoss, SourceSpec, TitleData, TitlePhase, TitleTrigger, Transition,
     TransitionSlot, Trigger,
 };
 use serde::{Deserialize, Serialize};
@@ -46,6 +47,9 @@ pub struct ShowInput {
     pub look: Look,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub triggers: Vec<Trigger>,
+    /// The camera's PTZ address (PER.2).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ptz: Option<lmix_types::PtzSpec>,
 }
 
 /// Everything a show file holds.
@@ -73,6 +77,58 @@ pub struct Show {
     /// MIDI controller on the T-bar.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub midi_tbar: Option<MidiBinding>,
+    /// Graphics channels with their titles, as they stand (like program).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub graphics: Vec<ShowGraphics>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub datasets: Vec<Dataset>,
+    /// Data sources; their rows are read from the files again.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub data_sources: Vec<ShowDataSource>,
+}
+
+/// One graphics channel as saved.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ShowGraphics {
+    pub id: InputId,
+    pub name: String,
+    #[serde(default)]
+    pub layers: Vec<ShowTitle>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub triggers: Vec<TitleTrigger>,
+}
+
+/// One title layer as saved.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ShowTitle {
+    pub layer: u32,
+    pub template: String,
+    #[serde(default)]
+    pub data: TitleData,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub bindings: Vec<FieldBinding>,
+    #[serde(default)]
+    pub phase: TitlePhase,
+    #[serde(default)]
+    pub step: u32,
+    /// Where the layer sits (kept when another template is loaded).
+    #[serde(default, skip_serializing_if = "LayerTransform::is_rest")]
+    pub transform: LayerTransform,
+}
+
+/// One data source as saved.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ShowDataSource {
+    pub id: InputId,
+    pub name: String,
+    pub spec: DataSourceSpec,
+    /// Selected row, 1-based.
+    #[serde(default)]
+    pub row: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub auto_ms: Option<u32>,
+    #[serde(default)]
+    pub loop_rows: bool,
 }
 
 /// One cue list as saved; where GO stands is not saved.
@@ -139,6 +195,9 @@ impl Default for Show {
             shortcuts: Vec::new(),
             cue_lists: Vec::new(),
             midi_tbar: None,
+            graphics: Vec::new(),
+            datasets: Vec::new(),
+            data_sources: Vec::new(),
         }
     }
 }
@@ -188,15 +247,42 @@ pub enum ShowFileError {
     TooNew { path: String, found: u32 },
 }
 
-/// Write atomically: temp file next to the target, then rename, so a crash
-/// never leaves a half-written show (SHW.5).
-pub async fn save(show: &Show, path: &Path) -> Result<(), ShowFileError> {
+/// Largest show file read.
+const MAX_SHOW_BYTES: u64 = 64 * 1024 * 1024;
+
+/// The show as a file's bytes.
+pub fn to_bytes(show: &Show) -> Vec<u8> {
     let file = ShowFile {
         format: FILE_FORMAT.to_string(),
         version: FILE_VERSION,
         show: show.clone(),
     };
-    let json = serde_json::to_vec_pretty(&file).expect("show serializes");
+    serde_json::to_vec_pretty(&file).expect("show serializes")
+}
+
+/// A show from a file's bytes; `name` for errors.
+pub fn from_bytes(bytes: &[u8], name: &str) -> Result<Show, ShowFileError> {
+    let format_err = |reason: String| ShowFileError::Format {
+        path: name.to_string(),
+        reason,
+    };
+    let file: ShowFile = serde_json::from_slice(bytes).map_err(|e| format_err(e.to_string()))?;
+    if file.format != FILE_FORMAT {
+        return Err(format_err(format!("format is \"{}\"", file.format)));
+    }
+    if file.version > FILE_VERSION {
+        return Err(ShowFileError::TooNew {
+            path: name.to_string(),
+            found: file.version,
+        });
+    }
+    Ok(file.show)
+}
+
+/// Write atomically: temp file next to the target, then rename, so a crash
+/// never leaves a half-written show (SHW.5).
+pub async fn save(show: &Show, path: &Path) -> Result<(), ShowFileError> {
+    let json = to_bytes(show);
     let shown = path.display().to_string();
     let write_err = |source| ShowFileError::Write {
         path: shown.clone(),
@@ -210,6 +296,20 @@ pub async fn save(show: &Show, path: &Path) -> Result<(), ShowFileError> {
 
 pub async fn load(path: &Path) -> Result<Show, ShowFileError> {
     let shown = path.display().to_string();
+    // A show is a regular file of reasonable size (not a device, a pipe
+    // or something huge someone points the API at).
+    let meta = tokio::fs::metadata(path)
+        .await
+        .map_err(|source| ShowFileError::Read {
+            path: shown.clone(),
+            source,
+        })?;
+    if !meta.is_file() || meta.len() > MAX_SHOW_BYTES {
+        return Err(ShowFileError::Format {
+            path: shown,
+            reason: "not a show file (a regular file up to 64 MB)".into(),
+        });
+    }
     let bytes = tokio::fs::read(path)
         .await
         .map_err(|source| ShowFileError::Read {
@@ -217,23 +317,7 @@ pub async fn load(path: &Path) -> Result<Show, ShowFileError> {
             source,
         })?;
 
-    let format_err = |reason: String| ShowFileError::Format {
-        path: shown.clone(),
-        reason,
-    };
-    let file: ShowFile = serde_json::from_slice(&bytes).map_err(|e| format_err(e.to_string()))?;
-
-    if file.format != FILE_FORMAT {
-        return Err(format_err(format!("format is \"{}\"", file.format)));
-    }
-    if file.version > FILE_VERSION {
-        return Err(ShowFileError::TooNew {
-            path: shown,
-            found: file.version,
-        });
-    }
-
-    Ok(file.show)
+    from_bytes(&bytes, &shown)
 }
 
 #[cfg(test)]
@@ -272,8 +356,13 @@ mod tests {
                     on: TriggerOn::Program,
                     delay_ms: 2000,
                     before_ms: None,
+                    at_ms: None,
                     actions: vec![Action::FadeToBlack { duration_ms: 500 }],
                 }],
+                ptz: Some(lmix_types::PtzSpec {
+                    address: "10.0.0.20:52381".into(),
+                    protocol: lmix_types::PtzProtocol::ViscaIp,
+                }),
             }],
             preview: Some(id),
             program: None,
@@ -328,6 +417,52 @@ mod tests {
                 },
                 source: OutputSource::Input(id),
                 aux: Some(2),
+            }],
+            graphics: vec![ShowGraphics {
+                id: InputId::new(),
+                name: "Titles".into(),
+                layers: vec![ShowTitle {
+                    layer: 2,
+                    template: "lmix/name-role".into(),
+                    data: TitleData::from([("name".into(), "N".into())]),
+                    bindings: vec![FieldBinding {
+                        field: "role".into(),
+                        source: id,
+                        column: "2".into(),
+                        format: Some("({0})".into()),
+                        row: Some(3),
+                    }],
+                    phase: TitlePhase::Playing,
+                    step: 1,
+                    transform: LayerTransform {
+                        x: 0.1,
+                        opacity: 0.5,
+                        ..Default::default()
+                    },
+                }],
+                triggers: vec![TitleTrigger {
+                    report: Some("zero".into()),
+                    layer: Some(2),
+                    delay_ms: 0,
+                    actions: vec![Action::Cut],
+                }],
+            }],
+            datasets: vec![Dataset {
+                name: "Guest".into(),
+                template: Some("lmix/name-role".into()),
+                data: TitleData::from([("name".into(), "N".into())]),
+            }],
+            data_sources: vec![ShowDataSource {
+                id,
+                name: "Guests".into(),
+                spec: DataSourceSpec::Csv {
+                    path: "guests.csv".into(),
+                    header: true,
+                    transpose: false,
+                },
+                row: 2,
+                auto_ms: Some(5000),
+                loop_rows: true,
             }],
         }
     }

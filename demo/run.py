@@ -121,6 +121,19 @@ def mixer():
     return "cuda" if shutil.which("nvidia-smi") else "gl"
 
 
+def titles(lang):
+    """A graphics channel with the night programme's titles: the show as a
+    lower third, the guest with their role, a clock (all from the world)."""
+    show = WORLD["graufeld"]["radio_show"]
+    guest = WORLD["graufeld"]["contact"]
+    act({"action": "add_graphics", "name": show["name"]})
+    act({"action": "title_load", "graphics": 1, "layer": 1, "template": "lmix/lower-third",
+         "data": {"headline": show["name"], "text": f"{show['slot']} · {text(show['about'], lang)}"}})
+    act({"action": "title_load", "graphics": 1, "layer": 2, "template": "lmix/name-role",
+         "data": {"name": guest["name"], "role": text(guest["role"], lang)}, "play": True})
+    act({"action": "title_load", "graphics": 1, "layer": 8, "template": "lmix/clock", "play": True})
+
+
 def stage(lang, work):
     """The show from the world: inputs, colours, buses, outputs."""
     ids = {}
@@ -146,6 +159,7 @@ def stage(lang, work):
         act(action)
         if out["running"]:
             act({"action": "start_output", "output": text(out["name"], lang)})
+    titles(lang)
     act({"action": "save_show", "path": str(work / STREAM["file"])})
 
 
@@ -202,7 +216,10 @@ def main():
         procs.append(subprocess.Popen([core, "--strom", f"http://127.0.0.1:{STROM_PORT}",
                                        "--listen", f"127.0.0.1:{CORE_PORT}", "--mixer", mixer(),
                                        "--slots", str(len(STREAM["inputs"])),
-                                       "--autosave", str(work / "autosave.lmix"), "--live-dir", str(live)],
+                                       "--autosave", str(work / "autosave.lmix"),
+                                       # Not the operator's shortcuts for all shows.
+                                       "--shortcuts", str(work / "shortcuts.json"),
+                                       "--live-dir", str(live)],
                                       env=env, stdout=log, stderr=log))
         wait_up(f"{CORE}/state", "lmix-core")
         stage(lang, work)

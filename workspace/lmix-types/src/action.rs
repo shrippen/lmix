@@ -14,6 +14,9 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::automation::{Cue, Trigger};
+use crate::graphics::{
+    BindingSpec, DataSourceSpec, Easing, LayerTransform, TitleData, TitleTrigger,
+};
 use crate::input::{
     ChannelStrip, InputColor, InputRef, Listen, Look, SignalLoss, SourceSpec, Transport, AUX_BUSES,
 };
@@ -42,6 +45,9 @@ pub struct StingerSpec {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(transparent)]
 pub struct TransitionSlot(pub u8);
+
+/// Dynamic inputs and values, numbered 1–4 (AUT.5).
+pub const DYNAMIC_SLOTS: u8 = 4;
 
 /// Number of transition buttons.
 pub const TRANSITION_SLOTS: u8 = 4;
@@ -98,6 +104,157 @@ impl Effect {
     }
 }
 
+/// Groups of actions (API.1), like vMix's function groups, for catalogs
+/// and controller software: `GET /api/actions` marks each action with
+/// `x-group`. A test keeps every action in exactly one group.
+pub const ACTION_GROUPS: &[(&str, &[&str])] = &[
+    (
+        "switching",
+        &[
+            "preview_input",
+            "cut",
+            "cut_direct",
+            "transition",
+            "set_transition",
+            "fade_to_black",
+            "t_bar",
+            "set_midi_tbar",
+        ],
+    ),
+    (
+        "input",
+        &[
+            "add_input",
+            "remove_input",
+            "restore_input",
+            "replace_source",
+            "rename_input",
+            "set_input_color",
+            "set_look",
+            "set_signal_loss",
+            "transport_input",
+            "seek_input",
+            "play_item",
+            "move_input",
+        ],
+    ),
+    ("overlay", &["overlay_in", "overlay_out"]),
+    (
+        "layout",
+        &[
+            "add_layout",
+            "set_layout",
+            "remove_layout",
+            "preview_layout",
+        ],
+    ),
+    (
+        "audio",
+        &[
+            "set_audio",
+            "set_audio_follow",
+            "set_volume",
+            "set_channel_strip",
+            "set_aux_send",
+            "set_aux_bus",
+            "set_listen",
+            "clear_listen",
+        ],
+    ),
+    (
+        "output",
+        &["add_output", "remove_output", "start_output", "stop_output"],
+    ),
+    (
+        "title",
+        &[
+            "add_graphics",
+            "remove_graphics",
+            "rename_graphics",
+            "title_load",
+            "title_play",
+            "title_next",
+            "title_stop",
+            "title_clear",
+            "title_update",
+            "title_add",
+            "title_transform",
+            "title_call",
+            "title_bind",
+            "set_title_triggers",
+            "title_report",
+            "save_dataset",
+            "remove_dataset",
+            "apply_dataset",
+            "dataset_next",
+            "dataset_previous",
+            "import_datasets",
+            "export_datasets",
+        ],
+    ),
+    (
+        "data",
+        &[
+            "add_data_source",
+            "remove_data_source",
+            "data_row",
+            "data_next",
+            "data_previous",
+            "set_data_auto",
+        ],
+    ),
+    (
+        "automation",
+        &[
+            "set_triggers",
+            "add_cue_list",
+            "set_cue_list",
+            "remove_cue_list",
+            "cue_go",
+            "cue_back",
+            "cue_jump",
+            "add_shortcut",
+            "set_shortcut",
+            "remove_shortcut",
+            "run_shortcut",
+            "set_dynamic_input",
+            "set_dynamic_value",
+        ],
+    ),
+    (
+        "ptz",
+        &[
+            "set_ptz",
+            "ptz_move",
+            "ptz_zoom",
+            "ptz_focus",
+            "ptz_home",
+            "ptz_preset",
+        ],
+    ),
+    (
+        "show",
+        &[
+            "new_show",
+            "save_show",
+            "open_show",
+            "append_show",
+            "relocate_media",
+            "export_package",
+            "import_package",
+        ],
+    ),
+    ("safety", &["set_lock"]),
+];
+
+/// The group of an action by its name (`cut`, `title_load`).
+pub fn action_group(name: &str) -> Option<&'static str> {
+    ACTION_GROUPS
+        .iter()
+        .find(|(_, names)| names.contains(&name))
+        .map(|(group, _)| *group)
+}
+
 /// Every operation, whatever triggered it.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "action", rename_all = "snake_case")]
@@ -132,6 +289,11 @@ pub enum Action {
         input: InputRef,
         transport: Transport,
     },
+    /// Jump to `position_ms` in the item a file, URL or playlist input
+    /// plays (UI.5).
+    SeekInput { input: InputRef, position_ms: u64 },
+    /// Play item `item` (1-based) of a playlist input (UI.4).
+    PlayItem { input: InputRef, item: u32 },
 
     // ---- Outputs (OUT, REC, STR) ----
     /// Add an output to the show; it starts stopped.
@@ -299,6 +461,227 @@ pub enum Action {
         duration_ms: u32,
     },
 
+    // ---- Dynamic inputs and values (AUT.5) ----
+    /// Let `"dynamic<slot>"` (1–4) name `input` in later actions; null
+    /// empties it. One key picks the input, another acts on it.
+    SetDynamicInput {
+        slot: u8,
+        #[serde(default)]
+        input: Option<InputRef>,
+    },
+    /// Set dynamic value `slot` (1–4); title texts and function arguments
+    /// show it where they say `{value<slot>}`.
+    SetDynamicValue { slot: u8, value: String },
+
+    // ---- PTZ (PER.2) ----
+    /// Set or clear (null) the PTZ address of an input's camera.
+    SetPtz {
+        input: InputRef,
+        #[serde(default)]
+        ptz: Option<crate::ptz::PtzSpec>,
+    },
+    /// Pan and tilt at a speed: −1 (left, down) to 1 (right, up); 0 0
+    /// stops.
+    PtzMove {
+        input: InputRef,
+        pan: f32,
+        tilt: f32,
+    },
+    /// Zoom at a speed: −1 (wide) to 1 (tele); 0 stops.
+    PtzZoom { input: InputRef, speed: f32 },
+    /// Focus: auto, manual, near, far, stop.
+    PtzFocus {
+        input: InputRef,
+        focus: crate::ptz::PtzFocus,
+    },
+    /// Back to the camera's home position.
+    PtzHome { input: InputRef },
+    /// Go to preset `preset` (0–127), or store the position there.
+    PtzPreset {
+        input: InputRef,
+        preset: u8,
+        #[serde(default)]
+        store: bool,
+    },
+
+    // ---- Titles (GFX) ----
+    /// Add a graphics channel: a page of title layers to render as an
+    /// input or overlay.
+    AddGraphics {
+        #[serde(default)]
+        name: Option<String>,
+    },
+    /// Remove a graphics channel and its layers.
+    RemoveGraphics { graphics: InputRef },
+    /// Rename a graphics channel.
+    RenameGraphics { graphics: InputRef, name: String },
+    /// Load `template` on `layer` (1–8) with `data`, replacing what the
+    /// layer held; `play` plays it at once (CasparCG `CG ADD`).
+    TitleLoad {
+        graphics: InputRef,
+        #[serde(default = "first_layer")]
+        layer: u32,
+        template: String,
+        #[serde(default)]
+        data: TitleData,
+        #[serde(default)]
+        play: bool,
+    },
+    /// Play the layer's title (in animation); again from the start if it
+    /// played already.
+    TitlePlay {
+        graphics: InputRef,
+        #[serde(default = "first_layer")]
+        layer: u32,
+    },
+    /// Next step of a multi-step title.
+    TitleNext {
+        graphics: InputRef,
+        #[serde(default = "first_layer")]
+        layer: u32,
+    },
+    /// Stop the title: it plays its out animation.
+    TitleStop {
+        graphics: InputRef,
+        #[serde(default = "first_layer")]
+        layer: u32,
+    },
+    /// Remove the title at once; without `layer` all layers.
+    TitleClear {
+        graphics: InputRef,
+        #[serde(default)]
+        layer: Option<u32>,
+    },
+    /// Set fields (others keep their values); an empty value clears one.
+    TitleUpdate {
+        graphics: InputRef,
+        #[serde(default = "first_layer")]
+        layer: u32,
+        data: TitleData,
+    },
+    /// Add `amount` to a number field (a score +1); an empty or
+    /// non-number field counts as 0.
+    TitleAdd {
+        graphics: InputRef,
+        #[serde(default = "first_layer")]
+        layer: u32,
+        field: String,
+        #[serde(default = "one")]
+        amount: f64,
+    },
+    /// Place the layer (GFX.18): position, size, turn, tilt, crop,
+    /// opacity, colour, blend; all values together, moving there in
+    /// `duration_ms` (0: at once).
+    TitleTransform {
+        graphics: InputRef,
+        #[serde(default = "first_layer")]
+        layer: u32,
+        transform: LayerTransform,
+        #[serde(default)]
+        duration_ms: u32,
+        #[serde(default)]
+        easing: Easing,
+    },
+    /// Call a function of the template (CasparCG `CG INVOKE`).
+    TitleCall {
+        graphics: InputRef,
+        #[serde(default = "first_layer")]
+        layer: u32,
+        function: String,
+        #[serde(default)]
+        args: Vec<String>,
+    },
+    /// Feed a field from a data source column; `binding` null unbinds.
+    TitleBind {
+        graphics: InputRef,
+        #[serde(default = "first_layer")]
+        layer: u32,
+        field: String,
+        #[serde(default)]
+        binding: Option<BindingSpec>,
+    },
+    /// Replace the channel's triggers on template reports.
+    SetTitleTriggers {
+        graphics: InputRef,
+        triggers: Vec<TitleTrigger>,
+    },
+    /// Sent by the graphics page: the template reported `event` (e.g.
+    /// `done` after its out animation, `zero` of a countdown).
+    TitleReport {
+        graphics: InputRef,
+        layer: u32,
+        event: String,
+    },
+    /// Save field values under `name` (GFX.8); replaces a set of that
+    /// name.
+    SaveDataset {
+        name: String,
+        #[serde(default)]
+        template: Option<String>,
+        data: TitleData,
+    },
+    /// Remove a saved set.
+    RemoveDataset { name: String },
+    /// Set a layer's fields from a saved set.
+    ApplyDataset {
+        graphics: InputRef,
+        #[serde(default = "first_layer")]
+        layer: u32,
+        name: String,
+    },
+
+    /// Apply the next saved set to the layer (sets of its template, or
+    /// of none); after the last, the first again.
+    DatasetNext {
+        graphics: InputRef,
+        #[serde(default = "first_layer")]
+        layer: u32,
+    },
+    /// Apply the set before.
+    DatasetPrevious {
+        graphics: InputRef,
+        #[serde(default = "first_layer")]
+        layer: u32,
+    },
+    /// Read sets from a CSV file: a column `name`, the others are fields;
+    /// sets of the same name are replaced.
+    ImportDatasets {
+        path: String,
+        #[serde(default)]
+        template: Option<String>,
+    },
+    /// Write the sets (of `template`, or all) to a CSV file.
+    ExportDatasets {
+        path: String,
+        #[serde(default)]
+        template: Option<String>,
+    },
+
+    // ---- Data sources (DAT) ----
+    /// Add a data source; lmix-core reads the file and follows changes.
+    AddDataSource {
+        spec: DataSourceSpec,
+        #[serde(default)]
+        name: Option<String>,
+    },
+    /// Remove a data source; fields bound to it keep their last values.
+    RemoveDataSource { source: InputRef },
+    /// Select row `row` (1-based).
+    DataRow { source: InputRef, row: u32 },
+    /// Select the next row (the first after the last with `loop_rows`).
+    DataNext { source: InputRef },
+    /// Select the previous row.
+    DataPrevious { source: InputRef },
+    /// Move on every `interval_ms` (null stops), and whether to start
+    /// again after the last row.
+    SetDataAuto {
+        source: InputRef,
+        #[serde(default)]
+        interval_ms: Option<u32>,
+        #[serde(default)]
+        loop_rows: bool,
+    },
+
     // ---- Show (SHW) ----
     /// Start an empty show.
     NewShow,
@@ -309,6 +692,21 @@ pub enum Action {
     },
     /// Open a show file, replacing the current show.
     OpenShow { path: String },
+    /// Look for the missing media files of all inputs in `folder` (by
+    /// file name) and use those found (SHW.4).
+    RelocateMedia { folder: String },
+    /// Add inputs of another show file to this one, with their settings
+    /// (SHW.3): `inputs` by number in that show, all if empty.
+    AppendShow {
+        path: String,
+        #[serde(default)]
+        inputs: Vec<u32>,
+    },
+    /// Write the show with its media, data files and own title templates
+    /// into one package file (SHW.6).
+    ExportPackage { path: String },
+    /// Unpack a package into `folder` (new or empty) and open its show.
+    ImportPackage { path: String, folder: String },
 }
 
 /// Default FTB fade.
@@ -320,6 +718,14 @@ fn default_ftb_ms() -> u32 {
 
 fn default_overlay_ms() -> u32 {
     DEFAULT_OVERLAY_MS
+}
+
+fn first_layer() -> u32 {
+    1
+}
+
+fn one() -> f64 {
+    1.0
 }
 
 /// Why an action was refused. Clients show `message` (API.9: errors with
@@ -389,6 +795,24 @@ pub enum ActionError {
     NoLooks,
     #[error("channel strip: {field} is out of range")]
     BadStrip { field: String },
+    #[error("dynamic slot {slot} does not exist (1–{max})")]
+    BadDynamic { slot: u8, max: u8 },
+    #[error("PTZ: {reason}")]
+    BadPtz { reason: String },
+    #[error("no graphics channel {reference}")]
+    UnknownGraphics { reference: String },
+    #[error("all {max} graphics channels are in use")]
+    GraphicsFull { max: usize },
+    #[error("no template {template}")]
+    UnknownTemplate { template: String },
+    #[error("title: {reason}")]
+    BadTitle { reason: String },
+    #[error("no data set {name}")]
+    UnknownDataset { name: String },
+    #[error("no data source {reference}")]
+    UnknownDataSource { reference: String },
+    #[error("data source: {reason}")]
+    BadDataSource { reason: String },
     #[error("show has no file yet; give a path")]
     NoShowPath,
     #[error("show file: {message}")]

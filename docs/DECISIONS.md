@@ -1217,3 +1217,607 @@ Zustand als JSON.
 **Offen**: Bewegung zwischen Layouts; MIDI-Rückmeldung; globale Tasten
 am echten KDE prüfen (H.32), MIDI mit echtem Controller (H.31).
 
+## 2026-10-11 — M7 Teil A: Titel und Datenquellen ohne Render-Engine
+
+**Kontext**: Titel sind Muss (§3.11, GFX). Die Engine-Wahl (E.9, CEF
+gegen WPE) hängt am Benchmark M7.0, der eine freie GPU braucht; auf dem
+Entwicklungsrechner gibt es zudem weder `cefsrc` noch `wpesrc`. Alles,
+was nicht von der Engine abhängt, sollte trotzdem fertig werden.
+**Optionen**: (a) Vorlagen über eine Engine-Schnittstelle direkt
+ansteuern (cefsrc: `listen-for-js-signals`, WPE: `run-javascript`), je
+Engine eigener Code; (b) eine Seite je Grafikkanal, die lmix-core selbst
+ausliefert und die dem Zustand über `/api/events` folgt; die Engine
+rendert nur eine URL.
+**Entscheidung**: (b). Ein **Grafikkanal** (`add_graphics`, bis 8) ist
+die Seite `/graphics/<n>`: bis zu 8 Ebenen, je ein `iframe` mit einer
+Vorlage, transparent, 1920×1080 (oder `?size=1080x1920`). Die Seite
+gleicht Zustand und Vorlage ab: neue Vorlage oder neue Revision → laden,
+`update()`; andere Werte → `update()`; Phase/`played`/`step` → `play()`,
+`next()`, `stop()`; neue `call.seq` → Funktion aufrufen. Damit gilt die
+CasparCG-Konvention unverändert (GFX.1), CasparCG-XML wählt das Manifest
+(`data_format: xml`, GFX.3). Dieselbe Seite ist im Browser die Vorschau
+(GFX.13) und läuft in CEF wie in WPE: E.9 bleibt offen, GFX.2 braucht
+nur noch „URL als Input“ in strom.
+**Lebenszyklus** (GFX.4): `title_load` (mit `play`), `title_play`,
+`title_next`, `title_stop`, `title_clear`, `title_update` (Felder
+mischen, leer entfernt), `title_call`. Die Vorlage meldet über das SDK
+(`lmixTitle.report`), die Seite schickt `title_report`, lmix-core gibt
+es als `Event::Title` weiter (Textprotokoll `TITLE`). Nur die
+Renderer-Seite meldet, `?preview`-Seiten nicht (sonst doppelt).
+**Vorlagen**: eingebaut (Kante-Satz, im Binary über `build.rs`, Kante-
+Tokens und Schriften per `scripts/sync-kante.sh`, offline) und ein
+Ordner (`--templates`), je Vorlage `index.html` + `manifest.json` oder
+eine einzelne `.html` (+ `.json`). Das Manifest beschreibt Felder (Text,
+mehrzeilig, Zahl, Farbe, Bild, Schalter, Auswahl), `steps`,
+`functions`. Ordner-Vorlagen bekommen eine Revision aus den Dateizeiten;
+ändert sich eine Datei, lädt die Seite die Vorlage neu und gibt ihr die
+gleichen Daten (GFX.14). Pfade bleiben im Ordner (auch über Links).
+**Vorlagensatz** (GFX.12): Bauchbinde, Name+Funktion, Laufschrift
+(Tempo, Richtung, `append`), Uhr, Countdown (Dauer oder Uhrzeit, ab-
+oder aufwärts, `start`/`pause`/`reset`/`adjust`, meldet `zero`, GFX.9),
+Spielstand, Vollbild-Karte (zweiter Schritt). Hochkant über
+`orientation: portrait`. Kante: Schnittecke, Akzentleiste, Rajdhani,
+JetBrains Mono, Bewegung aus den Kante-Dauern; die Wischblende ist eine
+Maske, damit die Schnittecke (clip-path) bleibt.
+**Datensätze** (GFX.8): `save_dataset`, `apply_dataset`,
+`remove_dataset`, in der Show.
+**Datenquellen** (DAT.1 teils, DAT.2–5): CSV (Trennzeichen geraten,
+Anführungszeichen, Kopfzeile wahlweise) und JSON (Array von Objekten,
+Spalten in Dateireihenfolge); Pfade relativ zur Show-Datei. lmix-core
+liest neu, wenn sich die Datei ändert. `title_bind` legt ein Feld auf
+eine Spalte (Name oder Nummer, Muster `{0}`); `data_row`, `data_next`,
+`data_previous`, `set_data_auto` (ab 500 ms, Schleife). Wird eine Quelle
+entfernt, behalten gebundene Felder ihren letzten Wert.
+**Console**: „Titles…“ (Kanäle, Ebenen 1–8 mit Stand, Vorlage laden,
+Formular aus dem Manifest, Live oder „Apply“, Funktionen, Datensätze,
+Feld an Spalte binden, Vorschau im Browser) und „Data…“ (Tabelle, Zeile
+per Klick, vor/zurück, Weiterschalten mit Schleife).
+**Demo**: die Sendehaus-Show bekommt einen Grafikkanal mit Sendung,
+Gast und Uhr aus der Studio-Weber-Welt.
+**Geprüft**: Rust-Tests (Switcher, Show-Datei, API, Vorlagen, CSV/JSON);
+`scripts/test-titles.sh` in Chromium (ohne GPU): laden unsichtbar,
+spielen, Feld ändern, stoppen mit `done`, zweiter Schritt, entfernen,
+Countdown meldet `zero`, Ordner-Vorlage mit XML-Daten und Funktions-
+aufruf, Datei geändert → neu geladen mit Daten, CSV-Feld folgt Zeile und
+Datei, Vorschau meldet nichts, Vorlage allein mit Vorschauleiste. Console
+unter Xvfb per Klick (Abspielen, Feld live, Zeile wählen).
+**Keine neue Abhängigkeit** (CSV und geordnetes JSON von Hand).
+**Auslöser auf Meldungen** (GFX.9, B36): ein Grafikkanal hat eigene
+Auslöser (`set_title_triggers`): Meldung (`zero`, `done`, leer = jede),
+wahlweise nur von einer Ebene, Verzögerung, 1–16 Aktionen; dieselben
+Grenzen wie bei Input-Auslösern (höchstens 8, keine Automatik in den
+Aktionen). Console: „Triggers…“ im Titel-Dialog (der Auslöser-Dialog der
+Inputs mit Meldung und Ebene statt Ereignis). Browser-Test: Countdown bei
+0 lädt einen Titel.
+**Zahl hochzählen** (B35): `title_add` addiert auf ein Feld (Standard
++1; leer oder keine Zahl zählt als 0), in der Console „−1“/„+1“ an
+Zahlenfeldern, als Kurzbefehl auf jede Taste oder Stream-Deck-Taste.
+**Textfolien** (GFX.21): Vorlage `lmix/text-slides`, Folien durch
+Leerzeilen getrennt; `next` zeigt die nächste, Funktion `back` die
+vorige, die letzte meldet `last`; Layout unten (Stream) oder ganzes Bild
+(Beamer).
+**Quellen im Netz und Text** (DAT.1, DAT.2): eine Quelle darf eine
+`http(s)://`-Adresse sein (öffentliches Google Sheet über den CSV-Export
+`…/export?format=csv`); lmix-core holt sie alle 10 s (höchstens 16 MB,
+10 s Zeitlimit) und meldet nur Änderungen. Typ `text`: jede nicht leere
+Zeile eine Zeile mit der Spalte `text` (Laufschrift, Folien). Dateien
+und Adressen laufen in einer eigenen Schleife, damit ein langsamer
+Abruf das Weiterschalten nicht aufhält.
+**Sprachen der Vorlagen**: ein Manifest kann `i18n` je Sprache haben
+(Name, Feldbezeichnungen, Anzeige der Auswahlwerte); die Console nimmt
+ihre Sprache, die Vorschauleiste die des Browsers. Der eingebaute Satz
+hat Deutsch (ein Test prüft, dass kein Feld fehlt); die Werte selbst
+bleiben die englischen Schlüssel (`left`, `down`).
+**Ebenen-Transformation** (GFX.18): `title_transform` setzt alle Werte
+einer Ebene zugleich (Verschiebung, Größe, Drehung, Neigung mit
+Perspektive, Zuschnitt, Deckkraft, Helligkeit/Kontrast/Sättigung,
+Blend-Modus) und bewegt sie in `duration_ms` mit Easing dorthin. Die
+Grafikseite setzt es per CSS auf das iframe der Ebene, also für jede
+Vorlage und jede Engine gleich; die Transformation gehört zur Ebene und
+bleibt beim Laden einer anderen Vorlage (wie CasparCGs MIXER). Console:
+Bereich „Place“ mit den häufigsten Werten.
+**Lottie** (GFX.5, E.10 erster Teil): lottie-web 5.12.2 (MIT, nur der
+SVG-Build, 240 KB, npm-Integrität geprüft) liegt im SDK
+(`sdk/lottie/`), `sdk/lmix-lottie.js` macht aus einer Bodymovin-
+Animation eine Vorlage: Textebenen sind Felder (Ebenenname = Feld),
+Marker `in` und `out` die Ein- und Ausblendung, übrige Marker die
+Schritte für `next`. Ebenen `kante:<token>` nehmen Füllung oder
+Textfarbe aus den Kante-Tokens, also keine festen Farben in der
+Animation. Die Schriften der Animation werden vor dem Messen geladen
+(sonst falsche Abstände nach einem Textwechsel). Eingebaut:
+`lmix/lottie-lower-third` (erzeugt von
+`scripts/make-lottie-lower-third.py`). Nativer Lottie-Input (ThorVG)
+bleibt später.
+**Datensätze vor/zurück, CSV** (GFX.8): `dataset_next` /
+`dataset_previous` gehen durch die Sätze der Vorlage einer Ebene (und die
+ohne Vorlage), nach dem letzten wieder zum ersten; `import_datasets`
+liest eine CSV-Tabelle (Spalte `name`, übrige Spalten Felder; gleiche
+Namen ersetzt), `export_datasets` schreibt sie zurück (atomar, Pfade
+relativ zur Show-Datei). Console: ◀/▶ und Import/Export im Titel-Dialog.
+**Spät geladene Seite** (B37): der Zustand trägt `played_at_ms`; lädt
+eine Grafikseite, während ein Titel läuft, gibt sie der Vorlage mit, wie
+lange er schon spielt (`lmixTitle.resumedMs()`), der Countdown zählt von
+dort weiter. Eine Pause vor dem Neuladen kennt die Seite nicht.
+**Feste Zeile** (DAT.4): eine Bindung kann `row` tragen und bleibt dann
+bei dieser Zeile, gleich welche gewählt ist (etwa Heim- und Gastteam aus
+Zeile 1 und 2 derselben Tabelle).
+**Vorschaubild** (GFX.19): liegt `thumbnail.png` neben einer Vorlage
+(bei einzelnen `.html`: `<name>.png`), nennt `GET /api/templates` die
+Adresse. Die eingebauten erzeugt `scripts/make-title-thumbnails.cjs`
+(Chromium, Feldbezeichnungen als Text, transparent, 480×270); die
+Console zeigt das Bild neben der Vorlagenwahl. Der Titel-Dialog scrollt,
+wenn er höher als das Fenster wird.
+**RSS/Atom und XML** (DAT.1): Typ `feed` macht aus jedem `item`/`entry`
+eine Zeile (`title`, `text`, `link`, `date`, `author`), Typ `xml` aus
+den Elementen eines Pfads (`scores/game`, mit `//` irgendwo) eine Zeile
+mit Attributen (`@id`) und Kindelementen als Spalten. Parser `roxmltree`
+0.21 (MIT/Apache-2.0, ohne eigene Abhängigkeiten außer `memchr`), kein
+volles XPath. Console: Art der Quelle wählbar, aus dem Namen vorbelegt.
+**Zeilen nicht im Zustand**: der Zustand geht bei jeder Änderung (auch
+jeder T-Bar-Bewegung) als Ganzes an alle Clients; mit bis zu 10 000
+Zeilen je Datenquelle wären das Megabytes je Ereignis. Er trägt deshalb
+nur Spalten, Zeilenzahl, die gewählte Zeile und eine Revision; die
+Tabelle liefert `GET /api/data/<quelle>`, die Console holt sie, wenn sich
+die Revision ändert.
+**Webseite „Titel“** (WEB.4): `/titles` zeigt die Ebenen eines Kanals
+mit Play/Next/Stop, das Formular der gewählten Ebene (gebundene Felder
+gesperrt) mit „Apply“, die Datensätze der Vorlage und „Save as set“; Werte
+nur über DOM-Knoten, nie als HTML (sie können aus fremden Quellen kommen).
+**Review**: ein unabhängiger Durchgang über den Branch fand sechs Fehler
+(geleertes Feld blieb sichtbar, Laden auf eine laufende Ebene ging auf
+Sendung, Netzabruf unter der Switcher-Sperre, Auslöser-Schleife über
+`title_report`, Datensatz-Index nach Löschen, Ebenenprüfung der Auslöser),
+alle behoben und mit Tests abgedeckt.
+**Offen**: Rendern in strom (GFX.2, nach M7.0), Grafikkanal als Input
+und Overlay (GFX.17), Overlay wartet auf das Ende der Ausblendung
+(GFX.4), Titel als Stinger (GFX.11), XLSX/ODS, Google Sheets mit API-Schlüssel (DAT.1), Zeilen zu Spalten
+(DAT.3), Bilder aus lokalen Pfaden außerhalb des Vorlagenordners.
+
+## 2026-10-11 — M9 Anfang: Console ohne GPU (UI.5, UI.10)
+
+**Kontext**: M7 wartet für den Rest auf die Render-Engine (M7.0, GPU);
+der User hat neue Meilensteine freigegeben. Aus M9 zuerst Console-Punkte,
+die ohne GPU prüfbar sind.
+**Transportleiste** (UI.5): unter Vorschau und Programm, sobald dort ein
+Datei-, URL- oder Playlist-Input steht: Neustart, Abspielen, Pause, bei
+Playlists Voriges/Nächstes, daneben die Länge des laufenden Stücks
+(`clip_ms`). Eine Positionsanzeige fehlt: der Zustand kennt nur die Länge.
+**Stopp-Rückfrage** (UI.10): ein laufender Ausgang (Aufnahme, Stream)
+stoppt erst nach „OK“; „Ask before stopping“ im Dialog schaltet die Frage
+ab (Console-Einstellung `safety/confirmStop`). Die Sperre (AUT.11) bleibt
+der harte Schutz.
+**Geprüft**: Console unter Xvfb gegen lmix-core ohne Engine: Leiste mit
+Playlist auf Programm; Abbrechen lässt laufen, OK stoppt, abgeschaltet
+stoppt ohne Frage; keine QML-Warnungen.
+**TSL-Tally** (PER.1): `--tsl <host:port>` (mehrere mit Komma) schickt
+per UDP TSL UMD 5.0 (Standard) oder mit `--tsl-version 3` 3.1 an
+Multiviewer und Tally-Systeme: je Input mit Bild Name und Tally
+(Programm rot = Tally 1, Vorschau grün = Tally 2), Adresse/Index = Nummer
+in der Leiste. Gesendet bei jeder Änderung und alle 5 s (Empfänger
+vergessen stumme Quellen). TSL 3.1 hat 127 Adressen und 16 ASCII-Zeichen;
+5.0 bekommt alle Inputs in einem Paket (bis 32 je Paket). TCP-Rahmen
+(DLE/STX) fehlt noch. Geprüft mit Paket-Tests nach der Spezifikation und
+einem UDP-Empfänger im Test; an echter Hardware nicht.
+**PTZ** (PER.2, PER.3 teils): ein Input kann eine PTZ-Adresse haben
+(`set_ptz`, in der Show): VISCA over IP nach Sony (UDP, 8-Byte-Kopf,
+Port 52381) oder VISCA direkt in UDP (PTZOptics u. a.). Aktionen
+`ptz_move` (Schwenken/Neigen mit Tempo −1…1, 0 0 hält an), `ptz_zoom`,
+`ptz_focus` (auto, manuell, nah, fern, stopp), `ptz_home`, `ptz_preset`
+(anfahren oder speichern, 0–127). Der Service schickt sie, die Show
+ändert sich nicht; Antworten der Kamera wertet lmix nicht aus.
+Kameraadresse 1. Positionen als virtuelle Inputs (PER.3) noch nicht:
+eine Position als Auslöser „geht in die Vorschau“ fährt die Kamera an.
+Console: „PTZ…“ im Kachelmenü (Adresse, Steuerkreuz beim Halten, Tempo,
+Zoom, Fokus, Home, Positionen 1–8 anfahren oder speichern). Geprüft mit
+Byte-Tests nach der VISCA-Spezifikation, einem UDP-Empfänger im Test
+und der Console gegen eine nachgebaute Kamera; an einer echten Kamera
+nicht.
+**Startoptionen** (UI.12): Console `--window normal|maximized|fullscreen`
+und `--mode simple|advanced`; lmix-core `--start-outputs` startet
+genannte Ausgänge (Nummer oder Name), sobald die Engine bereit ist, einen
+schon laufenden (übernommenen) nicht neu, also keine Lücke in einer
+Aufnahme. Die letzte Show öffnet lmix-core ohnehin (Autosave, `--show`).
+**Ansicht** (UI.3, UI.7): Menü „View“ neben „Inputs“: Kachelgröße klein,
+mittel, groß; sichtbare Reihen 1–4, darüber Bildlauf; „Simple mode“
+blendet Kurzbefehle, Cues, Aux, Titel, Daten, Layouts und die
+Latenzmessung aus (Umschalten, Overlays, FTB, Ausgänge, Sperre bleiben).
+Gespeichert unter `view/…`. Einzelne Inputs einklappen fehlt noch.
+**Dynamische Inputs und Werte** (AUT.5): `set_dynamic_input` (Platz
+1–4) lässt `"dynamic1"`…`"dynamic4"` in jeder späteren Aktion einen Input
+bezeichnen (wie `"preview"`, `"program"`): eine Taste wählt, eine andere
+wirkt. `set_dynamic_value` setzt Werte 1–4, die in Titeltexten und
+Funktionsargumenten für `{value1}`… stehen. Beides gilt zur Laufzeit,
+nicht in der Show; eine neue Show leert die Inputs. Console: „Dynamic
+input“ im Kachelmenü, Kennzeichen „D1“… auf der Kachel.
+**Review M9**: ein unabhängiger Durchgang fand vier Fehler, alle behoben:
+ein kurzer Tipp auf eine PTZ-Taste konnte den Stopp vor der Bewegung
+ankommen lassen (die Console schickte Aktionen parallel; jetzt der Reihe
+nach, eine IP-Adresse braucht keine DNS-Abfrage, der Stopp geht nach
+150 ms ein zweites Mal raus); Zoom und Fokus hielten beim Abbrechen nicht
+an (jetzt auch beim Schließen des Dialogs); TSL ließ verschwundene
+Anzeigen in ihrem letzten Tally stehen und schickte vor der ersten
+Änderung nichts; der Stopp-Dialog nannte den Ausgang über seine Nummer
+(jetzt über die Id).
+**Show-Paket** (SHW.6): `export_package` schreibt ein Tar (`.lmixpkg`,
+unkomprimiert: Medien sind es schon) mit der Show, den Dateien der
+Inputs (Datei, Standbild, Playlist), den Dateien der Datenquellen und
+den eigenen Titelvorlagen; die Pfade in der Show zeigen ins Paket.
+Fehlt eine Datei, nennt der Fehler sie. `import_package` entpackt in
+einen neuen oder leeren Ordner (nur Dateien und Ordner, nichts außerhalb),
+setzt die Inputs auf absolute Pfade dort, übernimmt Vorlagen, die der
+Vorlagenordner nicht hat (vorhandene bleiben), und öffnet die Show. Beides
+läuft ohne Switcher-Sperre (Medien können Gigabytes sein); die Sperre
+(AUT.11) verhindert den Import. Abhängigkeit `tar` 0.4 (MIT OR
+Apache-2.0, ohne xattr). Console: „Package“ → Export…/Import….
+**Input-Einstellungen in Reitern** (UI.8): „Settings…“ oben im
+Kachelmenü öffnet einen Dialog mit „General“ (Name, Farbmarke, Signal-
+verlust, Quelle mit „Replace…“), „Colour“ (Look), „Audio“ (Kanalzug und
+Aux-Sends), „Triggers“, „PTZ“ (Adresse, „Controls…“) und „Advanced“ (Id,
+Slot, Zustand, WHIP-Adresse). Farbe und Ton sind die Inhalte der
+bisherigen Dialoge, herausgelöst als `LookPanel` und `ChannelStripPanel`;
+die Dialoge gibt es weiter. Key, Effekte, Position, Ebenen und Tally
+fehlen, solange die Engine sie nicht hat.
+**Position im Clip** (B39, UI.5): die Positionsmeldungen der Player
+(alle 200 ms) gehen als `Event::Position` an die Clients (Textprotokoll
+`POSITION`), nicht als Zustandsänderung (kein Autosave, kein ganzer
+Zustand je Meldung). Die Transportleiste zeigt Fortschritt und
+„Position / Länge“. Springen im Clip fehlt (strom hat dafür keine Aktion
+in lmix).
+**Review der späteren M9-Teile**: ein dritter Durchgang fand: Import
+packte vor der Sperrprüfung aus (jetzt vorher geprüft); Vorlagen, die nur
+in Aktionen (Kurzbefehle, Cues, Auslöser) geladen werden, fehlten im
+Paket; Pfade mit `..` in einem fremden Paket zeigten aus dem Ordner
+(jetzt abgelehnt); eine halbe Paketdatei blieb nach einem Fehler liegen;
+dynamische Werte wurden zweimal ersetzt (jetzt in einem Durchgang);
+Reiterleiste und Auswahlfelder der Input-Einstellungen zeigten nach dem
+Wiederöffnen den alten Stand. Alle behoben.
+**TSL über TCP** (B40): `--tsl-tcp <host:port>` schickt dasselbe über
+TCP, TSL 5.0 mit DLE/STX-Rahmen (0xFE im Paket verdoppelt), TSL 3.1
+unverändert. Die Verbindung entsteht beim Senden und nach einem Fehler
+neu; ein nicht erreichbarer Empfänger wird 2 s lang übersprungen, damit
+er die übrigen Pakete nicht aufhält.
+**Layout-Editor** (LAY.6): eine gezogene Box rastet mit Anfang, Ende
+oder Mitte an Bildkanten, Bildmitte, dem Schutzbereich (5 %) und den
+Kanten und Mitten anderer Boxen ein (näher als 1,5 % des Bildes), sonst
+ins 1-%-Raster; mit Strg frei (Alt verschiebt unter KWin das Fenster).
+Rückgängig/Wiederholen (Knöpfe, Strg+Z, Strg+Umschalt+Z) über bis zu 100
+Schritte samt Hintergrund, solange der Dialog offen ist; Pixelwerte der
+gewählten Box für 1920 × 1080. Mehrfachauswahl und Sperre fehlen.
+**Lampen an MIDI-Controllern** (AUT.6): mit `--midi-feedback` schreibt
+lmix-core auf die `--midi`-Geräte: die Note oder der Regler eines
+Kurzbefehls zeigt den Stand seiner ersten Aktion (Input auf Programm, in
+der Vorschau, aus; FTB; Ausgang läuft; Sperre). Nur Änderungen, kurz
+gesammelt (eine Blende ergibt einen Schwung). Werte für Programm,
+Vorschau und aus mit `--midi-lamps` (Farben je Controller, APC mini
+3,1,0). Pegel und Motorfader fehlen. Geprüft mit einer Datei statt
+Gerät; an einem echten Controller nicht.
+**Review, vierter Durchgang**: TSL über TCP konnte bei einem Empfänger,
+der nicht liest, beim Schreiben hängen (jetzt 1 s Frist, dann neu
+verbinden); MIDI-Lampen blieben nach dem Entfernen eines Kurzbefehls an,
+kannten `dynamicN` nicht und merkten sich ungeschriebene Stände (ein
+wieder angesteckter Controller blieb dunkel); im Layout-Editor fehlte
+ohne Einrasten das Raster, Alt kollidierte mit KWin, und Rückgängig
+übersah den Hintergrund und speicherte leere Schritte. Alle behoben.
+
+## 2026-10-12 — Tabellen, Folien aus Datei, eingeklappte Inputs (DAT.1, DAT.3, GFX.21, UI.3)
+
+**Kontext**: Rest von M7 und M9, der weder GPU noch Engine braucht.
+
+**Entscheidung**:
+- **Tabellenkalkulationen** (DAT.1): neue Quellenart `sheet` für XLSX,
+  XLSM, XLS und ODS über `calamine` (ohne Standard-Features, kein
+  `chrono`), ein Blatt (`sheet`, sonst das erste), sonst wie CSV
+  (Kopfzeile). Datumszellen werden ISO-Daten (`2026-10-01`, mit Uhrzeit,
+  wenn eine dabei ist, Zeiten unter einem Tag als `18:30:00`, aus ODS
+  ebenso). Grenzen: Dateien mit dem 1904-Kalender (altes Excel für Mac)
+  lägen vier Jahre daneben und XLSX-Dauern ab 24 h (`[h]:mm`) erscheinen
+  als Datum, beides verrät `calamine` ohne `dates` nicht; verbundene
+  Zellen haben den Wert nur oben links; Zahlenformate (Prozent, Währung)
+  gehen verloren, es kommt die Zahl. Tabellen werden im Hintergrund und
+  außerhalb der Laufzeit gelesen (Entpacken dauert), wie Adressen. Ein
+  Google Sheet als XLSX-Export geht auch (`format=xlsx`).
+- **Zeilen zu Spalten** (DAT.3): `transpose` bei CSV und Tabellen dreht
+  die Tabelle vor der Kopfzeile: Namen in der ersten Spalte, je weitere
+  Spalte ein Eintrag (Formulare, Spielberichte). Ganz leere Zeilen zählen
+  bei Tabellen und beim Drehen nicht (Tabellen haben sie oft im benutzten
+  Bereich); in CSV bleibt eine Zeile `;;;` eine Zeile wie bisher, damit
+  eine gespeicherte Zeilennummer auf denselben Eintrag zeigt.
+- **Textfolien aus Datei** (GFX.21): `text` mit `paragraphs` macht jeden
+  Block zwischen Leerzeilen zu einem Eintrag, Zeilenumbrüche bleiben.
+  An das Feld `text` der Vorlage „Textfolien“ gebunden zeigt sie eine
+  Folie, die Quelle schaltet weiter (`data_next` auf einer Taste); der
+  Wechsel blendet wie `next()`. Kein eigener Folienzähler in der
+  Vorlage: Vor/zurück, Auto-Weiter und Zeilenwahl gibt es bei Quellen
+  schon. Beamer erst mit GFX.2.
+- **Einklappen** (UI.3): ein Input lässt sich im Kachelmenü einklappen;
+  er steht dann als Knopf in der Zeile „Eingeklappt“ (Klick Vorschau,
+  Doppelklick Schnitt, Rechtsklick ausklappen), rot/hervorgehoben wie die
+  Layout-Knöpfe. Gespeichert je Console (Einstellung `view/collapsed`,
+  Input-Ids), nicht in der Show: es ist die Ansicht eines Bedieners. Die
+  Kachelliste bleibt ein `GridView` (nur sichtbare Kacheln leben,
+  Performance), eingeklappte Inputs fehlen in ihrem Modell; Ziehen zum
+  Umsortieren rechnet über die Ids, nicht über Positionen.
+
+**Geprüft**: Tests für Tabellen (XLSX und ODS aus LibreOffice in
+`lmix-core/testdata`), Datum, Drehen, Absätze; `scripts/test-titles.sh`
+mit Folien aus Datei; Datenquellen-Dialog und Einklappen auf Xvfb.
+
+**Review**: ein Durchgang fand: schnelles Vor und Zurück in den Folien
+endete auf der falschen (eine laufende Blende wurde nicht ersetzt; jetzt
+mit Test in `test-titles.sh`); CSV verlor Leerzeilen (siehe oben);
+ODS-Zeiten kamen roh (`PT18H30M00S`), Excel-Daten vor dem 1. März 1900
+lagen einen Tag daneben; große Tabellen hielten den Mischer auf; die
+eingeklappten Knöpfe wurden bei jeder Zustandsmeldung neu gebaut (ein
+offenes Menü ging zu; jetzt ein Modell mit Schlüsseln wie bei den
+Kacheln). Alle behoben.
+
+## 2026-10-12 — Layout-Editor: Mehrfachauswahl und Sperre (LAY.6)
+
+**Entscheidung**: Umschalt+Klick nimmt eine Box zur Auswahl hinzu (oder
+heraus); gewählte Boxen tragen einen Fokusrahmen. Ziehen einer gewählten
+Box zieht die anderen sichtbar mit, gefangen wird an der gezogenen Box
+(gegen Bild, Schutzbereich und nicht gewählte Boxen), die anderen
+verschieben sich um gleich viel; Pfeiltasten verschieben alle gewählten,
+zusammen im Bild gehalten, als ein Schritt fürs Rückgängig. Umschalt
+gehört damit beim Klick der Auswahl, Strg dem freien Platzieren, Umschalt
+am Eckgriff dem freien Seitenverhältnis wie bisher.
+**Sperre** je Box (Häkchen „Sperren“): die Box zieht und skaliert nicht,
+die Ortswahl ist aus, Pfeiltasten lassen sie stehen; Eingang, Rahmen und
+Zuschnitt bleiben änderbar. Die Sperre wird mit dem Layout gespeichert
+(`locked` an `BoxSpec`/`LayoutBox`, fehlt sie, ist sie aus); die Engine
+sieht sie nicht.
+**Geprüft**: Switcher-Test (Sperre bleibt am Layout); auf Xvfb zwei
+Boxen gewählt und gezogen (gesperrte bleibt), Pfeiltasten, Strg+Z,
+gespeichert.
+**Review**: gemeinsam gezogene Boxen rasteten danach jede für sich ins
+Raster (das Fangen ging verloren, Abstände änderten sich; jetzt bewegen
+sich alle um denselben Betrag, ohne Raster je Box); die ganze Gruppe
+bleibt beim Ziehen im Bild; eine mit Umschalt herausgenommene Box zog
+die anderen scheinbar mit; ein abgebrochenes Ziehen ließ Boxen versetzt;
+ein einfacher Klick auf eine von mehreren gewählten wählt jetzt nur sie.
+
+## 2026-10-12 — Google Sheets über die API (DAT.1)
+
+**Entscheidung**: Quellenart `google_sheet` mit Adresse oder Id des
+Sheets und optional Blatt/Bereich (`Gäste!A1:D50`, sonst das erste Blatt,
+`A:ZZ`); gelesen über die Sheets API v4 (`values`, formatierte Werte), dann
+wie CSV (Kopfzeile, Drehen). Der **API-Schlüssel** steht nicht in der Show
+(Shows wandern als Paket weiter), sondern ist Startoption von lmix-core:
+`--google-api-key` bzw. `LMIX_GOOGLE_API_KEY` (in `core.env`), in `--help`
+verdeckt; Fehlermeldungen nennen die Adresse ohne Schlüssel. Ohne
+Schlüssel sagt die Quelle das und verweist auf den CSV-Export, der für
+öffentliche Sheets weiter ohne Schlüssel geht. Die Console schlägt die Art
+bei einer Sheet-Adresse ohne `format=`/`output=` vor. Pakete nehmen das
+Sheet nicht mit (keine Datei). OAuth (private Sheets eines Kontos ohne
+Freigabe) fehlt; ein Schlüssel liest öffentliche und per Link geteilte
+Sheets. Verweist die Adresse auf einen Reiter (`#gid=`) und ist kein
+Bereich angegeben, wird sein Titel über die Sheet-Eigenschaften
+nachgeschlagen; ein „im Web veröffentlicht“-Link (`/d/e/…`) hat keine Id
+und wird mit Hinweis abgelehnt.
+**Geprüft**: Adresse aus URL/Id und Bereich, Antwort mit leeren Zeilen
+und Zahlen (Test); gegen die echte API nicht (kein Schlüssel hier).
+
+## 2026-10-12 — Kurzbefehle für alle Shows (AUT.3)
+
+**Entscheidung**: Ein Kurzbefehl gehört der Show oder, mit „Alle Shows“
+(`all_shows`), den Einstellungen von lmix-core: Datei `--shortcuts`
+(`LMIX_SHORTCUTS`, Standard `~/.config/lmix/shortcuts.json`), gelesen beim
+Start, nach jeder Änderung atomar geschrieben; eine kaputte Datei wird
+als `.json.broken` beiseitegelegt statt überschrieben. Sie gelten in
+jeder Show (auch nach „Neu“ und „Öffnen“) und stehen im Zustand nach den
+Kurzbefehlen der Show (Nummern danach). **Die Show gewinnt**: belegt einer
+der Show dieselbe Taste, läuft auf der Taste der der Show
+(`key_shadowed`, in der Liste durchgestrichen); ebenso je MIDI-Note oder
+-Regler und gegen den T-Bar der Show (`midi_shadowed`, auch keine Lampe).
+Verdeckt wird je Belegung, nicht der ganze Kurzbefehl: Knopf, Nummer und
+die andere Belegung gehen weiter. Innerhalb derselben Ebene bleiben
+Tasten und Noten eindeutig. Ändern verschiebt einen Kurzbefehl zwischen
+Show und Einstellungen (ans Ende, mit neuer Id: eine ältere Kopie der
+Show kann die alte noch haben; trifft eine Id der Einstellungen doch eine
+der Show, bekommt sie eine neue). Ein MIDI-Kanal „beliebig“ überdeckt
+jeden Kanal: eine Note der Show auf Kanal 1 verdeckt dieselbe Note eines
+Kurzbefehls für alle Shows auf beliebigem Kanal. „Global“ heißt in lmix
+schon „Taste auch, wenn die Console nicht vorn ist“ (AUT.12), daher der
+Name „Alle Shows“. Testskripte und die Demo geben eine eigene Datei im
+Arbeitsordner an, damit sie nie die des Bedieners lesen oder schreiben.
+Schlägt das Schreiben fehl, wird es bei der nächsten Änderung wieder
+versucht; lässt sich eine kaputte Datei nicht beiseitelegen, wird sie
+nie überschrieben (Änderungen bleiben dann bis zum Ende im Speicher).
+Webseite „Tasten“, Ausführen und Entfernen in der Console rufen
+Kurzbefehle über die Id auf, nicht über die Nummer (die verschiebt sich
+mit den Kurzbefehlen der Show).
+**Geprüft**: Switcher-Test (Vorrang, Noten, Verschieben, neue Show),
+Service-Test (Datei geschrieben, neu gelesen, kaputte beiseitegelegt);
+Console auf Xvfb: Liste mit „Alle Shows“ und durchgestrichener Taste, F2
+führt den der Show aus, Häkchen im Bearbeiten-Dialog.
+
+## 2026-10-12 — Zustand als Diff (API.6)
+
+**Entscheidung**: `/api/events?diff=true` schickt nach dem ersten ganzen
+Zustand jede Änderung als `{"event":"state_diff","ops":[…]}`: JSON Patch
+(RFC 6902, nur `add`, `remove`, `replace`), Objekte je Schlüssel,
+Listen je Eintrag (hinten angefügt oder entfernt), sonst ersetzt. Ist der
+Patch länger als der ganze Zustand, kommt der ganze; nach einem
+Rückstand (Lagged) auch. Ohne `diff` bleibt alles wie bisher (Console,
+eigene Clients, TCP-Protokoll unverändert, nur additiv). Die Webseiten
+nutzen es über `lmixEvents` in `web/lmix.js`, das die Diffs anwendet und
+den Seiten ganze Zustände gibt: kopiert wird nur entlang geänderter
+Pfade, ältere Zustände, die eine Seite hält (Titel-Seite), ändern sich
+nicht. Passt ein Diff nicht, verbindet die Seite neu und beginnt mit dem
+ganzen Zustand. Nutzen: Handy-Tally und Fernbedienung im WLAN bekommen
+bei einem Statuswechsel einige hundert Byte statt des ganzen Zustands.
+Die Console bekommt weiter den ganzen Zustand (lokal, ihr Modell hängt
+an ganzen Zuständen); das ist ein eigener Schritt, wenn es sich messbar
+lohnt.
+**Geprüft**: Diff und Anwenden (Rust-Test, auch Escapes `~0`/`~1`);
+`test-web.sh` zählt Diffs, `test-titles.sh` läuft mit Diffs.
+**Review**: ein Fehler in einer Seite trennte die Verbindung (jetzt nur
+eine Warnung); der ganze Zustand wurde für jeden Diff serialisiert, nur
+um die Länge zu vergleichen (jetzt nur, wenn der Diff an die Länge des
+letzten ganzen herankommt); `?diff=1` und `?diff` gingen nicht; ein
+Schlüssel `__proto__` wäre in der Seite verloren gegangen. Kosten je
+Client und Änderung bleiben ein `serde_json::Value` des Zustands und ein
+Vergleich; den Wert einmal je Änderung statt je Client zu bauen, lohnt
+erst bei vielen Diff-Clients.
+
+## 2026-10-12 — Tally über HTTP (PER.1)
+
+**Entscheidung**: `--tally-http <Adresse>` (mehrfach, `LMIX_TALLY_HTTP`)
+ruft bei jeder Tally-Änderung und alle 30 s (ein neu gestartetes Gerät
+holt auf) jede Adresse auf: ohne Platzhalter POST mit JSON
+`{"tally":[…],"program":[…],"preview":[…]}` (Tally je Input wie die
+TCP-API: 0 aus, 1 Programm samt Overlays und Layout-Boxen, 2 Vorschau;
+dann die Nummern), mit Platzhaltern `{program}`, `{preview}`, `{tally}`
+ein GET mit eingesetzten Werten, für einfache Geräte (ESP32-Tally,
+Shelly, Hausautomation), die nur eine Adresse aufrufen können. Jedes
+Gerät hat eine eigene Aufgabe mit 1 s Frist: ein langsames oder fehlendes
+hält nur sich selbst auf; Änderungen während eines Aufrufs enden in einem
+Aufruf mit dem letzten Stand; ein nicht erreichbares Gerät wird einmal
+gemeldet, bis es wieder antwortet. In `LMIX_TALLY_HTTP` stehen mehrere
+Adressen durch Leerzeichen getrennt (Kommas kommen in Adressen vor). GPIO und Firmata bleiben
+offen (Hardware).
+**Geprüft**: Test mit einem kleinen HTTP-Empfänger (erster Stand, Schnitt
+auf Programm), Platzhalter und JSON; an einem echten Tally-Gerät nicht.
+
+## 2026-10-12 — Auslöser auf die Wiedergabezeit (AUT.7)
+
+**Entscheidung**: neben „Clip endet“ (mit Vorlauf = Restzeit) gibt es
+`play_time` mit `at_ms`: feuert, wenn ein Eintrag die Zeit erreicht (aus
+den Positionsmeldungen der Player, alle 200 ms), bei jedem Durchlauf und
+für jeden Eintrag einer Playlist; ein Sprung zurück (Schleife, Neustart)
+feuert nicht, der nächste Durchlauf wieder. Nur für Datei, URL und
+Playlist, `at_ms` Pflicht und nur hier erlaubt. In der Console „Clip ist
+gelaufen … ms“. Ein neuer Eintrag oder Durchlauf zählt ab 0: Zeiten
+vor der ersten Meldung (alle 200 ms) feuern mit ihr; `at_ms` mindestens
+1 (für den Anfang gibt es „geht auf Programm“). Nach dem Review: so
+feuern auch Zeiten am Anfang eines Eintrags.
+**Geprüft**: Tests für Durchlauf, Schleife, nächsten Eintrag und die
+Prüfung der Felder; Dialog auf Xvfb (Wert bleibt erhalten).
+
+## 2026-10-12 — Aktionsgruppen und Beispiel-Clients (API.1, API.11)
+
+**Entscheidung**: Jede Aktion gehört einer Gruppe (`switching`, `input`,
+`overlay`, `layout`, `audio`, `output`, `title`, `data`, `automation`,
+`ptz`, `show`, `safety`), angelehnt an die Funktionsgruppen von vMix;
+`GET /api/actions` markiert jede Variante mit `x-group` und listet die
+Gruppen in `x-groups` (additiv, Schema sonst unverändert). Die Tabelle
+steht in `lmix-types` (`ACTION_GROUPS`); ein Test verlangt, dass jede
+Aktion in genau einer Gruppe steht, eine neue Aktion ohne Gruppe fällt
+also auf.
+`examples/`: `python/lmix_client.py` (Aktion, Tally lesen und folgen,
+nur Standardbibliothek) und `tally-micropython/main.py` (Tally-Licht für
+einen Input auf einem ESP32, ohne `machine` auf dem Rechner zum
+Ausprobieren). Beide gegen lmix-core mit `--tcp` geprüft (Schnitt,
+Vorschau, Fehler), der ESP32 selbst nicht. Ein Companion-Modul bleibt
+offen (eigenes Repo, eigene Sprache).
+
+## 2026-10-12 — Inputs aus einer anderen Show (SHW.3)
+
+**Entscheidung**: `append_show { path, inputs }` nimmt Inputs einer
+anderen Show-Datei (nach ihrer Nummer dort, leer = alle) mit ihren
+Einstellungen (Quelle, Name, Farbe, Ton, Kanalzug, Sends, Look, Signal-
+verlust, PTZ) ans Ende, mit neuen Ids und in freien Slots; Auslöser
+bleiben zurück, ihre Aktionen nennen Inputs der anderen Show. Alles
+oder nichts: reichen die Slots nicht, kommt keiner. Geht auch bei
+Sperre (nichts wird geschlossen). `GET /api/shows/inputs?path=` listet
+die Inputs einer Show-Datei (Nummer, Name, Art); die Console fragt so
+nach dem Dateidialog „Aus Show…“, welche übernommen werden.
+**Geprüft**: Service-Test (Auswahl, Einstellungen, neue Id, zu wenig
+Slots, falsche Nummer); Console auf Xvfb (Datei gewählt, einen Input
+abgewählt, nur der andere kam).
+**Review**: angehängte Inputs bekamen keinen Tonpegel (jetzt wie bei
+jeder Änderung aus dem Mix); gleiche Namen bekommen „ (2)“, weil Aktionen
+Inputs auch über den Namen finden; Show-Dateien werden nur als normale
+Datei bis 64 MB gelesen (die API sollte nicht `/dev/zero` lesen). Auf der
+Tasten-Seite: `dynamic1`–`4` zeigen ihr Bild, Tasten auf „preview“ bauen
+die Seite nicht mehr bei jedem Wechsel neu, ein Bild wird erst neu
+geladen, wenn das vorige da ist. Das ESP32-Beispiel fragt alle 5 s nach
+dem Tally und geht nach 12 s Stille dunkel (ein lmix ohne Strom ließ
+das Licht sonst an).
+
+## 2026-10-12 — Fehlende Mediendateien (SHW.4)
+
+**Entscheidung**: lmix-core sieht alle 3 s nach, ob die Dateien der
+Datei- und Playlist-Inputs da sind (ohne den Mischer zu sperren); fehlende
+stehen je Input in `missing`. Die Console zeigt „Fehlt“ auf der Kachel
+(Tooltip mit den Pfaden) und, solange etwas fehlt, „Fehlende Dateien
+suchen…“: ein Ordner, in dem `relocate_media` nach den Dateinamen sucht
+und gefundene einsetzt (Quelle ersetzt, wie „Quelle ersetzen“). Findet
+es keine, meldet es das. Adressen (URL) prüft es nicht.
+**Geprüft**: Service-Test (Datei und Playlist markiert, falscher Ordner
+abgelehnt, richtiger eingesetzt, danach nichts mehr fehlend); Console
+auf Xvfb (Markierung, Knopf).
+**Review**: das Suchen im Ordner lief blockierend unter der Sperre des
+Mischers (ein hängendes Netzlaufwerk hätte das Schalten angehalten; jetzt
+vorher, asynchron, 2 s je Datei); ein Input auf Programm würde durch die
+neue Quelle neu starten (jetzt bleibt er, die Meldung sagt es);
+Adressen in Datei-Inputs galten als fehlend; nach dem Einsetzen stand
+„Fehlt“ noch bis zur nächsten Prüfung, und eine laufende Prüfung konnte
+alte Pfade zurückschreiben (jetzt nur Pfade, die der Input noch hat).
+Zwei fehlende Dateien gleichen Namens in verschiedenen Ordnern finden
+dieselbe Datei; nicht lesbare Dateien gelten als fehlend.
+
+## 2026-10-12 — Zugriff: LAN, Passwort, offene Seiten (API.7)
+
+**Kontext**: Die Webseiten und die API hatten keine Anmeldung; mit
+`--listen 0.0.0.0` konnte jeder im Netz schalten.
+**Entscheidung** (`access.rs`):
+- **Dieser Rechner** (loopback) braucht nie ein Passwort: Console,
+  Skripte, Companion auf derselben Maschine.
+- **Nur LAN als Standard**: Anfragen von Adressen außerhalb privater,
+  link-lokaler, unique-local Netze und des VPN-Bereichs 100.64.0.0/10
+  (Tailscale) bekommen 403, auch über das Textprotokoll und OSC;
+  `--allow-internet` hebt das auf (Reverse-Proxy, VPN).
+- **Passwort** `--password` (`LMIX_PASSWORD`, in `--help` verdeckt): aus
+  dem Netz HTTP Basic (Benutzername egal, der Browser fragt einmal; auch
+  der WebSocket geht so) oder `Authorization: Bearer`; Textprotokoll
+  erste Zeile `AUTH <passwort>` innerhalb von 10 s, sonst Fehler und
+  Ende. Vergleich in konstanter Zeit. Ohne Passwort bleibt es im LAN wie bisher.
+- **Offene Seiten** `--open-page tally,keys,mixer,titles`: die Seite,
+  ihre Dateien und was Seiten lesen (Zustand, Ereignisse, Tally, Bilder)
+  ohne Passwort, und nur die Aktionen, die die Seite sendet, einzeln
+  aufgezählt: `tally` keine, `keys` Kurzbefehle mit Häkchen „Webseite“
+  (auf ihre Id festgelegt), `mixer` Vorschau, Schnitt, Übergang, FTB,
+  Layout-Vorschau, `titles` Abspielen, Weiter, Stopp, Felder und
+  Datensätze (nie Dateien, Datenquellen, Adressen). Eine offene Seite
+  macht damit den Zustand lesbar (Namen der Inputs), nicht mehr.
+- **Browser**: eine Anfrage mit einem `Origin`, der nicht die Adresse
+  ist, an die sie geht, wird abgewiesen (eine fremde Webseite kann nicht
+  über den Browser des Bedieners schalten); auf diesem Rechner zählt nur
+  `localhost` oder eine IP-Adresse als Adresse (DNS-Rebinding).
+- **Reverse-Proxy**: trägt eine Anfrage `Forwarded`, `X-Forwarded-For`
+  oder `X-Real-IP`, gilt sie als aus dem Netz, auch wenn der Proxy auf
+  diesem Rechner läuft (sonst wäre hinter ihm jeder „lokal“). Der Proxy
+  muss diese Kopfzeilen setzen (nginx, Caddy tun es üblicherweise).
+- **OSC** hat kein Passwort (UDP, Controller): es gilt die LAN-Regel, und
+  mit Passwort nimmt OSC nur noch Nachrichten von diesem Rechner an.
+- „Erhöhte Sicherheit sperrt Skripte“: lmix hat keine Skripte.
+**Geprüft**: Tests für Adressen, Passwörter, offene Seiten, den Wächter
+mit simulierter Adresse und `AUTH` im Textprotokoll; echt über die
+LAN-Adresse: ohne Passwort 401, mit 200, offene Tally-Seite ohne,
+Mixer-Seite im Browser mit Basic-Anmeldung samt WebSocket.
+**Review** (Sicherheit): die offene Titel-Seite ließ alle Titel- und
+Datenaktionen zu, darunter Datensätze in beliebige Dateien schreiben und
+Dateien als Datenquelle lesen (jetzt nur die Aktionen der Seite, einzeln);
+OSC umging das Passwort; ein Proxy auf demselben Rechner machte jeden
+lokal; fremde Seiten im Browser des Bedieners hätten über loopback
+schalten können; `AUTH` ohne Frist. Alle behoben, mit Tests.
+
+## 2026-10-12 — Springen im Clip, Playlist-Eintrag (UI.5, UI.4)
+
+**Entscheidung**: strom hat am Player `seek` und `goto`; lmix gibt sie
+als Aktionen `seek_input {input, position_ms}` (Datei, URL, Playlist:
+im laufenden Eintrag) und `play_item {input, item}` (Playlist, 1-basiert,
+danach Play) weiter. Die Transportleiste springt beim Klick in den
+Fortschrittsbalken; das Kachelmenü einer Playlist hat „Eintrag
+abspielen“ mit den Dateinamen. (Die Notiz „strom hat dafür keine
+Aktion“ in „M9 Anfang“ war falsch: lmix hatte keine.)
+**Geprüft**: Switcher-Test (Befehle, Bereich, nur Playlist); Menü auf
+Xvfb. Gegen ein laufendes strom nicht geprüft (Pfad und Felder aus strom-types `SeekRequest`, `GotoRequest`).
+**Review**: ein Sprung zurück (oder zu einem früheren Eintrag, Neustart,
+Zurück) sah für die Clip-Überwachung wie ein Ende aus und löste
+„Clip endet“ und Wiedergabezeit-Auslöser aus. Jetzt gelten die
+Positionsmeldungen eines Players bis 600 ms nach so einem Befehl als
+neuer Anfang (Meldungen kommen alle 200 ms und können den alten Stand
+noch zeigen); Test dazu.
+

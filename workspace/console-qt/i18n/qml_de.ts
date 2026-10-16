@@ -2,6 +2,97 @@
 <!DOCTYPE TS>
 <TS version="2.1" language="de" sourcelanguage="en">
   <context>
+    <name>ActionListDialog</name>
+    <message>
+      <location filename="../qml/ActionListDialog.qml" line="+51" />
+      <source>Label</source>
+      <translation>Beschriftung</translation>
+    </message>
+  </context>
+  <context>
+    <name>ActionRows</name>
+    <message>
+      <location filename="../qml/ActionRows.qml" line="+25" />
+      <source>—</source>
+      <translation>—</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Cut</source>
+      <translation>Cut</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Transition button</source>
+      <translation>Übergangstaste</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Input into preview</source>
+      <translation>Input in die Vorschau</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Input onto program</source>
+      <translation>Input auf Programm</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Overlay 1 on with input</source>
+      <translation>Overlay 1 an mit Input</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Overlay 1 off</source>
+      <translation>Overlay 1 aus</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Fade to black</source>
+      <translation>Schwarzblende</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Start output</source>
+      <translation>Ausgang starten</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Stop output</source>
+      <translation>Ausgang stoppen</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Sound of input on</source>
+      <translation>Ton des Inputs an</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Sound of input off</source>
+      <translation>Ton des Inputs aus</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Other (JSON)</source>
+      <translation>Andere (JSON)</translation>
+    </message>
+    <message>
+      <location line="+96" />
+      <source>Action %1 is not valid JSON</source>
+      <translation>Aktion %1 ist kein gültiges JSON</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>Actions, in this order</source>
+      <translation>Aktionen, in dieser Reihenfolge</translation>
+    </message>
+    <message>
+      <location line="+23" />
+      <source>Action %1</source>
+      <translation>Aktion %1</translation>
+    </message>
+  </context>
+  <context>
     <name>AddInputDialog</name>
     <message>
       <location filename="../qml/AddInputDialog.qml" line="+15" />
@@ -103,6 +194,24 @@
     </message>
   </context>
   <context>
+    <name>AppendShowDialog</name>
+    <message>
+      <location filename="../qml/AppendShowDialog.qml" line="+23" />
+      <source>Inputs from %1</source>
+      <translation>Inputs aus %1</translation>
+    </message>
+    <message>
+      <location line="+48" />
+      <source>This show has no inputs.</source>
+      <translation>Diese Show hat keine Inputs.</translation>
+    </message>
+    <message>
+      <location line="+21" />
+      <source>They are added at the end with their settings; their triggers stay behind (they name inputs of the other show).</source>
+      <translation>Sie kommen mit ihren Einstellungen ans Ende; ihre Auslöser bleiben zurück (sie nennen Inputs der anderen Show).</translation>
+    </message>
+  </context>
+  <context>
     <name>AuxBusDialog</name>
     <message>
       <location filename="../qml/AuxBusDialog.qml" line="+21" />
@@ -133,12 +242,15 @@
   <context>
     <name>ChannelStripDialog</name>
     <message>
-      <location filename="../qml/ChannelStripDialog.qml" line="+39" />
+      <location filename="../qml/ChannelStripDialog.qml" line="+17" />
       <source>Channel strip of %1 %2</source>
       <translation>Kanalzug von %1 %2</translation>
     </message>
+  </context>
+  <context>
+    <name>ChannelStripPanel</name>
     <message>
-      <location line="+80" />
+      <location filename="../qml/ChannelStripPanel.qml" line="+107" />
       <source>Input</source>
       <translation>Eingang</translation>
     </message>
@@ -228,9 +340,392 @@
     </message>
   </context>
   <context>
+    <name>CollapsedBar</name>
+    <message>
+      <location filename="../qml/CollapsedBar.qml" line="+39" />
+      <source>Collapsed</source>
+      <translation>Eingeklappt</translation>
+    </message>
+    <message>
+      <location line="+25" />
+      <source>Input %1 %2, collapsed</source>
+      <translation>Input %1 %2, eingeklappt</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Click: into preview. Double click: cut. Right click: expand.</source>
+      <translation>Klick: in die Vorschau. Doppelklick: schneiden. Rechtsklick: ausklappen.</translation>
+    </message>
+    <message>
+      <location line="+13" />
+      <source>Expand</source>
+      <translation>Ausklappen</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Cut to program</source>
+      <translation>Direkt auf Programm</translation>
+    </message>
+  </context>
+  <context>
+    <name>CueListsDialog</name>
+    <message>
+      <location filename="../qml/CueListsDialog.qml" line="+30" />
+      <source>Cue lists</source>
+      <translation>Cue-Listen</translation>
+    </message>
+    <message>
+      <location line="+16" />
+      <location line="+131" />
+      <source>Cue %1</source>
+      <translation>Cue %1</translation>
+    </message>
+    <message>
+      <location line="-131" />
+      <source>New cue</source>
+      <translation>Neuer Cue</translation>
+    </message>
+    <message>
+      <location line="+27" />
+      <source>New list</source>
+      <translation>Neue Liste</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>+ List</source>
+      <translation>+ Liste</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>Remove list</source>
+      <translation>Liste entfernen</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>No cue lists yet. A cue list runs prepared steps of a show one after another, each with GO.</source>
+      <translation>Noch keine Cue-Listen. Eine Cue-Liste führt vorbereitete Schritte einer Show nacheinander aus, jeden mit GO.</translation>
+    </message>
+    <message>
+      <location line="+41" />
+      <source>Actions: %1</source>
+      <translation>Aktionen: %1</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Next</source>
+      <translation>Weiter</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Make this the cue GO runs next</source>
+      <translation>Diesen Cue als nächsten für GO setzen</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Edit…</source>
+      <translation>Bearbeiten…</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>Remove</source>
+      <translation>Entfernen</translation>
+    </message>
+    <message>
+      <location line="+18" />
+      <source>+ Cue</source>
+      <translation>+ Cue</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>Back</source>
+      <translation>Zurück</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>GO: %1</source>
+      <translation>GO: %1</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>GO</source>
+      <translation>GO</translation>
+    </message>
+  </context>
+  <context>
+    <name>DataSourcesDialog</name>
+    <message>
+      <location filename="../qml/DataSourcesDialog.qml" line="+76" />
+      <source>Data sources</source>
+      <translation>Datenquellen</translation>
+    </message>
+    <message>
+      <location line="+24" />
+      <source>Remove</source>
+      <translation>Entfernen</translation>
+    </message>
+    <message>
+      <location line="+51" />
+      <source>First row names columns</source>
+      <translation>Erste Zeile benennt die Spalten</translation>
+    </message>
+    <message>
+      <location line="-30" />
+      <source>+ Source</source>
+      <translation>+ Quelle</translation>
+    </message>
+    <message>
+      <location line="-72" />
+      <source>CSV table</source>
+      <translation>CSV-Tabelle</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Spreadsheet (XLSX, ODS)</source>
+      <translation>Tabellenkalkulation (XLSX, ODS)</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Google Sheet (API key)</source>
+      <translation>Google Sheet (API-Schlüssel)</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>JSON</source>
+      <translation>JSON</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Text, a row per line</source>
+      <translation>Text, eine Zeile je Eintrag</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Text, a row per paragraph (lyrics, slides)</source>
+      <translation>Text, ein Absatz je Eintrag (Liedtexte, Folien)</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>RSS / Atom feed</source>
+      <translation>RSS-/Atom-Feed</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>XML</source>
+      <translation>XML</translation>
+    </message>
+    <message>
+      <location line="+55" />
+      <source>File (relative to the show file) or http(s) address</source>
+      <translation>Datei (relativ zur Show-Datei) oder http(s)-Adresse</translation>
+    </message>
+    <message>
+      <location line="+36" />
+      <source>Sheet (the first if empty)</source>
+      <translation>Blatt (leer: das erste)</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Sheet or range, e.g. Guests!A1:D50</source>
+      <translation>Blatt oder Bereich, z. B. Gäste!A1:D50</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>Rows become columns</source>
+      <translation>Zeilen zu Spalten</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>For tables that list the names down the first column and an entry per further column.</source>
+      <translation>Für Tabellen, die die Namen in der ersten Spalte untereinander führen und je weitere Spalte einen Eintrag.</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Rows, e.g. scores/game</source>
+      <translation>Zeilen, z. B. scores/game</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>No data sources yet. A data source is a table (CSV, a spreadsheet, JSON, a feed, …) whose selected row fills title fields, e.g. names and roles of guests.</source>
+      <translation>Noch keine Datenquellen. Eine Datenquelle ist eine Tabelle (CSV, eine Tabellenkalkulation, JSON, ein Feed, …), deren gewählte Zeile Titelfelder füllt, z. B. Namen und Funktionen von Gästen.</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>The file cannot be read</source>
+      <translation>Die Datei lässt sich nicht lesen</translation>
+    </message>
+    <message>
+      <location line="+79" />
+      <source>Previous</source>
+      <translation>Zurück</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Next</source>
+      <translation>Weiter</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Move on</source>
+      <translation>Weiterschalten</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>off</source>
+      <translation>aus</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>every %1 s</source>
+      <translation>alle %1 s</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>Loop</source>
+      <translation>Schleife</translation>
+    </message>
+  </context>
+  <context>
+    <name>InputSettingsDialog</name>
+    <message>
+      <location filename="../qml/InputSettingsDialog.qml" line="+31" />
+      <source>General</source>
+      <translation>Allgemein</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Colour</source>
+      <translation>Farbe</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Audio</source>
+      <translation>Ton</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Triggers</source>
+      <translation>Auslöser</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>PTZ</source>
+      <translation>PTZ</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Advanced</source>
+      <translation>Erweitert</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Settings of %1 %2</source>
+      <translation>Einstellungen von %1 %2</translation>
+    </message>
+    <message>
+      <location line="+53" />
+      <source>Name</source>
+      <translation>Name</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>Colour tag</source>
+      <translation>Farbmarke</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>None</source>
+      <translation>Keine</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>When the signal is lost</source>
+      <translation>Bei Signalverlust</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Hold last frame</source>
+      <translation>Letztes Bild halten</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Black</source>
+      <translation>Schwarz</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Source</source>
+      <translation>Quelle</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Replace…</source>
+      <translation>Ersetzen…</translation>
+    </message>
+    <message>
+      <location line="+14" />
+      <source>Colour correction needs the GL mixer (lmix-core --mixer gl).</source>
+      <translation>Farbkorrektur braucht den GL-Mischer (lmix-core --mixer gl).</translation>
+    </message>
+    <message>
+      <location line="+16" />
+      <source>This input has no sound.</source>
+      <translation>Dieser Input hat keinen Ton.</translation>
+    </message>
+    <message>
+      <location line="+18" />
+      <source>%1 triggers run actions when this input goes on air, off air or ends.</source>
+      <translation>%1 Auslöser führen Aktionen aus, wenn dieser Input auf Sendung geht, sie verlässt oder endet.</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>No triggers.</source>
+      <translation>Keine Auslöser.</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Edit triggers…</source>
+      <translation>Auslöser bearbeiten…</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>Camera address</source>
+      <translation>Kameraadresse</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Set</source>
+      <translation>Setzen</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Controls…</source>
+      <translation>Steuerung…</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>Id</source>
+      <translation>Id</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Mixer slot</source>
+      <translation>Mischer-Slot</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>State</source>
+      <translation>Zustand</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>WHIP</source>
+      <translation>WHIP</translation>
+    </message>
+  </context>
+  <context>
     <name>InputTile</name>
     <message>
-      <location filename="../qml/InputTile.qml" line="+49" />
+      <location filename="../qml/InputTile.qml" line="+57" />
       <source>Input %1 %2</source>
       <translation>Input %1 %2</translation>
     </message>
@@ -255,7 +750,22 @@
       <translation>Nur Ton</translation>
     </message>
     <message>
-      <location line="+48" />
+      <location line="+40" />
+      <source>Missing</source>
+      <translation>Fehlt</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Missing files: %1</source>
+      <translation>Fehlende Dateien: %1</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Not found:</source>
+      <translation>Nicht gefunden:</translation>
+    </message>
+    <message>
+      <location line="+15" />
       <source>PGM</source>
       <translation>PGM</translation>
     </message>
@@ -265,7 +775,12 @@
       <translation>PRV</translation>
     </message>
     <message>
-      <location line="+5" />
+      <location line="+7" />
+      <source>Dynamic input %1</source>
+      <translation>Dynamischer Input %1</translation>
+    </message>
+    <message>
+      <location line="+4" />
       <source>OVL %1</source>
       <translation>OVL %1</translation>
     </message>
@@ -280,7 +795,7 @@
       <translation>startet</translation>
     </message>
     <message>
-      <location line="+11" />
+      <location line="+13" />
       <source>Overlay</source>
       <translation>Overlay</translation>
     </message>
@@ -321,11 +836,21 @@
     </message>
     <message>
       <location line="+11" />
+      <source>Settings…</source>
+      <translation>Einstellungen…</translation>
+    </message>
+    <message>
+      <location line="+5" />
       <source>Cut to program</source>
       <translation>Direkt auf Programm</translation>
     </message>
     <message>
       <location line="+5" />
+      <source>Collapse</source>
+      <translation>Einklappen</translation>
+    </message>
+    <message>
+      <location line="+4" />
       <source>Rename…</source>
       <translation>Umbenennen…</translation>
     </message>
@@ -343,6 +868,36 @@
       <location line="+0" />
       <source>Colour correction (needs the GL mixer)</source>
       <translation>Farbkorrektur (braucht den GL-Mischer)</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Triggers (%1)…</source>
+      <translation>Auslöser (%1)…</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Triggers…</source>
+      <translation>Auslöser…</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Dynamic input</source>
+      <translation>Dynamischer Input</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Clear dynamic %1</source>
+      <translation>Dynamisch %1 leeren</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Make it dynamic %1</source>
+      <translation>Als dynamisch %1 setzen</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>PTZ…</source>
+      <translation>PTZ…</translation>
     </message>
     <message>
       <location line="+5" />
@@ -425,7 +980,12 @@
       <translation>Weiter</translation>
     </message>
     <message>
-      <location line="+5" />
+      <location line="+6" />
+      <source>Play item</source>
+      <translation>Eintrag abspielen</translation>
+    </message>
+    <message>
+      <location line="+8" />
       <source>Send to this input (copy link)</source>
       <translation>An diesen Input senden (Link kopieren)</translation>
     </message>
@@ -539,7 +1099,7 @@
   <context>
     <name>LayoutDialog</name>
     <message>
-      <location filename="../qml/LayoutDialog.qml" line="+26" />
+      <location filename="../qml/LayoutDialog.qml" line="+69" />
       <source>Top right quarter</source>
       <translation>Viertel oben rechts</translation>
     </message>
@@ -584,7 +1144,7 @@
       <translation>Klein, unten links</translation>
     </message>
     <message>
-      <location line="+13" />
+      <location line="+157" />
       <source>Layout %1 %2</source>
       <translation>Layout %1 %2</translation>
     </message>
@@ -594,17 +1154,17 @@
       <translation>Neues Layout</translation>
     </message>
     <message>
-      <location line="+47" />
+      <location line="+50" />
       <source>Name</source>
       <translation>Name</translation>
     </message>
     <message>
-      <location line="+6" />
+      <location line="+4" />
       <source>optional</source>
       <translation>optional</translation>
     </message>
     <message>
-      <location line="+3" />
+      <location line="+6" />
       <source>Background</source>
       <translation>Hintergrund</translation>
     </message>
@@ -614,27 +1174,142 @@
       <translation>Schwarz</translation>
     </message>
     <message>
+      <location line="+16" />
+      <source>Layout area: arrow keys move the chosen boxes, with Shift they size the selected one</source>
+      <translation>Layout-Fläche: Pfeiltasten verschieben die gewählten Boxen, mit Umschalt ändern sie die Größe der markierten</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Add a box, then drag it into place</source>
+      <translation>Box hinzufügen, dann an ihren Platz ziehen</translation>
+    </message>
+    <message>
+      <location line="+71" />
+      <source> (cropped)</source>
+      <translation> (beschnitten)</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source> (locked)</source>
+      <translation> (gesperrt)</translation>
+    </message>
+    <message>
+      <location line="+95" />
+      <source>Box %1: %2, %3 px · %4 × %5 px (1920 × 1080)</source>
+      <translation>Box %1: %2, %3 px · %4 × %5 px (1920 × 1080)</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Boxes catch edges, the centre, the safe area and other boxes; hold Ctrl to place freely. Shift+click chooses more boxes to move together.</source>
+      <translation>Boxen rasten an Kanten, der Mitte, dem Schutzbereich und anderen Boxen ein; mit Strg frei platzieren. Umschalt+Klick wählt weitere Boxen, die sich gemeinsam bewegen.</translation>
+    </message>
+    <message>
       <location line="+4" />
+      <source>Undo</source>
+      <translation>Rückgängig</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Redo</source>
+      <translation>Wiederholen</translation>
+    </message>
+    <message>
+      <location line="+6" />
       <source>Boxes (bottom to top)</source>
       <translation>Boxen (von unten nach oben)</translation>
     </message>
     <message>
-      <location line="+16" />
+      <location line="+47" />
+      <source>Lock</source>
+      <translation>Sperren</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Lock box %1 in place</source>
+      <translation>Box %1 an ihrem Platz sperren</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Remove</source>
+      <translation>Entfernen</translation>
+    </message>
+    <message>
+      <location line="+17" />
+      <source>Crop</source>
+      <translation>Zuschnitt</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Left</source>
+      <translation>Links</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Top</source>
+      <translation>Oben</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Right</source>
+      <translation>Rechts</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Bottom</source>
+      <translation>Unten</translation>
+    </message>
+    <message>
+      <location line="+18" />
+      <source>Crop %1, percent</source>
+      <translation>Zuschnitt %1, Prozent</translation>
+    </message>
+    <message>
+      <location line="+18" />
+      <source>Every box needs an input.</source>
+      <translation>Jede Box braucht einen Input.</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>A crop must leave some of the input visible.</source>
+      <translation>Ein Zuschnitt muss etwas vom Input sichtbar lassen.</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>+ Box</source>
+      <translation>+ Box</translation>
+    </message>
+    <message>
+      <location line="-531" />
       <source>Empty</source>
       <translation>Leer</translation>
     </message>
     <message>
-      <location line="+1" />
+      <location line="+427" />
+      <source>Select box %1</source>
+      <translation>Box %1 wählen</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Choose input</source>
+      <translation>Input wählen</translation>
+    </message>
+    <message>
+      <location line="+2" />
       <source>Input of box %1</source>
       <translation>Input von Box %1</translation>
     </message>
     <message>
-      <location line="+8" />
+      <location line="+7" />
+      <source>Own place</source>
+      <translation>Eigener Platz</translation>
+    </message>
+    <message>
+      <location line="+3" />
       <source>Place of box %1</source>
       <translation>Lage von Box %1</translation>
     </message>
     <message>
-      <location line="+5" />
+      <location line="+9" />
       <source>Frame</source>
       <translation>Rahmen</translation>
     </message>
@@ -642,12 +1317,15 @@
   <context>
     <name>LookDialog</name>
     <message>
-      <location filename="../qml/LookDialog.qml" line="+30" />
+      <location filename="../qml/LookDialog.qml" line="+17" />
       <source>Colour of %1 %2</source>
       <translation>Farbe von %1 %2</translation>
     </message>
+  </context>
+  <context>
+    <name>LookPanel</name>
     <message>
-      <location line="+22" />
+      <location filename="../qml/LookPanel.qml" line="+43" />
       <source>Brightness</source>
       <translation>Helligkeit</translation>
     </message>
@@ -700,33 +1378,67 @@
   <context>
     <name>Main</name>
     <message>
-      <location filename="../qml/Main.qml" line="+82" />
+      <location filename="../qml/Main.qml" line="+132" />
       <source>Layout %1 %2</source>
       <translation>Layout %1 %2</translation>
     </message>
     <message>
-      <location line="+39" />
+      <location line="+62" />
       <source>Open show</source>
       <translation>Show öffnen</translation>
     </message>
     <message>
       <location line="+1" />
-      <location line="+9" />
+      <location line="+7" />
+      <location line="+20" />
       <source>lmix shows (*.lmix)</source>
       <translation>lmix-Shows (*.lmix)</translation>
     </message>
     <message>
-      <location line="-9" />
+      <location line="-27" />
+      <location line="+7" />
+      <location line="+36" />
       <source>All files (*)</source>
       <translation>Alle Dateien (*)</translation>
     </message>
     <message>
-      <location line="+6" />
+      <location line="-37" />
+      <source>Inputs from a show</source>
+      <translation>Inputs aus einer Show</translation>
+    </message>
+    <message>
+      <location line="+18" />
       <source>Save show</source>
       <translation>Show speichern</translation>
     </message>
     <message>
-      <location line="+66" />
+      <location line="+10" />
+      <source>Export show package</source>
+      <translation>Show-Paket exportieren</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <location line="+6" />
+      <source>lmix packages (*.lmixpkg)</source>
+      <translation>lmix-Pakete (*.lmixpkg)</translation>
+    </message>
+    <message>
+      <location line="-1" />
+      <source>Import show package</source>
+      <translation>Show-Paket importieren</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>Folder with the missing files</source>
+      <translation>Ordner mit den fehlenden Dateien</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Empty folder for the package's show and media</source>
+      <translation>Leerer Ordner für Show und Medien des Pakets</translation>
+    </message>
+    <message>
+      <location line="+143" />
       <source>lmix-core</source>
       <translation>lmix-core</translation>
     </message>
@@ -752,6 +1464,16 @@
     </message>
     <message>
       <location line="+10" />
+      <source>From show…</source>
+      <translation>Aus Show…</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Add inputs of another show to this one</source>
+      <translation>Inputs einer anderen Show hierher übernehmen</translation>
+    </message>
+    <message>
+      <location line="+4" />
       <source>Save</source>
       <translation>Speichern</translation>
     </message>
@@ -761,7 +1483,27 @@
       <translation>Speichern unter…</translation>
     </message>
     <message>
-      <location line="+7" />
+      <location line="+6" />
+      <source>Package</source>
+      <translation>Paket</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>The show with its media in one file, to move it to another machine</source>
+      <translation>Die Show mit ihren Medien in einer Datei, um sie auf einen anderen Rechner zu bringen</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Export…</source>
+      <translation>Exportieren…</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Import…</source>
+      <translation>Importieren…</translation>
+    </message>
+    <message>
+      <location line="+8" />
       <source>Kante</source>
       <translation>Kante</translation>
     </message>
@@ -791,7 +1533,7 @@
       <translation>Kante Light: nur die Formen von Kante, auf den Systemfarben</translation>
     </message>
     <message>
-      <location line="+12" />
+      <location line="+13" />
       <source>Latency</source>
       <translation>Latenz</translation>
     </message>
@@ -806,17 +1548,62 @@
       <translation>Vorschau</translation>
     </message>
     <message>
-      <location line="+19" />
+      <location line="+20" />
       <source>Program</source>
       <translation>Programm</translation>
     </message>
     <message>
-      <location line="+10" />
+      <location line="+11" />
       <source>Inputs</source>
       <translation>Inputs</translation>
     </message>
     <message>
       <location line="+3" />
+      <source>View</source>
+      <translation>Ansicht</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Tile size</source>
+      <translation>Kachelgröße</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Small</source>
+      <translation>Klein</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Medium</source>
+      <translation>Mittel</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Large</source>
+      <translation>Groß</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Rows</source>
+      <translation>Reihen</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Simple mode</source>
+      <translation>Einfacher Modus</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>Find missing files…</source>
+      <translation>Fehlende Dateien suchen…</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Inputs marked "Missing" lack media files: pick the folder they are in now. Inputs on program are left alone.</source>
+      <translation>Den mit „Fehlt“ markierten Inputs fehlen Mediendateien: den Ordner wählen, in dem sie jetzt liegen. Inputs auf Programm bleiben unverändert.</translation>
+    </message>
+    <message>
+      <location line="+4" />
       <source>Clear solo</source>
       <translation>Solo aus</translation>
     </message>
@@ -841,14 +1628,29 @@
       <translation>Gesperrt lassen sich keine Inputs schließen, keine Show laden und keine Ausgänge stoppen.</translation>
     </message>
     <message>
-      <location line="+4" />
+      <location line="+5" />
       <source>Shortcuts…</source>
       <translation>Belegungen…</translation>
     </message>
     <message>
-      <location line="+5" />
+      <location line="+6" />
+      <source>Cues…</source>
+      <translation>Cues…</translation>
+    </message>
+    <message>
+      <location line="+6" />
       <source>Aux…</source>
       <translation>Aux…</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Titles…</source>
+      <translation>Titel…</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Data…</source>
+      <translation>Daten…</translation>
     </message>
     <message>
       <location line="+5" />
@@ -857,14 +1659,52 @@
     </message>
   </context>
   <context>
+    <name>MidiLearnButton</name>
+    <message>
+      <location filename="../qml/MidiLearnButton.qml" line="+35" />
+      <source>No MIDI</source>
+      <translation>Kein MIDI</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>CC %1</source>
+      <translation>CC %1</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Note %1</source>
+      <translation>Note %1</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>%1, channel %2</source>
+      <translation>%1, Kanal %2</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Press or move on the controller…</source>
+      <translation>Am Controller drücken oder bewegen…</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>MIDI: %1</source>
+      <translation>MIDI: %1</translation>
+    </message>
+    <message>
+      <location line="+12" />
+      <source>Remove MIDI binding</source>
+      <translation>MIDI-Zuordnung entfernen</translation>
+    </message>
+  </context>
+  <context>
     <name>OutputBar</name>
     <message>
-      <location filename="../qml/OutputBar.qml" line="+25" />
+      <location filename="../qml/OutputBar.qml" line="+29" />
       <source>Outputs</source>
       <translation>Ausgänge</translation>
     </message>
     <message>
-      <location line="+23" />
+      <location line="+32" />
       <source>Running</source>
       <translation>Läuft</translation>
     </message>
@@ -889,80 +1729,160 @@
       <translation>%1 entfernen</translation>
     </message>
     <message>
-      <location line="+8" />
+      <location line="+14" />
+      <source>Stop %1?</source>
+      <translation>%1 stoppen?</translation>
+    </message>
+    <message>
+      <location line="+18" />
+      <source>A stopped recording or stream cannot go on where it was.</source>
+      <translation>Eine gestoppte Aufnahme oder ein gestoppter Stream lässt sich nicht an derselben Stelle fortsetzen.</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Ask before stopping</source>
+      <translation>Vor dem Stoppen fragen</translation>
+    </message>
+    <message>
+      <location line="+7" />
       <source>+ Output</source>
       <translation>+ Ausgang</translation>
     </message>
   </context>
   <context>
+    <name>PtzDialog</name>
+    <message>
+      <location filename="../qml/PtzDialog.qml" line="+51" />
+      <source>PTZ of %1 %2</source>
+      <translation>PTZ von %1 %2</translation>
+    </message>
+    <message>
+      <location line="+36" />
+      <source>Camera host:port, e.g. 192.168.1.20:52381</source>
+      <translation>Kamera Host:Port, z. B. 192.168.1.20:52381</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>VISCA over IP (Sony)</source>
+      <translation>VISCA over IP (Sony)</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>VISCA in UDP</source>
+      <translation>VISCA in UDP</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Set</source>
+      <translation>Setzen</translation>
+    </message>
+    <message>
+      <location line="+15" />
+      <source>Up</source>
+      <translation>Hoch</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Left</source>
+      <translation>Links</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <location line="+2" />
+      <source>Home</source>
+      <translation>Grundstellung</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Right</source>
+      <translation>Rechts</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Down</source>
+      <translation>Runter</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <location line="+7" />
+      <source>Speed</source>
+      <translation>Tempo</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Zoom</source>
+      <translation>Zoom</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Zoom out</source>
+      <translation>Herauszoomen</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Zoom in</source>
+      <translation>Hineinzoomen</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Focus</source>
+      <translation>Fokus</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Auto</source>
+      <translation>Auto</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Near</source>
+      <translation>Nah</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Far</source>
+      <translation>Fern</translation>
+    </message>
+    <message>
+      <location line="+12" />
+      <source>Presets</source>
+      <translation>Positionen</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Store preset %1</source>
+      <translation>Position %1 speichern</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Go to preset %1</source>
+      <translation>Position %1 anfahren</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>Pick a preset…</source>
+      <translation>Position wählen…</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Store</source>
+      <translation>Speichern</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Store where the camera is on the next preset pressed</source>
+      <translation>Die aktuelle Stellung auf der nächsten gedrückten Position speichern</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>A preset as a trigger of this input (goes into preview) moves the camera before it is taken.</source>
+      <translation>Eine Position als Auslöser dieses Inputs (geht in die Vorschau) fährt die Kamera an, bevor er genommen wird.</translation>
+    </message>
+  </context>
+  <context>
     <name>ShortcutEditDialog</name>
     <message>
-      <location filename="../qml/ShortcutEditDialog.qml" line="+24" />
-      <source>—</source>
-      <translation>—</translation>
-    </message>
-    <message>
-      <location line="+1" />
-      <source>Cut</source>
-      <translation>Cut</translation>
-    </message>
-    <message>
-      <location line="+1" />
-      <source>Transition button</source>
-      <translation>Übergangstaste</translation>
-    </message>
-    <message>
-      <location line="+1" />
-      <source>Input into preview</source>
-      <translation>Input in die Vorschau</translation>
-    </message>
-    <message>
-      <location line="+1" />
-      <source>Input onto program</source>
-      <translation>Input auf Programm</translation>
-    </message>
-    <message>
-      <location line="+1" />
-      <source>Overlay 1 on with input</source>
-      <translation>Overlay 1 an mit Input</translation>
-    </message>
-    <message>
-      <location line="+1" />
-      <source>Overlay 1 off</source>
-      <translation>Overlay 1 aus</translation>
-    </message>
-    <message>
-      <location line="+1" />
-      <source>Fade to black</source>
-      <translation>Schwarzblende</translation>
-    </message>
-    <message>
-      <location line="+1" />
-      <source>Start output</source>
-      <translation>Ausgang starten</translation>
-    </message>
-    <message>
-      <location line="+1" />
-      <source>Stop output</source>
-      <translation>Ausgang stoppen</translation>
-    </message>
-    <message>
-      <location line="+1" />
-      <source>Sound of input on</source>
-      <translation>Ton des Inputs an</translation>
-    </message>
-    <message>
-      <location line="+1" />
-      <source>Sound of input off</source>
-      <translation>Ton des Inputs aus</translation>
-    </message>
-    <message>
-      <location line="+1" />
-      <source>Other (JSON)</source>
-      <translation>Andere (JSON)</translation>
-    </message>
-    <message>
-      <location line="+53" />
+      <location filename="../qml/ShortcutEditDialog.qml" line="+22" />
       <source>Shortcut %1</source>
       <translation>Belegung %1</translation>
     </message>
@@ -972,12 +1892,7 @@
       <translation>Neue Belegung</translation>
     </message>
     <message>
-      <location line="+31" />
-      <source>Action %1 is not valid JSON</source>
-      <translation>Aktion %1 ist kein gültiges JSON</translation>
-    </message>
-    <message>
-      <location line="+34" />
+      <location line="+38" />
       <source>Label</source>
       <translation>Beschriftung</translation>
     </message>
@@ -992,25 +1907,25 @@
       <translation>Keine Taste</translation>
     </message>
     <message>
-      <location line="+35" />
+      <location line="+39" />
       <source>Web page</source>
       <translation>Web-Seite</translation>
     </message>
     <message>
       <location line="+5" />
-      <source>Actions, in this order</source>
-      <translation>Aktionen, in dieser Reihenfolge</translation>
+      <source>All shows</source>
+      <translation>Alle Shows</translation>
     </message>
     <message>
-      <location line="+23" />
-      <source>Action %1</source>
-      <translation>Aktion %1</translation>
+      <location line="+2" />
+      <source>Kept in lmix-core's settings and in every show; a shortcut of the show with the same key or MIDI note wins.</source>
+      <translation>In den Einstellungen von lmix-core und in jeder Show; ein Kurzbefehl der Show mit derselben Taste oder MIDI-Note hat Vorrang.</translation>
     </message>
   </context>
   <context>
     <name>ShortcutsDialog</name>
     <message>
-      <location filename="../qml/ShortcutsDialog.qml" line="+18" />
+      <location filename="../qml/ShortcutsDialog.qml" line="+26" />
       <source>Shortcuts</source>
       <translation>Belegungen</translation>
     </message>
@@ -1020,7 +1935,17 @@
       <translation>Noch keine Belegungen. Eine Belegung führt eine Liste von Aktionen aus, per Taste, über die Web-Seite „Tasten“ oder die API.</translation>
     </message>
     <message>
-      <location line="+22" />
+      <location line="+17" />
+      <source>A shortcut of the show has this key.</source>
+      <translation>Ein Kurzbefehl der Show hat diese Taste.</translation>
+    </message>
+    <message>
+      <location line="+17" />
+      <source>All shows</source>
+      <translation>Alle Shows</translation>
+    </message>
+    <message>
+      <location line="+3" />
       <source>Actions: %1</source>
       <translation>Aktionen: %1</translation>
     </message>
@@ -1040,7 +1965,32 @@
       <translation>Entfernen</translation>
     </message>
     <message>
-      <location line="+8" />
+      <location line="+10" />
+      <source>Keys also work when the Console is not in front</source>
+      <translation>Tasten wirken auch, wenn die Console nicht vorne ist</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>Bound by the desktop: %1</source>
+      <translation>Vom Desktop belegt: %1</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Not available: %1</source>
+      <translation>Nicht verfügbar: %1</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Asking the desktop…</source>
+      <translation>Frage den Desktop…</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>T-bar from MIDI</source>
+      <translation>T-Bar per MIDI</translation>
+    </message>
+    <message>
+      <location line="+12" />
       <source>+ Shortcut</source>
       <translation>+ Belegung</translation>
     </message>
@@ -1077,17 +2027,17 @@
   <context>
     <name>StingerDialog</name>
     <message>
-      <location filename="../qml/StingerDialog.qml" line="+22" />
+      <location filename="../qml/StingerDialog.qml" line="+31" />
       <source>Stinger on button %1</source>
       <translation>Stinger auf Taste %1</translation>
     </message>
     <message>
-      <location line="+31" />
+      <location line="+33" />
       <source>Clip</source>
       <translation>Clip</translation>
     </message>
     <message>
-      <location line="+12" />
+      <location line="+13" />
       <source>Add the stinger clip as an input first (file, URL or playlist; WebM with alpha shows program around it).</source>
       <translation>Erst den Stinger-Clip als Input anlegen (Datei, URL oder Playlist; bei WebM mit Alpha bleibt das Programm drumherum sichtbar).</translation>
     </message>
@@ -1102,7 +2052,12 @@
       <translation>Wie lange der Clip läuft</translation>
     </message>
     <message>
-      <location line="+15" />
+      <location line="+13" />
+      <source>Clip length (%1 s)</source>
+      <translation>Cliplänge (%1 s)</translation>
+    </message>
+    <message>
+      <location line="+7" />
       <source>Cut point</source>
       <translation>Cut-Punkt</translation>
     </message>
@@ -1457,6 +2412,304 @@
       <source>Engine: %1</source>
       <translation>Engine: %1</translation>
     </message>
+    <message>
+      <location line="+1" />
+      <source>PTZ: %1</source>
+      <translation>PTZ: %1</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Dynamic slot %1 does not exist (1–%2)</source>
+      <translation>Dynamischen Platz %1 gibt es nicht (1–%2)</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>No graphics channel matches %1</source>
+      <translation>Kein Grafikkanal passt zu %1</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>All %1 graphics channels are in use</source>
+      <translation>Alle %1 Grafikkanäle sind belegt</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>No template %1</source>
+      <translation>Keine Vorlage %1</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Title: %1</source>
+      <translation>Titel: %1</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>No data set %1</source>
+      <translation>Kein Datensatz %1</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>No data source matches %1</source>
+      <translation>Keine Datenquelle passt zu %1</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Data source: %1</source>
+      <translation>Datenquelle: %1</translation>
+    </message>
+  </context>
+  <context>
+    <name>TitleField</name>
+    <message>
+      <location filename="../qml/TitleField.qml" line="+74" />
+      <source>Data…</source>
+      <translation>Daten…</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Feed this field from a data source column</source>
+      <translation>Dieses Feld aus einer Spalte einer Datenquelle füllen</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>Image address or URL</source>
+      <translation>Bildadresse oder URL</translation>
+    </message>
+  </context>
+  <context>
+    <name>TitlesDialog</name>
+    <message>
+      <location filename="../qml/TitlesDialog.qml" line="+53" />
+      <source>Ready</source>
+      <translation>Bereit</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>On air</source>
+      <translation>Auf Sendung</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Stopped</source>
+      <translation>Gestoppt</translation>
+    </message>
+    <message>
+      <location line="+21" />
+      <source>row %1</source>
+      <translation>Zeile %1</translation>
+    </message>
+    <message>
+      <location line="+34" />
+      <source>Titles</source>
+      <translation>Titel</translation>
+    </message>
+    <message>
+      <location line="+19" />
+      <source>Not bound</source>
+      <translation>Nicht verbunden</translation>
+    </message>
+    <message>
+      <location line="+39" />
+      <source>New graphics channel</source>
+      <translation>Neuer Grafikkanal</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>+ Channel</source>
+      <translation>+ Kanal</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Preview</source>
+      <translation>Vorschau</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Open the channel's picture in the web browser</source>
+      <translation>Bild des Kanals im Webbrowser öffnen</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Triggers (%1)…</source>
+      <translation>Auslöser (%1)…</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Triggers…</source>
+      <translation>Auslöser…</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Run actions when a title reports, e.g. a countdown at zero</source>
+      <translation>Aktionen ausführen, wenn ein Titel etwas meldet, z. B. ein Countdown bei null</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Remove</source>
+      <translation>Entfernen</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>No graphics channel yet. A channel stacks up to eight titles, such as a lower third, a clock and a ticker.</source>
+      <translation>Noch kein Grafikkanal. Ein Kanal stapelt bis zu acht Titel, etwa eine Bauchbinde, eine Uhr und eine Laufschrift.</translation>
+    </message>
+    <message>
+      <location line="+44" />
+      <source>Play</source>
+      <translation>Abspielen</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Next</source>
+      <translation>Weiter</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Stop</source>
+      <translation>Stopp</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Clear</source>
+      <translation>Entfernen</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>Layer %1</source>
+      <translation>Ebene %1</translation>
+    </message>
+    <message>
+      <location line="+35" />
+      <source>Load</source>
+      <translation>Laden</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Load the template with the form's fields, ready to play</source>
+      <translation>Vorlage mit den Feldern des Formulars laden, bereit zum Abspielen</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Load and play</source>
+      <translation>Laden und abspielen</translation>
+    </message>
+    <message>
+      <location line="+36" />
+      <source>Live</source>
+      <translation>Live</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Send each field when it is edited; off: send them together with Apply</source>
+      <translation>Jedes Feld beim Bearbeiten senden; aus: alle zusammen mit Übernehmen</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Apply</source>
+      <translation>Übernehmen</translation>
+    </message>
+    <message>
+      <location line="+15" />
+      <source>Call the template's function %1</source>
+      <translation>Funktion %1 der Vorlage aufrufen</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>Place</source>
+      <translation>Platz</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>X %</source>
+      <translation>X %</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Y %</source>
+      <translation>Y %</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Size %</source>
+      <translation>Größe %</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Turn °</source>
+      <translation>Drehung °</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Opacity %</source>
+      <translation>Deckkraft %</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Colour %</source>
+      <translation>Farbe %</translation>
+    </message>
+    <message>
+      <location line="+31" />
+      <source>Move time, ms</source>
+      <translation>Bewegungszeit, ms</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Move</source>
+      <translation>Bewegen</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Reset</source>
+      <translation>Zurücksetzen</translation>
+    </message>
+    <message>
+      <location line="+23" />
+      <source>Use set</source>
+      <translation>Datensatz nutzen</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Remove set</source>
+      <translation>Datensatz entfernen</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Set name</source>
+      <translation>Name des Datensatzes</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <location line="+2" />
+      <source>Previous set</source>
+      <translation>Voriger Datensatz</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <location line="+2" />
+      <source>Next set</source>
+      <translation>Nächster Datensatz</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Save set</source>
+      <translation>Datensatz speichern</translation>
+    </message>
+    <message>
+      <location line="+18" />
+      <source>CSV file of sets (column name, then fields)</source>
+      <translation>CSV-Datei mit Datensätzen (Spalte name, dann Felder)</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Import</source>
+      <translation>Importieren</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Export</source>
+      <translation>Exportieren</translation>
+    </message>
   </context>
   <context>
     <name>TransitionPanel</name>
@@ -1530,6 +2783,187 @@
       <location line="+1" />
       <source>Overlay %1 is empty. Click: show the preview input.</source>
       <translation>Overlay %1 ist leer. Klick: Vorschau-Input zeigen.</translation>
+    </message>
+  </context>
+  <context>
+    <name>TransportBar</name>
+    <message>
+      <location filename="../qml/TransportBar.qml" line="+46" />
+      <source>Previous</source>
+      <translation>Zurück</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Restart</source>
+      <translation>Von vorn</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Play</source>
+      <translation>Abspielen</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Pause</source>
+      <translation>Pause</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Next</source>
+      <translation>Weiter</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Position; click to jump</source>
+      <translation>Position; Klick springt dorthin</translation>
+    </message>
+    <message>
+      <location line="+21" />
+      <source>Length %1</source>
+      <translation>Länge %1</translation>
+    </message>
+  </context>
+  <context>
+    <name>TriggersDialog</name>
+    <message>
+      <location filename="../qml/TriggersDialog.qml" line="+30" />
+      <source>Goes on program</source>
+      <translation>Geht auf Programm</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Leaves program</source>
+      <translation>Verlässt Programm</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Goes into preview</source>
+      <translation>Geht in die Vorschau</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Comes in as overlay</source>
+      <translation>Kommt als Overlay</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Goes out as overlay</source>
+      <translation>Geht als Overlay raus</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Clip ends</source>
+      <translation>Clip endet</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Clip has played</source>
+      <translation>Clip ist gelaufen</translation>
+    </message>
+    <message>
+      <location line="+16" />
+      <source>Triggers of graphics %1 %2</source>
+      <translation>Auslöser von Grafik %1 %2</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Triggers of %1 %2</source>
+      <translation>Auslöser von %1 %2</translation>
+    </message>
+    <message>
+      <location line="+19" />
+      <source>Actions of trigger %1</source>
+      <translation>Aktionen von Auslöser %1</translation>
+    </message>
+    <message>
+      <location line="+22" />
+      <source>No triggers. A trigger runs actions when a title reports something, e.g. a countdown reaching zero (zero) or a title gone after stop (done).</source>
+      <translation>Keine Auslöser. Ein Auslöser führt Aktionen aus, wenn ein Titel etwas meldet, etwa ein Countdown bei null (zero) oder ein Titel nach Stopp ausgeblendet (done).</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>No triggers. A trigger runs actions when this input goes on air or off air, also after a delay. Actions run by triggers fire no triggers themselves.</source>
+      <translation>Keine Auslöser. Ein Auslöser führt Aktionen aus, wenn dieser Input auf Sendung geht oder sie verlässt, auch verzögert. Von Auslösern ausgeführte Aktionen lösen selbst nichts aus.</translation>
+    </message>
+    <message>
+      <location line="+18" />
+      <source>Any report</source>
+      <translation>Jede Meldung</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Report of trigger %1</source>
+      <translation>Meldung von Auslöser %1</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>from layer</source>
+      <translation>von Ebene</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>any</source>
+      <translation>jede</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Layer of trigger %1</source>
+      <translation>Ebene von Auslöser %1</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>When trigger %1 fires</source>
+      <translation>Wenn Auslöser %1 auslöst</translation>
+    </message>
+    <message>
+      <location line="+20" />
+      <source>Time before the clip ends, trigger %1</source>
+      <translation>Zeit vor Clipende, Auslöser %1</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>ms before,</source>
+      <translation>ms vorher,</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>Playing time of trigger %1</source>
+      <translation>Laufzeit von Auslöser %1</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>ms,</source>
+      <translation>ms,</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>after</source>
+      <translation>nach</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Delay of trigger %1</source>
+      <translation>Verzögerung von Auslöser %1</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Actions: %1</source>
+      <translation>Aktionen: %1</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Edit…</source>
+      <translation>Bearbeiten…</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Remove</source>
+      <translation>Entfernen</translation>
+    </message>
+    <message>
+      <location line="+12" />
+      <source>+ Trigger</source>
+      <translation>+ Auslöser</translation>
     </message>
   </context>
 </TS>

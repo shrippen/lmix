@@ -10,6 +10,11 @@
   #keys .btn { min-height: 6rem; font-size: 1rem; white-space: normal; text-align: center; }
   #keys .btn small { display: block; color: var(--fg3); font-size: .7rem; margin-top: .3rem; }
   #keys .btn.done { outline: 2px solid var(--aqua); }
+  /* A key that switches an input shows its picture and tally (AUT.2). */
+  #keys .btn img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; margin-bottom: .4rem;
+    visibility: hidden; border-top: 4px solid transparent; }
+  #keys .btn.program img { border-top-color: var(--red); }
+  #keys .btn.preview img { border-top-color: var(--aqua); }
   #error { color: var(--red); font-family: var(--font-mono); font-size: .8rem; min-height: 1.2em; margin-bottom: .6rem; }
   .empty { color: var(--fg3); }
 </style>
@@ -23,24 +28,84 @@
 <script src="/web/lmix.js"></script>
 <script>
 "use strict";
-// Keys page (WEB.1): the show's shortcuts marked for the web, as buttons.
+// Keys page (WEB.1): the shortcuts marked for the web (the show's and
+// those for all shows), as buttons.
 const COLORS = { red: "#cc241d", orange: "#d65d0e", yellow: "#d79921", green: "#98971a", cyan: "#3f9a94",
   blue: "#458588", purple: "#b16286" };
 function esc(text) { return String(text).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]); }
 
-function render(shortcuts) {
-  const keys = shortcuts.filter(s => s.web);
-  document.getElementById("keys").innerHTML = keys.length === 0
-    ? '<p class="empty">No shortcuts marked for the web page. Add them in the Console: Shortcuts…</p>'
-    : keys.map(s => `<button class="btn" data-shortcut="${s.number}"` +
-        (s.color ? ` style="background:${COLORS[s.color] || ""}"` : "") +
-        `>${esc(s.label)}${s.key ? `<small>${esc(s.key)}</small>` : ""}</button>`).join("");
+const PICTURE_MS = 1500;
+
+/** The input a shortcut switches (its first action puts one into preview,
+ *  program or an overlay), as lmix names it, or null. */
+function inputOf(shortcut, state) {
+  const first = shortcut.actions[0] || {};
+  if (!["preview_input", "cut_direct", "overlay_in"].includes(first.action)) return null;
+  const ref = first.input;
+  const byId = (id) => state.inputs.find(i => i.id === id) || null;
+  if (typeof ref === "number") return state.inputs[ref - 1] || null;
+  if (ref === "preview") return byId(state.preview);
+  if (ref === "program") return byId(state.program);
+  const dynamic = /^dynamic([1-4])$/.exec(ref || "");
+  if (dynamic) return byId((state.dynamic_inputs || [])[Number(dynamic[1]) - 1]);
+  // Ids win over names, as in lmix.
+  return byId(ref) || state.inputs.find(i => i.name === ref) || null;
 }
+
+function render(state) {
+  const keys = (state.shortcuts || []).filter(s => s.web);
+  const grid = document.getElementById("keys");
+  const shown = keys.map(s => {
+    const input = inputOf(s, state);
+    return { s, input: input && input.source.kind !== "audio_device" ? input : null };
+  });
+  // Rebuilt only when the keys change: pictures stay while tally moves
+  // and while "preview" or a dynamic input points elsewhere.
+  const signature = JSON.stringify(shown.map(({ s, input }) => [s.id, s.label, s.color, s.key, s.key_shadowed, !!input]));
+  if (grid.dataset.signature !== signature) {
+    grid.dataset.signature = signature;
+    grid.innerHTML = keys.length === 0
+      ? '<p class="empty">No shortcuts marked for the web page. Add them in the Console: Shortcuts…</p>'
+      : shown.map(({ s, input }) => `<button class="btn" data-shortcut="${esc(s.id)}"` +
+          (s.color ? ` style="background:${COLORS[s.color] || ""}"` : "") + ">" +
+          (input ? `<img alt="" onload="this.style.visibility='visible'" onerror="this.style.visibility='hidden'">` : "") +
+          `${esc(s.label)}${s.key && !s.key_shadowed ? `<small>${esc(s.key)}</small>` : ""}</button>`).join("");
+  }
+  const buttons = grid.querySelectorAll("[data-shortcut]");
+  shown.forEach(({ input }, i) => {
+    const button = buttons[i];
+    if (!button || !input) return;
+    const img = button.querySelector("img");
+    if (img && img.dataset.picture !== input.id) {
+      img.dataset.picture = input.id;
+      img.dataset.loading = "";
+      loadPicture(img);
+    }
+    button.classList.toggle("program", state.program === input.id);
+    button.classList.toggle("preview", state.preview === input.id);
+  });
+}
+
+function loadPicture(img) {
+  img.dataset.loading = "1";
+  const done = () => { img.dataset.loading = ""; };
+  img.addEventListener("load", done, { once: true });
+  img.addEventListener("error", done, { once: true });
+  img.src = "/api/pictures/inputs/" + img.dataset.picture + "?t=" + Date.now();
+}
+
+function refreshPictures() {
+  // One request per picture at a time: a slow link finishes each.
+  for (const img of document.querySelectorAll("img[data-picture]")) {
+    if (img.dataset.loading !== "1") loadPicture(img);
+  }
+}
+setInterval(() => { if (!document.hidden) refreshPictures(); }, PICTURE_MS);
 
 document.addEventListener("click", e => {
   const button = e.target.closest("[data-shortcut]");
   if (!button) return;
-  lmixAct({ action: "run_shortcut", target: Number(button.dataset.shortcut) })
+  lmixAct({ action: "run_shortcut", target: button.dataset.shortcut })
     .then(() => {
       document.getElementById("error").textContent = "";
       button.classList.add("done");
@@ -53,7 +118,7 @@ document.addEventListener("click", e => {
     });
 });
 
-lmixEvents(event => { if (event.event === "state") render(event.state.shortcuts || []); }, lmixLinkState);
+lmixEvents(event => { if (event.event === "state") render(event.state); }, lmixLinkState);
 </script>
 </body>
 </html>

@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lower third</title>
+<link rel="stylesheet" href="/titles/sdk/lmix-title.css">
+<style>
+  .lower { position: absolute; left: var(--safe-x); bottom: calc(var(--safe-y) + 60 * var(--u)); max-width: calc(1100 * var(--u)); }
+  .lower .head { padding: calc(14 * var(--u)) calc(36 * var(--u)) calc(10 * var(--u)) calc(28 * var(--u)); font-size: calc(56 * var(--u)); }
+  .lower .text { margin-top: calc(6 * var(--u)); padding: calc(10 * var(--u)) calc(28 * var(--u)); font-size: calc(26 * var(--u));
+    background: var(--bg-void); display: inline-block; }
+  .lower .text:empty { display: none; }
+</style>
+</head>
+<body>
+<div class="lower">
+  <div class="head k-panel k-accent k-name k-wipe" id="head"></div>
+  <div><div class="text k-label k-rise k-later" id="text"></div></div>
+</div>
+<script src="/titles/sdk/lmix-title.js"></script>
+<script>
+  const parts = [document.getElementById("head"), document.getElementById("text")];
+  lmixTitle({
+    update(d) {
+      parts[0].textContent = d.headline || "";
+      parts[1].textContent = d.text || "";
+      parts[0].style.setProperty("--accent-colour", `var(--${d.accent || "yellow"})`);
+    },
+    play() { parts.forEach((p) => p.classList.add("is-in")); },
+    stop() { parts.forEach((p) => p.classList.remove("is-in")); return lmixTitle.duration("--dur"); },
+  });
+</script>
+</body>
+</html>

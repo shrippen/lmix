@@ -14,10 +14,15 @@
 //! | `GET /api/devices` | capture devices for `SourceSpec::Device` |
 //! | `GET /api/pictures/program` | program picture, JPEG |
 //! | `GET /api/pictures/inputs/{input}` | input picture (number, name, id, `preview`, `program`) |
-//! | `GET /api/events` | WebSocket: state first, then every event |
+//! | `GET /api/shows/inputs?path=` | inputs of a show file, to append some (SHW.3) |
+//! | `GET /api/templates` | title templates: built-in and from the folder (GFX.19) |
+//! | `GET /api/data/{source}` | all rows of a data source (number, name or id) |
+//! | `GET /titles/{path}` | template files, the title SDK, Kante's tokens and fonts |
+//! | `GET /graphics/{graphics}` | the page a graphics channel renders (number, name or id) |
+//! | `GET /api/events` | WebSocket: state first, then every event (`?diff=true`: state changes as JSON Patch) |
 //! | `GET /health` | liveness |
 //! | `GET /metrics` | health and metrics, Prometheus text format (OPS.3) |
-//! | `GET /`, `/mixer`, `/tally`, `/keys` | browser pages (`web.rs`) |
+//! | `GET /`, `/mixer`, `/tally`, `/keys`, `/titles` | browser pages (`web.rs`) |
 
 use std::sync::Arc;
 
@@ -50,11 +55,16 @@ pub fn router(service: Arc<Service>) -> Router {
         .route("/api/latency", get(latency))
         .route("/api/latency/measure", post(measure_latency))
         .route("/api/shows/recent", get(recent))
+        .route("/api/shows/inputs", get(show_inputs))
         .route("/api/devices", get(devices))
         .route("/api/pictures/program", get(program_picture))
         .route("/api/pictures/inputs/{input}", get(input_picture))
         .route("/api/live/program", get(live_program))
         .route("/api/live/inputs/{input}", get(live_input))
+        .route("/api/templates", get(templates))
+        .route("/api/data/{source}", get(data_table))
+        .route("/titles/{*path}", get(title_file))
+        .route("/graphics/{graphics}", get(graphics_page))
         .merge(crate::web::routes())
         .with_state(service)
 }
@@ -120,6 +130,34 @@ async fn levels(State(service): State<Arc<Service>>) -> impl IntoResponse {
 
 async fn recent(State(service): State<Arc<Service>>) -> impl IntoResponse {
     Json(service.recent().await)
+}
+
+#[derive(serde::Deserialize)]
+struct ShowQuery {
+    path: String,
+}
+
+/// Number, name and kind of each input of a show file.
+async fn show_inputs(Query(query): Query<ShowQuery>) -> Response {
+    match crate::show::load(std::path::Path::new(&query.path)).await {
+        Ok(show) => Json(
+            show.inputs
+                .iter()
+                .enumerate()
+                .map(|(i, input)| {
+                    serde_json::json!({
+                        "number": i + 1,
+                        "name": input.name,
+                        "kind": serde_json::to_value(&input.source).ok().map(|v| v["kind"].clone()),
+                    })
+                })
+                .collect::<Vec<_>>(),
+        )
+        .into_response(),
+        Err(e) => error_response(ActionError::ShowFile {
+            message: e.to_string(),
+        }),
+    }
 }
 
 async fn devices(State(service): State<Arc<Service>>) -> Response {
@@ -198,8 +236,78 @@ fn picture_response(picture: Result<Vec<u8>, EngineError>) -> Response {
     }
 }
 
+async fn data_table(State(service): State<Arc<Service>>, Path(source): Path<String>) -> Response {
+    let source = match source.parse::<u32>() {
+        Ok(number) => InputRef::Number(number),
+        Err(_) => InputRef::Text(source),
+    };
+    match service.data_table(&source).await {
+        Ok(table) => Json(table).into_response(),
+        Err(error) => error_response(error),
+    }
+}
+
+async fn templates(State(service): State<Arc<Service>>) -> impl IntoResponse {
+    Json(service.templates())
+}
+
+/// Template files change while a show runs: never cached.
+async fn title_file(State(service): State<Arc<Service>>, Path(path): Path<String>) -> Response {
+    match service.title_file(&path) {
+        Some(bytes) => (
+            [
+                (header::CONTENT_TYPE, crate::titles::content_type(&path)),
+                (header::CACHE_CONTROL, "no-cache"),
+            ],
+            bytes,
+        )
+            .into_response(),
+        None => StatusCode::NOT_FOUND.into_response(),
+    }
+}
+
+/// The page finds its channel from the address; it shows an empty
+/// transparent picture until the channel exists.
+async fn graphics_page(Path(_graphics): Path<String>) -> Response {
+    (
+        [
+            (header::CONTENT_TYPE, "text/html; charset=utf-8"),
+            (header::CACHE_CONTROL, "no-cache"),
+        ],
+        crate::titles::host_page(),
+    )
+        .into_response()
+}
+
 async fn catalog() -> impl IntoResponse {
-    Json(schemars::schema_for!(Action))
+    Json(catalog_schema())
+}
+
+/// The actions' JSON schema, each marked with its group (`x-group`,
+/// API.1).
+fn catalog_schema() -> serde_json::Value {
+    let mut schema = serde_json::to_value(schemars::schema_for!(Action)).expect("schema");
+    if let Some(variants) = schema.get_mut("oneOf").and_then(|v| v.as_array_mut()) {
+        for variant in variants {
+            if let Some(group) = action_name(variant).and_then(lmix_types::action_group) {
+                variant["x-group"] = group.into();
+            }
+        }
+    }
+    schema["x-groups"] = lmix_types::ACTION_GROUPS
+        .iter()
+        .map(|(group, _)| *group)
+        .collect::<Vec<_>>()
+        .into();
+    schema
+}
+
+/// The `action` name a variant of the schema stands for.
+fn action_name(variant: &serde_json::Value) -> Option<&str> {
+    let tag = &variant["properties"]["action"];
+    tag["const"]
+        .as_str()
+        .or_else(|| tag["enum"].get(0).and_then(|v| v.as_str()))
 }
 
 async fn action(State(service): State<Arc<Service>>, Json(action): Json<Action>) -> Response {
@@ -223,16 +331,44 @@ fn error_response(error: ActionError) -> Response {
     (status, Json(body)).into_response()
 }
 
-async fn events(State(service): State<Arc<Service>>, ws: WebSocketUpgrade) -> Response {
-    ws.on_upgrade(move |socket| stream(socket, service))
+#[derive(serde::Deserialize)]
+struct EventsQuery {
+    /// State changes as `state_diff` events (API.6) instead of the whole
+    /// state each time: `?diff`, `?diff=true`, `?diff=1`.
+    #[serde(default)]
+    diff: Option<String>,
+}
+
+impl EventsQuery {
+    fn diff(&self) -> bool {
+        matches!(self.diff.as_deref(), Some("" | "1" | "true" | "yes"))
+    }
+}
+
+async fn events(
+    State(service): State<Arc<Service>>,
+    Query(query): Query<EventsQuery>,
+    ws: WebSocketUpgrade,
+) -> Response {
+    let diff = query.diff();
+    ws.on_upgrade(move |socket| stream(socket, service, diff))
 }
 
 /// Current state first, so a client never starts blind; then live events.
-async fn stream(mut socket: WebSocket, service: Arc<Service>) {
+/// With `diff`, a state after the first goes out as
+/// `{"event":"state_diff","ops":[…]}`: JSON Patch operations (RFC 6902)
+/// on the last state sent; the whole state again when that is shorter or
+/// the client fell behind.
+async fn stream(mut socket: WebSocket, service: Arc<Service>, diff: bool) {
     let mut rx = service.subscribe();
     let first = Event::State {
         state: service.state().await,
     };
+    // The state this client holds, for diffs.
+    let mut held = diff.then(|| serde_json::to_value(&first).expect("state serializes"));
+    // Length of the last whole state sent: a diff about as long goes out
+    // whole instead.
+    let mut whole_len = held.as_ref().map_or(0, |v| v.to_string().len());
     if send(&mut socket, &first).await.is_err() {
         return;
     }
@@ -241,12 +377,52 @@ async fn stream(mut socket: WebSocket, service: Arc<Service>) {
         let event = match rx.recv().await {
             Ok(event) => event,
             // Fell behind: resend the full state instead of the lost diffs.
-            Err(RecvError::Lagged(_)) => Event::State {
-                state: service.state().await,
-            },
+            Err(RecvError::Lagged(_)) => {
+                let full = Event::State {
+                    state: service.state().await,
+                };
+                if let Some(held) = &mut held {
+                    *held = serde_json::to_value(&full).expect("state serializes");
+                }
+                if send(&mut socket, &full).await.is_err() {
+                    return;
+                }
+                continue;
+            }
             Err(RecvError::Closed) => return,
         };
-        if send(&mut socket, &event).await.is_err() {
+        let sent = match (&mut held, &event) {
+            (Some(held), Event::State { .. }) => {
+                let now = serde_json::to_value(&event).expect("state serializes");
+                let ops = crate::patch::diff(&held["state"], &now["state"]);
+                let text = if ops.is_empty() {
+                    None
+                } else {
+                    let patch =
+                        serde_json::json!({ "event": "state_diff", "ops": ops }).to_string();
+                    // The whole state is serialized only when the diff comes
+                    // near the last one's length.
+                    if patch.len() < whole_len / 2 {
+                        Some(patch)
+                    } else {
+                        let whole = now.to_string();
+                        whole_len = whole.len();
+                        Some(if patch.len() < whole.len() {
+                            patch
+                        } else {
+                            whole
+                        })
+                    }
+                };
+                *held = now;
+                match text {
+                    Some(text) => socket.send(Message::Text(text.into())).await,
+                    None => Ok(()),
+                }
+            }
+            _ => send(&mut socket, &event).await,
+        };
+        if sent.is_err() {
             return;
         }
     }
@@ -334,6 +510,106 @@ mod tests {
         let resp = app().oneshot(req).await.unwrap();
 
         assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    }
+
+    async fn get(app: &Router, uri: &str) -> (StatusCode, String, Vec<u8>) {
+        let resp = app
+            .clone()
+            .oneshot(Request::get(uri).body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        let status = resp.status();
+        let kind = resp
+            .headers()
+            .get(header::CONTENT_TYPE)
+            .map(|v| v.to_str().unwrap().to_string())
+            .unwrap_or_default();
+        let bytes = resp.into_body().collect().await.unwrap().to_bytes();
+        (status, kind, bytes.to_vec())
+    }
+
+    #[tokio::test]
+    async fn titles_pages_and_templates() {
+        let app = app();
+
+        let (status, _, body) = get(&app, "/api/templates").await;
+        assert_eq!(status, StatusCode::OK);
+        let list: Vec<lmix_types::Template> = serde_json::from_slice(&body).unwrap();
+        let lower = list.iter().find(|t| t.id == "lmix/lower-third").unwrap();
+        assert!(lower.builtin);
+
+        let (status, kind, _) = get(&app, &lower.url).await;
+        assert_eq!(
+            (status, kind.as_str()),
+            (StatusCode::OK, "text/html; charset=utf-8")
+        );
+        let (status, kind, _) = get(&app, "/titles/kante/fonts/Rajdhani-700.ttf").await;
+        assert_eq!((status, kind.as_str()), (StatusCode::OK, "font/ttf"));
+        let (status, _, page) = get(&app, "/graphics/1").await;
+        assert_eq!(status, StatusCode::OK);
+        assert!(String::from_utf8(page).unwrap().contains("/api/events"));
+        let (status, _, _) = get(&app, "/titles/nothing.html").await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn title_actions_over_http() {
+        let app = app();
+        post(&app, r#"{"action":"add_graphics","name":"Titles"}"#).await;
+
+        let (status, state) = post(
+            &app,
+            r#"{"action":"title_load","graphics":"Titles","template":"lmix/name-role","data":{"name":"N"},"play":true}"#,
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(state["graphics"][0]["layers"][0]["phase"], "playing");
+        assert_eq!(state["graphics"][0]["layers"][0]["values"]["name"], "N");
+
+        let (status, body) = post(
+            &app,
+            r#"{"action":"title_load","graphics":1,"template":"nope"}"#,
+        )
+        .await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+        assert_eq!(body["error"]["error"], "unknown_template");
+        let (status, _) = post(&app, r#"{"action":"title_play","graphics":2}"#).await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    }
+
+    #[test]
+    fn every_action_is_in_one_group() {
+        let schema = catalog_schema();
+        let names: Vec<&str> = schema["oneOf"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|v| action_name(v).expect("tagged variant"))
+            .collect();
+        let missing: Vec<_> = names
+            .iter()
+            .filter(|n| lmix_types::action_group(n).is_none())
+            .collect();
+        assert!(missing.is_empty(), "no group: {missing:?}");
+        let grouped: Vec<&str> = lmix_types::ACTION_GROUPS
+            .iter()
+            .flat_map(|(_, n)| n.iter().copied())
+            .collect();
+        let unknown: Vec<_> = grouped.iter().filter(|n| !names.contains(n)).collect();
+        assert!(unknown.is_empty(), "not an action: {unknown:?}");
+        let mut unique = grouped.clone();
+        unique.sort();
+        unique.dedup();
+        assert_eq!(unique.len(), grouped.len(), "an action in two groups");
+        assert_eq!(
+            schema["oneOf"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|v| action_name(v) == Some("cut"))
+                .unwrap()["x-group"],
+            "switching"
+        );
     }
 
     #[tokio::test]

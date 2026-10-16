@@ -116,7 +116,6 @@ KanteDialog {
                         Layout.fillWidth: true
                         implicitHeight: cueRow.implicitHeight + Kirigami.Units.smallSpacing
                         color: isNext ? KanteStyle.selectionColor : "transparent"
-                        radius: KanteStyle.radius
 
                         RowLayout {
                             id: cueRow

@@ -11,15 +11,24 @@
 
 pub mod action;
 pub mod automation;
+pub mod graphics;
 pub mod input;
 pub mod layout;
 pub mod midi;
 pub mod output;
+pub mod ptz;
 pub mod shortcut;
 pub mod state;
 
-pub use action::{Action, ActionError, Effect, StingerSpec, TransitionSlot};
+pub use action::{
+    action_group, Action, ActionError, Effect, StingerSpec, TransitionSlot, ACTION_GROUPS,
+};
 pub use automation::{Cue, CueList, Trigger, TriggerOn};
+pub use graphics::{
+    BindingSpec, Blend, DataFormat, DataSource, DataSourceSpec, DataTable, Dataset, Easing,
+    FieldBinding, FieldKind, Graphics, LayerTransform, Template, TemplateField, TemplateTexts,
+    TitleCall, TitleData, TitleLayer, TitlePhase, TitleTrigger,
+};
 pub use input::{
     AuxBus, ChannelStrip, Compressor, Device, DeviceKind, Eq4, Gate, Hpf, Ingest, Input,
     InputAudio, InputColor, InputId, InputRef, InputStatus, Listen, Look, SignalLoss, SourceSpec,
@@ -31,5 +40,6 @@ pub use output::{
     Container, DisplayMode, Output, OutputId, OutputRef, OutputSource, OutputSpec, OutputStats,
     OutputStatus,
 };
+pub use ptz::{PtzFocus, PtzProtocol, PtzSpec};
 pub use shortcut::{Shortcut, ShortcutSpec};
 pub use state::{Event, InputLevel, Latency, Levels, LiveFeed, ShowState, Stinger, Transition};

@@ -3,12 +3,33 @@
 
 /** Follows /api/events; calls onEvent for each event, onLink(true|false). */
 function lmixEvents(onEvent, onLink) {
-  const url = (location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/api/events";
+  // State changes come as diffs (API.6) and are applied here: pages see
+  // whole states as before, the network carries only what changed.
+  const url = (location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/api/events?diff=true";
   let retry = 500;
+  let state = null;
   const open = () => {
     const ws = new WebSocket(url);
     ws.onopen = () => { retry = 500; onLink && onLink(true); };
-    ws.onmessage = (m) => { try { onEvent(JSON.parse(m.data)); } catch (e) { console.warn(e); } };
+    ws.onmessage = (m) => {
+      let event;
+      try {
+        event = JSON.parse(m.data);
+        if (event.event === "state_diff") {
+          if (!state) throw new Error("diff before a state");
+          event = { event: "state", state: lmixPatch(state, event.ops) };
+        }
+        if (event.event === "state") state = event.state;
+      } catch (e) {
+        console.warn(e);
+        // Out of step: start over with a whole state.
+        state = null;
+        ws.close();
+        return;
+      }
+      // A page's own error does not drop the link.
+      try { onEvent(event); } catch (e) { console.warn(e); }
+    };
     ws.onclose = () => {
       onLink && onLink(false);
       setTimeout(open, retry);
@@ -16,6 +37,43 @@ function lmixEvents(onEvent, onLink) {
     };
   };
   open();
+}
+
+/** `doc` with JSON Patch `ops` (add, remove, replace) applied. Objects
+ *  and arrays on a changed path are copied, the rest is shared: a page may
+ *  keep an older state, it never changes under it. */
+function lmixPatch(doc, ops) {
+  // Own properties only, set as data (a key `__proto__` stays a key).
+  const put = (o, k, v) => Object.defineProperty(o, k, { value: v, writable: true, enumerable: true, configurable: true });
+  const copy = (v) => {
+    if (Array.isArray(v)) return v.slice();
+    const c = {};
+    for (const k of Object.keys(v)) put(c, k, v[k]);
+    return c;
+  };
+  for (const op of ops) {
+    const tokens = op.path.split("/").slice(1).map((t) => t.replace(/~1/g, "/").replace(/~0/g, "~"));
+    if (tokens.length === 0) { doc = op.value; continue; }
+    const root = copy(doc);
+    let at = root;
+    for (const t of tokens.slice(0, -1)) {
+      put(at, t, copy(at[t]));
+      at = at[t];
+    }
+    const last = tokens[tokens.length - 1];
+    if (Array.isArray(at)) {
+      const i = Number(last);
+      if (op.op === "remove") at.splice(i, 1);
+      else if (op.op === "add") at.splice(i, 0, op.value);
+      else at[i] = op.value;
+    } else if (op.op === "remove") {
+      delete at[last];
+    } else {
+      put(at, last, op.value);
+    }
+    doc = root;
+  }
+  return doc;
 }
 
 /** Runs one action; resolves to the new state or throws the error text. */

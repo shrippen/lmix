@@ -11,6 +11,9 @@ Erledigtes abhaken (`[x]`, Datum) und nach einer Weile löschen; Details stehen 
 - [ ] Breeze-Bug melden (siehe unten).
 - [ ] Hardware mit dir: H.13 Kopfhörer, H.20 Vollbild auf zweitem Monitor/Beamer, H.21 Kabel ziehen (`docs/HARDWARE-TODO.md`).
 - [ ] NFA.7: 8-h- und 48-h-Lauf, nachdem das Speicherwachstum in strom geklärt ist (H.24).
+- [ ] PRs der Nacht 11./12.10. ansehen und mergen: lmix #15 (H.24-Vergleich, Todo), #16 (Qt-eigene Übersetzungen), Kante #53 (Dialog ohne Hintergrund in Kante Light, danach `scripts/sync-kante.sh` in lmix), lmix #17 (M7 Teil A, gestapelt auf #9, also erst #7–#9 und strom #7/#8), lmix #18 (M9 Anfang, gestapelt auf #17), #19 (Tabellen XLSX/ODS, Folien aus Datei, Inputs einklappen; auf #18), #20 (Layout-Editor Mehrfachauswahl und Sperre; auf #19), #21 (Google Sheets API, Kurzbefehle für alle Shows, Zustand als Diff, Tally über HTTP, Wiedergabezeit, Tasten mit Bild, Anhängen, fehlende Dateien, Beispiele; auf #20), #22 (Zugriff: nur LAN, Passwort, offene Seiten; ⚠ öffentliche Adressen brauchen jetzt `--allow-internet`; auf #21), #23 (Springen im Clip, Playlist-Eintrag; gegen strom ungeprüft; auf #22).
+- [ ] CI für die Tests: `cargo test` (lmix-core, lmix-types, console-qt), `scripts/test-titles.sh` und `scripts/test-web.sh` laufen in keiner CI (nur `vm-check`). Nach dem Token-Fix (lmix-core braucht das Submodul `strom` für `strom-types`) einen Workflow `tests.yml` anlegen, in `.gitea/` und `.github/`, Chromium über Playwright.
+- [ ] M7.0 Benchmark CEF gegen WPE: braucht freie GPU und `cefsrc`/`wpesrc` (beide fehlen auf dem Rechner, Installation mit sudo); danach rendert strom den Grafikkanal (GFX.2).
 
 ### Breeze-Bug „MenuItem RegExp“ melden
 
@@ -46,6 +49,8 @@ enabled: !(/\&[^\&]/.test(control.text))
 
 ## Offen (Claude)
 
+- [ ] `scripts/test-titles.sh` schlug am 12.10. einmal fehl (direkt nach `test-web.sh`, Ausgabe nicht erhalten), danach 19-mal grün; bei der nächsten Wiederholung die Ausgabe sichern und die Ursache beheben.
+
 - [x] Demo-Modus mit Studio-Weber-Daten (2026-10-09, `demo/start.sh`).
 - [ ] Release-Build (wenn es einen gibt): `demo/` ausschließen und prüfen.
 - [ ] Andere dekodierende Quellen (SRT, NDI, Gerät) auf GPU-Speicher im Slot-Kanal prüfen (DECISIONS „Hardware-Decoder“).
@@ -54,3 +59,6 @@ enabled: !(/\&[^\&]/.test(control.text))
 - [ ] GL-Mischer: SRT-Ausgang ohne Video (Fix in strom, DECISIONS „Hardware-Läufe“); in der VM nicht nachstellbar (2026-10-09, DECISIONS „GL-Mischer und SRT“), braucht Hardware.
 - [x] Aktion in den ersten 2 s nach Engine-Neustart antwortet 502 (2026-10-09: neue Engine erkannt, Aktion geht in die Show, Restore sofort).
 - [ ] Konstantes Bildalter 54 ms bei einigen Kacheln klären.
+- [ ] M7 Rest (DECISIONS „M7 Teil A“): Grafikkanal als Input und Overlay (GFX.2, GFX.17, nach M7.0), Overlay wartet auf die Ausblendung (GFX.4), Titel als Stinger (GFX.11), Beamer für Textfolien (GFX.21, mit GFX.2), M7-Abnahme mit 5 Personas.
+- [ ] M9 Rest (DECISIONS „M9 Anfang“): PTZ-Positionen als virtuelle Inputs mit Standbild (PER.3, B38), PTZ und TSL an echter Hardware prüfen, Key/Effekte/Position/Ebenen in den Input-Einstellungen (UI.8, braucht Engine), HID/Gamepad/Stream Deck direkt (AUT.1).
+- [x] Lastenheft-Stand der M6/M8-Punkte (AUT.*, API.*, WEB.*, OPS.*) nachgetragen (2026-10-11).

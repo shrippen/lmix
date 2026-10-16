@@ -5,7 +5,7 @@ import org.kde.kirigami as Kirigami
 import Kante
 
 /**
- * The show's shortcuts: key, label, how many actions; add, edit, remove,
+ * The shortcuts, the show's and those for all shows: key, label, how many actions; add, edit, remove,
  * try. They also appear on the web page "Keys" when marked so.
  */
 KanteDialog {
@@ -55,17 +55,26 @@ KanteDialog {
                     Layout.preferredWidth: Kirigami.Units.gridUnit * 6
                     text: entry.modelData.key || "–"
                     font.family: KanteStyle.monoFamily
+                    font.strikeout: entry.modelData.key_shadowed === true
+                    QQC2.ToolTip.visible: entry.modelData.key_shadowed === true && keyHover.containsMouse
+                    QQC2.ToolTip.text: qsTr("A shortcut of the show has this key.")
+                    MouseArea { id: keyHover; anchors.fill: parent; hoverEnabled: true; acceptedButtons: Qt.NoButton }
                 }
                 QQC2.Label {
                     Layout.preferredWidth: Kirigami.Units.gridUnit * 8
                     text: entry.modelData.midi ? tbarLearn.describe(entry.modelData.midi) : ""
                     color: KanteStyle.mutedTextColor
                     elide: Text.ElideRight
+                    font.strikeout: entry.modelData.midi_shadowed === true
                 }
                 QQC2.Label {
                     Layout.fillWidth: true
                     text: entry.modelData.label
                     elide: Text.ElideRight
+                }
+                KanteSectionLabel {
+                    visible: entry.modelData.all_shows === true
+                    text: qsTr("All shows")
                 }
                 QQC2.Label {
                     text: qsTr("Actions: %1").arg(entry.modelData.actions.length)
@@ -73,7 +82,7 @@ KanteDialog {
                 }
                 KanteButton {
                     text: qsTr("Run")
-                    onClicked: dialog.act({ action: "run_shortcut", target: entry.modelData.number })
+                    onClicked: dialog.act({ action: "run_shortcut", target: entry.modelData.id })
                 }
                 KanteButton {
                     text: qsTr("Edit…")
@@ -81,7 +90,7 @@ KanteDialog {
                 }
                 KanteButton {
                     text: qsTr("Remove")
-                    onClicked: dialog.act({ action: "remove_shortcut", target: entry.modelData.number })
+                    onClicked: dialog.act({ action: "remove_shortcut", target: entry.modelData.id })
                 }
             }
         }

@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Scoreboard</title>
+<link rel="stylesheet" href="/titles/sdk/lmix-title.css">
+<style>
+  .board { position: absolute; top: var(--safe-y); left: var(--safe-x); display: flex; align-items: stretch; height: calc(60 * var(--u)); }
+  .board { --cut: calc(18 * var(--u)); background: var(--bg0); }
+  .team { display: flex; align-items: center; gap: calc(16 * var(--u)); padding: 0 calc(18 * var(--u)); }
+  .team.away { background: var(--bg1); }
+  .team .swatch { width: calc(8 * var(--u)); align-self: stretch; background: var(--colour); }
+  .team .name { font-size: calc(30 * var(--u)); min-width: calc(80 * var(--u)); }
+  .team .score { font-size: calc(38 * var(--u)); min-width: calc(48 * var(--u)); text-align: center; color: var(--fg0); }
+  .team .score.changed { color: var(--yellow); transition: color var(--dur-slow) var(--ease-out); }
+  .period { display: flex; align-items: center; padding: 0 calc(32 * var(--u)) 0 calc(24 * var(--u)); font-size: calc(22 * var(--u)); background: var(--bg-void); }
+  .period:empty { display: none; }
+</style>
+</head>
+<body>
+<div class="board k-panel k-wipe" id="board">
+  <div class="team" id="home"><span class="swatch"></span><span class="name k-name"></span><span class="score k-figure"></span></div>
+  <div class="team away" id="away"><span class="score k-figure"></span><span class="name k-name"></span><span class="swatch"></span></div>
+  <div class="period k-label" id="period"></div>
+</div>
+<script src="/titles/sdk/lmix-title.js"></script>
+<script>
+  const el = (id) => document.getElementById(id);
+  function show(team, value) {
+    const score = el(team).querySelector(".score");
+    if (score.textContent !== String(value)) {
+      score.classList.add("changed");
+      setTimeout(() => score.classList.remove("changed"), 1500);
+    }
+    score.textContent = value;
+  }
+  lmixTitle({
+    update(d) {
+      for (const team of ["home", "away"]) {
+        el(team).querySelector(".name").textContent = d[team] || "";
+        el(team).style.setProperty("--colour", `var(--${d[`${team}_colour`] || (team === "home" ? "red" : "blue")})`);
+        show(team, Number(d[`${team}_score`]) || 0);
+      }
+      el("period").textContent = d.period || "";
+    },
+    play() { el("board").classList.add("is-in"); },
+    stop() { el("board").classList.remove("is-in"); return lmixTitle.duration("--dur"); },
+  });
+</script>
+</body>
+</html>

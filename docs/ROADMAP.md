@@ -341,6 +341,20 @@ IDs: GFX.1–19, DAT.1–5, SWI.7, OVL.7. Entscheidungen E.9 (Engine), E.10 (Lot
 Lottie-Bauchbinde mit Textfeld, Countdown mit Auslöser bei 0, 8 animierte
 Titel 1080p60 ohne Drop.
 
+Stand (2026-10-11, Teil A ohne Render-Engine, DECISIONS „M7 Teil A“):
+
+| Teil | Stand |
+|---|---|
+| Grafikkanal als Seite, CasparCG-Lebenszyklus, JSON/XML-Daten, Feld hochzählen | ✅ GFX.1, 3, 4 (ohne Overlay-Warten) |
+| Vorlagen eingebaut (Kante-Satz, Textfolien) und aus Ordner, Neuladen | ✅ GFX.12, 13, 14, 19; GFX.21 teils (Folien aus Datei, Beamer fehlt) |
+| Datensätze (vor/zurück, CSV), Datenquellen CSV/XLSX/ODS/JSON/Text/Adresse mit Bindung, Zeilen zu Spalten, Auto-Weiter | ✅ GFX.8, DAT.2, DAT.3, DAT.5; DAT.1, 4 teils |
+| Console: Titel- und Datenquellen-Dialog | ✅ GFX.7 |
+| M7.0 Benchmark, Rendern in strom (GFX.2), Kanal als Input/Overlay | offen (GPU, `cefsrc`/`wpesrc`) |
+| Auslöser auf Titelmeldungen (Countdown bei 0) | ✅ GFX.9 |
+| Ebenen-Transformation, animiert | ✅ GFX.18 |
+| Lottie in Vorlagen (Bauchbinde mit Textfeldern) | ✅ GFX.5 teils |
+| Titel als Stinger | offen (Engine) |
+
 ### M8 — Fernbedienung, API-Gleichstand
 
 IDs: WEB.1–5, TEL.1–3, API.2–11, STR.8.
@@ -352,7 +366,7 @@ Stand:
 
 | # | Stand |
 |---|---|
-| WEB.1–3 | ✅ `/mixer`, `/tally`, `/keys` aus lmix-core, Kante-Aussehen; ⚠ ohne Anmeldung (WEB.4) |
+| WEB.1–3 | ✅ `/mixer`, `/tally`, `/keys` aus lmix-core, Kante-Aussehen; Anmeldung mit `--password`, Seiten einzeln offen (API.7) |
 | API.5 | ✅ Textzeilen über TCP: Aktionen, Tally/Zustand/Pegel/Ausgänge im Abo |
 | OPS.1 | ✅ Show beim Start (`LMIX_SHOW`), SIGTERM, systemd-Benutzer-Units |
 | OPS.3 | ✅ `/metrics` (Prometheus) mit Maschine, GPU, Speicher von strom (strom-Patch `lmix-process-memory`) und QoS je Flow |
@@ -364,6 +378,19 @@ LAY.6 (Ebenen-Editor), PRC.9 (Effektkette), AUD.9/11 (Matrix, Plugins),
 OUT.4/5 (Karte, Key+Fill), PER.2–5 (PTZ, Uhren), UI.3–12, SHW.6–9.
 
 **Abnahme**: Abdeckungsmatrix (`LASTENHEFT.md`) ohne offene M/S.
+
+Stand (2026-10-12, ohne GPU; DECISIONS „M9 Anfang“):
+
+| Teil | Stand |
+|---|---|
+| Transportleiste, Stopp-Rückfrage, Startoptionen, Kachelgröße/Reihen/Einklappen, einfacher Modus | ✅ UI.5 teils, UI.10, UI.12 teils, UI.3, UI.7 |
+| Input-Einstellungen in Reitern | ◐ UI.8 (ohne Key, Effekte, Position, Ebenen, Tally) |
+| Dynamische Inputs/Werte | ✅ AUT.5 |
+| Tally über TSL UMD 3.1/5.0 | ✅ PER.1 teils (ohne GPIO) |
+| PTZ über VISCA (IP, UDP), Positionen per Auslöser | ◐ PER.2, PER.3 (an echter Kamera ungeprüft) |
+| Show-Paket mit Medien, Daten, Vorlagen | ✅ SHW.6 |
+| Layout-Editor: Ziehen, Fangen, Mehrfachauswahl, Sperre, Rückgängig | ✅ LAY.6 |
+| Verschmelzen, Mix-Inputs, Effektkette, Karten-Ausgang, Key+Fill | offen (Engine/Hardware) |
 
 ### Später — Wiederholung, Gäste
 

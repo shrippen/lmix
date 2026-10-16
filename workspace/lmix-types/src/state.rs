@@ -77,6 +77,21 @@ pub struct ShowState {
     /// Name of the input `restore_input` would bring back.
     #[serde(default)]
     pub restorable: Option<String>,
+    /// Graphics channels (titles).
+    #[serde(default)]
+    pub graphics: Vec<crate::graphics::Graphics>,
+    /// Saved title data sets, by name.
+    #[serde(default)]
+    pub datasets: Vec<crate::graphics::Dataset>,
+    /// Data sources for title fields.
+    #[serde(default)]
+    pub data_sources: Vec<crate::graphics::DataSource>,
+    /// What `"dynamic1"`–`"dynamic4"` name (AUT.5).
+    #[serde(default)]
+    pub dynamic_inputs: [Option<InputId>; 4],
+    /// Dynamic values 1–4.
+    #[serde(default)]
+    pub dynamic_values: [String; 4],
 }
 
 /// Current API version (API.10: additive changes within one version).
@@ -159,6 +174,20 @@ pub enum Event {
     /// A note or controller message from a MIDI controller (to learn a
     /// binding).
     Midi { midi: crate::midi::MidiMessage },
+    /// Where a clip or playlist input plays, about five times a second
+    /// while it plays (UI.5).
+    Position {
+        input: InputId,
+        position_ms: u64,
+        duration_ms: u64,
+    },
+    /// A title template reported something (`title_report`), e.g.
+    /// `done` or `zero`.
+    Title {
+        graphics: InputId,
+        layer: u32,
+        report: String,
+    },
 }
 
 #[cfg(test)]

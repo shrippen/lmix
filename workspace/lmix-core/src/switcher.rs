@@ -7,9 +7,9 @@
 //!   Action ──► Switcher::apply ──► new state + [Command] ──► engine driver
 //! ```
 
-use lmix_types::action::{aux_index, OVERLAY_CHANNELS, TRANSITION_SLOTS};
+use lmix_types::action::{aux_index, DYNAMIC_SLOTS, OVERLAY_CHANNELS, TRANSITION_SLOTS};
 use lmix_types::automation::{AUTOMATION_ACTIONS, CUES, TRIGGERS, TRIGGER_DELAY_MAX_MS};
-use lmix_types::input::{color_rgb, AUX_BUSES, REF_PREVIEW, REF_PROGRAM, VOLUME_MAX};
+use lmix_types::input::{color_rgb, AUX_BUSES, REF_DYNAMIC, REF_PREVIEW, REF_PROGRAM, VOLUME_MAX};
 use lmix_types::layout::{BORDER_MAX_PX, LAYOUTS, LAYOUT_BOXES};
 use lmix_types::shortcut::SHORTCUT_ACTIONS;
 use lmix_types::state::API_VERSION;
@@ -25,6 +25,9 @@ use std::time::{Duration, Instant};
 use uuid::Uuid;
 
 use crate::show::{Show, ShowCueList, ShowInput, ShowLayout, ShowOutput, ShowShortcut};
+
+mod graphics;
+pub use graphics::{Rows, TemplateRef};
 
 /// What the engine has to do after an action.
 #[derive(Clone, Debug, PartialEq)]
@@ -98,6 +101,10 @@ pub enum Command {
     },
     /// Play, pause, restart or step the media player of `slot`.
     Transport { slot: usize, transport: Transport },
+    /// Jump within the item the slot's media player plays.
+    Seek { slot: usize, position_ms: u64 },
+    /// Play item `index` (0-based) of the slot's playlist.
+    PlayItem { slot: usize, index: usize },
     /// Set the audio channel of `slot`: linear gain (1.0 = unity) and
     /// mute, faded over `ramp_ms`.
     SetAudio {
@@ -162,6 +169,8 @@ fn runs_automation(action: &Action) -> bool {
         || matches!(
             action,
             Action::SetTriggers { .. }
+                | Action::SetTitleTriggers { .. }
+                | Action::TitleReport { .. }
                 | Action::AddCueList { .. }
                 | Action::SetCueList { .. }
                 | Action::RemoveCueList { .. }
@@ -169,6 +178,40 @@ fn runs_automation(action: &Action) -> bool {
                 | Action::CueBack { .. }
                 | Action::CueJump { .. }
         )
+}
+
+/// At most `TRIGGERS` triggers (delay, actions), each waiting at most 30 s
+/// with 1–16 actions that run no automation.
+pub(crate) fn check_triggers<'a>(
+    triggers: impl ExactSizeIterator<Item = (u32, &'a [Action])>,
+) -> Result<(), ActionError> {
+    let bad = |reason: String| Err(ActionError::BadTriggers { reason });
+    if triggers.len() > TRIGGERS {
+        return bad(format!("at most {TRIGGERS} triggers"));
+    }
+    for (delay_ms, actions) in triggers {
+        if delay_ms > TRIGGER_DELAY_MAX_MS {
+            return bad(format!("delays are at most {TRIGGER_DELAY_MAX_MS} ms"));
+        }
+        if actions.is_empty() || actions.len() > AUTOMATION_ACTIONS {
+            return bad(format!("1–{AUTOMATION_ACTIONS} actions each"));
+        }
+        if actions.iter().any(runs_automation) {
+            return bad("triggers cannot run shortcuts, cues or change automation".into());
+        }
+    }
+    Ok(())
+}
+
+/// 0-based index of dynamic slot `slot` (1–4).
+fn dynamic_index(slot: u8) -> Result<usize, ActionError> {
+    if slot == 0 || slot > DYNAMIC_SLOTS {
+        return Err(ActionError::BadDynamic {
+            slot,
+            max: DYNAMIC_SLOTS,
+        });
+    }
+    Ok(usize::from(slot - 1))
 }
 
 /// A name, at most `CUES` cues, each with 1–16 safe actions.
@@ -243,6 +286,24 @@ pub struct Switcher {
     output_status: HashMap<OutputId, OutputStatus>,
     /// Length of the item each player plays, by slot; runtime only.
     clip_ms: HashMap<usize, u64>,
+    /// Templates, data source rows, title calls; runtime only.
+    titles: graphics::TitleRuntime,
+    /// What `"dynamic1"`… name, and the dynamic values (AUT.5); runtime.
+    dynamic_inputs: [Option<InputId>; DYNAMIC_SLOTS as usize],
+    dynamic_values: [String; DYNAMIC_SLOTS as usize],
+    /// Shortcuts for all shows (AUT.3), from lmix-core's settings.
+    all_shows: Vec<ShowShortcut>,
+    /// `all_shows` changed since the service last saved it.
+    all_shows_changed: bool,
+    /// Media files not found per input (SHW.4); the service checks.
+    missing: HashMap<InputId, Vec<String>>,
+}
+
+/// Where a shortcut is kept.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Scope {
+    Show(usize),
+    AllShows(usize),
 }
 
 impl Switcher {
@@ -264,7 +325,118 @@ impl Switcher {
             ingest_base: None,
             clip_ms: HashMap::new(),
             output_status: HashMap::new(),
+            titles: graphics::TitleRuntime::default(),
+            dynamic_inputs: Default::default(),
+            dynamic_values: Default::default(),
+            all_shows: Vec::new(),
+            all_shows_changed: false,
+            missing: HashMap::new(),
         }
+    }
+
+    /// Media files of each input with files (file, playlist), for the
+    /// service to look for.
+    pub fn media_files(&self) -> Vec<(InputId, Vec<String>)> {
+        self.show
+            .inputs
+            .iter()
+            .filter_map(|i| match &i.source {
+                SourceSpec::File { path } => Some((i.id, vec![path.clone()])),
+                SourceSpec::Playlist { paths } => Some((i.id, paths.clone())),
+                _ => None,
+            })
+            // Addresses are no files.
+            .map(|(id, paths)| {
+                (
+                    id,
+                    paths.into_iter().filter(|p| !p.contains("://")).collect(),
+                )
+            })
+            .collect()
+    }
+
+    /// What is on program now, for the service.
+    pub fn state_program(&self) -> Option<InputId> {
+        self.show.program
+    }
+
+    /// Input `id` got a new source: nothing known missing until checked.
+    pub fn forget_missing(&mut self, id: InputId) {
+        self.missing.remove(&id);
+    }
+
+    /// Which media files are missing now; true if that changed.
+    pub fn set_missing(&mut self, missing: HashMap<InputId, Vec<String>>) -> bool {
+        // A check that started before a change (relocated, replaced) keeps
+        // only paths the input still has.
+        let now: HashMap<InputId, Vec<String>> = self.media_files().into_iter().collect();
+        let missing: HashMap<_, _> = missing
+            .into_iter()
+            .map(|(id, files)| {
+                let current = now.get(&id);
+                let files: Vec<String> = files
+                    .into_iter()
+                    .filter(|f| current.is_some_and(|c| c.contains(f)))
+                    .collect();
+                (id, files)
+            })
+            .filter(|(_, files)| !files.is_empty())
+            .collect();
+        if missing == self.missing {
+            return false;
+        }
+        self.missing = missing;
+        true
+    }
+
+    /// Missing files per input, as last checked.
+    pub fn missing_media(&self) -> Vec<(InputId, Vec<String>)> {
+        self.missing
+            .iter()
+            .map(|(id, files)| (*id, files.clone()))
+            .collect()
+    }
+
+    /// The source of input `id` (for relocating its files).
+    pub fn source_of(&self, id: InputId) -> Option<&SourceSpec> {
+        self.show
+            .inputs
+            .iter()
+            .find(|i| i.id == id)
+            .map(|i| &i.source)
+    }
+
+    /// Shortcuts for all shows, as the settings hold them.
+    pub fn all_shows_shortcuts(&self) -> &[ShowShortcut] {
+        &self.all_shows
+    }
+
+    /// Take shortcuts for all shows from the settings (start-up).
+    pub fn set_all_shows_shortcuts(&mut self, shortcuts: Vec<ShowShortcut>) {
+        self.all_shows = shortcuts;
+        self.all_shows_changed = false;
+        self.distinct_shortcut_ids();
+    }
+
+    /// A shortcut for all shows with the id of one of the show's (a show
+    /// saved before it moved) gets a new one: ids name one shortcut.
+    fn distinct_shortcut_ids(&mut self) {
+        for s in &mut self.all_shows {
+            if self.show.shortcuts.iter().any(|o| o.id == s.id) {
+                s.id = InputId::new();
+                self.all_shows_changed = true;
+            }
+        }
+    }
+
+    /// Mark the shortcuts for all shows as changed again (a save failed).
+    pub fn all_shows_unsaved(&mut self) {
+        self.all_shows_changed = true;
+    }
+
+    /// Whether shortcuts for all shows changed since the last call.
+    pub fn take_all_shows_changed(&mut self) -> bool {
+        std::mem::take(&mut self.all_shows_changed)
     }
 
     pub fn slots(&self) -> usize {
@@ -324,6 +496,47 @@ impl Switcher {
 
     fn apply_action(&mut self, action: Action) -> Result<Vec<Command>, ActionError> {
         match action {
+            action @ (Action::AddGraphics { .. }
+            | Action::RemoveGraphics { .. }
+            | Action::RenameGraphics { .. }
+            | Action::TitleLoad { .. }
+            | Action::TitlePlay { .. }
+            | Action::TitleNext { .. }
+            | Action::TitleStop { .. }
+            | Action::TitleClear { .. }
+            | Action::TitleUpdate { .. }
+            | Action::TitleAdd { .. }
+            | Action::TitleTransform { .. }
+            | Action::TitleCall { .. }
+            | Action::TitleBind { .. }
+            | Action::TitleReport { .. }
+            | Action::SetTitleTriggers { .. }
+            | Action::SaveDataset { .. }
+            | Action::RemoveDataset { .. }
+            | Action::ApplyDataset { .. }
+            | Action::DatasetNext { .. }
+            | Action::DatasetPrevious { .. }
+            | Action::AddDataSource { .. }
+            | Action::RemoveDataSource { .. }
+            | Action::DataRow { .. }
+            | Action::DataNext { .. }
+            | Action::DataPrevious { .. }
+            | Action::SetDataAuto { .. }) => {
+                let action = self.with_dynamic_values(action);
+                self.apply_title(action)
+            }
+            Action::SetDynamicInput { slot, input } => {
+                let at = dynamic_index(slot)?;
+                self.dynamic_inputs[at] = match input {
+                    Some(input) => Some(self.show.inputs[self.find(&input)?].id),
+                    None => None,
+                };
+                Ok(Vec::new())
+            }
+            Action::SetDynamicValue { slot, value } => {
+                self.dynamic_values[dynamic_index(slot)?] = value;
+                Ok(Vec::new())
+            }
             Action::AddInput { source, name } => self.add(source, name),
             Action::RemoveInput { input } => {
                 self.check_unlocked()?;
@@ -412,6 +625,29 @@ impl Switcher {
             Action::SetAuxBus { bus, volume, mute } => self.set_aux_bus(bus, volume, mute),
             Action::SetListen { input, listen } => self.set_listen(&input, listen),
             Action::TransportInput { input, transport } => self.transport(&input, transport),
+            Action::SeekInput { input, position_ms } => {
+                let slot = self.transport_slot(&input)?;
+                Ok(vec![Command::Seek { slot, position_ms }])
+            }
+            Action::PlayItem { input, item } => {
+                let index = self.find(&input)?;
+                let entry = &self.show.inputs[index];
+                let SourceSpec::Playlist { paths } = &entry.source else {
+                    return Err(ActionError::NoTransport {
+                        reference: entry.name.clone(),
+                    });
+                };
+                if item == 0 || item as usize > paths.len() {
+                    return Err(ActionError::BadPosition {
+                        number: item,
+                        max: paths.len() as u32,
+                    });
+                }
+                Ok(vec![Command::PlayItem {
+                    slot: entry.slot,
+                    index: item as usize - 1,
+                }])
+            }
             Action::SetSignalLoss { input, mode } => self.set_signal_loss(&input, mode),
             Action::AddOutput {
                 spec,
@@ -448,13 +684,41 @@ impl Switcher {
             Action::AddShortcut { shortcut } => self.add_shortcut(shortcut),
             Action::SetShortcut { target, shortcut } => self.set_shortcut(&target, shortcut),
             Action::RemoveShortcut { target } => {
-                let index = self.find_shortcut(&target)?;
-                self.show.shortcuts.remove(index);
+                match self.find_shortcut(&target)? {
+                    Scope::Show(i) => {
+                        self.show.shortcuts.remove(i);
+                    }
+                    Scope::AllShows(i) => {
+                        self.all_shows.remove(i);
+                        self.all_shows_changed = true;
+                    }
+                }
                 Ok(Vec::new())
             }
             // The service runs a shortcut's actions one by one.
             Action::RunShortcut { .. } => Err(ActionError::BadShortcut {
                 reason: "run through the service".into(),
+            }),
+            Action::SetPtz { input, ptz } => {
+                if let Some(spec) = &ptz {
+                    let port = spec.address.rsplit_once(':').map(|(_, p)| p.parse::<u16>());
+                    if !matches!(port, Some(Ok(p)) if p > 0) {
+                        return Err(ActionError::BadPtz {
+                            reason: format!("\"{}\" is no host:port", spec.address),
+                        });
+                    }
+                }
+                let index = self.find(&input)?;
+                self.show.inputs[index].ptz = ptz;
+                Ok(Vec::new())
+            }
+            // The service sends these to the camera (`ptz_of`).
+            Action::PtzMove { .. }
+            | Action::PtzZoom { .. }
+            | Action::PtzFocus { .. }
+            | Action::PtzHome { .. }
+            | Action::PtzPreset { .. } => Err(ActionError::BadPtz {
+                reason: "sent by the service".into(),
             }),
             Action::Transition { slot } => self.transition(slot),
             Action::SetTransition {
@@ -474,7 +738,16 @@ impl Switcher {
                 channel,
                 duration_ms,
             } => self.overlay_out(channel, duration_ms),
-            Action::NewShow | Action::SaveShow { .. } | Action::OpenShow { .. } => Ok(Vec::new()),
+            // The service reads and writes these files.
+            Action::NewShow
+            | Action::SaveShow { .. }
+            | Action::OpenShow { .. }
+            | Action::AppendShow { .. }
+            | Action::RelocateMedia { .. }
+            | Action::ImportDatasets { .. }
+            | Action::ExportDatasets { .. }
+            | Action::ExportPackage { .. }
+            | Action::ImportPackage { .. } => Ok(Vec::new()),
         }
     }
 
@@ -498,10 +771,13 @@ impl Switcher {
         commands.extend(self.clear_listen());
         commands.extend(self.stop_all_outputs());
         self.show = show;
+        self.distinct_shortcut_ids();
         self.path = path;
         // Closed inputs belong to the old show.
         self.removed.clear();
         self.status.clear();
+        self.titles.reset();
+        self.dynamic_inputs = Default::default();
         commands.extend(self.restore_commands());
         commands
     }
@@ -636,6 +912,8 @@ impl Switcher {
                     .has_transport()
                     .then(|| self.clip_ms.get(&input.slot).copied())
                     .flatten(),
+                ptz: input.ptz.clone(),
+                missing: self.missing.get(&input.id).cloned().unwrap_or_default(),
             })
             .collect();
 
@@ -672,8 +950,10 @@ impl Switcher {
                 .show
                 .shortcuts
                 .iter()
+                .map(|s| (s, false))
+                .chain(self.all_shows.iter().map(|s| (s, true)))
                 .enumerate()
-                .map(|(i, s)| Shortcut {
+                .map(|(i, (s, all_shows))| Shortcut {
                     id: s.id,
                     number: i as u32 + 1,
                     label: s.label.clone(),
@@ -682,6 +962,9 @@ impl Switcher {
                     color: s.color,
                     midi: s.midi,
                     actions: s.actions.clone(),
+                    all_shows,
+                    key_shadowed: all_shows && self.key_shadowed(s),
+                    midi_shadowed: all_shows && self.midi_shadowed(s),
                 })
                 .collect(),
             midi_tbar: self.show.midi_tbar,
@@ -698,6 +981,11 @@ impl Switcher {
                     boxes: l.boxes.clone(),
                 })
                 .collect(),
+            dynamic_inputs: self.dynamic_inputs,
+            dynamic_values: self.dynamic_values.clone(),
+            graphics: self.graphics_state(),
+            datasets: self.show.datasets.clone(),
+            data_sources: self.data_sources_state(),
         }
     }
 
@@ -746,6 +1034,7 @@ impl Switcher {
             sends: [0; AUX_BUSES],
             look: Look::default(),
             triggers: Vec::new(),
+            ptz: None,
         });
         self.status.insert(id, InputStatus::Starting);
 
@@ -1075,19 +1364,8 @@ impl Switcher {
         triggers: Vec<Trigger>,
     ) -> Result<Vec<Command>, ActionError> {
         let bad = |reason: String| Err(ActionError::BadTriggers { reason });
-        if triggers.len() > TRIGGERS {
-            return bad(format!("at most {TRIGGERS} per input"));
-        }
+        check_triggers(triggers.iter().map(|t| (t.delay_ms, t.actions.as_slice())))?;
         for trigger in &triggers {
-            if trigger.delay_ms > TRIGGER_DELAY_MAX_MS {
-                return bad(format!("delays are at most {TRIGGER_DELAY_MAX_MS} ms"));
-            }
-            if trigger.actions.is_empty() || trigger.actions.len() > AUTOMATION_ACTIONS {
-                return bad(format!("1–{AUTOMATION_ACTIONS} actions each"));
-            }
-            if trigger.actions.iter().any(runs_automation) {
-                return bad("triggers cannot run shortcuts, cues or change automation".into());
-            }
             match (trigger.on, trigger.before_ms) {
                 (TriggerOn::ClipEnd, Some(ms)) if ms > CLIP_COUNTDOWN_MAX_MS => {
                     return bad(format!(
@@ -1097,11 +1375,22 @@ impl Switcher {
                 (TriggerOn::ClipEnd, _) | (_, None) => {}
                 (_, Some(_)) => return bad("only clip_end has a time before the end".into()),
             }
+            match (trigger.on, trigger.at_ms) {
+                (TriggerOn::PlayTime, None | Some(0)) => {
+                    return bad("play_time needs at_ms, the playing time (at least 1 ms)".into());
+                }
+                (TriggerOn::PlayTime, _) | (_, None) => {}
+                (_, Some(_)) => return bad("only play_time has a playing time".into()),
+            }
         }
         let index = self.find(input)?;
         let plays = self.show.inputs[index].source.has_transport();
-        if !plays && triggers.iter().any(|t| t.on == TriggerOn::ClipEnd) {
-            return bad("clip_end needs a file, URL or playlist input".into());
+        if !plays
+            && triggers
+                .iter()
+                .any(|t| matches!(t.on, TriggerOn::ClipEnd | TriggerOn::PlayTime))
+        {
+            return bad("clip_end and play_time need a file, URL or playlist input".into());
         }
         self.show.inputs[index].triggers = triggers;
         Ok(Vec::new())
@@ -1128,10 +1417,11 @@ impl Switcher {
         input
             .triggers
             .iter()
-            .filter(|t| t.on == TriggerOn::ClipEnd)
-            .filter(|t| match t.before_ms {
-                None => change.ended,
-                Some(ms) => change.crosses(u64::from(ms)),
+            .filter(|t| match (t.on, t.before_ms, t.at_ms) {
+                (TriggerOn::ClipEnd, None, _) => change.ended,
+                (TriggerOn::ClipEnd, Some(ms), _) => change.crosses(u64::from(ms)),
+                (TriggerOn::PlayTime, _, Some(ms)) => change.reaches(u64::from(ms)),
+                _ => false,
             })
             .map(|t| (t.delay_ms, t.actions.clone()))
             .collect()
@@ -1283,20 +1573,79 @@ impl Switcher {
         Ok(commands)
     }
 
+    /// Add inputs of `other` (by number there, all if `numbers` is empty)
+    /// with their settings, at the end, in free slots (SHW.3). Their
+    /// triggers stay behind: their actions name inputs of the other show.
+    /// All or none: too few free slots refuses the lot.
+    pub fn append(&mut self, other: Show, numbers: &[u32]) -> Result<Vec<Command>, ActionError> {
+        let chosen: Vec<ShowInput> = if numbers.is_empty() {
+            other.inputs
+        } else {
+            numbers
+                .iter()
+                .map(|n| {
+                    (*n as usize)
+                        .checked_sub(1)
+                        .and_then(|i| other.inputs.get(i))
+                        .cloned()
+                        .ok_or_else(|| ActionError::UnknownInput {
+                            reference: n.to_string(),
+                        })
+                })
+                .collect::<Result<_, _>>()?
+        };
+        let free = (0..self.slots)
+            .filter(|s| !self.show.inputs.iter().any(|i| i.slot == *s))
+            .count();
+        if chosen.len() > free {
+            return Err(ActionError::SlotsFull { slots: self.slots });
+        }
+        let mut commands = Vec::new();
+        for mut input in chosen {
+            input.id = InputId::new();
+            input.slot = self.free_slot().expect("counted above");
+            input.triggers.clear();
+            // Names pick inputs in actions: a second "Cam 1" becomes "Cam 1 (2)".
+            let base = input.name.clone();
+            let mut n = 2;
+            while self.show.inputs.iter().any(|i| i.name == input.name) {
+                input.name = format!("{base} ({n})");
+                n += 1;
+            }
+            // Back in through the same door as a closed input.
+            self.removed.push((self.show.inputs.len(), input));
+            commands.extend(self.restore_input()?);
+        }
+        // Their sound as the mix says (follow video, mute), like any change.
+        commands.extend(self.audio_commands(AUDIO_RAMP_MS));
+        Ok(commands)
+    }
+
     // ---- Shortcuts ----
 
     fn add_shortcut(&mut self, spec: ShortcutSpec) -> Result<Vec<Command>, ActionError> {
         self.check_shortcut(&spec, None)?;
-        self.show.shortcuts.push(ShowShortcut {
-            id: InputId::new(),
+        self.keep_shortcut(spec, InputId::new());
+        Ok(Vec::new())
+    }
+
+    /// Puts a checked shortcut at the end of its list.
+    fn keep_shortcut(&mut self, spec: ShortcutSpec, id: InputId) {
+        let entry = ShowShortcut {
+            id,
             label: spec.label,
             key: spec.key,
             web: spec.web,
             color: spec.color,
             midi: spec.midi,
             actions: spec.actions,
-        });
-        Ok(Vec::new())
+        };
+        if spec.all_shows {
+            self.all_shows.push(entry);
+            self.all_shows_changed = true;
+        } else {
+            self.show.shortcuts.push(entry);
+        }
     }
 
     fn set_shortcut(
@@ -1304,9 +1653,29 @@ impl Switcher {
         target: &InputRef,
         spec: ShortcutSpec,
     ) -> Result<Vec<Command>, ActionError> {
-        let index = self.find_shortcut(target)?;
-        self.check_shortcut(&spec, Some(index))?;
-        let entry = &mut self.show.shortcuts[index];
+        let scope = self.find_shortcut(target)?;
+        self.check_shortcut(&spec, Some(scope))?;
+        let entry = match scope {
+            Scope::Show(i) if !spec.all_shows => &mut self.show.shortcuts[i],
+            Scope::AllShows(i) if spec.all_shows => {
+                self.all_shows_changed = true;
+                &mut self.all_shows[i]
+            }
+            // Moved between the show and the settings, at the end. A new
+            // id: an older copy of the show (file, package) may still hold
+            // the old one.
+            Scope::Show(i) => {
+                self.show.shortcuts.remove(i);
+                self.keep_shortcut(spec, InputId::new());
+                return Ok(Vec::new());
+            }
+            Scope::AllShows(i) => {
+                self.all_shows.remove(i);
+                self.all_shows_changed = true;
+                self.keep_shortcut(spec, InputId::new());
+                return Ok(Vec::new());
+            }
+        };
         entry.label = spec.label;
         entry.key = spec.key;
         entry.web = spec.web;
@@ -1316,9 +1685,27 @@ impl Switcher {
         Ok(Vec::new())
     }
 
-    /// A label, a free key, and actions that do not manage or run
-    /// shortcuts themselves (no loops).
-    fn check_shortcut(&self, spec: &ShortcutSpec, own: Option<usize>) -> Result<(), ActionError> {
+    /// A shortcut for all shows whose key one of the show's has: the
+    /// show's wins.
+    fn key_shadowed(&self, shortcut: &ShowShortcut) -> bool {
+        shortcut.key.is_some() && self.show.shortcuts.iter().any(|s| s.key == shortcut.key)
+    }
+
+    /// The same for its MIDI note or controller, also against the T-bar.
+    fn midi_shadowed(&self, shortcut: &ShowShortcut) -> bool {
+        shortcut.midi.is_some_and(|m| {
+            self.show
+                .shortcuts
+                .iter()
+                .any(|s| s.midi.is_some_and(|o| o.overlaps(&m)))
+                || self.show.midi_tbar.is_some_and(|t| t.overlaps(&m))
+        })
+    }
+
+    /// A label, a key and MIDI note free among the shortcuts it is kept
+    /// with (a show's may take those of one for all shows), and actions
+    /// that do not manage or run shortcuts themselves (no loops).
+    fn check_shortcut(&self, spec: &ShortcutSpec, own: Option<Scope>) -> Result<(), ActionError> {
         let bad = |reason: String| Err(ActionError::BadShortcut { reason });
         if spec.label.trim().is_empty() {
             return bad("it needs a label".into());
@@ -1329,10 +1716,22 @@ impl Switcher {
         if spec.actions.iter().any(changes_shortcuts) {
             return bad("a shortcut cannot run or change shortcuts".into());
         }
+        // The others it is kept with.
+        let (list, own) = if spec.all_shows {
+            let own = match own {
+                Some(Scope::AllShows(i)) => Some(i),
+                _ => None,
+            };
+            (&self.all_shows, own)
+        } else {
+            let own = match own {
+                Some(Scope::Show(i)) => Some(i),
+                _ => None,
+            };
+            (&self.show.shortcuts, own)
+        };
         let key_taken = spec.key.as_ref().is_some_and(|key| {
-            self.show
-                .shortcuts
-                .iter()
+            list.iter()
                 .enumerate()
                 .any(|(i, s)| Some(i) != own && s.key.as_ref() == Some(key))
         });
@@ -1343,13 +1742,13 @@ impl Switcher {
             if !midi.is_valid() {
                 return bad("MIDI channel 1–16, number 0–127".into());
             }
-            let taken = self
-                .show
-                .shortcuts
+            let taken = list
                 .iter()
                 .enumerate()
                 .any(|(i, s)| Some(i) != own && s.midi.is_some_and(|m| m.overlaps(midi)));
-            if taken || self.show.midi_tbar.is_some_and(|m| m.overlaps(midi)) {
+            // A show's T-bar only shadows a shortcut for all shows.
+            let tbar = !spec.all_shows && self.show.midi_tbar.is_some_and(|m| m.overlaps(midi));
+            if taken || tbar {
                 return bad(
                     "another shortcut or the T-bar has that MIDI note or controller".into(),
                 );
@@ -1360,10 +1759,18 @@ impl Switcher {
 
     /// The shortcut a MIDI message runs.
     pub fn midi_shortcut(&self, message: &MidiMessage) -> Option<InputId> {
+        let hit = |s: &&ShowShortcut| s.midi.is_some_and(|m| m.matches(message));
+        // The show's first, then those for all shows it does not shadow.
         self.show
             .shortcuts
             .iter()
-            .find(|s| s.midi.is_some_and(|m| m.matches(message)))
+            .find(hit)
+            .or_else(|| {
+                self.all_shows
+                    .iter()
+                    .filter(|s| !self.midi_shadowed(s))
+                    .find(hit)
+            })
             .map(|s| s.id)
     }
 
@@ -1374,29 +1781,40 @@ impl Switcher {
 
     /// Actions of a shortcut, for the service to run.
     pub fn shortcut_actions(&self, target: &InputRef) -> Result<Vec<Action>, ActionError> {
-        Ok(self.show.shortcuts[self.find_shortcut(target)?]
-            .actions
-            .clone())
+        Ok(match self.find_shortcut(target)? {
+            Scope::Show(i) => &self.show.shortcuts[i],
+            Scope::AllShows(i) => &self.all_shows[i],
+        }
+        .actions
+        .clone())
     }
 
-    /// A shortcut by number (1-based), id or label.
-    fn find_shortcut(&self, target: &InputRef) -> Result<usize, ActionError> {
-        let shortcuts = &self.show.shortcuts;
+    /// A shortcut by number (1-based, the show's first), id or label (the
+    /// show's first).
+    fn find_shortcut(&self, target: &InputRef) -> Result<Scope, ActionError> {
+        let local = self.show.shortcuts.len();
+        let all: Vec<&ShowShortcut> = self.show.shortcuts.iter().chain(&self.all_shows).collect();
         let index = match target {
-            InputRef::Number(n) => (*n as usize)
-                .checked_sub(1)
-                .filter(|i| *i < shortcuts.len()),
-            InputRef::Text(text) => shortcuts
+            InputRef::Number(n) => (*n as usize).checked_sub(1).filter(|i| *i < all.len()),
+            InputRef::Text(text) => all
                 .iter()
                 .position(|s| s.id.to_string() == *text)
-                .or_else(|| shortcuts.iter().position(|s| s.label == *text)),
+                .or_else(|| all.iter().position(|s| s.label == *text)),
         };
-        index.ok_or_else(|| ActionError::UnknownShortcut {
-            reference: match target {
-                InputRef::Number(n) => n.to_string(),
-                InputRef::Text(t) => format!("\"{t}\""),
-            },
-        })
+        index
+            .map(|i| {
+                if i < local {
+                    Scope::Show(i)
+                } else {
+                    Scope::AllShows(i - local)
+                }
+            })
+            .ok_or_else(|| ActionError::UnknownShortcut {
+                reference: match target {
+                    InputRef::Number(n) => n.to_string(),
+                    InputRef::Text(t) => format!("\"{t}\""),
+                },
+            })
     }
 
     // ---- Layouts ----
@@ -1507,6 +1925,7 @@ impl Switcher {
                 input,
                 border_px: spec.border_px,
                 crop: spec.crop,
+                locked: spec.locked,
             });
         }
         Ok((background, parts))
@@ -2023,17 +2442,21 @@ impl Switcher {
         input: &InputRef,
         transport: Transport,
     ) -> Result<Vec<Command>, ActionError> {
-        let index = self.find(input)?;
-        let entry = &self.show.inputs[index];
+        Ok(vec![Command::Transport {
+            slot: self.transport_slot(input)?,
+            transport,
+        }])
+    }
+
+    /// Slot of a file, URL or playlist input.
+    fn transport_slot(&self, input: &InputRef) -> Result<usize, ActionError> {
+        let entry = &self.show.inputs[self.find(input)?];
         if !entry.source.has_transport() {
             return Err(ActionError::NoTransport {
                 reference: entry.name.clone(),
             });
         }
-        Ok(vec![Command::Transport {
-            slot: entry.slot,
-            transport,
-        }])
+        Ok(entry.slot)
     }
 
     fn set_listen(
@@ -2138,6 +2561,65 @@ impl Switcher {
     }
 
     /// Slot that carries `input`.
+    /// `{value1}`… in title texts and function arguments replaced by the
+    /// dynamic values (AUT.5).
+    fn with_dynamic_values(&self, mut action: Action) -> Action {
+        // One pass: a value that says `{value2}` stays as it is.
+        let fill = |text: &mut String| {
+            if !text.contains("{value") {
+                return;
+            }
+            let mut out = String::new();
+            let mut rest = text.as_str();
+            while let Some(at) = rest.find("{value") {
+                out.push_str(&rest[..at]);
+                let tail = &rest[at..];
+                let slot = tail
+                    .get(6..8)
+                    .filter(|t| t.ends_with('}'))
+                    .and_then(|t| t[..1].parse::<usize>().ok())
+                    .filter(|n| (1..=self.dynamic_values.len()).contains(n));
+                match slot {
+                    Some(n) => {
+                        out.push_str(&self.dynamic_values[n - 1]);
+                        rest = &tail[8..];
+                    }
+                    None => {
+                        out.push_str("{value");
+                        rest = &tail[6..];
+                    }
+                }
+            }
+            out.push_str(rest);
+            *text = out;
+        };
+        match &mut action {
+            Action::TitleLoad { data, .. } | Action::TitleUpdate { data, .. } => {
+                data.values_mut().for_each(fill)
+            }
+            Action::TitleCall { args, .. } => args.iter_mut().for_each(fill),
+            _ => {}
+        }
+        action
+    }
+
+    /// The input that feeds mixer slot `slot`.
+    pub fn input_at_slot(&self, slot: usize) -> Option<InputId> {
+        self.show
+            .inputs
+            .iter()
+            .find(|i| i.slot == slot)
+            .map(|i| i.id)
+    }
+
+    /// PTZ address of the input `input` names.
+    pub fn ptz_of(&self, input: &InputRef) -> Result<lmix_types::PtzSpec, ActionError> {
+        let entry = &self.show.inputs[self.find(input)?];
+        entry.ptz.clone().ok_or_else(|| ActionError::BadPtz {
+            reason: format!("{} has no PTZ address", entry.name),
+        })
+    }
+
     pub fn slot_for(&self, input: &InputRef) -> Result<usize, ActionError> {
         let index = self.find(input)?;
         Ok(self.show.inputs[index].slot)
@@ -2174,6 +2656,13 @@ impl Switcher {
         }
         if text == REF_PROGRAM {
             return by_id(self.show.program);
+        }
+        if let Some(slot) = text
+            .strip_prefix(REF_DYNAMIC)
+            .and_then(|n| n.parse::<u8>().ok())
+            .filter(|n| (1..=DYNAMIC_SLOTS).contains(n))
+        {
+            return by_id(self.dynamic_inputs[usize::from(slot - 1)]);
         }
         if let Ok(uuid) = Uuid::parse_str(text) {
             return by_id(Some(InputId(uuid)));
@@ -2315,6 +2804,96 @@ mod tests {
         add(&mut sw, "A");
         add(&mut sw, "B");
         sw
+    }
+
+    #[test]
+    fn dynamic_inputs_pick_then_act() {
+        let mut sw = two_inputs();
+        let dynamic = || InputRef::Text("dynamic2".into());
+
+        assert!(matches!(
+            sw.apply(Action::PreviewInput { input: dynamic() }),
+            Err(ActionError::UnknownInput { .. })
+        ));
+        sw.apply(Action::SetDynamicInput {
+            slot: 2,
+            input: Some(named("B")),
+        })
+        .unwrap();
+        sw.apply(Action::PreviewInput { input: dynamic() }).unwrap();
+        let state = sw.state();
+        assert_eq!(state.preview, Some(state.inputs[1].id));
+        assert_eq!(state.dynamic_inputs[1], Some(state.inputs[1].id));
+
+        sw.apply(Action::SetDynamicInput {
+            slot: 2,
+            input: None,
+        })
+        .unwrap();
+        assert!(sw.apply(Action::PreviewInput { input: dynamic() }).is_err());
+        for slot in [0, 5] {
+            assert!(matches!(
+                sw.apply(Action::SetDynamicValue {
+                    slot,
+                    value: "x".into()
+                }),
+                Err(ActionError::BadDynamic { .. })
+            ));
+        }
+    }
+
+    #[test]
+    fn dynamic_values_fill_title_texts() {
+        let mut sw = two_inputs();
+        sw.set_templates(std::collections::HashMap::from([(
+            "t".to_string(),
+            TemplateRef {
+                url: "/t".into(),
+                revision: 0,
+            },
+        )]));
+        sw.apply(Action::AddGraphics { name: None }).unwrap();
+        sw.apply(Action::SetDynamicValue {
+            slot: 1,
+            value: "Guest".into(),
+        })
+        .unwrap();
+        sw.apply(Action::TitleLoad {
+            graphics: InputRef::Number(1),
+            layer: 1,
+            template: "t".into(),
+            data: lmix_types::TitleData::from([(
+                "name".to_string(),
+                "Hello {value1}!".to_string(),
+            )]),
+            play: false,
+        })
+        .unwrap();
+
+        assert_eq!(
+            sw.state().graphics[0].layers[0].data["name"],
+            "Hello Guest!"
+        );
+        assert_eq!(sw.state().dynamic_values[0], "Guest");
+        // One pass: a value naming another slot stays literal.
+        sw.apply(Action::SetDynamicValue {
+            slot: 2,
+            value: "{value1}".into(),
+        })
+        .unwrap();
+        sw.apply(Action::TitleUpdate {
+            graphics: InputRef::Number(1),
+            layer: 1,
+            data: lmix_types::TitleData::from([(
+                "name".to_string(),
+                "{value2} {value9} {value".to_string(),
+            )]),
+        })
+        .unwrap();
+        assert_eq!(
+            sw.state().graphics[0].layers[0].data["name"],
+            "{value1} {value9} {value"
+        );
     }
 
     #[test]
@@ -3049,9 +3628,12 @@ mod tests {
                     input: named("B"),
                     border_px: 4,
                     crop: ZOOM,
+                    locked: true,
                 }],
             })
             .unwrap();
+        // The editor's lock stays with the layout, the engine never sees it.
+        assert!(sw.state().layouts[0].boxes[0].locked);
         assert_eq!(
             cmds,
             [Command::SetLayout {
@@ -3138,6 +3720,7 @@ mod tests {
             input: named(input),
             border_px: 0,
             crop: BoxCrop::default(),
+            locked: false,
         };
         let nothing_left = BoxSpec {
             crop: BoxCrop {
@@ -3207,6 +3790,7 @@ mod tests {
             color: None,
             midi: None,
             actions,
+            all_shows: false,
         }
     }
 
@@ -3325,6 +3909,102 @@ mod tests {
         })
         .unwrap();
         assert!(sw.state().shortcuts.is_empty());
+    }
+
+    #[test]
+    fn shortcuts_for_all_shows_stay_and_give_way() {
+        let mut sw = two_inputs();
+        let everywhere = |label: &str, key: &str, note: u8| ShortcutSpec {
+            all_shows: true,
+            midi: Some(MidiBinding {
+                kind: MidiKind::Note,
+                channel: Some(1),
+                number: note,
+            }),
+            ..shortcut(label, Some(key), vec![Action::Cut])
+        };
+        sw.apply(Action::AddShortcut {
+            shortcut: everywhere("Cut", "F1", 36),
+        })
+        .unwrap();
+        assert!(sw.take_all_shows_changed());
+        // A show's shortcut may take the same key: it wins.
+        sw.apply(Action::AddShortcut {
+            shortcut: shortcut("Show cut", Some("F1"), vec![Action::Cut]),
+        })
+        .unwrap();
+        let state = sw.state();
+        assert_eq!(
+            state
+                .shortcuts
+                .iter()
+                .map(|s| (s.number, s.all_shows, s.key_shadowed, s.midi_shadowed))
+                .collect::<Vec<_>>(),
+            [(1, false, false, false), (2, true, true, false)]
+        );
+        // Two for all shows may not share a key.
+        assert!(matches!(
+            sw.apply(Action::AddShortcut {
+                shortcut: everywhere("Again", "F1", 37)
+            }),
+            Err(ActionError::BadShortcut { .. })
+        ));
+        let note = |n| MidiMessage {
+            kind: MidiKind::Note,
+            channel: 1,
+            number: n,
+            value: 100,
+        };
+        assert_eq!(sw.midi_shortcut(&note(36)), Some(state.shortcuts[1].id));
+
+        // Moved into the show: out of the settings, with a new id.
+        let id = state.shortcuts[1].id;
+        sw.apply(Action::SetShortcut {
+            target: InputRef::Number(2),
+            shortcut: ShortcutSpec {
+                key: Some("F3".into()),
+                ..shortcut("Cut", None, vec![Action::Cut])
+            },
+        })
+        .unwrap();
+        assert!(sw.take_all_shows_changed());
+        assert!(sw.all_shows_shortcuts().is_empty());
+        assert_ne!(sw.state().shortcuts[1].id, id);
+        assert!(!sw.state().shortcuts[1].all_shows);
+        // Settings holding an id the show has (saved before a move): renamed.
+        let in_show = sw.state().shortcuts[1].id;
+        sw.set_all_shows_shortcuts(vec![crate::show::ShowShortcut {
+            id: in_show,
+            label: "Twin".into(),
+            key: None,
+            web: false,
+            color: None,
+            midi: None,
+            actions: vec![Action::Cut],
+        }]);
+        assert_ne!(sw.all_shows_shortcuts()[0].id, in_show);
+        assert!(sw.take_all_shows_changed());
+
+        // A new show keeps the ones for all shows.
+        sw.set_all_shows_shortcuts(vec![crate::show::ShowShortcut {
+            id,
+            label: "Cut".into(),
+            key: Some("F1".into()),
+            web: false,
+            color: None,
+            midi: None,
+            actions: vec![Action::Cut],
+        }]);
+        sw.replace(crate::show::Show::default(), None);
+        let state = sw.state();
+        assert_eq!(state.shortcuts.len(), 1);
+        assert!(state.shortcuts[0].all_shows && !state.shortcuts[0].key_shadowed);
+        sw.apply(Action::RemoveShortcut {
+            target: InputRef::Number(1),
+        })
+        .unwrap();
+        assert!(sw.take_all_shows_changed());
+        assert!(sw.all_shows_shortcuts().is_empty());
     }
 
     #[test]
@@ -3465,6 +4145,7 @@ mod tests {
             on: TriggerOn::ClipEnd,
             delay_ms: 0,
             before_ms,
+            at_ms: None,
             actions: vec![Action::Cut],
         };
         assert!(matches!(
@@ -3493,14 +4174,44 @@ mod tests {
         let slot = sw.state().inputs[2].slot;
         let ended = crate::clips::ClipChange {
             ended: true,
-            left_ms: None,
+            ..Default::default()
         };
         let counting = crate::clips::ClipChange {
-            ended: false,
             left_ms: Some((3_100, 2_900)),
+            played_ms: Some((6_900, 7_100)),
+            ..Default::default()
         };
         assert_eq!(sw.clip_triggers(slot, &ended).len(), 1);
         assert_eq!(sw.clip_triggers(slot, &counting).len(), 1);
+        // At 7 s of playing time.
+        sw.apply(Action::SetTriggers {
+            input: named("Intro"),
+            triggers: vec![Trigger {
+                on: TriggerOn::PlayTime,
+                at_ms: Some(7_000),
+                ..at_end(None)
+            }],
+        })
+        .unwrap();
+        assert_eq!(sw.clip_triggers(slot, &counting).len(), 1);
+        assert!(sw.clip_triggers(slot, &ended).is_empty());
+        for wrong in [
+            Trigger {
+                on: TriggerOn::PlayTime,
+                ..at_end(None)
+            },
+            Trigger {
+                at_ms: Some(1),
+                ..at_end(None)
+            },
+        ] {
+            assert!(sw
+                .apply(Action::SetTriggers {
+                    input: named("Intro"),
+                    triggers: vec![wrong],
+                })
+                .is_err());
+        }
         assert!(sw
             .clip_triggers(sw.state().inputs[0].slot, &ended)
             .is_empty());
@@ -3516,12 +4227,14 @@ mod tests {
                     on: TriggerOn::Program,
                     delay_ms: 1000,
                     before_ms: None,
+                    at_ms: None,
                     actions: vec![Action::FadeToBlack { duration_ms: 500 }],
                 },
                 Trigger {
                     on: TriggerOn::ProgramOff,
                     delay_ms: 0,
                     before_ms: None,
+                    at_ms: None,
                     actions: vec![Action::Cut],
                 },
             ],
@@ -3546,6 +4259,7 @@ mod tests {
                     on: TriggerOn::Preview,
                     delay_ms: 60_000,
                     before_ms: None,
+                    at_ms: None,
                     actions: vec![Action::Cut],
                 }],
             }),
@@ -3724,6 +4438,50 @@ mod tests {
             })
             .unwrap_err();
         assert!(matches!(err, ActionError::NoTransport { .. }));
+
+        // Jumping in the clip, and to an item of a playlist.
+        assert_eq!(
+            sw.apply(Action::SeekInput {
+                input: named("Clip"),
+                position_ms: 12_500,
+            })
+            .unwrap(),
+            [Command::Seek {
+                slot: 2,
+                position_ms: 12_500
+            }]
+        );
+        sw.apply(Action::AddInput {
+            source: SourceSpec::Playlist {
+                paths: vec!["/a.mp4".into(), "/b.mp4".into()],
+            },
+            name: Some("List".into()),
+        })
+        .unwrap();
+        assert_eq!(
+            sw.apply(Action::PlayItem {
+                input: named("List"),
+                item: 2,
+            })
+            .unwrap(),
+            [Command::PlayItem { slot: 3, index: 1 }]
+        );
+        for item in [0, 3] {
+            assert!(matches!(
+                sw.apply(Action::PlayItem {
+                    input: named("List"),
+                    item,
+                }),
+                Err(ActionError::BadPosition { .. })
+            ));
+        }
+        assert!(matches!(
+            sw.apply(Action::PlayItem {
+                input: named("Clip"),
+                item: 1,
+            }),
+            Err(ActionError::NoTransport { .. })
+        ));
     }
 
     #[test]

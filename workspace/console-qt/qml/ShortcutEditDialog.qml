@@ -31,6 +31,7 @@ KanteDialog {
         label.text = shortcut ? shortcut.label : ""
         keyButton.sequence = shortcut && shortcut.key ? shortcut.key : ""
         web.checked = shortcut ? shortcut.web : true
+        allShows.checked = shortcut ? shortcut.all_shows === true : false
         midi.binding = shortcut && shortcut.midi ? shortcut.midi : null
         actions.load(shortcut ? shortcut.actions : [])
     }
@@ -38,9 +39,10 @@ KanteDialog {
     Component.onCompleted: standardButton(QQC2.Dialog.Ok).enabled = Qt.binding(() => actions.error === "" && actions.filled > 0 && label.text.trim() !== "")
 
     onAccepted: {
-        var spec = { label: label.text.trim(), key: keyButton.sequence || null, midi: midi.binding, web: web.checked, actions: actions.collect() }
+        var spec = { label: label.text.trim(), key: keyButton.sequence || null, midi: midi.binding, web: web.checked,
+            all_shows: allShows.checked, actions: actions.collect() }
         if (shortcut)
-            act({ action: "set_shortcut", target: shortcut.number, shortcut: spec })
+            act({ action: "set_shortcut", target: shortcut.id, shortcut: spec })
         else
             act({ action: "add_shortcut", shortcut: spec })
     }
@@ -103,6 +105,13 @@ KanteDialog {
                 id: web
                 text: qsTr("Web page")
                 KanteCheckSkin { control: web }
+            }
+            QQC2.CheckBox {
+                id: allShows
+                text: qsTr("All shows")
+                QQC2.ToolTip.visible: hovered
+                QQC2.ToolTip.text: qsTr("Kept in lmix-core's settings and in every show; a shortcut of the show with the same key or MIDI note wins.")
+                KanteCheckSkin { control: allShows }
             }
         }
 

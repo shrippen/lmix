@@ -71,7 +71,7 @@ PIDS+=($!)
 PIDS+=($!)
 wait_up "http://127.0.0.1:${STROM_PORT}/health" strom
 "$CORE_BIN" --strom "http://127.0.0.1:${STROM_PORT}" --listen "127.0.0.1:${CORE_PORT}" --mixer cpu \
-    --slots 2 --autosave "$WORK/autosave.lmix" --live-dir "$LIVE_DIR" >"$WORK/core.log" 2>&1 &
+    --slots 2 --autosave "$WORK/autosave.lmix" --shortcuts "$WORK/shortcuts.json" --live-dir "$LIVE_DIR" >"$WORK/core.log" 2>&1 &
 PIDS+=($!)
 wait_up "$CORE/state" lmix-core
 
@@ -82,8 +82,10 @@ sleep 2
 
 # The window opens at its default size (80 × 50 grid units of 18 px) at 0,0.
 unset WAYLAND_DISPLAY
-DISPLAY="$DISPLAY_NO" QT_QPA_PLATFORM=xcb QT_FORCE_STDERR_LOGGING=1 LMIX_CORE="http://127.0.0.1:${CORE_PORT}" \
-    "$CONSOLE_BIN" >"$WORK/console.log" 2>&1 &
+# Own settings: the Console writes style, keys and view settings on use,
+# never into the operator's ~/.config/lmix/console.conf.
+XDG_CONFIG_HOME="$WORK/config" DISPLAY="$DISPLAY_NO" QT_QPA_PLATFORM=xcb QT_FORCE_STDERR_LOGGING=1 \
+    LMIX_CORE="http://127.0.0.1:${CORE_PORT}" "$CONSOLE_BIN" >"$WORK/console.log" 2>&1 &
 PIDS+=($!)
 PROGRAM_AREA="600x340+810+180"
 PREVIEW_AREA="600x340+20+180"

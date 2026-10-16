@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>lmix titles</title>
+<link rel="stylesheet" href="/web/lmix.css">
+<style>
+  #error { color: var(--red); font-family: var(--font-mono); font-size: .8rem; min-height: 1.2em; }
+  .layers { display: grid; gap: .4rem; max-width: 48rem; }
+  .layer { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; padding: .5rem; background: var(--bg0);
+    border-left: 4px solid var(--bg2); cursor: pointer; }
+  .layer.selected { border-left-color: var(--yellow); }
+  .layer .num { font-family: var(--font-mono); color: var(--fg3); width: 1.5rem; }
+  .layer .name { flex: 1; min-width: 8rem; color: var(--fg0); }
+  .layer .phase { font-family: var(--font-mono); font-size: .7rem; letter-spacing: .12em; text-transform: uppercase; color: var(--fg3); }
+  .layer .phase.playing { color: var(--red); }
+  .layer .btn { min-height: 2.4rem; }
+  form.fields { display: grid; gap: .5rem; max-width: 48rem; margin-top: .8rem; }
+  form.fields label { display: grid; gap: .2rem; }
+  form.fields input, form.fields textarea, form.fields select { background: var(--bg0); color: var(--fg0);
+    border: 1px solid var(--bg2); padding: .5rem; font: inherit; width: 100%; }
+  form.fields .bound { color: var(--fg3); font-family: var(--font-mono); font-size: .75rem; }
+  .row input { background: var(--bg0); color: var(--fg0); border: 1px solid var(--bg2); padding: .5rem; font: inherit; }
+</style>
+</head>
+<body>
+<header class="bar"><h1>lmix titles</h1><span class="state">…</span></header>
+<main>
+  <div class="row" id="channels"></div>
+  <div id="error"></div>
+  <p class="label" id="empty" hidden>No graphics channel yet: add one in the Console ("Titles…").</p>
+  <div class="layers" id="layers"></div>
+  <form class="fields" id="fields" hidden></form>
+  <p class="label" id="sets-label" hidden>Data sets</p>
+  <div class="row" id="sets"></div>
+</main>
+<script src="/web/lmix.js"></script>
+<script>
+"use strict";
+// Titles page (WEB.4): a channel's layers with play / next / stop, the
+// selected layer's fields to edit and apply, and its data sets to use or
+// save. Values may come from data sources: built with DOM nodes, never
+// as HTML.
+let state = null, templates = [], channelAt = 0, layerNo = null;
+
+function act(action) {
+  return lmixAct(action).then(() => show("")).catch(e => show(errorText(e.message)));
+}
+function errorText(text) {
+  try { const e = JSON.parse(text); return e.message || (e.error && e.error.error) || text; } catch (_) { return text; }
+}
+function show(text) { document.getElementById("error").textContent = text; }
+function node(tag, props, ...children) {
+  const el = Object.assign(document.createElement(tag), props || {});
+  for (const c of children) el.append(c);
+  return el;
+}
+function button(text, action, primary) {
+  const b = node("button", { className: "btn" + (primary ? " primary" : ""), type: "button", textContent: text });
+  b.addEventListener("click", (e) => { e.stopPropagation(); act(action); });
+  return b;
+}
+async function loadTemplates() {
+  try { templates = await (await fetch("/api/templates")).json(); } catch (e) { templates = []; }
+}
+const templateOf = (id) => templates.find((t) => t.id === id);
+// Template texts in the browser's language, if the manifest has them.
+const lang = (navigator.language || "").slice(0, 2);
+const texts = (t) => (t && t.i18n && t.i18n[lang]) || {};
+const templateName = (t) => texts(t).name || t.name;
+const fieldLabel = (t, f) => (texts(t).fields || {})[f.id] || f.label;
+
+function render() {
+  const channels = state.graphics || [];
+  document.getElementById("empty").hidden = channels.length > 0;
+  channelAt = Math.min(channelAt, Math.max(0, channels.length - 1));
+  const g = channels[channelAt];
+  const row = document.getElementById("channels");
+  row.replaceChildren(...channels.map((c, i) => {
+    const b = node("button", { className: "btn" + (i === channelAt ? " primary" : ""), type: "button",
+      textContent: `${c.number} ${c.name}` });
+    b.addEventListener("click", () => { channelAt = i; layerNo = null; render(); });
+    return b;
+  }));
+  if (g) {
+    row.append(node("a", { className: "btn", href: `${g.page}?preview`, target: "_blank", textContent: "Preview" }));
+  }
+  renderLayers(g);
+  renderFields(g);
+  renderSets(g);
+}
+
+function renderLayers(g) {
+  const list = document.getElementById("layers");
+  if (!g) { list.replaceChildren(); return; }
+  if (layerNo === null && g.layers.length > 0) layerNo = g.layers[g.layers.length - 1].layer;
+  list.replaceChildren(...g.layers.slice().reverse().map((l) => {
+    const t = templateOf(l.template);
+    const ref = { graphics: g.number, layer: l.layer };
+    const row = node("div", { className: "layer" + (l.layer === layerNo ? " selected" : "") },
+      node("span", { className: "num", textContent: String(l.layer) }),
+      node("span", { className: "name", textContent: t ? templateName(t) : l.template }),
+      node("span", { className: "phase " + l.phase, textContent: l.phase === "playing" ? "on air" : l.phase }),
+      button("Play", Object.assign({ action: "title_play" }, ref), true));
+    if (t && t.steps > 0) row.append(button("Next", Object.assign({ action: "title_next" }, ref)));
+    row.append(button("Stop", Object.assign({ action: "title_stop" }, ref)));
+    row.addEventListener("click", () => { layerNo = l.layer; render(); });
+    return row;
+  }));
+}
+
+function renderFields(g) {
+  const form = document.getElementById("fields");
+  const l = g && g.layers.find((x) => x.layer === layerNo);
+  const t = l && templateOf(l.template);
+  // Keep what is being typed: only rebuild for another layer or template.
+  const key = l ? `${g.id}/${l.layer}/${l.template}` : "";
+  if (form.dataset.key === key) {
+    for (const input of form.querySelectorAll("[name]")) {
+      if (document.activeElement !== input && !input.dataset.edited) input.value = l.values[input.name] ?? "";
+    }
+    return;
+  }
+  form.dataset.key = key;
+  form.hidden = !t;
+  if (!t) { form.replaceChildren(); return; }
+  const bound = new Set((l.bindings || []).map((b) => b.field));
+  form.replaceChildren(...t.fields.map((f) => {
+    let input;
+    if (f.kind === "choice") {
+      input = node("select", { name: f.id },
+        ...f.choices.map((c) => node("option", { value: c, textContent: (texts(t).choices || {})[c] || c })));
+    } else if (f.kind === "long_text") {
+      input = node("textarea", { name: f.id, rows: 3 });
+    } else {
+      input = node("input", { name: f.id, type: f.kind === "number" ? "number" : f.kind === "color" ? "color" : "text" });
+    }
+    input.value = l.values[f.id] ?? f.default ?? "";
+    input.disabled = bound.has(f.id);
+    input.addEventListener("input", () => { input.dataset.edited = "1"; });
+    return node("label", {}, node("span", { className: "label", textContent: fieldLabel(t, f) }), input,
+      bound.has(f.id) ? node("span", { className: "bound", textContent: "fed by a data source" }) : "");
+  }));
+  const apply = node("button", { className: "btn primary", type: "submit", textContent: "Apply" });
+  form.append(node("div", { className: "row" }, apply));
+  form.onsubmit = (e) => {
+    e.preventDefault();
+    const data = {};
+    for (const input of form.querySelectorAll("[name]")) {
+      if (input.dataset.edited) { data[input.name] = input.value; delete input.dataset.edited; }
+    }
+    if (Object.keys(data).length > 0) act({ action: "title_update", graphics: g.number, layer: l.layer, data });
+  };
+}
+
+function renderSets(g) {
+  const l = g && g.layers.find((x) => x.layer === layerNo);
+  const sets = l ? (state.datasets || []).filter((d) => !d.template || d.template === l.template) : [];
+  document.getElementById("sets-label").hidden = !l;
+  const row = document.getElementById("sets");
+  if (!l) { row.replaceChildren(); return; }
+  const ref = { graphics: g.number, layer: l.layer };
+  const name = node("input", { placeholder: "Set name" });
+  const save = node("button", { className: "btn", type: "button", textContent: "Save as set" });
+  save.addEventListener("click", () => {
+    if (name.value.trim()) act({ action: "save_dataset", name: name.value.trim(), template: l.template, data: l.data });
+  });
+  row.replaceChildren(...sets.map((d) => button(d.name, Object.assign({ action: "apply_dataset", name: d.name }, ref))), name, save);
+}
+
+loadTemplates().then(() => lmixEvents((event) => {
+  if (event.event !== "state") return;
+  state = event.state;
+  const missing = (state.graphics || []).some((g) => g.layers.some((l) => !templateOf(l.template)));
+  (missing ? loadTemplates() : Promise.resolve()).then(render);
+}, lmixLinkState));
+</script>
+</body>
+</html>

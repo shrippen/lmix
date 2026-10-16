@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>lmix graphics</title>
+<!--
+  The page of one graphics channel (/graphics/<number, name or id>): its
+  title layers stacked on a transparent ground, at 1920×1080 scaled to the
+  window (?size=1080x1920 for portrait). It follows the show state over
+  /api/events and calls each template as CasparCG does: update(data),
+  play(), next(), stop() and other functions. The engine's browser renders
+  it; a normal browser shows the same as a preview (?preview: checkered
+  ground and the channel's name, and template reports are not passed on).
+-->
+<link rel="stylesheet" href="/titles/kante/variables.css">
+<style>
+  html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: transparent; }
+  #stage { position: absolute; left: 50%; top: 50%; transform-origin: 0 0; }
+  #stage iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: transparent; pointer-events: none;
+    transform-origin: 50% 50%; }
+  .preview body { background: repeating-conic-gradient(var(--bg1) 0 25%, var(--bg0) 0 50%) 0 0 / 32px 32px; }
+  .preview #stage { outline: 1px solid var(--bg2); }
+  #note { display: none; position: fixed; left: 8px; top: 8px; padding: 4px 8px; z-index: 1;
+    font: 13px "JetBrains Mono", monospace; color: var(--fg2); background: var(--bg-void); }
+  .preview #note { display: block; }
+  #note.offline { color: var(--red-text); }
+</style>
+</head>
+<body>
+<div id="note">…</div>
+<div id="stage"></div>
+<script src="/web/lmix.js"></script>
+<script>
+"use strict";
+const params = new URLSearchParams(location.search);
+const ref = decodeURIComponent(location.pathname.split("/").pop());
+const [width, height] = (params.get("size") || "1920x1080").split("x").map(Number);
+const stage = document.getElementById("stage");
+const note = document.getElementById("note");
+if (params.has("preview")) document.documentElement.classList.add("preview");
+
+function fit() {
+  const scale = Math.min(innerWidth / width, innerHeight / height);
+  stage.style.width = `${width}px`;
+  stage.style.height = `${height}px`;
+  stage.style.transform = `scale(${scale}) translate(-50%, -50%)`;
+}
+addEventListener("resize", fit);
+fit();
+
+let graphicsId = null;
+let formats = {};   // template id -> data format, from /api/templates
+const layers = new Map(); // layer number -> { frame, ready, url, revision, applied, want }
+
+async function loadFormats() {
+  try {
+    const resp = await fetch("/api/templates", { cache: "no-store" });
+    const list = await resp.json();
+    formats = Object.fromEntries(list.map((t) => [t.id, t.data_format]));
+  } catch (e) {
+    console.warn("templates", e);
+  }
+}
+
+/** The channel the address names: number, id, then name. */
+function channel(state) {
+  const all = state.graphics || [];
+  const n = /^\d+$/.test(ref) ? Number(ref) : null;
+  return all.find((g) => g.number === n) || all.find((g) => g.id === ref) || all.find((g) => g.name === ref);
+}
+
+function escapeXml(text) {
+  return String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+/** update()'s argument as the template wants it (GFX.3). */
+function payload(want) {
+  if (formats[want.template] === "xml") {
+    const parts = Object.entries(want.values).map(([id, value]) =>
+      `<componentData id="${escapeXml(id)}"><data id="text" value="${escapeXml(value)}"/></componentData>`);
+    return `<templateData>${parts.join("")}</templateData>`;
+  }
+  return JSON.stringify(want.values);
+}
+
+/** Call a function of the template; a broken template only logs. */
+function call(entry, name, ...args) {
+  try {
+    let target = entry.frame.contentWindow, owner = target;
+    for (const part of name.split(".")) { owner = target; target = target && target[part]; }
+    if (typeof target === "function") target.apply(owner, args);
+  } catch (e) {
+    console.warn(`layer ${entry.layer}: ${name} failed`, e);
+  }
+}
+
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+/** Bring the template to what the state wants, from what it got. */
+function sync(entry) {
+  if (!entry.ready) return;
+  const want = entry.want, got = entry.applied;
+  if (!got) {
+    // Fresh page: data, then where the title stands; old calls are not
+    // repeated.
+    call(entry, "update", payload(want));
+    if (want.phase === "playing") {
+      // Playing since before this page: clocks go on from there
+      // (lmixTitle.resumedMs in the SDK).
+      try {
+        entry.frame.contentWindow.lmixResumeMs = want.played_at_ms ? Math.max(0, Date.now() - want.played_at_ms) : 0;
+      } catch (e) {
+        // A template from another origin keeps its own time.
+      }
+      call(entry, "play");
+      for (let i = 0; i < want.step; i++) call(entry, "next");
+    }
+    entry.applied = { values: want.values, phase: want.phase, step: want.phase === "playing" ? want.step : 0,
+      played: want.played, call: want.call ? want.call.seq : 0 };
+    return;
+  }
+  if (!same(got.values, want.values)) {
+    call(entry, "update", payload(want));
+    got.values = want.values;
+  }
+  if (want.phase === "playing" && (got.phase !== "playing" || got.played !== want.played)) {
+    call(entry, "play");
+    got.step = 0;
+  }
+  if (want.phase === "playing") {
+    for (; got.step < want.step; got.step++) call(entry, "next");
+  }
+  if (want.phase === "stopped" && got.phase === "playing") call(entry, "stop");
+  got.phase = want.phase;
+  got.played = want.played;
+  if (want.call && want.call.seq !== got.call) {
+    call(entry, want.call.function, ...want.call.args);
+    got.call = want.call.seq;
+  }
+}
+
+const EASING = { linear: "linear", ease_in: "ease-in", ease_out: "ease-out", ease_in_out: "ease-in-out" };
+
+/** Where the layer sits (GFX.18): one change of all values, moving there
+ *  in transform_ms. */
+function place(entry, want, animate) {
+  const t = want.transform || {};
+  const key = JSON.stringify(t);
+  if (entry.placed === key) return;
+  entry.placed = key;
+  const f = entry.frame;
+  const ms = animate ? want.transform_ms || 0 : 0;
+  const ease = EASING[want.easing] || "ease-in-out";
+  f.style.transition = ms > 0
+    ? ["transform", "opacity", "clip-path", "filter"].map((p) => `${p} ${ms}ms ${ease}`).join(", ")
+    : "none";
+  const crop = t.crop || {};
+  const pct = (v) => `${((v || 0) * 100).toFixed(3)}%`;
+  f.style.transform = `translate(${(t.x || 0) * width}px, ${(t.y || 0) * height}px) perspective(${width}px) ` +
+    `rotateX(${t.tilt_x || 0}deg) rotateY(${t.tilt_y || 0}deg) rotate(${t.rotation || 0}deg) scale(${t.scale ?? 1})`;
+  f.style.clipPath = `inset(${pct(crop.top)} ${pct(crop.right)} ${pct(crop.bottom)} ${pct(crop.left)})`;
+  f.style.opacity = String(t.opacity ?? 1);
+  f.style.filter = `brightness(${t.brightness ?? 1}) contrast(${t.contrast ?? 1}) saturate(${t.saturation ?? 1})`;
+  f.style.mixBlendMode = (t.blend || "normal").replace(/_/g, "-");
+}
+
+function frameFor(entry) {
+  const frame = document.createElement("iframe");
+  frame.setAttribute("aria-hidden", "true");
+  frame.style.zIndex = String(entry.layer);
+  entry.ready = false;
+  entry.applied = null;
+  frame.addEventListener("load", () => { entry.ready = true; sync(entry); });
+  frame.src = entry.url;
+  if (entry.frame) entry.frame.replaceWith(frame); else stage.appendChild(frame);
+  entry.frame = frame;
+  entry.placed = null;
+  place(entry, entry.want, false);
+}
+
+async function follow(state) {
+  const g = channel(state);
+  graphicsId = g ? g.id : null;
+  note.textContent = g ? `${g.number} · ${g.name}` : `no graphics channel ${ref}`;
+  const wanted = new Map((g ? g.layers : []).map((l) => [l.layer, l]));
+  for (const [number, entry] of layers) {
+    if (!wanted.has(number)) { entry.frame.remove(); layers.delete(number); }
+  }
+  for (const [number, want] of wanted) {
+    if (!(want.template in formats)) await loadFormats();
+    let entry = layers.get(number);
+    if (!want.url) {
+      // Template gone from the folder: nothing to show on this layer.
+      if (entry) { entry.frame.remove(); layers.delete(number); }
+      continue;
+    }
+    if (!entry) {
+      entry = { layer: number };
+      layers.set(number, entry);
+    }
+    // Loaded again (title_load) on a layer that played: the new title
+    // starts unseen, so the frame starts over too.
+    const reloaded = want.phase === "loaded" && entry.applied && entry.applied.phase !== "loaded";
+    const reload = reloaded || entry.url !== want.url || entry.revision !== want.revision || entry.template !== want.template;
+    entry.want = want;
+    if (reload) {
+      entry.url = want.url;
+      entry.revision = want.revision;
+      entry.template = want.template;
+      // The template's files changed or it is another one: load it again
+      // with the same data (GFX.14).
+      frameFor(entry);
+    } else {
+      place(entry, want, true);
+      sync(entry);
+    }
+  }
+}
+
+// Templates report through the SDK: lmixTitle.report("done"). Only the
+// renderer's page passes reports on; previews would repeat them.
+window.lmixReport = function (source, event) {
+  if (params.has("preview")) return;
+  for (const entry of layers.values()) {
+    if (entry.frame.contentWindow === source && graphicsId) {
+      lmixAct({ action: "title_report", graphics: graphicsId, layer: entry.layer, event: String(event) })
+        .catch((e) => console.warn("report", e));
+    }
+  }
+};
+
+let queue = Promise.resolve();
+lmixEvents((event) => {
+  // One state after the other: following may wait for /api/templates.
+  if (event.event === "state") queue = queue.then(() => follow(event.state));
+}, (online) => note.classList.toggle("offline", !online));
+loadFormats();
+</script>
+</body>
+</html>

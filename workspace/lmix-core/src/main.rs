@@ -17,17 +17,26 @@ use anyhow::Context;
 use clap::{Parser, ValueEnum};
 use lmix_types::Action;
 
+mod access;
 mod api;
 mod clips;
+mod datasource;
 mod engine;
+mod feedback;
 mod metrics;
 mod midi;
 mod osc;
+mod package;
+mod patch;
+mod ptz;
 mod recent;
 mod service;
 mod show;
 mod switcher;
+mod tally_http;
 mod tcp;
+mod titles;
+mod tsl;
 mod web;
 
 use engine::flows::{MixerBackend, MonitorOut};
@@ -92,9 +101,43 @@ struct Args {
     #[arg(long, env = "LMIX_MIDI", value_delimiter = ',')]
     midi: Vec<PathBuf>,
 
+    /// Light the shortcuts' MIDI notes and controllers on the `--midi`
+    /// devices as their inputs stand (AUT.6).
+    #[arg(long, env = "LMIX_MIDI_FEEDBACK")]
+    midi_feedback: bool,
+
+    /// Lamp values for program, preview and off (colours on some
+    /// controllers, e.g. APC mini 3,1,0).
+    #[arg(long, env = "LMIX_MIDI_LAMPS", default_value = "127,64,0")]
+    midi_lamps: feedback::Lamps,
+
     /// UDP address for OSC (AUT.13); off without it.
     #[arg(long, env = "LMIX_OSC")]
     osc: Option<SocketAddr>,
+
+    /// Shortcuts for all shows (AUT.3), kept apart from show files.
+    #[arg(long, env = "LMIX_SHORTCUTS", default_value_os_t = default_shortcuts())]
+    shortcuts: PathBuf,
+
+    /// Password for access from the network (API.7); programs on this
+    /// machine need none. HTTP Basic or Bearer; text protocol `AUTH`.
+    #[arg(long, env = "LMIX_PASSWORD", hide_env_values = true)]
+    password: Option<String>,
+
+    /// Browser pages usable from the network without the password, with
+    /// only what they need (`tally`, `keys`, `mixer`, `titles`).
+    #[arg(long, value_enum, value_delimiter = ',', env = "LMIX_OPEN_PAGES")]
+    open_page: Vec<access::Page>,
+
+    /// Answer addresses outside the local network too (behind a reverse
+    /// proxy or VPN); by default only private and link-local ones.
+    #[arg(long, env = "LMIX_ALLOW_INTERNET")]
+    allow_internet: bool,
+
+    /// Key for the Google Sheets API (data sources `google_sheet`,
+    /// DAT.1); kept out of show files.
+    #[arg(long, env = "LMIX_GOOGLE_API_KEY", hide_env_values = true)]
+    google_api_key: Option<String>,
 
     /// Show file to open at start; without it the last autosave is resumed.
     #[arg(long, env = "LMIX_SHOW")]
@@ -103,15 +146,62 @@ struct Args {
     /// Autosave file, written after every change.
     #[arg(long, env = "LMIX_AUTOSAVE", default_value_os_t = default_autosave())]
     autosave: PathBuf,
+
+    /// Send tally to TSL UMD receivers (multiviewers, tally systems) at
+    /// these UDP addresses (PER.1); repeat or separate with commas.
+    #[arg(long, env = "LMIX_TSL", value_delimiter = ',')]
+    tsl: Vec<SocketAddr>,
+
+    /// The same over TCP to these addresses (TSL 5.0 framed with DLE/STX).
+    #[arg(long, env = "LMIX_TSL_TCP", value_delimiter = ',')]
+    tsl_tcp: Vec<SocketAddr>,
+
+    /// Call these addresses with the tally on every change (tally lights
+    /// over HTTP, PER.1): POST JSON, or GET with `{program}`, `{preview}`,
+    /// `{tally}` filled in; repeat for more (in the environment variable:
+    /// separated by spaces).
+    #[arg(long, env = "LMIX_TALLY_HTTP", value_delimiter = ' ')]
+    tally_http: Vec<String>,
+
+    /// TSL UMD version: 5 (5.0) or 3 (3.1).
+    #[arg(long, env = "LMIX_TSL_VERSION", value_enum, default_value_t = tsl::Version::V50)]
+    tsl_version: tsl::Version,
+
+    /// Outputs to start once the engine is up (number or name; repeat or
+    /// separate with commas), e.g. the stream and the recording (UI.12).
+    /// One already running is left as it is.
+    #[arg(long, env = "LMIX_START_OUTPUTS", value_delimiter = ',')]
+    start_outputs: Vec<String>,
+
+    /// Folder of own title templates, besides the built-in ones.
+    #[arg(long, env = "LMIX_TEMPLATES", default_value_os_t = default_templates())]
+    templates: PathBuf,
+}
+
+/// `$XDG_DATA_HOME/lmix/templates`, else `~/.local/share/…`.
+fn default_templates() -> PathBuf {
+    data_home().join("lmix").join("templates")
 }
 
 /// `$XDG_DATA_HOME/lmix/autosave.lmix`, else `~/.local/share/…`.
 fn default_autosave() -> PathBuf {
-    let base = std::env::var_os("XDG_DATA_HOME")
+    data_home().join("lmix").join("autosave.lmix")
+}
+
+fn default_shortcuts() -> PathBuf {
+    std::env::var_os("XDG_CONFIG_HOME")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("lmix")
+        .join("shortcuts.json")
+}
+
+fn data_home() -> PathBuf {
+    std::env::var_os("XDG_DATA_HOME")
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/share")))
-        .unwrap_or_else(|| PathBuf::from("."));
-    base.join("lmix").join("autosave.lmix")
+        .unwrap_or_else(|| PathBuf::from("."))
 }
 
 #[tokio::main]
@@ -123,6 +213,9 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let args = Args::parse();
+    if let Some(key) = args.google_api_key.clone().filter(|k| !k.trim().is_empty()) {
+        datasource::set_google_api_key(key.trim().to_string());
+    }
     metrics::started();
     let engine: Arc<dyn Engine> = match args.engine {
         EngineKind::Strom => {
@@ -142,6 +235,9 @@ async fn main() -> anyhow::Result<()> {
         .clone()
         .unwrap_or_else(|| args.strom.clone());
     service.set_ingest_base(public_url).await;
+    // Before the show: its titles name templates from the folder.
+    service.use_templates(args.templates.clone()).await;
+    service.use_shortcuts_file(args.shortcuts.clone()).await;
     let opened = match args.show {
         Some(path) => service
             .handle(Action::OpenShow { path })
@@ -156,26 +252,64 @@ async fn main() -> anyhow::Result<()> {
     }
 
     // The engine may come up after us: keep trying, then feed it the show.
-    tokio::spawn(connect(engine, service.clone(), args.slots));
+    tokio::spawn(connect(
+        engine,
+        service.clone(),
+        args.slots,
+        args.start_outputs.clone(),
+    ));
     tokio::spawn(service.clone().forward_levels());
     tokio::spawn(service.clone().watch_failures());
     tokio::spawn(service.clone().forward_output_stats());
     tokio::spawn(service.clone().watch_players());
+    tokio::spawn(service.clone().watch_media());
+    tokio::spawn(service.clone().watch_titles());
     if !args.midi.is_empty() {
         tokio::spawn(midi::serve(args.midi.clone(), service.clone()));
+        if args.midi_feedback {
+            tokio::spawn(feedback::serve(
+                args.midi.clone(),
+                args.midi_lamps,
+                service.clone(),
+            ));
+        }
     }
     if let Some(listen) = args.osc {
         let service = service.clone();
+        let internet = args.allow_internet;
+        // No password over OSC: with one set, only this machine may send.
+        let local_only = args.password.as_deref().is_some_and(|p| !p.is_empty());
+        if local_only {
+            tracing::info!("OSC takes messages from this machine only (it has no password)");
+        }
         tokio::spawn(async move {
-            if let Err(error) = osc::serve(listen, service).await {
+            if let Err(error) = osc::serve(listen, service, internet, local_only).await {
                 tracing::error!(%error, "OSC stopped");
             }
         });
     }
+    if !args.tsl.is_empty() || !args.tsl_tcp.is_empty() {
+        let service = service.clone();
+        let (targets, tcp, version) = (args.tsl.clone(), args.tsl_tcp.clone(), args.tsl_version);
+        tokio::spawn(async move {
+            if let Err(error) = tsl::serve(targets, tcp, version, service).await {
+                tracing::error!(%error, "TSL tally stopped");
+            }
+        });
+    }
+    if !args.tally_http.is_empty() {
+        tokio::spawn(tally_http::serve(args.tally_http.clone(), service.clone()));
+    }
+    let rules = Arc::new(access::Access {
+        password: args.password.clone().filter(|p| !p.is_empty()),
+        open_pages: args.open_page.clone(),
+        internet: args.allow_internet,
+    });
     if let Some(listen) = args.tcp {
         let service = service.clone();
+        let rules = rules.clone();
         tokio::spawn(async move {
-            if let Err(error) = tcp::serve(listen, service).await {
+            if let Err(error) = tcp::serve(listen, service, rules).await {
                 tracing::error!(%error, "text protocol stopped");
             }
         });
@@ -186,9 +320,16 @@ async fn main() -> anyhow::Result<()> {
         .with_context(|| format!("bind {}", args.listen))?;
     tracing::info!(listen = %args.listen, "lmix-core API up");
 
-    axum::serve(listener, api::router(service))
-        .with_graceful_shutdown(stopped())
-        .await?;
+    let app = api::router(service.clone()).layer(axum::middleware::from_fn_with_state(
+        (rules, service),
+        access::guard,
+    ));
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(stopped())
+    .await?;
     Ok(())
 }
 
@@ -206,7 +347,7 @@ async fn stopped() {
 /// Wait between engine start attempts.
 const ENGINE_RETRY: Duration = Duration::from_secs(2);
 
-async fn connect(engine: Arc<dyn Engine>, service: Arc<Service>, slots: usize) {
+async fn connect(engine: Arc<dyn Engine>, service: Arc<Service>, slots: usize, start: Vec<String>) {
     loop {
         match engine.start(slots).await {
             Ok(()) => break,
@@ -223,5 +364,33 @@ async fn connect(engine: Arc<dyn Engine>, service: Arc<Service>, slots: usize) {
     // restarted); outputs that kept running while lmix-core was gone are
     // only adopted, never restarted (no gap in a recording).
     service.adopt_running_outputs().await;
+    start_outputs(&service, &start).await;
     service.watch_engine(slots).await;
+}
+
+/// Start the outputs `--start-outputs` names, unless they run already.
+async fn start_outputs(service: &Arc<Service>, names: &[String]) {
+    for name in names.iter().map(|n| n.trim()).filter(|n| !n.is_empty()) {
+        let name = &name.to_string();
+        let output = match name.parse::<u32>() {
+            Ok(number) => lmix_types::OutputRef::Number(number),
+            Err(_) => lmix_types::OutputRef::Text(name.clone()),
+        };
+        let state = service.state().await;
+        let running = state.outputs.iter().enumerate().any(|(i, o)| {
+            let named = match &output {
+                lmix_types::OutputRef::Number(n) => *n as usize == i + 1,
+                lmix_types::OutputRef::Text(t) => o.name == *t || o.id.to_string() == *t,
+            };
+            named && matches!(o.status, lmix_types::OutputStatus::Running { .. })
+        });
+        if running {
+            tracing::info!(output = %name, "already running");
+            continue;
+        }
+        match service.handle(Action::StartOutput { output }).await {
+            Ok(_) => tracing::info!(output = %name, "started"),
+            Err(error) => tracing::error!(output = %name, %error, "could not start"),
+        }
+    }
 }

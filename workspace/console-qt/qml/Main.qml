@@ -33,6 +33,48 @@ Kirigami.ApplicationWindow {
         property bool global: false
     }
 
+    Settings {
+        id: viewSettings
+        category: "view"
+        /** Input tiles: 0 small, 1 medium, 2 large (UI.3). */
+        property int tileSize: 1
+        /** Rows of input tiles before the bar scrolls (UI.3). */
+        property int rows: 2
+        /** Only the switching essentials (UI.7). */
+        property bool simple: false
+        /** Ids of collapsed inputs, as JSON (UI.3). */
+        property string collapsed: "[]"
+    }
+    readonly property var collapsedIds: {
+        try {
+            const ids = JSON.parse(viewSettings.collapsed)
+            return Array.isArray(ids) ? ids : []
+        } catch (e) {
+            return []
+        }
+    }
+    function setCollapsed(id, on) {
+        // Ids of inputs gone from the show are dropped on the way.
+        const ids = collapsedIds.filter(i => i !== id && inputById(i) !== null)
+        if (on)
+            ids.push(id)
+        viewSettings.collapsed = JSON.stringify(ids)
+    }
+    function syncInputs() {
+        inputModel.sync(show ? show.inputs.filter(i => collapsedIds.indexOf(i.id) < 0).map(i => i.id) : [])
+    }
+    onCollapsedIdsChanged: syncInputs()
+    /** Simple mode: `--mode` for this run, else the saved choice. */
+    readonly property bool simple: backend.uiMode === "simple" || (backend.uiMode === "" && viewSettings.simple)
+    readonly property var tileUnits: [[10, 9.5], [12, 11], [16, 14]][Math.max(0, Math.min(2, viewSettings.tileSize))]
+
+    Settings {
+        id: safetySettings
+        category: "safety"
+        /** Ask before a running output (recording, stream) stops (UI.10). */
+        property bool confirmStop: true
+    }
+
     Binding {
         target: KanteStyle
         property: "kind"
@@ -47,6 +89,7 @@ Kirigami.ApplicationWindow {
     readonly property var inputs: show ? show.inputs : []
     readonly property var levels: backend.levels.length > 0 ? JSON.parse(backend.levels) : ({})
     readonly property var recent: backend.recent.length > 0 ? JSON.parse(backend.recent) : []
+    readonly property var positions: backend.positions.length > 0 ? JSON.parse(backend.positions) : ({})
 
     /** Send an lmix action (the API's JSON, as an object). */
     function act(action) {
@@ -62,7 +105,7 @@ Kirigami.ApplicationWindow {
     KeyedModel { id: transitionModel }
     // Reads `show` itself: `inputs` may not have followed it yet here.
     onShowChanged: {
-        inputModel.sync(show ? show.inputs.map(i => i.id) : [])
+        syncInputs()
         outputModel.sync(show ? show.outputs.map(o => o.id) : [])
         transitionModel.sync(show ? show.transitions.map(t => String(t.slot)) : [])
     }
@@ -94,11 +137,14 @@ Kirigami.ApplicationWindow {
     }
 
     readonly property var shortcuts: show && show.shortcuts ? show.shortcuts : []
-    readonly property var shortcutKeys: shortcuts.filter(s => s.key).map(s => s.key)
+    /** Shortcuts whose key runs them: one for all shows gives way to the
+     *  show's with the same key (AUT.3). */
+    readonly property var keyedShortcuts: shortcuts.filter(s => s.key && !s.key_shadowed)
+    readonly property var shortcutKeys: keyedShortcuts.map(s => s.key)
 
-    // The show's shortcuts (AUT.1–3); they win over the keys below.
+    // The shortcuts (AUT.1–3); they win over the keys below.
     Instantiator {
-        model: root.shortcuts.filter(s => s.key)
+        model: root.keyedShortcuts
         delegate: Shortcut {
             required property var modelData
             sequence: modelData.key
@@ -109,9 +155,16 @@ Kirigami.ApplicationWindow {
     // Global shortcuts (AUT.12): the desktop binds the keys (it may ask
     // once) and reports presses even while another window is in front.
     readonly property string globalShortcutList: JSON.stringify(keySettings.global
-        ? shortcuts.filter(s => s.key).map(s => ({ id: s.id, label: s.label, key: s.key })) : [])
+        ? keyedShortcuts.map(s => ({ id: s.id, label: s.label, key: s.key })) : [])
     onGlobalShortcutListChanged: backend.setGlobalShortcuts(globalShortcutList)
-    Component.onCompleted: backend.setGlobalShortcuts(globalShortcutList)
+    Component.onCompleted: {
+        backend.setGlobalShortcuts(globalShortcutList)
+        // Start options (UI.12): `lmix-console --window maximized|fullscreen`.
+        if (backend.windowMode === "maximized")
+            root.showMaximized()
+        else if (backend.windowMode === "fullscreen")
+            root.showFullScreen()
+    }
     Connections {
         target: backend
         function onGlobalShortcut(id) {
@@ -144,12 +197,60 @@ Kirigami.ApplicationWindow {
     }
 
     FileDialog {
+        id: appendDialog
+        title: qsTr("Inputs from a show")
+        nameFilters: [qsTr("lmix shows (*.lmix)"), qsTr("All files (*)")]
+        onAccepted: {
+            appendShowDialog.path = root.localPath(selectedFile)
+            appendShowDialog.open()
+        }
+    }
+
+    AppendShowDialog {
+        id: appendShowDialog
+        parent: QQC2.Overlay.overlay
+        anchors.centerIn: parent
+        act: root.act
+        coreUrl: backend.coreUrl
+    }
+
+    FileDialog {
         id: saveDialog
         title: qsTr("Save show")
         fileMode: FileDialog.SaveFile
         defaultSuffix: "lmix"
         nameFilters: [qsTr("lmix shows (*.lmix)")]
         onAccepted: root.act({ action: "save_show", path: root.localPath(selectedFile) })
+    }
+
+    // Show packages (SHW.6): show, media, data files, own templates.
+    FileDialog {
+        id: exportDialog
+        title: qsTr("Export show package")
+        fileMode: FileDialog.SaveFile
+        defaultSuffix: "lmixpkg"
+        nameFilters: [qsTr("lmix packages (*.lmixpkg)")]
+        onAccepted: root.act({ action: "export_package", path: root.localPath(selectedFile) })
+    }
+    FileDialog {
+        id: importDialog
+        title: qsTr("Import show package")
+        nameFilters: [qsTr("lmix packages (*.lmixpkg)"), qsTr("All files (*)")]
+        onAccepted: {
+            importFolderDialog.packagePath = root.localPath(selectedFile)
+            importFolderDialog.open()
+        }
+    }
+    FolderDialog {
+        id: relocateDialog
+        title: qsTr("Folder with the missing files")
+        onAccepted: root.act({ action: "relocate_media", folder: root.localPath(selectedFolder) })
+    }
+    FolderDialog {
+        id: importFolderDialog
+        property string packagePath
+        title: qsTr("Empty folder for the package's show and media")
+        onAccepted: root.act({ action: "import_package", path: packagePath, folder: root.localPath(selectedFolder) })
     }
 
     AddInputDialog {
@@ -202,6 +303,61 @@ Kirigami.ApplicationWindow {
         inputs: root.inputs
         outputs: root.show ? root.show.outputs : []
         lists: root.show && root.show.cue_lists ? root.show.cue_lists : []
+    }
+
+    TitlesDialog {
+        id: titlesDialog
+        parent: QQC2.Overlay.overlay
+        anchors.centerIn: parent
+        act: root.act
+        core: backend
+        graphics: root.show && root.show.graphics ? root.show.graphics : []
+        datasets: root.show && root.show.datasets ? root.show.datasets : []
+        sources: root.show && root.show.data_sources ? root.show.data_sources : []
+        templates: backend.templates.length > 0 ? JSON.parse(backend.templates) : []
+        coreUrl: backend.coreUrl
+        inputs: root.inputs
+        outputs: root.show ? root.show.outputs : []
+    }
+
+    InputSettingsDialog {
+        id: inputSettingsDialog
+        parent: QQC2.Overlay.overlay
+        anchors.centerIn: parent
+        act: root.act
+        core: backend
+        inputs: root.inputs
+        looksAvailable: root.show !== null && root.show.looks_available === true
+        onReplaceRequested: input => {
+            addInputDialog.replacing = input
+            addInputDialog.open()
+        }
+        onTriggersRequested: input => {
+            triggersDialog.graphics = null
+            triggersDialog.input = input
+            triggersDialog.open()
+        }
+        onPtzRequested: input => {
+            ptzDialog.inputId = input.id
+            ptzDialog.open()
+        }
+    }
+
+    PtzDialog {
+        id: ptzDialog
+        parent: QQC2.Overlay.overlay
+        anchors.centerIn: parent
+        act: root.act
+        inputs: root.inputs
+    }
+
+    DataSourcesDialog {
+        id: dataSourcesDialog
+        parent: QQC2.Overlay.overlay
+        anchors.centerIn: parent
+        act: root.act
+        coreUrl: backend.coreUrl
+        sources: root.show && root.show.data_sources ? root.show.data_sources : []
     }
 
     LayoutDialog {
@@ -271,6 +427,13 @@ Kirigami.ApplicationWindow {
                     }
                 }
                 KanteButton {
+                    text: qsTr("From show…")
+                    enabled: backend.connected
+                    QQC2.ToolTip.visible: hovered
+                    QQC2.ToolTip.text: qsTr("Add inputs of another show to this one")
+                    onClicked: appendDialog.open()
+                }
+                KanteButton {
                     text: qsTr("Save")
                     enabled: backend.connected
                     onClicked: root.show && root.show.path ? root.act({ action: "save_show" }) : saveDialog.open()
@@ -279,6 +442,26 @@ Kirigami.ApplicationWindow {
                     text: qsTr("Save as…")
                     enabled: backend.connected
                     onClicked: saveDialog.open()
+                }
+                KanteButton {
+                    id: packageButton
+                    text: qsTr("Package")
+                    enabled: backend.connected
+                    QQC2.ToolTip.visible: hovered
+                    QQC2.ToolTip.text: qsTr("The show with its media in one file, to move it to another machine")
+                    onClicked: packageMenu.popup(packageButton, 0, packageButton.height)
+                    QQC2.Menu {
+                        id: packageMenu
+                        KantePopupSkin { popup: packageMenu }
+                        QQC2.MenuItem {
+                            text: qsTr("Export…")
+                            onTriggered: exportDialog.open()
+                        }
+                        QQC2.MenuItem {
+                            text: qsTr("Import…")
+                            onTriggered: importDialog.open()
+                        }
+                    }
                 }
                 Item { Layout.fillWidth: true }
                 KanteSegmented {
@@ -297,6 +480,7 @@ Kirigami.ApplicationWindow {
                     color: KanteStyle.mutedTextColor
                 }
                 KanteButton {
+                    visible: !root.simple
                     text: qsTr("Latency")
                     busy: backend.measuring
                     enabled: backend.connected && !backend.measuring
@@ -317,6 +501,7 @@ Kirigami.ApplicationWindow {
                     tally: KanteStyle.positiveTextColor
                     // As the input arrives, not the tile's small picture.
                     source: root.previewInput ? "full:" + root.previewInput.id : ""
+                    input: root.previewInput
                 }
 
                 TransitionPanel {
@@ -336,13 +521,51 @@ Kirigami.ApplicationWindow {
                     tally: KanteStyle.negativeTextColor
                     source: "program"
                     peakDb: root.levels.program
+                    input: root.programInput
                 }
             }
 
             RowLayout {
                 Layout.fillWidth: true
                 KanteSectionLabel { text: qsTr("Inputs") }
+                KanteButton {
+                    id: viewButton
+                    text: qsTr("View")
+                    emphasis: KanteButton.Emphasis.Quiet
+                    onClicked: viewMenu.popup(viewButton, 0, viewButton.height)
+                    QQC2.Menu {
+                        id: viewMenu
+                        KantePopupSkin { popup: viewMenu }
+                        ChoiceMenu {
+                            title: qsTr("Tile size")
+                            current: viewSettings.tileSize
+                            choices: [{ value: 0, label: qsTr("Small") }, { value: 1, label: qsTr("Medium") }, { value: 2, label: qsTr("Large") }]
+                            onPicked: value => viewSettings.tileSize = value
+                        }
+                        ChoiceMenu {
+                            title: qsTr("Rows")
+                            current: viewSettings.rows
+                            choices: [1, 2, 3, 4].map(n => ({ value: n, label: String(n) }))
+                            onPicked: value => viewSettings.rows = value
+                        }
+                        QQC2.MenuItem {
+                            text: qsTr("Simple mode")
+                            checkable: true
+                            checked: root.simple
+                            enabled: backend.uiMode === ""
+                            onTriggered: viewSettings.simple = !viewSettings.simple
+                        }
+                    }
+                }
                 Item { Layout.fillWidth: true }
+                KanteButton {
+                    visible: root.inputs.some(i => i.missing && i.missing.length > 0)
+                    text: qsTr("Find missing files…")
+                    emphasis: KanteButton.Emphasis.Primary
+                    QQC2.ToolTip.visible: hovered
+                    QQC2.ToolTip.text: qsTr("Inputs marked \"Missing\" lack media files: pick the folder they are in now. Inputs on program are left alone.")
+                    onClicked: relocateDialog.open()
+                }
                 KanteButton {
                     text: qsTr("Clear solo")
                     visible: root.inputs.some(i => i.listen !== "off")
@@ -363,19 +586,34 @@ Kirigami.ApplicationWindow {
                     onClicked: root.act({ action: "set_lock", on: !locked })
                 }
                 KanteButton {
+                    visible: !root.simple
                     text: qsTr("Shortcuts…")
                     enabled: backend.connected
                     onClicked: shortcutsDialog.open()
                 }
                 KanteButton {
+                    visible: !root.simple
                     text: qsTr("Cues…")
                     enabled: backend.connected
                     onClicked: cueListsDialog.open()
                 }
                 KanteButton {
+                    visible: !root.simple
                     text: qsTr("Aux…")
                     enabled: backend.connected
                     onClicked: auxDialog.open()
+                }
+                KanteButton {
+                    visible: !root.simple
+                    text: qsTr("Titles…")
+                    enabled: backend.connected
+                    onClicked: titlesDialog.open()
+                }
+                KanteButton {
+                    visible: !root.simple
+                    text: qsTr("Data…")
+                    enabled: backend.connected
+                    onClicked: dataSourcesDialog.open()
                 }
                 KanteButton {
                     text: qsTr("+ Input")
@@ -390,9 +628,9 @@ Kirigami.ApplicationWindow {
             GridView {
                 id: bar
                 Layout.fillWidth: true
-                Layout.preferredHeight: cellHeight * Math.max(1, Math.min(2, Math.ceil(count / Math.max(1, Math.floor(width / cellWidth)))))
-                cellWidth: Kirigami.Units.gridUnit * 12 + Kirigami.Units.smallSpacing
-                cellHeight: Kirigami.Units.gridUnit * 11
+                Layout.preferredHeight: cellHeight * Math.max(1, Math.min(viewSettings.rows, Math.ceil(count / Math.max(1, Math.floor(width / cellWidth)))))
+                cellWidth: Kirigami.Units.gridUnit * root.tileUnits[0] + Kirigami.Units.smallSpacing
+                cellHeight: Kirigami.Units.gridUnit * root.tileUnits[1]
                 clip: true
                 boundsBehavior: Flickable.StopAtBounds
                 model: inputModel
@@ -415,9 +653,11 @@ Kirigami.ApplicationWindow {
                         bar.dropIndex = bar.indexAtScene(point)
                     }
                     onDragEnded: point => {
-                        var target = bar.indexAtScene(point)
-                        if (bar.dragged && target >= 0 && root.inputs[target] && root.inputs[target].id !== bar.dragged.id) {
-                            root.act({ action: "move_input", input: bar.dragged.number, number: root.inputs[target].number })
+                        // Collapsed inputs have no tile: the model's key, not the index into the inputs.
+                        var index = bar.indexAtScene(point)
+                        var target = index >= 0 && index < inputModel.count ? root.inputById(inputModel.get(index).key) : null
+                        if (bar.dragged && target && target.id !== bar.dragged.id) {
+                            root.act({ action: "move_input", input: bar.dragged.number, number: target.number })
                         }
                         bar.dragged = null
                         bar.dropIndex = -1
@@ -433,6 +673,7 @@ Kirigami.ApplicationWindow {
                     looksAvailable: root.show !== null && root.show.looks_available === true
                     peakDb: root.levels[key]
                     onTriggersRequested: {
+                        triggersDialog.graphics = null
                         triggersDialog.input = tileDelegate.input
                         triggersDialog.open()
                     }
@@ -440,10 +681,32 @@ Kirigami.ApplicationWindow {
                         addInputDialog.replacing = tileDelegate.input
                         addInputDialog.open()
                     }
+                    dynamicSlots: root.show && root.show.dynamic_inputs
+                        ? [1, 2, 3, 4].filter(n => root.show.dynamic_inputs[n - 1] === key) : []
+                    onSettingsRequested: {
+                        inputSettingsDialog.inputId = tileDelegate.input.id
+                        inputSettingsDialog.open()
+                    }
+                    onPtzRequested: {
+                        ptzDialog.inputId = tileDelegate.input.id
+                        ptzDialog.open()
+                    }
+                    onCollapseRequested: root.setCollapsed(tileDelegate.input.id, true)
                 }
             }
 
+            CollapsedBar {
+                Layout.fillWidth: true
+                core: backend
+                show: root.show
+                act: root.act
+                inputs: root.inputs
+                collapsed: root.collapsedIds
+                onExpandRequested: id => root.setCollapsed(id, false)
+            }
+
             LayoutBar {
+                visible: !root.simple
                 Layout.fillWidth: true
                 core: backend
                 show: root.show
@@ -461,6 +724,8 @@ Kirigami.ApplicationWindow {
                 act: root.act
                 outputs: outputModel
                 outputById: root.outputById
+                confirmStop: safetySettings.confirmStop
+                onConfirmStopChanged: safetySettings.confirmStop = confirmStop
                 onAddRequested: addOutputDialog.open()
             }
 
@@ -482,6 +747,8 @@ Kirigami.ApplicationWindow {
         property color tally
         property alias source: view.source
         property var peakDb: undefined
+        /** The input shown, for its transport; null for layouts. */
+        property var input: null
 
         Layout.fillWidth: true
         Layout.fillHeight: true
@@ -511,6 +778,12 @@ Kirigami.ApplicationWindow {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 core: backend
+            }
+            TransportBar {
+                Layout.fillWidth: true
+                input: monitor.input
+                act: root.act
+                position: monitor.input && root.positions[monitor.input.id] ? root.positions[monitor.input.id] : null
             }
             KanteAudioMeter {
                 Layout.fillWidth: true

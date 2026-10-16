@@ -114,6 +114,8 @@ fn main() {
                 "qml/StingerDialog.qml",
                 "qml/LookDialog.qml",
                 "qml/LayoutBar.qml",
+                "qml/CollapsedBar.qml",
+                "qml/AppendShowDialog.qml",
                 "qml/LayoutDialog.qml",
                 "qml/ShortcutsDialog.qml",
                 "qml/ShortcutEditDialog.qml",
@@ -125,6 +127,14 @@ fn main() {
                 "qml/OutputBar.qml",
                 "qml/ChoiceMenu.qml",
                 "qml/KeyedModel.qml",
+                "qml/TitleField.qml",
+                "qml/TitlesDialog.qml",
+                "qml/DataSourcesDialog.qml",
+                "qml/TransportBar.qml",
+                "qml/PtzDialog.qml",
+                "qml/LookPanel.qml",
+                "qml/ChannelStripPanel.qml",
+                "qml/InputSettingsDialog.qml",
             ])
             .qml_file(QmlFile::from("qml/Texts.qml").singleton(true)),
     )

@@ -1,0 +1,22 @@
+{
+  "name": "Name and role",
+  "fields": [
+    {"id": "name", "label": "Name"},
+    {"id": "role", "label": "Role"},
+    {"id": "side", "label": "Side", "kind": "choice", "default": "left", "choices": ["left", "right"]}
+  ],
+  "i18n": {
+    "de": {
+      "name": "Name und Funktion",
+      "fields": {
+        "name": "Name",
+        "role": "Funktion",
+        "side": "Seite"
+      },
+      "choices": {
+        "left": "links",
+        "right": "rechts"
+      }
+    }
+  }
+}

@@ -83,6 +83,13 @@ pub struct LayoutBox {
     pub border_px: u8,
     #[serde(default, skip_serializing_if = "BoxCrop::is_zero")]
     pub crop: BoxCrop,
+    /// Kept in place in the layout editor (LAY.6); the picture ignores it.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub locked: bool,
+}
+
+fn is_false(v: &bool) -> bool {
+    !v
 }
 
 /// A layout as clients see it. Its id can stand in preview or program
@@ -110,4 +117,6 @@ pub struct BoxSpec {
     pub border_px: u8,
     #[serde(default)]
     pub crop: BoxCrop,
+    #[serde(default)]
+    pub locked: bool,
 }

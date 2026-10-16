@@ -35,6 +35,9 @@ pub enum TriggerOn {
     /// A clip or playlist input reaches its end (the last item ends), or
     /// `before_ms` before it (countdown).
     ClipEnd,
+    /// A clip or playlist item has played `at_ms` (each item, each time
+    /// it plays through that point).
+    PlayTime,
 }
 
 /// Actions run when something happens to an input, after a delay. They
@@ -49,6 +52,9 @@ pub struct Trigger {
     /// 0–60 000 ms.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub before_ms: Option<u32>,
+    /// With `play_time`: the playing time that fires it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub at_ms: Option<u32>,
     pub actions: Vec<Action>,
 }
 

@@ -214,7 +214,7 @@ kann es, Console nicht.
 | LAY.3 | Verschachtelung: Ebenen von Ebenen werden gerendert (mind. 2 Stufen) | S | – |
 | LAY.4 | "Ebenen flach rechnen": Input samt Ebenen als ein Bild für Weiterverwendung | K | – |
 | LAY.5 | Layout-Vorlagen: speichern, laden, ex-/importieren, außerhalb der Show | S | – |
-| LAY.6 | Ebenen-Editor: Maus verschieben/skalieren/croppen, Mehrfachauswahl, Fangen an Kanten/Mitte/Schutzbereichen/anderen Ebenen, Sperre, Rückgängig/Wiederholen, Pixelwerte zur Ausgabegröße | S | – |
+| LAY.6 | Ebenen-Editor: Maus verschieben/skalieren/croppen, Mehrfachauswahl, Fangen an Kanten/Mitte/Schutzbereichen/anderen Ebenen, Sperre, Rückgängig/Wiederholen, Pixelwerte zur Ausgabegröße | S | ✅ (Zuschnitt per Zahl, nicht per Maus) |
 | LAY.7 | Ebene ein/aus, tauschen, Inhalt wechseln und Rechteck setzen per Aktion, auch animiert | S | – |
 
 ### 3.5 Schalten (SWI)
@@ -351,56 +351,56 @@ Funktionsreferenz, kein Code (MIT, `claude.md` Entscheidung 6).
 
 | ID | Anforderung | Prio | Stand |
 |---|---|---|---|
-| GFX.1 | Titel = HTML-Vorlage nach der offenen CasparCG-Konvention: globale Funktionen `play()`, `stop()`, `next()`, `update(data)` und beliebige weitere per Aufruf; bestehende CasparCG-HTML-Vorlagen laufen unverändert. Optional ein lmix-Manifest (Name, Größe, Felder mit Typ Text/Bild/Farbe/Zahl/Schalter, Animationsdauern) | M | – |
+| GFX.1 | Titel = HTML-Vorlage nach der offenen CasparCG-Konvention: globale Funktionen `play()`, `stop()`, `next()`, `update(data)` und beliebige weitere per Aufruf; bestehende CasparCG-HTML-Vorlagen laufen unverändert. Optional ein lmix-Manifest (Name, Größe, Felder mit Typ Text/Bild/Farbe/Zahl/Schalter, Animationsdauern) | M | ◐ (Konvention, Manifest ohne Größe/Dauern) |
 | GFX.2 | Rendering in der Engine (Chromium, `cefsrc`; E.9) mit Alpha in Ausgabeauflösung und -bildrate, ohne Neustart der Pipeline; Rendern pausieren/fortsetzen; ein hängender Titel nimmt Program nicht mit | M | ◐ (cefsrc E) |
-| GFX.3 | Daten: `update` mit Datensatz als JSON oder als XML im CasparCG-Format (`templateData` mit `componentData`/`data`); Felder einzeln per Aktion setzen und lesen | M | – |
-| GFX.4 | Lebenszyklus wie CasparCG: laden (vorbereitet, unsichtbar), laden und sofort abspielen, abspielen, weiter (mehrstufige Animation), stoppen mit Ausblend-Animation, sofort entfernen, Funktion aufrufen; Vorlage meldet Ende; Overlay-Kanal wartet auf Ende der Ausblendung | M | – |
-| GFX.5 | Lottie: Lottie-Animationen (JSON, .lottie) in Vorlagen (lottie-web) und später als eigener Input (E.10); Textebenen als Felder; Marker als Abläufe | S | – |
+| GFX.3 | Daten: `update` mit Datensatz als JSON oder als XML im CasparCG-Format (`templateData` mit `componentData`/`data`); Felder einzeln per Aktion setzen und lesen | M | ✅ |
+| GFX.4 | Lebenszyklus wie CasparCG: laden (vorbereitet, unsichtbar), laden und sofort abspielen, abspielen, weiter (mehrstufige Animation), stoppen mit Ausblend-Animation, sofort entfernen, Funktion aufrufen; Vorlage meldet Ende; Overlay-Kanal wartet auf Ende der Ausblendung | M | ◐ (Overlay wartet noch nicht) |
+| GFX.5 | Lottie: Lottie-Animationen (JSON, .lottie) in Vorlagen (lottie-web) und später als eigener Input (E.10); Textebenen als Felder; Marker als Abläufe | S | ◐ (in Vorlagen; eigener Input später, E.10) |
 | GFX.6 | Beliebige Webseiten (URL) als Input mit Ton, Größe und eigenem CSS; JavaScript-Funktion der Seite per Aktion aufrufen | S | ◐ (cefsrc E) |
-| GFX.21 | Textfolien: Liste von Texten (Liedtexte, Zitate) aus Datei als Titel, mit Taste weiterschalten; im Programm und auf Beamer (P1) | S | – |
+| GFX.21 | Textfolien: Liste von Texten (Liedtexte, Zitate) aus Datei als Titel, mit Taste weiterschalten; im Programm und auf Beamer (P1) | S | ◐ (Text im Feld oder aus Datei, ein Absatz je Folie; Beamer mit GFX.2) |
 | GFX.20 | Webseiten und Vorlagen spielen H.264 und AAC ab, auch über Media Source Extensions (HLS-Player, Streaming-Einbettungen wie Twitch, YouTube); bevorzugt mit Hardware-Dekodierung. DRM-geschützte Inhalte (EME/Widevine) sind nicht gefordert | M | – |
-| GFX.7 | Titel-Editor in der GUI: Formular aus Manifest oder Datensatz, Felder live oder per "Übernehmen" | M | – |
-| GFX.8 | Datensätze speichern, benennen, abrufen, auflisten (wie CasparCG-Datenspeicher); vor/zurück; CSV ex-/import | S | – |
-| GFX.9 | Countdown/Stoppuhr/Uhr als Vorlagenbaustein: Dauer, Ziel-/Startzeit, Richtung, Format, Start/Stopp/Pause/Anpassen per Aktion, Ereignis bei 0 | S | – |
-| GFX.10 | Laufschrift: Tempo, Richtung, Anhängen vs. Ersetzen | S | – |
+| GFX.7 | Titel-Editor in der GUI: Formular aus Manifest oder Datensatz, Felder live oder per "Übernehmen" | M | ✅ |
+| GFX.8 | Datensätze speichern, benennen, abrufen, auflisten (wie CasparCG-Datenspeicher); vor/zurück; CSV ex-/import | S | ✅ |
+| GFX.9 | Countdown/Stoppuhr/Uhr als Vorlagenbaustein: Dauer, Ziel-/Startzeit, Richtung, Format, Start/Stopp/Pause/Anpassen per Aktion, Ereignis bei 0 | S | ✅ |
+| GFX.10 | Laufschrift: Tempo, Richtung, Anhängen vs. Ersetzen | S | ✅ |
 | GFX.11 | Titel als Stinger: Schnittpunkt und Dauer aus Manifest oder Aktion | S | – |
-| GFX.12 | Vorlagensatz (eigen gestaltet): Bauchbinde, Name+Funktion, Laufschrift, Uhr, Countdown, Spielstand, Vollbild-Karte; Hochkant-Varianten | M | – |
-| GFX.13 | Vorlagen-SDK: kleine JS-Bibliothek für die Konvention, Vorlagen-Gerüst, Vorschau im normalen Browser mit Testdaten; Gestaltung mit üblichen Web-Werkzeugen | S | – |
-| GFX.14 | Vorlage neu laden bei Dateiänderung; gesetzte Daten bleiben erhalten | S | – |
+| GFX.12 | Vorlagensatz (eigen gestaltet): Bauchbinde, Name+Funktion, Laufschrift, Uhr, Countdown, Spielstand, Vollbild-Karte; Hochkant-Varianten | M | ✅ |
+| GFX.13 | Vorlagen-SDK: kleine JS-Bibliothek für die Konvention, Vorlagen-Gerüst, Vorschau im normalen Browser mit Testdaten; Gestaltung mit üblichen Web-Werkzeugen | S | ✅ |
+| GFX.14 | Vorlage neu laden bei Dateiänderung; gesetzte Daten bleiben erhalten | S | ✅ |
 | GFX.15 | Leistungsbudget: ≥ 8 aktive animierte Titel 1080p60 gleichzeitig ohne Drop | M | – |
 | GFX.16 | Import von vMix-Titeln (.gtzip, XAML) | X | – |
-| GFX.17 | Titel-Ebenen: mehrere Vorlagen gleichzeitig in einem Grafik-Input (z. B. Bauchbinde, Logo, Uhr), je Ebene unabhängig steuerbar; Grafik-Input als Overlay nutzbar | S | – |
-| GFX.18 | Ebenen-Transformation je Titel-Ebene: Position, Größe, Crop, Deckkraft, Drehung, Perspektive, Helligkeit/Kontrast/Sättigung, Blend-Modus; animiert mit Dauer und Easing; mehrere Änderungen gemeinsam auf einen Frame anwenden | S | – |
-| GFX.19 | Vorlagen- und Medienliste mit Infos (Felder, Größe, Dauer) und Vorschaubild über die API abfragbar | S | – |
+| GFX.17 | Titel-Ebenen: mehrere Vorlagen gleichzeitig in einem Grafik-Input (z. B. Bauchbinde, Logo, Uhr), je Ebene unabhängig steuerbar; Grafik-Input als Overlay nutzbar | S | ◐ (Ebenen; Input/Overlay mit GFX.2) |
+| GFX.18 | Ebenen-Transformation je Titel-Ebene: Position, Größe, Crop, Deckkraft, Drehung, Perspektive, Helligkeit/Kontrast/Sättigung, Blend-Modus; animiert mit Dauer und Easing; mehrere Änderungen gemeinsam auf einen Frame anwenden | S | ✅ (Console: Platz, Größe, Drehung, Deckkraft, Farbe) |
+| GFX.19 | Vorlagen- und Medienliste mit Infos (Felder, Größe, Dauer) und Vorschaubild über die API abfragbar | S | ✅ |
 
 ### 3.12 Datenquellen (DAT)
 
 | ID | Anforderung | Prio | Stand |
 |---|---|---|---|
-| DAT.1 | Typen: CSV, XLSX/ODS, Google Sheets (öffentlich + API-Schlüssel), RSS, Text, XML (XPath), JSON (Array von Objekten) | S | – |
-| DAT.2 | Lokal, im Netz, im Internet; automatische Aktualisierung bei Änderung | S | – |
-| DAT.3 | Optionen: erste Zeile = Spaltennamen, Zeilen zu Spalten | K | – |
-| DAT.4 | Zuordnung Titelfeld ← Quelle/Tabelle/Spalte (oder automatisch nach Name/Index)/Zeile (fest oder "gewählt"), Formatmuster `…{0}…`; Bilder per Pfad/URL | S | – |
-| DAT.5 | Datenquellen-Fenster: Zeile wählen, Auto-Weiter mit Intervall, Schleife; Aktionen nächste/vorige/bestimmte Zeile | S | – |
+| DAT.1 | Typen: CSV, XLSX/ODS, Google Sheets (öffentlich + API-Schlüssel), RSS, Text, XML (XPath), JSON (Array von Objekten) | S | ✅ (XML über Pfad statt XPath) |
+| DAT.2 | Lokal, im Netz, im Internet; automatische Aktualisierung bei Änderung | S | ✅ |
+| DAT.3 | Optionen: erste Zeile = Spaltennamen, Zeilen zu Spalten | K | ✅ |
+| DAT.4 | Zuordnung Titelfeld ← Quelle/Tabelle/Spalte (oder automatisch nach Name/Index)/Zeile (fest oder "gewählt"), Formatmuster `…{0}…`; Bilder per Pfad/URL | S | ✅ |
+| DAT.5 | Datenquellen-Fenster: Zeile wählen, Auto-Weiter mit Intervall, Schleife; Aktionen nächste/vorige/bestimmte Zeile | S | ✅ |
 
 ### 3.13 Automatisierung (AUT)
 
 | ID | Anforderung | Prio | Stand |
 |---|---|---|---|
-| AUT.1 | Tastenbelegung: Tastatur, MIDI (Note, CC, Wert, Jog-Typen), HID-Controller (X-keys, Shuttle), Gamepad (inkl. Druck/Analog), Stream-Deck-Anbindung | S | ◐ (Tasten 1–8, Take) |
-| AUT.2 | Je Belegung: Aktion, Input (fest oder "Input-Nummer"), Wert, Dauer, Beschriftung für Fernbedienung, Anzeige (Farbe/Bild/Live-Bild) | S | – |
-| AUT.3 | Mehrere Aktionen je Taste in fester Reihenfolge; global (Einstellungen) oder lokal (Show), lokal gewinnt | S | – |
+| AUT.1 | Tastenbelegung: Tastatur, MIDI (Note, CC, Wert, Jog-Typen), HID-Controller (X-keys, Shuttle), Gamepad (inkl. Druck/Analog), Stream-Deck-Anbindung | S | ◐ (Tastatur, MIDI Note/CC; ohne HID, Gamepad, Stream Deck direkt) |
+| AUT.2 | Je Belegung: Aktion, Input (fest oder "Input-Nummer"), Wert, Dauer, Beschriftung für Fernbedienung, Anzeige (Farbe/Bild/Live-Bild) | S | ◐ (Aktionen mit Parametern, Beschriftung, Farbe, Live-Bild des geschalteten Inputs auf der Tasten-Seite; ohne eigenes Bild) |
+| AUT.3 | Mehrere Aktionen je Taste in fester Reihenfolge; global (Einstellungen) oder lokal (Show), lokal gewinnt | S | ✅ |
 | AUT.4 | Vorlagen für Belegungen ex-/importieren | K | – |
-| AUT.5 | Dynamische Inputs/Werte 1–4: Taste A wählt Input/Wert, Taste B wirkt darauf | K | – |
-| AUT.6 | Rückmeldungen an Controller: Lampen, Farben, Motorfader nach Zustand (Input auf PGM/PVW/spielt, Pegel, Mute, Solo, Bus, FTB, Aufnahme, Stream, …) | S | – |
-| AUT.7 | Auslöser je Input: beim Ein-/Ausblenden (Take, Overlay), Ende, Wiedergabezeit/Restzeit, Countdown 0, Gast verbunden/getrennt, Wiederholung fertig → Aktionsliste mit Verzögerung (max. 30 s je Schritt) | S | – |
+| AUT.5 | Dynamische Inputs/Werte 1–4: Taste A wählt Input/Wert, Taste B wirkt darauf | K | ✅ |
+| AUT.6 | Rückmeldungen an Controller: Lampen, Farben, Motorfader nach Zustand (Input auf PGM/PVW/spielt, Pegel, Mute, Solo, Bus, FTB, Aufnahme, Stream, …) | S | ◐ (MIDI-Lampen: PGM/PVW, FTB, Ausgang, Sperre; ohne Pegel, Motorfader) |
+| AUT.7 | Auslöser je Input: beim Ein-/Ausblenden (Take, Overlay), Ende, Wiedergabezeit/Restzeit, Countdown 0, Gast verbunden/getrennt, Wiederholung fertig → Aktionsliste mit Verzögerung (max. 30 s je Schritt) | S | ◐ (PGM/PVW/Overlay, Clip-Ende mit Vorlauf, Wiedergabezeit, Titelmeldungen; ohne Gast, Wiederholung) |
 | AUT.8 | Ablaufliste: Inputs mit Startposition, Dauer, Übergang, Anzeigeart (Vollbild/Overlay); Start, Stopp, vor/zurück, Schleife, manuell; mehrere benannte Listen in der Show | S | – |
 | AUT.9 | Skripte: benannte Skripte (global/lokal), Start/Stopp per Aktion; Sprache JavaScript (E.6) mit Zugriff auf Aktionen, Zustand, Warten, Netzwerk; einfache Zeilen-Syntax (Aktion + Pause) | K | – |
-| AUT.10 | Rückgängig für Input schließen | S | – |
-| AUT.11 | Schutzschloss: Schließen, Show laden, Aufnahme-/Stream-/Ausgabe-Stopp sperren | S | – |
-| AUT.12 | Globale Tastenkürzel, auch wenn ein anderes Programm im Vordergrund ist (P4) | S | – |
-| AUT.13 | OSC als Steuerweg: Aktionen per OSC empfangen, Zustand per OSC senden (P5, P7) | S | – |
-| AUT.14 | Cue-Liste: jede Zeile führt mehrere Aktionen aus (Inputs, Ebenen, Overlays, Ton, Übergang); GO, zurück, springen; auslösbar per Taste, MIDI, OSC (P7) | S | – |
+| AUT.10 | Rückgängig für Input schließen | S | ✅ |
+| AUT.11 | Schutzschloss: Schließen, Show laden, Aufnahme-/Stream-/Ausgabe-Stopp sperren | S | ✅ |
+| AUT.12 | Globale Tastenkürzel, auch wenn ein anderes Programm im Vordergrund ist (P4) | S | ◐ (über das Portal; Plasma-Prüfung H.32) |
+| AUT.13 | OSC als Steuerweg: Aktionen per OSC empfangen, Zustand per OSC senden (P5, P7) | S | ✅ |
+| AUT.14 | Cue-Liste: jede Zeile führt mehrere Aktionen aus (Inputs, Ebenen, Overlays, Ton, Übergang); GO, zurück, springen; auslösbar per Taste, MIDI, OSC (P7) | S | ✅ |
 
 ### 3.14 Gäste (CAL)
 
@@ -419,26 +419,26 @@ Zurückgestellt (User 2026-10-08).
 
 | ID | Anforderung | Prio | Stand |
 |---|---|---|---|
-| API.1 | Ein Aktionskatalog für alle Bedienwege (§2.3); jede Aktion: Name, Gruppe, Parameter (Input, Wert, Dauer, Feldname, Index, Mix, Kanal), Beschreibung; maschinenlesbar exportierbar | M | – |
+| API.1 | Ein Aktionskatalog für alle Bedienwege (§2.3); jede Aktion: Name, Gruppe, Parameter (Input, Wert, Dauer, Feldname, Index, Mix, Kanal), Beschreibung; maschinenlesbar exportierbar | M | ✅ (JSON-Schema mit Beschreibungen und Gruppen `x-group`) |
 | API.2 | Umfang: alle Bedienfunktionen dieses Lastenhefts, mindestens alles, was die vMix-Funktionsreferenz steuern kann; Gruppen wie vMix: Allgemein, Audio, Übergang, Ausgang, Titel, Input, Overlay, Ablaufliste, Skript, Wiederholung, NDI/OMT, PTZ, Show, Datenquellen, Browser (vMix 29: rund 800 Aktionen inkl. nummerierter Varianten; lmix darf sie parametrisieren statt durchnummerieren, z. B. `overlay.in {channel}` statt `OverlayInput1In…8In`) | M | – |
-| API.3 | HTTP: Aktion per Aufruf mit Parametern; vollständiger Zustand abrufbar (JSON) | M | ◐ (strom-REST, andere Ebene) |
-| API.4 | Zustand enthält: Version, Inputs (ID, Nummer, Typ, Titel, Zustand, Position, Dauer, Schleife, Ton, Pegel, Busse, Ebenen, Titelfelder, Listeneinträge), Overlays, Preview, Program, FTB, Übergänge, Aufnahme/Stream/Ausgaben/Ablaufliste/Einzelaufnahme, Audio-Busse, dynamische Werte, Mixe | M | – |
-| API.5 | Ereigniskanal mit Abo: Tally (aus/PGM/PVW je Input), Rückmeldungszustände, Zustandsänderungen; Aktionen über denselben Kanal; leichtgewichtig genug für Mikrocontroller (Textzeilen über TCP oder WebSocket) | M | – |
-| API.6 | WebSocket mit Zustandsdiffs für eigene Clients | S | ◐ (strom-WS) |
-| API.7 | Sicherheit: nur LAN (Standard), Passwort, Ausnahmen je Seite, lokale Programme ohne Anmeldung, "erhöhte Sicherheit" sperrt Skripte | M | – |
+| API.3 | HTTP: Aktion per Aufruf mit Parametern; vollständiger Zustand abrufbar (JSON) | M | ✅ |
+| API.4 | Zustand enthält: Version, Inputs (ID, Nummer, Typ, Titel, Zustand, Position, Dauer, Schleife, Ton, Pegel, Busse, Ebenen, Titelfelder, Listeneinträge), Overlays, Preview, Program, FTB, Übergänge, Aufnahme/Stream/Ausgaben/Ablaufliste/Einzelaufnahme, Audio-Busse, dynamische Werte, Mixe | M | ◐ |
+| API.5 | Ereigniskanal mit Abo: Tally (aus/PGM/PVW je Input), Rückmeldungszustände, Zustandsänderungen; Aktionen über denselben Kanal; leichtgewichtig genug für Mikrocontroller (Textzeilen über TCP oder WebSocket) | M | ✅ |
+| API.6 | WebSocket mit Zustandsdiffs für eigene Clients | S | ✅ (auf Wunsch, `?diff=true`) |
+| API.7 | Sicherheit: nur LAN (Standard), Passwort, Ausnahmen je Seite, lokale Programme ohne Anmeldung, "erhöhte Sicherheit" sperrt Skripte | M | ✅ (lmix hat keine Skripte; OSC ohne Passwort, nur LAN) |
 | API.8 | Optionaler Kompatibilitätsmodus: vMix-Funktionsnamen, XML-Zustand, TCP-Protokoll, Ports 8088/8099 | K | – |
-| API.9 | Integrationsziel: alles, was Fremdprogramme an vMix nutzen, geht auch mit der lmix-API: Aktionen mit allen Parametern, Inputs über Nummer, Name oder ID (plus Kurzformen "Preview", "Program"), vollständiger Zustand, Ereignis-Abo (API.5), Pegel live, Titelfelder lesen/schreiben, Live-Vorschaubild je Input für Tasten-Displays, Fehler mit Grund. Referenz: Bitfocus Companion, Stream-Deck-Plugins, Tally-Software (`LASTENHEFT-QUELLEN.md` §2) | M | – |
-| API.10 | Schnittstelle dokumentiert und versioniert (maschinenlesbare Beschreibung, Änderungen nur additiv innerhalb einer Hauptversion) | M | – |
-| API.11 | Eigenes Companion-Modul für lmix, Beispiel-Clients (Tally auf Mikrocontroller, Skript) | S | – |
+| API.9 | Integrationsziel: alles, was Fremdprogramme an vMix nutzen, geht auch mit der lmix-API: Aktionen mit allen Parametern, Inputs über Nummer, Name oder ID (plus Kurzformen "Preview", "Program"), vollständiger Zustand, Ereignis-Abo (API.5), Pegel live, Titelfelder lesen/schreiben, Live-Vorschaubild je Input für Tasten-Displays, Fehler mit Grund. Referenz: Bitfocus Companion, Stream-Deck-Plugins, Tally-Software (`LASTENHEFT-QUELLEN.md` §2) | M | ◐ |
+| API.10 | Schnittstelle dokumentiert und versioniert (maschinenlesbare Beschreibung, Änderungen nur additiv innerhalb einer Hauptversion) | M | ◐ (JSON-Schema, `api_version`) |
+| API.11 | Eigenes Companion-Modul für lmix, Beispiel-Clients (Tally auf Mikrocontroller, Skript) | S | ◐ (Beispiele in `examples/`: Python, ESP32-Tally; ohne Companion-Modul) |
 
 ### 3.16 Web-Fernbedienung (WEB)
 
 | ID | Anforderung | Prio | Stand |
 |---|---|---|---|
-| WEB.1 | Seite "Tasten": alle als sichtbar markierten Belegungen als Raster | S | – |
-| WEB.2 | Seite "Mischer": Inputs, PVW/PGM, Übergangstasten | S | – |
-| WEB.3 | Seite "Tally": Input wählen, ganzer Bildschirm in PGM-/PVW-Farbe | S | – |
-| WEB.4 | Seite "Titel": Felder bearbeiten, Presets anwenden/anlegen | S | – |
+| WEB.1 | Seite "Tasten": alle als sichtbar markierten Belegungen als Raster | S | ✅ |
+| WEB.2 | Seite "Mischer": Inputs, PVW/PGM, Übergangstasten | S | ✅ |
+| WEB.3 | Seite "Tally": Input wählen, ganzer Bildschirm in PGM-/PVW-Farbe | S | ✅ |
+| WEB.4 | Seite "Titel": Felder bearbeiten, Presets anwenden/anlegen | S | ✅ |
 | WEB.5 | Seite "Mitschauen" (STR.8) und "Zeichnen" (§3.17) | K | – |
 
 ### 3.17 Zeichenebene (TEL)
@@ -453,9 +453,9 @@ Zurückgestellt (User 2026-10-08).
 
 | ID | Anforderung | Prio | Stand |
 |---|---|---|---|
-| PER.1 | Tally an: Web-Seite, TCP-API, Rückmeldungen, TSL UMD 3.1/5.0 (P5), USB-/Netz-Tally-Geräte (generisch, z. B. HTTP/OSC/GPIO), Arduino/Firmata | S | – (ROADMAP M6) |
-| PER.2 | PTZ je Input über Netzwerk (Protokolle VISCA-over-IP, NDI, ONVIF: lmix); Bewegen, Zoom, Fokus, Home, Tempo | S | – |
-| PER.3 | PTZ-Positionen als virtuelle Inputs: Preview fährt die Position an, Standbild außerhalb PVW/PGM, aktualisieren | S | – |
+| PER.1 | Tally an: Web-Seite, TCP-API, Rückmeldungen, TSL UMD 3.1/5.0 (P5), USB-/Netz-Tally-Geräte (generisch, z. B. HTTP/OSC/GPIO), Arduino/Firmata | S | ◐ (Webseite, TCP, OSC, TSL 3.1/5.0 per UDP und TCP, HTTP; ohne GPIO/Firmata) |
+| PER.2 | PTZ je Input über Netzwerk (Protokolle VISCA-over-IP, NDI, ONVIF: lmix); Bewegen, Zoom, Fokus, Home, Tempo | S | ◐ (VISCA over IP und in UDP; ohne NDI, ONVIF) |
+| PER.3 | PTZ-Positionen als virtuelle Inputs: Preview fährt die Position an, Standbild außerhalb PVW/PGM, aktualisieren | S | ◐ (Positionen per Auslöser; ohne virtuelle Inputs, Standbild) |
 | PER.4 | Virtuelles PTZ: digitaler Zoom/Schwenk auf beliebigem Input | K | – |
 | PER.5 | 2 Produktionsuhren: Uhrzeit (+Offset, 12/24 h), Ereignis (vor/während/nach in Bernstein/Grün/Rot), Aufnahme-, Streamdauer, Restzeit Program; Genauigkeit wählbar; als Input | S | – |
 | PER.6 | Statistik je Live-Input: Quell-Drops, Render-Drops, Resync, Frame-Abstände, Ton-Puffer/Drops/Resample; Encoder (CPU/GPU), SRT (Bandbreite, Verlust, RTT) | M | ◐ (Selftest) |
@@ -467,12 +467,12 @@ Zurückgestellt (User 2026-10-08).
 
 | ID | Anforderung | Prio | Stand |
 |---|---|---|---|
-| SHW.1 | Show enthält: Inputs mit allen Einstellungen, Overlays, Übergänge, Audio (Inputs + Busse), Ablauflisten, Kategorien, lokale Belegungen/Rückmeldungen/Skripte, Aufnahme, Streaming, Ausgänge, Karte, Datenquellen, Master-Format | M | – (ROADMAP 2b.4) |
-| SHW.2 | Offenes, versioniertes, lesbares Format (JSON); Medien per Pfad | M | – |
-| SHW.3 | Neu (mit Formatwahl), Öffnen (ersetzt), Anhängen (nur gewählte Inputs), Speichern, Speichern unter, zuletzt geöffnet | M | – |
-| SHW.4 | Fehlende Dateien: markieren, suchen lassen, sonst Input offline | M | – |
-| SHW.5 | Automatische Sicherung, "letzte Show" wiederherstellen (auch nach Absturz) | M | – |
-| SHW.6 | Paket: Show + Medien + Titel in einer Datei | S | – |
+| SHW.1 | Show enthält: Inputs mit allen Einstellungen, Overlays, Übergänge, Audio (Inputs + Busse), Ablauflisten, Kategorien, lokale Belegungen/Rückmeldungen/Skripte, Aufnahme, Streaming, Ausgänge, Karte, Datenquellen, Master-Format | M | ◐ (Inputs mit Einstellungen und Farb-Kategorien, Overlays, Übergänge, Audio samt Aux-Bussen, Layouts, Ablauflisten, Kurzbefehle, Auslöser, Ausgänge, Titel, Datenquellen; ohne Master-Format, Karte) |
+| SHW.2 | Offenes, versioniertes, lesbares Format (JSON); Medien per Pfad | M | ✅ (JSON `lmix-show`, Version 1, Medien per Pfad) |
+| SHW.3 | Neu (mit Formatwahl), Öffnen (ersetzt), Anhängen (nur gewählte Inputs), Speichern, Speichern unter, zuletzt geöffnet | M | ◐ (Neu, Öffnen, Anhängen gewählter Inputs, Speichern, Speichern unter, zuletzt geöffnet; ohne Formatwahl) |
+| SHW.4 | Fehlende Dateien: markieren, suchen lassen, sonst Input offline | M | ✅ (fehlende Mediendateien markiert, in einem Ordner nach Namen gesucht; fehlende Quelle: Input offline, kommt von selbst zurück) |
+| SHW.5 | Automatische Sicherung, "letzte Show" wiederherstellen (auch nach Absturz) | M | ✅ (Autosave nach jeder Änderung, Fortsetzen nach Absturz) |
+| SHW.6 | Paket: Show + Medien + Titel in einer Datei | S | ✅ |
 | SHW.7 | Formatwechsel beim Laden bestätigen | S | – |
 | SHW.8 | Globale Einstellungen getrennt ex-/importieren, Werkseinstellungen | S | – |
 | SHW.9 | Import von vMix-Presets (E.3: nie) | X | – |
@@ -484,16 +484,16 @@ Zurückgestellt (User 2026-10-08).
 |---|---|---|---|
 | UI.1 | Hauptfenster: Preview links, Program rechts (Farbcodes einstellbar), Übergangsspalte dazwischen, Input-Leiste unten mit Live-Kacheln, Fußleiste mit Senken-Tasten | M | ◐ (Console) |
 | UI.2 | Input-Kachel: Titelzeile (Nummer, Name, Kategoriefarbe), Bild, Tasten: Schließen, Cut, Schleife, Overlay 1–8, GO, Ton, Großansicht, Einstellungen; Tally-Farbe | M | ◐ |
-| UI.3 | Mehrere Input-Reihen, Kachelgröße einstellbar, Einklappen einzelner Inputs, Bildlauf | S | – |
-| UI.4 | Kontextmenüs je Input-Typ (Liste-Einträge, Fotos, Titel-Presets, NDI-Quelle, Browser …) | S | – |
-| UI.5 | Transportleiste unter PVW/PGM für Wiedergabe-Inputs | M | – |
+| UI.3 | Mehrere Input-Reihen, Kachelgröße einstellbar, Einklappen einzelner Inputs, Bildlauf | S | ✅ (Kachelgröße, Reihen, Bildlauf, Einklappen je Console) |
+| UI.4 | Kontextmenüs je Input-Typ (Liste-Einträge, Fotos, Titel-Presets, NDI-Quelle, Browser …) | S | ◐ (Wiedergabe, Playlist-Einträge, Senden an WHIP; ohne Fotos, NDI, Browser) |
+| UI.5 | Transportleiste unter PVW/PGM für Wiedergabe-Inputs | M | ✅ (Tasten, Position, Länge, Springen per Klick) |
 | UI.6 | Andockbare Bereiche (Audio, Wiederholung, Liste) und abdockbare Fenster für zweiten Monitor | S | – |
-| UI.7 | Einfacher und erweiterter Modus | S | – |
-| UI.8 | Input-Einstellungen in Reitern: Allgemein, Farbe, Key, Farbkorrektur, Effekte, Position, Ebenen, Auslöser, Tally, PTZ, Erweitert | M | – |
+| UI.7 | Einfacher und erweiterter Modus | S | ✅ |
+| UI.8 | Input-Einstellungen in Reitern: Allgemein, Farbe, Key, Farbkorrektur, Effekte, Position, Ebenen, Auslöser, Tally, PTZ, Erweitert | M | ◐ (Allgemein, Farbe, Ton, Auslöser, PTZ, Erweitert; ohne Key, Effekte, Position, Ebenen, Tally) |
 | UI.9 | Gestaltung nach dem Kante Design System (`agent.md`, GUI-Regel): Stilwahl Kante (Standard, dunkel; hell „Leinen“ bei hellem Systemthema), Kante Light (nur Formsprache, Farben des Systems), System als Rückfall (KDE Plasma/Breeze, folgt dem Plasma-Farbschema); Bildflächen bleiben dunkel; Sprachen en (Quelle) und de (erweiterbar) | M | – |
-| UI.10 | Bestätigung vor Stopp von Aufnahme/Stream (abschaltbar) | S | – |
+| UI.10 | Bestätigung vor Stopp von Aufnahme/Stream (abschaltbar) | S | ✅ |
 | UI.11 | Hochkant-Produktion: Vorlagen für 9:16, Schutzbereich, Quellrotation | K | – |
-| UI.12 | Startoptionen: maximiert, erweiterter Modus, Vollbild/Kartenausgang/SRT starten, letzte Show | S | – |
+| UI.12 | Startoptionen: maximiert, erweiterter Modus, Vollbild/Kartenausgang/SRT starten, letzte Show | S | ◐ (Fenster, Modus, Ausgänge starten, letzte Show; Vollbild-Ausgang über `--start-outputs`) |
 | UI.13 | Show-Vorlagen (z. B. Gottesdienst, Konferenz, Hörsaal) und Einrichtungsassistent: Kameras finden, Ton wählen, Stream-Ziel eintragen (P1, P6) | S | – |
 
 ---
@@ -504,9 +504,9 @@ Aus den Persona-Durchläufen (`PERSONAS.md`).
 
 | ID | Anforderung | Prio | Stand |
 |---|---|---|---|
-| OPS.1 | Headless-Betrieb: `lmix-core` und Engine laufen ohne GUI und ohne Monitor, Show wird beim Start geladen (systemd-Dienst) (P5) | S | – |
+| OPS.1 | Headless-Betrieb: `lmix-core` und Engine laufen ohne GUI und ohne Monitor, Show wird beim Start geladen (systemd-Dienst) (P5) | S | ✅ |
 | OPS.2 | Mehrere Bedienplätze gleichzeitig, auch über Netz: z. B. Bildregie und Tonregie an getrennten Rechnern; Rechte je Platz (P2, P5) | S | – |
-| OPS.3 | Monitoring: Gesundheitszustand und Metriken (Drops, Latenz, Encoder, Pegel, Speicher) über HTTP, Prometheus-Format (P5) | S | – |
+| OPS.3 | Monitoring: Gesundheitszustand und Metriken (Drops, Latenz, Encoder, Pegel, Speicher) über HTTP, Prometheus-Format (P5) | S | ✅ |
 | OPS.4 | Zeitplan: Show laden, Aufnahme und Stream starten/stoppen zu festen Zeiten, mit Namen für Dateien (REC.9) (P6) | K | – |
 
 ## 4. Nichtfunktionale Anforderungen (NFA)

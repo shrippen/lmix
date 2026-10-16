@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Name and role</title>
+<link rel="stylesheet" href="/titles/sdk/lmix-title.css">
+<style>
+  .tag { position: absolute; bottom: calc(var(--safe-y) + 40 * var(--u)); left: var(--safe-x); display: flex; flex-direction: column; align-items: flex-start; }
+  .tag.right { left: auto; right: var(--safe-x); align-items: flex-end; }
+  .tag .name { padding: calc(12 * var(--u)) calc(40 * var(--u)) calc(8 * var(--u)) calc(28 * var(--u)); font-size: calc(64 * var(--u)); }
+  .tag .role { padding: calc(10 * var(--u)) calc(28 * var(--u)); font-size: calc(24 * var(--u)); color: var(--yellow); background: var(--bg-void); }
+  .tag .role:empty { display: none; }
+</style>
+</head>
+<body>
+<div class="tag" id="tag">
+  <div class="name k-panel k-accent k-name k-wipe" id="name"></div>
+  <div class="role k-label k-rise k-later" id="role"></div>
+</div>
+<script src="/titles/sdk/lmix-title.js"></script>
+<script>
+  const tag = document.getElementById("tag");
+  const parts = [document.getElementById("name"), document.getElementById("role")];
+  lmixTitle({
+    update(d) {
+      parts[0].textContent = d.name || "";
+      parts[1].textContent = d.role || "";
+      tag.classList.toggle("right", d.side === "right");
+    },
+    play() { parts.forEach((p) => p.classList.add("is-in")); },
+    stop() { parts.forEach((p) => p.classList.remove("is-in")); return lmixTitle.duration("--dur"); },
+  });
+</script>
+</body>
+</html>

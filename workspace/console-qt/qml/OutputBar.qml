@@ -7,6 +7,8 @@ import Kante
 /**
  * Outputs: one button each (click starts or stops; right click removes),
  * state as a pill, running time and link health. "+ Output" adds one.
+ * Stopping a running output asks first unless `confirmStop` is off
+ * (UI.10); the question can turn it off.
  */
 RowLayout {
     id: bar
@@ -17,6 +19,8 @@ RowLayout {
     required property var outputs
     required property var outputById
     signal addRequested()
+    /** Ask before stopping a running output. */
+    property bool confirmStop: true
 
     readonly property var links: core.links.length > 0 ? JSON.parse(core.links) : ({})
 
@@ -41,7 +45,16 @@ RowLayout {
             emphasis: running ? KanteButton.Emphasis.Primary
                 : (status.state === "failed" ? KanteButton.Emphasis.Destructive : KanteButton.Emphasis.Normal)
             enabled: bar.core.connected
-            onClicked: bar.act({ action: running ? "stop_output" : "start_output", output: modelData.number })
+            onClicked: {
+                if (!running) {
+                    bar.act({ action: "start_output", output: modelData.number })
+                } else if (bar.confirmStop) {
+                    stopDialog.output = modelData
+                    stopDialog.open()
+                } else {
+                    bar.act({ action: "stop_output", output: modelData.number })
+                }
+            }
 
             QQC2.ToolTip.visible: hovered
             QQC2.ToolTip.text: {
@@ -68,6 +81,42 @@ RowLayout {
                     text: qsTr("Remove %1").arg(button.modelData.name)
                     onTriggered: bar.act({ action: "remove_output", output: button.modelData.number })
                 }
+            }
+        }
+    }
+
+    KanteDialog {
+        id: stopDialog
+        /** The output to stop. */
+        property var output: null
+        parent: QQC2.Overlay.overlay
+        anchors.centerIn: parent
+        modal: true
+        title: output ? qsTr("Stop %1?").arg(output.name) : ""
+        standardButtons: QQC2.Dialog.Ok | QQC2.Dialog.Cancel
+        kanteBarColor: KanteStyle.negativeTextColor
+        width: Kirigami.Units.gridUnit * 24
+        // KanteDialog has a child of its own, so it does not size to this.
+        contentHeight: stopColumn.implicitHeight
+        onOpened: askAgain.checked = true
+        onAccepted: {
+            bar.confirmStop = askAgain.checked
+            // By id: another Console may renumber the outputs meanwhile.
+            bar.act({ action: "stop_output", output: output.id })
+        }
+
+        ColumnLayout {
+            id: stopColumn
+            width: parent.width
+            QQC2.Label {
+                Layout.fillWidth: true
+                text: qsTr("A stopped recording or stream cannot go on where it was.")
+                wrapMode: Text.WordWrap
+            }
+            QQC2.CheckBox {
+                id: askAgain
+                text: qsTr("Ask before stopping")
+                KanteCheckSkin { control: askAgain }
             }
         }
     }
