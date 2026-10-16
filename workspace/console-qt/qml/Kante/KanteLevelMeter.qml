@@ -1,156 +1,186 @@
 import QtQuick
-import QtQuick.Controls as QQC2
 import "."
 
 /**
- * Audio level meter: a bar in dBFS with three zones (positive up to `warnAt`,
- * warning up to `dangerAt`, negative above), a peak-hold mark that falls back
- * after `holdMs`, and an optional scale under the bar (`scale`: the floor, both
- * zone limits and 0). Horizontal, or vertical with `vertical` (bottom up, scale
- * to the right). The tooltip names the value; `level` undefined = nothing measured.
- * Zone colours are the tier roles, so the meter reads the same in every kind.
+ * Input level (Kante 1.23, for Kontra): RMS as a bar, the peak as a tick, on a scale of
+ * −rangeDb..0 dBFS with three zones: too quiet, good, too loud. The zone the peak is in
+ * is named in words (its label bold and underlined) and in the read-out, so it never
+ * hangs on colour; `clipped` lights the clip box with its word and a cross.
+ *
+ *   peakDb, rmsDb   levels in dBFS (≤ 0; below −rangeDb is silence)
+ *   clipped         the input clipped (the app holds it for a while)
+ *   rangeDb         scale depth (default 60)
+ *   quietDb, loudDb zone limits for the peak (default −36 and −6)
  */
 Item {
     id: meter
 
-    /** Level in dBFS (peak or RMS, as the app measures); undefined while nothing is measured. */
-    property var level: undefined
-    property real floor: -60
-    property real warnAt: -18
-    property real dangerAt: -6
-    property bool vertical: false
-    /** Labels under (vertical: beside) the bar. */
-    property bool scale: false
-    /** Peak hold in ms; 0 switches the mark off. */
-    property int holdMs: 1500
-    /** Bar thickness. */
-    property real thickness: KanteStyle.unit(8)
+    property real peakDb: -120
+    property real rmsDb: -120
+    property bool clipped: false
+    property real rangeDb: 60
+    property real quietDb: -36
+    property real loudDb: -6
+    property string title: "Eingang"
+    property string quietText: "zu leise"
+    property string goodText: "gut"
+    property string loudText: "zu laut"
+    property string clipText: "Übersteuert"
+    property string accessibleName: "Eingangspegel"
 
-    function fraction(db) {
-        return Math.max(0, Math.min(1, (db - floor) / -floor))
-    }
-    readonly property real value: level === undefined ? 0 : fraction(level)
-    property real held: 0
-    /** Where the scale labels start (-1: dropped, too crowded); floor, warnAt, dangerAt, 0. */
-    readonly property var scaleStarts: scaleRow.starts
+    /** "quiet", "good", "loud" or "clip". */
+    readonly property string zone: clipped ? "clip" : peakDb > loudDb ? "loud" : peakDb < quietDb ? "quiet" : "good"
+    readonly property string zoneText: zone === "clip" ? clipText : zone === "loud" ? loudText : zone === "quiet" ? quietText : goodText
+    readonly property string peakText: peakDb <= -rangeDb ? "−∞ dB" : (peakDb < -0.05 ? "−" : "") + Math.abs(peakDb).toFixed(0) + " dB"
 
-    onValueChanged: {
-        if (holdMs <= 0)
-            return
-        if (value >= held) {
-            held = value
-            fall.restart()
-        }
-    }
-    Timer {
-        id: fall
-        interval: meter.holdMs
-        onTriggered: meter.held = meter.value
+    readonly property real clipWidth: Math.round(clipMetrics.width + KanteStyle.unit(30))
+    readonly property real trackWidth: Math.max(1, width - clipWidth - KanteStyle.unit(8))
+    readonly property real trackHeight: KanteStyle.unit(16)
+    function xOf(db) {
+        return Math.max(0, Math.min(1, (db + rangeDb) / rangeDb)) * trackWidth
     }
 
-    implicitWidth: vertical ? thickness + (scale ? scaleRow.implicitWidth + KanteStyle.unit(4) : 0) : KanteStyle.unit(160)
-    implicitHeight: vertical ? KanteStyle.unit(160) : thickness + (scale ? scaleMetrics.height + KanteStyle.unit(2) : 0)
-
-    // The bar; zones are drawn along x and the item is rotated for vertical meters.
-    Item {
-        id: track
-        width: meter.vertical ? meter.height : meter.width
-        height: meter.thickness
-        transformOrigin: Item.TopLeft
-        rotation: meter.vertical ? -90 : 0
-        y: meter.vertical ? meter.height : 0
-
-        Rectangle {
-            anchors.fill: parent
-            color: KanteStyle.sunkenColor
-        }
-        Rectangle {
-            width: Math.min(meter.value, meter.fraction(meter.warnAt)) * track.width
-            height: track.height
-            color: KanteStyle.positiveTextColor
-        }
-        Rectangle {
-            x: meter.fraction(meter.warnAt) * track.width
-            width: Math.max(0, Math.min(meter.value, meter.fraction(meter.dangerAt)) - meter.fraction(meter.warnAt)) * track.width
-            height: track.height
-            color: KanteStyle.warningColor
-        }
-        Rectangle {
-            x: meter.fraction(meter.dangerAt) * track.width
-            width: Math.max(0, meter.value - meter.fraction(meter.dangerAt)) * track.width
-            height: track.height
-            color: KanteStyle.negativeTextColor
-        }
-        // Peak hold
-        Rectangle {
-            visible: meter.holdMs > 0 && meter.held > 0
-            x: Math.min(track.width - width, meter.held * track.width)
-            width: 2
-            height: track.height
-            color: meter.held >= meter.fraction(meter.dangerAt) ? KanteStyle.negativeTextColor : KanteStyle.textColor
-        }
-    }
-
-    TextMetrics {
-        id: scaleMetrics
-        font: KanteStyle.labelFont()
-        text: "-60"
-    }
-    Item {
-        id: scaleRow
-        visible: meter.scale
-        readonly property var marks: [meter.floor, meter.warnAt, meter.dangerAt, 0]
-        readonly property real box: meter.vertical ? scaleMetrics.height : scaleMetrics.width
-        readonly property real length: meter.vertical ? height : width
-        /**
-         * Start of each mark along the scale: ends stay inside the meter, marks between
-         * centre on their value. A mark that would touch one already placed is dropped
-         * (-1); the floor and 0 go first, so a short meter keeps its range.
-         */
-        readonly property var starts: {
-            var at = marks.map(db => {
-                var f = meter.vertical ? 1 - meter.fraction(db) : meter.fraction(db)
-                return Math.max(0, Math.min(length - box, f * length - box / 2))
-            })
-            var gap = box / 2
-            var placed = []
-            var out = [-1, -1, -1, -1]
-            for (var i of [0, 3, 1, 2]) {
-                if (placed.every(p => at[i] + box + gap <= p || at[i] >= p + box + gap)) {
-                    placed.push(at[i])
-                    out[i] = at[i]
-                }
-            }
-            return out
-        }
-        implicitWidth: scaleMetrics.width
-        x: meter.vertical ? meter.thickness + KanteStyle.unit(4) : 0
-        y: meter.vertical ? 0 : meter.thickness + KanteStyle.unit(2)
-        width: meter.vertical ? implicitWidth : meter.width
-        height: meter.vertical ? meter.height : scaleMetrics.height
-        Repeater {
-            model: scaleRow.marks
-            delegate: Text {
-                required property real modelData
-                required property int index
-                text: modelData === 0 ? "0" : String(modelData)
-                font: KanteStyle.labelFont()
-                color: KanteStyle.mutedTextColor
-                visible: scaleRow.starts[index] >= 0
-                x: meter.vertical ? 0 : scaleRow.starts[index]
-                y: meter.vertical ? scaleRow.starts[index] : 0
-            }
-        }
-    }
-
-    readonly property string valueText: level === undefined ? qsTr("No signal")
-        : qsTr("%1 dBFS").arg(Number(level).toFixed(1))
+    implicitWidth: KanteStyle.unit(420)
+    implicitHeight: head.height + trackHeight + zones.height + KanteStyle.unit(12)
 
     Accessible.role: Accessible.ProgressBar
-    Accessible.name: valueText
+    Accessible.name: accessibleName
+    Accessible.description: peakText + ", " + zoneText
 
-    HoverHandler { id: hover }
-    QQC2.ToolTip.visible: hover.hovered
-    QQC2.ToolTip.delay: KanteStyle.durationFast
-    QQC2.ToolTip.text: valueText
+    TextMetrics {
+        id: clipMetrics
+        font: KanteStyle.labelFont()
+        text: meter.clipText
+    }
+
+    Item {
+        id: head
+        width: meter.width
+        height: Math.max(titleText.height, valueText.height)
+        Text {
+            id: titleText
+            text: meter.title
+            color: KanteStyle.mutedTextColor
+            font: KanteStyle.labelFont()
+        }
+        Text {
+            id: valueText
+            anchors.right: parent.right
+            text: meter.peakText + " · " + meter.zoneText
+            color: KanteStyle.textColor
+            font: KanteStyle.monoFont(KanteStyle.defaultFont.pointSize, true)
+        }
+    }
+
+    // Track: zones as ground, RMS bar, peak tick.
+    Item {
+        id: track
+        y: head.height + KanteStyle.unit(4)
+        width: meter.trackWidth
+        height: meter.trackHeight
+        Rectangle { anchors.fill: parent; color: KanteStyle.sunkenColor; border.width: 1; border.color: KanteStyle.frameColor }
+        Rectangle {
+            x: meter.xOf(meter.loudDb)
+            width: parent.width - x
+            height: parent.height
+            color: KanteStyle.tintWarnColor
+        }
+        Rectangle {
+            x: 1
+            y: Math.round(parent.height * 0.2)
+            width: Math.max(0, meter.xOf(meter.rmsDb) - 1)
+            height: Math.round(parent.height * 0.6)
+            color: KanteStyle.focusColor
+        }
+        Rectangle {
+            visible: meter.peakDb > -meter.rangeDb
+            x: Math.min(parent.width - width, meter.xOf(meter.peakDb))
+            width: Math.max(2, KanteStyle.unit(3))
+            height: parent.height
+            color: KanteStyle.strongTextColor
+        }
+        // Zone limits
+        Repeater {
+            model: [meter.quietDb, meter.loudDb]
+            delegate: Rectangle {
+                required property var modelData
+                x: meter.xOf(modelData)
+                y: -KanteStyle.unit(3)
+                width: 1
+                height: parent.height + KanteStyle.unit(6)
+                color: KanteStyle.mutedTextColor
+            }
+        }
+    }
+
+    // Clip box: word always there, filled with a cross when clipped.
+    Rectangle {
+        x: meter.width - width
+        width: meter.clipWidth
+        height: meter.trackHeight + KanteStyle.unit(4)
+        anchors.verticalCenter: track.verticalCenter
+        color: meter.clipped ? KanteStyle.negativeTextColor : "transparent"
+        border.width: meter.clipped ? 0 : 1
+        border.color: KanteStyle.frameColor
+        Row {
+            anchors.centerIn: parent
+            spacing: KanteStyle.unit(4)
+            KanteNoteMark {
+                visible: meter.clipped
+                anchors.verticalCenter: parent.verticalCenter
+                width: KanteStyle.unit(12)
+                height: width
+                noteState: "wrong"
+                color: KanteStyle.onStateColor
+            }
+            Text {
+                text: meter.clipText
+                color: meter.clipped ? KanteStyle.onStateColor : KanteStyle.disabledTextColor
+                font: KanteStyle.labelFont()
+            }
+        }
+    }
+
+    // Zone labels under the track; the zone of the peak bold and underlined.
+    Item {
+        id: zones
+        y: track.y + track.height + KanteStyle.unit(6)
+        width: meter.trackWidth
+        height: zoneMetrics.height + KanteStyle.unit(4)
+        TextMetrics { id: zoneMetrics; font: KanteStyle.labelFont(); text: "Ag" }
+        Repeater {
+            model: [
+                { key: "quiet", from: -meter.rangeDb, to: meter.quietDb, text: meter.quietText },
+                { key: "good", from: meter.quietDb, to: meter.loudDb, text: meter.goodText },
+                { key: "loud", from: meter.loudDb, to: 0, text: meter.loudText }
+            ]
+            delegate: Item {
+                required property var modelData
+                readonly property bool on: meter.zone === modelData.key || (meter.zone === "clip" && modelData.key === "loud")
+                x: meter.xOf(modelData.from)
+                width: meter.xOf(modelData.to) - x
+                height: zones.height
+                Text {
+                    id: zl
+                    // Centred on the zone, kept inside the track (the loud zone is narrow).
+                    x: Math.max(-parent.x, Math.min(meter.trackWidth - parent.x - width, (parent.width - width) / 2))
+                    text: parent.modelData.text
+                    color: parent.on ? KanteStyle.strongTextColor : KanteStyle.mutedTextColor
+                    font.family: zoneMetrics.font.family
+                    font.pointSize: zoneMetrics.font.pointSize
+                    font.capitalization: zoneMetrics.font.capitalization
+                    font.letterSpacing: zoneMetrics.font.letterSpacing
+                    font.bold: parent.on
+                }
+                Rectangle {
+                    visible: parent.on
+                    x: zl.x
+                    y: zl.height + 1
+                    width: zl.width
+                    height: 2
+                    color: KanteStyle.textColor
+                }
+            }
+        }
+    }
 }
