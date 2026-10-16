@@ -710,7 +710,7 @@ Kirigami.ApplicationWindow {
                 act: root.act
                 position: monitor.input && root.positions[monitor.input.id] ? root.positions[monitor.input.id] : null
             }
-            KanteLevelMeter {
+            KanteAudioMeter {
                 Layout.fillWidth: true
                 visible: monitor.peakDb !== undefined
                 level: monitor.peakDb

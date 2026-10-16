@@ -201,7 +201,7 @@ KanteCard {
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: 0
-                KanteLevelMeter {
+                KanteAudioMeter {
                     Layout.fillWidth: true
                     level: tile.peakDb
                     scale: true
