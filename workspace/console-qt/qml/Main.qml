@@ -529,15 +529,27 @@ Kirigami.ApplicationWindow {
                             root.act({ action: "quick_play" })
                     }
 
-                    TransitionPanel {
-                        Layout.alignment: Qt.AlignVCenter
+                    // Scrolls when the window is low: its height no longer
+                    // pushes the bars below the window (1440 × 900).
+                    QQC2.ScrollView {
+                        id: panelScroll
                         Layout.fillWidth: false
+                        Layout.fillHeight: true
                         Layout.preferredWidth: Kirigami.Units.gridUnit * 8
-                        core: backend
-                        show: root.show
-                        act: root.act
-                        transitions: transitionModel
-                        transitionBySlot: root.transitionBySlot
+                        Layout.minimumHeight: Kirigami.Units.gridUnit * 6
+                        contentWidth: availableWidth
+                        contentHeight: transitionPanel.implicitHeight
+                        QQC2.ScrollBar.horizontal.policy: QQC2.ScrollBar.AlwaysOff
+
+                        TransitionPanel {
+                            id: transitionPanel
+                            width: panelScroll.availableWidth
+                            core: backend
+                            show: root.show
+                            act: root.act
+                            transitions: transitionModel
+                            transitionBySlot: root.transitionBySlot
+                        }
                     }
 
                     Monitor {
