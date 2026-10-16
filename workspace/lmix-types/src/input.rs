@@ -497,6 +497,13 @@ pub struct Input {
     /// Colour correction (inputs with a picture).
     #[serde(default)]
     pub look: Look,
+    /// Actions when the input goes on or off air (AUT.7).
+    #[serde(default)]
+    pub triggers: Vec<crate::automation::Trigger>,
+    /// Length of the item playing now (clips, playlists), as the player
+    /// reports it; `None` until then and for other sources.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub clip_ms: Option<u64>,
 }
 
 /// What a discovered device delivers.

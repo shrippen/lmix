@@ -26,6 +26,7 @@ KanteCard {
     /** Another tile is dragged over this one: it would land here. */
     property bool dropTarget: false
     signal replaceRequested()
+    signal triggersRequested()
     /** Drag to reorder: where the pointer is, in the window. */
     signal dragMoved(point scenePosition)
     signal dragEnded(point scenePosition)
@@ -236,6 +237,10 @@ KanteCard {
             text: tile.looksAvailable ? qsTr("Colour correction…") : qsTr("Colour correction (needs the GL mixer)")
             enabled: tile.looksAvailable && tile.hasPicture
             onTriggered: lookDialog.open()
+        }
+        QQC2.MenuItem {
+            text: tile.input.triggers && tile.input.triggers.length > 0 ? qsTr("Triggers (%1)…").arg(tile.input.triggers.length) : qsTr("Triggers…")
+            onTriggered: tile.triggersRequested()
         }
         ChoiceMenu {
             title: qsTr("Colour tag")

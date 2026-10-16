@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>lmix tally</title>
+<link rel="stylesheet" href="/web/lmix.css">
+<style>
+  #light { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 1rem; background: var(--bg-void); transition: background .1s; }
+  #light.program { background: var(--red-n); }
+  #light.preview { background: var(--aqua-n); }
+  #name { font-family: var(--font-mono); font-size: clamp(2rem, 12vw, 9rem); letter-spacing: .08em; color: var(--fg0);
+    text-transform: uppercase; text-align: center; padding: 0 1rem; }
+  #what { font-family: var(--font-mono); font-size: clamp(1rem, 4vw, 2rem); letter-spacing: .3em; color: var(--fg0); opacity: .8; }
+  #pick { position: fixed; top: .8rem; right: .8rem; opacity: .6; }
+  #pick:hover, #pick:focus-within { opacity: 1; }
+</style>
+</head>
+<body>
+<div id="light"><div id="name">–</div><div id="what"></div></div>
+<label id="pick"><span class="label">Input </span><select id="input"></select></label>
+<script src="/web/lmix.js"></script>
+<script>
+"use strict";
+// Tally of one input (WEB.3): ?input=<number>; red on program, green in preview.
+const params = new URLSearchParams(location.search);
+let chosen = Number(params.get("input")) || 1;
+let inputs = [];
+let tally = [];
+const select = document.getElementById("input");
+
+function render() {
+  const input = inputs[chosen - 1];
+  const value = tally[chosen - 1] || 0;
+  const light = document.getElementById("light");
+  light.className = value === 1 ? "program" : value === 2 ? "preview" : "";
+  document.getElementById("name").textContent = input ? input.number + " " + input.name : "–";
+  document.getElementById("what").textContent = value === 1 ? "PROGRAM" : value === 2 ? "PREVIEW" : "";
+}
+
+function fillPicker() {
+  const options = inputs.map(i => `<option value="${i.number}">${i.number} ${i.name.replace(/</g, "&lt;")}</option>`).join("");
+  if (select.innerHTML !== options) select.innerHTML = options;
+  select.value = String(chosen);
+}
+
+select.addEventListener("change", () => {
+  chosen = Number(select.value);
+  history.replaceState(null, "", "?input=" + chosen);
+  render();
+});
+
+lmixEvents(event => {
+  if (event.event === "state") {
+    inputs = event.state.inputs;
+    fillPicker();
+  } else if (event.event === "tally") {
+    tally = event.tally;
+  }
+  render();
+}, online => { if (!online) { tally = []; render(); } });
+fetch("/api/tally").then(r => r.json()).then(t => { tally = t; render(); });
+</script>
+</body>
+</html>

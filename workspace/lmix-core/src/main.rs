@@ -18,11 +18,17 @@ use clap::{Parser, ValueEnum};
 use lmix_types::Action;
 
 mod api;
+mod clips;
 mod engine;
+mod metrics;
+mod midi;
+mod osc;
 mod recent;
 mod service;
 mod show;
 mod switcher;
+mod tcp;
+mod web;
 
 use engine::flows::{MixerBackend, MonitorOut};
 use engine::null::NullEngine;
@@ -78,8 +84,20 @@ struct Args {
     #[arg(long, default_value_t = DEFAULT_SLOTS)]
     slots: usize,
 
+    /// Address of the text protocol over TCP (API.5); off without it.
+    #[arg(long, env = "LMIX_TCP")]
+    tcp: Option<SocketAddr>,
+
+    /// MIDI device files to read (`/dev/snd/midiC1D0`); repeat for more.
+    #[arg(long, env = "LMIX_MIDI", value_delimiter = ',')]
+    midi: Vec<PathBuf>,
+
+    /// UDP address for OSC (AUT.13); off without it.
+    #[arg(long, env = "LMIX_OSC")]
+    osc: Option<SocketAddr>,
+
     /// Show file to open at start; without it the last autosave is resumed.
-    #[arg(long)]
+    #[arg(long, env = "LMIX_SHOW")]
     show: Option<String>,
 
     /// Autosave file, written after every change.
@@ -105,6 +123,7 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let args = Args::parse();
+    metrics::started();
     let engine: Arc<dyn Engine> = match args.engine {
         EngineKind::Strom => {
             let engine = StromEngine::new(args.strom.clone(), args.mixer, args.monitor_out);
@@ -141,6 +160,26 @@ async fn main() -> anyhow::Result<()> {
     tokio::spawn(service.clone().forward_levels());
     tokio::spawn(service.clone().watch_failures());
     tokio::spawn(service.clone().forward_output_stats());
+    tokio::spawn(service.clone().watch_players());
+    if !args.midi.is_empty() {
+        tokio::spawn(midi::serve(args.midi.clone(), service.clone()));
+    }
+    if let Some(listen) = args.osc {
+        let service = service.clone();
+        tokio::spawn(async move {
+            if let Err(error) = osc::serve(listen, service).await {
+                tracing::error!(%error, "OSC stopped");
+            }
+        });
+    }
+    if let Some(listen) = args.tcp {
+        let service = service.clone();
+        tokio::spawn(async move {
+            if let Err(error) = tcp::serve(listen, service).await {
+                tracing::error!(%error, "text protocol stopped");
+            }
+        });
+    }
 
     let listener = tokio::net::TcpListener::bind(args.listen)
         .await
@@ -148,11 +187,20 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!(listen = %args.listen, "lmix-core API up");
 
     axum::serve(listener, api::router(service))
-        .with_graceful_shutdown(async {
-            let _ = tokio::signal::ctrl_c().await;
-        })
+        .with_graceful_shutdown(stopped())
         .await?;
     Ok(())
+}
+
+/// Ctrl-C, or SIGTERM from systemd (OPS.1). The engine keeps running.
+async fn stopped() {
+    use tokio::signal::unix::{signal, SignalKind};
+    let mut term = signal(SignalKind::terminate()).expect("SIGTERM handler");
+    tokio::select! {
+        _ = tokio::signal::ctrl_c() => {}
+        _ = term.recv() => {}
+    }
+    tracing::info!("stopping");
 }
 
 /// Wait between engine start attempts.

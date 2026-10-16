@@ -12,8 +12,9 @@ use std::path::Path;
 use lmix_types::action::{OVERLAY_CHANNELS, TRANSITION_SLOTS};
 use lmix_types::input::AUX_BUSES;
 use lmix_types::{
-    AuxBus, ChannelStrip, Effect, InputAudio, InputColor, InputId, LayoutBox, Look, OutputId,
-    OutputSource, OutputSpec, SignalLoss, SourceSpec, Transition, TransitionSlot,
+    Action, AuxBus, ChannelStrip, Cue, Effect, InputAudio, InputColor, InputId, LayoutBox, Look,
+    MidiBinding, OutputId, OutputSource, OutputSpec, SignalLoss, SourceSpec, Transition,
+    TransitionSlot, Trigger,
 };
 use serde::{Deserialize, Serialize};
 
@@ -43,6 +44,8 @@ pub struct ShowInput {
     pub sends: [u8; AUX_BUSES],
     #[serde(default)]
     pub look: Look,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub triggers: Vec<Trigger>,
 }
 
 /// Everything a show file holds.
@@ -63,6 +66,37 @@ pub struct Show {
     pub aux_buses: [AuxBus; AUX_BUSES],
     #[serde(default)]
     pub layouts: Vec<ShowLayout>,
+    #[serde(default)]
+    pub shortcuts: Vec<ShowShortcut>,
+    #[serde(default)]
+    pub cue_lists: Vec<ShowCueList>,
+    /// MIDI controller on the T-bar.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub midi_tbar: Option<MidiBinding>,
+}
+
+/// One cue list as saved; where GO stands is not saved.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ShowCueList {
+    pub id: InputId,
+    pub name: String,
+    pub cues: Vec<Cue>,
+}
+
+/// One shortcut as saved.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ShowShortcut {
+    pub id: InputId,
+    pub label: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub key: Option<String>,
+    #[serde(default)]
+    pub web: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color: Option<InputColor>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub midi: Option<MidiBinding>,
+    pub actions: Vec<Action>,
 }
 
 /// One layout as saved.
@@ -102,6 +136,9 @@ impl Default for Show {
             overlays: Default::default(),
             aux_buses: Default::default(),
             layouts: Vec::new(),
+            shortcuts: Vec::new(),
+            cue_lists: Vec::new(),
+            midi_tbar: None,
         }
     }
 }
@@ -203,6 +240,7 @@ pub async fn load(path: &Path) -> Result<Show, ShowFileError> {
 mod tests {
     use super::*;
     use lmix_types::TestPattern;
+    use lmix_types::TriggerOn;
 
     fn sample() -> Show {
         let id = InputId::new();
@@ -230,11 +268,43 @@ mod tests {
                     saturation: 0.5,
                     ..Default::default()
                 },
+                triggers: vec![Trigger {
+                    on: TriggerOn::Program,
+                    delay_ms: 2000,
+                    before_ms: None,
+                    actions: vec![Action::FadeToBlack { duration_ms: 500 }],
+                }],
             }],
             preview: Some(id),
             program: None,
             transitions: default_transitions(),
             overlays: [None, Some(id), None, None],
+            cue_lists: vec![ShowCueList {
+                id: InputId::new(),
+                name: "Opening".into(),
+                cues: vec![Cue {
+                    label: "Bars".into(),
+                    actions: vec![Action::Cut],
+                }],
+            }],
+            shortcuts: vec![ShowShortcut {
+                id: InputId::new(),
+                label: "Bars".into(),
+                key: Some("F1".into()),
+                web: true,
+                color: None,
+                midi: Some(MidiBinding {
+                    kind: lmix_types::MidiKind::Note,
+                    channel: Some(10),
+                    number: 36,
+                }),
+                actions: vec![Action::Cut],
+            }],
+            midi_tbar: Some(MidiBinding {
+                kind: lmix_types::MidiKind::Cc,
+                channel: None,
+                number: 7,
+            }),
             layouts: vec![ShowLayout {
                 id: InputId::new(),
                 name: "Interview".into(),

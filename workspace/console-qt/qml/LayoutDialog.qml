@@ -5,8 +5,10 @@ import org.kde.kirigami as Kirigami
 import Kante
 
 /**
- * A layout: background input and up to four boxes, each an input at a
- * preset place, optionally framed. New layouts get a name.
+ * A layout: background input and up to eight boxes. Boxes are placed by
+ * dragging them on a 16:9 area (corner handle: size; arrow keys: move,
+ * with Shift: size) or from preset places; each can be framed and
+ * cropped (zoom into its input). New layouts get a name.
  */
 KanteDialog {
     id: dialog
@@ -18,8 +20,16 @@ KanteDialog {
 
     /** Inputs with a picture. */
     readonly property var pictures: inputs.filter(i => i.source.kind !== "audio_device")
-    readonly property int boxCount: 4
+    readonly property int maxBoxes: 8
     readonly property int frameWidth: 4
+    /** Positions snap to this fraction of the picture. */
+    readonly property real grid: 0.01
+    /** Smallest box side, fraction of the picture. */
+    readonly property real minSide: 0.05
+
+    /** Working copy: [{ input, rect: {x,y,w,h}, framed, crop: {left,top,right,bottom} }]. */
+    property var boxes: []
+    property int selected: -1
 
     /** Places a box can take, as fractions of the picture. */
     readonly property var places: [
@@ -35,53 +45,85 @@ KanteDialog {
     ]
 
     function placeOf(rect) {
-        var near = (a, b) => Math.abs(a - b) < 0.01
-        var index = places.findIndex(p => near(p.rect.x, rect.x) && near(p.rect.y, rect.y) && near(p.rect.w, rect.w) && near(p.rect.h, rect.h))
-        return index >= 0 ? index : 0
+        var near = (a, b) => Math.abs(a - b) < 0.005
+        return places.findIndex(p => near(p.rect.x, rect.x) && near(p.rect.y, rect.y) && near(p.rect.w, rect.w) && near(p.rect.h, rect.h))
     }
 
     function pictureIndex(id) {
         return pictures.findIndex(i => i.id === id)
     }
 
+    function inputLabel(id) {
+        var input = pictures.find(i => i.id === id)
+        return input ? input.number + " " + input.name : qsTr("Empty")
+    }
+
+    function snap(v) {
+        return Math.round(v / grid) * grid
+    }
+
+    /** Replaces box `index` with `changes` merged in. */
+    function edit(index, changes) {
+        var list = boxes.slice()
+        list[index] = Object.assign({}, list[index], changes)
+        boxes = list
+    }
+
+    /** Moves box `index` to (x, y), kept inside the picture. */
+    function moveTo(index, x, y) {
+        var r = boxes[index].rect
+        edit(index, { rect: { x: Math.min(Math.max(snap(x), 0), 1 - r.w), y: Math.min(Math.max(snap(y), 0), 1 - r.h), w: r.w, h: r.h } })
+    }
+
+    /** Sizes box `index` from its top left corner, kept inside the picture. */
+    function sizeTo(index, w, h) {
+        var r = boxes[index].rect
+        var fit = (v, room) => Math.min(Math.max(snap(v), minSide), room)
+        edit(index, { rect: { x: r.x, y: r.y, w: fit(w, 1 - r.x), h: fit(h, 1 - r.y) } })
+    }
+
+    function cropValid(c) {
+        return 1 - c.left - c.right >= 0.05 && 1 - c.top - c.bottom >= 0.05
+    }
+
+    readonly property bool valid: boxes.every(b => b.input !== null && cropValid(b.crop))
+
     title: layout ? qsTr("Layout %1 %2").arg(layout.number).arg(layout.name) : qsTr("New layout")
     modal: true
-    width: Kirigami.Units.gridUnit * 34
+    width: Kirigami.Units.gridUnit * 40
     standardButtons: QQC2.Dialog.Ok | QQC2.Dialog.Cancel
     // KanteDialog has a child of its own (KanteScope), so the popup does not
     // size itself to this one.
     contentHeight: column.implicitHeight
 
+    Component.onCompleted: standardButton(QQC2.Dialog.Ok).enabled = Qt.binding(() => dialog.valid)
+
     onOpened: {
         nameField.text = ""
         // Combo index 0 is "none": inputs start at 1.
         background.currentIndex = layout && layout.background ? pictureIndex(layout.background) + 1 : 0
-        for (var i = 0; i < boxCount; i++) {
-            var row = boxRows.itemAt(i)
-            var box = layout && layout.boxes[i] ? layout.boxes[i] : null
-            row.inputIndex = box ? pictureIndex(box.input) + 1 : 0
-            row.placeIndex = box ? placeOf(box.rect) : i
-            row.framed = box ? box.border_px > 0 : false
-        }
+        var noCrop = { left: 0, top: 0, right: 0, bottom: 0 }
+        boxes = layout ? layout.boxes.map(b => ({
+            input: b.input,
+            rect: Object.assign({}, b.rect),
+            framed: b.border_px > 0,
+            crop: Object.assign({}, noCrop, b.crop || {})
+        })) : []
+        selected = boxes.length > 0 ? 0 : -1
     }
 
     onAccepted: {
-        var boxes = []
-        for (var i = 0; i < boxCount; i++) {
-            var row = boxRows.itemAt(i)
-            if (row.inputIndex <= 0)
-                continue
-            boxes.push({
-                rect: places[row.placeIndex].rect,
-                input: pictures[row.inputIndex - 1].id,
-                border_px: row.framed ? frameWidth : 0
-            })
-        }
+        var specs = boxes.map(b => ({
+            rect: b.rect,
+            input: b.input,
+            border_px: b.framed ? frameWidth : 0,
+            crop: b.crop
+        }))
         var bg = background.currentIndex > 0 ? pictures[background.currentIndex - 1].id : null
         if (layout)
-            act({ action: "set_layout", layout: layout.number, background: bg, boxes: boxes })
+            act({ action: "set_layout", layout: layout.number, background: bg, boxes: specs })
         else
-            act({ action: "add_layout", name: nameField.text.trim() || null, background: bg, boxes: boxes })
+            act({ action: "add_layout", name: nameField.text.trim() || null, background: bg, boxes: specs })
     }
 
     ColumnLayout {
@@ -89,58 +131,268 @@ KanteDialog {
         width: parent.width
         spacing: Kirigami.Units.smallSpacing
 
-        KanteSectionLabel {
-            visible: dialog.layout === null
-            text: qsTr("Name")
-        }
-        KanteTextField {
-            id: nameField
-            visible: dialog.layout === null
+        RowLayout {
             Layout.fillWidth: true
-            placeholderText: qsTr("optional")
+            visible: dialog.layout === null
+            KanteSectionLabel { text: qsTr("Name") }
+            KanteTextField {
+                id: nameField
+                Layout.fillWidth: true
+                placeholderText: qsTr("optional")
+            }
         }
 
-        KanteSectionLabel { text: qsTr("Background") }
-        QQC2.ComboBox {
-            id: background
+        RowLayout {
             Layout.fillWidth: true
-            model: [qsTr("Black")].concat(dialog.pictures.map(i => i.number + " " + i.name))
-            KanteFieldSkin { control: background }
+            KanteSectionLabel { text: qsTr("Background") }
+            QQC2.ComboBox {
+                id: background
+                Layout.fillWidth: true
+                model: [qsTr("Black")].concat(dialog.pictures.map(i => i.number + " " + i.name))
+                KanteFieldSkin { control: background }
+            }
+        }
+
+        // The picture, 16:9: boxes bottom to top.
+        Rectangle {
+            id: area
+            Layout.fillWidth: true
+            Layout.preferredHeight: width * 9 / 16
+            color: background.currentIndex > 0 ? KanteStyle.sunkenColor : "black"
+            border.color: KanteStyle.frameColor
+            focus: true
+            activeFocusOnTab: true
+            Accessible.role: Accessible.Pane
+            Accessible.name: qsTr("Layout area: arrow keys move the selected box, with Shift they size it")
+
+            QQC2.Label {
+                anchors.centerIn: parent
+                visible: dialog.boxes.length === 0
+                color: KanteStyle.mutedTextColor
+                text: qsTr("Add a box, then drag it into place")
+            }
+
+            Keys.onPressed: event => {
+                var i = dialog.selected
+                if (i < 0)
+                    return
+                var dx = event.key === Qt.Key_Left ? -dialog.grid : event.key === Qt.Key_Right ? dialog.grid : 0
+                var dy = event.key === Qt.Key_Up ? -dialog.grid : event.key === Qt.Key_Down ? dialog.grid : 0
+                if (dx === 0 && dy === 0)
+                    return
+                var r = dialog.boxes[i].rect
+                if (event.modifiers & Qt.ShiftModifier)
+                    dialog.sizeTo(i, r.w + dx, r.h + dy)
+                else
+                    dialog.moveTo(i, r.x + dx, r.y + dy)
+                event.accepted = true
+            }
+
+            Repeater {
+                model: dialog.boxes
+
+                Rectangle {
+                    id: boxItem
+                    required property var modelData
+                    required property int index
+                    readonly property bool isSelected: dialog.selected === index
+                    readonly property var crop: modelData.crop
+                    x: modelData.rect.x * area.width
+                    y: modelData.rect.y * area.height
+                    width: modelData.rect.w * area.width
+                    height: modelData.rect.h * area.height
+                    z: index
+                    color: Qt.rgba(KanteStyle.accentColor.r, KanteStyle.accentColor.g, KanteStyle.accentColor.b, isSelected ? 0.55 : 0.3)
+                    border.width: modelData.framed ? 3 : 1
+                    border.color: modelData.framed ? "white" : KanteStyle.frameColor
+
+                    QQC2.Label {
+                        anchors.centerIn: parent
+                        width: parent.width - 8
+                        horizontalAlignment: Text.AlignHCenter
+                        elide: Text.ElideRight
+                        text: (boxItem.index + 1) + ": " + dialog.inputLabel(boxItem.modelData.input)
+                            + (boxItem.crop.left + boxItem.crop.top + boxItem.crop.right + boxItem.crop.bottom > 0 ? qsTr(" (cropped)") : "")
+                    }
+
+                    // Dragging moves the item itself; the box changes on
+                    // release (changing `boxes` rebuilds the delegates).
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.SizeAllCursor
+                        drag.target: boxItem
+                        drag.minimumX: 0
+                        drag.minimumY: 0
+                        drag.maximumX: area.width - boxItem.width
+                        drag.maximumY: area.height - boxItem.height
+                        drag.threshold: 2
+                        onPressed: {
+                            dialog.selected = boxItem.index
+                            area.forceActiveFocus()
+                        }
+                        onReleased: {
+                            if (drag.active || boxItem.x !== boxItem.modelData.rect.x * area.width || boxItem.y !== boxItem.modelData.rect.y * area.height)
+                                dialog.moveTo(boxItem.index, boxItem.x / area.width, boxItem.y / area.height)
+                        }
+                    }
+
+                    // Size handle, bottom right.
+                    Rectangle {
+                        width: Kirigami.Units.gridUnit * 0.8
+                        height: width
+                        anchors.right: parent.right
+                        anchors.bottom: parent.bottom
+                        visible: boxItem.isSelected
+                        color: KanteStyle.focusColor
+                        MouseArea {
+                            anchors.fill: parent
+                            anchors.margins: -4
+                            cursorShape: Qt.SizeFDiagCursor
+                            property point start
+                            property size origin
+                            property bool free: false
+                            onPressed: mouse => {
+                                start = mapToItem(area, mouse.x, mouse.y)
+                                origin = Qt.size(boxItem.width, boxItem.height)
+                            }
+                            onPositionChanged: mouse => {
+                                var p = mapToItem(area, mouse.x, mouse.y)
+                                var minPx = dialog.minSide * area.width
+                                var w = Math.max(origin.width + p.x - start.x, minPx)
+                                // Shift: free; otherwise the box keeps the picture's 16:9.
+                                free = (mouse.modifiers & Qt.ShiftModifier) !== 0
+                                var h = free ? Math.max(origin.height + p.y - start.y, dialog.minSide * area.height) : w * area.height / area.width
+                                boxItem.width = Math.min(w, area.width - boxItem.x)
+                                boxItem.height = Math.min(h, area.height - boxItem.y)
+                            }
+                            onReleased: dialog.sizeTo(boxItem.index, boxItem.width / area.width, boxItem.height / area.height)
+                        }
+                    }
+                }
+            }
         }
 
         KanteSectionLabel { text: qsTr("Boxes (bottom to top)") }
         Repeater {
-            id: boxRows
-            model: dialog.boxCount
+            model: dialog.boxes
 
             RowLayout {
                 id: boxRow
+                required property var modelData
                 required property int index
-                property alias inputIndex: inputBox.currentIndex
-                property alias placeIndex: placeBox.currentIndex
-                property alias framed: frame.checked
                 Layout.fillWidth: true
 
+                QQC2.RadioButton {
+                    checked: dialog.selected === boxRow.index
+                    text: boxRow.index + 1
+                    Accessible.name: qsTr("Select box %1").arg(boxRow.index + 1)
+                    onClicked: dialog.selected = boxRow.index
+                }
                 QQC2.ComboBox {
                     id: inputBox
                     Layout.fillWidth: true
-                    model: [qsTr("Empty")].concat(dialog.pictures.map(i => i.number + " " + i.name))
+                    model: [qsTr("Choose input")].concat(dialog.pictures.map(i => i.number + " " + i.name))
+                    currentIndex: boxRow.modelData.input ? dialog.pictureIndex(boxRow.modelData.input) + 1 : 0
                     Accessible.name: qsTr("Input of box %1").arg(boxRow.index + 1)
+                    onActivated: index => dialog.edit(boxRow.index, { input: index > 0 ? dialog.pictures[index - 1].id : null })
                     KanteFieldSkin { control: inputBox }
                 }
                 QQC2.ComboBox {
                     id: placeBox
-                    Layout.preferredWidth: Kirigami.Units.gridUnit * 11
-                    enabled: inputBox.currentIndex > 0
-                    model: dialog.places.map(p => p.label)
+                    Layout.preferredWidth: Kirigami.Units.gridUnit * 10
+                    model: [qsTr("Own place")].concat(dialog.places.map(p => p.label))
+                    currentIndex: dialog.placeOf(boxRow.modelData.rect) + 1
                     Accessible.name: qsTr("Place of box %1").arg(boxRow.index + 1)
+                    onActivated: index => {
+                        if (index > 0)
+                            dialog.edit(boxRow.index, { rect: Object.assign({}, dialog.places[index - 1].rect) })
+                    }
                     KanteFieldSkin { control: placeBox }
                 }
                 QQC2.CheckBox {
                     id: frame
                     text: qsTr("Frame")
-                    enabled: inputBox.currentIndex > 0
+                    checked: boxRow.modelData.framed
+                    onToggled: dialog.edit(boxRow.index, { framed: checked })
                     KanteCheckSkin { control: frame }
+                }
+                KanteButton {
+                    text: qsTr("Remove")
+                    onClicked: {
+                        var list = dialog.boxes.slice()
+                        list.splice(boxRow.index, 1)
+                        dialog.boxes = list
+                        dialog.selected = Math.min(dialog.selected, list.length - 1)
+                    }
+                }
+            }
+        }
+
+        // Crop of the selected box: how much of its input is hidden at each
+        // edge; the rest fills the box.
+        RowLayout {
+            Layout.fillWidth: true
+            visible: dialog.selected >= 0 && dialog.selected < dialog.boxes.length
+
+            KanteSectionLabel { text: qsTr("Crop") }
+            Repeater {
+                model: [
+                    { edge: "left", label: qsTr("Left") },
+                    { edge: "top", label: qsTr("Top") },
+                    { edge: "right", label: qsTr("Right") },
+                    { edge: "bottom", label: qsTr("Bottom") }
+                ]
+
+                RowLayout {
+                    id: cropField
+                    required property var modelData
+                    QQC2.Label { text: cropField.modelData.label }
+                    QQC2.SpinBox {
+                        id: cropSpin
+                        Layout.preferredWidth: Kirigami.Units.gridUnit * 4.5
+                        from: 0
+                        to: 90
+                        stepSize: 5
+                        editable: true
+                        value: dialog.selected >= 0 && dialog.selected < dialog.boxes.length
+                            ? Math.round(dialog.boxes[dialog.selected].crop[cropField.modelData.edge] * 100) : 0
+                        textFromValue: v => v + " %"
+                        valueFromText: text => parseInt(text) || 0
+                        Accessible.name: qsTr("Crop %1, percent").arg(cropField.modelData.label)
+                        onValueModified: {
+                            var crop = Object.assign({}, dialog.boxes[dialog.selected].crop)
+                            crop[cropField.modelData.edge] = value / 100
+                            dialog.edit(dialog.selected, { crop: crop })
+                        }
+                        KanteFieldSkin { control: cropSpin }
+                    }
+                }
+            }
+        }
+
+        RowLayout {
+            Layout.fillWidth: true
+            QQC2.Label {
+                Layout.fillWidth: true
+                color: KanteStyle.negativeTextColor
+                wrapMode: Text.WordWrap
+                text: dialog.boxes.some(b => b.input === null) ? qsTr("Every box needs an input.")
+                    : dialog.boxes.some(b => !dialog.cropValid(b.crop)) ? qsTr("A crop must leave some of the input visible.") : ""
+            }
+            KanteButton {
+                text: qsTr("+ Box")
+                enabled: dialog.boxes.length < dialog.maxBoxes
+                onClicked: {
+                    // New boxes start small in the top right, a step lower each.
+                    var n = dialog.boxes.length
+                    var y = Math.min(0.05 + 0.1 * n, 0.7)
+                    dialog.boxes = dialog.boxes.concat([{
+                        input: null,
+                        rect: { x: 0.7, y: y, w: 0.25, h: 0.25 },
+                        framed: false,
+                        crop: { left: 0, top: 0, right: 0, bottom: 0 }
+                    }])
+                    dialog.selected = n
                 }
             }
         }

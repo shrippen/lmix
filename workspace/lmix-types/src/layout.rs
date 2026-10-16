@@ -37,8 +37,43 @@ impl BoxRect {
     }
 }
 
+/// Part of the input hidden at each edge, as fractions of its width or
+/// height: the rest fills the box (zoom into a camera). All zero shows the
+/// whole input.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct BoxCrop {
+    #[serde(default)]
+    pub left: f32,
+    #[serde(default)]
+    pub top: f32,
+    #[serde(default)]
+    pub right: f32,
+    #[serde(default)]
+    pub bottom: f32,
+}
+
+/// Part of the input a crop must leave visible on each axis.
+pub const CROP_MIN_VISIBLE: f32 = 0.05;
+
+impl BoxCrop {
+    pub fn is_zero(&self) -> bool {
+        self.left == 0.0 && self.top == 0.0 && self.right == 0.0 && self.bottom == 0.0
+    }
+
+    /// Every edge in 0–1 and something left to see.
+    pub fn is_valid(&self) -> bool {
+        let edge = |v: f32| (0.0..1.0).contains(&v);
+        edge(self.left)
+            && edge(self.top)
+            && edge(self.right)
+            && edge(self.bottom)
+            && 1.0 - self.left - self.right >= CROP_MIN_VISIBLE
+            && 1.0 - self.top - self.bottom >= CROP_MIN_VISIBLE
+    }
+}
+
 /// One box of a layout: an input in a rectangle, with an optional white
-/// frame.
+/// frame and crop.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct LayoutBox {
     pub rect: BoxRect,
@@ -46,6 +81,8 @@ pub struct LayoutBox {
     /// Frame width in pixels; 0 = none.
     #[serde(default)]
     pub border_px: u8,
+    #[serde(default, skip_serializing_if = "BoxCrop::is_zero")]
+    pub crop: BoxCrop,
 }
 
 /// A layout as clients see it. Its id can stand in preview or program
@@ -71,4 +108,6 @@ pub struct BoxSpec {
     pub input: InputRef,
     #[serde(default)]
     pub border_px: u8,
+    #[serde(default)]
+    pub crop: BoxCrop,
 }

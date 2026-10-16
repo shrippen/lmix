@@ -23,6 +23,11 @@ env:
 
 jobs:
   build:
+    # Shares the group of vm-check: a strom build next to a VM check starves
+    # the CPU mixer, and the check gets the package once the build is done.
+    concurrency:
+      group: vm-check
+      cancel-in-progress: false
     timeout-minutes: 120
     runs-on: ubuntu-latest
     container: ubuntu:24.04
@@ -33,6 +38,10 @@ jobs:
           apt-get install -y -qq git curl ca-certificates jq zstd nodejs
 
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          # Otherwise checkout's own header for git.arianw.de wins over
+          # REGISTRY_TOKEN below, and the Actions token cannot read strom.
+          persist-credentials: false
 
       # The submodule is a private repository: the Actions token cannot read
       # it, REGISTRY_TOKEN (read:repository, write:package) can.
@@ -63,6 +72,17 @@ jobs:
             libgstreamer-plugins-bad1.0-dev libnice-dev libcairo2-dev
           curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain none
 
+      # utoipa-swagger-ui's build script downloads Swagger UI from GitHub
+      # once, without retry; a broken download stops the strom build (run
+      # 2433). Fetch it here with retries and hand the crate the file.
+      # Version: the default of utoipa-swagger-ui 9.0.
+      - name: Swagger UI
+        if: steps.exists.outputs.found == 'no'
+        run: |
+          curl -sSfL --retry 5 --retry-all-errors -o "$PWD/swagger-ui.zip" \
+            https://github.com/swagger-api/swagger-ui/archive/refs/tags/v5.17.14.zip
+          echo "SWAGGER_UI_DOWNLOAD_URL=file://$PWD/swagger-ui.zip" >> "$GITHUB_ENV"
+
       - name: Build strom
         if: steps.exists.outputs.found == 'no'
         working-directory: workspace/strom
@@ -78,5 +98,8 @@ jobs:
           TOKEN: ${{ secrets.REGISTRY_TOKEN }}
         run: |
           tar -C workspace/strom/target/release -c strom | zstd -19 -T0 > "$FILE"
-          curl -sf -X PUT -H "Authorization: token $TOKEN" --upload-file "$FILE" \
-            "$PACKAGE_URL/${{ steps.strom.outputs.sha }}/$FILE"
+          code=$(curl -sS -o upload.txt -w '%{http_code}' -X PUT \
+            -H "Authorization: token $TOKEN" --upload-file "$FILE" \
+            "$PACKAGE_URL/${{ steps.strom.outputs.sha }}/$FILE")
+          echo "HTTP $code"; cat upload.txt; echo
+          [ "$code" -lt 400 ]

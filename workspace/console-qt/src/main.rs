@@ -9,6 +9,7 @@ use gstreamer as gst;
 mod bridge;
 mod config;
 mod forms;
+mod portal;
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
 enum Style {
