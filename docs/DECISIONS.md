@@ -634,7 +634,7 @@ als Ausfall.
 **Latenz**: `POST /api/latency/measure` setzt eine strom-Buffer-Age-Probe
 auf den Programm-Ausgang des Mischers, `GET /api/latency` liefert Median,
 p95, Maximum. Der VM-Test prüft ein Budget (`LATENCY_BUDGET_MS`, 150 ms
-CPU); der Gitea-Workflow `vm-check` fährt den ganzen Test bei jeder
+CPU); der CI-Job `vm-check` (GitHub) fährt den ganzen Test bei jeder
 Änderung an lmix-core, Typen, Console oder strom (Messwerte: LATENCY.md).
 **SRT-Input**: Der strom-Block `srt_input` mit `decode` liefert in der VM
 aus `srt-live-transmit`/ffmpeg kein Bild: mit `ignore_pcr` (Standard)

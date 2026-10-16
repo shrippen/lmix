@@ -5,14 +5,14 @@ Erledigtes abhaken (`[x]`, Datum) und nach einer Weile löschen; Details stehen 
 ## Für dich
 
 - [x] strom PR #3 (`lmix-player-sysmem`) gemergt.
-- [ ] CI `strom.yml`/`vm-check.yml` seit Einführung rot (403 beim Submodul `strom`): neuen Gitea-Token mit `read:repository` + `write:package` als Secret `REGISTRY_TOKEN` hinterlegen, dann Lauf von PR #14 (`ci-submodule-token`, `persist-credentials: false`) neu starten und bei grün mergen. Der jetzige Token kommt an (Lauf 1859), darf `strom` aber nicht lesen.
+- [ ] CI läuft jetzt auf GitHub (`.github/workflows/ci.yml`, strom öffentlich, Paket `ghcr.io/shrippen/lmix-strom`). Nach dem Merge: PR #14 (`ci-submodule-token`) schließen, Secret `REGISTRY_TOKEN` löschen, in lokalen Kopien `git submodule sync workspace/strom` (Submodul-URL jetzt GitHub).
 - [ ] Demo-Welt-Kopien in 15 anderen Projekten veraltet (neuer Abschnitt `graufeld.stream`): `python3 shrippen.github.io/demo/tools/sync-demo.py`, dann je Projekt committen — soll ich?
 - [ ] Kante PR #36 mergen (Farb-Labels, `KanteLevelMeter`), danach in `shrippen.github.io` `./build.sh` committen (liegt schon gebaut, uncommittet).
 - [ ] Vorschau-Lücke ansehen (`scripts/run-local.sh`, Kachel anklicken) und entscheiden: Vorschau-Ausgang im strom-Mischer oder alte Ansicht halten, bis die neue ein Bild hat.
 - [ ] Breeze-Bug melden (siehe unten).
 - [ ] Hardware mit dir: H.13 Kopfhörer, H.20 Vollbild auf zweitem Monitor/Beamer, H.21 Kabel ziehen (`docs/HARDWARE-TODO.md`).
 - [x] NFA.7 8-h-Lauf (2026-10-12): ohne Ausfall, Latenz stabil; 48-h-Lauf nach dem Speicher-Fix (H.24).
-- [ ] CI für die Tests: `cargo test` (lmix-core, lmix-types, console-qt), `scripts/test-titles.sh` und `scripts/test-web.sh` laufen in keiner CI (nur `vm-check`). Nach dem Token-Fix (lmix-core braucht das Submodul `strom` für `strom-types`) einen Workflow `tests.yml` anlegen, in `.gitea/` und `.github/`, Chromium über Playwright.
+- [ ] CI für die Tests: `cargo test` (lmix-core, lmix-types, console-qt), `scripts/test-titles.sh` und `scripts/test-web.sh` laufen in keiner CI (nur `vm-check`). Als Jobs in `.github/workflows/ci.yml` ergänzen (lmix-core braucht das Submodul `strom` für `strom-types`, jetzt öffentlich), Chromium über Playwright.
 - [ ] M7.0 Benchmark CEF gegen WPE: braucht freie GPU und `cefsrc`/`wpesrc` (beide fehlen auf dem Rechner, Installation mit sudo); danach rendert strom den Grafikkanal (GFX.2).
 
 ### Breeze-Bug „MenuItem RegExp“ melden

@@ -66,8 +66,8 @@ git submodule update --init workspace/strom
 Systempakete wie in `BUILD.md` („Systemabhängigkeiten“) bzw. die
 apt-Liste in `scripts/cloud-setup.sh` (Ubuntu 24.04 / Kubuntu).
 
-strom: `scripts/fetch-strom.sh` lädt das CI-Binary (mit `GITEA_TOKEN`,
-`read:package`) oder baut lokal (`cargo build --release --features
+strom: `scripts/fetch-strom.sh` lädt das CI-Binary (ghcr, ohne Token)
+oder baut lokal (`cargo build --release --features
 no-gui`, 20–25 min kalt). Mischer-Backend wählt `lmix-core --mixer`
 (Standard `cuda` für NVIDIA; ohne NVIDIA `gl` oder `cpu`).
 
