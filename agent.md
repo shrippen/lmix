@@ -76,3 +76,4 @@ Rule 7: Use the body to explain what and why vs. how. Assume the code explains t
 ## Repository rule
 
 - PR-Agent (`.gitea/workflows/pr-agent.yml`) reviews every PR before it is merged. Wait for its comment on the PR's latest commit; after further pushes, ask for a new one with a `/review` comment. Fix or answer each finding in the PR, then merge. Without a review (the run skipped for lack of `PR_AGENT_LLM_KEY` or `PR_AGENT_MODEL`, or it failed), do not merge: ask the owner.
+- CI runs on the GitHub mirror (`.github/workflows/ci.yml`, since 16.10.2026) and reports back to Gitea as the commit status `github / test`. The strom binary goes to `ghcr.io/shrippen/lmix-strom` (public) only.
