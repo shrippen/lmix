@@ -40,7 +40,7 @@ function esc(text) { return String(text).replace(/[&<>"]/g, c => ({ "&": "&amp;"
 
 const PICTURE_MS = 1500;
 
-const SWITCHING = ["preview_input", "cut_direct", "overlay_in", "quick_play", "click_input", "go_input"];
+const SWITCHING = ["preview_input", "cut_direct", "overlay_in", "overlay_preview", "quick_play", "click_input", "go_input"];
 
 /** The input a shortcut switches (its first action puts one into preview,
  *  program or an overlay), as lmix names it, or null. */
