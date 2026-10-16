@@ -94,5 +94,3 @@ für WHIP-Links: `--public-url`.
   „M3 Schritt 4“).
 - Halten bei Quellverlust: in der VM teils ein schwarzer Frame (H.21).
 - MP4-Aufnahme reserviert ~93 MB moov; MKV ist Standard.
-- Qt-Console: Standardknöpfe der Dialoge („Close“, „OK“, „Cancel“) bleiben
-  englisch, die Qt-eigenen Übersetzungen (qtbase) werden nicht geladen.
