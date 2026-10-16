@@ -44,7 +44,7 @@ KanteDialog {
                 KanteSectionLabel {
                     text: bus.index === 0 ? qsTr("Aux 1 · before the faders") : qsTr("Aux 2 · after the faders")
                 }
-                KanteLevelMeter {
+                KanteAudioMeter {
                     Layout.fillWidth: true
                     level: dialog.levels["aux" + bus.number] !== undefined ? dialog.levels["aux" + bus.number] : -100
                     scale: true
