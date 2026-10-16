@@ -12,10 +12,10 @@ use std::path::Path;
 use lmix_types::action::{OVERLAY_CHANNELS, TRANSITION_SLOTS};
 use lmix_types::input::AUX_BUSES;
 use lmix_types::{
-    Action, AuxBus, ChannelStrip, Cue, DataSourceSpec, Dataset, Effect, FieldBinding, InputAudio,
-    InputColor, InputId, LayerTransform, LayoutBox, Look, MidiBinding, OutputId, OutputSource,
-    OutputSpec, SignalLoss, SourceSpec, TitleData, TitlePhase, TitleTrigger, Transition,
-    TransitionSlot, Trigger,
+    Action, AutoPlay, AuxBus, ChannelStrip, Cue, DataSourceSpec, Dataset, Effect, FieldBinding,
+    InputAudio, InputColor, InputId, LayerTransform, LayoutBox, Look, MidiBinding, OutputId,
+    OutputSource, OutputSpec, SignalLoss, SourceSpec, TitleData, TitlePhase, TitleTrigger,
+    Transition, TransitionSlot, Trigger,
 };
 use serde::{Deserialize, Serialize};
 
@@ -39,6 +39,9 @@ pub struct ShowInput {
     pub audio: InputAudio,
     #[serde(default)]
     pub signal_loss: SignalLoss,
+    /// Play, restart, pause on and off air (INP.11).
+    #[serde(default, skip_serializing_if = "AutoPlay::is_off")]
+    pub auto_play: AutoPlay,
     #[serde(default)]
     pub strip: ChannelStrip,
     #[serde(default)]
@@ -343,6 +346,11 @@ mod tests {
                     volume: 40,
                 },
                 signal_loss: SignalLoss::Black,
+                auto_play: AutoPlay {
+                    play: true,
+                    restart: false,
+                    pause: true,
+                },
                 strip: ChannelStrip {
                     delay_ms: 40,
                     ..Default::default()

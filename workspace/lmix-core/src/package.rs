@@ -357,6 +357,7 @@ mod tests {
             color: None,
             audio: Default::default(),
             signal_loss: Default::default(),
+            auto_play: Default::default(),
             strip: Default::default(),
             sends: [0; lmix_types::input::AUX_BUSES],
             look: Default::default(),

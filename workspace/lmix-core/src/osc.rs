@@ -11,6 +11,8 @@
 //! | `/lmix/tbar` | position (float 0–1) | `t_bar` |
 //! | `/lmix/overlay/{n}/in` | input | `overlay_in` |
 //! | `/lmix/overlay/{n}/out` | – | `overlay_out` |
+//! | `/lmix/overlay/{n}/last` | – | `overlay_last` |
+//! | `/lmix/overlay/out` | – | `overlay_out_all` |
 //! | `/lmix/cue/go`, `/lmix/cue/back` | list | `cue_go`, `cue_back` |
 //! | `/lmix/subscribe` | – | the sender gets tally and state from now on |
 //! | `/lmix/unsubscribe` | – | stops it |
@@ -283,6 +285,11 @@ pub fn request(message: &Message) -> Result<Request, String> {
             let channel = channel.parse::<u8>().map_err(|_| "overlay channel 1–4")?;
             json(serde_json::json!({ "action": "overlay_out", "channel": channel }))?
         }
+        ["overlay", channel, "last"] => {
+            let channel = channel.parse::<u8>().map_err(|_| "overlay channel 1–4")?;
+            json(serde_json::json!({ "action": "overlay_last", "channel": channel }))?
+        }
+        ["overlay", "out"] => json(serde_json::json!({ "action": "overlay_out_all" }))?,
         ["cue", step @ ("go" | "back")] => {
             let list = input(0)?;
             if *step == "go" {
@@ -484,6 +491,14 @@ mod tests {
                 input: InputRef::Number(3),
                 ..
             }))
+        ));
+        assert!(matches!(
+            req("/lmix/overlay/3/last", vec![]),
+            Ok(Request::Action(Action::OverlayLast { channel: 3, .. }))
+        ));
+        assert!(matches!(
+            req("/lmix/overlay/out", vec![]),
+            Ok(Request::Action(Action::OverlayOutAll { .. }))
         ));
         assert!(matches!(
             req(

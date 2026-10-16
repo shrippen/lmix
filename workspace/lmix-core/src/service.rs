@@ -934,8 +934,8 @@ impl Service {
     }
 
     /// Run one action; publishes the new state. Commands after a
-    /// `Command::Wait` (a stinger's cut and end) run later in the
-    /// background.
+    /// `Command::Wait` (a stinger's cut and end, a clip's automatic pause
+    /// after a fade) run later in the background.
     pub async fn handle(self: &Arc<Self>, action: Action) -> Result<ShowState, ActionError> {
         self.handle_as(action, Origin::Operator).await
     }
@@ -1234,7 +1234,8 @@ impl Service {
                     .position(|c| matches!(c, Command::Wait { .. }))
                     .unwrap_or(tail.len());
                 let mut sw = service.switcher.lock().await;
-                if let Err(e) = service.execute(&mut sw, &tail[..end]).await {
+                let due = sw.still_due(&tail[..end]);
+                if let Err(e) = service.execute(&mut sw, &due).await {
                     tracing::warn!(error = %e, "delayed engine commands failed");
                 }
                 service.publish(&sw);

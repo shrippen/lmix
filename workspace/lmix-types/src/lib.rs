@@ -30,7 +30,7 @@ pub use graphics::{
     TitleCall, TitleData, TitleLayer, TitlePhase, TitleTrigger,
 };
 pub use input::{
-    AuxBus, ChannelStrip, Compressor, Device, DeviceKind, Eq4, Gate, Hpf, Ingest, Input,
+    AutoPlay, AuxBus, ChannelStrip, Compressor, Device, DeviceKind, Eq4, Gate, Hpf, Ingest, Input,
     InputAudio, InputColor, InputId, InputRef, InputStatus, Listen, Look, SignalLoss, SourceSpec,
     TestPattern, Transport,
 };

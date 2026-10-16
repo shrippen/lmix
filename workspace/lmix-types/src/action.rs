@@ -18,7 +18,8 @@ use crate::graphics::{
     BindingSpec, DataSourceSpec, Easing, LayerTransform, TitleData, TitleTrigger,
 };
 use crate::input::{
-    ChannelStrip, InputColor, InputRef, Listen, Look, SignalLoss, SourceSpec, Transport, AUX_BUSES,
+    AutoPlay, ChannelStrip, InputColor, InputRef, Listen, Look, SignalLoss, SourceSpec, Transport,
+    AUX_BUSES,
 };
 use crate::layout::BoxSpec;
 use crate::output::{OutputRef, OutputSource, OutputSpec};
@@ -132,13 +133,22 @@ pub const ACTION_GROUPS: &[(&str, &[&str])] = &[
             "set_input_color",
             "set_look",
             "set_signal_loss",
+            "set_auto_play",
             "transport_input",
             "seek_input",
             "play_item",
             "move_input",
         ],
     ),
-    ("overlay", &["overlay_in", "overlay_out"]),
+    (
+        "overlay",
+        &[
+            "overlay_in",
+            "overlay_out",
+            "overlay_out_all",
+            "overlay_last",
+        ],
+    ),
     (
         "layout",
         &[
@@ -284,6 +294,12 @@ pub enum Action {
     SetLook { input: InputRef, look: Look },
     /// Choose last frame or black for when the input's source stalls.
     SetSignalLoss { input: InputRef, mode: SignalLoss },
+    /// Whether a file, URL or playlist input plays, starts from the
+    /// beginning, pauses by itself as it goes on and off air (INP.11).
+    SetAutoPlay {
+        input: InputRef,
+        auto_play: AutoPlay,
+    },
     /// Play, pause, restart or step a file, URL or playlist input.
     TransportInput {
         input: InputRef,
@@ -456,6 +472,18 @@ pub enum Action {
     },
     /// Take overlay `channel` off.
     OverlayOut {
+        channel: u8,
+        #[serde(default = "default_overlay_ms")]
+        duration_ms: u32,
+    },
+    /// Take every overlay channel off (OVL.8).
+    OverlayOutAll {
+        #[serde(default = "default_overlay_ms")]
+        duration_ms: u32,
+    },
+    /// Show the input overlay `channel` showed last again (OVL.8); does
+    /// nothing while the channel shows something.
+    OverlayLast {
         channel: u8,
         #[serde(default = "default_overlay_ms")]
         duration_ms: u32,
@@ -785,6 +813,8 @@ pub enum ActionError {
     BadVolume { volume: u8, max: u8 },
     #[error("overlay channel {channel} does not exist (1–{max})")]
     BadOverlay { channel: u8, max: u8 },
+    #[error("overlay {channel} has no input to show again")]
+    NoOverlayLast { channel: u8 },
     #[error("T-bar position is outside 0–1")]
     BadTBar,
     #[error("aux bus {bus} does not exist (1–{max})")]
