@@ -22,6 +22,7 @@ use reqwest::StatusCode;
 use serde::Serialize;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 use strom_types::api::{
     FadeToBlackRequest, SelectPreviewRequest, SrtRole, SrtStats, SrtStatsResponse,
@@ -37,6 +38,9 @@ const PLAYING_POLL: Duration = Duration::from_millis(200);
 const PLAYING_POLLS: u32 = 50;
 /// Flow errors kept for a slow reader.
 const ERROR_BUFFER: usize = 64;
+
+/// Player position reports kept for a slow reader (16 players, 1 s).
+const PLAYER_BUFFER: usize = 128;
 /// Vision mixer compositors whose input pads follow `SignalLoss`.
 const MIXER_COMPOSITORS: [&str; 2] = ["mixer", "mv_comp"];
 /// `max-last-buffer-repeat` default: repeat until end of stream.
@@ -58,7 +62,7 @@ const NOT_RUNNING_YET: &str = "query pipeline position";
 const LAYOUT_BORDER_COLOR: &str = "#FFFFFF";
 
 use super::flows::{self, MixerBackend, MonitorOut, AUDIO_MIXER, MIXER_BLOCK, PGM_TAP, SLOT_TAP};
-use super::meters::{self, EngineLevels, FlowError};
+use super::meters::{self, EngineHealth, EngineLevels, FlowError};
 use super::{Engine, EngineError, LivePicture, Picture};
 use crate::switcher::{Command, EngineBox, AUDIO_RAMP_MS};
 
@@ -71,6 +75,8 @@ pub struct StromEngine {
     black: AtomicUsize,
     levels: watch::Sender<EngineLevels>,
     errors: broadcast::Sender<FlowError>,
+    health: Arc<std::sync::Mutex<EngineHealth>>,
+    players: broadcast::Sender<crate::clips::PlayerProgress>,
     /// The meter reader runs once, from the first `start`.
     metering: AtomicBool,
     /// Directory of the live picture sockets (see [`Engine::live`]).
@@ -89,6 +95,8 @@ impl StromEngine {
             black: AtomicUsize::new(0),
             levels: watch::Sender::default(),
             errors: broadcast::channel(ERROR_BUFFER).0,
+            health: Arc::default(),
+            players: broadcast::channel(PLAYER_BUFFER).0,
             metering: AtomicBool::new(false),
             live_dir: default_live_dir(),
             live_setup: Mutex::new(()),
@@ -300,7 +308,20 @@ impl StromEngine {
                 }),
             })
             .collect();
-        let body = serde_json::json!({ "bg": background, "zones": zones, "transforms": {} });
+        // strom crops per source, wherever it shows in the composition.
+        let transforms: serde_json::Map<String, serde_json::Value> = boxes
+            .iter()
+            .filter(|b| !b.crop.is_zero())
+            .map(|b| {
+                let c = b.crop;
+                let crop = serde_json::json!({
+                    "left": c.left, "top": c.top, "right": c.right, "bottom": c.bottom
+                });
+                (b.slot.to_string(), crop)
+            })
+            .collect();
+        let body =
+            serde_json::json!({ "bg": background, "zones": zones, "transforms": transforms });
         let path = format!(
             "/flows/{}/blocks/{MIXER_BLOCK}/pip/{pip}",
             flows::mixer_id()
@@ -604,6 +625,8 @@ impl Engine for StromEngine {
                 AUDIO_MIXER,
                 self.levels.clone(),
                 self.errors.clone(),
+                self.health.clone(),
+                self.players.clone(),
             ));
         }
 
@@ -753,6 +776,14 @@ impl Engine for StromEngine {
 
     fn levels(&self) -> watch::Receiver<EngineLevels> {
         self.levels.subscribe()
+    }
+
+    fn players(&self) -> broadcast::Receiver<crate::clips::PlayerProgress> {
+        self.players.subscribe()
+    }
+
+    fn health(&self) -> EngineHealth {
+        self.health.lock().expect("health lock").clone()
     }
 
     fn flow_errors(&self) -> broadcast::Receiver<FlowError> {

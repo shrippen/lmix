@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>lmix mixer</title>
+<link rel="stylesheet" href="/web/lmix.css">
+<style>
+  #error { color: var(--red); font-family: var(--font-mono); font-size: .8rem; min-height: 1.2em; }
+  .btn.ftb-on { background: var(--red-n); }
+</style>
+</head>
+<body>
+<header class="bar"><h1>lmix mixer</h1><span class="state">…</span></header>
+<main>
+  <div class="row" id="takes"></div>
+  <div id="error"></div>
+  <p class="label">Inputs · click: preview · double click: program</p>
+  <div class="grid" id="inputs"></div>
+  <p class="label" id="layouts-label" hidden>Layouts</p>
+  <div class="row" id="layouts"></div>
+</main>
+<script src="/web/lmix.js"></script>
+<script>
+"use strict";
+// Mixer page (WEB.2): inputs with pictures, preview and program, takes.
+let state = null;
+const PICTURE_MS = 1500;
+// Button labels as in the Console.
+const EFFECTS = { cut: "Cut", fade: "Fade", dip_to_black: "Dip", slide_left: "Slide ◀", slide_right: "Slide ▶",
+  push_left: "Push ◀", push_right: "Push ▶", wipe_left: "Wipe ◀", wipe_right: "Wipe ▶", stinger: "Stinger" };
+
+function act(action) {
+  lmixAct(action).then(() => show("")).catch(e => show(errorText(e.message)));
+}
+function errorText(text) {
+  try { const e = JSON.parse(text).error; return e.message || e.error || text; } catch (_) { return text; }
+}
+function show(text) { document.getElementById("error").textContent = text; }
+function esc(text) { return String(text).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]); }
+
+function renderTakes() {
+  const canTake = state.preview !== null;
+  const buttons = [`<button class="btn primary" data-act='{"action":"cut"}' ${canTake ? "" : "disabled"}>Cut</button>`];
+  for (const t of state.transitions) {
+    buttons.push(`<button class="btn" data-act='{"action":"transition","slot":${t.slot}}' ${canTake ? "" : "disabled"}>` +
+      `${t.slot} ${esc(EFFECTS[t.effect] || t.effect)} ${t.effect === "cut" ? "" : t.duration_ms + " ms"}</button>`);
+  }
+  buttons.push(`<button class="btn ${state.fade_to_black ? "ftb-on" : ""}" data-act='{"action":"fade_to_black"}'>FTB</button>`);
+  document.getElementById("takes").innerHTML = buttons.join("");
+}
+
+function renderInputs() {
+  const grid = document.getElementById("inputs");
+  const tiles = state.inputs.filter(i => i.source.kind !== "audio_device").map(i => {
+    const bus = state.program === i.id ? "program" : state.preview === i.id ? "preview" : "";
+    return `<button class="tile ${bus}" data-input="${i.number}">` +
+      `<img alt="" data-picture="${i.number}" onload="this.style.visibility='visible'" ` +
+      `onerror="this.style.visibility='hidden'"><span class="name">${i.number} ${esc(i.name)}</span></button>`;
+  });
+  // Keep pictures across renders: only rebuild when the inputs change.
+  const key = state.inputs.map(i => i.id + i.name).join();
+  if (grid.dataset.key !== key) {
+    grid.innerHTML = tiles.join("");
+    grid.dataset.key = key;
+    refreshPictures();
+  }
+  for (const tile of grid.querySelectorAll(".tile")) {
+    const input = state.inputs[Number(tile.dataset.input) - 1];
+    tile.classList.toggle("program", state.program === input.id);
+    tile.classList.toggle("preview", state.preview === input.id);
+  }
+}
+
+function renderLayouts() {
+  const layouts = state.layouts || [];
+  document.getElementById("layouts-label").hidden = layouts.length === 0;
+  document.getElementById("layouts").innerHTML = layouts.map(l => {
+    const bus = state.program === l.id ? "program" : state.preview === l.id ? "preview" : "";
+    return `<button class="tile ${bus}" style="width:12rem" data-act='{"action":"preview_layout","layout":${l.number}}'>` +
+      `<span class="name">${l.number} ${esc(l.name)}</span></button>`;
+  }).join("");
+}
+
+function refreshPictures() {
+  for (const img of document.querySelectorAll("img[data-picture]")) {
+    img.src = "/api/pictures/inputs/" + img.dataset.picture + "?t=" + Date.now();
+  }
+}
+setInterval(() => { if (!document.hidden) refreshPictures(); }, PICTURE_MS);
+
+document.addEventListener("click", e => {
+  const button = e.target.closest("[data-act]");
+  if (button) return act(JSON.parse(button.dataset.act));
+  const tile = e.target.closest("[data-input]");
+  if (tile) act({ action: "preview_input", input: Number(tile.dataset.input) });
+});
+document.addEventListener("dblclick", e => {
+  const tile = e.target.closest("[data-input]");
+  if (tile) act({ action: "cut_direct", input: Number(tile.dataset.input) });
+});
+
+lmixEvents(event => {
+  if (event.event !== "state") return;
+  state = event.state;
+  renderTakes();
+  renderInputs();
+  renderLayouts();
+}, lmixLinkState);
+</script>
+</body>
+</html>

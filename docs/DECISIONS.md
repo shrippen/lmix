@@ -1086,6 +1086,137 @@ rechts, beide mit rotem Tally, wieder entfernt.
 Übergänge zwischen Layouts als Bewegung (strom kann morphen); Layouts auf
 CUDA/GL prüfen (H.29).
 
+## 2026-10-09 — M8 Schritt 1: Browser-Seiten (WEB.1–3)
+
+**Entscheidung**: lmix-core liefert kleine Seiten selbst aus (in der
+Binärdatei, `web.rs`), im Kante-Aussehen (Farb-Tokens, abgeschrägte
+Knöpfe). Sie nutzen dieselbe API wie jeder Client: Ereignisstrom und
+Aktionen, kein eigener Weg. `/mixer`: Inputs mit Bild (alle 1,5 s), Klick
+Vorschau, Doppelklick Programm, Cut, Übergangstasten, FTB, Layouts.
+`/tally?input=N`: ganzer Bildschirm rot/grün, verbindet sich selbst neu.
+`/keys`: für das Web freigegebene Kurzbefehle als große Tasten.
+**Geprüft**: `scripts/test-web.sh` (Chromium/Playwright gegen lmix-core
+ohne Engine).
+**Offen**: Anmeldung/Rechte (WEB.4), Seiten über das LAN nur mit
+`--listen 0.0.0.0`; Bilder als Live-Strom statt JPEG.
+
+## 2026-10-09 — M6: Steuerung (AUT.1–3, 7, 10, 11, 13, 14)
+
+**Kurzbefehle**: Beschriftung, optionale Taste, bis zu 16 Aktionen der
+Reihe nach; die erste fehlerhafte bricht ab. Sie gehören zur Show und
+laufen über Tasten der Console, `/keys` und `run_shortcut`. Der Dienst
+führt jede Aktion aus, als käme sie allein (Datei-Aktionen, Stinger).
+Kurzbefehle können keine Kurzbefehle auslösen oder ändern (keine
+Schleifen); Tasten sind eindeutig, eine Show-Taste gewinnt gegen 1–9.
+**Wiederherstellen und Sperre**: `restore_input` holt den zuletzt
+geschlossenen Input mit Id, Einstellungen, Platz und Slot zurück (die
+letzten zehn, solange die Show offen ist). `set_lock` sperrt Schließen von
+Inputs, Show öffnen/leeren und Ausgänge stoppen/entfernen; Umschalten geht
+weiter. Die Sperre gilt nur zur Laufzeit.
+**Auslöser**: je Input bis zu 8: bei Programm an/aus, Vorschau, Overlay
+ein/aus, nach einer Verzögerung (bis 30 s) Aktionen ausführen. Sie feuern
+nur für Aktionen des Bedieners (und von Cues), nicht für Aktionen anderer
+Auslöser: Automation kann sich nicht aufschaukeln.
+**Cue-Listen**: nummerierte Cues mit je 1–16 Aktionen; GO führt den
+nächsten aus, Zurück den davor, ein Sprung setzt den nächsten. Bearbeiten
+während der Show behält die Stelle. Beides steht in der Show-Datei.
+**OSC** (`--osc`, UDP): `/lmix/action` mit JSON und Kurzadressen (`cut`,
+`preview`, `program`, `transition`, `ftb`, `tbar`, `overlay/N/in|out`,
+`cue/go|back`); Fehler gehen als `/lmix/error` an den Absender zurück;
+`/lmix/subscribe` liefert Tally als `/lmix/tally s:Ziffern`. Eigener
+kleiner Parser (Nachrichten, Bundles, Typen i/f/s/T/F), keine neue
+Abhängigkeit; Zeitmarken von Bundles werden ignoriert.
+**Console**: „Kurzbefehle…“, „Cues…“ (GO, Zurück, Nächster je Cue), im
+Kachelmenü „Auslöser…“ und „Zurückholen“, Knopf „Sperre“. Die
+Aktionszeilen sind ein gemeinsamer Baustein (Vorlagen oder JSON).
+**Geprüft**: Switcher-Tests; VM-Test Abschnitt „automation“ (Cue-Liste,
+deren Cues Auslöser feuern, Zurück feuert erneut); OSC im Headless-Test.
+**Offen**: MIDI (AUT.4), globale Tasten außerhalb des Fensters (AUT.12),
+Auslöser bei Countdown/Clip-Ende, Zustand per OSC über Tally hinaus.
+
+## 2026-10-09 — M8 Schritt 2: Textprotokoll, Metriken, Headless (API.5, OPS.1, OPS.3)
+
+**Textprotokoll** (`--tcp`): Zeilen über TCP, Begrüßung `LMIX 1`. Eine
+JSON-Zeile ist eine Aktion, Antwort `OK` oder `ER <code> <grund>`;
+`TALLY`, `STATE`, `SUB/UNSUB TALLY|STATE|LEVELS|OUTPUTS|ALL`, `QUIT`.
+Tally als Ziffernfolge passt auf jeden Mikrocontroller. Wer zurückfällt,
+bekommt danach den aktuellen Stand statt verlorener Zwischenstände.
+Zeilen werden in einer eigenen Task gelesen (abbruchsicher im `select!`),
+höchstens 64 KiB je Zeile.
+**Metriken** (`GET /metrics`, Prometheus-Text): Inputs online, Tally,
+Pegel je Input und Programm, Ausgänge (läuft/gestoppt/Fehler), Rate,
+verlorene und verworfene Pakete, Latenz der letzten Messung, Laufzeit,
+Speicher von lmix-core. Speicher von strom fehlt noch (eigener Prozess).
+**Headless**: `LMIX_SHOW` öffnet eine Show beim Start, SIGTERM beendet
+sauber (Engine und Ausgänge laufen weiter), `packaging/systemd` hat
+Benutzer-Units für strom und lmix-core (Einstellungen in
+`~/.config/lmix/core.env`).
+**Geprüft**: `scripts/test-headless.sh` (ohne Engine): SIGTERM, Show beim
+Start, Textprotokoll, OSC, Metriken.
+**Offen**: Metriken von strom (Drops, Encoder, Speicher) durchreichen;
+Units auf einer echten Maschine ohne Anmeldung (H.30).
+
+## 2026-10-10 — Offene Punkte ohne Hardware: Layouts, Metriken, MIDI, globale Tasten, Clip-Ende, Stinger-Länge, OSC
+
+**Layout-Boxen frei** (4.6): Der Layout-Dialog zeigt eine 16:9-Fläche.
+Boxen zieht man an ihren Platz, die Ecke ändert die Größe (16:9, mit
+Umschalt frei), Pfeiltasten verschieben (mit Umschalt: Größe), Raster 1 %.
+Beim Ziehen bewegt sich nur das Element; die Box ändert sich beim
+Loslassen, denn ein neues `boxes` baut die Delegates neu und bräche das
+Ziehen ab. Die festen Plätze bleiben als Schnellwahl, bis zu 8 Boxen.
+**Zuschnitt** je Box (`crop`: Anteil links/oben/rechts/unten, mindestens
+5 % bleiben sichtbar) geht an strom als `transforms` der Quelle. strom
+passt den Ausschnitt mit seinem Seitenverhältnis in die Box ein
+(Ränder schwarz, wenn die Formen nicht passen). VM-Test: rechte Hälfte
+von Orange in einer Vollbild-Box, linker Rand schwarz.
+**Metriken der Engine** (OPS.3): lmix-core liest `SystemStats` und
+`QoSStats` aus dem Ereignisstrom von strom mit: CPU, Speicher, GPU-Last,
+-Speicher, Encoder/Decoder der Maschine; QoS je Flow (späte Puffer,
+Meldungen „fällt zurück“, letzter Anteil), beschriftet als Mischer, Input
+oder Ausgang. strom-Patch `lmix-process-memory` (strom-PR #8):
+`SystemStats.process_memory`, der eigene Speicher von strom, damit ein
+Leck (H.24) von anderem Verbrauch zu trennen ist. Geprüft: 263 MB in der VM.
+**MIDI** (AUT.4): lmix-core liest rohe Bytes aus Gerätedateien
+(`--midi /dev/snd/midiC1D0`, mehrere mit Komma), ohne ALSA-Bibliothek;
+fehlt das Gerät, versucht es alle 2 s neu. Der Parser kennt Running
+Status und überspringt SysEx und Echtzeit-Bytes. Ein Kurzbefehl kann eine
+Note oder einen Regler tragen (Kanal fest oder beliebig); er läuft bei
+Note an bzw. wenn ein Regler über 64 steigt. `set_midi_tbar` legt einen
+Regler auf die T-Bar (0–127 → 0–1). Bindungen sind eindeutig. Jede
+Nachricht geht als `Event::Midi` an die Clients (Textprotokoll: Thema
+`MIDI`), so lernt die Console: Knopf „No MIDI“ im Kurzbefehl-Editor und
+„T-bar from MIDI“ in der Liste. Geprüft mit einer FIFO statt Gerät
+(Headless-Test, Console unter Xvfb). Rückmeldung an Controller (LEDs)
+fehlt.
+**Globale Tasten** (AUT.12): Die Console bindet die Tasten der
+Kurzbefehle über das Portal `org.freedesktop.portal.GlobalShortcuts`
+(KDE Plasma, GNOME 48+, Hyprland; unter X11 ohne Portal nicht). Der
+Desktop fragt einmal und meldet Drücke, auch wenn ein Spiel vorne ist.
+Einstellung der Console („Keys also work when the Console is not in
+front“), der Dialog zeigt den Stand. Bei jeder Änderung wird die Sitzung
+geschlossen und neu gebunden. Geprüft gegen ein nachgebautes Portal
+(`workspace/tools/fake-portal`, `scripts/test-global-keys.sh`).
+**Clip-Ende** (AUT.7): Auslöser `clip_end` für Datei-, URL- und
+Playlist-Inputs feuert, wenn das letzte Stück endet (der Player beginnt
+von vorn), oder mit `before_ms` (bis 60 s) so lange vor dem Ende
+(Countdown, um rechtzeitig weiterzuschalten). lmix-core liest dazu die
+Positionsmeldungen der Mediaplayer von strom (alle 200 ms) und erkennt
+Ende und Schwelle aus zwei aufeinanderfolgenden Meldungen; ein
+Zurückspringen um mehr als 1 s zählt bei einer Einzeldatei als Ende.
+Die Aktionen laufen wie andere Auslöser und lösen keine weiteren aus.
+Console: „Clip ends“ mit „ms before“ im Auslöser-Dialog eines Clips.
+VM-Test: Countdown 2 s vor dem Ende und Ende einer Playlist.
+**Stinger-Länge**: Inputs mit Player melden `clip_ms`, die Länge des
+laufenden Stücks (aus den Positionsmeldungen). Der Stinger-Dialog nimmt
+sie für einen neuen Stinger und bietet „Clip length (2.0 s)“ an.
+**OSC mit Zustand** (AUT.13): Abonnenten bekommen außer der Tally
+`/lmix/program` und `/lmix/preview` (Name, Nummer; 0 für ein Layout),
+`/lmix/tbar`, `/lmix/ftb` und `/lmix/cue/next` je Liste, gleich nach dem
+Abo und danach nur Änderungen. `/lmix/state` beantwortet den ganzen
+Zustand als JSON.
+**Offen**: Bewegung zwischen Layouts; MIDI-Rückmeldung; globale Tasten
+am echten KDE prüfen (H.32), MIDI mit echtem Controller (H.31).
+
 ## 2026-10-11 — strom-Speicher (H.24): Vergleichsläufe auf Hardware
 
 **Läufe** (`scripts/soak-hardware.sh`, RTX 3090, je 60 min, RSS von strom
