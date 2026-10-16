@@ -4,12 +4,12 @@ Erledigtes abhaken (`[x]`, Datum) und nach einer Weile löschen; Details stehen 
 
 ## Für dich
 
-- [ ] PRs vom 16.10. ansehen und mergen: #28 (Test-CI, Workflows nur auf main und PRs), #29 (Console-Test klickt wieder richtig), #30 (Kante 1.34.1), #31 (automatische Wiedergabe INP.11, alle Overlays aus OVL.8), #32 (Schnellstart SWI.8, Klick/GO je Input INP.8/9; auf #31; ⚠ Doppelklick ist jetzt GO statt harter Schnitt), #33 (GL-Speicher, Soak ohne Ausgänge), danach die Overlay-/Layout-Vorlagen-PR (auf #32).
-- [ ] strom-PRs #7–#14 zeigen auf Gitea „offen“ (lmix #15–#25 am 16.10. geschlossen), ihr Inhalt ist in lmix `main` (9c723c9) bzw. strom `dev` (1ec76e2). Gitea erkennt manuelle Merges nicht, `manually-merged` ist im Repo nicht erlaubt: entweder in den Repo-Einstellungen „manuelles Mergen erkennen“ einschalten oder die PRs schließen.
+- [x] PRs vom 16.10. gemergt (#28–#36, 2026-10-16); lmix #15–#25 und strom #7–#14 geschlossen, Inhalt war schon in `main` bzw. `dev`.
+- [ ] PR-Agent antwortet nur „Failed to review PR“: der OpenRouter-Schlüssel hat sein Monatslimit erreicht (5,49 $ von 5 $, Reset 1.11.). Limit anheben oder anderen Schlüssel/Modell setzen (`PR_AGENT_LLM_KEY`, `PR_AGENT_MODEL`); deine lokale Änderung in `.gitea/pr-agent/` (Claude, adaptive thinking) ist noch nicht committet. Bis dahin genügt grüne CI (`agent.md`).
 - [ ] M7.0 (CEF gegen WPE): `cef` 152 ist installiert; `gstcefsrc` bauen lädt gstcefsrc und CEF 139 von außen und wurde heute nicht freigegeben. Freigeben, dann baue ich `cefsrc` nach `~/.local/lib/gstreamer-1.0`.
-- [ ] Gitea-Actions: `concurrency.group` mit `${{ github.ref }}` trennt auf Gitea 1.27.3 die Refs offenbar nicht: ein PR-Lauf ersetzte wartende Läufe auf `main` (Läufe 2509/2510, 2532). Betrifft das Muster aus CLAUDE.md in allen Projekten; prüfen.
+- [ ] Gitea-Actions: `concurrency.group` mit `${{ github.ref }}` trennte auf Gitea 1.27.3 die Refs offenbar nicht (Läufe 2509/2510, 2532). lmix prüft jetzt auf GitHub; betrifft noch die privaten Repos mit Gitea-CI.
 - [x] strom PR #3 (`lmix-player-sysmem`) gemergt.
-- [ ] CI läuft jetzt auf GitHub (`.github/workflows/ci.yml`, strom öffentlich, Paket `ghcr.io/shrippen/lmix-strom`). Nach dem Merge: PR #14 (`ci-submodule-token`) schließen, Secret `REGISTRY_TOKEN` löschen, in lokalen Kopien `git submodule sync workspace/strom` (Submodul-URL jetzt GitHub).
+- [ ] CI läuft auf GitHub (`.github/workflows/ci.yml`, strom öffentlich, Paket `ghcr.io/shrippen/lmix-strom`): Secret `REGISTRY_TOKEN` auf Gitea löschen; in lokalen Kopien `git submodule sync workspace/strom` (Submodul-URL jetzt GitHub). strom `dev` hat `04b87d1` (DSK-Blende); dein lokales strom-`dev` mit `7615d6f` (NVDEC-Deinterlace) ist darauf noch nicht nachgezogen.
 - [ ] Demo-Welt-Kopien in 15 anderen Projekten veraltet (neuer Abschnitt `graufeld.stream`): `python3 shrippen.github.io/demo/tools/sync-demo.py`, dann je Projekt committen — soll ich?
 - [ ] Vorschau-Lücke ansehen (`scripts/run-local.sh`, Kachel anklicken) und entscheiden: Vorschau-Ausgang im strom-Mischer oder alte Ansicht halten, bis die neue ein Bild hat.
 - [ ] Breeze-Bug melden (siehe unten).
