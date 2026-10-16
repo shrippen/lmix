@@ -577,6 +577,19 @@ impl Switcher {
         self.targets_changed = false;
     }
 
+    /// Take targets and subscribers of a package (SSH.5).
+    pub fn merge_target_settings(
+        &mut self,
+        from: crate::targets::Settings,
+    ) -> Result<(), ActionError> {
+        let mut settings = self.target_settings();
+        crate::targets::merge(&mut settings, from)?;
+        self.targets = settings.targets;
+        self.feeds = settings.feeds;
+        self.targets_changed = true;
+        Ok(())
+    }
+
     /// The fixed OSC subscribers (CTL.4).
     pub fn feeds(&self) -> &[lmix_types::Feed] {
         &self.feeds

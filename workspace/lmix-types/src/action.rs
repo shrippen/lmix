@@ -1051,11 +1051,19 @@ pub enum Action {
     /// into one package file (SHW.6).
     ExportPackage {
         path: String,
+        /// Also this machine's output targets and OSC subscribers, without
+        /// secrets (`machine.json`, show mode SSH.5).
+        #[serde(default)]
+        machine: bool,
     },
     /// Unpack a package into `folder` (new or empty) and open its show.
     ImportPackage {
         path: String,
         folder: String,
+        /// Also take the package's targets and OSC subscribers; ones of
+        /// the same name are replaced, their secrets stay (SSH.5).
+        #[serde(default)]
+        machine: bool,
     },
 }
 

@@ -275,6 +275,40 @@ pub fn to_bytes(settings: &Settings) -> Vec<u8> {
     serde_json::to_vec_pretty(settings).expect("targets serialize")
 }
 
+/// `settings` to carry to another machine: no secrets (SSH.5, EXT.2).
+pub fn without_secrets(settings: &Settings) -> Settings {
+    Settings {
+        targets: settings
+            .targets
+            .iter()
+            .map(|t| TargetConfig {
+                secret: None,
+                ..t.clone()
+            })
+            .collect(),
+        feeds: settings.feeds.clone(),
+    }
+}
+
+/// Take `from` into `into`: targets and subscribers of the same name are
+/// replaced, a target keeps its secret; within the limits.
+pub fn merge(into: &mut Settings, from: Settings) -> Result<(), ActionError> {
+    for target in from.targets {
+        let spec = TargetSpec {
+            name: target.name,
+            kind: target.kind,
+            addresses: target.addresses,
+            secret: None,
+            timeout_ms: target.timeout_ms,
+        };
+        set(&mut into.targets, spec)?;
+    }
+    for feed in from.feeds {
+        set_feed(&mut into.feeds, feed)?;
+    }
+    Ok(())
+}
+
 /// Add `feed` to `feeds` or replace the one of its name.
 pub fn set_feed(feeds: &mut Vec<Feed>, feed: Feed) -> Result<(), ActionError> {
     if feed.name.trim().is_empty() || feed.target.trim().is_empty() {
@@ -354,6 +388,35 @@ mod tests {
         let mut slow = spec("Slow", &["http://x"], None);
         slow.timeout_ms = 60_000;
         assert!(refused(set(&mut targets, slow)));
+    }
+
+    #[test]
+    fn machine_settings_travel_without_secrets() {
+        let mut here = Settings::default();
+        set(
+            &mut here.targets,
+            spec("Haus", &["http://ha:8123"], Some("token")),
+        )
+        .unwrap();
+        let carried = without_secrets(&here);
+        assert!(!String::from_utf8(to_bytes(&carried))
+            .unwrap()
+            .contains("token"));
+
+        let mut there = Settings::default();
+        set(
+            &mut there.targets,
+            spec("Haus", &["http://old:8123"], Some("their")),
+        )
+        .unwrap();
+        merge(&mut there, carried).unwrap();
+
+        assert_eq!(there.targets[0].addresses, ["http://ha:8123"]);
+        assert_eq!(
+            there.targets[0].secret.as_deref(),
+            Some("their"),
+            "a secret stays"
+        );
     }
 
     #[test]

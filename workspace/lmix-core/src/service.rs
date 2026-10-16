@@ -1279,10 +1279,15 @@ impl Service {
             _ => {}
         }
         // Packages copy media (gigabytes): without the switcher locked.
-        if let Action::ExportPackage { path } = &action {
-            let (show, show_path) = {
+        if let Action::ExportPackage { path, machine } = &action {
+            let (show, show_path, settings) = {
                 let sw = self.switcher.lock().await;
-                (sw.show().clone(), sw.path().map(str::to_string))
+                let settings = machine.then(|| {
+                    crate::targets::to_bytes(&crate::targets::without_secrets(
+                        &sw.target_settings(),
+                    ))
+                });
+                (sw.show().clone(), sw.path().map(str::to_string), settings)
             };
             let templates = self
                 .templates_dir
@@ -1291,7 +1296,13 @@ impl Service {
                 .clone();
             let out = PathBuf::from(path);
             let packed = tokio::task::spawn_blocking(move || {
-                crate::package::export(&show, show_path.as_deref(), templates.as_deref(), &out)
+                crate::package::export(
+                    &show,
+                    show_path.as_deref(),
+                    templates.as_deref(),
+                    settings.as_deref(),
+                    &out,
+                )
             })
             .await
             .map_err(|e| ActionError::ShowFile {
@@ -1308,7 +1319,11 @@ impl Service {
             _ => None,
         };
         let mut unpacked = match &action {
-            Action::ImportPackage { path, folder } => {
+            Action::ImportPackage {
+                path,
+                folder,
+                machine,
+            } => {
                 // Refused before gigabytes are unpacked (checked again below).
                 self.switcher.lock().await.check_unlocked()?;
                 let templates = self
@@ -1317,6 +1332,7 @@ impl Service {
                     .expect("templates dir lock")
                     .clone();
                 let (package, folder) = (PathBuf::from(path), PathBuf::from(folder));
+                let machine_at = folder.join(crate::package::MACHINE_FILE);
                 let (show, file, notes) = tokio::task::spawn_blocking(move || {
                     crate::package::import(&package, &folder, templates.as_deref())
                 })
@@ -1330,7 +1346,21 @@ impl Service {
                 }
                 // Templates it brought.
                 self.rescan_templates().await;
-                Some((show, file))
+                let settings = if *machine {
+                    let bytes =
+                        tokio::fs::read(&machine_at)
+                            .await
+                            .map_err(|e| ActionError::ShowFile {
+                                message: format!("{}: {e}", machine_at.display()),
+                            })?;
+                    Some(
+                        crate::targets::parse(&bytes)
+                            .map_err(|message| ActionError::ShowFile { message })?,
+                    )
+                } else {
+                    None
+                };
+                Some((show, file, settings))
             }
             _ => None,
         };
@@ -1396,7 +1426,10 @@ impl Service {
             Action::NewShow => sw.replace(Show::default(), None),
             Action::OpenShow { path } => open(&mut sw, path).await?,
             Action::ImportPackage { .. } => {
-                let (show, file) = unpacked.take().expect("unpacked above");
+                let (show, file, settings) = unpacked.take().expect("unpacked above");
+                if let Some(settings) = settings {
+                    sw.merge_target_settings(settings)?;
+                }
                 sw.replace(show, Some(file.display().to_string()))
             }
             Action::ImportDatasets { template, .. } => {
