@@ -2040,3 +2040,32 @@ durchsichtig. Beides lag am Test, nicht an lmix.
 Builds ließen strom von 900 auf 1082 MB springen (Warteschlangen unter
 CPU-Last), der Speicherwert wäre wertlos gewesen. Neuer Lauf ohne
 Nebenlast (Ergebnis im Eintrag „strom-Fixes“).
+
+## 2026-10-16 — GL-Mischer: Speicherwachstum ohne SRT
+
+**Gegenprobe** (`MIXER=gl INPUTS=1 STREAMS=0 MINUTES=60
+scripts/soak-hardware.sh`, strom `1ec76e2`, RTX 3090, Treiber 615.78,
+GStreamer 1.28.8; nur die Aufnahme, kein SRT): strom-RSS 753 MB nach
+10 min, 865 MB nach 60 min. Gleichmäßig ~50 MB/h, dazu ein Sprung von
++42 MB um Minute 43, als eine fremde GPU-Last (100 %, 22 GB) endete.
+Latenz durchgehend 56 ms, Aufnahme lückenlos (109 014 Bilder in 3632 s).
+Mit Aufnahme und SRT waren es am 2026-10-13 ~110 MB/h: das Wachstum
+hängt an jedem Encoder des GL-Mischers, nicht am SRT-Zweig.
+**Isoliert** (je 12 min, `gst-launch-1.0`, 1080p30 live, NVENC):
+`glupload ! glcolorconvert ! GLMemory RGBA ! cudaupload ! cudaconvert !
+nvh264enc`, dasselbe mit `gldownload` davor und `cudaupload` aus dem
+Systemspeicher: alle drei flach (304 → 249 bzw. 284 → 224 MB). Der Weg
+GL → CUDA → NVENC leckt für sich nicht.
+**Aber**: Beim GL-Mischer verlässt Program den Mischer schon im
+Systemspeicher (`gl_download` am Bildmischer, `flows.rs`); der Ausgangs-Flow
+sieht also genau den dritten, flachen Weg. Damit steht der Mischer selbst
+unter Verdacht, nicht der Encoder.
+**Ohne Ausgänge** (`RECORD=0 STREAMS=0`, neu in `soak-hardware.sh`,
+45 min): 517 MB nach 10 min, 635 MB nach 25 min, danach fast flach (653 MB
+nach 45 min). Der Anstieg fiel in die Zeit, in der nebenan gebaut und ein
+VM-Test lief (bekannter Effekt, Eintrag „Nachtläufe“), ab Minute 35 dazu
+eine fremde GPU-Last (100 %, 21 GB). Der Lauf trennt Leck und Last nicht.
+**Nächster Schritt**: dieselben zwei Läufe (GL ohne Ausgänge, GL mit
+Aufnahme) je 2 h ohne Nebenlast und mit freier GPU.
+**Stand**: CUDA bleibt der Standard-Mischer (~7,7 MB/h im 8-h-Lauf); GL
+erst nach der Ursache für lange Läufe empfehlen.
