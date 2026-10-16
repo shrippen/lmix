@@ -2157,3 +2157,113 @@ per Schnellstart auf Programm, spielt).
 **Offen**: Klick und GO kennen keine Overlay-Kanäle (vMix bietet mehr
 Ziele); ein Schnellstart, während der T-Bar halb steht, lässt ihn
 stehen wie Cut (siehe INP.11).
+
+## 2026-10-16 — Overlay-Kanäle, Overlay mit dem Take, Layout-Vorlagen (OVL.2, OVL.3, LAY.5)
+
+**Entscheidung OVL.2**: Jeder Overlay-Kanal hat Einstellungen in der Show
+(`overlay_channels`, Aktion `set_overlay {channel, effect, duration_ms,
+auto_off_ms?, rect?}`, im Zustand und in der Show-Datei; Standardwerte
+werden nicht geschrieben). Gesetzt wird alles auf einmal wie beim
+Schnellstart.
+- **Effekt**: nur `cut` und `fade`. strom blendet DSK-Ebenen nur über
+  Alpha (`lmix-dsk-fade`); Schieben, Wischen usw. bräuchten Keyframes auf
+  der Position des DSK-Pads in strom. Ausblenden ist dieselbe Blende
+  rückwärts. Andere Effekte: Fehler `bad_overlay_settings`.
+- **Dauer in den Aktionen**: `overlay_in`, `overlay_out`,
+  `overlay_out_all` und `overlay_last` haben `duration_ms` jetzt als
+  Option. Ohne sie gilt der Kanal (Schnitt: 0), mit ihr eine Blende
+  dieser Länge (0 schneidet), wie bisher. So bleiben Kurzbefehle mit
+  eigener Dauer gleich, und ohne Dauer folgen sie dem Kanal. Bricht
+  (noch kein Release): ohne Dauer war es fest 500 ms, jetzt der Kanal
+  (Standard ebenfalls 500 ms Blende). Bei „alle aus“ wartet die
+  Automatik (INP.11) auf die längste Blende.
+- **Auto-Aus** nach `auto_off_ms` (1 ms–1 h): der Service nimmt den Kanal
+  nach der Zeit selbst heraus (`overlay_out` ohne Dauer, also mit dem
+  Kanaleffekt). Jedes Einblenden zählt einen Zähler hoch, der Kanal merkt
+  sich seinen Stand; ist der Kanal bis dahin aus- und wieder eingeblendet
+  (auch mit demselben Input), entfällt das alte Auto-Aus und das neue
+  läuft (`overlay_still_on`, geprüft unter der Sperre des Switchers wie
+  `still_due`). Nur zur Laufzeit: Show öffnen oder Neustart stellen
+  Overlays ohne Auto-Aus wieder her (wie die Automatik keine Player
+  startet). Auto-Aus löst die `overlay_out`-Auslöser des Inputs aus wie
+  ein Druck des Bedieners (Auslöser-Aktionen selbst weiterhin nicht).
+- **Typ**: `rect` leer = Vollbild, sonst Bild im Bild in diesem Rechteck
+  (Bruchteile wie Layout-Boxen). Ohne strom-Änderung möglich: der
+  DSK-Pad auf dem Programm-Compositor (`vm:mixer`, `sink_{Schwarz+1+Ebene}`)
+  bekommt `xpos/ypos/width/height` (Pixel von 1920 × 1080, strom-Standard
+  `pgm_resolution`); strom setzt sie nur beim Aufbau und lässt sie bei
+  Takes, PiP und FTB in Ruhe (nur Alpha). `sizing-policy` steht dort auf
+  `keep-aspect-ratio`: der Input behält sein Seitenverhältnis in der Box.
+  Neuaufbau der Engine und Show öffnen setzen die Plätze aller Kanäle neu
+  (`OverlayPlace` in `restore_commands`).
+- **Offen (Engine)**: Rand um ein BiB-Overlay (die Rahmen der Layouts
+  sind Unterlagen für PiP-Zonen, DSK-Pads haben keine), Schiebe-/
+  Wischeffekte, OVL.4 (vergrößern per Aktion: ginge mit `set_overlay`,
+  aber ohne Bewegung).
+
+**Entscheidung OVL.3**: `overlay_preview {channel, input}` legt einen
+Input auf einen Kanal „für den nächsten Take“ (`null` nimmt ihn weg;
+im Zustand und in der Show-Datei `overlay_preview`, wie die Vorschau
+gespeichert). Er hat Vorschau-Tally (grün), solange er wartet. Der
+nächste Take der Vorschau nimmt ihn mit: Cut, Übergangstaste, T-Bar am
+Ende, Schnellstart der Vorschau, Stinger am Schnittpunkt (hinter dem
+Clip). Er geht mit Effekt und Länge des Takes ein (Schnitt: sofort),
+nicht mit dem Kanaleffekt: er gehört zum Bildwechsel. Danach ist er
+verbraucht. `cut_direct` und Schnellstart eines anderen Inputs sind kein
+Take der Vorschau und nehmen nichts mit. Zeigt der Kanal schon diesen
+Input, passiert nichts; ein anderer wird ersetzt. Ein entfernter Input
+fällt heraus. Auto-Aus (OVL.2) läuft ab dem Take. Beim T-Bar geht das
+Overlay erst am Ende ein, nicht mit dem Ziehen.
+- **Nicht im Vorschau-Bild**: strom zeigt DSK-Ebenen nur auf Programm;
+  das Vorschau-Bild im Multiview kommt direkt vom Input. Ein Overlay auf
+  der Vorschau bräuchte DSK-Pads auf dem Vorschau-Zweig in strom. Darum
+  zeigen Tally, Console und Lampen den vorbereiteten Zustand.
+- OSC `/lmix/overlay/{n}/preview [input]` (ohne Input: wegnehmen). MIDI-
+  Lampe einer `overlay_preview`-Taste: Vorschaufarbe, solange ihr Input
+  dort wartet, Programmfarbe, sobald der Kanal ihn zeigt; `/keys` zeigt
+  Bild und Tally des Inputs.
+
+**Entscheidung LAY.5**: Layout-Vorlagen gehören zu den Einstellungen von
+lmix-core, nicht zur Show: Datei `--layout-templates`
+(`LMIX_LAYOUT_TEMPLATES`, Standard `~/.config/lmix/layout-templates.json`),
+gelesen beim Start, nach jeder Änderung ganz geschrieben, kaputt: als
+`.json.broken` beiseitegelegt, wie die Kurzbefehle für alle Shows (der
+Lese- und Schreibweg ist jetzt für beide derselbe). Export- und
+Settings-Datei haben dieselbe Form (`{"format": "lmix-layouts",
+"version": 1, "templates": […]}`); eine neuere Version wird abgelehnt.
+Höchstens 64 Vorlagen, Name eindeutig (gleicher Name ersetzt).
+- Eine Vorlage hält Plätze, Rahmen, Zuschnitt, Sperre und für jeden
+  Platz den Input als Nummer und Name von damals, keine Ids (die gelten
+  nur in einer Show). Laden (`load_layout_template`) legt ein neues
+  Layout an: zuerst der Input gleichen Namens, sonst der an der Nummer,
+  wenn kein anderer Platz ihn hat, sonst der nächste übrige Input mit
+  Bild; reicht das nicht, Fehler. So passt eine Vorlage in eine Show mit
+  anderen Inputs, ohne Dialog.
+- Aktionen `save_layout_template {layout, name?}`,
+  `load_layout_template {template, name?}`, `remove_layout_template`,
+  `export_layout_templates {path, templates}` (leer: alle),
+  `import_layout_templates {path}`; `layout_templates` im Zustand.
+  Testskripte und Demo geben eine eigene Datei im Arbeitsordner an.
+
+**Console**: Rechtsklick auf einen Overlay-Kanal unter den Übergängen:
+„Einstellungen…“ (Effekt, Dauer, Automatisch aus, Bild im Bild mit Platz
+in Prozent oder Vorgabe), „Nicht mit dem nächsten Take“. Rechtsklick auf
+eine Overlay-Taste einer Kachel bereitet den Input dort vor (noch einmal:
+nicht mehr); Taste „1→“, Kachel „bereit OVL 1“ in Vorschaufarbe, Kanal
+„→ 3“ mit Vorschau-Betonung. Layout-Leiste: „Als Vorlage speichern“ im
+Layout-Menü, „Vorlagen“ (neues Layout aus, entfernen, Import, Export).
+Vorlage „Overlay 1 mit dem nächsten Take“ für Kurzbefehle, Auslöser und
+Cues; eine Overlay-Vorlage ohne Dauer folgt dem Kanal.
+**Geprüft**: Switcher-Tests (Kanaleffekt und eigene Dauer, Platz, Fehler,
+Auto-Aus fällig je Einblenden, Overlay mit Übergang, T-Bar und Cut,
+verbraucht, entfernter Input, Vorlagen speichern/laden nach Name und
+Nummer), Service-Tests (Auto-Aus nach der Zeit, nicht nach Aus und
+wieder Ein; Vorlagen-Datei, Export, Import, kaputte Datei), Lampen-Test,
+OSC-Zuordnung, `test-headless.sh` (OSC: vorbereitet, Take, Auto-Aus;
+Vorlage in eigener Datei), `test-web.sh`, Console auf Xvfb mit
+Null-Engine (Dialog setzt den Zustand, Kachel-Rechtsklick, Cut nimmt das
+Overlay mit, Vorlage laden, keine QML-Warnungen), `test-m2b-vm.sh`
+(strom, CPU-Mischer: vorbereitetes Overlay mit Vorschau-Tally, mit dem Cut
+im oberen rechten Viertel auf Programm, nach 6 s von selbst aus).
+**Offen**: siehe oben (Rand, Effekte außer Blende, Overlay im
+Vorschau-Bild: strom); BiB-Overlays auf CUDA/GL nicht geprüft (H.29).
