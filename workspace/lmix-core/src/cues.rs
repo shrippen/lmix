@@ -431,8 +431,9 @@ impl Runner {
     }
 
     /// After a list changed: standby at most one past its end; runs of
-    /// cues that are gone are dropped.
-    pub fn list_changed(&mut self, lists: &[ShowCueList]) {
+    /// cues that are gone are dropped, and a group left without a running
+    /// child ends at `now` (its follow goes on).
+    pub fn list_changed(&mut self, lists: &[ShowCueList], now: Instant) {
         for entry in lists {
             if let Some(standby) = self.standby.get_mut(&entry.id) {
                 *standby = (*standby).min(entry.cues.len());
@@ -446,6 +447,15 @@ impl Runner {
         });
         self.standby
             .retain(|id, _| lists.iter().any(|l| l.id == *id));
+        let groups: Vec<u64> = self
+            .runs
+            .iter()
+            .filter(|r| r.fired && !r.ended && r.end_at.is_none())
+            .map(|r| r.id)
+            .collect();
+        for group in groups {
+            self.parent_check(Some(group), now);
+        }
     }
 
     /// How late the steps ran so far.
@@ -1283,9 +1293,36 @@ mod tests {
 
         let old = std::mem::replace(&mut lists[0].cues, vec![cut("New"), a, b]);
         runner.keep_standby(&lists[0], &old);
-        runner.list_changed(&lists);
+        runner.list_changed(&lists, Instant::now());
 
         assert_eq!(runner.standby(lists[0].id), 2, "still on B");
+    }
+
+    #[test]
+    fn a_group_ends_when_its_running_child_is_edited_away() {
+        let child = wait("Rain", 60_000);
+        let group = Cue {
+            name: "Storm".into(),
+            follow: Follow::AfterEnd,
+            children: vec![child],
+            ..Cue::empty(CueKind::Group)
+        };
+        let mut lists = vec![list(vec![group, cut("After")])];
+        let mut runner = Runner::default();
+        let t = Instant::now();
+        runner.go(&lists, 0, t, 0).unwrap();
+
+        // A reload takes the child out while it runs.
+        lists[0].cues[0].children = vec![cut("Flash")];
+        runner.list_changed(&lists, after(t, 5));
+        let out = runner.tick(&lists, after(t, 10));
+
+        assert_eq!(
+            fired(&lists, &out),
+            ["After"],
+            "the group ended and followed"
+        );
+        assert!(runner.running(&lists, after(t, 10)).is_empty());
     }
 
     #[test]
@@ -1299,7 +1336,7 @@ mod tests {
         runner.go(&lists, 0, t, 0).unwrap();
 
         lists[0].cues.truncate(1);
-        runner.list_changed(&lists);
+        runner.list_changed(&lists, Instant::now());
 
         assert_eq!(runner.standby(lists[0].id), 1);
         assert!(

@@ -898,14 +898,16 @@ impl Switcher {
                 // when it is still there, IMP.5) and running cues.
                 let entry = &self.show.cue_lists[index];
                 self.cues.keep_standby(entry, &old);
-                self.cues.list_changed(&self.show.cue_lists);
+                self.cues
+                    .list_changed(&self.show.cue_lists, tokio::time::Instant::now());
                 self.sync_standby();
                 Ok(Vec::new())
             }
             Action::RemoveCueList { list } => {
                 let index = self.find_cue_list(&list)?;
                 self.show.cue_lists.remove(index);
-                self.cues.list_changed(&self.show.cue_lists);
+                self.cues
+                    .list_changed(&self.show.cue_lists, tokio::time::Instant::now());
                 Ok(Vec::new())
             }
             Action::CueStandby { list, to } => {

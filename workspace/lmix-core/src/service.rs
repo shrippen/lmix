@@ -1486,6 +1486,12 @@ impl Service {
             sw.check_unlocked()?;
         }
 
+        // A changed cue list may end a running group at once: the cue
+        // timer has to look again.
+        let cue_lists = matches!(
+            action,
+            Action::SetCueList { .. } | Action::RemoveCueList { .. }
+        );
         let commands = match action {
             Action::NewShow => sw.replace(Show::default(), None),
             Action::OpenShow { path } => open(&mut sw, path).await?,
@@ -1557,6 +1563,9 @@ impl Service {
             other => sw.apply(other)?,
         };
         sw.refresh_warnings();
+        if cue_lists {
+            self.cue_wake.notify_one();
+        }
         if let (true, Some(path)) = (file_action, sw.path().map(str::to_string)) {
             self.recent.lock().await.touch(&path).await;
         }
