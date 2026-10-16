@@ -33,8 +33,9 @@ on:
       - .github/workflows/ci.yml
   workflow_dispatch:
 
-# No workflow concurrency group: every commit runs to the end and keeps
-# its own status, a newer push does not cancel an older run.
+# No concurrency groups: every commit runs to the end and keeps its own
+# status. Each job gets its own VM, so a strom build no longer starves a
+# VM check of CPU as on the single Gitea runner.
 
 permissions:
   contents: read
@@ -47,12 +48,6 @@ env:
 
 jobs:
   strom:
-    # One strom build or VM check at a time across all branches (vm-check
-    # below, same group). Not cancelled: a run of another branch is not
-    # outdated by this one.
-    concurrency:
-      group: vm-check
-      cancel-in-progress: false
     timeout-minutes: 120
     runs-on: ubuntu-latest
     container: ubuntu:24.04
@@ -142,10 +137,6 @@ jobs:
 
   vm-check:
     needs: strom
-    # See strom above: a build next to a VM check starves the CPU mixer.
-    concurrency:
-      group: vm-check
-      cancel-in-progress: false
     timeout-minutes: 120
     runs-on: ubuntu-latest
     container: ubuntu:24.04
