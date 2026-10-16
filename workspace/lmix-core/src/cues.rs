@@ -76,6 +76,19 @@ impl Run {
     }
 }
 
+/// How late cue steps ran against their due time (RUN.8, SNF.4), for
+/// `/metrics`.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Lateness {
+    pub steps: u64,
+    pub max: Duration,
+    /// Steps later than [`LATE_BUDGET`].
+    pub over_budget: u64,
+}
+
+/// What RUN.8 allows a wait or follow to be off.
+pub const LATE_BUDGET: Duration = Duration::from_millis(10);
+
 /// A due step of a run.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 enum Step {
@@ -94,6 +107,7 @@ pub struct Runner {
     next_id: u64,
     /// A panic runs until then; another panic before is a hard stop.
     panic_until: Option<Instant>,
+    late: Lateness,
 }
 
 fn bad(reason: impl Into<String>) -> ActionError {
@@ -434,6 +448,11 @@ impl Runner {
             .retain(|id, _| lists.iter().any(|l| l.id == *id));
     }
 
+    /// How late the steps ran so far.
+    pub fn lateness(&self) -> Lateness {
+        self.late
+    }
+
     /// The next time [`Runner::tick`] has something to do.
     pub fn deadline(&self) -> Option<Instant> {
         self.runs
@@ -471,6 +490,12 @@ impl Runner {
             let Some((t, step, id)) = next else {
                 break;
             };
+            let late = now.saturating_duration_since(t);
+            self.late.steps += 1;
+            self.late.max = self.late.max.max(late);
+            if late > LATE_BUDGET {
+                self.late.over_budget += 1;
+            }
             match step {
                 Step::Fire => self.fire(lists, id, t, &mut out),
                 Step::Follow => self.follow(lists, id, t, &mut out),
@@ -940,6 +965,10 @@ mod tests {
         assert_eq!(runner.deadline(), None);
         // The end cue is due at exactly 2 s; this tick came 7 ms after.
         assert_eq!(end, Some(after(t, 2007)));
+        let late = runner.lateness();
+        assert_eq!(late.max, Duration::from_millis(7));
+        assert_eq!(late.over_budget, 0);
+        assert!(late.steps > 200, "fire and end of each wait");
     }
 
     #[test]

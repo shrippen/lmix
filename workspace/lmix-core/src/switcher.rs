@@ -2086,6 +2086,11 @@ impl Switcher {
         moved
     }
 
+    /// How late cue steps ran (RUN.8).
+    pub fn cue_lateness(&self) -> crate::cues::Lateness {
+        self.cues.lateness()
+    }
+
     /// When the cue lists have something due next.
     pub fn cue_deadline(&self) -> Option<tokio::time::Instant> {
         self.cues.deadline()

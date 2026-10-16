@@ -148,6 +148,7 @@ metrics="$(curl -sf "$CORE/metrics")"
 grep -q '^lmix_input_tally{input="2",name="Ball"} 1$' <<<"$metrics" || fail "metrics: tally of Ball"
 grep -q '^lmix_uptime_seconds [0-9]' <<<"$metrics" || fail "metrics: uptime"
 grep -q '^# TYPE lmix_input_online gauge$' <<<"$metrics" || fail "metrics: input health"
+grep -q '^# TYPE lmix_cue_late_over_budget_total counter$' <<<"$metrics" || fail "metrics: cue timing"
 pass "metrics: Prometheus text with inputs and tally"
 
 # OVL.8 over OSC: all overlays off, the last input of a channel again.

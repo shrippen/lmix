@@ -465,6 +465,11 @@ impl Service {
         }
     }
 
+    /// How late cue steps ran (RUN.8).
+    pub async fn cue_lateness(&self) -> crate::cues::Lateness {
+        self.switcher.lock().await.cue_lateness()
+    }
+
     /// Running cues as an event and the fixed OSC subscribers (CTL.2,
     /// CTL.4), `hz` times a second while there is something to say.
     pub async fn watch_feeds(self: Arc<Self>, hz: u32) {
