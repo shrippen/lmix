@@ -399,6 +399,19 @@ Stand (2026-10-12, ohne GPU; DECISIONS „M9 Anfang“):
 Zurückgestellt (User 2026-10-08): RPL.1–10, SRC.19–20, CAL.1–6, SRC.24.
 Ersetzt M4.5 und den Gäste-Punkt in M6.
 
+### Show-Modus (S1–S3)
+
+Zweiter Bedienmodus über demselben `lmix-core`, Anforderungen und
+Abnahmen in `LASTENHEFT-SHOW.md` §7. Eigene Zählung S1–S3, unabhängig von
+M1–M9. S-E.1–12 entschieden (User 2026-10-16) bis auf S-E.3, das vor S1
+Stufe 2 mit Messungen erneut vorgelegt wird.
+
+| Meilenstein | Inhalt | Voraussetzung aus `LASTENHEFT.md` |
+|---|---|---|
+| S1 Spieltisch | Cue-Modell und Ablauf in `lmix-core`, Zonen, Klang- und Bild-Cues, mehrere Bühnen, HTTP-Ziele (Licht über Home Assistant), Panik, Drehbuch-Import, Show-Ansicht | OUT.3, AUD.14, API.5, API.7 |
+| S2 Theater-Grundstand | Bearbeiten in der Oberfläche, erweiterte Gruppen und Fades, Effekt-Plugins, OSC-Cue, Variablen, Companion-Modul | GFX.2 (HTML-Ebene) |
+| S3 Erweiterungen | Eigenes Licht (Art-Net/sACN), Objekt-Audio, Timecode rein/raus | PER.9 |
+
 ---
 
 ## 3b. Lösungsansätze (angenommen 2026-10-08)

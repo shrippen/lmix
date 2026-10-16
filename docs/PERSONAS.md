@@ -9,6 +9,7 @@ Bewertung je Schritt: ✅ abgedeckt · ⚠ abgedeckt, aber Lücke oder Hürde ·
 ✗ fehlt · ⏸ bewusst später (Priorität L).
 
 Erster Durchlauf: 2026-10-08, gegen das Lastenheft. Befunde → §8.
+P8–P10 gehören zum Show-Modus (`LASTENHEFT-SHOW.md`).
 
 ---
 
@@ -178,6 +179,88 @@ Lichtpult sendet OSC/MIDI. Ziel: Szenenwechsel exakt auf Zuruf.
 
 **Befunde**: B20 Cue-Liste mit Aktionen je Zeile, B21 Ausgangs-Warping (Kann),
 B18 OSC.
+
+---
+
+## Show-Modus (P8–P10)
+
+Personas für `LASTENHEFT-SHOW.md` (§9 dort). Statt einer Bewertung steht
+je Schritt der Show-Meilenstein (S1–S3), der ihn abdeckt; Bewertungen
+folgen mit dem ersten Durchlauf.
+
+---
+
+## P8 Spielleitung am Spieltisch
+
+**Steckbrief**: Alex, 38, leitet eine Pen-&-Paper-Kampagne für eine
+Spielerin in einem eingerichteten Spielraum. Technik: Projektor hinter der
+Spielleitung, Lautsprecher vorn und einer hinter der Spielerin, Home
+Assistant für Licht, Duft und Wärme, Stream Deck mit Companion. Drehbuch und
+Notizen in Obsidian. Technisch versiert, aber wenig Zeit.
+**Erfolg**: Während des Spiels nie auf einen Bildschirm schauen müssen; ein
+Szenenwechsel ist ein Tastendruck; das Drehbuch ist die einzige Stelle, an
+der vorbereitet wird; ein Notfall-Taster stellt den Raum sofort auf normal.
+
+| # | Schritt | Anforderung | MS |
+|---|---|---|---|
+| 1 | Cues für eine Session im Drehbuch neben den Szenentext schreiben | IMP.1–3, IMP.8 | S1 |
+| 2 | Drehbuch importieren, Fehler direkt mit Zeile sehen | IMP.4, IMP.6, SUI.5 | S1 |
+| 3 | Szenenwechsel: Licht, Kulisse, Atmo, Musik als eine Gruppe mit Zeiten; alte Szene blendet von selbst aus | CUE.2–4, CUE.11, VIS.2–4, SND.1–8, EXT.4 | S1 |
+| 4 | Eine Stimme kommt nur von hinten | SND.5, SND.10, SND.15 | S1 |
+| 5 | Kulisse dunkler stellen, ohne Bild zu wechseln | VIS.7 | S1 |
+| 6 | Regieanweisung („Maske ab“) beim Standby groß lesen | CUE.8, SUI.3 | S1 |
+| 7 | GO, Standby und Restzeit auf dem Stream Deck | CTL.1–4 | S1 |
+| 8 | Spielerin geht woanders hin: Sprung zur passenden Szene | RUN.2 | S1 |
+| 9 | Kurz vor dem Spiel einen Cue im Drehbuch ändern, neu laden | IMP.5 | S1 |
+| 10 | Notfall: Taster an der Wand, Raum sofort hell und still | SAF.1–5, SAF.7, CTL.5 | S1 |
+| 11 | Spontaner Effekt (Donner, Glocke) ohne den Ablauf zu stören | RUN.12 | S2 |
+| 12 | Effektstärke auf der Bühne folgt einem Spielwert | VAR.1, VIS.12 | S2 |
+| 13 | Eine Stimme kommt langsam von hinten näher | OBJ.3–5 | S3 |
+
+---
+
+## P9 Tondesign an einer freien Bühne
+
+**Steckbrief**: Sam, 29, Ton und Zuspiel an einem kleinen Theater, bisher
+mit einem Mac-Showprogramm. Technik: Linux-Rechner, Audio-Interface mit 8
+Ausgängen, 4 Lautsprecherpositionen, Projektor für Hintergründe, Lichtpult
+mit OSC.
+**Erfolg**: Vorstellung mit über 100 Cues fehlerfrei fahren; Proben-
+änderungen in Minuten einpflegen; keine Aussetzer.
+
+| # | Schritt | Anforderung | MS |
+|---|---|---|---|
+| 1 | Cues in der Oberfläche anlegen, umsortieren, umnummerieren | SUI.10 | S2 |
+| 2 | Vier Lautsprecherpositionen als Zonen | SND.10 | S1 |
+| 3 | Musik mit S-Kurve ausblenden, Ziel danach stoppen | SND.6, SND.8 | S1 |
+| 4 | Lichtpult per OSC mitstarten | EXT.6 | S2 |
+| 5 | Probe ohne Lichtpult (Ausgänge sperren) | RUN.9 | S2 |
+| 6 | Einen Cue vorhören, ohne die Show zu bewegen | RUN.10 | S2 |
+| 7 | Mitten im Stück anfangen, Atmo des Akts soll laufen | RUN.13, RUN.14 | S3 |
+| 8 | Panik bei Zwischenfall im Saal | SAF.1 | S1 |
+| 9 | Hall auf einem Zuspieler, Hallanteil per Fade | FX.1, FX.3 | S2 |
+| 10 | Licht direkt über Art-Net statt Lichtpult | LGT.1, LGT.7, LGT.9 | S3 |
+| 11 | Tanzszene läuft auf Timecode der Band | TC.1–4 | S3 |
+
+---
+
+## P10 Ausstellungs- und Erlebnistechnik
+
+**Steckbrief**: Robin, 45, betreut Räume in einem Museum und einem
+Escape-Room. Abläufe laufen unbeaufsichtigt in Schleife oder starten auf
+Sensoren (über Home Assistant).
+**Erfolg**: Wochenlanger Betrieb ohne Eingriff; Auslösung von außen; nach
+Stromausfall sicherer Zustand.
+
+| # | Schritt | Anforderung | MS |
+|---|---|---|---|
+| 1 | Home Assistant startet eine Cue-Liste per HTTP mit Schlüssel | CTL.1, CTL.5 | S1 |
+| 2 | Ablauf mit Folgen läuft ohne Bedienung bis zum Ende | CUE.3, RUN.8 | S1 |
+| 3 | Licht und Türen per HTTP aus dem Ablauf | EXT.1–4 | S1 |
+| 4 | Nach Neustart nichts starten, bis ausgelöst wird | SAF.6 | S1 |
+| 5 | Museum: beim Laden startet die Schleife von selbst | CTL.13 | S2 |
+| 6 | Zufällige Geräuschkulisse ohne Wiederholung | CUE.6 | S3 |
+| 7 | Dauerbetrieb über Wochen | SNF.3 (verlängert) | S2 |
 
 ---
 

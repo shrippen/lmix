@@ -38,6 +38,9 @@ KanteHeatmap 1.0 KanteHeatmap.qml
 KanteHintCard 1.0 KanteHintCard.qml
 KanteHud 1.0 KanteHud.qml
 KanteInfoTip 1.0 KanteInfoTip.qml
+KanteKeyLane 1.0 KanteKeyLane.qml
+KanteKeyLayout 1.0 KanteKeyLayout.qml
+KanteKeyboard 1.0 KanteKeyboard.qml
 KanteKpi 1.0 KanteKpi.qml
 KanteLamp 1.0 KanteLamp.qml
 KanteLevelMeter 1.0 KanteLevelMeter.qml
@@ -83,6 +86,7 @@ KanteTabLane 1.0 KanteTabLane.qml
 KanteTabStaff 1.0 KanteTabStaff.qml
 KanteTagPicker 1.0 KanteTagPicker.qml
 KanteTalkButton 1.0 KanteTalkButton.qml
+KanteTechniqueMark 1.0 KanteTechniqueMark.qml
 KanteTextField 1.0 KanteTextField.qml
 KanteTick 1.0 KanteTick.qml
 KanteTile 1.0 KanteTile.qml
