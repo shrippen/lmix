@@ -21,7 +21,8 @@ use std::time::Duration;
 use tokio::time::Instant;
 
 use lmix_types::cue::{
-    Cue, CueEvent, CueId, CueKind, Follow, GroupMode, RunPhase, RunningCue, StandbyMove, StopScope,
+    Cue, CueEvent, CueId, CueKind, Follow, GroupMode, RunPhase, RunningCue, StandbyMove, StopMode,
+    StopScope,
 };
 use lmix_types::{Action, ActionError, InputId, InputRef};
 
@@ -42,6 +43,8 @@ pub enum Out {
         cue: Option<CueId>,
         what: CueEvent,
     },
+    /// A panic (`Fade`) or hard stop (`Hard`) happened.
+    Panic { mode: StopMode },
 }
 
 /// One started cue.
@@ -89,6 +92,8 @@ pub struct Runner {
     runs: Vec<Run>,
     last_go: Option<Instant>,
     next_id: u64,
+    /// A panic runs until then; another panic before is a hard stop.
+    panic_until: Option<Instant>,
 }
 
 fn bad(reason: impl Into<String>) -> ActionError {
@@ -327,7 +332,76 @@ impl Runner {
         self.runs.clear();
         self.standby.clear();
         self.last_go = None;
+        self.panic_until = None;
         out
+    }
+
+    /// Panic (SAF.1): every cue of every list stops, waits and follows
+    /// with them; standby stays. A second panic within `panic_ms` is a
+    /// hard stop. Then the emergency list's cues all start (SAF.4).
+    /// Nothing fades yet (sound and pictures come with step 2), so both
+    /// stop at once.
+    pub fn panic(
+        &mut self,
+        lists: &[ShowCueList],
+        emergency: Option<usize>,
+        now: Instant,
+        panic_ms: u32,
+    ) -> Vec<Out> {
+        let again = self.panic_until.is_some_and(|until| now < until);
+        if again {
+            return self.hard_stop(lists, emergency, now);
+        }
+        self.panic_until = Some(now + ms(panic_ms));
+        self.stop_everything(lists, emergency, now, StopMode::Fade)
+    }
+
+    /// Hard stop (SAF.3): everything at once; the emergency list runs.
+    pub fn hard_stop(
+        &mut self,
+        lists: &[ShowCueList],
+        emergency: Option<usize>,
+        now: Instant,
+    ) -> Vec<Out> {
+        self.panic_until = None;
+        self.stop_everything(lists, emergency, now, StopMode::Hard)
+    }
+
+    fn stop_everything(
+        &mut self,
+        lists: &[ShowCueList],
+        emergency: Option<usize>,
+        now: Instant,
+        mode: StopMode,
+    ) -> Vec<Out> {
+        let all: Vec<u64> = self.runs.iter().map(|r| r.id).collect();
+        let mut out = vec![Out::Panic { mode }];
+        self.stop_runs(&all, now, &mut out);
+        if let Some(list) = emergency.and_then(|l| lists.get(l)) {
+            for cue in &list.cues {
+                self.spawn(list.id, cue, None, now, Follow::None, &mut out);
+            }
+        }
+        out.extend(self.tick(lists, now));
+        out
+    }
+
+    /// Standby of every list from the cue ids the show kept (SAF.6); a
+    /// list without one starts at the top.
+    pub fn restore_standby(&mut self, lists: &[ShowCueList]) {
+        for list in lists {
+            let at = list
+                .standby
+                .and_then(|id| list.cues.iter().position(|c| c.id == id));
+            if let Some(at) = at {
+                self.standby.insert(list.id, at);
+            }
+        }
+    }
+
+    /// The cue standby is on, `None` past the end.
+    pub fn standby_cue(&self, list: &ShowCueList) -> Option<CueId> {
+        list.cues.get(self.standby(list.id)).map(|c| c.id)
     }
 
     /// `list` got new cues instead of `old`: standby stays on the cue it
@@ -727,6 +801,7 @@ mod tests {
             name: "Main".into(),
             cues,
             source: None,
+            standby: None,
         }
     }
 
@@ -738,7 +813,7 @@ mod tests {
                     let l = lists.iter().position(|e| e.id == *list)?;
                     Runner::cue(lists, l, *cue).map(|c| c.name.clone())
                 }
-                Out::Event { .. } => None,
+                Out::Event { .. } | Out::Panic { .. } => None,
             })
             .collect()
     }
@@ -747,7 +822,7 @@ mod tests {
         out.iter()
             .filter_map(|o| match o {
                 Out::Event { what, .. } => Some(what.clone()),
-                Out::Actions { .. } => None,
+                Out::Actions { .. } | Out::Panic { .. } => None,
             })
             .collect()
     }
@@ -1067,6 +1142,77 @@ mod tests {
         assert_eq!(events(&out), [CueEvent::Stopped]);
         assert_eq!(runner.standby(lists[0].id), 0);
         assert_eq!(runner.deadline(), None);
+    }
+
+    #[test]
+    fn panic_stops_all_and_runs_the_emergency_list() {
+        let mut later = cut("Later");
+        later.pre_wait_ms = 2000;
+        let lists = vec![
+            list(vec![wait("Atmo", 60_000), later, cut("Next")]),
+            list(vec![cut("Room light"), cut("Doors")]),
+        ];
+        let mut runner = Runner::default();
+        let t = Instant::now();
+        runner.go(&lists, 0, t, 0).unwrap();
+        runner
+            .start(&lists, Some(0), &lists[0].cues[1].id.to_string(), t)
+            .unwrap();
+
+        let out = runner.panic(&lists, Some(1), after(t, 100), 1000);
+
+        assert_eq!(
+            out[0],
+            Out::Panic {
+                mode: StopMode::Fade
+            }
+        );
+        assert_eq!(
+            fired(&lists, &out),
+            ["Room light", "Doors"],
+            "the whole emergency list"
+        );
+        assert!(runner.running(&lists, after(t, 100)).is_empty());
+        assert!(
+            fired(&lists, &runner.tick(&lists, after(t, 2500))).is_empty(),
+            "the pre wait is gone"
+        );
+        assert_eq!(runner.standby(lists[0].id), 1, "standby stays");
+
+        // Again within the panic time: hard stop; after it: a panic again.
+        let out = runner.panic(&lists, None, after(t, 600), 1000);
+        assert_eq!(
+            out[0],
+            Out::Panic {
+                mode: StopMode::Hard
+            }
+        );
+        let out = runner.panic(&lists, None, after(t, 900), 1000);
+        assert_eq!(
+            out[0],
+            Out::Panic {
+                mode: StopMode::Fade
+            }
+        );
+    }
+
+    #[test]
+    fn standby_comes_back_from_the_show() {
+        let mut lists = vec![list(vec![cut("A"), cut("B"), cut("C")])];
+        let mut runner = Runner::default();
+        runner
+            .move_standby(&lists, 0, &StandbyMove::Index(3))
+            .unwrap();
+        lists[0].standby = runner.standby_cue(&lists[0]);
+
+        let mut after_restart = Runner::default();
+        after_restart.restore_standby(&lists);
+
+        assert_eq!(after_restart.standby(lists[0].id), 2);
+        assert!(
+            after_restart.running(&lists, Instant::now()).is_empty(),
+            "nothing starts"
+        );
     }
 
     #[test]

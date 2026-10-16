@@ -243,6 +243,10 @@ pub const ACTION_GROUPS: &[(&str, &[&str])] = &[
             "cue_reset",
             "set_active_cue_list",
             "set_go_guard",
+            "cue_panic",
+            "cue_hard_stop",
+            "set_panic_time",
+            "set_emergency_list",
             "add_shortcut",
             "set_shortcut",
             "remove_shortcut",
@@ -570,6 +574,22 @@ pub enum Action {
     /// Shortest gap between two GOs, 0–5000 ms (RUN.6).
     SetGoGuard {
         ms: u32,
+    },
+    /// Stop every cue of every list over the panic time; a second panic
+    /// within it is a hard stop. Standby stays; the emergency list runs
+    /// (SAF.1, SAF.4).
+    CuePanic,
+    /// Stop every cue at once; the emergency list runs (SAF.3).
+    CueHardStop,
+    /// Panic time of the show, 0–10 000 ms (SAF.2).
+    SetPanicTime {
+        ms: u32,
+    },
+    /// The list that runs with every panic and hard stop; `null` for none
+    /// (SAF.4).
+    SetEmergencyList {
+        #[serde(default)]
+        list: Option<InputRef>,
     },
 
     // ---- Output targets (show mode EXT) ----

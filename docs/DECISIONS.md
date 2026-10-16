@@ -2466,3 +2466,31 @@ einen lokalen Server, Reserve-Adresse, 401 als Fehler), ein Dienst-Test
 (Cue → Home Assistant, Ereignis, Dateirechte, kein Geheimnis im Zustand).
 **Offen**: OSC senden (EXT.6, S2), Ziele ex- und importieren mit der Show
 (SSH.5), Platzhalter (EXT.7, S2).
+
+## 2026-10-16 — Panik, harter Stopp, Notfall-Liste (S1 Stufe 5, SAF)
+
+**Entscheidungen**:
+- **Panik hält jetzt sofort an**: Es gibt noch keine Klänge und Bilder zum
+  Ausblenden (Stufe 2/3). Die Panikzeit (`set_panic_time`, Standard 1 s,
+  0–10 s) zählt trotzdem schon: eine zweite Panik darin ist ein harter
+  Stopp (SAF.1), danach ist die nächste wieder eine Panik.
+- **Notfall-Liste startet ganz**: bei Panik und hartem Stopp starten alle
+  Cues der Liste zugleich, wie eine Zeitleiste (Folgen gelten nicht).
+  Wer eine Reihenfolge braucht, setzt Vorwartezeiten. Verworfen: nur den
+  ersten Cue starten (eine vergessene Folge ließe das Raumlicht aus).
+- **Standby steht in der Show** (`standby` als Cue-Id je Liste) und wird
+  bei jeder Bewegung mit der Show gesichert: nach einem Absturz oder
+  Neustart startet nichts, Standby steht, wo er war (SAF.6). Auch eine
+  gespeicherte Show öffnet mit ihrem Standby (wie beim Vorbild). Am Ende
+  einer Liste wird nichts gespeichert, sie beginnt dann oben.
+- **Jeder Weg**: Aktionen `cue_panic`, `cue_hard_stop`; OSC `/lmix/panic`,
+  `/lmix/stop/hard`; Kurzbefehle tragen sie auf Taste, globale Taste und
+  MIDI (SAF.5). Ereignis `panic` (`fade` oder `hard`), per TCP `PANIC`
+  im Thema `CUE`. Cues dürfen keine Panik auslösen (keine Schleifen).
+
+**Geprüft**: Runner-Tests (alle Cues und Vorwartezeiten weg, Notfall-Liste
+ganz, zweite Panik hart, danach wieder Panik; Standby aus der Show), ein
+Dienst-Test (Panik über den Dienst, Notfall-Cue schneidet, Ereignis;
+neuer Dienst über dieselbe Sicherung: Standby gleich, nichts läuft), OSC.
+**Offen**: Ausblenden und SAF.7 mit Stufe 2, Panik ohne Schlüssel (CTL.5),
+Escape als Panik in der Show-Ansicht (CTL.6, SUI).

@@ -234,7 +234,7 @@ QLab kennt keinen Import aus Texten; am nächsten kommt das Anlegen von Cues
 
 | ID | Anforderung | Prio | MS | Stand |
 |---|---|---|---|---|
-| CTL.1 | Befehle: GO, Standby (CUE.1 / RUN.2), Liste wählen und starten, Stopp, harter Stopp, Panik, Panik in Zeit x, Pause/Fortsetzen, Zurücksetzen. Über Tasten, MIDI, OSC über UDP und TCP (SLIP), HTTP; Ports einstellbar. Cues adressierbar über Nummer, feste ID, `standby`, `aktiv` | M | S1 | ◐ (GO/zurück/Sprung, AUT.13, AUT.14) |
+| CTL.1 | Befehle: GO, Standby (CUE.1 / RUN.2), Liste wählen und starten, Stopp, harter Stopp, Panik, Panik in Zeit x, Pause/Fortsetzen, Zurücksetzen. Über Tasten, MIDI, OSC über UDP und TCP (SLIP), HTTP; Ports einstellbar. Cues adressierbar über Nummer, feste ID, `standby`, `aktiv` | M | S1 | ◐ (GO, Standby, Liste wählen, Stopp, harter Stopp, Panik, Zurücksetzen; Pause S2; Panik in Zeit x fehlt) |
 | CTL.2 | Ereignis-Abo für den Ablauf: Standby (Nummer, Name, Notiz) je Liste, Cue gestartet/gestoppt, laufende Cues mit abgelaufener Zeit und Dauer, Panik, verworfenes GO, Fehler von Ausgabezielen. Restzeit fertig gerechnet (lmix), Takt begrenzt (Standard 4 Hz, einstellbar) | M | S1 | – (API.5) |
 | CTL.3 | Abo verwalten: an- und abmelden je Ereignis und Feld; Ablauf nach 60 s ohne Lebenszeichen | M | S1 | ◐ (AUT.13) |
 | CTL.4 | Feste OSC-Abonnenten in den Einstellungen (Host:Port, Ereignisauswahl, Nachrichtenvorlage mit Platzhaltern für Nummer, Name, Restzeit): Companion-Tasten ohne eigenes Modul und ohne Anmeldung | M | S1 | – |
@@ -252,12 +252,12 @@ QLab kennt keinen Import aus Texten; am nächsten kommt das Anlegen von Cues
 
 | ID | Anforderung | Prio | MS | Stand |
 |---|---|---|---|---|
-| SAF.1 | Panik: alle Klänge und Bild-Cues über die Panikdauer ausblenden und stoppen, alle Wartezeiten und Folgen abbrechen, über alle Listen; Standby bleibt; zweite Panik während der Ausblendung = harter Stopp | M | S1 | – |
-| SAF.2 | Panikdauer als Show-Einstellung, 0–10 s, Standard 1 s | M | S1 | – |
-| SAF.3 | Harter Stopp als eigener Befehl: sofort still, Bühne schwarz | M | S1 | – |
-| SAF.4 | Notfall-Liste: läuft bei Panik und hartem Stopp zusätzlich (z. B. HTTP: Raumlicht hell) (lmix) | M | S1 | – |
-| SAF.5 | Panik und harter Stopp über jeden Bedienweg erreichbar, auch ohne Console (OSC, HTTP, MIDI, globale Taste) | M | S1 | – |
-| SAF.6 | Nach Neustart von `lmix-core` oder Engine startet nichts von selbst: Stille, Bühne schwarz, Standbys auf dem letzten Stand (lmix; Ausnahme CTL.13) | M | S1 | – |
+| SAF.1 | Panik: alle Klänge und Bild-Cues über die Panikdauer ausblenden und stoppen, alle Wartezeiten und Folgen abbrechen, über alle Listen; Standby bleibt; zweite Panik während der Ausblendung = harter Stopp | M | S1 | ◐ (alle Cues und Wartezeiten aus, Standby bleibt, zweite Panik = harter Stopp; Ausblenden mit Stufe 2) |
+| SAF.2 | Panikdauer als Show-Einstellung, 0–10 s, Standard 1 s | M | S1 | ✅ (`set_panic_time`) |
+| SAF.3 | Harter Stopp als eigener Befehl: sofort still, Bühne schwarz | M | S1 | ◐ (`cue_hard_stop`; still und schwarz mit Zonen und Bühnen) |
+| SAF.4 | Notfall-Liste: läuft bei Panik und hartem Stopp zusätzlich (z. B. HTTP: Raumlicht hell) (lmix) | M | S1 | ✅ (`set_emergency_list`) |
+| SAF.5 | Panik und harter Stopp über jeden Bedienweg erreichbar, auch ohne Console (OSC, HTTP, MIDI, globale Taste) | M | S1 | ✅ (OSC `/lmix/panic`, `/lmix/stop/hard`, HTTP, MIDI und globale Taste über Kurzbefehle) |
+| SAF.6 | Nach Neustart von `lmix-core` oder Engine startet nichts von selbst: Stille, Bühne schwarz, Standbys auf dem letzten Stand (lmix; Ausnahme CTL.13) | M | S1 | ◐ (nichts startet, Standby aus der Sicherung; Stille und Schwarz mit Stufe 2/3) |
 | SAF.7 | Zeit von Panik bis Stille ≤ Panikdauer + 100 ms | M | S1 | – |
 | SAF.8 | Show-Sperre: Bearbeiten gesperrt, GO und Panik frei; Rückfrage beim Beenden; Bildschirmschoner und Ruhezustand unterdrückt | S | S2 | – |
 

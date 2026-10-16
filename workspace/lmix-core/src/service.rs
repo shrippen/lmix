@@ -452,6 +452,10 @@ impl Service {
             let out = {
                 let mut sw = self.switcher.lock().await;
                 let out = sw.cue_tick(tokio::time::Instant::now());
+                // A start cue may move another list's standby.
+                if sw.sync_standby() {
+                    self.write_autosave(&sw).await;
+                }
                 if !out.is_empty() {
                     self.publish(&sw);
                 }
@@ -468,6 +472,10 @@ impl Service {
             match o {
                 crate::cues::Out::Event { list, cue, what } => {
                     let _ = self.events.send(Event::Cue { list, cue, what });
+                }
+                crate::cues::Out::Panic { mode } => {
+                    tracing::warn!(?mode, "panic");
+                    let _ = self.events.send(Event::Panic { mode });
                 }
                 crate::cues::Out::Actions { list, cue, actions } => {
                     for action in actions {
@@ -1163,7 +1171,9 @@ impl Service {
             Action::CueGo { .. }
             | Action::CueStart { .. }
             | Action::CueStop { .. }
-            | Action::CueReset => {
+            | Action::CueReset
+            | Action::CuePanic
+            | Action::CueHardStop => {
                 let out = {
                     let mut sw = self.switcher.lock().await;
                     let now = tokio::time::Instant::now();
@@ -1173,8 +1183,13 @@ impl Service {
                         Action::CueStop { list, cue, .. } => {
                             sw.cue_stop(list.as_ref(), cue.as_deref(), now)?
                         }
+                        Action::CuePanic => sw.cue_panic(now),
+                        Action::CueHardStop => sw.cue_hard_stop(now),
                         _ => sw.cue_reset(now),
                     };
+                    if sw.sync_standby() {
+                        self.write_autosave(&sw).await;
+                    }
                     self.publish(&sw);
                     out
                 };
@@ -1857,6 +1872,77 @@ mod tests {
             },
             name: Some("Bars".into()),
         }
+    }
+
+    #[tokio::test]
+    async fn panic_runs_the_emergency_list_and_a_restart_starts_nothing() {
+        use lmix_types::{Cue, StopMode};
+        let dir = tempfile::tempdir().unwrap();
+        let autosave = dir.path().join("autosave.lmix");
+        let first = Service::new(4, Arc::new(NullEngine::default()), Some(autosave.clone()));
+        first.handle(bars()).await.unwrap();
+        let cut = Action::CutDirect {
+            input: InputRef::Text("Bars".into()),
+        };
+        let mut atmo = Cue::empty(lmix_types::CueKind::Wait);
+        atmo.name = "Atmo".into();
+        atmo.duration_ms = Some(600_000);
+        let cues = vec![
+            Cue::actions("A", vec![Action::FadeToBlack { duration_ms: 0 }]),
+            atmo,
+            Cue::actions("C", vec![Action::FadeToBlack { duration_ms: 0 }]),
+        ];
+        for (name, cues) in [
+            ("Show", cues),
+            ("Notfall", vec![Cue::actions("Licht", vec![cut])]),
+        ] {
+            first
+                .handle(Action::AddCueList {
+                    name: name.into(),
+                    cues,
+                    source: None,
+                })
+                .await
+                .unwrap();
+        }
+        first
+            .handle(Action::SetEmergencyList {
+                list: Some(InputRef::Text("Notfall".into())),
+            })
+            .await
+            .unwrap();
+        first.handle(Action::SetGoGuard { ms: 0 }).await.unwrap();
+        first.handle(Action::CueGo { list: None }).await.unwrap();
+        first.handle(Action::CueGo { list: None }).await.unwrap();
+        assert_eq!(first.state().await.running_cues.len(), 1, "Atmo runs");
+        let mut events = first.subscribe();
+
+        let state = first.handle(Action::CuePanic).await.unwrap();
+
+        assert!(state.running_cues.is_empty());
+        assert_eq!(state.cue_lists[0].standby, 3, "standby stays");
+        assert!(state.cue_lists[1].emergency);
+        assert!(
+            state.program.is_some(),
+            "the emergency list cut Bars to program"
+        );
+        let mut panicked = false;
+        while let Ok(event) = events.try_recv() {
+            panicked |= matches!(
+                event,
+                Event::Panic {
+                    mode: StopMode::Fade
+                }
+            );
+        }
+        assert!(panicked, "the panic was told");
+
+        // "Crash": a new service over the same autosave.
+        let second = Service::new(4, Arc::new(NullEngine::default()), Some(autosave));
+        assert!(second.resume().await.unwrap());
+        let state = second.state().await;
+        assert_eq!(state.cue_lists[0].standby, 3, "standby where it was");
+        assert!(state.running_cues.is_empty(), "nothing starts by itself");
     }
 
     #[tokio::test]

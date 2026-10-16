@@ -421,6 +421,8 @@ Stufe 6 (Drehbuch-Import, IMP) ✅ vorgezogen: `lmix-script`, `docs/DREHBUCH.md`
 DECISIONS „Drehbuch-Import“. Offen: SSH.2 (Show speichert nur den Ordner).
 Stufe 4 (Ausgabeziele, EXT.1–5) ✅ für HTTP und Home Assistant; DECISIONS
 „Ausgabeziele“.
+Stufe 5, Teil Sicherheit (SAF): Panik, harter Stopp, Notfall-Liste, Standby
+nach Neustart ✅ ohne Ausblenden (mit Stufe 2); DECISIONS „Panik“.
 
 ---
 
