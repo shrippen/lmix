@@ -1,0 +1,230 @@
+# Public mirror: Gitea pushes every branch here on each commit. This
+# builds strom and runs the end-to-end check, and reports the result back
+# to the commit on Gitea as the status "github / test", where the pull
+# requests live. There are no pull requests on GitHub, so everything runs
+# on push. Only pushes that touch the paths below run: commits without
+# them get no status.
+#
+# strom: built once per submodule commit in ubuntu:24.04 and stored as
+# the public OCI artifact ghcr.io/shrippen/lmix-strom:<strom commit>, so
+# sessions download it in seconds instead of compiling for 20+ minutes
+# (scripts/fetch-strom.sh). The binary links the system GStreamer, so it
+# runs where the same libraries are installed (cloud VM, Ubuntu 24.04).
+#
+# vm-check: lmix-core against a real strom (CPU mixer, no GPU):
+# switching, sound, sources, outputs, failover and the latency budget
+# (scripts/test-m2b-vm.sh). The latency regression check of ROADMAP 3.4.
+#
+# Needs the secret GITEA_TOKEN: a Gitea token with write access to the
+# repository (commit statuses).
+name: ci
+
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - workspace/lmix-core/**
+      - workspace/lmix-types/**
+      - workspace/console-qt/**
+      - workspace/selftest/**
+      - workspace/strom
+      - scripts/test-m2b-vm.sh
+      - scripts/fetch-strom.sh
+      - .github/workflows/ci.yml
+  workflow_dispatch:
+
+# No workflow concurrency group: every commit runs to the end and keeps
+# its own status, a newer push does not cancel an older run.
+
+permissions:
+  contents: read
+
+env:
+  GITEA_STATUS: https://git.arianw.de/api/v1/repos/shrippen/lmix/statuses/${{ github.sha }}
+  RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+  IMAGE: ghcr.io/shrippen/lmix-strom
+  FILE: strom-ubuntu24.04-x86_64.tar.zst
+
+jobs:
+  strom:
+    # One strom build or VM check at a time across all branches (vm-check
+    # below, same group). Not cancelled: a run of another branch is not
+    # outdated by this one.
+    concurrency:
+      group: vm-check
+      cancel-in-progress: false
+    timeout-minutes: 120
+    runs-on: ubuntu-latest
+    container: ubuntu:24.04
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      started: ${{ steps.start.outputs.t }}
+    steps:
+      - name: Tools
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq git curl ca-certificates jq zstd nodejs
+
+      # A missing status is no reason to fail the checks.
+      - id: start
+        name: Report pending to Gitea
+        run: |
+          echo "t=$(date +%s)" >> "$GITHUB_OUTPUT"
+          curl -fsS -X POST "$GITEA_STATUS" \
+            -H "Authorization: token $GITEA_TOKEN" -H "Content-Type: application/json" \
+            -d "{\"state\":\"pending\",\"context\":\"github / test\",\"description\":\"running\",\"target_url\":\"$RUN_URL\"}" \
+            || echo "::warning::Gitea status not reported"
+        env:
+          GITEA_TOKEN: ${{ secrets.GITEA_TOKEN }}
+
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: strom submodule
+        id: strom
+        run: |
+          git config --global --add safe.directory '*'
+          git submodule update --init --depth 50 workspace/strom
+          echo "sha=$(git -C workspace/strom rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - uses: oras-project/setup-oras@005458ad77f1c8facd38a094e4af2e69e5607ff4 # v2.0.2
+
+      - name: Already built?
+        id: exists
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "$TOKEN" | oras login ghcr.io -u "${{ github.actor }}" --password-stdin
+          found=no
+          oras manifest fetch "$IMAGE:${{ steps.strom.outputs.sha }}" >/dev/null 2>&1 && found=yes
+          echo "found=$found" >> "$GITHUB_OUTPUT"
+
+      - name: Build dependencies
+        if: steps.exists.outputs.found == 'no'
+        run: |
+          apt-get install -y -qq build-essential pkg-config clang mold libssl-dev \
+            libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+            libgstreamer-plugins-bad1.0-dev libnice-dev libcairo2-dev
+          curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain none
+
+      # utoipa-swagger-ui's build script downloads Swagger UI from GitHub
+      # once, without retry; a broken download stops the strom build (run
+      # 2433). Fetch it here with retries and hand the crate the file.
+      # Version: the default of utoipa-swagger-ui 9.0.
+      - name: Swagger UI
+        if: steps.exists.outputs.found == 'no'
+        run: |
+          curl -sSfL --retry 5 --retry-all-errors -o "$PWD/swagger-ui.zip" \
+            https://github.com/swagger-api/swagger-ui/archive/refs/tags/v5.17.14.zip
+          echo "SWAGGER_UI_DOWNLOAD_URL=file://$PWD/swagger-ui.zip" >> "$GITHUB_ENV"
+
+      - name: Build strom
+        if: steps.exists.outputs.found == 'no'
+        working-directory: workspace/strom
+        env:
+          RUSTFLAGS: -C link-arg=-fuse-ld=mold
+        run: |
+          . "$HOME/.cargo/env"
+          cargo build --release --features no-gui --bin strom
+
+      # One layer, the tarball; the source annotation links the package
+      # to this repository.
+      - name: Upload package
+        if: steps.exists.outputs.found == 'no'
+        run: |
+          tar -C workspace/strom/target/release -c strom | zstd -19 -T0 > "$FILE"
+          oras push "$IMAGE:${{ steps.strom.outputs.sha }}" \
+            --artifact-type application/vnd.shrippen.lmix-strom.v1 \
+            --annotation org.opencontainers.image.source=https://github.com/shrippen/lmix \
+            --annotation org.opencontainers.image.description="strom engine for lmix, Ubuntu 24.04 x86_64" \
+            "$FILE:application/vnd.oci.image.layer.v1.tar+zstd"
+
+  vm-check:
+    needs: strom
+    # See strom above: a build next to a VM check starves the CPU mixer.
+    concurrency:
+      group: vm-check
+      cancel-in-progress: false
+    timeout-minutes: 120
+    runs-on: ubuntu-latest
+    container: ubuntu:24.04
+    steps:
+      - name: Tools
+        run: |
+          apt-get update -qq
+          DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git curl ca-certificates \
+            jq zstd nodejs imagemagick xvfb ffmpeg build-essential mold clang pkg-config \
+            libssl-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+            libgstreamer-plugins-bad1.0-dev gstreamer1.0-plugins-base \
+            gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly \
+            gstreamer1.0-libav gstreamer1.0-tools gstreamer1.0-gl gstreamer1.0-nice \
+            libnice-dev libcairo2-dev
+          curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable
+
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: strom submodule
+        run: |
+          git config --global --add safe.directory '*'
+          git submodule update --init --depth 50 workspace/strom
+
+      # utoipa-swagger-ui's build script downloads Swagger UI from GitHub
+      # once, without retry; a broken download stops the strom build when
+      # fetch-strom.sh finds no package. Fetch it here with retries and hand
+      # the crate the file. Version: the default of utoipa-swagger-ui 9.0.
+      - name: Swagger UI
+        run: |
+          curl -sSfL --retry 5 --retry-all-errors -o "$PWD/swagger-ui.zip" \
+            https://github.com/swagger-api/swagger-ui/archive/refs/tags/v5.17.14.zip
+          echo "SWAGGER_UI_DOWNLOAD_URL=file://$PWD/swagger-ui.zip" >> "$GITHUB_ENV"
+
+      - name: VM check
+        env:
+          RUSTFLAGS: -C link-arg=-fuse-ld=mold
+          WORK: ${{ github.workspace }}/vm-work
+          KEEP_WORK: 1
+        run: |
+          . "$HOME/.cargo/env"
+          scripts/test-m2b-vm.sh
+
+      # Logs and pictures of a failed run. Public: only these, not the
+      # show files, recordings and strom data next to them.
+      - name: Keep the work folder
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: vm-work
+          path: |
+            vm-work/*.log
+            vm-work/*.jpg
+            vm-work/*.png
+          retention-days: 7
+
+  # Also runs when a check failed or was cancelled, so Gitea never keeps
+  # a stale "pending".
+  report:
+    needs: [strom, vm-check]
+    if: always()
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report result to Gitea
+        run: |
+          if [ "$STROM" = success ] && [ "$CHECK" = success ]; then
+            state=success
+          elif [ "$STROM" = failure ] || [ "$CHECK" = failure ]; then
+            state=failure
+          else
+            state=error
+          fi
+          desc="strom $STROM, vm-check $CHECK"
+          if [ -n "$STARTED" ]; then desc="$desc in $(( ($(date +%s) - STARTED) / 60 )) min"; fi
+          curl -fsS -X POST "$GITEA_STATUS" \
+            -H "Authorization: token $GITEA_TOKEN" -H "Content-Type: application/json" \
+            -d "{\"state\":\"$state\",\"context\":\"github / test\",\"description\":\"$desc\",\"target_url\":\"$RUN_URL\"}"
+        env:
+          STROM: ${{ needs.strom.result }}
+          CHECK: ${{ needs.vm-check.result }}
+          STARTED: ${{ needs.strom.outputs.started }}
+          GITEA_TOKEN: ${{ secrets.GITEA_TOKEN }}
