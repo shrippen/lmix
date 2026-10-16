@@ -2041,6 +2041,82 @@ Builds ließen strom von 900 auf 1082 MB springen (Warteschlangen unter
 CPU-Last), der Speicherwert wäre wertlos gewesen. Neuer Lauf ohne
 Nebenlast (Ergebnis im Eintrag „strom-Fixes“).
 
+## 2026-10-16 — GL-Mischer: Speicherwachstum ohne SRT
+
+**Gegenprobe** (`MIXER=gl INPUTS=1 STREAMS=0 MINUTES=60
+scripts/soak-hardware.sh`, strom `1ec76e2`, RTX 3090, Treiber 615.78,
+GStreamer 1.28.8; nur die Aufnahme, kein SRT): strom-RSS 753 MB nach
+10 min, 865 MB nach 60 min. Gleichmäßig ~50 MB/h, dazu ein Sprung von
++42 MB um Minute 43, als eine fremde GPU-Last (100 %, 22 GB) endete.
+Latenz durchgehend 56 ms, Aufnahme lückenlos (109 014 Bilder in 3632 s).
+Mit Aufnahme und SRT waren es am 2026-10-13 ~110 MB/h: das Wachstum
+hängt an jedem Encoder des GL-Mischers, nicht am SRT-Zweig.
+**Isoliert** (je 12 min, `gst-launch-1.0`, 1080p30 live, NVENC):
+`glupload ! glcolorconvert ! GLMemory RGBA ! cudaupload ! cudaconvert !
+nvh264enc`, dasselbe mit `gldownload` davor und `cudaupload` aus dem
+Systemspeicher: alle drei flach (304 → 249 bzw. 284 → 224 MB). Der Weg
+GL → CUDA → NVENC leckt für sich nicht.
+**Aber**: Beim GL-Mischer verlässt Program den Mischer schon im
+Systemspeicher (`gl_download` am Bildmischer, `flows.rs`); der Ausgangs-Flow
+sieht also genau den dritten, flachen Weg. Damit steht der Mischer selbst
+unter Verdacht, nicht der Encoder.
+**Ohne Ausgänge** (`RECORD=0 STREAMS=0`, neu in `soak-hardware.sh`,
+45 min): 517 MB nach 10 min, 635 MB nach 25 min, danach fast flach (653 MB
+nach 45 min). Der Anstieg fiel in die Zeit, in der nebenan gebaut und ein
+VM-Test lief (bekannter Effekt, Eintrag „Nachtläufe“), ab Minute 35 dazu
+eine fremde GPU-Last (100 %, 21 GB). Der Lauf trennt Leck und Last nicht.
+**Ohne Ausgänge, 2 h** (ohne Builds nebenan; die GPU lief die ganze
+Zeit fremd voll, 100 %, 21–23 GB): 577 MB nach 10 min, 603 MB nach 45 min,
+ein Sprung auf 713 MB in einer Minute (Minute 48), danach 813 MB nach
+120 min; ohne den Sprung ~70 MB/h. Latenz durchgehend 56 ms.
+**Befund**: Der GL-Mischer wächst auch ganz ohne Encoder. Die Ursache
+liegt im Mischer-Flow (GL-Bildmischer, `gl_download` von Program, Live-
+und Kachelbilder), nicht im Ausgang. Unter voller GPU-Last kommen Sprünge
+dazu (Warteschlangen).
+**Nächster Schritt**: in strom den Mischer-Flow zerlegen (ohne
+`gl_download`, ohne Kachel-Taps) und je 1 h messen, mit freier GPU.
+**Stand**: CUDA bleibt der Standard-Mischer (~7,7 MB/h im 8-h-Lauf); GL
+erst nach der Ursache für lange Läufe empfehlen.
+
+## 2026-10-16 — Show-Modus als zweiter Bedienmodus
+
+**Kontext**: lmix soll neben dem Bildmischer (vMix-Vorbild) auch Abläufe
+nach Drehbuch fahren können (QLab-Vorbild): Theater, Ausstellungen,
+Spieltisch. Technisch teilen beide Engine, Inputs, Ausgänge, Ton,
+Aktionskatalog, Auslöser, APIs und Show-Datei; verschieden ist das
+Bedienkonzept (im Moment entscheiden vs. vorbereitete Cue-Folge mit GO).
+
+**Optionen**: (a) eigenes Programm, z. B. auf Linux Show Player (GPL,
+Python) aufbauend; (b) Plugin neben lmix; (c) zweiter Modus über
+demselben `lmix-core`.
+
+**Entscheidung** (User): (c). Eigenes Lastenheft `LASTENHEFT-SHOW.md`
+mit Quellenzuordnung `LASTENHEFT-SHOW-QUELLEN.md` (Clean Room gegen das
+QLab-5-Handbuch), Meilensteine S1–S3, Personas P8–P10. Licht in S1 nur
+über Home Assistant, eigene Lichtsteuerung ab S3 (User). (a) scheidet
+auch an der Lizenz (GPL, `claude.md` 6).
+
+**Offen**: S-E.1–12 in `LASTENHEFT-SHOW.md` §6, vor Beginn von S1 zu
+entscheiden. `claude.md` nennt beide Modi (Entscheidungen 7, 8).
+
+## 2026-10-16 — Show-Modus: S-E.1–12
+
+**Kontext**: Offene Fragen aus `LASTENHEFT-SHOW.md` §6, vor S1 zu
+entscheiden. Vorschläge mit Alternativen auf einer Entscheidungsseite.
+
+**Entscheidung** (User): Vorschlag angenommen für S-E.1, 2, 4, 6–11.
+Abweichend: S-E.5 Cue ohne Rückwärtsverträglichkeit umbauen und Shows
+migrieren (vor dem ersten Release erlaubt); S-E.12 ein gemeinsamer
+Plugin-Host statt eines Prozesses je Plugin, bei Bedarf einer je Zone.
+Zurückgestellt: S-E.3, Folgen noch unklar; vor S1 Stufe 2 mit Messungen
+neu vorlegen.
+
+**Neu aus den Anmerkungen**: SUI.13 (Felder je Modus, „Erweitert“),
+SSH.5 (Show samt Rechner-Einstellungen ex-/importieren, ohne
+Geheimnisse), VIS.17 (Bühne als Input im Mischer für die gemischte
+Theatershow, S2-Abnahme mit P7). CUE.21 und SSH.1: migrieren statt
+alte Formate weiterlesen.
+
 ## 2026-10-16 — Clips auf Sendung, alle Overlays aus (INP.11, OVL.8)
 
 **Entscheidung INP.11**: Datei-, URL- und Playlist-Inputs haben drei
@@ -2088,7 +2164,9 @@ Abspielen, Overlay und Layout auf Sendung, T-Bar, Stinger, späte Pause,
 alle aus, letzter Input), Service-Test mit Null-Engine (Pause nach der
 Blende, keine nach Cut zurück), `test-headless.sh` (OSC), Console auf
 Xvfb (Schalter setzen den Zustand, Menü und Knopf). Mit echten Playern
-in strom nicht geprüft.
+in strom nicht geprüft. VM-Check (GitHub): Overlay wieder an, während
+es noch ausblendet; fand einen strom-Fehler (das Ende der Blende nahm
+den DSK wieder weg), behoben in strom 04b87d1.
 **Offen**: Ein Cut, während der T-Bar halb steht, lässt `t_bar` stehen
 (war schon so); die neue Vorschau gilt dann als eingeblendet und
 pausiert nicht.

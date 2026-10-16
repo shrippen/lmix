@@ -15,7 +15,8 @@ Flow {
     id: diff
 
     property var parts: []
-    property font font: KanteStyle.defaultFont
+    /** In the Japanese family (Kante 1.34, KanteStyle.japaneseFont). */
+    property font font: KanteStyle.japaneseFont()
     property color color: KanteStyle.textColor
     property string removedWord: "gestrichen"
     property string addedWord: "neu"

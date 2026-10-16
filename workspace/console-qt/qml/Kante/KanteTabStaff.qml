@@ -19,6 +19,10 @@ import "."
  *                quarter, 0.5 an eighth, 1.5 a dotted quarter). Notes with the same time
  *                form a chord (one stem). state as KanteTabLane, "offpitch" (1.27) with
  *                its `cents` beside the sign (`showCents`, Full marks)
+ *                technique, techniqueResult (1.31) as KanteTabLane: the tab sign beside the
+ *                fret number (KanteTechniqueMark), a ghost note's fret in parentheses,
+ *                a dead note's (1.32, "dead") as x;
+ *                setTechniqueResult(index, result) changes a result without a new layout
  *   bars         bar start times in seconds, numbers or {time, number, repeatStart, repeatEnd,
  *                endings}; number (Kante 1.28): the bar's label, e.g. the written bar number,
  *                so unrolled repeats read "5, 6, 5, 6" (a number or a string; left out:
@@ -88,6 +92,37 @@ Item {
     property var changedCents: ({})
     /** Cents beside the sign of an offpitch note (Kante 1.27), in Full marks. */
     property bool showCents: true
+    // Technique results set with setTechniqueResult, by note index (1.31).
+    property var changedTechniques: ({})
+
+    /** Sets how the technique of one note was played (Kante 1.31): "", "played", "other", "unheard". */
+    function setTechniqueResult(index, result) {
+        if (!notes || index < 0 || index >= notes.length) {
+            return
+        }
+        changedTechniques[index] = String(result || "")
+        revision++
+    }
+    /** The technique result of note i: as set with setTechniqueResult, else from `notes`. */
+    function techniqueResultOf(i) {
+        var r = changedTechniques[i]
+        return r !== undefined ? r : (notes && notes[i] && notes[i].techniqueResult ? String(notes[i].techniqueResult) : "")
+    }
+    /** The result as shown: "" when marks are Off. Depends on stateRevision. */
+    function shownTechniqueResult(i, revision) {
+        return marks === KanteTabStaff.Marks.Off ? "" : techniqueResultOf(i)
+    }
+    /** "Technik gespielt 3, Andere Technik 1" over all notes (screen readers). Depends on stateRevision. */
+    function techniqueSummary(revision) {
+        var counts = {}
+        for (var i = 0; notes && i < notes.length; i++) {
+            var r = shownTechniqueResult(i, revision)
+            if (r !== "") {
+                counts[r] = (counts[r] || 0) + 1
+            }
+        }
+        return KanteStyle.techniqueCountsText(counts)
+    }
 
     /**
      * Sets the state of one note without reassigning `notes` (no new layout, only colours and
@@ -108,6 +143,7 @@ Item {
     function resetStates() {
         changedStates = {}
         changedCents = {}
+        changedTechniques = {}
         revision++
     }
     /** The cents of note i (offpitch): as set with setNoteState, else from `notes`; NaN for none. */
@@ -171,6 +207,10 @@ Item {
         if (currentIndex >= 0) {
             var n = notes[currentIndex]
             d += ", " + nameOf(Number(n.string) || 0) + " " + n.fret + " (" + KanteStyle.noteStateName(shownState(currentIndex, stateRevision)) + centsSuffix(currentIndex, stateRevision) + ")"
+        }
+        var t = techniqueSummary(stateRevision)
+        if (t !== "") {
+            d += ", " + t
         }
         return d
     }
@@ -374,7 +414,17 @@ Item {
             var sys = sysOf(b)
             var str = Math.max(0, Math.min(nstr - 1, Number(n.string) || 0))
             var y = sys * systemHeight + staffTop + rowOf(str) * ls
-            L.frets.push({ x: x, y: y, text: n.fret !== undefined ? String(n.fret) : "", index: i, label: n.label || "", str: str })
+            var fretText = n.fret !== undefined ? String(n.fret) : ""
+            var technique = n.technique ? String(n.technique) : ""
+            // A ghost note's fret in parentheses, as written in tab (1.31).
+            if (technique === "ghost" && fretText !== "") {
+                fretText = "(" + fretText + ")"
+            }
+            // A dead note reads x instead of its fret (1.32).
+            if (technique === "dead") {
+                fretText = "x"
+            }
+            L.frets.push({ x: x, y: y, text: fretText, index: i, label: n.label || "", str: str, technique: technique })
             L.boxes[i] = { x: x, sys: sys }
             var prev = onsets.length ? onsets[onsets.length - 1] : null
             if (prev && Math.abs(prev.t - t) < 1e-3) {
@@ -596,6 +646,16 @@ Item {
                 font.family: nameMetrics.font.family
                 font.weight: parent.current ? Font.Bold : Font.Medium
                 font.pixelSize: Math.round(staff.ls * 0.9)
+            }
+            // Technique sign above right of the fret number (1.31).
+            KanteTechniqueMark {
+                technique: parent.modelData.technique || ""
+                result: staff.shownTechniqueResult(parent.modelData.index, staff.stateRevision)
+                color: staff.marks === KanteTabStaff.Marks.Quiet ? KanteStyle.mutedTextColor : resultColor
+                height: Math.round(staff.ls * 0.7)
+                width: implicitWidth
+                anchors.left: parent.right
+                anchors.bottom: parent.verticalCenter
             }
             Text {
                 visible: parent.modelData.label !== ""

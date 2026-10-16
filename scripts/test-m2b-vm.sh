@@ -54,6 +54,12 @@ fail() {
         echo "--- last 60 lines of $log" >&2
         tail -n 60 "$WORK/$log" >&2
     done
+    # Earlier trouble scrolls out of the tails (thumbnail polls fill them).
+    echo "--- last 40 warnings and errors of strom.log" >&2
+    grep -E 'WARN|ERROR' "$WORK/strom.log" | grep -v '/thumbnail' | tail -n 40 >&2 || true
+    echo "--- strom flows" >&2
+    curl -sf --max-time 5 "$STROM/api/flows" \
+        | jq -c '.flows[] | {name, id, state, running}' >&2 || true
     exit 1
 }
 pass() { echo "ok   $*"; }
@@ -453,19 +459,27 @@ pass "failover: stream broke, was marked failed and restarted itself"
 
 # --- overlays (4.1): an input above program, tally, take off ---
 act '{"action":"cut_direct","input":"Ball"}' >/dev/null
-act '{"action":"overlay_in","channel":1,"input":"Orange","duration_ms":0}' >/dev/null
 overlay_shown() { picture program "$WORK/ovl.jpg"; [[ $(rgb "$WORK/ovl.jpg" r) -gt 200 ]]; }
+overlay_gone() { picture program "$WORK/ovl.jpg"; [[ $(rgb "$WORK/ovl.jpg" r) -lt 60 ]]; }
+# Orange was on program before: wait for Ball, or a late picture passes.
+wait_for "$SETTLE_S" overlay_gone || fail "ball not on program before the overlay"
+act '{"action":"overlay_in","channel":1,"input":"Orange","duration_ms":0}' >/dev/null
 wait_for "$SETTLE_S" overlay_shown || fail "overlay 1 not on program"
 orange_number="$(curl -sf "$CORE/state" | jq '.inputs[] | select(.name=="Orange") | .number')"
 [[ "$(curl -sf "$CORE/tally" | jq ".[$((orange_number - 1))]")" == 1 ]] || fail "overlay input has no program tally"
 [[ "$(curl -sf "$CORE/state" | jq -r '.overlays[0] != null')" == true ]] || fail "overlay not in state"
 act '{"action":"overlay_out","channel":1,"duration_ms":500}' >/dev/null
-overlay_gone() { picture program "$WORK/ovl.jpg"; [[ $(rgb "$WORK/ovl.jpg" r) -lt 60 ]]; }
 wait_for "$SETTLE_S" overlay_gone || fail "overlay 1 not taken off"
 pass "overlays: input above program, red tally, faded off"
 # All off and the last input again (OVL.8).
 act '{"action":"overlay_last","channel":1,"duration_ms":0}' >/dev/null
 wait_for "$SETTLE_S" overlay_shown || fail "last input of overlay 1 not back"
+# Back on while the fade off still runs: the last command wins, the end
+# of the fade must not take it off again.
+act '{"action":"overlay_out","channel":1,"duration_ms":500}' >/dev/null
+act '{"action":"overlay_last","channel":1,"duration_ms":0}' >/dev/null
+sleep 1.5
+overlay_shown || fail "overlay taken off by the end of an older fade"
 act '{"action":"overlay_out_all","duration_ms":0}' >/dev/null
 wait_for "$SETTLE_S" overlay_gone || fail "overlays not all off"
 pass "overlays: last input again, all off"

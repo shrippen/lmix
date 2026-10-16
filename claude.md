@@ -1,8 +1,14 @@
-# Projekt: vMix-Alternative für Linux als native Desktop-App
+# Projekt: vMix- und QLab-Alternative für Linux als native Desktop-App
 
 ## Kontext
-Ziel: eine native Linux-Desktop-App, die als Software-Vision-Mixer (PGM/PVW-Schalter)
-ca. auf vMix-Niveau funktioniert. Medienkern = Strom (Eyevinn, Rust + GStreamer,
+Ziel: eine native Linux-Desktop-App mit zwei Bedienmodi über demselben `lmix-core`:
+- **Mischer**: Software-Vision-Mixer (PGM/PVW-Schalter) ca. auf vMix-Niveau
+  (`docs/LASTENHEFT.md`).
+- **Show**: Ablauf nach Drehbuch, vorbereitete Cue-Folge mit GO, Vorbild QLab 5
+  (`docs/LASTENHEFT-SHOW.md`; Theater, Ausstellung, Spieltisch).
+
+Beide teilen Engine, Inputs, Ausgänge, Ton, Aktionskatalog, Auslöser, APIs und
+Show-Datei. Medienkern = Strom (Eyevinn, Rust + GStreamer,
 Lizenz MIT oder Apache-2.0, https://github.com/Eyevinn/strom).
 
 Projektebene: Früh-Prototyp aus Mache, der aber auf echtes Produkt hinausläuft.
@@ -28,13 +34,29 @@ Kommuniziere auf Deutsch, Code/Commits auf Englisch.
 6. Lizenzkompatibilität: Projekt muss MIT-kompatibel bleiben (kommerzielle Nutzung
    möglich). Kein GPL-Code (weder 2 noch 3) in das Repo. Jede neue Abhängigkeit
    prifen, Lizenz in der Commit-Meldung dokumentieren.
+7. Show-Modus = zweiter Bedienmodus über demselben `lmix-core` (User 2026-10-16,
+   docs/DECISIONS.md), kein eigenes Programm, kein Plugin. Der Ablauf (Cue-Listen,
+   Standby, Zeiten, Panik) läuft in `lmix-core`, nicht in der Oberfläche; ein
+   Console-Absturz hält keinen Cue an. Die Show nennt nur logische Namen (Zone,
+   Bühne, Ausgabeziel); Geräte, Adressen und Geheimnisse liegen in den
+   Rechner-Einstellungen. Show und Mischer laufen je allein; eine Bühne kann Input im
+   Mischer sein (gemischte Theatershow). Entscheidungen S-E.1–12 in
+   `LASTENHEFT-SHOW.md` §6 (User 2026-10-16); S-E.3 (Klang-Cues intern) ist offen
+   und wird vor S1 Stufe 2 mit Messungen erneut vorgelegt.
+8. Clean Room: Vorbild-Verhalten nur aus öffentlichen Handbüchern, für vMix nach
+   CR.1–8 (`LASTENHEFT.md`), für QLab nach SCR.1–4 (`LASTENHEFT-SHOW.md` §0: nur das
+   QLab-5-Handbuch, eigene Worte und Namen, kein „QLab“ und keine QLab-Formate
+   oder -Icons in Oberfläche und Dateien). Neue Anforderung → Quelle in
+   `LASTENHEFT-SHOW-QUELLEN.md` bzw. `LASTENHEFT-QUELLEN.md` eintragen.
 
 ## Repo-Struktur
 workspace/
   strom/          ← Upstream-Klon (eigene Branch "dev", nur minimaler Diff erlaubt)
-  lmix-core/      ← Steuerprozess (Show, Aktionen, API), headless
+  lmix-core/      ← Steuerprozess (Show, Aktionen, Cue-Ablauf, API), headless
   console-qt/     ← UNSER Client: Qt Quick/Kirigami über cxx-qt (Entscheidung 3.5)
   selftest/       ← kopfloser Last- und Abnahmetest direkt an strom (M1b)
+  (Drehbuch-Import: eigenes Werkzeug, spricht nur die API; lmix-core kennt kein
+   Markdown, S-E.2)
   omtpw-bridge/   ← nur falls Options (b) für OMT gewählt wird (eigenes Repo, stabile API)
   docs/           ← Build-Doku, Architektur-Anatomie, Latenz-Messungen, Entscheide-Log
 
@@ -52,6 +74,7 @@ workspace/
 - Persona-Durchläufe (`docs/PERSONAS.md`, `docs/LASTENHEFT.md` §9): jede neue
   oder geänderte Funktion gegen die betroffenen Personas prüfen; jede
   Meilenstein-Abnahme spielt mindestens 5 Personas durch, Befunde in PERSONAS.md.
+  Show-Modus: P8–P10 zusammen mit P7 (`LASTENHEFT-SHOW.md` §9).
 - Alle Meilensteine enden in einem lauffähigen, vom User abnahmefähigen Zustand
   mit dokumentierten Akzeptanzbefehlen. Nach jeder Meile: STOPP und auf User-
   Freigabe warten.
@@ -59,6 +82,10 @@ workspace/
   Optionen, Entscheidung, mit Datum).
 
 ## Meilensteine
+
+Stand und weitere Meilensteine (M6–M9, Show-Modus S1–S3 mit eigener Zählung) in
+`docs/ROADMAP.md`; Abnahmen des Show-Modus in `LASTENHEFT-SHOW.md` §7. Die
+Abschnitte unten sind der ursprüngliche Auftrag für M0–M5.
 
 ### M0 — Lokaler Build + Anatonie (Priorität 1, allein)
 - strom workspace klonen und COMPLETT nativ lauffähig machen: Server (Headless,
@@ -125,6 +152,8 @@ workspace/
   (Web-Fernbedienung ist erlaubt, `docs/LASTENHEFT.md` E.1)
 - Windows/macOS
 - XAML-Titel-Engine, OBS-Plugin-Ökosystem
+- Show-Modus: Import von QLab-Dateien, Skript-Cues, gleichzeitiges Bearbeiten an
+  mehreren Rechnern, Tonhöhe/Abspielrate (`LASTENHEFT-SHOW.md` §5)
 - GPU-FX-Neuentwicklung jenseits des Bestehenden
 - Aufgehoben 2026-10-08 (E.1): Control-Surfaces und 4K sind wieder im Scope
 

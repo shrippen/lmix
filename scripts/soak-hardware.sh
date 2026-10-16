@@ -10,6 +10,7 @@
 #   scripts/soak-hardware.sh                 # 60 min, CUDA mixer, 8 inputs
 #   MINUTES=480 INPUTS=16 STREAMS=2 ISO=1 scripts/soak-hardware.sh   # NFA.7
 #   MINUTES=10 MIXER=gl scripts/soak-hardware.sh
+#   RECORD=0 STREAMS=0 …                     # no outputs: the mixer alone
 #   KEEP_WORK=1 …                            # keep logs, recordings, streams
 #   MALLOC_ARENA_MAX=2 …                     # passed on to strom
 #   WORK=/big/disk/soak …                    # where recordings go (see below)
@@ -29,6 +30,7 @@ MIXER="${MIXER:-cuda}"
 INPUTS="${INPUTS:-8}"
 STREAMS="${STREAMS:-1}"
 ISO="${ISO:-0}"
+RECORD="${RECORD:-1}"
 EVERY_S=300
 STROM_PORT=8599
 CORE_PORT=8699
@@ -62,7 +64,7 @@ wait_up() {
 }
 
 # Room for the recording, the ISO recording and each received stream.
-FILES=$((1 + ISO + STREAMS))
+FILES=$((RECORD + ISO + STREAMS))
 NEED_MB=$((FILES * 6000 / 8 * MINUTES * 60 * 12 / 10 / 1000))
 if [[ "$(findmnt -no FSTYPE --target "$WORK")" == tmpfs ]]; then
     echo "WORK=$WORK is on tmpfs (RAM); set WORK to a folder on disk" >&2
@@ -98,9 +100,12 @@ online="$(curl -sf "$CORE/state" | jq '[.inputs[] | select(.status=="online")] |
 [[ "$online" == "$INPUTS" ]] && pass "$INPUTS inputs online" || fail "only $online of $INPUTS inputs online"
 act '{"action":"cut_direct","input":1}'
 
-mkdir -p "$WORK/rec"
-OUTPUTS=(Rec)
-act "{\"action\":\"add_output\",\"spec\":{\"kind\":\"record\",\"folder\":\"$WORK/rec\",\"container\":\"mkv\"},\"name\":\"Rec\"}"
+OUTPUTS=()
+if [[ "$RECORD" == 1 ]]; then
+    mkdir -p "$WORK/rec"
+    act "{\"action\":\"add_output\",\"spec\":{\"kind\":\"record\",\"folder\":\"$WORK/rec\",\"container\":\"mkv\"},\"name\":\"Rec\"}"
+    OUTPUTS+=(Rec)
+fi
 if [[ "$ISO" == 1 ]]; then
     mkdir -p "$WORK/iso"
     first="$(curl -sf "$CORE/state" | jq -r '.inputs[0].id')"
@@ -231,7 +236,9 @@ check_file() {
         fail "$what short: ${frames:-0} frames, expected ≥ ${expect}"
     fi
 }
-check_file recording "$(find "$WORK/rec" -type f | head -1)"
+if [[ "$RECORD" == 1 ]]; then
+    check_file recording "$(find "$WORK/rec" -type f | head -1)"
+fi
 if [[ "$ISO" == 1 ]]; then
     check_file "ISO recording" "$(find "$WORK/iso" -type f | head -1)"
 fi

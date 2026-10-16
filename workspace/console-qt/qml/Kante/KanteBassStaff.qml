@@ -13,6 +13,9 @@ import "."
  *              beats = duration in quarters (1.5 dotted quarter, 1/3 eighth triplet),
  *              tied: tied to the next note (same pitch), state as KanteTabLane
  *              ("offpitch" with its `cents` beside the sign, 1.27)
+ *              technique, techniqueResult (1.31) as KanteTabLane: the tab sign above the
+ *              staff, under the state sign (KanteTechniqueMark); setTechniqueResult(index,
+ *              result) changes a result without a new layout
  *   rests      [{time, beats}]
  *   bars       [{time, number, numerator, denominator, keyFifths, chord}] (numbers or a missing
  *              signature keep the previous one; 4/4 at first); the time signature shows
@@ -91,6 +94,37 @@ Item {
     property var changedCents: ({})
     /** Cents beside the sign of an offpitch note (Kante 1.27), in Full marks. */
     property bool showCents: true
+    // Technique results set with setTechniqueResult, by note index (1.31).
+    property var changedTechniques: ({})
+
+    /** Sets how the technique of one note was played (Kante 1.31): "", "played", "other", "unheard". */
+    function setTechniqueResult(index, result) {
+        if (!notes || index < 0 || index >= notes.length) {
+            return
+        }
+        changedTechniques[index] = String(result || "")
+        revision++
+    }
+    /** The technique result of note i: as set with setTechniqueResult, else from `notes`. */
+    function techniqueResultOf(i) {
+        var r = changedTechniques[i]
+        return r !== undefined ? r : (notes && notes[i] && notes[i].techniqueResult ? String(notes[i].techniqueResult) : "")
+    }
+    /** The result as shown: "" when marks are Off. Depends on stateRevision. */
+    function shownTechniqueResult(i, revision) {
+        return marks === KanteBassStaff.Marks.Off ? "" : techniqueResultOf(i)
+    }
+    /** "Technik gespielt 3, Andere Technik 1" over all notes (screen readers). Depends on stateRevision. */
+    function techniqueSummary(revision) {
+        var counts = {}
+        for (var i = 0; notes && i < notes.length; i++) {
+            var r = shownTechniqueResult(i, revision)
+            if (r !== "") {
+                counts[r] = (counts[r] || 0) + 1
+            }
+        }
+        return KanteStyle.techniqueCountsText(counts)
+    }
 
     /**
      * Sets the state of one note without reassigning `notes` (no new layout, only colours and
@@ -111,6 +145,7 @@ Item {
     function resetStates() {
         changedStates = {}
         changedCents = {}
+        changedTechniques = {}
         revision++
     }
     /** The cents of note i (offpitch): as set with setNoteState, else from `notes`; NaN for none. */
@@ -170,6 +205,10 @@ Item {
             var n = notes[currentIndex]
             d += ", " + pitchName(Number(n.midi), barList.length ? barList[currentBar].key : keyFifths)
                 + " (" + KanteStyle.noteStateName(shownState(currentIndex, stateRevision)) + centsSuffix(currentIndex, stateRevision) + ")"
+        }
+        var t = techniqueSummary(stateRevision)
+        if (t !== "") {
+            d += ", " + t
         }
         return d
     }
@@ -397,7 +436,7 @@ Item {
 
     // ── Layout ───────────────────────────────────────────────────────
     function computeLayout(first, per, nsys, w, sp, ns, rs, bl, cl) {
-        var L = { glyphs: [], rects: [], polys: [], ties: [], marks: [], boxes: {} }
+        var L = { glyphs: [], rects: [], polys: [], ties: [], marks: [], techniques: [], boxes: {} }
         if (w <= 0 || bl.length === 0) {
             return L
         }
@@ -530,6 +569,10 @@ Item {
                 L.rects.push({ x: x - sp * 0.4, y: yOf(q, sys) - ledgerT / 2, w: headW + sp * 0.8, h: ledgerT, ink: "" })
             }
             L.marks.push({ x: x + headW / 2, y: sys * systemHeight + sp * 1.0, index: i })
+            // The technique sign under the state sign, above the chord symbols (1.31).
+            if (n.technique) {
+                L.techniques.push({ x: x + headW / 2, y: sys * systemHeight + sp * 2.4, index: i, technique: String(n.technique) })
+            }
             L.boxes[i] = { x: x, w: headW, sys: sys }
             var unit = bl[b].den === 8 && bl[b].num % 3 === 0 ? 1.5 : 1
             var spq = (bl[b].end - bl[b].time) / (bl[b].num * 4 / bl[b].den)
@@ -740,6 +783,20 @@ Item {
             cents: staff.stateRevision >= 0 ? staff.centsOf(modelData.index) : NaN
             showCents: staff.showCents && full
             color: full ? KanteStyle.noteStateColor(noteState) : KanteStyle.mutedTextColor
+        }
+    }
+
+    Repeater {
+        model: staff.layout.techniques
+        delegate: KanteTechniqueMark {
+            required property var modelData
+            technique: modelData.technique
+            result: staff.shownTechniqueResult(modelData.index, staff.stateRevision)
+            color: staff.marks === KanteBassStaff.Marks.Quiet ? KanteStyle.mutedTextColor : resultColor
+            height: Math.round(staff.sp * 1.2)
+            width: implicitWidth
+            x: modelData.x - width / 2
+            y: modelData.y - height / 2
         }
     }
 
