@@ -390,6 +390,7 @@ Stand (2026-10-12, ohne GPU; DECISIONS „M9 Anfang“):
 | PTZ über VISCA (IP, UDP), Positionen per Auslöser | ◐ PER.2, PER.3 (an echter Kamera ungeprüft) |
 | Show-Paket mit Medien, Daten, Vorlagen | ✅ SHW.6 |
 | Layout-Editor: Ziehen, Fangen, Mehrfachauswahl, Sperre, Rückgängig | ✅ LAY.6 |
+| Clips spielen/pausieren auf Sendung von selbst; alle Overlays aus, letzter Input je Kanal | ✅ INP.11, OVL.8 |
 | Verschmelzen, Mix-Inputs, Effektkette, Karten-Ausgang, Key+Fill | offen (Engine/Hardware) |
 
 ### Später — Wiederholung, Gäste

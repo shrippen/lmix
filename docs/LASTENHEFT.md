@@ -144,7 +144,7 @@ kann es, Console nicht.
 | INP.8 | Klick-Aktion je Input wählbar (Standard: in Preview) | S | – |
 | INP.9 | GO-Aktion je Input wählbar (Standard: Schnellstart, §3.6) | S | – |
 | INP.10 | Wiedergabe-Inputs: Play, Pause, Neustart, Positionieren, Schleife, Geschwindigkeit, In-/Out-Marke | M | ◐ (Playlist-Block E) |
-| INP.11 | Automatik je Input: bei Take abspielen / von vorn starten / nach Wegschalten pausieren | S | – |
+| INP.11 | Automatik je Input: bei Take abspielen / von vorn starten / nach Wegschalten pausieren | S | ✅ |
 | INP.12 | Live-Pause: Live-Quelle einfrieren, ohne Aufnahme/Wiederholung/Ton anzuhalten | S | – |
 | INP.13 | Offline-Zustand bei fehlender Quelle; Wiederverbinden; Datei neu zuordnen | M | – |
 | INP.14 | Seitenverhältnis je Input überschreiben | S | – |
@@ -245,7 +245,7 @@ kann es, Console nicht.
 | OVL.5 | Overlay je Ausgang abwählbar (Clean Feed) | M | – |
 | OVL.6 | Overlays auch auf Mix-Inputs (Aktion mit Mix-Liste) | S | – |
 | OVL.7 | Titel als Overlay: Ein-/Ausblendung nutzt die Titelanimation statt Kanaleffekt | S | – |
-| OVL.8 | "Alle Overlays aus"; letzter Input je Kanal wiederholen | S | – |
+| OVL.8 | "Alle Overlays aus"; letzter Input je Kanal wiederholen | S | ✅ |
 
 ### 3.7 Audio (AUD)
 
