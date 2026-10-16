@@ -39,7 +39,7 @@ const pass = (message) => console.log("ok   " + message);
 
   await page.dblclick('#inputs .tile[data-input="1"]');
   await page.waitForSelector('#inputs .tile.program[data-input="1"]', { timeout: 5000 });
-  pass("mixer: double click cuts straight to program");
+  pass("mixer: double click runs GO (quick play) to program");
   await page.screenshot({ path: process.env.SHOT_DIR + "/mixer.png" });
 
   await page.goto(base + "/tally?input=1");
@@ -62,6 +62,16 @@ const pass = (message) => console.log("ok   " + message);
   // The null engine has no pictures: the image is there, hidden.
   await page.waitForSelector("#keys .btn.program img[data-picture]", { state: "attached", timeout: 5000 });
   pass("keys: picture and tally of the input it switches");
+  // A key without an input stands as its MIDI lamp: all overlays off is
+  // on while an overlay shows, and off once it ran.
+  await fetch(base + "/api/actions", { method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ action: "overlay_in", channel: 1, input: 1, duration_ms: 0 }) });
+  const lit = await page.waitForSelector("#keys .btn.on .lamp", { timeout: 5000 });
+  if ((await lit.textContent()) !== "on") fail("keys: lamp word of a lit key");
+  await page.click("#keys .btn.on");
+  await page.waitForSelector("#keys .btn.on", { state: "detached", timeout: 5000 });
+  if ((await api("/api/state")).overlays.some((id) => id)) fail("keys: overlays not all off");
+  pass("keys: a key without an input stands as its MIDI lamp");
 
   if (frames.diff === 0 || frames.diff < frames.state) fail("diffs: " + JSON.stringify(frames));
   pass(`state as diffs (${frames.diff} diffs, ${frames.state} whole)`);

@@ -38,6 +38,16 @@
     </message>
     <message>
       <location line="+1" />
+      <source>Quick play of input</source>
+      <translation>Schnellstart des Inputs</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>GO of input</source>
+      <translation>GO des Inputs</translation>
+    </message>
+    <message>
+      <location line="+1" />
       <source>Overlay 1 on with input</source>
       <translation>Overlay 1 an mit Input</translation>
     </message>
@@ -82,7 +92,7 @@
       <translation>Andere (JSON)</translation>
     </message>
     <message>
-      <location line="+98" />
+      <location line="+100" />
       <source>Action %1 is not valid JSON</source>
       <translation>Aktion %1 ist kein gültiges JSON</translation>
     </message>
@@ -357,12 +367,12 @@
       <translation>Input %1 %2, eingeklappt</translation>
     </message>
     <message>
-      <location line="+4" />
-      <source>Click: into preview. Double click: cut. Right click: expand.</source>
-      <translation>Klick: in die Vorschau. Doppelklick: schneiden. Rechtsklick: ausklappen.</translation>
+      <location line="+5" />
+      <source>Click: %1. Double click (GO): %2. Right click: expand.</source>
+      <translation>Klick: %1. Doppelklick (GO): %2. Rechtsklick: aufklappen.</translation>
     </message>
     <message>
-      <location line="+13" />
+      <location line="+15" />
       <source>Expand</source>
       <translation>Ausklappen</translation>
     </message>
@@ -627,7 +637,7 @@
       <translation>Einstellungen von %1 %2</translation>
     </message>
     <message>
-      <location line="+53" />
+      <location line="+57" />
       <source>Name</source>
       <translation>Name</translation>
     </message>
@@ -658,6 +668,26 @@
     </message>
     <message>
       <location line="+7" />
+      <source>Click</source>
+      <translation>Klick</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>What a click on its tile does.</source>
+      <translation>Was ein Klick auf seine Kachel tut.</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>GO</source>
+      <translation>GO</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>What a double click on its tile, GO in its menu and the action go_input do. Quick play: to program with its own effect, and play.</source>
+      <translation>Was ein Doppelklick auf seine Kachel, GO in seinem Menü und die Aktion go_input tun. Schnellstart: mit eigenem Effekt auf Programm und abspielen.</translation>
+    </message>
+    <message>
+      <location line="+6" />
       <source>On air</source>
       <translation>Auf Sendung</translation>
     </message>
@@ -765,7 +795,7 @@
   <context>
     <name>InputTile</name>
     <message>
-      <location filename="../qml/InputTile.qml" line="+57" />
+      <location filename="../qml/InputTile.qml" line="+58" />
       <source>Input %1 %2</source>
       <translation>Input %1 %2</translation>
     </message>
@@ -781,11 +811,11 @@
     </message>
     <message>
       <location line="+1" />
-      <source>Click: preview. Double click: program. Right click: more.</source>
-      <translation>Klick: Vorschau. Doppelklick: Programm. Rechtsklick: mehr.</translation>
+      <source>Click: %1. Double click (GO): %2. Right click: more.</source>
+      <translation>Klick: %1. Doppelklick (GO): %2. Rechtsklick: mehr.</translation>
     </message>
     <message>
-      <location line="+29" />
+      <location line="+30" />
       <source>Audio only</source>
       <translation>Nur Ton</translation>
     </message>
@@ -883,6 +913,11 @@
       <location line="+5" />
       <source>Cut to program</source>
       <translation>Direkt auf Programm</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>GO: %1</source>
+      <translation>GO: %1</translation>
     </message>
     <message>
       <location line="+5" />
@@ -1588,7 +1623,7 @@
       <translation>Vorschau</translation>
     </message>
     <message>
-      <location line="+20" />
+      <location line="+23" />
       <source>Program</source>
       <translation>Programm</translation>
     </message>
@@ -2146,12 +2181,12 @@
     </message>
     <message>
       <location line="+1" />
-      <location line="+51" />
+      <location line="+59" />
       <source>NDI</source>
       <translation>NDI</translation>
     </message>
     <message>
-      <location line="-50" />
+      <location line="-58" />
       <source>WHIP (browser, OBS)</source>
       <translation>WHIP (Browser, OBS)</translation>
     </message>
@@ -2239,6 +2274,26 @@
       <location line="+1" />
       <source>Stinger</source>
       <translation>Stinger</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Into preview</source>
+      <translation>In die Vorschau</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Cut to program</source>
+      <translation>Direkt auf Programm</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Quick play</source>
+      <translation>Schnellstart</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Nothing</source>
+      <translation>Nichts</translation>
     </message>
     <message>
       <location line="+5" />
@@ -2754,7 +2809,7 @@
   <context>
     <name>TransitionPanel</name>
     <message>
-      <location filename="../qml/TransitionPanel.qml" line="+63" />
+      <location filename="../qml/TransitionPanel.qml" line="+64" />
       <source>Cut</source>
       <translation>Cut</translation>
     </message>
@@ -2765,21 +2820,33 @@
     </message>
     <message>
       <location line="+14" />
+      <location line="+58" />
       <source>Effect</source>
       <translation>Effekt</translation>
     </message>
     <message>
-      <location line="+12" />
+      <location line="-46" />
+      <location line="+52" />
       <source>Length</source>
       <translation>Dauer</translation>
     </message>
     <message>
-      <location line="+6" />
+      <location line="-46" />
       <source>Stinger clip and cut point…</source>
       <translation>Stinger-Clip und Cut-Punkt…</translation>
     </message>
     <message>
-      <location line="+12" />
+      <location line="+22" />
+      <source>Quick play</source>
+      <translation>Schnellstart</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Click: preview to program with this effect, and play it. Double click on the preview monitor does the same. Right click: effect and length.</source>
+      <translation>Klick: Vorschau mit diesem Effekt auf Programm und abspielen. Doppelklick auf den Vorschau-Monitor tut dasselbe. Rechtsklick: Effekt und Dauer.</translation>
+    </message>
+    <message>
+      <location line="+31" />
       <location line="+10" />
       <source>T-bar</source>
       <translation>T-Bar</translation>

@@ -2170,3 +2170,68 @@ den DSK wieder weg), behoben in strom 04b87d1.
 **Offen**: Ein Cut, während der T-Bar halb steht, lässt `t_bar` stehen
 (war schon so); die neue Vorschau gilt dann als eingeblendet und
 pausiert nicht.
+
+## 2026-10-16 — Schnellstart, Klick und GO je Input (SWI.8, INP.8, INP.9)
+
+**Entscheidung SWI.8**: Der Schnellstart hat einen eigenen Effekt in der
+Show (`quick_play {effect, duration_ms}`, Aktion `set_quick_play`,
+Standard Blende 500 ms, im Zustand und in der Show-Datei), neben den
+vier Übergangstasten und nicht als fünfte: er ist ein Weg auf Programm,
+keine Taste für den T-Bar. Kein Stinger (der bräuchte den Clip-Ablauf
+der Tasten; Fehler `bad_quick_play`). `quick_play {input}`:
+- Mit Input wie `cut_direct`, nur mit Effekt: die Vorschau bleibt, außer
+  der Input stand dort (dann Tausch wie beim Take). Ohne Input die
+  Vorschau (ein Layout dort wird nur übernommen).
+- Ein Clip (Datei, URL, Playlist) bekommt Play vor dem Umschalten, wie
+  bei der Automatik (INP.11); hat er dort „Abspielen“, startet ihn die
+  Automatik (kein doppeltes Play). Steht er schon auf Programm, spielt
+  er nur. Kein Neustart: wer von vorn will, setzt „Von Anfang“.
+- Ton folgt über die Dauer des Effekts; die Automatik pausiert den alten
+  Clip nach der Blende wie beim Übergang.
+- „Per Klick ins Preview-Fenster“: Doppelklick auf den Vorschau-Monitor
+  (ein einfacher Klick löst zu leicht aus). Dazu „Schnellstart“ unter den
+  Übergangstasten, Rechtsklick für Effekt und Dauer.
+
+**Entscheidung INP.8, INP.9**: Je Input zwei Felder `click` und `go` mit
+je einem von vier Werten, benannt wie die Aktion, die sie ausführen:
+`preview_input` (Standard Klick), `cut_direct`, `quick_play` (Standard
+GO), `none`. Keine freie Aktionsliste je Input, dafür gibt es
+Kurzbefehle; vier Werte bleiben in Menü und Show-Datei einfach
+(Standardwerte werden nicht geschrieben). Gesetzt mit
+`set_input_press {input, click?, go?}`, ausgeführt mit
+`click_input {input}` und `go_input {input}`: der Switcher macht daraus
+zuerst die genannte Aktion, Ton, Automatik und Fehler gelten wie dort.
+So gehen sie in Kurzbefehlen, Auslösern, Cues, über OSC (`/lmix/go`,
+`/lmix/quickplay`) und TCP.
+- GO ist der Doppelklick auf Kachel und eingeklappten Input und „GO: …“
+  im Kachelmenü, im Web-Mischpult ebenso. Bisher schnitt der Doppelklick
+  direkt auf Programm; jetzt ist es standardmäßig der Schnellstart (½ s
+  Blende, Clip spielt). Wer den harten Schnitt will, stellt GO auf
+  „Direkt auf Programm“. Eine eigene GO-Taste im Übergangsfeld gibt es
+  nicht: für die Vorschau ist das der Schnellstart-Knopf.
+- Ein Doppelklick löst vorher den Klick aus (Qt und Browser melden
+  beide); mit den Standardwerten geht der Input erst in die Vorschau,
+  dann nimmt der Schnellstart die Vorschau und der alte Programm-Input
+  kommt in die Vorschau, wie bisher beim Doppelklick.
+- Bricht (noch kein Release): der Doppelklick schneidet nicht mehr hart;
+  alte Show-Dateien laden mit den Standardwerten.
+
+**Nachtrag OVL.8** (offen aus PR #31): MIDI-Lampen (AUT.6) von
+`overlay_out` und `overlay_out_all` leuchten in Programmfarbe, solange
+der Kanal (irgendein Kanal) etwas zeigt; `overlay_last` in
+Programmfarbe, solange der Kanal etwas zeigt, in Vorschaufarbe, solange
+er seinen letzten Input wieder zeigen kann. `quick_play`, `click_input`
+und `go_input` leuchten wie `cut_direct` nach ihrem Input. Die Seite
+`/keys` zeigt dasselbe für Tasten ohne Input als Balken in Tally-Farbe
+und Wort („on“, „ready“), dabei auch FTB, Sperre und Ausgänge, die
+bisher nur die Lampen kannten.
+**Geprüft**: Switcher-Tests (Effekt und Vorschau, nur Abspielen auf
+Programm, kein Stinger, Automatik ohne doppeltes Play, Klick und GO),
+Lampen-Test, OSC-Zuordnung, `test-headless.sh` (OSC), `test-web.sh`
+(Doppelklick im Mischpult, Taste „Overlays aus“), Console auf Xvfb mit
+Null-Engine (Knopf und Menü, Doppelklick auf Vorschau und Kachel,
+Einstellungen, keine QML-Warnungen), `test-m2b-vm.sh` (pausierter Clip
+per Schnellstart auf Programm, spielt).
+**Offen**: Klick und GO kennen keine Overlay-Kanäle (vMix bietet mehr
+Ziele); ein Schnellstart, während der T-Bar halb steht, lässt ihn
+stehen wie Cut (siehe INP.11).

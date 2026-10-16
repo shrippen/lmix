@@ -6,7 +6,8 @@ import Kante
 
 /**
  * Cut, the four transition buttons (click: take preview; right click:
- * effect and length), fade to black and the overlay channels (click: the
+ * effect and length), quick play of preview (SWI.8, the same menu without
+ * the stinger), fade to black and the overlay channels (click: the
  * preview input on, or the overlay off; right click: the last input
  * again), with all overlays off.
  */
@@ -125,6 +126,51 @@ ColumnLayout {
                     height: visible ? implicitHeight : 0
                     onTriggered: panel.editStinger(button.modelData)
                 }
+            }
+        }
+    }
+
+    // Quick play (SWI.8): preview to program with its own effect, played
+    // if it is a clip. The right click sits on the item, as above.
+    Item {
+        id: quick
+        readonly property var setting: panel.show && panel.show.quick_play ? panel.show.quick_play : ({ effect: "fade", duration_ms: 500 })
+
+        Layout.fillWidth: true
+        implicitHeight: quickButton.implicitHeight
+
+        KanteButton {
+            id: quickButton
+            anchors.fill: parent
+            size: KanteButton.Size.Large
+            text: qsTr("Quick play") + "\n" + panel.effectLabel(quick.setting.effect) + " " + quick.setting.duration_ms + " ms"
+            enabled: panel.core.connected && panel.canTake
+            onClicked: panel.act({ action: "quick_play" })
+            QQC2.ToolTip.visible: hovered
+            QQC2.ToolTip.text: qsTr("Click: preview to program with this effect, and play it. Double click on the preview monitor does the same. Right click: effect and length.")
+        }
+
+        TapHandler {
+            acceptedButtons: Qt.RightButton
+            enabled: panel.core.connected
+            onTapped: quickMenu.popup()
+        }
+
+        QQC2.Menu {
+            id: quickMenu
+            KantePopupSkin { popup: quickMenu }
+
+            ChoiceMenu {
+                title: qsTr("Effect")
+                choices: panel.effects.filter(e => e.value !== "stinger")
+                current: quick.setting.effect
+                onPicked: value => panel.act({ action: "set_quick_play", effect: value, duration_ms: quick.setting.duration_ms })
+            }
+            ChoiceMenu {
+                title: qsTr("Length")
+                choices: panel.durations.map(ms => ({ value: ms, label: Texts.label("durations", ms) }))
+                current: quick.setting.duration_ms
+                onPicked: value => panel.act({ action: "set_quick_play", effect: quick.setting.effect, duration_ms: value })
             }
         }
     }

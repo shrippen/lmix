@@ -6,8 +6,8 @@ import Kante
 
 /**
  * Collapsed inputs (UI.3): a button each instead of a tile, red on
- * program and green in preview like a tile. Click: into preview; double
- * click: cut; right click: expand or cut.
+ * program and green in preview like a tile. Click and double click (GO)
+ * as on the tile; right click: expand or cut.
  */
 Flow {
     id: bar
@@ -62,10 +62,13 @@ Flow {
                     : entry.onPreview ? KanteButton.Emphasis.Primary : KanteButton.Emphasis.Normal
                 enabled: bar.core.connected
                 Accessible.name: qsTr("Input %1 %2, collapsed").arg(entry.modelData.number).arg(entry.modelData.name)
-                onClicked: bar.act({ action: "preview_input", input: entry.modelData.id })
-                onDoubleClicked: bar.act({ action: "cut_direct", input: entry.modelData.id })
+                // As on its tile (INP.8, INP.9).
+                onClicked: bar.act({ action: "click_input", input: entry.modelData.id })
+                onDoubleClicked: bar.act({ action: "go_input", input: entry.modelData.id })
                 QQC2.ToolTip.visible: hovered
-                QQC2.ToolTip.text: qsTr("Click: into preview. Double click: cut. Right click: expand.")
+                QQC2.ToolTip.text: qsTr("Click: %1. Double click (GO): %2. Right click: expand.")
+                    .arg(Texts.label("presses", entry.modelData.click || "preview_input"))
+                    .arg(Texts.label("presses", entry.modelData.go || "quick_play"))
             }
 
             TapHandler {

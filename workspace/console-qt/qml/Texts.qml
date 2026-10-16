@@ -48,6 +48,14 @@ QtObject {
             case "stinger": return qsTr("Stinger")
             }
             break
+        case "presses":
+            switch (value) {
+            case "preview_input": return qsTr("Into preview")
+            case "cut_direct": return qsTr("Cut to program")
+            case "quick_play": return qsTr("Quick play")
+            case "none": return qsTr("Nothing")
+            }
+            break
         case "colors":
             switch (value) {
             case "red": return qsTr("Red")

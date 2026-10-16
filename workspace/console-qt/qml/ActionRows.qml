@@ -27,6 +27,8 @@ ColumnLayout {
         { kind: "transition", label: qsTr("Transition button"), param: "button" },
         { kind: "preview_input", label: qsTr("Input into preview"), param: "input" },
         { kind: "cut_direct", label: qsTr("Input onto program"), param: "input" },
+        { kind: "quick_play", label: qsTr("Quick play of input"), param: "input" },
+        { kind: "go_input", label: qsTr("GO of input"), param: "input" },
         { kind: "overlay_in", label: qsTr("Overlay 1 on with input"), param: "input" },
         { kind: "overlay_out", label: qsTr("Overlay 1 off"), param: "" },
         { kind: "overlay_out_all", label: qsTr("All overlays off"), param: "" },
@@ -57,6 +59,8 @@ ColumnLayout {
         case "transition": return { action: "transition", slot: n }
         case "preview_input": return { action: "preview_input", input: n }
         case "cut_direct": return { action: "cut_direct", input: n }
+        case "quick_play": return { action: "quick_play", input: n }
+        case "go_input": return { action: "go_input", input: n }
         case "overlay_in": return { action: "overlay_in", channel: 1, input: n }
         case "overlay_out": return { action: "overlay_out", channel: 1 }
         case "overlay_out_all": return { action: "overlay_out_all" }
@@ -79,7 +83,7 @@ ColumnLayout {
         var plain = Object.keys(a).length
         if (a.action === "cut" && plain === 1) return { kind: "cut", index: 0 }
         if (a.action === "transition" && plain === 2) return { kind: "transition", index: number(a.slot) }
-        if ((a.action === "preview_input" || a.action === "cut_direct") && typeof a.input === "number" && plain === 2)
+        if (["preview_input", "cut_direct", "quick_play", "go_input"].indexOf(a.action) >= 0 && typeof a.input === "number" && plain === 2)
             return { kind: a.action, index: number(a.input) }
         if (a.action === "overlay_in" && a.channel === 1 && typeof a.input === "number" && plain <= 4 && overlayDefault(a))
             return { kind: "overlay_in", index: number(a.input) }

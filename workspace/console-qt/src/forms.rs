@@ -4,7 +4,8 @@
 //! passes strings.
 
 use lmix_types::{
-    Container, DisplayMode, Effect, InputColor, OutputSource, OutputSpec, SourceSpec, TestPattern,
+    Container, DisplayMode, Effect, InputColor, InputPress, OutputSource, OutputSpec, SourceSpec,
+    TestPattern,
 };
 use serde::{Deserialize, Serialize};
 
@@ -37,6 +38,7 @@ pub fn values(list: &str) -> Option<String> {
         .to_vec(),
         "effects" => Effect::ALL.map(name_of).to_vec(),
         "colors" => InputColor::ALL.map(name_of).to_vec(),
+        "presses" => InputPress::ALL.map(name_of).to_vec(),
         "containers" => Container::ALL.map(name_of).to_vec(),
         "outputs" => OUTPUT_KINDS.iter().map(|k| k.to_string()).collect(),
         "durations" => return serde_json::to_string(&DURATION_PRESETS_MS).ok(),
@@ -259,6 +261,10 @@ mod tests {
         assert_eq!(effects[2], "dip_to_black");
         assert!(values("sources").unwrap().contains("\"audio_device\""));
         assert!(values("containers").unwrap().contains("\"mkv\""));
+        assert_eq!(
+            values("presses").unwrap(),
+            r#"["preview_input","cut_direct","quick_play","none"]"#
+        );
         assert_eq!(values("durations").unwrap(), "[250,500,1000,2000]");
         assert_eq!(values("nope"), None);
     }

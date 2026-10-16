@@ -10,6 +10,7 @@
 //!   page, its files and what it reads (state, events, tally, pictures),
 //!   and only the actions the page itself sends, listed one by one: `tally`
 //!   none, `keys` the shortcuts marked for the web, `mixer` preview, cut,
+//!   click and GO of an input, quick play,
 //!   transition, FTB, layout preview, `titles` play, next, stop, update and
 //!   data sets of titles (never files, data sources or addresses);
 //! - a browser may not send requests across sites: a request whose
@@ -192,6 +193,9 @@ async fn open_action(access: &Access, service: &Service, action: &Action) -> Opt
             action,
             Action::PreviewInput { .. }
                 | Action::CutDirect { .. }
+                | Action::ClickInput { .. }
+                | Action::GoInput { .. }
+                | Action::QuickPlay { .. }
                 | Action::Cut
                 | Action::Transition { .. }
                 | Action::FadeToBlack { .. }

@@ -150,12 +150,16 @@ grep -q '^# TYPE lmix_input_online gauge$' <<<"$metrics" || fail "metrics: input
 pass "metrics: Prometheus text with inputs and tally"
 
 # OVL.8 over OSC: all overlays off, the last input of a channel again.
+# An address and string arguments.
 osc_send() {
     python3 -I - "$OSC_PORT" "$@" <<'PY'
 import socket, sys
 def pad(b): return b + b"\0" * (4 - len(b) % 4)
+args = sys.argv[3:]
+packet = pad(sys.argv[2].encode()) + pad(("," + "s" * len(args)).encode())
+packet += b"".join(pad(a.encode()) for a in args)
 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-s.sendto(pad(sys.argv[2].encode()) + pad(b","), ("127.0.0.1", int(sys.argv[1])))
+s.sendto(packet, ("127.0.0.1", int(sys.argv[1])))
 PY
 }
 act '{"action":"overlay_in","channel":1,"input":"Bars","duration_ms":0}'
@@ -165,4 +169,17 @@ wait_for state_is '.overlays == [null,null,null,null]' || fail "OSC: overlays no
 osc_send /lmix/overlay/2/last
 wait_for state_is ".overlays[1] == \"$ball_id\" and .overlays[0] == null" || fail "OSC: last input not back"
 pass "OSC: all overlays off, last input of a channel again"
+
+# SWI.8, INP.9 over OSC: quick play of preview, GO of an input.
+bars_id="$(curl -sf "$CORE/api/state" | jq -r '.inputs[] | select(.name=="Bars") | .id')"
+act '{"action":"t_bar","position":0}'
+act '{"action":"cut_direct","input":"Ball"}'
+act '{"action":"preview_input","input":"Bars"}'
+osc_send /lmix/quickplay
+wait_for state_is ".program == \"$bars_id\" and .preview == \"$ball_id\"" || fail "OSC: quick play did not take preview"
+act '{"action":"preview_input","input":"Ball"}'
+act '{"action":"set_input_press","input":"Ball","go":"cut_direct"}'
+osc_send /lmix/go Ball
+wait_for state_is ".program == \"$ball_id\"" || fail "OSC: GO did not run the input's GO action"
+pass "OSC: quick play of preview, GO of an input"
 echo "headless check passed"

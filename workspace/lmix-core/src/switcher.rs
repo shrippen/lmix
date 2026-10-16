@@ -15,9 +15,10 @@ use lmix_types::shortcut::SHORTCUT_ACTIONS;
 use lmix_types::state::API_VERSION;
 use lmix_types::{
     Action, ActionError, AutoPlay, AuxBus, BoxCrop, BoxRect, BoxSpec, ChannelStrip, Effect, Ingest,
-    Input, InputColor, InputId, InputRef, InputStatus, Layout, LayoutBox, Listen, Look, Output,
-    OutputId, OutputRef, OutputSource, OutputSpec, OutputStatus, Shortcut, ShortcutSpec, ShowState,
-    SignalLoss, SourceSpec, Stinger, StingerSpec, Transition, TransitionSlot, Transport,
+    Input, InputColor, InputId, InputPress, InputRef, InputStatus, Layout, LayoutBox, Listen, Look,
+    Output, OutputId, OutputRef, OutputSource, OutputSpec, OutputStatus, QuickPlay, Shortcut,
+    ShortcutSpec, ShowState, SignalLoss, SourceSpec, Stinger, StingerSpec, Transition,
+    TransitionSlot, Transport,
 };
 use lmix_types::{Cue, CueList, MidiKind, MidiMessage, Trigger, TriggerOn};
 use std::collections::HashMap;
@@ -481,6 +482,9 @@ impl Switcher {
     /// Apply one action. File actions (new/open/save) are handled by the
     /// service, which needs I/O; it calls [`Self::replace`] for them.
     pub fn apply(&mut self, action: Action) -> Result<Vec<Command>, ActionError> {
+        let Some(action) = self.pressed(action)? else {
+            return Ok(Vec::new());
+        };
         let ramp_ms = self.audio_ramp(&action);
         let leave_ms = self.leave_ms(&action);
         let airing = self.airing();
@@ -680,6 +684,13 @@ impl Switcher {
                 entry.auto_play = auto_play;
                 Ok(Vec::new())
             }
+            Action::SetInputPress { input, click, go } => {
+                let index = self.find(&input)?;
+                let entry = &mut self.show.inputs[index];
+                entry.click = click.unwrap_or(entry.click);
+                entry.go = go.unwrap_or(entry.go);
+                Ok(Vec::new())
+            }
             Action::AddOutput {
                 spec,
                 source,
@@ -752,6 +763,24 @@ impl Switcher {
                 reason: "sent by the service".into(),
             }),
             Action::Transition { slot } => self.transition(slot),
+            Action::QuickPlay { input } => self.quick_play(input.as_ref()),
+            Action::SetQuickPlay {
+                effect,
+                duration_ms,
+            } => {
+                if effect == Effect::Stinger {
+                    return Err(ActionError::BadQuickPlay {
+                        reason: "a stinger needs a transition button".into(),
+                    });
+                }
+                self.show.quick_play = QuickPlay {
+                    effect,
+                    duration_ms,
+                };
+                Ok(Vec::new())
+            }
+            // `apply` turns these into what the input's setting names.
+            Action::ClickInput { .. } | Action::GoInput { .. } => Ok(Vec::new()),
             Action::SetTransition {
                 slot,
                 effect,
@@ -940,6 +969,8 @@ impl Switcher {
                 listen: self.listen_of(input.id),
                 signal_loss: input.signal_loss,
                 auto_play: input.auto_play,
+                click: input.click,
+                go: input.go,
                 strip: input.strip,
                 sends: input.sends,
                 look: input.look,
@@ -962,6 +993,7 @@ impl Switcher {
             preview: self.show.preview,
             program: self.show.program,
             transitions: self.show.transitions.clone(),
+            quick_play: self.show.quick_play,
             fade_to_black: self.fade_to_black,
             slots: self.slots,
             outputs: self.outputs_state(),
@@ -1072,6 +1104,8 @@ impl Switcher {
             audio: Default::default(),
             signal_loss: SignalLoss::default(),
             auto_play: AutoPlay::default(),
+            click: InputPress::click(),
+            go: InputPress::go(),
             strip: ChannelStrip::default(),
             sends: [0; AUX_BUSES],
             look: Look::default(),
@@ -1396,6 +1430,74 @@ impl Switcher {
         self.stinger_until =
             Some(Instant::now() + Duration::from_millis(u64::from(button.duration_ms)));
         Ok(commands)
+    }
+
+    /// Quick play (SWI.8): `input` (preview when none) to program with
+    /// the quick play effect, played first if it is a clip. Like
+    /// `cut_direct`, preview stays unless the input was in it; on program
+    /// already, it only plays.
+    fn quick_play(&mut self, input: Option<&InputRef>) -> Result<Vec<Command>, ActionError> {
+        self.check_no_stinger()?;
+        let QuickPlay {
+            effect,
+            duration_ms,
+        } = self.show.quick_play;
+        let index = match input {
+            Some(input) => Some(self.find(input)?),
+            None => match self.show.preview {
+                None => return Err(ActionError::NoPreview),
+                // A layout in preview: taken, nothing to play.
+                Some(id) => self.show.inputs.iter().position(|i| i.id == id),
+            },
+        };
+        let Some(index) = index else {
+            return self.take(effect, duration_ms);
+        };
+        let entry = &self.show.inputs[index];
+        no_video_check(entry)?;
+        let (id, slot) = (entry.id, entry.slot);
+        // Automatic playback starts it already as it goes on air.
+        let plays =
+            entry.source.has_transport() && !(entry.auto_play.play && !self.airing().contains(&id));
+        let mut commands = Vec::new();
+        if plays {
+            commands.push(Command::Transport {
+                slot,
+                transport: Transport::Play,
+            });
+        }
+        if self.show.program == Some(id) {
+            return Ok(commands);
+        }
+        if self.show.preview == Some(id) {
+            commands.extend(self.take(effect, duration_ms)?);
+        } else {
+            self.show.program = Some(id);
+            commands.extend(program_then_preview(Some(slot), None, effect, duration_ms));
+        }
+        Ok(commands)
+    }
+
+    /// `click_input` and `go_input` as the action the input's setting
+    /// names (INP.8, INP.9); `None` when that is nothing.
+    fn pressed(&self, action: Action) -> Result<Option<Action>, ActionError> {
+        let (input, press) = match action {
+            Action::ClickInput { input } => {
+                let press = self.show.inputs[self.find(&input)?].click;
+                (input, press)
+            }
+            Action::GoInput { input } => {
+                let press = self.show.inputs[self.find(&input)?].go;
+                (input, press)
+            }
+            action => return Ok(Some(action)),
+        };
+        Ok(match press {
+            InputPress::PreviewInput => Some(Action::PreviewInput { input }),
+            InputPress::CutDirect => Some(Action::CutDirect { input }),
+            InputPress::QuickPlay => Some(Action::QuickPlay { input: Some(input) }),
+            InputPress::None => None,
+        })
     }
 
     // ---- Automation ----
@@ -2344,6 +2446,9 @@ impl Switcher {
                 .ok()
                 .filter(|b| b.effect != Effect::Cut)
                 .map_or(0, |b| b.duration_ms),
+            Action::QuickPlay { .. } if self.show.quick_play.effect != Effect::Cut => {
+                self.show.quick_play.duration_ms
+            }
             Action::OverlayIn { duration_ms, .. }
             | Action::OverlayOut { duration_ms, .. }
             | Action::OverlayOutAll { duration_ms }
@@ -2652,11 +2757,15 @@ impl Switcher {
     /// Audio follows the picture: a take fades sound as long as the
     /// transition; everything else only de-clicks.
     fn audio_ramp(&self, action: &Action) -> u32 {
-        let Action::Transition { slot } = action else {
-            return AUDIO_RAMP_MS;
-        };
-        self.button(*slot)
-            .map_or(AUDIO_RAMP_MS, |b| b.duration_ms.max(AUDIO_RAMP_MS))
+        match action {
+            Action::Transition { slot } => self
+                .button(*slot)
+                .map_or(AUDIO_RAMP_MS, |b| b.duration_ms.max(AUDIO_RAMP_MS)),
+            Action::QuickPlay { .. } if self.show.quick_play.effect != Effect::Cut => {
+                self.show.quick_play.duration_ms.max(AUDIO_RAMP_MS)
+            }
+            _ => AUDIO_RAMP_MS,
+        }
     }
 
     /// Channels whose wanted setting differs from what the engine has.
@@ -3672,6 +3781,204 @@ mod tests {
         // Cut back during the fade.
         sw.apply(Action::Cut).unwrap();
         assert_eq!(sw.still_due(later), []);
+    }
+
+    /// Commands without the audio follow-video ones.
+    fn picture_and_players(cmds: &[Command]) -> Vec<Command> {
+        cmds.iter()
+            .filter(|c| !matches!(c, Command::SetAudio { .. }))
+            .cloned()
+            .collect()
+    }
+
+    #[test]
+    fn quick_play_fades_the_input_in_and_plays_it() {
+        let mut sw = with_clips(AutoPlay::default());
+        sw.apply(Action::CutDirect { input: named("A") }).unwrap();
+        sw.apply(Action::PreviewInput { input: named("B") })
+            .unwrap();
+        assert_eq!(sw.state().quick_play, QuickPlay::default());
+        sw.apply(Action::SetAudioFollow {
+            input: named("Clip 1"),
+            follow: true,
+        })
+        .unwrap();
+
+        // Not in preview: straight over, preview stays.
+        let cmds = sw
+            .apply(Action::QuickPlay {
+                input: Some(named("Clip 1")),
+            })
+            .unwrap();
+        assert_eq!(
+            picture_and_players(&cmds),
+            [
+                transport(2, Transport::Play),
+                Command::Program {
+                    slot: Some(2),
+                    effect: Effect::Fade,
+                    duration_ms: 500
+                },
+            ]
+        );
+        let state = sw.state();
+        assert_eq!(state.program, Some(state.inputs[2].id));
+        assert_eq!(state.preview, Some(state.inputs[1].id));
+        // Its sound follows over the length of the fade.
+        assert_eq!(audio_of(&cmds), [(2, false, 500)]);
+
+        // On program already: it only plays.
+        assert_eq!(
+            sw.apply(Action::QuickPlay {
+                input: Some(named("Clip 1")),
+            }),
+            Ok(vec![transport(2, Transport::Play)])
+        );
+
+        // No input: preview, taken as with a transition button.
+        let cmds = sw.apply(Action::QuickPlay { input: None }).unwrap();
+        assert_eq!(
+            picture_and_players(&cmds),
+            [
+                Command::Program {
+                    slot: Some(1),
+                    effect: Effect::Fade,
+                    duration_ms: 500
+                },
+                Command::Preview { slot: 2 },
+            ]
+        );
+        assert_eq!(sw.tally(), [0, 1, 2, 0]);
+
+        let mut empty = two_inputs();
+        empty
+            .apply(Action::AddInput {
+                source: SourceSpec::AudioDevice { id: "mic".into() },
+                name: Some("Mic".into()),
+            })
+            .unwrap();
+        assert!(matches!(
+            empty.apply(Action::QuickPlay {
+                input: Some(named("Mic")),
+            }),
+            Err(ActionError::NoVideo { .. })
+        ));
+        assert_eq!(
+            empty.apply(Action::QuickPlay { input: None }),
+            Err(ActionError::NoPreview)
+        );
+    }
+
+    #[test]
+    fn quick_play_has_its_own_effect_but_no_stinger() {
+        let mut sw = with_clips(AutoPlay::default());
+        sw.apply(Action::SetQuickPlay {
+            effect: Effect::WipeLeft,
+            duration_ms: 1000,
+        })
+        .unwrap();
+        assert_eq!(
+            sw.state().quick_play,
+            QuickPlay {
+                effect: Effect::WipeLeft,
+                duration_ms: 1000
+            }
+        );
+        assert!(matches!(
+            sw.apply(Action::SetQuickPlay {
+                effect: Effect::Stinger,
+                duration_ms: 1000,
+            }),
+            Err(ActionError::BadQuickPlay { .. })
+        ));
+        let cmds = sw
+            .apply(Action::QuickPlay {
+                input: Some(named("A")),
+            })
+            .unwrap();
+        assert_eq!(
+            cmds[0],
+            Command::Program {
+                slot: Some(0),
+                effect: Effect::WipeLeft,
+                duration_ms: 1000
+            }
+        );
+        // The transition buttons are untouched.
+        assert_eq!(sw.state().transitions[0].effect, Effect::Fade);
+    }
+
+    #[test]
+    fn quick_play_with_automatic_playback_plays_once_and_pauses_the_old() {
+        let mut sw = with_clips(PLAY_AND_PAUSE);
+        sw.apply(Action::CutDirect {
+            input: named("Clip 1"),
+        })
+        .unwrap();
+
+        let cmds = sw
+            .apply(Action::QuickPlay {
+                input: Some(named("Clip 2")),
+            })
+            .unwrap();
+
+        let plays = cmds
+            .iter()
+            .filter(|c| **c == transport(3, Transport::Play))
+            .count();
+        assert_eq!(plays, 1, "{cmds:?}");
+        assert_eq!(cmds[0], transport(3, Transport::Play));
+        assert_eq!(
+            cmds[cmds.len() - 2..],
+            [Command::Wait { ms: 500 }, transport(2, Transport::Pause)]
+        );
+    }
+
+    #[test]
+    fn click_and_go_do_what_the_input_says() {
+        let mut sw = with_clips(AutoPlay::default());
+        let clip = || named("Clip 1");
+        let state = sw.state();
+        assert_eq!(state.inputs[2].click, InputPress::PreviewInput);
+        assert_eq!(state.inputs[2].go, InputPress::QuickPlay);
+
+        // Defaults: click into preview, GO quick play.
+        sw.apply(Action::ClickInput { input: clip() }).unwrap();
+        assert_eq!(sw.tally(), [0, 0, 2, 0]);
+        let cmds = sw.apply(Action::GoInput { input: clip() }).unwrap();
+        assert_eq!(cmds[0], transport(2, Transport::Play));
+        assert_eq!(sw.tally(), [0, 0, 1, 0]);
+
+        // Click straight to program; GO left as it is.
+        sw.apply(Action::SetInputPress {
+            input: named("A"),
+            click: Some(InputPress::CutDirect),
+            go: None,
+        })
+        .unwrap();
+        sw.apply(Action::ClickInput { input: named("A") }).unwrap();
+        assert_eq!(sw.tally(), [1, 0, 0, 0]);
+        assert_eq!(sw.state().inputs[0].go, InputPress::QuickPlay);
+
+        // Nothing: no change, no error.
+        sw.apply(Action::SetInputPress {
+            input: clip(),
+            click: Some(InputPress::None),
+            go: Some(InputPress::None),
+        })
+        .unwrap();
+        assert_eq!(
+            sw.apply(Action::ClickInput { input: clip() }),
+            Ok(Vec::new())
+        );
+        assert_eq!(sw.apply(Action::GoInput { input: clip() }), Ok(Vec::new()));
+        assert_eq!(sw.tally(), [1, 0, 0, 0]);
+        assert!(matches!(
+            sw.apply(Action::GoInput {
+                input: named("Nope")
+            }),
+            Err(ActionError::UnknownInput { .. })
+        ));
     }
 
     #[test]
