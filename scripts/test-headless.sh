@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # lmix-core without GUI (OPS.1): show loaded at start, text protocol over
 # TCP (API.5), OSC (AUT.13), MIDI from a FIFO (AUT.4), /metrics (OPS.3),
-# clean stop on SIGTERM. Null engine, no strom needed.
+# clean stop on SIGTERM, layout templates (LAY.5). Null engine, no strom
+# needed.
 #
 #   scripts/test-headless.sh
 #   KEEP_WORK=1 scripts/test-headless.sh   # keep logs
@@ -36,7 +37,7 @@ up() { for _ in $(seq 1 60); do curl -sf "$CORE/health" >/dev/null && return 0; 
 CORE_BIN="${CARGO_TARGET_DIR:-$ROOT/workspace/lmix-core/target}/release/lmix-core"
 start() {
     "$CORE_BIN" --engine none --listen "127.0.0.1:${PORT}" --tcp "127.0.0.1:${TCP_PORT}" --osc "127.0.0.1:${OSC_PORT}" --midi "$WORK/midi" \
-        --autosave "$WORK/autosave.lmix" --shortcuts "$WORK/shortcuts.json" "$@" >>"$WORK/core.log" 2>&1 &
+        --autosave "$WORK/autosave.lmix" --shortcuts "$WORK/shortcuts.json" --layout-templates "$WORK/layout-templates.json" "$@" >>"$WORK/core.log" 2>&1 &
     PIDS+=($!)
     up || fail "lmix-core did not come up"
 }
@@ -182,4 +183,25 @@ act '{"action":"set_input_press","input":"Ball","go":"cut_direct"}'
 osc_send /lmix/go Ball
 wait_for state_is ".program == \"$ball_id\"" || fail "OSC: GO did not run the input's GO action"
 pass "OSC: quick play of preview, GO of an input"
+
+# OVL.3 over OSC, OVL.2: an overlay prepared on preview goes on with the
+# take (cut, the channel's setting) and off by itself after 1.5 s.
+act '{"action":"overlay_out_all","duration_ms":0}'
+act '{"action":"set_overlay","channel":3,"effect":"cut","duration_ms":0,"auto_off_ms":1500}'
+osc_send /lmix/overlay/3/preview Ball
+wait_for state_is ".overlay_preview[2] == \"$ball_id\" and .overlay_channels[2].auto_off_ms == 1500" \
+    || fail "OSC: overlay not prepared"
+act '{"action":"cut"}'
+state_is ".overlays[2] == \"$ball_id\" and .overlay_preview[2] == null" || fail "prepared overlay did not go on with the take"
+wait_for state_is '.overlays[2] == null' || fail "overlay did not go off by itself"
+pass "OSC: overlay prepared on preview goes on with the take, off by itself"
+
+# LAY.5: a layout as a template in its own file, loaded as a new layout.
+act '{"action":"add_layout","name":"Corner","background":"Bars","boxes":[{"rect":{"x":0.7,"y":0.05,"w":0.25,"h":0.25},"input":"Ball"}]}'
+act '{"action":"save_layout_template","layout":"Corner"}'
+[[ "$(jq -r '.format + " " + .templates[0].name' "$WORK/layout-templates.json")" == "lmix-layouts Corner" ]] \
+    || fail "layout template not in its file"
+act '{"action":"load_layout_template","template":"Corner","name":"Corner 2"}'
+state_is '.layouts[1].name == "Corner 2" and .layouts[1].boxes[0].rect.x == 0.7' || fail "template not loaded"
+pass "layout template saved apart from the show and loaded"
 echo "headless check passed"
