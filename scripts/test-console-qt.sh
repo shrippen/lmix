@@ -89,8 +89,8 @@ XDG_CONFIG_HOME="$WORK/config" DISPLAY="$DISPLAY_NO" QT_QPA_PLATFORM=xcb QT_FORC
 PIDS+=($!)
 PROGRAM_AREA="600x340+810+180"
 PREVIEW_AREA="600x340+20+180"
-TILE_1="200x110+12+660"
-TILE_2="200x110+232+660"
+TILE_1="200x75+12+608"
+TILE_2="200x75+232+608"
 # The live flows start a few seconds after the Console, and on a VM
 # software GL shares four cores with the CPU mixer: pictures can stall
 # for seconds. Each check needs to hold once within LIVE_WAIT seconds.
@@ -110,7 +110,7 @@ done
 [[ -n "$tile_1_moves" ]] && pass "tile 1 moves (ball)" || fail "tile 1 still"
 [[ -n "$tile_2_shows" ]] && pass "tile 2 shows its picture" || fail "tile 2 blank"
 
-click 330 710
+click 330 645
 becomes preview 2
 [[ "$(number_of preview)" == 2 ]] && pass "click on a tile: preview" || fail "preview is $(number_of preview), not 2"
 # Cut acts on what the Console shows: wait until its preview has the picture.
@@ -119,7 +119,7 @@ for _ in $(seq 1 60); do
     awk "BEGIN { exit !($(spread p "$PREVIEW_AREA") > 0.05) }" && break
     sleep 1
 done
-click 720 220
+click 720 147
 becomes program 2
 [[ "$(number_of program)" == 2 ]] && pass "Cut: program" || fail "program is $(number_of program) after Cut"
 shot c
