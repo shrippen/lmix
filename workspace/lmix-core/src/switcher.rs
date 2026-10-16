@@ -10,7 +10,10 @@
 use lmix_types::action::{
     aux_index, AUTO_OFF_MAX_MS, DYNAMIC_SLOTS, OVERLAY_CHANNELS, TRANSITION_SLOTS,
 };
-use lmix_types::automation::{AUTOMATION_ACTIONS, CUES, TRIGGERS, TRIGGER_DELAY_MAX_MS};
+use lmix_types::automation::{AUTOMATION_ACTIONS, TRIGGERS, TRIGGER_DELAY_MAX_MS};
+use lmix_types::cue::{
+    CueKind, CUES, CUE_WAIT_MAX_MS, CUE_WAIT_STEP_MS, GO_GUARD_MAX_MS, GROUP_CHILDREN, GROUP_DEPTH,
+};
 use lmix_types::input::{color_rgb, AUX_BUSES, REF_DYNAMIC, REF_PREVIEW, REF_PROGRAM, VOLUME_MAX};
 use lmix_types::layout::{BORDER_MAX_PX, LAYOUTS, LAYOUT_BOXES, LAYOUT_TEMPLATES};
 use lmix_types::shortcut::SHORTCUT_ACTIONS;
@@ -24,6 +27,8 @@ use lmix_types::{
     Transport,
 };
 use lmix_types::{Cue, CueList, MidiKind, MidiMessage, Trigger, TriggerOn};
+
+use crate::cues::{Out, Runner};
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 use uuid::Uuid;
@@ -187,8 +192,12 @@ fn runs_automation(action: &Action) -> bool {
                 | Action::SetCueList { .. }
                 | Action::RemoveCueList { .. }
                 | Action::CueGo { .. }
-                | Action::CueBack { .. }
-                | Action::CueJump { .. }
+                | Action::CueStart { .. }
+                | Action::CueStop { .. }
+                | Action::CueStandby { .. }
+                | Action::CueReset
+                | Action::SetActiveCueList { .. }
+                | Action::SetGoGuard { .. }
         )
 }
 
@@ -226,21 +235,103 @@ fn dynamic_index(slot: u8) -> Result<usize, ActionError> {
     Ok(usize::from(slot - 1))
 }
 
-/// A name, at most `CUES` cues, each with 1–16 safe actions.
+/// A name and at most `CUES` well-formed cues (CUE.1–11, CUE.20).
 fn check_cues(name: &str, cues: &[Cue]) -> Result<(), ActionError> {
-    let bad = |reason: String| Err(ActionError::BadCueList { reason });
     if name.trim().is_empty() {
-        return bad("it needs a name".into());
+        return Err(bad_cues("it needs a name".into()));
     }
     if cues.len() > CUES {
-        return bad(format!("at most {CUES} cues"));
+        return Err(bad_cues(format!("at most {CUES} cues")));
     }
-    for cue in cues {
-        if cue.actions.is_empty() || cue.actions.len() > AUTOMATION_ACTIONS {
-            return bad(format!("1–{AUTOMATION_ACTIONS} actions per cue"));
+    cues.iter().try_for_each(|cue| check_cue(cue, 0))
+}
+
+fn bad_cues(reason: String) -> ActionError {
+    ActionError::BadCueList { reason }
+}
+
+/// One cue and its children, `depth` group levels down. Fields of
+/// another kind are refused, so a typo in a script shows.
+fn check_cue(cue: &Cue, depth: usize) -> Result<(), ActionError> {
+    let named = cue.display_name();
+    let bad = |what: &str| Err(bad_cues(format!("cue {named}: {what}")));
+    for wait in [
+        cue.pre_wait_ms,
+        cue.post_wait_ms,
+        cue.duration_ms.unwrap_or(0),
+    ] {
+        if wait > CUE_WAIT_MAX_MS || wait % CUE_WAIT_STEP_MS != 0 {
+            return bad(&format!(
+                "waits are 0–{CUE_WAIT_MAX_MS} ms in steps of {CUE_WAIT_STEP_MS} ms"
+            ));
         }
-        if cue.actions.iter().any(runs_automation) {
-            return bad("cues cannot run shortcuts, cues or change automation".into());
+    }
+    let own = |field: bool, kind: CueKind| !field || cue.kind == kind;
+    if !own(!cue.actions.is_empty(), CueKind::Actions)
+        || !own(cue.duration_ms.is_some(), CueKind::Wait)
+        || !own(cue.target.is_some(), CueKind::Start)
+        || !own(
+            cue.mode.is_some() || !cue.children.is_empty(),
+            CueKind::Group,
+        )
+    {
+        return bad("has fields of another kind");
+    }
+    match cue.kind {
+        CueKind::Actions => {
+            if cue.actions.is_empty() || cue.actions.len() > AUTOMATION_ACTIONS {
+                return bad(&format!("1–{AUTOMATION_ACTIONS} actions"));
+            }
+            if cue.actions.iter().any(runs_automation) {
+                return bad(
+                    "actions cannot run shortcuts, cues or change automation; use a start cue",
+                );
+            }
+        }
+        CueKind::Note => {}
+        CueKind::Wait if cue.duration_ms.is_none() => return bad("a wait needs duration_ms"),
+        CueKind::Wait => {}
+        CueKind::Start => {
+            let target = cue.target.clone().unwrap_or_default();
+            if target.list.is_none() && target.cue.is_none() {
+                return bad("a start cue needs a target cue or list");
+            }
+        }
+        CueKind::Group => {
+            if cue.children.is_empty() || cue.children.len() > GROUP_CHILDREN {
+                return bad(&format!("a group has 1–{GROUP_CHILDREN} cues"));
+            }
+            if depth + 1 > GROUP_DEPTH {
+                return bad(&format!("groups are at most {GROUP_DEPTH} levels deep"));
+            }
+            for child in &cue.children {
+                check_cue(child, depth + 1)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Ids and numbers set are unique in the whole show (CUE.1).
+fn check_unique(lists: &[ShowCueList]) -> Result<(), ActionError> {
+    fn walk<'a>(cues: &'a [Cue], all: &mut Vec<&'a Cue>) {
+        for cue in cues {
+            all.push(cue);
+            walk(&cue.children, all);
+        }
+    }
+    let mut all = Vec::new();
+    for list in lists {
+        walk(&list.cues, &mut all);
+    }
+    let mut ids = std::collections::HashSet::new();
+    let mut numbers = std::collections::HashSet::new();
+    for cue in all {
+        if !ids.insert(cue.id) {
+            return Err(bad_cues(format!("cue id {} twice", cue.id)));
+        }
+        if !cue.number.is_empty() && !numbers.insert(cue.number.as_str()) {
+            return Err(bad_cues(format!("cue number {} twice", cue.number)));
         }
     }
     Ok(())
@@ -285,8 +376,8 @@ pub struct Switcher {
     locked: bool,
     /// Inputs closed last, with their place in the bar (AUT.10).
     removed: Vec<(usize, ShowInput)>,
-    /// Next cue per list (0-based); a list missing here starts at 0.
-    cue_next: HashMap<InputId, usize>,
+    /// Standby and running cues of the cue lists.
+    cues: Runner,
     status: HashMap<InputId, InputStatus>,
     /// Audio channel settings the engine has, per slot.
     mix: HashMap<usize, Mix>,
@@ -340,7 +431,7 @@ impl Switcher {
             looks_available: false,
             locked: false,
             removed: Vec::new(),
-            cue_next: HashMap::new(),
+            cues: Runner::default(),
             status: HashMap::new(),
             mix: HashMap::new(),
             listen: HashMap::new(),
@@ -614,47 +705,57 @@ impl Switcher {
             Action::SetTriggers { input, triggers } => self.set_triggers(&input, triggers),
             Action::AddCueList { name, cues } => {
                 check_cues(&name, &cues)?;
-                self.show.cue_lists.push(ShowCueList {
+                let mut lists = self.show.cue_lists.clone();
+                lists.push(ShowCueList {
                     id: InputId::new(),
                     name,
                     cues,
                 });
+                check_unique(&lists)?;
+                self.show.cue_lists = lists;
                 Ok(Vec::new())
             }
             Action::SetCueList { list, name, cues } => {
                 let index = self.find_cue_list(&list)?;
                 check_cues(&name, &cues)?;
-                let entry = &mut self.show.cue_lists[index];
-                entry.name = name;
-                entry.cues = cues;
-                // Editing during the show keeps the place in the list.
-                if let Some(next) = self.cue_next.get_mut(&entry.id) {
-                    *next = (*next).min(entry.cues.len());
-                }
+                let mut lists = self.show.cue_lists.clone();
+                lists[index].name = name;
+                lists[index].cues = cues;
+                check_unique(&lists)?;
+                self.show.cue_lists = lists;
+                // Editing during the show keeps standby and running cues.
+                self.cues.list_changed(&self.show.cue_lists);
                 Ok(Vec::new())
             }
             Action::RemoveCueList { list } => {
                 let index = self.find_cue_list(&list)?;
-                let removed = self.show.cue_lists.remove(index);
-                self.cue_next.remove(&removed.id);
+                self.show.cue_lists.remove(index);
+                self.cues.list_changed(&self.show.cue_lists);
                 Ok(Vec::new())
             }
-            Action::CueJump { list, cue } => {
+            Action::CueStandby { list, to } => {
+                let index = self.cue_list_or_active(list.as_ref())?;
+                self.cues.move_standby(&self.show.cue_lists, index, &to)?;
+                Ok(Vec::new())
+            }
+            Action::SetActiveCueList { list } => {
                 let index = self.find_cue_list(&list)?;
-                let entry = &self.show.cue_lists[index];
-                let next = (cue as usize)
-                    .checked_sub(1)
-                    .filter(|c| *c < entry.cues.len())
-                    .ok_or_else(|| ActionError::BadCueList {
-                        reason: format!("no cue {cue}"),
-                    })?;
-                self.cue_next.insert(entry.id, next);
+                self.cues.set_active(self.show.cue_lists[index].id);
                 Ok(Vec::new())
             }
-            // The service runs a cue's actions one by one.
-            Action::CueGo { .. } | Action::CueBack { .. } => Err(ActionError::BadCueList {
-                reason: "run through the service".into(),
-            }),
+            Action::SetGoGuard { ms } => {
+                if ms > GO_GUARD_MAX_MS {
+                    return Err(bad_cues(format!("the GO guard is 0–{GO_GUARD_MAX_MS} ms")));
+                }
+                self.show.go_guard_ms = ms;
+                Ok(Vec::new())
+            }
+            // They start cues in time: through the service (cue_go and
+            // the like below).
+            Action::CueGo { .. }
+            | Action::CueStart { .. }
+            | Action::CueStop { .. }
+            | Action::CueReset => Err(bad_cues("run through the service".into())),
             Action::SetLock { on } => {
                 self.locked = on;
                 Ok(Vec::new())
@@ -913,6 +1014,9 @@ impl Switcher {
         commands.extend(self.clear_listen());
         commands.extend(self.stop_all_outputs());
         self.show = show;
+        // Cues of the old show stop without a word; a new show starts at
+        // the top of every list.
+        self.cues = Runner::default();
         self.distinct_shortcut_ids();
         self.path = path;
         // Closed inputs belong to the old show.
@@ -1105,9 +1209,14 @@ impl Switcher {
                     number: i as u32 + 1,
                     name: l.name.clone(),
                     cues: l.cues.clone(),
-                    next: self.cue_next.get(&l.id).copied().unwrap_or(0) as u32 + 1,
+                    standby: self.cues.standby(l.id) as u32 + 1,
+                    active: self.cues.active(&self.show.cue_lists) == Some(i),
                 })
                 .collect(),
+            running_cues: self
+                .cues
+                .running(&self.show.cue_lists, tokio::time::Instant::now()),
+            go_guard_ms: self.show.go_guard_ms,
             restorable: self.removed.last().map(|(_, input)| input.name.clone()),
             shortcuts: self
                 .show
@@ -1783,44 +1892,74 @@ impl Switcher {
             .is_ok_and(|i| self.show.overlays[i].is_some() && self.overlay_since[i] == since)
     }
 
-    /// Actions of the cue GO (or back) runs; moves the list on.
-    pub fn cue_step(&mut self, list: &InputRef, back: bool) -> Result<Vec<Action>, ActionError> {
-        let index = self.find_cue_list(list)?;
-        let entry = &self.show.cue_lists[index];
-        let next = self.cue_next.get(&entry.id).copied().unwrap_or(0);
-        let (run, after) = if back {
-            let run = next.checked_sub(2).ok_or_else(|| ActionError::BadCueList {
-                reason: "already at the first cue".into(),
-            })?;
-            (run, next - 1)
-        } else {
-            if next >= entry.cues.len() {
-                return Err(ActionError::BadCueList {
-                    reason: "no cues left; jump back first".into(),
-                });
-            }
-            (next, next + 1)
-        };
-        let actions = entry.cues[run].actions.clone();
-        self.cue_next.insert(entry.id, after);
-        Ok(actions)
+    /// GO in `list`, or in the active list (RUN.1, RUN.6, RUN.7).
+    pub fn cue_go(
+        &mut self,
+        list: Option<&InputRef>,
+        now: tokio::time::Instant,
+    ) -> Result<Vec<Out>, ActionError> {
+        let index = self.cue_list_or_active(list)?;
+        self.cues
+            .go(&self.show.cue_lists, index, now, self.show.go_guard_ms)
+    }
+
+    /// Start cue `cue` (number or id) without moving standby.
+    pub fn cue_start(
+        &mut self,
+        list: Option<&InputRef>,
+        cue: &str,
+        now: tokio::time::Instant,
+    ) -> Result<Vec<Out>, ActionError> {
+        let index = list.map(|l| self.find_cue_list(l)).transpose()?;
+        self.cues.start(&self.show.cue_lists, index, cue, now)
+    }
+
+    /// Stop one cue, a list's cues or every cue (RUN.4).
+    pub fn cue_stop(
+        &mut self,
+        list: Option<&InputRef>,
+        cue: Option<&str>,
+        now: tokio::time::Instant,
+    ) -> Result<Vec<Out>, ActionError> {
+        let index = list.map(|l| self.find_cue_list(l)).transpose()?;
+        self.cues.stop(&self.show.cue_lists, index, cue, now)
+    }
+
+    /// Stop every cue at once, every standby to the start (RUN.11).
+    pub fn cue_reset(&mut self, now: tokio::time::Instant) -> Vec<Out> {
+        self.cues.reset(now)
+    }
+
+    /// What the cue lists have due by `now`.
+    pub fn cue_tick(&mut self, now: tokio::time::Instant) -> Vec<Out> {
+        self.cues.tick(&self.show.cue_lists, now)
+    }
+
+    /// When the cue lists have something due next.
+    pub fn cue_deadline(&self) -> Option<tokio::time::Instant> {
+        self.cues.deadline()
+    }
+
+    /// `list`, or the active list without one.
+    fn cue_list_or_active(&self, list: Option<&InputRef>) -> Result<usize, ActionError> {
+        match list {
+            Some(list) => self.find_cue_list(list),
+            None => self
+                .cues
+                .active(&self.show.cue_lists)
+                .ok_or_else(|| bad_cues("no cue list".into())),
+        }
     }
 
     /// A cue list by number (1-based), id or name.
     fn find_cue_list(&self, list: &InputRef) -> Result<usize, ActionError> {
-        let lists = &self.show.cue_lists;
-        let index = match list {
-            InputRef::Number(n) => (*n as usize).checked_sub(1).filter(|i| *i < lists.len()),
-            InputRef::Text(text) => lists
-                .iter()
-                .position(|l| l.id.to_string() == *text)
-                .or_else(|| lists.iter().position(|l| l.name == *text)),
-        };
-        index.ok_or_else(|| ActionError::UnknownCueList {
-            reference: match list {
-                InputRef::Number(n) => n.to_string(),
-                InputRef::Text(t) => format!("\"{t}\""),
-            },
+        crate::cues::find_list(&self.show.cue_lists, list).ok_or_else(|| {
+            ActionError::UnknownCueList {
+                reference: match list {
+                    InputRef::Number(n) => n.to_string(),
+                    InputRef::Text(t) => format!("\"{t}\""),
+                },
+            }
         })
     }
 
@@ -5650,17 +5789,26 @@ mod tests {
         sw.apply(Action::RemoveInput { input: named("A") }).unwrap();
     }
 
-    fn cue(label: &str, action: Action) -> Cue {
-        Cue {
-            label: label.into(),
-            actions: vec![action],
-        }
+    fn cue(name: &str, action: Action) -> Cue {
+        Cue::actions(name, vec![action])
+    }
+
+    /// Actions the outs ask to run.
+    fn ran(out: &[Out]) -> Vec<Action> {
+        out.iter()
+            .flat_map(|o| match o {
+                Out::Actions { actions, .. } => actions.clone(),
+                Out::Event { .. } => Vec::new(),
+            })
+            .collect()
     }
 
     #[test]
-    fn cue_lists_go_back_and_jump() {
+    fn cue_lists_go_standby_and_edit() {
         let mut sw = two_inputs();
         let list = InputRef::Text("Opening".into());
+        let t = tokio::time::Instant::now();
+        sw.apply(Action::SetGoGuard { ms: 0 }).unwrap();
         sw.apply(Action::AddCueList {
             name: "Opening".into(),
             cues: vec![
@@ -5670,34 +5818,29 @@ mod tests {
             ],
         })
         .unwrap();
-        assert_eq!(sw.state().cue_lists[0].next, 1);
+        assert_eq!(sw.state().cue_lists[0].standby, 1);
+        assert!(sw.state().cue_lists[0].active, "the first list is active");
 
-        let go = |sw: &mut Switcher| sw.cue_step(&list, false);
-        assert_eq!(
-            go(&mut sw).unwrap(),
-            [Action::CutDirect { input: named("A") }]
-        );
-        assert_eq!(
-            go(&mut sw).unwrap(),
-            [Action::CutDirect { input: named("B") }]
-        );
-        assert_eq!(sw.state().cue_lists[0].next, 3);
-        assert_eq!(
-            sw.cue_step(&list, true).unwrap(),
-            [Action::CutDirect { input: named("A") }],
-            "back runs the cue before the last one"
-        );
-        assert_eq!(sw.state().cue_lists[0].next, 2);
+        // Without a list: the active one.
+        let out = sw.cue_go(None, t).unwrap();
+        assert_eq!(ran(&out), [Action::CutDirect { input: named("A") }]);
+        sw.cue_go(Some(&list), t).unwrap();
+        assert_eq!(sw.state().cue_lists[0].standby, 3);
 
-        sw.apply(Action::CueJump {
-            list: list.clone(),
-            cue: 3,
+        // Back moves standby only; nothing runs.
+        sw.apply(Action::CueStandby {
+            list: Some(list.clone()),
+            to: lmix_types::StandbyMove::Previous,
         })
         .unwrap();
-        go(&mut sw).unwrap();
-        assert!(matches!(go(&mut sw), Err(ActionError::BadCueList { .. })));
+        assert_eq!(sw.state().cue_lists[0].standby, 2);
 
         // Editing keeps the place, at most one past the last cue.
+        sw.apply(Action::CueStandby {
+            list: None,
+            to: lmix_types::StandbyMove::Index(3),
+        })
+        .unwrap();
         sw.apply(Action::SetCueList {
             list: list.clone(),
             name: "Opening".into(),
@@ -5707,20 +5850,64 @@ mod tests {
             ],
         })
         .unwrap();
-        assert_eq!(sw.state().cue_lists[0].next, 3);
-        assert_eq!(
-            sw.cue_step(&list, true).unwrap(),
-            [Action::CutDirect { input: named("A") }]
-        );
-        assert_eq!(sw.state().cue_lists[0].next, 2);
-
+        assert_eq!(sw.state().cue_lists[0].standby, 3);
         assert!(matches!(
-            sw.apply(Action::AddCueList {
-                name: "Loop".into(),
-                cues: vec![cue("Again", Action::CueGo { list })],
-            }),
+            sw.cue_go(None, t),
             Err(ActionError::BadCueList { .. })
         ));
+    }
+
+    #[test]
+    fn cue_lists_are_checked() {
+        let mut sw = two_inputs();
+        let add = |sw: &mut Switcher, cues: Vec<Cue>| {
+            sw.apply(Action::AddCueList {
+                name: "L".into(),
+                cues,
+            })
+        };
+        let refused =
+            |r: Result<Vec<Command>, ActionError>| matches!(r, Err(ActionError::BadCueList { .. }));
+        let mut wait = Cue::empty(CueKind::Wait);
+        wait.duration_ms = Some(1005);
+        let mut numbered = cue("A", Action::Cut);
+        numbered.number = "1".into();
+        let mut deep = cue("leaf", Action::Cut);
+        for _ in 0..4 {
+            deep = Cue {
+                children: vec![deep],
+                ..Cue::empty(CueKind::Group)
+            };
+        }
+        let mut stray = Cue::empty(CueKind::Note);
+        stray.duration_ms = Some(100);
+
+        assert!(refused(add(
+            &mut sw,
+            vec![cue("Loop", Action::CueGo { list: None })]
+        )));
+        assert!(refused(add(&mut sw, vec![wait])), "waits in steps of 10 ms");
+        assert!(
+            refused(add(&mut sw, vec![Cue::empty(CueKind::Wait)])),
+            "a wait needs a duration"
+        );
+        assert!(
+            refused(add(&mut sw, vec![Cue::empty(CueKind::Start)])),
+            "a start needs a target"
+        );
+        assert!(
+            refused(add(&mut sw, vec![deep])),
+            "at most three group levels"
+        );
+        assert!(refused(add(&mut sw, vec![stray])), "fields of another kind");
+        add(&mut sw, vec![numbered.clone()]).unwrap();
+        let mut again = numbered;
+        again.id = lmix_types::CueId::new();
+        assert!(
+            refused(add(&mut sw, vec![again])),
+            "numbers are unique in the show"
+        );
+        assert!(refused(sw.apply(Action::SetGoGuard { ms: 9000 })));
     }
 
     #[test]

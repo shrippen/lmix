@@ -5,9 +5,11 @@ import org.kde.kirigami as Kirigami
 import Kante
 
 /**
- * Cue lists (AUT.14): numbered cues run one after another with GO; Back
- * runs the one before, a click on a cue makes it the next. Edits go to
- * lmix-core at once and keep the place in the list.
+ * Cue lists (AUT.14, show mode CUE/RUN): GO starts the standby cue and
+ * its follow chain; Back and Standby move standby without starting
+ * anything. Only actions cues are edited here; waits, starts and groups
+ * (e.g. from a script) are shown and kept. Edits go to lmix-core at once
+ * and keep standby and running cues.
  */
 KanteDialog {
     id: dialog
@@ -25,6 +27,11 @@ KanteDialog {
 
     function save(cues) {
         act({ action: "set_cue_list", list: list.number, name: list.name, cues: cues })
+    }
+
+    /** The cue's name, or its kind when it has none. */
+    function cueName(cue) {
+        return cue.name !== "" ? cue.name : cue.kind
     }
 
     title: qsTr("Cue lists")
@@ -46,7 +53,9 @@ KanteDialog {
         title: dialog.list && dialog.editing < dialog.list.cues.length ? qsTr("Cue %1").arg(dialog.editing + 1) : qsTr("New cue")
         onDone: (label, actions) => {
             var cues = dialog.list.cues.slice()
-            cues.splice(dialog.editing, dialog.editing < cues.length ? 1 : 0, { label: label, actions: actions })
+            var old = dialog.editing < cues.length ? cues[dialog.editing] : {}
+            cues.splice(dialog.editing, dialog.editing < cues.length ? 1 : 0,
+                        Object.assign({}, old, { kind: "actions", name: label, actions: actions }))
             dialog.save(cues)
         }
     }
@@ -112,7 +121,8 @@ KanteDialog {
                         id: entry
                         required property var modelData
                         required property int index
-                        readonly property bool isNext: dialog.list.next === index + 1
+                        readonly property bool isNext: dialog.list.standby === index + 1
+                        readonly property bool editable: modelData.kind === "actions"
                         Layout.fillWidth: true
                         implicitHeight: cueRow.implicitHeight + Kirigami.Units.smallSpacing
                         color: isNext ? KanteStyle.selectionColor : "transparent"
@@ -124,30 +134,31 @@ KanteDialog {
 
                             QQC2.Label {
                                 Layout.preferredWidth: Kirigami.Units.gridUnit * 2
-                                text: (entry.isNext ? "▶ " : "") + (entry.index + 1)
+                                text: (entry.isNext ? "▶ " : "") + (entry.modelData.number !== "" ? entry.modelData.number : entry.index + 1)
                                 font.family: KanteStyle.monoFamily
                             }
                             QQC2.Label {
                                 Layout.fillWidth: true
-                                text: entry.modelData.label
+                                text: dialog.cueName(entry.modelData)
                                 elide: Text.ElideRight
                             }
                             QQC2.Label {
-                                text: qsTr("Actions: %1").arg(entry.modelData.actions.length)
+                                text: entry.editable ? qsTr("Actions: %1").arg(entry.modelData.actions.length) : entry.modelData.kind
                                 color: KanteStyle.mutedTextColor
                             }
                             KanteButton {
-                                text: qsTr("Next")
+                                text: qsTr("Standby")
                                 enabled: !entry.isNext
                                 QQC2.ToolTip.visible: hovered
-                                QQC2.ToolTip.text: qsTr("Make this the cue GO runs next")
-                                onClicked: dialog.act({ action: "cue_jump", list: dialog.list.number, cue: entry.index + 1 })
+                                QQC2.ToolTip.text: qsTr("Make this the cue GO starts next")
+                                onClicked: dialog.act({ action: "cue_standby", list: dialog.list.number, to: { index: entry.index + 1 } })
                             }
                             KanteButton {
                                 text: qsTr("Edit…")
+                                enabled: entry.editable
                                 onClicked: {
                                     dialog.editing = entry.index
-                                    cueDialog.label = entry.modelData.label
+                                    cueDialog.label = entry.modelData.name
                                     cueDialog.actions = entry.modelData.actions
                                     cueDialog.open()
                                 }
@@ -181,15 +192,21 @@ KanteDialog {
             }
             Item { Layout.fillWidth: true }
             KanteButton {
-                text: qsTr("Back")
-                enabled: dialog.list !== null && dialog.list.next > 2
-                onClicked: dialog.act({ action: "cue_back", list: dialog.list.number })
+                text: qsTr("Stop")
+                QQC2.ToolTip.visible: hovered
+                QQC2.ToolTip.text: qsTr("Stop the running cues of this list")
+                onClicked: dialog.act({ action: "cue_stop", list: dialog.list.number })
             }
             KanteButton {
-                text: dialog.list && dialog.list.next <= dialog.list.cues.length
-                    ? qsTr("GO: %1").arg(dialog.list.cues[dialog.list.next - 1].label) : qsTr("GO")
+                text: qsTr("Back")
+                enabled: dialog.list !== null && dialog.list.standby > 1
+                onClicked: dialog.act({ action: "cue_standby", list: dialog.list.number, to: "previous" })
+            }
+            KanteButton {
+                text: dialog.list && dialog.list.standby <= dialog.list.cues.length
+                    ? qsTr("GO: %1").arg(dialog.cueName(dialog.list.cues[dialog.list.standby - 1])) : qsTr("GO")
                 emphasis: KanteButton.Emphasis.Primary
-                enabled: dialog.list !== null && dialog.list.next <= dialog.list.cues.length
+                enabled: dialog.list !== null && dialog.list.standby <= dialog.list.cues.length
                 onClicked: dialog.act({ action: "cue_go", list: dialog.list.number })
             }
         }

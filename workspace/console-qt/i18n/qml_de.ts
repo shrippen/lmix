@@ -390,23 +390,23 @@
   <context>
     <name>CueListsDialog</name>
     <message>
-      <location filename="../qml/CueListsDialog.qml" line="+30" />
+      <location filename="../qml/CueListsDialog.qml" line="+37" />
       <source>Cue lists</source>
       <translation>Cue-Listen</translation>
     </message>
     <message>
       <location line="+16" />
-      <location line="+131" />
+      <location line="+135" />
       <source>Cue %1</source>
       <translation>Cue %1</translation>
     </message>
     <message>
-      <location line="-131" />
+      <location line="-135" />
       <source>New cue</source>
       <translation>Neuer Cue</translation>
     </message>
     <message>
-      <location line="+27" />
+      <location line="+29" />
       <source>New list</source>
       <translation>Neue Liste</translation>
     </message>
@@ -426,19 +426,19 @@
       <translation>Noch keine Cue-Listen. Eine Cue-Liste führt vorbereitete Schritte einer Show nacheinander aus, jeden mit GO.</translation>
     </message>
     <message>
-      <location line="+41" />
+      <location line="+42" />
       <source>Actions: %1</source>
       <translation>Aktionen: %1</translation>
     </message>
     <message>
       <location line="+4" />
-      <source>Next</source>
-      <translation>Weiter</translation>
+      <source>Standby</source>
+      <translation>Standby</translation>
     </message>
     <message>
       <location line="+3" />
-      <source>Make this the cue GO runs next</source>
-      <translation>Diesen Cue als nächsten für GO setzen</translation>
+      <source>Make this the cue GO starts next</source>
+      <translation>Diesen Cue auf Standby setzen: GO startet ihn als nächsten</translation>
     </message>
     <message>
       <location line="+4" />
@@ -446,7 +446,7 @@
       <translation>Bearbeiten…</translation>
     </message>
     <message>
-      <location line="+9" />
+      <location line="+10" />
       <source>Remove</source>
       <translation>Entfernen</translation>
     </message>
@@ -457,6 +457,16 @@
     </message>
     <message>
       <location line="+10" />
+      <source>Stop</source>
+      <translation>Stopp</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Stop the running cues of this list</source>
+      <translation>Die laufenden Cues dieser Liste anhalten</translation>
+    </message>
+    <message>
+      <location line="+4" />
       <source>Back</source>
       <translation>Zurück</translation>
     </message>

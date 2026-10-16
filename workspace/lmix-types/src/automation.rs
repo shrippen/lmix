@@ -1,10 +1,9 @@
-//! Automation: triggers per input (AUT.7) and cue lists (AUT.14).
+//! Automation: triggers per input (AUT.7). Cue lists: [`crate::cue`].
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::action::Action;
-use crate::input::InputId;
 
 /// Longest wait of a trigger before its actions.
 pub const TRIGGER_DELAY_MAX_MS: u32 = 30_000;
@@ -14,9 +13,6 @@ pub const TRIGGERS: usize = 8;
 
 /// Actions per trigger or cue.
 pub const AUTOMATION_ACTIONS: usize = 16;
-
-/// Cues per list.
-pub const CUES: usize = 200;
 
 /// When a trigger fires.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -56,23 +52,4 @@ pub struct Trigger {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub at_ms: Option<u32>,
     pub actions: Vec<Action>,
-}
-
-/// One cue: a label and actions run on GO.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
-pub struct Cue {
-    pub label: String,
-    pub actions: Vec<Action>,
-}
-
-/// A cue list as clients see it.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
-pub struct CueList {
-    pub id: InputId,
-    /// 1-based position among the lists.
-    pub number: u32,
-    pub name: String,
-    pub cues: Vec<Cue>,
-    /// 1-based cue that GO runs next; past the end when done.
-    pub next: u32,
 }

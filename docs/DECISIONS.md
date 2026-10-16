@@ -2345,3 +2345,54 @@ Overlay mit, Vorlage laden, keine QML-Warnungen), `test-m2b-vm.sh`
 im oberen rechten Viertel auf Programm, nach 6 s von selbst aus).
 **Offen**: siehe oben (Rand, Effekte außer Blende, Overlay im
 Vorschau-Bild: strom); BiB-Overlays auf CUDA/GL nicht geprüft (H.29).
+
+## 2026-10-16 — Show-Modus S1 Stufe 1: Cue-Modell und Ablauf
+
+**Kontext**: S1 beginnt mit Cue-Modell und Ablauf-Engine in `lmix-core`
+(`LASTENHEFT-SHOW.md` §7, S-E.1, S-E.5).
+
+**Entscheidungen**:
+- **Ein flacher `Cue`** (`lmix-types/src/cue.rs`) mit `kind` (`actions`,
+  `note`, `wait`, `start`, `group`) und den Feldern aller Arten, alle
+  optional außer `kind`; `check_cue` lehnt Felder einer anderen Art ab.
+  Ein Drehbuch oder Skript schreibt so nur, was es braucht
+  (`{"kind":"wait","duration_ms":2000}`), Tippfehler fallen trotzdem auf.
+  Verworfen: getaggtes Enum je Art (lange JSON-Pfade, Standardwerte je
+  Variante doppelt).
+- **Ablauf als reine Logik** (`lmix-core/src/cues.rs`, `Runner`): bekommt
+  die Zeit und gibt zurück, was zu tun ist (Aktionen, Ereignisse). Jeder
+  Schritt (Aktion, Ende, Folge) zählt von seiner eigenen Fälligkeit, nicht
+  vom Zeitpunkt des Weckens: 100 Warte-Cues à 20 ms enden genau 2 s nach
+  GO, auch wenn jedes Wecken 7 ms zu spät kommt (Test). Der Dienst schläft
+  bis zur nächsten Fälligkeit (`watch_cues`) und wird bei jeder
+  Cue-Aktion geweckt.
+- **Was bei GO sofort fällig ist, läuft vor der Antwort** (wie ein Cut);
+  Späteres läuft im Hintergrund. Eine fehlschlagende Aktion beendet nur
+  ihren Cue und kommt als Ereignis `cue`/`failed`; Zeiten und Folgen
+  laufen weiter (CUE.19).
+- **Standby ist die oberste Ebene**: GO startet den Standby-Cue samt
+  Folgekette, Standby springt hinter die Kette. Ein Cue in einer Gruppe als
+  Standby-Ziel heißt seine Gruppe (Gruppen „hinein“ erst S2).
+- **GO-Sperre** 300 ms je Show (`set_go_guard`, 0–5000 ms), gilt für jedes
+  GO über alle Wege (Taste, OSC, API, Kurzbefehl), nicht für `cue_start`
+  und Folgen; ein verworfenes GO ist das Ereignis `go_ignored`.
+- **Start-Cue mit Liste ohne Cue** = GO in dieser Liste (bewegt deren
+  Standby, ohne GO-Sperre); mit Cue: startet ihn samt Kette, Standby bleibt.
+- **Stopp und „andere stoppen“ halten sofort an**: Ausblenden gibt es erst
+  mit Klang und Bild (Stufe 2); `fade_ms` und `mode: fade` werden schon
+  angenommen und gespeichert.
+
+**Bricht** (vor dem ersten Release erlaubt): `cue_back` und `cue_jump`
+entfallen, dafür `cue_standby` (`previous`, `{"index": n}`, …); Zurück
+startet nichts mehr, es bewegt nur Standby (QLab-Verhalten). Im Zustand
+heißt `next` jetzt `standby`; ein Cue hat `name` statt `label`. OSC
+`/lmix/cue/next` heißt `/lmix/cue/standby` und trägt den Namen des
+Standby-Cues mit. Show-Dateien der Version 1 werden beim Laden migriert
+(`label` → `name`), Console-Dialog und VM-Check sind angepasst.
+
+**Geprüft**: 14 Tests der Ablauf-Engine und der Migration, ein
+Dienst-Test mit pausierter Zeit (Folge nach 300 ms, kaputter Cue
+gemeldet, nächster läuft), Switcher-Tests der Prüfregeln; VM-Check mit
+echtem strom (GO in der aktiven Liste, Folge nach 1,5 s, Standby zurück
+an den Kettenanfang). **Offen**: 4-h-Genauigkeit im Selftest (SNF.4),
+„erst nach Loslassen wieder scharf“ (RUN.6), Anzeige in der Console (SUI).

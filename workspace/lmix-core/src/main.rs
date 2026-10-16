@@ -20,6 +20,7 @@ use lmix_types::Action;
 mod access;
 mod api;
 mod clips;
+mod cues;
 mod datasource;
 mod engine;
 mod feedback;
@@ -273,6 +274,7 @@ async fn main() -> anyhow::Result<()> {
     tokio::spawn(service.clone().watch_players());
     tokio::spawn(service.clone().watch_media());
     tokio::spawn(service.clone().watch_titles());
+    tokio::spawn(service.clone().watch_cues());
     if !args.midi.is_empty() {
         tokio::spawn(midi::serve(args.midi.clone(), service.clone()));
         if args.midi_feedback {

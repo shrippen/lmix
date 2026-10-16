@@ -16,7 +16,9 @@
 //! | `/lmix/overlay/{n}/last` | – | `overlay_last` |
 //! | `/lmix/overlay/{n}/preview` | input, or none to clear | `overlay_preview` |
 //! | `/lmix/overlay/out` | – | `overlay_out_all` |
-//! | `/lmix/cue/go`, `/lmix/cue/back` | list | `cue_go`, `cue_back` |
+//! | `/lmix/cue/go` | list, or none for the active one | `cue_go` |
+//! | `/lmix/cue/back` | list, or none | `cue_standby` previous |
+//! | `/lmix/cue/stop` | list, or none for every cue | `cue_stop` |
 //! | `/lmix/subscribe` | – | the sender gets tally and state from now on |
 //! | `/lmix/unsubscribe` | – | stops it |
 //! | `/lmix/state` | – | answers `/lmix/state s:json` (the full state) |
@@ -200,11 +202,20 @@ fn state_messages(state: &ShowState) -> Vec<(String, Vec<u8>)> {
         ),
     ];
     for list in &state.cue_lists {
-        let next = encode_args(
-            "/lmix/cue/next",
-            &[Arg::Str(list.name.clone()), Arg::Int(list.next as i32)],
+        let name = list
+            .cues
+            .get(list.standby as usize - 1)
+            .map(|c| c.display_name())
+            .unwrap_or_default();
+        let standby = encode_args(
+            "/lmix/cue/standby",
+            &[
+                Arg::Str(list.name.clone()),
+                Arg::Int(list.standby as i32),
+                Arg::Str(name),
+            ],
         );
-        out.push((format!("cue/{}", list.id), next));
+        out.push((format!("cue/{}", list.id), standby));
     }
     out
 }
@@ -304,12 +315,19 @@ pub fn request(message: &Message) -> Result<Request, String> {
             }
         }
         ["overlay", "out"] => json(serde_json::json!({ "action": "overlay_out_all" }))?,
-        ["cue", step @ ("go" | "back")] => {
-            let list = input(0)?;
-            if *step == "go" {
-                Action::CueGo { list }
-            } else {
-                Action::CueBack { list }
+        ["cue", step @ ("go" | "back" | "stop")] => {
+            let list = arg(0).map(|_| input(0)).transpose()?;
+            match *step {
+                "go" => Action::CueGo { list },
+                "back" => Action::CueStandby {
+                    list,
+                    to: lmix_types::StandbyMove::Previous,
+                },
+                _ => Action::CueStop {
+                    list,
+                    cue: None,
+                    mode: lmix_types::StopMode::Fade,
+                },
             }
         }
         _ => return Err(format!("unknown address {}", message.address)),

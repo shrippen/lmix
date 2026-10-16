@@ -600,24 +600,28 @@ pass "layouts: background and box on program, red tally for both inputs, crop, r
 
 # --- automation (AUT.7, AUT.14): a cue list whose cues fire triggers ---
 act '{"action":"set_triggers","input":"Orange","triggers":[{"on":"program","delay_ms":500,"actions":[{"action":"overlay_in","channel":2,"input":"Ball","duration_ms":0}]},{"on":"program_off","actions":[{"action":"overlay_out","channel":2,"duration_ms":0}]}]}' >/dev/null
-act '{"action":"add_cue_list","name":"Run","cues":[{"label":"Orange","actions":[{"action":"cut_direct","input":"Orange"}]},{"label":"Ball","actions":[{"action":"cut_direct","input":"Ball"}]}]}' >/dev/null
+act '{"action":"add_cue_list","name":"Run","cues":[{"name":"Orange","actions":[{"action":"cut_direct","input":"Orange"}]},{"name":"Ball","actions":[{"action":"cut_direct","input":"Ball"}],"follow":"after_wait","post_wait_ms":1500},{"number":"3","name":"Orange again","actions":[{"action":"cut_direct","input":"Orange"}]}]}' >/dev/null
 state_is() { [[ "$(curl -sf "$CORE/state" | jq -r "$1")" == true ]]; }
 id_of() { curl -sf "$CORE/state" | jq -r ".inputs[] | select(.name==\"$1\") | .id"; }
 orange_id="$(id_of Orange)"; ball_id="$(id_of Ball)"
 act '{"action":"cue_go","list":"Run"}' >/dev/null
-state_is ".program == \"$orange_id\" and .cue_lists[0].next == 2" || fail "cue 1 did not take Orange"
+state_is ".program == \"$orange_id\" and .cue_lists[0].standby == 2" || fail "cue 1 did not take Orange"
 wait_for 4 state_is ".overlays[1] == \"$ball_id\"" || fail "trigger of Orange did not put Ball on overlay 2"
-act '{"action":"cue_go","list":"Run"}' >/dev/null
-state_is ".program == \"$ball_id\"" || fail "cue 2 did not take Ball"
+# GO without a list: the active one. Ball, then Orange again 1.5 s later
+# by itself (follow after the post wait).
+act '{"action":"cue_go"}' >/dev/null
+state_is ".program == \"$ball_id\" and .cue_lists[0].standby == 4" || fail "cue 2 did not take Ball or standby did not pass the chain"
+state_is "(.running_cues | length) == 1" || fail "cue 2 not running in its post wait"
 wait_for 4 state_is ".overlays[1] == null" || fail "leaving program did not take overlay 2 off"
-act '{"action":"cue_back","list":"Run"}' >/dev/null
-state_is ".program == \"$orange_id\" and .cue_lists[0].next == 2" || fail "back did not run cue 1"
-wait_for 4 state_is ".overlays[1] == \"$ball_id\"" || fail "trigger did not fire again after back"
+wait_for 4 state_is ".program == \"$orange_id\"" || fail "the follow did not start cue 3"
+wait_for 4 state_is ".overlays[1] == \"$ball_id\"" || fail "trigger did not fire again for cue 3"
+act '{"action":"cue_standby","list":"Run","to":"previous_sequence"}' >/dev/null
+state_is ".cue_lists[0].standby == 2 and .program == \"$orange_id\"" || fail "standby back did not go to the chain start, or ran something"
 act '{"action":"cut_direct","input":"Ball"}' >/dev/null
 act '{"action":"remove_cue_list","list":"Run"}' >/dev/null
 act '{"action":"set_triggers","input":"Orange","triggers":[]}' >/dev/null
 wait_for 4 state_is ".overlays[1] == null and (.cue_lists | length) == 0" || fail "automation not cleaned up"
-pass "automation: cues GO and back, triggers on and off program"
+pass "automation: cues GO, follow after a wait, standby back; triggers on and off program"
 # Clip end (AUT.7): Clips (two 10 s clips, looped) puts Orange on overlay 3
 # two seconds before its end and takes it off at the end.
 act '{"action":"set_triggers","input":"Clips","triggers":[{"on":"clip_end","before_ms":2000,"actions":[{"action":"overlay_in","channel":3,"input":"Orange","duration_ms":0}]},{"on":"clip_end","actions":[{"action":"overlay_out","channel":3,"duration_ms":0}]}]}' >/dev/null
