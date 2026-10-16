@@ -1310,6 +1310,38 @@ impl Service {
             }
             _ => {}
         }
+        // Settings files (SHW.8): read and written beside the switcher.
+        match &action {
+            Action::ExportSettings { path } => {
+                let bytes = crate::settings::to_bytes(&self.switcher.lock().await.settings_file());
+                write_settings(std::path::Path::new(path), bytes)
+                    .await
+                    .map_err(|e| ActionError::ShowFile {
+                        message: format!("{path}: {e}"),
+                    })?;
+                return Ok(self.state().await);
+            }
+            Action::ImportSettings { path } => {
+                let bytes = tokio::fs::read(path)
+                    .await
+                    .map_err(|e| ActionError::ShowFile {
+                        message: format!("{path}: {e}"),
+                    })?;
+                let file =
+                    crate::settings::parse(&bytes).map_err(|message| ActionError::ShowFile {
+                        message: format!("{path}: {message}"),
+                    })?;
+                let mut sw = self.switcher.lock().await;
+                sw.take_settings(file)?;
+                sw.refresh_warnings();
+                self.write_all_shows(&mut sw).await;
+                self.write_layout_templates(&mut sw).await;
+                self.write_targets(&mut sw).await;
+                self.publish(&sw);
+                return Ok(sw.state());
+            }
+            _ => {}
+        }
         // Packages copy media (gigabytes): without the switcher locked.
         if let Action::ExportPackage { path, machine } = &action {
             let (show, show_path, settings) = {
@@ -2813,6 +2845,80 @@ mod tests {
         assert!(
             log.iter().any(|c| matches!(c, Command::Preview { .. })),
             "{log:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn settings_go_to_a_file_and_back_without_secrets() {
+        use lmix_types::{ShortcutSpec, TargetKind, TargetSpec};
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("settings.json").display().to_string();
+        let service = Service::new(2, Arc::new(NullEngine::default()), None);
+        let target = |secret: Option<&str>| Action::SetTarget {
+            target: TargetSpec {
+                name: "Haus".into(),
+                kind: TargetKind::Http,
+                addresses: vec!["http://ha:8123".into()],
+                secret: secret.map(str::to_string),
+                timeout_ms: 1000,
+            },
+        };
+        service.handle(target(Some("geheim"))).await.unwrap();
+        service
+            .handle(Action::AddShortcut {
+                shortcut: ShortcutSpec {
+                    label: "Schwarz".into(),
+                    key: Some("F9".into()),
+                    web: false,
+                    color: None,
+                    midi: None,
+                    actions: vec![Action::FadeToBlack { duration_ms: 0 }],
+                    all_shows: true,
+                },
+            })
+            .await
+            .unwrap();
+
+        service
+            .handle(Action::ExportSettings { path: file.clone() })
+            .await
+            .unwrap();
+        let text = tokio::fs::read_to_string(&file).await.unwrap();
+        assert!(text.contains("Schwarz") && text.contains("http://ha:8123"));
+        assert!(!text.contains("geheim"), "no secrets in the file");
+
+        let state = service.handle(Action::ResetSettings).await.unwrap();
+        assert!(state.targets.is_empty() && state.shortcuts.is_empty());
+
+        // Imported: the target comes back without a secret; one set again
+        // before the next import stays.
+        let state = service
+            .handle(Action::ImportSettings { path: file.clone() })
+            .await
+            .unwrap();
+        assert_eq!(state.shortcuts[0].label, "Schwarz");
+        assert!(!state.targets[0].has_secret);
+        service.handle(target(Some("neu"))).await.unwrap();
+        let state = service
+            .handle(Action::ImportSettings { path: file.clone() })
+            .await
+            .unwrap();
+        assert!(
+            state.targets[0].has_secret,
+            "a target of the same name keeps its secret"
+        );
+
+        tokio::fs::write(&file, b"{\"format\":\"lmix-show\",\"version\":1}")
+            .await
+            .unwrap();
+        assert!(service
+            .handle(Action::ImportSettings { path: file })
+            .await
+            .is_err());
+        assert_eq!(
+            service.state().await.shortcuts.len(),
+            1,
+            "a bad file changes nothing"
         );
     }
 

@@ -282,6 +282,9 @@ pub const ACTION_GROUPS: &[(&str, &[&str])] = &[
     (
         "show",
         &[
+            "export_settings",
+            "import_settings",
+            "reset_settings",
             "new_show",
             "save_show",
             "open_show",
@@ -1056,6 +1059,16 @@ pub enum Action {
     },
     /// Write the show with its media, data files and own title templates
     /// into one package file (SHW.6).
+    /// This machine's settings into a file: shortcuts for all shows,
+    /// layout templates, output targets and OSC subscribers, no secrets
+    /// (SHW.8).
+    ExportSettings { path: String },
+    /// Take a settings file instead of the current settings; targets of
+    /// the same name keep their secret.
+    ImportSettings { path: String },
+    /// Back to factory settings: no shortcuts for all shows, layout
+    /// templates, targets or subscribers.
+    ResetSettings,
     ExportPackage {
         path: String,
         /// Also this machine's output targets and OSC subscribers, without

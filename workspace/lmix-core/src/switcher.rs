@@ -597,6 +597,84 @@ impl Switcher {
         Ok(())
     }
 
+    /// This machine's settings for a file, without secrets (SHW.8).
+    pub fn settings_file(&self) -> crate::settings::SettingsFile {
+        let carried = crate::targets::without_secrets(&self.target_settings());
+        crate::settings::SettingsFile {
+            shortcuts: self.all_shows.clone(),
+            layout_templates: self.layout_templates.clone(),
+            targets: carried.targets,
+            feeds: carried.feeds,
+        }
+    }
+
+    /// Take `file` instead of the current settings, all or nothing;
+    /// targets of the same name keep their secret (SHW.8).
+    pub fn take_settings(
+        &mut self,
+        file: crate::settings::SettingsFile,
+    ) -> Result<(), ActionError> {
+        let bad = |reason: String| Err(ActionError::BadShortcut { reason });
+        let mut keys = std::collections::HashSet::new();
+        for s in &file.shortcuts {
+            if s.label.trim().is_empty()
+                || s.actions.is_empty()
+                || s.actions.len() > SHORTCUT_ACTIONS
+                || s.actions.iter().any(changes_shortcuts)
+            {
+                return bad(format!(
+                    "shortcut {}: label and 1–{SHORTCUT_ACTIONS} actions that change no shortcuts",
+                    s.label
+                ));
+            }
+            if let Some(key) = &s.key {
+                if !keys.insert(key.clone()) {
+                    return bad(format!("key {key} twice"));
+                }
+            }
+        }
+        // Targets: the file's, with the secrets of those of the same name.
+        let mut next = crate::targets::Settings {
+            targets: self
+                .targets
+                .iter()
+                .filter(|t| file.targets.iter().any(|f| f.name == t.name))
+                .cloned()
+                .collect(),
+            feeds: Vec::new(),
+        };
+        crate::targets::merge(
+            &mut next,
+            crate::targets::Settings {
+                targets: file.targets,
+                feeds: file.feeds,
+            },
+        )?;
+        let templates = std::mem::take(&mut self.layout_templates);
+        if let Err(e) = self.keep_layout_templates(file.layout_templates) {
+            self.layout_templates = templates;
+            return Err(e);
+        }
+        self.all_shows = file.shortcuts;
+        self.distinct_shortcut_ids();
+        self.targets = next.targets;
+        self.feeds = next.feeds;
+        self.all_shows_changed = true;
+        self.targets_changed = true;
+        Ok(())
+    }
+
+    /// Factory settings (SHW.8).
+    pub fn reset_settings(&mut self) {
+        self.all_shows.clear();
+        self.layout_templates.clear();
+        self.targets.clear();
+        self.feeds.clear();
+        self.all_shows_changed = true;
+        self.layout_templates_changed = true;
+        self.targets_changed = true;
+    }
+
     /// The fixed OSC subscribers (CTL.4).
     pub fn feeds(&self) -> &[lmix_types::Feed] {
         &self.feeds
@@ -835,6 +913,16 @@ impl Switcher {
                 };
                 self.show.emergency_list = id;
                 Ok(Vec::new())
+            }
+            Action::ResetSettings => {
+                self.reset_settings();
+                Ok(Vec::new())
+            }
+            // Files: through the service.
+            Action::ExportSettings { .. } | Action::ImportSettings { .. } => {
+                Err(ActionError::ShowFile {
+                    message: "run through the service".into(),
+                })
             }
             Action::SetScriptFolder { folder } => {
                 if let Some(folder) = &folder {

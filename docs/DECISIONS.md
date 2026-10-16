@@ -2648,3 +2648,21 @@ einem Abonnenten.
   `/lmix/subscribe` hält es. **Bricht** für Abonnenten ohne Lebenszeichen;
   für Tasten ohne Keepalive gibt es die festen Abonnenten (CTL.4). Dabei die
   Doku `/lmix/cue/next` → `/lmix/cue/standby` nachgezogen.
+
+## 2026-10-16 — Älteres Show-Format, Einstellungen als Datei (SHW.7, SHW.8)
+
+- **SHW.7 ohne Rückfrage, mit Sicherung**: Eine Show-Datei älterer Version
+  wird beim Öffnen umgewandelt (seit heute Version 1 → 2). Statt vorher zu
+  fragen, sagt die Console es an, und das erste Speichern über die Datei
+  legt die alte als `<datei>.v<n>.bak` daneben (nur einmal). So bleibt die
+  alte Fassung, ohne dass jedes Öffnen eine Frage stellt.
+- **SHW.8**: `export_settings` schreibt die Einstellungen dieses Rechners
+  (Kurzbefehle für alle Shows, Layout-Vorlagen, Ausgabeziele, Abonnenten)
+  ohne Geheimnisse in eine Datei (`lmix-settings`, Version 1);
+  `import_settings` nimmt sie statt der aktuellen, ganz oder gar nicht,
+  gleichnamige Ziele behalten ihr Geheimnis; `reset_settings` sind die
+  Werkseinstellungen (in der Console mit Rückfrage). Im Menü „Paket“.
+**Geprüft**: Dienst-Tests (Version-1-Datei öffnen, speichern, Sicherung
+gleich der alten Datei, neue mit Version 2; Einstellungen exportieren ohne
+Geheimnis, zurücksetzen, importieren, Geheimnis bleibt, kaputte Datei ändert
+nichts); Console auf Xvfb (Menü, Rückfrage).

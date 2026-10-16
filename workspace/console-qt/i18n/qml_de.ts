@@ -1573,12 +1573,13 @@
     <message>
       <location line="-27" />
       <location line="+7" />
-      <location line="+36" />
+      <location line="+37" />
+      <location line="+44" />
       <source>All files (*)</source>
       <translation>Alle Dateien (*)</translation>
     </message>
     <message>
-      <location line="-37" />
+      <location line="-82" />
       <source>Inputs from a show</source>
       <translation>Inputs aus einer Show</translation>
     </message>
@@ -1588,7 +1589,38 @@
       <translation>Show speichern</translation>
     </message>
     <message>
-      <location line="+10" />
+      <location line="+11" />
+      <source>Export settings</source>
+      <translation>Einstellungen exportieren</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <location line="+6" />
+      <source>lmix settings (*.json)</source>
+      <translation>lmix-Einstellungen (*.json)</translation>
+    </message>
+    <message>
+      <location line="-1" />
+      <source>Import settings</source>
+      <translation>Einstellungen importieren</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Factory settings</source>
+      <translation>Werkseinstellungen</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>Remove the shortcuts for all shows, the layout templates, the output targets with their secrets and the OSC subscribers of this machine? The show stays.</source>
+      <translation>Die Kurzbefehle für alle Shows, die Layout-Vorlagen, die Ausgabeziele mit ihren Geheimnissen und die OSC-Abonnenten dieses Rechners entfernen? Die Show bleibt.</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Remove all</source>
+      <translation>Alles entfernen</translation>
+    </message>
+    <message>
+      <location line="+12" />
       <source>Export show package</source>
       <translation>Show-Paket exportieren</translation>
     </message>
@@ -1677,6 +1709,21 @@
       <location line="+4" />
       <source>Import…</source>
       <translation>Importieren…</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Export settings…</source>
+      <translation>Einstellungen exportieren…</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Import settings…</source>
+      <translation>Einstellungen importieren…</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Factory settings…</source>
+      <translation>Werkseinstellungen…</translation>
     </message>
     <message>
       <location line="+7" />

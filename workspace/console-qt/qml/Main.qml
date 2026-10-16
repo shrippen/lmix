@@ -230,6 +230,51 @@ Kirigami.ApplicationWindow {
         onAccepted: root.act({ action: "save_show", path: root.localPath(selectedFile) })
     }
 
+    // This machine's settings (SHW.8): shortcuts for all shows, layout
+    // templates, targets, subscribers; no secrets.
+    FileDialog {
+        id: exportSettingsDialog
+        title: qsTr("Export settings")
+        fileMode: FileDialog.SaveFile
+        defaultSuffix: "json"
+        nameFilters: [qsTr("lmix settings (*.json)")]
+        onAccepted: root.act({ action: "export_settings", path: root.localPath(selectedFile) })
+    }
+    FileDialog {
+        id: importSettingsDialog
+        title: qsTr("Import settings")
+        nameFilters: [qsTr("lmix settings (*.json)"), qsTr("All files (*)")]
+        onAccepted: root.act({ action: "import_settings", path: root.localPath(selectedFile) })
+    }
+    KanteDialog {
+        id: resetSettingsDialog
+        parent: QQC2.Overlay.overlay
+        anchors.centerIn: parent
+        title: qsTr("Factory settings")
+        modal: true
+        width: Kirigami.Units.gridUnit * 24
+        standardButtons: QQC2.Dialog.Cancel
+        contentHeight: resetColumn.implicitHeight
+        ColumnLayout {
+            id: resetColumn
+            width: parent.width
+            QQC2.Label {
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                text: qsTr("Remove the shortcuts for all shows, the layout templates, the output targets with their secrets and the OSC subscribers of this machine? The show stays.")
+            }
+            KanteButton {
+                Layout.alignment: Qt.AlignRight
+                emphasis: KanteButton.Emphasis.Destructive
+                text: qsTr("Remove all")
+                onClicked: {
+                    root.act({ action: "reset_settings" })
+                    resetSettingsDialog.close()
+                }
+            }
+        }
+    }
+
     // Show packages (SHW.6): show, media, data files, own templates.
     FileDialog {
         id: exportDialog
@@ -467,6 +512,19 @@ Kirigami.ApplicationWindow {
                         QQC2.MenuItem {
                             text: qsTr("Import…")
                             onTriggered: importDialog.open()
+                        }
+                        QQC2.MenuSeparator {}
+                        QQC2.MenuItem {
+                            text: qsTr("Export settings…")
+                            onTriggered: exportSettingsDialog.open()
+                        }
+                        QQC2.MenuItem {
+                            text: qsTr("Import settings…")
+                            onTriggered: importSettingsDialog.open()
+                        }
+                        QQC2.MenuItem {
+                            text: qsTr("Factory settings…")
+                            onTriggered: resetSettingsDialog.open()
                         }
                     }
                 }

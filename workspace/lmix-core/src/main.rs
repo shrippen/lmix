@@ -36,6 +36,7 @@ mod ptz;
 mod recent;
 mod script;
 mod service;
+mod settings;
 mod show;
 mod switcher;
 mod tally_http;

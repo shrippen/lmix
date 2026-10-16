@@ -183,6 +183,9 @@ pub fn right_of(action: &Action) -> Right {
         | Action::SetDataAuto { .. }
         | Action::SetEmergencyList { .. }
         | Action::SetScriptFolder { .. }
+        | Action::ExportSettings { .. }
+        | Action::ImportSettings { .. }
+        | Action::ResetSettings
         | Action::SetFeed { .. }
         | Action::SetGoGuard { .. }
         | Action::SetInputColor { .. }
