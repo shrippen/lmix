@@ -4,7 +4,9 @@
 //!
 //! | First action | Lamp |
 //! |---|---|
-//! | `preview_input`, `cut_direct`, `overlay_in` (an input) | program, preview or off |
+//! | `preview_input`, `cut_direct`, `overlay_in`, `quick_play`, `click_input`, `go_input` (an input) | program, preview or off |
+//! | `overlay_out`, `overlay_out_all` | program colour while the channel (any channel) shows something |
+//! | `overlay_last` | program colour while the channel shows something, preview colour while it can show its last input again |
 //! | `fade_to_black` | program colour while faded |
 //! | `start_output`, `stop_output` | program colour while the output runs |
 //! | `set_lock` | program colour while locked |
@@ -101,6 +103,14 @@ fn output_running(state: &ShowState, output: &OutputRef) -> bool {
     found.is_some_and(|o| matches!(o.status, lmix_types::OutputStatus::Running { .. }))
 }
 
+/// Whether overlay `channel` (1–4) shows something.
+fn shows(state: &ShowState, channel: u8) -> bool {
+    usize::from(channel)
+        .checked_sub(1)
+        .and_then(|i| state.overlays.get(i))
+        .is_some_and(Option::is_some)
+}
+
 /// Lamp value per bound note or controller in `state`.
 pub fn lamps(state: &ShowState, values: Lamps) -> HashMap<MidiBinding, u8> {
     let on = |yes: bool| if yes { values.program } else { values.off };
@@ -114,11 +124,26 @@ pub fn lamps(state: &ShowState, values: Lamps) -> HashMap<MidiBinding, u8> {
             let value = match s.actions.first()? {
                 Action::PreviewInput { input }
                 | Action::CutDirect { input }
-                | Action::OverlayIn { input, .. } => match input_of(state, input) {
+                | Action::OverlayIn { input, .. }
+                | Action::QuickPlay { input: Some(input) }
+                | Action::ClickInput { input }
+                | Action::GoInput { input } => match input_of(state, input) {
                     Some(id) if state.program == Some(id) => values.program,
                     Some(id) if state.preview == Some(id) => values.preview,
                     _ => values.off,
                 },
+                Action::OverlayOut { channel, .. } => on(shows(state, *channel)),
+                Action::OverlayOutAll { .. } => on(state.overlays.iter().any(Option::is_some)),
+                Action::OverlayLast { channel, .. } => {
+                    let last = usize::from(*channel)
+                        .checked_sub(1)
+                        .and_then(|i| state.overlay_last.get(i).copied().flatten());
+                    match (shows(state, *channel), last) {
+                        (true, _) => values.program,
+                        (false, Some(_)) => values.preview,
+                        (false, None) => values.off,
+                    }
+                }
                 Action::FadeToBlack { .. } => on(state.fade_to_black),
                 Action::StartOutput { output } | Action::StopOutput { output } => {
                     on(output_running(state, output))
@@ -367,5 +392,56 @@ mod tests {
         );
         assert_eq!(input_of(&state, &InputRef::Text("dynamic2".into())), None);
         assert!(!output_running(&state, &OutputRef::Number(0)));
+    }
+
+    #[test]
+    fn overlay_keys_light_as_their_channels_stand() {
+        let mut sw = crate::switcher::Switcher::new(2);
+        sw.apply(Action::AddInput {
+            source: SourceSpec::Pattern {
+                pattern: TestPattern::Bars,
+            },
+            name: Some("A".into()),
+        })
+        .unwrap();
+        sw.apply(key(1, vec![Action::OverlayOutAll { duration_ms: 0 }]))
+            .unwrap();
+        sw.apply(key(
+            2,
+            vec![Action::OverlayLast {
+                channel: 2,
+                duration_ms: 0,
+            }],
+        ))
+        .unwrap();
+        sw.apply(key(
+            3,
+            vec![Action::OverlayOut {
+                channel: 2,
+                duration_ms: 0,
+            }],
+        ))
+        .unwrap();
+        let note = |n| MidiBinding {
+            kind: MidiKind::Note,
+            channel: Some(1),
+            number: n,
+        };
+        let lit = |sw: &crate::switcher::Switcher| {
+            let lit = lamps(&sw.state(), Lamps::default());
+            (lit[&note(1)], lit[&note(2)], lit[&note(3)])
+        };
+        assert_eq!(lit(&sw), (0, 0, 0), "no overlay, none to show again");
+
+        sw.apply(Action::OverlayIn {
+            channel: 2,
+            input: InputRef::Number(1),
+            duration_ms: 0,
+        })
+        .unwrap();
+        assert_eq!(lit(&sw), (127, 127, 127));
+
+        sw.apply(Action::OverlayOutAll { duration_ms: 0 }).unwrap();
+        assert_eq!(lit(&sw), (0, 64, 0), "channel 2 can show A again");
     }
 }

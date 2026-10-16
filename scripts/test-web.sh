@@ -34,6 +34,7 @@ act '{"action":"add_input","source":{"kind":"pattern","pattern":"bars"},"name":"
 act '{"action":"add_input","source":{"kind":"pattern","pattern":"ball"},"name":"Ball"}'
 act '{"action":"cut_direct","input":1}'
 act '{"action":"add_shortcut","shortcut":{"label":"Ball on air","key":"F2","web":true,"color":"red","actions":[{"action":"preview_input","input":2},{"action":"cut"}]}}'
+act '{"action":"add_shortcut","shortcut":{"label":"Overlays off","web":true,"actions":[{"action":"overlay_out_all","duration_ms":0}]}}'
 
 export NODE_PATH="${NODE_PATH:-$(npm root -g)}"
 SHOT_DIR="$WORK" node "$ROOT/scripts/web-check.cjs" "$CORE" || fail "web pages"
