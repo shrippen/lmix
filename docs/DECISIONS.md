@@ -2494,3 +2494,31 @@ Dienst-Test (Panik über den Dienst, Notfall-Cue schneidet, Ereignis;
 neuer Dienst über dieselbe Sicherung: Standby gleich, nichts läuft), OSC.
 **Offen**: Ausblenden und SAF.7 mit Stufe 2, Panik ohne Schlüssel (CTL.5),
 Escape als Panik in der Show-Ansicht (CTL.6, SUI).
+
+## 2026-10-16 — Feste OSC-Abonnenten und Restzeit (S1 Stufe 5, CTL.2, CTL.4)
+
+**Kontext**: Abnahme S1: Standby-Name und Restzeit erscheinen auf
+Companion-Tasten über einen festen OSC-Abonnenten, ohne eigenes Modul.
+
+**Entscheidungen**:
+- **Abonnenten neben den Zielen** in derselben Rechner-Datei
+  (`targets.json` ist jetzt `{"targets": […], "feeds": […]}`; das Format
+  war erst seit heute da, keine Migration). Ein Abonnent nennt ein
+  `osc_udp`-Ziel und Nachrichten je Anlass (`standby`, `running`,
+  `panic`) mit Platzhaltern (`{name}`, `{number}`, `{remaining}` …).
+  Ein Argument, das nur aus einer Zeit besteht, geht als Float (Companion
+  kann damit rechnen), alles andere als Text.
+- **Ein Takt für beides** (`--cue-events-hz`, Standard 4, 1–20): das
+  Ereignis `running` (laufende Cues mit fertig gerechneter Restzeit) und
+  die `running`-Nachrichten gehen in diesem Takt, solange etwas läuft, und
+  einmal danach mit leeren Werten, damit Tasten nicht stehen bleiben.
+  Standby geht nur bei Änderung, Panik sofort. Ohne Abonnenten und ohne
+  laufende Cues arbeitet der Takt nicht.
+- **Neu gesetzter Abonnent bekommt alles neu** (Standby jeder Liste).
+
+**Geprüft**: 3 Tests in `feeds.rs` (Standby nur bei Änderung, Restzeit je
+Takt und einmal danach, Float bei reiner Zeit, Panik), ein Dienst-Test
+mit echtem UDP-Empfänger (Standby, Restzeit, Ereignis `running`, Panik),
+zehnmal hintereinander grün.
+**Offen**: OSC über TCP (SLIP) für Abonnenten, Ablauf nach 60 s ohne
+Lebenszeichen für angemeldete Abos (CTL.3).

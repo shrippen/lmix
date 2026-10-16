@@ -738,6 +738,7 @@ impl Runner {
             .filter_map(|run| {
                 let list = lists.iter().position(|l| l.id == run.list)?;
                 let cue = Self::cue(lists, list, run.cue)?;
+                let elapsed = now.saturating_duration_since(run.start).as_millis() as u64;
                 let phase = match (run.fired, run.ended) {
                     (false, _) => RunPhase::PreWait,
                     (true, false) => RunPhase::Running,
@@ -749,8 +750,11 @@ impl Runner {
                     number: cue.number.clone(),
                     name: cue.display_name(),
                     phase,
-                    elapsed_ms: now.saturating_duration_since(run.start).as_millis() as u64,
+                    elapsed_ms: elapsed,
                     total_ms: run.total.map(|d| d.as_millis() as u64),
+                    remaining_ms: run
+                        .total
+                        .map(|d| (d.as_millis() as u64).saturating_sub(elapsed)),
                 })
             })
             .collect()

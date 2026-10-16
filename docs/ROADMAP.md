@@ -423,6 +423,8 @@ Stufe 4 (Ausgabeziele, EXT.1–5) ✅ für HTTP und Home Assistant; DECISIONS
 „Ausgabeziele“.
 Stufe 5, Teil Sicherheit (SAF): Panik, harter Stopp, Notfall-Liste, Standby
 nach Neustart ✅ ohne Ausblenden (mit Stufe 2); DECISIONS „Panik“.
+Stufe 5, Teil Bedienung: Restzeit als Ereignis (CTL.2) und feste OSC-Abonnenten
+(CTL.4) ✅; DECISIONS „Feste OSC-Abonnenten“. Offen: Zugangsschlüssel (CTL.5).
 
 ---
 

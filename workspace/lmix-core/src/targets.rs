@@ -13,6 +13,7 @@
 use std::collections::BTreeMap;
 use std::time::Duration;
 
+use lmix_types::feed::{Feed, FEEDS, FEED_ARGS, FEED_MESSAGES};
 use lmix_types::target::{
     HttpMethod, Target, TargetKind, TargetResult, TargetSpec, TARGETS, TARGET_ADDRESSES,
     TARGET_TIMEOUT_MAX_MS, TARGET_TIMEOUT_MIN_MS,
@@ -256,13 +257,46 @@ pub async fn probe(http: &reqwest::Client, target: &TargetConfig) -> Result<(), 
     }
 }
 
-/// The settings file: a JSON list.
-pub fn parse(bytes: &[u8]) -> Result<Vec<TargetConfig>, String> {
+/// The settings file: targets and the fixed OSC subscribers (CTL.4)
+/// that send to them.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct Settings {
+    #[serde(default)]
+    pub targets: Vec<TargetConfig>,
+    #[serde(default)]
+    pub feeds: Vec<Feed>,
+}
+
+pub fn parse(bytes: &[u8]) -> Result<Settings, String> {
     serde_json::from_slice(bytes).map_err(|e| e.to_string())
 }
 
-pub fn to_bytes(targets: &[TargetConfig]) -> Vec<u8> {
-    serde_json::to_vec_pretty(targets).expect("targets serialize")
+pub fn to_bytes(settings: &Settings) -> Vec<u8> {
+    serde_json::to_vec_pretty(settings).expect("targets serialize")
+}
+
+/// Add `feed` to `feeds` or replace the one of its name.
+pub fn set_feed(feeds: &mut Vec<Feed>, feed: Feed) -> Result<(), ActionError> {
+    if feed.name.trim().is_empty() || feed.target.trim().is_empty() {
+        return Err(bad("a subscriber needs a name and a target"));
+    }
+    if feed.messages.is_empty() || feed.messages.len() > FEED_MESSAGES {
+        return Err(bad(format!("1–{FEED_MESSAGES} messages")));
+    }
+    for message in &feed.messages {
+        if !message.address.starts_with('/') {
+            return Err(bad(format!("{} is no OSC address", message.address)));
+        }
+        if message.args.len() > FEED_ARGS {
+            return Err(bad(format!("at most {FEED_ARGS} arguments")));
+        }
+    }
+    match feeds.iter().position(|f| f.name == feed.name) {
+        Some(i) => feeds[i] = feed,
+        None if feeds.len() >= FEEDS => return Err(bad(format!("at most {FEEDS} subscribers"))),
+        None => feeds.push(feed),
+    }
+    Ok(())
 }
 
 #[cfg(test)]
