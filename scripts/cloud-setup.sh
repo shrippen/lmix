@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Setup script for the Claude Code cloud environment (Ubuntu 24.04).
 # Paste into the environment settings, field "Setup script". Needs the
-# environment variable GITEA_TOKEN (read:repository, read:package).
+# environment variable GITEA_TOKEN (read:repository) to clone lmix.
 #
 # Installs GStreamer and the build tools, clones lmix with its strom
 # submodule to /root/work/lmix and fetches the prebuilt strom binary,
@@ -32,7 +32,7 @@ apt-get install -y -qq --no-install-recommends qt6-base-dev qt6-declarative-dev 
     qt6-tools-dev-tools qt6-qpa-plugins qml6-module-org-kde-kirigami kf6-kirigami-dev gstreamer1.0-qt6
 
 if [[ -z "${GITEA_TOKEN:-}" ]]; then
-    echo "GITEA_TOKEN not set: skipping lmix clone and strom download" >&2
+    echo "GITEA_TOKEN not set: skipping lmix clone" >&2
     exit 0
 fi
 
@@ -41,6 +41,7 @@ mkdir -p "$WORK"
 if [[ ! -d "$WORK/lmix/.git" ]]; then
     git "${auth[@]}" clone -q "$REPO" "$WORK/lmix"
 fi
-git "${auth[@]}" -C "$WORK/lmix" submodule update --init --depth 50 workspace/strom
+git -C "$WORK/lmix" submodule sync -q workspace/strom
+git -C "$WORK/lmix" submodule update --init --depth 50 workspace/strom
 
 "$WORK/lmix/scripts/fetch-strom.sh" >/dev/null

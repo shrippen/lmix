@@ -77,7 +77,7 @@ sleep 11; curl http://127.0.0.1:8200/api/latency
 - VM ohne GPU, CPU-Compositor 1080p30, 3 Slots plus Ausgänge:
   **Median 116 ms, p95 120 ms**.
 - Regression: `scripts/test-m2b-vm.sh` misst 5 s und scheitert über
-  `LATENCY_BUDGET_MS` (Standard 150 ms, VM); CI-Workflow `vm-check`.
+  `LATENCY_BUDGET_MS` (Standard 150 ms, VM); CI-Job `vm-check` (`.github/workflows/ci.yml`).
 - Ziel auf Hardware: ≤ 2 Frames Quelle → PGM (H.2).
 
 ## 2026-09-30 — M1b, NVIDIA RTX 3090, CUDA-Mixer
