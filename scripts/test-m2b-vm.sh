@@ -54,6 +54,12 @@ fail() {
         echo "--- last 60 lines of $log" >&2
         tail -n 60 "$WORK/$log" >&2
     done
+    # Earlier trouble scrolls out of the tails (thumbnail polls fill them).
+    echo "--- last 40 warnings and errors of strom.log" >&2
+    grep -E 'WARN|ERROR' "$WORK/strom.log" | grep -v '/thumbnail' | tail -n 40 >&2 || true
+    echo "--- strom flows" >&2
+    curl -sf --max-time 5 "$STROM/api/flows" \
+        | jq -c '.flows[] | {name, id, state, running}' >&2 || true
     exit 1
 }
 pass() { echo "ok   $*"; }
