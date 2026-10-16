@@ -19,6 +19,7 @@ use lmix_types::Action;
 
 mod access;
 mod api;
+mod checks;
 mod clips;
 mod cues;
 mod datasource;

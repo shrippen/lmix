@@ -2584,3 +2584,23 @@ Schlüssel nur mit `--open-panic`), für die wachsende Wartezeit (pausierte
 Zeit) und über TCP (Panik vor `AUTH`, Steuern ja, Bearbeiten nein).
 **Offen**: Rechte für die Web-Seiten jenseits der offenen Seiten, eigene
 Adressliste.
+
+## 2026-10-16 — Warnliste, Rechner-Einstellungen im Paket (SUI.5, SSH.5, CUE.1)
+
+- **Warnliste** (`cue_warnings` im Zustand): `lmix-core` prüft nach jeder
+  Änderung der Show, der Ziele oder der fehlenden Medien, was beim Lauf
+  schiefginge: Start-Cue ohne Ziel, Aktion an einen Input oder ein
+  Ausgabeziel, das es nicht gibt, Input ohne Mediendatei. Zwischengespeichert,
+  nicht je Zustand gerechnet. Jede Warnung hat eine Art (`problem`) mit
+  Werten, damit die Console sie übersetzt, und den englischen Text.
+- **Rechner-Einstellungen im Paket**: `export_package` mit `machine: true`
+  legt `machine.json` (Ziele, Abonnenten, ohne Geheimnisse) ins Paket;
+  `import_package` mit `machine: true` übernimmt sie, gleichnamige Ziele
+  behalten ihr Geheimnis. Dabei gefunden: Vorlagen, die Cues in Gruppen
+  laden, kamen nicht ins Paket (nur oberste Ebene durchsucht); behoben.
+- **Nummern mit Leerzeichen** warnen im Drehbuch (CUE.1), laden aber.
+
+**Geprüft**: Test der Prüfungen (fehlendes Start-Ziel, Ziel, Input in einer
+Gruppe, fehlende Mediendatei), Paket-Test mit `machine.json`, Test der
+Übernahme (Geheimnis bleibt), Drehbuch-Test; Console auf Xvfb zeigt drei
+Warnungen auf Deutsch.

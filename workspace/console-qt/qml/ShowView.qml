@@ -31,6 +31,39 @@ ColumnLayout {
     readonly property var runningIds: running.map(r => r.cue)
     readonly property var standbyCue: list && list.standby <= list.cues.length ? list.cues[list.standby - 1] : null
     readonly property bool fromScript: list !== null && list.source !== undefined && list.source !== null
+    /** What would go wrong when the lists run (SUI.5). */
+    readonly property var warnings: show && show.cue_warnings ? show.cue_warnings : []
+
+    /** A warning in the Console's language. */
+    function problem(w) {
+        switch (w.problem) {
+        case "start_cue_gone": return qsTr("starts cue %1, which is not there").arg(w.target)
+        case "start_list_gone": return qsTr("starts a cue list that is not there")
+        case "target_gone": return qsTr("sends to target %1, which this machine does not have").arg(w.target)
+        case "input_gone": return qsTr("uses input %1, which is not there").arg(w.input)
+        case "media_missing": return qsTr("uses input %1, whose media file is missing").arg(w.input)
+        default: return w.message
+        }
+    }
+
+    /** "12 Rain" of the cue with `id` in any list, for a warning. */
+    function cueLabel(listId, cueId) {
+        function find(cues) {
+            for (var i = 0; i < cues.length; i++) {
+                if (cues[i].id === cueId)
+                    return cues[i]
+                var inside = find(cues[i].children || [])
+                if (inside)
+                    return inside
+            }
+            return null
+        }
+        var owner = lists.find(l => l.id === listId)
+        var cue = owner ? find(owner.cues) : null
+        if (!cue)
+            return ""
+        return (cue.number !== "" ? cue.number + " " : "") + cueName(cue)
+    }
 
     /** When the last state came, and now (for running times). */
     property real stateAt: Date.now()
@@ -161,6 +194,33 @@ ColumnLayout {
             QQC2.ToolTip.visible: hovered
             QQC2.ToolTip.text: qsTr("Show waits and follows of every cue")
             KanteCheckSkin { control: advancedBox }
+        }
+    }
+
+    // Warnings before the show (SUI.5).
+    ColumnLayout {
+        Layout.fillWidth: true
+        visible: view.warnings.length > 0
+        spacing: 0
+
+        KanteSectionLabel {
+            text: qsTr("Warnings: %1").arg(view.warnings.length)
+            color: KanteStyle.warningColor
+        }
+        Repeater {
+            model: view.warnings.slice(0, 5)
+            QQC2.Label {
+                required property var modelData
+                Layout.fillWidth: true
+                text: qsTr("Cue %1: %2").arg(view.cueLabel(modelData.list, modelData.cue)).arg(view.problem(modelData))
+                color: KanteStyle.warningColor
+                elide: Text.ElideRight
+            }
+        }
+        QQC2.Label {
+            visible: view.warnings.length > 5
+            text: qsTr("… and %1 more").arg(view.warnings.length - 5)
+            color: KanteStyle.mutedTextColor
         }
     }
 

@@ -98,7 +98,7 @@ ausgeschlossen. **MS**: Meilenstein (§7). Stand: ✅ vorhanden · ◐ teilweise
 
 | ID | Anforderung | Prio | MS | Stand |
 |---|---|---|---|---|
-| CUE.1 | Cue hat Nummer, Name, Art, Notiz (mehrzeilig), Farbe, feste ID. Nummer ist freier Text, darf leer sein, ist in der ganzen Show eindeutig; Umsortieren ändert keine Nummer. Ohne Namen wird einer aus Art und Ziel gebildet. Nummern ohne Leerzeichen und Sonderzeichen empfohlen (Fernsteuerung), Import warnt | M | S1 | ◐ (alles bis auf die Import-Warnung, IMP) |
+| CUE.1 | Cue hat Nummer, Name, Art, Notiz (mehrzeilig), Farbe, feste ID. Nummer ist freier Text, darf leer sein, ist in der ganzen Show eindeutig; Umsortieren ändert keine Nummer. Ohne Namen wird einer aus Art und Ziel gebildet. Nummern ohne Leerzeichen und Sonderzeichen empfohlen (Fernsteuerung), Import warnt | M | S1 | ✅ (Drehbuch warnt bei Nummern mit Leerzeichen oder Zeichen) |
 | CUE.2 | Vorwartezeit und Nachwartezeit je Cue, 0 bis 1 h, Auflösung 10 ms. Nachwartezeit zählt ab Beginn der Aktion, also nach der Vorwartezeit | M | S1 | ✅ |
 | CUE.3 | Folge je Cue: keine; nächsten starten nach Nachwartezeit; nächsten starten nach Ende (dann gilt Nachwartezeit = Dauer) | M | S1 | ✅ |
 | CUE.4 | Gruppen-Modi: **Zeitleiste** (alle Kinder starten zugleich, versetzt nur durch ihre Vorwartezeiten; Kinder haben keine Folge), **erstes starten** (erstes Kind startet, Rest über Folgen; Standby springt hinter die Gruppe) | M | S1 | ✅ |
@@ -269,7 +269,7 @@ QLab kennt keinen Import aus Texten; am nächsten kommt das Anlegen von Cues
 | SUI.2 | Cue-Liste mit Spalten Nummer, Name, Art, Ziel, Vorwartezeit, Dauer, Nachwartezeit, Folge; Standby deutlich markiert; Gruppen einklappbar | M | S1 | ◐ (Nummer, Name, Notiz, Art mit Dauer, Vor/Nach/Folge unter „Erweitert“, Gruppen einklappbar; Ziel steht im Namen) |
 | SUI.3 | Großer GO-Knopf, Panik-Knopf, Standby-Name und Standby-Notiz in großer Schrift | M | S1 | ✅ |
 | SUI.4 | Laufende Cues mit Fortschrittsbalken, Restzeit, Stopp und Pause je Cue | M | S1 | ◐ (Fortschritt, Restzeit, Stopp je Cue; Pause mit RUN.5, S2) |
-| SUI.5 | Warnliste: defekte Cues, fehlende Medien, fehlende Zonen-Geräte, nicht erreichbare Ausgabeziele; vor der Show prüfbar | S | S1 | – |
+| SUI.5 | Warnliste: defekte Cues, fehlende Medien, fehlende Zonen-Geräte, nicht erreichbare Ausgabeziele; vor der Show prüfbar | S | S1 | ◐ (fehlende Start-Ziele, Ausgabeziele, Inputs, Mediendateien; Erreichbarkeit der Ziele und Zonen-Geräte fehlen) |
 | SUI.6 | Dunkle Raumansicht: stark gedimmt, kein Weiß, für Bedienung im dunklen Raum (lmix) | S | S1 | – |
 | SUI.7 | Kleine Bühnenvorschau | S | S1 | ◐ (Live-Monitore) |
 | SUI.8 | Zonen-Leiste: Pegel und Lautstärke je Zone | S | S1 | – |
@@ -285,9 +285,9 @@ QLab kennt keinen Import aus Texten; am nächsten kommt das Anlegen von Cues
 |---|---|---|---|---|
 | SSH.1 | Cue-Listen mit allen neuen Feldern in der Show-Datei; Format-Version steigt, ältere Shows werden beim Laden migriert (CUE.21) | M | S1 | ✅ |
 | SSH.2 | Im Drehbuch-Betrieb speichert die Show nur den Verweis auf den Drehbuch-Ordner, nicht die erzeugten Cues | S | S1 | – |
-| SSH.3 | Zonen-, Bühnen- und Ausgabeziel-Zuordnung liegen nicht in der Show, sondern in den Rechner-Einstellungen; ex- und importierbar | M | S1 | – |
+| SSH.3 | Zonen-, Bühnen- und Ausgabeziel-Zuordnung liegen nicht in der Show, sondern in den Rechner-Einstellungen; ex- und importierbar | M | S1 | ✅ (Ziele und Abonnenten in `targets.json`; Zonen und Bühnen mit Stufe 2/3) |
 | SSH.4 | Paket (SHW.6) nimmt Klang- und Bilddateien der Cues mit | S | S2 | ◐ (SHW.6) |
-| SSH.5 | Show-Datei auf Wunsch zusammen mit den Rechner-Einstellungen (Zonen, Bühnen, Ausgabeziele, Licht-Patch) exportieren und importieren, z. B. für den Umzug auf gleiche Technik; Geheimnisse bleiben draußen, nur ihre Verweise (EXT.2) (lmix) | S | S1 | – |
+| SSH.5 | Show-Datei auf Wunsch zusammen mit den Rechner-Einstellungen (Zonen, Bühnen, Ausgabeziele, Licht-Patch) exportieren und importieren, z. B. für den Umzug auf gleiche Technik; Geheimnisse bleiben draußen, nur ihre Verweise (EXT.2) (lmix) | S | S1 | ✅ (`export_package`/`import_package` mit `machine: true`, ohne Geheimnisse) |
 
 ### 3.12 Licht (LGT)
 

@@ -2331,7 +2331,32 @@
   <context>
     <name>ShowView</name>
     <message>
-      <location filename="../qml/ShowView.qml" line="+73" />
+      <location filename="../qml/ShowView.qml" line="+40" />
+      <source>starts cue %1, which is not there</source>
+      <translation>startet Cue %1, den es nicht gibt</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>starts a cue list that is not there</source>
+      <translation>startet eine Cue-Liste, die es nicht gibt</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>sends to target %1, which this machine does not have</source>
+      <translation>sendet an Ziel %1, das dieser Rechner nicht hat</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>uses input %1, which is not there</source>
+      <translation>nutzt Input %1, den es nicht gibt</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>uses input %1, whose media file is missing</source>
+      <translation>nutzt Input %1, dessen Mediendatei fehlt</translation>
+    </message>
+    <message>
+      <location line="+62" />
       <source>Wait %1</source>
       <translation>Warten %1</translation>
     </message>
@@ -2416,6 +2441,21 @@
       <location line="+5" />
       <source>Show waits and follows of every cue</source>
       <translation>Wartezeiten und Folgen jedes Cues zeigen</translation>
+    </message>
+    <message>
+      <location line="+12" />
+      <source>Warnings: %1</source>
+      <translation>Warnungen: %1</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Cue %1: %2</source>
+      <translation>Cue %1: %2</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>… and %1 more</source>
+      <translation>… und %1 weitere</translation>
     </message>
     <message>
       <location line="+9" />

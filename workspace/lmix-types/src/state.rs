@@ -156,6 +156,9 @@ pub struct ShowState {
     /// Panic time (SAF.2).
     #[serde(default)]
     pub panic_ms: u32,
+    /// What would go wrong when the cue lists run (SUI.5).
+    #[serde(default)]
+    pub cue_warnings: Vec<crate::cue::CueWarning>,
     /// Output targets of this machine, without secrets (EXT.1).
     #[serde(default)]
     pub targets: Vec<crate::target::Target>,

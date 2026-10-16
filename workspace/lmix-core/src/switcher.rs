@@ -383,6 +383,8 @@ pub struct Switcher {
     removed: Vec<(usize, ShowInput)>,
     /// Standby and running cues of the cue lists.
     cues: Runner,
+    /// What would go wrong when they run (SUI.5); see `refresh_warnings`.
+    cue_warnings: Vec<lmix_types::cue::CueWarning>,
     status: HashMap<InputId, InputStatus>,
     /// Audio channel settings the engine has, per slot.
     mix: HashMap<usize, Mix>,
@@ -442,6 +444,7 @@ impl Switcher {
             locked: false,
             removed: Vec::new(),
             cues: Runner::default(),
+            cue_warnings: Vec::new(),
             status: HashMap::new(),
             mix: HashMap::new(),
             listen: HashMap::new(),
@@ -1346,6 +1349,7 @@ impl Switcher {
                 .running(&self.show.cue_lists, tokio::time::Instant::now()),
             go_guard_ms: self.show.go_guard_ms,
             panic_ms: self.show.panic_ms,
+            cue_warnings: self.cue_warnings.clone(),
             targets: self.targets.iter().map(|t| t.public()).collect(),
             feeds: self.feeds.clone(),
             restorable: self.removed.last().map(|(_, input)| input.name.clone()),
@@ -2082,6 +2086,13 @@ impl Switcher {
     /// What the cue lists have due by `now`.
     pub fn cue_tick(&mut self, now: tokio::time::Instant) -> Vec<Out> {
         self.cues.tick(&self.show.cue_lists, now)
+    }
+
+    /// Check the cue lists again (SUI.5): after changes of the show, the
+    /// targets or the missing media.
+    pub fn refresh_warnings(&mut self) {
+        let missing = |id| self.missing.get(&id).is_some_and(|m| !m.is_empty());
+        self.cue_warnings = crate::checks::cue_warnings(&self.show, &self.targets, &missing);
     }
 
     /// Write standby into the show's lists; whether one moved (then the

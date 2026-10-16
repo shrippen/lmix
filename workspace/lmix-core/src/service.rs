@@ -197,6 +197,7 @@ impl Service {
         let read = read_settings(&path, "output targets", crate::targets::parse).await;
         let mut sw = self.switcher.lock().await;
         sw.set_target_settings(read.clone().ok().flatten().unwrap_or_default());
+        sw.refresh_warnings();
         if read.is_ok() {
             *self.targets_file.lock().expect("targets file lock") = Some(path);
         }
@@ -864,6 +865,7 @@ impl Service {
         }
         let mut sw = self.switcher.lock().await;
         if sw.set_missing(missing) {
+            sw.refresh_warnings();
             self.publish(&sw);
         }
     }
@@ -1492,6 +1494,7 @@ impl Service {
             }
             other => sw.apply(other)?,
         };
+        sw.refresh_warnings();
         if let (true, Some(path)) = (file_action, sw.path().map(str::to_string)) {
             self.recent.lock().await.touch(&path).await;
         }
