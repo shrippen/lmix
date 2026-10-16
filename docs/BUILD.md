@@ -183,15 +183,17 @@ WebSocket `GET /api/events`.
 ### strom fertig gebaut (CI)
 
 Ein kalter Release-Build von strom dauert 20–25 min. Die CI
-(`.gitea/workflows/strom.yml`) baut ihn einmal je Submodul-Commit in
-`ubuntu:24.04` und legt ihn als Generic-Paket `strom/<sha>` ab.
-`scripts/fetch-strom.sh` holt ihn (Sekunden) und baut nur lokal, wenn es
-kein Paket gibt oder `GITEA_TOKEN` fehlt.
+auf dem GitHub-Spiegel (`.github/workflows/ci.yml`) baut ihn einmal je
+Submodul-Commit in `ubuntu:24.04` und legt ihn öffentlich als
+`ghcr.io/shrippen/lmix-strom:<sha>` ab (OCI-Artefakt, ein Tarball).
+`scripts/fetch-strom.sh` holt ihn ohne Anmeldung (Sekunden) und baut nur
+lokal, wenn es kein Paket gibt. strom ist öffentlich
+(https://github.com/shrippen/strom, Spiegel des Gitea-Forks).
 
 | Wo | Was | Rechte |
 |---|---|---|
-| Repo-Secret `REGISTRY_TOKEN` (lmix) | CI: privates Submodul lesen, Paket schreiben | `read:repository`, `write:package` |
-| Umgebungsvariable `GITEA_TOKEN` (Cloud-Umgebung) | Klonen, Paket laden | `read:repository`, `read:package` |
+| Repo-Secret `GITEA_TOKEN` (GitHub-Spiegel lmix) | CI: Status `github / test` an Gitea | Schreibrecht auf das Repo |
+| Umgebungsvariable `GITEA_TOKEN` (Cloud-Umgebung) | lmix klonen | `read:repository` |
 
 Cloud-Umgebung: Inhalt von `scripts/cloud-setup.sh` als Setup-Skript
 eintragen. Es installiert GStreamer und Werkzeuge, klont lmix nach
