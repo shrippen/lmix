@@ -49,7 +49,7 @@ exec 5<>"$WORK/portal.in"
 PIDS+=($!)
 Xvfb "$DISPLAY_NUM" -screen 0 1440x900x24 >/dev/null 2>&1 &
 PIDS+=($!)
-"$(target lmix-core lmix-core)" --engine none --listen "127.0.0.1:${PORT}" --autosave "$WORK/autosave.lmix" --shortcuts "$WORK/shortcuts.json" >"$WORK/core.log" 2>&1 &
+"$(target lmix-core lmix-core)" --engine none --listen "127.0.0.1:${PORT}" --autosave "$WORK/autosave.lmix" --shortcuts "$WORK/shortcuts.json" --layout-templates "$WORK/layout-templates.json" >"$WORK/core.log" 2>&1 &
 PIDS+=($!)
 wait_for curl -sf "http://127.0.0.1:${PORT}/health" -o /dev/null || fail "lmix-core did not come up"
 

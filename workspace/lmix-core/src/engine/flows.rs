@@ -285,6 +285,16 @@ pub fn overlay_layer(channel: usize) -> usize {
     channel + 1
 }
 
+/// Program picture size: strom's default `pgm_resolution`, which the
+/// mixer flow keeps.
+pub const PROGRAM_SIZE: (u32, u32) = (1920, 1080);
+
+/// Pad of DSK `layer` (0-based) on the program compositor: after the
+/// mixer's inputs, which end with black.
+pub fn dsk_pad(black: usize, layer: usize) -> String {
+    format!("sink_{}", black + 1 + layer)
+}
+
 /// Block id of the `inter` input feeding DSK `layer` (0-based).
 pub fn layer_input(layer: usize) -> String {
     format!("dsk{layer}")

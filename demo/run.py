@@ -217,8 +217,10 @@ def main():
                                        "--listen", f"127.0.0.1:{CORE_PORT}", "--mixer", mixer(),
                                        "--slots", str(len(STREAM["inputs"])),
                                        "--autosave", str(work / "autosave.lmix"),
-                                       # Not the operator's shortcuts for all shows.
+                                       # Not the operator's shortcuts for all shows
+                                       # and layout templates.
                                        "--shortcuts", str(work / "shortcuts.json"),
+                                       "--layout-templates", str(work / "layout-templates.json"),
                                        "--live-dir", str(live)],
                                       env=env, stdout=log, stderr=log))
         wait_up(f"{CORE}/state", "lmix-core")

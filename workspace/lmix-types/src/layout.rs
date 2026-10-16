@@ -120,3 +120,45 @@ pub struct BoxSpec {
     #[serde(default)]
     pub locked: bool,
 }
+
+/// Layout templates lmix-core keeps (LAY.5).
+pub const LAYOUT_TEMPLATES: usize = 64;
+
+/// Marker of a file of layout templates (settings and export).
+pub const TEMPLATES_FORMAT: &str = "lmix-layouts";
+
+/// An input as a template remembers it: the show it was saved from may
+/// not be the one it is loaded into, so by name, then by number.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct TemplateInput {
+    /// 1-based place in the input bar when saved.
+    pub number: u32,
+    pub name: String,
+}
+
+/// A box of a template: its place, frame and crop, and the input it
+/// showed.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct TemplateBox {
+    pub rect: BoxRect,
+    pub input: TemplateInput,
+    #[serde(default)]
+    pub border_px: u8,
+    #[serde(default, skip_serializing_if = "BoxCrop::is_zero")]
+    pub crop: BoxCrop,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub locked: bool,
+}
+
+/// A layout saved apart from any show (LAY.5): loading it adds a new
+/// layout to the show.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct LayoutTemplate {
+    /// Unique among the templates; names one in actions.
+    pub name: String,
+    #[serde(default)]
+    pub background: Option<TemplateInput>,
+    /// Bottom to top.
+    #[serde(default)]
+    pub boxes: Vec<TemplateBox>,
+}

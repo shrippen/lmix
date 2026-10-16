@@ -218,7 +218,7 @@ kann es, Console nicht.
 | LAY.2 | Je Ebene Position, Crop, Rand, sichtbar an/aus, Rotation 90° | M | ◐ |
 | LAY.3 | Verschachtelung: Ebenen von Ebenen werden gerendert (mind. 2 Stufen) | S | – |
 | LAY.4 | "Ebenen flach rechnen": Input samt Ebenen als ein Bild für Weiterverwendung | K | – |
-| LAY.5 | Layout-Vorlagen: speichern, laden, ex-/importieren, außerhalb der Show | S | – |
+| LAY.5 | Layout-Vorlagen: speichern, laden, ex-/importieren, außerhalb der Show | S | ✅ |
 | LAY.6 | Ebenen-Editor: Maus verschieben/skalieren/croppen, Mehrfachauswahl, Fangen an Kanten/Mitte/Schutzbereichen/anderen Ebenen, Sperre, Rückgängig/Wiederholen, Pixelwerte zur Ausgabegröße | S | ✅ (Zuschnitt per Zahl, nicht per Maus) |
 | LAY.7 | Ebene ein/aus, tauschen, Inhalt wechseln und Rechteck setzen per Aktion, auch animiert | S | – |
 
@@ -244,8 +244,8 @@ kann es, Console nicht.
 | ID | Anforderung | Prio | Stand |
 |---|---|---|---|
 | OVL.1 | 8 Overlay-Kanäle über Program; ein Input je Kanal; Alpha und Key des Inputs gelten | M | ◐ (DSK 0–4, an/aus) |
-| OVL.2 | Je Kanal: Typ (Vollbild/PiP mit Position), Ein-/Ausblendeffekt + Dauer (rückwärts beim Ausblenden), Auto-Aus nach Zeit, Rand | M | – |
-| OVL.3 | Overlay in Preview vorbereiten; geht beim nächsten Take mit auf Program | S | – |
+| OVL.2 | Je Kanal: Typ (Vollbild/PiP mit Position), Ein-/Ausblendeffekt + Dauer (rückwärts beim Ausblenden), Auto-Aus nach Zeit, Rand | M | ◐ (Effekt nur Schnitt/Blende, ohne Rand: Engine) |
+| OVL.3 | Overlay in Preview vorbereiten; geht beim nächsten Take mit auf Program | S | ◐ (Tally, nicht im Vorschau-Bild: Engine) |
 | OVL.4 | PiP-Overlay per Aktion auf Vollbild vergrößern und zurück | K | – |
 | OVL.5 | Overlay je Ausgang abwählbar (Clean Feed) | M | – |
 | OVL.6 | Overlays auch auf Mix-Inputs (Aktion mit Mix-Liste) | S | – |

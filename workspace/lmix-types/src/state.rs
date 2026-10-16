@@ -3,9 +3,9 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::action::{Effect, TransitionSlot, OVERLAY_CHANNELS};
+use crate::action::{Effect, TransitionSlot, DEFAULT_OVERLAY_MS, OVERLAY_CHANNELS};
 use crate::input::{AuxBus, Input, InputId, AUX_BUSES};
-use crate::layout::Layout;
+use crate::layout::{BoxRect, Layout, LayoutTemplate};
 use crate::output::{Output, OutputStats};
 use crate::shortcut::Shortcut;
 
@@ -34,6 +34,49 @@ impl Default for QuickPlay {
         Self {
             effect: Effect::Fade,
             duration_ms: 500,
+        }
+    }
+}
+
+/// Settings of one overlay channel (OVL.2): how it goes on and off, for
+/// how long it stays, and where it sits.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct OverlayChannel {
+    /// `cut` or `fade` (the engine fades DSK layers only); going off
+    /// runs it backwards.
+    pub effect: Effect,
+    pub duration_ms: u32,
+    /// Goes off by itself this long after it went on; `None` stays on.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub auto_off_ms: Option<u32>,
+    /// Picture in picture: the overlay in this rectangle (fractions of
+    /// the picture, aspect kept); `None` fills the picture.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rect: Option<BoxRect>,
+}
+
+impl Default for OverlayChannel {
+    /// Full screen, half a second of fade, no auto off.
+    fn default() -> Self {
+        Self {
+            effect: Effect::Fade,
+            duration_ms: DEFAULT_OVERLAY_MS,
+            auto_off_ms: None,
+            rect: None,
+        }
+    }
+}
+
+impl OverlayChannel {
+    pub fn is_default(&self) -> bool {
+        *self == Self::default()
+    }
+
+    /// Length of going on or off: none for a cut.
+    pub fn fade_ms(&self) -> u32 {
+        match self.effect {
+            Effect::Cut => 0,
+            _ => self.duration_ms,
         }
     }
 }
@@ -75,6 +118,13 @@ pub struct ShowState {
     /// runtime only, not saved.
     #[serde(default)]
     pub overlay_last: [Option<InputId>; OVERLAY_CHANNELS as usize],
+    /// Effect, length, auto off and place of each overlay channel (OVL.2).
+    #[serde(default)]
+    pub overlay_channels: [OverlayChannel; OVERLAY_CHANNELS as usize],
+    /// The input each overlay channel gets with the next take of preview
+    /// (OVL.3); it has preview tally until then.
+    #[serde(default)]
+    pub overlay_preview: [Option<InputId>; OVERLAY_CHANNELS as usize],
     /// T-bar position (0 = at rest, below 1 = preview partly mixed in).
     #[serde(default)]
     pub t_bar: f32,
@@ -87,6 +137,10 @@ pub struct ShowState {
     /// Layouts; `preview` and `program` may name one.
     #[serde(default)]
     pub layouts: Vec<Layout>,
+    /// Layout templates (LAY.5), kept in lmix-core's settings for every
+    /// show.
+    #[serde(default)]
+    pub layout_templates: Vec<LayoutTemplate>,
     /// Shortcuts of the show.
     #[serde(default)]
     pub shortcuts: Vec<Shortcut>,

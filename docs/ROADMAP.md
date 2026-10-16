@@ -392,6 +392,8 @@ Stand (2026-10-12, ohne GPU; DECISIONS „M9 Anfang“):
 | Layout-Editor: Ziehen, Fangen, Mehrfachauswahl, Sperre, Rückgängig | ✅ LAY.6 |
 | Clips spielen/pausieren auf Sendung von selbst; alle Overlays aus, letzter Input je Kanal | ✅ INP.11, OVL.8 |
 | Schnellstart mit eigenem Effekt; Klick- und GO-Aktion je Input | ✅ SWI.8, INP.8, INP.9 |
+| Overlay-Kanäle: Effekt, Dauer, Auto-Aus, Bild im Bild; Overlay mit dem nächsten Take | ◐ OVL.2, OVL.3 (ohne Rand, Schiebe-/Wischeffekte, Vorschau-Bild: Engine) |
+| Layout-Vorlagen außerhalb der Show, Ex-/Import | ✅ LAY.5 |
 | Verschmelzen, Mix-Inputs, Effektkette, Karten-Ausgang, Key+Fill | offen (Engine/Hardware) |
 
 ### Später — Wiederholung, Gäste

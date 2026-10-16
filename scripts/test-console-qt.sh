@@ -71,7 +71,7 @@ PIDS+=($!)
 PIDS+=($!)
 wait_up "http://127.0.0.1:${STROM_PORT}/health" strom
 "$CORE_BIN" --strom "http://127.0.0.1:${STROM_PORT}" --listen "127.0.0.1:${CORE_PORT}" --mixer cpu \
-    --slots 2 --autosave "$WORK/autosave.lmix" --shortcuts "$WORK/shortcuts.json" --live-dir "$LIVE_DIR" >"$WORK/core.log" 2>&1 &
+    --slots 2 --autosave "$WORK/autosave.lmix" --shortcuts "$WORK/shortcuts.json" --layout-templates "$WORK/layout-templates.json" --live-dir "$LIVE_DIR" >"$WORK/core.log" 2>&1 &
 PIDS+=($!)
 wait_up "$CORE/state" lmix-core
 
