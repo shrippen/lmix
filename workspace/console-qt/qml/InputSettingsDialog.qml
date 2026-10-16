@@ -6,7 +6,7 @@ import Kante
 
 /**
  * An input's settings in tabs (UI.8): general (name, colour tag, signal
- * loss, source), colour, audio (channel strip and aux sends), triggers,
+ * loss, automatic playback of clips, source), colour, audio (channel strip and aux sends), triggers,
  * PTZ and advanced (id, slot, links). Colour and audio are the panels of
  * their own dialogs; triggers, PTZ controls and a new source open those.
  * Changes go to lmix-core as they are made.
@@ -32,6 +32,17 @@ KanteDialog {
     property int tab: 0
 
     function ref() { return dialog.input.id }
+
+    /** Clips, streams and playlists play, restart and pause by themselves
+     *  on and off air (INP.11). */
+    readonly property bool plays: input !== null && ["file", "url", "playlist"].indexOf(input.source.kind) >= 0
+
+    /** `set_auto_play` with one switch changed. */
+    function setAutoPlay(key, on) {
+        var auto = Object.assign({ play: false, restart: false, pause: false }, dialog.input.auto_play)
+        auto[key] = on
+        dialog.act({ action: "set_auto_play", input: dialog.ref(), auto_play: auto })
+    }
 
     title: input ? qsTr("Settings of %1 %2").arg(input.number).arg(input.name) : ""
     modal: true
@@ -116,6 +127,30 @@ KanteDialog {
                             model: [qsTr("Hold last frame"), qsTr("Black")]
                             onActivated: index => dialog.act({ action: "set_signal_loss", input: dialog.ref(), mode: modes[index] })
                             KanteFieldSkin { control: lossBox }
+                        }
+                    }
+                    KanteSettingRow {
+                        Layout.fillWidth: true
+                        title: qsTr("On air")
+                        visible: dialog.plays
+                        RowLayout {
+                            Repeater {
+                                model: [
+                                    { key: "play", label: qsTr("Play"), tip: qsTr("Starts playing as it goes on air: program, a layout on program, an overlay, or the T-bar.") },
+                                    { key: "restart", label: qsTr("From the start"), tip: qsTr("Goes back to the start of its clip as it goes on air.") },
+                                    { key: "pause", label: qsTr("Pause after"), tip: qsTr("Pauses once it is off air, after the transition.") }
+                                ]
+                                QQC2.CheckBox {
+                                    id: autoBox
+                                    required property var modelData
+                                    text: autoBox.modelData.label
+                                    checked: dialog.input !== null && !!dialog.input.auto_play && dialog.input.auto_play[autoBox.modelData.key] === true
+                                    onToggled: dialog.setAutoPlay(autoBox.modelData.key, autoBox.checked)
+                                    QQC2.ToolTip.visible: autoBox.hovered
+                                    QQC2.ToolTip.text: autoBox.modelData.tip
+                                    KanteCheckSkin { control: autoBox }
+                                }
+                            }
                         }
                     }
                     KanteSettingRow {

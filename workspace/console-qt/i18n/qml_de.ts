@@ -48,6 +48,11 @@
     </message>
     <message>
       <location line="+1" />
+      <source>All overlays off</source>
+      <translation>Alle Overlays aus</translation>
+    </message>
+    <message>
+      <location line="+1" />
       <source>Fade to black</source>
       <translation>Schwarzblende</translation>
     </message>
@@ -77,7 +82,7 @@
       <translation>Andere (JSON)</translation>
     </message>
     <message>
-      <location line="+96" />
+      <location line="+98" />
       <source>Action %1 is not valid JSON</source>
       <translation>Aktion %1 ist kein gültiges JSON</translation>
     </message>
@@ -617,7 +622,7 @@
       <translation>Erweitert</translation>
     </message>
     <message>
-      <location line="+5" />
+      <location line="+16" />
       <source>Settings of %1 %2</source>
       <translation>Einstellungen von %1 %2</translation>
     </message>
@@ -653,6 +658,41 @@
     </message>
     <message>
       <location line="+7" />
+      <source>On air</source>
+      <translation>Auf Sendung</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Play</source>
+      <translation>Abspielen</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Starts playing as it goes on air: program, a layout on program, an overlay, or the T-bar.</source>
+      <translation>Spielt ab, sobald es auf Sendung geht: Programm, ein Layout auf Programm, ein Overlay oder der T-Bar.</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>From the start</source>
+      <translation>Von Anfang</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Goes back to the start of its clip as it goes on air.</source>
+      <translation>Springt an den Anfang des Clips, sobald es auf Sendung geht.</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Pause after</source>
+      <translation>Danach pausieren</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Pauses once it is off air, after the transition.</source>
+      <translation>Pausiert, sobald es nicht mehr auf Sendung ist, nach dem Übergang.</translation>
+    </message>
+    <message>
+      <location line="+17" />
       <source>Source</source>
       <translation>Quelle</translation>
     </message>
@@ -2714,7 +2754,7 @@
   <context>
     <name>TransitionPanel</name>
     <message>
-      <location filename="../qml/TransitionPanel.qml" line="+60" />
+      <location filename="../qml/TransitionPanel.qml" line="+63" />
       <source>Cut</source>
       <translation>Cut</translation>
     </message>
@@ -2765,7 +2805,7 @@
       <translation>Overlays</translation>
     </message>
     <message>
-      <location line="+19" />
+      <location line="+33" />
       <source>Overlay %1: %2, click to take off</source>
       <translation>Overlay %1: %2, Klick nimmt es ab</translation>
     </message>
@@ -2781,8 +2821,28 @@
     </message>
     <message>
       <location line="+1" />
+      <source>Overlay %1 is empty. Click: show the preview input. Right click: %2 again.</source>
+      <translation>Overlay %1 ist leer. Klick: Vorschau-Input zeigen. Rechtsklick: wieder %2.</translation>
+    </message>
+    <message>
+      <location line="+1" />
       <source>Overlay %1 is empty. Click: show the preview input.</source>
       <translation>Overlay %1 ist leer. Klick: Vorschau-Input zeigen.</translation>
+    </message>
+    <message>
+      <location line="+15" />
+      <source>Show %1 %2 again</source>
+      <translation>%1 %2 wieder zeigen</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>All overlays off</source>
+      <translation>Alle Overlays aus</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Takes every overlay channel off, each with its fade.</source>
+      <translation>Nimmt alle Overlay-Kanäle heraus, jeden mit seiner Blende.</translation>
     </message>
   </context>
   <context>

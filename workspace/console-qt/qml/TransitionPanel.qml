@@ -7,7 +7,8 @@ import Kante
 /**
  * Cut, the four transition buttons (click: take preview; right click:
  * effect and length), fade to black and the overlay channels (click: the
- * preview input on, or the overlay off).
+ * preview input on, or the overlay off; right click: the last input
+ * again), with all overlays off.
  */
 ColumnLayout {
     id: panel
@@ -20,6 +21,8 @@ ColumnLayout {
 
     readonly property bool canTake: show !== null && show.preview !== null
     readonly property var overlays: show && show.overlays ? show.overlays : []
+    readonly property var overlayLast: show && show.overlay_last ? show.overlay_last : []
+    readonly property bool anyOverlay: overlays.some(id => id !== null)
 
     function inputById(id) {
         return show ? show.inputs.find(i => i.id === id) || null : null
@@ -176,22 +179,62 @@ ColumnLayout {
 
         Repeater {
             model: panel.overlays.length
-            KanteButton {
+
+            // The right click sits on this item, as on the transition
+            // buttons: an empty channel with nothing in preview is disabled.
+            Item {
+                id: channelItem
                 required property int index
                 readonly property int channel: index + 1
                 readonly property var shown: panel.overlays[index] ? panel.inputById(panel.overlays[index]) : null
+                readonly property var last: panel.overlayLast[index] ? panel.inputById(panel.overlayLast[index]) : null
                 Layout.fillWidth: true
-                text: shown ? channel + "\n" + shown.number : channel
-                emphasis: shown ? KanteButton.Emphasis.Destructive : KanteButton.Emphasis.Normal
-                enabled: panel.core.connected && (shown !== null || panel.canTake)
-                Accessible.name: shown ? qsTr("Overlay %1: %2, click to take off").arg(channel).arg(shown.name)
-                    : qsTr("Overlay %1: empty, click to show preview").arg(channel)
-                QQC2.ToolTip.visible: hovered
-                QQC2.ToolTip.text: shown ? qsTr("Overlay %1 shows %2 %3. Click: take off.").arg(channel).arg(shown.number).arg(shown.name)
-                    : qsTr("Overlay %1 is empty. Click: show the preview input.").arg(channel)
-                onClicked: panel.act(shown ? { action: "overlay_out", channel: channel }
-                    : { action: "overlay_in", channel: channel, input: panel.show.preview })
+                implicitHeight: channelButton.implicitHeight
+                implicitWidth: channelButton.implicitWidth
+
+                KanteButton {
+                    id: channelButton
+                    readonly property int channel: channelItem.channel
+                    readonly property var shown: channelItem.shown
+                    readonly property var last: channelItem.last
+                    anchors.fill: parent
+                    text: shown ? channel + "\n" + shown.number : channel
+                    emphasis: shown ? KanteButton.Emphasis.Destructive : KanteButton.Emphasis.Normal
+                    enabled: panel.core.connected && (shown !== null || panel.canTake)
+                    Accessible.name: shown ? qsTr("Overlay %1: %2, click to take off").arg(channel).arg(shown.name)
+                        : qsTr("Overlay %1: empty, click to show preview").arg(channel)
+                    QQC2.ToolTip.visible: hovered
+                    QQC2.ToolTip.text: shown ? qsTr("Overlay %1 shows %2 %3. Click: take off.").arg(channel).arg(shown.number).arg(shown.name)
+                        : last ? qsTr("Overlay %1 is empty. Click: show the preview input. Right click: %2 again.").arg(channel).arg(last.name)
+                        : qsTr("Overlay %1 is empty. Click: show the preview input.").arg(channel)
+                    onClicked: panel.act(shown ? { action: "overlay_out", channel: channel }
+                        : { action: "overlay_in", channel: channel, input: panel.show.preview })
+                }
+
+                TapHandler {
+                    acceptedButtons: Qt.RightButton
+                    enabled: panel.core.connected && channelItem.shown === null && channelItem.last !== null
+                    onTapped: lastMenu.popup()
+                }
+
+                QQC2.Menu {
+                    id: lastMenu
+                    KantePopupSkin { popup: lastMenu }
+                    QQC2.MenuItem {
+                        text: channelItem.last ? qsTr("Show %1 %2 again").arg(channelItem.last.number).arg(channelItem.last.name) : ""
+                        onTriggered: panel.act({ action: "overlay_last", channel: channelItem.channel })
+                    }
+                }
             }
         }
+    }
+    KanteButton {
+        Layout.fillWidth: true
+        visible: overlayRow.visible
+        text: qsTr("All overlays off")
+        enabled: panel.core.connected && panel.anyOverlay
+        QQC2.ToolTip.visible: hovered
+        QQC2.ToolTip.text: qsTr("Takes every overlay channel off, each with its fade.")
+        onClicked: panel.act({ action: "overlay_out_all" })
     }
 }
