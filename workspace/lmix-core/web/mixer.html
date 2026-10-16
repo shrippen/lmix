@@ -15,7 +15,7 @@
 <main>
   <div class="row" id="takes"></div>
   <div id="error"></div>
-  <p class="label">Inputs · click: preview · double click: program</p>
+  <p class="label">Inputs · click: as set (preview) · double click: GO (quick play)</p>
   <div class="grid" id="inputs"></div>
   <p class="label" id="layouts-label" hidden>Layouts</p>
   <div class="row" id="layouts"></div>
@@ -93,11 +93,12 @@ document.addEventListener("click", e => {
   const button = e.target.closest("[data-act]");
   if (button) return act(JSON.parse(button.dataset.act));
   const tile = e.target.closest("[data-input]");
-  if (tile) act({ action: "preview_input", input: Number(tile.dataset.input) });
+  // What each input is set to do (INP.8, INP.9).
+  if (tile) act({ action: "click_input", input: Number(tile.dataset.input) });
 });
 document.addEventListener("dblclick", e => {
   const tile = e.target.closest("[data-input]");
-  if (tile) act({ action: "cut_direct", input: Number(tile.dataset.input) });
+  if (tile) act({ action: "go_input", input: Number(tile.dataset.input) });
 });
 
 lmixEvents(event => {

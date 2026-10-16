@@ -39,7 +39,7 @@ const pass = (message) => console.log("ok   " + message);
 
   await page.dblclick('#inputs .tile[data-input="1"]');
   await page.waitForSelector('#inputs .tile.program[data-input="1"]', { timeout: 5000 });
-  pass("mixer: double click cuts straight to program");
+  pass("mixer: double click runs GO (quick play) to program");
   await page.screenshot({ path: process.env.SHOT_DIR + "/mixer.png" });
 
   await page.goto(base + "/tally?input=1");
