@@ -480,3 +480,35 @@ während ein Titel läuft, lässt Countdown und Spieluhr dort weiterlaufen
 
 **Befunde**: B38 PTZ-Positionen als virtuelle Inputs mit Standbild (PER.3);
 B39 Positionsanzeige und Springen im Clip (UI.5); B40 TSL über TCP.
+
+## Durchlauf 10: Show-Modus S1 ohne Engine (2026-10-16, Tests, Console auf Xvfb)
+
+Stand: Stufen 1, 4–7 und der Drehbuch-Import (PR #38–#47); Klang- und
+Bild-Cues (Stufen 2, 3) fehlen, sie warten auf S-E.3.
+
+| Persona | Schritt | Ergebnis |
+|---|---|---|
+| P8 Spieltisch | 1 Cues neben dem Szenentext im Drehbuch | ✅ `lmix-cue`-Blöcke in Obsidian, Überschriften werden Szenenmarken; Format per `lmix-script schema` |
+| P8 Spieltisch | 2 Importieren, Fehler mit Zeile | ✅ `lmix-script check/load`: Datei und Zeile, doppelte Nummern an beiden Stellen; Warnliste in der Show-Ansicht |
+| P8 Spieltisch | 3 Szenenwechsel als Gruppe mit Zeiten | ◐ Zeitleisten-Gruppe, Vorwartezeiten, „andere stoppen“, Licht über Home Assistant; ⚠ Kulisse und Atmo fehlen (Stufen 2/3) |
+| P8 Spieltisch | 4, 5 Stimme nur hinten, Kulisse dunkler | – Zonen und Bühnen (Stufen 2/3) |
+| P8 Spieltisch | 6 Regieanweisung beim Standby groß | ✅ Notiz des Standby-Cues unter dem Namen, Notiz-Cues aus Überschriften |
+| P8 Spieltisch | 7 GO, Standby und Restzeit auf dem Stream Deck | ✅ GO per OSC/HTTP, Standby-Name und Restzeit über einen festen OSC-Abonnenten; ⚠ Abonnent und Ziel nur per Aktion/JSON einzurichten, keine Oberfläche (B43) |
+| P8 Spieltisch | 8 Sprung zur passenden Szene | ✅ `cue_standby` auf Nummer, auch per Companion |
+| P8 Spieltisch | 9 Cue kurz vorher ändern, neu laden | ✅ `--watch`: Standby bleibt auf seinem Cue, laufende Cues laufen weiter |
+| P8 Spieltisch | 10 Notfall-Taster | ◐ `--open-panic` ohne Schlüssel, Notfall-Liste schaltet Raumlicht per Home Assistant; ⚠ „still“ erst mit Klang-Cues |
+| P9 Tondesign | 1 Cues in der Oberfläche anlegen | ⚠ Cue-Dialog nur für Aktions-Cues (SUI.10, S2) |
+| P9 Tondesign | 2, 3 Zonen, Fade mit S-Kurve | – Stufe 2 |
+| P9 Tondesign | 8 Panik bei Zwischenfall | ◐ alles hält an, Escape in der Show-Ansicht; Ausblenden mit Stufe 2 |
+| P10 Ausstellung | 1 Home Assistant startet eine Liste per HTTP mit Schlüssel | ✅ Schlüssel mit Recht `control` (`cue_go` mit Liste); Bearbeiten bleibt gesperrt |
+| P10 Ausstellung | 2 Ablauf mit Folgen ohne Bedienung | ✅ Folgen ohne Drift; Zeitgenauigkeit in `/metrics`, 1 min: 6121 Schritte, spätestens 4 ms |
+| P10 Ausstellung | 3 Licht und Türen per HTTP | ✅ Ausgabeziele, Geheimnis nur in den Rechner-Einstellungen; Ergebnis als Ereignis |
+| P10 Ausstellung | 4 Nach Neustart nichts starten | ✅ nichts läuft, Standby wie vorher |
+| P7 Theater-Video | Zuspieler nach Ablauf: Clip auf Programm, danach der nächste | ◐ Aktions-Cues schalten Inputs und Clips, mit Zeiten und Folgen; ⚠ ein Aktions-Cue endet sofort, „Folge nach Ende“ kann nicht auf das Clip-Ende warten (B45) |
+
+**Befunde**: B41 Klang- und Bild-Cues, Zonen, Bühnen fehlen (Stufen 2/3,
+nach S-E.3); B42 Cues anderer Arten in der Oberfläche anlegen (SUI.10,
+S2); B43 Oberfläche für Ausgabeziele und OSC-Abonnenten; B44 die Show kennt
+ihren Drehbuch-Ordner nicht (SSH.2): nach einem Neustart `lmix-script load`
+von Hand; B45 Aktions-Cue mit Clip: Ende des Clips als Dauer (mit VIS.2/
+Videoton oder einer Option „wartet auf Clip-Ende“).
