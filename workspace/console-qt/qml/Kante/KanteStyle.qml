@@ -91,6 +91,36 @@ QtObject {
         return f.pointSize > 0 ? f.pointSize * 4 / 3 : f.pixelSize
     }
 
+    /**
+     * Japanese text (Kante 1.34, Kaiwa): the first installed family of japaneseFamilies, else
+     * the default font's. Components that split Japanese into pieces use it (KanteRubyText per
+     * character, KantePitchCurve per mora, KanteDiffText per part): a lone 来 or 。 gives Qt no
+     * context, and under a non-Japanese locale its fallback took a Chinese face (other glyph
+     * forms, a lower baseline, a centred 。). Whole lines in a Text keep the default font.
+     */
+    readonly property var japaneseFamilies: [
+        "Noto Sans CJK JP", "Noto Sans JP", "Source Han Sans JP", "Source Han Sans",
+        "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Yu Gothic", "Meiryo UI",
+        "Meiryo", "BIZ UDPGothic", "IPAexGothic", "IPAPGothic", "TakaoPGothic", "VL PGothic",
+        "MS PGothic"
+    ]
+    readonly property string japaneseFamily: {
+        var installed = Qt.fontFamilies()
+        for (var i = 0; i < japaneseFamilies.length; i++) {
+            if (installed.indexOf(japaneseFamilies[i]) >= 0) {
+                return japaneseFamilies[i]
+            }
+        }
+        return defaultFont.family
+    }
+    /** `base` (default: the default font) in the Japanese family, same size and weight. */
+    function japaneseFont(base) {
+        var b = base || defaultFont
+        return b.pointSize > 0
+            ? Qt.font({ family: japaneseFamily, pointSize: b.pointSize, bold: b.bold })
+            : Qt.font({ family: japaneseFamily, pixelSize: b.pixelSize, bold: b.bold })
+    }
+
     // ── Surfaces (System values match a plain Kirigami look) ─────────────
     readonly property color strongTextColor: themed ? palette.strongText : Kirigami.Theme.textColor
     readonly property color mutedTextColor: themed ? palette.mutedText : tint(Kirigami.Theme.textColor, 0.75)
@@ -209,6 +239,42 @@ QtObject {
     function noteStateName(state) {
         var n = noteStateNames && noteStateNames[state]
         return n !== undefined ? String(n) : String(noteStateNames && noteStateNames.pending || "")
+    }
+    /**
+     * Words for playing techniques (Kante 1.31, KanteTechniqueMark): keys slide, hammer, pull,
+     * slap, pop, ghost, dead (1.32, a dead note). An app sets its translations once, like
+     * noteStateNames.
+     */
+    property var techniqueNames: ({
+        slide: "Slide", hammer: "Hammer-on", pull: "Pull-off", slap: "Slap", pop: "Pop", ghost: "Ghost Note",
+        dead: "Dead Note"
+    })
+    /** Name of a technique key; "" for an unknown key. */
+    function techniqueName(key) {
+        var n = techniqueNames && techniqueNames[key]
+        return n !== undefined ? String(n) : ""
+    }
+    /** Words for how a technique was played (1.31): played, other, unheard. */
+    property var techniqueResultNames: ({
+        played: "Technik gespielt", other: "Andere Technik", unheard: "Technik nicht gehört"
+    })
+    /** Name of a technique result; "" for none or an unknown one. */
+    function techniqueResultName(r) {
+        var n = techniqueResultNames && techniqueResultNames[r]
+        return n !== undefined ? String(n) : ""
+    }
+    /**
+     * Screen-reader text of technique results (1.31): "Technik gespielt 3, Andere Technik 1"
+     * from counts by result; "" when there are none.
+     */
+    function techniqueCountsText(counts) {
+        var parts = []
+        ;["played", "other", "unheard"].forEach(function (r) {
+            if (counts && counts[r]) {
+                parts.push(techniqueResultName(r) + " " + counts[r])
+            }
+        })
+        return parts.join(", ")
     }
     /**
      * String colours (Kante 1.28), one per string, string 0 = the lowest, kept apart from the

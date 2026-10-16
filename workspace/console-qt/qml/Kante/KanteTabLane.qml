@@ -17,6 +17,13 @@ import "."
  *                             far an offpitch note was off ("+32 ct" beside its sign).
  *                             setNoteState(index, state[, cents]) changes one note
  *                             without reassigning the list; resetStates() undoes it
+ *                             technique (1.31): "slide", "hammer", "pull", "slap", "pop" or
+ *                             "ghost" or "dead" (1.32), its tab sign above the head
+ *                             (KanteTechniqueMark); a ghost note shows its fret in
+ *                             parentheses, a dead note x. techniqueResult
+ *                             (1.31): "", "played", "other", "unheard";
+ *                             setTechniqueResult(index, result) changes one, resetStates()
+ *                             undoes them too
  *   showCents                 the cents beside offpitch signs (Full marks only; default true)
  *   bars                      bar start times in seconds (numbers or {time, number}); number
  *                             (1.28): the bar's label, e.g. the written bar number, so
@@ -84,6 +91,39 @@ Item {
     property var changedCents: ({})
     // Notes per state, kept up to date by setNoteState (the summary stays O(1)).
     property var stateCounts: ({})
+    // Technique results set with setTechniqueResult, by note index (1.31).
+    property var changedTechniques: ({})
+    // Notes per technique result, kept up to date by setTechniqueResult.
+    property var techniqueCounts: ({})
+
+    /**
+     * Sets how the technique of one note was played (Kante 1.31): "", "played", "other" or
+     * "unheard". Like setNoteState, only that note's sign changes.
+     */
+    function setTechniqueResult(index, result) {
+        if (!notes || index < 0 || index >= notes.length) {
+            return
+        }
+        var old = techniqueResultOf(index)
+        if (old !== "") {
+            techniqueCounts[old] = (techniqueCounts[old] || 1) - 1
+        }
+        var r = String(result || "")
+        if (r !== "") {
+            techniqueCounts[r] = (techniqueCounts[r] || 0) + 1
+        }
+        changedTechniques[index] = r
+        var it = noteRepeater.itemAt(index)
+        if (it) {
+            it.techniqueOverride = r
+        }
+        revision++
+    }
+    /** The technique result of note i: as set with setTechniqueResult, else from `notes`. */
+    function techniqueResultOf(i) {
+        var r = changedTechniques[i]
+        return r !== undefined ? r : (notes && notes[i] && notes[i].techniqueResult ? String(notes[i].techniqueResult) : "")
+    }
 
     /**
      * Sets the state of one note without reassigning `notes`: only that note's visuals
@@ -115,17 +155,24 @@ Item {
     function resetStates() {
         changedStates = {}
         changedCents = {}
-        var c = {}
+        changedTechniques = {}
+        var c = {}, tc = {}
         for (var k = 0; notes && k < notes.length; k++) {
             var st = notes[k].state ? String(notes[k].state) : "pending"
             c[st] = (c[st] || 0) + 1
+            var tr = notes[k].techniqueResult ? String(notes[k].techniqueResult) : ""
+            if (tr !== "") {
+                tc[tr] = (tc[tr] || 0) + 1
+            }
         }
         stateCounts = c
+        techniqueCounts = tc
         for (var i = 0; i < noteRepeater.count; i++) {
             var it = noteRepeater.itemAt(i)
             if (it) {
                 it.override = ""
                 it.overrideCents = NaN
+                it.techniqueOverride = "-"
             }
         }
         revision++
@@ -200,6 +247,10 @@ Item {
                 parts.push(KanteStyle.noteStateName(st) + " " + counts[st])
             }
         })
+        var t = KanteStyle.techniqueCountsText(techniqueCounts)
+        if (t !== "") {
+            parts.push(t)
+        }
         return parts.join(", ")
     }
     /** The string palette: kept apart from the state colours (hit, wrong, early/late). */
@@ -352,6 +403,11 @@ Item {
                     property string override: ""
                     /** Set by setNoteState with cents; NaN = the cents in `notes`. */
                     property real overrideCents: NaN
+                    /** Set by setTechniqueResult; "-" = the result in `notes` (1.31). */
+                    property string techniqueOverride: "-"
+                    readonly property string technique: n.technique ? String(n.technique) : ""
+                    readonly property string techniqueResult: lane.marks === KanteTabLane.Marks.Off ? ""
+                        : (techniqueOverride !== "-" ? techniqueOverride : (n.techniqueResult ? String(n.techniqueResult) : ""))
                     readonly property real cents: !isNaN(overrideCents) ? overrideCents
                         : (n.cents !== undefined && n.cents !== null ? Number(n.cents) : NaN)
                     readonly property string st: lane.marks === KanteTabLane.Marks.Off ? "pending"
@@ -413,7 +469,11 @@ Item {
                                 }
                                 Text {
                                     anchors.centerIn: headBox
-                                    text: note.n.fret !== undefined ? note.n.fret : ""
+                                    readonly property string fretText: note.n.fret !== undefined ? String(note.n.fret) : ""
+                                    // A ghost note's fret in parentheses, as written in tab (1.31); a
+                                    // dead note's as x (1.32).
+                                    text: note.technique === "dead" ? "x"
+                                        : note.technique === "ghost" && fretText !== "" ? "(" + fretText + ")" : fretText
                                     color: note.hollow ? KanteStyle.textColor : KanteStyle.inkOn(note.fill)
                                     font.family: nameMetrics.font.family
                                     font.weight: Font.Medium
@@ -434,10 +494,24 @@ Item {
                                         color: note.full ? KanteStyle.noteStateColor(note.st) : KanteStyle.mutedTextColor
                                     }
                                 }
+                                // Technique sign above the head, left of the state badge (1.31).
+                                KanteTechniqueMark {
+                                    id: techniqueMark
+                                    visible: drawn
+                                    technique: note.technique
+                                    result: note.techniqueResult
+                                    // Quiet: muted, the result still told by the frame.
+                                    color: note.full ? resultColor : KanteStyle.mutedTextColor
+                                    height: Math.round(lane.head * 0.5)
+                                    width: implicitWidth
+                                    // Its right edge stops short of the badge (which starts at 0.67 head).
+                                    x: headBox.x + lane.head * 0.62 - width
+                                    y: headBox.y - height - KanteStyle.unit(1)
+                                }
                                 Text {
                                     visible: !!note.n.label
                                     x: headBox.x
-                                    y: headBox.y - height
+                                    y: (techniqueMark.drawn ? techniqueMark.y : headBox.y) - height
                                     text: note.n.label || ""
                                     color: KanteStyle.mutedTextColor
                                     font: labelMetrics.font

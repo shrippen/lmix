@@ -32,6 +32,19 @@ FocusScope {
     implicitWidth: KanteStyle.unit(170)
     implicitHeight: input.implicitHeight
 
+    /** Years a two-digit year may lie ahead of today: "26" is 2026, "99" is 1999. */
+    readonly property int twoDigitYearsAhead: 20
+
+    /** Full year of a two-digit year, in the century around today (Qt reads "26" as 1926). */
+    function fullYear(twoDigits) {
+        var year = new Date().getFullYear()
+        var full = Math.floor(year / 100) * 100 + (twoDigits % 100)
+        if (full > year + twoDigitYearsAhead) {
+            full -= 100
+        }
+        return full
+    }
+
     /** Text -> Date, or null if empty, or undefined if unreadable. */
     function parse(text) {
         var t = String(text).trim()
@@ -40,6 +53,10 @@ FocusScope {
         }
         var fixed = Date.fromLocaleString(Qt.locale(), t, format)
         if (fixed instanceof Date && !isNaN(fixed.getTime())) {
+            // "dd.MM.yy": the field shows "26"; reading it back must give 2026, not 1926.
+            if (/(^|[^y])yy([^y]|$)/.test(format)) {
+                fixed.setFullYear(fullYear(fixed.getFullYear()))
+            }
             return fixed
         }
         var y, m, d
@@ -51,7 +68,7 @@ FocusScope {
             d = +dmy[1]; m = +dmy[2]
             y = dmy[3] === undefined ? new Date().getFullYear() : +dmy[3]
             if (y < 100) {
-                y += 2000
+                y = fullYear(y)
             }
         } else {
             return undefined
