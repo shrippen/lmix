@@ -61,7 +61,7 @@ enabled: !(/\&[^\&]/.test(control.text))
 - [x] Ton eines pausierten Clips (2026-10-13): Programm-Audio unverändert 80 ms, kein Fix nötig.
 - [x] CUDA-Latenz 106 ms statt 56 ms (2026-10-12): leere DSK-Ebenen seit `dde8237`, Fix strom `lmix-ignore-inactive-pads` (DECISIONS „CUDA-Latenz 106 ms“).
 - [x] GL-Mischer: SRT-Ausgang ohne Video (2026-10-13: behoben mit strom #11, 30 fps über 1 h).
-- [ ] GL-Mischer: strom-Speicher wächst ~50 MB/h mit Aufnahme, auch ohne SRT (2026-10-16, DECISIONS „GL-Mischer: Speicherwachstum ohne SRT“). Encoder-Weg allein leckt nicht, Program geht schon im Systemspeicher raus: Verdacht Mischer. Gegenprobe ohne Ausgänge (`RECORD=0 STREAMS=0 MIXER=gl scripts/soak-hardware.sh`) und mit Aufnahme je 2 h, ohne Nebenlast und mit freier GPU.
+- [ ] GL-Mischer: strom-Speicher wächst auch ohne Ausgänge (~70 MB/h, 2 h, 2026-10-16; mit Aufnahme ~50 MB/h, mit SRT ~110 MB/h): Ursache im Mischer-Flow, nicht im Encoder (DECISIONS „GL-Mischer: Speicherwachstum ohne SRT“). In strom den Mischer-Flow zerlegen (ohne `gl_download`, ohne Kachel-Taps), je 1 h mit freier GPU.
 - [x] GL-Mischer: Layout-Rahmen fehlten (H.29): udmabuf-Upload auf NVIDIA, Fix strom #14.
 - [x] Aktion in den ersten 2 s nach Engine-Neustart antwortet 502 (2026-10-09: neue Engine erkannt, Aktion geht in die Show, Restore sofort).
 - [ ] Konstantes Bildalter 54 ms bei einigen Kacheln klären.
