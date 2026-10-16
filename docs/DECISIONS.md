@@ -2060,4 +2060,4 @@ QLab-5-Handbuch), Meilensteine S1–S3, Personas P8–P10. Licht in S1 nur
 auch an der Lizenz (GPL, `claude.md` 6).
 
 **Offen**: S-E.1–12 in `LASTENHEFT-SHOW.md` §6, vor Beginn von S1 zu
-entscheiden. `claude.md` beschreibt lmix weiter nur als Bildmischer.
+entscheiden. `claude.md` nennt beide Modi (Entscheidungen 7, 8).
