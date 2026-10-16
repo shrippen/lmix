@@ -247,6 +247,7 @@ pub const ACTION_GROUPS: &[(&str, &[&str])] = &[
             "cue_hard_stop",
             "set_panic_time",
             "set_emergency_list",
+            "set_script_folder",
             "add_shortcut",
             "set_shortcut",
             "remove_shortcut",
@@ -592,6 +593,12 @@ pub enum Action {
     SetEmergencyList {
         #[serde(default)]
         list: Option<InputRef>,
+    },
+    /// The show's script folder: lmix-core keeps `lmix-script load
+    /// <folder> --watch` running for it; `null` stops it (SSH.2).
+    SetScriptFolder {
+        #[serde(default)]
+        folder: Option<String>,
     },
 
     // ---- Output targets (show mode EXT) ----

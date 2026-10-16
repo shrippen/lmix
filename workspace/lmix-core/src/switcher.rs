@@ -203,6 +203,7 @@ fn runs_automation(action: &Action) -> bool {
                 | Action::CueHardStop
                 | Action::SetPanicTime { .. }
                 | Action::SetEmergencyList { .. }
+                | Action::SetScriptFolder { .. }
         )
 }
 
@@ -832,6 +833,15 @@ impl Switcher {
                 self.show.emergency_list = id;
                 Ok(Vec::new())
             }
+            Action::SetScriptFolder { folder } => {
+                if let Some(folder) = &folder {
+                    if !std::path::Path::new(folder).is_dir() {
+                        return Err(bad_cues(format!("no folder {folder}")));
+                    }
+                }
+                self.show.script_folder = folder;
+                Ok(Vec::new())
+            }
             Action::SetActiveCueList { list } => {
                 let index = self.find_cue_list(&list)?;
                 self.cues.set_active(self.show.cue_lists[index].id);
@@ -1349,6 +1359,7 @@ impl Switcher {
                 .running(&self.show.cue_lists, tokio::time::Instant::now()),
             go_guard_ms: self.show.go_guard_ms,
             panic_ms: self.show.panic_ms,
+            script_folder: self.show.script_folder.clone(),
             cue_warnings: self.cue_warnings.clone(),
             targets: self.targets.iter().map(|t| t.public()).collect(),
             feeds: self.feeds.clone(),

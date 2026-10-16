@@ -34,6 +34,7 @@ mod package;
 mod patch;
 mod ptz;
 mod recent;
+mod script;
 mod service;
 mod show;
 mod switcher;
@@ -128,6 +129,11 @@ struct Args {
     /// cues run (CTL.2), 1–20 Hz.
     #[arg(long, env = "LMIX_CUE_EVENTS_HZ", default_value_t = 4, value_parser = clap::value_parser!(u32).range(1..=20))]
     cue_events_hz: u32,
+
+    /// The lmix-script tool, run for a show's script folder (show mode
+    /// SSH.2); default: next to lmix-core, else from PATH.
+    #[arg(long, env = "LMIX_SCRIPT_TOOL")]
+    script_tool: Option<PathBuf>,
 
     /// Output targets of this machine with their secrets (show mode
     /// EXT.1), kept apart from show files; written readable only by you.
@@ -280,6 +286,13 @@ async fn main() -> anyhow::Result<()> {
             .map(|_| true),
         None => service.resume().await,
     };
+    let tool = args
+        .script_tool
+        .clone()
+        .unwrap_or_else(script::default_tool);
+    service
+        .use_script_tool(tool, format!("http://{}", args.listen))
+        .await;
     match opened {
         Ok(true) => tracing::info!("show loaded"),
         Ok(false) => tracing::info!("starting with an empty show"),

@@ -284,7 +284,7 @@ QLab kennt keinen Import aus Texten; am nächsten kommt das Anlegen von Cues
 | ID | Anforderung | Prio | MS | Stand |
 |---|---|---|---|---|
 | SSH.1 | Cue-Listen mit allen neuen Feldern in der Show-Datei; Format-Version steigt, ältere Shows werden beim Laden migriert (CUE.21) | M | S1 | ✅ |
-| SSH.2 | Im Drehbuch-Betrieb speichert die Show nur den Verweis auf den Drehbuch-Ordner, nicht die erzeugten Cues | S | S1 | – |
+| SSH.2 | Im Drehbuch-Betrieb speichert die Show nur den Verweis auf den Drehbuch-Ordner, nicht die erzeugten Cues | S | S1 | ◐ (Show kennt ihren Drehbuch-Ordner, lmix-core hält `lmix-script --watch` dafür am Laufen; die Cues bleiben zusätzlich in der Show) |
 | SSH.3 | Zonen-, Bühnen- und Ausgabeziel-Zuordnung liegen nicht in der Show, sondern in den Rechner-Einstellungen; ex- und importierbar | M | S1 | ✅ (Ziele und Abonnenten in `targets.json`; Zonen und Bühnen mit Stufe 2/3) |
 | SSH.4 | Paket (SHW.6) nimmt Klang- und Bilddateien der Cues mit | S | S2 | ◐ (SHW.6) |
 | SSH.5 | Show-Datei auf Wunsch zusammen mit den Rechner-Einstellungen (Zonen, Bühnen, Ausgabeziele, Licht-Patch) exportieren und importieren, z. B. für den Umzug auf gleiche Technik; Geheimnisse bleiben draußen, nur ihre Verweise (EXT.2) (lmix) | S | S1 | ✅ (`export_package`/`import_package` mit `machine: true`, ohne Geheimnisse) |

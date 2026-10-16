@@ -182,6 +182,7 @@ pub fn right_of(action: &Action) -> Right {
         | Action::SetCueList { .. }
         | Action::SetDataAuto { .. }
         | Action::SetEmergencyList { .. }
+        | Action::SetScriptFolder { .. }
         | Action::SetFeed { .. }
         | Action::SetGoGuard { .. }
         | Action::SetInputColor { .. }

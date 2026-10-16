@@ -156,6 +156,9 @@ pub struct ShowState {
     /// Panic time (SAF.2).
     #[serde(default)]
     pub panic_ms: u32,
+    /// The show's script folder (SSH.2).
+    #[serde(default)]
+    pub script_folder: Option<String>,
     /// What would go wrong when the cue lists run (SUI.5).
     #[serde(default)]
     pub cue_warnings: Vec<crate::cue::CueWarning>,

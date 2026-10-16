@@ -2604,3 +2604,21 @@ Adressliste.
 Gruppe, fehlende Mediendatei), Paket-Test mit `machine.json`, Test der
 Übernahme (Geheimnis bleibt), Drehbuch-Test; Console auf Xvfb zeigt drei
 Warnungen auf Deutsch.
+
+## 2026-10-16 — Drehbuch-Ordner der Show (SSH.2, Befund B44)
+
+**Entscheidung**: Die Show merkt sich ihren Drehbuch-Ordner
+(`set_script_folder`, Knopf „Drehbuch…“ in der Show-Ansicht);
+`lmix-core` startet dafür `lmix-script load <ordner> --watch` als
+Kindprozess, beim Öffnen der Show, nach einem Neustart und bei jeder
+Änderung des Ordners, und beendet ihn ohne Ordner. `lmix-core` kennt so
+weiter kein Markdown (S-E.2); das Werkzeug spricht die API wie jeder Client
+(über Loopback, ohne Schlüssel).
+**Abweichung von SSH.2**: Die Cues der Drehbuch-Listen bleiben zusätzlich
+in der Show gespeichert. Ohne Werkzeug hat die Show dann trotzdem ihre
+Cues, und Standby übersteht einen Neustart (SAF.6). Das Werkzeug ersetzt sie
+beim nächsten Laden.
+**Geprüft**: Test des Kindprozesses (einmal je Ordner, Wechsel, Stopp) mit
+einem Ersatzwerkzeug; `scripts/test-script.sh` mit echtem `lmix-script`:
+Ordner setzen lädt die Liste, eine Änderung wird übernommen, ohne Ordner
+nicht mehr.

@@ -107,6 +107,11 @@ pub struct Show {
     /// The list that runs with every panic and hard stop (SAF.4).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub emergency_list: Option<InputId>,
+    /// Script folder whose lists lmix-script keeps loading (SSH.2). Its
+    /// lists stay in the show too: without the tool the show still has
+    /// its cues, and standby survives a restart (SAF.6).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub script_folder: Option<String>,
     /// MIDI controller on the T-bar.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub midi_tbar: Option<MidiBinding>,
@@ -239,6 +244,7 @@ impl Default for Show {
             go_guard_ms: default_go_guard(),
             panic_ms: default_panic(),
             emergency_list: None,
+            script_folder: None,
             midi_tbar: None,
             graphics: Vec::new(),
             datasets: Vec::new(),
@@ -489,6 +495,7 @@ mod tests {
             go_guard_ms: 120,
             panic_ms: 2000,
             emergency_list: None,
+            script_folder: None,
             shortcuts: vec![ShowShortcut {
                 id: InputId::new(),
                 label: "Bars".into(),

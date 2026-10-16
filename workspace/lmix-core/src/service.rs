@@ -67,6 +67,8 @@ pub struct Service {
     layout_templates_file: std::sync::Mutex<Option<PathBuf>>,
     /// Settings file of the output targets (`--targets`).
     targets_file: std::sync::Mutex<Option<PathBuf>>,
+    /// lmix-script for the show's script folder (SSH.2), once configured.
+    script: Mutex<Option<crate::script::ScriptRunner>>,
     recent: Mutex<Recent>,
     /// Last good frame per picture: a paused clip or still keeps its
     /// picture while the engine's tap has no new frame.
@@ -156,6 +158,7 @@ impl Service {
             all_shows_file: std::sync::Mutex::new(None),
             layout_templates_file: std::sync::Mutex::new(None),
             targets_file: std::sync::Mutex::new(None),
+            script: Mutex::new(None),
         })
     }
 
@@ -202,6 +205,21 @@ impl Service {
             *self.targets_file.lock().expect("targets file lock") = Some(path);
         }
         self.publish(&sw);
+    }
+
+    /// Run `tool` for the show's script folder, telling it `core_url`
+    /// (SSH.2); from now on after every change of the folder.
+    pub async fn use_script_tool(&self, tool: PathBuf, core_url: String) {
+        *self.script.lock().await = Some(crate::script::ScriptRunner::new(tool, core_url));
+        self.sync_script().await;
+    }
+
+    /// The tool runs for the show's script folder, or not at all.
+    async fn sync_script(&self) {
+        let folder = self.switcher.lock().await.show().script_folder.clone();
+        if let Some(runner) = self.script.lock().await.as_mut() {
+            runner.sync(folder.as_deref()).await;
+        }
     }
 
     /// The targets hold secrets: the file is the user's alone (EXT.2).
@@ -1158,7 +1176,19 @@ impl Service {
     /// `Command::Wait` (a stinger's cut and end, a clip's automatic pause
     /// after a fade) run later in the background.
     pub async fn handle(self: &Arc<Self>, action: Action) -> Result<ShowState, ActionError> {
-        self.handle_as(action, Origin::Operator).await
+        // These may give the show another script folder (SSH.2).
+        let folder = matches!(
+            action,
+            Action::SetScriptFolder { .. }
+                | Action::OpenShow { .. }
+                | Action::NewShow
+                | Action::ImportPackage { .. }
+        );
+        let result = self.handle_as(action, Origin::Operator).await;
+        if folder {
+            self.sync_script().await;
+        }
+        result
     }
 
     /// Send a PTZ action to the input's camera (PER.2). Nothing in the

@@ -14,6 +14,12 @@ lmix-script schema                    JSON-Schema eines Cue-Blocks (IMP.8)
 `load` spricht `http://127.0.0.1:8200` an (`--core` oder `LMIX_CORE`),
 mit Passwort über `--password` oder `LMIX_PASSWORD`.
 
+**Ohne Terminal**: In der Show-Ansicht der Console „Drehbuch…“ wählen
+(Aktion `set_script_folder`). Die Show merkt sich den Ordner, und
+`lmix-core` hält `lmix-script load <ordner> --watch` dafür am Laufen, auch
+nach einem Neustart (`--script-tool`, Standard: neben `lmix-core`, sonst
+aus `PATH`). Was das Werkzeug meldet, steht im Log von `lmix-core`.
+
 ## Format
 
 - **Eine Datei = eine Cue-Liste**, sofern sie mindestens einen

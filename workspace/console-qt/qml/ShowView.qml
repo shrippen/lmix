@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls as QQC2
+import QtQuick.Dialogs
 import org.kde.kirigami as Kirigami
 import Kante
 
@@ -185,6 +186,35 @@ ColumnLayout {
             elide: Text.ElideMiddle
         }
         Item { Layout.fillWidth: !view.fromScript }
+        QQC2.Label {
+            visible: view.show !== null && !!view.show.script_folder
+            text: view.show && view.show.script_folder ? qsTr("Script: %1").arg(view.show.script_folder) : ""
+            color: KanteStyle.mutedTextColor
+            elide: Text.ElideMiddle
+            Layout.maximumWidth: Kirigami.Units.gridUnit * 16
+        }
+        KanteButton {
+            focusPolicy: Qt.NoFocus
+            text: qsTr("Script…")
+            QQC2.ToolTip.visible: hovered
+            QQC2.ToolTip.text: qsTr("A folder of Markdown files with lmix-cue blocks; its lists follow every saved change")
+            onClicked: scriptDialog.open()
+        }
+        KanteButton {
+            focusPolicy: Qt.NoFocus
+            visible: view.show !== null && !!view.show.script_folder
+            text: qsTr("No script")
+            onClicked: view.act({ action: "set_script_folder", folder: null })
+        }
+        FolderDialog {
+            id: scriptDialog
+            title: qsTr("Script folder")
+            onAccepted: {
+                var path = decodeURIComponent(selectedFolder.toString().replace(/^file:\/\//, ""))
+                view.act({ action: "set_script_folder", folder: path })
+                view.forceActiveFocus()
+            }
+        }
         QQC2.CheckBox {
             id: advancedBox
             text: qsTr("Advanced")
@@ -228,7 +258,7 @@ ColumnLayout {
         Layout.fillWidth: true
         visible: view.lists.length === 0
         wrapMode: Text.WordWrap
-        text: qsTr("No cue lists yet. Add one under Cues… or load a script with lmix-script.")
+        text: qsTr("No cue lists yet. Add one under Cues… or choose a script folder with Script….")
     }
 
     RowLayout {

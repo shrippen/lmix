@@ -2331,7 +2331,7 @@
   <context>
     <name>ShowView</name>
     <message>
-      <location filename="../qml/ShowView.qml" line="+40" />
+      <location filename="../qml/ShowView.qml" line="+41" />
       <source>starts cue %1, which is not there</source>
       <translation>startet Cue %1, den es nicht gibt</translation>
     </message>
@@ -2434,6 +2434,31 @@
     </message>
     <message>
       <location line="+7" />
+      <source>Script: %1</source>
+      <translation>Drehbuch: %1</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Script…</source>
+      <translation>Drehbuch…</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>A folder of Markdown files with lmix-cue blocks; its lists follow every saved change</source>
+      <translation>Ein Ordner mit Markdown-Dateien und lmix-cue-Blöcken; seine Listen folgen jeder gespeicherten Änderung</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>No script</source>
+      <translation>Kein Drehbuch</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Script folder</source>
+      <translation>Drehbuch-Ordner</translation>
+    </message>
+    <message>
+      <location line="+9" />
       <source>Advanced</source>
       <translation>Erweitert</translation>
     </message>
@@ -2459,8 +2484,8 @@
     </message>
     <message>
       <location line="+9" />
-      <source>No cue lists yet. Add one under Cues… or load a script with lmix-script.</source>
-      <translation>Noch keine Cue-Listen. Unter „Cues…“ eine anlegen oder ein Drehbuch mit lmix-script laden.</translation>
+      <source>No cue lists yet. Add one under Cues… or choose a script folder with Script….</source>
+      <translation>Noch keine Cue-Listen. Unter „Cues…“ eine anlegen oder mit „Drehbuch…“ einen Drehbuch-Ordner wählen.</translation>
     </message>
     <message>
       <location line="+22" />
