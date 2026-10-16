@@ -102,7 +102,7 @@ wait_up "$STROM/health" strom
 
 start_core() {
     "$CORE_BIN" --strom "$STROM" --listen "127.0.0.1:${CORE_PORT}" --mixer cpu \
-        --slots "$SLOTS" --autosave "$WORK/autosave.lmix" --shortcuts "$WORK/shortcuts.json" >>"$WORK/core.log" 2>&1 &
+        --slots "$SLOTS" --autosave "$WORK/autosave.lmix" --shortcuts "$WORK/shortcuts.json" --layout-templates "$WORK/layout-templates.json" >>"$WORK/core.log" 2>&1 &
     CORE_PID=$!
     PIDS+=("$CORE_PID")
     wait_up "$CORE/state" lmix-core
