@@ -96,6 +96,7 @@ sind relativ zu dieser Basis; in Klammern der Abschnitt der Seite.
 | VIS.14 | video/text-cues/ |
 | VIS.15 | video/camera-cues/ · video/using-ndi/ |
 | VIS.16 | video/video-output/ (Kantenüberblendung, Verzerrung, Masken) |
+| VIS.17 | (lmix) |
 
 ## Externe Ziele (EXT)
 
@@ -170,6 +171,7 @@ sind relativ zu dieser Basis; in Klammern der Abschnitt der Seite.
 | SUI.10 | tools/tools-menu/ (Umnummerieren) · tools/paste-cue-properties/ · tools/find/ · fundamentals/workspace-settings/ (Auto-Nummer) |
 | SUI.11 | fundamentals/workspace-settings/ (Abspielkopf an Auswahl koppeln) |
 | SUI.12 | fundamentals/inspector/ (Markierung, Zweitfarbe) |
+| SUI.13 | (lmix) |
 
 ## Show-Datei (SSH)
 
@@ -178,6 +180,7 @@ sind relativ zu dieser Basis; in Klammern der Abschnitt der Seite.
 | SSH.1, SSH.2 | (lmix) |
 | SSH.3 | (lmix; QLab hält Patches im Dokument, fundamentals/workspace-settings/) |
 | SSH.4 | fundamentals/managing-workspaces/ (Projektordner) |
+| SSH.5 | (lmix) |
 
 ## Licht (LGT)
 

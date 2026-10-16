@@ -1,8 +1,8 @@
 # Lastenheft: Show-Modus (Showrunner) für lmix
 
 Stand 2026-10-16, Entwurf 3: abgeglichen mit dem QLab-5-Handbuch; Licht,
-Objekt-Audio, Effekt-Plugins und Timecode aufgenommen. Offene Punkte in §6
-warten auf Entscheidung.
+Objekt-Audio, Effekt-Plugins und Timecode aufgenommen. Entscheidungen in §6
+(User 2026-10-16), offen nur S-E.3.
 Ergänzt `LASTENHEFT.md` (Bildmischer) um einen zweiten Bedienmodus über
 demselben `lmix-core`. Abweichungen von `claude.md`, `ROADMAP.md` oder
 `LASTENHEFT.md` stehen in §6 zur Entscheidung, nicht stillschweigend.
@@ -118,7 +118,7 @@ ausgeschlossen. **MS**: Meilenstein (§7). Stand: ✅ vorhanden · ◐ teilweise
 | CUE.18 | Ducken: solange ein Cue läuft, andere Klänge der Liste um x dB senken, mit Zeit | K | S2 | – |
 | CUE.19 | Defekter Cue (fehlende Datei, fehlendes Ziel) in einer Folge: Zeiten und Folgen laufen weiter, Fehler wird gemeldet | M | S1 | – |
 | CUE.20 | Grenzen: mindestens 1000 Cues je Liste, 64 Kinder je Gruppe, Gruppen 3 Ebenen tief | S | S1 | ◐ (200 Cues, `CUES`) |
-| CUE.21 | Heutige Cue-Listen (AUT.14) laden unverändert und verhalten sich wie bisher (keine Zeiten, keine Folge) | M | S1 | – |
+| CUE.21 | Heutige Cue-Listen (AUT.14) werden beim Laden ins neue Cue-Modell migriert und verhalten sich wie bisher (keine Zeiten, keine Folge); kein Rückwärtslesen alter Formate (S-E.5) | M | S1 | – |
 
 ### 3.2 Ablauf (RUN)
 
@@ -188,6 +188,7 @@ ausgeschlossen. **MS**: Meilenstein (§7). Stand: ✅ vorhanden · ◐ teilweise
 | VIS.14 | Text-Cue: gestalteter Text als Bild-Ebene | K | S3 | ◐ (GFX) |
 | VIS.15 | Live-Bild (Kamera, NDI, Mischer-Input) als Bild-Cue | K | S3 | ◐ (Inputs) |
 | VIS.16 | Kantenüberblendung, Eckpunkt-Verzerrung, Maske je Ausgang | K | S3 | – (OUT.18) |
+| VIS.17 | Bühne als Input im Mischer, für die gemischte Theatershow: feste Teile fährt die Show, in freien Teilen übernimmt der Mischer; Show und Mischer laufen auch je allein (S-E.10) (lmix) | S | S2 | ◐ (Inputs) |
 
 ### 3.5 Externe Ziele (EXT)
 
@@ -276,15 +277,17 @@ QLab kennt keinen Import aus Texten; am nächsten kommt das Anlegen von Cues
 | SUI.10 | Cues in der Oberfläche anlegen, bearbeiten, umsortieren, umnummerieren (wenn kein Drehbuch-Betrieb) | S | S2 | ◐ (Cue-Dialog AUT.14) |
 | SUI.11 | Standby unabhängig von der Auswahl (bearbeiten, während ein anderer Cue auf Standby steht) | S | S2 | – |
 | SUI.12 | Cue markieren (Prüfliste) und Zweitfarbe „bereits gelaufen“ | K | S2 | – |
+| SUI.13 | Felder und Funktionen je nach Modus zeigen oder verbergen; Seltenes hinter „Erweitert“ (S-E.5) (lmix) | S | S1 | – |
 
 ### 3.11 Show-Datei (SSH)
 
 | ID | Anforderung | Prio | MS | Stand |
 |---|---|---|---|---|
-| SSH.1 | Cue-Listen mit allen neuen Feldern in der Show-Datei; Format-Version steigt, ältere Shows laden weiter (CUE.21) | M | S1 | – (SHW.2) |
+| SSH.1 | Cue-Listen mit allen neuen Feldern in der Show-Datei; Format-Version steigt, ältere Shows werden beim Laden migriert (CUE.21) | M | S1 | – (SHW.2) |
 | SSH.2 | Im Drehbuch-Betrieb speichert die Show nur den Verweis auf den Drehbuch-Ordner, nicht die erzeugten Cues | S | S1 | – |
 | SSH.3 | Zonen-, Bühnen- und Ausgabeziel-Zuordnung liegen nicht in der Show, sondern in den Rechner-Einstellungen; ex- und importierbar | M | S1 | – |
 | SSH.4 | Paket (SHW.6) nimmt Klang- und Bilddateien der Cues mit | S | S2 | ◐ (SHW.6) |
+| SSH.5 | Show-Datei auf Wunsch zusammen mit den Rechner-Einstellungen (Zonen, Bühnen, Ausgabeziele, Licht-Patch) exportieren und importieren, z. B. für den Umzug auf gleiche Technik; Geheimnisse bleiben draußen, nur ihre Verweise (EXT.2) (lmix) | S | S1 | – |
 
 ### 3.12 Licht (LGT)
 
@@ -336,7 +339,7 @@ VST3, CLAP nach E.8). Der Show-Modus nutzt ihn je Cue und je Zone.
 | FX.3 | Plugin-Parameter per Fade-Cue änderbar | S | S2 | – |
 | FX.4 | Nachklang: ein Cue endet erst, wenn der Nachklang seiner Plugins abgeklungen ist; Stopp mit Ausblendung lässt ihn ausklingen, harter Stopp schneidet ab | S | S2 | – |
 | FX.5 | Fehlendes Plugin oder unpassende Kanalzahl: Warnung, Cue spielt ohne dieses Plugin | M | S2 | – |
-| FX.6 | Plugins laufen so, dass ihr Absturz weder Engine noch Ablauf anhält (NFA.6) (lmix) | S | S2 | – |
+| FX.6 | Plugins laufen in einem gemeinsamen Plugin-Host-Prozess (bei Bedarf mehrere, z. B. je Zone), damit ihr Absturz weder Engine noch Ablauf anhält (NFA.6, S-E.12) (lmix) | S | S2 | – |
 | FX.7 | Nur Effekt-Plugins, keine Klangerzeuger (Instrumente) | — | — | (Abgrenzung) |
 
 ### 3.15 Timecode (TC)
@@ -384,22 +387,27 @@ Entwurf 2 hier und sind seit 2026-10-16 (User) Anforderungen (§3.12–3.15).
 
 ## 6. Entscheidungen
 
-### 6.1 Vorgeschlagen (zur Entscheidung durch den User)
+### 6.1 Entschieden (User 2026-10-16)
 
-| # | Frage | Vorschlag |
+| # | Frage | Entscheidung | Anmerkung des Users |
+|---|---|---|---|
+| S-E.1 | Ort der Ablauf-Engine | In `lmix-core` (E.4); Console und Companion sind Clients | |
+| S-E.2 | Drehbuch-Import | Eigenes Werkzeug über die API (Prozessregel 4); `lmix-core` kennt kein Markdown | |
+| S-E.4 | Zonen | Zone = logischer Ausgang mit Rechner-Zuordnung (SND.10), nicht die heutigen zwei Aux-Busse; Aux-Busse können später auf Zonen abgebildet werden. Zonen über mehrere Geräte brauchen Taktangleichung (SND.15) | |
+| S-E.5 | Cue-Modell | Bestehenden `Cue` umbauen, ohne Rückwärtsverträglichkeit; vorhandene Shows werden beim Laden migriert (CUE.21, SSH.1) | Die Oberfläche zeigt Felder und Funktionen je nach Modus oder verbirgt sie, Seltenes hinter „Erweitert“ (SUI.13) |
+| S-E.6 | Patches in Show oder Rechner | Rechner-Einstellungen (SSH.3); Abweichung vom Vorbild, damit eine Show ohne Änderung auf anderer Hardware läuft | Show-Datei auf Wunsch samt Rechner-Einstellungen ex- und importieren (SSH.5) |
+| S-E.7 | Windows | Bleibt ausgeschlossen (NFA.1); Show-Modus erbt die Plattform | Auf die Stärken von Linux konzentrieren, nicht auf die Schwächen |
+| S-E.8 | Name des Modus | „Show“; der Mischer heißt „Mixer“, deutsch „Mischer“ (Oberfläche zuerst Englisch) | |
+| S-E.9 | Bühnen in S1 | Mehrere Bühnen, je auf Vollbild oder Fenster (VIS.1); eine Bühne über mehrere Projektoren mit Teilbereichen und Kantenüberblendung erst S2/S3 (VIS.11, VIS.16) | |
+| S-E.10 | Mischer und Show auf denselben Ausgängen | Ein Bildausgang gehört zu jeder Zeit entweder dem Mischer (Program, Ausgang 1–4) oder einer Bühne; umschaltbar per Aktion. Eine Bühne kann als Input im Mischer erscheinen (VIS.17) | Show und Mischer laufen je für sich allein. Ziel ist die gemischte Theatershow: feste Teile fährt die Show, in freien, improvisierten Teilen übernimmt der Mischer |
+| S-E.11 | Licht-Patch | Geräte und Gruppen in der Show, Adressen und Ausgabeweg pro Rechner (LGT.3), wie Zonen und Bühnen | Wie S-E.6: Export und Import samt Rechner-Einstellungen (SSH.5) |
+| S-E.12 | Plugin-Isolation | Ein gemeinsamer Plugin-Host-Prozess (FX.6); ein Plugin-Absturz trifft die Plugins, nie Engine oder Ablauf. Lizenz der Plugin-SDKs gegen NFA.9 prüfen | In Grenzen; denkbar ist auch ein Host je Bus bzw. Zone |
+
+### 6.2 Offen
+
+| # | Frage | Stand |
 |---|---|---|
-| S-E.1 | Ort der Ablauf-Engine | In `lmix-core` (E.4); Console und Companion sind Clients |
-| S-E.2 | Drehbuch-Import in `lmix-core` oder als eigenes Werkzeug | Eigenes Werkzeug über die API (Prozessregel 4); `lmix-core` kennt kein Markdown |
-| S-E.3 | Klang-Cues intern | Wahl der Umsetzung; Anforderung ist nur SND.17 (keine Input-Kachel) |
-| S-E.4 | Zonen | Zone = logischer Ausgang mit Rechner-Zuordnung (SND.10), nicht die heutigen zwei Aux-Busse. Aux-Busse können später auf Zonen abgebildet werden. Zonen über mehrere Geräte brauchen Taktangleichung (SND.15) |
-| S-E.5 | Cue-Modell | Bestehenden `Cue` erweitern (rückwärtskompatibel, CUE.21) statt neuem Typ |
-| S-E.6 | Patches in Show oder Rechner | Rechner-Einstellungen (SSH.3); Abweichung vom Vorbild, damit eine Show ohne Änderung auf anderer Hardware läuft |
-| S-E.7 | Windows | Bleibt ausgeschlossen (NFA.1); Show-Modus erbt die Plattform |
-| S-E.8 | Name des Modus in der Oberfläche | „Show“ (Mischer heißt „Mischer“) |
-| S-E.9 | Bühnen in S1 | Mehrere Bühnen, je auf Vollbild oder Fenster (VIS.1); eine Bühne über mehrere Projektoren mit Teilbereichen und Kantenüberblendung erst S2/S3 (VIS.11, VIS.16) |
-| S-E.10 | Mischer und Show auf denselben Ausgängen | Ein Bildausgang gehört zu jeder Zeit entweder dem Mischer (Program, Ausgang 1–4) oder einer Bühne; umschaltbar per Aktion. Eine Bühne kann umgekehrt als Input im Mischer erscheinen |
-| S-E.11 | Licht-Patch | Geräte und Gruppen in der Show, Adressen und Ausgabeweg pro Rechner (LGT.3), wie Zonen und Bühnen |
-| S-E.12 | Plugin-Isolation | Plugins in eigenem Prozess oder abgesichertem Host, damit ein Absturz die Engine nicht mitnimmt (FX.6); Lizenz der Plugin-SDKs gegen NFA.9 prüfen |
+| S-E.3 | Klang-Cues intern: verdeckte strom-Inputs oder ein Abspieler je Zone | Zurückgestellt (User 2026-10-16, Folgen noch unklar). Festgelegt ist nur SND.17. Vor S1 Stufe 2 beide Wege messen (5–10 Klänge zugleich: Startzeit GO → Ton, Speicher, CPU) und mit Zahlen erneut vorlegen |
 
 ---
 
@@ -413,7 +421,7 @@ Home Assistant, Bedienung über Companion, Drehbuch in Obsidian.
 
 **Umfang** (alle Anforderungen mit MS = S1):
 CUE.1–4, 7–11, 19–21 · RUN.1–4, 6–8, 11 · SND.1–6, 8, 10–17 · VIS.1–8 (ohne VIS.1a) ·
-EXT.1–5 · IMP.1–6, 8, 9 · CTL.1–6 · SAF.1–7 · SUI.1–9 · SSH.1–3 · SNF.1–6.
+EXT.1–5 · IMP.1–6, 8, 9 · CTL.1–6 · SAF.1–7 · SUI.1–9, 13 · SSH.1–3, 5 · SNF.1–6.
 
 Licht in S1 nur über Home Assistant (EXT.4); eigene Lichtsteuerung ab S3.
 
@@ -465,6 +473,10 @@ Videoton, virtuelle Bühne, HTML-Ebene (nach GFX.2), Effekt-Plugins je Cue
 und Zone (FX), OSC-Cue, Platzhalter,
 Variablen, Companion-Modul, Web-Fernbedienung, Lernen, Protokoll,
 Show-Sperre, Vorlagen, Paket.
+
+**Abnahme S2** (zusätzlich): Persona P7 fährt eine gemischte Vorstellung, feste
+Szenen per Show, eine improvisierte Szene im Mischer mit der Bühne als Input
+(VIS.17).
 
 **Abnahme S2**: Persona P9 spielt eine Theatervorstellung mit 120 Cues ohne
 Drehbuch-Werkzeug, nur in der Oberfläche angelegt.

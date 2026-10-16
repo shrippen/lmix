@@ -2061,3 +2061,21 @@ auch an der Lizenz (GPL, `claude.md` 6).
 
 **Offen**: S-E.1–12 in `LASTENHEFT-SHOW.md` §6, vor Beginn von S1 zu
 entscheiden. `claude.md` nennt beide Modi (Entscheidungen 7, 8).
+
+## 2026-10-16 — Show-Modus: S-E.1–12
+
+**Kontext**: Offene Fragen aus `LASTENHEFT-SHOW.md` §6, vor S1 zu
+entscheiden. Vorschläge mit Alternativen auf einer Entscheidungsseite.
+
+**Entscheidung** (User): Vorschlag angenommen für S-E.1, 2, 4, 6–11.
+Abweichend: S-E.5 Cue ohne Rückwärtsverträglichkeit umbauen und Shows
+migrieren (vor dem ersten Release erlaubt); S-E.12 ein gemeinsamer
+Plugin-Host statt eines Prozesses je Plugin, bei Bedarf einer je Zone.
+Zurückgestellt: S-E.3, Folgen noch unklar; vor S1 Stufe 2 mit Messungen
+neu vorlegen.
+
+**Neu aus den Anmerkungen**: SUI.13 (Felder je Modus, „Erweitert“),
+SSH.5 (Show samt Rechner-Einstellungen ex-/importieren, ohne
+Geheimnisse), VIS.17 (Bühne als Input im Mischer für die gemischte
+Theatershow, S2-Abnahme mit P7). CUE.21 und SSH.1: migrieren statt
+alte Formate weiterlesen.

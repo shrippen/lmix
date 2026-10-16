@@ -401,7 +401,8 @@ Ersetzt M4.5 und den Gäste-Punkt in M6.
 
 Zweiter Bedienmodus über demselben `lmix-core`, Anforderungen und
 Abnahmen in `LASTENHEFT-SHOW.md` §7. Eigene Zählung S1–S3, unabhängig von
-M1–M9; Start erst nach Entscheidung über S-E.1–12.
+M1–M9. S-E.1–12 entschieden (User 2026-10-16) bis auf S-E.3, das vor S1
+Stufe 2 mit Messungen erneut vorgelegt wird.
 
 | Meilenstein | Inhalt | Voraussetzung aus `LASTENHEFT.md` |
 |---|---|---|

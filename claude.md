@@ -39,8 +39,10 @@ Kommuniziere auf Deutsch, Code/Commits auf Englisch.
    Standby, Zeiten, Panik) läuft in `lmix-core`, nicht in der Oberfläche; ein
    Console-Absturz hält keinen Cue an. Die Show nennt nur logische Namen (Zone,
    Bühne, Ausgabeziel); Geräte, Adressen und Geheimnisse liegen in den
-   Rechner-Einstellungen. Offene Fragen S-E.1–12 (`LASTENHEFT-SHOW.md` §6) vor
-   Beginn von S1 vom User entscheiden lassen.
+   Rechner-Einstellungen. Show und Mischer laufen je allein; eine Bühne kann Input im
+   Mischer sein (gemischte Theatershow). Entscheidungen S-E.1–12 in
+   `LASTENHEFT-SHOW.md` §6 (User 2026-10-16); S-E.3 (Klang-Cues intern) ist offen
+   und wird vor S1 Stufe 2 mit Messungen erneut vorgelegt.
 8. Clean Room: Vorbild-Verhalten nur aus öffentlichen Handbüchern, für vMix nach
    CR.1–8 (`LASTENHEFT.md`), für QLab nach SCR.1–4 (`LASTENHEFT-SHOW.md` §0: nur das
    QLab-5-Handbuch, eigene Worte und Namen, kein „QLab“ und keine QLab-Formate
@@ -54,7 +56,7 @@ workspace/
   console-qt/     ← UNSER Client: Qt Quick/Kirigami über cxx-qt (Entscheidung 3.5)
   selftest/       ← kopfloser Last- und Abnahmetest direkt an strom (M1b)
   (Drehbuch-Import: eigenes Werkzeug, spricht nur die API; lmix-core kennt kein
-   Markdown, Vorschlag S-E.2)
+   Markdown, S-E.2)
   omtpw-bridge/   ← nur falls Options (b) für OMT gewählt wird (eigenes Repo, stabile API)
   docs/           ← Build-Doku, Architektur-Anatomie, Latenz-Messungen, Entscheide-Log
 
