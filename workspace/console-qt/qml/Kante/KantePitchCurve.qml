@@ -147,7 +147,8 @@ Item {
                 x: pitch.moraX(index) - width / 2
                 text: modelData
                 color: index === pitch.missAt ? KanteStyle.negativeTextColor : KanteStyle.textColor
-                font.family: KanteStyle.defaultFont.family
+                // One mora per Text: the Japanese family (Kante 1.34).
+                font.family: KanteStyle.japaneseFamily
                 font.pointSize: KanteStyle.defaultFont.pointSize * 1.15
                 font.underline: index === pitch.missAt
             }

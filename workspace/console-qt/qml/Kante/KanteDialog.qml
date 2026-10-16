@@ -49,6 +49,26 @@ QQC2.Dialog {
         }
     }
 
+    // Qt hides a replaced background, header or footer and does not show it again when
+    // the platform's comes back (Kante -> Kante Light or System at run time, also when the
+    // saved style is applied after start): the dialog stood without a ground. Shown again,
+    // and the background takes the dialog's size again.
+    function kanteRestored(item, own) {
+        if (KanteStyle.themed || !item || item === own) {
+            return false
+        }
+        item.visible = true
+        return true
+    }
+    onBackgroundChanged: {
+        if (kanteRestored(background, kanteBackground)) {
+            background.width = Qt.binding(() => control.width)
+            background.height = Qt.binding(() => control.height)
+        }
+    }
+    onHeaderChanged: kanteRestored(header, kanteHeader)
+    onFooterChanged: kanteRestored(footer, kanteFooter)
+
     // The dim behind the dialog is Kante's scrim role (best effort: only when the style
     // provides the overlay attached object).
     Binding {

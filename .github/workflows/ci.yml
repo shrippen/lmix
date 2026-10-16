@@ -15,6 +15,14 @@
 # switching, sound, sources, outputs, failover and the latency budget
 # (scripts/test-m2b-vm.sh). The latency regression check of ROADMAP 3.4.
 #
+# core, console: tests without an engine: cargo test of lmix-types,
+# lmix-core and console-qt; lmix-core headless (text protocol, OSC, MIDI,
+# metrics); titles and browser pages in Chromium (Playwright).
+#
+# Stays local: scripts/test-console-qt.sh (Console on Xvfb with a real
+# strom, slow in the VM), scripts/test-global-keys.sh (D-Bus session),
+# scripts/test-looks-gl.sh (GPU).
+#
 # Needs the secret GITEA_TOKEN: a Gitea token with write access to the
 # repository (commit statuses).
 name: ci
@@ -29,6 +37,11 @@ on:
       - workspace/selftest/**
       - workspace/strom
       - scripts/test-m2b-vm.sh
+      - scripts/test-headless.sh
+      - scripts/test-titles.sh
+      - scripts/test-web.sh
+      - scripts/titles-check.cjs
+      - scripts/web-check.cjs
       - scripts/fetch-strom.sh
       - .github/workflows/ci.yml
   workflow_dispatch:
@@ -192,24 +205,97 @@ jobs:
             vm-work/*.png
           retention-days: 7
 
+  core:
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    container: ubuntu:24.04
+    steps:
+      - name: Tools
+        run: |
+          apt-get update -qq
+          DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git curl ca-certificates \
+            jq python3 nodejs build-essential mold clang pkg-config
+          curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable
+
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      # lmix-core builds strom-types from the submodule.
+      - name: strom submodule
+        run: |
+          git config --global --add safe.directory '*'
+          git submodule update --init --depth 50 workspace/strom
+
+      - name: cargo test
+        env:
+          RUSTFLAGS: -C link-arg=-fuse-ld=mold
+        run: |
+          . "$HOME/.cargo/env"
+          (cd workspace/lmix-types && cargo test)
+          (cd workspace/lmix-core && cargo test)
+
+      - name: Headless
+        env:
+          RUSTFLAGS: -C link-arg=-fuse-ld=mold
+        run: |
+          . "$HOME/.cargo/env"
+          scripts/test-headless.sh
+
+      # Playwright needs Node 20+; Ubuntu 24.04 has 18.
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+
+      # Same version as the screenshot tools (shrippen.github.io/demo/tools).
+      - name: Playwright
+        run: |
+          mkdir -p "$RUNNER_TEMP/pw" && cd "$RUNNER_TEMP/pw"
+          npm install --silent --no-save playwright@1.63.0
+          npx playwright install --with-deps chromium
+
+      - name: Titles and web pages
+        env:
+          RUSTFLAGS: -C link-arg=-fuse-ld=mold
+        run: |
+          . "$HOME/.cargo/env"
+          export NODE_PATH="$RUNNER_TEMP/pw/node_modules"
+          scripts/test-titles.sh
+          scripts/test-web.sh
+
+  console:
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    # Current Qt 6 and KF6, as on the development machine.
+    container: archlinux:latest
+    steps:
+      - name: Tools
+        run: |
+          pacman -Syu --noconfirm --needed git nodejs rust base-devel clang \
+            qt6-base qt6-declarative qt6-tools kirigami gstreamer gst-plugins-base
+
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: cargo test
+        run: cd workspace/console-qt && cargo test
+
   # Also runs when a check failed or was cancelled, so Gitea never keeps
   # a stale "pending".
   report:
-    needs: [strom, vm-check]
+    needs: [strom, vm-check, core, console]
     if: always()
     timeout-minutes: 5
     runs-on: ubuntu-latest
     steps:
       - name: Report result to Gitea
         run: |
-          if [ "$STROM" = success ] && [ "$CHECK" = success ]; then
+          all="$STROM $CHECK $CORE $CONSOLE"
+          if [ "$all" = "success success success success" ]; then
             state=success
-          elif [ "$STROM" = failure ] || [ "$CHECK" = failure ]; then
+          elif echo "$all" | grep -qw failure; then
             state=failure
           else
             state=error
           fi
-          desc="strom $STROM, vm-check $CHECK"
+          desc="strom $STROM, vm-check $CHECK, core $CORE, console $CONSOLE"
           if [ -n "$STARTED" ]; then desc="$desc in $(( ($(date +%s) - STARTED) / 60 )) min"; fi
           curl -fsS -X POST "$GITEA_STATUS" \
             -H "Authorization: token $GITEA_TOKEN" -H "Content-Type: application/json" \
@@ -217,5 +303,7 @@ jobs:
         env:
           STROM: ${{ needs.strom.result }}
           CHECK: ${{ needs.vm-check.result }}
+          CORE: ${{ needs.core.result }}
+          CONSOLE: ${{ needs.console.result }}
           STARTED: ${{ needs.strom.outputs.started }}
           GITEA_TOKEN: ${{ secrets.GITEA_TOKEN }}
