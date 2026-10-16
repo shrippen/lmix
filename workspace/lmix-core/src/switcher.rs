@@ -398,6 +398,9 @@ pub struct Switcher {
     all_shows: Vec<ShowShortcut>,
     /// `all_shows` changed since the service last saved it.
     all_shows_changed: bool,
+    /// Output targets of this machine with their secrets (EXT.1).
+    targets: Vec<crate::targets::TargetConfig>,
+    targets_changed: bool,
     /// Media files not found per input (SHW.4); the service checks.
     missing: HashMap<InputId, Vec<String>>,
     /// The input each overlay channel showed last (OVL.8); runtime only.
@@ -443,6 +446,8 @@ impl Switcher {
             dynamic_values: Default::default(),
             all_shows: Vec::new(),
             all_shows_changed: false,
+            targets: Vec::new(),
+            targets_changed: false,
             missing: HashMap::new(),
             overlay_last: Default::default(),
             overlays_shown: 0,
@@ -545,6 +550,32 @@ impl Switcher {
                 self.all_shows_changed = true;
             }
         }
+    }
+
+    /// Output targets as the settings hold them, secrets included.
+    pub fn targets(&self) -> &[crate::targets::TargetConfig] {
+        &self.targets
+    }
+
+    /// Take the output targets from the settings (start-up).
+    pub fn set_targets(&mut self, targets: Vec<crate::targets::TargetConfig>) {
+        self.targets = targets;
+        self.targets_changed = false;
+    }
+
+    /// The target `name`, for sending.
+    pub fn target(&self, name: &str) -> Result<crate::targets::TargetConfig, ActionError> {
+        crate::targets::find(&self.targets, name).cloned()
+    }
+
+    /// Whether the targets changed since the last call; again after a
+    /// failed save.
+    pub fn take_targets_changed(&mut self) -> bool {
+        std::mem::take(&mut self.targets_changed)
+    }
+
+    pub fn targets_unsaved(&mut self) {
+        self.targets_changed = true;
     }
 
     /// Mark the shortcuts for all shows as changed again (a save failed).
@@ -752,6 +783,23 @@ impl Switcher {
                 let index = self.find_cue_list(&list)?;
                 self.cues.set_active(self.show.cue_lists[index].id);
                 Ok(Vec::new())
+            }
+            Action::SetTarget { target } => {
+                crate::targets::set(&mut self.targets, target)?;
+                self.targets_changed = true;
+                Ok(Vec::new())
+            }
+            Action::RemoveTarget { name } => {
+                crate::targets::find(&self.targets, &name)?;
+                self.targets.retain(|t| t.name != name);
+                self.targets_changed = true;
+                Ok(Vec::new())
+            }
+            // They wait on the network: through the service.
+            Action::TestTarget { .. } | Action::HttpRequest { .. } | Action::HaService { .. } => {
+                Err(ActionError::BadTarget {
+                    reason: "run through the service".into(),
+                })
             }
             Action::SetGoGuard { ms } => {
                 if ms > GO_GUARD_MAX_MS {
@@ -1228,6 +1276,7 @@ impl Switcher {
                 .cues
                 .running(&self.show.cue_lists, tokio::time::Instant::now()),
             go_guard_ms: self.show.go_guard_ms,
+            targets: self.targets.iter().map(|t| t.public()).collect(),
             restorable: self.removed.last().map(|(_, input)| input.name.clone()),
             shortcuts: self
                 .show

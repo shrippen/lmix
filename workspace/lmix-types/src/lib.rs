@@ -20,6 +20,7 @@ pub mod output;
 pub mod ptz;
 pub mod shortcut;
 pub mod state;
+pub mod target;
 
 pub use action::{
     action_group, Action, ActionError, Effect, StingerSpec, TransitionSlot, ACTION_GROUPS,
@@ -53,3 +54,4 @@ pub use state::{
     Event, InputLevel, Latency, Levels, LiveFeed, OverlayChannel, QuickPlay, ShowState, Stinger,
     Transition,
 };
+pub use target::{HttpMethod, Target, TargetKind, TargetResult, TargetSpec};

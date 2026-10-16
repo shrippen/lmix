@@ -2433,3 +2433,36 @@ Szenenmarke, Neuladen mit gehaltenem Standby, `--watch`, fremde Liste
 bleibt, Liste mit Datei weg); beides in der CI (Job `core`).
 **Offen**: SSH.2 (die Show speichert nur den Ordner; heute lädt man nach
 dem Start neu), Warnung bei Nummern mit Leerzeichen (CUE.1).
+
+## 2026-10-16 — Ausgabeziele (S1 Stufe 4, EXT.1–5)
+
+**Kontext**: P8 schaltet Licht und Duft über Home Assistant; Tokens
+dürfen weder in die Show noch ins Drehbuch (EXT.2, S-E.6).
+
+**Entscheidungen**:
+- **Ziele sind Rechner-Einstellungen** (`--targets`, Standard
+  `~/.config/lmix/targets.json`) wie die Kurzbefehle für alle Shows; die
+  Datei entsteht mit Rechten 600. Im Zustand stehen Ziele ohne Geheimnis
+  (`has_secret`); `secret: null` beim Setzen behält es, `""` löscht es.
+- **HTTP-Cue = Aktions-Cue mit `http_request` oder `ha_service`**, keine
+  eigene Cue-Art: dieselben Aktionen gehen auch aus Kurzbefehlen und
+  Auslösern, und das Cue-Modell bleibt klein. Abweichung vom Wortlaut von
+  EXT.3 („HTTP-Cue“); der Anzeigename eines solchen Cues ist der Name der
+  Aktion, bis die Show-Ansicht (SUI) eigene Symbole bekommt.
+- **Senden blockiert nie**: die Aktion kehrt sofort zurück, die Anfrage
+  läuft im Hintergrund mit dem Zeitlimit des Ziels; das Ergebnis ist das
+  Ereignis `target` (`ok` oder `failed` mit Grund), auch per TCP (`SUB
+  TARGET`). Ein nicht erreichbares Ziel hält weder GO noch Folgen auf.
+- **Mehrere Adressen = gleichzeitig senden**, erreicht ist das Ziel, wenn
+  eine mit Erfolg antwortet (Haupt/Reserve).
+- **Geheimnis als `Authorization: Bearer`**: so will es Home Assistant
+  (langlebiges Zugangs-Token); andere Verfahren bei Bedarf.
+- **`test_target`** wartet auf die Antwort (`GET` der ersten Adresse)
+  und lehnt mit dem Grund ab (EXT.5).
+
+**Geprüft**: 5 Tests in `targets.rs` (Geheimnis bleibt, Prüfregeln,
+Home-Assistant-Pfad und -Rumpf, Token und Rumpf auf der Leitung gegen
+einen lokalen Server, Reserve-Adresse, 401 als Fehler), ein Dienst-Test
+(Cue → Home Assistant, Ereignis, Dateirechte, kein Geheimnis im Zustand).
+**Offen**: OSC senden (EXT.6, S2), Ziele ex- und importieren mit der Show
+(SSH.5), Platzhalter (EXT.7, S2).

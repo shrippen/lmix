@@ -54,6 +54,8 @@ pub struct Service {
     events: broadcast::Sender<Event>,
     /// Wakes [`Service::watch_cues`] when cue times changed.
     cue_wake: tokio::sync::Notify,
+    /// Client for output targets (each request has its target's limit).
+    target_http: reqwest::Client,
     /// Written after every change, read back after a crash (SHW.5).
     autosave: Option<PathBuf>,
     /// Players the operator moved (jump, item, restart, previous), and
@@ -63,6 +65,8 @@ pub struct Service {
     all_shows_file: std::sync::Mutex<Option<PathBuf>>,
     /// Settings file of the layout templates (LAY.5).
     layout_templates_file: std::sync::Mutex<Option<PathBuf>>,
+    /// Settings file of the output targets (`--targets`).
+    targets_file: std::sync::Mutex<Option<PathBuf>>,
     recent: Mutex<Recent>,
     /// Last good frame per picture: a paused clip or still keeps its
     /// picture while the engine's tap has no new frame.
@@ -131,6 +135,7 @@ impl Service {
             engine,
             events,
             cue_wake: tokio::sync::Notify::new(),
+            target_http: crate::datasource::client(),
             recent: Mutex::new(Recent::load(autosave.as_deref())),
             pictures: std::sync::Mutex::new(HashMap::new()),
             touched: std::sync::Mutex::new(HashMap::new()),
@@ -150,6 +155,7 @@ impl Service {
             jumped: std::sync::Mutex::new(HashMap::new()),
             all_shows_file: std::sync::Mutex::new(None),
             layout_templates_file: std::sync::Mutex::new(None),
+            targets_file: std::sync::Mutex::new(None),
         })
     }
 
@@ -183,6 +189,53 @@ impl Service {
                 .expect("templates file lock") = Some(path);
         }
         self.publish(&sw);
+    }
+
+    /// Keep the output targets in `path` (`--targets`), as the shortcuts
+    /// for all shows.
+    pub async fn use_targets_file(&self, path: PathBuf) {
+        let read = read_settings(&path, "output targets", crate::targets::parse).await;
+        let mut sw = self.switcher.lock().await;
+        sw.set_targets(read.clone().ok().flatten().unwrap_or_default());
+        if read.is_ok() {
+            *self.targets_file.lock().expect("targets file lock") = Some(path);
+        }
+        self.publish(&sw);
+    }
+
+    /// The targets hold secrets: the file is the user's alone (EXT.2).
+    async fn write_targets(&self, sw: &mut Switcher) {
+        if !sw.take_targets_changed() {
+            return;
+        }
+        let Some(path) = self.targets_file.lock().expect("targets file lock").clone() else {
+            return;
+        };
+        let text = crate::targets::to_bytes(sw.targets());
+        if let Err(e) = write_private_settings(&path, text).await {
+            tracing::warn!(error = %e, file = %path.display(), "output targets not saved");
+            sw.targets_unsaved();
+        }
+    }
+
+    /// Send `request` to `target` in the background; how it went is an
+    /// event, the caller never waits (EXT.3).
+    fn send_to_target(
+        self: &Arc<Self>,
+        target: crate::targets::TargetConfig,
+        request: crate::targets::Request,
+    ) {
+        let service = Arc::clone(self);
+        tokio::spawn(async move {
+            let result = crate::targets::send(&service.target_http, &target, &request).await;
+            if let lmix_types::TargetResult::Failed { reason } = &result {
+                tracing::warn!(target = %target.name, %reason, "output target not reached");
+            }
+            let _ = service.events.send(Event::Target {
+                target: target.name.clone(),
+                result,
+            });
+        });
     }
 
     /// Best effort, like the autosave.
@@ -1071,6 +1124,42 @@ impl Service {
                 let actions = self.switcher.lock().await.shortcut_actions(target)?;
                 return self.run_all(actions, origin).await;
             }
+            Action::HttpRequest {
+                target,
+                method,
+                path,
+                headers,
+                body,
+            } => {
+                let config = self.switcher.lock().await.target(target)?;
+                let request = crate::targets::Request {
+                    method: *method,
+                    path: path.clone(),
+                    headers: headers.clone(),
+                    body: body.clone(),
+                };
+                self.send_to_target(config, request);
+                return Ok(self.state().await);
+            }
+            Action::HaService {
+                target,
+                service,
+                entity,
+                data,
+            } => {
+                let config = self.switcher.lock().await.target(target)?;
+                let request =
+                    crate::targets::ha_request(service, entity.as_deref(), data.as_ref())?;
+                self.send_to_target(config, request);
+                return Ok(self.state().await);
+            }
+            Action::TestTarget { name } => {
+                let config = self.switcher.lock().await.target(name)?;
+                crate::targets::probe(&self.target_http, &config)
+                    .await
+                    .map_err(|reason| ActionError::BadTarget { reason })?;
+                return Ok(self.state().await);
+            }
             Action::CueGo { .. }
             | Action::CueStart { .. }
             | Action::CueStop { .. }
@@ -1309,6 +1398,7 @@ impl Service {
         self.write_autosave(&sw).await;
         self.write_all_shows(&mut sw).await;
         self.write_layout_templates(&mut sw).await;
+        self.write_targets(&mut sw).await;
         if !later.is_empty() {
             self.run_later(later.to_vec());
         }
@@ -1534,6 +1624,27 @@ async fn read_settings<T>(
     }
 }
 
+/// A settings file with secrets: like [`write_settings`], but readable
+/// only by the user from the start.
+async fn write_private_settings(path: &std::path::Path, bytes: Vec<u8>) -> std::io::Result<()> {
+    use tokio::io::AsyncWriteExt;
+    if let Some(dir) = path.parent().filter(|d| !d.as_os_str().is_empty()) {
+        tokio::fs::create_dir_all(dir).await?;
+    }
+    let mut tmp = path.as_os_str().to_owned();
+    tmp.push(".tmp");
+    let mut file = tokio::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(0o600)
+        .open(&tmp)
+        .await?;
+    file.write_all(&bytes).await?;
+    file.sync_all().await?;
+    tokio::fs::rename(&tmp, path).await
+}
+
 /// Write a settings file whole (a temporary file renamed over it).
 async fn write_settings(path: &std::path::Path, bytes: Vec<u8>) -> std::io::Result<()> {
     if let Some(dir) = path.parent().filter(|d| !d.as_os_str().is_empty()) {
@@ -1746,6 +1857,102 @@ mod tests {
             },
             name: Some("Bars".into()),
         }
+    }
+
+    #[tokio::test]
+    async fn a_cue_calls_home_assistant_and_the_secret_stays_in_its_file() {
+        use std::os::unix::fs::PermissionsExt;
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = format!("http://{}", listener.local_addr().unwrap());
+        let (seen_tx, mut seen) = tokio::sync::mpsc::channel(4);
+        tokio::spawn(async move {
+            while let Ok((mut stream, _)) = listener.accept().await {
+                let mut buf = vec![0; 8192];
+                let n = stream.read(&mut buf).await.unwrap_or(0);
+                let _ = seen_tx
+                    .send(String::from_utf8_lossy(&buf[..n]).into_owned())
+                    .await;
+                let _ = stream
+                    .write_all(b"HTTP/1.1 200 OK\r\ncontent-length: 0\r\nconnection: close\r\n\r\n")
+                    .await;
+            }
+        });
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("targets.json");
+        let service = Service::new(4, Arc::new(NullEngine::default()), None);
+        service.use_targets_file(file.clone()).await;
+        let mut events = service.subscribe();
+
+        let state = service
+            .handle(Action::SetTarget {
+                target: lmix_types::TargetSpec {
+                    name: "Haus".into(),
+                    kind: lmix_types::TargetKind::Http,
+                    addresses: vec![address],
+                    secret: Some("geheim".into()),
+                    timeout_ms: 1000,
+                },
+            })
+            .await
+            .unwrap();
+        assert!(state.targets[0].has_secret);
+        assert!(!serde_json::to_string(&state).unwrap().contains("geheim"));
+        let saved = tokio::fs::read_to_string(&file).await.unwrap();
+        assert!(saved.contains("geheim"));
+        let mode = tokio::fs::metadata(&file)
+            .await
+            .unwrap()
+            .permissions()
+            .mode();
+        assert_eq!(mode & 0o777, 0o600, "only the user reads the secrets");
+
+        let light = Action::HaService {
+            target: "Haus".into(),
+            service: "light.turn_on".into(),
+            entity: Some("light.raum".into()),
+            data: None,
+        };
+        service
+            .handle(Action::AddCueList {
+                name: "Show".into(),
+                cues: vec![lmix_types::Cue::actions("Licht", vec![light])],
+                source: None,
+            })
+            .await
+            .unwrap();
+        service.handle(Action::CueGo { list: None }).await.unwrap();
+
+        let sent = tokio::time::timeout(std::time::Duration::from_secs(5), seen.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(
+            sent.starts_with("POST /api/services/light/turn_on"),
+            "{sent}"
+        );
+        let reached = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            loop {
+                if let Ok(Event::Target { target, result }) = events.recv().await {
+                    return (target, result);
+                }
+            }
+        })
+        .await
+        .unwrap();
+        assert_eq!(reached, ("Haus".to_string(), lmix_types::TargetResult::Ok));
+        assert!(matches!(
+            service
+                .handle(Action::HttpRequest {
+                    target: "Gone".into(),
+                    method: lmix_types::HttpMethod::Post,
+                    path: String::new(),
+                    headers: Default::default(),
+                    body: None,
+                })
+                .await,
+            Err(ActionError::UnknownTarget { .. })
+        ));
     }
 
     #[tokio::test(start_paused = true)]

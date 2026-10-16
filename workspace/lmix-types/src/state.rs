@@ -153,6 +153,9 @@ pub struct ShowState {
     /// Shortest gap between two GOs (RUN.6).
     #[serde(default)]
     pub go_guard_ms: u32,
+    /// Output targets of this machine, without secrets (EXT.1).
+    #[serde(default)]
+    pub targets: Vec<crate::target::Target>,
     /// Locked against closing, loading and stopping (AUT.11).
     #[serde(default)]
     pub locked: bool,
@@ -272,6 +275,12 @@ pub enum Event {
         graphics: InputId,
         layer: u32,
         report: String,
+    },
+    /// How a message to an output target went (EXT.3, CTL.2).
+    Target {
+        target: String,
+        #[serde(flatten)]
+        result: crate::target::TargetResult,
     },
     /// A cue started, ended, stopped or failed, or a GO was dropped
     /// (RUN.6); `cue` is `null` for a GO.

@@ -36,6 +36,7 @@ mod service;
 mod show;
 mod switcher;
 mod tally_http;
+mod targets;
 mod tcp;
 mod titles;
 mod tsl;
@@ -120,6 +121,11 @@ struct Args {
     /// Shortcuts for all shows (AUT.3), kept apart from show files.
     #[arg(long, env = "LMIX_SHORTCUTS", default_value_os_t = config_file("shortcuts.json"))]
     shortcuts: PathBuf,
+
+    /// Output targets of this machine with their secrets (show mode
+    /// EXT.1), kept apart from show files; written readable only by you.
+    #[arg(long, env = "LMIX_TARGETS", default_value_os_t = config_file("targets.json"))]
+    targets: PathBuf,
 
     /// Layout templates (LAY.5), kept apart from show files.
     #[arg(long, env = "LMIX_LAYOUT_TEMPLATES", default_value_os_t = config_file("layout-templates.json"))]
@@ -245,6 +251,7 @@ async fn main() -> anyhow::Result<()> {
     // Before the show: its titles name templates from the folder.
     service.use_templates(args.templates.clone()).await;
     service.use_shortcuts_file(args.shortcuts.clone()).await;
+    service.use_targets_file(args.targets.clone()).await;
     service
         .use_layout_templates_file(args.layout_templates.clone())
         .await;

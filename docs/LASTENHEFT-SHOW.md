@@ -194,11 +194,11 @@ ausgeschlossen. **MS**: Meilenstein (§7). Stand: ✅ vorhanden · ◐ teilweise
 
 | ID | Anforderung | Prio | MS | Stand |
 |---|---|---|---|---|
-| EXT.1 | Ausgabeziele benannt in den Rechner-Einstellungen: Art (HTTP, OSC über UDP/TCP), Basis-URL bzw. Host:Port, Geheimnis-Verweis, Zeitlimit, mehrere gleichzeitige Ziele (Haupt/Reserve); Cues nennen nur den Zielnamen | M | S1 | – |
-| EXT.2 | Geheimnisse (Tokens, Passwörter) nur in den Rechner-Einstellungen; nie Klartext in Show-Datei oder Drehbuch (lmix) | M | S1 | – |
-| EXT.3 | HTTP-Cue: Ziel, Methode, Pfad, Kopfzeilen, Rumpf (JSON/Text); Fehler werden angezeigt und blockieren den Ablauf nie (lmix; QLab hat kein HTTP) | M | S1 | – |
-| EXT.4 | Home-Assistant-Kurzform: Dienst + Entität + Daten auf ein HA-Ziel (lmix; Gegenstück zu QLabs Gerätebeschreibungen) | S | S1 | – |
-| EXT.5 | Ziel testen: Nachricht probeweise senden, Ergebnis mit Grund | S | S1 | – |
+| EXT.1 | Ausgabeziele benannt in den Rechner-Einstellungen: Art (HTTP, OSC über UDP/TCP), Basis-URL bzw. Host:Port, Geheimnis-Verweis, Zeitlimit, mehrere gleichzeitige Ziele (Haupt/Reserve); Cues nennen nur den Zielnamen | M | S1 | ◐ (HTTP; OSC-Ziele angelegt, Senden mit EXT.6) |
+| EXT.2 | Geheimnisse (Tokens, Passwörter) nur in den Rechner-Einstellungen; nie Klartext in Show-Datei oder Drehbuch (lmix) | M | S1 | ✅ (`targets.json`, nur für den Nutzer lesbar) |
+| EXT.3 | HTTP-Cue: Ziel, Methode, Pfad, Kopfzeilen, Rumpf (JSON/Text); Fehler werden angezeigt und blockieren den Ablauf nie (lmix; QLab hat kein HTTP) | M | S1 | ✅ (Aktion `http_request` in einem Aktions-Cue, Ereignis `target`) |
+| EXT.4 | Home-Assistant-Kurzform: Dienst + Entität + Daten auf ein HA-Ziel (lmix; Gegenstück zu QLabs Gerätebeschreibungen) | S | S1 | ✅ (`ha_service`) |
+| EXT.5 | Ziel testen: Nachricht probeweise senden, Ergebnis mit Grund | S | S1 | ✅ (`test_target`) |
 | EXT.6 | OSC-Cue: Adresse, Argumente (Zahl, Text, Wahrheitswert, leer) an ein Ziel | S | S2 | – |
 | EXT.7 | Platzhalter in ausgehenden HTTP- und OSC-Nachrichten für Live-Werte (Standby-Nummer, Variable) | S | S2 | – |
 | EXT.8 | Netz-Cue mit Dauer: wiederholt senden oder einen Wert blenden | K | S3 | – |
