@@ -407,7 +407,10 @@ act '{"action":"cut_direct","input":"Ball"}' >/dev/null
 act '{"action":"preview_input","input":"Orange"}' >/dev/null
 act '{"action":"set_transition","slot":1,"effect":"fade","duration_ms":3000}' >/dev/null
 act '{"action":"transition","slot":1}' >/dev/null
-sleep 1
+# Two thirds into the fade: Orange is about 3/4 of the picture, so the
+# held frame is orange at once. At one third it was 1/4, and the check
+# raced the fail back (~2 s on GitHub, run 38962553235).
+sleep 2
 orange_slot="lmix slot $(curl -sf "$CORE/state" | jq '.inputs[] | select(.name=="Orange") | .slot')"
 curl -sf -X POST "$STROM/api/flows/$(flow_id "$orange_slot")/stop" >/dev/null
 # Hold: while the input is offline, program keeps fading to its last
