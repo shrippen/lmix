@@ -4,14 +4,14 @@ Erledigtes abhaken (`[x]`, Datum) und nach einer Weile löschen; Details stehen 
 
 ## Für dich
 
-- [ ] strom PR #3 (`lmix-player-sysmem`, Player in Systemspeicher) mergen.
+- [x] strom PR #3 (`lmix-player-sysmem`) gemergt.
+- [ ] CI `strom.yml`/`vm-check.yml` seit Einführung rot (403 beim Submodul `strom`): neuen Gitea-Token mit `read:repository` + `write:package` als Secret `REGISTRY_TOKEN` hinterlegen, dann Lauf von PR #14 (`ci-submodule-token`, `persist-credentials: false`) neu starten und bei grün mergen. Der jetzige Token kommt an (Lauf 1859), darf `strom` aber nicht lesen.
 - [ ] Demo-Welt-Kopien in 15 anderen Projekten veraltet (neuer Abschnitt `graufeld.stream`): `python3 shrippen.github.io/demo/tools/sync-demo.py`, dann je Projekt committen — soll ich?
 - [ ] Kante PR #36 mergen (Farb-Labels, `KanteLevelMeter`), danach in `shrippen.github.io` `./build.sh` committen (liegt schon gebaut, uncommittet).
 - [ ] Vorschau-Lücke ansehen (`scripts/run-local.sh`, Kachel anklicken) und entscheiden: Vorschau-Ausgang im strom-Mischer oder alte Ansicht halten, bis die neue ein Bild hat.
 - [ ] Breeze-Bug melden (siehe unten).
 - [ ] Hardware mit dir: H.13 Kopfhörer, H.20 Vollbild auf zweitem Monitor/Beamer, H.21 Kabel ziehen (`docs/HARDWARE-TODO.md`).
-- [ ] NFA.7: 8-h- und 48-h-Lauf, nachdem das Speicherwachstum in strom geklärt ist (H.24).
-- [ ] PRs der Nacht 11./12.10. ansehen und mergen: lmix #15 (H.24-Vergleich, Todo), #16 (Qt-eigene Übersetzungen), Kante #53 (Dialog ohne Hintergrund in Kante Light, danach `scripts/sync-kante.sh` in lmix), lmix #17 (M7 Teil A, gestapelt auf #9, also erst #7–#9 und strom #7/#8), lmix #18 (M9 Anfang, gestapelt auf #17), #19 (Tabellen XLSX/ODS, Folien aus Datei, Inputs einklappen; auf #18), #20 (Layout-Editor Mehrfachauswahl und Sperre; auf #19), #21 (Google Sheets API, Kurzbefehle für alle Shows, Zustand als Diff, Tally über HTTP, Wiedergabezeit, Tasten mit Bild, Anhängen, fehlende Dateien, Beispiele; auf #20), #22 (Zugriff: nur LAN, Passwort, offene Seiten; ⚠ öffentliche Adressen brauchen jetzt `--allow-internet`; auf #21), #23 (Springen im Clip, Playlist-Eintrag; gegen strom ungeprüft; auf #22).
+- [x] NFA.7 8-h-Lauf (2026-10-12): ohne Ausfall, Latenz stabil; 48-h-Lauf nach dem Speicher-Fix (H.24).
 - [ ] CI für die Tests: `cargo test` (lmix-core, lmix-types, console-qt), `scripts/test-titles.sh` und `scripts/test-web.sh` laufen in keiner CI (nur `vm-check`). Nach dem Token-Fix (lmix-core braucht das Submodul `strom` für `strom-types`) einen Workflow `tests.yml` anlegen, in `.gitea/` und `.github/`, Chromium über Playwright.
 - [ ] M7.0 Benchmark CEF gegen WPE: braucht freie GPU und `cefsrc`/`wpesrc` (beide fehlen auf dem Rechner, Installation mit sudo); danach rendert strom den Grafikkanal (GFX.2).
 
@@ -55,8 +55,12 @@ enabled: !(/\&[^\&]/.test(control.text))
 - [ ] Release-Build (wenn es einen gibt): `demo/` ausschließen und prüfen.
 - [ ] Andere dekodierende Quellen (SRT, NDI, Gerät) auf GPU-Speicher im Slot-Kanal prüfen (DECISIONS „Hardware-Decoder“).
 - [x] egui-Console entfernen (2026-10-09): Selbsttest als `lmix-selftest`, VM-Test und Screenshot über die Qt-Console (Cloud-VM: Qt 6 aus KDE neon).
-- [ ] strom-Speicher wächst ~32 MB/h (H.24, DECISIONS): in der VM eingegrenzt (2026-10-09: kein Leck ohne Ausgänge, SRT-Statistik leckt nicht, nach 12 min flach); offen: Vergleichsläufe auf Hardware (ohne ISO, 8 Inputs, `gl`, `MALLOC_ARENA_MAX=2`).
-- [ ] GL-Mischer: SRT-Ausgang ohne Video (Fix in strom, DECISIONS „Hardware-Läufe“); in der VM nicht nachstellbar (2026-10-09, DECISIONS „GL-Mischer und SRT“), braucht Hardware.
+- [x] strom-Speicher wuchs ~31 MB/h (H.24, 2026-10-13): ISO über `autovideoconvert` → NVENC, Fix strom #11, 3-h-Lauf flach, 8-h-Lauf ~7,7 MB/h in Stufen; offen: 48 h.
+- [x] Ton eines pausierten Clips (2026-10-13): Programm-Audio unverändert 80 ms, kein Fix nötig.
+- [x] CUDA-Latenz 106 ms statt 56 ms (2026-10-12): leere DSK-Ebenen seit `dde8237`, Fix strom `lmix-ignore-inactive-pads` (DECISIONS „CUDA-Latenz 106 ms“).
+- [x] GL-Mischer: SRT-Ausgang ohne Video (2026-10-13: behoben mit strom #11, 30 fps über 1 h).
+- [ ] GL-Mischer: strom-Speicher wächst mit SRT ~110 MB/h (2026-10-13 ruhig gemessen, 90 min, 1 Input: 672 → 813 MB ab Minute 10, 30 fps sauber; CUDA im 8-h-Lauf ~7,7 MB/h). Ursache suchen: GL→CUDA-Übergabe vor NVENC (`cudaupload` aus GL-Speicher) oder SRT; Gegenprobe GL mit Aufnahme statt SRT.
+- [x] GL-Mischer: Layout-Rahmen fehlten (H.29): udmabuf-Upload auf NVIDIA, Fix strom #14.
 - [x] Aktion in den ersten 2 s nach Engine-Neustart antwortet 502 (2026-10-09: neue Engine erkannt, Aktion geht in die Show, Restore sofort).
 - [ ] Konstantes Bildalter 54 ms bei einigen Kacheln klären.
 - [ ] M7 Rest (DECISIONS „M7 Teil A“): Grafikkanal als Input und Overlay (GFX.2, GFX.17, nach M7.0), Overlay wartet auf die Ausblendung (GFX.4), Titel als Stinger (GFX.11), Beamer für Textfolien (GFX.21, mit GFX.2), M7-Abnahme mit 5 Personas.

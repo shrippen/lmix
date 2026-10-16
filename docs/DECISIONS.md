@@ -1499,6 +1499,37 @@ wieder angesteckter Controller blieb dunkel); im Layout-Editor fehlte
 ohne Einrasten das Raster, Alt kollidierte mit KWin, und Rückgängig
 übersah den Hintergrund und speicherte leere Schritte. Alle behoben.
 
+## 2026-10-11 — strom-Speicher (H.24): Vergleichsläufe auf Hardware
+
+**Läufe** (`scripts/soak-hardware.sh`, RTX 3090, je 60 min, RSS von strom
+jede Minute in `rss.csv`; Grundlage wie am 2026-10-09: CUDA, 16 Inputs,
+ISO-Aufnahme, 2 × SRT; je Lauf eine Änderung):
+
+| Lauf | RSS 15 → 60 min | Verlauf ab Minute 25 | Latenz |
+|---|---|---|---|
+| Grundlage | 999 → 1004 MB | 985 → 1004 MB, stetig (~33 MB/h) | 106–107 ms |
+| ohne ISO | 773 → 759 MB | flach (760–775 MB) | 106–107 ms |
+| 8 Inputs | 679 → 729 MB | 709 → 729 MB, stetig (~30 MB/h) | 106–108 ms |
+| `MALLOC_ARENA_MAX=2` | 809 → 947 MB | Sprung um Minute 37 (818 → 940), danach ~20 MB/h | 86–89 ms |
+| `--mixer gl` | 1531 → 1945 MB | ~580 MB/h | 112–892 ms |
+
+**Störung**: Ab ~13:45 lief ein fremder Prozess auf der GPU (bis 22 GB,
+oft 95–100 %). Die Läufe „8 Inputs“, GL und `MALLOC_ARENA_MAX=2` sind
+dadurch nur eingeschränkt vergleichbar.
+
+**Befund**: Nur der Lauf ohne ISO-Aufnahme bleibt flach, alle Läufe mit
+ISO wachsen gleichmäßig um 20–33 MB/h, unabhängig von der Zahl der
+Inputs. Verdacht: der Ausgangs-Flow mit Input-Quelle (ISO). 60 min sind
+für diese Rate knapp; bestätigen mit einem längeren Paar (Grundlage gegen
+ohne ISO, je ≥ 3 h, GPU sonst frei).
+**GL**: Mit dem GL-Mischer kommt über SRT weiter kein Video an (Befund
+vom 2026-10-09), und strom wächst dabei um ~580 MB/h; der hängende
+SRT-Zweig staut offenbar nicht nur die 2-s-Audio-Queue. Erst nach dem Fix
+in strom erneut messen.
+**Latenz**: Mit CUDA jetzt 106–107 ms statt 56–63 ms am 2026-10-09
+(seitdem M4: Overlays, T-Bar, Kanalzug, Aux-Busse, Stinger). Der Lauf mit
+`MALLOC_ARENA_MAX=2` lag bei 87 ms; Ursache für beides offen.
+
 ## 2026-10-12 — Tabellen, Folien aus Datei, eingeklappte Inputs (DAT.1, DAT.3, GFX.21, UI.3)
 
 **Kontext**: Rest von M7 und M9, der weder GPU noch Engine braucht.
@@ -1821,3 +1852,191 @@ Positionsmeldungen eines Players bis 600 ms nach so einem Befehl als
 neuer Anfang (Meldungen kommen alle 200 ms und können den alten Stand
 noch zeigen); Test dazu.
 
+## 2026-10-12 — Ohne NVENC fallen alle Programm-Ausgänge aus
+
+**Befund** (Start des 8-h-Soaks): Aufnahme und beide SRT-Ausgänge sofort
+`failed`, alle 7 s neu gestartet, nur die ISO-Aufnahme lief. strom:
+`NVENC not available`, `Using software fallback encoder: x264enc`, dann
+`not-negotiated` am `pgm`-intersrc (`enc:videoconvert` kann
+`memory:CUDAMemory` nicht wandeln). Ursache 1, am Rechner: Das
+Treiber-Update 615.71 → 615.78 lief um 08:09 mit dem alten Kernelmodul;
+GStreamer speicherte dabei eine Registry ohne NVENC-Encoder und prüfte sie
+nach dem Neustart nicht neu (Abhilfe in `BUILD.md`). Ursache 2, in strom:
+Im Software-Modus setzt der Encoder-Block ein `videoconvert` vor den
+Encoder; der CUDA-Mischer liefert das Programm aber im GPU-Speicher (die
+Ausgänge holen es bewusst nicht herunter, damit NVENC es direkt nimmt).
+**Fix** (strom-Branch `lmix-encoder-cuda-download`, auf `dev`): Im
+Software-Modus ist der Wandler ein Bin `cudadownload ! videoconvert`, wenn
+`cudadownload` existiert (Systemspeicher läuft unverändert durch).
+Nachgestellt mit einer leeren `libnvidia-encode.so.1` vor der echten
+(CUDA da, NVENC nicht): vorher Aufnahme und SRT `failed`, danach laufen
+Aufnahme, ISO und SRT mit x264 (480 Bilder in 16 s). Test
+`test_software_convert_accepts_cuda_memory` (ignoriert ohne CUDA).
+Betrifft jeden Rechner mit CUDA-Mischer, aber ohne NVENC in der Registry
+(Treiber ohne `libnvidia-encode`, Rechenkarten ohne NVENC wie A100/H100).
+
+## 2026-10-12 — CUDA-Latenz 106 ms: leere DSK-Ebenen im Mischer
+
+**Bisect** (RTX 3090, CUDA-Mischer, 4 Testbild-Inputs, Aufnahme läuft,
+viermal `POST /api/latency/measure?seconds=5`; jede lmix-core-Version mit
+ihrem strom-Pin, parallel zum 8-h-Soak):
+
+| Stand | strom | Median |
+|---|---|---|
+| `70458ac` (Soak 2026-10-09) | `ed647f2` | 56 ms |
+| `e49e4cd`, `f370d79` | `ed647f2`, `1dbe229` | 56 ms |
+| `f370d79` (lmix-core alt) | `401053c` (strom neu) | 56 ms |
+| `dde8237` Overlays und T-Bar | `d47a50a` | 107 ms |
+| `f851798`, `60fb92d`, `619760d`, `ad3657f`, `6ce0d2b` | … `9274bbd` | 86–107 ms |
+
+**Ursache**: Seit `dde8237` hängen am Bildmischer vier DSK-Ebenen für
+die Overlays (später fünf mit dem Stinger), gespeist über `inter` von
+einem Kanal, den niemand füttert. Ein Live-Aggregator wartet bei jedem
+Bild bis zu seiner Frist, solange ein Pad keine Daten hat; das Programm
+kommt dadurch um das ganze Latenzbudget (`latency` + `min-upstream-latency`
+je 20 ms, plus Vorlauf) später. Die Werte springen zwischen 86 und 107 ms
+je nach Lage der Frist zum Bildtakt.
+**Fix** (strom-Branch `lmix-ignore-inactive-pads`, auf `dev`):
+`ignore-inactive-pads=true` an den Compositoren des Bildmischers. Pads ohne
+je ein Bild zählen nicht mehr, ab ihrem ersten Bild wieder. Gemessen mit
+dem heutigen lmix-core: **56 ms** statt 87–107 ms, auch mit Overlay an und
+wieder aus (der Kanal zeigt danach weiter auf den Slot, das Pad bekommt
+Bilder).
+**Rest**: Nach dem ersten Stinger 87 ms. Ursache ist nicht die
+Stinger-Ebene, sondern der Input des Clips selbst: Schon das Hinzufügen
+des Stinger-Clips (ohne Übergang) ergibt 86 ms. Ein pausierter Player
+liefert keine Bilder mehr, sein Pad am Mischer hatte aber schon eins und
+gilt als aktiv. Gelöst am 2026-10-13 (Eintrag „strom-Fixes“).
+
+## 2026-10-12 — NFA.7: 8-h-Soak und strom-Speicher (H.24)
+
+**Lauf** (`MINUTES=480 INPUTS=16 STREAMS=2 ISO=1 scripts/soak-hardware.sh`,
+RTX 3090, CUDA-Mischer, lmix `511460a`, strom `9274bbd`, 08:42–16:42):
+kein Ausfall. Aufnahme 864 919 Bilder in 28 828 s (30,0 fps), ISO 864 617,
+beide SRT-Empfänger je 864 809, 0 verlorene und 0 verworfene Pakete.
+Latenz durchgehend 106–107 ms (p95 einmal 111 ms; Ursache der 107 ms:
+Eintrag „CUDA-Latenz 106 ms“). Zwei FAILs im Bericht:
+- **strom-Speicher**: 1027 MB nach 10 min, 1387 MB am Ende. In den ersten
+  2 h liefen parallel Builds und die Läufe unten; ab Stunde 3 ruhig und
+  gleichmäßig: 1232 → 1387 MB in 5 h, **~31 MB/h** (wie am 2026-10-09).
+- **CRITICALs**: 28 Meldungen `gst_value_collect_int_range` beim Start
+  (ein Zeitpunkt, danach keine). Sie kommen aus dem PipeWire-Geräteanbieter
+  von GStreamer (`libgstpipewire`, Backtrace über `gst_caps_set_simple`),
+  den strom für die Geräteerkennung startet; `gst-device-monitor-1.0`
+  zeigt dieselben 28 ohne strom. Umgebung des Rechners, nicht lmix.
+
+**Eingrenzung des Wachstums** (CPU-Mischer, 1 Testbild-Input, nur eine
+ISO-Aufnahme als MKV, RSS von strom jede Minute):
+
+| Lauf | Wandler vor dem Encoder | Verlauf |
+|---|---|---|
+| ISO + NVENC (2 ×, 60 und 90 min) | `autovideoconvert` | stetig ~21–36 MB/h |
+| wie oben, `MALLOC_ARENA_MAX=2` | `autovideoconvert` | stetig ~28 MB/h |
+| ISO + NVENC, `STROM_FORCE_SOFTWARE_CONVERT=1` (40 min) | `videoconvert` | flach (544 MB von Minute 10 bis 30, dann 486) |
+| ISO + x264 (90 min) | `videoconvert` | flach |
+| ohne ISO (90 min) | – | flach |
+
+Reines GStreamer (je 60 min, ohne strom) wächst mit keiner Variante:
+`nvh264enc` direkt aus Systemspeicher, mit `cudaupload`, mit
+`autovideoconvert` und mit den Encoder-Einstellungen von strom.
+**Befund**: Das Wachstum hängt am Weg Systemspeicher → `autovideoconvert`
+→ NVENC in strom. `autovideoconvert` lädt dort jedes Bild über OpenGL
+hoch (`glupload ! glcolorconvert`, RGBA in GL-Speicher), NVENC nimmt es
+per CUDA-GL-Interop. Die Programm-Ausgänge kommen beim CUDA-Mischer schon
+im GPU-Speicher und wachsen nicht. In strom selbst nicht weiter verfolgt
+(was in der GL-Kette leckt, ist offen; ohne strom nicht nachstellbar).
+**Vorschlag** (strom, ungeprüft): Für NVENC-Encoder mit Systemspeicher
+`videoconvert` (oder `cudaupload ! cudaconvert`) statt `autovideoconvert`;
+den GL-Umweg braucht NVENC nicht. Danach ISO-Lauf ≥ 3 h, dann 48 h (H.24).
+
+## 2026-10-13 — strom-Fixes: Encoder, pausierter Player, Speicher
+
+**Stand** (Submodul `strom` auf `8e8da6f`, Branch `lmix-pin-1013`: Pin
+vom 2026-10-12 plus strom-PRs #9–#12):
+- **#9** Encoder im Software-Modus nimmt GPU-Speicher
+  (`cudadownload ! videoconvert`), Programm-Ausgänge laufen ohne NVENC.
+- **#10** `ignore-inactive-pads` am Bildmischer: 107 → 56 ms.
+- **#11** Vor NVENC `cudaupload ! cudaconvert` statt `autovideoconvert`
+  (kein Umweg über OpenGL). Erster Versuch mit `videoconvert`: Aufnahme
+  und SRT `not-negotiated`, NVENC nimmt I420 nicht aus CUDA-Speicher, und
+  `videoconvert` kann CUDA-Speicher nicht wandeln.
+- **#12** Pausierter Player wiederholt sein letztes Bild in der Bildrate
+  (auch am Ende der Playlist), mit der Laufzeit des Slot-Flows. Ein
+  pausierter Clip kostet das Programm keine 30 ms mehr.
+
+**Stinger** (Entscheidung „b“ vom 2026-10-12, verworfen): Die Stinger-Ebene
+beim Ausschalten zu spülen, wirkt im Test (Pad zählt danach wieder als
+inaktiv), lässt die Latenz aber bei 86 ms: Wartet hat das Input-Pad des
+pausierten Clips. Das Standbild (#12) ist Weg „c“ in strom statt in lmix
+und deckt jeden pausierten Clip ab, nicht nur Stinger.
+**Gemessen** (CUDA, 4 Inputs, Aufnahme): 56 ms vor dem Stinger, mit
+hinzugefügtem Clip, nach dem ersten und zweiten Stinger, Overlay an und
+aus.
+**Soak** (3 h, CUDA, 16 Inputs, Aufnahme + ISO + 2 × SRT, mit #9–#11):
+strom-RSS 1091 → 1101 MB von Minute 90 bis 180 (vorher ~31 MB/h), Latenz
+56 ms (einmal p95 85 ms), alle Bilder angekommen, 0 Pakete verloren. In
+der Zeit lief ComfyUI auf der GPU (bis 16 GB, zeitweise 100 %).
+**`soak-hardware.sh`** zählt die PipeWire-CRITICALs vom Start (Eintrag
+„NFA.7: 8-h-Soak“) nicht mehr als Fehler.
+**Ton**: Ein pausierter Clip mit Ton ändert das Programm-Audio nicht
+(Pufferalter an `pgm_audio_out` 80 ms vorher, beim Abspielen und
+pausiert, mit altem und neuem strom; CPU-Mischer). Das Bild lag im selben
+Lauf mit altem strom bei 112 ms, mit den Fixes bei 56 ms.
+**8-h-Lauf** (2026-10-13, 01:57–09:59, `d4a88e7`, ohne Nebenlast; Rest
+wie oben): Latenz durchgehend 56 ms, alle Bilder in Aufnahme, ISO und
+beiden SRT-Empfängern (864 557 bzw. 864 475/864 461 von 864 557), keine
+CRITICALs außer PipeWire. strom-RSS ab Stunde 1 von 847 auf 903 MB,
+~7,7 MB/h statt ~31, in Stufen (größte +29 MB nach 6,3 h), nicht
+gleichmäßig.
+**Offen**: 48-h-Lauf (H.24).
+
+## 2026-10-13 — Nachtläufe auf Hardware: GL, Stinger mit Alpha, H-Punkte
+
+**Stand** (Submodul `strom` auf `d4a88e7`, Branch `lmix-pin-1013`, dazu
+strom #13; seit dem Rahmen-Fix `b8ea416` mit #14). Läufe auf der RTX 3090, je eigener strom und lmix-core.
+- **GL-Latenz** (H.22): GL lag bei 88 oder 108 ms (je nach Start), CUDA bei
+  56. `glvideomixerelement` hat keine Eigenschaft `ignore-inactive-pads`,
+  #10 griff dort nicht. Jetzt über `gst_aggregator_set_ignore_inactive_pads()`
+  an jedem Mischer: GL 56–64 ms, auch nach Stingern und mit Overlay.
+  Messweg: Pufferalter je Element im Mischer (Eingänge 0–1 ms, nach dem
+  Compositor 88 ms).
+- **GL und SRT** (Befund vom 2026-10-09): mit #11 (`cudaupload ! cudaconvert`
+  statt `autovideoconvert` vor NVENC) trägt der SRT-Ausgang am GL-Mischer
+  Video, 107 996 Bilder in 60 min (30,0 fps); mit altem strom 0 Bilder.
+  Speicher in der Stunde 725 → 779 MB (Minute 15 bis 55), parallel zu
+  Builds gemessen. Ruhig nachgemessen (90 min, 1 Input, `b8ea416`):
+  672 → 813 MB ab Minute 10, ~110 MB/h, 162 053 Bilder (30 fps). Der
+  GL-Weg mit SRT wächst also weiter; CUDA im 8-h-Lauf nicht. Offen.
+- **Stinger mit Alpha** (H.27): ProRes 4444 (`A444_10LE`) und VP9 mit Alpha
+  (`A420`) liefen auf CUDA nicht: `cudaupload` hat diese Formate nicht,
+  Slot-Eingang und DSK-Ebene standen mit not-negotiated, kein Stinger zu
+  sehen. strom #13: `videoconvert ! cudaupload` an Eingängen und
+  DSK-Ebenen des CUDA-Mischers (Durchreichen für alles andere, auch
+  CUDA-Speicher). Danach auf CUDA wie auf GL: Balken über dem Programm,
+  Umgebung sichtbar, Schnitt in der Mitte.
+- **Quelle tauschen** (H.3): Testbild → Testbild bildgenau ohne Schwarz;
+  Testbild → Datei hält 1–3 Bilder (Decoderstart), kein Schwarz.
+- **Warmlauf** (H.9): erster Schnitt nach 2,4 s (CUDA) bzw. 3,1 s (GL).
+- **Signalverlust** (H.17, H.21 teilweise): SRT-Sender 6 s weg: „halten“
+  ohne Schwarzbild, „schwarz“ nach ~0,4 s, Rückkehr nach ~0,2 s; CUDA und
+  GL gleich.
+- **Layouts** (H.29): Plätze, Inhalt und Latenz stimmen. Auf GL fehlten
+  die weißen Rahmen, auch mit altem strom: Die Unterlage lag richtig und
+  bekam Puffer, `glupload` machte daraus aber leere Texturen. Ursache ist
+  der udmabuf-Weg von `glupload` (GStreamer 1.28) auf NVIDIA 615.78, der
+  für RGBA, BGRA und I420 leere Texturen liefert (NV12 geht); nachgestellt
+  mit `gst-launch` und mit ausgeblendetem `/dev/udmabuf`. strom umgeht das
+  schon hinter den Eingangs-Queues (`gpu::udmabuf_upload_broken`), die
+  Unterlage hängt aber ohne Queue an `glupload`. strom #14 setzt dieselbe
+  Sonde an die Unterlage: Rahmen da, Latenz 56 ms. Mit GUI gebauter strom
+  (ohne `no-gui`) beendet sich nach diesem Test auf SIGTERM nicht (hängt
+  beim Schließen der GUI); lmix baut mit `no-gui`, dort kein Hänger.
+
+**Messfehler unterwegs**: Clip-Pfade relativ zum Skript (`./clip.mp4`)
+löst strom relativ zu seinem Arbeitsverzeichnis auf (leere Box); ein mit
+`drawbox` auf transparentem Grund erzeugter Alpha-Clip war ganz
+durchsichtig. Beides lag am Test, nicht an lmix.
+**Soak**: Der 8-h-Lauf ab 00:30 wurde nach 65 min abgebrochen: parallele
+Builds ließen strom von 900 auf 1082 MB springen (Warteschlangen unter
+CPU-Last), der Speicherwert wäre wertlos gewesen. Neuer Lauf ohne
+Nebenlast (Ergebnis im Eintrag „strom-Fixes“).
