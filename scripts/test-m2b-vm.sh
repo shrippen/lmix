@@ -294,7 +294,7 @@ switched() {
 wait_for "$SETTLE_S" switched || fail "next did not switch clips (brightness change $change)"
 pass "transport: pause, play, next"
 
-# --- signal loss: hold the last frame (default) or black, per input ---
+# --- paused clip: strom repeats its last frame (no signal loss) ---
 act '{"action":"cut_direct","input":"Clips"}' >/dev/null
 # Straight to program from outside preview: the mixer must follow lmix.
 mixer_pgm="$(curl -sf "$STROM/api/flows/$MIXER_ID/blocks/vm/state" | jq '.program_input')"
@@ -315,16 +315,8 @@ wait_for "$SETTLE_S" bright program "$WORK/hold.jpg" || fail "paused clip not on
 # Held: still there two seconds later, not just passing through.
 sleep 2
 bright program "$WORK/hold.jpg" || fail "paused clip not held on program"
-# The mode applies from the next frame on: set it while the clip plays.
 act '{"action":"transport_input","input":"Clips","transport":"play"}' >/dev/null
-act '{"action":"set_signal_loss","input":"Clips","mode":"black"}' >/dev/null
-wait_for "$SETTLE_S" clips_move || fail "playlist does not play after the hold check"
-act '{"action":"transport_input","input":"Clips","transport":"pause"}' >/dev/null
-black_pgm() { picture program "$WORK/black.jpg"; [[ $(brightness "$WORK/black.jpg") -lt 5 ]]; }
-wait_for "$SETTLE_S" black_pgm || fail "paused clip not black on program ($(brightness "$WORK/black.jpg"))"
-act '{"action":"set_signal_loss","input":"Clips","mode":"hold"}' >/dev/null
-act '{"action":"transport_input","input":"Clips","transport":"play"}' >/dev/null
-pass "signal loss: paused clip held on program, black when set"
+pass "paused clip held on program"
 
 # --- outputs (M3): recording and SRT, each in its own flow ---
 # Codecs of a media file, sorted and comma separated (needs a finalized file).
@@ -405,6 +397,20 @@ wait_for "$((SETTLE_S + 15))" is input_state Orange online || fail "source did n
 orange_back() { picture inputs/Orange "$WORK/back.jpg"; [[ $(rgb "$WORK/back.jpg" r) -gt 200 ]]; }
 wait_for "$SETTLE_S" orange_back || fail "orange not back after failback"
 pass "failover: source died mid-transition, program held its last frame, input failed back"
+
+# Signal loss per input: hold the last frame (default, above) or black.
+# A paused clip keeps sending its frame, so the source has to die.
+act '{"action":"set_signal_loss","input":"Orange","mode":"black"}' >/dev/null
+act '{"action":"cut_direct","input":"Orange"}' >/dev/null
+orange_pgm() { picture program "$WORK/orange-pgm.jpg"; [[ $(rgb "$WORK/orange-pgm.jpg" r) -gt 200 ]]; }
+wait_for "$SETTLE_S" orange_pgm || fail "orange not on program before the loss"
+curl -sf -X POST "$STROM/api/flows/$(flow_id "$orange_slot")/stop" >/dev/null
+black_pgm() { picture program "$WORK/black.jpg"; [[ $(brightness "$WORK/black.jpg") -lt 5 ]]; }
+wait_for "$SETTLE_S" black_pgm || fail "dead source not black on program ($(brightness "$WORK/black.jpg"))"
+act '{"action":"set_signal_loss","input":"Orange","mode":"hold"}' >/dev/null
+wait_for "$((SETTLE_S + 15))" is input_state Orange online || fail "source did not fail back after the black check"
+wait_for "$SETTLE_S" orange_back || fail "orange not back after the black check"
+pass "signal loss: black when set, the source died"
 
 act '{"action":"start_output","output":"Stream"}' >/dev/null
 sleep 2   # running for a while, then the link breaks
