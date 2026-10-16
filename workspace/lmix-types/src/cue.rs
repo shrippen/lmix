@@ -173,7 +173,9 @@ pub struct Cue {
     /// `actions`: 1–16 actions of the catalog.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub actions: Vec<Action>,
-    /// `wait`: how long it runs.
+    /// `wait`: how long it runs. `actions`: how long it counts as
+    /// running after its actions, e.g. the length of the clip it starts,
+    /// so `follow: after_end` waits for it; without, it ends at once.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub duration_ms: Option<u32>,
     /// `start`: what it starts.

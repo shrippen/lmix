@@ -274,7 +274,7 @@ fn check_cue(cue: &Cue, depth: usize) -> Result<(), ActionError> {
     }
     let own = |field: bool, kind: CueKind| !field || cue.kind == kind;
     if !own(!cue.actions.is_empty(), CueKind::Actions)
-        || !own(cue.duration_ms.is_some(), CueKind::Wait)
+        || !(cue.duration_ms.is_none() || matches!(cue.kind, CueKind::Wait | CueKind::Actions))
         || !own(cue.target.is_some(), CueKind::Start)
         || !own(
             cue.mode.is_some() || !cue.children.is_empty(),

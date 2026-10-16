@@ -391,7 +391,7 @@ ColumnLayout {
                             }
                             QQC2.Label {
                                 Layout.preferredWidth: Kirigami.Units.gridUnit * 8
-                                text: view.kindLabel(row.cue) + (row.cue.kind === "wait" ? " " + view.clock(row.cue.duration_ms) : "")
+                                text: view.kindLabel(row.cue) + (row.cue.duration_ms ? " · " + view.clock(row.cue.duration_ms) : "")
                                 color: KanteStyle.mutedTextColor
                                 elide: Text.ElideRight
                             }

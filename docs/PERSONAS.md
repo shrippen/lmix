@@ -511,5 +511,6 @@ nach S-E.3); B42 Cues anderer Arten in der Oberfläche anlegen (SUI.10,
 S2); B43 Oberfläche für Ausgabeziele und OSC-Abonnenten (behoben am selben
 Abend: „Ziele…“ in der Show-Ansicht); B44 die Show kennt
 ihren Drehbuch-Ordner nicht (SSH.2): nach einem Neustart `lmix-script load`
-von Hand (behoben am selben Abend: „Drehbuch…“, DECISIONS); B45 Aktions-Cue mit Clip: Ende des Clips als Dauer (mit VIS.2/
-Videoton oder einer Option „wartet auf Clip-Ende“).
+von Hand (behoben am selben Abend: „Drehbuch…“, DECISIONS); B45 Aktions-Cue mit Clip: Ende des Clips als Dauer (am selben Abend:
+`duration_ms` an Aktions-Cues, von Hand; die Länge vom Clip selbst kommt mit
+VIS.2).

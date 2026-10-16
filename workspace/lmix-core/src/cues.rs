@@ -520,7 +520,7 @@ impl Runner {
         let pre = ms(cue.pre_wait_ms);
         let total = match cue.kind {
             CueKind::Group => None,
-            CueKind::Wait => Some(pre + ms(cue.duration_ms.unwrap_or(0))),
+            CueKind::Wait | CueKind::Actions => Some(pre + ms(cue.duration_ms.unwrap_or(0))),
             _ => Some(pre),
         };
         self.runs.push(Run {
@@ -567,11 +567,14 @@ impl Runner {
 
         let mut end_at = Some(t);
         match cue.kind {
-            CueKind::Actions => out.push(Out::Actions {
-                list: run.list,
-                cue: cue.id,
-                actions: cue.actions.clone(),
-            }),
+            CueKind::Actions => {
+                out.push(Out::Actions {
+                    list: run.list,
+                    cue: cue.id,
+                    actions: cue.actions.clone(),
+                });
+                end_at = Some(t + ms(cue.duration_ms.unwrap_or(0)));
+            }
             CueKind::Note => {}
             CueKind::Wait => end_at = Some(t + ms(cue.duration_ms.unwrap_or(0))),
             CueKind::Start => self.fire_start(lists, list, &cue, t, out),
@@ -969,6 +972,27 @@ mod tests {
         assert_eq!(late.max, Duration::from_millis(7));
         assert_eq!(late.over_budget, 0);
         assert!(late.steps > 200, "fire and end of each wait");
+    }
+
+    #[test]
+    fn an_actions_cue_can_last_like_its_clip() {
+        let mut clip = cut("Clip");
+        clip.duration_ms = Some(12_000);
+        clip.follow = Follow::AfterEnd;
+        let lists = vec![list(vec![clip, cut("Next")])];
+        let mut runner = Runner::default();
+        let t = Instant::now();
+
+        let out = runner.go(&lists, 0, t, 0).unwrap();
+        assert_eq!(fired(&lists, &out), ["Clip"], "its actions at once");
+        assert_eq!(
+            runner.running(&lists, after(t, 5000))[0].remaining_ms,
+            Some(7000)
+        );
+        assert_eq!(
+            fired(&lists, &runner.tick(&lists, after(t, 12_000))),
+            ["Next"]
+        );
     }
 
     #[test]
