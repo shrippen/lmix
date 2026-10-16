@@ -14,8 +14,8 @@ use lmix_types::input::AUX_BUSES;
 use lmix_types::{
     Action, AutoPlay, AuxBus, ChannelStrip, Cue, DataSourceSpec, Dataset, Effect, FieldBinding,
     InputAudio, InputColor, InputId, InputPress, LayerTransform, LayoutBox, Look, MidiBinding,
-    OutputId, OutputSource, OutputSpec, QuickPlay, SignalLoss, SourceSpec, TitleData, TitlePhase,
-    TitleTrigger, Transition, TransitionSlot, Trigger,
+    OutputId, OutputSource, OutputSpec, OverlayChannel, QuickPlay, SignalLoss, SourceSpec,
+    TitleData, TitlePhase, TitleTrigger, Transition, TransitionSlot, Trigger,
 };
 use serde::{Deserialize, Serialize};
 
@@ -81,6 +81,13 @@ pub struct Show {
     /// What each overlay channel shows, as program is kept too.
     #[serde(default)]
     pub overlays: [Option<InputId>; OVERLAY_CHANNELS as usize],
+    /// Effect, length, auto off and place per channel (OVL.2).
+    #[serde(default, skip_serializing_if = "all_default")]
+    pub overlay_channels: [OverlayChannel; OVERLAY_CHANNELS as usize],
+    /// What each channel gets with the next take (OVL.3), as preview is
+    /// kept too.
+    #[serde(default)]
+    pub overlay_preview: [Option<InputId>; OVERLAY_CHANNELS as usize],
     #[serde(default)]
     pub aux_buses: [AuxBus; AUX_BUSES],
     #[serde(default)]
@@ -206,6 +213,8 @@ impl Default for Show {
             quick_play: QuickPlay::default(),
             outputs: Vec::new(),
             overlays: Default::default(),
+            overlay_channels: Default::default(),
+            overlay_preview: Default::default(),
             aux_buses: Default::default(),
             layouts: Vec::new(),
             shortcuts: Vec::new(),
@@ -216,6 +225,10 @@ impl Default for Show {
             data_sources: Vec::new(),
         }
     }
+}
+
+fn all_default(channels: &[OverlayChannel; OVERLAY_CHANNELS as usize]) -> bool {
+    channels.iter().all(OverlayChannel::is_default)
 }
 
 /// Buttons 1–4: fade, cut, dip to black, wipe.
@@ -395,6 +408,23 @@ mod tests {
                 duration_ms: 1000,
             },
             overlays: [None, Some(id), None, None],
+            overlay_channels: [
+                OverlayChannel::default(),
+                OverlayChannel {
+                    effect: Effect::Cut,
+                    duration_ms: 0,
+                    auto_off_ms: Some(8000),
+                    rect: Some(lmix_types::BoxRect {
+                        x: 0.7,
+                        y: 0.05,
+                        w: 0.25,
+                        h: 0.25,
+                    }),
+                },
+                OverlayChannel::default(),
+                OverlayChannel::default(),
+            ],
+            overlay_preview: [Some(id), None, None, None],
             cue_lists: vec![ShowCueList {
                 id: InputId::new(),
                 name: "Opening".into(),

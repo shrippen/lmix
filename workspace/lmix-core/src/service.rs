@@ -59,6 +59,8 @@ pub struct Service {
     jumped: std::sync::Mutex<HashMap<strom_types::FlowId, Instant>>,
     /// Settings file of the shortcuts for all shows (AUT.3).
     all_shows_file: std::sync::Mutex<Option<PathBuf>>,
+    /// Settings file of the layout templates (LAY.5).
+    layout_templates_file: std::sync::Mutex<Option<PathBuf>>,
     recent: Mutex<Recent>,
     /// Last good frame per picture: a paused clip or still keeps its
     /// picture while the engine's tap has no new frame.
@@ -144,6 +146,7 @@ impl Service {
             autosave,
             jumped: std::sync::Mutex::new(HashMap::new()),
             all_shows_file: std::sync::Mutex::new(None),
+            layout_templates_file: std::sync::Mutex::new(None),
         })
     }
 
@@ -151,32 +154,31 @@ impl Service {
     /// written after each change. A file that cannot be read is left alone
     /// (renamed aside if it is broken) and the list starts empty.
     pub async fn use_shortcuts_file(&self, path: PathBuf) {
-        let shortcuts = match tokio::fs::read(&path).await {
-            Ok(bytes) => match serde_json::from_slice::<Vec<crate::show::ShowShortcut>>(&bytes) {
-                Ok(list) => list,
-                Err(e) => {
-                    let aside = path.with_extension("json.broken");
-                    tracing::warn!(error = %e, file = %path.display(), aside = %aside.display(), "shortcuts for all shows unreadable, set aside");
-                    if let Err(e) = tokio::fs::rename(&path, &aside).await {
-                        // Not set aside: never written over either.
-                        tracing::warn!(error = %e, file = %path.display(), "shortcuts for all shows will not be saved");
-                        let mut sw = self.switcher.lock().await;
-                        sw.set_all_shows_shortcuts(Vec::new());
-                        self.publish(&sw);
-                        return;
-                    }
-                    Vec::new()
-                }
-            },
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Vec::new(),
-            Err(e) => {
-                tracing::warn!(error = %e, file = %path.display(), "shortcuts for all shows not read");
-                Vec::new()
-            }
-        };
+        let read = read_settings(&path, "shortcuts for all shows", |bytes| {
+            serde_json::from_slice::<Vec<crate::show::ShowShortcut>>(bytes)
+                .map_err(|e| e.to_string())
+        })
+        .await;
         let mut sw = self.switcher.lock().await;
-        sw.set_all_shows_shortcuts(shortcuts);
-        *self.all_shows_file.lock().expect("shortcuts file lock") = Some(path);
+        sw.set_all_shows_shortcuts(read.clone().ok().flatten().unwrap_or_default());
+        if read.is_ok() {
+            *self.all_shows_file.lock().expect("shortcuts file lock") = Some(path);
+        }
+        self.publish(&sw);
+    }
+
+    /// Keep layout templates (LAY.5) in `path` (`--layout-templates`), as
+    /// the shortcuts for all shows.
+    pub async fn use_layout_templates_file(&self, path: PathBuf) {
+        let read = read_settings(&path, "layout templates", crate::layouts::parse).await;
+        let mut sw = self.switcher.lock().await;
+        sw.set_layout_templates(read.clone().ok().flatten().unwrap_or_default());
+        if read.is_ok() {
+            *self
+                .layout_templates_file
+                .lock()
+                .expect("templates file lock") = Some(path);
+        }
         self.publish(&sw);
     }
 
@@ -193,19 +195,34 @@ impl Service {
         else {
             return;
         };
-        let written = async {
-            if let Some(dir) = path.parent() {
-                tokio::fs::create_dir_all(dir).await?;
-            }
-            let text = serde_json::to_vec_pretty(sw.all_shows_shortcuts())?;
-            let tmp = path.with_extension("json.tmp");
-            tokio::fs::write(&tmp, text).await?;
-            tokio::fs::rename(&tmp, &path).await
+        let written = match serde_json::to_vec_pretty(sw.all_shows_shortcuts()) {
+            Ok(text) => write_settings(&path, text).await,
+            Err(e) => Err(e.into()),
         };
-        if let Err(e) = written.await {
+        if let Err(e) = written {
             tracing::warn!(error = %e, file = %path.display(), "shortcuts for all shows not saved");
             // Tried again with the next change.
             sw.all_shows_unsaved();
+        }
+    }
+
+    /// The same for the layout templates.
+    async fn write_layout_templates(&self, sw: &mut Switcher) {
+        if !sw.take_layout_templates_changed() {
+            return;
+        }
+        let Some(path) = self
+            .layout_templates_file
+            .lock()
+            .expect("templates file lock")
+            .clone()
+        else {
+            return;
+        };
+        let text = crate::layouts::to_bytes(sw.layout_templates());
+        if let Err(e) = write_settings(&path, text).await {
+            tracing::warn!(error = %e, file = %path.display(), "layout templates not saved");
+            sw.layout_templates_unsaved();
         }
     }
 
@@ -1074,7 +1091,25 @@ impl Service {
             }
             _ => None,
         };
+        // Templates to import are read before the switcher is locked.
+        let mut layout_import = match &action {
+            Action::ImportLayoutTemplates { path } => Some(
+                tokio::fs::read(path)
+                    .await
+                    .map_err(|e| e.to_string())
+                    .and_then(|bytes| crate::layouts::parse(&bytes))
+                    .map_err(|e| ActionError::BadLayout {
+                        reason: format!("{path}: {e}"),
+                    }),
+            ),
+            _ => None,
+        };
         let mut sw = self.switcher.lock().await;
+        if let Origin::AutoOff { channel, since } = origin {
+            if !sw.overlay_still_on(channel, since) {
+                return Ok(sw.state());
+            }
+        }
         let before = sw.on_air();
         let file_action = matches!(
             action,
@@ -1137,6 +1172,21 @@ impl Service {
                 save(&mut sw, path).await?;
                 Vec::new()
             }
+            Action::ImportLayoutTemplates { .. } => {
+                let templates = layout_import.take().expect("read above")?;
+                sw.import_layout_templates(templates)?;
+                Vec::new()
+            }
+            Action::ExportLayoutTemplates { path, templates } => {
+                let templates = sw.layout_templates_named(&templates)?;
+                let file = PathBuf::from(&path);
+                write_settings(&file, crate::layouts::to_bytes(&templates))
+                    .await
+                    .map_err(|e| ActionError::BadLayout {
+                        reason: format!("{path}: {e}"),
+                    })?;
+                Vec::new()
+            }
             Action::RelocateMedia { folder } => {
                 relocate(&mut sw, &folder, relocated.take().unwrap_or_default())?
             }
@@ -1182,11 +1232,15 @@ impl Service {
         self.publish(&sw);
         self.write_autosave(&sw).await;
         self.write_all_shows(&mut sw).await;
+        self.write_layout_templates(&mut sw).await;
         if !later.is_empty() {
             self.run_later(later.to_vec());
         }
+        for (delay_ms, channel, since) in sw.auto_offs(&before) {
+            self.run_auto_off(delay_ms, channel, since);
+        }
         // Triggered actions fire no triggers themselves (no loops).
-        if origin == Origin::Operator && result.is_ok() {
+        if origin != Origin::Trigger && result.is_ok() {
             for (delay_ms, actions) in sw.fired_triggers(&before) {
                 self.run_triggered(delay_ms, actions);
             }
@@ -1217,6 +1271,25 @@ impl Service {
                     tracing::warn!(error = %e, "trigger action failed; the rest is skipped");
                     break;
                 }
+            }
+        });
+    }
+
+    /// Overlay `channel` off after `delay_ms` with its own effect, unless
+    /// it went off or on again since (OVL.2).
+    fn run_auto_off(self: &Arc<Self>, delay_ms: u32, channel: u8, since: u64) {
+        let service = Arc::clone(self);
+        tokio::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_millis(u64::from(delay_ms))).await;
+            let off = Action::OverlayOut {
+                channel,
+                duration_ms: None,
+            };
+            if let Err(e) = service
+                .handle_as(off, Origin::AutoOff { channel, since })
+                .await
+            {
+                tracing::warn!(error = %e, channel, "overlay auto off failed");
             }
         });
     }
@@ -1353,11 +1426,61 @@ impl Service {
     }
 }
 
-/// Who started an action: triggers fire only for the operator's.
+/// A settings file of lmix-core read at start: `Ok(None)` when it is
+/// missing or unreadable (it starts empty and is written later), `Err`
+/// when it is broken and could not be set aside (never written over).
+async fn read_settings<T>(
+    path: &std::path::Path,
+    what: &str,
+    parse: impl Fn(&[u8]) -> Result<T, String>,
+) -> Result<Option<T>, ()> {
+    let bytes = match tokio::fs::read(path).await {
+        Ok(bytes) => bytes,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => {
+            tracing::warn!(error = %e, file = %path.display(), "{what} not read");
+            return Ok(None);
+        }
+    };
+    match parse(&bytes) {
+        Ok(read) => Ok(Some(read)),
+        Err(e) => {
+            let aside = path.with_extension("json.broken");
+            tracing::warn!(error = %e, file = %path.display(), aside = %aside.display(), "{what} unreadable, set aside");
+            match tokio::fs::rename(path, &aside).await {
+                Ok(()) => Ok(None),
+                Err(e) => {
+                    tracing::warn!(error = %e, file = %path.display(), "{what} will not be saved");
+                    Err(())
+                }
+            }
+        }
+    }
+}
+
+/// Write a settings file whole (a temporary file renamed over it).
+async fn write_settings(path: &std::path::Path, bytes: Vec<u8>) -> std::io::Result<()> {
+    if let Some(dir) = path.parent().filter(|d| !d.as_os_str().is_empty()) {
+        tokio::fs::create_dir_all(dir).await?;
+    }
+    let mut tmp = path.as_os_str().to_owned();
+    tmp.push(".tmp");
+    tokio::fs::write(&tmp, bytes).await?;
+    tokio::fs::rename(&tmp, path).await
+}
+
+/// Who started an action: triggers fire only for the operator's and an
+/// overlay's auto off.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Origin {
     Operator,
     Trigger,
+    /// Overlay `channel` goes off by itself (OVL.2), if it still shows
+    /// what went on at `since`.
+    AutoOff {
+        channel: u8,
+        since: u64,
+    },
 }
 
 /// lmix-core's last change of a flow.
@@ -2046,6 +2169,125 @@ mod tests {
         let third = Service::new(4, Arc::new(NullEngine::default()), None);
         third.use_shortcuts_file(file.clone()).await;
         assert!(third.state().await.shortcuts.is_empty());
+        assert!(file.with_extension("json.broken").exists());
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn an_overlay_goes_off_by_itself_unless_it_went_on_again() {
+        use lmix_types::{Effect, InputRef};
+        let service = Service::new(4, Arc::new(NullEngine::default()), None);
+        service.handle(bars()).await.unwrap();
+        service
+            .handle(Action::SetOverlay {
+                channel: 1,
+                effect: Effect::Fade,
+                duration_ms: 500,
+                auto_off_ms: Some(2000),
+                rect: None,
+            })
+            .await
+            .unwrap();
+        let show = || Action::OverlayIn {
+            channel: 1,
+            input: InputRef::Number(1),
+            duration_ms: None,
+        };
+        let shown = || async { service.state().await.overlays[0].is_some() };
+        let wait = |ms| tokio::time::sleep(std::time::Duration::from_millis(ms));
+
+        service.handle(show()).await.unwrap();
+        wait(1500).await;
+        assert!(shown().await);
+        wait(600).await;
+        assert!(!shown().await, "off after 2 s");
+
+        // Off and on again within the time: the new one counts.
+        service.handle(show()).await.unwrap();
+        wait(1000).await;
+        service
+            .handle(Action::OverlayOut {
+                channel: 1,
+                duration_ms: None,
+            })
+            .await
+            .unwrap();
+        service.handle(show()).await.unwrap();
+        wait(1500).await;
+        assert!(shown().await, "the first auto off is over");
+        wait(600).await;
+        assert!(!shown().await);
+    }
+
+    #[tokio::test]
+    async fn layout_templates_are_kept_in_the_settings_and_go_to_files() {
+        use lmix_types::InputRef;
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("config").join("layout-templates.json");
+        let first = Service::new(4, Arc::new(NullEngine::default()), None);
+        first.use_layout_templates_file(file.clone()).await;
+        first.handle(bars()).await.unwrap();
+        first
+            .handle(Action::AddLayout {
+                name: Some("Wide".into()),
+                background: Some(InputRef::Number(1)),
+                boxes: Vec::new(),
+            })
+            .await
+            .unwrap();
+        first
+            .handle(Action::SaveLayoutTemplate {
+                layout: InputRef::Number(1),
+                name: None,
+            })
+            .await
+            .unwrap();
+        let export = dir.path().join("out.json");
+        first
+            .handle(Action::ExportLayoutTemplates {
+                path: export.display().to_string(),
+                templates: vec!["Wide".into()],
+            })
+            .await
+            .unwrap();
+        assert_eq!(
+            crate::layouts::parse(&std::fs::read(&export).unwrap())
+                .unwrap()
+                .len(),
+            1
+        );
+
+        // Another run: still there; the export comes back in.
+        let second = Service::new(4, Arc::new(NullEngine::default()), None);
+        second.use_layout_templates_file(file.clone()).await;
+        assert_eq!(second.state().await.layout_templates[0].name, "Wide");
+        second
+            .handle(Action::RemoveLayoutTemplate {
+                template: "Wide".into(),
+            })
+            .await
+            .unwrap();
+        assert!(crate::layouts::parse(&std::fs::read(&file).unwrap())
+            .unwrap()
+            .is_empty());
+        second
+            .handle(Action::ImportLayoutTemplates {
+                path: export.display().to_string(),
+            })
+            .await
+            .unwrap();
+        assert_eq!(second.state().await.layout_templates.len(), 1);
+        let missing = second
+            .handle(Action::ImportLayoutTemplates {
+                path: dir.path().join("none.json").display().to_string(),
+            })
+            .await;
+        assert!(matches!(missing, Err(ActionError::BadLayout { .. })));
+
+        // A broken file is set aside, not overwritten.
+        std::fs::write(&file, "{").unwrap();
+        let third = Service::new(4, Arc::new(NullEngine::default()), None);
+        third.use_layout_templates_file(file.clone()).await;
+        assert!(third.state().await.layout_templates.is_empty());
         assert!(file.with_extension("json.broken").exists());
     }
 

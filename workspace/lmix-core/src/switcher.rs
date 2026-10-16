@@ -7,18 +7,21 @@
 //!   Action ──► Switcher::apply ──► new state + [Command] ──► engine driver
 //! ```
 
-use lmix_types::action::{aux_index, DYNAMIC_SLOTS, OVERLAY_CHANNELS, TRANSITION_SLOTS};
+use lmix_types::action::{
+    aux_index, AUTO_OFF_MAX_MS, DYNAMIC_SLOTS, OVERLAY_CHANNELS, TRANSITION_SLOTS,
+};
 use lmix_types::automation::{AUTOMATION_ACTIONS, CUES, TRIGGERS, TRIGGER_DELAY_MAX_MS};
 use lmix_types::input::{color_rgb, AUX_BUSES, REF_DYNAMIC, REF_PREVIEW, REF_PROGRAM, VOLUME_MAX};
-use lmix_types::layout::{BORDER_MAX_PX, LAYOUTS, LAYOUT_BOXES};
+use lmix_types::layout::{BORDER_MAX_PX, LAYOUTS, LAYOUT_BOXES, LAYOUT_TEMPLATES};
 use lmix_types::shortcut::SHORTCUT_ACTIONS;
 use lmix_types::state::API_VERSION;
 use lmix_types::{
     Action, ActionError, AutoPlay, AuxBus, BoxCrop, BoxRect, BoxSpec, ChannelStrip, Effect, Ingest,
-    Input, InputColor, InputId, InputPress, InputRef, InputStatus, Layout, LayoutBox, Listen, Look,
-    Output, OutputId, OutputRef, OutputSource, OutputSpec, OutputStatus, QuickPlay, Shortcut,
-    ShortcutSpec, ShowState, SignalLoss, SourceSpec, Stinger, StingerSpec, Transition,
-    TransitionSlot, Transport,
+    Input, InputColor, InputId, InputPress, InputRef, InputStatus, Layout, LayoutBox,
+    LayoutTemplate, Listen, Look, Output, OutputId, OutputRef, OutputSource, OutputSpec,
+    OutputStatus, OverlayChannel, QuickPlay, Shortcut, ShortcutSpec, ShowState, SignalLoss,
+    SourceSpec, Stinger, StingerSpec, TemplateBox, TemplateInput, Transition, TransitionSlot,
+    Transport,
 };
 use lmix_types::{Cue, CueList, MidiKind, MidiMessage, Trigger, TriggerOn};
 use std::collections::HashMap;
@@ -100,6 +103,12 @@ pub enum Command {
         slot: Option<usize>,
         duration_ms: u32,
     },
+    /// Place overlay `channel` (0-based) in `rect`, aspect kept; `None`
+    /// fills the picture (OVL.2).
+    OverlayPlace {
+        channel: usize,
+        rect: Option<BoxRect>,
+    },
     /// Play, pause, restart or step the media player of `slot`.
     Transport { slot: usize, transport: Transport },
     /// Jump within the item the slot's media player plays.
@@ -150,6 +159,8 @@ pub struct OnAir {
     program: Option<InputId>,
     preview: Option<InputId>,
     overlays: Vec<Option<InputId>>,
+    /// When each channel last went on (see `Switcher::overlay_since`).
+    overlay_since: Vec<u64>,
 }
 
 /// Actions that manage or run shortcuts.
@@ -300,6 +311,14 @@ pub struct Switcher {
     missing: HashMap<InputId, Vec<String>>,
     /// The input each overlay channel showed last (OVL.8); runtime only.
     overlay_last: [Option<InputId>; OVERLAY_CHANNELS as usize],
+    /// Counts overlays going on; each channel keeps the count of its last
+    /// time, so an auto off (OVL.2) finds out whether it is still due.
+    overlays_shown: u64,
+    overlay_since: [u64; OVERLAY_CHANNELS as usize],
+    /// Layout templates (LAY.5), from lmix-core's settings.
+    layout_templates: Vec<LayoutTemplate>,
+    /// `layout_templates` changed since the service last saved them.
+    layout_templates_changed: bool,
 }
 
 /// Where a shortcut is kept.
@@ -335,6 +354,10 @@ impl Switcher {
             all_shows_changed: false,
             missing: HashMap::new(),
             overlay_last: Default::default(),
+            overlays_shown: 0,
+            overlay_since: Default::default(),
+            layout_templates: Vec::new(),
+            layout_templates_changed: false,
         }
     }
 
@@ -441,6 +464,27 @@ impl Switcher {
     /// Whether shortcuts for all shows changed since the last call.
     pub fn take_all_shows_changed(&mut self) -> bool {
         std::mem::take(&mut self.all_shows_changed)
+    }
+
+    /// Layout templates, as the settings hold them (LAY.5).
+    pub fn layout_templates(&self) -> &[LayoutTemplate] {
+        &self.layout_templates
+    }
+
+    /// Take layout templates from the settings (start-up).
+    pub fn set_layout_templates(&mut self, templates: Vec<LayoutTemplate>) {
+        self.layout_templates = templates;
+        self.layout_templates_changed = false;
+    }
+
+    /// Mark the layout templates as changed again (a save failed).
+    pub fn layout_templates_unsaved(&mut self) {
+        self.layout_templates_changed = true;
+    }
+
+    /// Whether layout templates changed since the last call.
+    pub fn take_layout_templates_changed(&mut self) -> bool {
+        std::mem::take(&mut self.layout_templates_changed)
     }
 
     pub fn slots(&self) -> usize {
@@ -723,6 +767,19 @@ impl Switcher {
             } => self.set_layout(&layout, background, boxes),
             Action::RemoveLayout { layout } => self.remove_layout(&layout),
             Action::PreviewLayout { layout } => self.preview_layout(&layout),
+            Action::SaveLayoutTemplate { layout, name } => {
+                self.save_layout_template(&layout, name)?;
+                Ok(Vec::new())
+            }
+            Action::LoadLayoutTemplate { template, name } => {
+                self.load_layout_template(&template, name)
+            }
+            Action::RemoveLayoutTemplate { template } => {
+                let index = self.find_layout_template(&template)?;
+                self.layout_templates.remove(index);
+                self.layout_templates_changed = true;
+                Ok(Vec::new())
+            }
             Action::AddShortcut { shortcut } => self.add_shortcut(shortcut),
             Action::SetShortcut { target, shortcut } => self.set_shortcut(&target, shortcut),
             Action::RemoveShortcut { target } => {
@@ -803,6 +860,24 @@ impl Switcher {
                 channel,
                 duration_ms,
             } => self.overlay_last(channel, duration_ms),
+            Action::OverlayPreview { channel, input } => {
+                self.overlay_preview(channel, input.as_ref())
+            }
+            Action::SetOverlay {
+                channel,
+                effect,
+                duration_ms,
+                auto_off_ms,
+                rect,
+            } => self.set_overlay(
+                channel,
+                OverlayChannel {
+                    effect,
+                    duration_ms,
+                    auto_off_ms,
+                    rect,
+                },
+            ),
             // The service reads and writes these files.
             Action::NewShow
             | Action::SaveShow { .. }
@@ -812,7 +887,9 @@ impl Switcher {
             | Action::ImportDatasets { .. }
             | Action::ExportDatasets { .. }
             | Action::ExportPackage { .. }
-            | Action::ImportPackage { .. } => Ok(Vec::new()),
+            | Action::ImportPackage { .. }
+            | Action::ExportLayoutTemplates { .. }
+            | Action::ImportLayoutTemplates { .. } => Ok(Vec::new()),
         }
     }
 
@@ -888,9 +965,20 @@ impl Switcher {
             .collect()
     }
 
-    /// Every overlay channel as the engine should have it, without fade.
+    /// Every overlay channel as the engine should have it, placed, without
+    /// fade.
     fn overlay_commands(&self) -> Vec<Command> {
-        self.show
+        let place = self
+            .show
+            .overlay_channels
+            .iter()
+            .enumerate()
+            .map(|(channel, settings)| Command::OverlayPlace {
+                channel,
+                rect: settings.rect,
+            });
+        let shown = self
+            .show
             .overlays
             .iter()
             .enumerate()
@@ -898,8 +986,8 @@ impl Switcher {
                 channel,
                 slot: self.slot_of(*input),
                 duration_ms: 0,
-            })
-            .collect()
+            });
+        place.chain(shown).collect()
     }
 
     /// Solo state of every input with sound, as the engine should have it.
@@ -998,6 +1086,8 @@ impl Switcher {
             slots: self.slots,
             outputs: self.outputs_state(),
             overlays: self.show.overlays,
+            overlay_channels: self.show.overlay_channels,
+            overlay_preview: self.show.overlay_preview,
             overlay_last: self
                 .overlay_last
                 .map(|id| id.filter(|id| self.slot_of(Some(*id)).is_some())),
@@ -1041,6 +1131,7 @@ impl Switcher {
                 })
                 .collect(),
             midi_tbar: self.show.midi_tbar,
+            layout_templates: self.layout_templates.clone(),
             layouts: self
                 .show
                 .layouts
@@ -1075,7 +1166,13 @@ impl Switcher {
                 {
                     1
                 }
-                id if id == self.show.preview || self.in_layout(self.show.preview, i.id) => 2,
+                // So is one prepared on an overlay with the next take (OVL.3).
+                id if id == self.show.preview
+                    || self.in_layout(self.show.preview, i.id)
+                    || self.show.overlay_preview.contains(&id) =>
+                {
+                    2
+                }
                 _ => 0,
             })
             .collect()
@@ -1187,6 +1284,11 @@ impl Switcher {
             if button.stinger.is_some_and(|s| s.input == removed.id) {
                 button.effect = Effect::Cut;
                 button.stinger = None;
+            }
+        }
+        for armed in &mut self.show.overlay_preview {
+            if *armed == Some(removed.id) {
+                *armed = None;
             }
         }
         for (channel, shown) in self.show.overlays.iter_mut().enumerate() {
@@ -1324,7 +1426,40 @@ impl Switcher {
     }
 
     /// Preview to program; the old program goes to preview (classic swap).
+    /// Overlays prepared for it (OVL.3) go on with the same effect and
+    /// length.
     fn take(&mut self, effect: Effect, duration_ms: u32) -> Result<Vec<Command>, ActionError> {
+        let mut commands = self.swap_buses(effect, duration_ms)?;
+        let fade_ms = if effect == Effect::Cut {
+            0
+        } else {
+            duration_ms
+        };
+        for index in 0..usize::from(OVERLAY_CHANNELS) {
+            let Some(id) = self.show.overlay_preview[index].take() else {
+                continue;
+            };
+            if self.show.overlays[index] == Some(id) {
+                continue;
+            }
+            let Some(slot) = self.slot_of(Some(id)) else {
+                continue;
+            };
+            self.put_overlay(index, id);
+            commands.push(Command::Overlay {
+                channel: index,
+                slot: Some(slot),
+                duration_ms: fade_ms,
+            });
+        }
+        Ok(commands)
+    }
+
+    fn swap_buses(
+        &mut self,
+        effect: Effect,
+        duration_ms: u32,
+    ) -> Result<Vec<Command>, ActionError> {
         self.check_no_stinger()?;
         let to = self
             .bus_of(self.show.preview)
@@ -1622,7 +1757,30 @@ impl Switcher {
             program: self.show.program,
             preview: self.show.preview,
             overlays: self.show.overlays.to_vec(),
+            overlay_since: self.overlay_since.to_vec(),
         }
+    }
+
+    /// Auto offs (OVL.2) of the channels that went on since `before`, as
+    /// (delay, channel 1–4, when it went on).
+    pub fn auto_offs(&self, before: &OnAir) -> Vec<(u32, u8, u64)> {
+        (0..usize::from(OVERLAY_CHANNELS))
+            .filter(|&i| {
+                self.show.overlays[i].is_some()
+                    && before.overlay_since.get(i) != Some(&self.overlay_since[i])
+            })
+            .filter_map(|i| {
+                let ms = self.show.overlay_channels[i].auto_off_ms?;
+                Some((ms, i as u8 + 1, self.overlay_since[i]))
+            })
+            .collect()
+    }
+
+    /// Whether overlay `channel` (1–4) still shows what went on at
+    /// `since`: an auto off is due only then.
+    pub fn overlay_still_on(&self, channel: u8, since: u64) -> bool {
+        overlay_index(channel)
+            .is_ok_and(|i| self.show.overlays[i].is_some() && self.overlay_since[i] == since)
     }
 
     /// Actions of the cue GO (or back) runs; moves the list on.
@@ -2116,6 +2274,188 @@ impl Switcher {
         })
     }
 
+    // ---- Layout templates (LAY.5) ----
+
+    /// A template by name.
+    fn find_layout_template(&self, name: &str) -> Result<usize, ActionError> {
+        self.layout_templates
+            .iter()
+            .position(|t| t.name == name)
+            .ok_or_else(|| ActionError::UnknownLayoutTemplate { name: name.into() })
+    }
+
+    /// An input as a template keeps it.
+    fn template_input(&self, id: InputId) -> Option<TemplateInput> {
+        let index = self.show.inputs.iter().position(|i| i.id == id)?;
+        Some(TemplateInput {
+            number: index as u32 + 1,
+            name: self.show.inputs[index].name.clone(),
+        })
+    }
+
+    /// Keep layout `layout` as template `name` (its own by default).
+    fn save_layout_template(
+        &mut self,
+        layout: &InputRef,
+        name: Option<String>,
+    ) -> Result<(), ActionError> {
+        let entry = &self.show.layouts[self.find_layout(layout)?];
+        let name = name
+            .unwrap_or_else(|| entry.name.clone())
+            .trim()
+            .to_string();
+        let template = LayoutTemplate {
+            name,
+            background: entry.background.and_then(|id| self.template_input(id)),
+            boxes: entry
+                .boxes
+                .iter()
+                .filter_map(|b| {
+                    Some(TemplateBox {
+                        rect: b.rect,
+                        input: self.template_input(b.input)?,
+                        border_px: b.border_px,
+                        crop: b.crop,
+                        locked: b.locked,
+                    })
+                })
+                .collect(),
+        };
+        self.keep_layout_templates(vec![template])
+    }
+
+    /// Add or replace (by name) templates; all or none.
+    fn keep_layout_templates(&mut self, templates: Vec<LayoutTemplate>) -> Result<(), ActionError> {
+        let bad = |reason: String| ActionError::BadLayout { reason };
+        for t in &templates {
+            if t.name.trim().is_empty() {
+                return Err(bad("a template needs a name".into()));
+            }
+            if t.boxes.len() > LAYOUT_BOXES {
+                return Err(bad(format!("at most {LAYOUT_BOXES} boxes")));
+            }
+            if t.boxes
+                .iter()
+                .any(|b| !b.rect.is_valid() || b.border_px > BORDER_MAX_PX || !b.crop.is_valid())
+            {
+                return Err(bad(format!("template {}: a box is out of range", t.name)));
+            }
+        }
+        let mut kept = self.layout_templates.clone();
+        for template in templates {
+            match kept.iter_mut().find(|t| t.name == template.name) {
+                Some(old) => *old = template,
+                None => kept.push(template),
+            }
+        }
+        if kept.len() > LAYOUT_TEMPLATES {
+            return Err(bad(format!("at most {LAYOUT_TEMPLATES} templates")));
+        }
+        self.layout_templates = kept;
+        self.layout_templates_changed = true;
+        Ok(())
+    }
+
+    /// Read templates from a file (LAY.5); ones of the same name are
+    /// replaced.
+    pub fn import_layout_templates(
+        &mut self,
+        templates: Vec<LayoutTemplate>,
+    ) -> Result<(), ActionError> {
+        self.keep_layout_templates(templates)
+    }
+
+    /// Templates by name for a file, all for none.
+    pub fn layout_templates_named(
+        &self,
+        names: &[String],
+    ) -> Result<Vec<LayoutTemplate>, ActionError> {
+        if names.is_empty() {
+            return Ok(self.layout_templates.clone());
+        }
+        names
+            .iter()
+            .map(|n| Ok(self.layout_templates[self.find_layout_template(n)?].clone()))
+            .collect()
+    }
+
+    /// A new layout from a template. Each place takes the input of the
+    /// name it had; one without takes the input at its number, if no other
+    /// place has it, else the next input with a picture left over.
+    fn load_layout_template(
+        &mut self,
+        template: &str,
+        name: Option<String>,
+    ) -> Result<Vec<Command>, ActionError> {
+        let template = self.layout_templates[self.find_layout_template(template)?].clone();
+        let wanted: Vec<&TemplateInput> = template
+            .background
+            .iter()
+            .chain(template.boxes.iter().map(|b| &b.input))
+            .collect();
+        let pictures: Vec<InputId> = self
+            .show
+            .inputs
+            .iter()
+            .filter(|i| i.source.has_video())
+            .map(|i| i.id)
+            .collect();
+        let by_name = |t: &TemplateInput| {
+            self.show
+                .inputs
+                .iter()
+                .find(|i| i.name == t.name && pictures.contains(&i.id))
+                .map(|i| i.id)
+        };
+        let mut chosen: Vec<Option<InputId>> = wanted.iter().map(|t| by_name(t)).collect();
+        for (place, t) in wanted.iter().enumerate() {
+            if chosen[place].is_some() {
+                continue;
+            }
+            let at_number = (t.number as usize)
+                .checked_sub(1)
+                .and_then(|i| self.show.inputs.get(i))
+                .map(|i| i.id)
+                .filter(|id| pictures.contains(id) && !chosen.contains(&Some(*id)));
+            chosen[place] = at_number.or_else(|| {
+                pictures
+                    .iter()
+                    .copied()
+                    .find(|id| !chosen.contains(&Some(*id)))
+            });
+        }
+        let ids = chosen
+            .into_iter()
+            .collect::<Option<Vec<InputId>>>()
+            .ok_or_else(|| ActionError::BadLayout {
+                reason: format!(
+                    "template {} needs {} inputs with a picture",
+                    template.name,
+                    wanted.len()
+                ),
+            })?;
+        let reference = |id: InputId| InputRef::Text(id.to_string());
+        let mut ids = ids.into_iter();
+        let background = template
+            .background
+            .as_ref()
+            .and_then(|_| ids.next())
+            .map(reference);
+        let boxes = template
+            .boxes
+            .iter()
+            .zip(ids)
+            .map(|(b, id)| BoxSpec {
+                rect: b.rect,
+                input: reference(id),
+                border_px: b.border_px,
+                crop: b.crop,
+                locked: b.locked,
+            })
+            .collect();
+        self.add_layout(Some(name.unwrap_or(template.name)), background, boxes)
+    }
+
     /// Slot of an input or composition of a layout.
     fn bus_of(&self, id: Option<InputId>) -> Option<Bus> {
         let id = id?;
@@ -2359,26 +2699,44 @@ impl Switcher {
 
     // ---- Overlays ----
 
+    /// Length of an overlay going on or off: `given` (an action's own
+    /// fade), else the channel's effect (none for a cut).
+    fn overlay_ms(&self, index: usize, given: Option<u32>) -> u32 {
+        given.unwrap_or_else(|| self.show.overlay_channels[index].fade_ms())
+    }
+
+    /// Input `id` on channel `index`, remembered as its last; counted for
+    /// the auto off.
+    fn put_overlay(&mut self, index: usize, id: InputId) {
+        self.show.overlays[index] = Some(id);
+        self.overlay_last[index] = Some(id);
+        self.overlays_shown += 1;
+        self.overlay_since[index] = self.overlays_shown;
+    }
+
     fn overlay_in(
         &mut self,
         channel: u8,
         input: &InputRef,
-        duration_ms: u32,
+        duration_ms: Option<u32>,
     ) -> Result<Vec<Command>, ActionError> {
         let index = overlay_index(channel)?;
         let entry = &self.show.inputs[self.find(input)?];
         no_video_check(entry)?;
         let (id, slot) = (entry.id, entry.slot);
-        self.show.overlays[index] = Some(id);
-        self.overlay_last[index] = Some(id);
+        self.put_overlay(index, id);
         Ok(vec![Command::Overlay {
             channel: index,
             slot: Some(slot),
-            duration_ms,
+            duration_ms: self.overlay_ms(index, duration_ms),
         }])
     }
 
-    fn overlay_out(&mut self, channel: u8, duration_ms: u32) -> Result<Vec<Command>, ActionError> {
+    fn overlay_out(
+        &mut self,
+        channel: u8,
+        duration_ms: Option<u32>,
+    ) -> Result<Vec<Command>, ActionError> {
         let index = overlay_index(channel)?;
         if self.show.overlays[index].take().is_none() {
             return Ok(Vec::new());
@@ -2386,28 +2744,31 @@ impl Switcher {
         Ok(vec![Command::Overlay {
             channel: index,
             slot: None,
-            duration_ms,
+            duration_ms: self.overlay_ms(index, duration_ms),
         }])
     }
 
     /// Every channel that shows something off, each like `overlay_out`.
-    fn overlay_out_all(&mut self, duration_ms: u32) -> Vec<Command> {
-        self.show
-            .overlays
-            .iter_mut()
-            .enumerate()
-            .filter_map(|(channel, input)| {
-                input.take().map(|_| Command::Overlay {
-                    channel,
-                    slot: None,
-                    duration_ms,
-                })
+    fn overlay_out_all(&mut self, duration_ms: Option<u32>) -> Vec<Command> {
+        let shown: Vec<usize> = (0..usize::from(OVERLAY_CHANNELS))
+            .filter(|&i| self.show.overlays[i].take().is_some())
+            .collect();
+        shown
+            .into_iter()
+            .map(|channel| Command::Overlay {
+                channel,
+                slot: None,
+                duration_ms: self.overlay_ms(channel, duration_ms),
             })
             .collect()
     }
 
     /// The input `channel` showed last back on it, if it is empty.
-    fn overlay_last(&mut self, channel: u8, duration_ms: u32) -> Result<Vec<Command>, ActionError> {
+    fn overlay_last(
+        &mut self,
+        channel: u8,
+        duration_ms: Option<u32>,
+    ) -> Result<Vec<Command>, ActionError> {
         let index = overlay_index(channel)?;
         if self.show.overlays[index].is_some() {
             return Ok(Vec::new());
@@ -2416,6 +2777,59 @@ impl Switcher {
             .filter(|id| self.slot_of(Some(*id)).is_some())
             .ok_or(ActionError::NoOverlayLast { channel })?;
         self.overlay_in(channel, &InputRef::Text(last.to_string()), duration_ms)
+    }
+
+    /// Prepare `input` on `channel` for the next take (OVL.3), or clear it.
+    fn overlay_preview(
+        &mut self,
+        channel: u8,
+        input: Option<&InputRef>,
+    ) -> Result<Vec<Command>, ActionError> {
+        let index = overlay_index(channel)?;
+        let id = match input {
+            Some(input) => {
+                let entry = &self.show.inputs[self.find(input)?];
+                no_video_check(entry)?;
+                Some(entry.id)
+            }
+            None => None,
+        };
+        self.show.overlay_preview[index] = id;
+        Ok(Vec::new())
+    }
+
+    /// Effect, length, auto off and place of a channel (OVL.2); a channel
+    /// on air moves to its new place at once.
+    fn set_overlay(
+        &mut self,
+        channel: u8,
+        settings: OverlayChannel,
+    ) -> Result<Vec<Command>, ActionError> {
+        let index = overlay_index(channel)?;
+        let bad = |reason: String| ActionError::BadOverlaySettings { channel, reason };
+        if !matches!(settings.effect, Effect::Cut | Effect::Fade) {
+            return Err(bad("the effect is cut or fade".into()));
+        }
+        if settings
+            .auto_off_ms
+            .is_some_and(|ms| ms == 0 || ms > AUTO_OFF_MAX_MS)
+        {
+            return Err(bad(format!(
+                "auto off is 1–{AUTO_OFF_MAX_MS} ms after it went on"
+            )));
+        }
+        if settings.rect.is_some_and(|r| !r.is_valid()) {
+            return Err(bad("its place lies outside the picture".into()));
+        }
+        let moved = self.show.overlay_channels[index].rect != settings.rect;
+        self.show.overlay_channels[index] = settings;
+        Ok(moved
+            .then_some(Command::OverlayPlace {
+                channel: index,
+                rect: settings.rect,
+            })
+            .into_iter()
+            .collect())
     }
 
     // ---- Automatic playback (INP.11) ----
@@ -2449,10 +2863,25 @@ impl Switcher {
             Action::QuickPlay { .. } if self.show.quick_play.effect != Effect::Cut => {
                 self.show.quick_play.duration_ms
             }
-            Action::OverlayIn { duration_ms, .. }
-            | Action::OverlayOut { duration_ms, .. }
-            | Action::OverlayOutAll { duration_ms }
-            | Action::OverlayLast { duration_ms, .. } => *duration_ms,
+            Action::OverlayIn {
+                channel,
+                duration_ms,
+                ..
+            }
+            | Action::OverlayOut {
+                channel,
+                duration_ms,
+            }
+            | Action::OverlayLast {
+                channel,
+                duration_ms,
+            } => overlay_index(*channel).map_or(0, |i| self.overlay_ms(i, *duration_ms)),
+            // The longest of the channels going off.
+            Action::OverlayOutAll { duration_ms } => (0..usize::from(OVERLAY_CHANNELS))
+                .filter(|&i| self.show.overlays[i].is_some())
+                .map(|i| self.overlay_ms(i, *duration_ms))
+                .max()
+                .unwrap_or(0),
             _ => 0,
         }
     }
@@ -3318,7 +3747,7 @@ mod tests {
         sw.apply(Action::OverlayIn {
             channel,
             input: named(input),
-            duration_ms: 500,
+            duration_ms: Some(500),
         })
         .unwrap()
     }
@@ -3344,7 +3773,7 @@ mod tests {
         let cmds = sw
             .apply(Action::OverlayOut {
                 channel: 2,
-                duration_ms: 0,
+                duration_ms: Some(0),
             })
             .unwrap();
 
@@ -3359,7 +3788,7 @@ mod tests {
         assert_eq!(sw.tally(), [0, 0]);
         let again = sw.apply(Action::OverlayOut {
             channel: 2,
-            duration_ms: 0,
+            duration_ms: Some(0),
         });
         assert_eq!(again, Ok(Vec::new()));
     }
@@ -3376,12 +3805,12 @@ mod tests {
         let bad = sw.apply(Action::OverlayIn {
             channel: 5,
             input: named("A"),
-            duration_ms: 0,
+            duration_ms: Some(0),
         });
         let sound_only = sw.apply(Action::OverlayIn {
             channel: 1,
             input: named("Mic"),
-            duration_ms: 0,
+            duration_ms: Some(0),
         });
 
         assert_eq!(bad, Err(ActionError::BadOverlay { channel: 5, max: 4 }));
@@ -3424,7 +3853,9 @@ mod tests {
         let (a, b) = (sw.state().inputs[0].id, sw.state().inputs[1].id);
 
         let cmds = sw
-            .apply(Action::OverlayOutAll { duration_ms: 300 })
+            .apply(Action::OverlayOutAll {
+                duration_ms: Some(300),
+            })
             .unwrap();
 
         assert_eq!(
@@ -3445,13 +3876,15 @@ mod tests {
         assert_eq!(sw.state().overlays, [None; 4]);
         assert_eq!(sw.state().overlay_last, [Some(a), None, Some(b), None]);
         assert_eq!(
-            sw.apply(Action::OverlayOutAll { duration_ms: 0 }),
+            sw.apply(Action::OverlayOutAll {
+                duration_ms: Some(0)
+            }),
             Ok(Vec::new())
         );
 
         let last = |channel| Action::OverlayLast {
             channel,
-            duration_ms: 0,
+            duration_ms: Some(0),
         };
         assert_eq!(
             sw.apply(last(3)).unwrap(),
@@ -3483,6 +3916,329 @@ mod tests {
         sw.apply(Action::RestoreInput).unwrap();
         assert!(sw.apply(last(1)).is_ok());
         assert_eq!(sw.state().overlays[0], Some(a));
+    }
+
+    fn set_overlay(channel: u8, settings: OverlayChannel) -> Action {
+        Action::SetOverlay {
+            channel,
+            effect: settings.effect,
+            duration_ms: settings.duration_ms,
+            auto_off_ms: settings.auto_off_ms,
+            rect: settings.rect,
+        }
+    }
+
+    #[test]
+    fn overlay_channels_have_their_own_effect_and_place() {
+        let mut sw = two_inputs();
+        let corner = BoxRect {
+            x: 0.7,
+            y: 0.05,
+            w: 0.25,
+            h: 0.25,
+        };
+        let pip = OverlayChannel {
+            effect: Effect::Cut,
+            duration_ms: 0,
+            auto_off_ms: None,
+            rect: Some(corner),
+        };
+
+        assert_eq!(
+            sw.apply(set_overlay(2, pip)),
+            Ok(vec![Command::OverlayPlace {
+                channel: 1,
+                rect: Some(corner)
+            }])
+        );
+        assert_eq!(sw.apply(set_overlay(2, pip)), Ok(Vec::new()), "not moved");
+        assert_eq!(sw.state().overlay_channels[1], pip);
+        let on = |sw: &mut Switcher, channel, duration_ms| {
+            sw.apply(Action::OverlayIn {
+                channel,
+                input: named("B"),
+                duration_ms,
+            })
+            .unwrap()
+        };
+        let faded = |cmds: Vec<Command>| match cmds.as_slice() {
+            [Command::Overlay { duration_ms, .. }] => *duration_ms,
+            other => panic!("{other:?}"),
+        };
+        assert_eq!(faded(on(&mut sw, 2, None)), 0, "the channel cuts");
+        assert_eq!(faded(on(&mut sw, 2, Some(300))), 300, "the action's own");
+        assert_eq!(faded(on(&mut sw, 1, None)), 500, "default: half a second");
+        let off = sw
+            .apply(Action::OverlayOutAll { duration_ms: None })
+            .unwrap();
+        assert!(off.contains(&Command::Overlay {
+            channel: 0,
+            slot: None,
+            duration_ms: 500
+        }));
+        assert!(off.contains(&Command::Overlay {
+            channel: 1,
+            slot: None,
+            duration_ms: 0
+        }));
+        // Placed again when the engine is rebuilt.
+        assert!(sw.restore_commands().contains(&Command::OverlayPlace {
+            channel: 1,
+            rect: Some(corner)
+        }));
+
+        let bad = |sw: &mut Switcher, settings| {
+            matches!(
+                sw.apply(set_overlay(1, settings)),
+                Err(ActionError::BadOverlaySettings { channel: 1, .. })
+            )
+        };
+        let fade = OverlayChannel::default();
+        assert!(bad(
+            &mut sw,
+            OverlayChannel {
+                effect: Effect::WipeLeft,
+                ..fade
+            }
+        ));
+        assert!(bad(
+            &mut sw,
+            OverlayChannel {
+                auto_off_ms: Some(0),
+                ..fade
+            }
+        ));
+        assert!(bad(
+            &mut sw,
+            OverlayChannel {
+                rect: Some(BoxRect { x: 0.9, ..corner }),
+                ..fade
+            }
+        ));
+        assert!(matches!(
+            sw.apply(set_overlay(5, fade)),
+            Err(ActionError::BadOverlay { .. })
+        ));
+    }
+
+    #[test]
+    fn auto_off_is_due_for_the_time_an_overlay_went_on() {
+        let mut sw = two_inputs();
+        sw.apply(set_overlay(
+            2,
+            OverlayChannel {
+                auto_off_ms: Some(5000),
+                ..OverlayChannel::default()
+            },
+        ))
+        .unwrap();
+
+        let before = sw.on_air();
+        overlay_in(&mut sw, 1, "A");
+        assert_eq!(sw.auto_offs(&before), [], "channel 1 stays");
+        let before = sw.on_air();
+        overlay_in(&mut sw, 2, "B");
+        let [(5000, 2, since)] = sw.auto_offs(&before)[..] else {
+            panic!("{:?}", sw.auto_offs(&before));
+        };
+        assert!(sw.overlay_still_on(2, since));
+        assert_eq!(sw.auto_offs(&sw.on_air()), [], "nothing new");
+
+        // Shown again (even the same input): the old auto off is over.
+        let before = sw.on_air();
+        overlay_in(&mut sw, 2, "B");
+        let [(_, 2, again)] = sw.auto_offs(&before)[..] else {
+            panic!("shown again");
+        };
+        assert!(!sw.overlay_still_on(2, since));
+        assert!(sw.overlay_still_on(2, again));
+        sw.apply(Action::OverlayOut {
+            channel: 2,
+            duration_ms: None,
+        })
+        .unwrap();
+        assert!(!sw.overlay_still_on(2, again), "went off before");
+        assert!(!sw.overlay_still_on(9, again));
+    }
+
+    #[test]
+    fn overlay_prepared_in_preview_goes_on_with_the_next_take() {
+        let mut sw = two_inputs();
+        add(&mut sw, "Logo");
+        let id = |sw: &Switcher, n: usize| sw.state().inputs[n].id;
+        let prepare = |sw: &mut Switcher, channel, input: Option<&str>| {
+            sw.apply(Action::OverlayPreview {
+                channel,
+                input: input.map(named),
+            })
+        };
+        sw.apply(Action::PreviewInput { input: named("A") })
+            .unwrap();
+        assert_eq!(prepare(&mut sw, 1, Some("Logo")), Ok(Vec::new()));
+        assert_eq!(sw.state().overlay_preview[0], Some(id(&sw, 2)));
+        assert_eq!(sw.tally(), [2, 0, 2], "the logo has preview tally");
+
+        let cmds = sw
+            .apply(Action::Transition {
+                slot: TransitionSlot(1),
+            })
+            .unwrap();
+        assert_eq!(
+            cmds.last(),
+            Some(&Command::Overlay {
+                channel: 0,
+                slot: Some(2),
+                duration_ms: 500
+            }),
+            "with the take's fade"
+        );
+        let state = sw.state();
+        assert_eq!(state.overlays[0], Some(id(&sw, 2)));
+        assert_eq!(state.overlay_preview, [None; 4], "used up");
+        assert_eq!(state.overlay_last[0], Some(id(&sw, 2)));
+        assert_eq!(sw.tally(), [1, 0, 1]);
+
+        // With a cut at once; the T-bar at its end is a cut.
+        sw.apply(Action::OverlayOut {
+            channel: 1,
+            duration_ms: Some(0),
+        })
+        .unwrap();
+        sw.apply(Action::PreviewInput { input: named("B") })
+            .unwrap();
+        prepare(&mut sw, 3, Some("Logo")).unwrap();
+        let cmds = sw.apply(Action::TBar { position: 1.0 }).unwrap();
+        assert!(cmds.contains(&Command::Overlay {
+            channel: 2,
+            slot: Some(2),
+            duration_ms: 0
+        }));
+        // Already on the channel: nothing more.
+        prepare(&mut sw, 3, Some("Logo")).unwrap();
+        let cmds = sw.apply(Action::Cut).unwrap();
+        assert!(!cmds.iter().any(|c| matches!(c, Command::Overlay { .. })));
+        assert_eq!(sw.state().overlay_preview[2], None);
+
+        // Cleared, by hand or with the input; cut direct takes none along.
+        prepare(&mut sw, 2, Some("Logo")).unwrap();
+        prepare(&mut sw, 2, None).unwrap();
+        assert_eq!(sw.state().overlay_preview, [None; 4]);
+        prepare(&mut sw, 2, Some("A")).unwrap();
+        sw.apply(Action::CutDirect { input: named("B") }).unwrap();
+        assert_eq!(sw.state().overlays[1], None);
+        sw.apply(Action::RemoveInput { input: named("A") }).unwrap();
+        assert_eq!(sw.state().overlay_preview, [None; 4]);
+        assert!(matches!(
+            prepare(&mut sw, 0, Some("B")),
+            Err(ActionError::BadOverlay { .. })
+        ));
+    }
+
+    #[test]
+    fn layout_templates_keep_places_and_find_their_inputs_again() {
+        let mut sw = two_inputs();
+        add(&mut sw, "C");
+        let rect = BoxRect {
+            x: 0.5,
+            y: 0.0,
+            w: 0.5,
+            h: 0.5,
+        };
+        sw.apply(Action::AddLayout {
+            name: Some("Interview".into()),
+            background: Some(named("A")),
+            boxes: vec![BoxSpec {
+                rect,
+                input: named("C"),
+                border_px: 4,
+                crop: BoxCrop::default(),
+                locked: true,
+            }],
+        })
+        .unwrap();
+        sw.apply(Action::SaveLayoutTemplate {
+            layout: InputRef::Number(1),
+            name: None,
+        })
+        .unwrap();
+        assert!(sw.take_layout_templates_changed());
+        let template = &sw.state().layout_templates[0];
+        assert_eq!(template.name, "Interview");
+        assert_eq!(
+            template.boxes[0].input,
+            TemplateInput {
+                number: 3,
+                name: "C".into()
+            }
+        );
+
+        // Another show: "C" by its name, "A" (gone) at its number, which
+        // is free.
+        sw.replace(Show::default(), None);
+        assert_eq!(sw.state().layout_templates.len(), 1, "kept apart");
+        add(&mut sw, "C");
+        add(&mut sw, "D");
+        let cmds = sw
+            .apply(Action::LoadLayoutTemplate {
+                template: "Interview".into(),
+                name: None,
+            })
+            .unwrap();
+        assert!(matches!(cmds.as_slice(), [Command::SetLayout { .. }]));
+        let state = sw.state();
+        let layout = &state.layouts[0];
+        assert_eq!(layout.name, "Interview");
+        assert_eq!(layout.boxes[0].input, state.inputs[0].id, "C by name");
+        assert_eq!(layout.boxes[0].rect, rect);
+        assert!(layout.boxes[0].locked);
+        assert_eq!(
+            layout.background,
+            Some(state.inputs[1].id),
+            "number 1 is C's: the next one"
+        );
+
+        // Same name replaces; export picks by name; unknown ones fail.
+        sw.apply(Action::SaveLayoutTemplate {
+            layout: InputRef::Number(1),
+            name: Some("Interview".into()),
+        })
+        .unwrap();
+        assert_eq!(sw.layout_templates().len(), 1);
+        assert_eq!(sw.layout_templates_named(&[]).unwrap().len(), 1);
+        assert!(matches!(
+            sw.layout_templates_named(&["Nope".into()]),
+            Err(ActionError::UnknownLayoutTemplate { .. })
+        ));
+        sw.apply(Action::RemoveInput { input: named("D") }).unwrap();
+        assert!(
+            matches!(
+                sw.apply(Action::LoadLayoutTemplate {
+                    template: "Interview".into(),
+                    name: Some("Two".into()),
+                }),
+                Err(ActionError::BadLayout { .. })
+            ),
+            "two places, one input"
+        );
+        sw.apply(Action::RemoveLayoutTemplate {
+            template: "Interview".into(),
+        })
+        .unwrap();
+        assert!(sw.state().layout_templates.is_empty());
+        assert!(matches!(
+            sw.apply(Action::RemoveLayoutTemplate {
+                template: "Interview".into(),
+            }),
+            Err(ActionError::UnknownLayoutTemplate { .. })
+        ));
+        assert!(matches!(
+            sw.import_layout_templates(vec![LayoutTemplate {
+                name: " ".into(),
+                background: None,
+                boxes: Vec::new(),
+            }]),
+            Err(ActionError::BadLayout { .. })
+        ));
     }
 
     /// A, B (patterns), Clip 1 and Clip 2 (files) with `auto`.
@@ -3647,7 +4403,7 @@ mod tests {
         let cmds = sw
             .apply(Action::OverlayOut {
                 channel: 1,
-                duration_ms: 200,
+                duration_ms: Some(200),
             })
             .unwrap();
         assert_eq!(
@@ -3656,7 +4412,11 @@ mod tests {
         );
         let cmds = overlay_in(&mut sw, 2, "Clip 2");
         assert_eq!(cmds[0], transport(3, Transport::Play));
-        let cmds = sw.apply(Action::OverlayOutAll { duration_ms: 0 }).unwrap();
+        let cmds = sw
+            .apply(Action::OverlayOutAll {
+                duration_ms: Some(0),
+            })
+            .unwrap();
         assert_eq!(cmds.last(), Some(&transport(3, Transport::Pause)));
 
         // A box of a layout on program.

@@ -7,6 +7,7 @@
 //! | `preview_input`, `cut_direct`, `overlay_in`, `quick_play`, `click_input`, `go_input` (an input) | program, preview or off |
 //! | `overlay_out`, `overlay_out_all` | program colour while the channel (any channel) shows something |
 //! | `overlay_last` | program colour while the channel shows something, preview colour while it can show its last input again |
+//! | `overlay_preview` (an input) | program colour while the channel shows the input, preview colour while it is prepared there |
 //! | `fade_to_black` | program colour while faded |
 //! | `start_output`, `stop_output` | program colour while the output runs |
 //! | `set_lock` | program colour while locked |
@@ -142,6 +143,26 @@ pub fn lamps(state: &ShowState, values: Lamps) -> HashMap<MidiBinding, u8> {
                         (true, _) => values.program,
                         (false, Some(_)) => values.preview,
                         (false, None) => values.off,
+                    }
+                }
+                Action::OverlayPreview {
+                    channel,
+                    input: Some(input),
+                } => {
+                    let at = |list: &[Option<InputId>]| {
+                        let id = input_of(state, input);
+                        id.is_some()
+                            && usize::from(*channel)
+                                .checked_sub(1)
+                                .and_then(|i| list.get(i).copied())
+                                == Some(id)
+                    };
+                    if at(&state.overlays) {
+                        values.program
+                    } else if at(&state.overlay_preview) {
+                        values.preview
+                    } else {
+                        values.off
                     }
                 }
                 Action::FadeToBlack { .. } => on(state.fade_to_black),
@@ -404,13 +425,18 @@ mod tests {
             name: Some("A".into()),
         })
         .unwrap();
-        sw.apply(key(1, vec![Action::OverlayOutAll { duration_ms: 0 }]))
-            .unwrap();
+        sw.apply(key(
+            1,
+            vec![Action::OverlayOutAll {
+                duration_ms: Some(0),
+            }],
+        ))
+        .unwrap();
         sw.apply(key(
             2,
             vec![Action::OverlayLast {
                 channel: 2,
-                duration_ms: 0,
+                duration_ms: Some(0),
             }],
         ))
         .unwrap();
@@ -418,7 +444,7 @@ mod tests {
             3,
             vec![Action::OverlayOut {
                 channel: 2,
-                duration_ms: 0,
+                duration_ms: Some(0),
             }],
         ))
         .unwrap();
@@ -436,12 +462,40 @@ mod tests {
         sw.apply(Action::OverlayIn {
             channel: 2,
             input: InputRef::Number(1),
-            duration_ms: 0,
+            duration_ms: Some(0),
         })
         .unwrap();
         assert_eq!(lit(&sw), (127, 127, 127));
 
-        sw.apply(Action::OverlayOutAll { duration_ms: 0 }).unwrap();
+        sw.apply(Action::OverlayOutAll {
+            duration_ms: Some(0),
+        })
+        .unwrap();
         assert_eq!(lit(&sw), (0, 64, 0), "channel 2 can show A again");
+
+        sw.apply(key(
+            4,
+            vec![Action::OverlayPreview {
+                channel: 1,
+                input: Some(InputRef::Number(1)),
+            }],
+        ))
+        .unwrap();
+        let prepared =
+            |sw: &crate::switcher::Switcher| lamps(&sw.state(), Lamps::default())[&note(4)];
+        assert_eq!(prepared(&sw), 0);
+        sw.apply(Action::OverlayPreview {
+            channel: 1,
+            input: Some(InputRef::Number(1)),
+        })
+        .unwrap();
+        assert_eq!(prepared(&sw), 64, "prepared for the next take");
+        sw.apply(Action::OverlayIn {
+            channel: 1,
+            input: InputRef::Number(1),
+            duration_ms: None,
+        })
+        .unwrap();
+        assert_eq!(prepared(&sw), 127, "on the channel");
     }
 }

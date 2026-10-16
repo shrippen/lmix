@@ -23,6 +23,7 @@ mod clips;
 mod datasource;
 mod engine;
 mod feedback;
+mod layouts;
 mod metrics;
 mod midi;
 mod osc;
@@ -116,8 +117,12 @@ struct Args {
     osc: Option<SocketAddr>,
 
     /// Shortcuts for all shows (AUT.3), kept apart from show files.
-    #[arg(long, env = "LMIX_SHORTCUTS", default_value_os_t = default_shortcuts())]
+    #[arg(long, env = "LMIX_SHORTCUTS", default_value_os_t = config_file("shortcuts.json"))]
     shortcuts: PathBuf,
+
+    /// Layout templates (LAY.5), kept apart from show files.
+    #[arg(long, env = "LMIX_LAYOUT_TEMPLATES", default_value_os_t = config_file("layout-templates.json"))]
+    layout_templates: PathBuf,
 
     /// Password for access from the network (API.7); programs on this
     /// machine need none. HTTP Basic or Bearer; text protocol `AUTH`.
@@ -188,13 +193,14 @@ fn default_autosave() -> PathBuf {
     data_home().join("lmix").join("autosave.lmix")
 }
 
-fn default_shortcuts() -> PathBuf {
+/// `$XDG_CONFIG_HOME/lmix/<name>`, else `~/.config/…`.
+fn config_file(name: &str) -> PathBuf {
     std::env::var_os("XDG_CONFIG_HOME")
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))
         .unwrap_or_else(|| PathBuf::from("."))
         .join("lmix")
-        .join("shortcuts.json")
+        .join(name)
 }
 
 fn data_home() -> PathBuf {
@@ -238,6 +244,9 @@ async fn main() -> anyhow::Result<()> {
     // Before the show: its titles name templates from the folder.
     service.use_templates(args.templates.clone()).await;
     service.use_shortcuts_file(args.shortcuts.clone()).await;
+    service
+        .use_layout_templates_file(args.layout_templates.clone())
+        .await;
     let opened = match args.show {
         Some(path) => service
             .handle(Action::OpenShow { path })

@@ -16,8 +16,8 @@
 
 use async_trait::async_trait;
 use lmix_types::{
-    ChannelStrip, Device, DeviceKind, Effect, Listen, Look, OutputId, OutputStats, SignalLoss,
-    Transport,
+    BoxRect, ChannelStrip, Device, DeviceKind, Effect, Listen, Look, OutputId, OutputStats,
+    SignalLoss, Transport,
 };
 use reqwest::StatusCode;
 use serde::Serialize;
@@ -459,6 +459,53 @@ impl StromEngine {
             .await
     }
 
+    /// Overlay `channel` in `rect` of the program picture (OVL.2), or the
+    /// whole picture: the geometry of its DSK pad. strom sets it only when
+    /// it builds the mixer and keeps it through takes; the pad keeps the
+    /// input's aspect inside it.
+    async fn overlay_place(
+        &self,
+        channel: usize,
+        rect: Option<BoxRect>,
+    ) -> Result<(), EngineError> {
+        let (w, h) = flows::PROGRAM_SIZE;
+        let (w, h) = (f64::from(w), f64::from(h));
+        let rect = rect.unwrap_or(BoxRect {
+            x: 0.0,
+            y: 0.0,
+            w: 1.0,
+            h: 1.0,
+        });
+        let px = |v: f32, size: f64| (f64::from(v) * size).round() as i64;
+        let path = format!(
+            "/flows/{}/elements/{MIXER_BLOCK}:mixer/pads/{}/properties",
+            flows::mixer_id(),
+            flows::dsk_pad(
+                self.black.load(Ordering::Relaxed),
+                flows::overlay_layer(channel)
+            )
+        );
+        let properties = [
+            ("xpos", px(rect.x, w)),
+            ("ypos", px(rect.y, h)),
+            ("width", px(rect.w, w).max(1)),
+            ("height", px(rect.h, h).max(1)),
+        ];
+        for (name, value) in properties {
+            let body =
+                serde_json::json!({ "property_name": name, "value": PropertyValue::Int(value) });
+            let resp = self
+                .http
+                .patch(self.url(&path))
+                .json(&body)
+                .send()
+                .await
+                .map_err(net)?;
+            check(resp).await?;
+        }
+        Ok(())
+    }
+
     /// Show `slot` on DSK `layer` (0-based) or take the layer off.
     async fn dsk_layer(
         &self,
@@ -731,6 +778,7 @@ impl Engine for StromEngine {
                 slot,
                 duration_ms,
             } => self.overlay(*channel, *slot, *duration_ms).await,
+            Command::OverlayPlace { channel, rect } => self.overlay_place(*channel, *rect).await,
             Command::TBar { slot, position } => self.t_bar(*slot, *position).await,
             Command::SetStrip { slot, strip } => self.set_strip(*slot, strip).await,
             Command::Stinger { slot, on } => self.stinger(*slot, *on).await,

@@ -21,7 +21,7 @@ use crate::input::{
     AutoPlay, ChannelStrip, InputColor, InputPress, InputRef, Listen, Look, SignalLoss, SourceSpec,
     Transport, AUX_BUSES,
 };
-use crate::layout::BoxSpec;
+use crate::layout::{BoxRect, BoxSpec};
 use crate::output::{OutputRef, OutputSource, OutputSpec};
 use crate::shortcut::ShortcutSpec;
 
@@ -56,6 +56,8 @@ pub const TRANSITION_SLOTS: u8 = 4;
 pub const OVERLAY_CHANNELS: u8 = 4;
 /// Default fade of an overlay in or out.
 pub const DEFAULT_OVERLAY_MS: u32 = 500;
+/// Longest time an overlay stays on before it goes off by itself (OVL.2).
+pub const AUTO_OFF_MAX_MS: u32 = 3_600_000;
 
 /// Transition effects the engine can render (SWI.4, subset so far).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -152,6 +154,8 @@ pub const ACTION_GROUPS: &[(&str, &[&str])] = &[
             "overlay_out",
             "overlay_out_all",
             "overlay_last",
+            "overlay_preview",
+            "set_overlay",
         ],
     ),
     (
@@ -161,6 +165,11 @@ pub const ACTION_GROUPS: &[(&str, &[&str])] = &[
             "set_layout",
             "remove_layout",
             "preview_layout",
+            "save_layout_template",
+            "load_layout_template",
+            "remove_layout_template",
+            "export_layout_templates",
+            "import_layout_templates",
         ],
     ),
     (
@@ -396,6 +405,30 @@ pub enum Action {
     RemoveLayout { layout: InputRef },
     /// Put a layout into preview.
     PreviewLayout { layout: InputRef },
+    /// Keep a layout as a template for every show (LAY.5), under `name`
+    /// (the layout's by default); replaces a template of that name.
+    SaveLayoutTemplate {
+        layout: InputRef,
+        #[serde(default)]
+        name: Option<String>,
+    },
+    /// Add a layout from a template: each box takes the input of the
+    /// name it had, else the one at its number.
+    LoadLayoutTemplate {
+        template: String,
+        #[serde(default)]
+        name: Option<String>,
+    },
+    /// Remove a template.
+    RemoveLayoutTemplate { template: String },
+    /// Write templates (by name, all if empty) to a file.
+    ExportLayoutTemplates {
+        path: String,
+        #[serde(default)]
+        templates: Vec<String>,
+    },
+    /// Read templates from a file; ones of the same name are replaced.
+    ImportLayoutTemplates { path: String },
 
     // ---- Automation (AUT.7, AUT.14) ----
     /// Replace an input's triggers.
@@ -490,30 +523,52 @@ pub enum Action {
 
     // ---- Overlays (OVL) ----
     /// Show `input` on overlay `channel` (1–4), above program and its
-    /// transitions; replaces what the channel showed.
+    /// transitions; replaces what the channel showed. Without
+    /// `duration_ms` with the channel's effect, with it a fade of that
+    /// length (0 cuts); the same for the other overlay actions.
     OverlayIn {
         channel: u8,
         input: InputRef,
-        #[serde(default = "default_overlay_ms")]
-        duration_ms: u32,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        duration_ms: Option<u32>,
     },
     /// Take overlay `channel` off.
     OverlayOut {
         channel: u8,
-        #[serde(default = "default_overlay_ms")]
-        duration_ms: u32,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        duration_ms: Option<u32>,
     },
     /// Take every overlay channel off (OVL.8).
     OverlayOutAll {
-        #[serde(default = "default_overlay_ms")]
-        duration_ms: u32,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        duration_ms: Option<u32>,
     },
     /// Show the input overlay `channel` showed last again (OVL.8); does
     /// nothing while the channel shows something.
     OverlayLast {
         channel: u8,
-        #[serde(default = "default_overlay_ms")]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        duration_ms: Option<u32>,
+    },
+    /// Prepare `input` on overlay `channel` (OVL.3): it goes on with the
+    /// next take of preview (cut, transition, T-bar, quick play), with
+    /// the take's effect and length; `null` clears it.
+    OverlayPreview {
+        channel: u8,
+        #[serde(default)]
+        input: Option<InputRef>,
+    },
+    /// Settings of overlay `channel` (OVL.2): effect (cut or fade) and
+    /// length, auto off after `auto_off_ms`, picture in picture in
+    /// `rect` (full screen without).
+    SetOverlay {
+        channel: u8,
+        effect: Effect,
         duration_ms: u32,
+        #[serde(default)]
+        auto_off_ms: Option<u32>,
+        #[serde(default)]
+        rect: Option<BoxRect>,
     },
 
     // ---- Dynamic inputs and values (AUT.5) ----
@@ -771,10 +826,6 @@ fn default_ftb_ms() -> u32 {
     DEFAULT_FTB_MS
 }
 
-fn default_overlay_ms() -> u32 {
-    DEFAULT_OVERLAY_MS
-}
-
 fn first_layer() -> u32 {
     1
 }
@@ -844,6 +895,10 @@ pub enum ActionError {
     BadOverlay { channel: u8, max: u8 },
     #[error("overlay {channel} has no input to show again")]
     NoOverlayLast { channel: u8 },
+    #[error("overlay {channel}: {reason}")]
+    BadOverlaySettings { channel: u8, reason: String },
+    #[error("no layout template {name}")]
+    UnknownLayoutTemplate { name: String },
     #[error("T-bar position is outside 0–1")]
     BadTBar,
     #[error("aux bus {bus} does not exist (1–{max})")]
