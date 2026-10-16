@@ -2040,3 +2040,24 @@ durchsichtig. Beides lag am Test, nicht an lmix.
 Builds ließen strom von 900 auf 1082 MB springen (Warteschlangen unter
 CPU-Last), der Speicherwert wäre wertlos gewesen. Neuer Lauf ohne
 Nebenlast (Ergebnis im Eintrag „strom-Fixes“).
+
+## 2026-10-16 — Show-Modus als zweiter Bedienmodus
+
+**Kontext**: lmix soll neben dem Bildmischer (vMix-Vorbild) auch Abläufe
+nach Drehbuch fahren können (QLab-Vorbild): Theater, Ausstellungen,
+Spieltisch. Technisch teilen beide Engine, Inputs, Ausgänge, Ton,
+Aktionskatalog, Auslöser, APIs und Show-Datei; verschieden ist das
+Bedienkonzept (im Moment entscheiden vs. vorbereitete Cue-Folge mit GO).
+
+**Optionen**: (a) eigenes Programm, z. B. auf Linux Show Player (GPL,
+Python) aufbauend; (b) Plugin neben lmix; (c) zweiter Modus über
+demselben `lmix-core`.
+
+**Entscheidung** (User): (c). Eigenes Lastenheft `LASTENHEFT-SHOW.md`
+mit Quellenzuordnung `LASTENHEFT-SHOW-QUELLEN.md` (Clean Room gegen das
+QLab-5-Handbuch), Meilensteine S1–S3, Personas P8–P10. Licht in S1 nur
+über Home Assistant, eigene Lichtsteuerung ab S3 (User). (a) scheidet
+auch an der Lizenz (GPL, `claude.md` 6).
+
+**Offen**: S-E.1–12 in `LASTENHEFT-SHOW.md` §6, vor Beginn von S1 zu
+entscheiden. `claude.md` beschreibt lmix weiter nur als Bildmischer.
