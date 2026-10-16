@@ -141,8 +141,8 @@ kann es, Console nicht.
 | INP.5 | Virtueller Input: Kopie, die Bild der Quelle teilt, eigene Einstellungen hat | S | – |
 | INP.6 | Input schließen mit Rückgängig | S | – |
 | INP.7 | Kategorien: 6 feste Farben + 16 eigene, Beschriftung, Filter in der Input-Leiste, Suchkategorie nach Namen | S | – |
-| INP.8 | Klick-Aktion je Input wählbar (Standard: in Preview) | S | – |
-| INP.9 | GO-Aktion je Input wählbar (Standard: Schnellstart, §3.6) | S | – |
+| INP.8 | Klick-Aktion je Input wählbar (Standard: in Preview) | S | ✅ |
+| INP.9 | GO-Aktion je Input wählbar (Standard: Schnellstart, §3.5) | S | ✅ |
 | INP.10 | Wiedergabe-Inputs: Play, Pause, Neustart, Positionieren, Schleife, Geschwindigkeit, In-/Out-Marke | M | ◐ (Playlist-Block E) |
 | INP.11 | Automatik je Input: bei Take abspielen / von vorn starten / nach Wegschalten pausieren | S | ✅ |
 | INP.12 | Live-Pause: Live-Quelle einfrieren, ohne Aufnahme/Wiederholung/Ton anzuhalten | S | – |
@@ -228,7 +228,7 @@ kann es, Console nicht.
 | SWI.5 | T-Bar: manueller Fortschritt 0–100 %, per Maus, MIDI-Fader, Aktion | M | – (ROADMAP 4.3) |
 | SWI.6 | Verschmelzen: Ebenen, die in PVW und PGM vorkommen, wandern an ihre neue Position; Rest blendet | S | – |
 | SWI.7 | Stinger 1–8: Animations-Input, Dauer, Schnittpunkt, Zusatzeffekt, unter oder über Overlays; Dauer/Schnittpunkt aus Titelanimation übernehmbar | S | – (ROADMAP 4.2) |
-| SWI.8 | Schnellstart: Take mit eigenem Effekt (Standard ½ s Blende) und Start der Wiedergabe; optional per Klick ins Preview-Fenster | S | – |
+| SWI.8 | Schnellstart: Take mit eigenem Effekt (Standard ½ s Blende) und Start der Wiedergabe; optional per Klick ins Preview-Fenster | S | ✅ (Doppelklick ins Preview-Fenster) |
 | SWI.9 | FTB: blendet Senken auf Schwarz (optional mit Ton), Program-Anzeige bleibt bedienbar | M | ✅ |
 | SWI.10 | Mix-Inputs (E.11: Umfang wie vMix): bis 15 zusätzliche Mischer mit PVW/PGM, Cut/Übergang, Overlays und Stinger je Mix wählbar; "nur Ausgang"-Ansicht; Mix in Mix ohne Verzögerung bei aufsteigender Reihenfolge | S | – |
 | SWI.11 | Alle Wiedergabe-Inputs halten während Übergang ihr Timing (keine Ruckler, keine Ton-Lücke) | M | ✅ |
@@ -392,7 +392,7 @@ Funktionsreferenz, kein Code (MIT, `claude.md` Entscheidung 6).
 | AUT.3 | Mehrere Aktionen je Taste in fester Reihenfolge; global (Einstellungen) oder lokal (Show), lokal gewinnt | S | ✅ |
 | AUT.4 | Vorlagen für Belegungen ex-/importieren | K | – |
 | AUT.5 | Dynamische Inputs/Werte 1–4: Taste A wählt Input/Wert, Taste B wirkt darauf | K | ✅ |
-| AUT.6 | Rückmeldungen an Controller: Lampen, Farben, Motorfader nach Zustand (Input auf PGM/PVW/spielt, Pegel, Mute, Solo, Bus, FTB, Aufnahme, Stream, …) | S | ◐ (MIDI-Lampen: PGM/PVW, FTB, Ausgang, Sperre; ohne Pegel, Motorfader) |
+| AUT.6 | Rückmeldungen an Controller: Lampen, Farben, Motorfader nach Zustand (Input auf PGM/PVW/spielt, Pegel, Mute, Solo, Bus, FTB, Aufnahme, Stream, …) | S | ◐ (MIDI-Lampen: PGM/PVW, FTB, Ausgang, Sperre, Overlays; ohne Pegel, Motorfader) |
 | AUT.7 | Auslöser je Input: beim Ein-/Ausblenden (Take, Overlay), Ende, Wiedergabezeit/Restzeit, Countdown 0, Gast verbunden/getrennt, Wiederholung fertig → Aktionsliste mit Verzögerung (max. 30 s je Schritt) | S | ◐ (PGM/PVW/Overlay, Clip-Ende mit Vorlauf, Wiedergabezeit, Titelmeldungen; ohne Gast, Wiederholung) |
 | AUT.8 | Ablaufliste: Inputs mit Startposition, Dauer, Übergang, Anzeigeart (Vollbild/Overlay); Start, Stopp, vor/zurück, Schleife, manuell; mehrere benannte Listen in der Show | S | – |
 | AUT.9 | Skripte: benannte Skripte (global/lokal), Start/Stopp per Aktion; Sprache JavaScript (E.6) mit Zugriff auf Aktionen, Zustand, Warten, Netzwerk; einfache Zeilen-Syntax (Aktion + Pause) | K | – |

@@ -391,6 +391,7 @@ Stand (2026-10-12, ohne GPU; DECISIONS „M9 Anfang“):
 | Show-Paket mit Medien, Daten, Vorlagen | ✅ SHW.6 |
 | Layout-Editor: Ziehen, Fangen, Mehrfachauswahl, Sperre, Rückgängig | ✅ LAY.6 |
 | Clips spielen/pausieren auf Sendung von selbst; alle Overlays aus, letzter Input je Kanal | ✅ INP.11, OVL.8 |
+| Schnellstart mit eigenem Effekt; Klick- und GO-Aktion je Input | ✅ SWI.8, INP.8, INP.9 |
 | Verschmelzen, Mix-Inputs, Effektkette, Karten-Ausgang, Key+Fill | offen (Engine/Hardware) |
 
 ### Später — Wiederholung, Gäste
