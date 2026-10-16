@@ -1,0 +1,93 @@
+name: tests
+
+# Tests without an engine: cargo test of lmix-types, lmix-core and
+# console-qt; lmix-core headless (text protocol, OSC, MIDI, metrics);
+# titles and browser pages in Chromium (Playwright). The engine checks
+# run in vm-check.yml.
+#
+# Stays local: scripts/test-console-qt.sh (Console on Xvfb with a real
+# strom, slow in the VM), scripts/test-global-keys.sh (D-Bus session),
+# scripts/test-looks-gl.sh (GPU).
+on:
+  push:
+    branches: [main]
+    paths-ignore: ["docs/**", "*.md"]
+  pull_request:
+    paths-ignore: ["docs/**", "*.md"]
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core:
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    container: ubuntu:24.04
+    steps:
+      - name: Tools
+        run: |
+          apt-get update -qq
+          DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git curl ca-certificates \
+            jq python3 nodejs npm build-essential mold clang pkg-config
+          curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable
+
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      # lmix-core builds strom-types from the private submodule: see strom.yml.
+      - name: strom submodule
+        env:
+          TOKEN: ${{ secrets.REGISTRY_TOKEN }}
+        run: |
+          git config --global --add safe.directory '*'
+          git -c http.extraheader="Authorization: token $TOKEN" \
+            submodule update --init --depth 50 workspace/strom
+
+      - name: cargo test
+        env:
+          RUSTFLAGS: -C link-arg=-fuse-ld=mold
+        run: |
+          . "$HOME/.cargo/env"
+          (cd workspace/lmix-types && cargo test)
+          (cd workspace/lmix-core && cargo test)
+
+      - name: Headless
+        env:
+          RUSTFLAGS: -C link-arg=-fuse-ld=mold
+        run: |
+          . "$HOME/.cargo/env"
+          scripts/test-headless.sh
+
+      # Same version as the screenshot tools (shrippen.github.io/demo/tools).
+      - name: Playwright
+        run: |
+          mkdir -p "$RUNNER_TEMP/pw" && cd "$RUNNER_TEMP/pw"
+          npm install --silent --no-save playwright@1.63.0
+          npx playwright install --with-deps chromium
+
+      - name: Titles and web pages
+        env:
+          RUSTFLAGS: -C link-arg=-fuse-ld=mold
+        run: |
+          . "$HOME/.cargo/env"
+          export NODE_PATH="$RUNNER_TEMP/pw/node_modules"
+          scripts/test-titles.sh
+          scripts/test-web.sh
+
+  console:
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    # Current Qt 6 and KF6, as on the development machine.
+    container: archlinux:latest
+    steps:
+      - name: Tools
+        run: |
+          pacman -Syu --noconfirm --needed git nodejs rust base-devel clang \
+            qt6-base qt6-declarative qt6-tools kirigami gstreamer gst-plugins-base
+
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: cargo test
+        run: cd workspace/console-qt && cargo test

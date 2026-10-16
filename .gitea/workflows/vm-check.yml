@@ -8,6 +8,16 @@ name: vm-check
 # submodule commit it builds strom here (slow).
 on:
   push:
+    branches: [main]
+    paths:
+      - workspace/lmix-core/**
+      - workspace/lmix-types/**
+      - workspace/console-qt/**
+      - workspace/selftest/**
+      - workspace/strom
+      - scripts/test-m2b-vm.sh
+      - .gitea/workflows/vm-check.yml
+  pull_request:
     paths:
       - workspace/lmix-core/**
       - workspace/lmix-types/**

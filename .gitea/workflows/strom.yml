@@ -8,6 +8,11 @@ name: strom
 # where the same libraries are installed (cloud VM, Ubuntu 24.04 hosts).
 on:
   push:
+    branches: [main]
+    paths:
+      - workspace/strom
+      - .gitea/workflows/strom.yml
+  pull_request:
     paths:
       - workspace/strom
       - .gitea/workflows/strom.yml
