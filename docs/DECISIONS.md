@@ -2666,3 +2666,27 @@ einem Abonnenten.
 gleich der alten Datei, neue mit Version 2; Einstellungen exportieren ohne
 Geheimnis, zurücksetzen, importieren, Geheimnis bleibt, kaputte Datei ändert
 nichts); Console auf Xvfb (Menü, Rückfrage).
+
+## 2026-10-17 — Zonen ohne Engine (S1 Stufe 2, Teil SND.10)
+
+**Kontext**: S-E.4 ist entschieden (Zone = logischer Ausgang mit
+Zuordnung je Rechner), S-E.3 (wie Klang-Cues spielen) noch nicht. Die
+Zonen selbst hängen nicht an S-E.3.
+
+**Entscheidungen**:
+- **In der Show**: Zonen mit Namen und 1–8 Kanälen (bis 16 Zonen).
+- **In den Rechner-Einstellungen** (`targets.json`, mit Export, Import
+  und `machine.json` im Paket): je Zone 1–4 Ausgänge mit Gerät (leer =
+  Standardausgang), Gerätekanal je Zonenkanal und Pegel (−60 bis +12 dB).
+  Eine Zuordnung darf für Zonen bestehen, die die aktuelle Show nicht hat
+  (der Rechner bleibt für die nächste Show eingerichtet).
+- **Gerät als Text**: Es gibt noch keine Erkennung von Ausgabegeräten
+  (nur Eingänge); das Format wird mit dem Abspielen (Stufe 2) an die
+  Engine angepasst, falls nötig (vor dem ersten Release erlaubt).
+- **Ausgänge mit falscher Kanalzahl zählen nicht** (sie würden falsch
+  spielen); eine Zone ohne passenden Ausgang steht in der Warnliste.
+
+**Geprüft**: Tests der Prüfregeln und der Zusammenführung, Dienst-Test
+(Zuordnung kommt mit Export/Import der Einstellungen zurück); Console auf
+Xvfb (Dialog „Zonen…“, Warnung „Zone hinten spielt auf diesem Rechner
+nirgends“).

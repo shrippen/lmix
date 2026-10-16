@@ -127,6 +127,7 @@ fn main() {
                 "qml/CueListsDialog.qml",
                 "qml/ShowView.qml",
                 "qml/TargetsDialog.qml",
+                "qml/ZonesDialog.qml",
                 "qml/OutputBar.qml",
                 "qml/ChoiceMenu.qml",
                 "qml/KeyedModel.qml",

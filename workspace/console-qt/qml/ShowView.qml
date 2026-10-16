@@ -36,6 +36,8 @@ ColumnLayout {
     readonly property bool fromScript: list !== null && list.source !== undefined && list.source !== null
     /** What would go wrong when the lists run (SUI.5). */
     readonly property var warnings: show && show.cue_warnings ? show.cue_warnings : []
+    /** Zones that play nowhere on this machine (SND.16). */
+    readonly property var silentZones: show && show.zones ? show.zones.filter(z => z.outputs.length === 0) : []
 
     /** A warning in the Console's language. */
     function problem(w) {
@@ -197,6 +199,21 @@ ColumnLayout {
         }
         KanteButton {
             focusPolicy: Qt.NoFocus
+            text: qsTr("Zones…")
+            QQC2.ToolTip.visible: hovered
+            QQC2.ToolTip.text: qsTr("The show's sound zones and where they play on this machine")
+            onClicked: zonesDialog.open()
+        }
+        ZonesDialog {
+            id: zonesDialog
+            parent: QQC2.Overlay.overlay
+            anchors.centerIn: parent
+            act: view.act
+            zones: view.show && view.show.zones ? view.show.zones : []
+            onClosed: view.forceActiveFocus()
+        }
+        KanteButton {
+            focusPolicy: Qt.NoFocus
             text: qsTr("Targets…")
             QQC2.ToolTip.visible: hovered
             QQC2.ToolTip.text: qsTr("Output targets (HTTP, Home Assistant, OSC) and OSC subscribers of this machine")
@@ -257,12 +274,22 @@ ColumnLayout {
     // Warnings before the show (SUI.5).
     ColumnLayout {
         Layout.fillWidth: true
-        visible: view.warnings.length > 0
+        visible: view.warnings.length + view.silentZones.length > 0
         spacing: 0
 
         KanteSectionLabel {
-            text: qsTr("Warnings: %1").arg(view.warnings.length)
+            text: qsTr("Warnings: %1").arg(view.warnings.length + view.silentZones.length)
             color: KanteStyle.warningColor
+        }
+        Repeater {
+            model: view.silentZones
+            QQC2.Label {
+                required property var modelData
+                Layout.fillWidth: true
+                text: qsTr("Zone %1 plays nowhere on this machine (Zones…)").arg(modelData.name)
+                color: KanteStyle.warningColor
+                elide: Text.ElideRight
+            }
         }
         Repeater {
             model: view.warnings.slice(0, 5)

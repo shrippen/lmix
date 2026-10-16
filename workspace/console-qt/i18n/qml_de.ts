@@ -2383,7 +2383,7 @@
   <context>
     <name>ShowView</name>
     <message>
-      <location filename="../qml/ShowView.qml" line="+43" />
+      <location filename="../qml/ShowView.qml" line="+45" />
       <source>starts cue %1, which is not there</source>
       <translation>startet Cue %1, den es nicht gibt</translation>
     </message>
@@ -2491,6 +2491,16 @@
     </message>
     <message>
       <location line="+7" />
+      <source>Zones…</source>
+      <translation>Zonen…</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>The show's sound zones and where they play on this machine</source>
+      <translation>Die Klang-Zonen der Show und wo sie auf diesem Rechner spielen</translation>
+    </message>
+    <message>
+      <location line="+13" />
       <source>Targets…</source>
       <translation>Ziele…</translation>
     </message>
@@ -2546,6 +2556,11 @@
     </message>
     <message>
       <location line="+8" />
+      <source>Zone %1 plays nowhere on this machine (Zones…)</source>
+      <translation>Zone %1 spielt auf diesem Rechner nirgends (Zonen…)</translation>
+    </message>
+    <message>
+      <location line="+10" />
       <source>Cue %1: %2</source>
       <translation>Cue %1: %2</translation>
     </message>
@@ -3924,6 +3939,104 @@
       <location line="+12" />
       <source>+ Trigger</source>
       <translation>+ Auslöser</translation>
+    </message>
+  </context>
+  <context>
+    <name>ZonesDialog</name>
+    <message>
+      <location filename="../qml/ZonesDialog.qml" line="+58" />
+      <source>plays nowhere on this machine</source>
+      <translation>spielt auf diesem Rechner nirgends</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>default output</source>
+      <translation>Standardausgang</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Zones</source>
+      <translation>Zonen</translation>
+    </message>
+    <message>
+      <location line="+15" />
+      <source>No zones yet. A zone is a named sound output such as "front" or "back"; sound cues play into zones. Where a zone plays is set per machine.</source>
+      <translation>Noch keine Zonen. Eine Zone ist ein benannter Klangausgang wie „vorn“ oder „hinten“; Klang-Cues spielen in Zonen. Wo eine Zone spielt, wird je Rechner eingestellt.</translation>
+    </message>
+    <message>
+      <location line="+18" />
+      <source>%1 ch.</source>
+      <translation>%1 Kan.</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>Edit…</source>
+      <translation>Bearbeiten…</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Remove</source>
+      <translation>Entfernen</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>+ Zone</source>
+      <translation>+ Zone</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>Name</source>
+      <translation>Name</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>e.g. front</source>
+      <translation>z. B. vorn</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Channels</source>
+      <translation>Kanäle</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>On this machine</source>
+      <translation>Auf diesem Rechner</translation>
+    </message>
+    <message>
+      <location line="+13" />
+      <source>device, empty: default output</source>
+      <translation>Gerät, leer: Standardausgang</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>channels: 1, 2</source>
+      <translation>Kanäle: 1, 2</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>%1 dB</source>
+      <translation>%1 dB</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Remove output</source>
+      <translation>Ausgang entfernen</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>+ Output</source>
+      <translation>+ Ausgang</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Save</source>
+      <translation>Speichern</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Cancel</source>
+      <translation>Abbrechen</translation>
     </message>
   </context>
 </TS>

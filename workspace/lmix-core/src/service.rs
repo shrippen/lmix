@@ -2880,6 +2880,19 @@ mod tests {
             .unwrap();
 
         service
+            .handle(Action::SetZonePatch {
+                patch: lmix_types::ZonePatch {
+                    zone: "hinten".into(),
+                    outputs: vec![lmix_types::ZoneOutput {
+                        device: String::new(),
+                        channels: vec![3],
+                        gain_db: -3.0,
+                    }],
+                },
+            })
+            .await
+            .unwrap();
+        service
             .handle(Action::ExportSettings { path: file.clone() })
             .await
             .unwrap();
@@ -2898,6 +2911,21 @@ mod tests {
             .unwrap();
         assert_eq!(state.shortcuts[0].label, "Schwarz");
         assert!(!state.targets[0].has_secret);
+        service
+            .handle(Action::SetZone {
+                zone: lmix_types::Zone {
+                    name: "hinten".into(),
+                    channels: 1,
+                },
+            })
+            .await
+            .unwrap();
+        let zones = service.state().await.zones;
+        assert_eq!(
+            zones[0].outputs[0].channels,
+            vec![3],
+            "the zone patch came back"
+        );
         service.handle(target(Some("neu"))).await.unwrap();
         let state = service
             .handle(Action::ImportSettings { path: file.clone() })

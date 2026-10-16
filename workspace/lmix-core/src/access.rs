@@ -186,6 +186,10 @@ pub fn right_of(action: &Action) -> Right {
         | Action::ExportSettings { .. }
         | Action::ImportSettings { .. }
         | Action::ResetSettings
+        | Action::SetZone { .. }
+        | Action::RemoveZone { .. }
+        | Action::SetZonePatch { .. }
+        | Action::RemoveZonePatch { .. }
         | Action::SetFeed { .. }
         | Action::SetGoGuard { .. }
         | Action::SetInputColor { .. }

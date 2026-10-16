@@ -29,6 +29,9 @@ pub struct SettingsFile {
     pub targets: Vec<TargetConfig>,
     #[serde(default)]
     pub feeds: Vec<Feed>,
+    /// Where the zones play (SND.10).
+    #[serde(default)]
+    pub zone_patches: Vec<lmix_types::ZonePatch>,
 }
 
 #[derive(Serialize, Deserialize)]

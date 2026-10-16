@@ -257,6 +257,10 @@ pub const ACTION_GROUPS: &[(&str, &[&str])] = &[
         ],
     ),
     (
+        "zones",
+        &["set_zone", "remove_zone", "set_zone_patch", "remove_zone_patch"],
+    ),
+    (
         "targets",
         &[
             "set_target",
@@ -603,6 +607,14 @@ pub enum Action {
         #[serde(default)]
         folder: Option<String>,
     },
+
+    // ---- Zones (show mode SND.10) ----
+    /// Add a zone to the show, or replace the one of the same name.
+    SetZone { zone: crate::zone::Zone },
+    RemoveZone { name: String },
+    /// Where a zone plays on this machine (machine settings, SSH.3).
+    SetZonePatch { patch: crate::zone::ZonePatch },
+    RemoveZonePatch { zone: String },
 
     // ---- Output targets (show mode EXT) ----
     /// Add a target of this machine, or replace the one of the same name.
@@ -1129,6 +1141,8 @@ pub enum ActionError {
     UnknownTarget { name: String },
     #[error("target: {reason}")]
     BadTarget { reason: String },
+    #[error("zone: {reason}")]
+    BadZone { reason: String },
     #[error("cue list: {reason}")]
     BadCueList { reason: String },
     #[error("triggers: {reason}")]

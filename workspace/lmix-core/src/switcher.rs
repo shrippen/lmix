@@ -204,6 +204,10 @@ fn runs_automation(action: &Action) -> bool {
                 | Action::SetPanicTime { .. }
                 | Action::SetEmergencyList { .. }
                 | Action::SetScriptFolder { .. }
+                | Action::SetZone { .. }
+                | Action::RemoveZone { .. }
+                | Action::SetZonePatch { .. }
+                | Action::RemoveZonePatch { .. }
         )
 }
 
@@ -412,6 +416,8 @@ pub struct Switcher {
     /// the fixed OSC subscribers (CTL.4).
     targets: Vec<crate::targets::TargetConfig>,
     feeds: Vec<lmix_types::Feed>,
+    /// Where the show's zones play on this machine (SND.10).
+    zone_patches: Vec<lmix_types::ZonePatch>,
     targets_changed: bool,
     /// Media files not found per input (SHW.4); the service checks.
     missing: HashMap<InputId, Vec<String>>,
@@ -462,6 +468,7 @@ impl Switcher {
             all_shows_changed: false,
             targets: Vec::new(),
             feeds: Vec::new(),
+            zone_patches: Vec::new(),
             targets_changed: false,
             missing: HashMap::new(),
             overlay_last: Default::default(),
@@ -573,6 +580,7 @@ impl Switcher {
         crate::targets::Settings {
             targets: self.targets.clone(),
             feeds: self.feeds.clone(),
+            zone_patches: self.zone_patches.clone(),
         }
     }
 
@@ -581,6 +589,7 @@ impl Switcher {
     pub fn set_target_settings(&mut self, settings: crate::targets::Settings) {
         self.targets = settings.targets;
         self.feeds = settings.feeds;
+        self.zone_patches = settings.zone_patches;
         self.targets_changed = false;
     }
 
@@ -593,6 +602,7 @@ impl Switcher {
         crate::targets::merge(&mut settings, from)?;
         self.targets = settings.targets;
         self.feeds = settings.feeds;
+        self.zone_patches = settings.zone_patches;
         self.targets_changed = true;
         Ok(())
     }
@@ -605,6 +615,7 @@ impl Switcher {
             layout_templates: self.layout_templates.clone(),
             targets: carried.targets,
             feeds: carried.feeds,
+            zone_patches: carried.zone_patches,
         }
     }
 
@@ -642,12 +653,14 @@ impl Switcher {
                 .cloned()
                 .collect(),
             feeds: Vec::new(),
+            zone_patches: Vec::new(),
         };
         crate::targets::merge(
             &mut next,
             crate::targets::Settings {
                 targets: file.targets,
                 feeds: file.feeds,
+                zone_patches: file.zone_patches,
             },
         )?;
         let templates = std::mem::take(&mut self.layout_templates);
@@ -659,6 +672,7 @@ impl Switcher {
         self.distinct_shortcut_ids();
         self.targets = next.targets;
         self.feeds = next.feeds;
+        self.zone_patches = next.zone_patches;
         self.all_shows_changed = true;
         self.targets_changed = true;
         Ok(())
@@ -670,6 +684,7 @@ impl Switcher {
         self.layout_templates.clear();
         self.targets.clear();
         self.feeds.clear();
+        self.zone_patches.clear();
         self.all_shows_changed = true;
         self.layout_templates_changed = true;
         self.targets_changed = true;
@@ -912,6 +927,29 @@ impl Switcher {
                     None => None,
                 };
                 self.show.emergency_list = id;
+                Ok(Vec::new())
+            }
+            Action::SetZone { zone } => {
+                crate::zones::set_zone(&mut self.show.zones, zone)?;
+                Ok(Vec::new())
+            }
+            Action::RemoveZone { name } => {
+                if !self.show.zones.iter().any(|z| z.name == name) {
+                    return Err(ActionError::BadZone {
+                        reason: format!("no zone {name}"),
+                    });
+                }
+                self.show.zones.retain(|z| z.name != name);
+                Ok(Vec::new())
+            }
+            Action::SetZonePatch { patch } => {
+                crate::zones::set_patch(&mut self.zone_patches, patch)?;
+                self.targets_changed = true;
+                Ok(Vec::new())
+            }
+            Action::RemoveZonePatch { zone } => {
+                self.zone_patches.retain(|p| p.zone != zone);
+                self.targets_changed = true;
                 Ok(Vec::new())
             }
             Action::ResetSettings => {
@@ -1456,6 +1494,7 @@ impl Switcher {
             cue_warnings: self.cue_warnings.clone(),
             targets: self.targets.iter().map(|t| t.public()).collect(),
             feeds: self.feeds.clone(),
+            zones: crate::zones::states(&self.show.zones, &self.zone_patches),
             restorable: self.removed.last().map(|(_, input)| input.name.clone()),
             shortcuts: self
                 .show

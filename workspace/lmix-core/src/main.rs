@@ -45,6 +45,7 @@ mod tcp;
 mod titles;
 mod tsl;
 mod web;
+mod zones;
 
 use engine::flows::{MixerBackend, MonitorOut};
 use engine::null::NullEngine;

@@ -172,6 +172,9 @@ pub struct ShowState {
     /// Fixed OSC subscribers of this machine (CTL.4).
     #[serde(default)]
     pub feeds: Vec<crate::feed::Feed>,
+    /// The show's zones with this machine's outputs (SND.10).
+    #[serde(default)]
+    pub zones: Vec<crate::zone::ZoneState>,
     /// Locked against closing, loading and stopping (AUT.11).
     #[serde(default)]
     pub locked: bool,
