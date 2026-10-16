@@ -703,27 +703,37 @@ impl Switcher {
             }
             Action::RestoreInput => self.restore_input(),
             Action::SetTriggers { input, triggers } => self.set_triggers(&input, triggers),
-            Action::AddCueList { name, cues } => {
+            Action::AddCueList { name, cues, source } => {
                 check_cues(&name, &cues)?;
                 let mut lists = self.show.cue_lists.clone();
                 lists.push(ShowCueList {
                     id: InputId::new(),
                     name,
                     cues,
+                    source,
                 });
                 check_unique(&lists)?;
                 self.show.cue_lists = lists;
                 Ok(Vec::new())
             }
-            Action::SetCueList { list, name, cues } => {
+            Action::SetCueList {
+                list,
+                name,
+                cues,
+                source,
+            } => {
                 let index = self.find_cue_list(&list)?;
                 check_cues(&name, &cues)?;
                 let mut lists = self.show.cue_lists.clone();
+                let old = std::mem::replace(&mut lists[index].cues, cues);
                 lists[index].name = name;
-                lists[index].cues = cues;
+                lists[index].source = source;
                 check_unique(&lists)?;
                 self.show.cue_lists = lists;
-                // Editing during the show keeps standby and running cues.
+                // Editing during the show keeps standby (on the same cue
+                // when it is still there, IMP.5) and running cues.
+                let entry = &self.show.cue_lists[index];
+                self.cues.keep_standby(entry, &old);
                 self.cues.list_changed(&self.show.cue_lists);
                 Ok(Vec::new())
             }
@@ -1211,6 +1221,7 @@ impl Switcher {
                     cues: l.cues.clone(),
                     standby: self.cues.standby(l.id) as u32 + 1,
                     active: self.cues.active(&self.show.cue_lists) == Some(i),
+                    source: l.source.clone(),
                 })
                 .collect(),
             running_cues: self
@@ -5816,6 +5827,7 @@ mod tests {
                 cue("B", Action::CutDirect { input: named("B") }),
                 cue("Black", Action::FadeToBlack { duration_ms: 500 }),
             ],
+            source: None,
         })
         .unwrap();
         assert_eq!(sw.state().cue_lists[0].standby, 1);
@@ -5848,6 +5860,7 @@ mod tests {
                 cue("A", Action::CutDirect { input: named("A") }),
                 cue("B", Action::CutDirect { input: named("B") }),
             ],
+            source: None,
         })
         .unwrap();
         assert_eq!(sw.state().cue_lists[0].standby, 3);
@@ -5864,6 +5877,7 @@ mod tests {
             sw.apply(Action::AddCueList {
                 name: "L".into(),
                 cues,
+                source: None,
             })
         };
         let refused =

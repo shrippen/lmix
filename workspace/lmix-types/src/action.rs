@@ -441,14 +441,22 @@ pub enum Action {
         input: InputRef,
         triggers: Vec<Trigger>,
     },
-    /// Add a cue list.
-    AddCueList { name: String, cues: Vec<Cue> },
+    /// Add a cue list. `source`: where it comes from, e.g. a script
+    /// file (IMP.9); clients then do not edit it.
+    AddCueList {
+        name: String,
+        cues: Vec<Cue>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        source: Option<String>,
+    },
     /// Replace a cue list's name and cues (by number, name or id); the
     /// next cue stays where it was, at most one past the last.
     SetCueList {
         list: InputRef,
         name: String,
         cues: Vec<Cue>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        source: Option<String>,
     },
     /// Remove a cue list.
     RemoveCueList { list: InputRef },

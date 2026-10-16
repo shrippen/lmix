@@ -332,6 +332,7 @@ DE = {
     'MIDI: %1': 'MIDI: %1',
     'Make this the cue GO starts next': 'Diesen Cue auf Standby setzen: GO startet ihn als nächsten',
     'Standby': 'Standby',
+    'This list comes from %1 and is edited there; reload the script to change it.': 'Diese Liste kommt aus %1 und wird dort bearbeitet; zum Ändern das Drehbuch neu laden.',
     'Stop the running cues of this list': 'Die laufenden Cues dieser Liste anhalten',
     'Move on': 'Weiterschalten',
     'New cue': 'Neuer Cue',

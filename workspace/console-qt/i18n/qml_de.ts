@@ -390,18 +390,18 @@
   <context>
     <name>CueListsDialog</name>
     <message>
-      <location filename="../qml/CueListsDialog.qml" line="+37" />
+      <location filename="../qml/CueListsDialog.qml" line="+39" />
       <source>Cue lists</source>
       <translation>Cue-Listen</translation>
     </message>
     <message>
       <location line="+16" />
-      <location line="+135" />
+      <location line="+145" />
       <source>Cue %1</source>
       <translation>Cue %1</translation>
     </message>
     <message>
-      <location line="-135" />
+      <location line="-145" />
       <source>New cue</source>
       <translation>Neuer Cue</translation>
     </message>
@@ -421,7 +421,12 @@
       <translation>Liste entfernen</translation>
     </message>
     <message>
-      <location line="+10" />
+      <location line="+11" />
+      <source>This list comes from %1 and is edited there; reload the script to change it.</source>
+      <translation>Diese Liste kommt aus %1 und wird dort bearbeitet; zum Ändern das Drehbuch neu laden.</translation>
+    </message>
+    <message>
+      <location line="+7" />
       <source>No cue lists yet. A cue list runs prepared steps of a show one after another, each with GO.</source>
       <translation>Noch keine Cue-Listen. Eine Cue-Liste führt vorbereitete Schritte einer Show nacheinander aus, jeden mit GO.</translation>
     </message>
@@ -451,12 +456,12 @@
       <translation>Entfernen</translation>
     </message>
     <message>
-      <location line="+18" />
+      <location line="+19" />
       <source>+ Cue</source>
       <translation>+ Cue</translation>
     </message>
     <message>
-      <location line="+10" />
+      <location line="+11" />
       <source>Stop</source>
       <translation>Stopp</translation>
     </message>

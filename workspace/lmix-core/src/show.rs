@@ -164,6 +164,8 @@ pub struct ShowCueList {
     pub id: InputId,
     pub name: String,
     pub cues: Vec<Cue>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
 }
 
 /// One shortcut as saved.
@@ -465,6 +467,7 @@ mod tests {
                 id: InputId::new(),
                 name: "Opening".into(),
                 cues: vec![Cue::actions("Bars", vec![Action::Cut])],
+                source: None,
             }],
             go_guard_ms: 120,
             shortcuts: vec![ShowShortcut {
