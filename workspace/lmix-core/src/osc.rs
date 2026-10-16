@@ -23,9 +23,13 @@
 //! | `/lmix/stop/hard` | – | `cue_hard_stop` |
 //! | `/lmix/subscribe` | – | the sender gets tally and state from now on |
 //! | `/lmix/unsubscribe` | – | stops it |
+//! | `/lmix/ping` | – | answers `/lmix/pong`; keeps a subscription |
 //! | `/lmix/state` | – | answers `/lmix/state s:json` (the full state) |
 //!
 //! Refused actions answer the sender with `/lmix/error s:reason`.
+//! A subscription lasts 60 s after the subscriber's last message (CTL.3):
+//! send `/lmix/subscribe` or `/lmix/ping` within that. For buttons without
+//! keepalive there are fixed subscribers (`set_feed`, CTL.4).
 //! Subscribers get, right after subscribing and then on every change:
 //!
 //! | Address | Arguments |
@@ -34,7 +38,7 @@
 //! | `/lmix/program`, `/lmix/preview` | name, number (0: a layout, or none) |
 //! | `/lmix/tbar` | position (float 0–1) |
 //! | `/lmix/ftb` | 1 while faded to black |
-//! | `/lmix/cue/next` | list name, number of the cue GO runs next |
+//! | `/lmix/cue/standby` | list name, number of the standby cue (1-based), its name |
 //!
 //! Bundles are unpacked; their time tags are ignored (run now).
 
@@ -54,6 +58,12 @@ const MAX_PACKET: usize = 64 * 1024;
 
 /// Subscribers kept at most; the oldest is dropped beyond that.
 const MAX_SUBSCRIBERS: usize = 32;
+
+/// A subscription ends this long after the subscriber's last message.
+const SUBSCRIPTION_TTL: std::time::Duration = std::time::Duration::from_secs(60);
+
+/// Subscribers and when each was last heard.
+type Subscribers = Arc<Mutex<Vec<(SocketAddr, tokio::time::Instant)>>>;
 
 /// One OSC argument.
 #[derive(Clone, Debug, PartialEq)]
@@ -233,6 +243,7 @@ fn write_string(out: &mut Vec<u8>, text: &str) {
 pub enum Request {
     Action(Action),
     Subscribe,
+    Ping,
     Unsubscribe,
     State,
 }
@@ -261,6 +272,7 @@ pub fn request(message: &Message) -> Result<Request, String> {
     };
     let action = match parts.as_slice() {
         ["subscribe"] => return Ok(Request::Subscribe),
+        ["ping"] => return Ok(Request::Ping),
         ["unsubscribe"] => return Ok(Request::Unsubscribe),
         ["state"] => return Ok(Request::State),
         ["action"] => match arg(0) {
@@ -357,7 +369,7 @@ pub async fn serve(
     };
     let socket = Arc::new(UdpSocket::bind(listen).await?);
     tracing::info!(%listen, "OSC up");
-    let subscribers = Arc::new(Mutex::new(Vec::<SocketAddr>::new()));
+    let subscribers: Subscribers = Arc::new(Mutex::new(Vec::new()));
     tokio::spawn(send_updates(
         socket.clone(),
         subscribers.clone(),
@@ -373,6 +385,8 @@ pub async fn serve(
             crate::access::Peer::Network => local_only,
             crate::access::Peer::Local => false,
         };
+        // Any message keeps the sender's subscription (CTL.3).
+        heard(&subscribers, peer).await;
         for message in decode(&buf[..len]) {
             let request = request(&message);
             let panic = matches!(
@@ -391,11 +405,11 @@ pub async fn serve(
                 }
                 Ok(Request::Subscribe) => {
                     let mut subs = subscribers.lock().await;
-                    if !subs.contains(&peer) {
+                    if !subs.iter().any(|(s, _)| *s == peer) {
                         if subs.len() >= MAX_SUBSCRIBERS {
                             subs.remove(0);
                         }
-                        subs.push(peer);
+                        subs.push((peer, tokio::time::Instant::now()));
                     }
                     drop(subs);
                     let tally = tally_message(&service.tally().await);
@@ -408,7 +422,10 @@ pub async fn serve(
                     let json = serde_json::to_string(&service.state().await).unwrap_or_default();
                     let _ = socket.send_to(&encode("/lmix/state", &[&json]), peer).await;
                 }
-                Ok(Request::Unsubscribe) => subscribers.lock().await.retain(|s| *s != peer),
+                Ok(Request::Unsubscribe) => subscribers.lock().await.retain(|(s, _)| *s != peer),
+                Ok(Request::Ping) => {
+                    let _ = socket.send_to(&encode("/lmix/pong", &[]), peer).await;
+                }
                 Err(reason) => {
                     let _ = socket
                         .send_to(&encode("/lmix/error", &[&reason]), peer)
@@ -419,16 +436,31 @@ pub async fn serve(
     }
 }
 
+/// `peer` sent something: its subscription, if any, starts over.
+async fn heard(subscribers: &Subscribers, peer: SocketAddr) {
+    if let Some(entry) = subscribers
+        .lock()
+        .await
+        .iter_mut()
+        .find(|(s, _)| *s == peer)
+    {
+        entry.1 = tokio::time::Instant::now();
+    }
+}
+
+/// Subscribers heard within the TTL; the others are dropped.
+async fn live(subscribers: &Subscribers) -> HashSet<SocketAddr> {
+    let mut subs = subscribers.lock().await;
+    subs.retain(|(_, at)| at.elapsed() < SUBSCRIPTION_TTL);
+    subs.iter().map(|(s, _)| *s).collect()
+}
+
 fn tally_message(tally: &[u8]) -> Vec<u8> {
     let digits: String = tally.iter().map(|t| char::from(b'0' + t.min(&9))).collect();
     encode("/lmix/tally", &[&digits])
 }
 
-async fn send_updates(
-    socket: Arc<UdpSocket>,
-    subscribers: Arc<Mutex<Vec<SocketAddr>>>,
-    service: Arc<Service>,
-) {
+async fn send_updates(socket: Arc<UdpSocket>, subscribers: Subscribers, service: Arc<Service>) {
     let mut events = service.subscribe();
     // Last message sent per key: only changes go out.
     let mut sent: std::collections::HashMap<String, Vec<u8>> = std::collections::HashMap::new();
@@ -454,8 +486,7 @@ async fn send_updates(
         if fresh.is_empty() {
             continue;
         }
-        let subs: HashSet<SocketAddr> = subscribers.lock().await.iter().copied().collect();
-        for peer in subs {
+        for peer in live(&subscribers).await {
             for message in &fresh {
                 let _ = socket.send_to(message, peer).await;
             }
@@ -597,6 +628,7 @@ mod tests {
             Ok(Request::Action(Action::FadeToBlack { .. }))
         ));
         assert_eq!(req("/lmix/subscribe", vec![]), Ok(Request::Subscribe));
+        assert_eq!(req("/lmix/ping", vec![]), Ok(Request::Ping));
         assert!(req("/lmix/preview", vec![]).is_err());
         assert!(req("/lmix/frob", vec![]).is_err());
     }
@@ -646,6 +678,25 @@ mod tests {
                 address: "/lmix/tally".into(),
                 args: vec![Arg::Str("012".into())]
             }]
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_subscription_ends_without_a_word() {
+        let subscribers: Subscribers = Arc::new(Mutex::new(Vec::new()));
+        let a: SocketAddr = "192.168.1.5:9000".parse().unwrap();
+        let b: SocketAddr = "192.168.1.6:9000".parse().unwrap();
+        let now = tokio::time::Instant::now();
+        subscribers.lock().await.extend([(a, now), (b, now)]);
+
+        tokio::time::advance(std::time::Duration::from_secs(40)).await;
+        heard(&subscribers, a).await;
+        tokio::time::advance(std::time::Duration::from_secs(30)).await;
+
+        assert_eq!(
+            live(&subscribers).await,
+            HashSet::from([a]),
+            "b said nothing for 70 s"
         );
     }
 }

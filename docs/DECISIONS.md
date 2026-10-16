@@ -2632,3 +2632,19 @@ Geheimnis zeigt die Console nie; leer gelassen bleibt es, wie es ist. Ein
 Ziel lässt sich nicht umbenennen (das Geheimnis ginge verloren): entfernen
 und neu anlegen. Geprüft auf Xvfb gegen lmix-core mit zwei Zielen und
 einem Abonnenten.
+
+## 2026-10-16 — Kleinere S1-Punkte: Dauer von Aktions-Cues, dunkler Raum, OSC-Abo-Ablauf
+
+- **Aktions-Cue mit Dauer** (B45): `duration_ms` ist jetzt auch an
+  Aktions-Cues erlaubt; so lange gilt der Cue nach seinen Aktionen als
+  laufend (z. B. die Länge des Clips, den er startet), „Folge nach Ende“
+  wartet darauf. Die Länge aus dem Clip selbst kommt mit den Bild-Cues.
+- **Dunkler Raum** (SUI.6): Knopf „Dunkel“ in der Show-Ansicht; Kante
+  bekommt `preferDark` (Gruvbox dunkel, kein Weiß), darüber liegt der
+  Schleier von Kante mit 60 %; Klicks gehen durch. Nur der Schleier dimmte
+  im hellen Leinen-Schema zu wenig (auf Xvfb geprüft).
+- **OSC-Abos laufen ab** (CTL.3): 60 s nach der letzten Nachricht des
+  Abonnenten; `/lmix/ping` (Antwort `/lmix/pong`) oder ein neues
+  `/lmix/subscribe` hält es. **Bricht** für Abonnenten ohne Lebenszeichen;
+  für Tasten ohne Keepalive gibt es die festen Abonnenten (CTL.4). Dabei die
+  Doku `/lmix/cue/next` → `/lmix/cue/standby` nachgezogen.
