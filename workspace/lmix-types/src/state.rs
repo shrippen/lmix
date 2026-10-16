@@ -50,6 +50,10 @@ pub struct ShowState {
     /// What each overlay channel shows, channel 1 first.
     #[serde(default)]
     pub overlays: [Option<InputId>; OVERLAY_CHANNELS as usize],
+    /// The input each overlay channel showed last, for `overlay_last`;
+    /// runtime only, not saved.
+    #[serde(default)]
+    pub overlay_last: [Option<InputId>; OVERLAY_CHANNELS as usize],
     /// T-bar position (0 = at rest, below 1 = preview partly mixed in).
     #[serde(default)]
     pub t_bar: f32,

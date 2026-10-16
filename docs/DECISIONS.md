@@ -2116,3 +2116,57 @@ SSH.5 (Show samt Rechner-Einstellungen ex-/importieren, ohne
 Geheimnisse), VIS.17 (Bühne als Input im Mischer für die gemischte
 Theatershow, S2-Abnahme mit P7). CUE.21 und SSH.1: migrieren statt
 alte Formate weiterlesen.
+
+## 2026-10-16 — Clips auf Sendung, alle Overlays aus (INP.11, OVL.8)
+
+**Entscheidung INP.11**: Datei-, URL- und Playlist-Inputs haben drei
+Schalter `auto_play {play, restart, pause}` (Aktion `set_auto_play`, im
+Zustand und in der Show-Datei, Standard alle aus; für andere Quellen
+abgelehnt, außer alles aus). „Auf Sendung“ ist, was Tally Programm
+nennt: Programm, ein Layout auf Programm (Hintergrund und Boxen), ein
+Overlay-Kanal; dazu die Vorschau, solange der T-Bar sie einblendet. Der
+Switcher vergleicht das vor und nach jeder Aktion, damit zählen Cut,
+Cut direkt, Übergang, T-Bar, Overlays, geänderte Layouts, Kurzbefehle
+und Auslöser gleich, ohne Sonderfälle je Aktion.
+- Geht ein Input auf Sendung: `play` → Play, `restart` → Neustart des
+  Eintrags (mit `play`) oder Sprung auf 0 (ohne, bleibt pausiert). Die
+  Befehle stehen vor dem Umschalten: ein neu gestarteter Clip zeigt kein
+  altes Bild, und er läuft schon, während er eingeblendet wird.
+- Geht er von Sendung: `pause` erst nach dem Übergang (Dauer des
+  Übergangs oder der Overlay-Blende als `Wait`), sonst stünde ein
+  Standbild in der Blende. Beim Stinger beides am Schnittpunkt (der
+  Clip deckt ab). Kommt der Input während der Blende zurück (Cut
+  zurück), entfällt die Pause (`still_due` beim Ausführen der späten
+  Befehle). Steht er noch anderswo auf Sendung (Programm verlassen, im
+  Overlay geblieben), läuft er weiter.
+- FTB schaltet nichts um und berührt die Player nicht. Der Stinger-Clip
+  selbst bleibt beim Stinger. Vorschau allein zählt nicht (der Input
+  kann nicht zugleich in Vorschau und Programm stehen, ein Layout in der
+  Vorschau mit dem Programm-Input ändert nichts).
+- Eine Show öffnen oder die Engine neu aufbauen startet keine Player
+  (kein Wechsel, der Zustand wird nur wiederhergestellt).
+
+**Entscheidung OVL.8**: `overlay_out_all {duration_ms}` nimmt jeden
+belegten Kanal heraus wie `overlay_out`. `overlay_last {channel}` zeigt
+den Input wieder, den der Kanal zuletzt zeigte (gemerkt bei
+`overlay_in`, im Zustand `overlay_last`); zeigt der Kanal etwas, tut es
+nichts, ohne Merkwert Fehler `no_overlay_last`. Nur zur Laufzeit wie
+die Cue-Stelle: die Overlays selbst stehen in der Show-Datei, „zuletzt“
+gehört zur Sendung, nicht zur Show. Ein geschlossener Input fällt
+heraus, bis er wiederhergestellt ist. OSC: `/lmix/overlay/out`,
+`/lmix/overlay/{n}/last`.
+**Console**: Reiter Allgemein eines Clips „Auf Sendung: Abspielen, Von
+Anfang, Danach pausieren“; „Alle Overlays aus“ unter den Overlay-Tasten,
+Rechtsklick auf einen leeren Kanal „… wieder zeigen“; Vorlage „Alle
+Overlays aus“ für Kurzbefehle, Auslöser und Cues.
+**Geprüft**: Switcher-Tests (Take mit Blende, Cut, Neustart mit und ohne
+Abspielen, Overlay und Layout auf Sendung, T-Bar, Stinger, späte Pause,
+alle aus, letzter Input), Service-Test mit Null-Engine (Pause nach der
+Blende, keine nach Cut zurück), `test-headless.sh` (OSC), Console auf
+Xvfb (Schalter setzen den Zustand, Menü und Knopf). Mit echten Playern
+in strom nicht geprüft. VM-Check (GitHub): Overlay wieder an, während
+es noch ausblendet; fand einen strom-Fehler (das Ende der Blende nahm
+den DSK wieder weg), behoben in strom 04b87d1.
+**Offen**: Ein Cut, während der T-Bar halb steht, lässt `t_bar` stehen
+(war schon so); die neue Vorschau gilt dann als eingeblendet und
+pausiert nicht.

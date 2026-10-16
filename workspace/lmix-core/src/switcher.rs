@@ -14,9 +14,9 @@ use lmix_types::layout::{BORDER_MAX_PX, LAYOUTS, LAYOUT_BOXES};
 use lmix_types::shortcut::SHORTCUT_ACTIONS;
 use lmix_types::state::API_VERSION;
 use lmix_types::{
-    Action, ActionError, AuxBus, BoxCrop, BoxRect, BoxSpec, ChannelStrip, Effect, Ingest, Input,
-    InputColor, InputId, InputRef, InputStatus, Layout, LayoutBox, Listen, Look, Output, OutputId,
-    OutputRef, OutputSource, OutputSpec, OutputStatus, Shortcut, ShortcutSpec, ShowState,
+    Action, ActionError, AutoPlay, AuxBus, BoxCrop, BoxRect, BoxSpec, ChannelStrip, Effect, Ingest,
+    Input, InputColor, InputId, InputRef, InputStatus, Layout, LayoutBox, Listen, Look, Output,
+    OutputId, OutputRef, OutputSource, OutputSpec, OutputStatus, Shortcut, ShortcutSpec, ShowState,
     SignalLoss, SourceSpec, Stinger, StingerSpec, Transition, TransitionSlot, Transport,
 };
 use lmix_types::{Cue, CueList, MidiKind, MidiMessage, Trigger, TriggerOn};
@@ -297,6 +297,8 @@ pub struct Switcher {
     all_shows_changed: bool,
     /// Media files not found per input (SHW.4); the service checks.
     missing: HashMap<InputId, Vec<String>>,
+    /// The input each overlay channel showed last (OVL.8); runtime only.
+    overlay_last: [Option<InputId>; OVERLAY_CHANNELS as usize],
 }
 
 /// Where a shortcut is kept.
@@ -331,6 +333,7 @@ impl Switcher {
             all_shows: Vec::new(),
             all_shows_changed: false,
             missing: HashMap::new(),
+            overlay_last: Default::default(),
         }
     }
 
@@ -479,18 +482,35 @@ impl Switcher {
     /// service, which needs I/O; it calls [`Self::replace`] for them.
     pub fn apply(&mut self, action: Action) -> Result<Vec<Command>, ActionError> {
         let ramp_ms = self.audio_ramp(&action);
+        let leave_ms = self.leave_ms(&action);
+        let airing = self.airing();
         let mut commands = self.apply_action(action)?;
         let audio = self.audio_commands(ramp_ms);
-        // A stinger switches sound at its cut, not once the clip ends.
+        let (on, off) = self.auto_play_commands(&airing);
+        // A stinger switches sound and players at its cut, not once the
+        // clip ends.
+        let cut = commands
+            .iter()
+            .position(|c| matches!(c, Command::Wait { .. }));
         match commands
             .iter()
             .rposition(|c| matches!(c, Command::Wait { .. }))
         {
             Some(at) => {
-                commands.splice(at..at, audio);
+                commands.splice(at..at, audio.into_iter().chain(off));
             }
-            None => commands.extend(audio),
+            None => {
+                commands.extend(audio);
+                // The old picture is still seen while it fades out.
+                if leave_ms > 0 && !off.is_empty() {
+                    commands.push(Command::Wait { ms: leave_ms });
+                }
+                commands.extend(off);
+            }
         }
+        // Before the switch: a restarted clip shows no old frame.
+        let at = cut.map_or(0, |c| c + 1);
+        commands.splice(at..at, on);
         Ok(commands)
     }
 
@@ -649,6 +669,17 @@ impl Switcher {
                 }])
             }
             Action::SetSignalLoss { input, mode } => self.set_signal_loss(&input, mode),
+            Action::SetAutoPlay { input, auto_play } => {
+                let index = self.find(&input)?;
+                let entry = &mut self.show.inputs[index];
+                if !entry.source.has_transport() && !auto_play.is_off() {
+                    return Err(ActionError::NoTransport {
+                        reference: entry.name.clone(),
+                    });
+                }
+                entry.auto_play = auto_play;
+                Ok(Vec::new())
+            }
             Action::AddOutput {
                 spec,
                 source,
@@ -738,6 +769,11 @@ impl Switcher {
                 channel,
                 duration_ms,
             } => self.overlay_out(channel, duration_ms),
+            Action::OverlayOutAll { duration_ms } => Ok(self.overlay_out_all(duration_ms)),
+            Action::OverlayLast {
+                channel,
+                duration_ms,
+            } => self.overlay_last(channel, duration_ms),
             // The service reads and writes these files.
             Action::NewShow
             | Action::SaveShow { .. }
@@ -778,6 +814,7 @@ impl Switcher {
         self.status.clear();
         self.titles.reset();
         self.dynamic_inputs = Default::default();
+        self.overlay_last = Default::default();
         commands.extend(self.restore_commands());
         commands
     }
@@ -902,6 +939,7 @@ impl Switcher {
                 has_audio: input.source.has_audio(),
                 listen: self.listen_of(input.id),
                 signal_loss: input.signal_loss,
+                auto_play: input.auto_play,
                 strip: input.strip,
                 sends: input.sends,
                 look: input.look,
@@ -928,6 +966,9 @@ impl Switcher {
             slots: self.slots,
             outputs: self.outputs_state(),
             overlays: self.show.overlays,
+            overlay_last: self
+                .overlay_last
+                .map(|id| id.filter(|id| self.slot_of(Some(*id)).is_some())),
             t_bar: self.t_bar,
             aux_buses: self.show.aux_buses,
             looks_available: self.looks_available,
@@ -1030,6 +1071,7 @@ impl Switcher {
             color: None,
             audio: Default::default(),
             signal_loss: SignalLoss::default(),
+            auto_play: AutoPlay::default(),
             strip: ChannelStrip::default(),
             sends: [0; AUX_BUSES],
             look: Look::default(),
@@ -2226,6 +2268,7 @@ impl Switcher {
         no_video_check(entry)?;
         let (id, slot) = (entry.id, entry.slot);
         self.show.overlays[index] = Some(id);
+        self.overlay_last[index] = Some(id);
         Ok(vec![Command::Overlay {
             channel: index,
             slot: Some(slot),
@@ -2243,6 +2286,121 @@ impl Switcher {
             slot: None,
             duration_ms,
         }])
+    }
+
+    /// Every channel that shows something off, each like `overlay_out`.
+    fn overlay_out_all(&mut self, duration_ms: u32) -> Vec<Command> {
+        self.show
+            .overlays
+            .iter_mut()
+            .enumerate()
+            .filter_map(|(channel, input)| {
+                input.take().map(|_| Command::Overlay {
+                    channel,
+                    slot: None,
+                    duration_ms,
+                })
+            })
+            .collect()
+    }
+
+    /// The input `channel` showed last back on it, if it is empty.
+    fn overlay_last(&mut self, channel: u8, duration_ms: u32) -> Result<Vec<Command>, ActionError> {
+        let index = overlay_index(channel)?;
+        if self.show.overlays[index].is_some() {
+            return Ok(Vec::new());
+        }
+        let last = self.overlay_last[index]
+            .filter(|id| self.slot_of(Some(*id)).is_some())
+            .ok_or(ActionError::NoOverlayLast { channel })?;
+        self.overlay_in(channel, &InputRef::Text(last.to_string()), duration_ms)
+    }
+
+    // ---- Automatic playback (INP.11) ----
+
+    /// Inputs on air for automatic playback: what tally calls program,
+    /// and preview while the T-bar mixes it in.
+    fn airing(&self) -> Vec<InputId> {
+        let mut airing: Vec<InputId> = self
+            .show
+            .inputs
+            .iter()
+            .zip(self.tally())
+            .filter(|(_, tally)| *tally == 1)
+            .map(|(input, _)| input.id)
+            .collect();
+        if self.t_bar > 0.0 {
+            airing.extend(self.show.preview);
+        }
+        airing
+    }
+
+    /// How long the old picture is still seen after `action`; automatic
+    /// pauses wait for it. A stinger's cut is in its commands.
+    fn leave_ms(&self, action: &Action) -> u32 {
+        match action {
+            Action::Transition { slot } => self
+                .button(*slot)
+                .ok()
+                .filter(|b| b.effect != Effect::Cut)
+                .map_or(0, |b| b.duration_ms),
+            Action::OverlayIn { duration_ms, .. }
+            | Action::OverlayOut { duration_ms, .. }
+            | Action::OverlayOutAll { duration_ms }
+            | Action::OverlayLast { duration_ms, .. } => *duration_ms,
+            _ => 0,
+        }
+    }
+
+    /// Transport commands for the players that went on air since
+    /// `before` (play, restart) and for those that went off (pause).
+    fn auto_play_commands(&self, before: &[InputId]) -> (Vec<Command>, Vec<Command>) {
+        let now = self.airing();
+        let (mut on, mut off) = (Vec::new(), Vec::new());
+        for input in self.show.inputs.iter().filter(|i| i.source.has_transport()) {
+            let (slot, auto) = (input.slot, input.auto_play);
+            let (was, is) = (before.contains(&input.id), now.contains(&input.id));
+            if is && !was {
+                on.extend(match (auto.play, auto.restart) {
+                    (true, true) => Some(Command::Transport {
+                        slot,
+                        transport: Transport::Restart,
+                    }),
+                    (true, false) => Some(Command::Transport {
+                        slot,
+                        transport: Transport::Play,
+                    }),
+                    (false, true) => Some(Command::Seek {
+                        slot,
+                        position_ms: 0,
+                    }),
+                    (false, false) => None,
+                });
+            } else if was && !is && auto.pause {
+                off.push(Command::Transport {
+                    slot,
+                    transport: Transport::Pause,
+                });
+            }
+        }
+        (on, off)
+    }
+
+    /// Delayed commands as they stand now: the automatic pause of an
+    /// input that is back on air is dropped (only INP.11 pauses later).
+    pub fn still_due(&self, commands: &[Command]) -> Vec<Command> {
+        let airing = self.airing();
+        let on_air = |slot: usize| {
+            self.input_at_slot(slot)
+                .is_some_and(|id| airing.contains(&id))
+        };
+        commands
+            .iter()
+            .filter(|c| {
+                !matches!(c, Command::Transport { slot, transport: Transport::Pause } if on_air(*slot))
+            })
+            .cloned()
+            .collect()
     }
 
     // ---- Outputs ----
@@ -3147,6 +3305,373 @@ mod tests {
             duration_ms: 0
         }));
         assert_eq!(sw.state().overlays[0], None);
+    }
+
+    #[test]
+    fn all_overlays_go_off_and_the_last_input_comes_back() {
+        let mut sw = two_inputs();
+        overlay_in(&mut sw, 1, "A");
+        overlay_in(&mut sw, 3, "B");
+        let (a, b) = (sw.state().inputs[0].id, sw.state().inputs[1].id);
+
+        let cmds = sw
+            .apply(Action::OverlayOutAll { duration_ms: 300 })
+            .unwrap();
+
+        assert_eq!(
+            cmds,
+            [
+                Command::Overlay {
+                    channel: 0,
+                    slot: None,
+                    duration_ms: 300
+                },
+                Command::Overlay {
+                    channel: 2,
+                    slot: None,
+                    duration_ms: 300
+                },
+            ]
+        );
+        assert_eq!(sw.state().overlays, [None; 4]);
+        assert_eq!(sw.state().overlay_last, [Some(a), None, Some(b), None]);
+        assert_eq!(
+            sw.apply(Action::OverlayOutAll { duration_ms: 0 }),
+            Ok(Vec::new())
+        );
+
+        let last = |channel| Action::OverlayLast {
+            channel,
+            duration_ms: 0,
+        };
+        assert_eq!(
+            sw.apply(last(3)).unwrap(),
+            [Command::Overlay {
+                channel: 2,
+                slot: Some(1),
+                duration_ms: 0
+            }]
+        );
+        assert_eq!(sw.state().overlays[2], Some(b));
+        // Showing already: nothing to do.
+        assert_eq!(sw.apply(last(3)), Ok(Vec::new()));
+        assert_eq!(
+            sw.apply(last(2)),
+            Err(ActionError::NoOverlayLast { channel: 2 })
+        );
+        assert!(matches!(
+            sw.apply(last(5)),
+            Err(ActionError::BadOverlay { .. })
+        ));
+
+        // A closed input is not brought back, until it is restored.
+        sw.apply(Action::RemoveInput { input: named("A") }).unwrap();
+        assert_eq!(sw.state().overlay_last[0], None);
+        assert_eq!(
+            sw.apply(last(1)),
+            Err(ActionError::NoOverlayLast { channel: 1 })
+        );
+        sw.apply(Action::RestoreInput).unwrap();
+        assert!(sw.apply(last(1)).is_ok());
+        assert_eq!(sw.state().overlays[0], Some(a));
+    }
+
+    /// A, B (patterns), Clip 1 and Clip 2 (files) with `auto`.
+    fn with_clips(auto: AutoPlay) -> Switcher {
+        let mut sw = two_inputs();
+        for name in ["Clip 1", "Clip 2"] {
+            sw.apply(Action::AddInput {
+                source: SourceSpec::File {
+                    path: format!("/{name}.mp4"),
+                },
+                name: Some(name.into()),
+            })
+            .unwrap();
+            sw.apply(Action::SetAutoPlay {
+                input: named(name),
+                auto_play: auto,
+            })
+            .unwrap();
+        }
+        sw
+    }
+
+    const PLAY_AND_PAUSE: AutoPlay = AutoPlay {
+        play: true,
+        restart: false,
+        pause: true,
+    };
+
+    fn transport(slot: usize, transport: Transport) -> Command {
+        Command::Transport { slot, transport }
+    }
+
+    #[test]
+    fn auto_play_is_set_kept_and_only_for_players() {
+        let mut sw = with_clips(PLAY_AND_PAUSE);
+        assert_eq!(sw.state().inputs[2].auto_play, PLAY_AND_PAUSE);
+        assert_eq!(sw.state().inputs[0].auto_play, AutoPlay::default());
+        assert!(matches!(
+            sw.apply(Action::SetAutoPlay {
+                input: named("A"),
+                auto_play: PLAY_AND_PAUSE,
+            }),
+            Err(ActionError::NoTransport { .. })
+        ));
+        // Switching it off is fine anywhere (a source that was a clip).
+        assert!(sw
+            .apply(Action::SetAutoPlay {
+                input: named("A"),
+                auto_play: AutoPlay::default(),
+            })
+            .is_ok());
+        // Without the switches nothing plays by itself.
+        let mut plain = with_clips(AutoPlay::default());
+        assert_eq!(
+            plain
+                .apply(Action::CutDirect {
+                    input: named("Clip 1")
+                })
+                .unwrap(),
+            [Command::Program {
+                slot: Some(2),
+                effect: Effect::Cut,
+                duration_ms: 0
+            }]
+        );
+    }
+
+    #[test]
+    fn a_take_plays_the_new_clip_first_and_pauses_the_old_after_the_fade() {
+        let mut sw = with_clips(PLAY_AND_PAUSE);
+        sw.apply(Action::CutDirect {
+            input: named("Clip 1"),
+        })
+        .unwrap();
+        sw.apply(Action::PreviewInput {
+            input: named("Clip 2"),
+        })
+        .unwrap();
+
+        // Button 1: fade, 500 ms.
+        let cmds = sw
+            .apply(Action::Transition {
+                slot: TransitionSlot(1),
+            })
+            .unwrap();
+
+        assert_eq!(cmds[0], transport(3, Transport::Play));
+        assert_eq!(
+            cmds[1],
+            Command::Program {
+                slot: Some(3),
+                effect: Effect::Fade,
+                duration_ms: 500
+            }
+        );
+        assert_eq!(
+            cmds[cmds.len() - 2..],
+            [Command::Wait { ms: 500 }, transport(2, Transport::Pause)]
+        );
+
+        // A cut pauses at once.
+        let cmds = sw.apply(Action::Cut).unwrap();
+        assert_eq!(cmds[0], transport(2, Transport::Play));
+        assert_eq!(cmds.last(), Some(&transport(3, Transport::Pause)));
+        assert!(!cmds.iter().any(|c| matches!(c, Command::Wait { .. })));
+    }
+
+    #[test]
+    fn restart_starts_from_the_beginning_with_or_without_play() {
+        let mut sw = with_clips(AutoPlay {
+            play: true,
+            restart: true,
+            pause: false,
+        });
+        sw.apply(Action::SetAutoPlay {
+            input: named("Clip 2"),
+            auto_play: AutoPlay {
+                restart: true,
+                ..Default::default()
+            },
+        })
+        .unwrap();
+
+        let cmds = sw
+            .apply(Action::CutDirect {
+                input: named("Clip 1"),
+            })
+            .unwrap();
+        assert_eq!(cmds[0], transport(2, Transport::Restart));
+
+        let cmds = sw
+            .apply(Action::CutDirect {
+                input: named("Clip 2"),
+            })
+            .unwrap();
+        assert_eq!(
+            cmds[0],
+            Command::Seek {
+                slot: 3,
+                position_ms: 0
+            }
+        );
+        // Clip 1 does not pause by itself.
+        assert!(!cmds.contains(&transport(2, Transport::Pause)));
+    }
+
+    #[test]
+    fn overlays_and_layouts_count_as_on_air() {
+        let mut sw = with_clips(PLAY_AND_PAUSE);
+        sw.apply(Action::CutDirect {
+            input: named("Clip 1"),
+        })
+        .unwrap();
+
+        // On air already: as an overlay too, nothing new.
+        let cmds = overlay_in(&mut sw, 1, "Clip 1");
+        assert!(!cmds.iter().any(|c| matches!(c, Command::Transport { .. })));
+        // Off program, still an overlay: keeps playing.
+        let cmds = sw.apply(Action::CutDirect { input: named("A") }).unwrap();
+        assert!(!cmds.contains(&transport(2, Transport::Pause)));
+        // Off the overlay as well: pauses after its fade.
+        let cmds = sw
+            .apply(Action::OverlayOut {
+                channel: 1,
+                duration_ms: 200,
+            })
+            .unwrap();
+        assert_eq!(
+            cmds[cmds.len() - 2..],
+            [Command::Wait { ms: 200 }, transport(2, Transport::Pause)]
+        );
+        let cmds = overlay_in(&mut sw, 2, "Clip 2");
+        assert_eq!(cmds[0], transport(3, Transport::Play));
+        let cmds = sw.apply(Action::OverlayOutAll { duration_ms: 0 }).unwrap();
+        assert_eq!(cmds.last(), Some(&transport(3, Transport::Pause)));
+
+        // A box of a layout on program.
+        let cmds = sw
+            .apply(Action::AddLayout {
+                name: Some("Two".into()),
+                background: Some(named("A")),
+                boxes: vec![BoxSpec {
+                    input: named("Clip 2"),
+                    rect: BoxRect {
+                        x: 0.5,
+                        y: 0.5,
+                        w: 0.5,
+                        h: 0.5,
+                    },
+                    border_px: 0,
+                    crop: BoxCrop::default(),
+                    locked: false,
+                }],
+            })
+            .unwrap();
+        assert!(!cmds.iter().any(|c| matches!(c, Command::Transport { .. })));
+        sw.apply(Action::PreviewLayout {
+            layout: named("Two"),
+        })
+        .unwrap();
+        let cmds = sw.apply(Action::Cut).unwrap();
+        assert_eq!(cmds[0], transport(3, Transport::Play));
+    }
+
+    #[test]
+    fn the_t_bar_plays_as_it_starts_and_pauses_back_at_zero() {
+        let mut sw = with_clips(PLAY_AND_PAUSE);
+        sw.apply(Action::CutDirect {
+            input: named("Clip 1"),
+        })
+        .unwrap();
+        sw.apply(Action::PreviewInput {
+            input: named("Clip 2"),
+        })
+        .unwrap();
+        let t_bar = |sw: &mut Switcher, position| sw.apply(Action::TBar { position }).unwrap();
+
+        assert_eq!(t_bar(&mut sw, 0.2)[0], transport(3, Transport::Play));
+        assert_eq!(t_bar(&mut sw, 0.5).len(), 1, "just the T-bar");
+        assert_eq!(
+            t_bar(&mut sw, 0.0).last(),
+            Some(&transport(3, Transport::Pause))
+        );
+        t_bar(&mut sw, 0.5);
+        // Taken at the end: the old clip pauses, the new one plays on.
+        let cmds = t_bar(&mut sw, 1.0);
+        assert_eq!(cmds.last(), Some(&transport(2, Transport::Pause)));
+        assert!(!cmds.contains(&transport(3, Transport::Play)));
+    }
+
+    #[test]
+    fn a_stinger_switches_players_at_its_cut() {
+        let mut sw = with_stinger();
+        for name in ["A", "B"] {
+            sw.apply(Action::ReplaceSource {
+                input: named(name),
+                source: SourceSpec::File {
+                    path: format!("/{name}.mp4"),
+                },
+            })
+            .unwrap();
+            sw.apply(Action::SetAutoPlay {
+                input: named(name),
+                auto_play: PLAY_AND_PAUSE,
+            })
+            .unwrap();
+        }
+
+        let cmds = sw
+            .apply(Action::Transition {
+                slot: TransitionSlot(2),
+            })
+            .unwrap();
+
+        assert_eq!(
+            cmds[..4],
+            [
+                Command::Stinger { slot: 2, on: true },
+                Command::Wait { ms: 400 },
+                transport(1, Transport::Play),
+                Command::Program {
+                    slot: Some(1),
+                    effect: Effect::Cut,
+                    duration_ms: 0
+                },
+            ]
+        );
+        let end = cmds.len() - 2;
+        assert_eq!(cmds[end - 1], transport(0, Transport::Pause));
+        assert_eq!(cmds[end], Command::Wait { ms: 600 });
+    }
+
+    #[test]
+    fn a_late_pause_is_dropped_when_the_clip_is_back_on_air() {
+        let mut sw = with_clips(PLAY_AND_PAUSE);
+        sw.apply(Action::CutDirect {
+            input: named("Clip 1"),
+        })
+        .unwrap();
+        sw.apply(Action::PreviewInput {
+            input: named("Clip 2"),
+        })
+        .unwrap();
+        let cmds = sw
+            .apply(Action::Transition {
+                slot: TransitionSlot(1),
+            })
+            .unwrap();
+        let wait = cmds
+            .iter()
+            .position(|c| matches!(c, Command::Wait { .. }))
+            .unwrap();
+        let later = &cmds[wait + 1..];
+        assert_eq!(sw.still_due(later), later);
+
+        // Cut back during the fade.
+        sw.apply(Action::Cut).unwrap();
+        assert_eq!(sw.still_due(later), []);
     }
 
     #[test]

@@ -934,8 +934,8 @@ impl Service {
     }
 
     /// Run one action; publishes the new state. Commands after a
-    /// `Command::Wait` (a stinger's cut and end) run later in the
-    /// background.
+    /// `Command::Wait` (a stinger's cut and end, a clip's automatic pause
+    /// after a fade) run later in the background.
     pub async fn handle(self: &Arc<Self>, action: Action) -> Result<ShowState, ActionError> {
         self.handle_as(action, Origin::Operator).await
     }
@@ -1234,7 +1234,8 @@ impl Service {
                     .position(|c| matches!(c, Command::Wait { .. }))
                     .unwrap_or(tail.len());
                 let mut sw = service.switcher.lock().await;
-                if let Err(e) = service.execute(&mut sw, &tail[..end]).await {
+                let due = sw.still_due(&tail[..end]);
+                if let Err(e) = service.execute(&mut sw, &due).await {
                     tracing::warn!(error = %e, "delayed engine commands failed");
                 }
                 service.publish(&sw);
@@ -1640,6 +1641,81 @@ mod tests {
 
         tokio::time::sleep(std::time::Duration::from_millis(2500)).await;
         assert!(service.state().await.fade_to_black, "trigger ran");
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_clip_pauses_after_the_fade_unless_it_is_back_on_air() {
+        use lmix_types::{AutoPlay, InputRef, SourceSpec, TransitionSlot, Transport};
+        let engine = Arc::new(NullEngine::default());
+        let service = Service::new(4, engine.clone(), None);
+        service.handle(bars()).await.unwrap();
+        service
+            .handle(Action::AddInput {
+                source: SourceSpec::File {
+                    path: "/clip.mp4".into(),
+                },
+                name: Some("Clip".into()),
+            })
+            .await
+            .unwrap();
+        let clip = InputRef::Text("Clip".into());
+        service
+            .handle(Action::SetAutoPlay {
+                input: clip.clone(),
+                auto_play: AutoPlay {
+                    pause: true,
+                    ..Default::default()
+                },
+            })
+            .await
+            .unwrap();
+        let pauses = || {
+            engine
+                .log()
+                .iter()
+                .filter(|c| {
+                    matches!(
+                        c,
+                        Command::Transport {
+                            slot: 1,
+                            transport: Transport::Pause
+                        }
+                    )
+                })
+                .count()
+        };
+        let fade_to_bars = || async {
+            service
+                .handle(Action::CutDirect {
+                    input: clip.clone(),
+                })
+                .await
+                .unwrap();
+            service
+                .handle(Action::PreviewInput {
+                    input: InputRef::Text("Bars".into()),
+                })
+                .await
+                .unwrap();
+            // Button 1: fade, 500 ms.
+            service
+                .handle(Action::Transition {
+                    slot: TransitionSlot(1),
+                })
+                .await
+                .unwrap();
+        };
+
+        fade_to_bars().await;
+        assert_eq!(pauses(), 0, "seen while it fades out");
+        tokio::time::sleep(std::time::Duration::from_millis(600)).await;
+        assert_eq!(pauses(), 1);
+
+        // Back on program during the fade: it keeps playing.
+        fade_to_bars().await;
+        service.handle(Action::Cut).await.unwrap();
+        tokio::time::sleep(std::time::Duration::from_millis(600)).await;
+        assert_eq!(pauses(), 1);
     }
 
     #[tokio::test]

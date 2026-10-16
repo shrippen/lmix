@@ -324,6 +324,16 @@ bright program "$WORK/hold.jpg" || fail "paused clip not held on program"
 act '{"action":"transport_input","input":"Clips","transport":"play"}' >/dev/null
 pass "paused clip held on program"
 
+# Automatic playback (INP.11): paused once off air, plays again on air.
+act '{"action":"set_auto_play","input":"Clips","auto_play":{"play":true,"restart":false,"pause":true}}' >/dev/null
+wait_for "$SETTLE_S" clips_move || fail "playlist does not play before the automatic pause"
+act '{"action":"cut_direct","input":"Ball"}' >/dev/null
+wait_for "$SETTLE_S" clips_still || fail "clip off air not paused automatically"
+act '{"action":"cut_direct","input":"Clips"}' >/dev/null
+wait_for "$SETTLE_S" clips_move || fail "clip on air does not play automatically"
+act '{"action":"set_auto_play","input":"Clips","auto_play":{"play":false,"restart":false,"pause":false}}' >/dev/null
+pass "automatic playback: paused off air, plays on air"
+
 # --- outputs (M3): recording and SRT, each in its own flow ---
 # Codecs of a media file, sorted and comma separated (needs a finalized file).
 codecs() { ffprobe -v error -show_entries stream=codec_name -of csv=p=0 "$1" 2>/dev/null | sort | paste -sd, -; }
@@ -388,15 +398,23 @@ act '{"action":"transition","slot":1}' >/dev/null
 sleep 1
 orange_slot="lmix slot $(curl -sf "$CORE/state" | jq '.inputs[] | select(.name=="Orange") | .slot')"
 curl -sf -X POST "$STROM/api/flows/$(flow_id "$orange_slot")/stop" >/dev/null
-wait_for "$SETTLE_S" is input_state Orange offline || fail "dead source not marked offline"
 # Hold: while the input is offline, program keeps fading to its last
 # frame (CPU compositor in the VM may show one black frame at the loss,
-# HARDWARE-TODO).
+# HARDWARE-TODO). The source fails back after ~2 s on a slow runner:
+# offline and the picture are checked in one loop, the state first, so a
+# picture taken while offline counts.
+saw_offline=""
 held_orange() {
+    local state
+    state="$(input_state Orange)"
+    [[ "$state" == offline ]] && saw_offline=1
     picture program "$WORK/held.jpg"
-    [[ "$(input_state Orange)" == offline && $(rgb "$WORK/held.jpg" r) -gt 150 ]]
+    [[ "$state" == offline && $(rgb "$WORK/held.jpg" r) -gt 150 ]]
 }
-wait_for "$SETTLE_S" held_orange || fail "program lost the orange while the source was gone"
+if ! wait_for "$SETTLE_S" held_orange; then
+    [[ -n "$saw_offline" ]] || fail "dead source not marked offline"
+    fail "program lost the orange while the source was gone"
+fi
 running="$(curl -sf "$STROM/api/flows/$MIXER_ID" | jq -r '.flow.running')"
 [[ "$running" == true ]] || fail "mixer stopped after source loss"
 wait_for "$((SETTLE_S + 15))" is input_state Orange online || fail "source did not fail back"
@@ -429,16 +447,30 @@ pass "failover: stream broke, was marked failed and restarted itself"
 
 # --- overlays (4.1): an input above program, tally, take off ---
 act '{"action":"cut_direct","input":"Ball"}' >/dev/null
-act '{"action":"overlay_in","channel":1,"input":"Orange","duration_ms":0}' >/dev/null
 overlay_shown() { picture program "$WORK/ovl.jpg"; [[ $(rgb "$WORK/ovl.jpg" r) -gt 200 ]]; }
+overlay_gone() { picture program "$WORK/ovl.jpg"; [[ $(rgb "$WORK/ovl.jpg" r) -lt 60 ]]; }
+# Orange was on program before: wait for Ball, or a late picture passes.
+wait_for "$SETTLE_S" overlay_gone || fail "ball not on program before the overlay"
+act '{"action":"overlay_in","channel":1,"input":"Orange","duration_ms":0}' >/dev/null
 wait_for "$SETTLE_S" overlay_shown || fail "overlay 1 not on program"
 orange_number="$(curl -sf "$CORE/state" | jq '.inputs[] | select(.name=="Orange") | .number')"
 [[ "$(curl -sf "$CORE/tally" | jq ".[$((orange_number - 1))]")" == 1 ]] || fail "overlay input has no program tally"
 [[ "$(curl -sf "$CORE/state" | jq -r '.overlays[0] != null')" == true ]] || fail "overlay not in state"
 act '{"action":"overlay_out","channel":1,"duration_ms":500}' >/dev/null
-overlay_gone() { picture program "$WORK/ovl.jpg"; [[ $(rgb "$WORK/ovl.jpg" r) -lt 60 ]]; }
 wait_for "$SETTLE_S" overlay_gone || fail "overlay 1 not taken off"
 pass "overlays: input above program, red tally, faded off"
+# All off and the last input again (OVL.8).
+act '{"action":"overlay_last","channel":1,"duration_ms":0}' >/dev/null
+wait_for "$SETTLE_S" overlay_shown || fail "last input of overlay 1 not back"
+# Back on while the fade off still runs: the last command wins, the end
+# of the fade must not take it off again.
+act '{"action":"overlay_out","channel":1,"duration_ms":500}' >/dev/null
+act '{"action":"overlay_last","channel":1,"duration_ms":0}' >/dev/null
+sleep 1.5
+overlay_shown || fail "overlay taken off by the end of an older fade"
+act '{"action":"overlay_out_all","duration_ms":0}' >/dev/null
+wait_for "$SETTLE_S" overlay_gone || fail "overlays not all off"
+pass "overlays: last input again, all off"
 code="$(curl -s -o /dev/null -w '%{http_code}' -X POST "$CORE/actions" -H 'content-type: application/json' \
     -d '{"action":"set_channel_strip","input":"Orange","strip":{}}')"
 [[ "$code" != 200 ]] || fail "channel strip accepted for an input without sound"

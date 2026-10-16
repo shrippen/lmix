@@ -510,4 +510,13 @@ DE = {
     'Boxes catch edges, the centre, the safe area and other boxes; hold Ctrl to place freely. Shift+click chooses more boxes to move together.': 'Boxen rasten an Kanten, der Mitte, dem Schutzbereich und anderen Boxen ein; mit Strg frei platzieren. Umschalt+Klick wählt weitere Boxen, die sich gemeinsam bewegen.',
     'Undo': 'Rückgängig',
     'Redo': 'Wiederholen',
+    'From the start': 'Von Anfang',
+    'Pause after': 'Danach pausieren',
+    'Starts playing as it goes on air: program, a layout on program, an overlay, or the T-bar.': 'Spielt ab, sobald es auf Sendung geht: Programm, ein Layout auf Programm, ein Overlay oder der T-Bar.',
+    'Goes back to the start of its clip as it goes on air.': 'Springt an den Anfang des Clips, sobald es auf Sendung geht.',
+    'Pauses once it is off air, after the transition.': 'Pausiert, sobald es nicht mehr auf Sendung ist, nach dem Übergang.',
+    'All overlays off': 'Alle Overlays aus',
+    'Takes every overlay channel off, each with its fade.': 'Nimmt alle Overlay-Kanäle heraus, jeden mit seiner Blende.',
+    'Overlay %1 is empty. Click: show the preview input. Right click: %2 again.': 'Overlay %1 ist leer. Klick: Vorschau-Input zeigen. Rechtsklick: wieder %2.',
+    'Show %1 %2 again': '%1 %2 wieder zeigen',
 }

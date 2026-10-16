@@ -110,6 +110,29 @@ pub enum Transport {
     Previous,
 }
 
+/// What a file, URL or playlist input does by itself when it goes on
+/// or off air (INP.11). On air is what tally calls program: program, a
+/// layout on program, an overlay channel, and preview while the T-bar
+/// mixes it in.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct AutoPlay {
+    /// Play when it goes on air.
+    #[serde(default)]
+    pub play: bool,
+    /// Back to the start of its item when it goes on air.
+    #[serde(default)]
+    pub restart: bool,
+    /// Pause once it is off air (after the transition).
+    #[serde(default)]
+    pub pause: bool,
+}
+
+impl AutoPlay {
+    pub fn is_off(&self) -> bool {
+        *self == Self::default()
+    }
+}
+
 impl SourceSpec {
     /// Whether the source can carry sound: test patterns bring a tone,
     /// files, URLs and SRT their audio track; devices are video only
@@ -488,6 +511,9 @@ pub struct Input {
     /// Last frame or black when the source stalls.
     #[serde(default)]
     pub signal_loss: SignalLoss,
+    /// Play, restart, pause on and off air (file, URL, playlist).
+    #[serde(default)]
+    pub auto_play: AutoPlay,
     /// Solo on the monitor bus; not saved in the show file.
     #[serde(default)]
     pub listen: Listen,
