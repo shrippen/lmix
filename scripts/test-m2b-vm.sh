@@ -392,15 +392,23 @@ act '{"action":"transition","slot":1}' >/dev/null
 sleep 1
 orange_slot="lmix slot $(curl -sf "$CORE/state" | jq '.inputs[] | select(.name=="Orange") | .slot')"
 curl -sf -X POST "$STROM/api/flows/$(flow_id "$orange_slot")/stop" >/dev/null
-wait_for "$SETTLE_S" is input_state Orange offline || fail "dead source not marked offline"
 # Hold: while the input is offline, program keeps fading to its last
 # frame (CPU compositor in the VM may show one black frame at the loss,
-# HARDWARE-TODO).
+# HARDWARE-TODO). The source fails back after ~2 s on a slow runner:
+# offline and the picture are checked in one loop, the state first, so a
+# picture taken while offline counts.
+saw_offline=""
 held_orange() {
+    local state
+    state="$(input_state Orange)"
+    [[ "$state" == offline ]] && saw_offline=1
     picture program "$WORK/held.jpg"
-    [[ "$(input_state Orange)" == offline && $(rgb "$WORK/held.jpg" r) -gt 150 ]]
+    [[ "$state" == offline && $(rgb "$WORK/held.jpg" r) -gt 150 ]]
 }
-wait_for "$SETTLE_S" held_orange || fail "program lost the orange while the source was gone"
+if ! wait_for "$SETTLE_S" held_orange; then
+    [[ -n "$saw_offline" ]] || fail "dead source not marked offline"
+    fail "program lost the orange while the source was gone"
+fi
 running="$(curl -sf "$STROM/api/flows/$MIXER_ID" | jq -r '.flow.running')"
 [[ "$running" == true ]] || fail "mixer stopped after source loss"
 wait_for "$((SETTLE_S + 15))" is input_state Orange online || fail "source did not fail back"
