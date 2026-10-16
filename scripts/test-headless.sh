@@ -148,4 +148,21 @@ grep -q '^lmix_input_tally{input="2",name="Ball"} 1$' <<<"$metrics" || fail "met
 grep -q '^lmix_uptime_seconds [0-9]' <<<"$metrics" || fail "metrics: uptime"
 grep -q '^# TYPE lmix_input_online gauge$' <<<"$metrics" || fail "metrics: input health"
 pass "metrics: Prometheus text with inputs and tally"
+
+# OVL.8 over OSC: all overlays off, the last input of a channel again.
+osc_send() {
+    python3 -I - "$OSC_PORT" "$@" <<'PY'
+import socket, sys
+def pad(b): return b + b"\0" * (4 - len(b) % 4)
+s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+s.sendto(pad(sys.argv[2].encode()) + pad(b","), ("127.0.0.1", int(sys.argv[1])))
+PY
+}
+act '{"action":"overlay_in","channel":1,"input":"Bars","duration_ms":0}'
+act '{"action":"overlay_in","channel":2,"input":"Ball","duration_ms":0}'
+osc_send /lmix/overlay/out
+wait_for state_is '.overlays == [null,null,null,null]' || fail "OSC: overlays not all off"
+osc_send /lmix/overlay/2/last
+wait_for state_is ".overlays[1] == \"$ball_id\" and .overlays[0] == null" || fail "OSC: last input not back"
+pass "OSC: all overlays off, last input of a channel again"
 echo "headless check passed"

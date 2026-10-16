@@ -1643,6 +1643,81 @@ mod tests {
         assert!(service.state().await.fade_to_black, "trigger ran");
     }
 
+    #[tokio::test(start_paused = true)]
+    async fn a_clip_pauses_after_the_fade_unless_it_is_back_on_air() {
+        use lmix_types::{AutoPlay, InputRef, SourceSpec, TransitionSlot, Transport};
+        let engine = Arc::new(NullEngine::default());
+        let service = Service::new(4, engine.clone(), None);
+        service.handle(bars()).await.unwrap();
+        service
+            .handle(Action::AddInput {
+                source: SourceSpec::File {
+                    path: "/clip.mp4".into(),
+                },
+                name: Some("Clip".into()),
+            })
+            .await
+            .unwrap();
+        let clip = InputRef::Text("Clip".into());
+        service
+            .handle(Action::SetAutoPlay {
+                input: clip.clone(),
+                auto_play: AutoPlay {
+                    pause: true,
+                    ..Default::default()
+                },
+            })
+            .await
+            .unwrap();
+        let pauses = || {
+            engine
+                .log()
+                .iter()
+                .filter(|c| {
+                    matches!(
+                        c,
+                        Command::Transport {
+                            slot: 1,
+                            transport: Transport::Pause
+                        }
+                    )
+                })
+                .count()
+        };
+        let fade_to_bars = || async {
+            service
+                .handle(Action::CutDirect {
+                    input: clip.clone(),
+                })
+                .await
+                .unwrap();
+            service
+                .handle(Action::PreviewInput {
+                    input: InputRef::Text("Bars".into()),
+                })
+                .await
+                .unwrap();
+            // Button 1: fade, 500 ms.
+            service
+                .handle(Action::Transition {
+                    slot: TransitionSlot(1),
+                })
+                .await
+                .unwrap();
+        };
+
+        fade_to_bars().await;
+        assert_eq!(pauses(), 0, "seen while it fades out");
+        tokio::time::sleep(std::time::Duration::from_millis(600)).await;
+        assert_eq!(pauses(), 1);
+
+        // Back on program during the fade: it keeps playing.
+        fade_to_bars().await;
+        service.handle(Action::Cut).await.unwrap();
+        tokio::time::sleep(std::time::Duration::from_millis(600)).await;
+        assert_eq!(pauses(), 1);
+    }
+
     #[tokio::test]
     async fn a_shortcut_runs_its_actions_in_order() {
         use lmix_types::{InputRef, ShortcutSpec};
