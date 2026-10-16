@@ -323,8 +323,21 @@ pub fn to_bytes(show: &Show) -> Vec<u8> {
     serde_json::to_vec_pretty(&file).expect("show serializes")
 }
 
+/// A show read from a file, and the older file version it came in.
+pub struct Loaded {
+    pub show: Show,
+    /// The file's version when older than this lmix's: migrated on load,
+    /// saved in the new one (SHW.7).
+    pub older: Option<u32>,
+}
+
 /// A show from a file's bytes; `name` for errors.
 pub fn from_bytes(bytes: &[u8], name: &str) -> Result<Show, ShowFileError> {
+    read_bytes(bytes, name).map(|loaded| loaded.show)
+}
+
+/// A show from a file's bytes, with its older version if any.
+pub fn read_bytes(bytes: &[u8], name: &str) -> Result<Loaded, ShowFileError> {
     let format_err = |reason: String| ShowFileError::Format {
         path: name.to_string(),
         reason,
@@ -348,7 +361,22 @@ pub fn from_bytes(bytes: &[u8], name: &str) -> Result<Show, ShowFileError> {
         }
     }
     let file: ShowFile = serde_json::from_value(value).map_err(|e| format_err(e.to_string()))?;
-    Ok(file.show)
+    Ok(Loaded {
+        show: file.show,
+        older: (version < FILE_VERSION).then_some(version),
+    })
+}
+
+/// Keep the file of an older version beside it before it is written in
+/// the new one: `show.lmix` → `show.lmix.v1.bak`, once (SHW.7).
+pub async fn backup(path: &Path, version: u32) -> std::io::Result<()> {
+    let mut name = path.as_os_str().to_owned();
+    name.push(format!(".v{version}.bak"));
+    let to = std::path::PathBuf::from(name);
+    if tokio::fs::try_exists(&to).await? {
+        return Ok(());
+    }
+    tokio::fs::copy(path, &to).await.map(|_| ())
 }
 
 /// Version 1 to 2: a cue's `label` is its `name`; the rest of a cue of
@@ -384,6 +412,11 @@ pub async fn save(show: &Show, path: &Path) -> Result<(), ShowFileError> {
 }
 
 pub async fn load(path: &Path) -> Result<Show, ShowFileError> {
+    load_versioned(path).await.map(|loaded| loaded.show)
+}
+
+/// A show file, with its older version if any (SHW.7).
+pub async fn load_versioned(path: &Path) -> Result<Loaded, ShowFileError> {
     let shown = path.display().to_string();
     // A show is a regular file of reasonable size (not a device, a pipe
     // or something huge someone points the API at).
@@ -406,7 +439,7 @@ pub async fn load(path: &Path) -> Result<Show, ShowFileError> {
             source,
         })?;
 
-    from_bytes(&bytes, &shown)
+    read_bytes(&bytes, &shown)
 }
 
 #[cfg(test)]

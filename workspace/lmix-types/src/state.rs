@@ -159,6 +159,10 @@ pub struct ShowState {
     /// The show's script folder (SSH.2).
     #[serde(default)]
     pub script_folder: Option<String>,
+    /// The show file's older format version, migrated on open; the next
+    /// save over it keeps the old file as `<file>.v<n>.bak` (SHW.7).
+    #[serde(default)]
+    pub older_format: Option<u32>,
     /// What would go wrong when the cue lists run (SUI.5).
     #[serde(default)]
     pub cue_warnings: Vec<crate::cue::CueWarning>,

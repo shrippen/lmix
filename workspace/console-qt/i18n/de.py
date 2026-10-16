@@ -332,6 +332,7 @@ DE = {
     'MIDI: %1': 'MIDI: %1',
     'Make this the cue GO starts next': 'Diesen Cue auf Standby setzen: GO startet ihn als nächsten',
     'Standby': 'Standby',
+    'This show file is in the older format %1 and was converted on opening. Saving it keeps the old file beside it (.v%1.bak).': 'Diese Show-Datei hat das ältere Format %1 und wurde beim Öffnen umgewandelt. Beim Speichern bleibt die alte Datei daneben erhalten (.v%1.bak).',
     'Dark': 'Dunkel',
     'Dim the window for a dark room': 'Das Fenster für einen dunklen Raum abdunkeln',
     '+ Message': '+ Nachricht',

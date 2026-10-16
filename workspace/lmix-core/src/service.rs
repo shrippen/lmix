@@ -1901,12 +1901,14 @@ fn mark_slot(sw: &mut Switcher, command: &Command, ok: bool) {
 }
 
 async fn open(sw: &mut Switcher, path: String) -> Result<Vec<Command>, ActionError> {
-    let show = show::load(&PathBuf::from(&path))
+    let loaded = show::load_versioned(&PathBuf::from(&path))
         .await
         .map_err(|e| ActionError::ShowFile {
             message: e.to_string(),
         })?;
-    Ok(sw.replace(show, Some(path)))
+    let commands = sw.replace(loaded.show, Some(path));
+    sw.set_older_format(loaded.older);
+    Ok(commands)
 }
 
 /// Found media files (old path, new path) take the old paths' place,
@@ -1974,12 +1976,21 @@ async fn save(sw: &mut Switcher, path: Option<String>) -> Result<(), ActionError
         .or_else(|| sw.path().map(str::to_string))
         .ok_or(ActionError::NoShowPath)?;
 
+    // Over a file of an older version: keep it beside (SHW.7).
+    if let (Some(version), true) = (sw.older_format(), sw.path() == Some(path.as_str())) {
+        show::backup(&PathBuf::from(&path), version)
+            .await
+            .map_err(|e| ActionError::ShowFile {
+                message: format!("keeping the older file: {e}"),
+            })?;
+    }
     show::save(sw.show(), &PathBuf::from(&path))
         .await
         .map_err(|e| ActionError::ShowFile {
             message: e.to_string(),
         })?;
     sw.set_path(path);
+    sw.set_older_format(None);
     Ok(())
 }
 
@@ -2803,6 +2814,38 @@ mod tests {
             log.iter().any(|c| matches!(c, Command::Preview { .. })),
             "{log:?}"
         );
+    }
+
+    #[tokio::test]
+    async fn an_older_show_file_is_kept_when_saved_over() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("abend.lmix");
+        let old = br#"{"format":"lmix-show","version":1,"show":{"inputs":[],"preview":null,"program":null,"transitions":[],
+            "cue_lists":[{"id":"7d0c3c2e-2f43-4a39-9d5c-6c8f1f0b6a11","name":"Run","cues":[{"label":"Bars","actions":[{"action":"cut"}]}]}]}}"#;
+        tokio::fs::write(&file, old).await.unwrap();
+        let service = Service::new(2, Arc::new(NullEngine::default()), None);
+        let path = file.display().to_string();
+
+        let state = service
+            .handle(Action::OpenShow { path: path.clone() })
+            .await
+            .unwrap();
+        assert_eq!(state.older_format, Some(1));
+        assert_eq!(state.cue_lists[0].cues[0].name, "Bars");
+
+        let state = service
+            .handle(Action::SaveShow { path: None })
+            .await
+            .unwrap();
+        assert_eq!(state.older_format, None);
+        let kept = dir.path().join("abend.lmix.v1.bak");
+        assert_eq!(
+            tokio::fs::read(&kept).await.unwrap(),
+            old.to_vec(),
+            "the old file, as it was"
+        );
+        let new = tokio::fs::read_to_string(&file).await.unwrap();
+        assert!(new.contains("\"version\": 2"), "{new}");
     }
 
     #[tokio::test]

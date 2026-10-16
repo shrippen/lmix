@@ -386,6 +386,8 @@ pub struct Switcher {
     cues: Runner,
     /// What would go wrong when they run (SUI.5); see `refresh_warnings`.
     cue_warnings: Vec<lmix_types::cue::CueWarning>,
+    /// The show file's older version, until saved (SHW.7).
+    older_format: Option<u32>,
     status: HashMap<InputId, InputStatus>,
     /// Audio channel settings the engine has, per slot.
     mix: HashMap<usize, Mix>,
@@ -446,6 +448,7 @@ impl Switcher {
             removed: Vec::new(),
             cues: Runner::default(),
             cue_warnings: Vec::new(),
+            older_format: None,
             status: HashMap::new(),
             mix: HashMap::new(),
             listen: HashMap::new(),
@@ -1152,6 +1155,7 @@ impl Switcher {
         commands.extend(self.clear_listen());
         commands.extend(self.stop_all_outputs());
         self.show = show;
+        self.older_format = None;
         // Cues of the old show stop without a word; nothing starts, and
         // standby is where the show kept it (SAF.6).
         self.cues = Runner::default();
@@ -1360,6 +1364,7 @@ impl Switcher {
             go_guard_ms: self.show.go_guard_ms,
             panic_ms: self.show.panic_ms,
             script_folder: self.show.script_folder.clone(),
+            older_format: self.older_format,
             cue_warnings: self.cue_warnings.clone(),
             targets: self.targets.iter().map(|t| t.public()).collect(),
             feeds: self.feeds.clone(),
@@ -2097,6 +2102,15 @@ impl Switcher {
     /// What the cue lists have due by `now`.
     pub fn cue_tick(&mut self, now: tokio::time::Instant) -> Vec<Out> {
         self.cues.tick(&self.show.cue_lists, now)
+    }
+
+    /// The opened file was of an older version (SHW.7).
+    pub fn set_older_format(&mut self, version: Option<u32>) {
+        self.older_format = version;
+    }
+
+    pub fn older_format(&self) -> Option<u32> {
+        self.older_format
     }
 
     /// Check the cue lists again (SUI.5): after changes of the show, the

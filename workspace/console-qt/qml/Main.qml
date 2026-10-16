@@ -781,6 +781,17 @@ Kirigami.ApplicationWindow {
                 onDarkRoomChanged: viewSettings.darkRoom = darkRoom
             }
 
+            // An older show file, converted on opening (SHW.7).
+            QQC2.Label {
+                Layout.fillWidth: true
+                visible: root.show !== null && !!root.show.older_format
+                text: root.show && root.show.older_format
+                    ? qsTr("This show file is in the older format %1 and was converted on opening. Saving it keeps the old file beside it (.v%1.bak).").arg(root.show.older_format)
+                    : ""
+                color: KanteStyle.infoColor
+                wrapMode: Text.Wrap
+            }
+
             QQC2.Label {
                 Layout.fillWidth: true
                 visible: backend.message.length > 0

@@ -1739,12 +1739,12 @@
       <translation>Einige Sekunden lang Aufnahme bis Programm messen</translation>
     </message>
     <message>
-      <location line="+17" />
+      <location line="+19" />
       <source>Preview</source>
       <translation>Vorschau</translation>
     </message>
     <message>
-      <location line="+23" />
+      <location line="+35" />
       <source>Program</source>
       <translation>Programm</translation>
     </message>
@@ -1852,6 +1852,11 @@
       <location line="+5" />
       <source>+ Input</source>
       <translation>+ Input</translation>
+    </message>
+    <message>
+      <location line="+133" />
+      <source>This show file is in the older format %1 and was converted on opening. Saving it keeps the old file beside it (.v%1.bak).</source>
+      <translation>Diese Show-Datei hat das ältere Format %1 und wurde beim Öffnen umgewandelt. Beim Speichern bleibt die alte Datei daneben erhalten (.v%1.bak).</translation>
     </message>
   </context>
   <context>
