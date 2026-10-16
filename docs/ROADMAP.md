@@ -281,9 +281,9 @@ Stand:
 | # | Stand |
 |---|---|
 | 4.1 | ✅ 4 Overlay-Kanäle (wie vMix; strom-DSK hat höchstens 4) über die DSK-Ebenen des Mischers, Ein-/Ausblenden (strom-Patch `lmix-dsk-fade`), Tally rot, in Show-Datei; Console: Knöpfe 1–4 je Kachel und Overlay-Leiste; ⚠ Position/Größe eines Overlays: über ein Layout (4.6) |
-| 4.2 | ✅ Stinger: Clip-Input (Alpha, z. B. WebM/VP9) auf eigener DSK-Ebene unter den Overlays, Cut darunter am Cut-Punkt, Länge je Taste; gesperrt solange er läuft; strom-Patch `lmix-stinger-layer` (8 DSK); Console: Effekt „Stinger“ mit Dialog; ⚠ Länge noch von Hand |
+| 4.2 | ✅ Stinger: Clip-Input (Alpha, z. B. WebM/VP9) auf eigener DSK-Ebene unter den Overlays, Cut darunter am Cut-Punkt, Länge je Taste; gesperrt solange er läuft; strom-Patch `lmix-stinger-layer` (8 DSK); Console: Effekt „Stinger“ mit Dialog, Länge aus dem Clip |
 | 4.3 | ✅ T-Bar: Vorschau wird beim Ziehen über Programm eingeblendet (Mischung), am Ende Take, zurück auf 0 ohne Wirkung; Position im Zustand; Console-Schieber; ⚠ nur Blende (andere Effekte am Ende als Cut), Ton folgt erst beim Take |
-| 4.6 | ✅ Looks je Input (Farbkorrektur, nur GL-Mischer, sonst Ablehnung mit Grund); Layouts: Hintergrund und bis zu 8 Boxen mit Rahmen als PiP-Komposition, in Vorschau/Programm wie ein Input, Tally für alle Inputs darin; strom-Patch `lmix-live-underlays`; Console: „Farbkorrektur…“ je Kachel, Layout-Leiste und -Dialog; ⚠ Boxen nur an festen Plätzen, keine Bewegung zwischen Layouts |
+| 4.6 | ✅ Looks je Input (Farbkorrektur, nur GL-Mischer, sonst Ablehnung mit Grund); Layouts: Hintergrund und bis zu 8 Boxen mit Rahmen als PiP-Komposition, in Vorschau/Programm wie ein Input, Tally für alle Inputs darin; strom-Patch `lmix-live-underlays`; Boxen frei ziehen und zuschneiden; Console: „Farbkorrektur…“ je Kachel, Layout-Leiste und -Dialog mit Fläche; ⚠ keine Bewegung zwischen Layouts |
 | 4.7 | ✅ Kanalzug je Input: Gain, Pan, Hochpass, 4-Band-EQ, Gate, Kompressor, Verzögerung (live, strom-Patch `lmix-live-offset`); 2 Aux-Busse (1 vor, 2 nach dem Fader) mit Sends je Input, Master, Pegel, Ausgang mit Aux-Ton (Mix-Minus); alles in Show-Datei; Console: „Kanalzug…“, „Aux…“, Ausgangsdialog „Ton“; Solo/PFL/AFL seit M2b; ⚠ vor/nach fest je Bus |
 | 4.4 | → M7 (Titel) |
 | 4.5 | → „Später“ (Wiederholung) |
@@ -308,6 +308,18 @@ Stand:
   Media-Port, klärt die offene RTSP-/Bind-Frage aus `DECISIONS.md` mit — **C**
 - Scopes (Waveform, Vectorscope) auf PGM — **C**
 - PTZ über VISCA-IP — **C**, optional
+
+Stand:
+
+| # | Stand |
+|---|---|
+| AUT.1–3 | ✅ Kurzbefehle (Taste, bis 16 Aktionen) in der Show; Console-Editor, Web-Seite `/keys` |
+| AUT.7 | ✅ Auslöser je Input: Programm an/aus, Vorschau, Overlay ein/aus, Clip-Ende und Countdown davor, mit Verzögerung |
+| AUT.10, AUT.11 | ✅ Geschlossenen Input zurückholen; Sperre gegen Schließen/Stoppen |
+| AUT.13 | ✅ OSC: Aktionen per Adresse oder JSON; Tally, Programm, Vorschau, T-Bar, FTB, nächster Cue an Abonnenten; ganzer Zustand auf Anfrage |
+| AUT.14 | ✅ Cue-Listen mit GO, Zurück, Sprung; Console-Dialog |
+| AUT.4 | ✅ MIDI aus Gerätedateien: Note/Regler je Kurzbefehl, Regler auf T-Bar, Lernen in der Console; ⚠ keine Rückmeldung an den Controller |
+| AUT.12 | ✅ Globale Tasten über das GlobalShortcuts-Portal (KDE, GNOME 48+); ⚠ nicht unter X11 ohne Portal |
 
 ### M7 — Titel & Daten (HTML), direkt nach M4
 
@@ -335,6 +347,15 @@ IDs: WEB.1–5, TEL.1–3, API.2–11, STR.8.
 
 **Abnahme**: Bitfocus Companion steuert lmix über das eigene Modul
 (API.9, API.11); Tally auf dem Handy.
+
+Stand:
+
+| # | Stand |
+|---|---|
+| WEB.1–3 | ✅ `/mixer`, `/tally`, `/keys` aus lmix-core, Kante-Aussehen; ⚠ ohne Anmeldung (WEB.4) |
+| API.5 | ✅ Textzeilen über TCP: Aktionen, Tally/Zustand/Pegel/Ausgänge im Abo |
+| OPS.1 | ✅ Show beim Start (`LMIX_SHOW`), SIGTERM, systemd-Benutzer-Units |
+| OPS.3 | ✅ `/metrics` (Prometheus) mit Maschine, GPU, Speicher von strom (strom-Patch `lmix-process-memory`) und QoS je Flow |
 
 ### M9 — Gleichstand
 
