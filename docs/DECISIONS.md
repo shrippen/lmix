@@ -2077,3 +2077,42 @@ dazu (Warteschlangen).
 `gl_download`, ohne Kachel-Taps) und je 1 h messen, mit freier GPU.
 **Stand**: CUDA bleibt der Standard-Mischer (~7,7 MB/h im 8-h-Lauf); GL
 erst nach der Ursache für lange Läufe empfehlen.
+
+## 2026-10-16 — Show-Modus als zweiter Bedienmodus
+
+**Kontext**: lmix soll neben dem Bildmischer (vMix-Vorbild) auch Abläufe
+nach Drehbuch fahren können (QLab-Vorbild): Theater, Ausstellungen,
+Spieltisch. Technisch teilen beide Engine, Inputs, Ausgänge, Ton,
+Aktionskatalog, Auslöser, APIs und Show-Datei; verschieden ist das
+Bedienkonzept (im Moment entscheiden vs. vorbereitete Cue-Folge mit GO).
+
+**Optionen**: (a) eigenes Programm, z. B. auf Linux Show Player (GPL,
+Python) aufbauend; (b) Plugin neben lmix; (c) zweiter Modus über
+demselben `lmix-core`.
+
+**Entscheidung** (User): (c). Eigenes Lastenheft `LASTENHEFT-SHOW.md`
+mit Quellenzuordnung `LASTENHEFT-SHOW-QUELLEN.md` (Clean Room gegen das
+QLab-5-Handbuch), Meilensteine S1–S3, Personas P8–P10. Licht in S1 nur
+über Home Assistant, eigene Lichtsteuerung ab S3 (User). (a) scheidet
+auch an der Lizenz (GPL, `claude.md` 6).
+
+**Offen**: S-E.1–12 in `LASTENHEFT-SHOW.md` §6, vor Beginn von S1 zu
+entscheiden. `claude.md` nennt beide Modi (Entscheidungen 7, 8).
+
+## 2026-10-16 — Show-Modus: S-E.1–12
+
+**Kontext**: Offene Fragen aus `LASTENHEFT-SHOW.md` §6, vor S1 zu
+entscheiden. Vorschläge mit Alternativen auf einer Entscheidungsseite.
+
+**Entscheidung** (User): Vorschlag angenommen für S-E.1, 2, 4, 6–11.
+Abweichend: S-E.5 Cue ohne Rückwärtsverträglichkeit umbauen und Shows
+migrieren (vor dem ersten Release erlaubt); S-E.12 ein gemeinsamer
+Plugin-Host statt eines Prozesses je Plugin, bei Bedarf einer je Zone.
+Zurückgestellt: S-E.3, Folgen noch unklar; vor S1 Stufe 2 mit Messungen
+neu vorlegen.
+
+**Neu aus den Anmerkungen**: SUI.13 (Felder je Modus, „Erweitert“),
+SSH.5 (Show samt Rechner-Einstellungen ex-/importieren, ohne
+Geheimnisse), VIS.17 (Bühne als Input im Mischer für die gemischte
+Theatershow, S2-Abnahme mit P7). CUE.21 und SSH.1: migrieren statt
+alte Formate weiterlesen.

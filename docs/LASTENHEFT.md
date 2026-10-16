@@ -12,6 +12,11 @@ sinnvoll ist: Altlasten fallen weg oder werden durch Heutiges ersetzt
 (§5a), ein sauberer Schnitt zu vMix-Namen und -Formaten ist zulässig. Jede
 Abweichung steht mit Grund in diesem Dokument.
 
+**Show-Modus**: Der zweite Bedienmodus (Showrunner nach QLab-Vorbild)
+hat ein eigenes Lastenheft, `LASTENHEFT-SHOW.md` (IDs CUE, RUN, SND, VIS,
+EXT, VAR, IMP, CTL, SAF, SUI, SSH, LGT, OBJ, FX, TC; Meilensteine S1–S3).
+Es setzt auf diesem Lastenheft auf und ändert es nicht.
+
 ---
 
 ## 0. Clean-Room-Regeln
@@ -606,6 +611,7 @@ nicht nach, sondern ersetzt sie durch Heutiges oder lässt sie weg
 | # | Frage | Stand |
 |---|---|---|
 | E.7 | Gäste: Signalisierung/TURN selbst betreiben | Später |
+| S-E.1–12 | Show-Modus: Ablauf-Engine, Zonen, Patches, Bühnen, Plugins u. a. | Vorgeschlagen, `LASTENHEFT-SHOW.md` §6 |
 
 ---
 
@@ -664,3 +670,4 @@ SRC.18 bleibt K (SRC.31 genügt), SRC.19 bleibt L, M5b wie geplant.
   210 Seiten; lokal außerhalb des Repos), inkl. Shortcut Function Reference,
   HTTP- und TCP-API.
 - Zuordnung Anforderung → Handbuchseite: `docs/LASTENHEFT-QUELLEN.md`
+- Show-Modus: QLab-5-Handbuch, Zuordnung in `docs/LASTENHEFT-SHOW-QUELLEN.md`
