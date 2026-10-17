@@ -20,12 +20,12 @@ use lmix_types::layout::{BORDER_MAX_PX, LAYOUTS, LAYOUT_BOXES, LAYOUT_TEMPLATES}
 use lmix_types::shortcut::SHORTCUT_ACTIONS;
 use lmix_types::state::API_VERSION;
 use lmix_types::{
-    Action, ActionError, AtEnd, AutoPlay, AuxBus, BoxCrop, BoxRect, BoxSpec, ChannelStrip, Effect,
-    Ingest, Input, InputColor, InputId, InputPress, InputRef, InputStatus, Layout, LayoutBox,
-    LayoutTemplate, Listen, Look, Output, OutputGroup, OutputId, OutputRef, OutputSource,
-    OutputSpec, OutputStatus, OverlayChannel, QuickPlay, Shortcut, ShortcutSpec, ShowState,
-    SignalLoss, SourceSpec, Stinger, StingerSpec, TemplateBox, TemplateInput, Transition,
-    TransitionSlot, Transport, VideoEncoding, VolumeTarget, FADE_MAX_MS,
+    Action, ActionError, AtEnd, AutoPlay, AuxBus, BoxCrop, BoxRect, BoxShown, BoxSpec,
+    ChannelStrip, Effect, Ingest, Input, InputColor, InputId, InputPress, InputRef, InputStatus,
+    Layout, LayoutBox, LayoutTemplate, Listen, Look, Output, OutputGroup, OutputId, OutputRef,
+    OutputSource, OutputSpec, OutputStatus, OverlayChannel, QuickPlay, Shortcut, ShortcutSpec,
+    ShowState, SignalLoss, SourceSpec, Stinger, StingerSpec, TemplateBox, TemplateInput,
+    Transition, TransitionSlot, Transport, VideoEncoding, VolumeTarget, FADE_MAX_MS,
 };
 use lmix_types::{Cue, CueList, MidiKind, MidiMessage, Trigger, TriggerOn};
 
@@ -1241,6 +1241,11 @@ impl Switcher {
                 background,
                 boxes,
             } => self.set_layout(&layout, background, boxes),
+            Action::ShowBox {
+                layout,
+                number,
+                shown,
+            } => self.show_box(&layout, number, shown),
             Action::RemoveLayout { layout } => self.remove_layout(&layout),
             Action::PreviewLayout { layout } => self.preview_layout(&layout),
             Action::SaveLayoutTemplate { layout, name } => {
@@ -2837,6 +2842,30 @@ impl Switcher {
         Ok(vec![self.layout_command(&self.show.layouts[index])])
     }
 
+    /// LAY.2: a box out of the picture and back, as a layout change.
+    fn show_box(
+        &mut self,
+        layout: &InputRef,
+        number: u8,
+        shown: BoxShown,
+    ) -> Result<Vec<Command>, ActionError> {
+        let index = self.find_layout(layout)?;
+        let entry = &mut self.show.layouts[index];
+        let count = entry.boxes.len();
+        let found = usize::from(number)
+            .checked_sub(1)
+            .and_then(|at| entry.boxes.get_mut(at))
+            .ok_or_else(|| ActionError::BadLayout {
+                reason: format!("no box {number}; the layout has {count}"),
+            })?;
+        found.hidden = match shown {
+            BoxShown::Shown => false,
+            BoxShown::Hidden => true,
+            BoxShown::Toggle => !found.hidden,
+        };
+        Ok(vec![self.layout_command(&self.show.layouts[index])])
+    }
+
     fn remove_layout(&mut self, layout: &InputRef) -> Result<Vec<Command>, ActionError> {
         let index = self.find_layout(layout)?;
         let id = self.show.layouts[index].id;
@@ -2907,6 +2936,7 @@ impl Switcher {
                 border_px: spec.border_px,
                 crop: spec.crop,
                 locked: spec.locked,
+                hidden: spec.hidden,
             });
         }
         Ok((background, parts))
@@ -2920,6 +2950,7 @@ impl Switcher {
             boxes: layout
                 .boxes
                 .iter()
+                .filter(|b| !b.hidden)
                 .filter_map(|b| {
                     Some(EngineBox {
                         rect: b.rect,
@@ -3130,6 +3161,7 @@ impl Switcher {
                 border_px: b.border_px,
                 crop: b.crop,
                 locked: b.locked,
+                hidden: false,
             })
             .collect();
         self.add_layout(Some(name.unwrap_or(template.name)), background, boxes)
@@ -3155,7 +3187,7 @@ impl Switcher {
             .iter()
             .find(|l| Some(l.id) == layout)
             .is_some_and(|l| {
-                l.background == Some(input) || l.boxes.iter().any(|b| b.input == input)
+                l.background == Some(input) || l.boxes.iter().any(|b| b.input == input && !b.hidden)
             })
     }
 
@@ -4955,6 +4987,7 @@ mod tests {
                 border_px: 4,
                 crop: BoxCrop::default(),
                 locked: true,
+                hidden: false,
             }],
         })
         .unwrap();
@@ -5272,6 +5305,7 @@ mod tests {
                     border_px: 0,
                     crop: BoxCrop::default(),
                     locked: false,
+                    hidden: false,
                 }],
             })
             .unwrap();
@@ -6258,6 +6292,7 @@ mod tests {
                     border_px: 4,
                     crop: ZOOM,
                     locked: true,
+                    hidden: false,
                 }],
             })
             .unwrap();
@@ -6342,6 +6377,39 @@ mod tests {
     }
 
     #[test]
+    fn a_layout_box_hides_and_shows() {
+        let mut sw = with_layout();
+        sw.apply(Action::PreviewLayout {
+            layout: InputRef::Number(1),
+        })
+        .unwrap();
+        sw.apply(Action::Cut).unwrap();
+        assert_eq!(sw.tally(), [1, 1], "A and B in the layout on air");
+        let show = |shown| Action::ShowBox {
+            layout: InputRef::Number(1),
+            number: 1,
+            shown,
+        };
+
+        // LAY.2: hidden, the box stays in the layout but is not drawn.
+        let cmds = sw.apply(show(BoxShown::Hidden)).unwrap();
+        assert!(matches!(&cmds[..], [Command::SetLayout { boxes, .. }] if boxes.is_empty()));
+        assert!(sw.state().layouts[0].boxes[0].hidden);
+        assert_eq!(sw.tally(), [1, 0], "a hidden box is not on air");
+        let cmds = sw.apply(show(BoxShown::Toggle)).unwrap();
+        assert!(matches!(&cmds[..], [Command::SetLayout { boxes, .. }] if boxes.len() == 1));
+        assert_eq!(sw.tally(), [1, 1]);
+        assert!(matches!(
+            sw.apply(Action::ShowBox {
+                layout: InputRef::Number(1),
+                number: 2,
+                shown: BoxShown::Shown
+            }),
+            Err(ActionError::BadLayout { .. })
+        ));
+    }
+
+    #[test]
     fn layouts_are_checked() {
         let mut sw = with_layout();
         let spec = |input: &str, rect| BoxSpec {
@@ -6350,6 +6418,7 @@ mod tests {
             border_px: 0,
             crop: BoxCrop::default(),
             locked: false,
+            hidden: false,
         };
         let nothing_left = BoxSpec {
             crop: BoxCrop {

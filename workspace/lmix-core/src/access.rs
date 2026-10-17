@@ -300,6 +300,7 @@ pub fn right_of(action: &Action) -> Right {
         | Action::SetListen { .. }
         | Action::ClearListen
         | Action::PreviewLayout { .. }
+        | Action::ShowBox { .. }
         | Action::CueGo { .. }
         | Action::CueStart { .. }
         | Action::CueStop { .. }

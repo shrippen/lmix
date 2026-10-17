@@ -1449,7 +1449,7 @@
       <translation>Neues Layout</translation>
     </message>
     <message>
-      <location line="+50" />
+      <location line="+52" />
       <source>Name</source>
       <translation>Name</translation>
     </message>
@@ -1479,7 +1479,7 @@
       <translation>Box hinzufügen, dann an ihren Platz ziehen</translation>
     </message>
     <message>
-      <location line="+71" />
+      <location line="+73" />
       <source> (cropped)</source>
       <translation> (beschnitten)</translation>
     </message>
@@ -1487,6 +1487,11 @@
       <location line="+1" />
       <source> (locked)</source>
       <translation> (gesperrt)</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source> (hidden)</source>
+      <translation> (ausgeblendet)</translation>
     </message>
     <message>
       <location line="+95" />
@@ -1522,6 +1527,16 @@
       <location line="+2" />
       <source>Lock box %1 in place</source>
       <translation>Box %1 an ihrem Platz sperren</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Visible</source>
+      <translation>Sichtbar</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Show box %1 in the picture</source>
+      <translation>Box %1 im Bild zeigen</translation>
     </message>
     <message>
       <location line="+5" />
@@ -1574,12 +1589,12 @@
       <translation>+ Box</translation>
     </message>
     <message>
-      <location line="-531" />
+      <location line="-545" />
       <source>Empty</source>
       <translation>Leer</translation>
     </message>
     <message>
-      <location line="+427" />
+      <location line="+432" />
       <source>Select box %1</source>
       <translation>Box %1 wählen</translation>
     </message>
