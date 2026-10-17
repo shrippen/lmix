@@ -484,10 +484,16 @@ pub fn output_flow(
             flow.blocks.push(block(
                 "rtmp",
                 RTMP_OUTPUT_BLOCK,
-                vec![(
-                    "location",
-                    PropertyValue::String(OutputSpec::rtmp_location(url, key)),
-                )],
+                vec![
+                    (
+                        "location",
+                        PropertyValue::String(OutputSpec::rtmp_location(url, key)),
+                    ),
+                    // Output flows run on the mixer's running time (direct
+                    // media timing): a syncing sink waits for a clock time
+                    // that never comes. The encoder paces it, as for SRT.
+                    ("sync", PropertyValue::Bool(false)),
+                ],
             ));
             flow.links
                 .push(link("enc:encoded_out".into(), "rtmp:video_in".into()));
@@ -1599,6 +1605,11 @@ mod tests {
         assert!(matches!(
             rtmp.properties.get("location"),
             Some(PropertyValue::String(l)) if l == "rtmp://a.rtmp.example.com/live2/abcd-1234"
+        ));
+        // A syncing sink would wait on the mixer's running time for good.
+        assert!(matches!(
+            rtmp.properties.get("sync"),
+            Some(PropertyValue::Bool(false))
         ));
         for (from, to) in [
             ("enc:encoded_out", "rtmp:video_in"),
