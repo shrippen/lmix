@@ -5,9 +5,10 @@ name: pr-agent
 # A comment of the owner runs it again: /review, /improve, /ask "…".
 #
 # Needs the secret PR_AGENT_LLM_KEY and the variable PR_AGENT_MODEL (a
-# LiteLLM model name, e.g. gpt-5.6, gemini/gemini-3.5-pro, or through
-# OpenRouter openrouter/<vendor>/<model>). For a model PR-Agent does not
-# know, the variable PR_AGENT_MODEL_TOKENS gives its context size.
+# LiteLLM model name, e.g. anthropic/claude-opus-5-5, gpt-5.6,
+# gemini/gemini-3.5-pro, or through OpenRouter openrouter/<vendor>/<model>).
+# For a model PR-Agent does not know, the variable PR_AGENT_MODEL_TOKENS
+# gives its context size.
 # Comments come from the Actions bot; the secret PR_AGENT_GITEA_TOKEN sets
 # an own user.
 # Settings: .gitea/pr-agent/config.toml.
