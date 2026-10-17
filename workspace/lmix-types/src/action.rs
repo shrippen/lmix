@@ -19,8 +19,8 @@ use crate::graphics::{
     BindingSpec, DataSourceSpec, Easing, LayerTransform, TitleData, TitleTrigger,
 };
 use crate::input::{
-    AtEnd, AutoPlay, ChannelStrip, InputColor, InputPress, InputRef, Listen, Look, SignalLoss,
-    SourceSpec, Transport, AUX_BUSES,
+    AtEnd, AutoPlay, ChannelStrip, InputColor, InputPress, InputRef, Listen, Look, PageRunning,
+    SignalLoss, SourceSpec, Transport, AUX_BUSES,
 };
 use crate::layout::{BoxRect, BoxSpec};
 use crate::output::{OutputGroup, OutputRef, OutputSource, OutputSpec};
@@ -140,6 +140,8 @@ pub const ACTION_GROUPS: &[(&str, &[&str])] = &[
             "rename_input",
             "set_input_color",
             "set_look",
+            "page_call",
+            "set_page_running",
             "set_signal_loss",
             "set_auto_play",
             "set_at_end",
@@ -383,6 +385,17 @@ pub enum Action {
     SetLook {
         input: InputRef,
         look: Look,
+    },
+    /// Run JavaScript in a web or graphics input's page, such as one of its
+    /// functions (GFX.6).
+    PageCall {
+        input: InputRef,
+        script: String,
+    },
+    /// Freeze a web or graphics input's page or let it run again (GFX.2).
+    SetPageRunning {
+        input: InputRef,
+        running: PageRunning,
     },
     /// Choose last frame or black for when the input's source stalls.
     SetSignalLoss {
@@ -1310,6 +1323,8 @@ pub enum ActionError {
     BadColor { color: String },
     #[error("web page {url} is not an http:// or https:// address")]
     BadWebUrl { url: String },
+    #[error("{reference} shows no page (not a web or graphics input)")]
+    NoPage { reference: String },
     #[error("volume {volume} is outside 0–{max}")]
     BadVolume { volume: u8, max: u8 },
     #[error("a level fade lasts 0–{max} ms, not {duration_ms}")]

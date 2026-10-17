@@ -3382,10 +3382,10 @@ http(s) werden beim Anlegen abgelehnt (`bad_web_url`,
 | Alpha in Ausgabegröße und -rate (GFX.2) | BGRA, Größe/Rate als Eigenschaften | genutzt |
 | ohne Pipeline-Neustart (GFX.2) | `url` live | genutzt; Inhalte wechseln über die Grafikseite |
 | hängender Titel nimmt Program nicht mit (GFX.2) | – | eigener Flow je Slot |
-| Rendern pausieren/fortsetzen (GFX.2) | fehlt | offen: strom-Ergänzung über CDP (`Page.setWebLifecycleState`) |
+| Rendern pausieren/fortsetzen (GFX.2) | fehlt | ergänzt: strom #22 (`freeze`/`resume`), Aktion `set_page_running` |
 | Ton (GFX.6) | `stream_mode` | genutzt |
-| eigenes CSS (GFX.6) | fehlt | offen: strom-Ergänzung (Stylesheet beim Laden einspielen) |
-| JS-Funktion der Seite aufrufen (GFX.6) | fehlt (Fernsteuerung nur als DevTools-Link) | offen: strom-Ergänzung (`Runtime.evaluate`); für Grafikkanäle nicht nötig, lmix-core steuert sie |
+| eigenes CSS (GFX.6) | fehlt | ergänzt: strom #22 (`set_css`), Quelle `web` mit `css`, die Engine setzt es, sobald die Seite antwortet |
+| JS-Funktion der Seite aufrufen (GFX.6) | fehlt (Fernsteuerung nur als DevTools-Link) | ergänzt: strom #22 (`evaluate`), Aktion `page_call` |
 | H.264/AAC in Seiten (GFX.20) | hängt am CEF-Build von strom | ungeprüft |
 | 8 Titel 1080p60 (GFX.15) | – | mit GPU messen |
 | neue Program-Größe | Größe beim Bau | Seiten-Slots werden bei neuem Format neu gebaut |

@@ -270,6 +270,8 @@ pub fn right_of(action: &Action) -> Right {
         | Action::SetMultiview { .. }
         | Action::SetSampleRate { .. }
         | Action::SetLook { .. }
+        | Action::PageCall { .. }
+        | Action::SetPageRunning { .. }
         | Action::SetMidiTbar { .. }
         | Action::SetOverlay { .. }
         | Action::SetPanicTime { .. }

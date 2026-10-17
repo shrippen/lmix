@@ -42,7 +42,7 @@ pub use graphics::{
 pub use input::{
     AtEnd, AutoPlay, AuxBus, ChannelStrip, Compressor, Device, DeviceKind, Eq4, Gate, Hpf, Ingest,
     Input, InputAudio, InputColor, InputId, InputPress, InputRef, InputStatus, Listen, Look,
-    Playback, PlaybackState, SignalLoss, SourceSpec, TestPattern, Transport,
+    PageRunning, Playback, PlaybackState, SignalLoss, SourceSpec, TestPattern, Transport,
 };
 pub use layout::{
     BoxCrop, BoxRect, BoxShown, BoxSpec, Layout, LayoutBox, LayoutTemplate, TemplateBox,

@@ -97,12 +97,26 @@ pub enum SourceSpec {
     /// Audio-only input: microphone or line-in by device id (AUD.1).
     AudioDevice { id: String },
     /// Web page rendered by the engine's browser, with its sound (GFX.6):
-    /// an http(s) address.
-    Web { url: String },
+    /// an http(s) address, and CSS added to the page.
+    Web {
+        url: String,
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        css: String,
+    },
     /// A graphics channel's page as an input (GFX.2, GFX.17): its titles
     /// over a transparent background, keyable as an overlay. Number, name
     /// or id of the channel.
     Graphics { graphics: String },
+}
+
+/// Whether a web or graphics page runs or is frozen (GFX.2): frozen,
+/// its scripts and animations stop until it runs again.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum PageRunning {
+    #[default]
+    Running,
+    Frozen,
 }
 
 /// What a transport button does to a file, URL or playlist input (SRC.3).
@@ -223,7 +237,7 @@ impl SourceSpec {
             },
             Self::Ndi { name } => name.clone(),
             Self::Whip { endpoint } => format!("WHIP {endpoint}"),
-            Self::Web { url } => url.clone(),
+            Self::Web { url, .. } => url.clone(),
             Self::Graphics { graphics } => format!("Graphics {graphics}"),
         }
     }

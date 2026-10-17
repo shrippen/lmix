@@ -23,9 +23,9 @@ use lmix_types::{
     Action, ActionError, AtEnd, AutoPlay, AuxBus, BoxCrop, BoxRect, BoxShown, BoxSpec,
     ChannelStrip, Effect, Ingest, Input, InputColor, InputId, InputPress, InputRef, InputStatus,
     Layout, LayoutBox, LayoutTemplate, Listen, Look, Output, OutputGroup, OutputId, OutputRef,
-    OutputSource, OutputSpec, OutputStatus, OverlayChannel, QuickPlay, Shortcut, ShortcutSpec,
-    ShowState, SignalLoss, SourceSpec, Stinger, StingerSpec, TemplateBox, TemplateInput,
-    Transition, TransitionSlot, Transport, VolumeTarget, FADE_MAX_MS,
+    OutputSource, OutputSpec, OutputStatus, OverlayChannel, PageRunning, QuickPlay, Shortcut,
+    ShortcutSpec, ShowState, SignalLoss, SourceSpec, Stinger, StingerSpec, TemplateBox,
+    TemplateInput, Transition, TransitionSlot, Transport, VolumeTarget, FADE_MAX_MS,
 };
 use lmix_types::{Cue, CueList, MidiKind, MidiMessage, Trigger, TriggerOn};
 
@@ -96,6 +96,10 @@ pub enum Command {
     },
     /// Colour correction of the picture of `slot`.
     SetLook { slot: usize, look: Look },
+    /// Run JavaScript in the page of `slot` (web or graphics input).
+    PageScript { slot: usize, script: String },
+    /// Freeze the page of `slot`, or let it run.
+    PageRunning { slot: usize, running: PageRunning },
     /// Stinger clip of `slot` on the stinger layer from its start; off:
     /// layer away and the clip paused.
     Stinger { slot: usize, on: bool },
@@ -1103,6 +1107,14 @@ impl Switcher {
             Action::SetVolume { input, volume } => self.set_volume(&input, volume),
             Action::SetChannelStrip { input, strip } => self.set_strip(&input, strip),
             Action::SetLook { input, look } => self.set_look(&input, look),
+            Action::PageCall { input, script } => Ok(vec![Command::PageScript {
+                slot: self.page_slot(&input)?,
+                script,
+            }]),
+            Action::SetPageRunning { input, running } => Ok(vec![Command::PageRunning {
+                slot: self.page_slot(&input)?,
+                running,
+            }]),
             Action::SetAuxSend { input, bus, level } => self.set_aux_send(&input, bus, level),
             Action::SetAuxBus { bus, volume, mute } => {
                 self.set_aux_bus(bus, volume, mute, AUDIO_RAMP_MS)
@@ -3424,6 +3436,17 @@ impl Switcher {
         self.looks_available = available;
     }
 
+    /// The slot of a web or graphics input: one that shows a page.
+    fn page_slot(&self, input: &InputRef) -> Result<usize, ActionError> {
+        let entry = &self.show.inputs[self.find(input)?];
+        match entry.source {
+            SourceSpec::Web { .. } | SourceSpec::Graphics { .. } => Ok(entry.slot),
+            _ => Err(ActionError::NoPage {
+                reference: entry.name.clone(),
+            }),
+        }
+    }
+
     fn set_look(&mut self, input: &InputRef, look: Look) -> Result<Vec<Command>, ActionError> {
         if let Some(field) = look.out_of_range() {
             return Err(ActionError::BadLook {
@@ -4269,7 +4292,7 @@ fn check_source(source: &SourceSpec) -> Result<(), ActionError> {
         SourceSpec::Color { color } if color_rgb(color).is_none() => Err(ActionError::BadColor {
             color: color.clone(),
         }),
-        SourceSpec::Web { url } if !is_web_address(url) => {
+        SourceSpec::Web { url, .. } if !is_web_address(url) => {
             Err(ActionError::BadWebUrl { url: url.clone() })
         }
         _ => Ok(()),
@@ -7422,6 +7445,7 @@ mod tests {
         sw.apply(Action::AddInput {
             source: SourceSpec::Web {
                 url: "https://example.com".into(),
+                css: String::new(),
             },
             name: None,
         })
@@ -7454,18 +7478,76 @@ mod tests {
         assert_eq!(
             rebuilt,
             vec![SourceSpec::Web {
-                url: "https://example.com".into()
+                url: "https://example.com".into(),
+                css: String::new(),
             }]
         );
         // After the new mixer: SetFormat comes first.
         assert!(matches!(cmds[0], Command::SetFormat { .. }));
     }
 
+    /// A page's JavaScript and freezing go to its slot; an input without a
+    /// page refuses both.
+    #[test]
+    fn pages_take_scripts_and_freeze() {
+        let mut sw = Switcher::new(SLOTS);
+        sw.apply(Action::AddInput {
+            source: SourceSpec::Web {
+                url: "https://example.com/score".into(),
+                css: String::new(),
+            },
+            name: Some("Score".into()),
+        })
+        .unwrap();
+        sw.apply(Action::AddInput {
+            source: SourceSpec::Pattern {
+                pattern: TestPattern::Ball,
+            },
+            name: Some("Ball".into()),
+        })
+        .unwrap();
+        let score = InputRef::Text("Score".into());
+        let slot = sw.show.inputs[0].slot;
+
+        assert_eq!(
+            sw.apply(Action::PageCall {
+                input: score.clone(),
+                script: "goal('home')".into(),
+            })
+            .unwrap(),
+            vec![Command::PageScript {
+                slot,
+                script: "goal('home')".into()
+            }]
+        );
+        assert_eq!(
+            sw.apply(Action::SetPageRunning {
+                input: score,
+                running: PageRunning::Frozen,
+            })
+            .unwrap(),
+            vec![Command::PageRunning {
+                slot,
+                running: PageRunning::Frozen
+            }]
+        );
+        assert!(matches!(
+            sw.apply(Action::PageCall {
+                input: InputRef::Text("Ball".into()),
+                script: "x()".into(),
+            }),
+            Err(ActionError::NoPage { .. })
+        ));
+    }
+
     #[test]
     fn pages_need_a_web_address_and_graphics_a_channel() {
         let mut sw = Switcher::new(SLOTS);
         let add = |source: SourceSpec| Action::AddInput { source, name: None };
-        let web = |url: &str| SourceSpec::Web { url: url.into() };
+        let web = |url: &str| SourceSpec::Web {
+            url: url.into(),
+            css: String::new(),
+        };
         let graphics = |g: &str| SourceSpec::Graphics { graphics: g.into() };
 
         for url in [

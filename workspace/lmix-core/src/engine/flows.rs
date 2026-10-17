@@ -879,7 +879,7 @@ fn add_audio_mixer(flow: &mut Flow, slots: usize, monitor: MonitorOut, sample_ra
 }
 
 /// Block id of a web page or graphics page in a slot flow.
-const WEB: &str = "web";
+pub const WEB: &str = "web";
 
 /// What a slot flow is built for besides its source.
 #[derive(Clone, Debug)]
@@ -939,7 +939,7 @@ pub fn slot_flow(slot: usize, source: &SourceSpec, env: &SlotEnv) -> Flow {
 fn add_source(flow: &mut Flow, source: &SourceSpec, env: &SlotEnv) -> Option<String> {
     let backend = env.backend;
     let pad = match source {
-        SourceSpec::Web { url } => add_page(flow, url, PageKind::Web, &env.format),
+        SourceSpec::Web { url, .. } => add_page(flow, url, PageKind::Web, &env.format),
         SourceSpec::Graphics { graphics } => {
             let url = format!(
                 "{}/graphics/{}",
@@ -1111,6 +1111,9 @@ fn add_page(flow: &mut Flow, url: &str, kind: PageKind, format: &MasterFormat) -
             // strom refuses pages on this machine and its network unless
             // told otherwise; lmix-core's own page is one of them.
             ("strict_network", PropertyValue::Bool(kind == PageKind::Web)),
+            // lmix-core calls the page's functions, sets its CSS and
+            // freezes it (strom `devtools/page`).
+            ("page_scripting", PropertyValue::Bool(true)),
         ],
     ));
     format!("{WEB}:video_out")
@@ -2203,6 +2206,7 @@ mod tests {
         };
         let source = SourceSpec::Web {
             url: "https://example.com/scoreboard".into(),
+            css: String::new(),
         };
         let flow = slot_flow(0, &source, &env);
         let web = html_block(&flow);
@@ -2213,6 +2217,8 @@ mod tests {
         assert_eq!(uint(web, "framerate"), 30);
         assert_eq!(text(web, "stream_mode"), "audio_video");
         assert!(flag(web, "strict_network"));
+        // lmix-core calls the page's functions and sets its CSS.
+        assert!(flag(web, "page_scripting"));
         assert!(flow
             .links
             .iter()
@@ -2239,6 +2245,7 @@ mod tests {
         );
         assert_eq!(text(page, "stream_mode"), "video");
         assert!(!flag(page, "strict_network"));
+        assert!(flag(page, "page_scripting"));
         assert!(!source.has_audio());
         assert_eq!(uint(page, "width"), 1920);
     }
