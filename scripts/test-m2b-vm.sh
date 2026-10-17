@@ -614,13 +614,15 @@ code="$(curl -s -o /dev/null -w '%{http_code}' -X POST "$CORE/actions" -H 'conte
 act '{"action":"cut_direct","input":"Ball"}' >/dev/null
 act '{"action":"preview_input","input":"Orange"}' >/dev/null
 # Sound that follows video follows the T-bar (SWI.5): Ball fades out by
-# half (about -6 dB) and comes back when the bar goes back.
+# half (about -6 dB) and comes back when the bar goes back. Heard on aux
+# B, after the fader, where only Ball sends (program mixes other inputs).
+act '{"action":"set_aux_send","input":"Ball","bus":2,"level":100}' >/dev/null
 act '{"action":"set_audio_follow","input":"Ball","follow":true}' >/dev/null
-full=$(steady_db pgm_db)
+full=$(steady_db aux_db 1)
 act '{"action":"t_bar","position":0.5}' >/dev/null
-settled '[[ $(pgm_db) -le $((full - 4)) && $(pgm_db) -gt $SILENT_DB ]]' || fail "program sound did not follow the T-bar ($full -> $(pgm_db) dB)"
+settled '[[ $(aux_db 1) -le $((full - 4)) && $(aux_db 1) -gt $SILENT_DB ]]' || fail "Ball's sound did not follow the T-bar ($full -> $(aux_db 1) dB)"
 act '{"action":"t_bar","position":0}' >/dev/null
-settled '[[ $(pgm_db) -ge $((full - 2)) ]]' || fail "program sound not back with the T-bar ($full -> $(pgm_db) dB)"
+settled '[[ $(aux_db 1) -ge $((full - 2)) ]]' || fail "Ball's sound not back with the T-bar ($full -> $(aux_db 1) dB)"
 act '{"action":"set_audio_follow","input":"Ball","follow":false}' >/dev/null
 act '{"action":"t_bar","position":0.5}' >/dev/null
 half_mixed() { picture program "$WORK/tbar.jpg"; local r; r=$(rgb "$WORK/tbar.jpg" r); ((r > 80 && r < 200)); }
