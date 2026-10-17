@@ -15,14 +15,14 @@
 //! so waits and follows never drift (RUN.8): a chain of a hundred 20 ms
 //! waits ends 2 s after GO however late each tick is.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
 use tokio::time::Instant;
 
 use lmix_types::cue::{
-    Cue, CueEvent, CueId, CueKind, Follow, GroupMode, RunPhase, RunningCue, StandbyMove, StopMode,
-    StopScope,
+    Cue, CueEvent, CueId, CueKind, Follow, GoRearm, GroupMode, RunPhase, RunningCue, StandbyMove,
+    StopMode, StopScope,
 };
 use lmix_types::{Action, ActionError, InputId, InputRef};
 
@@ -104,10 +104,49 @@ pub struct Runner {
     active: Option<InputId>,
     runs: Vec<Run>,
     last_go: Option<Instant>,
+    /// Buttons that gave a GO and are not let go yet (RUN.6).
+    held: HashSet<Hold>,
     next_id: u64,
     /// A panic runs until then; another panic before is a hard stop.
     panic_until: Option<Instant>,
     late: Lateness,
+}
+
+/// A button whose release is reported: a MIDI note or controller, an
+/// OSC sender, a Console key (RUN.6). Each waits for its own release.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct Hold(pub u64);
+
+impl Hold {
+    /// The button named `key`, e.g. `midi 1 note 60`.
+    pub fn of(key: &str) -> Self {
+        use std::hash::{Hash, Hasher};
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        key.hash(&mut hasher);
+        Self(hasher.finish())
+    }
+}
+
+/// What lets a GO through (RUN.6).
+#[derive(Clone, Copy, Debug)]
+pub struct Guard {
+    /// Shortest gap to the GO before.
+    pub ms: u32,
+    pub rearm: GoRearm,
+    /// The button that gives this GO, if its release is reported.
+    pub held: Option<Hold>,
+}
+
+#[cfg(test)]
+impl Guard {
+    /// A gap of `ms`, no wait for a release.
+    pub fn time(ms: u32) -> Self {
+        Self {
+            ms,
+            rearm: GoRearm::Time,
+            held: None,
+        }
+    }
 }
 
 fn bad(reason: impl Into<String>) -> ActionError {
@@ -197,13 +236,15 @@ impl Runner {
         lists: &[ShowCueList],
         list: usize,
         now: Instant,
-        guard_ms: u32,
+        guard: Guard,
     ) -> Result<Vec<Out>, ActionError> {
         let entry = &lists[list];
-        if self
+        let early = self
             .last_go
-            .is_some_and(|last| now.duration_since(last) < ms(guard_ms))
-        {
+            .is_some_and(|last| now.duration_since(last) < ms(guard.ms));
+        let waiting = guard.rearm == GoRearm::Release
+            && guard.held.is_some_and(|held| self.held.contains(&held));
+        if early || waiting {
             return Ok(vec![Out::Event {
                 list: entry.id,
                 cue: None,
@@ -215,10 +256,23 @@ impl Runner {
             return Err(bad("no cues left; move standby back first"));
         }
         self.last_go = Some(now);
+        if let (GoRearm::Release, Some(held)) = (guard.rearm, guard.held) {
+            self.held.insert(held);
+        }
         let mut out = Vec::new();
         self.go_unguarded(lists, list, now, &mut out);
         out.extend(self.tick(lists, now));
         Ok(out)
+    }
+
+    /// Button `held` was let go: its next press may give GO (RUN.6).
+    pub fn release(&mut self, held: Hold) {
+        self.held.remove(&held);
+    }
+
+    /// Forget every held button (the rearm mode changed).
+    pub fn release_all(&mut self) {
+        self.held.clear();
     }
 
     /// Start the standby cue of `lists[list]` and move standby past its
@@ -431,8 +485,9 @@ impl Runner {
     }
 
     /// After a list changed: standby at most one past its end; runs of
-    /// cues that are gone are dropped.
-    pub fn list_changed(&mut self, lists: &[ShowCueList]) {
+    /// cues that are gone are dropped, and a group left without a running
+    /// child ends at `now` (its follow goes on).
+    pub fn list_changed(&mut self, lists: &[ShowCueList], now: Instant) {
         for entry in lists {
             if let Some(standby) = self.standby.get_mut(&entry.id) {
                 *standby = (*standby).min(entry.cues.len());
@@ -446,6 +501,15 @@ impl Runner {
         });
         self.standby
             .retain(|id, _| lists.iter().any(|l| l.id == *id));
+        let groups: Vec<u64> = self
+            .runs
+            .iter()
+            .filter(|r| r.fired && !r.ended && r.end_at.is_none())
+            .map(|r| r.id)
+            .collect();
+        for group in groups {
+            self.parent_check(Some(group), now);
+        }
     }
 
     /// How late the steps ran so far.
@@ -869,7 +933,7 @@ mod tests {
         let mut runner = Runner::default();
         let t = Instant::now();
 
-        let out = runner.go(&lists, 0, t, 0).unwrap();
+        let out = runner.go(&lists, 0, t, Guard::time(0)).unwrap();
 
         assert_eq!(fired(&lists, &out), ["A"]);
         assert_eq!(runner.standby(lists[0].id), 1);
@@ -879,10 +943,10 @@ mod tests {
         );
         assert_eq!(events(&out), [CueEvent::Started, CueEvent::Ended]);
 
-        runner.go(&lists, 0, after(t, 1), 0).unwrap();
+        runner.go(&lists, 0, after(t, 1), Guard::time(0)).unwrap();
         assert_eq!(runner.standby(lists[0].id), 2);
         assert!(
-            runner.go(&lists, 0, after(t, 2), 0).is_err(),
+            runner.go(&lists, 0, after(t, 2), Guard::time(0)).is_err(),
             "no cues left"
         );
     }
@@ -895,7 +959,7 @@ mod tests {
         let mut runner = Runner::default();
         let t = Instant::now();
 
-        let out = runner.go(&lists, 0, t, 0).unwrap();
+        let out = runner.go(&lists, 0, t, Guard::time(0)).unwrap();
         assert!(fired(&lists, &out).is_empty());
         assert_eq!(runner.deadline(), Some(after(t, 500)));
         assert_eq!(
@@ -922,7 +986,7 @@ mod tests {
         let mut runner = Runner::default();
         let t = Instant::now();
 
-        let out = runner.go(&lists, 0, t, 0).unwrap();
+        let out = runner.go(&lists, 0, t, Guard::time(0)).unwrap();
         assert_eq!(fired(&lists, &out), ["A"]);
         assert_eq!(
             runner.standby(lists[0].id),
@@ -952,7 +1016,7 @@ mod tests {
         let lists = vec![list(cues)];
         let mut runner = Runner::default();
         let t = Instant::now();
-        runner.go(&lists, 0, t, 0).unwrap();
+        runner.go(&lists, 0, t, Guard::time(0)).unwrap();
 
         // Ticks come 7 ms late every time.
         let mut now = t;
@@ -983,7 +1047,7 @@ mod tests {
         let mut runner = Runner::default();
         let t = Instant::now();
 
-        let out = runner.go(&lists, 0, t, 0).unwrap();
+        let out = runner.go(&lists, 0, t, Guard::time(0)).unwrap();
         assert_eq!(fired(&lists, &out), ["Clip"], "its actions at once");
         assert_eq!(
             runner.running(&lists, after(t, 5000))[0].remaining_ms,
@@ -1012,7 +1076,7 @@ mod tests {
         let mut runner = Runner::default();
         let t = Instant::now();
 
-        runner.go(&lists, 0, t, 0).unwrap();
+        runner.go(&lists, 0, t, Guard::time(0)).unwrap();
         assert_eq!(fired(&lists, &runner.tick(&lists, after(t, 100))), ["A"]);
         let out = runner.tick(&lists, after(t, 400));
         assert_eq!(
@@ -1037,7 +1101,7 @@ mod tests {
         let mut runner = Runner::default();
         let t = Instant::now();
 
-        runner.go(&lists, 0, t, 0).unwrap();
+        runner.go(&lists, 0, t, Guard::time(0)).unwrap();
         let out = runner.tick(&lists, after(t, 300));
 
         assert_eq!(fired(&lists, &out), ["B"], "C waits: B has no follow");
@@ -1049,7 +1113,7 @@ mod tests {
         let lists = vec![list(vec![cut("A"), cut("B")])];
         let mut runner = Runner::default();
         let t = Instant::now();
-        let guard = GO_GUARD_DEFAULT_MS;
+        let guard = Guard::time(GO_GUARD_DEFAULT_MS);
 
         runner.go(&lists, 0, t, guard).unwrap();
         let out = runner.go(&lists, 0, after(t, 120), guard).unwrap();
@@ -1057,6 +1121,50 @@ mod tests {
         assert_eq!(events(&out), [CueEvent::GoIgnored]);
         assert_eq!(runner.standby(lists[0].id), 1);
         let out = runner.go(&lists, 0, after(t, 300), guard).unwrap();
+        assert_eq!(fired(&lists, &out), ["B"]);
+    }
+
+    #[test]
+    fn go_waits_for_release() {
+        let lists = vec![list(vec![cut("A"), cut("B"), cut("C")])];
+        let mut runner = Runner::default();
+        let t = Instant::now();
+        let key = Hold::of("midi 1 note 60");
+        let held = |hold| Guard {
+            ms: 100,
+            rearm: GoRearm::Release,
+            held: hold,
+        };
+
+        runner.go(&lists, 0, t, held(Some(key))).unwrap();
+        let out = runner.go(&lists, 0, after(t, 500), held(Some(key))).unwrap();
+        assert_eq!(events(&out), [CueEvent::GoIgnored], "still held");
+
+        // Another way is not blocked by it, only by the time guard.
+        let out = runner.go(&lists, 0, after(t, 50), held(None)).unwrap();
+        assert_eq!(events(&out), [CueEvent::GoIgnored], "too soon");
+        let out = runner.go(&lists, 0, after(t, 600), held(None)).unwrap();
+        assert_eq!(fired(&lists, &out), ["B"]);
+
+        runner.release(key);
+        let out = runner.go(&lists, 0, after(t, 800), held(Some(key))).unwrap();
+        assert_eq!(fired(&lists, &out), ["C"]);
+    }
+
+    #[test]
+    fn time_rearm_ignores_holding() {
+        let lists = vec![list(vec![cut("A"), cut("B")])];
+        let mut runner = Runner::default();
+        let t = Instant::now();
+        let key = Hold::of("osc 10.0.0.2:9000");
+        let guard = Guard {
+            held: Some(key),
+            ..Guard::time(100)
+        };
+
+        runner.go(&lists, 0, t, guard).unwrap();
+        let out = runner.go(&lists, 0, after(t, 200), guard).unwrap();
+
         assert_eq!(fired(&lists, &out), ["B"]);
     }
 
@@ -1125,7 +1233,7 @@ mod tests {
         let t = Instant::now();
 
         assert_eq!(
-            fired(&lists, &runner.go(&lists, 0, t, 0).unwrap()),
+            fired(&lists, &runner.go(&lists, 0, t, Guard::time(0)).unwrap()),
             ["Other"]
         );
         assert_eq!(
@@ -1135,7 +1243,7 @@ mod tests {
         );
 
         assert_eq!(
-            fired(&lists, &runner.go(&lists, 0, after(t, 1), 0).unwrap()),
+            fired(&lists, &runner.go(&lists, 0, after(t, 1), Guard::time(0)).unwrap()),
             ["Side 1"]
         );
         assert_eq!(
@@ -1144,7 +1252,7 @@ mod tests {
             "a list target is a GO there"
         );
 
-        let out = runner.go(&lists, 0, after(t, 2), 0).unwrap();
+        let out = runner.go(&lists, 0, after(t, 2), Guard::time(0)).unwrap();
         assert!(events(&out)
             .iter()
             .any(|e| matches!(e, CueEvent::Failed { .. })));
@@ -1168,8 +1276,8 @@ mod tests {
         let mut runner = Runner::default();
         let t = Instant::now();
 
-        runner.go(&lists, 0, t, 0).unwrap();
-        let out = runner.go(&lists, 0, after(t, 1000), 0).unwrap();
+        runner.go(&lists, 0, t, Guard::time(0)).unwrap();
+        let out = runner.go(&lists, 0, after(t, 1000), Guard::time(0)).unwrap();
         assert!(events(&out).contains(&CueEvent::Stopped));
         let names: Vec<String> = runner
             .running(&lists, after(t, 1000))
@@ -1178,7 +1286,7 @@ mod tests {
             .collect();
         assert_eq!(names, ["Next"]);
 
-        runner.go(&lists, 0, after(t, 2000), 0).unwrap();
+        runner.go(&lists, 0, after(t, 2000), Guard::time(0)).unwrap();
         // By number or id; a name is no reference.
         runner
             .stop(&lists, Some(0), Some("Third"), after(t, 2100))
@@ -1192,7 +1300,7 @@ mod tests {
         let lists = vec![list(vec![wait("A", 10_000), cut("B")])];
         let mut runner = Runner::default();
         let t = Instant::now();
-        runner.go(&lists, 0, t, 0).unwrap();
+        runner.go(&lists, 0, t, Guard::time(0)).unwrap();
 
         let out = runner.reset(after(t, 10));
 
@@ -1211,7 +1319,7 @@ mod tests {
         ];
         let mut runner = Runner::default();
         let t = Instant::now();
-        runner.go(&lists, 0, t, 0).unwrap();
+        runner.go(&lists, 0, t, Guard::time(0)).unwrap();
         runner
             .start(&lists, Some(0), &lists[0].cues[1].id.to_string(), t)
             .unwrap();
@@ -1283,9 +1391,36 @@ mod tests {
 
         let old = std::mem::replace(&mut lists[0].cues, vec![cut("New"), a, b]);
         runner.keep_standby(&lists[0], &old);
-        runner.list_changed(&lists);
+        runner.list_changed(&lists, Instant::now());
 
         assert_eq!(runner.standby(lists[0].id), 2, "still on B");
+    }
+
+    #[test]
+    fn a_group_ends_when_its_running_child_is_edited_away() {
+        let child = wait("Rain", 60_000);
+        let group = Cue {
+            name: "Storm".into(),
+            follow: Follow::AfterEnd,
+            children: vec![child],
+            ..Cue::empty(CueKind::Group)
+        };
+        let mut lists = vec![list(vec![group, cut("After")])];
+        let mut runner = Runner::default();
+        let t = Instant::now();
+        runner.go(&lists, 0, t, Guard::time(0)).unwrap();
+
+        // A reload takes the child out while it runs.
+        lists[0].cues[0].children = vec![cut("Flash")];
+        runner.list_changed(&lists, after(t, 5));
+        let out = runner.tick(&lists, after(t, 10));
+
+        assert_eq!(
+            fired(&lists, &out),
+            ["After"],
+            "the group ended and followed"
+        );
+        assert!(runner.running(&lists, after(t, 10)).is_empty());
     }
 
     #[test]
@@ -1296,10 +1431,10 @@ mod tests {
         runner
             .move_standby(&lists, 0, &StandbyMove::Index(3))
             .unwrap();
-        runner.go(&lists, 0, t, 0).unwrap();
+        runner.go(&lists, 0, t, Guard::time(0)).unwrap();
 
         lists[0].cues.truncate(1);
-        runner.list_changed(&lists);
+        runner.list_changed(&lists, Instant::now());
 
         assert_eq!(runner.standby(lists[0].id), 1);
         assert!(

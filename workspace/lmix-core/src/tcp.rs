@@ -29,6 +29,7 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::mpsc;
 
+use crate::access::Right;
 use crate::service::Service;
 
 /// Protocol version in the greeting.
@@ -111,9 +112,14 @@ pub async fn serve(
         let service = service.clone();
         let access = access.clone();
         tokio::spawn(async move {
-            let password = match access.peer(peer.ip()) {
-                crate::access::Peer::Local => None,
-                crate::access::Peer::Network => access.needs_key().then_some(access),
+            // A trusted address has its right at once, no `AUTH` (CTL.5).
+            let (password, right) = match access.peer(peer.ip()) {
+                crate::access::Peer::Local => (None, Right::Edit),
+                crate::access::Peer::Network if !access.needs_key() => (None, Right::Edit),
+                crate::access::Peer::Network => match access.trusted(peer.ip()) {
+                    Some(right) => (None, right),
+                    None => (Some(access), Right::View),
+                },
                 crate::access::Peer::Refused => {
                     let _ = stream
                         .write_all(b"ER forbidden lmix answers only on the local network\n")
@@ -121,7 +127,7 @@ pub async fn serve(
                     return;
                 }
             };
-            if let Err(error) = client(stream, service, password, peer.ip()).await {
+            if let Err(error) = client(stream, service, password, right, peer.ip()).await {
                 tracing::debug!(%peer, %error, "text client gone");
             }
         });
@@ -129,21 +135,14 @@ pub async fn serve(
 }
 
 /// One client; `password` holds the rules while it still has to send
-/// `AUTH`.
+/// `AUTH`; `right`: what it may do until then (CTL.5).
 async fn client(
     stream: TcpStream,
     service: Arc<Service>,
     mut password: Option<Arc<crate::access::Access>>,
+    mut right: Right,
     ip: std::net::IpAddr,
 ) -> std::io::Result<()> {
-    use crate::access::Right;
-    // What this client may do: everything here or without keys, else
-    // what its key allows (CTL.5).
-    let mut right = if password.is_some() {
-        Right::View
-    } else {
-        Right::Edit
-    };
     let (read, mut write) = stream.into_split();
     let mut events = service.subscribe();
     let mut topics = Topics::default();
@@ -369,10 +368,16 @@ mod tests {
         let addr = listener.local_addr().unwrap();
         tokio::spawn(async move {
             let (stream, _) = listener.accept().await.unwrap();
+            let right = if access.is_some() {
+                Right::View
+            } else {
+                Right::Edit
+            };
             client(
                 stream,
                 service,
                 access,
+                right,
                 std::net::IpAddr::from([192, 168, 1, 9]),
             )
             .await
@@ -480,5 +485,29 @@ mod tests {
 
         write.write_all(b"QUIT\n").await.unwrap();
         assert_eq!(lines.next_line().await.unwrap(), None);
+    }
+
+    #[tokio::test]
+    async fn a_trusted_address_skips_auth() {
+        let service = Service::new(2, Arc::new(NullEngine::default()), None);
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.unwrap();
+            let ip = std::net::IpAddr::from([192, 168, 1, 20]);
+            client(stream, service, None, Right::Control, ip).await.unwrap();
+        });
+        let (read, mut write) = TcpStream::connect(addr).await.unwrap().into_split();
+        let mut lines = BufReader::new(read).lines();
+        assert_eq!(lines.next_line().await.unwrap().unwrap(), "LMIX 1");
+
+        write
+            .write_all(b"{\"action\":\"set_lock\",\"on\":true}\nTALLY\n")
+            .await
+            .unwrap();
+
+        let refused = lines.next_line().await.unwrap().unwrap();
+        assert!(refused.starts_with("ER forbidden"), "{refused}");
+        assert_eq!(lines.next_line().await.unwrap().unwrap(), "TALLY ");
     }
 }
