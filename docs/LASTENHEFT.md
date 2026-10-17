@@ -257,7 +257,7 @@ kann es, Console nicht.
 | ID | Anforderung | Prio | Stand |
 |---|---|---|---|
 | AUD.1 | Jeder Input mit Ton erscheint als Kanalzug: Fader, Mute, Pegelanzeige L/R | M | ✅ (Pegel links und rechts auf der Kachel, `channels_db` in den Pegeln) |
-| AUD.2 | Busse: Master + A–G, Zuweisung je Input per Taste; Bus A–G optional in Master; Bus-Ausgang auf Gerät oder nur intern | M | ◐ (Master mit Pegel und Stumm, 2 Aux, nicht A–G; Aux auf Ausgang) |
+| AUD.2 | Busse: Master + A–G, Zuweisung je Input per Taste; Bus A–G optional in Master; Bus-Ausgang auf Gerät oder nur intern | M | ◐ (Master mit Pegel und Stumm, Aux A–G mit Pegel je Input, A vor den Fadern, B–G danach; Aux auf Ausgang; Aux nicht in den Master) |
 | AUD.3 | Sendepegel je Input und Bus (Bus-Mixer) | S | ◐ (Sends je Input auf 2 Aux-Busse) |
 | AUD.4 | Abhörweg mit eigener Lautstärke je Input und gesamt; Solo AFL (Standard) / PFL, mehrfach-Solo, zerstörungsfrei | M | ◐ (AFL als Standard, PFL im Menü, Mehrfach-Solo, Abhörlautstärke gesamt; ohne Abhörlautstärke je Input) |
 | AUD.5 | Audio folgt Video: Take schaltet Ton der beteiligten Inputs; je Input an/aus; global an/aus | M | ✅ |

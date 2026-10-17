@@ -3091,3 +3091,24 @@ Playlist pausiert → `paused`, 2 Einträge, Dauer > 0; nach Play/Next →
 Aktion, Wiederherstellung), VM-Test mit strom: Playlist bleibt stehen,
 Zustand `stopped`, Bild steht, Auslöser feuert; zurück auf Schleife
 startet nichts, Neustart spielt wieder.
+
+## 2026-10-17 — Sieben Aux-Busse A–G (AUD.2)
+
+**Kontext**: AUD.2 fordert neben dem Master die Busse A–G; lmix hatte
+zwei Aux-Busse. Der strom-Audiomischer kann bis 32.
+
+**Entscheidung**:
+- `AUX_BUSES` = 7, in Aktionen 1–7, in der Console A–G. A nimmt die Sends
+  vor den Fadern (Monitormix, wie bisher Bus 1), B–G danach. Vor/nach ist
+  weiter fest je Bus; wählbar wäre es in strom (`chN_auxM_pre`), gefordert
+  ist es nicht.
+- Shows mit zwei Bussen laden weiter (fehlende Busse und Sends mit
+  Standard), wie bei den Overlay-Kanälen. Mischer-Flow „lmix mixer 9“.
+- Offen: Bus optional in den Master (strom kann Aux nicht in den Main
+  routen), Ausgang eines Busses auf ein Gerät ohne Ausgang in lmix.
+- Console: Bus-Dialog scrollt (sieben Busse sind höher als kleine
+  Fenster), Kanalzug und Ton-Auswahl eines Ausgangs mit A–G.
+
+**Geprüft**: Tests (alte Show mit zwei Bussen, Bus 8 abgelehnt), VM-Test
+mit strom: G still ohne Send, hörbar mit Send; Console auf Xvfb mit
+geöffnetem Bus-Dialog.
