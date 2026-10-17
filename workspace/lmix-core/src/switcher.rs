@@ -20,8 +20,8 @@ use lmix_types::layout::{BORDER_MAX_PX, LAYOUTS, LAYOUT_BOXES, LAYOUT_TEMPLATES}
 use lmix_types::shortcut::SHORTCUT_ACTIONS;
 use lmix_types::state::API_VERSION;
 use lmix_types::{
-    Action, ActionError, AutoPlay, AuxBus, BoxCrop, BoxRect, BoxSpec, ChannelStrip, Effect, Ingest,
-    Input, InputColor, InputId, InputPress, InputRef, InputStatus, Layout, LayoutBox,
+    Action, ActionError, AtEnd, AutoPlay, AuxBus, BoxCrop, BoxRect, BoxSpec, ChannelStrip, Effect,
+    Ingest, Input, InputColor, InputId, InputPress, InputRef, InputStatus, Layout, LayoutBox,
     LayoutTemplate, Listen, Look, Output, OutputGroup, OutputId, OutputRef, OutputSource,
     OutputSpec, OutputStatus, OverlayChannel, QuickPlay, Shortcut, ShortcutSpec, ShowState,
     SignalLoss, SourceSpec, Stinger, StingerSpec, TemplateBox, TemplateInput, Transition,
@@ -46,6 +46,13 @@ pub enum Command {
     SetSlot {
         slot: usize,
         source: Option<SourceSpec>,
+    },
+    /// Loop the player of `slot` or let it stop at the end (INP.10);
+    /// `items` are its files, unchanged.
+    SetAtEnd {
+        slot: usize,
+        items: Vec<String>,
+        at_end: AtEnd,
     },
     /// Show `slot` in preview.
     Preview { slot: usize },
@@ -1175,6 +1182,17 @@ impl Switcher {
                 entry.auto_play = auto_play;
                 Ok(Vec::new())
             }
+            Action::SetAtEnd { input, at_end } => {
+                let index = self.find(&input)?;
+                let entry = &mut self.show.inputs[index];
+                if !entry.source.has_transport() {
+                    return Err(ActionError::NoTransport {
+                        reference: entry.name.clone(),
+                    });
+                }
+                entry.at_end = at_end;
+                Ok(at_end_command(entry).into_iter().collect())
+            }
             Action::SetInputPress { input, click, go } => {
                 let index = self.find(&input)?;
                 let entry = &mut self.show.inputs[index];
@@ -1491,6 +1509,7 @@ impl Switcher {
                 source: Some(i.source.clone()),
             })
             .collect();
+        commands.extend(self.show.inputs.iter().filter_map(held_end_command));
 
         // Compositions are lost with the engine; set them before use.
         commands.extend(self.show.layouts.iter().map(|l| self.layout_command(l)));
@@ -1531,6 +1550,7 @@ impl Switcher {
                 listen: self.listen_of(input.id),
                 signal_loss: input.signal_loss,
                 auto_play: input.auto_play,
+                at_end: input.at_end,
                 click: input.click,
                 go: input.go,
                 strip: input.strip,
@@ -1700,6 +1720,7 @@ impl Switcher {
             audio: Default::default(),
             signal_loss: SignalLoss::default(),
             auto_play: AutoPlay::default(),
+            at_end: AtEnd::default(),
             click: InputPress::click(),
             go: InputPress::go(),
             strip,
@@ -1866,6 +1887,7 @@ impl Switcher {
             slot: entry.slot,
             source: Some(source.clone()),
         }];
+        commands.extend(held_end_command(entry));
         // After a source without sound the channel may hold anything.
         if source.has_audio() {
             commands.push(Command::SetStrip {
@@ -2496,6 +2518,7 @@ impl Switcher {
                 mode: input.signal_loss,
             },
         ];
+        commands.extend(held_end_command(&input));
         if input.source.has_audio() {
             commands.push(Command::SetStrip {
                 slot: input.slot,
@@ -4144,6 +4167,24 @@ fn check_source(source: &SourceSpec) -> Result<(), ActionError> {
 }
 
 /// Audio inputs have no picture for preview or program.
+/// The player setting of `input`'s end for its slot; `None` for sources
+/// without a player.
+fn at_end_command(input: &ShowInput) -> Option<Command> {
+    Some(Command::SetAtEnd {
+        slot: input.slot,
+        items: crate::engine::flows::player_items(&input.source)?,
+        at_end: input.at_end,
+    })
+}
+
+/// Restoring or rebuilding a slot: a held end has to be set again, a
+/// loop is how the slot starts.
+fn held_end_command(input: &ShowInput) -> Option<Command> {
+    (!input.at_end.is_loop())
+        .then(|| at_end_command(input))
+        .flatten()
+}
+
 /// 0-based index of overlay `channel` (1–8).
 fn overlay_index(channel: u8) -> Result<usize, ActionError> {
     if !(1..=OVERLAY_CHANNELS).contains(&channel) {
@@ -4990,6 +5031,41 @@ mod tests {
 
     fn transport(slot: usize, transport: Transport) -> Command {
         Command::Transport { slot, transport }
+    }
+
+    #[test]
+    fn a_clip_loops_or_holds_its_end() {
+        let mut sw = with_clips(AutoPlay::default());
+        let hold = |name: &str| Action::SetAtEnd {
+            input: named(name),
+            at_end: AtEnd::Hold,
+        };
+        let held = Command::SetAtEnd {
+            slot: 2,
+            items: vec!["/Clip 1.mp4".into()],
+            at_end: AtEnd::Hold,
+        };
+        assert_eq!(
+            sw.apply(hold("Clip 1")).unwrap(),
+            std::slice::from_ref(&held),
+            "on air, no rebuild"
+        );
+        assert_eq!(sw.state().inputs[2].at_end, AtEnd::Hold);
+        assert!(matches!(
+            sw.apply(hold("A")),
+            Err(ActionError::NoTransport { .. })
+        ));
+        // A rebuilt engine starts players looping: the held end comes back.
+        let restore = sw.restore_commands();
+        assert!(restore.contains(&held));
+        assert_eq!(
+            restore
+                .iter()
+                .filter(|c| matches!(c, Command::SetAtEnd { .. }))
+                .count(),
+            1,
+            "looping clips need nothing"
+        );
     }
 
     #[test]
