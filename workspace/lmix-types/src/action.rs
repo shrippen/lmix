@@ -19,11 +19,11 @@ use crate::graphics::{
     BindingSpec, DataSourceSpec, Easing, LayerTransform, TitleData, TitleTrigger,
 };
 use crate::input::{
-    AutoPlay, ChannelStrip, InputColor, InputPress, InputRef, Listen, Look, SignalLoss, SourceSpec,
-    Transport, AUX_BUSES,
+    AtEnd, AutoPlay, ChannelStrip, InputColor, InputPress, InputRef, Listen, Look, SignalLoss,
+    SourceSpec, Transport, AUX_BUSES,
 };
 use crate::layout::{BoxRect, BoxSpec};
-use crate::output::{OutputRef, OutputSource, OutputSpec};
+use crate::output::{OutputGroup, OutputRef, OutputSource, OutputSpec};
 use crate::shortcut::ShortcutSpec;
 use crate::target::{HttpMethod, TargetSpec};
 
@@ -142,6 +142,7 @@ pub const ACTION_GROUPS: &[(&str, &[&str])] = &[
             "set_look",
             "set_signal_loss",
             "set_auto_play",
+            "set_at_end",
             "set_input_press",
             "transport_input",
             "seek_input",
@@ -198,6 +199,8 @@ pub const ACTION_GROUPS: &[(&str, &[&str])] = &[
             "remove_output",
             "start_output",
             "stop_output",
+            "start_outputs",
+            "stop_outputs",
             "set_master_format",
         ],
     ),
@@ -389,6 +392,12 @@ pub enum Action {
         input: InputRef,
         auto_play: AutoPlay,
     },
+    /// Whether a file, URL or playlist input loops or stops on its last
+    /// frame at the end (INP.10); changes on air without a restart.
+    SetAtEnd {
+        input: InputRef,
+        at_end: AtEnd,
+    },
     /// Choose what a click on the input (INP.8) and its GO (INP.9) do;
     /// one left out stays as it is.
     SetInputPress {
@@ -439,6 +448,15 @@ pub enum Action {
     /// Stop it.
     StopOutput {
         output: OutputRef,
+    },
+    /// Start every output of `group` that is not running (STR.1); one
+    /// that cannot start does not keep the others back.
+    StartOutputs {
+        group: OutputGroup,
+    },
+    /// Stop every running output of `group`.
+    StopOutputs {
+        group: OutputGroup,
     },
 
     // ---- Audio (AUD) ----

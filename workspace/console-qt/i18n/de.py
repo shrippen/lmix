@@ -2,6 +2,11 @@
 # scripts/update-translations.sh collects the sources and writes these
 # into qml_de.ts (i18n/fill.py). Keep it complete.
 DE = {
+    'At the end': 'Am Ende',
+    'Stop on the last frame': 'Auf dem letzten Bild stehen bleiben',
+    'Start all streams': 'Alle Streams starten',
+    'Stop all streams': 'Alle Streams stoppen',
+    'Stop all streams?': 'Alle Streams stoppen?',
     '3840 × 2160 (4K UHD)': '3840 × 2160 (4K UHD)',
     '2560 × 1440': '2560 × 1440',
     '1920 × 1080 (Full HD)': '1920 × 1080 (Full HD)',

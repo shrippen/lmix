@@ -812,6 +812,17 @@ impl Engine for StromEngine {
             } => self.set_channel(*slot, *gain, *muted, *ramp_ms).await,
             Command::SetListen { slot, listen } => self.set_listen(*slot, *listen).await,
             Command::Transport { slot, transport } => self.transport(*slot, *transport).await,
+            Command::SetAtEnd {
+                slot,
+                items,
+                at_end,
+            } => {
+                let body = serde_json::json!({
+                    "files": items,
+                    "loop_playlist": at_end.is_loop(),
+                });
+                self.player_call(*slot, "playlist", body).await
+            }
             Command::Seek { slot, position_ms } => {
                 self.player_call(
                     *slot,

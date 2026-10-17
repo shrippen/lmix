@@ -40,17 +40,17 @@ pub use graphics::{
     TitleCall, TitleData, TitleLayer, TitlePhase, TitleTrigger,
 };
 pub use input::{
-    AutoPlay, AuxBus, ChannelStrip, Compressor, Device, DeviceKind, Eq4, Gate, Hpf, Ingest, Input,
-    InputAudio, InputColor, InputId, InputPress, InputRef, InputStatus, Listen, Look, SignalLoss,
-    SourceSpec, TestPattern, Transport,
+    AtEnd, AutoPlay, AuxBus, ChannelStrip, Compressor, Device, DeviceKind, Eq4, Gate, Hpf, Ingest,
+    Input, InputAudio, InputColor, InputId, InputPress, InputRef, InputStatus, Listen, Look,
+    Playback, PlaybackState, SignalLoss, SourceSpec, TestPattern, Transport,
 };
 pub use layout::{
     BoxCrop, BoxRect, BoxSpec, Layout, LayoutBox, LayoutTemplate, TemplateBox, TemplateInput,
 };
 pub use midi::{MidiBinding, MidiKind, MidiMessage};
 pub use output::{
-    Container, DisplayMode, Framerate, MasterFormat, Output, OutputId, OutputRef, OutputSource,
-    OutputSpec, OutputStats, OutputStatus,
+    Container, DisplayMode, Framerate, MasterFormat, Output, OutputGroup, OutputId, OutputRef,
+    OutputSource, OutputSpec, OutputStats, OutputStatus,
 };
 pub use ptz::{PtzFocus, PtzProtocol, PtzSpec};
 pub use shortcut::{Shortcut, ShortcutSpec};

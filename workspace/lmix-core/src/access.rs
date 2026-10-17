@@ -246,6 +246,7 @@ pub fn right_of(action: &Action) -> Right {
         | Action::SaveLayoutTemplate { .. }
         | Action::SaveShow { .. }
         | Action::SetAutoPlay { .. }
+        | Action::SetAtEnd { .. }
         | Action::SetCueList { .. }
         | Action::SetDataAuto { .. }
         | Action::SetEmergencyList { .. }
@@ -284,6 +285,8 @@ pub fn right_of(action: &Action) -> Right {
         | Action::PlayItem { .. }
         | Action::StartOutput { .. }
         | Action::StopOutput { .. }
+        | Action::StartOutputs { .. }
+        | Action::StopOutputs { .. }
         | Action::SetAudio { .. }
         | Action::SetAudioFollow { .. }
         | Action::SetVolume { .. }

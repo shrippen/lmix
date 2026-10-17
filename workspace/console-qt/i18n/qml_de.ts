@@ -83,6 +83,16 @@
     </message>
     <message>
       <location line="+1" />
+      <source>Start all streams</source>
+      <translation>Alle Streams starten</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Stop all streams</source>
+      <translation>Alle Streams stoppen</translation>
+    </message>
+    <message>
+      <location line="+1" />
       <source>Sound of input on</source>
       <translation>Ton des Inputs an</translation>
     </message>
@@ -97,7 +107,7 @@
       <translation>Andere (JSON)</translation>
     </message>
     <message>
-      <location line="+104" />
+      <location line="+108" />
       <source>Action %1 is not valid JSON</source>
       <translation>Aktion %1 ist kein gültiges JSON</translation>
     </message>
@@ -994,7 +1004,7 @@
       <translation>Overlay</translation>
     </message>
     <message>
-      <location line="+14" />
+      <location line="+17" />
       <source>Overlay %1</source>
       <translation>Overlay %1</translation>
     </message>
@@ -1019,7 +1029,7 @@
       <translation>Rechtsklick: mit dem nächsten Take.</translation>
     </message>
     <message>
-      <location line="+24" />
+      <location line="+25" />
       <source>Mute</source>
       <translation>Stumm</translation>
     </message>
@@ -1132,6 +1142,21 @@
       <location line="+1" />
       <source>None</source>
       <translation>Keine</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>At the end</source>
+      <translation>Am Ende</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Loop</source>
+      <translation>Schleife</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Stop on the last frame</source>
+      <translation>Auf dem letzten Bild stehen bleiben</translation>
     </message>
     <message>
       <location line="+6" />
@@ -2061,7 +2086,7 @@
   <context>
     <name>OutputBar</name>
     <message>
-      <location filename="../qml/OutputBar.qml" line="+29" />
+      <location filename="../qml/OutputBar.qml" line="+33" />
       <source>Outputs</source>
       <translation>Ausgänge</translation>
     </message>
@@ -2096,7 +2121,12 @@
       <translation>%1 stoppen?</translation>
     </message>
     <message>
-      <location line="+18" />
+      <location line="+0" />
+      <source>Stop all streams?</source>
+      <translation>Alle Streams stoppen?</translation>
+    </message>
+    <message>
+      <location line="+19" />
       <source>A stopped recording or stream cannot go on where it was.</source>
       <translation>Eine gestoppte Aufnahme oder ein gestoppter Stream lässt sich nicht an derselben Stelle fortsetzen.</translation>
     </message>
@@ -2106,7 +2136,17 @@
       <translation>Vor dem Stoppen fragen</translation>
     </message>
     <message>
-      <location line="+7" />
+      <location line="+8" />
+      <source>Stop all streams</source>
+      <translation>Alle Streams stoppen</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Start all streams</source>
+      <translation>Alle Streams starten</translation>
+    </message>
+    <message>
+      <location line="+15" />
       <source>+ Output</source>
       <translation>+ Ausgang</translation>
     </message>

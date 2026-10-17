@@ -31,6 +31,30 @@ impl std::fmt::Display for OutputId {
     }
 }
 
+/// Outputs that `start_outputs` and `stop_outputs` act on together
+/// (STR.1: all stream targets at once).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum OutputGroup {
+    /// SRT streams.
+    Streams,
+    /// Recordings.
+    Recordings,
+    /// Every output.
+    All,
+}
+
+impl OutputGroup {
+    /// Whether an output of `spec` belongs to the group.
+    pub fn holds(self, spec: &OutputSpec) -> bool {
+        match self {
+            OutputGroup::Streams => matches!(spec, OutputSpec::Srt { .. }),
+            OutputGroup::Recordings => matches!(spec, OutputSpec::Record { .. }),
+            OutputGroup::All => true,
+        }
+    }
+}
+
 /// An output by 1-based number, name or id.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(untagged)]
