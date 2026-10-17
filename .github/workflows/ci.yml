@@ -160,7 +160,7 @@ jobs:
         run: |
           apt-get update -qq
           DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git curl ca-certificates \
-            jq zstd nodejs imagemagick xvfb ffmpeg build-essential mold clang pkg-config \
+            jq zstd nodejs imagemagick xvfb ffmpeg build-essential mold clang pkg-config gdb \
             libssl-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
             libgstreamer-plugins-bad1.0-dev gstreamer1.0-plugins-base \
             gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly \

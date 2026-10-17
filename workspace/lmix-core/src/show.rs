@@ -105,6 +105,12 @@ pub struct Show {
     /// Picture size and rate of program (OUT.1).
     #[serde(default)]
     pub format: lmix_types::MasterFormat,
+    /// Layout of the multiview (OUT.10).
+    #[serde(
+        default,
+        skip_serializing_if = "lmix_types::MultiviewLayout::is_default"
+    )]
+    pub multiview: lmix_types::MultiviewLayout,
     /// Volume of the monitor bus (AUD.4).
     #[serde(default = "lmix_types::input::full_volume")]
     pub monitor_volume: u8,
@@ -265,6 +271,7 @@ impl Default for Show {
             aux_buses: Default::default(),
             master: Default::default(),
             format: Default::default(),
+            multiview: Default::default(),
             monitor_volume: lmix_types::input::full_volume(),
             default_delay_ms: 0,
             layouts: Vec::new(),
@@ -636,6 +643,10 @@ mod tests {
                 height: 1920,
                 framerate: lmix_types::Framerate::Fps25,
             },
+            multiview: lmix_types::MultiviewLayout {
+                program: lmix_types::ProgramSide::Left,
+                ..Default::default()
+            },
             monitor_volume: 70,
             default_delay_ms: 40,
             outputs: vec![ShowOutput {
@@ -644,6 +655,7 @@ mod tests {
                 spec: OutputSpec::Srt {
                     uri: "srt://cdn:9000".into(),
                     video_kbps: 6000,
+                    encoding: Default::default(),
                 },
                 source: OutputSource::Input(id),
                 aux: Some(2),

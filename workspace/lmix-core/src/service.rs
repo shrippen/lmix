@@ -1247,7 +1247,7 @@ impl Service {
             action,
             Action::SetScriptFolder { .. }
                 | Action::OpenShow { .. }
-                | Action::NewShow
+                | Action::NewShow { .. }
                 | Action::ImportPackage { .. }
         );
         let result = self.handle_as(action, Origin::Operator).await;
@@ -1564,7 +1564,7 @@ impl Service {
         };
         if matches!(
             action,
-            Action::OpenShow { .. } | Action::NewShow | Action::ImportPackage { .. }
+            Action::OpenShow { .. } | Action::NewShow { .. } | Action::ImportPackage { .. }
         ) {
             sw.check_unlocked()?;
         }
@@ -1576,7 +1576,19 @@ impl Service {
             Action::SetCueList { .. } | Action::RemoveCueList { .. }
         );
         let commands = match action {
-            Action::NewShow => sw.replace(Show::default(), None),
+            Action::NewShow { format } => {
+                if format.is_some_and(|f| !f.is_valid()) {
+                    return Err(ActionError::BadFormat {
+                        min: lmix_types::output::FORMAT_MIN_PX,
+                        max: lmix_types::output::FORMAT_MAX_PX,
+                    });
+                }
+                let show = Show {
+                    format: format.unwrap_or_default(),
+                    ..Show::default()
+                };
+                sw.replace(show, None)
+            }
             Action::OpenShow { path } => open(&mut sw, path).await?,
             Action::ImportPackage { .. } => {
                 let (show, file, settings) = unpacked.take().expect("unpacked above");
@@ -3157,6 +3169,42 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_new_show_starts_in_the_chosen_format() {
+        let service = Service::new(2, Arc::new(NullEngine::default()), None);
+        let upright = lmix_types::MasterFormat {
+            width: 1080,
+            height: 1920,
+            framerate: lmix_types::Framerate::Fps25,
+        };
+        let state = service
+            .handle(Action::NewShow {
+                format: Some(upright),
+            })
+            .await
+            .unwrap();
+        assert_eq!(state.format, upright, "SHW.3");
+        let bad = lmix_types::MasterFormat {
+            width: 100,
+            ..upright
+        };
+        assert!(matches!(
+            service.handle(Action::NewShow { format: Some(bad) }).await,
+            Err(ActionError::BadFormat { .. })
+        ));
+        let plain = service
+            .handle(Action::NewShow { format: None })
+            .await
+            .unwrap();
+        assert_eq!(plain.format, lmix_types::MasterFormat::default());
+        let json = r#"{"action":"new_show"}"#;
+        assert_eq!(
+            serde_json::from_str::<Action>(json).unwrap(),
+            Action::NewShow { format: None },
+            "older clients still send it without a format"
+        );
+    }
+
+    #[tokio::test]
     async fn shortcuts_for_all_shows_are_kept_in_the_settings() {
         use lmix_types::{InputRef, ShortcutSpec};
         let dir = tempfile::tempdir().unwrap();
@@ -3177,7 +3225,10 @@ mod tests {
             })
             .await
             .unwrap();
-        first.handle(Action::NewShow).await.unwrap();
+        first
+            .handle(Action::NewShow { format: None })
+            .await
+            .unwrap();
 
         // Another run (or a new show): still there.
         let second = Service::new(4, Arc::new(NullEngine::default()), None);
