@@ -58,7 +58,7 @@ const MONITOR_SINK: &str = "monitor_sink";
 pub const AUDIO_MIXER: &str = "mix";
 /// Mixer flow name; a new layout gets a new name, so `start` rebuilds a
 /// running mixer of an older lmix instead of reusing it.
-pub const MIXER_NAME: &str = "lmix mixer 7";
+pub const MIXER_NAME: &str = "lmix mixer 8";
 /// Block id of the vision mixer in the mixer flow.
 pub const MIXER_BLOCK: &str = "vm";
 /// Thumbnail tap on the program output: GUI monitor and picture checks.
@@ -325,7 +325,8 @@ pub fn format_of(flow: &Flow) -> Option<MasterFormat> {
     };
     let resolution = text("pgm_resolution")?;
     let (width, height) = resolution.split_once('x')?;
-    let framerate = serde_json::from_value(serde_json::Value::String(text("pgm_framerate")?)).ok()?;
+    let framerate =
+        serde_json::from_value(serde_json::Value::String(text("pgm_framerate")?)).ok()?;
     Some(MasterFormat {
         width: width.parse().ok()?,
         height: height.parse().ok()?,
@@ -813,9 +814,10 @@ fn add_source(flow: &mut Flow, source: &SourceSpec, backend: MixerBackend) -> Op
             )
         }
         SourceSpec::Image { path } => add_still(flow, path),
-        SourceSpec::File { path } => add_player(flow, std::slice::from_ref(path), backend),
-        SourceSpec::Url { url } => add_player(flow, std::slice::from_ref(url), backend),
-        SourceSpec::Playlist { paths } => add_player(flow, paths, backend),
+        SourceSpec::File { .. } | SourceSpec::Url { .. } | SourceSpec::Playlist { .. } => {
+            let items = player_items(source).expect("a player source");
+            add_player(flow, &items, backend)
+        }
         SourceSpec::Srt { uri } => {
             flow.blocks.push(block(
                 "srt",
@@ -918,7 +920,18 @@ fn add_still(flow: &mut Flow, path: &str) -> String {
     "caps".into()
 }
 
-/// Media player with `items`, looped; carries picture and sound.
+/// The files of a source played by the media player; `None` for others.
+pub fn player_items(source: &SourceSpec) -> Option<Vec<String>> {
+    match source {
+        SourceSpec::File { path } => Some(vec![path.clone()]),
+        SourceSpec::Url { url } => Some(vec![url.clone()]),
+        SourceSpec::Playlist { paths } => Some(paths.clone()),
+        _ => None,
+    }
+}
+
+/// Media player with `items`, looped (see `Command::SetAtEnd`); carries
+/// picture and sound.
 /// A hardware decoder (NVDEC, VA-API) keeps frames in GPU memory, and the
 /// inter channel passes any caps on. Only the CUDA mixer reads them, so for
 /// the others the player hands over system memory.
@@ -1111,7 +1124,12 @@ mod tests {
 
     #[test]
     fn mixer_subscribes_each_slot_channel() {
-        let flow = mixer_flow(3, MixerBackend::Cpu, MonitorOut::None, MasterFormat::default());
+        let flow = mixer_flow(
+            3,
+            MixerBackend::Cpu,
+            MonitorOut::None,
+            MasterFormat::default(),
+        );
 
         for slot in 0..3 {
             let input = flow
@@ -1132,7 +1150,12 @@ mod tests {
 
     #[test]
     fn mixer_has_black_after_slots() {
-        let flow = mixer_flow(3, MixerBackend::Cpu, MonitorOut::None, MasterFormat::default());
+        let flow = mixer_flow(
+            3,
+            MixerBackend::Cpu,
+            MonitorOut::None,
+            MasterFormat::default(),
+        );
 
         assert_eq!(black_input(3), 3);
         assert!(flow
@@ -1283,7 +1306,12 @@ mod tests {
 
     #[test]
     fn mixer_mixes_every_slot_sound() {
-        let flow = mixer_flow(3, MixerBackend::Cpu, MonitorOut::None, MasterFormat::default());
+        let flow = mixer_flow(
+            3,
+            MixerBackend::Cpu,
+            MonitorOut::None,
+            MasterFormat::default(),
+        );
 
         for slot in 0..3 {
             let to = format!("mix:input_{}", slot + 1);
@@ -1300,7 +1328,12 @@ mod tests {
             .any(|l| l.from == "mix:main_out" && l.to == "vm:pgm_audio_in"));
         assert!(flow.elements.iter().all(|e| e.id != MONITOR_SINK));
 
-        let heard = mixer_flow(3, MixerBackend::Cpu, MonitorOut::Auto, MasterFormat::default());
+        let heard = mixer_flow(
+            3,
+            MixerBackend::Cpu,
+            MonitorOut::Auto,
+            MasterFormat::default(),
+        );
         assert!(heard
             .links
             .iter()
@@ -1309,7 +1342,12 @@ mod tests {
 
     #[test]
     fn mixer_publishes_program_for_outputs() {
-        let flow = mixer_flow(2, MixerBackend::Cpu, MonitorOut::None, MasterFormat::default());
+        let flow = mixer_flow(
+            2,
+            MixerBackend::Cpu,
+            MonitorOut::None,
+            MasterFormat::default(),
+        );
 
         assert!(flow
             .links
@@ -1330,7 +1368,13 @@ mod tests {
         let spec = OutputSpec::Display {
             mode: lmix_types::DisplayMode::Window,
         };
-        let flow = output_flow(OutputId::new(), &spec, Feed::Multiview, None, MixerBackend::Cpu);
+        let flow = output_flow(
+            OutputId::new(),
+            &spec,
+            Feed::Multiview,
+            None,
+            MixerBackend::Cpu,
+        );
 
         let video = flow.blocks.iter().find(|b| b.id == "pgm").unwrap();
         assert!(matches!(
@@ -1341,12 +1385,17 @@ mod tests {
 
     #[test]
     fn mixer_has_a_stinger_layer_below_the_overlays() {
-        let flow = mixer_flow(2, MixerBackend::Cpu, MonitorOut::None, MasterFormat::default());
+        let flow = mixer_flow(
+            2,
+            MixerBackend::Cpu,
+            MonitorOut::None,
+            MasterFormat::default(),
+        );
 
         let vm = flow.blocks.iter().find(|b| b.id == MIXER_BLOCK).unwrap();
         assert!(matches!(
             vm.properties.get("num_dsk_inputs"),
-            Some(PropertyValue::String(n)) if n == "5"
+            Some(PropertyValue::String(n)) if n == "9"
         ));
         assert_eq!(layer_input(STINGER_LAYER), "dsk0");
         assert!(flow
@@ -1358,7 +1407,12 @@ mod tests {
 
     #[test]
     fn mixer_publishes_its_aux_buses() {
-        let flow = mixer_flow(2, MixerBackend::Cpu, MonitorOut::None, MasterFormat::default());
+        let flow = mixer_flow(
+            2,
+            MixerBackend::Cpu,
+            MonitorOut::None,
+            MasterFormat::default(),
+        );
 
         let mix = flow.blocks.iter().find(|b| b.id == AUDIO_MIXER).unwrap();
         assert!(matches!(
@@ -1629,7 +1683,15 @@ mod tests {
             MixerBackend::Cpu,
         );
 
-        for flow in [mixer_flow(2, MixerBackend::Cpu, MonitorOut::None, MasterFormat::default()), slot] {
+        for flow in [
+            mixer_flow(
+                2,
+                MixerBackend::Cpu,
+                MonitorOut::None,
+                MasterFormat::default(),
+            ),
+            slot,
+        ] {
             assert_eq!(flow.properties.clock_type, GStreamerClockType::Monotonic);
             assert!(flow.properties.effective_direct_media_timing());
         }

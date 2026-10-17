@@ -122,6 +122,12 @@ done
 click 720 147
 becomes program 2
 [[ "$(number_of program)" == 2 ]] && pass "Cut: program" || fail "program is $(number_of program) after Cut"
+# Two streams, not started: the output bar offers to start both (STR.1).
+for port in 9921 9922; do
+    curl -sf -X POST "$CORE/actions" -H 'content-type: application/json' \
+        -d "{\"action\":\"add_output\",\"spec\":{\"kind\":\"srt\",\"uri\":\"srt://:$port?mode=listener\"},\"name\":\"SRT $port\"}" >/dev/null
+done
+sleep 1
 shot c
 awk "BEGIN { exit !($(spread c "$PROGRAM_AREA") > 0.05) }" && pass "program monitor shows the new input" \
     || fail "program monitor blank after Cut"

@@ -148,7 +148,7 @@ kann es, Console nicht.
 | INP.7 | Kategorien: 6 feste Farben + 16 eigene, Beschriftung, Filter in der Input-Leiste, Suchkategorie nach Namen | S | ◐ (7 feste Farben; ohne eigene Farben, Beschriftung, Filter, Suche) |
 | INP.8 | Klick-Aktion je Input wählbar (Standard: in Preview) | S | ✅ |
 | INP.9 | GO-Aktion je Input wählbar (Standard: Schnellstart, §3.5) | S | ✅ |
-| INP.10 | Wiedergabe-Inputs: Play, Pause, Neustart, Positionieren, Schleife, Geschwindigkeit, In-/Out-Marke | M | ◐ (Play, Pause, Neustart, Positionieren; Schleife immer an; ohne Geschwindigkeit, In-/Out-Marke) |
+| INP.10 | Wiedergabe-Inputs: Play, Pause, Neustart, Positionieren, Schleife, Geschwindigkeit, In-/Out-Marke | M | ◐ (Play, Pause, Neustart, Positionieren; Schleife oder Stehenbleiben am Ende je Input; ohne Geschwindigkeit, In-/Out-Marke) |
 | INP.11 | Automatik je Input: bei Take abspielen / von vorn starten / nach Wegschalten pausieren | S | ✅ |
 | INP.12 | Live-Pause: Live-Quelle einfrieren, ohne Aufnahme/Wiederholung/Ton anzuhalten | S | – |
 | INP.13 | Offline-Zustand bei fehlender Quelle; Wiederverbinden; Datei neu zuordnen | M | ✅ |
@@ -243,7 +243,7 @@ kann es, Console nicht.
 
 | ID | Anforderung | Prio | Stand |
 |---|---|---|---|
-| OVL.1 | 8 Overlay-Kanäle über Program; ein Input je Kanal; Alpha und Key des Inputs gelten | M | ◐ (4 Kanäle, nicht 8) |
+| OVL.1 | 8 Overlay-Kanäle über Program; ein Input je Kanal; Alpha und Key des Inputs gelten | M | ✅ |
 | OVL.2 | Je Kanal: Typ (Vollbild/PiP mit Position), Ein-/Ausblendeffekt + Dauer (rückwärts beim Ausblenden), Auto-Aus nach Zeit, Rand | M | ◐ (Effekt nur Schnitt/Blende, ohne Rand: Engine) |
 | OVL.3 | Overlay in Preview vorbereiten; geht beim nächsten Take mit auf Program | S | ◐ (Tally, nicht im Vorschau-Bild: Engine) |
 | OVL.4 | PiP-Overlay per Aktion auf Vollbild vergrößern und zurück | K | – |
@@ -316,7 +316,7 @@ kann es, Console nicht.
 | MCR.1 | Einzelaufnahme: beliebige Live-Inputs und Ausgänge 1–4 gleichzeitig roh in getrennte Dateien | S | ◐ (Aufnahme je Input als ISO-Ausgang, auch gleichzeitig; Ausgänge 2–4 als Quelle fehlen) |
 | MCR.2 | Bereits komprimierte Quellen ohne Neukodierung sichern: SRT als TS, NDI im Original-Format | S | – (E: TS ohne Neukodierung im strom-Recorder) |
 | MCR.3 | Ordner je Quelle, Split, Ton je Quelle (eigener oder Bus) | S | ◐ (Ordner und Ton je Ausgang, eigener oder Aux; ohne Teilen) |
-| STR.1 | Bis 5 Streamziele, einzeln und gemeinsam startbar; Fehler eines Ziels stoppt nur dieses | M | ◐ (mehrere SRT-Ausgänge, einzeln startbar, ein Fehler stoppt nur diesen; kein gemeinsamer Start) |
+| STR.1 | Bis 5 Streamziele, einzeln und gemeinsam startbar; Fehler eines Ziels stoppt nur dieses | M | ✅ (SRT-Ausgänge einzeln oder alle zusammen, `start_outputs`/`stop_outputs`; ein Fehler stoppt nur diesen) |
 | STR.2 | Protokolle RTMP; zusätzlich RTMPS, SRT, WHIP (lmix); Ziel = URL + Schlüssel; Profile (benannte Zielsätze) | M | ◐ (SRT; RTMP wartet auf strom #771, WHIP E; ohne Profile) |
 | STR.3 | Qualitätsprofile: Auflösung, Bitrate, Codec H.264/HEVC/AV1, Profil/Level/Preset, Keyframe-Abstand, CBR, Ton-Bitrate/-Kanäle; Ziele teilen Profil oder eigenes | M | ◐ (nur Video-Bitrate; H.264 fest) |
 | STR.4 | Multi-Bitrate: ein Ziel mit mehreren Qualitäten, keyframe-ausgerichtet | K | – |
@@ -427,7 +427,7 @@ Zurückgestellt (User 2026-10-08).
 | API.1 | Ein Aktionskatalog für alle Bedienwege (§2.3); jede Aktion: Name, Gruppe, Parameter (Input, Wert, Dauer, Feldname, Index, Mix, Kanal), Beschreibung; maschinenlesbar exportierbar | M | ✅ (JSON-Schema mit Beschreibungen und Gruppen `x-group`) |
 | API.2 | Umfang: alle Bedienfunktionen dieses Lastenhefts, mindestens alles, was die vMix-Funktionsreferenz steuern kann; Gruppen wie vMix: Allgemein, Audio, Übergang, Ausgang, Titel, Input, Overlay, Ablaufliste, Skript, Wiederholung, NDI/OMT, PTZ, Show, Datenquellen, Browser (vMix 29: rund 800 Aktionen inkl. nummerierter Varianten; lmix darf sie parametrisieren statt durchnummerieren, z. B. `overlay.in {channel}` statt `OverlayInput1In…8In`) | M | ◐ (147 Aktionen in 13 Gruppen; ohne Ablaufliste, Skript, Wiederholung, Browser, NDI) |
 | API.3 | HTTP: Aktion per Aufruf mit Parametern; vollständiger Zustand abrufbar (JSON) | M | ✅ |
-| API.4 | Zustand enthält: Version, Inputs (ID, Nummer, Typ, Titel, Zustand, Position, Dauer, Schleife, Ton, Pegel, Busse, Ebenen, Titelfelder, Listeneinträge), Overlays, Preview, Program, FTB, Übergänge, Aufnahme/Stream/Ausgaben/Ablaufliste/Einzelaufnahme, Audio-Busse, dynamische Werte, Mixe | M | ◐ |
+| API.4 | Zustand enthält: Version, Inputs (ID, Nummer, Typ, Titel, Zustand, Position, Dauer, Schleife, Ton, Pegel, Busse, Ebenen, Titelfelder, Listeneinträge), Overlays, Preview, Program, FTB, Übergänge, Aufnahme/Stream/Ausgaben/Ablaufliste/Einzelaufnahme, Audio-Busse, dynamische Werte, Mixe | M | ◐ (Inputs mit Abspielstand: Zustand, Position, Dauer, Playlist-Eintrag; ohne Schleife, Ebenen, Titelfelder im Input) |
 | API.5 | Ereigniskanal mit Abo: Tally (aus/PGM/PVW je Input), Rückmeldungszustände, Zustandsänderungen; Aktionen über denselben Kanal; leichtgewichtig genug für Mikrocontroller (Textzeilen über TCP oder WebSocket) | M | ✅ |
 | API.6 | WebSocket mit Zustandsdiffs für eigene Clients | S | ✅ (auf Wunsch, `?diff=true`) |
 | API.7 | Sicherheit: nur LAN (Standard), Passwort, Ausnahmen je Seite, lokale Programme ohne Anmeldung, "erhöhte Sicherheit" sperrt Skripte | M | ✅ (lmix hat keine Skripte; OSC ohne Passwort, nur LAN) |

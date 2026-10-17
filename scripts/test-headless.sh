@@ -167,7 +167,7 @@ PY
 act '{"action":"overlay_in","channel":1,"input":"Bars","duration_ms":0}'
 act '{"action":"overlay_in","channel":2,"input":"Ball","duration_ms":0}'
 osc_send /lmix/overlay/out
-wait_for state_is '.overlays == [null,null,null,null]' || fail "OSC: overlays not all off"
+wait_for state_is '.overlays | all(. == null)' || fail "OSC: overlays not all off"
 osc_send /lmix/overlay/2/last
 wait_for state_is ".overlays[1] == \"$ball_id\" and .overlays[0] == null" || fail "OSC: last input not back"
 pass "OSC: all overlays off, last input of a channel again"

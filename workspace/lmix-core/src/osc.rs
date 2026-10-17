@@ -326,7 +326,7 @@ pub fn request(message: &Message) -> Result<Request, String> {
             _ => return Err("/lmix/tbar needs a position 0–1".into()),
         },
         ["overlay", channel, "in"] => {
-            let channel = channel.parse::<u8>().map_err(|_| "overlay channel 1–4")?;
+            let channel = channel.parse::<u8>().map_err(|_| "overlay channel 1–8")?;
             let input = match input(0)? {
                 InputRef::Number(n) => serde_json::json!(n),
                 InputRef::Text(s) => serde_json::json!(s),
@@ -334,15 +334,15 @@ pub fn request(message: &Message) -> Result<Request, String> {
             json(serde_json::json!({ "action": "overlay_in", "channel": channel, "input": input }))?
         }
         ["overlay", channel, "out"] => {
-            let channel = channel.parse::<u8>().map_err(|_| "overlay channel 1–4")?;
+            let channel = channel.parse::<u8>().map_err(|_| "overlay channel 1–8")?;
             json(serde_json::json!({ "action": "overlay_out", "channel": channel }))?
         }
         ["overlay", channel, "last"] => {
-            let channel = channel.parse::<u8>().map_err(|_| "overlay channel 1–4")?;
+            let channel = channel.parse::<u8>().map_err(|_| "overlay channel 1–8")?;
             json(serde_json::json!({ "action": "overlay_last", "channel": channel }))?
         }
         ["overlay", channel, "preview"] => {
-            let channel = channel.parse::<u8>().map_err(|_| "overlay channel 1–4")?;
+            let channel = channel.parse::<u8>().map_err(|_| "overlay channel 1–8")?;
             Action::OverlayPreview {
                 channel,
                 input: arg(0).map(|_| input(0)).transpose()?,
@@ -513,12 +513,7 @@ pub async fn serve(
 
 /// `peer` sent something: its subscription, if any, starts over.
 async fn heard(subscribers: &Subscribers, peer: SocketAddr) {
-    if let Some(entry) = subscribers
-        .lock()
-        .await
-        .iter_mut()
-        .find(|s| s.peer == peer)
-    {
+    if let Some(entry) = subscribers.lock().await.iter_mut().find(|s| s.peer == peer) {
         entry.heard = tokio::time::Instant::now();
     }
 }
@@ -844,7 +839,11 @@ mod tests {
         heard(&subscribers, a).await;
         tokio::time::advance(std::time::Duration::from_secs(30)).await;
 
-        let peers: Vec<SocketAddr> = live(&subscribers).await.into_iter().map(|(p, _)| p).collect();
+        let peers: Vec<SocketAddr> = live(&subscribers)
+            .await
+            .into_iter()
+            .map(|(p, _)| p)
+            .collect();
         assert_eq!(peers, [a], "b said nothing for 70 s");
     }
 }

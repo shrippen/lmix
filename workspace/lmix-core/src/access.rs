@@ -166,7 +166,9 @@ impl Trust {
             v4 => v4,
         };
         let (have, want, bits) = match (ip, self.net) {
-            (IpAddr::V4(a), IpAddr::V4(b)) => (u128::from(u32::from(a)), u128::from(u32::from(b)), 32),
+            (IpAddr::V4(a), IpAddr::V4(b)) => {
+                (u128::from(u32::from(a)), u128::from(u32::from(b)), 32)
+            }
             (IpAddr::V6(a), IpAddr::V6(b)) => (u128::from(a), u128::from(b), 128),
             _ => return false,
         };
@@ -244,6 +246,7 @@ pub fn right_of(action: &Action) -> Right {
         | Action::SaveLayoutTemplate { .. }
         | Action::SaveShow { .. }
         | Action::SetAutoPlay { .. }
+        | Action::SetAtEnd { .. }
         | Action::SetCueList { .. }
         | Action::SetDataAuto { .. }
         | Action::SetEmergencyList { .. }
@@ -282,6 +285,8 @@ pub fn right_of(action: &Action) -> Right {
         | Action::PlayItem { .. }
         | Action::StartOutput { .. }
         | Action::StopOutput { .. }
+        | Action::StartOutputs { .. }
+        | Action::StopOutputs { .. }
         | Action::SetAudio { .. }
         | Action::SetAudioFollow { .. }
         | Action::SetVolume { .. }
@@ -1139,11 +1144,19 @@ mod tests {
         };
         let ip = |text: &str| text.parse::<IpAddr>().unwrap();
 
-        assert_eq!(access.trusted(ip("192.168.1.20")), Some(Right::Control), "highest");
+        assert_eq!(
+            access.trusted(ip("192.168.1.20")),
+            Some(Right::Control),
+            "highest"
+        );
         assert_eq!(access.trusted(ip("192.168.1.77")), Some(Right::View));
         assert_eq!(access.trusted(ip("::ffff:192.168.1.77")), Some(Right::View));
         assert_eq!(access.trusted(ip("192.168.2.1")), None);
-        assert_eq!(access.trusted(ip("fd12::1")), Some(Right::Control), "control by default");
+        assert_eq!(
+            access.trusted(ip("fd12::1")),
+            Some(Right::Control),
+            "control by default"
+        );
         assert_eq!(access.trusted(ip("fe80::1")), None);
         assert!(trust("0.0.0.0/0=edit").unwrap().contains(ip("10.1.2.3")));
         assert!(trust("192.168.1.0/33").is_err());
@@ -1161,7 +1174,10 @@ mod tests {
         };
         let status = |from, request| async move { call(access(), from, request).await.0 };
 
-        assert_eq!(status("192.168.1.20", post(cut, None)).await, StatusCode::OK);
+        assert_eq!(
+            status("192.168.1.20", post(cut, None)).await,
+            StatusCode::OK
+        );
         assert_eq!(
             status("192.168.1.20", post(add, None)).await,
             StatusCode::FORBIDDEN,

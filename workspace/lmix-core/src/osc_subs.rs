@@ -335,8 +335,13 @@ pub fn cue(
 }
 
 fn find(cues: &[Cue], id: lmix_types::CueId) -> Option<&Cue> {
-    cues.iter()
-        .find_map(|c| if c.id == id { Some(c) } else { find(&c.children, id) })
+    cues.iter().find_map(|c| {
+        if c.id == id {
+            Some(c)
+        } else {
+            find(&c.children, id)
+        }
+    })
 }
 
 /// A panic (`fade`) or hard stop (`hard`) for `sub`.
@@ -393,7 +398,10 @@ mod tests {
             )))
         );
         assert!(wish(&strings(&["weather"])).is_err());
-        assert!(wish(&strings(&["panic", "name"])).is_err(), "panic has no name");
+        assert!(
+            wish(&strings(&["panic", "name"])).is_err(),
+            "panic has no name"
+        );
         assert_eq!(unwish(&strings(&["cue"])), Ok(Some(Topic::Cue)));
         assert_eq!(unwish(&[]), Ok(None));
 
@@ -434,7 +442,11 @@ mod tests {
             standby(&state, &old)[0].1,
             encode_args(
                 "/lmix/cue/standby",
-                &[Arg::Str("Szene".into()), Arg::Int(1), Arg::Str("Licht an".into())]
+                &[
+                    Arg::Str("Szene".into()),
+                    Arg::Int(1),
+                    Arg::Str("Licht an".into())
+                ]
             ),
             "as before"
         );

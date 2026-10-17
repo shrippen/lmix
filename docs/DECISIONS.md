@@ -3017,3 +3017,77 @@ Auflösung von SD bis 4K, Hochkant 1080 × 1920 und Bildraten 23,976–60.
 gleiches Format ändert nichts, Quellen bleiben), VM-Test mit strom:
 1080 × 1920 bei 25 fps gebaut, Program läuft, zurück auf 1920 × 1080,
 Quelle online; Console auf Xvfb.
+
+## 2026-10-17 — Acht Overlay-Kanäle (OVL.1)
+
+**Kontext**: OVL.1 fordert acht Overlay-Kanäle über Program, lmix hatte
+vier. Der strom-Mischer erlaubte acht DSK-Ebenen, eine davon braucht der
+Stinger (unterste Ebene).
+
+**Entscheidung**:
+- `OVERLAY_CHANNELS` = 8. Der Mischer bekommt neun DSK-Ebenen (Stinger +
+  8), dafür hebt strom #16 (`lmix-nine-dsk`) die Grenze wie dbaf113 von 8
+  auf 9; nur Grenze und Auswahlwerte, keine neue Logik. Mischer-Flow heißt
+  jetzt „lmix mixer 8“, ein laufender alter Mischer wird neu gebaut.
+- Shows mit vier Kanälen laden weiter: fehlende Kanäle bekommen ihren
+  Standard (leer, halbe Sekunde Blende), mehr als acht sind ein Fehler.
+- API: Kanal 1–8 in Aktionen, OSC und Zustand (Arrays mit acht Einträgen).
+  Die Console richtet sich nach der Länge der Arrays.
+
+**Geprüft**: Tests (alte Show mit vier Kanälen, Kanal 9 abgelehnt, neun
+DSK-Ebenen im Mischer), VM-Test mit strom: Kanal 8 über Program an und
+aus; Console auf Xvfb.
+
+## 2026-10-17 — Alle Streams zusammen starten (STR.1)
+
+**Entscheidung**: Aktionen `start_outputs` / `stop_outputs` mit einer
+Gruppe (`streams` = SRT, `recordings`, `all`) statt eines Schalters.
+Start nimmt nur Ausgänge, die nicht laufen; kann einer nicht starten
+(Quelle fehlt), starten die anderen trotzdem, der Fehler kommt nur
+zurück, wenn keiner startet. Stopp nimmt nur laufende. Console: ab zwei
+Streams „Alle Streams starten“ bzw. „… stoppen“ (fragt vorher wie ein
+einzelner Ausgang), beides auch als Vorgabe für Kurzbefehle und Auslöser.
+
+**Geprüft**: Test (nur gestoppte starten, Gruppen trennen Streams und
+Aufnahmen), VM-Test mit strom: zweiter Stream startet zum laufenden,
+Aufnahme bleibt aus, beide stoppen; Console auf Xvfb mit dem Knopf.
+
+## 2026-10-17 — Abspielstand im Zustand (API.4)
+
+**Kontext**: API.4 verlangt Position und Dauer je Input im Zustand.
+lmix schickte sie nur als Ereignis `position` (5 × je Sekunde).
+
+**Entscheidung**: `Input.playback` (`state` playing/paused/stopped,
+`position_ms`, `duration_ms`, `item` 1-basiert, `items`) aus der letzten
+Meldung des Players, eingesetzt beim Lesen des Zustands (`GET /api/state`,
+TCP/OSC-Vollzustand). Der gepushte Zustand (WebSocket) ändert sich dadurch
+nicht, sonst ginge fünfmal je Sekunde der ganze Zustand hinaus; live
+bleibt das Ereignis `position`. Play/Pause kommt aus strom
+`MediaPlayerStateChanged` (bisher nicht gelesen); Meldungen älter als 2 s
+gelten als weg.
+
+**Geprüft**: Test (Meldung erscheint im Zustand), VM-Test mit strom:
+Playlist pausiert → `paused`, 2 Einträge, Dauer > 0; nach Play/Next →
+`playing`.
+
+## 2026-10-17 — Schleife oder Stehenbleiben am Ende (INP.10)
+
+**Kontext**: Clips und Playlisten liefen immer in der Schleife.
+
+**Entscheidung**:
+- Je Input `at_end`: `loop` (Standard, wie bisher) oder `hold` (bleibt
+  auf dem letzten Bild stehen; strom hält es mit dem Standbild-Thread).
+  Enum statt Schalter, Aktion `set_at_end`.
+- Umschalten live ohne Neustart: strom #17 nimmt `loop_playlist` in die
+  Playlist-Anfrage auf (die Eigenschaft ist nicht live), ein gestoppter
+  Player fängt nur bei anderen Dateien neu an. Der Slot startet weiter
+  mit Schleife; `hold` wird nach jedem Neuaufbau (Engine-Neustart,
+  Quelle ersetzt, Slot verschoben) als `SetAtEnd` nachgeschickt.
+- Clip-Ende-Auslöser (AUT.7) feuern auch, wenn ein gehaltener Clip
+  stoppt (Zustand `stopped` aus strom, seit API.4 gelesen).
+- Console: „Am Ende“ im Kachelmenü.
+
+**Geprüft**: Tests (gehaltenes Ende zählt als Ende, zuerst rot;
+Aktion, Wiederherstellung), VM-Test mit strom: Playlist bleibt stehen,
+Zustand `stopped`, Bild steht, Auslöser feuert; zurück auf Schleife
+startet nichts, Neustart spielt wieder.

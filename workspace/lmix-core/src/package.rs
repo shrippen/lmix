@@ -374,6 +374,7 @@ mod tests {
             audio: Default::default(),
             signal_loss: Default::default(),
             auto_play: Default::default(),
+            at_end: Default::default(),
             click: lmix_types::InputPress::click(),
             go: lmix_types::InputPress::go(),
             strip: Default::default(),

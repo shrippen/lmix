@@ -33,23 +33,24 @@ pub use cue::{
     Cue, CueEvent, CueId, CueKind, CueList, CueTarget, Follow, GroupMode, RunPhase, RunningCue,
     StandbyMove, StopMode, StopOthers, StopScope,
 };
+pub use feed::{Feed, FeedMessage, FeedOn};
 pub use graphics::{
     BindingSpec, Blend, DataFormat, DataSource, DataSourceSpec, DataTable, Dataset, Easing,
     FieldBinding, FieldKind, Graphics, LayerTransform, Template, TemplateField, TemplateTexts,
     TitleCall, TitleData, TitleLayer, TitlePhase, TitleTrigger,
 };
 pub use input::{
-    AutoPlay, AuxBus, ChannelStrip, Compressor, Device, DeviceKind, Eq4, Gate, Hpf, Ingest, Input,
-    InputAudio, InputColor, InputId, InputPress, InputRef, InputStatus, Listen, Look, SignalLoss,
-    SourceSpec, TestPattern, Transport,
+    AtEnd, AutoPlay, AuxBus, ChannelStrip, Compressor, Device, DeviceKind, Eq4, Gate, Hpf, Ingest,
+    Input, InputAudio, InputColor, InputId, InputPress, InputRef, InputStatus, Listen, Look,
+    Playback, PlaybackState, SignalLoss, SourceSpec, TestPattern, Transport,
 };
 pub use layout::{
     BoxCrop, BoxRect, BoxSpec, Layout, LayoutBox, LayoutTemplate, TemplateBox, TemplateInput,
 };
 pub use midi::{MidiBinding, MidiKind, MidiMessage};
 pub use output::{
-    Container, DisplayMode, Framerate, MasterFormat, Output, OutputId, OutputRef, OutputSource,
-    OutputSpec, OutputStats, OutputStatus,
+    Container, DisplayMode, Framerate, MasterFormat, Output, OutputGroup, OutputId, OutputRef,
+    OutputSource, OutputSpec, OutputStats, OutputStatus,
 };
 pub use ptz::{PtzFocus, PtzProtocol, PtzSpec};
 pub use shortcut::{Shortcut, ShortcutSpec};
@@ -57,6 +58,5 @@ pub use state::{
     Event, InputLevel, Latency, Levels, LiveFeed, OverlayChannel, QuickPlay, ShowState, Stinger,
     Transition,
 };
-pub use feed::{Feed, FeedMessage, FeedOn};
-pub use zone::{Zone, ZoneOutput, ZonePatch, ZoneState};
 pub use target::{HttpMethod, Target, TargetKind, TargetResult, TargetSpec};
+pub use zone::{Zone, ZoneOutput, ZonePatch, ZoneState};

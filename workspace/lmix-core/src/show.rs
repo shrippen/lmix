@@ -12,10 +12,10 @@ use std::path::Path;
 use lmix_types::action::{OVERLAY_CHANNELS, TRANSITION_SLOTS};
 use lmix_types::input::AUX_BUSES;
 use lmix_types::{
-    Action, AutoPlay, AuxBus, ChannelStrip, Cue, DataSourceSpec, Dataset, Effect, FieldBinding,
-    InputAudio, InputColor, InputId, InputPress, LayerTransform, LayoutBox, Look, MidiBinding,
-    OutputId, OutputSource, OutputSpec, OverlayChannel, QuickPlay, SignalLoss, SourceSpec,
-    TitleData, TitlePhase, TitleTrigger, Transition, TransitionSlot, Trigger,
+    Action, AtEnd, AutoPlay, AuxBus, ChannelStrip, Cue, DataSourceSpec, Dataset, Effect,
+    FieldBinding, InputAudio, InputColor, InputId, InputPress, LayerTransform, LayoutBox, Look,
+    MidiBinding, OutputId, OutputSource, OutputSpec, OverlayChannel, QuickPlay, SignalLoss,
+    SourceSpec, TitleData, TitlePhase, TitleTrigger, Transition, TransitionSlot, Trigger,
 };
 use serde::{Deserialize, Serialize};
 
@@ -44,6 +44,9 @@ pub struct ShowInput {
     /// Play, restart, pause on and off air (INP.11).
     #[serde(default, skip_serializing_if = "AutoPlay::is_off")]
     pub auto_play: AutoPlay,
+    /// Loop or hold the last frame at the end (INP.10).
+    #[serde(default, skip_serializing_if = "AtEnd::is_loop")]
+    pub at_end: AtEnd,
     /// What a click on it does (INP.8).
     #[serde(
         default = "InputPress::click",
@@ -81,14 +84,18 @@ pub struct Show {
     #[serde(default)]
     pub outputs: Vec<ShowOutput>,
     /// What each overlay channel shows, as program is kept too.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "padded")]
     pub overlays: [Option<InputId>; OVERLAY_CHANNELS as usize],
     /// Effect, length, auto off and place per channel (OVL.2).
-    #[serde(default, skip_serializing_if = "all_default")]
+    #[serde(
+        default,
+        skip_serializing_if = "all_default",
+        deserialize_with = "padded"
+    )]
     pub overlay_channels: [OverlayChannel; OVERLAY_CHANNELS as usize],
     /// What each channel gets with the next take (OVL.3), as preview is
     /// kept too.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "padded")]
     pub overlay_preview: [Option<InputId>; OVERLAY_CHANNELS as usize],
     #[serde(default)]
     pub aux_buses: [AuxBus; AUX_BUSES],
@@ -275,6 +282,24 @@ impl Default for Show {
             data_sources: Vec::new(),
         }
     }
+}
+
+/// A per-channel array saved with fewer channels (shows from before
+/// OVL.1 had eight): the missing ones get their default.
+fn padded<'de, D, T, const N: usize>(deserializer: D) -> Result<[T; N], D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Deserialize<'de> + Default,
+{
+    let saved = Vec::<T>::deserialize(deserializer)?;
+    if saved.len() > N {
+        return Err(serde::de::Error::invalid_length(
+            saved.len(),
+            &"at most one per channel",
+        ));
+    }
+    let mut saved = saved.into_iter();
+    Ok(std::array::from_fn(|_| saved.next().unwrap_or_default()))
 }
 
 fn all_default(channels: &[OverlayChannel; OVERLAY_CHANNELS as usize]) -> bool {
@@ -498,6 +523,7 @@ mod tests {
                     restart: false,
                     pause: true,
                 },
+                at_end: AtEnd::Hold,
                 click: InputPress::CutDirect,
                 go: InputPress::None,
                 strip: ChannelStrip {
@@ -528,7 +554,7 @@ mod tests {
                 effect: Effect::WipeLeft,
                 duration_ms: 1000,
             },
-            overlays: [None, Some(id), None, None],
+            overlays: [None, Some(id), None, None, None, None, None, Some(id)],
             overlay_channels: [
                 OverlayChannel::default(),
                 OverlayChannel {
@@ -544,8 +570,12 @@ mod tests {
                 },
                 OverlayChannel::default(),
                 OverlayChannel::default(),
+                OverlayChannel::default(),
+                OverlayChannel::default(),
+                OverlayChannel::default(),
+                OverlayChannel::default(),
             ],
-            overlay_preview: [Some(id), None, None, None],
+            overlay_preview: [Some(id), None, None, None, None, None, None, None],
             cue_lists: vec![ShowCueList {
                 id: InputId::new(),
                 name: "Opening".into(),
@@ -698,6 +728,33 @@ mod tests {
         let err = load(&path).await.unwrap_err();
 
         assert!(matches!(err, ShowFileError::TooNew { .. }), "{err}");
+    }
+
+    #[test]
+    fn four_channel_overlays_still_load() {
+        let mut saved = serde_json::to_value(sample()).unwrap();
+        for key in ["overlays", "overlay_channels", "overlay_preview"] {
+            saved[key].as_array_mut().unwrap().truncate(4);
+        }
+        let show: Show = serde_json::from_value(saved).unwrap();
+        let id = show.inputs[0].id;
+        assert_eq!(
+            show.overlays,
+            [None, Some(id), None, None, None, None, None, None]
+        );
+        assert_eq!(show.overlay_channels[1].auto_off_ms, Some(8000));
+        assert_eq!(show.overlay_channels[7], OverlayChannel::default());
+        assert_eq!(show.overlay_preview[0], Some(id));
+
+        let mut saved = serde_json::to_value(sample()).unwrap();
+        saved["overlays"]
+            .as_array_mut()
+            .unwrap()
+            .push(serde_json::Value::Null);
+        assert!(
+            serde_json::from_value::<Show>(saved).is_err(),
+            "nine channels"
+        );
     }
 
     #[test]

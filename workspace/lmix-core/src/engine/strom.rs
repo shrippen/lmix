@@ -402,7 +402,12 @@ impl StromEngine {
 
     /// A fader and its mute on the audio mixer, one write at a time.
     async fn set_level(&self, level: Level, ramp_ms: u32) -> Result<(), EngineError> {
-        let known = self.mutes.lock().expect("mutes lock").get(&level.mute).copied();
+        let known = self
+            .mutes
+            .lock()
+            .expect("mutes lock")
+            .get(&level.mute)
+            .copied();
         for property in level_writes(&level, known) {
             self.patch_audio_mixer(vec![property], ramp_ms).await?;
         }
@@ -807,6 +812,17 @@ impl Engine for StromEngine {
             } => self.set_channel(*slot, *gain, *muted, *ramp_ms).await,
             Command::SetListen { slot, listen } => self.set_listen(*slot, *listen).await,
             Command::Transport { slot, transport } => self.transport(*slot, *transport).await,
+            Command::SetAtEnd {
+                slot,
+                items,
+                at_end,
+            } => {
+                let body = serde_json::json!({
+                    "files": items,
+                    "loop_playlist": at_end.is_loop(),
+                });
+                self.player_call(*slot, "playlist", body).await
+            }
             Command::Seek { slot, position_ms } => {
                 self.player_call(
                     *slot,
@@ -1110,7 +1126,6 @@ pub fn default_live_dir() -> PathBuf {
         .join("live")
 }
 
-
 /// A fader of the audio mixer with its mute: names and wanted values.
 struct Level {
     fader: String,
@@ -1154,8 +1169,14 @@ mod tests {
             writes.into_iter().map(|(name, _)| name).collect()
         };
 
-        assert_eq!(names(level_writes(&level(false), Some(false))), ["main_fader"]);
-        assert_eq!(names(level_writes(&level(true), Some(true))), ["main_fader"]);
+        assert_eq!(
+            names(level_writes(&level(false), Some(false))),
+            ["main_fader"]
+        );
+        assert_eq!(
+            names(level_writes(&level(true), Some(true))),
+            ["main_fader"]
+        );
         assert_eq!(
             names(level_writes(&level(false), Some(true))),
             ["main_mute", "main_fader"],

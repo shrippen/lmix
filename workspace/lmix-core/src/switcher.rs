@@ -20,12 +20,12 @@ use lmix_types::layout::{BORDER_MAX_PX, LAYOUTS, LAYOUT_BOXES, LAYOUT_TEMPLATES}
 use lmix_types::shortcut::SHORTCUT_ACTIONS;
 use lmix_types::state::API_VERSION;
 use lmix_types::{
-    Action, ActionError, AutoPlay, AuxBus, BoxCrop, BoxRect, BoxSpec, ChannelStrip, Effect, Ingest,
-    Input, InputColor, InputId, InputPress, InputRef, InputStatus, Layout, LayoutBox,
-    LayoutTemplate, Listen, Look, Output, OutputId, OutputRef, OutputSource, OutputSpec,
-    OutputStatus, OverlayChannel, QuickPlay, Shortcut, ShortcutSpec, ShowState, SignalLoss,
-    SourceSpec, Stinger, StingerSpec, TemplateBox, TemplateInput, Transition, TransitionSlot,
-    Transport, VolumeTarget, FADE_MAX_MS,
+    Action, ActionError, AtEnd, AutoPlay, AuxBus, BoxCrop, BoxRect, BoxSpec, ChannelStrip, Effect,
+    Ingest, Input, InputColor, InputId, InputPress, InputRef, InputStatus, Layout, LayoutBox,
+    LayoutTemplate, Listen, Look, Output, OutputGroup, OutputId, OutputRef, OutputSource,
+    OutputSpec, OutputStatus, OverlayChannel, QuickPlay, Shortcut, ShortcutSpec, ShowState,
+    SignalLoss, SourceSpec, Stinger, StingerSpec, TemplateBox, TemplateInput, Transition,
+    TransitionSlot, Transport, VolumeTarget, FADE_MAX_MS,
 };
 use lmix_types::{Cue, CueList, MidiKind, MidiMessage, Trigger, TriggerOn};
 
@@ -46,6 +46,13 @@ pub enum Command {
     SetSlot {
         slot: usize,
         source: Option<SourceSpec>,
+    },
+    /// Loop the player of `slot` or let it stop at the end (INP.10);
+    /// `items` are its files, unchanged.
+    SetAtEnd {
+        slot: usize,
+        items: Vec<String>,
+        at_end: AtEnd,
     },
     /// Show `slot` in preview.
     Preview { slot: usize },
@@ -248,7 +255,7 @@ pub(crate) fn check_triggers<'a>(
     Ok(())
 }
 
-/// 0-based index of dynamic slot `slot` (1–4).
+/// 0-based index of dynamic slot `slot` (1–8).
 fn dynamic_index(slot: u8) -> Result<usize, ActionError> {
     if slot == 0 || slot > DYNAMIC_SLOTS {
         return Err(ActionError::BadDynamic {
@@ -1034,11 +1041,9 @@ impl Switcher {
             Action::TestTarget { .. }
             | Action::CheckTargets
             | Action::HttpRequest { .. }
-            | Action::HaService { .. } => {
-                Err(ActionError::BadTarget {
-                    reason: "run through the service".into(),
-                })
-            }
+            | Action::HaService { .. } => Err(ActionError::BadTarget {
+                reason: "run through the service".into(),
+            }),
             Action::SetGoGuard { ms } => {
                 if ms > GO_GUARD_MAX_MS {
                     return Err(bad_cues(format!("the GO guard is 0–{GO_GUARD_MAX_MS} ms")));
@@ -1177,6 +1182,17 @@ impl Switcher {
                 entry.auto_play = auto_play;
                 Ok(Vec::new())
             }
+            Action::SetAtEnd { input, at_end } => {
+                let index = self.find(&input)?;
+                let entry = &mut self.show.inputs[index];
+                if !entry.source.has_transport() {
+                    return Err(ActionError::NoTransport {
+                        reference: entry.name.clone(),
+                    });
+                }
+                entry.at_end = at_end;
+                Ok(at_end_command(entry).into_iter().collect())
+            }
             Action::SetInputPress { input, click, go } => {
                 let index = self.find(&input)?;
                 let entry = &mut self.show.inputs[index];
@@ -1198,6 +1214,11 @@ impl Switcher {
             Action::StopOutput { output } => {
                 self.check_unlocked()?;
                 self.stop_output(&output)
+            }
+            Action::StartOutputs { group } => self.start_outputs(group),
+            Action::StopOutputs { group } => {
+                self.check_unlocked()?;
+                Ok(self.stop_outputs(group))
             }
             Action::ClearListen => Ok(self.clear_listen()),
             Action::MoveInput { input, number } => self.move_input(&input, number),
@@ -1488,6 +1509,7 @@ impl Switcher {
                 source: Some(i.source.clone()),
             })
             .collect();
+        commands.extend(self.show.inputs.iter().filter_map(held_end_command));
 
         // Compositions are lost with the engine; set them before use.
         commands.extend(self.show.layouts.iter().map(|l| self.layout_command(l)));
@@ -1528,6 +1550,7 @@ impl Switcher {
                 listen: self.listen_of(input.id),
                 signal_loss: input.signal_loss,
                 auto_play: input.auto_play,
+                at_end: input.at_end,
                 click: input.click,
                 go: input.go,
                 strip: input.strip,
@@ -1540,6 +1563,7 @@ impl Switcher {
                     .has_transport()
                     .then(|| self.clip_ms.get(&input.slot).copied())
                     .flatten(),
+                playback: None,
                 ptz: input.ptz.clone(),
                 missing: self.missing.get(&input.id).cloned().unwrap_or_default(),
             })
@@ -1696,6 +1720,7 @@ impl Switcher {
             audio: Default::default(),
             signal_loss: SignalLoss::default(),
             auto_play: AutoPlay::default(),
+            at_end: AtEnd::default(),
             click: InputPress::click(),
             go: InputPress::go(),
             strip,
@@ -1862,6 +1887,7 @@ impl Switcher {
             slot: entry.slot,
             source: Some(source.clone()),
         }];
+        commands.extend(held_end_command(entry));
         // After a source without sound the channel may hold anything.
         if source.has_audio() {
             commands.push(Command::SetStrip {
@@ -2254,7 +2280,7 @@ impl Switcher {
     }
 
     /// Auto offs (OVL.2) of the channels that went on since `before`, as
-    /// (delay, channel 1–4, when it went on).
+    /// (delay, channel 1–8, when it went on).
     pub fn auto_offs(&self, before: &OnAir) -> Vec<(u32, u8, u64)> {
         (0..usize::from(OVERLAY_CHANNELS))
             .filter(|&i| {
@@ -2268,7 +2294,7 @@ impl Switcher {
             .collect()
     }
 
-    /// Whether overlay `channel` (1–4) still shows what went on at
+    /// Whether overlay `channel` (1–8) still shows what went on at
     /// `since`: an auto off is due only then.
     pub fn overlay_still_on(&self, channel: u8, since: u64) -> bool {
         overlay_index(channel)
@@ -2492,6 +2518,7 @@ impl Switcher {
                 mode: input.signal_loss,
             },
         ];
+        commands.extend(held_end_command(&input));
         if input.source.has_audio() {
             commands.push(Command::SetStrip {
                 slot: input.slot,
@@ -3696,6 +3723,39 @@ impl Switcher {
         Ok(vec![Command::StopOutput { id }])
     }
 
+    /// Start commands for the outputs of `group` that do not run; an
+    /// output that cannot start (its source is gone) is left out, the
+    /// error only comes back when none could.
+    fn start_outputs(&mut self, group: OutputGroup) -> Result<Vec<Command>, ActionError> {
+        let mut first_error = None;
+        let commands: Vec<Command> = self
+            .show
+            .outputs
+            .iter()
+            .filter(|o| group.holds(&o.spec) && !self.output_running(o.id))
+            .filter_map(|o| match self.start_command(o) {
+                Ok(command) => Some(command),
+                Err(e) => {
+                    first_error.get_or_insert(e);
+                    None
+                }
+            })
+            .collect();
+        match first_error {
+            Some(e) if commands.is_empty() => Err(e),
+            _ => Ok(commands),
+        }
+    }
+
+    fn stop_outputs(&mut self, group: OutputGroup) -> Vec<Command> {
+        self.show
+            .outputs
+            .iter()
+            .filter(|o| group.holds(&o.spec) && self.output_running(o.id))
+            .map(|o| Command::StopOutput { id: o.id })
+            .collect()
+    }
+
     fn stop_all_outputs(&mut self) -> Vec<Command> {
         let running: Vec<OutputId> = self
             .show
@@ -4107,7 +4167,25 @@ fn check_source(source: &SourceSpec) -> Result<(), ActionError> {
 }
 
 /// Audio inputs have no picture for preview or program.
-/// 0-based index of overlay `channel` (1–4).
+/// The player setting of `input`'s end for its slot; `None` for sources
+/// without a player.
+fn at_end_command(input: &ShowInput) -> Option<Command> {
+    Some(Command::SetAtEnd {
+        slot: input.slot,
+        items: crate::engine::flows::player_items(&input.source)?,
+        at_end: input.at_end,
+    })
+}
+
+/// Restoring or rebuilding a slot: a held end has to be set again, a
+/// loop is how the slot starts.
+fn held_end_command(input: &ShowInput) -> Option<Command> {
+    (!input.at_end.is_loop())
+        .then(|| at_end_command(input))
+        .flatten()
+}
+
+/// 0-based index of overlay `channel` (1–8).
 fn overlay_index(channel: u8) -> Result<usize, ActionError> {
     if !(1..=OVERLAY_CHANNELS).contains(&channel) {
         return Err(ActionError::BadOverlay {
@@ -4445,7 +4523,10 @@ mod tests {
             }]
         );
         let b = sw.state().inputs[1].id;
-        assert_eq!(sw.state().overlays, [None, Some(b), None, None]);
+        assert_eq!(
+            sw.state().overlays,
+            [None, Some(b), None, None, None, None, None, None]
+        );
         assert_eq!(sw.tally(), [0, 1]);
 
         let cmds = sw
@@ -4481,7 +4562,7 @@ mod tests {
         .unwrap();
 
         let bad = sw.apply(Action::OverlayIn {
-            channel: 5,
+            channel: 9,
             input: named("A"),
             duration_ms: Some(0),
         });
@@ -4491,7 +4572,7 @@ mod tests {
             duration_ms: Some(0),
         });
 
-        assert_eq!(bad, Err(ActionError::BadOverlay { channel: 5, max: 4 }));
+        assert_eq!(bad, Err(ActionError::BadOverlay { channel: 9, max: 8 }));
         assert!(matches!(sound_only, Err(ActionError::NoVideo { .. })));
     }
 
@@ -4551,8 +4632,11 @@ mod tests {
                 },
             ]
         );
-        assert_eq!(sw.state().overlays, [None; 4]);
-        assert_eq!(sw.state().overlay_last, [Some(a), None, Some(b), None]);
+        assert_eq!(sw.state().overlays, [None; 8]);
+        assert_eq!(
+            sw.state().overlay_last,
+            [Some(a), None, Some(b), None, None, None, None, None]
+        );
         assert_eq!(
             sw.apply(Action::OverlayOutAll {
                 duration_ms: Some(0)
@@ -4580,7 +4664,7 @@ mod tests {
             Err(ActionError::NoOverlayLast { channel: 2 })
         );
         assert!(matches!(
-            sw.apply(last(5)),
+            sw.apply(last(9)),
             Err(ActionError::BadOverlay { .. })
         ));
 
@@ -4694,7 +4778,7 @@ mod tests {
             }
         ));
         assert!(matches!(
-            sw.apply(set_overlay(5, fade)),
+            sw.apply(set_overlay(9, fade)),
             Err(ActionError::BadOverlay { .. })
         ));
     }
@@ -4772,7 +4856,7 @@ mod tests {
         );
         let state = sw.state();
         assert_eq!(state.overlays[0], Some(id(&sw, 2)));
-        assert_eq!(state.overlay_preview, [None; 4], "used up");
+        assert_eq!(state.overlay_preview, [None; 8], "used up");
         assert_eq!(state.overlay_last[0], Some(id(&sw, 2)));
         assert_eq!(sw.tally(), [1, 0, 1]);
 
@@ -4800,12 +4884,12 @@ mod tests {
         // Cleared, by hand or with the input; cut direct takes none along.
         prepare(&mut sw, 2, Some("Logo")).unwrap();
         prepare(&mut sw, 2, None).unwrap();
-        assert_eq!(sw.state().overlay_preview, [None; 4]);
+        assert_eq!(sw.state().overlay_preview, [None; 8]);
         prepare(&mut sw, 2, Some("A")).unwrap();
         sw.apply(Action::CutDirect { input: named("B") }).unwrap();
         assert_eq!(sw.state().overlays[1], None);
         sw.apply(Action::RemoveInput { input: named("A") }).unwrap();
-        assert_eq!(sw.state().overlay_preview, [None; 4]);
+        assert_eq!(sw.state().overlay_preview, [None; 8]);
         assert!(matches!(
             prepare(&mut sw, 0, Some("B")),
             Err(ActionError::BadOverlay { .. })
@@ -4947,6 +5031,41 @@ mod tests {
 
     fn transport(slot: usize, transport: Transport) -> Command {
         Command::Transport { slot, transport }
+    }
+
+    #[test]
+    fn a_clip_loops_or_holds_its_end() {
+        let mut sw = with_clips(AutoPlay::default());
+        let hold = |name: &str| Action::SetAtEnd {
+            input: named(name),
+            at_end: AtEnd::Hold,
+        };
+        let held = Command::SetAtEnd {
+            slot: 2,
+            items: vec!["/Clip 1.mp4".into()],
+            at_end: AtEnd::Hold,
+        };
+        assert_eq!(
+            sw.apply(hold("Clip 1")).unwrap(),
+            std::slice::from_ref(&held),
+            "on air, no rebuild"
+        );
+        assert_eq!(sw.state().inputs[2].at_end, AtEnd::Hold);
+        assert!(matches!(
+            sw.apply(hold("A")),
+            Err(ActionError::NoTransport { .. })
+        ));
+        // A rebuilt engine starts players looping: the held end comes back.
+        let restore = sw.restore_commands();
+        assert!(restore.contains(&held));
+        assert_eq!(
+            restore
+                .iter()
+                .filter(|c| matches!(c, Command::SetAtEnd { .. }))
+                .count(),
+            1,
+            "looping clips need nothing"
+        );
     }
 
     #[test]
@@ -5633,17 +5752,23 @@ mod tests {
             framerate: lmix_types::Framerate::Fps25,
         };
 
-        let cmds = sw.apply(Action::SetMasterFormat { format: upright }).unwrap();
+        let cmds = sw
+            .apply(Action::SetMasterFormat { format: upright })
+            .unwrap();
 
         assert_eq!(cmds[0], Command::SetFormat { format: upright });
-        assert!(cmds.iter().any(|c| matches!(c, Command::Preview { .. }) || matches!(c, Command::Program { .. })));
+        assert!(cmds
+            .iter()
+            .any(|c| matches!(c, Command::Preview { .. }) || matches!(c, Command::Program { .. })));
         assert!(
             !cmds.iter().any(|c| matches!(c, Command::SetSlot { .. })),
             "the sources keep running"
         );
         assert_eq!(sw.state().format, upright);
         assert!(
-            sw.apply(Action::SetMasterFormat { format: upright }).unwrap().is_empty(),
+            sw.apply(Action::SetMasterFormat { format: upright })
+                .unwrap()
+                .is_empty(),
             "the same format again changes nothing"
         );
         for bad in [(1081, 1920), (1080, 100), (8000, 4320)] {
@@ -5685,11 +5810,16 @@ mod tests {
         ));
 
         let cmds = sw.apply(Action::SetMonitorVolume { volume: 50 }).unwrap();
-        assert_eq!(cmds, [Command::SetMonitor { gain: fader_gain(50) }]);
+        assert_eq!(
+            cmds,
+            [Command::SetMonitor {
+                gain: fader_gain(50)
+            }]
+        );
         assert_eq!(sw.state().monitor_volume, 50);
-        assert!(sw
-            .restore_commands()
-            .contains(&Command::SetMonitor { gain: fader_gain(50) }));
+        assert!(sw.restore_commands().contains(&Command::SetMonitor {
+            gain: fader_gain(50)
+        }));
     }
 
     #[test]
@@ -5711,7 +5841,11 @@ mod tests {
             .apply(fade(VolumeTarget::Input(named("B")), 25, 3000))
             .unwrap();
         assert_eq!(audio_of(&cmds), [(1, false, 3000)]);
-        assert_eq!(sw.state().inputs[1].audio.volume, 25, "the end value at once");
+        assert_eq!(
+            sw.state().inputs[1].audio.volume,
+            25,
+            "the end value at once"
+        );
 
         let cmds = sw.apply(fade(VolumeTarget::Bus(2), 0, 4000)).unwrap();
         assert_eq!(
@@ -5754,7 +5888,8 @@ mod tests {
             sw.apply(fade(VolumeTarget::Input(named("B")), 101, 100)),
             Err(ActionError::BadVolume { .. })
         ));
-        let json = r#"{"action":"fade_volume","target":{"input":"B"},"volume":0,"duration_ms":2000}"#;
+        let json =
+            r#"{"action":"fade_volume","target":{"input":"B"},"volume":0,"duration_ms":2000}"#;
         assert_eq!(
             serde_json::from_str::<Action>(json).unwrap(),
             fade(VolumeTarget::Input(InputRef::Text("B".into())), 0, 2000)
@@ -6830,6 +6965,66 @@ mod tests {
             })
             .unwrap_err();
         assert!(matches!(err, ActionError::UnknownOutput { .. }));
+    }
+
+    #[test]
+    fn output_groups_start_and_stop_together() {
+        let mut sw = Switcher::new(SLOTS);
+        let srt = |port: u16| OutputSpec::Srt {
+            uri: format!("srt://cdn:{port}"),
+            video_kbps: 6000,
+        };
+        let record = OutputSpec::Record {
+            folder: "show".into(),
+            container: Default::default(),
+            video_kbps: 8000,
+        };
+        for spec in [srt(9000), record, srt(9001)] {
+            sw.apply(Action::AddOutput {
+                spec,
+                source: OutputSource::Program,
+                name: None,
+                aux: None,
+            })
+            .unwrap();
+        }
+        let ids: Vec<OutputId> = sw.state().outputs.iter().map(|o| o.id).collect();
+        sw.set_output_status(ids[2], OutputStatus::Running { since_ms: 1 });
+        let started = |cmds: Vec<Command>| -> Vec<OutputId> {
+            cmds.iter()
+                .map(|c| match c {
+                    Command::StartOutput { id, .. } | Command::StopOutput { id } => *id,
+                    other => panic!("{other:?}"),
+                })
+                .collect()
+        };
+
+        let streams = Action::StartOutputs {
+            group: OutputGroup::Streams,
+        };
+        assert_eq!(
+            started(sw.apply(streams.clone()).unwrap()),
+            [ids[0]],
+            "not the running one"
+        );
+        sw.set_output_status(ids[0], OutputStatus::Running { since_ms: 2 });
+        assert!(sw.apply(streams).unwrap().is_empty());
+
+        let stop_all = Action::StopOutputs {
+            group: OutputGroup::All,
+        };
+        assert_eq!(started(sw.apply(stop_all).unwrap()), [ids[0], ids[2]]);
+        let recordings = Action::StartOutputs {
+            group: OutputGroup::Recordings,
+        };
+        assert_eq!(started(sw.apply(recordings).unwrap()), [ids[1]]);
+        assert_eq!(
+            serde_json::from_str::<Action>(r#"{"action":"stop_outputs","group":"streams"}"#)
+                .unwrap(),
+            Action::StopOutputs {
+                group: OutputGroup::Streams
+            }
+        );
     }
 
     #[test]

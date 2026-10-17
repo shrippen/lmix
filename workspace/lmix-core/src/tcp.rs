@@ -495,7 +495,9 @@ mod tests {
         tokio::spawn(async move {
             let (stream, _) = listener.accept().await.unwrap();
             let ip = std::net::IpAddr::from([192, 168, 1, 20]);
-            client(stream, service, None, Right::Control, ip).await.unwrap();
+            client(stream, service, None, Right::Control, ip)
+                .await
+                .unwrap();
         });
         let (read, mut write) = TcpStream::connect(addr).await.unwrap().into_split();
         let mut lines = BufReader::new(read).lines();

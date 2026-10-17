@@ -1137,7 +1137,9 @@ mod tests {
         };
 
         runner.go(&lists, 0, t, held(Some(key))).unwrap();
-        let out = runner.go(&lists, 0, after(t, 500), held(Some(key))).unwrap();
+        let out = runner
+            .go(&lists, 0, after(t, 500), held(Some(key)))
+            .unwrap();
         assert_eq!(events(&out), [CueEvent::GoIgnored], "still held");
 
         // Another way is not blocked by it, only by the time guard.
@@ -1147,7 +1149,9 @@ mod tests {
         assert_eq!(fired(&lists, &out), ["B"]);
 
         runner.release(key);
-        let out = runner.go(&lists, 0, after(t, 800), held(Some(key))).unwrap();
+        let out = runner
+            .go(&lists, 0, after(t, 800), held(Some(key)))
+            .unwrap();
         assert_eq!(fired(&lists, &out), ["C"]);
     }
 
@@ -1243,7 +1247,10 @@ mod tests {
         );
 
         assert_eq!(
-            fired(&lists, &runner.go(&lists, 0, after(t, 1), Guard::time(0)).unwrap()),
+            fired(
+                &lists,
+                &runner.go(&lists, 0, after(t, 1), Guard::time(0)).unwrap()
+            ),
             ["Side 1"]
         );
         assert_eq!(
@@ -1277,7 +1284,9 @@ mod tests {
         let t = Instant::now();
 
         runner.go(&lists, 0, t, Guard::time(0)).unwrap();
-        let out = runner.go(&lists, 0, after(t, 1000), Guard::time(0)).unwrap();
+        let out = runner
+            .go(&lists, 0, after(t, 1000), Guard::time(0))
+            .unwrap();
         assert!(events(&out).contains(&CueEvent::Stopped));
         let names: Vec<String> = runner
             .running(&lists, after(t, 1000))
@@ -1286,7 +1295,9 @@ mod tests {
             .collect();
         assert_eq!(names, ["Next"]);
 
-        runner.go(&lists, 0, after(t, 2000), Guard::time(0)).unwrap();
+        runner
+            .go(&lists, 0, after(t, 2000), Guard::time(0))
+            .unwrap();
         // By number or id; a name is no reference.
         runner
             .stop(&lists, Some(0), Some("Third"), after(t, 2100))

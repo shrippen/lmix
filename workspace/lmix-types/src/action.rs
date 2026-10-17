@@ -19,11 +19,11 @@ use crate::graphics::{
     BindingSpec, DataSourceSpec, Easing, LayerTransform, TitleData, TitleTrigger,
 };
 use crate::input::{
-    AutoPlay, ChannelStrip, InputColor, InputPress, InputRef, Listen, Look, SignalLoss, SourceSpec,
-    Transport, AUX_BUSES,
+    AtEnd, AutoPlay, ChannelStrip, InputColor, InputPress, InputRef, Listen, Look, SignalLoss,
+    SourceSpec, Transport, AUX_BUSES,
 };
 use crate::layout::{BoxRect, BoxSpec};
-use crate::output::{OutputRef, OutputSource, OutputSpec};
+use crate::output::{OutputGroup, OutputRef, OutputSource, OutputSpec};
 use crate::shortcut::ShortcutSpec;
 use crate::target::{HttpMethod, TargetSpec};
 
@@ -54,8 +54,8 @@ pub const DYNAMIC_SLOTS: u8 = 4;
 
 /// Number of transition buttons.
 pub const TRANSITION_SLOTS: u8 = 4;
-/// Overlay channels above program (OVL.1), numbered 1–4.
-pub const OVERLAY_CHANNELS: u8 = 4;
+/// Overlay channels above program (OVL.1), numbered 1–8.
+pub const OVERLAY_CHANNELS: u8 = 8;
 /// Default fade of an overlay in or out.
 pub const DEFAULT_OVERLAY_MS: u32 = 500;
 /// Longest time an overlay stays on before it goes off by itself (OVL.2).
@@ -142,6 +142,7 @@ pub const ACTION_GROUPS: &[(&str, &[&str])] = &[
             "set_look",
             "set_signal_loss",
             "set_auto_play",
+            "set_at_end",
             "set_input_press",
             "transport_input",
             "seek_input",
@@ -198,6 +199,8 @@ pub const ACTION_GROUPS: &[(&str, &[&str])] = &[
             "remove_output",
             "start_output",
             "stop_output",
+            "start_outputs",
+            "stop_outputs",
             "set_master_format",
         ],
     ),
@@ -269,7 +272,12 @@ pub const ACTION_GROUPS: &[(&str, &[&str])] = &[
     ),
     (
         "zones",
-        &["set_zone", "remove_zone", "set_zone_patch", "remove_zone_patch"],
+        &[
+            "set_zone",
+            "remove_zone",
+            "set_zone_patch",
+            "remove_zone_patch",
+        ],
     ),
     (
         "targets",
@@ -384,6 +392,12 @@ pub enum Action {
         input: InputRef,
         auto_play: AutoPlay,
     },
+    /// Whether a file, URL or playlist input loops or stops on its last
+    /// frame at the end (INP.10); changes on air without a restart.
+    SetAtEnd {
+        input: InputRef,
+        at_end: AtEnd,
+    },
     /// Choose what a click on the input (INP.8) and its GO (INP.9) do;
     /// one left out stays as it is.
     SetInputPress {
@@ -434,6 +448,15 @@ pub enum Action {
     /// Stop it.
     StopOutput {
         output: OutputRef,
+    },
+    /// Start every output of `group` that is not running (STR.1); one
+    /// that cannot start does not keep the others back.
+    StartOutputs {
+        group: OutputGroup,
+    },
+    /// Stop every running output of `group`.
+    StopOutputs {
+        group: OutputGroup,
     },
 
     // ---- Audio (AUD) ----
@@ -673,11 +696,19 @@ pub enum Action {
 
     // ---- Zones (show mode SND.10) ----
     /// Add a zone to the show, or replace the one of the same name.
-    SetZone { zone: crate::zone::Zone },
-    RemoveZone { name: String },
+    SetZone {
+        zone: crate::zone::Zone,
+    },
+    RemoveZone {
+        name: String,
+    },
     /// Where a zone plays on this machine (machine settings, SSH.3).
-    SetZonePatch { patch: crate::zone::ZonePatch },
-    RemoveZonePatch { zone: String },
+    SetZonePatch {
+        patch: crate::zone::ZonePatch,
+    },
+    RemoveZonePatch {
+        zone: String,
+    },
 
     // ---- Output targets (show mode EXT) ----
     /// Add a target of this machine, or replace the one of the same name.
@@ -723,8 +754,12 @@ pub enum Action {
 
     /// Add a fixed OSC subscriber, or replace the one of the same name
     /// (CTL.4).
-    SetFeed { feed: crate::feed::Feed },
-    RemoveFeed { name: String },
+    SetFeed {
+        feed: crate::feed::Feed,
+    },
+    RemoveFeed {
+        name: String,
+    },
 
     // ---- Safety ----
     /// Lock or unlock (AUT.11): while locked, closing inputs, opening or
@@ -770,7 +805,7 @@ pub enum Action {
     CutDirect {
         input: InputRef,
     },
-    /// Take preview to program with transition button `slot` (1–4).
+    /// Take preview to program with transition button `slot` (1–8).
     Transition {
         slot: TransitionSlot,
     },
@@ -817,7 +852,7 @@ pub enum Action {
     },
 
     // ---- Overlays (OVL) ----
-    /// Show `input` on overlay `channel` (1–4), above program and its
+    /// Show `input` on overlay `channel` (1–8), above program and its
     /// transitions; replaces what the channel showed. Without
     /// `duration_ms` with the channel's effect, with it a fade of that
     /// length (0 cuts); the same for the other overlay actions.
@@ -867,14 +902,14 @@ pub enum Action {
     },
 
     // ---- Dynamic inputs and values (AUT.5) ----
-    /// Let `"dynamic<slot>"` (1–4) name `input` in later actions; null
+    /// Let `"dynamic<slot>"` (1–8) name `input` in later actions; null
     /// empties it. One key picks the input, another acts on it.
     SetDynamicInput {
         slot: u8,
         #[serde(default)]
         input: Option<InputRef>,
     },
-    /// Set dynamic value `slot` (1–4); title texts and function arguments
+    /// Set dynamic value `slot` (1–8); title texts and function arguments
     /// show it where they say `{value<slot>}`.
     SetDynamicValue {
         slot: u8,
@@ -1140,10 +1175,14 @@ pub enum Action {
     /// This machine's settings into a file: shortcuts for all shows,
     /// layout templates, output targets and OSC subscribers, no secrets
     /// (SHW.8).
-    ExportSettings { path: String },
+    ExportSettings {
+        path: String,
+    },
     /// Take a settings file instead of the current settings; targets of
     /// the same name keep their secret.
-    ImportSettings { path: String },
+    ImportSettings {
+        path: String,
+    },
     /// Back to factory settings: no shortcuts for all shows, layout
     /// templates, targets or subscribers.
     ResetSettings,
