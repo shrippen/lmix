@@ -501,7 +501,7 @@ Bild-Cues (Stufen 2, 3) fehlen, sie warten auf S-E.3.
 | P9 Tondesign | 2, 3 Zonen, Fade mit S-Kurve | – Stufe 2 |
 | P9 Tondesign | 8 Panik bei Zwischenfall | ◐ alles hält an, Escape in der Show-Ansicht; Ausblenden mit Stufe 2 |
 | P10 Ausstellung | 1 Home Assistant startet eine Liste per HTTP mit Schlüssel | ✅ Schlüssel mit Recht `control` (`cue_go` mit Liste); Bearbeiten bleibt gesperrt |
-| P10 Ausstellung | 2 Ablauf mit Folgen ohne Bedienung | ✅ Folgen ohne Drift; Zeitgenauigkeit in `/metrics`, 1 min: 6121 Schritte, spätestens 4 ms |
+| P10 Ausstellung | 2 Ablauf mit Folgen ohne Bedienung | ◐ Folgen ohne Drift; Zeitgenauigkeit in `/metrics`, frei 1 h: spätestens 5,2 ms; unter Last bis 146 ms (RUN.8 offen) |
 | P10 Ausstellung | 3 Licht und Türen per HTTP | ✅ Ausgabeziele, Geheimnis nur in den Rechner-Einstellungen; Ergebnis als Ereignis |
 | P10 Ausstellung | 4 Nach Neustart nichts starten | ✅ nichts läuft, Standby wie vorher |
 | P7 Theater-Video | Zuspieler nach Ablauf: Clip auf Programm, danach der nächste | ◐ Aktions-Cues schalten Inputs und Clips, mit Zeiten und Folgen; ⚠ ein Aktions-Cue endet sofort, „Folge nach Ende“ kann nicht auf das Clip-Ende warten (B45) |

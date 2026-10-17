@@ -2690,3 +2690,29 @@ Zonen selbst hängen nicht an S-E.3.
 (Zuordnung kommt mit Export/Import der Einstellungen zurück); Console auf
 Xvfb (Dialog „Zonen…“, Warnung „Zone hinten spielt auf diesem Rechner
 nirgends“).
+
+## 2026-10-17 — Cue-Zeitgenauigkeit über 4 h nur ohne Last (RUN.8)
+
+**Messung** (`scripts/test-cue-timing.sh`, Null-Engine, Kette aus 50
+Wartezeiten zu 20 ms, Grenze 10 ms):
+
+| Lauf | Rechner | Schritte | spätestens | über 10 ms |
+|---|---|---|---|---|
+| 4 h (16.10. 22:47–02:47) | nebenbei Rust-/Qt-Builds und Tests | 1 468 803 | 145,6 ms | 694 (0,05 %) |
+| 1 h (17.10. 02:48–03:48) | sonst frei (Last ~1) | 367 201 | 5,2 ms | 0 |
+| 10 min | alle 24 Kerne mit `yes` belegt | 61 203 | 65,3 ms | 214 |
+
+Die Zeiten driften nicht. Verspätet sind nur Schritte, bei denen der
+Rechner ausgelastet ist: Der Zeitgeber läuft als normaler Prozess
+(nice 0) in der tokio-Laufzeit und wartet auf einen freien Kern. Das
+Autosave beim Weiterrücken von Standby ist nicht die Ursache: Im Test
+rückt Standby nicht, die Datei wurde nur beim Start geschrieben.
+
+**Folgerung**: RUN.8 hält auf einem freien Show-Rechner; die 4-h-Messung
+ohne Last steht noch aus. Unter Last hält es nicht.
+
+**Vorschlag (offen, nicht gebaut)**: Den Zeitgeber der Cue-Listen auf
+einen eigenen Thread mit Echtzeit-Priorität legen und diese wie PipeWire
+über rtkit (D-Bus) anfordern, ohne Root. Geht das nicht, warnt der
+Selbsttest: In SNF.4 mitmessen, wie spät die Schritte sind, und die
+Last des Rechners anzeigen.
