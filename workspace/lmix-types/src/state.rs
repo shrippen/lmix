@@ -134,6 +134,15 @@ pub struct ShowState {
     /// Master of program sound (AUD.2).
     #[serde(default)]
     pub master: AuxBus,
+    /// Picture size and rate of program (OUT.1).
+    #[serde(default)]
+    pub format: crate::output::MasterFormat,
+    /// Volume of the monitor bus, 0–100 (AUD.4).
+    #[serde(default = "crate::input::full_volume")]
+    pub monitor_volume: u8,
+    /// Delay of new inputs with sound, ms (AUD.6).
+    #[serde(default)]
+    pub default_delay_ms: u32,
     /// Whether the engine can apply looks (the GL mixer can).
     #[serde(default)]
     pub looks_available: bool,

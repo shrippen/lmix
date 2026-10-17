@@ -254,7 +254,7 @@ async fn follow(thread: cxx_qt::CxxQtThread<qobject::Core>) {
 }
 
 /// `{ "<input id>": peak, "ch:<input id>": [left, right], "program": peak,
-/// "aux1": peak, … }`.
+/// "monitor": peak, "aux1": peak, … }`.
 fn levels_json(levels: &Levels) -> String {
     let mut map = serde_json::Map::new();
     for level in &levels.inputs {
@@ -265,6 +265,9 @@ fn levels_json(levels: &Levels) -> String {
     }
     if let Some(peak) = levels.program_peak_db {
         map.insert("program".into(), peak.into());
+    }
+    if let Some(peak) = levels.monitor_peak_db {
+        map.insert("monitor".into(), peak.into());
     }
     for (bus, peak) in levels.aux_peak_db.iter().enumerate() {
         if let Some(peak) = peak {

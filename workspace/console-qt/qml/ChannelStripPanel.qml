@@ -126,6 +126,15 @@ ColumnLayout {
         value: panel.strip ? panel.strip.delay_ms : 0
         onMoved: v => panel.edit(s => s.delay_ms = Math.round(v))
     }
+    // New inputs with sound start with this delay (AUD.6).
+    KanteButton {
+        Layout.alignment: Qt.AlignRight
+        text: qsTr("Delay for new inputs")
+        enabled: panel.strip !== null
+        QQC2.ToolTip.visible: hovered
+        QQC2.ToolTip.text: qsTr("New inputs with sound start with this delay; inputs already there keep theirs")
+        onClicked: panel.act({ action: "set_default_delay", ms: panel.strip.delay_ms })
+    }
 
     Repeater {
         model: [qsTr("Aux 1 (before the fader)"), qsTr("Aux 2 (after the fader)")]
