@@ -290,7 +290,7 @@ kann es, Console nicht.
 | OUT.7 | Alle Kameras, Gäste und Audio-Inputs automatisch als NDI/OMT; Busse als reine Ton-Streams | S | – |
 | OUT.8 | SRT-Ausgang je Ausgang: Modus, Latenz, Verschlüsselung, Stream-ID, H.264/HEVC, Bitrate, CBR mit Füllung, Stereo-Paare als eigene Spuren, HW-Encode | M | ◐ (SRT je Ausgang: H.264 mit HW-Encode, Bitrate, Modus/Optionen über die URI; ohne HEVC, CBR-Füllung, eigene Tonspuren) |
 | OUT.9 | Virtuelle Kamera und virtuelles Audiogerät für andere Programme (v4l2loopback, PipeWire) | S | – |
-| OUT.10 | Multiview 1 und 2, je eigenes Layout: PVW/PGM + 2/8/14 Inputs, nur Inputs, Reihenfolge nach Nummer oder Typ, Titel oben/unten, Pegel, Tally-Rahmen, Klick wählt Preview | M | ◐ (Multiview der Engine als Ausgangsquelle, OUT.2; Layout nicht wählbar, nicht in der Console zu sehen) |
+| OUT.10 | Multiview 1 und 2, je eigenes Layout: PVW/PGM + 2/8/14 Inputs, nur Inputs, Reihenfolge nach Nummer oder Typ, Titel oben/unten, Pegel, Tally-Rahmen, Klick wählt Preview | M | ◐ (Multiview der Engine als Ausgangsquelle, OUT.2; Program links oder rechts, Pegel an/aus; ohne 2/8/14 Kacheln, nur Inputs, Reihenfolge, Titel oben/unten, Klick wählt Preview, zweite Multiview) |
 | OUT.11 | Live-Monitore in der GUI: PVW, PGM, alle Input-Kacheln flüssig (volle Bildrate); Bilder lokal direkt über GPU-Speicher aus der Engine (G.2) | M | ◐ (alle Inputs live über Shared Memory, 30 fps bei 18 Ansichten; DMABuf ohne Kopie und volle Bildrate offen, H.4) |
 | OUT.12 | Schutzbereiche: EBU/SMPTE, 80/90 %, Raster, 4:3, 1:1, 9:16 | S | – |
 | OUT.13 | Messinstrumente: Waveform Y/RGB, Parade, Vektorskop (75/100 %-Marken), neben Bild | S | – |

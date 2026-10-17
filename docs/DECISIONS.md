@@ -3142,3 +3142,18 @@ wie sie sind.
 **Geprüft**: Test (zuerst rot: bei halber T-Bar kam kein Ton-Befehl),
 VM-Test mit strom: Ball auf Program bei halber T-Bar ≈ −6 dB, zurück
 auf 0 wieder voll.
+
+## 2026-10-17 — Multiview-Layout (OUT.10)
+
+**Entscheidung**: Die Show hat `multiview`: `program` (`left`/`right`,
+Standard rechts wie strom) und `meters` (`shown`/`hidden`). Beides sind
+strom-Eigenschaften des Mischers, die nur beim Bau gelten
+(`swap_pvw_pgm`, `show_vu_meters`); deshalb trägt `Command::SetFormat`
+Format und Layout gemeinsam, die Engine baut nur neu, wenn eins davon
+sich ändert, und übernimmt beim Neustart von lmix-core einen laufenden
+Mischer samt Layout. Kachelzahl (2/8/14), Reihenfolge, Titelposition und
+eine zweite Multiview kann der strom-Mischer nicht.
+
+**Geprüft**: Tests (Layout im Flow und zurückgelesen, Neubau ohne
+Quellen-Neustart, gleiches Layout ändert nichts), VM-Test mit strom:
+Program links ohne Pegel und zurück, Quellen bleiben.
