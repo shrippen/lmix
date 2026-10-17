@@ -430,8 +430,9 @@ fn check_fields(value: &toml::Value, fields: &[String]) -> Result<(), String> {
     Ok(())
 }
 
-/// Media sources' `path`/`paths` relative to the folder; missing files
-/// are warnings (IMP.4).
+/// Media sources' `path`/`paths`, and the `file` of a sound or picture
+/// (cue or action), relative to the folder; missing files are warnings
+/// (IMP.4).
 fn resolve_paths(
     folder: &Path,
     value: &mut serde_json::Value,
@@ -455,6 +456,11 @@ fn resolve_paths(
                             if let serde_json::Value::String(path) = p {
                                 *path = resolve(folder, path, warn);
                             }
+                        }
+                    }
+                    ("sound" | "picture", serde_json::Value::Object(played)) => {
+                        if let Some(serde_json::Value::String(file)) = played.get_mut("file") {
+                            *file = resolve(folder, file, warn);
                         }
                     }
                     (_, v) => resolve_paths(folder, v, false, warn),
@@ -580,6 +586,43 @@ actions = [
         assert_eq!(problems.len(), 1);
         assert!(!problems[0].fatal, "a missing file still loads");
         assert!(problems[0].message.contains("gone.mp4"));
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn sound_and_picture_files_are_relative_to_the_folder() {
+        let dir = std::env::temp_dir().join(format!("lmix-script-s-{}", std::process::id()));
+        std::fs::create_dir_all(dir.join("fx")).unwrap();
+        std::fs::write(dir.join("fx/rain.flac"), b"").unwrap();
+        let text = r#"```lmix-cue
+number = "1"
+kind = "sound"
+sound = { file = "fx/rain.flac", fade_out_ms = 2000 }
+```
+
+```lmix-cue
+number = "2"
+kind = "picture"
+picture = { file = "pics/forest.png", stage = "Back" }
+```
+
+```lmix-cue
+number = "3"
+actions = [{ action = "play_sound", id = "door", sound = { file = "fx/rain.flac" } }]
+```
+"#;
+        let (list, problems) = parse_file(&dir, Path::new("a.md"), text);
+        let cues = list.unwrap().cues;
+
+        let rain = dir.join("fx/rain.flac").display().to_string();
+        assert_eq!(cues[0].sound.as_ref().unwrap().file, rain);
+        assert_eq!(
+            cues[1].picture.as_ref().unwrap().file,
+            dir.join("pics/forest.png").display().to_string()
+        );
+        assert!(serde_json::to_string(&cues[2]).unwrap().contains(&rain));
+        assert_eq!(problems.len(), 1, "{problems:?}");
+        assert!(problems[0].message.contains("forest.png"));
         std::fs::remove_dir_all(dir).unwrap();
     }
 
