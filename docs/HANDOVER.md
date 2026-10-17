@@ -35,6 +35,12 @@ unten mergen; Gitea stellt die Basis des nächsten auf `main` um):
 | #52 | `m9-settings` | Älteres Show-Format beim Speichern gesichert; Einstellungen ex-/importieren (SHW.7/8) |
 | #53 | `s1-zones` | Zonen in der Show, Ausgänge je Rechner (SND.10 ohne Engine); Gruppe endet nach Neuladen |
 | #54 | `s1-ctl` | Panik in Zeit x, Cues über `standby`, Listen über `active` (CTL.1) |
+| #56 | `s1-release` | GO erst nach Loslassen (RUN.6) |
+| #57 | `s1-check` | Nicht erreichbare Ziele in der Warnliste, „Ziele prüfen“ (SUI.5) |
+| #58 | `s1-trust` | Vertraute Adressen ohne Schlüssel, `--trust` (CTL.5) |
+| #59 | `s1-osc-topics` | OSC-Abo je Thema und Feld (CTL.3); enthält den Fix aus #45 |
+| #60 | `se13-stage-measure` | S-E.13 Bühnen gemessen, nur Doku und Messskript |
+| #61 | `todo-1017` | Übergabe und Todo nach dem 17.10. |
 
 Rote GitHub-Läufe auf `s1-feeds` und `s1-script-folder` sind die wackelige
 Failover-Prüfung, die #45 behebt (der Stapel bekommt sie über `main`).
@@ -46,7 +52,10 @@ ohne Lebenszeichen ab; Show-Dateien Version 1 werden beim Öffnen
 umgewandelt (alte Datei bleibt als `.v1.bak`).
 
 Offen für S1 (DECISIONS „Show-Modus …“, PERSONAS Durchlauf 10): Klang-
-und Bild-Cues, Zonen, Bühnen (Stufen 2/3), warten auf S-E.3 und GPU.
+und Bild-Cues, Zonen, Bühnen (Stufen 2/3), warten auf die Entscheidungen
+S-E.3 (Klang, #39) und S-E.13 (Bühnen, #60); Vorschlag beide B, als ein
+strom-Block „Show-Wiedergabe“. Ton lässt sich ohne GPU bauen, Bild mit dem
+CPU-Mischer vorbereiten; GPU-Pfade auf echter Hardware.
 
 ## Branches und PRs (Gitea), Stand 2026-10-09
 
