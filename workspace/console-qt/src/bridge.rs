@@ -253,11 +253,15 @@ async fn follow(thread: cxx_qt::CxxQtThread<qobject::Core>) {
     }
 }
 
-/// `{ "<input id>": peak, "program": peak, "aux1": peak, … }`.
+/// `{ "<input id>": peak, "ch:<input id>": [left, right], "program": peak,
+/// "aux1": peak, … }`.
 fn levels_json(levels: &Levels) -> String {
     let mut map = serde_json::Map::new();
     for level in &levels.inputs {
         map.insert(level.input.to_string(), level.peak_db.into());
+        if !level.channels_db.is_empty() {
+            map.insert(format!("ch:{}", level.input), level.channels_db.clone().into());
+        }
     }
     if let Some(peak) = levels.program_peak_db {
         map.insert("program".into(), peak.into());

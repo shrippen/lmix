@@ -2,6 +2,9 @@
 # scripts/update-translations.sh collects the sources and writes these
 # into qml_de.ts (i18n/fill.py). Keep it complete.
 DE = {
+    'Level left': 'Pegel links',
+    'Level right': 'Pegel rechts',
+    'Level': 'Pegel',
     'Buses…': 'Busse…',
     'Master · program sound': 'Master · Programmton',
     'Master volume': 'Lautstärke Master',

@@ -2940,3 +2940,13 @@ Die Mischer nehmen Alpha schon (Stinger mit Alpha).
 **Geprüft**: Test der Formate je Dateiart; VM-Test (CPU-Mischer): ein PNG,
 links rot, rechts klar, als Overlay über Orange zeigt rechts Orange.
 Offen: CUDA und GL auf echter Hardware (H.33).
+
+## 2026-10-17 — Pegel links und rechts (AUD.1)
+
+strom meldet die Spitzenwerte je Kanal; lmix-core behielt nur den
+lautesten. Jetzt tragen die Pegel je Input zusätzlich `channels_db`
+(links, rechts; leer, solange keine frische Messung da ist), `peak_db`
+bleibt für bestehende Clients. Die Kachel zeigt zwei schmale
+`KanteAudioMeter` übereinander, eine Haarlinie auseinander (bei gleichem
+Pegel sonst nicht als zwei zu erkennen); ohne Kanalwerte ein Balken wie
+bisher. Kein neues Kante-Bauteil nötig.

@@ -769,6 +769,7 @@ Kirigami.ApplicationWindow {
                         overlayPreview: root.show && root.show.overlay_preview ? root.show.overlay_preview : []
                         looksAvailable: root.show !== null && root.show.looks_available === true
                         peakDb: root.levels[key]
+                        channelsDb: root.levels["ch:" + key]
                         onTriggersRequested: {
                             triggersDialog.graphics = null
                             triggersDialog.input = tileDelegate.input

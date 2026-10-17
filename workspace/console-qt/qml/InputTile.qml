@@ -28,6 +28,8 @@ KanteCard {
     /** The engine can apply looks (GL mixer). */
     property bool looksAvailable: false
     property var peakDb: undefined
+    /** Peak per channel, dBFS: left, right (AUD.1); undefined before the first. */
+    property var channelsDb: undefined
     /** Another tile is dragged over this one: it would land here. */
     property bool dropTarget: false
     signal replaceRequested()
@@ -237,10 +239,27 @@ KanteCard {
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: 0
-                KanteAudioMeter {
+                // Left above right, a hairline apart; one bar while the
+                // channels are unknown.
+                ColumnLayout {
                     Layout.fillWidth: true
-                    level: tile.peakDb
-                    scale: true
+                    spacing: KanteStyle.unit(1)
+                    KanteAudioMeter {
+                        Layout.fillWidth: true
+                        readonly property bool stereo: tile.channelsDb !== undefined && tile.channelsDb.length >= 2
+                        level: stereo ? tile.channelsDb[0] : tile.peakDb
+                        thickness: stereo ? KanteStyle.unit(4) : KanteStyle.unit(8)
+                        scale: !stereo
+                        Accessible.name: stereo ? qsTr("Level left") : qsTr("Level")
+                    }
+                    KanteAudioMeter {
+                        Layout.fillWidth: true
+                        visible: tile.channelsDb !== undefined && tile.channelsDb.length >= 2
+                        level: visible ? tile.channelsDb[1] : undefined
+                        thickness: KanteStyle.unit(4)
+                        scale: true
+                        Accessible.name: qsTr("Level right")
+                    }
                 }
                 QQC2.Slider {
                     id: volume

@@ -211,11 +211,15 @@ pub struct ShowState {
 pub const API_VERSION: u32 = 1;
 
 /// Peak level of one input, before its fader and mute (what arrives).
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct InputLevel {
     pub input: InputId,
     /// Loudest channel, dBFS.
     pub peak_db: f32,
+    /// Each channel, dBFS: left, right (AUD.1); empty before the first
+    /// measurement.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub channels_db: Vec<f32>,
 }
 
 /// Audio levels, sent about ten times a second while sound flows.

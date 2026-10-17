@@ -826,7 +826,7 @@
   <context>
     <name>InputTile</name>
     <message>
-      <location filename="../qml/InputTile.qml" line="+64" />
+      <location filename="../qml/InputTile.qml" line="+66" />
       <source>Input %1 %2</source>
       <translation>Input %1 %2</translation>
     </message>
@@ -946,7 +946,22 @@
       <translation>Ton an</translation>
     </message>
     <message>
-      <location line="+23" />
+      <location line="+19" />
+      <source>Level left</source>
+      <translation>Pegel links</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Level</source>
+      <translation>Pegel</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Level right</source>
+      <translation>Pegel rechts</translation>
+    </message>
+    <message>
+      <location line="+13" />
       <source>Volume %1</source>
       <translation>Lautstärke %1</translation>
     </message>
@@ -1912,7 +1927,7 @@
       <translation>+ Input</translation>
     </message>
     <message>
-      <location line="+133" />
+      <location line="+134" />
       <source>This show file is in the older format %1 and was converted on opening. Saving it keeps the old file beside it (.v%1.bak).</source>
       <translation>Diese Show-Datei hat das ältere Format %1 und wurde beim Öffnen umgewandelt. Beim Speichern bleibt die alte Datei daneben erhalten (.v%1.bak).</translation>
     </message>
