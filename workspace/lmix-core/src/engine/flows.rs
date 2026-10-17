@@ -1147,6 +1147,18 @@ fn encode_path_segment(text: &str) -> String {
 /// clip starts after a cue.
 pub const FILE_PLAYOUT_DELAY_MS: u64 = 100;
 
+/// strom's own playout delay, which URL streams keep (ms).
+const STREAM_PLAYOUT_DELAY_MS: u64 = 500;
+
+/// How long after a player source starts its first frame plays (ms);
+/// `None` for sources without a player.
+pub fn playout_ms(source: &SourceSpec) -> Option<u64> {
+    match source {
+        SourceSpec::Url { .. } => Some(STREAM_PLAYOUT_DELAY_MS),
+        _ => playout_delay_ms(source),
+    }
+}
+
 /// Playout delay for a player source; `None` keeps strom's default.
 fn playout_delay_ms(source: &SourceSpec) -> Option<u64> {
     match source {
