@@ -43,3 +43,5 @@ Hardware: **NV** = NVIDIA-Host (RTX 3090), **AMD**, **INTEL**,
 | H.31 | MIDI mit echtem Controller (z. B. Akai APC, Korg nanoKONTROL) über `/dev/snd/midiC*D*`: Pads lösen Kurzbefehle aus, Fader bewegt die T-Bar ohne Ruckeln, Abziehen und Wiederanstecken | MIDI | AUT.1 | offen |
 | H.32 | Globale Tasten unter KDE Plasma (Wayland): Bestätigungsdialog, Tasten wirken mit einem Spiel im Vollbild vorn, Änderung der Tasten in den Systemeinstellungen | KDE | AUT.12 | offen |
 | H.33 | PNG mit Alpha als Overlay und Layout-Box auf dem CUDA- und dem GL-Mischer: klare Stellen zeigen Program, Kanten ohne dunklen Saum; GPU-Last eines BGRA-Standbilds in 1080p | NV | SRC.4 | offen |
+| H.34 | strom mit upstream main 0.7.1 (strom #20): CUDA-Mischer, GL-Mischer mit NVDEC-Eingängen (upstreams `gl_input_front`), NVENC-Ausgänge, GPU-Vorschaubilder, die ignorierten CUDA-Tests in strom (`cargo test -- --ignored`), Latenz im Selbsttest | NV | Upstream-Abgleich | offen (User 2026-10-17: mit der nächsten Hardware-Runde) |
+| H.35 | VA-Bilder (AMD/Intel-Dekoder) in den GL-Mischer und VA-Vorschaubilder | AMD, INTEL | Upstream-Abgleich | offen, Brücke nur konzeptionell angelegt |
