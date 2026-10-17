@@ -244,15 +244,18 @@ KanteCard {
                 Layout.fillWidth: true
                 spacing: 0
                 // Left above right, a hairline apart; one bar while the
-                // channels are unknown.
+                // channels are unknown. Muted, the meters stay but read
+                // pale (AUD.12): the source still sends, program hears none.
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: KanteStyle.unit(1)
+                    opacity: tile.audio.on ? 1 : 0.4
                     KanteAudioMeter {
                         Layout.fillWidth: true
                         readonly property bool stereo: tile.channelsDb !== undefined && tile.channelsDb.length >= 2
                         level: stereo ? tile.channelsDb[0] : tile.peakDb
                         thickness: stereo ? KanteStyle.unit(4) : KanteStyle.unit(8)
+                        holdMs: 2000
                         scale: !stereo
                         Accessible.name: stereo ? qsTr("Level left") : qsTr("Level")
                     }
@@ -261,6 +264,7 @@ KanteCard {
                         visible: tile.channelsDb !== undefined && tile.channelsDb.length >= 2
                         level: visible ? tile.channelsDb[1] : undefined
                         thickness: KanteStyle.unit(4)
+                        holdMs: 2000
                         scale: true
                         Accessible.name: qsTr("Level right")
                     }
