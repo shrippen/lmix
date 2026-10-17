@@ -67,6 +67,8 @@ pub struct Service {
     layout_templates_file: std::sync::Mutex<Option<PathBuf>>,
     /// Settings file of the output targets (`--targets`).
     targets_file: std::sync::Mutex<Option<PathBuf>>,
+    /// lmix-script for the show's script folder (SSH.2), once configured.
+    script: Mutex<Option<crate::script::ScriptRunner>>,
     recent: Mutex<Recent>,
     /// Last good frame per picture: a paused clip or still keeps its
     /// picture while the engine's tap has no new frame.
@@ -156,6 +158,7 @@ impl Service {
             all_shows_file: std::sync::Mutex::new(None),
             layout_templates_file: std::sync::Mutex::new(None),
             targets_file: std::sync::Mutex::new(None),
+            script: Mutex::new(None),
         })
     }
 
@@ -197,10 +200,26 @@ impl Service {
         let read = read_settings(&path, "output targets", crate::targets::parse).await;
         let mut sw = self.switcher.lock().await;
         sw.set_target_settings(read.clone().ok().flatten().unwrap_or_default());
+        sw.refresh_warnings();
         if read.is_ok() {
             *self.targets_file.lock().expect("targets file lock") = Some(path);
         }
         self.publish(&sw);
+    }
+
+    /// Run `tool` for the show's script folder, telling it `core_url`
+    /// (SSH.2); from now on after every change of the folder.
+    pub async fn use_script_tool(&self, tool: PathBuf, core_url: String) {
+        *self.script.lock().await = Some(crate::script::ScriptRunner::new(tool, core_url));
+        self.sync_script().await;
+    }
+
+    /// The tool runs for the show's script folder, or not at all.
+    async fn sync_script(&self) {
+        let folder = self.switcher.lock().await.show().script_folder.clone();
+        if let Some(runner) = self.script.lock().await.as_mut() {
+            runner.sync(folder.as_deref()).await;
+        }
     }
 
     /// The targets hold secrets: the file is the user's alone (EXT.2).
@@ -228,14 +247,27 @@ impl Service {
         let service = Arc::clone(self);
         tokio::spawn(async move {
             let result = crate::targets::send(&service.target_http, &target, &request).await;
-            if let lmix_types::TargetResult::Failed { reason } = &result {
-                tracing::warn!(target = %target.name, %reason, "output target not reached");
-            }
+            let reached = match &result {
+                lmix_types::TargetResult::Failed { reason } => {
+                    tracing::warn!(target = %target.name, %reason, "output target not reached");
+                    Err(reason.clone())
+                }
+                lmix_types::TargetResult::Ok => Ok(()),
+            };
+            service.reached(&target.name, reached).await;
             let _ = service.events.send(Event::Target {
                 target: target.name.clone(),
                 result,
             });
         });
+    }
+
+    /// Note how target `name` answered; the warnings follow (SUI.5).
+    async fn reached(&self, name: &str, result: Result<(), String>) {
+        let mut sw = self.switcher.lock().await;
+        if sw.set_reached(name, result) {
+            self.publish(&sw);
+        }
     }
 
     /// Best effort, like the autosave.
@@ -864,6 +896,7 @@ impl Service {
         }
         let mut sw = self.switcher.lock().await;
         if sw.set_missing(missing) {
+            sw.refresh_warnings();
             self.publish(&sw);
         }
     }
@@ -1067,6 +1100,13 @@ impl Service {
         pressed: bool,
     ) -> Result<(), ActionError> {
         let _ = self.events.send(Event::Midi { midi: message });
+        let hold = crate::cues::Hold::of(&format!(
+            "midi {} {:?} {}",
+            message.channel, message.kind, message.number
+        ));
+        if !pressed {
+            self.release(hold).await;
+        }
         let action = {
             let sw = self.switcher.lock().await;
             crate::midi::action_for(
@@ -1077,9 +1117,23 @@ impl Service {
             )
         };
         match action {
-            Some(action) => self.handle(action).await.map(|_| ()),
+            Some(action) => self.handle_as(action, Origin::Held(hold)).await.map(|_| ()),
             None => Ok(()),
         }
+    }
+
+    /// GO from a button whose release is reported (`held`, RUN.6): OSC.
+    pub async fn go_held(
+        self: &Arc<Self>,
+        action: Action,
+        held: crate::cues::Hold,
+    ) -> Result<ShowState, ActionError> {
+        self.handle_as(action, Origin::Held(held)).await
+    }
+
+    /// Button `held` was let go: it may give GO again (RUN.6).
+    pub async fn release(&self, held: crate::cues::Hold) {
+        self.switcher.lock().await.cue_release(held);
     }
 
     /// Fire `clip_end` triggers and note clip lengths as the media players
@@ -1156,7 +1210,19 @@ impl Service {
     /// `Command::Wait` (a stinger's cut and end, a clip's automatic pause
     /// after a fade) run later in the background.
     pub async fn handle(self: &Arc<Self>, action: Action) -> Result<ShowState, ActionError> {
-        self.handle_as(action, Origin::Operator).await
+        // These may give the show another script folder (SSH.2).
+        let folder = matches!(
+            action,
+            Action::SetScriptFolder { .. }
+                | Action::OpenShow { .. }
+                | Action::NewShow
+                | Action::ImportPackage { .. }
+        );
+        let result = self.handle_as(action, Origin::Operator).await;
+        if folder {
+            self.sync_script().await;
+        }
+        result
     }
 
     /// Send a PTZ action to the input's camera (PER.2). Nothing in the
@@ -1241,27 +1307,44 @@ impl Service {
             }
             Action::TestTarget { name } => {
                 let config = self.switcher.lock().await.target(name)?;
-                crate::targets::probe(&self.target_http, &config)
-                    .await
-                    .map_err(|reason| ActionError::BadTarget { reason })?;
+                let result = crate::targets::probe(&self.target_http, &config).await;
+                self.reached(name, result.clone()).await;
+                result.map_err(|reason| ActionError::BadTarget { reason })?;
+                return Ok(self.state().await);
+            }
+            Action::CheckTargets => {
+                let used = self.switcher.lock().await.used_targets();
+                let probes = used
+                    .iter()
+                    .map(|t| crate::targets::probe(&self.target_http, t));
+                let results = futures_util::future::join_all(probes).await;
+                for (target, result) in used.iter().zip(results) {
+                    self.reached(&target.name, result).await;
+                }
                 return Ok(self.state().await);
             }
             Action::CueGo { .. }
             | Action::CueStart { .. }
             | Action::CueStop { .. }
             | Action::CueReset
-            | Action::CuePanic
+            | Action::CuePanic { .. }
             | Action::CueHardStop => {
                 let out = {
                     let mut sw = self.switcher.lock().await;
                     let now = tokio::time::Instant::now();
                     let out = match &action {
-                        Action::CueGo { list } => sw.cue_go(list.as_ref(), now)?,
+                        Action::CueGo { list } => {
+                            let held = match origin {
+                                Origin::Held(hold) => Some(hold),
+                                _ => None,
+                            };
+                            sw.cue_go(list.as_ref(), now, held)?
+                        }
                         Action::CueStart { list, cue } => sw.cue_start(list.as_ref(), cue, now)?,
                         Action::CueStop { list, cue, .. } => {
                             sw.cue_stop(list.as_ref(), cue.as_deref(), now)?
                         }
-                        Action::CuePanic => sw.cue_panic(now),
+                        Action::CuePanic { ms } => sw.cue_panic(now, *ms)?,
                         Action::CueHardStop => sw.cue_hard_stop(now),
                         _ => sw.cue_reset(now),
                     };
@@ -1278,11 +1361,48 @@ impl Service {
             }
             _ => {}
         }
+        // Settings files (SHW.8): read and written beside the switcher.
+        match &action {
+            Action::ExportSettings { path } => {
+                let bytes = crate::settings::to_bytes(&self.switcher.lock().await.settings_file());
+                write_settings(std::path::Path::new(path), bytes)
+                    .await
+                    .map_err(|e| ActionError::ShowFile {
+                        message: format!("{path}: {e}"),
+                    })?;
+                return Ok(self.state().await);
+            }
+            Action::ImportSettings { path } => {
+                let bytes = tokio::fs::read(path)
+                    .await
+                    .map_err(|e| ActionError::ShowFile {
+                        message: format!("{path}: {e}"),
+                    })?;
+                let file =
+                    crate::settings::parse(&bytes).map_err(|message| ActionError::ShowFile {
+                        message: format!("{path}: {message}"),
+                    })?;
+                let mut sw = self.switcher.lock().await;
+                sw.take_settings(file)?;
+                sw.refresh_warnings();
+                self.write_all_shows(&mut sw).await;
+                self.write_layout_templates(&mut sw).await;
+                self.write_targets(&mut sw).await;
+                self.publish(&sw);
+                return Ok(sw.state());
+            }
+            _ => {}
+        }
         // Packages copy media (gigabytes): without the switcher locked.
-        if let Action::ExportPackage { path } = &action {
-            let (show, show_path) = {
+        if let Action::ExportPackage { path, machine } = &action {
+            let (show, show_path, settings) = {
                 let sw = self.switcher.lock().await;
-                (sw.show().clone(), sw.path().map(str::to_string))
+                let settings = machine.then(|| {
+                    crate::targets::to_bytes(&crate::targets::without_secrets(
+                        &sw.target_settings(),
+                    ))
+                });
+                (sw.show().clone(), sw.path().map(str::to_string), settings)
             };
             let templates = self
                 .templates_dir
@@ -1291,7 +1411,13 @@ impl Service {
                 .clone();
             let out = PathBuf::from(path);
             let packed = tokio::task::spawn_blocking(move || {
-                crate::package::export(&show, show_path.as_deref(), templates.as_deref(), &out)
+                crate::package::export(
+                    &show,
+                    show_path.as_deref(),
+                    templates.as_deref(),
+                    settings.as_deref(),
+                    &out,
+                )
             })
             .await
             .map_err(|e| ActionError::ShowFile {
@@ -1308,7 +1434,11 @@ impl Service {
             _ => None,
         };
         let mut unpacked = match &action {
-            Action::ImportPackage { path, folder } => {
+            Action::ImportPackage {
+                path,
+                folder,
+                machine,
+            } => {
                 // Refused before gigabytes are unpacked (checked again below).
                 self.switcher.lock().await.check_unlocked()?;
                 let templates = self
@@ -1317,6 +1447,7 @@ impl Service {
                     .expect("templates dir lock")
                     .clone();
                 let (package, folder) = (PathBuf::from(path), PathBuf::from(folder));
+                let machine_at = folder.join(crate::package::MACHINE_FILE);
                 let (show, file, notes) = tokio::task::spawn_blocking(move || {
                     crate::package::import(&package, &folder, templates.as_deref())
                 })
@@ -1330,7 +1461,21 @@ impl Service {
                 }
                 // Templates it brought.
                 self.rescan_templates().await;
-                Some((show, file))
+                let settings = if *machine {
+                    let bytes =
+                        tokio::fs::read(&machine_at)
+                            .await
+                            .map_err(|e| ActionError::ShowFile {
+                                message: format!("{}: {e}", machine_at.display()),
+                            })?;
+                    Some(
+                        crate::targets::parse(&bytes)
+                            .map_err(|message| ActionError::ShowFile { message })?,
+                    )
+                } else {
+                    None
+                };
+                Some((show, file, settings))
             }
             _ => None,
         };
@@ -1392,11 +1537,20 @@ impl Service {
             sw.check_unlocked()?;
         }
 
+        // A changed cue list may end a running group at once: the cue
+        // timer has to look again.
+        let cue_lists = matches!(
+            action,
+            Action::SetCueList { .. } | Action::RemoveCueList { .. }
+        );
         let commands = match action {
             Action::NewShow => sw.replace(Show::default(), None),
             Action::OpenShow { path } => open(&mut sw, path).await?,
             Action::ImportPackage { .. } => {
-                let (show, file) = unpacked.take().expect("unpacked above");
+                let (show, file, settings) = unpacked.take().expect("unpacked above");
+                if let Some(settings) = settings {
+                    sw.merge_target_settings(settings)?;
+                }
                 sw.replace(show, Some(file.display().to_string()))
             }
             Action::ImportDatasets { template, .. } => {
@@ -1459,6 +1613,10 @@ impl Service {
             }
             other => sw.apply(other)?,
         };
+        sw.refresh_warnings();
+        if cue_lists {
+            self.cue_wake.notify_one();
+        }
         if let (true, Some(path)) = (file_action, sw.path().map(str::to_string)) {
             self.recent.lock().await.touch(&path).await;
         }
@@ -1473,7 +1631,7 @@ impl Service {
         if let (Some(report), Ok(())) = (report, &result) {
             // Like an input's triggers: none for what a trigger did.
             if let (
-                Origin::Operator,
+                Origin::Operator | Origin::Held(_),
                 Event::Title {
                     graphics,
                     layer,
@@ -1754,6 +1912,8 @@ async fn write_settings(path: &std::path::Path, bytes: Vec<u8>) -> std::io::Resu
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Origin {
     Operator,
+    /// A button whose release comes later (RUN.6).
+    Held(crate::cues::Hold),
     Trigger,
     /// Overlay `channel` goes off by itself (OVL.2), if it still shows
     /// what went on at `since`.
@@ -1835,12 +1995,14 @@ fn mark_slot(sw: &mut Switcher, command: &Command, ok: bool) {
 }
 
 async fn open(sw: &mut Switcher, path: String) -> Result<Vec<Command>, ActionError> {
-    let show = show::load(&PathBuf::from(&path))
+    let loaded = show::load_versioned(&PathBuf::from(&path))
         .await
         .map_err(|e| ActionError::ShowFile {
             message: e.to_string(),
         })?;
-    Ok(sw.replace(show, Some(path)))
+    let commands = sw.replace(loaded.show, Some(path));
+    sw.set_older_format(loaded.older);
+    Ok(commands)
 }
 
 /// Found media files (old path, new path) take the old paths' place,
@@ -1908,12 +2070,21 @@ async fn save(sw: &mut Switcher, path: Option<String>) -> Result<(), ActionError
         .or_else(|| sw.path().map(str::to_string))
         .ok_or(ActionError::NoShowPath)?;
 
+    // Over a file of an older version: keep it beside (SHW.7).
+    if let (Some(version), true) = (sw.older_format(), sw.path() == Some(path.as_str())) {
+        show::backup(&PathBuf::from(&path), version)
+            .await
+            .map_err(|e| ActionError::ShowFile {
+                message: format!("keeping the older file: {e}"),
+            })?;
+    }
     show::save(sw.show(), &PathBuf::from(&path))
         .await
         .map_err(|e| ActionError::ShowFile {
             message: e.to_string(),
         })?;
     sw.set_path(path);
+    sw.set_older_format(None);
     Ok(())
 }
 
@@ -2045,7 +2216,7 @@ mod tests {
         .unwrap();
         assert!(running[0].remaining_ms.unwrap() > 59_000);
 
-        service.handle(Action::CuePanic).await.unwrap();
+        service.handle(Action::CuePanic { ms: None }).await.unwrap();
         let mut panic = String::new();
         for _ in 0..10 {
             panic = next().await;
@@ -2099,7 +2270,7 @@ mod tests {
         assert_eq!(first.state().await.running_cues.len(), 1, "Atmo runs");
         let mut events = first.subscribe();
 
-        let state = first.handle(Action::CuePanic).await.unwrap();
+        let state = first.handle(Action::CuePanic { ms: None }).await.unwrap();
 
         assert!(state.running_cues.is_empty());
         assert_eq!(state.cue_lists[0].standby, 3, "standby stays");
@@ -2221,6 +2392,61 @@ mod tests {
                 .await,
             Err(ActionError::UnknownTarget { .. })
         ));
+    }
+
+    #[tokio::test]
+    async fn checking_targets_warns_until_they_answer() {
+        use tokio::io::AsyncWriteExt;
+        // Nothing listens there yet: the port of a dropped listener.
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
+        let service = Service::new(4, Arc::new(NullEngine::default()), None);
+        let target = |name: &str| Action::SetTarget {
+            target: lmix_types::TargetSpec {
+                name: name.into(),
+                kind: lmix_types::TargetKind::Http,
+                addresses: vec![format!("http://127.0.0.1:{port}")],
+                secret: None,
+                timeout_ms: 500,
+            },
+        };
+        service.handle(target("Haus")).await.unwrap();
+        // Not used by a cue: not probed, no warning.
+        service.handle(target("Keller")).await.unwrap();
+        let light = Action::HaService {
+            target: "Haus".into(),
+            service: "light.turn_on".into(),
+            entity: None,
+            data: None,
+        };
+        service
+            .handle(Action::AddCueList {
+                name: "Show".into(),
+                cues: vec![lmix_types::Cue::actions("Licht", vec![light])],
+                source: None,
+            })
+            .await
+            .unwrap();
+
+        let state = service.handle(Action::CheckTargets).await.unwrap();
+
+        let problems: Vec<_> = state.cue_warnings.iter().map(|w| &w.problem).collect();
+        assert!(
+            matches!(problems[..], [lmix_types::cue::CueProblem::TargetUnreached { target, .. }] if target == "Haus"),
+            "{problems:?}"
+        );
+
+        let listener = tokio::net::TcpListener::bind(("127.0.0.1", port)).await.unwrap();
+        tokio::spawn(async move {
+            while let Ok((mut stream, _)) = listener.accept().await {
+                let _ = stream
+                    .write_all(b"HTTP/1.1 200 OK\r\ncontent-length: 0\r\nconnection: close\r\n\r\n")
+                    .await;
+            }
+        });
+        let state = service.handle(Action::CheckTargets).await.unwrap();
+        assert!(state.cue_warnings.is_empty(), "{:?}", state.cue_warnings);
     }
 
     #[tokio::test(start_paused = true)]
@@ -2737,6 +2963,140 @@ mod tests {
             log.iter().any(|c| matches!(c, Command::Preview { .. })),
             "{log:?}"
         );
+    }
+
+    #[tokio::test]
+    async fn settings_go_to_a_file_and_back_without_secrets() {
+        use lmix_types::{ShortcutSpec, TargetKind, TargetSpec};
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("settings.json").display().to_string();
+        let service = Service::new(2, Arc::new(NullEngine::default()), None);
+        let target = |secret: Option<&str>| Action::SetTarget {
+            target: TargetSpec {
+                name: "Haus".into(),
+                kind: TargetKind::Http,
+                addresses: vec!["http://ha:8123".into()],
+                secret: secret.map(str::to_string),
+                timeout_ms: 1000,
+            },
+        };
+        service.handle(target(Some("geheim"))).await.unwrap();
+        service
+            .handle(Action::AddShortcut {
+                shortcut: ShortcutSpec {
+                    label: "Schwarz".into(),
+                    key: Some("F9".into()),
+                    web: false,
+                    color: None,
+                    midi: None,
+                    actions: vec![Action::FadeToBlack { duration_ms: 0 }],
+                    all_shows: true,
+                },
+            })
+            .await
+            .unwrap();
+
+        service
+            .handle(Action::SetZonePatch {
+                patch: lmix_types::ZonePatch {
+                    zone: "hinten".into(),
+                    outputs: vec![lmix_types::ZoneOutput {
+                        device: String::new(),
+                        channels: vec![3],
+                        gain_db: -3.0,
+                    }],
+                },
+            })
+            .await
+            .unwrap();
+        service
+            .handle(Action::ExportSettings { path: file.clone() })
+            .await
+            .unwrap();
+        let text = tokio::fs::read_to_string(&file).await.unwrap();
+        assert!(text.contains("Schwarz") && text.contains("http://ha:8123"));
+        assert!(!text.contains("geheim"), "no secrets in the file");
+
+        let state = service.handle(Action::ResetSettings).await.unwrap();
+        assert!(state.targets.is_empty() && state.shortcuts.is_empty());
+
+        // Imported: the target comes back without a secret; one set again
+        // before the next import stays.
+        let state = service
+            .handle(Action::ImportSettings { path: file.clone() })
+            .await
+            .unwrap();
+        assert_eq!(state.shortcuts[0].label, "Schwarz");
+        assert!(!state.targets[0].has_secret);
+        service
+            .handle(Action::SetZone {
+                zone: lmix_types::Zone {
+                    name: "hinten".into(),
+                    channels: 1,
+                },
+            })
+            .await
+            .unwrap();
+        let zones = service.state().await.zones;
+        assert_eq!(
+            zones[0].outputs[0].channels,
+            vec![3],
+            "the zone patch came back"
+        );
+        service.handle(target(Some("neu"))).await.unwrap();
+        let state = service
+            .handle(Action::ImportSettings { path: file.clone() })
+            .await
+            .unwrap();
+        assert!(
+            state.targets[0].has_secret,
+            "a target of the same name keeps its secret"
+        );
+
+        tokio::fs::write(&file, b"{\"format\":\"lmix-show\",\"version\":1}")
+            .await
+            .unwrap();
+        assert!(service
+            .handle(Action::ImportSettings { path: file })
+            .await
+            .is_err());
+        assert_eq!(
+            service.state().await.shortcuts.len(),
+            1,
+            "a bad file changes nothing"
+        );
+    }
+
+    #[tokio::test]
+    async fn an_older_show_file_is_kept_when_saved_over() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("abend.lmix");
+        let old = br#"{"format":"lmix-show","version":1,"show":{"inputs":[],"preview":null,"program":null,"transitions":[],
+            "cue_lists":[{"id":"7d0c3c2e-2f43-4a39-9d5c-6c8f1f0b6a11","name":"Run","cues":[{"label":"Bars","actions":[{"action":"cut"}]}]}]}}"#;
+        tokio::fs::write(&file, old).await.unwrap();
+        let service = Service::new(2, Arc::new(NullEngine::default()), None);
+        let path = file.display().to_string();
+
+        let state = service
+            .handle(Action::OpenShow { path: path.clone() })
+            .await
+            .unwrap();
+        assert_eq!(state.older_format, Some(1));
+        assert_eq!(state.cue_lists[0].cues[0].name, "Bars");
+
+        let state = service
+            .handle(Action::SaveShow { path: None })
+            .await
+            .unwrap();
+        assert_eq!(state.older_format, None);
+        let kept = dir.path().join("abend.lmix.v1.bak");
+        assert_eq!(
+            tokio::fs::read(&kept).await.unwrap(),
+            old.to_vec(),
+            "the old file, as it was"
+        );
+        let new = tokio::fs::read_to_string(&file).await.unwrap();
+        assert!(new.contains("\"version\": 2"), "{new}");
     }
 
     #[tokio::test]

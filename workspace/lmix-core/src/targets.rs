@@ -265,6 +265,9 @@ pub struct Settings {
     pub targets: Vec<TargetConfig>,
     #[serde(default)]
     pub feeds: Vec<Feed>,
+    /// Where the zones play on this machine (SND.10, SSH.3).
+    #[serde(default)]
+    pub zone_patches: Vec<lmix_types::ZonePatch>,
 }
 
 pub fn parse(bytes: &[u8]) -> Result<Settings, String> {
@@ -273,6 +276,44 @@ pub fn parse(bytes: &[u8]) -> Result<Settings, String> {
 
 pub fn to_bytes(settings: &Settings) -> Vec<u8> {
     serde_json::to_vec_pretty(settings).expect("targets serialize")
+}
+
+/// `settings` to carry to another machine: no secrets (SSH.5, EXT.2).
+pub fn without_secrets(settings: &Settings) -> Settings {
+    Settings {
+        targets: settings
+            .targets
+            .iter()
+            .map(|t| TargetConfig {
+                secret: None,
+                ..t.clone()
+            })
+            .collect(),
+        feeds: settings.feeds.clone(),
+        zone_patches: settings.zone_patches.clone(),
+    }
+}
+
+/// Take `from` into `into`: targets and subscribers of the same name are
+/// replaced, a target keeps its secret; within the limits.
+pub fn merge(into: &mut Settings, from: Settings) -> Result<(), ActionError> {
+    for target in from.targets {
+        let spec = TargetSpec {
+            name: target.name,
+            kind: target.kind,
+            addresses: target.addresses,
+            secret: None,
+            timeout_ms: target.timeout_ms,
+        };
+        set(&mut into.targets, spec)?;
+    }
+    for feed in from.feeds {
+        set_feed(&mut into.feeds, feed)?;
+    }
+    for patch in from.zone_patches {
+        crate::zones::set_patch(&mut into.zone_patches, patch)?;
+    }
+    Ok(())
 }
 
 /// Add `feed` to `feeds` or replace the one of its name.
@@ -354,6 +395,35 @@ mod tests {
         let mut slow = spec("Slow", &["http://x"], None);
         slow.timeout_ms = 60_000;
         assert!(refused(set(&mut targets, slow)));
+    }
+
+    #[test]
+    fn machine_settings_travel_without_secrets() {
+        let mut here = Settings::default();
+        set(
+            &mut here.targets,
+            spec("Haus", &["http://ha:8123"], Some("token")),
+        )
+        .unwrap();
+        let carried = without_secrets(&here);
+        assert!(!String::from_utf8(to_bytes(&carried))
+            .unwrap()
+            .contains("token"));
+
+        let mut there = Settings::default();
+        set(
+            &mut there.targets,
+            spec("Haus", &["http://old:8123"], Some("their")),
+        )
+        .unwrap();
+        merge(&mut there, carried).unwrap();
+
+        assert_eq!(there.targets[0].addresses, ["http://ha:8123"]);
+        assert_eq!(
+            there.targets[0].secret.as_deref(),
+            Some("their"),
+            "a secret stays"
+        );
     }
 
     #[test]

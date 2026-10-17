@@ -173,7 +173,9 @@ pub struct Cue {
     /// `actions`: 1–16 actions of the catalog.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub actions: Vec<Action>,
-    /// `wait`: how long it runs.
+    /// `wait`: how long it runs. `actions`: how long it counts as
+    /// running after its actions, e.g. the length of the clip it starts,
+    /// so `follow: after_end` waits for it; without, it ends at once.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub duration_ms: Option<u32>,
     /// `start`: what it starts.
@@ -296,6 +298,20 @@ pub enum StopMode {
     Hard,
 }
 
+/// When GO takes another press after one went through (RUN.6).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum GoRearm {
+    /// After the GO guard.
+    #[default]
+    Time,
+    /// After the GO guard and once the button that gave it is let go.
+    /// Only ways that report letting go wait for it: MIDI, OSC
+    /// (`/lmix/cue/release`), the Console's space key. Each waits on its
+    /// own, so a lost release blocks only that one.
+    Release,
+}
+
 /// A cue list as clients see it.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct CueList {
@@ -343,6 +359,56 @@ pub struct RunningCue {
     /// `total_ms` less `elapsed_ms`, done for the client (CTL.2).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub remaining_ms: Option<u64>,
+}
+
+/// Something that would go wrong when a cue runs (SUI.5).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct CueWarning {
+    pub list: InputId,
+    pub cue: CueId,
+    #[serde(flatten)]
+    pub problem: CueProblem,
+    /// The problem in English, for logs and simple clients.
+    pub message: String,
+}
+
+/// What would go wrong (`CueWarning`), for clients that say it in
+/// their language.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "problem", rename_all = "snake_case")]
+pub enum CueProblem {
+    /// A start cue's cue is in no list.
+    StartCueGone { target: String },
+    /// A start cue's list is gone.
+    StartListGone,
+    /// An HTTP or Home Assistant action names no target of the machine.
+    TargetGone { target: String },
+    /// Its target did not answer the last check or send (SUI.5).
+    TargetUnreached { target: String, reason: String },
+    /// An action names an input that is not there.
+    InputGone { input: String },
+    /// An input a cue uses has no media file.
+    MediaMissing { input: String },
+}
+
+impl CueProblem {
+    /// In English.
+    pub fn message(&self) -> String {
+        match self {
+            Self::StartCueGone { target } => format!("starts cue {target}, which is not there"),
+            Self::StartListGone => "starts a cue list that is not there".into(),
+            Self::TargetGone { target } => {
+                format!("sends to target {target}, which this machine does not have")
+            }
+            Self::TargetUnreached { target, reason } => {
+                format!("sends to target {target}, which did not answer: {reason}")
+            }
+            Self::InputGone { input } => format!("uses input {input}, which is not there"),
+            Self::MediaMissing { input } => {
+                format!("uses input {input}, whose media file is missing")
+            }
+        }
+    }
 }
 
 /// What happened to a cue (`Event::Cue`).

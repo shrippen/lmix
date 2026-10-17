@@ -2584,3 +2584,209 @@ Schlüssel nur mit `--open-panic`), für die wachsende Wartezeit (pausierte
 Zeit) und über TCP (Panik vor `AUTH`, Steuern ja, Bearbeiten nein).
 **Offen**: Rechte für die Web-Seiten jenseits der offenen Seiten, eigene
 Adressliste.
+
+## 2026-10-16 — Warnliste, Rechner-Einstellungen im Paket (SUI.5, SSH.5, CUE.1)
+
+- **Warnliste** (`cue_warnings` im Zustand): `lmix-core` prüft nach jeder
+  Änderung der Show, der Ziele oder der fehlenden Medien, was beim Lauf
+  schiefginge: Start-Cue ohne Ziel, Aktion an einen Input oder ein
+  Ausgabeziel, das es nicht gibt, Input ohne Mediendatei. Zwischengespeichert,
+  nicht je Zustand gerechnet. Jede Warnung hat eine Art (`problem`) mit
+  Werten, damit die Console sie übersetzt, und den englischen Text.
+- **Rechner-Einstellungen im Paket**: `export_package` mit `machine: true`
+  legt `machine.json` (Ziele, Abonnenten, ohne Geheimnisse) ins Paket;
+  `import_package` mit `machine: true` übernimmt sie, gleichnamige Ziele
+  behalten ihr Geheimnis. Dabei gefunden: Vorlagen, die Cues in Gruppen
+  laden, kamen nicht ins Paket (nur oberste Ebene durchsucht); behoben.
+- **Nummern mit Leerzeichen** warnen im Drehbuch (CUE.1), laden aber.
+
+**Geprüft**: Test der Prüfungen (fehlendes Start-Ziel, Ziel, Input in einer
+Gruppe, fehlende Mediendatei), Paket-Test mit `machine.json`, Test der
+Übernahme (Geheimnis bleibt), Drehbuch-Test; Console auf Xvfb zeigt drei
+Warnungen auf Deutsch.
+
+## 2026-10-16 — Drehbuch-Ordner der Show (SSH.2, Befund B44)
+
+**Entscheidung**: Die Show merkt sich ihren Drehbuch-Ordner
+(`set_script_folder`, Knopf „Drehbuch…“ in der Show-Ansicht);
+`lmix-core` startet dafür `lmix-script load <ordner> --watch` als
+Kindprozess, beim Öffnen der Show, nach einem Neustart und bei jeder
+Änderung des Ordners, und beendet ihn ohne Ordner. `lmix-core` kennt so
+weiter kein Markdown (S-E.2); das Werkzeug spricht die API wie jeder Client
+(über Loopback, ohne Schlüssel).
+**Abweichung von SSH.2**: Die Cues der Drehbuch-Listen bleiben zusätzlich
+in der Show gespeichert. Ohne Werkzeug hat die Show dann trotzdem ihre
+Cues, und Standby übersteht einen Neustart (SAF.6). Das Werkzeug ersetzt sie
+beim nächsten Laden.
+**Geprüft**: Test des Kindprozesses (einmal je Ordner, Wechsel, Stopp) mit
+einem Ersatzwerkzeug; `scripts/test-script.sh` mit echtem `lmix-script`:
+Ordner setzen lädt die Liste, eine Änderung wird übernommen, ohne Ordner
+nicht mehr.
+
+## 2026-10-16 — Ziele und Abonnenten in der Console (Befund B43)
+
+Dialog „Ziele…“ in der Show-Ansicht: Ausgabeziele anlegen, bearbeiten,
+testen (HTTP), entfernen; OSC-Abonnenten mit Nachrichten je Anlass
+(Standby, laufender Cue, Panik), Adresse und Werten mit Platzhaltern. Das
+Geheimnis zeigt die Console nie; leer gelassen bleibt es, wie es ist. Ein
+Ziel lässt sich nicht umbenennen (das Geheimnis ginge verloren): entfernen
+und neu anlegen. Geprüft auf Xvfb gegen lmix-core mit zwei Zielen und
+einem Abonnenten.
+
+## 2026-10-16 — Kleinere S1-Punkte: Dauer von Aktions-Cues, dunkler Raum, OSC-Abo-Ablauf
+
+- **Aktions-Cue mit Dauer** (B45): `duration_ms` ist jetzt auch an
+  Aktions-Cues erlaubt; so lange gilt der Cue nach seinen Aktionen als
+  laufend (z. B. die Länge des Clips, den er startet), „Folge nach Ende“
+  wartet darauf. Die Länge aus dem Clip selbst kommt mit den Bild-Cues.
+- **Dunkler Raum** (SUI.6): Knopf „Dunkel“ in der Show-Ansicht; Kante
+  bekommt `preferDark` (Gruvbox dunkel, kein Weiß), darüber liegt der
+  Schleier von Kante mit 60 %; Klicks gehen durch. Nur der Schleier dimmte
+  im hellen Leinen-Schema zu wenig (auf Xvfb geprüft).
+- **OSC-Abos laufen ab** (CTL.3): 60 s nach der letzten Nachricht des
+  Abonnenten; `/lmix/ping` (Antwort `/lmix/pong`) oder ein neues
+  `/lmix/subscribe` hält es. **Bricht** für Abonnenten ohne Lebenszeichen;
+  für Tasten ohne Keepalive gibt es die festen Abonnenten (CTL.4). Dabei die
+  Doku `/lmix/cue/next` → `/lmix/cue/standby` nachgezogen.
+
+## 2026-10-16 — Älteres Show-Format, Einstellungen als Datei (SHW.7, SHW.8)
+
+- **SHW.7 ohne Rückfrage, mit Sicherung**: Eine Show-Datei älterer Version
+  wird beim Öffnen umgewandelt (seit heute Version 1 → 2). Statt vorher zu
+  fragen, sagt die Console es an, und das erste Speichern über die Datei
+  legt die alte als `<datei>.v<n>.bak` daneben (nur einmal). So bleibt die
+  alte Fassung, ohne dass jedes Öffnen eine Frage stellt.
+- **SHW.8**: `export_settings` schreibt die Einstellungen dieses Rechners
+  (Kurzbefehle für alle Shows, Layout-Vorlagen, Ausgabeziele, Abonnenten)
+  ohne Geheimnisse in eine Datei (`lmix-settings`, Version 1);
+  `import_settings` nimmt sie statt der aktuellen, ganz oder gar nicht,
+  gleichnamige Ziele behalten ihr Geheimnis; `reset_settings` sind die
+  Werkseinstellungen (in der Console mit Rückfrage). Im Menü „Paket“.
+**Geprüft**: Dienst-Tests (Version-1-Datei öffnen, speichern, Sicherung
+gleich der alten Datei, neue mit Version 2; Einstellungen exportieren ohne
+Geheimnis, zurücksetzen, importieren, Geheimnis bleibt, kaputte Datei ändert
+nichts); Console auf Xvfb (Menü, Rückfrage).
+
+## 2026-10-17 — Zonen ohne Engine (S1 Stufe 2, Teil SND.10)
+
+**Kontext**: S-E.4 ist entschieden (Zone = logischer Ausgang mit
+Zuordnung je Rechner), S-E.3 (wie Klang-Cues spielen) noch nicht. Die
+Zonen selbst hängen nicht an S-E.3.
+
+**Entscheidungen**:
+- **In der Show**: Zonen mit Namen und 1–8 Kanälen (bis 16 Zonen).
+- **In den Rechner-Einstellungen** (`targets.json`, mit Export, Import
+  und `machine.json` im Paket): je Zone 1–4 Ausgänge mit Gerät (leer =
+  Standardausgang), Gerätekanal je Zonenkanal und Pegel (−60 bis +12 dB).
+  Eine Zuordnung darf für Zonen bestehen, die die aktuelle Show nicht hat
+  (der Rechner bleibt für die nächste Show eingerichtet).
+- **Gerät als Text**: Es gibt noch keine Erkennung von Ausgabegeräten
+  (nur Eingänge); das Format wird mit dem Abspielen (Stufe 2) an die
+  Engine angepasst, falls nötig (vor dem ersten Release erlaubt).
+- **Ausgänge mit falscher Kanalzahl zählen nicht** (sie würden falsch
+  spielen); eine Zone ohne passenden Ausgang steht in der Warnliste.
+
+**Geprüft**: Tests der Prüfregeln und der Zusammenführung, Dienst-Test
+(Zuordnung kommt mit Export/Import der Einstellungen zurück); Console auf
+Xvfb (Dialog „Zonen…“, Warnung „Zone hinten spielt auf diesem Rechner
+nirgends“).
+
+## 2026-10-17 — Cue-Zeitgenauigkeit über 4 h nur ohne Last (RUN.8)
+
+**Messung** (`scripts/test-cue-timing.sh`, Null-Engine, Kette aus 50
+Wartezeiten zu 20 ms, Grenze 10 ms):
+
+| Lauf | Rechner | Schritte | spätestens | über 10 ms |
+|---|---|---|---|---|
+| 4 h (16.10. 22:47–02:47) | nebenbei Rust-/Qt-Builds und Tests | 1 468 803 | 145,6 ms | 694 (0,05 %) |
+| 1 h (17.10. 02:48–03:48) | sonst frei (Last ~1) | 367 201 | 5,2 ms | 0 |
+| 10 min | alle 24 Kerne mit `yes` belegt | 61 203 | 65,3 ms | 214 |
+
+Die Zeiten driften nicht. Verspätet sind nur Schritte, bei denen der
+Rechner ausgelastet ist: Der Zeitgeber läuft als normaler Prozess
+(nice 0) in der tokio-Laufzeit und wartet auf einen freien Kern. Das
+Autosave beim Weiterrücken von Standby ist nicht die Ursache: Im Test
+rückt Standby nicht, die Datei wurde nur beim Start geschrieben.
+
+**Folgerung**: RUN.8 hält auf einem freien Show-Rechner; die 4-h-Messung
+ohne Last steht noch aus. Unter Last hält es nicht.
+
+**Vorschlag (offen, nicht gebaut)**: Den Zeitgeber der Cue-Listen auf
+einen eigenen Thread mit Echtzeit-Priorität legen und diese wie PipeWire
+über rtkit (D-Bus) anfordern, ohne Root. Geht das nicht, warnt der
+Selbsttest: In SNF.4 mitmessen, wie spät die Schritte sind, und die
+Last des Rechners anzeigen.
+
+## 2026-10-17 — GO erst nach Loslassen (RUN.6)
+
+**Kontext**: RUN.6 verlangt die Option „erst nach Loslassen wieder
+scharf“: Ein festgehaltener oder prellender Taster gibt kein zweites GO,
+auch nicht nach der GO-Sperre.
+
+**Optionen**: (a) ein Merker für alle Wege: Jedes GO wartet, bis
+irgendein Taster losgelassen wird; (b) je Taster: Nur der Taster, der das
+GO gab, wartet auf sein Loslassen.
+
+**Entscheidung**: (b). Mit (a) sperrt ein verlorenes Loslassen (UDP) jedes
+GO der Show; mit (b) nur diesen einen Weg, die Leertaste und Companion
+bleiben bedienbar.
+
+- `set_go_rearm` mit `time` (Standard, nur GO-Sperre) oder `release`;
+  gespeichert in der Show (`go_rearm`, fehlt bei `time`).
+- Loslassen melden: MIDI (Note aus, Controller unter 64; je Kanal, Art,
+  Nummer), OSC `/lmix/cue/release` (je Absender: Companion schickt alle
+  Tasten über einen Socket, jede GO-Taste dort zählt als dieselbe). Die
+  Leertaste der Show-Ansicht nimmt ihre Wiederholungen ohnehin nicht an.
+- HTTP, TCP und Kurzbefehle ohne MIDI melden kein Loslassen: für sie gilt
+  nur die GO-Sperre.
+- Wechsel des Modus vergisst alle gehaltenen Taster.
+
+**Geprüft**: Tests im Ablauf (gehalten, anderer Weg, Loslassen, Modus
+`time`), OSC-Adresse, Speichern und Laden der Show.
+
+## 2026-10-17 — Erreichbarkeit der Ziele in der Warnliste (SUI.5)
+
+**Kontext**: Die Warnliste nannte Ziele, die der Rechner nicht hat, aber
+nicht solche, die nicht antworten. SUI.5 verlangt beides vor der Show.
+
+**Entscheidung**:
+- `check_targets` (Console „Ziele prüfen“) fragt alle Ziele, an die Cues
+  senden, gleichzeitig ab (wie `test_target`: `GET` der ersten Adresse).
+  Wer nicht antwortet, steht mit Grund als `target_unreached` an jedem
+  Cue, der dorthin sendet.
+- Jedes Senden während der Show und jeder `test_target` schreibt das
+  Ergebnis fort: Ein Ziel, das ausfällt, erscheint ohne neue Prüfung in
+  der Liste, eines, das wieder antwortet, verschwindet.
+- Kein Prüfen im Hintergrund: Abfragen im Takt fluten Home Assistant und
+  zeigen nur, was das nächste Senden ohnehin zeigt.
+- Neue Einstellungen oder Entfernen eines Ziels vergessen sein Ergebnis.
+- Zonen-Geräte: strom nennt seine Ton-Ausgänge noch nicht; mit Stufe 2.
+
+**Geprüft**: Regel-Test (Gruppe, doppelte Nennung), Dienst-Test mit
+Ziel ohne und mit Gegenstelle.
+
+## 2026-10-17 — Vertraute Adressen ohne Schlüssel (CTL.5)
+
+**Kontext**: CTL.5 verlangt eine Stufe „ohne Schlüssel“ getrennt für den
+Rechner und eine LAN-Adressliste, Standard nur der Rechner. Bisher: mit
+Schlüssel oder Passwort braucht jedes Gerät im LAN einen Schlüssel; OSC
+hat keinen und nahm dann nur den Rechner (und `--open-panic`). Ein
+Stream Deck über Companion per OSC ging so nur ohne jeden Schlüssel.
+
+**Entscheidung**: `--trust ADRESSE[/PRÄFIX][=RECHT]` (mehrfach oder mit
+Komma, `LMIX_TRUST`), Recht `view`, `control` (Standard) oder `edit`.
+- Gilt nur, wenn Schlüssel oder Passwort gesetzt sind: Sonst darf das LAN
+  ohnehin alles. Der Standard „nur der Rechner“ aus CTL.5 heißt in lmix:
+  Schlüssel setzen; ohne Schlüssel bleibt das Verhalten von API.7, damit
+  bestehende Aufbauten (Webseiten, Companion ohne Schlüssel) weiterlaufen.
+- HTTP: ohne `Authorization` hat die Adresse ihr Recht; ein falscher
+  Schlüssel bleibt falsch (Wartezeit). Textprotokoll: kein `AUTH` nötig,
+  das Recht gilt sofort. OSC: jede Nachricht bis zu diesem Recht
+  (`cue/go` ist `control`).
+- Mehrere passende Einträge: das höchste Recht. IPv4 in IPv6 (`::ffff:`)
+  zählt als IPv4.
+- Nur Adressen, keine Namen: Ein Name, der auf eine andere Adresse zeigt,
+  wäre ein Schlüssel ohne Schloss.
+
+**Geprüft**: Lesen der Einträge (Präfix, Recht, Fehler), Netze v4/v6,
+HTTP mit und ohne Liste, Textprotokoll ohne `AUTH`.

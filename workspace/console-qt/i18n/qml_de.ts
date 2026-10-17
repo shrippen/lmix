@@ -1554,7 +1554,7 @@
   <context>
     <name>Main</name>
     <message>
-      <location filename="../qml/Main.qml" line="+137" />
+      <location filename="../qml/Main.qml" line="+139" />
       <source>Layout %1 %2</source>
       <translation>Layout %1 %2</translation>
     </message>
@@ -1573,12 +1573,13 @@
     <message>
       <location line="-27" />
       <location line="+7" />
-      <location line="+36" />
+      <location line="+37" />
+      <location line="+44" />
       <source>All files (*)</source>
       <translation>Alle Dateien (*)</translation>
     </message>
     <message>
-      <location line="-37" />
+      <location line="-82" />
       <source>Inputs from a show</source>
       <translation>Inputs aus einer Show</translation>
     </message>
@@ -1588,7 +1589,38 @@
       <translation>Show speichern</translation>
     </message>
     <message>
-      <location line="+10" />
+      <location line="+11" />
+      <source>Export settings</source>
+      <translation>Einstellungen exportieren</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <location line="+6" />
+      <source>lmix settings (*.json)</source>
+      <translation>lmix-Einstellungen (*.json)</translation>
+    </message>
+    <message>
+      <location line="-1" />
+      <source>Import settings</source>
+      <translation>Einstellungen importieren</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Factory settings</source>
+      <translation>Werkseinstellungen</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>Remove the shortcuts for all shows, the layout templates, the output targets with their secrets and the OSC subscribers of this machine? The show stays.</source>
+      <translation>Die Kurzbefehle für alle Shows, die Layout-Vorlagen, die Ausgabeziele mit ihren Geheimnissen und die OSC-Abonnenten dieses Rechners entfernen? Die Show bleibt.</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Remove all</source>
+      <translation>Alles entfernen</translation>
+    </message>
+    <message>
+      <location line="+12" />
       <source>Export show package</source>
       <translation>Show-Paket exportieren</translation>
     </message>
@@ -1679,6 +1711,21 @@
       <translation>Importieren…</translation>
     </message>
     <message>
+      <location line="+5" />
+      <source>Export settings…</source>
+      <translation>Einstellungen exportieren…</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Import settings…</source>
+      <translation>Einstellungen importieren…</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Factory settings…</source>
+      <translation>Werkseinstellungen…</translation>
+    </message>
+    <message>
       <location line="+7" />
       <source>Mixer</source>
       <translation>Mischer</translation>
@@ -1739,12 +1786,12 @@
       <translation>Einige Sekunden lang Aufnahme bis Programm messen</translation>
     </message>
     <message>
-      <location line="+17" />
+      <location line="+19" />
       <source>Preview</source>
       <translation>Vorschau</translation>
     </message>
     <message>
-      <location line="+23" />
+      <location line="+35" />
       <source>Program</source>
       <translation>Programm</translation>
     </message>
@@ -1852,6 +1899,11 @@
       <location line="+5" />
       <source>+ Input</source>
       <translation>+ Input</translation>
+    </message>
+    <message>
+      <location line="+133" />
+      <source>This show file is in the older format %1 and was converted on opening. Saving it keeps the old file beside it (.v%1.bak).</source>
+      <translation>Diese Show-Datei hat das ältere Format %1 und wurde beim Öffnen umgewandelt. Beim Speichern bleibt die alte Datei daneben erhalten (.v%1.bak).</translation>
     </message>
   </context>
   <context>
@@ -2331,7 +2383,37 @@
   <context>
     <name>ShowView</name>
     <message>
-      <location filename="../qml/ShowView.qml" line="+73" />
+      <location filename="../qml/ShowView.qml" line="+45" />
+      <source>starts cue %1, which is not there</source>
+      <translation>startet Cue %1, den es nicht gibt</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>starts a cue list that is not there</source>
+      <translation>startet eine Cue-Liste, die es nicht gibt</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>sends to target %1, which this machine does not have</source>
+      <translation>sendet an Ziel %1, das dieser Rechner nicht hat</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>sends to target %1, which did not answer: %2</source>
+      <translation>sendet an Ziel %1, das nicht antwortete: %2</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>uses input %1, which is not there</source>
+      <translation>nutzt Input %1, den es nicht gibt</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>uses input %1, whose media file is missing</source>
+      <translation>nutzt Input %1, dessen Mediendatei fehlt</translation>
+    </message>
+    <message>
+      <location line="+62" />
       <source>Wait %1</source>
       <translation>Warten %1</translation>
     </message>
@@ -2409,6 +2491,71 @@
     </message>
     <message>
       <location line="+7" />
+      <source>Script: %1</source>
+      <translation>Drehbuch: %1</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Zones…</source>
+      <translation>Zonen…</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>The show's sound zones and where they play on this machine</source>
+      <translation>Die Klang-Zonen der Show und wo sie auf diesem Rechner spielen</translation>
+    </message>
+    <message>
+      <location line="+13" />
+      <source>Targets…</source>
+      <translation>Ziele…</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Output targets (HTTP, Home Assistant, OSC) and OSC subscribers of this machine</source>
+      <translation>Ausgabeziele (HTTP, Home Assistant, OSC) und OSC-Abonnenten dieses Rechners</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Check targets</source>
+      <translation>Ziele prüfen</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Ask every target the cues send to; those that do not answer show up as warnings</source>
+      <translation>Alle Ziele fragen, an die Cues senden; wer nicht antwortet, steht in den Warnungen</translation>
+    </message>
+    <message>
+      <location line="+14" />
+      <source>Script…</source>
+      <translation>Drehbuch…</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>A folder of Markdown files with lmix-cue blocks; its lists follow every saved change</source>
+      <translation>Ein Ordner mit Markdown-Dateien und lmix-cue-Blöcken; seine Listen folgen jeder gespeicherten Änderung</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>No script</source>
+      <translation>Kein Drehbuch</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Script folder</source>
+      <translation>Drehbuch-Ordner</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>Dark</source>
+      <translation>Dunkel</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Dim the window for a dark room</source>
+      <translation>Das Fenster für einen dunklen Raum abdunkeln</translation>
+    </message>
+    <message>
+      <location line="+5" />
       <source>Advanced</source>
       <translation>Erweitert</translation>
     </message>
@@ -2418,9 +2565,29 @@
       <translation>Wartezeiten und Folgen jedes Cues zeigen</translation>
     </message>
     <message>
+      <location line="+12" />
+      <source>Warnings: %1</source>
+      <translation>Warnungen: %1</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Zone %1 plays nowhere on this machine (Zones…)</source>
+      <translation>Zone %1 spielt auf diesem Rechner nirgends (Zonen…)</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>Cue %1: %2</source>
+      <translation>Cue %1: %2</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>… and %1 more</source>
+      <translation>… und %1 weitere</translation>
+    </message>
+    <message>
       <location line="+9" />
-      <source>No cue lists yet. Add one under Cues… or load a script with lmix-script.</source>
-      <translation>Noch keine Cue-Listen. Unter „Cues…“ eine anlegen oder ein Drehbuch mit lmix-script laden.</translation>
+      <source>No cue lists yet. Add one under Cues… or choose a script folder with Script….</source>
+      <translation>Noch keine Cue-Listen. Unter „Cues…“ eine anlegen oder mit „Drehbuch…“ einen Drehbuch-Ordner wählen.</translation>
     </message>
     <message>
       <location line="+22" />
@@ -2503,9 +2670,14 @@
       <translation>Alle Cues über die Panikzeit anhalten; noch einmal: sofort (Escape)</translation>
     </message>
     <message>
-      <location line="+4" />
+      <location line="+6" />
       <source>Panic time %1 s · GO guard %2 ms</source>
       <translation>Panikzeit %1 s · GO-Sperre %2 ms</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source> · GO again once let go</source>
+      <translation> · GO erst nach Loslassen wieder</translation>
     </message>
     <message>
       <location line="+20" />
@@ -2613,6 +2785,204 @@
       <location line="+1" />
       <source>When program cuts underneath, best where the clip covers the picture</source>
       <translation>Wann darunter geschnitten wird, am besten, wo der Clip das Bild verdeckt</translation>
+    </message>
+  </context>
+  <context>
+    <name>TargetsDialog</name>
+    <message>
+      <location filename="../qml/TargetsDialog.qml" line="+28" />
+      <source>OSC (UDP)</source>
+      <translation>OSC (UDP)</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>OSC (TCP)</source>
+      <translation>OSC (TCP)</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>HTTP</source>
+      <translation>HTTP</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Running cue</source>
+      <translation>Laufender Cue</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Panic</source>
+      <translation>Panik</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Standby</source>
+      <translation>Standby</translation>
+    </message>
+    <message>
+      <location line="+65" />
+      <source>Targets and subscribers</source>
+      <translation>Ziele und Abonnenten</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>Output targets of this machine</source>
+      <translation>Ausgabeziele dieses Rechners</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>No targets yet. Cues send to a target by its name, e.g. Home Assistant for light, or Companion for buttons.</source>
+      <translation>Noch keine Ziele. Cues senden an ein Ziel über seinen Namen, z. B. Home Assistant für Licht oder Companion für Tasten.</translation>
+    </message>
+    <message>
+      <location line="+30" />
+      <source>with secret</source>
+      <translation>mit Geheimnis</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Test</source>
+      <translation>Testen</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Send a request to the first address; a failure shows below the window</source>
+      <translation>Eine Anfrage an die erste Adresse senden; ein Fehler erscheint unten im Fenster</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <location line="+103" />
+      <source>Edit…</source>
+      <translation>Bearbeiten…</translation>
+    </message>
+    <message>
+      <location line="-99" />
+      <location line="+103" />
+      <source>Remove</source>
+      <translation>Entfernen</translation>
+    </message>
+    <message>
+      <location line="-96" />
+      <source>+ Target</source>
+      <translation>+ Ziel</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <location line="+106" />
+      <source>Name</source>
+      <translation>Name</translation>
+    </message>
+    <message>
+      <location line="-100" />
+      <source>e.g. Haus</source>
+      <translation>z. B. Haus</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Kind</source>
+      <translation>Art</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Addresses</source>
+      <translation>Adressen</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>http://ha.local:8123, a backup after a space</source>
+      <translation>http://ha.local:8123, eine Reserve nach einem Leerzeichen</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>host:port</source>
+      <translation>host:port</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Secret</source>
+      <translation>Geheimnis</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>unchanged</source>
+      <translation>unverändert</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>token, e.g. Home Assistant's long-lived token</source>
+      <translation>Token, z. B. das langlebige Zugangs-Token von Home Assistant</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Time limit ms</source>
+      <translation>Zeitlimit ms</translation>
+    </message>
+    <message>
+      <location line="+13" />
+      <location line="+124" />
+      <source>Save</source>
+      <translation>Speichern</translation>
+    </message>
+    <message>
+      <location line="-118" />
+      <location line="+124" />
+      <source>Cancel</source>
+      <translation>Abbrechen</translation>
+    </message>
+    <message>
+      <location line="-116" />
+      <source>OSC subscribers</source>
+      <translation>OSC-Abonnenten</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>No subscribers yet. A subscriber sends standby, the running cue's remaining time and panic to an OSC (UDP) target, e.g. Companion's custom variables. Placeholders: {list} {number} {name} {note} {remaining} {elapsed} {total} {mode}.</source>
+      <translation>Noch keine Abonnenten. Ein Abonnent schickt Standby, die Restzeit des laufenden Cues und Panik an ein OSC-Ziel (UDP), z. B. an Companions eigene Variablen. Platzhalter: {list} {number} {name} {note} {remaining} {elapsed} {total} {mode}.</translation>
+    </message>
+    <message>
+      <location line="+18" />
+      <source>to %1, %2 messages</source>
+      <translation>an %1, %2 Nachrichten</translation>
+    </message>
+    <message>
+      <location line="+16" />
+      <source>+ Subscriber</source>
+      <translation>+ Abonnent</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Add an OSC (UDP) target first</source>
+      <translation>Zuerst ein OSC-Ziel (UDP) anlegen</translation>
+    </message>
+    <message>
+      <location line="+14" />
+      <source>e.g. Stream Deck</source>
+      <translation>z. B. Stream Deck</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Target</source>
+      <translation>Ziel</translation>
+    </message>
+    <message>
+      <location line="+25" />
+      <source>/address</source>
+      <translation>/adresse</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>values, comma separated: {number} {name}</source>
+      <translation>Werte, mit Komma getrennt: {number} {name}</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Remove message</source>
+      <translation>Nachricht entfernen</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>+ Message</source>
+      <translation>+ Nachricht</translation>
     </message>
   </context>
   <context>
@@ -3589,6 +3959,104 @@
       <location line="+12" />
       <source>+ Trigger</source>
       <translation>+ Auslöser</translation>
+    </message>
+  </context>
+  <context>
+    <name>ZonesDialog</name>
+    <message>
+      <location filename="../qml/ZonesDialog.qml" line="+58" />
+      <source>plays nowhere on this machine</source>
+      <translation>spielt auf diesem Rechner nirgends</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>default output</source>
+      <translation>Standardausgang</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Zones</source>
+      <translation>Zonen</translation>
+    </message>
+    <message>
+      <location line="+15" />
+      <source>No zones yet. A zone is a named sound output such as "front" or "back"; sound cues play into zones. Where a zone plays is set per machine.</source>
+      <translation>Noch keine Zonen. Eine Zone ist ein benannter Klangausgang wie „vorn“ oder „hinten“; Klang-Cues spielen in Zonen. Wo eine Zone spielt, wird je Rechner eingestellt.</translation>
+    </message>
+    <message>
+      <location line="+18" />
+      <source>%1 ch.</source>
+      <translation>%1 Kan.</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>Edit…</source>
+      <translation>Bearbeiten…</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Remove</source>
+      <translation>Entfernen</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>+ Zone</source>
+      <translation>+ Zone</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>Name</source>
+      <translation>Name</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>e.g. front</source>
+      <translation>z. B. vorn</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Channels</source>
+      <translation>Kanäle</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>On this machine</source>
+      <translation>Auf diesem Rechner</translation>
+    </message>
+    <message>
+      <location line="+13" />
+      <source>device, empty: default output</source>
+      <translation>Gerät, leer: Standardausgang</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>channels: 1, 2</source>
+      <translation>Kanäle: 1, 2</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>%1 dB</source>
+      <translation>%1 dB</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Remove output</source>
+      <translation>Ausgang entfernen</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>+ Output</source>
+      <translation>+ Ausgang</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Save</source>
+      <translation>Speichern</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Cancel</source>
+      <translation>Abbrechen</translation>
     </message>
   </context>
 </TS>

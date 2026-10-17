@@ -4,6 +4,9 @@ Erledigtes abhaken (`[x]`, Datum) und nach einer Weile löschen; Details stehen 
 
 ## Für dich
 
+- [ ] **S-E.3 entscheiden** (Klang-Cues: Abspieler je Zone oder verdeckte Inputs), mit Messung: Entscheidungsseite https://claude.ai/artifact/DAzFNWyRUKGiu4x5WUvFPo, „An Claude übergeben“. Danach S1 Stufe 2 (Zonen, Klang-Cues).
+- [ ] **PRs vom 16./17.10. ansehen und mergen**, Reihenfolge in `docs/HANDOVER.md`: #45, #51, #39, dann der Stapel #38 → #52.
+- [ ] Cue-Zeitgenauigkeit: 4-h-Lauf `DURATION_S=14400 scripts/test-cue-timing.sh` lief in der Nacht; Ergebnis in DECISIONS (oder neu starten, falls nicht eingetragen).
 - [x] PRs vom 16.10. gemergt (#28–#36, 2026-10-16); lmix #15–#25 und strom #7–#14 geschlossen, Inhalt war schon in `main` bzw. `dev`.
 - [ ] PR-Agent antwortet nur „Failed to review PR“: der OpenRouter-Schlüssel hat sein Monatslimit erreicht (5,49 $ von 5 $, Reset 1.11.). Limit anheben oder anderen Schlüssel/Modell setzen (`PR_AGENT_LLM_KEY`, `PR_AGENT_MODEL`); deine lokale Änderung in `.gitea/pr-agent/` (Claude, adaptive thinking) ist noch nicht committet. Bis dahin genügt grüne CI (`agent.md`).
 - [ ] M7.0 (CEF gegen WPE): `cef` 152 ist installiert; `gstcefsrc` bauen lädt gstcefsrc und CEF 139 von außen und wurde heute nicht freigegeben. Freigeben, dann baue ich `cefsrc` nach `~/.local/lib/gstreamer-1.0`.
@@ -53,6 +56,7 @@ enabled: !(/\&[^\&]/.test(control.text))
 ## Offen (Claude)
 
 - [ ] `scripts/test-titles.sh` schlug am 12.10. einmal fehl (direkt nach `test-web.sh`, Ausgabe nicht erhalten), danach 19-mal grün; bei der nächsten Wiederholung die Ausgabe sichern und die Ursache beheben.
+- [ ] Cue-Zeitgeber unter Last bis 146 ms spät (RUN.8, DECISIONS 17.10.): Echtzeit-Priorität per rtkit für den Zeitgeber-Thread, dann 4 h unter Last messen; zusätzlich 4 h auf freiem Rechner.
 
 - [x] Demo-Modus mit Studio-Weber-Daten (2026-10-09, `demo/start.sh`).
 - [ ] Release-Build (wenn es einen gibt): `demo/` ausschließen und prüfen.
