@@ -101,12 +101,18 @@ pub struct Show {
     /// Shortest gap between two GOs (RUN.6).
     #[serde(default = "default_go_guard")]
     pub go_guard_ms: u32,
+    /// Whether GO also waits for the button to be let go (RUN.6).
+    #[serde(default, skip_serializing_if = "is_time")]
+    pub go_rearm: lmix_types::cue::GoRearm,
     /// Panic time (SAF.2).
     #[serde(default = "default_panic")]
     pub panic_ms: u32,
     /// The list that runs with every panic and hard stop (SAF.4).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub emergency_list: Option<InputId>,
+    /// Sound zones; their devices are this machine's (SND.10).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub zones: Vec<lmix_types::Zone>,
     /// Script folder whose lists lmix-script keeps loading (SSH.2). Its
     /// lists stay in the show too: without the tool the show still has
     /// its cues, and standby survives a restart (SAF.6).
@@ -242,8 +248,10 @@ impl Default for Show {
             shortcuts: Vec::new(),
             cue_lists: Vec::new(),
             go_guard_ms: default_go_guard(),
+            go_rearm: Default::default(),
             panic_ms: default_panic(),
             emergency_list: None,
+            zones: Vec::new(),
             script_folder: None,
             midi_tbar: None,
             graphics: Vec::new(),
@@ -258,6 +266,10 @@ fn all_default(channels: &[OverlayChannel; OVERLAY_CHANNELS as usize]) -> bool {
 }
 
 /// Buttons 1–4: fade, cut, dip to black, wipe.
+fn is_time(rearm: &lmix_types::cue::GoRearm) -> bool {
+    *rearm == lmix_types::cue::GoRearm::Time
+}
+
 fn default_go_guard() -> u32 {
     lmix_types::cue::GO_GUARD_DEFAULT_MS
 }
@@ -526,8 +538,10 @@ mod tests {
                 standby: None,
             }],
             go_guard_ms: 120,
+            go_rearm: lmix_types::cue::GoRearm::Release,
             panic_ms: 2000,
             emergency_list: None,
+            zones: Vec::new(),
             script_folder: None,
             shortcuts: vec![ShowShortcut {
                 id: InputId::new(),

@@ -153,6 +153,9 @@ pub struct ShowState {
     /// Shortest gap between two GOs (RUN.6).
     #[serde(default)]
     pub go_guard_ms: u32,
+    /// When GO takes another press (RUN.6).
+    #[serde(default)]
+    pub go_rearm: crate::cue::GoRearm,
     /// Panic time (SAF.2).
     #[serde(default)]
     pub panic_ms: u32,
@@ -172,6 +175,9 @@ pub struct ShowState {
     /// Fixed OSC subscribers of this machine (CTL.4).
     #[serde(default)]
     pub feeds: Vec<crate::feed::Feed>,
+    /// The show's zones with this machine's outputs (SND.10).
+    #[serde(default)]
+    pub zones: Vec<crate::zone::ZoneState>,
     /// Locked against closing, loading and stopping (AUT.11).
     #[serde(default)]
     pub locked: bool,

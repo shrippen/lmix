@@ -265,6 +265,9 @@ pub struct Settings {
     pub targets: Vec<TargetConfig>,
     #[serde(default)]
     pub feeds: Vec<Feed>,
+    /// Where the zones play on this machine (SND.10, SSH.3).
+    #[serde(default)]
+    pub zone_patches: Vec<lmix_types::ZonePatch>,
 }
 
 pub fn parse(bytes: &[u8]) -> Result<Settings, String> {
@@ -287,6 +290,7 @@ pub fn without_secrets(settings: &Settings) -> Settings {
             })
             .collect(),
         feeds: settings.feeds.clone(),
+        zone_patches: settings.zone_patches.clone(),
     }
 }
 
@@ -305,6 +309,9 @@ pub fn merge(into: &mut Settings, from: Settings) -> Result<(), ActionError> {
     }
     for feed in from.feeds {
         set_feed(&mut into.feeds, feed)?;
+    }
+    for patch in from.zone_patches {
+        crate::zones::set_patch(&mut into.zone_patches, patch)?;
     }
     Ok(())
 }
