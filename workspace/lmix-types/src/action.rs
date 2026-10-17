@@ -285,6 +285,10 @@ pub const ACTION_GROUPS: &[(&str, &[&str])] = &[
         ],
     ),
     (
+        "sound",
+        &["play_sound", "fade_sound", "stop_sound", "set_zone_level"],
+    ),
+    (
         "targets",
         &[
             "set_target",
@@ -741,6 +745,40 @@ pub enum Action {
     },
     RemoveZonePatch {
         zone: String,
+    },
+
+    // ---- Sound (show mode SND) ----
+    /// Play `sound` as `id` into the zones; a sound of the same id is
+    /// replaced. Sound cues run this with their cue id.
+    PlaySound {
+        id: String,
+        sound: crate::sound::SoundCue,
+    },
+    /// Fade sound `id` to `gain_db` over `duration_ms` (S-curve, SND.6,
+    /// SND.8).
+    FadeSound {
+        id: String,
+        gain_db: f32,
+        duration_ms: u32,
+        #[serde(default)]
+        then: crate::sound::AfterFade,
+    },
+    /// Stop sound `id`, or every sound, faded out over `fade_ms`.
+    StopSound {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        id: Option<String>,
+        #[serde(default)]
+        fade_ms: u32,
+    },
+    /// Level and mute of a zone, reached over `duration_ms` (SND.11).
+    SetZoneLevel {
+        zone: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        gain_db: Option<f32>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        mute: Option<bool>,
+        #[serde(default)]
+        duration_ms: u32,
     },
 
     // ---- Output targets (show mode EXT) ----
@@ -1289,6 +1327,8 @@ pub enum ActionError {
     BadTarget { reason: String },
     #[error("zone: {reason}")]
     BadZone { reason: String },
+    #[error("sound: {reason}")]
+    BadSound { reason: String },
     #[error("cue list: {reason}")]
     BadCueList { reason: String },
     #[error("triggers: {reason}")]

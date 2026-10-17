@@ -2603,12 +2603,12 @@
     </message>
     <message>
       <location line="+1" />
-      <location line="+10" />
+      <location line="+21" />
       <source>Note</source>
       <translation>Notiz</translation>
     </message>
     <message>
-      <location line="-9" />
+      <location line="-20" />
       <source>Group</source>
       <translation>Gruppe</translation>
     </message>
@@ -2619,17 +2619,39 @@
     </message>
     <message>
       <location line="+0" />
-      <location line="+10" />
+      <location line="+21" />
       <source>Start</source>
       <translation>Start</translation>
     </message>
     <message>
-      <location line="-9" />
+      <location line="-20" />
+      <location line="+21" />
+      <source>Sound</source>
+      <translation>Ton</translation>
+    </message>
+    <message>
+      <location line="-19" />
       <source>Actions</source>
       <translation>Aktionen</translation>
     </message>
     <message>
-      <location line="+6" />
+      <location line="+7" />
+      <source>Fade %1</source>
+      <translation>Blende %1</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Fade zone %1</source>
+      <translation>Blende Zone %1</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <location line="+10" />
+      <source>Fade</source>
+      <translation>Blende</translation>
+    </message>
+    <message>
+      <location line="-5" />
       <source>Wait</source>
       <translation>Warten</translation>
     </message>
@@ -2644,7 +2666,7 @@
       <translation>Gruppe, Zeitleiste</translation>
     </message>
     <message>
-      <location line="+2" />
+      <location line="+4" />
       <source>Actions: %1</source>
       <translation>Aktionen: %1</translation>
     </message>

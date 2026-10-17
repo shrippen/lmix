@@ -21,6 +21,7 @@ use uuid::Uuid;
 
 use crate::action::Action;
 use crate::input::{InputColor, InputId, InputRef};
+use crate::sound::{FadeCue, FadeTarget, SoundCue};
 
 /// Cues per list and per group level (CUE.20).
 pub const CUES: usize = 1000;
@@ -85,6 +86,11 @@ pub enum CueKind {
     Start,
     /// Starts its `children` as `mode` says (CUE.4).
     Group,
+    /// Plays `sound` into zones (SND.1); ends with the file, or after
+    /// `duration_ms` when set.
+    Sound,
+    /// Fades a sound cue or a zone (`fade`) over `duration_ms` (SND.6).
+    Fade,
 }
 
 /// What starts the next cue (CUE.3).
@@ -189,6 +195,12 @@ pub struct Cue {
     pub children: Vec<Cue>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stop_others: Option<StopOthers>,
+    /// `sound`: what it plays.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sound: Option<SoundCue>,
+    /// `fade`: what it fades.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fade: Option<FadeCue>,
 }
 
 impl Cue {
@@ -219,6 +231,8 @@ impl Cue {
             mode: None,
             children: Vec::new(),
             stop_others: None,
+            sound: None,
+            fade: None,
         }
     }
 
@@ -248,6 +262,15 @@ impl Cue {
                 }
             }
             CueKind::Group => "Group".into(),
+            CueKind::Sound => match &self.sound {
+                Some(sound) => file_name(&sound.file).to_string(),
+                None => "Sound".into(),
+            },
+            CueKind::Fade => match self.fade.as_ref().map(|f| &f.target) {
+                Some(FadeTarget::Cue(cue)) => format!("Fade {cue}"),
+                Some(FadeTarget::Zone(zone)) => format!("Fade zone {zone}"),
+                None => "Fade".into(),
+            },
         }
     }
 }
@@ -259,6 +282,11 @@ fn action_name(action: &Action) -> Option<String> {
         .get("action")?
         .as_str()
         .map(str::to_string)
+}
+
+/// The last part of a path, e.g. `rain.flac`.
+fn file_name(path: &str) -> &str {
+    path.rsplit(['/', '\\']).next().unwrap_or(path)
 }
 
 fn input_ref_text(reference: &InputRef) -> String {
@@ -456,6 +484,22 @@ mod tests {
             Cue::actions("Rain", vec![Action::Cut]).display_name(),
             "Rain"
         );
+    }
+
+    #[test]
+    fn sound_and_fade_cues_name_what_they_touch() {
+        let rain: Cue =
+            serde_json::from_str(r#"{"kind":"sound","sound":{"file":"/media/fx/rain.flac"}}"#)
+                .unwrap();
+        let fade: Cue = serde_json::from_str(
+            r#"{"kind":"fade","duration_ms":5000,
+                "fade":{"target":{"cue":"12"},"gain_db":-60,"then":"stop"}}"#,
+        )
+        .unwrap();
+
+        assert_eq!(rain.display_name(), "rain.flac");
+        assert_eq!(fade.display_name(), "Fade 12");
+        assert_eq!(fade.fade.unwrap().then, crate::sound::AfterFade::Stop);
     }
 
     #[test]

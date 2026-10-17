@@ -24,6 +24,7 @@ use lmix_types::cue::{
     Cue, CueEvent, CueId, CueKind, Follow, GoRearm, GroupMode, RunPhase, RunningCue, StandbyMove,
     StopMode, StopScope,
 };
+use lmix_types::sound::FadeTarget;
 use lmix_types::{Action, ActionError, InputId, InputRef};
 
 use crate::show::ShowCueList;
@@ -45,6 +46,8 @@ pub enum Out {
     },
     /// A panic (`Fade`) or hard stop (`Hard`) happened.
     Panic { mode: StopMode },
+    /// Stop every sound, faded out over `fade_ms`.
+    StopSounds { fade_ms: u32 },
 }
 
 /// One started cue.
@@ -67,6 +70,9 @@ struct Run {
     followed: bool,
     /// Pre wait plus duration, when known.
     total: Option<Duration>,
+    kind: CueKind,
+    /// A sound cue's fade when it is stopped (SND.2).
+    fade_out_ms: u32,
 }
 
 impl Run {
@@ -350,7 +356,7 @@ impl Runner {
             .map(|r| r.id)
             .collect();
         let mut out = Vec::new();
-        self.stop_runs(&victims, now, &mut out);
+        self.stop_runs(&victims, now, SoundEnd::Own, &mut out);
         out.extend(self.tick(lists, now));
         Ok(out)
     }
@@ -396,7 +402,8 @@ impl Runner {
     pub fn reset(&mut self, now: Instant) -> Vec<Out> {
         let all: Vec<u64> = self.runs.iter().map(|r| r.id).collect();
         let mut out = Vec::new();
-        self.stop_runs(&all, now, &mut out);
+        self.stop_runs(&all, now, SoundEnd::Caller, &mut out);
+        out.push(Out::StopSounds { fade_ms: 0 });
         self.runs.clear();
         self.standby.clear();
         self.last_go = None;
@@ -421,7 +428,7 @@ impl Runner {
             return self.hard_stop(lists, emergency, now);
         }
         self.panic_until = Some(now + ms(panic_ms));
-        self.stop_everything(lists, emergency, now, StopMode::Fade)
+        self.stop_everything(lists, emergency, now, StopMode::Fade, panic_ms)
     }
 
     /// Hard stop (SAF.3): everything at once; the emergency list runs.
@@ -432,7 +439,7 @@ impl Runner {
         now: Instant,
     ) -> Vec<Out> {
         self.panic_until = None;
-        self.stop_everything(lists, emergency, now, StopMode::Hard)
+        self.stop_everything(lists, emergency, now, StopMode::Hard, 0)
     }
 
     fn stop_everything(
@@ -441,10 +448,14 @@ impl Runner {
         emergency: Option<usize>,
         now: Instant,
         mode: StopMode,
+        fade_ms: u32,
     ) -> Vec<Out> {
         let all: Vec<u64> = self.runs.iter().map(|r| r.id).collect();
         let mut out = vec![Out::Panic { mode }];
-        self.stop_runs(&all, now, &mut out);
+        self.stop_runs(&all, now, SoundEnd::Caller, &mut out);
+        // Every sound, also those of actions and of the panic before
+        // (a hard stop cuts what still fades out).
+        out.push(Out::StopSounds { fade_ms });
         if let Some(list) = emergency.and_then(|l| lists.get(l)) {
             for cue in &list.cues {
                 self.spawn(list.id, cue, None, now, Follow::None, &mut out);
@@ -504,7 +515,7 @@ impl Runner {
         let groups: Vec<u64> = self
             .runs
             .iter()
-            .filter(|r| r.fired && !r.ended && r.end_at.is_none())
+            .filter(|r| r.kind == CueKind::Group && r.fired && !r.ended && r.end_at.is_none())
             .map(|r| r.id)
             .collect();
         for group in groups {
@@ -584,8 +595,11 @@ impl Runner {
         let pre = ms(cue.pre_wait_ms);
         let total = match cue.kind {
             CueKind::Group => None,
-            CueKind::Wait | CueKind::Actions => Some(pre + ms(cue.duration_ms.unwrap_or(0))),
-            _ => Some(pre),
+            CueKind::Sound => cue.duration_ms.map(|d| pre + ms(d)),
+            CueKind::Wait | CueKind::Actions | CueKind::Fade => {
+                Some(pre + ms(cue.duration_ms.unwrap_or(0)))
+            }
+            CueKind::Note | CueKind::Start => Some(pre),
         };
         self.runs.push(Run {
             id: self.next_id,
@@ -601,6 +615,8 @@ impl Runner {
             follow_at: None,
             followed: false,
             total,
+            kind: cue.kind,
+            fade_out_ms: cue.sound.as_ref().map_or(0, |s| s.fade_out_ms),
         });
         out.push(Out::Event {
             list,
@@ -626,7 +642,7 @@ impl Runner {
         };
         if let Some(stop) = cue.stop_others {
             let victims = self.others(&run, stop.scope);
-            self.stop_runs(&victims, t, out);
+            self.stop_runs(&victims, t, SoundEnd::Fade(stop.fade_ms), out);
         }
 
         let mut end_at = Some(t);
@@ -642,6 +658,23 @@ impl Runner {
             CueKind::Note => {}
             CueKind::Wait => end_at = Some(t + ms(cue.duration_ms.unwrap_or(0))),
             CueKind::Start => self.fire_start(lists, list, &cue, t, out),
+            CueKind::Sound => {
+                let sound = cue.sound.clone().unwrap_or_default();
+                out.push(Out::Actions {
+                    list: run.list,
+                    cue: cue.id,
+                    actions: vec![Action::PlaySound {
+                        id: sound_id(cue.id),
+                        sound,
+                    }],
+                });
+                // Without a duration it ends with its file (`sound_ended`).
+                end_at = cue.duration_ms.map(|d| t + ms(d));
+            }
+            CueKind::Fade => {
+                self.fire_fade(lists, list, &cue, out);
+                end_at = Some(t + ms(cue.duration_ms.unwrap_or(0)));
+            }
             CueKind::Group if cue.children.is_empty() => {}
             CueKind::Group => {
                 end_at = None;
@@ -665,6 +698,58 @@ impl Runner {
         if run.follow == Follow::AfterWait {
             run.follow_at = Some(t + ms(cue.post_wait_ms));
         }
+    }
+
+    /// A fade cue's action (SND.6): its cue's sound or its zone to the
+    /// level. A cue that is gone fails the fade; times go on (CUE.19).
+    fn fire_fade(&mut self, lists: &[ShowCueList], own: usize, cue: &Cue, out: &mut Vec<Out>) {
+        let Some(fade) = cue.fade.clone() else {
+            out.push(failed(lists[own].id, cue.id, "fade: no target"));
+            return;
+        };
+        let duration_ms = cue.duration_ms.unwrap_or(0);
+        let action = match &fade.target {
+            FadeTarget::Cue(text) => match Self::locate(lists, Some(own), text) {
+                Some((_, id)) => Action::FadeSound {
+                    id: sound_id(id),
+                    gain_db: fade.gain_db,
+                    duration_ms,
+                    then: fade.then,
+                },
+                None => {
+                    out.push(failed(
+                        lists[own].id,
+                        cue.id,
+                        &format!("fade: no cue {text}"),
+                    ));
+                    return;
+                }
+            },
+            FadeTarget::Zone(zone) => Action::SetZoneLevel {
+                zone: zone.clone(),
+                gain_db: Some(fade.gain_db),
+                mute: None,
+                duration_ms,
+            },
+        };
+        out.push(Out::Actions {
+            list: lists[own].id,
+            cue: cue.id,
+            actions: vec![action],
+        });
+    }
+
+    /// The engine says the sound of `cue` is over (its file ended, or a
+    /// fade stopped it): its runs end now.
+    pub fn sound_ended(&mut self, lists: &[ShowCueList], cue: CueId, now: Instant) -> Vec<Out> {
+        for run in self
+            .runs
+            .iter_mut()
+            .filter(|r| r.cue == cue && r.kind == CueKind::Sound && r.fired && !r.ended)
+        {
+            run.end_at = Some(run.end_at.map_or(now, |at| at.min(now)));
+        }
+        self.tick(lists, now)
     }
 
     /// A start cue's target (CUE.10): a cue, or a GO in a list. A target
@@ -787,8 +872,9 @@ impl Runner {
             .collect()
     }
 
-    /// Stop runs `ids` and everything they started.
-    fn stop_runs(&mut self, ids: &[u64], t: Instant, out: &mut Vec<Out>) {
+    /// Stop runs `ids` and everything they started; their sounds as
+    /// `sounds` says.
+    fn stop_runs(&mut self, ids: &[u64], t: Instant, sounds: SoundEnd, out: &mut Vec<Out>) {
         let mut stopped: Vec<u64> = ids.to_vec();
         let mut i = 0;
         while i < stopped.len() {
@@ -809,6 +895,21 @@ impl Runner {
             .map(|r| r.parent)
             .collect();
         for run in self.runs.iter().filter(|r| stopped.contains(&r.id)) {
+            let fade_ms = match sounds {
+                SoundEnd::Own => Some(run.fade_out_ms),
+                SoundEnd::Fade(ms) => Some(ms),
+                SoundEnd::Caller => None,
+            };
+            if let (CueKind::Sound, true, Some(fade_ms)) = (run.kind, run.fired, fade_ms) {
+                out.push(Out::Actions {
+                    list: run.list,
+                    cue: run.cue,
+                    actions: vec![Action::StopSound {
+                        id: Some(sound_id(run.cue)),
+                        fade_ms,
+                    }],
+                });
+            }
             out.push(Out::Event {
                 list: run.list,
                 cue: Some(run.cue),
@@ -853,6 +954,21 @@ impl Runner {
     }
 }
 
+/// How stopped runs stop their sounds.
+#[derive(Clone, Copy, Debug)]
+enum SoundEnd {
+    /// Each with its cue's fade out.
+    Own,
+    Fade(u32),
+    /// Not one by one: the caller stops every sound.
+    Caller,
+}
+
+/// The engine's id of a sound cue's sound.
+pub fn sound_id(cue: CueId) -> String {
+    cue.to_string()
+}
+
 fn failed(list: InputId, cue: CueId, reason: &str) -> Out {
     Out::Event {
         list,
@@ -878,6 +994,7 @@ pub fn find_list(lists: &[ShowCueList], list: &InputRef) -> Option<usize> {
 mod tests {
     use super::*;
     use lmix_types::cue::{CueTarget, StopOthers, GO_GUARD_DEFAULT_MS};
+    use lmix_types::StandbyMove;
 
     fn cut(name: &str) -> Cue {
         Cue::actions(name, vec![Action::Cut])
@@ -909,7 +1026,7 @@ mod tests {
                     let l = lists.iter().position(|e| e.id == *list)?;
                     Runner::cue(lists, l, *cue).map(|c| c.name.clone())
                 }
-                Out::Event { .. } | Out::Panic { .. } => None,
+                Out::Event { .. } | Out::Panic { .. } | Out::StopSounds { .. } => None,
             })
             .collect()
     }
@@ -918,7 +1035,7 @@ mod tests {
         out.iter()
             .filter_map(|o| match o {
                 Out::Event { what, .. } => Some(what.clone()),
-                Out::Actions { .. } | Out::Panic { .. } => None,
+                Out::Actions { .. } | Out::Panic { .. } | Out::StopSounds { .. } => None,
             })
             .collect()
     }
@@ -949,6 +1066,172 @@ mod tests {
             runner.go(&lists, 0, after(t, 2), Guard::time(0)).is_err(),
             "no cues left"
         );
+    }
+
+    fn sound(name: &str, fade_out_ms: u32) -> Cue {
+        Cue {
+            name: name.into(),
+            sound: Some(lmix_types::SoundCue {
+                file: format!("/fx/{name}.wav"),
+                fade_out_ms,
+                ..Default::default()
+            }),
+            ..Cue::empty(CueKind::Sound)
+        }
+    }
+
+    /// Actions the outs ask to run.
+    fn actions(out: &[Out]) -> Vec<Action> {
+        out.iter()
+            .flat_map(|o| match o {
+                Out::Actions { actions, .. } => actions.clone(),
+                _ => Vec::new(),
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_sound_cue_runs_until_its_file_ends() {
+        let mut rain = sound("Rain", 0);
+        rain.follow = Follow::AfterEnd;
+        let lists = vec![list(vec![rain, cut("Lights")])];
+        let rain_id = lists[0].cues[0].id;
+        let mut runner = Runner::default();
+        let t = Instant::now();
+
+        let out = runner.go(&lists, 0, t, Guard::time(0)).unwrap();
+        assert!(matches!(
+            &actions(&out)[..],
+            [Action::PlaySound { id, sound }] if *id == rain_id.to_string()
+                && sound.file == "/fx/Rain.wav"
+        ));
+        assert_eq!(runner.running(&lists, after(t, 5000)).len(), 1);
+        assert_eq!(runner.running(&lists, after(t, 5000))[0].total_ms, None);
+
+        let out = runner.sound_ended(&lists, rain_id, after(t, 8000));
+        assert_eq!(
+            fired(&lists, &out),
+            ["Lights"],
+            "after_end follows the file"
+        );
+        assert!(runner.running(&lists, after(t, 8000)).is_empty());
+    }
+
+    #[test]
+    fn a_stopped_sound_fades_with_its_cue_or_the_stopper() {
+        let mut rain = sound("Rain", 2000);
+        rain.number = "1".into();
+        let mut wind = sound("Wind", 0);
+        wind.number = "2".into();
+        wind.stop_others = Some(StopOthers {
+            scope: StopScope::List,
+            fade_ms: 500,
+        });
+        let lists = vec![list(vec![rain, wind])];
+        let rain = lists[0].cues[0].id.to_string();
+        let mut runner = Runner::default();
+        let t = Instant::now();
+        runner.go(&lists, 0, t, Guard::time(0)).unwrap();
+
+        let out = runner
+            .stop(&lists, Some(0), Some("1"), after(t, 10))
+            .unwrap();
+        assert_eq!(
+            actions(&out),
+            [Action::StopSound {
+                id: Some(rain.clone()),
+                fade_ms: 2000
+            }],
+            "its own fade out"
+        );
+
+        runner.start(&lists, Some(0), "1", after(t, 20)).unwrap();
+        let out = runner.start(&lists, Some(0), "2", after(t, 30)).unwrap();
+        assert!(
+            actions(&out).contains(&Action::StopSound {
+                id: Some(rain),
+                fade_ms: 500
+            }),
+            "the fade of the cue that stops it"
+        );
+    }
+
+    #[test]
+    fn panic_fades_every_sound_and_a_second_cuts_them() {
+        let lists = vec![list(vec![sound("Rain", 2000)])];
+        let mut runner = Runner::default();
+        let t = Instant::now();
+        runner.go(&lists, 0, t, Guard::time(0)).unwrap();
+
+        let out = runner.panic(&lists, None, after(t, 100), 1500);
+        assert!(out.contains(&Out::StopSounds { fade_ms: 1500 }));
+        assert!(
+            actions(&out).is_empty(),
+            "no stop one by one: the panic stops them all"
+        );
+        let out = runner.panic(&lists, None, after(t, 200), 1500);
+        assert!(out.contains(&Out::StopSounds { fade_ms: 0 }));
+    }
+
+    #[test]
+    fn a_fade_cue_fades_its_cue_or_zone() {
+        let fade = |name: &str, target: FadeTarget| Cue {
+            name: name.into(),
+            duration_ms: Some(3000),
+            fade: Some(lmix_types::FadeCue {
+                target,
+                gain_db: -20.0,
+                then: lmix_types::AfterFade::Stop,
+            }),
+            ..Cue::empty(CueKind::Fade)
+        };
+        let mut rain = sound("Rain", 0);
+        rain.number = "12".into();
+        let lists = vec![list(vec![
+            rain,
+            fade("Down", FadeTarget::Cue("12".into())),
+            fade("Hall", FadeTarget::Zone("Hall".into())),
+            fade("Lost", FadeTarget::Cue("99".into())),
+        ])];
+        let rain = lists[0].cues[0].id.to_string();
+        let mut runner = Runner::default();
+        let t = Instant::now();
+        runner.go(&lists, 0, t, Guard::time(0)).unwrap();
+
+        let out = runner
+            .go(&lists, 0, after(t, 1000), Guard::time(0))
+            .unwrap();
+        assert_eq!(
+            actions(&out),
+            [Action::FadeSound {
+                id: rain,
+                gain_db: -20.0,
+                duration_ms: 3000,
+                then: lmix_types::AfterFade::Stop
+            }]
+        );
+        assert_eq!(
+            runner
+                .running(&lists, after(t, 1000))
+                .iter()
+                .find(|r| r.name == "Down")
+                .and_then(|r| r.total_ms),
+            Some(3000),
+            "a fade runs as long as it fades"
+        );
+        let out = runner
+            .go(&lists, 0, after(t, 2000), Guard::time(0))
+            .unwrap();
+        assert!(matches!(
+            &actions(&out)[..],
+            [Action::SetZoneLevel { zone, gain_db: Some(g), .. }] if zone == "Hall" && *g == -20.0
+        ));
+        let out = runner
+            .go(&lists, 0, after(t, 3000), Guard::time(0))
+            .unwrap();
+        assert!(events(&out)
+            .iter()
+            .any(|e| matches!(e, CueEvent::Failed { .. })));
     }
 
     #[test]

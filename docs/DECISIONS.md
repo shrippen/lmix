@@ -3453,3 +3453,47 @@ laufen über upstream (nur Inputs, GL), alles andere bleibt bei der
 eigenen Ebene; die Taste wählt den Weg nach Clip und Ziel. Zuerst im
 VM-Test messen, wie weit der eigene Cut vom geplanten Bild abweicht.
 **Offen**: Entscheidung des Users.
+
+## 2026-10-17 — Klang-Cues gebaut (S1 Stufe 2, S-E.3 B)
+
+**Kontext**: S-E.3 B entschieden (User 17.10.): Klang über einen strom-
+Block mit einem `audiomixer` je Zone, ein Flow je Rechner.
+
+**Gebaut**:
+- strom (#23, #24, #25 auf `dev`): Block `builtin.show_sound`. Je Zone ein
+  Live-`audiomixer` → Pegel → Ausgang `zone_out_N`; je Klang ein
+  Dekodierzweig zur Laufzeit, Kanalzuordnung über `mix-matrix`, S-Kurven
+  über eine Control-Binding; REST unter `…/blocks/{id}/show_sound`. Bis
+  16 Zonen (wie lmix); Mono ohne Zuordnung auf alle Kanäle der ersten
+  Zone. Ein Klang endet erst, wenn sein Ende an den Zonen-Mischern
+  ankommt (vorher am Dekoder: eine Datei von 1 s war nicht zu hören).
+- lmix-types: Cue-Arten `sound` (`SoundCue`: Datei, Pegel, Zuordnung
+  Dateikanal → Zone/Kanal mit Pegel, Ein- und Ausblendzeit) und `fade`
+  (`FadeCue`: Ziel Cue oder Zone, Pegel, danach behalten/stoppen, Dauer
+  = `duration_ms`). Aktionen `play_sound`, `fade_sound`, `stop_sound`,
+  `set_zone_level` (Gruppe „sound“, Recht `control`).
+- lmix-core: ein Flow „lmix sound“ aus den Zonen der Show und den
+  Ausgängen dieses Rechners (`ZonePatch`: Gerät, Kanäle, Pegel). Je
+  Ausgang `audioconvert` (Zonen- → Gerätekanäle) → `volume` →
+  `pulsesink device=…` (leer: `autoaudiosink`); eine Zone ohne Ausgang
+  läuft in einen `fakesink`. Geänderte Zonen oder Patches bauen den Flow
+  neu (laufende Klänge enden dabei). Der Cue-Runner spielt den Klang mit
+  der Cue-ID; ohne `duration_ms` endet der Cue mit der Datei (strom
+  meldet das Ende nicht selbst, lmix-core fragt alle 100 ms, solange
+  etwas spielt). Stopp blendet mit der Ausblendzeit des Cues aus, ein
+  Cue mit „andere stoppen“ mit seiner Zeit, Panik alle Klänge über die
+  Panikzeit, harter Stopp und Reset sofort.
+
+**Geprüft**: Einheitstests (Runner, Prüfung, Flow-Aufbau, Matrix) und
+`scripts/test-sound-cues.sh` gegen echtes strom (Zone → Flow läuft;
+1-s-Cue endet mit der Datei und `after_end` folgt; Stopp mit Fade; Fade
+auf die Zone; Panik; ohne Zonen kein Flow). Hörbar geprüft nur in
+strom (`show_sound_test.rs`, Pegel am Zonenausgang); die VM hat keine
+Soundkarte.
+
+**Offen**: Vorladen vor GO (SND.12: gemessen 31–32 ms ohne Vorladen,
+also im Ziel; strom kann `preload`), Wiederholungen (SND.3), Begrenzer
+(SND.14), Geräteausfall zur Laufzeit (SND.16), Zonen-Leiste in der
+Console (SUI.8), Geräteliste der Ausgänge, Klang-Cues im Cue-Editor der
+Console (bisher nur Anzeige in der Liste). Gerätezuordnung mit
+`pulsesink` braucht einen Test auf echter Hardware (HARDWARE-TODO).

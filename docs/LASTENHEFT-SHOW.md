@@ -143,23 +143,23 @@ ausgeschlossen. **MS**: Meilenstein (§7). Stand: ✅ vorhanden · ◐ teilweise
 
 | ID | Anforderung | Prio | MS | Stand |
 |---|---|---|---|---|
-| SND.1 | Klang-Cue spielt eine Datei (WAV, FLAC, OGG, Opus, MP3; bis 24 Kanäle; Abtastrate und Bittiefe beliebig, automatisch angepasst). Komprimierte Formate werden vorab dekodiert oder vorgeladen, damit SND.12 gilt | M | S1 | – |
-| SND.2 | Lautstärke je Cue (dB, 0 dB = unverändert). Einblendzeit und Ausblendzeit beim Stoppen als Komfort im Klang-Cue; wirken intern wie Fades und werden von späteren Fades übersteuert (lmix) | M | S1 | – |
+| SND.1 | Klang-Cue spielt eine Datei (WAV, FLAC, OGG, Opus, MP3; bis 24 Kanäle; Abtastrate und Bittiefe beliebig, automatisch angepasst). Komprimierte Formate werden vorab dekodiert oder vorgeladen, damit SND.12 gilt | M | S1 | ◐ (Datei über strom `show_sound`, Formate wie GStreamer dekodiert; ohne Vorladen) |
+| SND.2 | Lautstärke je Cue (dB, 0 dB = unverändert). Einblendzeit und Ausblendzeit beim Stoppen als Komfort im Klang-Cue; wirken intern wie Fades und werden von späteren Fades übersteuert (lmix) | M | S1 | ✅ (Pegel, Ein- und Ausblendzeit im Klang-Cue) |
 | SND.3 | Wiederholungen: n-mal oder endlos, lückenlos (keine Pause, kein Klick an der Nahtstelle) | M | S1 | – |
 | SND.4 | Mindestens 16 Klang-Cues gleichzeitig ohne Aussetzer (lmix) | M | S1 | – |
-| SND.5 | Kanalzuordnung je Klang-Cue: Dateikanal → Zone mit Pegel je Kreuzung; Vorlagen je Zone (Stereo → L/R, Stereo → Mono −3 dB); Gesamtpegel je Cue | M | S1 | – |
-| SND.6 | Fade-Cue, absolut: ändert nur die gesetzten Parameter eines Ziels (Cue oder Zone) über eine Dauer; optional „Ziel danach stoppen“; Zielwert „still“ = untere Reglergrenze; Fades auf verschiedene Parameter desselben Ziels laufen gleichzeitig | M | S1 | – (Grundlage `fade_volume`, AUD.14) |
+| SND.5 | Kanalzuordnung je Klang-Cue: Dateikanal → Zone mit Pegel je Kreuzung; Vorlagen je Zone (Stereo → L/R, Stereo → Mono −3 dB); Gesamtpegel je Cue | M | S1 | ◐ (Kreuzungen Dateikanal → Zone mit Pegel, Gesamtpegel; Vorlagen fehlen) |
+| SND.6 | Fade-Cue, absolut: ändert nur die gesetzten Parameter eines Ziels (Cue oder Zone) über eine Dauer; optional „Ziel danach stoppen“; Zielwert „still“ = untere Reglergrenze; Fades auf verschiedene Parameter desselben Ziels laufen gleichzeitig | M | S1 | ◐ (Fade-Cue auf Cue oder Zone, Pegel, „danach stoppen“; ein Parameter: Pegel) |
 | SND.7 | Fade relativ (dB addieren); ein absoluter Fade hat Vorrang vor laufenden relativen | S | S2 | – |
-| SND.8 | Fade-Kurve: S-Kurve als Standard | M | S1 | – |
+| SND.8 | Fade-Kurve: S-Kurve als Standard | M | S1 | ✅ (S-Kurve in strom) |
 | SND.9 | Weitere Kurven (linear, parametrisch) und Pegelbereich (Reglerskala, dB, linear) | S | S2 | – |
-| SND.10 | Zonen: mindestens 8 benannte Zonen mit 1–8 Kanälen; pro Rechner Zuordnung Zone → Gerät und Kanäle mit Pegel, mehrere Ziele je Zone möglich. Die Show nennt nur Zonennamen (lmix; QLab hält Patches im Dokument) | M | S1 | ◐ (Zonen mit Namen und Kanälen in der Show, Zuordnung zu Gerät, Kanälen und Pegel je Rechner, mehrere Ausgänge; Abspielen mit Stufe 2) |
-| SND.11 | Lautstärke und Mute je Zone, als Aktion, als Fade-Ziel und in der Oberfläche | M | S1 | ◐ (Aux-Bus 1–2) |
+| SND.10 | Zonen: mindestens 8 benannte Zonen mit 1–8 Kanälen; pro Rechner Zuordnung Zone → Gerät und Kanäle mit Pegel, mehrere Ziele je Zone möglich. Die Show nennt nur Zonennamen (lmix; QLab hält Patches im Dokument) | M | S1 | ✅ (Zonen in der Show, Zuordnung je Rechner, mehrere Ausgänge; Flow „lmix sound“) |
+| SND.11 | Lautstärke und Mute je Zone, als Aktion, als Fade-Ziel und in der Oberfläche | M | S1 | ◐ (Pegel und Mute je Zone als Aktion und Fade-Ziel; Oberfläche fehlt) |
 | SND.12 | Latenz GO → hörbarer Klang ≤ 50 ms | M | S1 | – |
 | SND.13 | Reglergrenzen der Show: höchster Wert (Standard +12 dB) und niedrigster (Standard −60 dB = still); gelten für Cues, Fades und Fernsteuerung | M | S1 | – |
 | SND.14 | Signal-Begrenzer je Zone (Höchstpegel in dBFS), Schutz vor Lautstärkesprüngen (lmix) | S | S1 | – |
 | SND.15 | Zonen auf verschiedenen Geräten bleiben über 4 h synchron (Taktangleichung); Abweichung im Selftest gemessen | M | S1 | – |
 | SND.16 | Fehlendes Gerät einer Zone: Warnung an Zone und Cues, Show läuft weiter; Gerät kommt zurück → Zone geht wieder | M | S1 | ◐ (Warnung für Zonen ohne Ausgang auf diesem Rechner; Geräteausfall zur Laufzeit mit Stufe 2) |
-| SND.17 | Klang-Cue erscheint nicht als Input-Kachel im Mischer (lmix) | S | S1 | – |
+| SND.17 | Klang-Cue erscheint nicht als Input-Kachel im Mischer (lmix) | S | S1 | ✅ (Klänge laufen im eigenen Flow, ohne Input-Kachel) |
 | SND.18 | Start- und Endpunkt in der Datei | S | S2 | – |
 | SND.19 | Fade der Kreuzungspegel (Klang zwischen Zonen verschieben) | S | S2 | – |
 | SND.20 | Trim je Cue, bewusst nicht per Fade oder Fernsteuerung änderbar | K | S2 | – |

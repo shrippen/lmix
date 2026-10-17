@@ -402,7 +402,7 @@ impl Default for MasterFormat {
 impl MasterFormat {
     /// Even sides within the limits (video formats subsample by 2).
     pub fn is_valid(&self) -> bool {
-        let side = |v: u32| (FORMAT_MIN_PX..=FORMAT_MAX_PX).contains(&v) && v % 2 == 0;
+        let side = |v: u32| (FORMAT_MIN_PX..=FORMAT_MAX_PX).contains(&v) && v.is_multiple_of(2);
         side(self.width) && side(self.height)
     }
 

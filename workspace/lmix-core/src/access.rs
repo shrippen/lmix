@@ -285,6 +285,10 @@ pub fn right_of(action: &Action) -> Right {
         | Action::SetTriggers { .. }
         | Action::TitleBind { .. } => Right::Edit,
         Action::TransportInput { .. }
+        | Action::PlaySound { .. }
+        | Action::FadeSound { .. }
+        | Action::StopSound { .. }
+        | Action::SetZoneLevel { .. }
         | Action::SeekInput { .. }
         | Action::PlayItem { .. }
         | Action::StartOutput { .. }

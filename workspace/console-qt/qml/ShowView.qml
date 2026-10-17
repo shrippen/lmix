@@ -113,8 +113,19 @@ ColumnLayout {
         case "note": return qsTr("Note")
         case "group": return qsTr("Group")
         case "start": return cue.target && cue.target.cue ? qsTr("Start %1").arg(cue.target.cue) : qsTr("Start")
+        case "sound": return cue.sound ? cue.sound.file.split("/").pop() : qsTr("Sound")
+        case "fade": return fadeName(cue)
         default: return cue.actions && cue.actions.length > 0 ? cue.actions[0].action : qsTr("Actions")
         }
+    }
+
+    function fadeName(cue) {
+        var target = cue.fade ? cue.fade.target : null
+        if (target && target.cue !== undefined)
+            return qsTr("Fade %1").arg(target.cue)
+        if (target && target.zone !== undefined)
+            return qsTr("Fade zone %1").arg(target.zone)
+        return qsTr("Fade")
     }
 
     function kindLabel(cue) {
@@ -123,6 +134,8 @@ ColumnLayout {
         case "note": return qsTr("Note")
         case "group": return cue.mode === "first" ? qsTr("Group, first") : qsTr("Group, timeline")
         case "start": return qsTr("Start")
+        case "sound": return qsTr("Sound")
+        case "fade": return qsTr("Fade")
         default: return qsTr("Actions: %1").arg(cue.actions ? cue.actions.length : 0)
         }
     }
