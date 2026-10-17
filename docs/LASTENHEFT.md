@@ -281,7 +281,7 @@ kann es, Console nicht.
 
 | ID | Anforderung | Prio | Stand |
 |---|---|---|---|
-| OUT.1 | Master-Format: Auflösung (SD bis 4K, Hochkant 1080×1920, frei), Bildrate (23,976–60, 50i/59,94i, optional 100/120), Seitenverhältnis | M | ◐ (fest 1920×1080, Bildrate nicht wählbar) |
+| OUT.1 | Master-Format: Auflösung (SD bis 4K, Hochkant 1080×1920, frei), Bildrate (23,976–60, 50i/59,94i, optional 100/120), Seitenverhältnis | M | ◐ (`set_master_format`: Größe frei 320–7680 px, auch hochkant, Bildrate 23,976–60; ohne Halbbilder 50i/59,94i, ohne 100/120; Seitenverhältnis folgt der Größe) |
 | OUT.2 | Ausgang 1 = Program; Ausgang 2–4 mit Quelle Program/Preview/Multiview 1–2/Mix n/Input n; Overlay-Auswahl je Ausgang; Quelle live umschaltbar | M | ◐ (Ausgänge mit Quelle Program, Multiview oder Input, Ton aus Aux; ohne Preview (gibt der strom-Mischer nicht heraus), Mix, Overlay je Ausgang; Quelle nicht live umschaltbar) |
 | OUT.3 | Vollbild 1–2 auf Monitoren (Monitor, Rechteck, Cursor aus, immer oben); Quelle wie OUT.2 oder Wiederholungs-Multiview | M | ◐ (Fenster, Vollbild Wayland, DRM; Quelle Program/Input; Monitor wählt der Compositor, kein Rechteck; Prüfung auf Hardware offen, H.20) |
 | OUT.4 | Kartenausgang SDI/HDMI (DeckLink, AJA wenn Treiber), eigenes Format, Ton-Kanäle, Ton-Delay | S | – (E: DeckLink-Ausgang in strom) |

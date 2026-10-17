@@ -95,6 +95,9 @@ pub struct Show {
     /// Master of program sound (AUD.2).
     #[serde(default)]
     pub master: AuxBus,
+    /// Picture size and rate of program (OUT.1).
+    #[serde(default)]
+    pub format: lmix_types::MasterFormat,
     /// Volume of the monitor bus (AUD.4).
     #[serde(default = "lmix_types::input::full_volume")]
     pub monitor_volume: u8,
@@ -254,6 +257,7 @@ impl Default for Show {
             overlay_preview: Default::default(),
             aux_buses: Default::default(),
             master: Default::default(),
+            format: Default::default(),
             monitor_volume: lmix_types::input::full_volume(),
             default_delay_ms: 0,
             layouts: Vec::new(),
@@ -590,6 +594,11 @@ mod tests {
             master: AuxBus {
                 volume: 90,
                 mute: false,
+            },
+            format: lmix_types::MasterFormat {
+                width: 1080,
+                height: 1920,
+                framerate: lmix_types::Framerate::Fps25,
             },
             monitor_volume: 70,
             default_delay_ms: 40,
