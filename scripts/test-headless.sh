@@ -205,4 +205,59 @@ act '{"action":"save_layout_template","layout":"Corner"}'
 act '{"action":"load_layout_template","template":"Corner","name":"Corner 2"}'
 state_is '.layouts[1].name == "Corner 2" and .layouts[1].boxes[0].rect.x == 0.7' || fail "template not loaded"
 pass "layout template saved apart from the show and loaded"
+# CTL.3: an OSC subscription per topic and field: name and remaining time
+# of the running cue, cue events; one empty running message at the end.
+act '{"action":"add_cue_list","name":"Szene","cues":[{"number":"1","name":"Pause","kind":"wait","duration_ms":800}]}'
+topics="$(python3 -I - "$OSC_PORT" <<'PY'
+import socket, struct, sys
+def pad(b): return b + b"\0" * (4 - len(b) % 4)
+def msg(addr, *args):
+    out = pad(addr.encode()) + pad(("," + "s" * len(args)).encode())
+    for a in args:
+        out += pad(a.encode())
+    return out
+def parse(data):
+    def string(at):
+        end = data.index(b"\0", at)
+        return data[at:end].decode(), (end + 4) & ~3
+    addr, at = string(0)
+    tags, at = string(at)
+    args = []
+    for t in tags[1:]:
+        if t == "s":
+            v, at = string(at)
+        elif t == "f":
+            v = struct.unpack(">f", data[at:at + 4])[0]; at += 4
+        elif t == "i":
+            v = struct.unpack(">i", data[at:at + 4])[0]; at += 4
+        args.append(v)
+    return addr, args
+s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s.settimeout(5)
+dest = ("127.0.0.1", int(sys.argv[1]))
+s.sendto(msg("/lmix/subscribe", "running", "name", "remaining"), dest)
+s.sendto(msg("/lmix/subscribe", "cue", "what", "name"), dest)
+s.sendto(msg("/lmix/cue/go"), dest)
+seen = []
+mixer = False
+while True:
+    addr, args = parse(s.recv(65536))
+    mixer = mixer or addr in ("/lmix/tally", "/lmix/program")
+    if addr == "/lmix/cue/event":
+        seen.append("event " + "/".join(args))
+    elif addr == "/lmix/cue/running":
+        name, remaining = args
+        seen.append("running " + (name or "-") + (" counting" if 0 < remaining <= 0.8 else ""))
+        if not name:
+            break
+# Repeats at the event rate count once.
+out = []
+for line in seen:
+    if not out or out[-1] != line:
+        out.append(line)
+print(", ".join(out), "| mixer" if mixer else "")
+PY
+)" || fail "OSC topic client failed"
+[[ "$topics" == "event started/Pause, running Pause counting, event ended/Pause, running -"* && "$topics" != *mixer* ]] \
+    || fail "OSC topics: got '$topics'"
+pass "OSC: subscription per topic and field (running, cue events), no mixer messages"
 echo "headless check passed"
