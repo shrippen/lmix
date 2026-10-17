@@ -68,6 +68,8 @@ use super::meters::{self, EngineHealth, EngineLevels, FlowError};
 use super::{Engine, EngineError, LivePicture, Picture};
 use crate::switcher::{Command, EngineBox, AUDIO_RAMP_MS};
 
+mod sound;
+
 pub struct StromEngine {
     base_url: String,
     http: reqwest::Client,
@@ -100,6 +102,7 @@ pub struct StromEngine {
     sample_rate: std::sync::Mutex<u32>,
     /// Mixer inputs of the last `start`.
     slots: AtomicUsize,
+    sounds: sound::Sounds,
 }
 
 /// Longest wait for one engine call. Commands run under the switcher
@@ -141,6 +144,7 @@ impl StromEngine {
             multiview: Default::default(),
             sample_rate: std::sync::Mutex::new(lmix_types::output::default_sample_rate()),
             slots: AtomicUsize::new(0),
+            sounds: Default::default(),
         }
     }
 
@@ -1020,6 +1024,21 @@ impl Engine for StromEngine {
             }
             // The service waits; nothing for the engine to do.
             Command::Wait { .. } => Ok(()),
+            Command::SetZones { zones } => self.set_zones(zones).await,
+            Command::PlaySound { id, sound } => self.play_sound(id, sound).await,
+            Command::FadeSound {
+                id,
+                gain_db,
+                duration_ms,
+                then,
+            } => self.fade_sound(id, *gain_db, *duration_ms, *then).await,
+            Command::StopSound { id, fade_ms } => self.stop_sound(id.as_deref(), *fade_ms).await,
+            Command::SetZoneLevel {
+                zone,
+                gain_db,
+                mute,
+                duration_ms,
+            } => self.zone_level(*zone, *gain_db, *mute, *duration_ms).await,
             Command::SetAuxSend { slot, bus, gain } => {
                 let channel = flows::audio_channel(*slot);
                 let name = format!("ch{channel}_aux{}_level", bus + 1);
@@ -1110,6 +1129,10 @@ impl Engine for StromEngine {
 
     fn levels(&self) -> watch::Receiver<EngineLevels> {
         self.levels.subscribe()
+    }
+
+    fn sounds_ended(&self) -> broadcast::Receiver<String> {
+        self.sounds.subscribe()
     }
 
     fn players(&self) -> broadcast::Receiver<crate::clips::PlayerProgress> {

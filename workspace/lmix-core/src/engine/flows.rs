@@ -30,7 +30,7 @@ use super::LivePicture;
 use crate::switcher::Feed;
 
 /// Namespace of all lmix flow ids.
-const FLOW_NAMESPACE: Uuid = Uuid::from_u128(0x6c6d_6978_2d63_6f72_652d_666c_6f77_7321);
+pub(crate) const FLOW_NAMESPACE: Uuid = Uuid::from_u128(0x6c6d_6978_2d63_6f72_652d_666c_6f77_7321);
 
 const MEDIA_PLAYER_BLOCK: &str = "builtin.media_player";
 const HTML_INPUT_BLOCK: &str = "builtin.html_input";
@@ -1131,7 +1131,7 @@ fn whole_fps(fraction: &str) -> u64 {
 
 /// `text` as one URL path segment: unreserved characters stay, the rest
 /// is percent-encoded.
-fn encode_path_segment(text: &str) -> String {
+pub(crate) fn encode_path_segment(text: &str) -> String {
     let mut out = String::new();
     for byte in text.bytes() {
         match byte {

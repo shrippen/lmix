@@ -157,6 +157,29 @@ pub enum Command {
         muted: bool,
         ramp_ms: u32,
     },
+    /// The show's zones with this machine's outputs; the engine builds
+    /// its sound flow for them (running sounds stop). Empty: none.
+    SetZones { zones: Vec<lmix_types::ZoneState> },
+    /// Play `sound` as `id`, replacing a sound of that id.
+    PlaySound {
+        id: String,
+        sound: crate::sound::EngineSound,
+    },
+    FadeSound {
+        id: String,
+        gain_db: f32,
+        duration_ms: u32,
+        then: lmix_types::AfterFade,
+    },
+    /// Stop sound `id`, or every sound.
+    StopSound { id: Option<String>, fade_ms: u32 },
+    /// Zone `zone` (place in the show) to its level and mute.
+    SetZoneLevel {
+        zone: usize,
+        gain_db: Option<f32>,
+        mute: Option<bool>,
+        duration_ms: u32,
+    },
 }
 
 /// A layout box as the engine places it.
@@ -314,8 +337,14 @@ fn check_cue(cue: &Cue, depth: usize) -> Result<(), ActionError> {
     }
     let own = |field: bool, kind: CueKind| !field || cue.kind == kind;
     if !own(!cue.actions.is_empty(), CueKind::Actions)
-        || !(cue.duration_ms.is_none() || matches!(cue.kind, CueKind::Wait | CueKind::Actions))
+        || !(cue.duration_ms.is_none()
+            || matches!(
+                cue.kind,
+                CueKind::Wait | CueKind::Actions | CueKind::Sound | CueKind::Fade
+            ))
         || !own(cue.target.is_some(), CueKind::Start)
+        || !own(cue.sound.is_some(), CueKind::Sound)
+        || !own(cue.fade.is_some(), CueKind::Fade)
         || !own(
             cue.mode.is_some() || !cue.children.is_empty(),
             CueKind::Group,
@@ -352,6 +381,11 @@ fn check_cue(cue: &Cue, depth: usize) -> Result<(), ActionError> {
             }
             for child in &cue.children {
                 check_cue(child, depth + 1)?;
+            }
+        }
+        CueKind::Sound | CueKind::Fade => {
+            if let Err(e) = crate::sound::check_cue(cue) {
+                return bad(&e.to_string());
             }
         }
     }
@@ -456,6 +490,8 @@ pub struct Switcher {
     feeds: Vec<lmix_types::Feed>,
     /// Where the show's zones play on this machine (SND.10).
     zone_patches: Vec<lmix_types::ZonePatch>,
+    /// The zones the engine got last; `None`: send them again.
+    zones_sent: Option<Vec<lmix_types::ZoneState>>,
     targets_changed: bool,
     /// Media files not found per input (SHW.4); the service checks.
     missing: HashMap<InputId, Vec<String>>,
@@ -508,6 +544,7 @@ impl Switcher {
             targets: Vec::new(),
             feeds: Vec::new(),
             zone_patches: Vec::new(),
+            zones_sent: None,
             targets_changed: false,
             missing: HashMap::new(),
             overlay_last: Default::default(),
@@ -826,6 +863,7 @@ impl Switcher {
         let leave_ms = self.leave_ms(&action);
         let airing = self.airing();
         let mut commands = self.apply_action(action)?;
+        commands.extend(self.zone_commands());
         let audio = self.audio_commands(ramp_ms);
         let (on, off) = self.auto_play_commands(&airing);
         // A stinger switches sound and players at its cut, not once the
@@ -992,6 +1030,47 @@ impl Switcher {
                 self.zone_patches.retain(|p| p.zone != zone);
                 self.targets_changed = true;
                 Ok(Vec::new())
+            }
+            Action::PlaySound { id, sound } => Ok(vec![Command::PlaySound {
+                id,
+                sound: crate::sound::engine_sound(&sound, &self.show.zones)?,
+            }]),
+            Action::FadeSound {
+                id,
+                gain_db,
+                duration_ms,
+                then,
+            } => {
+                crate::sound::check_level(gain_db)?;
+                crate::sound::check_fade_time(duration_ms)?;
+                Ok(vec![Command::FadeSound {
+                    id,
+                    gain_db,
+                    duration_ms,
+                    then,
+                }])
+            }
+            Action::StopSound { id, fade_ms } => {
+                crate::sound::check_fade_time(fade_ms)?;
+                Ok(vec![Command::StopSound { id, fade_ms }])
+            }
+            Action::SetZoneLevel {
+                zone,
+                gain_db,
+                mute,
+                duration_ms,
+            } => {
+                let zone = crate::sound::zone_index(&self.show.zones, &zone)?;
+                if let Some(db) = gain_db {
+                    crate::sound::check_level(db)?;
+                }
+                crate::sound::check_fade_time(duration_ms)?;
+                Ok(vec![Command::SetZoneLevel {
+                    zone,
+                    gain_db,
+                    mute,
+                    duration_ms,
+                }])
             }
             Action::ResetSettings => {
                 self.reset_settings();
@@ -1441,7 +1520,8 @@ impl Switcher {
     /// restart. The sources keep running (no clip starts over).
     fn mixer_rebuilt(&mut self) -> Vec<Command> {
         let mut commands = self.restore_commands();
-        commands.retain(|c| !matches!(c, Command::SetSlot { .. }));
+        // Nor do the sounds: their flow is not the mixer's.
+        commands.retain(|c| !matches!(c, Command::SetSlot { .. } | Command::SetZones { .. }));
         commands
     }
 
@@ -1494,7 +1574,19 @@ impl Switcher {
             commands.extend(send_commands(input));
         }
         commands.extend(self.aux_bus_commands());
+        self.zones_sent = None;
+        commands.extend(self.zone_commands());
         commands
+    }
+
+    /// The zones for the engine, when they changed since it last got them.
+    fn zone_commands(&mut self) -> Option<Command> {
+        let zones = crate::zones::states(&self.show.zones, &self.zone_patches);
+        if self.zones_sent.as_ref() == Some(&zones) {
+            return None;
+        }
+        self.zones_sent = Some(zones.clone());
+        Some(Command::SetZones { zones })
     }
 
     fn aux_bus_commands(&self) -> Vec<Command> {
@@ -2455,6 +2547,15 @@ impl Switcher {
     fn emergency_index(&self) -> Option<usize> {
         let id = self.show.emergency_list?;
         self.show.cue_lists.iter().position(|l| l.id == id)
+    }
+
+    /// The engine's sound `id` is over; the sound cue it belongs to ends.
+    pub fn sound_ended(&mut self, id: &str, now: tokio::time::Instant) -> Vec<Out> {
+        let Ok(cue) = id.parse::<Uuid>() else {
+            return Vec::new();
+        };
+        self.cues
+            .sound_ended(&self.show.cue_lists, lmix_types::CueId(cue), now)
     }
 
     /// What the cue lists have due by `now`.
@@ -6837,9 +6938,97 @@ mod tests {
         out.iter()
             .flat_map(|o| match o {
                 Out::Actions { actions, .. } => actions.clone(),
-                Out::Event { .. } | Out::Panic { .. } => Vec::new(),
+                Out::Event { .. } | Out::Panic { .. } | Out::StopSounds { .. } => Vec::new(),
             })
             .collect()
+    }
+
+    #[test]
+    fn sounds_play_in_the_shows_zones_which_reach_the_engine() {
+        let mut sw = two_inputs();
+        let play = Action::PlaySound {
+            id: "door".into(),
+            sound: lmix_types::SoundCue {
+                file: "/fx/door.wav".into(),
+                ..Default::default()
+            },
+        };
+        assert!(
+            matches!(sw.apply(play.clone()), Err(ActionError::BadSound { .. })),
+            "no zones yet"
+        );
+        let hall = Action::SetZone {
+            zone: lmix_types::Zone {
+                name: "Hall".into(),
+                channels: 2,
+            },
+        };
+        let zones_sent = |commands: &[Command]| {
+            commands
+                .iter()
+                .any(|c| matches!(c, Command::SetZones { zones } if zones.len() == 1))
+        };
+        assert!(zones_sent(&sw.apply(hall.clone()).unwrap()));
+        assert!(
+            !zones_sent(&sw.apply(hall).unwrap()),
+            "unchanged zones are not sent again"
+        );
+        assert!(zones_sent(&sw.restore_commands()), "a restore sends them");
+        let upright = lmix_types::MasterFormat {
+            width: 1080,
+            height: 1920,
+            framerate: lmix_types::Framerate::Fps25,
+        };
+        assert!(
+            !zones_sent(
+                &sw.apply(Action::SetMasterFormat { format: upright })
+                    .unwrap()
+            ),
+            "a new mixer leaves the sounds playing"
+        );
+
+        let commands = sw.apply(play).unwrap();
+        assert!(commands.iter().any(|c| matches!(
+            c,
+            Command::PlaySound { id, sound } if id == "door" && sound.uri == "file:///fx/door.wav"
+        )));
+        assert!(sw
+            .apply(Action::SetZoneLevel {
+                zone: "Foyer".into(),
+                gain_db: Some(-6.0),
+                mute: None,
+                duration_ms: 0,
+            })
+            .is_err());
+    }
+
+    #[test]
+    fn sound_cues_are_checked_when_saved() {
+        let mut sw = two_inputs();
+        let sound = |file: &str| Cue {
+            sound: Some(lmix_types::SoundCue {
+                file: file.into(),
+                ..Default::default()
+            }),
+            ..Cue::empty(CueKind::Sound)
+        };
+        let add = |sw: &mut Switcher, cues| {
+            sw.apply(Action::AddCueList {
+                name: "Sound".into(),
+                cues,
+                source: None,
+            })
+        };
+        assert!(add(&mut sw, vec![sound("/fx/rain.flac")]).is_ok());
+        assert!(add(&mut sw, vec![sound("rain.flac")]).is_err(), "relative");
+        assert!(
+            add(&mut sw, vec![Cue::empty(CueKind::Sound)]).is_err(),
+            "no sound"
+        );
+        assert!(
+            add(&mut sw, vec![Cue::empty(CueKind::Fade)]).is_err(),
+            "no fade"
+        );
     }
 
     #[test]

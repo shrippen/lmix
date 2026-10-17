@@ -2,6 +2,8 @@
 # scripts/update-translations.sh collects the sources and writes these
 # into qml_de.ts (i18n/fill.py). Keep it complete.
 DE = {
+    'Fade %1': 'Blende %1',
+    'Fade zone %1': 'Blende Zone %1',
     'Web page': 'Webseite',
     'Graphics channel': 'Grafikkanal',
     'GFX': 'GFX',

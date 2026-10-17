@@ -504,6 +504,28 @@ impl Service {
         }
     }
 
+    /// End sound cues as the engine reports their sounds over; forever.
+    pub async fn watch_sounds(self: Arc<Self>) {
+        let mut ended = self.engine.sounds_ended();
+        loop {
+            let id = match ended.recv().await {
+                Ok(id) => id,
+                Err(broadcast::error::RecvError::Lagged(_)) => continue,
+                Err(broadcast::error::RecvError::Closed) => return,
+            };
+            let out = {
+                let mut sw = self.switcher.lock().await;
+                let out = sw.sound_ended(&id, tokio::time::Instant::now());
+                if !out.is_empty() {
+                    self.publish(&sw);
+                }
+                out
+            };
+            self.cue_wake.notify_one();
+            self.run_cue_outs(out).await;
+        }
+    }
+
     /// How late cue steps ran (RUN.8).
     pub async fn cue_lateness(&self) -> crate::cues::Lateness {
         self.switcher.lock().await.cue_lateness()
@@ -589,6 +611,12 @@ impl Service {
             match o {
                 crate::cues::Out::Event { list, cue, what } => {
                     let _ = self.events.send(Event::Cue { list, cue, what });
+                }
+                crate::cues::Out::StopSounds { fade_ms } => {
+                    let stop = Action::StopSound { id: None, fade_ms };
+                    if let Err(e) = Box::pin(self.handle_as(stop, Origin::Operator)).await {
+                        tracing::warn!(error = %e, "sounds did not stop");
+                    }
                 }
                 crate::cues::Out::Panic { mode } => {
                     tracing::warn!(?mode, "panic");
