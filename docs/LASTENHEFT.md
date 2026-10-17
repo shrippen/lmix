@@ -316,7 +316,7 @@ kann es, Console nicht.
 | MCR.1 | Einzelaufnahme: beliebige Live-Inputs und Ausgänge 1–4 gleichzeitig roh in getrennte Dateien | S | ◐ (Aufnahme je Input als ISO-Ausgang, auch gleichzeitig; Ausgänge 2–4 als Quelle fehlen) |
 | MCR.2 | Bereits komprimierte Quellen ohne Neukodierung sichern: SRT als TS, NDI im Original-Format | S | – (E: TS ohne Neukodierung im strom-Recorder) |
 | MCR.3 | Ordner je Quelle, Split, Ton je Quelle (eigener oder Bus) | S | ◐ (Ordner und Ton je Ausgang, eigener oder Aux; ohne Teilen) |
-| STR.1 | Bis 5 Streamziele, einzeln und gemeinsam startbar; Fehler eines Ziels stoppt nur dieses | M | ◐ (mehrere SRT-Ausgänge, einzeln startbar, ein Fehler stoppt nur diesen; kein gemeinsamer Start) |
+| STR.1 | Bis 5 Streamziele, einzeln und gemeinsam startbar; Fehler eines Ziels stoppt nur dieses | M | ✅ (SRT-Ausgänge einzeln oder alle zusammen, `start_outputs`/`stop_outputs`; ein Fehler stoppt nur diesen) |
 | STR.2 | Protokolle RTMP; zusätzlich RTMPS, SRT, WHIP (lmix); Ziel = URL + Schlüssel; Profile (benannte Zielsätze) | M | ◐ (SRT; RTMP wartet auf strom #771, WHIP E; ohne Profile) |
 | STR.3 | Qualitätsprofile: Auflösung, Bitrate, Codec H.264/HEVC/AV1, Profil/Level/Preset, Keyframe-Abstand, CBR, Ton-Bitrate/-Kanäle; Ziele teilen Profil oder eigenes | M | ◐ (nur Video-Bitrate; H.264 fest) |
 | STR.4 | Multi-Bitrate: ein Ziel mit mehreren Qualitäten, keyframe-ausgerichtet | K | – |

@@ -3037,3 +3037,17 @@ Stinger (unterste Ebene).
 **Geprüft**: Tests (alte Show mit vier Kanälen, Kanal 9 abgelehnt, neun
 DSK-Ebenen im Mischer), VM-Test mit strom: Kanal 8 über Program an und
 aus; Console auf Xvfb.
+
+## 2026-10-17 — Alle Streams zusammen starten (STR.1)
+
+**Entscheidung**: Aktionen `start_outputs` / `stop_outputs` mit einer
+Gruppe (`streams` = SRT, `recordings`, `all`) statt eines Schalters.
+Start nimmt nur Ausgänge, die nicht laufen; kann einer nicht starten
+(Quelle fehlt), starten die anderen trotzdem, der Fehler kommt nur
+zurück, wenn keiner startet. Stopp nimmt nur laufende. Console: ab zwei
+Streams „Alle Streams starten“ bzw. „… stoppen“ (fragt vorher wie ein
+einzelner Ausgang), beides auch als Vorgabe für Kurzbefehle und Auslöser.
+
+**Geprüft**: Test (nur gestoppte starten, Gruppen trennen Streams und
+Aufnahmen), VM-Test mit strom: zweiter Stream startet zum laufenden,
+Aufnahme bleibt aus, beide stoppen; Console auf Xvfb mit dem Knopf.
