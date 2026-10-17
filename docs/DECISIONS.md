@@ -3051,3 +3051,21 @@ einzelner Ausgang), beides auch als Vorgabe für Kurzbefehle und Auslöser.
 **Geprüft**: Test (nur gestoppte starten, Gruppen trennen Streams und
 Aufnahmen), VM-Test mit strom: zweiter Stream startet zum laufenden,
 Aufnahme bleibt aus, beide stoppen; Console auf Xvfb mit dem Knopf.
+
+## 2026-10-17 — Abspielstand im Zustand (API.4)
+
+**Kontext**: API.4 verlangt Position und Dauer je Input im Zustand.
+lmix schickte sie nur als Ereignis `position` (5 × je Sekunde).
+
+**Entscheidung**: `Input.playback` (`state` playing/paused/stopped,
+`position_ms`, `duration_ms`, `item` 1-basiert, `items`) aus der letzten
+Meldung des Players, eingesetzt beim Lesen des Zustands (`GET /api/state`,
+TCP/OSC-Vollzustand). Der gepushte Zustand (WebSocket) ändert sich dadurch
+nicht, sonst ginge fünfmal je Sekunde der ganze Zustand hinaus; live
+bleibt das Ereignis `position`. Play/Pause kommt aus strom
+`MediaPlayerStateChanged` (bisher nicht gelesen); Meldungen älter als 2 s
+gelten als weg.
+
+**Geprüft**: Test (Meldung erscheint im Zustand), VM-Test mit strom:
+Playlist pausiert → `paused`, 2 Einträge, Dauer > 0; nach Play/Next →
+`playing`.
