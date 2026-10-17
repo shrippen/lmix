@@ -1087,6 +1087,13 @@ impl Service {
         pressed: bool,
     ) -> Result<(), ActionError> {
         let _ = self.events.send(Event::Midi { midi: message });
+        let hold = crate::cues::Hold::of(&format!(
+            "midi {} {:?} {}",
+            message.channel, message.kind, message.number
+        ));
+        if !pressed {
+            self.release(hold).await;
+        }
         let action = {
             let sw = self.switcher.lock().await;
             crate::midi::action_for(
@@ -1097,9 +1104,23 @@ impl Service {
             )
         };
         match action {
-            Some(action) => self.handle(action).await.map(|_| ()),
+            Some(action) => self.handle_as(action, Origin::Held(hold)).await.map(|_| ()),
             None => Ok(()),
         }
+    }
+
+    /// GO from a button whose release is reported (`held`, RUN.6): OSC.
+    pub async fn go_held(
+        self: &Arc<Self>,
+        action: Action,
+        held: crate::cues::Hold,
+    ) -> Result<ShowState, ActionError> {
+        self.handle_as(action, Origin::Held(held)).await
+    }
+
+    /// Button `held` was let go: it may give GO again (RUN.6).
+    pub async fn release(&self, held: crate::cues::Hold) {
+        self.switcher.lock().await.cue_release(held);
     }
 
     /// Fire `clip_end` triggers and note clip lengths as the media players
@@ -1288,7 +1309,13 @@ impl Service {
                     let mut sw = self.switcher.lock().await;
                     let now = tokio::time::Instant::now();
                     let out = match &action {
-                        Action::CueGo { list } => sw.cue_go(list.as_ref(), now)?,
+                        Action::CueGo { list } => {
+                            let held = match origin {
+                                Origin::Held(hold) => Some(hold),
+                                _ => None,
+                            };
+                            sw.cue_go(list.as_ref(), now, held)?
+                        }
                         Action::CueStart { list, cue } => sw.cue_start(list.as_ref(), cue, now)?,
                         Action::CueStop { list, cue, .. } => {
                             sw.cue_stop(list.as_ref(), cue.as_deref(), now)?
@@ -1580,7 +1607,7 @@ impl Service {
         if let (Some(report), Ok(())) = (report, &result) {
             // Like an input's triggers: none for what a trigger did.
             if let (
-                Origin::Operator,
+                Origin::Operator | Origin::Held(_),
                 Event::Title {
                     graphics,
                     layer,
@@ -1861,6 +1888,8 @@ async fn write_settings(path: &std::path::Path, bytes: Vec<u8>) -> std::io::Resu
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Origin {
     Operator,
+    /// A button whose release comes later (RUN.6).
+    Held(crate::cues::Hold),
     Trigger,
     /// Overlay `channel` goes off by itself (OVL.2), if it still shows
     /// what went on at `since`.

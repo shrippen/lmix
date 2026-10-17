@@ -520,7 +520,10 @@ ColumnLayout {
             }
             QQC2.Label {
                 Layout.fillWidth: true
-                text: view.show ? qsTr("Panic time %1 s · GO guard %2 ms").arg((view.show.panic_ms / 1000).toFixed(1)).arg(view.show.go_guard_ms) : ""
+                // Release: a MIDI or OSC button gives the next GO only once let
+                // go (RUN.6); space ignores its own repeats anyway.
+                text: view.show ? qsTr("Panic time %1 s · GO guard %2 ms").arg((view.show.panic_ms / 1000).toFixed(1)).arg(view.show.go_guard_ms)
+                                  + (view.show.go_rearm === "release" ? qsTr(" · GO again once let go") : "") : ""
                 color: KanteStyle.mutedTextColor
                 font.family: KanteStyle.monoFamily
                 wrapMode: Text.WordWrap

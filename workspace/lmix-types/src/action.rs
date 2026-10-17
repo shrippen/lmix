@@ -243,6 +243,7 @@ pub const ACTION_GROUPS: &[(&str, &[&str])] = &[
             "cue_reset",
             "set_active_cue_list",
             "set_go_guard",
+            "set_go_rearm",
             "cue_panic",
             "cue_hard_stop",
             "set_panic_time",
@@ -584,6 +585,11 @@ pub enum Action {
     /// Shortest gap between two GOs, 0–5000 ms (RUN.6).
     SetGoGuard {
         ms: u32,
+    },
+    /// Take GO again after the guard alone, or once the button is let go
+    /// as well (RUN.6).
+    SetGoRearm {
+        rearm: crate::cue::GoRearm,
     },
     /// Stop every cue of every list over the panic time, or over `ms`
     /// ("panic in time x", CTL.1); a second panic within it is a hard

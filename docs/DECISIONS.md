@@ -2716,3 +2716,30 @@ einen eigenen Thread mit Echtzeit-Priorität legen und diese wie PipeWire
 über rtkit (D-Bus) anfordern, ohne Root. Geht das nicht, warnt der
 Selbsttest: In SNF.4 mitmessen, wie spät die Schritte sind, und die
 Last des Rechners anzeigen.
+
+## 2026-10-17 — GO erst nach Loslassen (RUN.6)
+
+**Kontext**: RUN.6 verlangt die Option „erst nach Loslassen wieder
+scharf“: Ein festgehaltener oder prellender Taster gibt kein zweites GO,
+auch nicht nach der GO-Sperre.
+
+**Optionen**: (a) ein Merker für alle Wege: Jedes GO wartet, bis
+irgendein Taster losgelassen wird; (b) je Taster: Nur der Taster, der das
+GO gab, wartet auf sein Loslassen.
+
+**Entscheidung**: (b). Mit (a) sperrt ein verlorenes Loslassen (UDP) jedes
+GO der Show; mit (b) nur diesen einen Weg, die Leertaste und Companion
+bleiben bedienbar.
+
+- `set_go_rearm` mit `time` (Standard, nur GO-Sperre) oder `release`;
+  gespeichert in der Show (`go_rearm`, fehlt bei `time`).
+- Loslassen melden: MIDI (Note aus, Controller unter 64; je Kanal, Art,
+  Nummer), OSC `/lmix/cue/release` (je Absender: Companion schickt alle
+  Tasten über einen Socket, jede GO-Taste dort zählt als dieselbe). Die
+  Leertaste der Show-Ansicht nimmt ihre Wiederholungen ohnehin nicht an.
+- HTTP, TCP und Kurzbefehle ohne MIDI melden kein Loslassen: für sie gilt
+  nur die GO-Sperre.
+- Wechsel des Modus vergisst alle gehaltenen Taster.
+
+**Geprüft**: Tests im Ablauf (gehalten, anderer Weg, Loslassen, Modus
+`time`), OSC-Adresse, Speichern und Laden der Show.

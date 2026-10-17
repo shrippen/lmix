@@ -153,6 +153,9 @@ pub struct ShowState {
     /// Shortest gap between two GOs (RUN.6).
     #[serde(default)]
     pub go_guard_ms: u32,
+    /// When GO takes another press (RUN.6).
+    #[serde(default)]
+    pub go_rearm: crate::cue::GoRearm,
     /// Panic time (SAF.2).
     #[serde(default)]
     pub panic_ms: u32,

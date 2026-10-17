@@ -2655,9 +2655,14 @@
       <translation>Alle Cues über die Panikzeit anhalten; noch einmal: sofort (Escape)</translation>
     </message>
     <message>
-      <location line="+4" />
+      <location line="+6" />
       <source>Panic time %1 s · GO guard %2 ms</source>
       <translation>Panikzeit %1 s · GO-Sperre %2 ms</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source> · GO again once let go</source>
+      <translation> · GO erst nach Loslassen wieder</translation>
     </message>
     <message>
       <location line="+20" />

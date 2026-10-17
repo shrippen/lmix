@@ -298,6 +298,20 @@ pub enum StopMode {
     Hard,
 }
 
+/// When GO takes another press after one went through (RUN.6).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum GoRearm {
+    /// After the GO guard.
+    #[default]
+    Time,
+    /// After the GO guard and once the button that gave it is let go.
+    /// Only ways that report letting go wait for it: MIDI, OSC
+    /// (`/lmix/cue/release`), the Console's space key. Each waits on its
+    /// own, so a lost release blocks only that one.
+    Release,
+}
+
 /// A cue list as clients see it.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct CueList {

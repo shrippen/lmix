@@ -425,6 +425,7 @@ DE = {
     'Open group': 'Gruppe aufklappen',
     'Panic': 'Panik',
     'Panic time %1 s · GO guard %2 ms': 'Panikzeit %1 s · GO-Sperre %2 ms',
+    ' · GO again once let go': ' · GO erst nach Loslassen wieder',
     'Post': 'Nach',
     'Pre': 'Vor',
     'Run prepared cues with GO': 'Vorbereitete Cues mit GO abfahren',

@@ -192,6 +192,7 @@ pub fn right_of(action: &Action) -> Right {
         | Action::RemoveZonePatch { .. }
         | Action::SetFeed { .. }
         | Action::SetGoGuard { .. }
+        | Action::SetGoRearm { .. }
         | Action::SetInputColor { .. }
         | Action::SetInputPress { .. }
         | Action::SetLayout { .. }
