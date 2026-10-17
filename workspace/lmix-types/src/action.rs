@@ -1308,6 +1308,8 @@ pub enum ActionError {
     NoTransport { reference: String },
     #[error("color {color} is not #rrggbb")]
     BadColor { color: String },
+    #[error("web page {url} is not an http:// or https:// address")]
+    BadWebUrl { url: String },
     #[error("volume {volume} is outside 0–{max}")]
     BadVolume { volume: u8, max: u8 },
     #[error("a level fade lasts 0–{max} ms, not {duration_ms}")]

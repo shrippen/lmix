@@ -1118,7 +1118,9 @@ impl Switcher {
                     return Ok(Vec::new());
                 }
                 self.show.format = format;
-                Ok(self.mixer_rebuilt())
+                let mut commands = self.mixer_rebuilt();
+                commands.extend(self.page_commands());
+                Ok(commands)
             }
             Action::SetSampleRate { hz } => {
                 if !lmix_types::output::SAMPLE_RATES.contains(&hz) {
@@ -1431,6 +1433,25 @@ impl Switcher {
         commands
     }
 
+    /// Web and graphics pages built again, at the new program size; they
+    /// render at the size of their slot flow.
+    fn page_commands(&self) -> Vec<Command> {
+        self.show
+            .inputs
+            .iter()
+            .filter(|i| {
+                matches!(
+                    i.source,
+                    SourceSpec::Web { .. } | SourceSpec::Graphics { .. }
+                )
+            })
+            .map(|i| Command::SetSlot {
+                slot: i.slot,
+                source: Some(i.source.clone()),
+            })
+            .collect()
+    }
+
     /// Commands that rebuild the engine from the current show (start-up,
     /// engine restart): slots, program, preview, then every audio channel.
     pub fn restore_commands(&mut self) -> Vec<Command> {
@@ -1735,6 +1756,7 @@ impl Switcher {
         name: Option<String>,
     ) -> Result<Vec<Command>, ActionError> {
         check_source(&source)?;
+        self.check_graphics_source(&source)?;
         let slot = self
             .free_slot()
             .ok_or(ActionError::SlotsFull { slots: self.slots })?;
@@ -1908,6 +1930,7 @@ impl Switcher {
         source: SourceSpec,
     ) -> Result<Vec<Command>, ActionError> {
         check_source(&source)?;
+        self.check_graphics_source(&source)?;
         let index = self.find(input)?;
         let entry = &mut self.show.inputs[index];
         if !source.has_video() && [self.show.preview, self.show.program].contains(&Some(entry.id)) {
@@ -4239,17 +4262,28 @@ fn program_then_preview(
     commands
 }
 
-/// Reject sources the engine cannot build (a color that is not `#rrggbb`).
+/// Reject sources the engine cannot build: a color that is not
+/// `#rrggbb`, a web page that is not an http(s) address.
 fn check_source(source: &SourceSpec) -> Result<(), ActionError> {
-    let SourceSpec::Color { color } = source else {
-        return Ok(());
-    };
-    match color_rgb(color) {
-        Some(_) => Ok(()),
-        None => Err(ActionError::BadColor {
+    match source {
+        SourceSpec::Color { color } if color_rgb(color).is_none() => Err(ActionError::BadColor {
             color: color.clone(),
         }),
+        SourceSpec::Web { url } if !is_web_address(url) => {
+            Err(ActionError::BadWebUrl { url: url.clone() })
+        }
+        _ => Ok(()),
     }
+}
+
+/// `http://` or `https://` with a host after it.
+fn is_web_address(url: &str) -> bool {
+    let lower = url.trim().to_ascii_lowercase();
+    ["http://", "https://"].iter().any(|scheme| {
+        lower
+            .strip_prefix(scheme)
+            .is_some_and(|rest| !rest.is_empty())
+    })
 }
 
 /// Audio inputs have no picture for preview or program.
@@ -7378,6 +7412,90 @@ mod tests {
             })
             .unwrap_err();
         assert!(matches!(err, ActionError::UnknownInput { .. }));
+    }
+
+    /// A page renders at the program size of its slot flow, so a new
+    /// format builds it again; other sources keep running.
+    #[test]
+    fn a_new_format_renders_pages_again() {
+        let mut sw = Switcher::new(SLOTS);
+        sw.apply(Action::AddInput {
+            source: SourceSpec::Web {
+                url: "https://example.com".into(),
+            },
+            name: None,
+        })
+        .unwrap();
+        sw.apply(Action::AddInput {
+            source: SourceSpec::Pattern {
+                pattern: TestPattern::Ball,
+            },
+            name: None,
+        })
+        .unwrap();
+        let portrait = lmix_types::MasterFormat {
+            width: 1080,
+            height: 1920,
+            ..lmix_types::MasterFormat::default()
+        };
+        let cmds = sw
+            .apply(Action::SetMasterFormat { format: portrait })
+            .unwrap();
+        let rebuilt: Vec<_> = cmds
+            .iter()
+            .filter_map(|c| match c {
+                Command::SetSlot {
+                    source: Some(source),
+                    ..
+                } => Some(source.clone()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            rebuilt,
+            vec![SourceSpec::Web {
+                url: "https://example.com".into()
+            }]
+        );
+        // After the new mixer: SetFormat comes first.
+        assert!(matches!(cmds[0], Command::SetFormat { .. }));
+    }
+
+    #[test]
+    fn pages_need_a_web_address_and_graphics_a_channel() {
+        let mut sw = Switcher::new(SLOTS);
+        let add = |source: SourceSpec| Action::AddInput { source, name: None };
+        let web = |url: &str| SourceSpec::Web { url: url.into() };
+        let graphics = |g: &str| SourceSpec::Graphics { graphics: g.into() };
+
+        for url in [
+            "file:///etc/passwd",
+            "example.com",
+            "javascript:alert(1)",
+            "",
+        ] {
+            assert!(
+                matches!(sw.apply(add(web(url))), Err(ActionError::BadWebUrl { .. })),
+                "{url}"
+            );
+        }
+        assert!(sw.apply(add(web("https://example.com/score"))).is_ok());
+
+        assert!(matches!(
+            sw.apply(add(graphics("1"))),
+            Err(ActionError::UnknownGraphics { .. })
+        ));
+        sw.apply(Action::AddGraphics {
+            name: Some("Lower thirds".into()),
+        })
+        .unwrap();
+        // By number or by name, as the graphics page takes it.
+        assert!(sw.apply(add(graphics("1"))).is_ok());
+        assert!(sw.apply(add(graphics("Lower thirds"))).is_ok());
+        assert!(matches!(
+            sw.apply(add(graphics("2"))),
+            Err(ActionError::UnknownGraphics { .. })
+        ));
     }
 
     #[test]

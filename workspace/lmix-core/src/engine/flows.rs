@@ -33,6 +33,7 @@ use crate::switcher::Feed;
 const FLOW_NAMESPACE: Uuid = Uuid::from_u128(0x6c6d_6978_2d63_6f72_652d_666c_6f77_7321);
 
 const MEDIA_PLAYER_BLOCK: &str = "builtin.media_player";
+const HTML_INPUT_BLOCK: &str = "builtin.html_input";
 const SRT_INPUT_BLOCK: &str = "builtin.mpegtssrt_input";
 const LOCAL_INPUT_BLOCK: &str = "builtin.local_input";
 const NDI_INPUT_BLOCK: &str = "builtin.ndi_input";
@@ -877,14 +878,42 @@ fn add_audio_mixer(flow: &mut Flow, slots: usize, monitor: MonitorOut, sample_ra
     }
 }
 
+/// Block id of a web page or graphics page in a slot flow.
+const WEB: &str = "web";
+
+/// What a slot flow is built for besides its source.
+#[derive(Clone, Debug)]
+pub struct SlotEnv {
+    pub backend: MixerBackend,
+    /// Program format: web and graphics pages render at its size and rate.
+    pub format: MasterFormat,
+    /// Where the engine reaches lmix-core's pages (graphics channels),
+    /// e.g. `http://127.0.0.1:8090`.
+    pub pages: String,
+}
+
+#[cfg(test)]
+impl SlotEnv {
+    pub fn new(backend: MixerBackend) -> Self {
+        Self {
+            backend,
+            format: MasterFormat::default(),
+            pages: DEFAULT_PAGES.into(),
+        }
+    }
+}
+
+/// lmix-core's own address when nothing else is known.
+pub const DEFAULT_PAGES: &str = "http://127.0.0.1:8090";
+
 /// One slot: the source, published on the slot's inter channel.
-pub fn slot_flow(slot: usize, source: &SourceSpec, backend: MixerBackend) -> Flow {
+pub fn slot_flow(slot: usize, source: &SourceSpec, env: &SlotEnv) -> Flow {
     let mut flow = Flow::new(format!("lmix slot {slot}"));
     flow.id = slot_id(slot);
     share_timing(&mut flow);
 
     // Sound-only sources publish no picture: their mixer input stays empty.
-    if let Some(out) = add_source(&mut flow, source, backend) {
+    if let Some(out) = add_source(&mut flow, source, env) {
         flow.blocks.push(block(SLOT_TAP, THUMBNAIL_BLOCK, vec![]));
         flow.links.push(link(out, format!("{SLOT_TAP}:video_in")));
         flow.blocks
@@ -907,8 +936,18 @@ pub fn slot_flow(slot: usize, source: &SourceSpec, backend: MixerBackend) -> Flo
 
 /// Add the source and return the pad that carries its video; `None` for
 /// sound-only sources (see `SourceSpec::has_video`).
-fn add_source(flow: &mut Flow, source: &SourceSpec, backend: MixerBackend) -> Option<String> {
+fn add_source(flow: &mut Flow, source: &SourceSpec, env: &SlotEnv) -> Option<String> {
+    let backend = env.backend;
     let pad = match source {
+        SourceSpec::Web { url } => add_page(flow, url, PageKind::Web, &env.format),
+        SourceSpec::Graphics { graphics } => {
+            let url = format!(
+                "{}/graphics/{}",
+                env.pages.trim_end_matches('/'),
+                encode_path_segment(graphics)
+            );
+            add_page(flow, &url, PageKind::Graphics, &env.format)
+        }
         SourceSpec::Pattern { pattern } => {
             let pattern = pattern.nick().into();
             add_test_picture(flow, vec![("pattern", PropertyValue::String(pattern))])
@@ -1041,6 +1080,67 @@ pub fn player_items(source: &SourceSpec) -> Option<Vec<String>> {
     }
 }
 
+/// What a page in a slot is.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum PageKind {
+    /// Someone's web page: with sound, kept off the local network.
+    Web,
+    /// lmix-core's graphics page: silent, served from this machine.
+    Graphics,
+}
+
+/// The engine's browser rendering `url` at the program's size and rate
+/// (strom `builtin.html_input`, Chromium through `cefsrc`).
+fn add_page(flow: &mut Flow, url: &str, kind: PageKind, format: &MasterFormat) -> String {
+    let stream_mode = match kind {
+        PageKind::Web => "audio_video",
+        PageKind::Graphics => "video",
+    };
+    flow.blocks.push(block(
+        WEB,
+        HTML_INPUT_BLOCK,
+        vec![
+            ("url", PropertyValue::String(url.into())),
+            ("width", PropertyValue::UInt(u64::from(format.width))),
+            ("height", PropertyValue::UInt(u64::from(format.height))),
+            (
+                "framerate",
+                PropertyValue::UInt(whole_fps(format.framerate.fraction())),
+            ),
+            ("stream_mode", PropertyValue::String(stream_mode.into())),
+            // strom refuses pages on this machine and its network unless
+            // told otherwise; lmix-core's own page is one of them.
+            ("strict_network", PropertyValue::Bool(kind == PageKind::Web)),
+        ],
+    ));
+    format!("{WEB}:video_out")
+}
+
+/// Frames per second rounded up: Chromium renders whole frames per second.
+fn whole_fps(fraction: &str) -> u64 {
+    let (num, den) = fraction.split_once('/').unwrap_or((fraction, "1"));
+    let (num, den) = (
+        num.parse::<u64>().unwrap_or(30),
+        den.parse::<u64>().unwrap_or(1),
+    );
+    num.div_ceil(den.max(1))
+}
+
+/// `text` as one URL path segment: unreserved characters stay, the rest
+/// is percent-encoded.
+fn encode_path_segment(text: &str) -> String {
+    let mut out = String::new();
+    for byte in text.bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => {
+                out.push(byte as char)
+            }
+            _ => out.push_str(&format!("%{byte:02X}")),
+        }
+    }
+    out
+}
+
 /// Playout delay of a player on local files (ms). strom holds every
 /// buffer this long before it plays (500 ms by default), to ride out
 /// network stalls; a local file needs little, and the delay is how late a
@@ -1117,6 +1217,7 @@ fn add_audio(flow: &mut Flow, slot: usize, source: &SourceSpec) -> Option<String
         SourceSpec::Srt { .. } => "srt:audio_out_0".into(),
         SourceSpec::Ndi { .. } => "ndi:audio_out".into(),
         SourceSpec::Whip { .. } => "whip:audio_out".into(),
+        SourceSpec::Web { .. } => format!("{WEB}:audio_out"),
         SourceSpec::AudioDevice { id } => {
             flow.blocks.push(block(
                 "adev",
@@ -1128,9 +1229,10 @@ fn add_audio(flow: &mut Flow, slot: usize, source: &SourceSpec) -> Option<String
             ));
             "adev:audio_out".into()
         }
-        SourceSpec::Device { .. } | SourceSpec::Color { .. } | SourceSpec::Image { .. } => {
-            return None
-        }
+        SourceSpec::Device { .. }
+        | SourceSpec::Color { .. }
+        | SourceSpec::Image { .. }
+        | SourceSpec::Graphics { .. } => return None,
     };
     Some(pad)
 }
@@ -1352,7 +1454,7 @@ mod tests {
             &SourceSpec::Pattern {
                 pattern: TestPattern::Ball,
             },
-            MixerBackend::Cuda,
+            &SlotEnv::new(MixerBackend::Cuda),
         );
 
         assert_eq!(flow.id, slot_id(2));
@@ -1378,7 +1480,7 @@ mod tests {
             &SourceSpec::Pattern {
                 pattern: TestPattern::Bars,
             },
-            MixerBackend::Cpu,
+            &SlotEnv::new(MixerBackend::Cpu),
         );
 
         assert!(flow
@@ -1394,7 +1496,7 @@ mod tests {
             &SourceSpec::Color {
                 color: "#ff8000".into(),
             },
-            MixerBackend::Cpu,
+            &SlotEnv::new(MixerBackend::Cpu),
         );
         let src = flow.elements.iter().find(|e| e.id == "src").unwrap();
 
@@ -1407,7 +1509,11 @@ mod tests {
     #[test]
     fn playlist_shares_one_player_for_picture_and_sound() {
         let paths = vec!["/a.mp4".to_string(), "/b.mp4".to_string()];
-        let flow = slot_flow(0, &SourceSpec::Playlist { paths }, MixerBackend::Cpu);
+        let flow = slot_flow(
+            0,
+            &SourceSpec::Playlist { paths },
+            &SlotEnv::new(MixerBackend::Cpu),
+        );
 
         assert_eq!(flow.blocks.iter().filter(|b| b.id == PLAYER).count(), 1);
         assert!(flow
@@ -1425,7 +1531,7 @@ mod tests {
         let flow = slot_flow(
             0,
             &SourceSpec::AudioDevice { id: "mic".into() },
-            MixerBackend::Cpu,
+            &SlotEnv::new(MixerBackend::Cpu),
         );
 
         assert!(flow
@@ -1445,7 +1551,7 @@ mod tests {
             &SourceSpec::Image {
                 path: "/logo.png".into(),
             },
-            MixerBackend::Cuda,
+            &SlotEnv::new(MixerBackend::Cuda),
         );
 
         assert!(flow
@@ -1464,7 +1570,7 @@ mod tests {
         let flow = slot_flow(
             0,
             &SourceSpec::Device { id: "cam".into() },
-            MixerBackend::Cpu,
+            &SlotEnv::new(MixerBackend::Cpu),
         );
 
         assert!(flow.blocks.iter().all(|b| b.id != SLOT_AUDIO_OUT));
@@ -1942,7 +2048,7 @@ mod tests {
             &SourceSpec::Pattern {
                 pattern: TestPattern::Bars,
             },
-            MixerBackend::Cpu,
+            &SlotEnv::new(MixerBackend::Cpu),
         );
 
         for flow in [
@@ -2027,7 +2133,7 @@ mod tests {
             path: "/clip.webm".into(),
         };
         let system_memory = |backend| {
-            let flow = slot_flow(0, &file, backend);
+            let flow = slot_flow(0, &file, &SlotEnv::new(backend));
             let player = flow.blocks.iter().find(|b| b.id == "player").unwrap();
             matches!(
                 player.properties.get("system_memory"),
@@ -2043,10 +2149,92 @@ mod tests {
         assert!(!system_memory(MixerBackend::Cuda));
     }
 
+    fn html_block(flow: &Flow) -> &strom_types::BlockInstance {
+        flow.blocks
+            .iter()
+            .find(|b| b.block_definition_id == HTML_INPUT_BLOCK)
+            .expect("an HTML input")
+    }
+
+    fn uint(block: &strom_types::BlockInstance, key: &str) -> u64 {
+        match block.properties.get(key) {
+            Some(PropertyValue::UInt(v)) => *v,
+            other => panic!("{key} is {other:?}"),
+        }
+    }
+
+    fn text<'a>(block: &'a strom_types::BlockInstance, key: &str) -> &'a str {
+        match block.properties.get(key) {
+            Some(PropertyValue::String(v)) => v,
+            other => panic!("{key} is {other:?}"),
+        }
+    }
+
+    fn flag(block: &strom_types::BlockInstance, key: &str) -> bool {
+        match block.properties.get(key) {
+            Some(PropertyValue::Bool(v)) => *v,
+            other => panic!("{key} is {other:?}"),
+        }
+    }
+
+    /// A web page renders at the program's size and rate (GFX.2), with its
+    /// sound (GFX.6), and stays off the machine's own network.
+    #[test]
+    fn web_page_renders_at_program_size_with_sound() {
+        let env = SlotEnv {
+            format: MasterFormat {
+                width: 1080,
+                height: 1920,
+                framerate: lmix_types::Framerate::Fps29_97,
+            },
+            ..SlotEnv::new(MixerBackend::Cpu)
+        };
+        let source = SourceSpec::Web {
+            url: "https://example.com/scoreboard".into(),
+        };
+        let flow = slot_flow(0, &source, &env);
+        let web = html_block(&flow);
+        assert_eq!(text(web, "url"), "https://example.com/scoreboard");
+        assert_eq!(uint(web, "width"), 1080);
+        assert_eq!(uint(web, "height"), 1920);
+        // Chromium renders whole frames per second: 29.97 asks for 30.
+        assert_eq!(uint(web, "framerate"), 30);
+        assert_eq!(text(web, "stream_mode"), "audio_video");
+        assert!(flag(web, "strict_network"));
+        assert!(flow
+            .links
+            .iter()
+            .any(|l| l.from == format!("{WEB}:audio_out")));
+    }
+
+    /// A graphics channel as an input (GFX.2, GFX.17): the engine renders
+    /// lmix-core's own transparent page for it, silent, from the local
+    /// network that strict mode would refuse.
+    #[test]
+    fn graphics_channel_renders_the_lmix_page() {
+        let env = SlotEnv {
+            pages: "http://127.0.0.1:8090".into(),
+            ..SlotEnv::new(MixerBackend::Cpu)
+        };
+        let source = SourceSpec::Graphics {
+            graphics: "Lower thirds".into(),
+        };
+        let flow = slot_flow(0, &source, &env);
+        let page = html_block(&flow);
+        assert_eq!(
+            text(page, "url"),
+            "http://127.0.0.1:8090/graphics/Lower%20thirds"
+        );
+        assert_eq!(text(page, "stream_mode"), "video");
+        assert!(!flag(page, "strict_network"));
+        assert!(!source.has_audio());
+        assert_eq!(uint(page, "width"), 1920);
+    }
+
     #[test]
     fn local_clips_start_without_the_stream_playout_delay() {
         let delay = |source: &SourceSpec| {
-            let flow = slot_flow(0, source, MixerBackend::Cpu);
+            let flow = slot_flow(0, source, &SlotEnv::new(MixerBackend::Cpu));
             let player = flow.blocks.iter().find(|b| b.id == "player").unwrap();
             match player.properties.get("playout_delay_ms") {
                 Some(PropertyValue::UInt(ms)) => Some(*ms),
@@ -2078,7 +2266,7 @@ mod tests {
             &SourceSpec::File {
                 path: "/a b.mp4".into(),
             },
-            MixerBackend::Cpu,
+            &SlotEnv::new(MixerBackend::Cpu),
         );
         let player = flow.blocks.iter().find(|b| b.id == "player").unwrap();
 

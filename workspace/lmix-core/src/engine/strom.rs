@@ -82,6 +82,8 @@ pub struct StromEngine {
     metering: AtomicBool,
     /// Directory of the live picture sockets (see [`Engine::live`]).
     live_dir: PathBuf,
+    /// Where the engine reaches lmix-core's pages (graphics channels).
+    pages: String,
     /// One live flow is set up at a time (two Consoles asking at once).
     live_setup: Mutex<()>,
     /// Mute of each audio mixer channel and bus as last sent (see
@@ -124,6 +126,7 @@ impl StromEngine {
             players: broadcast::channel(PLAYER_BUFFER).0,
             metering: AtomicBool::new(false),
             live_dir: default_live_dir(),
+            pages: flows::DEFAULT_PAGES.into(),
             live_setup: Mutex::new(()),
             mutes: Default::default(),
             format: Default::default(),
@@ -136,6 +139,12 @@ impl StromEngine {
     /// Live picture sockets in `dir` instead of [`default_live_dir`].
     pub fn with_live_dir(mut self, dir: PathBuf) -> Self {
         self.live_dir = dir;
+        self
+    }
+
+    /// lmix-core's address as the engine reaches it, for graphics pages.
+    pub fn with_pages(mut self, url: String) -> Self {
+        self.pages = url;
         self
     }
 
@@ -828,8 +837,12 @@ impl Engine for StromEngine {
                 slot,
                 source: Some(source),
             } => {
-                self.put_flow(&flows::slot_flow(*slot, source, self.backend))
-                    .await
+                let env = flows::SlotEnv {
+                    backend: self.backend,
+                    format: *self.format.lock().expect("format lock"),
+                    pages: self.pages.clone(),
+                };
+                self.put_flow(&flows::slot_flow(*slot, source, &env)).await
             }
             Command::SetSlot { slot, source: None } => self.drop_flow(flows::slot_id(*slot)).await,
             Command::Preview { slot } => self.select_preview(*slot).await,

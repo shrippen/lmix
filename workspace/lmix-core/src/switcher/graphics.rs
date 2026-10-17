@@ -13,6 +13,7 @@ use lmix_types::graphics::TRANSFORM_MS_MAX;
 use lmix_types::graphics::{
     cell, formatted, DATASETS, DATA_AUTO_MIN_MS, DATA_ROWS, DATA_SOURCES, GRAPHICS, GRAPHICS_LAYERS,
 };
+use lmix_types::SourceSpec;
 use lmix_types::{
     Action, ActionError, BindingSpec, DataSource, Dataset, Easing, FieldBinding, Graphics, InputId,
     InputRef, TitleCall, TitleData, TitleLayer, TitlePhase,
@@ -739,6 +740,25 @@ impl Switcher {
     pub fn graphics_id(&self, graphics: &InputRef) -> Option<InputId> {
         let at = self.find_graphics(graphics).ok()?;
         Some(self.show.graphics[at].id)
+    }
+
+    /// A graphics channel as an input must exist, named as the graphics
+    /// page takes it: number, name or id.
+    pub(super) fn check_graphics_source(&self, source: &SourceSpec) -> Result<(), ActionError> {
+        let SourceSpec::Graphics { graphics } = source else {
+            return Ok(());
+        };
+        let text = graphics.trim();
+        let known = self.show.graphics.iter().enumerate().any(|(i, g)| {
+            text == (i + 1).to_string() || text == g.name || text == g.id.to_string()
+        });
+        if known {
+            Ok(())
+        } else {
+            Err(ActionError::UnknownGraphics {
+                reference: graphics.clone(),
+            })
+        }
     }
 
     fn find_graphics(&self, graphics: &InputRef) -> Result<usize, ActionError> {

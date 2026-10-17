@@ -96,6 +96,13 @@ pub enum SourceSpec {
     Whip { endpoint: String },
     /// Audio-only input: microphone or line-in by device id (AUD.1).
     AudioDevice { id: String },
+    /// Web page rendered by the engine's browser, with its sound (GFX.6):
+    /// an http(s) address.
+    Web { url: String },
+    /// A graphics channel's page as an input (GFX.2, GFX.17): its titles
+    /// over a transparent background, keyable as an overlay. Number, name
+    /// or id of the channel.
+    Graphics { graphics: String },
 }
 
 /// What a transport button does to a file, URL or playlist input (SRC.3).
@@ -182,7 +189,7 @@ impl SourceSpec {
     pub fn has_audio(&self) -> bool {
         !matches!(
             self,
-            Self::Device { .. } | Self::Color { .. } | Self::Image { .. }
+            Self::Device { .. } | Self::Color { .. } | Self::Image { .. } | Self::Graphics { .. }
         )
     }
 
@@ -216,6 +223,8 @@ impl SourceSpec {
             },
             Self::Ndi { name } => name.clone(),
             Self::Whip { endpoint } => format!("WHIP {endpoint}"),
+            Self::Web { url } => url.clone(),
+            Self::Graphics { graphics } => format!("Graphics {graphics}"),
         }
     }
 }
