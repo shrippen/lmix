@@ -2,6 +2,7 @@
 # scripts/update-translations.sh collects the sources and writes these
 # into qml_de.ts (i18n/fill.py). Keep it complete.
 DE = {
+    'Sound at 44.1 kHz': 'Ton mit 44,1 kHz',
     'RTMP stream (YouTube, Twitch …)': 'RTMP-Stream (YouTube, Twitch …)',
     'Stream key': 'Stream-Schlüssel',
     'New show': 'Neue Show',

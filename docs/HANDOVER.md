@@ -1,6 +1,6 @@
 # Übergabe: Stand M9 und Show-Modus S1 (in Arbeit), lokale Übernahme
 
-Stand 2026-10-09, PR-Liste 2026-10-17 (bis #88). Die Arbeit läuft lokal weiter (Arch, RTX 3090), Abnahme
+Stand 2026-10-09, PR-Liste 2026-10-17 (bis #89). Die Arbeit läuft lokal weiter (Arch, RTX 3090), Abnahme
 auf echter Hardware.
 
 ## Offene PRs, Stand 2026-10-17 nachts (Merge-Reihenfolge)
@@ -68,6 +68,8 @@ unten mergen; Gitea stellt die Basis des nächsten auf `main` um):
 | #86 | `strom-upstream-fixes` | strom-Pin mit upstream #874/#788 (strom #19) |
 | #87 | `vm-picture-retry` | VM-Check: fehlendes Bild ist ein Fehlversuch |
 | #88 | `aud12-meter` | Pegel stumm blass, Spitzenwert 2 s (AUD.12) |
+| #89 | `aud17-sample-rate` | Abtastrate 44,1 kHz wählbar (AUD.17) |
+| #90 | `strom-upstream-sync` | strom mit ganzem upstream main 0.7.1 (strom #20), Player-Verzögerung 100 ms für Dateien |
 
 Rote GitHub-Läufe auf `s1-feeds` und `s1-script-folder` sind die wackelige
 Failover-Prüfung, die #45 behebt (der Stapel bekommt sie über `main`).
@@ -77,6 +79,15 @@ Breaking (vor dem ersten Release erlaubt, je PR beschrieben): Cue `label`
 OSC `/lmix/cue/next` → `/lmix/cue/standby`, OSC-Abos laufen nach 60 s
 ohne Lebenszeichen ab; Show-Dateien Version 1 werden beim Öffnen
 umgewandelt (alte Datei bleibt als `.v1.bak`).
+
+strom-Upstream (Eyevinn/strom `main`): ganz übernommen als Merge (strom
+#20 `lmix-upstream-sync`, upstream 0.7.1 vom 15.10.), lmix #90 pinnt ihn.
+Upstream ersetzt unseren Abtastraten-Patch und `gl_bridge.rs`; was es
+behält und anpasst, steht in DECISIONS 17.10. „strom mit ganzem upstream
+main“. CPU-Pfade sind in der VM geprüft, die GPU-Pfade (CUDA-/GL-Mischer,
+NVDEC/NVENC, Thumbnails) brauchen die Abnahme auf der RTX 3090. Neu
+verfügbar: HTML-Input (GFX.2), Player für Live-Streams/URLs, upstream-
+Stinger, Live-Recorder.
 
 Offen für S1 (DECISIONS „Show-Modus …“, PERSONAS Durchlauf 10): Klang-
 und Bild-Cues, Zonen, Bühnen (Stufen 2/3), warten auf die Entscheidungen
@@ -97,8 +108,10 @@ strom-Fork auf Gitea (`shrippen/strom`), Ziel `dev`, seit 17.10. gestapelt:
 #15 `lmix-still-release` (Leck pausierter Clips) → #16 `lmix-nine-dsk`
 (9 DSK-Ebenen) → #17 `lmix-player-loop` (Schleife live) → #18
 `lmix-rtmp-output` (RTMP und 4:2:0 aus upstream) → #19
-`lmix-upstream-fixes` (Stopp begrenzt, Bus-Watches). Das Submodul von
-lmix #74 zeigt auf #17, #85 auf #18, #86 auf #19; nach dem Merge auf `dev` neu pinnen.
+`lmix-upstream-fixes` (Stopp begrenzt, Bus-Watches) → #20
+`lmix-upstream-sync` (ganzes upstream main). Das Submodul von lmix #74
+zeigt auf #17, #85 auf #18, #86 auf #19, #90 auf #20; nach dem Merge auf
+`dev` neu pinnen.
 
 strom-Fork (`shrippen/strom`), Ziel `dev`:
 - Gemergt: #1 `lmix-start-time`, #2 `lmix-sample-rate`, #3

@@ -204,6 +204,7 @@ pub const ACTION_GROUPS: &[(&str, &[&str])] = &[
             "stop_outputs",
             "set_master_format",
             "set_multiview",
+            "set_sample_rate",
         ],
     ),
     (
@@ -509,6 +510,11 @@ pub enum Action {
     /// meters. The engine builds the mixer anew, as for the format.
     SetMultiview {
         layout: crate::output::MultiviewLayout,
+    },
+    /// Sample rate of the audio mixer (AUD.17): 48000 (default) or
+    /// 44100. Inputs are resampled to it; the mixer is built anew.
+    SetSampleRate {
+        hz: u32,
     },
     /// Master of program sound: volume 0–100 and mute (AUD.2).
     SetMaster {
@@ -1246,6 +1252,8 @@ pub enum ActionError {
     UnknownOutput { reference: String },
     #[error("encoding: {reason}")]
     BadEncoding { reason: String },
+    #[error("sample rate {hz} Hz: 48000 or 44100")]
+    BadSampleRate { hz: u32 },
     #[error("no input matches {reference}")]
     UnknownInput { reference: String },
     #[error("all {slots} mixer slots are in use")]

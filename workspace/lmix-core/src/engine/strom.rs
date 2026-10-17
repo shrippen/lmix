@@ -91,6 +91,8 @@ pub struct StromEngine {
     format: std::sync::Mutex<lmix_types::MasterFormat>,
     /// Multiview layout of the mixer (OUT.10), with `format`.
     multiview: std::sync::Mutex<lmix_types::MultiviewLayout>,
+    /// Sample rate of the audio mixer (AUD.17), with `format`.
+    sample_rate: std::sync::Mutex<u32>,
     /// Mixer inputs of the last `start`.
     slots: AtomicUsize,
 }
@@ -126,6 +128,7 @@ impl StromEngine {
             mutes: Default::default(),
             format: Default::default(),
             multiview: Default::default(),
+            sample_rate: std::sync::Mutex::new(lmix_types::output::default_sample_rate()),
             slots: AtomicUsize::new(0),
         }
     }
@@ -274,10 +277,11 @@ impl StromEngine {
 
         // strom reads the inputs only when no composition is involved.
         let body = TriggerTransitionRequest {
-            from_input: state.program_input.unwrap_or(0),
-            to_input: to.as_input().unwrap_or(0),
+            from_input: Some(state.program_input.unwrap_or(0)),
+            to_input: Some(to.as_input().unwrap_or(0)),
             transition_type: wire_name(effect).into(),
             duration_ms: u64::from(duration_ms),
+            stinger_clip: None,
         };
 
         // Right after start strom cannot place a transition until the first
@@ -388,12 +392,14 @@ impl StromEngine {
     fn mixer_flow(&self) -> Flow {
         let format = *self.format.lock().expect("format lock");
         let multiview = *self.multiview.lock().expect("multiview lock");
+        let sample_rate = *self.sample_rate.lock().expect("rate lock");
         flows::mixer_flow(
             self.slots.load(Ordering::Relaxed),
             self.backend,
             self.monitor,
             format,
             multiview,
+            sample_rate,
         )
     }
 
@@ -411,15 +417,18 @@ impl StromEngine {
         &self,
         format: lmix_types::MasterFormat,
         multiview: lmix_types::MultiviewLayout,
+        sample_rate: u32,
     ) -> Result<(), EngineError> {
         {
             let mut current = self.format.lock().expect("format lock");
             let mut current_view = self.multiview.lock().expect("multiview lock");
-            if *current == format && *current_view == multiview {
+            let mut current_rate = self.sample_rate.lock().expect("rate lock");
+            if *current == format && *current_view == multiview && *current_rate == sample_rate {
                 return Ok(());
             }
             *current = format;
             *current_view = multiview;
+            *current_rate = sample_rate;
         }
         let flow = self.mixer_flow();
         self.build_mixer(&flow).await
@@ -804,6 +813,9 @@ impl Engine for StromEngine {
             if let Some(multiview) = current.as_ref().map(flows::multiview_of) {
                 *self.multiview.lock().expect("multiview lock") = multiview;
             }
+            if let Some(rate) = current.as_ref().and_then(flows::sample_rate_of) {
+                *self.sample_rate.lock().expect("rate lock") = rate;
+            }
             return Ok(());
         }
         let wanted = self.mixer_flow();
@@ -922,7 +934,11 @@ impl Engine for StromEngine {
                 };
                 self.set_level(level, *ramp_ms).await
             }
-            Command::SetFormat { format, multiview } => self.set_format(*format, *multiview).await,
+            Command::SetFormat {
+                format,
+                multiview,
+                sample_rate,
+            } => self.set_format(*format, *multiview, *sample_rate).await,
             Command::SetMonitor { gain } => {
                 let fader = ("monitor_fader".to_string(), PropertyValue::Float(*gain));
                 self.patch_audio_mixer(vec![fader], AUDIO_RAMP_MS).await

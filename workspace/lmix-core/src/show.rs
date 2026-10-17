@@ -111,6 +111,12 @@ pub struct Show {
         skip_serializing_if = "lmix_types::MultiviewLayout::is_default"
     )]
     pub multiview: lmix_types::MultiviewLayout,
+    /// Sample rate of the audio mixer, Hz (AUD.17).
+    #[serde(
+        default = "lmix_types::output::default_sample_rate",
+        skip_serializing_if = "is_default_rate"
+    )]
+    pub sample_rate: u32,
     /// Volume of the monitor bus (AUD.4).
     #[serde(default = "lmix_types::input::full_volume")]
     pub monitor_volume: u8,
@@ -272,6 +278,7 @@ impl Default for Show {
             master: Default::default(),
             format: Default::default(),
             multiview: Default::default(),
+            sample_rate: lmix_types::output::default_sample_rate(),
             monitor_volume: lmix_types::input::full_volume(),
             default_delay_ms: 0,
             layouts: Vec::new(),
@@ -308,6 +315,10 @@ where
     }
     let mut saved = saved.into_iter();
     Ok(std::array::from_fn(|_| saved.next().unwrap_or_default()))
+}
+
+fn is_default_rate(hz: &u32) -> bool {
+    *hz == lmix_types::output::default_sample_rate()
 }
 
 fn all_default(channels: &[OverlayChannel; OVERLAY_CHANNELS as usize]) -> bool {
@@ -647,6 +658,7 @@ mod tests {
                 program: lmix_types::ProgramSide::Left,
                 ..Default::default()
             },
+            sample_rate: 44_100,
             monitor_volume: 70,
             default_delay_ms: 40,
             outputs: vec![ShowOutput {

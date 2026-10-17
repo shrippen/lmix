@@ -120,6 +120,8 @@ pub enum Command {
     SetFormat {
         format: lmix_types::MasterFormat,
         multiview: lmix_types::MultiviewLayout,
+        /// Of the audio mixer, Hz (AUD.17).
+        sample_rate: u32,
     },
     /// Mix `slot` (preview) over program by `position` (0–1), as the
     /// T-bar stands; 0 hides it again.
@@ -1118,6 +1120,16 @@ impl Switcher {
                 self.show.format = format;
                 Ok(self.mixer_rebuilt())
             }
+            Action::SetSampleRate { hz } => {
+                if !lmix_types::output::SAMPLE_RATES.contains(&hz) {
+                    return Err(ActionError::BadSampleRate { hz });
+                }
+                if hz == self.show.sample_rate {
+                    return Ok(Vec::new());
+                }
+                self.show.sample_rate = hz;
+                Ok(self.mixer_rebuilt())
+            }
             Action::SetMultiview { layout } => {
                 if layout == self.show.multiview {
                     return Ok(Vec::new());
@@ -1426,6 +1438,7 @@ impl Switcher {
         let mut commands = vec![Command::SetFormat {
             format: self.show.format,
             multiview: self.show.multiview,
+            sample_rate: self.show.sample_rate,
         }];
         commands.extend(self.picture_commands());
         self.mix.clear();
@@ -1611,6 +1624,7 @@ impl Switcher {
             master: self.show.master,
             format: self.show.format,
             multiview: self.show.multiview,
+            sample_rate: self.show.sample_rate,
             monitor_volume: self.show.monitor_volume,
             default_delay_ms: self.show.default_delay_ms,
             looks_available: self.looks_available,
@@ -5870,7 +5884,8 @@ mod tests {
             cmds[0],
             Command::SetFormat {
                 format: upright,
-                multiview: Default::default()
+                multiview: Default::default(),
+                sample_rate: 48_000
             }
         );
         assert!(cmds
@@ -7122,6 +7137,32 @@ mod tests {
     }
 
     #[test]
+    fn the_sample_rate_rebuilds_the_mixer_only() {
+        let mut sw = two_inputs();
+        let cmds = sw.apply(Action::SetSampleRate { hz: 44_100 }).unwrap();
+        assert!(matches!(
+            cmds[0],
+            Command::SetFormat {
+                sample_rate: 44_100,
+                ..
+            }
+        ));
+        assert!(
+            !cmds.iter().any(|c| matches!(c, Command::SetSlot { .. })),
+            "the sources keep running (the channel strips resample)"
+        );
+        assert_eq!(sw.state().sample_rate, 44_100);
+        assert!(sw
+            .apply(Action::SetSampleRate { hz: 44_100 })
+            .unwrap()
+            .is_empty());
+        assert!(matches!(
+            sw.apply(Action::SetSampleRate { hz: 96_000 }),
+            Err(ActionError::BadSampleRate { hz: 96_000 })
+        ));
+    }
+
+    #[test]
     fn a_multiview_layout_rebuilds_the_mixer_only() {
         let mut sw = two_inputs();
         let layout = lmix_types::MultiviewLayout {
@@ -7135,7 +7176,8 @@ mod tests {
             cmds[0],
             Command::SetFormat {
                 format: Default::default(),
-                multiview: layout
+                multiview: layout,
+                sample_rate: 48_000
             }
         );
         assert!(

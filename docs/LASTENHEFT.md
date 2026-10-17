@@ -272,7 +272,7 @@ kann es, Console nicht.
 | AUD.14 | Pegel-Fades per Aktion (Ziel, Dauer) für Input, Master, Busse | S | ✅ (`fade_volume`, bis 60 s, linear im Pegel; Kurven mit SND.6) |
 | AUD.15 | Mehrkanal-Kombinationen für Senken: Master, einzelne Busse, MA, MAB, MABC, alle 16 Kanäle | S | – |
 | AUD.16 | Taktabweichung je Quelle: Lücke füllen oder resamplen (wählbar) | M | – |
-| AUD.17 | Abtastrate 48 kHz (44,1 kHz wählbar); intern Gleitkomma | M | ◐ (48 kHz fest, 44,1 kHz nicht wählbar; intern Gleitkomma) |
+| AUD.17 | Abtastrate 48 kHz (44,1 kHz wählbar); intern Gleitkomma | M | ✅ (48 kHz, 44,1 kHz wählbar je Show; Inputs werden im Kanalzug umgerechnet; intern Gleitkomma) |
 | AUD.18 | -20-dB-Pad je Input; +20 dB je Netzausgang | K | – |
 | AUD.19 | Mixer-Fenster abdockbar; Kanalzüge ein-/ausblendbar; nach Kategorie filtern | S | – |
 | AUD.20 | Sprachbefehle als Tastenbelegung | X | – |

@@ -445,3 +445,11 @@ impl MultiviewLayout {
         *self == Self::default()
     }
 }
+
+/// Sample rates the audio mixer runs at (AUD.17), Hz.
+pub const SAMPLE_RATES: [u32; 2] = [48_000, 44_100];
+
+/// The default: broadcast and video run at 48 kHz.
+pub fn default_sample_rate() -> u32 {
+    SAMPLE_RATES[0]
+}
