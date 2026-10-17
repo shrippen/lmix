@@ -456,9 +456,9 @@ impl Service {
                 if sw.sync_standby() {
                     self.write_autosave(&sw).await;
                 }
-                if !out.is_empty() {
-                    self.publish(&sw);
-                }
+                // Every due step changes what runs (a wait's pre wait
+                // ending makes no out, but clients show the phase).
+                self.publish(&sw);
                 out
             };
             self.run_cue_outs(out).await;
