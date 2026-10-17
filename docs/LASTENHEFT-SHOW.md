@@ -143,7 +143,7 @@ ausgeschlossen. **MS**: Meilenstein (§7). Stand: ✅ vorhanden · ◐ teilweise
 
 | ID | Anforderung | Prio | MS | Stand |
 |---|---|---|---|---|
-| SND.1 | Klang-Cue spielt eine Datei (WAV, FLAC, OGG, Opus, MP3; bis 24 Kanäle; Abtastrate und Bittiefe beliebig, automatisch angepasst). Komprimierte Formate werden vorab dekodiert oder vorgeladen, damit SND.12 gilt | M | S1 | ◐ (Datei über strom `show_playback`, Formate wie GStreamer dekodiert; ohne Vorladen) |
+| SND.1 | Klang-Cue spielt eine Datei (WAV, FLAC, OGG, Opus, MP3; bis 24 Kanäle; Abtastrate und Bittiefe beliebig, automatisch angepasst). Komprimierte Formate werden vorab dekodiert oder vorgeladen, damit SND.12 gilt | M | S1 | ◐ (Datei über strom `show_playback`, Formate wie GStreamer dekodiert; Standby-Cue vorgeladen; bis 24 Kanäle ungeprüft) |
 | SND.2 | Lautstärke je Cue (dB, 0 dB = unverändert). Einblendzeit und Ausblendzeit beim Stoppen als Komfort im Klang-Cue; wirken intern wie Fades und werden von späteren Fades übersteuert (lmix) | M | S1 | ✅ (Pegel, Ein- und Ausblendzeit im Klang-Cue) |
 | SND.3 | Wiederholungen: n-mal oder endlos, lückenlos (keine Pause, kein Klick an der Nahtstelle) | M | S1 | – |
 | SND.4 | Mindestens 16 Klang-Cues gleichzeitig ohne Aussetzer (lmix) | M | S1 | – |
@@ -154,7 +154,7 @@ ausgeschlossen. **MS**: Meilenstein (§7). Stand: ✅ vorhanden · ◐ teilweise
 | SND.9 | Weitere Kurven (linear, parametrisch) und Pegelbereich (Reglerskala, dB, linear) | S | S2 | – |
 | SND.10 | Zonen: mindestens 8 benannte Zonen mit 1–8 Kanälen; pro Rechner Zuordnung Zone → Gerät und Kanäle mit Pegel, mehrere Ziele je Zone möglich. Die Show nennt nur Zonennamen (lmix; QLab hält Patches im Dokument) | M | S1 | ✅ (Zonen in der Show, Zuordnung je Rechner, mehrere Ausgänge; Flow „lmix playback“) |
 | SND.11 | Lautstärke und Mute je Zone, als Aktion, als Fade-Ziel und in der Oberfläche | M | S1 | ◐ (Pegel und Mute je Zone als Aktion und Fade-Ziel; Oberfläche fehlt) |
-| SND.12 | Latenz GO → hörbarer Klang ≤ 50 ms | M | S1 | – |
+| SND.12 | Latenz GO → hörbarer Klang ≤ 50 ms | M | S1 | ◐ (Standby-Cue vorgeladen, GO gibt ihn nur frei; Messung mit Gerät offen, H.37) |
 | SND.13 | Reglergrenzen der Show: höchster Wert (Standard +12 dB) und niedrigster (Standard −60 dB = still); gelten für Cues, Fades und Fernsteuerung | M | S1 | – |
 | SND.14 | Signal-Begrenzer je Zone (Höchstpegel in dBFS), Schutz vor Lautstärkesprüngen (lmix) | S | S1 | – |
 | SND.15 | Zonen auf verschiedenen Geräten bleiben über 4 h synchron (Taktangleichung); Abweichung im Selftest gemessen | M | S1 | – |

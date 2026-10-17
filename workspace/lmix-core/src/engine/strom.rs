@@ -1025,6 +1025,7 @@ impl Engine for StromEngine {
             // The service waits; nothing for the engine to do.
             Command::Wait { .. } => Ok(()),
             Command::SetPlayback { playback } => self.set_playback(playback).await,
+            Command::SetPreload { preload } => self.set_preload(preload).await,
             Command::ShowPicture { id, picture } => self.show_picture(id, picture).await,
             Command::FadePicture {
                 id,

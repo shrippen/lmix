@@ -115,15 +115,18 @@ cues="$(jq -cn --arg one "$WORK/tone1.wav" --arg ten "$WORK/tone10.wav" --arg re
 ]')"
 act '{"action":"set_go_guard","ms":0}' || fail "GO guard refused"
 act "{\"action\":\"add_cue_list\",\"name\":\"Sound\",\"cues\":$cues}" || fail "cue list refused"
+within '[[ "$(sounds)" == *ready* ]]' 3 || fail "the standby sound is not held ready: $(sounds)"
+pass "standby sound cue held ready (preloaded)"
 act '{"action":"cue_go"}' || fail "GO refused"
 within '[[ "$(sounds)" == *playing* ]]' 2 || fail "cue 1 does not play: $(sounds)"
 [[ "$(running)" == 1 ]] || fail "running: $(running)"
 within '[[ "$(running)" == 2 ]]' 3 || fail "cue 2 did not follow the end of the file: $(running)"
-[[ "$(sounds)" == "[]" ]] || fail "the sound stayed: $(sounds)"
+[[ "$(sounds)" != *playing* ]] || fail "the sound stayed: $(sounds)"
 pass "sound cue ends with its file, the next follows"
 
 # --- stop with the cue's fade out ---
 act '{"action":"cue_standby","to":{"cue":"3"}}' || fail "standby refused"
+within '[[ "$(sounds)" == *ready* ]]' 3 || fail "standby 3 is not held ready: $(sounds)"
 act '{"action":"cue_go"}' || fail "GO 3 refused"
 within '[[ "$(sounds)" == *playing* ]]' 2 || fail "cue 3 does not play"
 act '{"action":"cue_stop","cue":"3"}' || fail "stop refused"
@@ -138,6 +141,7 @@ within '[[ "$(running)" != *4* ]]' 2 || fail "fade cue still running: $(running)
 pass "fade cue sets the zone level"
 
 # --- a picture cue shows until stopped; fades on the stage and the cue ---
+within '[[ "$(pictures)" == *ready* ]]' 3 || fail "the standby picture is not held ready: $(pictures)"
 act '{"action":"cue_go"}' || fail "GO 5 refused"
 within '[[ "$(pictures)" == *playing* ]]' 2 || fail "cue 5 does not show: $(pictures)"
 sleep 1

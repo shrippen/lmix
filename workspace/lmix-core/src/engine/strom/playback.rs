@@ -5,8 +5,11 @@
 //! strom does not report the end of a sound or picture by itself, so
 //! while any plays a poller reads the block's state and reports those
 //! that are gone ([`Engine::playback_ended`](crate::engine::Engine::playback_ended)).
+//!
+//! What the switcher asks to hold ready (`SetPreload`) is added to the
+//! block decoded and waiting; playing it then only lets it go.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -27,7 +30,7 @@ use crate::engine::flows::encode_path_segment;
 use crate::engine::playback_flow::{playback_flow, playback_flow_id, PLAYBACK_BLOCK};
 use crate::engine::EngineError;
 use crate::playback::{EnginePicture, EngineSound};
-use crate::switcher::Playback;
+use crate::switcher::{Playback, Preload};
 
 /// How often the poller reads which sounds and pictures still play.
 const PLAYBACK_POLL: Duration = Duration::from_millis(100);
@@ -36,6 +39,8 @@ const PLAYBACK_POLL: Duration = Duration::from_millis(100);
 /// Their ids are cue ids, so one set holds both.
 pub(super) struct Playing {
     ids: Arc<Mutex<HashSet<String>>>,
+    /// Held ready in the block, not started yet.
+    ready: Mutex<HashMap<String, Ready>>,
     ended: broadcast::Sender<String>,
     polling: Arc<std::sync::atomic::AtomicBool>,
 }
@@ -44,6 +49,7 @@ impl Default for Playing {
     fn default() -> Self {
         Self {
             ids: Arc::default(),
+            ready: Mutex::default(),
             ended: broadcast::channel(256).0,
             polling: Arc::default(),
         }
@@ -55,12 +61,80 @@ impl Playing {
         self.ended.subscribe()
     }
 
+    /// Take `id` out of what is held ready, if it is held as `what`.
+    fn take_ready(&self, id: &str, what: &Ready) -> bool {
+        let mut ready = self.ready.lock().expect("ready lock");
+        if ready.get(id) == Some(what) {
+            ready.remove(id);
+            true
+        } else {
+            false
+        }
+    }
+
     /// Everything is over (the playback flow is rebuilt or dropped).
     fn forget_all(&self) {
+        self.ready.lock().expect("ready lock").clear();
         let gone: Vec<String> = self.ids.lock().expect("playing lock").drain().collect();
         for id in gone {
             let _ = self.ended.send(id);
         }
+    }
+}
+
+/// What is held ready under an id.
+#[derive(Clone, Debug, PartialEq)]
+enum Ready {
+    Sound(EngineSound),
+    Picture(EnginePicture),
+}
+
+/// strom's request for `sound` as `id`; with a fade in it starts silent.
+fn sound_request(id: &str, sound: &EngineSound, start: SoundStart) -> AddSoundRequest {
+    AddSoundRequest {
+        id: id.to_string(),
+        uri: sound.uri.clone(),
+        gain_db: if sound.fade_in_ms > 0 {
+            GAIN_MIN_DB
+        } else {
+            f64::from(sound.gain_db)
+        },
+        routes: sound
+            .routes
+            .iter()
+            .map(|r| SoundRoute {
+                channel: r.channel,
+                zone: r.zone,
+                zone_channel: r.zone_channel,
+                gain_db: f64::from(r.gain_db),
+            })
+            .collect(),
+        start,
+    }
+}
+
+/// strom's request for `picture` as `id`; with a fade in it starts clear.
+fn picture_request(id: &str, picture: &EnginePicture, start: SoundStart) -> AddPictureRequest {
+    AddPictureRequest {
+        id: id.to_string(),
+        uri: picture.uri.clone(),
+        stage: picture.stage,
+        layer: u32::from(picture.layer),
+        opacity: if picture.fade_in_ms > 0 {
+            0.0
+        } else {
+            f64::from(picture.opacity)
+        },
+        fit: match picture.fit {
+            stage::PictureFit::Fit => PictureFit::Fit,
+            stage::PictureFit::Fill => PictureFit::Fill,
+            stage::PictureFit::Stretch => PictureFit::Stretch,
+        },
+        end: match picture.end {
+            stage::PictureEnd::Hold => PictureEnd::Hold,
+            stage::PictureEnd::Stop => PictureEnd::Stop,
+        },
+        start,
     }
 }
 
@@ -100,33 +174,92 @@ impl StromEngine {
         check(resp).await.map(|_| ())
     }
 
-    /// Play `sound` as `id` at once; with a fade in it starts silent.
+    /// Hold `preload` ready: what is new is added waiting, what was held
+    /// and is no more named (or named otherwise) goes.
+    pub(super) async fn set_preload(&self, preload: &Preload) -> Result<(), EngineError> {
+        let wanted: HashMap<String, Ready> = preload
+            .sounds
+            .iter()
+            .map(|(id, s)| (id.clone(), Ready::Sound(s.clone())))
+            .chain(
+                preload
+                    .pictures
+                    .iter()
+                    .map(|(id, p)| (id.clone(), Ready::Picture(p.clone()))),
+            )
+            .collect();
+        let held: Vec<(String, Ready)> = self
+            .playback
+            .ready
+            .lock()
+            .expect("ready lock")
+            .iter()
+            .map(|(id, what)| (id.clone(), what.clone()))
+            .collect();
+        for (id, what) in held {
+            if wanted.get(&id) == Some(&what) {
+                continue;
+            }
+            self.playback.ready.lock().expect("ready lock").remove(&id);
+            let kind = match what {
+                Ready::Sound(_) => "sounds",
+                Ready::Picture(_) => "pictures",
+            };
+            self.stop_each(kind, vec![id], 0).await;
+        }
+        for (id, what) in wanted {
+            let held = self
+                .playback
+                .ready
+                .lock()
+                .expect("ready lock")
+                .contains_key(&id);
+            if held {
+                continue;
+            }
+            let added = match &what {
+                Ready::Sound(sound) => {
+                    let request = sound_request(&id, sound, SoundStart::Preload);
+                    self.playback_post("/sounds", &request).await
+                }
+                Ready::Picture(picture) => {
+                    let request = picture_request(&id, picture, SoundStart::Preload);
+                    self.playback_post("/pictures", &request).await
+                }
+            };
+            match added {
+                Ok(()) => {
+                    self.playback
+                        .ready
+                        .lock()
+                        .expect("ready lock")
+                        .insert(id, what);
+                }
+                Err(e) => tracing::debug!(error = %e, %id, "not preloaded; it loads on GO"),
+            }
+        }
+        Ok(())
+    }
+
+    /// Let held `id` go (`kind`: `sounds`, `pictures`).
+    async fn release(&self, kind: &str, id: &str) -> Result<(), EngineError> {
+        let path = format!("/{kind}/{}/play", encode_path_segment(id));
+        self.playback_post(&path, &serde_json::json!({})).await
+    }
+
+    /// Play `sound` as `id` at once, letting it go when it is held ready;
+    /// with a fade in it starts silent.
     pub(super) async fn play_sound(
         &self,
         id: &str,
         sound: &EngineSound,
     ) -> Result<(), EngineError> {
-        let request = AddSoundRequest {
-            id: id.to_string(),
-            uri: sound.uri.clone(),
-            gain_db: if sound.fade_in_ms > 0 {
-                GAIN_MIN_DB
-            } else {
-                f64::from(sound.gain_db)
-            },
-            routes: sound
-                .routes
-                .iter()
-                .map(|r| SoundRoute {
-                    channel: r.channel,
-                    zone: r.zone,
-                    zone_channel: r.zone_channel,
-                    gain_db: f64::from(r.gain_db),
-                })
-                .collect(),
-            start: SoundStart::Play,
-        };
-        self.playback_post("/sounds", &request).await?;
+        if self.playback.take_ready(id, &Ready::Sound(sound.clone())) {
+            self.release("sounds", id).await?;
+        } else {
+            let request = sound_request(id, sound, SoundStart::Play);
+            self.playback_post("/sounds", &request).await?;
+        }
         self.track(id);
         if sound.fade_in_ms > 0 {
             self.fade_sound(id, sound.gain_db, sound.fade_in_ms, AfterFade::Keep)
@@ -185,34 +318,22 @@ impl StromEngine {
             .await
     }
 
-    /// Show `picture` as `id` at once; with a fade in it starts clear.
+    /// Show `picture` as `id` at once, letting it go when it is held
+    /// ready; with a fade in it starts clear.
     pub(super) async fn show_picture(
         &self,
         id: &str,
         picture: &EnginePicture,
     ) -> Result<(), EngineError> {
-        let request = AddPictureRequest {
-            id: id.to_string(),
-            uri: picture.uri.clone(),
-            stage: picture.stage,
-            layer: u32::from(picture.layer),
-            opacity: if picture.fade_in_ms > 0 {
-                0.0
-            } else {
-                f64::from(picture.opacity)
-            },
-            fit: match picture.fit {
-                stage::PictureFit::Fit => PictureFit::Fit,
-                stage::PictureFit::Fill => PictureFit::Fill,
-                stage::PictureFit::Stretch => PictureFit::Stretch,
-            },
-            end: match picture.end {
-                stage::PictureEnd::Hold => PictureEnd::Hold,
-                stage::PictureEnd::Stop => PictureEnd::Stop,
-            },
-            start: SoundStart::Play,
-        };
-        self.playback_post("/pictures", &request).await?;
+        if self
+            .playback
+            .take_ready(id, &Ready::Picture(picture.clone()))
+        {
+            self.release("pictures", id).await?;
+        } else {
+            let request = picture_request(id, picture, SoundStart::Play);
+            self.playback_post("/pictures", &request).await?;
+        }
         self.track(id);
         if picture.fade_in_ms > 0 {
             self.fade_picture(id, picture.opacity, picture.fade_in_ms, AfterFade::Keep)

@@ -161,6 +161,9 @@ pub enum Command {
     /// engine builds its playback flow for them (running sounds and
     /// pictures stop). Without zones and stages: none.
     SetPlayback { playback: Playback },
+    /// Hold these sounds and pictures ready (decoded, waiting); the ones
+    /// held before and not named go, unless they started meanwhile.
+    SetPreload { preload: Preload },
     /// Play `sound` as `id`, replacing a sound of that id.
     PlaySound {
         id: String,
@@ -209,6 +212,13 @@ pub struct Playback {
     pub stages: Vec<lmix_types::StageState>,
     /// Of the stages: the program's.
     pub framerate: lmix_types::Framerate,
+}
+
+/// Sounds and pictures the engine holds ready, by id.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Preload {
+    pub sounds: Vec<(String, crate::playback::EngineSound)>,
+    pub pictures: Vec<(String, crate::playback::EnginePicture)>,
 }
 
 /// A layout box as the engine places it.
@@ -531,6 +541,8 @@ pub struct Switcher {
     stage_patches: Vec<lmix_types::StagePatch>,
     /// The zones and stages the engine got last; `None`: send them again.
     playback_sent: Option<Playback>,
+    /// What the engine was last told to hold ready; `None`: tell it again.
+    preload_sent: Option<Preload>,
     targets_changed: bool,
     /// Media files not found per input (SHW.4); the service checks.
     missing: HashMap<InputId, Vec<String>>,
@@ -585,6 +597,7 @@ impl Switcher {
             zone_patches: Vec::new(),
             stage_patches: Vec::new(),
             playback_sent: None,
+            preload_sent: None,
             targets_changed: false,
             missing: HashMap::new(),
             overlay_last: Default::default(),
@@ -1633,7 +1646,8 @@ impl Switcher {
         // Nor do sounds and pictures, unless the stages' rate changed:
         // their flow is not the mixer's.
         if self.playback_sent == before {
-            commands.retain(|c| !matches!(c, Command::SetPlayback { .. }));
+            commands
+                .retain(|c| !matches!(c, Command::SetPlayback { .. } | Command::SetPreload { .. }));
         }
         commands
     }
@@ -1693,18 +1707,54 @@ impl Switcher {
     }
 
     /// Zones and stages for the engine, when they changed since it last
-    /// got them.
-    fn playback_commands(&mut self) -> Option<Command> {
+    /// got them, and what it holds ready on them.
+    fn playback_commands(&mut self) -> Vec<Command> {
         let playback = Playback {
             zones: crate::zones::states(&self.show.zones, &self.zone_patches),
             stages: crate::stages::states(&self.show.stages, &self.stage_patches),
             framerate: self.show.format.framerate,
         };
-        if self.playback_sent.as_ref() == Some(&playback) {
+        let mut commands = Vec::new();
+        if self.playback_sent.as_ref() != Some(&playback) {
+            self.playback_sent = Some(playback.clone());
+            commands.push(Command::SetPlayback { playback });
+            // A new flow holds nothing ready.
+            self.preload_sent = None;
+        }
+        commands.extend(self.preload_commands());
+        commands
+    }
+
+    /// What the engine should hold ready, when it changed: the standby
+    /// cue of every list, if it plays a sound or shows a picture, so GO
+    /// starts it at once (SND.12).
+    pub fn preload_commands(&mut self) -> Option<Command> {
+        let mut preload = Preload::default();
+        for list in &self.show.cue_lists {
+            let Some(cue) = list.cues.get(self.cues.standby(list.id)) else {
+                continue;
+            };
+            let id = crate::cues::media_id(cue.id);
+            match (&cue.sound, &cue.picture) {
+                (Some(sound), _) if cue.kind == CueKind::Sound => {
+                    if let Ok(sound) = crate::playback::engine_sound(sound, &self.show.zones) {
+                        preload.sounds.push((id, sound));
+                    }
+                }
+                (_, Some(picture)) if cue.kind == CueKind::Picture => {
+                    if let Ok(picture) = crate::playback::engine_picture(picture, &self.show.stages)
+                    {
+                        preload.pictures.push((id, picture));
+                    }
+                }
+                _ => {}
+            }
+        }
+        if self.preload_sent.as_ref() == Some(&preload) {
             return None;
         }
-        self.playback_sent = Some(playback.clone());
-        Some(Command::SetPlayback { playback })
+        self.preload_sent = Some(preload.clone());
+        Some(Command::SetPreload { preload })
     }
 
     fn aux_bus_commands(&self) -> Vec<Command> {
@@ -7190,6 +7240,66 @@ mod tests {
                 duration_ms: 0,
             })
             .is_err());
+    }
+
+    #[test]
+    fn the_standby_sound_or_picture_is_held_ready() {
+        let mut sw = two_inputs();
+        sw.apply(Action::SetZone {
+            zone: lmix_types::Zone {
+                name: "Hall".into(),
+                channels: 2,
+            },
+        })
+        .unwrap();
+        let sound = |file: &str| Cue {
+            sound: Some(lmix_types::SoundCue {
+                file: file.into(),
+                ..Default::default()
+            }),
+            ..Cue::empty(CueKind::Sound)
+        };
+        let wait = Cue {
+            duration_ms: Some(100),
+            ..Cue::empty(CueKind::Wait)
+        };
+        let ready = |commands: &[Command]| {
+            commands.iter().find_map(|c| match c {
+                Command::SetPreload { preload } => Some(
+                    preload
+                        .sounds
+                        .iter()
+                        .map(|(_, s)| s.uri.clone())
+                        .collect::<Vec<_>>(),
+                ),
+                _ => None,
+            })
+        };
+        let commands = sw
+            .apply(Action::AddCueList {
+                name: "Sound".into(),
+                cues: vec![sound("/fx/door.wav"), wait, sound("/fx/rain.wav")],
+                source: None,
+            })
+            .unwrap();
+        assert_eq!(
+            ready(&commands),
+            Some(vec!["file:///fx/door.wav".to_string()]),
+            "the standby cue"
+        );
+        assert_eq!(sw.preload_commands(), None, "unchanged: not sent again");
+
+        let t = tokio::time::Instant::now();
+        sw.cue_go(None, t, None).unwrap();
+        let next = sw.preload_commands().map(|c| ready(&[c]));
+        assert_eq!(next, Some(Some(vec![])), "a wait is standby: nothing held");
+        sw.cue_go(None, t + Duration::from_secs(1), None).unwrap();
+        let next = sw.preload_commands().map(|c| ready(&[c]));
+        assert_eq!(next, Some(Some(vec!["file:///fx/rain.wav".to_string()])));
+        assert!(
+            ready(&sw.restore_commands()).is_some(),
+            "a restore holds it ready again"
+        );
     }
 
     #[test]

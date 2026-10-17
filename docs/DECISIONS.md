@@ -3543,3 +3543,26 @@ der Bühne in einem Fenster auf Xvfb.
 GPU, freie Geometrie (VIS.9), Video-Wiederholungen, Ton aus Videos in
 Zonen (VIS.10), Bühnen-Dialog und Vorschau in der Console (SUI.7),
 Vollbild und DRM auf echten Bildschirmen (HARDWARE-TODO H.38).
+
+## 2026-10-17 — Standby-Cues vorgeladen (SND.12)
+
+**Kontext**: SND.12 verlangt GO → hörbar ≤ 50 ms. Gemessen ohne Vorladen
+31–32 ms für einen Klang in reinem GStreamer (S-E.3), für Bilder 53–91 ms,
+vorgeladen 28–64 ms (S-E.13); dazu kommt in lmix der Weg über REST und
+das Dekodieren komprimierter Dateien.
+
+**Entscheidung**: Der Standby-Cue jeder Liste wird vorgeladen, wenn er
+einen Klang spielt oder ein Bild zeigt. Der Switcher bestimmt die Menge
+(`SetPreload`, nur bei Änderung), die Engine gleicht sie mit strom ab:
+neu → `start: preload` (dekodiert, am ersten Puffer gehalten), nicht mehr
+Standby → entfernt, geändert → neu geladen. GO auf einen vorgeladenen
+Cue gibt ihn nur frei (`…/play`); ohne Vorladen legt GO ihn wie bisher
+neu an. Nach einem GO läuft erst dessen Aktion, dann die neue Menge, so
+bleibt der gestartete Cue unberührt. Ein neuer Playback-Flow lädt neu.
+
+Nicht vorgeladen: Cues in Gruppen und Cues, die über einen Start-Cue
+laufen; sie starten wie vorher.
+
+**Geprüft**: `scripts/test-show-playback.sh` (Standby-Klang und -Bild in
+strom „ready“, nach GO „playing“, jedes nur einmal angelegt); Einheits-
+test der Menge im Switcher.
