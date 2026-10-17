@@ -519,3 +519,26 @@ Nachtrag 2026-10-17 (RUN.6): P8 Schritt 7 und 10, ein festgehaltener oder
 prellender Stream-Deck- bzw. MIDI-Taster gibt mit `set_go_rearm` `release`
 kein zweites GO, bis er losgelassen ist (Companion: Loslassen als
 `/lmix/cue/release`); die Leertaste bleibt daneben bedienbar. ✅ in Tests.
+
+## Durchlauf 11: Funktionen vom 17.10. (VM-Test mit strom, Console auf Xvfb, Tests)
+
+| Persona | Schritt | Ergebnis |
+|---|---|---|
+| P1 Kirche | Liedtext, Name und Logo gleichzeitig über dem Bild | ✅ acht Overlay-Kanäle (OVL.1); ⚠ die Overlay-Leiste in der Übergangsspalte ist mit acht Knöpfen eng |
+| P2 Konferenz | Stream zu YouTube und zum Kunden-Server zugleich starten, nach der Session beide stoppen | ✅ „Alle Streams starten/stoppen“ (STR.1), fragt vor dem Stoppen |
+| P2 Konferenz | Aufnahme platzsparend für die Nachbearbeitung | ✅ H.265 je Aufnahme (STR.3); ⚠ AV1 fehlt (strom-Recorder) |
+| P3 Fußball | Pausen-Clip bleibt am Ende stehen, statt von vorn zu laufen | ✅ „Am Ende: auf dem letzten Bild stehen bleiben“ (INP.10), Clip-Ende-Auslöser feuert trotzdem |
+| P4 Streamerin | Hochkant-Stream für Shorts, eigene Show dafür | ✅ „Neu“ fragt nach dem Format (SHW.3), 1080 × 1920 |
+| P4 Streamerin | Mit der T-Bar langsam von der Kamera in den Clip, Ton gleitet mit | ✅ Ton mit „folgt Bild“ blendet mit der T-Bar (SWI.5) |
+| P5 Broadcast | Plattform verlangt CBR und 2-s-Keyframes | ✅ Bitratenart und Keyframe-Abstand je Ausgang (STR.3) |
+| P5 Broadcast | Multiview wie gewohnt: Program links | ✅ Program links/rechts, Pegel an/aus (OUT.10); ⚠ Kachelzahl und zweite Multiview fehlen (strom) |
+| P5 Broadcast | Eine hängende Engine darf die Steuerung nicht einfrieren | ✅ jeder Engine-Aufruf mit 60 s Zeitlimit (B46 behoben) |
+| P5 Broadcast | Companion zeigt Restzeit des Clips auf der Taste | ✅ Abspielstand im Zustand (API.4) neben dem Ereignis `position` |
+| P6 Hochschule | In-Ear-Mixe für fünf Vortragende | ✅ sieben Aux-Busse A–G (AUD.2), A vor den Fadern; ⚠ Bus in den Master und Bus auf ein Gerät fehlen |
+| P7 Theater | Box im Layout nur für eine Szene zeigen, ohne das Layout neu zu bauen | ✅ „Sichtbar“ je Box, `show_box` für Kurzbefehle (LAY.2) |
+
+**Befunde**: B46 lmix-core hing einmal 37 min, weil ein Engine-Aufruf
+ohne Zeitlimit unter dem Switcher-Lock wartete (behoben: #80; der VM-Check
+sichert bei einem Hänger die Threads); B47 seltener Rest eines gestoppten
+Slot-Flows in strom (todo.md); B48 Overlay-Leiste mit acht Kanälen eng
+(eine Reihe; zwei Reihen passen nicht in die Spaltenhöhe).
