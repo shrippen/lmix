@@ -212,7 +212,12 @@ settled '[[ $(mon_db) -lt $SILENT_DB ]]' || fail "AFL of a muted input heard ($(
 act '{"action":"clear_listen"}' >/dev/null
 act '{"action":"set_audio","input":"Ball","on":true}' >/dev/null
 settled '[[ $(mon_db) -gt $AUDIBLE_DB ]]' || fail "monitor not back on program after clearing solos"
-pass "solo: PFL hears a muted input, AFL does not, monitor back on program"
+act '{"action":"set_monitor_volume","volume":0}' >/dev/null
+settled '[[ $(mon_db) -lt $SILENT_DB ]]' || fail "monitor volume 0 still heard ($(mon_db) dB)"
+[[ $(pgm_db) -gt $AUDIBLE_DB ]] || fail "monitor volume took program down too"
+act '{"action":"set_monitor_volume","volume":100}' >/dev/null
+settled '[[ $(mon_db) -gt $AUDIBLE_DB ]]' || fail "monitor not back at volume 100"
+pass "solo: PFL hears a muted input, AFL does not, monitor back on program, own volume"
 
 # --- channel strip (4.7): trim lowers program, delay set while playing ---
 act '{"action":"set_volume","input":"Ball","volume":100}' >/dev/null
@@ -395,7 +400,16 @@ done
 iso_file() { find "$WORK/strom-data" -path "*iso-$1/*" -name '*.mp4' | head -1; }
 [[ "$(codecs "$(iso_file Orange)")" == "h264" ]] || fail "ISO of a silent input: $(codecs "$(iso_file Orange)")"
 [[ "$(codecs "$(iso_file Clips)")" == "aac,h264" ]] || fail "ISO of the playlist: $(codecs "$(iso_file Clips)")"
-pass "MultiCorder: ISO recordings per input (silent input video only, playlist with sound)"
+# The multiview as an output (OUT.2), with program sound.
+act '{"action":"add_output","spec":{"kind":"record","folder":"mv","container":"mp4"},"source":{"from":"multiview"},"name":"MV"}' >/dev/null
+act '{"action":"start_output","output":"MV"}' >/dev/null
+sleep 4
+act '{"action":"stop_output","output":"MV"}' >/dev/null
+wait_for "$SETTLE_S" is output_state MV stopped || fail "multiview recording did not stop"
+mv_file="$(find "$WORK/strom-data" -path '*mv/*' -name '*.mp4' | head -1)"
+[[ "$(codecs "$mv_file")" == "aac,h264" ]] || fail "multiview recording: $(codecs "$mv_file")"
+act '{"action":"remove_output","output":"MV"}' >/dev/null
+pass "MultiCorder: ISO recordings per input (silent input video only, playlist with sound); multiview recorded"
 
 # Display output: program in a window on the engine's screen. Orange on
 # program makes the window easy to recognize.
@@ -497,6 +511,30 @@ overlay_shown || fail "overlay taken off by the end of an older fade"
 act '{"action":"overlay_out_all","duration_ms":0}' >/dev/null
 wait_for "$SETTLE_S" overlay_gone || fail "overlays not all off"
 pass "overlays: last input again, all off"
+# A still with alpha (SRC.4): a PNG, red on the left half and clear on the
+# right, as overlay over Orange lets Orange through on the right.
+convert -size 1280x720 xc:none -fill '#ff0000' -draw 'rectangle 0,0 639,719' "$MEDIA/badge.png"
+act "{\"action\":\"add_input\",\"source\":{\"kind\":\"image\",\"path\":\"$MEDIA/badge.png\"},\"name\":\"Badge\"}" >/dev/null
+act '{"action":"cut_direct","input":"Orange"}' >/dev/null
+act '{"action":"overlay_in","channel":1,"input":"Badge","duration_ms":0}' >/dev/null
+# Mean of colour channel $3 (r, g) in the left or right half, middle band.
+half() {
+    local w h x; read -r w h <<<"$(identify -format '%w %h' "$1")"
+    [[ "$2" == left ]] && x=$((w / 8)) || x=$((w * 5 / 8))
+    convert "$1" -crop "$((w / 4))x$((h / 4))+$x+$((h * 3 / 8))" +repage -format "%[fx:int(mean.$3*255)]" info:
+}
+badge_over_orange() {
+    picture program "$WORK/badge.jpg"
+    [[ $(half "$WORK/badge.jpg" left r) -gt 200 && $(half "$WORK/badge.jpg" left g) -lt 60 \
+        && $(half "$WORK/badge.jpg" right r) -gt 200 && $(half "$WORK/badge.jpg" right g) -gt 90 ]]
+}
+wait_for "$SETTLE_S" badge_over_orange \
+    || fail "PNG alpha lost: right half $(half "$WORK/badge.jpg" right r)/$(half "$WORK/badge.jpg" right g) (r/g), want orange"
+act '{"action":"overlay_out_all","duration_ms":0}' >/dev/null
+[[ "$(curl -sf "$CORE/state" | jq '.overlays[0]')" == null ]] || fail "badge overlay not off"
+# Its slot is needed later on.
+act '{"action":"remove_input","input":"Badge"}' >/dev/null
+pass "still with alpha: a PNG overlay lets program through where it is clear"
 # Channel settings (OVL.2) and an overlay prepared on preview (OVL.3):
 # Orange waits on channel 2 with preview tally, goes on with the cut in
 # the top right quarter (the place of its DSK pad) and off by itself.
@@ -712,6 +750,24 @@ wait_for "$SETTLE_S" is output_state Stream running || fail "running output not 
     || fail "output flow duplicated"
 [[ "$(output_starts)" == "$starts_before" ]] || fail "output restarted instead of adopted"
 pass "lmix-core killed and restarted: mixer kept running, show resumed, output adopted"
+
+# --- program format (OUT.1): upright 1080x1920, then back ---
+mixer_starts() { grep -c "Starting pipeline: lmix mixer" "$WORK/strom.log" || true; }
+before="$(mixer_starts)"
+act '{"action":"cut_direct","input":"Ball"}' >/dev/null
+act '{"action":"set_master_format","format":{"width":1080,"height":1920,"framerate":"25/1"}}' >/dev/null
+# The API's program picture is a 320x180 thumbnail whatever the format:
+# the mixer's own properties tell the format, the picture that it runs.
+vm_prop() { curl -sf "$STROM/api/flows/$MIXER_ID" | jq -r ".flow.blocks[] | select(.id==\"vm\") | .properties.$1"; }
+wait_for "$((SETTLE_S + 10))" is vm_prop pgm_resolution 1080x1920 || fail "mixer not built in 1080x1920"
+[[ "$(vm_prop pgm_framerate)" == 25/1 ]] || fail "mixer not at 25 fps"
+[[ "$(mixer_starts)" -gt "$before" ]] || fail "mixer not built anew"
+wait_for "$((SETTLE_S + 10))" program_moves || fail "program does not move in 1080x1920"
+act '{"action":"set_master_format","format":{"width":1920,"height":1080,"framerate":"30/1"}}' >/dev/null
+wait_for "$((SETTLE_S + 10))" is vm_prop pgm_resolution 1920x1080 || fail "mixer not back in 1920x1080"
+wait_for "$((SETTLE_S + 10))" program_moves || fail "program does not move after going back"
+wait_for "$SETTLE_S" is input_state Ball online || fail "Ball not online after the format changes"
+pass "program format: upright 1080x1920 and back, mixer rebuilt, sources kept"
 
 criticals="$(grep -c 'GStreamer-CRITICAL' "$WORK/strom.log" || true)"
 [[ "$criticals" == 0 ]] || fail "$criticals GStreamer CRITICALs in strom.log"

@@ -134,6 +134,15 @@ pub struct ShowState {
     /// Master of program sound (AUD.2).
     #[serde(default)]
     pub master: AuxBus,
+    /// Picture size and rate of program (OUT.1).
+    #[serde(default)]
+    pub format: crate::output::MasterFormat,
+    /// Volume of the monitor bus, 0–100 (AUD.4).
+    #[serde(default = "crate::input::full_volume")]
+    pub monitor_volume: u8,
+    /// Delay of new inputs with sound, ms (AUD.6).
+    #[serde(default)]
+    pub default_delay_ms: u32,
     /// Whether the engine can apply looks (the GL mixer can).
     #[serde(default)]
     pub looks_available: bool,
@@ -211,11 +220,15 @@ pub struct ShowState {
 pub const API_VERSION: u32 = 1;
 
 /// Peak level of one input, before its fader and mute (what arrives).
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct InputLevel {
     pub input: InputId,
     /// Loudest channel, dBFS.
     pub peak_db: f32,
+    /// Each channel, dBFS: left, right (AUD.1); empty before the first
+    /// measurement.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub channels_db: Vec<f32>,
 }
 
 /// Audio levels, sent about ten times a second while sound flows.

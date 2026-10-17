@@ -111,6 +111,7 @@ fn main() {
                 "qml/TransitionPanel.qml",
                 "qml/ChannelStripDialog.qml",
                 "qml/AuxBusDialog.qml",
+                "qml/FormatDialog.qml",
                 "qml/StingerDialog.qml",
                 "qml/OverlayDialog.qml",
                 "qml/LookDialog.qml",
