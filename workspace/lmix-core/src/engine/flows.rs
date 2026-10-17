@@ -58,7 +58,7 @@ const MONITOR_SINK: &str = "monitor_sink";
 pub const AUDIO_MIXER: &str = "mix";
 /// Mixer flow name; a new layout gets a new name, so `start` rebuilds a
 /// running mixer of an older lmix instead of reusing it.
-pub const MIXER_NAME: &str = "lmix mixer 6";
+pub const MIXER_NAME: &str = "lmix mixer 7";
 /// Block id of the vision mixer in the mixer flow.
 pub const MIXER_BLOCK: &str = "vm";
 /// Thumbnail tap on the program output: GUI monitor and picture checks.
@@ -66,6 +66,8 @@ pub const PGM_TAP: &str = "tap_pgm";
 /// Program picture and sound for the output flows (`inter`).
 pub const PGM_OUT: &str = "pgm_out";
 const PGM_AUDIO_OUT: &str = "pgm_audio_out";
+/// The multiview for the outputs (OUT.2).
+const MV_OUT: &str = "mv_out";
 /// Outputs buffer a little more than the mixer: they are not on the
 /// switching path, an encoder hiccup must not drop frames.
 const OUTPUT_BUFFER_MS: &str = "500";
@@ -271,6 +273,13 @@ pub fn mixer_flow(slots: usize, backend: MixerBackend, monitor: MonitorOut) -> F
         format!("{PGM_TAP}:video_out"),
         format!("{PGM_OUT}:sink"),
     ));
+    // The multiview is rendered anyway (strom ends an unlinked pad in a
+    // fakesink); this only hands it to outputs that ask (OUT.2).
+    flow.blocks.push(block(MV_OUT, INTER_OUTPUT_BLOCK, vec![]));
+    flow.links.push(link(
+        format!("{MIXER_BLOCK}:multiview_out"),
+        format!("{MV_OUT}:sink"),
+    ));
     flow.blocks
         .push(block(PGM_AUDIO_OUT, INTER_OUTPUT_BLOCK, vec![]));
     flow.links.push(link(
@@ -344,6 +353,7 @@ pub fn output_flow(
     // for a track that never comes.
     let (video, audio) = match feed {
         Feed::Program => (pgm_channel(PGM_OUT), Some(pgm_channel(PGM_AUDIO_OUT))),
+        Feed::Multiview => (pgm_channel(MV_OUT), Some(pgm_channel(PGM_AUDIO_OUT))),
         Feed::Slot { slot, audio } => (slot_channel(slot), audio.then(|| slot_audio_channel(slot))),
     };
     // An aux bus replaces the feed's sound (e.g. a mix-minus stream).
@@ -369,7 +379,7 @@ pub fn output_flow(
     }
     let sound = audio.is_some();
     // Screens and NDI read frames on the CPU; the encoders take GPU memory.
-    let on_gpu = matches!(feed, Feed::Program) && backend == MixerBackend::Cuda;
+    let on_gpu = matches!(feed, Feed::Program | Feed::Multiview) && backend == MixerBackend::Cuda;
 
     match spec {
         OutputSpec::Srt { uri, video_kbps } => {
@@ -1259,6 +1269,24 @@ mod tests {
             .links
             .iter()
             .any(|l| l.from == "mix:main_out" && l.to == "pgm_audio_out:sink"));
+        assert!(flow
+            .links
+            .iter()
+            .any(|l| l.from == "vm:multiview_out" && l.to == "mv_out:sink"));
+    }
+
+    #[test]
+    fn an_output_can_show_the_multiview() {
+        let spec = OutputSpec::Display {
+            mode: lmix_types::DisplayMode::Window,
+        };
+        let flow = output_flow(OutputId::new(), &spec, Feed::Multiview, None, MixerBackend::Cpu);
+
+        let video = flow.blocks.iter().find(|b| b.id == "pgm").unwrap();
+        assert!(matches!(
+            video.properties.get("channel"),
+            Some(PropertyValue::String(c)) if *c == format!("strom_{}_mv_out", mixer_id())
+        ));
     }
 
     #[test]

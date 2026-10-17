@@ -2,6 +2,7 @@
 # scripts/update-translations.sh collects the sources and writes these
 # into qml_de.ts (i18n/fill.py). Keep it complete.
 DE = {
+    'Multiview': 'Multiview',
     'Delay for new inputs': 'Delay für neue Inputs',
     'New inputs with sound start with this delay; inputs already there keep theirs': 'Neue Inputs mit Ton beginnen mit diesem Delay; vorhandene behalten ihres',
     'Listen on the monitor bus after the fader (right click: before it)': 'Auf dem Abhörbus hören, nach dem Fader (Rechtsklick: davor)',

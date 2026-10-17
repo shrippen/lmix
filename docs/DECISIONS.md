@@ -2968,3 +2968,23 @@ bisher. Kein neues Kante-Bauteil nötig.
 **Geprüft**: Schalter-Test (Delay neuer Inputs, Grenze, Abhör-Befehl und
 Wiederherstellen), VM-Test mit strom (Abhören auf 0 still, Program
 bleibt), Console auf Xvfb.
+
+## 2026-10-17 — Multiview als Ausgang (OUT.2)
+
+Ausgänge konnten nur Program oder einen Input zeigen. Der strom-Mischer
+rendert die Multiview ohnehin (ein unverbundener Ausgang endet in einem
+`fakesink`); lmix gibt `multiview_out` jetzt wie Program über `inter`
+heraus, und ein Ausgang kann `{"from": "multiview"}` zeigen, mit
+Program-Ton (oder einem Aux-Bus). Console: „Multiview“ als Quelle im
+Ausgangs-Dialog.
+
+- Der Mischer-Flow heißt jetzt „lmix mixer 7“: ein laufender alter
+  Mischer ohne diesen Ausgang wird beim ersten Start einmal neu gebaut.
+- Preview als Quelle bleibt offen: der Mischer-Block hat keinen
+  Preview-Ausgang (nur `pgm_out`, `multiview_out`); das bräuchte einen
+  strom-Patch.
+
+**Geprüft**: Flow-Tests (Mischer gibt die Multiview heraus, Ausgang liest
+sie), VM-Test mit strom: Aufnahme der Multiview, H.264 und AAC.
+Nebenbefund: Die VM-Prüfung „pausierter Clip auf Sendung gehalten“ fiel
+einmal, als nebenher ein Rust-Build lief; ohne Last grün.

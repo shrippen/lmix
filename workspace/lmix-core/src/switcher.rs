@@ -161,6 +161,7 @@ enum Bus {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Feed {
     Program,
+    Multiview,
     /// One input's slot; `audio` when its source has sound.
     Slot {
         slot: usize,
@@ -3602,6 +3603,9 @@ impl Switcher {
         let name = match (output.name.is_empty(), source) {
             (false, _) => output.name.clone(),
             (true, OutputSource::Program) => output.spec.default_name(),
+            (true, OutputSource::Multiview) => {
+                format!("{} (Multiview)", output.spec.default_name())
+            }
             (true, OutputSource::Input(id)) => {
                 let input = self
                     .show
@@ -3619,8 +3623,10 @@ impl Switcher {
     /// Program, or the slot of the output's input; ISO outputs need an
     /// input with a picture.
     fn feed_of(&self, output: &ShowOutput) -> Result<Feed, ActionError> {
-        let OutputSource::Input(id) = output.source else {
-            return Ok(Feed::Program);
+        let id = match output.source {
+            OutputSource::Program => return Ok(Feed::Program),
+            OutputSource::Multiview => return Ok(Feed::Multiview),
+            OutputSource::Input(id) => id,
         };
         let input = self
             .show

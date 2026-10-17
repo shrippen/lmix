@@ -282,7 +282,7 @@ kann es, Console nicht.
 | ID | Anforderung | Prio | Stand |
 |---|---|---|---|
 | OUT.1 | Master-Format: Auflösung (SD bis 4K, Hochkant 1080×1920, frei), Bildrate (23,976–60, 50i/59,94i, optional 100/120), Seitenverhältnis | M | ◐ (fest 1920×1080, Bildrate nicht wählbar) |
-| OUT.2 | Ausgang 1 = Program; Ausgang 2–4 mit Quelle Program/Preview/Multiview 1–2/Mix n/Input n; Overlay-Auswahl je Ausgang; Quelle live umschaltbar | M | ◐ (Ausgänge mit Quelle Program oder Input, Ton aus Aux; ohne Preview/Multiview/Mix, ohne Overlay je Ausgang, Quelle nicht live umschaltbar) |
+| OUT.2 | Ausgang 1 = Program; Ausgang 2–4 mit Quelle Program/Preview/Multiview 1–2/Mix n/Input n; Overlay-Auswahl je Ausgang; Quelle live umschaltbar | M | ◐ (Ausgänge mit Quelle Program, Multiview oder Input, Ton aus Aux; ohne Preview (gibt der strom-Mischer nicht heraus), Mix, Overlay je Ausgang; Quelle nicht live umschaltbar) |
 | OUT.3 | Vollbild 1–2 auf Monitoren (Monitor, Rechteck, Cursor aus, immer oben); Quelle wie OUT.2 oder Wiederholungs-Multiview | M | ◐ (Fenster, Vollbild Wayland, DRM; Quelle Program/Input; Monitor wählt der Compositor, kein Rechteck; Prüfung auf Hardware offen, H.20) |
 | OUT.4 | Kartenausgang SDI/HDMI (DeckLink, AJA wenn Treiber), eigenes Format, Ton-Kanäle, Ton-Delay | S | – (E: DeckLink-Ausgang in strom) |
 | OUT.5 | Key+Fill-Ausgang (zwei Ports, gerade/vormultipliziert) | K | – |
@@ -290,7 +290,7 @@ kann es, Console nicht.
 | OUT.7 | Alle Kameras, Gäste und Audio-Inputs automatisch als NDI/OMT; Busse als reine Ton-Streams | S | – |
 | OUT.8 | SRT-Ausgang je Ausgang: Modus, Latenz, Verschlüsselung, Stream-ID, H.264/HEVC, Bitrate, CBR mit Füllung, Stereo-Paare als eigene Spuren, HW-Encode | M | ◐ (SRT je Ausgang: H.264 mit HW-Encode, Bitrate, Modus/Optionen über die URI; ohne HEVC, CBR-Füllung, eigene Tonspuren) |
 | OUT.9 | Virtuelle Kamera und virtuelles Audiogerät für andere Programme (v4l2loopback, PipeWire) | S | – |
-| OUT.10 | Multiview 1 und 2, je eigenes Layout: PVW/PGM + 2/8/14 Inputs, nur Inputs, Reihenfolge nach Nummer oder Typ, Titel oben/unten, Pegel, Tally-Rahmen, Klick wählt Preview | M | ◐ (Multiview E; nicht als Ausgangsquelle, nicht in der Console) |
+| OUT.10 | Multiview 1 und 2, je eigenes Layout: PVW/PGM + 2/8/14 Inputs, nur Inputs, Reihenfolge nach Nummer oder Typ, Titel oben/unten, Pegel, Tally-Rahmen, Klick wählt Preview | M | ◐ (Multiview der Engine als Ausgangsquelle, OUT.2; Layout nicht wählbar, nicht in der Console zu sehen) |
 | OUT.11 | Live-Monitore in der GUI: PVW, PGM, alle Input-Kacheln flüssig (volle Bildrate); Bilder lokal direkt über GPU-Speicher aus der Engine (G.2) | M | ◐ (alle Inputs live über Shared Memory, 30 fps bei 18 Ansichten; DMABuf ohne Kopie und volle Bildrate offen, H.4) |
 | OUT.12 | Schutzbereiche: EBU/SMPTE, 80/90 %, Raster, 4:3, 1:1, 9:16 | S | – |
 | OUT.13 | Messinstrumente: Waveform Y/RGB, Parade, Vektorskop (75/100 %-Marken), neben Bild | S | – |

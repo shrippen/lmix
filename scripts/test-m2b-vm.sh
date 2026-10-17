@@ -400,7 +400,16 @@ done
 iso_file() { find "$WORK/strom-data" -path "*iso-$1/*" -name '*.mp4' | head -1; }
 [[ "$(codecs "$(iso_file Orange)")" == "h264" ]] || fail "ISO of a silent input: $(codecs "$(iso_file Orange)")"
 [[ "$(codecs "$(iso_file Clips)")" == "aac,h264" ]] || fail "ISO of the playlist: $(codecs "$(iso_file Clips)")"
-pass "MultiCorder: ISO recordings per input (silent input video only, playlist with sound)"
+# The multiview as an output (OUT.2), with program sound.
+act '{"action":"add_output","spec":{"kind":"record","folder":"mv","container":"mp4"},"source":{"from":"multiview"},"name":"MV"}' >/dev/null
+act '{"action":"start_output","output":"MV"}' >/dev/null
+sleep 4
+act '{"action":"stop_output","output":"MV"}' >/dev/null
+wait_for "$SETTLE_S" is output_state MV stopped || fail "multiview recording did not stop"
+mv_file="$(find "$WORK/strom-data" -path '*mv/*' -name '*.mp4' | head -1)"
+[[ "$(codecs "$mv_file")" == "aac,h264" ]] || fail "multiview recording: $(codecs "$mv_file")"
+act '{"action":"remove_output","output":"MV"}' >/dev/null
+pass "MultiCorder: ISO recordings per input (silent input video only, playlist with sound); multiview recorded"
 
 # Display output: program in a window on the engine's screen. Orange on
 # program makes the window easy to recognize.

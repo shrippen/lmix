@@ -74,6 +74,9 @@ pub enum OutputSource {
     /// One input as it arrives, before the mixer: ISO recording
     /// (MultiCorder, REC.4) or an ISO feed.
     Input(InputId),
+    /// The multiview: preview, program and the inputs (OUT.2, OUT.10),
+    /// with program sound.
+    Multiview,
 }
 
 /// Default video bitrate of encoded outputs.

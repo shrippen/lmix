@@ -163,7 +163,7 @@
       <translation>Ausgang hinzufügen</translation>
     </message>
     <message>
-      <location line="+37" />
+      <location line="+40" />
       <source>Output</source>
       <translation>Ausgang</translation>
     </message>
@@ -176,6 +176,11 @@
       <location line="+4" />
       <source>Program</source>
       <translation>Programm</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Multiview</source>
+      <translation>Multiview</translation>
     </message>
     <message>
       <location line="+6" />
