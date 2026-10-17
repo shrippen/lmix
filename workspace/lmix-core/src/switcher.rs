@@ -20,12 +20,12 @@ use lmix_types::layout::{BORDER_MAX_PX, LAYOUTS, LAYOUT_BOXES, LAYOUT_TEMPLATES}
 use lmix_types::shortcut::SHORTCUT_ACTIONS;
 use lmix_types::state::API_VERSION;
 use lmix_types::{
-    Action, ActionError, AtEnd, AutoPlay, AuxBus, BoxCrop, BoxRect, BoxSpec, ChannelStrip, Effect,
-    Ingest, Input, InputColor, InputId, InputPress, InputRef, InputStatus, Layout, LayoutBox,
-    LayoutTemplate, Listen, Look, Output, OutputGroup, OutputId, OutputRef, OutputSource,
-    OutputSpec, OutputStatus, OverlayChannel, QuickPlay, Shortcut, ShortcutSpec, ShowState,
-    SignalLoss, SourceSpec, Stinger, StingerSpec, TemplateBox, TemplateInput, Transition,
-    TransitionSlot, Transport, VideoEncoding, VolumeTarget, FADE_MAX_MS,
+    Action, ActionError, AtEnd, AutoPlay, AuxBus, BoxCrop, BoxRect, BoxShown, BoxSpec,
+    ChannelStrip, Effect, Ingest, Input, InputColor, InputId, InputPress, InputRef, InputStatus,
+    Layout, LayoutBox, LayoutTemplate, Listen, Look, Output, OutputGroup, OutputId, OutputRef,
+    OutputSource, OutputSpec, OutputStatus, OverlayChannel, QuickPlay, Shortcut, ShortcutSpec,
+    ShowState, SignalLoss, SourceSpec, Stinger, StingerSpec, TemplateBox, TemplateInput,
+    Transition, TransitionSlot, Transport, VideoEncoding, VolumeTarget, FADE_MAX_MS,
 };
 use lmix_types::{Cue, CueList, MidiKind, MidiMessage, Trigger, TriggerOn};
 
@@ -117,7 +117,10 @@ pub enum Command {
     SetMonitor { gain: f64 },
     /// Program in this format (OUT.1); the engine rebuilds its mixer only
     /// when it differs, and the commands after it set the mixer up again.
-    SetFormat { format: lmix_types::MasterFormat },
+    SetFormat {
+        format: lmix_types::MasterFormat,
+        multiview: lmix_types::MultiviewLayout,
+    },
     /// Mix `slot` (preview) over program by `position` (0–1), as the
     /// T-bar stands; 0 hides it again.
     TBar { slot: usize, position: f32 },
@@ -1113,11 +1116,14 @@ impl Switcher {
                     return Ok(Vec::new());
                 }
                 self.show.format = format;
-                // A new mixer, set up again; outputs restart in the new
-                // size. The sources keep running (no clip starts over).
-                let mut commands = self.restore_commands();
-                commands.retain(|c| !matches!(c, Command::SetSlot { .. }));
-                Ok(commands)
+                Ok(self.mixer_rebuilt())
+            }
+            Action::SetMultiview { layout } => {
+                if layout == self.show.multiview {
+                    return Ok(Vec::new());
+                }
+                self.show.multiview = layout;
+                Ok(self.mixer_rebuilt())
             }
             Action::SetMonitorVolume { volume } => {
                 check_volume(volume)?;
@@ -1235,6 +1241,11 @@ impl Switcher {
                 background,
                 boxes,
             } => self.set_layout(&layout, background, boxes),
+            Action::ShowBox {
+                layout,
+                number,
+                shown,
+            } => self.show_box(&layout, number, shown),
             Action::RemoveLayout { layout } => self.remove_layout(&layout),
             Action::PreviewLayout { layout } => self.preview_layout(&layout),
             Action::SaveLayoutTemplate { layout, name } => {
@@ -1349,7 +1360,7 @@ impl Switcher {
                 },
             ),
             // The service reads and writes these files.
-            Action::NewShow
+            Action::NewShow { .. }
             | Action::SaveShow { .. }
             | Action::OpenShow { .. }
             | Action::AppendShow { .. }
@@ -1400,12 +1411,21 @@ impl Switcher {
         commands
     }
 
+    /// A new mixer for a new format or multiview, set up again; outputs
+    /// restart. The sources keep running (no clip starts over).
+    fn mixer_rebuilt(&mut self) -> Vec<Command> {
+        let mut commands = self.restore_commands();
+        commands.retain(|c| !matches!(c, Command::SetSlot { .. }));
+        commands
+    }
+
     /// Commands that rebuild the engine from the current show (start-up,
     /// engine restart): slots, program, preview, then every audio channel.
     pub fn restore_commands(&mut self) -> Vec<Command> {
         // First: a new format builds a new mixer, the rest sets it up.
         let mut commands = vec![Command::SetFormat {
             format: self.show.format,
+            multiview: self.show.multiview,
         }];
         commands.extend(self.picture_commands());
         self.mix.clear();
@@ -1590,6 +1610,7 @@ impl Switcher {
             aux_buses: self.show.aux_buses,
             master: self.show.master,
             format: self.show.format,
+            multiview: self.show.multiview,
             monitor_volume: self.show.monitor_volume,
             default_delay_ms: self.show.default_delay_ms,
             looks_available: self.looks_available,
@@ -2821,6 +2842,30 @@ impl Switcher {
         Ok(vec![self.layout_command(&self.show.layouts[index])])
     }
 
+    /// LAY.2: a box out of the picture and back, as a layout change.
+    fn show_box(
+        &mut self,
+        layout: &InputRef,
+        number: u8,
+        shown: BoxShown,
+    ) -> Result<Vec<Command>, ActionError> {
+        let index = self.find_layout(layout)?;
+        let entry = &mut self.show.layouts[index];
+        let count = entry.boxes.len();
+        let found = usize::from(number)
+            .checked_sub(1)
+            .and_then(|at| entry.boxes.get_mut(at))
+            .ok_or_else(|| ActionError::BadLayout {
+                reason: format!("no box {number}; the layout has {count}"),
+            })?;
+        found.hidden = match shown {
+            BoxShown::Shown => false,
+            BoxShown::Hidden => true,
+            BoxShown::Toggle => !found.hidden,
+        };
+        Ok(vec![self.layout_command(&self.show.layouts[index])])
+    }
+
     fn remove_layout(&mut self, layout: &InputRef) -> Result<Vec<Command>, ActionError> {
         let index = self.find_layout(layout)?;
         let id = self.show.layouts[index].id;
@@ -2891,6 +2936,7 @@ impl Switcher {
                 border_px: spec.border_px,
                 crop: spec.crop,
                 locked: spec.locked,
+                hidden: spec.hidden,
             });
         }
         Ok((background, parts))
@@ -2904,6 +2950,7 @@ impl Switcher {
             boxes: layout
                 .boxes
                 .iter()
+                .filter(|b| !b.hidden)
                 .filter_map(|b| {
                     Some(EngineBox {
                         rect: b.rect,
@@ -3114,6 +3161,7 @@ impl Switcher {
                 border_px: b.border_px,
                 crop: b.crop,
                 locked: b.locked,
+                hidden: false,
             })
             .collect();
         self.add_layout(Some(name.unwrap_or(template.name)), background, boxes)
@@ -3139,7 +3187,7 @@ impl Switcher {
             .iter()
             .find(|l| Some(l.id) == layout)
             .is_some_and(|l| {
-                l.background == Some(input) || l.boxes.iter().any(|b| b.input == input)
+                l.background == Some(input) || l.boxes.iter().any(|b| b.input == input && !b.hidden)
             })
     }
 
@@ -3968,10 +4016,31 @@ impl Switcher {
 
     fn mix_of(&self, input: &ShowInput) -> Mix {
         let audio = input.audio;
-        let off_air = audio.follow_video && self.show.program != Some(input.id);
+        let gain = fader_gain(audio.volume);
+        let on_program = self.show.program == Some(input.id);
+        if !audio.follow_video {
+            return Mix {
+                gain,
+                muted: !audio.on,
+            };
+        }
+        // While the T-bar is pulled (SWI.5), program sound fades out as
+        // preview fades in, like the picture.
+        let pulled = self.t_bar > 0.0;
+        let share = if on_program && pulled {
+            1.0 - f64::from(self.t_bar)
+        } else if pulled && self.show.preview == Some(input.id) {
+            f64::from(self.t_bar)
+        } else if on_program {
+            1.0
+        } else {
+            0.0
+        };
+        // Off air it is muted at its own level, as without the T-bar.
+        let silent = share == 0.0;
         Mix {
-            gain: fader_gain(audio.volume),
-            muted: !audio.on || off_air,
+            gain: if silent { gain } else { gain * share },
+            muted: !audio.on || silent,
         }
     }
 
@@ -4918,6 +4987,7 @@ mod tests {
                 border_px: 4,
                 crop: BoxCrop::default(),
                 locked: true,
+                hidden: false,
             }],
         })
         .unwrap();
@@ -5235,6 +5305,7 @@ mod tests {
                     border_px: 0,
                     crop: BoxCrop::default(),
                     locked: false,
+                    hidden: false,
                 }],
             })
             .unwrap();
@@ -5575,6 +5646,42 @@ mod tests {
     }
 
     #[test]
+    fn sound_that_follows_video_follows_the_t_bar() {
+        let mut sw = two_inputs();
+        for name in ["A", "B"] {
+            sw.apply(Action::SetAudioFollow {
+                input: named(name),
+                follow: true,
+            })
+            .unwrap();
+        }
+        sw.apply(Action::CutDirect { input: named("A") }).unwrap();
+        sw.apply(Action::PreviewInput { input: named("B") })
+            .unwrap();
+        let gains = |cmds: &[Command]| -> Vec<(usize, f64, bool)> {
+            cmds.iter()
+                .filter_map(|c| match c {
+                    Command::SetAudio {
+                        slot, gain, muted, ..
+                    } => Some((*slot, (*gain * 100.0).round() / 100.0, *muted)),
+                    _ => None,
+                })
+                .collect()
+        };
+
+        // Halfway (SWI.5): program fades out as preview fades in.
+        let half = sw.apply(Action::TBar { position: 0.5 }).unwrap();
+        assert_eq!(gains(&half), [(0, 0.5, false), (1, 0.5, false)]);
+        // Back to the start: as before.
+        let back = sw.apply(Action::TBar { position: 0.0 }).unwrap();
+        assert_eq!(gains(&back), [(0, 1.0, false), (1, 1.0, true)]);
+        // At the end: the take, B alone.
+        sw.apply(Action::TBar { position: 0.8 }).unwrap();
+        let end = sw.apply(Action::TBar { position: 1.0 }).unwrap();
+        assert_eq!(gains(&end), [(0, 1.0, true), (1, 1.0, false)]);
+    }
+
+    #[test]
     fn t_bar_back_to_zero_and_bad_positions() {
         let mut sw = two_inputs();
         assert_eq!(
@@ -5759,7 +5866,13 @@ mod tests {
             .apply(Action::SetMasterFormat { format: upright })
             .unwrap();
 
-        assert_eq!(cmds[0], Command::SetFormat { format: upright });
+        assert_eq!(
+            cmds[0],
+            Command::SetFormat {
+                format: upright,
+                multiview: Default::default()
+            }
+        );
         assert!(cmds
             .iter()
             .any(|c| matches!(c, Command::Preview { .. }) || matches!(c, Command::Program { .. })));
@@ -6179,6 +6292,7 @@ mod tests {
                     border_px: 4,
                     crop: ZOOM,
                     locked: true,
+                    hidden: false,
                 }],
             })
             .unwrap();
@@ -6263,6 +6377,39 @@ mod tests {
     }
 
     #[test]
+    fn a_layout_box_hides_and_shows() {
+        let mut sw = with_layout();
+        sw.apply(Action::PreviewLayout {
+            layout: InputRef::Number(1),
+        })
+        .unwrap();
+        sw.apply(Action::Cut).unwrap();
+        assert_eq!(sw.tally(), [1, 1], "A and B in the layout on air");
+        let show = |shown| Action::ShowBox {
+            layout: InputRef::Number(1),
+            number: 1,
+            shown,
+        };
+
+        // LAY.2: hidden, the box stays in the layout but is not drawn.
+        let cmds = sw.apply(show(BoxShown::Hidden)).unwrap();
+        assert!(matches!(&cmds[..], [Command::SetLayout { boxes, .. }] if boxes.is_empty()));
+        assert!(sw.state().layouts[0].boxes[0].hidden);
+        assert_eq!(sw.tally(), [1, 0], "a hidden box is not on air");
+        let cmds = sw.apply(show(BoxShown::Toggle)).unwrap();
+        assert!(matches!(&cmds[..], [Command::SetLayout { boxes, .. }] if boxes.len() == 1));
+        assert_eq!(sw.tally(), [1, 1]);
+        assert!(matches!(
+            sw.apply(Action::ShowBox {
+                layout: InputRef::Number(1),
+                number: 2,
+                shown: BoxShown::Shown
+            }),
+            Err(ActionError::BadLayout { .. })
+        ));
+    }
+
+    #[test]
     fn layouts_are_checked() {
         let mut sw = with_layout();
         let spec = |input: &str, rect| BoxSpec {
@@ -6271,6 +6418,7 @@ mod tests {
             border_px: 0,
             crop: BoxCrop::default(),
             locked: false,
+            hidden: false,
         };
         let nothing_left = BoxSpec {
             crop: BoxCrop {
@@ -6971,6 +7119,34 @@ mod tests {
             })
             .unwrap_err();
         assert!(matches!(err, ActionError::UnknownOutput { .. }));
+    }
+
+    #[test]
+    fn a_multiview_layout_rebuilds_the_mixer_only() {
+        let mut sw = two_inputs();
+        let layout = lmix_types::MultiviewLayout {
+            program: lmix_types::ProgramSide::Left,
+            meters: lmix_types::MultiviewMeters::Hidden,
+        };
+
+        let cmds = sw.apply(Action::SetMultiview { layout }).unwrap();
+
+        assert_eq!(
+            cmds[0],
+            Command::SetFormat {
+                format: Default::default(),
+                multiview: layout
+            }
+        );
+        assert!(
+            !cmds.iter().any(|c| matches!(c, Command::SetSlot { .. })),
+            "the sources keep running"
+        );
+        assert_eq!(sw.state().multiview, layout);
+        assert!(sw
+            .apply(Action::SetMultiview { layout })
+            .unwrap()
+            .is_empty());
     }
 
     #[test]

@@ -86,6 +86,18 @@ pub struct LayoutBox {
     /// Kept in place in the layout editor (LAY.6); the picture ignores it.
     #[serde(default, skip_serializing_if = "is_false")]
     pub locked: bool,
+    /// Kept in the layout but not drawn, and not on air (LAY.2).
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub hidden: bool,
+}
+
+/// Whether `show_box` shows a layout box, hides it or flips it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum BoxShown {
+    Shown,
+    Hidden,
+    Toggle,
 }
 
 fn is_false(v: &bool) -> bool {
@@ -119,6 +131,8 @@ pub struct BoxSpec {
     pub crop: BoxCrop,
     #[serde(default)]
     pub locked: bool,
+    #[serde(default)]
+    pub hidden: bool,
 }
 
 /// Layout templates lmix-core keeps (LAY.5).

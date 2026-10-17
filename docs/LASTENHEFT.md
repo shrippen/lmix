@@ -215,7 +215,7 @@ kann es, Console nicht.
 | ID | Anforderung | Prio | Stand |
 |---|---|---|---|
 | LAY.1 | Bis 10 Ebenen je Input, jede ein anderer Input; Z-Reihenfolge per Nummer | M | ◐ (bis 4 Layouts: Hintergrund + 8 Boxen, Reihenfolge nach Boxnummer; nicht je Input) |
-| LAY.2 | Je Ebene Position, Crop, Rand, sichtbar an/aus, Rotation 90° | M | ◐ (Rechteck, Zuschnitt, Rahmen, Sperre; ohne sichtbar an/aus, Rotation) |
+| LAY.2 | Je Ebene Position, Crop, Rand, sichtbar an/aus, Rotation 90° | M | ◐ (Rechteck, Zuschnitt, Rahmen, Sperre, sichtbar an/aus; ohne Rotation) |
 | LAY.3 | Verschachtelung: Ebenen von Ebenen werden gerendert (mind. 2 Stufen) | S | – |
 | LAY.4 | "Ebenen flach rechnen": Input samt Ebenen als ein Bild für Weiterverwendung | K | – |
 | LAY.5 | Layout-Vorlagen: speichern, laden, ex-/importieren, außerhalb der Show | S | ✅ |
@@ -230,7 +230,7 @@ kann es, Console nicht.
 | SWI.2 | Cut (Tausch PVW/PGM) und Cut direkt (Input sofort auf PGM) | M | ✅ |
 | SWI.3 | 4 Übergangstasten, je Effekt + Dauer einstellbar; Taste 1 steuert T-Bar | M | ◐ (T-Bar nur Blende, nicht Effekt von Taste 1) |
 | SWI.4 | Effektkatalog: Cut, Blende, 3D-Zoom, Schieben, Wischen, Würfel, Würfelzoom, Fliegen, Fliegen+Drehen, Kreuzzoom, Verschmelzen (SWI.6), Stinger 1–8 | M | ◐ (Cut, Blende, Dip, Schieben, Push, Wischen, Stinger; ohne 3D-Zoom, Würfel, Fliegen, Kreuzzoom, Verschmelzen) |
-| SWI.5 | T-Bar: manueller Fortschritt 0–100 %, per Maus, MIDI-Fader, Aktion | M | ◐ (Maus, MIDI, Aktion; nur Blende, Ton erst beim Take) |
+| SWI.5 | T-Bar: manueller Fortschritt 0–100 %, per Maus, MIDI-Fader, Aktion | M | ◐ (Maus, MIDI, Aktion; Ton mit „folgt Bild“ blendet mit; nur Blende als Effekt) |
 | SWI.6 | Verschmelzen: Ebenen, die in PVW und PGM vorkommen, wandern an ihre neue Position; Rest blendet | S | – |
 | SWI.7 | Stinger 1–8: Animations-Input, Dauer, Schnittpunkt, Zusatzeffekt, unter oder über Overlays; Dauer/Schnittpunkt aus Titelanimation übernehmbar | S | ◐ (4 Tasten, Clip + Dauer + Schnittpunkt; nur unter Overlays, ohne Zusatzeffekt, ohne Titelanimation) |
 | SWI.8 | Schnellstart: Take mit eigenem Effekt (Standard ½ s Blende) und Start der Wiedergabe; optional per Klick ins Preview-Fenster | S | ✅ (Doppelklick ins Preview-Fenster) |
@@ -290,7 +290,7 @@ kann es, Console nicht.
 | OUT.7 | Alle Kameras, Gäste und Audio-Inputs automatisch als NDI/OMT; Busse als reine Ton-Streams | S | – |
 | OUT.8 | SRT-Ausgang je Ausgang: Modus, Latenz, Verschlüsselung, Stream-ID, H.264/HEVC, Bitrate, CBR mit Füllung, Stereo-Paare als eigene Spuren, HW-Encode | M | ◐ (SRT je Ausgang: H.264 mit HW-Encode, Bitrate, Modus/Optionen über die URI; ohne HEVC, CBR-Füllung, eigene Tonspuren) |
 | OUT.9 | Virtuelle Kamera und virtuelles Audiogerät für andere Programme (v4l2loopback, PipeWire) | S | – |
-| OUT.10 | Multiview 1 und 2, je eigenes Layout: PVW/PGM + 2/8/14 Inputs, nur Inputs, Reihenfolge nach Nummer oder Typ, Titel oben/unten, Pegel, Tally-Rahmen, Klick wählt Preview | M | ◐ (Multiview der Engine als Ausgangsquelle, OUT.2; Layout nicht wählbar, nicht in der Console zu sehen) |
+| OUT.10 | Multiview 1 und 2, je eigenes Layout: PVW/PGM + 2/8/14 Inputs, nur Inputs, Reihenfolge nach Nummer oder Typ, Titel oben/unten, Pegel, Tally-Rahmen, Klick wählt Preview | M | ◐ (Multiview der Engine als Ausgangsquelle, OUT.2; Program links oder rechts, Pegel an/aus; ohne 2/8/14 Kacheln, nur Inputs, Reihenfolge, Titel oben/unten, Klick wählt Preview, zweite Multiview) |
 | OUT.11 | Live-Monitore in der GUI: PVW, PGM, alle Input-Kacheln flüssig (volle Bildrate); Bilder lokal direkt über GPU-Speicher aus der Engine (G.2) | M | ◐ (alle Inputs live über Shared Memory, 30 fps bei 18 Ansichten; DMABuf ohne Kopie und volle Bildrate offen, H.4) |
 | OUT.12 | Schutzbereiche: EBU/SMPTE, 80/90 %, Raster, 4:3, 1:1, 9:16 | S | – |
 | OUT.13 | Messinstrumente: Waveform Y/RGB, Parade, Vektorskop (75/100 %-Marken), neben Bild | S | – |
@@ -474,7 +474,7 @@ Zurückgestellt (User 2026-10-08).
 |---|---|---|---|
 | SHW.1 | Show enthält: Inputs mit allen Einstellungen, Overlays, Übergänge, Audio (Inputs + Busse), Ablauflisten, Kategorien, lokale Belegungen/Rückmeldungen/Skripte, Aufnahme, Streaming, Ausgänge, Karte, Datenquellen, Master-Format | M | ◐ (Inputs mit Einstellungen und Farb-Kategorien, Overlays, Übergänge, Audio samt Aux-Bussen, Layouts, Ablauflisten, Kurzbefehle, Auslöser, Ausgänge, Titel, Datenquellen; ohne Master-Format, Karte) |
 | SHW.2 | Offenes, versioniertes, lesbares Format (JSON); Medien per Pfad | M | ✅ (JSON `lmix-show`, Version 2, Medien per Pfad) |
-| SHW.3 | Neu (mit Formatwahl), Öffnen (ersetzt), Anhängen (nur gewählte Inputs), Speichern, Speichern unter, zuletzt geöffnet | M | ◐ (Neu, Öffnen, Anhängen gewählter Inputs, Speichern, Speichern unter, zuletzt geöffnet; ohne Formatwahl) |
+| SHW.3 | Neu (mit Formatwahl), Öffnen (ersetzt), Anhängen (nur gewählte Inputs), Speichern, Speichern unter, zuletzt geöffnet | M | ✅ (Neu mit Programmformat, Öffnen, Anhängen gewählter Inputs, Speichern, Speichern unter, zuletzt geöffnet) |
 | SHW.4 | Fehlende Dateien: markieren, suchen lassen, sonst Input offline | M | ✅ (fehlende Mediendateien markiert, in einem Ordner nach Namen gesucht; fehlende Quelle: Input offline, kommt von selbst zurück) |
 | SHW.5 | Automatische Sicherung, "letzte Show" wiederherstellen (auch nach Absturz) | M | ✅ (Autosave nach jeder Änderung, Fortsetzen nach Absturz) |
 | SHW.6 | Paket: Show + Medien + Titel in einer Datei | S | ✅ |

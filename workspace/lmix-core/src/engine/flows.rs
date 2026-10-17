@@ -22,8 +22,8 @@ use lmix_types::action::OVERLAY_CHANNELS;
 use lmix_types::input::{color_rgb, AUX_BUSES, AUX_PRE_FADER};
 use lmix_types::layout::LAYOUTS;
 use lmix_types::{
-    DisplayMode, Framerate, MasterFormat, OutputId, OutputSpec, RateMode, SourceSpec, VideoCodec,
-    VideoEncoding,
+    DisplayMode, Framerate, MasterFormat, MultiviewLayout, MultiviewMeters, OutputId, OutputSpec,
+    ProgramSide, RateMode, SourceSpec, VideoCodec, VideoEncoding,
 };
 
 use super::LivePicture;
@@ -175,6 +175,7 @@ pub fn mixer_flow(
     backend: MixerBackend,
     monitor: MonitorOut,
     format: MasterFormat,
+    multiview: MultiviewLayout,
 ) -> Flow {
     let mut flow = Flow::new(MIXER_NAME);
     flow.id = mixer_id();
@@ -242,6 +243,14 @@ pub fn mixer_flow(
             ("num_inputs", PropertyValue::Int(black as i64 + 1)),
             // Program size and rate (OUT.1); the multiview keeps its own.
             ("pgm_resolution", PropertyValue::String(format.resolution())),
+            (
+                "swap_pvw_pgm",
+                PropertyValue::Bool(multiview.program == ProgramSide::Left),
+            ),
+            (
+                "show_vu_meters",
+                PropertyValue::Bool(multiview.meters == MultiviewMeters::Shown),
+            ),
             (
                 "pgm_framerate",
                 PropertyValue::String(format.framerate.fraction().into()),
@@ -335,6 +344,32 @@ pub fn format_of(flow: &Flow) -> Option<MasterFormat> {
         height: height.parse().ok()?,
         framerate,
     })
+}
+
+/// The multiview layout a mixer flow was built with; the engine's
+/// defaults where a property is missing.
+pub fn multiview_of(flow: &Flow) -> MultiviewLayout {
+    let flag = |key: &str| {
+        flow.blocks
+            .iter()
+            .find(|b| b.id == MIXER_BLOCK)
+            .and_then(|b| match b.properties.get(key) {
+                Some(PropertyValue::Bool(on)) => Some(*on),
+                _ => None,
+            })
+    };
+    MultiviewLayout {
+        program: if flag("swap_pvw_pgm") == Some(true) {
+            ProgramSide::Left
+        } else {
+            ProgramSide::Right
+        },
+        meters: if flag("show_vu_meters") == Some(false) {
+            MultiviewMeters::Hidden
+        } else {
+            MultiviewMeters::Shown
+        },
+    }
 }
 
 /// Pad of DSK `layer` (0-based) on the program compositor: after the
@@ -1126,7 +1161,21 @@ mod tests {
             height: 1920,
             framerate: lmix_types::Framerate::Fps59_94,
         };
-        let flow = mixer_flow(2, MixerBackend::Cpu, MonitorOut::None, upright);
+        let layout = MultiviewLayout {
+            program: ProgramSide::Left,
+            meters: MultiviewMeters::Hidden,
+        };
+        let flow = mixer_flow(2, MixerBackend::Cpu, MonitorOut::None, upright, layout);
+        // The multiview layout (OUT.10) is read back like the format.
+        assert_eq!(multiview_of(&flow), layout);
+        let plain = mixer_flow(
+            2,
+            MixerBackend::Cpu,
+            MonitorOut::None,
+            upright,
+            MultiviewLayout::default(),
+        );
+        assert_eq!(multiview_of(&plain), MultiviewLayout::default());
 
         let vm = flow.blocks.iter().find(|b| b.id == MIXER_BLOCK).unwrap();
         assert!(matches!(
@@ -1163,6 +1212,7 @@ mod tests {
             MixerBackend::Cpu,
             MonitorOut::None,
             MasterFormat::default(),
+            MultiviewLayout::default(),
         );
 
         for slot in 0..3 {
@@ -1189,6 +1239,7 @@ mod tests {
             MixerBackend::Cpu,
             MonitorOut::None,
             MasterFormat::default(),
+            MultiviewLayout::default(),
         );
 
         assert_eq!(black_input(3), 3);
@@ -1201,7 +1252,13 @@ mod tests {
     #[test]
     fn only_the_gl_mixer_downloads_program() {
         let download = |backend| {
-            let flow = mixer_flow(2, backend, MonitorOut::None, MasterFormat::default());
+            let flow = mixer_flow(
+                2,
+                backend,
+                MonitorOut::None,
+                MasterFormat::default(),
+                MultiviewLayout::default(),
+            );
             let vm = flow.blocks.iter().find(|b| b.id == "vm").unwrap();
             matches!(
                 vm.properties.get("gl_download"),
@@ -1345,6 +1402,7 @@ mod tests {
             MixerBackend::Cpu,
             MonitorOut::None,
             MasterFormat::default(),
+            MultiviewLayout::default(),
         );
 
         for slot in 0..3 {
@@ -1367,6 +1425,7 @@ mod tests {
             MixerBackend::Cpu,
             MonitorOut::Auto,
             MasterFormat::default(),
+            MultiviewLayout::default(),
         );
         assert!(heard
             .links
@@ -1381,6 +1440,7 @@ mod tests {
             MixerBackend::Cpu,
             MonitorOut::None,
             MasterFormat::default(),
+            MultiviewLayout::default(),
         );
 
         assert!(flow
@@ -1425,6 +1485,7 @@ mod tests {
             MixerBackend::Cpu,
             MonitorOut::None,
             MasterFormat::default(),
+            MultiviewLayout::default(),
         );
 
         let vm = flow.blocks.iter().find(|b| b.id == MIXER_BLOCK).unwrap();
@@ -1447,6 +1508,7 @@ mod tests {
             MixerBackend::Cpu,
             MonitorOut::None,
             MasterFormat::default(),
+            MultiviewLayout::default(),
         );
 
         let mix = flow.blocks.iter().find(|b| b.id == AUDIO_MIXER).unwrap();
@@ -1770,6 +1832,7 @@ mod tests {
                 MixerBackend::Cpu,
                 MonitorOut::None,
                 MasterFormat::default(),
+                MultiviewLayout::default(),
             ),
             slot,
         ] {
