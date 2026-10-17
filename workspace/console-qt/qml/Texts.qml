@@ -91,6 +91,7 @@ QtObject {
         case "outputs":
             switch (value) {
             case "srt": return qsTr("SRT stream")
+            case "rtmp": return qsTr("RTMP stream (YouTube, Twitch …)")
             case "record": return qsTr("Recording")
             case "ndi": return qsTr("NDI")
             case "window": return qsTr("Screen: window")

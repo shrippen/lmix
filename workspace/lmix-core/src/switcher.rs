@@ -25,7 +25,7 @@ use lmix_types::{
     Layout, LayoutBox, LayoutTemplate, Listen, Look, Output, OutputGroup, OutputId, OutputRef,
     OutputSource, OutputSpec, OutputStatus, OverlayChannel, QuickPlay, Shortcut, ShortcutSpec,
     ShowState, SignalLoss, SourceSpec, Stinger, StingerSpec, TemplateBox, TemplateInput,
-    Transition, TransitionSlot, Transport, VideoEncoding, VolumeTarget, FADE_MAX_MS,
+    Transition, TransitionSlot, Transport, VolumeTarget, FADE_MAX_MS,
 };
 use lmix_types::{Cue, CueList, MidiKind, MidiMessage, Trigger, TriggerOn};
 
@@ -3692,7 +3692,7 @@ impl Switcher {
         if let Some(bus) = aux {
             aux_index(bus)?;
         }
-        if let Some(reason) = spec.encoding().and_then(VideoEncoding::problem) {
+        if let Some(reason) = spec.problem() {
             return Err(ActionError::BadEncoding { reason });
         }
         let output = ShowOutput {
@@ -4303,7 +4303,7 @@ fn no_video_check(entry: &ShowInput) -> Result<(), ActionError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use lmix_types::{MidiBinding, TestPattern};
+    use lmix_types::{MidiBinding, TestPattern, VideoEncoding};
 
     const SLOTS: usize = 4;
 
@@ -7147,6 +7147,45 @@ mod tests {
             .apply(Action::SetMultiview { layout })
             .unwrap()
             .is_empty());
+    }
+
+    #[test]
+    fn rtmp_needs_an_rtmp_address_and_h264() {
+        let mut sw = Switcher::new(SLOTS);
+        let rtmp = |url: &str, codec| OutputSpec::Rtmp {
+            url: url.into(),
+            key: "key".into(),
+            video_kbps: 4500,
+            encoding: VideoEncoding {
+                codec,
+                ..Default::default()
+            },
+        };
+        let add = |spec| Action::AddOutput {
+            spec,
+            source: OutputSource::Program,
+            name: None,
+            aux: None,
+        };
+        for bad in [
+            rtmp("srt://cdn:9000", lmix_types::VideoCodec::H264),
+            rtmp("rtmp://cdn/live", lmix_types::VideoCodec::H265),
+        ] {
+            assert!(matches!(
+                sw.apply(add(bad)),
+                Err(ActionError::BadEncoding { .. })
+            ));
+        }
+        sw.apply(add(rtmp("rtmps://cdn/live", lmix_types::VideoCodec::H264)))
+            .unwrap();
+        assert_eq!(sw.state().outputs[0].name, "RTMP rtmps://cdn/live");
+        // A stream like SRT: started with the others (STR.1).
+        let cmds = sw
+            .apply(Action::StartOutputs {
+                group: OutputGroup::Streams,
+            })
+            .unwrap();
+        assert_eq!(cmds.len(), 1);
     }
 
     #[test]
