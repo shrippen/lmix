@@ -1,6 +1,6 @@
 # Übergabe: Stand M9 und Show-Modus S1 (in Arbeit), lokale Übernahme
 
-Stand 2026-10-09, PR-Liste 2026-10-17. Die Arbeit läuft lokal weiter (Arch, RTX 3090), Abnahme
+Stand 2026-10-09, PR-Liste 2026-10-17 (bis #68). Die Arbeit läuft lokal weiter (Arch, RTX 3090), Abnahme
 auf echter Hardware.
 
 ## Offene PRs, Stand 2026-10-17 nachts (Merge-Reihenfolge)
@@ -41,6 +41,13 @@ unten mergen; Gitea stellt die Basis des nächsten auf `main` um):
 | #59 | `s1-osc-topics` | OSC-Abo je Thema und Feld (CTL.3); enthält den Fix aus #45 |
 | #60 | `se13-stage-measure` | S-E.13 Bühnen gemessen, nur Doku und Messskript |
 | #61 | `todo-1017` | Übergabe und Todo nach dem 17.10. |
+| #62 | `lastenheft-stand` | Lastenheft: Stand von 68 Zeilen nachgezogen |
+| #63 | `aud14-fades` | Pegel blenden: Eingang, Bus, Master über Zeit (AUD.14) |
+| #64 | `src4-alpha` | Standbilder mit Alpha (PNG, WebP, TIFF) (SRC.4) |
+| #65 | `aud1-stereo` | Pegel je Kanal an der Kachel (AUD.1) |
+| #66 | `aud4-monitor` | Abhörpegel, Standardverzögerung neuer Eingänge (AUD.4/AUD.6) |
+| #67 | `out2-multiview` | Multiview als Ausgangsquelle (OUT.2) |
+| #68 | `out1-format` | Programmformat: Auflösung und Bildrate (OUT.1) |
 
 Rote GitHub-Läufe auf `s1-feeds` und `s1-script-folder` sind die wackelige
 Failover-Prüfung, die #45 behebt (der Stapel bekommt sie über `main`).

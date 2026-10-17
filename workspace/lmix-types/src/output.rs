@@ -74,6 +74,9 @@ pub enum OutputSource {
     /// One input as it arrives, before the mixer: ISO recording
     /// (MultiCorder, REC.4) or an ISO feed.
     Input(InputId),
+    /// The multiview: preview, program and the inputs (OUT.2, OUT.10),
+    /// with program sound.
+    Multiview,
 }
 
 /// Default video bitrate of encoded outputs.
@@ -185,3 +188,79 @@ pub struct OutputStats {
     /// Round-trip time to the receiver.
     pub rtt_ms: Option<u32>,
 }
+
+/// Frame rate of program (OUT.1); the rates strom's mixer offers.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub enum Framerate {
+    #[serde(rename = "24000/1001")]
+    Fps23_976,
+    #[serde(rename = "24/1")]
+    Fps24,
+    #[serde(rename = "25/1")]
+    Fps25,
+    #[serde(rename = "30000/1001")]
+    Fps29_97,
+    #[default]
+    #[serde(rename = "30/1")]
+    Fps30,
+    #[serde(rename = "50/1")]
+    Fps50,
+    #[serde(rename = "60000/1001")]
+    Fps59_94,
+    #[serde(rename = "60/1")]
+    Fps60,
+}
+
+impl Framerate {
+    /// As GStreamer writes it, e.g. `30000/1001`.
+    pub fn fraction(self) -> &'static str {
+        match self {
+            Self::Fps23_976 => "24000/1001",
+            Self::Fps24 => "24/1",
+            Self::Fps25 => "25/1",
+            Self::Fps29_97 => "30000/1001",
+            Self::Fps30 => "30/1",
+            Self::Fps50 => "50/1",
+            Self::Fps59_94 => "60000/1001",
+            Self::Fps60 => "60/1",
+        }
+    }
+}
+
+/// Smallest and largest program side, pixels (SD to 8K, upright too).
+pub const FORMAT_MIN_PX: u32 = 320;
+pub const FORMAT_MAX_PX: u32 = 7680;
+
+/// Picture size and rate of program (OUT.1): every output, the
+/// multiview and the overlays follow it. Upright (9:16) is allowed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct MasterFormat {
+    pub width: u32,
+    pub height: u32,
+    #[serde(default)]
+    pub framerate: Framerate,
+}
+
+impl Default for MasterFormat {
+    fn default() -> Self {
+        Self {
+            width: 1920,
+            height: 1080,
+            framerate: Framerate::default(),
+        }
+    }
+}
+
+impl MasterFormat {
+    /// Even sides within the limits (video formats subsample by 2).
+    pub fn is_valid(&self) -> bool {
+        let side = |v: u32| (FORMAT_MIN_PX..=FORMAT_MAX_PX).contains(&v) && v % 2 == 0;
+        side(self.width) && side(self.height)
+    }
+
+    /// `1920x1080`, as strom takes it.
+    pub fn resolution(&self) -> String {
+        format!("{}x{}", self.width, self.height)
+    }
+}
+

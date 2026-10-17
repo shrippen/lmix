@@ -2940,3 +2940,80 @@ Die Mischer nehmen Alpha schon (Stinger mit Alpha).
 **Geprüft**: Test der Formate je Dateiart; VM-Test (CPU-Mischer): ein PNG,
 links rot, rechts klar, als Overlay über Orange zeigt rechts Orange.
 Offen: CUDA und GL auf echter Hardware (H.33).
+
+## 2026-10-17 — Pegel links und rechts (AUD.1)
+
+strom meldet die Spitzenwerte je Kanal; lmix-core behielt nur den
+lautesten. Jetzt tragen die Pegel je Input zusätzlich `channels_db`
+(links, rechts; leer, solange keine frische Messung da ist), `peak_db`
+bleibt für bestehende Clients. Die Kachel zeigt zwei schmale
+`KanteAudioMeter` übereinander, eine Haarlinie auseinander (bei gleichem
+Pegel sonst nicht als zwei zu erkennen); ohne Kanalwerte ein Balken wie
+bisher. Kein neues Kante-Bauteil nötig.
+
+## 2026-10-17 — Abhörlautstärke, AFL als Standard, Standard-Delay (AUD.4, AUD.6)
+
+- **Abhörlautstärke** (`set_monitor_volume`, 0–100, in der Show): der
+  Regler des Abhörbusses in strom (`monitor_fader`), im Dialog „Busse…“
+  mit Pegel. strom hat für den Abhörbus kein eigenes Stumm; Lautstärke je
+  Input auf dem Abhörbus fehlt weiter (bräuchte einen eigenen Send je
+  Kanal in strom).
+- **Solo-Taste hört nach dem Fader (AFL)**, wie AUD.4 es als Standard
+  verlangt; PFL über das Menü der Kachel. Vorher war PFL der Standard.
+- **Standard-Delay** (`set_default_delay`, 0–500 ms, in der Show): neue
+  Inputs mit Ton bekommen ihn im Kanalzug, vorhandene behalten ihren.
+  Console: „Delay für neue Inputs“ im Kanalzug übernimmt den Wert des
+  Inputs.
+
+**Geprüft**: Schalter-Test (Delay neuer Inputs, Grenze, Abhör-Befehl und
+Wiederherstellen), VM-Test mit strom (Abhören auf 0 still, Program
+bleibt), Console auf Xvfb.
+
+## 2026-10-17 — Multiview als Ausgang (OUT.2)
+
+Ausgänge konnten nur Program oder einen Input zeigen. Der strom-Mischer
+rendert die Multiview ohnehin (ein unverbundener Ausgang endet in einem
+`fakesink`); lmix gibt `multiview_out` jetzt wie Program über `inter`
+heraus, und ein Ausgang kann `{"from": "multiview"}` zeigen, mit
+Program-Ton (oder einem Aux-Bus). Console: „Multiview“ als Quelle im
+Ausgangs-Dialog.
+
+- Der Mischer-Flow heißt jetzt „lmix mixer 7“: ein laufender alter
+  Mischer ohne diesen Ausgang wird beim ersten Start einmal neu gebaut.
+- Preview als Quelle bleibt offen: der Mischer-Block hat keinen
+  Preview-Ausgang (nur `pgm_out`, `multiview_out`); das bräuchte einen
+  strom-Patch.
+
+**Geprüft**: Flow-Tests (Mischer gibt die Multiview heraus, Ausgang liest
+sie), VM-Test mit strom: Aufnahme der Multiview, H.264 und AAC.
+Nebenbefund: Die VM-Prüfung „pausierter Clip auf Sendung gehalten“ fiel
+einmal, als nebenher ein Rust-Build lief; ohne Last grün.
+
+## 2026-10-17 — Programmformat wählbar (OUT.1)
+
+**Kontext**: Program lief fest in 1920 × 1080 bei 30 fps; OUT.1 verlangt
+Auflösung von SD bis 4K, Hochkant 1080 × 1920 und Bildraten 23,976–60.
+
+**Entscheidung**:
+- `set_master_format {format: {width, height, framerate}}`, gespeichert in
+  der Show. Größe frei, gerade, 320–7680 px je Seite (strom nimmt jedes
+  `WxH`), Bildrate aus der Liste des strom-Mischers (23,976, 24, 25,
+  29,97, 30, 50, 59,94, 60). Halbbilder (50i/59,94i) und 100/120 bietet
+  der Mischer nicht.
+- Die Engine baut den Mischer nur neu, wenn das Format sich ändert
+  (`Command::SetFormat`, erstes Kommando jeder Wiederherstellung); danach
+  wird der Mischer wie nach einem Engine-Neustart eingerichtet, laufende
+  Ausgänge starten in der neuen Größe neu. Die Quellen laufen weiter (kein
+  `SetSlot`), Clips fangen nicht von vorn an. Program steht dabei kurz.
+- Startet lmix-core neu, übernimmt es einen laufenden Mischer in seinem
+  Format; die Wiederherstellung baut nur neu, wenn die Show ein anderes
+  will (kein Bildaussetzer beim Neustart wie bisher).
+- Overlay-Rechtecke rechnen mit dem aktuellen Format statt fest 1920 × 1080.
+  Standbilder bleiben 1920 × 1080 (der Mischer skaliert).
+- Console: „Programmformat…“ im Paket-Menü, Größen als Vorlagen (4K bis
+  SD, zwei Hochkant), Hinweis auf die Unterbrechung.
+
+**Geprüft**: Tests (Format im Mischer-Flow und zurückgelesen, Grenzen,
+gleiches Format ändert nichts, Quellen bleiben), VM-Test mit strom:
+1080 × 1920 bei 25 fps gebaut, Program läuft, zurück auf 1920 × 1080,
+Quelle online; Console auf Xvfb.

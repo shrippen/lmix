@@ -272,6 +272,11 @@ pub const AUX_BUSES: usize = 2;
 /// themselves whatever is on air), bus 2 a second mix after the fader.
 pub const AUX_PRE_FADER: [bool; AUX_BUSES] = [true, false];
 
+/// Volume 100: unity gain (serde default).
+pub fn full_volume() -> u8 {
+    VOLUME_MAX
+}
+
 /// Master of an aux bus.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct AuxBus {
