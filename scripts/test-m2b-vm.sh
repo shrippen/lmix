@@ -49,7 +49,7 @@ fail() {
     echo "FAIL: $*" >&2
     # What the engine and lmix-core were doing (CI shows no files).
     local log
-    for log in strom.log core.log gst.log; do
+    for log in strom.log core.log gst.log core-threads.txt; do
         [[ -s "$WORK/$log" ]] || continue
         echo "--- last 60 lines of $log" >&2
         tail -n 60 "$WORK/$log" >&2
@@ -73,10 +73,16 @@ settled() { wait_for "$SETTLE_S" eval "$1"; }
 # is <state function> <name> <state>: evaluated anew on every try.
 is() { [[ "$("$1" "$2")" == "$3" ]]; }
 
+# A hung lmix-core (seen once, todo.md) fails the action after two
+# minutes and leaves its threads in the work folder.
 act() {
     local out code
-    out="$(curl -s -w '\n%{http_code}' -X POST "$CORE/actions" -H 'content-type: application/json' -d "$1")"
+    out="$(curl -s --max-time 120 -w '\n%{http_code}' -X POST "$CORE/actions" -H 'content-type: application/json' -d "$1")"
     code="${out##*$'\n'}"
+    if [[ "$code" == 000 && -n "${CORE_PID:-}" ]]; then
+        gdb -p "$CORE_PID" -batch -ex 'thread apply all bt' >"$WORK/core-threads.txt" 2>&1 || true
+        fail "action $1 got no answer in 120 s; lmix-core threads: $WORK/core-threads.txt"
+    fi
     [[ "$code" == 200 ]] || fail "action $1 -> $code ${out%$'\n'*}"
     printf '%s\n' "${out%$'\n'*}"
 }
