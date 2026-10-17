@@ -495,7 +495,7 @@ Zurückgestellt (User 2026-10-08).
 | UI.6 | Andockbare Bereiche (Audio, Wiederholung, Liste) und abdockbare Fenster für zweiten Monitor | S | – |
 | UI.7 | Einfacher und erweiterter Modus | S | ✅ |
 | UI.8 | Input-Einstellungen in Reitern: Allgemein, Farbe, Key, Farbkorrektur, Effekte, Position, Ebenen, Auslöser, Tally, PTZ, Erweitert | M | ◐ (Allgemein, Farbe, Ton, Auslöser, PTZ, Erweitert; ohne Key, Effekte, Position, Ebenen, Tally) |
-| UI.9 | Gestaltung nach dem Kante Design System (`agent.md`, GUI-Regel): Stilwahl Kante (Standard, dunkel; hell „Leinen“ bei hellem Systemthema), Kante Light (nur Formsprache, Farben des Systems), System als Rückfall (KDE Plasma/Breeze, folgt dem Plasma-Farbschema); Bildflächen bleiben dunkel; Sprachen en (Quelle) und de (erweiterbar) | M | – |
+| UI.9 | Gestaltung nach dem Kante Design System (`agent.md`, GUI-Regel): Stilwahl Kante (Standard, dunkel; hell „Leinen“ bei hellem Systemthema), Kante Light (nur Formsprache, Farben des Systems), System als Rückfall (KDE Plasma/Breeze, folgt dem Plasma-Farbschema); Bildflächen bleiben dunkel; Sprachen en (Quelle) und de (erweiterbar) | M | ✅ (Stilwahl in den Einstellungen, `KanteStyle.kind`; en/de) |
 | UI.10 | Bestätigung vor Stopp von Aufnahme/Stream (abschaltbar) | S | ✅ |
 | UI.11 | Hochkant-Produktion: Vorlagen für 9:16, Schutzbereich, Quellrotation | K | – |
 | UI.12 | Startoptionen: maximiert, erweiterter Modus, Vollbild/Kartenausgang/SRT starten, letzte Show | S | ◐ (Fenster, Modus, Ausgänge starten, letzte Show; Vollbild-Ausgang über `--start-outputs`) |
