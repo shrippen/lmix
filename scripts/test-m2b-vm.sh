@@ -49,7 +49,7 @@ fail() {
     echo "FAIL: $*" >&2
     # What the engine and lmix-core were doing (CI shows no files).
     local log
-    for log in strom.log core.log gst.log core-threads.txt; do
+    for log in strom.log core.log gst.log core-threads.txt strom-threads.txt; do
         [[ -s "$WORK/$log" ]] || continue
         echo "--- last 60 lines of $log" >&2
         tail -n 60 "$WORK/$log" >&2
@@ -80,8 +80,12 @@ act() {
     out="$(curl -s --max-time 120 -w '\n%{http_code}' -X POST "$CORE/actions" -H 'content-type: application/json' -d "$1")"
     code="${out##*$'\n'}"
     if [[ "$code" == 000 && -n "${CORE_PID:-}" ]]; then
+        # lmix-core may wait on an engine call that hangs: both sides.
         gdb -p "$CORE_PID" -batch -ex 'thread apply all bt' >"$WORK/core-threads.txt" 2>&1 || true
-        fail "action $1 got no answer in 120 s; lmix-core threads: $WORK/core-threads.txt"
+        local strom_pid
+        strom_pid="$(pgrep -f -- "--port $STROM_PORT " | head -1)"
+        [[ -n "$strom_pid" ]] && { gdb -p "$strom_pid" -batch -ex 'thread apply all bt' >"$WORK/strom-threads.txt" 2>&1 || true; }
+        fail "action $1 got no answer in 120 s; threads: $WORK/core-threads.txt, $WORK/strom-threads.txt"
     fi
     [[ "$code" == 200 ]] || fail "action $1 -> $code ${out%$'\n'*}"
     printf '%s\n' "${out%$'\n'*}"
