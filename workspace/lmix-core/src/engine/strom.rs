@@ -82,6 +82,10 @@ pub struct StromEngine {
     metering: AtomicBool,
     /// Directory of the live picture sockets (see [`Engine::live`]).
     live_dir: PathBuf,
+    /// Where the engine reaches lmix-core's pages (graphics channels).
+    pages: String,
+    /// Playout delay of each player slot (ms, see `flows::playout_ms`).
+    playout: std::sync::Mutex<std::collections::HashMap<usize, u64>>,
     /// One live flow is set up at a time (two Consoles asking at once).
     live_setup: Mutex<()>,
     /// Mute of each audio mixer channel and bus as last sent (see
@@ -124,6 +128,8 @@ impl StromEngine {
             players: broadcast::channel(PLAYER_BUFFER).0,
             metering: AtomicBool::new(false),
             live_dir: default_live_dir(),
+            pages: flows::DEFAULT_PAGES.into(),
+            playout: Default::default(),
             live_setup: Mutex::new(()),
             mutes: Default::default(),
             format: Default::default(),
@@ -136,6 +142,12 @@ impl StromEngine {
     /// Live picture sockets in `dir` instead of [`default_live_dir`].
     pub fn with_live_dir(mut self, dir: PathBuf) -> Self {
         self.live_dir = dir;
+        self
+    }
+
+    /// lmix-core's address as the engine reaches it, for graphics pages.
+    pub fn with_pages(mut self, url: String) -> Self {
+        self.pages = url;
         self
     }
 
@@ -664,6 +676,17 @@ impl StromEngine {
             return self.transport(slot, Transport::Pause).await;
         }
         self.transport(slot, Transport::Restart).await?;
+        // The clip's first frame plays after its playout delay; the layer,
+        // and the cut the switcher times from here, wait for it.
+        let delay = self
+            .playout
+            .lock()
+            .expect("playout lock")
+            .get(&slot)
+            .copied();
+        if let Some(ms) = delay {
+            tokio::time::sleep(std::time::Duration::from_millis(ms)).await;
+        }
         self.dsk_layer(flows::STINGER_LAYER, Some(slot), 0).await
     }
 
@@ -828,10 +851,24 @@ impl Engine for StromEngine {
                 slot,
                 source: Some(source),
             } => {
-                self.put_flow(&flows::slot_flow(*slot, source, self.backend))
-                    .await
+                {
+                    let mut playout = self.playout.lock().expect("playout lock");
+                    match flows::playout_ms(source) {
+                        Some(ms) => playout.insert(*slot, ms),
+                        None => playout.remove(slot),
+                    };
+                }
+                let env = flows::SlotEnv {
+                    backend: self.backend,
+                    format: *self.format.lock().expect("format lock"),
+                    pages: self.pages.clone(),
+                };
+                self.put_flow(&flows::slot_flow(*slot, source, &env)).await
             }
-            Command::SetSlot { slot, source: None } => self.drop_flow(flows::slot_id(*slot)).await,
+            Command::SetSlot { slot, source: None } => {
+                self.playout.lock().expect("playout lock").remove(slot);
+                self.drop_flow(flows::slot_id(*slot)).await
+            }
             Command::Preview { slot } => self.select_preview(*slot).await,
             Command::Program {
                 slot,
@@ -1200,6 +1237,72 @@ fn level_writes(level: &Level, known: Option<bool>) -> Vec<(String, PropertyValu
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A strom stand-in that answers every request with `{}` and records
+    /// method, path and time.
+    async fn recording_strom() -> (
+        String,
+        std::sync::Arc<std::sync::Mutex<Vec<(String, String, std::time::Instant)>>>,
+    ) {
+        let calls = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let seen = calls.clone();
+        let app = axum::Router::new().fallback(move |request: axum::extract::Request| {
+            let seen = seen.clone();
+            async move {
+                seen.lock().unwrap().push((
+                    request.method().to_string(),
+                    request.uri().path().to_string(),
+                    std::time::Instant::now(),
+                ));
+                axum::Json(serde_json::json!({}))
+            }
+        });
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        (format!("http://{addr}"), calls)
+    }
+
+    /// strom holds a clip's buffers for its playout delay before they play
+    /// (100 ms on a file, see `flows::FILE_PLAYOUT_DELAY_MS`). A stinger
+    /// comes on only once its first frame can be there, so the cut the
+    /// switcher times from here falls where the clip puts it.
+    #[tokio::test]
+    async fn a_stinger_waits_for_its_clip_to_play() {
+        let (url, calls) = recording_strom().await;
+        let engine = StromEngine::new(url, MixerBackend::Cpu, MonitorOut::None);
+        let clip = lmix_types::SourceSpec::File {
+            path: "/clips/sting.webm".into(),
+        };
+        engine
+            .run(&Command::SetSlot {
+                slot: 3,
+                source: Some(clip),
+            })
+            .await
+            .unwrap();
+        calls.lock().unwrap().clear();
+        engine
+            .run(&Command::Stinger { slot: 3, on: true })
+            .await
+            .unwrap();
+
+        let calls = calls.lock().unwrap();
+        let played = calls
+            .iter()
+            .rposition(|(_, path, _)| path.contains("/player"))
+            .expect("the clip is started");
+        let layer = calls
+            .iter()
+            .position(|(_, path, _)| path.contains(&flows::mixer_id().to_string()))
+            .expect("the stinger layer goes on");
+        assert!(layer > played, "the layer went on before the clip started");
+        let waited = calls[layer].2 - calls[played].2;
+        assert!(
+            waited >= std::time::Duration::from_millis(flows::FILE_PLAYOUT_DELAY_MS),
+            "the layer went on {waited:?} after the clip started"
+        );
+    }
 
     /// An engine that takes a request and never answers fails the call
     /// instead of holding lmix-core (and its switcher lock) for good.

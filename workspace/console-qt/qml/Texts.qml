@@ -35,6 +35,8 @@ QtObject {
             case "srt": return qsTr("SRT")
             case "ndi": return qsTr("NDI")
             case "whip": return qsTr("WHIP (browser, OBS)")
+            case "web": return qsTr("Web page")
+            case "graphics": return qsTr("Graphics channel")
             case "device": return qsTr("Camera / capture")
             case "audio_device": return qsTr("Audio (mic, line)")
             }
@@ -118,6 +120,8 @@ QtObject {
         case "playlist": return qsTr("LIST", "source badge: playlist")
         case "ndi": return "NDI"
         case "whip": return "WHIP"
+        case "web": return "WEB"
+        case "graphics": return qsTr("GFX", "source badge: graphics channel")
         case "audio_device": return qsTr("MIC", "source badge: microphone, line in")
         }
         return ""

@@ -2907,6 +2907,11 @@
       <translation>Endpunktname, z. B. buehne</translation>
     </message>
     <message>
+      <location line="+2" />
+      <source>channel number or name, e.g. 1</source>
+      <translation>Nummer oder Name des Kanals, z. B. 1</translation>
+    </message>
+    <message>
       <location line="+1" />
       <location line="+1" />
       <source>device id</source>
@@ -3218,14 +3223,24 @@
     </message>
     <message>
       <location line="+1" />
-      <location line="+60" />
+      <location line="+62" />
       <source>NDI</source>
       <translation>NDI</translation>
     </message>
     <message>
-      <location line="-59" />
+      <location line="-61" />
       <source>WHIP (browser, OBS)</source>
       <translation>WHIP (Browser, OBS)</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Web page</source>
+      <translation>Web-Seite</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Graphics channel</source>
+      <translation>Grafikkanal</translation>
     </message>
     <message>
       <location line="+1" />
@@ -3439,7 +3454,13 @@
       <translation>LISTE</translation>
     </message>
     <message>
-      <location line="+3" />
+      <location line="+4" />
+      <source>GFX</source>
+      <comment>source badge: graphics channel</comment>
+      <translation>GFX</translation>
+    </message>
+    <message>
+      <location line="+1" />
       <source>MIC</source>
       <comment>source badge: microphone, line in</comment>
       <translation>MIK</translation>

@@ -42,6 +42,8 @@ ColumnLayout {
         srt: "srt://host:port",
         ndi: "HOST (Source name)",
         whip: qsTr("endpoint name, e.g. stage"),
+        web: "https://…",
+        graphics: qsTr("channel number or name, e.g. 1"),
         device: qsTr("device id"),
         audio_device: qsTr("device id")
     })

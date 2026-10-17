@@ -176,7 +176,7 @@ kann es, Console nicht.
 | SRC.13 | Netzstreams | RTSP (UDP/TCP), RTMP, TS über UDP/TCP (Server und Pull), HLS; Puffer; Niedriglatenz-Modus | S | ◐ (URL über den Media-Player: http(s), RTSP; ohne Puffer, Niedriglatenz, TS-Server) |
 | SRC.14 | WebRTC/WHIP | eingehender WHIP-Stream (lmix) | S | ◐ (Console: WHIP-Adresse und Browser-Seite; auf Hardware ungeprüft, H.15) |
 | SRC.15 | Webseite | Chromium-Rendering, URL, Größe, eigenes CSS, transparenter Hintergrund, Ton, Maus/Tastatur-Bedienung, zurück/vor/neu laden | S | ◐ (CEF E, eigener Build) |
-| SRC.16 | Titel | §3.11 | M | ◐ (Titelkanäle, Vorlagen, Daten; Rendern in strom offen, M7.0/GFX.2) |
+| SRC.16 | Titel | §3.11 | M | ◐ (Titelkanäle, Vorlagen, Daten; Grafikkanal als Input über strom `html_input`, mit Chromium ungeprüft) |
 | SRC.17 | Bildschirm lokal | Bildschirm oder Fenster dieses Rechners (PipeWire-Portal) | S | – |
 | SRC.18 | Bildschirm entfernt | Fenster/Bildschirm anderer Rechner per NDI/OMT (Fremdwerkzeug genügt) | K | – |
 | SRC.19 | Video-Verzögerung | Ringpuffer eines Inputs oder von Program, Länge in s, Abspieltempo (Zeitlupe), Ausschnitt als Clip speichern → Liste oder neuer Input | L | – |
@@ -357,11 +357,11 @@ Funktionsreferenz, kein Code (MIT, `claude.md` Entscheidung 6).
 | ID | Anforderung | Prio | Stand |
 |---|---|---|---|
 | GFX.1 | Titel = HTML-Vorlage nach der offenen CasparCG-Konvention: globale Funktionen `play()`, `stop()`, `next()`, `update(data)` und beliebige weitere per Aufruf; bestehende CasparCG-HTML-Vorlagen laufen unverändert. Optional ein lmix-Manifest (Name, Größe, Felder mit Typ Text/Bild/Farbe/Zahl/Schalter, Animationsdauern) | M | ◐ (Konvention, Manifest ohne Größe/Dauern) |
-| GFX.2 | Rendering in der Engine (Chromium, `cefsrc`; E.9) mit Alpha in Ausgabeauflösung und -bildrate, ohne Neustart der Pipeline; Rendern pausieren/fortsetzen; ein hängender Titel nimmt Program nicht mit | M | ◐ (cefsrc E) |
+| GFX.2 | Rendering in der Engine (Chromium, `cefsrc`; E.9) mit Alpha in Ausgabeauflösung und -bildrate, ohne Neustart der Pipeline; Rendern pausieren/fortsetzen; ein hängender Titel nimmt Program nicht mit | M | ◐ (Quelle `graphics` über strom `html_input` in Program-Größe und -Rate, eigener Flow; pausieren offen; mit Chromium ungeprüft) |
 | GFX.3 | Daten: `update` mit Datensatz als JSON oder als XML im CasparCG-Format (`templateData` mit `componentData`/`data`); Felder einzeln per Aktion setzen und lesen | M | ✅ |
 | GFX.4 | Lebenszyklus wie CasparCG: laden (vorbereitet, unsichtbar), laden und sofort abspielen, abspielen, weiter (mehrstufige Animation), stoppen mit Ausblend-Animation, sofort entfernen, Funktion aufrufen; Vorlage meldet Ende; Overlay-Kanal wartet auf Ende der Ausblendung | M | ◐ (Overlay wartet noch nicht) |
 | GFX.5 | Lottie: Lottie-Animationen (JSON, .lottie) in Vorlagen (lottie-web) und später als eigener Input (E.10); Textebenen als Felder; Marker als Abläufe | S | ◐ (in Vorlagen; eigener Input später, E.10) |
-| GFX.6 | Beliebige Webseiten (URL) als Input mit Ton, Größe und eigenem CSS; JavaScript-Funktion der Seite per Aktion aufrufen | S | ◐ (cefsrc E) |
+| GFX.6 | Beliebige Webseiten (URL) als Input mit Ton, Größe und eigenem CSS; JavaScript-Funktion der Seite per Aktion aufrufen | S | ◐ (Quelle `web` mit Ton; eigenes CSS und JS-Aufruf offen; mit Chromium ungeprüft) |
 | GFX.21 | Textfolien: Liste von Texten (Liedtexte, Zitate) aus Datei als Titel, mit Taste weiterschalten; im Programm und auf Beamer (P1) | S | ◐ (Text im Feld oder aus Datei, ein Absatz je Folie; Beamer mit GFX.2) |
 | GFX.20 | Webseiten und Vorlagen spielen H.264 und AAC ab, auch über Media Source Extensions (HLS-Player, Streaming-Einbettungen wie Twitch, YouTube); bevorzugt mit Hardware-Dekodierung. DRM-geschützte Inhalte (EME/Widevine) sind nicht gefordert | M | – |
 | GFX.7 | Titel-Editor in der GUI: Formular aus Manifest oder Datensatz, Felder live oder per "Übernehmen" | M | ✅ |
@@ -374,7 +374,7 @@ Funktionsreferenz, kein Code (MIT, `claude.md` Entscheidung 6).
 | GFX.14 | Vorlage neu laden bei Dateiänderung; gesetzte Daten bleiben erhalten | S | ✅ |
 | GFX.15 | Leistungsbudget: ≥ 8 aktive animierte Titel 1080p60 gleichzeitig ohne Drop | M | – |
 | GFX.16 | Import von vMix-Titeln (.gtzip, XAML) | X | – |
-| GFX.17 | Titel-Ebenen: mehrere Vorlagen gleichzeitig in einem Grafik-Input (z. B. Bauchbinde, Logo, Uhr), je Ebene unabhängig steuerbar; Grafik-Input als Overlay nutzbar | S | ◐ (Ebenen; Input/Overlay mit GFX.2) |
+| GFX.17 | Titel-Ebenen: mehrere Vorlagen gleichzeitig in einem Grafik-Input (z. B. Bauchbinde, Logo, Uhr), je Ebene unabhängig steuerbar; Grafik-Input als Overlay nutzbar | S | ◐ (Ebenen; Grafikkanal als Input `graphics`, als Overlay nutzbar; mit Chromium ungeprüft) |
 | GFX.18 | Ebenen-Transformation je Titel-Ebene: Position, Größe, Crop, Deckkraft, Drehung, Perspektive, Helligkeit/Kontrast/Sättigung, Blend-Modus; animiert mit Dauer und Easing; mehrere Änderungen gemeinsam auf einen Frame anwenden | S | ✅ (Console: Platz, Größe, Drehung, Deckkraft, Farbe) |
 | GFX.19 | Vorlagen- und Medienliste mit Infos (Felder, Größe, Dauer) und Vorschaubild über die API abfragbar | S | ✅ |
 

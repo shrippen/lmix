@@ -3351,3 +3351,48 @@ Abgefragt über eine Entscheidungsseite (Optionen mit Vorschlag).
 - **Player-Verzögerung** 100 ms für lokale Dateien: bestätigt.
 - **AMD/Intel (VA)** weiter unterstützen: die Brücke für VA-Bilder in den
   GL-Mischer konzeptionell wieder anlegen, Test auf Hardware später.
+
+## 2026-10-17 — GFX.2 auf upstreams HTML-Input
+
+**Kontext**: User-Entscheidung: GFX.2 auf strom `builtin.html_input`
+(upstream #879, Chromium über `cefsrc`) bauen und ergänzen, was dem
+eigenen Weg gegenüber fehlt. Der eigene Weg war seit M7 Teil A die
+Grafikseite von lmix-core (`/graphics/<n>`), für die nur „URL als
+Input" in strom fehlte.
+
+**Entscheidung**: zwei Quellen.
+- `web` (GFX.6): beliebige http(s)-Seite mit Ton (`audio_video`),
+  `strict_network` an (keine Seiten aus dem eigenen Netz).
+- `graphics` (GFX.2, GFX.17): der Grafikkanal als Input, Nummer, Name
+  oder ID. Die Engine rendert `http://<lmix-core>/graphics/<kanal>`
+  transparent und ohne Ton; `strict_network` aus, denn die Seite kommt
+  von diesem Rechner. lmix-core gibt strom seine Adresse aus `--listen`
+  (Platzhalter-Bind 0.0.0.0 wird zu 127.0.0.1). Als Overlay-Kanal
+  gekeyt wie jedes Input mit Alpha.
+Beide rendern in Program-Größe und -Rate (29,97 → 30, Chromium rendert
+ganze Bilder je Sekunde), je in einem eigenen Slot-Flow: eine hängende
+Seite nimmt Program nicht mit. Unbekannte Kanäle und Adressen ohne
+http(s) werden beim Anlegen abgelehnt (`bad_web_url`,
+`unknown_graphics`).
+
+**Vergleich: was upstreams Block gegenüber dem Lastenheft nicht kann**:
+
+| Anforderung | upstream `html_input` | Stand |
+|---|---|---|
+| Alpha in Ausgabegröße und -rate (GFX.2) | BGRA, Größe/Rate als Eigenschaften | genutzt |
+| ohne Pipeline-Neustart (GFX.2) | `url` live | genutzt; Inhalte wechseln über die Grafikseite |
+| hängender Titel nimmt Program nicht mit (GFX.2) | – | eigener Flow je Slot |
+| Rendern pausieren/fortsetzen (GFX.2) | fehlt | offen: strom-Ergänzung über CDP (`Page.setWebLifecycleState`) |
+| Ton (GFX.6) | `stream_mode` | genutzt |
+| eigenes CSS (GFX.6) | fehlt | offen: strom-Ergänzung (Stylesheet beim Laden einspielen) |
+| JS-Funktion der Seite aufrufen (GFX.6) | fehlt (Fernsteuerung nur als DevTools-Link) | offen: strom-Ergänzung (`Runtime.evaluate`); für Grafikkanäle nicht nötig, lmix-core steuert sie |
+| H.264/AAC in Seiten (GFX.20) | hängt am CEF-Build von strom | ungeprüft |
+| 8 Titel 1080p60 (GFX.15) | – | mit GPU messen |
+| neue Program-Größe | Größe beim Bau | Seiten-Slots werden bei neuem Format neu gebaut |
+
+**Nicht geprüft**: Ein echter Lauf mit Chromium. In der VM gibt es kein
+`cefsrc`; ein Plugin aus dem strom-full-Image auszuführen hat die
+Sicherheitsprüfung der Sitzung abgelehnt (fremder Code). Geprüft sind die
+Flows (Größe, Rate, Ton, Netz, Adresse) und die Ablehnungen in Tests.
+Abnahme mit strom-full oder auf der RTX 3090 (HARDWARE-TODO H.36).
+

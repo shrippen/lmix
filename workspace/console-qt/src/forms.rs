@@ -47,7 +47,7 @@ pub fn values(list: &str) -> Option<String> {
     serde_json::to_string(&names).ok()
 }
 
-const SOURCE_KINDS: [&str; 11] = [
+const SOURCE_KINDS: [&str; 13] = [
     "pattern",
     "color",
     "image",
@@ -57,6 +57,8 @@ const SOURCE_KINDS: [&str; 11] = [
     "srt",
     "ndi",
     "whip",
+    "web",
+    "graphics",
     "device",
     "audio_device",
 ];
@@ -100,6 +102,8 @@ pub fn source_of(kind: &str, value: &str) -> Option<SourceSpec> {
         "srt" => SourceSpec::Srt { uri: text },
         "ndi" => SourceSpec::Ndi { name: text },
         "whip" => SourceSpec::Whip { endpoint: text },
+        "web" => SourceSpec::Web { url: text },
+        "graphics" => SourceSpec::Graphics { graphics: text },
         "device" => SourceSpec::Device { id: text },
         "audio_device" => SourceSpec::AudioDevice { id: text },
         _ => return None,
@@ -245,6 +249,18 @@ mod tests {
             source_of("playlist", " /a.mp4; ;/b.mp4 "),
             Some(SourceSpec::Playlist {
                 paths: vec!["/a.mp4".into(), "/b.mp4".into()]
+            })
+        );
+        assert_eq!(
+            source_of("web", " https://example.com "),
+            Some(SourceSpec::Web {
+                url: "https://example.com".into()
+            })
+        );
+        assert_eq!(
+            source_of("graphics", "1"),
+            Some(SourceSpec::Graphics {
+                graphics: "1".into()
             })
         );
     }

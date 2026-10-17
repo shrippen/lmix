@@ -266,7 +266,8 @@ async fn main() -> anyhow::Result<()> {
     metrics::started();
     let engine: Arc<dyn Engine> = match args.engine {
         EngineKind::Strom => {
-            let engine = StromEngine::new(args.strom.clone(), args.mixer, args.monitor_out);
+            let engine = StromEngine::new(args.strom.clone(), args.mixer, args.monitor_out)
+                .with_pages(pages_url(args.listen));
             Arc::new(match args.live_dir.clone() {
                 Some(dir) => engine.with_live_dir(dir),
                 None => engine,
@@ -469,4 +470,15 @@ async fn start_outputs(service: &Arc<Service>, names: &[String]) {
             Err(error) => tracing::error!(output = %name, %error, "could not start"),
         }
     }
+}
+
+/// lmix-core's address as the engine on this machine reaches it: a
+/// wildcard bind (`0.0.0.0`, `::`) is reached over loopback.
+fn pages_url(listen: SocketAddr) -> String {
+    let ip = match listen.ip() {
+        ip if ip.is_unspecified() && ip.is_ipv4() => std::net::IpAddr::from([127, 0, 0, 1]),
+        ip if ip.is_unspecified() => std::net::IpAddr::from(std::net::Ipv6Addr::LOCALHOST),
+        ip => ip,
+    };
+    format!("http://{}", SocketAddr::new(ip, listen.port()))
 }
