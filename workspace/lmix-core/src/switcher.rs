@@ -403,8 +403,10 @@ pub struct Switcher {
     all_shows: Vec<ShowShortcut>,
     /// `all_shows` changed since the service last saved it.
     all_shows_changed: bool,
-    /// Output targets of this machine with their secrets (EXT.1).
+    /// Output targets of this machine with their secrets (EXT.1), and
+    /// the fixed OSC subscribers (CTL.4).
     targets: Vec<crate::targets::TargetConfig>,
+    feeds: Vec<lmix_types::Feed>,
     targets_changed: bool,
     /// Media files not found per input (SHW.4); the service checks.
     missing: HashMap<InputId, Vec<String>>,
@@ -452,6 +454,7 @@ impl Switcher {
             all_shows: Vec::new(),
             all_shows_changed: false,
             targets: Vec::new(),
+            feeds: Vec::new(),
             targets_changed: false,
             missing: HashMap::new(),
             overlay_last: Default::default(),
@@ -557,15 +560,26 @@ impl Switcher {
         }
     }
 
-    /// Output targets as the settings hold them, secrets included.
-    pub fn targets(&self) -> &[crate::targets::TargetConfig] {
-        &self.targets
+    /// Output targets and subscribers as the settings hold them, secrets
+    /// included.
+    pub fn target_settings(&self) -> crate::targets::Settings {
+        crate::targets::Settings {
+            targets: self.targets.clone(),
+            feeds: self.feeds.clone(),
+        }
     }
 
-    /// Take the output targets from the settings (start-up).
-    pub fn set_targets(&mut self, targets: Vec<crate::targets::TargetConfig>) {
-        self.targets = targets;
+    /// Take the output targets and subscribers from the settings
+    /// (start-up).
+    pub fn set_target_settings(&mut self, settings: crate::targets::Settings) {
+        self.targets = settings.targets;
+        self.feeds = settings.feeds;
         self.targets_changed = false;
+    }
+
+    /// The fixed OSC subscribers (CTL.4).
+    pub fn feeds(&self) -> &[lmix_types::Feed] {
+        &self.feeds
     }
 
     /// The target `name`, for sending.
@@ -809,6 +823,21 @@ impl Switcher {
             }
             Action::SetTarget { target } => {
                 crate::targets::set(&mut self.targets, target)?;
+                self.targets_changed = true;
+                Ok(Vec::new())
+            }
+            Action::SetFeed { feed } => {
+                crate::targets::set_feed(&mut self.feeds, feed)?;
+                self.targets_changed = true;
+                Ok(Vec::new())
+            }
+            Action::RemoveFeed { name } => {
+                if !self.feeds.iter().any(|f| f.name == name) {
+                    return Err(ActionError::BadTarget {
+                        reason: format!("no subscriber {name}"),
+                    });
+                }
+                self.feeds.retain(|f| f.name != name);
                 self.targets_changed = true;
                 Ok(Vec::new())
             }
@@ -1305,6 +1334,7 @@ impl Switcher {
             go_guard_ms: self.show.go_guard_ms,
             panic_ms: self.show.panic_ms,
             targets: self.targets.iter().map(|t| t.public()).collect(),
+            feeds: self.feeds.clone(),
             restorable: self.removed.last().map(|(_, input)| input.name.clone()),
             shortcuts: self
                 .show

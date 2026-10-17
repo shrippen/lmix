@@ -12,6 +12,7 @@
 pub mod action;
 pub mod automation;
 pub mod cue;
+pub mod feed;
 pub mod graphics;
 pub mod input;
 pub mod layout;
@@ -54,4 +55,5 @@ pub use state::{
     Event, InputLevel, Latency, Levels, LiveFeed, OverlayChannel, QuickPlay, ShowState, Stinger,
     Transition,
 };
+pub use feed::{Feed, FeedMessage, FeedOn};
 pub use target::{HttpMethod, Target, TargetKind, TargetResult, TargetSpec};

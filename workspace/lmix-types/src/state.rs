@@ -159,6 +159,9 @@ pub struct ShowState {
     /// Output targets of this machine, without secrets (EXT.1).
     #[serde(default)]
     pub targets: Vec<crate::target::Target>,
+    /// Fixed OSC subscribers of this machine (CTL.4).
+    #[serde(default)]
+    pub feeds: Vec<crate::feed::Feed>,
     /// Locked against closing, loading and stopping (AUT.11).
     #[serde(default)]
     pub locked: bool,
@@ -279,6 +282,10 @@ pub enum Event {
         layer: u32,
         report: String,
     },
+    /// The running cues with their remaining time, at the cue event rate
+    /// (default 4 Hz) while cues run, once more when none is left
+    /// (CTL.2).
+    Running { cues: Vec<crate::cue::RunningCue> },
     /// Panic (`mode: fade`, over the panic time) or hard stop (`hard`),
     /// from any control (SAF.1, SAF.3, CTL.2).
     Panic { mode: crate::cue::StopMode },

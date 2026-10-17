@@ -263,6 +263,8 @@ pub const ACTION_GROUPS: &[(&str, &[&str])] = &[
             "test_target",
             "http_request",
             "ha_service",
+            "set_feed",
+            "remove_feed",
         ],
     ),
     (
@@ -630,6 +632,11 @@ pub enum Action {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         data: Option<serde_json::Value>,
     },
+
+    /// Add a fixed OSC subscriber, or replace the one of the same name
+    /// (CTL.4).
+    SetFeed { feed: crate::feed::Feed },
+    RemoveFeed { name: String },
 
     // ---- Safety ----
     /// Lock or unlock (AUT.11): while locked, closing inputs, opening or

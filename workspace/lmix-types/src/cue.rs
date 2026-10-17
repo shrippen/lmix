@@ -340,6 +340,9 @@ pub struct RunningCue {
     /// Pre wait plus duration; `null` while unknown (a group).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub total_ms: Option<u64>,
+    /// `total_ms` less `elapsed_ms`, done for the client (CTL.2).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remaining_ms: Option<u64>,
 }
 
 /// What happened to a cue (`Event::Cue`).
