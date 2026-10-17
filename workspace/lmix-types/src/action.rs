@@ -338,7 +338,7 @@ pub enum Action {
         input: InputRef,
         name: String,
     },
-    /// Set or clear the color tag of an input (INP.3).
+    /// Set or clear the color tag of an input (INP.7).
     SetInputColor {
         input: InputRef,
         #[serde(default)]

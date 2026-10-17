@@ -318,7 +318,7 @@ Stand:
 | AUT.10, AUT.11 | ✅ Geschlossenen Input zurückholen; Sperre gegen Schließen/Stoppen |
 | AUT.13 | ✅ OSC: Aktionen per Adresse oder JSON; Tally, Programm, Vorschau, T-Bar, FTB, nächster Cue an Abonnenten; ganzer Zustand auf Anfrage |
 | AUT.14 | ✅ Cue-Listen mit GO, Zurück, Sprung; Console-Dialog |
-| AUT.4 | ✅ MIDI aus Gerätedateien: Note/Regler je Kurzbefehl, Regler auf T-Bar, Lernen in der Console; ⚠ keine Rückmeldung an den Controller |
+| AUT.1 | ✅ MIDI aus Gerätedateien: Note/Regler je Kurzbefehl, Regler auf T-Bar, Lernen in der Console; ⚠ keine Rückmeldung an den Controller |
 | AUT.12 | ✅ Globale Tasten über das GlobalShortcuts-Portal (KDE, GNOME 48+); ⚠ nicht unter X11 ohne Portal |
 
 ### M7 — Titel & Daten (HTML), direkt nach M4

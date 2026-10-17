@@ -181,7 +181,7 @@ pub struct ShowState {
     /// Locked against closing, loading and stopping (AUT.11).
     #[serde(default)]
     pub locked: bool,
-    /// MIDI controller that moves the T-bar (AUT.4).
+    /// MIDI controller that moves the T-bar (AUT.1).
     #[serde(default)]
     pub midi_tbar: Option<crate::midi::MidiBinding>,
     /// Name of the input `restore_input` would bring back.

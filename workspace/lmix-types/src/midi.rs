@@ -1,4 +1,4 @@
-//! MIDI controllers (AUT.4): a note or controller bound to a shortcut,
+//! MIDI controllers (AUT.1): a note or controller bound to a shortcut,
 //! a controller bound to the T-bar.
 
 use schemars::JsonSchema;
