@@ -23,6 +23,8 @@ const RECONNECT: Duration = Duration::from_secs(2);
 #[derive(Clone, Debug, Default)]
 pub struct EngineLevels {
     pub slots: HashMap<usize, (f32, Instant)>,
+    /// Peak of each channel per slot, as measured with `slots` (AUD.1).
+    pub slot_channels: HashMap<usize, Vec<f32>>,
     pub main: Option<(f32, Instant)>,
     pub monitor: Option<(f32, Instant)>,
     /// Aux buses, 0-based.
@@ -209,6 +211,8 @@ fn record_meter(
     levels.send_modify(|l| match meter {
         Meter::Slot(slot) => {
             l.slots.insert(slot, reading);
+            l.slot_channels
+                .insert(slot, peak.iter().map(|p| *p as f32).collect());
         }
         Meter::Main => l.main = Some(reading),
         Meter::Monitor => l.monitor = Some(reading),
@@ -221,6 +225,17 @@ fn record_meter(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn slots_keep_each_channel() {
+        let (levels, read) = watch::channel(EngineLevels::default());
+
+        record_meter(&levels, "mix:meter:2", "mix", &[-12.0, -30.0]);
+
+        let l = read.borrow();
+        assert_eq!(l.slots[&1].0, -12.0, "loudest");
+        assert_eq!(l.slot_channels[&1], [-12.0, -30.0]);
+    }
 
     #[test]
     fn meter_names() {

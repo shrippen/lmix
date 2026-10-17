@@ -751,14 +751,20 @@ impl Service {
             .inputs
             .iter()
             .filter(|i| i.source.has_audio())
-            .map(|i| InputLevel {
-                input: i.id,
-                peak_db: engine
-                    .slots
-                    .get(&i.slot)
-                    .copied()
-                    .and_then(fresh)
-                    .unwrap_or(LEVEL_FLOOR_DB),
+            .map(|i| {
+                let peak_db = engine.slots.get(&i.slot).copied().and_then(fresh);
+                // Channels only while the reading is fresh, like the peak.
+                let channels_db = match (peak_db, engine.slot_channels.get(&i.slot)) {
+                    (Some(_), Some(channels)) => {
+                        channels.iter().map(|db| db.max(LEVEL_FLOOR_DB)).collect()
+                    }
+                    _ => Vec::new(),
+                };
+                InputLevel {
+                    input: i.id,
+                    peak_db: peak_db.unwrap_or(LEVEL_FLOOR_DB),
+                    channels_db,
+                }
             })
             .collect();
         Levels {

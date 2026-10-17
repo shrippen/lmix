@@ -163,7 +163,7 @@
       <translation>Ausgang hinzufügen</translation>
     </message>
     <message>
-      <location line="+37" />
+      <location line="+40" />
       <source>Output</source>
       <translation>Ausgang</translation>
     </message>
@@ -176,6 +176,11 @@
       <location line="+4" />
       <source>Program</source>
       <translation>Programm</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Multiview</source>
+      <translation>Multiview</translation>
     </message>
     <message>
       <location line="+6" />
@@ -234,12 +239,32 @@
   <context>
     <name>AuxBusDialog</name>
     <message>
-      <location filename="../qml/AuxBusDialog.qml" line="+21" />
-      <source>Aux buses</source>
-      <translation>Aux-Busse</translation>
+      <location filename="../qml/AuxBusDialog.qml" line="+26" />
+      <source>Master and aux buses</source>
+      <translation>Master und Aux-Busse</translation>
     </message>
     <message>
-      <location line="+24" />
+      <location line="+13" />
+      <source>Master · program sound</source>
+      <translation>Master · Programmton</translation>
+    </message>
+    <message>
+      <location line="+15" />
+      <source>Master volume</source>
+      <translation>Lautstärke Master</translation>
+    </message>
+    <message>
+      <location line="+19" />
+      <source>Monitor · listening</source>
+      <translation>Abhören</translation>
+    </message>
+    <message>
+      <location line="+15" />
+      <source>Monitor volume</source>
+      <translation>Lautstärke Abhören</translation>
+    </message>
+    <message>
+      <location line="+22" />
       <source>Aux 1 · before the faders</source>
       <translation>Aux 1 · vor den Fadern</translation>
     </message>
@@ -254,7 +279,8 @@
       <translation>Lautstärke von Aux %1</translation>
     </message>
     <message>
-      <location line="+11" />
+      <location line="-61" />
+      <location line="+72" />
       <source>Mute</source>
       <translation>Stumm</translation>
     </message>
@@ -300,7 +326,17 @@
       <translation>Ton später als das Bild (Lippensynchronität)</translation>
     </message>
     <message>
-      <location line="+7" />
+      <location line="+8" />
+      <source>Delay for new inputs</source>
+      <translation>Delay für neue Inputs</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>New inputs with sound start with this delay; inputs already there keep theirs</source>
+      <translation>Neue Inputs mit Ton beginnen mit diesem Delay; vorhandene behalten ihres</translation>
+    </message>
+    <message>
+      <location line="+5" />
       <source>Aux 1 (before the fader)</source>
       <translation>Aux 1 (vor dem Fader)</translation>
     </message>
@@ -620,6 +656,64 @@
     </message>
   </context>
   <context>
+    <name>FormatDialog</name>
+    <message>
+      <location filename="../qml/FormatDialog.qml" line="+19" />
+      <source>3840 × 2160 (4K UHD)</source>
+      <translation>3840 × 2160 (4K UHD)</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>2560 × 1440</source>
+      <translation>2560 × 1440</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>1920 × 1080 (Full HD)</source>
+      <translation>1920 × 1080 (Full HD)</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>1280 × 720 (HD)</source>
+      <translation>1280 × 720 (HD)</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>720 × 576 (PAL SD)</source>
+      <translation>720 × 576 (PAL SD)</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>1080 × 1920 (upright)</source>
+      <translation>1080 × 1920 (hochkant)</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>720 × 1280 (upright)</source>
+      <translation>720 × 1280 (hochkant)</translation>
+    </message>
+    <message>
+      <location line="+13" />
+      <source>Program format</source>
+      <translation>Programmformat</translation>
+    </message>
+    <message>
+      <location line="+26" />
+      <source>Size</source>
+      <translation>Größe</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Frames per second</source>
+      <translation>Bilder pro Sekunde</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>Program stops for a moment while the mixer is built anew; running outputs restart.</source>
+      <translation>Das Programm steht kurz, während der Mischer neu gebaut wird; laufende Ausgänge starten neu.</translation>
+    </message>
+  </context>
+  <context>
     <name>InputSettingsDialog</name>
     <message>
       <location filename="../qml/InputSettingsDialog.qml" line="+31" />
@@ -815,7 +909,7 @@
   <context>
     <name>InputTile</name>
     <message>
-      <location filename="../qml/InputTile.qml" line="+64" />
+      <location filename="../qml/InputTile.qml" line="+66" />
       <source>Input %1 %2</source>
       <translation>Input %1 %2</translation>
     </message>
@@ -935,14 +1029,29 @@
       <translation>Ton an</translation>
     </message>
     <message>
-      <location line="+23" />
+      <location line="+19" />
+      <source>Level left</source>
+      <translation>Pegel links</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Level</source>
+      <translation>Pegel</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Level right</source>
+      <translation>Pegel rechts</translation>
+    </message>
+    <message>
+      <location line="+13" />
       <source>Volume %1</source>
       <translation>Lautstärke %1</translation>
     </message>
     <message>
-      <location line="+8" />
-      <source>Listen on the monitor bus (right click: before or after the fader)</source>
-      <translation>Auf dem Abhörbus hören (Rechtsklick: vor oder nach dem Fader)</translation>
+      <location line="+9" />
+      <source>Listen on the monitor bus after the fader (right click: before it)</source>
+      <translation>Auf dem Abhörbus hören, nach dem Fader (Rechtsklick: davor)</translation>
     </message>
     <message>
       <location line="+11" />
@@ -1646,7 +1755,7 @@
       <translation>Leerer Ordner für Show und Medien des Pakets</translation>
     </message>
     <message>
-      <location line="+143" />
+      <location line="+153" />
       <source>lmix-core</source>
       <translation>lmix-core</translation>
     </message>
@@ -1712,6 +1821,11 @@
     </message>
     <message>
       <location line="+5" />
+      <source>Program format…</source>
+      <translation>Programmformat…</translation>
+    </message>
+    <message>
+      <location line="+4" />
       <source>Export settings…</source>
       <translation>Einstellungen exportieren…</translation>
     </message>
@@ -1882,8 +1996,8 @@
     </message>
     <message>
       <location line="+6" />
-      <source>Aux…</source>
-      <translation>Aux…</translation>
+      <source>Buses…</source>
+      <translation>Busse…</translation>
     </message>
     <message>
       <location line="+6" />
@@ -1901,7 +2015,7 @@
       <translation>+ Input</translation>
     </message>
     <message>
-      <location line="+133" />
+      <location line="+134" />
       <source>This show file is in the older format %1 and was converted on opening. Saving it keeps the old file beside it (.v%1.bak).</source>
       <translation>Diese Show-Datei hat das ältere Format %1 und wurde beim Öffnen umgewandelt. Beim Speichern bleibt die alte Datei daneben erhalten (.v%1.bak).</translation>
     </message>
