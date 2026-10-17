@@ -98,43 +98,43 @@ ausgeschlossen. **MS**: Meilenstein (§7). Stand: ✅ vorhanden · ◐ teilweise
 
 | ID | Anforderung | Prio | MS | Stand |
 |---|---|---|---|---|
-| CUE.1 | Cue hat Nummer, Name, Art, Notiz (mehrzeilig), Farbe, feste ID. Nummer ist freier Text, darf leer sein, ist in der ganzen Show eindeutig; Umsortieren ändert keine Nummer. Ohne Namen wird einer aus Art und Ziel gebildet. Nummern ohne Leerzeichen und Sonderzeichen empfohlen (Fernsteuerung), Import warnt | M | S1 | ◐ (Label) |
-| CUE.2 | Vorwartezeit und Nachwartezeit je Cue, 0 bis 1 h, Auflösung 10 ms. Nachwartezeit zählt ab Beginn der Aktion, also nach der Vorwartezeit | M | S1 | – |
-| CUE.3 | Folge je Cue: keine; nächsten starten nach Nachwartezeit; nächsten starten nach Ende (dann gilt Nachwartezeit = Dauer) | M | S1 | – |
-| CUE.4 | Gruppen-Modi: **Zeitleiste** (alle Kinder starten zugleich, versetzt nur durch ihre Vorwartezeiten; Kinder haben keine Folge), **erstes starten** (erstes Kind startet, Rest über Folgen; Standby springt hinter die Gruppe) | M | S1 | – |
+| CUE.1 | Cue hat Nummer, Name, Art, Notiz (mehrzeilig), Farbe, feste ID. Nummer ist freier Text, darf leer sein, ist in der ganzen Show eindeutig; Umsortieren ändert keine Nummer. Ohne Namen wird einer aus Art und Ziel gebildet. Nummern ohne Leerzeichen und Sonderzeichen empfohlen (Fernsteuerung), Import warnt | M | S1 | ✅ (Drehbuch warnt bei Nummern mit Leerzeichen oder Zeichen) |
+| CUE.2 | Vorwartezeit und Nachwartezeit je Cue, 0 bis 1 h, Auflösung 10 ms. Nachwartezeit zählt ab Beginn der Aktion, also nach der Vorwartezeit | M | S1 | ✅ |
+| CUE.3 | Folge je Cue: keine; nächsten starten nach Nachwartezeit; nächsten starten nach Ende (dann gilt Nachwartezeit = Dauer) | M | S1 | ✅ |
+| CUE.4 | Gruppen-Modi: **Zeitleiste** (alle Kinder starten zugleich, versetzt nur durch ihre Vorwartezeiten; Kinder haben keine Folge), **erstes starten** (erstes Kind startet, Rest über Folgen; Standby springt hinter die Gruppe) | M | S1 | ✅ |
 | CUE.5 | Gruppen-Modi **hinein** (Standby geht ins erste Kind; Gliederung, z. B. Szene), **Wiedergabeliste** (Kinder nacheinander, Schleife, Mischen, Überblendung; GO = nächstes Kind) | S | S2 | – |
 | CUE.6 | Gruppen-Modus **Zufall**: ein scharfes, nicht laufendes Kind; jedes kommt einmal dran, bevor sich eines wiederholt | K | S3 | – |
-| CUE.7 | Aktions-Cue: beliebige Aktionen des Katalogs (heutiger Cue, AUT.14) | M | S1 | ✅ (AUT.14) |
-| CUE.8 | Notiz-Cue: tut nichts, trägt eine Regieanweisung oder trennt Abschnitte | M | S1 | – |
-| CUE.9 | Warte-Cue: läuft nur ab, Dauer = Nachwartezeit | S | S1 | – |
-| CUE.10 | Start-Cue: startet einen anderen Cue oder eine Cue-Liste, ohne Standby zu bewegen | S | S1 | – |
-| CUE.11 | Andere beim Start ausblenden und stoppen: Geschwister, Liste oder alles, mit Zeit | M | S1 | – |
+| CUE.7 | Aktions-Cue: beliebige Aktionen des Katalogs (heutiger Cue, AUT.14) | M | S1 | ✅ |
+| CUE.8 | Notiz-Cue: tut nichts, trägt eine Regieanweisung oder trennt Abschnitte | M | S1 | ✅ |
+| CUE.9 | Warte-Cue: läuft nur ab, Dauer = Nachwartezeit | S | S1 | ✅ |
+| CUE.10 | Start-Cue: startet einen anderen Cue oder eine Cue-Liste, ohne Standby zu bewegen | S | S1 | ✅ |
+| CUE.11 | Andere beim Start ausblenden und stoppen: Geschwister, Liste oder alles, mit Zeit | M | S1 | ◐ (stoppt; Ausblendung mit Klang und Bild ab Stufe 2) |
 | CUE.12 | Unscharf: Aktion entfällt, Zeiten und Folge bleiben; optional „überspringen, wenn unscharf“. Scharf-/Unscharf-Cue mit Ziel | S | S2 | – |
-| CUE.13 | Springen-Cue: setzt Standby auf ein Ziel | S | S2 | ◐ (`cue_jump` als Aktion) |
+| CUE.13 | Springen-Cue: setzt Standby auf ein Ziel | S | S2 | ◐ (`cue_standby` als Aktion) |
 | CUE.14 | Zweitauslöser je Cue: was ein Start an einen laufenden Cue tut (nichts, Stopp mit Ausblendung, harter Stopp, Neustart, Schleife beenden); optional beim Loslassen der Taste | S | S2 | – |
 | CUE.15 | Schleife sauber beenden: laufender Durchgang spielt zu Ende; optional danach nächsten Cue starten oder Ziel stoppen | S | S2 | – |
 | CUE.16 | Direkter Auslöser je Cue (Taste, MIDI, OSC, Uhrzeit): startet Cue samt Folge, Standby unverändert | S | S2 | ◐ (Kurzbefehle) |
 | CUE.17 | Pause-, Zurücksetzen- und Laden-Cue mit Ziel | K | S3 | – |
 | CUE.18 | Ducken: solange ein Cue läuft, andere Klänge der Liste um x dB senken, mit Zeit | K | S2 | – |
-| CUE.19 | Defekter Cue (fehlende Datei, fehlendes Ziel) in einer Folge: Zeiten und Folgen laufen weiter, Fehler wird gemeldet | M | S1 | – |
-| CUE.20 | Grenzen: mindestens 1000 Cues je Liste, 64 Kinder je Gruppe, Gruppen 3 Ebenen tief | S | S1 | ◐ (200 Cues, `CUES`) |
-| CUE.21 | Heutige Cue-Listen (AUT.14) werden beim Laden ins neue Cue-Modell migriert und verhalten sich wie bisher (keine Zeiten, keine Folge); kein Rückwärtslesen alter Formate (S-E.5) | M | S1 | – |
+| CUE.19 | Defekter Cue (fehlende Datei, fehlendes Ziel) in einer Folge: Zeiten und Folgen laufen weiter, Fehler wird gemeldet | M | S1 | ✅ (Fehler als Ereignis `cue` `failed`) |
+| CUE.20 | Grenzen: mindestens 1000 Cues je Liste, 64 Kinder je Gruppe, Gruppen 3 Ebenen tief | S | S1 | ✅ |
+| CUE.21 | Heutige Cue-Listen (AUT.14) werden beim Laden ins neue Cue-Modell migriert und verhalten sich wie bisher (keine Zeiten, keine Folge); kein Rückwärtslesen alter Formate (S-E.5) | M | S1 | ✅ (Show-Datei Version 2) |
 
 ### 3.2 Ablauf (RUN)
 
 | ID | Anforderung | Prio | MS | Stand |
 |---|---|---|---|---|
-| RUN.1 | GO startet den Standby-Cue samt Folge; Standby rückt auf den ersten Cue nach der Folge bzw. Gruppe (bei Gruppe „hinein“ ins erste Kind) | M | S1 | ◐ (`cue_go`) |
-| RUN.2 | Standby setzen, unabhängig von laufenden Cues: einen Cue vor/zurück, eine ganze Folge vor/zurück, auf Nummer, auf Anfang | M | S1 | ◐ (`cue_back`, `cue_jump`) |
-| RUN.3 | Mehrere Cues laufen gleichzeitig; Liste der laufenden Cues mit abgelaufener Zeit, Restzeit, Fortschritt | M | S1 | – |
-| RUN.4 | Einzelnen laufenden Cue stoppen (mit seiner Ausblendung) oder hart stoppen | M | S1 | – |
+| RUN.1 | GO startet den Standby-Cue samt Folge; Standby rückt auf den ersten Cue nach der Folge bzw. Gruppe (bei Gruppe „hinein“ ins erste Kind) | M | S1 | ✅ (ohne „hinein“, S2) |
+| RUN.2 | Standby setzen, unabhängig von laufenden Cues: einen Cue vor/zurück, eine ganze Folge vor/zurück, auf Nummer, auf Anfang | M | S1 | ✅ (`cue_standby`) |
+| RUN.3 | Mehrere Cues laufen gleichzeitig; Liste der laufenden Cues mit abgelaufener Zeit, Restzeit, Fortschritt | M | S1 | ✅ (`running_cues` im Zustand; Anzeige SUI.4) |
+| RUN.4 | Einzelnen laufenden Cue stoppen (mit seiner Ausblendung) oder hart stoppen | M | S1 | ◐ (`cue_stop`; Ausblendung ab Stufe 2) |
 | RUN.5 | Alles pausieren / fortsetzen, über alle Listen; einzelnen Cue pausieren | S | S2 | – |
-| RUN.6 | Schutz vor Doppel-GO: Mindestabstand einstellbar (Standard 300 ms, lmix-Wert), wirkt auf GO über alle Bedienwege, nicht auf direkte Auslöser, Folgen, Stopp, Panik; verworfenes GO sichtbar und als Ereignis; Option „erst nach Loslassen wieder scharf“ | M | S1 | – |
-| RUN.7 | Mehrere Cue-Listen je Show, jede mit eigenem Standby; eine aktive Liste für GO; „Liste X starten“ = GO in X, ohne aktive Liste zu wechseln | M | S1 | ◐ |
-| RUN.8 | Zeitgenauigkeit: Wartezeiten und Folgen ± 10 ms über 4 h | M | S1 | – |
+| RUN.6 | Schutz vor Doppel-GO: Mindestabstand einstellbar (Standard 300 ms, lmix-Wert), wirkt auf GO über alle Bedienwege, nicht auf direkte Auslöser, Folgen, Stopp, Panik; verworfenes GO sichtbar und als Ereignis; Option „erst nach Loslassen wieder scharf“ | M | S1 | ✅ (Abstand, Ereignis `go_ignored`, `set_go_rearm` `release` für MIDI, OSC `/lmix/cue/release`, Leertaste) |
+| RUN.7 | Mehrere Cue-Listen je Show, jede mit eigenem Standby; eine aktive Liste für GO; „Liste X starten“ = GO in X, ohne aktive Liste zu wechseln | M | S1 | ✅ |
+| RUN.8 | Zeitgenauigkeit: Wartezeiten und Folgen ± 10 ms über 4 h | M | S1 | ◐ (ohne Drift; freier Rechner 1 h: spätestens 5,2 ms; unter Last bis 146 ms, DECISIONS 17.10.; Echtzeit-Priorität und 4 h frei offen) |
 | RUN.9 | Sperren je Ein- und Ausgabeklasse (Netz rein/raus, HTTP, MIDI, OSC): z. B. Probe ohne Lichtpult oder kein fremdes GO; betroffene Cues zeigen Warnung; per Aktion und API schaltbar | S | S2 | – |
 | RUN.10 | Vorhören: einzelnen Cue ohne Vorwartezeit und Folge abspielen, Standby bleibt; Umleitung je Ausgabeart (unverändert, stumm, andere Zone, Monitorfenster) | S | S2 | – |
-| RUN.11 | Show zurücksetzen: harter Stopp, vorübergehende Änderungen verwerfen, alle Standbys auf den Anfang | S | S1 | – |
+| RUN.11 | Show zurücksetzen: harter Stopp, vorübergehende Änderungen verwerfen, alle Standbys auf den Anfang | S | S1 | ✅ |
 | RUN.12 | Raster: Tastenfläche ohne Standby für spontane Effekte, je Feld ein Cue; Companion-Taste je Feld | S | S2 | – |
 | RUN.13 | Ab Zeitpunkt starten (auch negativ ab Ende), gilt für die ganze Folge | K | S3 | – |
 | RUN.14 | Start mitten in der Show mit Zustand nachziehen: dauerhafte Klänge und Bühne des Abschnitts herstellen (lmix) | K | S3 | – |
@@ -148,17 +148,17 @@ ausgeschlossen. **MS**: Meilenstein (§7). Stand: ✅ vorhanden · ◐ teilweise
 | SND.3 | Wiederholungen: n-mal oder endlos, lückenlos (keine Pause, kein Klick an der Nahtstelle) | M | S1 | – |
 | SND.4 | Mindestens 16 Klang-Cues gleichzeitig ohne Aussetzer (lmix) | M | S1 | – |
 | SND.5 | Kanalzuordnung je Klang-Cue: Dateikanal → Zone mit Pegel je Kreuzung; Vorlagen je Zone (Stereo → L/R, Stereo → Mono −3 dB); Gesamtpegel je Cue | M | S1 | – |
-| SND.6 | Fade-Cue, absolut: ändert nur die gesetzten Parameter eines Ziels (Cue oder Zone) über eine Dauer; optional „Ziel danach stoppen“; Zielwert „still“ = untere Reglergrenze; Fades auf verschiedene Parameter desselben Ziels laufen gleichzeitig | M | S1 | – (AUD.14) |
+| SND.6 | Fade-Cue, absolut: ändert nur die gesetzten Parameter eines Ziels (Cue oder Zone) über eine Dauer; optional „Ziel danach stoppen“; Zielwert „still“ = untere Reglergrenze; Fades auf verschiedene Parameter desselben Ziels laufen gleichzeitig | M | S1 | – (Grundlage `fade_volume`, AUD.14) |
 | SND.7 | Fade relativ (dB addieren); ein absoluter Fade hat Vorrang vor laufenden relativen | S | S2 | – |
 | SND.8 | Fade-Kurve: S-Kurve als Standard | M | S1 | – |
 | SND.9 | Weitere Kurven (linear, parametrisch) und Pegelbereich (Reglerskala, dB, linear) | S | S2 | – |
-| SND.10 | Zonen: mindestens 8 benannte Zonen mit 1–8 Kanälen; pro Rechner Zuordnung Zone → Gerät und Kanäle mit Pegel, mehrere Ziele je Zone möglich. Die Show nennt nur Zonennamen (lmix; QLab hält Patches im Dokument) | M | S1 | – (AUD.2 ◐) |
+| SND.10 | Zonen: mindestens 8 benannte Zonen mit 1–8 Kanälen; pro Rechner Zuordnung Zone → Gerät und Kanäle mit Pegel, mehrere Ziele je Zone möglich. Die Show nennt nur Zonennamen (lmix; QLab hält Patches im Dokument) | M | S1 | ◐ (Zonen mit Namen und Kanälen in der Show, Zuordnung zu Gerät, Kanälen und Pegel je Rechner, mehrere Ausgänge; Abspielen mit Stufe 2) |
 | SND.11 | Lautstärke und Mute je Zone, als Aktion, als Fade-Ziel und in der Oberfläche | M | S1 | ◐ (Aux-Bus 1–2) |
 | SND.12 | Latenz GO → hörbarer Klang ≤ 50 ms | M | S1 | – |
 | SND.13 | Reglergrenzen der Show: höchster Wert (Standard +12 dB) und niedrigster (Standard −60 dB = still); gelten für Cues, Fades und Fernsteuerung | M | S1 | – |
 | SND.14 | Signal-Begrenzer je Zone (Höchstpegel in dBFS), Schutz vor Lautstärkesprüngen (lmix) | S | S1 | – |
 | SND.15 | Zonen auf verschiedenen Geräten bleiben über 4 h synchron (Taktangleichung); Abweichung im Selftest gemessen | M | S1 | – |
-| SND.16 | Fehlendes Gerät einer Zone: Warnung an Zone und Cues, Show läuft weiter; Gerät kommt zurück → Zone geht wieder | M | S1 | – |
+| SND.16 | Fehlendes Gerät einer Zone: Warnung an Zone und Cues, Show läuft weiter; Gerät kommt zurück → Zone geht wieder | M | S1 | ◐ (Warnung für Zonen ohne Ausgang auf diesem Rechner; Geräteausfall zur Laufzeit mit Stufe 2) |
 | SND.17 | Klang-Cue erscheint nicht als Input-Kachel im Mischer (lmix) | S | S1 | – |
 | SND.18 | Start- und Endpunkt in der Datei | S | S2 | – |
 | SND.19 | Fade der Kreuzungspegel (Klang zwischen Zonen verschieben) | S | S2 | – |
@@ -194,11 +194,11 @@ ausgeschlossen. **MS**: Meilenstein (§7). Stand: ✅ vorhanden · ◐ teilweise
 
 | ID | Anforderung | Prio | MS | Stand |
 |---|---|---|---|---|
-| EXT.1 | Ausgabeziele benannt in den Rechner-Einstellungen: Art (HTTP, OSC über UDP/TCP), Basis-URL bzw. Host:Port, Geheimnis-Verweis, Zeitlimit, mehrere gleichzeitige Ziele (Haupt/Reserve); Cues nennen nur den Zielnamen | M | S1 | – |
-| EXT.2 | Geheimnisse (Tokens, Passwörter) nur in den Rechner-Einstellungen; nie Klartext in Show-Datei oder Drehbuch (lmix) | M | S1 | – |
-| EXT.3 | HTTP-Cue: Ziel, Methode, Pfad, Kopfzeilen, Rumpf (JSON/Text); Fehler werden angezeigt und blockieren den Ablauf nie (lmix; QLab hat kein HTTP) | M | S1 | – |
-| EXT.4 | Home-Assistant-Kurzform: Dienst + Entität + Daten auf ein HA-Ziel (lmix; Gegenstück zu QLabs Gerätebeschreibungen) | S | S1 | – |
-| EXT.5 | Ziel testen: Nachricht probeweise senden, Ergebnis mit Grund | S | S1 | – |
+| EXT.1 | Ausgabeziele benannt in den Rechner-Einstellungen: Art (HTTP, OSC über UDP/TCP), Basis-URL bzw. Host:Port, Geheimnis-Verweis, Zeitlimit, mehrere gleichzeitige Ziele (Haupt/Reserve); Cues nennen nur den Zielnamen | M | S1 | ◐ (HTTP; OSC-Ziele angelegt, Senden mit EXT.6) |
+| EXT.2 | Geheimnisse (Tokens, Passwörter) nur in den Rechner-Einstellungen; nie Klartext in Show-Datei oder Drehbuch (lmix) | M | S1 | ✅ (`targets.json`, nur für den Nutzer lesbar) |
+| EXT.3 | HTTP-Cue: Ziel, Methode, Pfad, Kopfzeilen, Rumpf (JSON/Text); Fehler werden angezeigt und blockieren den Ablauf nie (lmix; QLab hat kein HTTP) | M | S1 | ✅ (Aktion `http_request` in einem Aktions-Cue, Ereignis `target`) |
+| EXT.4 | Home-Assistant-Kurzform: Dienst + Entität + Daten auf ein HA-Ziel (lmix; Gegenstück zu QLabs Gerätebeschreibungen) | S | S1 | ✅ (`ha_service`) |
+| EXT.5 | Ziel testen: Nachricht probeweise senden, Ergebnis mit Grund | S | S1 | ✅ (`test_target`) |
 | EXT.6 | OSC-Cue: Adresse, Argumente (Zahl, Text, Wahrheitswert, leer) an ein Ziel | S | S2 | – |
 | EXT.7 | Platzhalter in ausgehenden HTTP- und OSC-Nachrichten für Live-Werte (Standby-Nummer, Variable) | S | S2 | – |
 | EXT.8 | Netz-Cue mit Dauer: wiederholt senden oder einen Wert blenden | K | S3 | – |
@@ -220,26 +220,26 @@ QLab kennt keinen Import aus Texten; am nächsten kommt das Anlegen von Cues
 
 | ID | Anforderung | Prio | MS | Stand |
 |---|---|---|---|---|
-| IMP.1 | Eigenes Werkzeug liest Markdown-Dateien eines Ordners (z. B. Obsidian-Vault) und erzeugt Cue-Listen über die API | M | S1 | – |
-| IMP.2 | Cues stehen als Codeblöcke (`lmix-cue`) im Text; Reihenfolge im Text = Reihenfolge der Liste; Überschriften werden Notiz-Cues als Szenenmarken (S2: Gruppen „hinein“, CUE.5) | M | S1 | – |
-| IMP.3 | Eine Datei = eine Cue-Liste; Name aus Dateiname oder Frontmatter | M | S1 | – |
-| IMP.4 | Medienpfade relativ zum Ordner; fehlende Dateien und doppelte Nummern als Fehler mit Datei und Zeile | M | S1 | – |
-| IMP.5 | Neu laden auf Befehl und bei Dateiänderung; Standby bleibt auf derselben Cue-Nummer; laufende Cues laufen weiter | M | S1 | – |
-| IMP.6 | Cue-Nummern im Drehbuch sind die feste Zuordnung; der Import nummeriert nicht selbst | M | S1 | – |
+| IMP.1 | Eigenes Werkzeug liest Markdown-Dateien eines Ordners (z. B. Obsidian-Vault) und erzeugt Cue-Listen über die API | M | S1 | ✅ (`lmix-script`, `docs/DREHBUCH.md`) |
+| IMP.2 | Cues stehen als Codeblöcke (`lmix-cue`) im Text; Reihenfolge im Text = Reihenfolge der Liste; Überschriften werden Notiz-Cues als Szenenmarken (S2: Gruppen „hinein“, CUE.5) | M | S1 | ✅ |
+| IMP.3 | Eine Datei = eine Cue-Liste; Name aus Dateiname oder Frontmatter | M | S1 | ✅ |
+| IMP.4 | Medienpfade relativ zum Ordner; fehlende Dateien und doppelte Nummern als Fehler mit Datei und Zeile | M | S1 | ✅ (fehlende Medien als Warnung, CUE.19) |
+| IMP.5 | Neu laden auf Befehl und bei Dateiänderung; Standby bleibt auf derselben Cue-Nummer; laufende Cues laufen weiter | M | S1 | ✅ (`--watch`) |
+| IMP.6 | Cue-Nummern im Drehbuch sind die feste Zuordnung; der Import nummeriert nicht selbst | M | S1 | ✅ |
 | IMP.7 | Vorlagen: Standardwerte je Cue-Art (z. B. Fade-Dauer) und benannte Cue-Bausteine („Szene“ = Bild + Licht + Atmo als Gruppe) | S | S2 | – |
-| IMP.8 | Formatbeschreibung als JSON-Schema | S | S1 | – |
-| IMP.9 | Im Drehbuch-Betrieb sind Cues in der Oberfläche nicht bearbeitbar (eine Quelle der Wahrheit); Hinweis in der Oberfläche | M | S1 | – |
+| IMP.8 | Formatbeschreibung als JSON-Schema | S | S1 | ✅ (`lmix-script schema`) |
+| IMP.9 | Im Drehbuch-Betrieb sind Cues in der Oberfläche nicht bearbeitbar (eine Quelle der Wahrheit); Hinweis in der Oberfläche | M | S1 | ✅ (Quelle der Liste, Console sperrt) |
 
 ### 3.8 Bedienung und Fernsteuerung (CTL)
 
 | ID | Anforderung | Prio | MS | Stand |
 |---|---|---|---|---|
-| CTL.1 | Befehle: GO, Standby (CUE.1 / RUN.2), Liste wählen und starten, Stopp, harter Stopp, Panik, Panik in Zeit x, Pause/Fortsetzen, Zurücksetzen. Über Tasten, MIDI, OSC über UDP und TCP (SLIP), HTTP; Ports einstellbar. Cues adressierbar über Nummer, feste ID, `standby`, `aktiv` | M | S1 | ◐ (GO/zurück/Sprung, AUT.13, AUT.14) |
-| CTL.2 | Ereignis-Abo für den Ablauf: Standby (Nummer, Name, Notiz) je Liste, Cue gestartet/gestoppt, laufende Cues mit abgelaufener Zeit und Dauer, Panik, verworfenes GO, Fehler von Ausgabezielen. Restzeit fertig gerechnet (lmix), Takt begrenzt (Standard 4 Hz, einstellbar) | M | S1 | – (API.5) |
-| CTL.3 | Abo verwalten: an- und abmelden je Ereignis und Feld; Ablauf nach 60 s ohne Lebenszeichen | M | S1 | ◐ (AUT.13) |
-| CTL.4 | Feste OSC-Abonnenten in den Einstellungen (Host:Port, Ereignisauswahl, Nachrichtenvorlage mit Platzhaltern für Nummer, Name, Restzeit): Companion-Tasten ohne eigenes Modul und ohne Anmeldung | M | S1 | – |
-| CTL.5 | Zugriffsschutz für Steuerung von außen: Rechte Ansehen, Steuern, Bearbeiten für OSC, HTTP, TCP, Web. Mehrere Zugangsschlüssel mit eigenen Rechten; Stufe „ohne Schlüssel“ getrennt für localhost und eine LAN-Adressliste (Standard: nur localhost). Panik einzeln ohne Schlüssel freigebbar. Falsche Schlüssel verlängern die Wartezeit, Abweisungen werden protokolliert | M | S1 | ◐ (API.7) |
-| CTL.6 | Globale Taste für GO und Panik, auch wenn die Console nicht im Vordergrund ist; in der Show-Ansicht ist Escape immer Panik, zweimal Escape harter Stopp, nicht umlegbar | S | S1 | ◐ (AUT.12) |
+| CTL.1 | Befehle: GO, Standby (CUE.1 / RUN.2), Liste wählen und starten, Stopp, harter Stopp, Panik, Panik in Zeit x, Pause/Fortsetzen, Zurücksetzen. Über Tasten, MIDI, OSC über UDP und TCP (SLIP), HTTP; Ports einstellbar. Cues adressierbar über Nummer, feste ID, `standby`, `aktiv` | M | S1 | ◐ (GO, Standby, Liste wählen und starten, Stopp, harter Stopp, Panik, Panik in Zeit x, Zurücksetzen; Cues über Nummer, ID, `standby`, Listen über `active`; Pause S2) |
+| CTL.2 | Ereignis-Abo für den Ablauf: Standby (Nummer, Name, Notiz) je Liste, Cue gestartet/gestoppt, laufende Cues mit abgelaufener Zeit und Dauer, Panik, verworfenes GO, Fehler von Ausgabezielen. Restzeit fertig gerechnet (lmix), Takt begrenzt (Standard 4 Hz, einstellbar) | M | S1 | ◐ (Ereignis `running` mit Restzeit, 4 Hz, `--cue-events-hz`; `cue`, `panic`, `target`; Standby über den Zustand) |
+| CTL.3 | Abo verwalten: an- und abmelden je Ereignis und Feld; Ablauf nach 60 s ohne Lebenszeichen | M | S1 | ✅ (OSC-Abos enden 60 s nach der letzten Nachricht, `/lmix/ping`; OSC je Thema und Feld: `/lmix/subscribe running name remaining`, Themen `mixer`, `standby`, `running`, `cue`, `panic`, `target`; TCP-Themen) |
+| CTL.4 | Feste OSC-Abonnenten in den Einstellungen (Host:Port, Ereignisauswahl, Nachrichtenvorlage mit Platzhaltern für Nummer, Name, Restzeit): Companion-Tasten ohne eigenes Modul und ohne Anmeldung | M | S1 | ✅ (`set_feed` auf `osc_udp`-Ziele, Platzhalter) |
+| CTL.5 | Zugriffsschutz für Steuerung von außen: Rechte Ansehen, Steuern, Bearbeiten für OSC, HTTP, TCP, Web. Mehrere Zugangsschlüssel mit eigenen Rechten; Stufe „ohne Schlüssel“ getrennt für localhost und eine LAN-Adressliste (Standard: nur localhost). Panik einzeln ohne Schlüssel freigebbar. Falsche Schlüssel verlängern die Wartezeit, Abweisungen werden protokolliert | M | S1 | ✅ (Schlüssel mit Ansehen/Steuern/Bearbeiten für HTTP und TCP, `--open-panic` auch für OSC, wachsende Wartezeit und Protokoll; Adressliste mit Recht `--trust` für HTTP, TCP, OSC; ohne Schlüssel und Passwort bleibt das LAN frei wie bei API.7, DECISIONS 17.10.) |
+| CTL.6 | Globale Taste für GO und Panik, auch wenn die Console nicht im Vordergrund ist; in der Show-Ansicht ist Escape immer Panik, zweimal Escape harter Stopp, nicht umlegbar | S | S1 | ◐ (Leertaste GO, Escape Panik, zweimal hart, in der Show-Ansicht; global über Kurzbefehle) |
 | CTL.7 | Antworten auf Anfragen mit Status ok/Fehler/abgelehnt und Daten; für reine Aktionen abschaltbar; Lebenszeichen-Befehl | S | S2 | ◐ (API.3) |
 | CTL.8 | Companion-Modul: Aktionen, Rückmeldungen, Variablen für den Show-Modus | S | S2 | – (API.11) |
 | CTL.9 | Web-Fernbedienung `/show` für Handy/Tablet: GO, Panik, Standby mit Notiz, laufende Cues; Nur-Lesen-Modus; hält den Doppel-GO-Schutz ein | S | S2 | – |
@@ -252,12 +252,12 @@ QLab kennt keinen Import aus Texten; am nächsten kommt das Anlegen von Cues
 
 | ID | Anforderung | Prio | MS | Stand |
 |---|---|---|---|---|
-| SAF.1 | Panik: alle Klänge und Bild-Cues über die Panikdauer ausblenden und stoppen, alle Wartezeiten und Folgen abbrechen, über alle Listen; Standby bleibt; zweite Panik während der Ausblendung = harter Stopp | M | S1 | – |
-| SAF.2 | Panikdauer als Show-Einstellung, 0–10 s, Standard 1 s | M | S1 | – |
-| SAF.3 | Harter Stopp als eigener Befehl: sofort still, Bühne schwarz | M | S1 | – |
-| SAF.4 | Notfall-Liste: läuft bei Panik und hartem Stopp zusätzlich (z. B. HTTP: Raumlicht hell) (lmix) | M | S1 | – |
-| SAF.5 | Panik und harter Stopp über jeden Bedienweg erreichbar, auch ohne Console (OSC, HTTP, MIDI, globale Taste) | M | S1 | – |
-| SAF.6 | Nach Neustart von `lmix-core` oder Engine startet nichts von selbst: Stille, Bühne schwarz, Standbys auf dem letzten Stand (lmix; Ausnahme CTL.13) | M | S1 | – |
+| SAF.1 | Panik: alle Klänge und Bild-Cues über die Panikdauer ausblenden und stoppen, alle Wartezeiten und Folgen abbrechen, über alle Listen; Standby bleibt; zweite Panik während der Ausblendung = harter Stopp | M | S1 | ◐ (alle Cues und Wartezeiten aus, Standby bleibt, zweite Panik = harter Stopp; Ausblenden mit Stufe 2) |
+| SAF.2 | Panikdauer als Show-Einstellung, 0–10 s, Standard 1 s | M | S1 | ✅ (`set_panic_time`) |
+| SAF.3 | Harter Stopp als eigener Befehl: sofort still, Bühne schwarz | M | S1 | ◐ (`cue_hard_stop`; still und schwarz mit Zonen und Bühnen) |
+| SAF.4 | Notfall-Liste: läuft bei Panik und hartem Stopp zusätzlich (z. B. HTTP: Raumlicht hell) (lmix) | M | S1 | ✅ (`set_emergency_list`) |
+| SAF.5 | Panik und harter Stopp über jeden Bedienweg erreichbar, auch ohne Console (OSC, HTTP, MIDI, globale Taste) | M | S1 | ✅ (OSC `/lmix/panic`, `/lmix/stop/hard`, HTTP, MIDI und globale Taste über Kurzbefehle) |
+| SAF.6 | Nach Neustart von `lmix-core` oder Engine startet nichts von selbst: Stille, Bühne schwarz, Standbys auf dem letzten Stand (lmix; Ausnahme CTL.13) | M | S1 | ◐ (nichts startet, Standby aus der Sicherung; Stille und Schwarz mit Stufe 2/3) |
 | SAF.7 | Zeit von Panik bis Stille ≤ Panikdauer + 100 ms | M | S1 | – |
 | SAF.8 | Show-Sperre: Bearbeiten gesperrt, GO und Panik frei; Rückfrage beim Beenden; Bildschirmschoner und Ruhezustand unterdrückt | S | S2 | – |
 
@@ -265,29 +265,29 @@ QLab kennt keinen Import aus Texten; am nächsten kommt das Anlegen von Cues
 
 | ID | Anforderung | Prio | MS | Stand |
 |---|---|---|---|---|
-| SUI.1 | Show-Ansicht in der Console als eigener Modus (umschaltbar zum Mischer) | M | S1 | – |
-| SUI.2 | Cue-Liste mit Spalten Nummer, Name, Art, Ziel, Vorwartezeit, Dauer, Nachwartezeit, Folge; Standby deutlich markiert; Gruppen einklappbar | M | S1 | – |
-| SUI.3 | Großer GO-Knopf, Panik-Knopf, Standby-Name und Standby-Notiz in großer Schrift | M | S1 | – |
-| SUI.4 | Laufende Cues mit Fortschrittsbalken, Restzeit, Stopp und Pause je Cue | M | S1 | – |
-| SUI.5 | Warnliste: defekte Cues, fehlende Medien, fehlende Zonen-Geräte, nicht erreichbare Ausgabeziele; vor der Show prüfbar | S | S1 | – |
-| SUI.6 | Dunkle Raumansicht: stark gedimmt, kein Weiß, für Bedienung im dunklen Raum (lmix) | S | S1 | – |
+| SUI.1 | Show-Ansicht in der Console als eigener Modus (umschaltbar zum Mischer) | M | S1 | ✅ (Umschalter Mischer/Show) |
+| SUI.2 | Cue-Liste mit Spalten Nummer, Name, Art, Ziel, Vorwartezeit, Dauer, Nachwartezeit, Folge; Standby deutlich markiert; Gruppen einklappbar | M | S1 | ◐ (Nummer, Name, Notiz, Art mit Dauer, Vor/Nach/Folge unter „Erweitert“, Gruppen einklappbar; Ziel steht im Namen) |
+| SUI.3 | Großer GO-Knopf, Panik-Knopf, Standby-Name und Standby-Notiz in großer Schrift | M | S1 | ✅ |
+| SUI.4 | Laufende Cues mit Fortschrittsbalken, Restzeit, Stopp und Pause je Cue | M | S1 | ◐ (Fortschritt, Restzeit, Stopp je Cue; Pause mit RUN.5, S2) |
+| SUI.5 | Warnliste: defekte Cues, fehlende Medien, fehlende Zonen-Geräte, nicht erreichbare Ausgabeziele; vor der Show prüfbar | S | S1 | ◐ (fehlende Start-Ziele, Ausgabeziele, Inputs, Mediendateien; Erreichbarkeit der Ziele: `check_targets`, „Ziele prüfen“, jedes Senden; Zonen-Geräte mit Stufe 2) |
+| SUI.6 | Dunkle Raumansicht: stark gedimmt, kein Weiß, für Bedienung im dunklen Raum (lmix) | S | S1 | ✅ (Knopf „Dunkel“: Kante dunkel und ein Schleier über dem Fenster) |
 | SUI.7 | Kleine Bühnenvorschau | S | S1 | ◐ (Live-Monitore) |
 | SUI.8 | Zonen-Leiste: Pegel und Lautstärke je Zone | S | S1 | – |
-| SUI.9 | Gestaltung nach Kante (UI.9), Texte aus Katalogen de/en (NFA.11) | M | S1 | ◐ |
+| SUI.9 | Gestaltung nach Kante (UI.9), Texte aus Katalogen de/en (NFA.11) | M | S1 | ✅ |
 | SUI.10 | Cues in der Oberfläche anlegen, bearbeiten, umsortieren, umnummerieren (wenn kein Drehbuch-Betrieb) | S | S2 | ◐ (Cue-Dialog AUT.14) |
 | SUI.11 | Standby unabhängig von der Auswahl (bearbeiten, während ein anderer Cue auf Standby steht) | S | S2 | – |
 | SUI.12 | Cue markieren (Prüfliste) und Zweitfarbe „bereits gelaufen“ | K | S2 | – |
-| SUI.13 | Felder und Funktionen je nach Modus zeigen oder verbergen; Seltenes hinter „Erweitert“ (S-E.5) (lmix) | S | S1 | – |
+| SUI.13 | Felder und Funktionen je nach Modus zeigen oder verbergen; Seltenes hinter „Erweitert“ (S-E.5) (lmix) | S | S1 | ◐ („Erweitert“ in der Show-Ansicht) |
 
 ### 3.11 Show-Datei (SSH)
 
 | ID | Anforderung | Prio | MS | Stand |
 |---|---|---|---|---|
-| SSH.1 | Cue-Listen mit allen neuen Feldern in der Show-Datei; Format-Version steigt, ältere Shows werden beim Laden migriert (CUE.21) | M | S1 | – (SHW.2) |
-| SSH.2 | Im Drehbuch-Betrieb speichert die Show nur den Verweis auf den Drehbuch-Ordner, nicht die erzeugten Cues | S | S1 | – |
-| SSH.3 | Zonen-, Bühnen- und Ausgabeziel-Zuordnung liegen nicht in der Show, sondern in den Rechner-Einstellungen; ex- und importierbar | M | S1 | – |
+| SSH.1 | Cue-Listen mit allen neuen Feldern in der Show-Datei; Format-Version steigt, ältere Shows werden beim Laden migriert (CUE.21) | M | S1 | ✅ |
+| SSH.2 | Im Drehbuch-Betrieb speichert die Show nur den Verweis auf den Drehbuch-Ordner, nicht die erzeugten Cues | S | S1 | ◐ (Show kennt ihren Drehbuch-Ordner, lmix-core hält `lmix-script --watch` dafür am Laufen; die Cues bleiben zusätzlich in der Show) |
+| SSH.3 | Zonen-, Bühnen- und Ausgabeziel-Zuordnung liegen nicht in der Show, sondern in den Rechner-Einstellungen; ex- und importierbar | M | S1 | ✅ (Ziele, Abonnenten und Zonen-Zuordnung in `targets.json`; Bühnen mit Stufe 3) |
 | SSH.4 | Paket (SHW.6) nimmt Klang- und Bilddateien der Cues mit | S | S2 | ◐ (SHW.6) |
-| SSH.5 | Show-Datei auf Wunsch zusammen mit den Rechner-Einstellungen (Zonen, Bühnen, Ausgabeziele, Licht-Patch) exportieren und importieren, z. B. für den Umzug auf gleiche Technik; Geheimnisse bleiben draußen, nur ihre Verweise (EXT.2) (lmix) | S | S1 | – |
+| SSH.5 | Show-Datei auf Wunsch zusammen mit den Rechner-Einstellungen (Zonen, Bühnen, Ausgabeziele, Licht-Patch) exportieren und importieren, z. B. für den Umzug auf gleiche Technik; Geheimnisse bleiben draußen, nur ihre Verweise (EXT.2) (lmix) | S | S1 | ✅ (`export_package`/`import_package` mit `machine: true`, ohne Geheimnisse) |
 
 ### 3.12 Licht (LGT)
 
@@ -407,6 +407,7 @@ Entwurf 2 hier und sind seit 2026-10-16 (User) Anforderungen (§3.12–3.15).
 
 | # | Frage | Stand |
 |---|---|---|
+| S-E.13 | Bühnen intern: Bild-Cues als verdeckte strom-Inputs auf einem Mischer-Flow je Bühne, oder ein Bühnen-Block in strom mit einem Zweig je Bild-Cue | Gemessen 2026-10-17 (DECISIONS „S-E.13“): Zweig je Cue zeigt nach 53–91 ms, vorgeladen 28–64 ms, Input-Weg nach 122–133 ms; Speicher und CPU gleich. Vorschlag: Zweig je Cue, zusammen mit S-E.3 B in einem Show-Block. Entscheidung des Users offen |
 | S-E.3 | Klang-Cues intern: verdeckte strom-Inputs oder ein Abspieler je Zone | Zurückgestellt (User 2026-10-16, Folgen noch unklar). Festgelegt ist nur SND.17. Vor S1 Stufe 2 beide Wege messen (5–10 Klänge zugleich: Startzeit GO → Ton, Speicher, CPU) und mit Zahlen erneut vorlegen |
 
 ---

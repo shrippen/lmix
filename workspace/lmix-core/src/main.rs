@@ -19,26 +19,34 @@ use lmix_types::Action;
 
 mod access;
 mod api;
+mod checks;
 mod clips;
+mod cues;
 mod datasource;
 mod engine;
 mod feedback;
+mod feeds;
 mod layouts;
 mod metrics;
 mod midi;
 mod osc;
+mod osc_subs;
 mod package;
 mod patch;
 mod ptz;
 mod recent;
+mod script;
 mod service;
+mod settings;
 mod show;
 mod switcher;
 mod tally_http;
+mod targets;
 mod tcp;
 mod titles;
 mod tsl;
 mod web;
+mod zones;
 
 use engine::flows::{MixerBackend, MonitorOut};
 use engine::null::NullEngine;
@@ -120,6 +128,21 @@ struct Args {
     #[arg(long, env = "LMIX_SHORTCUTS", default_value_os_t = config_file("shortcuts.json"))]
     shortcuts: PathBuf,
 
+    /// How often running cues go to subscribers and OSC subscribers while
+    /// cues run (CTL.2), 1–20 Hz.
+    #[arg(long, env = "LMIX_CUE_EVENTS_HZ", default_value_t = 4, value_parser = clap::value_parser!(u32).range(1..=20))]
+    cue_events_hz: u32,
+
+    /// The lmix-script tool, run for a show's script folder (show mode
+    /// SSH.2); default: next to lmix-core, else from PATH.
+    #[arg(long, env = "LMIX_SCRIPT_TOOL")]
+    script_tool: Option<PathBuf>,
+
+    /// Output targets of this machine with their secrets (show mode
+    /// EXT.1), kept apart from show files; written readable only by you.
+    #[arg(long, env = "LMIX_TARGETS", default_value_os_t = config_file("targets.json"))]
+    targets: PathBuf,
+
     /// Layout templates (LAY.5), kept apart from show files.
     #[arg(long, env = "LMIX_LAYOUT_TEMPLATES", default_value_os_t = config_file("layout-templates.json"))]
     layout_templates: PathBuf,
@@ -128,6 +151,24 @@ struct Args {
     /// machine need none. HTTP Basic or Bearer; text protocol `AUTH`.
     #[arg(long, env = "LMIX_PASSWORD", hide_env_values = true)]
     password: Option<String>,
+
+    /// Access keys with rights, a JSON list of `{name, key, right}` with
+    /// right `view`, `control` or `edit` (show mode CTL.5); like the
+    /// password, for HTTP and the text protocol.
+    #[arg(long, env = "LMIX_ACCESS_KEYS")]
+    access_keys: Option<PathBuf>,
+
+    /// Panic and hard stop from the local network without a key (a
+    /// button by the stage), also over OSC (show mode CTL.5, SAF.5).
+    #[arg(long, env = "LMIX_OPEN_PANIC")]
+    open_panic: bool,
+
+    /// Addresses or networks with a right without a key, e.g.
+    /// `192.168.1.20=control`, `192.168.1.0/24=view` (show mode CTL.5);
+    /// only matters with `--password` or `--access-keys`. HTTP, text
+    /// protocol and OSC.
+    #[arg(long, value_delimiter = ',', env = "LMIX_TRUST")]
+    trust: Vec<access::Trust>,
 
     /// Browser pages usable from the network without the password, with
     /// only what they need (`tally`, `keys`, `mixer`, `titles`).
@@ -244,6 +285,7 @@ async fn main() -> anyhow::Result<()> {
     // Before the show: its titles name templates from the folder.
     service.use_templates(args.templates.clone()).await;
     service.use_shortcuts_file(args.shortcuts.clone()).await;
+    service.use_targets_file(args.targets.clone()).await;
     service
         .use_layout_templates_file(args.layout_templates.clone())
         .await;
@@ -254,6 +296,13 @@ async fn main() -> anyhow::Result<()> {
             .map(|_| true),
         None => service.resume().await,
     };
+    let tool = args
+        .script_tool
+        .clone()
+        .unwrap_or_else(script::default_tool);
+    service
+        .use_script_tool(tool, format!("http://{}", args.listen))
+        .await;
     match opened {
         Ok(true) => tracing::info!("show loaded"),
         Ok(false) => tracing::info!("starting with an empty show"),
@@ -273,6 +322,8 @@ async fn main() -> anyhow::Result<()> {
     tokio::spawn(service.clone().watch_players());
     tokio::spawn(service.clone().watch_media());
     tokio::spawn(service.clone().watch_titles());
+    tokio::spawn(service.clone().watch_cues());
+    tokio::spawn(service.clone().watch_feeds(args.cue_events_hz));
     if !args.midi.is_empty() {
         tokio::spawn(midi::serve(args.midi.clone(), service.clone()));
         if args.midi_feedback {
@@ -286,13 +337,21 @@ async fn main() -> anyhow::Result<()> {
     if let Some(listen) = args.osc {
         let service = service.clone();
         let internet = args.allow_internet;
-        // No password over OSC: with one set, only this machine may send.
-        let local_only = args.password.as_deref().is_some_and(|p| !p.is_empty());
+        // No password over OSC: with one set, only this machine may send
+        // (panic too from the network with --open-panic).
+        let local_only =
+            args.password.as_deref().is_some_and(|p| !p.is_empty()) || args.access_keys.is_some();
+        let open_panic = args.open_panic;
+        let trusted = args.trust.clone();
         if local_only {
-            tracing::info!("OSC takes messages from this machine only (it has no password)");
+            tracing::info!(
+                "OSC takes messages from this machine and trusted addresses only (it has no password)"
+            );
         }
         tokio::spawn(async move {
-            if let Err(error) = osc::serve(listen, service, internet, local_only).await {
+            if let Err(error) =
+                osc::serve(listen, service, internet, local_only, open_panic, trusted).await
+            {
                 tracing::error!(%error, "OSC stopped");
             }
         });
@@ -309,10 +368,18 @@ async fn main() -> anyhow::Result<()> {
     if !args.tally_http.is_empty() {
         tokio::spawn(tally_http::serve(args.tally_http.clone(), service.clone()));
     }
+    let keys = match &args.access_keys {
+        Some(path) => access::read_keys(path)?,
+        None => Vec::new(),
+    };
     let rules = Arc::new(access::Access {
         password: args.password.clone().filter(|p| !p.is_empty()),
         open_pages: args.open_page.clone(),
         internet: args.allow_internet,
+        keys,
+        open_panic: args.open_panic,
+        trusted: args.trust.clone(),
+        ..access::Access::default()
     });
     if let Some(listen) = args.tcp {
         let service = service.clone();

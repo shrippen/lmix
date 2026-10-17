@@ -74,7 +74,7 @@ MultiCorder ohne Re-Encode) — relevant für M2 als Interop-Gegenstelle.
 | FTB | ✅ | ❌ | Button (**C**) |
 | Audio-Mixer | ✅ 128 Kanäle, Gruppen, Aux, Gate/Comp/EQ, PFL/AFL | Fader + Peak-Meter | Busse, Solo, EQ-UI, **Audio-follows-Video** (**C**) |
 | Titel/Grafik | CEF-HTML (Build separat) | ❌ | HTML-Titel + Datenquellen (**C**/**B**) |
-| Stream | SRT, WHIP, NDI; RTMP-Block upstream offen (#771) | ❌ | Ausgangsleiste (**C**) |
+| Stream | SRT, RTMP/RTMPS (seit 17.10., strom #18), WHIP, NDI | ✅ | Ausgangsleiste (**C**) |
 | Record / MultiCorder | Recorder-Block | ❌ | pro Input via `inter` (**C**) |
 | Replay | ❌ | ❌ | Ringbuffer-Block (**B**) |
 | Gäste | WHIP-Input | ❌ | Browser-Gast per WHIP (**C**) |
@@ -248,7 +248,7 @@ GPU-Punkte in `HARDWARE-TODO.md`):
 
 | # | Punkt | Ort |
 |---|---|---|
-| 3.1 | Ausgangsleiste: Stream (SRT jetzt, RTMP sobald #771 upstream), Record, NDI/OMT-Out; Status: Bitrate, Drops, Laufzeit | C |
+| 3.1 | Ausgangsleiste: Stream (SRT, RTMP seit 17.10.), Record, NDI/OMT-Out; Status: Bitrate, Drops, Laufzeit | C |
 | 3.2 | MultiCorder: Recorder pro Input am `inter`-Bus | C |
 | 3.3 | Fullscreen-Output auf zweitem Monitor (Sink im Engine-Prozess, nicht in der GUI — Crash-Isolation) | C |
 | 3.4 | Failover, Latenz-CI (wie `claude.md`) | C |
@@ -258,7 +258,7 @@ GPU-Punkte in `HARDWARE-TODO.md`):
 
 | # | Stand |
 |---|---|
-| 3.1 | ✅ Ausgänge SRT, Aufnahme (MKV/MP4/TS), NDI als eigene Flows; Start/Stopp, Status mit Laufzeit und Fehler; Senderate, Paketverluste und RTT für SRT (B32); RTMP wartet auf strom #771, OMT ohne strom-Block |
+| 3.1 | ✅ Ausgänge SRT, Aufnahme (MKV/MP4/TS), NDI als eigene Flows; Start/Stopp, Status mit Laufzeit und Fehler; Senderate, Paketverluste und RTT für SRT (B32); RTMP/RTMPS seit 17.10. (strom #18, B31), OMT ohne strom-Block |
 | 3.2 | ✅ MultiCorder als Ausgangsquelle "Input": Aufnahme, SRT oder NDI je Input (ISO) |
 | 3.3 | ✅ Bildschirm-Ausgang im Engine-Prozess: Fenster, Vollbild (Wayland), DRM-Anschluss; ⚠ Vollbild/DRM nur auf Hardware prüfbar (H.20) |
 | 3.4 | ✅ Failover: Quelle weg → Input offline, PGM hält, Slot kommt von selbst wieder (2–10 s Backoff); Ausgang bricht → Fehler, Neustart; Latenz-API und Budget-Check im VM-Test, CI `vm-check`; ⚠ SRT-Input in strom unzuverlässig (H.23) |
@@ -280,7 +280,7 @@ Stand:
 
 | # | Stand |
 |---|---|
-| 4.1 | ✅ 4 Overlay-Kanäle (wie vMix; strom-DSK hat höchstens 4) über die DSK-Ebenen des Mischers, Ein-/Ausblenden (strom-Patch `lmix-dsk-fade`), Tally rot, in Show-Datei; Console: Knöpfe 1–4 je Kachel und Overlay-Leiste; ⚠ Position/Größe eines Overlays: über ein Layout (4.6) |
+| 4.1 | ✅ 4 Overlay-Kanäle, seit 17.10. 8 (OVL.1, strom #16: 9 DSK-Ebenen mit Stinger) über die DSK-Ebenen des Mischers, Ein-/Ausblenden (strom-Patch `lmix-dsk-fade`), Tally rot, in Show-Datei; Console: Knöpfe je Kanal an der Kachel und Overlay-Leiste; ⚠ Position/Größe eines Overlays: über ein Layout (4.6) |
 | 4.2 | ✅ Stinger: Clip-Input (Alpha, z. B. WebM/VP9) auf eigener DSK-Ebene unter den Overlays, Cut darunter am Cut-Punkt, Länge je Taste; gesperrt solange er läuft; strom-Patch `lmix-stinger-layer` (8 DSK); Console: Effekt „Stinger“ mit Dialog, Länge aus dem Clip |
 | 4.3 | ✅ T-Bar: Vorschau wird beim Ziehen über Programm eingeblendet (Mischung), am Ende Take, zurück auf 0 ohne Wirkung; Position im Zustand; Console-Schieber; ⚠ nur Blende (andere Effekte am Ende als Cut), Ton folgt erst beim Take |
 | 4.6 | ✅ Looks je Input (Farbkorrektur, nur GL-Mischer, sonst Ablehnung mit Grund); Layouts: Hintergrund und bis zu 8 Boxen mit Rahmen als PiP-Komposition, in Vorschau/Programm wie ein Input, Tally für alle Inputs darin; strom-Patch `lmix-live-underlays`; Boxen frei ziehen und zuschneiden; Console: „Farbkorrektur…“ je Kachel, Layout-Leiste und -Dialog mit Fläche; ⚠ keine Bewegung zwischen Layouts |
@@ -318,7 +318,7 @@ Stand:
 | AUT.10, AUT.11 | ✅ Geschlossenen Input zurückholen; Sperre gegen Schließen/Stoppen |
 | AUT.13 | ✅ OSC: Aktionen per Adresse oder JSON; Tally, Programm, Vorschau, T-Bar, FTB, nächster Cue an Abonnenten; ganzer Zustand auf Anfrage |
 | AUT.14 | ✅ Cue-Listen mit GO, Zurück, Sprung; Console-Dialog |
-| AUT.4 | ✅ MIDI aus Gerätedateien: Note/Regler je Kurzbefehl, Regler auf T-Bar, Lernen in der Console; ⚠ keine Rückmeldung an den Controller |
+| AUT.1 | ✅ MIDI aus Gerätedateien: Note/Regler je Kurzbefehl, Regler auf T-Bar, Lernen in der Console; ⚠ keine Rückmeldung an den Controller |
 | AUT.12 | ✅ Globale Tasten über das GlobalShortcuts-Portal (KDE, GNOME 48+); ⚠ nicht unter X11 ohne Portal |
 
 ### M7 — Titel & Daten (HTML), direkt nach M4
@@ -413,6 +413,20 @@ Stufe 2 mit Messungen erneut vorgelegt wird.
 | S1 Spieltisch | Cue-Modell und Ablauf in `lmix-core`, Zonen, Klang- und Bild-Cues, mehrere Bühnen, HTTP-Ziele (Licht über Home Assistant), Panik, Drehbuch-Import, Show-Ansicht | OUT.3, AUD.14, API.5, API.7 |
 | S2 Theater-Grundstand | Bearbeiten in der Oberfläche, erweiterte Gruppen und Fades, Effekt-Plugins, OSC-Cue, Variablen, Companion-Modul | GFX.2 (HTML-Ebene) |
 | S3 Erweiterungen | Eigenes Licht (Art-Net/sACN), Objekt-Audio, Timecode rein/raus | PER.9 |
+
+Stand S1 (2026-10-16): Stufe 1 (Cue-Modell und Ablauf in `lmix-core`,
+CUE/RUN/SSH.1) ✅ bis auf Ausblenden (mit Stufe 2) und die 4-h-Messung
+(SNF.4); „erst nach Loslassen“ (RUN.6) ✅ 17.10.; DECISIONS „Show-Modus S1 Stufe 1“.
+Stufe 6 (Drehbuch-Import, IMP) ✅ vorgezogen: `lmix-script`, `docs/DREHBUCH.md`;
+DECISIONS „Drehbuch-Import“. Offen: SSH.2 (Show speichert nur den Ordner).
+Stufe 4 (Ausgabeziele, EXT.1–5) ✅ für HTTP und Home Assistant; DECISIONS
+„Ausgabeziele“.
+Stufe 5, Teil Sicherheit (SAF): Panik, harter Stopp, Notfall-Liste, Standby
+nach Neustart ✅ ohne Ausblenden (mit Stufe 2); DECISIONS „Panik“.
+Stufe 5, Teil Bedienung: Restzeit als Ereignis (CTL.2) und feste OSC-Abonnenten
+(CTL.4) ✅; DECISIONS „Feste OSC-Abonnenten“. Offen: Zugangsschlüssel (CTL.5).
+Stufe 7 (Show-Ansicht der Console, SUI.1–4, 9, 13) ✅ im Grundstand; DECISIONS
+„Show-Ansicht“. Ohne GPU offen in S1: CTL.5; mit Engine: Stufen 2 und 3.
 
 ---
 

@@ -131,6 +131,24 @@ pub struct ShowState {
     /// Masters of the aux buses (bus 1 first).
     #[serde(default)]
     pub aux_buses: [AuxBus; AUX_BUSES],
+    /// Master of program sound (AUD.2).
+    #[serde(default)]
+    pub master: AuxBus,
+    /// Picture size and rate of program (OUT.1).
+    #[serde(default)]
+    pub format: crate::output::MasterFormat,
+    /// Layout of the multiview (OUT.10).
+    #[serde(default)]
+    pub multiview: crate::output::MultiviewLayout,
+    /// Sample rate of the audio mixer, Hz (AUD.17).
+    #[serde(default = "crate::output::default_sample_rate")]
+    pub sample_rate: u32,
+    /// Volume of the monitor bus, 0–100 (AUD.4).
+    #[serde(default = "crate::input::full_volume")]
+    pub monitor_volume: u8,
+    /// Delay of new inputs with sound, ms (AUD.6).
+    #[serde(default)]
+    pub default_delay_ms: u32,
     /// Whether the engine can apply looks (the GL mixer can).
     #[serde(default)]
     pub looks_available: bool,
@@ -146,11 +164,42 @@ pub struct ShowState {
     pub shortcuts: Vec<Shortcut>,
     /// Cue lists of the show.
     #[serde(default)]
-    pub cue_lists: Vec<crate::automation::CueList>,
+    pub cue_lists: Vec<crate::cue::CueList>,
+    /// Cues that run now, in start order (RUN.3).
+    #[serde(default)]
+    pub running_cues: Vec<crate::cue::RunningCue>,
+    /// Shortest gap between two GOs (RUN.6).
+    #[serde(default)]
+    pub go_guard_ms: u32,
+    /// When GO takes another press (RUN.6).
+    #[serde(default)]
+    pub go_rearm: crate::cue::GoRearm,
+    /// Panic time (SAF.2).
+    #[serde(default)]
+    pub panic_ms: u32,
+    /// The show's script folder (SSH.2).
+    #[serde(default)]
+    pub script_folder: Option<String>,
+    /// The show file's older format version, migrated on open; the next
+    /// save over it keeps the old file as `<file>.v<n>.bak` (SHW.7).
+    #[serde(default)]
+    pub older_format: Option<u32>,
+    /// What would go wrong when the cue lists run (SUI.5).
+    #[serde(default)]
+    pub cue_warnings: Vec<crate::cue::CueWarning>,
+    /// Output targets of this machine, without secrets (EXT.1).
+    #[serde(default)]
+    pub targets: Vec<crate::target::Target>,
+    /// Fixed OSC subscribers of this machine (CTL.4).
+    #[serde(default)]
+    pub feeds: Vec<crate::feed::Feed>,
+    /// The show's zones with this machine's outputs (SND.10).
+    #[serde(default)]
+    pub zones: Vec<crate::zone::ZoneState>,
     /// Locked against closing, loading and stopping (AUT.11).
     #[serde(default)]
     pub locked: bool,
-    /// MIDI controller that moves the T-bar (AUT.4).
+    /// MIDI controller that moves the T-bar (AUT.1).
     #[serde(default)]
     pub midi_tbar: Option<crate::midi::MidiBinding>,
     /// Name of the input `restore_input` would bring back.
@@ -177,11 +226,15 @@ pub struct ShowState {
 pub const API_VERSION: u32 = 1;
 
 /// Peak level of one input, before its fader and mute (what arrives).
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct InputLevel {
     pub input: InputId,
     /// Loudest channel, dBFS.
     pub peak_db: f32,
+    /// Each channel, dBFS: left, right (AUD.1); empty before the first
+    /// measurement.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub channels_db: Vec<f32>,
 }
 
 /// Audio levels, sent about ten times a second while sound flows.
@@ -266,6 +319,28 @@ pub enum Event {
         graphics: InputId,
         layer: u32,
         report: String,
+    },
+    /// The running cues with their remaining time, at the cue event rate
+    /// (default 4 Hz) while cues run, once more when none is left
+    /// (CTL.2).
+    Running { cues: Vec<crate::cue::RunningCue> },
+    /// Panic (`mode: fade`, over the panic time) or hard stop (`hard`),
+    /// from any control (SAF.1, SAF.3, CTL.2).
+    Panic { mode: crate::cue::StopMode },
+    /// How a message to an output target went (EXT.3, CTL.2).
+    Target {
+        target: String,
+        #[serde(flatten)]
+        result: crate::target::TargetResult,
+    },
+    /// A cue started, ended, stopped or failed, or a GO was dropped
+    /// (RUN.6); `cue` is `null` for a GO.
+    Cue {
+        list: InputId,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        cue: Option<crate::cue::CueId>,
+        #[serde(flatten)]
+        what: crate::cue::CueEvent,
     },
 }
 

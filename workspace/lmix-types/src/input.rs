@@ -248,6 +248,45 @@ pub enum InputStatus {
     Offline,
 }
 
+/// What a clip or playlist does at its end (INP.10).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum AtEnd {
+    /// Start again from the first item.
+    #[default]
+    Loop,
+    /// Stop on the last frame.
+    Hold,
+}
+
+impl AtEnd {
+    pub fn is_loop(&self) -> bool {
+        *self == AtEnd::Loop
+    }
+}
+
+/// Whether a player plays, as it last said.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum PlaybackState {
+    Playing,
+    Paused,
+    Stopped,
+}
+
+/// Where a clip or playlist input plays (API.4).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct Playback {
+    /// `None` until the player reports a change of state.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub state: Option<PlaybackState>,
+    pub position_ms: u64,
+    pub duration_ms: u64,
+    /// Item of the playlist, 1-based, and how many there are.
+    pub item: usize,
+    pub items: usize,
+}
+
 /// One input as clients see it.
 /// What an input shows when its source delivers no new frames (paused
 /// clip, lost camera or stream).
@@ -264,13 +303,18 @@ pub enum SignalLoss {
 /// Highest input volume (vMix scale, 100 = unity gain).
 pub const VOLUME_MAX: u8 = 100;
 
-/// Aux buses of the audio mixer, numbered 1–2 in actions.
-pub const AUX_BUSES: usize = 2;
+/// Aux buses of the audio mixer, A–G (AUD.2), numbered 1–7 in actions.
+pub const AUX_BUSES: usize = 7;
 
 /// Which aux buses take their sends before the channel fader (and its
-/// on/off): bus 1 is the monitor mix (in-ear, presenters hear
-/// themselves whatever is on air), bus 2 a second mix after the fader.
-pub const AUX_PRE_FADER: [bool; AUX_BUSES] = [true, false];
+/// on/off): bus A (1) is the monitor mix (in-ear, presenters hear
+/// themselves whatever is on air), B–G mixes after the fader.
+pub const AUX_PRE_FADER: [bool; AUX_BUSES] = [true, false, false, false, false, false, false];
+
+/// Volume 100: unity gain (serde default).
+pub fn full_volume() -> u8 {
+    VOLUME_MAX
+}
 
 /// Master of an aux bus.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -556,6 +600,9 @@ pub struct Input {
     /// Play, restart, pause on and off air (file, URL, playlist).
     #[serde(default)]
     pub auto_play: AutoPlay,
+    /// Loop or stop at the end (file, URL, playlist).
+    #[serde(default)]
+    pub at_end: AtEnd,
     /// What a click on the input does (INP.8).
     #[serde(default = "InputPress::click")]
     pub click: InputPress,
@@ -581,6 +628,10 @@ pub struct Input {
     /// reports it; `None` until then and for other sources.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub clip_ms: Option<u64>,
+    /// Where a clip or playlist plays (API.4), from the player's last
+    /// report; `None` for other sources and while it reports nothing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub playback: Option<Playback>,
     /// The camera's PTZ address, if it has one (PER.2).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ptz: Option<crate::ptz::PtzSpec>,

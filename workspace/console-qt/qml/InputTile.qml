@@ -28,6 +28,8 @@ KanteCard {
     /** The engine can apply looks (GL mixer). */
     property bool looksAvailable: false
     property var peakDb: undefined
+    /** Peak per channel, dBFS: left, right (AUD.1); undefined before the first. */
+    property var channelsDb: undefined
     /** Another tile is dragged over this one: it would land here. */
     property bool dropTarget: false
     signal replaceRequested()
@@ -185,35 +187,39 @@ KanteCard {
             spacing: Kirigami.Units.smallSpacing
 
             KanteSectionLabel {
-                // Small tiles (UI.3): the buttons alone.
-                visible: tile.width >= Kirigami.Units.gridUnit * 11
+                // Small tiles (UI.3): the buttons alone, all eight in a row.
+                visible: tile.width >= Kirigami.Units.gridUnit * 16
                 text: qsTr("Overlay")
                 color: KanteStyle.mutedTextColor
             }
-            Repeater {
-                model: tile.overlays.length
-                KanteToolButton {
-                    id: overlayButton
-                    required property int index
-                    readonly property int channel: index + 1
-                    readonly property bool on: tile.overlays[index] === tile.input.id
-                    readonly property bool prepared: tile.overlayPreview[index] === tile.input.id
-                    text: prepared ? channel + "→" : channel
-                    checkable: true
-                    checked: on
-                    Accessible.name: qsTr("Overlay %1").arg(channel)
-                    QQC2.ToolTip.visible: hovered
-                    QQC2.ToolTip.text: (on ? qsTr("Take off overlay %1").arg(channel)
-                        : qsTr("Show on overlay %1").arg(channel))
-                        + ". " + (prepared ? qsTr("Goes on with the next take.") : qsTr("Right click: with the next take."))
-                    onClicked: tile.act(on ? { action: "overlay_out", channel: channel }
-                        : { action: "overlay_in", channel: channel, input: tile.ref() })
+            // Eight channels (OVL.1) wrap onto a second row on small tiles.
+            Flow {
+                Layout.fillWidth: true
+                Repeater {
+                    model: tile.overlays.length
+                    KanteToolButton {
+                        id: overlayButton
+                        required property int index
+                        readonly property int channel: index + 1
+                        readonly property bool on: tile.overlays[index] === tile.input.id
+                        readonly property bool prepared: tile.overlayPreview[index] === tile.input.id
+                        text: prepared ? channel + "→" : channel
+                        checkable: true
+                        checked: on
+                        Accessible.name: qsTr("Overlay %1").arg(channel)
+                        QQC2.ToolTip.visible: hovered
+                        QQC2.ToolTip.text: (on ? qsTr("Take off overlay %1").arg(channel)
+                            : qsTr("Show on overlay %1").arg(channel))
+                            + ". " + (prepared ? qsTr("Goes on with the next take.") : qsTr("Right click: with the next take."))
+                        onClicked: tile.act(on ? { action: "overlay_out", channel: channel }
+                            : { action: "overlay_in", channel: channel, input: tile.ref() })
 
-                    // OVL.3: prepared now, on air with the next take of preview.
-                    TapHandler {
-                        acceptedButtons: Qt.RightButton
-                        onTapped: tile.act({ action: "overlay_preview", channel: overlayButton.channel,
-                            input: overlayButton.prepared ? null : tile.ref() })
+                        // OVL.3: prepared now, on air with the next take of preview.
+                        TapHandler {
+                            acceptedButtons: Qt.RightButton
+                            onTapped: tile.act({ action: "overlay_preview", channel: overlayButton.channel,
+                                input: overlayButton.prepared ? null : tile.ref() })
+                        }
                     }
                 }
             }
@@ -237,10 +243,31 @@ KanteCard {
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: 0
-                KanteAudioMeter {
+                // Left above right, a hairline apart; one bar while the
+                // channels are unknown. Muted, the meters stay but read
+                // pale (AUD.12): the source still sends, program hears none.
+                ColumnLayout {
                     Layout.fillWidth: true
-                    level: tile.peakDb
-                    scale: true
+                    spacing: KanteStyle.unit(1)
+                    opacity: tile.audio.on ? 1 : 0.4
+                    KanteAudioMeter {
+                        Layout.fillWidth: true
+                        readonly property bool stereo: tile.channelsDb !== undefined && tile.channelsDb.length >= 2
+                        level: stereo ? tile.channelsDb[0] : tile.peakDb
+                        thickness: stereo ? KanteStyle.unit(4) : KanteStyle.unit(8)
+                        holdMs: 2000
+                        scale: !stereo
+                        Accessible.name: stereo ? qsTr("Level left") : qsTr("Level")
+                    }
+                    KanteAudioMeter {
+                        Layout.fillWidth: true
+                        visible: tile.channelsDb !== undefined && tile.channelsDb.length >= 2
+                        level: visible ? tile.channelsDb[1] : undefined
+                        thickness: KanteStyle.unit(4)
+                        holdMs: 2000
+                        scale: true
+                        Accessible.name: qsTr("Level right")
+                    }
                 }
                 QQC2.Slider {
                     id: volume
@@ -256,12 +283,13 @@ KanteCard {
                 }
             }
             KanteToolButton {
-                text: tile.input.listen === "afl" ? "AFL" : "PFL"
+                // After the fader by default (AUD.4); before it from the menu.
+                text: tile.input.listen === "pfl" ? "PFL" : "AFL"
                 checkable: true
                 checked: tile.input.listen !== "off"
                 QQC2.ToolTip.visible: hovered
-                QQC2.ToolTip.text: qsTr("Listen on the monitor bus (right click: before or after the fader)")
-                onClicked: tile.act({ action: "set_listen", input: tile.ref(), listen: tile.input.listen === "off" ? "pfl" : "off" })
+                QQC2.ToolTip.text: qsTr("Listen on the monitor bus after the fader (right click: before it)")
+                onClicked: tile.act({ action: "set_listen", input: tile.ref(), listen: tile.input.listen === "off" ? "afl" : "off" })
             }
         }
     }
@@ -323,6 +351,14 @@ KanteCard {
             choices: [{ value: null, label: qsTr("None") }].concat(Texts.choices("colors", tile.core.choices("colors")))
             current: tile.input.color
             onPicked: value => tile.act({ action: "set_input_color", input: tile.ref(), color: value })
+        }
+        // INP.10: loop, or stop on the last frame (on air without a restart).
+        ChoiceMenu {
+            title: qsTr("At the end")
+            enabled: tile.playable
+            choices: [{ value: "loop", label: qsTr("Loop") }, { value: "hold", label: qsTr("Stop on the last frame") }]
+            current: tile.input.at_end || "loop"
+            onPicked: value => tile.act({ action: "set_at_end", input: tile.ref(), at_end: value })
         }
         QQC2.Menu {
             id: lossMenu

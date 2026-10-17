@@ -23,9 +23,26 @@
 //!
 //! OSC (UDP) carries no password: with one set, it takes messages from
 //! this machine only.
+//!
+//! Access keys (show mode CTL.5, `--access-keys`): more keys, each with a
+//! right: `view` (read state and pictures), `control` (run the show: GO,
+//! cuts, levels, titles, panic) or `edit` (also change what is prepared:
+//! inputs, cue lists, targets, files). The password counts as an `edit`
+//! key. `--open-panic` lets panic and hard stop through from the local
+//! network without a key (a button by the stage, OSC included). A wrong
+//! key makes the next answer to that address wait longer (up to 5 s) and
+//! is logged.
+//!
+//! Trusted addresses (CTL.5, `--trust 192.168.1.20=control`): with keys
+//! or a password set, an address or network on the list has its right
+//! without a key, over HTTP, the text protocol and OSC; every other
+//! address of the network needs a key. Without keys and password the
+//! local network may do everything, as before (API.7).
 
+use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use axum::body::Body;
 use axum::extract::{ConnectInfo, State};
@@ -64,6 +81,295 @@ pub struct Access {
     pub password: Option<String>,
     pub open_pages: Vec<Page>,
     pub internet: bool,
+    /// More keys with their rights (CTL.5).
+    pub keys: Vec<AccessKey>,
+    /// Panic and hard stop from the local network without a key.
+    pub open_panic: bool,
+    /// Addresses with a right without a key (CTL.5).
+    pub trusted: Vec<Trust>,
+    /// Wrong keys per address, for the growing wait.
+    pub failures: Failures,
+}
+
+/// Wrong keys per address; only [`Access::punish`] and
+/// [`Access::forgive`] touch them.
+#[derive(Clone, Debug, Default)]
+pub struct Failures(Arc<Mutex<HashMap<IpAddr, u32>>>);
+
+/// What a key lets its holder do (CTL.5).
+#[derive(
+    Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, serde::Deserialize, serde::Serialize,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum Right {
+    /// Read: state, events, tally, pictures.
+    View,
+    /// Run the show.
+    Control,
+    /// Also change what is prepared.
+    Edit,
+}
+
+/// An access key from `--access-keys`.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
+pub struct AccessKey {
+    /// For the log, e.g. "Companion".
+    pub name: String,
+    pub key: String,
+    pub right: Right,
+}
+
+/// An address or network that has a right without a key (CTL.5):
+/// `192.168.1.20=control`, `192.168.1.0/24=view`, `fd00::/8`; without
+/// a right it is `control`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Trust {
+    net: IpAddr,
+    prefix: u8,
+    right: Right,
+}
+
+impl std::str::FromStr for Trust {
+    type Err = String;
+
+    fn from_str(text: &str) -> Result<Self, Self::Err> {
+        let (net, right) = match text.split_once('=') {
+            Some((net, right)) => (net, right.trim()),
+            None => (text, "control"),
+        };
+        let right: Right = serde_json::from_value(serde_json::Value::String(right.into()))
+            .map_err(|_| format!("{text}: the right is view, control or edit"))?;
+        let (address, prefix) = match net.trim().split_once('/') {
+            Some((a, p)) => (a, Some(p)),
+            None => (net.trim(), None),
+        };
+        let net: IpAddr = address
+            .parse()
+            .map_err(|_| format!("{text}: {address} is no IP address"))?;
+        let bits = if net.is_ipv4() { 32 } else { 128 };
+        let prefix = match prefix {
+            Some(p) => p
+                .parse::<u8>()
+                .ok()
+                .filter(|p| *p <= bits)
+                .ok_or_else(|| format!("{text}: the prefix is 0–{bits}"))?,
+            None => bits,
+        };
+        Ok(Self { net, prefix, right })
+    }
+}
+
+impl Trust {
+    fn contains(&self, ip: IpAddr) -> bool {
+        let ip = match ip {
+            IpAddr::V6(v6) => v6.to_ipv4_mapped().map_or(ip, IpAddr::V4),
+            v4 => v4,
+        };
+        let (have, want, bits) = match (ip, self.net) {
+            (IpAddr::V4(a), IpAddr::V4(b)) => {
+                (u128::from(u32::from(a)), u128::from(u32::from(b)), 32)
+            }
+            (IpAddr::V6(a), IpAddr::V6(b)) => (u128::from(a), u128::from(b), 128),
+            _ => return false,
+        };
+        let shift = bits - u32::from(self.prefix);
+        let mask = if shift >= 128 { 0 } else { u128::MAX << shift };
+        (have & mask) == (want & mask)
+    }
+}
+
+/// Shortest key: a guessable one would be no lock.
+const KEY_MIN_CHARS: usize = 12;
+
+/// The keys of `--access-keys`: a JSON list of `{name, key, right}`.
+pub fn read_keys(path: &std::path::Path) -> anyhow::Result<Vec<AccessKey>> {
+    use anyhow::Context;
+    let bytes = std::fs::read(path).with_context(|| format!("read {}", path.display()))?;
+    let keys: Vec<AccessKey> =
+        serde_json::from_slice(&bytes).with_context(|| format!("parse {}", path.display()))?;
+    for key in &keys {
+        anyhow::ensure!(
+            key.key.chars().count() >= KEY_MIN_CHARS,
+            "{}: key {} is shorter than {KEY_MIN_CHARS} characters",
+            path.display(),
+            key.name
+        );
+    }
+    let mut seen = std::collections::HashSet::new();
+    anyhow::ensure!(
+        keys.iter().all(|k| seen.insert(k.key.as_str())),
+        "{}: a key is there twice",
+        path.display()
+    );
+    Ok(keys)
+}
+
+/// The right an action needs: running the show is `control`, changing
+/// what is prepared (or files and the machine's settings) is `edit`. No
+/// wildcard: a new action does not build until it has its right.
+pub fn right_of(action: &Action) -> Right {
+    match action {
+        Action::AddCueList { .. }
+        | Action::AddDataSource { .. }
+        | Action::AddGraphics { .. }
+        | Action::AddInput { .. }
+        | Action::AddLayout { .. }
+        | Action::AddOutput { .. }
+        | Action::AddShortcut { .. }
+        | Action::AppendShow { .. }
+        | Action::ExportDatasets { .. }
+        | Action::ExportLayoutTemplates { .. }
+        | Action::ExportPackage { .. }
+        | Action::ImportDatasets { .. }
+        | Action::ImportLayoutTemplates { .. }
+        | Action::ImportPackage { .. }
+        | Action::LoadLayoutTemplate { .. }
+        | Action::MoveInput { .. }
+        | Action::NewShow { .. }
+        | Action::OpenShow { .. }
+        | Action::RelocateMedia { .. }
+        | Action::RemoveCueList { .. }
+        | Action::RemoveDataSource { .. }
+        | Action::RemoveDataset { .. }
+        | Action::RemoveFeed { .. }
+        | Action::RemoveGraphics { .. }
+        | Action::RemoveInput { .. }
+        | Action::RemoveLayout { .. }
+        | Action::RemoveLayoutTemplate { .. }
+        | Action::RemoveOutput { .. }
+        | Action::RemoveShortcut { .. }
+        | Action::RemoveTarget { .. }
+        | Action::RenameGraphics { .. }
+        | Action::RenameInput { .. }
+        | Action::ReplaceSource { .. }
+        | Action::RestoreInput
+        | Action::SaveLayoutTemplate { .. }
+        | Action::SaveShow { .. }
+        | Action::SetAutoPlay { .. }
+        | Action::SetAtEnd { .. }
+        | Action::SetCueList { .. }
+        | Action::SetDataAuto { .. }
+        | Action::SetEmergencyList { .. }
+        | Action::SetScriptFolder { .. }
+        | Action::ExportSettings { .. }
+        | Action::ImportSettings { .. }
+        | Action::ResetSettings
+        | Action::SetZone { .. }
+        | Action::RemoveZone { .. }
+        | Action::SetZonePatch { .. }
+        | Action::RemoveZonePatch { .. }
+        | Action::SetFeed { .. }
+        | Action::SetGoGuard { .. }
+        | Action::SetGoRearm { .. }
+        | Action::SetInputColor { .. }
+        | Action::SetInputPress { .. }
+        | Action::SetLayout { .. }
+        | Action::SetLock { .. }
+        | Action::SetDefaultDelay { .. }
+        | Action::SetMasterFormat { .. }
+        | Action::SetMultiview { .. }
+        | Action::SetSampleRate { .. }
+        | Action::SetLook { .. }
+        | Action::SetMidiTbar { .. }
+        | Action::SetOverlay { .. }
+        | Action::SetPanicTime { .. }
+        | Action::SetPtz { .. }
+        | Action::SetQuickPlay { .. }
+        | Action::SetShortcut { .. }
+        | Action::SetSignalLoss { .. }
+        | Action::SetTarget { .. }
+        | Action::SetTitleTriggers { .. }
+        | Action::SetTransition { .. }
+        | Action::SetTriggers { .. }
+        | Action::TitleBind { .. } => Right::Edit,
+        Action::TransportInput { .. }
+        | Action::SeekInput { .. }
+        | Action::PlayItem { .. }
+        | Action::StartOutput { .. }
+        | Action::StopOutput { .. }
+        | Action::StartOutputs { .. }
+        | Action::StopOutputs { .. }
+        | Action::SetAudio { .. }
+        | Action::SetAudioFollow { .. }
+        | Action::SetVolume { .. }
+        | Action::SetChannelStrip { .. }
+        | Action::SetAuxSend { .. }
+        | Action::SetAuxBus { .. }
+        | Action::SetMaster { .. }
+        | Action::SetMonitorVolume { .. }
+        | Action::FadeVolume { .. }
+        | Action::SetListen { .. }
+        | Action::ClearListen
+        | Action::PreviewLayout { .. }
+        | Action::ShowBox { .. }
+        | Action::CueGo { .. }
+        | Action::CueStart { .. }
+        | Action::CueStop { .. }
+        | Action::CueStandby { .. }
+        | Action::CueReset
+        | Action::SetActiveCueList { .. }
+        | Action::CuePanic { .. }
+        | Action::CueHardStop
+        | Action::TestTarget { .. }
+        | Action::CheckTargets
+        | Action::HttpRequest { .. }
+        | Action::HaService { .. }
+        | Action::RunShortcut { .. }
+        | Action::PreviewInput { .. }
+        | Action::Cut
+        | Action::CutDirect { .. }
+        | Action::Transition { .. }
+        | Action::QuickPlay { .. }
+        | Action::ClickInput { .. }
+        | Action::GoInput { .. }
+        | Action::FadeToBlack { .. }
+        | Action::TBar { .. }
+        | Action::OverlayIn { .. }
+        | Action::OverlayOut { .. }
+        | Action::OverlayOutAll { .. }
+        | Action::OverlayLast { .. }
+        | Action::OverlayPreview { .. }
+        | Action::SetDynamicInput { .. }
+        | Action::SetDynamicValue { .. }
+        | Action::PtzMove { .. }
+        | Action::PtzZoom { .. }
+        | Action::PtzFocus { .. }
+        | Action::PtzHome { .. }
+        | Action::PtzPreset { .. }
+        | Action::TitleLoad { .. }
+        | Action::TitlePlay { .. }
+        | Action::TitleNext { .. }
+        | Action::TitleStop { .. }
+        | Action::TitleClear { .. }
+        | Action::TitleUpdate { .. }
+        | Action::TitleAdd { .. }
+        | Action::TitleTransform { .. }
+        | Action::TitleCall { .. }
+        | Action::TitleReport { .. }
+        | Action::SaveDataset { .. }
+        | Action::ApplyDataset { .. }
+        | Action::DatasetNext { .. }
+        | Action::DatasetPrevious { .. }
+        | Action::DataRow { .. }
+        | Action::DataNext { .. }
+        | Action::DataPrevious { .. } => Right::Control,
+    }
+}
+
+/// What a request's `Authorization` says.
+#[derive(Debug, PartialEq, Eq)]
+enum Auth {
+    Right(Right),
+    /// None given.
+    Missing,
+    /// One given that is no key.
+    Wrong,
+}
+
+/// Wait after the `n`-th wrong key from one address.
+fn penalty(n: u32) -> Duration {
+    Duration::from_millis(100u64.saturating_mul(1 << n.saturating_sub(1).min(6)))
+        .min(Duration::from_secs(5))
 }
 
 /// Loopback, private, link-local, unique-local, or the shared range
@@ -128,30 +434,83 @@ impl Access {
         }
     }
 
-    /// Whether `given` is the password (or none is needed).
-    pub fn password_ok(&self, given: &str) -> bool {
-        self.password
-            .as_deref()
-            .is_none_or(|p| same(p.as_bytes(), given.as_bytes()))
+    /// Whether the network needs a key at all.
+    pub fn needs_key(&self) -> bool {
+        self.password.is_some() || !self.keys.is_empty()
     }
 
-    /// The password in a request's `Authorization` header, if right.
-    fn authorized(&self, request: &Request<Body>) -> bool {
-        let Some(password) = &self.password else {
-            return true;
+    /// The right `given` grants; without password and keys the local
+    /// network may do everything (as before CTL.5).
+    pub fn right_of_key(&self, given: &str) -> Option<Right> {
+        if !self.needs_key() {
+            return Some(Right::Edit);
+        }
+        let password = self
+            .password
+            .as_deref()
+            .is_some_and(|p| same(p.as_bytes(), given.as_bytes()));
+        let key = self
+            .keys
+            .iter()
+            .filter(|k| same(k.key.as_bytes(), given.as_bytes()))
+            .map(|k| k.right)
+            .max();
+        if password {
+            Some(Right::Edit)
+        } else {
+            key
+        }
+    }
+
+    /// The right `ip` has without a key: the highest of its trusted
+    /// entries (CTL.5).
+    pub fn trusted(&self, ip: IpAddr) -> Option<Right> {
+        self.trusted
+            .iter()
+            .filter(|t| t.contains(ip))
+            .map(|t| t.right)
+            .max()
+    }
+
+    /// Whether an open page or `--open-panic` lets `action` through.
+    pub fn open_for(&self, action: &Action) -> bool {
+        self.open_panic && matches!(action, Action::CuePanic { .. } | Action::CueHardStop)
+    }
+
+    /// A wrong key from `ip`: wait longer each time, and log it.
+    pub async fn punish(&self, ip: IpAddr, what: &str) {
+        let n = {
+            let mut failures = self.failures.0.lock().expect("failures lock");
+            let n = failures.entry(ip).or_default();
+            *n = n.saturating_add(1);
+            *n
         };
+        tracing::warn!(%ip, failures = n, "{what}: wrong key, refused");
+        tokio::time::sleep(penalty(n)).await;
+    }
+
+    /// A right key from `ip`: the wait starts over.
+    pub fn forgive(&self, ip: IpAddr) {
+        self.failures.0.lock().expect("failures lock").remove(&ip);
+    }
+
+    /// The key in a request's `Authorization` header.
+    fn authorized(&self, request: &Request<Body>) -> Auth {
+        if !self.needs_key() {
+            return Auth::Right(Right::Edit);
+        }
         let Some(value) = request
             .headers()
             .get(header::AUTHORIZATION)
             .and_then(|v| v.to_str().ok())
         else {
-            return false;
+            return Auth::Missing;
         };
         let given = if let Some(token) = value.strip_prefix("Bearer ") {
             token.to_string()
         } else if let Some(basic) = value.strip_prefix("Basic ") {
             let Ok(decoded) = base64::engine::general_purpose::STANDARD.decode(basic.trim()) else {
-                return false;
+                return Auth::Wrong;
             };
             let text = String::from_utf8_lossy(&decoded).into_owned();
             // "user:password"; the user name does not matter.
@@ -159,9 +518,9 @@ impl Access {
                 .map(|(_, p)| p.to_string())
                 .unwrap_or_default()
         } else {
-            return false;
+            return Auth::Wrong;
         };
-        same(password.as_bytes(), given.as_bytes())
+        self.right_of_key(&given).map_or(Auth::Wrong, Auth::Right)
     }
 
     fn opened(&self, page: Page) -> bool {
@@ -188,6 +547,9 @@ impl Access {
 /// The action as it may run, or None. A shortcut run from the keys page
 /// is pinned to its id (the list may change before it runs).
 async fn open_action(access: &Access, service: &Service, action: &Action) -> Option<Action> {
+    if access.open_for(action) {
+        return Some(action.clone());
+    }
     let mixer = access.opened(Page::Mixer)
         && matches!(
             action,
@@ -300,14 +662,26 @@ pub async fn guard(
         }
         Peer::Network => {}
     }
-    if access.authorized(&request) {
-        return next.run(request).await;
+    match access.authorized(&request) {
+        Auth::Right(right) => {
+            access.forgive(peer.ip());
+            return with_right(right, request, next).await;
+        }
+        Auth::Wrong => {
+            access.punish(peer.ip(), "HTTP").await;
+            return unauthorized();
+        }
+        Auth::Missing => {}
+    }
+    if let Some(right) = access.trusted(peer.ip()) {
+        return with_right(right, request, next).await;
     }
     let path = request.uri().path().to_string();
     if request.method() == Method::GET && access.open_read(&path) {
         return next.run(request).await;
     }
-    if request.method() == Method::POST && path == "/api/actions" && !access.open_pages.is_empty() {
+    let open = !access.open_pages.is_empty() || access.open_panic;
+    if request.method() == Method::POST && path == "/api/actions" && open {
         // Read the action to see whether an open page may send it.
         let (parts, body) = request.into_parts();
         let Ok(bytes) = axum::body::to_bytes(body, 64 * 1024).await else {
@@ -324,6 +698,41 @@ pub async fn guard(
         return unauthorized();
     }
     unauthorized()
+}
+
+/// A request with a key of `right`: reading needs `view`, an action its
+/// own right (`right_of`), anything else sent `control`.
+async fn with_right(right: Right, request: Request<Body>, next: Next) -> Response {
+    if right == Right::Edit || request.method() == Method::GET {
+        return next.run(request).await;
+    }
+    let forbidden = |what: &str| {
+        (
+            StatusCode::FORBIDDEN,
+            format!("this key may not {what} (it may {right:?})"),
+        )
+            .into_response()
+    };
+    if request.uri().path() != "/api/actions" {
+        return match right {
+            Right::Control => next.run(request).await,
+            _ => forbidden("send this"),
+        };
+    }
+    let (parts, body) = request.into_parts();
+    // The API's own limit for a JSON body (axum's default).
+    let Ok(bytes) = axum::body::to_bytes(body, 2 * 1024 * 1024).await else {
+        return StatusCode::PAYLOAD_TOO_LARGE.into_response();
+    };
+    // Unreadable actions go on: the API refuses them with its reason.
+    if let Ok(action) = serde_json::from_slice::<Action>(&bytes) {
+        let needs = right_of(&action);
+        if needs > right {
+            return forbidden(&format!("run this action (it needs {needs:?})"));
+        }
+    }
+    next.run(Request::from_parts(parts, Body::from(bytes)))
+        .await
 }
 
 fn unauthorized() -> Response {
@@ -389,13 +798,24 @@ mod tests {
                 base64::engine::general_purpose::STANDARD.encode(s)
             )
         };
-        assert!(access.authorized(&with("Bearer geheim")));
-        assert!(access.authorized(&with(&basic("anyone:geheim"))));
-        assert!(!access.authorized(&with(&basic("geheim:wrong"))));
-        assert!(!access.authorized(&with("Bearer geheim2")));
-        assert!(!access.authorized(&Request::get("/").body(Body::empty()).unwrap()));
-        assert!(access.password_ok("geheim") && !access.password_ok("gehei"));
-        assert!(Access::default().password_ok("anything"));
+        let edit = Auth::Right(Right::Edit);
+        assert_eq!(access.authorized(&with("Bearer geheim")), edit);
+        assert_eq!(access.authorized(&with(&basic("anyone:geheim"))), edit);
+        assert_eq!(
+            access.authorized(&with(&basic("geheim:wrong"))),
+            Auth::Wrong
+        );
+        assert_eq!(access.authorized(&with("Bearer geheim2")), Auth::Wrong);
+        assert_eq!(
+            access.authorized(&Request::get("/").body(Body::empty()).unwrap()),
+            Auth::Missing
+        );
+        assert_eq!(access.right_of_key("geheim"), Some(Right::Edit));
+        assert_eq!(access.right_of_key("gehei"), None);
+        assert_eq!(
+            Access::default().right_of_key("anything"),
+            Some(Right::Edit)
+        );
     }
 
     async fn call(
@@ -452,6 +872,7 @@ mod tests {
             password: Some("p".into()),
             open_pages: vec![Page::Keys],
             internet: false,
+            ..Access::default()
         };
         let cut = r#"{"action":"fade_to_black","duration_ms":0}"#;
         // This machine: no password.
@@ -509,6 +930,7 @@ mod tests {
             password: Some("p".into()),
             open_pages: vec![Page::Titles],
             internet: false,
+            ..Access::default()
         };
         let ftb = r#"{"action":"fade_to_black","duration_ms":0}"#;
         let with = |headers: &[(&str, &str)], body: &str| {
@@ -624,5 +1046,174 @@ mod tests {
             assert!(!access.open_read(path), "{path}");
         }
         assert!(!Access::default().open_read("/tally"));
+    }
+
+    fn keyed() -> Access {
+        Access {
+            keys: vec![
+                AccessKey {
+                    name: "Companion".into(),
+                    key: "steuern-0123456".into(),
+                    right: Right::Control,
+                },
+                AccessKey {
+                    name: "Monitor".into(),
+                    key: "ansehen-0123456".into(),
+                    right: Right::View,
+                },
+            ],
+            open_panic: true,
+            ..Access::default()
+        }
+    }
+
+    #[test]
+    fn actions_need_their_right() {
+        assert_eq!(right_of(&Action::Cut), Right::Control);
+        assert_eq!(right_of(&Action::CuePanic { ms: None }), Right::Control);
+        assert_eq!(right_of(&Action::CueGo { list: None }), Right::Control);
+        assert_eq!(right_of(&Action::SetLock { on: false }), Right::Edit);
+        assert_eq!(
+            right_of(&Action::RemoveInput {
+                input: InputRef::Number(1)
+            }),
+            Right::Edit
+        );
+        assert_eq!(
+            right_of(&Action::OpenShow {
+                path: "/x.lmix".into()
+            }),
+            Right::Edit
+        );
+        let keys = keyed();
+        assert_eq!(keys.right_of_key("steuern-0123456"), Some(Right::Control));
+        assert_eq!(keys.right_of_key("steuern-012345"), None);
+        assert!(keys.needs_key());
+        assert!(penalty(1) < penalty(3) && penalty(30) == Duration::from_secs(5));
+    }
+
+    #[tokio::test]
+    async fn keys_give_their_rights_and_panic_is_open() {
+        let cut = r#"{"action":"fade_to_black","duration_ms":0}"#;
+        let add = r#"{"action":"add_input","source":{"kind":"pattern","pattern":"bars"}}"#;
+        let panic = r#"{"action":"cue_panic"}"#;
+        let lan = "192.168.1.9";
+        let status = |access, request| async move { call(access, lan, request).await.0 };
+
+        assert_eq!(
+            status(keyed(), post(cut, Some("Bearer steuern-0123456"))).await,
+            StatusCode::OK
+        );
+        assert_eq!(
+            status(keyed(), post(add, Some("Bearer steuern-0123456"))).await,
+            StatusCode::FORBIDDEN,
+            "control may not edit"
+        );
+        assert_eq!(
+            status(keyed(), post(cut, Some("Bearer ansehen-0123456"))).await,
+            StatusCode::FORBIDDEN,
+            "view may not act"
+        );
+        let state = Request::get("/api/state")
+            .header(header::AUTHORIZATION, "Bearer ansehen-0123456")
+            .body(Body::empty())
+            .unwrap();
+        assert_eq!(status(keyed(), state).await, StatusCode::OK);
+        // Panic without a key; nothing else.
+        assert_eq!(status(keyed(), post(panic, None)).await, StatusCode::OK);
+        assert_eq!(
+            status(keyed(), post(cut, None)).await,
+            StatusCode::UNAUTHORIZED
+        );
+        let closed = Access {
+            open_panic: false,
+            ..keyed()
+        };
+        assert_eq!(
+            status(closed, post(panic, None)).await,
+            StatusCode::UNAUTHORIZED
+        );
+    }
+
+    #[test]
+    fn trusted_addresses_and_networks() {
+        let trust = |text: &str| text.parse::<Trust>();
+        let deck = trust("192.168.1.20=control").unwrap();
+        let room = trust("192.168.1.0/24=view").unwrap();
+        let v6 = trust("fd00::/8").unwrap();
+        let access = Access {
+            trusted: vec![room, deck, v6],
+            ..keyed()
+        };
+        let ip = |text: &str| text.parse::<IpAddr>().unwrap();
+
+        assert_eq!(
+            access.trusted(ip("192.168.1.20")),
+            Some(Right::Control),
+            "highest"
+        );
+        assert_eq!(access.trusted(ip("192.168.1.77")), Some(Right::View));
+        assert_eq!(access.trusted(ip("::ffff:192.168.1.77")), Some(Right::View));
+        assert_eq!(access.trusted(ip("192.168.2.1")), None);
+        assert_eq!(
+            access.trusted(ip("fd12::1")),
+            Some(Right::Control),
+            "control by default"
+        );
+        assert_eq!(access.trusted(ip("fe80::1")), None);
+        assert!(trust("0.0.0.0/0=edit").unwrap().contains(ip("10.1.2.3")));
+        assert!(trust("192.168.1.0/33").is_err());
+        assert!(trust("192.168.1.20=admin").is_err());
+        assert!(trust("deck.lan").is_err());
+    }
+
+    #[tokio::test]
+    async fn a_trusted_address_needs_no_key() {
+        let cut = r#"{"action":"fade_to_black","duration_ms":0}"#;
+        let add = r#"{"action":"add_input","source":{"kind":"pattern","pattern":"bars"}}"#;
+        let access = || Access {
+            trusted: vec!["192.168.1.20=control".parse().unwrap()],
+            ..keyed()
+        };
+        let status = |from, request| async move { call(access(), from, request).await.0 };
+
+        assert_eq!(
+            status("192.168.1.20", post(cut, None)).await,
+            StatusCode::OK
+        );
+        assert_eq!(
+            status("192.168.1.20", post(add, None)).await,
+            StatusCode::FORBIDDEN,
+            "its right is control"
+        );
+        assert_eq!(
+            status("192.168.1.21", post(cut, None)).await,
+            StatusCode::UNAUTHORIZED,
+            "not on the list"
+        );
+        assert_eq!(
+            status("192.168.1.20", post(cut, Some("Bearer falsch-0123456"))).await,
+            StatusCode::UNAUTHORIZED,
+            "a wrong key is wrong there too"
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn wrong_keys_wait_longer() {
+        let access = keyed();
+        let ip: IpAddr = "192.168.1.9".parse().unwrap();
+        let t = tokio::time::Instant::now();
+        access.punish(ip, "test").await;
+        access.punish(ip, "test").await;
+        access.punish(ip, "test").await;
+        assert_eq!(t.elapsed(), Duration::from_millis(100 + 200 + 400));
+        access.forgive(ip);
+        let t = tokio::time::Instant::now();
+        access.punish(ip, "test").await;
+        assert_eq!(
+            t.elapsed(),
+            Duration::from_millis(100),
+            "a right key starts over"
+        );
     }
 }

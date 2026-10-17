@@ -14,7 +14,7 @@ KanteDialog {
     id: dialog
 
     required property var act
-    /** Channel 1–4 and its settings (`overlay_channels` of the state); set
+    /** Channel 1–8 and its settings (`overlay_channels` of the state); set
      *  before `open()`. */
     property int channel: 1
     property var settings: null

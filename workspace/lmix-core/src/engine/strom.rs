@@ -84,13 +84,37 @@ pub struct StromEngine {
     live_dir: PathBuf,
     /// One live flow is set up at a time (two Consoles asking at once).
     live_setup: Mutex<()>,
+    /// Mute of each audio mixer channel and bus as last sent (see
+    /// [`level_writes`]); forgotten at every start.
+    mutes: std::sync::Mutex<std::collections::HashMap<String, bool>>,
+    /// Program format the mixer is built for (OUT.1).
+    format: std::sync::Mutex<lmix_types::MasterFormat>,
+    /// Multiview layout of the mixer (OUT.10), with `format`.
+    multiview: std::sync::Mutex<lmix_types::MultiviewLayout>,
+    /// Sample rate of the audio mixer (AUD.17), with `format`.
+    sample_rate: std::sync::Mutex<u32>,
+    /// Mixer inputs of the last `start`.
+    slots: AtomicUsize,
+}
+
+/// Longest wait for one engine call. Commands run under the switcher
+/// lock, so a call that never returns would freeze lmix-core; the slowest
+/// real ones (a recording drained with EOS, a mixer rebuilt) take seconds.
+const ENGINE_CALL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
+
+/// HTTP client for strom's API: a hung call fails after `timeout`.
+fn engine_client(timeout: std::time::Duration) -> reqwest::Client {
+    reqwest::Client::builder()
+        .timeout(timeout)
+        .build()
+        .expect("HTTP client builds")
 }
 
 impl StromEngine {
     pub fn new(base_url: String, backend: MixerBackend, monitor: MonitorOut) -> Self {
         Self {
             base_url,
-            http: reqwest::Client::new(),
+            http: engine_client(ENGINE_CALL_TIMEOUT),
             backend,
             monitor,
             black: AtomicUsize::new(0),
@@ -101,6 +125,11 @@ impl StromEngine {
             metering: AtomicBool::new(false),
             live_dir: default_live_dir(),
             live_setup: Mutex::new(()),
+            mutes: Default::default(),
+            format: Default::default(),
+            multiview: Default::default(),
+            sample_rate: std::sync::Mutex::new(lmix_types::output::default_sample_rate()),
+            slots: AtomicUsize::new(0),
         }
     }
 
@@ -248,10 +277,11 @@ impl StromEngine {
 
         // strom reads the inputs only when no composition is involved.
         let body = TriggerTransitionRequest {
-            from_input: state.program_input.unwrap_or(0),
-            to_input: to.as_input().unwrap_or(0),
+            from_input: Some(state.program_input.unwrap_or(0)),
+            to_input: Some(to.as_input().unwrap_or(0)),
             transition_type: wire_name(effect).into(),
             duration_ms: u64::from(duration_ms),
+            stinger_clip: None,
         };
 
         // Right after start strom cannot place a transition until the first
@@ -348,12 +378,77 @@ impl StromEngine {
         ramp_ms: u32,
     ) -> Result<(), EngineError> {
         let channel = flows::audio_channel(slot);
-        let fader = (format!("ch{channel}_fader"), PropertyValue::Float(gain));
-        let mute = (format!("ch{channel}_mute"), PropertyValue::Bool(muted));
-        let order = if muted { [fader, mute] } else { [mute, fader] };
-        for property in order {
+        let level = Level {
+            fader: format!("ch{channel}_fader"),
+            mute: format!("ch{channel}_mute"),
+            gain,
+            muted,
+        };
+        self.set_level(level, ramp_ms).await
+    }
+
+    /// The mixer flow for the last `start`, the current format and
+    /// multiview.
+    fn mixer_flow(&self) -> Flow {
+        let format = *self.format.lock().expect("format lock");
+        let multiview = *self.multiview.lock().expect("multiview lock");
+        let sample_rate = *self.sample_rate.lock().expect("rate lock");
+        flows::mixer_flow(
+            self.slots.load(Ordering::Relaxed),
+            self.backend,
+            self.monitor,
+            format,
+            multiview,
+            sample_rate,
+        )
+    }
+
+    /// strom starts a fresh mixer on input 0; the restore that follows
+    /// puts the show's program (or black) there. Transitions need a
+    /// playing pipeline, so wait for it. Its mutes are unknown again.
+    async fn build_mixer(&self, flow: &Flow) -> Result<(), EngineError> {
+        self.mutes.lock().expect("mutes lock").clear();
+        self.put_flow(flow).await?;
+        self.wait_playing(flow.id).await
+    }
+
+    /// Program in `format` (OUT.1): a new mixer only when it differs.
+    async fn set_format(
+        &self,
+        format: lmix_types::MasterFormat,
+        multiview: lmix_types::MultiviewLayout,
+        sample_rate: u32,
+    ) -> Result<(), EngineError> {
+        {
+            let mut current = self.format.lock().expect("format lock");
+            let mut current_view = self.multiview.lock().expect("multiview lock");
+            let mut current_rate = self.sample_rate.lock().expect("rate lock");
+            if *current == format && *current_view == multiview && *current_rate == sample_rate {
+                return Ok(());
+            }
+            *current = format;
+            *current_view = multiview;
+            *current_rate = sample_rate;
+        }
+        let flow = self.mixer_flow();
+        self.build_mixer(&flow).await
+    }
+
+    /// A fader and its mute on the audio mixer, one write at a time.
+    async fn set_level(&self, level: Level, ramp_ms: u32) -> Result<(), EngineError> {
+        let known = self
+            .mutes
+            .lock()
+            .expect("mutes lock")
+            .get(&level.mute)
+            .copied();
+        for property in level_writes(&level, known) {
             self.patch_audio_mixer(vec![property], ramp_ms).await?;
         }
+        self.mutes
+            .lock()
+            .expect("mutes lock")
+            .insert(level.mute, level.muted);
         Ok(())
     }
 
@@ -468,8 +563,8 @@ impl StromEngine {
         channel: usize,
         rect: Option<BoxRect>,
     ) -> Result<(), EngineError> {
-        let (w, h) = flows::PROGRAM_SIZE;
-        let (w, h) = (f64::from(w), f64::from(h));
+        let format = *self.format.lock().expect("format lock");
+        let (w, h) = (f64::from(format.width), f64::from(format.height));
         let rect = rect.unwrap_or(BoxRect {
             x: 0.0,
             y: 0.0,
@@ -687,6 +782,9 @@ impl Engine for StromEngine {
     /// Keep a running mixer with the right slot count (no picture drop when
     /// lmix-core restarts); rebuild it otherwise.
     async fn start(&self, slots: usize) -> Result<(), EngineError> {
+        // A reused or new mixer: its mutes are unknown, the restore sends
+        // them all.
+        self.mutes.lock().expect("mutes lock").clear();
         if !self.metering.swap(true, Ordering::Relaxed) {
             let ws_url = self.base_url.replacen("http", "ws", 1) + "/api/ws";
             tokio::spawn(meters::follow(
@@ -702,21 +800,26 @@ impl Engine for StromEngine {
 
         let black = flows::black_input(slots);
         self.black.store(black, Ordering::Relaxed);
+        self.slots.store(slots, Ordering::Relaxed);
 
-        let wanted = flows::mixer_flow(slots, self.backend, self.monitor);
-        let current = self.get_flow(wanted.id).await?;
+        let current = self.get_flow(flows::mixer_id()).await?;
         let reusable = current.as_ref().is_some_and(|f| {
             f.running && f.name == flows::MIXER_NAME && slot_count(f) == Some(black + 1)
         });
-        if reusable {
+        // Keep a running mixer in whatever format it has: the restore that
+        // follows brings the show's (OUT.1), rebuilding only if it differs.
+        if let (true, Some(format)) = (reusable, current.as_ref().and_then(flows::format_of)) {
+            *self.format.lock().expect("format lock") = format;
+            if let Some(multiview) = current.as_ref().map(flows::multiview_of) {
+                *self.multiview.lock().expect("multiview lock") = multiview;
+            }
+            if let Some(rate) = current.as_ref().and_then(flows::sample_rate_of) {
+                *self.sample_rate.lock().expect("rate lock") = rate;
+            }
             return Ok(());
         }
-
-        // strom starts a fresh mixer on input 0; the restore that follows
-        // every start puts the show's program (or black) there. Transitions
-        // need a playing pipeline, so wait for it.
-        self.put_flow(&wanted).await?;
-        self.wait_playing(wanted.id).await
+        let wanted = self.mixer_flow();
+        self.build_mixer(&wanted).await
     }
 
     async fn run(&self, command: &Command) -> Result<(), EngineError> {
@@ -749,6 +852,17 @@ impl Engine for StromEngine {
             } => self.set_channel(*slot, *gain, *muted, *ramp_ms).await,
             Command::SetListen { slot, listen } => self.set_listen(*slot, *listen).await,
             Command::Transport { slot, transport } => self.transport(*slot, *transport).await,
+            Command::SetAtEnd {
+                slot,
+                items,
+                at_end,
+            } => {
+                let body = serde_json::json!({
+                    "files": items,
+                    "loop_playlist": at_end.is_loop(),
+                });
+                self.player_call(*slot, "playlist", body).await
+            }
             Command::Seek { slot, position_ms } => {
                 self.player_call(
                     *slot,
@@ -769,8 +883,9 @@ impl Engine for StromEngine {
                 feed,
                 aux,
             } => {
-                self.put_flow(&flows::output_flow(*id, spec, *feed, *aux, self.backend))
-                    .await
+                let framerate = self.format.lock().expect("format lock").framerate;
+                let flow = flows::output_flow(*id, spec, *feed, *aux, self.backend, framerate);
+                self.put_flow(&flow).await
             }
             Command::StopOutput { id } => self.drop_flow(flows::output_flow_id(*id)).await,
             Command::Overlay {
@@ -805,12 +920,41 @@ impl Engine for StromEngine {
                 self.patch_audio_mixer(vec![(name, PropertyValue::Float(*gain))], AUDIO_RAMP_MS)
                     .await
             }
-            Command::SetAuxBus { bus, gain, mute } => {
-                let properties = vec![
-                    (format!("aux{}_fader", bus + 1), PropertyValue::Float(*gain)),
-                    (format!("aux{}_mute", bus + 1), PropertyValue::Bool(*mute)),
-                ];
-                self.patch_audio_mixer(properties, AUDIO_RAMP_MS).await
+            Command::SetAuxBus {
+                bus,
+                gain,
+                mute,
+                ramp_ms,
+            } => {
+                let level = Level {
+                    fader: format!("aux{}_fader", bus + 1),
+                    mute: format!("aux{}_mute", bus + 1),
+                    gain: *gain,
+                    muted: *mute,
+                };
+                self.set_level(level, *ramp_ms).await
+            }
+            Command::SetFormat {
+                format,
+                multiview,
+                sample_rate,
+            } => self.set_format(*format, *multiview, *sample_rate).await,
+            Command::SetMonitor { gain } => {
+                let fader = ("monitor_fader".to_string(), PropertyValue::Float(*gain));
+                self.patch_audio_mixer(vec![fader], AUDIO_RAMP_MS).await
+            }
+            Command::SetMaster {
+                gain,
+                mute,
+                ramp_ms,
+            } => {
+                let level = Level {
+                    fader: "main_fader".into(),
+                    mute: "main_mute".into(),
+                    gain: *gain,
+                    muted: *mute,
+                };
+                self.set_level(level, *ramp_ms).await
             }
         }
     }
@@ -1027,10 +1171,92 @@ pub fn default_live_dir() -> PathBuf {
         .join("live")
 }
 
+/// A fader of the audio mixer with its mute: names and wanted values.
+struct Level {
+    fader: String,
+    mute: String,
+    gain: f64,
+    muted: bool,
+}
+
+/// What to write for `level`, in order. strom takes every `mute=false`
+/// as an unmute: it fades in from silence to the level before the mute,
+/// even on a channel that was not muted, and a fader ramp that follows
+/// starts from that silence (AUD.14: a fade from 100 to 0 stayed silent).
+/// So the mute goes only when it differs from `known` (the last sent;
+/// `None` after a start); unmute before the fader, mute after it.
+fn level_writes(level: &Level, known: Option<bool>) -> Vec<(String, PropertyValue)> {
+    let fader = (level.fader.clone(), PropertyValue::Float(level.gain));
+    if known == Some(level.muted) {
+        return vec![fader];
+    }
+    let mute = (level.mute.clone(), PropertyValue::Bool(level.muted));
+    if level.muted {
+        vec![fader, mute]
+    } else {
+        vec![mute, fader]
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// An engine that takes a request and never answers fails the call
+    /// instead of holding lmix-core (and its switcher lock) for good.
+    #[tokio::test]
+    async fn an_engine_call_does_not_wait_forever() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            let mut held = Vec::new();
+            while let Ok((stream, _)) = listener.accept().await {
+                held.push(stream);
+            }
+        });
+        let client = engine_client(std::time::Duration::from_millis(300));
+        let started = std::time::Instant::now();
+        let result = client.get(format!("http://{addr}/api/flows")).send().await;
+        assert!(result.is_err());
+        assert!(started.elapsed() < std::time::Duration::from_secs(5));
+    }
     use strom_types::api::{SrtCallerStats, SrtConnectionStats};
+
+    #[test]
+    fn mutes_go_only_when_they_change() {
+        let level = |muted| Level {
+            fader: "main_fader".into(),
+            mute: "main_mute".into(),
+            gain: 0.5,
+            muted,
+        };
+        let names = |writes: Vec<(String, PropertyValue)>| -> Vec<String> {
+            writes.into_iter().map(|(name, _)| name).collect()
+        };
+
+        assert_eq!(
+            names(level_writes(&level(false), Some(false))),
+            ["main_fader"]
+        );
+        assert_eq!(
+            names(level_writes(&level(true), Some(true))),
+            ["main_fader"]
+        );
+        assert_eq!(
+            names(level_writes(&level(false), Some(true))),
+            ["main_mute", "main_fader"],
+            "unmute first"
+        );
+        assert_eq!(
+            names(level_writes(&level(true), Some(false))),
+            ["main_fader", "main_mute"],
+            "mute last"
+        );
+        assert_eq!(
+            names(level_writes(&level(false), None)),
+            ["main_mute", "main_fader"],
+            "after a start: everything"
+        );
+    }
 
     fn caller(rate_mbps: f64, lost: u64, rtt_ms: f64) -> SrtCallerStats {
         SrtCallerStats {

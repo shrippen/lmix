@@ -5,7 +5,7 @@
 
 use lmix_types::{
     Container, DisplayMode, Effect, InputColor, InputPress, OutputSource, OutputSpec, SourceSpec,
-    TestPattern,
+    TestPattern, VideoEncoding,
 };
 use serde::{Deserialize, Serialize};
 
@@ -61,7 +61,15 @@ const SOURCE_KINDS: [&str; 11] = [
     "audio_device",
 ];
 
-const OUTPUT_KINDS: [&str; 6] = ["srt", "record", "ndi", "window", "fullscreen", "drm"];
+const OUTPUT_KINDS: [&str; 7] = [
+    "srt",
+    "rtmp",
+    "record",
+    "ndi",
+    "window",
+    "fullscreen",
+    "drm",
+];
 
 /// The source the "add input" form describes; `None` while a needed field
 /// is empty. `value` is the pattern name, the colour (`#rrggbb`), or the
@@ -128,11 +136,24 @@ pub struct OutputForm {
     /// Aux bus for the sound; 0 keeps the source's own.
     #[serde(default)]
     pub aux: u8,
+    /// Codec, rate control, keyframes of SRT and recordings (STR.3).
+    #[serde(default)]
+    pub encoding: VideoEncoding,
+    /// Stream key of an RTMP output, apart from its server.
+    #[serde(default)]
+    pub key: String,
 }
 
 /// The output the "add output" form describes; `None` while a needed
 /// field is empty.
-pub fn output_of(kind: &str, text: &str, container: &str, video_kbps: u32) -> Option<OutputSpec> {
+pub fn output_of(
+    kind: &str,
+    text: &str,
+    container: &str,
+    video_kbps: u32,
+    encoding: VideoEncoding,
+    key: &str,
+) -> Option<OutputSpec> {
     let text = text.trim().to_string();
     let needs_text = !matches!(kind, "window" | "fullscreen");
     if needs_text && text.is_empty() {
@@ -147,12 +168,20 @@ pub fn output_of(kind: &str, text: &str, container: &str, video_kbps: u32) -> Op
         "srt" => OutputSpec::Srt {
             uri: text,
             video_kbps,
+            encoding,
+        },
+        "rtmp" => OutputSpec::Rtmp {
+            url: text,
+            key: key.trim().to_string(),
+            video_kbps,
+            encoding,
         },
         "record" => OutputSpec::Record {
             folder: text,
             container: serde_json::from_value(serde_json::Value::String(container.into()))
                 .unwrap_or_default(),
             video_kbps,
+            encoding,
         },
         "ndi" => OutputSpec::Ndi { name: text },
         "window" => OutputSpec::Display {
@@ -170,10 +199,11 @@ pub fn output_of(kind: &str, text: &str, container: &str, video_kbps: u32) -> Op
     })
 }
 
-/// Program, or one input by id (ISO, MultiCorder).
+/// Program, the multiview, or one input by id (ISO, MultiCorder).
 pub fn output_source_of(input: &str) -> OutputSource {
     match input.trim() {
         "" | "program" => OutputSource::Program,
+        "multiview" => OutputSource::Multiview,
         id => serde_json::from_value(serde_json::Value::String(id.into()))
             .map(OutputSource::Input)
             .unwrap_or(OutputSource::Program),
@@ -230,27 +260,39 @@ mod tests {
     #[test]
     fn outputs_from_the_form() {
         assert_eq!(
-            output_of("window", "", "mkv", 0),
+            output_of("window", "", "mkv", 0, VideoEncoding::default(), ""),
             Some(OutputSpec::Display {
                 mode: DisplayMode::Window
             })
         );
-        assert_eq!(output_of("drm", "", "mkv", 0), None, "needs a connector");
-        assert_eq!(output_of("drm", "x", "mkv", 0), None);
         assert_eq!(
-            output_of("record", "show", "mp4", 0),
+            output_of("drm", "", "mkv", 0, VideoEncoding::default(), ""),
+            None,
+            "needs a connector"
+        );
+        assert_eq!(
+            output_of("drm", "x", "mkv", 0, VideoEncoding::default(), ""),
+            None
+        );
+        assert_eq!(
+            output_of("record", "show", "mp4", 0, VideoEncoding::default(), ""),
             Some(OutputSpec::Record {
                 folder: "show".into(),
                 container: Container::Mp4,
-                video_kbps: DEFAULT_VIDEO_KBPS
+                video_kbps: DEFAULT_VIDEO_KBPS,
+                encoding: VideoEncoding::default(),
             })
         );
-        assert_eq!(output_of("srt", " ", "mkv", 8000), None);
+        assert_eq!(
+            output_of("srt", " ", "mkv", 8000, VideoEncoding::default(), ""),
+            None
+        );
     }
 
     #[test]
     fn output_source_of_program_or_input() {
         assert_eq!(output_source_of(""), OutputSource::Program);
+        assert_eq!(output_source_of("multiview"), OutputSource::Multiview);
         let id = lmix_types::InputId::new();
         assert_eq!(output_source_of(&id.to_string()), OutputSource::Input(id));
     }

@@ -4,7 +4,7 @@ import QtQuick.Controls as QQC2
 import org.kde.kirigami as Kirigami
 import Kante
 
-/** New output: stream, recording, NDI or screen, of program or one input. */
+/** New output: stream, recording, NDI or screen, of program, the multiview or one input. */
 KanteDialog {
     id: dialog
 
@@ -15,11 +15,12 @@ KanteDialog {
     readonly property var containers: Texts.choices("containers", core.choices("containers"))
     readonly property string kind: kinds[kindBox.currentIndex] ? kinds[kindBox.currentIndex].value : "srt"
     readonly property bool needsText: kind !== "window" && kind !== "fullscreen"
-    readonly property bool encodes: kind === "srt" || kind === "record"
+    readonly property bool encodes: kind === "srt" || kind === "rtmp" || kind === "record"
     /** Screens show picture only. */
     readonly property bool carriesSound: kind !== "window" && kind !== "fullscreen" && kind !== "drm"
     readonly property var hints: ({
         srt: "srt://host:9000",
+        rtmp: "rtmp://a.rtmp.youtube.com/live2",
         record: qsTr("folder in the engine's media directory"),
         ndi: qsTr("NDI name, e.g. lmix PGM"),
         drm: qsTr("DRM connector id")
@@ -38,7 +39,10 @@ KanteDialog {
     }
 
     onAccepted: {
-        var source = sourceBox.currentIndex <= 0 ? "program" : dialog.inputs[sourceBox.currentIndex - 1].id
+        // Program, Multiview, then the inputs.
+        var source = sourceBox.currentIndex <= 0 ? "program"
+                   : sourceBox.currentIndex === 1 ? "multiview"
+                   : dialog.inputs[sourceBox.currentIndex - 2].id
         var container = dialog.containers[containerBox.currentIndex] ? dialog.containers[containerBox.currentIndex].value : "mkv"
         core.addOutput(JSON.stringify({
             kind: dialog.kind,
@@ -46,6 +50,12 @@ KanteDialog {
             source: source,
             container: container,
             video_kbps: kbps.value,
+            key: keyField.text,
+            encoding: {
+                codec: codecBox.currentIndex === 1 ? "h265" : "h264",
+                rate: rateBox.currentIndex === 1 ? "cbr" : "vbr",
+                keyframe_ms: Math.round(keyframes.value * 1000)
+            },
             name: nameField.text,
             aux: dialog.carriesSound ? soundBox.currentIndex : 0
         }))
@@ -76,12 +86,20 @@ KanteDialog {
             Layout.fillWidth: true
             placeholderText: dialog.hints[dialog.kind] || ""
         }
+        // STR.2: the platform's stream key, apart from the server.
+        KanteTextField {
+            id: keyField
+            visible: dialog.kind === "rtmp"
+            Layout.fillWidth: true
+            placeholderText: qsTr("Stream key")
+            echoMode: TextInput.Password
+        }
 
         KanteSectionLabel { text: qsTr("Carries") }
         QQC2.ComboBox {
             id: sourceBox
             Layout.fillWidth: true
-            model: [qsTr("Program")].concat(dialog.inputs.map(i => i.number + " " + i.name))
+            model: [qsTr("Program"), qsTr("Multiview")].concat(dialog.inputs.map(i => i.number + " " + i.name))
             KanteFieldSkin { control: sourceBox }
         }
 
@@ -94,7 +112,7 @@ KanteDialog {
             visible: dialog.carriesSound
             Layout.fillWidth: true
             // Index = aux bus number; 0 keeps the source's own sound.
-            model: [qsTr("As carried"), qsTr("Aux 1 (before the faders)"), qsTr("Aux 2 (after the faders)")]
+            model: [qsTr("As carried")].concat(Texts.auxNames())
             KanteFieldSkin { control: soundBox }
         }
 
@@ -111,11 +129,36 @@ KanteDialog {
                 KanteFieldSkin { control: kbps }
             }
             QQC2.ComboBox {
+                id: codecBox
+                model: ["H.264", "H.265 (HEVC)"]
+                KanteFieldSkin { control: codecBox }
+            }
+            QQC2.ComboBox {
                 id: containerBox
                 visible: dialog.kind === "record"
                 model: dialog.containers
                 textRole: "label"
                 KanteFieldSkin { control: containerBox }
+            }
+        }
+
+        // STR.3: constant bitrate for platforms and fixed links, keyframes
+        // every so many seconds (0: the encoder's choice).
+        RowLayout {
+            visible: dialog.encodes
+            QQC2.ComboBox {
+                id: rateBox
+                model: [qsTr("Variable bitrate"), qsTr("Constant bitrate")]
+                KanteFieldSkin { control: rateBox }
+            }
+            KanteSectionLabel { text: qsTr("Keyframe every (s)") }
+            QQC2.SpinBox {
+                id: keyframes
+                from: 0
+                to: 10
+                value: 2
+                editable: true
+                KanteFieldSkin { control: keyframes }
             }
         }
 

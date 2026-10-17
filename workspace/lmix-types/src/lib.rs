@@ -11,6 +11,8 @@
 
 pub mod action;
 pub mod automation;
+pub mod cue;
+pub mod feed;
 pub mod graphics;
 pub mod input;
 pub mod layout;
@@ -19,28 +21,38 @@ pub mod output;
 pub mod ptz;
 pub mod shortcut;
 pub mod state;
+pub mod target;
+pub mod zone;
 
 pub use action::{
-    action_group, Action, ActionError, Effect, StingerSpec, TransitionSlot, ACTION_GROUPS,
+    action_group, Action, ActionError, Effect, StingerSpec, TransitionSlot, VolumeTarget,
+    ACTION_GROUPS, FADE_MAX_MS,
 };
-pub use automation::{Cue, CueList, Trigger, TriggerOn};
+pub use automation::{Trigger, TriggerOn};
+pub use cue::{
+    Cue, CueEvent, CueId, CueKind, CueList, CueTarget, Follow, GroupMode, RunPhase, RunningCue,
+    StandbyMove, StopMode, StopOthers, StopScope,
+};
+pub use feed::{Feed, FeedMessage, FeedOn};
 pub use graphics::{
     BindingSpec, Blend, DataFormat, DataSource, DataSourceSpec, DataTable, Dataset, Easing,
     FieldBinding, FieldKind, Graphics, LayerTransform, Template, TemplateField, TemplateTexts,
     TitleCall, TitleData, TitleLayer, TitlePhase, TitleTrigger,
 };
 pub use input::{
-    AutoPlay, AuxBus, ChannelStrip, Compressor, Device, DeviceKind, Eq4, Gate, Hpf, Ingest, Input,
-    InputAudio, InputColor, InputId, InputPress, InputRef, InputStatus, Listen, Look, SignalLoss,
-    SourceSpec, TestPattern, Transport,
+    AtEnd, AutoPlay, AuxBus, ChannelStrip, Compressor, Device, DeviceKind, Eq4, Gate, Hpf, Ingest,
+    Input, InputAudio, InputColor, InputId, InputPress, InputRef, InputStatus, Listen, Look,
+    Playback, PlaybackState, SignalLoss, SourceSpec, TestPattern, Transport,
 };
 pub use layout::{
-    BoxCrop, BoxRect, BoxSpec, Layout, LayoutBox, LayoutTemplate, TemplateBox, TemplateInput,
+    BoxCrop, BoxRect, BoxShown, BoxSpec, Layout, LayoutBox, LayoutTemplate, TemplateBox,
+    TemplateInput,
 };
 pub use midi::{MidiBinding, MidiKind, MidiMessage};
 pub use output::{
-    Container, DisplayMode, Output, OutputId, OutputRef, OutputSource, OutputSpec, OutputStats,
-    OutputStatus,
+    Container, DisplayMode, Framerate, MasterFormat, MultiviewLayout, MultiviewMeters, Output,
+    OutputGroup, OutputId, OutputRef, OutputSource, OutputSpec, OutputStats, OutputStatus,
+    ProgramSide, RateMode, VideoCodec, VideoEncoding,
 };
 pub use ptz::{PtzFocus, PtzProtocol, PtzSpec};
 pub use shortcut::{Shortcut, ShortcutSpec};
@@ -48,3 +60,5 @@ pub use state::{
     Event, InputLevel, Latency, Levels, LiveFeed, OverlayChannel, QuickPlay, ShowState, Stinger,
     Transition,
 };
+pub use target::{HttpMethod, Target, TargetKind, TargetResult, TargetSpec};
+pub use zone::{Zone, ZoneOutput, ZonePatch, ZoneState};

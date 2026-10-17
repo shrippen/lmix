@@ -1,7 +1,7 @@
 //! The show: what gets saved to and loaded from a `.lmix` file (SHW.1–2).
 //!
 //! ```json
-//! { "format": "lmix-show", "version": 1, "show": { "inputs": [...], ... } }
+//! { "format": "lmix-show", "version": 2, "show": { "inputs": [...], ... } }
 //! ```
 //!
 //! Plain, versioned JSON so people and tools can read it. Media are
@@ -12,17 +12,19 @@ use std::path::Path;
 use lmix_types::action::{OVERLAY_CHANNELS, TRANSITION_SLOTS};
 use lmix_types::input::AUX_BUSES;
 use lmix_types::{
-    Action, AutoPlay, AuxBus, ChannelStrip, Cue, DataSourceSpec, Dataset, Effect, FieldBinding,
-    InputAudio, InputColor, InputId, InputPress, LayerTransform, LayoutBox, Look, MidiBinding,
-    OutputId, OutputSource, OutputSpec, OverlayChannel, QuickPlay, SignalLoss, SourceSpec,
-    TitleData, TitlePhase, TitleTrigger, Transition, TransitionSlot, Trigger,
+    Action, AtEnd, AutoPlay, AuxBus, ChannelStrip, Cue, DataSourceSpec, Dataset, Effect,
+    FieldBinding, InputAudio, InputColor, InputId, InputPress, LayerTransform, LayoutBox, Look,
+    MidiBinding, OutputId, OutputSource, OutputSpec, OverlayChannel, QuickPlay, SignalLoss,
+    SourceSpec, TitleData, TitlePhase, TitleTrigger, Transition, TransitionSlot, Trigger,
 };
 use serde::{Deserialize, Serialize};
 
 /// Marker of a show file.
 const FILE_FORMAT: &str = "lmix-show";
 /// Current file version; older versions get migrated on load.
-const FILE_VERSION: u32 = 1;
+///
+/// 2: cues of the show mode; a cue's `label` became `name` (CUE.21).
+const FILE_VERSION: u32 = 2;
 /// Default length of a timed transition.
 const DEFAULT_TRANSITION_MS: u32 = 500;
 
@@ -42,6 +44,9 @@ pub struct ShowInput {
     /// Play, restart, pause on and off air (INP.11).
     #[serde(default, skip_serializing_if = "AutoPlay::is_off")]
     pub auto_play: AutoPlay,
+    /// Loop or hold the last frame at the end (INP.10).
+    #[serde(default, skip_serializing_if = "AtEnd::is_loop")]
+    pub at_end: AtEnd,
     /// What a click on it does (INP.8).
     #[serde(
         default = "InputPress::click",
@@ -53,7 +58,7 @@ pub struct ShowInput {
     pub go: InputPress,
     #[serde(default)]
     pub strip: ChannelStrip,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "padded")]
     pub sends: [u8; AUX_BUSES],
     #[serde(default)]
     pub look: Look,
@@ -79,23 +84,71 @@ pub struct Show {
     #[serde(default)]
     pub outputs: Vec<ShowOutput>,
     /// What each overlay channel shows, as program is kept too.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "padded")]
     pub overlays: [Option<InputId>; OVERLAY_CHANNELS as usize],
     /// Effect, length, auto off and place per channel (OVL.2).
-    #[serde(default, skip_serializing_if = "all_default")]
+    #[serde(
+        default,
+        skip_serializing_if = "all_default",
+        deserialize_with = "padded"
+    )]
     pub overlay_channels: [OverlayChannel; OVERLAY_CHANNELS as usize],
     /// What each channel gets with the next take (OVL.3), as preview is
     /// kept too.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "padded")]
     pub overlay_preview: [Option<InputId>; OVERLAY_CHANNELS as usize],
-    #[serde(default)]
+    #[serde(default, deserialize_with = "padded")]
     pub aux_buses: [AuxBus; AUX_BUSES],
+    /// Master of program sound (AUD.2).
+    #[serde(default)]
+    pub master: AuxBus,
+    /// Picture size and rate of program (OUT.1).
+    #[serde(default)]
+    pub format: lmix_types::MasterFormat,
+    /// Layout of the multiview (OUT.10).
+    #[serde(
+        default,
+        skip_serializing_if = "lmix_types::MultiviewLayout::is_default"
+    )]
+    pub multiview: lmix_types::MultiviewLayout,
+    /// Sample rate of the audio mixer, Hz (AUD.17).
+    #[serde(
+        default = "lmix_types::output::default_sample_rate",
+        skip_serializing_if = "is_default_rate"
+    )]
+    pub sample_rate: u32,
+    /// Volume of the monitor bus (AUD.4).
+    #[serde(default = "lmix_types::input::full_volume")]
+    pub monitor_volume: u8,
+    /// Delay of new inputs with sound (AUD.6).
+    #[serde(default)]
+    pub default_delay_ms: u32,
     #[serde(default)]
     pub layouts: Vec<ShowLayout>,
     #[serde(default)]
     pub shortcuts: Vec<ShowShortcut>,
     #[serde(default)]
     pub cue_lists: Vec<ShowCueList>,
+    /// Shortest gap between two GOs (RUN.6).
+    #[serde(default = "default_go_guard")]
+    pub go_guard_ms: u32,
+    /// Whether GO also waits for the button to be let go (RUN.6).
+    #[serde(default, skip_serializing_if = "is_time")]
+    pub go_rearm: lmix_types::cue::GoRearm,
+    /// Panic time (SAF.2).
+    #[serde(default = "default_panic")]
+    pub panic_ms: u32,
+    /// The list that runs with every panic and hard stop (SAF.4).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub emergency_list: Option<InputId>,
+    /// Sound zones; their devices are this machine's (SND.10).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub zones: Vec<lmix_types::Zone>,
+    /// Script folder whose lists lmix-script keeps loading (SSH.2). Its
+    /// lists stay in the show too: without the tool the show still has
+    /// its cues, and standby survives a restart (SAF.6).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub script_folder: Option<String>,
     /// MIDI controller on the T-bar.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub midi_tbar: Option<MidiBinding>,
@@ -159,6 +212,12 @@ pub struct ShowCueList {
     pub id: InputId,
     pub name: String,
     pub cues: Vec<Cue>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+    /// Where standby stood, so a restart goes on there (SAF.6); nothing
+    /// runs after a load.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub standby: Option<lmix_types::CueId>,
 }
 
 /// One shortcut as saved.
@@ -198,7 +257,7 @@ pub struct ShowOutput {
     pub spec: OutputSpec,
     #[serde(default)]
     pub source: OutputSource,
-    /// Sound from this aux bus (1–2) instead of the source's own.
+    /// Sound from this aux bus (1–7, A–G) instead of the source's own.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub aux: Option<u8>,
 }
@@ -216,9 +275,21 @@ impl Default for Show {
             overlay_channels: Default::default(),
             overlay_preview: Default::default(),
             aux_buses: Default::default(),
+            master: Default::default(),
+            format: Default::default(),
+            multiview: Default::default(),
+            sample_rate: lmix_types::output::default_sample_rate(),
+            monitor_volume: lmix_types::input::full_volume(),
+            default_delay_ms: 0,
             layouts: Vec::new(),
             shortcuts: Vec::new(),
             cue_lists: Vec::new(),
+            go_guard_ms: default_go_guard(),
+            go_rearm: Default::default(),
+            panic_ms: default_panic(),
+            emergency_list: None,
+            zones: Vec::new(),
+            script_folder: None,
             midi_tbar: None,
             graphics: Vec::new(),
             datasets: Vec::new(),
@@ -227,11 +298,46 @@ impl Default for Show {
     }
 }
 
+/// A per-channel array saved with fewer entries (shows from before eight
+/// overlay channels, OVL.1, or seven aux buses, AUD.2): the missing ones
+/// get their default.
+fn padded<'de, D, T, const N: usize>(deserializer: D) -> Result<[T; N], D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Deserialize<'de> + Default,
+{
+    let saved = Vec::<T>::deserialize(deserializer)?;
+    if saved.len() > N {
+        return Err(serde::de::Error::invalid_length(
+            saved.len(),
+            &"at most one per channel",
+        ));
+    }
+    let mut saved = saved.into_iter();
+    Ok(std::array::from_fn(|_| saved.next().unwrap_or_default()))
+}
+
+fn is_default_rate(hz: &u32) -> bool {
+    *hz == lmix_types::output::default_sample_rate()
+}
+
 fn all_default(channels: &[OverlayChannel; OVERLAY_CHANNELS as usize]) -> bool {
     channels.iter().all(OverlayChannel::is_default)
 }
 
 /// Buttons 1–4: fade, cut, dip to black, wipe.
+fn is_time(rearm: &lmix_types::cue::GoRearm) -> bool {
+    *rearm == lmix_types::cue::GoRearm::Time
+}
+
+fn default_go_guard() -> u32 {
+    lmix_types::cue::GO_GUARD_DEFAULT_MS
+}
+
+fn default_panic() -> u32 {
+    lmix_types::cue::PANIC_DEFAULT_MS
+}
+
 fn default_transitions() -> Vec<Transition> {
     let effects = [
         Effect::Fade,
@@ -289,23 +395,77 @@ pub fn to_bytes(show: &Show) -> Vec<u8> {
     serde_json::to_vec_pretty(&file).expect("show serializes")
 }
 
+/// A show read from a file, and the older file version it came in.
+pub struct Loaded {
+    pub show: Show,
+    /// The file's version when older than this lmix's: migrated on load,
+    /// saved in the new one (SHW.7).
+    pub older: Option<u32>,
+}
+
 /// A show from a file's bytes; `name` for errors.
 pub fn from_bytes(bytes: &[u8], name: &str) -> Result<Show, ShowFileError> {
+    read_bytes(bytes, name).map(|loaded| loaded.show)
+}
+
+/// A show from a file's bytes, with its older version if any.
+pub fn read_bytes(bytes: &[u8], name: &str) -> Result<Loaded, ShowFileError> {
     let format_err = |reason: String| ShowFileError::Format {
         path: name.to_string(),
         reason,
     };
-    let file: ShowFile = serde_json::from_slice(bytes).map_err(|e| format_err(e.to_string()))?;
-    if file.format != FILE_FORMAT {
-        return Err(format_err(format!("format is \"{}\"", file.format)));
+    let mut value: serde_json::Value =
+        serde_json::from_slice(bytes).map_err(|e| format_err(e.to_string()))?;
+    let format = value.get("format").and_then(|f| f.as_str()).unwrap_or("");
+    if format != FILE_FORMAT {
+        return Err(format_err(format!("format is \"{format}\"")));
     }
-    if file.version > FILE_VERSION {
+    let version = value.get("version").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
+    if version > FILE_VERSION {
         return Err(ShowFileError::TooNew {
             path: name.to_string(),
-            found: file.version,
+            found: version,
         });
     }
-    Ok(file.show)
+    if version < 2 {
+        if let Some(show) = value.get_mut("show") {
+            migrate_cue_labels(show);
+        }
+    }
+    let file: ShowFile = serde_json::from_value(value).map_err(|e| format_err(e.to_string()))?;
+    Ok(Loaded {
+        show: file.show,
+        older: (version < FILE_VERSION).then_some(version),
+    })
+}
+
+/// Keep the file of an older version beside it before it is written in
+/// the new one: `show.lmix` → `show.lmix.v1.bak`, once (SHW.7).
+pub async fn backup(path: &Path, version: u32) -> std::io::Result<()> {
+    let mut name = path.as_os_str().to_owned();
+    name.push(format!(".v{version}.bak"));
+    let to = std::path::PathBuf::from(name);
+    if tokio::fs::try_exists(&to).await? {
+        return Ok(());
+    }
+    tokio::fs::copy(path, &to).await.map(|_| ())
+}
+
+/// Version 1 to 2: a cue's `label` is its `name`; the rest of a cue of
+/// then (`actions`) is an actions cue now (CUE.21).
+fn migrate_cue_labels(show: &mut serde_json::Value) {
+    let Some(lists) = show.get_mut("cue_lists").and_then(|l| l.as_array_mut()) else {
+        return;
+    };
+    let cues = lists
+        .iter_mut()
+        .filter_map(|l| l.get_mut("cues").and_then(|c| c.as_array_mut()))
+        .flatten();
+    for cue in cues.filter_map(|c| c.as_object_mut()) {
+        if let Some(label) = cue.remove("label") {
+            cue.insert("name".into(), label);
+        }
+    }
 }
 
 /// Write atomically: temp file next to the target, then rename, so a crash
@@ -324,6 +484,11 @@ pub async fn save(show: &Show, path: &Path) -> Result<(), ShowFileError> {
 }
 
 pub async fn load(path: &Path) -> Result<Show, ShowFileError> {
+    load_versioned(path).await.map(|loaded| loaded.show)
+}
+
+/// A show file, with its older version if any (SHW.7).
+pub async fn load_versioned(path: &Path) -> Result<Loaded, ShowFileError> {
     let shown = path.display().to_string();
     // A show is a regular file of reasonable size (not a device, a pipe
     // or something huge someone points the API at).
@@ -346,7 +511,7 @@ pub async fn load(path: &Path) -> Result<Show, ShowFileError> {
             source,
         })?;
 
-    from_bytes(&bytes, &shown)
+    read_bytes(&bytes, &shown)
 }
 
 #[cfg(test)]
@@ -377,13 +542,14 @@ mod tests {
                     restart: false,
                     pause: true,
                 },
+                at_end: AtEnd::Hold,
                 click: InputPress::CutDirect,
                 go: InputPress::None,
                 strip: ChannelStrip {
                     delay_ms: 40,
                     ..Default::default()
                 },
-                sends: [70, 0],
+                sends: [70, 0, 0, 0, 0, 0, 25],
                 look: Look {
                     saturation: 0.5,
                     ..Default::default()
@@ -407,7 +573,7 @@ mod tests {
                 effect: Effect::WipeLeft,
                 duration_ms: 1000,
             },
-            overlays: [None, Some(id), None, None],
+            overlays: [None, Some(id), None, None, None, None, None, Some(id)],
             overlay_channels: [
                 OverlayChannel::default(),
                 OverlayChannel {
@@ -423,16 +589,25 @@ mod tests {
                 },
                 OverlayChannel::default(),
                 OverlayChannel::default(),
+                OverlayChannel::default(),
+                OverlayChannel::default(),
+                OverlayChannel::default(),
+                OverlayChannel::default(),
             ],
-            overlay_preview: [Some(id), None, None, None],
+            overlay_preview: [Some(id), None, None, None, None, None, None, None],
             cue_lists: vec![ShowCueList {
                 id: InputId::new(),
                 name: "Opening".into(),
-                cues: vec![Cue {
-                    label: "Bars".into(),
-                    actions: vec![Action::Cut],
-                }],
+                cues: vec![Cue::actions("Bars", vec![Action::Cut])],
+                source: None,
+                standby: None,
             }],
+            go_guard_ms: 120,
+            go_rearm: lmix_types::cue::GoRearm::Release,
+            panic_ms: 2000,
+            emergency_list: None,
+            zones: Vec::new(),
+            script_folder: None,
             shortcuts: vec![ShowShortcut {
                 id: InputId::new(),
                 label: "Bars".into(),
@@ -464,13 +639,35 @@ mod tests {
                     volume: 60,
                     mute: true,
                 },
+                AuxBus::default(),
+                AuxBus::default(),
+                AuxBus::default(),
+                AuxBus::default(),
+                AuxBus::default(),
             ],
+            master: AuxBus {
+                volume: 90,
+                mute: false,
+            },
+            format: lmix_types::MasterFormat {
+                width: 1080,
+                height: 1920,
+                framerate: lmix_types::Framerate::Fps25,
+            },
+            multiview: lmix_types::MultiviewLayout {
+                program: lmix_types::ProgramSide::Left,
+                ..Default::default()
+            },
+            sample_rate: 44_100,
+            monitor_volume: 70,
+            default_delay_ms: 40,
             outputs: vec![ShowOutput {
                 id: OutputId::new(),
                 name: "Stream".into(),
                 spec: OutputSpec::Srt {
                     uri: "srt://cdn:9000".into(),
                     video_kbps: 6000,
+                    encoding: Default::default(),
                 },
                 source: OutputSource::Input(id),
                 aux: Some(2),
@@ -561,6 +758,57 @@ mod tests {
         let err = load(&path).await.unwrap_err();
 
         assert!(matches!(err, ShowFileError::TooNew { .. }), "{err}");
+    }
+
+    #[test]
+    fn shows_with_fewer_channels_still_load() {
+        let mut saved = serde_json::to_value(sample()).unwrap();
+        for key in ["overlays", "overlay_channels", "overlay_preview"] {
+            saved[key].as_array_mut().unwrap().truncate(4);
+        }
+        // Two aux buses before AUD.2.
+        saved["aux_buses"].as_array_mut().unwrap().truncate(2);
+        saved["inputs"][0]["sends"]
+            .as_array_mut()
+            .unwrap()
+            .truncate(2);
+        let show: Show = serde_json::from_value(saved).unwrap();
+        let id = show.inputs[0].id;
+        assert_eq!(
+            show.overlays,
+            [None, Some(id), None, None, None, None, None, None]
+        );
+        assert_eq!(show.overlay_channels[1].auto_off_ms, Some(8000));
+        assert_eq!(show.overlay_channels[7], OverlayChannel::default());
+        assert_eq!(show.overlay_preview[0], Some(id));
+        assert_eq!(show.aux_buses[1].volume, 60);
+        assert_eq!(show.aux_buses[6], AuxBus::default());
+        assert_eq!(show.inputs[0].sends, [70, 0, 0, 0, 0, 0, 0]);
+
+        let mut saved = serde_json::to_value(sample()).unwrap();
+        saved["overlays"]
+            .as_array_mut()
+            .unwrap()
+            .push(serde_json::Value::Null);
+        assert!(
+            serde_json::from_value::<Show>(saved).is_err(),
+            "nine channels"
+        );
+    }
+
+    #[test]
+    fn version_1_cues_become_actions_cues() {
+        let old = br#"{"format":"lmix-show","version":1,"show":{"inputs":[],"preview":null,"program":null,"transitions":[],
+            "cue_lists":[{"id":"7d0c3c2e-2f43-4a39-9d5c-6c8f1f0b6a11","name":"Run","cues":[{"label":"Bars","actions":[{"action":"cut"}]}]}]}}"#;
+
+        let show = from_bytes(old, "old.lmix").unwrap();
+
+        let cue = &show.cue_lists[0].cues[0];
+        assert_eq!(cue.name, "Bars");
+        assert_eq!(cue.kind, lmix_types::CueKind::Actions);
+        assert_eq!(cue.actions, vec![Action::Cut]);
+        assert_eq!(cue.follow, lmix_types::Follow::None, "no times, no follow");
+        assert_eq!(show.go_guard_ms, lmix_types::cue::GO_GUARD_DEFAULT_MS);
     }
 
     #[test]

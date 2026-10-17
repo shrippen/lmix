@@ -1,4 +1,4 @@
-//! MIDI controllers (AUT.4) read as raw bytes from a device file
+//! MIDI controllers (AUT.1) read as raw bytes from a device file
 //! (`/dev/snd/midiC1D0`, also a FIFO): no ALSA library needed.
 //!
 //! Notes and controllers run the shortcut bound to them; a controller
