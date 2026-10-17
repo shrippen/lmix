@@ -3497,3 +3497,49 @@ also im Ziel; strom kann `preload`), Wiederholungen (SND.3), Begrenzer
 Console (SUI.8), Geräteliste der Ausgänge, Klang-Cues im Cue-Editor der
 Console (bisher nur Anzeige in der Liste). Gerätezuordnung mit
 `pulsesink` braucht einen Test auf echter Hardware (HARDWARE-TODO).
+
+## 2026-10-17 — Bühnen und Bild-Cues gebaut (S1 Stufe 3, S-E.13 B)
+
+**Kontext**: S-E.13 B entschieden (User 17.10.): Bild-Cues als Zweige im
+selben strom-Block wie die Zonen („Show-Wiedergabe“).
+
+**Gebaut**:
+- strom (#26 auf `dev`): Der Block heißt jetzt `builtin.show_playback`
+  (vorher `show_sound`), REST unter `…/show_playback` mit Klängen, Zonen,
+  Bildern und Bühnen. Je Bühne ein `compositor` auf schwarzem Grund mit
+  einer live laufenden Schwarzquelle, die zugleich der Dimmer ist
+  (oberste Ebene, Deckkraft = 1 − Helligkeit); Ausgang `stage_out_N`.
+  Ein Bild ist ein Zweig Datei → Dekoder [→ Beschnitt für „füllen“]
+  [→ `imagefreeze` für Standbilder] → Pad mit Ebene, Deckkraft (S-Kurve)
+  und Bühnengröße; ein Video hält am Ende sein letztes Bild oder geht.
+  Vorladen wie beim Klang. CPU-`compositor`; GL/CUDA wie beim Mischer
+  kommt später.
+- lmix-types: `Stage` (Name, Größe) in der Show, `StagePatch` je Rechner
+  (Bildschirme: Fenster, Vollbild, DRM wie bei den Display-Ausgängen),
+  Cue-Art `picture` (`PictureCue`: Datei, Bühne, Ebene 0–999, Deckkraft,
+  Füllmodus einpassen/füllen/strecken, Ende halten/stoppen, Ein- und
+  Ausblendzeit). Fade-Cues setzen nur, was angegeben ist: `gain_db` für
+  Klang-Cue oder Zone, `opacity` für Bild-Cue, `brightness` für eine
+  Bühne (Ziel `stage`). Aktionen `set_stage`, `remove_stage`,
+  `set_stage_patch`, `remove_stage_patch`, `show_picture`,
+  `fade_picture`, `stop_picture`, `set_stage_level`.
+- lmix-core: ein Flow „lmix playback“ für Zonen und Bühnen zusammen
+  (vorher „lmix sound“); jede Bühne auf ihre Bildschirme (mehrere über
+  `tee`), ohne Bildschirm in einen `fakesink`. Ein Bild-Cue ohne Dauer
+  läuft bis zum Stopp (Standbild, gehaltenes Video) oder bis zum Ende
+  des Videos (`end: stop`); ein Fade mit „danach stoppen“ beendet ihn.
+  Stopp, „andere stoppen“, Panik und harter Stopp wirken auf Bilder wie
+  auf Klänge. Ein neues Programmformat baut den Flow nur neu, wenn sich
+  die Bildrate ändert (die Bühnen laufen mit ihr).
+
+**Geprüft**: strom-Tests am Bühnenausgang (schwarz ohne Bilder,
+vorgeladen sichtbar innerhalb von 200 ms nach `play`, einpassen mit
+Rändern, füllen/strecken ohne, Dimmer, Fade halb durch, Video hält oder
+geht, Pipeline wird freigegeben); lmix-Tests (Runner, Prüfung,
+Flow-Aufbau); `scripts/test-show-playback.sh` gegen echtes strom mit
+der Bühne in einem Fenster auf Xvfb.
+
+**Offen**: Mischmodi (VIS.6, braucht eigenes Blending), Bühnen auf der
+GPU, freie Geometrie (VIS.9), Video-Wiederholungen, Ton aus Videos in
+Zonen (VIS.10), Bühnen-Dialog und Vorschau in der Console (SUI.7),
+Vollbild und DRM auf echten Bildschirmen (HARDWARE-TODO H.38).

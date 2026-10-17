@@ -114,6 +114,7 @@ ColumnLayout {
         case "group": return qsTr("Group")
         case "start": return cue.target && cue.target.cue ? qsTr("Start %1").arg(cue.target.cue) : qsTr("Start")
         case "sound": return cue.sound ? cue.sound.file.split("/").pop() : qsTr("Sound")
+        case "picture": return cue.picture ? cue.picture.file.split("/").pop() : qsTr("Picture")
         case "fade": return fadeName(cue)
         default: return cue.actions && cue.actions.length > 0 ? cue.actions[0].action : qsTr("Actions")
         }
@@ -125,6 +126,8 @@ ColumnLayout {
             return qsTr("Fade %1").arg(target.cue)
         if (target && target.zone !== undefined)
             return qsTr("Fade zone %1").arg(target.zone)
+        if (target && target.stage !== undefined)
+            return qsTr("Fade stage %1").arg(target.stage)
         return qsTr("Fade")
     }
 
@@ -135,6 +138,7 @@ ColumnLayout {
         case "group": return cue.mode === "first" ? qsTr("Group, first") : qsTr("Group, timeline")
         case "start": return qsTr("Start")
         case "sound": return qsTr("Sound")
+        case "picture": return cue.picture ? qsTr("Picture on %1").arg(cue.picture.stage) : qsTr("Picture")
         case "fade": return qsTr("Fade")
         default: return qsTr("Actions: %1").arg(cue.actions ? cue.actions.length : 0)
         }

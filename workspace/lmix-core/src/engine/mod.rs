@@ -11,7 +11,7 @@ use crate::switcher::Command;
 pub mod flows;
 pub mod meters;
 pub mod null;
-pub mod sound_flow;
+pub mod playback_flow;
 pub mod strom;
 
 #[derive(Debug, thiserror::Error)]
@@ -93,9 +93,9 @@ pub trait Engine: Send + Sync {
         tokio::sync::broadcast::channel(1).1
     }
 
-    /// Ids of sounds that are over: played to their end, stopped, or
-    /// gone with the zones.
-    fn sounds_ended(&self) -> tokio::sync::broadcast::Receiver<String> {
+    /// Ids of sounds and pictures that are over: played to their end,
+    /// stopped, or gone with the playback flow.
+    fn playback_ended(&self) -> tokio::sync::broadcast::Receiver<String> {
         tokio::sync::broadcast::channel(1).1
     }
 

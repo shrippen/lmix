@@ -2,6 +2,9 @@
 # scripts/update-translations.sh collects the sources and writes these
 # into qml_de.ts (i18n/fill.py). Keep it complete.
 DE = {
+    'Picture': 'Bild',
+    'Picture on %1': 'Bild auf %1',
+    'Fade stage %1': 'Blende Bühne %1',
     'Fade %1': 'Blende %1',
     'Fade zone %1': 'Blende Zone %1',
     'Web page': 'Webseite',

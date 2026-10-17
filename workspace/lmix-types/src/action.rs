@@ -289,6 +289,19 @@ pub const ACTION_GROUPS: &[(&str, &[&str])] = &[
         &["play_sound", "fade_sound", "stop_sound", "set_zone_level"],
     ),
     (
+        "stages",
+        &[
+            "set_stage",
+            "remove_stage",
+            "set_stage_patch",
+            "remove_stage_patch",
+            "show_picture",
+            "fade_picture",
+            "stop_picture",
+            "set_stage_level",
+        ],
+    ),
+    (
         "targets",
         &[
             "set_target",
@@ -777,6 +790,50 @@ pub enum Action {
         gain_db: Option<f32>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         mute: Option<bool>,
+        #[serde(default)]
+        duration_ms: u32,
+    },
+
+    // ---- Stages (show mode VIS) ----
+    /// Add a stage to the show, or replace the one of the same name.
+    SetStage {
+        stage: crate::stage::Stage,
+    },
+    RemoveStage {
+        name: String,
+    },
+    /// Where a stage shows on this machine (machine settings, SSH.3).
+    SetStagePatch {
+        patch: crate::stage::StagePatch,
+    },
+    RemoveStagePatch {
+        stage: String,
+    },
+    /// Show `picture` as `id`, replacing a picture of that id. Picture
+    /// cues run this with their cue id.
+    ShowPicture {
+        id: String,
+        picture: crate::stage::PictureCue,
+    },
+    /// Fade picture `id` to `opacity` over `duration_ms` (S-curve, VIS.4).
+    FadePicture {
+        id: String,
+        opacity: f32,
+        duration_ms: u32,
+        #[serde(default)]
+        then: crate::sound::AfterFade,
+    },
+    /// Take picture `id`, or every picture, off its stage over `fade_ms`.
+    StopPicture {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        id: Option<String>,
+        #[serde(default)]
+        fade_ms: u32,
+    },
+    /// Brightness of a stage, 0 (black) to 1, over `duration_ms` (VIS.7).
+    SetStageLevel {
+        stage: String,
+        brightness: f32,
         #[serde(default)]
         duration_ms: u32,
     },
@@ -1329,6 +1386,8 @@ pub enum ActionError {
     BadZone { reason: String },
     #[error("sound: {reason}")]
     BadSound { reason: String },
+    #[error("stage: {reason}")]
+    BadStage { reason: String },
     #[error("cue list: {reason}")]
     BadCueList { reason: String },
     #[error("triggers: {reason}")]

@@ -22,6 +22,7 @@ use uuid::Uuid;
 use crate::action::Action;
 use crate::input::{InputColor, InputId, InputRef};
 use crate::sound::{FadeCue, FadeTarget, SoundCue};
+use crate::stage::PictureCue;
 
 /// Cues per list and per group level (CUE.20).
 pub const CUES: usize = 1000;
@@ -89,8 +90,12 @@ pub enum CueKind {
     /// Plays `sound` into zones (SND.1); ends with the file, or after
     /// `duration_ms` when set.
     Sound,
-    /// Fades a sound cue or a zone (`fade`) over `duration_ms` (SND.6).
+    /// Fades a cue, zone or stage (`fade`) over `duration_ms` (SND.6,
+    /// VIS.4, VIS.7).
     Fade,
+    /// Shows `picture` on a stage (VIS.2); ends after `duration_ms` when
+    /// set, a video with `end: stop` at its end, else when stopped.
+    Picture,
 }
 
 /// What starts the next cue (CUE.3).
@@ -201,6 +206,9 @@ pub struct Cue {
     /// `fade`: what it fades.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fade: Option<FadeCue>,
+    /// `picture`: what it shows.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub picture: Option<PictureCue>,
 }
 
 impl Cue {
@@ -233,6 +241,7 @@ impl Cue {
             stop_others: None,
             sound: None,
             fade: None,
+            picture: None,
         }
     }
 
@@ -266,9 +275,14 @@ impl Cue {
                 Some(sound) => file_name(&sound.file).to_string(),
                 None => "Sound".into(),
             },
+            CueKind::Picture => match &self.picture {
+                Some(picture) => file_name(&picture.file).to_string(),
+                None => "Picture".into(),
+            },
             CueKind::Fade => match self.fade.as_ref().map(|f| &f.target) {
                 Some(FadeTarget::Cue(cue)) => format!("Fade {cue}"),
                 Some(FadeTarget::Zone(zone)) => format!("Fade zone {zone}"),
+                Some(FadeTarget::Stage(stage)) => format!("Fade stage {stage}"),
                 None => "Fade".into(),
             },
         }

@@ -157,13 +157,14 @@ pub enum Command {
         muted: bool,
         ramp_ms: u32,
     },
-    /// The show's zones with this machine's outputs; the engine builds
-    /// its sound flow for them (running sounds stop). Empty: none.
-    SetZones { zones: Vec<lmix_types::ZoneState> },
+    /// The show's zones and stages with this machine's outputs; the
+    /// engine builds its playback flow for them (running sounds and
+    /// pictures stop). Without zones and stages: none.
+    SetPlayback { playback: Playback },
     /// Play `sound` as `id`, replacing a sound of that id.
     PlaySound {
         id: String,
-        sound: crate::sound::EngineSound,
+        sound: crate::playback::EngineSound,
     },
     FadeSound {
         id: String,
@@ -173,6 +174,25 @@ pub enum Command {
     },
     /// Stop sound `id`, or every sound.
     StopSound { id: Option<String>, fade_ms: u32 },
+    /// Show `picture` as `id`, replacing a picture of that id.
+    ShowPicture {
+        id: String,
+        picture: crate::playback::EnginePicture,
+    },
+    FadePicture {
+        id: String,
+        opacity: f32,
+        duration_ms: u32,
+        then: lmix_types::AfterFade,
+    },
+    /// Take picture `id`, or every picture, off its stage.
+    StopPicture { id: Option<String>, fade_ms: u32 },
+    /// Stage `stage` (place in the show) to its brightness.
+    SetStageLevel {
+        stage: usize,
+        brightness: f32,
+        duration_ms: u32,
+    },
     /// Zone `zone` (place in the show) to its level and mute.
     SetZoneLevel {
         zone: usize,
@@ -180,6 +200,15 @@ pub enum Command {
         mute: Option<bool>,
         duration_ms: u32,
     },
+}
+
+/// What the engine's playback flow is built for.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Playback {
+    pub zones: Vec<lmix_types::ZoneState>,
+    pub stages: Vec<lmix_types::StageState>,
+    /// Of the stages: the program's.
+    pub framerate: lmix_types::Framerate,
 }
 
 /// A layout box as the engine places it.
@@ -261,6 +290,10 @@ fn runs_automation(action: &Action) -> bool {
                 | Action::RemoveZone { .. }
                 | Action::SetZonePatch { .. }
                 | Action::RemoveZonePatch { .. }
+                | Action::SetStage { .. }
+                | Action::RemoveStage { .. }
+                | Action::SetStagePatch { .. }
+                | Action::RemoveStagePatch { .. }
         )
 }
 
@@ -340,11 +373,16 @@ fn check_cue(cue: &Cue, depth: usize) -> Result<(), ActionError> {
         || !(cue.duration_ms.is_none()
             || matches!(
                 cue.kind,
-                CueKind::Wait | CueKind::Actions | CueKind::Sound | CueKind::Fade
+                CueKind::Wait
+                    | CueKind::Actions
+                    | CueKind::Sound
+                    | CueKind::Fade
+                    | CueKind::Picture
             ))
         || !own(cue.target.is_some(), CueKind::Start)
         || !own(cue.sound.is_some(), CueKind::Sound)
         || !own(cue.fade.is_some(), CueKind::Fade)
+        || !own(cue.picture.is_some(), CueKind::Picture)
         || !own(
             cue.mode.is_some() || !cue.children.is_empty(),
             CueKind::Group,
@@ -383,8 +421,8 @@ fn check_cue(cue: &Cue, depth: usize) -> Result<(), ActionError> {
                 check_cue(child, depth + 1)?;
             }
         }
-        CueKind::Sound | CueKind::Fade => {
-            if let Err(e) = crate::sound::check_cue(cue) {
+        CueKind::Sound | CueKind::Fade | CueKind::Picture => {
+            if let Err(e) = crate::playback::check_cue(cue) {
                 return bad(&e.to_string());
             }
         }
@@ -490,8 +528,9 @@ pub struct Switcher {
     feeds: Vec<lmix_types::Feed>,
     /// Where the show's zones play on this machine (SND.10).
     zone_patches: Vec<lmix_types::ZonePatch>,
-    /// The zones the engine got last; `None`: send them again.
-    zones_sent: Option<Vec<lmix_types::ZoneState>>,
+    stage_patches: Vec<lmix_types::StagePatch>,
+    /// The zones and stages the engine got last; `None`: send them again.
+    playback_sent: Option<Playback>,
     targets_changed: bool,
     /// Media files not found per input (SHW.4); the service checks.
     missing: HashMap<InputId, Vec<String>>,
@@ -544,7 +583,8 @@ impl Switcher {
             targets: Vec::new(),
             feeds: Vec::new(),
             zone_patches: Vec::new(),
-            zones_sent: None,
+            stage_patches: Vec::new(),
+            playback_sent: None,
             targets_changed: false,
             missing: HashMap::new(),
             overlay_last: Default::default(),
@@ -657,6 +697,7 @@ impl Switcher {
             targets: self.targets.clone(),
             feeds: self.feeds.clone(),
             zone_patches: self.zone_patches.clone(),
+            stage_patches: self.stage_patches.clone(),
         }
     }
 
@@ -666,6 +707,7 @@ impl Switcher {
         self.targets = settings.targets;
         self.feeds = settings.feeds;
         self.zone_patches = settings.zone_patches;
+        self.stage_patches = settings.stage_patches;
         self.targets_changed = false;
     }
 
@@ -679,6 +721,7 @@ impl Switcher {
         self.targets = settings.targets;
         self.feeds = settings.feeds;
         self.zone_patches = settings.zone_patches;
+        self.stage_patches = settings.stage_patches;
         self.targets_changed = true;
         Ok(())
     }
@@ -692,6 +735,7 @@ impl Switcher {
             targets: carried.targets,
             feeds: carried.feeds,
             zone_patches: carried.zone_patches,
+            stage_patches: carried.stage_patches,
         }
     }
 
@@ -730,6 +774,7 @@ impl Switcher {
                 .collect(),
             feeds: Vec::new(),
             zone_patches: Vec::new(),
+            stage_patches: Vec::new(),
         };
         crate::targets::merge(
             &mut next,
@@ -737,6 +782,7 @@ impl Switcher {
                 targets: file.targets,
                 feeds: file.feeds,
                 zone_patches: file.zone_patches,
+                stage_patches: file.stage_patches,
             },
         )?;
         let templates = std::mem::take(&mut self.layout_templates);
@@ -749,6 +795,7 @@ impl Switcher {
         self.targets = next.targets;
         self.feeds = next.feeds;
         self.zone_patches = next.zone_patches;
+        self.stage_patches = next.stage_patches;
         self.all_shows_changed = true;
         self.targets_changed = true;
         Ok(())
@@ -761,6 +808,7 @@ impl Switcher {
         self.targets.clear();
         self.feeds.clear();
         self.zone_patches.clear();
+        self.stage_patches.clear();
         self.all_shows_changed = true;
         self.layout_templates_changed = true;
         self.targets_changed = true;
@@ -863,7 +911,7 @@ impl Switcher {
         let leave_ms = self.leave_ms(&action);
         let airing = self.airing();
         let mut commands = self.apply_action(action)?;
-        commands.extend(self.zone_commands());
+        commands.extend(self.playback_commands());
         let audio = self.audio_commands(ramp_ms);
         let (on, off) = self.auto_play_commands(&airing);
         // A stinger switches sound and players at its cut, not once the
@@ -1031,9 +1079,69 @@ impl Switcher {
                 self.targets_changed = true;
                 Ok(Vec::new())
             }
+            Action::SetStage { stage } => {
+                crate::stages::set_stage(&mut self.show.stages, stage)?;
+                Ok(Vec::new())
+            }
+            Action::RemoveStage { name } => {
+                if !self.show.stages.iter().any(|s| s.name == name) {
+                    return Err(ActionError::BadStage {
+                        reason: format!("no stage {name}"),
+                    });
+                }
+                self.show.stages.retain(|s| s.name != name);
+                Ok(Vec::new())
+            }
+            Action::SetStagePatch { patch } => {
+                crate::stages::set_patch(&mut self.stage_patches, patch)?;
+                self.targets_changed = true;
+                Ok(Vec::new())
+            }
+            Action::RemoveStagePatch { stage } => {
+                self.stage_patches.retain(|p| p.stage != stage);
+                self.targets_changed = true;
+                Ok(Vec::new())
+            }
+            Action::ShowPicture { id, picture } => Ok(vec![Command::ShowPicture {
+                id,
+                picture: crate::playback::engine_picture(&picture, &self.show.stages)?,
+            }]),
+            Action::FadePicture {
+                id,
+                opacity,
+                duration_ms,
+                then,
+            } => {
+                crate::playback::check_share(opacity)?;
+                crate::playback::check_fade_time(duration_ms)?;
+                Ok(vec![Command::FadePicture {
+                    id,
+                    opacity,
+                    duration_ms,
+                    then,
+                }])
+            }
+            Action::StopPicture { id, fade_ms } => {
+                crate::playback::check_fade_time(fade_ms)?;
+                Ok(vec![Command::StopPicture { id, fade_ms }])
+            }
+            Action::SetStageLevel {
+                stage,
+                brightness,
+                duration_ms,
+            } => {
+                let stage = crate::playback::stage_index(&self.show.stages, &stage)?;
+                crate::playback::check_share(brightness)?;
+                crate::playback::check_fade_time(duration_ms)?;
+                Ok(vec![Command::SetStageLevel {
+                    stage,
+                    brightness,
+                    duration_ms,
+                }])
+            }
             Action::PlaySound { id, sound } => Ok(vec![Command::PlaySound {
                 id,
-                sound: crate::sound::engine_sound(&sound, &self.show.zones)?,
+                sound: crate::playback::engine_sound(&sound, &self.show.zones)?,
             }]),
             Action::FadeSound {
                 id,
@@ -1041,8 +1149,8 @@ impl Switcher {
                 duration_ms,
                 then,
             } => {
-                crate::sound::check_level(gain_db)?;
-                crate::sound::check_fade_time(duration_ms)?;
+                crate::playback::check_level(gain_db)?;
+                crate::playback::check_fade_time(duration_ms)?;
                 Ok(vec![Command::FadeSound {
                     id,
                     gain_db,
@@ -1051,7 +1159,7 @@ impl Switcher {
                 }])
             }
             Action::StopSound { id, fade_ms } => {
-                crate::sound::check_fade_time(fade_ms)?;
+                crate::playback::check_fade_time(fade_ms)?;
                 Ok(vec![Command::StopSound { id, fade_ms }])
             }
             Action::SetZoneLevel {
@@ -1060,11 +1168,11 @@ impl Switcher {
                 mute,
                 duration_ms,
             } => {
-                let zone = crate::sound::zone_index(&self.show.zones, &zone)?;
+                let zone = crate::playback::zone_index(&self.show.zones, &zone)?;
                 if let Some(db) = gain_db {
-                    crate::sound::check_level(db)?;
+                    crate::playback::check_level(db)?;
                 }
-                crate::sound::check_fade_time(duration_ms)?;
+                crate::playback::check_fade_time(duration_ms)?;
                 Ok(vec![Command::SetZoneLevel {
                     zone,
                     gain_db,
@@ -1519,9 +1627,14 @@ impl Switcher {
     /// A new mixer for a new format or multiview, set up again; outputs
     /// restart. The sources keep running (no clip starts over).
     fn mixer_rebuilt(&mut self) -> Vec<Command> {
+        let before = self.playback_sent.clone();
         let mut commands = self.restore_commands();
-        // Nor do the sounds: their flow is not the mixer's.
-        commands.retain(|c| !matches!(c, Command::SetSlot { .. } | Command::SetZones { .. }));
+        commands.retain(|c| !matches!(c, Command::SetSlot { .. }));
+        // Nor do sounds and pictures, unless the stages' rate changed:
+        // their flow is not the mixer's.
+        if self.playback_sent == before {
+            commands.retain(|c| !matches!(c, Command::SetPlayback { .. }));
+        }
         commands
     }
 
@@ -1574,19 +1687,24 @@ impl Switcher {
             commands.extend(send_commands(input));
         }
         commands.extend(self.aux_bus_commands());
-        self.zones_sent = None;
-        commands.extend(self.zone_commands());
+        self.playback_sent = None;
+        commands.extend(self.playback_commands());
         commands
     }
 
-    /// The zones for the engine, when they changed since it last got them.
-    fn zone_commands(&mut self) -> Option<Command> {
-        let zones = crate::zones::states(&self.show.zones, &self.zone_patches);
-        if self.zones_sent.as_ref() == Some(&zones) {
+    /// Zones and stages for the engine, when they changed since it last
+    /// got them.
+    fn playback_commands(&mut self) -> Option<Command> {
+        let playback = Playback {
+            zones: crate::zones::states(&self.show.zones, &self.zone_patches),
+            stages: crate::stages::states(&self.show.stages, &self.stage_patches),
+            framerate: self.show.format.framerate,
+        };
+        if self.playback_sent.as_ref() == Some(&playback) {
             return None;
         }
-        self.zones_sent = Some(zones.clone());
-        Some(Command::SetZones { zones })
+        self.playback_sent = Some(playback.clone());
+        Some(Command::SetPlayback { playback })
     }
 
     fn aux_bus_commands(&self) -> Vec<Command> {
@@ -1782,6 +1900,7 @@ impl Switcher {
             targets: self.targets.iter().map(|t| t.public()).collect(),
             feeds: self.feeds.clone(),
             zones: crate::zones::states(&self.show.zones, &self.zone_patches),
+            stages: crate::stages::states(&self.show.stages, &self.stage_patches),
             restorable: self.removed.last().map(|(_, input)| input.name.clone()),
             shortcuts: self
                 .show
@@ -2549,13 +2668,14 @@ impl Switcher {
         self.show.cue_lists.iter().position(|l| l.id == id)
     }
 
-    /// The engine's sound `id` is over; the sound cue it belongs to ends.
-    pub fn sound_ended(&mut self, id: &str, now: tokio::time::Instant) -> Vec<Out> {
+    /// The engine's sound or picture `id` is over; the cue it belongs to
+    /// ends.
+    pub fn media_ended(&mut self, id: &str, now: tokio::time::Instant) -> Vec<Out> {
         let Ok(cue) = id.parse::<Uuid>() else {
             return Vec::new();
         };
         self.cues
-            .sound_ended(&self.show.cue_lists, lmix_types::CueId(cue), now)
+            .media_ended(&self.show.cue_lists, lmix_types::CueId(cue), now)
     }
 
     /// What the cue lists have due by `now`.
@@ -6938,7 +7058,7 @@ mod tests {
         out.iter()
             .flat_map(|o| match o {
                 Out::Actions { actions, .. } => actions.clone(),
-                Out::Event { .. } | Out::Panic { .. } | Out::StopSounds { .. } => Vec::new(),
+                Out::Event { .. } | Out::Panic { .. } | Out::StopPlayback { .. } => Vec::new(),
             })
             .collect()
     }
@@ -6964,9 +7084,9 @@ mod tests {
             },
         };
         let zones_sent = |commands: &[Command]| {
-            commands
-                .iter()
-                .any(|c| matches!(c, Command::SetZones { zones } if zones.len() == 1))
+            commands.iter().any(
+                |c| matches!(c, Command::SetPlayback { playback } if playback.zones.len() == 1),
+            )
         };
         assert!(zones_sent(&sw.apply(hall.clone()).unwrap()));
         assert!(
@@ -6977,7 +7097,7 @@ mod tests {
         let upright = lmix_types::MasterFormat {
             width: 1080,
             height: 1920,
-            framerate: lmix_types::Framerate::Fps25,
+            ..Default::default()
         };
         assert!(
             !zones_sent(
@@ -6997,6 +7117,76 @@ mod tests {
                 zone: "Foyer".into(),
                 gain_db: Some(-6.0),
                 mute: None,
+                duration_ms: 0,
+            })
+            .is_err());
+    }
+
+    #[test]
+    fn pictures_show_on_the_shows_stages_which_reach_the_engine() {
+        let mut sw = two_inputs();
+        let show = Action::ShowPicture {
+            id: "forest".into(),
+            picture: lmix_types::PictureCue {
+                file: "/pics/forest.png".into(),
+                stage: "Back".into(),
+                layer: 1,
+                opacity: 1.0,
+                fit: Default::default(),
+                end: Default::default(),
+                fade_in_ms: 0,
+                fade_out_ms: 0,
+            },
+        };
+        assert!(matches!(
+            sw.apply(show.clone()),
+            Err(ActionError::BadStage { .. })
+        ));
+        let commands = sw
+            .apply(Action::SetStage {
+                stage: lmix_types::Stage {
+                    name: "Back".into(),
+                    width: 1920,
+                    height: 1080,
+                },
+            })
+            .unwrap();
+        assert!(commands.iter().any(|c| matches!(
+            c,
+            Command::SetPlayback { playback } if playback.stages.len() == 1 && playback.zones.is_empty()
+        )));
+        let screen = lmix_types::StageOutput {
+            display: lmix_types::DisplayMode::Fullscreen,
+        };
+        let commands = sw
+            .apply(Action::SetStagePatch {
+                patch: lmix_types::StagePatch {
+                    stage: "Back".into(),
+                    outputs: vec![screen],
+                },
+            })
+            .unwrap();
+        assert!(commands.iter().any(|c| matches!(
+            c,
+            Command::SetPlayback { playback } if playback.stages[0].outputs == [screen]
+        )));
+        assert_eq!(sw.state().stages[0].outputs, [screen]);
+        assert_eq!(
+            sw.target_settings().stage_patches.len(),
+            1,
+            "kept per machine"
+        );
+
+        let commands = sw.apply(show).unwrap();
+        assert!(commands.iter().any(|c| matches!(
+            c,
+            Command::ShowPicture { id, picture } if id == "forest" && picture.stage == 0
+                && picture.uri == "file:///pics/forest.png"
+        )));
+        assert!(sw
+            .apply(Action::SetStageLevel {
+                stage: "Back".into(),
+                brightness: 2.0,
                 duration_ms: 0,
             })
             .is_err());

@@ -89,11 +89,15 @@ NVDEC/NVENC, Thumbnails) brauchen die Abnahme auf der RTX 3090. Neu
 verfügbar: HTML-Input (GFX.2), Player für Live-Streams/URLs, upstream-
 Stinger, Live-Recorder.
 
-Offen für S1 (DECISIONS „Show-Modus …“, PERSONAS Durchlauf 10): Klang-
-und Bild-Cues, Zonen, Bühnen (Stufen 2/3), warten auf die Entscheidungen
-S-E.3 (Klang, #39) und S-E.13 (Bühnen, #60); Vorschlag beide B, als ein
-strom-Block „Show-Wiedergabe“. Ton lässt sich ohne GPU bauen, Bild mit dem
-CPU-Mischer vorbereiten; GPU-Pfade auf echter Hardware.
+S1 Stufen 2/3 (S-E.3 B, S-E.13 B, entschieden 17.10.): strom-Block
+`builtin.show_playback` („Show-Wiedergabe“, strom #23–#26) mit Zonen und
+Bühnen in einem Flow „lmix playback“ je Rechner. lmix #96 bringt Klang-
+und Fade-Cues, der PR darauf Bühnen und Bild-Cues (DECISIONS 17.10.
+„Klang-Cues gebaut“, „Bühnen und Bild-Cues gebaut“); Prüfung
+`scripts/test-show-playback.sh`. Offen: Vorladen, Wiederholungen,
+Begrenzer, Mischmodi, GPU-Bühnen, Console-Dialoge für Zonen/Bühnen und
+ein Cue-Editor für Klang und Bild; Geräte und Bildschirme auf echter
+Hardware (HARDWARE-TODO H.37, H.38).
 
 ## Branches und PRs (Gitea), Stand 2026-10-09
 
