@@ -383,6 +383,8 @@ pub enum CueProblem {
     StartListGone,
     /// An HTTP or Home Assistant action names no target of the machine.
     TargetGone { target: String },
+    /// Its target did not answer the last check or send (SUI.5).
+    TargetUnreached { target: String, reason: String },
     /// An action names an input that is not there.
     InputGone { input: String },
     /// An input a cue uses has no media file.
@@ -397,6 +399,9 @@ impl CueProblem {
             Self::StartListGone => "starts a cue list that is not there".into(),
             Self::TargetGone { target } => {
                 format!("sends to target {target}, which this machine does not have")
+            }
+            Self::TargetUnreached { target, reason } => {
+                format!("sends to target {target}, which did not answer: {reason}")
             }
             Self::InputGone { input } => format!("uses input {input}, which is not there"),
             Self::MediaMissing { input } => {

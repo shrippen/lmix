@@ -32,6 +32,12 @@
 //! network without a key (a button by the stage, OSC included). A wrong
 //! key makes the next answer to that address wait longer (up to 5 s) and
 //! is logged.
+//!
+//! Trusted addresses (CTL.5, `--trust 192.168.1.20=control`): with keys
+//! or a password set, an address or network on the list has its right
+//! without a key, over HTTP, the text protocol and OSC; every other
+//! address of the network needs a key. Without keys and password the
+//! local network may do everything, as before (API.7).
 
 use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr};
@@ -79,6 +85,8 @@ pub struct Access {
     pub keys: Vec<AccessKey>,
     /// Panic and hard stop from the local network without a key.
     pub open_panic: bool,
+    /// Addresses with a right without a key (CTL.5).
+    pub trusted: Vec<Trust>,
     /// Wrong keys per address, for the growing wait.
     pub failures: Failures,
 }
@@ -109,6 +117,63 @@ pub struct AccessKey {
     pub name: String,
     pub key: String,
     pub right: Right,
+}
+
+/// An address or network that has a right without a key (CTL.5):
+/// `192.168.1.20=control`, `192.168.1.0/24=view`, `fd00::/8`; without
+/// a right it is `control`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Trust {
+    net: IpAddr,
+    prefix: u8,
+    right: Right,
+}
+
+impl std::str::FromStr for Trust {
+    type Err = String;
+
+    fn from_str(text: &str) -> Result<Self, Self::Err> {
+        let (net, right) = match text.split_once('=') {
+            Some((net, right)) => (net, right.trim()),
+            None => (text, "control"),
+        };
+        let right: Right = serde_json::from_value(serde_json::Value::String(right.into()))
+            .map_err(|_| format!("{text}: the right is view, control or edit"))?;
+        let (address, prefix) = match net.trim().split_once('/') {
+            Some((a, p)) => (a, Some(p)),
+            None => (net.trim(), None),
+        };
+        let net: IpAddr = address
+            .parse()
+            .map_err(|_| format!("{text}: {address} is no IP address"))?;
+        let bits = if net.is_ipv4() { 32 } else { 128 };
+        let prefix = match prefix {
+            Some(p) => p
+                .parse::<u8>()
+                .ok()
+                .filter(|p| *p <= bits)
+                .ok_or_else(|| format!("{text}: the prefix is 0–{bits}"))?,
+            None => bits,
+        };
+        Ok(Self { net, prefix, right })
+    }
+}
+
+impl Trust {
+    fn contains(&self, ip: IpAddr) -> bool {
+        let ip = match ip {
+            IpAddr::V6(v6) => v6.to_ipv4_mapped().map_or(ip, IpAddr::V4),
+            v4 => v4,
+        };
+        let (have, want, bits) = match (ip, self.net) {
+            (IpAddr::V4(a), IpAddr::V4(b)) => (u128::from(u32::from(a)), u128::from(u32::from(b)), 32),
+            (IpAddr::V6(a), IpAddr::V6(b)) => (u128::from(a), u128::from(b), 128),
+            _ => return false,
+        };
+        let shift = bits - u32::from(self.prefix);
+        let mask = if shift >= 128 { 0 } else { u128::MAX << shift };
+        (have & mask) == (want & mask)
+    }
 }
 
 /// Shortest key: a guessable one would be no lock.
@@ -233,6 +298,7 @@ pub fn right_of(action: &Action) -> Right {
         | Action::CuePanic { .. }
         | Action::CueHardStop
         | Action::TestTarget { .. }
+        | Action::CheckTargets
         | Action::HttpRequest { .. }
         | Action::HaService { .. }
         | Action::RunShortcut { .. }
@@ -381,6 +447,16 @@ impl Access {
         } else {
             key
         }
+    }
+
+    /// The right `ip` has without a key: the highest of its trusted
+    /// entries (CTL.5).
+    pub fn trusted(&self, ip: IpAddr) -> Option<Right> {
+        self.trusted
+            .iter()
+            .filter(|t| t.contains(ip))
+            .map(|t| t.right)
+            .max()
     }
 
     /// Whether an open page or `--open-panic` lets `action` through.
@@ -583,6 +659,9 @@ pub async fn guard(
             return unauthorized();
         }
         Auth::Missing => {}
+    }
+    if let Some(right) = access.trusted(peer.ip()) {
+        return with_right(right, request, next).await;
     }
     let path = request.uri().path().to_string();
     if request.method() == Method::GET && access.open_read(&path) {
@@ -1040,6 +1119,58 @@ mod tests {
         assert_eq!(
             status(closed, post(panic, None)).await,
             StatusCode::UNAUTHORIZED
+        );
+    }
+
+    #[test]
+    fn trusted_addresses_and_networks() {
+        let trust = |text: &str| text.parse::<Trust>();
+        let deck = trust("192.168.1.20=control").unwrap();
+        let room = trust("192.168.1.0/24=view").unwrap();
+        let v6 = trust("fd00::/8").unwrap();
+        let access = Access {
+            trusted: vec![room, deck, v6],
+            ..keyed()
+        };
+        let ip = |text: &str| text.parse::<IpAddr>().unwrap();
+
+        assert_eq!(access.trusted(ip("192.168.1.20")), Some(Right::Control), "highest");
+        assert_eq!(access.trusted(ip("192.168.1.77")), Some(Right::View));
+        assert_eq!(access.trusted(ip("::ffff:192.168.1.77")), Some(Right::View));
+        assert_eq!(access.trusted(ip("192.168.2.1")), None);
+        assert_eq!(access.trusted(ip("fd12::1")), Some(Right::Control), "control by default");
+        assert_eq!(access.trusted(ip("fe80::1")), None);
+        assert!(trust("0.0.0.0/0=edit").unwrap().contains(ip("10.1.2.3")));
+        assert!(trust("192.168.1.0/33").is_err());
+        assert!(trust("192.168.1.20=admin").is_err());
+        assert!(trust("deck.lan").is_err());
+    }
+
+    #[tokio::test]
+    async fn a_trusted_address_needs_no_key() {
+        let cut = r#"{"action":"fade_to_black","duration_ms":0}"#;
+        let add = r#"{"action":"add_input","source":{"kind":"pattern","pattern":"bars"}}"#;
+        let access = || Access {
+            trusted: vec!["192.168.1.20=control".parse().unwrap()],
+            ..keyed()
+        };
+        let status = |from, request| async move { call(access(), from, request).await.0 };
+
+        assert_eq!(status("192.168.1.20", post(cut, None)).await, StatusCode::OK);
+        assert_eq!(
+            status("192.168.1.20", post(add, None)).await,
+            StatusCode::FORBIDDEN,
+            "its right is control"
+        );
+        assert_eq!(
+            status("192.168.1.21", post(cut, None)).await,
+            StatusCode::UNAUTHORIZED,
+            "not on the list"
+        );
+        assert_eq!(
+            status("192.168.1.20", post(cut, Some("Bearer falsch-0123456"))).await,
+            StatusCode::UNAUTHORIZED,
+            "a wrong key is wrong there too"
         );
     }
 

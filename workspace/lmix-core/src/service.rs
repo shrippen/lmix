@@ -247,14 +247,27 @@ impl Service {
         let service = Arc::clone(self);
         tokio::spawn(async move {
             let result = crate::targets::send(&service.target_http, &target, &request).await;
-            if let lmix_types::TargetResult::Failed { reason } = &result {
-                tracing::warn!(target = %target.name, %reason, "output target not reached");
-            }
+            let reached = match &result {
+                lmix_types::TargetResult::Failed { reason } => {
+                    tracing::warn!(target = %target.name, %reason, "output target not reached");
+                    Err(reason.clone())
+                }
+                lmix_types::TargetResult::Ok => Ok(()),
+            };
+            service.reached(&target.name, reached).await;
             let _ = service.events.send(Event::Target {
                 target: target.name.clone(),
                 result,
             });
         });
+    }
+
+    /// Note how target `name` answered; the warnings follow (SUI.5).
+    async fn reached(&self, name: &str, result: Result<(), String>) {
+        let mut sw = self.switcher.lock().await;
+        if sw.set_reached(name, result) {
+            self.publish(&sw);
+        }
     }
 
     /// Best effort, like the autosave.
@@ -1294,9 +1307,20 @@ impl Service {
             }
             Action::TestTarget { name } => {
                 let config = self.switcher.lock().await.target(name)?;
-                crate::targets::probe(&self.target_http, &config)
-                    .await
-                    .map_err(|reason| ActionError::BadTarget { reason })?;
+                let result = crate::targets::probe(&self.target_http, &config).await;
+                self.reached(name, result.clone()).await;
+                result.map_err(|reason| ActionError::BadTarget { reason })?;
+                return Ok(self.state().await);
+            }
+            Action::CheckTargets => {
+                let used = self.switcher.lock().await.used_targets();
+                let probes = used
+                    .iter()
+                    .map(|t| crate::targets::probe(&self.target_http, t));
+                let results = futures_util::future::join_all(probes).await;
+                for (target, result) in used.iter().zip(results) {
+                    self.reached(&target.name, result).await;
+                }
                 return Ok(self.state().await);
             }
             Action::CueGo { .. }
@@ -2368,6 +2392,61 @@ mod tests {
                 .await,
             Err(ActionError::UnknownTarget { .. })
         ));
+    }
+
+    #[tokio::test]
+    async fn checking_targets_warns_until_they_answer() {
+        use tokio::io::AsyncWriteExt;
+        // Nothing listens there yet: the port of a dropped listener.
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
+        let service = Service::new(4, Arc::new(NullEngine::default()), None);
+        let target = |name: &str| Action::SetTarget {
+            target: lmix_types::TargetSpec {
+                name: name.into(),
+                kind: lmix_types::TargetKind::Http,
+                addresses: vec![format!("http://127.0.0.1:{port}")],
+                secret: None,
+                timeout_ms: 500,
+            },
+        };
+        service.handle(target("Haus")).await.unwrap();
+        // Not used by a cue: not probed, no warning.
+        service.handle(target("Keller")).await.unwrap();
+        let light = Action::HaService {
+            target: "Haus".into(),
+            service: "light.turn_on".into(),
+            entity: None,
+            data: None,
+        };
+        service
+            .handle(Action::AddCueList {
+                name: "Show".into(),
+                cues: vec![lmix_types::Cue::actions("Licht", vec![light])],
+                source: None,
+            })
+            .await
+            .unwrap();
+
+        let state = service.handle(Action::CheckTargets).await.unwrap();
+
+        let problems: Vec<_> = state.cue_warnings.iter().map(|w| &w.problem).collect();
+        assert!(
+            matches!(problems[..], [lmix_types::cue::CueProblem::TargetUnreached { target, .. }] if target == "Haus"),
+            "{problems:?}"
+        );
+
+        let listener = tokio::net::TcpListener::bind(("127.0.0.1", port)).await.unwrap();
+        tokio::spawn(async move {
+            while let Ok((mut stream, _)) = listener.accept().await {
+                let _ = stream
+                    .write_all(b"HTTP/1.1 200 OK\r\ncontent-length: 0\r\nconnection: close\r\n\r\n")
+                    .await;
+            }
+        });
+        let state = service.handle(Action::CheckTargets).await.unwrap();
+        assert!(state.cue_warnings.is_empty(), "{:?}", state.cue_warnings);
     }
 
     #[tokio::test(start_paused = true)]

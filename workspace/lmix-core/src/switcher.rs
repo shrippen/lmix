@@ -397,6 +397,8 @@ pub struct Switcher {
     cues: Runner,
     /// What would go wrong when they run (SUI.5); see `refresh_warnings`.
     cue_warnings: Vec<lmix_types::cue::CueWarning>,
+    /// Targets that did not answer their last check or send (SUI.5).
+    unreached: std::collections::BTreeMap<String, String>,
     /// The show file's older version, until saved (SHW.7).
     older_format: Option<u32>,
     status: HashMap<InputId, InputStatus>,
@@ -461,6 +463,7 @@ impl Switcher {
             removed: Vec::new(),
             cues: Runner::default(),
             cue_warnings: Vec::new(),
+            unreached: Default::default(),
             older_format: None,
             status: HashMap::new(),
             mix: HashMap::new(),
@@ -986,6 +989,8 @@ impl Switcher {
                 Ok(Vec::new())
             }
             Action::SetTarget { target } => {
+                // New settings: unknown until checked or sent to again.
+                self.unreached.remove(target.name.trim());
                 crate::targets::set(&mut self.targets, target)?;
                 self.targets_changed = true;
                 Ok(Vec::new())
@@ -1008,11 +1013,15 @@ impl Switcher {
             Action::RemoveTarget { name } => {
                 crate::targets::find(&self.targets, &name)?;
                 self.targets.retain(|t| t.name != name);
+                self.unreached.remove(&name);
                 self.targets_changed = true;
                 Ok(Vec::new())
             }
             // They wait on the network: through the service.
-            Action::TestTarget { .. } | Action::HttpRequest { .. } | Action::HaService { .. } => {
+            Action::TestTarget { .. }
+            | Action::CheckTargets
+            | Action::HttpRequest { .. }
+            | Action::HaService { .. } => {
                 Err(ActionError::BadTarget {
                     reason: "run through the service".into(),
                 })
@@ -2289,7 +2298,33 @@ impl Switcher {
     /// targets or the missing media.
     pub fn refresh_warnings(&mut self) {
         let missing = |id| self.missing.get(&id).is_some_and(|m| !m.is_empty());
-        self.cue_warnings = crate::checks::cue_warnings(&self.show, &self.targets, &missing);
+        let machine = crate::checks::Machine {
+            targets: &self.targets,
+            unreached: &self.unreached,
+            missing: &missing,
+        };
+        self.cue_warnings = crate::checks::cue_warnings(&self.show, &machine);
+    }
+
+    /// How target `name` answered (`Err`: why not); whether that changes
+    /// the warnings (SUI.5).
+    pub fn set_reached(&mut self, name: &str, result: Result<(), String>) -> bool {
+        let changed = match result {
+            Ok(()) => self.unreached.remove(name).is_some(),
+            Err(reason) => self.unreached.insert(name.to_string(), reason.clone()) != Some(reason),
+        };
+        if changed {
+            self.refresh_warnings();
+        }
+        changed
+    }
+
+    /// The targets the cue lists send to, with their settings (SUI.5).
+    pub fn used_targets(&self) -> Vec<crate::targets::TargetConfig> {
+        crate::checks::used_targets(&self.show)
+            .iter()
+            .filter_map(|name| self.targets.iter().find(|t| &t.name == name).cloned())
+            .collect()
     }
 
     /// Write standby into the show's lists; whether one moved (then the

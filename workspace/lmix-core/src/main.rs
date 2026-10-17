@@ -162,6 +162,13 @@ struct Args {
     #[arg(long, env = "LMIX_OPEN_PANIC")]
     open_panic: bool,
 
+    /// Addresses or networks with a right without a key, e.g.
+    /// `192.168.1.20=control`, `192.168.1.0/24=view` (show mode CTL.5);
+    /// only matters with `--password` or `--access-keys`. HTTP, text
+    /// protocol and OSC.
+    #[arg(long, value_delimiter = ',', env = "LMIX_TRUST")]
+    trust: Vec<access::Trust>,
+
     /// Browser pages usable from the network without the password, with
     /// only what they need (`tally`, `keys`, `mixer`, `titles`).
     #[arg(long, value_enum, value_delimiter = ',', env = "LMIX_OPEN_PAGES")]
@@ -334,11 +341,15 @@ async fn main() -> anyhow::Result<()> {
         let local_only =
             args.password.as_deref().is_some_and(|p| !p.is_empty()) || args.access_keys.is_some();
         let open_panic = args.open_panic;
+        let trusted = args.trust.clone();
         if local_only {
-            tracing::info!("OSC takes messages from this machine only (it has no password)");
+            tracing::info!(
+                "OSC takes messages from this machine and trusted addresses only (it has no password)"
+            );
         }
         tokio::spawn(async move {
-            if let Err(error) = osc::serve(listen, service, internet, local_only, open_panic).await
+            if let Err(error) =
+                osc::serve(listen, service, internet, local_only, open_panic, trusted).await
             {
                 tracing::error!(%error, "OSC stopped");
             }
@@ -366,6 +377,7 @@ async fn main() -> anyhow::Result<()> {
         internet: args.allow_internet,
         keys,
         open_panic: args.open_panic,
+        trusted: args.trust.clone(),
         ..access::Access::default()
     });
     if let Some(listen) = args.tcp {

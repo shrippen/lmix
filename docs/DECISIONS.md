@@ -2743,3 +2743,50 @@ bleiben bedienbar.
 
 **Geprüft**: Tests im Ablauf (gehalten, anderer Weg, Loslassen, Modus
 `time`), OSC-Adresse, Speichern und Laden der Show.
+
+## 2026-10-17 — Erreichbarkeit der Ziele in der Warnliste (SUI.5)
+
+**Kontext**: Die Warnliste nannte Ziele, die der Rechner nicht hat, aber
+nicht solche, die nicht antworten. SUI.5 verlangt beides vor der Show.
+
+**Entscheidung**:
+- `check_targets` (Console „Ziele prüfen“) fragt alle Ziele, an die Cues
+  senden, gleichzeitig ab (wie `test_target`: `GET` der ersten Adresse).
+  Wer nicht antwortet, steht mit Grund als `target_unreached` an jedem
+  Cue, der dorthin sendet.
+- Jedes Senden während der Show und jeder `test_target` schreibt das
+  Ergebnis fort: Ein Ziel, das ausfällt, erscheint ohne neue Prüfung in
+  der Liste, eines, das wieder antwortet, verschwindet.
+- Kein Prüfen im Hintergrund: Abfragen im Takt fluten Home Assistant und
+  zeigen nur, was das nächste Senden ohnehin zeigt.
+- Neue Einstellungen oder Entfernen eines Ziels vergessen sein Ergebnis.
+- Zonen-Geräte: strom nennt seine Ton-Ausgänge noch nicht; mit Stufe 2.
+
+**Geprüft**: Regel-Test (Gruppe, doppelte Nennung), Dienst-Test mit
+Ziel ohne und mit Gegenstelle.
+
+## 2026-10-17 — Vertraute Adressen ohne Schlüssel (CTL.5)
+
+**Kontext**: CTL.5 verlangt eine Stufe „ohne Schlüssel“ getrennt für den
+Rechner und eine LAN-Adressliste, Standard nur der Rechner. Bisher: mit
+Schlüssel oder Passwort braucht jedes Gerät im LAN einen Schlüssel; OSC
+hat keinen und nahm dann nur den Rechner (und `--open-panic`). Ein
+Stream Deck über Companion per OSC ging so nur ohne jeden Schlüssel.
+
+**Entscheidung**: `--trust ADRESSE[/PRÄFIX][=RECHT]` (mehrfach oder mit
+Komma, `LMIX_TRUST`), Recht `view`, `control` (Standard) oder `edit`.
+- Gilt nur, wenn Schlüssel oder Passwort gesetzt sind: Sonst darf das LAN
+  ohnehin alles. Der Standard „nur der Rechner“ aus CTL.5 heißt in lmix:
+  Schlüssel setzen; ohne Schlüssel bleibt das Verhalten von API.7, damit
+  bestehende Aufbauten (Webseiten, Companion ohne Schlüssel) weiterlaufen.
+- HTTP: ohne `Authorization` hat die Adresse ihr Recht; ein falscher
+  Schlüssel bleibt falsch (Wartezeit). Textprotokoll: kein `AUTH` nötig,
+  das Recht gilt sofort. OSC: jede Nachricht bis zu diesem Recht
+  (`cue/go` ist `control`).
+- Mehrere passende Einträge: das höchste Recht. IPv4 in IPv6 (`::ffff:`)
+  zählt als IPv4.
+- Nur Adressen, keine Namen: Ein Name, der auf eine andere Adresse zeigt,
+  wäre ein Schlüssel ohne Schloss.
+
+**Geprüft**: Lesen der Einträge (Präfix, Recht, Fehler), Netze v4/v6,
+HTTP mit und ohne Liste, Textprotokoll ohne `AUTH`.

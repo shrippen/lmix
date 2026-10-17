@@ -2399,6 +2399,11 @@
     </message>
     <message>
       <location line="+1" />
+      <source>sends to target %1, which did not answer: %2</source>
+      <translation>sendet an Ziel %1, das nicht antwortete: %2</translation>
+    </message>
+    <message>
+      <location line="+1" />
       <source>uses input %1, which is not there</source>
       <translation>nutzt Input %1, den es nicht gibt</translation>
     </message>
@@ -2508,6 +2513,16 @@
       <location line="+2" />
       <source>Output targets (HTTP, Home Assistant, OSC) and OSC subscribers of this machine</source>
       <translation>Ausgabeziele (HTTP, Home Assistant, OSC) und OSC-Abonnenten dieses Rechners</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Check targets</source>
+      <translation>Ziele prüfen</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Ask every target the cues send to; those that do not answer show up as warnings</source>
+      <translation>Alle Ziele fragen, an die Cues senden; wer nicht antwortet, steht in den Warnungen</translation>
     </message>
     <message>
       <location line="+14" />
