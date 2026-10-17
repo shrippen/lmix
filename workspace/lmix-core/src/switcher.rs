@@ -3968,10 +3968,31 @@ impl Switcher {
 
     fn mix_of(&self, input: &ShowInput) -> Mix {
         let audio = input.audio;
-        let off_air = audio.follow_video && self.show.program != Some(input.id);
+        let gain = fader_gain(audio.volume);
+        let on_program = self.show.program == Some(input.id);
+        if !audio.follow_video {
+            return Mix {
+                gain,
+                muted: !audio.on,
+            };
+        }
+        // While the T-bar is pulled (SWI.5), program sound fades out as
+        // preview fades in, like the picture.
+        let pulled = self.t_bar > 0.0;
+        let share = if on_program && pulled {
+            1.0 - f64::from(self.t_bar)
+        } else if pulled && self.show.preview == Some(input.id) {
+            f64::from(self.t_bar)
+        } else if on_program {
+            1.0
+        } else {
+            0.0
+        };
+        // Off air it is muted at its own level, as without the T-bar.
+        let silent = share == 0.0;
         Mix {
-            gain: fader_gain(audio.volume),
-            muted: !audio.on || off_air,
+            gain: if silent { gain } else { gain * share },
+            muted: !audio.on || silent,
         }
     }
 
@@ -5572,6 +5593,42 @@ mod tests {
         ));
         assert_eq!(sw.tally(), [2, 1], "preview went to program");
         assert_eq!(sw.state().t_bar, 0.0);
+    }
+
+    #[test]
+    fn sound_that_follows_video_follows_the_t_bar() {
+        let mut sw = two_inputs();
+        for name in ["A", "B"] {
+            sw.apply(Action::SetAudioFollow {
+                input: named(name),
+                follow: true,
+            })
+            .unwrap();
+        }
+        sw.apply(Action::CutDirect { input: named("A") }).unwrap();
+        sw.apply(Action::PreviewInput { input: named("B") })
+            .unwrap();
+        let gains = |cmds: &[Command]| -> Vec<(usize, f64, bool)> {
+            cmds.iter()
+                .filter_map(|c| match c {
+                    Command::SetAudio {
+                        slot, gain, muted, ..
+                    } => Some((*slot, (*gain * 100.0).round() / 100.0, *muted)),
+                    _ => None,
+                })
+                .collect()
+        };
+
+        // Halfway (SWI.5): program fades out as preview fades in.
+        let half = sw.apply(Action::TBar { position: 0.5 }).unwrap();
+        assert_eq!(gains(&half), [(0, 0.5, false), (1, 0.5, false)]);
+        // Back to the start: as before.
+        let back = sw.apply(Action::TBar { position: 0.0 }).unwrap();
+        assert_eq!(gains(&back), [(0, 1.0, false), (1, 1.0, true)]);
+        // At the end: the take, B alone.
+        sw.apply(Action::TBar { position: 0.8 }).unwrap();
+        let end = sw.apply(Action::TBar { position: 1.0 }).unwrap();
+        assert_eq!(gains(&end), [(0, 1.0, true), (1, 1.0, false)]);
     }
 
     #[test]

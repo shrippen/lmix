@@ -613,6 +613,15 @@ code="$(curl -s -o /dev/null -w '%{http_code}' -X POST "$CORE/actions" -H 'conte
 # --- T-bar (4.3): preview mixed in by hand, taken at the end ---
 act '{"action":"cut_direct","input":"Ball"}' >/dev/null
 act '{"action":"preview_input","input":"Orange"}' >/dev/null
+# Sound that follows video follows the T-bar (SWI.5): Ball fades out by
+# half (about -6 dB) and comes back when the bar goes back.
+act '{"action":"set_audio_follow","input":"Ball","follow":true}' >/dev/null
+full=$(steady_db pgm_db)
+act '{"action":"t_bar","position":0.5}' >/dev/null
+settled '[[ $(pgm_db) -le $((full - 4)) && $(pgm_db) -gt $SILENT_DB ]]' || fail "program sound did not follow the T-bar ($full -> $(pgm_db) dB)"
+act '{"action":"t_bar","position":0}' >/dev/null
+settled '[[ $(pgm_db) -ge $((full - 2)) ]]' || fail "program sound not back with the T-bar ($full -> $(pgm_db) dB)"
+act '{"action":"set_audio_follow","input":"Ball","follow":false}' >/dev/null
 act '{"action":"t_bar","position":0.5}' >/dev/null
 half_mixed() { picture program "$WORK/tbar.jpg"; local r; r=$(rgb "$WORK/tbar.jpg" r); ((r > 80 && r < 200)); }
 wait_for "$SETTLE_S" half_mixed || fail "T-bar at half: program red $(rgb "$WORK/tbar.jpg" r), not a mix"
@@ -621,7 +630,7 @@ act '{"action":"t_bar","position":1}' >/dev/null
 [[ "$(curl -sf "$CORE/state" | jq -r '[.inputs[] | select(.name=="Orange") | .id][0] == .program')" == true ]] \
     || fail "T-bar at the end did not take preview to program"
 wait_for "$SETTLE_S" overlay_shown || fail "program not orange after the T-bar take"
-pass "T-bar: preview mixed in by half, taken at the end"
+pass "T-bar: preview mixed in by half, sound follows, taken at the end"
 
 # --- stinger (4.2): a clip with alpha over program, cut underneath ---
 # Blue square in the middle, the rest transparent; 2 s.
