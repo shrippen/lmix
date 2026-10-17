@@ -93,11 +93,24 @@ pub struct StromEngine {
     slots: AtomicUsize,
 }
 
+/// Longest wait for one engine call. Commands run under the switcher
+/// lock, so a call that never returns would freeze lmix-core; the slowest
+/// real ones (a recording drained with EOS, a mixer rebuilt) take seconds.
+const ENGINE_CALL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
+
+/// HTTP client for strom's API: a hung call fails after `timeout`.
+fn engine_client(timeout: std::time::Duration) -> reqwest::Client {
+    reqwest::Client::builder()
+        .timeout(timeout)
+        .build()
+        .expect("HTTP client builds")
+}
+
 impl StromEngine {
     pub fn new(base_url: String, backend: MixerBackend, monitor: MonitorOut) -> Self {
         Self {
             base_url,
-            http: reqwest::Client::new(),
+            http: engine_client(ENGINE_CALL_TIMEOUT),
             backend,
             monitor,
             black: AtomicUsize::new(0),
@@ -1156,6 +1169,25 @@ fn level_writes(level: &Level, known: Option<bool>) -> Vec<(String, PropertyValu
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// An engine that takes a request and never answers fails the call
+    /// instead of holding lmix-core (and its switcher lock) for good.
+    #[tokio::test]
+    async fn an_engine_call_does_not_wait_forever() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            let mut held = Vec::new();
+            while let Ok((stream, _)) = listener.accept().await {
+                held.push(stream);
+            }
+        });
+        let client = engine_client(std::time::Duration::from_millis(300));
+        let started = std::time::Instant::now();
+        let result = client.get(format!("http://{addr}/api/flows")).send().await;
+        assert!(result.is_err());
+        assert!(started.elapsed() < std::time::Duration::from_secs(5));
+    }
     use strom_types::api::{SrtCallerStats, SrtConnectionStats};
 
     #[test]
