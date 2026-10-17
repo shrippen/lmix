@@ -785,8 +785,10 @@ pass "clip end: hold on the last frame, fires, loops again"
 # of two frames is checked on hardware (HARDWARE-TODO).
 LATENCY_BUDGET_MS="${LATENCY_BUDGET_MS:-150}"
 act '{"action":"cut_direct","input":"Ball"}' >/dev/null
-curl -sf -X POST "$CORE/latency/measure?seconds=5" >/dev/null || fail "latency measurement not started"
-sleep 6
+# About 20 samples: p95 then tolerates one hiccup of the shared VM (with 10
+# it was the slowest sample).
+curl -sf -X POST "$CORE/latency/measure?seconds=10" >/dev/null || fail "latency measurement not started"
+sleep 11
 latency="$(curl -sf "$CORE/latency")"
 samples="$(jq -r '.samples' <<<"$latency")"
 median="$(jq -r '.median_ms' <<<"$latency")"

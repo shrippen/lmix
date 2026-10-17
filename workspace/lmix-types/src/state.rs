@@ -275,10 +275,10 @@ impl Latency {
     pub fn of(ages_ms: &[u64]) -> Self {
         let mut sorted = ages_ms.to_vec();
         sorted.sort_unstable();
+        // Nearest rank: the ceil(n * q / 100)-th smallest sample.
         let at = |q: usize| {
-            sorted
-                .get((sorted.len() * q / 100).min(sorted.len().saturating_sub(1)))
-                .copied()
+            let rank = (sorted.len() * q).div_ceil(100).max(1);
+            sorted.get(rank - 1).copied()
         };
         Self {
             samples: sorted.len(),
@@ -353,10 +353,24 @@ mod tests {
         let ages: Vec<u64> = (1..=100).rev().collect();
         let latency = Latency::of(&ages);
 
+        // Nearest rank: the smallest value at least q % of the samples
+        // are at or below.
         assert_eq!(latency.samples, 100);
-        assert_eq!(latency.median_ms, Some(51));
-        assert_eq!(latency.p95_ms, Some(96));
+        assert_eq!(latency.median_ms, Some(50));
+        assert_eq!(latency.p95_ms, Some(95));
         assert_eq!(latency.max_ms, Some(100));
         assert_eq!(Latency::of(&[]).median_ms, None);
+    }
+
+    /// With 20 samples, one slow one is the 5 % above p95, not p95
+    /// itself (the VM latency check takes about 20).
+    #[test]
+    fn one_slow_sample_in_twenty_is_above_p95() {
+        let mut ages: Vec<u64> = (1..=19).collect();
+        ages.push(500);
+        let latency = Latency::of(&ages);
+        assert_eq!(latency.p95_ms, Some(19));
+        assert_eq!(latency.max_ms, Some(500));
+        assert_eq!(Latency::of(&[7]).p95_ms, Some(7));
     }
 }
