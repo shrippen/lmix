@@ -843,8 +843,9 @@ impl Engine for StromEngine {
                 feed,
                 aux,
             } => {
-                self.put_flow(&flows::output_flow(*id, spec, *feed, *aux, self.backend))
-                    .await
+                let framerate = self.format.lock().expect("format lock").framerate;
+                let flow = flows::output_flow(*id, spec, *feed, *aux, self.backend, framerate);
+                self.put_flow(&flow).await
             }
             Command::StopOutput { id } => self.drop_flow(flows::output_flow_id(*id)).await,
             Command::Overlay {

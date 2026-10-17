@@ -25,7 +25,7 @@ use lmix_types::{
     LayoutTemplate, Listen, Look, Output, OutputGroup, OutputId, OutputRef, OutputSource,
     OutputSpec, OutputStatus, OverlayChannel, QuickPlay, Shortcut, ShortcutSpec, ShowState,
     SignalLoss, SourceSpec, Stinger, StingerSpec, TemplateBox, TemplateInput, Transition,
-    TransitionSlot, Transport, VolumeTarget, FADE_MAX_MS,
+    TransitionSlot, Transport, VideoEncoding, VolumeTarget, FADE_MAX_MS,
 };
 use lmix_types::{Cue, CueList, MidiKind, MidiMessage, Trigger, TriggerOn};
 
@@ -3644,6 +3644,9 @@ impl Switcher {
         if let Some(bus) = aux {
             aux_index(bus)?;
         }
+        if let Some(reason) = spec.encoding().and_then(VideoEncoding::problem) {
+            return Err(ActionError::BadEncoding { reason });
+        }
         let output = ShowOutput {
             id: OutputId::new(),
             name: name.unwrap_or_default(),
@@ -5914,6 +5917,7 @@ mod tests {
         let srt = OutputSpec::Srt {
             uri: "srt://cdn:9000".into(),
             video_kbps: 6000,
+            encoding: Default::default(),
         };
         assert!(matches!(
             sw.apply(Action::AddOutput {
@@ -5932,6 +5936,7 @@ mod tests {
         let srt = OutputSpec::Srt {
             uri: "srt://cdn:9000".into(),
             video_kbps: 6000,
+            encoding: Default::default(),
         };
         sw.apply(Action::AddOutput {
             spec: srt,
@@ -6918,6 +6923,7 @@ mod tests {
         let srt = OutputSpec::Srt {
             uri: "srt://cdn:9000".into(),
             video_kbps: 6000,
+            encoding: Default::default(),
         };
         sw.apply(Action::AddOutput {
             spec: srt.clone(),
@@ -6968,16 +6974,55 @@ mod tests {
     }
 
     #[test]
+    fn a_long_keyframe_interval_is_refused() {
+        let mut sw = Switcher::new(SLOTS);
+        let spec = |keyframe_ms| OutputSpec::Record {
+            folder: "show".into(),
+            container: Default::default(),
+            video_kbps: 8000,
+            encoding: VideoEncoding {
+                keyframe_ms,
+                ..Default::default()
+            },
+        };
+        let add = |spec| Action::AddOutput {
+            spec,
+            source: OutputSource::Program,
+            name: None,
+            aux: None,
+        };
+        assert!(matches!(
+            sw.apply(add(spec(20_000))),
+            Err(ActionError::BadEncoding { .. })
+        ));
+        assert!(sw.apply(add(spec(10_000))).is_ok());
+        let json = r#"{"action":"add_output","spec":{"kind":"srt","uri":"srt://cdn:9000","encoding":{"codec":"h265","rate":"cbr"}}}"#;
+        let Action::AddOutput { spec, .. } = serde_json::from_str::<Action>(json).unwrap() else {
+            panic!("not add_output");
+        };
+        assert_eq!(
+            spec.encoding(),
+            Some(&VideoEncoding {
+                codec: lmix_types::VideoCodec::H265,
+                rate: lmix_types::RateMode::Cbr,
+                keyframe_ms: lmix_types::output::DEFAULT_KEYFRAME_MS,
+            })
+        );
+    }
+
+    #[test]
     fn output_groups_start_and_stop_together() {
         let mut sw = Switcher::new(SLOTS);
         let srt = |port: u16| OutputSpec::Srt {
             uri: format!("srt://cdn:{port}"),
             video_kbps: 6000,
+            encoding: Default::default(),
         };
         let record = OutputSpec::Record {
             folder: "show".into(),
             container: Default::default(),
             video_kbps: 8000,
+            encoding: Default::default(),
         };
         for spec in [srt(9000), record, srt(9001)] {
             sw.apply(Action::AddOutput {
@@ -7035,6 +7080,7 @@ mod tests {
             folder: "iso".into(),
             container: lmix_types::Container::Mkv,
             video_kbps: 8000,
+            encoding: Default::default(),
         };
         sw.apply(Action::AddOutput {
             spec: rec,

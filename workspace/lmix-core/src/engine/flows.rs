@@ -21,7 +21,10 @@ use uuid::Uuid;
 use lmix_types::action::OVERLAY_CHANNELS;
 use lmix_types::input::{color_rgb, AUX_BUSES, AUX_PRE_FADER};
 use lmix_types::layout::LAYOUTS;
-use lmix_types::{DisplayMode, MasterFormat, OutputId, OutputSpec, SourceSpec};
+use lmix_types::{
+    DisplayMode, Framerate, MasterFormat, OutputId, OutputSpec, RateMode, SourceSpec, VideoCodec,
+    VideoEncoding,
+};
 
 use super::LivePicture;
 use crate::switcher::Feed;
@@ -371,6 +374,7 @@ pub fn output_flow(
     feed: Feed,
     aux: Option<usize>,
     backend: MixerBackend,
+    framerate: Framerate,
 ) -> Flow {
     let mut flow = Flow::new(format!("lmix output {id}"));
     flow.id = output_flow_id(id);
@@ -412,8 +416,12 @@ pub fn output_flow(
     let on_gpu = matches!(feed, Feed::Program | Feed::Multiview) && backend == MixerBackend::Cuda;
 
     match spec {
-        OutputSpec::Srt { uri, video_kbps } => {
-            add_encoder(&mut flow, *video_kbps);
+        OutputSpec::Srt {
+            uri,
+            video_kbps,
+            encoding,
+        } => {
+            add_encoder(&mut flow, *video_kbps, encoding, framerate);
             flow.blocks.push(block(
                 "srt",
                 SRT_OUTPUT_BLOCK,
@@ -434,8 +442,9 @@ pub fn output_flow(
             folder,
             container,
             video_kbps,
+            encoding,
         } => {
-            add_encoder(&mut flow, *video_kbps);
+            add_encoder(&mut flow, *video_kbps, encoding, framerate);
             flow.blocks.push(block(
                 "rec",
                 RECORDER_BLOCK,
@@ -652,19 +661,44 @@ pub fn live_flow(which: LivePicture, socket: &str, backend: MixerBackend, sink: 
     flow
 }
 
-/// H.264 from program: hardware when the engine has one, else software.
-fn add_encoder(flow: &mut Flow, video_kbps: u32) {
+/// Program encoded as `encoding` says (STR.3): hardware when the engine
+/// has one, else software. The keyframe interval goes to the encoder in
+/// frames of the program rate.
+fn add_encoder(flow: &mut Flow, video_kbps: u32, encoding: &VideoEncoding, framerate: Framerate) {
+    let codec = match encoding.codec {
+        VideoCodec::H264 => "h264",
+        VideoCodec::H265 => "h265",
+    };
+    let rate = match encoding.rate {
+        RateMode::Vbr => "vbr",
+        RateMode::Cbr => "cbr",
+    };
     flow.blocks.push(block(
         "enc",
         VIDEO_ENCODER_BLOCK,
         vec![
-            ("codec", PropertyValue::String("h264".into())),
+            ("codec", PropertyValue::String(codec.into())),
             ("encoder_preference", PropertyValue::String("auto".into())),
             ("bitrate", PropertyValue::UInt(u64::from(video_kbps))),
+            ("rate_control", PropertyValue::String(rate.into())),
+            (
+                "keyframe_interval",
+                PropertyValue::UInt(keyframe_frames(encoding.keyframe_ms, framerate)),
+            ),
         ],
     ));
     flow.links
         .push(link("pgm:src".into(), "enc:video_in".into()));
+}
+
+/// Frames between keyframes for `ms` at `framerate`; 0 stays automatic.
+fn keyframe_frames(ms: u32, framerate: Framerate) -> u64 {
+    let (num, den) = framerate
+        .fraction()
+        .split_once('/')
+        .and_then(|(n, d)| Some((n.parse::<u64>().ok()?, d.parse::<u64>().ok()?)))
+        .unwrap_or((30, 1));
+    (u64::from(ms) * num).div_ceil(1000 * den)
 }
 
 /// Element in the mixer flow that delays the sound of `slot`.
@@ -1374,6 +1408,7 @@ mod tests {
             Feed::Multiview,
             None,
             MixerBackend::Cpu,
+            Framerate::default(),
         );
 
         let video = flow.blocks.iter().find(|b| b.id == "pgm").unwrap();
@@ -1438,6 +1473,7 @@ mod tests {
         let spec = OutputSpec::Srt {
             uri: "srt://cdn:9000".into(),
             video_kbps: 6000,
+            encoding: Default::default(),
         };
         let flow = output_flow(
             OutputId::new(),
@@ -1445,6 +1481,7 @@ mod tests {
             Feed::Program,
             Some(0),
             MixerBackend::Cpu,
+            Framerate::default(),
         );
 
         let audio = flow.blocks.iter().find(|b| b.id == "pgm_audio").unwrap();
@@ -1455,11 +1492,15 @@ mod tests {
     }
 
     #[test]
-    fn recording_encodes_picture_and_sound() {
-        let spec = OutputSpec::Record {
-            folder: "show".into(),
-            container: lmix_types::Container::Mkv,
-            video_kbps: 8000,
+    fn an_output_encodes_as_it_is_told() {
+        let spec = OutputSpec::Srt {
+            uri: "srt://cdn:9000".into(),
+            video_kbps: 4000,
+            encoding: VideoEncoding {
+                codec: VideoCodec::H265,
+                rate: RateMode::Cbr,
+                keyframe_ms: 2000,
+            },
         };
         let flow = output_flow(
             OutputId::new(),
@@ -1467,6 +1508,40 @@ mod tests {
             Feed::Program,
             None,
             MixerBackend::Cpu,
+            Framerate::Fps25,
+        );
+
+        let enc = flow.blocks.iter().find(|b| b.id == "enc").unwrap();
+        let text = |name: &str| match enc.properties.get(name) {
+            Some(PropertyValue::String(s)) => s.clone(),
+            other => panic!("{name}: {other:?}"),
+        };
+        assert_eq!(text("codec"), "h265");
+        assert_eq!(text("rate_control"), "cbr");
+        assert!(matches!(
+            enc.properties.get("keyframe_interval"),
+            Some(PropertyValue::UInt(50))
+        ));
+        // 59.94 fps: two seconds round up to 120 frames.
+        assert_eq!(keyframe_frames(2000, Framerate::Fps59_94), 120);
+        assert_eq!(keyframe_frames(0, Framerate::Fps30), 0, "automatic");
+    }
+
+    #[test]
+    fn recording_encodes_picture_and_sound() {
+        let spec = OutputSpec::Record {
+            folder: "show".into(),
+            container: lmix_types::Container::Mkv,
+            video_kbps: 8000,
+            encoding: Default::default(),
+        };
+        let flow = output_flow(
+            OutputId::new(),
+            &spec,
+            Feed::Program,
+            None,
+            MixerBackend::Cpu,
+            Framerate::default(),
         );
 
         let pgm = flow.blocks.iter().find(|b| b.id == "pgm").unwrap();
@@ -1490,6 +1565,7 @@ mod tests {
             folder: "iso".into(),
             container: lmix_types::Container::Mkv,
             video_kbps: 8000,
+            encoding: Default::default(),
         };
         let flow = output_flow(
             OutputId::new(),
@@ -1500,6 +1576,7 @@ mod tests {
             },
             None,
             MixerBackend::Cuda,
+            Framerate::default(),
         );
 
         let pgm = flow.blocks.iter().find(|b| b.id == "pgm").unwrap();
@@ -1599,6 +1676,7 @@ mod tests {
             Feed::Program,
             None,
             MixerBackend::Cpu,
+            Framerate::default(),
         );
 
         let screen = flow.elements.iter().find(|e| e.id == "screen").unwrap();
@@ -1625,6 +1703,7 @@ mod tests {
             Feed::Program,
             None,
             MixerBackend::Cuda,
+            Framerate::default(),
         );
         assert!(flow
             .links
@@ -1650,6 +1729,7 @@ mod tests {
             folder: "show".into(),
             container: lmix_types::Container::Mkv,
             video_kbps: 8000,
+            encoding: Default::default(),
         };
         let flow = output_flow(
             OutputId::new(),
@@ -1657,6 +1737,7 @@ mod tests {
             Feed::Program,
             None,
             MixerBackend::Cuda,
+            Framerate::default(),
         );
         assert!(
             flow.elements

@@ -1226,6 +1226,8 @@ fn one() -> f64 {
 pub enum ActionError {
     #[error("no output matches {reference}")]
     UnknownOutput { reference: String },
+    #[error("encoding: {reason}")]
+    BadEncoding { reason: String },
     #[error("no input matches {reference}")]
     UnknownInput { reference: String },
     #[error("all {slots} mixer slots are in use")]

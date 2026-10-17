@@ -410,6 +410,18 @@ act '{"action":"stop_outputs","group":"streams"}' >/dev/null
 settled '[[ "$(output_state Stream)" == stopped && "$(output_state "Stream 2")" == stopped ]]' || fail "streams not all stopped"
 act '{"action":"remove_output","output":"Stream 2"}' >/dev/null
 pass "outputs: all streams started and stopped together"
+# Encoding (STR.3): H.265 at a constant bitrate lands as HEVC.
+act '{"action":"add_output","spec":{"kind":"record","folder":"hevc","container":"mkv","encoding":{"codec":"h265","rate":"cbr","keyframe_ms":1000}},"name":"HEVC"}' >/dev/null
+act '{"action":"start_output","output":"HEVC"}' >/dev/null
+settled '[[ "$(output_state HEVC)" == running ]]' || fail "HEVC recording not running"
+sleep 3
+act '{"action":"stop_output","output":"HEVC"}' >/dev/null
+wait_for "$SETTLE_S" is output_state HEVC stopped || fail "HEVC recording did not stop"
+hevc="$(find "$WORK/strom-data" -path '*hevc/*' -name '*.mkv' | head -1)"
+[[ -n "$hevc" ]] || fail "no HEVC recording file"
+[[ "$(codecs "$hevc")" == "aac,hevc" ]] || fail "recording is not HEVC: $(codecs "$hevc")"
+act '{"action":"remove_output","output":"HEVC"}' >/dev/null
+pass "outputs: H.265 recording at a constant bitrate"
 
 # MultiCorder: ISO recordings of single inputs, with and without sound.
 input_id() { curl -sf "$CORE/state" | jq -r ".inputs[] | select(.name==\"$1\") | .id"; }

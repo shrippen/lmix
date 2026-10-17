@@ -173,7 +173,7 @@
       <translation>Ausgang hinzufügen</translation>
     </message>
     <message>
-      <location line="+40" />
+      <location line="+45" />
       <source>Output</source>
       <translation>Ausgang</translation>
     </message>
@@ -208,7 +208,22 @@
       <translation>Video kbit/s</translation>
     </message>
     <message>
-      <location line="+19" />
+      <location line="+30" />
+      <source>Variable bitrate</source>
+      <translation>Variable Bitrate</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Constant bitrate</source>
+      <translation>Konstante Bitrate</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Keyframe every (s)</source>
+      <translation>Keyframe alle (s)</translation>
+    </message>
+    <message>
+      <location line="+11" />
       <source>Name</source>
       <translation>Name</translation>
     </message>
@@ -244,7 +259,7 @@
       <translation>Master und Aux-Busse</translation>
     </message>
     <message>
-      <location line="+13" />
+      <location line="+19" />
       <source>Master · program sound</source>
       <translation>Master · Programmton</translation>
     </message>

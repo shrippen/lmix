@@ -330,8 +330,13 @@ impl qobject::Core {
         let Ok(form) = serde_json::from_str::<forms::OutputForm>(&form.to_string()) else {
             return false;
         };
-        let Some(spec) = forms::output_of(&form.kind, &form.text, &form.container, form.video_kbps)
-        else {
+        let Some(spec) = forms::output_of(
+            &form.kind,
+            &form.text,
+            &form.container,
+            form.video_kbps,
+            form.encoding,
+        ) else {
             return false;
         };
         let name = form.name.trim().to_string();

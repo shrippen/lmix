@@ -5,7 +5,7 @@
 
 use lmix_types::{
     Container, DisplayMode, Effect, InputColor, InputPress, OutputSource, OutputSpec, SourceSpec,
-    TestPattern,
+    TestPattern, VideoEncoding,
 };
 use serde::{Deserialize, Serialize};
 
@@ -128,11 +128,20 @@ pub struct OutputForm {
     /// Aux bus for the sound; 0 keeps the source's own.
     #[serde(default)]
     pub aux: u8,
+    /// Codec, rate control, keyframes of SRT and recordings (STR.3).
+    #[serde(default)]
+    pub encoding: VideoEncoding,
 }
 
 /// The output the "add output" form describes; `None` while a needed
 /// field is empty.
-pub fn output_of(kind: &str, text: &str, container: &str, video_kbps: u32) -> Option<OutputSpec> {
+pub fn output_of(
+    kind: &str,
+    text: &str,
+    container: &str,
+    video_kbps: u32,
+    encoding: VideoEncoding,
+) -> Option<OutputSpec> {
     let text = text.trim().to_string();
     let needs_text = !matches!(kind, "window" | "fullscreen");
     if needs_text && text.is_empty() {
@@ -147,12 +156,14 @@ pub fn output_of(kind: &str, text: &str, container: &str, video_kbps: u32) -> Op
         "srt" => OutputSpec::Srt {
             uri: text,
             video_kbps,
+            encoding,
         },
         "record" => OutputSpec::Record {
             folder: text,
             container: serde_json::from_value(serde_json::Value::String(container.into()))
                 .unwrap_or_default(),
             video_kbps,
+            encoding,
         },
         "ndi" => OutputSpec::Ndi { name: text },
         "window" => OutputSpec::Display {
@@ -231,22 +242,33 @@ mod tests {
     #[test]
     fn outputs_from_the_form() {
         assert_eq!(
-            output_of("window", "", "mkv", 0),
+            output_of("window", "", "mkv", 0, VideoEncoding::default()),
             Some(OutputSpec::Display {
                 mode: DisplayMode::Window
             })
         );
-        assert_eq!(output_of("drm", "", "mkv", 0), None, "needs a connector");
-        assert_eq!(output_of("drm", "x", "mkv", 0), None);
         assert_eq!(
-            output_of("record", "show", "mp4", 0),
+            output_of("drm", "", "mkv", 0, VideoEncoding::default()),
+            None,
+            "needs a connector"
+        );
+        assert_eq!(
+            output_of("drm", "x", "mkv", 0, VideoEncoding::default()),
+            None
+        );
+        assert_eq!(
+            output_of("record", "show", "mp4", 0, VideoEncoding::default()),
             Some(OutputSpec::Record {
                 folder: "show".into(),
                 container: Container::Mp4,
-                video_kbps: DEFAULT_VIDEO_KBPS
+                video_kbps: DEFAULT_VIDEO_KBPS,
+                encoding: VideoEncoding::default(),
             })
         );
-        assert_eq!(output_of("srt", " ", "mkv", 8000), None);
+        assert_eq!(
+            output_of("srt", " ", "mkv", 8000, VideoEncoding::default()),
+            None
+        );
     }
 
     #[test]

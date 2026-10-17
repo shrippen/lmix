@@ -644,6 +644,7 @@ mod tests {
                 spec: OutputSpec::Srt {
                     uri: "srt://cdn:9000".into(),
                     video_kbps: 6000,
+                    encoding: Default::default(),
                 },
                 source: OutputSource::Input(id),
                 aux: Some(2),
