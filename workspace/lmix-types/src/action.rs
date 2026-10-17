@@ -243,6 +243,10 @@ pub const ACTION_GROUPS: &[(&str, &[&str])] = &[
             "cue_reset",
             "set_active_cue_list",
             "set_go_guard",
+            "cue_panic",
+            "cue_hard_stop",
+            "set_panic_time",
+            "set_emergency_list",
             "add_shortcut",
             "set_shortcut",
             "remove_shortcut",
@@ -259,6 +263,8 @@ pub const ACTION_GROUPS: &[(&str, &[&str])] = &[
             "test_target",
             "http_request",
             "ha_service",
+            "set_feed",
+            "remove_feed",
         ],
     ),
     (
@@ -571,6 +577,22 @@ pub enum Action {
     SetGoGuard {
         ms: u32,
     },
+    /// Stop every cue of every list over the panic time; a second panic
+    /// within it is a hard stop. Standby stays; the emergency list runs
+    /// (SAF.1, SAF.4).
+    CuePanic,
+    /// Stop every cue at once; the emergency list runs (SAF.3).
+    CueHardStop,
+    /// Panic time of the show, 0–10 000 ms (SAF.2).
+    SetPanicTime {
+        ms: u32,
+    },
+    /// The list that runs with every panic and hard stop; `null` for none
+    /// (SAF.4).
+    SetEmergencyList {
+        #[serde(default)]
+        list: Option<InputRef>,
+    },
 
     // ---- Output targets (show mode EXT) ----
     /// Add a target of this machine, or replace the one of the same name.
@@ -610,6 +632,11 @@ pub enum Action {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         data: Option<serde_json::Value>,
     },
+
+    /// Add a fixed OSC subscriber, or replace the one of the same name
+    /// (CTL.4).
+    SetFeed { feed: crate::feed::Feed },
+    RemoveFeed { name: String },
 
     // ---- Safety ----
     /// Lock or unlock (AUT.11): while locked, closing inputs, opening or

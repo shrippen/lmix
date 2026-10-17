@@ -91,6 +91,8 @@ impl Topics {
             Event::Position { .. } => Self::POSITION,
             Event::Cue { .. } => Self::CUE,
             Event::Target { .. } => Self::TARGET,
+            Event::Panic { .. } => Self::CUE,
+            Event::Running { .. } => Self::CUE,
         };
         self.0 & bit != 0
     }
@@ -291,6 +293,8 @@ fn event_line(event: &Event) -> String {
         Event::Midi { midi } => format!("MIDI {}\n", json(midi)),
         Event::Cue { .. } => format!("CUE {}\n", json(event)),
         Event::Target { .. } => format!("TARGET {}\n", json(event)),
+        Event::Panic { .. } => format!("PANIC {}\n", json(event)),
+        Event::Running { cues } => format!("RUNNING {}\n", json(cues)),
         Event::Title { .. } => format!("TITLE {}\n", json(event)),
         Event::Position { .. } => format!("POSITION {}\n", json(event)),
     }

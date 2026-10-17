@@ -101,6 +101,12 @@ pub struct Show {
     /// Shortest gap between two GOs (RUN.6).
     #[serde(default = "default_go_guard")]
     pub go_guard_ms: u32,
+    /// Panic time (SAF.2).
+    #[serde(default = "default_panic")]
+    pub panic_ms: u32,
+    /// The list that runs with every panic and hard stop (SAF.4).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub emergency_list: Option<InputId>,
     /// MIDI controller on the T-bar.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub midi_tbar: Option<MidiBinding>,
@@ -166,6 +172,10 @@ pub struct ShowCueList {
     pub cues: Vec<Cue>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source: Option<String>,
+    /// Where standby stood, so a restart goes on there (SAF.6); nothing
+    /// runs after a load.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub standby: Option<lmix_types::CueId>,
 }
 
 /// One shortcut as saved.
@@ -227,6 +237,8 @@ impl Default for Show {
             shortcuts: Vec::new(),
             cue_lists: Vec::new(),
             go_guard_ms: default_go_guard(),
+            panic_ms: default_panic(),
+            emergency_list: None,
             midi_tbar: None,
             graphics: Vec::new(),
             datasets: Vec::new(),
@@ -242,6 +254,10 @@ fn all_default(channels: &[OverlayChannel; OVERLAY_CHANNELS as usize]) -> bool {
 /// Buttons 1–4: fade, cut, dip to black, wipe.
 fn default_go_guard() -> u32 {
     lmix_types::cue::GO_GUARD_DEFAULT_MS
+}
+
+fn default_panic() -> u32 {
+    lmix_types::cue::PANIC_DEFAULT_MS
 }
 
 fn default_transitions() -> Vec<Transition> {
@@ -468,8 +484,11 @@ mod tests {
                 name: "Opening".into(),
                 cues: vec![Cue::actions("Bars", vec![Action::Cut])],
                 source: None,
+                standby: None,
             }],
             go_guard_ms: 120,
+            panic_ms: 2000,
+            emergency_list: None,
             shortcuts: vec![ShowShortcut {
                 id: InputId::new(),
                 label: "Bars".into(),

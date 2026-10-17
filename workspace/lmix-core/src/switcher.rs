@@ -13,6 +13,7 @@ use lmix_types::action::{
 use lmix_types::automation::{AUTOMATION_ACTIONS, TRIGGERS, TRIGGER_DELAY_MAX_MS};
 use lmix_types::cue::{
     CueKind, CUES, CUE_WAIT_MAX_MS, CUE_WAIT_STEP_MS, GO_GUARD_MAX_MS, GROUP_CHILDREN, GROUP_DEPTH,
+    PANIC_MAX_MS,
 };
 use lmix_types::input::{color_rgb, AUX_BUSES, REF_DYNAMIC, REF_PREVIEW, REF_PROGRAM, VOLUME_MAX};
 use lmix_types::layout::{BORDER_MAX_PX, LAYOUTS, LAYOUT_BOXES, LAYOUT_TEMPLATES};
@@ -198,6 +199,10 @@ fn runs_automation(action: &Action) -> bool {
                 | Action::CueReset
                 | Action::SetActiveCueList { .. }
                 | Action::SetGoGuard { .. }
+                | Action::CuePanic
+                | Action::CueHardStop
+                | Action::SetPanicTime { .. }
+                | Action::SetEmergencyList { .. }
         )
 }
 
@@ -398,8 +403,10 @@ pub struct Switcher {
     all_shows: Vec<ShowShortcut>,
     /// `all_shows` changed since the service last saved it.
     all_shows_changed: bool,
-    /// Output targets of this machine with their secrets (EXT.1).
+    /// Output targets of this machine with their secrets (EXT.1), and
+    /// the fixed OSC subscribers (CTL.4).
     targets: Vec<crate::targets::TargetConfig>,
+    feeds: Vec<lmix_types::Feed>,
     targets_changed: bool,
     /// Media files not found per input (SHW.4); the service checks.
     missing: HashMap<InputId, Vec<String>>,
@@ -447,6 +454,7 @@ impl Switcher {
             all_shows: Vec::new(),
             all_shows_changed: false,
             targets: Vec::new(),
+            feeds: Vec::new(),
             targets_changed: false,
             missing: HashMap::new(),
             overlay_last: Default::default(),
@@ -552,15 +560,26 @@ impl Switcher {
         }
     }
 
-    /// Output targets as the settings hold them, secrets included.
-    pub fn targets(&self) -> &[crate::targets::TargetConfig] {
-        &self.targets
+    /// Output targets and subscribers as the settings hold them, secrets
+    /// included.
+    pub fn target_settings(&self) -> crate::targets::Settings {
+        crate::targets::Settings {
+            targets: self.targets.clone(),
+            feeds: self.feeds.clone(),
+        }
     }
 
-    /// Take the output targets from the settings (start-up).
-    pub fn set_targets(&mut self, targets: Vec<crate::targets::TargetConfig>) {
-        self.targets = targets;
+    /// Take the output targets and subscribers from the settings
+    /// (start-up).
+    pub fn set_target_settings(&mut self, settings: crate::targets::Settings) {
+        self.targets = settings.targets;
+        self.feeds = settings.feeds;
         self.targets_changed = false;
+    }
+
+    /// The fixed OSC subscribers (CTL.4).
+    pub fn feeds(&self) -> &[lmix_types::Feed] {
+        &self.feeds
     }
 
     /// The target `name`, for sending.
@@ -742,6 +761,7 @@ impl Switcher {
                     name,
                     cues,
                     source,
+                    standby: None,
                 });
                 check_unique(&lists)?;
                 self.show.cue_lists = lists;
@@ -766,6 +786,7 @@ impl Switcher {
                 let entry = &self.show.cue_lists[index];
                 self.cues.keep_standby(entry, &old);
                 self.cues.list_changed(&self.show.cue_lists);
+                self.sync_standby();
                 Ok(Vec::new())
             }
             Action::RemoveCueList { list } => {
@@ -777,6 +798,22 @@ impl Switcher {
             Action::CueStandby { list, to } => {
                 let index = self.cue_list_or_active(list.as_ref())?;
                 self.cues.move_standby(&self.show.cue_lists, index, &to)?;
+                self.sync_standby();
+                Ok(Vec::new())
+            }
+            Action::SetPanicTime { ms } => {
+                if ms > PANIC_MAX_MS {
+                    return Err(bad_cues(format!("the panic time is 0–{PANIC_MAX_MS} ms")));
+                }
+                self.show.panic_ms = ms;
+                Ok(Vec::new())
+            }
+            Action::SetEmergencyList { list } => {
+                let id = match list {
+                    Some(list) => Some(self.show.cue_lists[self.find_cue_list(&list)?].id),
+                    None => None,
+                };
+                self.show.emergency_list = id;
                 Ok(Vec::new())
             }
             Action::SetActiveCueList { list } => {
@@ -786,6 +823,21 @@ impl Switcher {
             }
             Action::SetTarget { target } => {
                 crate::targets::set(&mut self.targets, target)?;
+                self.targets_changed = true;
+                Ok(Vec::new())
+            }
+            Action::SetFeed { feed } => {
+                crate::targets::set_feed(&mut self.feeds, feed)?;
+                self.targets_changed = true;
+                Ok(Vec::new())
+            }
+            Action::RemoveFeed { name } => {
+                if !self.feeds.iter().any(|f| f.name == name) {
+                    return Err(ActionError::BadTarget {
+                        reason: format!("no subscriber {name}"),
+                    });
+                }
+                self.feeds.retain(|f| f.name != name);
                 self.targets_changed = true;
                 Ok(Vec::new())
             }
@@ -813,7 +865,9 @@ impl Switcher {
             Action::CueGo { .. }
             | Action::CueStart { .. }
             | Action::CueStop { .. }
-            | Action::CueReset => Err(bad_cues("run through the service".into())),
+            | Action::CueReset
+            | Action::CuePanic
+            | Action::CueHardStop => Err(bad_cues("run through the service".into())),
             Action::SetLock { on } => {
                 self.locked = on;
                 Ok(Vec::new())
@@ -1072,9 +1126,10 @@ impl Switcher {
         commands.extend(self.clear_listen());
         commands.extend(self.stop_all_outputs());
         self.show = show;
-        // Cues of the old show stop without a word; a new show starts at
-        // the top of every list.
+        // Cues of the old show stop without a word; nothing starts, and
+        // standby is where the show kept it (SAF.6).
         self.cues = Runner::default();
+        self.cues.restore_standby(&self.show.cue_lists);
         self.distinct_shortcut_ids();
         self.path = path;
         // Closed inputs belong to the old show.
@@ -1270,13 +1325,16 @@ impl Switcher {
                     standby: self.cues.standby(l.id) as u32 + 1,
                     active: self.cues.active(&self.show.cue_lists) == Some(i),
                     source: l.source.clone(),
+                    emergency: self.show.emergency_list == Some(l.id),
                 })
                 .collect(),
             running_cues: self
                 .cues
                 .running(&self.show.cue_lists, tokio::time::Instant::now()),
             go_guard_ms: self.show.go_guard_ms,
+            panic_ms: self.show.panic_ms,
             targets: self.targets.iter().map(|t| t.public()).collect(),
+            feeds: self.feeds.clone(),
             restorable: self.removed.last().map(|(_, input)| input.name.clone()),
             shortcuts: self
                 .show
@@ -1990,9 +2048,42 @@ impl Switcher {
         self.cues.reset(now)
     }
 
+    /// Panic, or a hard stop when one runs (SAF.1).
+    pub fn cue_panic(&mut self, now: tokio::time::Instant) -> Vec<Out> {
+        let emergency = self.emergency_index();
+        self.cues
+            .panic(&self.show.cue_lists, emergency, now, self.show.panic_ms)
+    }
+
+    /// Hard stop (SAF.3).
+    pub fn cue_hard_stop(&mut self, now: tokio::time::Instant) -> Vec<Out> {
+        let emergency = self.emergency_index();
+        self.cues.hard_stop(&self.show.cue_lists, emergency, now)
+    }
+
+    fn emergency_index(&self) -> Option<usize> {
+        let id = self.show.emergency_list?;
+        self.show.cue_lists.iter().position(|l| l.id == id)
+    }
+
     /// What the cue lists have due by `now`.
     pub fn cue_tick(&mut self, now: tokio::time::Instant) -> Vec<Out> {
         self.cues.tick(&self.show.cue_lists, now)
+    }
+
+    /// Write standby into the show's lists; whether one moved (then the
+    /// show is saved: a restart goes on there, SAF.6).
+    pub fn sync_standby(&mut self) -> bool {
+        let mut moved = false;
+        for i in 0..self.show.cue_lists.len() {
+            let at = self.cues.standby_cue(&self.show.cue_lists[i]);
+            let list = &mut self.show.cue_lists[i];
+            if list.standby != at {
+                list.standby = at;
+                moved = true;
+            }
+        }
+        moved
     }
 
     /// When the cue lists have something due next.
@@ -5858,7 +5949,7 @@ mod tests {
         out.iter()
             .flat_map(|o| match o {
                 Out::Actions { actions, .. } => actions.clone(),
-                Out::Event { .. } => Vec::new(),
+                Out::Event { .. } | Out::Panic { .. } => Vec::new(),
             })
             .collect()
     }

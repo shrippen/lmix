@@ -2466,3 +2466,87 @@ einen lokalen Server, Reserve-Adresse, 401 als Fehler), ein Dienst-Test
 (Cue → Home Assistant, Ereignis, Dateirechte, kein Geheimnis im Zustand).
 **Offen**: OSC senden (EXT.6, S2), Ziele ex- und importieren mit der Show
 (SSH.5), Platzhalter (EXT.7, S2).
+
+## 2026-10-16 — Panik, harter Stopp, Notfall-Liste (S1 Stufe 5, SAF)
+
+**Entscheidungen**:
+- **Panik hält jetzt sofort an**: Es gibt noch keine Klänge und Bilder zum
+  Ausblenden (Stufe 2/3). Die Panikzeit (`set_panic_time`, Standard 1 s,
+  0–10 s) zählt trotzdem schon: eine zweite Panik darin ist ein harter
+  Stopp (SAF.1), danach ist die nächste wieder eine Panik.
+- **Notfall-Liste startet ganz**: bei Panik und hartem Stopp starten alle
+  Cues der Liste zugleich, wie eine Zeitleiste (Folgen gelten nicht).
+  Wer eine Reihenfolge braucht, setzt Vorwartezeiten. Verworfen: nur den
+  ersten Cue starten (eine vergessene Folge ließe das Raumlicht aus).
+- **Standby steht in der Show** (`standby` als Cue-Id je Liste) und wird
+  bei jeder Bewegung mit der Show gesichert: nach einem Absturz oder
+  Neustart startet nichts, Standby steht, wo er war (SAF.6). Auch eine
+  gespeicherte Show öffnet mit ihrem Standby (wie beim Vorbild). Am Ende
+  einer Liste wird nichts gespeichert, sie beginnt dann oben.
+- **Jeder Weg**: Aktionen `cue_panic`, `cue_hard_stop`; OSC `/lmix/panic`,
+  `/lmix/stop/hard`; Kurzbefehle tragen sie auf Taste, globale Taste und
+  MIDI (SAF.5). Ereignis `panic` (`fade` oder `hard`), per TCP `PANIC`
+  im Thema `CUE`. Cues dürfen keine Panik auslösen (keine Schleifen).
+
+**Geprüft**: Runner-Tests (alle Cues und Vorwartezeiten weg, Notfall-Liste
+ganz, zweite Panik hart, danach wieder Panik; Standby aus der Show), ein
+Dienst-Test (Panik über den Dienst, Notfall-Cue schneidet, Ereignis;
+neuer Dienst über dieselbe Sicherung: Standby gleich, nichts läuft), OSC.
+**Offen**: Ausblenden und SAF.7 mit Stufe 2, Panik ohne Schlüssel (CTL.5),
+Escape als Panik in der Show-Ansicht (CTL.6, SUI).
+
+## 2026-10-16 — Feste OSC-Abonnenten und Restzeit (S1 Stufe 5, CTL.2, CTL.4)
+
+**Kontext**: Abnahme S1: Standby-Name und Restzeit erscheinen auf
+Companion-Tasten über einen festen OSC-Abonnenten, ohne eigenes Modul.
+
+**Entscheidungen**:
+- **Abonnenten neben den Zielen** in derselben Rechner-Datei
+  (`targets.json` ist jetzt `{"targets": […], "feeds": […]}`; das Format
+  war erst seit heute da, keine Migration). Ein Abonnent nennt ein
+  `osc_udp`-Ziel und Nachrichten je Anlass (`standby`, `running`,
+  `panic`) mit Platzhaltern (`{name}`, `{number}`, `{remaining}` …).
+  Ein Argument, das nur aus einer Zeit besteht, geht als Float (Companion
+  kann damit rechnen), alles andere als Text.
+- **Ein Takt für beides** (`--cue-events-hz`, Standard 4, 1–20): das
+  Ereignis `running` (laufende Cues mit fertig gerechneter Restzeit) und
+  die `running`-Nachrichten gehen in diesem Takt, solange etwas läuft, und
+  einmal danach mit leeren Werten, damit Tasten nicht stehen bleiben.
+  Standby geht nur bei Änderung, Panik sofort. Ohne Abonnenten und ohne
+  laufende Cues arbeitet der Takt nicht.
+- **Neu gesetzter Abonnent bekommt alles neu** (Standby jeder Liste).
+
+**Geprüft**: 3 Tests in `feeds.rs` (Standby nur bei Änderung, Restzeit je
+Takt und einmal danach, Float bei reiner Zeit, Panik), ein Dienst-Test
+mit echtem UDP-Empfänger (Standby, Restzeit, Ereignis `running`, Panik),
+zehnmal hintereinander grün.
+**Offen**: OSC über TCP (SLIP) für Abonnenten, Ablauf nach 60 s ohne
+Lebenszeichen für angemeldete Abos (CTL.3).
+
+## 2026-10-16 — Show-Ansicht der Console (S1 Stufe 7, SUI)
+
+**Entscheidungen**:
+- **Umschalter Mischer/Show** in der Werkzeugleiste (gemerkt in den
+  Einstellungen der Console). Der Mischer-Bereich und die Show-Ansicht
+  teilen sich die Seite; Datei-Knöpfe und Stil bleiben.
+- **Die gezeigte Liste ist die aktive**: wer eine Liste wählt, setzt sie
+  aktiv (`set_active_cue_list`). GO hier, die Leertaste und GO von außen
+  (Companion, OSC) meinen damit dieselbe Liste.
+- **Tasten in der Ansicht, nicht fensterweit**: Leertaste GO, Escape
+  Panik (zweimal: hart, über die Panikzeit im Core). Die Ansicht hält den
+  Fokus, ihre Knöpfe nehmen keinen: so schließt Escape in einem Dialog den
+  Dialog, und die Leertaste drückt nie einen fokussierten Panik-Knopf.
+- **Zeiten laufen in der Console weiter**: der Core sendet einen Zustand
+  bei jedem fälligen Schritt (jetzt auch, wenn eine Vorwartezeit ohne
+  Ausgabe endet), dazwischen zählt die Ansicht ab dem Eintreffen weiter.
+  Kein eigenes Ereignis nötig.
+- **„Erweitert“** zeigt Vor- und Nachwartezeit und Folge (SUI.13);
+  Bearbeiten bleibt im Cue-Dialog (SUI.10, S2).
+
+**Geprüft**: Console auf Xvfb gegen lmix-core mit Null-Engine und einer
+Drehbuch-Liste (Szenenmarken, Zeitleisten-Gruppe, Warte-Cues): Ansicht,
+zweimal Leertaste (GO, Kette, Standby auf der nächsten Szene), laufende
+Cues mit Fortschritt und Restzeit, Escape als Panik. Console-Tests,
+lmix-core 248 Tests.
+**Offen**: dunkle Raumansicht (SUI.6), Bühnenvorschau und Zonen-Leiste
+(SUI.7, SUI.8, mit Stufe 2/3), Warnliste (SUI.5).

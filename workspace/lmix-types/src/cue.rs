@@ -43,6 +43,10 @@ pub const GO_GUARD_DEFAULT_MS: u32 = 300;
 /// Longest gap the GO guard may be set to.
 pub const GO_GUARD_MAX_MS: u32 = 5000;
 
+/// Default and longest panic time (SAF.2).
+pub const PANIC_DEFAULT_MS: u32 = 1000;
+pub const PANIC_MAX_MS: u32 = 10_000;
+
 /// Stable identity of a cue; survives renumbering and reordering (CUE.1).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
 #[serde(transparent)]
@@ -308,6 +312,9 @@ pub struct CueList {
     /// is edited there, not in a client (IMP.9).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source: Option<String>,
+    /// Runs with every panic and hard stop (SAF.4).
+    #[serde(default)]
+    pub emergency: bool,
 }
 
 /// Where a running cue is (RUN.3).
@@ -333,6 +340,9 @@ pub struct RunningCue {
     /// Pre wait plus duration; `null` while unknown (a group).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub total_ms: Option<u64>,
+    /// `total_ms` less `elapsed_ms`, done for the client (CTL.2).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remaining_ms: Option<u64>,
 }
 
 /// What happened to a cue (`Event::Cue`).
