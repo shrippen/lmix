@@ -927,7 +927,7 @@ fn add_source(flow: &mut Flow, source: &SourceSpec, backend: MixerBackend) -> Op
         SourceSpec::Image { path } => add_still(flow, path),
         SourceSpec::File { .. } | SourceSpec::Url { .. } | SourceSpec::Playlist { .. } => {
             let items = player_items(source).expect("a player source");
-            add_player(flow, &items, backend)
+            add_player(flow, &items, playout_delay_ms(source), backend)
         }
         SourceSpec::Srt { uri } => {
             flow.blocks.push(block(
@@ -1041,26 +1041,46 @@ pub fn player_items(source: &SourceSpec) -> Option<Vec<String>> {
     }
 }
 
+/// Playout delay of a player on local files (ms). strom holds every
+/// buffer this long before it plays (500 ms by default), to ride out
+/// network stalls; a local file needs little, and the delay is how late a
+/// clip starts after a cue.
+pub const FILE_PLAYOUT_DELAY_MS: u64 = 100;
+
+/// Playout delay for a player source; `None` keeps strom's default.
+fn playout_delay_ms(source: &SourceSpec) -> Option<u64> {
+    match source {
+        SourceSpec::File { .. } | SourceSpec::Playlist { .. } => Some(FILE_PLAYOUT_DELAY_MS),
+        _ => None,
+    }
+}
+
 /// Media player with `items`, looped (see `Command::SetAtEnd`); carries
 /// picture and sound.
 /// A hardware decoder (NVDEC, VA-API) keeps frames in GPU memory, and the
 /// inter channel passes any caps on. Only the CUDA mixer reads them, so for
 /// the others the player hands over system memory.
-fn add_player(flow: &mut Flow, items: &[String], backend: MixerBackend) -> String {
+fn add_player(
+    flow: &mut Flow,
+    items: &[String],
+    delay_ms: Option<u64>,
+    backend: MixerBackend,
+) -> String {
     let playlist = serde_json::to_string(items).expect("playlist serializes");
-    flow.blocks.push(block(
-        PLAYER,
-        MEDIA_PLAYER_BLOCK,
-        vec![
-            ("playlist", PropertyValue::String(playlist)),
-            ("decode", PropertyValue::Bool(true)),
-            ("loop_playlist", PropertyValue::Bool(true)),
-            (
-                "system_memory",
-                PropertyValue::Bool(backend != MixerBackend::Cuda),
-            ),
-        ],
-    ));
+    let mut properties = vec![
+        ("playlist", PropertyValue::String(playlist)),
+        ("decode", PropertyValue::Bool(true)),
+        ("loop_playlist", PropertyValue::Bool(true)),
+        (
+            "system_memory",
+            PropertyValue::Bool(backend != MixerBackend::Cuda),
+        ),
+    ];
+    if let Some(ms) = delay_ms {
+        properties.push(("playout_delay_ms", PropertyValue::UInt(ms)));
+    }
+    flow.blocks
+        .push(block(PLAYER, MEDIA_PLAYER_BLOCK, properties));
     format!("{PLAYER}:video_out")
 }
 
@@ -2021,6 +2041,34 @@ mod tests {
         assert!(system_memory(MixerBackend::Cpu));
         // The CUDA mixer takes decoded frames without a copy.
         assert!(!system_memory(MixerBackend::Cuda));
+    }
+
+    #[test]
+    fn local_clips_start_without_the_stream_playout_delay() {
+        let delay = |source: &SourceSpec| {
+            let flow = slot_flow(0, source, MixerBackend::Cpu);
+            let player = flow.blocks.iter().find(|b| b.id == "player").unwrap();
+            match player.properties.get("playout_delay_ms") {
+                Some(PropertyValue::UInt(ms)) => Some(*ms),
+                None => None,
+                Some(other) => panic!("playout_delay_ms is {other:?}"),
+            }
+        };
+
+        let file = SourceSpec::File {
+            path: "/clip.webm".into(),
+        };
+        let playlist = SourceSpec::Playlist {
+            paths: vec!["/a.webm".into(), "/b.webm".into()],
+        };
+        let url = SourceSpec::Url {
+            url: "https://example.com/live.m3u8".into(),
+        };
+        let short = Some(FILE_PLAYOUT_DELAY_MS);
+        assert_eq!(delay(&file), short);
+        assert_eq!(delay(&playlist), short);
+        // A stream keeps strom's default, which rides out network stalls.
+        assert_eq!(delay(&url), None);
     }
 
     #[test]

@@ -277,10 +277,11 @@ impl StromEngine {
 
         // strom reads the inputs only when no composition is involved.
         let body = TriggerTransitionRequest {
-            from_input: state.program_input.unwrap_or(0),
-            to_input: to.as_input().unwrap_or(0),
+            from_input: Some(state.program_input.unwrap_or(0)),
+            to_input: Some(to.as_input().unwrap_or(0)),
             transition_type: wire_name(effect).into(),
             duration_ms: u64::from(duration_ms),
+            stinger_clip: None,
         };
 
         // Right after start strom cannot place a transition until the first
