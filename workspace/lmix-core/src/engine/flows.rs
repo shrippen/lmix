@@ -99,6 +99,12 @@ const PATTERN_WIDTH: u32 = 1280;
 const PATTERN_HEIGHT: u32 = 720;
 const PATTERN_FPS: u32 = 30;
 const PATTERN_FORMAT: &str = "NV12";
+/// Still images whose file type can carry alpha go as BGRA, so a PNG logo
+/// lets program through where it is clear (SRC.4); the others (JPEG, BMP)
+/// as the smaller NV12. The mixers take both. By file type, not by
+/// negotiation: `videoconvert` would pick BGRA for a JPEG too.
+const ALPHA_IMAGES: [&str; 4] = ["png", "webp", "tif", "tiff"];
+const STILL_ALPHA_FORMAT: &str = "BGRA";
 
 /// Where the monitor bus (solo listening, headphones) goes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum)]
@@ -838,7 +844,7 @@ fn add_test_picture(flow: &mut Flow, mut properties: Vec<(&str, PropertyValue)>)
     "caps".into()
 }
 
-/// Still image: decoded once, repeated live in the pattern format.
+/// Still image: decoded once, repeated live (`still_caps`).
 fn add_still(flow: &mut Flow, path: &str) -> String {
     flow.elements.push(element(
         "file",
@@ -857,7 +863,7 @@ fn add_still(flow: &mut Flow, path: &str) -> String {
     flow.elements.push(element(
         "caps",
         "capsfilter",
-        vec![("caps", PropertyValue::String(pattern_caps()))],
+        vec![("caps", PropertyValue::String(still_caps(path)))],
     ));
     // decodebin's picture pad appears at runtime (src_0); strom links
     // dynamic pads only with both pad names given.
@@ -969,6 +975,22 @@ fn share_timing(flow: &mut Flow) {
     flow.properties.direct_media_timing = Some(true);
 }
 
+/// Program size, so a still keeps its detail: per frame no more than a
+/// 1080p video input, and nothing to decode.
+fn still_caps(path: &str) -> String {
+    let (width, height) = PROGRAM_SIZE;
+    let alpha = std::path::Path::new(path)
+        .extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| ALPHA_IMAGES.contains(&e.to_ascii_lowercase().as_str()));
+    let format = if alpha {
+        STILL_ALPHA_FORMAT
+    } else {
+        PATTERN_FORMAT
+    };
+    format!("video/x-raw,format={format},width={width},height={height},framerate={PATTERN_FPS}/1")
+}
+
 fn pattern_caps() -> String {
     format!(
         "video/x-raw,format={PATTERN_FORMAT},width={PATTERN_WIDTH},height={PATTERN_HEIGHT},framerate={PATTERN_FPS}/1"
@@ -1010,6 +1032,14 @@ fn link(from: String, to: String) -> Link {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn stills_keep_alpha_where_the_file_can_have_it() {
+        assert!(still_caps("/media/logo.PNG").contains("format=BGRA,width=1920,height=1080"));
+        assert!(still_caps("/media/bg.webp").contains("format=BGRA"));
+        assert!(still_caps("/media/photo.jpg").contains("format=NV12,width=1920"));
+        assert!(still_caps("/media/noext").contains("format=NV12"));
+    }
     use lmix_types::TestPattern;
 
     #[test]

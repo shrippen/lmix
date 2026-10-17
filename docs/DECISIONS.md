@@ -2921,3 +2921,22 @@ strom bleibt unverändert; ein „Aufheben ohne Stumm = nichts tun“ in
 **Geprüft**: Tests im Schalter (Input, Bus, Master, Grenzen, JSON-Form),
 `level_writes`, VM-Test mit strom: Master fadet über 2 s auf still und
 kommt zurück.
+
+## 2026-10-17 — Standbilder mit Alpha (SRC.4)
+
+**Kontext**: Ein Standbild wurde nach NV12 in 1280 × 720 gewandelt: ein
+PNG-Logo mit transparentem Grund deckte als Overlay das ganze Program
+schwarz zu (VM-Test: rechte, klare Hälfte 0/0 statt Orange), und Bilder
+verloren Auflösung gegenüber dem 1080p-Program.
+
+**Entscheidung**: Standbilder in Programmgröße (1920 × 1080). Dateiarten,
+die Alpha tragen können (PNG, WebP, TIFF), als BGRA, die übrigen (JPEG,
+BMP) als NV12. Nach Dateiart, nicht durch Aushandeln: `videoconvert`
+wählt aus `{NV12, BGRA}` auch für ein JPEG BGRA. Ein BGRA-Bild sind
+8,3 MB je Bild gegen 3,1 MB in NV12; da `imagefreeze` dasselbe Bild
+wiederholt, kostet es nichts zu dekodieren, nur den Weg in den Mischer.
+Die Mischer nehmen Alpha schon (Stinger mit Alpha).
+
+**Geprüft**: Test der Formate je Dateiart; VM-Test (CPU-Mischer): ein PNG,
+links rot, rechts klar, als Overlay über Orange zeigt rechts Orange.
+Offen: CUDA und GL auf echter Hardware (H.33).

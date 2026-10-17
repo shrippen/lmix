@@ -497,6 +497,30 @@ overlay_shown || fail "overlay taken off by the end of an older fade"
 act '{"action":"overlay_out_all","duration_ms":0}' >/dev/null
 wait_for "$SETTLE_S" overlay_gone || fail "overlays not all off"
 pass "overlays: last input again, all off"
+# A still with alpha (SRC.4): a PNG, red on the left half and clear on the
+# right, as overlay over Orange lets Orange through on the right.
+convert -size 1280x720 xc:none -fill '#ff0000' -draw 'rectangle 0,0 639,719' "$MEDIA/badge.png"
+act "{\"action\":\"add_input\",\"source\":{\"kind\":\"image\",\"path\":\"$MEDIA/badge.png\"},\"name\":\"Badge\"}" >/dev/null
+act '{"action":"cut_direct","input":"Orange"}' >/dev/null
+act '{"action":"overlay_in","channel":1,"input":"Badge","duration_ms":0}' >/dev/null
+# Mean of colour channel $3 (r, g) in the left or right half, middle band.
+half() {
+    local w h x; read -r w h <<<"$(identify -format '%w %h' "$1")"
+    [[ "$2" == left ]] && x=$((w / 8)) || x=$((w * 5 / 8))
+    convert "$1" -crop "$((w / 4))x$((h / 4))+$x+$((h * 3 / 8))" +repage -format "%[fx:int(mean.$3*255)]" info:
+}
+badge_over_orange() {
+    picture program "$WORK/badge.jpg"
+    [[ $(half "$WORK/badge.jpg" left r) -gt 200 && $(half "$WORK/badge.jpg" left g) -lt 60 \
+        && $(half "$WORK/badge.jpg" right r) -gt 200 && $(half "$WORK/badge.jpg" right g) -gt 90 ]]
+}
+wait_for "$SETTLE_S" badge_over_orange \
+    || fail "PNG alpha lost: right half $(half "$WORK/badge.jpg" right r)/$(half "$WORK/badge.jpg" right g) (r/g), want orange"
+act '{"action":"overlay_out_all","duration_ms":0}' >/dev/null
+[[ "$(curl -sf "$CORE/state" | jq '.overlays[0]')" == null ]] || fail "badge overlay not off"
+# Its slot is needed later on.
+act '{"action":"remove_input","input":"Badge"}' >/dev/null
+pass "still with alpha: a PNG overlay lets program through where it is clear"
 # Channel settings (OVL.2) and an overlay prepared on preview (OVL.3):
 # Orange waits on channel 2 with preview tally, goes on with the cut in
 # the top right quarter (the place of its DSK pad) and off by itself.
