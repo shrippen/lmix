@@ -23,7 +23,7 @@ use crate::input::{
     Transport, AUX_BUSES,
 };
 use crate::layout::{BoxRect, BoxSpec};
-use crate::output::{OutputRef, OutputSource, OutputSpec};
+use crate::output::{OutputGroup, OutputRef, OutputSource, OutputSpec};
 use crate::shortcut::ShortcutSpec;
 use crate::target::{HttpMethod, TargetSpec};
 
@@ -198,6 +198,8 @@ pub const ACTION_GROUPS: &[(&str, &[&str])] = &[
             "remove_output",
             "start_output",
             "stop_output",
+            "start_outputs",
+            "stop_outputs",
             "set_master_format",
         ],
     ),
@@ -439,6 +441,15 @@ pub enum Action {
     /// Stop it.
     StopOutput {
         output: OutputRef,
+    },
+    /// Start every output of `group` that is not running (STR.1); one
+    /// that cannot start does not keep the others back.
+    StartOutputs {
+        group: OutputGroup,
+    },
+    /// Stop every running output of `group`.
+    StopOutputs {
+        group: OutputGroup,
     },
 
     // ---- Audio (AUD) ----

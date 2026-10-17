@@ -22,10 +22,10 @@ use lmix_types::state::API_VERSION;
 use lmix_types::{
     Action, ActionError, AutoPlay, AuxBus, BoxCrop, BoxRect, BoxSpec, ChannelStrip, Effect, Ingest,
     Input, InputColor, InputId, InputPress, InputRef, InputStatus, Layout, LayoutBox,
-    LayoutTemplate, Listen, Look, Output, OutputId, OutputRef, OutputSource, OutputSpec,
-    OutputStatus, OverlayChannel, QuickPlay, Shortcut, ShortcutSpec, ShowState, SignalLoss,
-    SourceSpec, Stinger, StingerSpec, TemplateBox, TemplateInput, Transition, TransitionSlot,
-    Transport, VolumeTarget, FADE_MAX_MS,
+    LayoutTemplate, Listen, Look, Output, OutputGroup, OutputId, OutputRef, OutputSource,
+    OutputSpec, OutputStatus, OverlayChannel, QuickPlay, Shortcut, ShortcutSpec, ShowState,
+    SignalLoss, SourceSpec, Stinger, StingerSpec, TemplateBox, TemplateInput, Transition,
+    TransitionSlot, Transport, VolumeTarget, FADE_MAX_MS,
 };
 use lmix_types::{Cue, CueList, MidiKind, MidiMessage, Trigger, TriggerOn};
 
@@ -1196,6 +1196,11 @@ impl Switcher {
             Action::StopOutput { output } => {
                 self.check_unlocked()?;
                 self.stop_output(&output)
+            }
+            Action::StartOutputs { group } => self.start_outputs(group),
+            Action::StopOutputs { group } => {
+                self.check_unlocked()?;
+                Ok(self.stop_outputs(group))
             }
             Action::ClearListen => Ok(self.clear_listen()),
             Action::MoveInput { input, number } => self.move_input(&input, number),
@@ -3692,6 +3697,39 @@ impl Switcher {
     fn stop_output(&mut self, output: &OutputRef) -> Result<Vec<Command>, ActionError> {
         let id = self.show.outputs[self.find_output(output)?].id;
         Ok(vec![Command::StopOutput { id }])
+    }
+
+    /// Start commands for the outputs of `group` that do not run; an
+    /// output that cannot start (its source is gone) is left out, the
+    /// error only comes back when none could.
+    fn start_outputs(&mut self, group: OutputGroup) -> Result<Vec<Command>, ActionError> {
+        let mut first_error = None;
+        let commands: Vec<Command> = self
+            .show
+            .outputs
+            .iter()
+            .filter(|o| group.holds(&o.spec) && !self.output_running(o.id))
+            .filter_map(|o| match self.start_command(o) {
+                Ok(command) => Some(command),
+                Err(e) => {
+                    first_error.get_or_insert(e);
+                    None
+                }
+            })
+            .collect();
+        match first_error {
+            Some(e) if commands.is_empty() => Err(e),
+            _ => Ok(commands),
+        }
+    }
+
+    fn stop_outputs(&mut self, group: OutputGroup) -> Vec<Command> {
+        self.show
+            .outputs
+            .iter()
+            .filter(|o| group.holds(&o.spec) && self.output_running(o.id))
+            .map(|o| Command::StopOutput { id: o.id })
+            .collect()
     }
 
     fn stop_all_outputs(&mut self) -> Vec<Command> {
@@ -6850,6 +6888,66 @@ mod tests {
             })
             .unwrap_err();
         assert!(matches!(err, ActionError::UnknownOutput { .. }));
+    }
+
+    #[test]
+    fn output_groups_start_and_stop_together() {
+        let mut sw = Switcher::new(SLOTS);
+        let srt = |port: u16| OutputSpec::Srt {
+            uri: format!("srt://cdn:{port}"),
+            video_kbps: 6000,
+        };
+        let record = OutputSpec::Record {
+            folder: "show".into(),
+            container: Default::default(),
+            video_kbps: 8000,
+        };
+        for spec in [srt(9000), record, srt(9001)] {
+            sw.apply(Action::AddOutput {
+                spec,
+                source: OutputSource::Program,
+                name: None,
+                aux: None,
+            })
+            .unwrap();
+        }
+        let ids: Vec<OutputId> = sw.state().outputs.iter().map(|o| o.id).collect();
+        sw.set_output_status(ids[2], OutputStatus::Running { since_ms: 1 });
+        let started = |cmds: Vec<Command>| -> Vec<OutputId> {
+            cmds.iter()
+                .map(|c| match c {
+                    Command::StartOutput { id, .. } | Command::StopOutput { id } => *id,
+                    other => panic!("{other:?}"),
+                })
+                .collect()
+        };
+
+        let streams = Action::StartOutputs {
+            group: OutputGroup::Streams,
+        };
+        assert_eq!(
+            started(sw.apply(streams.clone()).unwrap()),
+            [ids[0]],
+            "not the running one"
+        );
+        sw.set_output_status(ids[0], OutputStatus::Running { since_ms: 2 });
+        assert!(sw.apply(streams).unwrap().is_empty());
+
+        let stop_all = Action::StopOutputs {
+            group: OutputGroup::All,
+        };
+        assert_eq!(started(sw.apply(stop_all).unwrap()), [ids[0], ids[2]]);
+        let recordings = Action::StartOutputs {
+            group: OutputGroup::Recordings,
+        };
+        assert_eq!(started(sw.apply(recordings).unwrap()), [ids[1]]);
+        assert_eq!(
+            serde_json::from_str::<Action>(r#"{"action":"stop_outputs","group":"streams"}"#)
+                .unwrap(),
+            Action::StopOutputs {
+                group: OutputGroup::Streams
+            }
+        );
     }
 
     #[test]

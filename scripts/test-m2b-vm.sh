@@ -385,6 +385,15 @@ recording="$(find "$WORK/strom-data" -path '*rec/*' -name '*.mp4' | head -1)"
 [[ -n "$recording" ]] || fail "no recording file"
 [[ "$(codecs "$recording")" == "aac,h264" ]] || fail "recording lacks H.264 or AAC: $(codecs "$recording")"
 pass "outputs: recording (H.264 + AAC, finalized MP4), SRT stream received with link health, start/stop"
+# All streams at once (STR.1): the stopped one starts, then both stop.
+act '{"action":"add_output","spec":{"kind":"srt","uri":"srt://:9912?mode=listener"},"name":"Stream 2"}' >/dev/null
+act '{"action":"start_outputs","group":"streams"}' >/dev/null
+settled '[[ "$(output_state Stream)" == running && "$(output_state "Stream 2")" == running ]]' || fail "streams not all running"
+[[ "$(output_state Rec)" == stopped ]] || fail "start of all streams started the recording"
+act '{"action":"stop_outputs","group":"streams"}' >/dev/null
+settled '[[ "$(output_state Stream)" == stopped && "$(output_state "Stream 2")" == stopped ]]' || fail "streams not all stopped"
+act '{"action":"remove_output","output":"Stream 2"}' >/dev/null
+pass "outputs: all streams started and stopped together"
 
 # MultiCorder: ISO recordings of single inputs, with and without sound.
 input_id() { curl -sf "$CORE/state" | jq -r ".inputs[] | select(.name==\"$1\") | .id"; }

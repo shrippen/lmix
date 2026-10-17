@@ -49,8 +49,8 @@ pub use layout::{
 };
 pub use midi::{MidiBinding, MidiKind, MidiMessage};
 pub use output::{
-    Container, DisplayMode, Framerate, MasterFormat, Output, OutputId, OutputRef, OutputSource,
-    OutputSpec, OutputStats, OutputStatus,
+    Container, DisplayMode, Framerate, MasterFormat, Output, OutputGroup, OutputId, OutputRef,
+    OutputSource, OutputSpec, OutputStats, OutputStatus,
 };
 pub use ptz::{PtzFocus, PtzProtocol, PtzSpec};
 pub use shortcut::{Shortcut, ShortcutSpec};

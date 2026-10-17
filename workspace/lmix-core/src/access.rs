@@ -284,6 +284,8 @@ pub fn right_of(action: &Action) -> Right {
         | Action::PlayItem { .. }
         | Action::StartOutput { .. }
         | Action::StopOutput { .. }
+        | Action::StartOutputs { .. }
+        | Action::StopOutputs { .. }
         | Action::SetAudio { .. }
         | Action::SetAudioFollow { .. }
         | Action::SetVolume { .. }
