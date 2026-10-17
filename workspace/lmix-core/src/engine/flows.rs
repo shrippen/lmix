@@ -21,7 +21,7 @@ use uuid::Uuid;
 use lmix_types::action::OVERLAY_CHANNELS;
 use lmix_types::input::{color_rgb, AUX_BUSES, AUX_PRE_FADER};
 use lmix_types::layout::LAYOUTS;
-use lmix_types::{DisplayMode, OutputId, OutputSpec, SourceSpec};
+use lmix_types::{DisplayMode, MasterFormat, OutputId, OutputSpec, SourceSpec};
 
 use super::LivePicture;
 use crate::switcher::Feed;
@@ -58,7 +58,7 @@ const MONITOR_SINK: &str = "monitor_sink";
 pub const AUDIO_MIXER: &str = "mix";
 /// Mixer flow name; a new layout gets a new name, so `start` rebuilds a
 /// running mixer of an older lmix instead of reusing it.
-pub const MIXER_NAME: &str = "lmix mixer 6";
+pub const MIXER_NAME: &str = "lmix mixer 7";
 /// Block id of the vision mixer in the mixer flow.
 pub const MIXER_BLOCK: &str = "vm";
 /// Thumbnail tap on the program output: GUI monitor and picture checks.
@@ -66,6 +66,8 @@ pub const PGM_TAP: &str = "tap_pgm";
 /// Program picture and sound for the output flows (`inter`).
 pub const PGM_OUT: &str = "pgm_out";
 const PGM_AUDIO_OUT: &str = "pgm_audio_out";
+/// The multiview for the outputs (OUT.2).
+const MV_OUT: &str = "mv_out";
 /// Outputs buffer a little more than the mixer: they are not on the
 /// switching path, an encoder hiccup must not drop frames.
 const OUTPUT_BUFFER_MS: &str = "500";
@@ -99,6 +101,12 @@ const PATTERN_WIDTH: u32 = 1280;
 const PATTERN_HEIGHT: u32 = 720;
 const PATTERN_FPS: u32 = 30;
 const PATTERN_FORMAT: &str = "NV12";
+/// Still images whose file type can carry alpha go as BGRA, so a PNG logo
+/// lets program through where it is clear (SRC.4); the others (JPEG, BMP)
+/// as the smaller NV12. The mixers take both. By file type, not by
+/// negotiation: `videoconvert` would pick BGRA for a JPEG too.
+const ALPHA_IMAGES: [&str; 4] = ["png", "webp", "tif", "tiff"];
+const STILL_ALPHA_FORMAT: &str = "BGRA";
 
 /// Where the monitor bus (solo listening, headphones) goes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum)]
@@ -159,7 +167,12 @@ pub fn black_input(slots: usize) -> usize {
 }
 
 /// Mixer: one inter input per slot, plus black, into the vision mixer.
-pub fn mixer_flow(slots: usize, backend: MixerBackend, monitor: MonitorOut) -> Flow {
+pub fn mixer_flow(
+    slots: usize,
+    backend: MixerBackend,
+    monitor: MonitorOut,
+    format: MasterFormat,
+) -> Flow {
     let mut flow = Flow::new(MIXER_NAME);
     flow.id = mixer_id();
     share_timing(&mut flow);
@@ -224,6 +237,12 @@ pub fn mixer_flow(slots: usize, backend: MixerBackend, monitor: MonitorOut) -> F
         VISION_MIXER_BLOCK,
         vec![
             ("num_inputs", PropertyValue::Int(black as i64 + 1)),
+            // Program size and rate (OUT.1); the multiview keeps its own.
+            ("pgm_resolution", PropertyValue::String(format.resolution())),
+            (
+                "pgm_framerate",
+                PropertyValue::String(format.framerate.fraction().into()),
+            ),
             (
                 "compositor_preference",
                 PropertyValue::String(backend.property().into()),
@@ -265,6 +284,13 @@ pub fn mixer_flow(slots: usize, backend: MixerBackend, monitor: MonitorOut) -> F
         format!("{PGM_TAP}:video_out"),
         format!("{PGM_OUT}:sink"),
     ));
+    // The multiview is rendered anyway (strom ends an unlinked pad in a
+    // fakesink); this only hands it to outputs that ask (OUT.2).
+    flow.blocks.push(block(MV_OUT, INTER_OUTPUT_BLOCK, vec![]));
+    flow.links.push(link(
+        format!("{MIXER_BLOCK}:multiview_out"),
+        format!("{MV_OUT}:sink"),
+    ));
     flow.blocks
         .push(block(PGM_AUDIO_OUT, INTER_OUTPUT_BLOCK, vec![]));
     flow.links.push(link(
@@ -288,6 +314,24 @@ pub fn overlay_layer(channel: usize) -> usize {
 /// Program picture size: strom's default `pgm_resolution`, which the
 /// mixer flow keeps.
 pub const PROGRAM_SIZE: (u32, u32) = (1920, 1080);
+
+/// The mixer's program format as built, read from its flow; `None` for
+/// a mixer that names none (built before OUT.1: the strom default).
+pub fn format_of(flow: &Flow) -> Option<MasterFormat> {
+    let mixer = flow.blocks.iter().find(|b| b.id == MIXER_BLOCK)?;
+    let text = |key: &str| match mixer.properties.get(key) {
+        Some(PropertyValue::String(s)) => Some(s.clone()),
+        _ => None,
+    };
+    let resolution = text("pgm_resolution")?;
+    let (width, height) = resolution.split_once('x')?;
+    let framerate = serde_json::from_value(serde_json::Value::String(text("pgm_framerate")?)).ok()?;
+    Some(MasterFormat {
+        width: width.parse().ok()?,
+        height: height.parse().ok()?,
+        framerate,
+    })
+}
 
 /// Pad of DSK `layer` (0-based) on the program compositor: after the
 /// mixer's inputs, which end with black.
@@ -338,6 +382,7 @@ pub fn output_flow(
     // for a track that never comes.
     let (video, audio) = match feed {
         Feed::Program => (pgm_channel(PGM_OUT), Some(pgm_channel(PGM_AUDIO_OUT))),
+        Feed::Multiview => (pgm_channel(MV_OUT), Some(pgm_channel(PGM_AUDIO_OUT))),
         Feed::Slot { slot, audio } => (slot_channel(slot), audio.then(|| slot_audio_channel(slot))),
     };
     // An aux bus replaces the feed's sound (e.g. a mix-minus stream).
@@ -363,7 +408,7 @@ pub fn output_flow(
     }
     let sound = audio.is_some();
     // Screens and NDI read frames on the CPU; the encoders take GPU memory.
-    let on_gpu = matches!(feed, Feed::Program) && backend == MixerBackend::Cuda;
+    let on_gpu = matches!(feed, Feed::Program | Feed::Multiview) && backend == MixerBackend::Cuda;
 
     match spec {
         OutputSpec::Srt { uri, video_kbps } => {
@@ -838,7 +883,7 @@ fn add_test_picture(flow: &mut Flow, mut properties: Vec<(&str, PropertyValue)>)
     "caps".into()
 }
 
-/// Still image: decoded once, repeated live in the pattern format.
+/// Still image: decoded once, repeated live (`still_caps`).
 fn add_still(flow: &mut Flow, path: &str) -> String {
     flow.elements.push(element(
         "file",
@@ -857,7 +902,7 @@ fn add_still(flow: &mut Flow, path: &str) -> String {
     flow.elements.push(element(
         "caps",
         "capsfilter",
-        vec![("caps", PropertyValue::String(pattern_caps()))],
+        vec![("caps", PropertyValue::String(still_caps(path)))],
     ));
     // decodebin's picture pad appears at runtime (src_0); strom links
     // dynamic pads only with both pad names given.
@@ -969,6 +1014,22 @@ fn share_timing(flow: &mut Flow) {
     flow.properties.direct_media_timing = Some(true);
 }
 
+/// Program size, so a still keeps its detail: per frame no more than a
+/// 1080p video input, and nothing to decode.
+fn still_caps(path: &str) -> String {
+    let (width, height) = PROGRAM_SIZE;
+    let alpha = std::path::Path::new(path)
+        .extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| ALPHA_IMAGES.contains(&e.to_ascii_lowercase().as_str()));
+    let format = if alpha {
+        STILL_ALPHA_FORMAT
+    } else {
+        PATTERN_FORMAT
+    };
+    format!("video/x-raw,format={format},width={width},height={height},framerate={PATTERN_FPS}/1")
+}
+
 fn pattern_caps() -> String {
     format!(
         "video/x-raw,format={PATTERN_FORMAT},width={PATTERN_WIDTH},height={PATTERN_HEIGHT},framerate={PATTERN_FPS}/1"
@@ -1010,6 +1071,35 @@ fn link(from: String, to: String) -> Link {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_mixer_carries_its_format() {
+        let upright = MasterFormat {
+            width: 1080,
+            height: 1920,
+            framerate: lmix_types::Framerate::Fps59_94,
+        };
+        let flow = mixer_flow(2, MixerBackend::Cpu, MonitorOut::None, upright);
+
+        let vm = flow.blocks.iter().find(|b| b.id == MIXER_BLOCK).unwrap();
+        assert!(matches!(
+            vm.properties.get("pgm_resolution"),
+            Some(PropertyValue::String(r)) if r == "1080x1920"
+        ));
+        assert!(matches!(
+            vm.properties.get("pgm_framerate"),
+            Some(PropertyValue::String(r)) if r == "60000/1001"
+        ));
+        assert_eq!(format_of(&flow), Some(upright));
+    }
+
+    #[test]
+    fn stills_keep_alpha_where_the_file_can_have_it() {
+        assert!(still_caps("/media/logo.PNG").contains("format=BGRA,width=1920,height=1080"));
+        assert!(still_caps("/media/bg.webp").contains("format=BGRA"));
+        assert!(still_caps("/media/photo.jpg").contains("format=NV12,width=1920"));
+        assert!(still_caps("/media/noext").contains("format=NV12"));
+    }
     use lmix_types::TestPattern;
 
     #[test]
@@ -1021,7 +1111,7 @@ mod tests {
 
     #[test]
     fn mixer_subscribes_each_slot_channel() {
-        let flow = mixer_flow(3, MixerBackend::Cpu, MonitorOut::None);
+        let flow = mixer_flow(3, MixerBackend::Cpu, MonitorOut::None, MasterFormat::default());
 
         for slot in 0..3 {
             let input = flow
@@ -1042,7 +1132,7 @@ mod tests {
 
     #[test]
     fn mixer_has_black_after_slots() {
-        let flow = mixer_flow(3, MixerBackend::Cpu, MonitorOut::None);
+        let flow = mixer_flow(3, MixerBackend::Cpu, MonitorOut::None, MasterFormat::default());
 
         assert_eq!(black_input(3), 3);
         assert!(flow
@@ -1054,7 +1144,7 @@ mod tests {
     #[test]
     fn only_the_gl_mixer_downloads_program() {
         let download = |backend| {
-            let flow = mixer_flow(2, backend, MonitorOut::None);
+            let flow = mixer_flow(2, backend, MonitorOut::None, MasterFormat::default());
             let vm = flow.blocks.iter().find(|b| b.id == "vm").unwrap();
             matches!(
                 vm.properties.get("gl_download"),
@@ -1193,7 +1283,7 @@ mod tests {
 
     #[test]
     fn mixer_mixes_every_slot_sound() {
-        let flow = mixer_flow(3, MixerBackend::Cpu, MonitorOut::None);
+        let flow = mixer_flow(3, MixerBackend::Cpu, MonitorOut::None, MasterFormat::default());
 
         for slot in 0..3 {
             let to = format!("mix:input_{}", slot + 1);
@@ -1210,7 +1300,7 @@ mod tests {
             .any(|l| l.from == "mix:main_out" && l.to == "vm:pgm_audio_in"));
         assert!(flow.elements.iter().all(|e| e.id != MONITOR_SINK));
 
-        let heard = mixer_flow(3, MixerBackend::Cpu, MonitorOut::Auto);
+        let heard = mixer_flow(3, MixerBackend::Cpu, MonitorOut::Auto, MasterFormat::default());
         assert!(heard
             .links
             .iter()
@@ -1219,7 +1309,7 @@ mod tests {
 
     #[test]
     fn mixer_publishes_program_for_outputs() {
-        let flow = mixer_flow(2, MixerBackend::Cpu, MonitorOut::None);
+        let flow = mixer_flow(2, MixerBackend::Cpu, MonitorOut::None, MasterFormat::default());
 
         assert!(flow
             .links
@@ -1229,11 +1319,29 @@ mod tests {
             .links
             .iter()
             .any(|l| l.from == "mix:main_out" && l.to == "pgm_audio_out:sink"));
+        assert!(flow
+            .links
+            .iter()
+            .any(|l| l.from == "vm:multiview_out" && l.to == "mv_out:sink"));
+    }
+
+    #[test]
+    fn an_output_can_show_the_multiview() {
+        let spec = OutputSpec::Display {
+            mode: lmix_types::DisplayMode::Window,
+        };
+        let flow = output_flow(OutputId::new(), &spec, Feed::Multiview, None, MixerBackend::Cpu);
+
+        let video = flow.blocks.iter().find(|b| b.id == "pgm").unwrap();
+        assert!(matches!(
+            video.properties.get("channel"),
+            Some(PropertyValue::String(c)) if *c == format!("strom_{}_mv_out", mixer_id())
+        ));
     }
 
     #[test]
     fn mixer_has_a_stinger_layer_below_the_overlays() {
-        let flow = mixer_flow(2, MixerBackend::Cpu, MonitorOut::None);
+        let flow = mixer_flow(2, MixerBackend::Cpu, MonitorOut::None, MasterFormat::default());
 
         let vm = flow.blocks.iter().find(|b| b.id == MIXER_BLOCK).unwrap();
         assert!(matches!(
@@ -1250,7 +1358,7 @@ mod tests {
 
     #[test]
     fn mixer_publishes_its_aux_buses() {
-        let flow = mixer_flow(2, MixerBackend::Cpu, MonitorOut::None);
+        let flow = mixer_flow(2, MixerBackend::Cpu, MonitorOut::None, MasterFormat::default());
 
         let mix = flow.blocks.iter().find(|b| b.id == AUDIO_MIXER).unwrap();
         assert!(matches!(
@@ -1521,7 +1629,7 @@ mod tests {
             MixerBackend::Cpu,
         );
 
-        for flow in [mixer_flow(2, MixerBackend::Cpu, MonitorOut::None), slot] {
+        for flow in [mixer_flow(2, MixerBackend::Cpu, MonitorOut::None, MasterFormat::default()), slot] {
             assert_eq!(flow.properties.clock_type, GStreamerClockType::Monotonic);
             assert!(flow.properties.effective_direct_media_timing());
         }

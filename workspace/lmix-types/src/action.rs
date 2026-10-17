@@ -183,13 +183,23 @@ pub const ACTION_GROUPS: &[(&str, &[&str])] = &[
             "set_channel_strip",
             "set_aux_send",
             "set_aux_bus",
+            "set_master",
+            "set_monitor_volume",
+            "set_default_delay",
+            "fade_volume",
             "set_listen",
             "clear_listen",
         ],
     ),
     (
         "output",
-        &["add_output", "remove_output", "start_output", "stop_output"],
+        &[
+            "add_output",
+            "remove_output",
+            "start_output",
+            "stop_output",
+            "set_master_format",
+        ],
     ),
     (
         "title",
@@ -309,6 +319,20 @@ pub fn action_group(name: &str) -> Option<&'static str> {
         .iter()
         .find(|(_, names)| names.contains(&name))
         .map(|(group, _)| *group)
+}
+
+/// Longest level fade (AUD.14).
+pub const FADE_MAX_MS: u32 = 60_000;
+
+/// What a level fade moves (AUD.14): `{"input": "Cam 1"}`, `{"bus": 1}`
+/// or `"master"`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum VolumeTarget {
+    Input(InputRef),
+    /// Aux bus 1–2.
+    Bus(u8),
+    Master,
 }
 
 /// Every operation, whatever triggered it.
@@ -440,6 +464,35 @@ pub enum Action {
         input: InputRef,
         bus: u8,
         level: u8,
+    },
+    /// Volume of the monitor bus, what solo listening and the headphones
+    /// hear, 0–100 (AUD.4).
+    SetMonitorVolume {
+        volume: u8,
+    },
+    /// Delay new inputs with sound get in their channel strip, 0–500 ms
+    /// (AUD.6); inputs already there keep theirs.
+    SetDefaultDelay {
+        ms: u32,
+    },
+    /// Picture size and rate of program (OUT.1). The engine builds the
+    /// mixer anew: program stops for a moment, running outputs restart.
+    SetMasterFormat {
+        format: crate::output::MasterFormat,
+    },
+    /// Master of program sound: volume 0–100 and mute (AUD.2).
+    SetMaster {
+        volume: u8,
+        mute: bool,
+    },
+    /// Move a level to `volume` over `duration_ms` (AUD.14): an input's
+    /// fader, an aux bus or the master; mute stays as it is. The state
+    /// shows the end value at once; a new level on the same target takes
+    /// over from where the fade is.
+    FadeVolume {
+        target: VolumeTarget,
+        volume: u8,
+        duration_ms: u32,
     },
     /// Master of aux bus `bus` (1–2): volume 0–100 and mute.
     SetAuxBus {
@@ -1190,6 +1243,10 @@ pub enum ActionError {
     BadColor { color: String },
     #[error("volume {volume} is outside 0–{max}")]
     BadVolume { volume: u8, max: u8 },
+    #[error("a level fade lasts 0–{max} ms, not {duration_ms}")]
+    BadFade { duration_ms: u32, max: u32 },
+    #[error("program format: even sides of {min}–{max} pixels")]
+    BadFormat { min: u32, max: u32 },
     #[error("overlay channel {channel} does not exist (1–{max})")]
     BadOverlay { channel: u8, max: u8 },
     #[error("overlay {channel} has no input to show again")]

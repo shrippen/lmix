@@ -92,6 +92,18 @@ pub struct Show {
     pub overlay_preview: [Option<InputId>; OVERLAY_CHANNELS as usize],
     #[serde(default)]
     pub aux_buses: [AuxBus; AUX_BUSES],
+    /// Master of program sound (AUD.2).
+    #[serde(default)]
+    pub master: AuxBus,
+    /// Picture size and rate of program (OUT.1).
+    #[serde(default)]
+    pub format: lmix_types::MasterFormat,
+    /// Volume of the monitor bus (AUD.4).
+    #[serde(default = "lmix_types::input::full_volume")]
+    pub monitor_volume: u8,
+    /// Delay of new inputs with sound (AUD.6).
+    #[serde(default)]
+    pub default_delay_ms: u32,
     #[serde(default)]
     pub layouts: Vec<ShowLayout>,
     #[serde(default)]
@@ -244,6 +256,10 @@ impl Default for Show {
             overlay_channels: Default::default(),
             overlay_preview: Default::default(),
             aux_buses: Default::default(),
+            master: Default::default(),
+            format: Default::default(),
+            monitor_volume: lmix_types::input::full_volume(),
+            default_delay_ms: 0,
             layouts: Vec::new(),
             shortcuts: Vec::new(),
             cue_lists: Vec::new(),
@@ -575,6 +591,17 @@ mod tests {
                     mute: true,
                 },
             ],
+            master: AuxBus {
+                volume: 90,
+                mute: false,
+            },
+            format: lmix_types::MasterFormat {
+                width: 1080,
+                height: 1920,
+                framerate: lmix_types::Framerate::Fps25,
+            },
+            monitor_volume: 70,
+            default_delay_ms: 40,
             outputs: vec![ShowOutput {
                 id: OutputId::new(),
                 name: "Stream".into(),

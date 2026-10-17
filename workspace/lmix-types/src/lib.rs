@@ -25,7 +25,8 @@ pub mod target;
 pub mod zone;
 
 pub use action::{
-    action_group, Action, ActionError, Effect, StingerSpec, TransitionSlot, ACTION_GROUPS,
+    action_group, Action, ActionError, Effect, StingerSpec, TransitionSlot, VolumeTarget,
+    ACTION_GROUPS, FADE_MAX_MS,
 };
 pub use automation::{Trigger, TriggerOn};
 pub use cue::{
@@ -47,8 +48,8 @@ pub use layout::{
 };
 pub use midi::{MidiBinding, MidiKind, MidiMessage};
 pub use output::{
-    Container, DisplayMode, Output, OutputId, OutputRef, OutputSource, OutputSpec, OutputStats,
-    OutputStatus,
+    Container, DisplayMode, Framerate, MasterFormat, Output, OutputId, OutputRef, OutputSource,
+    OutputSpec, OutputStats, OutputStatus,
 };
 pub use ptz::{PtzFocus, PtzProtocol, PtzSpec};
 pub use shortcut::{Shortcut, ShortcutSpec};

@@ -446,6 +446,7 @@ mod tests {
             inputs: vec![InputLevel {
                 input: input.id,
                 peak_db: -12.5,
+                channels_db: vec![-12.5, -20.0],
             }],
             program_peak_db: Some(-6.0),
             monitor_peak_db: None,
