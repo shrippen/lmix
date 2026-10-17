@@ -1835,7 +1835,17 @@
       <translation>Programmformat…</translation>
     </message>
     <message>
-      <location line="+4" />
+      <location line="+7" />
+      <source>Multiview: program on the left</source>
+      <translation>Multiview: Program links</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Multiview: level meters</source>
+      <translation>Multiview: Pegelanzeigen</translation>
+    </message>
+    <message>
+      <location line="+6" />
       <source>Export settings…</source>
       <translation>Einstellungen exportieren…</translation>
     </message>

@@ -117,7 +117,10 @@ pub enum Command {
     SetMonitor { gain: f64 },
     /// Program in this format (OUT.1); the engine rebuilds its mixer only
     /// when it differs, and the commands after it set the mixer up again.
-    SetFormat { format: lmix_types::MasterFormat },
+    SetFormat {
+        format: lmix_types::MasterFormat,
+        multiview: lmix_types::MultiviewLayout,
+    },
     /// Mix `slot` (preview) over program by `position` (0–1), as the
     /// T-bar stands; 0 hides it again.
     TBar { slot: usize, position: f32 },
@@ -1113,11 +1116,14 @@ impl Switcher {
                     return Ok(Vec::new());
                 }
                 self.show.format = format;
-                // A new mixer, set up again; outputs restart in the new
-                // size. The sources keep running (no clip starts over).
-                let mut commands = self.restore_commands();
-                commands.retain(|c| !matches!(c, Command::SetSlot { .. }));
-                Ok(commands)
+                Ok(self.mixer_rebuilt())
+            }
+            Action::SetMultiview { layout } => {
+                if layout == self.show.multiview {
+                    return Ok(Vec::new());
+                }
+                self.show.multiview = layout;
+                Ok(self.mixer_rebuilt())
             }
             Action::SetMonitorVolume { volume } => {
                 check_volume(volume)?;
@@ -1400,12 +1406,21 @@ impl Switcher {
         commands
     }
 
+    /// A new mixer for a new format or multiview, set up again; outputs
+    /// restart. The sources keep running (no clip starts over).
+    fn mixer_rebuilt(&mut self) -> Vec<Command> {
+        let mut commands = self.restore_commands();
+        commands.retain(|c| !matches!(c, Command::SetSlot { .. }));
+        commands
+    }
+
     /// Commands that rebuild the engine from the current show (start-up,
     /// engine restart): slots, program, preview, then every audio channel.
     pub fn restore_commands(&mut self) -> Vec<Command> {
         // First: a new format builds a new mixer, the rest sets it up.
         let mut commands = vec![Command::SetFormat {
             format: self.show.format,
+            multiview: self.show.multiview,
         }];
         commands.extend(self.picture_commands());
         self.mix.clear();
@@ -1590,6 +1605,7 @@ impl Switcher {
             aux_buses: self.show.aux_buses,
             master: self.show.master,
             format: self.show.format,
+            multiview: self.show.multiview,
             monitor_volume: self.show.monitor_volume,
             default_delay_ms: self.show.default_delay_ms,
             looks_available: self.looks_available,
@@ -5816,7 +5832,13 @@ mod tests {
             .apply(Action::SetMasterFormat { format: upright })
             .unwrap();
 
-        assert_eq!(cmds[0], Command::SetFormat { format: upright });
+        assert_eq!(
+            cmds[0],
+            Command::SetFormat {
+                format: upright,
+                multiview: Default::default()
+            }
+        );
         assert!(cmds
             .iter()
             .any(|c| matches!(c, Command::Preview { .. }) || matches!(c, Command::Program { .. })));
@@ -7028,6 +7050,34 @@ mod tests {
             })
             .unwrap_err();
         assert!(matches!(err, ActionError::UnknownOutput { .. }));
+    }
+
+    #[test]
+    fn a_multiview_layout_rebuilds_the_mixer_only() {
+        let mut sw = two_inputs();
+        let layout = lmix_types::MultiviewLayout {
+            program: lmix_types::ProgramSide::Left,
+            meters: lmix_types::MultiviewMeters::Hidden,
+        };
+
+        let cmds = sw.apply(Action::SetMultiview { layout }).unwrap();
+
+        assert_eq!(
+            cmds[0],
+            Command::SetFormat {
+                format: Default::default(),
+                multiview: layout
+            }
+        );
+        assert!(
+            !cmds.iter().any(|c| matches!(c, Command::SetSlot { .. })),
+            "the sources keep running"
+        );
+        assert_eq!(sw.state().multiview, layout);
+        assert!(sw
+            .apply(Action::SetMultiview { layout })
+            .unwrap()
+            .is_empty());
     }
 
     #[test]

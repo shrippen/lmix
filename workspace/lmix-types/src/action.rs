@@ -202,6 +202,7 @@ pub const ACTION_GROUPS: &[(&str, &[&str])] = &[
             "start_outputs",
             "stop_outputs",
             "set_master_format",
+            "set_multiview",
         ],
     ),
     (
@@ -502,6 +503,11 @@ pub enum Action {
     /// mixer anew: program stops for a moment, running outputs restart.
     SetMasterFormat {
         format: crate::output::MasterFormat,
+    },
+    /// Layout of the multiview (OUT.10): which side program is on, level
+    /// meters. The engine builds the mixer anew, as for the format.
+    SetMultiview {
+        layout: crate::output::MultiviewLayout,
     },
     /// Master of program sound: volume 0–100 and mute (AUD.2).
     SetMaster {

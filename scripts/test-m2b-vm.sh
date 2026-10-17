@@ -842,6 +842,16 @@ wait_for "$((SETTLE_S + 10))" program_moves || fail "program does not move after
 wait_for "$SETTLE_S" is input_state Ball online || fail "Ball not online after the format changes"
 pass "program format: upright 1080x1920 and back, mixer rebuilt, sources kept"
 
+# --- multiview layout (OUT.10): program on the left, no meters, back ---
+act '{"action":"set_multiview","layout":{"program":"left","meters":"hidden"}}' >/dev/null
+wait_for "$((SETTLE_S + 10))" is vm_prop swap_pvw_pgm true || fail "multiview not built with program on the left"
+[[ "$(vm_prop show_vu_meters)" == false ]] || fail "multiview still draws meters"
+wait_for "$((SETTLE_S + 10))" program_moves || fail "program does not move after the multiview change"
+act '{"action":"set_multiview","layout":{}}' >/dev/null
+wait_for "$((SETTLE_S + 10))" is vm_prop swap_pvw_pgm false || fail "multiview layout not back"
+wait_for "$SETTLE_S" is input_state Ball online || fail "Ball not online after the multiview changes"
+pass "multiview layout: program on the left without meters and back, sources kept"
+
 criticals="$(grep -c 'GStreamer-CRITICAL' "$WORK/strom.log" || true)"
 [[ "$criticals" == 0 ]] || fail "$criticals GStreamer CRITICALs in strom.log"
 pass "no GStreamer CRITICALs"

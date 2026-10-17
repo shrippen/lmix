@@ -2,6 +2,8 @@
 # scripts/update-translations.sh collects the sources and writes these
 # into qml_de.ts (i18n/fill.py). Keep it complete.
 DE = {
+    'Multiview: program on the left': 'Multiview: Program links',
+    'Multiview: level meters': 'Multiview: Pegelanzeigen',
     'Variable bitrate': 'Variable Bitrate',
     'Constant bitrate': 'Konstante Bitrate',
     'Keyframe every (s)': 'Keyframe alle (s)',
