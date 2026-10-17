@@ -46,8 +46,8 @@ pub enum Out {
     },
     /// A panic (`Fade`) or hard stop (`Hard`) happened.
     Panic { mode: StopMode },
-    /// Stop every sound, faded out over `fade_ms`.
-    StopSounds { fade_ms: u32 },
+    /// Stop every sound and picture, faded out over `fade_ms`.
+    StopPlayback { fade_ms: u32 },
 }
 
 /// One started cue.
@@ -403,7 +403,7 @@ impl Runner {
         let all: Vec<u64> = self.runs.iter().map(|r| r.id).collect();
         let mut out = Vec::new();
         self.stop_runs(&all, now, SoundEnd::Caller, &mut out);
-        out.push(Out::StopSounds { fade_ms: 0 });
+        out.push(Out::StopPlayback { fade_ms: 0 });
         self.runs.clear();
         self.standby.clear();
         self.last_go = None;
@@ -453,9 +453,9 @@ impl Runner {
         let all: Vec<u64> = self.runs.iter().map(|r| r.id).collect();
         let mut out = vec![Out::Panic { mode }];
         self.stop_runs(&all, now, SoundEnd::Caller, &mut out);
-        // Every sound, also those of actions and of the panic before
-        // (a hard stop cuts what still fades out).
-        out.push(Out::StopSounds { fade_ms });
+        // Every sound and picture, also those of actions and of the panic
+        // before (a hard stop cuts what still fades out).
+        out.push(Out::StopPlayback { fade_ms });
         if let Some(list) = emergency.and_then(|l| lists.get(l)) {
             for cue in &list.cues {
                 self.spawn(list.id, cue, None, now, Follow::None, &mut out);
@@ -595,7 +595,7 @@ impl Runner {
         let pre = ms(cue.pre_wait_ms);
         let total = match cue.kind {
             CueKind::Group => None,
-            CueKind::Sound => cue.duration_ms.map(|d| pre + ms(d)),
+            CueKind::Sound | CueKind::Picture => cue.duration_ms.map(|d| pre + ms(d)),
             CueKind::Wait | CueKind::Actions | CueKind::Fade => {
                 Some(pre + ms(cue.duration_ms.unwrap_or(0)))
             }
@@ -616,7 +616,11 @@ impl Runner {
             followed: false,
             total,
             kind: cue.kind,
-            fade_out_ms: cue.sound.as_ref().map_or(0, |s| s.fade_out_ms),
+            fade_out_ms: match (&cue.sound, &cue.picture) {
+                (Some(sound), _) => sound.fade_out_ms,
+                (_, Some(picture)) => picture.fade_out_ms,
+                _ => 0,
+            },
         });
         out.push(Out::Event {
             list,
@@ -664,11 +668,26 @@ impl Runner {
                     list: run.list,
                     cue: cue.id,
                     actions: vec![Action::PlaySound {
-                        id: sound_id(cue.id),
+                        id: media_id(cue.id),
                         sound,
                     }],
                 });
-                // Without a duration it ends with its file (`sound_ended`).
+                // Without a duration it ends with its file (`media_ended`).
+                end_at = cue.duration_ms.map(|d| t + ms(d));
+            }
+            CueKind::Picture => {
+                let picture = cue.picture.clone().expect("checked: a picture cue has one");
+                out.push(Out::Actions {
+                    list: run.list,
+                    cue: cue.id,
+                    actions: vec![Action::ShowPicture {
+                        id: media_id(cue.id),
+                        picture,
+                    }],
+                });
+                // Without a duration a still image or held video runs
+                // until it is stopped, a video with `end: stop` until its
+                // end (`media_ended`).
                 end_at = cue.duration_ms.map(|d| t + ms(d));
             }
             CueKind::Fade => {
@@ -700,35 +719,60 @@ impl Runner {
         }
     }
 
-    /// A fade cue's action (SND.6): its cue's sound or its zone to the
-    /// level. A cue that is gone fails the fade; times go on (CUE.19).
+    /// A fade cue's action (SND.6, VIS.4, VIS.7): a sound cue's level, a
+    /// picture cue's opacity, a zone's level or a stage's brightness. A
+    /// cue that is gone, or a value its target does not have, fails the
+    /// fade; times go on (CUE.19).
     fn fire_fade(&mut self, lists: &[ShowCueList], own: usize, cue: &Cue, out: &mut Vec<Out>) {
         let Some(fade) = cue.fade.clone() else {
             out.push(failed(lists[own].id, cue.id, "fade: no target"));
             return;
         };
         let duration_ms = cue.duration_ms.unwrap_or(0);
+        let fail = |what: String| failed(lists[own].id, cue.id, &format!("fade: {what}"));
         let action = match &fade.target {
-            FadeTarget::Cue(text) => match Self::locate(lists, Some(own), text) {
-                Some((_, id)) => Action::FadeSound {
-                    id: sound_id(id),
-                    gain_db: fade.gain_db,
-                    duration_ms,
-                    then: fade.then,
-                },
-                None => {
-                    out.push(failed(
-                        lists[own].id,
-                        cue.id,
-                        &format!("fade: no cue {text}"),
-                    ));
+            FadeTarget::Cue(text) => {
+                let Some((list, id)) = Self::locate(lists, Some(own), text) else {
+                    out.push(fail(format!("no cue {text}")));
                     return;
+                };
+                let kind = Self::cue(lists, list, id).map(|c| c.kind);
+                match (kind, fade.gain_db, fade.opacity) {
+                    (Some(CueKind::Sound), Some(gain_db), _) => Action::FadeSound {
+                        id: media_id(id),
+                        gain_db,
+                        duration_ms,
+                        then: fade.then,
+                    },
+                    (Some(CueKind::Picture), _, Some(opacity)) => Action::FadePicture {
+                        id: media_id(id),
+                        opacity,
+                        duration_ms,
+                        then: fade.then,
+                    },
+                    (Some(CueKind::Sound), None, _) => {
+                        out.push(fail(format!("cue {text} is a sound: set gain_db")));
+                        return;
+                    }
+                    (Some(CueKind::Picture), _, None) => {
+                        out.push(fail(format!("cue {text} is a picture: set opacity")));
+                        return;
+                    }
+                    _ => {
+                        out.push(fail(format!("cue {text} plays no sound or picture")));
+                        return;
+                    }
                 }
-            },
+            }
             FadeTarget::Zone(zone) => Action::SetZoneLevel {
                 zone: zone.clone(),
-                gain_db: Some(fade.gain_db),
+                gain_db: fade.gain_db,
                 mute: None,
+                duration_ms,
+            },
+            FadeTarget::Stage(stage) => Action::SetStageLevel {
+                stage: stage.clone(),
+                brightness: fade.brightness.unwrap_or(1.0),
                 duration_ms,
             },
         };
@@ -739,13 +783,14 @@ impl Runner {
         });
     }
 
-    /// The engine says the sound of `cue` is over (its file ended, or a
-    /// fade stopped it): its runs end now.
-    pub fn sound_ended(&mut self, lists: &[ShowCueList], cue: CueId, now: Instant) -> Vec<Out> {
+    /// The engine says the sound or picture of `cue` is over (its file
+    /// ended, or a fade stopped it): its runs end now.
+    pub fn media_ended(&mut self, lists: &[ShowCueList], cue: CueId, now: Instant) -> Vec<Out> {
+        let media = |kind| matches!(kind, CueKind::Sound | CueKind::Picture);
         for run in self
             .runs
             .iter_mut()
-            .filter(|r| r.cue == cue && r.kind == CueKind::Sound && r.fired && !r.ended)
+            .filter(|r| r.cue == cue && media(r.kind) && r.fired && !r.ended)
         {
             run.end_at = Some(run.end_at.map_or(now, |at| at.min(now)));
         }
@@ -900,14 +945,22 @@ impl Runner {
                 SoundEnd::Fade(ms) => Some(ms),
                 SoundEnd::Caller => None,
             };
-            if let (CueKind::Sound, true, Some(fade_ms)) = (run.kind, run.fired, fade_ms) {
+            let stop = match (run.kind, run.fired, fade_ms) {
+                (CueKind::Sound, true, Some(fade_ms)) => Some(Action::StopSound {
+                    id: Some(media_id(run.cue)),
+                    fade_ms,
+                }),
+                (CueKind::Picture, true, Some(fade_ms)) => Some(Action::StopPicture {
+                    id: Some(media_id(run.cue)),
+                    fade_ms,
+                }),
+                _ => None,
+            };
+            if let Some(stop) = stop {
                 out.push(Out::Actions {
                     list: run.list,
                     cue: run.cue,
-                    actions: vec![Action::StopSound {
-                        id: Some(sound_id(run.cue)),
-                        fade_ms,
-                    }],
+                    actions: vec![stop],
                 });
             }
             out.push(Out::Event {
@@ -954,18 +1007,18 @@ impl Runner {
     }
 }
 
-/// How stopped runs stop their sounds.
+/// How stopped runs stop their sounds and pictures.
 #[derive(Clone, Copy, Debug)]
 enum SoundEnd {
     /// Each with its cue's fade out.
     Own,
     Fade(u32),
-    /// Not one by one: the caller stops every sound.
+    /// Not one by one: the caller stops them all.
     Caller,
 }
 
-/// The engine's id of a sound cue's sound.
-pub fn sound_id(cue: CueId) -> String {
+/// The engine's id of a sound or picture cue's sound or picture.
+pub fn media_id(cue: CueId) -> String {
     cue.to_string()
 }
 
@@ -1026,7 +1079,7 @@ mod tests {
                     let l = lists.iter().position(|e| e.id == *list)?;
                     Runner::cue(lists, l, *cue).map(|c| c.name.clone())
                 }
-                Out::Event { .. } | Out::Panic { .. } | Out::StopSounds { .. } => None,
+                Out::Event { .. } | Out::Panic { .. } | Out::StopPlayback { .. } => None,
             })
             .collect()
     }
@@ -1035,7 +1088,7 @@ mod tests {
         out.iter()
             .filter_map(|o| match o {
                 Out::Event { what, .. } => Some(what.clone()),
-                Out::Actions { .. } | Out::Panic { .. } | Out::StopSounds { .. } => None,
+                Out::Actions { .. } | Out::Panic { .. } | Out::StopPlayback { .. } => None,
             })
             .collect()
     }
@@ -1108,7 +1161,7 @@ mod tests {
         assert_eq!(runner.running(&lists, after(t, 5000)).len(), 1);
         assert_eq!(runner.running(&lists, after(t, 5000))[0].total_ms, None);
 
-        let out = runner.sound_ended(&lists, rain_id, after(t, 8000));
+        let out = runner.media_ended(&lists, rain_id, after(t, 8000));
         assert_eq!(
             fired(&lists, &out),
             ["Lights"],
@@ -1164,13 +1217,13 @@ mod tests {
         runner.go(&lists, 0, t, Guard::time(0)).unwrap();
 
         let out = runner.panic(&lists, None, after(t, 100), 1500);
-        assert!(out.contains(&Out::StopSounds { fade_ms: 1500 }));
+        assert!(out.contains(&Out::StopPlayback { fade_ms: 1500 }));
         assert!(
             actions(&out).is_empty(),
             "no stop one by one: the panic stops them all"
         );
         let out = runner.panic(&lists, None, after(t, 200), 1500);
-        assert!(out.contains(&Out::StopSounds { fade_ms: 0 }));
+        assert!(out.contains(&Out::StopPlayback { fade_ms: 0 }));
     }
 
     #[test]
@@ -1180,7 +1233,9 @@ mod tests {
             duration_ms: Some(3000),
             fade: Some(lmix_types::FadeCue {
                 target,
-                gain_db: -20.0,
+                gain_db: Some(-20.0),
+                opacity: None,
+                brightness: None,
                 then: lmix_types::AfterFade::Stop,
             }),
             ..Cue::empty(CueKind::Fade)
@@ -1232,6 +1287,146 @@ mod tests {
         assert!(events(&out)
             .iter()
             .any(|e| matches!(e, CueEvent::Failed { .. })));
+    }
+
+    fn picture(name: &str, end: lmix_types::PictureEnd) -> Cue {
+        Cue {
+            name: name.into(),
+            picture: Some(lmix_types::PictureCue {
+                file: format!("/pics/{name}.png"),
+                stage: "Back".into(),
+                layer: 1,
+                opacity: 1.0,
+                fit: Default::default(),
+                end,
+                fade_in_ms: 0,
+                fade_out_ms: 1000,
+            }),
+            ..Cue::empty(CueKind::Picture)
+        }
+    }
+
+    #[test]
+    fn a_picture_cue_shows_until_stopped_and_fades_with_its_cue() {
+        let mut forest = picture("Forest", lmix_types::PictureEnd::Hold);
+        forest.number = "1".into();
+        let mut out_ = Cue {
+            number: "2".into(),
+            duration_ms: Some(2000),
+            fade: Some(lmix_types::FadeCue {
+                target: FadeTarget::Cue("1".into()),
+                gain_db: None,
+                opacity: Some(0.0),
+                brightness: None,
+                then: lmix_types::AfterFade::Stop,
+            }),
+            ..Cue::empty(CueKind::Fade)
+        };
+        out_.name = "Out".into();
+        let dark = Cue {
+            number: "3".into(),
+            duration_ms: Some(500),
+            fade: Some(lmix_types::FadeCue {
+                target: FadeTarget::Stage("Back".into()),
+                gain_db: None,
+                opacity: None,
+                brightness: Some(0.0),
+                then: lmix_types::AfterFade::Keep,
+            }),
+            ..Cue::empty(CueKind::Fade)
+        };
+        let lists = vec![list(vec![forest, out_, dark])];
+        let forest = lists[0].cues[0].id.to_string();
+        let mut runner = Runner::default();
+        let t = Instant::now();
+
+        let out = runner.go(&lists, 0, t, Guard::time(0)).unwrap();
+        assert!(matches!(
+            &actions(&out)[..],
+            [Action::ShowPicture { id, picture }] if *id == forest && picture.stage == "Back"
+        ));
+        assert_eq!(
+            runner.running(&lists, after(t, 60_000)).len(),
+            1,
+            "a still image runs until it is stopped"
+        );
+
+        let out = runner
+            .go(&lists, 0, after(t, 1000), Guard::time(0))
+            .unwrap();
+        assert_eq!(
+            actions(&out),
+            [Action::FadePicture {
+                id: forest.clone(),
+                opacity: 0.0,
+                duration_ms: 2000,
+                then: lmix_types::AfterFade::Stop
+            }]
+        );
+        let out = runner
+            .go(&lists, 0, after(t, 1100), Guard::time(0))
+            .unwrap();
+        assert!(matches!(
+            &actions(&out)[..],
+            [Action::SetStageLevel { stage, brightness, duration_ms: 500 }]
+                if stage == "Back" && *brightness == 0.0
+        ));
+
+        // The engine reports the picture gone after its fade: the cue ends.
+        let id = lists[0].cues[0].id;
+        runner.media_ended(&lists, id, after(t, 3100));
+        assert!(runner
+            .running(&lists, after(t, 3100))
+            .iter()
+            .all(|r| r.cue != id));
+    }
+
+    #[test]
+    fn a_stopped_picture_fades_out_and_a_panic_stops_all() {
+        let lists = vec![list(vec![picture("Forest", lmix_types::PictureEnd::Stop)])];
+        let forest = lists[0].cues[0].id.to_string();
+        let mut runner = Runner::default();
+        let t = Instant::now();
+        runner.go(&lists, 0, t, Guard::time(0)).unwrap();
+
+        let out = runner.stop(&lists, Some(0), None, after(t, 10)).unwrap();
+        assert_eq!(
+            actions(&out),
+            [Action::StopPicture {
+                id: Some(forest),
+                fade_ms: 1000
+            }]
+        );
+        runner.go(&lists, 0, after(t, 20), Guard::time(0)).ok();
+        let out = runner.panic(&lists, None, after(t, 30), 800);
+        assert!(out.contains(&Out::StopPlayback { fade_ms: 800 }));
+    }
+
+    #[test]
+    fn a_fade_needs_a_value_its_target_has() {
+        let mut rain = sound("Rain", 0);
+        rain.number = "1".into();
+        let fade = Cue {
+            number: "2".into(),
+            duration_ms: Some(100),
+            fade: Some(lmix_types::FadeCue {
+                target: FadeTarget::Cue("1".into()),
+                gain_db: None,
+                opacity: Some(0.5),
+                brightness: None,
+                then: lmix_types::AfterFade::Keep,
+            }),
+            ..Cue::empty(CueKind::Fade)
+        };
+        let lists = vec![list(vec![rain, fade])];
+        let mut runner = Runner::default();
+        let t = Instant::now();
+        runner.go(&lists, 0, t, Guard::time(0)).unwrap();
+        let out = runner.go(&lists, 0, after(t, 10), Guard::time(0)).unwrap();
+        assert!(actions(&out).is_empty());
+        assert!(events(&out)
+            .iter()
+            .any(|e| matches!(e, CueEvent::Failed { reason } if reason.contains("gain_db"))));
     }
 
     #[test]

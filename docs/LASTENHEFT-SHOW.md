@@ -143,7 +143,7 @@ ausgeschlossen. **MS**: Meilenstein (§7). Stand: ✅ vorhanden · ◐ teilweise
 
 | ID | Anforderung | Prio | MS | Stand |
 |---|---|---|---|---|
-| SND.1 | Klang-Cue spielt eine Datei (WAV, FLAC, OGG, Opus, MP3; bis 24 Kanäle; Abtastrate und Bittiefe beliebig, automatisch angepasst). Komprimierte Formate werden vorab dekodiert oder vorgeladen, damit SND.12 gilt | M | S1 | ◐ (Datei über strom `show_sound`, Formate wie GStreamer dekodiert; ohne Vorladen) |
+| SND.1 | Klang-Cue spielt eine Datei (WAV, FLAC, OGG, Opus, MP3; bis 24 Kanäle; Abtastrate und Bittiefe beliebig, automatisch angepasst). Komprimierte Formate werden vorab dekodiert oder vorgeladen, damit SND.12 gilt | M | S1 | ◐ (Datei über strom `show_playback`, Formate wie GStreamer dekodiert; ohne Vorladen) |
 | SND.2 | Lautstärke je Cue (dB, 0 dB = unverändert). Einblendzeit und Ausblendzeit beim Stoppen als Komfort im Klang-Cue; wirken intern wie Fades und werden von späteren Fades übersteuert (lmix) | M | S1 | ✅ (Pegel, Ein- und Ausblendzeit im Klang-Cue) |
 | SND.3 | Wiederholungen: n-mal oder endlos, lückenlos (keine Pause, kein Klick an der Nahtstelle) | M | S1 | – |
 | SND.4 | Mindestens 16 Klang-Cues gleichzeitig ohne Aussetzer (lmix) | M | S1 | – |
@@ -152,7 +152,7 @@ ausgeschlossen. **MS**: Meilenstein (§7). Stand: ✅ vorhanden · ◐ teilweise
 | SND.7 | Fade relativ (dB addieren); ein absoluter Fade hat Vorrang vor laufenden relativen | S | S2 | – |
 | SND.8 | Fade-Kurve: S-Kurve als Standard | M | S1 | ✅ (S-Kurve in strom) |
 | SND.9 | Weitere Kurven (linear, parametrisch) und Pegelbereich (Reglerskala, dB, linear) | S | S2 | – |
-| SND.10 | Zonen: mindestens 8 benannte Zonen mit 1–8 Kanälen; pro Rechner Zuordnung Zone → Gerät und Kanäle mit Pegel, mehrere Ziele je Zone möglich. Die Show nennt nur Zonennamen (lmix; QLab hält Patches im Dokument) | M | S1 | ✅ (Zonen in der Show, Zuordnung je Rechner, mehrere Ausgänge; Flow „lmix sound“) |
+| SND.10 | Zonen: mindestens 8 benannte Zonen mit 1–8 Kanälen; pro Rechner Zuordnung Zone → Gerät und Kanäle mit Pegel, mehrere Ziele je Zone möglich. Die Show nennt nur Zonennamen (lmix; QLab hält Patches im Dokument) | M | S1 | ✅ (Zonen in der Show, Zuordnung je Rechner, mehrere Ausgänge; Flow „lmix playback“) |
 | SND.11 | Lautstärke und Mute je Zone, als Aktion, als Fade-Ziel und in der Oberfläche | M | S1 | ◐ (Pegel und Mute je Zone als Aktion und Fade-Ziel; Oberfläche fehlt) |
 | SND.12 | Latenz GO → hörbarer Klang ≤ 50 ms | M | S1 | – |
 | SND.13 | Reglergrenzen der Show: höchster Wert (Standard +12 dB) und niedrigster (Standard −60 dB = still); gelten für Cues, Fades und Fernsteuerung | M | S1 | – |
@@ -171,15 +171,15 @@ ausgeschlossen. **MS**: Meilenstein (§7). Stand: ✅ vorhanden · ◐ teilweise
 
 | ID | Anforderung | Prio | MS | Stand |
 |---|---|---|---|---|
-| VIS.1 | Mehrere Bühnen je Show (mindestens 4), jede eine eigene Bildfläche mit eigenen Ebenen; die Show nennt nur Bühnennamen. Pro Rechner wird jede Bühne einem oder mehreren Ausgängen zugeordnet: Vollbild auf einem Bildschirm/Projektor oder Fenster auf dem Desktop (Probe ohne Projektor, Kontrollbild) | M | S1 | ◐ (OUT.3, Display Vollbild/Fenster) |
+| VIS.1 | Mehrere Bühnen je Show (mindestens 4), jede eine eigene Bildfläche mit eigenen Ebenen; die Show nennt nur Bühnennamen. Pro Rechner wird jede Bühne einem oder mehreren Ausgängen zugeordnet: Vollbild auf einem Bildschirm/Projektor oder Fenster auf dem Desktop (Probe ohne Projektor, Kontrollbild) | M | S1 | ◐ (Bühnen in der Show, Bildschirme je Rechner: Fenster, Vollbild, DRM; Flow „lmix playback“) |
 | VIS.1a | Bühne zusätzlich als Netzausgang (NDI/OMT) | S | S2 | ◐ (OUT.6) |
-| VIS.2 | Bild-Cue: Video oder Standbild auf eine Bühne; Standbild läuft bis Stopp; Video: Wiederholungen wie SND.3, am Ende halten (letztes Bild bleibt) oder stoppen | M | S1 | ◐ |
-| VIS.3 | Ebenen: Ebenennummer je Bild-Cue (1–999, dazu „ganz oben“, „ganz unten“); auf gleicher Ebene liegt der zuletzt gestartete oben. „Kulisse“ ist Konvention (z. B. Ebene 1) | M | S1 | ◐ (Overlays, OVL) |
-| VIS.4 | Deckkraft je Bild-Cue (0–100 %); Bild-Fade-Cue für Deckkraft mit Kurve und „Ziel danach stoppen“. Überblenden = neuer Cue auf derselben Ebene blendet ein, alter blendet aus und stoppt (CUE.11) | M | S1 | – |
-| VIS.5 | Füllmodus je Bild-Cue: einpassen, füllen, strecken | M | S1 | – |
+| VIS.2 | Bild-Cue: Video oder Standbild auf eine Bühne; Standbild läuft bis Stopp; Video: Wiederholungen wie SND.3, am Ende halten (letztes Bild bleibt) oder stoppen | M | S1 | ◐ (Bild-Cue mit Video oder Standbild; Ende halten oder stoppen; Wiederholungen fehlen) |
+| VIS.3 | Ebenen: Ebenennummer je Bild-Cue (1–999, dazu „ganz oben“, „ganz unten“); auf gleicher Ebene liegt der zuletzt gestartete oben. „Kulisse“ ist Konvention (z. B. Ebene 1) | M | S1 | ✅ (Ebene 0–999 je Bild-Cue; gleiche Ebene: der spätere oben) |
+| VIS.4 | Deckkraft je Bild-Cue (0–100 %); Bild-Fade-Cue für Deckkraft mit Kurve und „Ziel danach stoppen“. Überblenden = neuer Cue auf derselben Ebene blendet ein, alter blendet aus und stoppt (CUE.11) | M | S1 | ◐ (Deckkraft je Bild-Cue, Fade mit S-Kurve und „danach stoppen“; Überblenden über CUE.11) |
+| VIS.5 | Füllmodus je Bild-Cue: einpassen, füllen, strecken | M | S1 | ✅ (einpassen, füllen, strecken) |
 | VIS.6 | Mischmodus je Bild-Cue: mindestens normal, aufhellen, addieren, multiplizieren (Effektvideos auf Schwarz) | S | S1 | – |
-| VIS.7 | Bühnen-Dimmer: Gesamthelligkeit einer Bühne per Fade (0–100 %), unabhängig vom Inhalt (lmix) | M | S1 | – |
-| VIS.8 | Bühne zeigt ohne laufende Cues, beim Start und nach Panik dauerhaft Schwarz, nie Testbild oder Desktop | M | S1 | – |
+| VIS.7 | Bühnen-Dimmer: Gesamthelligkeit einer Bühne per Fade (0–100 %), unabhängig vom Inhalt (lmix) | M | S1 | ✅ (Bühnen-Helligkeit als Aktion und Fade-Ziel) |
+| VIS.8 | Bühne zeigt ohne laufende Cues, beim Start und nach Panik dauerhaft Schwarz, nie Testbild oder Desktop | M | S1 | ◐ (Bühne schwarz ohne Bilder, beim Start und nach Panik; auf echten Bildschirmen ungeprüft) |
 | VIS.9 | Freie Geometrie: Position, Skalierung, Drehung, Beschnitt; per Fade änderbar | S | S2 | – |
 | VIS.10 | Ton aus Videodateien in Zonen (wie SND.5) | S | S2 | – |
 | VIS.11 | Bühne als virtuelle Fläche mit eigener Auflösung, Teilbereiche auf mehrere Ausgänge | S | S2 | – |

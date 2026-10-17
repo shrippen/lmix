@@ -144,6 +144,9 @@ pub struct Show {
     /// Sound zones; their devices are this machine's (SND.10).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub zones: Vec<lmix_types::Zone>,
+    /// Picture stages; their screens are this machine's (VIS.1).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub stages: Vec<lmix_types::Stage>,
     /// Script folder whose lists lmix-script keeps loading (SSH.2). Its
     /// lists stay in the show too: without the tool the show still has
     /// its cues, and standby survives a restart (SAF.6).
@@ -289,6 +292,7 @@ impl Default for Show {
             panic_ms: default_panic(),
             emergency_list: None,
             zones: Vec::new(),
+            stages: Vec::new(),
             script_folder: None,
             midi_tbar: None,
             graphics: Vec::new(),
@@ -607,6 +611,7 @@ mod tests {
             panic_ms: 2000,
             emergency_list: None,
             zones: Vec::new(),
+            stages: Vec::new(),
             script_folder: None,
             shortcuts: vec![ShowShortcut {
                 id: InputId::new(),

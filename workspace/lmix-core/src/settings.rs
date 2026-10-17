@@ -32,6 +32,9 @@ pub struct SettingsFile {
     /// Where the zones play (SND.10).
     #[serde(default)]
     pub zone_patches: Vec<lmix_types::ZonePatch>,
+    /// Where the stages show (VIS.1).
+    #[serde(default)]
+    pub stage_patches: Vec<lmix_types::StagePatch>,
 }
 
 #[derive(Serialize, Deserialize)]

@@ -504,9 +504,10 @@ impl Service {
         }
     }
 
-    /// End sound cues as the engine reports their sounds over; forever.
-    pub async fn watch_sounds(self: Arc<Self>) {
-        let mut ended = self.engine.sounds_ended();
+    /// End sound and picture cues as the engine reports theirs over;
+    /// forever.
+    pub async fn watch_playback(self: Arc<Self>) {
+        let mut ended = self.engine.playback_ended();
         loop {
             let id = match ended.recv().await {
                 Ok(id) => id,
@@ -515,7 +516,7 @@ impl Service {
             };
             let out = {
                 let mut sw = self.switcher.lock().await;
-                let out = sw.sound_ended(&id, tokio::time::Instant::now());
+                let out = sw.media_ended(&id, tokio::time::Instant::now());
                 if !out.is_empty() {
                     self.publish(&sw);
                 }
@@ -612,10 +613,15 @@ impl Service {
                 crate::cues::Out::Event { list, cue, what } => {
                     let _ = self.events.send(Event::Cue { list, cue, what });
                 }
-                crate::cues::Out::StopSounds { fade_ms } => {
-                    let stop = Action::StopSound { id: None, fade_ms };
-                    if let Err(e) = Box::pin(self.handle_as(stop, Origin::Operator)).await {
-                        tracing::warn!(error = %e, "sounds did not stop");
+                crate::cues::Out::StopPlayback { fade_ms } => {
+                    let stops = [
+                        Action::StopSound { id: None, fade_ms },
+                        Action::StopPicture { id: None, fade_ms },
+                    ];
+                    for stop in stops {
+                        if let Err(e) = Box::pin(self.handle_as(stop, Origin::Operator)).await {
+                            tracing::warn!(error = %e, "sounds or pictures did not stop");
+                        }
                     }
                 }
                 crate::cues::Out::Panic { mode } => {

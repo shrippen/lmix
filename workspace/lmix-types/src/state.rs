@@ -196,6 +196,9 @@ pub struct ShowState {
     /// The show's zones with this machine's outputs (SND.10).
     #[serde(default)]
     pub zones: Vec<crate::zone::ZoneState>,
+    /// The show's stages with this machine's screens (VIS.1).
+    #[serde(default)]
+    pub stages: Vec<crate::stage::StageState>,
     /// Locked against closing, loading and stopping (AUT.11).
     #[serde(default)]
     pub locked: bool,

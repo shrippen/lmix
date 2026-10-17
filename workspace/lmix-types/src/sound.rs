@@ -78,23 +78,35 @@ pub enum AfterFade {
     Stop,
 }
 
-/// What a fade cue fades (SND.6, SND.11).
+/// What a fade cue fades (SND.6, SND.11, VIS.4, VIS.7).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum FadeTarget {
-    /// A sound cue, by number or id; looked for in the fade cue's list
-    /// first.
+    /// A sound or picture cue, by number or id; looked for in the fade
+    /// cue's list first.
     Cue(String),
     /// A zone, by name.
     Zone(String),
+    /// A stage, by name.
+    Stage(String),
 }
 
-/// What a fade cue does; it runs for the cue's `duration_ms` (SND.6).
+/// What a fade cue does; it runs for the cue's `duration_ms`. Only the
+/// values set change (SND.6): `gain_db` for a sound cue or a zone,
+/// `opacity` for a picture cue, `brightness` for a stage.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct FadeCue {
     pub target: FadeTarget,
-    /// Target level, dB; [`SOUND_GAIN_MIN_DB`] is silence.
-    pub gain_db: f32,
+    /// Level, dB; [`SOUND_GAIN_MIN_DB`] is silence.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gain_db: Option<f32>,
+    /// 0 (clear) to 1.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub opacity: Option<f32>,
+    /// 0 (black) to 1 (VIS.7).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub brightness: Option<f32>,
+    /// `stop`: the target cue stops when the fade is over.
     #[serde(default)]
     pub then: AfterFade,
 }

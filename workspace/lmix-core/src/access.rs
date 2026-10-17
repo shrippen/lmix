@@ -258,6 +258,10 @@ pub fn right_of(action: &Action) -> Right {
         | Action::RemoveZone { .. }
         | Action::SetZonePatch { .. }
         | Action::RemoveZonePatch { .. }
+        | Action::SetStage { .. }
+        | Action::RemoveStage { .. }
+        | Action::SetStagePatch { .. }
+        | Action::RemoveStagePatch { .. }
         | Action::SetFeed { .. }
         | Action::SetGoGuard { .. }
         | Action::SetGoRearm { .. }
@@ -289,6 +293,10 @@ pub fn right_of(action: &Action) -> Right {
         | Action::FadeSound { .. }
         | Action::StopSound { .. }
         | Action::SetZoneLevel { .. }
+        | Action::ShowPicture { .. }
+        | Action::FadePicture { .. }
+        | Action::StopPicture { .. }
+        | Action::SetStageLevel { .. }
         | Action::SeekInput { .. }
         | Action::PlayItem { .. }
         | Action::StartOutput { .. }

@@ -2603,12 +2603,12 @@
     </message>
     <message>
       <location line="+1" />
-      <location line="+21" />
+      <location line="+24" />
       <source>Note</source>
       <translation>Notiz</translation>
     </message>
     <message>
-      <location line="-20" />
+      <location line="-23" />
       <source>Group</source>
       <translation>Gruppe</translation>
     </message>
@@ -2619,18 +2619,24 @@
     </message>
     <message>
       <location line="+0" />
-      <location line="+21" />
+      <location line="+24" />
       <source>Start</source>
       <translation>Start</translation>
     </message>
     <message>
-      <location line="-20" />
-      <location line="+21" />
+      <location line="-23" />
+      <location line="+24" />
       <source>Sound</source>
       <translation>Ton</translation>
     </message>
     <message>
-      <location line="-19" />
+      <location line="-23" />
+      <location line="+24" />
+      <source>Picture</source>
+      <translation>Bild</translation>
+    </message>
+    <message>
+      <location line="-22" />
       <source>Actions</source>
       <translation>Aktionen</translation>
     </message>
@@ -2645,13 +2651,18 @@
       <translation>Blende Zone %1</translation>
     </message>
     <message>
+      <location line="+2" />
+      <source>Fade stage %1</source>
+      <translation>Blende Bühne %1</translation>
+    </message>
+    <message>
       <location line="+1" />
-      <location line="+10" />
+      <location line="+11" />
       <source>Fade</source>
       <translation>Blende</translation>
     </message>
     <message>
-      <location line="-5" />
+      <location line="-6" />
       <source>Wait</source>
       <translation>Warten</translation>
     </message>
@@ -2666,7 +2677,12 @@
       <translation>Gruppe, Zeitleiste</translation>
     </message>
     <message>
-      <location line="+4" />
+      <location line="+3" />
+      <source>Picture on %1</source>
+      <translation>Bild auf %1</translation>
+    </message>
+    <message>
+      <location line="+2" />
       <source>Actions: %1</source>
       <translation>Aktionen: %1</translation>
     </message>

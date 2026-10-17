@@ -1,5 +1,6 @@
-//! Sound cues on the engine (show mode SND): what a cue plays is checked
-//! here, and zone names become the engine's zone numbers.
+//! Sound and picture cues on the engine (show mode SND, VIS): what a cue
+//! plays is checked here, and zone and stage names become the engine's
+//! numbers.
 //!
 //! ```text
 //!   show zones [Hall (2), Foyer (1)]
@@ -11,6 +12,7 @@ use lmix_types::sound::{
     AfterFade, FadeCue, FadeTarget, SoundCue, SOUND_FADE_MAX_MS, SOUND_FILE_CHANNELS,
     SOUND_GAIN_MAX_DB, SOUND_GAIN_MIN_DB, SOUND_ROUTES,
 };
+use lmix_types::stage::{PictureCue, PictureEnd, PictureFit, Stage, PICTURE_LAYER_MAX};
 use lmix_types::zone::{Zone, ZONE_CHANNELS};
 use lmix_types::ActionError;
 
@@ -33,6 +35,12 @@ pub struct EngineRoute {
     pub zone: usize,
     pub zone_channel: u32,
     pub gain_db: f32,
+}
+
+fn bad_stage(reason: impl Into<String>) -> ActionError {
+    ActionError::BadStage {
+        reason: reason.into(),
+    }
 }
 
 fn bad(reason: impl Into<String>) -> ActionError {
@@ -89,19 +97,104 @@ pub fn check_sound(sound: &SoundCue) -> Result<(), ActionError> {
     Ok(())
 }
 
+/// A fade sets something its target has: a level for a zone, a
+/// brightness for a stage, a level or an opacity for a cue (which of them
+/// counts is known once the cue is found).
 pub fn check_fade(fade: &FadeCue) -> Result<(), ActionError> {
-    check_gain(fade.gain_db, "the fade's level")?;
+    if let Some(db) = fade.gain_db {
+        check_gain(db, "the fade's level")?;
+    }
+    for share in [fade.opacity, fade.brightness].into_iter().flatten() {
+        check_share(share)?;
+    }
+    let sets = |what: bool, name: &str| {
+        if what {
+            Ok(())
+        } else {
+            Err(bad(format!("a fade of a {name} sets its value")))
+        }
+    };
     match (&fade.target, fade.then) {
         (FadeTarget::Cue(cue), _) if cue.trim().is_empty() => Err(bad("a fade names its cue")),
-        (FadeTarget::Zone(_), AfterFade::Stop) => Err(bad("only a cue stops after its fade")),
-        _ => Ok(()),
+        (FadeTarget::Zone(_) | FadeTarget::Stage(_), AfterFade::Stop) => {
+            Err(bad("only a cue stops after its fade"))
+        }
+        (FadeTarget::Cue(_), _) => sets(fade.gain_db.is_some() || fade.opacity.is_some(), "cue"),
+        (FadeTarget::Zone(_), _) => sets(fade.gain_db.is_some(), "zone (gain_db)"),
+        (FadeTarget::Stage(_), _) => sets(fade.brightness.is_some(), "stage (brightness)"),
     }
+}
+
+/// An opacity or brightness: 0–1.
+pub fn check_share(value: f32) -> Result<(), ActionError> {
+    if !(0.0..=1.0).contains(&value) {
+        return Err(bad("opacity and brightness are 0–1"));
+    }
+    Ok(())
+}
+
+/// What a picture cue shows, without the show's stages.
+pub fn check_picture(picture: &PictureCue) -> Result<(), ActionError> {
+    if !std::path::Path::new(&picture.file).is_absolute() {
+        return Err(bad_stage(format!(
+            "{:?}: the file needs an absolute path",
+            picture.file
+        )));
+    }
+    if picture.stage.trim().is_empty() {
+        return Err(bad_stage("a picture names its stage"));
+    }
+    if picture.layer > PICTURE_LAYER_MAX {
+        return Err(bad_stage(format!("layers are 0–{PICTURE_LAYER_MAX}")));
+    }
+    check_share(picture.opacity)?;
+    check_fade_time(picture.fade_in_ms)?;
+    check_fade_time(picture.fade_out_ms)
+}
+
+/// A picture as the engine shows it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct EnginePicture {
+    pub uri: String,
+    /// Place of its stage in the show.
+    pub stage: usize,
+    pub layer: u16,
+    pub opacity: f32,
+    pub fit: PictureFit,
+    pub end: PictureEnd,
+    pub fade_in_ms: u32,
+}
+
+/// `picture` as the engine shows it on the show's `stages`.
+pub fn engine_picture(
+    picture: &PictureCue,
+    stages: &[Stage],
+) -> Result<EnginePicture, ActionError> {
+    check_picture(picture)?;
+    Ok(EnginePicture {
+        uri: file_uri(&picture.file),
+        stage: stage_index(stages, &picture.stage)?,
+        layer: picture.layer,
+        opacity: picture.opacity,
+        fit: picture.fit,
+        end: picture.end,
+        fade_in_ms: picture.fade_in_ms,
+    })
+}
+
+/// Place of stage `name` in the show.
+pub fn stage_index(stages: &[Stage], name: &str) -> Result<usize, ActionError> {
+    stages
+        .iter()
+        .position(|s| s.name == name)
+        .ok_or_else(|| bad_stage(format!("no stage {name}")))
 }
 
 /// The fields a sound or fade cue needs.
 pub fn check_cue(cue: &Cue) -> Result<(), ActionError> {
     match cue.kind {
         CueKind::Sound => check_sound(cue.sound.as_ref().ok_or_else(|| bad("no sound"))?),
+        CueKind::Picture => check_picture(cue.picture.as_ref().ok_or_else(|| bad("no picture"))?),
         CueKind::Fade => {
             check_fade(cue.fade.as_ref().ok_or_else(|| bad("no fade"))?)?;
             match cue.duration_ms {
@@ -243,11 +336,28 @@ mod tests {
     fn only_cues_stop_after_a_fade() {
         let fade = |target, then| FadeCue {
             target,
-            gain_db: SOUND_GAIN_MIN_DB,
+            gain_db: Some(SOUND_GAIN_MIN_DB),
+            opacity: None,
+            brightness: None,
             then,
         };
         assert!(check_fade(&fade(FadeTarget::Cue("12".into()), AfterFade::Stop)).is_ok());
         assert!(check_fade(&fade(FadeTarget::Zone("Hall".into()), AfterFade::Stop)).is_err());
         assert!(check_fade(&fade(FadeTarget::Cue(" ".into()), AfterFade::Keep)).is_err());
+        assert!(
+            check_fade(&fade(FadeTarget::Stage("Back".into()), AfterFade::Keep)).is_err(),
+            "a stage fades its brightness, not a level"
+        );
+        let dim = FadeCue {
+            brightness: Some(0.0),
+            gain_db: None,
+            ..fade(FadeTarget::Stage("Back".into()), AfterFade::Keep)
+        };
+        assert!(check_fade(&dim).is_ok());
+        assert!(check_fade(&FadeCue {
+            brightness: Some(1.5),
+            ..dim
+        })
+        .is_err());
     }
 }

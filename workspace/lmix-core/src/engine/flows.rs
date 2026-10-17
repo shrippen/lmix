@@ -563,6 +563,15 @@ pub fn output_flow(
 /// sync=false: frames come live from the mixer, already as old as its
 /// latency; a syncing sink would drop them all as late.
 fn add_display(flow: &mut Flow, from: &str, mode: DisplayMode) {
+    flow.elements
+        .push(element("convert", "videoconvert", vec![]));
+    flow.elements.push(display_sink("screen", mode));
+    flow.links.push(link(from.into(), "convert".into()));
+    flow.links.push(link("convert".into(), "screen".into()));
+}
+
+/// The sink element `id` that shows raw video on a screen as `mode` says.
+pub(crate) fn display_sink(id: &str, mode: DisplayMode) -> Element {
     let mut properties = vec![
         ("qos", PropertyValue::Bool(false)),
         ("sync", PropertyValue::Bool(false)),
@@ -578,11 +587,7 @@ fn add_display(flow: &mut Flow, from: &str, mode: DisplayMode) {
             "kmssink"
         }
     };
-    flow.elements
-        .push(element("convert", "videoconvert", vec![]));
-    flow.elements.push(element("screen", sink, properties));
-    flow.links.push(link(from.into(), "convert".into()));
-    flow.links.push(link("convert".into(), "screen".into()));
+    element(id, sink, properties)
 }
 
 /// Program leaves the CUDA mixer in GPU memory: elements that read frames
