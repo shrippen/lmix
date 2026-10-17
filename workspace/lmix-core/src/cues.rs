@@ -330,6 +330,18 @@ impl Runner {
         out
     }
 
+    /// `list` got new cues instead of `old`: standby stays on the cue it
+    /// was on, when that cue is still there (IMP.5).
+    pub fn keep_standby(&mut self, list: &ShowCueList, old: &[Cue]) {
+        let standby = self.standby(list.id);
+        let Some(was) = old.get(standby) else {
+            return;
+        };
+        if let Some(now) = list.cues.iter().position(|c| c.id == was.id) {
+            self.standby.insert(list.id, now);
+        }
+    }
+
     /// After a list changed: standby at most one past its end; runs of
     /// cues that are gone are dropped.
     pub fn list_changed(&mut self, lists: &[ShowCueList]) {
@@ -714,6 +726,7 @@ mod tests {
             id: InputId::new(),
             name: "Main".into(),
             cues,
+            source: None,
         }
     }
 
@@ -1054,6 +1067,22 @@ mod tests {
         assert_eq!(events(&out), [CueEvent::Stopped]);
         assert_eq!(runner.standby(lists[0].id), 0);
         assert_eq!(runner.deadline(), None);
+    }
+
+    #[test]
+    fn standby_stays_on_its_cue_when_cues_come_before() {
+        let (a, b) = (cut("A"), cut("B"));
+        let mut lists = vec![list(vec![a.clone(), b.clone()])];
+        let mut runner = Runner::default();
+        runner
+            .move_standby(&lists, 0, &StandbyMove::Index(2))
+            .unwrap();
+
+        let old = std::mem::replace(&mut lists[0].cues, vec![cut("New"), a, b]);
+        runner.keep_standby(&lists[0], &old);
+        runner.list_changed(&lists);
+
+        assert_eq!(runner.standby(lists[0].id), 2, "still on B");
     }
 
     #[test]

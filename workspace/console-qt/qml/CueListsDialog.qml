@@ -24,6 +24,8 @@ KanteDialog {
     readonly property var list: lists.length > 0 ? lists[Math.min(current, lists.length - 1)] : null
     /** Cue whose actions are being edited; past the end for a new one. */
     property int editing: -1
+    /** The list comes from a script and is edited there (IMP.9). */
+    readonly property bool fromScript: list !== null && list.source !== undefined && list.source !== null
 
     function save(cues) {
         act({ action: "set_cue_list", list: list.number, name: list.name, cues: cues })
@@ -99,6 +101,14 @@ KanteDialog {
 
         QQC2.Label {
             Layout.fillWidth: true
+            visible: dialog.fromScript
+            wrapMode: Text.WordWrap
+            color: KanteStyle.mutedTextColor
+            text: dialog.fromScript ? qsTr("This list comes from %1 and is edited there; reload the script to change it.").arg(dialog.list.source.replace(/^script:/, "")) : ""
+        }
+
+        QQC2.Label {
+            Layout.fillWidth: true
             visible: dialog.list === null
             wrapMode: Text.WordWrap
             text: qsTr("No cue lists yet. A cue list runs prepared steps of a show one after another, each with GO.")
@@ -155,7 +165,7 @@ KanteDialog {
                             }
                             KanteButton {
                                 text: qsTr("Edit…")
-                                enabled: entry.editable
+                                enabled: entry.editable && !dialog.fromScript
                                 onClicked: {
                                     dialog.editing = entry.index
                                     cueDialog.label = entry.modelData.name
@@ -165,6 +175,7 @@ KanteDialog {
                             }
                             KanteButton {
                                 text: qsTr("Remove")
+                                enabled: !dialog.fromScript
                                 onClicked: {
                                     var cues = dialog.list.cues.slice()
                                     cues.splice(entry.index, 1)
@@ -183,6 +194,7 @@ KanteDialog {
 
             KanteButton {
                 text: qsTr("+ Cue")
+                enabled: !dialog.fromScript
                 onClicked: {
                     dialog.editing = dialog.list.cues.length
                     cueDialog.label = qsTr("Cue %1").arg(dialog.list.cues.length + 1)

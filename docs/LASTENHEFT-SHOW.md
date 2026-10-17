@@ -220,15 +220,15 @@ QLab kennt keinen Import aus Texten; am nächsten kommt das Anlegen von Cues
 
 | ID | Anforderung | Prio | MS | Stand |
 |---|---|---|---|---|
-| IMP.1 | Eigenes Werkzeug liest Markdown-Dateien eines Ordners (z. B. Obsidian-Vault) und erzeugt Cue-Listen über die API | M | S1 | – |
-| IMP.2 | Cues stehen als Codeblöcke (`lmix-cue`) im Text; Reihenfolge im Text = Reihenfolge der Liste; Überschriften werden Notiz-Cues als Szenenmarken (S2: Gruppen „hinein“, CUE.5) | M | S1 | – |
-| IMP.3 | Eine Datei = eine Cue-Liste; Name aus Dateiname oder Frontmatter | M | S1 | – |
-| IMP.4 | Medienpfade relativ zum Ordner; fehlende Dateien und doppelte Nummern als Fehler mit Datei und Zeile | M | S1 | – |
-| IMP.5 | Neu laden auf Befehl und bei Dateiänderung; Standby bleibt auf derselben Cue-Nummer; laufende Cues laufen weiter | M | S1 | – |
-| IMP.6 | Cue-Nummern im Drehbuch sind die feste Zuordnung; der Import nummeriert nicht selbst | M | S1 | – |
+| IMP.1 | Eigenes Werkzeug liest Markdown-Dateien eines Ordners (z. B. Obsidian-Vault) und erzeugt Cue-Listen über die API | M | S1 | ✅ (`lmix-script`, `docs/DREHBUCH.md`) |
+| IMP.2 | Cues stehen als Codeblöcke (`lmix-cue`) im Text; Reihenfolge im Text = Reihenfolge der Liste; Überschriften werden Notiz-Cues als Szenenmarken (S2: Gruppen „hinein“, CUE.5) | M | S1 | ✅ |
+| IMP.3 | Eine Datei = eine Cue-Liste; Name aus Dateiname oder Frontmatter | M | S1 | ✅ |
+| IMP.4 | Medienpfade relativ zum Ordner; fehlende Dateien und doppelte Nummern als Fehler mit Datei und Zeile | M | S1 | ✅ (fehlende Medien als Warnung, CUE.19) |
+| IMP.5 | Neu laden auf Befehl und bei Dateiänderung; Standby bleibt auf derselben Cue-Nummer; laufende Cues laufen weiter | M | S1 | ✅ (`--watch`) |
+| IMP.6 | Cue-Nummern im Drehbuch sind die feste Zuordnung; der Import nummeriert nicht selbst | M | S1 | ✅ |
 | IMP.7 | Vorlagen: Standardwerte je Cue-Art (z. B. Fade-Dauer) und benannte Cue-Bausteine („Szene“ = Bild + Licht + Atmo als Gruppe) | S | S2 | – |
-| IMP.8 | Formatbeschreibung als JSON-Schema | S | S1 | – |
-| IMP.9 | Im Drehbuch-Betrieb sind Cues in der Oberfläche nicht bearbeitbar (eine Quelle der Wahrheit); Hinweis in der Oberfläche | M | S1 | – |
+| IMP.8 | Formatbeschreibung als JSON-Schema | S | S1 | ✅ (`lmix-script schema`) |
+| IMP.9 | Im Drehbuch-Betrieb sind Cues in der Oberfläche nicht bearbeitbar (eine Quelle der Wahrheit); Hinweis in der Oberfläche | M | S1 | ✅ (Quelle der Liste, Console sperrt) |
 
 ### 3.8 Bedienung und Fernsteuerung (CTL)
 

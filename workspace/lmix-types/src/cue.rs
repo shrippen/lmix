@@ -304,6 +304,10 @@ pub struct CueList {
     pub standby: u32,
     /// GO without a list goes here (RUN.7).
     pub active: bool,
+    /// Where the list comes from, e.g. `script:Session 3.md`; such a list
+    /// is edited there, not in a client (IMP.9).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
 }
 
 /// Where a running cue is (RUN.3).

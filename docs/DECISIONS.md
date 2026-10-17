@@ -2396,3 +2396,40 @@ gemeldet, nächster läuft), Switcher-Tests der Prüfregeln; VM-Check mit
 echtem strom (GO in der aktiven Liste, Folge nach 1,5 s, Standby zurück
 an den Kettenanfang). **Offen**: 4-h-Genauigkeit im Selftest (SNF.4),
 „erst nach Loslassen wieder scharf“ (RUN.6), Anzeige in der Console (SUI).
+
+## 2026-10-16 — Drehbuch-Import (S1 Stufe 6, IMP)
+
+**Kontext**: Spielleitung P8 schreibt Cues ins Drehbuch (Obsidian) neben
+den Szenentext. S-E.2: eigenes Werkzeug über die API.
+
+**Entscheidungen**:
+- **`lmix-script`** (`workspace/lmix-script`), vorgezogen vor die Stufen
+  2–5: hängt nur am Cue-Modell (Stufe 1) und lässt sich ohne GPU und
+  Hardware prüfen.
+- **Cue-Blöcke in TOML** (```` ```lmix-cue ````), die Felder des API-Cues.
+  Verworfen: YAML (das übliche Rust-Crate `serde_yaml` ist archiviert,
+  die Nachfolger jung oder umstritten), JSON (in Obsidian mühsam zu
+  schreiben). TOML-Crate `toml` (MIT/Apache-2.0), Dateibeobachtung
+  `notify` (CC0/MIT/Apache-2.0), HTTP `reqwest` (MIT/Apache-2.0).
+- **Überschriften werden Notiz-Cues mit Folge „nach Ende“**: GO auf einer
+  Szenenmarke startet die Szene, statt einen leeren Schritt zu machen.
+- **Ids aus Liste und Nummer** (UUID v5), ohne Nummer aus dem Namen:
+  dasselbe Drehbuch ergibt bei jedem Laden dieselben Ids, `lmix-core`
+  hält damit Standby und laufende Cues (`set_cue_list` hält Standby jetzt
+  über die Cue-Id statt die Stelle).
+- **Liste mit Quelle** (`source: "script:<ordner>/<datei>"`): `lmix-script`
+  ersetzt nur eigene Listen, entfernt eigene ohne Datei, lässt eine Liste
+  gleichen Namens aus der Console stehen. Die Console bearbeitet Listen
+  mit Quelle nicht (IMP.9).
+- **Doppelte Nummer**: Fehler an jeder Stelle, keine beteiligte Liste
+  lädt. Welche Stelle „die zweite“ ist, hinge sonst an Dateinamen.
+- **Fehlende Mediendatei = Warnung**, die Liste lädt: die Abnahme von S1
+  verlangt, dass eine fehlende Datei den Szenenwechsel nicht abbricht; der
+  Cue meldet den Fehler beim Lauf (CUE.19).
+
+**Geprüft**: 6 Tests im Werkzeug, `scripts/test-script.sh` gegen
+lmix-core mit Null-Engine (Fehler mit Datei und Zeile, Laden, GO auf der
+Szenenmarke, Neuladen mit gehaltenem Standby, `--watch`, fremde Liste
+bleibt, Liste mit Datei weg); beides in der CI (Job `core`).
+**Offen**: SSH.2 (die Show speichert nur den Ordner; heute lädt man nach
+dem Start neu), Warnung bei Nummern mit Leerzeichen (CUE.1).

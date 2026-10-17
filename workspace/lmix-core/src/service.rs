@@ -1780,6 +1780,7 @@ mod tests {
             .handle(Action::AddCueList {
                 name: "Show".into(),
                 cues: vec![a, b, broken, d],
+                source: None,
             })
             .await
             .unwrap();
