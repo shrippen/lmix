@@ -101,12 +101,18 @@ pub struct Show {
     /// Shortest gap between two GOs (RUN.6).
     #[serde(default = "default_go_guard")]
     pub go_guard_ms: u32,
+    /// Whether GO also waits for the button to be let go (RUN.6).
+    #[serde(default, skip_serializing_if = "is_time")]
+    pub go_rearm: lmix_types::cue::GoRearm,
     /// Panic time (SAF.2).
     #[serde(default = "default_panic")]
     pub panic_ms: u32,
     /// The list that runs with every panic and hard stop (SAF.4).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub emergency_list: Option<InputId>,
+    /// Sound zones; their devices are this machine's (SND.10).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub zones: Vec<lmix_types::Zone>,
     /// Script folder whose lists lmix-script keeps loading (SSH.2). Its
     /// lists stay in the show too: without the tool the show still has
     /// its cues, and standby survives a restart (SAF.6).
@@ -242,8 +248,10 @@ impl Default for Show {
             shortcuts: Vec::new(),
             cue_lists: Vec::new(),
             go_guard_ms: default_go_guard(),
+            go_rearm: Default::default(),
             panic_ms: default_panic(),
             emergency_list: None,
+            zones: Vec::new(),
             script_folder: None,
             midi_tbar: None,
             graphics: Vec::new(),
@@ -258,6 +266,10 @@ fn all_default(channels: &[OverlayChannel; OVERLAY_CHANNELS as usize]) -> bool {
 }
 
 /// Buttons 1–4: fade, cut, dip to black, wipe.
+fn is_time(rearm: &lmix_types::cue::GoRearm) -> bool {
+    *rearm == lmix_types::cue::GoRearm::Time
+}
+
 fn default_go_guard() -> u32 {
     lmix_types::cue::GO_GUARD_DEFAULT_MS
 }
@@ -323,8 +335,21 @@ pub fn to_bytes(show: &Show) -> Vec<u8> {
     serde_json::to_vec_pretty(&file).expect("show serializes")
 }
 
+/// A show read from a file, and the older file version it came in.
+pub struct Loaded {
+    pub show: Show,
+    /// The file's version when older than this lmix's: migrated on load,
+    /// saved in the new one (SHW.7).
+    pub older: Option<u32>,
+}
+
 /// A show from a file's bytes; `name` for errors.
 pub fn from_bytes(bytes: &[u8], name: &str) -> Result<Show, ShowFileError> {
+    read_bytes(bytes, name).map(|loaded| loaded.show)
+}
+
+/// A show from a file's bytes, with its older version if any.
+pub fn read_bytes(bytes: &[u8], name: &str) -> Result<Loaded, ShowFileError> {
     let format_err = |reason: String| ShowFileError::Format {
         path: name.to_string(),
         reason,
@@ -348,7 +373,22 @@ pub fn from_bytes(bytes: &[u8], name: &str) -> Result<Show, ShowFileError> {
         }
     }
     let file: ShowFile = serde_json::from_value(value).map_err(|e| format_err(e.to_string()))?;
-    Ok(file.show)
+    Ok(Loaded {
+        show: file.show,
+        older: (version < FILE_VERSION).then_some(version),
+    })
+}
+
+/// Keep the file of an older version beside it before it is written in
+/// the new one: `show.lmix` → `show.lmix.v1.bak`, once (SHW.7).
+pub async fn backup(path: &Path, version: u32) -> std::io::Result<()> {
+    let mut name = path.as_os_str().to_owned();
+    name.push(format!(".v{version}.bak"));
+    let to = std::path::PathBuf::from(name);
+    if tokio::fs::try_exists(&to).await? {
+        return Ok(());
+    }
+    tokio::fs::copy(path, &to).await.map(|_| ())
 }
 
 /// Version 1 to 2: a cue's `label` is its `name`; the rest of a cue of
@@ -384,6 +424,11 @@ pub async fn save(show: &Show, path: &Path) -> Result<(), ShowFileError> {
 }
 
 pub async fn load(path: &Path) -> Result<Show, ShowFileError> {
+    load_versioned(path).await.map(|loaded| loaded.show)
+}
+
+/// A show file, with its older version if any (SHW.7).
+pub async fn load_versioned(path: &Path) -> Result<Loaded, ShowFileError> {
     let shown = path.display().to_string();
     // A show is a regular file of reasonable size (not a device, a pipe
     // or something huge someone points the API at).
@@ -406,7 +451,7 @@ pub async fn load(path: &Path) -> Result<Show, ShowFileError> {
             source,
         })?;
 
-    from_bytes(&bytes, &shown)
+    read_bytes(&bytes, &shown)
 }
 
 #[cfg(test)]
@@ -493,8 +538,10 @@ mod tests {
                 standby: None,
             }],
             go_guard_ms: 120,
+            go_rearm: lmix_types::cue::GoRearm::Release,
             panic_ms: 2000,
             emergency_list: None,
+            zones: Vec::new(),
             script_folder: None,
             shortcuts: vec![ShowShortcut {
                 id: InputId::new(),

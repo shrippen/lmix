@@ -415,8 +415,8 @@ Stufe 2 mit Messungen erneut vorgelegt wird.
 | S3 Erweiterungen | Eigenes Licht (Art-Net/sACN), Objekt-Audio, Timecode rein/raus | PER.9 |
 
 Stand S1 (2026-10-16): Stufe 1 (Cue-Modell und Ablauf in `lmix-core`,
-CUE/RUN/SSH.1) ✅ bis auf Ausblenden (mit Stufe 2), „erst nach Loslassen“
-(RUN.6) und die 4-h-Messung (SNF.4); DECISIONS „Show-Modus S1 Stufe 1“.
+CUE/RUN/SSH.1) ✅ bis auf Ausblenden (mit Stufe 2) und die 4-h-Messung
+(SNF.4); „erst nach Loslassen“ (RUN.6) ✅ 17.10.; DECISIONS „Show-Modus S1 Stufe 1“.
 Stufe 6 (Drehbuch-Import, IMP) ✅ vorgezogen: `lmix-script`, `docs/DREHBUCH.md`;
 DECISIONS „Drehbuch-Import“. Offen: SSH.2 (Show speichert nur den Ordner).
 Stufe 4 (Ausgabeziele, EXT.1–5) ✅ für HTTP und Home Assistant; DECISIONS

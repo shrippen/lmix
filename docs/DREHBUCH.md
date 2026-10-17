@@ -35,6 +35,9 @@ aus `PATH`). Was das Werkzeug meldet, steht im Log von `lmix-core`.
 - **Nummern** (`number`) sind die feste Zuordnung (IMP.6); der Import
   nummeriert nicht. Eine Nummer zweimal in der Show ist ein Fehler an
   beiden Stellen, keine der Listen wird geladen.
+- **Dauer eines Aktions-Cues** (`duration_ms`): so lange gilt er als
+  laufend, z. B. die Länge des Clips, den er startet; `follow =
+  "after_end"` wartet dann darauf. Ohne Dauer endet er sofort.
 - **Medienpfade** (`path`, `paths` einer Quelle) zählen ab dem Ordner.
   Eine fehlende Datei ist eine Warnung mit Zeile; die Liste lädt trotzdem,
   der Cue meldet den Fehler, wenn er läuft (CUE.19).
