@@ -3193,7 +3193,12 @@ denen unsere CUDA-/GL-Mischer-Patches aufsetzen. Ohne GPU in der VM
 nicht prüfbar, daher nicht allein entschieden.
 
 **Entscheidung**: Nur den RTMP-Block übernommen (cherry-pick #827, #869,
-#871 auf den lmix-Stapel, strom-Branch `lmix-rtmp-output`). lmix:
+#871 auf den lmix-Stapel, strom #18 `lmix-rtmp-output`), dazu #850: der
+VM-Test zeigte, dass x264 H.264 High 4:4:4 lieferte, das der RTMP-Block
+und die Plattformen ablehnen (betraf mit Software-Encoder auch SRT und
+Aufnahmen); seitdem 8-bit 4:2:0. Der RTMP-Sink läuft mit `sync=false`,
+weil Ausgangs-Flows auf der Laufzeit des Mischers laufen: mit `sync`
+kam beim Empfänger nur der FLV-Kopf an. lmix:
 Ausgang `rtmp` mit `url` (rtmp:// oder rtmps://) und `key` getrennt,
 Encoder-Einstellungen wie SRT, nur H.264 (FLV); zählt als Stream
 (STR.1). Der Schlüssel steht wie die URL im Zustand und in der Show;
