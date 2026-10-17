@@ -87,6 +87,10 @@ pub struct StromEngine {
     /// Mute of each audio mixer channel and bus as last sent (see
     /// [`level_writes`]); forgotten at every start.
     mutes: std::sync::Mutex<std::collections::HashMap<String, bool>>,
+    /// Program format the mixer is built for (OUT.1).
+    format: std::sync::Mutex<lmix_types::MasterFormat>,
+    /// Mixer inputs of the last `start`.
+    slots: AtomicUsize,
 }
 
 impl StromEngine {
@@ -105,6 +109,8 @@ impl StromEngine {
             live_dir: default_live_dir(),
             live_setup: Mutex::new(()),
             mutes: Default::default(),
+            format: Default::default(),
+            slots: AtomicUsize::new(0),
         }
     }
 
@@ -361,6 +367,39 @@ impl StromEngine {
         self.set_level(level, ramp_ms).await
     }
 
+    /// The mixer flow for the last `start` and the current format.
+    fn mixer_flow(&self) -> Flow {
+        let format = *self.format.lock().expect("format lock");
+        flows::mixer_flow(
+            self.slots.load(Ordering::Relaxed),
+            self.backend,
+            self.monitor,
+            format,
+        )
+    }
+
+    /// strom starts a fresh mixer on input 0; the restore that follows
+    /// puts the show's program (or black) there. Transitions need a
+    /// playing pipeline, so wait for it. Its mutes are unknown again.
+    async fn build_mixer(&self, flow: &Flow) -> Result<(), EngineError> {
+        self.mutes.lock().expect("mutes lock").clear();
+        self.put_flow(flow).await?;
+        self.wait_playing(flow.id).await
+    }
+
+    /// Program in `format` (OUT.1): a new mixer only when it differs.
+    async fn set_format(&self, format: lmix_types::MasterFormat) -> Result<(), EngineError> {
+        {
+            let mut current = self.format.lock().expect("format lock");
+            if *current == format {
+                return Ok(());
+            }
+            *current = format;
+        }
+        let flow = self.mixer_flow();
+        self.build_mixer(&flow).await
+    }
+
     /// A fader and its mute on the audio mixer, one write at a time.
     async fn set_level(&self, level: Level, ramp_ms: u32) -> Result<(), EngineError> {
         let known = self.mutes.lock().expect("mutes lock").get(&level.mute).copied();
@@ -485,8 +524,8 @@ impl StromEngine {
         channel: usize,
         rect: Option<BoxRect>,
     ) -> Result<(), EngineError> {
-        let (w, h) = flows::PROGRAM_SIZE;
-        let (w, h) = (f64::from(w), f64::from(h));
+        let format = *self.format.lock().expect("format lock");
+        let (w, h) = (f64::from(format.width), f64::from(format.height));
         let rect = rect.unwrap_or(BoxRect {
             x: 0.0,
             y: 0.0,
@@ -722,21 +761,20 @@ impl Engine for StromEngine {
 
         let black = flows::black_input(slots);
         self.black.store(black, Ordering::Relaxed);
+        self.slots.store(slots, Ordering::Relaxed);
 
-        let wanted = flows::mixer_flow(slots, self.backend, self.monitor);
-        let current = self.get_flow(wanted.id).await?;
+        let current = self.get_flow(flows::mixer_id()).await?;
         let reusable = current.as_ref().is_some_and(|f| {
             f.running && f.name == flows::MIXER_NAME && slot_count(f) == Some(black + 1)
         });
-        if reusable {
+        // Keep a running mixer in whatever format it has: the restore that
+        // follows brings the show's (OUT.1), rebuilding only if it differs.
+        if let (true, Some(format)) = (reusable, current.as_ref().and_then(flows::format_of)) {
+            *self.format.lock().expect("format lock") = format;
             return Ok(());
         }
-
-        // strom starts a fresh mixer on input 0; the restore that follows
-        // every start puts the show's program (or black) there. Transitions
-        // need a playing pipeline, so wait for it.
-        self.put_flow(&wanted).await?;
-        self.wait_playing(wanted.id).await
+        let wanted = self.mixer_flow();
+        self.build_mixer(&wanted).await
     }
 
     async fn run(&self, command: &Command) -> Result<(), EngineError> {
@@ -839,6 +877,7 @@ impl Engine for StromEngine {
                 };
                 self.set_level(level, *ramp_ms).await
             }
+            Command::SetFormat { format } => self.set_format(*format).await,
             Command::SetMonitor { gain } => {
                 let fader = ("monitor_fader".to_string(), PropertyValue::Float(*gain));
                 self.patch_audio_mixer(vec![fader], AUDIO_RAMP_MS).await
