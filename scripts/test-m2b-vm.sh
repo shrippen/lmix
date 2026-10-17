@@ -212,7 +212,12 @@ settled '[[ $(mon_db) -lt $SILENT_DB ]]' || fail "AFL of a muted input heard ($(
 act '{"action":"clear_listen"}' >/dev/null
 act '{"action":"set_audio","input":"Ball","on":true}' >/dev/null
 settled '[[ $(mon_db) -gt $AUDIBLE_DB ]]' || fail "monitor not back on program after clearing solos"
-pass "solo: PFL hears a muted input, AFL does not, monitor back on program"
+act '{"action":"set_monitor_volume","volume":0}' >/dev/null
+settled '[[ $(mon_db) -lt $SILENT_DB ]]' || fail "monitor volume 0 still heard ($(mon_db) dB)"
+[[ $(pgm_db) -gt $AUDIBLE_DB ]] || fail "monitor volume took program down too"
+act '{"action":"set_monitor_volume","volume":100}' >/dev/null
+settled '[[ $(mon_db) -gt $AUDIBLE_DB ]]' || fail "monitor not back at volume 100"
+pass "solo: PFL hears a muted input, AFL does not, monitor back on program, own volume"
 
 # --- channel strip (4.7): trim lowers program, delay set while playing ---
 act '{"action":"set_volume","input":"Ball","volume":100}' >/dev/null

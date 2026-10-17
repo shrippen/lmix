@@ -2950,3 +2950,21 @@ bleibt für bestehende Clients. Die Kachel zeigt zwei schmale
 `KanteAudioMeter` übereinander, eine Haarlinie auseinander (bei gleichem
 Pegel sonst nicht als zwei zu erkennen); ohne Kanalwerte ein Balken wie
 bisher. Kein neues Kante-Bauteil nötig.
+
+## 2026-10-17 — Abhörlautstärke, AFL als Standard, Standard-Delay (AUD.4, AUD.6)
+
+- **Abhörlautstärke** (`set_monitor_volume`, 0–100, in der Show): der
+  Regler des Abhörbusses in strom (`monitor_fader`), im Dialog „Busse…“
+  mit Pegel. strom hat für den Abhörbus kein eigenes Stumm; Lautstärke je
+  Input auf dem Abhörbus fehlt weiter (bräuchte einen eigenen Send je
+  Kanal in strom).
+- **Solo-Taste hört nach dem Fader (AFL)**, wie AUD.4 es als Standard
+  verlangt; PFL über das Menü der Kachel. Vorher war PFL der Standard.
+- **Standard-Delay** (`set_default_delay`, 0–500 ms, in der Show): neue
+  Inputs mit Ton bekommen ihn im Kanalzug, vorhandene behalten ihren.
+  Console: „Delay für neue Inputs“ im Kanalzug übernimmt den Wert des
+  Inputs.
+
+**Geprüft**: Schalter-Test (Delay neuer Inputs, Grenze, Abhör-Befehl und
+Wiederherstellen), VM-Test mit strom (Abhören auf 0 still, Program
+bleibt), Console auf Xvfb.

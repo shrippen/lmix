@@ -234,7 +234,7 @@
   <context>
     <name>AuxBusDialog</name>
     <message>
-      <location filename="../qml/AuxBusDialog.qml" line="+24" />
+      <location filename="../qml/AuxBusDialog.qml" line="+26" />
       <source>Master and aux buses</source>
       <translation>Master und Aux-Busse</translation>
     </message>
@@ -249,7 +249,17 @@
       <translation>Lautstärke Master</translation>
     </message>
     <message>
-      <location line="+29" />
+      <location line="+19" />
+      <source>Monitor · listening</source>
+      <translation>Abhören</translation>
+    </message>
+    <message>
+      <location line="+15" />
+      <source>Monitor volume</source>
+      <translation>Lautstärke Abhören</translation>
+    </message>
+    <message>
+      <location line="+22" />
       <source>Aux 1 · before the faders</source>
       <translation>Aux 1 · vor den Fadern</translation>
     </message>
@@ -264,8 +274,8 @@
       <translation>Lautstärke von Aux %1</translation>
     </message>
     <message>
-      <location line="-34" />
-      <location line="+45" />
+      <location line="-61" />
+      <location line="+72" />
       <source>Mute</source>
       <translation>Stumm</translation>
     </message>
@@ -311,7 +321,17 @@
       <translation>Ton später als das Bild (Lippensynchronität)</translation>
     </message>
     <message>
-      <location line="+7" />
+      <location line="+8" />
+      <source>Delay for new inputs</source>
+      <translation>Delay für neue Inputs</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>New inputs with sound start with this delay; inputs already there keep theirs</source>
+      <translation>Neue Inputs mit Ton beginnen mit diesem Delay; vorhandene behalten ihres</translation>
+    </message>
+    <message>
+      <location line="+5" />
       <source>Aux 1 (before the fader)</source>
       <translation>Aux 1 (vor dem Fader)</translation>
     </message>
@@ -966,9 +986,9 @@
       <translation>Lautstärke %1</translation>
     </message>
     <message>
-      <location line="+8" />
-      <source>Listen on the monitor bus (right click: before or after the fader)</source>
-      <translation>Auf dem Abhörbus hören (Rechtsklick: vor oder nach dem Fader)</translation>
+      <location line="+9" />
+      <source>Listen on the monitor bus after the fader (right click: before it)</source>
+      <translation>Auf dem Abhörbus hören, nach dem Fader (Rechtsklick: davor)</translation>
     </message>
     <message>
       <location line="+11" />
@@ -1672,7 +1692,7 @@
       <translation>Leerer Ordner für Show und Medien des Pakets</translation>
     </message>
     <message>
-      <location line="+144" />
+      <location line="+145" />
       <source>lmix-core</source>
       <translation>lmix-core</translation>
     </message>

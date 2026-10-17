@@ -184,6 +184,8 @@ pub const ACTION_GROUPS: &[(&str, &[&str])] = &[
             "set_aux_send",
             "set_aux_bus",
             "set_master",
+            "set_monitor_volume",
+            "set_default_delay",
             "fade_volume",
             "set_listen",
             "clear_listen",
@@ -456,6 +458,16 @@ pub enum Action {
         input: InputRef,
         bus: u8,
         level: u8,
+    },
+    /// Volume of the monitor bus, what solo listening and the headphones
+    /// hear, 0–100 (AUD.4).
+    SetMonitorVolume {
+        volume: u8,
+    },
+    /// Delay new inputs with sound get in their channel strip, 0–500 ms
+    /// (AUD.6); inputs already there keep theirs.
+    SetDefaultDelay {
+        ms: u32,
     },
     /// Master of program sound: volume 0–100 and mute (AUD.2).
     SetMaster {

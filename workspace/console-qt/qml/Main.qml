@@ -427,6 +427,7 @@ Kirigami.ApplicationWindow {
         act: root.act
         buses: root.show ? root.show.aux_buses : []
         master: root.show && root.show.master ? root.show.master : ({ volume: 100, mute: false })
+        monitorVolume: root.show && root.show.monitor_volume !== undefined ? root.show.monitor_volume : 100
         levels: root.levels
     }
 

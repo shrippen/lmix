@@ -275,12 +275,13 @@ KanteCard {
                 }
             }
             KanteToolButton {
-                text: tile.input.listen === "afl" ? "AFL" : "PFL"
+                // After the fader by default (AUD.4); before it from the menu.
+                text: tile.input.listen === "pfl" ? "PFL" : "AFL"
                 checkable: true
                 checked: tile.input.listen !== "off"
                 QQC2.ToolTip.visible: hovered
-                QQC2.ToolTip.text: qsTr("Listen on the monitor bus (right click: before or after the fader)")
-                onClicked: tile.act({ action: "set_listen", input: tile.ref(), listen: tile.input.listen === "off" ? "pfl" : "off" })
+                QQC2.ToolTip.text: qsTr("Listen on the monitor bus after the fader (right click: before it)")
+                onClicked: tile.act({ action: "set_listen", input: tile.ref(), listen: tile.input.listen === "off" ? "afl" : "off" })
             }
         }
     }

@@ -262,6 +262,7 @@ pub fn right_of(action: &Action) -> Right {
         | Action::SetInputPress { .. }
         | Action::SetLayout { .. }
         | Action::SetLock { .. }
+        | Action::SetDefaultDelay { .. }
         | Action::SetLook { .. }
         | Action::SetMidiTbar { .. }
         | Action::SetOverlay { .. }
@@ -287,6 +288,7 @@ pub fn right_of(action: &Action) -> Right {
         | Action::SetAuxSend { .. }
         | Action::SetAuxBus { .. }
         | Action::SetMaster { .. }
+        | Action::SetMonitorVolume { .. }
         | Action::FadeVolume { .. }
         | Action::SetListen { .. }
         | Action::ClearListen

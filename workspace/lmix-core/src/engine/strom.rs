@@ -839,6 +839,10 @@ impl Engine for StromEngine {
                 };
                 self.set_level(level, *ramp_ms).await
             }
+            Command::SetMonitor { gain } => {
+                let fader = ("monitor_fader".to_string(), PropertyValue::Float(*gain));
+                self.patch_audio_mixer(vec![fader], AUDIO_RAMP_MS).await
+            }
             Command::SetMaster {
                 gain,
                 mute,

@@ -106,6 +106,8 @@ pub enum Command {
     },
     /// Master of program sound, reached over `ramp_ms` (AUD.2, AUD.14).
     SetMaster { gain: f64, mute: bool, ramp_ms: u32 },
+    /// Level of the monitor bus (AUD.4).
+    SetMonitor { gain: f64 },
     /// Mix `slot` (preview) over program by `position` (0–1), as the
     /// T-bar stands; 0 hides it again.
     TBar { slot: usize, position: f32 },
@@ -1091,6 +1093,22 @@ impl Switcher {
             Action::SetAuxBus { bus, volume, mute } => {
                 self.set_aux_bus(bus, volume, mute, AUDIO_RAMP_MS)
             }
+            Action::SetMonitorVolume { volume } => {
+                check_volume(volume)?;
+                self.show.monitor_volume = volume;
+                Ok(vec![Command::SetMonitor {
+                    gain: fader_gain(volume),
+                }])
+            }
+            Action::SetDefaultDelay { ms } => {
+                if ms > ChannelStrip::DELAY_MAX_MS {
+                    return Err(ActionError::BadStrip {
+                        field: "delay_ms".into(),
+                    });
+                }
+                self.show.default_delay_ms = ms;
+                Ok(Vec::new())
+            }
             Action::SetMaster { volume, mute } => {
                 check_volume(volume)?;
                 self.show.master = AuxBus { volume, mute };
@@ -1379,6 +1397,9 @@ impl Switcher {
                 ramp_ms: AUDIO_RAMP_MS,
             })
             .chain(std::iter::once(self.master_command(AUDIO_RAMP_MS)))
+            .chain(std::iter::once(Command::SetMonitor {
+                gain: fader_gain(self.show.monitor_volume),
+            }))
             .collect()
     }
 
@@ -1519,6 +1540,8 @@ impl Switcher {
             t_bar: self.t_bar,
             aux_buses: self.show.aux_buses,
             master: self.show.master,
+            monitor_volume: self.show.monitor_volume,
+            default_delay_ms: self.show.default_delay_ms,
             looks_available: self.looks_available,
             locked: self.locked,
             cue_lists: self
@@ -1632,6 +1655,11 @@ impl Switcher {
             .ok_or(ActionError::SlotsFull { slots: self.slots })?;
         let id = InputId::new();
         let name = name.unwrap_or_else(|| source.default_name());
+        // A new input's sound comes the show's default delay late (AUD.6).
+        let strip = ChannelStrip {
+            delay_ms: self.show.default_delay_ms,
+            ..ChannelStrip::default()
+        };
 
         self.show.inputs.push(ShowInput {
             id,
@@ -1644,7 +1672,7 @@ impl Switcher {
             auto_play: AutoPlay::default(),
             click: InputPress::click(),
             go: InputPress::go(),
-            strip: ChannelStrip::default(),
+            strip,
             sends: [0; AUX_BUSES],
             look: Look::default(),
             triggers: Vec::new(),
@@ -1670,10 +1698,7 @@ impl Switcher {
             });
         }
         if source.has_audio() {
-            commands.push(Command::SetStrip {
-                slot,
-                strip: ChannelStrip::default(),
-            });
+            commands.push(Command::SetStrip { slot, strip });
             commands.extend((0..AUX_BUSES).map(|bus| Command::SetAuxSend {
                 slot,
                 bus,
@@ -5566,6 +5591,37 @@ mod tests {
             mute: true,
             ramp_ms: AUDIO_RAMP_MS,
         }));
+    }
+
+    #[test]
+    fn new_inputs_get_the_default_delay_and_the_monitor_its_volume() {
+        let mut sw = Switcher::new(SLOTS);
+        sw.apply(Action::SetDefaultDelay { ms: 40 }).unwrap();
+
+        let cmds = sw
+            .apply(Action::AddInput {
+                source: SourceSpec::AudioDevice { id: "mic".into() },
+                name: Some("Mic".into()),
+            })
+            .unwrap();
+
+        let strip = ChannelStrip {
+            delay_ms: 40,
+            ..ChannelStrip::default()
+        };
+        assert!(cmds.contains(&Command::SetStrip { slot: 0, strip }));
+        assert_eq!(sw.state().inputs[0].strip.delay_ms, 40);
+        assert!(matches!(
+            sw.apply(Action::SetDefaultDelay { ms: 501 }),
+            Err(ActionError::BadStrip { .. })
+        ));
+
+        let cmds = sw.apply(Action::SetMonitorVolume { volume: 50 }).unwrap();
+        assert_eq!(cmds, [Command::SetMonitor { gain: fader_gain(50) }]);
+        assert_eq!(sw.state().monitor_volume, 50);
+        assert!(sw
+            .restore_commands()
+            .contains(&Command::SetMonitor { gain: fader_gain(50) }));
     }
 
     #[test]
