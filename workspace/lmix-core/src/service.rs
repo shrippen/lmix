@@ -501,6 +501,18 @@ impl Service {
                 out
             };
             self.run_cue_outs(out).await;
+            self.preload_standby().await;
+        }
+    }
+
+    /// Have the engine hold the standby cues' sounds and pictures ready.
+    /// After a GO's actions: the cue it started has used its preload.
+    async fn preload_standby(&self) {
+        let mut sw = self.switcher.lock().await;
+        if let Some(command) = sw.preload_commands() {
+            if let Err(e) = self.execute(&mut sw, &[command]).await {
+                tracing::debug!(error = %e, "standby not preloaded");
+            }
         }
     }
 
@@ -1423,6 +1435,7 @@ impl Service {
                 self.cue_wake.notify_one();
                 // What is due at once runs before the answer, like a cut.
                 self.run_cue_outs(out).await;
+                self.preload_standby().await;
                 return Ok(self.state().await);
             }
             _ => {}
