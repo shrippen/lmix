@@ -1,6 +1,6 @@
 # Übergabe: Stand M9 und Show-Modus S1 (in Arbeit), lokale Übernahme
 
-Stand 2026-10-09, PR-Liste 2026-10-17 (bis #78). Die Arbeit läuft lokal weiter (Arch, RTX 3090), Abnahme
+Stand 2026-10-09, PR-Liste 2026-10-17 (bis #84). Die Arbeit läuft lokal weiter (Arch, RTX 3090), Abnahme
 auf echter Hardware.
 
 ## Offene PRs, Stand 2026-10-17 nachts (Merge-Reihenfolge)
@@ -58,6 +58,12 @@ unten mergen; Gitea stellt die Basis des nächsten auf `main` um):
 | #76 | `vm-act-timeout` | VM-Check: Aktionen mit Zeitlimit, Threads von lmix-core bei Hänger |
 | #77 | `str3-encoding` | Codec, Rate Control, Keyframes je Ausgang (STR.3) |
 | #78 | `swi5-tbar-sound` | Ton folgt der T-Bar (SWI.5) |
+| #79 | `handover-1017c` | Übergabe: PRs #69–#78, strom-Stapel |
+| #80 | `engine-call-timeout` | Engine-Aufrufe mit Zeitlimit 60 s (Hänger von lmix-core) |
+| #81 | `out10-multiview` | Multiview: Program links/rechts, Pegel an/aus (OUT.10) |
+| #82 | `lay2-box-visible` | Layout-Box ein-/ausblenden (LAY.2) |
+| #83 | `shw3-new-format` | Neue Show mit Formatwahl (SHW.3) |
+| #84 | `personas-1017` | Persona-Durchlauf 11, Übergabe bis #84 |
 
 Rote GitHub-Läufe auf `s1-feeds` und `s1-script-folder` sind die wackelige
 Failover-Prüfung, die #45 behebt (der Stapel bekommt sie über `main`).
