@@ -148,7 +148,7 @@ kann es, Console nicht.
 | INP.7 | Kategorien: 6 feste Farben + 16 eigene, Beschriftung, Filter in der Input-Leiste, Suchkategorie nach Namen | S | ◐ (7 feste Farben; ohne eigene Farben, Beschriftung, Filter, Suche) |
 | INP.8 | Klick-Aktion je Input wählbar (Standard: in Preview) | S | ✅ |
 | INP.9 | GO-Aktion je Input wählbar (Standard: Schnellstart, §3.5) | S | ✅ |
-| INP.10 | Wiedergabe-Inputs: Play, Pause, Neustart, Positionieren, Schleife, Geschwindigkeit, In-/Out-Marke | M | ◐ (Play, Pause, Neustart, Positionieren; Schleife immer an; ohne Geschwindigkeit, In-/Out-Marke) |
+| INP.10 | Wiedergabe-Inputs: Play, Pause, Neustart, Positionieren, Schleife, Geschwindigkeit, In-/Out-Marke | M | ◐ (Play, Pause, Neustart, Positionieren; Schleife oder Stehenbleiben am Ende je Input; ohne Geschwindigkeit, In-/Out-Marke) |
 | INP.11 | Automatik je Input: bei Take abspielen / von vorn starten / nach Wegschalten pausieren | S | ✅ |
 | INP.12 | Live-Pause: Live-Quelle einfrieren, ohne Aufnahme/Wiederholung/Ton anzuhalten | S | – |
 | INP.13 | Offline-Zustand bei fehlender Quelle; Wiederverbinden; Datei neu zuordnen | M | ✅ |
