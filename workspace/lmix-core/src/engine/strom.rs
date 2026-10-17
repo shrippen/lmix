@@ -17,7 +17,7 @@
 use async_trait::async_trait;
 use lmix_types::{
     BoxRect, ChannelStrip, Device, DeviceKind, Effect, Listen, Look, OutputId, OutputStats,
-    SignalLoss, Transport,
+    PageRunning, SignalLoss, SourceSpec, Transport,
 };
 use reqwest::StatusCode;
 use serde::Serialize;
@@ -29,6 +29,7 @@ use strom_types::api::{
     FadeToBlackRequest, SelectPreviewRequest, SrtRole, SrtStats, SrtStatsResponse,
     TriggerTransitionRequest, UpdateBlockPropertiesRequest, VisionMixerState,
 };
+use strom_types::devtools::HtmlPageCommand;
 use strom_types::discovery::DeviceResponse;
 use strom_types::vision_mixer::{NormRect, Source, Zone, ZoneBorder, TRANSITION_FOREGROUND_ZORDER};
 use strom_types::{Flow, FlowId, PipelineState, PropertyValue};
@@ -105,6 +106,10 @@ pub struct StromEngine {
 /// lock, so a call that never returns would freeze lmix-core; the slowest
 /// real ones (a recording drained with EOS, a mixer rebuilt) take seconds.
 const ENGINE_CALL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
+
+/// How often, and how many times, a new web page is asked to take its CSS.
+const PAGE_READY_POLL: std::time::Duration = std::time::Duration::from_millis(500);
+const PAGE_READY_TRIES: u32 = 40;
 
 /// HTTP client for strom's API: a hung call fails after `timeout`.
 fn engine_client(timeout: std::time::Duration) -> reqwest::Client {
@@ -690,6 +695,50 @@ impl StromEngine {
         self.dsk_layer(flows::STINGER_LAYER, Some(slot), 0).await
     }
 
+    /// strom's page endpoint of the web or graphics page in `slot`.
+    fn page_url(&self, slot: usize) -> String {
+        self.url(&format!(
+            "/flows/{}/blocks/{}/devtools/page",
+            flows::slot_id(slot),
+            flows::WEB
+        ))
+    }
+
+    /// Send `command` to the page in `slot` (strom `devtools/page`).
+    async fn page_command(
+        &self,
+        slot: usize,
+        command: &HtmlPageCommand,
+    ) -> Result<(), EngineError> {
+        let resp = self
+            .http
+            .post(self.page_url(slot))
+            .json(command)
+            .send()
+            .await
+            .map_err(net)?;
+        check(resp).await.map(|_| ())
+    }
+
+    /// Set a web page's CSS once its page answers: a page that has just
+    /// been built is still starting, and its CSS lasts until it loads
+    /// again, which only a new slot flow does.
+    fn css_when_ready(&self, slot: usize, css: String) {
+        let http = self.http.clone();
+        let url = self.page_url(slot);
+        tokio::spawn(async move {
+            let command = HtmlPageCommand::SetCss { css };
+            for _ in 0..PAGE_READY_TRIES {
+                let sent = http.post(&url).json(&command).send().await;
+                if sent.is_ok_and(|resp| resp.status().is_success()) {
+                    return;
+                }
+                tokio::time::sleep(PAGE_READY_POLL).await;
+            }
+            tracing::warn!(slot, "web page did not take its CSS");
+        });
+    }
+
     /// A call on the slot's media player (`seek`, `goto`).
     async fn player_call(
         &self,
@@ -863,7 +912,14 @@ impl Engine for StromEngine {
                     format: *self.format.lock().expect("format lock"),
                     pages: self.pages.clone(),
                 };
-                self.put_flow(&flows::slot_flow(*slot, source, &env)).await
+                self.put_flow(&flows::slot_flow(*slot, source, &env))
+                    .await?;
+                if let SourceSpec::Web { css, .. } = source {
+                    if !css.is_empty() {
+                        self.css_when_ready(*slot, css.clone());
+                    }
+                }
+                Ok(())
             }
             Command::SetSlot { slot, source: None } => {
                 self.playout.lock().expect("playout lock").remove(slot);
@@ -949,6 +1005,19 @@ impl Engine for StromEngine {
                     .await
             }
             Command::SetLook { slot, look } => self.set_look(*slot, look).await,
+            Command::PageScript { slot, script } => {
+                let command = HtmlPageCommand::Evaluate {
+                    expression: script.clone(),
+                };
+                self.page_command(*slot, &command).await
+            }
+            Command::PageRunning { slot, running } => {
+                let command = match running {
+                    PageRunning::Running => HtmlPageCommand::Resume,
+                    PageRunning::Frozen => HtmlPageCommand::Freeze,
+                };
+                self.page_command(*slot, &command).await
+            }
             // The service waits; nothing for the engine to do.
             Command::Wait { .. } => Ok(()),
             Command::SetAuxSend { slot, bus, gain } => {
@@ -1238,6 +1307,10 @@ fn level_writes(level: &Level, known: Option<bool>) -> Vec<(String, PropertyValu
 mod tests {
     use super::*;
 
+    /// Bodies of page commands the stand-in strom received.
+    static PAGE_BODIES: std::sync::Mutex<Vec<serde_json::Value>> =
+        std::sync::Mutex::new(Vec::new());
+
     /// A strom stand-in that answers every request with `{}` and records
     /// method, path and time.
     async fn recording_strom() -> (
@@ -1249,11 +1322,20 @@ mod tests {
         let app = axum::Router::new().fallback(move |request: axum::extract::Request| {
             let seen = seen.clone();
             async move {
+                let path = request.uri().path().to_string();
                 seen.lock().unwrap().push((
                     request.method().to_string(),
-                    request.uri().path().to_string(),
+                    path.clone(),
                     std::time::Instant::now(),
                 ));
+                if path.ends_with("/devtools/page") {
+                    let body = axum::body::to_bytes(request.into_body(), 1 << 20)
+                        .await
+                        .unwrap();
+                    if let Ok(value) = serde_json::from_slice(&body) {
+                        PAGE_BODIES.lock().unwrap().push(value);
+                    }
+                }
                 axum::Json(serde_json::json!({}))
             }
         });
@@ -1302,6 +1384,69 @@ mod tests {
             waited >= std::time::Duration::from_millis(flows::FILE_PLAYOUT_DELAY_MS),
             "the layer went on {waited:?} after the clip started"
         );
+    }
+
+    /// A web page's CSS goes to its page once the slot runs, and its
+    /// scripts and freezing as page commands (strom `devtools/page`).
+    #[tokio::test]
+    async fn page_commands_reach_the_page() {
+        let (url, calls) = recording_strom().await;
+        let engine = StromEngine::new(url, MixerBackend::Cpu, MonitorOut::None);
+        let page = lmix_types::SourceSpec::Web {
+            url: "https://example.com".into(),
+            css: "body { background: transparent }".into(),
+        };
+        engine
+            .run(&Command::SetSlot {
+                slot: 2,
+                source: Some(page),
+            })
+            .await
+            .unwrap();
+        engine
+            .run(&Command::PageScript {
+                slot: 2,
+                script: "next()".into(),
+            })
+            .await
+            .unwrap();
+        engine
+            .run(&Command::PageRunning {
+                slot: 2,
+                running: lmix_types::PageRunning::Frozen,
+            })
+            .await
+            .unwrap();
+
+        let page_path = format!("/flows/{}/blocks/web/devtools/page", flows::slot_id(2));
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        loop {
+            let to_page = calls
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|(_, path, _)| path.ends_with(&page_path));
+            let bodies = PAGE_BODIES.lock().unwrap().clone();
+            assert!(to_page || bodies.is_empty());
+            let actions: Vec<String> = bodies
+                .iter()
+                .filter_map(|b| b["action"].as_str().map(str::to_string))
+                .collect();
+            if actions.contains(&"set_css".to_string()) {
+                assert!(actions.contains(&"evaluate".to_string()), "{actions:?}");
+                assert!(actions.contains(&"freeze".to_string()), "{actions:?}");
+                let css = bodies.iter().find(|b| b["action"] == "set_css").unwrap();
+                assert_eq!(css["css"], "body { background: transparent }");
+                let script = bodies.iter().find(|b| b["action"] == "evaluate").unwrap();
+                assert_eq!(script["expression"], "next()");
+                break;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "no set_css: {actions:?}"
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        }
     }
 
     /// An engine that takes a request and never answers fails the call

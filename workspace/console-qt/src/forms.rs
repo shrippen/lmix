@@ -102,7 +102,10 @@ pub fn source_of(kind: &str, value: &str) -> Option<SourceSpec> {
         "srt" => SourceSpec::Srt { uri: text },
         "ndi" => SourceSpec::Ndi { name: text },
         "whip" => SourceSpec::Whip { endpoint: text },
-        "web" => SourceSpec::Web { url: text },
+        "web" => SourceSpec::Web {
+            url: text,
+            css: String::new(),
+        },
         "graphics" => SourceSpec::Graphics { graphics: text },
         "device" => SourceSpec::Device { id: text },
         "audio_device" => SourceSpec::AudioDevice { id: text },
@@ -254,7 +257,8 @@ mod tests {
         assert_eq!(
             source_of("web", " https://example.com "),
             Some(SourceSpec::Web {
-                url: "https://example.com".into()
+                url: "https://example.com".into(),
+                css: String::new(),
             })
         );
         assert_eq!(
