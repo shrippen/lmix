@@ -2,6 +2,8 @@
 # scripts/update-translations.sh collects the sources and writes these
 # into qml_de.ts (i18n/fill.py). Keep it complete.
 DE = {
+    'Aux %1 (before the faders)': 'Aux %1 (vor den Fadern)',
+    'Aux %1 (after the faders)': 'Aux %1 (nach den Fadern)',
     'At the end': 'Am Ende',
     'Stop on the last frame': 'Auf dem letzten Bild stehen bleiben',
     'Start all streams': 'Alle Streams starten',

@@ -58,7 +58,7 @@ pub struct ShowInput {
     pub go: InputPress,
     #[serde(default)]
     pub strip: ChannelStrip,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "padded")]
     pub sends: [u8; AUX_BUSES],
     #[serde(default)]
     pub look: Look,
@@ -97,7 +97,7 @@ pub struct Show {
     /// kept too.
     #[serde(default, deserialize_with = "padded")]
     pub overlay_preview: [Option<InputId>; OVERLAY_CHANNELS as usize],
-    #[serde(default)]
+    #[serde(default, deserialize_with = "padded")]
     pub aux_buses: [AuxBus; AUX_BUSES],
     /// Master of program sound (AUD.2).
     #[serde(default)]
@@ -245,7 +245,7 @@ pub struct ShowOutput {
     pub spec: OutputSpec,
     #[serde(default)]
     pub source: OutputSource,
-    /// Sound from this aux bus (1–2) instead of the source's own.
+    /// Sound from this aux bus (1–7, A–G) instead of the source's own.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub aux: Option<u8>,
 }
@@ -284,8 +284,9 @@ impl Default for Show {
     }
 }
 
-/// A per-channel array saved with fewer channels (shows from before
-/// OVL.1 had eight): the missing ones get their default.
+/// A per-channel array saved with fewer entries (shows from before eight
+/// overlay channels, OVL.1, or seven aux buses, AUD.2): the missing ones
+/// get their default.
 fn padded<'de, D, T, const N: usize>(deserializer: D) -> Result<[T; N], D::Error>
 where
     D: serde::Deserializer<'de>,
@@ -530,7 +531,7 @@ mod tests {
                     delay_ms: 40,
                     ..Default::default()
                 },
-                sends: [70, 0],
+                sends: [70, 0, 0, 0, 0, 0, 25],
                 look: Look {
                     saturation: 0.5,
                     ..Default::default()
@@ -620,6 +621,11 @@ mod tests {
                     volume: 60,
                     mute: true,
                 },
+                AuxBus::default(),
+                AuxBus::default(),
+                AuxBus::default(),
+                AuxBus::default(),
+                AuxBus::default(),
             ],
             master: AuxBus {
                 volume: 90,
@@ -731,11 +737,17 @@ mod tests {
     }
 
     #[test]
-    fn four_channel_overlays_still_load() {
+    fn shows_with_fewer_channels_still_load() {
         let mut saved = serde_json::to_value(sample()).unwrap();
         for key in ["overlays", "overlay_channels", "overlay_preview"] {
             saved[key].as_array_mut().unwrap().truncate(4);
         }
+        // Two aux buses before AUD.2.
+        saved["aux_buses"].as_array_mut().unwrap().truncate(2);
+        saved["inputs"][0]["sends"]
+            .as_array_mut()
+            .unwrap()
+            .truncate(2);
         let show: Show = serde_json::from_value(saved).unwrap();
         let id = show.inputs[0].id;
         assert_eq!(
@@ -745,6 +757,9 @@ mod tests {
         assert_eq!(show.overlay_channels[1].auto_off_ms, Some(8000));
         assert_eq!(show.overlay_channels[7], OverlayChannel::default());
         assert_eq!(show.overlay_preview[0], Some(id));
+        assert_eq!(show.aux_buses[1].volume, 60);
+        assert_eq!(show.aux_buses[6], AuxBus::default());
+        assert_eq!(show.inputs[0].sends, [70, 0, 0, 0, 0, 0, 0]);
 
         let mut saved = serde_json::to_value(sample()).unwrap();
         saved["overlays"]

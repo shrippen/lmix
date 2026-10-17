@@ -97,7 +97,7 @@ KanteDialog {
             visible: dialog.carriesSound
             Layout.fillWidth: true
             // Index = aux bus number; 0 keeps the source's own sound.
-            model: [qsTr("As carried"), qsTr("Aux 1 (before the faders)"), qsTr("Aux 2 (after the faders)")]
+            model: [qsTr("As carried")].concat(Texts.auxNames())
             KanteFieldSkin { control: soundBox }
         }
 

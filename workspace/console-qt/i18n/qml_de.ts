@@ -203,16 +203,6 @@
       <translation>Wie die Quelle</translation>
     </message>
     <message>
-      <location line="+0" />
-      <source>Aux 1 (before the faders)</source>
-      <translation>Aux 1 (vor den Fadern)</translation>
-    </message>
-    <message>
-      <location line="+0" />
-      <source>Aux 2 (after the faders)</source>
-      <translation>Aux 2 (nach den Fadern)</translation>
-    </message>
-    <message>
       <location line="+6" />
       <source>Video kb/s</source>
       <translation>Video kbit/s</translation>
@@ -274,17 +264,7 @@
       <translation>Lautstärke Abhören</translation>
     </message>
     <message>
-      <location line="+22" />
-      <source>Aux 1 · before the faders</source>
-      <translation>Aux 1 · vor den Fadern</translation>
-    </message>
-    <message>
-      <location line="+0" />
-      <source>Aux 2 · after the faders</source>
-      <translation>Aux 2 · nach den Fadern</translation>
-    </message>
-    <message>
-      <location line="+16" />
+      <location line="+38" />
       <source>Volume of aux %1</source>
       <translation>Lautstärke von Aux %1</translation>
     </message>
@@ -346,17 +326,7 @@
       <translation>Neue Inputs mit Ton beginnen mit diesem Delay; vorhandene behalten ihres</translation>
     </message>
     <message>
-      <location line="+5" />
-      <source>Aux 1 (before the fader)</source>
-      <translation>Aux 1 (vor dem Fader)</translation>
-    </message>
-    <message>
-      <location line="+0" />
-      <source>Aux 2 (after the fader)</source>
-      <translation>Aux 2 (nach dem Fader)</translation>
-    </message>
-    <message>
-      <location line="+5" />
+      <location line="+10" />
       <source>Aux sends</source>
       <translation>Aux-Sends</translation>
     </message>
@@ -3143,6 +3113,16 @@
     <name>Texts</name>
     <message>
       <location filename="../qml/Texts.qml" line="+15" />
+      <source>Aux %1 (before the faders)</source>
+      <translation>Aux %1 (vor den Fadern)</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Aux %1 (after the faders)</source>
+      <translation>Aux %1 (nach den Fadern)</translation>
+    </message>
+    <message>
+      <location line="+13" />
       <source>Test pattern</source>
       <translation>Testbild</translation>
     </message>

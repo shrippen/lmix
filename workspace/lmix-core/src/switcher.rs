@@ -5713,7 +5713,7 @@ mod tests {
                 gain: fader_gain(50)
             }]
         );
-        assert_eq!(sw.state().inputs[1].sends, [0, 50]);
+        assert_eq!(sw.state().inputs[1].sends, [0, 50, 0, 0, 0, 0, 0]);
 
         sw.apply(Action::SetAuxBus {
             bus: 1,
@@ -5881,7 +5881,7 @@ mod tests {
             Err(ActionError::BadFade { .. })
         ));
         assert!(matches!(
-            sw.apply(fade(VolumeTarget::Bus(3), 50, 100)),
+            sw.apply(fade(VolumeTarget::Bus(8), 50, 100)),
             Err(ActionError::BadAuxBus { .. })
         ));
         assert!(matches!(
@@ -5901,7 +5901,7 @@ mod tests {
     #[test]
     fn aux_bus_numbers_are_checked() {
         let mut sw = two_inputs();
-        for bus in [0, 3] {
+        for bus in [0, 8] {
             assert!(matches!(
                 sw.apply(Action::SetAuxBus {
                     bus,
@@ -5920,7 +5920,7 @@ mod tests {
                 spec: srt,
                 source: OutputSource::Program,
                 name: None,
-                aux: Some(3),
+                aux: Some(8),
             }),
             Err(ActionError::BadAuxBus { .. })
         ));
@@ -7268,6 +7268,31 @@ mod tests {
                 Command::SetAuxSend {
                     slot: 0,
                     bus: 1,
+                    gain: 0.0
+                },
+                Command::SetAuxSend {
+                    slot: 0,
+                    bus: 2,
+                    gain: 0.0
+                },
+                Command::SetAuxSend {
+                    slot: 0,
+                    bus: 3,
+                    gain: 0.0
+                },
+                Command::SetAuxSend {
+                    slot: 0,
+                    bus: 4,
+                    gain: 0.0
+                },
+                Command::SetAuxSend {
+                    slot: 0,
+                    bus: 5,
+                    gain: 0.0
+                },
+                Command::SetAuxSend {
+                    slot: 0,
+                    bus: 6,
                     gain: 0.0
                 },
                 Command::SetAudio {

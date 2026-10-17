@@ -338,7 +338,7 @@ pub const FADE_MAX_MS: u32 = 60_000;
 #[serde(rename_all = "snake_case")]
 pub enum VolumeTarget {
     Input(InputRef),
-    /// Aux bus 1–2.
+    /// Aux bus 1–7 (A–G).
     Bus(u8),
     Master,
 }
@@ -431,7 +431,7 @@ pub enum Action {
         /// Program (default) or one input (ISO, MultiCorder).
         #[serde(default)]
         source: OutputSource,
-        /// Sound from aux bus 1–2 instead of the source's own.
+        /// Sound from aux bus 1–7 (A–G) instead of the source's own.
         #[serde(default)]
         aux: Option<u8>,
         #[serde(default)]
@@ -481,7 +481,7 @@ pub enum Action {
         input: InputRef,
         strip: ChannelStrip,
     },
-    /// Send an input to aux bus `bus` (1–2) at `level`, 0–100; 0 stops
+    /// Send an input to aux bus `bus` (1–7, A–G) at `level`, 0–100; 0 stops
     /// the send.
     SetAuxSend {
         input: InputRef,
@@ -517,7 +517,7 @@ pub enum Action {
         volume: u8,
         duration_ms: u32,
     },
-    /// Master of aux bus `bus` (1–2): volume 0–100 and mute.
+    /// Master of aux bus `bus` (1–7, A–G): volume 0–100 and mute.
     SetAuxBus {
         bus: u8,
         volume: u8,

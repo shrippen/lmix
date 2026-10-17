@@ -189,7 +189,7 @@ pub struct Output {
     pub spec: OutputSpec,
     #[serde(default)]
     pub source: OutputSource,
-    /// Sound from this aux bus (1–2) instead of the source's own.
+    /// Sound from this aux bus (1–7, A–G) instead of the source's own.
     #[serde(default)]
     pub aux: Option<u8>,
     pub status: OutputStatus,

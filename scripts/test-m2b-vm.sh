@@ -245,11 +245,16 @@ act '{"action":"fade_volume","target":"master","volume":100,"duration_ms":0}' >/
 settled '[[ $(pgm_db) -ge $((full - 2)) ]]' || fail "master not back ($full -> $(pgm_db) dB)"
 pass "level fade: master down over 2 s, back at once"
 
-# --- aux buses (4.7): bus 1 before the fader, bus 2 after it ---
+# --- aux buses (4.7, AUD.2): A before the fader, B–G after it ---
 aux_db() { curl -sf "$CORE/audio/levels" | jq ".aux_peak_db[$1] // -100 | floor"; }
 act '{"action":"set_aux_send","input":"Ball","bus":1,"level":100}' >/dev/null
 act '{"action":"set_aux_send","input":"Ball","bus":2,"level":100}' >/dev/null
 settled '[[ $(aux_db 0) -gt $AUDIBLE_DB && $(aux_db 1) -gt $AUDIBLE_DB ]]' || fail "aux buses silent with sends up ($(aux_db 0), $(aux_db 1) dB)"
+# The last of the seven (AUD.2): G hears its send, and only that.
+[[ $(aux_db 6) -lt $SILENT_DB ]] || fail "aux G sounds without a send ($(aux_db 6) dB)"
+act '{"action":"set_aux_send","input":"Ball","bus":7,"level":100}' >/dev/null
+settled '[[ $(aux_db 6) -gt $AUDIBLE_DB ]]' || fail "aux G silent with its send up ($(aux_db 6) dB)"
+act '{"action":"set_aux_send","input":"Ball","bus":7,"level":0}' >/dev/null
 act '{"action":"set_audio","input":"Ball","on":false}' >/dev/null
 settled '[[ $(aux_db 1) -lt $SILENT_DB ]]' || fail "aux 2 (after the fader) hears a muted input ($(aux_db 1) dB)"
 [[ $(aux_db 0) -gt $AUDIBLE_DB ]] || fail "aux 1 (before the fader) lost a muted input"
@@ -257,7 +262,7 @@ act '{"action":"set_aux_bus","bus":1,"volume":100,"mute":true}' >/dev/null
 settled '[[ $(aux_db 0) -lt $SILENT_DB ]]' || fail "muted aux 1 still sounds ($(aux_db 0) dB)"
 act '{"action":"set_aux_bus","bus":1,"volume":100,"mute":false}' >/dev/null
 act '{"action":"set_audio","input":"Ball","on":true}' >/dev/null
-pass "aux buses: sends heard, before/after the fader, master mute"
+pass "aux buses: sends heard (A, B, G), before/after the fader, master mute"
 
 # --- more sources (2b.3): color, still image, playlist with transport ---
 MEDIA="$WORK/media"

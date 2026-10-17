@@ -8,6 +8,20 @@ import QtQuick
  */
 QtObject {
     /** Text of one value of a form list (Core.choices). */
+    /** Aux buses A–G (AUD.2): A takes its sends before the faders. */
+    readonly property int auxBuses: 7
+    function auxName(index) {
+        var letter = String.fromCharCode(65 + index)
+        return index === 0 ? qsTr("Aux %1 (before the faders)").arg(letter)
+            : qsTr("Aux %1 (after the faders)").arg(letter)
+    }
+    function auxNames() {
+        var names = []
+        for (var i = 0; i < auxBuses; i++)
+            names.push(auxName(i))
+        return names
+    }
+
     function label(list, value) {
         switch (list) {
         case "sources":

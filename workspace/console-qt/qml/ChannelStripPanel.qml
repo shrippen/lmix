@@ -25,7 +25,7 @@ ColumnLayout {
     property var strip: null
 
     /** Aux send levels, set apart from the strip. */
-    property var sends: [0, 0]
+    property var sends: []
 
     function sendTo(bus, level) {
         var s = sends.slice()
@@ -43,7 +43,7 @@ ColumnLayout {
 
     function load() {
         strip = JSON.parse(JSON.stringify(input.strip))
-        sends = input.sends ? input.sends.slice() : [0, 0]
+        sends = input.sends ? input.sends.slice() : []
     }
 
     Timer {
@@ -137,7 +137,7 @@ ColumnLayout {
     }
 
     Repeater {
-        model: [qsTr("Aux 1 (before the fader)"), qsTr("Aux 2 (after the fader)")]
+        model: Texts.auxNames()
         SliderRow {
             required property int index
             required property string modelData
@@ -145,7 +145,7 @@ ColumnLayout {
             section: index === 0 ? qsTr("Aux sends") : ""
             title: modelData
             from: 0; to: 100; step: 1
-            value: panel.sends[index]
+            value: panel.sends[index] || 0
             onMoved: v => panel.sendTo(index + 1, Math.round(v))
         }
     }
