@@ -52,6 +52,7 @@ use tokio::net::UdpSocket;
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::Mutex;
 
+use crate::access::Right;
 use crate::service::Service;
 
 /// Largest datagram read.
@@ -373,17 +374,20 @@ fn hold(peer: SocketAddr) -> crate::cues::Hold {
 /// Receive messages and send tally until the process ends.
 /// OSC carries no password: senders outside the local network are
 /// ignored unless `internet`, and with a password (`local_only`) all but
-/// this machine (API.7); `open_panic` lets panic and hard stop through
-/// from the network all the same (CTL.5).
+/// this machine (API.7) and the trusted addresses, with their right;
+/// `open_panic` lets panic and hard stop through from the network all
+/// the same (CTL.5).
 pub async fn serve(
     listen: SocketAddr,
     service: Arc<Service>,
     internet: bool,
     local_only: bool,
     open_panic: bool,
+    trusted: Vec<crate::access::Trust>,
 ) -> anyhow::Result<()> {
     let access = crate::access::Access {
         internet,
+        trusted,
         ..Default::default()
     };
     let socket = Arc::new(UdpSocket::bind(listen).await?);
@@ -398,12 +402,15 @@ pub async fn serve(
     let mut buf = vec![0u8; MAX_PACKET];
     loop {
         let (len, peer) = socket.recv_from(&mut buf).await?;
-        let panic_only = match access.peer(peer.ip()) {
+        // None: only an open panic.
+        let granted = match access.peer(peer.ip()) {
             crate::access::Peer::Refused => continue,
-            crate::access::Peer::Network if local_only && !open_panic => continue,
-            crate::access::Peer::Network => local_only,
-            crate::access::Peer::Local => false,
+            crate::access::Peer::Network if local_only => access.trusted(peer.ip()),
+            crate::access::Peer::Network | crate::access::Peer::Local => Some(Right::Edit),
         };
+        if granted.is_none() && !open_panic {
+            continue;
+        }
         // Any message keeps the sender's subscription (CTL.3).
         heard(&subscribers, peer).await;
         for message in decode(&buf[..len]) {
@@ -414,7 +421,13 @@ pub async fn serve(
                     Action::CuePanic { .. } | Action::CueHardStop
                 ))
             );
-            if panic_only && !panic {
+            let allowed = match (&request, granted) {
+                (Ok(Request::Action(action)), Some(right)) => {
+                    crate::access::right_of(action) <= right
+                }
+                (_, granted) => granted.is_some(),
+            };
+            if !(allowed || panic && open_panic) {
                 continue;
             }
             match request {
