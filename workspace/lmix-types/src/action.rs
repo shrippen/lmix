@@ -1161,8 +1161,12 @@ pub enum Action {
     },
 
     // ---- Show (SHW) ----
-    /// Start an empty show.
-    NewShow,
+    /// Start an empty show, in `format` if given (SHW.3), else in the
+    /// default 1920 × 1080 at 30 fps.
+    NewShow {
+        #[serde(default)]
+        format: Option<crate::output::MasterFormat>,
+    },
     /// Save the show; without `path` to its current file.
     SaveShow {
         #[serde(default)]

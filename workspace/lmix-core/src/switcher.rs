@@ -1360,7 +1360,7 @@ impl Switcher {
                 },
             ),
             // The service reads and writes these files.
-            Action::NewShow
+            Action::NewShow { .. }
             | Action::SaveShow { .. }
             | Action::OpenShow { .. }
             | Action::AppendShow { .. }

@@ -653,7 +653,7 @@
   <context>
     <name>FormatDialog</name>
     <message>
-      <location filename="../qml/FormatDialog.qml" line="+19" />
+      <location filename="../qml/FormatDialog.qml" line="+21" />
       <source>3840 × 2160 (4K UHD)</source>
       <translation>3840 × 2160 (4K UHD)</translation>
     </message>
@@ -693,7 +693,12 @@
       <translation>Programmformat</translation>
     </message>
     <message>
-      <location line="+26" />
+      <location line="+0" />
+      <source>New show</source>
+      <translation>Neue Show</translation>
+    </message>
+    <message>
+      <location line="+24" />
       <source>Size</source>
       <translation>Größe</translation>
     </message>
@@ -704,6 +709,11 @@
     </message>
     <message>
       <location line="+10" />
+      <source>The new show replaces the open one; save it first if you need it.</source>
+      <translation>Die neue Show ersetzt die offene; vorher speichern, wenn du sie noch brauchst.</translation>
+    </message>
+    <message>
+      <location line="+1" />
       <source>Program stops for a moment while the mixer is built anew; running outputs restart.</source>
       <translation>Das Programm steht kurz, während der Mischer neu gebaut wird; laufende Ausgänge starten neu.</translation>
     </message>
@@ -1780,7 +1790,7 @@
       <translation>Leerer Ordner für Show und Medien des Pakets</translation>
     </message>
     <message>
-      <location line="+153" />
+      <location line="+163" />
       <source>lmix-core</source>
       <translation>lmix-core</translation>
     </message>

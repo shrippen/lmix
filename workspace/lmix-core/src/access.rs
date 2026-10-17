@@ -225,7 +225,7 @@ pub fn right_of(action: &Action) -> Right {
         | Action::ImportPackage { .. }
         | Action::LoadLayoutTemplate { .. }
         | Action::MoveInput { .. }
-        | Action::NewShow
+        | Action::NewShow { .. }
         | Action::OpenShow { .. }
         | Action::RelocateMedia { .. }
         | Action::RemoveCueList { .. }
