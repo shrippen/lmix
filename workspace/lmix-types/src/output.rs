@@ -110,6 +110,75 @@ fn default_kbps() -> u32 {
     DEFAULT_VIDEO_KBPS
 }
 
+/// Video codec of an encoded output (STR.3). The engine's recorder and
+/// its MPEG-TS muxer take these two.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum VideoCodec {
+    #[default]
+    H264,
+    /// HEVC: about the same picture at a lower bitrate, heavier to encode.
+    H265,
+}
+
+/// How the encoder holds its bitrate.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum RateMode {
+    /// Variable around the bitrate (default).
+    #[default]
+    Vbr,
+    /// Constant: what platforms and fixed links ask for.
+    Cbr,
+}
+
+/// Default keyframe interval of encoded outputs.
+pub const DEFAULT_KEYFRAME_MS: u32 = 2_000;
+/// Longest keyframe interval.
+pub const KEYFRAME_MAX_MS: u32 = 10_000;
+
+fn default_keyframe_ms() -> u32 {
+    DEFAULT_KEYFRAME_MS
+}
+
+/// How an output encodes video beyond its bitrate (STR.3).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct VideoEncoding {
+    #[serde(default)]
+    pub codec: VideoCodec,
+    #[serde(default)]
+    pub rate: RateMode,
+    /// Time between keyframes; 0 leaves it to the encoder.
+    #[serde(default = "default_keyframe_ms")]
+    pub keyframe_ms: u32,
+}
+
+impl Default for VideoEncoding {
+    fn default() -> Self {
+        Self {
+            codec: VideoCodec::default(),
+            rate: RateMode::default(),
+            keyframe_ms: DEFAULT_KEYFRAME_MS,
+        }
+    }
+}
+
+impl VideoEncoding {
+    pub fn is_default(&self) -> bool {
+        *self == Self::default()
+    }
+
+    /// Why the engine could not encode this, if it could not.
+    pub fn problem(&self) -> Option<String> {
+        (self.keyframe_ms > KEYFRAME_MAX_MS).then(|| {
+            format!(
+                "keyframe interval {} ms, at most {KEYFRAME_MAX_MS} ms",
+                self.keyframe_ms
+            )
+        })
+    }
+}
+
 /// What an output does with program.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case")]
@@ -120,6 +189,9 @@ pub enum OutputSpec {
         uri: String,
         #[serde(default = "default_kbps")]
         video_kbps: u32,
+        /// Codec, rate control and keyframe interval (STR.3).
+        #[serde(default, skip_serializing_if = "VideoEncoding::is_default")]
+        encoding: VideoEncoding,
     },
     /// Recording, H.264 + AAC, into `folder` below the engine's media
     /// directory (REC.1).
@@ -129,6 +201,9 @@ pub enum OutputSpec {
         container: Container,
         #[serde(default = "default_kbps")]
         video_kbps: u32,
+        /// Codec, rate control and keyframe interval (STR.3).
+        #[serde(default, skip_serializing_if = "VideoEncoding::is_default")]
+        encoding: VideoEncoding,
     },
     /// NDI on the network, uncompressed program (OUT.6).
     Ndi { name: String },
@@ -152,6 +227,16 @@ pub enum DisplayMode {
 }
 
 impl OutputSpec {
+    /// Its video encoding; `None` for outputs that send raw picture.
+    pub fn encoding(&self) -> Option<&VideoEncoding> {
+        match self {
+            OutputSpec::Srt { encoding, .. } | OutputSpec::Record { encoding, .. } => {
+                Some(encoding)
+            }
+            _ => None,
+        }
+    }
+
     pub fn default_name(&self) -> String {
         match self {
             Self::Srt { uri, .. } => format!("SRT {uri}"),
@@ -285,5 +370,39 @@ impl MasterFormat {
     /// `1920x1080`, as strom takes it.
     pub fn resolution(&self) -> String {
         format!("{}x{}", self.width, self.height)
+    }
+}
+
+/// Where the multiview shows program (OUT.10); preview takes the other side.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ProgramSide {
+    Left,
+    /// As the engine does by default: preview left, program right.
+    #[default]
+    Right,
+}
+
+/// Whether the multiview draws level meters on its tiles.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum MultiviewMeters {
+    #[default]
+    Shown,
+    Hidden,
+}
+
+/// Layout of the engine's multiview (OUT.10).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct MultiviewLayout {
+    #[serde(default)]
+    pub program: ProgramSide,
+    #[serde(default)]
+    pub meters: MultiviewMeters,
+}
+
+impl MultiviewLayout {
+    pub fn is_default(&self) -> bool {
+        *self == Self::default()
     }
 }

@@ -1,6 +1,6 @@
 # Übergabe: Stand M9 und Show-Modus S1 (in Arbeit), lokale Übernahme
 
-Stand 2026-10-09, PR-Liste 2026-10-17 (bis #68). Die Arbeit läuft lokal weiter (Arch, RTX 3090), Abnahme
+Stand 2026-10-09, PR-Liste 2026-10-17 (bis #78). Die Arbeit läuft lokal weiter (Arch, RTX 3090), Abnahme
 auf echter Hardware.
 
 ## Offene PRs, Stand 2026-10-17 nachts (Merge-Reihenfolge)
@@ -48,6 +48,16 @@ unten mergen; Gitea stellt die Basis des nächsten auf `main` um):
 | #66 | `aud4-monitor` | Abhörpegel, Standardverzögerung neuer Eingänge (AUD.4/AUD.6) |
 | #67 | `out2-multiview` | Multiview als Ausgangsquelle (OUT.2) |
 | #68 | `out1-format` | Programmformat: Auflösung und Bildrate (OUT.1) |
+| #69 | `handover-1017b` | Übergabe: PRs #62–#68 |
+| #70 | `strom-still-release` | strom-Pin mit Fix für das Leck pausierter Clips (strom #15) |
+| #71 | `ovl1-eight` | Acht Overlay-Kanäle (OVL.1, strom #16); vorweg `cargo fmt` über den Stapel |
+| #72 | `str1-streams` | Alle Streams zusammen starten/stoppen (STR.1) |
+| #73 | `api4-playback` | Abspielstand im Zustand (API.4) |
+| #74 | `inp10-at-end` | Clip am Ende: Schleife oder stehen bleiben (INP.10, strom #17) |
+| #75 | `aud2-seven-aux` | Sieben Aux-Busse A–G (AUD.2) |
+| #76 | `vm-act-timeout` | VM-Check: Aktionen mit Zeitlimit, Threads von lmix-core bei Hänger |
+| #77 | `str3-encoding` | Codec, Rate Control, Keyframes je Ausgang (STR.3) |
+| #78 | `swi5-tbar-sound` | Ton folgt der T-Bar (SWI.5) |
 
 Rote GitHub-Läufe auf `s1-feeds` und `s1-script-folder` sind die wackelige
 Failover-Prüfung, die #45 behebt (der Stapel bekommt sie über `main`).
@@ -72,6 +82,11 @@ CPU-Mischer vorbereiten; GPU-Pfade auf echter Hardware.
 | #4 | `claude-todo` (mit `console-qt`) | `main` | Restart-502, Selbsttest, Qt-Console statt egui | gemergt |
 | #5 | `m4` | `main` | M4: Overlays (4.1), T-Bar (4.3), Kanalzug und Aux-Busse (4.7) | gemergt |
 | #6 | `m4-stinger` | `main` | M4: Stinger (4.2) | offen |
+
+strom-Fork auf Gitea (`shrippen/strom`), Ziel `dev`, seit 17.10. gestapelt:
+#15 `lmix-still-release` (Leck pausierter Clips) → #16 `lmix-nine-dsk`
+(9 DSK-Ebenen) → #17 `lmix-player-loop` (Schleife live). Das Submodul
+von lmix #74 ff. zeigt auf #17; nach dem Merge auf `dev` neu pinnen.
 
 strom-Fork (`shrippen/strom`), Ziel `dev`:
 - Gemergt: #1 `lmix-start-time`, #2 `lmix-sample-rate`, #3

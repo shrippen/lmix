@@ -414,6 +414,18 @@ act '{"action":"stop_outputs","group":"streams"}' >/dev/null
 settled '[[ "$(output_state Stream)" == stopped && "$(output_state "Stream 2")" == stopped ]]' || fail "streams not all stopped"
 act '{"action":"remove_output","output":"Stream 2"}' >/dev/null
 pass "outputs: all streams started and stopped together"
+# Encoding (STR.3): H.265 at a constant bitrate lands as HEVC.
+act '{"action":"add_output","spec":{"kind":"record","folder":"hevc","container":"mkv","encoding":{"codec":"h265","rate":"cbr","keyframe_ms":1000}},"name":"HEVC"}' >/dev/null
+act '{"action":"start_output","output":"HEVC"}' >/dev/null
+settled '[[ "$(output_state HEVC)" == running ]]' || fail "HEVC recording not running"
+sleep 3
+act '{"action":"stop_output","output":"HEVC"}' >/dev/null
+wait_for "$SETTLE_S" is output_state HEVC stopped || fail "HEVC recording did not stop"
+hevc="$(find "$WORK/strom-data" -path '*hevc/*' -name '*.mkv' | head -1)"
+[[ -n "$hevc" ]] || fail "no HEVC recording file"
+[[ "$(codecs "$hevc")" == "aac,hevc" ]] || fail "recording is not HEVC: $(codecs "$hevc")"
+act '{"action":"remove_output","output":"HEVC"}' >/dev/null
+pass "outputs: H.265 recording at a constant bitrate"
 
 # MultiCorder: ISO recordings of single inputs, with and without sound.
 input_id() { curl -sf "$CORE/state" | jq -r ".inputs[] | select(.name==\"$1\") | .id"; }
@@ -605,6 +617,17 @@ code="$(curl -s -o /dev/null -w '%{http_code}' -X POST "$CORE/actions" -H 'conte
 # --- T-bar (4.3): preview mixed in by hand, taken at the end ---
 act '{"action":"cut_direct","input":"Ball"}' >/dev/null
 act '{"action":"preview_input","input":"Orange"}' >/dev/null
+# Sound that follows video follows the T-bar (SWI.5): Ball fades out by
+# half (about -6 dB) and comes back when the bar goes back. Heard on aux
+# B, after the fader, where only Ball sends (program mixes other inputs).
+act '{"action":"set_aux_send","input":"Ball","bus":2,"level":100}' >/dev/null
+act '{"action":"set_audio_follow","input":"Ball","follow":true}' >/dev/null
+full=$(steady_db aux_db 1)
+act '{"action":"t_bar","position":0.5}' >/dev/null
+settled '[[ $(aux_db 1) -le $((full - 4)) && $(aux_db 1) -gt $SILENT_DB ]]' || fail "Ball's sound did not follow the T-bar ($full -> $(aux_db 1) dB)"
+act '{"action":"t_bar","position":0}' >/dev/null
+settled '[[ $(aux_db 1) -ge $((full - 2)) ]]' || fail "Ball's sound not back with the T-bar ($full -> $(aux_db 1) dB)"
+act '{"action":"set_audio_follow","input":"Ball","follow":false}' >/dev/null
 act '{"action":"t_bar","position":0.5}' >/dev/null
 half_mixed() { picture program "$WORK/tbar.jpg"; local r; r=$(rgb "$WORK/tbar.jpg" r); ((r > 80 && r < 200)); }
 wait_for "$SETTLE_S" half_mixed || fail "T-bar at half: program red $(rgb "$WORK/tbar.jpg" r), not a mix"
@@ -613,7 +636,7 @@ act '{"action":"t_bar","position":1}' >/dev/null
 [[ "$(curl -sf "$CORE/state" | jq -r '[.inputs[] | select(.name=="Orange") | .id][0] == .program')" == true ]] \
     || fail "T-bar at the end did not take preview to program"
 wait_for "$SETTLE_S" overlay_shown || fail "program not orange after the T-bar take"
-pass "T-bar: preview mixed in by half, taken at the end"
+pass "T-bar: preview mixed in by half, sound follows, taken at the end"
 
 # --- stinger (4.2): a clip with alpha over program, cut underneath ---
 # Blue square in the middle, the rest transparent; 2 s.
@@ -670,6 +693,17 @@ layout_shown() {
         && [[ $(quarter "$WORK/layout.jpg" "$((w / 4))x$((h / 4))+$((w * 5 / 8))+$((h / 8))") -lt 100 ]]
 }
 wait_for "$SETTLE_S" layout_shown || fail "layout picture: background and box not where they belong"
+# A hidden box (LAY.2): Orange shows through, Ball is off air; back.
+act '{"action":"show_box","layout":"Interview","number":1,"shown":"hidden"}' >/dev/null
+box_hidden() {
+    picture program "$WORK/layout.jpg"
+    local w h; read -r w h <<<"$(identify -format '%w %h' "$WORK/layout.jpg")"
+    [[ $(quarter "$WORK/layout.jpg" "$((w / 4))x$((h / 4))+$((w * 5 / 8))+$((h / 8))") -gt 200 ]]
+}
+wait_for "$SETTLE_S" box_hidden || fail "hidden box still in the picture"
+[[ "$(on_air Ball)" == 0 ]] || fail "input of a hidden box still has red tally"
+act '{"action":"show_box","layout":"Interview","number":1,"shown":"toggle"}' >/dev/null
+wait_for "$SETTLE_S" layout_shown || fail "box not back after showing it again"
 # Crop: the right half of Orange fills a full-picture box at its own
 # aspect (strom fits it), so the left edge turns black.
 act '{"action":"set_layout","layout":1,"background":null,"boxes":[{"rect":{"x":0,"y":0,"w":1,"h":1},"input":"Orange","crop":{"left":0.5}}]}' >/dev/null
@@ -683,7 +717,7 @@ wait_for "$SETTLE_S" cropped || fail "layout crop not applied"
 act '{"action":"cut_direct","input":"Ball"}' >/dev/null
 act '{"action":"remove_layout","layout":1}' >/dev/null
 [[ "$(curl -sf "$CORE/state" | jq '.layouts | length')" == 0 ]] || fail "layout not removed"
-pass "layouts: background and box on program, red tally for both inputs, crop, removed"
+pass "layouts: background and box on program, red tally for both inputs, box hidden and back, crop, removed"
 
 # --- automation (AUT.7, AUT.14): a cue list whose cues fire triggers ---
 act '{"action":"set_triggers","input":"Orange","triggers":[{"on":"program","delay_ms":500,"actions":[{"action":"overlay_in","channel":2,"input":"Ball","duration_ms":0}]},{"on":"program_off","actions":[{"action":"overlay_out","channel":2,"duration_ms":0}]}]}' >/dev/null
@@ -818,6 +852,16 @@ wait_for "$((SETTLE_S + 10))" is vm_prop pgm_resolution 1920x1080 || fail "mixer
 wait_for "$((SETTLE_S + 10))" program_moves || fail "program does not move after going back"
 wait_for "$SETTLE_S" is input_state Ball online || fail "Ball not online after the format changes"
 pass "program format: upright 1080x1920 and back, mixer rebuilt, sources kept"
+
+# --- multiview layout (OUT.10): program on the left, no meters, back ---
+act '{"action":"set_multiview","layout":{"program":"left","meters":"hidden"}}' >/dev/null
+wait_for "$((SETTLE_S + 10))" is vm_prop swap_pvw_pgm true || fail "multiview not built with program on the left"
+[[ "$(vm_prop show_vu_meters)" == false ]] || fail "multiview still draws meters"
+wait_for "$((SETTLE_S + 10))" program_moves || fail "program does not move after the multiview change"
+act '{"action":"set_multiview","layout":{}}' >/dev/null
+wait_for "$((SETTLE_S + 10))" is vm_prop swap_pvw_pgm false || fail "multiview layout not back"
+wait_for "$SETTLE_S" is input_state Ball online || fail "Ball not online after the multiview changes"
+pass "multiview layout: program on the left without meters and back, sources kept"
 
 criticals="$(grep -c 'GStreamer-CRITICAL' "$WORK/strom.log" || true)"
 [[ "$criticals" == 0 ]] || fail "$criticals GStreamer CRITICALs in strom.log"

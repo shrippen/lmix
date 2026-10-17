@@ -2,6 +2,16 @@
 # scripts/update-translations.sh collects the sources and writes these
 # into qml_de.ts (i18n/fill.py). Keep it complete.
 DE = {
+    'New show': 'Neue Show',
+    'The new show replaces the open one; save it first if you need it.': 'Die neue Show ersetzt die offene; vorher speichern, wenn du sie noch brauchst.',
+    'Visible': 'Sichtbar',
+    'Show box %1 in the picture': 'Box %1 im Bild zeigen',
+    ' (hidden)': ' (ausgeblendet)',
+    'Multiview: program on the left': 'Multiview: Program links',
+    'Multiview: level meters': 'Multiview: Pegelanzeigen',
+    'Variable bitrate': 'Variable Bitrate',
+    'Constant bitrate': 'Konstante Bitrate',
+    'Keyframe every (s)': 'Keyframe alle (s)',
     'Aux %1 (before the faders)': 'Aux %1 (vor den Fadern)',
     'Aux %1 (after the faders)': 'Aux %1 (nach den Fadern)',
     'At the end': 'Am Ende',
