@@ -554,6 +554,13 @@ Kirigami.ApplicationWindow {
                             checked: layout.meters === "shown"
                             onTriggered: root.act({ action: "set_multiview", layout: { program: layout.program, meters: checked ? "shown" : "hidden" } })
                         }
+                        // AUD.17: 48 kHz by default; 44.1 kHz for music productions.
+                        QQC2.MenuItem {
+                            text: qsTr("Sound at 44.1 kHz")
+                            checkable: true
+                            checked: root.show && root.show.sample_rate === 44100
+                            onTriggered: root.act({ action: "set_sample_rate", hz: checked ? 44100 : 48000 })
+                        }
                         QQC2.MenuItem {
                             text: qsTr("Export settings…")
                             onTriggered: exportSettingsDialog.open()

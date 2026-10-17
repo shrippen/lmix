@@ -140,6 +140,9 @@ pub struct ShowState {
     /// Layout of the multiview (OUT.10).
     #[serde(default)]
     pub multiview: crate::output::MultiviewLayout,
+    /// Sample rate of the audio mixer, Hz (AUD.17).
+    #[serde(default = "crate::output::default_sample_rate")]
+    pub sample_rate: u32,
     /// Volume of the monitor bus, 0–100 (AUD.4).
     #[serde(default = "crate::input::full_volume")]
     pub monitor_volume: u8,

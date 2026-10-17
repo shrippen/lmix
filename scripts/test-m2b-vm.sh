@@ -877,6 +877,16 @@ wait_for "$((SETTLE_S + 10))" is vm_prop swap_pvw_pgm false || fail "multiview l
 wait_for "$SETTLE_S" is input_state Ball online || fail "Ball not online after the multiview changes"
 pass "multiview layout: program on the left without meters and back, sources kept"
 
+# --- sample rate (AUD.17): 44.1 kHz, program still sounds, back ---
+mix_prop() { curl -sf "$STROM/api/flows/$MIXER_ID" | jq -r ".flow.blocks[] | select(.id==\"mix\") | .properties.$1"; }
+act '{"action":"set_sample_rate","hz":44100}' >/dev/null
+wait_for "$((SETTLE_S + 10))" is mix_prop sample_rate 44100 || fail "audio mixer not built at 44.1 kHz"
+settled '[[ $(pgm_db) -gt $AUDIBLE_DB ]]' || fail "program silent at 44.1 kHz ($(pgm_db) dB)"
+act '{"action":"set_sample_rate","hz":48000}' >/dev/null
+wait_for "$((SETTLE_S + 10))" is mix_prop sample_rate 48000 || fail "audio mixer not back at 48 kHz"
+settled '[[ $(pgm_db) -gt $AUDIBLE_DB ]]' || fail "program silent back at 48 kHz ($(pgm_db) dB)"
+pass "sample rate: 44.1 kHz with sound and back"
+
 criticals="$(grep -c 'GStreamer-CRITICAL' "$WORK/strom.log" || true)"
 [[ "$criticals" == 0 ]] || fail "$criticals GStreamer CRITICALs in strom.log"
 pass "no GStreamer CRITICALs"

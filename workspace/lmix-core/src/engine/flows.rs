@@ -93,12 +93,9 @@ const INTER_BUFFER_MS: &str = "100";
 const TONE_BASE_HZ: f64 = 440.0;
 const TONE_STEP: f64 = 1.25;
 const TONE_VOLUME: f64 = 0.1;
-/// One audio format for every slot, at the audio mixer's bus rate.
+/// One audio format for every slot. Slots stay at 48 kHz whatever the
+/// mixer runs at (AUD.17): its channel strips resample.
 const AUDIO_CAPS: &str = "audio/x-raw,format=F32LE,layout=interleaved,rate=48000,channels=2";
-/// Bus rate of the audio mixer (Hz), as in [`AUDIO_CAPS`]. Without it the
-/// mixer, running before the first slot sounds, settles on 44.1 kHz and
-/// refuses the slots.
-const AUDIO_RATE: u64 = 48_000;
 
 /// Format test patterns are rendered in; real sources keep theirs.
 const PATTERN_WIDTH: u32 = 1280;
@@ -177,6 +174,7 @@ pub fn mixer_flow(
     monitor: MonitorOut,
     format: MasterFormat,
     multiview: MultiviewLayout,
+    sample_rate: u32,
 ) -> Flow {
     let mut flow = Flow::new(MIXER_NAME);
     flow.id = mixer_id();
@@ -282,7 +280,7 @@ pub fn mixer_flow(
         ],
     ));
 
-    add_audio_mixer(&mut flow, slots, monitor);
+    add_audio_mixer(&mut flow, slots, monitor, sample_rate);
 
     flow.blocks.push(block(PGM_TAP, THUMBNAIL_BLOCK, vec![]));
     flow.links.push(link(
@@ -345,6 +343,15 @@ pub fn format_of(flow: &Flow) -> Option<MasterFormat> {
         height: height.parse().ok()?,
         framerate,
     })
+}
+
+/// The sample rate the audio mixer of a mixer flow was built with.
+pub fn sample_rate_of(flow: &Flow) -> Option<u32> {
+    let mix = flow.blocks.iter().find(|b| b.id == AUDIO_MIXER)?;
+    match mix.properties.get("sample_rate") {
+        Some(PropertyValue::UInt(hz)) => u32::try_from(*hz).ok(),
+        _ => None,
+    }
 }
 
 /// The multiview layout a mixer flow was built with; the engine's
@@ -781,7 +788,7 @@ const AUDIO_INTER_BUFFER_MS: &str = "1000";
 
 /// Sound of every slot into one audio mixer; its main mix is program
 /// audio (into the vision mixer, which meters it on the multiview).
-fn add_audio_mixer(flow: &mut Flow, slots: usize, monitor: MonitorOut) {
+fn add_audio_mixer(flow: &mut Flow, slots: usize, monitor: MonitorOut, sample_rate: u32) {
     for slot in 0..slots {
         let input = format!("ain{slot}");
         flow.blocks.push(block(
@@ -815,7 +822,12 @@ fn add_audio_mixer(flow: &mut Flow, slots: usize, monitor: MonitorOut) {
             "num_channels".to_string(),
             PropertyValue::UInt(slots as u64),
         ),
-        ("sample_rate".to_string(), PropertyValue::UInt(AUDIO_RATE)),
+        // The bus rate (AUD.17). Without it the mixer, running before
+        // the first slot sounds, settles on 44.1 kHz and refuses the slots.
+        (
+            "sample_rate".to_string(),
+            PropertyValue::UInt(u64::from(sample_rate)),
+        ),
         (
             "start_time_selection".to_string(),
             PropertyValue::String("first".into()),
@@ -1195,15 +1207,25 @@ mod tests {
             program: ProgramSide::Left,
             meters: MultiviewMeters::Hidden,
         };
-        let flow = mixer_flow(2, MixerBackend::Cpu, MonitorOut::None, upright, layout);
-        // The multiview layout (OUT.10) is read back like the format.
+        let flow = mixer_flow(
+            2,
+            MixerBackend::Cpu,
+            MonitorOut::None,
+            upright,
+            layout,
+            44_100,
+        );
+        // The multiview layout (OUT.10) and the sample rate (AUD.17) are
+        // read back like the format.
         assert_eq!(multiview_of(&flow), layout);
+        assert_eq!(sample_rate_of(&flow), Some(44_100));
         let plain = mixer_flow(
             2,
             MixerBackend::Cpu,
             MonitorOut::None,
             upright,
             MultiviewLayout::default(),
+            48_000,
         );
         assert_eq!(multiview_of(&plain), MultiviewLayout::default());
 
@@ -1243,6 +1265,7 @@ mod tests {
             MonitorOut::None,
             MasterFormat::default(),
             MultiviewLayout::default(),
+            48_000,
         );
 
         for slot in 0..3 {
@@ -1270,6 +1293,7 @@ mod tests {
             MonitorOut::None,
             MasterFormat::default(),
             MultiviewLayout::default(),
+            48_000,
         );
 
         assert_eq!(black_input(3), 3);
@@ -1288,6 +1312,7 @@ mod tests {
                 MonitorOut::None,
                 MasterFormat::default(),
                 MultiviewLayout::default(),
+                48_000,
             );
             let vm = flow.blocks.iter().find(|b| b.id == "vm").unwrap();
             matches!(
@@ -1433,6 +1458,7 @@ mod tests {
             MonitorOut::None,
             MasterFormat::default(),
             MultiviewLayout::default(),
+            48_000,
         );
 
         for slot in 0..3 {
@@ -1456,6 +1482,7 @@ mod tests {
             MonitorOut::Auto,
             MasterFormat::default(),
             MultiviewLayout::default(),
+            48_000,
         );
         assert!(heard
             .links
@@ -1471,6 +1498,7 @@ mod tests {
             MonitorOut::None,
             MasterFormat::default(),
             MultiviewLayout::default(),
+            48_000,
         );
 
         assert!(flow
@@ -1516,6 +1544,7 @@ mod tests {
             MonitorOut::None,
             MasterFormat::default(),
             MultiviewLayout::default(),
+            48_000,
         );
 
         let vm = flow.blocks.iter().find(|b| b.id == MIXER_BLOCK).unwrap();
@@ -1539,6 +1568,7 @@ mod tests {
             MonitorOut::None,
             MasterFormat::default(),
             MultiviewLayout::default(),
+            48_000,
         );
 
         let mix = flow.blocks.iter().find(|b| b.id == AUDIO_MIXER).unwrap();
@@ -1902,6 +1932,7 @@ mod tests {
                 MonitorOut::None,
                 MasterFormat::default(),
                 MultiviewLayout::default(),
+                48_000,
             ),
             slot,
         ] {

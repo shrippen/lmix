@@ -1039,7 +1039,7 @@
       <translation>Ton an</translation>
     </message>
     <message>
-      <location line="+19" />
+      <location line="+22" />
       <source>Level left</source>
       <translation>Pegel links</translation>
     </message>
@@ -1049,7 +1049,7 @@
       <translation>Pegel</translation>
     </message>
     <message>
-      <location line="+8" />
+      <location line="+9" />
       <source>Level right</source>
       <translation>Pegel rechts</translation>
     </message>
@@ -1873,6 +1873,11 @@
       <location line="+7" />
       <source>Multiview: level meters</source>
       <translation>Multiview: Pegelanzeigen</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Sound at 44.1 kHz</source>
+      <translation>Ton mit 44,1 kHz</translation>
     </message>
     <message>
       <location line="+6" />
