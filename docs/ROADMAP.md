@@ -74,7 +74,7 @@ MultiCorder ohne Re-Encode) — relevant für M2 als Interop-Gegenstelle.
 | FTB | ✅ | ❌ | Button (**C**) |
 | Audio-Mixer | ✅ 128 Kanäle, Gruppen, Aux, Gate/Comp/EQ, PFL/AFL | Fader + Peak-Meter | Busse, Solo, EQ-UI, **Audio-follows-Video** (**C**) |
 | Titel/Grafik | CEF-HTML (Build separat) | ❌ | HTML-Titel + Datenquellen (**C**/**B**) |
-| Stream | SRT, WHIP, NDI; RTMP-Block upstream offen (#771) | ❌ | Ausgangsleiste (**C**) |
+| Stream | SRT, RTMP/RTMPS (seit 17.10., strom #18), WHIP, NDI | ✅ | Ausgangsleiste (**C**) |
 | Record / MultiCorder | Recorder-Block | ❌ | pro Input via `inter` (**C**) |
 | Replay | ❌ | ❌ | Ringbuffer-Block (**B**) |
 | Gäste | WHIP-Input | ❌ | Browser-Gast per WHIP (**C**) |
@@ -248,7 +248,7 @@ GPU-Punkte in `HARDWARE-TODO.md`):
 
 | # | Punkt | Ort |
 |---|---|---|
-| 3.1 | Ausgangsleiste: Stream (SRT jetzt, RTMP sobald #771 upstream), Record, NDI/OMT-Out; Status: Bitrate, Drops, Laufzeit | C |
+| 3.1 | Ausgangsleiste: Stream (SRT, RTMP seit 17.10.), Record, NDI/OMT-Out; Status: Bitrate, Drops, Laufzeit | C |
 | 3.2 | MultiCorder: Recorder pro Input am `inter`-Bus | C |
 | 3.3 | Fullscreen-Output auf zweitem Monitor (Sink im Engine-Prozess, nicht in der GUI — Crash-Isolation) | C |
 | 3.4 | Failover, Latenz-CI (wie `claude.md`) | C |
@@ -258,7 +258,7 @@ GPU-Punkte in `HARDWARE-TODO.md`):
 
 | # | Stand |
 |---|---|
-| 3.1 | ✅ Ausgänge SRT, Aufnahme (MKV/MP4/TS), NDI als eigene Flows; Start/Stopp, Status mit Laufzeit und Fehler; Senderate, Paketverluste und RTT für SRT (B32); RTMP wartet auf strom #771, OMT ohne strom-Block |
+| 3.1 | ✅ Ausgänge SRT, Aufnahme (MKV/MP4/TS), NDI als eigene Flows; Start/Stopp, Status mit Laufzeit und Fehler; Senderate, Paketverluste und RTT für SRT (B32); RTMP/RTMPS seit 17.10. (strom #18, B31), OMT ohne strom-Block |
 | 3.2 | ✅ MultiCorder als Ausgangsquelle "Input": Aufnahme, SRT oder NDI je Input (ISO) |
 | 3.3 | ✅ Bildschirm-Ausgang im Engine-Prozess: Fenster, Vollbild (Wayland), DRM-Anschluss; ⚠ Vollbild/DRM nur auf Hardware prüfbar (H.20) |
 | 3.4 | ✅ Failover: Quelle weg → Input offline, PGM hält, Slot kommt von selbst wieder (2–10 s Backoff); Ausgang bricht → Fehler, Neustart; Latenz-API und Budget-Check im VM-Test, CI `vm-check`; ⚠ SRT-Input in strom unzuverlässig (H.23) |
