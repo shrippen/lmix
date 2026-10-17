@@ -8,7 +8,8 @@ import Kante
  * Outputs: one button each (click starts or stops; right click removes),
  * state as a pill, running time and link health. "+ Output" adds one.
  * Stopping a running output asks first unless `confirmStop` is off
- * (UI.10); the question can turn it off.
+ * (UI.10); the question can turn it off. With two or more streams, one
+ * button starts the stopped ones or, when all run, stops them (STR.1).
  */
 RowLayout {
     id: bar
@@ -23,6 +24,9 @@ RowLayout {
     property bool confirmStop: true
 
     readonly property var links: core.links.length > 0 ? JSON.parse(core.links) : ({})
+    /** SRT outputs, started and stopped together with one button (STR.1). */
+    readonly property var streams: (show && show.outputs ? show.outputs : []).filter(o => o.spec && o.spec.kind === "srt")
+    readonly property bool allStreaming: streams.every(o => o.status.state === "running")
 
     spacing: Kirigami.Units.smallSpacing
 
@@ -87,12 +91,12 @@ RowLayout {
 
     KanteDialog {
         id: stopDialog
-        /** The output to stop. */
+        /** The output to stop; null stops all streams. */
         property var output: null
         parent: QQC2.Overlay.overlay
         anchors.centerIn: parent
         modal: true
-        title: output ? qsTr("Stop %1?").arg(output.name) : ""
+        title: output ? qsTr("Stop %1?").arg(output.name) : qsTr("Stop all streams?")
         standardButtons: QQC2.Dialog.Ok | QQC2.Dialog.Cancel
         kanteBarColor: KanteStyle.negativeTextColor
         width: Kirigami.Units.gridUnit * 24
@@ -102,7 +106,8 @@ RowLayout {
         onAccepted: {
             bar.confirmStop = askAgain.checked
             // By id: another Console may renumber the outputs meanwhile.
-            bar.act({ action: "stop_output", output: output.id })
+            bar.act(output ? { action: "stop_output", output: output.id }
+                : { action: "stop_outputs", group: "streams" })
         }
 
         ColumnLayout {
@@ -117,6 +122,22 @@ RowLayout {
                 id: askAgain
                 text: qsTr("Ask before stopping")
                 KanteCheckSkin { control: askAgain }
+            }
+        }
+    }
+
+    KanteButton {
+        visible: bar.streams.length > 1
+        text: bar.allStreaming ? qsTr("Stop all streams") : qsTr("Start all streams")
+        enabled: bar.core.connected
+        onClicked: {
+            if (!bar.allStreaming) {
+                bar.act({ action: "start_outputs", group: "streams" })
+            } else if (bar.confirmStop) {
+                stopDialog.output = null
+                stopDialog.open()
+            } else {
+                bar.act({ action: "stop_outputs", group: "streams" })
             }
         }
     }

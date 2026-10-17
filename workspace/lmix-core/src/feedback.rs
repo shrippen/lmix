@@ -104,7 +104,7 @@ fn output_running(state: &ShowState, output: &OutputRef) -> bool {
     found.is_some_and(|o| matches!(o.status, lmix_types::OutputStatus::Running { .. }))
 }
 
-/// Whether overlay `channel` (1–4) shows something.
+/// Whether overlay `channel` (1–8) shows something.
 fn shows(state: &ShowState, channel: u8) -> bool {
     usize::from(channel)
         .checked_sub(1)

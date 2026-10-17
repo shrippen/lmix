@@ -253,14 +253,24 @@ async fn follow(thread: cxx_qt::CxxQtThread<qobject::Core>) {
     }
 }
 
-/// `{ "<input id>": peak, "program": peak, "aux1": peak, … }`.
+/// `{ "<input id>": peak, "ch:<input id>": [left, right], "program": peak,
+/// "monitor": peak, "aux1": peak, … }`.
 fn levels_json(levels: &Levels) -> String {
     let mut map = serde_json::Map::new();
     for level in &levels.inputs {
         map.insert(level.input.to_string(), level.peak_db.into());
+        if !level.channels_db.is_empty() {
+            map.insert(
+                format!("ch:{}", level.input),
+                level.channels_db.clone().into(),
+            );
+        }
     }
     if let Some(peak) = levels.program_peak_db {
         map.insert("program".into(), peak.into());
+    }
+    if let Some(peak) = levels.monitor_peak_db {
+        map.insert("monitor".into(), peak.into());
     }
     for (bus, peak) in levels.aux_peak_db.iter().enumerate() {
         if let Some(peak) = peak {
@@ -320,8 +330,14 @@ impl qobject::Core {
         let Ok(form) = serde_json::from_str::<forms::OutputForm>(&form.to_string()) else {
             return false;
         };
-        let Some(spec) = forms::output_of(&form.kind, &form.text, &form.container, form.video_kbps)
-        else {
+        let Some(spec) = forms::output_of(
+            &form.kind,
+            &form.text,
+            &form.container,
+            form.video_kbps,
+            form.encoding,
+            &form.key,
+        ) else {
             return false;
         };
         let name = form.name.trim().to_string();

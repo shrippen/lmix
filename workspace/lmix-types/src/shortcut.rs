@@ -31,7 +31,7 @@ pub struct Shortcut {
     pub web: bool,
     #[serde(default)]
     pub color: Option<InputColor>,
-    /// Note or controller of a MIDI controller that runs it (AUT.4).
+    /// Note or controller of a MIDI controller that runs it (AUT.1).
     #[serde(default)]
     pub midi: Option<MidiBinding>,
     /// Run in this order; the first failing one stops the rest.

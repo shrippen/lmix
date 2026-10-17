@@ -1,30 +1,99 @@
-# Übergabe: Stand M4 (in Arbeit), lokale Übernahme
+# Übergabe: Stand M9 und Show-Modus S1 (in Arbeit), lokale Übernahme
 
-Stand 2026-10-09, PR-Liste 2026-10-12. Die Arbeit läuft lokal weiter (Arch, RTX 3090), Abnahme
+Stand 2026-10-09, PR-Liste 2026-10-17 (bis #89). Die Arbeit läuft lokal weiter (Arch, RTX 3090), Abnahme
 auf echter Hardware.
 
-## Offene PRs, Stand 2026-10-12 (Merge-Reihenfolge)
+## Offene PRs, Stand 2026-10-17 nachts (Merge-Reihenfolge)
 
-Gestapelt, jeder auf dem davor; von unten nach oben mergen (die Basis
-des nächsten wird danach `main`, Gitea stellt sie beim Mergen um):
+CI läuft auf GitHub (Status `github / test` am Commit auf Gitea). PR-Agent
+scheitert am Kostenlimit des Schlüssels (`todo.md`), grüne CI genügt.
 
-| PR | Branch | Basis | Inhalt |
-|---|---|---|---|
-| strom #7, #8 | `lmix-live-underlays`, `lmix-process-memory` | `dev` | Layout-Underlays live, eigener Speicher in den Stats |
-| #8 | `m8-web` | `m4-pip` | M6/M8: Webseiten, Kurzbefehle, Auslöser, Cue-Listen, OSC, Textprotokoll, Metriken |
-| #9 | `m6-open` | `m8-web` | Offene Punkte ohne Hardware |
-| #17 | `m7-titles` | `m6-open` | M7 Teil A: Titel und Datenquellen ohne Render-Engine |
-| #18 | `m9-console` | `m7-titles` | M9: Transportleiste, Stopp-Rückfrage, TSL, PTZ, Pakete, Layout-Fangen, MIDI-Lampen |
-| #19 | `m9-data` | `m9-console` | XLSX/ODS, Zeilen zu Spalten, Folien aus Datei, Inputs einklappen |
-| #20 | `m9-layout` | `m9-data` | Layout-Editor: Mehrfachauswahl, Sperre |
-| #21 | `m9-keys` | `m9-layout` | Google Sheets API, Kurzbefehle für alle Shows, Zustand als Diff, Tally über HTTP, Wiedergabezeit-Auslöser, Tasten mit Bild, Inputs anhängen, fehlende Dateien, Beispiel-Clients |
-| #22 | `m9-security` | `m9-keys` | Zugriff: nur LAN, Passwort, offene Seiten (API.7) |
-| #23 | `m9-transport` | `m9-security` | Springen im Clip, Playlist-Eintrag abspielen (UI.5, UI.4) |
+Unabhängig von `main`, zuerst:
 
-Unabhängig von `main`: #14 (CI-Token fürs strom-Submodul; der Token
-braucht noch Leserechte, siehe `todo.md`), #15 (H.24-Vergleich), #16
-(Qt-eigene Übersetzungen); Kante #53 (Dialog in Kante Light), danach
-`scripts/sync-kante.sh`.
+| PR | Branch | Inhalt |
+|---|---|---|
+| #45 | `vm-failover-later` | VM-Check: Quelle stirbt später in der Blende (Failover-Prüfung wackelte) |
+| #51 | `console-test-coords` | Lokaler Console-Check: wartet auf das Bild nach dem Cut, ignoriert CRITICALs von strom beim Start |
+| #39 | `se3-measure` | S-E.3 gemessen (Klang-Cues), nur Doku und Messskript |
+
+Show-Modus S1 und Rest, gestapelt, jeder auf dem davor (von oben nach
+unten mergen; Gitea stellt die Basis des nächsten auf `main` um):
+
+| PR | Branch | Inhalt |
+|---|---|---|
+| #38 | `s1-cues` | Cue-Modell und Ablauf in lmix-core (Stufe 1) |
+| #40 | `s1-script` | Drehbuch-Import `lmix-script` (Stufe 6) |
+| #41 | `s1-targets` | Ausgabeziele HTTP, Home Assistant (Stufe 4) |
+| #42 | `s1-safety` | Panik, harter Stopp, Notfall-Liste (Stufe 5) |
+| #43 | `s1-feeds` | Restzeit als Ereignis, feste OSC-Abonnenten (CTL.2, CTL.4) |
+| #44 | `s1-show-view` | Show-Ansicht der Console (Stufe 7) |
+| #46 | `s1-timing` | Cue-Zeitgenauigkeit in `/metrics`, Zugangsschlüssel mit Rechten |
+| #47 | `s1-checks` | Warnliste, Rechner-Einstellungen im Paket, Persona-Durchlauf 10 |
+| #48 | `s1-script-folder` | Show merkt sich ihren Drehbuch-Ordner |
+| #49 | `s1-targets-ui` | Ziele und Abonnenten in der Console |
+| #50 | `s1-polish` | Dauer an Aktions-Cues, dunkler Raum, OSC-Abo-Ablauf, Übergangsleiste rollt (Fix für `main`) |
+| #52 | `m9-settings` | Älteres Show-Format beim Speichern gesichert; Einstellungen ex-/importieren (SHW.7/8) |
+| #53 | `s1-zones` | Zonen in der Show, Ausgänge je Rechner (SND.10 ohne Engine); Gruppe endet nach Neuladen |
+| #54 | `s1-ctl` | Panik in Zeit x, Cues über `standby`, Listen über `active` (CTL.1) |
+| #56 | `s1-release` | GO erst nach Loslassen (RUN.6) |
+| #57 | `s1-check` | Nicht erreichbare Ziele in der Warnliste, „Ziele prüfen“ (SUI.5) |
+| #58 | `s1-trust` | Vertraute Adressen ohne Schlüssel, `--trust` (CTL.5) |
+| #59 | `s1-osc-topics` | OSC-Abo je Thema und Feld (CTL.3); enthält den Fix aus #45 |
+| #60 | `se13-stage-measure` | S-E.13 Bühnen gemessen, nur Doku und Messskript |
+| #61 | `todo-1017` | Übergabe und Todo nach dem 17.10. |
+| #62 | `lastenheft-stand` | Lastenheft: Stand von 68 Zeilen nachgezogen |
+| #63 | `aud14-fades` | Pegel blenden: Eingang, Bus, Master über Zeit (AUD.14) |
+| #64 | `src4-alpha` | Standbilder mit Alpha (PNG, WebP, TIFF) (SRC.4) |
+| #65 | `aud1-stereo` | Pegel je Kanal an der Kachel (AUD.1) |
+| #66 | `aud4-monitor` | Abhörpegel, Standardverzögerung neuer Eingänge (AUD.4/AUD.6) |
+| #67 | `out2-multiview` | Multiview als Ausgangsquelle (OUT.2) |
+| #68 | `out1-format` | Programmformat: Auflösung und Bildrate (OUT.1) |
+| #69 | `handover-1017b` | Übergabe: PRs #62–#68 |
+| #70 | `strom-still-release` | strom-Pin mit Fix für das Leck pausierter Clips (strom #15) |
+| #71 | `ovl1-eight` | Acht Overlay-Kanäle (OVL.1, strom #16); vorweg `cargo fmt` über den Stapel |
+| #72 | `str1-streams` | Alle Streams zusammen starten/stoppen (STR.1) |
+| #73 | `api4-playback` | Abspielstand im Zustand (API.4) |
+| #74 | `inp10-at-end` | Clip am Ende: Schleife oder stehen bleiben (INP.10, strom #17) |
+| #75 | `aud2-seven-aux` | Sieben Aux-Busse A–G (AUD.2) |
+| #76 | `vm-act-timeout` | VM-Check: Aktionen mit Zeitlimit, Threads von lmix-core bei Hänger |
+| #77 | `str3-encoding` | Codec, Rate Control, Keyframes je Ausgang (STR.3) |
+| #78 | `swi5-tbar-sound` | Ton folgt der T-Bar (SWI.5) |
+| #79 | `handover-1017c` | Übergabe: PRs #69–#78, strom-Stapel |
+| #80 | `engine-call-timeout` | Engine-Aufrufe mit Zeitlimit 60 s (Hänger von lmix-core) |
+| #81 | `out10-multiview` | Multiview: Program links/rechts, Pegel an/aus (OUT.10) |
+| #82 | `lay2-box-visible` | Layout-Box ein-/ausblenden (LAY.2) |
+| #83 | `shw3-new-format` | Neue Show mit Formatwahl (SHW.3) |
+| #84 | `personas-1017` | Persona-Durchlauf 11, Übergabe bis #84 |
+| #85 | `str2-rtmp` | RTMP-Ausgang (STR.2, B31), strom #18 |
+| #86 | `strom-upstream-fixes` | strom-Pin mit upstream #874/#788 (strom #19) |
+| #87 | `vm-picture-retry` | VM-Check: fehlendes Bild ist ein Fehlversuch |
+| #88 | `aud12-meter` | Pegel stumm blass, Spitzenwert 2 s (AUD.12) |
+| #89 | `aud17-sample-rate` | Abtastrate 44,1 kHz wählbar (AUD.17) |
+| #90 | `strom-upstream-sync` | strom mit ganzem upstream main 0.7.1 (strom #20), Player-Verzögerung 100 ms für Dateien |
+
+Rote GitHub-Läufe auf `s1-feeds` und `s1-script-folder` sind die wackelige
+Failover-Prüfung, die #45 behebt (der Stapel bekommt sie über `main`).
+
+Breaking (vor dem ersten Release erlaubt, je PR beschrieben): Cue `label`
+→ `name`, `cue_back`/`cue_jump` → `cue_standby`, `next` → `standby`,
+OSC `/lmix/cue/next` → `/lmix/cue/standby`, OSC-Abos laufen nach 60 s
+ohne Lebenszeichen ab; Show-Dateien Version 1 werden beim Öffnen
+umgewandelt (alte Datei bleibt als `.v1.bak`).
+
+strom-Upstream (Eyevinn/strom `main`): ganz übernommen als Merge (strom
+#20 `lmix-upstream-sync`, upstream 0.7.1 vom 15.10.), lmix #90 pinnt ihn.
+Upstream ersetzt unseren Abtastraten-Patch und `gl_bridge.rs`; was es
+behält und anpasst, steht in DECISIONS 17.10. „strom mit ganzem upstream
+main“. CPU-Pfade sind in der VM geprüft, die GPU-Pfade (CUDA-/GL-Mischer,
+NVDEC/NVENC, Thumbnails) brauchen die Abnahme auf der RTX 3090. Neu
+verfügbar: HTML-Input (GFX.2), Player für Live-Streams/URLs, upstream-
+Stinger, Live-Recorder.
+
+Offen für S1 (DECISIONS „Show-Modus …“, PERSONAS Durchlauf 10): Klang-
+und Bild-Cues, Zonen, Bühnen (Stufen 2/3), warten auf die Entscheidungen
+S-E.3 (Klang, #39) und S-E.13 (Bühnen, #60); Vorschlag beide B, als ein
+strom-Block „Show-Wiedergabe“. Ton lässt sich ohne GPU bauen, Bild mit dem
+CPU-Mischer vorbereiten; GPU-Pfade auf echter Hardware.
 
 ## Branches und PRs (Gitea), Stand 2026-10-09
 
@@ -34,6 +103,15 @@ braucht noch Leserechte, siehe `todo.md`), #15 (H.24-Vergleich), #16
 | #4 | `claude-todo` (mit `console-qt`) | `main` | Restart-502, Selbsttest, Qt-Console statt egui | gemergt |
 | #5 | `m4` | `main` | M4: Overlays (4.1), T-Bar (4.3), Kanalzug und Aux-Busse (4.7) | gemergt |
 | #6 | `m4-stinger` | `main` | M4: Stinger (4.2) | offen |
+
+strom-Fork auf Gitea (`shrippen/strom`), Ziel `dev`, seit 17.10. gestapelt:
+#15 `lmix-still-release` (Leck pausierter Clips) → #16 `lmix-nine-dsk`
+(9 DSK-Ebenen) → #17 `lmix-player-loop` (Schleife live) → #18
+`lmix-rtmp-output` (RTMP und 4:2:0 aus upstream) → #19
+`lmix-upstream-fixes` (Stopp begrenzt, Bus-Watches) → #20
+`lmix-upstream-sync` (ganzes upstream main). Das Submodul von lmix #74
+zeigt auf #17, #85 auf #18, #86 auf #19, #90 auf #20; nach dem Merge auf
+`dev` neu pinnen.
 
 strom-Fork (`shrippen/strom`), Ziel `dev`:
 - Gemergt: #1 `lmix-start-time`, #2 `lmix-sample-rate`, #3
@@ -106,7 +184,6 @@ für WHIP-Links: `--public-url`.
 ## Offen beim User
 
 - **Merges** strom #6, lmix #6.
-- B31 RTMP-Ausgang wartet auf strom #771.
 
 ## Bekannte Befunde
 

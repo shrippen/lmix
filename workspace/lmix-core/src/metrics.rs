@@ -21,6 +21,7 @@ pub struct Snapshot {
     pub latency: Latency,
     pub uptime_secs: u64,
     pub engine: EngineHealth,
+    pub cues: crate::cues::Lateness,
 }
 
 static STARTED: OnceLock<Instant> = OnceLock::new();
@@ -92,6 +93,37 @@ pub fn render(snap: &Snapshot, resident: Option<u64>) -> String {
         )
         .sample("lmix_resident_memory_bytes", &[], bytes);
     }
+
+    // Cue timing (show mode RUN.8, SNF.4): due time to execution.
+    Family::new(
+        &mut out,
+        "lmix_cue_steps_total",
+        "counter",
+        "Cue steps run (actions, ends, follows).",
+    )
+    .sample("lmix_cue_steps_total", &[], snap.cues.steps);
+    Family::new(
+        &mut out,
+        "lmix_cue_late_max_seconds",
+        "gauge",
+        "Latest a cue step ran after its due time since start.",
+    )
+    .sample(
+        "lmix_cue_late_max_seconds",
+        &[],
+        snap.cues.max.as_secs_f64(),
+    );
+    Family::new(
+        &mut out,
+        "lmix_cue_late_over_budget_total",
+        "counter",
+        "Cue steps more than 10 ms late (RUN.8 allows 10 ms).",
+    )
+    .sample(
+        "lmix_cue_late_over_budget_total",
+        &[],
+        snap.cues.over_budget,
+    );
 
     let mut f = Family::new(
         &mut out,
@@ -402,7 +434,7 @@ mod tests {
     fn renders_inputs_tally_levels_and_escapes_names() {
         let mut state: ShowState = serde_json::from_value(serde_json::json!({
             "api_version": 1, "inputs": [], "transitions": [], "fade_to_black": false,
-            "slots": 2, "outputs": [], "overlays": [null, null, null, null], "t_bar": 0.0
+            "slots": 2, "outputs": [], "overlays": [null, null, null, null, null, null, null, null], "t_bar": 0.0
         }))
         .unwrap();
         let input: Input = serde_json::from_value(serde_json::json!({
@@ -414,6 +446,7 @@ mod tests {
             inputs: vec![InputLevel {
                 input: input.id,
                 peak_db: -12.5,
+                channels_db: vec![-12.5, -20.0],
             }],
             program_peak_db: Some(-6.0),
             monitor_peak_db: None,
@@ -453,12 +486,20 @@ mod tests {
                 latency: Latency::of(&[]),
                 uptime_secs: 7,
                 engine,
+                cues: crate::cues::Lateness {
+                    steps: 12,
+                    max: std::time::Duration::from_millis(3),
+                    over_budget: 1,
+                },
             },
             Some(4096),
         );
 
         for line in [
             "lmix_uptime_seconds 7",
+            "lmix_cue_steps_total 12",
+            "lmix_cue_late_max_seconds 0.003",
+            "lmix_cue_late_over_budget_total 1",
             "lmix_resident_memory_bytes 4096",
             r#"lmix_input_online{input="1",name="Cam \"A\""} 1"#,
             r#"lmix_input_tally{input="1",name="Cam \"A\""} 1"#,

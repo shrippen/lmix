@@ -2345,3 +2345,929 @@ Overlay mit, Vorlage laden, keine QML-Warnungen), `test-m2b-vm.sh`
 im oberen rechten Viertel auf Programm, nach 6 s von selbst aus).
 **Offen**: siehe oben (Rand, Effekte außer Blende, Overlay im
 Vorschau-Bild: strom); BiB-Overlays auf CUDA/GL nicht geprüft (H.29).
+
+## 2026-10-16 — Show-Modus S1 Stufe 1: Cue-Modell und Ablauf
+
+**Kontext**: S1 beginnt mit Cue-Modell und Ablauf-Engine in `lmix-core`
+(`LASTENHEFT-SHOW.md` §7, S-E.1, S-E.5).
+
+**Entscheidungen**:
+- **Ein flacher `Cue`** (`lmix-types/src/cue.rs`) mit `kind` (`actions`,
+  `note`, `wait`, `start`, `group`) und den Feldern aller Arten, alle
+  optional außer `kind`; `check_cue` lehnt Felder einer anderen Art ab.
+  Ein Drehbuch oder Skript schreibt so nur, was es braucht
+  (`{"kind":"wait","duration_ms":2000}`), Tippfehler fallen trotzdem auf.
+  Verworfen: getaggtes Enum je Art (lange JSON-Pfade, Standardwerte je
+  Variante doppelt).
+- **Ablauf als reine Logik** (`lmix-core/src/cues.rs`, `Runner`): bekommt
+  die Zeit und gibt zurück, was zu tun ist (Aktionen, Ereignisse). Jeder
+  Schritt (Aktion, Ende, Folge) zählt von seiner eigenen Fälligkeit, nicht
+  vom Zeitpunkt des Weckens: 100 Warte-Cues à 20 ms enden genau 2 s nach
+  GO, auch wenn jedes Wecken 7 ms zu spät kommt (Test). Der Dienst schläft
+  bis zur nächsten Fälligkeit (`watch_cues`) und wird bei jeder
+  Cue-Aktion geweckt.
+- **Was bei GO sofort fällig ist, läuft vor der Antwort** (wie ein Cut);
+  Späteres läuft im Hintergrund. Eine fehlschlagende Aktion beendet nur
+  ihren Cue und kommt als Ereignis `cue`/`failed`; Zeiten und Folgen
+  laufen weiter (CUE.19).
+- **Standby ist die oberste Ebene**: GO startet den Standby-Cue samt
+  Folgekette, Standby springt hinter die Kette. Ein Cue in einer Gruppe als
+  Standby-Ziel heißt seine Gruppe (Gruppen „hinein“ erst S2).
+- **GO-Sperre** 300 ms je Show (`set_go_guard`, 0–5000 ms), gilt für jedes
+  GO über alle Wege (Taste, OSC, API, Kurzbefehl), nicht für `cue_start`
+  und Folgen; ein verworfenes GO ist das Ereignis `go_ignored`.
+- **Start-Cue mit Liste ohne Cue** = GO in dieser Liste (bewegt deren
+  Standby, ohne GO-Sperre); mit Cue: startet ihn samt Kette, Standby bleibt.
+- **Stopp und „andere stoppen“ halten sofort an**: Ausblenden gibt es erst
+  mit Klang und Bild (Stufe 2); `fade_ms` und `mode: fade` werden schon
+  angenommen und gespeichert.
+
+**Bricht** (vor dem ersten Release erlaubt): `cue_back` und `cue_jump`
+entfallen, dafür `cue_standby` (`previous`, `{"index": n}`, …); Zurück
+startet nichts mehr, es bewegt nur Standby (QLab-Verhalten). Im Zustand
+heißt `next` jetzt `standby`; ein Cue hat `name` statt `label`. OSC
+`/lmix/cue/next` heißt `/lmix/cue/standby` und trägt den Namen des
+Standby-Cues mit. Show-Dateien der Version 1 werden beim Laden migriert
+(`label` → `name`), Console-Dialog und VM-Check sind angepasst.
+
+**Geprüft**: 14 Tests der Ablauf-Engine und der Migration, ein
+Dienst-Test mit pausierter Zeit (Folge nach 300 ms, kaputter Cue
+gemeldet, nächster läuft), Switcher-Tests der Prüfregeln; VM-Check mit
+echtem strom (GO in der aktiven Liste, Folge nach 1,5 s, Standby zurück
+an den Kettenanfang). **Offen**: 4-h-Genauigkeit im Selftest (SNF.4),
+„erst nach Loslassen wieder scharf“ (RUN.6), Anzeige in der Console (SUI).
+
+## 2026-10-16 — Drehbuch-Import (S1 Stufe 6, IMP)
+
+**Kontext**: Spielleitung P8 schreibt Cues ins Drehbuch (Obsidian) neben
+den Szenentext. S-E.2: eigenes Werkzeug über die API.
+
+**Entscheidungen**:
+- **`lmix-script`** (`workspace/lmix-script`), vorgezogen vor die Stufen
+  2–5: hängt nur am Cue-Modell (Stufe 1) und lässt sich ohne GPU und
+  Hardware prüfen.
+- **Cue-Blöcke in TOML** (```` ```lmix-cue ````), die Felder des API-Cues.
+  Verworfen: YAML (das übliche Rust-Crate `serde_yaml` ist archiviert,
+  die Nachfolger jung oder umstritten), JSON (in Obsidian mühsam zu
+  schreiben). TOML-Crate `toml` (MIT/Apache-2.0), Dateibeobachtung
+  `notify` (CC0/MIT/Apache-2.0), HTTP `reqwest` (MIT/Apache-2.0).
+- **Überschriften werden Notiz-Cues mit Folge „nach Ende“**: GO auf einer
+  Szenenmarke startet die Szene, statt einen leeren Schritt zu machen.
+- **Ids aus Liste und Nummer** (UUID v5), ohne Nummer aus dem Namen:
+  dasselbe Drehbuch ergibt bei jedem Laden dieselben Ids, `lmix-core`
+  hält damit Standby und laufende Cues (`set_cue_list` hält Standby jetzt
+  über die Cue-Id statt die Stelle).
+- **Liste mit Quelle** (`source: "script:<ordner>/<datei>"`): `lmix-script`
+  ersetzt nur eigene Listen, entfernt eigene ohne Datei, lässt eine Liste
+  gleichen Namens aus der Console stehen. Die Console bearbeitet Listen
+  mit Quelle nicht (IMP.9).
+- **Doppelte Nummer**: Fehler an jeder Stelle, keine beteiligte Liste
+  lädt. Welche Stelle „die zweite“ ist, hinge sonst an Dateinamen.
+- **Fehlende Mediendatei = Warnung**, die Liste lädt: die Abnahme von S1
+  verlangt, dass eine fehlende Datei den Szenenwechsel nicht abbricht; der
+  Cue meldet den Fehler beim Lauf (CUE.19).
+
+**Geprüft**: 6 Tests im Werkzeug, `scripts/test-script.sh` gegen
+lmix-core mit Null-Engine (Fehler mit Datei und Zeile, Laden, GO auf der
+Szenenmarke, Neuladen mit gehaltenem Standby, `--watch`, fremde Liste
+bleibt, Liste mit Datei weg); beides in der CI (Job `core`).
+**Offen**: SSH.2 (die Show speichert nur den Ordner; heute lädt man nach
+dem Start neu), Warnung bei Nummern mit Leerzeichen (CUE.1).
+
+## 2026-10-16 — Ausgabeziele (S1 Stufe 4, EXT.1–5)
+
+**Kontext**: P8 schaltet Licht und Duft über Home Assistant; Tokens
+dürfen weder in die Show noch ins Drehbuch (EXT.2, S-E.6).
+
+**Entscheidungen**:
+- **Ziele sind Rechner-Einstellungen** (`--targets`, Standard
+  `~/.config/lmix/targets.json`) wie die Kurzbefehle für alle Shows; die
+  Datei entsteht mit Rechten 600. Im Zustand stehen Ziele ohne Geheimnis
+  (`has_secret`); `secret: null` beim Setzen behält es, `""` löscht es.
+- **HTTP-Cue = Aktions-Cue mit `http_request` oder `ha_service`**, keine
+  eigene Cue-Art: dieselben Aktionen gehen auch aus Kurzbefehlen und
+  Auslösern, und das Cue-Modell bleibt klein. Abweichung vom Wortlaut von
+  EXT.3 („HTTP-Cue“); der Anzeigename eines solchen Cues ist der Name der
+  Aktion, bis die Show-Ansicht (SUI) eigene Symbole bekommt.
+- **Senden blockiert nie**: die Aktion kehrt sofort zurück, die Anfrage
+  läuft im Hintergrund mit dem Zeitlimit des Ziels; das Ergebnis ist das
+  Ereignis `target` (`ok` oder `failed` mit Grund), auch per TCP (`SUB
+  TARGET`). Ein nicht erreichbares Ziel hält weder GO noch Folgen auf.
+- **Mehrere Adressen = gleichzeitig senden**, erreicht ist das Ziel, wenn
+  eine mit Erfolg antwortet (Haupt/Reserve).
+- **Geheimnis als `Authorization: Bearer`**: so will es Home Assistant
+  (langlebiges Zugangs-Token); andere Verfahren bei Bedarf.
+- **`test_target`** wartet auf die Antwort (`GET` der ersten Adresse)
+  und lehnt mit dem Grund ab (EXT.5).
+
+**Geprüft**: 5 Tests in `targets.rs` (Geheimnis bleibt, Prüfregeln,
+Home-Assistant-Pfad und -Rumpf, Token und Rumpf auf der Leitung gegen
+einen lokalen Server, Reserve-Adresse, 401 als Fehler), ein Dienst-Test
+(Cue → Home Assistant, Ereignis, Dateirechte, kein Geheimnis im Zustand).
+**Offen**: OSC senden (EXT.6, S2), Ziele ex- und importieren mit der Show
+(SSH.5), Platzhalter (EXT.7, S2).
+
+## 2026-10-16 — Panik, harter Stopp, Notfall-Liste (S1 Stufe 5, SAF)
+
+**Entscheidungen**:
+- **Panik hält jetzt sofort an**: Es gibt noch keine Klänge und Bilder zum
+  Ausblenden (Stufe 2/3). Die Panikzeit (`set_panic_time`, Standard 1 s,
+  0–10 s) zählt trotzdem schon: eine zweite Panik darin ist ein harter
+  Stopp (SAF.1), danach ist die nächste wieder eine Panik.
+- **Notfall-Liste startet ganz**: bei Panik und hartem Stopp starten alle
+  Cues der Liste zugleich, wie eine Zeitleiste (Folgen gelten nicht).
+  Wer eine Reihenfolge braucht, setzt Vorwartezeiten. Verworfen: nur den
+  ersten Cue starten (eine vergessene Folge ließe das Raumlicht aus).
+- **Standby steht in der Show** (`standby` als Cue-Id je Liste) und wird
+  bei jeder Bewegung mit der Show gesichert: nach einem Absturz oder
+  Neustart startet nichts, Standby steht, wo er war (SAF.6). Auch eine
+  gespeicherte Show öffnet mit ihrem Standby (wie beim Vorbild). Am Ende
+  einer Liste wird nichts gespeichert, sie beginnt dann oben.
+- **Jeder Weg**: Aktionen `cue_panic`, `cue_hard_stop`; OSC `/lmix/panic`,
+  `/lmix/stop/hard`; Kurzbefehle tragen sie auf Taste, globale Taste und
+  MIDI (SAF.5). Ereignis `panic` (`fade` oder `hard`), per TCP `PANIC`
+  im Thema `CUE`. Cues dürfen keine Panik auslösen (keine Schleifen).
+
+**Geprüft**: Runner-Tests (alle Cues und Vorwartezeiten weg, Notfall-Liste
+ganz, zweite Panik hart, danach wieder Panik; Standby aus der Show), ein
+Dienst-Test (Panik über den Dienst, Notfall-Cue schneidet, Ereignis;
+neuer Dienst über dieselbe Sicherung: Standby gleich, nichts läuft), OSC.
+**Offen**: Ausblenden und SAF.7 mit Stufe 2, Panik ohne Schlüssel (CTL.5),
+Escape als Panik in der Show-Ansicht (CTL.6, SUI).
+
+## 2026-10-16 — Feste OSC-Abonnenten und Restzeit (S1 Stufe 5, CTL.2, CTL.4)
+
+**Kontext**: Abnahme S1: Standby-Name und Restzeit erscheinen auf
+Companion-Tasten über einen festen OSC-Abonnenten, ohne eigenes Modul.
+
+**Entscheidungen**:
+- **Abonnenten neben den Zielen** in derselben Rechner-Datei
+  (`targets.json` ist jetzt `{"targets": […], "feeds": […]}`; das Format
+  war erst seit heute da, keine Migration). Ein Abonnent nennt ein
+  `osc_udp`-Ziel und Nachrichten je Anlass (`standby`, `running`,
+  `panic`) mit Platzhaltern (`{name}`, `{number}`, `{remaining}` …).
+  Ein Argument, das nur aus einer Zeit besteht, geht als Float (Companion
+  kann damit rechnen), alles andere als Text.
+- **Ein Takt für beides** (`--cue-events-hz`, Standard 4, 1–20): das
+  Ereignis `running` (laufende Cues mit fertig gerechneter Restzeit) und
+  die `running`-Nachrichten gehen in diesem Takt, solange etwas läuft, und
+  einmal danach mit leeren Werten, damit Tasten nicht stehen bleiben.
+  Standby geht nur bei Änderung, Panik sofort. Ohne Abonnenten und ohne
+  laufende Cues arbeitet der Takt nicht.
+- **Neu gesetzter Abonnent bekommt alles neu** (Standby jeder Liste).
+
+**Geprüft**: 3 Tests in `feeds.rs` (Standby nur bei Änderung, Restzeit je
+Takt und einmal danach, Float bei reiner Zeit, Panik), ein Dienst-Test
+mit echtem UDP-Empfänger (Standby, Restzeit, Ereignis `running`, Panik),
+zehnmal hintereinander grün.
+**Offen**: OSC über TCP (SLIP) für Abonnenten, Ablauf nach 60 s ohne
+Lebenszeichen für angemeldete Abos (CTL.3).
+
+## 2026-10-16 — Show-Ansicht der Console (S1 Stufe 7, SUI)
+
+**Entscheidungen**:
+- **Umschalter Mischer/Show** in der Werkzeugleiste (gemerkt in den
+  Einstellungen der Console). Der Mischer-Bereich und die Show-Ansicht
+  teilen sich die Seite; Datei-Knöpfe und Stil bleiben.
+- **Die gezeigte Liste ist die aktive**: wer eine Liste wählt, setzt sie
+  aktiv (`set_active_cue_list`). GO hier, die Leertaste und GO von außen
+  (Companion, OSC) meinen damit dieselbe Liste.
+- **Tasten in der Ansicht, nicht fensterweit**: Leertaste GO, Escape
+  Panik (zweimal: hart, über die Panikzeit im Core). Die Ansicht hält den
+  Fokus, ihre Knöpfe nehmen keinen: so schließt Escape in einem Dialog den
+  Dialog, und die Leertaste drückt nie einen fokussierten Panik-Knopf.
+- **Zeiten laufen in der Console weiter**: der Core sendet einen Zustand
+  bei jedem fälligen Schritt (jetzt auch, wenn eine Vorwartezeit ohne
+  Ausgabe endet), dazwischen zählt die Ansicht ab dem Eintreffen weiter.
+  Kein eigenes Ereignis nötig.
+- **„Erweitert“** zeigt Vor- und Nachwartezeit und Folge (SUI.13);
+  Bearbeiten bleibt im Cue-Dialog (SUI.10, S2).
+
+**Geprüft**: Console auf Xvfb gegen lmix-core mit Null-Engine und einer
+Drehbuch-Liste (Szenenmarken, Zeitleisten-Gruppe, Warte-Cues): Ansicht,
+zweimal Leertaste (GO, Kette, Standby auf der nächsten Szene), laufende
+Cues mit Fortschritt und Restzeit, Escape als Panik. Console-Tests,
+lmix-core 248 Tests.
+**Offen**: dunkle Raumansicht (SUI.6), Bühnenvorschau und Zonen-Leiste
+(SUI.7, SUI.8, mit Stufe 2/3), Warnliste (SUI.5).
+
+## 2026-10-16 — Zugangsschlüssel mit Rechten (S1 Stufe 5, CTL.5)
+
+**Kontext**: Companion soll GO und Panik schicken dürfen, aber keine Show
+öffnen; ein Taster an der Bühne soll Panik ohne Schlüssel auslösen
+(Abnahme S1). Bisher (API.7): ein Passwort für alles, offene Seiten.
+
+**Entscheidungen**:
+- **Erweitern statt ersetzen**: `--access-keys` (JSON-Liste `{name, key,
+  right}`) neben `--password`; das Passwort zählt als Schlüssel mit
+  `edit`. Ohne Passwort und Schlüssel bleibt das lokale Netz offen wie
+  bisher; der eigene Rechner braucht nie einen Schlüssel.
+- **Drei Rechte**: `view` (lesen), `control` (die Show fahren: GO, Cuts,
+  Pegel, Titel, Panik, Ziele ansprechen), `edit` (Vorbereitetes ändern:
+  Inputs, Cue-Listen, Ziele, Abonnenten, Dateien, Sperre). Die Zuordnung
+  steht in `right_of` als `match` ohne Platzhalter: eine neue Aktion baut
+  erst, wenn sie ihr Recht hat.
+- **`--open-panic`**: Panik und harter Stopp gehen aus dem lokalen Netz
+  ohne Schlüssel, über HTTP, TCP (vor `AUTH`) und OSC (das sonst mit
+  Passwort nur den eigenen Rechner hört).
+- **Falsche Schlüssel bremsen**: je Adresse 100 ms, dann doppelt, höchstens
+  5 s; ein richtiger Schlüssel setzt zurück; jede Abweisung steht im Log.
+  Schlüssel unter 12 Zeichen lehnt `lmix-core` beim Start ab.
+- **Abweichung**: CTL.5 nennt eine Stufe „ohne Schlüssel“ mit eigener
+  LAN-Adressliste. Die gibt es nicht: der Rechner selbst bleibt frei, das
+  Netz braucht Passwort oder Schlüssel, sobald einer gesetzt ist. Eine
+  Adressliste kommt, wenn eine Persona sie braucht.
+
+**Geprüft**: Tests für die Einordnung, für Rechte über HTTP (Steuern darf
+schneiden, nicht `add_input`; Ansehen liest, schaltet nicht; Panik ohne
+Schlüssel nur mit `--open-panic`), für die wachsende Wartezeit (pausierte
+Zeit) und über TCP (Panik vor `AUTH`, Steuern ja, Bearbeiten nein).
+**Offen**: Rechte für die Web-Seiten jenseits der offenen Seiten, eigene
+Adressliste.
+
+## 2026-10-16 — Warnliste, Rechner-Einstellungen im Paket (SUI.5, SSH.5, CUE.1)
+
+- **Warnliste** (`cue_warnings` im Zustand): `lmix-core` prüft nach jeder
+  Änderung der Show, der Ziele oder der fehlenden Medien, was beim Lauf
+  schiefginge: Start-Cue ohne Ziel, Aktion an einen Input oder ein
+  Ausgabeziel, das es nicht gibt, Input ohne Mediendatei. Zwischengespeichert,
+  nicht je Zustand gerechnet. Jede Warnung hat eine Art (`problem`) mit
+  Werten, damit die Console sie übersetzt, und den englischen Text.
+- **Rechner-Einstellungen im Paket**: `export_package` mit `machine: true`
+  legt `machine.json` (Ziele, Abonnenten, ohne Geheimnisse) ins Paket;
+  `import_package` mit `machine: true` übernimmt sie, gleichnamige Ziele
+  behalten ihr Geheimnis. Dabei gefunden: Vorlagen, die Cues in Gruppen
+  laden, kamen nicht ins Paket (nur oberste Ebene durchsucht); behoben.
+- **Nummern mit Leerzeichen** warnen im Drehbuch (CUE.1), laden aber.
+
+**Geprüft**: Test der Prüfungen (fehlendes Start-Ziel, Ziel, Input in einer
+Gruppe, fehlende Mediendatei), Paket-Test mit `machine.json`, Test der
+Übernahme (Geheimnis bleibt), Drehbuch-Test; Console auf Xvfb zeigt drei
+Warnungen auf Deutsch.
+
+## 2026-10-16 — Drehbuch-Ordner der Show (SSH.2, Befund B44)
+
+**Entscheidung**: Die Show merkt sich ihren Drehbuch-Ordner
+(`set_script_folder`, Knopf „Drehbuch…“ in der Show-Ansicht);
+`lmix-core` startet dafür `lmix-script load <ordner> --watch` als
+Kindprozess, beim Öffnen der Show, nach einem Neustart und bei jeder
+Änderung des Ordners, und beendet ihn ohne Ordner. `lmix-core` kennt so
+weiter kein Markdown (S-E.2); das Werkzeug spricht die API wie jeder Client
+(über Loopback, ohne Schlüssel).
+**Abweichung von SSH.2**: Die Cues der Drehbuch-Listen bleiben zusätzlich
+in der Show gespeichert. Ohne Werkzeug hat die Show dann trotzdem ihre
+Cues, und Standby übersteht einen Neustart (SAF.6). Das Werkzeug ersetzt sie
+beim nächsten Laden.
+**Geprüft**: Test des Kindprozesses (einmal je Ordner, Wechsel, Stopp) mit
+einem Ersatzwerkzeug; `scripts/test-script.sh` mit echtem `lmix-script`:
+Ordner setzen lädt die Liste, eine Änderung wird übernommen, ohne Ordner
+nicht mehr.
+
+## 2026-10-16 — Ziele und Abonnenten in der Console (Befund B43)
+
+Dialog „Ziele…“ in der Show-Ansicht: Ausgabeziele anlegen, bearbeiten,
+testen (HTTP), entfernen; OSC-Abonnenten mit Nachrichten je Anlass
+(Standby, laufender Cue, Panik), Adresse und Werten mit Platzhaltern. Das
+Geheimnis zeigt die Console nie; leer gelassen bleibt es, wie es ist. Ein
+Ziel lässt sich nicht umbenennen (das Geheimnis ginge verloren): entfernen
+und neu anlegen. Geprüft auf Xvfb gegen lmix-core mit zwei Zielen und
+einem Abonnenten.
+
+## 2026-10-16 — Kleinere S1-Punkte: Dauer von Aktions-Cues, dunkler Raum, OSC-Abo-Ablauf
+
+- **Aktions-Cue mit Dauer** (B45): `duration_ms` ist jetzt auch an
+  Aktions-Cues erlaubt; so lange gilt der Cue nach seinen Aktionen als
+  laufend (z. B. die Länge des Clips, den er startet), „Folge nach Ende“
+  wartet darauf. Die Länge aus dem Clip selbst kommt mit den Bild-Cues.
+- **Dunkler Raum** (SUI.6): Knopf „Dunkel“ in der Show-Ansicht; Kante
+  bekommt `preferDark` (Gruvbox dunkel, kein Weiß), darüber liegt der
+  Schleier von Kante mit 60 %; Klicks gehen durch. Nur der Schleier dimmte
+  im hellen Leinen-Schema zu wenig (auf Xvfb geprüft).
+- **OSC-Abos laufen ab** (CTL.3): 60 s nach der letzten Nachricht des
+  Abonnenten; `/lmix/ping` (Antwort `/lmix/pong`) oder ein neues
+  `/lmix/subscribe` hält es. **Bricht** für Abonnenten ohne Lebenszeichen;
+  für Tasten ohne Keepalive gibt es die festen Abonnenten (CTL.4). Dabei die
+  Doku `/lmix/cue/next` → `/lmix/cue/standby` nachgezogen.
+
+## 2026-10-16 — Älteres Show-Format, Einstellungen als Datei (SHW.7, SHW.8)
+
+- **SHW.7 ohne Rückfrage, mit Sicherung**: Eine Show-Datei älterer Version
+  wird beim Öffnen umgewandelt (seit heute Version 1 → 2). Statt vorher zu
+  fragen, sagt die Console es an, und das erste Speichern über die Datei
+  legt die alte als `<datei>.v<n>.bak` daneben (nur einmal). So bleibt die
+  alte Fassung, ohne dass jedes Öffnen eine Frage stellt.
+- **SHW.8**: `export_settings` schreibt die Einstellungen dieses Rechners
+  (Kurzbefehle für alle Shows, Layout-Vorlagen, Ausgabeziele, Abonnenten)
+  ohne Geheimnisse in eine Datei (`lmix-settings`, Version 1);
+  `import_settings` nimmt sie statt der aktuellen, ganz oder gar nicht,
+  gleichnamige Ziele behalten ihr Geheimnis; `reset_settings` sind die
+  Werkseinstellungen (in der Console mit Rückfrage). Im Menü „Paket“.
+**Geprüft**: Dienst-Tests (Version-1-Datei öffnen, speichern, Sicherung
+gleich der alten Datei, neue mit Version 2; Einstellungen exportieren ohne
+Geheimnis, zurücksetzen, importieren, Geheimnis bleibt, kaputte Datei ändert
+nichts); Console auf Xvfb (Menü, Rückfrage).
+
+## 2026-10-17 — Zonen ohne Engine (S1 Stufe 2, Teil SND.10)
+
+**Kontext**: S-E.4 ist entschieden (Zone = logischer Ausgang mit
+Zuordnung je Rechner), S-E.3 (wie Klang-Cues spielen) noch nicht. Die
+Zonen selbst hängen nicht an S-E.3.
+
+**Entscheidungen**:
+- **In der Show**: Zonen mit Namen und 1–8 Kanälen (bis 16 Zonen).
+- **In den Rechner-Einstellungen** (`targets.json`, mit Export, Import
+  und `machine.json` im Paket): je Zone 1–4 Ausgänge mit Gerät (leer =
+  Standardausgang), Gerätekanal je Zonenkanal und Pegel (−60 bis +12 dB).
+  Eine Zuordnung darf für Zonen bestehen, die die aktuelle Show nicht hat
+  (der Rechner bleibt für die nächste Show eingerichtet).
+- **Gerät als Text**: Es gibt noch keine Erkennung von Ausgabegeräten
+  (nur Eingänge); das Format wird mit dem Abspielen (Stufe 2) an die
+  Engine angepasst, falls nötig (vor dem ersten Release erlaubt).
+- **Ausgänge mit falscher Kanalzahl zählen nicht** (sie würden falsch
+  spielen); eine Zone ohne passenden Ausgang steht in der Warnliste.
+
+**Geprüft**: Tests der Prüfregeln und der Zusammenführung, Dienst-Test
+(Zuordnung kommt mit Export/Import der Einstellungen zurück); Console auf
+Xvfb (Dialog „Zonen…“, Warnung „Zone hinten spielt auf diesem Rechner
+nirgends“).
+
+## 2026-10-17 — Cue-Zeitgenauigkeit über 4 h nur ohne Last (RUN.8)
+
+**Messung** (`scripts/test-cue-timing.sh`, Null-Engine, Kette aus 50
+Wartezeiten zu 20 ms, Grenze 10 ms):
+
+| Lauf | Rechner | Schritte | spätestens | über 10 ms |
+|---|---|---|---|---|
+| 4 h (16.10. 22:47–02:47) | nebenbei Rust-/Qt-Builds und Tests | 1 468 803 | 145,6 ms | 694 (0,05 %) |
+| 1 h (17.10. 02:48–03:48) | sonst frei (Last ~1) | 367 201 | 5,2 ms | 0 |
+| 10 min | alle 24 Kerne mit `yes` belegt | 61 203 | 65,3 ms | 214 |
+
+Die Zeiten driften nicht. Verspätet sind nur Schritte, bei denen der
+Rechner ausgelastet ist: Der Zeitgeber läuft als normaler Prozess
+(nice 0) in der tokio-Laufzeit und wartet auf einen freien Kern. Das
+Autosave beim Weiterrücken von Standby ist nicht die Ursache: Im Test
+rückt Standby nicht, die Datei wurde nur beim Start geschrieben.
+
+**Folgerung**: RUN.8 hält auf einem freien Show-Rechner; die 4-h-Messung
+ohne Last steht noch aus. Unter Last hält es nicht.
+
+**Vorschlag (offen, nicht gebaut)**: Den Zeitgeber der Cue-Listen auf
+einen eigenen Thread mit Echtzeit-Priorität legen und diese wie PipeWire
+über rtkit (D-Bus) anfordern, ohne Root. Geht das nicht, warnt der
+Selbsttest: In SNF.4 mitmessen, wie spät die Schritte sind, und die
+Last des Rechners anzeigen.
+
+## 2026-10-17 — GO erst nach Loslassen (RUN.6)
+
+**Kontext**: RUN.6 verlangt die Option „erst nach Loslassen wieder
+scharf“: Ein festgehaltener oder prellender Taster gibt kein zweites GO,
+auch nicht nach der GO-Sperre.
+
+**Optionen**: (a) ein Merker für alle Wege: Jedes GO wartet, bis
+irgendein Taster losgelassen wird; (b) je Taster: Nur der Taster, der das
+GO gab, wartet auf sein Loslassen.
+
+**Entscheidung**: (b). Mit (a) sperrt ein verlorenes Loslassen (UDP) jedes
+GO der Show; mit (b) nur diesen einen Weg, die Leertaste und Companion
+bleiben bedienbar.
+
+- `set_go_rearm` mit `time` (Standard, nur GO-Sperre) oder `release`;
+  gespeichert in der Show (`go_rearm`, fehlt bei `time`).
+- Loslassen melden: MIDI (Note aus, Controller unter 64; je Kanal, Art,
+  Nummer), OSC `/lmix/cue/release` (je Absender: Companion schickt alle
+  Tasten über einen Socket, jede GO-Taste dort zählt als dieselbe). Die
+  Leertaste der Show-Ansicht nimmt ihre Wiederholungen ohnehin nicht an.
+- HTTP, TCP und Kurzbefehle ohne MIDI melden kein Loslassen: für sie gilt
+  nur die GO-Sperre.
+- Wechsel des Modus vergisst alle gehaltenen Taster.
+
+**Geprüft**: Tests im Ablauf (gehalten, anderer Weg, Loslassen, Modus
+`time`), OSC-Adresse, Speichern und Laden der Show.
+
+## 2026-10-17 — Erreichbarkeit der Ziele in der Warnliste (SUI.5)
+
+**Kontext**: Die Warnliste nannte Ziele, die der Rechner nicht hat, aber
+nicht solche, die nicht antworten. SUI.5 verlangt beides vor der Show.
+
+**Entscheidung**:
+- `check_targets` (Console „Ziele prüfen“) fragt alle Ziele, an die Cues
+  senden, gleichzeitig ab (wie `test_target`: `GET` der ersten Adresse).
+  Wer nicht antwortet, steht mit Grund als `target_unreached` an jedem
+  Cue, der dorthin sendet.
+- Jedes Senden während der Show und jeder `test_target` schreibt das
+  Ergebnis fort: Ein Ziel, das ausfällt, erscheint ohne neue Prüfung in
+  der Liste, eines, das wieder antwortet, verschwindet.
+- Kein Prüfen im Hintergrund: Abfragen im Takt fluten Home Assistant und
+  zeigen nur, was das nächste Senden ohnehin zeigt.
+- Neue Einstellungen oder Entfernen eines Ziels vergessen sein Ergebnis.
+- Zonen-Geräte: strom nennt seine Ton-Ausgänge noch nicht; mit Stufe 2.
+
+**Geprüft**: Regel-Test (Gruppe, doppelte Nennung), Dienst-Test mit
+Ziel ohne und mit Gegenstelle.
+
+## 2026-10-17 — Vertraute Adressen ohne Schlüssel (CTL.5)
+
+**Kontext**: CTL.5 verlangt eine Stufe „ohne Schlüssel“ getrennt für den
+Rechner und eine LAN-Adressliste, Standard nur der Rechner. Bisher: mit
+Schlüssel oder Passwort braucht jedes Gerät im LAN einen Schlüssel; OSC
+hat keinen und nahm dann nur den Rechner (und `--open-panic`). Ein
+Stream Deck über Companion per OSC ging so nur ohne jeden Schlüssel.
+
+**Entscheidung**: `--trust ADRESSE[/PRÄFIX][=RECHT]` (mehrfach oder mit
+Komma, `LMIX_TRUST`), Recht `view`, `control` (Standard) oder `edit`.
+- Gilt nur, wenn Schlüssel oder Passwort gesetzt sind: Sonst darf das LAN
+  ohnehin alles. Der Standard „nur der Rechner“ aus CTL.5 heißt in lmix:
+  Schlüssel setzen; ohne Schlüssel bleibt das Verhalten von API.7, damit
+  bestehende Aufbauten (Webseiten, Companion ohne Schlüssel) weiterlaufen.
+- HTTP: ohne `Authorization` hat die Adresse ihr Recht; ein falscher
+  Schlüssel bleibt falsch (Wartezeit). Textprotokoll: kein `AUTH` nötig,
+  das Recht gilt sofort. OSC: jede Nachricht bis zu diesem Recht
+  (`cue/go` ist `control`).
+- Mehrere passende Einträge: das höchste Recht. IPv4 in IPv6 (`::ffff:`)
+  zählt als IPv4.
+- Nur Adressen, keine Namen: Ein Name, der auf eine andere Adresse zeigt,
+  wäre ein Schlüssel ohne Schloss.
+
+**Geprüft**: Lesen der Einträge (Präfix, Recht, Fehler), Netze v4/v6,
+HTTP mit und ohne Liste, Textprotokoll ohne `AUTH`.
+
+## 2026-10-17 — OSC-Abo je Ereignis und Feld (CTL.3)
+
+**Kontext**: Ein OSC-Abonnent bekam bisher alles vom Mischer und den
+Standby, aber keine Cue-Ereignisse, keine Restzeit und keine Panik; die
+gab es nur über feste Abonnenten (CTL.4) und TCP. CTL.3 verlangt An- und
+Abmelden je Ereignis und Feld.
+
+**Entscheidung** (`osc_subs.rs`):
+- `/lmix/subscribe` ohne Argumente wie bisher: Mischer und Standby.
+- `/lmix/subscribe THEMA [FELD …]`: fügt ein Thema hinzu, nur mit den
+  genannten Feldern in dieser Reihenfolge (ohne Felder: alle). Themen
+  `mixer`, `standby`, `running` (neuester laufender Cue je Liste im
+  Takt der Cue-Ereignisse, am Ende einmal leer, wie bei CTL.4), `cue`
+  (`started`, `ended`, `stopped`, `go_ignored`, `failed` mit Grund),
+  `panic`, `target`.
+- `/lmix/unsubscribe THEMA` nimmt eines weg, ohne Argument alle.
+- Zeiten als Float in Sekunden, die Position als Int, sonst Text; ein
+  Feld, das das Thema nicht hat, wird abgelehnt (`/lmix/error`).
+- Feste Abonnenten (CTL.4) bleiben, wie sie sind: sie brauchen kein
+  Lebenszeichen und haben Vorlagen mit Platzhaltern.
+
+**Geprüft**: Tests der Felder und Nachrichten, Headless-Test mit echtem
+OSC-Client (Name und Restzeit des laufenden Cues, Cue-Ereignisse, keine
+Mischer-Nachrichten).
+
+## 2026-10-17 — S-E.13: Bühnen intern, gemessen (offen)
+
+**Kontext**: S1 Stufe 3 (VIS) braucht Bühnen: mindestens 4 je Show, jede
+eine eigene Bildfläche mit Ebenen, auf Vollbild oder Fenster (VIS.1,
+S-E.9), Schwarz ohne Cues (VIS.8). Wie bei S-E.3 gibt es zwei Wege:
+(A) eine Bühne ist ein Mischer-Flow wie heute, jeder Bild-Cue ein
+verdeckter Input (eigener Flow, Bild über `inter`, belegt einen Slot);
+(B) ein Bühnen-Block in strom, ein Flow mit `compositor`, ein Zweig je
+laufendem Bild-Cue, zur Laufzeit an- und abgehängt.
+
+**Messung** (`scripts/bench-stage/run.sh`, reines GStreamer 1.24 auf der
+CPU, `compositor` 1080p30 in `fakesink sync`, ohne strom und GPU; 4 Kerne
+Xeon 2,8 GHz; 1080p30-H.264-Clips, je Cue eine Kachel 480 × 270; Zeit von
+der Anfrage bis zum ersten Ausgangsbild, das den Cue zeigt):
+
+| | A: Pipeline je Cue + intervideo | B: Zweig je Cue | B vorgeladen |
+|---|---|---|---|
+| Anfrage → sichtbar (8 Cues nacheinander) | 122–133 ms (kalt 209) | 53–91 ms (kalt 118) | 28–64 ms |
+| Speicher je Cue | ~60 MB | ~58 MB | ~53 MB |
+| Threads je Cue | 9 | 8 | 8 |
+| CPU bei 8 Cues (4 Kerne) | 98 % | 93 % | 88 % |
+| Ausgang | 30 fps, nichts verworfen | 30 fps | 30 fps |
+
+Bei 30 fps ist ein Bild 33 ms: B vorgeladen erscheint mit dem nächsten
+oder übernächsten Bild, A zwei bis drei Bilder später. A wartet auf die
+Periode der Inter-Quelle; in lmix kämen dazu der Flow über REST, der Slot
+(16 Standard, geteilt mit Kameras) und für 4 Bühnen 4 Mischer.
+
+**Befunde unabhängig vom Weg**:
+- Ein neu angehängter Zweig braucht einen Pad-Offset auf die laufende Zeit
+  der Bühne, sonst überspringt der `compositor` den Anfang des Clips (im
+  ersten Lauf bis 2,4 s); strom macht das für den Mischer schon
+  (`lmix-live-offset`).
+- Mischmodi (VIS.6): Kein GStreamer-Compositor kann „aufhellen“
+  (Maximum). Der CPU-`compositor` kennt nur über und addieren,
+  `glvideomixer` multiplizieren nur über Blendfunktionen, „aufhellen“ gar
+  nicht. VIS.6 braucht in beiden Wegen eigenes Blending in strom (z. B.
+  ein Shader je Ebene).
+
+**Folgerung (Vorschlag)**: B, und zusammen mit S-E.3 B als **ein**
+strom-Block „Show-Wiedergabe“ in einem Flow je Rechner: Zonen
+(`audiomixer`) und Bühnen (`compositor`) teilen eine Uhr, ein Szenenwechsel
+mit Kulisse und Atmo startet auf denselben Zeitpunkt, und Ton aus Videos
+(VIS.10, S2) kommt ohne Umweg in die Zone. A bliebe für Live-Bild als
+Bild-Cue (VIS.15, S3), das schon ein Input ist.
+**Offen**: Entscheidung des Users.
+
+**Bauplan B** (Schätzung, nicht gebaut):
+- strom: Bühne = `compositor` (GL bzw. CUDA wie der Mischer, CPU als
+  Rückfall) mit schwarzem Grund (VIS.8), Ausgang je Rechner auf Vollbild
+  oder Fenster (VIS.1, wie OUT.3). Bild-Cue = Zweig Datei → Dekoder →
+  Pad mit `zorder` (Ebene, VIS.3), `alpha` (Deckkraft, Fade über
+  Controller wie die DSK-Blende, VIS.4), `sizing-policy` (Füllmodus,
+  VIS.5); vorladen vor GO (pausiert, am Pad gehalten). Standbild über
+  `imagefreeze`. Bühnen-Dimmer (VIS.7) als letzte Ebene oder Pegel am
+  Ausgang. Eigenes Blending für VIS.6.
+- lmix-core: Bühnen in der Show (Namen) und Zuordnung je Rechner (wie
+  Zonen, SSH.3); Cue-Art `picture` und Fade-Ziel Bild/Bühne; Panik
+  blendet Bühnen schwarz.
+- Console: Bühnen-Dialog, kleine Vorschau (SUI.7).
+- Aufwand grob: mit dem Ton-Block zusammen 1–2 Tage mehr als S-E.3 B
+  allein, sonst 3–4 Tage.
+
+**Grenzen der Messung**: nur CPU und ein Rechner mit 4 Kernen; GPU-Pfade
+(GL, CUDA) und 4 Bühnen gleichzeitig sind ungemessen, beides gehört in die
+Abnahme auf echter Hardware.
+
+## 2026-10-17 — Pegel-Fades und Master (AUD.14, AUD.2)
+
+**Kontext**: AUD.14 (Pegel-Fades per Aktion für Input, Master, Busse)
+fehlte; es ist Voraussetzung des Show-Modus (S1, SND.6). Einen
+Master-Regler hatte lmix nicht, obwohl strom ihn hat (`main_fader`).
+
+**Entscheidung**:
+- `fade_volume {target, volume, duration_ms}` mit Ziel `{"input": …}`,
+  `{"bus": 1|2}` oder `"master"`, Dauer 0–60 s. strom rampt die
+  Eigenschaft selbst (`ramp_ms` der Eigenschafts-API, Interpolation am
+  Element); lmix-core sendet einen Befehl, keine Zwischenschritte. Der
+  Zustand zeigt sofort den Endwert; ein neuer Wert auf demselben Ziel
+  setzt dort fort, wo der Fade steht.
+- Mute bleibt, wie es ist; kürzer als die Klickschutz-Rampe (20 ms) wird
+  nicht gefadet.
+- Verlauf linear im Verstärkungsfaktor (die Regler sind quadratisch,
+  `fader_gain`). S-Kurven und „still“ als Ziel kommen mit SND.6 im
+  Show-Modus.
+- `set_master {volume, mute}`, gespeichert in der Show (`master`, fehlt
+  in alten Dateien = 100, unverändert laut: strom-Standard 1,0). Console:
+  Dialog „Busse…“ mit Master, Aux 1 und 2.
+
+**Befund dabei** (VM-Test): Der erste Fade des Masters blieb still. strom
+nimmt jedes `mute=false` als Aufheben der Stummschaltung: Es blendet von
+Stille auf den Pegel vor dem Stummschalten (ohne den: 1,0) ein, auch wenn
+der Kanal gar nicht stumm war (`apply_mute`); eine Regler-Rampe danach
+startet bei dieser Stille. lmix schickte bei jeder Pegeländerung
+`mute=false` mit, also hatte jede Reglerbewegung eines Kanals einen
+Einbruch von etwa 40 ms, und lange Rampen begannen bei 0.
+**Behoben in lmix** (`level_writes` in `engine/strom.rs`): Stumm geht nur,
+wenn es sich gegenüber dem zuletzt Gesendeten ändert, für Kanäle, Aux-Busse
+und Master; nach jedem Start der Engine wird alles einmal gesendet.
+strom bleibt unverändert; ein „Aufheben ohne Stumm = nichts tun“ in
+`apply_mute` wäre ein passender Fehlerbericht an strom.
+
+**Geprüft**: Tests im Schalter (Input, Bus, Master, Grenzen, JSON-Form),
+`level_writes`, VM-Test mit strom: Master fadet über 2 s auf still und
+kommt zurück.
+
+## 2026-10-17 — Standbilder mit Alpha (SRC.4)
+
+**Kontext**: Ein Standbild wurde nach NV12 in 1280 × 720 gewandelt: ein
+PNG-Logo mit transparentem Grund deckte als Overlay das ganze Program
+schwarz zu (VM-Test: rechte, klare Hälfte 0/0 statt Orange), und Bilder
+verloren Auflösung gegenüber dem 1080p-Program.
+
+**Entscheidung**: Standbilder in Programmgröße (1920 × 1080). Dateiarten,
+die Alpha tragen können (PNG, WebP, TIFF), als BGRA, die übrigen (JPEG,
+BMP) als NV12. Nach Dateiart, nicht durch Aushandeln: `videoconvert`
+wählt aus `{NV12, BGRA}` auch für ein JPEG BGRA. Ein BGRA-Bild sind
+8,3 MB je Bild gegen 3,1 MB in NV12; da `imagefreeze` dasselbe Bild
+wiederholt, kostet es nichts zu dekodieren, nur den Weg in den Mischer.
+Die Mischer nehmen Alpha schon (Stinger mit Alpha).
+
+**Geprüft**: Test der Formate je Dateiart; VM-Test (CPU-Mischer): ein PNG,
+links rot, rechts klar, als Overlay über Orange zeigt rechts Orange.
+Offen: CUDA und GL auf echter Hardware (H.33).
+
+## 2026-10-17 — Pegel links und rechts (AUD.1)
+
+strom meldet die Spitzenwerte je Kanal; lmix-core behielt nur den
+lautesten. Jetzt tragen die Pegel je Input zusätzlich `channels_db`
+(links, rechts; leer, solange keine frische Messung da ist), `peak_db`
+bleibt für bestehende Clients. Die Kachel zeigt zwei schmale
+`KanteAudioMeter` übereinander, eine Haarlinie auseinander (bei gleichem
+Pegel sonst nicht als zwei zu erkennen); ohne Kanalwerte ein Balken wie
+bisher. Kein neues Kante-Bauteil nötig.
+
+## 2026-10-17 — Abhörlautstärke, AFL als Standard, Standard-Delay (AUD.4, AUD.6)
+
+- **Abhörlautstärke** (`set_monitor_volume`, 0–100, in der Show): der
+  Regler des Abhörbusses in strom (`monitor_fader`), im Dialog „Busse…“
+  mit Pegel. strom hat für den Abhörbus kein eigenes Stumm; Lautstärke je
+  Input auf dem Abhörbus fehlt weiter (bräuchte einen eigenen Send je
+  Kanal in strom).
+- **Solo-Taste hört nach dem Fader (AFL)**, wie AUD.4 es als Standard
+  verlangt; PFL über das Menü der Kachel. Vorher war PFL der Standard.
+- **Standard-Delay** (`set_default_delay`, 0–500 ms, in der Show): neue
+  Inputs mit Ton bekommen ihn im Kanalzug, vorhandene behalten ihren.
+  Console: „Delay für neue Inputs“ im Kanalzug übernimmt den Wert des
+  Inputs.
+
+**Geprüft**: Schalter-Test (Delay neuer Inputs, Grenze, Abhör-Befehl und
+Wiederherstellen), VM-Test mit strom (Abhören auf 0 still, Program
+bleibt), Console auf Xvfb.
+
+## 2026-10-17 — Multiview als Ausgang (OUT.2)
+
+Ausgänge konnten nur Program oder einen Input zeigen. Der strom-Mischer
+rendert die Multiview ohnehin (ein unverbundener Ausgang endet in einem
+`fakesink`); lmix gibt `multiview_out` jetzt wie Program über `inter`
+heraus, und ein Ausgang kann `{"from": "multiview"}` zeigen, mit
+Program-Ton (oder einem Aux-Bus). Console: „Multiview“ als Quelle im
+Ausgangs-Dialog.
+
+- Der Mischer-Flow heißt jetzt „lmix mixer 7“: ein laufender alter
+  Mischer ohne diesen Ausgang wird beim ersten Start einmal neu gebaut.
+- Preview als Quelle bleibt offen: der Mischer-Block hat keinen
+  Preview-Ausgang (nur `pgm_out`, `multiview_out`); das bräuchte einen
+  strom-Patch.
+
+**Geprüft**: Flow-Tests (Mischer gibt die Multiview heraus, Ausgang liest
+sie), VM-Test mit strom: Aufnahme der Multiview, H.264 und AAC.
+Nebenbefund: Die VM-Prüfung „pausierter Clip auf Sendung gehalten“ fiel
+einmal, als nebenher ein Rust-Build lief; ohne Last grün.
+
+## 2026-10-17 — Programmformat wählbar (OUT.1)
+
+**Kontext**: Program lief fest in 1920 × 1080 bei 30 fps; OUT.1 verlangt
+Auflösung von SD bis 4K, Hochkant 1080 × 1920 und Bildraten 23,976–60.
+
+**Entscheidung**:
+- `set_master_format {format: {width, height, framerate}}`, gespeichert in
+  der Show. Größe frei, gerade, 320–7680 px je Seite (strom nimmt jedes
+  `WxH`), Bildrate aus der Liste des strom-Mischers (23,976, 24, 25,
+  29,97, 30, 50, 59,94, 60). Halbbilder (50i/59,94i) und 100/120 bietet
+  der Mischer nicht.
+- Die Engine baut den Mischer nur neu, wenn das Format sich ändert
+  (`Command::SetFormat`, erstes Kommando jeder Wiederherstellung); danach
+  wird der Mischer wie nach einem Engine-Neustart eingerichtet, laufende
+  Ausgänge starten in der neuen Größe neu. Die Quellen laufen weiter (kein
+  `SetSlot`), Clips fangen nicht von vorn an. Program steht dabei kurz.
+- Startet lmix-core neu, übernimmt es einen laufenden Mischer in seinem
+  Format; die Wiederherstellung baut nur neu, wenn die Show ein anderes
+  will (kein Bildaussetzer beim Neustart wie bisher).
+- Overlay-Rechtecke rechnen mit dem aktuellen Format statt fest 1920 × 1080.
+  Standbilder bleiben 1920 × 1080 (der Mischer skaliert).
+- Console: „Programmformat…“ im Paket-Menü, Größen als Vorlagen (4K bis
+  SD, zwei Hochkant), Hinweis auf die Unterbrechung.
+
+**Geprüft**: Tests (Format im Mischer-Flow und zurückgelesen, Grenzen,
+gleiches Format ändert nichts, Quellen bleiben), VM-Test mit strom:
+1080 × 1920 bei 25 fps gebaut, Program läuft, zurück auf 1920 × 1080,
+Quelle online; Console auf Xvfb.
+
+## 2026-10-17 — Acht Overlay-Kanäle (OVL.1)
+
+**Kontext**: OVL.1 fordert acht Overlay-Kanäle über Program, lmix hatte
+vier. Der strom-Mischer erlaubte acht DSK-Ebenen, eine davon braucht der
+Stinger (unterste Ebene).
+
+**Entscheidung**:
+- `OVERLAY_CHANNELS` = 8. Der Mischer bekommt neun DSK-Ebenen (Stinger +
+  8), dafür hebt strom #16 (`lmix-nine-dsk`) die Grenze wie dbaf113 von 8
+  auf 9; nur Grenze und Auswahlwerte, keine neue Logik. Mischer-Flow heißt
+  jetzt „lmix mixer 8“, ein laufender alter Mischer wird neu gebaut.
+- Shows mit vier Kanälen laden weiter: fehlende Kanäle bekommen ihren
+  Standard (leer, halbe Sekunde Blende), mehr als acht sind ein Fehler.
+- API: Kanal 1–8 in Aktionen, OSC und Zustand (Arrays mit acht Einträgen).
+  Die Console richtet sich nach der Länge der Arrays.
+
+**Geprüft**: Tests (alte Show mit vier Kanälen, Kanal 9 abgelehnt, neun
+DSK-Ebenen im Mischer), VM-Test mit strom: Kanal 8 über Program an und
+aus; Console auf Xvfb.
+
+## 2026-10-17 — Alle Streams zusammen starten (STR.1)
+
+**Entscheidung**: Aktionen `start_outputs` / `stop_outputs` mit einer
+Gruppe (`streams` = SRT, `recordings`, `all`) statt eines Schalters.
+Start nimmt nur Ausgänge, die nicht laufen; kann einer nicht starten
+(Quelle fehlt), starten die anderen trotzdem, der Fehler kommt nur
+zurück, wenn keiner startet. Stopp nimmt nur laufende. Console: ab zwei
+Streams „Alle Streams starten“ bzw. „… stoppen“ (fragt vorher wie ein
+einzelner Ausgang), beides auch als Vorgabe für Kurzbefehle und Auslöser.
+
+**Geprüft**: Test (nur gestoppte starten, Gruppen trennen Streams und
+Aufnahmen), VM-Test mit strom: zweiter Stream startet zum laufenden,
+Aufnahme bleibt aus, beide stoppen; Console auf Xvfb mit dem Knopf.
+
+## 2026-10-17 — Abspielstand im Zustand (API.4)
+
+**Kontext**: API.4 verlangt Position und Dauer je Input im Zustand.
+lmix schickte sie nur als Ereignis `position` (5 × je Sekunde).
+
+**Entscheidung**: `Input.playback` (`state` playing/paused/stopped,
+`position_ms`, `duration_ms`, `item` 1-basiert, `items`) aus der letzten
+Meldung des Players, eingesetzt beim Lesen des Zustands (`GET /api/state`,
+TCP/OSC-Vollzustand). Der gepushte Zustand (WebSocket) ändert sich dadurch
+nicht, sonst ginge fünfmal je Sekunde der ganze Zustand hinaus; live
+bleibt das Ereignis `position`. Play/Pause kommt aus strom
+`MediaPlayerStateChanged` (bisher nicht gelesen); Meldungen älter als 2 s
+gelten als weg.
+
+**Geprüft**: Test (Meldung erscheint im Zustand), VM-Test mit strom:
+Playlist pausiert → `paused`, 2 Einträge, Dauer > 0; nach Play/Next →
+`playing`.
+
+## 2026-10-17 — Schleife oder Stehenbleiben am Ende (INP.10)
+
+**Kontext**: Clips und Playlisten liefen immer in der Schleife.
+
+**Entscheidung**:
+- Je Input `at_end`: `loop` (Standard, wie bisher) oder `hold` (bleibt
+  auf dem letzten Bild stehen; strom hält es mit dem Standbild-Thread).
+  Enum statt Schalter, Aktion `set_at_end`.
+- Umschalten live ohne Neustart: strom #17 nimmt `loop_playlist` in die
+  Playlist-Anfrage auf (die Eigenschaft ist nicht live), ein gestoppter
+  Player fängt nur bei anderen Dateien neu an. Der Slot startet weiter
+  mit Schleife; `hold` wird nach jedem Neuaufbau (Engine-Neustart,
+  Quelle ersetzt, Slot verschoben) als `SetAtEnd` nachgeschickt.
+- Clip-Ende-Auslöser (AUT.7) feuern auch, wenn ein gehaltener Clip
+  stoppt (Zustand `stopped` aus strom, seit API.4 gelesen).
+- Console: „Am Ende“ im Kachelmenü.
+
+**Geprüft**: Tests (gehaltenes Ende zählt als Ende, zuerst rot;
+Aktion, Wiederherstellung), VM-Test mit strom: Playlist bleibt stehen,
+Zustand `stopped`, Bild steht, Auslöser feuert; zurück auf Schleife
+startet nichts, Neustart spielt wieder.
+
+## 2026-10-17 — Sieben Aux-Busse A–G (AUD.2)
+
+**Kontext**: AUD.2 fordert neben dem Master die Busse A–G; lmix hatte
+zwei Aux-Busse. Der strom-Audiomischer kann bis 32.
+
+**Entscheidung**:
+- `AUX_BUSES` = 7, in Aktionen 1–7, in der Console A–G. A nimmt die Sends
+  vor den Fadern (Monitormix, wie bisher Bus 1), B–G danach. Vor/nach ist
+  weiter fest je Bus; wählbar wäre es in strom (`chN_auxM_pre`), gefordert
+  ist es nicht.
+- Shows mit zwei Bussen laden weiter (fehlende Busse und Sends mit
+  Standard), wie bei den Overlay-Kanälen. Mischer-Flow „lmix mixer 9“.
+- Offen: Bus optional in den Master (strom kann Aux nicht in den Main
+  routen), Ausgang eines Busses auf ein Gerät ohne Ausgang in lmix.
+- Console: Bus-Dialog scrollt (sieben Busse sind höher als kleine
+  Fenster), Kanalzug und Ton-Auswahl eines Ausgangs mit A–G.
+
+**Geprüft**: Tests (alte Show mit zwei Bussen, Bus 8 abgelehnt), VM-Test
+mit strom: G still ohne Send, hörbar mit Send; Console auf Xvfb mit
+geöffnetem Bus-Dialog.
+
+## 2026-10-17 — Codec, Rate Control, Keyframes je Ausgang (STR.3)
+
+**Entscheidung**: SRT-Ausgänge und Aufnahmen bekommen `encoding`:
+`codec` (`h264` Standard, `h265`), `rate` (`vbr` Standard, `cbr`),
+`keyframe_ms` (Standard 2000, 0 = Encoder entscheidet, höchstens 10 s).
+Millisekunden statt Frames, weil sie beim Wechsel des Programmformats
+(OUT.1) gleich bleiben; die Engine rechnet mit der Bildrate um. Ohne
+Angabe bleibt alles wie bisher (Show-Dateien unverändert).
+
+AV1 fehlt: der strom-Recorder (nur `h264parse`/`h265parse`) und
+`mpegtsmux` von GStreamer 1.24 nehmen es nicht. Auflösung je Ausgang,
+Profil/Preset, Ton-Bitrate und geteilte Profile bleiben offen.
+
+**Geprüft**: Tests (Encoder-Eigenschaften im Flow, 2 s bei 25 und 59,94
+fps, Grenze 10 s), VM-Test mit strom: H.265-Aufnahme mit CBR ist HEVC +
+AAC; Console-Dialog „Ausgang hinzufügen“ mit Codec, Bitratenart,
+Keyframe-Abstand.
+
+## 2026-10-17 — Ton folgt der T-Bar (SWI.5)
+
+**Entscheidung**: Inputs mit „Ton folgt Bild“ blenden mit der T-Bar:
+Program mit `1 − p`, Vorschau mit `p` (linear in der Verstärkung, wie
+das Bild), zurück auf 0 wie vorher, bei 1 der Take. Stummgeschaltete
+Kanäle behalten ihren eigenen Pegel. Inputs ohne „folgt Bild“ bleiben,
+wie sie sind.
+
+**Geprüft**: Test (zuerst rot: bei halber T-Bar kam kein Ton-Befehl),
+VM-Test mit strom: Ball auf Program bei halber T-Bar ≈ −6 dB, zurück
+auf 0 wieder voll.
+
+## 2026-10-17 — Multiview-Layout (OUT.10)
+
+**Entscheidung**: Die Show hat `multiview`: `program` (`left`/`right`,
+Standard rechts wie strom) und `meters` (`shown`/`hidden`). Beides sind
+strom-Eigenschaften des Mischers, die nur beim Bau gelten
+(`swap_pvw_pgm`, `show_vu_meters`); deshalb trägt `Command::SetFormat`
+Format und Layout gemeinsam, die Engine baut nur neu, wenn eins davon
+sich ändert, und übernimmt beim Neustart von lmix-core einen laufenden
+Mischer samt Layout. Kachelzahl (2/8/14), Reihenfolge, Titelposition und
+eine zweite Multiview kann der strom-Mischer nicht.
+
+**Geprüft**: Tests (Layout im Flow und zurückgelesen, Neubau ohne
+Quellen-Neustart, gleiches Layout ändert nichts), VM-Test mit strom:
+Program links ohne Pegel und zurück, Quellen bleiben.
+
+## 2026-10-17 — Layout-Box ein- und ausblenden (LAY.2)
+
+**Entscheidung**: Eine Box hat `hidden`. Ausgeblendet bleibt sie mit
+Platz, Zuschnitt und Rahmen im Layout, die Engine zeichnet sie nicht,
+ihr Input bekommt kein Tally (nicht auf Sendung). `show_box {layout,
+number, shown: shown|hidden|toggle}` schaltet eine Box für Tasten und
+Kurzbefehle; der Layout-Editor hat je Box „Sichtbar“ und zeigt
+ausgeblendete Boxen blass. Vorlagen (LAY.5) merken sich das nicht.
+
+**Geprüft**: Test (Box aus dem Engine-Befehl, Tally weg, Umschalten,
+Box 2 gibt es nicht), VM-Test mit strom: ausgeblendet scheint der
+Hintergrund durch, Ball ohne Tally, wieder eingeblendet.
+
+## 2026-10-17 — Neue Show mit Formatwahl (SHW.3)
+
+**Entscheidung**: `new_show` nimmt ein optionales `format` (wie
+`set_master_format`, geprüft); ohne bleibt es 1920 × 1080 bei 30 fps.
+Ältere Aufrufe ohne Feld gehen unverändert. Der Mischer wird nur neu
+gebaut, wenn das Format sich ändert (`SetFormat` der Wiederherstellung).
+Console: „Neu“ fragt im Format-Dialog nach Größe und Bildrate, mit dem
+Format der offenen Show vorgewählt.
+
+**Geprüft**: Test (neue Show im Format, ungültiges abgelehnt, ohne Feld
+der Standard), Console auf Xvfb, Headless-Test.
+
+## 2026-10-17 — RTMP-Ausgang (STR.2, B31) und strom-Upstream
+
+**Kontext**: Eyevinn/strom `main` hat seit unserem Abzweig (14.09.) 177
+Commits, darunter `builtin.rtmp_output` (#827). Ein voller Abgleich
+ergab 22 Konfliktdateien, vor allem in den GPU-Pfaden: upstream hat
+`gl_bridge.rs` durch `video_adapt.rs`/`gl_input_front.rs` ersetzt, auf
+denen unsere CUDA-/GL-Mischer-Patches aufsetzen. Ohne GPU in der VM
+nicht prüfbar, daher nicht allein entschieden.
+
+**Entscheidung**: Nur den RTMP-Block übernommen (cherry-pick #827, #869,
+#871 auf den lmix-Stapel, strom #18 `lmix-rtmp-output`), dazu #850: der
+VM-Test zeigte, dass x264 H.264 High 4:4:4 lieferte, das der RTMP-Block
+und die Plattformen ablehnen (betraf mit Software-Encoder auch SRT und
+Aufnahmen); seitdem 8-bit 4:2:0. Der RTMP-Sink läuft mit `sync=false`,
+weil Ausgangs-Flows auf der Laufzeit des Mischers laufen: mit `sync`
+kam beim Empfänger nur der FLV-Kopf an. lmix:
+Ausgang `rtmp` mit `url` (rtmp:// oder rtmps://) und `key` getrennt,
+Encoder-Einstellungen wie SRT, nur H.264 (FLV); zählt als Stream
+(STR.1). Der Schlüssel steht wie die URL im Zustand und in der Show;
+die Console zeigt ihn verdeckt.
+
+**Upstream-Abgleich** (offen, mit Abnahme auf der RTX 3090): neben RTMP
+u. a. HTML-Input-Block (#879, Weg zu GFX.2), Player für Live-Streams und
+URLs (#945), Abtastrate wählbar (#946, AUD.17), Stinger-Übergänge
+(#1010), begrenztes `set_state(NULL)` beim Stoppen (#874), Player-
+Deadlock-Fix (#986).
+
+**Geprüft**: strom-Tests `rtmp_output_test`, `rtmp_output_pipeline_test`,
+`output_refusal_test` (51 grün); lmix-Tests (Flow, Ablehnung von
+Nicht-RTMP-Adressen und H.265); VM-Test: ffmpeg als RTMP-Server bekommt
+H.264 + AAC.
+
+## 2026-10-17 — Abtastrate 44,1 kHz wählbar (AUD.17)
+
+**Entscheidung**: Die Show hat `sample_rate` (48000 Standard, 44100),
+Aktion `set_sample_rate`. Der Audiomischer legt seine Busse darauf fest
+(strom-Eigenschaft `sample_rate`, lmix-Patch ed647f2); die Slots
+liefern weiter 48 kHz, die Kanalzüge rechnen um. Wie Format und
+Multiview gilt die Rate beim Bau des Mischers: `SetFormat` trägt sie
+mit, die Engine baut nur bei Änderung neu und übernimmt beim Neustart
+von lmix-core die Rate eines laufenden Mischers. Ausgänge erben sie
+(AAC bei 44,1 kHz).
+
+**Geprüft**: Tests (Rate im Flow und zurückgelesen, Neubau ohne
+Quellen-Neustart, 96 kHz abgelehnt), VM-Test mit strom: Mischer bei
+44,1 kHz, Program hörbar, zurück auf 48 kHz.
+
+## 2026-10-17 — strom mit ganzem upstream main (0.7.1)
+
+**Entscheidung**: Der Fork übernimmt upstream Eyevinn/strom `main`
+(8fce2ee) als Merge auf die lmix-Patches (strom-PR „lmix-upstream-sync").
+Wo upstream jetzt löst, was ein Patch tat, gilt upstream:
+
+- Abtastrate des Audiomischers: upstreams `sample_rate` (#946) ersetzt
+  ed647f2. Gleicher Name, gleiche Werte (48000, 44100), AUD.17 läuft
+  unverändert.
+- CUDA-Bilder in den GL-Mischer: upstreams `gl_input_front` ersetzt
+  unseren `gl_bridge`. VA-Bilder (AMD/Intel) werden dort nicht mehr
+  überbrückt; ungetestete Hardware vorher wie nachher. Der CPU-Mischer
+  behält das Herunterladen als kleines Modul `memory_bridge`.
+- Rahmen-Unterlagen schieben ein Bild und dann EOS (upstream); bei
+  Startzeit „first" ist die Quelle live, damit das Bild Laufzeit trägt.
+
+Behalten und angepasst: Startzeit „first" für beide Mischer (upstreams
+neuer Schutz gegen das Zurückspringen beim ersten Puffer schaltet sie
+sonst ab), Standbild des pausierten Players (erste Videospur; nicht für
+Stinger-Quellen), Systemspeicher und Loop-Steuerung des Players, DSK-
+Blenden, CUDA-Compositor (dort keine Software-Alpha-Mischung),
+GPU-Deinterlace und -Thumbnails, geteilter CUDA-Kontext, NVENC-Wege,
+udmabuf-Umgehung, `--host`.
+
+**lmix folgt**: Übergänge nennen die Eingänge als Option (Stinger-Clip
+leer). Der Player hält jeden Puffer eine Ausspielverzögerung lang
+(Standard 500 ms gegen Netz-Aussetzer); bei lokalen Dateien ist das nur
+die Zeit vom Cue bis zum Bild, deshalb 100 ms für Datei und Playlist,
+URL-Streams behalten den Standard.
+
+**Neu verfügbar, nicht genutzt**: HTML-Input (#879, Weg zu GFX.2),
+Stinger-Übergänge in strom (#1010; lmix hat eine eigene Stinger-Ebene),
+Live-Recorder (#1034), Multiview-Tally (#1009), Eingangsnamen zur
+Laufzeit (#1014).
+
+**Geprüft**: strom: 967 Unit-Tests, Integrationstests (OpenAPI,
+Pipeline-Lebenszyklus, Mediaplayer, Mischer-Abtastrate, Vision Mixer
+CPU/CUDA-Eingang/Formate/Unterlagen, Stinger, RTMP, Ablehnungen),
+clippy `-D warnings` (no-gui und efp). lmix-core 297 Tests, VM-Test mit
+strom. **Offen**: GPU-Abnahme auf der RTX 3090 (CUDA-Mischer,
+GL-Mischer, NVDEC/NVENC, Thumbnails).

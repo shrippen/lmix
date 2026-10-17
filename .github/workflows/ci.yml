@@ -16,8 +16,8 @@
 # (scripts/test-m2b-vm.sh). The latency regression check of ROADMAP 3.4.
 #
 # core, console: tests without an engine: cargo test of lmix-types,
-# lmix-core and console-qt; lmix-core headless (text protocol, OSC, MIDI,
-# metrics); titles and browser pages in Chromium (Playwright).
+# lmix-core, lmix-script and console-qt; lmix-core headless (text
+# protocol, OSC, MIDI, metrics); script import (lmix-script); titles and browser pages in Chromium (Playwright).
 #
 # Stays local: scripts/test-console-qt.sh (Console on Xvfb with a real
 # strom, slow in the VM), scripts/test-global-keys.sh (D-Bus session),
@@ -35,9 +35,11 @@ on:
       - workspace/lmix-types/**
       - workspace/console-qt/**
       - workspace/selftest/**
+      - workspace/lmix-script/**
       - workspace/strom
       - scripts/test-m2b-vm.sh
       - scripts/test-headless.sh
+      - scripts/test-script.sh
       - scripts/test-titles.sh
       - scripts/test-web.sh
       - scripts/titles-check.cjs
@@ -158,7 +160,7 @@ jobs:
         run: |
           apt-get update -qq
           DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git curl ca-certificates \
-            jq zstd nodejs imagemagick xvfb ffmpeg build-essential mold clang pkg-config \
+            jq zstd nodejs imagemagick xvfb ffmpeg build-essential mold clang pkg-config gdb \
             libssl-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
             libgstreamer-plugins-bad1.0-dev gstreamer1.0-plugins-base \
             gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly \
@@ -232,6 +234,7 @@ jobs:
           . "$HOME/.cargo/env"
           (cd workspace/lmix-types && cargo test)
           (cd workspace/lmix-core && cargo test)
+          (cd workspace/lmix-script && cargo test)
 
       - name: Headless
         env:
@@ -239,6 +242,7 @@ jobs:
         run: |
           . "$HOME/.cargo/env"
           scripts/test-headless.sh
+          scripts/test-script.sh
 
       # Playwright needs Node 20+; Ubuntu 24.04 has 18.
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0

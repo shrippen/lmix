@@ -23,6 +23,8 @@ const RECONNECT: Duration = Duration::from_secs(2);
 #[derive(Clone, Debug, Default)]
 pub struct EngineLevels {
     pub slots: HashMap<usize, (f32, Instant)>,
+    /// Peak of each channel per slot, as measured with `slots` (AUD.1).
+    pub slot_channels: HashMap<usize, Vec<f32>>,
     pub main: Option<(f32, Instant)>,
     pub monitor: Option<(f32, Instant)>,
     /// Aux buses, 0-based.
@@ -96,6 +98,15 @@ pub struct FlowError {
     pub kind: FlowFailure,
 }
 
+fn playback_state(state: strom_types::mediaplayer::PlayerState) -> lmix_types::PlaybackState {
+    use strom_types::mediaplayer::PlayerState;
+    match state {
+        PlayerState::Playing => lmix_types::PlaybackState::Playing,
+        PlayerState::Paused => lmix_types::PlaybackState::Paused,
+        PlayerState::Stopped => lmix_types::PlaybackState::Stopped,
+    }
+}
+
 /// How a flow went down.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FlowFailure {
@@ -116,6 +127,8 @@ pub async fn follow(
     health: Arc<Mutex<EngineHealth>>,
     players: broadcast::Sender<crate::clips::PlayerProgress>,
 ) {
+    // Last state each player reported, added to its position reports.
+    let mut player_states = HashMap::new();
     loop {
         if let Ok((mut stream, _)) = tokio_tungstenite::connect_async(&ws_url).await {
             while let Some(Ok(message)) = stream.next().await {
@@ -149,6 +162,9 @@ pub async fn follow(
                             kind: FlowFailure::Error,
                         });
                     }
+                    Ok(StromEvent::MediaPlayerStateChanged { flow_id, state, .. }) => {
+                        player_states.insert(flow_id, playback_state(state));
+                    }
                     Ok(StromEvent::MediaPlayerPosition {
                         flow_id,
                         position_ns,
@@ -163,6 +179,7 @@ pub async fn follow(
                             duration_ms: duration_ns / 1_000_000,
                             index: current_file_index,
                             items: total_files,
+                            state: player_states.get(&flow_id).copied(),
                         });
                     }
                     Ok(StromEvent::SystemStats(stats)) => {
@@ -209,6 +226,8 @@ fn record_meter(
     levels.send_modify(|l| match meter {
         Meter::Slot(slot) => {
             l.slots.insert(slot, reading);
+            l.slot_channels
+                .insert(slot, peak.iter().map(|p| *p as f32).collect());
         }
         Meter::Main => l.main = Some(reading),
         Meter::Monitor => l.monitor = Some(reading),
@@ -221,6 +240,17 @@ fn record_meter(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn slots_keep_each_channel() {
+        let (levels, read) = watch::channel(EngineLevels::default());
+
+        record_meter(&levels, "mix:meter:2", "mix", &[-12.0, -30.0]);
+
+        let l = read.borrow();
+        assert_eq!(l.slots[&1].0, -12.0, "loudest");
+        assert_eq!(l.slot_channels[&1], [-12.0, -30.0]);
+    }
 
     #[test]
     fn meter_names() {

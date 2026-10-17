@@ -10,20 +10,26 @@
 use lmix_types::action::{
     aux_index, AUTO_OFF_MAX_MS, DYNAMIC_SLOTS, OVERLAY_CHANNELS, TRANSITION_SLOTS,
 };
-use lmix_types::automation::{AUTOMATION_ACTIONS, CUES, TRIGGERS, TRIGGER_DELAY_MAX_MS};
+use lmix_types::automation::{AUTOMATION_ACTIONS, TRIGGERS, TRIGGER_DELAY_MAX_MS};
+use lmix_types::cue::{
+    CueKind, CUES, CUE_WAIT_MAX_MS, CUE_WAIT_STEP_MS, GO_GUARD_MAX_MS, GROUP_CHILDREN, GROUP_DEPTH,
+    PANIC_MAX_MS,
+};
 use lmix_types::input::{color_rgb, AUX_BUSES, REF_DYNAMIC, REF_PREVIEW, REF_PROGRAM, VOLUME_MAX};
 use lmix_types::layout::{BORDER_MAX_PX, LAYOUTS, LAYOUT_BOXES, LAYOUT_TEMPLATES};
 use lmix_types::shortcut::SHORTCUT_ACTIONS;
 use lmix_types::state::API_VERSION;
 use lmix_types::{
-    Action, ActionError, AutoPlay, AuxBus, BoxCrop, BoxRect, BoxSpec, ChannelStrip, Effect, Ingest,
-    Input, InputColor, InputId, InputPress, InputRef, InputStatus, Layout, LayoutBox,
-    LayoutTemplate, Listen, Look, Output, OutputId, OutputRef, OutputSource, OutputSpec,
-    OutputStatus, OverlayChannel, QuickPlay, Shortcut, ShortcutSpec, ShowState, SignalLoss,
-    SourceSpec, Stinger, StingerSpec, TemplateBox, TemplateInput, Transition, TransitionSlot,
-    Transport,
+    Action, ActionError, AtEnd, AutoPlay, AuxBus, BoxCrop, BoxRect, BoxShown, BoxSpec,
+    ChannelStrip, Effect, Ingest, Input, InputColor, InputId, InputPress, InputRef, InputStatus,
+    Layout, LayoutBox, LayoutTemplate, Listen, Look, Output, OutputGroup, OutputId, OutputRef,
+    OutputSource, OutputSpec, OutputStatus, OverlayChannel, QuickPlay, Shortcut, ShortcutSpec,
+    ShowState, SignalLoss, SourceSpec, Stinger, StingerSpec, TemplateBox, TemplateInput,
+    Transition, TransitionSlot, Transport, VolumeTarget, FADE_MAX_MS,
 };
 use lmix_types::{Cue, CueList, MidiKind, MidiMessage, Trigger, TriggerOn};
+
+use crate::cues::{Guard, Hold, Out, Runner};
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 use uuid::Uuid;
@@ -40,6 +46,13 @@ pub enum Command {
     SetSlot {
         slot: usize,
         source: Option<SourceSpec>,
+    },
+    /// Loop the player of `slot` or let it stop at the end (INP.10);
+    /// `items` are its files, unchanged.
+    SetAtEnd {
+        slot: usize,
+        items: Vec<String>,
+        at_end: AtEnd,
     },
     /// Show `slot` in preview.
     Preview { slot: usize },
@@ -91,8 +104,25 @@ pub enum Command {
     Wait { ms: u32 },
     /// Send of `slot` to aux bus `bus` (0-based), linear gain.
     SetAuxSend { slot: usize, bus: usize, gain: f64 },
-    /// Master of aux bus `bus` (0-based).
-    SetAuxBus { bus: usize, gain: f64, mute: bool },
+    /// Master of aux bus `bus` (0-based), reached over `ramp_ms`.
+    SetAuxBus {
+        bus: usize,
+        gain: f64,
+        mute: bool,
+        ramp_ms: u32,
+    },
+    /// Master of program sound, reached over `ramp_ms` (AUD.2, AUD.14).
+    SetMaster { gain: f64, mute: bool, ramp_ms: u32 },
+    /// Level of the monitor bus (AUD.4).
+    SetMonitor { gain: f64 },
+    /// Program in this format (OUT.1); the engine rebuilds its mixer only
+    /// when it differs, and the commands after it set the mixer up again.
+    SetFormat {
+        format: lmix_types::MasterFormat,
+        multiview: lmix_types::MultiviewLayout,
+        /// Of the audio mixer, Hz (AUD.17).
+        sample_rate: u32,
+    },
     /// Mix `slot` (preview) over program by `position` (0–1), as the
     /// T-bar stands; 0 hides it again.
     TBar { slot: usize, position: f32 },
@@ -146,6 +176,7 @@ enum Bus {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Feed {
     Program,
+    Multiview,
     /// One input's slot; `audio` when its source has sound.
     Slot {
         slot: usize,
@@ -187,8 +218,22 @@ fn runs_automation(action: &Action) -> bool {
                 | Action::SetCueList { .. }
                 | Action::RemoveCueList { .. }
                 | Action::CueGo { .. }
-                | Action::CueBack { .. }
-                | Action::CueJump { .. }
+                | Action::CueStart { .. }
+                | Action::CueStop { .. }
+                | Action::CueStandby { .. }
+                | Action::CueReset
+                | Action::SetActiveCueList { .. }
+                | Action::SetGoGuard { .. }
+                | Action::SetGoRearm { .. }
+                | Action::CuePanic { .. }
+                | Action::CueHardStop
+                | Action::SetPanicTime { .. }
+                | Action::SetEmergencyList { .. }
+                | Action::SetScriptFolder { .. }
+                | Action::SetZone { .. }
+                | Action::RemoveZone { .. }
+                | Action::SetZonePatch { .. }
+                | Action::RemoveZonePatch { .. }
         )
 }
 
@@ -215,7 +260,7 @@ pub(crate) fn check_triggers<'a>(
     Ok(())
 }
 
-/// 0-based index of dynamic slot `slot` (1–4).
+/// 0-based index of dynamic slot `slot` (1–8).
 fn dynamic_index(slot: u8) -> Result<usize, ActionError> {
     if slot == 0 || slot > DYNAMIC_SLOTS {
         return Err(ActionError::BadDynamic {
@@ -226,21 +271,109 @@ fn dynamic_index(slot: u8) -> Result<usize, ActionError> {
     Ok(usize::from(slot - 1))
 }
 
-/// A name, at most `CUES` cues, each with 1–16 safe actions.
+/// The standby cue of a list, where an action names a cue (CTL.1).
+const CUE_STANDBY: &str = "standby";
+
+/// The active cue list, where an action names a list (CTL.1).
+const LIST_ACTIVE: &str = "active";
+
+/// A name and at most `CUES` well-formed cues (CUE.1–11, CUE.20).
 fn check_cues(name: &str, cues: &[Cue]) -> Result<(), ActionError> {
-    let bad = |reason: String| Err(ActionError::BadCueList { reason });
     if name.trim().is_empty() {
-        return bad("it needs a name".into());
+        return Err(bad_cues("it needs a name".into()));
     }
     if cues.len() > CUES {
-        return bad(format!("at most {CUES} cues"));
+        return Err(bad_cues(format!("at most {CUES} cues")));
     }
-    for cue in cues {
-        if cue.actions.is_empty() || cue.actions.len() > AUTOMATION_ACTIONS {
-            return bad(format!("1–{AUTOMATION_ACTIONS} actions per cue"));
+    cues.iter().try_for_each(|cue| check_cue(cue, 0))
+}
+
+fn bad_cues(reason: String) -> ActionError {
+    ActionError::BadCueList { reason }
+}
+
+/// One cue and its children, `depth` group levels down. Fields of
+/// another kind are refused, so a typo in a script shows.
+fn check_cue(cue: &Cue, depth: usize) -> Result<(), ActionError> {
+    let named = cue.display_name();
+    let bad = |what: &str| Err(bad_cues(format!("cue {named}: {what}")));
+    for wait in [
+        cue.pre_wait_ms,
+        cue.post_wait_ms,
+        cue.duration_ms.unwrap_or(0),
+    ] {
+        if wait > CUE_WAIT_MAX_MS || wait % CUE_WAIT_STEP_MS != 0 {
+            return bad(&format!(
+                "waits are 0–{CUE_WAIT_MAX_MS} ms in steps of {CUE_WAIT_STEP_MS} ms"
+            ));
         }
-        if cue.actions.iter().any(runs_automation) {
-            return bad("cues cannot run shortcuts, cues or change automation".into());
+    }
+    let own = |field: bool, kind: CueKind| !field || cue.kind == kind;
+    if !own(!cue.actions.is_empty(), CueKind::Actions)
+        || !(cue.duration_ms.is_none() || matches!(cue.kind, CueKind::Wait | CueKind::Actions))
+        || !own(cue.target.is_some(), CueKind::Start)
+        || !own(
+            cue.mode.is_some() || !cue.children.is_empty(),
+            CueKind::Group,
+        )
+    {
+        return bad("has fields of another kind");
+    }
+    match cue.kind {
+        CueKind::Actions => {
+            if cue.actions.is_empty() || cue.actions.len() > AUTOMATION_ACTIONS {
+                return bad(&format!("1–{AUTOMATION_ACTIONS} actions"));
+            }
+            if cue.actions.iter().any(runs_automation) {
+                return bad(
+                    "actions cannot run shortcuts, cues or change automation; use a start cue",
+                );
+            }
+        }
+        CueKind::Note => {}
+        CueKind::Wait if cue.duration_ms.is_none() => return bad("a wait needs duration_ms"),
+        CueKind::Wait => {}
+        CueKind::Start => {
+            let target = cue.target.clone().unwrap_or_default();
+            if target.list.is_none() && target.cue.is_none() {
+                return bad("a start cue needs a target cue or list");
+            }
+        }
+        CueKind::Group => {
+            if cue.children.is_empty() || cue.children.len() > GROUP_CHILDREN {
+                return bad(&format!("a group has 1–{GROUP_CHILDREN} cues"));
+            }
+            if depth + 1 > GROUP_DEPTH {
+                return bad(&format!("groups are at most {GROUP_DEPTH} levels deep"));
+            }
+            for child in &cue.children {
+                check_cue(child, depth + 1)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Ids and numbers set are unique in the whole show (CUE.1).
+fn check_unique(lists: &[ShowCueList]) -> Result<(), ActionError> {
+    fn walk<'a>(cues: &'a [Cue], all: &mut Vec<&'a Cue>) {
+        for cue in cues {
+            all.push(cue);
+            walk(&cue.children, all);
+        }
+    }
+    let mut all = Vec::new();
+    for list in lists {
+        walk(&list.cues, &mut all);
+    }
+    let mut ids = std::collections::HashSet::new();
+    let mut numbers = std::collections::HashSet::new();
+    for cue in all {
+        if !ids.insert(cue.id) {
+            return Err(bad_cues(format!("cue id {} twice", cue.id)));
+        }
+        if !cue.number.is_empty() && !numbers.insert(cue.number.as_str()) {
+            return Err(bad_cues(format!("cue number {} twice", cue.number)));
         }
     }
     Ok(())
@@ -285,8 +418,14 @@ pub struct Switcher {
     locked: bool,
     /// Inputs closed last, with their place in the bar (AUT.10).
     removed: Vec<(usize, ShowInput)>,
-    /// Next cue per list (0-based); a list missing here starts at 0.
-    cue_next: HashMap<InputId, usize>,
+    /// Standby and running cues of the cue lists.
+    cues: Runner,
+    /// What would go wrong when they run (SUI.5); see `refresh_warnings`.
+    cue_warnings: Vec<lmix_types::cue::CueWarning>,
+    /// Targets that did not answer their last check or send (SUI.5).
+    unreached: std::collections::BTreeMap<String, String>,
+    /// The show file's older version, until saved (SHW.7).
+    older_format: Option<u32>,
     status: HashMap<InputId, InputStatus>,
     /// Audio channel settings the engine has, per slot.
     mix: HashMap<usize, Mix>,
@@ -307,6 +446,13 @@ pub struct Switcher {
     all_shows: Vec<ShowShortcut>,
     /// `all_shows` changed since the service last saved it.
     all_shows_changed: bool,
+    /// Output targets of this machine with their secrets (EXT.1), and
+    /// the fixed OSC subscribers (CTL.4).
+    targets: Vec<crate::targets::TargetConfig>,
+    feeds: Vec<lmix_types::Feed>,
+    /// Where the show's zones play on this machine (SND.10).
+    zone_patches: Vec<lmix_types::ZonePatch>,
+    targets_changed: bool,
     /// Media files not found per input (SHW.4); the service checks.
     missing: HashMap<InputId, Vec<String>>,
     /// The input each overlay channel showed last (OVL.8); runtime only.
@@ -340,7 +486,10 @@ impl Switcher {
             looks_available: false,
             locked: false,
             removed: Vec::new(),
-            cue_next: HashMap::new(),
+            cues: Runner::default(),
+            cue_warnings: Vec::new(),
+            unreached: Default::default(),
+            older_format: None,
             status: HashMap::new(),
             mix: HashMap::new(),
             listen: HashMap::new(),
@@ -352,6 +501,10 @@ impl Switcher {
             dynamic_values: Default::default(),
             all_shows: Vec::new(),
             all_shows_changed: false,
+            targets: Vec::new(),
+            feeds: Vec::new(),
+            zone_patches: Vec::new(),
+            targets_changed: false,
             missing: HashMap::new(),
             overlay_last: Default::default(),
             overlays_shown: 0,
@@ -454,6 +607,142 @@ impl Switcher {
                 self.all_shows_changed = true;
             }
         }
+    }
+
+    /// Output targets and subscribers as the settings hold them, secrets
+    /// included.
+    pub fn target_settings(&self) -> crate::targets::Settings {
+        crate::targets::Settings {
+            targets: self.targets.clone(),
+            feeds: self.feeds.clone(),
+            zone_patches: self.zone_patches.clone(),
+        }
+    }
+
+    /// Take the output targets and subscribers from the settings
+    /// (start-up).
+    pub fn set_target_settings(&mut self, settings: crate::targets::Settings) {
+        self.targets = settings.targets;
+        self.feeds = settings.feeds;
+        self.zone_patches = settings.zone_patches;
+        self.targets_changed = false;
+    }
+
+    /// Take targets and subscribers of a package (SSH.5).
+    pub fn merge_target_settings(
+        &mut self,
+        from: crate::targets::Settings,
+    ) -> Result<(), ActionError> {
+        let mut settings = self.target_settings();
+        crate::targets::merge(&mut settings, from)?;
+        self.targets = settings.targets;
+        self.feeds = settings.feeds;
+        self.zone_patches = settings.zone_patches;
+        self.targets_changed = true;
+        Ok(())
+    }
+
+    /// This machine's settings for a file, without secrets (SHW.8).
+    pub fn settings_file(&self) -> crate::settings::SettingsFile {
+        let carried = crate::targets::without_secrets(&self.target_settings());
+        crate::settings::SettingsFile {
+            shortcuts: self.all_shows.clone(),
+            layout_templates: self.layout_templates.clone(),
+            targets: carried.targets,
+            feeds: carried.feeds,
+            zone_patches: carried.zone_patches,
+        }
+    }
+
+    /// Take `file` instead of the current settings, all or nothing;
+    /// targets of the same name keep their secret (SHW.8).
+    pub fn take_settings(
+        &mut self,
+        file: crate::settings::SettingsFile,
+    ) -> Result<(), ActionError> {
+        let bad = |reason: String| Err(ActionError::BadShortcut { reason });
+        let mut keys = std::collections::HashSet::new();
+        for s in &file.shortcuts {
+            if s.label.trim().is_empty()
+                || s.actions.is_empty()
+                || s.actions.len() > SHORTCUT_ACTIONS
+                || s.actions.iter().any(changes_shortcuts)
+            {
+                return bad(format!(
+                    "shortcut {}: label and 1–{SHORTCUT_ACTIONS} actions that change no shortcuts",
+                    s.label
+                ));
+            }
+            if let Some(key) = &s.key {
+                if !keys.insert(key.clone()) {
+                    return bad(format!("key {key} twice"));
+                }
+            }
+        }
+        // Targets: the file's, with the secrets of those of the same name.
+        let mut next = crate::targets::Settings {
+            targets: self
+                .targets
+                .iter()
+                .filter(|t| file.targets.iter().any(|f| f.name == t.name))
+                .cloned()
+                .collect(),
+            feeds: Vec::new(),
+            zone_patches: Vec::new(),
+        };
+        crate::targets::merge(
+            &mut next,
+            crate::targets::Settings {
+                targets: file.targets,
+                feeds: file.feeds,
+                zone_patches: file.zone_patches,
+            },
+        )?;
+        let templates = std::mem::take(&mut self.layout_templates);
+        if let Err(e) = self.keep_layout_templates(file.layout_templates) {
+            self.layout_templates = templates;
+            return Err(e);
+        }
+        self.all_shows = file.shortcuts;
+        self.distinct_shortcut_ids();
+        self.targets = next.targets;
+        self.feeds = next.feeds;
+        self.zone_patches = next.zone_patches;
+        self.all_shows_changed = true;
+        self.targets_changed = true;
+        Ok(())
+    }
+
+    /// Factory settings (SHW.8).
+    pub fn reset_settings(&mut self) {
+        self.all_shows.clear();
+        self.layout_templates.clear();
+        self.targets.clear();
+        self.feeds.clear();
+        self.zone_patches.clear();
+        self.all_shows_changed = true;
+        self.layout_templates_changed = true;
+        self.targets_changed = true;
+    }
+
+    /// The fixed OSC subscribers (CTL.4).
+    pub fn feeds(&self) -> &[lmix_types::Feed] {
+        &self.feeds
+    }
+
+    /// The target `name`, for sending.
+    pub fn target(&self, name: &str) -> Result<crate::targets::TargetConfig, ActionError> {
+        crate::targets::find(&self.targets, name).cloned()
+    }
+
+    /// Whether the targets changed since the last call; again after a
+    /// failed save.
+    pub fn take_targets_changed(&mut self) -> bool {
+        std::mem::take(&mut self.targets_changed)
+    }
+
+    pub fn targets_unsaved(&mut self) {
+        self.targets_changed = true;
     }
 
     /// Mark the shortcuts for all shows as changed again (a save failed).
@@ -612,49 +901,174 @@ impl Switcher {
             }
             Action::RestoreInput => self.restore_input(),
             Action::SetTriggers { input, triggers } => self.set_triggers(&input, triggers),
-            Action::AddCueList { name, cues } => {
+            Action::AddCueList { name, cues, source } => {
                 check_cues(&name, &cues)?;
-                self.show.cue_lists.push(ShowCueList {
+                let mut lists = self.show.cue_lists.clone();
+                lists.push(ShowCueList {
                     id: InputId::new(),
                     name,
                     cues,
+                    source,
+                    standby: None,
                 });
+                check_unique(&lists)?;
+                self.show.cue_lists = lists;
                 Ok(Vec::new())
             }
-            Action::SetCueList { list, name, cues } => {
+            Action::SetCueList {
+                list,
+                name,
+                cues,
+                source,
+            } => {
                 let index = self.find_cue_list(&list)?;
                 check_cues(&name, &cues)?;
-                let entry = &mut self.show.cue_lists[index];
-                entry.name = name;
-                entry.cues = cues;
-                // Editing during the show keeps the place in the list.
-                if let Some(next) = self.cue_next.get_mut(&entry.id) {
-                    *next = (*next).min(entry.cues.len());
-                }
+                let mut lists = self.show.cue_lists.clone();
+                let old = std::mem::replace(&mut lists[index].cues, cues);
+                lists[index].name = name;
+                lists[index].source = source;
+                check_unique(&lists)?;
+                self.show.cue_lists = lists;
+                // Editing during the show keeps standby (on the same cue
+                // when it is still there, IMP.5) and running cues.
+                let entry = &self.show.cue_lists[index];
+                self.cues.keep_standby(entry, &old);
+                self.cues
+                    .list_changed(&self.show.cue_lists, tokio::time::Instant::now());
+                self.sync_standby();
                 Ok(Vec::new())
             }
             Action::RemoveCueList { list } => {
                 let index = self.find_cue_list(&list)?;
-                let removed = self.show.cue_lists.remove(index);
-                self.cue_next.remove(&removed.id);
+                self.show.cue_lists.remove(index);
+                self.cues
+                    .list_changed(&self.show.cue_lists, tokio::time::Instant::now());
                 Ok(Vec::new())
             }
-            Action::CueJump { list, cue } => {
+            Action::CueStandby { list, to } => {
+                let index = self.cue_list_or_active(list.as_ref())?;
+                self.cues.move_standby(&self.show.cue_lists, index, &to)?;
+                self.sync_standby();
+                Ok(Vec::new())
+            }
+            Action::SetPanicTime { ms } => {
+                if ms > PANIC_MAX_MS {
+                    return Err(bad_cues(format!("the panic time is 0–{PANIC_MAX_MS} ms")));
+                }
+                self.show.panic_ms = ms;
+                Ok(Vec::new())
+            }
+            Action::SetEmergencyList { list } => {
+                let id = match list {
+                    Some(list) => Some(self.show.cue_lists[self.find_cue_list(&list)?].id),
+                    None => None,
+                };
+                self.show.emergency_list = id;
+                Ok(Vec::new())
+            }
+            Action::SetZone { zone } => {
+                crate::zones::set_zone(&mut self.show.zones, zone)?;
+                Ok(Vec::new())
+            }
+            Action::RemoveZone { name } => {
+                if !self.show.zones.iter().any(|z| z.name == name) {
+                    return Err(ActionError::BadZone {
+                        reason: format!("no zone {name}"),
+                    });
+                }
+                self.show.zones.retain(|z| z.name != name);
+                Ok(Vec::new())
+            }
+            Action::SetZonePatch { patch } => {
+                crate::zones::set_patch(&mut self.zone_patches, patch)?;
+                self.targets_changed = true;
+                Ok(Vec::new())
+            }
+            Action::RemoveZonePatch { zone } => {
+                self.zone_patches.retain(|p| p.zone != zone);
+                self.targets_changed = true;
+                Ok(Vec::new())
+            }
+            Action::ResetSettings => {
+                self.reset_settings();
+                Ok(Vec::new())
+            }
+            // Files: through the service.
+            Action::ExportSettings { .. } | Action::ImportSettings { .. } => {
+                Err(ActionError::ShowFile {
+                    message: "run through the service".into(),
+                })
+            }
+            Action::SetScriptFolder { folder } => {
+                if let Some(folder) = &folder {
+                    if !std::path::Path::new(folder).is_dir() {
+                        return Err(bad_cues(format!("no folder {folder}")));
+                    }
+                }
+                self.show.script_folder = folder;
+                Ok(Vec::new())
+            }
+            Action::SetActiveCueList { list } => {
                 let index = self.find_cue_list(&list)?;
-                let entry = &self.show.cue_lists[index];
-                let next = (cue as usize)
-                    .checked_sub(1)
-                    .filter(|c| *c < entry.cues.len())
-                    .ok_or_else(|| ActionError::BadCueList {
-                        reason: format!("no cue {cue}"),
-                    })?;
-                self.cue_next.insert(entry.id, next);
+                self.cues.set_active(self.show.cue_lists[index].id);
                 Ok(Vec::new())
             }
-            // The service runs a cue's actions one by one.
-            Action::CueGo { .. } | Action::CueBack { .. } => Err(ActionError::BadCueList {
+            Action::SetTarget { target } => {
+                // New settings: unknown until checked or sent to again.
+                self.unreached.remove(target.name.trim());
+                crate::targets::set(&mut self.targets, target)?;
+                self.targets_changed = true;
+                Ok(Vec::new())
+            }
+            Action::SetFeed { feed } => {
+                crate::targets::set_feed(&mut self.feeds, feed)?;
+                self.targets_changed = true;
+                Ok(Vec::new())
+            }
+            Action::RemoveFeed { name } => {
+                if !self.feeds.iter().any(|f| f.name == name) {
+                    return Err(ActionError::BadTarget {
+                        reason: format!("no subscriber {name}"),
+                    });
+                }
+                self.feeds.retain(|f| f.name != name);
+                self.targets_changed = true;
+                Ok(Vec::new())
+            }
+            Action::RemoveTarget { name } => {
+                crate::targets::find(&self.targets, &name)?;
+                self.targets.retain(|t| t.name != name);
+                self.unreached.remove(&name);
+                self.targets_changed = true;
+                Ok(Vec::new())
+            }
+            // They wait on the network: through the service.
+            Action::TestTarget { .. }
+            | Action::CheckTargets
+            | Action::HttpRequest { .. }
+            | Action::HaService { .. } => Err(ActionError::BadTarget {
                 reason: "run through the service".into(),
             }),
+            Action::SetGoGuard { ms } => {
+                if ms > GO_GUARD_MAX_MS {
+                    return Err(bad_cues(format!("the GO guard is 0–{GO_GUARD_MAX_MS} ms")));
+                }
+                self.show.go_guard_ms = ms;
+                Ok(Vec::new())
+            }
+            Action::SetGoRearm { rearm } => {
+                self.show.go_rearm = rearm;
+                self.cues.release_all();
+                Ok(Vec::new())
+            }
+            // They start cues in time: through the service (cue_go and
+            // the like below).
+            Action::CueGo { .. }
+            | Action::CueStart { .. }
+            | Action::CueStop { .. }
+            | Action::CueReset
+            | Action::CuePanic { .. }
+            | Action::CueHardStop => Err(bad_cues("run through the service".into())),
             Action::SetLock { on } => {
                 self.locked = on;
                 Ok(Vec::new())
@@ -690,7 +1104,65 @@ impl Switcher {
             Action::SetChannelStrip { input, strip } => self.set_strip(&input, strip),
             Action::SetLook { input, look } => self.set_look(&input, look),
             Action::SetAuxSend { input, bus, level } => self.set_aux_send(&input, bus, level),
-            Action::SetAuxBus { bus, volume, mute } => self.set_aux_bus(bus, volume, mute),
+            Action::SetAuxBus { bus, volume, mute } => {
+                self.set_aux_bus(bus, volume, mute, AUDIO_RAMP_MS)
+            }
+            Action::SetMasterFormat { format } => {
+                if !format.is_valid() {
+                    return Err(ActionError::BadFormat {
+                        min: lmix_types::output::FORMAT_MIN_PX,
+                        max: lmix_types::output::FORMAT_MAX_PX,
+                    });
+                }
+                if format == self.show.format {
+                    return Ok(Vec::new());
+                }
+                self.show.format = format;
+                Ok(self.mixer_rebuilt())
+            }
+            Action::SetSampleRate { hz } => {
+                if !lmix_types::output::SAMPLE_RATES.contains(&hz) {
+                    return Err(ActionError::BadSampleRate { hz });
+                }
+                if hz == self.show.sample_rate {
+                    return Ok(Vec::new());
+                }
+                self.show.sample_rate = hz;
+                Ok(self.mixer_rebuilt())
+            }
+            Action::SetMultiview { layout } => {
+                if layout == self.show.multiview {
+                    return Ok(Vec::new());
+                }
+                self.show.multiview = layout;
+                Ok(self.mixer_rebuilt())
+            }
+            Action::SetMonitorVolume { volume } => {
+                check_volume(volume)?;
+                self.show.monitor_volume = volume;
+                Ok(vec![Command::SetMonitor {
+                    gain: fader_gain(volume),
+                }])
+            }
+            Action::SetDefaultDelay { ms } => {
+                if ms > ChannelStrip::DELAY_MAX_MS {
+                    return Err(ActionError::BadStrip {
+                        field: "delay_ms".into(),
+                    });
+                }
+                self.show.default_delay_ms = ms;
+                Ok(Vec::new())
+            }
+            Action::SetMaster { volume, mute } => {
+                check_volume(volume)?;
+                self.show.master = AuxBus { volume, mute };
+                Ok(vec![self.master_command(AUDIO_RAMP_MS)])
+            }
+            Action::FadeVolume {
+                target,
+                volume,
+                duration_ms,
+            } => self.fade_volume(&target, volume, duration_ms),
             Action::SetListen { input, listen } => self.set_listen(&input, listen),
             Action::TransportInput { input, transport } => self.transport(&input, transport),
             Action::SeekInput { input, position_ms } => {
@@ -728,6 +1200,17 @@ impl Switcher {
                 entry.auto_play = auto_play;
                 Ok(Vec::new())
             }
+            Action::SetAtEnd { input, at_end } => {
+                let index = self.find(&input)?;
+                let entry = &mut self.show.inputs[index];
+                if !entry.source.has_transport() {
+                    return Err(ActionError::NoTransport {
+                        reference: entry.name.clone(),
+                    });
+                }
+                entry.at_end = at_end;
+                Ok(at_end_command(entry).into_iter().collect())
+            }
             Action::SetInputPress { input, click, go } => {
                 let index = self.find(&input)?;
                 let entry = &mut self.show.inputs[index];
@@ -750,6 +1233,11 @@ impl Switcher {
                 self.check_unlocked()?;
                 self.stop_output(&output)
             }
+            Action::StartOutputs { group } => self.start_outputs(group),
+            Action::StopOutputs { group } => {
+                self.check_unlocked()?;
+                Ok(self.stop_outputs(group))
+            }
             Action::ClearListen => Ok(self.clear_listen()),
             Action::MoveInput { input, number } => self.move_input(&input, number),
             Action::PreviewInput { input } => self.preview(&input),
@@ -765,6 +1253,11 @@ impl Switcher {
                 background,
                 boxes,
             } => self.set_layout(&layout, background, boxes),
+            Action::ShowBox {
+                layout,
+                number,
+                shown,
+            } => self.show_box(&layout, number, shown),
             Action::RemoveLayout { layout } => self.remove_layout(&layout),
             Action::PreviewLayout { layout } => self.preview_layout(&layout),
             Action::SaveLayoutTemplate { layout, name } => {
@@ -879,7 +1372,7 @@ impl Switcher {
                 },
             ),
             // The service reads and writes these files.
-            Action::NewShow
+            Action::NewShow { .. }
             | Action::SaveShow { .. }
             | Action::OpenShow { .. }
             | Action::AppendShow { .. }
@@ -913,6 +1406,11 @@ impl Switcher {
         commands.extend(self.clear_listen());
         commands.extend(self.stop_all_outputs());
         self.show = show;
+        self.older_format = None;
+        // Cues of the old show stop without a word; nothing starts, and
+        // standby is where the show kept it (SAF.6).
+        self.cues = Runner::default();
+        self.cues.restore_standby(&self.show.cue_lists);
         self.distinct_shortcut_ids();
         self.path = path;
         // Closed inputs belong to the old show.
@@ -925,10 +1423,24 @@ impl Switcher {
         commands
     }
 
+    /// A new mixer for a new format or multiview, set up again; outputs
+    /// restart. The sources keep running (no clip starts over).
+    fn mixer_rebuilt(&mut self) -> Vec<Command> {
+        let mut commands = self.restore_commands();
+        commands.retain(|c| !matches!(c, Command::SetSlot { .. }));
+        commands
+    }
+
     /// Commands that rebuild the engine from the current show (start-up,
     /// engine restart): slots, program, preview, then every audio channel.
     pub fn restore_commands(&mut self) -> Vec<Command> {
-        let mut commands = self.picture_commands();
+        // First: a new format builds a new mixer, the rest sets it up.
+        let mut commands = vec![Command::SetFormat {
+            format: self.show.format,
+            multiview: self.show.multiview,
+            sample_rate: self.show.sample_rate,
+        }];
+        commands.extend(self.picture_commands());
         self.mix.clear();
         commands.extend(self.audio_commands(AUDIO_RAMP_MS));
         // A reused mixer may still hold solos from before.
@@ -961,8 +1473,21 @@ impl Switcher {
                 bus,
                 gain: fader_gain(master.volume),
                 mute: master.mute,
+                ramp_ms: AUDIO_RAMP_MS,
             })
+            .chain(std::iter::once(self.master_command(AUDIO_RAMP_MS)))
+            .chain(std::iter::once(Command::SetMonitor {
+                gain: fader_gain(self.show.monitor_volume),
+            }))
             .collect()
+    }
+
+    fn master_command(&self, ramp_ms: u32) -> Command {
+        Command::SetMaster {
+            gain: fader_gain(self.show.master.volume),
+            mute: self.show.master.mute,
+            ramp_ms,
+        }
     }
 
     /// Every overlay channel as the engine should have it, placed, without
@@ -1017,6 +1542,7 @@ impl Switcher {
                 source: Some(i.source.clone()),
             })
             .collect();
+        commands.extend(self.show.inputs.iter().filter_map(held_end_command));
 
         // Compositions are lost with the engine; set them before use.
         commands.extend(self.show.layouts.iter().map(|l| self.layout_command(l)));
@@ -1057,6 +1583,7 @@ impl Switcher {
                 listen: self.listen_of(input.id),
                 signal_loss: input.signal_loss,
                 auto_play: input.auto_play,
+                at_end: input.at_end,
                 click: input.click,
                 go: input.go,
                 strip: input.strip,
@@ -1069,6 +1596,7 @@ impl Switcher {
                     .has_transport()
                     .then(|| self.clip_ms.get(&input.slot).copied())
                     .flatten(),
+                playback: None,
                 ptz: input.ptz.clone(),
                 missing: self.missing.get(&input.id).cloned().unwrap_or_default(),
             })
@@ -1093,6 +1621,12 @@ impl Switcher {
                 .map(|id| id.filter(|id| self.slot_of(Some(*id)).is_some())),
             t_bar: self.t_bar,
             aux_buses: self.show.aux_buses,
+            master: self.show.master,
+            format: self.show.format,
+            multiview: self.show.multiview,
+            sample_rate: self.show.sample_rate,
+            monitor_volume: self.show.monitor_volume,
+            default_delay_ms: self.show.default_delay_ms,
             looks_available: self.looks_available,
             locked: self.locked,
             cue_lists: self
@@ -1105,9 +1639,24 @@ impl Switcher {
                     number: i as u32 + 1,
                     name: l.name.clone(),
                     cues: l.cues.clone(),
-                    next: self.cue_next.get(&l.id).copied().unwrap_or(0) as u32 + 1,
+                    standby: self.cues.standby(l.id) as u32 + 1,
+                    active: self.cues.active(&self.show.cue_lists) == Some(i),
+                    source: l.source.clone(),
+                    emergency: self.show.emergency_list == Some(l.id),
                 })
                 .collect(),
+            running_cues: self
+                .cues
+                .running(&self.show.cue_lists, tokio::time::Instant::now()),
+            go_guard_ms: self.show.go_guard_ms,
+            go_rearm: self.show.go_rearm,
+            panic_ms: self.show.panic_ms,
+            script_folder: self.show.script_folder.clone(),
+            older_format: self.older_format,
+            cue_warnings: self.cue_warnings.clone(),
+            targets: self.targets.iter().map(|t| t.public()).collect(),
+            feeds: self.feeds.clone(),
+            zones: crate::zones::states(&self.show.zones, &self.zone_patches),
             restorable: self.removed.last().map(|(_, input)| input.name.clone()),
             shortcuts: self
                 .show
@@ -1191,6 +1740,11 @@ impl Switcher {
             .ok_or(ActionError::SlotsFull { slots: self.slots })?;
         let id = InputId::new();
         let name = name.unwrap_or_else(|| source.default_name());
+        // A new input's sound comes the show's default delay late (AUD.6).
+        let strip = ChannelStrip {
+            delay_ms: self.show.default_delay_ms,
+            ..ChannelStrip::default()
+        };
 
         self.show.inputs.push(ShowInput {
             id,
@@ -1201,9 +1755,10 @@ impl Switcher {
             audio: Default::default(),
             signal_loss: SignalLoss::default(),
             auto_play: AutoPlay::default(),
+            at_end: AtEnd::default(),
             click: InputPress::click(),
             go: InputPress::go(),
-            strip: ChannelStrip::default(),
+            strip,
             sends: [0; AUX_BUSES],
             look: Look::default(),
             triggers: Vec::new(),
@@ -1229,10 +1784,7 @@ impl Switcher {
             });
         }
         if source.has_audio() {
-            commands.push(Command::SetStrip {
-                slot,
-                strip: ChannelStrip::default(),
-            });
+            commands.push(Command::SetStrip { slot, strip });
             commands.extend((0..AUX_BUSES).map(|bus| Command::SetAuxSend {
                 slot,
                 bus,
@@ -1370,6 +1922,7 @@ impl Switcher {
             slot: entry.slot,
             source: Some(source.clone()),
         }];
+        commands.extend(held_end_command(entry));
         // After a source without sound the channel may hold anything.
         if source.has_audio() {
             commands.push(Command::SetStrip {
@@ -1762,7 +2315,7 @@ impl Switcher {
     }
 
     /// Auto offs (OVL.2) of the channels that went on since `before`, as
-    /// (delay, channel 1–4, when it went on).
+    /// (delay, channel 1–8, when it went on).
     pub fn auto_offs(&self, before: &OnAir) -> Vec<(u32, u8, u64)> {
         (0..usize::from(OVERLAY_CHANNELS))
             .filter(|&i| {
@@ -1776,51 +2329,195 @@ impl Switcher {
             .collect()
     }
 
-    /// Whether overlay `channel` (1–4) still shows what went on at
+    /// Whether overlay `channel` (1–8) still shows what went on at
     /// `since`: an auto off is due only then.
     pub fn overlay_still_on(&self, channel: u8, since: u64) -> bool {
         overlay_index(channel)
             .is_ok_and(|i| self.show.overlays[i].is_some() && self.overlay_since[i] == since)
     }
 
-    /// Actions of the cue GO (or back) runs; moves the list on.
-    pub fn cue_step(&mut self, list: &InputRef, back: bool) -> Result<Vec<Action>, ActionError> {
-        let index = self.find_cue_list(list)?;
-        let entry = &self.show.cue_lists[index];
-        let next = self.cue_next.get(&entry.id).copied().unwrap_or(0);
-        let (run, after) = if back {
-            let run = next.checked_sub(2).ok_or_else(|| ActionError::BadCueList {
-                reason: "already at the first cue".into(),
-            })?;
-            (run, next - 1)
-        } else {
-            if next >= entry.cues.len() {
-                return Err(ActionError::BadCueList {
-                    reason: "no cues left; jump back first".into(),
-                });
-            }
-            (next, next + 1)
+    /// GO in `list`, or in the active list (RUN.1, RUN.6, RUN.7); `held`:
+    /// the button that gives it, if its release is reported.
+    pub fn cue_go(
+        &mut self,
+        list: Option<&InputRef>,
+        now: tokio::time::Instant,
+        held: Option<Hold>,
+    ) -> Result<Vec<Out>, ActionError> {
+        let index = self.cue_list_or_active(list)?;
+        let guard = Guard {
+            ms: self.show.go_guard_ms,
+            rearm: self.show.go_rearm,
+            held,
         };
-        let actions = entry.cues[run].actions.clone();
-        self.cue_next.insert(entry.id, after);
-        Ok(actions)
+        self.cues.go(&self.show.cue_lists, index, now, guard)
     }
 
-    /// A cue list by number (1-based), id or name.
-    fn find_cue_list(&self, list: &InputRef) -> Result<usize, ActionError> {
-        let lists = &self.show.cue_lists;
-        let index = match list {
-            InputRef::Number(n) => (*n as usize).checked_sub(1).filter(|i| *i < lists.len()),
-            InputRef::Text(text) => lists
-                .iter()
-                .position(|l| l.id.to_string() == *text)
-                .or_else(|| lists.iter().position(|l| l.name == *text)),
+    /// Button `held` was let go: it may give GO again (RUN.6).
+    pub fn cue_release(&mut self, held: Hold) {
+        self.cues.release(held);
+    }
+
+    /// Start cue `cue` (number, id, or `standby`: the list's standby cue)
+    /// without moving standby (CTL.1).
+    pub fn cue_start(
+        &mut self,
+        list: Option<&InputRef>,
+        cue: &str,
+        now: tokio::time::Instant,
+    ) -> Result<Vec<Out>, ActionError> {
+        if cue == CUE_STANDBY {
+            let index = self.cue_list_or_active(list)?;
+            let id = self
+                .cues
+                .standby_cue(&self.show.cue_lists[index])
+                .ok_or_else(|| bad_cues("no cues left; move standby back first".into()))?;
+            return self
+                .cues
+                .start(&self.show.cue_lists, Some(index), &id.to_string(), now);
+        }
+        let index = list.map(|l| self.find_cue_list(l)).transpose()?;
+        self.cues.start(&self.show.cue_lists, index, cue, now)
+    }
+
+    /// Stop one cue, a list's cues or every cue (RUN.4).
+    pub fn cue_stop(
+        &mut self,
+        list: Option<&InputRef>,
+        cue: Option<&str>,
+        now: tokio::time::Instant,
+    ) -> Result<Vec<Out>, ActionError> {
+        let index = list.map(|l| self.find_cue_list(l)).transpose()?;
+        self.cues.stop(&self.show.cue_lists, index, cue, now)
+    }
+
+    /// Stop every cue at once, every standby to the start (RUN.11).
+    pub fn cue_reset(&mut self, now: tokio::time::Instant) -> Vec<Out> {
+        self.cues.reset(now)
+    }
+
+    /// Panic over the show's panic time or `ms`, or a hard stop when one
+    /// runs (SAF.1, CTL.1).
+    pub fn cue_panic(
+        &mut self,
+        now: tokio::time::Instant,
+        ms: Option<u32>,
+    ) -> Result<Vec<Out>, ActionError> {
+        if ms.is_some_and(|ms| ms > PANIC_MAX_MS) {
+            return Err(bad_cues(format!("the panic time is 0–{PANIC_MAX_MS} ms")));
+        }
+        let emergency = self.emergency_index();
+        let ms = ms.unwrap_or(self.show.panic_ms);
+        Ok(self.cues.panic(&self.show.cue_lists, emergency, now, ms))
+    }
+
+    /// Hard stop (SAF.3).
+    pub fn cue_hard_stop(&mut self, now: tokio::time::Instant) -> Vec<Out> {
+        let emergency = self.emergency_index();
+        self.cues.hard_stop(&self.show.cue_lists, emergency, now)
+    }
+
+    fn emergency_index(&self) -> Option<usize> {
+        let id = self.show.emergency_list?;
+        self.show.cue_lists.iter().position(|l| l.id == id)
+    }
+
+    /// What the cue lists have due by `now`.
+    pub fn cue_tick(&mut self, now: tokio::time::Instant) -> Vec<Out> {
+        self.cues.tick(&self.show.cue_lists, now)
+    }
+
+    /// The opened file was of an older version (SHW.7).
+    pub fn set_older_format(&mut self, version: Option<u32>) {
+        self.older_format = version;
+    }
+
+    pub fn older_format(&self) -> Option<u32> {
+        self.older_format
+    }
+
+    /// Check the cue lists again (SUI.5): after changes of the show, the
+    /// targets or the missing media.
+    pub fn refresh_warnings(&mut self) {
+        let missing = |id| self.missing.get(&id).is_some_and(|m| !m.is_empty());
+        let machine = crate::checks::Machine {
+            targets: &self.targets,
+            unreached: &self.unreached,
+            missing: &missing,
         };
-        index.ok_or_else(|| ActionError::UnknownCueList {
-            reference: match list {
-                InputRef::Number(n) => n.to_string(),
-                InputRef::Text(t) => format!("\"{t}\""),
-            },
+        self.cue_warnings = crate::checks::cue_warnings(&self.show, &machine);
+    }
+
+    /// How target `name` answered (`Err`: why not); whether that changes
+    /// the warnings (SUI.5).
+    pub fn set_reached(&mut self, name: &str, result: Result<(), String>) -> bool {
+        let changed = match result {
+            Ok(()) => self.unreached.remove(name).is_some(),
+            Err(reason) => self.unreached.insert(name.to_string(), reason.clone()) != Some(reason),
+        };
+        if changed {
+            self.refresh_warnings();
+        }
+        changed
+    }
+
+    /// The targets the cue lists send to, with their settings (SUI.5).
+    pub fn used_targets(&self) -> Vec<crate::targets::TargetConfig> {
+        crate::checks::used_targets(&self.show)
+            .iter()
+            .filter_map(|name| self.targets.iter().find(|t| &t.name == name).cloned())
+            .collect()
+    }
+
+    /// Write standby into the show's lists; whether one moved (then the
+    /// show is saved: a restart goes on there, SAF.6).
+    pub fn sync_standby(&mut self) -> bool {
+        let mut moved = false;
+        for i in 0..self.show.cue_lists.len() {
+            let at = self.cues.standby_cue(&self.show.cue_lists[i]);
+            let list = &mut self.show.cue_lists[i];
+            if list.standby != at {
+                list.standby = at;
+                moved = true;
+            }
+        }
+        moved
+    }
+
+    /// How late cue steps ran (RUN.8).
+    pub fn cue_lateness(&self) -> crate::cues::Lateness {
+        self.cues.lateness()
+    }
+
+    /// When the cue lists have something due next.
+    pub fn cue_deadline(&self) -> Option<tokio::time::Instant> {
+        self.cues.deadline()
+    }
+
+    /// `list`, or the active list without one.
+    fn cue_list_or_active(&self, list: Option<&InputRef>) -> Result<usize, ActionError> {
+        match list {
+            Some(list) => self.find_cue_list(list),
+            None => self
+                .cues
+                .active(&self.show.cue_lists)
+                .ok_or_else(|| bad_cues("no cue list".into())),
+        }
+    }
+
+    /// A cue list by number (1-based), id or name; `active` is the active
+    /// list (CTL.1).
+    fn find_cue_list(&self, list: &InputRef) -> Result<usize, ActionError> {
+        if matches!(list, InputRef::Text(text) if text == LIST_ACTIVE) {
+            return self.cue_list_or_active(None);
+        }
+        crate::cues::find_list(&self.show.cue_lists, list).ok_or_else(|| {
+            ActionError::UnknownCueList {
+                reference: match list {
+                    InputRef::Number(n) => n.to_string(),
+                    InputRef::Text(t) => format!("\"{t}\""),
+                },
+            }
         })
     }
 
@@ -1856,6 +2553,7 @@ impl Switcher {
                 mode: input.signal_loss,
             },
         ];
+        commands.extend(held_end_command(&input));
         if input.source.has_audio() {
             commands.push(Command::SetStrip {
                 slot: input.slot,
@@ -2158,6 +2856,30 @@ impl Switcher {
         Ok(vec![self.layout_command(&self.show.layouts[index])])
     }
 
+    /// LAY.2: a box out of the picture and back, as a layout change.
+    fn show_box(
+        &mut self,
+        layout: &InputRef,
+        number: u8,
+        shown: BoxShown,
+    ) -> Result<Vec<Command>, ActionError> {
+        let index = self.find_layout(layout)?;
+        let entry = &mut self.show.layouts[index];
+        let count = entry.boxes.len();
+        let found = usize::from(number)
+            .checked_sub(1)
+            .and_then(|at| entry.boxes.get_mut(at))
+            .ok_or_else(|| ActionError::BadLayout {
+                reason: format!("no box {number}; the layout has {count}"),
+            })?;
+        found.hidden = match shown {
+            BoxShown::Shown => false,
+            BoxShown::Hidden => true,
+            BoxShown::Toggle => !found.hidden,
+        };
+        Ok(vec![self.layout_command(&self.show.layouts[index])])
+    }
+
     fn remove_layout(&mut self, layout: &InputRef) -> Result<Vec<Command>, ActionError> {
         let index = self.find_layout(layout)?;
         let id = self.show.layouts[index].id;
@@ -2228,6 +2950,7 @@ impl Switcher {
                 border_px: spec.border_px,
                 crop: spec.crop,
                 locked: spec.locked,
+                hidden: spec.hidden,
             });
         }
         Ok((background, parts))
@@ -2241,6 +2964,7 @@ impl Switcher {
             boxes: layout
                 .boxes
                 .iter()
+                .filter(|b| !b.hidden)
                 .filter_map(|b| {
                     Some(EngineBox {
                         rect: b.rect,
@@ -2451,6 +3175,7 @@ impl Switcher {
                 border_px: b.border_px,
                 crop: b.crop,
                 locked: b.locked,
+                hidden: false,
             })
             .collect();
         self.add_layout(Some(name.unwrap_or(template.name)), background, boxes)
@@ -2476,7 +3201,7 @@ impl Switcher {
             .iter()
             .find(|l| Some(l.id) == layout)
             .is_some_and(|l| {
-                l.background == Some(input) || l.boxes.iter().any(|b| b.input == input)
+                l.background == Some(input) || l.boxes.iter().any(|b| b.input == input && !b.hidden)
             })
     }
 
@@ -2628,6 +3353,7 @@ impl Switcher {
         bus: u8,
         volume: u8,
         mute: bool,
+        ramp_ms: u32,
     ) -> Result<Vec<Command>, ActionError> {
         let bus = aux_index(bus)?;
         check_volume(volume)?;
@@ -2636,7 +3362,38 @@ impl Switcher {
             bus,
             gain: fader_gain(volume),
             mute,
+            ramp_ms,
         }])
+    }
+
+    /// A level fade (AUD.14): the engine ramps from where the level is.
+    /// An input's fader goes out with the other channels (`audio_ramp`
+    /// gives them the fade's time).
+    fn fade_volume(
+        &mut self,
+        target: &VolumeTarget,
+        volume: u8,
+        duration_ms: u32,
+    ) -> Result<Vec<Command>, ActionError> {
+        if duration_ms > FADE_MAX_MS {
+            return Err(ActionError::BadFade {
+                duration_ms,
+                max: FADE_MAX_MS,
+            });
+        }
+        let ramp_ms = duration_ms.max(AUDIO_RAMP_MS);
+        match target {
+            VolumeTarget::Input(input) => self.set_volume(input, volume),
+            VolumeTarget::Bus(bus) => {
+                let mute = self.show.aux_buses[aux_index(*bus)?].mute;
+                self.set_aux_bus(*bus, volume, mute, ramp_ms)
+            }
+            VolumeTarget::Master => {
+                check_volume(volume)?;
+                self.show.master.volume = volume;
+                Ok(vec![self.master_command(ramp_ms)])
+            }
+        }
     }
 
     /// The engine says whether it can apply looks.
@@ -2949,6 +3706,9 @@ impl Switcher {
         if let Some(bus) = aux {
             aux_index(bus)?;
         }
+        if let Some(reason) = spec.problem() {
+            return Err(ActionError::BadEncoding { reason });
+        }
         let output = ShowOutput {
             id: OutputId::new(),
             name: name.unwrap_or_default(),
@@ -2960,6 +3720,9 @@ impl Switcher {
         let name = match (output.name.is_empty(), source) {
             (false, _) => output.name.clone(),
             (true, OutputSource::Program) => output.spec.default_name(),
+            (true, OutputSource::Multiview) => {
+                format!("{} (Multiview)", output.spec.default_name())
+            }
             (true, OutputSource::Input(id)) => {
                 let input = self
                     .show
@@ -2977,8 +3740,10 @@ impl Switcher {
     /// Program, or the slot of the output's input; ISO outputs need an
     /// input with a picture.
     fn feed_of(&self, output: &ShowOutput) -> Result<Feed, ActionError> {
-        let OutputSource::Input(id) = output.source else {
-            return Ok(Feed::Program);
+        let id = match output.source {
+            OutputSource::Program => return Ok(Feed::Program),
+            OutputSource::Multiview => return Ok(Feed::Multiview),
+            OutputSource::Input(id) => id,
         };
         let input = self
             .show
@@ -3021,6 +3786,39 @@ impl Switcher {
     fn stop_output(&mut self, output: &OutputRef) -> Result<Vec<Command>, ActionError> {
         let id = self.show.outputs[self.find_output(output)?].id;
         Ok(vec![Command::StopOutput { id }])
+    }
+
+    /// Start commands for the outputs of `group` that do not run; an
+    /// output that cannot start (its source is gone) is left out, the
+    /// error only comes back when none could.
+    fn start_outputs(&mut self, group: OutputGroup) -> Result<Vec<Command>, ActionError> {
+        let mut first_error = None;
+        let commands: Vec<Command> = self
+            .show
+            .outputs
+            .iter()
+            .filter(|o| group.holds(&o.spec) && !self.output_running(o.id))
+            .filter_map(|o| match self.start_command(o) {
+                Ok(command) => Some(command),
+                Err(e) => {
+                    first_error.get_or_insert(e);
+                    None
+                }
+            })
+            .collect();
+        match first_error {
+            Some(e) if commands.is_empty() => Err(e),
+            _ => Ok(commands),
+        }
+    }
+
+    fn stop_outputs(&mut self, group: OutputGroup) -> Vec<Command> {
+        self.show
+            .outputs
+            .iter()
+            .filter(|o| group.holds(&o.spec) && self.output_running(o.id))
+            .map(|o| Command::StopOutput { id: o.id })
+            .collect()
     }
 
     fn stop_all_outputs(&mut self) -> Vec<Command> {
@@ -3193,6 +3991,11 @@ impl Switcher {
             Action::QuickPlay { .. } if self.show.quick_play.effect != Effect::Cut => {
                 self.show.quick_play.duration_ms.max(AUDIO_RAMP_MS)
             }
+            Action::FadeVolume {
+                target: VolumeTarget::Input(_),
+                duration_ms,
+                ..
+            } => (*duration_ms).clamp(AUDIO_RAMP_MS, FADE_MAX_MS),
             _ => AUDIO_RAMP_MS,
         }
     }
@@ -3227,10 +4030,31 @@ impl Switcher {
 
     fn mix_of(&self, input: &ShowInput) -> Mix {
         let audio = input.audio;
-        let off_air = audio.follow_video && self.show.program != Some(input.id);
+        let gain = fader_gain(audio.volume);
+        let on_program = self.show.program == Some(input.id);
+        if !audio.follow_video {
+            return Mix {
+                gain,
+                muted: !audio.on,
+            };
+        }
+        // While the T-bar is pulled (SWI.5), program sound fades out as
+        // preview fades in, like the picture.
+        let pulled = self.t_bar > 0.0;
+        let share = if on_program && pulled {
+            1.0 - f64::from(self.t_bar)
+        } else if pulled && self.show.preview == Some(input.id) {
+            f64::from(self.t_bar)
+        } else if on_program {
+            1.0
+        } else {
+            0.0
+        };
+        // Off air it is muted at its own level, as without the T-bar.
+        let silent = share == 0.0;
         Mix {
-            gain: fader_gain(audio.volume),
-            muted: !audio.on || off_air,
+            gain: if silent { gain } else { gain * share },
+            muted: !audio.on || silent,
         }
     }
 
@@ -3429,7 +4253,25 @@ fn check_source(source: &SourceSpec) -> Result<(), ActionError> {
 }
 
 /// Audio inputs have no picture for preview or program.
-/// 0-based index of overlay `channel` (1–4).
+/// The player setting of `input`'s end for its slot; `None` for sources
+/// without a player.
+fn at_end_command(input: &ShowInput) -> Option<Command> {
+    Some(Command::SetAtEnd {
+        slot: input.slot,
+        items: crate::engine::flows::player_items(&input.source)?,
+        at_end: input.at_end,
+    })
+}
+
+/// Restoring or rebuilding a slot: a held end has to be set again, a
+/// loop is how the slot starts.
+fn held_end_command(input: &ShowInput) -> Option<Command> {
+    (!input.at_end.is_loop())
+        .then(|| at_end_command(input))
+        .flatten()
+}
+
+/// 0-based index of overlay `channel` (1–8).
 fn overlay_index(channel: u8) -> Result<usize, ActionError> {
     if !(1..=OVERLAY_CHANNELS).contains(&channel) {
         return Err(ActionError::BadOverlay {
@@ -3475,7 +4317,7 @@ fn no_video_check(entry: &ShowInput) -> Result<(), ActionError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use lmix_types::{MidiBinding, TestPattern};
+    use lmix_types::{MidiBinding, TestPattern, VideoEncoding};
 
     const SLOTS: usize = 4;
 
@@ -3767,7 +4609,10 @@ mod tests {
             }]
         );
         let b = sw.state().inputs[1].id;
-        assert_eq!(sw.state().overlays, [None, Some(b), None, None]);
+        assert_eq!(
+            sw.state().overlays,
+            [None, Some(b), None, None, None, None, None, None]
+        );
         assert_eq!(sw.tally(), [0, 1]);
 
         let cmds = sw
@@ -3803,7 +4648,7 @@ mod tests {
         .unwrap();
 
         let bad = sw.apply(Action::OverlayIn {
-            channel: 5,
+            channel: 9,
             input: named("A"),
             duration_ms: Some(0),
         });
@@ -3813,7 +4658,7 @@ mod tests {
             duration_ms: Some(0),
         });
 
-        assert_eq!(bad, Err(ActionError::BadOverlay { channel: 5, max: 4 }));
+        assert_eq!(bad, Err(ActionError::BadOverlay { channel: 9, max: 8 }));
         assert!(matches!(sound_only, Err(ActionError::NoVideo { .. })));
     }
 
@@ -3873,8 +4718,11 @@ mod tests {
                 },
             ]
         );
-        assert_eq!(sw.state().overlays, [None; 4]);
-        assert_eq!(sw.state().overlay_last, [Some(a), None, Some(b), None]);
+        assert_eq!(sw.state().overlays, [None; 8]);
+        assert_eq!(
+            sw.state().overlay_last,
+            [Some(a), None, Some(b), None, None, None, None, None]
+        );
         assert_eq!(
             sw.apply(Action::OverlayOutAll {
                 duration_ms: Some(0)
@@ -3902,7 +4750,7 @@ mod tests {
             Err(ActionError::NoOverlayLast { channel: 2 })
         );
         assert!(matches!(
-            sw.apply(last(5)),
+            sw.apply(last(9)),
             Err(ActionError::BadOverlay { .. })
         ));
 
@@ -4016,7 +4864,7 @@ mod tests {
             }
         ));
         assert!(matches!(
-            sw.apply(set_overlay(5, fade)),
+            sw.apply(set_overlay(9, fade)),
             Err(ActionError::BadOverlay { .. })
         ));
     }
@@ -4094,7 +4942,7 @@ mod tests {
         );
         let state = sw.state();
         assert_eq!(state.overlays[0], Some(id(&sw, 2)));
-        assert_eq!(state.overlay_preview, [None; 4], "used up");
+        assert_eq!(state.overlay_preview, [None; 8], "used up");
         assert_eq!(state.overlay_last[0], Some(id(&sw, 2)));
         assert_eq!(sw.tally(), [1, 0, 1]);
 
@@ -4122,12 +4970,12 @@ mod tests {
         // Cleared, by hand or with the input; cut direct takes none along.
         prepare(&mut sw, 2, Some("Logo")).unwrap();
         prepare(&mut sw, 2, None).unwrap();
-        assert_eq!(sw.state().overlay_preview, [None; 4]);
+        assert_eq!(sw.state().overlay_preview, [None; 8]);
         prepare(&mut sw, 2, Some("A")).unwrap();
         sw.apply(Action::CutDirect { input: named("B") }).unwrap();
         assert_eq!(sw.state().overlays[1], None);
         sw.apply(Action::RemoveInput { input: named("A") }).unwrap();
-        assert_eq!(sw.state().overlay_preview, [None; 4]);
+        assert_eq!(sw.state().overlay_preview, [None; 8]);
         assert!(matches!(
             prepare(&mut sw, 0, Some("B")),
             Err(ActionError::BadOverlay { .. })
@@ -4153,6 +5001,7 @@ mod tests {
                 border_px: 4,
                 crop: BoxCrop::default(),
                 locked: true,
+                hidden: false,
             }],
         })
         .unwrap();
@@ -4269,6 +5118,41 @@ mod tests {
 
     fn transport(slot: usize, transport: Transport) -> Command {
         Command::Transport { slot, transport }
+    }
+
+    #[test]
+    fn a_clip_loops_or_holds_its_end() {
+        let mut sw = with_clips(AutoPlay::default());
+        let hold = |name: &str| Action::SetAtEnd {
+            input: named(name),
+            at_end: AtEnd::Hold,
+        };
+        let held = Command::SetAtEnd {
+            slot: 2,
+            items: vec!["/Clip 1.mp4".into()],
+            at_end: AtEnd::Hold,
+        };
+        assert_eq!(
+            sw.apply(hold("Clip 1")).unwrap(),
+            std::slice::from_ref(&held),
+            "on air, no rebuild"
+        );
+        assert_eq!(sw.state().inputs[2].at_end, AtEnd::Hold);
+        assert!(matches!(
+            sw.apply(hold("A")),
+            Err(ActionError::NoTransport { .. })
+        ));
+        // A rebuilt engine starts players looping: the held end comes back.
+        let restore = sw.restore_commands();
+        assert!(restore.contains(&held));
+        assert_eq!(
+            restore
+                .iter()
+                .filter(|c| matches!(c, Command::SetAtEnd { .. }))
+                .count(),
+            1,
+            "looping clips need nothing"
+        );
     }
 
     #[test]
@@ -4435,6 +5319,7 @@ mod tests {
                     border_px: 0,
                     crop: BoxCrop::default(),
                     locked: false,
+                    hidden: false,
                 }],
             })
             .unwrap();
@@ -4775,6 +5660,42 @@ mod tests {
     }
 
     #[test]
+    fn sound_that_follows_video_follows_the_t_bar() {
+        let mut sw = two_inputs();
+        for name in ["A", "B"] {
+            sw.apply(Action::SetAudioFollow {
+                input: named(name),
+                follow: true,
+            })
+            .unwrap();
+        }
+        sw.apply(Action::CutDirect { input: named("A") }).unwrap();
+        sw.apply(Action::PreviewInput { input: named("B") })
+            .unwrap();
+        let gains = |cmds: &[Command]| -> Vec<(usize, f64, bool)> {
+            cmds.iter()
+                .filter_map(|c| match c {
+                    Command::SetAudio {
+                        slot, gain, muted, ..
+                    } => Some((*slot, (*gain * 100.0).round() / 100.0, *muted)),
+                    _ => None,
+                })
+                .collect()
+        };
+
+        // Halfway (SWI.5): program fades out as preview fades in.
+        let half = sw.apply(Action::TBar { position: 0.5 }).unwrap();
+        assert_eq!(gains(&half), [(0, 0.5, false), (1, 0.5, false)]);
+        // Back to the start: as before.
+        let back = sw.apply(Action::TBar { position: 0.0 }).unwrap();
+        assert_eq!(gains(&back), [(0, 1.0, false), (1, 1.0, true)]);
+        // At the end: the take, B alone.
+        sw.apply(Action::TBar { position: 0.8 }).unwrap();
+        let end = sw.apply(Action::TBar { position: 1.0 }).unwrap();
+        assert_eq!(gains(&end), [(0, 1.0, true), (1, 1.0, false)]);
+    }
+
+    #[test]
     fn t_bar_back_to_zero_and_bad_positions() {
         let mut sw = two_inputs();
         assert_eq!(
@@ -4916,7 +5837,7 @@ mod tests {
                 gain: fader_gain(50)
             }]
         );
-        assert_eq!(sw.state().inputs[1].sends, [0, 50]);
+        assert_eq!(sw.state().inputs[1].sends, [0, 50, 0, 0, 0, 0, 0]);
 
         sw.apply(Action::SetAuxBus {
             bus: 1,
@@ -4941,14 +5862,177 @@ mod tests {
         assert!(restore.contains(&Command::SetAuxBus {
             bus: 0,
             gain: fader_gain(80),
-            mute: true
+            mute: true,
+            ramp_ms: AUDIO_RAMP_MS,
         }));
+    }
+
+    #[test]
+    fn a_new_format_rebuilds_and_restores() {
+        let mut sw = two_inputs();
+        let upright = lmix_types::MasterFormat {
+            width: 1080,
+            height: 1920,
+            framerate: lmix_types::Framerate::Fps25,
+        };
+
+        let cmds = sw
+            .apply(Action::SetMasterFormat { format: upright })
+            .unwrap();
+
+        assert_eq!(
+            cmds[0],
+            Command::SetFormat {
+                format: upright,
+                multiview: Default::default(),
+                sample_rate: 48_000
+            }
+        );
+        assert!(cmds
+            .iter()
+            .any(|c| matches!(c, Command::Preview { .. }) || matches!(c, Command::Program { .. })));
+        assert!(
+            !cmds.iter().any(|c| matches!(c, Command::SetSlot { .. })),
+            "the sources keep running"
+        );
+        assert_eq!(sw.state().format, upright);
+        assert!(
+            sw.apply(Action::SetMasterFormat { format: upright })
+                .unwrap()
+                .is_empty(),
+            "the same format again changes nothing"
+        );
+        for bad in [(1081, 1920), (1080, 100), (8000, 4320)] {
+            let format = lmix_types::MasterFormat {
+                width: bad.0,
+                height: bad.1,
+                ..upright
+            };
+            assert!(matches!(
+                sw.apply(Action::SetMasterFormat { format }),
+                Err(ActionError::BadFormat { .. })
+            ));
+        }
+        let json = r#"{"action":"set_master_format","format":{"width":1280,"height":720,"framerate":"60000/1001"}}"#;
+        assert!(serde_json::from_str::<Action>(json).is_ok());
+    }
+
+    #[test]
+    fn new_inputs_get_the_default_delay_and_the_monitor_its_volume() {
+        let mut sw = Switcher::new(SLOTS);
+        sw.apply(Action::SetDefaultDelay { ms: 40 }).unwrap();
+
+        let cmds = sw
+            .apply(Action::AddInput {
+                source: SourceSpec::AudioDevice { id: "mic".into() },
+                name: Some("Mic".into()),
+            })
+            .unwrap();
+
+        let strip = ChannelStrip {
+            delay_ms: 40,
+            ..ChannelStrip::default()
+        };
+        assert!(cmds.contains(&Command::SetStrip { slot: 0, strip }));
+        assert_eq!(sw.state().inputs[0].strip.delay_ms, 40);
+        assert!(matches!(
+            sw.apply(Action::SetDefaultDelay { ms: 501 }),
+            Err(ActionError::BadStrip { .. })
+        ));
+
+        let cmds = sw.apply(Action::SetMonitorVolume { volume: 50 }).unwrap();
+        assert_eq!(
+            cmds,
+            [Command::SetMonitor {
+                gain: fader_gain(50)
+            }]
+        );
+        assert_eq!(sw.state().monitor_volume, 50);
+        assert!(sw.restore_commands().contains(&Command::SetMonitor {
+            gain: fader_gain(50)
+        }));
+    }
+
+    #[test]
+    fn levels_fade_over_their_time() {
+        let mut sw = two_inputs();
+        sw.apply(Action::SetAuxBus {
+            bus: 2,
+            volume: 80,
+            mute: true,
+        })
+        .unwrap();
+        let fade = |target, volume, duration_ms| Action::FadeVolume {
+            target,
+            volume,
+            duration_ms,
+        };
+
+        let cmds = sw
+            .apply(fade(VolumeTarget::Input(named("B")), 25, 3000))
+            .unwrap();
+        assert_eq!(audio_of(&cmds), [(1, false, 3000)]);
+        assert_eq!(
+            sw.state().inputs[1].audio.volume,
+            25,
+            "the end value at once"
+        );
+
+        let cmds = sw.apply(fade(VolumeTarget::Bus(2), 0, 4000)).unwrap();
+        assert_eq!(
+            cmds,
+            [Command::SetAuxBus {
+                bus: 1,
+                gain: 0.0,
+                mute: true,
+                ramp_ms: 4000,
+            }],
+            "mute stays"
+        );
+
+        let cmds = sw.apply(fade(VolumeTarget::Master, 50, 0)).unwrap();
+        assert_eq!(
+            cmds,
+            [Command::SetMaster {
+                gain: fader_gain(50),
+                mute: false,
+                ramp_ms: AUDIO_RAMP_MS,
+            }],
+            "no fade shorter than the click guard"
+        );
+        assert_eq!(sw.state().master.volume, 50);
+        assert!(sw.restore_commands().contains(&Command::SetMaster {
+            gain: fader_gain(50),
+            mute: false,
+            ramp_ms: AUDIO_RAMP_MS,
+        }));
+
+        assert!(matches!(
+            sw.apply(fade(VolumeTarget::Master, 50, FADE_MAX_MS + 1)),
+            Err(ActionError::BadFade { .. })
+        ));
+        assert!(matches!(
+            sw.apply(fade(VolumeTarget::Bus(8), 50, 100)),
+            Err(ActionError::BadAuxBus { .. })
+        ));
+        assert!(matches!(
+            sw.apply(fade(VolumeTarget::Input(named("B")), 101, 100)),
+            Err(ActionError::BadVolume { .. })
+        ));
+        let json =
+            r#"{"action":"fade_volume","target":{"input":"B"},"volume":0,"duration_ms":2000}"#;
+        assert_eq!(
+            serde_json::from_str::<Action>(json).unwrap(),
+            fade(VolumeTarget::Input(InputRef::Text("B".into())), 0, 2000)
+        );
+        let json = r#"{"action":"fade_volume","target":"master","volume":0,"duration_ms":2000}"#;
+        assert!(serde_json::from_str::<Action>(json).is_ok());
     }
 
     #[test]
     fn aux_bus_numbers_are_checked() {
         let mut sw = two_inputs();
-        for bus in [0, 3] {
+        for bus in [0, 8] {
             assert!(matches!(
                 sw.apply(Action::SetAuxBus {
                     bus,
@@ -4961,13 +6045,14 @@ mod tests {
         let srt = OutputSpec::Srt {
             uri: "srt://cdn:9000".into(),
             video_kbps: 6000,
+            encoding: Default::default(),
         };
         assert!(matches!(
             sw.apply(Action::AddOutput {
                 spec: srt,
                 source: OutputSource::Program,
                 name: None,
-                aux: Some(3),
+                aux: Some(8),
             }),
             Err(ActionError::BadAuxBus { .. })
         ));
@@ -4979,6 +6064,7 @@ mod tests {
         let srt = OutputSpec::Srt {
             uri: "srt://cdn:9000".into(),
             video_kbps: 6000,
+            encoding: Default::default(),
         };
         sw.apply(Action::AddOutput {
             spec: srt,
@@ -5221,6 +6307,7 @@ mod tests {
                     border_px: 4,
                     crop: ZOOM,
                     locked: true,
+                    hidden: false,
                 }],
             })
             .unwrap();
@@ -5305,6 +6392,39 @@ mod tests {
     }
 
     #[test]
+    fn a_layout_box_hides_and_shows() {
+        let mut sw = with_layout();
+        sw.apply(Action::PreviewLayout {
+            layout: InputRef::Number(1),
+        })
+        .unwrap();
+        sw.apply(Action::Cut).unwrap();
+        assert_eq!(sw.tally(), [1, 1], "A and B in the layout on air");
+        let show = |shown| Action::ShowBox {
+            layout: InputRef::Number(1),
+            number: 1,
+            shown,
+        };
+
+        // LAY.2: hidden, the box stays in the layout but is not drawn.
+        let cmds = sw.apply(show(BoxShown::Hidden)).unwrap();
+        assert!(matches!(&cmds[..], [Command::SetLayout { boxes, .. }] if boxes.is_empty()));
+        assert!(sw.state().layouts[0].boxes[0].hidden);
+        assert_eq!(sw.tally(), [1, 0], "a hidden box is not on air");
+        let cmds = sw.apply(show(BoxShown::Toggle)).unwrap();
+        assert!(matches!(&cmds[..], [Command::SetLayout { boxes, .. }] if boxes.len() == 1));
+        assert_eq!(sw.tally(), [1, 1]);
+        assert!(matches!(
+            sw.apply(Action::ShowBox {
+                layout: InputRef::Number(1),
+                number: 2,
+                shown: BoxShown::Shown
+            }),
+            Err(ActionError::BadLayout { .. })
+        ));
+    }
+
+    #[test]
     fn layouts_are_checked() {
         let mut sw = with_layout();
         let spec = |input: &str, rect| BoxSpec {
@@ -5313,6 +6433,7 @@ mod tests {
             border_px: 0,
             crop: BoxCrop::default(),
             locked: false,
+            hidden: false,
         };
         let nothing_left = BoxSpec {
             crop: BoxCrop {
@@ -5650,17 +6771,26 @@ mod tests {
         sw.apply(Action::RemoveInput { input: named("A") }).unwrap();
     }
 
-    fn cue(label: &str, action: Action) -> Cue {
-        Cue {
-            label: label.into(),
-            actions: vec![action],
-        }
+    fn cue(name: &str, action: Action) -> Cue {
+        Cue::actions(name, vec![action])
+    }
+
+    /// Actions the outs ask to run.
+    fn ran(out: &[Out]) -> Vec<Action> {
+        out.iter()
+            .flat_map(|o| match o {
+                Out::Actions { actions, .. } => actions.clone(),
+                Out::Event { .. } | Out::Panic { .. } => Vec::new(),
+            })
+            .collect()
     }
 
     #[test]
-    fn cue_lists_go_back_and_jump() {
+    fn cue_lists_go_standby_and_edit() {
         let mut sw = two_inputs();
         let list = InputRef::Text("Opening".into());
+        let t = tokio::time::Instant::now();
+        sw.apply(Action::SetGoGuard { ms: 0 }).unwrap();
         sw.apply(Action::AddCueList {
             name: "Opening".into(),
             cues: vec![
@@ -5668,36 +6798,32 @@ mod tests {
                 cue("B", Action::CutDirect { input: named("B") }),
                 cue("Black", Action::FadeToBlack { duration_ms: 500 }),
             ],
+            source: None,
         })
         .unwrap();
-        assert_eq!(sw.state().cue_lists[0].next, 1);
+        assert_eq!(sw.state().cue_lists[0].standby, 1);
+        assert!(sw.state().cue_lists[0].active, "the first list is active");
 
-        let go = |sw: &mut Switcher| sw.cue_step(&list, false);
-        assert_eq!(
-            go(&mut sw).unwrap(),
-            [Action::CutDirect { input: named("A") }]
-        );
-        assert_eq!(
-            go(&mut sw).unwrap(),
-            [Action::CutDirect { input: named("B") }]
-        );
-        assert_eq!(sw.state().cue_lists[0].next, 3);
-        assert_eq!(
-            sw.cue_step(&list, true).unwrap(),
-            [Action::CutDirect { input: named("A") }],
-            "back runs the cue before the last one"
-        );
-        assert_eq!(sw.state().cue_lists[0].next, 2);
+        // Without a list: the active one.
+        let out = sw.cue_go(None, t, None).unwrap();
+        assert_eq!(ran(&out), [Action::CutDirect { input: named("A") }]);
+        sw.cue_go(Some(&list), t, None).unwrap();
+        assert_eq!(sw.state().cue_lists[0].standby, 3);
 
-        sw.apply(Action::CueJump {
-            list: list.clone(),
-            cue: 3,
+        // Back moves standby only; nothing runs.
+        sw.apply(Action::CueStandby {
+            list: Some(list.clone()),
+            to: lmix_types::StandbyMove::Previous,
         })
         .unwrap();
-        go(&mut sw).unwrap();
-        assert!(matches!(go(&mut sw), Err(ActionError::BadCueList { .. })));
+        assert_eq!(sw.state().cue_lists[0].standby, 2);
 
         // Editing keeps the place, at most one past the last cue.
+        sw.apply(Action::CueStandby {
+            list: None,
+            to: lmix_types::StandbyMove::Index(3),
+        })
+        .unwrap();
         sw.apply(Action::SetCueList {
             list: list.clone(),
             name: "Opening".into(),
@@ -5705,22 +6831,100 @@ mod tests {
                 cue("A", Action::CutDirect { input: named("A") }),
                 cue("B", Action::CutDirect { input: named("B") }),
             ],
+            source: None,
         })
         .unwrap();
-        assert_eq!(sw.state().cue_lists[0].next, 3);
-        assert_eq!(
-            sw.cue_step(&list, true).unwrap(),
-            [Action::CutDirect { input: named("A") }]
-        );
-        assert_eq!(sw.state().cue_lists[0].next, 2);
-
+        assert_eq!(sw.state().cue_lists[0].standby, 3);
         assert!(matches!(
-            sw.apply(Action::AddCueList {
-                name: "Loop".into(),
-                cues: vec![cue("Again", Action::CueGo { list })],
-            }),
+            sw.cue_go(None, t, None),
             Err(ActionError::BadCueList { .. })
         ));
+    }
+
+    #[test]
+    fn cues_by_standby_and_lists_by_active() {
+        let mut sw = two_inputs();
+        let t = tokio::time::Instant::now();
+        for name in ["Main", "Side"] {
+            sw.apply(Action::AddCueList {
+                name: name.into(),
+                cues: vec![
+                    cue("A", Action::CutDirect { input: named("A") }),
+                    cue("B", Action::CutDirect { input: named("B") }),
+                ],
+                source: None,
+            })
+            .unwrap();
+        }
+        sw.apply(Action::SetActiveCueList {
+            list: InputRef::Text("Side".into()),
+        })
+        .unwrap();
+        sw.apply(Action::CueStandby {
+            list: Some(InputRef::Text("active".into())),
+            to: lmix_types::StandbyMove::Next,
+        })
+        .unwrap();
+        assert_eq!(sw.state().cue_lists[1].standby, 2, "active = Side");
+
+        let out = sw.cue_start(None, "standby", t).unwrap();
+        assert_eq!(ran(&out), [Action::CutDirect { input: named("B") }]);
+        assert_eq!(sw.state().cue_lists[1].standby, 2, "standby stays");
+        assert!(sw.cue_panic(t, Some(20_000)).is_err(), "panic time 0–10 s");
+    }
+
+    #[test]
+    fn cue_lists_are_checked() {
+        let mut sw = two_inputs();
+        let add = |sw: &mut Switcher, cues: Vec<Cue>| {
+            sw.apply(Action::AddCueList {
+                name: "L".into(),
+                cues,
+                source: None,
+            })
+        };
+        let refused =
+            |r: Result<Vec<Command>, ActionError>| matches!(r, Err(ActionError::BadCueList { .. }));
+        let mut wait = Cue::empty(CueKind::Wait);
+        wait.duration_ms = Some(1005);
+        let mut numbered = cue("A", Action::Cut);
+        numbered.number = "1".into();
+        let mut deep = cue("leaf", Action::Cut);
+        for _ in 0..4 {
+            deep = Cue {
+                children: vec![deep],
+                ..Cue::empty(CueKind::Group)
+            };
+        }
+        let mut stray = Cue::empty(CueKind::Note);
+        stray.duration_ms = Some(100);
+
+        assert!(refused(add(
+            &mut sw,
+            vec![cue("Loop", Action::CueGo { list: None })]
+        )));
+        assert!(refused(add(&mut sw, vec![wait])), "waits in steps of 10 ms");
+        assert!(
+            refused(add(&mut sw, vec![Cue::empty(CueKind::Wait)])),
+            "a wait needs a duration"
+        );
+        assert!(
+            refused(add(&mut sw, vec![Cue::empty(CueKind::Start)])),
+            "a start needs a target"
+        );
+        assert!(
+            refused(add(&mut sw, vec![deep])),
+            "at most three group levels"
+        );
+        assert!(refused(add(&mut sw, vec![stray])), "fields of another kind");
+        add(&mut sw, vec![numbered.clone()]).unwrap();
+        let mut again = numbered;
+        again.id = lmix_types::CueId::new();
+        assert!(
+            refused(add(&mut sw, vec![again])),
+            "numbers are unique in the show"
+        );
+        assert!(refused(sw.apply(Action::SetGoGuard { ms: 9000 })));
     }
 
     #[test]
@@ -5882,6 +7086,7 @@ mod tests {
         let srt = OutputSpec::Srt {
             uri: "srt://cdn:9000".into(),
             video_kbps: 6000,
+            encoding: Default::default(),
         };
         sw.apply(Action::AddOutput {
             spec: srt.clone(),
@@ -5932,6 +7137,199 @@ mod tests {
     }
 
     #[test]
+    fn the_sample_rate_rebuilds_the_mixer_only() {
+        let mut sw = two_inputs();
+        let cmds = sw.apply(Action::SetSampleRate { hz: 44_100 }).unwrap();
+        assert!(matches!(
+            cmds[0],
+            Command::SetFormat {
+                sample_rate: 44_100,
+                ..
+            }
+        ));
+        assert!(
+            !cmds.iter().any(|c| matches!(c, Command::SetSlot { .. })),
+            "the sources keep running (the channel strips resample)"
+        );
+        assert_eq!(sw.state().sample_rate, 44_100);
+        assert!(sw
+            .apply(Action::SetSampleRate { hz: 44_100 })
+            .unwrap()
+            .is_empty());
+        assert!(matches!(
+            sw.apply(Action::SetSampleRate { hz: 96_000 }),
+            Err(ActionError::BadSampleRate { hz: 96_000 })
+        ));
+    }
+
+    #[test]
+    fn a_multiview_layout_rebuilds_the_mixer_only() {
+        let mut sw = two_inputs();
+        let layout = lmix_types::MultiviewLayout {
+            program: lmix_types::ProgramSide::Left,
+            meters: lmix_types::MultiviewMeters::Hidden,
+        };
+
+        let cmds = sw.apply(Action::SetMultiview { layout }).unwrap();
+
+        assert_eq!(
+            cmds[0],
+            Command::SetFormat {
+                format: Default::default(),
+                multiview: layout,
+                sample_rate: 48_000
+            }
+        );
+        assert!(
+            !cmds.iter().any(|c| matches!(c, Command::SetSlot { .. })),
+            "the sources keep running"
+        );
+        assert_eq!(sw.state().multiview, layout);
+        assert!(sw
+            .apply(Action::SetMultiview { layout })
+            .unwrap()
+            .is_empty());
+    }
+
+    #[test]
+    fn rtmp_needs_an_rtmp_address_and_h264() {
+        let mut sw = Switcher::new(SLOTS);
+        let rtmp = |url: &str, codec| OutputSpec::Rtmp {
+            url: url.into(),
+            key: "key".into(),
+            video_kbps: 4500,
+            encoding: VideoEncoding {
+                codec,
+                ..Default::default()
+            },
+        };
+        let add = |spec| Action::AddOutput {
+            spec,
+            source: OutputSource::Program,
+            name: None,
+            aux: None,
+        };
+        for bad in [
+            rtmp("srt://cdn:9000", lmix_types::VideoCodec::H264),
+            rtmp("rtmp://cdn/live", lmix_types::VideoCodec::H265),
+        ] {
+            assert!(matches!(
+                sw.apply(add(bad)),
+                Err(ActionError::BadEncoding { .. })
+            ));
+        }
+        sw.apply(add(rtmp("rtmps://cdn/live", lmix_types::VideoCodec::H264)))
+            .unwrap();
+        assert_eq!(sw.state().outputs[0].name, "RTMP rtmps://cdn/live");
+        // A stream like SRT: started with the others (STR.1).
+        let cmds = sw
+            .apply(Action::StartOutputs {
+                group: OutputGroup::Streams,
+            })
+            .unwrap();
+        assert_eq!(cmds.len(), 1);
+    }
+
+    #[test]
+    fn a_long_keyframe_interval_is_refused() {
+        let mut sw = Switcher::new(SLOTS);
+        let spec = |keyframe_ms| OutputSpec::Record {
+            folder: "show".into(),
+            container: Default::default(),
+            video_kbps: 8000,
+            encoding: VideoEncoding {
+                keyframe_ms,
+                ..Default::default()
+            },
+        };
+        let add = |spec| Action::AddOutput {
+            spec,
+            source: OutputSource::Program,
+            name: None,
+            aux: None,
+        };
+        assert!(matches!(
+            sw.apply(add(spec(20_000))),
+            Err(ActionError::BadEncoding { .. })
+        ));
+        assert!(sw.apply(add(spec(10_000))).is_ok());
+        let json = r#"{"action":"add_output","spec":{"kind":"srt","uri":"srt://cdn:9000","encoding":{"codec":"h265","rate":"cbr"}}}"#;
+        let Action::AddOutput { spec, .. } = serde_json::from_str::<Action>(json).unwrap() else {
+            panic!("not add_output");
+        };
+        assert_eq!(
+            spec.encoding(),
+            Some(&VideoEncoding {
+                codec: lmix_types::VideoCodec::H265,
+                rate: lmix_types::RateMode::Cbr,
+                keyframe_ms: lmix_types::output::DEFAULT_KEYFRAME_MS,
+            })
+        );
+    }
+
+    #[test]
+    fn output_groups_start_and_stop_together() {
+        let mut sw = Switcher::new(SLOTS);
+        let srt = |port: u16| OutputSpec::Srt {
+            uri: format!("srt://cdn:{port}"),
+            video_kbps: 6000,
+            encoding: Default::default(),
+        };
+        let record = OutputSpec::Record {
+            folder: "show".into(),
+            container: Default::default(),
+            video_kbps: 8000,
+            encoding: Default::default(),
+        };
+        for spec in [srt(9000), record, srt(9001)] {
+            sw.apply(Action::AddOutput {
+                spec,
+                source: OutputSource::Program,
+                name: None,
+                aux: None,
+            })
+            .unwrap();
+        }
+        let ids: Vec<OutputId> = sw.state().outputs.iter().map(|o| o.id).collect();
+        sw.set_output_status(ids[2], OutputStatus::Running { since_ms: 1 });
+        let started = |cmds: Vec<Command>| -> Vec<OutputId> {
+            cmds.iter()
+                .map(|c| match c {
+                    Command::StartOutput { id, .. } | Command::StopOutput { id } => *id,
+                    other => panic!("{other:?}"),
+                })
+                .collect()
+        };
+
+        let streams = Action::StartOutputs {
+            group: OutputGroup::Streams,
+        };
+        assert_eq!(
+            started(sw.apply(streams.clone()).unwrap()),
+            [ids[0]],
+            "not the running one"
+        );
+        sw.set_output_status(ids[0], OutputStatus::Running { since_ms: 2 });
+        assert!(sw.apply(streams).unwrap().is_empty());
+
+        let stop_all = Action::StopOutputs {
+            group: OutputGroup::All,
+        };
+        assert_eq!(started(sw.apply(stop_all).unwrap()), [ids[0], ids[2]]);
+        let recordings = Action::StartOutputs {
+            group: OutputGroup::Recordings,
+        };
+        assert_eq!(started(sw.apply(recordings).unwrap()), [ids[1]]);
+        assert_eq!(
+            serde_json::from_str::<Action>(r#"{"action":"stop_outputs","group":"streams"}"#)
+                .unwrap(),
+            Action::StopOutputs {
+                group: OutputGroup::Streams
+            }
+        );
+    }
+
+    #[test]
     fn iso_output_follows_its_input() {
         let mut sw = two_inputs();
         let b = sw.state().inputs[1].id;
@@ -5939,6 +7337,7 @@ mod tests {
             folder: "iso".into(),
             container: lmix_types::Container::Mkv,
             video_kbps: 8000,
+            encoding: Default::default(),
         };
         sw.apply(Action::AddOutput {
             spec: rec,
@@ -6174,6 +7573,31 @@ mod tests {
                     bus: 1,
                     gain: 0.0
                 },
+                Command::SetAuxSend {
+                    slot: 0,
+                    bus: 2,
+                    gain: 0.0
+                },
+                Command::SetAuxSend {
+                    slot: 0,
+                    bus: 3,
+                    gain: 0.0
+                },
+                Command::SetAuxSend {
+                    slot: 0,
+                    bus: 4,
+                    gain: 0.0
+                },
+                Command::SetAuxSend {
+                    slot: 0,
+                    bus: 5,
+                    gain: 0.0
+                },
+                Command::SetAuxSend {
+                    slot: 0,
+                    bus: 6,
+                    gain: 0.0
+                },
                 Command::SetAudio {
                     slot: 0,
                     gain: 1.0,
@@ -6333,12 +7757,14 @@ mod tests {
 
         let cmds = fresh.replace(show, Some("x.lmix".into()));
 
-        // Picture first (slots, program, preview), then audio and the rest.
-        assert!(matches!(cmds[0], Command::SetSlot { slot: 0, .. }));
-        assert!(matches!(cmds[1], Command::SetSlot { slot: 1, .. }));
-        assert!(matches!(cmds[2], Command::Program { slot: None, .. }));
-        assert_eq!(cmds[3], Command::Preview { slot: 1 });
-        assert!(matches!(cmds[4], Command::SetAudio { slot: 0, .. }));
+        // The format (a new mixer if it differs), then picture (slots,
+        // program, preview), then audio and the rest.
+        assert!(matches!(cmds[0], Command::SetFormat { .. }));
+        assert!(matches!(cmds[1], Command::SetSlot { slot: 0, .. }));
+        assert!(matches!(cmds[2], Command::SetSlot { slot: 1, .. }));
+        assert!(matches!(cmds[3], Command::Program { slot: None, .. }));
+        assert_eq!(cmds[4], Command::Preview { slot: 1 });
+        assert!(matches!(cmds[5], Command::SetAudio { slot: 0, .. }));
         assert_eq!(fresh.state().path.as_deref(), Some("x.lmix"));
     }
 
