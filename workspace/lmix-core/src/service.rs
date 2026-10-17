@@ -61,6 +61,8 @@ pub struct Service {
     /// Players the operator moved (jump, item, restart, previous), and
     /// when: their position reports right after are no clip end.
     jumped: std::sync::Mutex<HashMap<strom_types::FlowId, Instant>>,
+    /// Each player's last report, for `playback` in the state (API.4).
+    playback: std::sync::Mutex<HashMap<InputId, (lmix_types::Playback, Instant)>>,
     /// Settings file of the shortcuts for all shows (AUT.3).
     all_shows_file: std::sync::Mutex<Option<PathBuf>>,
     /// Settings file of the layout templates (LAY.5).
@@ -118,6 +120,10 @@ const URL_REFRESH: std::time::Duration = std::time::Duration::from_secs(10);
 const FILES_CHECK: std::time::Duration = std::time::Duration::from_secs(1);
 /// How long after a jump in a player its reports are no clip end.
 const JUMP_SETTLE: std::time::Duration = std::time::Duration::from_millis(600);
+/// Players report five times a second while their flow runs, but a busy
+/// engine leaves gaps of seconds (a VM check lost a held clip's state for
+/// one read); a report this old belongs to a player that is gone.
+const PLAYBACK_STALE: std::time::Duration = std::time::Duration::from_secs(10);
 
 /// How often the inputs' media files are looked for (SHW.4).
 const MEDIA_CHECK: std::time::Duration = std::time::Duration::from_secs(3);
@@ -155,6 +161,7 @@ impl Service {
             ptz_seq: std::sync::atomic::AtomicU32::new(0),
             autosave,
             jumped: std::sync::Mutex::new(HashMap::new()),
+            playback: std::sync::Mutex::new(HashMap::new()),
             all_shows_file: std::sync::Mutex::new(None),
             layout_templates_file: std::sync::Mutex::new(None),
             targets_file: std::sync::Mutex::new(None),
@@ -680,7 +687,13 @@ impl Service {
     }
 
     pub async fn state(&self) -> ShowState {
-        self.switcher.lock().await.state()
+        let mut state = self.switcher.lock().await.state();
+        let mut playback = self.playback.lock().expect("playback lock");
+        playback.retain(|_, (_, at)| at.elapsed() < PLAYBACK_STALE);
+        for input in &mut state.inputs {
+            input.playback = playback.get(&input.id).map(|(p, _)| *p);
+        }
+        state
     }
 
     /// Latest frame of an input; the switcher lock is not held while the
@@ -1176,6 +1189,19 @@ impl Service {
                 }
                 // For the transport bars; no state change, no autosave.
                 if let Some(input) = sw.input_at_slot(slot) {
+                    self.playback.lock().expect("playback lock").insert(
+                        input,
+                        (
+                            lmix_types::Playback {
+                                state: report.state,
+                                position_ms: report.position_ms,
+                                duration_ms: report.duration_ms,
+                                item: report.index + 1,
+                                items: report.items,
+                            },
+                            Instant::now(),
+                        ),
+                    );
                     let _ = self.events.send(Event::Position {
                         input,
                         position_ms: report.position_ms,
@@ -3383,6 +3409,7 @@ mod tests {
             duration_ms: 9000,
             index: 0,
             items: 1,
+            state: Some(lmix_types::PlaybackState::Paused),
         });
 
         let id = service.state().await.inputs[0].id;
@@ -3401,6 +3428,17 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(position, (id, 1500, 9000));
+        // The state reads the last report too (API.4).
+        assert_eq!(
+            service.state().await.inputs[0].playback,
+            Some(lmix_types::Playback {
+                state: Some(lmix_types::PlaybackState::Paused),
+                position_ms: 1500,
+                duration_ms: 9000,
+                item: 1,
+                items: 1,
+            })
+        );
     }
 
     #[tokio::test]
@@ -3626,6 +3664,7 @@ mod tests {
             duration_ms: 10_000,
             index: 0,
             items: 1,
+            state: None,
         };
         let settle = || tokio::time::sleep(std::time::Duration::from_millis(100));
 
