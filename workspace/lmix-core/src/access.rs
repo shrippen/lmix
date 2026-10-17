@@ -225,7 +225,7 @@ pub fn right_of(action: &Action) -> Right {
         | Action::ImportPackage { .. }
         | Action::LoadLayoutTemplate { .. }
         | Action::MoveInput { .. }
-        | Action::NewShow
+        | Action::NewShow { .. }
         | Action::OpenShow { .. }
         | Action::RelocateMedia { .. }
         | Action::RemoveCueList { .. }
@@ -267,6 +267,7 @@ pub fn right_of(action: &Action) -> Right {
         | Action::SetLock { .. }
         | Action::SetDefaultDelay { .. }
         | Action::SetMasterFormat { .. }
+        | Action::SetMultiview { .. }
         | Action::SetLook { .. }
         | Action::SetMidiTbar { .. }
         | Action::SetOverlay { .. }
@@ -299,6 +300,7 @@ pub fn right_of(action: &Action) -> Right {
         | Action::SetListen { .. }
         | Action::ClearListen
         | Action::PreviewLayout { .. }
+        | Action::ShowBox { .. }
         | Action::CueGo { .. }
         | Action::CueStart { .. }
         | Action::CueStop { .. }
