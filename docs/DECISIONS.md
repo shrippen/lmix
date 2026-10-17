@@ -3130,3 +3130,15 @@ Profil/Preset, Ton-Bitrate und geteilte Profile bleiben offen.
 fps, Grenze 10 s), VM-Test mit strom: H.265-Aufnahme mit CBR ist HEVC +
 AAC; Console-Dialog „Ausgang hinzufügen“ mit Codec, Bitratenart,
 Keyframe-Abstand.
+
+## 2026-10-17 — Ton folgt der T-Bar (SWI.5)
+
+**Entscheidung**: Inputs mit „Ton folgt Bild“ blenden mit der T-Bar:
+Program mit `1 − p`, Vorschau mit `p` (linear in der Verstärkung, wie
+das Bild), zurück auf 0 wie vorher, bei 1 der Take. Stummgeschaltete
+Kanäle behalten ihren eigenen Pegel. Inputs ohne „folgt Bild“ bleiben,
+wie sie sind.
+
+**Geprüft**: Test (zuerst rot: bei halber T-Bar kam kein Ton-Befehl),
+VM-Test mit strom: Ball auf Program bei halber T-Bar ≈ −6 dB, zurück
+auf 0 wieder voll.

@@ -230,7 +230,7 @@ kann es, Console nicht.
 | SWI.2 | Cut (Tausch PVW/PGM) und Cut direkt (Input sofort auf PGM) | M | ✅ |
 | SWI.3 | 4 Übergangstasten, je Effekt + Dauer einstellbar; Taste 1 steuert T-Bar | M | ◐ (T-Bar nur Blende, nicht Effekt von Taste 1) |
 | SWI.4 | Effektkatalog: Cut, Blende, 3D-Zoom, Schieben, Wischen, Würfel, Würfelzoom, Fliegen, Fliegen+Drehen, Kreuzzoom, Verschmelzen (SWI.6), Stinger 1–8 | M | ◐ (Cut, Blende, Dip, Schieben, Push, Wischen, Stinger; ohne 3D-Zoom, Würfel, Fliegen, Kreuzzoom, Verschmelzen) |
-| SWI.5 | T-Bar: manueller Fortschritt 0–100 %, per Maus, MIDI-Fader, Aktion | M | ◐ (Maus, MIDI, Aktion; nur Blende, Ton erst beim Take) |
+| SWI.5 | T-Bar: manueller Fortschritt 0–100 %, per Maus, MIDI-Fader, Aktion | M | ◐ (Maus, MIDI, Aktion; Ton mit „folgt Bild“ blendet mit; nur Blende als Effekt) |
 | SWI.6 | Verschmelzen: Ebenen, die in PVW und PGM vorkommen, wandern an ihre neue Position; Rest blendet | S | – |
 | SWI.7 | Stinger 1–8: Animations-Input, Dauer, Schnittpunkt, Zusatzeffekt, unter oder über Overlays; Dauer/Schnittpunkt aus Titelanimation übernehmbar | S | ◐ (4 Tasten, Clip + Dauer + Schnittpunkt; nur unter Overlays, ohne Zusatzeffekt, ohne Titelanimation) |
 | SWI.8 | Schnellstart: Take mit eigenem Effekt (Standard ½ s Blende) und Start der Wiedergabe; optional per Klick ins Preview-Fenster | S | ✅ (Doppelklick ins Preview-Fenster) |
