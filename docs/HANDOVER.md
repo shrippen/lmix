@@ -33,6 +33,11 @@ unten mergen; Gitea stellt die Basis des nächsten auf `main` um):
 | #49 | `s1-targets-ui` | Ziele und Abonnenten in der Console |
 | #50 | `s1-polish` | Dauer an Aktions-Cues, dunkler Raum, OSC-Abo-Ablauf, Übergangsleiste rollt (Fix für `main`) |
 | #52 | `m9-settings` | Älteres Show-Format beim Speichern gesichert; Einstellungen ex-/importieren (SHW.7/8) |
+| #53 | `s1-zones` | Zonen in der Show, Ausgänge je Rechner (SND.10 ohne Engine); Gruppe endet nach Neuladen |
+| #54 | `s1-ctl` | Panik in Zeit x, Cues über `standby`, Listen über `active` (CTL.1) |
+
+Rote GitHub-Läufe auf `s1-feeds` und `s1-script-folder` sind die wackelige
+Failover-Prüfung, die #45 behebt (der Stapel bekommt sie über `main`).
 
 Breaking (vor dem ersten Release erlaubt, je PR beschrieben): Cue `label`
 → `name`, `cue_back`/`cue_jump` → `cue_standby`, `next` → `standby`,

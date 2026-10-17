@@ -56,6 +56,7 @@ enabled: !(/\&[^\&]/.test(control.text))
 ## Offen (Claude)
 
 - [ ] `scripts/test-titles.sh` schlug am 12.10. einmal fehl (direkt nach `test-web.sh`, Ausgabe nicht erhalten), danach 19-mal grün; bei der nächsten Wiederholung die Ausgabe sichern und die Ursache beheben.
+- [ ] Cue-Zeitgeber unter Last bis 146 ms spät (RUN.8, DECISIONS 17.10.): Echtzeit-Priorität per rtkit für den Zeitgeber-Thread, dann 4 h unter Last messen; zusätzlich 4 h auf freiem Rechner.
 
 - [x] Demo-Modus mit Studio-Weber-Daten (2026-10-09, `demo/start.sh`).
 - [ ] Release-Build (wenn es einen gibt): `demo/` ausschließen und prüfen.
