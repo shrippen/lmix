@@ -17,12 +17,12 @@ use std::time::Duration;
 use serde::Serialize;
 use strom_types::show_playback::{
     AddPictureRequest, AddSoundRequest, FadeEnd, PictureEnd, PictureFadeRequest, PictureFit,
-    ShowPlaybackState, SoundFadeRequest, SoundRoute, SoundStart, SoundState, SoundStopRequest,
-    StageLevelRequest, ZoneLevelRequest, GAIN_MIN_DB,
+    ShowPlaybackState, SoundFadeRequest, SoundInfo, SoundRepeat, SoundRoute, SoundStart,
+    SoundState, SoundStopRequest, StageLevelRequest, ZoneLevelRequest, GAIN_MIN_DB,
 };
 use tokio::sync::broadcast;
 
-use lmix_types::sound::AfterFade;
+use lmix_types::sound::{self, AfterFade};
 use lmix_types::stage;
 
 use super::{check, net, StromEngine};
@@ -59,6 +59,16 @@ impl Default for Playing {
 impl Playing {
     pub(super) fn subscribe(&self) -> broadcast::Receiver<String> {
         self.ended.subscribe()
+    }
+
+    /// The ids of `items` that are not held ready.
+    fn not_ready(&self, items: Vec<SoundInfo>) -> Vec<String> {
+        let ready = self.ready.lock().expect("ready lock");
+        items
+            .into_iter()
+            .map(|item| item.id)
+            .filter(|id| !ready.contains_key(id))
+            .collect()
     }
 
     /// Take `id` out of what is held ready, if it is held as `what`.
@@ -110,6 +120,11 @@ fn sound_request(id: &str, sound: &EngineSound, start: SoundStart) -> AddSoundRe
             })
             .collect(),
         start,
+        repeat: match sound.repeat {
+            sound::SoundRepeat::Once => SoundRepeat::Once,
+            sound::SoundRepeat::Times(n) => SoundRepeat::Times(n),
+            sound::SoundRepeat::Forever => SoundRepeat::Forever,
+        },
     }
 }
 
@@ -254,9 +269,9 @@ impl StromEngine {
         id: &str,
         sound: &EngineSound,
     ) -> Result<(), EngineError> {
-        if self.playback.take_ready(id, &Ready::Sound(sound.clone())) {
-            self.release("sounds", id).await?;
-        } else {
+        let held = self.playback.take_ready(id, &Ready::Sound(sound.clone()));
+        // Held but gone from the block meanwhile: added afresh.
+        if !held || self.release("sounds", id).await.is_err() {
             let request = sound_request(id, sound, SoundStart::Play);
             self.playback_post("/sounds", &request).await?;
         }
@@ -292,8 +307,10 @@ impl StromEngine {
     ) -> Result<(), EngineError> {
         let ids = match id {
             Some(id) => vec![id.to_string()],
+            // Every sound that plays: what is held ready stays (the
+            // standby cue after a panic).
             None => match self.playback_state().await {
-                Ok(state) => state.sounds.into_iter().map(|s| s.id).collect(),
+                Ok(state) => self.playback.not_ready(state.sounds),
                 // No playback flow: nothing plays.
                 Err(_) => return Ok(()),
             },
@@ -325,12 +342,10 @@ impl StromEngine {
         id: &str,
         picture: &EnginePicture,
     ) -> Result<(), EngineError> {
-        if self
+        let held = self
             .playback
-            .take_ready(id, &Ready::Picture(picture.clone()))
-        {
-            self.release("pictures", id).await?;
-        } else {
+            .take_ready(id, &Ready::Picture(picture.clone()));
+        if !held || self.release("pictures", id).await.is_err() {
             let request = picture_request(id, picture, SoundStart::Play);
             self.playback_post("/pictures", &request).await?;
         }
@@ -368,7 +383,7 @@ impl StromEngine {
         let ids = match id {
             Some(id) => vec![id.to_string()],
             None => match self.playback_state().await {
-                Ok(state) => state.pictures.into_iter().map(|p| p.id).collect(),
+                Ok(state) => self.playback.not_ready(state.pictures),
                 Err(_) => return Ok(()),
             },
         };
@@ -479,7 +494,6 @@ fn over(playing: &HashSet<String>, state: &ShowPlaybackState) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use strom_types::show_playback::SoundInfo;
 
     #[test]
     fn sounds_and_pictures_that_ended_or_left_are_over() {

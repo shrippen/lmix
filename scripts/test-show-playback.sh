@@ -111,7 +111,8 @@ cues="$(jq -cn --arg one "$WORK/tone1.wav" --arg ten "$WORK/tone10.wav" --arg re
     {number: "6", kind: "fade", duration_ms: 200, fade: {target: {stage: "Back"}, brightness: 0}},
     {number: "7", kind: "fade", duration_ms: 300, fade: {target: {cue: "5"}, opacity: 0, then: "stop"}},
     {number: "8", kind: "sound", sound: {file: $ten, fade_in_ms: 500}},
-    {number: "9", kind: "picture", picture: {file: $red, stage: "Back"}}
+    {number: "9", kind: "picture", picture: {file: $red, stage: "Back"}},
+    {number: "10", kind: "sound", sound: {file: $one, repeat: {times: 2}}}
 ]')"
 act '{"action":"set_go_guard","ms":0}' || fail "GO guard refused"
 act "{\"action\":\"add_cue_list\",\"name\":\"Sound\",\"cues\":$cues}" || fail "cue list refused"
@@ -160,10 +161,19 @@ act '{"action":"cue_go"}' || fail "GO 9 refused"
 within '[[ "$(sounds)" == *playing* && "$(pictures)" == *playing* ]]' 2 \
     || fail "cues 8 and 9 do not play: $(sounds) $(pictures)"
 act '{"action":"cue_panic","ms":400}' || fail "panic refused"
-within '[[ "$(sounds)" == "[]" && "$(pictures)" == "[]" ]]' 2 \
+within '[[ "$(sounds)" != *playing* && "$(pictures)" != *playing* ]]' 2 \
     || fail "panic left: $(sounds) $(pictures)"
+[[ "$(sounds)" == *ready* ]] || fail "the panic took the standby cue's preload: $(sounds)"
 [[ -z "$(running)" ]] || fail "cues run after the panic: $(running)"
-pass "panic stops every sound and picture"
+pass "panic stops every sound and picture, the standby cue stays ready"
+
+# --- a sound cue played twice runs 2 s without a gap, then ends ---
+act '{"action":"cue_go"}' || fail "GO 10 refused"
+within '[[ "$(sounds)" == *playing* ]]' 2 || fail "cue 10 does not play"
+sleep 1.4
+[[ "$(running)" == *10* ]] || fail "cue 10 ended after one play"
+within '[[ "$(running)" != *10* ]]' 2 || fail "cue 10 did not end after two plays: $(running)"
+pass "a sound cue repeated twice ends after its second play"
 
 # --- no zones and no stages: the flow goes ---
 act '{"action":"remove_zone","name":"Hall"}' || fail "remove zone refused"
