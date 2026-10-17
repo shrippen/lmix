@@ -3112,3 +3112,21 @@ zwei Aux-Busse. Der strom-Audiomischer kann bis 32.
 **Geprüft**: Tests (alte Show mit zwei Bussen, Bus 8 abgelehnt), VM-Test
 mit strom: G still ohne Send, hörbar mit Send; Console auf Xvfb mit
 geöffnetem Bus-Dialog.
+
+## 2026-10-17 — Codec, Rate Control, Keyframes je Ausgang (STR.3)
+
+**Entscheidung**: SRT-Ausgänge und Aufnahmen bekommen `encoding`:
+`codec` (`h264` Standard, `h265`), `rate` (`vbr` Standard, `cbr`),
+`keyframe_ms` (Standard 2000, 0 = Encoder entscheidet, höchstens 10 s).
+Millisekunden statt Frames, weil sie beim Wechsel des Programmformats
+(OUT.1) gleich bleiben; die Engine rechnet mit der Bildrate um. Ohne
+Angabe bleibt alles wie bisher (Show-Dateien unverändert).
+
+AV1 fehlt: der strom-Recorder (nur `h264parse`/`h265parse`) und
+`mpegtsmux` von GStreamer 1.24 nehmen es nicht. Auflösung je Ausgang,
+Profil/Preset, Ton-Bitrate und geteilte Profile bleiben offen.
+
+**Geprüft**: Tests (Encoder-Eigenschaften im Flow, 2 s bei 25 und 59,94
+fps, Grenze 10 s), VM-Test mit strom: H.265-Aufnahme mit CBR ist HEVC +
+AAC; Console-Dialog „Ausgang hinzufügen“ mit Codec, Bitratenart,
+Keyframe-Abstand.
