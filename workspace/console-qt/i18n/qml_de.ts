@@ -163,7 +163,7 @@
       <translation>Ausgang hinzufügen</translation>
     </message>
     <message>
-      <location line="+37" />
+      <location line="+40" />
       <source>Output</source>
       <translation>Ausgang</translation>
     </message>
@@ -176,6 +176,11 @@
       <location line="+4" />
       <source>Program</source>
       <translation>Programm</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Multiview</source>
+      <translation>Multiview</translation>
     </message>
     <message>
       <location line="+6" />
@@ -648,6 +653,64 @@
       <location line="+10" />
       <source>Loop</source>
       <translation>Schleife</translation>
+    </message>
+  </context>
+  <context>
+    <name>FormatDialog</name>
+    <message>
+      <location filename="../qml/FormatDialog.qml" line="+19" />
+      <source>3840 × 2160 (4K UHD)</source>
+      <translation>3840 × 2160 (4K UHD)</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>2560 × 1440</source>
+      <translation>2560 × 1440</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>1920 × 1080 (Full HD)</source>
+      <translation>1920 × 1080 (Full HD)</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>1280 × 720 (HD)</source>
+      <translation>1280 × 720 (HD)</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>720 × 576 (PAL SD)</source>
+      <translation>720 × 576 (PAL SD)</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>1080 × 1920 (upright)</source>
+      <translation>1080 × 1920 (hochkant)</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>720 × 1280 (upright)</source>
+      <translation>720 × 1280 (hochkant)</translation>
+    </message>
+    <message>
+      <location line="+13" />
+      <source>Program format</source>
+      <translation>Programmformat</translation>
+    </message>
+    <message>
+      <location line="+26" />
+      <source>Size</source>
+      <translation>Größe</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Frames per second</source>
+      <translation>Bilder pro Sekunde</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>Program stops for a moment while the mixer is built anew; running outputs restart.</source>
+      <translation>Das Programm steht kurz, während der Mischer neu gebaut wird; laufende Ausgänge starten neu.</translation>
     </message>
   </context>
   <context>
@@ -1692,7 +1755,7 @@
       <translation>Leerer Ordner für Show und Medien des Pakets</translation>
     </message>
     <message>
-      <location line="+145" />
+      <location line="+153" />
       <source>lmix-core</source>
       <translation>lmix-core</translation>
     </message>
@@ -1758,6 +1821,11 @@
     </message>
     <message>
       <location line="+5" />
+      <source>Program format…</source>
+      <translation>Programmformat…</translation>
+    </message>
+    <message>
+      <location line="+4" />
       <source>Export settings…</source>
       <translation>Einstellungen exportieren…</translation>
     </message>

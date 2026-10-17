@@ -400,7 +400,16 @@ done
 iso_file() { find "$WORK/strom-data" -path "*iso-$1/*" -name '*.mp4' | head -1; }
 [[ "$(codecs "$(iso_file Orange)")" == "h264" ]] || fail "ISO of a silent input: $(codecs "$(iso_file Orange)")"
 [[ "$(codecs "$(iso_file Clips)")" == "aac,h264" ]] || fail "ISO of the playlist: $(codecs "$(iso_file Clips)")"
-pass "MultiCorder: ISO recordings per input (silent input video only, playlist with sound)"
+# The multiview as an output (OUT.2), with program sound.
+act '{"action":"add_output","spec":{"kind":"record","folder":"mv","container":"mp4"},"source":{"from":"multiview"},"name":"MV"}' >/dev/null
+act '{"action":"start_output","output":"MV"}' >/dev/null
+sleep 4
+act '{"action":"stop_output","output":"MV"}' >/dev/null
+wait_for "$SETTLE_S" is output_state MV stopped || fail "multiview recording did not stop"
+mv_file="$(find "$WORK/strom-data" -path '*mv/*' -name '*.mp4' | head -1)"
+[[ "$(codecs "$mv_file")" == "aac,h264" ]] || fail "multiview recording: $(codecs "$mv_file")"
+act '{"action":"remove_output","output":"MV"}' >/dev/null
+pass "MultiCorder: ISO recordings per input (silent input video only, playlist with sound); multiview recorded"
 
 # Display output: program in a window on the engine's screen. Orange on
 # program makes the window easy to recognize.
@@ -741,6 +750,24 @@ wait_for "$SETTLE_S" is output_state Stream running || fail "running output not 
     || fail "output flow duplicated"
 [[ "$(output_starts)" == "$starts_before" ]] || fail "output restarted instead of adopted"
 pass "lmix-core killed and restarted: mixer kept running, show resumed, output adopted"
+
+# --- program format (OUT.1): upright 1080x1920, then back ---
+mixer_starts() { grep -c "Starting pipeline: lmix mixer" "$WORK/strom.log" || true; }
+before="$(mixer_starts)"
+act '{"action":"cut_direct","input":"Ball"}' >/dev/null
+act '{"action":"set_master_format","format":{"width":1080,"height":1920,"framerate":"25/1"}}' >/dev/null
+# The API's program picture is a 320x180 thumbnail whatever the format:
+# the mixer's own properties tell the format, the picture that it runs.
+vm_prop() { curl -sf "$STROM/api/flows/$MIXER_ID" | jq -r ".flow.blocks[] | select(.id==\"vm\") | .properties.$1"; }
+wait_for "$((SETTLE_S + 10))" is vm_prop pgm_resolution 1080x1920 || fail "mixer not built in 1080x1920"
+[[ "$(vm_prop pgm_framerate)" == 25/1 ]] || fail "mixer not at 25 fps"
+[[ "$(mixer_starts)" -gt "$before" ]] || fail "mixer not built anew"
+wait_for "$((SETTLE_S + 10))" program_moves || fail "program does not move in 1080x1920"
+act '{"action":"set_master_format","format":{"width":1920,"height":1080,"framerate":"30/1"}}' >/dev/null
+wait_for "$((SETTLE_S + 10))" is vm_prop pgm_resolution 1920x1080 || fail "mixer not back in 1920x1080"
+wait_for "$((SETTLE_S + 10))" program_moves || fail "program does not move after going back"
+wait_for "$SETTLE_S" is input_state Ball online || fail "Ball not online after the format changes"
+pass "program format: upright 1080x1920 and back, mixer rebuilt, sources kept"
 
 criticals="$(grep -c 'GStreamer-CRITICAL' "$WORK/strom.log" || true)"
 [[ "$criticals" == 0 ]] || fail "$criticals GStreamer CRITICALs in strom.log"

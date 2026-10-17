@@ -420,6 +420,14 @@ Kirigami.ApplicationWindow {
         inputs: root.inputs
     }
 
+    FormatDialog {
+        id: formatDialog
+        parent: QQC2.Overlay.overlay
+        anchors.centerIn: parent
+        act: root.act
+        format: root.show && root.show.format ? root.show.format : ({ width: 1920, height: 1080, framerate: "30/1" })
+    }
+
     AuxBusDialog {
         id: auxDialog
         parent: QQC2.Overlay.overlay
@@ -516,6 +524,10 @@ Kirigami.ApplicationWindow {
                             onTriggered: importDialog.open()
                         }
                         QQC2.MenuSeparator {}
+                        QQC2.MenuItem {
+                            text: qsTr("Program format…")
+                            onTriggered: formatDialog.open()
+                        }
                         QQC2.MenuItem {
                             text: qsTr("Export settings…")
                             onTriggered: exportSettingsDialog.open()

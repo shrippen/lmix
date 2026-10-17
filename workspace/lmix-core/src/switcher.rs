@@ -108,6 +108,9 @@ pub enum Command {
     SetMaster { gain: f64, mute: bool, ramp_ms: u32 },
     /// Level of the monitor bus (AUD.4).
     SetMonitor { gain: f64 },
+    /// Program in this format (OUT.1); the engine rebuilds its mixer only
+    /// when it differs, and the commands after it set the mixer up again.
+    SetFormat { format: lmix_types::MasterFormat },
     /// Mix `slot` (preview) over program by `position` (0–1), as the
     /// T-bar stands; 0 hides it again.
     TBar { slot: usize, position: f32 },
@@ -161,6 +164,7 @@ enum Bus {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Feed {
     Program,
+    Multiview,
     /// One input's slot; `audio` when its source has sound.
     Slot {
         slot: usize,
@@ -1093,6 +1097,23 @@ impl Switcher {
             Action::SetAuxBus { bus, volume, mute } => {
                 self.set_aux_bus(bus, volume, mute, AUDIO_RAMP_MS)
             }
+            Action::SetMasterFormat { format } => {
+                if !format.is_valid() {
+                    return Err(ActionError::BadFormat {
+                        min: lmix_types::output::FORMAT_MIN_PX,
+                        max: lmix_types::output::FORMAT_MAX_PX,
+                    });
+                }
+                if format == self.show.format {
+                    return Ok(Vec::new());
+                }
+                self.show.format = format;
+                // A new mixer, set up again; outputs restart in the new
+                // size. The sources keep running (no clip starts over).
+                let mut commands = self.restore_commands();
+                commands.retain(|c| !matches!(c, Command::SetSlot { .. }));
+                Ok(commands)
+            }
             Action::SetMonitorVolume { volume } => {
                 check_volume(volume)?;
                 self.show.monitor_volume = volume;
@@ -1361,7 +1382,11 @@ impl Switcher {
     /// Commands that rebuild the engine from the current show (start-up,
     /// engine restart): slots, program, preview, then every audio channel.
     pub fn restore_commands(&mut self) -> Vec<Command> {
-        let mut commands = self.picture_commands();
+        // First: a new format builds a new mixer, the rest sets it up.
+        let mut commands = vec![Command::SetFormat {
+            format: self.show.format,
+        }];
+        commands.extend(self.picture_commands());
         self.mix.clear();
         commands.extend(self.audio_commands(AUDIO_RAMP_MS));
         // A reused mixer may still hold solos from before.
@@ -1540,6 +1565,7 @@ impl Switcher {
             t_bar: self.t_bar,
             aux_buses: self.show.aux_buses,
             master: self.show.master,
+            format: self.show.format,
             monitor_volume: self.show.monitor_volume,
             default_delay_ms: self.show.default_delay_ms,
             looks_available: self.looks_available,
@@ -3602,6 +3628,9 @@ impl Switcher {
         let name = match (output.name.is_empty(), source) {
             (false, _) => output.name.clone(),
             (true, OutputSource::Program) => output.spec.default_name(),
+            (true, OutputSource::Multiview) => {
+                format!("{} (Multiview)", output.spec.default_name())
+            }
             (true, OutputSource::Input(id)) => {
                 let input = self
                     .show
@@ -3619,8 +3648,10 @@ impl Switcher {
     /// Program, or the slot of the output's input; ISO outputs need an
     /// input with a picture.
     fn feed_of(&self, output: &ShowOutput) -> Result<Feed, ActionError> {
-        let OutputSource::Input(id) = output.source else {
-            return Ok(Feed::Program);
+        let id = match output.source {
+            OutputSource::Program => return Ok(Feed::Program),
+            OutputSource::Multiview => return Ok(Feed::Multiview),
+            OutputSource::Input(id) => id,
         };
         let input = self
             .show
@@ -5594,6 +5625,43 @@ mod tests {
     }
 
     #[test]
+    fn a_new_format_rebuilds_and_restores() {
+        let mut sw = two_inputs();
+        let upright = lmix_types::MasterFormat {
+            width: 1080,
+            height: 1920,
+            framerate: lmix_types::Framerate::Fps25,
+        };
+
+        let cmds = sw.apply(Action::SetMasterFormat { format: upright }).unwrap();
+
+        assert_eq!(cmds[0], Command::SetFormat { format: upright });
+        assert!(cmds.iter().any(|c| matches!(c, Command::Preview { .. }) || matches!(c, Command::Program { .. })));
+        assert!(
+            !cmds.iter().any(|c| matches!(c, Command::SetSlot { .. })),
+            "the sources keep running"
+        );
+        assert_eq!(sw.state().format, upright);
+        assert!(
+            sw.apply(Action::SetMasterFormat { format: upright }).unwrap().is_empty(),
+            "the same format again changes nothing"
+        );
+        for bad in [(1081, 1920), (1080, 100), (8000, 4320)] {
+            let format = lmix_types::MasterFormat {
+                width: bad.0,
+                height: bad.1,
+                ..upright
+            };
+            assert!(matches!(
+                sw.apply(Action::SetMasterFormat { format }),
+                Err(ActionError::BadFormat { .. })
+            ));
+        }
+        let json = r#"{"action":"set_master_format","format":{"width":1280,"height":720,"framerate":"60000/1001"}}"#;
+        assert!(serde_json::from_str::<Action>(json).is_ok());
+    }
+
+    #[test]
     fn new_inputs_get_the_default_delay_and_the_monitor_its_volume() {
         let mut sw = Switcher::new(SLOTS);
         sw.apply(Action::SetDefaultDelay { ms: 40 }).unwrap();
@@ -7166,12 +7234,14 @@ mod tests {
 
         let cmds = fresh.replace(show, Some("x.lmix".into()));
 
-        // Picture first (slots, program, preview), then audio and the rest.
-        assert!(matches!(cmds[0], Command::SetSlot { slot: 0, .. }));
-        assert!(matches!(cmds[1], Command::SetSlot { slot: 1, .. }));
-        assert!(matches!(cmds[2], Command::Program { slot: None, .. }));
-        assert_eq!(cmds[3], Command::Preview { slot: 1 });
-        assert!(matches!(cmds[4], Command::SetAudio { slot: 0, .. }));
+        // The format (a new mixer if it differs), then picture (slots,
+        // program, preview), then audio and the rest.
+        assert!(matches!(cmds[0], Command::SetFormat { .. }));
+        assert!(matches!(cmds[1], Command::SetSlot { slot: 0, .. }));
+        assert!(matches!(cmds[2], Command::SetSlot { slot: 1, .. }));
+        assert!(matches!(cmds[3], Command::Program { slot: None, .. }));
+        assert_eq!(cmds[4], Command::Preview { slot: 1 });
+        assert!(matches!(cmds[5], Command::SetAudio { slot: 0, .. }));
         assert_eq!(fresh.state().path.as_deref(), Some("x.lmix"));
     }
 

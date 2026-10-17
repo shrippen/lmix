@@ -170,10 +170,11 @@ pub fn output_of(kind: &str, text: &str, container: &str, video_kbps: u32) -> Op
     })
 }
 
-/// Program, or one input by id (ISO, MultiCorder).
+/// Program, the multiview, or one input by id (ISO, MultiCorder).
 pub fn output_source_of(input: &str) -> OutputSource {
     match input.trim() {
         "" | "program" => OutputSource::Program,
+        "multiview" => OutputSource::Multiview,
         id => serde_json::from_value(serde_json::Value::String(id.into()))
             .map(OutputSource::Input)
             .unwrap_or(OutputSource::Program),
@@ -251,6 +252,7 @@ mod tests {
     #[test]
     fn output_source_of_program_or_input() {
         assert_eq!(output_source_of(""), OutputSource::Program);
+        assert_eq!(output_source_of("multiview"), OutputSource::Multiview);
         let id = lmix_types::InputId::new();
         assert_eq!(output_source_of(&id.to_string()), OutputSource::Input(id));
     }

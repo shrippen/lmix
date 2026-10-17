@@ -263,6 +263,7 @@ pub fn right_of(action: &Action) -> Right {
         | Action::SetLayout { .. }
         | Action::SetLock { .. }
         | Action::SetDefaultDelay { .. }
+        | Action::SetMasterFormat { .. }
         | Action::SetLook { .. }
         | Action::SetMidiTbar { .. }
         | Action::SetOverlay { .. }
