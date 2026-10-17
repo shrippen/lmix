@@ -286,6 +286,8 @@ pub fn right_of(action: &Action) -> Right {
         | Action::SetChannelStrip { .. }
         | Action::SetAuxSend { .. }
         | Action::SetAuxBus { .. }
+        | Action::SetMaster { .. }
+        | Action::FadeVolume { .. }
         | Action::SetListen { .. }
         | Action::ClearListen
         | Action::PreviewLayout { .. }

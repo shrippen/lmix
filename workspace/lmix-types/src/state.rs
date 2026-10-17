@@ -131,6 +131,9 @@ pub struct ShowState {
     /// Masters of the aux buses (bus 1 first).
     #[serde(default)]
     pub aux_buses: [AuxBus; AUX_BUSES],
+    /// Master of program sound (AUD.2).
+    #[serde(default)]
+    pub master: AuxBus,
     /// Whether the engine can apply looks (the GL mixer can).
     #[serde(default)]
     pub looks_available: bool,

@@ -25,7 +25,8 @@ pub mod target;
 pub mod zone;
 
 pub use action::{
-    action_group, Action, ActionError, Effect, StingerSpec, TransitionSlot, ACTION_GROUPS,
+    action_group, Action, ActionError, Effect, StingerSpec, TransitionSlot, VolumeTarget,
+    ACTION_GROUPS, FADE_MAX_MS,
 };
 pub use automation::{Trigger, TriggerOn};
 pub use cue::{

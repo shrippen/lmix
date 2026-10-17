@@ -234,12 +234,22 @@
   <context>
     <name>AuxBusDialog</name>
     <message>
-      <location filename="../qml/AuxBusDialog.qml" line="+21" />
-      <source>Aux buses</source>
-      <translation>Aux-Busse</translation>
+      <location filename="../qml/AuxBusDialog.qml" line="+24" />
+      <source>Master and aux buses</source>
+      <translation>Master und Aux-Busse</translation>
     </message>
     <message>
-      <location line="+24" />
+      <location line="+13" />
+      <source>Master · program sound</source>
+      <translation>Master · Programmton</translation>
+    </message>
+    <message>
+      <location line="+15" />
+      <source>Master volume</source>
+      <translation>Lautstärke Master</translation>
+    </message>
+    <message>
+      <location line="+29" />
       <source>Aux 1 · before the faders</source>
       <translation>Aux 1 · vor den Fadern</translation>
     </message>
@@ -254,7 +264,8 @@
       <translation>Lautstärke von Aux %1</translation>
     </message>
     <message>
-      <location line="+11" />
+      <location line="-34" />
+      <location line="+45" />
       <source>Mute</source>
       <translation>Stumm</translation>
     </message>
@@ -1646,7 +1657,7 @@
       <translation>Leerer Ordner für Show und Medien des Pakets</translation>
     </message>
     <message>
-      <location line="+143" />
+      <location line="+144" />
       <source>lmix-core</source>
       <translation>lmix-core</translation>
     </message>
@@ -1882,8 +1893,8 @@
     </message>
     <message>
       <location line="+6" />
-      <source>Aux…</source>
-      <translation>Aux…</translation>
+      <source>Buses…</source>
+      <translation>Busse…</translation>
     </message>
     <message>
       <location line="+6" />

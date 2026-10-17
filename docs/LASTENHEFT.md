@@ -257,7 +257,7 @@ kann es, Console nicht.
 | ID | Anforderung | Prio | Stand |
 |---|---|---|---|
 | AUD.1 | Jeder Input mit Ton erscheint als Kanalzug: Fader, Mute, Pegelanzeige L/R | M | ◐ (Pegelanzeige einkanalig, nicht L/R) |
-| AUD.2 | Busse: Master + A–G, Zuweisung je Input per Taste; Bus A–G optional in Master; Bus-Ausgang auf Gerät oder nur intern | M | ◐ (Master + 2 Aux, nicht A–G; Aux auf Ausgang) |
+| AUD.2 | Busse: Master + A–G, Zuweisung je Input per Taste; Bus A–G optional in Master; Bus-Ausgang auf Gerät oder nur intern | M | ◐ (Master mit Pegel und Stumm, 2 Aux, nicht A–G; Aux auf Ausgang) |
 | AUD.3 | Sendepegel je Input und Bus (Bus-Mixer) | S | ◐ (Sends je Input auf 2 Aux-Busse) |
 | AUD.4 | Abhörweg mit eigener Lautstärke je Input und gesamt; Solo AFL (Standard) / PFL, mehrfach-Solo, zerstörungsfrei | M | ◐ (PFL/AFL, Mehrfach-Solo in der Console; ohne eigene Abhörlautstärke, Standard PFL statt AFL) |
 | AUD.5 | Audio folgt Video: Take schaltet Ton der beteiligten Inputs; je Input an/aus; global an/aus | M | ✅ |
@@ -269,7 +269,7 @@ kann es, Console nicht.
 | AUD.11 | Plugins je Input und Bus: LV2, VST3, CLAP (E.8), Reihenfolge, an/aus, Editor-Fenster | S | – |
 | AUD.12 | Pegelanzeigen in dBFS, 5 Farbbänder, Spitzenwert über ~2 s, vor/nach Fader, gedämpft-Anzeige | M | ◐ |
 | AUD.13 | Bus-Übersicht: Matrix Inputs × Busse in einem Fenster, filterbar | S | – |
-| AUD.14 | Pegel-Fades per Aktion (Ziel, Dauer) für Input, Master, Busse | S | – |
+| AUD.14 | Pegel-Fades per Aktion (Ziel, Dauer) für Input, Master, Busse | S | ✅ (`fade_volume`, bis 60 s, linear im Pegel; Kurven mit SND.6) |
 | AUD.15 | Mehrkanal-Kombinationen für Senken: Master, einzelne Busse, MA, MAB, MABC, alle 16 Kanäle | S | – |
 | AUD.16 | Taktabweichung je Quelle: Lücke füllen oder resamplen (wählbar) | M | – |
 | AUD.17 | Abtastrate 48 kHz (44,1 kHz wählbar); intern Gleitkomma | M | ◐ (48 kHz fest, 44,1 kHz nicht wählbar; intern Gleitkomma) |

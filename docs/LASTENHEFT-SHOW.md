@@ -148,7 +148,7 @@ ausgeschlossen. **MS**: Meilenstein (§7). Stand: ✅ vorhanden · ◐ teilweise
 | SND.3 | Wiederholungen: n-mal oder endlos, lückenlos (keine Pause, kein Klick an der Nahtstelle) | M | S1 | – |
 | SND.4 | Mindestens 16 Klang-Cues gleichzeitig ohne Aussetzer (lmix) | M | S1 | – |
 | SND.5 | Kanalzuordnung je Klang-Cue: Dateikanal → Zone mit Pegel je Kreuzung; Vorlagen je Zone (Stereo → L/R, Stereo → Mono −3 dB); Gesamtpegel je Cue | M | S1 | – |
-| SND.6 | Fade-Cue, absolut: ändert nur die gesetzten Parameter eines Ziels (Cue oder Zone) über eine Dauer; optional „Ziel danach stoppen“; Zielwert „still“ = untere Reglergrenze; Fades auf verschiedene Parameter desselben Ziels laufen gleichzeitig | M | S1 | – (AUD.14) |
+| SND.6 | Fade-Cue, absolut: ändert nur die gesetzten Parameter eines Ziels (Cue oder Zone) über eine Dauer; optional „Ziel danach stoppen“; Zielwert „still“ = untere Reglergrenze; Fades auf verschiedene Parameter desselben Ziels laufen gleichzeitig | M | S1 | – (Grundlage `fade_volume`, AUD.14) |
 | SND.7 | Fade relativ (dB addieren); ein absoluter Fade hat Vorrang vor laufenden relativen | S | S2 | – |
 | SND.8 | Fade-Kurve: S-Kurve als Standard | M | S1 | – |
 | SND.9 | Weitere Kurven (linear, parametrisch) und Pegelbereich (Reglerskala, dB, linear) | S | S2 | – |

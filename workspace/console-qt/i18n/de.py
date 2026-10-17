@@ -2,6 +2,10 @@
 # scripts/update-translations.sh collects the sources and writes these
 # into qml_de.ts (i18n/fill.py). Keep it complete.
 DE = {
+    'Buses…': 'Busse…',
+    'Master · program sound': 'Master · Programmton',
+    'Master volume': 'Lautstärke Master',
+    'Master and aux buses': 'Master und Aux-Busse',
     'Replace source of %1': 'Quelle von %1 ersetzen',
     'Add input': 'Input hinzufügen',
     'Source': 'Quelle',

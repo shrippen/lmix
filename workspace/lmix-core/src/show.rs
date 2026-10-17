@@ -92,6 +92,9 @@ pub struct Show {
     pub overlay_preview: [Option<InputId>; OVERLAY_CHANNELS as usize],
     #[serde(default)]
     pub aux_buses: [AuxBus; AUX_BUSES],
+    /// Master of program sound (AUD.2).
+    #[serde(default)]
+    pub master: AuxBus,
     #[serde(default)]
     pub layouts: Vec<ShowLayout>,
     #[serde(default)]
@@ -244,6 +247,7 @@ impl Default for Show {
             overlay_channels: Default::default(),
             overlay_preview: Default::default(),
             aux_buses: Default::default(),
+            master: Default::default(),
             layouts: Vec::new(),
             shortcuts: Vec::new(),
             cue_lists: Vec::new(),
@@ -575,6 +579,10 @@ mod tests {
                     mute: true,
                 },
             ],
+            master: AuxBus {
+                volume: 90,
+                mute: false,
+            },
             outputs: vec![ShowOutput {
                 id: OutputId::new(),
                 name: "Stream".into(),

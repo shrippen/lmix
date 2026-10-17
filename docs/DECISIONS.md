@@ -2882,3 +2882,42 @@ Bild-Cue (VIS.15, S3), das schon ein Input ist.
 **Grenzen der Messung**: nur CPU und ein Rechner mit 4 Kernen; GPU-Pfade
 (GL, CUDA) und 4 Bühnen gleichzeitig sind ungemessen, beides gehört in die
 Abnahme auf echter Hardware.
+
+## 2026-10-17 — Pegel-Fades und Master (AUD.14, AUD.2)
+
+**Kontext**: AUD.14 (Pegel-Fades per Aktion für Input, Master, Busse)
+fehlte; es ist Voraussetzung des Show-Modus (S1, SND.6). Einen
+Master-Regler hatte lmix nicht, obwohl strom ihn hat (`main_fader`).
+
+**Entscheidung**:
+- `fade_volume {target, volume, duration_ms}` mit Ziel `{"input": …}`,
+  `{"bus": 1|2}` oder `"master"`, Dauer 0–60 s. strom rampt die
+  Eigenschaft selbst (`ramp_ms` der Eigenschafts-API, Interpolation am
+  Element); lmix-core sendet einen Befehl, keine Zwischenschritte. Der
+  Zustand zeigt sofort den Endwert; ein neuer Wert auf demselben Ziel
+  setzt dort fort, wo der Fade steht.
+- Mute bleibt, wie es ist; kürzer als die Klickschutz-Rampe (20 ms) wird
+  nicht gefadet.
+- Verlauf linear im Verstärkungsfaktor (die Regler sind quadratisch,
+  `fader_gain`). S-Kurven und „still“ als Ziel kommen mit SND.6 im
+  Show-Modus.
+- `set_master {volume, mute}`, gespeichert in der Show (`master`, fehlt
+  in alten Dateien = 100, unverändert laut: strom-Standard 1,0). Console:
+  Dialog „Busse…“ mit Master, Aux 1 und 2.
+
+**Befund dabei** (VM-Test): Der erste Fade des Masters blieb still. strom
+nimmt jedes `mute=false` als Aufheben der Stummschaltung: Es blendet von
+Stille auf den Pegel vor dem Stummschalten (ohne den: 1,0) ein, auch wenn
+der Kanal gar nicht stumm war (`apply_mute`); eine Regler-Rampe danach
+startet bei dieser Stille. lmix schickte bei jeder Pegeländerung
+`mute=false` mit, also hatte jede Reglerbewegung eines Kanals einen
+Einbruch von etwa 40 ms, und lange Rampen begannen bei 0.
+**Behoben in lmix** (`level_writes` in `engine/strom.rs`): Stumm geht nur,
+wenn es sich gegenüber dem zuletzt Gesendeten ändert, für Kanäle, Aux-Busse
+und Master; nach jedem Start der Engine wird alles einmal gesendet.
+strom bleibt unverändert; ein „Aufheben ohne Stumm = nichts tun“ in
+`apply_mute` wäre ein passender Fehlerbericht an strom.
+
+**Geprüft**: Tests im Schalter (Input, Bus, Master, Grenzen, JSON-Form),
+`level_writes`, VM-Test mit strom: Master fadet über 2 s auf still und
+kommt zurück.

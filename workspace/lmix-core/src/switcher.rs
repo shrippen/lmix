@@ -25,7 +25,7 @@ use lmix_types::{
     LayoutTemplate, Listen, Look, Output, OutputId, OutputRef, OutputSource, OutputSpec,
     OutputStatus, OverlayChannel, QuickPlay, Shortcut, ShortcutSpec, ShowState, SignalLoss,
     SourceSpec, Stinger, StingerSpec, TemplateBox, TemplateInput, Transition, TransitionSlot,
-    Transport,
+    Transport, VolumeTarget, FADE_MAX_MS,
 };
 use lmix_types::{Cue, CueList, MidiKind, MidiMessage, Trigger, TriggerOn};
 
@@ -97,8 +97,15 @@ pub enum Command {
     Wait { ms: u32 },
     /// Send of `slot` to aux bus `bus` (0-based), linear gain.
     SetAuxSend { slot: usize, bus: usize, gain: f64 },
-    /// Master of aux bus `bus` (0-based).
-    SetAuxBus { bus: usize, gain: f64, mute: bool },
+    /// Master of aux bus `bus` (0-based), reached over `ramp_ms`.
+    SetAuxBus {
+        bus: usize,
+        gain: f64,
+        mute: bool,
+        ramp_ms: u32,
+    },
+    /// Master of program sound, reached over `ramp_ms` (AUD.2, AUD.14).
+    SetMaster { gain: f64, mute: bool, ramp_ms: u32 },
     /// Mix `slot` (preview) over program by `position` (0–1), as the
     /// T-bar stands; 0 hides it again.
     TBar { slot: usize, position: f32 },
@@ -1081,7 +1088,19 @@ impl Switcher {
             Action::SetChannelStrip { input, strip } => self.set_strip(&input, strip),
             Action::SetLook { input, look } => self.set_look(&input, look),
             Action::SetAuxSend { input, bus, level } => self.set_aux_send(&input, bus, level),
-            Action::SetAuxBus { bus, volume, mute } => self.set_aux_bus(bus, volume, mute),
+            Action::SetAuxBus { bus, volume, mute } => {
+                self.set_aux_bus(bus, volume, mute, AUDIO_RAMP_MS)
+            }
+            Action::SetMaster { volume, mute } => {
+                check_volume(volume)?;
+                self.show.master = AuxBus { volume, mute };
+                Ok(vec![self.master_command(AUDIO_RAMP_MS)])
+            }
+            Action::FadeVolume {
+                target,
+                volume,
+                duration_ms,
+            } => self.fade_volume(&target, volume, duration_ms),
             Action::SetListen { input, listen } => self.set_listen(&input, listen),
             Action::TransportInput { input, transport } => self.transport(&input, transport),
             Action::SeekInput { input, position_ms } => {
@@ -1357,8 +1376,18 @@ impl Switcher {
                 bus,
                 gain: fader_gain(master.volume),
                 mute: master.mute,
+                ramp_ms: AUDIO_RAMP_MS,
             })
+            .chain(std::iter::once(self.master_command(AUDIO_RAMP_MS)))
             .collect()
+    }
+
+    fn master_command(&self, ramp_ms: u32) -> Command {
+        Command::SetMaster {
+            gain: fader_gain(self.show.master.volume),
+            mute: self.show.master.mute,
+            ramp_ms,
+        }
     }
 
     /// Every overlay channel as the engine should have it, placed, without
@@ -1489,6 +1518,7 @@ impl Switcher {
                 .map(|id| id.filter(|id| self.slot_of(Some(*id)).is_some())),
             t_bar: self.t_bar,
             aux_buses: self.show.aux_buses,
+            master: self.show.master,
             looks_available: self.looks_available,
             locked: self.locked,
             cue_lists: self
@@ -3183,6 +3213,7 @@ impl Switcher {
         bus: u8,
         volume: u8,
         mute: bool,
+        ramp_ms: u32,
     ) -> Result<Vec<Command>, ActionError> {
         let bus = aux_index(bus)?;
         check_volume(volume)?;
@@ -3191,7 +3222,38 @@ impl Switcher {
             bus,
             gain: fader_gain(volume),
             mute,
+            ramp_ms,
         }])
+    }
+
+    /// A level fade (AUD.14): the engine ramps from where the level is.
+    /// An input's fader goes out with the other channels (`audio_ramp`
+    /// gives them the fade's time).
+    fn fade_volume(
+        &mut self,
+        target: &VolumeTarget,
+        volume: u8,
+        duration_ms: u32,
+    ) -> Result<Vec<Command>, ActionError> {
+        if duration_ms > FADE_MAX_MS {
+            return Err(ActionError::BadFade {
+                duration_ms,
+                max: FADE_MAX_MS,
+            });
+        }
+        let ramp_ms = duration_ms.max(AUDIO_RAMP_MS);
+        match target {
+            VolumeTarget::Input(input) => self.set_volume(input, volume),
+            VolumeTarget::Bus(bus) => {
+                let mute = self.show.aux_buses[aux_index(*bus)?].mute;
+                self.set_aux_bus(*bus, volume, mute, ramp_ms)
+            }
+            VolumeTarget::Master => {
+                check_volume(volume)?;
+                self.show.master.volume = volume;
+                Ok(vec![self.master_command(ramp_ms)])
+            }
+        }
     }
 
     /// The engine says whether it can apply looks.
@@ -3748,6 +3810,11 @@ impl Switcher {
             Action::QuickPlay { .. } if self.show.quick_play.effect != Effect::Cut => {
                 self.show.quick_play.duration_ms.max(AUDIO_RAMP_MS)
             }
+            Action::FadeVolume {
+                target: VolumeTarget::Input(_),
+                duration_ms,
+                ..
+            } => (*duration_ms).clamp(AUDIO_RAMP_MS, FADE_MAX_MS),
             _ => AUDIO_RAMP_MS,
         }
     }
@@ -5496,8 +5563,80 @@ mod tests {
         assert!(restore.contains(&Command::SetAuxBus {
             bus: 0,
             gain: fader_gain(80),
-            mute: true
+            mute: true,
+            ramp_ms: AUDIO_RAMP_MS,
         }));
+    }
+
+    #[test]
+    fn levels_fade_over_their_time() {
+        let mut sw = two_inputs();
+        sw.apply(Action::SetAuxBus {
+            bus: 2,
+            volume: 80,
+            mute: true,
+        })
+        .unwrap();
+        let fade = |target, volume, duration_ms| Action::FadeVolume {
+            target,
+            volume,
+            duration_ms,
+        };
+
+        let cmds = sw
+            .apply(fade(VolumeTarget::Input(named("B")), 25, 3000))
+            .unwrap();
+        assert_eq!(audio_of(&cmds), [(1, false, 3000)]);
+        assert_eq!(sw.state().inputs[1].audio.volume, 25, "the end value at once");
+
+        let cmds = sw.apply(fade(VolumeTarget::Bus(2), 0, 4000)).unwrap();
+        assert_eq!(
+            cmds,
+            [Command::SetAuxBus {
+                bus: 1,
+                gain: 0.0,
+                mute: true,
+                ramp_ms: 4000,
+            }],
+            "mute stays"
+        );
+
+        let cmds = sw.apply(fade(VolumeTarget::Master, 50, 0)).unwrap();
+        assert_eq!(
+            cmds,
+            [Command::SetMaster {
+                gain: fader_gain(50),
+                mute: false,
+                ramp_ms: AUDIO_RAMP_MS,
+            }],
+            "no fade shorter than the click guard"
+        );
+        assert_eq!(sw.state().master.volume, 50);
+        assert!(sw.restore_commands().contains(&Command::SetMaster {
+            gain: fader_gain(50),
+            mute: false,
+            ramp_ms: AUDIO_RAMP_MS,
+        }));
+
+        assert!(matches!(
+            sw.apply(fade(VolumeTarget::Master, 50, FADE_MAX_MS + 1)),
+            Err(ActionError::BadFade { .. })
+        ));
+        assert!(matches!(
+            sw.apply(fade(VolumeTarget::Bus(3), 50, 100)),
+            Err(ActionError::BadAuxBus { .. })
+        ));
+        assert!(matches!(
+            sw.apply(fade(VolumeTarget::Input(named("B")), 101, 100)),
+            Err(ActionError::BadVolume { .. })
+        ));
+        let json = r#"{"action":"fade_volume","target":{"input":"B"},"volume":0,"duration_ms":2000}"#;
+        assert_eq!(
+            serde_json::from_str::<Action>(json).unwrap(),
+            fade(VolumeTarget::Input(InputRef::Text("B".into())), 0, 2000)
+        );
+        let json = r#"{"action":"fade_volume","target":"master","volume":0,"duration_ms":2000}"#;
+        assert!(serde_json::from_str::<Action>(json).is_ok());
     }
 
     #[test]

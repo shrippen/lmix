@@ -84,6 +84,9 @@ pub struct StromEngine {
     live_dir: PathBuf,
     /// One live flow is set up at a time (two Consoles asking at once).
     live_setup: Mutex<()>,
+    /// Mute of each audio mixer channel and bus as last sent (see
+    /// [`level_writes`]); forgotten at every start.
+    mutes: std::sync::Mutex<std::collections::HashMap<String, bool>>,
 }
 
 impl StromEngine {
@@ -101,6 +104,7 @@ impl StromEngine {
             metering: AtomicBool::new(false),
             live_dir: default_live_dir(),
             live_setup: Mutex::new(()),
+            mutes: Default::default(),
         }
     }
 
@@ -348,12 +352,25 @@ impl StromEngine {
         ramp_ms: u32,
     ) -> Result<(), EngineError> {
         let channel = flows::audio_channel(slot);
-        let fader = (format!("ch{channel}_fader"), PropertyValue::Float(gain));
-        let mute = (format!("ch{channel}_mute"), PropertyValue::Bool(muted));
-        let order = if muted { [fader, mute] } else { [mute, fader] };
-        for property in order {
+        let level = Level {
+            fader: format!("ch{channel}_fader"),
+            mute: format!("ch{channel}_mute"),
+            gain,
+            muted,
+        };
+        self.set_level(level, ramp_ms).await
+    }
+
+    /// A fader and its mute on the audio mixer, one write at a time.
+    async fn set_level(&self, level: Level, ramp_ms: u32) -> Result<(), EngineError> {
+        let known = self.mutes.lock().expect("mutes lock").get(&level.mute).copied();
+        for property in level_writes(&level, known) {
             self.patch_audio_mixer(vec![property], ramp_ms).await?;
         }
+        self.mutes
+            .lock()
+            .expect("mutes lock")
+            .insert(level.mute, level.muted);
         Ok(())
     }
 
@@ -687,6 +704,9 @@ impl Engine for StromEngine {
     /// Keep a running mixer with the right slot count (no picture drop when
     /// lmix-core restarts); rebuild it otherwise.
     async fn start(&self, slots: usize) -> Result<(), EngineError> {
+        // A reused or new mixer: its mutes are unknown, the restore sends
+        // them all.
+        self.mutes.lock().expect("mutes lock").clear();
         if !self.metering.swap(true, Ordering::Relaxed) {
             let ws_url = self.base_url.replacen("http", "ws", 1) + "/api/ws";
             tokio::spawn(meters::follow(
@@ -805,12 +825,32 @@ impl Engine for StromEngine {
                 self.patch_audio_mixer(vec![(name, PropertyValue::Float(*gain))], AUDIO_RAMP_MS)
                     .await
             }
-            Command::SetAuxBus { bus, gain, mute } => {
-                let properties = vec![
-                    (format!("aux{}_fader", bus + 1), PropertyValue::Float(*gain)),
-                    (format!("aux{}_mute", bus + 1), PropertyValue::Bool(*mute)),
-                ];
-                self.patch_audio_mixer(properties, AUDIO_RAMP_MS).await
+            Command::SetAuxBus {
+                bus,
+                gain,
+                mute,
+                ramp_ms,
+            } => {
+                let level = Level {
+                    fader: format!("aux{}_fader", bus + 1),
+                    mute: format!("aux{}_mute", bus + 1),
+                    gain: *gain,
+                    muted: *mute,
+                };
+                self.set_level(level, *ramp_ms).await
+            }
+            Command::SetMaster {
+                gain,
+                mute,
+                ramp_ms,
+            } => {
+                let level = Level {
+                    fader: "main_fader".into(),
+                    mute: "main_mute".into(),
+                    gain: *gain,
+                    muted: *mute,
+                };
+                self.set_level(level, *ramp_ms).await
             }
         }
     }
@@ -1027,10 +1067,68 @@ pub fn default_live_dir() -> PathBuf {
         .join("live")
 }
 
+
+/// A fader of the audio mixer with its mute: names and wanted values.
+struct Level {
+    fader: String,
+    mute: String,
+    gain: f64,
+    muted: bool,
+}
+
+/// What to write for `level`, in order. strom takes every `mute=false`
+/// as an unmute: it fades in from silence to the level before the mute,
+/// even on a channel that was not muted, and a fader ramp that follows
+/// starts from that silence (AUD.14: a fade from 100 to 0 stayed silent).
+/// So the mute goes only when it differs from `known` (the last sent;
+/// `None` after a start); unmute before the fader, mute after it.
+fn level_writes(level: &Level, known: Option<bool>) -> Vec<(String, PropertyValue)> {
+    let fader = (level.fader.clone(), PropertyValue::Float(level.gain));
+    if known == Some(level.muted) {
+        return vec![fader];
+    }
+    let mute = (level.mute.clone(), PropertyValue::Bool(level.muted));
+    if level.muted {
+        vec![fader, mute]
+    } else {
+        vec![mute, fader]
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;
     use strom_types::api::{SrtCallerStats, SrtConnectionStats};
+
+    #[test]
+    fn mutes_go_only_when_they_change() {
+        let level = |muted| Level {
+            fader: "main_fader".into(),
+            mute: "main_mute".into(),
+            gain: 0.5,
+            muted,
+        };
+        let names = |writes: Vec<(String, PropertyValue)>| -> Vec<String> {
+            writes.into_iter().map(|(name, _)| name).collect()
+        };
+
+        assert_eq!(names(level_writes(&level(false), Some(false))), ["main_fader"]);
+        assert_eq!(names(level_writes(&level(true), Some(true))), ["main_fader"]);
+        assert_eq!(
+            names(level_writes(&level(false), Some(true))),
+            ["main_mute", "main_fader"],
+            "unmute first"
+        );
+        assert_eq!(
+            names(level_writes(&level(true), Some(false))),
+            ["main_fader", "main_mute"],
+            "mute last"
+        );
+        assert_eq!(
+            names(level_writes(&level(false), None)),
+            ["main_mute", "main_fader"],
+            "after a start: everything"
+        );
+    }
 
     fn caller(rate_mbps: f64, lost: u64, rtt_ms: f64) -> SrtCallerStats {
         SrtCallerStats {

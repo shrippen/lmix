@@ -229,6 +229,17 @@ settled '[[ $(pgm_db) -ge $((full - 2)) ]]' || fail "strip reset did not restore
 act '{"action":"set_volume","input":"Ball","volume":50}' >/dev/null   # checked after the crash below
 pass "channel strip: gain lowers program, delay changed on air, reset"
 
+# --- level fade (AUD.14): the master down over 2 s, back at once ---
+full=$(steady_db pgm_db)
+act '{"action":"fade_volume","target":"master","volume":0,"duration_ms":2000}' >/dev/null
+sleep 0.7
+mid=$(pgm_db)
+(( mid > SILENT_DB )) || fail "master fade cut at once instead of fading ($full -> $mid dB after 0.7 s)"
+settled '[[ $(pgm_db) -lt $SILENT_DB ]]' || fail "master fade did not reach silence ($(pgm_db) dB)"
+act '{"action":"fade_volume","target":"master","volume":100,"duration_ms":0}' >/dev/null
+settled '[[ $(pgm_db) -ge $((full - 2)) ]]' || fail "master not back ($full -> $(pgm_db) dB)"
+pass "level fade: master down over 2 s, back at once"
+
 # --- aux buses (4.7): bus 1 before the fader, bus 2 after it ---
 aux_db() { curl -sf "$CORE/audio/levels" | jq ".aux_peak_db[$1] // -100 | floor"; }
 act '{"action":"set_aux_send","input":"Ball","bus":1,"level":100}' >/dev/null

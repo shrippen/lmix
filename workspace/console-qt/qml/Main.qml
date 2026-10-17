@@ -426,6 +426,7 @@ Kirigami.ApplicationWindow {
         anchors.centerIn: parent
         act: root.act
         buses: root.show ? root.show.aux_buses : []
+        master: root.show && root.show.master ? root.show.master : ({ volume: 100, mute: false })
         levels: root.levels
     }
 
@@ -694,7 +695,7 @@ Kirigami.ApplicationWindow {
                     }
                     KanteButton {
                         visible: !root.simple
-                        text: qsTr("Aux…")
+                        text: qsTr("Buses…")
                         enabled: backend.connected
                         onClicked: auxDialog.open()
                     }
