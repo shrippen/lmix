@@ -3214,3 +3214,18 @@ Deadlock-Fix (#986).
 `output_refusal_test` (51 grün); lmix-Tests (Flow, Ablehnung von
 Nicht-RTMP-Adressen und H.265); VM-Test: ffmpeg als RTMP-Server bekommt
 H.264 + AAC.
+
+## 2026-10-17 — Abtastrate 44,1 kHz wählbar (AUD.17)
+
+**Entscheidung**: Die Show hat `sample_rate` (48000 Standard, 44100),
+Aktion `set_sample_rate`. Der Audiomischer legt seine Busse darauf fest
+(strom-Eigenschaft `sample_rate`, lmix-Patch ed647f2); die Slots
+liefern weiter 48 kHz, die Kanalzüge rechnen um. Wie Format und
+Multiview gilt die Rate beim Bau des Mischers: `SetFormat` trägt sie
+mit, die Engine baut nur bei Änderung neu und übernimmt beim Neustart
+von lmix-core die Rate eines laufenden Mischers. Ausgänge erben sie
+(AAC bei 44,1 kHz).
+
+**Geprüft**: Tests (Rate im Flow und zurückgelesen, Neubau ohne
+Quellen-Neustart, 96 kHz abgelehnt), VM-Test mit strom: Mischer bei
+44,1 kHz, Program hörbar, zurück auf 48 kHz.
