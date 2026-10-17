@@ -1,6 +1,6 @@
 # Übergabe: Stand M9 und Show-Modus S1 (in Arbeit), lokale Übernahme
 
-Stand 2026-10-09, PR-Liste 2026-10-17 (bis #84). Die Arbeit läuft lokal weiter (Arch, RTX 3090), Abnahme
+Stand 2026-10-09, PR-Liste 2026-10-17 (bis #88). Die Arbeit läuft lokal weiter (Arch, RTX 3090), Abnahme
 auf echter Hardware.
 
 ## Offene PRs, Stand 2026-10-17 nachts (Merge-Reihenfolge)
@@ -64,6 +64,10 @@ unten mergen; Gitea stellt die Basis des nächsten auf `main` um):
 | #82 | `lay2-box-visible` | Layout-Box ein-/ausblenden (LAY.2) |
 | #83 | `shw3-new-format` | Neue Show mit Formatwahl (SHW.3) |
 | #84 | `personas-1017` | Persona-Durchlauf 11, Übergabe bis #84 |
+| #85 | `str2-rtmp` | RTMP-Ausgang (STR.2, B31), strom #18 |
+| #86 | `strom-upstream-fixes` | strom-Pin mit upstream #874/#788 (strom #19) |
+| #87 | `vm-picture-retry` | VM-Check: fehlendes Bild ist ein Fehlversuch |
+| #88 | `aud12-meter` | Pegel stumm blass, Spitzenwert 2 s (AUD.12) |
 
 Rote GitHub-Läufe auf `s1-feeds` und `s1-script-folder` sind die wackelige
 Failover-Prüfung, die #45 behebt (der Stapel bekommt sie über `main`).
@@ -91,8 +95,10 @@ CPU-Mischer vorbereiten; GPU-Pfade auf echter Hardware.
 
 strom-Fork auf Gitea (`shrippen/strom`), Ziel `dev`, seit 17.10. gestapelt:
 #15 `lmix-still-release` (Leck pausierter Clips) → #16 `lmix-nine-dsk`
-(9 DSK-Ebenen) → #17 `lmix-player-loop` (Schleife live). Das Submodul
-von lmix #74 ff. zeigt auf #17; nach dem Merge auf `dev` neu pinnen.
+(9 DSK-Ebenen) → #17 `lmix-player-loop` (Schleife live) → #18
+`lmix-rtmp-output` (RTMP und 4:2:0 aus upstream) → #19
+`lmix-upstream-fixes` (Stopp begrenzt, Bus-Watches). Das Submodul von
+lmix #74 zeigt auf #17, #85 auf #18, #86 auf #19; nach dem Merge auf `dev` neu pinnen.
 
 strom-Fork (`shrippen/strom`), Ziel `dev`:
 - Gemergt: #1 `lmix-start-time`, #2 `lmix-sample-rate`, #3
@@ -165,7 +171,6 @@ für WHIP-Links: `--public-url`.
 ## Offen beim User
 
 - **Merges** strom #6, lmix #6.
-- B31 RTMP-Ausgang wartet auf strom #771.
 
 ## Bekannte Befunde
 

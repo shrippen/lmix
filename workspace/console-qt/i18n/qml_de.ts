@@ -153,7 +153,7 @@
   <context>
     <name>AddOutputDialog</name>
     <message>
-      <location filename="../qml/AddOutputDialog.qml" line="+23" />
+      <location filename="../qml/AddOutputDialog.qml" line="+24" />
       <source>folder in the engine's media directory</source>
       <translation>Ordner im Medienverzeichnis der Engine</translation>
     </message>
@@ -173,12 +173,17 @@
       <translation>Ausgang hinzufügen</translation>
     </message>
     <message>
-      <location line="+45" />
+      <location line="+46" />
       <source>Output</source>
       <translation>Ausgang</translation>
     </message>
     <message>
-      <location line="+15" />
+      <location line="+19" />
+      <source>Stream key</source>
+      <translation>Stream-Schlüssel</translation>
+    </message>
+    <message>
+      <location line="+4" />
       <source>Carries</source>
       <translation>Inhalt</translation>
     </message>
@@ -3208,12 +3213,12 @@
     </message>
     <message>
       <location line="+1" />
-      <location line="+59" />
+      <location line="+60" />
       <source>NDI</source>
       <translation>NDI</translation>
     </message>
     <message>
-      <location line="-58" />
+      <location line="-59" />
       <source>WHIP (browser, OBS)</source>
       <translation>WHIP (Browser, OBS)</translation>
     </message>
@@ -3361,6 +3366,11 @@
       <location line="+12" />
       <source>SRT stream</source>
       <translation>SRT-Stream</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>RTMP stream (YouTube, Twitch …)</source>
+      <translation>RTMP-Stream (YouTube, Twitch …)</translation>
     </message>
     <message>
       <location line="+1" />

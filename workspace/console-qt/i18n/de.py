@@ -2,6 +2,8 @@
 # scripts/update-translations.sh collects the sources and writes these
 # into qml_de.ts (i18n/fill.py). Keep it complete.
 DE = {
+    'RTMP stream (YouTube, Twitch …)': 'RTMP-Stream (YouTube, Twitch …)',
+    'Stream key': 'Stream-Schlüssel',
     'New show': 'Neue Show',
     'The new show replaces the open one; save it first if you need it.': 'Die neue Show ersetzt die offene; vorher speichern, wenn du sie noch brauchst.',
     'Visible': 'Sichtbar',
