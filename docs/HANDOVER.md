@@ -1,6 +1,6 @@
 # Übergabe: Stand M9 und Show-Modus S1 (in Arbeit), lokale Übernahme
 
-Stand 2026-10-09, PR-Liste 2026-10-17 (bis #88). Die Arbeit läuft lokal weiter (Arch, RTX 3090), Abnahme
+Stand 2026-10-09, PR-Liste 2026-10-17 (bis #89). Die Arbeit läuft lokal weiter (Arch, RTX 3090), Abnahme
 auf echter Hardware.
 
 ## Offene PRs, Stand 2026-10-17 nachts (Merge-Reihenfolge)
@@ -68,6 +68,7 @@ unten mergen; Gitea stellt die Basis des nächsten auf `main` um):
 | #86 | `strom-upstream-fixes` | strom-Pin mit upstream #874/#788 (strom #19) |
 | #87 | `vm-picture-retry` | VM-Check: fehlendes Bild ist ein Fehlversuch |
 | #88 | `aud12-meter` | Pegel stumm blass, Spitzenwert 2 s (AUD.12) |
+| #89 | `aud17-sample-rate` | Abtastrate 44,1 kHz wählbar (AUD.17) |
 
 Rote GitHub-Läufe auf `s1-feeds` und `s1-script-folder` sind die wackelige
 Failover-Prüfung, die #45 behebt (der Stapel bekommt sie über `main`).
@@ -77,6 +78,14 @@ Breaking (vor dem ersten Release erlaubt, je PR beschrieben): Cue `label`
 OSC `/lmix/cue/next` → `/lmix/cue/standby`, OSC-Abos laufen nach 60 s
 ohne Lebenszeichen ab; Show-Dateien Version 1 werden beim Öffnen
 umgewandelt (alte Datei bleibt als `.v1.bak`).
+
+strom-Upstream (Eyevinn/strom `main`): 177 Commits vor unserem Abzweig
+vom 14.09. Übernommen: RTMP-Ausgang, 4:2:0-Encoder, begrenzter Stopp,
+Bus-Watches (strom #18/#19). Ein voller Abgleich hat 22 Konfliktdateien,
+vor allem in den GPU-Pfaden (upstream ersetzt `gl_bridge.rs`); nur mit
+GPU prüfbar, also eine Sitzung auf der RTX 3090. Er brächte u. a. den
+HTML-Input (GFX.2), Player für Live-Streams/URLs und weitere Player-Fixes
+(DECISIONS 17.10. „RTMP-Ausgang“).
 
 Offen für S1 (DECISIONS „Show-Modus …“, PERSONAS Durchlauf 10): Klang-
 und Bild-Cues, Zonen, Bühnen (Stufen 2/3), warten auf die Entscheidungen
