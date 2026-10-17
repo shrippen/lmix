@@ -166,6 +166,7 @@ pub const ACTION_GROUPS: &[(&str, &[&str])] = &[
         &[
             "add_layout",
             "set_layout",
+            "show_box",
             "remove_layout",
             "preview_layout",
             "save_layout_template",
@@ -563,6 +564,13 @@ pub enum Action {
         background: Option<InputRef>,
         #[serde(default)]
         boxes: Vec<BoxSpec>,
+    },
+    /// Show, hide or flip box `number` (1-based) of a layout (LAY.2); a
+    /// hidden box stays in the layout, is not drawn and not on air.
+    ShowBox {
+        layout: InputRef,
+        number: u8,
+        shown: crate::layout::BoxShown,
     },
     /// Remove a layout (not while it is on program).
     RemoveLayout {
@@ -1153,8 +1161,12 @@ pub enum Action {
     },
 
     // ---- Show (SHW) ----
-    /// Start an empty show.
-    NewShow,
+    /// Start an empty show, in `format` if given (SHW.3), else in the
+    /// default 1920 × 1080 at 30 fps.
+    NewShow {
+        #[serde(default)]
+        format: Option<crate::output::MasterFormat>,
+    },
     /// Save the show; without `path` to its current file.
     SaveShow {
         #[serde(default)]

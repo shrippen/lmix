@@ -420,6 +420,16 @@ Kirigami.ApplicationWindow {
         inputs: root.inputs
     }
 
+    // SHW.3: a new show starts in the format chosen here.
+    FormatDialog {
+        id: newShowDialog
+        parent: QQC2.Overlay.overlay
+        anchors.centerIn: parent
+        act: root.act
+        newShow: true
+        format: root.show && root.show.format ? root.show.format : ({ width: 1920, height: 1080, framerate: "30/1" })
+    }
+
     FormatDialog {
         id: formatDialog
         parent: QQC2.Overlay.overlay
@@ -470,7 +480,7 @@ Kirigami.ApplicationWindow {
                 KanteButton {
                     text: qsTr("New")
                     enabled: backend.connected
-                    onClicked: root.act({ action: "new_show" })
+                    onClicked: newShowDialog.open()
                 }
                 KanteButton {
                     text: qsTr("Open…")

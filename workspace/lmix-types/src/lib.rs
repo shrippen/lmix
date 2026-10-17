@@ -45,7 +45,8 @@ pub use input::{
     Playback, PlaybackState, SignalLoss, SourceSpec, TestPattern, Transport,
 };
 pub use layout::{
-    BoxCrop, BoxRect, BoxSpec, Layout, LayoutBox, LayoutTemplate, TemplateBox, TemplateInput,
+    BoxCrop, BoxRect, BoxShown, BoxSpec, Layout, LayoutBox, LayoutTemplate, TemplateBox,
+    TemplateInput,
 };
 pub use midi::{MidiBinding, MidiKind, MidiMessage};
 pub use output::{

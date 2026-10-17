@@ -28,7 +28,7 @@ KanteDialog {
     /** Smallest box side, fraction of the picture. */
     readonly property real minSide: 0.05
 
-    /** Working copy: [{ input, rect: {x,y,w,h}, framed, crop: {left,top,right,bottom}, locked }]. */
+    /** Working copy: [{ input, rect: {x,y,w,h}, framed, crop: {left,top,right,bottom}, locked, hidden }]. */
     property var boxes: []
     /** The box the crop and pixel values are for; -1 none. */
     property int selected: -1
@@ -251,7 +251,8 @@ KanteDialog {
             rect: Object.assign({}, b.rect),
             framed: b.border_px > 0,
             crop: Object.assign({}, noCrop, b.crop || {}),
-            locked: b.locked === true
+            locked: b.locked === true,
+            hidden: b.hidden === true
         })) : []
         select(boxes.length > 0 ? 0 : -1, false)
         history = [snapshot()]
@@ -264,7 +265,8 @@ KanteDialog {
             input: b.input,
             border_px: b.framed ? frameWidth : 0,
             crop: b.crop,
-            locked: b.locked
+            locked: b.locked,
+            hidden: b.hidden
         }))
         var bg = background.currentIndex > 0 ? pictures[background.currentIndex - 1].id : null
         if (layout)
@@ -355,6 +357,8 @@ KanteDialog {
                     id: boxItem
                     required property var modelData
                     required property int index
+                    // A hidden box (LAY.2) stays editable, pale.
+                    opacity: modelData.hidden ? 0.4 : 1
                     readonly property bool isSelected: dialog.selected === index
                     readonly property bool isChosen: dialog.chosen.indexOf(index) >= 0
                     /** Moves along while another chosen box is dragged. */
@@ -390,6 +394,7 @@ KanteDialog {
                         text: (boxItem.index + 1) + ": " + dialog.inputLabel(boxItem.modelData.input)
                             + (boxItem.crop.left + boxItem.crop.top + boxItem.crop.right + boxItem.crop.bottom > 0 ? qsTr(" (cropped)") : "")
                             + (boxItem.modelData.locked ? qsTr(" (locked)") : "")
+                            + (boxItem.modelData.hidden ? qsTr(" (hidden)") : "")
                     }
 
                     // Dragging moves the item itself; the box changes on
@@ -555,6 +560,15 @@ KanteDialog {
                     onToggled: dialog.edit(boxRow.index, { locked: checked })
                     KanteCheckSkin { control: lock }
                 }
+                // LAY.2: kept in the layout, out of the picture.
+                QQC2.CheckBox {
+                    id: visibleBox
+                    text: qsTr("Visible")
+                    checked: !boxRow.modelData.hidden
+                    Accessible.name: qsTr("Show box %1 in the picture").arg(boxRow.index + 1)
+                    onToggled: dialog.edit(boxRow.index, { hidden: !checked })
+                    KanteCheckSkin { control: visibleBox }
+                }
                 KanteButton {
                     text: qsTr("Remove")
                     onClicked: {
@@ -630,7 +644,8 @@ KanteDialog {
                         rect: { x: 0.7, y: y, w: 0.25, h: 0.25 },
                         framed: false,
                         crop: { left: 0, top: 0, right: 0, bottom: 0 },
-                        locked: false
+                        locked: false,
+                        hidden: false
                     }])
                     dialog.select(n, false)
                 }

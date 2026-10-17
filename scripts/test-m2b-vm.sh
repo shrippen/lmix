@@ -693,6 +693,17 @@ layout_shown() {
         && [[ $(quarter "$WORK/layout.jpg" "$((w / 4))x$((h / 4))+$((w * 5 / 8))+$((h / 8))") -lt 100 ]]
 }
 wait_for "$SETTLE_S" layout_shown || fail "layout picture: background and box not where they belong"
+# A hidden box (LAY.2): Orange shows through, Ball is off air; back.
+act '{"action":"show_box","layout":"Interview","number":1,"shown":"hidden"}' >/dev/null
+box_hidden() {
+    picture program "$WORK/layout.jpg"
+    local w h; read -r w h <<<"$(identify -format '%w %h' "$WORK/layout.jpg")"
+    [[ $(quarter "$WORK/layout.jpg" "$((w / 4))x$((h / 4))+$((w * 5 / 8))+$((h / 8))") -gt 200 ]]
+}
+wait_for "$SETTLE_S" box_hidden || fail "hidden box still in the picture"
+[[ "$(on_air Ball)" == 0 ]] || fail "input of a hidden box still has red tally"
+act '{"action":"show_box","layout":"Interview","number":1,"shown":"toggle"}' >/dev/null
+wait_for "$SETTLE_S" layout_shown || fail "box not back after showing it again"
 # Crop: the right half of Orange fills a full-picture box at its own
 # aspect (strom fits it), so the left edge turns black.
 act '{"action":"set_layout","layout":1,"background":null,"boxes":[{"rect":{"x":0,"y":0,"w":1,"h":1},"input":"Orange","crop":{"left":0.5}}]}' >/dev/null
@@ -706,7 +717,7 @@ wait_for "$SETTLE_S" cropped || fail "layout crop not applied"
 act '{"action":"cut_direct","input":"Ball"}' >/dev/null
 act '{"action":"remove_layout","layout":1}' >/dev/null
 [[ "$(curl -sf "$CORE/state" | jq '.layouts | length')" == 0 ]] || fail "layout not removed"
-pass "layouts: background and box on program, red tally for both inputs, crop, removed"
+pass "layouts: background and box on program, red tally for both inputs, box hidden and back, crop, removed"
 
 # --- automation (AUT.7, AUT.14): a cue list whose cues fire triggers ---
 act '{"action":"set_triggers","input":"Orange","triggers":[{"on":"program","delay_ms":500,"actions":[{"action":"overlay_in","channel":2,"input":"Ball","duration_ms":0}]},{"on":"program_off","actions":[{"action":"overlay_out","channel":2,"duration_ms":0}]}]}' >/dev/null
