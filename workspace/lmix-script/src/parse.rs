@@ -388,7 +388,28 @@ fn parse_cue(
     if cue.kind == CueKind::Note && cue.name.is_empty() && cue.note.is_empty() {
         return Err((first_line, "a note cue needs a name or a note".into()));
     }
+    warnings.extend(number_warnings(&cue).into_iter().map(|m| (first_line, m)));
     Ok((cue, warnings))
+}
+
+/// Numbers a remote control can send as they are (CUE.1): letters,
+/// digits, `.`, `-`, `_`; in this cue and its children.
+fn number_warnings(cue: &Cue) -> Vec<String> {
+    let plain = |n: &str| {
+        n.chars()
+            .all(|c| c.is_alphanumeric() || matches!(c, '.' | '-' | '_'))
+    };
+    let mut out = Vec::new();
+    if !cue.number.is_empty() && !plain(&cue.number) {
+        out.push(format!(
+            "cue number \"{}\" has spaces or signs; OSC and Companion want letters, digits, . - _",
+            cue.number
+        ));
+    }
+    for child in &cue.children {
+        out.extend(number_warnings(child));
+    }
+    out
 }
 
 /// Unknown fields of a cue and its children: likely typos.
@@ -560,6 +581,18 @@ actions = [
         assert!(!problems[0].fatal, "a missing file still loads");
         assert!(problems[0].message.contains("gone.mp4"));
         std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn numbers_with_spaces_are_a_warning() {
+        let text =
+            "```lmix-cue\nnumber = \"1 a\"\nname = \"x\"\nactions = [{ action = \"cut\" }]\n```\n";
+        let (list, problems) = parse_file(Path::new("/s"), Path::new("a.md"), text);
+
+        assert!(list.is_some(), "it still loads");
+        assert_eq!(problems.len(), 1);
+        assert!(!problems[0].fatal);
+        assert!(problems[0].message.contains("\"1 a\""));
     }
 
     #[test]

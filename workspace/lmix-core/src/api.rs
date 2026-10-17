@@ -86,6 +86,7 @@ async fn metrics(State(service): State<Arc<Service>>) -> impl IntoResponse {
         latency: service.latency(),
         uptime_secs: crate::metrics::started().elapsed().as_secs(),
         engine: service.engine_health(),
+        cues: service.cue_lateness().await,
     };
     (
         [(header::CONTENT_TYPE, "text/plain; version=0.0.4")],

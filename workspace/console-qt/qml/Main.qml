@@ -48,6 +48,8 @@ Kirigami.ApplicationWindow {
         property bool showMode: false
         /** Waits and follows in the show view (SUI.13). */
         property bool showAdvanced: false
+        /** The show view dimmed for a dark room (SUI.6). */
+        property bool darkRoom: false
     }
     readonly property var collapsedIds: {
         try {
@@ -226,6 +228,51 @@ Kirigami.ApplicationWindow {
         defaultSuffix: "lmix"
         nameFilters: [qsTr("lmix shows (*.lmix)")]
         onAccepted: root.act({ action: "save_show", path: root.localPath(selectedFile) })
+    }
+
+    // This machine's settings (SHW.8): shortcuts for all shows, layout
+    // templates, targets, subscribers; no secrets.
+    FileDialog {
+        id: exportSettingsDialog
+        title: qsTr("Export settings")
+        fileMode: FileDialog.SaveFile
+        defaultSuffix: "json"
+        nameFilters: [qsTr("lmix settings (*.json)")]
+        onAccepted: root.act({ action: "export_settings", path: root.localPath(selectedFile) })
+    }
+    FileDialog {
+        id: importSettingsDialog
+        title: qsTr("Import settings")
+        nameFilters: [qsTr("lmix settings (*.json)"), qsTr("All files (*)")]
+        onAccepted: root.act({ action: "import_settings", path: root.localPath(selectedFile) })
+    }
+    KanteDialog {
+        id: resetSettingsDialog
+        parent: QQC2.Overlay.overlay
+        anchors.centerIn: parent
+        title: qsTr("Factory settings")
+        modal: true
+        width: Kirigami.Units.gridUnit * 24
+        standardButtons: QQC2.Dialog.Cancel
+        contentHeight: resetColumn.implicitHeight
+        ColumnLayout {
+            id: resetColumn
+            width: parent.width
+            QQC2.Label {
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                text: qsTr("Remove the shortcuts for all shows, the layout templates, the output targets with their secrets and the OSC subscribers of this machine? The show stays.")
+            }
+            KanteButton {
+                Layout.alignment: Qt.AlignRight
+                emphasis: KanteButton.Emphasis.Destructive
+                text: qsTr("Remove all")
+                onClicked: {
+                    root.act({ action: "reset_settings" })
+                    resetSettingsDialog.close()
+                }
+            }
+        }
     }
 
     // Show packages (SHW.6): show, media, data files, own templates.
@@ -466,6 +513,19 @@ Kirigami.ApplicationWindow {
                             text: qsTr("Import…")
                             onTriggered: importDialog.open()
                         }
+                        QQC2.MenuSeparator {}
+                        QQC2.MenuItem {
+                            text: qsTr("Export settings…")
+                            onTriggered: exportSettingsDialog.open()
+                        }
+                        QQC2.MenuItem {
+                            text: qsTr("Import settings…")
+                            onTriggered: importSettingsDialog.open()
+                        }
+                        QQC2.MenuItem {
+                            text: qsTr("Factory settings…")
+                            onTriggered: resetSettingsDialog.open()
+                        }
                     }
                 }
                 Item { Layout.fillWidth: true }
@@ -501,10 +561,12 @@ Kirigami.ApplicationWindow {
                 }
             }
 
-            // Mixer and show view share the page (SUI.1).
+            // Mixer and show view share the page (SUI.1). Height from the
+            // page, not from the children: the monitors take what is left.
             ColumnLayout {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
+                Layout.preferredHeight: 0
                 visible: !root.showMode
                 spacing: Kirigami.Units.largeSpacing
 
@@ -525,15 +587,27 @@ Kirigami.ApplicationWindow {
                             root.act({ action: "quick_play" })
                     }
 
-                    TransitionPanel {
-                        Layout.alignment: Qt.AlignVCenter
+                    // Scrolls when the window is low: its height no longer
+                    // pushes the bars below the window (1440 × 900).
+                    QQC2.ScrollView {
+                        id: panelScroll
                         Layout.fillWidth: false
+                        Layout.fillHeight: true
                         Layout.preferredWidth: Kirigami.Units.gridUnit * 8
-                        core: backend
-                        show: root.show
-                        act: root.act
-                        transitions: transitionModel
-                        transitionBySlot: root.transitionBySlot
+                        Layout.minimumHeight: Kirigami.Units.gridUnit * 6
+                        contentWidth: availableWidth
+                        contentHeight: transitionPanel.implicitHeight
+                        QQC2.ScrollBar.horizontal.policy: QQC2.ScrollBar.AlwaysOff
+
+                        TransitionPanel {
+                            id: transitionPanel
+                            width: panelScroll.availableWidth
+                            core: backend
+                            show: root.show
+                            act: root.act
+                            transitions: transitionModel
+                            transitionBySlot: root.transitionBySlot
+                        }
                     }
 
                     Monitor {
@@ -755,11 +829,25 @@ Kirigami.ApplicationWindow {
             ShowView {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
+                Layout.preferredHeight: 0
                 visible: root.showMode
                 act: root.act
                 show: root.show
                 advanced: viewSettings.showAdvanced
                 onAdvancedChanged: viewSettings.showAdvanced = advanced
+                darkRoom: viewSettings.darkRoom
+                onDarkRoomChanged: viewSettings.darkRoom = darkRoom
+            }
+
+            // An older show file, converted on opening (SHW.7).
+            QQC2.Label {
+                Layout.fillWidth: true
+                visible: root.show !== null && !!root.show.older_format
+                text: root.show && root.show.older_format
+                    ? qsTr("This show file is in the older format %1 and was converted on opening. Saving it keeps the old file beside it (.v%1.bak).").arg(root.show.older_format)
+                    : ""
+                color: KanteStyle.infoColor
+                wrapMode: Text.Wrap
             }
 
             QQC2.Label {
@@ -770,6 +858,24 @@ Kirigami.ApplicationWindow {
                 wrapMode: Text.Wrap
             }
         }
+    }
+
+    // Dark room (SUI.6): Kante's dark scheme (no white), and the window
+    // under its scrim; clicks go through.
+    Binding {
+        target: KanteStyle
+        property: "preferDark"
+        value: true
+        when: root.showMode && viewSettings.darkRoom
+        restoreMode: Binding.RestoreBindingOrValue
+    }
+    Rectangle {
+        parent: root.contentItem
+        anchors.fill: parent
+        z: 1000
+        color: KanteStyle.scrimColor
+        opacity: 0.6
+        visible: root.showMode && viewSettings.darkRoom
     }
 
     component Monitor: KanteCard {

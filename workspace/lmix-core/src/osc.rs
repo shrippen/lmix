@@ -19,13 +19,18 @@
 //! | `/lmix/cue/go` | list, or none for the active one | `cue_go` |
 //! | `/lmix/cue/back` | list, or none | `cue_standby` previous |
 //! | `/lmix/cue/stop` | list, or none for every cue | `cue_stop` |
-//! | `/lmix/panic` | – | `cue_panic` (twice: hard stop) |
+//! | `/lmix/cue/release` | none | the GO button is let go (RUN.6) |
+//! | `/lmix/panic` | time in ms (int) or s (float), or none | `cue_panic` (twice: hard stop) |
 //! | `/lmix/stop/hard` | – | `cue_hard_stop` |
 //! | `/lmix/subscribe` | – | the sender gets tally and state from now on |
 //! | `/lmix/unsubscribe` | – | stops it |
+//! | `/lmix/ping` | – | answers `/lmix/pong`; keeps a subscription |
 //! | `/lmix/state` | – | answers `/lmix/state s:json` (the full state) |
 //!
 //! Refused actions answer the sender with `/lmix/error s:reason`.
+//! A subscription lasts 60 s after the subscriber's last message (CTL.3):
+//! send `/lmix/subscribe` or `/lmix/ping` within that. For buttons without
+//! keepalive there are fixed subscribers (`set_feed`, CTL.4).
 //! Subscribers get, right after subscribing and then on every change:
 //!
 //! | Address | Arguments |
@@ -34,7 +39,7 @@
 //! | `/lmix/program`, `/lmix/preview` | name, number (0: a layout, or none) |
 //! | `/lmix/tbar` | position (float 0–1) |
 //! | `/lmix/ftb` | 1 while faded to black |
-//! | `/lmix/cue/next` | list name, number of the cue GO runs next |
+//! | `/lmix/cue/standby` | list name, number of the standby cue (1-based), its name |
 //!
 //! Bundles are unpacked; their time tags are ignored (run now).
 
@@ -47,6 +52,7 @@ use tokio::net::UdpSocket;
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::Mutex;
 
+use crate::access::Right;
 use crate::service::Service;
 
 /// Largest datagram read.
@@ -54,6 +60,12 @@ const MAX_PACKET: usize = 64 * 1024;
 
 /// Subscribers kept at most; the oldest is dropped beyond that.
 const MAX_SUBSCRIBERS: usize = 32;
+
+/// A subscription ends this long after the subscriber's last message.
+const SUBSCRIPTION_TTL: std::time::Duration = std::time::Duration::from_secs(60);
+
+/// Subscribers and when each was last heard.
+type Subscribers = Arc<Mutex<Vec<(SocketAddr, tokio::time::Instant)>>>;
 
 /// One OSC argument.
 #[derive(Clone, Debug, PartialEq)]
@@ -232,7 +244,10 @@ fn write_string(out: &mut Vec<u8>, text: &str) {
 #[derive(Debug, PartialEq)]
 pub enum Request {
     Action(Action),
+    /// The sender's GO button is let go (RUN.6).
+    Release,
     Subscribe,
+    Ping,
     Unsubscribe,
     State,
 }
@@ -261,6 +276,7 @@ pub fn request(message: &Message) -> Result<Request, String> {
     };
     let action = match parts.as_slice() {
         ["subscribe"] => return Ok(Request::Subscribe),
+        ["ping"] => return Ok(Request::Ping),
         ["unsubscribe"] => return Ok(Request::Unsubscribe),
         ["state"] => return Ok(Request::State),
         ["action"] => match arg(0) {
@@ -317,8 +333,18 @@ pub fn request(message: &Message) -> Result<Request, String> {
             }
         }
         ["overlay", "out"] => json(serde_json::json!({ "action": "overlay_out_all" }))?,
-        ["panic"] => Action::CuePanic,
+        // An optional time: panic over that many ms (CTL.1).
+        ["panic"] => Action::CuePanic {
+            ms: match arg(0) {
+                Some(Arg::Int(ms)) => {
+                    Some(u32::try_from(*ms).map_err(|_| "panic time 0–10000 ms")?)
+                }
+                Some(Arg::Float(s)) => Some((s * 1000.0).round() as u32),
+                _ => None,
+            },
+        },
         ["stop", "hard"] => Action::CueHardStop,
+        ["cue", "release"] => return Ok(Request::Release),
         ["cue", step @ ("go" | "back" | "stop")] => {
             let list = arg(0).map(|_| input(0)).transpose()?;
             match *step {
@@ -339,23 +365,34 @@ pub fn request(message: &Message) -> Result<Request, String> {
     Ok(Request::Action(action))
 }
 
+/// A sender's GO button (RUN.6): Companion sends all its buttons from one
+/// socket, so any GO button there counts as the same.
+fn hold(peer: SocketAddr) -> crate::cues::Hold {
+    crate::cues::Hold::of(&format!("osc {peer}"))
+}
+
 /// Receive messages and send tally until the process ends.
 /// OSC carries no password: senders outside the local network are
 /// ignored unless `internet`, and with a password (`local_only`) all but
-/// this machine (API.7).
+/// this machine (API.7) and the trusted addresses, with their right;
+/// `open_panic` lets panic and hard stop through from the network all
+/// the same (CTL.5).
 pub async fn serve(
     listen: SocketAddr,
     service: Arc<Service>,
     internet: bool,
     local_only: bool,
+    open_panic: bool,
+    trusted: Vec<crate::access::Trust>,
 ) -> anyhow::Result<()> {
     let access = crate::access::Access {
         internet,
+        trusted,
         ..Default::default()
     };
     let socket = Arc::new(UdpSocket::bind(listen).await?);
     tracing::info!(%listen, "OSC up");
-    let subscribers = Arc::new(Mutex::new(Vec::<SocketAddr>::new()));
+    let subscribers: Subscribers = Arc::new(Mutex::new(Vec::new()));
     tokio::spawn(send_updates(
         socket.clone(),
         subscribers.clone(),
@@ -365,13 +402,43 @@ pub async fn serve(
     let mut buf = vec![0u8; MAX_PACKET];
     loop {
         let (len, peer) = socket.recv_from(&mut buf).await?;
-        match access.peer(peer.ip()) {
+        // None: only an open panic.
+        let granted = match access.peer(peer.ip()) {
             crate::access::Peer::Refused => continue,
-            crate::access::Peer::Network if local_only => continue,
-            _ => {}
+            crate::access::Peer::Network if local_only => access.trusted(peer.ip()),
+            crate::access::Peer::Network | crate::access::Peer::Local => Some(Right::Edit),
+        };
+        if granted.is_none() && !open_panic {
+            continue;
         }
+        // Any message keeps the sender's subscription (CTL.3).
+        heard(&subscribers, peer).await;
         for message in decode(&buf[..len]) {
-            match request(&message) {
+            let request = request(&message);
+            let panic = matches!(
+                request,
+                Ok(Request::Action(
+                    Action::CuePanic { .. } | Action::CueHardStop
+                ))
+            );
+            let allowed = match (&request, granted) {
+                (Ok(Request::Action(action)), Some(right)) => {
+                    crate::access::right_of(action) <= right
+                }
+                (_, granted) => granted.is_some(),
+            };
+            if !(allowed || panic && open_panic) {
+                continue;
+            }
+            match request {
+                // GO waits for this sender's release (RUN.6).
+                Ok(Request::Action(action @ Action::CueGo { .. })) => {
+                    if let Err(error) = service.go_held(action, hold(peer)).await {
+                        let reply = encode("/lmix/error", &[&error.to_string()]);
+                        let _ = socket.send_to(&reply, peer).await;
+                    }
+                }
+                Ok(Request::Release) => service.release(hold(peer)).await,
                 Ok(Request::Action(action)) => {
                     if let Err(error) = service.handle(action).await {
                         let reply = encode("/lmix/error", &[&error.to_string()]);
@@ -380,11 +447,11 @@ pub async fn serve(
                 }
                 Ok(Request::Subscribe) => {
                     let mut subs = subscribers.lock().await;
-                    if !subs.contains(&peer) {
+                    if !subs.iter().any(|(s, _)| *s == peer) {
                         if subs.len() >= MAX_SUBSCRIBERS {
                             subs.remove(0);
                         }
-                        subs.push(peer);
+                        subs.push((peer, tokio::time::Instant::now()));
                     }
                     drop(subs);
                     let tally = tally_message(&service.tally().await);
@@ -397,7 +464,10 @@ pub async fn serve(
                     let json = serde_json::to_string(&service.state().await).unwrap_or_default();
                     let _ = socket.send_to(&encode("/lmix/state", &[&json]), peer).await;
                 }
-                Ok(Request::Unsubscribe) => subscribers.lock().await.retain(|s| *s != peer),
+                Ok(Request::Unsubscribe) => subscribers.lock().await.retain(|(s, _)| *s != peer),
+                Ok(Request::Ping) => {
+                    let _ = socket.send_to(&encode("/lmix/pong", &[]), peer).await;
+                }
                 Err(reason) => {
                     let _ = socket
                         .send_to(&encode("/lmix/error", &[&reason]), peer)
@@ -408,16 +478,31 @@ pub async fn serve(
     }
 }
 
+/// `peer` sent something: its subscription, if any, starts over.
+async fn heard(subscribers: &Subscribers, peer: SocketAddr) {
+    if let Some(entry) = subscribers
+        .lock()
+        .await
+        .iter_mut()
+        .find(|(s, _)| *s == peer)
+    {
+        entry.1 = tokio::time::Instant::now();
+    }
+}
+
+/// Subscribers heard within the TTL; the others are dropped.
+async fn live(subscribers: &Subscribers) -> HashSet<SocketAddr> {
+    let mut subs = subscribers.lock().await;
+    subs.retain(|(_, at)| at.elapsed() < SUBSCRIPTION_TTL);
+    subs.iter().map(|(s, _)| *s).collect()
+}
+
 fn tally_message(tally: &[u8]) -> Vec<u8> {
     let digits: String = tally.iter().map(|t| char::from(b'0' + t.min(&9))).collect();
     encode("/lmix/tally", &[&digits])
 }
 
-async fn send_updates(
-    socket: Arc<UdpSocket>,
-    subscribers: Arc<Mutex<Vec<SocketAddr>>>,
-    service: Arc<Service>,
-) {
+async fn send_updates(socket: Arc<UdpSocket>, subscribers: Subscribers, service: Arc<Service>) {
     let mut events = service.subscribe();
     // Last message sent per key: only changes go out.
     let mut sent: std::collections::HashMap<String, Vec<u8>> = std::collections::HashMap::new();
@@ -443,8 +528,7 @@ async fn send_updates(
         if fresh.is_empty() {
             continue;
         }
-        let subs: HashSet<SocketAddr> = subscribers.lock().await.iter().copied().collect();
-        for peer in subs {
+        for peer in live(&subscribers).await {
             for message in &fresh {
                 let _ = socket.send_to(message, peer).await;
             }
@@ -516,16 +600,21 @@ mod tests {
         assert_eq!(req("/lmix/cut", vec![]), Ok(Request::Action(Action::Cut)));
         assert_eq!(
             req("/lmix/panic", vec![]),
-            Ok(Request::Action(Action::CuePanic))
+            Ok(Request::Action(Action::CuePanic { ms: None }))
         );
         assert_eq!(
             req("/lmix/stop/hard", vec![]),
             Ok(Request::Action(Action::CueHardStop))
         );
         assert_eq!(
+            req("/lmix/panic", vec![Arg::Int(3000)]),
+            Ok(Request::Action(Action::CuePanic { ms: Some(3000) }))
+        );
+        assert_eq!(
             req("/lmix/cue/go", vec![]),
             Ok(Request::Action(Action::CueGo { list: None }))
         );
+        assert_eq!(req("/lmix/cue/release", vec![]), Ok(Request::Release));
         assert_eq!(
             req("/lmix/program", vec![Arg::Str("Cam".into())]),
             Ok(Request::Action(Action::CutDirect {
@@ -586,6 +675,7 @@ mod tests {
             Ok(Request::Action(Action::FadeToBlack { .. }))
         ));
         assert_eq!(req("/lmix/subscribe", vec![]), Ok(Request::Subscribe));
+        assert_eq!(req("/lmix/ping", vec![]), Ok(Request::Ping));
         assert!(req("/lmix/preview", vec![]).is_err());
         assert!(req("/lmix/frob", vec![]).is_err());
     }
@@ -635,6 +725,25 @@ mod tests {
                 address: "/lmix/tally".into(),
                 args: vec![Arg::Str("012".into())]
             }]
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_subscription_ends_without_a_word() {
+        let subscribers: Subscribers = Arc::new(Mutex::new(Vec::new()));
+        let a: SocketAddr = "192.168.1.5:9000".parse().unwrap();
+        let b: SocketAddr = "192.168.1.6:9000".parse().unwrap();
+        let now = tokio::time::Instant::now();
+        subscribers.lock().await.extend([(a, now), (b, now)]);
+
+        tokio::time::advance(std::time::Duration::from_secs(40)).await;
+        heard(&subscribers, a).await;
+        tokio::time::advance(std::time::Duration::from_secs(30)).await;
+
+        assert_eq!(
+            live(&subscribers).await,
+            HashSet::from([a]),
+            "b said nothing for 70 s"
         );
     }
 }

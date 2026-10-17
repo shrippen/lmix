@@ -44,7 +44,8 @@ SCRIPT_BIN="${TARGET:-$ROOT/workspace/lmix-script/target}/release/lmix-script"
 export LMIX_CORE="$CORE"
 
 "$CORE_BIN" --engine none --listen "127.0.0.1:${PORT}" --autosave "$WORK/autosave.lmix" \
-    --shortcuts "$WORK/shortcuts.json" --layout-templates "$WORK/layout-templates.json" >>"$WORK/core.log" 2>&1 &
+    --shortcuts "$WORK/shortcuts.json" --layout-templates "$WORK/layout-templates.json" \
+    --targets "$WORK/targets.json" --script-tool "$SCRIPT_BIN" >>"$WORK/core.log" 2>&1 &
 PIDS+=($!)
 up || fail "lmix-core did not come up"
 act '{"action":"add_input","source":{"kind":"pattern","pattern":"bars"},"name":"Bars"}'
@@ -159,6 +160,27 @@ rm "$DIR/Sessions/Session 3.md"
 "$SCRIPT_BIN" load "$DIR" >"$WORK/load4.log" 2>&1 || fail "load of an empty script failed"
 [[ "$(state '[.cue_lists[].name] | join(",")')" == "Live" ]] || fail "list of the removed file still there"
 pass "a removed file removes its list, the operator's stays"
+
+# --- the show's script folder: lmix-core runs the tool itself (SSH.2) ------
+cat >"$DIR/Abend.md" <<'EOF'
+```lmix-cue
+number = "1"
+name = "Anfang"
+actions = [{ action = "cut" }]
+```
+EOF
+abend_is() { [[ "$(state '[.cue_lists[] | select(.name=="Abend") | .cues[0].name] | join("")')" == "$1" ]]; }
+act "{\"action\":\"set_script_folder\",\"folder\":\"$DIR\"}"
+[[ "$(state .script_folder)" == "$DIR" ]] || fail "script folder not in the state"
+wait_for 40 abend_is "Anfang" || fail "lmix-core did not load the folder: $(tail -5 "$WORK/core.log")"
+sed -i 's/^name = "Anfang"$/name = "Beginn"/' "$DIR/Abend.md"
+wait_for 40 abend_is "Beginn" || fail "a change of the folder was not loaded"
+act '{"action":"set_script_folder","folder":null}'
+sleep 1
+sed -i 's/^name = "Beginn"$/name = "Später"/' "$DIR/Abend.md"
+sleep 2
+abend_is "Beginn" || fail "the tool still runs without a folder"
+pass "script folder of the show: loaded and watched by lmix-core, stopped without one"
 
 # --- schema -----------------------------------------------------------------
 "$SCRIPT_BIN" schema | jq -e '.properties.kind and .properties.follow and .properties.children' >/dev/null \

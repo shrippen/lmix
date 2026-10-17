@@ -98,7 +98,7 @@ ausgeschlossen. **MS**: Meilenstein (§7). Stand: ✅ vorhanden · ◐ teilweise
 
 | ID | Anforderung | Prio | MS | Stand |
 |---|---|---|---|---|
-| CUE.1 | Cue hat Nummer, Name, Art, Notiz (mehrzeilig), Farbe, feste ID. Nummer ist freier Text, darf leer sein, ist in der ganzen Show eindeutig; Umsortieren ändert keine Nummer. Ohne Namen wird einer aus Art und Ziel gebildet. Nummern ohne Leerzeichen und Sonderzeichen empfohlen (Fernsteuerung), Import warnt | M | S1 | ◐ (alles bis auf die Import-Warnung, IMP) |
+| CUE.1 | Cue hat Nummer, Name, Art, Notiz (mehrzeilig), Farbe, feste ID. Nummer ist freier Text, darf leer sein, ist in der ganzen Show eindeutig; Umsortieren ändert keine Nummer. Ohne Namen wird einer aus Art und Ziel gebildet. Nummern ohne Leerzeichen und Sonderzeichen empfohlen (Fernsteuerung), Import warnt | M | S1 | ✅ (Drehbuch warnt bei Nummern mit Leerzeichen oder Zeichen) |
 | CUE.2 | Vorwartezeit und Nachwartezeit je Cue, 0 bis 1 h, Auflösung 10 ms. Nachwartezeit zählt ab Beginn der Aktion, also nach der Vorwartezeit | M | S1 | ✅ |
 | CUE.3 | Folge je Cue: keine; nächsten starten nach Nachwartezeit; nächsten starten nach Ende (dann gilt Nachwartezeit = Dauer) | M | S1 | ✅ |
 | CUE.4 | Gruppen-Modi: **Zeitleiste** (alle Kinder starten zugleich, versetzt nur durch ihre Vorwartezeiten; Kinder haben keine Folge), **erstes starten** (erstes Kind startet, Rest über Folgen; Standby springt hinter die Gruppe) | M | S1 | ✅ |
@@ -129,9 +129,9 @@ ausgeschlossen. **MS**: Meilenstein (§7). Stand: ✅ vorhanden · ◐ teilweise
 | RUN.3 | Mehrere Cues laufen gleichzeitig; Liste der laufenden Cues mit abgelaufener Zeit, Restzeit, Fortschritt | M | S1 | ✅ (`running_cues` im Zustand; Anzeige SUI.4) |
 | RUN.4 | Einzelnen laufenden Cue stoppen (mit seiner Ausblendung) oder hart stoppen | M | S1 | ◐ (`cue_stop`; Ausblendung ab Stufe 2) |
 | RUN.5 | Alles pausieren / fortsetzen, über alle Listen; einzelnen Cue pausieren | S | S2 | – |
-| RUN.6 | Schutz vor Doppel-GO: Mindestabstand einstellbar (Standard 300 ms, lmix-Wert), wirkt auf GO über alle Bedienwege, nicht auf direkte Auslöser, Folgen, Stopp, Panik; verworfenes GO sichtbar und als Ereignis; Option „erst nach Loslassen wieder scharf“ | M | S1 | ◐ (Abstand, Ereignis `go_ignored`; „erst nach Loslassen“ fehlt) |
+| RUN.6 | Schutz vor Doppel-GO: Mindestabstand einstellbar (Standard 300 ms, lmix-Wert), wirkt auf GO über alle Bedienwege, nicht auf direkte Auslöser, Folgen, Stopp, Panik; verworfenes GO sichtbar und als Ereignis; Option „erst nach Loslassen wieder scharf“ | M | S1 | ✅ (Abstand, Ereignis `go_ignored`, `set_go_rearm` `release` für MIDI, OSC `/lmix/cue/release`, Leertaste) |
 | RUN.7 | Mehrere Cue-Listen je Show, jede mit eigenem Standby; eine aktive Liste für GO; „Liste X starten“ = GO in X, ohne aktive Liste zu wechseln | M | S1 | ✅ |
-| RUN.8 | Zeitgenauigkeit: Wartezeiten und Folgen ± 10 ms über 4 h | M | S1 | ◐ (Zeiten ohne Drift, getestet; 4-h-Messung im Selftest offen, SNF.4) |
+| RUN.8 | Zeitgenauigkeit: Wartezeiten und Folgen ± 10 ms über 4 h | M | S1 | ◐ (ohne Drift; freier Rechner 1 h: spätestens 5,2 ms; unter Last bis 146 ms, DECISIONS 17.10.; Echtzeit-Priorität und 4 h frei offen) |
 | RUN.9 | Sperren je Ein- und Ausgabeklasse (Netz rein/raus, HTTP, MIDI, OSC): z. B. Probe ohne Lichtpult oder kein fremdes GO; betroffene Cues zeigen Warnung; per Aktion und API schaltbar | S | S2 | – |
 | RUN.10 | Vorhören: einzelnen Cue ohne Vorwartezeit und Folge abspielen, Standby bleibt; Umleitung je Ausgabeart (unverändert, stumm, andere Zone, Monitorfenster) | S | S2 | – |
 | RUN.11 | Show zurücksetzen: harter Stopp, vorübergehende Änderungen verwerfen, alle Standbys auf den Anfang | S | S1 | ✅ |
@@ -152,13 +152,13 @@ ausgeschlossen. **MS**: Meilenstein (§7). Stand: ✅ vorhanden · ◐ teilweise
 | SND.7 | Fade relativ (dB addieren); ein absoluter Fade hat Vorrang vor laufenden relativen | S | S2 | – |
 | SND.8 | Fade-Kurve: S-Kurve als Standard | M | S1 | – |
 | SND.9 | Weitere Kurven (linear, parametrisch) und Pegelbereich (Reglerskala, dB, linear) | S | S2 | – |
-| SND.10 | Zonen: mindestens 8 benannte Zonen mit 1–8 Kanälen; pro Rechner Zuordnung Zone → Gerät und Kanäle mit Pegel, mehrere Ziele je Zone möglich. Die Show nennt nur Zonennamen (lmix; QLab hält Patches im Dokument) | M | S1 | – (AUD.2 ◐) |
+| SND.10 | Zonen: mindestens 8 benannte Zonen mit 1–8 Kanälen; pro Rechner Zuordnung Zone → Gerät und Kanäle mit Pegel, mehrere Ziele je Zone möglich. Die Show nennt nur Zonennamen (lmix; QLab hält Patches im Dokument) | M | S1 | ◐ (Zonen mit Namen und Kanälen in der Show, Zuordnung zu Gerät, Kanälen und Pegel je Rechner, mehrere Ausgänge; Abspielen mit Stufe 2) |
 | SND.11 | Lautstärke und Mute je Zone, als Aktion, als Fade-Ziel und in der Oberfläche | M | S1 | ◐ (Aux-Bus 1–2) |
 | SND.12 | Latenz GO → hörbarer Klang ≤ 50 ms | M | S1 | – |
 | SND.13 | Reglergrenzen der Show: höchster Wert (Standard +12 dB) und niedrigster (Standard −60 dB = still); gelten für Cues, Fades und Fernsteuerung | M | S1 | – |
 | SND.14 | Signal-Begrenzer je Zone (Höchstpegel in dBFS), Schutz vor Lautstärkesprüngen (lmix) | S | S1 | – |
 | SND.15 | Zonen auf verschiedenen Geräten bleiben über 4 h synchron (Taktangleichung); Abweichung im Selftest gemessen | M | S1 | – |
-| SND.16 | Fehlendes Gerät einer Zone: Warnung an Zone und Cues, Show läuft weiter; Gerät kommt zurück → Zone geht wieder | M | S1 | – |
+| SND.16 | Fehlendes Gerät einer Zone: Warnung an Zone und Cues, Show läuft weiter; Gerät kommt zurück → Zone geht wieder | M | S1 | ◐ (Warnung für Zonen ohne Ausgang auf diesem Rechner; Geräteausfall zur Laufzeit mit Stufe 2) |
 | SND.17 | Klang-Cue erscheint nicht als Input-Kachel im Mischer (lmix) | S | S1 | – |
 | SND.18 | Start- und Endpunkt in der Datei | S | S2 | – |
 | SND.19 | Fade der Kreuzungspegel (Klang zwischen Zonen verschieben) | S | S2 | – |
@@ -234,11 +234,11 @@ QLab kennt keinen Import aus Texten; am nächsten kommt das Anlegen von Cues
 
 | ID | Anforderung | Prio | MS | Stand |
 |---|---|---|---|---|
-| CTL.1 | Befehle: GO, Standby (CUE.1 / RUN.2), Liste wählen und starten, Stopp, harter Stopp, Panik, Panik in Zeit x, Pause/Fortsetzen, Zurücksetzen. Über Tasten, MIDI, OSC über UDP und TCP (SLIP), HTTP; Ports einstellbar. Cues adressierbar über Nummer, feste ID, `standby`, `aktiv` | M | S1 | ◐ (GO, Standby, Liste wählen, Stopp, harter Stopp, Panik, Zurücksetzen; Pause S2; Panik in Zeit x fehlt) |
+| CTL.1 | Befehle: GO, Standby (CUE.1 / RUN.2), Liste wählen und starten, Stopp, harter Stopp, Panik, Panik in Zeit x, Pause/Fortsetzen, Zurücksetzen. Über Tasten, MIDI, OSC über UDP und TCP (SLIP), HTTP; Ports einstellbar. Cues adressierbar über Nummer, feste ID, `standby`, `aktiv` | M | S1 | ◐ (GO, Standby, Liste wählen und starten, Stopp, harter Stopp, Panik, Panik in Zeit x, Zurücksetzen; Cues über Nummer, ID, `standby`, Listen über `active`; Pause S2) |
 | CTL.2 | Ereignis-Abo für den Ablauf: Standby (Nummer, Name, Notiz) je Liste, Cue gestartet/gestoppt, laufende Cues mit abgelaufener Zeit und Dauer, Panik, verworfenes GO, Fehler von Ausgabezielen. Restzeit fertig gerechnet (lmix), Takt begrenzt (Standard 4 Hz, einstellbar) | M | S1 | ◐ (Ereignis `running` mit Restzeit, 4 Hz, `--cue-events-hz`; `cue`, `panic`, `target`; Standby über den Zustand) |
-| CTL.3 | Abo verwalten: an- und abmelden je Ereignis und Feld; Ablauf nach 60 s ohne Lebenszeichen | M | S1 | ◐ (AUT.13) |
+| CTL.3 | Abo verwalten: an- und abmelden je Ereignis und Feld; Ablauf nach 60 s ohne Lebenszeichen | M | S1 | ◐ (OSC-Abos enden 60 s nach der letzten Nachricht, `/lmix/ping`; Auswahl je Ereignis und Feld: TCP-Themen, sonst S2) |
 | CTL.4 | Feste OSC-Abonnenten in den Einstellungen (Host:Port, Ereignisauswahl, Nachrichtenvorlage mit Platzhaltern für Nummer, Name, Restzeit): Companion-Tasten ohne eigenes Modul und ohne Anmeldung | M | S1 | ✅ (`set_feed` auf `osc_udp`-Ziele, Platzhalter) |
-| CTL.5 | Zugriffsschutz für Steuerung von außen: Rechte Ansehen, Steuern, Bearbeiten für OSC, HTTP, TCP, Web. Mehrere Zugangsschlüssel mit eigenen Rechten; Stufe „ohne Schlüssel“ getrennt für localhost und eine LAN-Adressliste (Standard: nur localhost). Panik einzeln ohne Schlüssel freigebbar. Falsche Schlüssel verlängern die Wartezeit, Abweisungen werden protokolliert | M | S1 | ◐ (API.7) |
+| CTL.5 | Zugriffsschutz für Steuerung von außen: Rechte Ansehen, Steuern, Bearbeiten für OSC, HTTP, TCP, Web. Mehrere Zugangsschlüssel mit eigenen Rechten; Stufe „ohne Schlüssel“ getrennt für localhost und eine LAN-Adressliste (Standard: nur localhost). Panik einzeln ohne Schlüssel freigebbar. Falsche Schlüssel verlängern die Wartezeit, Abweisungen werden protokolliert | M | S1 | ✅ (Schlüssel mit Ansehen/Steuern/Bearbeiten für HTTP und TCP, `--open-panic` auch für OSC, wachsende Wartezeit und Protokoll; Adressliste mit Recht `--trust` für HTTP, TCP, OSC; ohne Schlüssel und Passwort bleibt das LAN frei wie bei API.7, DECISIONS 17.10.) |
 | CTL.6 | Globale Taste für GO und Panik, auch wenn die Console nicht im Vordergrund ist; in der Show-Ansicht ist Escape immer Panik, zweimal Escape harter Stopp, nicht umlegbar | S | S1 | ◐ (Leertaste GO, Escape Panik, zweimal hart, in der Show-Ansicht; global über Kurzbefehle) |
 | CTL.7 | Antworten auf Anfragen mit Status ok/Fehler/abgelehnt und Daten; für reine Aktionen abschaltbar; Lebenszeichen-Befehl | S | S2 | ◐ (API.3) |
 | CTL.8 | Companion-Modul: Aktionen, Rückmeldungen, Variablen für den Show-Modus | S | S2 | – (API.11) |
@@ -269,8 +269,8 @@ QLab kennt keinen Import aus Texten; am nächsten kommt das Anlegen von Cues
 | SUI.2 | Cue-Liste mit Spalten Nummer, Name, Art, Ziel, Vorwartezeit, Dauer, Nachwartezeit, Folge; Standby deutlich markiert; Gruppen einklappbar | M | S1 | ◐ (Nummer, Name, Notiz, Art mit Dauer, Vor/Nach/Folge unter „Erweitert“, Gruppen einklappbar; Ziel steht im Namen) |
 | SUI.3 | Großer GO-Knopf, Panik-Knopf, Standby-Name und Standby-Notiz in großer Schrift | M | S1 | ✅ |
 | SUI.4 | Laufende Cues mit Fortschrittsbalken, Restzeit, Stopp und Pause je Cue | M | S1 | ◐ (Fortschritt, Restzeit, Stopp je Cue; Pause mit RUN.5, S2) |
-| SUI.5 | Warnliste: defekte Cues, fehlende Medien, fehlende Zonen-Geräte, nicht erreichbare Ausgabeziele; vor der Show prüfbar | S | S1 | – |
-| SUI.6 | Dunkle Raumansicht: stark gedimmt, kein Weiß, für Bedienung im dunklen Raum (lmix) | S | S1 | – |
+| SUI.5 | Warnliste: defekte Cues, fehlende Medien, fehlende Zonen-Geräte, nicht erreichbare Ausgabeziele; vor der Show prüfbar | S | S1 | ◐ (fehlende Start-Ziele, Ausgabeziele, Inputs, Mediendateien; Erreichbarkeit der Ziele: `check_targets`, „Ziele prüfen“, jedes Senden; Zonen-Geräte mit Stufe 2) |
+| SUI.6 | Dunkle Raumansicht: stark gedimmt, kein Weiß, für Bedienung im dunklen Raum (lmix) | S | S1 | ✅ (Knopf „Dunkel“: Kante dunkel und ein Schleier über dem Fenster) |
 | SUI.7 | Kleine Bühnenvorschau | S | S1 | ◐ (Live-Monitore) |
 | SUI.8 | Zonen-Leiste: Pegel und Lautstärke je Zone | S | S1 | – |
 | SUI.9 | Gestaltung nach Kante (UI.9), Texte aus Katalogen de/en (NFA.11) | M | S1 | ✅ |
@@ -284,10 +284,10 @@ QLab kennt keinen Import aus Texten; am nächsten kommt das Anlegen von Cues
 | ID | Anforderung | Prio | MS | Stand |
 |---|---|---|---|---|
 | SSH.1 | Cue-Listen mit allen neuen Feldern in der Show-Datei; Format-Version steigt, ältere Shows werden beim Laden migriert (CUE.21) | M | S1 | ✅ |
-| SSH.2 | Im Drehbuch-Betrieb speichert die Show nur den Verweis auf den Drehbuch-Ordner, nicht die erzeugten Cues | S | S1 | – |
-| SSH.3 | Zonen-, Bühnen- und Ausgabeziel-Zuordnung liegen nicht in der Show, sondern in den Rechner-Einstellungen; ex- und importierbar | M | S1 | – |
+| SSH.2 | Im Drehbuch-Betrieb speichert die Show nur den Verweis auf den Drehbuch-Ordner, nicht die erzeugten Cues | S | S1 | ◐ (Show kennt ihren Drehbuch-Ordner, lmix-core hält `lmix-script --watch` dafür am Laufen; die Cues bleiben zusätzlich in der Show) |
+| SSH.3 | Zonen-, Bühnen- und Ausgabeziel-Zuordnung liegen nicht in der Show, sondern in den Rechner-Einstellungen; ex- und importierbar | M | S1 | ✅ (Ziele, Abonnenten und Zonen-Zuordnung in `targets.json`; Bühnen mit Stufe 3) |
 | SSH.4 | Paket (SHW.6) nimmt Klang- und Bilddateien der Cues mit | S | S2 | ◐ (SHW.6) |
-| SSH.5 | Show-Datei auf Wunsch zusammen mit den Rechner-Einstellungen (Zonen, Bühnen, Ausgabeziele, Licht-Patch) exportieren und importieren, z. B. für den Umzug auf gleiche Technik; Geheimnisse bleiben draußen, nur ihre Verweise (EXT.2) (lmix) | S | S1 | – |
+| SSH.5 | Show-Datei auf Wunsch zusammen mit den Rechner-Einstellungen (Zonen, Bühnen, Ausgabeziele, Licht-Patch) exportieren und importieren, z. B. für den Umzug auf gleiche Technik; Geheimnisse bleiben draußen, nur ihre Verweise (EXT.2) (lmix) | S | S1 | ✅ (`export_package`/`import_package` mit `machine: true`, ohne Geheimnisse) |
 
 ### 3.12 Licht (LGT)
 

@@ -8,6 +8,7 @@
 //!     data/<n>-<file>        files of data sources (not addresses)
 //!     templates/<id>/…       own title templates (built-in ones stay out)
 //!     templates/<id>.html …
+//!     machine.json           targets and OSC subscribers, no secrets (if asked)
 //! ```
 //!
 //! Importing unpacks into a folder, points the inputs at the media there
@@ -24,6 +25,9 @@ use crate::show::{self, Show};
 
 /// The show file inside a package.
 const SHOW_FILE: &str = "show.lmix";
+
+/// This machine's targets and subscribers inside a package (SSH.5).
+pub const MACHINE_FILE: &str = "machine.json";
 
 /// What a package holds.
 #[derive(Debug, Default, PartialEq)]
@@ -116,6 +120,7 @@ pub fn export(
     show: &Show,
     show_path: Option<&str>,
     templates: Option<&Path>,
+    machine: Option<&[u8]>,
     out: &Path,
 ) -> Result<Packed, String> {
     let mut packed_show = show.clone();
@@ -176,6 +181,13 @@ pub fn export(
         header.set_mtime(now);
         header.set_cksum();
         tar.append_data(&mut header, SHOW_FILE, body.as_slice())?;
+        if let Some(machine) = machine {
+            let mut header = header.clone();
+            header.set_size(machine.len() as u64);
+            header.set_mode(0o600);
+            header.set_cksum();
+            tar.append_data(&mut header, MACHINE_FILE, machine)?;
+        }
         let mut packed = Packed::default();
         for (name, path) in files.list.iter().chain(&extra) {
             tar.append_path_with_name(path, name)?;
@@ -199,11 +211,15 @@ pub fn export(
 fn templates_used(show: &Show) -> Vec<&str> {
     let mut actions: Vec<&lmix_types::Action> = Vec::new();
     actions.extend(show.shortcuts.iter().flat_map(|s| &s.actions));
-    actions.extend(
-        show.cue_lists
-            .iter()
-            .flat_map(|l| l.cues.iter().flat_map(|c| &c.actions)),
-    );
+    fn cue_actions<'a>(cues: &'a [lmix_types::Cue], out: &mut Vec<&'a lmix_types::Action>) {
+        for cue in cues {
+            out.extend(&cue.actions);
+            cue_actions(&cue.children, out);
+        }
+    }
+    for list in &show.cue_lists {
+        cue_actions(&list.cues, &mut actions);
+    }
     actions.extend(
         show.inputs
             .iter()
@@ -428,7 +444,14 @@ mod tests {
         };
         let package = here.path().join("s.lmixpkg");
 
-        let packed = export(&show, Some(&show_path), Some(&templates), &package).unwrap();
+        let packed = export(
+            &show,
+            Some(&show_path),
+            Some(&templates),
+            Some(b"{\"targets\":[]}"),
+            &package,
+        )
+        .unwrap();
         // a.webm once, b.png, guests.csv, own/index.html.
         assert_eq!(
             packed,
@@ -441,6 +464,10 @@ mod tests {
         let elsewhere = here.path().join("there");
         let other_templates = here.path().join("other-templates");
         let (opened, file, notes) = import(&package, &elsewhere, Some(&other_templates)).unwrap();
+        assert!(
+            elsewhere.join(MACHINE_FILE).is_file(),
+            "the machine's settings came along"
+        );
 
         assert_eq!(file, elsewhere.join("show.lmix"));
         assert!(notes.is_empty());
@@ -479,7 +506,7 @@ mod tests {
         });
         let p2 = here.path().join("k.lmixpkg");
         assert_eq!(
-            export(&with_key, Some(&show_path), Some(&templates), &p2)
+            export(&with_key, Some(&show_path), Some(&templates), None, &p2)
                 .unwrap()
                 .files,
             4
@@ -502,7 +529,7 @@ mod tests {
             ..Show::default()
         };
 
-        let error = export(&show, None, None, &here.path().join("p.lmixpkg")).unwrap_err();
+        let error = export(&show, None, None, None, &here.path().join("p.lmixpkg")).unwrap_err();
 
         assert!(error.contains("/nowhere/clip.webm"), "{error}");
     }

@@ -243,10 +243,12 @@ pub const ACTION_GROUPS: &[(&str, &[&str])] = &[
             "cue_reset",
             "set_active_cue_list",
             "set_go_guard",
+            "set_go_rearm",
             "cue_panic",
             "cue_hard_stop",
             "set_panic_time",
             "set_emergency_list",
+            "set_script_folder",
             "add_shortcut",
             "set_shortcut",
             "remove_shortcut",
@@ -256,11 +258,16 @@ pub const ACTION_GROUPS: &[(&str, &[&str])] = &[
         ],
     ),
     (
+        "zones",
+        &["set_zone", "remove_zone", "set_zone_patch", "remove_zone_patch"],
+    ),
+    (
         "targets",
         &[
             "set_target",
             "remove_target",
             "test_target",
+            "check_targets",
             "http_request",
             "ha_service",
             "set_feed",
@@ -281,6 +288,9 @@ pub const ACTION_GROUPS: &[(&str, &[&str])] = &[
     (
         "show",
         &[
+            "export_settings",
+            "import_settings",
+            "reset_settings",
             "new_show",
             "save_show",
             "open_show",
@@ -577,10 +587,18 @@ pub enum Action {
     SetGoGuard {
         ms: u32,
     },
-    /// Stop every cue of every list over the panic time; a second panic
-    /// within it is a hard stop. Standby stays; the emergency list runs
-    /// (SAF.1, SAF.4).
-    CuePanic,
+    /// Take GO again after the guard alone, or once the button is let go
+    /// as well (RUN.6).
+    SetGoRearm {
+        rearm: crate::cue::GoRearm,
+    },
+    /// Stop every cue of every list over the panic time, or over `ms`
+    /// ("panic in time x", CTL.1); a second panic within it is a hard
+    /// stop. Standby stays; the emergency list runs (SAF.1, SAF.4).
+    CuePanic {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        ms: Option<u32>,
+    },
     /// Stop every cue at once; the emergency list runs (SAF.3).
     CueHardStop,
     /// Panic time of the show, 0–10 000 ms (SAF.2).
@@ -593,6 +611,20 @@ pub enum Action {
         #[serde(default)]
         list: Option<InputRef>,
     },
+    /// The show's script folder: lmix-core keeps `lmix-script load
+    /// <folder> --watch` running for it; `null` stops it (SSH.2).
+    SetScriptFolder {
+        #[serde(default)]
+        folder: Option<String>,
+    },
+
+    // ---- Zones (show mode SND.10) ----
+    /// Add a zone to the show, or replace the one of the same name.
+    SetZone { zone: crate::zone::Zone },
+    RemoveZone { name: String },
+    /// Where a zone plays on this machine (machine settings, SSH.3).
+    SetZonePatch { patch: crate::zone::ZonePatch },
+    RemoveZonePatch { zone: String },
 
     // ---- Output targets (show mode EXT) ----
     /// Add a target of this machine, or replace the one of the same name.
@@ -607,6 +639,9 @@ pub enum Action {
     TestTarget {
         name: String,
     },
+    /// Probe every target the cue lists send to, all at once; those that
+    /// do not answer go into the warnings until they do (SUI.5).
+    CheckTargets,
     /// An HTTP request to every address of `target`. The action does not
     /// wait for it; how it went comes as `Event::Target` (EXT.3).
     HttpRequest {
@@ -1049,13 +1084,31 @@ pub enum Action {
     },
     /// Write the show with its media, data files and own title templates
     /// into one package file (SHW.6).
+    /// This machine's settings into a file: shortcuts for all shows,
+    /// layout templates, output targets and OSC subscribers, no secrets
+    /// (SHW.8).
+    ExportSettings { path: String },
+    /// Take a settings file instead of the current settings; targets of
+    /// the same name keep their secret.
+    ImportSettings { path: String },
+    /// Back to factory settings: no shortcuts for all shows, layout
+    /// templates, targets or subscribers.
+    ResetSettings,
     ExportPackage {
         path: String,
+        /// Also this machine's output targets and OSC subscribers, without
+        /// secrets (`machine.json`, show mode SSH.5).
+        #[serde(default)]
+        machine: bool,
     },
     /// Unpack a package into `folder` (new or empty) and open its show.
     ImportPackage {
         path: String,
         folder: String,
+        /// Also take the package's targets and OSC subscribers; ones of
+        /// the same name are replaced, their secrets stay (SSH.5).
+        #[serde(default)]
+        machine: bool,
     },
 }
 
@@ -1101,6 +1154,8 @@ pub enum ActionError {
     UnknownTarget { name: String },
     #[error("target: {reason}")]
     BadTarget { reason: String },
+    #[error("zone: {reason}")]
+    BadZone { reason: String },
     #[error("cue list: {reason}")]
     BadCueList { reason: String },
     #[error("triggers: {reason}")]

@@ -11,7 +11,7 @@
 //! | `SUB <topic>` | `OK`, then a line per change; topics `TALLY`, `STATE`, `LEVELS`, `OUTPUTS`, `MIDI`, `TITLE`, `POSITION`, `CUE`, `TARGET`, `ALL` |
 //! | `UNSUB <topic>` | `OK` |
 //! | `QUIT` | closes |
-//! | `AUTH <password>` | `OK`; first line from the network when lmix-core has `--password` (API.7) |
+//! | `AUTH <password>` | `OK`; first line from the network when lmix-core has `--password` or `--access-keys` (API.7, CTL.5); a key's right limits the actions after it |
 //!
 //! Subscribed changes arrive as `TALLY <digits>`, `STATE <json>`,
 //! `LEVELS <json>`, `OUTPUTS <json>`, `MIDI <json>` and `TITLE <json>` (a
@@ -29,6 +29,7 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::mpsc;
 
+use crate::access::Right;
 use crate::service::Service;
 
 /// Protocol version in the greeting.
@@ -111,9 +112,14 @@ pub async fn serve(
         let service = service.clone();
         let access = access.clone();
         tokio::spawn(async move {
-            let password = match access.peer(peer.ip()) {
-                crate::access::Peer::Local => None,
-                crate::access::Peer::Network => access.password.is_some().then_some(access),
+            // A trusted address has its right at once, no `AUTH` (CTL.5).
+            let (password, right) = match access.peer(peer.ip()) {
+                crate::access::Peer::Local => (None, Right::Edit),
+                crate::access::Peer::Network if !access.needs_key() => (None, Right::Edit),
+                crate::access::Peer::Network => match access.trusted(peer.ip()) {
+                    Some(right) => (None, right),
+                    None => (Some(access), Right::View),
+                },
                 crate::access::Peer::Refused => {
                     let _ = stream
                         .write_all(b"ER forbidden lmix answers only on the local network\n")
@@ -121,7 +127,7 @@ pub async fn serve(
                     return;
                 }
             };
-            if let Err(error) = client(stream, service, password).await {
+            if let Err(error) = client(stream, service, password, right, peer.ip()).await {
                 tracing::debug!(%peer, %error, "text client gone");
             }
         });
@@ -129,11 +135,13 @@ pub async fn serve(
 }
 
 /// One client; `password` holds the rules while it still has to send
-/// `AUTH`.
+/// `AUTH`; `right`: what it may do until then (CTL.5).
 async fn client(
     stream: TcpStream,
     service: Arc<Service>,
     mut password: Option<Arc<crate::access::Access>>,
+    mut right: Right,
+    ip: std::net::IpAddr,
 ) -> std::io::Result<()> {
     let (read, mut write) = stream.into_split();
     let mut events = service.subscribe();
@@ -166,17 +174,43 @@ async fn client(
                     None => return Ok(()),
                 };
                 if let Some(access) = &password {
-                    // Nothing before the password; a wrong one ends it.
-                    match line.trim_end_matches(['\r', '\n']).strip_prefix("AUTH ") {
-                        Some(given) if access.password_ok(given) => {
+                    // Nothing before the password but an open panic; a
+                    // wrong one ends it.
+                    let text = line.trim_end_matches(['\r', '\n']);
+                    if let Ok(action) = serde_json::from_str::<Action>(text) {
+                        if access.open_for(&action) {
+                            if let Some(reply) = answer(text, &service, &mut topics).await {
+                                write.write_all(reply.as_bytes()).await?;
+                            }
+                            continue;
+                        }
+                    }
+                    match text.strip_prefix("AUTH ").map(|given| access.right_of_key(given)) {
+                        Some(Some(granted)) => {
+                            access.forgive(ip);
+                            right = granted;
                             password = None;
                             write.write_all(b"OK\n").await?;
                             continue;
                         }
-                        _ => {
+                        Some(None) => {
+                            access.punish(ip, "text protocol").await;
                             write.write_all(b"ER auth password needed (AUTH <password>)\n").await?;
                             return Ok(());
                         }
+                        None => {
+                            write.write_all(b"ER auth password needed (AUTH <password>)\n").await?;
+                            return Ok(());
+                        }
+                    }
+                }
+                if let Ok(action) = serde_json::from_str::<Action>(line.trim()) {
+                    let needs = crate::access::right_of(&action);
+                    if needs > right {
+                        write
+                            .write_all(format!("ER forbidden this key may not run it (it needs {needs:?})\n").as_bytes())
+                            .await?;
+                        continue;
                     }
                 }
                 match answer(line.trim(), &service, &mut topics).await {
@@ -334,7 +368,20 @@ mod tests {
         let addr = listener.local_addr().unwrap();
         tokio::spawn(async move {
             let (stream, _) = listener.accept().await.unwrap();
-            client(stream, service, access).await.unwrap();
+            let right = if access.is_some() {
+                Right::View
+            } else {
+                Right::Edit
+            };
+            client(
+                stream,
+                service,
+                access,
+                right,
+                std::net::IpAddr::from([192, 168, 1, 9]),
+            )
+            .await
+            .unwrap();
         });
         let (read, write) = TcpStream::connect(addr).await.unwrap().into_split();
         (BufReader::new(read).lines(), write)
@@ -362,6 +409,40 @@ mod tests {
             .unwrap()
             .starts_with("ER auth"));
         assert_eq!(lines.next_line().await.unwrap(), None, "closed");
+    }
+
+    #[tokio::test]
+    async fn a_control_key_runs_the_show_but_does_not_edit() {
+        let access = Arc::new(crate::access::Access {
+            keys: vec![crate::access::AccessKey {
+                name: "Deck".into(),
+                key: "steuern-0123456".into(),
+                right: crate::access::Right::Control,
+            }],
+            open_panic: true,
+            ..Default::default()
+        });
+        let (mut lines, mut write) = connect_as(Some(access.clone())).await;
+        let mut next = async || lines.next_line().await.unwrap().unwrap();
+        assert_eq!(next().await, "LMIX 1");
+        // Panic before the key: open.
+        write
+            .write_all(b"{\"action\":\"cue_panic\"}\n")
+            .await
+            .unwrap();
+        assert_eq!(next().await, "OK");
+        write.write_all(b"AUTH steuern-0123456\n").await.unwrap();
+        assert_eq!(next().await, "OK");
+        write
+            .write_all(b"{\"action\":\"fade_to_black\",\"duration_ms\":0}\n")
+            .await
+            .unwrap();
+        assert_eq!(next().await, "OK");
+        write
+            .write_all(b"{\"action\":\"add_input\",\"source\":{\"kind\":\"pattern\",\"pattern\":\"bars\"}}\n")
+            .await
+            .unwrap();
+        assert!(next().await.starts_with("ER forbidden"));
     }
 
     #[tokio::test]
@@ -404,5 +485,29 @@ mod tests {
 
         write.write_all(b"QUIT\n").await.unwrap();
         assert_eq!(lines.next_line().await.unwrap(), None);
+    }
+
+    #[tokio::test]
+    async fn a_trusted_address_skips_auth() {
+        let service = Service::new(2, Arc::new(NullEngine::default()), None);
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.unwrap();
+            let ip = std::net::IpAddr::from([192, 168, 1, 20]);
+            client(stream, service, None, Right::Control, ip).await.unwrap();
+        });
+        let (read, mut write) = TcpStream::connect(addr).await.unwrap().into_split();
+        let mut lines = BufReader::new(read).lines();
+        assert_eq!(lines.next_line().await.unwrap().unwrap(), "LMIX 1");
+
+        write
+            .write_all(b"{\"action\":\"set_lock\",\"on\":true}\nTALLY\n")
+            .await
+            .unwrap();
+
+        let refused = lines.next_line().await.unwrap().unwrap();
+        assert!(refused.starts_with("ER forbidden"), "{refused}");
+        assert_eq!(lines.next_line().await.unwrap().unwrap(), "TALLY ");
     }
 }
