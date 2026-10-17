@@ -3271,3 +3271,64 @@ CPU/CUDA-Eingang/Formate/Unterlagen, Stinger, RTMP, Ablehnungen),
 clippy `-D warnings` (no-gui und efp). lmix-core 297 Tests, VM-Test mit
 strom. **Offen**: GPU-Abnahme auf der RTX 3090 (CUDA-Mischer,
 GL-Mischer, NVDEC/NVENC, Thumbnails).
+## 2026-10-16 — S-E.3: Klang-Cues intern, gemessen
+
+**Kontext**: S-E.3 zurückgestellt (User), vor S1 Stufe 2 mit Zahlen neu
+vorlegen. Gefragt: Klang-Cue als verdeckter strom-Input (A, wie ein
+Clip-Input heute: eigener Flow, Ton über `inter` in den Audio-Mischer)
+oder als Zweig eines Abspielers je Zone (B, ein Flow je Zone, ein
+`audiomixer`, ein Zweig je laufendem Klang).
+
+**Messung** (`scripts/bench-sound-cues/run.sh`, reines GStreamer 1.28,
+ohne strom und Gerät, 24 Kerne, GPU belegt, nicht genutzt; 30-s-FLAC,
+Stereo):
+
+| | A: Pipeline je Klang + interaudio | B: Zweig je Klang |
+|---|---|---|
+| Anfrage → erstes hörbares Sample am Zonen-Ausgang | 51–102 ms (kalt 192) | 31–32 ms |
+| Speicher je Klang | ~1 MB | ~0,6 MB |
+| Threads je Klang | 3 | 2 |
+| CPU bei 10 Klängen | 2,2–3,3 % | 3,8–4,4 % |
+
+A schwankt mit der Periode der Inter-Quelle. In lmix kommt dazu: der
+Slot-Ton läuft über strom-`inter` mit bis zu 1000 ms Puffer
+(`AUDIO_INTER_BUFFER_MS`, für die Kanalverzögerung), jeder Klang belegt
+einen der Mischer-Slots (Standard 16, höchstens 32, beim Start
+fest) und der Flow entsteht über REST.
+SND.12 verlangt GO → hörbar ≤ 50 ms, vor der Latenz des Geräts.
+
+**Folgerung (Vorschlag)**: B. Nur B hält SND.12; Speicher und CPU sind
+in beiden Fällen klein. Preis: ein neuer strom-Block „Zonen-Abspieler“
+(Zweige zur Laufzeit an- und abhängen, Pegel-Fade je Zweig), als eigener,
+upstream-tauglicher Commit; die Zone selbst (Gerät, Kanäle, SND.10) ist
+ohnehin neu. A bliebe nur für Videoton (VIS.10, S2), der schon ein Input ist.
+**Offen**: Entscheidung des Users.
+
+**Bauplan, damit die Folgen greifbar sind** (Schätzung, nicht gebaut):
+
+*B, Abspieler je Zone* (Vorschlag):
+- strom: ein neuer Block „Show-Ton“ (eigener, upstream-tauglicher Commit)
+  in einem Flow je Rechner. Je Zone ein `audiomixer` → Pegel (`volume`,
+  SND.11) → Begrenzer (SND.14) → Ausgang je Gerät mit Kanalzuordnung
+  (SND.10). Klänge kommen zur Laufzeit dazu: je Klang eine eigene
+  Dekodier-Pipeline wie im `mediaplayer`-Block (Datei → `appsink` →
+  `appsrc` im Flow), dann Kreuzungspunkte Datei-Kanal → Zone mit Pegel wie
+  im `liveaudiorouter` (`volume` je Kreuzung, Rampen klickfrei; SND.5,
+  SND.6, SND.8 mit S-Kurve). Vorladen vor GO (pausiert, dekodiert) hält
+  SND.12. Alle Zonen in einem Flow teilen eine Uhr; Geräte gleichen über
+  die Resampling-Nachführung der Sinks ab (SND.15, im Selftest messen).
+- lmix-core: Cue-Arten `sound` (Datei, Zonen-Zuordnung, Pegel,
+  Wiederholungen, Ein-/Ausblendung) und `fade` (Ziel Cue oder Zone,
+  Parameter, Dauer, Kurve, „danach stoppen“); Dauer aus der Datei;
+  Panik blendet über die Panikzeit aus (SAF.1/7).
+- Console: Zonen-Leiste mit Pegeln (SUI.8).
+- Aufwand grob: strom-Block 2–3 Tage, lmix-core 2 Tage, Console 1 Tag.
+
+*A, verdeckte Inputs*:
+- Jeder Klang belegt einen Mischer-Slot (16 Standard, geteilt mit
+  Kameras), sein Ton läuft über die Inter-Strecke mit bis zu 1000 ms
+  Puffer in den Audio-Mischer. Zonen wären Busse des Mischers (heute zwei
+  Aux-Busse), Geräte pro Zone bräuchten eigene Ausgänge des Mischers;
+  das widerspricht S-E.4 (Zone mit Rechner-Zuordnung, nicht Aux-Bus).
+- Weniger neuer strom-Code, aber SND.12 (≤ 50 ms) verfehlt, Slots werden
+  knapp, Zonen über Busse sind ein Umweg.
