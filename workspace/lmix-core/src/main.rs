@@ -30,6 +30,7 @@ mod layouts;
 mod metrics;
 mod midi;
 mod osc;
+mod osc_subs;
 mod package;
 mod patch;
 mod ptz;

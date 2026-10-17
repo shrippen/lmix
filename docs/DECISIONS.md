@@ -2790,3 +2790,28 @@ Komma, `LMIX_TRUST`), Recht `view`, `control` (Standard) oder `edit`.
 
 **Geprüft**: Lesen der Einträge (Präfix, Recht, Fehler), Netze v4/v6,
 HTTP mit und ohne Liste, Textprotokoll ohne `AUTH`.
+
+## 2026-10-17 — OSC-Abo je Ereignis und Feld (CTL.3)
+
+**Kontext**: Ein OSC-Abonnent bekam bisher alles vom Mischer und den
+Standby, aber keine Cue-Ereignisse, keine Restzeit und keine Panik; die
+gab es nur über feste Abonnenten (CTL.4) und TCP. CTL.3 verlangt An- und
+Abmelden je Ereignis und Feld.
+
+**Entscheidung** (`osc_subs.rs`):
+- `/lmix/subscribe` ohne Argumente wie bisher: Mischer und Standby.
+- `/lmix/subscribe THEMA [FELD …]`: fügt ein Thema hinzu, nur mit den
+  genannten Feldern in dieser Reihenfolge (ohne Felder: alle). Themen
+  `mixer`, `standby`, `running` (neuester laufender Cue je Liste im
+  Takt der Cue-Ereignisse, am Ende einmal leer, wie bei CTL.4), `cue`
+  (`started`, `ended`, `stopped`, `go_ignored`, `failed` mit Grund),
+  `panic`, `target`.
+- `/lmix/unsubscribe THEMA` nimmt eines weg, ohne Argument alle.
+- Zeiten als Float in Sekunden, die Position als Int, sonst Text; ein
+  Feld, das das Thema nicht hat, wird abgelehnt (`/lmix/error`).
+- Feste Abonnenten (CTL.4) bleiben, wie sie sind: sie brauchen kein
+  Lebenszeichen und haben Vorlagen mit Platzhaltern.
+
+**Geprüft**: Tests der Felder und Nachrichten, Headless-Test mit echtem
+OSC-Client (Name und Restzeit des laufenden Cues, Cue-Ereignisse, keine
+Mischer-Nachrichten).
