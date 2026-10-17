@@ -215,7 +215,7 @@ kann es, Console nicht.
 | ID | Anforderung | Prio | Stand |
 |---|---|---|---|
 | LAY.1 | Bis 10 Ebenen je Input, jede ein anderer Input; Z-Reihenfolge per Nummer | M | ◐ (bis 4 Layouts: Hintergrund + 8 Boxen, Reihenfolge nach Boxnummer; nicht je Input) |
-| LAY.2 | Je Ebene Position, Crop, Rand, sichtbar an/aus, Rotation 90° | M | ◐ (Rechteck, Zuschnitt, Rahmen, Sperre; ohne sichtbar an/aus, Rotation) |
+| LAY.2 | Je Ebene Position, Crop, Rand, sichtbar an/aus, Rotation 90° | M | ◐ (Rechteck, Zuschnitt, Rahmen, Sperre, sichtbar an/aus; ohne Rotation) |
 | LAY.3 | Verschachtelung: Ebenen von Ebenen werden gerendert (mind. 2 Stufen) | S | – |
 | LAY.4 | "Ebenen flach rechnen": Input samt Ebenen als ein Bild für Weiterverwendung | K | – |
 | LAY.5 | Layout-Vorlagen: speichern, laden, ex-/importieren, außerhalb der Show | S | ✅ |

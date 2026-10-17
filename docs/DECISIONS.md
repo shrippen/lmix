@@ -3157,3 +3157,16 @@ eine zweite Multiview kann der strom-Mischer nicht.
 **Geprüft**: Tests (Layout im Flow und zurückgelesen, Neubau ohne
 Quellen-Neustart, gleiches Layout ändert nichts), VM-Test mit strom:
 Program links ohne Pegel und zurück, Quellen bleiben.
+
+## 2026-10-17 — Layout-Box ein- und ausblenden (LAY.2)
+
+**Entscheidung**: Eine Box hat `hidden`. Ausgeblendet bleibt sie mit
+Platz, Zuschnitt und Rahmen im Layout, die Engine zeichnet sie nicht,
+ihr Input bekommt kein Tally (nicht auf Sendung). `show_box {layout,
+number, shown: shown|hidden|toggle}` schaltet eine Box für Tasten und
+Kurzbefehle; der Layout-Editor hat je Box „Sichtbar“ und zeigt
+ausgeblendete Boxen blass. Vorlagen (LAY.5) merken sich das nicht.
+
+**Geprüft**: Test (Box aus dem Engine-Befehl, Tally weg, Umschalten,
+Box 2 gibt es nicht), VM-Test mit strom: ausgeblendet scheint der
+Hintergrund durch, Ball ohne Tally, wieder eingeblendet.
