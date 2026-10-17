@@ -233,6 +233,7 @@ pub fn right_of(action: &Action) -> Right {
         | Action::CuePanic { .. }
         | Action::CueHardStop
         | Action::TestTarget { .. }
+        | Action::CheckTargets
         | Action::HttpRequest { .. }
         | Action::HaService { .. }
         | Action::RunShortcut { .. }

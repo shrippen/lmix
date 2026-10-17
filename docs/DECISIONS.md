@@ -2743,3 +2743,24 @@ bleiben bedienbar.
 
 **Geprüft**: Tests im Ablauf (gehalten, anderer Weg, Loslassen, Modus
 `time`), OSC-Adresse, Speichern und Laden der Show.
+
+## 2026-10-17 — Erreichbarkeit der Ziele in der Warnliste (SUI.5)
+
+**Kontext**: Die Warnliste nannte Ziele, die der Rechner nicht hat, aber
+nicht solche, die nicht antworten. SUI.5 verlangt beides vor der Show.
+
+**Entscheidung**:
+- `check_targets` (Console „Ziele prüfen“) fragt alle Ziele, an die Cues
+  senden, gleichzeitig ab (wie `test_target`: `GET` der ersten Adresse).
+  Wer nicht antwortet, steht mit Grund als `target_unreached` an jedem
+  Cue, der dorthin sendet.
+- Jedes Senden während der Show und jeder `test_target` schreibt das
+  Ergebnis fort: Ein Ziel, das ausfällt, erscheint ohne neue Prüfung in
+  der Liste, eines, das wieder antwortet, verschwindet.
+- Kein Prüfen im Hintergrund: Abfragen im Takt fluten Home Assistant und
+  zeigen nur, was das nächste Senden ohnehin zeigt.
+- Neue Einstellungen oder Entfernen eines Ziels vergessen sein Ergebnis.
+- Zonen-Geräte: strom nennt seine Ton-Ausgänge noch nicht; mit Stufe 2.
+
+**Geprüft**: Regel-Test (Gruppe, doppelte Nennung), Dienst-Test mit
+Ziel ohne und mit Gegenstelle.

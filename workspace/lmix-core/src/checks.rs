@@ -4,8 +4,11 @@
 //!
 //! - a start cue whose cue or list is gone;
 //! - an action naming an input that is not there;
-//! - an HTTP or Home Assistant action naming no target of this machine;
+//! - an HTTP or Home Assistant action naming no target of this machine,
+//!   or one that did not answer the last check or send;
 //! - an input a cue uses whose media file is missing.
+
+use std::collections::BTreeMap;
 
 use lmix_types::cue::{Cue, CueProblem, CueWarning};
 use lmix_types::input::{REF_DYNAMIC, REF_PREVIEW, REF_PROGRAM};
@@ -14,16 +17,39 @@ use lmix_types::{Action, InputId};
 use crate::show::{Show, ShowCueList};
 use crate::targets::TargetConfig;
 
-/// Every warning of `show`'s cue lists; `missing`: inputs whose media
-/// are not there.
-pub fn cue_warnings(
-    show: &Show,
-    targets: &[TargetConfig],
-    missing: &dyn Fn(InputId) -> bool,
-) -> Vec<CueWarning> {
+/// What the machine knows besides the show.
+pub struct Machine<'a> {
+    pub targets: &'a [TargetConfig],
+    /// Targets that did not answer, with the reason.
+    pub unreached: &'a BTreeMap<String, String>,
+    /// Inputs whose media are not there.
+    pub missing: &'a dyn Fn(InputId) -> bool,
+}
+
+/// Every warning of `show`'s cue lists.
+pub fn cue_warnings(show: &Show, machine: &Machine) -> Vec<CueWarning> {
     let mut out = Vec::new();
     for list in &show.cue_lists {
-        walk(show, list, &list.cues, targets, missing, &mut out);
+        walk(show, list, &list.cues, machine, &mut out);
+    }
+    out
+}
+
+/// The targets the cue lists send to, each once.
+pub fn used_targets(show: &Show) -> Vec<String> {
+    fn add(cues: &[Cue], out: &mut Vec<String>) {
+        for cue in cues {
+            for name in cue.actions.iter().filter_map(action_target) {
+                if !out.iter().any(|n| n == name) {
+                    out.push(name.to_string());
+                }
+            }
+            add(&cue.children, out);
+        }
+    }
+    let mut out = Vec::new();
+    for list in &show.cue_lists {
+        add(&list.cues, &mut out);
     }
     out
 }
@@ -32,8 +58,7 @@ fn walk(
     show: &Show,
     list: &ShowCueList,
     cues: &[Cue],
-    targets: &[TargetConfig],
-    missing: &dyn Fn(InputId) -> bool,
+    machine: &Machine,
     out: &mut Vec<CueWarning>,
 ) {
     for cue in cues {
@@ -61,15 +86,20 @@ fn walk(
         }
         for action in &cue.actions {
             if let Some(name) = action_target(action) {
-                if !targets.iter().any(|t| t.name == name) {
+                if !machine.targets.iter().any(|t| t.name == name) {
                     warn(CueProblem::TargetGone {
                         target: name.to_string(),
+                    });
+                } else if let Some(reason) = machine.unreached.get(name) {
+                    warn(CueProblem::TargetUnreached {
+                        target: name.to_string(),
+                        reason: reason.clone(),
                     });
                 }
             }
             for reference in input_refs(action) {
                 match find_input(show, &reference) {
-                    Lookup::Here(id) if missing(id) => warn(CueProblem::MediaMissing {
+                    Lookup::Here(id) if (machine.missing)(id) => warn(CueProblem::MediaMissing {
                         input: reference.clone(),
                     }),
                     Lookup::Here(_) | Lookup::Special => {}
@@ -79,7 +109,7 @@ fn walk(
                 }
             }
         }
-        walk(show, list, &cue.children, targets, missing, out);
+        walk(show, list, &cue.children, machine, out);
     }
 }
 
@@ -194,7 +224,13 @@ mod tests {
             group,
         ]);
 
-        let warnings = cue_warnings(&show, &[], &|_| false);
+        let none = BTreeMap::new();
+        let machine = |missing: &'static dyn Fn(InputId) -> bool| Machine {
+            targets: &[],
+            unreached: &none,
+            missing,
+        };
+        let warnings = cue_warnings(&show, &machine(&|_| false));
         let texts: Vec<&str> = warnings.iter().map(|w| w.message.as_str()).collect();
 
         assert_eq!(
@@ -206,9 +242,63 @@ mod tests {
             ]
         );
         let cam = show.inputs[0].id;
-        let missing = cue_warnings(&show, &[], &|id| id == cam);
+        let is_cam = move |id| id == cam;
+        let missing = cue_warnings(
+            &show,
+            &Machine {
+                targets: &[],
+                unreached: &none,
+                missing: &is_cam,
+            },
+        );
         assert!(missing
             .iter()
             .any(|w| w.message.contains("media file is missing")));
+    }
+
+    #[test]
+    fn unreached_targets_warn() {
+        let light = |target: &str| Action::HaService {
+            target: target.into(),
+            service: "light.turn_on".into(),
+            entity: None,
+            data: None,
+        };
+        let group = Cue {
+            children: vec![Cue::actions("Licht", vec![light("Haus")])],
+            ..Cue::empty(CueKind::Group)
+        };
+        let show = show_with(vec![
+            Cue::actions("Duft", vec![light("Duft"), light("Haus")]),
+            group,
+        ]);
+        let target = |name: &str| TargetConfig {
+            name: name.into(),
+            kind: lmix_types::TargetKind::Http,
+            addresses: vec!["http://ha.lan:8123".into()],
+            secret: None,
+            timeout_ms: 1000,
+        };
+        let targets = [target("Haus"), target("Duft")];
+        let unreached = BTreeMap::from([("Haus".to_string(), "cannot connect".to_string())]);
+
+        let warnings = cue_warnings(
+            &show,
+            &Machine {
+                targets: &targets,
+                unreached: &unreached,
+                missing: &|_| false,
+            },
+        );
+
+        assert_eq!(used_targets(&show), ["Duft", "Haus"]);
+        let texts: Vec<&str> = warnings.iter().map(|w| w.message.as_str()).collect();
+        assert_eq!(
+            texts,
+            [
+                "sends to target Haus, which did not answer: cannot connect",
+                "sends to target Haus, which did not answer: cannot connect",
+            ]
+        );
     }
 }

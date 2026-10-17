@@ -269,7 +269,7 @@ QLab kennt keinen Import aus Texten; am nächsten kommt das Anlegen von Cues
 | SUI.2 | Cue-Liste mit Spalten Nummer, Name, Art, Ziel, Vorwartezeit, Dauer, Nachwartezeit, Folge; Standby deutlich markiert; Gruppen einklappbar | M | S1 | ◐ (Nummer, Name, Notiz, Art mit Dauer, Vor/Nach/Folge unter „Erweitert“, Gruppen einklappbar; Ziel steht im Namen) |
 | SUI.3 | Großer GO-Knopf, Panik-Knopf, Standby-Name und Standby-Notiz in großer Schrift | M | S1 | ✅ |
 | SUI.4 | Laufende Cues mit Fortschrittsbalken, Restzeit, Stopp und Pause je Cue | M | S1 | ◐ (Fortschritt, Restzeit, Stopp je Cue; Pause mit RUN.5, S2) |
-| SUI.5 | Warnliste: defekte Cues, fehlende Medien, fehlende Zonen-Geräte, nicht erreichbare Ausgabeziele; vor der Show prüfbar | S | S1 | ◐ (fehlende Start-Ziele, Ausgabeziele, Inputs, Mediendateien; Erreichbarkeit der Ziele und Zonen-Geräte fehlen) |
+| SUI.5 | Warnliste: defekte Cues, fehlende Medien, fehlende Zonen-Geräte, nicht erreichbare Ausgabeziele; vor der Show prüfbar | S | S1 | ◐ (fehlende Start-Ziele, Ausgabeziele, Inputs, Mediendateien; Erreichbarkeit der Ziele: `check_targets`, „Ziele prüfen“, jedes Senden; Zonen-Geräte mit Stufe 2) |
 | SUI.6 | Dunkle Raumansicht: stark gedimmt, kein Weiß, für Bedienung im dunklen Raum (lmix) | S | S1 | ✅ (Knopf „Dunkel“: Kante dunkel und ein Schleier über dem Fenster) |
 | SUI.7 | Kleine Bühnenvorschau | S | S1 | ◐ (Live-Monitore) |
 | SUI.8 | Zonen-Leiste: Pegel und Lautstärke je Zone | S | S1 | – |

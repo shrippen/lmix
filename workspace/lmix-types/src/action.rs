@@ -267,6 +267,7 @@ pub const ACTION_GROUPS: &[(&str, &[&str])] = &[
             "set_target",
             "remove_target",
             "test_target",
+            "check_targets",
             "http_request",
             "ha_service",
             "set_feed",
@@ -638,6 +639,9 @@ pub enum Action {
     TestTarget {
         name: String,
     },
+    /// Probe every target the cue lists send to, all at once; those that
+    /// do not answer go into the warnings until they do (SUI.5).
+    CheckTargets,
     /// An HTTP request to every address of `target`. The action does not
     /// wait for it; how it went comes as `Event::Target` (EXT.3).
     HttpRequest {
