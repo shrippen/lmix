@@ -8,7 +8,7 @@
 //! | `{"action": …}` | `OK` or `ER <error> <message>` |
 //! | `TALLY` | `TALLY <digits>`: per input 0 off, 1 program, 2 preview |
 //! | `STATE` | `STATE <json>` |
-//! | `SUB <topic>` | `OK`, then a line per change; topics `TALLY`, `STATE`, `LEVELS`, `OUTPUTS`, `MIDI`, `TITLE`, `POSITION`, `CUE`, `ALL` |
+//! | `SUB <topic>` | `OK`, then a line per change; topics `TALLY`, `STATE`, `LEVELS`, `OUTPUTS`, `MIDI`, `TITLE`, `POSITION`, `CUE`, `TARGET`, `ALL` |
 //! | `UNSUB <topic>` | `OK` |
 //! | `QUIT` | closes |
 //! | `AUTH <password>` | `OK`; first line from the network when lmix-core has `--password` (API.7) |
@@ -42,27 +42,29 @@ const MAX_LINE: u64 = 64 * 1024;
 
 /// Topics a client can subscribe to, as bits.
 #[derive(Clone, Copy, Default)]
-struct Topics(u8);
+struct Topics(u16);
 
 impl Topics {
-    const TALLY: u8 = 1;
-    const STATE: u8 = 2;
-    const LEVELS: u8 = 4;
-    const OUTPUTS: u8 = 8;
-    const MIDI: u8 = 16;
-    const TITLE: u8 = 32;
-    const POSITION: u8 = 64;
-    const CUE: u8 = 128;
-    const ALL: u8 = Self::TALLY
+    const TALLY: u16 = 1;
+    const STATE: u16 = 2;
+    const LEVELS: u16 = 4;
+    const OUTPUTS: u16 = 8;
+    const MIDI: u16 = 16;
+    const TITLE: u16 = 32;
+    const POSITION: u16 = 64;
+    const CUE: u16 = 128;
+    const TARGET: u16 = 256;
+    const ALL: u16 = Self::TALLY
         | Self::STATE
         | Self::LEVELS
         | Self::OUTPUTS
         | Self::MIDI
         | Self::TITLE
         | Self::POSITION
-        | Self::CUE;
+        | Self::CUE
+        | Self::TARGET;
 
-    fn parse(name: &str) -> Option<u8> {
+    fn parse(name: &str) -> Option<u16> {
         match name.to_ascii_uppercase().as_str() {
             "TALLY" => Some(Self::TALLY),
             "STATE" => Some(Self::STATE),
@@ -72,6 +74,7 @@ impl Topics {
             "TITLE" => Some(Self::TITLE),
             "POSITION" => Some(Self::POSITION),
             "CUE" => Some(Self::CUE),
+            "TARGET" => Some(Self::TARGET),
             "ALL" => Some(Self::ALL),
             _ => None,
         }
@@ -87,6 +90,9 @@ impl Topics {
             Event::Title { .. } => Self::TITLE,
             Event::Position { .. } => Self::POSITION,
             Event::Cue { .. } => Self::CUE,
+            Event::Target { .. } => Self::TARGET,
+            Event::Panic { .. } => Self::CUE,
+            Event::Running { .. } => Self::CUE,
         };
         self.0 & bit != 0
     }
@@ -286,6 +292,9 @@ fn event_line(event: &Event) -> String {
         Event::Outputs { stats } => format!("OUTPUTS {}\n", json(stats)),
         Event::Midi { midi } => format!("MIDI {}\n", json(midi)),
         Event::Cue { .. } => format!("CUE {}\n", json(event)),
+        Event::Target { .. } => format!("TARGET {}\n", json(event)),
+        Event::Panic { .. } => format!("PANIC {}\n", json(event)),
+        Event::Running { cues } => format!("RUNNING {}\n", json(cues)),
         Event::Title { .. } => format!("TITLE {}\n", json(event)),
         Event::Position { .. } => format!("POSITION {}\n", json(event)),
     }

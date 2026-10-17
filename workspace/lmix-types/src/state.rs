@@ -153,6 +153,15 @@ pub struct ShowState {
     /// Shortest gap between two GOs (RUN.6).
     #[serde(default)]
     pub go_guard_ms: u32,
+    /// Panic time (SAF.2).
+    #[serde(default)]
+    pub panic_ms: u32,
+    /// Output targets of this machine, without secrets (EXT.1).
+    #[serde(default)]
+    pub targets: Vec<crate::target::Target>,
+    /// Fixed OSC subscribers of this machine (CTL.4).
+    #[serde(default)]
+    pub feeds: Vec<crate::feed::Feed>,
     /// Locked against closing, loading and stopping (AUT.11).
     #[serde(default)]
     pub locked: bool,
@@ -272,6 +281,19 @@ pub enum Event {
         graphics: InputId,
         layer: u32,
         report: String,
+    },
+    /// The running cues with their remaining time, at the cue event rate
+    /// (default 4 Hz) while cues run, once more when none is left
+    /// (CTL.2).
+    Running { cues: Vec<crate::cue::RunningCue> },
+    /// Panic (`mode: fade`, over the panic time) or hard stop (`hard`),
+    /// from any control (SAF.1, SAF.3, CTL.2).
+    Panic { mode: crate::cue::StopMode },
+    /// How a message to an output target went (EXT.3, CTL.2).
+    Target {
+        target: String,
+        #[serde(flatten)]
+        result: crate::target::TargetResult,
     },
     /// A cue started, ended, stopped or failed, or a GO was dropped
     /// (RUN.6); `cue` is `null` for a GO.

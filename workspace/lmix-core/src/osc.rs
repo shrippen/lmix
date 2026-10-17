@@ -19,6 +19,8 @@
 //! | `/lmix/cue/go` | list, or none for the active one | `cue_go` |
 //! | `/lmix/cue/back` | list, or none | `cue_standby` previous |
 //! | `/lmix/cue/stop` | list, or none for every cue | `cue_stop` |
+//! | `/lmix/panic` | – | `cue_panic` (twice: hard stop) |
+//! | `/lmix/stop/hard` | – | `cue_hard_stop` |
 //! | `/lmix/subscribe` | – | the sender gets tally and state from now on |
 //! | `/lmix/unsubscribe` | – | stops it |
 //! | `/lmix/state` | – | answers `/lmix/state s:json` (the full state) |
@@ -315,6 +317,8 @@ pub fn request(message: &Message) -> Result<Request, String> {
             }
         }
         ["overlay", "out"] => json(serde_json::json!({ "action": "overlay_out_all" }))?,
+        ["panic"] => Action::CuePanic,
+        ["stop", "hard"] => Action::CueHardStop,
         ["cue", step @ ("go" | "back" | "stop")] => {
             let list = arg(0).map(|_| input(0)).transpose()?;
             match *step {
@@ -510,6 +514,18 @@ mod tests {
             })
         };
         assert_eq!(req("/lmix/cut", vec![]), Ok(Request::Action(Action::Cut)));
+        assert_eq!(
+            req("/lmix/panic", vec![]),
+            Ok(Request::Action(Action::CuePanic))
+        );
+        assert_eq!(
+            req("/lmix/stop/hard", vec![]),
+            Ok(Request::Action(Action::CueHardStop))
+        );
+        assert_eq!(
+            req("/lmix/cue/go", vec![]),
+            Ok(Request::Action(Action::CueGo { list: None }))
+        );
         assert_eq!(
             req("/lmix/program", vec![Arg::Str("Cam".into())]),
             Ok(Request::Action(Action::CutDirect {

@@ -25,6 +25,7 @@ use crate::input::{
 use crate::layout::{BoxRect, BoxSpec};
 use crate::output::{OutputRef, OutputSource, OutputSpec};
 use crate::shortcut::ShortcutSpec;
+use crate::target::{HttpMethod, TargetSpec};
 
 /// 0-based index of aux bus `bus` (1-based, as in actions).
 pub fn aux_index(bus: u8) -> Result<usize, ActionError> {
@@ -242,12 +243,28 @@ pub const ACTION_GROUPS: &[(&str, &[&str])] = &[
             "cue_reset",
             "set_active_cue_list",
             "set_go_guard",
+            "cue_panic",
+            "cue_hard_stop",
+            "set_panic_time",
+            "set_emergency_list",
             "add_shortcut",
             "set_shortcut",
             "remove_shortcut",
             "run_shortcut",
             "set_dynamic_input",
             "set_dynamic_value",
+        ],
+    ),
+    (
+        "targets",
+        &[
+            "set_target",
+            "remove_target",
+            "test_target",
+            "http_request",
+            "ha_service",
+            "set_feed",
+            "remove_feed",
         ],
     ),
     (
@@ -296,13 +313,21 @@ pub enum Action {
         name: Option<String>,
     },
     /// Close an input.
-    RemoveInput { input: InputRef },
+    RemoveInput {
+        input: InputRef,
+    },
     /// Bring back the input closed last, with its settings (AUT.10).
     RestoreInput,
     /// Change what an input shows, keeping its settings (INP.4).
-    ReplaceSource { input: InputRef, source: SourceSpec },
+    ReplaceSource {
+        input: InputRef,
+        source: SourceSpec,
+    },
     /// Rename an input.
-    RenameInput { input: InputRef, name: String },
+    RenameInput {
+        input: InputRef,
+        name: String,
+    },
     /// Set or clear the color tag of an input (INP.3).
     SetInputColor {
         input: InputRef,
@@ -310,9 +335,15 @@ pub enum Action {
         color: Option<InputColor>,
     },
     /// Set an input's colour correction (needs the GL mixer).
-    SetLook { input: InputRef, look: Look },
+    SetLook {
+        input: InputRef,
+        look: Look,
+    },
     /// Choose last frame or black for when the input's source stalls.
-    SetSignalLoss { input: InputRef, mode: SignalLoss },
+    SetSignalLoss {
+        input: InputRef,
+        mode: SignalLoss,
+    },
     /// Whether a file, URL or playlist input plays, starts from the
     /// beginning, pauses by itself as it goes on and off air (INP.11).
     SetAutoPlay {
@@ -335,9 +366,15 @@ pub enum Action {
     },
     /// Jump to `position_ms` in the item a file, URL or playlist input
     /// plays (UI.5).
-    SeekInput { input: InputRef, position_ms: u64 },
+    SeekInput {
+        input: InputRef,
+        position_ms: u64,
+    },
     /// Play item `item` (1-based) of a playlist input (UI.4).
-    PlayItem { input: InputRef, item: u32 },
+    PlayItem {
+        input: InputRef,
+        item: u32,
+    },
 
     // ---- Outputs (OUT, REC, STR) ----
     /// Add an output to the show; it starts stopped.
@@ -353,19 +390,34 @@ pub enum Action {
         name: Option<String>,
     },
     /// Remove an output (stops it first).
-    RemoveOutput { output: OutputRef },
+    RemoveOutput {
+        output: OutputRef,
+    },
     /// Start streaming / recording / sending.
-    StartOutput { output: OutputRef },
+    StartOutput {
+        output: OutputRef,
+    },
     /// Stop it.
-    StopOutput { output: OutputRef },
+    StopOutput {
+        output: OutputRef,
+    },
 
     // ---- Audio (AUD) ----
     /// Switch an input's sound on or off.
-    SetAudio { input: InputRef, on: bool },
+    SetAudio {
+        input: InputRef,
+        on: bool,
+    },
     /// Audio follows video: the input is heard only while on program.
-    SetAudioFollow { input: InputRef, follow: bool },
+    SetAudioFollow {
+        input: InputRef,
+        follow: bool,
+    },
     /// Set an input's volume, 0–100 (100 = unity gain).
-    SetVolume { input: InputRef, volume: u8 },
+    SetVolume {
+        input: InputRef,
+        volume: u8,
+    },
     /// Set an input's channel strip: trim, pan, filter, EQ, dynamics,
     /// delay.
     SetChannelStrip {
@@ -374,18 +426,32 @@ pub enum Action {
     },
     /// Send an input to aux bus `bus` (1–2) at `level`, 0–100; 0 stops
     /// the send.
-    SetAuxSend { input: InputRef, bus: u8, level: u8 },
+    SetAuxSend {
+        input: InputRef,
+        bus: u8,
+        level: u8,
+    },
     /// Master of aux bus `bus` (1–2): volume 0–100 and mute.
-    SetAuxBus { bus: u8, volume: u8, mute: bool },
+    SetAuxBus {
+        bus: u8,
+        volume: u8,
+        mute: bool,
+    },
     /// Listen to an input on the monitor bus, before or after its fader.
     /// While any input is soloed, the monitor bus carries only the solos;
     /// otherwise it follows program.
-    SetListen { input: InputRef, listen: Listen },
+    SetListen {
+        input: InputRef,
+        listen: Listen,
+    },
     /// End every solo: the monitor bus follows program again.
     ClearListen,
 
     /// Move an input to a 1-based position in the input bar (INP.3).
-    MoveInput { input: InputRef, number: u32 },
+    MoveInput {
+        input: InputRef,
+        number: u32,
+    },
 
     // ---- Layouts (picture in picture) ----
     /// Add a layout: a background input with input boxes on top. It can
@@ -407,9 +473,13 @@ pub enum Action {
         boxes: Vec<BoxSpec>,
     },
     /// Remove a layout (not while it is on program).
-    RemoveLayout { layout: InputRef },
+    RemoveLayout {
+        layout: InputRef,
+    },
     /// Put a layout into preview.
-    PreviewLayout { layout: InputRef },
+    PreviewLayout {
+        layout: InputRef,
+    },
     /// Keep a layout as a template for every show (LAY.5), under `name`
     /// (the layout's by default); replaces a template of that name.
     SaveLayoutTemplate {
@@ -425,7 +495,9 @@ pub enum Action {
         name: Option<String>,
     },
     /// Remove a template.
-    RemoveLayoutTemplate { template: String },
+    RemoveLayoutTemplate {
+        template: String,
+    },
     /// Write templates (by name, all if empty) to a file.
     ExportLayoutTemplates {
         path: String,
@@ -433,7 +505,9 @@ pub enum Action {
         templates: Vec<String>,
     },
     /// Read templates from a file; ones of the same name are replaced.
-    ImportLayoutTemplates { path: String },
+    ImportLayoutTemplates {
+        path: String,
+    },
 
     // ---- Automation (AUT.7, AUT.14) ----
     /// Replace an input's triggers.
@@ -459,7 +533,9 @@ pub enum Action {
         source: Option<String>,
     },
     /// Remove a cue list.
-    RemoveCueList { list: InputRef },
+    RemoveCueList {
+        list: InputRef,
+    },
     /// Start the list's standby cue with its follow chain and move
     /// standby past it (RUN.1); without `list` the active list. Dropped
     /// when it comes sooner than the GO guard (RUN.6).
@@ -494,14 +570,80 @@ pub enum Action {
     /// (RUN.11).
     CueReset,
     /// The list GO goes to without a list (RUN.7).
-    SetActiveCueList { list: InputRef },
+    SetActiveCueList {
+        list: InputRef,
+    },
     /// Shortest gap between two GOs, 0–5000 ms (RUN.6).
-    SetGoGuard { ms: u32 },
+    SetGoGuard {
+        ms: u32,
+    },
+    /// Stop every cue of every list over the panic time; a second panic
+    /// within it is a hard stop. Standby stays; the emergency list runs
+    /// (SAF.1, SAF.4).
+    CuePanic,
+    /// Stop every cue at once; the emergency list runs (SAF.3).
+    CueHardStop,
+    /// Panic time of the show, 0–10 000 ms (SAF.2).
+    SetPanicTime {
+        ms: u32,
+    },
+    /// The list that runs with every panic and hard stop; `null` for none
+    /// (SAF.4).
+    SetEmergencyList {
+        #[serde(default)]
+        list: Option<InputRef>,
+    },
+
+    // ---- Output targets (show mode EXT) ----
+    /// Add a target of this machine, or replace the one of the same name.
+    SetTarget {
+        target: TargetSpec,
+    },
+    RemoveTarget {
+        name: String,
+    },
+    /// Send a probe (HTTP: `GET` of the first address); refused with the
+    /// reason when it fails (EXT.5).
+    TestTarget {
+        name: String,
+    },
+    /// An HTTP request to every address of `target`. The action does not
+    /// wait for it; how it went comes as `Event::Target` (EXT.3).
+    HttpRequest {
+        target: String,
+        #[serde(default)]
+        method: HttpMethod,
+        /// Appended to each address, e.g. `/api/scene/1`.
+        #[serde(default)]
+        path: String,
+        #[serde(default)]
+        headers: std::collections::BTreeMap<String, String>,
+        /// A string goes as text, anything else as JSON.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        body: Option<serde_json::Value>,
+    },
+    /// Call a Home Assistant service, e.g. `light.turn_on`, for `entity`
+    /// with `data`; the target's secret is the access token (EXT.4).
+    HaService {
+        target: String,
+        service: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        entity: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        data: Option<serde_json::Value>,
+    },
+
+    /// Add a fixed OSC subscriber, or replace the one of the same name
+    /// (CTL.4).
+    SetFeed { feed: crate::feed::Feed },
+    RemoveFeed { name: String },
 
     // ---- Safety ----
     /// Lock or unlock (AUT.11): while locked, closing inputs, opening or
     /// clearing the show and stopping or removing outputs are refused.
-    SetLock { on: bool },
+    SetLock {
+        on: bool,
+    },
     /// Bind a MIDI controller (`cc`) to the T-bar: 0–127 moves it from
     /// 0 to 1; `null` unbinds.
     SetMidiTbar {
@@ -511,27 +653,39 @@ pub enum Action {
 
     // ---- Shortcuts (AUT.1–3) ----
     /// Add a shortcut: a key and label for a list of actions.
-    AddShortcut { shortcut: ShortcutSpec },
+    AddShortcut {
+        shortcut: ShortcutSpec,
+    },
     /// Replace a shortcut (by number, label or id).
     SetShortcut {
         target: InputRef,
         shortcut: ShortcutSpec,
     },
     /// Remove a shortcut.
-    RemoveShortcut { target: InputRef },
+    RemoveShortcut {
+        target: InputRef,
+    },
     /// Run a shortcut's actions in order; the first failing one stops
     /// the rest.
-    RunShortcut { target: InputRef },
+    RunShortcut {
+        target: InputRef,
+    },
 
     // ---- Switching (SWI) ----
     /// Put an input into preview.
-    PreviewInput { input: InputRef },
+    PreviewInput {
+        input: InputRef,
+    },
     /// Swap preview and program instantly.
     Cut,
     /// Put an input on program instantly, skipping preview.
-    CutDirect { input: InputRef },
+    CutDirect {
+        input: InputRef,
+    },
     /// Take preview to program with transition button `slot` (1–4).
-    Transition { slot: TransitionSlot },
+    Transition {
+        slot: TransitionSlot,
+    },
     /// Take `input` (preview when left out) to program with the quick
     /// play effect and play it, if it is a clip (SWI.8). Preview stays,
     /// unless `input` was in it; on program already it only plays.
@@ -540,11 +694,18 @@ pub enum Action {
         input: Option<InputRef>,
     },
     /// Set the effect and length of quick play (no stinger).
-    SetQuickPlay { effect: Effect, duration_ms: u32 },
+    SetQuickPlay {
+        effect: Effect,
+        duration_ms: u32,
+    },
     /// Do what a click on `input` does (INP.8; preview unless set).
-    ClickInput { input: InputRef },
+    ClickInput {
+        input: InputRef,
+    },
     /// Do what GO on `input` does (INP.9; quick play unless set).
-    GoInput { input: InputRef },
+    GoInput {
+        input: InputRef,
+    },
     /// Configure transition button `slot`.
     SetTransition {
         slot: TransitionSlot,
@@ -563,7 +724,9 @@ pub enum Action {
     /// Move the T-bar (SWI.3): mix preview over program by `position`
     /// (0–1). Reaching 1 takes preview to program; back at 0 leaves both
     /// as they were.
-    TBar { position: f32 },
+    TBar {
+        position: f32,
+    },
 
     // ---- Overlays (OVL) ----
     /// Show `input` on overlay `channel` (1–4), above program and its
@@ -625,7 +788,10 @@ pub enum Action {
     },
     /// Set dynamic value `slot` (1–4); title texts and function arguments
     /// show it where they say `{value<slot>}`.
-    SetDynamicValue { slot: u8, value: String },
+    SetDynamicValue {
+        slot: u8,
+        value: String,
+    },
 
     // ---- PTZ (PER.2) ----
     /// Set or clear (null) the PTZ address of an input's camera.
@@ -642,14 +808,19 @@ pub enum Action {
         tilt: f32,
     },
     /// Zoom at a speed: −1 (wide) to 1 (tele); 0 stops.
-    PtzZoom { input: InputRef, speed: f32 },
+    PtzZoom {
+        input: InputRef,
+        speed: f32,
+    },
     /// Focus: auto, manual, near, far, stop.
     PtzFocus {
         input: InputRef,
         focus: crate::ptz::PtzFocus,
     },
     /// Back to the camera's home position.
-    PtzHome { input: InputRef },
+    PtzHome {
+        input: InputRef,
+    },
     /// Go to preset `preset` (0–127), or store the position there.
     PtzPreset {
         input: InputRef,
@@ -666,9 +837,14 @@ pub enum Action {
         name: Option<String>,
     },
     /// Remove a graphics channel and its layers.
-    RemoveGraphics { graphics: InputRef },
+    RemoveGraphics {
+        graphics: InputRef,
+    },
     /// Rename a graphics channel.
-    RenameGraphics { graphics: InputRef, name: String },
+    RenameGraphics {
+        graphics: InputRef,
+        name: String,
+    },
     /// Load `template` on `layer` (1–8) with `data`, replacing what the
     /// layer held; `play` plays it at once (CasparCG `CG ADD`).
     TitleLoad {
@@ -775,7 +951,9 @@ pub enum Action {
         data: TitleData,
     },
     /// Remove a saved set.
-    RemoveDataset { name: String },
+    RemoveDataset {
+        name: String,
+    },
     /// Set a layer's fields from a saved set.
     ApplyDataset {
         graphics: InputRef,
@@ -819,13 +997,22 @@ pub enum Action {
         name: Option<String>,
     },
     /// Remove a data source; fields bound to it keep their last values.
-    RemoveDataSource { source: InputRef },
+    RemoveDataSource {
+        source: InputRef,
+    },
     /// Select row `row` (1-based).
-    DataRow { source: InputRef, row: u32 },
+    DataRow {
+        source: InputRef,
+        row: u32,
+    },
     /// Select the next row (the first after the last with `loop_rows`).
-    DataNext { source: InputRef },
+    DataNext {
+        source: InputRef,
+    },
     /// Select the previous row.
-    DataPrevious { source: InputRef },
+    DataPrevious {
+        source: InputRef,
+    },
     /// Move on every `interval_ms` (null stops), and whether to start
     /// again after the last row.
     SetDataAuto {
@@ -845,10 +1032,14 @@ pub enum Action {
         path: Option<String>,
     },
     /// Open a show file, replacing the current show.
-    OpenShow { path: String },
+    OpenShow {
+        path: String,
+    },
     /// Look for the missing media files of all inputs in `folder` (by
     /// file name) and use those found (SHW.4).
-    RelocateMedia { folder: String },
+    RelocateMedia {
+        folder: String,
+    },
     /// Add inputs of another show file to this one, with their settings
     /// (SHW.3): `inputs` by number in that show, all if empty.
     AppendShow {
@@ -858,9 +1049,14 @@ pub enum Action {
     },
     /// Write the show with its media, data files and own title templates
     /// into one package file (SHW.6).
-    ExportPackage { path: String },
+    ExportPackage {
+        path: String,
+    },
     /// Unpack a package into `folder` (new or empty) and open its show.
-    ImportPackage { path: String, folder: String },
+    ImportPackage {
+        path: String,
+        folder: String,
+    },
 }
 
 /// Default FTB fade.
@@ -901,6 +1097,10 @@ pub enum ActionError {
     BadLayout { reason: String },
     #[error("no cue list {reference}")]
     UnknownCueList { reference: String },
+    #[error("no target {name}")]
+    UnknownTarget { name: String },
+    #[error("target: {reason}")]
+    BadTarget { reason: String },
     #[error("cue list: {reason}")]
     BadCueList { reason: String },
     #[error("triggers: {reason}")]

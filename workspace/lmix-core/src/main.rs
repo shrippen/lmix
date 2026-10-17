@@ -24,6 +24,7 @@ mod cues;
 mod datasource;
 mod engine;
 mod feedback;
+mod feeds;
 mod layouts;
 mod metrics;
 mod midi;
@@ -36,6 +37,7 @@ mod service;
 mod show;
 mod switcher;
 mod tally_http;
+mod targets;
 mod tcp;
 mod titles;
 mod tsl;
@@ -120,6 +122,16 @@ struct Args {
     /// Shortcuts for all shows (AUT.3), kept apart from show files.
     #[arg(long, env = "LMIX_SHORTCUTS", default_value_os_t = config_file("shortcuts.json"))]
     shortcuts: PathBuf,
+
+    /// How often running cues go to subscribers and OSC subscribers while
+    /// cues run (CTL.2), 1–20 Hz.
+    #[arg(long, env = "LMIX_CUE_EVENTS_HZ", default_value_t = 4, value_parser = clap::value_parser!(u32).range(1..=20))]
+    cue_events_hz: u32,
+
+    /// Output targets of this machine with their secrets (show mode
+    /// EXT.1), kept apart from show files; written readable only by you.
+    #[arg(long, env = "LMIX_TARGETS", default_value_os_t = config_file("targets.json"))]
+    targets: PathBuf,
 
     /// Layout templates (LAY.5), kept apart from show files.
     #[arg(long, env = "LMIX_LAYOUT_TEMPLATES", default_value_os_t = config_file("layout-templates.json"))]
@@ -245,6 +257,7 @@ async fn main() -> anyhow::Result<()> {
     // Before the show: its titles name templates from the folder.
     service.use_templates(args.templates.clone()).await;
     service.use_shortcuts_file(args.shortcuts.clone()).await;
+    service.use_targets_file(args.targets.clone()).await;
     service
         .use_layout_templates_file(args.layout_templates.clone())
         .await;
@@ -275,6 +288,7 @@ async fn main() -> anyhow::Result<()> {
     tokio::spawn(service.clone().watch_media());
     tokio::spawn(service.clone().watch_titles());
     tokio::spawn(service.clone().watch_cues());
+    tokio::spawn(service.clone().watch_feeds(args.cue_events_hz));
     if !args.midi.is_empty() {
         tokio::spawn(midi::serve(args.midi.clone(), service.clone()));
         if args.midi_feedback {

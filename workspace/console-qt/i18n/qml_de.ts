@@ -1554,7 +1554,7 @@
   <context>
     <name>Main</name>
     <message>
-      <location filename="../qml/Main.qml" line="+132" />
+      <location filename="../qml/Main.qml" line="+137" />
       <source>Layout %1 %2</source>
       <translation>Layout %1 %2</translation>
     </message>
@@ -1679,7 +1679,27 @@
       <translation>Importieren…</translation>
     </message>
     <message>
-      <location line="+8" />
+      <location line="+7" />
+      <source>Mixer</source>
+      <translation>Mischer</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Show</source>
+      <translation>Show</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Switch inputs live</source>
+      <translation>Inputs live schalten</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Run prepared cues with GO</source>
+      <translation>Vorbereitete Cues mit GO abfahren</translation>
+    </message>
+    <message>
+      <location line="+5" />
       <source>Kante</source>
       <translation>Kante</translation>
     </message>
@@ -1719,7 +1739,7 @@
       <translation>Einige Sekunden lang Aufnahme bis Programm messen</translation>
     </message>
     <message>
-      <location line="+10" />
+      <location line="+17" />
       <source>Preview</source>
       <translation>Vorschau</translation>
     </message>
@@ -2306,6 +2326,221 @@
       <location line="+12" />
       <source>+ Shortcut</source>
       <translation>+ Belegung</translation>
+    </message>
+  </context>
+  <context>
+    <name>ShowView</name>
+    <message>
+      <location filename="../qml/ShowView.qml" line="+73" />
+      <source>Wait %1</source>
+      <translation>Warten %1</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <location line="+10" />
+      <source>Note</source>
+      <translation>Notiz</translation>
+    </message>
+    <message>
+      <location line="-9" />
+      <source>Group</source>
+      <translation>Gruppe</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Start %1</source>
+      <translation>Start %1</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <location line="+10" />
+      <source>Start</source>
+      <translation>Start</translation>
+    </message>
+    <message>
+      <location line="-9" />
+      <source>Actions</source>
+      <translation>Aktionen</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Wait</source>
+      <translation>Warten</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Group, first</source>
+      <translation>Gruppe, erstes</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Group, timeline</source>
+      <translation>Gruppe, Zeitleiste</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Actions: %1</source>
+      <translation>Aktionen: %1</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>after wait</source>
+      <translation>nach Wartezeit</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>after end</source>
+      <translation>nach Ende</translation>
+    </message>
+    <message>
+      <location line="+39" />
+      <source>Cue list</source>
+      <translation>Cue-Liste</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>emergency</source>
+      <translation>Notfall</translation>
+    </message>
+    <message>
+      <location line="+12" />
+      <source>From %1</source>
+      <translation>Aus %1</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Advanced</source>
+      <translation>Erweitert</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Show waits and follows of every cue</source>
+      <translation>Wartezeiten und Folgen jedes Cues zeigen</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>No cue lists yet. Add one under Cues… or load a script with lmix-script.</source>
+      <translation>Noch keine Cue-Listen. Unter „Cues…“ eine anlegen oder ein Drehbuch mit lmix-script laden.</translation>
+    </message>
+    <message>
+      <location line="+22" />
+      <source>No.</source>
+      <translation>Nr.</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Cue</source>
+      <translation>Cue</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Kind</source>
+      <translation>Art</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Pre</source>
+      <translation>Vor</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Post</source>
+      <translation>Nach</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Follow</source>
+      <translation>Folge</translation>
+    </message>
+    <message>
+      <location line="+61" />
+      <source>Open group</source>
+      <translation>Gruppe aufklappen</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Close group</source>
+      <translation>Gruppe zuklappen</translation>
+    </message>
+    <message>
+      <location line="+64" />
+      <source>Standby</source>
+      <translation>Standby</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>End of the list</source>
+      <translation>Ende der Liste</translation>
+    </message>
+    <message>
+      <location line="+16" />
+      <source>GO</source>
+      <translation>GO</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Start the standby cue (space)</source>
+      <translation>Den Standby-Cue starten (Leertaste)</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Back</source>
+      <translation>Zurück</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Next</source>
+      <translation>Weiter</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>Panic</source>
+      <translation>Panik</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Stop every cue over the panic time; again: at once (Escape)</source>
+      <translation>Alle Cues über die Panikzeit anhalten; noch einmal: sofort (Escape)</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Panic time %1 s · GO guard %2 ms</source>
+      <translation>Panikzeit %1 s · GO-Sperre %2 ms</translation>
+    </message>
+    <message>
+      <location line="+20" />
+      <source>Running: %1</source>
+      <translation>Läuft: %1</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Stop all</source>
+      <translation>Alle anhalten</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Nothing runs.</source>
+      <translation>Nichts läuft.</translation>
+    </message>
+    <message>
+      <location line="+24" />
+      <source>pre wait</source>
+      <translation>Vorwartezeit</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>post wait</source>
+      <translation>Nachwartezeit</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>running</source>
+      <translation>läuft</translation>
+    </message>
+    <message>
+      <location line="+17" />
+      <source>Stop</source>
+      <translation>Stopp</translation>
     </message>
   </context>
   <context>

@@ -419,6 +419,14 @@ CUE/RUN/SSH.1) ✅ bis auf Ausblenden (mit Stufe 2), „erst nach Loslassen“
 (RUN.6) und die 4-h-Messung (SNF.4); DECISIONS „Show-Modus S1 Stufe 1“.
 Stufe 6 (Drehbuch-Import, IMP) ✅ vorgezogen: `lmix-script`, `docs/DREHBUCH.md`;
 DECISIONS „Drehbuch-Import“. Offen: SSH.2 (Show speichert nur den Ordner).
+Stufe 4 (Ausgabeziele, EXT.1–5) ✅ für HTTP und Home Assistant; DECISIONS
+„Ausgabeziele“.
+Stufe 5, Teil Sicherheit (SAF): Panik, harter Stopp, Notfall-Liste, Standby
+nach Neustart ✅ ohne Ausblenden (mit Stufe 2); DECISIONS „Panik“.
+Stufe 5, Teil Bedienung: Restzeit als Ereignis (CTL.2) und feste OSC-Abonnenten
+(CTL.4) ✅; DECISIONS „Feste OSC-Abonnenten“. Offen: Zugangsschlüssel (CTL.5).
+Stufe 7 (Show-Ansicht der Console, SUI.1–4, 9, 13) ✅ im Grundstand; DECISIONS
+„Show-Ansicht“. Ohne GPU offen in S1: CTL.5; mit Engine: Stufen 2 und 3.
 
 ---
 
