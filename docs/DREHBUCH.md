@@ -14,6 +14,12 @@ lmix-script schema                    JSON-Schema eines Cue-Blocks (IMP.8)
 `load` spricht `http://127.0.0.1:8200` an (`--core` oder `LMIX_CORE`),
 mit Passwort über `--password` oder `LMIX_PASSWORD`.
 
+**Ohne Terminal**: In der Show-Ansicht der Console „Drehbuch…“ wählen
+(Aktion `set_script_folder`). Die Show merkt sich den Ordner, und
+`lmix-core` hält `lmix-script load <ordner> --watch` dafür am Laufen, auch
+nach einem Neustart (`--script-tool`, Standard: neben `lmix-core`, sonst
+aus `PATH`). Was das Werkzeug meldet, steht im Log von `lmix-core`.
+
 ## Format
 
 - **Eine Datei = eine Cue-Liste**, sofern sie mindestens einen
@@ -29,6 +35,9 @@ mit Passwort über `--password` oder `LMIX_PASSWORD`.
 - **Nummern** (`number`) sind die feste Zuordnung (IMP.6); der Import
   nummeriert nicht. Eine Nummer zweimal in der Show ist ein Fehler an
   beiden Stellen, keine der Listen wird geladen.
+- **Dauer eines Aktions-Cues** (`duration_ms`): so lange gilt er als
+  laufend, z. B. die Länge des Clips, den er startet; `follow =
+  "after_end"` wartet dann darauf. Ohne Dauer endet er sofort.
 - **Medienpfade** (`path`, `paths` einer Quelle) zählen ab dem Ordner.
   Eine fehlende Datei ist eine Warnung mit Zeile; die Liste lädt trotzdem,
   der Cue meldet den Fehler, wenn er läuft (CUE.19).

@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls as QQC2
+import QtQuick.Dialogs
 import org.kde.kirigami as Kirigami
 import Kante
 
@@ -19,6 +20,8 @@ ColumnLayout {
 
     /** More columns: waits and follows (SUI.13). */
     property bool advanced: false
+    /** The whole window dimmed for a dark room (SUI.6). */
+    property bool darkRoom: false
     /** Groups shown closed, by cue id (SUI.2). */
     property var closed: ({})
 
@@ -33,6 +36,8 @@ ColumnLayout {
     readonly property bool fromScript: list !== null && list.source !== undefined && list.source !== null
     /** What would go wrong when the lists run (SUI.5). */
     readonly property var warnings: show && show.cue_warnings ? show.cue_warnings : []
+    /** Zones that play nowhere on this machine (SND.16). */
+    readonly property var silentZones: show && show.zones ? show.zones.filter(z => z.outputs.length === 0) : []
 
     /** A warning in the Console's language. */
     function problem(w) {
@@ -40,6 +45,7 @@ ColumnLayout {
         case "start_cue_gone": return qsTr("starts cue %1, which is not there").arg(w.target)
         case "start_list_gone": return qsTr("starts a cue list that is not there")
         case "target_gone": return qsTr("sends to target %1, which this machine does not have").arg(w.target)
+        case "target_unreached": return qsTr("sends to target %1, which did not answer: %2").arg(w.target).arg(w.reason)
         case "input_gone": return qsTr("uses input %1, which is not there").arg(w.input)
         case "media_missing": return qsTr("uses input %1, whose media file is missing").arg(w.input)
         default: return w.message
@@ -185,6 +191,82 @@ ColumnLayout {
             elide: Text.ElideMiddle
         }
         Item { Layout.fillWidth: !view.fromScript }
+        QQC2.Label {
+            visible: view.show !== null && !!view.show.script_folder
+            text: view.show && view.show.script_folder ? qsTr("Script: %1").arg(view.show.script_folder) : ""
+            color: KanteStyle.mutedTextColor
+            elide: Text.ElideMiddle
+            Layout.maximumWidth: Kirigami.Units.gridUnit * 16
+        }
+        KanteButton {
+            focusPolicy: Qt.NoFocus
+            text: qsTr("Zones…")
+            QQC2.ToolTip.visible: hovered
+            QQC2.ToolTip.text: qsTr("The show's sound zones and where they play on this machine")
+            onClicked: zonesDialog.open()
+        }
+        ZonesDialog {
+            id: zonesDialog
+            parent: QQC2.Overlay.overlay
+            anchors.centerIn: parent
+            act: view.act
+            zones: view.show && view.show.zones ? view.show.zones : []
+            onClosed: view.forceActiveFocus()
+        }
+        KanteButton {
+            focusPolicy: Qt.NoFocus
+            text: qsTr("Targets…")
+            QQC2.ToolTip.visible: hovered
+            QQC2.ToolTip.text: qsTr("Output targets (HTTP, Home Assistant, OSC) and OSC subscribers of this machine")
+            onClicked: targetsDialog.open()
+        }
+        KanteButton {
+            focusPolicy: Qt.NoFocus
+            text: qsTr("Check targets")
+            QQC2.ToolTip.visible: hovered
+            QQC2.ToolTip.text: qsTr("Ask every target the cues send to; those that do not answer show up as warnings")
+            onClicked: view.act({ action: "check_targets" })
+        }
+        TargetsDialog {
+            id: targetsDialog
+            parent: QQC2.Overlay.overlay
+            anchors.centerIn: parent
+            act: view.act
+            targets: view.show && view.show.targets ? view.show.targets : []
+            feeds: view.show && view.show.feeds ? view.show.feeds : []
+            onClosed: view.forceActiveFocus()
+        }
+        KanteButton {
+            focusPolicy: Qt.NoFocus
+            text: qsTr("Script…")
+            QQC2.ToolTip.visible: hovered
+            QQC2.ToolTip.text: qsTr("A folder of Markdown files with lmix-cue blocks; its lists follow every saved change")
+            onClicked: scriptDialog.open()
+        }
+        KanteButton {
+            focusPolicy: Qt.NoFocus
+            visible: view.show !== null && !!view.show.script_folder
+            text: qsTr("No script")
+            onClicked: view.act({ action: "set_script_folder", folder: null })
+        }
+        FolderDialog {
+            id: scriptDialog
+            title: qsTr("Script folder")
+            onAccepted: {
+                var path = decodeURIComponent(selectedFolder.toString().replace(/^file:\/\//, ""))
+                view.act({ action: "set_script_folder", folder: path })
+                view.forceActiveFocus()
+            }
+        }
+        KanteButton {
+            focusPolicy: Qt.NoFocus
+            checkable: true
+            checked: view.darkRoom
+            text: qsTr("Dark")
+            QQC2.ToolTip.visible: hovered
+            QQC2.ToolTip.text: qsTr("Dim the window for a dark room")
+            onToggled: view.darkRoom = checked
+        }
         QQC2.CheckBox {
             id: advancedBox
             text: qsTr("Advanced")
@@ -200,12 +282,22 @@ ColumnLayout {
     // Warnings before the show (SUI.5).
     ColumnLayout {
         Layout.fillWidth: true
-        visible: view.warnings.length > 0
+        visible: view.warnings.length + view.silentZones.length > 0
         spacing: 0
 
         KanteSectionLabel {
-            text: qsTr("Warnings: %1").arg(view.warnings.length)
+            text: qsTr("Warnings: %1").arg(view.warnings.length + view.silentZones.length)
             color: KanteStyle.warningColor
+        }
+        Repeater {
+            model: view.silentZones
+            QQC2.Label {
+                required property var modelData
+                Layout.fillWidth: true
+                text: qsTr("Zone %1 plays nowhere on this machine (Zones…)").arg(modelData.name)
+                color: KanteStyle.warningColor
+                elide: Text.ElideRight
+            }
         }
         Repeater {
             model: view.warnings.slice(0, 5)
@@ -228,7 +320,7 @@ ColumnLayout {
         Layout.fillWidth: true
         visible: view.lists.length === 0
         wrapMode: Text.WordWrap
-        text: qsTr("No cue lists yet. Add one under Cues… or load a script with lmix-script.")
+        text: qsTr("No cue lists yet. Add one under Cues… or choose a script folder with Script….")
     }
 
     RowLayout {
@@ -345,7 +437,7 @@ ColumnLayout {
                             }
                             QQC2.Label {
                                 Layout.preferredWidth: Kirigami.Units.gridUnit * 8
-                                text: view.kindLabel(row.cue) + (row.cue.kind === "wait" ? " " + view.clock(row.cue.duration_ms) : "")
+                                text: view.kindLabel(row.cue) + (row.cue.duration_ms ? " · " + view.clock(row.cue.duration_ms) : "")
                                 color: KanteStyle.mutedTextColor
                                 elide: Text.ElideRight
                             }
@@ -436,7 +528,10 @@ ColumnLayout {
             }
             QQC2.Label {
                 Layout.fillWidth: true
-                text: view.show ? qsTr("Panic time %1 s · GO guard %2 ms").arg((view.show.panic_ms / 1000).toFixed(1)).arg(view.show.go_guard_ms) : ""
+                // Release: a MIDI or OSC button gives the next GO only once let
+                // go (RUN.6); space ignores its own repeats anyway.
+                text: view.show ? qsTr("Panic time %1 s · GO guard %2 ms").arg((view.show.panic_ms / 1000).toFixed(1)).arg(view.show.go_guard_ms)
+                                  + (view.show.go_rearm === "release" ? qsTr(" · GO again once let go") : "") : ""
                 color: KanteStyle.mutedTextColor
                 font.family: KanteStyle.monoFamily
                 wrapMode: Text.WordWrap

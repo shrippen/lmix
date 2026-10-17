@@ -34,7 +34,9 @@ mod package;
 mod patch;
 mod ptz;
 mod recent;
+mod script;
 mod service;
+mod settings;
 mod show;
 mod switcher;
 mod tally_http;
@@ -43,6 +45,7 @@ mod tcp;
 mod titles;
 mod tsl;
 mod web;
+mod zones;
 
 use engine::flows::{MixerBackend, MonitorOut};
 use engine::null::NullEngine;
@@ -129,6 +132,11 @@ struct Args {
     #[arg(long, env = "LMIX_CUE_EVENTS_HZ", default_value_t = 4, value_parser = clap::value_parser!(u32).range(1..=20))]
     cue_events_hz: u32,
 
+    /// The lmix-script tool, run for a show's script folder (show mode
+    /// SSH.2); default: next to lmix-core, else from PATH.
+    #[arg(long, env = "LMIX_SCRIPT_TOOL")]
+    script_tool: Option<PathBuf>,
+
     /// Output targets of this machine with their secrets (show mode
     /// EXT.1), kept apart from show files; written readable only by you.
     #[arg(long, env = "LMIX_TARGETS", default_value_os_t = config_file("targets.json"))]
@@ -153,6 +161,13 @@ struct Args {
     /// button by the stage), also over OSC (show mode CTL.5, SAF.5).
     #[arg(long, env = "LMIX_OPEN_PANIC")]
     open_panic: bool,
+
+    /// Addresses or networks with a right without a key, e.g.
+    /// `192.168.1.20=control`, `192.168.1.0/24=view` (show mode CTL.5);
+    /// only matters with `--password` or `--access-keys`. HTTP, text
+    /// protocol and OSC.
+    #[arg(long, value_delimiter = ',', env = "LMIX_TRUST")]
+    trust: Vec<access::Trust>,
 
     /// Browser pages usable from the network without the password, with
     /// only what they need (`tally`, `keys`, `mixer`, `titles`).
@@ -280,6 +295,13 @@ async fn main() -> anyhow::Result<()> {
             .map(|_| true),
         None => service.resume().await,
     };
+    let tool = args
+        .script_tool
+        .clone()
+        .unwrap_or_else(script::default_tool);
+    service
+        .use_script_tool(tool, format!("http://{}", args.listen))
+        .await;
     match opened {
         Ok(true) => tracing::info!("show loaded"),
         Ok(false) => tracing::info!("starting with an empty show"),
@@ -319,11 +341,15 @@ async fn main() -> anyhow::Result<()> {
         let local_only =
             args.password.as_deref().is_some_and(|p| !p.is_empty()) || args.access_keys.is_some();
         let open_panic = args.open_panic;
+        let trusted = args.trust.clone();
         if local_only {
-            tracing::info!("OSC takes messages from this machine only (it has no password)");
+            tracing::info!(
+                "OSC takes messages from this machine and trusted addresses only (it has no password)"
+            );
         }
         tokio::spawn(async move {
-            if let Err(error) = osc::serve(listen, service, internet, local_only, open_panic).await
+            if let Err(error) =
+                osc::serve(listen, service, internet, local_only, open_panic, trusted).await
             {
                 tracing::error!(%error, "OSC stopped");
             }
@@ -351,6 +377,7 @@ async fn main() -> anyhow::Result<()> {
         internet: args.allow_internet,
         keys,
         open_panic: args.open_panic,
+        trusted: args.trust.clone(),
         ..access::Access::default()
     });
     if let Some(listen) = args.tcp {
