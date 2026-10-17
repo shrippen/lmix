@@ -120,9 +120,10 @@ const URL_REFRESH: std::time::Duration = std::time::Duration::from_secs(10);
 const FILES_CHECK: std::time::Duration = std::time::Duration::from_secs(1);
 /// How long after a jump in a player its reports are no clip end.
 const JUMP_SETTLE: std::time::Duration = std::time::Duration::from_millis(600);
-/// Players report five times a second while their flow runs; an older
-/// report belongs to one that is gone.
-const PLAYBACK_STALE: std::time::Duration = std::time::Duration::from_secs(2);
+/// Players report five times a second while their flow runs, but a busy
+/// engine leaves gaps of seconds (a VM check lost a held clip's state for
+/// one read); a report this old belongs to a player that is gone.
+const PLAYBACK_STALE: std::time::Duration = std::time::Duration::from_secs(10);
 
 /// How often the inputs' media files are looked for (SHW.4).
 const MEDIA_CHECK: std::time::Duration = std::time::Duration::from_secs(3);
