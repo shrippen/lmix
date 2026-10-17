@@ -3017,3 +3017,23 @@ Auflösung von SD bis 4K, Hochkant 1080 × 1920 und Bildraten 23,976–60.
 gleiches Format ändert nichts, Quellen bleiben), VM-Test mit strom:
 1080 × 1920 bei 25 fps gebaut, Program läuft, zurück auf 1920 × 1080,
 Quelle online; Console auf Xvfb.
+
+## 2026-10-17 — Acht Overlay-Kanäle (OVL.1)
+
+**Kontext**: OVL.1 fordert acht Overlay-Kanäle über Program, lmix hatte
+vier. Der strom-Mischer erlaubte acht DSK-Ebenen, eine davon braucht der
+Stinger (unterste Ebene).
+
+**Entscheidung**:
+- `OVERLAY_CHANNELS` = 8. Der Mischer bekommt neun DSK-Ebenen (Stinger +
+  8), dafür hebt strom #16 (`lmix-nine-dsk`) die Grenze wie dbaf113 von 8
+  auf 9; nur Grenze und Auswahlwerte, keine neue Logik. Mischer-Flow heißt
+  jetzt „lmix mixer 8“, ein laufender alter Mischer wird neu gebaut.
+- Shows mit vier Kanälen laden weiter: fehlende Kanäle bekommen ihren
+  Standard (leer, halbe Sekunde Blende), mehr als acht sind ein Fehler.
+- API: Kanal 1–8 in Aktionen, OSC und Zustand (Arrays mit acht Einträgen).
+  Die Console richtet sich nach der Länge der Arrays.
+
+**Geprüft**: Tests (alte Show mit vier Kanälen, Kanal 9 abgelehnt, neun
+DSK-Ebenen im Mischer), VM-Test mit strom: Kanal 8 über Program an und
+aus; Console auf Xvfb.

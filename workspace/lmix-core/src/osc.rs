@@ -326,7 +326,7 @@ pub fn request(message: &Message) -> Result<Request, String> {
             _ => return Err("/lmix/tbar needs a position 0–1".into()),
         },
         ["overlay", channel, "in"] => {
-            let channel = channel.parse::<u8>().map_err(|_| "overlay channel 1–4")?;
+            let channel = channel.parse::<u8>().map_err(|_| "overlay channel 1–8")?;
             let input = match input(0)? {
                 InputRef::Number(n) => serde_json::json!(n),
                 InputRef::Text(s) => serde_json::json!(s),
@@ -334,15 +334,15 @@ pub fn request(message: &Message) -> Result<Request, String> {
             json(serde_json::json!({ "action": "overlay_in", "channel": channel, "input": input }))?
         }
         ["overlay", channel, "out"] => {
-            let channel = channel.parse::<u8>().map_err(|_| "overlay channel 1–4")?;
+            let channel = channel.parse::<u8>().map_err(|_| "overlay channel 1–8")?;
             json(serde_json::json!({ "action": "overlay_out", "channel": channel }))?
         }
         ["overlay", channel, "last"] => {
-            let channel = channel.parse::<u8>().map_err(|_| "overlay channel 1–4")?;
+            let channel = channel.parse::<u8>().map_err(|_| "overlay channel 1–8")?;
             json(serde_json::json!({ "action": "overlay_last", "channel": channel }))?
         }
         ["overlay", channel, "preview"] => {
-            let channel = channel.parse::<u8>().map_err(|_| "overlay channel 1–4")?;
+            let channel = channel.parse::<u8>().map_err(|_| "overlay channel 1–8")?;
             Action::OverlayPreview {
                 channel,
                 input: arg(0).map(|_| input(0)).transpose()?,

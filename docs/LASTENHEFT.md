@@ -243,7 +243,7 @@ kann es, Console nicht.
 
 | ID | Anforderung | Prio | Stand |
 |---|---|---|---|
-| OVL.1 | 8 Overlay-Kanäle über Program; ein Input je Kanal; Alpha und Key des Inputs gelten | M | ◐ (4 Kanäle, nicht 8) |
+| OVL.1 | 8 Overlay-Kanäle über Program; ein Input je Kanal; Alpha und Key des Inputs gelten | M | ✅ |
 | OVL.2 | Je Kanal: Typ (Vollbild/PiP mit Position), Ein-/Ausblendeffekt + Dauer (rückwärts beim Ausblenden), Auto-Aus nach Zeit, Rand | M | ◐ (Effekt nur Schnitt/Blende, ohne Rand: Engine) |
 | OVL.3 | Overlay in Preview vorbereiten; geht beim nächsten Take mit auf Program | S | ◐ (Tally, nicht im Vorschau-Bild: Engine) |
 | OVL.4 | PiP-Overlay per Aktion auf Vollbild vergrößern und zurück | K | – |

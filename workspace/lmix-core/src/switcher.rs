@@ -248,7 +248,7 @@ pub(crate) fn check_triggers<'a>(
     Ok(())
 }
 
-/// 0-based index of dynamic slot `slot` (1–4).
+/// 0-based index of dynamic slot `slot` (1–8).
 fn dynamic_index(slot: u8) -> Result<usize, ActionError> {
     if slot == 0 || slot > DYNAMIC_SLOTS {
         return Err(ActionError::BadDynamic {
@@ -2252,7 +2252,7 @@ impl Switcher {
     }
 
     /// Auto offs (OVL.2) of the channels that went on since `before`, as
-    /// (delay, channel 1–4, when it went on).
+    /// (delay, channel 1–8, when it went on).
     pub fn auto_offs(&self, before: &OnAir) -> Vec<(u32, u8, u64)> {
         (0..usize::from(OVERLAY_CHANNELS))
             .filter(|&i| {
@@ -2266,7 +2266,7 @@ impl Switcher {
             .collect()
     }
 
-    /// Whether overlay `channel` (1–4) still shows what went on at
+    /// Whether overlay `channel` (1–8) still shows what went on at
     /// `since`: an auto off is due only then.
     pub fn overlay_still_on(&self, channel: u8, since: u64) -> bool {
         overlay_index(channel)
@@ -4105,7 +4105,7 @@ fn check_source(source: &SourceSpec) -> Result<(), ActionError> {
 }
 
 /// Audio inputs have no picture for preview or program.
-/// 0-based index of overlay `channel` (1–4).
+/// 0-based index of overlay `channel` (1–8).
 fn overlay_index(channel: u8) -> Result<usize, ActionError> {
     if !(1..=OVERLAY_CHANNELS).contains(&channel) {
         return Err(ActionError::BadOverlay {
@@ -4443,7 +4443,10 @@ mod tests {
             }]
         );
         let b = sw.state().inputs[1].id;
-        assert_eq!(sw.state().overlays, [None, Some(b), None, None]);
+        assert_eq!(
+            sw.state().overlays,
+            [None, Some(b), None, None, None, None, None, None]
+        );
         assert_eq!(sw.tally(), [0, 1]);
 
         let cmds = sw
@@ -4479,7 +4482,7 @@ mod tests {
         .unwrap();
 
         let bad = sw.apply(Action::OverlayIn {
-            channel: 5,
+            channel: 9,
             input: named("A"),
             duration_ms: Some(0),
         });
@@ -4489,7 +4492,7 @@ mod tests {
             duration_ms: Some(0),
         });
 
-        assert_eq!(bad, Err(ActionError::BadOverlay { channel: 5, max: 4 }));
+        assert_eq!(bad, Err(ActionError::BadOverlay { channel: 9, max: 8 }));
         assert!(matches!(sound_only, Err(ActionError::NoVideo { .. })));
     }
 
@@ -4549,8 +4552,11 @@ mod tests {
                 },
             ]
         );
-        assert_eq!(sw.state().overlays, [None; 4]);
-        assert_eq!(sw.state().overlay_last, [Some(a), None, Some(b), None]);
+        assert_eq!(sw.state().overlays, [None; 8]);
+        assert_eq!(
+            sw.state().overlay_last,
+            [Some(a), None, Some(b), None, None, None, None, None]
+        );
         assert_eq!(
             sw.apply(Action::OverlayOutAll {
                 duration_ms: Some(0)
@@ -4578,7 +4584,7 @@ mod tests {
             Err(ActionError::NoOverlayLast { channel: 2 })
         );
         assert!(matches!(
-            sw.apply(last(5)),
+            sw.apply(last(9)),
             Err(ActionError::BadOverlay { .. })
         ));
 
@@ -4692,7 +4698,7 @@ mod tests {
             }
         ));
         assert!(matches!(
-            sw.apply(set_overlay(5, fade)),
+            sw.apply(set_overlay(9, fade)),
             Err(ActionError::BadOverlay { .. })
         ));
     }
@@ -4770,7 +4776,7 @@ mod tests {
         );
         let state = sw.state();
         assert_eq!(state.overlays[0], Some(id(&sw, 2)));
-        assert_eq!(state.overlay_preview, [None; 4], "used up");
+        assert_eq!(state.overlay_preview, [None; 8], "used up");
         assert_eq!(state.overlay_last[0], Some(id(&sw, 2)));
         assert_eq!(sw.tally(), [1, 0, 1]);
 
@@ -4798,12 +4804,12 @@ mod tests {
         // Cleared, by hand or with the input; cut direct takes none along.
         prepare(&mut sw, 2, Some("Logo")).unwrap();
         prepare(&mut sw, 2, None).unwrap();
-        assert_eq!(sw.state().overlay_preview, [None; 4]);
+        assert_eq!(sw.state().overlay_preview, [None; 8]);
         prepare(&mut sw, 2, Some("A")).unwrap();
         sw.apply(Action::CutDirect { input: named("B") }).unwrap();
         assert_eq!(sw.state().overlays[1], None);
         sw.apply(Action::RemoveInput { input: named("A") }).unwrap();
-        assert_eq!(sw.state().overlay_preview, [None; 4]);
+        assert_eq!(sw.state().overlay_preview, [None; 8]);
         assert!(matches!(
             prepare(&mut sw, 0, Some("B")),
             Err(ActionError::BadOverlay { .. })

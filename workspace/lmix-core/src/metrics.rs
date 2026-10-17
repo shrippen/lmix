@@ -434,7 +434,7 @@ mod tests {
     fn renders_inputs_tally_levels_and_escapes_names() {
         let mut state: ShowState = serde_json::from_value(serde_json::json!({
             "api_version": 1, "inputs": [], "transitions": [], "fade_to_black": false,
-            "slots": 2, "outputs": [], "overlays": [null, null, null, null], "t_bar": 0.0
+            "slots": 2, "outputs": [], "overlays": [null, null, null, null, null, null, null, null], "t_bar": 0.0
         }))
         .unwrap();
         let input: Input = serde_json::from_value(serde_json::json!({

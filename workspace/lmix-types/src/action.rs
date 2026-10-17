@@ -54,8 +54,8 @@ pub const DYNAMIC_SLOTS: u8 = 4;
 
 /// Number of transition buttons.
 pub const TRANSITION_SLOTS: u8 = 4;
-/// Overlay channels above program (OVL.1), numbered 1–4.
-pub const OVERLAY_CHANNELS: u8 = 4;
+/// Overlay channels above program (OVL.1), numbered 1–8.
+pub const OVERLAY_CHANNELS: u8 = 8;
 /// Default fade of an overlay in or out.
 pub const DEFAULT_OVERLAY_MS: u32 = 500;
 /// Longest time an overlay stays on before it goes off by itself (OVL.2).
@@ -787,7 +787,7 @@ pub enum Action {
     CutDirect {
         input: InputRef,
     },
-    /// Take preview to program with transition button `slot` (1–4).
+    /// Take preview to program with transition button `slot` (1–8).
     Transition {
         slot: TransitionSlot,
     },
@@ -834,7 +834,7 @@ pub enum Action {
     },
 
     // ---- Overlays (OVL) ----
-    /// Show `input` on overlay `channel` (1–4), above program and its
+    /// Show `input` on overlay `channel` (1–8), above program and its
     /// transitions; replaces what the channel showed. Without
     /// `duration_ms` with the channel's effect, with it a fade of that
     /// length (0 cuts); the same for the other overlay actions.
@@ -884,14 +884,14 @@ pub enum Action {
     },
 
     // ---- Dynamic inputs and values (AUT.5) ----
-    /// Let `"dynamic<slot>"` (1–4) name `input` in later actions; null
+    /// Let `"dynamic<slot>"` (1–8) name `input` in later actions; null
     /// empties it. One key picks the input, another acts on it.
     SetDynamicInput {
         slot: u8,
         #[serde(default)]
         input: Option<InputRef>,
     },
-    /// Set dynamic value `slot` (1–4); title texts and function arguments
+    /// Set dynamic value `slot` (1–8); title texts and function arguments
     /// show it where they say `{value<slot>}`.
     SetDynamicValue {
         slot: u8,

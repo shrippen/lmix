@@ -58,7 +58,7 @@ const MONITOR_SINK: &str = "monitor_sink";
 pub const AUDIO_MIXER: &str = "mix";
 /// Mixer flow name; a new layout gets a new name, so `start` rebuilds a
 /// running mixer of an older lmix instead of reusing it.
-pub const MIXER_NAME: &str = "lmix mixer 7";
+pub const MIXER_NAME: &str = "lmix mixer 8";
 /// Block id of the vision mixer in the mixer flow.
 pub const MIXER_BLOCK: &str = "vm";
 /// Thumbnail tap on the program output: GUI monitor and picture checks.
@@ -1383,7 +1383,7 @@ mod tests {
         let vm = flow.blocks.iter().find(|b| b.id == MIXER_BLOCK).unwrap();
         assert!(matches!(
             vm.properties.get("num_dsk_inputs"),
-            Some(PropertyValue::String(n)) if n == "5"
+            Some(PropertyValue::String(n)) if n == "9"
         ));
         assert_eq!(layer_input(STINGER_LAYER), "dsk0");
         assert!(flow

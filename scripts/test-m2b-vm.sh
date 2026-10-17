@@ -511,6 +511,12 @@ overlay_shown || fail "overlay taken off by the end of an older fade"
 act '{"action":"overlay_out_all","duration_ms":0}' >/dev/null
 wait_for "$SETTLE_S" overlay_gone || fail "overlays not all off"
 pass "overlays: last input again, all off"
+# Eight channels (OVL.1): the top one shows above program as well.
+act '{"action":"overlay_in","channel":8,"input":"Orange","duration_ms":0}' >/dev/null
+wait_for "$SETTLE_S" overlay_shown || fail "overlay 8 not on program"
+act '{"action":"overlay_out","channel":8,"duration_ms":0}' >/dev/null
+wait_for "$SETTLE_S" overlay_gone || fail "overlay 8 not taken off"
+pass "overlays: channel 8 on and off"
 # A still with alpha (SRC.4): a PNG, red on the left half and clear on the
 # right, as overlay over Orange lets Orange through on the right.
 convert -size 1280x720 xc:none -fill '#ff0000' -draw 'rectangle 0,0 639,719' "$MEDIA/badge.png"
