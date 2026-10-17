@@ -2345,3 +2345,91 @@ Overlay mit, Vorlage laden, keine QML-Warnungen), `test-m2b-vm.sh`
 im oberen rechten Viertel auf Programm, nach 6 s von selbst aus).
 **Offen**: siehe oben (Rand, Effekte außer Blende, Overlay im
 Vorschau-Bild: strom); BiB-Overlays auf CUDA/GL nicht geprüft (H.29).
+
+## 2026-10-16 — Show-Modus S1 Stufe 1: Cue-Modell und Ablauf
+
+**Kontext**: S1 beginnt mit Cue-Modell und Ablauf-Engine in `lmix-core`
+(`LASTENHEFT-SHOW.md` §7, S-E.1, S-E.5).
+
+**Entscheidungen**:
+- **Ein flacher `Cue`** (`lmix-types/src/cue.rs`) mit `kind` (`actions`,
+  `note`, `wait`, `start`, `group`) und den Feldern aller Arten, alle
+  optional außer `kind`; `check_cue` lehnt Felder einer anderen Art ab.
+  Ein Drehbuch oder Skript schreibt so nur, was es braucht
+  (`{"kind":"wait","duration_ms":2000}`), Tippfehler fallen trotzdem auf.
+  Verworfen: getaggtes Enum je Art (lange JSON-Pfade, Standardwerte je
+  Variante doppelt).
+- **Ablauf als reine Logik** (`lmix-core/src/cues.rs`, `Runner`): bekommt
+  die Zeit und gibt zurück, was zu tun ist (Aktionen, Ereignisse). Jeder
+  Schritt (Aktion, Ende, Folge) zählt von seiner eigenen Fälligkeit, nicht
+  vom Zeitpunkt des Weckens: 100 Warte-Cues à 20 ms enden genau 2 s nach
+  GO, auch wenn jedes Wecken 7 ms zu spät kommt (Test). Der Dienst schläft
+  bis zur nächsten Fälligkeit (`watch_cues`) und wird bei jeder
+  Cue-Aktion geweckt.
+- **Was bei GO sofort fällig ist, läuft vor der Antwort** (wie ein Cut);
+  Späteres läuft im Hintergrund. Eine fehlschlagende Aktion beendet nur
+  ihren Cue und kommt als Ereignis `cue`/`failed`; Zeiten und Folgen
+  laufen weiter (CUE.19).
+- **Standby ist die oberste Ebene**: GO startet den Standby-Cue samt
+  Folgekette, Standby springt hinter die Kette. Ein Cue in einer Gruppe als
+  Standby-Ziel heißt seine Gruppe (Gruppen „hinein“ erst S2).
+- **GO-Sperre** 300 ms je Show (`set_go_guard`, 0–5000 ms), gilt für jedes
+  GO über alle Wege (Taste, OSC, API, Kurzbefehl), nicht für `cue_start`
+  und Folgen; ein verworfenes GO ist das Ereignis `go_ignored`.
+- **Start-Cue mit Liste ohne Cue** = GO in dieser Liste (bewegt deren
+  Standby, ohne GO-Sperre); mit Cue: startet ihn samt Kette, Standby bleibt.
+- **Stopp und „andere stoppen“ halten sofort an**: Ausblenden gibt es erst
+  mit Klang und Bild (Stufe 2); `fade_ms` und `mode: fade` werden schon
+  angenommen und gespeichert.
+
+**Bricht** (vor dem ersten Release erlaubt): `cue_back` und `cue_jump`
+entfallen, dafür `cue_standby` (`previous`, `{"index": n}`, …); Zurück
+startet nichts mehr, es bewegt nur Standby (QLab-Verhalten). Im Zustand
+heißt `next` jetzt `standby`; ein Cue hat `name` statt `label`. OSC
+`/lmix/cue/next` heißt `/lmix/cue/standby` und trägt den Namen des
+Standby-Cues mit. Show-Dateien der Version 1 werden beim Laden migriert
+(`label` → `name`), Console-Dialog und VM-Check sind angepasst.
+
+**Geprüft**: 14 Tests der Ablauf-Engine und der Migration, ein
+Dienst-Test mit pausierter Zeit (Folge nach 300 ms, kaputter Cue
+gemeldet, nächster läuft), Switcher-Tests der Prüfregeln; VM-Check mit
+echtem strom (GO in der aktiven Liste, Folge nach 1,5 s, Standby zurück
+an den Kettenanfang). **Offen**: 4-h-Genauigkeit im Selftest (SNF.4),
+„erst nach Loslassen wieder scharf“ (RUN.6), Anzeige in der Console (SUI).
+
+## 2026-10-16 — Drehbuch-Import (S1 Stufe 6, IMP)
+
+**Kontext**: Spielleitung P8 schreibt Cues ins Drehbuch (Obsidian) neben
+den Szenentext. S-E.2: eigenes Werkzeug über die API.
+
+**Entscheidungen**:
+- **`lmix-script`** (`workspace/lmix-script`), vorgezogen vor die Stufen
+  2–5: hängt nur am Cue-Modell (Stufe 1) und lässt sich ohne GPU und
+  Hardware prüfen.
+- **Cue-Blöcke in TOML** (```` ```lmix-cue ````), die Felder des API-Cues.
+  Verworfen: YAML (das übliche Rust-Crate `serde_yaml` ist archiviert,
+  die Nachfolger jung oder umstritten), JSON (in Obsidian mühsam zu
+  schreiben). TOML-Crate `toml` (MIT/Apache-2.0), Dateibeobachtung
+  `notify` (CC0/MIT/Apache-2.0), HTTP `reqwest` (MIT/Apache-2.0).
+- **Überschriften werden Notiz-Cues mit Folge „nach Ende“**: GO auf einer
+  Szenenmarke startet die Szene, statt einen leeren Schritt zu machen.
+- **Ids aus Liste und Nummer** (UUID v5), ohne Nummer aus dem Namen:
+  dasselbe Drehbuch ergibt bei jedem Laden dieselben Ids, `lmix-core`
+  hält damit Standby und laufende Cues (`set_cue_list` hält Standby jetzt
+  über die Cue-Id statt die Stelle).
+- **Liste mit Quelle** (`source: "script:<ordner>/<datei>"`): `lmix-script`
+  ersetzt nur eigene Listen, entfernt eigene ohne Datei, lässt eine Liste
+  gleichen Namens aus der Console stehen. Die Console bearbeitet Listen
+  mit Quelle nicht (IMP.9).
+- **Doppelte Nummer**: Fehler an jeder Stelle, keine beteiligte Liste
+  lädt. Welche Stelle „die zweite“ ist, hinge sonst an Dateinamen.
+- **Fehlende Mediendatei = Warnung**, die Liste lädt: die Abnahme von S1
+  verlangt, dass eine fehlende Datei den Szenenwechsel nicht abbricht; der
+  Cue meldet den Fehler beim Lauf (CUE.19).
+
+**Geprüft**: 6 Tests im Werkzeug, `scripts/test-script.sh` gegen
+lmix-core mit Null-Engine (Fehler mit Datei und Zeile, Laden, GO auf der
+Szenenmarke, Neuladen mit gehaltenem Standby, `--watch`, fremde Liste
+bleibt, Liste mit Datei weg); beides in der CI (Job `core`).
+**Offen**: SSH.2 (die Show speichert nur den Ordner; heute lädt man nach
+dem Start neu), Warnung bei Nummern mit Leerzeichen (CUE.1).

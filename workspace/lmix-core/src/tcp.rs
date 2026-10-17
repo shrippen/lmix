@@ -8,7 +8,7 @@
 //! | `{"action": …}` | `OK` or `ER <error> <message>` |
 //! | `TALLY` | `TALLY <digits>`: per input 0 off, 1 program, 2 preview |
 //! | `STATE` | `STATE <json>` |
-//! | `SUB <topic>` | `OK`, then a line per change; topics `TALLY`, `STATE`, `LEVELS`, `OUTPUTS`, `MIDI`, `TITLE`, `POSITION`, `ALL` |
+//! | `SUB <topic>` | `OK`, then a line per change; topics `TALLY`, `STATE`, `LEVELS`, `OUTPUTS`, `MIDI`, `TITLE`, `POSITION`, `CUE`, `ALL` |
 //! | `UNSUB <topic>` | `OK` |
 //! | `QUIT` | closes |
 //! | `AUTH <password>` | `OK`; first line from the network when lmix-core has `--password` (API.7) |
@@ -52,13 +52,15 @@ impl Topics {
     const MIDI: u8 = 16;
     const TITLE: u8 = 32;
     const POSITION: u8 = 64;
+    const CUE: u8 = 128;
     const ALL: u8 = Self::TALLY
         | Self::STATE
         | Self::LEVELS
         | Self::OUTPUTS
         | Self::MIDI
         | Self::TITLE
-        | Self::POSITION;
+        | Self::POSITION
+        | Self::CUE;
 
     fn parse(name: &str) -> Option<u8> {
         match name.to_ascii_uppercase().as_str() {
@@ -69,6 +71,7 @@ impl Topics {
             "MIDI" => Some(Self::MIDI),
             "TITLE" => Some(Self::TITLE),
             "POSITION" => Some(Self::POSITION),
+            "CUE" => Some(Self::CUE),
             "ALL" => Some(Self::ALL),
             _ => None,
         }
@@ -83,6 +86,7 @@ impl Topics {
             Event::Midi { .. } => Self::MIDI,
             Event::Title { .. } => Self::TITLE,
             Event::Position { .. } => Self::POSITION,
+            Event::Cue { .. } => Self::CUE,
         };
         self.0 & bit != 0
     }
@@ -281,6 +285,7 @@ fn event_line(event: &Event) -> String {
         Event::Levels { levels } => format!("LEVELS {}\n", json(levels)),
         Event::Outputs { stats } => format!("OUTPUTS {}\n", json(stats)),
         Event::Midi { midi } => format!("MIDI {}\n", json(midi)),
+        Event::Cue { .. } => format!("CUE {}\n", json(event)),
         Event::Title { .. } => format!("TITLE {}\n", json(event)),
         Event::Position { .. } => format!("POSITION {}\n", json(event)),
     }

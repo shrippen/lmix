@@ -414,6 +414,12 @@ Stufe 2 mit Messungen erneut vorgelegt wird.
 | S2 Theater-Grundstand | Bearbeiten in der Oberfläche, erweiterte Gruppen und Fades, Effekt-Plugins, OSC-Cue, Variablen, Companion-Modul | GFX.2 (HTML-Ebene) |
 | S3 Erweiterungen | Eigenes Licht (Art-Net/sACN), Objekt-Audio, Timecode rein/raus | PER.9 |
 
+Stand S1 (2026-10-16): Stufe 1 (Cue-Modell und Ablauf in `lmix-core`,
+CUE/RUN/SSH.1) ✅ bis auf Ausblenden (mit Stufe 2), „erst nach Loslassen“
+(RUN.6) und die 4-h-Messung (SNF.4); DECISIONS „Show-Modus S1 Stufe 1“.
+Stufe 6 (Drehbuch-Import, IMP) ✅ vorgezogen: `lmix-script`, `docs/DREHBUCH.md`;
+DECISIONS „Drehbuch-Import“. Offen: SSH.2 (Show speichert nur den Ordner).
+
 ---
 
 ## 3b. Lösungsansätze (angenommen 2026-10-08)

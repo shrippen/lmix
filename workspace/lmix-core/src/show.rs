@@ -1,7 +1,7 @@
 //! The show: what gets saved to and loaded from a `.lmix` file (SHW.1–2).
 //!
 //! ```json
-//! { "format": "lmix-show", "version": 1, "show": { "inputs": [...], ... } }
+//! { "format": "lmix-show", "version": 2, "show": { "inputs": [...], ... } }
 //! ```
 //!
 //! Plain, versioned JSON so people and tools can read it. Media are
@@ -22,7 +22,9 @@ use serde::{Deserialize, Serialize};
 /// Marker of a show file.
 const FILE_FORMAT: &str = "lmix-show";
 /// Current file version; older versions get migrated on load.
-const FILE_VERSION: u32 = 1;
+///
+/// 2: cues of the show mode; a cue's `label` became `name` (CUE.21).
+const FILE_VERSION: u32 = 2;
 /// Default length of a timed transition.
 const DEFAULT_TRANSITION_MS: u32 = 500;
 
@@ -96,6 +98,9 @@ pub struct Show {
     pub shortcuts: Vec<ShowShortcut>,
     #[serde(default)]
     pub cue_lists: Vec<ShowCueList>,
+    /// Shortest gap between two GOs (RUN.6).
+    #[serde(default = "default_go_guard")]
+    pub go_guard_ms: u32,
     /// MIDI controller on the T-bar.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub midi_tbar: Option<MidiBinding>,
@@ -159,6 +164,8 @@ pub struct ShowCueList {
     pub id: InputId,
     pub name: String,
     pub cues: Vec<Cue>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
 }
 
 /// One shortcut as saved.
@@ -219,6 +226,7 @@ impl Default for Show {
             layouts: Vec::new(),
             shortcuts: Vec::new(),
             cue_lists: Vec::new(),
+            go_guard_ms: default_go_guard(),
             midi_tbar: None,
             graphics: Vec::new(),
             datasets: Vec::new(),
@@ -232,6 +240,10 @@ fn all_default(channels: &[OverlayChannel; OVERLAY_CHANNELS as usize]) -> bool {
 }
 
 /// Buttons 1–4: fade, cut, dip to black, wipe.
+fn default_go_guard() -> u32 {
+    lmix_types::cue::GO_GUARD_DEFAULT_MS
+}
+
 fn default_transitions() -> Vec<Transition> {
     let effects = [
         Effect::Fade,
@@ -295,17 +307,43 @@ pub fn from_bytes(bytes: &[u8], name: &str) -> Result<Show, ShowFileError> {
         path: name.to_string(),
         reason,
     };
-    let file: ShowFile = serde_json::from_slice(bytes).map_err(|e| format_err(e.to_string()))?;
-    if file.format != FILE_FORMAT {
-        return Err(format_err(format!("format is \"{}\"", file.format)));
+    let mut value: serde_json::Value =
+        serde_json::from_slice(bytes).map_err(|e| format_err(e.to_string()))?;
+    let format = value.get("format").and_then(|f| f.as_str()).unwrap_or("");
+    if format != FILE_FORMAT {
+        return Err(format_err(format!("format is \"{format}\"")));
     }
-    if file.version > FILE_VERSION {
+    let version = value.get("version").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
+    if version > FILE_VERSION {
         return Err(ShowFileError::TooNew {
             path: name.to_string(),
-            found: file.version,
+            found: version,
         });
     }
+    if version < 2 {
+        if let Some(show) = value.get_mut("show") {
+            migrate_cue_labels(show);
+        }
+    }
+    let file: ShowFile = serde_json::from_value(value).map_err(|e| format_err(e.to_string()))?;
     Ok(file.show)
+}
+
+/// Version 1 to 2: a cue's `label` is its `name`; the rest of a cue of
+/// then (`actions`) is an actions cue now (CUE.21).
+fn migrate_cue_labels(show: &mut serde_json::Value) {
+    let Some(lists) = show.get_mut("cue_lists").and_then(|l| l.as_array_mut()) else {
+        return;
+    };
+    let cues = lists
+        .iter_mut()
+        .filter_map(|l| l.get_mut("cues").and_then(|c| c.as_array_mut()))
+        .flatten();
+    for cue in cues.filter_map(|c| c.as_object_mut()) {
+        if let Some(label) = cue.remove("label") {
+            cue.insert("name".into(), label);
+        }
+    }
 }
 
 /// Write atomically: temp file next to the target, then rename, so a crash
@@ -428,11 +466,10 @@ mod tests {
             cue_lists: vec![ShowCueList {
                 id: InputId::new(),
                 name: "Opening".into(),
-                cues: vec![Cue {
-                    label: "Bars".into(),
-                    actions: vec![Action::Cut],
-                }],
+                cues: vec![Cue::actions("Bars", vec![Action::Cut])],
+                source: None,
             }],
+            go_guard_ms: 120,
             shortcuts: vec![ShowShortcut {
                 id: InputId::new(),
                 label: "Bars".into(),
@@ -561,6 +598,21 @@ mod tests {
         let err = load(&path).await.unwrap_err();
 
         assert!(matches!(err, ShowFileError::TooNew { .. }), "{err}");
+    }
+
+    #[test]
+    fn version_1_cues_become_actions_cues() {
+        let old = br#"{"format":"lmix-show","version":1,"show":{"inputs":[],"preview":null,"program":null,"transitions":[],
+            "cue_lists":[{"id":"7d0c3c2e-2f43-4a39-9d5c-6c8f1f0b6a11","name":"Run","cues":[{"label":"Bars","actions":[{"action":"cut"}]}]}]}}"#;
+
+        let show = from_bytes(old, "old.lmix").unwrap();
+
+        let cue = &show.cue_lists[0].cues[0];
+        assert_eq!(cue.name, "Bars");
+        assert_eq!(cue.kind, lmix_types::CueKind::Actions);
+        assert_eq!(cue.actions, vec![Action::Cut]);
+        assert_eq!(cue.follow, lmix_types::Follow::None, "no times, no follow");
+        assert_eq!(show.go_guard_ms, lmix_types::cue::GO_GUARD_DEFAULT_MS);
     }
 
     #[test]

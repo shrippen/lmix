@@ -52,6 +52,8 @@ pub struct Service {
     switcher: Mutex<Switcher>,
     engine: Arc<dyn Engine>,
     events: broadcast::Sender<Event>,
+    /// Wakes [`Service::watch_cues`] when cue times changed.
+    cue_wake: tokio::sync::Notify,
     /// Written after every change, read back after a crash (SHW.5).
     autosave: Option<PathBuf>,
     /// Players the operator moved (jump, item, restart, previous), and
@@ -128,6 +130,7 @@ impl Service {
             switcher: Mutex::new(switcher),
             engine,
             events,
+            cue_wake: tokio::sync::Notify::new(),
             recent: Mutex::new(Recent::load(autosave.as_deref())),
             pictures: std::sync::Mutex::new(HashMap::new()),
             touched: std::sync::Mutex::new(HashMap::new()),
@@ -372,6 +375,66 @@ impl Service {
         }
         if changed {
             self.publish(&sw);
+        }
+    }
+
+    /// Run what the cue lists have due, each at its time (RUN.8): sleep
+    /// to the next deadline, or until a cue action changed them.
+    pub async fn watch_cues(self: Arc<Self>) {
+        loop {
+            let deadline = self.switcher.lock().await.cue_deadline();
+            let woken = self.cue_wake.notified();
+            match deadline {
+                Some(at) => {
+                    tokio::select! {
+                        _ = tokio::time::sleep_until(at) => {}
+                        _ = woken => continue,
+                    }
+                }
+                None => {
+                    woken.await;
+                    continue;
+                }
+            }
+            let out = {
+                let mut sw = self.switcher.lock().await;
+                let out = sw.cue_tick(tokio::time::Instant::now());
+                if !out.is_empty() {
+                    self.publish(&sw);
+                }
+                out
+            };
+            self.run_cue_outs(out).await;
+        }
+    }
+
+    /// Run cue actions and send cue events. A failing action stops the
+    /// rest of its cue and is reported; times and follows go on (CUE.19).
+    async fn run_cue_outs(self: &Arc<Self>, out: Vec<crate::cues::Out>) {
+        for o in out {
+            match o {
+                crate::cues::Out::Event { list, cue, what } => {
+                    let _ = self.events.send(Event::Cue { list, cue, what });
+                }
+                crate::cues::Out::Actions { list, cue, actions } => {
+                    for action in actions {
+                        let Err(e) = Box::pin(self.handle_as(action, Origin::Operator)).await
+                        else {
+                            continue;
+                        };
+                        tracing::warn!(error = %e, %cue, "cue action failed; the rest of the cue is skipped");
+                        let what = lmix_types::CueEvent::Failed {
+                            reason: e.to_string(),
+                        };
+                        let _ = self.events.send(Event::Cue {
+                            list,
+                            cue: Some(cue),
+                            what,
+                        });
+                        break;
+                    }
+                }
+            }
         }
     }
 
@@ -1008,15 +1071,28 @@ impl Service {
                 let actions = self.switcher.lock().await.shortcut_actions(target)?;
                 return self.run_all(actions, origin).await;
             }
-            Action::CueGo { list } | Action::CueBack { list } => {
-                let back = matches!(action, Action::CueBack { .. });
-                let actions = {
+            Action::CueGo { .. }
+            | Action::CueStart { .. }
+            | Action::CueStop { .. }
+            | Action::CueReset => {
+                let out = {
                     let mut sw = self.switcher.lock().await;
-                    let actions = sw.cue_step(list, back)?;
+                    let now = tokio::time::Instant::now();
+                    let out = match &action {
+                        Action::CueGo { list } => sw.cue_go(list.as_ref(), now)?,
+                        Action::CueStart { list, cue } => sw.cue_start(list.as_ref(), cue, now)?,
+                        Action::CueStop { list, cue, .. } => {
+                            sw.cue_stop(list.as_ref(), cue.as_deref(), now)?
+                        }
+                        _ => sw.cue_reset(now),
+                    };
                     self.publish(&sw);
-                    actions
+                    out
                 };
-                return self.run_all(actions, origin).await;
+                self.cue_wake.notify_one();
+                // What is due at once runs before the answer, like a cut.
+                self.run_cue_outs(out).await;
+                return Ok(self.state().await);
             }
             _ => {}
         }
@@ -1248,7 +1324,7 @@ impl Service {
         result.map(|()| sw.state())
     }
 
-    /// Actions of a shortcut or cue in order; the first error stops them.
+    /// Actions of a shortcut in order; the first error stops them.
     async fn run_all(
         self: &Arc<Self>,
         actions: Vec<Action>,
@@ -1670,6 +1746,91 @@ mod tests {
             },
             name: Some("Bars".into()),
         }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn cues_follow_in_time_and_a_failed_cue_goes_on() {
+        use lmix_types::{Cue, CueEvent, Follow};
+        let engine = Arc::new(NullEngine::default());
+        let service = Service::new(4, engine, None);
+        tokio::spawn(service.clone().watch_cues());
+        service.handle(bars()).await.unwrap();
+        service
+            .handle(Action::AddInput {
+                source: SourceSpec::Pattern {
+                    pattern: TestPattern::Ball,
+                },
+                name: Some("Two".into()),
+            })
+            .await
+            .unwrap();
+        let cut = |name: &str| Action::CutDirect {
+            input: InputRef::Text(name.into()),
+        };
+        let mut a = Cue::actions("A", vec![cut("Bars")]);
+        a.follow = Follow::AfterWait;
+        a.post_wait_ms = 300;
+        let mut b = Cue::actions("B", vec![cut("Two")]);
+        b.follow = Follow::AfterWait;
+        b.post_wait_ms = 200;
+        let mut broken = Cue::actions("Broken", vec![cut("Gone")]);
+        broken.follow = Follow::AfterEnd;
+        let d = Cue::actions("D", vec![cut("Bars")]);
+        service
+            .handle(Action::AddCueList {
+                name: "Show".into(),
+                cues: vec![a, b, broken, d],
+                source: None,
+            })
+            .await
+            .unwrap();
+        let mut events = service.subscribe();
+        let program = || async {
+            let state = service.state().await;
+            let id = state.program?;
+            state
+                .inputs
+                .iter()
+                .find(|i| i.id == id)
+                .map(|i| i.name.clone())
+        };
+        let ms = |ms| tokio::time::sleep(std::time::Duration::from_millis(ms));
+
+        let state = service.handle(Action::CueGo { list: None }).await.unwrap();
+        assert_eq!(program().await.as_deref(), Some("Bars"));
+        assert_eq!(
+            state.cue_lists[0].standby, 5,
+            "standby past the whole chain"
+        );
+
+        ms(290).await;
+        assert_eq!(program().await.as_deref(), Some("Bars"));
+        assert_eq!(
+            service.state().await.running_cues.len(),
+            1,
+            "A in its post wait"
+        );
+        ms(20).await;
+        assert_eq!(program().await.as_deref(), Some("Two"));
+        ms(200).await;
+        assert_eq!(
+            program().await.as_deref(),
+            Some("Bars"),
+            "D ran after the broken cue"
+        );
+        assert!(service.state().await.running_cues.is_empty());
+
+        let mut failed = false;
+        while let Ok(event) = events.try_recv() {
+            failed |= matches!(
+                event,
+                Event::Cue {
+                    what: CueEvent::Failed { .. },
+                    ..
+                }
+            );
+        }
+        assert!(failed, "the broken cue was reported");
     }
 
     #[tokio::test(start_paused = true)]

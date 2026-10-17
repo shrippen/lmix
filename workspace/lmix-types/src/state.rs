@@ -146,7 +146,13 @@ pub struct ShowState {
     pub shortcuts: Vec<Shortcut>,
     /// Cue lists of the show.
     #[serde(default)]
-    pub cue_lists: Vec<crate::automation::CueList>,
+    pub cue_lists: Vec<crate::cue::CueList>,
+    /// Cues that run now, in start order (RUN.3).
+    #[serde(default)]
+    pub running_cues: Vec<crate::cue::RunningCue>,
+    /// Shortest gap between two GOs (RUN.6).
+    #[serde(default)]
+    pub go_guard_ms: u32,
     /// Locked against closing, loading and stopping (AUT.11).
     #[serde(default)]
     pub locked: bool,
@@ -266,6 +272,15 @@ pub enum Event {
         graphics: InputId,
         layer: u32,
         report: String,
+    },
+    /// A cue started, ended, stopped or failed, or a GO was dropped
+    /// (RUN.6); `cue` is `null` for a GO.
+    Cue {
+        list: InputId,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        cue: Option<crate::cue::CueId>,
+        #[serde(flatten)]
+        what: crate::cue::CueEvent,
     },
 }
 

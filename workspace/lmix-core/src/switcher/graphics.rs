@@ -1446,7 +1446,7 @@ mod tests {
             vec![trigger(
                 "zero",
                 vec![Action::CueGo {
-                    list: InputRef::Number(1),
+                    list: Some(InputRef::Number(1)),
                 }],
             )],
             // A report from a trigger would fire it again and again.

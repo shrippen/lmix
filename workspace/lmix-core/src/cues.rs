@@ -1,0 +1,1107 @@
+//! Running cue lists (show mode, `docs/LASTENHEFT-SHOW.md` §3.2).
+//!
+//! The runner keeps standby per list and the cues that run. It knows no
+//! clock and no engine: callers pass the time and get back what to do
+//! ([`Out`]). The service runs the actions and wakes [`Runner::tick`] at
+//! [`Runner::deadline`].
+//!
+//! ```text
+//!   start ──pre wait──► fire ──duration──► end
+//!                        └──post wait──► follow (after_wait)
+//!                                  end ─► follow (after_end)
+//! ```
+//!
+//! Every step happens at its own due time, not at the time `tick` came,
+//! so waits and follows never drift (RUN.8): a chain of a hundred 20 ms
+//! waits ends 2 s after GO however late each tick is.
+
+use std::collections::HashMap;
+use std::time::Duration;
+
+use tokio::time::Instant;
+
+use lmix_types::cue::{
+    Cue, CueEvent, CueId, CueKind, Follow, GroupMode, RunPhase, RunningCue, StandbyMove, StopScope,
+};
+use lmix_types::{Action, ActionError, InputId, InputRef};
+
+use crate::show::ShowCueList;
+
+/// What the caller has to do.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Out {
+    /// Run these actions in order.
+    Actions {
+        list: InputId,
+        cue: CueId,
+        actions: Vec<Action>,
+    },
+    /// Tell the clients.
+    Event {
+        list: InputId,
+        cue: Option<CueId>,
+        what: CueEvent,
+    },
+}
+
+/// One started cue.
+#[derive(Clone, Debug)]
+struct Run {
+    id: u64,
+    list: InputId,
+    cue: CueId,
+    /// The group run that started it.
+    parent: Option<u64>,
+    start: Instant,
+    fire_at: Instant,
+    fired: bool,
+    /// Known once fired; a group's when its last child is done.
+    end_at: Option<Instant>,
+    ended: bool,
+    /// `None` for children of a timeline group.
+    follow: Follow,
+    follow_at: Option<Instant>,
+    followed: bool,
+    /// Pre wait plus duration, when known.
+    total: Option<Duration>,
+}
+
+impl Run {
+    /// Still to show and to wait for: not ended, or a follow to come.
+    fn live(&self) -> bool {
+        !self.ended || (self.follow == Follow::AfterWait && !self.followed)
+    }
+}
+
+/// A due step of a run.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum Step {
+    Fire,
+    Follow,
+    End,
+}
+
+#[derive(Debug, Default)]
+pub struct Runner {
+    /// 0-based top-level standby per list; missing = 0.
+    standby: HashMap<InputId, usize>,
+    active: Option<InputId>,
+    runs: Vec<Run>,
+    last_go: Option<Instant>,
+    next_id: u64,
+}
+
+fn bad(reason: impl Into<String>) -> ActionError {
+    ActionError::BadCueList {
+        reason: reason.into(),
+    }
+}
+
+fn ms(ms: u32) -> Duration {
+    Duration::from_millis(u64::from(ms))
+}
+
+/// Path of the cue with `id` below `cues` (indices per level).
+fn path_of(cues: &[Cue], id: CueId) -> Option<Vec<usize>> {
+    for (i, cue) in cues.iter().enumerate() {
+        if cue.id == id {
+            return Some(vec![i]);
+        }
+        if let Some(mut rest) = path_of(&cue.children, id) {
+            rest.insert(0, i);
+            return Some(rest);
+        }
+    }
+    None
+}
+
+/// The cue at `path`.
+fn at<'a>(cues: &'a [Cue], path: &[usize]) -> Option<&'a Cue> {
+    let (first, rest) = path.split_first()?;
+    let cue = cues.get(*first)?;
+    if rest.is_empty() {
+        return Some(cue);
+    }
+    at(&cue.children, rest)
+}
+
+/// The cues next to the one at `path` (its list or group).
+fn siblings<'a>(cues: &'a [Cue], path: &[usize]) -> Option<&'a [Cue]> {
+    match path.split_last()? {
+        (_, []) => Some(cues),
+        (_, parent) => at(cues, parent).map(|p| p.children.as_slice()),
+    }
+}
+
+/// The cue named `text` (id or number) anywhere below `cues`.
+fn find_cue(cues: &[Cue], text: &str) -> Option<CueId> {
+    for cue in cues {
+        if cue.id.to_string() == text || (!cue.number.is_empty() && cue.number == text) {
+            return Some(cue.id);
+        }
+        if let Some(id) = find_cue(&cue.children, text) {
+            return Some(id);
+        }
+    }
+    None
+}
+
+/// Last cue of the follow chain that starts at `start`.
+fn chain_end(cues: &[Cue], start: usize) -> usize {
+    let mut i = start;
+    while i + 1 < cues.len() && cues[i].follow != Follow::None {
+        i += 1;
+    }
+    i
+}
+
+impl Runner {
+    /// 0-based standby of `list`.
+    pub fn standby(&self, list: InputId) -> usize {
+        self.standby.get(&list).copied().unwrap_or(0)
+    }
+
+    /// The active list (RUN.7); the first one while none is set.
+    pub fn active(&self, lists: &[ShowCueList]) -> Option<usize> {
+        self.active
+            .and_then(|id| lists.iter().position(|l| l.id == id))
+            .or_else(|| (!lists.is_empty()).then_some(0))
+    }
+
+    pub fn set_active(&mut self, list: InputId) {
+        self.active = Some(list);
+    }
+
+    /// GO in `lists[list]` (RUN.1, RUN.6).
+    pub fn go(
+        &mut self,
+        lists: &[ShowCueList],
+        list: usize,
+        now: Instant,
+        guard_ms: u32,
+    ) -> Result<Vec<Out>, ActionError> {
+        let entry = &lists[list];
+        if self
+            .last_go
+            .is_some_and(|last| now.duration_since(last) < ms(guard_ms))
+        {
+            return Ok(vec![Out::Event {
+                list: entry.id,
+                cue: None,
+                what: CueEvent::GoIgnored,
+            }]);
+        }
+        let standby = self.standby(entry.id);
+        if standby >= entry.cues.len() {
+            return Err(bad("no cues left; move standby back first"));
+        }
+        self.last_go = Some(now);
+        let mut out = Vec::new();
+        self.go_unguarded(lists, list, now, &mut out);
+        out.extend(self.tick(lists, now));
+        Ok(out)
+    }
+
+    /// Start the standby cue of `lists[list]` and move standby past its
+    /// chain; nothing when the list is done.
+    fn go_unguarded(&mut self, lists: &[ShowCueList], list: usize, t: Instant, out: &mut Vec<Out>) {
+        let entry = &lists[list];
+        let standby = self.standby(entry.id);
+        let Some(cue) = entry.cues.get(standby) else {
+            return;
+        };
+        let after = chain_end(&entry.cues, standby) + 1;
+        self.standby.insert(entry.id, after);
+        self.spawn(entry.id, cue, None, t, cue.follow, out);
+    }
+
+    /// Start the cue `text` (number or id) with its chain; standby stays.
+    /// It is looked for in `list` first, then in every list.
+    pub fn start(
+        &mut self,
+        lists: &[ShowCueList],
+        list: Option<usize>,
+        text: &str,
+        now: Instant,
+    ) -> Result<Vec<Out>, ActionError> {
+        let (list, id) =
+            Self::locate(lists, list, text).ok_or_else(|| bad(format!("no cue {text}")))?;
+        let mut out = Vec::new();
+        let cue = Self::cue(lists, list, id).expect("just found");
+        let follow = cue.follow;
+        self.spawn(lists[list].id, cue, None, now, follow, &mut out);
+        out.extend(self.tick(lists, now));
+        Ok(out)
+    }
+
+    /// The list and id of the cue `text`, in `list` first.
+    fn locate(lists: &[ShowCueList], list: Option<usize>, text: &str) -> Option<(usize, CueId)> {
+        let first = list.and_then(|l| find_cue(&lists[l].cues, text).map(|id| (l, id)));
+        first.or_else(|| {
+            lists
+                .iter()
+                .enumerate()
+                .find_map(|(l, entry)| find_cue(&entry.cues, text).map(|id| (l, id)))
+        })
+    }
+
+    fn cue(lists: &[ShowCueList], list: usize, id: CueId) -> Option<&Cue> {
+        let cues = &lists[list].cues;
+        at(cues, &path_of(cues, id)?)
+    }
+
+    /// Stop the cue `cue` (number or id) of `list`, or every cue of the
+    /// list, or every cue (RUN.4). No fades run yet, so both modes stop
+    /// at once.
+    pub fn stop(
+        &mut self,
+        lists: &[ShowCueList],
+        list: Option<usize>,
+        cue: Option<&str>,
+        now: Instant,
+    ) -> Result<Vec<Out>, ActionError> {
+        let list_id = list.map(|l| lists[l].id);
+        let cue_id = match cue {
+            Some(text) => Some(
+                Self::locate(lists, list, text)
+                    .ok_or_else(|| bad(format!("no cue {text}")))?
+                    .1,
+            ),
+            None => None,
+        };
+        let victims: Vec<u64> = self
+            .runs
+            .iter()
+            .filter(|r| list_id.is_none_or(|l| r.list == l))
+            .filter(|r| cue_id.is_none_or(|c| r.cue == c))
+            .map(|r| r.id)
+            .collect();
+        let mut out = Vec::new();
+        self.stop_runs(&victims, now, &mut out);
+        out.extend(self.tick(lists, now));
+        Ok(out)
+    }
+
+    /// Move standby of `lists[list]` (RUN.2).
+    pub fn move_standby(
+        &mut self,
+        lists: &[ShowCueList],
+        list: usize,
+        to: &StandbyMove,
+    ) -> Result<(), ActionError> {
+        let entry = &lists[list];
+        let cues = &entry.cues;
+        let now = self.standby(entry.id).min(cues.len());
+        let next = match to {
+            StandbyMove::Next => (now + 1).min(cues.len()),
+            StandbyMove::Previous => now.saturating_sub(1),
+            StandbyMove::NextSequence if now < cues.len() => chain_end(cues, now) + 1,
+            StandbyMove::NextSequence => now,
+            StandbyMove::PreviousSequence => {
+                let mut i = now.saturating_sub(1);
+                while i > 0 && cues[i - 1].follow != Follow::None {
+                    i -= 1;
+                }
+                i
+            }
+            StandbyMove::Start => 0,
+            StandbyMove::Index(n) => (*n as usize)
+                .checked_sub(1)
+                .filter(|i| *i < cues.len())
+                .ok_or_else(|| bad(format!("no cue {n}")))?,
+            // A cue inside a group: its top-level group (into groups is S2).
+            StandbyMove::Cue(text) => {
+                let id = find_cue(cues, text).ok_or_else(|| bad(format!("no cue {text}")))?;
+                path_of(cues, id).expect("just found")[0]
+            }
+        };
+        self.standby.insert(entry.id, next);
+        Ok(())
+    }
+
+    /// Stop everything at once, every standby to the start (RUN.11).
+    pub fn reset(&mut self, now: Instant) -> Vec<Out> {
+        let all: Vec<u64> = self.runs.iter().map(|r| r.id).collect();
+        let mut out = Vec::new();
+        self.stop_runs(&all, now, &mut out);
+        self.runs.clear();
+        self.standby.clear();
+        self.last_go = None;
+        out
+    }
+
+    /// `list` got new cues instead of `old`: standby stays on the cue it
+    /// was on, when that cue is still there (IMP.5).
+    pub fn keep_standby(&mut self, list: &ShowCueList, old: &[Cue]) {
+        let standby = self.standby(list.id);
+        let Some(was) = old.get(standby) else {
+            return;
+        };
+        if let Some(now) = list.cues.iter().position(|c| c.id == was.id) {
+            self.standby.insert(list.id, now);
+        }
+    }
+
+    /// After a list changed: standby at most one past its end; runs of
+    /// cues that are gone are dropped.
+    pub fn list_changed(&mut self, lists: &[ShowCueList]) {
+        for entry in lists {
+            if let Some(standby) = self.standby.get_mut(&entry.id) {
+                *standby = (*standby).min(entry.cues.len());
+            }
+        }
+        self.runs.retain(|r| {
+            lists
+                .iter()
+                .find(|l| l.id == r.list)
+                .is_some_and(|l| path_of(&l.cues, r.cue).is_some())
+        });
+        self.standby
+            .retain(|id, _| lists.iter().any(|l| l.id == *id));
+    }
+
+    /// The next time [`Runner::tick`] has something to do.
+    pub fn deadline(&self) -> Option<Instant> {
+        self.runs
+            .iter()
+            .filter_map(|r| self.due(r).map(|(t, _)| t))
+            .min()
+    }
+
+    /// The step `run` waits for, and when.
+    fn due(&self, run: &Run) -> Option<(Instant, Step)> {
+        if !run.fired {
+            return Some((run.fire_at, Step::Fire));
+        }
+        let follow = (run.follow == Follow::AfterWait && !run.followed)
+            .then_some(run.follow_at)
+            .flatten()
+            .map(|t| (t, Step::Follow));
+        let end = (!run.ended)
+            .then_some(run.end_at)
+            .flatten()
+            .map(|t| (t, Step::End));
+        follow.into_iter().chain(end).min()
+    }
+
+    /// Everything due by `now`, each at its own time.
+    pub fn tick(&mut self, lists: &[ShowCueList], now: Instant) -> Vec<Out> {
+        let mut out = Vec::new();
+        loop {
+            let next = self
+                .runs
+                .iter()
+                .filter_map(|r| self.due(r).map(|(t, step)| (t, step, r.id)))
+                .filter(|(t, _, _)| *t <= now)
+                .min();
+            let Some((t, step, id)) = next else {
+                break;
+            };
+            match step {
+                Step::Fire => self.fire(lists, id, t, &mut out),
+                Step::Follow => self.follow(lists, id, t, &mut out),
+                Step::End => self.end(lists, id, t, &mut out),
+            }
+            self.runs.retain(Run::live);
+        }
+        out
+    }
+
+    /// Start `cue` of `list`: its pre wait begins at `t`.
+    fn spawn(
+        &mut self,
+        list: InputId,
+        cue: &Cue,
+        parent: Option<u64>,
+        t: Instant,
+        follow: Follow,
+        out: &mut Vec<Out>,
+    ) {
+        self.next_id += 1;
+        let pre = ms(cue.pre_wait_ms);
+        let total = match cue.kind {
+            CueKind::Group => None,
+            CueKind::Wait => Some(pre + ms(cue.duration_ms.unwrap_or(0))),
+            _ => Some(pre),
+        };
+        self.runs.push(Run {
+            id: self.next_id,
+            list,
+            cue: cue.id,
+            parent,
+            start: t,
+            fire_at: t + pre,
+            fired: false,
+            end_at: None,
+            ended: false,
+            follow,
+            follow_at: None,
+            followed: false,
+            total,
+        });
+        out.push(Out::Event {
+            list,
+            cue: Some(cue.id),
+            what: CueEvent::Started,
+        });
+    }
+
+    fn run_mut(&mut self, id: u64) -> Option<&mut Run> {
+        self.runs.iter_mut().find(|r| r.id == id)
+    }
+
+    /// The pre wait of run `id` is over: its action.
+    fn fire(&mut self, lists: &[ShowCueList], id: u64, t: Instant, out: &mut Vec<Out>) {
+        let run = self.run_mut(id).expect("due run").clone();
+        let Some(list) = lists.iter().position(|l| l.id == run.list) else {
+            self.runs.retain(|r| r.id != id);
+            return;
+        };
+        let Some(cue) = Self::cue(lists, list, run.cue).cloned() else {
+            self.runs.retain(|r| r.id != id);
+            return;
+        };
+        if let Some(stop) = cue.stop_others {
+            let victims = self.others(&run, stop.scope);
+            self.stop_runs(&victims, t, out);
+        }
+
+        let mut end_at = Some(t);
+        match cue.kind {
+            CueKind::Actions => out.push(Out::Actions {
+                list: run.list,
+                cue: cue.id,
+                actions: cue.actions.clone(),
+            }),
+            CueKind::Note => {}
+            CueKind::Wait => end_at = Some(t + ms(cue.duration_ms.unwrap_or(0))),
+            CueKind::Start => self.fire_start(lists, list, &cue, t, out),
+            CueKind::Group if cue.children.is_empty() => {}
+            CueKind::Group => {
+                end_at = None;
+                match cue.mode.unwrap_or_default() {
+                    GroupMode::Timeline => {
+                        for child in &cue.children {
+                            self.spawn(run.list, child, Some(id), t, Follow::None, out);
+                        }
+                    }
+                    GroupMode::First => {
+                        let first = &cue.children[0];
+                        self.spawn(run.list, first, Some(id), t, first.follow, out);
+                    }
+                }
+            }
+        }
+
+        let run = self.run_mut(id).expect("fired run");
+        run.fired = true;
+        run.end_at = end_at;
+        if run.follow == Follow::AfterWait {
+            run.follow_at = Some(t + ms(cue.post_wait_ms));
+        }
+    }
+
+    /// A start cue's target (CUE.10): a cue, or a GO in a list. A target
+    /// that is gone fails the cue; times and follows go on (CUE.19).
+    fn fire_start(
+        &mut self,
+        lists: &[ShowCueList],
+        own: usize,
+        cue: &Cue,
+        t: Instant,
+        out: &mut Vec<Out>,
+    ) {
+        let target = cue.target.clone().unwrap_or_default();
+        let list = match &target.list {
+            Some(reference) => match find_list(lists, reference) {
+                Some(list) => Some(list),
+                None => {
+                    out.push(failed(lists[own].id, cue.id, "start: no such cue list"));
+                    return;
+                }
+            },
+            None => None,
+        };
+        match (target.cue.as_deref(), list) {
+            (Some(text), _) => match Self::locate(lists, list.or(Some(own)), text) {
+                Some((l, id)) => {
+                    let started = Self::cue(lists, l, id).expect("just found");
+                    self.spawn(lists[l].id, started, None, t, started.follow, out);
+                }
+                None => out.push(failed(
+                    lists[own].id,
+                    cue.id,
+                    &format!("start: no cue {text}"),
+                )),
+            },
+            (None, Some(l)) => self.go_unguarded(lists, l, t, out),
+            (None, None) => out.push(failed(lists[own].id, cue.id, "start: no target")),
+        }
+    }
+
+    /// The post wait of run `id` is over: start the next cue.
+    fn follow(&mut self, lists: &[ShowCueList], id: u64, t: Instant, out: &mut Vec<Out>) {
+        let run = self.run_mut(id).expect("due run");
+        run.followed = true;
+        let run = run.clone();
+        self.start_next(lists, &run, t, out);
+        if run.ended {
+            self.parent_check(run.parent, t);
+        }
+    }
+
+    /// Run `id` ended.
+    fn end(&mut self, lists: &[ShowCueList], id: u64, t: Instant, out: &mut Vec<Out>) {
+        let run = self.run_mut(id).expect("due run");
+        run.ended = true;
+        let run = run.clone();
+        out.push(Out::Event {
+            list: run.list,
+            cue: Some(run.cue),
+            what: CueEvent::Ended,
+        });
+        if run.follow == Follow::AfterEnd {
+            self.start_next(lists, &run, t, out);
+        }
+        self.parent_check(run.parent, t);
+    }
+
+    /// The cue after `run`'s in its list or group, started at `t`.
+    fn start_next(&mut self, lists: &[ShowCueList], run: &Run, t: Instant, out: &mut Vec<Out>) {
+        let Some(entry) = lists.iter().find(|l| l.id == run.list) else {
+            return;
+        };
+        let Some(path) = path_of(&entry.cues, run.cue) else {
+            return;
+        };
+        let index = *path.last().expect("a path has a cue");
+        let Some(next) = siblings(&entry.cues, &path).and_then(|s| s.get(index + 1)) else {
+            return;
+        };
+        self.spawn(run.list, next, run.parent, t, next.follow, out);
+    }
+
+    /// A group ends when none of its children is live any more.
+    fn parent_check(&mut self, parent: Option<u64>, t: Instant) {
+        let Some(parent) = parent else {
+            return;
+        };
+        if self
+            .runs
+            .iter()
+            .any(|r| r.parent == Some(parent) && r.live())
+        {
+            return;
+        }
+        if let Some(group) = self.run_mut(parent) {
+            if group.fired && group.end_at.is_none() {
+                group.end_at = Some(t);
+            }
+        }
+    }
+
+    /// Runs `scope` stops for `run` (CUE.11): never itself or the groups
+    /// it runs in.
+    fn others(&self, run: &Run, scope: StopScope) -> Vec<u64> {
+        let mut keep = vec![run.id];
+        let mut up = run.parent;
+        while let Some(id) = up {
+            keep.push(id);
+            up = self.runs.iter().find(|r| r.id == id).and_then(|r| r.parent);
+        }
+        self.runs
+            .iter()
+            .filter(|r| !keep.contains(&r.id))
+            .filter(|r| match scope {
+                StopScope::Siblings => r.list == run.list && r.parent == run.parent,
+                StopScope::List => r.list == run.list,
+                StopScope::All => true,
+            })
+            .map(|r| r.id)
+            .collect()
+    }
+
+    /// Stop runs `ids` and everything they started.
+    fn stop_runs(&mut self, ids: &[u64], t: Instant, out: &mut Vec<Out>) {
+        let mut stopped: Vec<u64> = ids.to_vec();
+        let mut i = 0;
+        while i < stopped.len() {
+            let id = stopped[i];
+            stopped.extend(
+                self.runs
+                    .iter()
+                    .filter(|r| r.parent == Some(id) && !stopped.contains(&r.id))
+                    .map(|r| r.id)
+                    .collect::<Vec<_>>(),
+            );
+            i += 1;
+        }
+        let parents: Vec<Option<u64>> = self
+            .runs
+            .iter()
+            .filter(|r| stopped.contains(&r.id))
+            .map(|r| r.parent)
+            .collect();
+        for run in self.runs.iter().filter(|r| stopped.contains(&r.id)) {
+            out.push(Out::Event {
+                list: run.list,
+                cue: Some(run.cue),
+                what: CueEvent::Stopped,
+            });
+        }
+        self.runs.retain(|r| !stopped.contains(&r.id));
+        for parent in parents {
+            if parent.is_some_and(|p| !stopped.contains(&p)) {
+                self.parent_check(parent, t);
+            }
+        }
+    }
+
+    /// Cues that run, in start order (RUN.3).
+    pub fn running(&self, lists: &[ShowCueList], now: Instant) -> Vec<RunningCue> {
+        self.runs
+            .iter()
+            .filter_map(|run| {
+                let list = lists.iter().position(|l| l.id == run.list)?;
+                let cue = Self::cue(lists, list, run.cue)?;
+                let phase = match (run.fired, run.ended) {
+                    (false, _) => RunPhase::PreWait,
+                    (true, false) => RunPhase::Running,
+                    (true, true) => RunPhase::PostWait,
+                };
+                Some(RunningCue {
+                    list: run.list,
+                    cue: run.cue,
+                    number: cue.number.clone(),
+                    name: cue.display_name(),
+                    phase,
+                    elapsed_ms: now.saturating_duration_since(run.start).as_millis() as u64,
+                    total_ms: run.total.map(|d| d.as_millis() as u64),
+                })
+            })
+            .collect()
+    }
+}
+
+fn failed(list: InputId, cue: CueId, reason: &str) -> Out {
+    Out::Event {
+        list,
+        cue: Some(cue),
+        what: CueEvent::Failed {
+            reason: reason.to_string(),
+        },
+    }
+}
+
+/// A cue list by number (1-based), id or name.
+pub fn find_list(lists: &[ShowCueList], list: &InputRef) -> Option<usize> {
+    match list {
+        InputRef::Number(n) => (*n as usize).checked_sub(1).filter(|i| *i < lists.len()),
+        InputRef::Text(text) => lists
+            .iter()
+            .position(|l| l.id.to_string() == *text)
+            .or_else(|| lists.iter().position(|l| l.name == *text)),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use lmix_types::cue::{CueTarget, StopOthers, GO_GUARD_DEFAULT_MS};
+
+    fn cut(name: &str) -> Cue {
+        Cue::actions(name, vec![Action::Cut])
+    }
+
+    fn wait(name: &str, duration_ms: u32) -> Cue {
+        Cue {
+            name: name.into(),
+            duration_ms: Some(duration_ms),
+            ..Cue::empty(CueKind::Wait)
+        }
+    }
+
+    fn list(cues: Vec<Cue>) -> ShowCueList {
+        ShowCueList {
+            id: InputId::new(),
+            name: "Main".into(),
+            cues,
+            source: None,
+        }
+    }
+
+    /// Names of the cues whose actions ran, in order.
+    fn fired(lists: &[ShowCueList], out: &[Out]) -> Vec<String> {
+        out.iter()
+            .filter_map(|o| match o {
+                Out::Actions { list, cue, .. } => {
+                    let l = lists.iter().position(|e| e.id == *list)?;
+                    Runner::cue(lists, l, *cue).map(|c| c.name.clone())
+                }
+                Out::Event { .. } => None,
+            })
+            .collect()
+    }
+
+    fn events(out: &[Out]) -> Vec<CueEvent> {
+        out.iter()
+            .filter_map(|o| match o {
+                Out::Event { what, .. } => Some(what.clone()),
+                Out::Actions { .. } => None,
+            })
+            .collect()
+    }
+
+    fn after(t: Instant, ms_: u64) -> Instant {
+        t + Duration::from_millis(ms_)
+    }
+
+    #[test]
+    fn go_runs_standby_and_moves_on() {
+        let lists = vec![list(vec![cut("A"), cut("B")])];
+        let mut runner = Runner::default();
+        let t = Instant::now();
+
+        let out = runner.go(&lists, 0, t, 0).unwrap();
+
+        assert_eq!(fired(&lists, &out), ["A"]);
+        assert_eq!(runner.standby(lists[0].id), 1);
+        assert!(
+            runner.running(&lists, t).is_empty(),
+            "an actions cue ends at once"
+        );
+        assert_eq!(events(&out), [CueEvent::Started, CueEvent::Ended]);
+
+        runner.go(&lists, 0, after(t, 1), 0).unwrap();
+        assert_eq!(runner.standby(lists[0].id), 2);
+        assert!(
+            runner.go(&lists, 0, after(t, 2), 0).is_err(),
+            "no cues left"
+        );
+    }
+
+    #[test]
+    fn pre_wait_holds_the_action() {
+        let mut a = cut("A");
+        a.pre_wait_ms = 500;
+        let lists = vec![list(vec![a])];
+        let mut runner = Runner::default();
+        let t = Instant::now();
+
+        let out = runner.go(&lists, 0, t, 0).unwrap();
+        assert!(fired(&lists, &out).is_empty());
+        assert_eq!(runner.deadline(), Some(after(t, 500)));
+        assert_eq!(
+            runner.running(&lists, after(t, 200))[0].phase,
+            RunPhase::PreWait
+        );
+        assert_eq!(runner.running(&lists, after(t, 200))[0].total_ms, Some(500));
+
+        assert!(runner.tick(&lists, after(t, 499)).is_empty());
+        assert_eq!(fired(&lists, &runner.tick(&lists, after(t, 500))), ["A"]);
+        assert_eq!(runner.deadline(), None);
+    }
+
+    #[test]
+    fn follows_after_wait_and_after_end() {
+        let mut a = cut("A");
+        a.follow = Follow::AfterWait;
+        a.post_wait_ms = 1000;
+        let mut b = wait("B", 2000);
+        b.follow = Follow::AfterEnd;
+        let c = cut("C");
+        let d = cut("D");
+        let lists = vec![list(vec![a, b, c, d])];
+        let mut runner = Runner::default();
+        let t = Instant::now();
+
+        let out = runner.go(&lists, 0, t, 0).unwrap();
+        assert_eq!(fired(&lists, &out), ["A"]);
+        assert_eq!(
+            runner.standby(lists[0].id),
+            3,
+            "standby past the chain A, B, C"
+        );
+
+        assert!(fired(&lists, &runner.tick(&lists, after(t, 999))).is_empty());
+        runner.tick(&lists, after(t, 1000));
+        assert_eq!(runner.running(&lists, after(t, 1500))[0].name, "B");
+        // Late tick: C still counts from B's end, not from the tick.
+        let out = runner.tick(&lists, after(t, 3700));
+        assert_eq!(fired(&lists, &out), ["C"]);
+        assert!(runner.running(&lists, after(t, 3700)).is_empty());
+    }
+
+    #[test]
+    fn a_hundred_waits_do_not_drift() {
+        let cues: Vec<Cue> = (0..100)
+            .map(|i| {
+                let mut w = wait(&format!("w{i}"), 20);
+                w.follow = Follow::AfterEnd;
+                w
+            })
+            .chain([cut("end")])
+            .collect();
+        let lists = vec![list(cues)];
+        let mut runner = Runner::default();
+        let t = Instant::now();
+        runner.go(&lists, 0, t, 0).unwrap();
+
+        // Ticks come 7 ms late every time.
+        let mut now = t;
+        let mut end = None;
+        while end.is_none() {
+            let Some(due) = runner.deadline() else { break };
+            now = due.max(now) + Duration::from_millis(7);
+            if !fired(&lists, &runner.tick(&lists, now)).is_empty() {
+                end = Some(now);
+            }
+        }
+
+        assert_eq!(runner.deadline(), None);
+        // The end cue is due at exactly 2 s; this tick came 7 ms after.
+        assert_eq!(end, Some(after(t, 2007)));
+    }
+
+    #[test]
+    fn timeline_group_starts_children_together() {
+        let mut a = cut("A");
+        a.pre_wait_ms = 100;
+        a.follow = Follow::AfterEnd; // ignored in a timeline
+        let mut b = cut("B");
+        b.pre_wait_ms = 400;
+        let group = Cue {
+            name: "Scene".into(),
+            follow: Follow::AfterEnd,
+            children: vec![a, b],
+            ..Cue::empty(CueKind::Group)
+        };
+        let lists = vec![list(vec![group, cut("After")])];
+        let mut runner = Runner::default();
+        let t = Instant::now();
+
+        runner.go(&lists, 0, t, 0).unwrap();
+        assert_eq!(fired(&lists, &runner.tick(&lists, after(t, 100))), ["A"]);
+        let out = runner.tick(&lists, after(t, 400));
+        assert_eq!(
+            fired(&lists, &out),
+            ["B", "After"],
+            "group ends with B, then follows"
+        );
+    }
+
+    #[test]
+    fn first_group_chains_its_children() {
+        let mut a = wait("A", 300);
+        a.follow = Follow::AfterEnd;
+        let b = cut("B");
+        let c = cut("C");
+        let group = Cue {
+            mode: Some(GroupMode::First),
+            children: vec![a, b, c],
+            ..Cue::empty(CueKind::Group)
+        };
+        let lists = vec![list(vec![group])];
+        let mut runner = Runner::default();
+        let t = Instant::now();
+
+        runner.go(&lists, 0, t, 0).unwrap();
+        let out = runner.tick(&lists, after(t, 300));
+
+        assert_eq!(fired(&lists, &out), ["B"], "C waits: B has no follow");
+        assert!(runner.running(&lists, after(t, 300)).is_empty());
+    }
+
+    #[test]
+    fn double_go_is_dropped() {
+        let lists = vec![list(vec![cut("A"), cut("B")])];
+        let mut runner = Runner::default();
+        let t = Instant::now();
+        let guard = GO_GUARD_DEFAULT_MS;
+
+        runner.go(&lists, 0, t, guard).unwrap();
+        let out = runner.go(&lists, 0, after(t, 120), guard).unwrap();
+
+        assert_eq!(events(&out), [CueEvent::GoIgnored]);
+        assert_eq!(runner.standby(lists[0].id), 1);
+        let out = runner.go(&lists, 0, after(t, 300), guard).unwrap();
+        assert_eq!(fired(&lists, &out), ["B"]);
+    }
+
+    #[test]
+    fn standby_moves() {
+        let mut b = cut("B");
+        b.follow = Follow::AfterEnd;
+        let mut c = cut("C");
+        c.number = "12".into();
+        let lists = vec![list(vec![cut("A"), b, c, cut("D")])];
+        let mut runner = Runner::default();
+        let id = lists[0].id;
+        let mut go = |to: StandbyMove| {
+            runner.move_standby(&lists, 0, &to).unwrap();
+            runner.standby(id)
+        };
+
+        assert_eq!(go(StandbyMove::Next), 1);
+        assert_eq!(go(StandbyMove::NextSequence), 3, "past B and C");
+        assert_eq!(go(StandbyMove::PreviousSequence), 1, "to the start of B, C");
+        assert_eq!(go(StandbyMove::Cue("12".into())), 2);
+        assert_eq!(go(StandbyMove::Index(4)), 3);
+        assert_eq!(go(StandbyMove::Next), 4);
+        assert_eq!(go(StandbyMove::Next), 4, "at most one past the end");
+        assert_eq!(go(StandbyMove::Start), 0);
+        assert_eq!(go(StandbyMove::Previous), 0);
+        assert!(runner
+            .move_standby(&lists, 0, &StandbyMove::Index(9))
+            .is_err());
+    }
+
+    #[test]
+    fn start_cue_and_list_targets() {
+        let mut other = cut("Other");
+        other.number = "50".into();
+        let start_cue = Cue {
+            name: "Start 50".into(),
+            target: Some(CueTarget {
+                list: None,
+                cue: Some("50".into()),
+            }),
+            ..Cue::empty(CueKind::Start)
+        };
+        let start_list = Cue {
+            target: Some(CueTarget {
+                list: Some(InputRef::Text("Side".into())),
+                cue: None,
+            }),
+            ..Cue::empty(CueKind::Start)
+        };
+        let broken = Cue {
+            target: Some(CueTarget {
+                list: None,
+                cue: Some("99".into()),
+            }),
+            ..Cue::empty(CueKind::Start)
+        };
+        let mut side = list(vec![cut("Side 1"), cut("Side 2")]);
+        side.name = "Side".into();
+        let lists = vec![
+            list(vec![start_cue, start_list, broken, cut("x")]),
+            side,
+            list(vec![other]),
+        ];
+        let mut runner = Runner::default();
+        let t = Instant::now();
+
+        assert_eq!(
+            fired(&lists, &runner.go(&lists, 0, t, 0).unwrap()),
+            ["Other"]
+        );
+        assert_eq!(
+            runner.standby(lists[2].id),
+            0,
+            "a start cue does not move standby"
+        );
+
+        assert_eq!(
+            fired(&lists, &runner.go(&lists, 0, after(t, 1), 0).unwrap()),
+            ["Side 1"]
+        );
+        assert_eq!(
+            runner.standby(lists[1].id),
+            1,
+            "a list target is a GO there"
+        );
+
+        let out = runner.go(&lists, 0, after(t, 2), 0).unwrap();
+        assert!(events(&out)
+            .iter()
+            .any(|e| matches!(e, CueEvent::Failed { .. })));
+        assert_eq!(
+            runner.standby(lists[0].id),
+            3,
+            "a broken cue still moves on"
+        );
+    }
+
+    #[test]
+    fn stop_others_and_stop() {
+        let mut long = wait("Atmo", 60_000);
+        long.number = "1".into();
+        let mut next = wait("Next", 60_000);
+        next.stop_others = Some(StopOthers {
+            scope: StopScope::List,
+            fade_ms: 3000,
+        });
+        let lists = vec![list(vec![long, next, wait("Third", 60_000)])];
+        let mut runner = Runner::default();
+        let t = Instant::now();
+
+        runner.go(&lists, 0, t, 0).unwrap();
+        let out = runner.go(&lists, 0, after(t, 1000), 0).unwrap();
+        assert!(events(&out).contains(&CueEvent::Stopped));
+        let names: Vec<String> = runner
+            .running(&lists, after(t, 1000))
+            .into_iter()
+            .map(|r| r.name)
+            .collect();
+        assert_eq!(names, ["Next"]);
+
+        runner.go(&lists, 0, after(t, 2000), 0).unwrap();
+        // By number or id; a name is no reference.
+        runner
+            .stop(&lists, Some(0), Some("Third"), after(t, 2100))
+            .unwrap_err();
+        runner.stop(&lists, None, None, after(t, 2100)).unwrap();
+        assert!(runner.running(&lists, after(t, 2100)).is_empty());
+    }
+
+    #[test]
+    fn reset_stops_and_rewinds() {
+        let lists = vec![list(vec![wait("A", 10_000), cut("B")])];
+        let mut runner = Runner::default();
+        let t = Instant::now();
+        runner.go(&lists, 0, t, 0).unwrap();
+
+        let out = runner.reset(after(t, 10));
+
+        assert_eq!(events(&out), [CueEvent::Stopped]);
+        assert_eq!(runner.standby(lists[0].id), 0);
+        assert_eq!(runner.deadline(), None);
+    }
+
+    #[test]
+    fn standby_stays_on_its_cue_when_cues_come_before() {
+        let (a, b) = (cut("A"), cut("B"));
+        let mut lists = vec![list(vec![a.clone(), b.clone()])];
+        let mut runner = Runner::default();
+        runner
+            .move_standby(&lists, 0, &StandbyMove::Index(2))
+            .unwrap();
+
+        let old = std::mem::replace(&mut lists[0].cues, vec![cut("New"), a, b]);
+        runner.keep_standby(&lists[0], &old);
+        runner.list_changed(&lists);
+
+        assert_eq!(runner.standby(lists[0].id), 2, "still on B");
+    }
+
+    #[test]
+    fn changed_lists_keep_standby_in_range() {
+        let mut lists = vec![list(vec![cut("A"), cut("B"), wait("C", 5000)])];
+        let mut runner = Runner::default();
+        let t = Instant::now();
+        runner
+            .move_standby(&lists, 0, &StandbyMove::Index(3))
+            .unwrap();
+        runner.go(&lists, 0, t, 0).unwrap();
+
+        lists[0].cues.truncate(1);
+        runner.list_changed(&lists);
+
+        assert_eq!(runner.standby(lists[0].id), 1);
+        assert!(
+            runner.running(&lists, t).is_empty(),
+            "the running cue is gone"
+        );
+    }
+}

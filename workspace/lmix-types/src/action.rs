@@ -13,7 +13,8 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::automation::{Cue, Trigger};
+use crate::automation::Trigger;
+use crate::cue::{Cue, StandbyMove, StopMode};
 use crate::graphics::{
     BindingSpec, DataSourceSpec, Easing, LayerTransform, TitleData, TitleTrigger,
 };
@@ -235,8 +236,12 @@ pub const ACTION_GROUPS: &[(&str, &[&str])] = &[
             "set_cue_list",
             "remove_cue_list",
             "cue_go",
-            "cue_back",
-            "cue_jump",
+            "cue_start",
+            "cue_stop",
+            "cue_standby",
+            "cue_reset",
+            "set_active_cue_list",
+            "set_go_guard",
             "add_shortcut",
             "set_shortcut",
             "remove_shortcut",
@@ -436,23 +441,62 @@ pub enum Action {
         input: InputRef,
         triggers: Vec<Trigger>,
     },
-    /// Add a cue list.
-    AddCueList { name: String, cues: Vec<Cue> },
+    /// Add a cue list. `source`: where it comes from, e.g. a script
+    /// file (IMP.9); clients then do not edit it.
+    AddCueList {
+        name: String,
+        cues: Vec<Cue>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        source: Option<String>,
+    },
     /// Replace a cue list's name and cues (by number, name or id); the
     /// next cue stays where it was, at most one past the last.
     SetCueList {
         list: InputRef,
         name: String,
         cues: Vec<Cue>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        source: Option<String>,
     },
     /// Remove a cue list.
     RemoveCueList { list: InputRef },
-    /// Run the list's next cue and move on.
-    CueGo { list: InputRef },
-    /// Run the cue before the last one run and step back.
-    CueBack { list: InputRef },
-    /// Make cue `cue` (1-based) the next one, without running it.
-    CueJump { list: InputRef, cue: u32 },
+    /// Start the list's standby cue with its follow chain and move
+    /// standby past it (RUN.1); without `list` the active list. Dropped
+    /// when it comes sooner than the GO guard (RUN.6).
+    CueGo {
+        #[serde(default)]
+        list: Option<InputRef>,
+    },
+    /// Start a cue (number or id) with its follow chain; standby stays,
+    /// the GO guard does not apply.
+    CueStart {
+        #[serde(default)]
+        list: Option<InputRef>,
+        cue: String,
+    },
+    /// Stop a running cue (number or id), or without `cue` every cue of
+    /// the list, or without `list` every cue (RUN.4).
+    CueStop {
+        #[serde(default)]
+        list: Option<InputRef>,
+        #[serde(default)]
+        cue: Option<String>,
+        #[serde(default)]
+        mode: StopMode,
+    },
+    /// Move standby without starting anything (RUN.2).
+    CueStandby {
+        #[serde(default)]
+        list: Option<InputRef>,
+        to: StandbyMove,
+    },
+    /// Stop every cue at once and put every standby back to the start
+    /// (RUN.11).
+    CueReset,
+    /// The list GO goes to without a list (RUN.7).
+    SetActiveCueList { list: InputRef },
+    /// Shortest gap between two GOs, 0–5000 ms (RUN.6).
+    SetGoGuard { ms: u32 },
 
     // ---- Safety ----
     /// Lock or unlock (AUT.11): while locked, closing inputs, opening or

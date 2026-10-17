@@ -98,43 +98,43 @@ ausgeschlossen. **MS**: Meilenstein (§7). Stand: ✅ vorhanden · ◐ teilweise
 
 | ID | Anforderung | Prio | MS | Stand |
 |---|---|---|---|---|
-| CUE.1 | Cue hat Nummer, Name, Art, Notiz (mehrzeilig), Farbe, feste ID. Nummer ist freier Text, darf leer sein, ist in der ganzen Show eindeutig; Umsortieren ändert keine Nummer. Ohne Namen wird einer aus Art und Ziel gebildet. Nummern ohne Leerzeichen und Sonderzeichen empfohlen (Fernsteuerung), Import warnt | M | S1 | ◐ (Label) |
-| CUE.2 | Vorwartezeit und Nachwartezeit je Cue, 0 bis 1 h, Auflösung 10 ms. Nachwartezeit zählt ab Beginn der Aktion, also nach der Vorwartezeit | M | S1 | – |
-| CUE.3 | Folge je Cue: keine; nächsten starten nach Nachwartezeit; nächsten starten nach Ende (dann gilt Nachwartezeit = Dauer) | M | S1 | – |
-| CUE.4 | Gruppen-Modi: **Zeitleiste** (alle Kinder starten zugleich, versetzt nur durch ihre Vorwartezeiten; Kinder haben keine Folge), **erstes starten** (erstes Kind startet, Rest über Folgen; Standby springt hinter die Gruppe) | M | S1 | – |
+| CUE.1 | Cue hat Nummer, Name, Art, Notiz (mehrzeilig), Farbe, feste ID. Nummer ist freier Text, darf leer sein, ist in der ganzen Show eindeutig; Umsortieren ändert keine Nummer. Ohne Namen wird einer aus Art und Ziel gebildet. Nummern ohne Leerzeichen und Sonderzeichen empfohlen (Fernsteuerung), Import warnt | M | S1 | ◐ (alles bis auf die Import-Warnung, IMP) |
+| CUE.2 | Vorwartezeit und Nachwartezeit je Cue, 0 bis 1 h, Auflösung 10 ms. Nachwartezeit zählt ab Beginn der Aktion, also nach der Vorwartezeit | M | S1 | ✅ |
+| CUE.3 | Folge je Cue: keine; nächsten starten nach Nachwartezeit; nächsten starten nach Ende (dann gilt Nachwartezeit = Dauer) | M | S1 | ✅ |
+| CUE.4 | Gruppen-Modi: **Zeitleiste** (alle Kinder starten zugleich, versetzt nur durch ihre Vorwartezeiten; Kinder haben keine Folge), **erstes starten** (erstes Kind startet, Rest über Folgen; Standby springt hinter die Gruppe) | M | S1 | ✅ |
 | CUE.5 | Gruppen-Modi **hinein** (Standby geht ins erste Kind; Gliederung, z. B. Szene), **Wiedergabeliste** (Kinder nacheinander, Schleife, Mischen, Überblendung; GO = nächstes Kind) | S | S2 | – |
 | CUE.6 | Gruppen-Modus **Zufall**: ein scharfes, nicht laufendes Kind; jedes kommt einmal dran, bevor sich eines wiederholt | K | S3 | – |
-| CUE.7 | Aktions-Cue: beliebige Aktionen des Katalogs (heutiger Cue, AUT.14) | M | S1 | ✅ (AUT.14) |
-| CUE.8 | Notiz-Cue: tut nichts, trägt eine Regieanweisung oder trennt Abschnitte | M | S1 | – |
-| CUE.9 | Warte-Cue: läuft nur ab, Dauer = Nachwartezeit | S | S1 | – |
-| CUE.10 | Start-Cue: startet einen anderen Cue oder eine Cue-Liste, ohne Standby zu bewegen | S | S1 | – |
-| CUE.11 | Andere beim Start ausblenden und stoppen: Geschwister, Liste oder alles, mit Zeit | M | S1 | – |
+| CUE.7 | Aktions-Cue: beliebige Aktionen des Katalogs (heutiger Cue, AUT.14) | M | S1 | ✅ |
+| CUE.8 | Notiz-Cue: tut nichts, trägt eine Regieanweisung oder trennt Abschnitte | M | S1 | ✅ |
+| CUE.9 | Warte-Cue: läuft nur ab, Dauer = Nachwartezeit | S | S1 | ✅ |
+| CUE.10 | Start-Cue: startet einen anderen Cue oder eine Cue-Liste, ohne Standby zu bewegen | S | S1 | ✅ |
+| CUE.11 | Andere beim Start ausblenden und stoppen: Geschwister, Liste oder alles, mit Zeit | M | S1 | ◐ (stoppt; Ausblendung mit Klang und Bild ab Stufe 2) |
 | CUE.12 | Unscharf: Aktion entfällt, Zeiten und Folge bleiben; optional „überspringen, wenn unscharf“. Scharf-/Unscharf-Cue mit Ziel | S | S2 | – |
-| CUE.13 | Springen-Cue: setzt Standby auf ein Ziel | S | S2 | ◐ (`cue_jump` als Aktion) |
+| CUE.13 | Springen-Cue: setzt Standby auf ein Ziel | S | S2 | ◐ (`cue_standby` als Aktion) |
 | CUE.14 | Zweitauslöser je Cue: was ein Start an einen laufenden Cue tut (nichts, Stopp mit Ausblendung, harter Stopp, Neustart, Schleife beenden); optional beim Loslassen der Taste | S | S2 | – |
 | CUE.15 | Schleife sauber beenden: laufender Durchgang spielt zu Ende; optional danach nächsten Cue starten oder Ziel stoppen | S | S2 | – |
 | CUE.16 | Direkter Auslöser je Cue (Taste, MIDI, OSC, Uhrzeit): startet Cue samt Folge, Standby unverändert | S | S2 | ◐ (Kurzbefehle) |
 | CUE.17 | Pause-, Zurücksetzen- und Laden-Cue mit Ziel | K | S3 | – |
 | CUE.18 | Ducken: solange ein Cue läuft, andere Klänge der Liste um x dB senken, mit Zeit | K | S2 | – |
-| CUE.19 | Defekter Cue (fehlende Datei, fehlendes Ziel) in einer Folge: Zeiten und Folgen laufen weiter, Fehler wird gemeldet | M | S1 | – |
-| CUE.20 | Grenzen: mindestens 1000 Cues je Liste, 64 Kinder je Gruppe, Gruppen 3 Ebenen tief | S | S1 | ◐ (200 Cues, `CUES`) |
-| CUE.21 | Heutige Cue-Listen (AUT.14) werden beim Laden ins neue Cue-Modell migriert und verhalten sich wie bisher (keine Zeiten, keine Folge); kein Rückwärtslesen alter Formate (S-E.5) | M | S1 | – |
+| CUE.19 | Defekter Cue (fehlende Datei, fehlendes Ziel) in einer Folge: Zeiten und Folgen laufen weiter, Fehler wird gemeldet | M | S1 | ✅ (Fehler als Ereignis `cue` `failed`) |
+| CUE.20 | Grenzen: mindestens 1000 Cues je Liste, 64 Kinder je Gruppe, Gruppen 3 Ebenen tief | S | S1 | ✅ |
+| CUE.21 | Heutige Cue-Listen (AUT.14) werden beim Laden ins neue Cue-Modell migriert und verhalten sich wie bisher (keine Zeiten, keine Folge); kein Rückwärtslesen alter Formate (S-E.5) | M | S1 | ✅ (Show-Datei Version 2) |
 
 ### 3.2 Ablauf (RUN)
 
 | ID | Anforderung | Prio | MS | Stand |
 |---|---|---|---|---|
-| RUN.1 | GO startet den Standby-Cue samt Folge; Standby rückt auf den ersten Cue nach der Folge bzw. Gruppe (bei Gruppe „hinein“ ins erste Kind) | M | S1 | ◐ (`cue_go`) |
-| RUN.2 | Standby setzen, unabhängig von laufenden Cues: einen Cue vor/zurück, eine ganze Folge vor/zurück, auf Nummer, auf Anfang | M | S1 | ◐ (`cue_back`, `cue_jump`) |
-| RUN.3 | Mehrere Cues laufen gleichzeitig; Liste der laufenden Cues mit abgelaufener Zeit, Restzeit, Fortschritt | M | S1 | – |
-| RUN.4 | Einzelnen laufenden Cue stoppen (mit seiner Ausblendung) oder hart stoppen | M | S1 | – |
+| RUN.1 | GO startet den Standby-Cue samt Folge; Standby rückt auf den ersten Cue nach der Folge bzw. Gruppe (bei Gruppe „hinein“ ins erste Kind) | M | S1 | ✅ (ohne „hinein“, S2) |
+| RUN.2 | Standby setzen, unabhängig von laufenden Cues: einen Cue vor/zurück, eine ganze Folge vor/zurück, auf Nummer, auf Anfang | M | S1 | ✅ (`cue_standby`) |
+| RUN.3 | Mehrere Cues laufen gleichzeitig; Liste der laufenden Cues mit abgelaufener Zeit, Restzeit, Fortschritt | M | S1 | ✅ (`running_cues` im Zustand; Anzeige SUI.4) |
+| RUN.4 | Einzelnen laufenden Cue stoppen (mit seiner Ausblendung) oder hart stoppen | M | S1 | ◐ (`cue_stop`; Ausblendung ab Stufe 2) |
 | RUN.5 | Alles pausieren / fortsetzen, über alle Listen; einzelnen Cue pausieren | S | S2 | – |
-| RUN.6 | Schutz vor Doppel-GO: Mindestabstand einstellbar (Standard 300 ms, lmix-Wert), wirkt auf GO über alle Bedienwege, nicht auf direkte Auslöser, Folgen, Stopp, Panik; verworfenes GO sichtbar und als Ereignis; Option „erst nach Loslassen wieder scharf“ | M | S1 | – |
-| RUN.7 | Mehrere Cue-Listen je Show, jede mit eigenem Standby; eine aktive Liste für GO; „Liste X starten“ = GO in X, ohne aktive Liste zu wechseln | M | S1 | ◐ |
-| RUN.8 | Zeitgenauigkeit: Wartezeiten und Folgen ± 10 ms über 4 h | M | S1 | – |
+| RUN.6 | Schutz vor Doppel-GO: Mindestabstand einstellbar (Standard 300 ms, lmix-Wert), wirkt auf GO über alle Bedienwege, nicht auf direkte Auslöser, Folgen, Stopp, Panik; verworfenes GO sichtbar und als Ereignis; Option „erst nach Loslassen wieder scharf“ | M | S1 | ◐ (Abstand, Ereignis `go_ignored`; „erst nach Loslassen“ fehlt) |
+| RUN.7 | Mehrere Cue-Listen je Show, jede mit eigenem Standby; eine aktive Liste für GO; „Liste X starten“ = GO in X, ohne aktive Liste zu wechseln | M | S1 | ✅ |
+| RUN.8 | Zeitgenauigkeit: Wartezeiten und Folgen ± 10 ms über 4 h | M | S1 | ◐ (Zeiten ohne Drift, getestet; 4-h-Messung im Selftest offen, SNF.4) |
 | RUN.9 | Sperren je Ein- und Ausgabeklasse (Netz rein/raus, HTTP, MIDI, OSC): z. B. Probe ohne Lichtpult oder kein fremdes GO; betroffene Cues zeigen Warnung; per Aktion und API schaltbar | S | S2 | – |
 | RUN.10 | Vorhören: einzelnen Cue ohne Vorwartezeit und Folge abspielen, Standby bleibt; Umleitung je Ausgabeart (unverändert, stumm, andere Zone, Monitorfenster) | S | S2 | – |
-| RUN.11 | Show zurücksetzen: harter Stopp, vorübergehende Änderungen verwerfen, alle Standbys auf den Anfang | S | S1 | – |
+| RUN.11 | Show zurücksetzen: harter Stopp, vorübergehende Änderungen verwerfen, alle Standbys auf den Anfang | S | S1 | ✅ |
 | RUN.12 | Raster: Tastenfläche ohne Standby für spontane Effekte, je Feld ein Cue; Companion-Taste je Feld | S | S2 | – |
 | RUN.13 | Ab Zeitpunkt starten (auch negativ ab Ende), gilt für die ganze Folge | K | S3 | – |
 | RUN.14 | Start mitten in der Show mit Zustand nachziehen: dauerhafte Klänge und Bühne des Abschnitts herstellen (lmix) | K | S3 | – |
@@ -220,15 +220,15 @@ QLab kennt keinen Import aus Texten; am nächsten kommt das Anlegen von Cues
 
 | ID | Anforderung | Prio | MS | Stand |
 |---|---|---|---|---|
-| IMP.1 | Eigenes Werkzeug liest Markdown-Dateien eines Ordners (z. B. Obsidian-Vault) und erzeugt Cue-Listen über die API | M | S1 | – |
-| IMP.2 | Cues stehen als Codeblöcke (`lmix-cue`) im Text; Reihenfolge im Text = Reihenfolge der Liste; Überschriften werden Notiz-Cues als Szenenmarken (S2: Gruppen „hinein“, CUE.5) | M | S1 | – |
-| IMP.3 | Eine Datei = eine Cue-Liste; Name aus Dateiname oder Frontmatter | M | S1 | – |
-| IMP.4 | Medienpfade relativ zum Ordner; fehlende Dateien und doppelte Nummern als Fehler mit Datei und Zeile | M | S1 | – |
-| IMP.5 | Neu laden auf Befehl und bei Dateiänderung; Standby bleibt auf derselben Cue-Nummer; laufende Cues laufen weiter | M | S1 | – |
-| IMP.6 | Cue-Nummern im Drehbuch sind die feste Zuordnung; der Import nummeriert nicht selbst | M | S1 | – |
+| IMP.1 | Eigenes Werkzeug liest Markdown-Dateien eines Ordners (z. B. Obsidian-Vault) und erzeugt Cue-Listen über die API | M | S1 | ✅ (`lmix-script`, `docs/DREHBUCH.md`) |
+| IMP.2 | Cues stehen als Codeblöcke (`lmix-cue`) im Text; Reihenfolge im Text = Reihenfolge der Liste; Überschriften werden Notiz-Cues als Szenenmarken (S2: Gruppen „hinein“, CUE.5) | M | S1 | ✅ |
+| IMP.3 | Eine Datei = eine Cue-Liste; Name aus Dateiname oder Frontmatter | M | S1 | ✅ |
+| IMP.4 | Medienpfade relativ zum Ordner; fehlende Dateien und doppelte Nummern als Fehler mit Datei und Zeile | M | S1 | ✅ (fehlende Medien als Warnung, CUE.19) |
+| IMP.5 | Neu laden auf Befehl und bei Dateiänderung; Standby bleibt auf derselben Cue-Nummer; laufende Cues laufen weiter | M | S1 | ✅ (`--watch`) |
+| IMP.6 | Cue-Nummern im Drehbuch sind die feste Zuordnung; der Import nummeriert nicht selbst | M | S1 | ✅ |
 | IMP.7 | Vorlagen: Standardwerte je Cue-Art (z. B. Fade-Dauer) und benannte Cue-Bausteine („Szene“ = Bild + Licht + Atmo als Gruppe) | S | S2 | – |
-| IMP.8 | Formatbeschreibung als JSON-Schema | S | S1 | – |
-| IMP.9 | Im Drehbuch-Betrieb sind Cues in der Oberfläche nicht bearbeitbar (eine Quelle der Wahrheit); Hinweis in der Oberfläche | M | S1 | – |
+| IMP.8 | Formatbeschreibung als JSON-Schema | S | S1 | ✅ (`lmix-script schema`) |
+| IMP.9 | Im Drehbuch-Betrieb sind Cues in der Oberfläche nicht bearbeitbar (eine Quelle der Wahrheit); Hinweis in der Oberfläche | M | S1 | ✅ (Quelle der Liste, Console sperrt) |
 
 ### 3.8 Bedienung und Fernsteuerung (CTL)
 
@@ -283,7 +283,7 @@ QLab kennt keinen Import aus Texten; am nächsten kommt das Anlegen von Cues
 
 | ID | Anforderung | Prio | MS | Stand |
 |---|---|---|---|---|
-| SSH.1 | Cue-Listen mit allen neuen Feldern in der Show-Datei; Format-Version steigt, ältere Shows werden beim Laden migriert (CUE.21) | M | S1 | – (SHW.2) |
+| SSH.1 | Cue-Listen mit allen neuen Feldern in der Show-Datei; Format-Version steigt, ältere Shows werden beim Laden migriert (CUE.21) | M | S1 | ✅ |
 | SSH.2 | Im Drehbuch-Betrieb speichert die Show nur den Verweis auf den Drehbuch-Ordner, nicht die erzeugten Cues | S | S1 | – |
 | SSH.3 | Zonen-, Bühnen- und Ausgabeziel-Zuordnung liegen nicht in der Show, sondern in den Rechner-Einstellungen; ex- und importierbar | M | S1 | – |
 | SSH.4 | Paket (SHW.6) nimmt Klang- und Bilddateien der Cues mit | S | S2 | ◐ (SHW.6) |

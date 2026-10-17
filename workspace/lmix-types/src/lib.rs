@@ -11,6 +11,7 @@
 
 pub mod action;
 pub mod automation;
+pub mod cue;
 pub mod graphics;
 pub mod input;
 pub mod layout;
@@ -23,7 +24,11 @@ pub mod state;
 pub use action::{
     action_group, Action, ActionError, Effect, StingerSpec, TransitionSlot, ACTION_GROUPS,
 };
-pub use automation::{Cue, CueList, Trigger, TriggerOn};
+pub use automation::{Trigger, TriggerOn};
+pub use cue::{
+    Cue, CueEvent, CueId, CueKind, CueList, CueTarget, Follow, GroupMode, RunPhase, RunningCue,
+    StandbyMove, StopMode, StopOthers, StopScope,
+};
 pub use graphics::{
     BindingSpec, Blend, DataFormat, DataSource, DataSourceSpec, DataTable, Dataset, Easing,
     FieldBinding, FieldKind, Graphics, LayerTransform, Template, TemplateField, TemplateTexts,
