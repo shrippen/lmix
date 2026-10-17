@@ -2815,3 +2815,70 @@ Abmelden je Ereignis und Feld.
 **Geprüft**: Tests der Felder und Nachrichten, Headless-Test mit echtem
 OSC-Client (Name und Restzeit des laufenden Cues, Cue-Ereignisse, keine
 Mischer-Nachrichten).
+
+## 2026-10-17 — S-E.13: Bühnen intern, gemessen (offen)
+
+**Kontext**: S1 Stufe 3 (VIS) braucht Bühnen: mindestens 4 je Show, jede
+eine eigene Bildfläche mit Ebenen, auf Vollbild oder Fenster (VIS.1,
+S-E.9), Schwarz ohne Cues (VIS.8). Wie bei S-E.3 gibt es zwei Wege:
+(A) eine Bühne ist ein Mischer-Flow wie heute, jeder Bild-Cue ein
+verdeckter Input (eigener Flow, Bild über `inter`, belegt einen Slot);
+(B) ein Bühnen-Block in strom, ein Flow mit `compositor`, ein Zweig je
+laufendem Bild-Cue, zur Laufzeit an- und abgehängt.
+
+**Messung** (`scripts/bench-stage/run.sh`, reines GStreamer 1.24 auf der
+CPU, `compositor` 1080p30 in `fakesink sync`, ohne strom und GPU; 4 Kerne
+Xeon 2,8 GHz; 1080p30-H.264-Clips, je Cue eine Kachel 480 × 270; Zeit von
+der Anfrage bis zum ersten Ausgangsbild, das den Cue zeigt):
+
+| | A: Pipeline je Cue + intervideo | B: Zweig je Cue | B vorgeladen |
+|---|---|---|---|
+| Anfrage → sichtbar (8 Cues nacheinander) | 122–133 ms (kalt 209) | 53–91 ms (kalt 118) | 28–64 ms |
+| Speicher je Cue | ~60 MB | ~58 MB | ~53 MB |
+| Threads je Cue | 9 | 8 | 8 |
+| CPU bei 8 Cues (4 Kerne) | 98 % | 93 % | 88 % |
+| Ausgang | 30 fps, nichts verworfen | 30 fps | 30 fps |
+
+Bei 30 fps ist ein Bild 33 ms: B vorgeladen erscheint mit dem nächsten
+oder übernächsten Bild, A zwei bis drei Bilder später. A wartet auf die
+Periode der Inter-Quelle; in lmix kämen dazu der Flow über REST, der Slot
+(16 Standard, geteilt mit Kameras) und für 4 Bühnen 4 Mischer.
+
+**Befunde unabhängig vom Weg**:
+- Ein neu angehängter Zweig braucht einen Pad-Offset auf die laufende Zeit
+  der Bühne, sonst überspringt der `compositor` den Anfang des Clips (im
+  ersten Lauf bis 2,4 s); strom macht das für den Mischer schon
+  (`lmix-live-offset`).
+- Mischmodi (VIS.6): Kein GStreamer-Compositor kann „aufhellen“
+  (Maximum). Der CPU-`compositor` kennt nur über und addieren,
+  `glvideomixer` multiplizieren nur über Blendfunktionen, „aufhellen“ gar
+  nicht. VIS.6 braucht in beiden Wegen eigenes Blending in strom (z. B.
+  ein Shader je Ebene).
+
+**Folgerung (Vorschlag)**: B, und zusammen mit S-E.3 B als **ein**
+strom-Block „Show-Wiedergabe“ in einem Flow je Rechner: Zonen
+(`audiomixer`) und Bühnen (`compositor`) teilen eine Uhr, ein Szenenwechsel
+mit Kulisse und Atmo startet auf denselben Zeitpunkt, und Ton aus Videos
+(VIS.10, S2) kommt ohne Umweg in die Zone. A bliebe für Live-Bild als
+Bild-Cue (VIS.15, S3), das schon ein Input ist.
+**Offen**: Entscheidung des Users.
+
+**Bauplan B** (Schätzung, nicht gebaut):
+- strom: Bühne = `compositor` (GL bzw. CUDA wie der Mischer, CPU als
+  Rückfall) mit schwarzem Grund (VIS.8), Ausgang je Rechner auf Vollbild
+  oder Fenster (VIS.1, wie OUT.3). Bild-Cue = Zweig Datei → Dekoder →
+  Pad mit `zorder` (Ebene, VIS.3), `alpha` (Deckkraft, Fade über
+  Controller wie die DSK-Blende, VIS.4), `sizing-policy` (Füllmodus,
+  VIS.5); vorladen vor GO (pausiert, am Pad gehalten). Standbild über
+  `imagefreeze`. Bühnen-Dimmer (VIS.7) als letzte Ebene oder Pegel am
+  Ausgang. Eigenes Blending für VIS.6.
+- lmix-core: Bühnen in der Show (Namen) und Zuordnung je Rechner (wie
+  Zonen, SSH.3); Cue-Art `picture` und Fade-Ziel Bild/Bühne; Panik
+  blendet Bühnen schwarz.
+- Console: Bühnen-Dialog, kleine Vorschau (SUI.7).
+- Aufwand grob: mit dem Ton-Block zusammen 1–2 Tage mehr als S-E.3 B
+  allein, sonst 3–4 Tage.
+
+**Grenzen der Messung**: nur CPU und ein Rechner mit 4 Kernen; GPU-Pfade
+(GL, CUDA) und 4 Bühnen gleichzeitig sind ungemessen, beides gehört in die
+Abnahme auf echter Hardware.
