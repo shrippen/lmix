@@ -420,6 +420,16 @@ Kirigami.ApplicationWindow {
         inputs: root.inputs
     }
 
+    // SHW.3: a new show starts in the format chosen here.
+    FormatDialog {
+        id: newShowDialog
+        parent: QQC2.Overlay.overlay
+        anchors.centerIn: parent
+        act: root.act
+        newShow: true
+        format: root.show && root.show.format ? root.show.format : ({ width: 1920, height: 1080, framerate: "30/1" })
+    }
+
     FormatDialog {
         id: formatDialog
         parent: QQC2.Overlay.overlay
@@ -470,7 +480,7 @@ Kirigami.ApplicationWindow {
                 KanteButton {
                     text: qsTr("New")
                     enabled: backend.connected
-                    onClicked: root.act({ action: "new_show" })
+                    onClicked: newShowDialog.open()
                 }
                 KanteButton {
                     text: qsTr("Open…")
@@ -527,6 +537,22 @@ Kirigami.ApplicationWindow {
                         QQC2.MenuItem {
                             text: qsTr("Program format…")
                             onTriggered: formatDialog.open()
+                        }
+                        // OUT.10: program left or right, meters on the tiles;
+                        // the mixer is built anew, like for the format.
+                        QQC2.MenuItem {
+                            readonly property var layout: root.show && root.show.multiview ? root.show.multiview : ({ program: "right", meters: "shown" })
+                            text: qsTr("Multiview: program on the left")
+                            checkable: true
+                            checked: layout.program === "left"
+                            onTriggered: root.act({ action: "set_multiview", layout: { program: checked ? "left" : "right", meters: layout.meters } })
+                        }
+                        QQC2.MenuItem {
+                            readonly property var layout: root.show && root.show.multiview ? root.show.multiview : ({ program: "right", meters: "shown" })
+                            text: qsTr("Multiview: level meters")
+                            checkable: true
+                            checked: layout.meters === "shown"
+                            onTriggered: root.act({ action: "set_multiview", layout: { program: layout.program, meters: checked ? "shown" : "hidden" } })
                         }
                         QQC2.MenuItem {
                             text: qsTr("Export settings…")

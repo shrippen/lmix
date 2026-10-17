@@ -89,15 +89,30 @@ pub struct StromEngine {
     mutes: std::sync::Mutex<std::collections::HashMap<String, bool>>,
     /// Program format the mixer is built for (OUT.1).
     format: std::sync::Mutex<lmix_types::MasterFormat>,
+    /// Multiview layout of the mixer (OUT.10), with `format`.
+    multiview: std::sync::Mutex<lmix_types::MultiviewLayout>,
     /// Mixer inputs of the last `start`.
     slots: AtomicUsize,
+}
+
+/// Longest wait for one engine call. Commands run under the switcher
+/// lock, so a call that never returns would freeze lmix-core; the slowest
+/// real ones (a recording drained with EOS, a mixer rebuilt) take seconds.
+const ENGINE_CALL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
+
+/// HTTP client for strom's API: a hung call fails after `timeout`.
+fn engine_client(timeout: std::time::Duration) -> reqwest::Client {
+    reqwest::Client::builder()
+        .timeout(timeout)
+        .build()
+        .expect("HTTP client builds")
 }
 
 impl StromEngine {
     pub fn new(base_url: String, backend: MixerBackend, monitor: MonitorOut) -> Self {
         Self {
             base_url,
-            http: reqwest::Client::new(),
+            http: engine_client(ENGINE_CALL_TIMEOUT),
             backend,
             monitor,
             black: AtomicUsize::new(0),
@@ -110,6 +125,7 @@ impl StromEngine {
             live_setup: Mutex::new(()),
             mutes: Default::default(),
             format: Default::default(),
+            multiview: Default::default(),
             slots: AtomicUsize::new(0),
         }
     }
@@ -367,14 +383,17 @@ impl StromEngine {
         self.set_level(level, ramp_ms).await
     }
 
-    /// The mixer flow for the last `start` and the current format.
+    /// The mixer flow for the last `start`, the current format and
+    /// multiview.
     fn mixer_flow(&self) -> Flow {
         let format = *self.format.lock().expect("format lock");
+        let multiview = *self.multiview.lock().expect("multiview lock");
         flows::mixer_flow(
             self.slots.load(Ordering::Relaxed),
             self.backend,
             self.monitor,
             format,
+            multiview,
         )
     }
 
@@ -388,13 +407,19 @@ impl StromEngine {
     }
 
     /// Program in `format` (OUT.1): a new mixer only when it differs.
-    async fn set_format(&self, format: lmix_types::MasterFormat) -> Result<(), EngineError> {
+    async fn set_format(
+        &self,
+        format: lmix_types::MasterFormat,
+        multiview: lmix_types::MultiviewLayout,
+    ) -> Result<(), EngineError> {
         {
             let mut current = self.format.lock().expect("format lock");
-            if *current == format {
+            let mut current_view = self.multiview.lock().expect("multiview lock");
+            if *current == format && *current_view == multiview {
                 return Ok(());
             }
             *current = format;
+            *current_view = multiview;
         }
         let flow = self.mixer_flow();
         self.build_mixer(&flow).await
@@ -776,6 +801,9 @@ impl Engine for StromEngine {
         // follows brings the show's (OUT.1), rebuilding only if it differs.
         if let (true, Some(format)) = (reusable, current.as_ref().and_then(flows::format_of)) {
             *self.format.lock().expect("format lock") = format;
+            if let Some(multiview) = current.as_ref().map(flows::multiview_of) {
+                *self.multiview.lock().expect("multiview lock") = multiview;
+            }
             return Ok(());
         }
         let wanted = self.mixer_flow();
@@ -894,7 +922,7 @@ impl Engine for StromEngine {
                 };
                 self.set_level(level, *ramp_ms).await
             }
-            Command::SetFormat { format } => self.set_format(*format).await,
+            Command::SetFormat { format, multiview } => self.set_format(*format, *multiview).await,
             Command::SetMonitor { gain } => {
                 let fader = ("monitor_fader".to_string(), PropertyValue::Float(*gain));
                 self.patch_audio_mixer(vec![fader], AUDIO_RAMP_MS).await
@@ -1156,6 +1184,25 @@ fn level_writes(level: &Level, known: Option<bool>) -> Vec<(String, PropertyValu
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// An engine that takes a request and never answers fails the call
+    /// instead of holding lmix-core (and its switcher lock) for good.
+    #[tokio::test]
+    async fn an_engine_call_does_not_wait_forever() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            let mut held = Vec::new();
+            while let Ok((stream, _)) = listener.accept().await {
+                held.push(stream);
+            }
+        });
+        let client = engine_client(std::time::Duration::from_millis(300));
+        let started = std::time::Instant::now();
+        let result = client.get(format!("http://{addr}/api/flows")).send().await;
+        assert!(result.is_err());
+        assert!(started.elapsed() < std::time::Duration::from_secs(5));
+    }
     use strom_types::api::{SrtCallerStats, SrtConnectionStats};
 
     #[test]

@@ -3142,3 +3142,43 @@ wie sie sind.
 **Geprüft**: Test (zuerst rot: bei halber T-Bar kam kein Ton-Befehl),
 VM-Test mit strom: Ball auf Program bei halber T-Bar ≈ −6 dB, zurück
 auf 0 wieder voll.
+
+## 2026-10-17 — Multiview-Layout (OUT.10)
+
+**Entscheidung**: Die Show hat `multiview`: `program` (`left`/`right`,
+Standard rechts wie strom) und `meters` (`shown`/`hidden`). Beides sind
+strom-Eigenschaften des Mischers, die nur beim Bau gelten
+(`swap_pvw_pgm`, `show_vu_meters`); deshalb trägt `Command::SetFormat`
+Format und Layout gemeinsam, die Engine baut nur neu, wenn eins davon
+sich ändert, und übernimmt beim Neustart von lmix-core einen laufenden
+Mischer samt Layout. Kachelzahl (2/8/14), Reihenfolge, Titelposition und
+eine zweite Multiview kann der strom-Mischer nicht.
+
+**Geprüft**: Tests (Layout im Flow und zurückgelesen, Neubau ohne
+Quellen-Neustart, gleiches Layout ändert nichts), VM-Test mit strom:
+Program links ohne Pegel und zurück, Quellen bleiben.
+
+## 2026-10-17 — Layout-Box ein- und ausblenden (LAY.2)
+
+**Entscheidung**: Eine Box hat `hidden`. Ausgeblendet bleibt sie mit
+Platz, Zuschnitt und Rahmen im Layout, die Engine zeichnet sie nicht,
+ihr Input bekommt kein Tally (nicht auf Sendung). `show_box {layout,
+number, shown: shown|hidden|toggle}` schaltet eine Box für Tasten und
+Kurzbefehle; der Layout-Editor hat je Box „Sichtbar“ und zeigt
+ausgeblendete Boxen blass. Vorlagen (LAY.5) merken sich das nicht.
+
+**Geprüft**: Test (Box aus dem Engine-Befehl, Tally weg, Umschalten,
+Box 2 gibt es nicht), VM-Test mit strom: ausgeblendet scheint der
+Hintergrund durch, Ball ohne Tally, wieder eingeblendet.
+
+## 2026-10-17 — Neue Show mit Formatwahl (SHW.3)
+
+**Entscheidung**: `new_show` nimmt ein optionales `format` (wie
+`set_master_format`, geprüft); ohne bleibt es 1920 × 1080 bei 30 fps.
+Ältere Aufrufe ohne Feld gehen unverändert. Der Mischer wird nur neu
+gebaut, wenn das Format sich ändert (`SetFormat` der Wiederherstellung).
+Console: „Neu“ fragt im Format-Dialog nach Größe und Bildrate, mit dem
+Format der offenen Show vorgewählt.
+
+**Geprüft**: Test (neue Show im Format, ungültiges abgelehnt, ohne Feld
+der Standard), Console auf Xvfb, Headless-Test.

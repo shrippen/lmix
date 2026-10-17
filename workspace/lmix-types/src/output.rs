@@ -372,3 +372,37 @@ impl MasterFormat {
         format!("{}x{}", self.width, self.height)
     }
 }
+
+/// Where the multiview shows program (OUT.10); preview takes the other side.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ProgramSide {
+    Left,
+    /// As the engine does by default: preview left, program right.
+    #[default]
+    Right,
+}
+
+/// Whether the multiview draws level meters on its tiles.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum MultiviewMeters {
+    #[default]
+    Shown,
+    Hidden,
+}
+
+/// Layout of the engine's multiview (OUT.10).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct MultiviewLayout {
+    #[serde(default)]
+    pub program: ProgramSide,
+    #[serde(default)]
+    pub meters: MultiviewMeters,
+}
+
+impl MultiviewLayout {
+    pub fn is_default(&self) -> bool {
+        *self == Self::default()
+    }
+}
