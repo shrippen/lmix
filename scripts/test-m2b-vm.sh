@@ -414,6 +414,18 @@ act '{"action":"stop_outputs","group":"streams"}' >/dev/null
 settled '[[ "$(output_state Stream)" == stopped && "$(output_state "Stream 2")" == stopped ]]' || fail "streams not all stopped"
 act '{"action":"remove_output","output":"Stream 2"}' >/dev/null
 pass "outputs: all streams started and stopped together"
+# RTMP (STR.2): ffmpeg takes the stream as a platform would.
+timeout 30 ffmpeg -loglevel error -listen 1 -i rtmp://127.0.0.1:19350/live/lmixkey -t 4 -c copy "$WORK/rtmp.flv" &
+rtmp_receiver=$!
+sleep 1
+act '{"action":"add_output","spec":{"kind":"rtmp","url":"rtmp://127.0.0.1:19350/live","key":"lmixkey","video_kbps":2000},"name":"RTMP"}' >/dev/null
+act '{"action":"start_output","output":"RTMP"}' >/dev/null
+wait "$rtmp_receiver" || true
+[[ $(stat -c %s "$WORK/rtmp.flv" 2>/dev/null || echo 0) -gt 50000 ]] || fail "RTMP output delivered nothing"
+[[ "$(codecs "$WORK/rtmp.flv")" == "aac,h264" ]] || fail "RTMP stream lacks H.264 or AAC: $(codecs "$WORK/rtmp.flv")"
+act '{"action":"stop_output","output":"RTMP"}' >/dev/null
+act '{"action":"remove_output","output":"RTMP"}' >/dev/null
+pass "outputs: RTMP stream received with H.264 and AAC"
 # Encoding (STR.3): H.265 at a constant bitrate lands as HEVC.
 act '{"action":"add_output","spec":{"kind":"record","folder":"hevc","container":"mkv","encoding":{"codec":"h265","rate":"cbr","keyframe_ms":1000}},"name":"HEVC"}' >/dev/null
 act '{"action":"start_output","output":"HEVC"}' >/dev/null
