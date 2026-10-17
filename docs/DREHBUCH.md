@@ -74,6 +74,41 @@ duration_ms = 3000
 ```
 ````
 
+## Klang und Bild
+
+Klang-, Bild- und Fade-Cues (Show-Modus SND, VIS) haben dieselben Felder
+wie in der API. Die Datei (`file`) zählt ab dem Ordner wie die übrigen
+Medienpfade; Zonen und Bühnen werden mit ihrem Namen genannt (sie stehen
+in der Show, die Geräte und Bildschirme dazu je Rechner).
+
+````markdown
+## Gewitter zieht auf
+
+```lmix-cue
+number = "20"
+kind = "sound"
+sound = { file = "ton/regen.flac", gain_db = -6, fade_in_ms = 3000, fade_out_ms = 2000 }
+```
+
+```lmix-cue
+number = "21"
+kind = "picture"
+picture = { file = "bild/wolken.mp4", stage = "Hinten", layer = 1, fit = "fill", fade_in_ms = 1000 }
+follow = "after_wait"
+```
+
+```lmix-cue
+number = "22"
+kind = "fade"
+duration_ms = 5000
+fade = { target = { cue = "20" }, gain_db = -60, then = "stop" }
+```
+````
+
+Ein Fade setzt nur, was er nennt: `gain_db` für einen Klang-Cue oder eine
+Zone, `opacity` für einen Bild-Cue, `brightness` für eine Bühne
+(`target = { stage = "Hinten" }`).
+
 ## Neu laden
 
 `load` ersetzt eine Liste, die es schon geladen hat (erkannt an ihrer
