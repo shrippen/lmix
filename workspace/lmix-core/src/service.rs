@@ -2443,7 +2443,9 @@ mod tests {
             "{problems:?}"
         );
 
-        let listener = tokio::net::TcpListener::bind(("127.0.0.1", port)).await.unwrap();
+        let listener = tokio::net::TcpListener::bind(("127.0.0.1", port))
+            .await
+            .unwrap();
         tokio::spawn(async move {
             while let Ok((mut stream, _)) = listener.accept().await {
                 let _ = stream

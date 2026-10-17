@@ -1034,11 +1034,9 @@ impl Switcher {
             Action::TestTarget { .. }
             | Action::CheckTargets
             | Action::HttpRequest { .. }
-            | Action::HaService { .. } => {
-                Err(ActionError::BadTarget {
-                    reason: "run through the service".into(),
-                })
-            }
+            | Action::HaService { .. } => Err(ActionError::BadTarget {
+                reason: "run through the service".into(),
+            }),
             Action::SetGoGuard { ms } => {
                 if ms > GO_GUARD_MAX_MS {
                     return Err(bad_cues(format!("the GO guard is 0–{GO_GUARD_MAX_MS} ms")));
@@ -5633,17 +5631,23 @@ mod tests {
             framerate: lmix_types::Framerate::Fps25,
         };
 
-        let cmds = sw.apply(Action::SetMasterFormat { format: upright }).unwrap();
+        let cmds = sw
+            .apply(Action::SetMasterFormat { format: upright })
+            .unwrap();
 
         assert_eq!(cmds[0], Command::SetFormat { format: upright });
-        assert!(cmds.iter().any(|c| matches!(c, Command::Preview { .. }) || matches!(c, Command::Program { .. })));
+        assert!(cmds
+            .iter()
+            .any(|c| matches!(c, Command::Preview { .. }) || matches!(c, Command::Program { .. })));
         assert!(
             !cmds.iter().any(|c| matches!(c, Command::SetSlot { .. })),
             "the sources keep running"
         );
         assert_eq!(sw.state().format, upright);
         assert!(
-            sw.apply(Action::SetMasterFormat { format: upright }).unwrap().is_empty(),
+            sw.apply(Action::SetMasterFormat { format: upright })
+                .unwrap()
+                .is_empty(),
             "the same format again changes nothing"
         );
         for bad in [(1081, 1920), (1080, 100), (8000, 4320)] {
@@ -5685,11 +5689,16 @@ mod tests {
         ));
 
         let cmds = sw.apply(Action::SetMonitorVolume { volume: 50 }).unwrap();
-        assert_eq!(cmds, [Command::SetMonitor { gain: fader_gain(50) }]);
+        assert_eq!(
+            cmds,
+            [Command::SetMonitor {
+                gain: fader_gain(50)
+            }]
+        );
         assert_eq!(sw.state().monitor_volume, 50);
-        assert!(sw
-            .restore_commands()
-            .contains(&Command::SetMonitor { gain: fader_gain(50) }));
+        assert!(sw.restore_commands().contains(&Command::SetMonitor {
+            gain: fader_gain(50)
+        }));
     }
 
     #[test]
@@ -5711,7 +5720,11 @@ mod tests {
             .apply(fade(VolumeTarget::Input(named("B")), 25, 3000))
             .unwrap();
         assert_eq!(audio_of(&cmds), [(1, false, 3000)]);
-        assert_eq!(sw.state().inputs[1].audio.volume, 25, "the end value at once");
+        assert_eq!(
+            sw.state().inputs[1].audio.volume,
+            25,
+            "the end value at once"
+        );
 
         let cmds = sw.apply(fade(VolumeTarget::Bus(2), 0, 4000)).unwrap();
         assert_eq!(
@@ -5754,7 +5767,8 @@ mod tests {
             sw.apply(fade(VolumeTarget::Input(named("B")), 101, 100)),
             Err(ActionError::BadVolume { .. })
         ));
-        let json = r#"{"action":"fade_volume","target":{"input":"B"},"volume":0,"duration_ms":2000}"#;
+        let json =
+            r#"{"action":"fade_volume","target":{"input":"B"},"volume":0,"duration_ms":2000}"#;
         assert_eq!(
             serde_json::from_str::<Action>(json).unwrap(),
             fade(VolumeTarget::Input(InputRef::Text("B".into())), 0, 2000)

@@ -260,7 +260,10 @@ fn levels_json(levels: &Levels) -> String {
     for level in &levels.inputs {
         map.insert(level.input.to_string(), level.peak_db.into());
         if !level.channels_db.is_empty() {
-            map.insert(format!("ch:{}", level.input), level.channels_db.clone().into());
+            map.insert(
+                format!("ch:{}", level.input),
+                level.channels_db.clone().into(),
+            );
         }
     }
     if let Some(peak) = levels.program_peak_db {

@@ -33,6 +33,7 @@ pub use cue::{
     Cue, CueEvent, CueId, CueKind, CueList, CueTarget, Follow, GroupMode, RunPhase, RunningCue,
     StandbyMove, StopMode, StopOthers, StopScope,
 };
+pub use feed::{Feed, FeedMessage, FeedOn};
 pub use graphics::{
     BindingSpec, Blend, DataFormat, DataSource, DataSourceSpec, DataTable, Dataset, Easing,
     FieldBinding, FieldKind, Graphics, LayerTransform, Template, TemplateField, TemplateTexts,
@@ -57,6 +58,5 @@ pub use state::{
     Event, InputLevel, Latency, Levels, LiveFeed, OverlayChannel, QuickPlay, ShowState, Stinger,
     Transition,
 };
-pub use feed::{Feed, FeedMessage, FeedOn};
-pub use zone::{Zone, ZoneOutput, ZonePatch, ZoneState};
 pub use target::{HttpMethod, Target, TargetKind, TargetResult, TargetSpec};
+pub use zone::{Zone, ZoneOutput, ZonePatch, ZoneState};

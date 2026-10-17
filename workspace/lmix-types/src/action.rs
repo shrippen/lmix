@@ -269,7 +269,12 @@ pub const ACTION_GROUPS: &[(&str, &[&str])] = &[
     ),
     (
         "zones",
-        &["set_zone", "remove_zone", "set_zone_patch", "remove_zone_patch"],
+        &[
+            "set_zone",
+            "remove_zone",
+            "set_zone_patch",
+            "remove_zone_patch",
+        ],
     ),
     (
         "targets",
@@ -673,11 +678,19 @@ pub enum Action {
 
     // ---- Zones (show mode SND.10) ----
     /// Add a zone to the show, or replace the one of the same name.
-    SetZone { zone: crate::zone::Zone },
-    RemoveZone { name: String },
+    SetZone {
+        zone: crate::zone::Zone,
+    },
+    RemoveZone {
+        name: String,
+    },
     /// Where a zone plays on this machine (machine settings, SSH.3).
-    SetZonePatch { patch: crate::zone::ZonePatch },
-    RemoveZonePatch { zone: String },
+    SetZonePatch {
+        patch: crate::zone::ZonePatch,
+    },
+    RemoveZonePatch {
+        zone: String,
+    },
 
     // ---- Output targets (show mode EXT) ----
     /// Add a target of this machine, or replace the one of the same name.
@@ -723,8 +736,12 @@ pub enum Action {
 
     /// Add a fixed OSC subscriber, or replace the one of the same name
     /// (CTL.4).
-    SetFeed { feed: crate::feed::Feed },
-    RemoveFeed { name: String },
+    SetFeed {
+        feed: crate::feed::Feed,
+    },
+    RemoveFeed {
+        name: String,
+    },
 
     // ---- Safety ----
     /// Lock or unlock (AUT.11): while locked, closing inputs, opening or
@@ -1140,10 +1157,14 @@ pub enum Action {
     /// This machine's settings into a file: shortcuts for all shows,
     /// layout templates, output targets and OSC subscribers, no secrets
     /// (SHW.8).
-    ExportSettings { path: String },
+    ExportSettings {
+        path: String,
+    },
     /// Take a settings file instead of the current settings; targets of
     /// the same name keep their secret.
-    ImportSettings { path: String },
+    ImportSettings {
+        path: String,
+    },
     /// Back to factory settings: no shortcuts for all shows, layout
     /// templates, targets or subscribers.
     ResetSettings,

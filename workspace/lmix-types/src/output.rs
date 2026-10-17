@@ -263,4 +263,3 @@ impl MasterFormat {
         format!("{}x{}", self.width, self.height)
     }
 }
-

@@ -325,7 +325,8 @@ pub fn format_of(flow: &Flow) -> Option<MasterFormat> {
     };
     let resolution = text("pgm_resolution")?;
     let (width, height) = resolution.split_once('x')?;
-    let framerate = serde_json::from_value(serde_json::Value::String(text("pgm_framerate")?)).ok()?;
+    let framerate =
+        serde_json::from_value(serde_json::Value::String(text("pgm_framerate")?)).ok()?;
     Some(MasterFormat {
         width: width.parse().ok()?,
         height: height.parse().ok()?,
@@ -1111,7 +1112,12 @@ mod tests {
 
     #[test]
     fn mixer_subscribes_each_slot_channel() {
-        let flow = mixer_flow(3, MixerBackend::Cpu, MonitorOut::None, MasterFormat::default());
+        let flow = mixer_flow(
+            3,
+            MixerBackend::Cpu,
+            MonitorOut::None,
+            MasterFormat::default(),
+        );
 
         for slot in 0..3 {
             let input = flow
@@ -1132,7 +1138,12 @@ mod tests {
 
     #[test]
     fn mixer_has_black_after_slots() {
-        let flow = mixer_flow(3, MixerBackend::Cpu, MonitorOut::None, MasterFormat::default());
+        let flow = mixer_flow(
+            3,
+            MixerBackend::Cpu,
+            MonitorOut::None,
+            MasterFormat::default(),
+        );
 
         assert_eq!(black_input(3), 3);
         assert!(flow
@@ -1283,7 +1294,12 @@ mod tests {
 
     #[test]
     fn mixer_mixes_every_slot_sound() {
-        let flow = mixer_flow(3, MixerBackend::Cpu, MonitorOut::None, MasterFormat::default());
+        let flow = mixer_flow(
+            3,
+            MixerBackend::Cpu,
+            MonitorOut::None,
+            MasterFormat::default(),
+        );
 
         for slot in 0..3 {
             let to = format!("mix:input_{}", slot + 1);
@@ -1300,7 +1316,12 @@ mod tests {
             .any(|l| l.from == "mix:main_out" && l.to == "vm:pgm_audio_in"));
         assert!(flow.elements.iter().all(|e| e.id != MONITOR_SINK));
 
-        let heard = mixer_flow(3, MixerBackend::Cpu, MonitorOut::Auto, MasterFormat::default());
+        let heard = mixer_flow(
+            3,
+            MixerBackend::Cpu,
+            MonitorOut::Auto,
+            MasterFormat::default(),
+        );
         assert!(heard
             .links
             .iter()
@@ -1309,7 +1330,12 @@ mod tests {
 
     #[test]
     fn mixer_publishes_program_for_outputs() {
-        let flow = mixer_flow(2, MixerBackend::Cpu, MonitorOut::None, MasterFormat::default());
+        let flow = mixer_flow(
+            2,
+            MixerBackend::Cpu,
+            MonitorOut::None,
+            MasterFormat::default(),
+        );
 
         assert!(flow
             .links
@@ -1330,7 +1356,13 @@ mod tests {
         let spec = OutputSpec::Display {
             mode: lmix_types::DisplayMode::Window,
         };
-        let flow = output_flow(OutputId::new(), &spec, Feed::Multiview, None, MixerBackend::Cpu);
+        let flow = output_flow(
+            OutputId::new(),
+            &spec,
+            Feed::Multiview,
+            None,
+            MixerBackend::Cpu,
+        );
 
         let video = flow.blocks.iter().find(|b| b.id == "pgm").unwrap();
         assert!(matches!(
@@ -1341,7 +1373,12 @@ mod tests {
 
     #[test]
     fn mixer_has_a_stinger_layer_below_the_overlays() {
-        let flow = mixer_flow(2, MixerBackend::Cpu, MonitorOut::None, MasterFormat::default());
+        let flow = mixer_flow(
+            2,
+            MixerBackend::Cpu,
+            MonitorOut::None,
+            MasterFormat::default(),
+        );
 
         let vm = flow.blocks.iter().find(|b| b.id == MIXER_BLOCK).unwrap();
         assert!(matches!(
@@ -1358,7 +1395,12 @@ mod tests {
 
     #[test]
     fn mixer_publishes_its_aux_buses() {
-        let flow = mixer_flow(2, MixerBackend::Cpu, MonitorOut::None, MasterFormat::default());
+        let flow = mixer_flow(
+            2,
+            MixerBackend::Cpu,
+            MonitorOut::None,
+            MasterFormat::default(),
+        );
 
         let mix = flow.blocks.iter().find(|b| b.id == AUDIO_MIXER).unwrap();
         assert!(matches!(
@@ -1629,7 +1671,15 @@ mod tests {
             MixerBackend::Cpu,
         );
 
-        for flow in [mixer_flow(2, MixerBackend::Cpu, MonitorOut::None, MasterFormat::default()), slot] {
+        for flow in [
+            mixer_flow(
+                2,
+                MixerBackend::Cpu,
+                MonitorOut::None,
+                MasterFormat::default(),
+            ),
+            slot,
+        ] {
             assert_eq!(flow.properties.clock_type, GStreamerClockType::Monotonic);
             assert!(flow.properties.effective_direct_media_timing());
         }

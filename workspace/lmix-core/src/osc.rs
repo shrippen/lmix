@@ -513,12 +513,7 @@ pub async fn serve(
 
 /// `peer` sent something: its subscription, if any, starts over.
 async fn heard(subscribers: &Subscribers, peer: SocketAddr) {
-    if let Some(entry) = subscribers
-        .lock()
-        .await
-        .iter_mut()
-        .find(|s| s.peer == peer)
-    {
+    if let Some(entry) = subscribers.lock().await.iter_mut().find(|s| s.peer == peer) {
         entry.heard = tokio::time::Instant::now();
     }
 }
@@ -844,7 +839,11 @@ mod tests {
         heard(&subscribers, a).await;
         tokio::time::advance(std::time::Duration::from_secs(30)).await;
 
-        let peers: Vec<SocketAddr> = live(&subscribers).await.into_iter().map(|(p, _)| p).collect();
+        let peers: Vec<SocketAddr> = live(&subscribers)
+            .await
+            .into_iter()
+            .map(|(p, _)| p)
+            .collect();
         assert_eq!(peers, [a], "b said nothing for 70 s");
     }
 }
