@@ -7186,6 +7186,7 @@ mod tests {
                 end: Default::default(),
                 fade_in_ms: 0,
                 fade_out_ms: 0,
+                repeat: Default::default(),
             },
         };
         assert!(matches!(

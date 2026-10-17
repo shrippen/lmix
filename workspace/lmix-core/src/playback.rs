@@ -50,6 +50,16 @@ fn bad(reason: impl Into<String>) -> ActionError {
     }
 }
 
+/// Plays of a sound or video: 1–[`SOUND_TIMES_MAX`] times, or forever.
+fn check_times(repeat: SoundRepeat) -> Result<(), ActionError> {
+    match repeat {
+        SoundRepeat::Times(n) if !(1..=SOUND_TIMES_MAX).contains(&n) => Err(bad(format!(
+            "plays are 1–{SOUND_TIMES_MAX} times, or forever"
+        ))),
+        _ => Ok(()),
+    }
+}
+
 /// A cue, fade or zone level within the show's bounds (SND.13).
 pub fn check_level(db: f32) -> Result<(), ActionError> {
     check_gain(db, "a level")
@@ -83,13 +93,7 @@ pub fn check_sound(sound: &SoundCue) -> Result<(), ActionError> {
     check_gain(sound.gain_db, "the level")?;
     check_fade_time(sound.fade_in_ms)?;
     check_fade_time(sound.fade_out_ms)?;
-    if let SoundRepeat::Times(n) = sound.repeat {
-        if !(1..=SOUND_TIMES_MAX).contains(&n) {
-            return Err(bad(format!(
-                "a sound plays 1–{SOUND_TIMES_MAX} times, or forever"
-            )));
-        }
-    }
+    check_times(sound.repeat)?;
     if sound.routes.len() > SOUND_ROUTES {
         return Err(bad(format!("at most {SOUND_ROUTES} routes")));
     }
@@ -156,6 +160,7 @@ pub fn check_picture(picture: &PictureCue) -> Result<(), ActionError> {
         return Err(bad_stage(format!("layers are 0–{PICTURE_LAYER_MAX}")));
     }
     check_share(picture.opacity)?;
+    check_times(picture.repeat)?;
     check_fade_time(picture.fade_in_ms)?;
     check_fade_time(picture.fade_out_ms)
 }
@@ -171,6 +176,7 @@ pub struct EnginePicture {
     pub fit: PictureFit,
     pub end: PictureEnd,
     pub fade_in_ms: u32,
+    pub repeat: SoundRepeat,
 }
 
 /// `picture` as the engine shows it on the show's `stages`.
@@ -187,6 +193,7 @@ pub fn engine_picture(
         fit: picture.fit,
         end: picture.end,
         fade_in_ms: picture.fade_in_ms,
+        repeat: picture.repeat,
     })
 }
 
@@ -352,6 +359,38 @@ mod tests {
             engine_sound(&thrice, &zones()).unwrap().repeat,
             SoundRepeat::Times(3)
         );
+    }
+
+    #[test]
+    fn a_picture_names_a_stage_of_the_show_and_may_repeat() {
+        let stages = [Stage {
+            name: "Back".into(),
+            width: 1920,
+            height: 1080,
+        }];
+        let forest = PictureCue {
+            file: "/pics/forest.mp4".into(),
+            stage: "Back".into(),
+            layer: 2,
+            opacity: 1.0,
+            fit: PictureFit::Fill,
+            end: PictureEnd::Stop,
+            fade_in_ms: 0,
+            fade_out_ms: 0,
+            repeat: SoundRepeat::Times(4),
+        };
+        let shown = engine_picture(&forest, &stages).unwrap();
+        assert_eq!((shown.stage, shown.repeat), (0, SoundRepeat::Times(4)));
+        let side = PictureCue {
+            stage: "Side".into(),
+            ..forest.clone()
+        };
+        assert!(engine_picture(&side, &stages).is_err(), "no such stage");
+        let never = PictureCue {
+            repeat: SoundRepeat::Times(0),
+            ..forest
+        };
+        assert!(check_picture(&never).is_err());
     }
 
     #[test]

@@ -106,6 +106,14 @@ pub struct PictureCue {
     /// Fade out when it is stopped (a panic uses the panic time).
     #[serde(default)]
     pub fade_out_ms: u32,
+    /// Plays of a video, like a sound's (VIS.2); `end` applies after the
+    /// last. A still image ignores it.
+    #[serde(default, skip_serializing_if = "is_once")]
+    pub repeat: crate::sound::SoundRepeat,
+}
+
+fn is_once(repeat: &crate::sound::SoundRepeat) -> bool {
+    *repeat == crate::sound::SoundRepeat::Once
 }
 
 fn first_layer() -> u16 {

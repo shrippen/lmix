@@ -1301,6 +1301,7 @@ mod tests {
                 end,
                 fade_in_ms: 0,
                 fade_out_ms: 1000,
+                repeat: Default::default(),
             }),
             ..Cue::empty(CueKind::Picture)
         }
