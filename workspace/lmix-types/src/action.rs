@@ -243,6 +243,7 @@ pub const ACTION_GROUPS: &[(&str, &[&str])] = &[
             "cue_reset",
             "set_active_cue_list",
             "set_go_guard",
+            "set_go_rearm",
             "cue_panic",
             "cue_hard_stop",
             "set_panic_time",
@@ -266,6 +267,7 @@ pub const ACTION_GROUPS: &[(&str, &[&str])] = &[
             "set_target",
             "remove_target",
             "test_target",
+            "check_targets",
             "http_request",
             "ha_service",
             "set_feed",
@@ -585,6 +587,11 @@ pub enum Action {
     SetGoGuard {
         ms: u32,
     },
+    /// Take GO again after the guard alone, or once the button is let go
+    /// as well (RUN.6).
+    SetGoRearm {
+        rearm: crate::cue::GoRearm,
+    },
     /// Stop every cue of every list over the panic time, or over `ms`
     /// ("panic in time x", CTL.1); a second panic within it is a hard
     /// stop. Standby stays; the emergency list runs (SAF.1, SAF.4).
@@ -632,6 +639,9 @@ pub enum Action {
     TestTarget {
         name: String,
     },
+    /// Probe every target the cue lists send to, all at once; those that
+    /// do not answer go into the warnings until they do (SUI.5).
+    CheckTargets,
     /// An HTTP request to every address of `target`. The action does not
     /// wait for it; how it went comes as `Event::Target` (EXT.3).
     HttpRequest {

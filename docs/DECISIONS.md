@@ -2716,3 +2716,77 @@ einen eigenen Thread mit Echtzeit-Priorität legen und diese wie PipeWire
 über rtkit (D-Bus) anfordern, ohne Root. Geht das nicht, warnt der
 Selbsttest: In SNF.4 mitmessen, wie spät die Schritte sind, und die
 Last des Rechners anzeigen.
+
+## 2026-10-17 — GO erst nach Loslassen (RUN.6)
+
+**Kontext**: RUN.6 verlangt die Option „erst nach Loslassen wieder
+scharf“: Ein festgehaltener oder prellender Taster gibt kein zweites GO,
+auch nicht nach der GO-Sperre.
+
+**Optionen**: (a) ein Merker für alle Wege: Jedes GO wartet, bis
+irgendein Taster losgelassen wird; (b) je Taster: Nur der Taster, der das
+GO gab, wartet auf sein Loslassen.
+
+**Entscheidung**: (b). Mit (a) sperrt ein verlorenes Loslassen (UDP) jedes
+GO der Show; mit (b) nur diesen einen Weg, die Leertaste und Companion
+bleiben bedienbar.
+
+- `set_go_rearm` mit `time` (Standard, nur GO-Sperre) oder `release`;
+  gespeichert in der Show (`go_rearm`, fehlt bei `time`).
+- Loslassen melden: MIDI (Note aus, Controller unter 64; je Kanal, Art,
+  Nummer), OSC `/lmix/cue/release` (je Absender: Companion schickt alle
+  Tasten über einen Socket, jede GO-Taste dort zählt als dieselbe). Die
+  Leertaste der Show-Ansicht nimmt ihre Wiederholungen ohnehin nicht an.
+- HTTP, TCP und Kurzbefehle ohne MIDI melden kein Loslassen: für sie gilt
+  nur die GO-Sperre.
+- Wechsel des Modus vergisst alle gehaltenen Taster.
+
+**Geprüft**: Tests im Ablauf (gehalten, anderer Weg, Loslassen, Modus
+`time`), OSC-Adresse, Speichern und Laden der Show.
+
+## 2026-10-17 — Erreichbarkeit der Ziele in der Warnliste (SUI.5)
+
+**Kontext**: Die Warnliste nannte Ziele, die der Rechner nicht hat, aber
+nicht solche, die nicht antworten. SUI.5 verlangt beides vor der Show.
+
+**Entscheidung**:
+- `check_targets` (Console „Ziele prüfen“) fragt alle Ziele, an die Cues
+  senden, gleichzeitig ab (wie `test_target`: `GET` der ersten Adresse).
+  Wer nicht antwortet, steht mit Grund als `target_unreached` an jedem
+  Cue, der dorthin sendet.
+- Jedes Senden während der Show und jeder `test_target` schreibt das
+  Ergebnis fort: Ein Ziel, das ausfällt, erscheint ohne neue Prüfung in
+  der Liste, eines, das wieder antwortet, verschwindet.
+- Kein Prüfen im Hintergrund: Abfragen im Takt fluten Home Assistant und
+  zeigen nur, was das nächste Senden ohnehin zeigt.
+- Neue Einstellungen oder Entfernen eines Ziels vergessen sein Ergebnis.
+- Zonen-Geräte: strom nennt seine Ton-Ausgänge noch nicht; mit Stufe 2.
+
+**Geprüft**: Regel-Test (Gruppe, doppelte Nennung), Dienst-Test mit
+Ziel ohne und mit Gegenstelle.
+
+## 2026-10-17 — Vertraute Adressen ohne Schlüssel (CTL.5)
+
+**Kontext**: CTL.5 verlangt eine Stufe „ohne Schlüssel“ getrennt für den
+Rechner und eine LAN-Adressliste, Standard nur der Rechner. Bisher: mit
+Schlüssel oder Passwort braucht jedes Gerät im LAN einen Schlüssel; OSC
+hat keinen und nahm dann nur den Rechner (und `--open-panic`). Ein
+Stream Deck über Companion per OSC ging so nur ohne jeden Schlüssel.
+
+**Entscheidung**: `--trust ADRESSE[/PRÄFIX][=RECHT]` (mehrfach oder mit
+Komma, `LMIX_TRUST`), Recht `view`, `control` (Standard) oder `edit`.
+- Gilt nur, wenn Schlüssel oder Passwort gesetzt sind: Sonst darf das LAN
+  ohnehin alles. Der Standard „nur der Rechner“ aus CTL.5 heißt in lmix:
+  Schlüssel setzen; ohne Schlüssel bleibt das Verhalten von API.7, damit
+  bestehende Aufbauten (Webseiten, Companion ohne Schlüssel) weiterlaufen.
+- HTTP: ohne `Authorization` hat die Adresse ihr Recht; ein falscher
+  Schlüssel bleibt falsch (Wartezeit). Textprotokoll: kein `AUTH` nötig,
+  das Recht gilt sofort. OSC: jede Nachricht bis zu diesem Recht
+  (`cue/go` ist `control`).
+- Mehrere passende Einträge: das höchste Recht. IPv4 in IPv6 (`::ffff:`)
+  zählt als IPv4.
+- Nur Adressen, keine Namen: Ein Name, der auf eine andere Adresse zeigt,
+  wäre ein Schlüssel ohne Schloss.
+
+**Geprüft**: Lesen der Einträge (Präfix, Recht, Fehler), Netze v4/v6,
+HTTP mit und ohne Liste, Textprotokoll ohne `AUTH`.

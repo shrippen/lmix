@@ -45,6 +45,7 @@ ColumnLayout {
         case "start_cue_gone": return qsTr("starts cue %1, which is not there").arg(w.target)
         case "start_list_gone": return qsTr("starts a cue list that is not there")
         case "target_gone": return qsTr("sends to target %1, which this machine does not have").arg(w.target)
+        case "target_unreached": return qsTr("sends to target %1, which did not answer: %2").arg(w.target).arg(w.reason)
         case "input_gone": return qsTr("uses input %1, which is not there").arg(w.input)
         case "media_missing": return qsTr("uses input %1, whose media file is missing").arg(w.input)
         default: return w.message
@@ -218,6 +219,13 @@ ColumnLayout {
             QQC2.ToolTip.visible: hovered
             QQC2.ToolTip.text: qsTr("Output targets (HTTP, Home Assistant, OSC) and OSC subscribers of this machine")
             onClicked: targetsDialog.open()
+        }
+        KanteButton {
+            focusPolicy: Qt.NoFocus
+            text: qsTr("Check targets")
+            QQC2.ToolTip.visible: hovered
+            QQC2.ToolTip.text: qsTr("Ask every target the cues send to; those that do not answer show up as warnings")
+            onClicked: view.act({ action: "check_targets" })
         }
         TargetsDialog {
             id: targetsDialog
@@ -520,7 +528,10 @@ ColumnLayout {
             }
             QQC2.Label {
                 Layout.fillWidth: true
-                text: view.show ? qsTr("Panic time %1 s · GO guard %2 ms").arg((view.show.panic_ms / 1000).toFixed(1)).arg(view.show.go_guard_ms) : ""
+                // Release: a MIDI or OSC button gives the next GO only once let
+                // go (RUN.6); space ignores its own repeats anyway.
+                text: view.show ? qsTr("Panic time %1 s · GO guard %2 ms").arg((view.show.panic_ms / 1000).toFixed(1)).arg(view.show.go_guard_ms)
+                                  + (view.show.go_rearm === "release" ? qsTr(" · GO again once let go") : "") : ""
                 color: KanteStyle.mutedTextColor
                 font.family: KanteStyle.monoFamily
                 wrapMode: Text.WordWrap

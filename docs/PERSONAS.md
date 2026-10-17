@@ -514,3 +514,8 @@ ihren Drehbuch-Ordner nicht (SSH.2): nach einem Neustart `lmix-script load`
 von Hand (behoben am selben Abend: „Drehbuch…“, DECISIONS); B45 Aktions-Cue mit Clip: Ende des Clips als Dauer (am selben Abend:
 `duration_ms` an Aktions-Cues, von Hand; die Länge vom Clip selbst kommt mit
 VIS.2).
+
+Nachtrag 2026-10-17 (RUN.6): P8 Schritt 7 und 10, ein festgehaltener oder
+prellender Stream-Deck- bzw. MIDI-Taster gibt mit `set_go_rearm` `release`
+kein zweites GO, bis er losgelassen ist (Companion: Loslassen als
+`/lmix/cue/release`); die Leertaste bleibt daneben bedienbar. ✅ in Tests.

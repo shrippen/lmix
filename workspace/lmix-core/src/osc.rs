@@ -19,6 +19,7 @@
 //! | `/lmix/cue/go` | list, or none for the active one | `cue_go` |
 //! | `/lmix/cue/back` | list, or none | `cue_standby` previous |
 //! | `/lmix/cue/stop` | list, or none for every cue | `cue_stop` |
+//! | `/lmix/cue/release` | none | the GO button is let go (RUN.6) |
 //! | `/lmix/panic` | time in ms (int) or s (float), or none | `cue_panic` (twice: hard stop) |
 //! | `/lmix/stop/hard` | – | `cue_hard_stop` |
 //! | `/lmix/subscribe` | – | the sender gets tally and state from now on |
@@ -51,6 +52,7 @@ use tokio::net::UdpSocket;
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::Mutex;
 
+use crate::access::Right;
 use crate::service::Service;
 
 /// Largest datagram read.
@@ -242,6 +244,8 @@ fn write_string(out: &mut Vec<u8>, text: &str) {
 #[derive(Debug, PartialEq)]
 pub enum Request {
     Action(Action),
+    /// The sender's GO button is let go (RUN.6).
+    Release,
     Subscribe,
     Ping,
     Unsubscribe,
@@ -340,6 +344,7 @@ pub fn request(message: &Message) -> Result<Request, String> {
             },
         },
         ["stop", "hard"] => Action::CueHardStop,
+        ["cue", "release"] => return Ok(Request::Release),
         ["cue", step @ ("go" | "back" | "stop")] => {
             let list = arg(0).map(|_| input(0)).transpose()?;
             match *step {
@@ -360,20 +365,29 @@ pub fn request(message: &Message) -> Result<Request, String> {
     Ok(Request::Action(action))
 }
 
+/// A sender's GO button (RUN.6): Companion sends all its buttons from one
+/// socket, so any GO button there counts as the same.
+fn hold(peer: SocketAddr) -> crate::cues::Hold {
+    crate::cues::Hold::of(&format!("osc {peer}"))
+}
+
 /// Receive messages and send tally until the process ends.
 /// OSC carries no password: senders outside the local network are
 /// ignored unless `internet`, and with a password (`local_only`) all but
-/// this machine (API.7); `open_panic` lets panic and hard stop through
-/// from the network all the same (CTL.5).
+/// this machine (API.7) and the trusted addresses, with their right;
+/// `open_panic` lets panic and hard stop through from the network all
+/// the same (CTL.5).
 pub async fn serve(
     listen: SocketAddr,
     service: Arc<Service>,
     internet: bool,
     local_only: bool,
     open_panic: bool,
+    trusted: Vec<crate::access::Trust>,
 ) -> anyhow::Result<()> {
     let access = crate::access::Access {
         internet,
+        trusted,
         ..Default::default()
     };
     let socket = Arc::new(UdpSocket::bind(listen).await?);
@@ -388,12 +402,15 @@ pub async fn serve(
     let mut buf = vec![0u8; MAX_PACKET];
     loop {
         let (len, peer) = socket.recv_from(&mut buf).await?;
-        let panic_only = match access.peer(peer.ip()) {
+        // None: only an open panic.
+        let granted = match access.peer(peer.ip()) {
             crate::access::Peer::Refused => continue,
-            crate::access::Peer::Network if local_only && !open_panic => continue,
-            crate::access::Peer::Network => local_only,
-            crate::access::Peer::Local => false,
+            crate::access::Peer::Network if local_only => access.trusted(peer.ip()),
+            crate::access::Peer::Network | crate::access::Peer::Local => Some(Right::Edit),
         };
+        if granted.is_none() && !open_panic {
+            continue;
+        }
         // Any message keeps the sender's subscription (CTL.3).
         heard(&subscribers, peer).await;
         for message in decode(&buf[..len]) {
@@ -404,10 +421,24 @@ pub async fn serve(
                     Action::CuePanic { .. } | Action::CueHardStop
                 ))
             );
-            if panic_only && !panic {
+            let allowed = match (&request, granted) {
+                (Ok(Request::Action(action)), Some(right)) => {
+                    crate::access::right_of(action) <= right
+                }
+                (_, granted) => granted.is_some(),
+            };
+            if !(allowed || panic && open_panic) {
                 continue;
             }
             match request {
+                // GO waits for this sender's release (RUN.6).
+                Ok(Request::Action(action @ Action::CueGo { .. })) => {
+                    if let Err(error) = service.go_held(action, hold(peer)).await {
+                        let reply = encode("/lmix/error", &[&error.to_string()]);
+                        let _ = socket.send_to(&reply, peer).await;
+                    }
+                }
+                Ok(Request::Release) => service.release(hold(peer)).await,
                 Ok(Request::Action(action)) => {
                     if let Err(error) = service.handle(action).await {
                         let reply = encode("/lmix/error", &[&error.to_string()]);
@@ -583,6 +614,7 @@ mod tests {
             req("/lmix/cue/go", vec![]),
             Ok(Request::Action(Action::CueGo { list: None }))
         );
+        assert_eq!(req("/lmix/cue/release", vec![]), Ok(Request::Release));
         assert_eq!(
             req("/lmix/program", vec![Arg::Str("Cam".into())]),
             Ok(Request::Action(Action::CutDirect {
