@@ -302,6 +302,10 @@ clips_still() {
 picture inputs/Clips "$WORK/c0.jpg"   # switches the tap on before pausing
 act '{"action":"transport_input","input":"Clips","transport":"pause"}' >/dev/null
 wait_for "$SETTLE_S" clips_still || fail "paused playlist still moves"
+# The state says where it stands (API.4).
+clips_playback() { curl -sf "$CORE/state" | jq -r '.inputs[] | select(.name=="Clips") | .playback // empty'; }
+settled '[[ "$(clips_playback | jq -r .state)" == paused ]]' || fail "state does not show the pause: $(clips_playback)"
+[[ "$(clips_playback | jq '.items == 2 and .duration_ms > 0')" == true ]] || fail "playback in the state incomplete: $(clips_playback)"
 act '{"action":"transport_input","input":"Clips","transport":"play"}' >/dev/null
 clips_move() { ! clips_still; }
 wait_for "$SETTLE_S" clips_move || fail "playlist does not play again"
@@ -314,7 +318,8 @@ switched() {
     [[ ${change#-} -gt $MIN_BRIGHTNESS ]]
 }
 wait_for "$SETTLE_S" switched || fail "next did not switch clips (brightness change $change)"
-pass "transport: pause, play, next"
+settled '[[ "$(clips_playback | jq -r .state)" == playing ]]' || fail "state does not show playing: $(clips_playback)"
+pass "transport: pause, play, next; playback in the state"
 
 # --- paused clip: strom repeats its last frame (no signal loss) ---
 act '{"action":"cut_direct","input":"Clips"}' >/dev/null

@@ -15,6 +15,8 @@ pub struct PlayerProgress {
     /// 0-based item of the playlist, and how many there are.
     pub index: usize,
     pub items: usize,
+    /// Its last change of state; reports come while paused too.
+    pub state: Option<lmix_types::PlaybackState>,
 }
 
 /// What one report shows that the one before did not.
@@ -102,6 +104,7 @@ mod tests {
             duration_ms: 10_000,
             index,
             items,
+            state: None,
         }
     }
 

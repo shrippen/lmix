@@ -1543,6 +1543,7 @@ impl Switcher {
                     .has_transport()
                     .then(|| self.clip_ms.get(&input.slot).copied())
                     .flatten(),
+                playback: None,
                 ptz: input.ptz.clone(),
                 missing: self.missing.get(&input.id).cloned().unwrap_or_default(),
             })

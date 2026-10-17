@@ -98,6 +98,15 @@ pub struct FlowError {
     pub kind: FlowFailure,
 }
 
+fn playback_state(state: strom_types::mediaplayer::PlayerState) -> lmix_types::PlaybackState {
+    use strom_types::mediaplayer::PlayerState;
+    match state {
+        PlayerState::Playing => lmix_types::PlaybackState::Playing,
+        PlayerState::Paused => lmix_types::PlaybackState::Paused,
+        PlayerState::Stopped => lmix_types::PlaybackState::Stopped,
+    }
+}
+
 /// How a flow went down.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FlowFailure {
@@ -118,6 +127,8 @@ pub async fn follow(
     health: Arc<Mutex<EngineHealth>>,
     players: broadcast::Sender<crate::clips::PlayerProgress>,
 ) {
+    // Last state each player reported, added to its position reports.
+    let mut player_states = HashMap::new();
     loop {
         if let Ok((mut stream, _)) = tokio_tungstenite::connect_async(&ws_url).await {
             while let Some(Ok(message)) = stream.next().await {
@@ -151,6 +162,9 @@ pub async fn follow(
                             kind: FlowFailure::Error,
                         });
                     }
+                    Ok(StromEvent::MediaPlayerStateChanged { flow_id, state, .. }) => {
+                        player_states.insert(flow_id, playback_state(state));
+                    }
                     Ok(StromEvent::MediaPlayerPosition {
                         flow_id,
                         position_ns,
@@ -165,6 +179,7 @@ pub async fn follow(
                             duration_ms: duration_ns / 1_000_000,
                             index: current_file_index,
                             items: total_files,
+                            state: player_states.get(&flow_id).copied(),
                         });
                     }
                     Ok(StromEvent::SystemStats(stats)) => {
