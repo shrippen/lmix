@@ -3170,3 +3170,15 @@ ausgeblendete Boxen blass. Vorlagen (LAY.5) merken sich das nicht.
 **Geprüft**: Test (Box aus dem Engine-Befehl, Tally weg, Umschalten,
 Box 2 gibt es nicht), VM-Test mit strom: ausgeblendet scheint der
 Hintergrund durch, Ball ohne Tally, wieder eingeblendet.
+
+## 2026-10-17 — Neue Show mit Formatwahl (SHW.3)
+
+**Entscheidung**: `new_show` nimmt ein optionales `format` (wie
+`set_master_format`, geprüft); ohne bleibt es 1920 × 1080 bei 30 fps.
+Ältere Aufrufe ohne Feld gehen unverändert. Der Mischer wird nur neu
+gebaut, wenn das Format sich ändert (`SetFormat` der Wiederherstellung).
+Console: „Neu“ fragt im Format-Dialog nach Größe und Bildrate, mit dem
+Format der offenen Show vorgewählt.
+
+**Geprüft**: Test (neue Show im Format, ungültiges abgelehnt, ohne Feld
+der Standard), Console auf Xvfb, Headless-Test.
