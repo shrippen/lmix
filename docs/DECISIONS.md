@@ -3091,3 +3091,94 @@ Playlist pausiert → `paused`, 2 Einträge, Dauer > 0; nach Play/Next →
 Aktion, Wiederherstellung), VM-Test mit strom: Playlist bleibt stehen,
 Zustand `stopped`, Bild steht, Auslöser feuert; zurück auf Schleife
 startet nichts, Neustart spielt wieder.
+
+## 2026-10-17 — Sieben Aux-Busse A–G (AUD.2)
+
+**Kontext**: AUD.2 fordert neben dem Master die Busse A–G; lmix hatte
+zwei Aux-Busse. Der strom-Audiomischer kann bis 32.
+
+**Entscheidung**:
+- `AUX_BUSES` = 7, in Aktionen 1–7, in der Console A–G. A nimmt die Sends
+  vor den Fadern (Monitormix, wie bisher Bus 1), B–G danach. Vor/nach ist
+  weiter fest je Bus; wählbar wäre es in strom (`chN_auxM_pre`), gefordert
+  ist es nicht.
+- Shows mit zwei Bussen laden weiter (fehlende Busse und Sends mit
+  Standard), wie bei den Overlay-Kanälen. Mischer-Flow „lmix mixer 9“.
+- Offen: Bus optional in den Master (strom kann Aux nicht in den Main
+  routen), Ausgang eines Busses auf ein Gerät ohne Ausgang in lmix.
+- Console: Bus-Dialog scrollt (sieben Busse sind höher als kleine
+  Fenster), Kanalzug und Ton-Auswahl eines Ausgangs mit A–G.
+
+**Geprüft**: Tests (alte Show mit zwei Bussen, Bus 8 abgelehnt), VM-Test
+mit strom: G still ohne Send, hörbar mit Send; Console auf Xvfb mit
+geöffnetem Bus-Dialog.
+
+## 2026-10-17 — Codec, Rate Control, Keyframes je Ausgang (STR.3)
+
+**Entscheidung**: SRT-Ausgänge und Aufnahmen bekommen `encoding`:
+`codec` (`h264` Standard, `h265`), `rate` (`vbr` Standard, `cbr`),
+`keyframe_ms` (Standard 2000, 0 = Encoder entscheidet, höchstens 10 s).
+Millisekunden statt Frames, weil sie beim Wechsel des Programmformats
+(OUT.1) gleich bleiben; die Engine rechnet mit der Bildrate um. Ohne
+Angabe bleibt alles wie bisher (Show-Dateien unverändert).
+
+AV1 fehlt: der strom-Recorder (nur `h264parse`/`h265parse`) und
+`mpegtsmux` von GStreamer 1.24 nehmen es nicht. Auflösung je Ausgang,
+Profil/Preset, Ton-Bitrate und geteilte Profile bleiben offen.
+
+**Geprüft**: Tests (Encoder-Eigenschaften im Flow, 2 s bei 25 und 59,94
+fps, Grenze 10 s), VM-Test mit strom: H.265-Aufnahme mit CBR ist HEVC +
+AAC; Console-Dialog „Ausgang hinzufügen“ mit Codec, Bitratenart,
+Keyframe-Abstand.
+
+## 2026-10-17 — Ton folgt der T-Bar (SWI.5)
+
+**Entscheidung**: Inputs mit „Ton folgt Bild“ blenden mit der T-Bar:
+Program mit `1 − p`, Vorschau mit `p` (linear in der Verstärkung, wie
+das Bild), zurück auf 0 wie vorher, bei 1 der Take. Stummgeschaltete
+Kanäle behalten ihren eigenen Pegel. Inputs ohne „folgt Bild“ bleiben,
+wie sie sind.
+
+**Geprüft**: Test (zuerst rot: bei halber T-Bar kam kein Ton-Befehl),
+VM-Test mit strom: Ball auf Program bei halber T-Bar ≈ −6 dB, zurück
+auf 0 wieder voll.
+
+## 2026-10-17 — Multiview-Layout (OUT.10)
+
+**Entscheidung**: Die Show hat `multiview`: `program` (`left`/`right`,
+Standard rechts wie strom) und `meters` (`shown`/`hidden`). Beides sind
+strom-Eigenschaften des Mischers, die nur beim Bau gelten
+(`swap_pvw_pgm`, `show_vu_meters`); deshalb trägt `Command::SetFormat`
+Format und Layout gemeinsam, die Engine baut nur neu, wenn eins davon
+sich ändert, und übernimmt beim Neustart von lmix-core einen laufenden
+Mischer samt Layout. Kachelzahl (2/8/14), Reihenfolge, Titelposition und
+eine zweite Multiview kann der strom-Mischer nicht.
+
+**Geprüft**: Tests (Layout im Flow und zurückgelesen, Neubau ohne
+Quellen-Neustart, gleiches Layout ändert nichts), VM-Test mit strom:
+Program links ohne Pegel und zurück, Quellen bleiben.
+
+## 2026-10-17 — Layout-Box ein- und ausblenden (LAY.2)
+
+**Entscheidung**: Eine Box hat `hidden`. Ausgeblendet bleibt sie mit
+Platz, Zuschnitt und Rahmen im Layout, die Engine zeichnet sie nicht,
+ihr Input bekommt kein Tally (nicht auf Sendung). `show_box {layout,
+number, shown: shown|hidden|toggle}` schaltet eine Box für Tasten und
+Kurzbefehle; der Layout-Editor hat je Box „Sichtbar“ und zeigt
+ausgeblendete Boxen blass. Vorlagen (LAY.5) merken sich das nicht.
+
+**Geprüft**: Test (Box aus dem Engine-Befehl, Tally weg, Umschalten,
+Box 2 gibt es nicht), VM-Test mit strom: ausgeblendet scheint der
+Hintergrund durch, Ball ohne Tally, wieder eingeblendet.
+
+## 2026-10-17 — Neue Show mit Formatwahl (SHW.3)
+
+**Entscheidung**: `new_show` nimmt ein optionales `format` (wie
+`set_master_format`, geprüft); ohne bleibt es 1920 × 1080 bei 30 fps.
+Ältere Aufrufe ohne Feld gehen unverändert. Der Mischer wird nur neu
+gebaut, wenn das Format sich ändert (`SetFormat` der Wiederherstellung).
+Console: „Neu“ fragt im Format-Dialog nach Größe und Bildrate, mit dem
+Format der offenen Show vorgewählt.
+
+**Geprüft**: Test (neue Show im Format, ungültiges abgelehnt, ohne Feld
+der Standard), Console auf Xvfb, Headless-Test.

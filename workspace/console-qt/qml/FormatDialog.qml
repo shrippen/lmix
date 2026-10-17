@@ -14,6 +14,8 @@ KanteDialog {
     required property var act
     /** `format` of the show state. */
     property var format: ({ width: 1920, height: 1080, framerate: "30/1" })
+    /** Asks for the format of a new, empty show instead (SHW.3). */
+    property bool newShow: false
 
     readonly property var sizes: [
         { width: 3840, height: 2160, label: qsTr("3840 × 2160 (4K UHD)") },
@@ -35,7 +37,7 @@ KanteDialog {
         { value: "60/1", label: "60" }
     ]
 
-    title: qsTr("Program format")
+    title: newShow ? qsTr("New show") : qsTr("Program format")
     modal: true
     width: Kirigami.Units.gridUnit * 24
     standardButtons: QQC2.Dialog.Ok | QQC2.Dialog.Cancel
@@ -50,10 +52,8 @@ KanteDialog {
 
     onAccepted: {
         var size = sizes[sizeBox.currentIndex]
-        act({
-            action: "set_master_format",
-            format: { width: size.width, height: size.height, framerate: rates[rateBox.currentIndex].value }
-        })
+        var format = { width: size.width, height: size.height, framerate: rates[rateBox.currentIndex].value }
+        act(newShow ? { action: "new_show", format: format } : { action: "set_master_format", format: format })
     }
 
     ColumnLayout {
@@ -79,7 +79,8 @@ KanteDialog {
         }
         QQC2.Label {
             Layout.fillWidth: true
-            text: qsTr("Program stops for a moment while the mixer is built anew; running outputs restart.")
+            text: dialog.newShow ? qsTr("The new show replaces the open one; save it first if you need it.")
+                : qsTr("Program stops for a moment while the mixer is built anew; running outputs restart.")
             color: KanteStyle.mutedTextColor
             wrapMode: Text.WordWrap
         }

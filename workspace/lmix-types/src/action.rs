@@ -166,6 +166,7 @@ pub const ACTION_GROUPS: &[(&str, &[&str])] = &[
         &[
             "add_layout",
             "set_layout",
+            "show_box",
             "remove_layout",
             "preview_layout",
             "save_layout_template",
@@ -202,6 +203,7 @@ pub const ACTION_GROUPS: &[(&str, &[&str])] = &[
             "start_outputs",
             "stop_outputs",
             "set_master_format",
+            "set_multiview",
         ],
     ),
     (
@@ -338,7 +340,7 @@ pub const FADE_MAX_MS: u32 = 60_000;
 #[serde(rename_all = "snake_case")]
 pub enum VolumeTarget {
     Input(InputRef),
-    /// Aux bus 1–2.
+    /// Aux bus 1–7 (A–G).
     Bus(u8),
     Master,
 }
@@ -431,7 +433,7 @@ pub enum Action {
         /// Program (default) or one input (ISO, MultiCorder).
         #[serde(default)]
         source: OutputSource,
-        /// Sound from aux bus 1–2 instead of the source's own.
+        /// Sound from aux bus 1–7 (A–G) instead of the source's own.
         #[serde(default)]
         aux: Option<u8>,
         #[serde(default)]
@@ -481,7 +483,7 @@ pub enum Action {
         input: InputRef,
         strip: ChannelStrip,
     },
-    /// Send an input to aux bus `bus` (1–2) at `level`, 0–100; 0 stops
+    /// Send an input to aux bus `bus` (1–7, A–G) at `level`, 0–100; 0 stops
     /// the send.
     SetAuxSend {
         input: InputRef,
@@ -503,6 +505,11 @@ pub enum Action {
     SetMasterFormat {
         format: crate::output::MasterFormat,
     },
+    /// Layout of the multiview (OUT.10): which side program is on, level
+    /// meters. The engine builds the mixer anew, as for the format.
+    SetMultiview {
+        layout: crate::output::MultiviewLayout,
+    },
     /// Master of program sound: volume 0–100 and mute (AUD.2).
     SetMaster {
         volume: u8,
@@ -517,7 +524,7 @@ pub enum Action {
         volume: u8,
         duration_ms: u32,
     },
-    /// Master of aux bus `bus` (1–2): volume 0–100 and mute.
+    /// Master of aux bus `bus` (1–7, A–G): volume 0–100 and mute.
     SetAuxBus {
         bus: u8,
         volume: u8,
@@ -557,6 +564,13 @@ pub enum Action {
         background: Option<InputRef>,
         #[serde(default)]
         boxes: Vec<BoxSpec>,
+    },
+    /// Show, hide or flip box `number` (1-based) of a layout (LAY.2); a
+    /// hidden box stays in the layout, is not drawn and not on air.
+    ShowBox {
+        layout: InputRef,
+        number: u8,
+        shown: crate::layout::BoxShown,
     },
     /// Remove a layout (not while it is on program).
     RemoveLayout {
@@ -1147,8 +1161,12 @@ pub enum Action {
     },
 
     // ---- Show (SHW) ----
-    /// Start an empty show.
-    NewShow,
+    /// Start an empty show, in `format` if given (SHW.3), else in the
+    /// default 1920 × 1080 at 30 fps.
+    NewShow {
+        #[serde(default)]
+        format: Option<crate::output::MasterFormat>,
+    },
     /// Save the show; without `path` to its current file.
     SaveShow {
         #[serde(default)]
@@ -1226,6 +1244,8 @@ fn one() -> f64 {
 pub enum ActionError {
     #[error("no output matches {reference}")]
     UnknownOutput { reference: String },
+    #[error("encoding: {reason}")]
+    BadEncoding { reason: String },
     #[error("no input matches {reference}")]
     UnknownInput { reference: String },
     #[error("all {slots} mixer slots are in use")]

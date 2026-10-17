@@ -173,7 +173,7 @@
       <translation>Ausgang hinzufügen</translation>
     </message>
     <message>
-      <location line="+40" />
+      <location line="+45" />
       <source>Output</source>
       <translation>Ausgang</translation>
     </message>
@@ -203,22 +203,27 @@
       <translation>Wie die Quelle</translation>
     </message>
     <message>
-      <location line="+0" />
-      <source>Aux 1 (before the faders)</source>
-      <translation>Aux 1 (vor den Fadern)</translation>
-    </message>
-    <message>
-      <location line="+0" />
-      <source>Aux 2 (after the faders)</source>
-      <translation>Aux 2 (nach den Fadern)</translation>
-    </message>
-    <message>
       <location line="+6" />
       <source>Video kb/s</source>
       <translation>Video kbit/s</translation>
     </message>
     <message>
-      <location line="+19" />
+      <location line="+30" />
+      <source>Variable bitrate</source>
+      <translation>Variable Bitrate</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Constant bitrate</source>
+      <translation>Konstante Bitrate</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Keyframe every (s)</source>
+      <translation>Keyframe alle (s)</translation>
+    </message>
+    <message>
+      <location line="+11" />
       <source>Name</source>
       <translation>Name</translation>
     </message>
@@ -254,7 +259,7 @@
       <translation>Master und Aux-Busse</translation>
     </message>
     <message>
-      <location line="+13" />
+      <location line="+19" />
       <source>Master · program sound</source>
       <translation>Master · Programmton</translation>
     </message>
@@ -274,17 +279,7 @@
       <translation>Lautstärke Abhören</translation>
     </message>
     <message>
-      <location line="+22" />
-      <source>Aux 1 · before the faders</source>
-      <translation>Aux 1 · vor den Fadern</translation>
-    </message>
-    <message>
-      <location line="+0" />
-      <source>Aux 2 · after the faders</source>
-      <translation>Aux 2 · nach den Fadern</translation>
-    </message>
-    <message>
-      <location line="+16" />
+      <location line="+38" />
       <source>Volume of aux %1</source>
       <translation>Lautstärke von Aux %1</translation>
     </message>
@@ -346,17 +341,7 @@
       <translation>Neue Inputs mit Ton beginnen mit diesem Delay; vorhandene behalten ihres</translation>
     </message>
     <message>
-      <location line="+5" />
-      <source>Aux 1 (before the fader)</source>
-      <translation>Aux 1 (vor dem Fader)</translation>
-    </message>
-    <message>
-      <location line="+0" />
-      <source>Aux 2 (after the fader)</source>
-      <translation>Aux 2 (nach dem Fader)</translation>
-    </message>
-    <message>
-      <location line="+5" />
+      <location line="+10" />
       <source>Aux sends</source>
       <translation>Aux-Sends</translation>
     </message>
@@ -668,7 +653,7 @@
   <context>
     <name>FormatDialog</name>
     <message>
-      <location filename="../qml/FormatDialog.qml" line="+19" />
+      <location filename="../qml/FormatDialog.qml" line="+21" />
       <source>3840 × 2160 (4K UHD)</source>
       <translation>3840 × 2160 (4K UHD)</translation>
     </message>
@@ -708,7 +693,12 @@
       <translation>Programmformat</translation>
     </message>
     <message>
-      <location line="+26" />
+      <location line="+0" />
+      <source>New show</source>
+      <translation>Neue Show</translation>
+    </message>
+    <message>
+      <location line="+24" />
       <source>Size</source>
       <translation>Größe</translation>
     </message>
@@ -719,6 +709,11 @@
     </message>
     <message>
       <location line="+10" />
+      <source>The new show replaces the open one; save it first if you need it.</source>
+      <translation>Die neue Show ersetzt die offene; vorher speichern, wenn du sie noch brauchst.</translation>
+    </message>
+    <message>
+      <location line="+1" />
       <source>Program stops for a moment while the mixer is built anew; running outputs restart.</source>
       <translation>Das Programm steht kurz, während der Mischer neu gebaut wird; laufende Ausgänge starten neu.</translation>
     </message>
@@ -1464,7 +1459,7 @@
       <translation>Neues Layout</translation>
     </message>
     <message>
-      <location line="+50" />
+      <location line="+52" />
       <source>Name</source>
       <translation>Name</translation>
     </message>
@@ -1494,7 +1489,7 @@
       <translation>Box hinzufügen, dann an ihren Platz ziehen</translation>
     </message>
     <message>
-      <location line="+71" />
+      <location line="+73" />
       <source> (cropped)</source>
       <translation> (beschnitten)</translation>
     </message>
@@ -1502,6 +1497,11 @@
       <location line="+1" />
       <source> (locked)</source>
       <translation> (gesperrt)</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source> (hidden)</source>
+      <translation> (ausgeblendet)</translation>
     </message>
     <message>
       <location line="+95" />
@@ -1537,6 +1537,16 @@
       <location line="+2" />
       <source>Lock box %1 in place</source>
       <translation>Box %1 an ihrem Platz sperren</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Visible</source>
+      <translation>Sichtbar</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Show box %1 in the picture</source>
+      <translation>Box %1 im Bild zeigen</translation>
     </message>
     <message>
       <location line="+5" />
@@ -1589,12 +1599,12 @@
       <translation>+ Box</translation>
     </message>
     <message>
-      <location line="-531" />
+      <location line="-545" />
       <source>Empty</source>
       <translation>Leer</translation>
     </message>
     <message>
-      <location line="+427" />
+      <location line="+432" />
       <source>Select box %1</source>
       <translation>Box %1 wählen</translation>
     </message>
@@ -1780,7 +1790,7 @@
       <translation>Leerer Ordner für Show und Medien des Pakets</translation>
     </message>
     <message>
-      <location line="+153" />
+      <location line="+163" />
       <source>lmix-core</source>
       <translation>lmix-core</translation>
     </message>
@@ -1850,7 +1860,17 @@
       <translation>Programmformat…</translation>
     </message>
     <message>
-      <location line="+4" />
+      <location line="+7" />
+      <source>Multiview: program on the left</source>
+      <translation>Multiview: Program links</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Multiview: level meters</source>
+      <translation>Multiview: Pegelanzeigen</translation>
+    </message>
+    <message>
+      <location line="+6" />
       <source>Export settings…</source>
       <translation>Einstellungen exportieren…</translation>
     </message>
@@ -3143,6 +3163,16 @@
     <name>Texts</name>
     <message>
       <location filename="../qml/Texts.qml" line="+15" />
+      <source>Aux %1 (before the faders)</source>
+      <translation>Aux %1 (vor den Fadern)</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Aux %1 (after the faders)</source>
+      <translation>Aux %1 (nach den Fadern)</translation>
+    </message>
+    <message>
+      <location line="+13" />
       <source>Test pattern</source>
       <translation>Testbild</translation>
     </message>

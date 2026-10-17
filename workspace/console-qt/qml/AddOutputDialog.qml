@@ -49,6 +49,11 @@ KanteDialog {
             source: source,
             container: container,
             video_kbps: kbps.value,
+            encoding: {
+                codec: codecBox.currentIndex === 1 ? "h265" : "h264",
+                rate: rateBox.currentIndex === 1 ? "cbr" : "vbr",
+                keyframe_ms: Math.round(keyframes.value * 1000)
+            },
             name: nameField.text,
             aux: dialog.carriesSound ? soundBox.currentIndex : 0
         }))
@@ -97,7 +102,7 @@ KanteDialog {
             visible: dialog.carriesSound
             Layout.fillWidth: true
             // Index = aux bus number; 0 keeps the source's own sound.
-            model: [qsTr("As carried"), qsTr("Aux 1 (before the faders)"), qsTr("Aux 2 (after the faders)")]
+            model: [qsTr("As carried")].concat(Texts.auxNames())
             KanteFieldSkin { control: soundBox }
         }
 
@@ -114,11 +119,36 @@ KanteDialog {
                 KanteFieldSkin { control: kbps }
             }
             QQC2.ComboBox {
+                id: codecBox
+                model: ["H.264", "H.265 (HEVC)"]
+                KanteFieldSkin { control: codecBox }
+            }
+            QQC2.ComboBox {
                 id: containerBox
                 visible: dialog.kind === "record"
                 model: dialog.containers
                 textRole: "label"
                 KanteFieldSkin { control: containerBox }
+            }
+        }
+
+        // STR.3: constant bitrate for platforms and fixed links, keyframes
+        // every so many seconds (0: the encoder's choice).
+        RowLayout {
+            visible: dialog.encodes
+            QQC2.ComboBox {
+                id: rateBox
+                model: [qsTr("Variable bitrate"), qsTr("Constant bitrate")]
+                KanteFieldSkin { control: rateBox }
+            }
+            KanteSectionLabel { text: qsTr("Keyframe every (s)") }
+            QQC2.SpinBox {
+                id: keyframes
+                from: 0
+                to: 10
+                value: 2
+                editable: true
+                KanteFieldSkin { control: keyframes }
             }
         }
 

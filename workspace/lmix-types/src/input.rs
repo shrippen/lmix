@@ -303,13 +303,13 @@ pub enum SignalLoss {
 /// Highest input volume (vMix scale, 100 = unity gain).
 pub const VOLUME_MAX: u8 = 100;
 
-/// Aux buses of the audio mixer, numbered 1–2 in actions.
-pub const AUX_BUSES: usize = 2;
+/// Aux buses of the audio mixer, A–G (AUD.2), numbered 1–7 in actions.
+pub const AUX_BUSES: usize = 7;
 
 /// Which aux buses take their sends before the channel fader (and its
-/// on/off): bus 1 is the monitor mix (in-ear, presenters hear
-/// themselves whatever is on air), bus 2 a second mix after the fader.
-pub const AUX_PRE_FADER: [bool; AUX_BUSES] = [true, false];
+/// on/off): bus A (1) is the monitor mix (in-ear, presenters hear
+/// themselves whatever is on air), B–G mixes after the fader.
+pub const AUX_PRE_FADER: [bool; AUX_BUSES] = [true, false, false, false, false, false, false];
 
 /// Volume 100: unity gain (serde default).
 pub fn full_volume() -> u8 {

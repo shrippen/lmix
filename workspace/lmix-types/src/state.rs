@@ -137,6 +137,9 @@ pub struct ShowState {
     /// Picture size and rate of program (OUT.1).
     #[serde(default)]
     pub format: crate::output::MasterFormat,
+    /// Layout of the multiview (OUT.10).
+    #[serde(default)]
+    pub multiview: crate::output::MultiviewLayout,
     /// Volume of the monitor bus, 0–100 (AUD.4).
     #[serde(default = "crate::input::full_volume")]
     pub monitor_volume: u8,
