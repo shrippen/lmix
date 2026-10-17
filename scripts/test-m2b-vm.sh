@@ -701,6 +701,21 @@ wait_for "$((SETTLE_S + 20))" state_is ".overlays[2] == \"$orange_id\"" || fail 
 wait_for "$SETTLE_S" state_is ".overlays[2] == null" || fail "clip end did not fire"
 act '{"action":"set_triggers","input":"Clips","triggers":[]}' >/dev/null
 pass "clip end: countdown and end of a playlist fire their triggers"
+# Hold at the end (INP.10): the playlist stops on its last frame, the
+# end still fires, switching back to the loop does not restart it.
+act '{"action":"set_at_end","input":"Clips","at_end":"hold"}' >/dev/null
+act '{"action":"set_triggers","input":"Clips","triggers":[{"on":"clip_end","actions":[{"action":"overlay_in","channel":3,"input":"Orange","duration_ms":0}]}]}' >/dev/null
+wait_for "$((SETTLE_S + 25))" state_is ".overlays[2] == \"$orange_id\"" || fail "held end did not fire clip_end"
+settled '[[ "$(clips_playback | jq -r .state)" == stopped ]]' || fail "held playlist not stopped: $(clips_playback)"
+wait_for "$SETTLE_S" clips_still || fail "held playlist still moves"
+act '{"action":"set_at_end","input":"Clips","at_end":"loop"}' >/dev/null
+sleep 1
+clips_still || fail "switching back to the loop restarted the held clip"
+act '{"action":"transport_input","input":"Clips","transport":"restart"}' >/dev/null
+wait_for "$SETTLE_S" clips_move || fail "held playlist does not play again"
+act '{"action":"set_triggers","input":"Clips","triggers":[]}' >/dev/null
+act '{"action":"overlay_out","channel":3,"duration_ms":0}' >/dev/null
+pass "clip end: hold on the last frame, fires, loops again"
 
 # --- latency (NFA.3): capture-to-program, CPU mixer in a VM ---
 # Budget here is generous (software compositing, no GPU); the real target

@@ -3069,3 +3069,25 @@ gelten als weg.
 **Geprüft**: Test (Meldung erscheint im Zustand), VM-Test mit strom:
 Playlist pausiert → `paused`, 2 Einträge, Dauer > 0; nach Play/Next →
 `playing`.
+
+## 2026-10-17 — Schleife oder Stehenbleiben am Ende (INP.10)
+
+**Kontext**: Clips und Playlisten liefen immer in der Schleife.
+
+**Entscheidung**:
+- Je Input `at_end`: `loop` (Standard, wie bisher) oder `hold` (bleibt
+  auf dem letzten Bild stehen; strom hält es mit dem Standbild-Thread).
+  Enum statt Schalter, Aktion `set_at_end`.
+- Umschalten live ohne Neustart: strom #17 nimmt `loop_playlist` in die
+  Playlist-Anfrage auf (die Eigenschaft ist nicht live), ein gestoppter
+  Player fängt nur bei anderen Dateien neu an. Der Slot startet weiter
+  mit Schleife; `hold` wird nach jedem Neuaufbau (Engine-Neustart,
+  Quelle ersetzt, Slot verschoben) als `SetAtEnd` nachgeschickt.
+- Clip-Ende-Auslöser (AUT.7) feuern auch, wenn ein gehaltener Clip
+  stoppt (Zustand `stopped` aus strom, seit API.4 gelesen).
+- Console: „Am Ende“ im Kachelmenü.
+
+**Geprüft**: Tests (gehaltenes Ende zählt als Ende, zuerst rot;
+Aktion, Wiederherstellung), VM-Test mit strom: Playlist bleibt stehen,
+Zustand `stopped`, Bild steht, Auslöser feuert; zurück auf Schleife
+startet nichts, Neustart spielt wieder.

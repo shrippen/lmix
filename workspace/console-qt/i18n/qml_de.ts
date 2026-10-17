@@ -1145,6 +1145,21 @@
     </message>
     <message>
       <location line="+6" />
+      <source>At the end</source>
+      <translation>Am Ende</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Loop</source>
+      <translation>Schleife</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Stop on the last frame</source>
+      <translation>Auf dem letzten Bild stehen bleiben</translation>
+    </message>
+    <message>
+      <location line="+6" />
       <source>When the signal is lost</source>
       <translation>Bei Signalverlust</translation>
     </message>

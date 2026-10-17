@@ -248,6 +248,23 @@ pub enum InputStatus {
     Offline,
 }
 
+/// What a clip or playlist does at its end (INP.10).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum AtEnd {
+    /// Start again from the first item.
+    #[default]
+    Loop,
+    /// Stop on the last frame.
+    Hold,
+}
+
+impl AtEnd {
+    pub fn is_loop(&self) -> bool {
+        *self == AtEnd::Loop
+    }
+}
+
 /// Whether a player plays, as it last said.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -583,6 +600,9 @@ pub struct Input {
     /// Play, restart, pause on and off air (file, URL, playlist).
     #[serde(default)]
     pub auto_play: AutoPlay,
+    /// Loop or stop at the end (file, URL, playlist).
+    #[serde(default)]
+    pub at_end: AtEnd,
     /// What a click on the input does (INP.8).
     #[serde(default = "InputPress::click")]
     pub click: InputPress,

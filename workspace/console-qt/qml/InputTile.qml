@@ -348,6 +348,14 @@ KanteCard {
             current: tile.input.color
             onPicked: value => tile.act({ action: "set_input_color", input: tile.ref(), color: value })
         }
+        // INP.10: loop, or stop on the last frame (on air without a restart).
+        ChoiceMenu {
+            title: qsTr("At the end")
+            enabled: tile.playable
+            choices: [{ value: "loop", label: qsTr("Loop") }, { value: "hold", label: qsTr("Stop on the last frame") }]
+            current: tile.input.at_end || "loop"
+            onPicked: value => tile.act({ action: "set_at_end", input: tile.ref(), at_end: value })
+        }
         QQC2.Menu {
             id: lossMenu
             title: qsTr("When the signal is lost")

@@ -814,9 +814,10 @@ fn add_source(flow: &mut Flow, source: &SourceSpec, backend: MixerBackend) -> Op
             )
         }
         SourceSpec::Image { path } => add_still(flow, path),
-        SourceSpec::File { path } => add_player(flow, std::slice::from_ref(path), backend),
-        SourceSpec::Url { url } => add_player(flow, std::slice::from_ref(url), backend),
-        SourceSpec::Playlist { paths } => add_player(flow, paths, backend),
+        SourceSpec::File { .. } | SourceSpec::Url { .. } | SourceSpec::Playlist { .. } => {
+            let items = player_items(source).expect("a player source");
+            add_player(flow, &items, backend)
+        }
         SourceSpec::Srt { uri } => {
             flow.blocks.push(block(
                 "srt",
@@ -919,7 +920,18 @@ fn add_still(flow: &mut Flow, path: &str) -> String {
     "caps".into()
 }
 
-/// Media player with `items`, looped; carries picture and sound.
+/// The files of a source played by the media player; `None` for others.
+pub fn player_items(source: &SourceSpec) -> Option<Vec<String>> {
+    match source {
+        SourceSpec::File { path } => Some(vec![path.clone()]),
+        SourceSpec::Url { url } => Some(vec![url.clone()]),
+        SourceSpec::Playlist { paths } => Some(paths.clone()),
+        _ => None,
+    }
+}
+
+/// Media player with `items`, looped (see `Command::SetAtEnd`); carries
+/// picture and sound.
 /// A hardware decoder (NVDEC, VA-API) keeps frames in GPU memory, and the
 /// inter channel passes any caps on. Only the CUDA mixer reads them, so for
 /// the others the player hands over system memory.

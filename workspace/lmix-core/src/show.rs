@@ -12,10 +12,10 @@ use std::path::Path;
 use lmix_types::action::{OVERLAY_CHANNELS, TRANSITION_SLOTS};
 use lmix_types::input::AUX_BUSES;
 use lmix_types::{
-    Action, AutoPlay, AuxBus, ChannelStrip, Cue, DataSourceSpec, Dataset, Effect, FieldBinding,
-    InputAudio, InputColor, InputId, InputPress, LayerTransform, LayoutBox, Look, MidiBinding,
-    OutputId, OutputSource, OutputSpec, OverlayChannel, QuickPlay, SignalLoss, SourceSpec,
-    TitleData, TitlePhase, TitleTrigger, Transition, TransitionSlot, Trigger,
+    Action, AtEnd, AutoPlay, AuxBus, ChannelStrip, Cue, DataSourceSpec, Dataset, Effect,
+    FieldBinding, InputAudio, InputColor, InputId, InputPress, LayerTransform, LayoutBox, Look,
+    MidiBinding, OutputId, OutputSource, OutputSpec, OverlayChannel, QuickPlay, SignalLoss,
+    SourceSpec, TitleData, TitlePhase, TitleTrigger, Transition, TransitionSlot, Trigger,
 };
 use serde::{Deserialize, Serialize};
 
@@ -44,6 +44,9 @@ pub struct ShowInput {
     /// Play, restart, pause on and off air (INP.11).
     #[serde(default, skip_serializing_if = "AutoPlay::is_off")]
     pub auto_play: AutoPlay,
+    /// Loop or hold the last frame at the end (INP.10).
+    #[serde(default, skip_serializing_if = "AtEnd::is_loop")]
+    pub at_end: AtEnd,
     /// What a click on it does (INP.8).
     #[serde(
         default = "InputPress::click",
@@ -520,6 +523,7 @@ mod tests {
                     restart: false,
                     pause: true,
                 },
+                at_end: AtEnd::Hold,
                 click: InputPress::CutDirect,
                 go: InputPress::None,
                 strip: ChannelStrip {

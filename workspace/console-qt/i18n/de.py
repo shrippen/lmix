@@ -2,6 +2,8 @@
 # scripts/update-translations.sh collects the sources and writes these
 # into qml_de.ts (i18n/fill.py). Keep it complete.
 DE = {
+    'At the end': 'Am Ende',
+    'Stop on the last frame': 'Auf dem letzten Bild stehen bleiben',
     'Start all streams': 'Alle Streams starten',
     'Stop all streams': 'Alle Streams stoppen',
     'Stop all streams?': 'Alle Streams stoppen?',

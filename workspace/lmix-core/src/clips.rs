@@ -68,12 +68,15 @@ impl ClipWatch {
         };
         let last_item = |p: &PlayerProgress| p.index + 1 >= p.items.max(1);
         let left = |p: &PlayerProgress| p.duration_ms.saturating_sub(p.position_ms);
-        let ended = last_item(&before)
-            && if now.items > 1 {
-                now.index < before.index
-            } else {
-                now.position_ms + JUMP_BACK_MS < before.position_ms
-            };
+        let stopped = |p: &PlayerProgress| p.state == Some(lmix_types::PlaybackState::Stopped);
+        // Looped, the playlist starts again; held (INP.10), it stops.
+        let ended = (stopped(&now) && !stopped(&before))
+            || last_item(&before)
+                && if now.items > 1 {
+                    now.index < before.index
+                } else {
+                    now.position_ms + JUMP_BACK_MS < before.position_ms
+                };
         let same_item = now.index == before.index && !ended;
         let left_ms = (same_item && last_item(&now) && now.duration_ms > 0)
             .then(|| (left(&before), left(&now)));
@@ -118,6 +121,23 @@ mod tests {
         assert!(change.crosses(3_000), "{change:?}");
         assert!(!watch.update(at(1, 2, 7_300)).crosses(3_000), "fires once");
         assert!(watch.update(at(0, 2, 150)).ended);
+    }
+
+    #[test]
+    fn a_held_end_is_an_end() {
+        use lmix_types::PlaybackState;
+        let mut watch = ClipWatch::default();
+        let held = |position_ms, state| PlayerProgress {
+            state: Some(state),
+            ..at(1, 2, position_ms)
+        };
+        watch.update(held(9_800, PlaybackState::Playing));
+        // Without the loop the player stops on its last frame (INP.10).
+        assert!(watch.update(held(10_000, PlaybackState::Stopped)).ended);
+        assert!(
+            !watch.update(held(10_000, PlaybackState::Stopped)).ended,
+            "once"
+        );
     }
 
     #[test]
