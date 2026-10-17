@@ -501,7 +501,7 @@ Bild-Cues (Stufen 2, 3) fehlen, sie warten auf S-E.3.
 | P9 Tondesign | 2, 3 Zonen, Fade mit S-Kurve | – Stufe 2 |
 | P9 Tondesign | 8 Panik bei Zwischenfall | ◐ alles hält an, Escape in der Show-Ansicht; Ausblenden mit Stufe 2 |
 | P10 Ausstellung | 1 Home Assistant startet eine Liste per HTTP mit Schlüssel | ✅ Schlüssel mit Recht `control` (`cue_go` mit Liste); Bearbeiten bleibt gesperrt |
-| P10 Ausstellung | 2 Ablauf mit Folgen ohne Bedienung | ✅ Folgen ohne Drift; Zeitgenauigkeit in `/metrics`, 1 min: 6121 Schritte, spätestens 4 ms |
+| P10 Ausstellung | 2 Ablauf mit Folgen ohne Bedienung | ◐ Folgen ohne Drift; Zeitgenauigkeit in `/metrics`, frei 1 h: spätestens 5,2 ms; unter Last bis 146 ms (RUN.8 offen) |
 | P10 Ausstellung | 3 Licht und Türen per HTTP | ✅ Ausgabeziele, Geheimnis nur in den Rechner-Einstellungen; Ergebnis als Ereignis |
 | P10 Ausstellung | 4 Nach Neustart nichts starten | ✅ nichts läuft, Standby wie vorher |
 | P7 Theater-Video | Zuspieler nach Ablauf: Clip auf Programm, danach der nächste | ◐ Aktions-Cues schalten Inputs und Clips, mit Zeiten und Folgen; ⚠ ein Aktions-Cue endet sofort, „Folge nach Ende“ kann nicht auf das Clip-Ende warten (B45) |
@@ -511,5 +511,11 @@ nach S-E.3); B42 Cues anderer Arten in der Oberfläche anlegen (SUI.10,
 S2); B43 Oberfläche für Ausgabeziele und OSC-Abonnenten (behoben am selben
 Abend: „Ziele…“ in der Show-Ansicht); B44 die Show kennt
 ihren Drehbuch-Ordner nicht (SSH.2): nach einem Neustart `lmix-script load`
-von Hand (behoben am selben Abend: „Drehbuch…“, DECISIONS); B45 Aktions-Cue mit Clip: Ende des Clips als Dauer (mit VIS.2/
-Videoton oder einer Option „wartet auf Clip-Ende“).
+von Hand (behoben am selben Abend: „Drehbuch…“, DECISIONS); B45 Aktions-Cue mit Clip: Ende des Clips als Dauer (am selben Abend:
+`duration_ms` an Aktions-Cues, von Hand; die Länge vom Clip selbst kommt mit
+VIS.2).
+
+Nachtrag 2026-10-17 (RUN.6): P8 Schritt 7 und 10, ein festgehaltener oder
+prellender Stream-Deck- bzw. MIDI-Taster gibt mit `set_go_rearm` `release`
+kein zweites GO, bis er losgelassen ist (Companion: Loslassen als
+`/lmix/cue/release`); die Leertaste bleibt daneben bedienbar. ✅ in Tests.

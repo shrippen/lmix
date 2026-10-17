@@ -153,12 +153,19 @@ pub struct ShowState {
     /// Shortest gap between two GOs (RUN.6).
     #[serde(default)]
     pub go_guard_ms: u32,
+    /// When GO takes another press (RUN.6).
+    #[serde(default)]
+    pub go_rearm: crate::cue::GoRearm,
     /// Panic time (SAF.2).
     #[serde(default)]
     pub panic_ms: u32,
     /// The show's script folder (SSH.2).
     #[serde(default)]
     pub script_folder: Option<String>,
+    /// The show file's older format version, migrated on open; the next
+    /// save over it keeps the old file as `<file>.v<n>.bak` (SHW.7).
+    #[serde(default)]
+    pub older_format: Option<u32>,
     /// What would go wrong when the cue lists run (SUI.5).
     #[serde(default)]
     pub cue_warnings: Vec<crate::cue::CueWarning>,
@@ -168,6 +175,9 @@ pub struct ShowState {
     /// Fixed OSC subscribers of this machine (CTL.4).
     #[serde(default)]
     pub feeds: Vec<crate::feed::Feed>,
+    /// The show's zones with this machine's outputs (SND.10).
+    #[serde(default)]
+    pub zones: Vec<crate::zone::ZoneState>,
     /// Locked against closing, loading and stopping (AUT.11).
     #[serde(default)]
     pub locked: bool,

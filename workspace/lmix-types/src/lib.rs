@@ -22,6 +22,7 @@ pub mod ptz;
 pub mod shortcut;
 pub mod state;
 pub mod target;
+pub mod zone;
 
 pub use action::{
     action_group, Action, ActionError, Effect, StingerSpec, TransitionSlot, ACTION_GROUPS,
@@ -56,4 +57,5 @@ pub use state::{
     Transition,
 };
 pub use feed::{Feed, FeedMessage, FeedOn};
+pub use zone::{Zone, ZoneOutput, ZonePatch, ZoneState};
 pub use target::{HttpMethod, Target, TargetKind, TargetResult, TargetSpec};
