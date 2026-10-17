@@ -2861,7 +2861,7 @@ strom-Block „Show-Wiedergabe“ in einem Flow je Rechner: Zonen
 mit Kulisse und Atmo startet auf denselben Zeitpunkt, und Ton aus Videos
 (VIS.10, S2) kommt ohne Umweg in die Zone. A bliebe für Live-Bild als
 Bild-Cue (VIS.15, S3), das schon ein Input ist.
-**Offen**: Entscheidung des Users.
+**Entscheidung** (User 2026-10-17): B, zusammen mit S-E.3 B als ein strom-Block „Show-Wiedergabe“.
 
 **Bauplan B** (Schätzung, nicht gebaut):
 - strom: Bühne = `compositor` (GL bzw. CUDA wie der Mischer, CPU als
@@ -3302,7 +3302,7 @@ in beiden Fällen klein. Preis: ein neuer strom-Block „Zonen-Abspieler“
 (Zweige zur Laufzeit an- und abhängen, Pegel-Fade je Zweig), als eigener,
 upstream-tauglicher Commit; die Zone selbst (Gerät, Kanäle, SND.10) ist
 ohnehin neu. A bliebe nur für Videoton (VIS.10, S2), der schon ein Input ist.
-**Offen**: Entscheidung des Users.
+**Entscheidung** (User 2026-10-17): B, Abspieler je Zone, im strom-Block „Show-Wiedergabe“ zusammen mit den Bühnen (S-E.13).
 
 **Bauplan, damit die Folgen greifbar sind** (Schätzung, nicht gebaut):
 
@@ -3332,3 +3332,22 @@ ohnehin neu. A bliebe nur für Videoton (VIS.10, S2), der schon ein Input ist.
   das widerspricht S-E.4 (Zone mit Rechner-Zuordnung, nicht Aux-Bus).
 - Weniger neuer strom-Code, aber SND.12 (≤ 50 ms) verfehlt, Slots werden
   knapp, Zonen über Busse sind ein Umweg.
+
+## 2026-10-17 — Entscheidungen des Users nach dem strom-Abgleich
+
+Abgefragt über eine Entscheidungsseite (Optionen mit Vorschlag).
+
+- **S-E.3 und S-E.13**: beide B, ein strom-Block „Show-Wiedergabe“ mit
+  Zonen (`audiomixer`) und Bühnen (`compositor`) in einem Flow je Rechner.
+- **Merge**: alles sofort, auch der Upstream-Abgleich (strom #15–#20 auf
+  `dev`, lmix #38–#90, #39, #45 auf `main`).
+- **GPU-Abnahme** auf der RTX 3090: später, mit der nächsten
+  Hardware-Runde (HARDWARE-TODO).
+- **GFX.2** auf upstreams HTML-Input bauen; was gegenüber dem eigenen Weg
+  fehlt, wird ergänzt.
+- **Stinger**: eigene Ebene gegen upstreams Stinger vergleichen (Matte,
+  Timing, Latenz), dann neu vorlegen.
+- **Live-Recorder** (#1034): prüfen, ob er MultiCorder verbessert.
+- **Player-Verzögerung** 100 ms für lokale Dateien: bestätigt.
+- **AMD/Intel (VA)** weiter unterstützen: die Brücke für VA-Bilder in den
+  GL-Mischer konzeptionell wieder anlegen, Test auf Hardware später.

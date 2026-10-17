@@ -2,7 +2,7 @@
 
 Stand 2026-10-16, Entwurf 3: abgeglichen mit dem QLab-5-Handbuch; Licht,
 Objekt-Audio, Effekt-Plugins und Timecode aufgenommen. Entscheidungen in §6
-(User 2026-10-16), offen nur S-E.3.
+(User 2026-10-16), S-E.3 und S-E.13 am 2026-10-17.
 Ergänzt `LASTENHEFT.md` (Bildmischer) um einen zweiten Bedienmodus über
 demselben `lmix-core`. Abweichungen von `claude.md`, `ROADMAP.md` oder
 `LASTENHEFT.md` stehen in §6 zur Entscheidung, nicht stillschweigend.
@@ -407,8 +407,8 @@ Entwurf 2 hier und sind seit 2026-10-16 (User) Anforderungen (§3.12–3.15).
 
 | # | Frage | Stand |
 |---|---|---|
-| S-E.13 | Bühnen intern: Bild-Cues als verdeckte strom-Inputs auf einem Mischer-Flow je Bühne, oder ein Bühnen-Block in strom mit einem Zweig je Bild-Cue | Gemessen 2026-10-17 (DECISIONS „S-E.13“): Zweig je Cue zeigt nach 53–91 ms, vorgeladen 28–64 ms, Input-Weg nach 122–133 ms; Speicher und CPU gleich. Vorschlag: Zweig je Cue, zusammen mit S-E.3 B in einem Show-Block. Entscheidung des Users offen |
-| S-E.3 | Klang-Cues intern: verdeckte strom-Inputs oder ein Abspieler je Zone | Zurückgestellt (User 2026-10-16, Folgen noch unklar). Festgelegt ist nur SND.17. Vor S1 Stufe 2 beide Wege messen (5–10 Klänge zugleich: Startzeit GO → Ton, Speicher, CPU) und mit Zahlen erneut vorlegen |
+| S-E.13 | Bühnen intern: Bild-Cues als verdeckte strom-Inputs auf einem Mischer-Flow je Bühne, oder ein Bühnen-Block in strom mit einem Zweig je Bild-Cue | Gemessen 2026-10-17 (DECISIONS „S-E.13“): Zweig je Cue zeigt nach 53–91 ms, vorgeladen 28–64 ms, Input-Weg nach 122–133 ms; Speicher und CPU gleich. **Entschieden (User 2026-10-17): Zweig je Cue**, zusammen mit S-E.3 B im strom-Block „Show-Wiedergabe“ |
+| S-E.3 | Klang-Cues intern: verdeckte strom-Inputs oder ein Abspieler je Zone | Zurückgestellt (User 2026-10-16, Folgen noch unklar). Festgelegt ist nur SND.17. Gemessen 2026-10-16 (DECISIONS „S-E.3“): Zweig 31–32 ms, Input-Weg 51–102 ms. **Entschieden (User 2026-10-17): Abspieler je Zone**, im strom-Block „Show-Wiedergabe“ mit den Bühnen |
 
 ---
 
