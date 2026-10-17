@@ -3396,3 +3396,60 @@ Sicherheitsprüfung der Sitzung abgelehnt (fremder Code). Geprüft sind die
 Flows (Größe, Rate, Ton, Netz, Adresse) und die Ablehnungen in Tests.
 Abnahme mit strom-full oder auf der RTX 3090 (HARDWARE-TODO H.36).
 
+
+## 2026-10-17 — Live-Recorder für MultiCorder (Prüfung, Vorschlag)
+
+**Kontext**: User: prüfen, ob upstreams Live-Recorder (#1034,
+`builtin.liverecorder`, fragmentiertes MP4) MultiCorder verbessert.
+Heute nimmt lmix Program und ISO-Spuren mit `builtin.recorder` auf
+(`splitmuxsink` + `mp4mux`).
+
+**Messung** (`scripts/bench-recorders/run.sh`, VM ohne GPU, H.264
+640×360@25, 7 s, dann strom mit `kill -9`):
+
+| | Recorder | Live-Recorder |
+|---|---|---|
+| während der Aufnahme lesbar | ja, 6,0 s (151 Bilder) | ja, 7,0 s (175 Bilder) |
+| nach `kill -9` lesbar | ja, 6,0 s | ja, 7,0 s |
+| Dateigröße nach 7 s | 47,6 MB (Index-Platz vorab reserviert) | 130 KB |
+
+Beide überstehen einen Absturz; der Live-Recorder ist eine Sekunde näher
+an „jetzt" und belegt keinen reservierten Platz. Laut upstream hält eine
+stumme Spur die anderen nicht auf (GAP-Ereignisse) und kommt in derselben
+Datei zurück; der Recorder schreibt eine Spur, die nie Daten bekam, gar
+nicht erst an. Dazu teilt er nach Zeit oder Größe und stoppt auf Wunsch
+selbst. Upstream nennt ihn „experimentell"; fragmentiertes MP4 öffnen
+gängige Schnittprogramme, ältere Werkzeuge nicht immer.
+
+**Vorschlag**: ISO-Spuren (MultiCorder, H24-Vergleich) auf den
+Live-Recorder umstellen, Program-Aufnahme vorerst beim Recorder lassen;
+nach einer langen Aufnahme (H.24) über beides entscheiden.
+**Offen**: Entscheidung des Users.
+
+## 2026-10-17 — Stinger: eigene Ebene gegen upstream (Vergleich, Vorschlag)
+
+**Kontext**: User: eigene Stinger-Ebene (seit M4, DECISIONS 09.10.)
+gegen upstreams Stinger-Übergänge (#1010) vergleichen (Matte, Timing,
+Latenz), dann neu vorlegen.
+
+| | lmix-Ebene | upstream |
+|---|---|---|
+| Timing | lmix-core zählt vom Start des Clips (Warte-Befehle, HTTP-Aufrufe); seit dem Abgleich wartet die Engine die Ausspielverzögerung des Clips ab, sonst kam der Cut 100 ms zu früh | bildgenau: der erste Frame wartet geparkt, jeder Schritt ist ein Keyframe auf einen Clip-Zeitstempel; verspätete Cuts werden gemeldet |
+| Track-Matte, Nur-Maske | nein | ja auf GL (Mischmodus über Blendfunktionen); CPU spielt klassisch; auf unserem CUDA-Mischer klassisch, ungeprüft |
+| Cut-Punkt | von Hand | von Hand oder aus der Clip-Analyse (wo die Grafik deckt) |
+| Clips | ein Clip-Input je Taste (4 Tasten), beliebige Player-Quelle | Clip-Liste einer Stinger-Quelle je Mischer, Clip je Übergang wählbar |
+| Ziel | Input oder Layout (PiP) | nur Inputs: PGM-Input zu PVW-Input |
+| Lage | unter den Overlays | Grafik über allem |
+| Alpha | ProRes 4444, VP9 mit Alpha (auf Hardware geprüft, H.27) | dieselben Formate, Analyse erkennt Alpha |
+| Ton | Ton des Clip-Inputs nach seinen Einstellungen | Ton des Clips über die Stinger-Quelle |
+| Prüfung | VM-Test (Clip mit Alpha, Cut darunter) | eigene strom-Tests, `stinger_test` grün in der VM |
+
+**Folgerung**: upstream ist bildgenau und kann Track-Matte, aber nur
+zwischen Inputs und über den Overlays. Ganz umstellen hieße, Layouts als
+Stinger-Ziel und „unter den Overlays" aufzugeben oder in strom
+nachzubauen.
+**Vorschlag**: beides anbieten: Stinger mit Matte oder Clip-Analyse
+laufen über upstream (nur Inputs, GL), alles andere bleibt bei der
+eigenen Ebene; die Taste wählt den Weg nach Clip und Ziel. Zuerst im
+VM-Test messen, wie weit der eigene Cut vom geplanten Bild abweicht.
+**Offen**: Entscheidung des Users.
