@@ -267,7 +267,7 @@ kann es, Console nicht.
 | AUD.9 | Kanalmatrix 16 × 16 (Quelle → Bus-Kanal), Presets speichern/anwenden | S | – |
 | AUD.10 | EQ, Kompressor, Noise Gate je Input und Bus | M | ◐ (EQ, Gate, Kompressor, Hochpass je Input auch in der Console; nicht je Bus) |
 | AUD.11 | Plugins je Input und Bus: LV2, VST3, CLAP (E.8), Reihenfolge, an/aus, Editor-Fenster | S | – |
-| AUD.12 | Pegelanzeigen in dBFS, 5 Farbbänder, Spitzenwert über ~2 s, vor/nach Fader, gedämpft-Anzeige | M | ◐ |
+| AUD.12 | Pegelanzeigen in dBFS, 5 Farbbänder, Spitzenwert über ~2 s, vor/nach Fader, gedämpft-Anzeige | M | ◐ (dBFS, Spitzenwert hält 2 s, stumm = blass, links/rechts; drei statt fünf Farbbänder (Kante-Meter), nur vor dem Fader) |
 | AUD.13 | Bus-Übersicht: Matrix Inputs × Busse in einem Fenster, filterbar | S | – |
 | AUD.14 | Pegel-Fades per Aktion (Ziel, Dauer) für Input, Master, Busse | S | ✅ (`fade_volume`, bis 60 s, linear im Pegel; Kurven mit SND.6) |
 | AUD.15 | Mehrkanal-Kombinationen für Senken: Master, einzelne Busse, MA, MAB, MABC, alle 16 Kanäle | S | – |
@@ -317,7 +317,7 @@ kann es, Console nicht.
 | MCR.2 | Bereits komprimierte Quellen ohne Neukodierung sichern: SRT als TS, NDI im Original-Format | S | – (E: TS ohne Neukodierung im strom-Recorder) |
 | MCR.3 | Ordner je Quelle, Split, Ton je Quelle (eigener oder Bus) | S | ◐ (Ordner und Ton je Ausgang, eigener oder Aux; ohne Teilen) |
 | STR.1 | Bis 5 Streamziele, einzeln und gemeinsam startbar; Fehler eines Ziels stoppt nur dieses | M | ✅ (SRT-Ausgänge einzeln oder alle zusammen, `start_outputs`/`stop_outputs`; ein Fehler stoppt nur diesen) |
-| STR.2 | Protokolle RTMP; zusätzlich RTMPS, SRT, WHIP (lmix); Ziel = URL + Schlüssel; Profile (benannte Zielsätze) | M | ◐ (SRT; RTMP wartet auf strom #771, WHIP E; ohne Profile) |
+| STR.2 | Protokolle RTMP; zusätzlich RTMPS, SRT, WHIP (lmix); Ziel = URL + Schlüssel; Profile (benannte Zielsätze) | M | ◐ (SRT, RTMP/RTMPS mit Schlüssel; WHIP E; ohne Profile) |
 | STR.3 | Qualitätsprofile: Auflösung, Bitrate, Codec H.264/HEVC/AV1, Profil/Level/Preset, Keyframe-Abstand, CBR, Ton-Bitrate/-Kanäle; Ziele teilen Profil oder eigenes | M | ◐ (Video-Bitrate, Codec H.264/HEVC, CBR/VBR, Keyframe-Abstand je Ausgang; ohne AV1 (strom-Recorder und TS-Muxer), Auflösung, Profil/Preset, Ton-Bitrate, geteilte Profile) |
 | STR.4 | Multi-Bitrate: ein Ziel mit mehreren Qualitäten, keyframe-ausgerichtet | K | – |
 | STR.5 | Sendeverzögerung n s (Puffer im RAM, Countdown) | S | – |

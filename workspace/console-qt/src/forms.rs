@@ -61,7 +61,15 @@ const SOURCE_KINDS: [&str; 11] = [
     "audio_device",
 ];
 
-const OUTPUT_KINDS: [&str; 6] = ["srt", "record", "ndi", "window", "fullscreen", "drm"];
+const OUTPUT_KINDS: [&str; 7] = [
+    "srt",
+    "rtmp",
+    "record",
+    "ndi",
+    "window",
+    "fullscreen",
+    "drm",
+];
 
 /// The source the "add input" form describes; `None` while a needed field
 /// is empty. `value` is the pattern name, the colour (`#rrggbb`), or the
@@ -131,6 +139,9 @@ pub struct OutputForm {
     /// Codec, rate control, keyframes of SRT and recordings (STR.3).
     #[serde(default)]
     pub encoding: VideoEncoding,
+    /// Stream key of an RTMP output, apart from its server.
+    #[serde(default)]
+    pub key: String,
 }
 
 /// The output the "add output" form describes; `None` while a needed
@@ -141,6 +152,7 @@ pub fn output_of(
     container: &str,
     video_kbps: u32,
     encoding: VideoEncoding,
+    key: &str,
 ) -> Option<OutputSpec> {
     let text = text.trim().to_string();
     let needs_text = !matches!(kind, "window" | "fullscreen");
@@ -155,6 +167,12 @@ pub fn output_of(
     Some(match kind {
         "srt" => OutputSpec::Srt {
             uri: text,
+            video_kbps,
+            encoding,
+        },
+        "rtmp" => OutputSpec::Rtmp {
+            url: text,
+            key: key.trim().to_string(),
             video_kbps,
             encoding,
         },
@@ -242,22 +260,22 @@ mod tests {
     #[test]
     fn outputs_from_the_form() {
         assert_eq!(
-            output_of("window", "", "mkv", 0, VideoEncoding::default()),
+            output_of("window", "", "mkv", 0, VideoEncoding::default(), ""),
             Some(OutputSpec::Display {
                 mode: DisplayMode::Window
             })
         );
         assert_eq!(
-            output_of("drm", "", "mkv", 0, VideoEncoding::default()),
+            output_of("drm", "", "mkv", 0, VideoEncoding::default(), ""),
             None,
             "needs a connector"
         );
         assert_eq!(
-            output_of("drm", "x", "mkv", 0, VideoEncoding::default()),
+            output_of("drm", "x", "mkv", 0, VideoEncoding::default(), ""),
             None
         );
         assert_eq!(
-            output_of("record", "show", "mp4", 0, VideoEncoding::default()),
+            output_of("record", "show", "mp4", 0, VideoEncoding::default(), ""),
             Some(OutputSpec::Record {
                 folder: "show".into(),
                 container: Container::Mp4,
@@ -266,7 +284,7 @@ mod tests {
             })
         );
         assert_eq!(
-            output_of("srt", " ", "mkv", 8000, VideoEncoding::default()),
+            output_of("srt", " ", "mkv", 8000, VideoEncoding::default(), ""),
             None
         );
     }

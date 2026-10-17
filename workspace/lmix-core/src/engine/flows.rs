@@ -39,6 +39,7 @@ const NDI_INPUT_BLOCK: &str = "builtin.ndi_input";
 const NDI_OUTPUT_BLOCK: &str = "builtin.ndi_output";
 const SRT_OUTPUT_BLOCK: &str = "builtin.mpegtssrt_output";
 const RECORDER_BLOCK: &str = "builtin.recorder";
+const RTMP_OUTPUT_BLOCK: &str = "builtin.rtmp_output";
 const VIDEO_ENCODER_BLOCK: &str = "builtin.videoenc";
 const WHIP_INPUT_BLOCK: &str = "builtin.whip_input";
 const INTER_OUTPUT_BLOCK: &str = "builtin.inter_output";
@@ -471,6 +472,35 @@ pub fn output_flow(
             if sound {
                 flow.links
                     .push(link("pgm_audio:src".into(), "srt:audio_in_0".into()));
+            }
+        }
+        OutputSpec::Rtmp {
+            url,
+            key,
+            video_kbps,
+            encoding,
+        } => {
+            add_encoder(&mut flow, *video_kbps, encoding, framerate);
+            flow.blocks.push(block(
+                "rtmp",
+                RTMP_OUTPUT_BLOCK,
+                vec![
+                    (
+                        "location",
+                        PropertyValue::String(OutputSpec::rtmp_location(url, key)),
+                    ),
+                    // Output flows run on the mixer's running time (direct
+                    // media timing): a syncing sink waits for a clock time
+                    // that never comes. The encoder paces it, as for SRT.
+                    ("sync", PropertyValue::Bool(false)),
+                ],
+            ));
+            flow.links
+                .push(link("enc:encoded_out".into(), "rtmp:video_in".into()));
+            // The block encodes raw sound to AAC itself.
+            if sound {
+                flow.links
+                    .push(link("pgm_audio:src".into(), "rtmp:audio_in".into()));
             }
         }
         OutputSpec::Record {
@@ -1551,6 +1581,45 @@ mod tests {
             audio.properties.get("channel"),
             Some(PropertyValue::String(c)) if *c == format!("strom_{}_aux1_out", mixer_id())
         ));
+    }
+
+    #[test]
+    fn rtmp_publishes_to_server_and_key() {
+        let spec = OutputSpec::Rtmp {
+            url: "rtmp://a.rtmp.example.com/live2/".into(),
+            key: "abcd-1234".into(),
+            video_kbps: 4500,
+            encoding: Default::default(),
+        };
+        let flow = output_flow(
+            OutputId::new(),
+            &spec,
+            Feed::Program,
+            None,
+            MixerBackend::Cpu,
+            Framerate::default(),
+        );
+
+        let rtmp = flow.blocks.iter().find(|b| b.id == "rtmp").unwrap();
+        assert_eq!(rtmp.block_definition_id, RTMP_OUTPUT_BLOCK);
+        assert!(matches!(
+            rtmp.properties.get("location"),
+            Some(PropertyValue::String(l)) if l == "rtmp://a.rtmp.example.com/live2/abcd-1234"
+        ));
+        // A syncing sink would wait on the mixer's running time for good.
+        assert!(matches!(
+            rtmp.properties.get("sync"),
+            Some(PropertyValue::Bool(false))
+        ));
+        for (from, to) in [
+            ("enc:encoded_out", "rtmp:video_in"),
+            ("pgm_audio:src", "rtmp:audio_in"),
+        ] {
+            assert!(
+                flow.links.iter().any(|l| l.from == from && l.to == to),
+                "{from} -> {to}"
+            );
+        }
     }
 
     #[test]

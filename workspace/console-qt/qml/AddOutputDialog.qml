@@ -15,11 +15,12 @@ KanteDialog {
     readonly property var containers: Texts.choices("containers", core.choices("containers"))
     readonly property string kind: kinds[kindBox.currentIndex] ? kinds[kindBox.currentIndex].value : "srt"
     readonly property bool needsText: kind !== "window" && kind !== "fullscreen"
-    readonly property bool encodes: kind === "srt" || kind === "record"
+    readonly property bool encodes: kind === "srt" || kind === "rtmp" || kind === "record"
     /** Screens show picture only. */
     readonly property bool carriesSound: kind !== "window" && kind !== "fullscreen" && kind !== "drm"
     readonly property var hints: ({
         srt: "srt://host:9000",
+        rtmp: "rtmp://a.rtmp.youtube.com/live2",
         record: qsTr("folder in the engine's media directory"),
         ndi: qsTr("NDI name, e.g. lmix PGM"),
         drm: qsTr("DRM connector id")
@@ -49,6 +50,7 @@ KanteDialog {
             source: source,
             container: container,
             video_kbps: kbps.value,
+            key: keyField.text,
             encoding: {
                 codec: codecBox.currentIndex === 1 ? "h265" : "h264",
                 rate: rateBox.currentIndex === 1 ? "cbr" : "vbr",
@@ -83,6 +85,14 @@ KanteDialog {
             visible: dialog.needsText
             Layout.fillWidth: true
             placeholderText: dialog.hints[dialog.kind] || ""
+        }
+        // STR.2: the platform's stream key, apart from the server.
+        KanteTextField {
+            id: keyField
+            visible: dialog.kind === "rtmp"
+            Layout.fillWidth: true
+            placeholderText: qsTr("Stream key")
+            echoMode: TextInput.Password
         }
 
         KanteSectionLabel { text: qsTr("Carries") }

@@ -48,7 +48,9 @@ impl OutputGroup {
     /// Whether an output of `spec` belongs to the group.
     pub fn holds(self, spec: &OutputSpec) -> bool {
         match self {
-            OutputGroup::Streams => matches!(spec, OutputSpec::Srt { .. }),
+            OutputGroup::Streams => {
+                matches!(spec, OutputSpec::Srt { .. } | OutputSpec::Rtmp { .. })
+            }
             OutputGroup::Recordings => matches!(spec, OutputSpec::Record { .. }),
             OutputGroup::All => true,
         }
@@ -205,6 +207,20 @@ pub enum OutputSpec {
         #[serde(default, skip_serializing_if = "VideoEncoding::is_default")]
         encoding: VideoEncoding,
     },
+    /// FLV over RTMP or RTMPS to a platform (STR.2): H.264 + AAC.
+    /// `url` is the server, e.g. `rtmp://a.rtmp.youtube.com/live2`; the
+    /// stream key goes apart so clients can hide it.
+    Rtmp {
+        url: String,
+        #[serde(default)]
+        key: String,
+        #[serde(default = "default_kbps")]
+        video_kbps: u32,
+        /// Codec (H.264 only: FLV carries no other), rate control and
+        /// keyframe interval (STR.3).
+        #[serde(default, skip_serializing_if = "VideoEncoding::is_default")]
+        encoding: VideoEncoding,
+    },
     /// NDI on the network, uncompressed program (OUT.6).
     Ndi { name: String },
     /// Picture on a screen of the engine machine (OUT.3): projector, LED
@@ -230,16 +246,39 @@ impl OutputSpec {
     /// Its video encoding; `None` for outputs that send raw picture.
     pub fn encoding(&self) -> Option<&VideoEncoding> {
         match self {
-            OutputSpec::Srt { encoding, .. } | OutputSpec::Record { encoding, .. } => {
-                Some(encoding)
-            }
+            OutputSpec::Srt { encoding, .. }
+            | OutputSpec::Rtmp { encoding, .. }
+            | OutputSpec::Record { encoding, .. } => Some(encoding),
             _ => None,
+        }
+    }
+
+    /// Why the engine could not send this, if it could not (STR.2, STR.3).
+    pub fn problem(&self) -> Option<String> {
+        if let OutputSpec::Rtmp { url, encoding, .. } = self {
+            if !(url.starts_with("rtmp://") || url.starts_with("rtmps://")) {
+                return Some(format!("{url} is no rtmp:// or rtmps:// address"));
+            }
+            if encoding.codec != VideoCodec::H264 {
+                return Some("RTMP carries H.264 only".into());
+            }
+        }
+        self.encoding().and_then(VideoEncoding::problem)
+    }
+
+    /// Where an RTMP output publishes: server and stream key.
+    pub fn rtmp_location(url: &str, key: &str) -> String {
+        if key.is_empty() {
+            url.to_string()
+        } else {
+            format!("{}/{key}", url.trim_end_matches('/'))
         }
     }
 
     pub fn default_name(&self) -> String {
         match self {
             Self::Srt { uri, .. } => format!("SRT {uri}"),
+            Self::Rtmp { url, .. } => format!("RTMP {url}"),
             Self::Record { folder, .. } => format!("Record {folder}"),
             Self::Ndi { name } => format!("NDI {name}"),
             Self::Display { mode } => match mode {
