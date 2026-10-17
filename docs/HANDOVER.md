@@ -165,7 +165,6 @@ für WHIP-Links: `--public-url`.
 ## Offen beim User
 
 - **Merges** strom #6, lmix #6.
-- B31 RTMP-Ausgang wartet auf strom #771.
 
 ## Bekannte Befunde
 

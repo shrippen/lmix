@@ -3182,3 +3182,30 @@ Format der offenen Show vorgewählt.
 
 **Geprüft**: Test (neue Show im Format, ungültiges abgelehnt, ohne Feld
 der Standard), Console auf Xvfb, Headless-Test.
+
+## 2026-10-17 — RTMP-Ausgang (STR.2, B31) und strom-Upstream
+
+**Kontext**: Eyevinn/strom `main` hat seit unserem Abzweig (14.09.) 177
+Commits, darunter `builtin.rtmp_output` (#827). Ein voller Abgleich
+ergab 22 Konfliktdateien, vor allem in den GPU-Pfaden: upstream hat
+`gl_bridge.rs` durch `video_adapt.rs`/`gl_input_front.rs` ersetzt, auf
+denen unsere CUDA-/GL-Mischer-Patches aufsetzen. Ohne GPU in der VM
+nicht prüfbar, daher nicht allein entschieden.
+
+**Entscheidung**: Nur den RTMP-Block übernommen (cherry-pick #827, #869,
+#871 auf den lmix-Stapel, strom-Branch `lmix-rtmp-output`). lmix:
+Ausgang `rtmp` mit `url` (rtmp:// oder rtmps://) und `key` getrennt,
+Encoder-Einstellungen wie SRT, nur H.264 (FLV); zählt als Stream
+(STR.1). Der Schlüssel steht wie die URL im Zustand und in der Show;
+die Console zeigt ihn verdeckt.
+
+**Upstream-Abgleich** (offen, mit Abnahme auf der RTX 3090): neben RTMP
+u. a. HTML-Input-Block (#879, Weg zu GFX.2), Player für Live-Streams und
+URLs (#945), Abtastrate wählbar (#946, AUD.17), Stinger-Übergänge
+(#1010), begrenztes `set_state(NULL)` beim Stoppen (#874), Player-
+Deadlock-Fix (#986).
+
+**Geprüft**: strom-Tests `rtmp_output_test`, `rtmp_output_pipeline_test`,
+`output_refusal_test` (51 grün); lmix-Tests (Flow, Ablehnung von
+Nicht-RTMP-Adressen und H.265); VM-Test: ffmpeg als RTMP-Server bekommt
+H.264 + AAC.
