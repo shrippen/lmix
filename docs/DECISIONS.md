@@ -3229,3 +3229,45 @@ von lmix-core die Rate eines laufenden Mischers. Ausgänge erben sie
 **Geprüft**: Tests (Rate im Flow und zurückgelesen, Neubau ohne
 Quellen-Neustart, 96 kHz abgelehnt), VM-Test mit strom: Mischer bei
 44,1 kHz, Program hörbar, zurück auf 48 kHz.
+
+## 2026-10-17 — strom mit ganzem upstream main (0.7.1)
+
+**Entscheidung**: Der Fork übernimmt upstream Eyevinn/strom `main`
+(8fce2ee) als Merge auf die lmix-Patches (strom-PR „lmix-upstream-sync").
+Wo upstream jetzt löst, was ein Patch tat, gilt upstream:
+
+- Abtastrate des Audiomischers: upstreams `sample_rate` (#946) ersetzt
+  ed647f2. Gleicher Name, gleiche Werte (48000, 44100), AUD.17 läuft
+  unverändert.
+- CUDA-Bilder in den GL-Mischer: upstreams `gl_input_front` ersetzt
+  unseren `gl_bridge`. VA-Bilder (AMD/Intel) werden dort nicht mehr
+  überbrückt; ungetestete Hardware vorher wie nachher. Der CPU-Mischer
+  behält das Herunterladen als kleines Modul `memory_bridge`.
+- Rahmen-Unterlagen schieben ein Bild und dann EOS (upstream); bei
+  Startzeit „first" ist die Quelle live, damit das Bild Laufzeit trägt.
+
+Behalten und angepasst: Startzeit „first" für beide Mischer (upstreams
+neuer Schutz gegen das Zurückspringen beim ersten Puffer schaltet sie
+sonst ab), Standbild des pausierten Players (erste Videospur; nicht für
+Stinger-Quellen), Systemspeicher und Loop-Steuerung des Players, DSK-
+Blenden, CUDA-Compositor (dort keine Software-Alpha-Mischung),
+GPU-Deinterlace und -Thumbnails, geteilter CUDA-Kontext, NVENC-Wege,
+udmabuf-Umgehung, `--host`.
+
+**lmix folgt**: Übergänge nennen die Eingänge als Option (Stinger-Clip
+leer). Der Player hält jeden Puffer eine Ausspielverzögerung lang
+(Standard 500 ms gegen Netz-Aussetzer); bei lokalen Dateien ist das nur
+die Zeit vom Cue bis zum Bild, deshalb 100 ms für Datei und Playlist,
+URL-Streams behalten den Standard.
+
+**Neu verfügbar, nicht genutzt**: HTML-Input (#879, Weg zu GFX.2),
+Stinger-Übergänge in strom (#1010; lmix hat eine eigene Stinger-Ebene),
+Live-Recorder (#1034), Multiview-Tally (#1009), Eingangsnamen zur
+Laufzeit (#1014).
+
+**Geprüft**: strom: 967 Unit-Tests, Integrationstests (OpenAPI,
+Pipeline-Lebenszyklus, Mediaplayer, Mischer-Abtastrate, Vision Mixer
+CPU/CUDA-Eingang/Formate/Unterlagen, Stinger, RTMP, Ablehnungen),
+clippy `-D warnings` (no-gui und efp). lmix-core 297 Tests, VM-Test mit
+strom. **Offen**: GPU-Abnahme auf der RTX 3090 (CUDA-Mischer,
+GL-Mischer, NVDEC/NVENC, Thumbnails).
