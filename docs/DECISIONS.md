@@ -3977,14 +3977,15 @@ wird (Eintrag oben), wartete der Merge zweimal. Der Eigentümer wollte ihn
 behalten, aber nur auf Abruf (18.10.2026).
 
 **Entscheidung**: `.gitea/workflows/pr-agent.yml` startet nur, wenn der
-Eigentümer `/review` unter einen PR schreibt (allein oder mit Optionen
-nach einem Leerzeichen); kein Lauf bei Push oder neuem PR. Ein neues
-`/review` ersetzt einen laufenden, andere Kommentare brechen nichts ab.
+Eigentümer einen Kommentar mit `/review` beginnt; kein Lauf bei Push
+oder neuem PR. Ein neues `/review` (allein oder mit Optionen nach einem
+Leerzeichen) ersetzt einen laufenden, andere Kommentare brechen nichts ab.
 Sitzungen schreiben kein `/review`. Ohne `/review` wartet kein Merge auf
-PR-Agent; nach einem `/review` wartet der Merge auf diesen Lauf (ein
-fehlgeschlagener hält nichts auf), und seine Befunde werden behoben oder
-beantwortet. Eine Antwort zählt wie beim Claude-Review erst, wenn der
-nächste Review-Agent sie annimmt. Dieselbe Regel gilt in allen Repos mit
+PR-Agent; nach einem `/review` wartet der Merge, bis dieser Lauf fertig
+ist (ein fehlgeschlagener hält nichts auf), und seine Befunde werden
+behoben oder beantwortet. Beantwortete Befunde gehen mit den offenen
+**Wichtig** an den nächsten Review-Agenten; eine Antwort zählt erst, wenn
+er sie annimmt. Dieselbe Regel gilt in allen Repos mit
 PR-Agent.
 
 **Verworfen**: PR-Agent ganz entfernen. Er bleibt als zweiter Leser mit
