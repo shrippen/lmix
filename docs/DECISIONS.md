@@ -3797,8 +3797,9 @@ Jetzt:
   sich etwas ändert: Cut, Übergänge, Stinger, T-Bar, Quick Play, FTB,
   Cut direkt, dazu neu Show öffnen/neu/Paket importieren und das
   Schließen des Inputs auf Program (beide schneiden; vorher wartete die
-  Engine sie ab). Paket importieren übernimmt die Ziele der Datei schon
-  vorher; das ist wiederholbar (gleiche Namen werden ersetzt).
+  Engine sie ab). Diese Erweiterung über die Liste der Entscheidung hinaus
+  ist noch nicht vom Eigentümer bestätigt (Frage in #109).
+  Paket importieren übernimmt die Ziele der Datei schon vorher; das ist wiederholbar (gleiche Namen werden ersetzt).
 - Die Engine wartet nicht mehr: kein Abfragen von `running` vor Take,
   Stinger und FTB. Kein Zurücknehmen.
 - Scheitert der Stinger-Befehl (strom lehnt ab, Clip fehlt), endet die
