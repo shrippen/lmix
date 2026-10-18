@@ -3,7 +3,7 @@
 Stand 2026-10-09, PR-Liste 2026-10-17 (bis #89). Die Arbeit läuft lokal weiter (Arch, RTX 3090), Abnahme
 auf echter Hardware.
 
-## Offene PRs, Stand 2026-10-17 nachts (Merge-Reihenfolge)
+## PRs in Merge-Reihenfolge, Stand 2026-10-18 (bis #101 gemergt, offen #102)
 
 CI läuft auf GitHub (Status `github / test` am Commit auf Gitea). Seit
 18.10.2026 prüft vor jedem Merge ein neuer Claude-Agent (`agent.md`,
@@ -82,6 +82,8 @@ unten mergen; Gitea stellt die Basis des nächsten auf `main` um):
 | #98 | `cue-preload` | Standby-Cues vorgeladen (SND.12) |
 | #99 | `script-sound-files` | Drehbuch: Klang- und Bilddateien ab dem Ordner |
 | #100 | `sound-repeat` | Wiederholungen von Klängen (SND.3, strom #27), Panik lässt Vorgeladenes |
+| #101 | `picture-repeat` | Wiederholungen von Videos (VIS.2, strom #28) |
+| #102 | `review-rule` | Jeder PR wird von einem neuen Claude-Agenten geprüft (`REVIEW.md`) |
 
 Rote GitHub-Läufe auf `s1-feeds` und `s1-script-folder` sind die wackelige
 Failover-Prüfung, die #45 behebt (der Stapel bekommt sie über `main`).

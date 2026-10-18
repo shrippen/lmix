@@ -49,8 +49,9 @@ or one that stops the operator:
   at most five) or **Bestand** (the bug was there before this PR; not
   blocking).
 - The report starts with the count, e.g. "2 Wichtig, 1 Kleinigkeit" (the
-  session puts the heading above it). With nothing to fix it says so
-  plainly: "Nichts zu beheben."
+  session puts the heading above it). The count of **Wichtig** holds every
+  one still open, also from an earlier round, e.g. "1 Wichtig (offen aus
+  Runde 1)". Only when none is open it says plainly: "Nichts zu beheben."
 - In a later round: say for each open **Wichtig** of the last round whether
   it is fixed, or whether its answer is accepted, with the reason.
 - Findings in German, code names as they are.
