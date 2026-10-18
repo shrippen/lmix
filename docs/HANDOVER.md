@@ -1,7 +1,95 @@
 # Übergabe: Stand M9 und Show-Modus S1 (in Arbeit), lokale Übernahme
 
-Stand 2026-10-09, PR-Liste 2026-10-18 (bis #102). Die Arbeit läuft lokal weiter (Arch, RTX 3090), Abnahme
+Stand 2026-10-18 abends (bis #114). Die Arbeit läuft lokal weiter (Arch, RTX 3090), Abnahme
 auf echter Hardware.
+
+## Für den nächsten Agenten: Stand 18.10.2026 abends
+
+Kurz: `main` ist sauber (alles bis #114 gemergt, kein eigener PR offen).
+Offen sind eine Frage an den Eigentümer, kleine Nachzügler aus Reviews,
+VSP und die Abnahme auf der RTX 3090.
+
+### Arbeitsweise (gilt für jeden PR)
+
+- Gitea `git.arianw.de/shrippen/lmix` ist führend, GitHub nur Spiegel.
+  Branch → PR auf Gitea → Review → Merge über die Gitea-API.
+- Review: ein **neuer** Claude-Agent prüft jeden PR (`agent.md`
+  „Repository rule“, `REVIEW.md`). Sein Bericht geht unverändert als
+  Kommentar „## Claude-Review (neuer Agent) zu <commit>“ in den PR.
+  Merge nur ohne offenes **Wichtig** und mit grüner CI (`github / test`,
+  nach den Pfaden von `ci.yml`). Nach 3 Runden mit Wichtig: Eigentümer
+  fragen. Optionale Befunde mit einer Zeile beantworten und in den
+  nächsten PR mitnehmen.
+- PRs an CI, Release, Packaging, `agent.md`, `REVIEW.md`, Geheimnissen
+  oder Veröffentlichtem bestätigt der Eigentümer vor dem Merge in Worten.
+- PR-Agent läuft nur auf `/review` des Eigentümers (#112–#114);
+  Sitzungen schreiben kein `/review`.
+- Platz auf der Platte ist knapp: nach Builds `target/*/incremental`,
+  `target/debug` löschen. Der VM-Gesamttest braucht
+  `SWAGGER_UI_DOWNLOAD_URL` (lokale Kopie von swagger-ui 5.17.14), wenn
+  GitHub-Downloads gesperrt sind.
+
+### Seit #102 gemergt (18.10.)
+
+| PR | Branch | Inhalt |
+|---|---|---|
+| #103 | `decisions-1018` | Entscheidungsseite 18.10. eingetragen, Regel angeglichen |
+| #104 | `live-recorder` | Aufnahmen über `builtin.liverecorder`; MKV fällt bei GStreamer < 1.26 auf `builtin.recorder` zurück (REC.3) |
+| #105 | `cue-timer-rt` | Cue-Zeitgeber auf eigenem Echtzeit-Thread (rtkit/SCHED_FIFO, SIGXCPU gibt ab), `lmix_cue_timer_realtime` (RUN.8) |
+| #106 | `stinger-upstream` | Stinger über die Stinger-Übergänge von strom upstream (STG) |
+| #107 | `stinger-wait` | geschlossen, ersetzt durch #109 |
+| #108 | `console-split` | Console getrennt in `lmix-mixer` und `lmix-show` (ein Kern, zwei Oberflächen); globale Tasten je Programm, Show ab Werk an, Mischer aus |
+| #109 | `stinger-done` | Stinger-Sperre endet mit `StingerCompleted`/`StingerFailed` von strom, Obergrenze; kein Warten unter der Sperre |
+| #111 | `review-followups` | Sperre: Grenze Clip + 8 s, Generation je Take, frühes Completed gemerkt |
+| #110 | – | Review-Regel: drei Lücken schließen – geschlossen, nicht gemergt |
+| #112–#114 | `pr-agent-*`, `pa-last` | PR-Agent nur auf `/review` des Eigentümers |
+
+Was jeweils entschieden wurde und warum: `docs/DECISIONS.md`, Einträge
+vom 18.10. (Review-Regel, Entscheidungsseite, REC, STG mit Nachträgen,
+RUN.8, Console getrennt).
+
+### Offen beim Eigentümer
+
+- **#109, Umfang der Sperre:** Während eines Stingers lehnt lmix
+  zusätzlich ab: Show öffnen/neu, Paket importieren, den Eingang auf
+  Programm entfernen (`StingerPlaying`). Das geht über die Liste der
+  Entscheidung hinaus; Antwort steht aus. Bis dahin bleibt es so.
+- Paket-Import übernimmt die Ziele vor der Ablehnung. Saubere Lösung
+  bräuchte eine öffentliche Abfrage am Switcher – nur mit Zustimmung.
+
+### Nächste Schritte (Reihenfolge)
+
+1. **Nachzügler aus dem Review von #111** (ein PR):
+   - `service.rs` `watch_stingers`: bei `Lagged` `continue` statt
+     `stinger_finished()`.
+   - `meters.rs`: `StingerFailed` gegen die bekannte Take-Id prüfen
+     (andere Id → ignorieren).
+   - `switcher.rs`: Grenze in `stinger_started` ab jetzt neu setzen.
+   - `NullEngine::stinging()` zählt Generationen; Service-Test: altes
+     Ende hält, aktuelles gibt frei.
+   - `scripts/test-global-keys.sh`: `show.conf` prüfen statt der
+     Logzeile „settings taken over“ (bricht mit `RUST_LOG=warn`).
+2. **Console `--style`:** Qt verbraucht `--style` selbst, die eigene
+   Option kommt nicht an. Umbenennen oder vor Qt auswerten.
+3. **Weitere Kleinigkeiten:** verliehene Vorschau nach abgelehntem
+   Übergang nicht zurückgegeben; andere Engine-Aufrufe mit 60 s Zeitlimit;
+   Aufnahme: Platzhalter `<Ausgang>` im Text, Test der Präfix-Form;
+   DECISIONS-Satzreihenfolge und Flag `DEMOTE_FAILED` aus #105.
+4. **VSP:** Vorschau-Ausgang im strom-Mischer (noch nicht begonnen).
+5. **Hardware (RTX 3090):** H.24, H.27 (Stinger auf CUDA/GL-Mischer),
+   H.36–H.39 (H.39: Echtzeit-Zeitgeber, `test-cue-timing.sh` unter Last),
+   CEF/`cefsrc`, GPU-Pfade allgemein; Console: zwei Portal-Sitzungen am
+   KDE-Portal (Mischer und Show gleichzeitig), Fokus nach Dialogen.
+
+### Prüfen
+
+- `cd workspace/lmix-core && CARGO_INCREMENTAL=0 cargo test --bin lmix-core`
+  (340), `cargo clippy --all-targets -- -D warnings`, `cargo fmt`.
+- `scripts/test-m2b-vm.sh` (47 Prüfungen, zuletzt grün),
+  `scripts/test-console-qt.sh` (13), `scripts/test-global-keys.sh` (5),
+  `scripts/test-cue-timing.sh`. Unter Last (paralleler Build) scheitert
+  der VM-Test gern an der Latenz – dann allein wiederholen.
+- Console starten: `scripts/run-local.sh` (`APP=show` oder `APP=both`).
 
 ## PRs in Merge-Reihenfolge, Stand 2026-10-18 (bis #101 gemergt, offen #102)
 
