@@ -120,18 +120,36 @@ pub enum FlowFailure {
 /// How a stinger take on lmix's mixer ended (strom's `StingerCompleted`,
 /// `StingerFailed`). Until then strom holds the mixer and refuses takes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum StingerEnd {
+pub enum StingerOutcome {
     Completed,
     Failed,
+}
+
+/// The end of lmix's take `generation` (counted by `Stingers::starting`).
+/// A late end of an older take must not free a newer take's lock.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct StingerEnd {
+    pub outcome: StingerOutcome,
+    pub generation: u64,
+}
+
+/// lmix's last take as strom's events see it.
+#[derive(Default)]
+struct Take {
+    /// Takes lmix started.
+    generation: u64,
+    /// strom's id of the take; `None` while it is being started or none
+    /// ran.
+    id: Option<u64>,
+    /// A completed take strom reported before lmix knew its id.
+    early: Option<u64>,
 }
 
 /// Stinger ends of one mixer block, for the take lmix started last.
 pub struct Stingers {
     /// The vision mixer block in the mixer flow.
     block: &'static str,
-    /// strom's id of the take lmix started last; `None` while a take is
-    /// being started or none ran.
-    take: Mutex<Option<u64>>,
+    take: Mutex<Take>,
     ends: broadcast::Sender<StingerEnd>,
 }
 
@@ -142,19 +160,38 @@ impl Stingers {
     pub fn new(block: &'static str) -> Self {
         Self {
             block,
-            take: Mutex::new(None),
+            take: Mutex::new(Take::default()),
             ends: broadcast::channel(STINGER_BUFFER).0,
         }
     }
 
     /// A take is about to start: an older one's end no longer counts.
     pub fn starting(&self) {
-        *self.take.lock().expect("stinger take lock") = None;
+        let mut take = self.take.lock().expect("stinger take lock");
+        take.generation += 1;
+        take.id = None;
+        take.early = None;
     }
 
-    /// strom started take `id`; its `StingerCompleted` ends it.
+    /// The take lmix started last (see `StingerEnd`).
+    pub fn generation(&self) -> u64 {
+        self.take.lock().expect("stinger take lock").generation
+    }
+
+    /// strom started take `id`; its `StingerCompleted` ends it. One that
+    /// came before strom's answer ends it now.
     pub fn started(&self, id: u64) {
-        *self.take.lock().expect("stinger take lock") = Some(id);
+        let mut take = self.take.lock().expect("stinger take lock");
+        if take.early.take() != Some(id) {
+            take.id = Some(id);
+            return;
+        }
+        let end = StingerEnd {
+            outcome: StingerOutcome::Completed,
+            generation: take.generation,
+        };
+        // Nobody listening is fine.
+        let _ = self.ends.send(end);
     }
 
     pub fn subscribe(&self) -> broadcast::Receiver<StingerEnd> {
@@ -166,21 +203,31 @@ impl Stingers {
     /// started from strom's own panel); a failed one is always the take
     /// being started, as strom reports it before answering the request.
     fn end_of(&self, event: &StromEvent, mixer: FlowId) -> Option<StingerEnd> {
-        match event {
+        let mut take = self.take.lock().expect("stinger take lock");
+        let generation = take.generation;
+        let outcome = match event {
             StromEvent::StingerCompleted {
                 flow_id,
                 block_id,
                 report,
             } if *flow_id == mixer && block_id == self.block => {
-                let mut take = self.take.lock().expect("stinger take lock");
-                take.take_if(|id| *id == report.take_id)
-                    .map(|_| StingerEnd::Completed)
+                // Before strom's answer: `started` decides.
+                if take.id.is_none() {
+                    take.early = Some(report.take_id);
+                }
+                take.id
+                    .take_if(|id| *id == report.take_id)
+                    .map(|_| StingerOutcome::Completed)
             }
             StromEvent::StingerFailed {
                 flow_id, block_id, ..
-            } if *flow_id == mixer && block_id == self.block => Some(StingerEnd::Failed),
+            } if *flow_id == mixer && block_id == self.block => Some(StingerOutcome::Failed),
             _ => None,
-        }
+        }?;
+        Some(StingerEnd {
+            outcome,
+            generation,
+        })
     }
 
     fn pass_on(&self, event: &StromEvent, mixer: FlowId) {
@@ -390,19 +437,56 @@ mod tests {
         assert_eq!(stingers.end_of(&older_take, mixer), None);
 
         let ours = completed(mixer, "vm", 7);
-        assert_eq!(stingers.end_of(&ours, mixer), Some(StingerEnd::Completed));
+        let end = StingerEnd {
+            outcome: StingerOutcome::Completed,
+            generation: 0,
+        };
+        assert_eq!(stingers.end_of(&ours, mixer), Some(end));
         assert_eq!(stingers.end_of(&ours, mixer), None, "it ends once");
 
         // A new take forgets the old one before strom answers.
         stingers.started(8);
         stingers.starting();
         assert_eq!(stingers.end_of(&completed(mixer, "vm", 8), mixer), None);
+
+        // An end carries its take's generation, not a newer one's.
+        stingers.started(11);
+        let end = stingers.end_of(&completed(mixer, "vm", 11), mixer);
+        stingers.starting();
+        assert_eq!(end.map(|e| e.generation), Some(1));
+        assert_eq!(stingers.generation(), 2);
+    }
+
+    #[test]
+    fn an_end_before_the_take_id_ends_it_on_the_id() {
+        let mixer = FlowId::new_v4();
+        let stingers = Stingers::new("vm");
+        let mut ends = stingers.subscribe();
+        stingers.starting();
+
+        // strom ended the take before lmix read its id.
+        stingers.pass_on(&completed(mixer, "vm", 9), mixer);
+        assert!(ends.try_recv().is_err(), "not known yet");
+
+        stingers.started(9);
+        let end = StingerEnd {
+            outcome: StingerOutcome::Completed,
+            generation: 1,
+        };
+        assert_eq!(ends.try_recv().ok(), Some(end), "ended on the id");
+
+        // Another take's early end does not count.
+        stingers.starting();
+        stingers.pass_on(&completed(mixer, "vm", 9), mixer);
+        stingers.started(10);
+        assert!(ends.try_recv().is_err());
     }
 
     #[test]
     fn a_failed_stinger_ends_it() {
         let mixer = FlowId::new_v4();
         let stingers = Stingers::new("vm");
+        stingers.starting();
         let wire = serde_json::json!({
             "type": "StingerFailed",
             "data": {
@@ -414,7 +498,11 @@ mod tests {
 
         let event: StromEvent = serde_json::from_value(wire).unwrap();
 
-        assert_eq!(stingers.end_of(&event, mixer), Some(StingerEnd::Failed));
+        let end = StingerEnd {
+            outcome: StingerOutcome::Failed,
+            generation: 1,
+        };
+        assert_eq!(stingers.end_of(&event, mixer), Some(end));
     }
 
     #[test]

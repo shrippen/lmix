@@ -99,6 +99,11 @@ pub trait Engine: Send + Sync {
         tokio::sync::broadcast::channel(1).1
     }
 
+    /// The stinger take the engine started last, as its ends name it.
+    fn stinger_generation(&self) -> u64 {
+        0
+    }
+
     /// Ids of sounds and pictures that are over: played to their end,
     /// stopped, or gone with the playback flow.
     fn playback_ended(&self) -> tokio::sync::broadcast::Receiver<String> {

@@ -514,6 +514,9 @@ pub struct Switcher {
     /// A stinger runs: switching is refused until the engine reports
     /// its end (`stinger_finished`), at the latest at this time.
     stinger_until: Option<Instant>,
+    /// The engine's generation of the take behind the lock; only its
+    /// end frees it.
+    stinger_take: u64,
     /// Stinger library the engine has; `None` sends it again.
     stinger_sent: Option<Vec<LibraryClip>>,
     /// The engine can apply looks (GL mixer).
@@ -592,6 +595,7 @@ impl Switcher {
             fade_to_black: false,
             t_bar: 0.0,
             stinger_until: None,
+            stinger_take: 0,
             stinger_sent: Some(Vec::new()),
             looks_available: false,
             locked: false,
@@ -2456,7 +2460,7 @@ impl Switcher {
         );
         // Locked until the engine reports the end. The whole clip plays,
         // its length when the player reported it; a lost report frees
-        // the lock after strom's own limit.
+        // the lock after strom's own limit and a margin.
         let length_ms = self
             .clip_ms
             .get(&slot)
@@ -3567,6 +3571,19 @@ impl Switcher {
     /// it ran on is gone): switching is free again.
     pub fn stinger_finished(&mut self) {
         self.stinger_until = None;
+    }
+
+    /// The engine started its take `generation` for the lock.
+    pub fn stinger_started(&mut self, generation: u64) {
+        self.stinger_take = generation;
+    }
+
+    /// The engine's take `generation` ended: frees the lock if it is
+    /// that take's, not after a newer take started.
+    pub fn stinger_ended(&mut self, generation: u64) {
+        if generation == self.stinger_take {
+            self.stinger_finished();
+        }
     }
 
     fn check_no_stinger(&self) -> Result<(), ActionError> {
@@ -6694,6 +6711,22 @@ mod tests {
 
         // At the limit, switching is free without the end.
         sw.stinger_until = Some(Instant::now());
+        sw.apply(Action::Cut).unwrap();
+    }
+
+    #[test]
+    fn a_late_end_of_an_older_take_keeps_the_lock() {
+        let sting = Action::Transition {
+            slot: TransitionSlot(2),
+        };
+        let mut sw = with_stinger();
+        sw.apply(sting).unwrap();
+        sw.stinger_started(2);
+
+        sw.stinger_ended(1);
+        assert_eq!(sw.apply(Action::Cut), Err(ActionError::StingerPlaying));
+
+        sw.stinger_ended(2);
         sw.apply(Action::Cut).unwrap();
     }
 

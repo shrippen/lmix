@@ -1314,6 +1314,10 @@ impl Engine for StromEngine {
         self.stingers.subscribe()
     }
 
+    fn stinger_generation(&self) -> u64 {
+        self.stingers.generation()
+    }
+
     fn health(&self) -> EngineHealth {
         self.health.lock().expect("health lock").clone()
     }

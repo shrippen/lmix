@@ -3822,6 +3822,25 @@ auf Sendung.
 (hängender Mischer), lässt den nächsten Cut wie bisher an strom
 scheitern.
 
+**Nachtrag (18.10., Review #108/#109)**:
+- Grenze jetzt Clip + 8 s (`STINGER_FINISH_LIMIT_MS`): strom startet seine
+  1 s + 5 s erst nach Cue, Analyse und `play_at` und cued den Clip neu,
+  bevor es `running` freigibt. Mit 6 s lief lmix' Grenze bei einem
+  hängenden Mischer immer zuerst ab; 2 s Reserve.
+- Ein spätes Ende eines älteren Takes gibt die Sperre eines neueren nicht
+  mehr frei: `Stingers::starting` zählt jeden Take (Generation), jedes
+  `StingerEnd` trägt sie, der Switcher gibt nur bei gleicher Generation
+  frei (`stinger_ended`). Vorher konnte `Completed(N)` nach abgelaufener
+  Grenze auf den Switcher warten, den Take N+1 hielt, und dann dessen
+  Sperre lösen.
+- `StingerCompleted` vor der Antwort auf `…/stinger/take` (Id noch
+  unbekannt) geht nicht mehr verloren: lmix merkt sich die Id und meldet
+  das Ende, sobald die Antwort sie nennt. Vorher hielt die Sperre bis zur
+  Grenze.
+**Geprüft**: Unit-Tests (Generation im Ende, spätes Ende hält die Sperre,
+Ende vor der Id); `scripts/test-m2b-vm.sh` (Stinger gesperrt bis
+strom's Ende).
+
 ## 2026-10-18 — Zeitgeber mit Echtzeit-Priorität (RUN.8)
 
 **Kontext**: User-Entscheidung RUN.8 (Entscheidungsseite 18.10.): Der
