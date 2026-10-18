@@ -99,12 +99,14 @@ rebound() { grep -q '"trigger":"F9"' "$WORK/portal.out"; }
 wait_for rebound || fail "changed key not bound again"
 pass "a changed key is bound again"
 
-# lmix Show by default (no show.conf): binds the keys too.
+# lmix Show by default: binds the keys too, also after an update, when it
+# takes over the old console.conf with its "global=false" written by default.
+printf '[keys]\nglobal=false\n' >"$WORK/config/lmix/console.conf"
 before="$(wc -l <"$WORK/portal.out")"
 XDG_CONFIG_HOME="$WORK/config" DISPLAY="$DISPLAY_NUM" QT_QPA_PLATFORM=xcb LMIX_CORE="http://127.0.0.1:${PORT}" \
     "$(target console-qt lmix-show)" >"$WORK/show.log" 2>&1 &
 PIDS+=($!)
 show_bound() { tail -n +"$((before + 1))" "$WORK/portal.out" | grep -q '"trigger":"F9"'; }
 wait_for show_bound || fail "lmix Show did not bind by default: $(tail -n +"$((before + 1))" "$WORK/portal.out")"
-pass "lmix Show binds the shortcut keys by default"
+pass "lmix Show binds the shortcut keys by default, also with an old console.conf"
 echo "global keys check passed"

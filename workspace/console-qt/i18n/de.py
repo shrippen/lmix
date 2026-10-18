@@ -376,7 +376,7 @@ DE = {
     'Goes out as overlay': 'Geht als Overlay raus',
     'Image address or URL': 'Bildadresse oder URL',
     'Keys also work when this window is not in front': 'Tasten wirken auch, wenn dieses Fenster nicht vorne ist',
-    'If lmix Mixer and lmix Show both run with this on, a key press runs twice.': 'Läuft auch lmix Mischer bzw. lmix Show mit globalen Tasten, löst ein Druck doppelt aus.',
+    'If lmix Mixer and lmix Show both run with this on, a key press runs twice.': 'Laufen lmix Mischer und lmix Show beide mit globalen Tasten, löst ein Druck doppelt aus.',
     'Layer %1': 'Ebene %1',
     'Layout area: arrow keys move the chosen boxes, with Shift they size the selected one': 'Layout-Fläche: Pfeiltasten verschieben die gewählten Boxen, mit Umschalt ändern sie die Größe der markierten',
     'Leaves program': 'Verlässt Programm',

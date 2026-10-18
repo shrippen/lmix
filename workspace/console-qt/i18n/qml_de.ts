@@ -2547,7 +2547,7 @@
     <message>
       <location line="+9" />
       <source>If lmix Mixer and lmix Show both run with this on, a key press runs twice.</source>
-      <translation>Läuft auch lmix Mischer bzw. lmix Show mit globalen Tasten, löst ein Druck doppelt aus.</translation>
+      <translation>Laufen lmix Mischer und lmix Show beide mit globalen Tasten, löst ein Druck doppelt aus.</translation>
     </message>
     <message>
       <location line="+5" />

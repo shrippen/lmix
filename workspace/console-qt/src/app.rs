@@ -101,10 +101,34 @@ fn adopt_old_settings(dir: &Path, name: &str) -> std::io::Result<bool> {
     if own.exists() || !old.is_file() {
         return Ok(false);
     }
+    let text = std::fs::read_to_string(&old)?;
+    let text = if name == "show" {
+        without_global_off(&text)
+    } else {
+        text
+    };
     let tmp = dir.join(format!("{name}.conf.tmp"));
-    std::fs::copy(&old, &tmp)?;
+    std::fs::write(&tmp, text)?;
     std::fs::rename(&tmp, &own)?;
     Ok(true)
+}
+
+/// The old console wrote its default `global=false` under `[keys]` into
+/// every file; kept, it would hide the show's default (on). Only a key the
+/// user switched on is carried over.
+fn without_global_off(text: &str) -> String {
+    let mut section = "";
+    let mut out = String::with_capacity(text.len());
+    for line in text.split_inclusive('\n') {
+        let trimmed = line.trim();
+        if trimmed.starts_with('[') {
+            section = trimmed;
+        } else if section == "[keys]" && trimmed.replace(' ', "") == "global=false" {
+            continue;
+        }
+        out.push_str(line);
+    }
+    out
 }
 
 /// Starts the program `app`; returns only by ending the process.
@@ -221,6 +245,35 @@ mod tests {
             "[appearance]\nstyle=2\n"
         );
         assert!(!dir.join("show.conf.tmp").exists());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn the_show_keeps_its_global_keys_default() {
+        let dir = folder("global");
+        let old = "[appearance]\nstyle=2\n[keys]\nglobal=false\n[view]\nglobal=false\n";
+        std::fs::write(dir.join(OLD_SETTINGS), old).unwrap();
+
+        assert!(adopt_old_settings(&dir, "show").unwrap());
+        assert_eq!(
+            std::fs::read_to_string(dir.join("show.conf")).unwrap(),
+            "[appearance]\nstyle=2\n[keys]\n[view]\nglobal=false\n"
+        );
+        // The mixer's default is off anyway; its copy stays as it was.
+        assert!(adopt_old_settings(&dir, "mixer").unwrap());
+        assert_eq!(
+            std::fs::read_to_string(dir.join("mixer.conf")).unwrap(),
+            old
+        );
+
+        // Switched on, it stays on.
+        std::fs::remove_file(dir.join("show.conf")).unwrap();
+        std::fs::write(dir.join(OLD_SETTINGS), "[keys]\nglobal=true\n").unwrap();
+        assert!(adopt_old_settings(&dir, "show").unwrap());
+        assert_eq!(
+            std::fs::read_to_string(dir.join("show.conf")).unwrap(),
+            "[keys]\nglobal=true\n"
+        );
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

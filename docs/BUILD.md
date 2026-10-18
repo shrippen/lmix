@@ -322,7 +322,8 @@ Automatischer Test (Xvfb, CPU-Mischer, keine GPU nötig):
 `scripts/test-console-qt.sh` prüft im Mischer bewegte Monitore und Kacheln,
 Klick = Vorschau, Cut und dass QML keine Warnungen schreibt; danach startet
 es die Show am selben `lmix-core` und prüft, dass ihr Fenster zeichnet, ohne
-QML-Warnungen.
+QML-Warnungen, dass die Leertaste GO und Escape Panik auslöst, auch nach
+„Speichern unter…“ in der Kopfzeile, das mit Escape geschlossen wird.
 
 ## Dauertest auf Hardware
 

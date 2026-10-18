@@ -3795,7 +3795,9 @@ AppShell.qml   Fenster: lmix-core, Stil, Datei-Knöpfe (Neu, Öffnen, Zuletzt,
   `show.conf`. Fehlt die eigene Datei und gibt es `console.conf`, kopiert
   das Programm sie einmal (beide Programme; über eine `.tmp`-Datei und
   Umbenennen), so bleiben Stil und Ansicht. `view.showMode` entfällt.
-  Stand `keys/global` in der alten Datei auf an, ist es danach in beiden an.
+  Stand `keys/global` in der alten Datei auf an, ist es danach in beiden an;
+  stand es auf aus (die alte Console schrieb das immer), nimmt die Show es
+  nicht mit und bleibt bei ihrer Vorgabe an.
 - **Titelleiste** nennt das Programm: „lmix Mischer — <Show>“, „lmix Show —
   <Show>“.
 - `--mode simple|advanced` wirkt nur im Mischer; `--core`, `--style`,
