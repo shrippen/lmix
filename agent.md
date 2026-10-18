@@ -38,7 +38,7 @@ Rule 7: Use the body to explain what and why vs. how. Assume the code explains t
 
 - If the prompt indicates that a bug is being fixed, don't write the fix right away. First write the test. Observe it failing. Then write the fix. And observe the test passing.
 
-- PR-Agent (where set up): If the review fails (an error, no result, e.g. a key or cost limit), ask for it once more with `/review`; if that fails too, green CI is enough to merge (owner, 11.10.2026).
+- PR-Agent (where set up): If the review fails (an error, no result, e.g. a key or cost limit), ask for it once more with `/review`; if that fails too, green CI is enough to merge (owner, 11.10.2026). Here the Claude review is needed in addition (see Repository rule).
 
 ## GUI rule
 
@@ -75,5 +75,11 @@ Rule 7: Use the body to explain what and why vs. how. Assume the code explains t
 
 ## Repository rule
 
-- PR-Agent (`.gitea/workflows/pr-agent.yml`) reviews every PR before it is merged. Wait for its comment on the PR's latest commit; after further pushes, ask for a new one with a `/review` comment. Fix or answer each finding in the PR, then merge. Without a review (the run skipped for lack of `PR_AGENT_LLM_KEY` or `PR_AGENT_MODEL`, or it failed), do not merge: ask the owner.
+- Claude review (owner, 18.10.2026): every PR is reviewed by a new Claude agent before it is merged. The owner does not read code, so this is the second reader.
+  - The session that wrote the PR starts a new agent (Agent tool, no shared context) and gives it only the PR's title and body, the diff against its base (`git diff <base>...HEAD`), the repository and `REVIEW.md`. It does not tell it what it thinks of its own change.
+  - The agent checks every finding it would post against the code (file, line, the input that goes wrong) and drops what it cannot show. It reports as `REVIEW.md` says: count first, labels **Wichtig**, **Kleinigkeit**, **Bestand**.
+  - The session posts the report unchanged as a PR comment on Gitea, headed `Claude-Review (neuer Agent) zu <commit>`, with the Claude Code footer.
+  - Merge only when the review covers the PR's latest commit, CI is green, and every **Wichtig** is fixed or answered in the PR with a reason. After a fix, a new agent reviews only the new commits. After three rounds that still find **Wichtig**, stop and rethink the approach with the owner.
+  - The owner confirms in words, not by reading code, a PR that changes CI or release workflows (`.gitea/workflows`, `.github/workflows`, `packaging/`), secrets or what is published.
+- PR-Agent (`.gitea/workflows/pr-agent.yml`) is an extra reader: it reviews every PR with another LLM. Read its findings and fix or answer them like the Claude review's. If it fails, ask once more with `/review`; if that fails too, the Claude review and green CI are enough.
 - CI runs on the GitHub mirror (`.github/workflows/ci.yml`, since 16.10.2026) and reports back to Gitea as the commit status `github / test`. The strom binary goes to `ghcr.io/shrippen/lmix-strom` (public) only.
