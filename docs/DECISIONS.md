@@ -3985,7 +3985,8 @@ PR-Agent; nach einem `/review` wartet der Merge, bis dieser Lauf fertig
 ist (ein fehlgeschlagener hält nichts auf), und seine Befunde werden
 behoben oder beantwortet. Beantwortete Befunde gehen mit den offenen
 **Wichtig** an den nächsten Review-Agenten; eine Antwort zählt erst, wenn
-er sie annimmt. Dieselbe Regel gilt in allen Repos mit
+er sie annimmt, sonst entscheidet der Eigentümer in Worten. Ein Kommentar
+wie `/reviewed` endet im ersten Schritt, ohne etwas zu installieren. Dieselbe Regel gilt in allen Repos mit
 PR-Agent.
 
 **Verworfen**: PR-Agent ganz entfernen. Er bleibt als zweiter Leser mit
