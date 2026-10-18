@@ -1268,12 +1268,16 @@ impl Service {
         let mut ends = self.engine.stingers();
         loop {
             match ends.recv().await {
-                Ok(end) => tracing::debug!(?end, "stinger ended"),
+                Ok(end) => {
+                    tracing::debug!(?end, "stinger ended");
+                    self.switcher.lock().await.stinger_ended(end.generation);
+                }
                 // Missed ones ended a stinger too.
-                Err(broadcast::error::RecvError::Lagged(_)) => {}
+                Err(broadcast::error::RecvError::Lagged(_)) => {
+                    self.switcher.lock().await.stinger_finished();
+                }
                 Err(broadcast::error::RecvError::Closed) => return,
             }
-            self.switcher.lock().await.stinger_finished();
         }
     }
 
@@ -1917,6 +1921,10 @@ impl Service {
             }
             mark_slot(sw, command, outcome.is_ok());
             mark_output(sw, command, &outcome);
+            // Only this take's end frees the lock, not an older one's.
+            if let (Ok(()), Command::Stinger { .. }) = (&outcome, command) {
+                sw.stinger_started(self.engine.stinger_generation());
+            }
 
             let Err(e) = outcome else {
                 continue;
@@ -2795,7 +2803,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_stinger_holds_switching_until_the_engine_ends_it() {
-        use crate::engine::meters::StingerEnd;
+        use crate::engine::meters::{StingerEnd, StingerOutcome};
         use lmix_types::TransitionSlot;
         let engine = Arc::new(NullEngine::stinging());
         let service = stinger_service(engine.clone()).await;
@@ -2811,7 +2819,10 @@ mod tests {
             "past the clip, still held"
         );
 
-        engine.end_stinger(StingerEnd::Completed);
+        engine.end_stinger(StingerEnd {
+            outcome: StingerOutcome::Completed,
+            generation: 0,
+        });
         let soon = std::time::Duration::from_millis(500);
         assert!(cut_within(&service, soon).await, "free at the end");
 

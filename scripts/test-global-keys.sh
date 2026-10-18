@@ -108,5 +108,6 @@ XDG_CONFIG_HOME="$WORK/config" DISPLAY="$DISPLAY_NUM" QT_QPA_PLATFORM=xcb LMIX_C
 PIDS+=($!)
 show_bound() { tail -n +"$((before + 1))" "$WORK/portal.out" | grep -q '"trigger":"F9"'; }
 wait_for show_bound || fail "lmix Show did not bind by default: $(tail -n +"$((before + 1))" "$WORK/portal.out")"
+grep -q "settings taken over" "$WORK/show.log" || fail "show did not take over console.conf"
 pass "lmix Show binds the shortcut keys by default, also with an old console.conf"
 echo "global keys check passed"
