@@ -3671,10 +3671,14 @@ Aufnahmen, Program wie ISO-Spuren, über upstreams Live-Recorder
 **Entscheidung**: Aufnahme-Ausgänge bauen den Live-Recorder statt
 `builtin.recorder`. Gleiche Eigenschaften (Container, Ordner, Präfix, Zahl
 der Tonspuren) und Pads, also keine Änderung an Show-Dateien oder API. Die
-Dateien heißen jetzt `<Ordner>/lmix_<Datum>_<Zeit>_00001.<Endung>`.
+Dateien heißen `<Ordner>/lmix-<Ausgang>_<Datum>_<Zeit>_00001.<Endung>`.
+Neu ist der Anfang der Ausgangs-ID: Sonst schrieben zwei Aufnahmen in
+einen Ordner, die in derselben Sekunde starten (Restore nach einem
+strom-Neustart), dieselbe Datei.
 Ausnahme: MKV vor GStreamer 1.26. Dort ist `matroskamux` noch kein
 Live-Muxer, und der Live-Recorder lehnt MKV ab. lmix-core fragt beim
-Start strom nach seiner GStreamer-Version (`/api/version`) und nimmt für
+Start strom nach seiner GStreamer-Version (`/api/version`, ohne Antwort
+mit Warnung im Log) und nimmt für
 MKV dann den älteren Recorder (dessen MKV bleibt nach einem Absturz
 ebenfalls lesbar). MP4 und TS gehen immer über den Live-Recorder.
 **Geprüft**: Unit-Tests (Block je Container und Version);
