@@ -2701,7 +2701,7 @@ mod tests {
         assert!(engine
             .log()
             .iter()
-            .any(|c| matches!(c, Command::Stinger { to: 0, file } if file == "sting.webm")));
+            .any(|c| matches!(c, Command::Stinger { to: 0, clip } if clip.file == "sting.webm")));
         assert!(!overlay(), "no overlay before the cut point");
         // The switcher stays free meanwhile.
         service.state().await;

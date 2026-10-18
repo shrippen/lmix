@@ -3708,17 +3708,26 @@ baut daraus upstreams Stinger-Bibliothek:
   `cut_point_ms`, Layout `auto`, darunter `cut`), jede Änderung mit der
   erwarteten Datei (409 bei fremder Änderung). Die Playlist-Eigenschaft
   neu zu setzen erreicht den laufenden Player nicht; die API schon.
-- Auslösen: `Stinger` → Übergang Typ `stinger` mit dem Index des Clips;
-  strom schaltet PGM bildgenau am Cut-Punkt. Fehlt der Clip in der
-  Bibliothek (Datei fehlte), schneidet die Engine und meldet den Fehler
-  (wie upstream bei einem Clip, der nicht spielt).
+- Auslösen: `Stinger` trägt Datei und Cut-Punkt. Die Engine legt den
+  Clip vorher in die Bibliothek, wenn er fehlt oder einen anderen
+  Cut-Punkt hat (ein gescheiterter Abgleich heilt so beim nächsten
+  Drücken), dann `POST …/stinger/take` mit Index und Datei (strom lehnt
+  ab, wenn die Bibliothek sich dazwischen geändert hat). strom schaltet
+  PGM bildgenau am Cut-Punkt. Läuft der Stinger nicht (Datei fehlt, strom
+  lehnt ab), schneidet die Engine auf das neue Program, wie es der
+  Switcher schon zeigt, und meldet den Fehler (wie upstream bei einem
+  Clip, der nicht spielt).
 - Der Switcher tauscht PVW/PGM beim Drücken wie bisher. Ton (AFV),
   Auto-Play, Auto-Pause und vorbereitete Overlays laufen nach
   Cut-Punkt + 80 ms Preroll (`Command::Wait`), also nach lmix-Uhr, ±1–2
   Bilder neben dem Bildschnitt. Sperre (`stinger_until`): Preroll +
-  Cliplänge, wenn der Player sie meldet, sonst die Länge der Taste. Ein
-  Übergang, den strom noch ablehnt („a stinger is on air“, er parkt den
-  Clip nach dem Ende neu), wird wie beim Anlauf wiederholt.
+  Cliplänge (wenn der Player sie meldet, sonst die Länge der Taste) +
+  300 ms. So lange hält strom den Mischer nach dem Clip meist noch (zwei
+  Bilder, dann parkt es den Clip neu). Den Rest wartet die Engine ab:
+  Vor jedem Take, Stinger und FTB nach einem Stinger fragt sie alle 20 ms,
+  bis strom `running == false` meldet (höchstens Cliplänge + 6 s). Cut,
+  Übergänge, T-Bar und FTB lehnt lmix während der Sperre ab
+  (`StingerPlaying`); FTB kippt den Zustand dann nicht.
 - Ton: `stinger:audio_out` auf einen eigenen Kanal des Audiomischers nach
   den Slots, auf Programm mit 0 dB, ohne Kanalzug.
 
@@ -3742,16 +3751,23 @@ strom-Grenze (9) bleibt.
   erste Taste.
 - Der Clip spielt immer ganz; die Länge der Taste gilt nur für die
   Sperre, solange die Cliplänge unbekannt ist.
-- Ausblenden nach Schwarz während eines Stingers lehnt strom ab (Fehler
-  der Engine, lmix sperrt es nicht selbst).
+- Ausblenden nach Schwarz während eines Stingers geht nicht mehr (strom
+  lehnt ab, lmix sperrt es); vorher ging es.
+- Abgleich: Entfernt der Abgleich einen Clip nicht (z. B. während eines
+  Stingers), bleibt er in der Bibliothek liegen, bis sich die Tasten
+  wieder ändern oder lmix neu aufbaut; er stört nicht.
 - Track-Matte und Nur-Maske nur auf dem GL-Mischer; CPU und CUDA spielen
   klassisch (CUDA ungeprüft).
 - Der Clip-Input selbst bleibt angelegt und pausiert; er liefert nur die
   Datei (und die Kachel).
 
-**Geprüft**: Unit-Tests (Switcher: Befehle, Sperre, Layout-Ablehnung,
-Bibliothek je Datei; Engine gegen nachgebautes strom: Index, Abgleich,
-Cut ohne Clip; Mischer-Flow); `scripts/test-m2b-vm.sh` (CPU-Mischer):
+**Update**: Der Mischer-Flow heißt jetzt `lmix mixer 10`. Das erste
+Starten nach dem Update baut einen laufenden Mischer neu, das Bild fällt
+dabei kurz weg: nicht während einer Show aktualisieren.
+**Geprüft**: Unit-Tests (Switcher: Befehle, Sperre, FTB gesperrt,
+Layout-Ablehnung, Bibliothek je Datei; Engine gegen nachgebautes strom,
+das die Bibliothek wirklich ändert: Index und Datei, Clip nachlegen,
+Stinger nach Stinger wartet, Abgleich, Cut ohne Clip; Mischer-Flow); `scripts/test-m2b-vm.sh` (CPU-Mischer):
 Clip in upstreams Bibliothek mit Cut-Punkt, Vorschau sofort auf Program,
 Cut gesperrt, Clip mit Alpha über dem alten Programm, Ende auf dem neuen,
 Take-Bericht von strom, Taste wird Cut und Bibliothek leer, wenn der

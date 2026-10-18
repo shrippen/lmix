@@ -13,7 +13,7 @@
 //! | `StartOutput` / `StopOutput` | output flow (own flow per output) built and started / deleted |
 //! | `Transport` | slot's media player: play, pause, seek 0, next, previous |
 //! | `Seek`, `PlayItem` | the player's `seek` and `goto` (then play) |
-//! | `Stinger` | vision mixer: strom's stinger take with the clip's library index (`transition` type `stinger`) |
+//! | `Stinger` | vision mixer stinger API: clip ensured in the library, then `stinger/take` with index and file; a cut if it cannot run |
 //! | `StingerLibrary` | vision mixer stinger API: clips removed, added, cut points set |
 
 use async_trait::async_trait;
@@ -35,7 +35,7 @@ use strom_types::devtools::HtmlPageCommand;
 use strom_types::discovery::DeviceResponse;
 use strom_types::stinger::{
     StingerAddClipRequest, StingerBeneath, StingerClip, StingerClipSettings, StingerLayout,
-    StingerState,
+    StingerState, StingerTakeRequest, StingerTakeResponse,
 };
 use strom_types::vision_mixer::{NormRect, Source, Zone, ZoneBorder, TRANSITION_FOREGROUND_ZORDER};
 use strom_types::{Flow, FlowId, PipelineState, PropertyValue};
@@ -65,9 +65,11 @@ const DEVICE_CATEGORIES: [(&str, DeviceKind); 3] = [
 
 /// strom's answer to a transition before the pipeline has a position.
 const NOT_RUNNING_YET: &str = "query pipeline position";
-/// strom's answer to a transition while its stinger still finishes (it
-/// parks the clip again after the end).
-const STINGER_ON_AIR: &str = "a stinger is on air";
+/// How often the engine asks whether strom's last stinger has finished.
+const STINGER_POLL: Duration = Duration::from_millis(20);
+/// How long after a stinger's clip strom may still hold the mixer at most
+/// (its own give-up time after the end, plus a second).
+const STINGER_FINISH_LIMIT: Duration = Duration::from_secs(6);
 
 /// Frame colour of layout boxes.
 const LAYOUT_BORDER_COLOR: &str = "#FFFFFF";
@@ -109,6 +111,8 @@ pub struct StromEngine {
     sample_rate: std::sync::Mutex<u32>,
     /// Mixer inputs of the last `start`.
     slots: AtomicUsize,
+    /// Until when strom may still hold the mixer for the last stinger.
+    stinger_busy: std::sync::Mutex<Option<std::time::Instant>>,
     playback: playback::Playing,
     /// Whether recordings may be live MKV; set by `start` from strom's
     /// GStreamer version.
@@ -153,6 +157,7 @@ impl StromEngine {
             multiview: Default::default(),
             sample_rate: std::sync::Mutex::new(lmix_types::output::default_sample_rate()),
             slots: AtomicUsize::new(0),
+            stinger_busy: Default::default(),
             playback: Default::default(),
             live_mkv: std::sync::Mutex::new(flows::LiveMkv::No),
         }
@@ -278,21 +283,21 @@ impl StromEngine {
         duration_ms: u32,
     ) -> Result<(), EngineError> {
         let to = slot.unwrap_or_else(|| self.black.load(Ordering::Relaxed));
-        self.take_source(Source::Input(to), effect, duration_ms, None)
+        self.take_source(Source::Input(to), effect, duration_ms)
             .await
     }
 
     /// Transition from what is on program to `to` (an input or a
     /// composition). strom takes whatever is in its preview: put `to`
-    /// there first and give the old preview back after. A stinger plays
-    /// library clip `clip`.
+    /// there first and give the old preview back after. A stinger still
+    /// finishing is waited out (strom refuses takes meanwhile).
     async fn take_source(
         &self,
         to: Source,
         effect: Effect,
         duration_ms: u32,
-        clip: Option<usize>,
     ) -> Result<(), EngineError> {
+        self.stinger_idle().await;
         let state = self.mixer_state().await?;
         let on = |pip: Option<usize>, input: Option<usize>| match pip {
             Some(pip) => Some(Source::Pip(pip)),
@@ -314,17 +319,16 @@ impl StromEngine {
             to_input: Some(to.as_input().unwrap_or(0)),
             transition_type: wire_name(effect).into(),
             duration_ms: u64::from(duration_ms),
-            stinger_clip: clip,
+            stinger_clip: None,
         };
 
         // Right after start strom cannot place a transition until the first
-        // frames ran through ("Failed to query pipeline position"), nor
-        // while its last stinger parks the clip again.
+        // frames ran through ("Failed to query pipeline position").
         let mut attempt = 0;
         loop {
             let result = self.mixer_call("transition", &body).await;
-            let warming_up = matches!(&result, Err(EngineError::Refused(m))
-                if m.contains(NOT_RUNNING_YET) || m.contains(STINGER_ON_AIR));
+            let warming_up =
+                matches!(&result, Err(EngineError::Refused(m)) if m.contains(NOT_RUNNING_YET));
             attempt += 1;
             if !warming_up || attempt >= PLAYING_POLLS {
                 result?;
@@ -575,7 +579,7 @@ impl StromEngine {
         Ok(())
     }
 
-    /// Overlay `channel` is DSK layer `channel + 1` of the vision mixer,
+    /// Overlay `channel` is DSK layer `channel` of the vision mixer,
     /// fed by its own `inter` input: point that input at the slot, then
     /// fade the layer in; off fades it out and leaves the input as is.
     async fn overlay(
@@ -709,20 +713,83 @@ impl StromEngine {
         check(resp).await?.json().await.map_err(net)
     }
 
-    /// Stinger from program to `to` with the library clip of `file`;
-    /// strom switches program at its cut point. A clip not in the library
-    /// (its file was missing) costs the graphic, not the switch: a cut.
-    async fn stinger(&self, to: usize, file: &str) -> Result<(), EngineError> {
-        let library = self.stinger_state().await?;
-        let Some(clip) = library.clips.iter().find(|c| c.file == file) else {
-            self.take_source(Source::Input(to), Effect::Cut, 0, None)
-                .await?;
-            return Err(EngineError::Refused(format!(
-                "stinger clip {file} is not in the engine's library; cut instead"
-            )));
+    /// Stinger from program to `to` with `clip`; strom switches program
+    /// at its cut point. The clip is put in the library first when it is
+    /// missing there or has another cut point (a sync that failed heals
+    /// here). A stinger that cannot run costs the graphic, not the switch:
+    /// program cuts, as the switcher already has it, and the error says so.
+    async fn stinger(&self, to: usize, clip: &LibraryClip) -> Result<(), EngineError> {
+        self.stinger_idle().await;
+        let taken = match self.stinger_ensure(clip).await {
+            Ok(index) => self.stinger_take(to, index, &clip.file).await,
+            Err(e) => Err(e),
         };
-        self.take_source(Source::Input(to), Effect::Stinger, 0, Some(clip.index))
+        let Err(e) = taken else {
+            return Ok(());
+        };
+        self.take_source(Source::Input(to), Effect::Cut, 0).await?;
+        Err(EngineError::Refused(format!(
+            "stinger {}: {e}; cut instead",
+            clip.file
+        )))
+    }
+
+    /// Library index of `clip`, added or its cut point set when needed.
+    async fn stinger_ensure(&self, clip: &LibraryClip) -> Result<usize, EngineError> {
+        let settings = clip_settings(clip);
+        let library = self.stinger_state().await?;
+        let have = match library.clips.iter().find(|c| c.file == clip.file) {
+            None => self.stinger_add(&clip.file, settings).await?,
+            Some(have) if have.settings != settings => {
+                self.stinger_settings(have, settings).await?
+            }
+            Some(have) => have.clone(),
+        };
+        Ok(have.index)
+    }
+
+    /// strom's take (PGM to PVW), with `to` in its preview first. The
+    /// file guards the index: a library changed meanwhile is refused.
+    async fn stinger_take(&self, to: usize, index: usize, file: &str) -> Result<(), EngineError> {
+        let state = self.mixer_state().await?;
+        if state.preview_pip.is_some() || state.preview_input != Some(to) {
+            self.select_preview(to).await?;
+        }
+        let body = StingerTakeRequest {
+            index: Some(index),
+            file: Some(file.into()),
+        };
+        let resp = self
+            .http
+            .post(self.stinger_url("/take"))
+            .json(&body)
+            .send()
             .await
+            .map_err(net)?;
+        let take: StingerTakeResponse = check(resp).await?.json().await.map_err(net)?;
+        let clip = Duration::from_millis(take.duration_ms)
+            + Duration::from_secs_f64(take.take_to_air_ms.max(0.0) / 1000.0);
+        *self.stinger_busy.lock().expect("stinger lock") =
+            Some(std::time::Instant::now() + clip + STINGER_FINISH_LIMIT);
+        Ok(())
+    }
+
+    /// Wait until strom has finished its last stinger: after the clip it
+    /// still holds the mixer while it parks the clip again, and refuses
+    /// takes and fades meanwhile. Gives up at the limit or when strom
+    /// does not answer.
+    async fn stinger_idle(&self) {
+        let busy = *self.stinger_busy.lock().expect("stinger lock");
+        let Some(until) = busy else {
+            return;
+        };
+        while std::time::Instant::now() < until {
+            match self.stinger_state().await {
+                Ok(state) if state.running => tokio::time::sleep(STINGER_POLL).await,
+                _ => break,
+            }
+        }
+        *self.stinger_busy.lock().expect("stinger lock") = None;
     }
 
     /// Make the stinger library these clips: others go (and duplicates),
@@ -757,9 +824,9 @@ impl StromEngine {
         for clip in clips {
             let settings = clip_settings(clip);
             match library.clips.iter().find(|c| c.file == clip.file) {
-                None => note(self.stinger_add(&clip.file, settings).await),
+                None => note(self.stinger_add(&clip.file, settings).await.map(drop)),
                 Some(have) if have.settings != settings => {
-                    note(self.stinger_settings(have, settings).await)
+                    note(self.stinger_settings(have, settings).await.map(drop))
                 }
                 Some(_) => {}
             }
@@ -782,7 +849,7 @@ impl StromEngine {
         &self,
         file: &str,
         settings: StingerClipSettings,
-    ) -> Result<(), EngineError> {
+    ) -> Result<StingerClip, EngineError> {
         let body = StingerAddClipRequest {
             file: file.into(),
             settings: Some(settings),
@@ -794,14 +861,14 @@ impl StromEngine {
             .send()
             .await
             .map_err(net)?;
-        check(resp).await.map(|_| ())
+        check(resp).await?.json().await.map_err(net)
     }
 
     async fn stinger_settings(
         &self,
         clip: &StingerClip,
         settings: StingerClipSettings,
-    ) -> Result<(), EngineError> {
+    ) -> Result<StingerClip, EngineError> {
         let resp = self
             .http
             .put(self.stinger_url(&format!("/clips/{}", clip.index)))
@@ -810,7 +877,7 @@ impl StromEngine {
             .send()
             .await
             .map_err(net)?;
-        check(resp).await.map(|_| ())
+        check(resp).await?.json().await.map_err(net)
     }
 
     /// strom's page endpoint of the web or graphics page in `slot`.
@@ -1048,6 +1115,7 @@ impl Engine for StromEngine {
                 duration_ms,
             } => self.program(*slot, *effect, *duration_ms).await,
             Command::FadeToBlack { duration_ms } => {
+                self.stinger_idle().await;
                 let body = FadeToBlackRequest {
                     duration_ms: u64::from(*duration_ms),
                 };
@@ -1107,7 +1175,7 @@ impl Engine for StromEngine {
             Command::OverlayPlace { channel, rect } => self.overlay_place(*channel, *rect).await,
             Command::TBar { slot, position } => self.t_bar(*slot, *position).await,
             Command::SetStrip { slot, strip } => self.set_strip(*slot, strip).await,
-            Command::Stinger { to, file } => self.stinger(*to, file).await,
+            Command::Stinger { to, clip } => self.stinger(*to, clip).await,
             Command::StingerLibrary { clips } => self.stinger_library(clips).await,
             Command::SetLayout {
                 pip,
@@ -1120,7 +1188,7 @@ impl Engine for StromEngine {
                 effect,
                 duration_ms,
             } => {
-                self.take_source(Source::Pip(*pip), *effect, *duration_ms, None)
+                self.take_source(Source::Pip(*pip), *effect, *duration_ms)
                     .await
             }
             Command::SetLook { slot, look } => self.set_look(*slot, look).await,
@@ -1518,52 +1586,132 @@ mod tests {
         body: serde_json::Value,
     }
 
-    /// A strom stand-in whose mixer has `files` as its stinger library
-    /// (each with cut point `cut_ms`), PGM 0 and PVW 1; it records every
-    /// request and changes nothing.
-    async fn stinger_strom(
-        files: &[(&str, u64)],
-    ) -> (String, std::sync::Arc<std::sync::Mutex<Vec<Call>>>) {
-        let clips = files
-            .iter()
-            .enumerate()
-            .map(|(index, (file, cut_ms))| StingerClip {
-                index,
-                file: (*file).into(),
-                settings: StingerClipSettings {
-                    cut_point_ms: Some(*cut_ms),
-                    ..Default::default()
-                },
-                info: None,
-                variant: None,
-                downgraded_from: None,
+    /// The stinger stand-in's library and take state.
+    #[derive(Default)]
+    struct FakeStinger {
+        /// Files with their cut points, in library order.
+        clips: Vec<(String, u64)>,
+        /// Files strom cannot add (not on disk).
+        absent: Vec<String>,
+        /// State reads that still report the last take running.
+        running: usize,
+        /// Takes started while one was running (strom refuses them).
+        refused: usize,
+        calls: Vec<Call>,
+    }
+
+    type Fake = std::sync::Arc<std::sync::Mutex<FakeStinger>>;
+
+    fn fake_clip(index: usize, (file, cut_ms): &(String, u64)) -> serde_json::Value {
+        serde_json::to_value(StingerClip {
+            index,
+            file: file.clone(),
+            settings: StingerClipSettings {
                 cut_point_ms: Some(*cut_ms),
-                missing: false,
-                analysis_error: None,
-            })
-            .collect();
-        let library = serde_json::to_value(StingerState {
-            source_block_id: Some(flows::STINGER_PLAYER.into()),
-            problem: None,
-            matte_supported: false,
-            preroll_ms: u64::from(flows::STINGER_PREROLL_MS),
-            clips,
-            cued_index: None,
-            ready: true,
-            last_cue_ms: None,
-            running: false,
-            last_take: None,
+                ..Default::default()
+            },
+            info: None,
+            variant: None,
+            downgraded_from: None,
+            cut_point_ms: Some(*cut_ms),
+            missing: false,
+            analysis_error: None,
         })
-        .unwrap();
-        let mixer = serde_json::json!({
-            "program_input": 0, "preview_input": 1, "program_pip": null,
-            "preview_pip": null, "ftb_active": false, "dsk_enabled": [],
-            "overlay_alpha": 1.0, "pips": []
-        });
-        let calls = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
-        let seen = calls.clone();
+        .unwrap()
+    }
+
+    /// One request to the stand-in: what strom's stinger API does with
+    /// the library, as far as lmix sees it. PGM 0, PVW 1.
+    fn fake_answer(
+        fake: &mut FakeStinger,
+        call: &Call,
+    ) -> (axum::http::StatusCode, serde_json::Value) {
+        use axum::http::StatusCode;
+        let ok = |v| (StatusCode::OK, v);
+        let file = call
+            .query
+            .strip_prefix("file=")
+            .map(|f| f.replace("%2F", "/"));
+        let index = call
+            .path
+            .rsplit('/')
+            .next()
+            .and_then(|i| i.parse::<usize>().ok());
+        let at = |fake: &FakeStinger, i: usize| fake.clips.get(i).map(|c| c.0.clone());
+        match (call.method.as_str(), call.path.rsplit('/').next()) {
+            ("GET", Some("stinger")) => {
+                let running = fake.running > 0;
+                fake.running = fake.running.saturating_sub(1);
+                let clips = fake
+                    .clips
+                    .iter()
+                    .enumerate()
+                    .map(|(i, c)| fake_clip(i, c))
+                    .collect::<Vec<_>>();
+                ok(serde_json::json!({
+                    "source_block_id": flows::STINGER_PLAYER, "problem": null,
+                    "matte_supported": false, "preroll_ms": 80, "clips": clips,
+                    "cued_index": null, "ready": true, "last_cue_ms": null,
+                    "running": running, "last_take": null
+                }))
+            }
+            ("GET", Some("state")) => ok(serde_json::json!({
+                "program_input": 0, "preview_input": 1, "program_pip": null,
+                "preview_pip": null, "ftb_active": false, "dsk_enabled": [],
+                "overlay_alpha": 1.0, "pips": []
+            })),
+            ("DELETE", _) => match index {
+                Some(i) if at(fake, i) == file => {
+                    fake.clips.remove(i);
+                    ok(serde_json::json!({}))
+                }
+                _ => (StatusCode::CONFLICT, serde_json::json!({})),
+            },
+            ("PUT", _) => match index {
+                Some(i) if at(fake, i) == file => {
+                    fake.clips[i].1 = call.body["cut_point_ms"].as_u64().unwrap();
+                    ok(fake_clip(i, &fake.clips[i]))
+                }
+                _ => (StatusCode::CONFLICT, serde_json::json!({})),
+            },
+            ("POST", Some("clips")) => {
+                let file = call.body["file"].as_str().unwrap().to_string();
+                if fake.absent.contains(&file) {
+                    return (StatusCode::BAD_REQUEST, serde_json::json!({}));
+                }
+                let cut = call.body["settings"]["cut_point_ms"].as_u64().unwrap();
+                fake.clips.push((file, cut));
+                let i = fake.clips.len() - 1;
+                ok(fake_clip(i, &fake.clips[i]))
+            }
+            ("POST", Some("take")) => {
+                if fake.running > 0 {
+                    fake.refused += 1;
+                    return (StatusCode::BAD_REQUEST, serde_json::json!({}));
+                }
+                let i = call.body["index"].as_u64().unwrap() as usize;
+                if at(fake, i).as_deref() != call.body["file"].as_str() {
+                    return (StatusCode::CONFLICT, serde_json::json!({}));
+                }
+                fake.running = 3;
+                ok(serde_json::json!({
+                    "take_id": 1, "index": i, "file": fake.clips[i].0,
+                    "variant": "classic", "downgraded_from": null,
+                    "take_to_air_ms": 80.0, "duration_ms": 0
+                }))
+            }
+            _ => ok(serde_json::json!({})),
+        }
+    }
+
+    /// A strom stand-in whose mixer has `clips` (file, cut point) as its
+    /// stinger library; it applies library edits and takes.
+    async fn stinger_strom(clips: &[(&str, u64)]) -> (String, Fake) {
+        let fake: Fake = Default::default();
+        fake.lock().unwrap().clips = clips.iter().map(|(f, c)| ((*f).into(), *c)).collect();
+        let shared = fake.clone();
         let app = axum::Router::new().fallback(move |request: axum::extract::Request| {
-            let (seen, library, mixer) = (seen.clone(), library.clone(), mixer.clone());
+            let shared = shared.clone();
             async move {
                 let method = request.method().to_string();
                 let path = request.uri().path().to_string();
@@ -1572,81 +1720,136 @@ mod tests {
                     .await
                     .unwrap();
                 let body = serde_json::from_slice(&body).unwrap_or_default();
-                let answer = match (method.as_str(), path.rsplit('/').next()) {
-                    ("GET", Some("stinger")) => library,
-                    ("GET", Some("state")) => mixer,
-                    _ => serde_json::json!({}),
-                };
-                seen.lock().unwrap().push(Call {
+                let call = Call {
                     method,
                     path,
                     query,
                     body,
-                });
-                axum::Json(answer)
+                };
+                let mut fake = shared.lock().unwrap();
+                let (status, answer) = fake_answer(&mut fake, &call);
+                fake.calls.push(call);
+                (status, axum::Json(answer))
             }
         });
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
         tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
-        (format!("http://{addr}"), calls)
+        (format!("http://{addr}"), fake)
+    }
+
+    fn sting(file: &str, cut_ms: u32) -> Command {
+        Command::Stinger {
+            to: 1,
+            clip: LibraryClip {
+                file: file.into(),
+                cut_ms,
+            },
+        }
+    }
+
+    fn takes(fake: &Fake) -> Vec<serde_json::Value> {
+        let fake = fake.lock().unwrap();
+        fake.calls
+            .iter()
+            .filter(|c| c.path.ends_with("/stinger/take"))
+            .map(|c| c.body.clone())
+            .collect()
     }
 
     /// strom plays the stinger and switches program at its cut point: the
-    /// engine names the clip by its place in the library.
+    /// engine names the clip by its place in the library and its file.
     #[tokio::test]
     async fn a_stinger_takes_its_library_clip() {
-        let (url, calls) = stinger_strom(&[("/a.webm", 300), ("/sting.webm", 400)]).await;
+        let (url, fake) = stinger_strom(&[("/a.webm", 300), ("/sting.webm", 400)]).await;
         let engine = StromEngine::new(url, MixerBackend::Cpu, MonitorOut::None);
 
+        engine.run(&sting("/sting.webm", 400)).await.unwrap();
+
+        let takes = takes(&fake);
+        assert_eq!(takes.len(), 1);
+        assert_eq!(takes[0]["index"], 1);
+        assert_eq!(takes[0]["file"], "/sting.webm");
+    }
+
+    /// A library sync that failed (strom busy, the mixer restarting)
+    /// heals at the take: the clip is added, or its cut point set.
+    #[tokio::test]
+    async fn a_stinger_puts_its_clip_in_the_library_first() {
+        let (url, fake) = stinger_strom(&[("/a.webm", 300)]).await;
+        let engine = StromEngine::new(url, MixerBackend::Cpu, MonitorOut::None);
+
+        engine.run(&sting("/sting.webm", 400)).await.unwrap();
+        engine.run(&sting("/a.webm", 500)).await.unwrap();
+
+        assert_eq!(
+            fake.lock().unwrap().clips,
+            [("/a.webm".into(), 500), ("/sting.webm".into(), 400)]
+        );
+        let takes = takes(&fake);
+        assert_eq!(
+            (takes[0]["index"].clone(), takes[1]["index"].clone()),
+            (1.into(), 0.into())
+        );
+    }
+
+    /// A second stinger right after the first waits until strom has
+    /// finished it (it parks the clip after the end) instead of being
+    /// refused while the switcher has already switched.
+    #[tokio::test]
+    async fn a_stinger_after_a_stinger_waits_for_strom() {
+        let (url, fake) = stinger_strom(&[("/sting.webm", 400)]).await;
+        let engine = StromEngine::new(url, MixerBackend::Cpu, MonitorOut::None);
+
+        engine.run(&sting("/sting.webm", 400)).await.unwrap();
+        engine.run(&sting("/sting.webm", 400)).await.unwrap();
         engine
-            .run(&Command::Stinger {
-                to: 1,
-                file: "/sting.webm".into(),
-            })
+            .run(&Command::FadeToBlack { duration_ms: 0 })
             .await
             .unwrap();
 
-        let calls = calls.lock().unwrap();
-        let take = calls
+        assert_eq!(takes(&fake).len(), 2);
+        assert_eq!(fake.lock().unwrap().refused, 0);
+        let fake = fake.lock().unwrap();
+        let ftb = fake
+            .calls
             .iter()
-            .find(|c| c.path.ends_with("/transition"))
-            .expect("a take");
-        assert_eq!(take.body["transition_type"], "stinger");
-        assert_eq!(take.body["stinger_clip"], 1);
+            .position(|c| c.path.ends_with("/ftb"))
+            .unwrap();
+        assert_eq!(fake.running, 0, "the fade waited too");
+        assert!(ftb > 0);
     }
 
-    /// A clip strom does not have (its file was missing) costs the
-    /// graphic: program still cuts, and the engine says why.
+    /// A clip strom cannot have (its file is missing) costs the graphic:
+    /// program still cuts, and the engine says why.
     #[tokio::test]
     async fn a_stinger_without_its_clip_cuts() {
-        let (url, calls) = stinger_strom(&[]).await;
+        let (url, fake) = stinger_strom(&[]).await;
+        fake.lock().unwrap().absent.push("/sting.webm".into());
         let engine = StromEngine::new(url, MixerBackend::Cpu, MonitorOut::None);
 
-        let result = engine
-            .run(&Command::Stinger {
-                to: 1,
-                file: "/sting.webm".into(),
-            })
-            .await;
+        let result = engine.run(&sting("/sting.webm", 400)).await;
 
         assert!(matches!(result, Err(EngineError::Refused(m)) if m.contains("cut instead")));
-        let calls = calls.lock().unwrap();
-        let take = calls
+        let fake = fake.lock().unwrap();
+        let cut = fake
+            .calls
             .iter()
             .find(|c| c.path.ends_with("/transition"))
             .expect("a cut");
-        assert_eq!(take.body["transition_type"], "cut");
+        assert_eq!(cut.body["transition_type"], "cut");
     }
 
     /// The library becomes what the switcher names: strangers and
-    /// duplicates go (from the end), cut points change, new clips come.
+    /// duplicates go (from the end, so each index still holds its file),
+    /// cut points change, new clips come.
     #[tokio::test]
     async fn the_stinger_library_follows_the_buttons() {
-        let (url, calls) = stinger_strom(&[
+        let (url, fake) = stinger_strom(&[
             ("/old.webm", 100),
             ("/sting.webm", 400),
             ("/sting.webm", 400),
+            ("/older.webm", 100),
         ])
         .await;
         let engine = StromEngine::new(url, MixerBackend::Cpu, MonitorOut::None);
@@ -1662,29 +1865,14 @@ mod tests {
             .await
             .unwrap();
 
-        let calls = calls.lock().unwrap();
-        let edits: Vec<_> = calls.iter().filter(|c| c.method != "GET").collect();
-        let stinger = format!(
-            "/api/flows/{}/blocks/{MIXER_BLOCK}/stinger",
-            flows::mixer_id()
-        );
-        let at = |e: &Call| (e.method.clone(), e.path.replace(&stinger, ""));
+        let fake = fake.lock().unwrap();
         assert_eq!(
-            edits.iter().map(|e| at(e)).collect::<Vec<_>>(),
-            [
-                ("DELETE".into(), "/clips/2".into()),
-                ("DELETE".into(), "/clips/0".into()),
-                ("PUT".into(), "/clips/1".into()),
-                ("POST".into(), "/clips".into()),
-            ]
+            fake.clips,
+            [("/sting.webm".into(), 500), ("/new.webm".into(), 300)]
         );
-        // Each edit names the file it means: strom refuses a changed library.
-        assert!(edits[0].query.contains("sting.webm") && edits[1].query.contains("old.webm"));
-        assert_eq!(edits[2].body["cut_point_ms"], 500);
-        assert_eq!(edits[3].body["file"], "/new.webm");
-        assert_eq!(edits[3].body["settings"]["cut_point_ms"], 300);
-        assert_eq!(edits[3].body["settings"]["layout"], "auto");
-        assert_eq!(edits[3].body["settings"]["beneath"], "cut");
+        let post = fake.calls.iter().find(|c| c.method == "POST").unwrap();
+        assert_eq!(post.body["settings"]["layout"], "auto");
+        assert_eq!(post.body["settings"]["beneath"], "cut");
     }
 
     /// A web page's CSS goes to its page once the slot runs, and its

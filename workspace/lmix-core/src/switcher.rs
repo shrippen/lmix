@@ -100,9 +100,10 @@ pub enum Command {
     PageScript { slot: usize, script: String },
     /// Freeze the page of `slot`, or let it run.
     PageRunning { slot: usize, running: PageRunning },
-    /// Stinger from program to `to` with library clip `file`: the engine
-    /// plays it and switches program at its cut point, frame-accurate.
-    Stinger { to: usize, file: String },
+    /// Stinger from program to `to` with `clip` (added to the library
+    /// first if missing): the engine plays it and switches program at its
+    /// cut point, frame-accurate.
+    Stinger { to: usize, clip: LibraryClip },
     /// The engine's stinger clips: these and no others.
     StingerLibrary { clips: Vec<LibraryClip> },
     /// Hold the commands after it back by `ms`; the service runs them
@@ -1566,7 +1567,7 @@ impl Switcher {
                 duration_ms,
                 stinger,
             } => self.set_transition(slot, effect, duration_ms, stinger),
-            Action::FadeToBlack { duration_ms } => Ok(self.toggle_ftb(duration_ms)),
+            Action::FadeToBlack { duration_ms } => self.toggle_ftb(duration_ms),
             Action::TBar { position } => self.t_bar(position),
             Action::OverlayIn {
                 channel,
@@ -2407,7 +2408,7 @@ impl Switcher {
             reason: reason.into(),
         };
         let stinger = button.stinger.ok_or_else(|| bad("no clip set"))?;
-        let (clip, file) = self
+        let (slot, file) = self
             .stinger_clip(stinger.input)
             .ok_or_else(|| bad("its clip input is gone"))?;
         // strom's stinger takes one input to another (DECISIONS 18.10., STG).
@@ -2428,7 +2429,11 @@ impl Switcher {
             .iter()
             .take_while(|c| matches!(c, Command::Program { .. } | Command::Preview { .. }))
             .count();
-        commands[0] = Command::Stinger { to, file };
+        let clip = LibraryClip {
+            file,
+            cut_ms: stinger.cut_ms,
+        };
+        commands[0] = Command::Stinger { to, clip };
         let preroll_ms = crate::engine::flows::STINGER_PREROLL_MS;
         commands.insert(
             swap,
@@ -2436,15 +2441,16 @@ impl Switcher {
                 ms: stinger.cut_ms + preroll_ms,
             },
         );
-        // The whole clip plays; its length when the player reported it.
+        // The whole clip plays, its length when the player reported it;
+        // then strom holds the mixer a little longer (it parks the clip).
         let length_ms = self
             .clip_ms
-            .get(&clip)
+            .get(&slot)
             .copied()
             .filter(|ms| *ms > 0)
             .unwrap_or(u64::from(button.duration_ms));
-        self.stinger_until =
-            Some(Instant::now() + Duration::from_millis(length_ms + u64::from(preroll_ms)));
+        let after_ms = u64::from(preroll_ms + crate::engine::flows::STINGER_FINISH_MS);
+        self.stinger_until = Some(Instant::now() + Duration::from_millis(length_ms + after_ms));
         Ok(commands)
     }
 
@@ -4469,9 +4475,11 @@ impl Switcher {
         }
     }
 
-    fn toggle_ftb(&mut self, duration_ms: u32) -> Vec<Command> {
+    /// strom refuses a fade during a stinger; it would invert the state.
+    fn toggle_ftb(&mut self, duration_ms: u32) -> Result<Vec<Command>, ActionError> {
+        self.check_no_stinger()?;
         self.fade_to_black = !self.fade_to_black;
-        vec![Command::FadeToBlack { duration_ms }]
+        Ok(vec![Command::FadeToBlack { duration_ms }])
     }
 
     // ---- Lookup ----
@@ -6513,7 +6521,10 @@ mod tests {
     fn sting(to: usize) -> Command {
         Command::Stinger {
             to,
-            file: "sting.webm".into(),
+            clip: LibraryClip {
+                file: "sting.webm".into(),
+                cut_ms: 400,
+            },
         }
     }
 
@@ -6592,6 +6603,11 @@ mod tests {
         assert_eq!(sw.state().program, Some(sw.state().inputs[1].id));
         assert_eq!(sw.state().preview, Some(sw.state().inputs[0].id));
         assert_eq!(sw.apply(Action::Cut), Err(ActionError::StingerPlaying));
+        assert_eq!(
+            sw.apply(Action::FadeToBlack { duration_ms: 500 }),
+            Err(ActionError::StingerPlaying)
+        );
+        assert!(!sw.state().fade_to_black, "the fade did not flip");
     }
 
     #[test]
@@ -6600,7 +6616,8 @@ mod tests {
             slot: TransitionSlot(2),
         };
         let locked = |sw: &Switcher| sw.stinger_until.unwrap() - Instant::now();
-        let preroll = Duration::from_millis(u64::from(PREROLL));
+        let finish = crate::engine::flows::STINGER_FINISH_MS;
+        let preroll = Duration::from_millis(u64::from(PREROLL + finish));
 
         // Without a reported length, the button's.
         let mut sw = with_stinger();
