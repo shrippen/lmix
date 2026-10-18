@@ -29,7 +29,7 @@ VSP und die Abnahme auf der RTX 3090.
   `SWAGGER_UI_DOWNLOAD_URL` (lokale Kopie von swagger-ui 5.17.14), wenn
   GitHub-Downloads gesperrt sind.
 
-### Seit #102 gemergt (18.10.)
+### PRs seit #102 (18.10.)
 
 | PR | Branch | Inhalt |
 |---|---|---|
@@ -40,20 +40,21 @@ VSP und die Abnahme auf der RTX 3090.
 | #107 | `stinger-wait` | geschlossen, ersetzt durch #109 |
 | #108 | `console-split` | Console getrennt in `lmix-mixer` und `lmix-show` (ein Kern, zwei Oberflächen); globale Tasten je Programm, Show ab Werk an, Mischer aus |
 | #109 | `stinger-done` | Stinger-Sperre endet mit `StingerCompleted`/`StingerFailed` von strom, Obergrenze; kein Warten unter der Sperre |
-| #111 | `review-followups` | Sperre: Grenze Clip + 8 s, Generation je Take, frühes Completed gemerkt |
 | #110 | – | Review-Regel: drei Lücken schließen – geschlossen, nicht gemergt |
-| #112–#114 | `pr-agent-*`, `pa-last` | PR-Agent nur auf `/review` des Eigentümers |
+| #111 | `review-followups` | Sperre: Grenze Clip + 8 s, Generation je Take, frühes Completed gemerkt |
+| #112–#114 | `pr-agent-manual`, `pa-polish`, `pa-last` | PR-Agent nur auf `/review` des Eigentümers |
 
 Was jeweils entschieden wurde und warum: `docs/DECISIONS.md`, Einträge
 vom 18.10. (Review-Regel, Entscheidungsseite, REC, STG mit Nachträgen,
-RUN.8, Console getrennt).
+RUN.8, Console getrennt, PR-Agent nur auf `/review`).
 
 ### Offen beim Eigentümer
 
 - **#109, Umfang der Sperre:** Während eines Stingers lehnt lmix
   zusätzlich ab: Show öffnen/neu, Paket importieren, den Eingang auf
   Programm entfernen (`StingerPlaying`). Das geht über die Liste der
-  Entscheidung hinaus; Antwort steht aus. Bis dahin bleibt es so.
+  Entscheidung hinaus; Antwort steht aus. Bis dahin bleibt es so
+  (auch in `todo.md` und im STG-Nachtrag vermerkt).
 - Paket-Import übernimmt die Ziele vor der Ablehnung. Saubere Lösung
   bräuchte eine öffentliche Abfrage am Switcher – nur mit Zustimmung.
 
@@ -69,17 +70,26 @@ RUN.8, Console getrennt).
      Ende hält, aktuelles gibt frei.
    - `scripts/test-global-keys.sh`: `show.conf` prüfen statt der
      Logzeile „settings taken over“ (bricht mit `RUST_LOG=warn`).
-2. **Console `--style`:** Qt verbraucht `--style` selbst, die eigene
-   Option kommt nicht an. Umbenennen oder vor Qt auswerten.
-3. **Weitere Kleinigkeiten:** verliehene Vorschau nach abgelehntem
-   Übergang nicht zurückgegeben; andere Engine-Aufrufe mit 60 s Zeitlimit;
-   Aufnahme: Platzhalter `<Ausgang>` im Text, Test der Präfix-Form;
-   DECISIONS-Satzreihenfolge und Flag `DEMOTE_FAILED` aus #105.
+2. **Console `--style`:** clap liest die Option vor Qt
+   (`console-qt/src/app.rs`, `config::init`), aber `QGuiApplication::new`
+   liest dieselbe argv, sucht ein Quick-Controls-Stilmodul `kante` und lädt
+   das Fenster nicht (DECISIONS 18.10. „Console geteilt“, Bestand). Option
+   umbenennen oder vor `QGuiApplication::new` aus der argv nehmen.
+3. **Weitere Kleinigkeiten** (optional, je mit Quelle):
+   - #104, Review Runde 2: `lmix-<Ausgang>` in DECISIONS (REC) und im
+     Kommentar an `recording_prefix` (`engine/flows.rs`) liest sich als
+     Name; gemeint sind die ersten 8 Zeichen der Ausgangs-ID. Der Test
+     dort prüft nur „verschieden“, nicht die Form `lmix-` + 8 Zeichen.
+   - #105, Review Runde 4: In DECISIONS (RUN.8) steht der Einschub vor
+     „Dann steht eine Warnung im Log …“, so dass „Dann“ falsch bezogen
+     wird. Wunsch: Scheitert die Rückstufung in `on_xcpu`
+     (`src/realtime.rs`), bleibt keine Spur; ein Merker (etwa ein
+     `AtomicBool`, beim nächsten Metrik-Lauf gemeldet) würde helfen.
 4. **VSP:** Vorschau-Ausgang im strom-Mischer (noch nicht begonnen).
 5. **Hardware (RTX 3090):** H.24, H.27 (Stinger auf CUDA/GL-Mischer),
    H.36–H.39 (H.39: Echtzeit-Zeitgeber, `test-cue-timing.sh` unter Last),
-   CEF/`cefsrc`, GPU-Pfade allgemein; Console: zwei Portal-Sitzungen am
-   KDE-Portal (Mischer und Show gleichzeitig), Fokus nach Dialogen.
+   CEF/`cefsrc`, GPU-Pfade allgemein; H.40 (Console: zwei Portal-Sitzungen
+   am KDE-Portal, Fokus nach Dialogen).
 
 ### Prüfen
 
@@ -91,7 +101,7 @@ RUN.8, Console getrennt).
   der VM-Test gern an der Latenz – dann allein wiederholen.
 - Console starten: `scripts/run-local.sh` (`APP=show` oder `APP=both`).
 
-## PRs in Merge-Reihenfolge, Stand 2026-10-18 (bis #101 gemergt, offen #102)
+## PRs in Merge-Reihenfolge, Stand 2026-10-18 (bis #102 gemergt)
 
 CI läuft auf GitHub (Status `github / test` am Commit auf Gitea). Seit
 18.10.2026 prüft vor jedem Merge ein neuer Claude-Agent (`agent.md`,
@@ -106,8 +116,7 @@ Unabhängig von `main` (gemergt):
 | #51 | `console-test-coords` | Lokaler Console-Check: wartet auf das Bild nach dem Cut, ignoriert CRITICALs von strom beim Start |
 | #39 | `se3-measure` | S-E.3 gemessen (Klang-Cues), nur Doku und Messskript |
 
-Show-Modus S1 und Rest, in der Reihenfolge des Merges (bis #101
-gemergt; #102 liegt direkt auf `main` und ist offen):
+Show-Modus S1 und Rest, in der Reihenfolge des Merges (bis #102 gemergt):
 
 | PR | Branch | Inhalt |
 |---|---|---|
