@@ -489,11 +489,9 @@ fn pages_url(listen: SocketAddr) -> String {
 
 /// The cue timer on its own thread and runtime with real-time priority
 /// (RUN.8): on a busy machine, the shared runtime's workers wait for a
-/// free core, and with them every wait and follow. What the due steps do
-/// runs on the shared runtime (see [`service::Service::cue_clock`]).
+/// free core, and with them every wait and follow. The cues' actions run
+/// there too, in order with their steps (a panic never overtakes them).
 fn spawn_cue_timer(service: std::sync::Arc<service::Service>) {
-    let (steps, due) = tokio::sync::mpsc::unbounded_channel();
-    tokio::spawn(service.clone().run_cue_steps(due));
     let (tid_tx, tid_rx) = std::sync::mpsc::channel();
     std::thread::Builder::new()
         .name("lmix-cues".into())
@@ -512,7 +510,7 @@ fn spawn_cue_timer(service: std::sync::Arc<service::Service>) {
                 .enable_all()
                 .build()
                 .expect("cue timer runtime builds")
-                .block_on(service.cue_clock(steps));
+                .block_on(service.watch_cues());
         })
         .expect("cue timer thread starts");
     // Asked from the side: a hung system bus must not hold up the timer.
@@ -520,10 +518,19 @@ fn spawn_cue_timer(service: std::sync::Arc<service::Service>) {
         let Ok(tid) = tid_rx.recv() else { return };
         match realtime::make_realtime(tid) {
             Ok(how) => tracing::info!(how, "cue timer runs with real-time priority"),
-            Err(why) => tracing::warn!(
-                %why,
-                "cue timer without real-time priority: steps may be late on a busy machine (RUN.8)"
-            ),
+            Err(why) => {
+                tracing::warn!(
+                    %why,
+                    "cue timer without real-time priority: steps may be late on a busy machine (RUN.8)"
+                );
+                return;
+            }
         }
+        while !realtime::demoted() {
+            std::thread::sleep(std::time::Duration::from_secs(1));
+        }
+        tracing::warn!(
+            "cue timer gave up real-time priority: a cue step computed for over 100 ms without a pause (RUN.8)"
+        );
     });
 }

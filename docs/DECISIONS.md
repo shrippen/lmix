@@ -3694,40 +3694,53 @@ GStreamer 1.28 auch MKV über den Live-Recorder.
 Zeitgeber der Cue-Listen bekommt einen eigenen Thread mit
 Echtzeit-Priorität über rtkit; geht das nicht, warnt lmix.
 
-**Entscheidung**: Der Zeitgeber (`cue_clock`) läuft auf dem Thread
-`lmix-cues` mit eigener tokio-Laufzeit. Er schläft bis zur nächsten
-Frist und nimmt dann nur, was fällig ist (`cue_tick`). Was die Schritte
-tun, läuft auf der gemeinsamen Laufzeit (`run_cue_steps`: Autosave,
-Clients, die Aktionen der Cues, Vorladen). Ein Hilfs-Thread holt dem
-Zeitgeber die Priorität: zuerst `SCHED_FIFO` direkt (Priorität 20; mit
-`RLIMIT_RTPRIO` oder als Root), sonst über rtkit auf dem System-D-Bus
-(`MakeThreadRealtime`, bis zu dessen `MaxRealtimePriority`), wie
-PipeWire. Ein hängender D-Bus hält den Zeitgeber so nicht auf. Auf beiden
-Wegen wird vorher `RLIMIT_RTTIME` auf 200 ms gesetzt. Ohne diese Grenze
-gewährt rtkit nichts, und ein Echtzeit-Thread, der nicht mehr schläft,
-kann den Rechner nicht anhalten. An dieser Grenze beendet der Kernel aber
-den Prozess. Darum laufen keine Aktionen auf dem Echtzeit-Thread: „Show
-öffnen“ mit großen Datenquellen oder das Autosave könnten sie erreichen.
-Klappt beides nicht, steht eine Warnung im Log, und `/metrics` zeigt
-`lmix_cue_timer_realtime 0`; endet der Thread, ebenso, mit Fehler im Log.
+**Entscheidung**: `watch_cues` läuft auf dem Thread `lmix-cues` mit eigener
+tokio-Laufzeit, die Aktionen der Cues wie bisher gleich danach im selben
+Ablauf. Damit bleibt die Reihenfolge: Eine Panik kann keine schon fälligen
+Aktionen überholen, und die Verspätung in `/metrics` zeigt weiter, wenn
+langsame Aktionen die nächsten Schritte aufhalten. Ein Hilfs-Thread holt
+dem Zeitgeber die Priorität: zuerst `SCHED_FIFO` direkt (Priorität 20;
+mit `RLIMIT_RTPRIO` oder als Root), sonst über rtkit auf dem
+System-D-Bus (`MakeThreadRealtime`, bis zu dessen
+`MaxRealtimePriority`), wie PipeWire. Ein hängender D-Bus hält den
+Zeitgeber so nicht auf.
 
-**Reichweite**: Pünktlich werden damit Wartezeiten und Folgen nach Zeit.
-Ein GO führt seine Schritte auf dem Thread des Aufrufers aus (HTTP, MIDI,
-OSC). Eine Folge nach dem Ende eines Klangs oder Bilds kommt mit der
-Meldung der Engine (Abfrage alle 100 ms, SND.12). Die Aktionen selbst
-laufen auf normalen Threads und können unter Last warten.
+**Schutz**: Auf beiden Wegen gilt vorher `RLIMIT_RTTIME`: weich 100 ms,
+hart 200 ms (rtkit gewährt nichts ohne Grenze). An der harten Grenze
+beendet der Kernel den Prozess. Darum macht das SIGXCPU der weichen
+Grenze den Zeitgeber wieder zu einem normalen Thread: Ein Cue-Schritt, der
+so lange rechnet (etwa „Show öffnen“ mit großen Datenquellen), kostet die
+Priorität, nicht die Show. Dann steht eine Warnung im Log, und `/metrics`
+zeigt `lmix_cue_timer_realtime 0`, ebenso ohne Echtzeit von Anfang an und
+wenn der Thread endet. Ein Unit-Test prüft die Rückstufung, wo der Test
+SCHED_FIFO bekommt (in der VM als Root).
 
-**Grenze**: Der Zeitgeber braucht für jeden Schritt kurz die Sperre des
+**Reichweite**: Wartezeiten und Folgen nach Zeit. Ein GO führt seine
+Schritte auf dem Thread des Aufrufers aus (HTTP, MIDI, OSC). Eine Folge
+nach dem Ende eines Klangs oder Bilds kommt mit der Meldung der Engine,
+die strom alle 100 ms abfragt (SND.12). Datei-Schreiben (Autosave) läuft
+über tokios Blocking-Threads mit normaler Priorität.
+
+**Grenze**: Der Zeitgeber braucht für jeden Schritt die Sperre des
 Switchers. Hält sie gerade ein normaler Thread, den die Last verdrängt
 hat, wartet auch der Echtzeit-Thread (Prioritätsumkehr). Hilft Echtzeit
 auf dem 3090-Rechner nicht, ist der nächste Schritt ein Zeitgeber, der
 seine Fristen ohne diese Sperre kennt.
 
 **Messung** (VM mit 4 Kernen, alle vier mit `yes` belegt, je 3 min,
-`scripts/test-cue-timing.sh`): spätester Schritt mit Echtzeit 19,6 ms,
-3,8 ms und nach dem Umbau 24,4 ms, ohne Echtzeit (CAP_SYS_NICE entzogen)
-9,0 ms und 7,5 ms. In der VM ist kein Gewinn zu sehen. Die Werte streuen
-stärker, als Echtzeit sie ändert, und die Sperre (siehe Grenze) wirkt mit.
-Schlüssig ist erst die Messung auf dem 3090-Rechner (H.39); dort kamen
-ohne Echtzeit bis 65,3 ms zustande.
+`scripts/test-cue-timing.sh`, spätester Schritt):
+
+| Fassung | mit Echtzeit | ohne (CAP_SYS_NICE entzogen) |
+|---|---|---|
+| Aktionen auf dem Zeitgeber, erste Fassung | 19,6 ms; 3,8 ms | 9,0 ms; 7,5 ms |
+| Aktionen getrennt (verworfen, siehe unten) | 24,4 ms | – |
+| diese Fassung | 8,9 ms | – |
+
+In der VM ist kein Gewinn belegt; die Werte streuen stärker, als
+Echtzeit sie ändert. Schlüssig ist erst die Messung auf dem 3090-Rechner
+(H.39), wo ohne Echtzeit bis 65,3 ms zustande kamen.
+
+**Verworfen**: Die Aktionen über einen Kanal auf der gemeinsamen Laufzeit
+ausführen (Review #105, Runde 2): Schon fällige Aktionen konnten eine
+Panik überholen, und die Metrik hätte nur noch den Zeitgeber gemessen.
 

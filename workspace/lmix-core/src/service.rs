@@ -48,17 +48,11 @@ const OUTPUT_STATS_INTERVAL: std::time::Duration = std::time::Duration::from_sec
 /// Silence: also stands in for "no reading" (JSON has no infinity).
 pub const LEVEL_FLOOR_DB: f32 = -100.0;
 
-/// Steps the cue timer found due, for [`Service::run_cue_steps`].
-pub struct CueSteps {
-    out: Vec<crate::cues::Out>,
-    standby_moved: bool,
-}
-
 pub struct Service {
     switcher: Mutex<Switcher>,
     engine: Arc<dyn Engine>,
     events: broadcast::Sender<Event>,
-    /// Wakes [`Service::cue_clock`] when cue times changed.
+    /// Wakes [`Service::watch_cues`] when cue times changed.
     cue_wake: tokio::sync::Notify,
     /// Client for output targets (each request has its target's limit).
     target_http: reqwest::Client,
@@ -476,21 +470,9 @@ impl Service {
         }
     }
 
-    /// Run what the cue lists have due, each at its time (RUN.8): the clock
-    /// and its steps together on one runtime, for tests.
-    #[cfg(test)]
+    /// Run what the cue lists have due, each at its time (RUN.8): sleep
+    /// to the next deadline, or until a cue action changed them.
     pub async fn watch_cues(self: Arc<Self>) {
-        let (steps, due) = tokio::sync::mpsc::unbounded_channel();
-        tokio::spawn(self.clone().run_cue_steps(due));
-        self.cue_clock(steps).await;
-    }
-
-    /// The cue timer (RUN.8): sleep to the next deadline, or until a cue
-    /// action changed them, then take what is due. Only that: it runs on
-    /// the real-time thread, where long work could make the kernel stop
-    /// the process (RLIMIT_RTTIME), so what the steps do runs in
-    /// [`Self::run_cue_steps`].
-    pub async fn cue_clock(self: Arc<Self>, steps: tokio::sync::mpsc::UnboundedSender<CueSteps>) {
         loop {
             let deadline = self.switcher.lock().await.cue_deadline();
             let woken = self.cue_wake.notified();
@@ -506,35 +488,18 @@ impl Service {
                     continue;
                 }
             }
-            let due = {
+            let out = {
                 let mut sw = self.switcher.lock().await;
                 let out = sw.cue_tick(tokio::time::Instant::now());
                 // A start cue may move another list's standby.
-                let standby_moved = sw.sync_standby();
-                CueSteps { out, standby_moved }
-            };
-            if steps.send(due).is_err() {
-                return;
-            }
-        }
-    }
-
-    /// What the cue timer found due, on the shared runtime: autosave,
-    /// clients, the cues' actions, the standby's preload.
-    pub async fn run_cue_steps(
-        self: Arc<Self>,
-        mut due: tokio::sync::mpsc::UnboundedReceiver<CueSteps>,
-    ) {
-        while let Some(CueSteps { out, standby_moved }) = due.recv().await {
-            {
-                let sw = self.switcher.lock().await;
-                if standby_moved {
+                if sw.sync_standby() {
                     self.write_autosave(&sw).await;
                 }
                 // Every due step changes what runs (a wait's pre wait
                 // ending makes no out, but clients show the phase).
                 self.publish(&sw);
-            }
+                out
+            };
             self.run_cue_outs(out).await;
             self.preload_standby().await;
         }
