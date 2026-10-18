@@ -3613,7 +3613,7 @@ statt einer Behebung zählt nur, wenn der nächste Agent sie annimmt.
 Folgerunden prüfen nur die neuen Commits, nach drei Runden mit
 **Wichtig** wird der Ansatz mit dem Eigentümer neu bedacht. Änderungen
 an CI, Release, Geheimnissen und an dieser Regel bestätigt der
-Eigentümer in Worten. Vorbild ist Anthropics Beitrag „Solving code review
+Eigentümer vor dem Merge in Worten. Vorbild ist Anthropics Beitrag „Solving code review
 at Anthropic“: frischer Kontext, geprüfte Befunde, Stufen, `REVIEW.md`,
 Rundenbegrenzung.
 
