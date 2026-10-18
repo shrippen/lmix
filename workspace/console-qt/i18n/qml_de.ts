@@ -239,6 +239,189 @@
     </message>
   </context>
   <context>
+    <name>AppShell</name>
+    <message>
+      <location filename="../qml/AppShell.qml" line="+87" />
+      <source>Open show</source>
+      <translation>Show öffnen</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <location line="+9" />
+      <source>lmix shows (*.lmix)</source>
+      <translation>lmix-Shows (*.lmix)</translation>
+    </message>
+    <message>
+      <location line="-9" />
+      <location line="+26" />
+      <location line="+44" />
+      <source>All files (*)</source>
+      <translation>Alle Dateien (*)</translation>
+    </message>
+    <message>
+      <location line="-64" />
+      <source>Save show</source>
+      <translation>Show speichern</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>Export settings</source>
+      <translation>Einstellungen exportieren</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <location line="+6" />
+      <source>lmix settings (*.json)</source>
+      <translation>lmix-Einstellungen (*.json)</translation>
+    </message>
+    <message>
+      <location line="-1" />
+      <source>Import settings</source>
+      <translation>Einstellungen importieren</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Factory settings</source>
+      <translation>Werkseinstellungen</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>Remove the shortcuts for all shows, the layout templates, the output targets with their secrets and the OSC subscribers of this machine? The show stays.</source>
+      <translation>Die Kurzbefehle für alle Shows, die Layout-Vorlagen, die Ausgabeziele mit ihren Geheimnissen und die OSC-Abonnenten dieses Rechners entfernen? Die Show bleibt.</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Remove all</source>
+      <translation>Alles entfernen</translation>
+    </message>
+    <message>
+      <location line="+12" />
+      <source>Export show package</source>
+      <translation>Show-Paket exportieren</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <location line="+6" />
+      <source>lmix packages (*.lmixpkg)</source>
+      <translation>lmix-Pakete (*.lmixpkg)</translation>
+    </message>
+    <message>
+      <location line="-1" />
+      <source>Import show package</source>
+      <translation>Show-Paket importieren</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>Empty folder for the package's show and media</source>
+      <translation>Leerer Ordner für Show und Medien des Pakets</translation>
+    </message>
+    <message>
+      <location line="+22" />
+      <source>lmix-core</source>
+      <translation>lmix-core</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>lmix-core offline</source>
+      <translation>lmix-core nicht erreichbar</translation>
+    </message>
+    <message>
+      <location line="+14" />
+      <source>New</source>
+      <translation>Neu</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Open…</source>
+      <translation>Öffnen…</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Recent</source>
+      <translation>Zuletzt</translation>
+    </message>
+    <message>
+      <location line="+15" />
+      <source>Save</source>
+      <translation>Speichern</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Save as…</source>
+      <translation>Speichern unter…</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Package</source>
+      <translation>Paket</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>The show with its media in one file, to move it to another machine</source>
+      <translation>Die Show mit ihren Medien in einer Datei, um sie auf einen anderen Rechner zu bringen</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Export…</source>
+      <translation>Exportieren…</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Import…</source>
+      <translation>Importieren…</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Export settings…</source>
+      <translation>Einstellungen exportieren…</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Import settings…</source>
+      <translation>Einstellungen importieren…</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Factory settings…</source>
+      <translation>Werkseinstellungen…</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Kante</source>
+      <translation>Kante</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Kante Light</source>
+      <translation>Kante Light</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>System</source>
+      <translation>System</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Kante: Gruvbox dark, Leinen when the system theme is light</source>
+      <translation>Kante: Gruvbox dunkel, Leinen bei hellem Systemthema</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Kante Light: only the shapes of Kante, on the system colours</source>
+      <translation>Kante Light: nur die Formen von Kante, auf den Systemfarben</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>System style (Breeze)</source>
+      <translation>Systemstil (Breeze)</translation>
+    </message>
+    <message>
+      <location line="+27" />
+      <source>This show file is in the older format %1 and was converted on opening. Saving it keeps the old file beside it (.v%1.bak).</source>
+      <translation>Diese Show-Datei hat das ältere Format %1 und wurde beim Öffnen umgewandelt. Beim Speichern bleibt die alte Datei daneben erhalten (.v%1.bak).</translation>
+    </message>
+  </context>
+  <context>
     <name>AppendShowDialog</name>
     <message>
       <location filename="../qml/AppendShowDialog.qml" line="+23" />
@@ -1701,126 +1884,77 @@
     </message>
   </context>
   <context>
-    <name>Main</name>
+    <name>MidiLearnButton</name>
     <message>
-      <location filename="../qml/Main.qml" line="+139" />
+      <location filename="../qml/MidiLearnButton.qml" line="+35" />
+      <source>No MIDI</source>
+      <translation>Kein MIDI</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>CC %1</source>
+      <translation>CC %1</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Note %1</source>
+      <translation>Note %1</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>%1, channel %2</source>
+      <translation>%1, Kanal %2</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Press or move on the controller…</source>
+      <translation>Am Controller drücken oder bewegen…</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>MIDI: %1</source>
+      <translation>MIDI: %1</translation>
+    </message>
+    <message>
+      <location line="+12" />
+      <source>Remove MIDI binding</source>
+      <translation>MIDI-Zuordnung entfernen</translation>
+    </message>
+  </context>
+  <context>
+    <name>MixerMain</name>
+    <message>
+      <location filename="../qml/MixerMain.qml" line="+17" />
+      <source>lmix Mixer</source>
+      <translation>lmix Mischer</translation>
+    </message>
+    <message>
+      <location line="+83" />
       <source>Layout %1 %2</source>
       <translation>Layout %1 %2</translation>
     </message>
     <message>
-      <location line="+62" />
-      <source>Open show</source>
-      <translation>Show öffnen</translation>
-    </message>
-    <message>
-      <location line="+1" />
-      <location line="+7" />
-      <location line="+20" />
-      <source>lmix shows (*.lmix)</source>
-      <translation>lmix-Shows (*.lmix)</translation>
-    </message>
-    <message>
-      <location line="-27" />
-      <location line="+7" />
-      <location line="+37" />
-      <location line="+44" />
-      <source>All files (*)</source>
-      <translation>Alle Dateien (*)</translation>
-    </message>
-    <message>
-      <location line="-82" />
+      <location line="+51" />
       <source>Inputs from a show</source>
       <translation>Inputs aus einer Show</translation>
     </message>
     <message>
-      <location line="+18" />
-      <source>Save show</source>
-      <translation>Show speichern</translation>
+      <location line="+1" />
+      <source>lmix shows (*.lmix)</source>
+      <translation>lmix-Shows (*.lmix)</translation>
     </message>
     <message>
-      <location line="+11" />
-      <source>Export settings</source>
-      <translation>Einstellungen exportieren</translation>
+      <location line="+0" />
+      <source>All files (*)</source>
+      <translation>Alle Dateien (*)</translation>
     </message>
     <message>
-      <location line="+3" />
-      <location line="+6" />
-      <source>lmix settings (*.json)</source>
-      <translation>lmix-Einstellungen (*.json)</translation>
-    </message>
-    <message>
-      <location line="-1" />
-      <source>Import settings</source>
-      <translation>Einstellungen importieren</translation>
-    </message>
-    <message>
-      <location line="+8" />
-      <source>Factory settings</source>
-      <translation>Werkseinstellungen</translation>
-    </message>
-    <message>
-      <location line="+11" />
-      <source>Remove the shortcuts for all shows, the layout templates, the output targets with their secrets and the OSC subscribers of this machine? The show stays.</source>
-      <translation>Die Kurzbefehle für alle Shows, die Layout-Vorlagen, die Ausgabeziele mit ihren Geheimnissen und die OSC-Abonnenten dieses Rechners entfernen? Die Show bleibt.</translation>
-    </message>
-    <message>
-      <location line="+5" />
-      <source>Remove all</source>
-      <translation>Alles entfernen</translation>
-    </message>
-    <message>
-      <location line="+12" />
-      <source>Export show package</source>
-      <translation>Show-Paket exportieren</translation>
-    </message>
-    <message>
-      <location line="+3" />
-      <location line="+6" />
-      <source>lmix packages (*.lmixpkg)</source>
-      <translation>lmix-Pakete (*.lmixpkg)</translation>
-    </message>
-    <message>
-      <location line="-1" />
-      <source>Import show package</source>
-      <translation>Show-Paket importieren</translation>
-    </message>
-    <message>
-      <location line="+9" />
+      <location line="+17" />
       <source>Folder with the missing files</source>
       <translation>Ordner mit den fehlenden Dateien</translation>
     </message>
     <message>
-      <location line="+6" />
-      <source>Empty folder for the package's show and media</source>
-      <translation>Leerer Ordner für Show und Medien des Pakets</translation>
-    </message>
-    <message>
-      <location line="+163" />
-      <source>lmix-core</source>
-      <translation>lmix-core</translation>
-    </message>
-    <message>
-      <location line="+0" />
-      <source>lmix-core offline</source>
-      <translation>lmix-core nicht erreichbar</translation>
-    </message>
-    <message>
-      <location line="+14" />
-      <source>New</source>
-      <translation>Neu</translation>
-    </message>
-    <message>
-      <location line="+5" />
-      <source>Open…</source>
-      <translation>Öffnen…</translation>
-    </message>
-    <message>
-      <location line="+6" />
-      <source>Recent</source>
-      <translation>Zuletzt</translation>
-    </message>
-    <message>
-      <location line="+10" />
+      <location line="+137" />
       <source>From show…</source>
       <translation>Aus Show…</translation>
     </message>
@@ -1830,37 +1964,7 @@
       <translation>Inputs einer anderen Show hierher übernehmen</translation>
     </message>
     <message>
-      <location line="+4" />
-      <source>Save</source>
-      <translation>Speichern</translation>
-    </message>
-    <message>
-      <location line="+5" />
-      <source>Save as…</source>
-      <translation>Speichern unter…</translation>
-    </message>
-    <message>
-      <location line="+6" />
-      <source>Package</source>
-      <translation>Paket</translation>
-    </message>
-    <message>
-      <location line="+3" />
-      <source>The show with its media in one file, to move it to another machine</source>
-      <translation>Die Show mit ihren Medien in einer Datei, um sie auf einen anderen Rechner zu bringen</translation>
-    </message>
-    <message>
-      <location line="+6" />
-      <source>Export…</source>
-      <translation>Exportieren…</translation>
-    </message>
-    <message>
-      <location line="+4" />
-      <source>Import…</source>
-      <translation>Importieren…</translation>
-    </message>
-    <message>
-      <location line="+5" />
+      <location line="+7" />
       <source>Program format…</source>
       <translation>Programmformat…</translation>
     </message>
@@ -1880,72 +1984,7 @@
       <translation>Ton mit 44,1 kHz</translation>
     </message>
     <message>
-      <location line="+6" />
-      <source>Export settings…</source>
-      <translation>Einstellungen exportieren…</translation>
-    </message>
-    <message>
-      <location line="+4" />
-      <source>Import settings…</source>
-      <translation>Einstellungen importieren…</translation>
-    </message>
-    <message>
-      <location line="+4" />
-      <source>Factory settings…</source>
-      <translation>Werkseinstellungen…</translation>
-    </message>
-    <message>
-      <location line="+7" />
-      <source>Mixer</source>
-      <translation>Mischer</translation>
-    </message>
-    <message>
-      <location line="+0" />
-      <source>Show</source>
-      <translation>Show</translation>
-    </message>
-    <message>
-      <location line="+2" />
-      <source>Switch inputs live</source>
-      <translation>Inputs live schalten</translation>
-    </message>
-    <message>
-      <location line="+0" />
-      <source>Run prepared cues with GO</source>
-      <translation>Vorbereitete Cues mit GO abfahren</translation>
-    </message>
-    <message>
-      <location line="+5" />
-      <source>Kante</source>
-      <translation>Kante</translation>
-    </message>
-    <message>
-      <location line="+0" />
-      <source>Kante Light</source>
-      <translation>Kante Light</translation>
-    </message>
-    <message>
-      <location line="+0" />
-      <source>System</source>
-      <translation>System</translation>
-    </message>
-    <message>
-      <location line="+2" />
-      <source>System style (Breeze)</source>
-      <translation>Systemstil (Breeze)</translation>
-    </message>
-    <message>
-      <location line="+0" />
-      <source>Kante: Gruvbox dark, Leinen when the system theme is light</source>
-      <translation>Kante: Gruvbox dunkel, Leinen bei hellem Systemthema</translation>
-    </message>
-    <message>
-      <location line="+0" />
-      <source>Kante Light: only the shapes of Kante, on the system colours</source>
-      <translation>Kante Light: nur die Formen von Kante, auf den Systemfarben</translation>
-    </message>
-    <message>
-      <location line="+13" />
+      <location line="+15" />
       <source>Latency</source>
       <translation>Latenz</translation>
     </message>
@@ -1955,7 +1994,7 @@
       <translation>Einige Sekunden lang Aufnahme bis Programm messen</translation>
     </message>
     <message>
-      <location line="+19" />
+      <location line="+15" />
       <source>Preview</source>
       <translation>Vorschau</translation>
     </message>
@@ -2046,11 +2085,6 @@
     </message>
     <message>
       <location line="+6" />
-      <source>Cues…</source>
-      <translation>Cues…</translation>
-    </message>
-    <message>
-      <location line="+6" />
       <source>Buses…</source>
       <translation>Busse…</translation>
     </message>
@@ -2068,49 +2102,6 @@
       <location line="+5" />
       <source>+ Input</source>
       <translation>+ Input</translation>
-    </message>
-    <message>
-      <location line="+134" />
-      <source>This show file is in the older format %1 and was converted on opening. Saving it keeps the old file beside it (.v%1.bak).</source>
-      <translation>Diese Show-Datei hat das ältere Format %1 und wurde beim Öffnen umgewandelt. Beim Speichern bleibt die alte Datei daneben erhalten (.v%1.bak).</translation>
-    </message>
-  </context>
-  <context>
-    <name>MidiLearnButton</name>
-    <message>
-      <location filename="../qml/MidiLearnButton.qml" line="+35" />
-      <source>No MIDI</source>
-      <translation>Kein MIDI</translation>
-    </message>
-    <message>
-      <location line="+1" />
-      <source>CC %1</source>
-      <translation>CC %1</translation>
-    </message>
-    <message>
-      <location line="+0" />
-      <source>Note %1</source>
-      <translation>Note %1</translation>
-    </message>
-    <message>
-      <location line="+1" />
-      <source>%1, channel %2</source>
-      <translation>%1, Kanal %2</translation>
-    </message>
-    <message>
-      <location line="+7" />
-      <source>Press or move on the controller…</source>
-      <translation>Am Controller drücken oder bewegen…</translation>
-    </message>
-    <message>
-      <location line="+1" />
-      <source>MIDI: %1</source>
-      <translation>MIDI: %1</translation>
-    </message>
-    <message>
-      <location line="+12" />
-      <source>Remove MIDI binding</source>
-      <translation>MIDI-Zuordnung entfernen</translation>
     </message>
   </context>
   <context>
@@ -2565,6 +2556,14 @@
     </message>
   </context>
   <context>
+    <name>ShowMain</name>
+    <message>
+      <location filename="../qml/ShowMain.qml" line="+15" />
+      <source>lmix Show</source>
+      <translation>lmix Show</translation>
+    </message>
+  </context>
+  <context>
     <name>ShowView</name>
     <message>
       <location filename="../qml/ShowView.qml" line="+45" />
@@ -2718,6 +2717,11 @@
     </message>
     <message>
       <location line="+7" />
+      <source>Cues…</source>
+      <translation>Cues…</translation>
+    </message>
+    <message>
+      <location line="+15" />
       <source>Zones…</source>
       <translation>Zonen…</translation>
     </message>

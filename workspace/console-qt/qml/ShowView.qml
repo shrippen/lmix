@@ -217,6 +217,21 @@ ColumnLayout {
         }
         KanteButton {
             focusPolicy: Qt.NoFocus
+            text: qsTr("Cues…")
+            onClicked: cueListsDialog.open()
+        }
+        CueListsDialog {
+            id: cueListsDialog
+            parent: QQC2.Overlay.overlay
+            anchors.centerIn: parent
+            act: view.act
+            inputs: view.show ? view.show.inputs : []
+            outputs: view.show ? view.show.outputs : []
+            lists: view.lists
+            onClosed: view.forceActiveFocus()
+        }
+        KanteButton {
+            focusPolicy: Qt.NoFocus
             text: qsTr("Zones…")
             QQC2.ToolTip.visible: hovered
             QQC2.ToolTip.text: qsTr("The show's sound zones and where they play on this machine")

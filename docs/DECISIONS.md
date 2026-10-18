@@ -3749,3 +3749,51 @@ Echtzeit sie ändert. Schlüssig ist erst die Messung auf dem 3090-Rechner
 ausführen (Review #105, Runde 2): Schon fällige Aktionen konnten eine
 Panik überholen, und die Metrik hätte nur noch den Zeitgeber gemessen.
 
+## 2026-10-18 — Console in zwei Programme geteilt (Mischer, Show)
+
+**Kontext**: Auftrag des Users (18.10.): Die Console wird zu zwei
+Oberflächen, eine für den Mischer, eine für die Show. Beide laufen
+gleichzeitig und sprechen mit demselben `lmix-core`. Bisher teilten sich
+Mischer und Show-Ansicht ein Fenster mit Umschalter (2026-10-16).
+
+**Optionen**: (a) zwei Crates; (b) ein Crate mit zwei Binaries, die
+Rust-Brücke (`Core`), Formulare, Portal und das QML-Modul teilen.
+
+**Entscheidung**: (b). `workspace/console-qt` baut `lmix-mixer` und
+`lmix-show`; `lmix-console` entfällt. Jedes Programm hat eigenen
+Anwendungsnamen (`mixer`, `show`, Organisation `lmix`), eigene
+Desktop-Datei und Wayland-App-ID (`lmix-mixer`, `lmix-show`,
+`packaging/desktop/`) und eigenes Haupt-QML:
+
+```
+AppShell.qml   Fenster: lmix-core, Stil, Datei-Knöpfe (Neu, Öffnen, Zuletzt,
+               Speichern, Paket mit Einstellungen exportieren/importieren/
+               zurücksetzen), Hinweis altes Format, Ablehnungen
+ ├ MixerMain.qml  Monitore, Übergänge, Inputs, Layouts, Ausgänge, alle
+ │                Mischer-Dialoge, „Aus Show…“, Programmformat, Multiview,
+ │                44,1 kHz, Latenz, Tasten 1–9, Belegungen, globale Tasten
+ └ ShowMain.qml   Show-Ansicht (Erweitert, Dunkel), Cue-Dialog („Cues…“
+                  steht jetzt in der Show-Ansicht), Leertaste GO, Escape Panik
+```
+
+- **Globale Tasten (AUT.12) nur im Mischer**: Jeder Prozess hätte eine
+  eigene Portal-Sitzung, ein Druck liefe zweimal. Die Belegungen mit
+  Fenstertasten (AUT.1–3) gehören ebenfalls zum Mischer; die Show behält
+  ihre Fenstertasten.
+- **Einstellungen** je Programm in `~/.config/lmix/mixer.conf` und
+  `show.conf`. Fehlt die eigene Datei und gibt es `console.conf`, kopiert
+  das Programm sie einmal (beide Programme), so bleiben Stil und Ansicht.
+  `view.showMode` entfällt.
+- **Titelleiste** nennt das Programm: „lmix Mischer — <Show>“, „lmix Show —
+  <Show>“.
+- `--mode simple|advanced` wirkt nur im Mischer; `--core`, `--style`,
+  `--window` in beiden.
+- Skripte: `run-local.sh` startet den Mischer (`APP=show|both`),
+  `test-console-qt.sh` prüft den Mischer und danach die Show am selben
+  Core, `test-global-keys.sh` und `CONSOLE_SHOT` den Mischer, die Demo
+  macht je ein Bild von Mischer und Show.
+
+**Bestand, nicht geändert**: `--style` erreicht auch Qt, das daraufhin ein
+Quick-Controls-Stil-Modul `kante` sucht und das Fenster nicht lädt (so schon
+bei `lmix-console`). Die Demo startet darum ohne `--style` (Kante ist
+Standard).

@@ -5,7 +5,7 @@
 #
 #   scripts/test-m2b-vm.sh            # builds, runs, cleans up
 #   CONSOLE_SHOT=out.png scripts/test-m2b-vm.sh
-#                                     # also screenshots the Qt Console
+#                                     # also screenshots lmix Mixer
 #                                     # (lmix-core client) on Xvfb
 #   KEEP_WORK=1                       # keep logs and pictures
 #   WORK=dir                          # put them there (default: mktemp)
@@ -803,15 +803,16 @@ act '{"action":"set_input_color","input":"Ball","color":"cyan"}' >/dev/null
 curl -sf "$CORE/devices" | jq -e 'type == "array"' >/dev/null || fail "device list"
 pass "color tag; device list ($(curl -sf "$CORE/devices" | jq length) found)"
 
-# --- Console as lmix-core client, on a virtual display ---
+# --- lmix Mixer as lmix-core client, on a virtual display ---
 if [[ -n "${CONSOLE_SHOT:-}" ]]; then
-    # Qt Console (needs Qt 6 with Kirigami and gst-plugin-qml6, BUILD.md).
+    # lmix Mixer (needs Qt 6 with Kirigami and gst-plugin-qml6, BUILD.md),
+    # with its own settings, not the operator's.
     (cd "$ROOT/workspace/console-qt" && cargo build --release)
-    CONSOLE_BIN="${CARGO_TARGET_DIR:-$ROOT/workspace/console-qt/target}/release/lmix-console"
+    CONSOLE_BIN="${CARGO_TARGET_DIR:-$ROOT/workspace/console-qt/target}/release/lmix-mixer"
     Xvfb :93 -screen 0 1440x900x24 >/dev/null 2>&1 &
     PIDS+=($!)
     sleep 1
-    DISPLAY=:93 WAYLAND_DISPLAY= QT_QPA_PLATFORM=xcb QT_FORCE_STDERR_LOGGING=1 \
+    DISPLAY=:93 WAYLAND_DISPLAY= QT_QPA_PLATFORM=xcb QT_FORCE_STDERR_LOGGING=1 XDG_CONFIG_HOME="$WORK/config" \
         LMIX_CORE="${CORE%/api}" "$CONSOLE_BIN" >"$WORK/console.log" 2>&1 &
     PIDS+=($!)
     sleep "${CONSOLE_WAIT:-25}"   # live flows start one after another
@@ -820,7 +821,7 @@ if [[ -n "${CONSOLE_SHOT:-}" ]]; then
     sleep 2
     DISPLAY=:93 import -window root "$CONSOLE_SHOT"
     act '{"action":"clear_listen"}' >/dev/null
-    pass "Console screenshot: $CONSOLE_SHOT"
+    pass "mixer screenshot: $CONSOLE_SHOT"
 fi
 
 # --- show file ---

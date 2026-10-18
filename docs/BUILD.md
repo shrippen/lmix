@@ -235,12 +235,16 @@ auch der Node-Treiber aus Pythons playwright:
 
 ```bash
 scripts/test-m2b-vm.sh   # strom (CPU-Mischer) + lmix-core, Testbilder
-CONSOLE_SHOT=console.png scripts/test-m2b-vm.sh   # plus Qt-Console auf Xvfb (braucht Qt 6, Kirigami)
+CONSOLE_SHOT=console.png scripts/test-m2b-vm.sh   # plus lmix Mischer auf Xvfb (braucht Qt 6, Kirigami)
 ```
 
 Prüft Bildinhalt (Helligkeit, Bewegung) über ImageMagick `convert`.
 
 ## Qt-Console (`workspace/console-qt`, Prototyp)
+
+Ein Crate, zwei Programme über demselben `lmix-core` (DECISIONS
+2026-10-18): `lmix-mixer` (lmix Mischer: Inputs live schalten) und
+`lmix-show` (lmix Show: Cues mit GO). Beide laufen auch gleichzeitig.
 
 Ziel ist Linux allgemein, keine einzelne Distribution; entwickelt wird auf
 Arch. Gebraucht werden:
@@ -287,26 +291,37 @@ prüft, trägt sie hier ein.
 ```bash
 scripts/sync-kante.sh                 # Kante-QML ins Crate kopieren (nach Kante-Änderungen)
 cd workspace/console-qt
-cargo run --release -- --core http://127.0.0.1:8200 [--style kante|kante-light|system]
+cargo run --release --bin lmix-mixer -- --core http://127.0.0.1:8200 [--style kante|kante-light|system]
+cargo run --release --bin lmix-show -- --core http://127.0.0.1:8200
 ```
 
-Oder alles zusammen (strom, lmix-core, Console mit Testbildern; Schließen
-beendet alles): `scripts/run-local.sh` (`MIXER=gl`, `INPUTS=8`).
+Oder alles zusammen (strom, lmix-core, Mischer mit Testbildern; Schließen
+beendet alles): `scripts/run-local.sh` (`MIXER=gl`, `INPUTS=8`; `APP=show`
+startet die Show, `APP=both` beide).
 
-Sprache: Quelltexte englisch, Deutsch als Übersetzung; die Console folgt der
+Einstellungen (Stil, Ansicht, Tasten) je Programm in
+`~/.config/lmix/mixer.conf` und `show.conf`. Beim ersten Start kopiert jedes
+Programm eine vorhandene `console.conf` (die eine Console bis 18.10.2026)
+einmal in seine Datei. Startmenü: `packaging/desktop/lmix-mixer.desktop` und
+`lmix-show.desktop` nach `~/.local/share/applications/`, die Programme im
+`PATH`. Globale Tasten (AUT.12) bindet nur der Mischer.
+
+Sprache: Quelltexte englisch, Deutsch als Übersetzung; die Programme folgen der
 Systemsprache (`LANGUAGE=en LANG=en_US.UTF-8` erzwingt Englisch). Neue oder geänderte
 Texte: `scripts/update-translations.sh` sammelt sie (`lupdate`) und trägt die
 deutschen Texte aus `workspace/console-qt/i18n/de.py` ein; fehlende meldet es.
 
-`cxx-qt-build` findet Qt über `qmake6` (bzw. `QMAKE=…`). Die Console muss auf
+`cxx-qt-build` findet Qt über `qmake6` (bzw. `QMAKE=…`). Der Mischer muss auf
 dem Rechner der Engine laufen: Live-Bilder kommen über Unix-Sockets in
 `$XDG_RUNTIME_DIR/lmix/live` (`lmix-core --live-dir`). Messwerte je Ansicht:
-`RUST_LOG=lmix_console=debug`. Läuft die Console ohne Terminal, landen
+`RUST_LOG=lmix_mixer=debug`. Läuft ein Programm ohne Terminal, landen
 Qt-Meldungen im Journal; `QT_FORCE_STDERR_LOGGING=1` holt sie nach stderr.
 
 Automatischer Test (Xvfb, CPU-Mischer, keine GPU nötig):
-`scripts/test-console-qt.sh` prüft bewegte Monitore und Kacheln, Klick =
-Vorschau, Cut und dass QML keine Warnungen schreibt.
+`scripts/test-console-qt.sh` prüft im Mischer bewegte Monitore und Kacheln,
+Klick = Vorschau, Cut und dass QML keine Warnungen schreibt; danach startet
+es die Show am selben `lmix-core` und prüft, dass ihr Fenster zeichnet, ohne
+QML-Warnungen.
 
 ## Dauertest auf Hardware
 

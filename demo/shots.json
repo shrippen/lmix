@@ -5,7 +5,10 @@
   "viewport": [1440, 900],
   "shots": [
     {
-      "name": "console"
+      "name": "mixer"
+    },
+    {
+      "name": "show"
     }
   ]
 }
