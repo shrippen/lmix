@@ -3687,29 +3687,47 @@ abgeschlossen und lesbar, H.265 in MKV über den älteren Recorder,
 ISO-Spuren mit und ohne Ton, Multiview-Aufnahme.
 **Offen**: Lange Aufnahme auf dem 3090-Rechner (H.24), dort mit
 GStreamer 1.28 auch MKV über den Live-Recorder.
+
 ## 2026-10-18 — Zeitgeber mit Echtzeit-Priorität (RUN.8)
 
 **Kontext**: User-Entscheidung RUN.8 (Entscheidungsseite 18.10.): Der
 Zeitgeber der Cue-Listen bekommt einen eigenen Thread mit
 Echtzeit-Priorität über rtkit; geht das nicht, warnt lmix.
 
-**Entscheidung**: `watch_cues` läuft auf dem Thread `lmix-cues` mit einer
-eigenen tokio-Laufzeit (ein Thread). Der Thread holt sich zuerst selbst
-`SCHED_FIFO` (Priorität 20; klappt mit `RLIMIT_RTPRIO` oder als Root) und
-fragt sonst rtkit über den System-D-Bus (`MakeThreadRealtime`, bis zu
-dessen `MaxRealtimePriority`), wie PipeWire. Vorher setzt er
-`RLIMIT_RTTIME` auf 200 ms, ohne das gewährt rtkit nichts, und ein
-Echtzeit-Thread, der nicht mehr schläft, kann den Rechner nicht anhalten.
+**Entscheidung**: Der Zeitgeber (`cue_clock`) läuft auf dem Thread
+`lmix-cues` mit eigener tokio-Laufzeit. Er schläft bis zur nächsten
+Frist und nimmt dann nur, was fällig ist (`cue_tick`). Was die Schritte
+tun, läuft auf der gemeinsamen Laufzeit (`run_cue_steps`: Autosave,
+Clients, die Aktionen der Cues, Vorladen). Ein Hilfs-Thread holt dem
+Zeitgeber die Priorität: zuerst `SCHED_FIFO` direkt (Priorität 20; mit
+`RLIMIT_RTPRIO` oder als Root), sonst über rtkit auf dem System-D-Bus
+(`MakeThreadRealtime`, bis zu dessen `MaxRealtimePriority`), wie
+PipeWire. Ein hängender D-Bus hält den Zeitgeber so nicht auf. Auf beiden
+Wegen wird vorher `RLIMIT_RTTIME` auf 200 ms gesetzt. Ohne diese Grenze
+gewährt rtkit nichts, und ein Echtzeit-Thread, der nicht mehr schläft,
+kann den Rechner nicht anhalten. An dieser Grenze beendet der Kernel aber
+den Prozess. Darum laufen keine Aktionen auf dem Echtzeit-Thread: „Show
+öffnen“ mit großen Datenquellen oder das Autosave könnten sie erreichen.
 Klappt beides nicht, steht eine Warnung im Log, und `/metrics` zeigt
-`lmix_cue_timer_realtime 0`. Die Aktionen der Cues laufen auf demselben
-Thread, damit auch sie nicht auf einen freien Kern warten.
+`lmix_cue_timer_realtime 0`; endet der Thread, ebenso, mit Fehler im Log.
+
+**Reichweite**: Pünktlich werden damit Wartezeiten und Folgen nach Zeit.
+Ein GO führt seine Schritte auf dem Thread des Aufrufers aus (HTTP, MIDI,
+OSC). Eine Folge nach dem Ende eines Klangs oder Bilds kommt mit der
+Meldung der Engine (Abfrage alle 100 ms, SND.12). Die Aktionen selbst
+laufen auf normalen Threads und können unter Last warten.
+
 **Grenze**: Der Zeitgeber braucht für jeden Schritt kurz die Sperre des
 Switchers. Hält sie gerade ein normaler Thread, den die Last verdrängt
-hat, wartet auch der Echtzeit-Thread (Prioritätsumkehr). Das mildert
-Echtzeit nicht; dagegen hilft nur, die Sperre kurz zu halten.
+hat, wartet auch der Echtzeit-Thread (Prioritätsumkehr). Hilft Echtzeit
+auf dem 3090-Rechner nicht, ist der nächste Schritt ein Zeitgeber, der
+seine Fristen ohne diese Sperre kennt.
+
 **Messung** (VM mit 4 Kernen, alle vier mit `yes` belegt, je 3 min,
-`scripts/test-cue-timing.sh`): mit Echtzeit 19,6 ms und 3,8 ms
-spätestens, ohne (CAP_SYS_NICE entzogen) 9,0 ms und 7,5 ms. In der VM
-streut das stärker, als Echtzeit ändert (der Gast-Kernel steuert die
-virtuellen Kerne nicht); schlüssig ist erst die Messung auf dem
-3090-Rechner (H.39), wo ohne Echtzeit 65,3 ms gemessen wurden.
+`scripts/test-cue-timing.sh`): spätester Schritt mit Echtzeit 19,6 ms,
+3,8 ms und nach dem Umbau 24,4 ms, ohne Echtzeit (CAP_SYS_NICE entzogen)
+9,0 ms und 7,5 ms. In der VM ist kein Gewinn zu sehen. Die Werte streuen
+stärker, als Echtzeit sie ändert, und die Sperre (siehe Grenze) wirkt mit.
+Schlüssig ist erst die Messung auf dem 3090-Rechner (H.39); dort kamen
+ohne Echtzeit bis 65,3 ms zustande.
+

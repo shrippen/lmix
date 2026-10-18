@@ -489,23 +489,41 @@ fn pages_url(listen: SocketAddr) -> String {
 
 /// The cue timer on its own thread and runtime with real-time priority
 /// (RUN.8): on a busy machine, the shared runtime's workers wait for a
-/// free core, and with them every wait and follow.
+/// free core, and with them every wait and follow. What the due steps do
+/// runs on the shared runtime (see [`service::Service::cue_clock`]).
 fn spawn_cue_timer(service: std::sync::Arc<service::Service>) {
+    let (steps, due) = tokio::sync::mpsc::unbounded_channel();
+    tokio::spawn(service.clone().run_cue_steps(due));
+    let (tid_tx, tid_rx) = std::sync::mpsc::channel();
     std::thread::Builder::new()
         .name("lmix-cues".into())
         .spawn(move || {
-            match realtime::make_current_thread_realtime() {
-                Ok(how) => tracing::info!(how, "cue timer runs with real-time priority"),
-                Err(why) => tracing::warn!(
-                    %why,
-                    "cue timer without real-time priority: steps may be late on a busy machine (RUN.8)"
-                ),
+            /// Says so when the timer stops, a panic included.
+            struct Ended;
+            impl Drop for Ended {
+                fn drop(&mut self) {
+                    realtime::ended();
+                    tracing::error!("cue timer stopped: waits and follows no longer run");
+                }
             }
+            let _ended = Ended;
+            let _ = tid_tx.send(realtime::thread_id());
             tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()
                 .expect("cue timer runtime builds")
-                .block_on(service.watch_cues());
+                .block_on(service.cue_clock(steps));
         })
         .expect("cue timer thread starts");
+    // Asked from the side: a hung system bus must not hold up the timer.
+    std::thread::spawn(move || {
+        let Ok(tid) = tid_rx.recv() else { return };
+        match realtime::make_realtime(tid) {
+            Ok(how) => tracing::info!(how, "cue timer runs with real-time priority"),
+            Err(why) => tracing::warn!(
+                %why,
+                "cue timer without real-time priority: steps may be late on a busy machine (RUN.8)"
+            ),
+        }
+    });
 }
