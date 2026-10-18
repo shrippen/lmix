@@ -4,13 +4,15 @@ Studio Weber world (demo/world.json, graufeld.stream; copied in by
 shrippen.github.io/demo/tools/sync-demo.py, never edit it here).
 
 Renders a synthetic clip per input (videotestsrc pattern, the input's name,
-a tone), starts strom, lmix-core and the Qt Console on this machine, builds
-the show through the API and puts it on air. Nothing leaves the machine.
+a tone), starts strom, lmix-core, lmix Mixer and lmix Show on this machine,
+builds the show through the API and puts it on air. Nothing leaves the
+machine.
 
-    demo/start.sh [de|en]          interactive; closing the Console ends it
+    demo/start.sh [de|en]          interactive; closing the mixer ends it
     SHOT_DIR=… SHOT_PLAN=… demo/start.sh de
                                    screenshots on a virtual display
-                                   (shrippen.github.io/demo/tools/screenshots.py)
+                                   (shrippen.github.io/demo/tools/screenshots.py);
+                                   a shot's name is the program: mixer, show
 
 Internal tool for screenshots: never part of a release.
 """
@@ -42,6 +44,7 @@ SHOT_DISPLAY = ":96"
 SHOT_SIZE = "1440x900x24"
 # Until every live picture shows and the meters move.
 SHOT_SETTLE_S = 15
+APPS = ("mixer", "show")
 LOCALES = {"de": "de_DE.UTF-8", "en": "en_US.UTF-8"}
 # Kante follows the platform's brightness: a dark scheme gives Gruvbox,
 # none (a bare virtual display) gives Leinen.
@@ -58,15 +61,18 @@ def run(cmd, **kw):
 
 
 def build():
-    """Engine and our two binaries; returns their paths."""
+    """Engine, lmix-core and the programs; returns the paths of the first
+    two and {app: path} of the programs."""
     strom = run([str(ROOT / "scripts" / "fetch-strom.sh")], capture_output=True, text=True).stdout.strip()
     target = os.environ.get("CARGO_TARGET_DIR")
-    bins = {}
-    for crate, binary in (("lmix-core", "lmix-core"), ("console-qt", "lmix-console")):
+
+    def release(crate):
         run(["cargo", "build", "--release", "-q"], cwd=ROOT / "workspace" / crate)
-        base = Path(target) if target else ROOT / "workspace" / crate / "target"
-        bins[crate] = str(base / "release" / binary)
-    return strom, bins["lmix-core"], bins["console-qt"]
+        return (Path(target) if target else ROOT / "workspace" / crate / "target") / "release"
+
+    core = str(release("lmix-core") / "lmix-core")
+    console = release("console-qt")
+    return strom, core, {app: str(console / f"lmix-{app}") for app in APPS}
 
 
 def render(item, lang, folder):
@@ -134,6 +140,14 @@ def titles(lang):
     act({"action": "title_load", "graphics": 1, "layer": 8, "template": "lmix/clock", "play": True})
 
 
+def cues(lang, ids):
+    """For lmix Show: a cue list that puts each input on air in turn."""
+    cue_list = [{"number": str(n + 1), "name": text(item["name"], lang), "kind": "actions",
+                 "actions": [{"action": "cut_direct", "input": ids[item["id"]]}]}
+                for n, item in enumerate(STREAM["inputs"])]
+    act({"action": "add_cue_list", "name": STREAM["show"], "cues": cue_list})
+
+
 def stage(lang, work):
     """The show from the world: inputs, colours, buses, outputs."""
     ids = {}
@@ -160,6 +174,7 @@ def stage(lang, work):
         if out["running"]:
             act({"action": "start_output", "output": text(out["name"], lang)})
     titles(lang)
+    cues(lang, ids)
     act({"action": "save_show", "path": str(work / STREAM["file"])})
 
 
@@ -168,7 +183,7 @@ def main():
     if lang not in LOCALES:
         sys.exit("usage: demo/start.sh [de|en]")
     shots = os.environ.get("SHOT_DIR")
-    strom, core, console = build()
+    strom, core, apps = build()
 
     work = Path(tempfile.mkdtemp(prefix="lmix-demo-"))
     live = Path(os.environ.get("XDG_RUNTIME_DIR", "/tmp")) / "lmix-demo"
@@ -228,16 +243,31 @@ def main():
 
         env.update(LMIX_CORE=f"http://127.0.0.1:{CORE_PORT}", LANGUAGE=lang, LANG=LOCALES[lang],
                    LC_ALL=LOCALES[lang])
-        console_proc = subprocess.Popen([console, "--style", "kante"], env=env, stdout=log, stderr=log)
-        procs.append(console_proc)
+
+        # Kante is the default style, the settings are fresh. (`--style`
+        # would also reach Qt, which then looks for a Quick Controls style.)
+        def start(app):
+            return subprocess.Popen([apps[app]], env=env, stdout=log, stderr=log)
+
         if not shots:
-            console_proc.wait()
+            procs.append(start("show"))
+            mixer_proc = start("mixer")
+            procs.append(mixer_proc)
+            mixer_proc.wait()
             return
-        time.sleep(float(os.environ.get("DEMO_SETTLE_S", SHOT_SETTLE_S)))
-        plan = json.loads(os.environ.get("SHOT_PLAN", "[]")) or [{"name": "console"}]
+        # One program at a time: each fills the virtual display.
+        plan = json.loads(os.environ.get("SHOT_PLAN", "[]")) or [{"name": app} for app in APPS]
         for shot in plan:
+            if shot["name"] not in APPS:
+                sys.exit(f"shot {shot['name']}: names a program ({', '.join(APPS)})")
+            proc = start(shot["name"])
+            procs.append(proc)
+            time.sleep(float(os.environ.get("DEMO_SETTLE_S", SHOT_SETTLE_S)))
             run(["import", "-display", SHOT_DISPLAY, "-window", "root", str(Path(shots) / f"{shot['name']}.png")])
             print(f"shot {shot['name']}", flush=True)
+            proc.terminate()
+            proc.wait(timeout=10)
+            procs.remove(proc)
     finally:
         stop()
 

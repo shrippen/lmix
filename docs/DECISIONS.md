@@ -3836,3 +3836,68 @@ Echtzeit sie ändert. Schlüssig ist erst die Messung auf dem 3090-Rechner
 ausführen (Review #105, Runde 2): Schon fällige Aktionen konnten eine
 Panik überholen, und die Metrik hätte nur noch den Zeitgeber gemessen.
 
+## 2026-10-18 — Console in zwei Programme geteilt (Mischer, Show)
+
+**Kontext**: Auftrag des Users (18.10.): Die Console wird zu zwei
+Oberflächen, eine für den Mischer, eine für die Show. Beide laufen
+gleichzeitig und sprechen mit demselben `lmix-core`. Bisher teilten sich
+Mischer und Show-Ansicht ein Fenster mit Umschalter (2026-10-16).
+
+**Optionen**: (a) zwei Crates; (b) ein Crate mit zwei Binaries, die
+Rust-Brücke (`Core`), Formulare, Portal und das QML-Modul teilen.
+
+**Entscheidung**: (b). `workspace/console-qt` baut `lmix-mixer` und
+`lmix-show`; `lmix-console` entfällt. Jedes Programm hat eigenen
+Anwendungsnamen (`mixer`, `show`, Organisation `lmix`), eigene
+Desktop-Datei und Wayland-App-ID (`lmix-mixer`, `lmix-show`,
+`packaging/desktop/`) und eigenes Haupt-QML:
+
+```
+AppShell.qml   Fenster: lmix-core, Stil, Datei-Knöpfe (Neu, Öffnen, Zuletzt,
+               Speichern, Paket mit Einstellungen exportieren/importieren/
+               zurücksetzen), Belegungen (Fenstertasten, globale Tasten,
+               Dialog), Hinweis altes Format, Ablehnungen
+ ├ MixerMain.qml  Monitore, Übergänge, Inputs, Layouts, Ausgänge, alle
+ │                Mischer-Dialoge, „Aus Show…“, Programmformat, Multiview,
+ │                44,1 kHz, Latenz, Tasten 1–9
+ └ ShowMain.qml   Show-Ansicht (Erweitert, Dunkel), Cue-Dialog („Cues…“
+                  steht jetzt in der Show-Ansicht), „Belegungen…“ in der
+                  Kopfzeile, Leertaste GO, Escape Panik
+```
+
+- **Belegungen in beiden Programmen** (AUT.1–3): Fenstertasten wirken nur
+  im Fenster vorne, lösen also nie doppelt aus.
+- **Globale Tasten (AUT.12) in beiden, je mit eigenem Schalter**
+  (`keys/global` in `mixer.conf` bzw. `show.conf`; Entscheidung des Users
+  18.10.2026): ab Werk in der Show an (Panik und GO von überall), im Mischer
+  aus. Jeder Prozess hat seine eigene Portal-Sitzung; sind beide an, löst
+  ein Druck zweimal aus. Darauf weist der Belegungen-Dialog unter dem
+  Schalter hin. Die Show erreicht den Dialog über „Belegungen…“ in der
+  Kopfzeile.
+- **Fokus in der Show**: Die Knöpfe der Kopfzeile nehmen keinen Fokus; nach
+  den Dialogen des Fensters (Datei, Paket, Einstellungen, Neu, Belegungen)
+  holt die Show Fenster und Show-Ansicht zurück, damit Leertaste und Escape
+  wieder GO und Panik sind (vorher blieb der Fokus am Knopf).
+- **Einstellungen** je Programm in `~/.config/lmix/mixer.conf` und
+  `show.conf`. Fehlt die eigene Datei und gibt es `console.conf`, kopiert
+  das Programm sie einmal (beide Programme; über eine `.tmp`-Datei und
+  Umbenennen), so bleiben Stil und Ansicht. `view.showMode` entfällt.
+  Stand `keys/global` in der alten Datei auf an, ist es danach in beiden an;
+  stand es auf aus (die alte Console schrieb das immer), nimmt die Show es
+  nicht mit und bleibt bei ihrer Vorgabe an.
+- **Titelleiste** nennt das Programm: „lmix Mischer — <Show>“, „lmix Show —
+  <Show>“.
+- `--mode simple|advanced` wirkt nur im Mischer; `--core`, `--style`,
+  `--window` in beiden.
+- `claude.md` Punkt 7 und SUI.1 neu gefasst (User 18.10.2026): ein Kern,
+  zwei Oberflächen; die Desktop-Dateien in `packaging/desktop/` bestätigt.
+- Skripte: `run-local.sh` startet den Mischer (`APP=show|both`),
+  `test-console-qt.sh` prüft den Mischer und danach die Show am selben
+  Core (auch Leertaste GO und Escape Panik nach Kopfzeile und Dialog),
+  `test-global-keys.sh` die Vorgaben beider Programme, `CONSOLE_SHOT` den
+  Mischer, die Demo macht je ein Bild von Mischer und Show.
+
+**Bestand, nicht geändert**: `--style` erreicht auch Qt, das daraufhin ein
+Quick-Controls-Stil-Modul `kante` sucht und das Fenster nicht lädt (so schon
+bei `lmix-console`). Die Demo startet darum ohne `--style` (Kante ist
+Standard).

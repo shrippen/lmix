@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=lmix Show
+GenericName=Show Control
+GenericName[de]=Showsteuerung
+Comment=Run prepared cues with GO
+Comment[de]=Vorbereitete Cues mit GO abfahren
+Exec=lmix-show
+Terminal=false
+Categories=AudioVideo;
+StartupWMClass=lmix-show

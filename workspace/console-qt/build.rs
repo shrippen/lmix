@@ -60,7 +60,7 @@ fn lrelease() -> Option<PathBuf> {
 }
 
 /// The translations (i18n/qml_<lang>.ts) as .qm files in a .qrc beside
-/// Main.qml, where QQmlApplicationEngine looks for them (`i18n/qml_<lang>.qm`).
+/// the root QML files, where QQmlApplicationEngine looks for them (`i18n/qml_<lang>.qm`).
 /// Without lrelease the Console builds in English only.
 fn translations_qrc() -> Option<PathBuf> {
     println!("cargo::rerun-if-changed=i18n");
@@ -102,7 +102,9 @@ fn main() {
     let mut builder = CxxQtBuilder::new_qml_module(
         QmlModule::new("org.lmix.console")
             .qml_files([
-                "qml/Main.qml",
+                "qml/AppShell.qml",
+                "qml/MixerMain.qml",
+                "qml/ShowMain.qml",
                 "qml/LiveView.qml",
                 "qml/InputTile.qml",
                 "qml/SourceFields.qml",

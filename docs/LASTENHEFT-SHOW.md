@@ -239,7 +239,7 @@ QLab kennt keinen Import aus Texten; am nächsten kommt das Anlegen von Cues
 | CTL.3 | Abo verwalten: an- und abmelden je Ereignis und Feld; Ablauf nach 60 s ohne Lebenszeichen | M | S1 | ✅ (OSC-Abos enden 60 s nach der letzten Nachricht, `/lmix/ping`; OSC je Thema und Feld: `/lmix/subscribe running name remaining`, Themen `mixer`, `standby`, `running`, `cue`, `panic`, `target`; TCP-Themen) |
 | CTL.4 | Feste OSC-Abonnenten in den Einstellungen (Host:Port, Ereignisauswahl, Nachrichtenvorlage mit Platzhaltern für Nummer, Name, Restzeit): Companion-Tasten ohne eigenes Modul und ohne Anmeldung | M | S1 | ✅ (`set_feed` auf `osc_udp`-Ziele, Platzhalter) |
 | CTL.5 | Zugriffsschutz für Steuerung von außen: Rechte Ansehen, Steuern, Bearbeiten für OSC, HTTP, TCP, Web. Mehrere Zugangsschlüssel mit eigenen Rechten; Stufe „ohne Schlüssel“ getrennt für localhost und eine LAN-Adressliste (Standard: nur localhost). Panik einzeln ohne Schlüssel freigebbar. Falsche Schlüssel verlängern die Wartezeit, Abweisungen werden protokolliert | M | S1 | ✅ (Schlüssel mit Ansehen/Steuern/Bearbeiten für HTTP und TCP, `--open-panic` auch für OSC, wachsende Wartezeit und Protokoll; Adressliste mit Recht `--trust` für HTTP, TCP, OSC; ohne Schlüssel und Passwort bleibt das LAN frei wie bei API.7, DECISIONS 17.10.) |
-| CTL.6 | Globale Taste für GO und Panik, auch wenn die Console nicht im Vordergrund ist; in der Show-Ansicht ist Escape immer Panik, zweimal Escape harter Stopp, nicht umlegbar | S | S1 | ◐ (Leertaste GO, Escape Panik, zweimal hart, in der Show-Ansicht; global über Kurzbefehle) |
+| CTL.6 | Globale Taste für GO und Panik, auch wenn die Console nicht im Vordergrund ist; in der Show-Ansicht ist Escape immer Panik, zweimal Escape harter Stopp, nicht umlegbar | S | S1 | ◐ (Leertaste GO, Escape Panik, zweimal hart, in der Show-Ansicht; global über Kurzbefehle: Fenstertasten in lmix-show und lmix-mixer, globale Tasten in beiden mit eigenem Schalter, in lmix-show ab Werk an, im Mischer aus) |
 | CTL.7 | Antworten auf Anfragen mit Status ok/Fehler/abgelehnt und Daten; für reine Aktionen abschaltbar; Lebenszeichen-Befehl | S | S2 | ◐ (API.3) |
 | CTL.8 | Companion-Modul: Aktionen, Rückmeldungen, Variablen für den Show-Modus | S | S2 | – (API.11) |
 | CTL.9 | Web-Fernbedienung `/show` für Handy/Tablet: GO, Panik, Standby mit Notiz, laufende Cues; Nur-Lesen-Modus; hält den Doppel-GO-Schutz ein | S | S2 | – |
@@ -256,7 +256,7 @@ QLab kennt keinen Import aus Texten; am nächsten kommt das Anlegen von Cues
 | SAF.2 | Panikdauer als Show-Einstellung, 0–10 s, Standard 1 s | M | S1 | ✅ (`set_panic_time`) |
 | SAF.3 | Harter Stopp als eigener Befehl: sofort still, Bühne schwarz | M | S1 | ◐ (`cue_hard_stop`; still und schwarz mit Zonen und Bühnen) |
 | SAF.4 | Notfall-Liste: läuft bei Panik und hartem Stopp zusätzlich (z. B. HTTP: Raumlicht hell) (lmix) | M | S1 | ✅ (`set_emergency_list`) |
-| SAF.5 | Panik und harter Stopp über jeden Bedienweg erreichbar, auch ohne Console (OSC, HTTP, MIDI, globale Taste) | M | S1 | ✅ (OSC `/lmix/panic`, `/lmix/stop/hard`, HTTP, MIDI und globale Taste über Kurzbefehle) |
+| SAF.5 | Panik und harter Stopp über jeden Bedienweg erreichbar, auch ohne Console (OSC, HTTP, MIDI, globale Taste) | M | S1 | ✅ (OSC `/lmix/panic`, `/lmix/stop/hard`, HTTP, MIDI und globale Taste über Kurzbefehle, in lmix-show ab Werk an) |
 | SAF.6 | Nach Neustart von `lmix-core` oder Engine startet nichts von selbst: Stille, Bühne schwarz, Standbys auf dem letzten Stand (lmix; Ausnahme CTL.13) | M | S1 | ◐ (nichts startet, Standby aus der Sicherung; Stille und Schwarz mit Stufe 2/3) |
 | SAF.7 | Zeit von Panik bis Stille ≤ Panikdauer + 100 ms | M | S1 | – |
 | SAF.8 | Show-Sperre: Bearbeiten gesperrt, GO und Panik frei; Rückfrage beim Beenden; Bildschirmschoner und Ruhezustand unterdrückt | S | S2 | – |
@@ -265,7 +265,7 @@ QLab kennt keinen Import aus Texten; am nächsten kommt das Anlegen von Cues
 
 | ID | Anforderung | Prio | MS | Stand |
 |---|---|---|---|---|
-| SUI.1 | Show-Ansicht in der Console als eigener Modus (umschaltbar zum Mischer) | M | S1 | ✅ (Umschalter Mischer/Show) |
+| SUI.1 | Show-Oberfläche als eigenes Programm lmix-show (läuft neben lmix-mixer am selben lmix-core) | M | S1 | ✅ (`lmix-show`, DECISIONS 2026-10-18) |
 | SUI.2 | Cue-Liste mit Spalten Nummer, Name, Art, Ziel, Vorwartezeit, Dauer, Nachwartezeit, Folge; Standby deutlich markiert; Gruppen einklappbar | M | S1 | ◐ (Nummer, Name, Notiz, Art mit Dauer, Vor/Nach/Folge unter „Erweitert“, Gruppen einklappbar; Ziel steht im Namen) |
 | SUI.3 | Großer GO-Knopf, Panik-Knopf, Standby-Name und Standby-Notiz in großer Schrift | M | S1 | ✅ |
 | SUI.4 | Laufende Cues mit Fortschrittsbalken, Restzeit, Stopp und Pause je Cue | M | S1 | ◐ (Fortschritt, Restzeit, Stopp je Cue; Pause mit RUN.5, S2) |

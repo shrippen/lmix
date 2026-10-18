@@ -56,7 +56,7 @@ Textur-Importpfad für Live-Monitore (H.4).
 
 ## Schritt 1: Prototyp (Stand 2026-10-09)
 
-`workspace/console-qt` (Binary `lmix-console`), Client von `lmix-core` wie
+`workspace/console-qt` (Binary `lmix-console`, seit 2026-10-18 `lmix-mixer` und `lmix-show`), Client von `lmix-core` wie
 die egui-Console:
 
 - Kirigami-Fenster mit Kante (Stil per `--style kante|kante-light|system`,
@@ -72,7 +72,7 @@ die egui-Console:
   Socket (Engine-Neustart, neuer Flow), fragt die Kachel nach 1 s neu.
 - Rust-Backend (cxx-qt, `src/bridge.rs`): Zustand über WebSocket, Aktionen
   über HTTP, eine Pipeline je Item.
-- Messsonde: mit `RUST_LOG=lmix_console=debug` meldet jede Ansicht alle
+- Messsonde: mit `RUST_LOG=lmix_mixer=debug` meldet jede Ansicht alle
   5 s fps und Bildalter (Engine-Zeitstempel bis GUI-Sink, ohne Anzeige).
 
 ### Messung (H.11), RTX 3090, Wayland (Plasma), CUDA-Mischer, 16 Inputs
@@ -177,4 +177,4 @@ Selbsttest ist ein eigenes Binary (`workspace/selftest`, `lmix-selftest`),
 VM-Test und Screenshot laufen über die Qt-Console (`test-m2b-vm.sh`
 `CONSOLE_SHOT`, `test-console-qt.sh`). Mit der egui-Console gingen der
 M1b-Modus direkt an strom und das Leistungs-Overlay (F3); Messwerte je
-Ansicht liefert die Qt-Console mit `RUST_LOG=lmix_console=debug`.
+Ansicht liefert die Qt-Console mit `RUST_LOG=lmix_mixer=debug`.

@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# Qt Console against a real engine, on a virtual display (no GPU needed):
+# lmix Mixer against a real engine, on a virtual display (no GPU needed):
 # monitors and tiles show moving live pictures, clicks switch, no QML
-# warnings. Needs Qt 6 with Kirigami, gst-plugin-qml6 (gstreamer1.0-qt6),
-# Xvfb, xdotool, ImageMagick, jq.
+# warnings. Then lmix Show beside it against the same lmix-core: its
+# window draws, space is GO and Escape panic (also after a click on the
+# header and a closed dialog), no QML warnings. Needs Qt 6 with Kirigami, gst-plugin-qml6
+# (gstreamer1.0-qt6), Xvfb, xdotool, ImageMagick, jq.
 #
 #   scripts/test-console-qt.sh
 #   KEEP_WORK=1 scripts/test-console-qt.sh   # keep logs and screenshots
@@ -61,7 +63,7 @@ STROM_BIN="$("$ROOT/scripts/fetch-strom.sh")"
 (cd "$ROOT/workspace/lmix-core" && cargo build --release >/dev/null 2>&1)
 (cd "$ROOT/workspace/console-qt" && cargo build --release >/dev/null 2>&1) || fail "console-qt does not build"
 CORE_BIN="${CARGO_TARGET_DIR:-$ROOT/workspace/lmix-core/target}/release/lmix-core"
-CONSOLE_BIN="${CARGO_TARGET_DIR:-$ROOT/workspace/console-qt/target}/release/lmix-console"
+CONSOLE_DIR="${CARGO_TARGET_DIR:-$ROOT/workspace/console-qt/target}/release"
 
 Xvfb "$DISPLAY_NO" -screen 0 1440x900x24 >/dev/null 2>&1 &
 PIDS+=($!)
@@ -85,10 +87,11 @@ sleep 2
 
 # The window opens at its default size (80 × 50 grid units of 18 px) at 0,0.
 unset WAYLAND_DISPLAY
-# Own settings: the Console writes style, keys and view settings on use,
-# never into the operator's ~/.config/lmix/console.conf.
-XDG_CONFIG_HOME="$WORK/config" DISPLAY="$DISPLAY_NO" QT_QPA_PLATFORM=xcb QT_FORCE_STDERR_LOGGING=1 \
-    LMIX_CORE="http://127.0.0.1:${CORE_PORT}" "$CONSOLE_BIN" >"$WORK/console.log" 2>&1 &
+# Own settings: the programs write style, keys and view settings on use,
+# never into the operator's ~/.config/lmix/mixer.conf and show.conf.
+export XDG_CONFIG_HOME="$WORK/config" DISPLAY="$DISPLAY_NO" QT_QPA_PLATFORM=xcb QT_FORCE_STDERR_LOGGING=1 \
+    LMIX_CORE="http://127.0.0.1:${CORE_PORT}"
+"$CONSOLE_DIR/lmix-mixer" >"$WORK/console.log" 2>&1 &
 PIDS+=($!)
 PROGRAM_AREA="600x340+810+180"
 PREVIEW_AREA="600x340+20+180"
@@ -143,7 +146,51 @@ if grep -E 'qrc:|\.qml:[0-9]+' "$WORK/console.log" >/dev/null; then
     fail "QML warnings: $(grep -E 'qrc:|\.qml:[0-9]+' "$WORK/console.log" | head -3)"
 fi
 pass "no QML warnings"
+
+# lmix Show beside the mixer, same lmix-core: its window opens over the
+# mixer's and draws the show view (not a flat colour).
+act '{"action":"add_cue_list","name":"Act 1","cues":[{"number":"1","name":"Doors","kind":"wait","duration_ms":120000},{"number":"2","name":"House","kind":"wait","duration_ms":120000},{"number":"3","name":"Lights","kind":"note"}]}'
+"$CONSOLE_DIR/lmix-show" >"$WORK/show.log" 2>&1 &
+PIDS+=($!)
+show_window=""
+for _ in $(seq 1 60); do
+    show_window="$(xdotool search --name '^lmix Show' 2>/dev/null | head -1 || true)"
+    [[ -n "$show_window" ]] && break
+    sleep 0.5
+done
+[[ -n "$show_window" ]] || fail "no lmix Show window"
+sleep 3
+import -window "$show_window" "$WORK/show.png"
+awk "BEGIN { exit !($(spread show 1400x800+20+40) > 0.05) }" && pass "lmix Show draws its window" || fail "lmix Show window blank"
+# No window manager: give the show window the keyboard; keys then go to
+# whatever has it (a dialog the show opens takes it over).
+standby() { state | jq '.cue_lists[0].standby'; }
+cues_running() { state | jq '.running_cues | length'; }
+key() { xdotool key "$1"; }
+xdotool windowfocus "$show_window"
+sleep 1
+until_true() { for _ in $(seq 1 20); do eval "$1" && return 0; sleep 0.5; done; return 1; }
+key space
+until_true '[[ "$(standby)" == 2 && "$(cues_running)" -ge 1 ]]' && pass "show: space is GO" \
+    || fail "show: space did not GO (standby $(standby), running $(cues_running))"
+# A header button and its dialog (Save as…, left open with Escape) must
+# not keep the keys: Escape closes the dialog, the cue keeps running.
+click 383 73
+sleep 2
+key Escape
+sleep 1
+[[ "$(cues_running)" -ge 1 ]] || fail "show: Escape in the Save dialog reached the show (panic)"
+key space
+until_true '[[ "$(standby)" == 3 ]]' && pass "show: space is GO after a header button and its dialog" \
+    || fail "show: no GO after Save as… (standby $(standby))"
+key Escape
+until_true '[[ "$(cues_running)" == 0 ]]' && pass "show: Escape is panic" \
+    || fail "show: Escape did not stop the cues ($(cues_running) running)"
+if grep -E 'qrc:|\.qml:[0-9]+' "$WORK/show.log" >/dev/null; then
+    fail "QML warnings (show): $(grep -E 'qrc:|\.qml:[0-9]+' "$WORK/show.log" | head -3)"
+fi
+pass "no QML warnings (show)"
 criticals="$(tail -n +"$((STROM_START_LINES + 1))" "$WORK/strom.log" | grep -c 'GStreamer-CRITICAL' || true)"
 [[ "$criticals" == 0 ]] || fail "$criticals GStreamer CRITICALs in strom.log"
 pass "no GStreamer CRITICALs (live flows)"
-echo "Qt Console check passed"
+echo "Qt mixer and show check passed"

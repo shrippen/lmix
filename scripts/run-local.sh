@@ -1,14 +1,19 @@
 #!/usr/bin/env bash
-# Engine, lmix-core and the Qt Console on this machine, with a few test
-# inputs; closing the Console stops everything.
+# Engine, lmix-core and lmix Mixer on this machine, with a few test
+# inputs; closing the window stops everything. APP=show starts lmix Show
+# instead, APP=both the two (closing the mixer stops everything).
+# Arguments go to the program(s), e.g. --window maximized.
 #
 #   scripts/run-local.sh              # CUDA mixer, 4 test inputs
 #   MIXER=gl INPUTS=8 scripts/run-local.sh
+#   APP=both scripts/run-local.sh     # mixer and show at once
 #   KEEP_WORK=1 scripts/run-local.sh  # keep logs (path printed at the end)
 set -euo pipefail
 
 MIXER="${MIXER:-cuda}"
 INPUTS="${INPUTS:-4}"
+APP="${APP:-mixer}"
+[[ "$APP" =~ ^(mixer|show|both)$ ]] || { echo "APP is mixer, show or both, not $APP" >&2; exit 1; }
 STROM_PORT="${STROM_PORT:-8500}"
 CORE_PORT="${CORE_PORT:-8600}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -37,7 +42,7 @@ STROM_BIN="$("$ROOT/scripts/fetch-strom.sh")"
 (cd "$ROOT/workspace/lmix-core" && cargo build --release -q)
 (cd "$ROOT/workspace/console-qt" && cargo build --release -q)
 CORE_BIN="${CARGO_TARGET_DIR:-$ROOT/workspace/lmix-core/target}/release/lmix-core"
-CONSOLE_BIN="${CARGO_TARGET_DIR:-$ROOT/workspace/console-qt/target}/release/lmix-console"
+CONSOLE_DIR="${CARGO_TARGET_DIR:-$ROOT/workspace/console-qt/target}/release"
 
 (cd "$WORK" && exec "$STROM_BIN" --host 127.0.0.1 --port "$STROM_PORT" --no-auto-restart \
     --data-dir "$WORK/strom-data" >"$WORK/strom.log" 2>&1) &
@@ -55,4 +60,14 @@ for i in $(seq 1 "$INPUTS"); do
 done
 act '{"action":"cut_direct","input":1}'
 
-LMIX_CORE="http://127.0.0.1:${CORE_PORT}" "$CONSOLE_BIN" "$@" >"$WORK/console.log" 2>&1
+export LMIX_CORE="http://127.0.0.1:${CORE_PORT}"
+case "$APP" in
+mixer | show)
+    "$CONSOLE_DIR/lmix-$APP" "$@" >"$WORK/$APP.log" 2>&1
+    ;;
+both)
+    "$CONSOLE_DIR/lmix-show" "$@" >"$WORK/show.log" 2>&1 &
+    PIDS+=($!)
+    "$CONSOLE_DIR/lmix-mixer" "$@" >"$WORK/mixer.log" 2>&1
+    ;;
+esac

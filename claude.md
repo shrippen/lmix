@@ -34,8 +34,8 @@ Kommuniziere auf Deutsch, Code/Commits auf Englisch.
 6. Lizenzkompatibilität: Projekt muss MIT-kompatibel bleiben (kommerzielle Nutzung
    möglich). Kein GPL-Code (weder 2 noch 3) in das Repo. Jede neue Abhängigkeit
    prifen, Lizenz in der Commit-Meldung dokumentieren.
-7. Show-Modus = zweiter Bedienmodus über demselben `lmix-core` (User 2026-10-16,
-   docs/DECISIONS.md), kein eigenes Programm, kein Plugin. Der Ablauf (Cue-Listen,
+7. Show-Modus = zweiter Bedienmodus über demselben `lmix-core`: ein Kern, zwei
+   Oberflächen (`lmix-mixer`, `lmix-show`), kein Plugin. Der Ablauf (Cue-Listen,
    Standby, Zeiten, Panik) läuft in `lmix-core`, nicht in der Oberfläche; ein
    Console-Absturz hält keinen Cue an. Die Show nennt nur logische Namen (Zone,
    Bühne, Ausgabeziel); Geräte, Adressen und Geheimnisse liegen in den
