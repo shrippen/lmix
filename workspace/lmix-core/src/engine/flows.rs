@@ -81,7 +81,9 @@ const MV_OUT: &str = "mv_out";
 /// Outputs buffer a little more than the mixer: they are not on the
 /// switching path, an encoder hiccup must not drop frames.
 const OUTPUT_BUFFER_MS: &str = "500";
-/// Recording files: `<folder>/lmix_<date>_<time>_00001.mkv`, …
+/// Recording files: `<folder>/lmix-<output>_<date>_<time>_00001.mkv`, …
+/// The output's id in the name: two recordings into one folder that start
+/// in the same second (a restore) would otherwise write the same file.
 const RECORDING_PREFIX: &str = "lmix";
 /// Thumbnail tap in every slot flow: input bar pictures and preview monitor.
 pub const SLOT_TAP: &str = "tap";
@@ -405,6 +407,13 @@ fn pgm_channel(block: &str) -> String {
     format!("strom_{}_{block}", mixer_id())
 }
 
+/// File name prefix of output `id`'s recordings: `lmix-` and the first
+/// part of its id.
+fn recording_prefix(id: OutputId) -> String {
+    let id = id.to_string();
+    format!("{RECORDING_PREFIX}-{}", &id[..8])
+}
+
 /// Whether strom's GStreamer has a live MKV muxer (1.26 and later).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LiveMkv {
@@ -554,7 +563,7 @@ pub fn output_flow(
                     ("output_dir", PropertyValue::String(folder.clone())),
                     (
                         "filename_prefix",
-                        PropertyValue::String(RECORDING_PREFIX.into()),
+                        PropertyValue::String(recording_prefix(id)),
                     ),
                     ("num_audio_tracks", PropertyValue::UInt(u64::from(sound))),
                 ],
@@ -638,7 +647,8 @@ fn add_download(flow: &mut Flow, from: &str, on_gpu: bool) -> String {
     "sysmem".into()
 }
 
-/// Program sound as AAC into `to` (the recorder takes encoded audio only).
+/// Program sound as AAC into `to`. The live recorder would encode raw
+/// sound itself; the older MKV recorder takes encoded audio only.
 fn add_aac(flow: &mut Flow, to: &str) {
     flow.elements.push(element("aconv", "audioconvert", vec![]));
     flow.elements.push(element("aac", "avenc_aac", vec![]));
@@ -1899,7 +1909,21 @@ mod tests {
             .any(|l| l.from == "aacparse" && l.to == "rec:audio_in_0")); // The live recorder: readable while it grows, a stopped track does
                                                                          // not hold up the others (REC).
         let rec = flow.blocks.iter().find(|b| b.id == "rec").unwrap();
-        assert_eq!(rec.block_definition_id, "builtin.liverecorder");
+        assert_eq!(rec.block_definition_id, "builtin.liverecorder"); // Two recordings into one folder never share a file name.
+        let prefix = |flow: &Flow| {
+            let rec = flow.blocks.iter().find(|b| b.id == "rec").unwrap();
+            format!("{:?}", rec.properties.get("filename_prefix"))
+        };
+        let other = output_flow(
+            OutputId::new(),
+            &spec,
+            Feed::Program,
+            None,
+            MixerBackend::Cpu,
+            Framerate::default(),
+            LiveMkv::Yes,
+        );
+        assert_ne!(prefix(&flow), prefix(&other));
     }
 
     #[test]

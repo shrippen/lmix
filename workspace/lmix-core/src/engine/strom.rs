@@ -878,7 +878,12 @@ impl Engine for StromEngine {
             ));
         }
 
-        let version = self.gstreamer_version().await.unwrap_or_default();
+        let version = self.gstreamer_version().await.unwrap_or_else(|| {
+            tracing::warn!(
+                "strom did not tell its GStreamer version: MKV recordings use the older recorder"
+            );
+            String::new()
+        });
         *self.live_mkv.lock().expect("live mkv lock") = flows::LiveMkv::for_gstreamer(&version);
 
         let black = flows::black_input(slots);
