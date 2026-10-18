@@ -530,7 +530,7 @@ fn spawn_cue_timer(service: std::sync::Arc<service::Service>) {
             std::thread::sleep(std::time::Duration::from_secs(1));
         }
         tracing::warn!(
-            "cue timer gave up real-time priority: a cue step computed for over 100 ms without a pause (RUN.8)"
+            "cue timer gave up real-time priority for the rest of the run: a cue step computed past RLIMIT_RTTIME's soft limit without a pause (RUN.8)"
         );
     });
 }

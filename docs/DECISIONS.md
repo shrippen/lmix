@@ -3710,13 +3710,18 @@ hart 200 ms (rtkit gewährt nichts ohne Grenze). An der harten Grenze
 beendet der Kernel den Prozess. Darum macht das SIGXCPU der weichen
 Grenze den Zeitgeber wieder zu einem normalen Thread: Ein Cue-Schritt, der
 so lange rechnet (etwa „Show öffnen“ mit großen Datenquellen), kostet die
-Priorität, nicht die Show. Dann steht eine Warnung im Log, und `/metrics`
+Priorität für den Rest des Laufs, nicht die Show. Die Rückstufung behält
+`SCHED_RESET_ON_FORK`: Ohne CAP_SYS_NICE lässt der Kernel das Flag nicht
+löschen (EPERM, mit einem Prozess ohne Rechte nachgeprüft), und der
+Thread bliebe bis zum Abbruch an der harten Grenze in Echtzeit. Dann steht eine Warnung im Log, und `/metrics`
 zeigt `lmix_cue_timer_realtime 0`, ebenso ohne Echtzeit von Anfang an und
 wenn der Thread endet. Ein Unit-Test prüft die Rückstufung, wo der Test
 SCHED_FIFO bekommt (in der VM als Root).
 
 **Reichweite**: Wartezeiten und Folgen nach Zeit. Ein GO führt seine
-Schritte auf dem Thread des Aufrufers aus (HTTP, MIDI, OSC). Eine Folge
+Schritte auf dem Thread des Aufrufers aus (HTTP, MIDI, OSC). Was Aktionen
+eines Cues mit `tokio::spawn` starten (Ziele, Datenquellen, verzögerte
+Aktionen), läuft auf der Laufzeit des Zeitgebers und endet mit ihr. Eine Folge
 nach dem Ende eines Klangs oder Bilds kommt mit der Meldung der Engine,
 die strom alle 100 ms abfragt (SND.12). Datei-Schreiben (Autosave) läuft
 über tokios Blocking-Threads mit normaler Priorität.

@@ -73,14 +73,24 @@ pub fn make_realtime(tid: libc::pid_t) -> Result<&'static str, String> {
 }
 
 /// SIGXCPU: the real-time thread computed too long. Back to a normal
-/// thread; only async-signal-safe calls here.
+/// thread; only async-signal-safe calls here. `SCHED_RESET_ON_FORK` stays
+/// set: without CAP_SYS_NICE the kernel refuses to drop it (EPERM), and
+/// the thread would stay real-time until the hard limit kills the process.
 extern "C" fn on_xcpu(_: libc::c_int) {
+    // SAFETY: errno is thread-local; the interrupted code gets it back.
+    let errno = unsafe { *libc::__errno_location() };
     let param = libc::sched_param { sched_priority: 0 };
     let tid = RT_THREAD.load(Ordering::Relaxed);
     // SAFETY: sched_setscheduler is async-signal-safe (a plain syscall).
-    unsafe { libc::sched_setscheduler(tid, libc::SCHED_OTHER, &param) };
-    REALTIME.store(false, Ordering::Relaxed);
-    DEMOTED.store(true, Ordering::Relaxed);
+    let rc = unsafe {
+        libc::sched_setscheduler(tid, libc::SCHED_OTHER | libc::SCHED_RESET_ON_FORK, &param)
+    };
+    if rc == 0 {
+        REALTIME.store(false, Ordering::Relaxed);
+        DEMOTED.store(true, Ordering::Relaxed);
+    }
+    // SAFETY: as above.
+    unsafe { *libc::__errno_location() = errno };
 }
 
 /// Soft and hard RLIMIT_RTTIME (a lower hard limit already set stays),
@@ -98,6 +108,7 @@ fn limit_rt_time() -> Result<(), String> {
     unsafe {
         let mut action: libc::sigaction = std::mem::zeroed();
         action.sa_sigaction = on_xcpu as *const () as usize;
+        action.sa_flags = libc::SA_RESTART;
         libc::sigemptyset(&mut action.sa_mask);
         if libc::sigaction(libc::SIGXCPU, &action, std::ptr::null_mut()) != 0 {
             return Err(format!("SIGXCPU: {}", std::io::Error::last_os_error()));
@@ -172,7 +183,7 @@ mod tests {
                 std::hint::spin_loop();
             }
             // SAFETY: plain query of the calling thread.
-            let policy = unsafe { libc::sched_getscheduler(0) };
+            let policy = unsafe { libc::sched_getscheduler(0) } & !libc::SCHED_RESET_ON_FORK;
             Some((demoted(), policy))
         });
         if let Some((demoted, policy)) = worker.join().unwrap() {

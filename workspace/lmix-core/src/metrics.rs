@@ -511,7 +511,6 @@ mod tests {
             "lmix_cue_steps_total 12",
             "lmix_cue_late_max_seconds 0.003",
             "lmix_cue_late_over_budget_total 1",
-            "lmix_cue_timer_realtime 0",
             "lmix_resident_memory_bytes 4096",
             r#"lmix_input_online{input="1",name="Cam \"A\""} 1"#,
             r#"lmix_input_tally{input="1",name="Cam \"A\""} 1"#,
@@ -527,6 +526,10 @@ mod tests {
         ] {
             assert!(text.lines().any(|l| l == line), "missing {line} in\n{text}");
         }
+        // 0 or 1: the real-time test may hold the priority meanwhile.
+        assert!(text
+            .lines()
+            .any(|l| l.starts_with("lmix_cue_timer_realtime ")));
         assert!(
             !text.contains("lmix_latency_ms{"),
             "no latency before a measurement"
