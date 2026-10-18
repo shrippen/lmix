@@ -103,6 +103,9 @@ pub struct StromEngine {
     /// Mixer inputs of the last `start`.
     slots: AtomicUsize,
     playback: playback::Playing,
+    /// Whether recordings may be live MKV; set by `start` from strom's
+    /// GStreamer version.
+    live_mkv: std::sync::Mutex<flows::LiveMkv>,
 }
 
 /// Longest wait for one engine call. Commands run under the switcher
@@ -145,6 +148,7 @@ impl StromEngine {
             sample_rate: std::sync::Mutex::new(lmix_types::output::default_sample_rate()),
             slots: AtomicUsize::new(0),
             playback: Default::default(),
+            live_mkv: std::sync::Mutex::new(flows::LiveMkv::No),
         }
     }
 
@@ -874,6 +878,9 @@ impl Engine for StromEngine {
             ));
         }
 
+        let version = self.gstreamer_version().await.unwrap_or_default();
+        *self.live_mkv.lock().expect("live mkv lock") = flows::LiveMkv::for_gstreamer(&version);
+
         let black = flows::black_input(slots);
         self.black.store(black, Ordering::Relaxed);
         self.slots.store(slots, Ordering::Relaxed);
@@ -981,7 +988,9 @@ impl Engine for StromEngine {
                 aux,
             } => {
                 let framerate = self.format.lock().expect("format lock").framerate;
-                let flow = flows::output_flow(*id, spec, *feed, *aux, self.backend, framerate);
+                let live_mkv = *self.live_mkv.lock().expect("live mkv lock");
+                let flow =
+                    flows::output_flow(*id, spec, *feed, *aux, self.backend, framerate, live_mkv);
                 self.put_flow(&flow).await
             }
             Command::StopOutput { id } => self.drop_flow(flows::output_flow_id(*id)).await,

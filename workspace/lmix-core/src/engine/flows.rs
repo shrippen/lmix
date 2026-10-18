@@ -39,7 +39,12 @@ const LOCAL_INPUT_BLOCK: &str = "builtin.local_input";
 const NDI_INPUT_BLOCK: &str = "builtin.ndi_input";
 const NDI_OUTPUT_BLOCK: &str = "builtin.ndi_output";
 const SRT_OUTPUT_BLOCK: &str = "builtin.mpegtssrt_output";
-const RECORDER_BLOCK: &str = "builtin.recorder";
+/// Fragmented files: readable while they grow and after a crash, and a
+/// track that stops does not hold up the others (DECISIONS 18.10., REC).
+const RECORDER_BLOCK: &str = "builtin.liverecorder";
+/// MKV before GStreamer 1.26, where matroskamux is not live yet: the
+/// live recorder refuses it, this one writes MKV that stays readable too.
+const MKV_RECORDER_BLOCK: &str = "builtin.recorder";
 const RTMP_OUTPUT_BLOCK: &str = "builtin.rtmp_output";
 const VIDEO_ENCODER_BLOCK: &str = "builtin.videoenc";
 const WHIP_INPUT_BLOCK: &str = "builtin.whip_input";
@@ -76,7 +81,7 @@ const MV_OUT: &str = "mv_out";
 /// Outputs buffer a little more than the mixer: they are not on the
 /// switching path, an encoder hiccup must not drop frames.
 const OUTPUT_BUFFER_MS: &str = "500";
-/// Recording files: `<folder>/lmix_00001.mkv`, …
+/// Recording files: `<folder>/lmix_<date>_<time>_00001.mkv`, …
 const RECORDING_PREFIX: &str = "lmix";
 /// Thumbnail tap in every slot flow: input bar pictures and preview monitor.
 pub const SLOT_TAP: &str = "tap";
@@ -400,6 +405,24 @@ fn pgm_channel(block: &str) -> String {
     format!("strom_{}_{block}", mixer_id())
 }
 
+/// Whether strom's GStreamer has a live MKV muxer (1.26 and later).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LiveMkv {
+    Yes,
+    No,
+}
+
+impl LiveMkv {
+    /// From strom's GStreamer version, e.g. "1.24.2"; unknown counts as old.
+    pub fn for_gstreamer(version: &str) -> Self {
+        let mut parts = version.split('.').map(|p| p.parse::<u32>().ok());
+        match (parts.next().flatten(), parts.next().flatten()) {
+            (Some(major), Some(minor)) if (major, minor) >= (1, 26) => Self::Yes,
+            _ => Self::No,
+        }
+    }
+}
+
 pub fn output_flow_id(id: OutputId) -> FlowId {
     Uuid::new_v5(&FLOW_NAMESPACE, format!("output-{id}").as_bytes())
 }
@@ -419,6 +442,7 @@ pub fn output_flow(
     aux: Option<usize>,
     backend: MixerBackend,
     framerate: Framerate,
+    live_mkv: LiveMkv,
 ) -> Flow {
     let mut flow = Flow::new(format!("lmix output {id}"));
     flow.id = output_flow_id(id);
@@ -518,9 +542,13 @@ pub fn output_flow(
             encoding,
         } => {
             add_encoder(&mut flow, *video_kbps, encoding, framerate);
+            let recorder = match (container, live_mkv) {
+                (lmix_types::Container::Mkv, LiveMkv::No) => MKV_RECORDER_BLOCK,
+                _ => RECORDER_BLOCK,
+            };
             flow.blocks.push(block(
                 "rec",
-                RECORDER_BLOCK,
+                recorder,
                 vec![
                     ("container", PropertyValue::String(container.nick().into())),
                     ("output_dir", PropertyValue::String(folder.clone())),
@@ -1673,6 +1701,7 @@ mod tests {
             None,
             MixerBackend::Cpu,
             Framerate::default(),
+            LiveMkv::Yes,
         );
 
         let video = flow.blocks.iter().find(|b| b.id == "pgm").unwrap();
@@ -1750,6 +1779,7 @@ mod tests {
             Some(0),
             MixerBackend::Cpu,
             Framerate::default(),
+            LiveMkv::Yes,
         );
 
         let audio = flow.blocks.iter().find(|b| b.id == "pgm_audio").unwrap();
@@ -1774,6 +1804,7 @@ mod tests {
             None,
             MixerBackend::Cpu,
             Framerate::default(),
+            LiveMkv::Yes,
         );
 
         let rtmp = flow.blocks.iter().find(|b| b.id == "rtmp").unwrap();
@@ -1816,6 +1847,7 @@ mod tests {
             None,
             MixerBackend::Cpu,
             Framerate::Fps25,
+            LiveMkv::Yes,
         );
 
         let enc = flow.blocks.iter().find(|b| b.id == "enc").unwrap();
@@ -1849,6 +1881,7 @@ mod tests {
             None,
             MixerBackend::Cpu,
             Framerate::default(),
+            LiveMkv::Yes,
         );
 
         let pgm = flow.blocks.iter().find(|b| b.id == "pgm").unwrap();
@@ -1863,7 +1896,42 @@ mod tests {
         assert!(flow
             .links
             .iter()
-            .any(|l| l.from == "aacparse" && l.to == "rec:audio_in_0"));
+            .any(|l| l.from == "aacparse" && l.to == "rec:audio_in_0")); // The live recorder: readable while it grows, a stopped track does
+                                                                         // not hold up the others (REC).
+        let rec = flow.blocks.iter().find(|b| b.id == "rec").unwrap();
+        assert_eq!(rec.block_definition_id, "builtin.liverecorder");
+    }
+
+    #[test]
+    fn mkv_before_gstreamer_1_26_records_with_the_older_recorder() {
+        let spec = |container| OutputSpec::Record {
+            folder: "show".into(),
+            container,
+            video_kbps: 8000,
+            encoding: Default::default(),
+        };
+        let recorder = |container, version: &str| {
+            let flow = output_flow(
+                OutputId::new(),
+                &spec(container),
+                Feed::Program,
+                None,
+                MixerBackend::Cpu,
+                Framerate::default(),
+                LiveMkv::for_gstreamer(version),
+            );
+            let rec = flow.blocks.iter().find(|b| b.id == "rec").unwrap();
+            rec.block_definition_id.clone()
+        };
+        use lmix_types::Container::{Mkv, Mp4};
+        assert_eq!(recorder(Mkv, "1.24.2"), "builtin.recorder");
+        assert_eq!(
+            recorder(Mkv, ""),
+            "builtin.recorder",
+            "unknown counts as old"
+        );
+        assert_eq!(recorder(Mkv, "1.28.7"), "builtin.liverecorder");
+        assert_eq!(recorder(Mp4, "1.24.2"), "builtin.liverecorder");
     }
 
     #[test]
@@ -1884,6 +1952,7 @@ mod tests {
             None,
             MixerBackend::Cuda,
             Framerate::default(),
+            LiveMkv::Yes,
         );
 
         let pgm = flow.blocks.iter().find(|b| b.id == "pgm").unwrap();
@@ -1984,6 +2053,7 @@ mod tests {
             None,
             MixerBackend::Cpu,
             Framerate::default(),
+            LiveMkv::Yes,
         );
 
         let screen = flow.elements.iter().find(|e| e.id == "screen").unwrap();
@@ -2011,6 +2081,7 @@ mod tests {
             None,
             MixerBackend::Cuda,
             Framerate::default(),
+            LiveMkv::Yes,
         );
         assert!(flow
             .links
@@ -2045,6 +2116,7 @@ mod tests {
             None,
             MixerBackend::Cuda,
             Framerate::default(),
+            LiveMkv::Yes,
         );
         assert!(
             flow.elements

@@ -306,7 +306,7 @@ kann es, Console nicht.
 |---|---|---|---|
 | REC.1 | Aufnahme von Ausgang 1–4 mit Ton-Bus-Wahl; Start/Stopp; Laufzeit + verworfene Frames | M | ◐ (Aufnahme von Program oder Input mit Aux-Ton, Start/Stopp, Laufzeit; ohne verworfene Frames) |
 | REC.2 | Formate: MP4, MOV, MKV, MXF, MPG/TS, AVI; Codecs H.264, MPEG-2, VC-3/DNxHD, MJPEG, verlustfrei; HW-Encode; Ton AAC/PCM (Auswahl im Detail lmix) | M | ◐ (MKV, MP4, TS; H.264 HW/SW + AAC) |
-| REC.3 | Ausfallsicher: unterbrochene Datei bleibt lesbar (fragmentiertes MP4, MKV, MXF, TS) | M | ✅ (MKV Standard und TS; MP4 mit Kopf-Reserve) |
+| REC.3 | Ausfallsicher: unterbrochene Datei bleibt lesbar (fragmentiertes MP4, MKV, MXF, TS) | M | ✅ (Live-Recorder: fragmentiertes MP4, TS, MKV ab GStreamer 1.26; davor MKV über den älteren Recorder; DECISIONS 18.10. „Aufnahmen über den Live-Recorder“) |
 | REC.4 | Neue Datei alle n Minuten, nahtlos | S | – (E: Teilen nach Zeit/Größe im strom-Recorder) |
 | REC.5 | Dateinamensmuster mit Datum/Zeit; Standardordner | S | ◐ (Ordner je Ausgang, Datum/Zeit fest im Namen; kein Muster) |
 | REC.6 | Zweiter Recorder mit eigenem Format/Quelle, startet mit dem ersten | S | ◐ (beliebig viele Aufnahme-Ausgänge mit eigenem Format und eigener Quelle; Start nicht gekoppelt) |
