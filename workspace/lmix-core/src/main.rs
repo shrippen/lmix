@@ -35,6 +35,7 @@ mod package;
 mod patch;
 mod playback;
 mod ptz;
+mod realtime;
 mod recent;
 mod script;
 mod service;
@@ -326,7 +327,7 @@ async fn main() -> anyhow::Result<()> {
     tokio::spawn(service.clone().watch_playback());
     tokio::spawn(service.clone().watch_media());
     tokio::spawn(service.clone().watch_titles());
-    tokio::spawn(service.clone().watch_cues());
+    spawn_cue_timer(service.clone());
     tokio::spawn(service.clone().watch_feeds(args.cue_events_hz));
     if !args.midi.is_empty() {
         tokio::spawn(midi::serve(args.midi.clone(), service.clone()));
@@ -484,4 +485,27 @@ fn pages_url(listen: SocketAddr) -> String {
         ip => ip,
     };
     format!("http://{}", SocketAddr::new(ip, listen.port()))
+}
+
+/// The cue timer on its own thread and runtime with real-time priority
+/// (RUN.8): on a busy machine, the shared runtime's workers wait for a
+/// free core, and with them every wait and follow.
+fn spawn_cue_timer(service: std::sync::Arc<service::Service>) {
+    std::thread::Builder::new()
+        .name("lmix-cues".into())
+        .spawn(move || {
+            match realtime::make_current_thread_realtime() {
+                Ok(how) => tracing::info!(how, "cue timer runs with real-time priority"),
+                Err(why) => tracing::warn!(
+                    %why,
+                    "cue timer without real-time priority: steps may be late on a busy machine (RUN.8)"
+                ),
+            }
+            tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("cue timer runtime builds")
+                .block_on(service.watch_cues());
+        })
+        .expect("cue timer thread starts");
 }

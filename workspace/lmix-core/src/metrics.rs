@@ -124,6 +124,17 @@ pub fn render(snap: &Snapshot, resident: Option<u64>) -> String {
         &[],
         snap.cues.over_budget,
     );
+    Family::new(
+        &mut out,
+        "lmix_cue_timer_realtime",
+        "gauge",
+        "1 while the cue timer runs with real-time priority (RUN.8).",
+    )
+    .sample(
+        "lmix_cue_timer_realtime",
+        &[],
+        u64::from(crate::realtime::granted()),
+    );
 
     let mut f = Family::new(
         &mut out,
