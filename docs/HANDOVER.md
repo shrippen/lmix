@@ -5,8 +5,10 @@ auf echter Hardware.
 
 ## Offene PRs, Stand 2026-10-17 nachts (Merge-Reihenfolge)
 
-CI läuft auf GitHub (Status `github / test` am Commit auf Gitea). PR-Agent
-scheitert am Kostenlimit des Schlüssels (`todo.md`), grüne CI genügt.
+CI läuft auf GitHub (Status `github / test` am Commit auf Gitea). Seit
+18.10.2026 prüft vor jedem Merge ein neuer Claude-Agent (`agent.md`,
+`REVIEW.md`). PR-Agent scheitert am Kostenlimit des Schlüssels
+(`todo.md`); Claude-Review und grüne CI genügen.
 
 Unabhängig von `main`, zuerst:
 

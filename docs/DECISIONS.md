@@ -3590,3 +3590,31 @@ oder `"forever"`.
 endlos mit Fade über die Naht, vorgeladen und wiederholt);
 `scripts/test-show-playback.sh` (ein zweifach gespielter 1-s-Cue endet
 nach dem zweiten Durchgang).
+
+## 2026-10-18 — Jeder PR wird von einem neuen Claude-Agenten geprüft
+
+**Kontext**: Der Eigentümer liest keinen Code. PR-Agent scheitert seit
+Tagen am Kostenlimit seines Schlüssels; PRs gingen allein mit grüner CI
+hinein. Der Eigentümer will, dass jeder PR von einem neuen Claude-Agenten
+geprüft wird (18.10.2026).
+
+**Entscheidung**: Vor jedem Merge startet die schreibende Sitzung einen
+neuen Agenten ohne ihren Kontext. Er bekommt nur Absicht, Diff,
+Repository und `REVIEW.md`, belegt jeden Befund mit Datei, Zeile und
+Fehlerfall und stuft ihn als **Wichtig**, **Kleinigkeit** oder
+**Bestand** ein. Der Bericht steht unverändert als Kommentar am PR.
+Gemergt wird erst, wenn kein **Wichtig** mehr offen ist. Eine Antwort
+statt einer Behebung zählt nur, wenn der nächste Agent sie annimmt.
+Folgerunden prüfen nur die neuen Commits, nach drei Runden mit
+**Wichtig** wird der Ansatz mit dem Eigentümer neu bedacht. Änderungen
+an CI, Release, Geheimnissen und an dieser Regel bestätigt der
+Eigentümer in Worten. Vorbild ist Anthropics Beitrag „Solving code review
+at Anthropic“: frischer Kontext, geprüfte Befunde, Stufen, `REVIEW.md`,
+Rundenbegrenzung.
+
+**Verworfen**: Code Review for Claude Code (die GitHub-App). PRs liegen
+auf Gitea, GitHub ist nur Spiegel ohne PRs. Ein Gitea-Workflow mit
+Claude Code im Kopflosmodus wäre von der schreibenden Sitzung
+unabhängig, braucht aber einen eigenen API-Schlüssel mit Kosten je
+Prüfung. Er bleibt als Ausbau, wenn der Eigentümer einen Schlüssel
+hinterlegt.

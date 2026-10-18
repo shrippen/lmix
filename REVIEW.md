@@ -48,6 +48,9 @@ or one that stops the operator:
   must be fixed or answered before the merge), **Kleinigkeit** (optional,
   at most five) or **Bestand** (the bug was there before this PR; not
   blocking).
-- The comment starts with the count, e.g. "2 Wichtig, 1 Kleinigkeit". With
-  nothing to fix it says so plainly: "Nichts zu beheben."
+- The report starts with the count, e.g. "2 Wichtig, 1 Kleinigkeit" (the
+  session puts the heading above it). With nothing to fix it says so
+  plainly: "Nichts zu beheben."
+- In a later round: say for each open **Wichtig** of the last round whether
+  it is fixed, or whether its answer is accepted, with the reason.
 - Findings in German, code names as they are.
