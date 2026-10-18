@@ -5,9 +5,10 @@ import org.kde.kirigami as Kirigami
 import Kante
 
 /**
- * Stinger of a transition button: a clip (file, URL or playlist, ideally
- * with alpha) played over program, its length, and the cut point at which
- * program cuts to preview underneath.
+ * Stinger of a transition button: a clip (file, URL or the first item of a
+ * playlist, ideally with alpha) that the engine plays to its end over
+ * program, cutting to preview underneath at the cut point. The length
+ * holds switching back while the clip's own length is not known.
  */
 KanteDialog {
     id: dialog
@@ -74,13 +75,13 @@ KanteDialog {
             Layout.fillWidth: true
             visible: dialog.clips.length === 0
             wrapMode: Text.WordWrap
-            text: qsTr("Add the stinger clip as an input first (file, URL or playlist; WebM with alpha shows program around it).")
+            text: qsTr("Add the stinger clip as an input first (file, URL or playlist, which plays its first item; WebM with alpha shows program around it).")
         }
 
         KanteSettingRow {
             Layout.fillWidth: true
             title: qsTr("Length")
-            hint: qsTr("How long the clip plays")
+            hint: qsTr("Until the player reports the clip's length; the clip always plays to its end")
             RowLayout {
                 QQC2.SpinBox {
                     id: length
@@ -113,6 +114,11 @@ KanteDialog {
                 }
                 QQC2.Label { text: "ms" }
             }
+        }
+        QQC2.Label {
+            Layout.fillWidth: true
+            wrapMode: Text.WordWrap
+            text: qsTr("Stingers run between inputs only, not with layouts.")
         }
     }
 }

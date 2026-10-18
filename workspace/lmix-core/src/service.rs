@@ -2628,24 +2628,44 @@ mod tests {
     }
 
     #[tokio::test(start_paused = true)]
-    async fn a_stinger_cuts_and_ends_later_without_holding_the_switcher() {
+    async fn a_stinger_goes_to_the_engine_and_overlays_follow_at_the_cut() {
         use lmix_types::{action::StingerSpec, Effect, InputRef, TransitionSlot};
         let engine = Arc::new(NullEngine::default());
         let service = Service::new(4, engine.clone(), None);
         service.handle(bars()).await.unwrap();
-        let clip = SourceSpec::File {
-            path: "sting.webm".into(),
-        };
-        service
-            .handle(Action::AddInput {
-                source: clip,
-                name: Some("Sting".into()),
-            })
-            .await
-            .unwrap();
+        for (name, source) in [
+            (
+                "Sting",
+                SourceSpec::File {
+                    path: "sting.webm".into(),
+                },
+            ),
+            (
+                "Logo",
+                SourceSpec::Color {
+                    color: "#ff0000".into(),
+                },
+            ),
+        ] {
+            service
+                .handle(Action::AddInput {
+                    source,
+                    name: Some(name.into()),
+                })
+                .await
+                .unwrap();
+        }
         service
             .handle(Action::PreviewInput {
                 input: InputRef::Text("Bars".into()),
+            })
+            .await
+            .unwrap();
+        // Prepared overlays go on with the take: here, at the cut.
+        service
+            .handle(Action::OverlayPreview {
+                channel: 1,
+                input: Some(InputRef::Text("Logo".into())),
             })
             .await
             .unwrap();
@@ -2661,17 +2681,15 @@ mod tests {
             })
             .await
             .unwrap();
-        let cut = || {
+        assert!(engine
+            .log()
+            .iter()
+            .any(|c| matches!(c, Command::StingerLibrary { clips } if clips.len() == 1)));
+        let overlay = || {
             engine
                 .log()
                 .iter()
-                .any(|c| matches!(c, Command::Program { slot: Some(0), .. }))
-        };
-        let ended = || {
-            engine
-                .log()
-                .iter()
-                .any(|c| matches!(c, Command::Stinger { on: false, .. }))
+                .any(|c| matches!(c, Command::Overlay { slot: Some(2), .. }))
         };
 
         service
@@ -2680,14 +2698,16 @@ mod tests {
             })
             .await
             .unwrap();
-        assert!(!cut(), "no cut before the cut point");
+        assert!(engine
+            .log()
+            .iter()
+            .any(|c| matches!(c, Command::Stinger { to: 0, clip } if clip.file == "sting.webm")));
+        assert!(!overlay(), "no overlay before the cut point");
         // The switcher stays free meanwhile.
         service.state().await;
 
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        assert!(cut() && !ended());
-        tokio::time::sleep(std::time::Duration::from_millis(700)).await;
-        assert!(ended());
+        assert!(overlay());
     }
 
     #[tokio::test(start_paused = true)]

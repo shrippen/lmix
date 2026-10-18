@@ -2974,7 +2974,7 @@
   <context>
     <name>StingerDialog</name>
     <message>
-      <location filename="../qml/StingerDialog.qml" line="+31" />
+      <location filename="../qml/StingerDialog.qml" line="+32" />
       <source>Stinger on button %1</source>
       <translation>Stinger auf Taste %1</translation>
     </message>
@@ -2984,19 +2984,19 @@
       <translation>Clip</translation>
     </message>
     <message>
-      <location line="+13" />
-      <source>Add the stinger clip as an input first (file, URL or playlist; WebM with alpha shows program around it).</source>
-      <translation>Erst den Stinger-Clip als Input anlegen (Datei, URL oder Playlist; bei WebM mit Alpha bleibt das Programm drumherum sichtbar).</translation>
-    </message>
-    <message>
-      <location line="+5" />
+      <location line="+18" />
       <source>Length</source>
       <translation>Dauer</translation>
     </message>
     <message>
-      <location line="+1" />
-      <source>How long the clip plays</source>
-      <translation>Wie lange der Clip läuft</translation>
+      <location line="-5" />
+      <source>Add the stinger clip as an input first (file, URL or playlist, which plays its first item; WebM with alpha shows program around it).</source>
+      <translation>Erst den Stinger-Clip als Input anlegen (Datei, URL oder Playlist, die ihr erstes Stück spielt; bei WebM mit Alpha bleibt das Programm drumherum sichtbar).</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Until the player reports the clip's length; the clip always plays to its end</source>
+      <translation>Bis der Player die Cliplänge meldet; der Clip läuft immer bis zum Ende</translation>
     </message>
     <message>
       <location line="+13" />
@@ -3012,6 +3012,11 @@
       <location line="+1" />
       <source>When program cuts underneath, best where the clip covers the picture</source>
       <translation>Wann darunter geschnitten wird, am besten, wo der Clip das Bild verdeckt</translation>
+    </message>
+    <message>
+      <location line="+16" />
+      <source>Stingers run between inputs only, not with layouts.</source>
+      <translation>Stinger laufen nur zwischen Inputs, nicht mit Layouts.</translation>
     </message>
   </context>
   <context>

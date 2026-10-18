@@ -6,6 +6,7 @@
 //!   slot flow 1: …                                                 ├─► mixer flow:
 //!   …                                                          ┘   inter_input × N ─► vision mixer
 //!                                               inter_input × N ─► audio mixer ─► vm PGM audio
+//!                       stinger player ─► vm stinger_in, its sound ─► audio mixer
 //! ```
 //!
 //! Flow ids are fixed per slot (UUID v5), so the `inter` channel name
@@ -15,6 +16,9 @@
 use strom_types::block::{BlockInstance, Position};
 use strom_types::element::{Element, Link};
 use strom_types::flow::GStreamerClockType;
+use strom_types::stinger::{
+    ENABLE_STINGER_PROPERTY, STINGER_INPUT_PAD, STINGER_MODE_PROPERTY, STINGER_PREROLL_PROPERTY,
+};
 use strom_types::{Flow, FlowId, PropertyValue};
 use uuid::Uuid;
 
@@ -68,9 +72,19 @@ const MONITOR_SINK: &str = "monitor_sink";
 pub const AUDIO_MIXER: &str = "mix";
 /// Mixer flow name; a new layout gets a new name, so `start` rebuilds a
 /// running mixer of an older lmix instead of reusing it.
-pub const MIXER_NAME: &str = "lmix mixer 9";
+pub const MIXER_NAME: &str = "lmix mixer 10";
 /// Block id of the vision mixer in the mixer flow.
 pub const MIXER_BLOCK: &str = "vm";
+/// Block id of the stinger clip player in the mixer flow: strom's stinger
+/// source, its playlist the stinger library (DECISIONS 18.10., STG).
+pub const STINGER_PLAYER: &str = "stinger";
+/// Delay from a stinger take to the clip's first frame on air (ms); the
+/// switcher times the cut from the take with it. strom's default.
+pub const STINGER_PREROLL_MS: u32 = 80;
+/// How long strom usually holds the mixer after a stinger's clip has
+/// ended (ms): two frames, then it parks the clip again. The switcher's
+/// lock covers it; the engine waits out the rest (`stinger_idle`).
+pub const STINGER_FINISH_MS: u32 = 300;
 /// Thumbnail tap on the program output: GUI monitor and picture checks.
 pub const PGM_TAP: &str = "tap_pgm";
 /// Program picture and sound for the output flows (`inter`).
@@ -204,9 +218,9 @@ pub fn mixer_flow(
         ));
     }
 
-    // DSK layers, fed over `inter`: the stinger at the bottom, then one
-    // per overlay. The channel is pointed at a slot when a layer goes on;
-    // until then it waits on a channel nobody publishes.
+    // DSK layers, fed over `inter`: one per overlay. The channel is
+    // pointed at a slot when a layer goes on; until then it waits on a
+    // channel nobody publishes.
     for layer in 0..DSK_LAYERS {
         let input = layer_input(layer);
         flow.blocks.push(block(
@@ -277,6 +291,12 @@ pub fn mixer_flow(
                 "start_time_selection",
                 PropertyValue::String("first".into()),
             ),
+            // strom draws the stinger over program, under the DSK layers.
+            (ENABLE_STINGER_PROPERTY, PropertyValue::Bool(true)),
+            (
+                STINGER_PREROLL_PROPERTY,
+                PropertyValue::UInt(u64::from(STINGER_PREROLL_MS)),
+            ),
             // GL memory is bound to the mixer's GL context, which the
             // output flows do not share: program leaves in system memory.
             // CUDA program stays on the GPU for the encoders; the flows
@@ -288,6 +308,7 @@ pub fn mixer_flow(
         ],
     ));
 
+    add_stinger_player(&mut flow, backend);
     add_audio_mixer(&mut flow, slots, monitor, sample_rate);
 
     flow.blocks.push(block(PGM_TAP, THUMBNAIL_BLOCK, vec![]));
@@ -319,15 +340,40 @@ pub fn mixer_flow(
     flow
 }
 
-/// DSK layer of the stinger, below the overlays.
-pub const STINGER_LAYER: usize = 0;
-
-/// DSK layers in the mixer: the stinger, then the overlays.
-const DSK_LAYERS: usize = 1 + OVERLAY_CHANNELS as usize;
+/// DSK layers in the mixer: one per overlay.
+const DSK_LAYERS: usize = OVERLAY_CHANNELS as usize;
 
 /// DSK layer of overlay `channel` (0-based).
 pub fn overlay_layer(channel: usize) -> usize {
-    channel + 1
+    channel
+}
+
+/// strom's stinger source: a media player in stinger mode on the mixer's
+/// stinger input, its sound on the audio mixer channel after the slots.
+/// The engine fills its playlist (`Command::StingerLibrary`). Like the
+/// slot players, it hands frames over in system memory unless the mixer
+/// is CUDA's.
+fn add_stinger_player(flow: &mut Flow, backend: MixerBackend) {
+    flow.blocks.push(block(
+        STINGER_PLAYER,
+        MEDIA_PLAYER_BLOCK,
+        vec![
+            (STINGER_MODE_PROPERTY, PropertyValue::Bool(true)),
+            (
+                "system_memory",
+                PropertyValue::Bool(backend != MixerBackend::Cuda),
+            ),
+        ],
+    ));
+    flow.links.push(link(
+        format!("{STINGER_PLAYER}:video_out"),
+        format!("{MIXER_BLOCK}:{STINGER_INPUT_PAD}"),
+    ));
+}
+
+/// Audio mixer channel of the stinger clip's sound: after the slots'.
+pub fn stinger_channel(slots: usize) -> usize {
+    audio_channel(slots)
 }
 
 /// Program picture size: strom's default `pgm_resolution`, which the
@@ -862,9 +908,10 @@ fn add_audio_mixer(flow: &mut Flow, slots: usize, monitor: MonitorOut, sample_ra
         ));
     }
     let mut properties = vec![
+        // The slots, then the stinger clip.
         (
             "num_channels".to_string(),
-            PropertyValue::UInt(slots as u64),
+            PropertyValue::UInt(slots as u64 + 1),
         ),
         // The bus rate (AUD.17). Without it the mixer, running before
         // the first slot sounds, settles on 44.1 kHz and refuses the slots.
@@ -896,6 +943,11 @@ fn add_audio_mixer(flow: &mut Flow, slots: usize, monitor: MonitorOut, sample_ra
         .collect();
     flow.blocks
         .push(block(AUDIO_MIXER, AUDIO_MIXER_BLOCK, properties));
+    // The stinger clip's sound goes to program at unity, no strip.
+    flow.links.push(link(
+        format!("{STINGER_PLAYER}:audio_out"),
+        format!("{AUDIO_MIXER}:input_{}", stinger_channel(slots)),
+    ));
     flow.links.push(link(
         format!("{AUDIO_MIXER}:main_out"),
         format!("{MIXER_BLOCK}:pgm_audio_in"),
@@ -1192,18 +1244,6 @@ pub(crate) fn encode_path_segment(text: &str) -> String {
 /// network stalls; a local file needs little, and the delay is how late a
 /// clip starts after a cue.
 pub const FILE_PLAYOUT_DELAY_MS: u64 = 100;
-
-/// strom's own playout delay, which URL streams keep (ms).
-const STREAM_PLAYOUT_DELAY_MS: u64 = 500;
-
-/// How long after a player source starts its first frame plays (ms);
-/// `None` for sources without a player.
-pub fn playout_ms(source: &SourceSpec) -> Option<u64> {
-    match source {
-        SourceSpec::Url { .. } => Some(STREAM_PLAYOUT_DELAY_MS),
-        _ => playout_delay_ms(source),
-    }
-}
 
 /// Playout delay for a player source; `None` keeps strom's default.
 fn playout_delay_ms(source: &SourceSpec) -> Option<u64> {
@@ -1722,7 +1762,7 @@ mod tests {
     }
 
     #[test]
-    fn mixer_has_a_stinger_layer_below_the_overlays() {
+    fn mixer_plays_stingers_through_strom() {
         let flow = mixer_flow(
             2,
             MixerBackend::Cpu,
@@ -1732,17 +1772,38 @@ mod tests {
             48_000,
         );
 
+        // One DSK layer per overlay; strom draws the stinger beneath them.
         let vm = flow.blocks.iter().find(|b| b.id == MIXER_BLOCK).unwrap();
         assert!(matches!(
             vm.properties.get("num_dsk_inputs"),
-            Some(PropertyValue::String(n)) if n == "9"
+            Some(PropertyValue::String(n)) if *n == OVERLAY_CHANNELS.to_string()
         ));
-        assert_eq!(layer_input(STINGER_LAYER), "dsk0");
+        assert_eq!(overlay_layer(0), 0);
         assert!(flow
             .links
             .iter()
-            .any(|l| l.from == "dsk4:src" && l.to == "vm:dsk_in_4"));
-        assert_eq!(overlay_layer(3), 4);
+            .any(|l| l.from == "dsk3:src" && l.to == "vm:dsk_in_3"));
+        assert!(matches!(
+            vm.properties.get(ENABLE_STINGER_PROPERTY),
+            Some(PropertyValue::Bool(true))
+        ));
+
+        // The stinger source: a player in stinger mode, picture into the
+        // mixer, sound into the audio mixer after the slots.
+        let player = flow.blocks.iter().find(|b| b.id == STINGER_PLAYER).unwrap();
+        assert_eq!(player.block_definition_id, MEDIA_PLAYER_BLOCK);
+        assert!(matches!(
+            player.properties.get(STINGER_MODE_PROPERTY),
+            Some(PropertyValue::Bool(true))
+        ));
+        let linked = |from: &str, to: &str| flow.links.iter().any(|l| l.from == from && l.to == to);
+        assert!(linked("stinger:video_out", "vm:stinger_in"));
+        assert!(linked("stinger:audio_out", "mix:input_3"));
+        let mix = flow.blocks.iter().find(|b| b.id == AUDIO_MIXER).unwrap();
+        assert!(matches!(
+            mix.properties.get("num_channels"),
+            Some(PropertyValue::UInt(3))
+        ));
     }
 
     #[test]
