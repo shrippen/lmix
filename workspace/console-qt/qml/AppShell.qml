@@ -29,6 +29,15 @@ Kirigami.ApplicationWindow {
     property alias tools: toolsRow.data
     /** Menu items put into the Package menu after Import. */
     property list<QtObject> packageItems
+    /** Bind the keyed shortcuts at the desktop too (AUT.12): the
+     *  program's own setting (keys/global). Each program binds its own, so
+     *  with both on a press runs twice; the shortcuts dialog says so. */
+    property bool globalShortcuts: false
+    /** The switch in the shortcuts dialog was used. */
+    signal globalShortcutsToggled(bool on)
+    /** A shell dialog or menu closed: the program puts the keyboard focus
+     *  back where its keys work (the show view: space GO, Escape panic). */
+    signal restoreFocus()
 
     readonly property Core backend: Core {}
 
@@ -71,7 +80,68 @@ Kirigami.ApplicationWindow {
         return decodeURIComponent(url.toString().replace(/^file:\/\//, ""))
     }
 
+    readonly property var shortcuts: show && show.shortcuts ? show.shortcuts : []
+    /** Shortcuts whose key runs them: one for all shows gives way to the
+     *  show's with the same key (AUT.3). */
+    readonly property var keyedShortcuts: shortcuts.filter(s => s.key && !s.key_shadowed)
+    readonly property var shortcutKeys: keyedShortcuts.map(s => s.key)
+
+    // The shortcuts (AUT.1–3) while this window is in front; they win over
+    // the program's own keys.
+    Instantiator {
+        model: root.keyedShortcuts
+        delegate: Shortcut {
+            required property var modelData
+            sequence: modelData.key
+            onActivated: root.act({ action: "run_shortcut", target: modelData.id })
+        }
+    }
+
+    // Global shortcuts (AUT.12): the desktop binds the keys (it may ask
+    // once) and reports presses even while another window is in front.
+    readonly property string globalShortcutList: JSON.stringify(globalShortcuts
+        ? keyedShortcuts.map(s => ({ id: s.id, label: s.label, key: s.key })) : [])
+    onGlobalShortcutListChanged: backend.setGlobalShortcuts(globalShortcutList)
+    Connections {
+        target: root.backend
+        function onGlobalShortcut(id) {
+            root.act({ action: "run_shortcut", target: id })
+        }
+    }
+
+    function openShortcuts() {
+        shortcutsDialog.open()
+    }
+
+    ShortcutsDialog {
+        id: shortcutsDialog
+        onClosed: root.restoreFocus()
+        parent: QQC2.Overlay.overlay
+        anchors.centerIn: parent
+        act: root.act
+        core: root.backend
+        shortcuts: root.shortcuts
+        globalKeys: root.globalShortcuts
+        globalStatus: root.backend.globalKeys
+        onGlobalKeysToggled: on => root.globalShortcutsToggled(on)
+        midiTbar: root.show ? root.show.midi_tbar : null
+        onEditRequested: shortcut => {
+            shortcutEditDialog.shortcut = shortcut
+            shortcutEditDialog.open()
+        }
+    }
+    ShortcutEditDialog {
+        id: shortcutEditDialog
+        parent: QQC2.Overlay.overlay
+        anchors.centerIn: parent
+        act: root.act
+        core: root.backend
+        inputs: root.inputs
+        outputs: root.show ? root.show.outputs : []
+    }
+
     Component.onCompleted: {
+        backend.setGlobalShortcuts(globalShortcutList)
         // Start options (UI.12): `--window maximized|fullscreen`.
         if (backend.windowMode === "maximized")
             root.showMaximized()
@@ -84,38 +154,55 @@ Kirigami.ApplicationWindow {
 
     FileDialog {
         id: openDialog
+        onRejected: root.restoreFocus()
         title: qsTr("Open show")
         nameFilters: [qsTr("lmix shows (*.lmix)"), qsTr("All files (*)")]
-        onAccepted: root.act({ action: "open_show", path: root.localPath(selectedFile) })
+        onAccepted: {
+            root.act({ action: "open_show", path: root.localPath(selectedFile) })
+            root.restoreFocus()
+        }
     }
 
     FileDialog {
         id: saveDialog
+        onRejected: root.restoreFocus()
         title: qsTr("Save show")
         fileMode: FileDialog.SaveFile
         defaultSuffix: "lmix"
         nameFilters: [qsTr("lmix shows (*.lmix)")]
-        onAccepted: root.act({ action: "save_show", path: root.localPath(selectedFile) })
+        onAccepted: {
+            root.act({ action: "save_show", path: root.localPath(selectedFile) })
+            root.restoreFocus()
+        }
     }
 
     // This machine's settings (SHW.8): shortcuts for all shows, layout
     // templates, targets, subscribers; no secrets.
     FileDialog {
         id: exportSettingsDialog
+        onRejected: root.restoreFocus()
         title: qsTr("Export settings")
         fileMode: FileDialog.SaveFile
         defaultSuffix: "json"
         nameFilters: [qsTr("lmix settings (*.json)")]
-        onAccepted: root.act({ action: "export_settings", path: root.localPath(selectedFile) })
+        onAccepted: {
+            root.act({ action: "export_settings", path: root.localPath(selectedFile) })
+            root.restoreFocus()
+        }
     }
     FileDialog {
         id: importSettingsDialog
+        onRejected: root.restoreFocus()
         title: qsTr("Import settings")
         nameFilters: [qsTr("lmix settings (*.json)"), qsTr("All files (*)")]
-        onAccepted: root.act({ action: "import_settings", path: root.localPath(selectedFile) })
+        onAccepted: {
+            root.act({ action: "import_settings", path: root.localPath(selectedFile) })
+            root.restoreFocus()
+        }
     }
     KanteDialog {
         id: resetSettingsDialog
+        onClosed: root.restoreFocus()
         parent: QQC2.Overlay.overlay
         anchors.centerIn: parent
         title: qsTr("Factory settings")
@@ -146,14 +233,19 @@ Kirigami.ApplicationWindow {
     // Show packages (SHW.6): show, media, data files, own templates.
     FileDialog {
         id: exportDialog
+        onRejected: root.restoreFocus()
         title: qsTr("Export show package")
         fileMode: FileDialog.SaveFile
         defaultSuffix: "lmixpkg"
         nameFilters: [qsTr("lmix packages (*.lmixpkg)")]
-        onAccepted: root.act({ action: "export_package", path: root.localPath(selectedFile) })
+        onAccepted: {
+            root.act({ action: "export_package", path: root.localPath(selectedFile) })
+            root.restoreFocus()
+        }
     }
     FileDialog {
         id: importDialog
+        onRejected: root.restoreFocus()
         title: qsTr("Import show package")
         nameFilters: [qsTr("lmix packages (*.lmixpkg)"), qsTr("All files (*)")]
         onAccepted: {
@@ -163,14 +255,19 @@ Kirigami.ApplicationWindow {
     }
     FolderDialog {
         id: importFolderDialog
+        onRejected: root.restoreFocus()
         property string packagePath
         title: qsTr("Empty folder for the package's show and media")
-        onAccepted: root.act({ action: "import_package", path: packagePath, folder: root.localPath(selectedFolder) })
+        onAccepted: {
+            root.act({ action: "import_package", path: packagePath, folder: root.localPath(selectedFolder) })
+            root.restoreFocus()
+        }
     }
 
     // SHW.3: a new show starts in the format chosen here.
     FormatDialog {
         id: newShowDialog
+        onClosed: root.restoreFocus()
         parent: QQC2.Overlay.overlay
         anchors.centerIn: parent
         act: root.act
@@ -195,22 +292,27 @@ Kirigami.ApplicationWindow {
             anchors.fill: parent
             spacing: Kirigami.Units.largeSpacing
 
+            // The buttons take no focus: in the show, space and Escape stay
+            // with the show view.
             RowLayout {
                 Layout.fillWidth: true
                 spacing: Kirigami.Units.smallSpacing
 
                 KanteButton {
+                    focusPolicy: Qt.NoFocus
                     text: qsTr("New")
                     enabled: root.backend.connected
                     onClicked: newShowDialog.open()
                 }
                 KanteButton {
+                    focusPolicy: Qt.NoFocus
                     text: qsTr("Open…")
                     enabled: root.backend.connected
                     onClicked: openDialog.open()
                 }
                 KanteButton {
                     id: recentButton
+                    focusPolicy: Qt.NoFocus
                     text: qsTr("Recent")
                     enabled: root.backend.connected && root.recent.length > 0
                     onClicked: recentMenu.popup(recentButton, 0, recentButton.height)
@@ -226,17 +328,20 @@ Kirigami.ApplicationWindow {
                     spacing: Kirigami.Units.smallSpacing
                 }
                 KanteButton {
+                    focusPolicy: Qt.NoFocus
                     text: qsTr("Save")
                     enabled: root.backend.connected
                     onClicked: root.show && root.show.path ? root.act({ action: "save_show" }) : saveDialog.open()
                 }
                 KanteButton {
+                    focusPolicy: Qt.NoFocus
                     text: qsTr("Save as…")
                     enabled: root.backend.connected
                     onClicked: saveDialog.open()
                 }
                 KanteButton {
                     id: packageButton
+                    focusPolicy: Qt.NoFocus
                     text: qsTr("Package")
                     enabled: root.backend.connected
                     QQC2.ToolTip.visible: hovered
@@ -270,6 +375,7 @@ Kirigami.ApplicationWindow {
                 }
                 Item { Layout.fillWidth: true }
                 KanteSegmented {
+                    activeFocusOnTab: false
                     readonly property var kinds: [KanteStyle.Kind.Kante, KanteStyle.Kind.KanteLight, KanteStyle.Kind.System]
                     model: [qsTr("Kante"), qsTr("Kante Light"), qsTr("System")]
                     currentIndex: kinds.indexOf(KanteStyle.kind)

@@ -16,7 +16,7 @@ KanteDialog {
     required property var shortcuts
     /** The show's T-bar controller binding, or `null`. */
     property var midiTbar: null
-    /** Keys also work outside the Console (a Console setting). */
+    /** Keys also work outside this window (a setting of the program). */
     property bool globalKeys: false
     /** `Core.globalKeys`: "", "on:<count>" or "off:<reason>". */
     property string globalStatus: ""
@@ -99,7 +99,7 @@ KanteDialog {
             Layout.fillWidth: true
             QQC2.CheckBox {
                 id: globalBox
-                text: qsTr("Keys also work when the Console is not in front")
+                text: qsTr("Keys also work when this window is not in front")
                 checked: dialog.globalKeys
                 onToggled: dialog.globalKeysToggled(checked)
                 KanteCheckSkin { control: globalBox }
@@ -113,6 +113,14 @@ KanteDialog {
                     : dialog.globalStatus.startsWith("off:") ? qsTr("Not available: %1").arg(dialog.globalStatus.slice(4))
                     : qsTr("Asking the desktop…")
             }
+        }
+        // Mixer and show each bind their own (DECISIONS 2026-10-18).
+        QQC2.Label {
+            Layout.fillWidth: true
+            visible: dialog.globalKeys
+            wrapMode: Text.Wrap
+            color: KanteStyle.mutedTextColor
+            text: qsTr("If lmix Mixer and lmix Show both run with this on, a key press runs twice.")
         }
 
         RowLayout {

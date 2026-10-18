@@ -19,7 +19,8 @@ AppShell {
     Settings {
         id: keySettings
         category: "keys"
-        /** Shortcut keys also work while the Console is not in front. */
+        /** Shortcut keys also work while the mixer is not in front;
+         *  off here, on in lmix Show (owner, 18.10.2026). */
         property bool global: false
     }
 
@@ -100,34 +101,8 @@ AppShell {
         return layout ? qsTr("Layout %1 %2").arg(layout.number).arg(layout.name) : ""
     }
 
-    readonly property var shortcuts: show && show.shortcuts ? show.shortcuts : []
-    /** Shortcuts whose key runs them: one for all shows gives way to the
-     *  show's with the same key (AUT.3). */
-    readonly property var keyedShortcuts: shortcuts.filter(s => s.key && !s.key_shadowed)
-    readonly property var shortcutKeys: keyedShortcuts.map(s => s.key)
-
-    // The shortcuts (AUT.1–3); they win over the keys below.
-    Instantiator {
-        model: root.keyedShortcuts
-        delegate: Shortcut {
-            required property var modelData
-            sequence: modelData.key
-            onActivated: root.act({ action: "run_shortcut", target: modelData.id })
-        }
-    }
-
-    // Global shortcuts (AUT.12): the desktop binds the keys (it may ask
-    // once) and reports presses even while another window is in front.
-    readonly property string globalShortcutList: JSON.stringify(keySettings.global
-        ? keyedShortcuts.map(s => ({ id: s.id, label: s.label, key: s.key })) : [])
-    onGlobalShortcutListChanged: backend.setGlobalShortcuts(globalShortcutList)
-    Component.onCompleted: backend.setGlobalShortcuts(globalShortcutList)
-    Connections {
-        target: backend
-        function onGlobalShortcut(id) {
-            root.act({ action: "run_shortcut", target: id })
-        }
-    }
+    globalShortcuts: keySettings.global
+    onGlobalShortcutsToggled: on => keySettings.global = on
 
     // Keys 1–9: that input into preview (not while a text field has focus:
     // fields take printable keys first).
@@ -174,33 +149,6 @@ AppShell {
         id: addInputDialog
         parent: QQC2.Overlay.overlay
         core: backend
-    }
-
-    ShortcutsDialog {
-        id: shortcutsDialog
-        parent: QQC2.Overlay.overlay
-        anchors.centerIn: parent
-        act: root.act
-        core: backend
-        shortcuts: root.shortcuts
-        globalKeys: keySettings.global
-        globalStatus: backend.globalKeys
-        onGlobalKeysToggled: on => keySettings.global = on
-        midiTbar: root.show ? root.show.midi_tbar : null
-        onEditRequested: shortcut => {
-            shortcutEditDialog.shortcut = shortcut
-            shortcutEditDialog.open()
-        }
-    }
-
-    ShortcutEditDialog {
-        id: shortcutEditDialog
-        parent: QQC2.Overlay.overlay
-        anchors.centerIn: parent
-        act: root.act
-        core: backend
-        inputs: root.inputs
-        outputs: root.show ? root.show.outputs : []
     }
 
     TriggersDialog {
@@ -477,7 +425,7 @@ AppShell {
                 visible: !root.simple
                 text: qsTr("Shortcuts…")
                 enabled: backend.connected
-                onClicked: shortcutsDialog.open()
+                onClicked: root.openShortcuts()
             }
             KanteButton {
                 visible: !root.simple

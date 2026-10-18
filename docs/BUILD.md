@@ -304,7 +304,8 @@ Einstellungen (Stil, Ansicht, Tasten) je Programm in
 Programm eine vorhandene `console.conf` (die eine Console bis 18.10.2026)
 einmal in seine Datei. Startmenü: `packaging/desktop/lmix-mixer.desktop` und
 `lmix-show.desktop` nach `~/.local/share/applications/`, die Programme im
-`PATH`. Globale Tasten (AUT.12) bindet nur der Mischer.
+`PATH`. Globale Tasten (AUT.12) schaltet jedes Programm selbst (Belegungen…);
+ab Werk in der Show an, im Mischer aus.
 
 Sprache: Quelltexte englisch, Deutsch als Übersetzung; die Programme folgen der
 Systemsprache (`LANGUAGE=en LANG=en_US.UTF-8` erzwingt Englisch). Neue oder geänderte

@@ -2,7 +2,8 @@
 # lmix Mixer against a real engine, on a virtual display (no GPU needed):
 # monitors and tiles show moving live pictures, clicks switch, no QML
 # warnings. Then lmix Show beside it against the same lmix-core: its
-# window draws, no QML warnings. Needs Qt 6 with Kirigami, gst-plugin-qml6
+# window draws, space is GO and Escape panic (also after a click on the
+# header and a closed dialog), no QML warnings. Needs Qt 6 with Kirigami, gst-plugin-qml6
 # (gstreamer1.0-qt6), Xvfb, xdotool, ImageMagick, jq.
 #
 #   scripts/test-console-qt.sh
@@ -148,7 +149,7 @@ pass "no QML warnings"
 
 # lmix Show beside the mixer, same lmix-core: its window opens over the
 # mixer's and draws the show view (not a flat colour).
-act '{"action":"add_cue_list","name":"Act 1","cues":[{"number":"1","name":"Doors","kind":"note"}]}'
+act '{"action":"add_cue_list","name":"Act 1","cues":[{"number":"1","name":"Doors","kind":"wait","duration_ms":120000},{"number":"2","name":"House","kind":"wait","duration_ms":120000},{"number":"3","name":"Lights","kind":"note"}]}'
 "$CONSOLE_DIR/lmix-show" >"$WORK/show.log" 2>&1 &
 PIDS+=($!)
 show_window=""
@@ -161,6 +162,30 @@ done
 sleep 3
 import -window "$show_window" "$WORK/show.png"
 awk "BEGIN { exit !($(spread show 1400x800+20+40) > 0.05) }" && pass "lmix Show draws its window" || fail "lmix Show window blank"
+# No window manager: give the show window the keyboard; keys then go to
+# whatever has it (a dialog the show opens takes it over).
+standby() { state | jq '.cue_lists[0].standby'; }
+cues_running() { state | jq '.running_cues | length'; }
+key() { xdotool key "$1"; }
+xdotool windowfocus "$show_window"
+sleep 1
+until_true() { for _ in $(seq 1 20); do eval "$1" && return 0; sleep 0.5; done; return 1; }
+key space
+until_true '[[ "$(standby)" == 2 && "$(cues_running)" -ge 1 ]]' && pass "show: space is GO" \
+    || fail "show: space did not GO (standby $(standby), running $(cues_running))"
+# A header button and its dialog (Save as…, left open with Escape) must
+# not keep the keys: Escape closes the dialog, the cue keeps running.
+click 383 73
+sleep 2
+key Escape
+sleep 1
+[[ "$(cues_running)" -ge 1 ]] || fail "show: Escape in the Save dialog reached the show (panic)"
+key space
+until_true '[[ "$(standby)" == 3 ]]' && pass "show: space is GO after a header button and its dialog" \
+    || fail "show: no GO after Save as… (standby $(standby))"
+key Escape
+until_true '[[ "$(cues_running)" == 0 ]]' && pass "show: Escape is panic" \
+    || fail "show: Escape did not stop the cues ($(cues_running) running)"
 if grep -E 'qrc:|\.qml:[0-9]+' "$WORK/show.log" >/dev/null; then
     fail "QML warnings (show): $(grep -E 'qrc:|\.qml:[0-9]+' "$WORK/show.log" | head -3)"
 fi

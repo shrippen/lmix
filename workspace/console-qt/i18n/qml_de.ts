@@ -241,36 +241,36 @@
   <context>
     <name>AppShell</name>
     <message>
-      <location filename="../qml/AppShell.qml" line="+87" />
+      <location filename="../qml/AppShell.qml" line="+158" />
       <source>Open show</source>
       <translation>Show öffnen</translation>
     </message>
     <message>
       <location line="+1" />
-      <location line="+9" />
+      <location line="+13" />
       <source>lmix shows (*.lmix)</source>
       <translation>lmix-Shows (*.lmix)</translation>
     </message>
     <message>
-      <location line="-9" />
-      <location line="+26" />
-      <location line="+44" />
+      <location line="-13" />
+      <location line="+38" />
+      <location line="+53" />
       <source>All files (*)</source>
       <translation>Alle Dateien (*)</translation>
     </message>
     <message>
-      <location line="-64" />
+      <location line="-81" />
       <source>Save show</source>
       <translation>Show speichern</translation>
     </message>
     <message>
-      <location line="+11" />
+      <location line="+15" />
       <source>Export settings</source>
       <translation>Einstellungen exportieren</translation>
     </message>
     <message>
       <location line="+3" />
-      <location line="+6" />
+      <location line="+10" />
       <source>lmix settings (*.json)</source>
       <translation>lmix-Einstellungen (*.json)</translation>
     </message>
@@ -280,7 +280,7 @@
       <translation>Einstellungen importieren</translation>
     </message>
     <message>
-      <location line="+8" />
+      <location line="+12" />
       <source>Factory settings</source>
       <translation>Werkseinstellungen</translation>
     </message>
@@ -295,13 +295,13 @@
       <translation>Alles entfernen</translation>
     </message>
     <message>
-      <location line="+12" />
+      <location line="+13" />
       <source>Export show package</source>
       <translation>Show-Paket exportieren</translation>
     </message>
     <message>
       <location line="+3" />
-      <location line="+6" />
+      <location line="+10" />
       <source>lmix packages (*.lmixpkg)</source>
       <translation>lmix-Pakete (*.lmixpkg)</translation>
     </message>
@@ -311,12 +311,12 @@
       <translation>Show-Paket importieren</translation>
     </message>
     <message>
-      <location line="+10" />
+      <location line="+11" />
       <source>Empty folder for the package's show and media</source>
       <translation>Leerer Ordner für Show und Medien des Pakets</translation>
     </message>
     <message>
-      <location line="+22" />
+      <location line="+26" />
       <source>lmix-core</source>
       <translation>lmix-core</translation>
     </message>
@@ -326,32 +326,32 @@
       <translation>lmix-core nicht erreichbar</translation>
     </message>
     <message>
-      <location line="+14" />
+      <location line="+17" />
       <source>New</source>
       <translation>Neu</translation>
     </message>
     <message>
-      <location line="+5" />
+      <location line="+6" />
       <source>Open…</source>
       <translation>Öffnen…</translation>
     </message>
     <message>
-      <location line="+6" />
+      <location line="+7" />
       <source>Recent</source>
       <translation>Zuletzt</translation>
     </message>
     <message>
-      <location line="+15" />
+      <location line="+16" />
       <source>Save</source>
       <translation>Speichern</translation>
     </message>
     <message>
-      <location line="+5" />
+      <location line="+6" />
       <source>Save as…</source>
       <translation>Speichern unter…</translation>
     </message>
     <message>
-      <location line="+6" />
+      <location line="+7" />
       <source>Package</source>
       <translation>Paket</translation>
     </message>
@@ -386,7 +386,7 @@
       <translation>Werkseinstellungen…</translation>
     </message>
     <message>
-      <location line="+8" />
+      <location line="+9" />
       <source>Kante</source>
       <translation>Kante</translation>
     </message>
@@ -1929,12 +1929,12 @@
       <translation>lmix Mischer</translation>
     </message>
     <message>
-      <location line="+83" />
+      <location line="+84" />
       <source>Layout %1 %2</source>
       <translation>Layout %1 %2</translation>
     </message>
     <message>
-      <location line="+51" />
+      <location line="+25" />
       <source>Inputs from a show</source>
       <translation>Inputs aus einer Show</translation>
     </message>
@@ -1954,7 +1954,7 @@
       <translation>Ordner mit den fehlenden Dateien</translation>
     </message>
     <message>
-      <location line="+137" />
+      <location line="+110" />
       <source>From show…</source>
       <translation>Aus Show…</translation>
     </message>
@@ -2526,8 +2526,8 @@
     </message>
     <message>
       <location line="+10" />
-      <source>Keys also work when the Console is not in front</source>
-      <translation>Tasten wirken auch, wenn die Console nicht vorne ist</translation>
+      <source>Keys also work when this window is not in front</source>
+      <translation>Tasten wirken auch, wenn dieses Fenster nicht vorne ist</translation>
     </message>
     <message>
       <location line="+10" />
@@ -2545,7 +2545,12 @@
       <translation>Frage den Desktop…</translation>
     </message>
     <message>
-      <location line="+6" />
+      <location line="+9" />
+      <source>If lmix Mixer and lmix Show both run with this on, a key press runs twice.</source>
+      <translation>Läuft auch lmix Mischer bzw. lmix Show mit globalen Tasten, löst ein Druck doppelt aus.</translation>
+    </message>
+    <message>
+      <location line="+5" />
       <source>T-bar from MIDI</source>
       <translation>T-Bar per MIDI</translation>
     </message>
@@ -2561,6 +2566,11 @@
       <location filename="../qml/ShowMain.qml" line="+15" />
       <source>lmix Show</source>
       <translation>lmix Show</translation>
+    </message>
+    <message>
+      <location line="+33" />
+      <source>Shortcuts…</source>
+      <translation>Belegungen…</translation>
     </message>
   </context>
   <context>

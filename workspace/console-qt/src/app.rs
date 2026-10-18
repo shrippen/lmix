@@ -93,14 +93,17 @@ fn settings_dir() -> Option<PathBuf> {
 
 /// Copies the old `console.conf` to `<name>.conf` once, so style and view
 /// settings survive the split; later the two files go their own ways.
-/// True when it copied.
+/// Through `<name>.conf.tmp` and a rename: a copy cut short leaves no half
+/// file that would count as the program's own. True when it copied.
 fn adopt_old_settings(dir: &Path, name: &str) -> std::io::Result<bool> {
     let own = dir.join(format!("{name}.conf"));
     let old = dir.join(OLD_SETTINGS);
     if own.exists() || !old.is_file() {
         return Ok(false);
     }
-    std::fs::copy(&old, &own)?;
+    let tmp = dir.join(format!("{name}.conf.tmp"));
+    std::fs::copy(&old, &tmp)?;
+    std::fs::rename(&tmp, &own)?;
     Ok(true)
 }
 
@@ -202,6 +205,22 @@ mod tests {
             std::fs::read_to_string(dir.join("mixer.conf")).unwrap(),
             "[appearance]\nstyle=0\n"
         );
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_copy_cut_short_is_redone() {
+        let dir = folder("cut");
+        std::fs::write(dir.join(OLD_SETTINGS), "[appearance]\nstyle=2\n").unwrap();
+        // What an earlier start left when it stopped mid-copy.
+        std::fs::write(dir.join("show.conf.tmp"), "[appear").unwrap();
+
+        assert!(adopt_old_settings(&dir, "show").unwrap());
+        assert_eq!(
+            std::fs::read_to_string(dir.join("show.conf")).unwrap(),
+            "[appearance]\nstyle=2\n"
+        );
+        assert!(!dir.join("show.conf.tmp").exists());
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

@@ -6,13 +6,29 @@ import org.lmix.console
 /**
  * lmix Show: runs prepared cues with GO (LASTENHEFT-SHOW.md). The window
  * around it is AppShell, shared with lmix Mixer (DECISIONS 2026-10-18).
- * Global shortcuts stay with the mixer, so a press runs once; the show
- * keeps its window keys (space GO, Escape panic).
+ * Keys: space GO and Escape panic in the show view, the shortcuts in the
+ * window and, by default, at the desktop (keys/global).
  */
 AppShell {
     id: root
 
     appName: qsTr("lmix Show")
+    globalShortcuts: keySettings.global
+    onGlobalShortcutsToggled: on => keySettings.global = on
+    // After a dialog in its own window, the window itself may not be
+    // active again (no window manager, some desktops).
+    onRestoreFocus: {
+        root.requestActivate()
+        showView.forceActiveFocus()
+    }
+
+    Settings {
+        id: keySettings
+        category: "keys"
+        /** Shortcut keys (panic, GO) also work while the show is not in
+         *  front; on by default here, off in lmix Mixer (owner, 18.10.2026). */
+        property bool global: true
+    }
 
     Settings {
         id: viewSettings
@@ -25,6 +41,15 @@ AppShell {
 
     // Space and Escape reach the view from the start.
     Component.onCompleted: showView.forceActiveFocus()
+
+    tools: [
+        KanteButton {
+            focusPolicy: Qt.NoFocus
+            text: qsTr("Shortcuts…")
+            enabled: root.backend.connected
+            onClicked: root.openShortcuts()
+        }
+    ]
 
     ShowView {
         id: showView
