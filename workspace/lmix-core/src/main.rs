@@ -324,6 +324,7 @@ async fn main() -> anyhow::Result<()> {
     tokio::spawn(service.clone().watch_failures());
     tokio::spawn(service.clone().forward_output_stats());
     tokio::spawn(service.clone().watch_players());
+    tokio::spawn(service.clone().watch_stingers());
     tokio::spawn(service.clone().watch_playback());
     tokio::spawn(service.clone().watch_media());
     tokio::spawn(service.clone().watch_titles());

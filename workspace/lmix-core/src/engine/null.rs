@@ -27,6 +27,9 @@ pub struct NullEngine {
     /// Media player reports a test sends.
     #[cfg(test)]
     players: Option<tokio::sync::broadcast::Sender<crate::clips::PlayerProgress>>,
+    /// Stinger ends a test sends.
+    #[cfg(test)]
+    stingers: Option<tokio::sync::broadcast::Sender<super::meters::StingerEnd>>,
 }
 
 impl NullEngine {
@@ -45,6 +48,25 @@ impl NullEngine {
         if let Some(tx) = &self.players {
             let _ = tx.send(progress);
         }
+    }
+
+    /// An engine whose stingers a test can end.
+    #[cfg(test)]
+    pub fn stinging() -> Self {
+        Self {
+            stingers: Some(tokio::sync::broadcast::channel(16).0),
+            ..Self::default()
+        }
+    }
+
+    /// End the running stinger as the engine would.
+    #[cfg(test)]
+    pub fn end_stinger(&self, end: super::meters::StingerEnd) {
+        let stingers = self
+            .stingers
+            .as_ref()
+            .expect("engine built with stinging()");
+        let _ = stingers.send(end);
     }
 
     /// An engine whose flows can be made to fail (tests).
@@ -98,6 +120,14 @@ impl Engine for NullEngine {
     fn players(&self) -> tokio::sync::broadcast::Receiver<crate::clips::PlayerProgress> {
         #[cfg(test)]
         if let Some(tx) = &self.players {
+            return tx.subscribe();
+        }
+        tokio::sync::broadcast::channel(1).1
+    }
+
+    fn stingers(&self) -> tokio::sync::broadcast::Receiver<super::meters::StingerEnd> {
+        #[cfg(test)]
+        if let Some(tx) = &self.stingers {
             return tx.subscribe();
         }
         tokio::sync::broadcast::channel(1).1

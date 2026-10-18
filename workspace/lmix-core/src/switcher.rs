@@ -511,7 +511,8 @@ pub struct Switcher {
     fade_to_black: bool,
     /// T-bar position while it is pulled; runtime only.
     t_bar: f32,
-    /// When a running stinger ends; switching waits for it.
+    /// A stinger runs: switching is refused until the engine reports
+    /// its end (`stinger_finished`), at the latest at this time.
     stinger_until: Option<Instant>,
     /// Stinger library the engine has; `None` sends it again.
     stinger_sent: Option<Vec<LibraryClip>>,
@@ -1617,7 +1618,13 @@ impl Switcher {
     }
 
     /// Swap in a whole show (new/open): empty all old slots, feed the new.
-    pub fn replace(&mut self, show: Show, path: Option<String>) -> Vec<Command> {
+    /// Not while a stinger holds the program.
+    pub fn replace(
+        &mut self,
+        show: Show,
+        path: Option<String>,
+    ) -> Result<Vec<Command>, ActionError> {
+        self.check_no_stinger()?;
         let mut commands: Vec<Command> = self
             .show
             .inputs
@@ -1650,7 +1657,7 @@ impl Switcher {
         self.dynamic_inputs = Default::default();
         self.overlay_last = Default::default();
         commands.extend(self.restore_commands());
-        commands
+        Ok(commands)
     }
 
     /// A new mixer for a new format or multiview, set up again; outputs
@@ -1690,6 +1697,8 @@ impl Switcher {
     /// Commands that rebuild the engine from the current show (start-up,
     /// engine restart): slots, program, preview, then every audio channel.
     pub fn restore_commands(&mut self) -> Vec<Command> {
+        // A new or restarted mixer runs no stinger; no end will come.
+        self.stinger_finished();
         // First: a new format builds a new mixer, the rest sets it up.
         let mut commands = vec![Command::SetFormat {
             format: self.show.format,
@@ -2109,6 +2118,10 @@ impl Switcher {
 
     fn remove(&mut self, input: &InputRef) -> Result<Vec<Command>, ActionError> {
         let index = self.find(input)?;
+        // Program goes black with a cut, which a stinger holds off.
+        if self.show.program == Some(self.show.inputs[index].id) {
+            self.check_no_stinger()?;
+        }
         let removed = self.show.inputs.remove(index);
         self.removed.push((index, removed.clone()));
         if self.removed.len() > REMOVED_KEPT {
@@ -2441,15 +2454,16 @@ impl Switcher {
                 ms: stinger.cut_ms + preroll_ms,
             },
         );
-        // The whole clip plays, its length when the player reported it;
-        // then strom holds the mixer a little longer (it parks the clip).
+        // Locked until the engine reports the end. The whole clip plays,
+        // its length when the player reported it; a lost report frees
+        // the lock after strom's own limit.
         let length_ms = self
             .clip_ms
             .get(&slot)
             .copied()
             .filter(|ms| *ms > 0)
             .unwrap_or(u64::from(button.duration_ms));
-        let after_ms = u64::from(preroll_ms + crate::engine::flows::STINGER_FINISH_MS);
+        let after_ms = u64::from(preroll_ms + crate::engine::flows::STINGER_FINISH_LIMIT_MS);
         self.stinger_until = Some(Instant::now() + Duration::from_millis(length_ms + after_ms));
         Ok(commands)
     }
@@ -3547,6 +3561,12 @@ impl Switcher {
             .is_some_and(|l| {
                 l.background == Some(input) || l.boxes.iter().any(|b| b.input == input && !b.hidden)
             })
+    }
+
+    /// The engine has finished the stinger (or it failed, or the mixer
+    /// it ran on is gone): switching is free again.
+    pub fn stinger_finished(&mut self) {
+        self.stinger_until = None;
     }
 
     fn check_no_stinger(&self) -> Result<(), ActionError> {
@@ -5453,7 +5473,7 @@ mod tests {
 
         // Another show: "C" by its name, "A" (gone) at its number, which
         // is free.
-        sw.replace(Show::default(), None);
+        sw.replace(Show::default(), None).unwrap();
         assert_eq!(sw.state().layout_templates.len(), 1, "kept apart");
         add(&mut sw, "C");
         add(&mut sw, "D");
@@ -6611,23 +6631,84 @@ mod tests {
     }
 
     #[test]
-    fn a_stinger_locks_switching_for_the_clip_length() {
+    fn a_stinger_locks_switching_until_the_engine_ends_it() {
+        let mut sw = with_stinger();
+        sw.apply(Action::Transition {
+            slot: TransitionSlot(2),
+        })
+        .unwrap();
+        let before = sw.state();
+
+        // Past the clip, strom may still hold the mixer.
+        let refused = [
+            Action::Cut,
+            Action::Transition {
+                slot: TransitionSlot(1),
+            },
+            Action::Transition {
+                slot: TransitionSlot(2),
+            },
+            Action::TBar { position: 0.5 },
+            Action::FadeToBlack { duration_ms: 500 },
+            Action::CutDirect { input: named("A") },
+            Action::QuickPlay { input: None },
+            Action::RemoveInput { input: named("B") },
+        ];
+        for action in refused {
+            assert_eq!(
+                sw.apply(action.clone()),
+                Err(ActionError::StingerPlaying),
+                "{action:?}"
+            );
+        }
+        assert_eq!(
+            sw.replace(Show::default(), None),
+            Err(ActionError::StingerPlaying)
+        );
+        assert_eq!(sw.state(), before, "nothing changed");
+
+        sw.stinger_finished();
+        sw.apply(Action::Cut).unwrap();
+        assert_eq!(sw.state().program, Some(sw.state().inputs[0].id));
+    }
+
+    #[test]
+    fn a_lost_stinger_end_frees_the_lock_after_strom_gives_up() {
         let sting = Action::Transition {
             slot: TransitionSlot(2),
         };
         let locked = |sw: &Switcher| sw.stinger_until.unwrap() - Instant::now();
-        let finish = crate::engine::flows::STINGER_FINISH_MS;
-        let preroll = Duration::from_millis(u64::from(PREROLL + finish));
+        let limit = crate::engine::flows::STINGER_FINISH_LIMIT_MS;
+        let after = Duration::from_millis(u64::from(PREROLL + limit));
 
         // Without a reported length, the button's.
         let mut sw = with_stinger();
         sw.apply(sting.clone()).unwrap();
-        assert!(locked(&sw) <= Duration::from_millis(1000) + preroll);
+        assert!(locked(&sw) <= Duration::from_millis(1000) + after);
+        assert!(locked(&sw) > Duration::from_millis(900) + after);
 
         let mut sw = with_stinger();
         sw.set_clip_length(2, 2500);
-        sw.apply(sting).unwrap();
-        assert!(locked(&sw) > Duration::from_millis(2400) + preroll);
+        sw.apply(sting.clone()).unwrap();
+        assert!(locked(&sw) > Duration::from_millis(2400) + after);
+
+        // At the limit, switching is free without the end.
+        sw.stinger_until = Some(Instant::now());
+        sw.apply(Action::Cut).unwrap();
+    }
+
+    #[test]
+    fn a_new_mixer_ends_the_stinger() {
+        let mut sw = with_stinger();
+        sw.apply(Action::Transition {
+            slot: TransitionSlot(2),
+        })
+        .unwrap();
+
+        sw.restore_commands();
+
+        assert_eq!(sw.stinger_until, None, "no end comes from a new mixer");
+        sw.apply(Action::Cut).unwrap();
     }
 
     #[test]
@@ -7256,7 +7337,7 @@ mod tests {
             midi: None,
             actions: vec![Action::Cut],
         }]);
-        sw.replace(crate::show::Show::default(), None);
+        sw.replace(crate::show::Show::default(), None).unwrap();
         let state = sw.state();
         assert_eq!(state.shortcuts.len(), 1);
         assert!(state.shortcuts[0].all_shows && !state.shortcuts[0].key_shadowed);
@@ -8665,7 +8746,7 @@ mod tests {
         let show = sw.show().clone();
         let mut fresh = Switcher::new(SLOTS);
 
-        let cmds = fresh.replace(show, Some("x.lmix".into()));
+        let cmds = fresh.replace(show, Some("x.lmix".into())).unwrap();
 
         // The format (a new mixer if it differs), then picture (slots,
         // program, preview), then audio and the rest.

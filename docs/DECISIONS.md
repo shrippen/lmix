@@ -3775,6 +3775,53 @@ Clip-Input geht.
 **Offen**: H.27 neu auf CUDA/GL (Track-Matte, Bildgenauigkeit, Ton des
 Clips hörbar).
 
+**Nachtrag (18.10., Ende des Stingers)**: User-Entscheidung nach PR #107.
+Das Warten der Engine (`stinger_idle`) hielt die Switcher-Sperre bis zu
+Clip + 6 s und damit Panik (SAF) und Cue-Zeitgeber auf; abgelehnte Takes
+nachträglich zurückzunehmen ging nicht sauber (#107, drei Runden).
+Jetzt:
+- Die Sperre (`stinger_until`) beginnt beim Drücken wie bisher und endet,
+  wenn strom das Ende des Takes meldet: `StingerCompleted` oder
+  `StingerFailed` auf dem WebSocket, den lmix-core schon liest
+  (`meters::follow`), nur für den Mischer-Flow und den Block `vm`.
+  `StingerCompleted` zählt nur für den letzten Take von lmix (`take_id`
+  aus der Antwort auf `…/stinger/take`; vor jedem Take vergessen). So
+  beendet weder ein älterer Take noch einer aus strom's eigener
+  Oberfläche die Sperre. `StingerFailed` kommt, bevor strom auf die
+  Anfrage antwortet; lmix kennt die Id dann noch nicht und nimmt es ohne.
+  `StingerStarted` braucht lmix nicht.
+- Höchstens bis Preroll + Cliplänge (sonst Länge der Taste) + 6 s
+  (strom gibt einen hängenden Mischer 1 s + 5 s nach dem Clip auf). Ein
+  verlorenes Ereignis sperrt so nicht für immer.
+- Während der Sperre lehnt der Switcher mit `StingerPlaying` ab, bevor
+  sich etwas ändert: Cut, Übergänge, Stinger, T-Bar, Quick Play, FTB,
+  Cut direkt, dazu neu Show öffnen/neu/Paket importieren und das
+  Schließen des Inputs auf Program (beide schneiden; vorher wartete die
+  Engine sie ab). Paket importieren übernimmt die Ziele der Datei schon
+  vorher; das ist wiederholbar (gleiche Namen werden ersetzt).
+- Die Engine wartet nicht mehr: kein Abfragen von `running` vor Take,
+  Stinger und FTB. Kein Zurücknehmen.
+- Scheitert der Stinger-Befehl (strom lehnt ab, Clip fehlt), endet die
+  Sperre sofort im Dienst. strom meldet dann `StingerFailed` (oder
+  nichts, wenn es vor dem Take ablehnt). Hat strom selbst geschnitten
+  (`program_changed`), findet der Ersatz-Cut der Engine das neue Program
+  schon vor und tut nichts; sonst schneidet sie. In beiden Fällen ist
+  gesendet, was der Switcher seit dem Drücken zeigt.
+- Neuer Mischer (strom-Neustart, Restore, neues Format, Multiview,
+  Abtastrate): Die Sperre endet, ein Ende käme nicht mehr. Läuft die
+  Engine noch nicht, endet sie gleich.
+- Panik wartet auf nichts davon; sie nimmt die Switcher-Sperre nicht
+  länger als andere Aktionen.
+**Geprüft**: Unit-Tests (Switcher: Sperre bis zum Ende, Grenze, Ablehnung
+ohne Änderung, neuer Mischer; Ereignisse in strom-Form, fremder Flow,
+Block und Take; Dienst mit NullEngine: Sperre bis zum Ereignis, sofort
+frei bei Fehler; Engine: Take und FTB nach einem Stinger ohne Abfrage);
+`scripts/test-m2b-vm.sh`: Cut gleich nach strom's Ende angenommen und
+auf Sendung.
+**Offen**: Ein Take, dessen Grenze abläuft, bevor strom ihn beendet
+(hängender Mischer), lässt den nächsten Cut wie bisher an strom
+scheitern.
+
 ## 2026-10-18 — Zeitgeber mit Echtzeit-Priorität (RUN.8)
 
 **Kontext**: User-Entscheidung RUN.8 (Entscheidungsseite 18.10.): Der

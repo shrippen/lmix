@@ -65,11 +65,6 @@ const DEVICE_CATEGORIES: [(&str, DeviceKind); 3] = [
 
 /// strom's answer to a transition before the pipeline has a position.
 const NOT_RUNNING_YET: &str = "query pipeline position";
-/// How often the engine asks whether strom's last stinger has finished.
-const STINGER_POLL: Duration = Duration::from_millis(20);
-/// How long after a stinger's clip strom may still hold the mixer at most
-/// (its own give-up time after the end, plus a second).
-const STINGER_FINISH_LIMIT: Duration = Duration::from_secs(6);
 
 /// Frame colour of layout boxes.
 const LAYOUT_BORDER_COLOR: &str = "#FFFFFF";
@@ -111,8 +106,8 @@ pub struct StromEngine {
     sample_rate: std::sync::Mutex<u32>,
     /// Mixer inputs of the last `start`.
     slots: AtomicUsize,
-    /// Until when strom may still hold the mixer for the last stinger.
-    stinger_busy: std::sync::Mutex<Option<std::time::Instant>>,
+    /// Ends of the stinger takes lmix starts (strom's events).
+    stingers: Arc<meters::Stingers>,
     playback: playback::Playing,
     /// Whether recordings may be live MKV; set by `start` from strom's
     /// GStreamer version.
@@ -157,7 +152,7 @@ impl StromEngine {
             multiview: Default::default(),
             sample_rate: std::sync::Mutex::new(lmix_types::output::default_sample_rate()),
             slots: AtomicUsize::new(0),
-            stinger_busy: Default::default(),
+            stingers: Arc::new(meters::Stingers::new(MIXER_BLOCK)),
             playback: Default::default(),
             live_mkv: std::sync::Mutex::new(flows::LiveMkv::No),
         }
@@ -289,15 +284,13 @@ impl StromEngine {
 
     /// Transition from what is on program to `to` (an input or a
     /// composition). strom takes whatever is in its preview: put `to`
-    /// there first and give the old preview back after. A stinger still
-    /// finishing is waited out (strom refuses takes meanwhile).
+    /// there first and give the old preview back after.
     async fn take_source(
         &self,
         to: Source,
         effect: Effect,
         duration_ms: u32,
     ) -> Result<(), EngineError> {
-        self.stinger_idle().await;
         let state = self.mixer_state().await?;
         let on = |pip: Option<usize>, input: Option<usize>| match pip {
             Some(pip) => Some(Source::Pip(pip)),
@@ -719,7 +712,7 @@ impl StromEngine {
     /// here). A stinger that cannot run costs the graphic, not the switch:
     /// program cuts, as the switcher already has it, and the error says so.
     async fn stinger(&self, to: usize, clip: &LibraryClip) -> Result<(), EngineError> {
-        self.stinger_idle().await;
+        self.stingers.starting();
         let taken = match self.stinger_ensure(clip).await {
             Ok(index) => self.stinger_take(to, index, &clip.file).await,
             Err(e) => Err(e),
@@ -767,29 +760,8 @@ impl StromEngine {
             .await
             .map_err(net)?;
         let take: StingerTakeResponse = check(resp).await?.json().await.map_err(net)?;
-        let clip = Duration::from_millis(take.duration_ms)
-            + Duration::from_secs_f64(take.take_to_air_ms.max(0.0) / 1000.0);
-        *self.stinger_busy.lock().expect("stinger lock") =
-            Some(std::time::Instant::now() + clip + STINGER_FINISH_LIMIT);
+        self.stingers.started(take.take_id);
         Ok(())
-    }
-
-    /// Wait until strom has finished its last stinger: after the clip it
-    /// still holds the mixer while it parks the clip again, and refuses
-    /// takes and fades meanwhile. Gives up at the limit or when strom
-    /// does not answer.
-    async fn stinger_idle(&self) {
-        let busy = *self.stinger_busy.lock().expect("stinger lock");
-        let Some(until) = busy else {
-            return;
-        };
-        while std::time::Instant::now() < until {
-            match self.stinger_state().await {
-                Ok(state) if state.running => tokio::time::sleep(STINGER_POLL).await,
-                _ => break,
-            }
-        }
-        *self.stinger_busy.lock().expect("stinger lock") = None;
     }
 
     /// Make the stinger library these clips: others go (and duplicates),
@@ -1052,6 +1024,7 @@ impl Engine for StromEngine {
                 self.errors.clone(),
                 self.health.clone(),
                 self.players.clone(),
+                self.stingers.clone(),
             ));
         }
 
@@ -1115,7 +1088,6 @@ impl Engine for StromEngine {
                 duration_ms,
             } => self.program(*slot, *effect, *duration_ms).await,
             Command::FadeToBlack { duration_ms } => {
-                self.stinger_idle().await;
                 let body = FadeToBlackRequest {
                     duration_ms: u64::from(*duration_ms),
                 };
@@ -1336,6 +1308,10 @@ impl Engine for StromEngine {
 
     fn players(&self) -> broadcast::Receiver<crate::clips::PlayerProgress> {
         self.players.subscribe()
+    }
+
+    fn stingers(&self) -> broadcast::Receiver<meters::StingerEnd> {
+        self.stingers.subscribe()
     }
 
     fn health(&self) -> EngineHealth {
@@ -1593,10 +1569,6 @@ mod tests {
         clips: Vec<(String, u64)>,
         /// Files strom cannot add (not on disk).
         absent: Vec<String>,
-        /// State reads that still report the last take running.
-        running: usize,
-        /// Takes started while one was running (strom refuses them).
-        refused: usize,
         calls: Vec<Call>,
     }
 
@@ -1640,8 +1612,6 @@ mod tests {
         let at = |fake: &FakeStinger, i: usize| fake.clips.get(i).map(|c| c.0.clone());
         match (call.method.as_str(), call.path.rsplit('/').next()) {
             ("GET", Some("stinger")) => {
-                let running = fake.running > 0;
-                fake.running = fake.running.saturating_sub(1);
                 let clips = fake
                     .clips
                     .iter()
@@ -1652,7 +1622,7 @@ mod tests {
                     "source_block_id": flows::STINGER_PLAYER, "problem": null,
                     "matte_supported": false, "preroll_ms": 80, "clips": clips,
                     "cued_index": null, "ready": true, "last_cue_ms": null,
-                    "running": running, "last_take": null
+                    "running": false, "last_take": null
                 }))
             }
             ("GET", Some("state")) => ok(serde_json::json!({
@@ -1685,15 +1655,10 @@ mod tests {
                 ok(fake_clip(i, &fake.clips[i]))
             }
             ("POST", Some("take")) => {
-                if fake.running > 0 {
-                    fake.refused += 1;
-                    return (StatusCode::BAD_REQUEST, serde_json::json!({}));
-                }
                 let i = call.body["index"].as_u64().unwrap() as usize;
                 if at(fake, i).as_deref() != call.body["file"].as_str() {
                     return (StatusCode::CONFLICT, serde_json::json!({}));
                 }
-                fake.running = 3;
                 ok(serde_json::json!({
                     "take_id": 1, "index": i, "file": fake.clips[i].0,
                     "variant": "classic", "downgraded_from": null,
@@ -1793,31 +1758,41 @@ mod tests {
         );
     }
 
-    /// A second stinger right after the first waits until strom has
-    /// finished it (it parks the clip after the end) instead of being
-    /// refused while the switcher has already switched.
+    /// After a stinger the engine does not wait for strom: the switcher
+    /// holds takes until strom reports the end, so a take or fade goes
+    /// out at once, without asking whether the stinger still runs.
     #[tokio::test]
-    async fn a_stinger_after_a_stinger_waits_for_strom() {
+    async fn after_a_stinger_takes_go_out_at_once() {
         let (url, fake) = stinger_strom(&[("/sting.webm", 400)]).await;
         let engine = StromEngine::new(url, MixerBackend::Cpu, MonitorOut::None);
 
         engine.run(&sting("/sting.webm", 400)).await.unwrap();
-        engine.run(&sting("/sting.webm", 400)).await.unwrap();
+        let asked = fake.lock().unwrap().calls.len();
         engine
             .run(&Command::FadeToBlack { duration_ms: 0 })
             .await
             .unwrap();
-
-        assert_eq!(takes(&fake).len(), 2);
-        assert_eq!(fake.lock().unwrap().refused, 0);
-        let fake = fake.lock().unwrap();
-        let ftb = fake
-            .calls
-            .iter()
-            .position(|c| c.path.ends_with("/ftb"))
+        engine
+            .run(&Command::Program {
+                slot: Some(1),
+                effect: Effect::Cut,
+                duration_ms: 0,
+            })
+            .await
             .unwrap();
-        assert_eq!(fake.running, 0, "the fade waited too");
-        assert!(ftb > 0);
+        engine.run(&sting("/sting.webm", 400)).await.unwrap();
+
+        let fake = fake.lock().unwrap();
+        let after: Vec<_> = fake.calls[asked..]
+            .iter()
+            .map(|c| (c.method.as_str(), c.path.rsplit('/').next().unwrap()))
+            .collect();
+        assert_eq!(after[0], ("POST", "ftb"), "{after:?}");
+        let state_reads = after.iter().filter(|c| **c == ("GET", "stinger")).count();
+        assert_eq!(
+            state_reads, 1,
+            "only the library lookup of the second stinger"
+        );
     }
 
     /// A clip strom cannot have (its file is missing) costs the graphic:

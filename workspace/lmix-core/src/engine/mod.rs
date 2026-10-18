@@ -93,6 +93,12 @@ pub trait Engine: Send + Sync {
         tokio::sync::broadcast::channel(1).1
     }
 
+    /// Ends of the stingers the engine plays: until then it holds the
+    /// mixer and refuses takes.
+    fn stingers(&self) -> tokio::sync::broadcast::Receiver<meters::StingerEnd> {
+        tokio::sync::broadcast::channel(1).1
+    }
+
     /// Ids of sounds and pictures that are over: played to their end,
     /// stopped, or gone with the playback flow.
     fn playback_ended(&self) -> tokio::sync::broadcast::Receiver<String> {
