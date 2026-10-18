@@ -7,8 +7,8 @@ auf echter Hardware.
 
 CI läuft auf GitHub (Status `github / test` am Commit auf Gitea). Seit
 18.10.2026 prüft vor jedem Merge ein neuer Claude-Agent (`agent.md`,
-`REVIEW.md`). PR-Agent scheitert am Kostenlimit des Schlüssels
-(`todo.md`); Claude-Review und grüne CI genügen.
+`REVIEW.md`). PR-Agent läuft nur noch, wenn der Eigentümer `/review`
+kommentiert; sein Schlüssel hat das Kostenlimit erreicht (`todo.md`).
 
 Unabhängig von `main` (gemergt):
 
