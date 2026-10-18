@@ -150,6 +150,11 @@ fn picture_request(id: &str, picture: &EnginePicture, start: SoundStart) -> AddP
             stage::PictureEnd::Stop => PictureEnd::Stop,
         },
         start,
+        repeat: match picture.repeat {
+            sound::SoundRepeat::Once => SoundRepeat::Once,
+            sound::SoundRepeat::Times(n) => SoundRepeat::Times(n),
+            sound::SoundRepeat::Forever => SoundRepeat::Forever,
+        },
     }
 }
 

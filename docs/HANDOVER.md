@@ -72,6 +72,16 @@ unten mergen; Gitea stellt die Basis des nächsten auf `main` um):
 | #88 | `aud12-meter` | Pegel stumm blass, Spitzenwert 2 s (AUD.12) |
 | #89 | `aud17-sample-rate` | Abtastrate 44,1 kHz wählbar (AUD.17) |
 | #90 | `strom-upstream-sync` | strom mit ganzem upstream main 0.7.1 (strom #20), Player-Verzögerung 100 ms für Dateien |
+| #91 | `decisions-1017` | Entscheidungen 17.10. (S-E.3/S-E.13 B, Merge, GPU später …) |
+| #92 | `strom-va-pin` | VA-Brücke in den GL-Mischer (strom #21) |
+| #93 | `gfx2-web-inputs` | Webseite und Grafikkanal als Input (GFX.2/GFX.6), Stinger-Schnitt mit dem Clip, Latenz-Perzentil |
+| #94 | `eval-stinger-recorder` | Vergleich Stinger und Live-Recorder (Vorschläge offen) |
+| #95 | `gfx6-page-control` | JavaScript, CSS, Einfrieren einer Seite (strom #22) |
+| #96 | `snd-cues` | Klang- und Fade-Cues in Zonen (strom #23–#25) |
+| #97 | `stage-cues` | Bühnen und Bild-Cues, Block „Show Playback“ (strom #26) |
+| #98 | `cue-preload` | Standby-Cues vorgeladen (SND.12) |
+| #99 | `script-sound-files` | Drehbuch: Klang- und Bilddateien ab dem Ordner |
+| #100 | `sound-repeat` | Wiederholungen von Klängen (SND.3, strom #27), Panik lässt Vorgeladenes |
 
 Rote GitHub-Läufe auf `s1-feeds` und `s1-script-folder` sind die wackelige
 Failover-Prüfung, die #45 behebt (der Stapel bekommt sie über `main`).
@@ -118,6 +128,11 @@ strom-Fork auf Gitea (`shrippen/strom`), Ziel `dev`, seit 17.10. gestapelt:
 `lmix-upstream-sync` (ganzes upstream main). Das Submodul von lmix #74
 zeigt auf #17, #85 auf #18, #86 auf #19, #90 auf #20; nach dem Merge auf
 `dev` neu pinnen.
+Danach (17.10. abends, je einzeln auf `dev` gemergt): #21 VA-Brücke,
+#22 Seitensteuerung, #23 Show-Sound-Block, #24 16 Zonen/Mono, #25 Ende
+an den Zonen, #26 Bühnen und Umbenennung in `builtin.show_playback`,
+#27 Wiederholungen ohne Lücke (Pegel an den Mischer-Pads), #28 Videos
+wiederholen, Nahtlogik als Modul.
 
 strom-Fork (`shrippen/strom`), Ziel `dev`:
 - Gemergt: #1 `lmix-start-time`, #2 `lmix-sample-rate`, #3

@@ -68,6 +68,8 @@ for s in 1 10; do
 done
 gst-launch-1.0 -q videotestsrc pattern=red num-buffers=1 ! video/x-raw,width=64,height=64 \
     ! pngenc ! filesink location="$WORK/red.png"
+gst-launch-1.0 -q videotestsrc pattern=green num-buffers=15 ! video/x-raw,width=64,height=36,framerate=30/1 \
+    ! jpegenc ! avimux ! filesink location="$WORK/green.avi"
 
 # A screen for the stage's window.
 DISPLAY_NUM=:96
@@ -102,7 +104,7 @@ curl -sf "$STROM/api/flows/$(playback_flow)" | jq -e '.flow.elements[] | select(
 pass "zone Hall and stage Back (window): playback flow runs"
 
 # --- a sound cue ends with its file; the next cue follows ---
-cues="$(jq -cn --arg one "$WORK/tone1.wav" --arg ten "$WORK/tone10.wav" --arg red "$WORK/red.png" '[
+cues="$(jq -cn --arg one "$WORK/tone1.wav" --arg ten "$WORK/tone10.wav" --arg red "$WORK/red.png" --arg green "$WORK/green.avi" '[
     {number: "1", kind: "sound", sound: {file: $one}, follow: "after_end"},
     {number: "2", kind: "wait", duration_ms: 1000},
     {number: "3", kind: "sound", sound: {file: $ten, fade_out_ms: 300}},
@@ -112,7 +114,8 @@ cues="$(jq -cn --arg one "$WORK/tone1.wav" --arg ten "$WORK/tone10.wav" --arg re
     {number: "7", kind: "fade", duration_ms: 300, fade: {target: {cue: "5"}, opacity: 0, then: "stop"}},
     {number: "8", kind: "sound", sound: {file: $ten, fade_in_ms: 500}},
     {number: "9", kind: "picture", picture: {file: $red, stage: "Back"}},
-    {number: "10", kind: "sound", sound: {file: $one, repeat: {times: 2}}}
+    {number: "10", kind: "sound", sound: {file: $one, repeat: {times: 2}}},
+    {number: "11", kind: "picture", picture: {file: $green, stage: "Back", end: "stop", repeat: {times: 3}}}
 ]')"
 act '{"action":"set_go_guard","ms":0}' || fail "GO guard refused"
 act "{\"action\":\"add_cue_list\",\"name\":\"Sound\",\"cues\":$cues}" || fail "cue list refused"
@@ -174,6 +177,15 @@ sleep 1.4
 [[ "$(running)" == *10* ]] || fail "cue 10 ended after one play"
 within '[[ "$(running)" != *10* ]]' 2 || fail "cue 10 did not end after two plays: $(running)"
 pass "a sound cue repeated twice ends after its second play"
+
+# --- a video cue played 3 times (0.5 s each) leaves after its last play ---
+act '{"action":"cue_go"}' || fail "GO 11 refused"
+within '[[ "$(pictures)" == *playing* ]]' 2 || fail "cue 11 does not show"
+sleep 1
+[[ "$(running)" == *11* ]] || fail "cue 11 ended after one play"
+within '[[ "$(running)" != *11* ]]' 2 || fail "cue 11 did not end after three plays: $(running)"
+[[ "$(pictures)" == "[]" ]] || fail "the video stayed: $(pictures)"
+pass "a video cue played 3 times leaves after its last play"
 
 # --- no zones and no stages: the flow goes ---
 act '{"action":"remove_zone","name":"Hall"}' || fail "remove zone refused"

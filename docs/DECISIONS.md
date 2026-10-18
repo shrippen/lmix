@@ -3591,6 +3591,11 @@ endlos mit Fade über die Naht, vorgeladen und wiederholt);
 `scripts/test-show-playback.sh` (ein zweifach gespielter 1-s-Cue endet
 nach dem zweiten Durchgang).
 
+Nachtrag (17.10.): Videos wiederholen sich ebenso (VIS.2, strom #28):
+`picture.repeat` wie beim Klang; `end` (halten/stoppen) gilt nach dem
+letzten Durchgang, ein Standbild übergeht `repeat`. Die Nahtlogik ist in
+strom ein eigenes Modul für Klang und Bild.
+
 ## 2026-10-18 — Jeder PR wird von einem neuen Claude-Agenten geprüft
 
 **Kontext**: Der Eigentümer liest keinen Code. PR-Agent scheitert seit
