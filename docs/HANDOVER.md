@@ -18,8 +18,8 @@ VSP und die Abnahme auf der RTX 3090.
   Kommentar „## Claude-Review (neuer Agent) zu <commit>“ in den PR.
   Merge nur ohne offenes **Wichtig** und mit grüner CI (`github / test`,
   nach den Pfaden von `ci.yml`). Nach 3 Runden mit Wichtig: Eigentümer
-  fragen. Optionale Befunde mit einer Zeile beantworten und in den
-  nächsten PR mitnehmen.
+  fragen. Bisher so gehandhabt (keine Regel): optionale Befunde mit
+  einer Zeile beantworten und in den nächsten PR mitnehmen.
 - PRs an CI, Release, Packaging, `agent.md`, `REVIEW.md`, Geheimnissen
   oder Veröffentlichtem bestätigt der Eigentümer vor dem Merge in Worten.
 - PR-Agent läuft nur auf `/review` des Eigentümers (#112–#114);
@@ -46,7 +46,7 @@ VSP und die Abnahme auf der RTX 3090.
 
 Was jeweils entschieden wurde und warum: `docs/DECISIONS.md`, Einträge
 vom 18.10. (Review-Regel, Entscheidungsseite, REC, STG mit Nachträgen,
-RUN.8, Console getrennt, PR-Agent nur auf `/review`).
+RUN.8, „Console in zwei Programme geteilt (Mischer, Show)“, PR-Agent nur auf `/review`).
 
 ### Offen beim Eigentümer
 
@@ -55,8 +55,6 @@ RUN.8, Console getrennt, PR-Agent nur auf `/review`).
   Programm entfernen (`StingerPlaying`). Das geht über die Liste der
   Entscheidung hinaus; Antwort steht aus. Bis dahin bleibt es so
   (auch in `todo.md` und im STG-Nachtrag vermerkt).
-- Paket-Import übernimmt die Ziele vor der Ablehnung. Saubere Lösung
-  bräuchte eine öffentliche Abfrage am Switcher – nur mit Zustimmung.
 
 ### Nächste Schritte (Reihenfolge)
 
@@ -64,8 +62,13 @@ RUN.8, Console getrennt, PR-Agent nur auf `/review`).
    - `service.rs` `watch_stingers`: bei `Lagged` `continue` statt
      `stinger_finished()`.
    - `meters.rs`: `StingerFailed` gegen die bekannte Take-Id prüfen
-     (andere Id → ignorieren).
+     (andere bekannte Id → ignorieren; `None` oder Id noch unbekannt →
+     freigeben wie bisher, Failed kommt oft vor der Antwort auf den Take).
    - `switcher.rs`: Grenze in `stinger_started` ab jetzt neu setzen.
+   - Bekannte Grenze, keine Frage offen: Paket importieren übernimmt die
+     Ziele vor der Ablehnung (wiederholbar, DECISIONS STG). Eine saubere
+     Lösung bräuchte eine öffentliche Abfrage am Switcher und damit die
+     Zustimmung des Eigentümers.
    - `NullEngine::stinging()` zählt Generationen; Service-Test: altes
      Ende hält, aktuelles gibt frei.
    - `scripts/test-global-keys.sh`: `show.conf` prüfen statt der
@@ -73,7 +76,8 @@ RUN.8, Console getrennt, PR-Agent nur auf `/review`).
 2. **Console `--style`:** clap liest die Option vor Qt
    (`console-qt/src/app.rs`, `config::init`), aber `QGuiApplication::new`
    liest dieselbe argv, sucht ein Quick-Controls-Stilmodul `kante` und lädt
-   das Fenster nicht (DECISIONS 18.10. „Console geteilt“, Bestand). Option
+   das Fenster nicht (DECISIONS 18.10. „Console in zwei Programme geteilt (Mischer, Show)“,
+   Bestand). Option
    umbenennen oder vor `QGuiApplication::new` aus der argv nehmen.
 3. **Weitere Kleinigkeiten** (optional, je mit Quelle):
    - #104, Review Runde 2: `lmix-<Ausgang>` in DECISIONS (REC) und im
