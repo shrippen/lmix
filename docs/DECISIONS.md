@@ -3967,3 +3967,25 @@ AppShell.qml   Fenster: lmix-core, Stil, Datei-Knöpfe (Neu, Öffnen, Zuletzt,
 Quick-Controls-Stil-Modul `kante` sucht und das Fenster nicht lädt (so schon
 bei `lmix-console`). Die Demo startet darum ohne `--style` (Kante ist
 Standard).
+
+## 2026-10-18 — PR-Agent nur auf `/review` des Eigentümers
+
+**Kontext**: PR-Agent lief bei jedem PR und jedem Kommentar. Auf dem einen
+Gitea-Runner brach jeder Kommentar den wartenden Lauf ab, sein Schlüssel
+hat das Kostenlimit erreicht, und seit jeder PR vom Claude-Review geprüft
+wird (Eintrag oben), wartete der Merge zweimal. Der Eigentümer wollte ihn
+behalten, aber nur auf Abruf (18.10.2026).
+
+**Entscheidung**: `.gitea/workflows/pr-agent.yml` startet nur, wenn der
+Eigentümer `/review` unter einen PR schreibt (allein oder mit Optionen
+nach einem Leerzeichen); kein Lauf bei Push oder neuem PR. Ein neues
+`/review` ersetzt einen laufenden, andere Kommentare brechen nichts ab.
+Sitzungen schreiben kein `/review`. Ohne `/review` wartet kein Merge auf
+PR-Agent; nach einem `/review` wartet der Merge auf diesen Lauf (ein
+fehlgeschlagener hält nichts auf), und seine Befunde werden behoben oder
+beantwortet. Eine Antwort zählt wie beim Claude-Review erst, wenn der
+nächste Review-Agent sie annimmt. Dieselbe Regel gilt in allen Repos mit
+PR-Agent.
+
+**Verworfen**: PR-Agent ganz entfernen. Er bleibt als zweiter Leser mit
+einem anderen Modell, wenn der Eigentümer ihn will.
