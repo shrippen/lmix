@@ -4,6 +4,9 @@ Erledigtes abhaken (`[x]`, Datum) und nach einer Weile löschen; Details stehen 
 
 ## Für dich
 
+- [ ] Entscheidungen 18.10. umsetzen (DECISIONS „Entscheidungsseite 18.10.“): alle Aufnahmen über den Live-Recorder (REC), Stinger ganz über upstream (STG), Zeitgeber mit rtkit (RUN.8), Vorschau-Ausgang im strom-Mischer (VSP).
+- [ ] Review-Regel (REV.R): Repos ohne `agent.md` bekommen sie mit ihrem nächsten PR (Block wie in Kaiwa `agent.md`, eigenes `REVIEW.md`). Demo-Welt-Kopien (DEMO) beim nächsten Release je Projekt abgleichen (`sync-demo.py`).
+- [ ] Sitzung auf dem 3090-Rechner (HW, CEF): `cefsrc` bauen (H.36), Hardware-Abnahme H.13, H.20, H.21, H.37, H.38, GPU-Pfade, VA. Checkliste in `docs/HARDWARE-TODO.md`.
 - [ ] **S-E.3 entscheiden** (Klang-Cues: Abspieler je Zone oder verdeckte Inputs), mit Messung: Entscheidungsseite https://claude.ai/artifact/DAzFNWyRUKGiu4x5WUvFPo, „An Claude übergeben“. Danach S1 Stufe 2 (Zonen, Klang-Cues).
 - [ ] **PRs vom 16./17.10. ansehen und mergen**, Reihenfolge in `docs/HANDOVER.md`: #45, #51, #39, dann der Stapel #38 → #52.
 - [ ] Cue-Zeitgenauigkeit: 4-h-Lauf `DURATION_S=14400 scripts/test-cue-timing.sh` lief in der Nacht; Ergebnis in DECISIONS (oder neu starten, falls nicht eingetragen).
