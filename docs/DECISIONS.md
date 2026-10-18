@@ -3637,7 +3637,8 @@ mit Vorschlag).
   die übrigen bekommen sie mit dem nächsten PR. Der gemeinsame Block nennt
   dabei: CI grün auf dem neuesten Commit des PR, PR-Agents Status zählt
   nicht, „was veröffentlicht wird“ heißt Release, Tag, neue öffentliche
-  Seite oder Paket.
+  Seite oder Paket (ein Neubau des schon Veröffentlichten zählt nicht).
+  lmix behält seine Fassung nach den CI-Pfaden.
 - **REC**: Alle Aufnahmen (Program und ISO-Spuren) laufen über upstreams
   Live-Recorder (`builtin.liverecorder`, fragmentiertes MP4). Der
   Vorschlag war nur die ISO-Spuren.
@@ -3653,8 +3654,10 @@ mit Vorschlag).
 - **HW**: Abnahme in einer Sitzung auf dem 3090-Rechner (Tests und
   Selbsttest durch Claude, Steckarbeit durch den User).
 
-**Frage des Users zu CEF** (beantwortet): lmix hat ein Titelsystem (M7
-Teil A: Vorlagen, Grafikkanäle `/graphics/<n>`). Bisher lief diese Seite
-nur als Vorschau im Browser; auf Sendung gingen höchstens Standbilder als
-Overlay. `cefsrc` rendert die Grafikseite live in strom (transparent, in
-Program-Größe und -Rate), erst damit kommen animierte Titel auf Sendung.
+**Frage des Users zu CEF** (beantwortet): Es gibt keinen zweiten Weg.
+`cefsrc` ist die Engine hinter dem schon gebauten Weg: Die Grafikseite
+`/graphics/<n>` (M7 Teil A) und Webseiten laufen über strom
+`builtin.html_input`, und der rendert mit Chromium über `cefsrc` (GFX.2,
+17.10., strom #22). In der VM gibt es kein `cefsrc`, darum lief der Weg
+nie echt. Freigeben heißt, `cefsrc` auf dem 3090-Rechner zu bauen und den
+Weg dort abzunehmen (H.36).
