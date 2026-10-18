@@ -1,14 +1,16 @@
 # Übergabe: Stand M9 und Show-Modus S1 (in Arbeit), lokale Übernahme
 
-Stand 2026-10-09, PR-Liste 2026-10-17 (bis #89). Die Arbeit läuft lokal weiter (Arch, RTX 3090), Abnahme
+Stand 2026-10-09, PR-Liste 2026-10-18 (bis #102). Die Arbeit läuft lokal weiter (Arch, RTX 3090), Abnahme
 auf echter Hardware.
 
-## Offene PRs, Stand 2026-10-17 nachts (Merge-Reihenfolge)
+## PRs in Merge-Reihenfolge, Stand 2026-10-18 (bis #101 gemergt, offen #102)
 
-CI läuft auf GitHub (Status `github / test` am Commit auf Gitea). PR-Agent
-scheitert am Kostenlimit des Schlüssels (`todo.md`), grüne CI genügt.
+CI läuft auf GitHub (Status `github / test` am Commit auf Gitea). Seit
+18.10.2026 prüft vor jedem Merge ein neuer Claude-Agent (`agent.md`,
+`REVIEW.md`). PR-Agent scheitert am Kostenlimit des Schlüssels
+(`todo.md`); Claude-Review und grüne CI genügen.
 
-Unabhängig von `main`, zuerst:
+Unabhängig von `main` (gemergt):
 
 | PR | Branch | Inhalt |
 |---|---|---|
@@ -16,8 +18,8 @@ Unabhängig von `main`, zuerst:
 | #51 | `console-test-coords` | Lokaler Console-Check: wartet auf das Bild nach dem Cut, ignoriert CRITICALs von strom beim Start |
 | #39 | `se3-measure` | S-E.3 gemessen (Klang-Cues), nur Doku und Messskript |
 
-Show-Modus S1 und Rest, gestapelt, jeder auf dem davor (von oben nach
-unten mergen; Gitea stellt die Basis des nächsten auf `main` um):
+Show-Modus S1 und Rest, in der Reihenfolge des Merges (bis #101
+gemergt; #102 liegt direkt auf `main` und ist offen):
 
 | PR | Branch | Inhalt |
 |---|---|---|
@@ -80,9 +82,11 @@ unten mergen; Gitea stellt die Basis des nächsten auf `main` um):
 | #98 | `cue-preload` | Standby-Cues vorgeladen (SND.12) |
 | #99 | `script-sound-files` | Drehbuch: Klang- und Bilddateien ab dem Ordner |
 | #100 | `sound-repeat` | Wiederholungen von Klängen (SND.3, strom #27), Panik lässt Vorgeladenes |
+| #101 | `picture-repeat` | Wiederholungen von Videos (VIS.2, strom #28) |
+| #102 | `review-rule` | Jeder PR wird von einem neuen Claude-Agenten geprüft (`REVIEW.md`) |
 
-Rote GitHub-Läufe auf `s1-feeds` und `s1-script-folder` sind die wackelige
-Failover-Prüfung, die #45 behebt (der Stapel bekommt sie über `main`).
+Die wackelige Failover-Prüfung (früher rote Läufe auf `s1-feeds` und
+`s1-script-folder`) ist mit #45 behoben.
 
 Breaking (vor dem ersten Release erlaubt, je PR beschrieben): Cue `label`
 → `name`, `cue_back`/`cue_jump` → `cue_standby`, `next` → `standby`,
