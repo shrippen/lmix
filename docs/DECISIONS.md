@@ -3623,3 +3623,38 @@ Claude Code im Kopflosmodus wäre von der schreibenden Sitzung
 unabhängig, braucht aber einen eigenen API-Schlüssel mit Kosten je
 Prüfung. Er bleibt als Ausbau, wenn der Eigentümer einen Schlüssel
 hinterlegt.
+
+## 2026-10-18 — Entscheidungsseite 18.10. beantwortet
+
+Abgefragt über https://claude.ai/artifact/E2RiT9QzpfU5uhAnRhBLtV (Optionen
+mit Vorschlag).
+
+**Entscheidungen** (User):
+- **REV.2**: Bei der Review-Regel vom 18.10. bleiben (neuer Agent aus der
+  schreibenden Sitzung). Kein Gitea-Workflow mit eigenem Schlüssel.
+- **REV.R**: Die Regel steht in Kaiwa (G-11) und in jedem Repo mit
+  `agent.md` (Kaiwa, Kante, andon, kurrent, plasmai, shrippen.github.io);
+  die übrigen bekommen sie mit dem nächsten PR. Der gemeinsame Block nennt
+  dabei: CI grün auf dem neuesten Commit des PR, PR-Agents Status zählt
+  nicht, „was veröffentlicht wird“ heißt Release, Tag, neue öffentliche
+  Seite oder Paket.
+- **REC**: Alle Aufnahmen (Program und ISO-Spuren) laufen über upstreams
+  Live-Recorder (`builtin.liverecorder`, fragmentiertes MP4). Der
+  Vorschlag war nur die ISO-Spuren.
+- **STG**: Stinger ganz über upstream (#1010). Der Vorschlag war beides.
+  Folgen, die der Umbau klären muss: Layouts (PiP) als Ziel und „unter den
+  Overlays“ gibt es upstream nicht; sie fallen weg oder kommen in strom.
+- **CEF**: Freigegeben: `cefsrc` auf dem 3090-Rechner bauen, Abnahme H.36.
+- **RUN.8**: Zeitgeber der Cue-Listen auf eigenem Thread mit
+  Echtzeit-Priorität über rtkit; geht das nicht, warnt der Selbsttest.
+- **VSP**: Vorschau-Ausgang im strom-Mischer bauen.
+- **DEMO**: Demo-Welt-Kopien beim nächsten Release des jeweiligen Projekts
+  abgleichen.
+- **HW**: Abnahme in einer Sitzung auf dem 3090-Rechner (Tests und
+  Selbsttest durch Claude, Steckarbeit durch den User).
+
+**Frage des Users zu CEF** (beantwortet): lmix hat ein Titelsystem (M7
+Teil A: Vorlagen, Grafikkanäle `/graphics/<n>`). Bisher lief diese Seite
+nur als Vorschau im Browser; auf Sendung gingen höchstens Standbilder als
+Overlay. `cefsrc` rendert die Grafikseite live in strom (transparent, in
+Program-Größe und -Rate), erst damit kommen animierte Titel auf Sendung.
