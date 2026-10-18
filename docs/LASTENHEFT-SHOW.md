@@ -145,7 +145,7 @@ ausgeschlossen. **MS**: Meilenstein (§7). Stand: ✅ vorhanden · ◐ teilweise
 |---|---|---|---|---|
 | SND.1 | Klang-Cue spielt eine Datei (WAV, FLAC, OGG, Opus, MP3; bis 24 Kanäle; Abtastrate und Bittiefe beliebig, automatisch angepasst). Komprimierte Formate werden vorab dekodiert oder vorgeladen, damit SND.12 gilt | M | S1 | ◐ (Datei über strom `show_playback`, Formate wie GStreamer dekodiert; Standby-Cue vorgeladen; bis 24 Kanäle ungeprüft) |
 | SND.2 | Lautstärke je Cue (dB, 0 dB = unverändert). Einblendzeit und Ausblendzeit beim Stoppen als Komfort im Klang-Cue; wirken intern wie Fades und werden von späteren Fades übersteuert (lmix) | M | S1 | ✅ (Pegel, Ein- und Ausblendzeit im Klang-Cue) |
-| SND.3 | Wiederholungen: n-mal oder endlos, lückenlos (keine Pause, kein Klick an der Nahtstelle) | M | S1 | – |
+| SND.3 | Wiederholungen: n-mal oder endlos, lückenlos (keine Pause, kein Klick an der Nahtstelle) | M | S1 | ✅ (`repeat`: n-mal oder endlos, über Segment-Seeks ohne Lücke; ein Fade läuft über die Naht) |
 | SND.4 | Mindestens 16 Klang-Cues gleichzeitig ohne Aussetzer (lmix) | M | S1 | – |
 | SND.5 | Kanalzuordnung je Klang-Cue: Dateikanal → Zone mit Pegel je Kreuzung; Vorlagen je Zone (Stereo → L/R, Stereo → Mono −3 dB); Gesamtpegel je Cue | M | S1 | ◐ (Kreuzungen Dateikanal → Zone mit Pegel, Gesamtpegel; Vorlagen fehlen) |
 | SND.6 | Fade-Cue, absolut: ändert nur die gesetzten Parameter eines Ziels (Cue oder Zone) über eine Dauer; optional „Ziel danach stoppen“; Zielwert „still“ = untere Reglergrenze; Fades auf verschiedene Parameter desselben Ziels laufen gleichzeitig | M | S1 | ◐ (Fade-Cue auf Cue oder Zone, Pegel, „danach stoppen“; ein Parameter: Pegel) |

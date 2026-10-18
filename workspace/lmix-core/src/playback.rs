@@ -9,8 +9,8 @@
 
 use lmix_types::cue::{Cue, CueKind};
 use lmix_types::sound::{
-    AfterFade, FadeCue, FadeTarget, SoundCue, SOUND_FADE_MAX_MS, SOUND_FILE_CHANNELS,
-    SOUND_GAIN_MAX_DB, SOUND_GAIN_MIN_DB, SOUND_ROUTES,
+    AfterFade, FadeCue, FadeTarget, SoundCue, SoundRepeat, SOUND_FADE_MAX_MS, SOUND_FILE_CHANNELS,
+    SOUND_GAIN_MAX_DB, SOUND_GAIN_MIN_DB, SOUND_ROUTES, SOUND_TIMES_MAX,
 };
 use lmix_types::stage::{PictureCue, PictureEnd, PictureFit, Stage, PICTURE_LAYER_MAX};
 use lmix_types::zone::{Zone, ZONE_CHANNELS};
@@ -25,6 +25,7 @@ pub struct EngineSound {
     /// Empty: the engine's default (file channels to the first zone).
     pub routes: Vec<EngineRoute>,
     pub fade_in_ms: u32,
+    pub repeat: SoundRepeat,
 }
 
 /// A crosspoint with 0-based channels and the zone by its place in the
@@ -82,6 +83,13 @@ pub fn check_sound(sound: &SoundCue) -> Result<(), ActionError> {
     check_gain(sound.gain_db, "the level")?;
     check_fade_time(sound.fade_in_ms)?;
     check_fade_time(sound.fade_out_ms)?;
+    if let SoundRepeat::Times(n) = sound.repeat {
+        if !(1..=SOUND_TIMES_MAX).contains(&n) {
+            return Err(bad(format!(
+                "a sound plays 1–{SOUND_TIMES_MAX} times, or forever"
+            )));
+        }
+    }
     if sound.routes.len() > SOUND_ROUTES {
         return Err(bad(format!("at most {SOUND_ROUTES} routes")));
     }
@@ -244,6 +252,7 @@ pub fn engine_sound(sound: &SoundCue, zones: &[Zone]) -> Result<EngineSound, Act
         gain_db: sound.gain_db,
         routes,
         fade_in_ms: sound.fade_in_ms,
+        repeat: sound.repeat,
     })
 }
 
@@ -330,6 +339,19 @@ mod tests {
             ..rain(vec![])
         };
         assert!(check_sound(&loud).is_err());
+        let never = SoundCue {
+            repeat: SoundRepeat::Times(0),
+            ..rain(vec![])
+        };
+        assert!(check_sound(&never).is_err(), "0 plays");
+        let thrice = SoundCue {
+            repeat: SoundRepeat::Times(3),
+            ..rain(vec![])
+        };
+        assert_eq!(
+            engine_sound(&thrice, &zones()).unwrap().repeat,
+            SoundRepeat::Times(3)
+        );
     }
 
     #[test]

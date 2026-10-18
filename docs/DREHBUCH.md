@@ -87,7 +87,7 @@ in der Show, die Geräte und Bildschirme dazu je Rechner).
 ```lmix-cue
 number = "20"
 kind = "sound"
-sound = { file = "ton/regen.flac", gain_db = -6, fade_in_ms = 3000, fade_out_ms = 2000 }
+sound = { file = "ton/regen.flac", gain_db = -6, fade_in_ms = 3000, fade_out_ms = 2000, repeat = "forever" }
 ```
 
 ```lmix-cue
@@ -105,7 +105,8 @@ fade = { target = { cue = "20" }, gain_db = -60, then = "stop" }
 ```
 ````
 
-Ein Fade setzt nur, was er nennt: `gain_db` für einen Klang-Cue oder eine
+`repeat` ist `"once"` (Standard), `{ times = 3 }` oder `"forever"`; die
+Durchgänge folgen ohne Lücke. Ein Fade setzt nur, was er nennt: `gain_db` für einen Klang-Cue oder eine
 Zone, `opacity` für einen Bild-Cue, `brightness` für eine Bühne
 (`target = { stage = "Hinten" }`).
 

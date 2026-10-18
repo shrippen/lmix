@@ -3566,3 +3566,27 @@ laufen; sie starten wie vorher.
 **Geprüft**: `scripts/test-show-playback.sh` (Standby-Klang und -Bild in
 strom „ready“, nach GO „playing“, jedes nur einmal angelegt); Einheits-
 test der Menge im Switcher.
+
+## 2026-10-17 — Wiederholungen lückenlos (SND.3)
+
+**Kontext**: SND.3 verlangt n-mal oder endlos, ohne Pause und ohne Klick
+an der Naht.
+
+**Entscheidung**: Segment-Seeks in strom (#27). Der erste Seek (mit
+Flush) kommt, solange der erste Puffer am Gate wartet; danach folgt an
+jedem `SEGMENT_DONE` ein Seek ohne Flush, dessen Segment die laufende
+Zeit fortsetzt. Das nächste Abspielen beginnt so genau am Ende des
+letzten. Das letzte Abspielen endet mit EOS, und der Cue endet mit ihm
+(`after_end` folgt). Der Cue-Pegel sitzt dafür jetzt an den Pads der
+Zonen-Mischer (laufende Zeit der Zone); die Zeit des Zweigs beginnt bei
+jeder Wiederholung neu, ein Fade über die Naht liefe sonst falsch.
+Verworfen: zwei Dekoder im Wechsel (doppelte Last, Genauigkeit hängt an
+der gemeldeten Dauer) und Neuanlegen am Ende (Lücke).
+
+In lmix: `sound.repeat` = `"once"` (Standard), `{"times": n}` (1–10 000)
+oder `"forever"`.
+
+**Geprüft**: strom-Tests (3 × 1 s ohne einen stillen 10-ms-Puffer,
+endlos mit Fade über die Naht, vorgeladen und wiederholt);
+`scripts/test-show-playback.sh` (ein zweifach gespielter 1-s-Cue endet
+nach dem zweiten Durchgang).

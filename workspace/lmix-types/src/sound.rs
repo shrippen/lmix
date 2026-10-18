@@ -34,6 +34,22 @@ pub const SOUND_FILE_CHANNELS: u8 = 24;
 /// Longest fade, fade in or fade out: 10 min.
 pub const SOUND_FADE_MAX_MS: u32 = 600_000;
 
+/// Most plays of a repeated sound short of `forever`.
+pub const SOUND_TIMES_MAX: u32 = 10_000;
+
+/// How often a sound cue plays (SND.3); the plays follow each other
+/// without a gap. JSON: `"once"`, `{"times": 3}`, `"forever"`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum SoundRepeat {
+    #[default]
+    Once,
+    /// This many plays in all.
+    Times(u32),
+    /// Until the cue is stopped.
+    Forever,
+}
+
 /// One crosspoint: a channel of the file into a channel of a zone (SND.5).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct SoundRoute {
@@ -65,6 +81,12 @@ pub struct SoundCue {
     /// Fade out when it is stopped (a panic uses the panic time).
     #[serde(default)]
     pub fade_out_ms: u32,
+    #[serde(default, skip_serializing_if = "is_once")]
+    pub repeat: SoundRepeat,
+}
+
+fn is_once(repeat: &SoundRepeat) -> bool {
+    *repeat == SoundRepeat::Once
 }
 
 /// What a fade leaves behind (SND.6).
