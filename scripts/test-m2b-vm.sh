@@ -668,6 +668,7 @@ in_library() {
 wait_for "$SETTLE_S" in_library || fail "stinger clip not in strom's library: $(curl -sf "$STINGER_API" | jq -c '.clips')"
 act '{"action":"preview_input","input":"Ball"}' >/dev/null   # program is Orange
 sleep 2
+sting_at=$(date +%s)
 act '{"action":"transition","slot":4}' >/dev/null
 [[ "$(curl -sf "$CORE/state" | jq -r '[.inputs[] | select(.name=="Ball") | .id][0] == .program')" == true ]] \
     || fail "stinger did not take preview to program"
@@ -690,11 +691,17 @@ wait_for "$SETTLE_S" stinger_gone || fail "stinger did not end on the new progra
 # strom ran the take, not lmix-core: its report names the clip.
 took() { curl -sf "$STINGER_API" | jq -e --arg f "$MEDIA/sting.webm" '.last_take.file == $f' >/dev/null; }
 wait_for "$SETTLE_S" took || fail "strom reports no stinger take: $(curl -sf "$STINGER_API" | jq -c '.last_take')"
+# strom's end of the take frees lmix's lock, long before its limit
+# (clip + 6 s): a cut right after goes out.
+cut_ok() { [[ "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$CORE/actions" -H 'content-type: application/json' -d '{"action":"cut"}')" == 200 ]]; }
+wait_for 2 cut_ok || fail "cut refused after strom finished the stinger"
+(($(date +%s) - sting_at < 6)) || fail "cut only accepted $(($(date +%s) - sting_at)) s after the stinger (lock limit, not strom's end)"
+wait_for "$SETTLE_S" overlay_shown || fail "cut after the stinger not on program (orange)"
 act '{"action":"remove_input","input":"Sting"}' >/dev/null
 [[ "$(curl -sf "$CORE/state" | jq -r '.transitions[3].effect')" == cut ]] || fail "stinger button kept a removed clip"
 library_empty() { [[ "$(curl -sf "$STINGER_API" | jq '.clips | length')" == 0 ]]; }
 wait_for "$SETTLE_S" library_empty || fail "removed clip still in strom's stinger library"
-pass "stinger: strom plays the clip with alpha over program, cuts underneath, locked while it plays"
+pass "stinger: strom plays the clip with alpha over program, cuts underneath, locked until strom ends it"
 
 # --- looks (4.6): the CPU mixer has none; the action says so ---
 [[ "$(curl -sf "$CORE/state" | jq '.looks_available')" == false ]] || fail "CPU mixer claims looks"

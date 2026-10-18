@@ -716,7 +716,7 @@ impl Service {
             message: e.to_string(),
         })?;
         let mut sw = self.switcher.lock().await;
-        let commands = sw.replace(show, None);
+        let commands = sw.replace(show, None)?;
         let result = self.execute(&mut sw, &commands).await;
         self.read_new_sources(&mut sw).await;
         self.publish(&sw);
@@ -1262,6 +1262,21 @@ impl Service {
         }
     }
 
+    /// Free switching when the engine reports a stinger's end; forever.
+    /// Until then the switcher refuses takes (strom would too).
+    pub async fn watch_stingers(self: Arc<Self>) {
+        let mut ends = self.engine.stingers();
+        loop {
+            match ends.recv().await {
+                Ok(end) => tracing::debug!(?end, "stinger ended"),
+                // Missed ones ended a stinger too.
+                Err(broadcast::error::RecvError::Lagged(_)) => {}
+                Err(broadcast::error::RecvError::Closed) => return,
+            }
+            self.switcher.lock().await.stinger_finished();
+        }
+    }
+
     /// What the engine reports about its machine and flows.
     pub fn engine_health(&self) -> crate::engine::meters::EngineHealth {
         self.engine.health()
@@ -1634,7 +1649,7 @@ impl Service {
                     format: format.unwrap_or_default(),
                     ..Show::default()
                 };
-                sw.replace(show, None)
+                sw.replace(show, None)?
             }
             Action::OpenShow { path } => open(&mut sw, path).await?,
             Action::ImportPackage { .. } => {
@@ -1642,7 +1657,7 @@ impl Service {
                 if let Some(settings) = settings {
                     sw.merge_target_settings(settings)?;
                 }
-                sw.replace(show, Some(file.display().to_string()))
+                sw.replace(show, Some(file.display().to_string()))?
             }
             Action::ImportDatasets { template, .. } => {
                 let table = imported.take().unwrap_or_default();
@@ -1853,9 +1868,13 @@ impl Service {
     /// the rest still run; the first error is returned.
     async fn execute(&self, sw: &mut Switcher, commands: &[Command]) -> Result<(), ActionError> {
         if !self.engine_ready.load(Ordering::SeqCst) {
-            // Outputs keep what was asked, so restore starts them.
+            // Outputs keep what was asked, so restore starts them. No
+            // stinger runs, so none will end.
             for command in commands {
                 mark_output(sw, command, &Ok(()));
+                if matches!(command, Command::Stinger { .. }) {
+                    sw.stinger_finished();
+                }
             }
             return Ok(());
         }
@@ -1902,6 +1921,10 @@ impl Service {
             let Err(e) = outcome else {
                 continue;
             };
+            // The engine cut instead (or could not); no end will come.
+            if matches!(command, Command::Stinger { .. }) {
+                sw.stinger_finished();
+            }
             tracing::warn!(?command, error = %e, "engine command failed");
             first_error.get_or_insert(ActionError::Engine {
                 message: e.to_string(),
@@ -2091,7 +2114,7 @@ async fn open(sw: &mut Switcher, path: String) -> Result<Vec<Command>, ActionErr
         .map_err(|e| ActionError::ShowFile {
             message: e.to_string(),
         })?;
-    let commands = sw.replace(loaded.show, Some(path));
+    let commands = sw.replace(loaded.show, Some(path))?;
     sw.set_older_format(loaded.older);
     Ok(commands)
 }
@@ -2708,6 +2731,95 @@ mod tests {
 
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         assert!(overlay());
+    }
+
+    /// Red on program, Bars in preview, button 1 a stinger with the clip
+    /// "Sting".
+    async fn stinger_service(engine: Arc<NullEngine>) -> Arc<Service> {
+        use lmix_types::{action::StingerSpec, Effect, InputRef, TransitionSlot};
+        let service = Service::new(4, engine, None);
+        service.handle(bars()).await.unwrap();
+        let sting = SourceSpec::File {
+            path: "sting.webm".into(),
+        };
+        let red = SourceSpec::Color {
+            color: "#ff0000".into(),
+        };
+        for (name, source) in [("Sting", sting), ("Red", red)] {
+            service
+                .handle(Action::AddInput {
+                    source,
+                    name: Some(name.into()),
+                })
+                .await
+                .unwrap();
+        }
+        service
+            .handle(Action::CutDirect {
+                input: InputRef::Text("Red".into()),
+            })
+            .await
+            .unwrap();
+        service
+            .handle(Action::PreviewInput {
+                input: InputRef::Text("Bars".into()),
+            })
+            .await
+            .unwrap();
+        service
+            .handle(Action::SetTransition {
+                slot: TransitionSlot(1),
+                effect: Effect::Stinger,
+                duration_ms: 1000,
+                stinger: Some(StingerSpec {
+                    input: InputRef::Text("Sting".into()),
+                    cut_ms: 400,
+                }),
+            })
+            .await
+            .unwrap();
+        service
+    }
+
+    /// Cut until it is accepted, at most `within`.
+    async fn cut_within(service: &Arc<Service>, within: std::time::Duration) -> bool {
+        let until = Instant::now() + within;
+        while Instant::now() < until {
+            if service.handle(Action::Cut).await.is_ok() {
+                return true;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+        }
+        false
+    }
+
+    #[tokio::test]
+    async fn a_stinger_holds_switching_until_the_engine_ends_it() {
+        use crate::engine::meters::StingerEnd;
+        use lmix_types::TransitionSlot;
+        let engine = Arc::new(NullEngine::stinging());
+        let service = stinger_service(engine.clone()).await;
+        tokio::spawn(service.clone().watch_stingers());
+        let sting = Action::Transition {
+            slot: TransitionSlot(1),
+        };
+
+        service.handle(sting.clone()).await.unwrap();
+        let wait = std::time::Duration::from_millis(1200);
+        assert!(
+            !cut_within(&service, wait).await,
+            "past the clip, still held"
+        );
+
+        engine.end_stinger(StingerEnd::Completed);
+        let soon = std::time::Duration::from_millis(500);
+        assert!(cut_within(&service, soon).await, "free at the end");
+
+        // A stinger the engine could not play ends at once (it cut).
+        engine.refuse(true);
+        assert!(service.handle(sting).await.is_err());
+        engine.refuse(false);
+        assert!(service.handle(Action::Cut).await.is_ok());
     }
 
     #[tokio::test(start_paused = true)]

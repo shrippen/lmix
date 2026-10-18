@@ -81,10 +81,11 @@ pub const STINGER_PLAYER: &str = "stinger";
 /// Delay from a stinger take to the clip's first frame on air (ms); the
 /// switcher times the cut from the take with it. strom's default.
 pub const STINGER_PREROLL_MS: u32 = 80;
-/// How long strom usually holds the mixer after a stinger's clip has
-/// ended (ms): two frames, then it parks the clip again. The switcher's
-/// lock covers it; the engine waits out the rest (`stinger_idle`).
-pub const STINGER_FINISH_MS: u32 = 300;
+/// How long strom may hold the mixer after a stinger's clip at most (ms):
+/// it gives up on a stalled mixer 1 s + 5 s after the clip. The
+/// switcher's lock waits for strom's end of the take, at most this long
+/// after the clip, so a lost event does not lock it for good.
+pub const STINGER_FINISH_LIMIT_MS: u32 = 6000;
 /// Thumbnail tap on the program output: GUI monitor and picture checks.
 pub const PGM_TAP: &str = "tap_pgm";
 /// Program picture and sound for the output flows (`inter`).

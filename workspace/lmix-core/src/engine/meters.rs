@@ -3,7 +3,8 @@
 //! strom posts a `MeterData` event about ten times a second per audio
 //! mixer channel (`mix:meter:<channel>`, before fader and mute) and for the
 //! main mix (`mix:meter:main`, after them) on its WebSocket. Pipeline errors,
-//! QoS reports and system statistics come the same way.
+//! QoS reports, system statistics and the end of stinger takes come the
+//! same way.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -116,8 +117,83 @@ pub enum FlowFailure {
     Stopped,
 }
 
+/// How a stinger take on lmix's mixer ended (strom's `StingerCompleted`,
+/// `StingerFailed`). Until then strom holds the mixer and refuses takes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StingerEnd {
+    Completed,
+    Failed,
+}
+
+/// Stinger ends of one mixer block, for the take lmix started last.
+pub struct Stingers {
+    /// The vision mixer block in the mixer flow.
+    block: &'static str,
+    /// strom's id of the take lmix started last; `None` while a take is
+    /// being started or none ran.
+    take: Mutex<Option<u64>>,
+    ends: broadcast::Sender<StingerEnd>,
+}
+
+/// Stinger ends a slow reader may fall behind by.
+const STINGER_BUFFER: usize = 16;
+
+impl Stingers {
+    pub fn new(block: &'static str) -> Self {
+        Self {
+            block,
+            take: Mutex::new(None),
+            ends: broadcast::channel(STINGER_BUFFER).0,
+        }
+    }
+
+    /// A take is about to start: an older one's end no longer counts.
+    pub fn starting(&self) {
+        *self.take.lock().expect("stinger take lock") = None;
+    }
+
+    /// strom started take `id`; its `StingerCompleted` ends it.
+    pub fn started(&self, id: u64) {
+        *self.take.lock().expect("stinger take lock") = Some(id);
+    }
+
+    pub fn subscribe(&self) -> broadcast::Receiver<StingerEnd> {
+        self.ends.subscribe()
+    }
+
+    /// The end `event` reports for lmix's take on `mixer`, if any. A
+    /// completed take must be lmix's last one (not an older take or one
+    /// started from strom's own panel); a failed one is always the take
+    /// being started, as strom reports it before answering the request.
+    fn end_of(&self, event: &StromEvent, mixer: FlowId) -> Option<StingerEnd> {
+        match event {
+            StromEvent::StingerCompleted {
+                flow_id,
+                block_id,
+                report,
+            } if *flow_id == mixer && block_id == self.block => {
+                let mut take = self.take.lock().expect("stinger take lock");
+                take.take_if(|id| *id == report.take_id)
+                    .map(|_| StingerEnd::Completed)
+            }
+            StromEvent::StingerFailed {
+                flow_id, block_id, ..
+            } if *flow_id == mixer && block_id == self.block => Some(StingerEnd::Failed),
+            _ => None,
+        }
+    }
+
+    fn pass_on(&self, event: &StromEvent, mixer: FlowId) {
+        if let Some(end) = self.end_of(event, mixer) {
+            // Nobody listening is fine.
+            let _ = self.ends.send(end);
+        }
+    }
+}
+
 /// Read strom's event stream forever: keep `levels` current and pass on
-/// pipeline errors.
+/// pipeline errors and stinger ends.
+#[allow(clippy::too_many_arguments)]
 pub async fn follow(
     ws_url: String,
     mixer: FlowId,
@@ -126,6 +202,7 @@ pub async fn follow(
     errors: broadcast::Sender<FlowError>,
     health: Arc<Mutex<EngineHealth>>,
     players: broadcast::Sender<crate::clips::PlayerProgress>,
+    stingers: Arc<Stingers>,
 ) {
     // Last state each player reported, added to its position reports.
     let mut player_states = HashMap::new();
@@ -135,7 +212,11 @@ pub async fn follow(
                 let Message::Text(text) = message else {
                     continue;
                 };
-                match serde_json::from_str(&text) {
+                let event: Result<StromEvent, _> = serde_json::from_str(&text);
+                if let Ok(event) = &event {
+                    stingers.pass_on(event, mixer);
+                }
+                match event {
                     Ok(StromEvent::MeterData {
                         flow_id,
                         element_id,
@@ -264,6 +345,76 @@ mod tests {
         assert_eq!(parse_meter("mix:meter:aux0", "mix"), None);
         assert_eq!(parse_meter("mix:meter:0", "mix"), None);
         assert_eq!(parse_meter("other:meter:1", "mix"), None);
+    }
+
+    /// strom's events as they come over the WebSocket.
+    fn completed(flow: FlowId, block: &str, take_id: u64) -> StromEvent {
+        let report = strom_types::stinger::StingerTakeReport {
+            take_id,
+            index: 0,
+            file: "/sting.webm".into(),
+            variant: strom_types::stinger::StingerVariant::Classic,
+            downgraded_from: None,
+            from_input: 0,
+            to_input: 1,
+            take_to_air_ms: 80.0,
+            cue_ms: None,
+            duration_ms: 1500,
+            cut_point_ms: Some(400),
+            frames_expected: 45,
+            frames_arrived: 45,
+            frames_late: 0,
+            worst_margin_ms: Some(20.0),
+            warning: None,
+        };
+        let event = StromEvent::StingerCompleted {
+            flow_id: flow,
+            block_id: block.into(),
+            report,
+        };
+        let wire = serde_json::to_string(&event).unwrap();
+        serde_json::from_str(&wire).unwrap()
+    }
+
+    #[test]
+    fn a_stinger_ends_with_lmixs_take() {
+        let mixer = FlowId::new_v4();
+        let stingers = Stingers::new("vm");
+        stingers.started(7);
+
+        let other_flow = completed(FlowId::new_v4(), "vm", 7);
+        let other_block = completed(mixer, "vm2", 7);
+        let older_take = completed(mixer, "vm", 6);
+        assert_eq!(stingers.end_of(&other_flow, mixer), None);
+        assert_eq!(stingers.end_of(&other_block, mixer), None);
+        assert_eq!(stingers.end_of(&older_take, mixer), None);
+
+        let ours = completed(mixer, "vm", 7);
+        assert_eq!(stingers.end_of(&ours, mixer), Some(StingerEnd::Completed));
+        assert_eq!(stingers.end_of(&ours, mixer), None, "it ends once");
+
+        // A new take forgets the old one before strom answers.
+        stingers.started(8);
+        stingers.starting();
+        assert_eq!(stingers.end_of(&completed(mixer, "vm", 8), mixer), None);
+    }
+
+    #[test]
+    fn a_failed_stinger_ends_it() {
+        let mixer = FlowId::new_v4();
+        let stingers = Stingers::new("vm");
+        let wire = serde_json::json!({
+            "type": "StingerFailed",
+            "data": {
+                "flow_id": mixer, "block_id": "vm", "take_id": 3,
+                "reason": "clip 0 could not play, cut instead",
+                "program_changed": true
+            }
+        });
+
+        let event: StromEvent = serde_json::from_value(wire).unwrap();
+
+        assert_eq!(stingers.end_of(&event, mixer), Some(StingerEnd::Failed));
     }
 
     #[test]
