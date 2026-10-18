@@ -35,6 +35,7 @@ mod package;
 mod patch;
 mod playback;
 mod ptz;
+mod realtime;
 mod recent;
 mod script;
 mod service;
@@ -326,7 +327,7 @@ async fn main() -> anyhow::Result<()> {
     tokio::spawn(service.clone().watch_playback());
     tokio::spawn(service.clone().watch_media());
     tokio::spawn(service.clone().watch_titles());
-    tokio::spawn(service.clone().watch_cues());
+    spawn_cue_timer(service.clone());
     tokio::spawn(service.clone().watch_feeds(args.cue_events_hz));
     if !args.midi.is_empty() {
         tokio::spawn(midi::serve(args.midi.clone(), service.clone()));
@@ -484,4 +485,52 @@ fn pages_url(listen: SocketAddr) -> String {
         ip => ip,
     };
     format!("http://{}", SocketAddr::new(ip, listen.port()))
+}
+
+/// The cue timer on its own thread and runtime with real-time priority
+/// (RUN.8): on a busy machine, the shared runtime's workers wait for a
+/// free core, and with them every wait and follow. The cues' actions run
+/// there too, in order with their steps (a panic never overtakes them).
+fn spawn_cue_timer(service: std::sync::Arc<service::Service>) {
+    let (tid_tx, tid_rx) = std::sync::mpsc::channel();
+    std::thread::Builder::new()
+        .name("lmix-cues".into())
+        .spawn(move || {
+            /// Says so when the timer stops, a panic included.
+            struct Ended;
+            impl Drop for Ended {
+                fn drop(&mut self) {
+                    realtime::ended();
+                    tracing::error!("cue timer stopped: waits and follows no longer run");
+                }
+            }
+            let _ended = Ended;
+            let _ = tid_tx.send(realtime::thread_id());
+            tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("cue timer runtime builds")
+                .block_on(service.watch_cues());
+        })
+        .expect("cue timer thread starts");
+    // Asked from the side: a hung system bus must not hold up the timer.
+    std::thread::spawn(move || {
+        let Ok(tid) = tid_rx.recv() else { return };
+        match realtime::make_realtime(tid) {
+            Ok(how) => tracing::info!(how, "cue timer runs with real-time priority"),
+            Err(why) => {
+                tracing::warn!(
+                    %why,
+                    "cue timer without real-time priority: steps may be late on a busy machine (RUN.8)"
+                );
+                return;
+            }
+        }
+        while !realtime::demoted() {
+            std::thread::sleep(std::time::Duration::from_secs(1));
+        }
+        tracing::warn!(
+            "cue timer gave up real-time priority for the rest of the run: a cue step computed past RLIMIT_RTTIME's soft limit without a pause (RUN.8)"
+        );
+    });
 }
