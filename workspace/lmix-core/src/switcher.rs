@@ -100,9 +100,11 @@ pub enum Command {
     PageScript { slot: usize, script: String },
     /// Freeze the page of `slot`, or let it run.
     PageRunning { slot: usize, running: PageRunning },
-    /// Stinger clip of `slot` on the stinger layer from its start; off:
-    /// layer away and the clip paused.
-    Stinger { slot: usize, on: bool },
+    /// Stinger from program to `to` with library clip `file`: the engine
+    /// plays it and switches program at its cut point, frame-accurate.
+    Stinger { to: usize, file: String },
+    /// The engine's stinger clips: these and no others.
+    StingerLibrary { clips: Vec<LibraryClip> },
     /// Hold the commands after it back by `ms`; the service runs them
     /// later, without blocking other actions.
     Wait { ms: u32 },
@@ -228,6 +230,15 @@ pub struct EngineBox {
     pub slot: usize,
     pub border_px: u8,
     pub crop: BoxCrop,
+}
+
+/// A clip of the engine's stinger library: the file of a stinger button's
+/// clip input and its cut point. One per file: strom keeps the settings
+/// of a clip by its file.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LibraryClip {
+    pub file: String,
+    pub cut_ms: u32,
 }
 
 /// What stands in preview or program: an input's slot or a layout's
@@ -474,6 +485,9 @@ const REMOVED_KEPT: usize = 10;
 /// Anti-click fade for audio changes outside a transition.
 pub const AUDIO_RAMP_MS: u32 = 20;
 
+/// strom's stinger takes one input to another, never a layout.
+const STINGER_NO_LAYOUTS: &str = "only between inputs, not with layouts";
+
 /// What one audio channel is set to.
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct Mix {
@@ -498,6 +512,8 @@ pub struct Switcher {
     t_bar: f32,
     /// When a running stinger ends; switching waits for it.
     stinger_until: Option<Instant>,
+    /// Stinger library the engine has; `None` sends it again.
+    stinger_sent: Option<Vec<LibraryClip>>,
     /// The engine can apply looks (GL mixer).
     looks_available: bool,
     /// Locked against closing, loading and stopping (AUT.11).
@@ -574,6 +590,7 @@ impl Switcher {
             fade_to_black: false,
             t_bar: 0.0,
             stinger_until: None,
+            stinger_sent: Some(Vec::new()),
             looks_available: false,
             locked: false,
             removed: Vec::new(),
@@ -925,19 +942,17 @@ impl Switcher {
         let airing = self.airing();
         let mut commands = self.apply_action(action)?;
         commands.extend(self.playback_commands());
+        commands.extend(self.stinger_commands());
         let audio = self.audio_commands(ramp_ms);
         let (on, off) = self.auto_play_commands(&airing);
-        // A stinger switches sound and players at its cut, not once the
-        // clip ends.
+        // A stinger switches sound and players at its cut: after its wait.
         let cut = commands
             .iter()
             .position(|c| matches!(c, Command::Wait { .. }));
-        match commands
-            .iter()
-            .rposition(|c| matches!(c, Command::Wait { .. }))
-        {
-            Some(at) => {
-                commands.splice(at..at, audio.into_iter().chain(off));
+        match cut {
+            Some(_) => {
+                commands.extend(audio);
+                commands.extend(off);
             }
             None => {
                 commands.extend(audio);
@@ -1692,6 +1707,8 @@ impl Switcher {
         }));
         commands.extend(self.overlay_commands());
         commands.extend(self.stinger_pause_commands());
+        self.stinger_sent = None;
+        commands.extend(self.stinger_commands());
         commands.extend(self.look_commands());
         for input in self.show.inputs.iter().filter(|i| i.source.has_audio()) {
             commands.push(Command::SetStrip {
@@ -2390,29 +2407,44 @@ impl Switcher {
             reason: reason.into(),
         };
         let stinger = button.stinger.ok_or_else(|| bad("no clip set"))?;
-        let clip = self
-            .slot_of(Some(stinger.input))
+        let (clip, file) = self
+            .stinger_clip(stinger.input)
             .ok_or_else(|| bad("its clip input is gone"))?;
+        // strom's stinger takes one input to another (DECISIONS 18.10., STG).
+        let layout = |id| matches!(self.bus_of(id), Some(Bus::Layout(_)));
+        if layout(self.show.program) || layout(self.show.preview) {
+            return Err(bad(STINGER_NO_LAYOUTS));
+        }
+        let Some(Bus::Slot(to)) = self.bus_of(self.show.preview) else {
+            return Err(ActionError::NoPreview);
+        };
 
-        // Clip on, cut underneath at the cut point, clip off at the end.
-        let cut = self.take(Effect::Cut, 0)?;
-        let mut commands = vec![
-            Command::Stinger {
-                slot: clip,
-                on: true,
+        // The engine plays the clip and switches program at its cut point;
+        // overlays, sound and players follow then. A take starts the clip
+        // after the engine's preroll.
+        //   [Program to, Preview old] → [Stinger to, Preview old, Wait cut, …]
+        let mut commands = self.take(Effect::Cut, 0)?;
+        let swap = commands
+            .iter()
+            .take_while(|c| matches!(c, Command::Program { .. } | Command::Preview { .. }))
+            .count();
+        commands[0] = Command::Stinger { to, file };
+        let preroll_ms = crate::engine::flows::STINGER_PREROLL_MS;
+        commands.insert(
+            swap,
+            Command::Wait {
+                ms: stinger.cut_ms + preroll_ms,
             },
-            Command::Wait { ms: stinger.cut_ms },
-        ];
-        commands.extend(cut);
-        commands.push(Command::Wait {
-            ms: button.duration_ms.saturating_sub(stinger.cut_ms),
-        });
-        commands.push(Command::Stinger {
-            slot: clip,
-            on: false,
-        });
+        );
+        // The whole clip plays; its length when the player reported it.
+        let length_ms = self
+            .clip_ms
+            .get(&clip)
+            .copied()
+            .filter(|ms| *ms > 0)
+            .unwrap_or(u64::from(button.duration_ms));
         self.stinger_until =
-            Some(Instant::now() + Duration::from_millis(u64::from(button.duration_ms)));
+            Some(Instant::now() + Duration::from_millis(length_ms + u64::from(preroll_ms)));
         Ok(commands)
     }
 
@@ -3530,6 +3562,7 @@ impl Switcher {
         let stinger = match (effect, stinger) {
             (Effect::Stinger, Some(spec)) => {
                 let (stinger, clip) = self.stinger_of(&spec, duration_ms)?;
+                self.check_cut_point(slot, stinger)?;
                 // Paused until the button is pressed; it would loop unseen.
                 commands.push(Command::Transport {
                     slot: clip,
@@ -3575,6 +3608,67 @@ impl Switcher {
             cut_ms: spec.cut_ms,
         };
         Ok((stinger, entry.slot))
+    }
+
+    /// strom keeps one cut point per clip file: another button with the
+    /// same clip must not ask for another one.
+    fn check_cut_point(&self, slot: TransitionSlot, stinger: Stinger) -> Result<(), ActionError> {
+        let file = self.stinger_clip(stinger.input).map(|(_, f)| f);
+        let other = self.show.transitions.iter().find(|t| {
+            t.slot != slot
+                && t.stinger.is_some_and(|s| {
+                    s.cut_ms != stinger.cut_ms && self.stinger_clip(s.input).map(|(_, f)| f) == file
+                })
+        });
+        match other {
+            Some(t) => Err(ActionError::BadStinger {
+                reason: format!(
+                    "button {} plays this clip with another cut point; a clip has one",
+                    t.slot.0
+                ),
+            }),
+            None => Ok(()),
+        }
+    }
+
+    /// Slot and file of a stinger's clip input; a playlist plays its
+    /// first item.
+    fn stinger_clip(&self, input: InputId) -> Option<(usize, String)> {
+        let entry = self.show.inputs.iter().find(|i| i.id == input)?;
+        let file = crate::engine::flows::player_items(&entry.source)?
+            .into_iter()
+            .next()?;
+        Some((entry.slot, file))
+    }
+
+    /// The stinger buttons' clips, once per file (the first button's cut
+    /// point), in button order.
+    fn stinger_library(&self) -> Vec<LibraryClip> {
+        let mut clips: Vec<LibraryClip> = Vec::new();
+        for stinger in self.show.transitions.iter().filter_map(|t| t.stinger) {
+            let Some((_, file)) = self.stinger_clip(stinger.input) else {
+                continue;
+            };
+            if clips.iter().any(|c| c.file == file) {
+                continue;
+            }
+            clips.push(LibraryClip {
+                file,
+                cut_ms: stinger.cut_ms,
+            });
+        }
+        clips
+    }
+
+    /// The stinger library for the engine, when it changed since it last
+    /// got it (a button, its clip input or that input's source).
+    fn stinger_commands(&mut self) -> Vec<Command> {
+        let clips = self.stinger_library();
+        if self.stinger_sent.as_ref() == Some(&clips) {
+            return Vec::new();
+        }
+        self.stinger_sent = Some(clips.clone());
+        vec![Command::StingerLibrary { clips }]
     }
 
     /// Clips of stinger buttons, paused (start-up, restore).
@@ -5713,19 +5807,13 @@ mod tests {
         assert_eq!(
             cmds[..4],
             [
-                Command::Stinger { slot: 2, on: true },
-                Command::Wait { ms: 400 },
+                sting(1),
+                Command::Preview { slot: 0 },
+                Command::Wait { ms: 400 + PREROLL },
                 transport(1, Transport::Play),
-                Command::Program {
-                    slot: Some(1),
-                    effect: Effect::Cut,
-                    duration_ms: 0
-                },
             ]
         );
-        let end = cmds.len() - 2;
-        assert_eq!(cmds[end - 1], transport(0, Transport::Pause));
-        assert_eq!(cmds[end], Command::Wait { ms: 600 });
+        assert_eq!(cmds.last(), Some(&transport(0, Transport::Pause)));
     }
 
     #[test]
@@ -6419,6 +6507,28 @@ mod tests {
         assert_eq!(sw.state().outputs[0].aux, Some(1));
     }
 
+    const PREROLL: u32 = crate::engine::flows::STINGER_PREROLL_MS;
+
+    /// The stinger of `with_stinger` to slot `to`.
+    fn sting(to: usize) -> Command {
+        Command::Stinger {
+            to,
+            file: "sting.webm".into(),
+        }
+    }
+
+    fn library(clips: &[(&str, u32)]) -> Command {
+        Command::StingerLibrary {
+            clips: clips
+                .iter()
+                .map(|(file, cut_ms)| LibraryClip {
+                    file: (*file).into(),
+                    cut_ms: *cut_ms,
+                })
+                .collect(),
+        }
+    }
+
     /// A and B, B in preview, A on program, and the clip "Sting" (slot 2)
     /// on button 2: 1000 ms, cut at 400 ms.
     fn with_stinger() -> Switcher {
@@ -6446,17 +6556,20 @@ mod tests {
             .unwrap();
         assert_eq!(
             cmds,
-            [Command::Transport {
-                slot: 2,
-                transport: Transport::Pause
-            }],
-            "the clip waits paused"
+            [
+                Command::Transport {
+                    slot: 2,
+                    transport: Transport::Pause
+                },
+                library(&[("sting.webm", 400)]),
+            ],
+            "the clip waits paused, and goes to the engine's library"
         );
         sw
     }
 
     #[test]
-    fn a_stinger_cuts_underneath_at_its_cut_point() {
+    fn a_stinger_takes_preview_through_the_engine() {
         let mut sw = with_stinger();
 
         let cmds = sw
@@ -6465,28 +6578,114 @@ mod tests {
             })
             .unwrap();
 
+        // The engine switches program at the cut; the switcher only waits
+        // for it with what follows the picture.
         assert_eq!(
-            cmds[..4],
+            cmds[..3],
             [
-                Command::Stinger { slot: 2, on: true },
-                Command::Wait { ms: 400 },
-                Command::Program {
-                    slot: Some(1),
-                    effect: Effect::Cut,
-                    duration_ms: 0
-                },
+                sting(1),
                 Command::Preview { slot: 0 },
+                Command::Wait { ms: 400 + PREROLL },
             ]
         );
-        assert_eq!(
-            cmds[cmds.len() - 2..],
-            [
-                Command::Wait { ms: 600 },
-                Command::Stinger { slot: 2, on: false }
-            ]
-        );
+        assert!(!cmds.iter().any(|c| matches!(c, Command::Program { .. })));
         assert_eq!(sw.state().program, Some(sw.state().inputs[1].id));
+        assert_eq!(sw.state().preview, Some(sw.state().inputs[0].id));
         assert_eq!(sw.apply(Action::Cut), Err(ActionError::StingerPlaying));
+    }
+
+    #[test]
+    fn a_stinger_locks_switching_for_the_clip_length() {
+        let sting = Action::Transition {
+            slot: TransitionSlot(2),
+        };
+        let locked = |sw: &Switcher| sw.stinger_until.unwrap() - Instant::now();
+        let preroll = Duration::from_millis(u64::from(PREROLL));
+
+        // Without a reported length, the button's.
+        let mut sw = with_stinger();
+        sw.apply(sting.clone()).unwrap();
+        assert!(locked(&sw) <= Duration::from_millis(1000) + preroll);
+
+        let mut sw = with_stinger();
+        sw.set_clip_length(2, 2500);
+        sw.apply(sting).unwrap();
+        assert!(locked(&sw) > Duration::from_millis(2400) + preroll);
+    }
+
+    #[test]
+    fn a_stinger_refuses_layouts() {
+        let mut sw = with_stinger();
+        sw.apply(Action::AddLayout {
+            name: Some("Two".into()),
+            background: Some(named("A")),
+            boxes: Vec::new(),
+        })
+        .unwrap();
+        sw.apply(Action::PreviewLayout {
+            layout: named("Two"),
+        })
+        .unwrap();
+        let refused = Err(ActionError::BadStinger {
+            reason: STINGER_NO_LAYOUTS.into(),
+        });
+        let sting = Action::Transition {
+            slot: TransitionSlot(2),
+        };
+
+        assert_eq!(sw.apply(sting.clone()), refused, "layout in preview");
+        sw.apply(Action::Cut).unwrap();
+        sw.apply(Action::PreviewInput { input: named("B") })
+            .unwrap();
+        assert_eq!(sw.apply(sting), refused, "layout on program");
+        assert_eq!(sw.stinger_until, None, "nothing plays");
+    }
+
+    #[test]
+    fn the_stinger_library_has_each_clip_once() {
+        let mut sw = with_stinger();
+        let set = |slot, input: &str, cut_ms| Action::SetTransition {
+            slot: TransitionSlot(slot),
+            effect: Effect::Stinger,
+            duration_ms: 1000,
+            stinger: Some(StingerSpec {
+                input: named(input),
+                cut_ms,
+            }),
+        };
+        sw.apply(Action::AddInput {
+            source: SourceSpec::Playlist {
+                paths: vec!["wipe.mov".into(), "other.mov".into()],
+            },
+            name: Some("Wipe".into()),
+        })
+        .unwrap();
+
+        // A playlist plays its first item; a second button on the same
+        // clip with the same cut point adds nothing.
+        let cmds = sw.apply(set(3, "Wipe", 300)).unwrap();
+        assert!(cmds.contains(&library(&[("sting.webm", 400), ("wipe.mov", 300)])));
+        let cmds = sw.apply(set(1, "Sting", 400)).unwrap();
+        assert!(!cmds
+            .iter()
+            .any(|c| matches!(c, Command::StingerLibrary { .. })));
+
+        // strom keeps one cut point per clip.
+        assert!(matches!(
+            sw.apply(set(4, "Sting", 500)),
+            Err(ActionError::BadStinger { .. })
+        ));
+
+        // A new source is a new clip.
+        let cmds = sw
+            .apply(Action::ReplaceSource {
+                input: named("Wipe"),
+                source: SourceSpec::File {
+                    path: "push.mov".into(),
+                },
+            })
+            .unwrap();
+        assert!(cmds.contains(&library(&[("sting.webm", 400), ("push.mov", 300)])));
     }
 
     #[test]
@@ -6523,17 +6722,21 @@ mod tests {
     fn stinger_clips_wait_paused_and_leave_with_their_input() {
         let mut sw = with_stinger();
 
-        assert!(sw.restore_commands().contains(&Command::Transport {
+        let restored = sw.restore_commands();
+        assert!(restored.contains(&Command::Transport {
             slot: 2,
             transport: Transport::Pause
         }));
+        assert!(restored.contains(&library(&[("sting.webm", 400)])));
 
-        sw.apply(Action::RemoveInput {
-            input: named("Sting"),
-        })
-        .unwrap();
+        let cmds = sw
+            .apply(Action::RemoveInput {
+                input: named("Sting"),
+            })
+            .unwrap();
         let button = sw.state().transitions[1];
         assert_eq!((button.effect, button.stinger), (Effect::Cut, None));
+        assert!(cmds.contains(&library(&[])));
     }
 
     #[test]

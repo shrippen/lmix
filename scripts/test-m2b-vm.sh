@@ -652,12 +652,20 @@ act '{"action":"t_bar","position":1}' >/dev/null
 wait_for "$SETTLE_S" overlay_shown || fail "program not orange after the T-bar take"
 pass "T-bar: preview mixed in by half, sound follows, taken at the end"
 
-# --- stinger (4.2): a clip with alpha over program, cut underneath ---
+# --- stinger (4.2, STG): strom plays a clip with alpha over program and
+# cuts underneath at its cut point ---
 # Blue square in the middle, the rest transparent; 2 s.
 ffmpeg -loglevel error -y -f lavfi -i "color=c=black@0.0:s=1280x720:r=30:d=2,format=yuva420p[bg];color=c=blue:s=400x400:r=30:d=2,format=yuva420p[box];[bg][box]overlay=440:160:format=yuv420" \
     -c:v libvpx-vp9 -pix_fmt yuva420p -auto-alt-ref 0 "$MEDIA/sting.webm"
 act "{\"action\":\"add_input\",\"source\":{\"kind\":\"file\",\"path\":\"$MEDIA/sting.webm\"},\"name\":\"Sting\"}" >/dev/null
 act '{"action":"set_transition","slot":4,"effect":"stinger","duration_ms":3000,"stinger":{"input":"Sting","cut_ms":1500}}' >/dev/null
+# The button's clip is in strom's stinger library, with its cut point.
+STINGER_API="$STROM/api/flows/$MIXER_ID/blocks/vm/stinger"
+in_library() {
+    curl -sf "$STINGER_API" | jq -e --arg f "$MEDIA/sting.webm" \
+        '[.clips[] | select(.file == $f and .settings.cut_point_ms == 1500)] | length == 1' >/dev/null
+}
+wait_for "$SETTLE_S" in_library || fail "stinger clip not in strom's library: $(curl -sf "$STINGER_API" | jq -c '.clips')"
 act '{"action":"preview_input","input":"Ball"}' >/dev/null   # program is Orange
 sleep 2
 act '{"action":"transition","slot":4}' >/dev/null
@@ -679,9 +687,14 @@ stinger_gone() {
     ((b < 120)) && [[ $(rgb "$WORK/sting.jpg" r) -lt 60 ]]
 }
 wait_for "$SETTLE_S" stinger_gone || fail "stinger did not end on the new program"
+# strom ran the take, not lmix-core: its report names the clip.
+took() { curl -sf "$STINGER_API" | jq -e --arg f "$MEDIA/sting.webm" '.last_take.file == $f' >/dev/null; }
+wait_for "$SETTLE_S" took || fail "strom reports no stinger take: $(curl -sf "$STINGER_API" | jq -c '.last_take')"
 act '{"action":"remove_input","input":"Sting"}' >/dev/null
 [[ "$(curl -sf "$CORE/state" | jq -r '.transitions[3].effect')" == cut ]] || fail "stinger button kept a removed clip"
-pass "stinger: clip with alpha over program, cut underneath, locked while it plays"
+library_empty() { [[ "$(curl -sf "$STINGER_API" | jq '.clips | length')" == 0 ]]; }
+wait_for "$SETTLE_S" library_empty || fail "removed clip still in strom's stinger library"
+pass "stinger: strom plays the clip with alpha over program, cuts underneath, locked while it plays"
 
 # --- looks (4.6): the CPU mixer has none; the action says so ---
 [[ "$(curl -sf "$CORE/state" | jq '.looks_available')" == false ]] || fail "CPU mixer claims looks"

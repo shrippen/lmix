@@ -81,9 +81,10 @@ impl OverlayChannel {
     }
 }
 
-/// A stinger: a clip (with alpha) played over program; at `cut_ms` into
-/// it program cuts to preview underneath. It plays for the button's
-/// `duration_ms`.
+/// A stinger: a clip (with alpha) the engine plays to its end over
+/// program; at `cut_ms` into it program cuts to preview underneath. The
+/// button's `duration_ms` holds switching while the clip's length is not
+/// known.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct Stinger {
     pub input: InputId,
