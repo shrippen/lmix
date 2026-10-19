@@ -10,6 +10,8 @@
 //!   show:stage_out_1 ─► fakesink                     (the stage shows nowhere here)
 //! ```
 
+use std::collections::HashMap;
+
 use strom_types::block::{BlockInstance, Position};
 use strom_types::element::{Element, Link};
 use strom_types::{Flow, FlowId, PropertyValue};
@@ -29,8 +31,12 @@ pub fn playback_flow_id() -> FlowId {
     Uuid::new_v5(&super::flows::FLOW_NAMESPACE, b"show-playback")
 }
 
+/// Speaker positions of each output device's channels, in the device's
+/// order, by device name (PipeWire's `node.name`, what `pulsesink` takes).
+pub type DeviceChannels = HashMap<String, Vec<String>>;
+
 /// The flow for `playback`; `None` without zones and stages.
-pub fn playback_flow(playback: &Playback) -> Option<Flow> {
+pub fn playback_flow(playback: &Playback, devices: &DeviceChannels) -> Option<Flow> {
     if playback.zones.is_empty() && playback.stages.is_empty() {
         return None;
     }
@@ -84,7 +90,7 @@ pub fn playback_flow(playback: &Playback) -> Option<Flow> {
                 flow.links.push(link(out, sink));
             }
             [only] => {
-                let first = add_output(&mut flow, i, 0, zone.channels, only);
+                let first = add_output(&mut flow, i, 0, zone.channels, only, devices);
                 flow.links.push(link(out, first));
             }
             outputs => {
@@ -96,7 +102,7 @@ pub fn playback_flow(playback: &Playback) -> Option<Flow> {
                     flow.elements.push(element(&queue, "queue", vec![]));
                     flow.links
                         .push(link(format!("{tee}:src_%u"), queue.clone()));
-                    let first = add_output(&mut flow, i, o, zone.channels, output);
+                    let first = add_output(&mut flow, i, o, zone.channels, output, devices);
                     flow.links.push(link(queue, first));
                 }
             }
@@ -144,30 +150,48 @@ fn add_stage(flow: &mut Flow, i: usize, outputs: &[StageOutput]) {
     }
 }
 
-/// One output of zone `zone`; returns the element its sound goes into.
 /// pulsesink's ring buffer: its default of 200 ms makes PipeWire run the
 /// stream at ~90 ms, alone more than GO-to-heard may take (SND.12, 50 ms).
 const PULSE_BUFFER_US: i64 = 20_000;
 const PULSE_LATENCY_US: i64 = 5_000;
 
-fn add_output(flow: &mut Flow, zone: usize, o: usize, channels: u8, output: &ZoneOutput) -> String {
+/// One output of zone `zone`; returns the element its sound goes into.
+fn add_output(
+    flow: &mut Flow,
+    zone: usize,
+    o: usize,
+    channels: u8,
+    output: &ZoneOutput,
+    devices: &DeviceChannels,
+) -> String {
     let name = |part: &str| format!("z{zone}o{o}_{part}");
-    let device_channels = output.channels.iter().copied().max().unwrap_or(1);
+    let layout = devices
+        .get(&output.device)
+        .and_then(|positions| DeviceLayout::of(positions, &output.channels))
+        .unwrap_or_else(|| {
+            if output.channels.iter().any(|c| *c > 2) {
+                tracing::warn!(
+                    device = %output.device,
+                    positions = ?devices.get(&output.device),
+                    "zone {zone} plays unpositioned on device channels {:?}: the sound \
+                     server may put them elsewhere",
+                    output.channels
+                );
+            }
+            DeviceLayout::unpositioned(&output.channels)
+        });
     flow.elements.push(element(
         &name("map"),
         "audioconvert",
         vec![(
             "mix-matrix",
-            PropertyValue::String(mix_matrix(channels, &output.channels)),
+            PropertyValue::String(layout.mix_matrix(channels, &output.channels)),
         )],
     ));
     flow.elements.push(element(
         &name("caps"),
         "capsfilter",
-        vec![(
-            "caps",
-            PropertyValue::String(format!("audio/x-raw,channels={device_channels}")),
-        )],
+        vec![("caps", PropertyValue::String(layout.caps()))],
     ));
     flow.elements.push(element(
         &name("gain"),
@@ -197,25 +221,111 @@ fn add_output(flow: &mut Flow, zone: usize, o: usize, channels: u8, output: &Zon
     name("map")
 }
 
-/// `audioconvert`'s mix-matrix: a row per device channel up to the
-/// highest one used, a column per zone channel; `device_channels` are
-/// 1-based, one per zone channel.
-fn mix_matrix(zone_channels: u8, device_channels: &[u8]) -> String {
-    let rows = device_channels.iter().copied().max().unwrap_or(1);
-    let row = |device: u8| {
-        let cells: Vec<&str> = (0..zone_channels)
-            .map(|z| {
-                if device_channels.get(usize::from(z)) == Some(&device) {
-                    "(float)1"
-                } else {
-                    "(float)0"
-                }
-            })
+/// GStreamer's channel position bit for a PipeWire position name, for the
+/// positions `pulsesink` passes on to the sound server.
+fn position_bit(name: &str) -> Option<u32> {
+    Some(match name {
+        "FL" => 0,
+        "FR" => 1,
+        "FC" => 2,
+        "LFE" => 3,
+        "RL" => 4,
+        "RR" => 5,
+        "FLC" => 6,
+        "FRC" => 7,
+        "RC" => 8,
+        "SL" => 10,
+        "SR" => 11,
+        "TFL" => 12,
+        "TFR" => 13,
+        "TFC" => 14,
+        "TC" => 15,
+        "TRL" => 16,
+        "TRR" => 17,
+        "TRC" => 20,
+        _ => return None,
+    })
+}
+
+/// The stream an output sends its device. The sound server routes by
+/// position, not by index: device channel 3 of a 7.1 card is its centre,
+/// so the stream carries the device's positions (a channel mask) and puts
+/// a zone channel on the stream channel at that position. GStreamer orders
+/// a masked stream by position, which need not be the device's order.
+/// Without positions (unknown device, `AUX` channels of a pro-audio
+/// profile) the stream goes unpositioned, up to the highest channel used.
+struct DeviceLayout {
+    channels: usize,
+    mask: Option<u64>,
+    /// Stream channel (0-based) per device channel (0-based).
+    stream_channel: Vec<usize>,
+}
+
+impl DeviceLayout {
+    fn of(positions: &[String], used: &[u8]) -> Option<Self> {
+        let bits: Vec<u32> = positions
+            .iter()
+            .map(|p| position_bit(p))
+            .collect::<Option<_>>()?;
+        let mask = bits.iter().fold(0u64, |mask, bit| mask | 1 << bit);
+        let fits = used
+            .iter()
+            .all(|&c| (1..=positions.len()).contains(&usize::from(c)));
+        if positions.len() < 2 || mask.count_ones() as usize != positions.len() || !fits {
+            return None;
+        }
+        let stream_channel = bits
+            .iter()
+            .map(|bit| (mask & ((1u64 << bit) - 1)).count_ones() as usize)
             .collect();
-        format!("<{}>", cells.join(", "))
-    };
-    let rows: Vec<String> = (1..=rows).map(row).collect();
-    format!("<{}>", rows.join(", "))
+        Some(Self {
+            channels: positions.len(),
+            mask: Some(mask),
+            stream_channel,
+        })
+    }
+
+    fn unpositioned(used: &[u8]) -> Self {
+        let channels = usize::from(used.iter().copied().max().unwrap_or(1));
+        Self {
+            channels,
+            mask: None,
+            stream_channel: (0..channels).collect(),
+        }
+    }
+
+    fn caps(&self) -> String {
+        match self.mask {
+            Some(mask) => format!(
+                "audio/x-raw,channels={},channel-mask=(bitmask)0x{mask:016x}",
+                self.channels
+            ),
+            None => format!("audio/x-raw,channels={}", self.channels),
+        }
+    }
+
+    /// `audioconvert`'s mix-matrix: a row per stream channel, a column per
+    /// zone channel; `device_channels` are 1-based, one per zone channel.
+    fn mix_matrix(&self, zone_channels: u8, device_channels: &[u8]) -> String {
+        let row = |stream: usize| {
+            let cells: Vec<&str> = (0..zone_channels)
+                .map(|z| {
+                    let device = device_channels.get(usize::from(z)).copied();
+                    let target = device
+                        .and_then(|d| usize::from(d).checked_sub(1))
+                        .and_then(|d| self.stream_channel.get(d));
+                    if target == Some(&stream) {
+                        "(float)1"
+                    } else {
+                        "(float)0"
+                    }
+                })
+                .collect();
+            format!("<{}>", cells.join(", "))
+        };
+        let rows: Vec<String> = (0..self.channels).map(row).collect();
+        format!("<{}>", rows.join(", "))
+    }
 }
 
 fn element(id: &str, kind: &str, properties: Vec<(&str, PropertyValue)>) -> Element {
@@ -258,14 +368,66 @@ mod tests {
         }
     }
 
+    fn positions(names: &str) -> Vec<String> {
+        names.split(' ').map(str::to_string).collect()
+    }
+
+    /// The stream channels a zone's channels land on, row by row.
+    fn rows(matrix: &str) -> Vec<Vec<bool>> {
+        matrix
+            .trim_start_matches("<<")
+            .trim_end_matches(">>")
+            .split(">, <")
+            .map(|row| row.split(", ").map(|c| c == "(float)1").collect())
+            .collect()
+    }
+
     #[test]
-    fn a_stereo_zone_on_channels_three_and_four() {
+    fn without_positions_device_channel_n_is_stream_channel_n() {
+        let layout = DeviceLayout::unpositioned(&[3, 4]);
+        assert_eq!(layout.caps(), "audio/x-raw,channels=4");
         assert_eq!(
-            mix_matrix(2, &[3, 4]),
+            layout.mix_matrix(2, &[3, 4]),
             "<<(float)0, (float)0>, <(float)0, (float)0>, \
              <(float)1, (float)0>, <(float)0, (float)1>>"
         );
-        assert_eq!(mix_matrix(1, &[1]), "<<(float)1>>");
+        assert_eq!(
+            DeviceLayout::unpositioned(&[1]).mix_matrix(1, &[1]),
+            "<<(float)1>>"
+        );
+    }
+
+    #[test]
+    fn a_stereo_zone_on_channels_three_and_four_of_a_7_1_device() {
+        // The night of 19.10.: unpositioned, this was silent on every
+        // channel, the sound server routes by position.
+        let layout = DeviceLayout::of(&positions("FL FR FC LFE RL RR SL SR"), &[3, 4]).unwrap();
+        assert_eq!(
+            layout.caps(),
+            "audio/x-raw,channels=8,channel-mask=(bitmask)0x0000000000000c3f"
+        );
+        let rows = rows(&layout.mix_matrix(2, &[3, 4]));
+        assert_eq!(rows.len(), 8);
+        assert_eq!(rows[2], [true, false], "FC");
+        assert_eq!(rows[3], [false, true], "LFE");
+        assert_eq!(rows.iter().flatten().filter(|c| **c).count(), 2);
+    }
+
+    #[test]
+    fn device_order_is_not_stream_order() {
+        // ALSA's 5.1: channel 3 is rear left, 5 the centre; GStreamer
+        // orders the stream FL FR FC LFE RL RR.
+        let layout = DeviceLayout::of(&positions("FL FR RL RR FC LFE"), &[3, 5]).unwrap();
+        let rows = rows(&layout.mix_matrix(2, &[3, 5]));
+        assert_eq!(rows[4], [true, false], "RL");
+        assert_eq!(rows[2], [false, true], "FC");
+    }
+
+    #[test]
+    fn aux_channels_and_short_devices_stay_unpositioned() {
+        assert!(DeviceLayout::of(&positions("AUX0 AUX1 AUX2 AUX3"), &[3, 4]).is_none());
+        assert!(DeviceLayout::of(&positions("FL FR"), &[3, 4]).is_none());
+        assert!(DeviceLayout::of(&positions("MONO"), &[1]).is_none());
     }
 
     fn playback(zones: Vec<ZoneState>, stages: Vec<StageState>) -> Playback {
@@ -285,16 +447,19 @@ mod tests {
             height: 1080,
             outputs,
         };
-        let flow = playback_flow(&playback(
-            vec![],
-            vec![
-                stage(
-                    "Back",
-                    vec![screen(DisplayMode::Fullscreen), screen(DisplayMode::Window)],
-                ),
-                stage("Side", vec![]),
-            ],
-        ))
+        let flow = playback_flow(
+            &playback(
+                vec![],
+                vec![
+                    stage(
+                        "Back",
+                        vec![screen(DisplayMode::Fullscreen), screen(DisplayMode::Window)],
+                    ),
+                    stage("Side", vec![]),
+                ],
+            ),
+            &DeviceChannels::new(),
+        )
         .unwrap();
         let links: Vec<(&str, &str)> = flow
             .links
@@ -324,23 +489,26 @@ mod tests {
             block.properties.get("framerate"),
             Some(PropertyValue::String(r)) if r == "25/1"
         ));
-        assert!(playback_flow(&playback(vec![], vec![])).is_none());
+        assert!(playback_flow(&playback(vec![], vec![]), &DeviceChannels::new()).is_none());
     }
 
     #[test]
     fn each_zone_plays_on_its_outputs_or_nowhere() {
-        let flow = playback_flow(&playback(
-            vec![
-                zone("Hall", 2, vec![output("", vec![1, 2])]),
-                zone(
-                    "Foyer",
-                    1,
-                    vec![output("usb-a", vec![1]), output("usb-b", vec![2])],
-                ),
-                zone("Stage", 2, vec![]),
-            ],
-            vec![],
-        ))
+        let flow = playback_flow(
+            &playback(
+                vec![
+                    zone("Hall", 2, vec![output("", vec![1, 2])]),
+                    zone(
+                        "Foyer",
+                        1,
+                        vec![output("usb-a", vec![1]), output("usb-b", vec![2])],
+                    ),
+                    zone("Stage", 2, vec![]),
+                ],
+                vec![],
+            ),
+            &[("usb-b".to_string(), positions("FL FR"))].into(),
+        )
         .unwrap();
         let links: Vec<(&str, &str)> = flow
             .links
@@ -363,5 +531,15 @@ mod tests {
             sink("z1o1_sink").properties.get("buffer-time"),
             Some(PropertyValue::Int(PULSE_BUFFER_US))
         ));
+        // A device that says its positions gets a positioned stream.
+        let caps = |id: &str| match sink(id).properties.get("caps") {
+            Some(PropertyValue::String(c)) => c.clone(),
+            other => panic!("{id}: {other:?}"),
+        };
+        assert_eq!(caps("z1o0_caps"), "audio/x-raw,channels=1");
+        assert_eq!(
+            caps("z1o1_caps"),
+            "audio/x-raw,channels=2,channel-mask=(bitmask)0x0000000000000003"
+        );
     }
 }
