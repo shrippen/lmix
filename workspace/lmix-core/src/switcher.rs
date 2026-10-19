@@ -255,6 +255,8 @@ enum Bus {
 pub enum Feed {
     Program,
     Multiview,
+    /// The mixer's preview output (OUT.2).
+    Preview,
     /// One input's slot; `audio` when its source has sound.
     Slot {
         slot: usize,
@@ -4177,6 +4179,7 @@ impl Switcher {
             (true, OutputSource::Multiview) => {
                 format!("{} (Multiview)", output.spec.default_name())
             }
+            (true, OutputSource::Preview) => format!("{} (Preview)", output.spec.default_name()),
             (true, OutputSource::Input(id)) => {
                 let input = self
                     .show
@@ -4197,6 +4200,7 @@ impl Switcher {
         let id = match output.source {
             OutputSource::Program => return Ok(Feed::Program),
             OutputSource::Multiview => return Ok(Feed::Multiview),
+            OutputSource::Preview => return Ok(Feed::Preview),
             OutputSource::Input(id) => id,
         };
         let input = self
@@ -8208,6 +8212,34 @@ mod tests {
                 group: OutputGroup::Streams
             }
         );
+    }
+
+    #[test]
+    fn an_output_can_carry_the_preview() {
+        let mut sw = two_inputs();
+        sw.apply(Action::AddOutput {
+            spec: OutputSpec::Ndi {
+                name: "Desk".into(),
+            },
+            source: OutputSource::Preview,
+            name: None,
+            aux: None,
+        })
+        .unwrap();
+        assert!(sw.state().outputs[0].name.ends_with(" (Preview)"));
+
+        let cmds = sw
+            .apply(Action::StartOutput {
+                output: OutputRef::Number(1),
+            })
+            .unwrap();
+        assert!(matches!(
+            cmds[0],
+            Command::StartOutput {
+                feed: Feed::Preview,
+                ..
+            }
+        ));
     }
 
     #[test]

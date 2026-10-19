@@ -103,6 +103,9 @@ pub enum OutputSource {
     /// The multiview: preview, program and the inputs (OUT.2, OUT.10),
     /// with program sound.
     Multiview,
+    /// The mixer's preview as it composes it: an input or a layout, what
+    /// a take puts on program (OUT.2), with program sound.
+    Preview,
 }
 
 /// Default video bitrate of encoded outputs.

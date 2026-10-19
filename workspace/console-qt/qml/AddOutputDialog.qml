@@ -4,7 +4,7 @@ import QtQuick.Controls as QQC2
 import org.kde.kirigami as Kirigami
 import Kante
 
-/** New output: stream, recording, NDI or screen, of program, the multiview or one input. */
+/** New output: stream, recording, NDI or screen, of program, preview, the multiview or one input. */
 KanteDialog {
     id: dialog
 
@@ -39,10 +39,11 @@ KanteDialog {
     }
 
     onAccepted: {
-        // Program, Multiview, then the inputs.
+        // Program, Preview, Multiview, then the inputs.
         var source = sourceBox.currentIndex <= 0 ? "program"
-                   : sourceBox.currentIndex === 1 ? "multiview"
-                   : dialog.inputs[sourceBox.currentIndex - 2].id
+                   : sourceBox.currentIndex === 1 ? "preview"
+                   : sourceBox.currentIndex === 2 ? "multiview"
+                   : dialog.inputs[sourceBox.currentIndex - 3].id
         var container = dialog.containers[containerBox.currentIndex] ? dialog.containers[containerBox.currentIndex].value : "mkv"
         core.addOutput(JSON.stringify({
             kind: dialog.kind,
@@ -99,7 +100,7 @@ KanteDialog {
         QQC2.ComboBox {
             id: sourceBox
             Layout.fillWidth: true
-            model: [qsTr("Program"), qsTr("Multiview")].concat(dialog.inputs.map(i => i.number + " " + i.name))
+            model: [qsTr("Program"), qsTr("Preview"), qsTr("Multiview")].concat(dialog.inputs.map(i => i.number + " " + i.name))
             KanteFieldSkin { control: sourceBox }
         }
 

@@ -523,6 +523,7 @@ pub fn output_flow(
     let (video, audio) = match feed {
         Feed::Program => (pgm_channel(PGM_OUT), Some(pgm_channel(PGM_AUDIO_OUT))),
         Feed::Multiview => (pgm_channel(MV_OUT), Some(pgm_channel(PGM_AUDIO_OUT))),
+        Feed::Preview => (pgm_channel(PVW_OUT), Some(pgm_channel(PGM_AUDIO_OUT))),
         Feed::Slot { slot, audio } => (slot_channel(slot), audio.then(|| slot_audio_channel(slot))),
     };
     // An aux bus replaces the feed's sound (e.g. a mix-minus stream).
@@ -548,7 +549,8 @@ pub fn output_flow(
     }
     let sound = audio.is_some();
     // Screens and NDI read frames on the CPU; the encoders take GPU memory.
-    let on_gpu = matches!(feed, Feed::Program | Feed::Multiview) && backend == MixerBackend::Cuda;
+    let on_gpu = matches!(feed, Feed::Program | Feed::Multiview | Feed::Preview)
+        && backend == MixerBackend::Cuda;
 
     match spec {
         OutputSpec::Srt {
@@ -1781,6 +1783,40 @@ mod tests {
             video.properties.get("channel"),
             Some(PropertyValue::String(c)) if *c == format!("strom_{}_mv_out", mixer_id())
         ));
+    }
+
+    #[test]
+    fn an_output_can_carry_the_preview() {
+        let spec = OutputSpec::Srt {
+            uri: "srt://:9000?mode=listener".into(),
+            video_kbps: 6000,
+            encoding: Default::default(),
+        };
+        let flow = output_flow(
+            OutputId::new(),
+            &spec,
+            Feed::Preview,
+            None,
+            MixerBackend::Cpu,
+            Framerate::default(),
+            LiveMkv::Yes,
+        );
+
+        let channel = |id: &str| match flow
+            .blocks
+            .iter()
+            .find(|b| b.id == id)
+            .and_then(|b| b.properties.get("channel"))
+        {
+            Some(PropertyValue::String(c)) => c.clone(),
+            other => panic!("{id}: {other:?}"),
+        };
+        assert_eq!(channel("pgm"), format!("strom_{}_pvw_out", mixer_id()));
+        assert_eq!(
+            channel("pgm_audio"),
+            format!("strom_{}_pgm_audio_out", mixer_id()),
+            "program sound"
+        );
     }
 
     #[test]

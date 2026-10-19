@@ -4195,3 +4195,14 @@ leer); ein Lauf auf ruhigem Rechner steht aus.
 Mit allem zusammen (strom `lmix-pin-1019`: #29–#33) ist
 `hw-sound-cues` zum ersten Mal ganz grün: GO 32,9 ms Median (31,1–34,7),
 Panik, 16 Klänge, zwei Geräte, Gerätekanäle 3/4.
+
+## 2026-10-19 — Ausgang mit Quelle Vorschau (OUT.2)
+
+**Entscheidung**: Ein Ausgang kann die Vorschau tragen (`source:
+{"from": "preview"}`, Console „Trägt: Vorschau“), seit der Mischer sie
+ausgibt (VSP, strom #32): Bild wie die Vorschau des Mischers (Input oder
+Layout), Ton von Program wie beim Multiview. Auf CUDA bleibt das Bild für
+die Encoder auf der GPU wie bei Program.
+
+**Geprüft**: Aufnahme mit Quelle Vorschau, Program schwarz, Vorschau
+Balken: Bild 30 im Mittel 130 (CPU) bzw. 140 (CUDA), schwarz wäre 0.
