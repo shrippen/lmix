@@ -201,20 +201,17 @@ fn add_output(
             PropertyValue::Float(10f64.powf(f64::from(output.gain_db) / 20.0)),
         )],
     ));
-    let sink = if output.device.is_empty() {
-        element(&name("sink"), "autoaudiosink", vec![])
-    } else {
-        element(
-            &name("sink"),
-            "pulsesink",
-            vec![
-                ("device", PropertyValue::String(output.device.clone())),
-                ("buffer-time", PropertyValue::Int(PULSE_BUFFER_US)),
-                ("latency-time", PropertyValue::Int(PULSE_LATENCY_US)),
-            ],
-        )
-    };
-    flow.elements.push(sink);
+    // The machine's default output (no device) is the sound server's
+    // default sink, with the same small buffer.
+    let mut properties = vec![
+        ("buffer-time", PropertyValue::Int(PULSE_BUFFER_US)),
+        ("latency-time", PropertyValue::Int(PULSE_LATENCY_US)),
+    ];
+    if !output.device.is_empty() {
+        properties.push(("device", PropertyValue::String(output.device.clone())));
+    }
+    flow.elements
+        .push(element(&name("sink"), "pulsesink", properties));
     for (from, to) in [("map", "caps"), ("caps", "gain"), ("gain", "sink")] {
         flow.links.push(link(name(from), name(to)));
     }
@@ -399,8 +396,8 @@ mod tests {
 
     #[test]
     fn a_stereo_zone_on_channels_three_and_four_of_a_7_1_device() {
-        // The night of 19.10.: unpositioned, this was silent on every
-        // channel, the sound server routes by position.
+        // Unpositioned, this landed on rear left/right (5/6): the sound
+        // server routes by position, not by index (19.10.).
         let layout = DeviceLayout::of(&positions("FL FR FC LFE RL RR SL SR"), &[3, 4]).unwrap();
         assert_eq!(
             layout.caps(),
@@ -521,7 +518,13 @@ mod tests {
         assert!(links.contains(&("z1o1_queue", "z1o1_map")));
         assert!(links.contains(&("show:zone_out_2", "z2_nowhere")));
         let sink = |id: &str| flow.elements.iter().find(|e| e.id == id).unwrap();
-        assert_eq!(sink("z0o0_sink").element_type, "autoaudiosink");
+        // The default output: the sound server's default, small buffer too.
+        assert_eq!(sink("z0o0_sink").element_type, "pulsesink");
+        assert!(!sink("z0o0_sink").properties.contains_key("device"));
+        assert!(matches!(
+            sink("z0o0_sink").properties.get("latency-time"),
+            Some(PropertyValue::Int(PULSE_LATENCY_US))
+        ));
         assert!(matches!(
             sink("z1o1_sink").properties.get("device"),
             Some(PropertyValue::String(d)) if d == "usb-b"
