@@ -142,6 +142,20 @@ for _ in $(seq 1 20); do
 done
 [[ -n "$program_shows" ]] && pass "program monitor shows the new input" || fail "program monitor blank after Cut"
 
+# A layout on preview: the monitor shows the mixer's preview (VSP), which
+# composes it; the input-only monitor before had nothing to show.
+curl -sf -X POST "$CORE/actions" -H 'content-type: application/json' \
+    -d '{"action":"add_layout","name":"Corner","background":1,"boxes":[{"rect":{"x":0.5,"y":0.0,"w":0.5,"h":0.5},"input":2}]}' >/dev/null
+curl -sf -X POST "$CORE/actions" -H 'content-type: application/json' \
+    -d '{"action":"preview_input","input":"Corner"}' >/dev/null
+layout_shows=""
+for _ in $(seq 1 40); do
+    shot l
+    awk "BEGIN { exit !($(spread l "$PREVIEW_AREA") > 0.05) }" && layout_shows=1 && break
+    sleep 0.5
+done
+[[ -n "$layout_shows" ]] && pass "preview monitor shows a layout" || fail "preview monitor blank with a layout on preview"
+
 if grep -E 'qrc:|\.qml:[0-9]+' "$WORK/console.log" >/dev/null; then
     fail "QML warnings: $(grep -E 'qrc:|\.qml:[0-9]+' "$WORK/console.log" | head -3)"
 fi
