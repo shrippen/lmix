@@ -150,7 +150,6 @@ const PULSE_BUFFER_US: i64 = 20_000;
 const PULSE_LATENCY_US: i64 = 5_000;
 
 /// One output of zone `zone`; returns the element its sound goes into.
-
 fn add_output(flow: &mut Flow, zone: usize, o: usize, channels: u8, output: &ZoneOutput) -> String {
     let name = |part: &str| format!("z{zone}o{o}_{part}");
     let device_channels = output.channels.iter().copied().max().unwrap_or(1);
