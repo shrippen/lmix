@@ -4,6 +4,8 @@ Erledigtes abhaken (`[x]`, Datum) und nach einer Weile löschen; Details stehen 
 
 ## Für dich
 
+- [ ] **Hardware-Nacht 19.10.** (DECISIONS 19.10.): strom #29 (CUDA-Mischer auf echter Hardware: Alpha nach Blende, Stinger, Vorschaubilder; Rampen-CRITICAL) ansehen und mergen, danach lmix-PR der Nacht (Submodul, `pulsesink`-Puffer, Doku). Mit dir: H.38 Bühne am Projektor ansehen (nachts waren die Bildschirme gedimmt), H.13, H.20, H.21.
+- [ ] **Entscheiden: Gerätekanäle einer Zone** (H.37): Auf Geräten mit Kanalpositionen (FL, FR, …) landet eine Zone auf Kanal 3/4 nirgends, PipeWire ordnet nach Position. Kanalzahl und -belegung des Geräts mitschicken (Gerätekanal N = N-ter Kanal des Geräts), oder Gerätekanäle nur für Pro-Audio-Profile (AUX) anbieten?
 - [ ] Vorschau-Ausgang im strom-Mischer (VSP, DECISIONS „Entscheidungsseite 18.10.“). REC (#104), STG (#106, #109, #111) und RUN.8 (#105) sind gemergt (2026-10-18).
 - [ ] **Stinger-Sperre, Umfang (#109):** Darf lmix während eines Stingers auch Show öffnen/neu, Paket importieren und das Entfernen des Eingangs auf Program ablehnen? So ist es gebaut; Antwort steht aus.
 - [ ] Nachzügler aus dem Review von #111 (Stinger-Sperre, Tastentest): Liste in `docs/HANDOVER.md`, „Nächste Schritte“.
@@ -62,6 +64,12 @@ enabled: !(/\&[^\&]/.test(control.text))
 
 ## Offen (Claude)
 
+- [ ] **Panik und Stopp erreichen laufende Klänge nicht** (H.37, DECISIONS 19.10.): strom meldet einen Klang am echten Gerät 0,2 s nach dem Start als beendet und baut ihn ab, der Ton spielt aus einem Puffer hinter der EOS-Sonde bis zum Dateiende; lmix findet nichts zu stoppen. Nachstellen: `QUIET=1 scripts/hw-sound-cues/run.sh` (Prüfung „panic“). In strom: Ende erst melden, wenn gehört; Stoppen wirkt auch auf das, was noch im Puffer ist.
+- [ ] GO bis hörbar 77 ms statt ≤ 50 ms (SND.12, H.37): Rest ist strom's Zonenlatenz (30 ms) und PipeWire; prüfen, ob die Zonenlatenz kleiner gehen kann.
+- [ ] 16 Inputs auf CUDA: Latenz 81 ms statt 56 ms mit 8 Inputs (H.2, NFA.2 „≤ 2 Frames“): Ursache im Mischer suchen (wächst mit der Zahl der Pads).
+- [ ] `cudaconverter`-Alpha-Bug upstream melden (GStreamer, `gstcudaconverter.cpp`: der Setter setzt `priv->alpha` nicht); den Workaround in strom #29 entfernen, sobald die Distributionen den Fix haben.
+- [ ] strom-Tests auf der RTX 3090 rot, auch auf `dev`: `nvdec_cuda_after_a_converted_format_stays_on_the_gpu`, `measure_idle_fx_slot_renders`; `gpu_stingers_land_frame_accurately` flakig unter GPU-Last (H.34).
+- [ ] Abnahmetest `test-m2b-vm.sh` für echte Hardware öffnen (`MIXER`, Strom-Umgebung, Looks auf GL, Bildschirm-Ausgang auf Wayland): in dieser Nacht als Kopie gelaufen (`~/.cache/lmix-hwnight/m2b/test.sh`). Die 28 CRITICALs der Facecam (GStreamer-V4L2-Abtastung) dort aus der Zählung nehmen.
 - [ ] `scripts/test-titles.sh` schlug am 12.10. einmal fehl (direkt nach `test-web.sh`, Ausgabe nicht erhalten), danach 19-mal grün, am 17.10. in der Cloud 8-mal direkt nach `test-web.sh` grün; nicht nachstellbar. Bei der nächsten Wiederholung die Ausgabe sichern (`KEEP_WORK=1`) und die Ursache beheben.
 - [ ] Cue-Zeitgeber unter Last bis 146 ms spät (RUN.8, DECISIONS 17.10.): Echtzeit-Priorität per rtkit für den Zeitgeber-Thread, dann 4 h unter Last messen; zusätzlich 4 h auf freiem Rechner.
 
