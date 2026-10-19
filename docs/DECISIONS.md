@@ -4042,7 +4042,7 @@ der ohne den Fix scheitert; die CUDA-Tests sind `#[ignore]`, laufen mit
 - Eine Zone auf zwei Geräten (Scarlett, S/PDIF): beide spielen, 6–8 ms Versatz.
 - GO bis erstes Sample am Gerät (vorgeladen, 10 GOs): 110 ms Median (bis
   133 ms). Mit `buffer-time` 20 ms und `latency-time` 5 ms am `pulsesink`
-  (lmix, Branch `hw-night-1019`) 77 ms (77–81 ms). SND.12 verlangt 50 ms; der
+  (lmix, Branch `hw-night-1019`) 77 ms (77–81 ms). Gilt für Zonen mit genanntem Gerät; die Standardausgabe (Gerät leer) bleibt `autoaudiosink` mit seinem Puffer (~110 ms), weil sie ohne Sound-Server auf ALSA zurückfallen muss (SNF.1, Review #116). SND.12 verlangt 50 ms; der
   Rest sind strom's Zonenlatenz (30 ms) und PipeWire.
 - **Panik stoppt keinen Klang** (offen): strom meldet einen 5-s-Klang 0,2 s
   nach „plays“ als beendet und baut ihn ab, sein Zustand listet keine Klänge
