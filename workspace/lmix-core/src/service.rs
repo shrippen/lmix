@@ -1272,9 +1272,10 @@ impl Service {
                     tracing::debug!(?end, "stinger ended");
                     self.switcher.lock().await.stinger_ended(end.generation);
                 }
-                // Missed ones ended a stinger too.
-                Err(broadcast::error::RecvError::Lagged(_)) => {
-                    self.switcher.lock().await.stinger_finished();
+                // A missed end may be an older take's; the current take's
+                // limit frees the lock if it was its own.
+                Err(broadcast::error::RecvError::Lagged(missed)) => {
+                    tracing::warn!(missed, "stinger ends missed");
                 }
                 Err(broadcast::error::RecvError::Closed) => return,
             }
@@ -2821,16 +2822,56 @@ mod tests {
 
         engine.end_stinger(StingerEnd {
             outcome: StingerOutcome::Completed,
-            generation: 0,
+            generation: 1,
         });
         let soon = std::time::Duration::from_millis(500);
         assert!(cut_within(&service, soon).await, "free at the end");
+
+        // A late end of the first take does not free the second.
+        service.handle(sting.clone()).await.unwrap();
+        engine.end_stinger(StingerEnd {
+            outcome: StingerOutcome::Completed,
+            generation: 1,
+        });
+        assert!(!cut_within(&service, soon).await, "an older take's end");
+        engine.end_stinger(StingerEnd {
+            outcome: StingerOutcome::Failed,
+            generation: 2,
+        });
+        assert!(cut_within(&service, soon).await, "its own end");
 
         // A stinger the engine could not play ends at once (it cut).
         engine.refuse(true);
         assert!(service.handle(sting).await.is_err());
         engine.refuse(false);
         assert!(service.handle(Action::Cut).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn missed_stinger_ends_keep_the_lock() {
+        use crate::engine::meters::{StingerEnd, StingerOutcome};
+        use lmix_types::TransitionSlot;
+        let engine = Arc::new(NullEngine::stinging());
+        let service = stinger_service(engine.clone()).await;
+        tokio::spawn(service.clone().watch_stingers());
+        tokio::task::yield_now().await;
+        service
+            .handle(Action::Transition {
+                slot: TransitionSlot(1),
+            })
+            .await
+            .unwrap();
+
+        // More ends of an older take than the watcher can hold: it misses
+        // some, and they may have been anyone's.
+        for _ in 0..40 {
+            engine.end_stinger(StingerEnd {
+                outcome: StingerOutcome::Completed,
+                generation: 0,
+            });
+        }
+        let soon = std::time::Duration::from_millis(300);
+        assert!(!cut_within(&service, soon).await, "still held");
     }
 
     #[tokio::test(start_paused = true)]

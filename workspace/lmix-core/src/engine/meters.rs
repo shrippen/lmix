@@ -200,8 +200,9 @@ impl Stingers {
 
     /// The end `event` reports for lmix's take on `mixer`, if any. A
     /// completed take must be lmix's last one (not an older take or one
-    /// started from strom's own panel); a failed one is always the take
-    /// being started, as strom reports it before answering the request.
+    /// started from strom's own panel); a failed one too, unless lmix does
+    /// not know its take's id yet (strom reports most failures before it
+    /// answers the request) or strom gave the failure none.
     fn end_of(&self, event: &StromEvent, mixer: FlowId) -> Option<StingerEnd> {
         let mut take = self.take.lock().expect("stinger take lock");
         let generation = take.generation;
@@ -219,9 +220,21 @@ impl Stingers {
                     .take_if(|id| *id == report.take_id)
                     .map(|_| StingerOutcome::Completed)
             }
+            // Mostly the take being started (strom reports it before it
+            // answers, so without a known id); a known other take's
+            // failure is not this one's.
             StromEvent::StingerFailed {
-                flow_id, block_id, ..
-            } if *flow_id == mixer && block_id == self.block => Some(StingerOutcome::Failed),
+                flow_id,
+                block_id,
+                take_id,
+                ..
+            } if *flow_id == mixer && block_id == self.block => match (take_id, take.id) {
+                (Some(failed), Some(current)) if *failed != current => None,
+                _ => {
+                    take.id = None;
+                    Some(StingerOutcome::Failed)
+                }
+            },
             _ => None,
         }?;
         Some(StingerEnd {
@@ -503,6 +516,40 @@ mod tests {
             generation: 1,
         };
         assert_eq!(stingers.end_of(&event, mixer), Some(end));
+    }
+
+    #[test]
+    fn another_takes_failure_does_not_end_this_one() {
+        let mixer = FlowId::new_v4();
+        let stingers = Stingers::new("vm");
+        stingers.starting();
+        stingers.started(4);
+        let failed = |take_id: Option<u64>| {
+            serde_json::from_value::<StromEvent>(serde_json::json!({
+                "type": "StingerFailed",
+                "data": {
+                    "flow_id": mixer, "block_id": "vm", "take_id": take_id,
+                    "reason": "clip 0 could not play, cut instead",
+                    "program_changed": true
+                }
+            }))
+            .unwrap()
+        };
+        let end = Some(StingerEnd {
+            outcome: StingerOutcome::Failed,
+            generation: 1,
+        });
+
+        assert_eq!(stingers.end_of(&failed(Some(3)), mixer), None, "older take");
+        assert_eq!(stingers.end_of(&failed(Some(4)), mixer), end, "this take");
+        stingers.starting();
+        stingers.started(5);
+        let end = end.map(|e| StingerEnd { generation: 2, ..e });
+        assert_eq!(
+            stingers.end_of(&failed(None), mixer),
+            end,
+            "no id: this take"
+        );
     }
 
     #[test]

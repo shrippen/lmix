@@ -3671,7 +3671,8 @@ Aufnahmen, Program wie ISO-Spuren, über upstreams Live-Recorder
 **Entscheidung**: Aufnahme-Ausgänge bauen den Live-Recorder statt
 `builtin.recorder`. Gleiche Eigenschaften (Container, Ordner, Präfix, Zahl
 der Tonspuren) und Pads, also keine Änderung an Show-Dateien oder API. Die
-Dateien heißen `<Ordner>/lmix-<Ausgang>_<Datum>_<Zeit>_00001.<Endung>`.
+Dateien heißen `<Ordner>/lmix-<ID8>_<Datum>_<Zeit>_00001.<Endung>`, mit
+`<ID8>` den ersten 8 Zeichen der Ausgangs-ID (kein Name).
 Neu ist der Anfang der Ausgangs-ID: Sonst schrieben zwei Aufnahmen in
 einen Ordner, die in derselben Sekunde starten (Restore nach einem
 strom-Neustart), dieselbe Datei.
@@ -3864,12 +3865,14 @@ hart 200 ms (rtkit gewährt nichts ohne Grenze). An der harten Grenze
 beendet der Kernel den Prozess. Darum macht das SIGXCPU der weichen
 Grenze den Zeitgeber wieder zu einem normalen Thread: Ein Cue-Schritt, der
 so lange rechnet (etwa „Show öffnen“ mit großen Datenquellen), kostet die
-Priorität für den Rest des Laufs, nicht die Show. Die Rückstufung behält
+Priorität für den Rest des Laufs, nicht die Show. Dann steht eine Warnung
+im Log, und `/metrics` zeigt `lmix_cue_timer_realtime 0`, ebenso ohne
+Echtzeit von Anfang an und wenn der Thread endet. Die Rückstufung behält
 `SCHED_RESET_ON_FORK`: Ohne CAP_SYS_NICE lässt der Kernel das Flag nicht
 löschen (EPERM, mit einem Prozess ohne Rechte nachgeprüft), und der
-Thread bliebe bis zum Abbruch an der harten Grenze in Echtzeit. Dann steht eine Warnung im Log, und `/metrics`
-zeigt `lmix_cue_timer_realtime 0`, ebenso ohne Echtzeit von Anfang an und
-wenn der Thread endet. Ein Unit-Test prüft die Rückstufung, wo der Test
+Thread bliebe bis zum Abbruch an der harten Grenze in Echtzeit. Scheitert
+die Rückstufung trotzdem, merkt sich der Signal-Handler den Fehler, und der
+Wächter-Thread schreibt ihn ins Log (19.10., Review #105). Ein Unit-Test prüft die Rückstufung, wo der Test
 SCHED_FIFO bekommt (in der VM als Root).
 
 **Reichweite**: Wartezeiten und Folgen nach Zeit. Ein GO führt seine

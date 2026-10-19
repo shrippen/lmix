@@ -55,9 +55,10 @@ struct Args {
     core: String,
 
     /// Style for this run; without it the one chosen in the window
-    /// (Kante at first).
+    /// (Kante at first). Not `--style`: Qt reads the same arguments and
+    /// would look for a Quick Controls style of that name.
     #[arg(long, value_enum)]
-    style: Option<Style>,
+    theme: Option<Style>,
 
     /// How the window opens (UI.12).
     #[arg(long, value_enum, default_value_t = Window::Normal)]
@@ -150,7 +151,7 @@ pub fn run(app: &App) -> ! {
         Some(Mode::Simple) => "simple",
         Some(Mode::Advanced) => "advanced",
     };
-    config::init(&args.core, args.style.map_or(-1, Style::kind), window, mode);
+    config::init(&args.core, args.theme.map_or(-1, Style::kind), window, mode);
 
     if let Some(dir) = settings_dir() {
         match adopt_old_settings(&dir, app.name) {

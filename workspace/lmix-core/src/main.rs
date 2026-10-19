@@ -527,7 +527,15 @@ fn spawn_cue_timer(service: std::sync::Arc<service::Service>) {
                 return;
             }
         }
+        let mut reported = false;
         while !realtime::demoted() {
+            if let (Some(errno), false) = (realtime::demotion_failed(), reported) {
+                reported = true;
+                tracing::error!(
+                    errno,
+                    "cue timer could not give up real-time priority at RLIMIT_RTTIME's soft limit: the hard limit will end lmix-core (RUN.8)"
+                );
+            }
             std::thread::sleep(std::time::Duration::from_secs(1));
         }
         tracing::warn!(

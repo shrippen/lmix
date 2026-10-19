@@ -244,8 +244,7 @@ def main():
         env.update(LMIX_CORE=f"http://127.0.0.1:{CORE_PORT}", LANGUAGE=lang, LANG=LOCALES[lang],
                    LC_ALL=LOCALES[lang])
 
-        # Kante is the default style, the settings are fresh. (`--style`
-        # would also reach Qt, which then looks for a Quick Controls style.)
+        # Kante is the default style, the settings are fresh.
         def start(app):
             return subprocess.Popen([apps[app]], env=env, stdout=log, stderr=log)
 

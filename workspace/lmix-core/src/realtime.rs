@@ -32,6 +32,8 @@ const RT_TIME_HARD: Duration = Duration::from_millis(200);
 
 static REALTIME: AtomicBool = AtomicBool::new(false);
 static DEMOTED: AtomicBool = AtomicBool::new(false);
+/// errno of a demotion the kernel refused (0: none).
+static DEMOTE_ERRNO: AtomicI32 = AtomicI32::new(0);
 /// The thread with real-time priority, for the SIGXCPU handler.
 static RT_THREAD: AtomicI32 = AtomicI32::new(0);
 
@@ -43,6 +45,15 @@ pub fn granted() -> bool {
 /// Whether the timer gave its priority up at the soft limit.
 pub fn demoted() -> bool {
     DEMOTED.load(Ordering::Relaxed)
+}
+
+/// errno of a demotion at the soft limit the kernel refused; the thread
+/// then stays real-time until the hard limit ends the process.
+pub fn demotion_failed() -> Option<i32> {
+    match DEMOTE_ERRNO.load(Ordering::Relaxed) {
+        0 => None,
+        errno => Some(errno),
+    }
 }
 
 /// The cue thread ended: no real-time timer any more.
@@ -88,6 +99,9 @@ extern "C" fn on_xcpu(_: libc::c_int) {
     if rc == 0 {
         REALTIME.store(false, Ordering::Relaxed);
         DEMOTED.store(true, Ordering::Relaxed);
+    } else {
+        // SAFETY: as above.
+        DEMOTE_ERRNO.store(unsafe { *libc::__errno_location() }, Ordering::Relaxed);
     }
     // SAFETY: as above.
     unsafe { *libc::__errno_location() = errno };

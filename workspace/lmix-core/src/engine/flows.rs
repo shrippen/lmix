@@ -455,8 +455,8 @@ fn pgm_channel(block: &str) -> String {
     format!("strom_{}_{block}", mixer_id())
 }
 
-/// File name prefix of output `id`'s recordings: `lmix-` and the first
-/// part of its id.
+/// File name prefix of output `id`'s recordings: `lmix-` and the first 8
+/// characters of its id (not its name), e.g. `lmix-3f2a9c1e`.
 fn recording_prefix(id: OutputId) -> String {
     let id = id.to_string();
     format!("{RECORDING_PREFIX}-{}", &id[..8])
@@ -1987,6 +1987,10 @@ mod tests {
             LiveMkv::Yes,
         );
         assert_ne!(prefix(&flow), prefix(&other));
+        let id = OutputId::new();
+        let own = recording_prefix(id);
+        assert_eq!(own, format!("lmix-{}", &id.to_string()[..8]));
+        assert_eq!(own.len(), "lmix-".len() + 8);
     }
 
     #[test]
