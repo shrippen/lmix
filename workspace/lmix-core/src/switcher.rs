@@ -2308,7 +2308,15 @@ impl Switcher {
         }
 
         self.show.preview = Some(entry.id);
-        Ok(vec![Command::Preview { slot: entry.slot }])
+        let mut commands = vec![Command::Preview { slot: entry.slot }];
+        // A pulled T-bar shows the new preview where the old one was.
+        if self.t_bar > 0.0 {
+            commands.push(Command::TBar {
+                position: self.t_bar,
+                effect: self.t_bar_effect()?,
+            });
+        }
+        Ok(commands)
     }
 
     /// Preview to program; the old program goes to preview (classic swap).
@@ -2418,14 +2426,33 @@ impl Switcher {
             }
             None => return Err(ActionError::NoPreview),
         };
-        // Button 1 steers the T-bar (SWI.3); a stinger's clip cannot stand
-        // still, so its bar blends.
-        let effect = match self.button(TransitionSlot(1))?.effect {
-            Effect::Stinger => Effect::Fade,
-            effect => effect,
-        };
+        let effect = self.t_bar_effect()?;
         self.t_bar = position;
         Ok(vec![Command::TBar { position, effect }])
+    }
+
+    /// Button 1 steers the T-bar (SWI.3); a stinger's clip cannot stand
+    /// still, so its bar blends.
+    fn t_bar_effect(&self) -> Result<Effect, ActionError> {
+        Ok(match self.button(TransitionSlot(1))?.effect {
+            Effect::Stinger => Effect::Fade,
+            effect => effect,
+        })
+    }
+
+    /// Put a pulled T-bar back to the start, for what it cannot mix (a
+    /// layout on preview, the black): program shows as it rests until the
+    /// bar is moved again.
+    fn t_bar_back(&mut self) -> Result<Vec<Command>, ActionError> {
+        if self.t_bar == 0.0 {
+            return Ok(Vec::new());
+        }
+        let effect = self.t_bar_effect()?;
+        self.t_bar = 0.0;
+        Ok(vec![Command::TBar {
+            position: 0.0,
+            effect,
+        }])
     }
 
     fn transition(&mut self, slot: TransitionSlot) -> Result<Vec<Command>, ActionError> {
@@ -3280,8 +3307,11 @@ impl Switcher {
                 reference: entry.name.clone(),
             });
         }
+        let pip = entry.pip;
         self.show.preview = Some(entry.id);
-        Ok(vec![Command::PreviewLayout { pip: entry.pip }])
+        let mut commands = self.t_bar_back()?;
+        commands.push(Command::PreviewLayout { pip });
+        Ok(commands)
     }
 
     /// Background and boxes of a layout from an action: inputs with a
@@ -4529,8 +4559,10 @@ impl Switcher {
     /// strom refuses a fade during a stinger; it would invert the state.
     fn toggle_ftb(&mut self, duration_ms: u32) -> Result<Vec<Command>, ActionError> {
         self.check_no_stinger()?;
+        let mut commands = self.t_bar_back()?;
         self.fade_to_black = !self.fade_to_black;
-        Ok(vec![Command::FadeToBlack { duration_ms }])
+        commands.push(Command::FadeToBlack { duration_ms });
+        Ok(commands)
     }
 
     // ---- Lookup ----
@@ -6228,6 +6260,43 @@ mod tests {
                 ..
             }]
         ));
+    }
+
+    #[test]
+    fn a_pulled_t_bar_follows_preview_and_goes_back_for_what_it_cannot_mix() {
+        let mut sw = two_inputs();
+        add(&mut sw, "C");
+        sw.apply(Action::PreviewInput { input: named("B") })
+            .unwrap();
+        sw.apply(Action::TBar { position: 0.4 }).unwrap();
+
+        // Another input on preview comes in at the bar's position.
+        let cmds = sw
+            .apply(Action::PreviewInput { input: named("C") })
+            .unwrap();
+        assert!(
+            matches!(
+                cmds[..],
+                [Command::Preview { .. }, Command::TBar { position, .. }] if position == 0.4
+            ),
+            "{cmds:?}"
+        );
+
+        // Fade to black puts the bar back first: nothing of preview stays
+        // under the black.
+        let cmds = sw.apply(Action::FadeToBlack { duration_ms: 0 }).unwrap();
+        assert!(
+            matches!(
+                cmds[..],
+                [Command::TBar { position, .. }, Command::FadeToBlack { .. }] if position == 0.0
+            ),
+            "{cmds:?}"
+        );
+        assert_eq!(
+            sw.apply(Action::FadeToBlack { duration_ms: 0 }).unwrap(),
+            [Command::FadeToBlack { duration_ms: 0 }],
+            "the bar is back already"
+        );
     }
 
     #[test]
