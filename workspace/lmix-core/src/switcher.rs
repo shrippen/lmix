@@ -516,6 +516,9 @@ pub struct Switcher {
     /// A stinger runs: switching is refused until the engine reports
     /// its end (`stinger_finished`), at the latest at this time.
     stinger_until: Option<Instant>,
+    /// Until a take or a fade to black with a duration has landed: the
+    /// engine refuses the T-bar meanwhile, so lmix does too.
+    moving_until: Option<Instant>,
     /// The engine's generation of the take behind the lock; only its
     /// end frees it.
     stinger_take: u64,
@@ -597,6 +600,7 @@ impl Switcher {
             fade_to_black: false,
             t_bar: 0.0,
             stinger_until: None,
+            moving_until: None,
             stinger_take: 0,
             stinger_sent: Some(Vec::new()),
             looks_available: false,
@@ -950,6 +954,19 @@ impl Switcher {
         let airing = self.airing();
         let program = self.show.program;
         let mut commands = self.apply_action(action)?;
+        let moving_ms = commands
+            .iter()
+            .map(|c| match c {
+                Command::Program { duration_ms, .. }
+                | Command::ProgramLayout { duration_ms, .. }
+                | Command::FadeToBlack { duration_ms } => *duration_ms,
+                _ => 0,
+            })
+            .max()
+            .unwrap_or(0);
+        if moving_ms > 0 {
+            self.moving_until = Some(Instant::now() + Duration::from_millis(u64::from(moving_ms)));
+        }
         // Any take (cut, transition, stinger, cut direct) rests the mixer's
         // pads: a bar pulled before it starts again from 0.
         if self.show.program != program {
@@ -1711,6 +1728,7 @@ impl Switcher {
     pub fn restore_commands(&mut self) -> Vec<Command> {
         // A new or restarted mixer runs no stinger; no end will come.
         self.stinger_finished();
+        self.moving_until = None;
         // First: a new format builds a new mixer, the rest sets it up.
         let mut commands = vec![Command::SetFormat {
             format: self.show.format,
@@ -2454,6 +2472,19 @@ impl Switcher {
                 reason: "the T-bar mixes inputs only; take the layout off program with Cut or a transition"
                     .into(),
             });
+        }
+        // The engine refuses the bar while the pads still move (a take or
+        // fade to black with a duration); taking the position anyway would
+        // blend the sound without the picture. At 0 nothing is held then.
+        if self
+            .moving_until
+            .is_some_and(|until| Instant::now() < until)
+        {
+            if position == 0.0 {
+                self.t_bar = 0.0;
+                return Ok(Vec::new());
+            }
+            return Err(ActionError::TransitionRunning);
         }
         let effect = self.t_bar_effect()?;
         self.t_bar = position;
@@ -7271,6 +7302,46 @@ mod tests {
             sw.apply(Action::PreviewInput { input: named("C") })
                 .unwrap(),
             [Command::Preview { slot: 2 }]
+        );
+    }
+
+    #[test]
+    fn the_t_bar_waits_for_a_running_take_and_keeps_its_sound() {
+        let mut sw = two_inputs();
+        sw.apply(Action::CutDirect { input: named("A") }).unwrap();
+        sw.apply(Action::PreviewInput { input: named("B") })
+            .unwrap();
+        sw.apply(Action::SetTransition {
+            slot: TransitionSlot(1),
+            effect: Effect::Fade,
+            duration_ms: 60_000,
+            stinger: None,
+        })
+        .unwrap();
+        sw.apply(Action::Transition {
+            slot: TransitionSlot(1),
+        })
+        .unwrap();
+        assert_eq!(
+            sw.apply(Action::TBar { position: 0.4 }),
+            Err(ActionError::TransitionRunning)
+        );
+        assert_eq!(sw.state().t_bar, 0.0, "no bar the engine does not show");
+        // Back to 0 sends nothing; the end of the bar is still a cut.
+        assert_eq!(sw.apply(Action::TBar { position: 0.0 }), Ok(Vec::new()));
+
+        // Fade to black back up with a duration, the same.
+        let mut sw = two_inputs();
+        sw.apply(Action::PreviewInput { input: named("B") })
+            .unwrap();
+        sw.apply(Action::FadeToBlack { duration_ms: 0 }).unwrap();
+        sw.apply(Action::FadeToBlack {
+            duration_ms: 60_000,
+        })
+        .unwrap();
+        assert_eq!(
+            sw.apply(Action::TBar { position: 0.4 }),
+            Err(ActionError::TransitionRunning)
         );
     }
 

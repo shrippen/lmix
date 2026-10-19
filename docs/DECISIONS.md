@@ -4254,8 +4254,11 @@ vorher.
   Vorschau halb auf Sendung, unter dem Schwarz sichtbar). Der nächste
   Zug am T-Bar zeigt die Vorschau wieder an der Stelle, an der er steht.
 - **Laufende Animation**: strom lehnt den T-Bar ab, solange ein Take oder
-  die Aufblende nach Fade to Black die Input-Pads noch bewegt; der nächste
-  Fader-Schritt danach greift.
+  die Aufblende nach Fade to Black die Input-Pads noch bewegt; lmix lehnt
+  ihn in dieser Zeit selbst ab (`transition_running`, ohne die Stellung zu
+  übernehmen, sonst blendete der Ton ohne Bild). Position 0 schickt dann
+  nichts, das Ende (1) bleibt ein Schnitt. Der nächste Fader-Schritt
+  danach greift.
 - **Anderes Seitenverhältnis**: deckt das neue Bild das alte nicht ganz,
   blendet das alte mit dem T-Bar aus, damit am Ende keine Streifen
   verschwinden (wie beim animierten Schieben).
