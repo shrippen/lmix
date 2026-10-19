@@ -19,11 +19,15 @@ weiter.
 | #29 | `lmix-cuda-hw-fixes` | CUDA-Mischer auf echter Hardware: Alpha nach Blende (`cudaconverter`-Bug umgangen), Stinger, Vorschaubilder im Vollbereich, Rampen-CRITICAL |
 | #30 | `lmix-zone-clock` | Live-Stille je Zone: Panik und Stopp erreichen laufende Klänge |
 | #31 | `lmix-device-channels` | Audio-Ausgänge mit Kanalpositionen in der Geräteliste |
-| #32 | `lmix-preview-out` | Vorschau-Ausgang `pvw_out` am Bildmischer (VSP) |
+| #32 | `lmix-preview-out` | Vorschau-Ausgang `pvw_out` am Bildmischer (VSP), mit Zonen-Rändern |
 | #33 | `lmix-zone-latency` | Zone wartet weniger: GO bis hörbar 32,9 ms (SND.12) |
+| #34 | `lmix-tbar-effect` | T-Bar hält den Take mit seinem Effekt (SWI.3) |
 
-`lmix-pin-1019` (strom) ist der Merge aller fünf; lmix zeigt bis dahin
-darauf. Danach das Submodul auf `dev` stellen (kleiner PR).
+`lmix-pin-1019` (strom) wächst mit: Er ist der Merge aller strom-PRs
+oben (zuletzt `be2be9e`). Jeder lmix-PR zeigt auf den Stand, den sein
+Text nennt (#121: `a016205` = #29–#33; #122: `fbd3dfb` mit den Rändern
+von #32; #123: `be2be9e` mit #34). Nach dem Merge in `dev` das Submodul
+auf `dev` stellen (kleiner PR).
 
 **lmix**:
 
@@ -32,7 +36,9 @@ darauf. Danach das Submodul auf `dev` stellen (kleiner PR).
 | #116 | `main` | Hardware-Nacht: Ergebnisse, `pulsesink`-Puffer, `hw-sound-cues` |
 | #117 | #116 | Zonen auf Gerätekanälen (Kanalbelegung des Geräts) |
 | #119 | #117 | Vorschau-Monitor zeigt den Vorschau-Ausgang des Mischers (VSP) |
-| #121 | #119 | Stand 19.10.: Submodul auf `lmix-pin-1019` mit #33, Doku, Upstream-Bericht |
+| #121 | #119 | Stand 19.10.: Submodul mit #33, Doku, Upstream-Bericht |
+| #122 | #121 | Ausgänge mit Quelle Vorschau (OUT.2) |
+| #123 | #122 | T-Bar mit dem Effekt von Taste 1 (SWI.3) |
 | #118 | `main` | Nachzügler #111, Console `--theme` statt `--style`, Kleinigkeiten #104/#105 |
 | #120 | `main` | Abnahmetest mit `MIXER` (cpu, cuda, gl) auf echter Hardware |
 
@@ -48,8 +54,8 @@ beim Mergen von #118/#120 nach dem Stapel Konflikte dort von Hand lösen
   öffnet Fenster auf dem Desktop).
 - VSP: Vorschau kommt aus dem Mischer, Layouts in der Vorschau sichtbar,
   getestet auf CPU, GL und CUDA.
-- Latenz-„Sprung bei 16 Inputs“ war keiner: Sie hängt am Input auf
-  Program (56–81 ms). Ursache vermutet im Live-Aggregator, offen.
+- Latenz-„Sprung bei 16 Inputs“ war keiner: meist 56 ms, ab und zu
+  60–81 ms (mal je Input, mal je Lauf). Ursache offen.
 
 ### Nächste Schritte (Reihenfolge)
 
@@ -57,9 +63,9 @@ beim Mergen von #118/#120 nach dem Stapel Konflikte dort von Hand lösen
    Reviews anstößt.
 2. **OVL.3 im Vorschau-Bild**: wartet auf die Entscheidung in `todo.md`
    („Für dich“); danach DSK-Ebenen am Vorschau-Compositor in strom.
-3. **Zonen-Ränder auf dem Vorschau-Ausgang** (strom #32 „For the
-   reviewer“): eigene Unterlagen-Ketten am Vorschau-Compositor.
-4. **Latenz je Input** (todo): Aggregator-Fristen ansehen.
+3. **OVL.5 Clean Feed und OVL.2 Rand um BiB-Overlays**: warten auf die
+   Entscheidungen (Entscheidungsseite 19.10., `todo.md`).
+4. **Latenz** (todo): einen erhöhten Lauf fangen, dann Aggregator-Fristen.
 5. **CEF/H.36**: Bau braucht die Freigabe (todo); dann H.36 und M7.0.
 6. Flakes im Console-Test (todo): „tile 1 still“, Show-Dialog.
 7. Hardware mit dem Eigentümer: H.38 (Bühne sehen), H.13, H.20, H.21,
