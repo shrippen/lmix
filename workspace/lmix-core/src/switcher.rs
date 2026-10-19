@@ -1722,7 +1722,15 @@ impl Switcher {
         // program slot) would keep showing it, a new one rests anyway.
         match self.t_bar_back() {
             Ok(back) => commands.extend(back),
-            Err(_) => self.t_bar = 0.0,
+            // A show without transition buttons: at 0 the effect does not
+            // matter.
+            Err(_) => {
+                self.t_bar = 0.0;
+                commands.push(Command::TBar {
+                    position: 0.0,
+                    effect: Effect::Fade,
+                });
+            }
         }
         self.mix.clear();
         commands.extend(self.audio_commands(AUDIO_RAMP_MS));
