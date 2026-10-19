@@ -145,6 +145,11 @@ fn add_stage(flow: &mut Flow, i: usize, outputs: &[StageOutput]) {
 }
 
 /// One output of zone `zone`; returns the element its sound goes into.
+/// pulsesink's ring buffer: its default of 200 ms makes PipeWire run the
+/// stream at ~90 ms, alone more than GO-to-heard may take (SND.12, 50 ms).
+const PULSE_BUFFER_US: i64 = 20_000;
+const PULSE_LATENCY_US: i64 = 5_000;
+
 fn add_output(flow: &mut Flow, zone: usize, o: usize, channels: u8, output: &ZoneOutput) -> String {
     let name = |part: &str| format!("z{zone}o{o}_{part}");
     let device_channels = output.channels.iter().copied().max().unwrap_or(1);
@@ -178,7 +183,11 @@ fn add_output(flow: &mut Flow, zone: usize, o: usize, channels: u8, output: &Zon
         element(
             &name("sink"),
             "pulsesink",
-            vec![("device", PropertyValue::String(output.device.clone()))],
+            vec![
+                ("device", PropertyValue::String(output.device.clone())),
+                ("buffer-time", PropertyValue::Int(PULSE_BUFFER_US)),
+                ("latency-time", PropertyValue::Int(PULSE_LATENCY_US)),
+            ],
         )
     };
     flow.elements.push(sink);
@@ -348,6 +357,11 @@ mod tests {
         assert!(matches!(
             sink("z1o1_sink").properties.get("device"),
             Some(PropertyValue::String(d)) if d == "usb-b"
+        ));
+        // A small ring buffer: GO to heard within SND.12.
+        assert!(matches!(
+            sink("z1o1_sink").properties.get("buffer-time"),
+            Some(PropertyValue::Int(PULSE_BUFFER_US))
         ));
     }
 }
