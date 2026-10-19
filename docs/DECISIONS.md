@@ -744,7 +744,7 @@ Aktion in den bis zu 2 s bis zur Erkennung antwortet noch 502.
 
 **Entscheidung**: Stilwahl Kante / Kante Light / System in der
 Werkzeugleiste, gespeichert mit QSettings (`agent.md`: Stilwahl in den
-Einstellungen); `--style` gilt für einen Lauf. Inputs per Drag & Drop
+Einstellungen); `--style` (seit 19.10. `--theme`) gilt für einen Lauf. Inputs per Drag & Drop
 umsortieren (`move_input`). Der Vorschau-Monitor liest den Input in
 voller Größe (`?size=full`, eigener Flow je Slot, nur auf Abruf), die
 Kacheln weiter 640×360.
@@ -3843,6 +3843,17 @@ scheitern.
 Ende vor der Id); `scripts/test-m2b-vm.sh` (Stinger gesperrt bis
 strom's Ende).
 
+
+**Nachtrag (19.10., Review von #111, lmix #118)**:
+- Die Grenze zählt ab dem Start des Takes durch die Engine neu
+  (`stinger_started`), nicht mehr ab dem Drücken: hat die Engine für
+  Clip, Vorschau und Take länger gebraucht, hält die Sperre entsprechend
+  länger, höchstens Preroll + Cliplänge + 8 s ab dem Start.
+- `StingerFailed` mit einer bekannten Id eines anderen Takes beendet die
+  Sperre nicht; ohne Id oder solange lmix die Id des eigenen Takes noch
+  nicht kennt, beendet es sie wie bisher.
+- Verpasste Enden (`Lagged` im Kanal) geben die Sperre nicht mehr frei:
+  sie können zu einem älteren Take gehören. Dann gibt die Grenze frei.
 ## 2026-10-18 — Zeitgeber mit Echtzeit-Priorität (RUN.8)
 
 **Kontext**: User-Entscheidung RUN.8 (Entscheidungsseite 18.10.): Der
@@ -3872,7 +3883,10 @@ Echtzeit von Anfang an und wenn der Thread endet. Die Rückstufung behält
 löschen (EPERM, mit einem Prozess ohne Rechte nachgeprüft), und der
 Thread bliebe bis zum Abbruch an der harten Grenze in Echtzeit. Scheitert
 die Rückstufung trotzdem, merkt sich der Signal-Handler den Fehler, und der
-Wächter-Thread schreibt ihn ins Log (19.10., Review #105). Ein Unit-Test prüft die Rückstufung, wo der Test
+Wächter-Thread schreibt ihn bei seiner nächsten Runde (einmal je Sekunde)
+ins Log (19.10., Review #105). Rechnet der Thread bis zur harten Grenze
+weiter (weitere 100 ms), beendet der Kernel lmix-core meist vorher, und die
+Zeile fehlt; sie erscheint vor allem, wenn der Schritt vorher endet. Ein Unit-Test prüft die Rückstufung, wo der Test
 SCHED_FIFO bekommt (in der VM als Root).
 
 **Reichweite**: Wartezeiten und Folgen nach Zeit. Ein GO führt seine
@@ -3957,8 +3971,8 @@ AppShell.qml   Fenster: lmix-core, Stil, Datei-Knöpfe (Neu, Öffnen, Zuletzt,
   nicht mit und bleibt bei ihrer Vorgabe an.
 - **Titelleiste** nennt das Programm: „lmix Mischer — <Show>“, „lmix Show —
   <Show>“.
-- `--mode simple|advanced` wirkt nur im Mischer; `--core`, `--style`,
-  `--window` in beiden.
+- `--mode simple|advanced` wirkt nur im Mischer; `--core`, `--style`
+  (seit 19.10. `--theme`), `--window` in beiden.
 - `claude.md` Punkt 7 und SUI.1 neu gefasst (User 18.10.2026): ein Kern,
   zwei Oberflächen; die Desktop-Dateien in `packaging/desktop/` bestätigt.
 - Skripte: `run-local.sh` startet den Mischer (`APP=show|both`),
@@ -3967,10 +3981,11 @@ AppShell.qml   Fenster: lmix-core, Stil, Datei-Knöpfe (Neu, Öffnen, Zuletzt,
   `test-global-keys.sh` die Vorgaben beider Programme, `CONSOLE_SHOT` den
   Mischer, die Demo macht je ein Bild von Mischer und Show.
 
-**Bestand, nicht geändert**: `--style` erreicht auch Qt, das daraufhin ein
-Quick-Controls-Stil-Modul `kante` sucht und das Fenster nicht lädt (so schon
-bei `lmix-console`). Die Demo startet darum ohne `--style` (Kante ist
-Standard).
+**Bestand, behoben 19.10. (#118)**: `--style` erreichte auch Qt, das
+daraufhin ein Quick-Controls-Stil-Modul `kante` suchte und das Fenster nicht
+lud (so schon bei `lmix-console`). Die Option heißt jetzt `--theme`
+(Breaking vor dem ersten Release: `--style` gibt es nicht mehr; BUILD.md,
+GUI-SHELL.md und der Demo-Kommentar sind nachgezogen).
 
 ## 2026-10-18 — PR-Agent nur auf `/review` des Eigentümers
 

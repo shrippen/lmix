@@ -533,7 +533,7 @@ fn spawn_cue_timer(service: std::sync::Arc<service::Service>) {
                 reported = true;
                 tracing::error!(
                     errno,
-                    "cue timer could not give up real-time priority at RLIMIT_RTTIME's soft limit: the hard limit will end lmix-core (RUN.8)"
+                    "cue timer could not give up real-time priority at RLIMIT_RTTIME's soft limit: the hard limit may end lmix-core (RUN.8)"
                 );
             }
             std::thread::sleep(std::time::Duration::from_secs(1));

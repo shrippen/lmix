@@ -58,7 +58,7 @@ RUN.8, „Console in zwei Programme geteilt (Mischer, Show)“, PR-Agent nur auf
 
 ### Nächste Schritte (Reihenfolge)
 
-1. **Nachzügler aus dem Review von #111** (ein PR):
+1. **Nachzügler aus dem Review von #111** (erledigt in #118, 19.10.):
    - `service.rs` `watch_stingers`: bei `Lagged` `continue` statt
      `stinger_finished()`.
    - `meters.rs`: `StingerFailed` gegen die bekannte Take-Id prüfen
@@ -73,13 +73,13 @@ RUN.8, „Console in zwei Programme geteilt (Mischer, Show)“, PR-Agent nur auf
      Ende hält, aktuelles gibt frei.
    - `scripts/test-global-keys.sh`: `show.conf` prüfen statt der
      Logzeile „settings taken over“ (bricht mit `RUST_LOG=warn`).
-2. **Console `--style`:** clap liest die Option vor Qt
+2. **Console `--style`** (erledigt in #118: heißt jetzt `--theme`): clap liest die Option vor Qt
    (`console-qt/src/app.rs`, `config::init`), aber `QGuiApplication::new`
    liest dieselbe argv, sucht ein Quick-Controls-Stilmodul `kante` und lädt
    das Fenster nicht (DECISIONS 18.10. „Console in zwei Programme geteilt (Mischer, Show)“,
    Bestand). Option
    umbenennen oder vor `QGuiApplication::new` aus der argv nehmen.
-3. **Weitere Kleinigkeiten** (optional, je mit Quelle):
+3. **Weitere Kleinigkeiten** (erledigt in #118):
    - #104, Review Runde 2: `lmix-<Ausgang>` in DECISIONS (REC) und im
      Kommentar an `recording_prefix` (`engine/flows.rs`) liest sich als
      Name; gemeint sind die ersten 8 Zeichen der Ausgangs-ID. Der Test
