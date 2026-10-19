@@ -1755,10 +1755,10 @@ mod tests {
             .iter()
             .any(|l| l.from == "vm:pvw_out" && l.to == "pvw_out:sink"));
         let vm = flow.blocks.iter().find(|b| b.id == "vm").unwrap();
-        assert_eq!(
+        assert!(matches!(
             vm.properties.get("enable_preview_out"),
-            Some(&PropertyValue::Bool(true))
-        );
+            Some(PropertyValue::Bool(true))
+        ));
     }
 
     #[test]
