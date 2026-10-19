@@ -4116,7 +4116,7 @@ Kachel baute eine neue Pipeline (Lücke), und ein Layout auf Vorschau zeigte
 gar nichts (die Vorschau war kein Input).
 
 **Entscheidung**:
-- strom (Branch `lmix-preview-out`): Eigenschaft `enable_preview_out` am
+- strom #32: Eigenschaft `enable_preview_out` am
   Bildmischer, Ausgang `pvw_out` in Programmgröße. Ein dritter Compositor
   (`pvw_comp`) bekommt je Input einen Zweig vom Tee des Inputs und spiegelt
   die PVW-Pads des Multiviews: Jede Änderung (Position, Größe, Alpha,
