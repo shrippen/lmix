@@ -957,6 +957,15 @@ impl Switcher {
         let moving_ms = commands
             .iter()
             .map(|c| match c {
+                // A cut is done at once, whatever its button's duration.
+                Command::Program {
+                    effect: Effect::Cut,
+                    ..
+                }
+                | Command::ProgramLayout {
+                    effect: Effect::Cut,
+                    ..
+                } => 0,
                 Command::Program { duration_ms, .. }
                 | Command::ProgramLayout { duration_ms, .. }
                 | Command::FadeToBlack { duration_ms } => *duration_ms,
@@ -7329,6 +7338,24 @@ mod tests {
         assert_eq!(sw.state().t_bar, 0.0, "no bar the engine does not show");
         // Back to 0 sends nothing; the end of the bar is still a cut.
         assert_eq!(sw.apply(Action::TBar { position: 0.0 }), Ok(Vec::new()));
+
+        // A cut button with a duration moves nothing: the bar is free.
+        let mut sw = two_inputs();
+        sw.apply(Action::CutDirect { input: named("A") }).unwrap();
+        sw.apply(Action::PreviewInput { input: named("B") })
+            .unwrap();
+        sw.apply(Action::SetTransition {
+            slot: TransitionSlot(2),
+            effect: Effect::Cut,
+            duration_ms: 60_000,
+            stinger: None,
+        })
+        .unwrap();
+        sw.apply(Action::Transition {
+            slot: TransitionSlot(2),
+        })
+        .unwrap();
+        assert!(sw.apply(Action::TBar { position: 0.4 }).is_ok());
 
         // Fade to black back up with a duration, the same.
         let mut sw = two_inputs();

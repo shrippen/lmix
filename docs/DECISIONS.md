@@ -4255,7 +4255,7 @@ vorher.
   Zug am T-Bar zeigt die Vorschau wieder an der Stelle, an der er steht.
 - **Laufende Animation**: strom lehnt den T-Bar ab, solange ein Take oder
   die Aufblende nach Fade to Black die Input-Pads noch bewegt; lmix lehnt
-  ihn in dieser Zeit selbst ab (`transition_running`, ohne die Stellung zu
+  ihn in dieser Zeit selbst ab (`ActionError::TransitionRunning`, ohne die Stellung zu
   übernehmen, sonst blendete der Ton ohne Bild). Position 0 schickt dann
   nichts, das Ende (1) bleibt ein Schnitt. Der nächste Fader-Schritt
   danach greift.
