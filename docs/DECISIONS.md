@@ -4221,9 +4221,11 @@ lag: lmix setzte nur das Alpha des Vorschau-Pads.
 
 **Entscheidung**: strom hält den Take von Program zur Vorschau an einer
 Stelle (`POST …/blocks/vm/tbar {position, transition_type}`, strom #34):
-Pads in Ruhe wie beim klassischen Take, dann der Effekt an dieser Stelle
+jeder Input-Pad geht direkt auf die Werte des Effekts an dieser Stelle
 (Schieben und Push verschieben die Pads, Dip geht in der Mitte durch
-Schwarz, Blende mischt). lmix schickt den Effekt von Taste 1 mit. Am Ende
+Schwarz, Blende mischt), ohne Umweg über die Ruhelage: der Mischer rendert
+zwischen zwei Property-Schreibvorgängen, ein Umweg blitzte als Frame auf
+(Review strom #34). lmix schickt den Effekt von Taste 1 mit. Am Ende
 bleibt es ein Schnitt-Take wie bisher, zurück auf 0 zeigt Program wie
 vorher.
 - **Als Blende**: Schnitt (hat kein Dazwischen), Wischen (braucht die
@@ -4234,6 +4236,17 @@ vorher.
 - **Overlay-Blenden laufen weiter**: strom setzt beim Halten nur die
   Input-Pads zurück, nicht die DSK-Ebenen (Review #123).
 - Layouts auf Vorschau bleiben beim T-Bar abgelehnt wie bisher.
+- **Gezogener T-Bar und Vorschau** (Review strom #34): ein anderes Input auf
+  die Vorschau kommt an der Stelle des T-Bars herein; ein Layout auf die
+  Vorschau und Fade to Black stellen ihn erst auf 0 (sonst stünde die alte
+  Vorschau halb auf Sendung, unter dem Schwarz sichtbar). Der nächste
+  Zug am T-Bar zeigt die Vorschau wieder an der Stelle, an der er steht.
+- **Laufende Animation**: strom lehnt den T-Bar ab, solange ein Take oder
+  die Aufblende nach Fade to Black die Input-Pads noch bewegt; der nächste
+  Fader-Schritt danach greift.
+- **Anderes Seitenverhältnis**: deckt das neue Bild das alte nicht ganz,
+  blendet das alte mit dem T-Bar aus, damit am Ende keine Streifen
+  verschwinden (wie beim animierten Schieben).
 
 **Geprüft**: strom-Test auf dem CPU-Mischer (rot/blau, Schieben, Push, Dip,
 Blende, zurück); lmix gegen strom auf CPU und CUDA: Schieben links bei 0,5
