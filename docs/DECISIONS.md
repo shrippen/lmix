@@ -4062,8 +4062,11 @@ der ohne den Fix scheitert; die CUDA-Tests sind `#[ignore]`, laufen mit
   mit Positionen (virtuell, FL…SR) ist eine Zone auf [3, 4] auf allen Kanälen
   stumm: lmix schickt einen 4-Kanal-Strom ohne Positionen, PipeWire ordnet nach
   Position, nicht nach Index. Gerätekanal N ist so nur auf Geräten mit
-  „AUX“-Kanälen (Pro-Audio-Profil) adressierbar. Entscheidung offen
-  (Kanalzahl und -belegung des Geräts mitschicken).
+  „AUX“-Kanälen (Pro-Audio-Profil) adressierbar. **Entscheidung (User,
+  19.10.)**: lmix schickt den Strom mit Kanalzahl und -belegung des Geräts
+  (aus den Caps, die strom in die Geräteliste legt); Gerätekanal N ist der
+  N-te Kanal des Geräts, PipeWire ordnet dann 1:1, Pro-Audio-Geräte (AUX)
+  gehen denselben Weg. Ohne Angabe des Geräts wie bisher, mit Warnung.
 
 **Bühnen (H.38)**: Vollbild als `waylandsink`, 1080p30-Video über die CPU:
 strom 185 % CPU für eine Bühne, 280 % für vier. Sichtprüfung nachts nicht

@@ -5,7 +5,7 @@ Erledigtes abhaken (`[x]`, Datum) und nach einer Weile löschen; Details stehen 
 ## Für dich
 
 - [ ] **Hardware-Nacht 19.10.** (DECISIONS 19.10.): strom #29 (CUDA-Mischer auf echter Hardware: Alpha nach Blende, Stinger, Vorschaubilder; Rampen-CRITICAL) und #30 (Panik erreicht Klänge) ansehen und mergen, danach lmix #116 (Submodul, `pulsesink`-Puffer, Doku). Mit dir: H.38 Bühne am Projektor ansehen (nachts waren die Bildschirme gedimmt), H.13, H.20, H.21.
-- [ ] **Entscheiden: Gerätekanäle einer Zone** (H.37): Auf Geräten mit Kanalpositionen (FL, FR, …) landet eine Zone auf Kanal 3/4 nirgends, PipeWire ordnet nach Position. Kanalzahl und -belegung des Geräts mitschicken (Gerätekanal N = N-ter Kanal des Geräts), oder Gerätekanäle nur für Pro-Audio-Profile (AUX) anbieten?
+- [x] Entschieden 2026-10-19: Gerätekanäle einer Zone über die Kanalbelegung des Geräts (DECISIONS 19.10.).
 - [ ] Vorschau-Ausgang im strom-Mischer (VSP, DECISIONS „Entscheidungsseite 18.10.“). REC (#104), STG (#106, #109, #111) und RUN.8 (#105) sind gemergt (2026-10-18).
 - [ ] **Stinger-Sperre, Umfang (#109):** Darf lmix während eines Stingers auch Show öffnen/neu, Paket importieren und das Entfernen des Eingangs auf Program ablehnen? So ist es gebaut; Antwort steht aus.
 - [ ] Nachzügler aus dem Review von #111 (Stinger-Sperre, Tastentest): Liste in `docs/HANDOVER.md`, „Nächste Schritte“.
@@ -64,6 +64,7 @@ enabled: !(/\&[^\&]/.test(control.text))
 
 ## Offen (Claude)
 
+- [ ] Zonen auf Gerätekanälen (H.37, Entscheidung 19.10.): strom legt `channels` und `channel-mask` aus den Caps des Geräts in die Geräteliste; lmix-core setzt sie in die Caps vor dem `pulsesink` (Strom mit der Kanalzahl und -belegung des Geräts, `mix-matrix` auf alle Gerätekanäle). Ohne Angabe wie bisher, mit Warnung im Zonen-Patch. Danach H.37 „Kanäle 3/4“ auf einem Gerät mit Positionen und einem Pro-Audio-Interface prüfen.
 - [ ] **Panik und Stopp erreichen laufende Klänge nicht** (H.37, DECISIONS 19.10.): Fix strom #30 (Live-Stille je Zone) ansehen und mergen, danach Submodul nachziehen und `QUIET=1 scripts/hw-sound-cues/run.sh` wiederholen.
 - [ ] GO bis hörbar 77 ms statt ≤ 50 ms (SND.12, H.37): Rest ist strom's Zonenlatenz (30 ms) und PipeWire; prüfen, ob die Zonenlatenz kleiner gehen kann.
 - [ ] CUDA-Mischer mit 16 Slots: Latenz 81–83 ms statt 56 ms (H.2, NFA.2 „≤ 2 Frames“). Mit 8, 12, 14, 15 Slots 56 ms: Sprung genau bei 16, nicht mit der Last (GL mit 16: 56 ms nach 5 min). Mit dem Schwarz-Input sind das 17 statt 16 Mischer-Eingänge (`black_input`). strom hat dort keine feste Grenze (nur `pick_grid` begrenzt Spalten auf 16); 25 ms sind kein ganzes Bild, eher eine verpasste Frist des CUDA-Mischers oder des Multiview. Mit `GST_DEBUG=aggregator:5` am `vm:mixer` die Fristen bei 16 und 17 Eingängen vergleichen.
