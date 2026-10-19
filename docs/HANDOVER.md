@@ -309,8 +309,8 @@ strom-Fork (`shrippen/strom`), Ziel `dev`:
 Offen in dieser Reihenfolge: strom #6, dann lmix #6.
 
 Seit 2026-10-09 auf `console-qt` und `claude-todo`:
-- Live-Bilder über Unix-Sockets (`/api/live/…`, `?size=full` für die
-  Vorschau).
+- Live-Bilder über Unix-Sockets (`/api/live/…`, damals `?size=full` für
+  die Vorschau; seit 19.10. `/api/live/preview`, VSP).
 - Qt-Console `workspace/console-qt`: Schritt 1 gemessen, Schritt 2 (Funktionen
   der egui-Console) übertragen, Test `scripts/test-console-qt.sh`.
 - lmix-core: CUDA-Programm für Bildschirm/NDI/Live heruntergeladen,

@@ -37,7 +37,8 @@ wait_up() {
     exit 1
 }
 if [[ "${QUIET:-}" == 1 ]]; then
-    for sink in "$DEVICE" ${DEVICE2:+"$DEVICE2"}; do
+    # A MULTI of the caller's is a real device too; the run's own is silent.
+    for sink in "$DEVICE" ${DEVICE2:+"$DEVICE2"} ${MULTI:+"$MULTI"}; do
         VOLUMES+=("$sink=$(pactl get-sink-volume "$sink" | grep -oE '[0-9]+%' | head -1)")
         pactl set-sink-volume "$sink" 1%
     done
