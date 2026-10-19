@@ -352,7 +352,7 @@ mod tests {
         let sink = |id: &str| flow.elements.iter().find(|e| e.id == id).unwrap();
         // The default output: the sound server's default, small buffer too.
         assert_eq!(sink("z0o0_sink").element_type, "pulsesink");
-        assert!(sink("z0o0_sink").properties.get("device").is_none());
+        assert!(!sink("z0o0_sink").properties.contains_key("device"));
         assert!(matches!(
             sink("z0o0_sink").properties.get("latency-time"),
             Some(PropertyValue::Int(PULSE_LATENCY_US))
