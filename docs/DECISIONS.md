@@ -4051,9 +4051,13 @@ der ohne den Fix scheitert; die CUDA-Tests sind `#[ignore]`, laufen mit
   erreicht die Sonde vor dem Zonenmischer sofort, die Annahme „der Mischer
   nimmt die Puffer, wie er sie spielt“ hält am echten Gerät nicht. Der Puffer
   liegt nicht im Pulse-Stream (Buffer Latency 0), sondern in der Pipeline
-  dahinter. In der VM fiel es nicht auf (Fakesink). Nächster Schritt in
-  strom: das Ende eines Klangs erst melden, wenn er gehört ist, und Stoppen
-  unabhängig davon, ob strom ihn noch führt.
+  dahinter. In der VM fiel es nicht auf (Fakesink).
+  Ursache (`GST_DEBUG=aggregator:6`): Der Zonenmischer (`audiomixer`,
+  force-live, aber ohne Live-Eingang) mischte die 125 Puffer der 5-s-Datei
+  in 130 ms; den Test-Rig hielt sein `appsink sync=true` im Takt,
+  `pulsesink` auf der Monotonic-Uhr nicht. Fix strom #30: jede Zone bekommt
+  eine Live-Stille, wie jede Bühne ihr Live-Schwarz. Danach Panik wirksam
+  (Spitze danach 0,000 statt 0,300, 3 von 3 Läufen), GO 68–77 ms.
 - Gerätekanäle 3/4: kein Mehrkanal-Interface hier. Auf einem 8-Kanal-Gerät
   mit Positionen (virtuell, FL…SR) ist eine Zone auf [3, 4] auf allen Kanälen
   stumm: lmix schickt einen 4-Kanal-Strom ohne Positionen, PipeWire ordnet nach

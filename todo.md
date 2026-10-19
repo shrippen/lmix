@@ -4,7 +4,7 @@ Erledigtes abhaken (`[x]`, Datum) und nach einer Weile löschen; Details stehen 
 
 ## Für dich
 
-- [ ] **Hardware-Nacht 19.10.** (DECISIONS 19.10.): strom #29 (CUDA-Mischer auf echter Hardware: Alpha nach Blende, Stinger, Vorschaubilder; Rampen-CRITICAL) ansehen und mergen, danach lmix-PR der Nacht (Submodul, `pulsesink`-Puffer, Doku). Mit dir: H.38 Bühne am Projektor ansehen (nachts waren die Bildschirme gedimmt), H.13, H.20, H.21.
+- [ ] **Hardware-Nacht 19.10.** (DECISIONS 19.10.): strom #29 (CUDA-Mischer auf echter Hardware: Alpha nach Blende, Stinger, Vorschaubilder; Rampen-CRITICAL) und #30 (Panik erreicht Klänge) ansehen und mergen, danach lmix #116 (Submodul, `pulsesink`-Puffer, Doku). Mit dir: H.38 Bühne am Projektor ansehen (nachts waren die Bildschirme gedimmt), H.13, H.20, H.21.
 - [ ] **Entscheiden: Gerätekanäle einer Zone** (H.37): Auf Geräten mit Kanalpositionen (FL, FR, …) landet eine Zone auf Kanal 3/4 nirgends, PipeWire ordnet nach Position. Kanalzahl und -belegung des Geräts mitschicken (Gerätekanal N = N-ter Kanal des Geräts), oder Gerätekanäle nur für Pro-Audio-Profile (AUX) anbieten?
 - [ ] Vorschau-Ausgang im strom-Mischer (VSP, DECISIONS „Entscheidungsseite 18.10.“). REC (#104), STG (#106, #109, #111) und RUN.8 (#105) sind gemergt (2026-10-18).
 - [ ] **Stinger-Sperre, Umfang (#109):** Darf lmix während eines Stingers auch Show öffnen/neu, Paket importieren und das Entfernen des Eingangs auf Program ablehnen? So ist es gebaut; Antwort steht aus.
@@ -64,7 +64,7 @@ enabled: !(/\&[^\&]/.test(control.text))
 
 ## Offen (Claude)
 
-- [ ] **Panik und Stopp erreichen laufende Klänge nicht** (H.37, DECISIONS 19.10.): strom meldet einen Klang am echten Gerät 0,2 s nach dem Start als beendet und baut ihn ab, der Ton spielt aus einem Puffer hinter der EOS-Sonde bis zum Dateiende; lmix findet nichts zu stoppen. Nachstellen: `QUIET=1 scripts/hw-sound-cues/run.sh` (Prüfung „panic“). In strom: Ende erst melden, wenn gehört; Stoppen wirkt auch auf das, was noch im Puffer ist.
+- [ ] **Panik und Stopp erreichen laufende Klänge nicht** (H.37, DECISIONS 19.10.): Fix strom #30 (Live-Stille je Zone) ansehen und mergen, danach Submodul nachziehen und `QUIET=1 scripts/hw-sound-cues/run.sh` wiederholen.
 - [ ] GO bis hörbar 77 ms statt ≤ 50 ms (SND.12, H.37): Rest ist strom's Zonenlatenz (30 ms) und PipeWire; prüfen, ob die Zonenlatenz kleiner gehen kann.
 - [ ] CUDA-Mischer mit 16 Slots: Latenz 81–83 ms statt 56 ms (H.2, NFA.2 „≤ 2 Frames“). Mit 8, 12, 14, 15 Slots 56 ms: Sprung genau bei 16, nicht mit der Last (GL mit 16: 56 ms nach 5 min). Schwelle im Mischer-Aufbau suchen (Multiview-Raster, Pad-Nummern der DSK-Ebenen, Aggregator-Latenz).
 - [ ] `cudaconverter`-Alpha-Bug upstream melden (GStreamer, `gstcudaconverter.cpp`: der Setter setzt `priv->alpha` nicht); den Workaround in strom #29 entfernen, sobald die Distributionen den Fix haben.
