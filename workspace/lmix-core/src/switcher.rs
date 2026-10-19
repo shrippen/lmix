@@ -4194,8 +4194,8 @@ impl Switcher {
         Ok(Vec::new())
     }
 
-    /// Program, or the slot of the output's input; ISO outputs need an
-    /// input with a picture.
+    /// Program, the multiview, the preview, or the slot of the output's
+    /// input; ISO outputs need an input with a picture.
     fn feed_of(&self, output: &ShowOutput) -> Result<Feed, ActionError> {
         let id = match output.source {
             OutputSource::Program => return Ok(Feed::Program),

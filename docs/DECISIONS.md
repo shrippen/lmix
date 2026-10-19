@@ -4207,7 +4207,7 @@ Panik, 16 Klänge, zwei Geräte, Gerätekanäle 3/4.
 ## 2026-10-19 — Ausgang mit Quelle Vorschau (OUT.2)
 
 **Entscheidung**: Ein Ausgang kann die Vorschau tragen (`source:
-{"from": "preview"}`, Console „Trägt: Vorschau“), seit der Mischer sie
+{"from": "preview"}`, Console „Inhalt: Vorschau“), seit der Mischer sie
 ausgibt (VSP, strom #32): Bild wie die Vorschau des Mischers (Input oder
 Layout), Ton von Program wie beim Multiview. Auf CUDA bleibt das Bild für
 die Encoder auf der GPU wie bei Program.
