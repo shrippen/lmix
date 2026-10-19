@@ -3,8 +3,8 @@ import Kante
 import org.freedesktop.gstreamer.Qt6GLVideoItem
 
 /**
- * A live picture from the engine: `source` is "program", an input id, or ""
- * for nothing. GStreamer draws into the item on the GPU (qml6glsink); the
+ * A live picture from the engine: `source` is "program", "preview", an
+ * input id, or "" for nothing. GStreamer draws into the item on the GPU (qml6glsink); the
  * stage stays dark in every style, as Kante's image stages do.
  */
 Item {

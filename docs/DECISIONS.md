@@ -4077,7 +4077,15 @@ der ohne den Fix scheitert; die CUDA-Tests sind `#[ignore]`, laufen mit
   Stromkanal mit der Position seines Gerätekanals (GStreamer ordnet nach
   Position, ALSA-5.1 etwa ist FL FR RL RR FC LFE). Ohne Positionen (Gerät
   unbekannt, AUX-Kanäle, Mono) bleibt der Strom ohne Positionen; liegt ein
-  Kanal über 2, steht eine Warnung im Log. Geprüft auf einem virtuellen
+  Kanal über 2, steht eine Warnung im Log.
+  **Folge für bestehende Einstellungen** (Review #117): Ein Gerät, das seine
+  Positionen meldet, bekommt jetzt genau die gewählten Kanäle. Eine
+  Mono-Zone auf Kanal 1 eines Stereo-Geräts spielt nur noch links (vorher
+  verteilte PipeWire den Mono-Strom auf beide Seiten); eine Stereo-Zone auf
+  1/2 eines 5.1/7.1-Geräts nur noch vorne links/rechts (vorher je nach
+  Upmix auch hinten). Gewollt nach der Entscheidung: Gerätekanal N ist der
+  N-te Kanal. Wer eine Mono-Zone auf beiden Seiten will, legt sie auf 1 und
+  2 (zwei Ausgänge) oder macht die Zone zweikanalig. Geprüft auf einem virtuellen
   7.1-Gerät: jedes Paar landet genau auf seinen Kanälen, die übrigen
   bleiben still (`scripts/hw-sound-cues/run.sh`, Schritt „channels 3/4“).
   Offen: ein echtes Mehrkanal-Interface (H.37), Pro-Audio-Profil.
