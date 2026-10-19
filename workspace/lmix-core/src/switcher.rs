@@ -130,9 +130,9 @@ pub enum Command {
         /// Of the audio mixer, Hz (AUD.17).
         sample_rate: u32,
     },
-    /// Mix `slot` (preview) over program by `position` (0–1), as the
-    /// T-bar stands; 0 hides it again.
-    TBar { slot: usize, position: f32 },
+    /// Hold the take of preview at `position` (0–1) with `effect`, as
+    /// the T-bar stands (SWI.3); 0 shows program as it was.
+    TBar { position: f32, effect: Effect },
     /// Show `slot` on overlay `channel` (0-based) or take it off, faded
     /// over `duration_ms`.
     Overlay {
@@ -2393,8 +2393,8 @@ impl Switcher {
         ))
     }
 
-    /// T-bar (SWI.3): preview fades in over program as it is pulled; at
-    /// the end it is a take, back at the start nothing happened.
+    /// T-bar (SWI.3): preview comes in with button 1's effect as it is
+    /// pulled; at the end it is a take, back at the start nothing happened.
     fn t_bar(&mut self, position: f32) -> Result<Vec<Command>, ActionError> {
         if !(0.0..=1.0).contains(&position) {
             return Err(ActionError::BadTBar);
@@ -2404,8 +2404,8 @@ impl Switcher {
             self.t_bar = 0.0;
             return self.take(Effect::Cut, 0);
         }
-        let slot = match self.bus_of(self.show.preview) {
-            Some(Bus::Slot(slot)) => slot,
+        match self.bus_of(self.show.preview) {
+            Some(Bus::Slot(_)) => {}
             Some(Bus::Layout(_)) => {
                 return Err(ActionError::BadLayout {
                     reason: "the T-bar mixes inputs only; take a layout with Cut or a transition"
@@ -2414,8 +2414,14 @@ impl Switcher {
             }
             None => return Err(ActionError::NoPreview),
         };
+        // Button 1 steers the T-bar (SWI.3); a stinger's clip cannot stand
+        // still, so its bar blends.
+        let effect = match self.button(TransitionSlot(1))?.effect {
+            Effect::Stinger => Effect::Fade,
+            effect => effect,
+        };
         self.t_bar = position;
-        Ok(vec![Command::TBar { slot, position }])
+        Ok(vec![Command::TBar { position, effect }])
     }
 
     fn transition(&mut self, slot: TransitionSlot) -> Result<Vec<Command>, ActionError> {
@@ -6103,8 +6109,8 @@ mod tests {
         assert_eq!(
             half,
             [Command::TBar {
-                slot: 1,
-                position: 0.5
+                position: 0.5,
+                effect: Effect::Fade
             }]
         );
         assert_eq!(sw.state().t_bar, 0.5);
@@ -6161,6 +6167,43 @@ mod tests {
     }
 
     #[test]
+    fn t_bar_runs_the_effect_of_button_one() {
+        let mut sw = two_inputs();
+        sw.apply(Action::PreviewInput { input: named("B") })
+            .unwrap();
+        sw.apply(Action::SetTransition {
+            slot: TransitionSlot(1),
+            effect: Effect::PushLeft,
+            duration_ms: 800,
+            stinger: None,
+        })
+        .unwrap();
+
+        assert_eq!(
+            sw.apply(Action::TBar { position: 0.4 }).unwrap(),
+            [Command::TBar {
+                position: 0.4,
+                effect: Effect::PushLeft
+            }]
+        );
+        // Button 2's effect does not steer it.
+        sw.apply(Action::SetTransition {
+            slot: TransitionSlot(2),
+            effect: Effect::SlideRight,
+            duration_ms: 800,
+            stinger: None,
+        })
+        .unwrap();
+        assert!(matches!(
+            sw.apply(Action::TBar { position: 0.5 }).unwrap()[..],
+            [Command::TBar {
+                effect: Effect::PushLeft,
+                ..
+            }]
+        ));
+    }
+
+    #[test]
     fn t_bar_back_to_zero_and_bad_positions() {
         let mut sw = two_inputs();
         assert_eq!(
@@ -6175,8 +6218,8 @@ mod tests {
         assert_eq!(
             back,
             [Command::TBar {
-                slot: 1,
-                position: 0.0
+                position: 0.0,
+                effect: Effect::Fade
             }]
         );
         assert_eq!(

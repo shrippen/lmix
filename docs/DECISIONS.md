@@ -4206,3 +4206,24 @@ die Encoder auf der GPU wie bei Program.
 
 **Geprüft**: Aufnahme mit Quelle Vorschau, Program schwarz, Vorschau
 Balken: Bild 30 im Mittel 130 (CPU) bzw. 140 (CUDA), schwarz wäre 0.
+
+## 2026-10-19 — T-Bar mit dem Effekt von Taste 1 (SWI.3)
+
+**Kontext**: Der T-Bar blendete immer, gleich welcher Effekt auf Taste 1
+lag: lmix setzte nur das Alpha des Vorschau-Pads.
+
+**Entscheidung**: strom hält den Take von Program zur Vorschau an einer
+Stelle (`POST …/blocks/vm/tbar {position, transition_type}`, strom #34):
+Pads in Ruhe wie beim klassischen Take, dann der Effekt an dieser Stelle
+(Schieben und Push verschieben die Pads, Dip geht in der Mitte durch
+Schwarz, Blende mischt). lmix schickt den Effekt von Taste 1 mit. Am Ende
+bleibt es ein Schnitt-Take wie bisher, zurück auf 0 zeigt Program wie
+vorher.
+- **Als Blende**: Wischen (braucht die Uniforms der Shader-Engine) und
+  Stinger (ein Clip steht nicht still).
+- Layouts auf Vorschau bleiben beim T-Bar abgelehnt wie bisher.
+
+**Geprüft**: strom-Test auf dem CPU-Mischer (rot/blau, Schieben, Push, Dip,
+Blende, zurück); lmix gegen strom auf CPU und CUDA: Schieben links bei 0,5
+links schwarz, rechts Balken (0 | 221 bzw. 0 | 145), Blende bei 0,5 die
+Hälfte der Balken, am Ende der Take.

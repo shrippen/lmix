@@ -228,7 +228,7 @@ kann es, Console nicht.
 |---|---|---|---|
 | SWI.1 | Preview/Program-Paar; Input in Preview per Klick, Taste, Aktion | M | ✅ |
 | SWI.2 | Cut (Tausch PVW/PGM) und Cut direkt (Input sofort auf PGM) | M | ✅ |
-| SWI.3 | 4 Übergangstasten, je Effekt + Dauer einstellbar; Taste 1 steuert T-Bar | M | ◐ (T-Bar nur Blende, nicht Effekt von Taste 1) |
+| SWI.3 | 4 Übergangstasten, je Effekt + Dauer einstellbar; Taste 1 steuert T-Bar | M | ✅ (T-Bar mit dem Effekt von Taste 1 seit 19.10.: Blende, Dip, Schieben, Push; Wischen und Stinger als Blende) |
 | SWI.4 | Effektkatalog: Cut, Blende, 3D-Zoom, Schieben, Wischen, Würfel, Würfelzoom, Fliegen, Fliegen+Drehen, Kreuzzoom, Verschmelzen (SWI.6), Stinger 1–8 | M | ◐ (Cut, Blende, Dip, Schieben, Push, Wischen, Stinger; ohne 3D-Zoom, Würfel, Fliegen, Kreuzzoom, Verschmelzen) |
 | SWI.5 | T-Bar: manueller Fortschritt 0–100 %, per Maus, MIDI-Fader, Aktion | M | ◐ (Maus, MIDI, Aktion; Ton mit „folgt Bild“ blendet mit; nur Blende als Effekt) |
 | SWI.6 | Verschmelzen: Ebenen, die in PVW und PGM vorkommen, wandern an ihre neue Position; Rest blendet | S | – |
