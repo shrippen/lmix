@@ -2400,6 +2400,10 @@ impl Switcher {
             return Err(ActionError::BadTBar);
         }
         self.check_no_stinger()?;
+        // The bar would put program back on air under the black.
+        if self.fade_to_black {
+            return Err(ActionError::FadeToBlackOn);
+        }
         if position >= 1.0 {
             self.t_bar = 0.0;
             return self.take(Effect::Cut, 0);
@@ -6201,6 +6205,47 @@ mod tests {
                 ..
             }]
         ));
+    }
+
+    #[test]
+    fn t_bar_of_a_stinger_button_blends() {
+        // A stinger's clip cannot stand still: its bar blends.
+        let mut sw = with_stinger();
+        sw.apply(Action::SetTransition {
+            slot: TransitionSlot(1),
+            effect: Effect::Stinger,
+            duration_ms: 1000,
+            stinger: Some(StingerSpec {
+                input: named("Sting"),
+                cut_ms: 400,
+            }),
+        })
+        .unwrap();
+        assert!(matches!(
+            sw.apply(Action::TBar { position: 0.5 }).unwrap()[..],
+            [Command::TBar {
+                effect: Effect::Fade,
+                ..
+            }]
+        ));
+    }
+
+    #[test]
+    fn t_bar_waits_for_the_end_of_a_fade_to_black() {
+        let mut sw = two_inputs();
+        sw.apply(Action::PreviewInput { input: named("B") })
+            .unwrap();
+        sw.apply(Action::FadeToBlack { duration_ms: 0 }).unwrap();
+
+        for position in [0.3, 1.0] {
+            assert_eq!(
+                sw.apply(Action::TBar { position }),
+                Err(ActionError::FadeToBlackOn),
+                "{position}"
+            );
+        }
+        sw.apply(Action::FadeToBlack { duration_ms: 0 }).unwrap();
+        assert!(sw.apply(Action::TBar { position: 0.3 }).is_ok());
     }
 
     #[test]

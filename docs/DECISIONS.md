@@ -4226,8 +4226,13 @@ Pads in Ruhe wie beim klassischen Take, dann der Effekt an dieser Stelle
 Schwarz, Blende mischt). lmix schickt den Effekt von Taste 1 mit. Am Ende
 bleibt es ein Schnitt-Take wie bisher, zurück auf 0 zeigt Program wie
 vorher.
-- **Als Blende**: Wischen (braucht die Uniforms der Shader-Engine) und
-  Stinger (ein Clip steht nicht still).
+- **Als Blende**: Schnitt (hat kein Dazwischen), Wischen (braucht die
+  Uniforms der Shader-Engine) und Stinger (ein Clip steht nicht still).
+- **Bei Fade to Black gesperrt** (`fade_to_black_on`, Review #123): der
+  T-Bar setzt die Pads wie ein Take zurück und brächte Program unter dem
+  Schwarz zurück, während FTB noch an ist. strom lehnt dann ebenso ab.
+- **Overlay-Blenden laufen weiter**: strom setzt beim Halten nur die
+  Input-Pads zurück, nicht die DSK-Ebenen (Review #123).
 - Layouts auf Vorschau bleiben beim T-Bar abgelehnt wie bisher.
 
 **Geprüft**: strom-Test auf dem CPU-Mischer (rot/blau, Schieben, Push, Dip,
