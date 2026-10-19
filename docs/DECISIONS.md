@@ -4241,7 +4241,11 @@ vorher.
 - **Ein Take setzt den T-Bar auf 0**: jede Aktion, die Program wechselt
   (Cut, Übergang, Stinger, Cut direkt), setzt in strom die Pads zurück;
   lmix führt den T-Bar dann wieder ab 0, sonst käme die nächste Vorschau
-  an der alten Stelle von selbst auf Sendung (Review #123).
+  an der alten Stelle von selbst auf Sendung (Review #123). Ebenso ein
+  neuer oder neu gestarteter Mischer (Neustart der Engine, Format, Show
+  laden). Nicht erfasst: strom merkt sich das Halten nicht, ein
+  Geometrie-Refresh (ein Input ändert seine Größe) setzt die Pads zurück,
+  ohne dass lmix es erfährt; der nächste Zug am T-Bar stellt es wieder her.
 - **Gezogener T-Bar und Vorschau** (Review strom #34): ein anderes Input auf
   die Vorschau kommt an der Stelle des T-Bars herein; ein Layout auf die
   Vorschau und Fade to Black stellen ihn erst auf 0 (sonst stünde die alte

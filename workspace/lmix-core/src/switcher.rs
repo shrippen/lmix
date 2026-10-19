@@ -1711,6 +1711,8 @@ impl Switcher {
     pub fn restore_commands(&mut self) -> Vec<Command> {
         // A new or restarted mixer runs no stinger; no end will come.
         self.stinger_finished();
+        // Nor does it hold a T-bar: program comes up as it rests.
+        self.t_bar = 0.0;
         // First: a new format builds a new mixer, the rest sets it up.
         let mut commands = vec![Command::SetFormat {
             format: self.show.format,
@@ -7234,6 +7236,22 @@ mod tests {
             Err(ActionError::BadLayout { .. })
         ));
         assert_eq!(sw.state().t_bar, 0.0);
+    }
+
+    #[test]
+    fn a_restored_mixer_holds_no_t_bar() {
+        let mut sw = two_inputs();
+        add(&mut sw, "C");
+        sw.apply(Action::PreviewInput { input: named("B") })
+            .unwrap();
+        sw.apply(Action::TBar { position: 0.4 }).unwrap();
+        sw.restore_commands();
+        assert_eq!(sw.state().t_bar, 0.0);
+        assert_eq!(
+            sw.apply(Action::PreviewInput { input: named("C") })
+                .unwrap(),
+            [Command::Preview { slot: 2 }]
+        );
     }
 
     #[test]
