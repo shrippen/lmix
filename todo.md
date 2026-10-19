@@ -13,7 +13,7 @@ Erledigtes abhaken (`[x]`, Datum) und nach einer Weile löschen; Details stehen 
 - [ ] Sitzung auf dem 3090-Rechner (HW, CEF): `cefsrc` bauen (H.36), Hardware-Abnahme H.13, H.20, H.21, H.37, H.38, GPU-Pfade, VA. Checkliste in `docs/HARDWARE-TODO.md`.
 - [ ] **S-E.3 entscheiden** (Klang-Cues: Abspieler je Zone oder verdeckte Inputs), mit Messung: Entscheidungsseite https://claude.ai/artifact/DAzFNWyRUKGiu4x5WUvFPo, „An Claude übergeben“. Danach S1 Stufe 2 (Zonen, Klang-Cues).
 - [ ] **PRs vom 16./17.10. ansehen und mergen**, Reihenfolge in `docs/HANDOVER.md`: #45, #51, #39, dann der Stapel #38 → #52.
-- [ ] Cue-Zeitgenauigkeit: 4-h-Lauf `DURATION_S=14400 scripts/test-cue-timing.sh` lief in der Nacht; Ergebnis in DECISIONS (oder neu starten, falls nicht eingetragen).
+- [x] Cue-Zeitgenauigkeit 4 h (2026-10-19, DECISIONS „Hardware-Nacht“): mit Echtzeit, neben Builds und Tests, 226 von 1 468 811 Schritten über 10 ms, spätestens 385,7 ms. Ein Lauf auf freiem Rechner steht aus (eine Nacht ohne andere Arbeit).
 - [x] PRs vom 16.10. gemergt (#28–#36, 2026-10-16); lmix #15–#25 und strom #7–#14 geschlossen, Inhalt war schon in `main` bzw. `dev`.
 - [ ] PR-Agent antwortet nur „Failed to review PR“: der OpenRouter-Schlüssel hat sein Monatslimit erreicht (5,49 $ von 5 $, Reset 1.11.). Limit anheben oder anderen Schlüssel/Modell setzen (`PR_AGENT_LLM_KEY`, `PR_AGENT_MODEL`). PR-Agent läuft nur auf `/review` des Eigentümers, kein Merge wartet sonst auf ihn (`agent.md`).
 - [ ] M7.0 (CEF gegen WPE): `cef` 152 ist installiert; `gstcefsrc` bauen lädt gstcefsrc und CEF 139 von außen und wurde heute nicht freigegeben. Freigeben, dann baue ich `cefsrc` nach `~/.local/lib/gstreamer-1.0`.
@@ -66,12 +66,12 @@ enabled: !(/\&[^\&]/.test(control.text))
 
 - [ ] **Panik und Stopp erreichen laufende Klänge nicht** (H.37, DECISIONS 19.10.): strom meldet einen Klang am echten Gerät 0,2 s nach dem Start als beendet und baut ihn ab, der Ton spielt aus einem Puffer hinter der EOS-Sonde bis zum Dateiende; lmix findet nichts zu stoppen. Nachstellen: `QUIET=1 scripts/hw-sound-cues/run.sh` (Prüfung „panic“). In strom: Ende erst melden, wenn gehört; Stoppen wirkt auch auf das, was noch im Puffer ist.
 - [ ] GO bis hörbar 77 ms statt ≤ 50 ms (SND.12, H.37): Rest ist strom's Zonenlatenz (30 ms) und PipeWire; prüfen, ob die Zonenlatenz kleiner gehen kann.
-- [ ] 16 Inputs auf CUDA: Latenz 81 ms statt 56 ms mit 8 Inputs (H.2, NFA.2 „≤ 2 Frames“): Ursache im Mischer suchen (wächst mit der Zahl der Pads).
+- [ ] CUDA-Mischer mit 16 Slots: Latenz 81–83 ms statt 56 ms (H.2, NFA.2 „≤ 2 Frames“). Mit 8, 12, 14, 15 Slots 56 ms: Sprung genau bei 16, nicht mit der Last (GL mit 16: 56 ms nach 5 min). Schwelle im Mischer-Aufbau suchen (Multiview-Raster, Pad-Nummern der DSK-Ebenen, Aggregator-Latenz).
 - [ ] `cudaconverter`-Alpha-Bug upstream melden (GStreamer, `gstcudaconverter.cpp`: der Setter setzt `priv->alpha` nicht); den Workaround in strom #29 entfernen, sobald die Distributionen den Fix haben.
 - [ ] strom-Tests auf der RTX 3090 rot, auch auf `dev`: `nvdec_cuda_after_a_converted_format_stays_on_the_gpu`, `measure_idle_fx_slot_renders`; `gpu_stingers_land_frame_accurately` flakig unter GPU-Last (H.34).
 - [ ] Abnahmetest `test-m2b-vm.sh` für echte Hardware öffnen (`MIXER`, Strom-Umgebung, Looks auf GL, Bildschirm-Ausgang auf Wayland): in dieser Nacht als Kopie gelaufen (`~/.cache/lmix-hwnight/m2b/test.sh`). Die 28 CRITICALs der Facecam (GStreamer-V4L2-Abtastung) dort aus der Zählung nehmen.
 - [ ] `scripts/test-titles.sh` schlug am 12.10. einmal fehl (direkt nach `test-web.sh`, Ausgabe nicht erhalten), danach 19-mal grün, am 17.10. in der Cloud 8-mal direkt nach `test-web.sh` grün; nicht nachstellbar. Bei der nächsten Wiederholung die Ausgabe sichern (`KEEP_WORK=1`) und die Ursache beheben.
-- [ ] Cue-Zeitgeber unter Last bis 146 ms spät (RUN.8, DECISIONS 17.10.): Echtzeit-Priorität per rtkit für den Zeitgeber-Thread, dann 4 h unter Last messen; zusätzlich 4 h auf freiem Rechner.
+- [ ] Cue-Zeitgeber unter Last (RUN.8): Echtzeit gebaut (#105), auf der RTX 3090 gemessen (DECISIONS 19.10.): 10 min Volllast 16,6 ms (ohne 133 ms), über rtkit 1,6 ms; 4 h neben Builds ein Ausreißer von 385,7 ms. Offen: 4 h auf freiem Rechner; hält 10 ms nicht, dann Zeitgeber ohne Switcher-Sperre (DECISIONS 18.10. „Grenze“).
 
 - [x] Demo-Modus mit Studio-Weber-Daten (2026-10-09, `demo/start.sh`).
 - [ ] Release-Build (wenn es einen gibt): `demo/` ausschließen und prüfen.

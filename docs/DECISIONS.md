@@ -3992,3 +3992,96 @@ PR-Agent.
 
 **Verworfen**: PR-Agent ganz entfernen. Er bleibt als zweiter Leser mit
 einem anderen Modell, wenn der Eigentümer ihn will.
+
+## 2026-10-19 — Hardware-Nacht auf der RTX 3090: Abnahme CUDA und GL, Klang, Bühnen, Zeitgeber
+
+**Stand**: lmix `main` f2136cd, strom `dev` 81cd27a plus Branch `lmix-cuda-hw-fixes`;
+RTX 3090, Treiber 615.78, GStreamer 1.28.8, Rust 1.99.1. Die ganze Nacht lief nebenher
+eine fremde GPU-Last (100 %, 20–23 GB VRAM, ~350 W); Latenz- und Lastwerte sind
+darum Obergrenzen.
+
+**Abnahmetest auf echter Hardware**: `scripts/test-m2b-vm.sh` als Kopie mit
+`--mixer cuda` bzw. `gl` (strom auf der Wayland-Sitzung, NVIDIA-GL statt
+llvmpipe). Mit den Fixes unten sind auf beiden Mischern alle Prüfungen grün
+(Stinger mit Alpha, Overlays, PNG mit Alpha, Layouts mit Zuschnitt, Failover,
+Signalverlust, Aufnahme/SRT/RTMP/H.265 über NVENC, MultiCorder, Automation,
+Show speichern und Wiederaufnahme nach Neustart von lmix-core; auf GL auch
+Looks). Latenz im Test 87 ms (CUDA) bzw. 88 ms (GL) Median unter der fremden
+Last. Rot bleibt nur „keine CRITICALs“: 28 kommen aus GStreamers V4L2-Abtastung
+der Facecam (`gst-device-monitor-1.0 Video/Source` allein zeigt sie auch).
+GL brauchte `SETTLE_S=30`: unter der fremden Last kamen die ersten Bilder
+erst nach 10 s.
+
+**Gefunden und in strom behoben** (Branch `lmix-cuda-hw-fixes`, je mit Test,
+der ohne den Fix scheitert; die CUDA-Tests sind `#[ignore]`, laufen mit
+`cargo test -- --ignored` auf einem CUDA-Rechner):
+1. **Alpha hängt nach einer Blende (CUDA)**: `cudaconverter` (1.28.8, auch
+   upstream `main`) vergleicht ein neues Alpha mit einem Feld, das er nie
+   setzt (immer 1.0). Ein Bruchteil zurück auf genau 1.0 wird überhört: Nach
+   einer Blende blieb das neue Program bei ~0,97 (Ball auf Grau) und eine
+   später wieder geschnittene Quelle bei ~0,03 (fast schwarz). strom macht an
+   CUDA-Mischer-Pads aus 1.0 den Wert 1 − 10⁻¹²: für den Konverter eine
+   Änderung, im Kernel (`f32`) genau 1.0. Upstream melden.
+2. **Vorschaubilder auf CUDA im Videobereich**: NV12 ging ohne Umrechnung in
+   `nvjpegenc`, JPEG ist Vollbereich: Schwarz 16, Weiß 235 in allen
+   Program- und Input-Bildern (die Aufnahme selbst stimmte). Jetzt
+   `colorimetry=1:4:0:0` vor dem Encoder.
+3. **Kein Stinger auf CUDA**: `stinger_pads` suchte das Pad hinter der GL-Queue
+   oder dem CPU-Crop, auf CUDA hängt es hinter `cudaupload_stinger`. Jeder
+   Stinger wurde abgelehnt („this vision mixer has no stinger input“).
+4. **Stinger mit Alpha auf CUDA nicht ausgehandelt**: `videoconvert !
+   videocrop ! cudaupload`; `videocrop` nimmt A420/A444_10LE, also reichte der
+   Convert sie durch, `cudaupload` nicht. Auf CUDA jetzt Crop, Convert, Upload.
+5. **CRITICAL bei jeder langen Stummschaltung**: Der letzte Stützpunkt einer
+   dB-Rampe auf 0 lag bei −1,25·10⁻¹⁸ (`(1.0 − 0.95) / 0.05` ist etwas über 1),
+   `volume` lehnte ihn ab. Jetzt auf [0, 1] begrenzt.
+
+**Klang-Cues auf echten Geräten (H.37)**, Scarlett Solo auf −120 dB gestellt
+(nachts), gemessen am Monitor des Geräts mit `parec`:
+- 16 Klänge gleichzeitig: 8 s ohne Lücke, alle Samples da.
+- Eine Zone auf zwei Geräten (Scarlett, S/PDIF): beide spielen, 6–8 ms Versatz.
+- GO bis erstes Sample am Gerät (vorgeladen, 10 GOs): 110 ms Median (bis
+  133 ms). Mit `buffer-time` 20 ms und `latency-time` 5 ms am `pulsesink`
+  (lmix, Branch `hw-night-1019`) 77 ms (77–81 ms). SND.12 verlangt 50 ms; der
+  Rest sind strom's Zonenlatenz (30 ms) und PipeWire.
+- **Panik stoppt keinen Klang** (offen): strom meldet einen 5-s-Klang 0,2 s
+  nach „plays“ als beendet und baut ihn ab, sein Zustand listet keine Klänge
+  mehr, während er zu hören ist. lmix stoppt bei Panik „jeden Klang, den
+  strom meldet“, also keinen; der Ton spielt bis zum Ende der Datei. Das EOS
+  erreicht die Sonde vor dem Zonenmischer sofort, die Annahme „der Mischer
+  nimmt die Puffer, wie er sie spielt“ hält am echten Gerät nicht. Der Puffer
+  liegt nicht im Pulse-Stream (Buffer Latency 0), sondern in der Pipeline
+  dahinter. In der VM fiel es nicht auf (Fakesink). Nächster Schritt in
+  strom: das Ende eines Klangs erst melden, wenn er gehört ist, und Stoppen
+  unabhängig davon, ob strom ihn noch führt.
+- Gerätekanäle 3/4: kein Mehrkanal-Interface hier. Auf einem 8-Kanal-Gerät
+  mit Positionen (virtuell, FL…SR) ist eine Zone auf [3, 4] auf allen Kanälen
+  stumm: lmix schickt einen 4-Kanal-Strom ohne Positionen, PipeWire ordnet nach
+  Position, nicht nach Index. Gerätekanal N ist so nur auf Geräten mit
+  „AUX“-Kanälen (Pro-Audio-Profil) adressierbar. Entscheidung offen
+  (Kanalzahl und -belegung des Geräts mitschicken).
+
+**Bühnen (H.38)**: Vollbild als `waylandsink`, 1080p30-Video über die CPU:
+strom 185 % CPU für eine Bühne, 280 % für vier. Sichtprüfung nachts nicht
+möglich (Bildschirme gedimmt, Bildschirmfotos leer).
+
+**Kamera (H.7, H.12)**: Elgato Facecam MK.2 in der Geräteliste, als Input
+nach 1 s online, Bild auf Program (CUDA).
+
+**Zeitgeber (H.39)**, 10 min mit 24 × `yes`: mit Echtzeit (SCHED_FIFO über
+`RLIMIT_RTPRIO`) spätestens 16,6 ms, 10 von 61 215 Schritten über 10 ms; ohne
+Echtzeit (rtkit gesperrt) 133,2 ms und 434. Echtzeit hilft deutlich, hält
+10 ms unter Volllast aber nicht. 4 h mit Echtzeit, neben den Builds und Tests
+dieser Nacht (Builds mit `-j 12`, Tests, Soaks, zeitweise nur 4 GB RAM frei): 1 468 811 Schritte, spätestens 385,7 ms, 226 über 10 ms (0,015 %); die Echtzeit blieb die ganzen 4 h (keine Rückstufung). Zum Vergleich 17.10. ohne Echtzeit unter Builds: 145,6 ms, 694 darüber. Weniger späte Schritte, aber ein schlimmerer Ausreißer (in der ersten Stunde, während der strom-Builds). Über rtkit (`RLIMIT_RTPRIO` 0, „how=rtkit“ im Log) 3 min mit 24 × `yes`: spätestens 1,6 ms, keiner über 10 ms. Ein 4-h-Lauf auf freiem Rechner steht weiter aus.
+
+**strom ignorierte Tests (H.34)**: rot auch auf unverändertem `dev`:
+`nvdec_cuda_after_a_converted_format_stays_on_the_gpu` (GBR_10LE nie auf PGM)
+und `measure_idle_fx_slot_renders` (GL). `gpu_stingers_land_frame_accurately`
+scheitert unter der GPU-Last etwa jedes vierte Mal, auch auf `dev`.
+
+**16 Inputs (H.2, H.10, H.18)**, GPU frei (die fremde Last endete 03:38): CUDA 20 min ohne Drop (Aufnahme 37 038 Bilder in 1 233 s, SRT ohne Verlust), Latenz durchgehend 81 ms, mit 8 Inputs 56 ms wie am 13.10.; GL 15 min, Latenz nach 5 min 56 ms (anfangs 80 ms), strom-RSS 1 084 → 1 149 MB (bekanntes GL-Wachstum). Gegenproben je 3–5 min auf CUDA: 12, 14 und 15 Inputs 56 ms, 16 wieder 83 ms. Die Latenz springt also genau bei 16 Slots, sie wächst nicht mit der Last; ≤ 2 Frames (NFA.2) hält auf CUDA mit 16 Inputs nicht. Ursache offen.
+
+**Syncthing**: In lmix hatte Syncthing `.git/index` (auch den des
+Submoduls) und 264 Objekte überschrieben bzw. verdoppelt; Arbeitsbaum war
+unverändert. Index aus HEAD neu gebaut, Konfliktdateien nach `~/.cache`.
+Seit 19.10. ignoriert Syncthing `.git`.
