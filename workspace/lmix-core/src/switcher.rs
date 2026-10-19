@@ -1711,8 +1711,6 @@ impl Switcher {
     pub fn restore_commands(&mut self) -> Vec<Command> {
         // A new or restarted mixer runs no stinger; no end will come.
         self.stinger_finished();
-        // Nor does it hold a T-bar: program comes up as it rests.
-        self.t_bar = 0.0;
         // First: a new format builds a new mixer, the rest sets it up.
         let mut commands = vec![Command::SetFormat {
             format: self.show.format,
@@ -1720,6 +1718,12 @@ impl Switcher {
             sample_rate: self.show.sample_rate,
         }];
         commands.extend(self.picture_commands());
+        // A held T-bar goes back to 0: a reused mixer (same format, same
+        // program slot) would keep showing it, a new one rests anyway.
+        match self.t_bar_back() {
+            Ok(back) => commands.extend(back),
+            Err(_) => self.t_bar = 0.0,
+        }
         self.mix.clear();
         commands.extend(self.audio_commands(AUDIO_RAMP_MS));
         // A reused mixer may still hold solos from before.
@@ -7245,7 +7249,12 @@ mod tests {
         sw.apply(Action::PreviewInput { input: named("B") })
             .unwrap();
         sw.apply(Action::TBar { position: 0.4 }).unwrap();
-        sw.restore_commands();
+        let cmds = sw.restore_commands();
+        assert!(
+            cmds.iter()
+                .any(|c| matches!(c, Command::TBar { position, .. } if *position == 0.0)),
+            "a reused mixer still holds the bar: {cmds:?}"
+        );
         assert_eq!(sw.state().t_bar, 0.0);
         assert_eq!(
             sw.apply(Action::PreviewInput { input: named("C") })
