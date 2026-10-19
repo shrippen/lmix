@@ -1718,20 +1718,18 @@ impl Switcher {
             sample_rate: self.show.sample_rate,
         }];
         commands.extend(self.picture_commands());
-        // A held T-bar goes back to 0: a reused mixer (same format, same
-        // program slot) would keep showing it, a new one rests anyway.
-        match self.t_bar_back() {
-            Ok(back) => commands.extend(back),
-            // A show without transition buttons: at 0 the effect does not
-            // matter.
-            Err(_) => {
-                self.t_bar = 0.0;
-                commands.push(Command::TBar {
-                    position: 0.0,
-                    effect: Effect::Fade,
-                });
-            }
+        // The T-bar goes back to 0, held or not: a reused mixer (same
+        // format, same program slot) keeps whatever bar it showed, also one
+        // a restarted lmix-core no longer knows of. Not under fade to
+        // black, which refuses it; the effect does not matter at 0.
+        if !self.fade_to_black {
+            let effect = self.t_bar_effect().unwrap_or(Effect::Fade);
+            commands.push(Command::TBar {
+                position: 0.0,
+                effect,
+            });
         }
+        self.t_bar = 0.0;
         self.mix.clear();
         commands.extend(self.audio_commands(AUDIO_RAMP_MS));
         // A reused mixer may still hold solos from before.
@@ -2155,8 +2153,13 @@ impl Switcher {
         }
         let mut commands = Vec::new();
 
-        // A removed input leaves preview empty and program black.
+        // A removed input leaves preview empty and program black; a bar
+        // pulled towards it goes back first.
         if self.show.preview == Some(removed.id) {
+            if let Ok(back) = self.t_bar_back() {
+                commands.extend(back);
+            }
+            self.t_bar = 0.0;
             self.show.preview = None;
         }
         if self.show.program == Some(removed.id) {
@@ -7272,6 +7275,38 @@ mod tests {
     }
 
     #[test]
+    fn a_restarted_core_puts_a_bar_it_never_saw_back() {
+        // A restarted lmix-core knows no bar; the running mixer may hold one.
+        let mut sw = two_inputs();
+        let cmds = sw.restore_commands();
+        assert!(
+            cmds.iter()
+                .any(|c| matches!(c, Command::TBar { position, .. } if *position == 0.0)),
+            "{cmds:?}"
+        );
+        // Not under fade to black, which strom refuses the bar under.
+        sw.apply(Action::FadeToBlack { duration_ms: 0 }).unwrap();
+        assert!(!sw
+            .restore_commands()
+            .iter()
+            .any(|c| matches!(c, Command::TBar { .. })));
+    }
+
+    #[test]
+    fn removing_the_preview_under_a_pulled_bar_puts_it_back() {
+        let mut sw = two_inputs();
+        sw.apply(Action::PreviewInput { input: named("B") })
+            .unwrap();
+        sw.apply(Action::TBar { position: 0.4 }).unwrap();
+        let cmds = sw.apply(Action::RemoveInput { input: named("B") }).unwrap();
+        assert!(
+            matches!(cmds.first(), Some(Command::TBar { position, .. }) if *position == 0.0),
+            "{cmds:?}"
+        );
+        assert_eq!(sw.state().t_bar, 0.0);
+    }
+
+    #[test]
     fn a_restored_show_without_buttons_still_puts_the_t_bar_back() {
         let mut sw = two_inputs();
         sw.apply(Action::PreviewInput { input: named("B") })
@@ -9065,13 +9100,14 @@ mod tests {
         let cmds = fresh.replace(show, Some("x.lmix".into())).unwrap();
 
         // The format (a new mixer if it differs), then picture (slots,
-        // program, preview), then audio and the rest.
+        // program, preview), the T-bar at rest, then audio and the rest.
         assert!(matches!(cmds[0], Command::SetFormat { .. }));
         assert!(matches!(cmds[1], Command::SetSlot { slot: 0, .. }));
         assert!(matches!(cmds[2], Command::SetSlot { slot: 1, .. }));
         assert!(matches!(cmds[3], Command::Program { slot: None, .. }));
         assert_eq!(cmds[4], Command::Preview { slot: 1 });
-        assert!(matches!(cmds[5], Command::SetAudio { slot: 0, .. }));
+        assert!(matches!(cmds[5], Command::TBar { position, .. } if position == 0.0));
+        assert!(matches!(cmds[6], Command::SetAudio { slot: 0, .. }));
         assert_eq!(fresh.state().path.as_deref(), Some("x.lmix"));
     }
 
