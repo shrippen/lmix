@@ -948,7 +948,13 @@ impl Switcher {
         let ramp_ms = self.audio_ramp(&action);
         let leave_ms = self.leave_ms(&action);
         let airing = self.airing();
+        let program = self.show.program;
         let mut commands = self.apply_action(action)?;
+        // Any take (cut, transition, stinger, cut direct) rests the mixer's
+        // pads: a bar pulled before it starts again from 0.
+        if self.show.program != program {
+            self.t_bar = 0.0;
+        }
         commands.extend(self.playback_commands());
         commands.extend(self.stinger_commands());
         let audio = self.audio_commands(ramp_ms);
@@ -2426,6 +2432,12 @@ impl Switcher {
             }
             None => return Err(ActionError::NoPreview),
         };
+        if let Some(Bus::Layout(_)) = self.bus_of(self.show.program) {
+            return Err(ActionError::BadLayout {
+                reason: "the T-bar mixes inputs only; take the layout off program with Cut or a transition"
+                    .into(),
+            });
+        }
         let effect = self.t_bar_effect()?;
         self.t_bar = position;
         Ok(vec![Command::TBar { position, effect }])
@@ -7212,6 +7224,34 @@ mod tests {
             sw.apply(Action::TBar { position: 0.5 }),
             Err(ActionError::BadLayout { .. })
         ));
+
+        // Nor from a layout on program: the mixer's pads are the layout's.
+        sw.apply(Action::Cut).unwrap();
+        sw.apply(Action::PreviewInput { input: named("B") })
+            .unwrap();
+        assert!(matches!(
+            sw.apply(Action::TBar { position: 0.5 }),
+            Err(ActionError::BadLayout { .. })
+        ));
+        assert_eq!(sw.state().t_bar, 0.0);
+    }
+
+    #[test]
+    fn a_take_while_the_t_bar_is_pulled_starts_it_again_from_zero() {
+        let mut sw = two_inputs();
+        add(&mut sw, "C");
+        sw.apply(Action::PreviewInput { input: named("B") })
+            .unwrap();
+        sw.apply(Action::TBar { position: 0.4 }).unwrap();
+        sw.apply(Action::Cut).unwrap();
+        assert_eq!(sw.state().t_bar, 0.0);
+
+        // The next preview stays off air.
+        assert_eq!(
+            sw.apply(Action::PreviewInput { input: named("C") })
+                .unwrap(),
+            [Command::Preview { slot: 2 }]
+        );
     }
 
     #[test]

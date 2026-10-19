@@ -4235,7 +4235,13 @@ vorher.
   Schwarz zurück, während FTB noch an ist. strom lehnt dann ebenso ab.
 - **Overlay-Blenden laufen weiter**: strom setzt beim Halten nur die
   Input-Pads zurück, nicht die DSK-Ebenen (Review #123).
-- Layouts auf Vorschau bleiben beim T-Bar abgelehnt wie bisher.
+- Layouts auf Vorschau bleiben beim T-Bar abgelehnt wie bisher, ebenso ein
+  Layout auf Program (die Pads gehören dann dem Layout; strom lehnt ab,
+  und der Ton blendete sonst ohne Bild; Review #123).
+- **Ein Take setzt den T-Bar auf 0**: jede Aktion, die Program wechselt
+  (Cut, Übergang, Stinger, Cut direkt), setzt in strom die Pads zurück;
+  lmix führt den T-Bar dann wieder ab 0, sonst käme die nächste Vorschau
+  an der alten Stelle von selbst auf Sendung (Review #123).
 - **Gezogener T-Bar und Vorschau** (Review strom #34): ein anderes Input auf
   die Vorschau kommt an der Stelle des T-Bars herein; ein Layout auf die
   Vorschau und Fade to Black stellen ihn erst auf 0 (sonst stünde die alte
