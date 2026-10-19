@@ -4164,6 +4164,13 @@ oder Blende, mit und ohne Aufnahme und SRT: 8-mal überall 56 ms, einmal
 56 ms kommen also nur ab und zu, dann je Lauf oder ab einem Schnitt. Im
 Normalfall hält NFA.2 (≤ 66,7 ms).
 
+**Mischer-Latenz** (Eigenschaft `latency` des Bildmischers, strom-Standard
+20 ms, 16 Inputs mit Aufnahme und SRT, je 3 min): 20 ms 73 ms (ein
+erhöhter Lauf), 10 und 15 ms je 56 ms; Bildzahlen gleich (5834/5835
+Bilder in Aufnahme, ~5765 über SRT). Der feste Teil kommt also nicht aus
+dem Spielraum des Mischers, sondern von davor (Quelle, Inter-Kanal,
+`min-upstream-latency`).
+
 **Nächster Schritt**: einen Lauf mit erhöhtem Wert fangen (Skript mit
 Wiederholung, bis ein Wert über 56 ms kommt) und dann die Fristen des
 Programm-Mischers mit `GST_DEBUG=aggregator:6` ansehen; prüfen, ob der
