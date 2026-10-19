@@ -7272,6 +7272,25 @@ mod tests {
     }
 
     #[test]
+    fn a_restored_show_without_buttons_still_puts_the_t_bar_back() {
+        let mut sw = two_inputs();
+        sw.apply(Action::PreviewInput { input: named("B") })
+            .unwrap();
+        sw.apply(Action::TBar { position: 0.4 }).unwrap();
+        // As a show file with "transitions": [] would load.
+        sw.show.transitions.clear();
+        let cmds = sw.restore_commands();
+        assert!(
+            cmds.iter().any(|c| matches!(
+                c,
+                Command::TBar { position, effect: Effect::Fade } if *position == 0.0
+            )),
+            "{cmds:?}"
+        );
+        assert_eq!(sw.state().t_bar, 0.0);
+    }
+
+    #[test]
     fn a_take_while_the_t_bar_is_pulled_starts_it_again_from_zero() {
         let mut sw = two_inputs();
         add(&mut sw, "C");
