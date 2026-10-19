@@ -4042,7 +4042,7 @@ der ohne den Fix scheitert; die CUDA-Tests sind `#[ignore]`, laufen mit
 - Eine Zone auf zwei Geräten (Scarlett, S/PDIF): beide spielen, 6–8 ms Versatz.
 - GO bis erstes Sample am Gerät (vorgeladen, 10 GOs): 110 ms Median (bis
   133 ms). Mit `buffer-time` 20 ms und `latency-time` 5 ms am `pulsesink`
-  (lmix, Branch `hw-night-1019`) 77 ms (77–81 ms). SND.12 verlangt 50 ms; der
+  (lmix, Branch `hw-night-1019`) 77 ms (77–81 ms). Gilt für Zonen mit genanntem Gerät; die Standardausgabe (Gerät leer) bleibt `autoaudiosink` mit seinem Puffer (~110 ms), weil sie ohne Sound-Server auf ALSA zurückfallen muss (SNF.1, Review #116). SND.12 verlangt 50 ms; der
   Rest sind strom's Zonenlatenz (30 ms) und PipeWire.
 - **Panik stoppt keinen Klang** (offen): strom meldet einen 5-s-Klang 0,2 s
   nach „plays“ als beendet und baut ihn ab, sein Zustand listet keine Klänge
@@ -4144,7 +4144,7 @@ gar nichts (die Vorschau war kein Input).
 Auflösung, Beschriftung und Tally im Bild); einen Input-Selector statt des
 Compositors (keine Layouts auf Vorschau).
 
-## 2026-10-19 — Latenz: kein Sprung bei 16 Inputs, sondern die Phase des Inputs (H.2, NFA.2)
+## 2026-10-19 — Latenz: kein Sprung bei 16 Inputs (H.2, NFA.3)
 
 **Kontext**: In der Hardware-Nacht maß der CUDA-Mischer mit 16 Inputs
 durchgehend 81–83 ms, mit 8–15 Inputs 56 ms („Sprung genau bei 16“).
@@ -4157,20 +4157,19 @@ durchgehend 81–83 ms, mit 8–15 Inputs 56 ms („Sprung genau bei 16“).
   In 1 und 2 je 74 ms, In 3–6 je 60 ms, In 7–9 je 56 ms. Der Wert ändert
   sich nur beim Schnitt und bleibt je Input gleich.
 
-**Ergebnis**: Die Latenz hängt nicht an der Zahl der Inputs, sondern
-daran, welcher Input auf Program liegt: rund 56 ms fest plus ein Anteil
-je Input (bis gut 25 ms bei 30 fps). In der Nacht lag zufällig ein Input
-mit großem Anteil auf Program. Vermutung: Der Live-Aggregator gibt ein
-Bild aus, sobald alle aktiven Pads Daten haben, und die Pads laufen mit
-der Phase ihrer Quellen (je Slot-Flow ein eigener Takt der Testquelle).
-NFA.2 (≤ 2 Bilder = 66,7 ms) hält damit nicht immer (siehe Nachmessung).
+**Ergebnis**: Die Latenz hängt nicht an der Zahl der Inputs. Rund 56 ms
+sind fest; darüber kommen ab und zu höhere Werte (60–81 ms), am Vormittag
+wechselnd mit dem Input auf Program, mittags je Lauf (siehe Nachmessung).
+Ursache offen: Phase der Quellen gegenüber dem Live-Aggregator (er gibt
+ein Bild aus, sobald alle aktiven Pads Daten haben) oder etwas je Lauf.
+NFA.3 (intern ≤ 2 Bilder = 66,7 ms) hält im Normalfall, nicht immer.
 
 **Nachmessung** (mittags, strom mit #29–#33, eigenes Skript: N Inputs,
 jeder 2 × auf Program, je 2 s gemessen): 9 Läufe mit 4–15 Inputs, Schnitt
 oder Blende, mit und ohne Aufnahme und SRT: 8-mal überall 56 ms, einmal
 überall 65 ms (für den ganzen Lauf, unabhängig vom Input). Die Werte über
 56 ms kommen also nur ab und zu, dann je Lauf oder ab einem Schnitt. Im
-Normalfall hält NFA.2 (≤ 66,7 ms).
+Normalfall hält NFA.3 (≤ 66,7 ms).
 
 **Mischer-Latenz** (Eigenschaft `latency` des Bildmischers, strom-Standard
 20 ms, 16 Inputs mit Aufnahme und SRT, je 3 min): 20 ms 73 ms (ein
@@ -4207,7 +4206,7 @@ Panik, 16 Klänge, zwei Geräte, Gerätekanäle 3/4.
 ## 2026-10-19 — Ausgang mit Quelle Vorschau (OUT.2)
 
 **Entscheidung**: Ein Ausgang kann die Vorschau tragen (`source:
-{"from": "preview"}`, Console „Trägt: Vorschau“), seit der Mischer sie
+{"from": "preview"}`, Console „Inhalt: Vorschau“), seit der Mischer sie
 ausgibt (VSP, strom #32): Bild wie die Vorschau des Mischers (Input oder
 Layout), Ton von Program wie beim Multiview. Auf CUDA bleibt das Bild für
 die Encoder auf der GPU wie bei Program.

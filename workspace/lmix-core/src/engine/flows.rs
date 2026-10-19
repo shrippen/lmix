@@ -95,7 +95,8 @@ pub const PGM_OUT: &str = "pgm_out";
 const PGM_AUDIO_OUT: &str = "pgm_audio_out";
 /// The multiview for the outputs (OUT.2).
 const MV_OUT: &str = "mv_out";
-/// The mixer's preview output (VSP), for the Console's preview monitor.
+/// The mixer's preview output (VSP): the Console's preview monitor and
+/// outputs that carry the preview (OUT.2).
 const PVW_OUT: &str = "pvw_out";
 /// Outputs buffer a little more than the mixer: they are not on the
 /// switching path, an encoder hiccup must not drop frames.
@@ -517,7 +518,8 @@ pub fn output_flow(
     // Stopping drains with EOS: recordings get their trailer (MP4 needs it).
     flow.properties.eos_on_stop = Some(true);
 
-    // Program, or one slot as it arrives (ISO, MultiCorder). A slot
+    // Program, the multiview, the preview, or one slot as it arrives (ISO,
+    // MultiCorder). A slot
     // without sound gets no audio branch: a recorder would wait forever
     // for a track that never comes.
     let (video, audio) = match feed {

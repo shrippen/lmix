@@ -201,17 +201,25 @@ fn add_output(
             PropertyValue::Float(10f64.powf(f64::from(output.gain_db) / 20.0)),
         )],
     ));
-    // The machine's default output (no device) is the sound server's
-    // default sink, with the same small buffer.
-    let mut properties = vec![
-        ("buffer-time", PropertyValue::Int(PULSE_BUFFER_US)),
-        ("latency-time", PropertyValue::Int(PULSE_LATENCY_US)),
-    ];
-    if !output.device.is_empty() {
-        properties.push(("device", PropertyValue::String(output.device.clone())));
-    }
-    flow.elements
-        .push(element(&name("sink"), "pulsesink", properties));
+    // The machine's default output (no device) stays autoaudiosink: it
+    // falls back to ALSA without a sound server (SNF.1), and the whole
+    // playback flow, stages included, must start there. Its default
+    // buffer keeps GO-to-heard at ~110 ms; a named device gets the small
+    // buffer.
+    let sink = if output.device.is_empty() {
+        element(&name("sink"), "autoaudiosink", vec![])
+    } else {
+        element(
+            &name("sink"),
+            "pulsesink",
+            vec![
+                ("device", PropertyValue::String(output.device.clone())),
+                ("buffer-time", PropertyValue::Int(PULSE_BUFFER_US)),
+                ("latency-time", PropertyValue::Int(PULSE_LATENCY_US)),
+            ],
+        )
+    };
+    flow.elements.push(sink);
     for (from, to) in [("map", "caps"), ("caps", "gain"), ("gain", "sink")] {
         flow.links.push(link(name(from), name(to)));
     }
@@ -518,13 +526,9 @@ mod tests {
         assert!(links.contains(&("z1o1_queue", "z1o1_map")));
         assert!(links.contains(&("show:zone_out_2", "z2_nowhere")));
         let sink = |id: &str| flow.elements.iter().find(|e| e.id == id).unwrap();
-        // The default output: the sound server's default, small buffer too.
-        assert_eq!(sink("z0o0_sink").element_type, "pulsesink");
-        assert!(!sink("z0o0_sink").properties.contains_key("device"));
-        assert!(matches!(
-            sink("z0o0_sink").properties.get("latency-time"),
-            Some(PropertyValue::Int(PULSE_LATENCY_US))
-        ));
+        // The default output finds its sink itself, ALSA without a sound
+        // server (SNF.1).
+        assert_eq!(sink("z0o0_sink").element_type, "autoaudiosink");
         assert!(matches!(
             sink("z1o1_sink").properties.get("device"),
             Some(PropertyValue::String(d)) if d == "usb-b"
