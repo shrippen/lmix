@@ -144,11 +144,12 @@ fn add_stage(flow: &mut Flow, i: usize, outputs: &[StageOutput]) {
     }
 }
 
-/// One output of zone `zone`; returns the element its sound goes into.
 /// pulsesink's ring buffer: its default of 200 ms makes PipeWire run the
 /// stream at ~90 ms, alone more than GO-to-heard may take (SND.12, 50 ms).
 const PULSE_BUFFER_US: i64 = 20_000;
 const PULSE_LATENCY_US: i64 = 5_000;
+
+/// One output of zone `zone`; returns the element its sound goes into.
 
 fn add_output(flow: &mut Flow, zone: usize, o: usize, channels: u8, output: &ZoneOutput) -> String {
     let name = |part: &str| format!("z{zone}o{o}_{part}");
@@ -177,20 +178,17 @@ fn add_output(flow: &mut Flow, zone: usize, o: usize, channels: u8, output: &Zon
             PropertyValue::Float(10f64.powf(f64::from(output.gain_db) / 20.0)),
         )],
     ));
-    let sink = if output.device.is_empty() {
-        element(&name("sink"), "autoaudiosink", vec![])
-    } else {
-        element(
-            &name("sink"),
-            "pulsesink",
-            vec![
-                ("device", PropertyValue::String(output.device.clone())),
-                ("buffer-time", PropertyValue::Int(PULSE_BUFFER_US)),
-                ("latency-time", PropertyValue::Int(PULSE_LATENCY_US)),
-            ],
-        )
-    };
-    flow.elements.push(sink);
+    // The machine's default output (no device) is the sound server's
+    // default sink, with the same small buffer.
+    let mut properties = vec![
+        ("buffer-time", PropertyValue::Int(PULSE_BUFFER_US)),
+        ("latency-time", PropertyValue::Int(PULSE_LATENCY_US)),
+    ];
+    if !output.device.is_empty() {
+        properties.push(("device", PropertyValue::String(output.device.clone())));
+    }
+    flow.elements
+        .push(element(&name("sink"), "pulsesink", properties));
     for (from, to) in [("map", "caps"), ("caps", "gain"), ("gain", "sink")] {
         flow.links.push(link(name(from), name(to)));
     }
@@ -353,7 +351,13 @@ mod tests {
         assert!(links.contains(&("z1o1_queue", "z1o1_map")));
         assert!(links.contains(&("show:zone_out_2", "z2_nowhere")));
         let sink = |id: &str| flow.elements.iter().find(|e| e.id == id).unwrap();
-        assert_eq!(sink("z0o0_sink").element_type, "autoaudiosink");
+        // The default output: the sound server's default, small buffer too.
+        assert_eq!(sink("z0o0_sink").element_type, "pulsesink");
+        assert!(sink("z0o0_sink").properties.get("device").is_none());
+        assert!(matches!(
+            sink("z0o0_sink").properties.get("latency-time"),
+            Some(PropertyValue::Int(PULSE_LATENCY_US))
+        ));
         assert!(matches!(
             sink("z1o1_sink").properties.get("device"),
             Some(PropertyValue::String(d)) if d == "usb-b"
