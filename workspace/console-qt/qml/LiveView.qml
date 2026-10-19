@@ -11,7 +11,7 @@ Item {
     id: view
 
     required property var core
-    /** "program", an input id (tile size), "full:<id>" (as it arrives) or "". */
+    /** "program", "preview", an input id (tile size) or "". */
     property string source: ""
 
     Rectangle {

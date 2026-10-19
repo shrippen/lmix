@@ -19,6 +19,7 @@ use strom_types::flow::GStreamerClockType;
 use strom_types::stinger::{
     ENABLE_STINGER_PROPERTY, STINGER_INPUT_PAD, STINGER_MODE_PROPERTY, STINGER_PREROLL_PROPERTY,
 };
+use strom_types::vision_mixer::{ENABLE_PREVIEW_OUT_PROPERTY, PREVIEW_OUTPUT_PAD};
 use strom_types::{Flow, FlowId, PropertyValue};
 use uuid::Uuid;
 
@@ -94,6 +95,8 @@ pub const PGM_OUT: &str = "pgm_out";
 const PGM_AUDIO_OUT: &str = "pgm_audio_out";
 /// The multiview for the outputs (OUT.2).
 const MV_OUT: &str = "mv_out";
+/// The mixer's preview output (VSP), for the Console's preview monitor.
+const PVW_OUT: &str = "pvw_out";
 /// Outputs buffer a little more than the mixer: they are not on the
 /// switching path, an encoder hiccup must not drop frames.
 const OUTPUT_BUFFER_MS: &str = "500";
@@ -101,7 +104,7 @@ const OUTPUT_BUFFER_MS: &str = "500";
 /// The output's id in the name: two recordings into one folder that start
 /// in the same second (a restore) would otherwise write the same file.
 const RECORDING_PREFIX: &str = "lmix";
-/// Thumbnail tap in every slot flow: input bar pictures and preview monitor.
+/// Thumbnail tap in every slot flow: input bar pictures.
 pub const SLOT_TAP: &str = "tap";
 /// Subscriber buffer of a live picture: as short as the mixer's, it
 /// shows now or nothing.
@@ -295,6 +298,8 @@ pub fn mixer_flow(
             ),
             // strom draws the stinger over program, under the DSK layers.
             (ENABLE_STINGER_PROPERTY, PropertyValue::Bool(true)),
+            // Preview at program size, as the mixer composes it (VSP).
+            (ENABLE_PREVIEW_OUT_PROPERTY, PropertyValue::Bool(true)),
             (
                 STINGER_PREROLL_PROPERTY,
                 PropertyValue::UInt(u64::from(STINGER_PREROLL_MS)),
@@ -332,6 +337,11 @@ pub fn mixer_flow(
     flow.links.push(link(
         format!("{MIXER_BLOCK}:multiview_out"),
         format!("{MV_OUT}:sink"),
+    ));
+    flow.blocks.push(block(PVW_OUT, INTER_OUTPUT_BLOCK, vec![]));
+    flow.links.push(link(
+        format!("{MIXER_BLOCK}:{PREVIEW_OUTPUT_PAD}"),
+        format!("{PVW_OUT}:sink"),
     ));
     flow.blocks
         .push(block(PGM_AUDIO_OUT, INTER_OUTPUT_BLOCK, vec![]));
@@ -711,8 +721,8 @@ fn add_aac(flow: &mut Flow, to: &str) {
 pub fn live_flow_id(which: LivePicture) -> FlowId {
     let name = match which {
         LivePicture::Program => "live-program".to_string(),
+        LivePicture::Preview => "live-preview".to_string(),
         LivePicture::Slot(slot) => format!("live-slot-{slot}"),
-        LivePicture::SlotFull(slot) => format!("live-slot-{slot}-full"),
     };
     Uuid::new_v5(&FLOW_NAMESPACE, name.as_bytes())
 }
@@ -721,18 +731,18 @@ pub fn live_flow_id(which: LivePicture) -> FlowId {
 pub fn live_socket_name(which: LivePicture) -> String {
     match which {
         LivePicture::Program => "program.sock".into(),
+        LivePicture::Preview => "preview.sock".into(),
         LivePicture::Slot(slot) => format!("slot-{slot}.sock"),
-        LivePicture::SlotFull(slot) => format!("slot-{slot}-full.sock"),
     }
 }
 
 /// Live picture for a Console on the engine's machine: raw frames over a
 /// Unix socket, no encoding (the Console reads it with `unixfdsrc`).
-/// Inputs at tile size or as they arrive, program at full size.
+/// Inputs at tile size, program and preview at full size.
 ///
 /// ```text
 ///   pgm ─► [cudadownload ─► caps] ─► videoscale ─► caps ─► unixfdsink   input (tile)
-///   pgm ─► [cudadownload ─► caps] ─► [compositor] ─► unixfdsink         input (full), program
+///   pgm ─► [cudadownload ─► caps] ─► [compositor] ─► unixfdsink         program, preview
 ///
 /// The download only with the CUDA mixer, the copy only before GStreamer
 /// 1.28 (see [`FdSink`]).
@@ -763,8 +773,8 @@ impl FdSink {
 pub fn live_flow(which: LivePicture, socket: &str, backend: MixerBackend, sink: FdSink) -> Flow {
     let (name, channel) = match which {
         LivePicture::Program => ("program".to_string(), pgm_channel(PGM_OUT)),
+        LivePicture::Preview => ("preview".to_string(), pgm_channel(PVW_OUT)),
         LivePicture::Slot(slot) => (format!("slot {slot}"), slot_channel(slot)),
-        LivePicture::SlotFull(slot) => (format!("slot {slot} full"), slot_channel(slot)),
     };
     let mut flow = Flow::new(format!("lmix live {name}"));
     flow.id = live_flow_id(which);
@@ -1739,6 +1749,16 @@ mod tests {
             .links
             .iter()
             .any(|l| l.from == "vm:multiview_out" && l.to == "mv_out:sink"));
+        // The Console's preview monitor reads the mixer's preview (VSP).
+        assert!(flow
+            .links
+            .iter()
+            .any(|l| l.from == "vm:pvw_out" && l.to == "pvw_out:sink"));
+        let vm = flow.blocks.iter().find(|b| b.id == "vm").unwrap();
+        assert_eq!(
+            vm.properties.get("enable_preview_out"),
+            Some(&PropertyValue::Bool(true))
+        );
     }
 
     #[test]
@@ -2105,10 +2125,10 @@ mod tests {
     }
 
     #[test]
-    fn full_live_input_is_not_scaled() {
+    fn live_preview_reads_the_mixers_preview_output_unscaled() {
         let flow = live_flow(
-            LivePicture::SlotFull(3),
-            "/run/x/slot-3-full.sock",
+            LivePicture::Preview,
+            "/run/x/preview.sock",
             MixerBackend::Cuda,
             FdSink::CopiesItself,
         );
@@ -2118,14 +2138,16 @@ mod tests {
             .links
             .iter()
             .any(|l| l.from == "sysmem" && l.to == "sock"));
+        let pgm = flow.blocks.iter().find(|b| b.id == "pgm").unwrap();
+        assert!(matches!(
+            pgm.properties.get("channel"),
+            Some(PropertyValue::String(c)) if *c == format!("strom_{}_pvw_out", mixer_id())
+        ));
         assert_ne!(
-            live_flow_id(LivePicture::SlotFull(3)),
-            live_flow_id(LivePicture::Slot(3))
+            live_flow_id(LivePicture::Preview),
+            live_flow_id(LivePicture::Program)
         );
-        assert_eq!(
-            live_socket_name(LivePicture::SlotFull(3)),
-            "slot-3-full.sock"
-        );
+        assert_eq!(live_socket_name(LivePicture::Preview), "preview.sock");
     }
 
     #[test]

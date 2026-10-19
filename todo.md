@@ -6,7 +6,7 @@ Erledigtes abhaken (`[x]`, Datum) und nach einer Weile löschen; Details stehen 
 
 - [ ] **Hardware-Nacht 19.10.** (DECISIONS 19.10.): strom #29 (CUDA-Mischer auf echter Hardware: Alpha nach Blende, Stinger, Vorschaubilder; Rampen-CRITICAL) und #30 (Panik erreicht Klänge) ansehen und mergen, danach lmix #116 (Submodul, `pulsesink`-Puffer, Doku). Mit dir: H.38 Bühne am Projektor ansehen (nachts waren die Bildschirme gedimmt), H.13, H.20, H.21.
 - [x] Entschieden 2026-10-19: Gerätekanäle einer Zone über die Kanalbelegung des Geräts (DECISIONS 19.10.).
-- [ ] Vorschau-Ausgang im strom-Mischer (VSP, DECISIONS „Entscheidungsseite 18.10.“). REC (#104), STG (#106, #109, #111) und RUN.8 (#105) sind gemergt (2026-10-18).
+- [ ] Vorschau-Ausgang im strom-Mischer (VSP): gebaut 19.10. (strom „lmix-preview-out“, lmix „preview-out“), Console zeigt im Vorschau-Monitor den Mischer-Ausgang. Ansehen und mergen; offen: Zonen-Ränder auf dem Vorschau-Ausgang.
 - [ ] **Stinger-Sperre, Umfang (#109):** Darf lmix während eines Stingers auch Show öffnen/neu, Paket importieren und das Entfernen des Eingangs auf Program ablehnen? So ist es gebaut; Antwort steht aus.
 - [ ] Nachzügler aus dem Review von #111 (Stinger-Sperre, Tastentest): Liste in `docs/HANDOVER.md`, „Nächste Schritte“.
 - [ ] Review-Regel (REV.R): Repos ohne `agent.md` bekommen sie mit ihrem nächsten PR (Block wie in Kaiwa `agent.md`, eigenes `REVIEW.md`). Demo-Welt-Kopien (DEMO) beim nächsten Release je Projekt abgleichen (`sync-demo.py`).
@@ -21,7 +21,6 @@ Erledigtes abhaken (`[x]`, Datum) und nach einer Weile löschen; Details stehen 
 - [x] strom PR #3 (`lmix-player-sysmem`) gemergt.
 - [ ] CI läuft auf GitHub (`.github/workflows/ci.yml`, strom öffentlich, Paket `ghcr.io/shrippen/lmix-strom`): Secret `REGISTRY_TOKEN` auf Gitea löschen; in lokalen Kopien `git submodule sync workspace/strom` (Submodul-URL jetzt GitHub). strom `dev` hat `04b87d1` (DSK-Blende); dein lokales strom-`dev` mit `7615d6f` (NVDEC-Deinterlace) ist darauf noch nicht nachgezogen.
 - [ ] Demo-Welt-Kopien in 15 anderen Projekten veraltet (neuer Abschnitt `graufeld.stream`): `python3 shrippen.github.io/demo/tools/sync-demo.py`, dann je Projekt committen — soll ich?
-- [ ] Vorschau-Lücke ansehen (`scripts/run-local.sh`, Kachel anklicken) und entscheiden: Vorschau-Ausgang im strom-Mischer oder alte Ansicht halten, bis die neue ein Bild hat.
 - [ ] Entscheiden: S-E.3 Klang-Cues (#39) und S-E.13 Bühnen (#60), je A oder B; Vorschlag beide B, als ein strom-Block. Danach baue ich S1 Stufe 2 (Ton geht ohne GPU) und Stufe 3.
 - [ ] PRs vom 17.10. (#56–#84) liegen auf dem S1-Stapel über #54; Reihenfolge in `docs/HANDOVER.md`. strom #15–#17 zuerst (Submodul ab lmix #70).
 - [ ] Breeze-Bug melden (siehe unten).
