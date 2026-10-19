@@ -1,6 +1,6 @@
 # Übergabe: Stand M9 und Show-Modus S1 (in Arbeit), lokale Übernahme
 
-Stand 2026-10-19 abends (`main` bis #115, offen #116–#121). Die Arbeit läuft lokal weiter (Arch, RTX 3090), Abnahme
+Stand 2026-10-19 abends (`main` bis #115, offen #116–#123, strom #29–#34). Die Arbeit läuft lokal weiter (Arch, RTX 3090), Abnahme
 auf echter Hardware.
 
 ## Für den nächsten Agenten: Stand 19.10.2026 abends
@@ -24,9 +24,10 @@ weiter.
 | #34 | `lmix-tbar-effect` | T-Bar hält den Take mit seinem Effekt (SWI.3) |
 
 `lmix-pin-1019` (strom) wächst mit: Er ist der Merge aller strom-PRs
-oben (zuletzt `be2be9e`). Jeder lmix-PR zeigt auf den Stand, den sein
+oben (Stand siehe lmix #123). Jeder lmix-PR zeigt auf den Stand, den sein
 Text nennt (#121: `a016205` = #29–#33; #122: `fbd3dfb` mit den Rändern
-von #32; #123: `be2be9e` mit #34). Nach dem Merge in `dev` das Submodul
+von #32; #123: der jüngste Stand mit #34 nach allen Review-Runden und den
+Review-Nachträgen von #29 und #33, Hash im PR-Text). Nach dem Merge in `dev` das Submodul
 auf `dev` stellen (kleiner PR).
 
 **lmix**:
@@ -56,6 +57,11 @@ beim Mergen von #118/#120 nach dem Stapel Konflikte dort von Hand lösen
   getestet auf CPU, GL und CUDA.
 - Latenz-„Sprung bei 16 Inputs“ war keiner: meist 56 ms, ab und zu
   60–81 ms (mal je Input, mal je Lauf). Ursache offen.
+- T-Bar mit dem Effekt von Taste 1 (strom #34, lmix #123): nach vielen
+  Review-Runden hält strom jeden Pad direkt auf seinen Werten (kein Frame
+  über die Ruhelage), wartet auf laufende Takes, folgt der Vorschau; lmix
+  stellt den T-Bar bei Take, Layout, FTB und Wiederherstellen auf 0.
+  End to end CPU und CUDA, Abnahmetest 47/47 mit dem Pin.
 
 ### Nächste Schritte (Reihenfolge)
 
@@ -67,7 +73,10 @@ beim Mergen von #118/#120 nach dem Stapel Konflikte dort von Hand lösen
    Entscheidungen (Entscheidungsseite 19.10., `todo.md`).
 4. **Latenz** (todo): einen erhöhten Lauf fangen, dann Aggregator-Fristen.
 5. **CEF/H.36**: Bau braucht die Freigabe (todo); dann H.36 und M7.0.
-6. Flakes im Console-Test (todo): „tile 1 still“, Show-Dialog.
+6. Flakes im Console-Test (todo): „tile 1 still“ (abends wieder grün),
+   Show-Dialog. strom-GL-Tests `source_resize` und
+   `overlay_upload::tally_follows_a_cut…` sind auf dem 3090-Rechner rot,
+   auch ohne die PRs (todo).
 7. Hardware mit dem Eigentümer: H.38 (Bühne sehen), H.13, H.20, H.21,
    echtes Mehrkanal-Interface (H.37), GL-Abnahme tagsüber mit Freigabe.
 
