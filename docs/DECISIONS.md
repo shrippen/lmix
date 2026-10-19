@@ -4083,7 +4083,7 @@ dieser Nacht (Builds mit `-j 12`, Tests, Soaks, zeitweise nur 4 GB RAM frei): 1 
 und `measure_idle_fx_slot_renders` (GL). `gpu_stingers_land_frame_accurately`
 scheitert unter der GPU-Last etwa jedes vierte Mal, auch auf `dev`.
 
-**16 Inputs (H.2, H.10, H.18)**, GPU frei (die fremde Last endete 03:38): CUDA 20 min ohne Drop (Aufnahme 37 038 Bilder in 1 233 s, SRT ohne Verlust), Latenz durchgehend 81 ms, mit 8 Inputs 56 ms wie am 13.10.; GL 15 min, Latenz nach 5 min 56 ms (anfangs 80 ms), strom-RSS 1 084 → 1 149 MB (bekanntes GL-Wachstum). Gegenproben je 3–5 min auf CUDA: 12, 14 und 15 Inputs 56 ms, 16 wieder 83 ms. Die Latenz springt also genau bei 16 Slots, sie wächst nicht mit der Last; ≤ 2 Frames (NFA.2) hält auf CUDA mit 16 Inputs nicht. Ursache offen.
+**16 Inputs (H.2, H.10, H.18)**, GPU frei (die fremde Last endete 03:38): CUDA 20 min ohne Drop (Aufnahme 37 038 Bilder in 1 233 s, SRT ohne Verlust), Latenz durchgehend 81 ms, mit 8 Inputs 56 ms wie am 13.10.; GL 15 min, Latenz nach 5 min 56 ms (anfangs 80 ms), strom-RSS 1 084 → 1 149 MB (bekanntes GL-Wachstum). Gegenproben je 3–5 min auf CUDA: 12, 14 und 15 Inputs 56 ms, 16 wieder 83 ms. Die Latenz springt also genau bei 16 Slots (17 Mischer-Eingänge mit dem Schwarz-Input), sie wächst nicht mit der Last; ≤ 2 Frames (NFA.2) hält auf CUDA mit 16 Inputs nicht. Ursache offen.
 
 **Syncthing**: In lmix hatte Syncthing `.git/index` (auch den des
 Submoduls) und 264 Objekte überschrieben bzw. verdoppelt; Arbeitsbaum war
