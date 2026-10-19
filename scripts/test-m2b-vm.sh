@@ -498,15 +498,17 @@ screen_orange() {
     DISPLAY="$ENGINE_DISPLAY" import -window root "$WORK/screen.png"
     [[ $(rgb "$WORK/screen.png" r) -gt 200 && $(rgb "$WORK/screen.png" b) -lt 60 ]]
 }
-wait_for "$SETTLE_S" screen_orange || true
 if [[ "$MIXER" == gl ]]; then
+    # It opens on the desktop, not on Xvfb: only that it runs.
     [[ "$(output_state Screen)" == running ]] || fail "display output not running"
-    echo "skip display output picture: on the GL mixer it opens on the desktop, not on Xvfb"
+    act '{"action":"stop_output","output":"Screen"}' >/dev/null
+    pass "display output: running (picture not checked on the GL mixer)"
 else
+    wait_for "$SETTLE_S" screen_orange || true
     [[ "$(output_state Screen)" == running ]] && screen_orange || fail "display output does not show program"
+    act '{"action":"stop_output","output":"Screen"}' >/dev/null
+    pass "display output: program in a window on the engine screen"
 fi
-act '{"action":"stop_output","output":"Screen"}' >/dev/null
-pass "display output: program in a window on the engine screen"
 
 # --- failover (3.4): a source dies mid-transition, a stream breaks ---
 input_state() { curl -sf "$CORE/state" | jq -r ".inputs[] | select(.name==\"$1\") | .status"; }
