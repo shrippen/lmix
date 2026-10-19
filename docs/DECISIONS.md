@@ -4135,3 +4135,48 @@ gar nichts (die Vorschau war kein Input).
 **Verworfen**: den PVW-Ausschnitt aus dem Multiview schneiden (halbe
 Auflösung, Beschriftung und Tally im Bild); einen Input-Selector statt des
 Compositors (keine Layouts auf Vorschau).
+
+## 2026-10-19 — Latenz: kein Sprung bei 16 Inputs, sondern die Phase des Inputs (H.2, NFA.2)
+
+**Kontext**: In der Hardware-Nacht maß der CUDA-Mischer mit 16 Inputs
+durchgehend 81–83 ms, mit 8–15 Inputs 56 ms („Sprung genau bei 16“).
+
+**Messung** (19.10. vormittags, RTX 3090 ohne fremde Last, strom
+`lmix-pin-1019`, `scripts/soak-hardware.sh`, je 1 min):
+- 15 und 16 Inputs ohne Ausgänge: 56 ms; 16 mit Aufnahme und SRT: 56 ms;
+  15 mit Aufnahme und SRT: 56 ms, nach einer Minute 81 ms.
+- Fein (15 Inputs mit Ausgängen, alle 10 s, Program wechselt alle 30 s):
+  In 1 und 2 je 74 ms, In 3–6 je 60 ms, In 7–9 je 56 ms. Der Wert ändert
+  sich nur beim Schnitt und bleibt je Input gleich.
+
+**Ergebnis**: Die Latenz hängt nicht an der Zahl der Inputs, sondern
+daran, welcher Input auf Program liegt: rund 56 ms fest plus ein Anteil
+je Input (bis gut 25 ms bei 30 fps). In der Nacht lag zufällig ein Input
+mit großem Anteil auf Program. Vermutung: Der Live-Aggregator gibt ein
+Bild aus, sobald alle aktiven Pads Daten haben, und die Pads laufen mit
+der Phase ihrer Quellen (je Slot-Flow ein eigener Takt der Testquelle).
+NFA.2 (≤ 2 Bilder = 66,7 ms) hält damit nur für einen Teil der Inputs.
+
+**Nächster Schritt**: Fristen des Programm-Mischers bei zwei Inputs mit
+bekannter Phase mit `GST_DEBUG=aggregator:6` ansehen; prüfen, ob der feste
+Teil (56 ms) kleiner geht (Mischer-Latenz, Slot-Puffer).
+
+## 2026-10-19 — GO bis hörbar: Zonen-Latenz 15 ms (SND.12)
+
+**Kontext**: SND.12 verlangt GO bis hörbar ≤ 50 ms. Gemessen 63–77 ms
+(Scarlett Solo, `hw-sound-cues`). Die Zone wartete die Latenz ihrer
+Pipeline: Mischer 30 ms, dazu die Live-Stille (strom #30) mit den
+1024 Samples (21 ms) von `audiotestsrc`, die sie als Latenz meldet, und
+`min-upstream-latency` 30 ms.
+
+**Entscheidung** (strom #33): Live-Stille in Blöcken von 5 ms (240
+Samples), Mischer-Block 5 ms, `min-upstream-latency` gleich dem Block,
+Mischer-Latenz 15 ms. Gemessen: GO bis erstes Sample am Gerät 44 ms
+Median (43–49 ms), 16 Klänge ohne Lücke. Mischer-Latenz 20 ms: 44–56 ms;
+10 ms: 21–35 ms, aber einmal 2 Lücken bei 16 Klängen gleichzeitig (der
+erste Puffer eines Klangs kommt zu spät). 15 ms lassen 10 ms mehr Luft
+dafür. Die Streuung zwischen Läufen ist groß (±10 ms, Rechner nicht
+leer); ein Lauf auf ruhigem Rechner steht aus.
+Mit allem zusammen (strom `lmix-pin-1019`: #29–#33) ist
+`hw-sound-cues` zum ersten Mal ganz grün: GO 32,9 ms Median (31,1–34,7),
+Panik, 16 Klänge, zwei Geräte, Gerätekanäle 3/4.
