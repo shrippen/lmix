@@ -143,15 +143,22 @@ done
 [[ -n "$program_shows" ]] && pass "program monitor shows the new input" || fail "program monitor blank after Cut"
 
 # A layout on preview: the monitor shows the mixer's preview (VSP), which
-# composes it; the input-only monitor before had nothing to show.
+# composes it; the input-only monitor before had nothing to show. Snow in
+# the top right quarter of the picture (grey on average, noisy), where
+# Ball alone is black and an empty monitor flat beige.
 curl -sf -X POST "$CORE/actions" -H 'content-type: application/json' \
     -d '{"action":"add_layout","name":"Corner","background":1,"boxes":[{"rect":{"x":0.5,"y":0.0,"w":0.5,"h":0.5},"input":2}]}' >/dev/null
 curl -sf -X POST "$CORE/actions" -H 'content-type: application/json' \
-    -d '{"action":"preview_input","input":"Corner"}' >/dev/null
+    -d '{"action":"preview_layout","layout":1}' >/dev/null
+layout_id="$(state | jq -r '.layouts[0].id')"
+for _ in $(seq 1 40); do [[ "$(state | jq -r .preview)" == "$layout_id" ]] && break; sleep 0.5; done
+PREVIEW_CORNER="250x130+350+180"
 layout_shows=""
 for _ in $(seq 1 40); do
     shot l
-    awk "BEGIN { exit !($(spread l "$PREVIEW_AREA") > 0.05) }" && layout_shows=1 && break
+    read -r mean sd < <("$IM" "$WORK/l.png" -crop "$PREVIEW_CORNER" -colorspace gray \
+        -format '%[fx:mean] %[fx:standard_deviation]' info:)
+    awk "BEGIN { exit !($mean > 0.25 && $mean < 0.75 && $sd > 0.05) }" && layout_shows=1 && break
     sleep 0.5
 done
 [[ -n "$layout_shows" ]] && pass "preview monitor shows a layout" || fail "preview monitor blank with a layout on preview"
