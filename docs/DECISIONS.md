@@ -4155,11 +4155,19 @@ je Input (bis gut 25 ms bei 30 fps). In der Nacht lag zufällig ein Input
 mit großem Anteil auf Program. Vermutung: Der Live-Aggregator gibt ein
 Bild aus, sobald alle aktiven Pads Daten haben, und die Pads laufen mit
 der Phase ihrer Quellen (je Slot-Flow ein eigener Takt der Testquelle).
-NFA.2 (≤ 2 Bilder = 66,7 ms) hält damit nur für einen Teil der Inputs.
+NFA.2 (≤ 2 Bilder = 66,7 ms) hält damit nicht immer (siehe Nachmessung).
 
-**Nächster Schritt**: Fristen des Programm-Mischers bei zwei Inputs mit
-bekannter Phase mit `GST_DEBUG=aggregator:6` ansehen; prüfen, ob der feste
-Teil (56 ms) kleiner geht (Mischer-Latenz, Slot-Puffer).
+**Nachmessung** (mittags, strom mit #29–#33, eigenes Skript: N Inputs,
+jeder 2 × auf Program, je 2 s gemessen): 9 Läufe mit 4–15 Inputs, Schnitt
+oder Blende, mit und ohne Aufnahme und SRT: 8-mal überall 56 ms, einmal
+überall 65 ms (für den ganzen Lauf, unabhängig vom Input). Die Werte über
+56 ms kommen also nur ab und zu, dann je Lauf oder ab einem Schnitt. Im
+Normalfall hält NFA.2 (≤ 66,7 ms).
+
+**Nächster Schritt**: einen Lauf mit erhöhtem Wert fangen (Skript mit
+Wiederholung, bis ein Wert über 56 ms kommt) und dann die Fristen des
+Programm-Mischers mit `GST_DEBUG=aggregator:6` ansehen; prüfen, ob der
+feste Teil (56 ms) kleiner geht (Mischer-Latenz, Slot-Puffer).
 
 ## 2026-10-19 — GO bis hörbar: Zonen-Latenz 15 ms (SND.12)
 
