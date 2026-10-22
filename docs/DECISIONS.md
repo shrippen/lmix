@@ -4403,6 +4403,12 @@ Ton an `pgm_audio_out` je 48 ms (einmal 0 ms), Aussetzer gleich (je
 einer, wohl Messartefakt). Das Alter ist dort das Zeitraster des
 Ausgangs, kein Warten.
 
+**Lippensynchronität** (Clip mit Blitz und Piep zur selben Zeit, jede
+Sekunde, als einziger Input auf Program, CUDA, 25 s MKV-Aufnahme, je 3
+Läufe): Ton nach dem Bild, `main` 21,5/52,0/54,2 ms, ohne Sync
+32,8/40,5/49,0 ms (Median je Lauf). Unverändert, aber es gibt einen
+Versatz von 1–2 Frames, schon vorher (todo).
+
 `/api/latency` misst weiter am Eingang von `pgm_out`; das ist jetzt das
 Alter, mit dem die Ausgänge Program bekommen. Offen: die Bildphase
 (0–33 ms je Lauf); mit freiem Rechner wiederholen.
