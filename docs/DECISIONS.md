@@ -4352,3 +4352,43 @@ das Review. Ein
 neuer Claude-Agent prüft die **Wichtig** früherer Runden (PR-Agent sieht
 keine früheren Runden) und reviewt selbst, wenn PR-Agent zweimal scheitert.
 Regel: `agent.md`, `REVIEW.md`.
+
+## 2026-10-23 — Mischer-Ausgänge ohne Sync: Program 90 → 0–64 ms (NFA.3)
+
+**Kontext**: Die feste Latenz von 56 ms (22.10.) war nicht die Latenz der
+Ausgänge. Bildalter an Messpunkten im Mischer-Flow (Buffer-Age-Probes,
+CUDA, Testbilder): Die Inputs kommen mit 0–5 ms am Mischer an, der
+Compositor gibt Program mit 4–52 ms aus (je Lauf verschieden: er wartet
+auf das nächste Bild des spätesten Inputs, die Bildphase). Danach hielt
+die `intersink` von `pgm_out` (strom-Standard `sync=true`) jedes Bild bis
+Zeitstempel + Latenz des ganzen Mischer-Flows (sein langsamster Zweig,
+107–127 ms) und staute die Queue davor. Gemessen wurde bisher am Eingang
+dieser Senke: 56 ms. Der Encoder einer Aufnahme bekam Program in jedem
+Lauf mit 90 ms, den Ton mit 129 ms. NFA.3 (≤ 2 Frames, 66,7 ms) hielt für
+die Ausgänge also nicht. Die Compositor-Werte `latency` und
+`min-upstream-latency` (je 20 ms) ändern daran nichts (auch 0/0 ergab
+56 ms an `pgm_out`).
+
+**Optionen**: (a) Pipeline-Latenz des Mischer-Flows senken (Zweige
+einzeln kürzen; jede neue Senke kann sie wieder heben); (b) die
+inter-Ausgänge des Mischers ohne Sync.
+
+**Entscheidung**: (b). Alle inter-Ausgänge des Mischer-Flows (Program,
+Multiview, Vorschau, Programmton, Aux-Busse) mit `sync=false`. Den Takt
+geben die Live-Aggregatoren (Bildmischer und Tonmischer laufen mit
+`force-live`); die Ausgangs-Flows sind getrennte Pipelines mit
+erhaltenen Zeitstempeln (Basiszeit 0), Encoder, Muxer und Senken richten
+sich nach den Zeitstempeln. Die Slot-Flows behalten `sync=true`: Dort
+taktet die Senke Clips aus Dateien.
+
+**Messung** (RTX 3090, unter fremder Last: Load 7–125 durch eine andere
+Sitzung; je Lauf strom und lmix-core neu, MKV-Aufnahme auf Program):
+- 2 Inputs, CUDA, 12 Läufe: vorher Encoder immer 90 ms; ohne Sync
+  0–62 ms (Mittel ~25 ms). Ton an der Aufnahme 128 → 83–98 ms.
+- 8 Inputs, je Input auf Program: CUDA vorher 90 ms am Encoder, ohne
+  Sync 33/61/64 ms (`pgm_out` je Input 28–69 ms); CPU vorher 90 ms, ohne
+  Sync 45–85 ms (unter Load 125, CPU-Mischer selbst langsam).
+
+`/api/latency` misst weiter am Eingang von `pgm_out`; das ist jetzt das
+Alter, mit dem die Ausgänge Program bekommen. Offen: die Bildphase
+(0–33 ms je Lauf); mit freiem Rechner wiederholen.
