@@ -4353,7 +4353,7 @@ neuer Claude-Agent prüft die **Wichtig** früherer Runden (PR-Agent sieht
 keine früheren Runden) und reviewt selbst, wenn PR-Agent zweimal scheitert.
 Regel: `agent.md`, `REVIEW.md`.
 
-## 2026-10-23 — Mischer-Ausgänge ohne Sync: Program 90 → 0–64 ms (NFA.3)
+## 2026-10-23 — Mischer-Ausgänge ohne Sync: Program 90 → 0–85 ms (NFA.3)
 
 **Kontext**: Die feste Latenz von 56 ms (22.10.) war nicht die Latenz der
 Ausgänge. Bildalter an Messpunkten im Mischer-Flow (Buffer-Age-Probes,
@@ -4384,7 +4384,7 @@ taktet die Senke Clips aus Dateien.
 **Messung** (RTX 3090, unter fremder Last: Load 7–125 durch eine andere
 Sitzung; je Lauf strom und lmix-core neu, MKV-Aufnahme auf Program):
 - 2 Inputs, CUDA, 12 Läufe: vorher Encoder immer 90 ms; ohne Sync
-  0–62 ms (Mittel ~25 ms). Ton an der Aufnahme 128 → 83–98 ms.
+  0–62 ms (Mittel ~25 ms).
 - 8 Inputs, je Input auf Program: CUDA vorher 90 ms am Encoder, ohne
   Sync 33/61/64 ms (`pgm_out` je Input 28–69 ms); CPU vorher 90 ms, ohne
   Sync 45–85 ms (unter Load 125, CPU-Mischer selbst langsam).
@@ -4395,9 +4395,13 @@ Sitzung; je Lauf strom und lmix-core neu, MKV-Aufnahme auf Program):
 jetzt je Lauf verschieden. Alle Ausgänge mit Bild und Ton paaren nach
 Zeitstempeln (Muxer bei Aufnahme, SRT, RTMP; `ndisinkcombiner` bei
 NDI); dort wartet das Bild auf den späteren Ton, der Gewinn ist also der
-des Tons (129 → 44–101 ms). Voll wirkt er, wo nur Bild ankommt:
+des Tons (an der Aufnahme 128–130 → 44–101 ms über alle Läufe). Voll wirkt er, wo nur Bild ankommt:
 Bildschirm-Ausgänge, Live-Bilder der Console. Der Tonweg ist der nächste
-Engpass.
+Engpass. Die Latenz des Tonmischers (strom-Standard 30 ms) zu senken
+bringt nichts: mit 30/20/15/10 ms je ein Lauf, 4 Inputs, 60 s Aufnahme,
+Ton an `pgm_audio_out` je 48 ms (einmal 0 ms), Aussetzer gleich (je
+einer, wohl Messartefakt). Das Alter ist dort das Zeitraster des
+Ausgangs, kein Warten.
 
 `/api/latency` misst weiter am Eingang von `pgm_out`; das ist jetzt das
 Alter, mit dem die Ausgänge Program bekommen. Offen: die Bildphase
