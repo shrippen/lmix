@@ -6,7 +6,7 @@ Erledigtes abhaken (`[x]`, Datum) und nach einer Weile löschen; Details stehen 
 
 - [ ] **Hardware-Nacht 19.10.** (DECISIONS 19.10.): strom #29 (CUDA-Mischer auf echter Hardware: Alpha nach Blende, Stinger, Vorschaubilder; Rampen-CRITICAL) und #30 (Panik erreicht Klänge) ansehen und mergen, danach lmix #116 (Submodul, `pulsesink`-Puffer, Doku). Mit dir: H.38 Bühne am Projektor ansehen (nachts waren die Bildschirme gedimmt), H.13, H.20, H.21.
 - [x] Entschieden 2026-10-19: Gerätekanäle einer Zone über die Kanalbelegung des Geräts (DECISIONS 19.10.).
-- [ ] Vorschau-Ausgang im strom-Mischer (VSP, DECISIONS „Entscheidungsseite 18.10.“). REC (#104), STG (#106, #109, #111) und RUN.8 (#105) sind gemergt (2026-10-18).
+- [ ] Vorschau-Ausgang im strom-Mischer (VSP): gebaut 19.10. (strom #32, lmix #119), Console zeigt im Vorschau-Monitor den Mischer-Ausgang. Ansehen und mergen; offen: Zonen-Ränder auf dem Vorschau-Ausgang.
 - [ ] **Stinger-Sperre, Umfang (#109):** Darf lmix während eines Stingers auch Show öffnen/neu, Paket importieren und das Entfernen des Eingangs auf Program ablehnen? So ist es gebaut; Antwort steht aus.
 - [ ] Nachzügler aus dem Review von #111 (Stinger-Sperre, Tastentest): Liste in `docs/HANDOVER.md`, „Nächste Schritte“.
 - [ ] Review-Regel (REV.R): Repos ohne `agent.md` bekommen sie mit ihrem nächsten PR (Block wie in Kaiwa `agent.md`, eigenes `REVIEW.md`). Demo-Welt-Kopien (DEMO) beim nächsten Release je Projekt abgleichen (`sync-demo.py`).
@@ -21,7 +21,6 @@ Erledigtes abhaken (`[x]`, Datum) und nach einer Weile löschen; Details stehen 
 - [x] strom PR #3 (`lmix-player-sysmem`) gemergt.
 - [ ] CI läuft auf GitHub (`.github/workflows/ci.yml`, strom öffentlich, Paket `ghcr.io/shrippen/lmix-strom`): Secret `REGISTRY_TOKEN` auf Gitea löschen; in lokalen Kopien `git submodule sync workspace/strom` (Submodul-URL jetzt GitHub). strom `dev` hat `04b87d1` (DSK-Blende); dein lokales strom-`dev` mit `7615d6f` (NVDEC-Deinterlace) ist darauf noch nicht nachgezogen.
 - [ ] Demo-Welt-Kopien in 15 anderen Projekten veraltet (neuer Abschnitt `graufeld.stream`): `python3 shrippen.github.io/demo/tools/sync-demo.py`, dann je Projekt committen — soll ich?
-- [ ] Vorschau-Lücke ansehen (`scripts/run-local.sh`, Kachel anklicken) und entscheiden: Vorschau-Ausgang im strom-Mischer oder alte Ansicht halten, bis die neue ein Bild hat.
 - [ ] Entscheiden: S-E.3 Klang-Cues (#39) und S-E.13 Bühnen (#60), je A oder B; Vorschlag beide B, als ein strom-Block. Danach baue ich S1 Stufe 2 (Ton geht ohne GPU) und Stufe 3.
 - [ ] PRs vom 17.10. (#56–#84) liegen auf dem S1-Stapel über #54; Reihenfolge in `docs/HANDOVER.md`. strom #15–#17 zuerst (Submodul ab lmix #70).
 - [ ] Breeze-Bug melden (siehe unten).
@@ -71,6 +70,7 @@ enabled: !(/\&[^\&]/.test(control.text))
 - [ ] `cudaconverter`-Alpha-Bug upstream melden (GStreamer, `gstcudaconverter.cpp`: der Setter setzt `priv->alpha` nicht); den Workaround in strom #29 entfernen, sobald die Distributionen den Fix haben.
 - [ ] strom-Tests auf der RTX 3090 rot, auch auf `dev`: `nvdec_cuda_after_a_converted_format_stays_on_the_gpu`, `measure_idle_fx_slot_renders`; `gpu_stingers_land_frame_accurately` flakig unter GPU-Last (H.34).
 - [ ] Abnahmetest `test-m2b-vm.sh` für echte Hardware öffnen (`MIXER`, Strom-Umgebung, Looks auf GL, Bildschirm-Ausgang auf Wayland): in dieser Nacht als Kopie gelaufen (`~/.cache/lmix-hwnight/m2b/test.sh`). Die 28 CRITICALs der Facecam (GStreamer-V4L2-Abtastung) dort aus der Zählung nehmen.
+- [ ] `scripts/test-console-qt.sh` scheitert seit 19.10. vormittags auf dem 3090-Rechner bei „tile 1 still“ (vier Läufe in Folge, auch ohne VSP mit strom #117; der erste Lauf des Tages war grün). Der Ball der Kachel steht am linken Rand. Ursache offen; Rechner war beschäftigt (Syncthing, Baloo).
 - [ ] `scripts/test-titles.sh` schlug am 12.10. einmal fehl (direkt nach `test-web.sh`, Ausgabe nicht erhalten), danach 19-mal grün, am 17.10. in der Cloud 8-mal direkt nach `test-web.sh` grün; nicht nachstellbar. Bei der nächsten Wiederholung die Ausgabe sichern (`KEEP_WORK=1`) und die Ursache beheben.
 - [ ] Cue-Zeitgeber unter Last (RUN.8): Echtzeit gebaut (#105), auf der RTX 3090 gemessen (DECISIONS 19.10.): 10 min Volllast 16,6 ms (ohne 133 ms), über rtkit 1,6 ms; 4 h neben Builds ein Ausreißer von 385,7 ms. Offen: 4 h auf freiem Rechner; hält 10 ms nicht, dann Zeitgeber ohne Switcher-Sperre (DECISIONS 18.10. „Grenze“).
 

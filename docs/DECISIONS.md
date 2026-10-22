@@ -4114,3 +4114,32 @@ scheitert unter der GPU-Last etwa jedes vierte Mal, auch auf `dev`.
 Submoduls) und 264 Objekte überschrieben bzw. verdoppelt; Arbeitsbaum war
 unverändert. Index aus HEAD neu gebaut, Konfliktdateien nach `~/.cache`.
 Seit 19.10. ignoriert Syncthing `.git`.
+
+## 2026-10-19 — Vorschau-Ausgang im strom-Mischer (VSP)
+
+**Kontext**: Entscheidung 18.10. (VSP): Die Vorschau kommt wie Program aus dem
+Mischer. Bis dahin las der Vorschau-Monitor der Console den Input in voller
+Größe (`/api/live/inputs/{id}?size=full`, ein Flow je Slot): ein Klick auf eine
+Kachel baute eine neue Pipeline (Lücke), und ein Layout auf Vorschau zeigte
+gar nichts (die Vorschau war kein Input).
+
+**Entscheidung**:
+- strom #32: Eigenschaft `enable_preview_out` am
+  Bildmischer, Ausgang `pvw_out` in Programmgröße. Ein dritter Compositor
+  (`pvw_comp`) bekommt je Input einen Zweig vom Tee des Inputs und spiegelt
+  die PVW-Pads des Multiviews: Jede Änderung (Position, Größe, Alpha,
+  Z-Ordnung, Zuschnitt) an einem PVW-Pad landet, von `pvw_rect` auf das ganze
+  Bild umgerechnet, am Zwillingspad. So zeigt der Ausgang Inputs und PiPs auf
+  Vorschau, Takes und Blenden, ohne dass eine Operation ihn kennen muss.
+- Ohne Ränder: Die Zonen-Ränder (Underlays) spiegelt er nicht; ihre Quellen
+  hängen an genau einem Compositor-Pad (Neustart, Halten). Folgearbeit.
+- lmix: Der Mischer-Flow schaltet den Ausgang ein und legt ihn auf den
+  Inter-Kanal `pvw_out`; `/api/live/preview` liefert den Socket, die Console
+  zeigt im Vorschau-Monitor immer ihn. `?size=full` und `SlotFull` entfallen
+  (vor dem ersten Release).
+- Kosten: ein Compositor in Programmgröße mehr; Pads mit Alpha 0 rechnet der
+  Compositor nicht.
+
+**Verworfen**: den PVW-Ausschnitt aus dem Multiview schneiden (halbe
+Auflösung, Beschriftung und Tally im Bild); einen Input-Selector statt des
+Compositors (keine Layouts auf Vorschau).

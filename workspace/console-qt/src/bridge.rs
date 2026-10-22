@@ -132,7 +132,7 @@ pub mod qobject {
     }
 
     unsafe extern "RustQt" {
-        /// Show `source` ("program", an input id, or "full:<id>") in `item`, a
+        /// Show `source` ("program", "preview" or an input id) in `item`, a
         /// `GstGLQt6VideoItem` whose scene graph is up.
         #[qinvokable]
         #[cxx_name = "showLive"]
@@ -735,15 +735,11 @@ async fn live_socket(source: &str) -> Result<String, String> {
     Ok(feed.socket)
 }
 
-/// `program`, an input id (tile size), or `full:<input id>` (as it
-/// arrives, for the preview monitor).
+/// `program`, `preview` (the mixer's), or an input id (tile size).
 fn live_path(source: &str) -> String {
     match source {
-        "program" => "/api/live/program".to_string(),
-        _ => match source.strip_prefix("full:") {
-            Some(input) => format!("/api/live/inputs/{input}?size=full"),
-            None => format!("/api/live/inputs/{source}"),
-        },
+        "program" | "preview" => format!("/api/live/{source}"),
+        _ => format!("/api/live/inputs/{source}"),
     }
 }
 
@@ -755,6 +751,6 @@ mod tests {
     fn live_path_of_program_and_inputs() {
         assert_eq!(live_path("program"), "/api/live/program");
         assert_eq!(live_path("7d0c"), "/api/live/inputs/7d0c");
-        assert_eq!(live_path("full:7d0c"), "/api/live/inputs/7d0c?size=full");
+        assert_eq!(live_path("preview"), "/api/live/preview");
     }
 }

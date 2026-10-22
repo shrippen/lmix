@@ -37,10 +37,10 @@ pub enum Picture {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum LivePicture {
     Program,
+    /// The mixer's preview output (VSP): what a take puts on program.
+    Preview,
     /// A slot at tile size.
     Slot(usize),
-    /// A slot as it arrives (the preview monitor).
-    SlotFull(usize),
 }
 
 #[async_trait]
