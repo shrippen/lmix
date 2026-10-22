@@ -59,7 +59,7 @@ Textur-Importpfad für Live-Monitore (H.4).
 `workspace/console-qt` (Binary `lmix-console`, seit 2026-10-18 `lmix-mixer` und `lmix-show`), Client von `lmix-core` wie
 die egui-Console:
 
-- Kirigami-Fenster mit Kante (Stil per `--style kante|kante-light|system`,
+- Kirigami-Fenster mit Kante (Stil per `--theme kante|kante-light|system`,
   Standard Kante). `scripts/sync-kante.sh` kopiert `Kante/qml/Kante`
   unverändert nach `console-qt/qml/Kante`, `build.rs` legt es unter
   `qrc:/qt/qml/Kante` in die Ressourcen, also `import Kante` ohne Pfad.

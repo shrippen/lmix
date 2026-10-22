@@ -9,7 +9,7 @@ Erledigtes abhaken (`[x]`, Datum) und nach einer Weile löschen; Details stehen 
 - [x] Entschieden 2026-10-19: Gerätekanäle einer Zone über die Kanalbelegung des Geräts (DECISIONS 19.10.).
 - [ ] Vorschau-Ausgang im strom-Mischer (VSP): gebaut 19.10. (strom #32, lmix #119), Console zeigt im Vorschau-Monitor den Mischer-Ausgang. Ansehen und mergen (die Zonen-Ränder auf dem Vorschau-Ausgang sind in strom #32 nachgezogen).
 - [ ] **Stinger-Sperre, Umfang (#109):** Darf lmix während eines Stingers auch Show öffnen/neu, Paket importieren und das Entfernen des Eingangs auf Program ablehnen? So ist es gebaut; Antwort steht aus.
-- [ ] Nachzügler aus dem Review von #111 (Stinger-Sperre, Tastentest): Liste in `docs/HANDOVER.md`, „Nächste Schritte“.
+- [ ] Nachzügler aus dem Review von #111 (Stinger-Sperre, Tastentest), Console `--style` (jetzt `--theme`) und die Kleinigkeiten aus #104/#105: lmix #118 ansehen und mergen.
 - [ ] Review-Regel (REV.R): Repos ohne `agent.md` bekommen sie mit ihrem nächsten PR (Block wie in Kaiwa `agent.md`, eigenes `REVIEW.md`). Demo-Welt-Kopien (DEMO) beim nächsten Release je Projekt abgleichen (`sync-demo.py`).
 - [ ] Sitzung auf dem 3090-Rechner (HW, CEF): `cefsrc` bauen (H.36), Hardware-Abnahme H.13, H.20, H.21, H.37, H.38, GPU-Pfade, VA. Checkliste in `docs/HARDWARE-TODO.md`.
 - [ ] **S-E.3 entscheiden** (Klang-Cues: Abspieler je Zone oder verdeckte Inputs), mit Messung: Entscheidungsseite https://claude.ai/artifact/DAzFNWyRUKGiu4x5WUvFPo, „An Claude übergeben“. Danach S1 Stufe 2 (Zonen, Klang-Cues).

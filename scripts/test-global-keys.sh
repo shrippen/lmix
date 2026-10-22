@@ -101,13 +101,15 @@ pass "a changed key is bound again"
 
 # lmix Show by default: binds the keys too, also after an update, when it
 # takes over the old console.conf with its "global=false" written by default.
-printf '[keys]\nglobal=false\n' >"$WORK/config/lmix/console.conf"
+printf '[keys]\nglobal=false\n[test]\nmarker=old-console\n' >"$WORK/config/lmix/console.conf"
 before="$(wc -l <"$WORK/portal.out")"
 XDG_CONFIG_HOME="$WORK/config" DISPLAY="$DISPLAY_NUM" QT_QPA_PLATFORM=xcb LMIX_CORE="http://127.0.0.1:${PORT}" \
     "$(target console-qt lmix-show)" >"$WORK/show.log" 2>&1 &
 PIDS+=($!)
 show_bound() { tail -n +"$((before + 1))" "$WORK/portal.out" | grep -q '"trigger":"F9"'; }
 wait_for show_bound || fail "lmix Show did not bind by default: $(tail -n +"$((before + 1))" "$WORK/portal.out")"
-grep -q "settings taken over" "$WORK/show.log" || fail "show did not take over console.conf"
+# From the file, not the log: the log line is gone with RUST_LOG=warn.
+grep -q "marker=old-console" "$WORK/config/lmix/show.conf" || fail "show did not take over console.conf"
+! grep -q "global=false" "$WORK/config/lmix/show.conf" || fail "show took over the old default global=false"
 pass "lmix Show binds the shortcut keys by default, also with an old console.conf"
 echo "global keys check passed"

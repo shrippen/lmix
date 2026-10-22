@@ -33,6 +33,9 @@ pub struct NullEngine {
     /// Stinger ends a test sends.
     #[cfg(test)]
     stingers: Option<tokio::sync::broadcast::Sender<super::meters::StingerEnd>>,
+    /// Stinger takes run so far, as the engine's generations count them.
+    #[cfg(test)]
+    stinger_takes: std::sync::atomic::AtomicU64,
 }
 
 impl NullEngine {
@@ -135,6 +138,11 @@ impl Engine for NullEngine {
         tokio::sync::broadcast::channel(1).1
     }
 
+    #[cfg(test)]
+    fn stinger_generation(&self) -> u64 {
+        self.stinger_takes.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
     fn stingers(&self) -> tokio::sync::broadcast::Receiver<super::meters::StingerEnd> {
         #[cfg(test)]
         if let Some(tx) = &self.stingers {
@@ -154,6 +162,10 @@ impl Engine for NullEngine {
         {
             if self.refusing.load(std::sync::atomic::Ordering::SeqCst) {
                 return Err(EngineError::Refused("no mixer yet".into()));
+            }
+            if matches!(command, Command::Stinger { .. }) {
+                self.stinger_takes
+                    .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             }
             if matches!(command, Command::TBar { .. })
                 && self

@@ -291,7 +291,7 @@ prüft, trägt sie hier ein.
 ```bash
 scripts/sync-kante.sh                 # Kante-QML ins Crate kopieren (nach Kante-Änderungen)
 cd workspace/console-qt
-cargo run --release --bin lmix-mixer -- --core http://127.0.0.1:8200 [--style kante|kante-light|system]
+cargo run --release --bin lmix-mixer -- --core http://127.0.0.1:8200 [--theme kante|kante-light|system]
 cargo run --release --bin lmix-show -- --core http://127.0.0.1:8200
 ```
 

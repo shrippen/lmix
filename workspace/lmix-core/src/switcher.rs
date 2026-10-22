@@ -516,6 +516,9 @@ pub struct Switcher {
     /// A stinger runs: switching is refused until the engine reports
     /// its end (`stinger_finished`), at the latest at this time.
     stinger_until: Option<Instant>,
+    /// How long the lock holds without an end, counted again when the
+    /// engine starts the take.
+    stinger_hold: Duration,
     /// Until a take or a fade to black with a duration has landed: the
     /// engine refuses the T-bar meanwhile, so lmix does too.
     moving_until: Option<Instant>,
@@ -600,6 +603,7 @@ impl Switcher {
             fade_to_black: false,
             t_bar: 0.0,
             stinger_until: None,
+            stinger_hold: Duration::ZERO,
             moving_until: None,
             stinger_take: 0,
             stinger_sent: Some(Vec::new()),
@@ -2582,7 +2586,8 @@ impl Switcher {
             .filter(|ms| *ms > 0)
             .unwrap_or(u64::from(button.duration_ms));
         let after_ms = u64::from(preroll_ms + crate::engine::flows::STINGER_FINISH_LIMIT_MS);
-        self.stinger_until = Some(Instant::now() + Duration::from_millis(length_ms + after_ms));
+        self.stinger_hold = Duration::from_millis(length_ms + after_ms);
+        self.stinger_until = Some(Instant::now() + self.stinger_hold);
         Ok(commands)
     }
 
@@ -3705,9 +3710,13 @@ impl Switcher {
         self.stinger_until = None;
     }
 
-    /// The engine started its take `generation` for the lock.
+    /// The engine started its take `generation` for the lock; the limit
+    /// counts from now (the engine may have taken a while to start it).
     pub fn stinger_started(&mut self, generation: u64) {
         self.stinger_take = generation;
+        if self.stinger_until.is_some() {
+            self.stinger_until = Some(Instant::now() + self.stinger_hold);
+        }
     }
 
     /// The engine's take `generation` ended: frees the lock if it is
@@ -6981,9 +6990,20 @@ mod tests {
         sw.apply(sting.clone()).unwrap();
         assert!(locked(&sw) > Duration::from_millis(2400) + after);
 
+        // The limit counts from the engine's start of the take.
+        sw.stinger_until = Some(Instant::now());
+        sw.stinger_started(1);
+        assert!(locked(&sw) > Duration::from_millis(2400) + after);
+        assert_eq!(sw.apply(Action::Cut), Err(ActionError::StingerPlaying));
+
         // At the limit, switching is free without the end.
         sw.stinger_until = Some(Instant::now());
         sw.apply(Action::Cut).unwrap();
+
+        // A take that ended before its start was confirmed stays ended.
+        sw.stinger_finished();
+        sw.stinger_started(2);
+        assert_eq!(sw.stinger_until, None);
     }
 
     #[test]
