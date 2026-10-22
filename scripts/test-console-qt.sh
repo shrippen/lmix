@@ -109,6 +109,10 @@ PROGRAM_AREA="600x340+810+180"
 PREVIEW_AREA="600x340+20+180"
 TILE_1="200x75+12+608"
 TILE_2="200x75+232+608"
+# The tile's picture is about 78×44 px: the ball is 2–3 px wide and a
+# move changes about 9 px (19.10.–22.10.: 8.9 at fuzz 5 %). A still
+# picture changes none.
+TILE_MOVED_PX=3
 # The live flows start a few seconds after the Console, and on a VM
 # software GL shares four cores with the CPU mixer: pictures can stall
 # for seconds. Each check needs to hold once within LIVE_WAIT seconds.
@@ -120,7 +124,7 @@ while ((SECONDS < deadline)); do
     sleep 1
     shot b
     (($(moved a b "$PROGRAM_AREA") > 50)) && program_moves=1
-    (($(moved a b "$TILE_1") > 10)) && tile_1_moves=1
+    (($(moved a b "$TILE_1") > TILE_MOVED_PX)) && tile_1_moves=1
     awk "BEGIN { exit !($(spread a "$TILE_2") > 0.05) }" && tile_2_shows=1
     [[ -n "$program_moves" && -n "$tile_1_moves" && -n "$tile_2_shows" ]] && break
 done
