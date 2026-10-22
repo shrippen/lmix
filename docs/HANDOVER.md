@@ -1,9 +1,37 @@
 # Übergabe: Stand M9 und Show-Modus S1 (in Arbeit), lokale Übernahme
 
-Stand 2026-10-19 abends (`main` bis #115, offen #116–#123, strom #29–#34). Die Arbeit läuft lokal weiter (Arch, RTX 3090), Abnahme
+Stand 2026-10-22 abends (`main` mit allen PRs bis #125, strom `dev` mit #29–#37).
 auf echter Hardware.
 
-## Für den nächsten Agenten: Stand 19.10.2026 abends
+## Für den nächsten Agenten: Stand 22.10.2026 abends
+
+Der Eigentümer hat am 22.10. das Mergen freigegeben: strom #29–#37 sind in
+`dev`, lmix #116–#125 in `main`, #118 und #120 danach; das Submodul zeigt
+auf strom `dev` (Pin-PR vom 22.10.). `lmix-pin-1019` (strom) wird damit
+nicht mehr gebraucht, ältere lmix-Commits zeigen aber noch auf ihn: nicht
+löschen.
+
+### Ergebnisse 22.10. (Details in DECISIONS)
+
+- T-Bar folgt strom (#124): ein abgelehnter Schritt geht auf 0 zurück,
+  Ton bleibt; jeder Take hebt Fade to Black auf.
+- BiB-Cut ohne Schwarz (strom #35): neue Pads erst sichtbar, dann die
+  alten aus.
+- GL-Tests auf NVIDIA grün (strom #36): die Tests machen die
+  GPU-Erkennung des Servers; eingesetzte `videoconvert`-Adapter bleiben
+  ohne udmabuf. Vorschaubilder ohne `cudaconvertscale` (strom #37).
+- Abnahmetest prüft die Vorschau als Ausgangsquelle, Console-Test
+  „tile 1 still“ behoben (#125).
+- Latenz: auf freiem Rechner konstant 56 ms je Input und Lauf; Ausreißer
+  nur unter Last daneben.
+
+### Nächste Schritte
+
+Wie unten (19.10.), ohne Punkt 1 und 6; Punkt 4 ist jetzt „fester Teil
+der Latenz kleiner“.
+
+## Stand 19.10.2026 abends (überholt)
+
 
 Kurz: Hardware-Nacht (01–07 Uhr) und ein Arbeitstag (08–20 Uhr) auf dem
 3090-Rechner. `main` ist unverändert (f2136cd); alles liegt in PRs, die
