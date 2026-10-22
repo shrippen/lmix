@@ -6,7 +6,7 @@ auf echter Hardware.
 ## Für den nächsten Agenten: Stand 22.10.2026 abends
 
 Der Eigentümer hat am 22.10. das Mergen freigegeben: strom #29–#37 sind in
-`dev`; in lmix kamen #116–#125 in `main`, danach #118 und #120, zuletzt
+`dev`; in lmix kamen #116, #117, #119, #121–#125 in `main`, danach #118 und #120, zuletzt
 der Pin-PR #127: das Submodul zeigt auf strom `dev`. `lmix-pin-1019` (strom) wird damit
 nicht mehr gebraucht, ältere lmix-Commits zeigen aber noch auf ihn: nicht
 löschen.
@@ -22,8 +22,9 @@ löschen.
   ohne udmabuf. Vorschaubilder ohne `cudaconvertscale` (strom #37).
 - Abnahmetest prüft die Vorschau als Ausgangsquelle, Console-Test
   „tile 1 still“ behoben (#125).
-- Latenz: auf freiem Rechner konstant 56 ms je Input und Lauf; Ausreißer
-  nur unter Last daneben.
+- Latenz: mit 8 Inputs ohne Ausgänge auf freiem Rechner konstant 56 ms je
+  Input und Lauf; mit 15 Inputs und Ausgängen (19.10.) noch je Input
+  verschieden, offen.
 
 ### Nächste Schritte
 

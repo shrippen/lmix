@@ -4295,7 +4295,7 @@ Bestand).
 NullEngine lehnt `TBar` ab), `a_take_lifts_fade_to_black_as_the_engine_does`;
 beide scheitern ohne den Fix.
 
-## 2026-10-22 — Latenz: 56 ms fest, Ausreißer unter Last (NFA.3)
+## 2026-10-22 — Latenz mit 8 Inputs: 56 ms, Ausreißer unter Last (NFA.3)
 
 **Kontext**: Am 19.10. lag die Latenz Quelle → PGM meist bei 56 ms, ab und
 zu bei 60–81 ms, mal je Input, mal je Lauf. Vermutung danach: Seit strom
@@ -4313,7 +4313,10 @@ des Mischers).
 - Alle erhöhten Werte fielen in 18:02–18:05, als daneben strom
   kompiliert und seine GPU-Tests liefen; davor und danach nur 56 ms.
 
-**Ergebnis**: Die Bildphase je Input erklärt die Ausreißer nicht: auf
-freiem Rechner hat jedes Input in jedem Lauf 56 ms. Die erhöhten Werte
-kommen mit Last auf demselben Rechner. NFA.3 (≤ 66,7 ms) hält im
-Normalfall; offen bleibt, ob der feste Teil kleiner geht.
+**Ergebnis**: Mit 8 Inputs ohne Ausgänge hat auf freiem Rechner jedes
+Input in jedem Lauf 56 ms; erhöhte Werte kamen hier nur mit Last
+daneben. Das widerlegt die Bildphase je Input nicht: am 19.10.
+vormittags (15 Inputs mit Aufnahme und SRT, ohne fremde Last) lag sie
+je Input verschieden (74/60/56 ms). Offen also: dieser Aufbau auf freiem
+Rechner mit dem Wiederholungs-Skript, und ob der feste Teil kleiner geht.
+NFA.3 (≤ 66,7 ms) hält im Normalfall.
