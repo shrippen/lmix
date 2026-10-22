@@ -52,15 +52,15 @@ moved() {
     "$IM" "$WORK/$2.png" -crop "$3" +repage "$WORK/m2.png"
     compare -metric AE -fuzz 5% "$WORK/m1.png" "$WORK/m2.png" null: 2>&1 | awk '{ printf "%d", $1 }' || true
 }
-# QML warnings of lmix's own files in a log. Qt's and KDE's modules
-# (Qt's file dialog in the Breeze style warns since qqc2-breeze-style
-# 6.8.1, 22.10.) are printed as a note: they are not ours to fix here.
-QT_KDE_QML='qrc:/qt-project\.org/|qrc:/qt/qml/org/kde/'
+# QML warnings in a log, except Qt's file dialog in the Breeze style
+# (warns since qqc2-breeze-style 6.8.1, 22.10.): printed as a note, not
+# ours to fix. Kirigami and lmix's own files still fail the check.
+QT_KDE_QML='qrc:/qt-project\.org/imports/QtQuick/Dialogs/|qrc:/qt/qml/org/kde/breeze/'
 own_qml_warnings() {
     local found
     found="$(grep -E 'qrc:|\.qml:[0-9]+' "$WORK/$1" || true)"
     if grep -qE "$QT_KDE_QML" <<<"$found"; then
-        echo "note: $1 has QML warnings from Qt/KDE modules: $(grep -E "$QT_KDE_QML" <<<"$found" | sort -u | head -2 | tr '\n' ' ')" >&2
+        echo "note: $1 has QML warnings from Qt's file dialog in Breeze: $(grep -E "$QT_KDE_QML" <<<"$found" | sort -u | head -2 | tr '\n' ' ')" >&2
     fi
     grep -vE "$QT_KDE_QML" <<<"$found" | grep .
 }
