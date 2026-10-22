@@ -51,7 +51,8 @@ Last. Vorher (`sync=true` an den inter-Ausgängen des Mischers) zeigte
 | CUDA, 2 Inputs, 6 + 6 Läufe | 90 ms | 0–62 ms |
 | CUDA, 8 Inputs, 3 Läufe | 90 ms | 33–64 ms |
 | CPU, 8 Inputs, 3 Läufe (Load 125) | 90 ms | 45–85 ms |
-| Ton an der Aufnahme | 128–130 ms | 50–101 ms |
+| GL, 4 Inputs, 3 Läufe (Load 132) | 90 ms | 9–68 ms |
+| Ton an der Aufnahme | 128–130 ms | 44–101 ms |
 
 ## 2026-10-09 — M3, Dauerlauf NFA.7, NVIDIA RTX 3090, CUDA-Mischer
 

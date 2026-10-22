@@ -4388,6 +4388,16 @@ Sitzung; je Lauf strom und lmix-core neu, MKV-Aufnahme auf Program):
 - 8 Inputs, je Input auf Program: CUDA vorher 90 ms am Encoder, ohne
   Sync 33/61/64 ms (`pgm_out` je Input 28–69 ms); CPU vorher 90 ms, ohne
   Sync 45–85 ms (unter Load 125, CPU-Mischer selbst langsam).
+- GL, 4 Inputs, 3 Läufe (Load 132): vorher 90 ms, ohne Sync 9/14/68 ms.
+- Abnahmetest `MIXER=cuda scripts/test-m2b-vm.sh` 47/47.
+
+**Bild und Ton**: Vorher lagen sie fest 39 ms auseinander (90/129 ms),
+jetzt je Lauf verschieden. Alle Ausgänge mit Bild und Ton paaren nach
+Zeitstempeln (Muxer bei Aufnahme, SRT, RTMP; `ndisinkcombiner` bei
+NDI); dort wartet das Bild auf den späteren Ton, der Gewinn ist also der
+des Tons (129 → 44–101 ms). Voll wirkt er, wo nur Bild ankommt:
+Bildschirm-Ausgänge, Live-Bilder der Console. Der Tonweg ist der nächste
+Engpass.
 
 `/api/latency` misst weiter am Eingang von `pgm_out`; das ist jetzt das
 Alter, mit dem die Ausgänge Program bekommen. Offen: die Bildphase
