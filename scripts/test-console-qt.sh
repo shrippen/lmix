@@ -52,6 +52,18 @@ moved() {
     "$IM" "$WORK/$2.png" -crop "$3" +repage "$WORK/m2.png"
     compare -metric AE -fuzz 5% "$WORK/m1.png" "$WORK/m2.png" null: 2>&1 | awk '{ printf "%d", $1 }' || true
 }
+# QML warnings in a log, except Qt's file dialog in the Breeze style
+# (warns since qqc2-breeze-style 6.8.1, 22.10.): printed as a note, not
+# ours to fix. Kirigami and lmix's own files still fail the check.
+QT_KDE_QML='qrc:/qt-project\.org/imports/QtQuick/Dialogs/|qrc:/qt/qml/org/kde/breeze/'
+own_qml_warnings() {
+    local found
+    found="$(grep -E 'qrc:|\.qml:[0-9]+' "$WORK/$1" || true)"
+    if grep -qE "$QT_KDE_QML" <<<"$found"; then
+        echo "note: $1 has QML warnings from Qt's file dialog in Breeze: $(grep -E "$QT_KDE_QML" <<<"$found" | sort -u | head -2 | tr '\n' ' ')" >&2
+    fi
+    grep -vE "$QT_KDE_QML" <<<"$found" | grep .
+}
 click() { DISPLAY="$DISPLAY_NO" xdotool mousemove "$1" "$2" click "${3:-1}"; }
 # Waits up to 60 s until the input in `preview`/`program` has number $2
 # (a busy VM handles clicks late).
@@ -97,6 +109,10 @@ PROGRAM_AREA="600x340+810+180"
 PREVIEW_AREA="600x340+20+180"
 TILE_1="200x75+12+608"
 TILE_2="200x75+232+608"
+# The tile's picture is about 78×44 px: the ball is 2–3 px wide and a
+# move changes about 9 px (19.10.–22.10.: 8.9 at fuzz 5 %). A still
+# picture changes none.
+TILE_MOVED_PX=3
 # The live flows start a few seconds after the Console, and on a VM
 # software GL shares four cores with the CPU mixer: pictures can stall
 # for seconds. Each check needs to hold once within LIVE_WAIT seconds.
@@ -108,7 +124,7 @@ while ((SECONDS < deadline)); do
     sleep 1
     shot b
     (($(moved a b "$PROGRAM_AREA") > 50)) && program_moves=1
-    (($(moved a b "$TILE_1") > 10)) && tile_1_moves=1
+    (($(moved a b "$TILE_1") > TILE_MOVED_PX)) && tile_1_moves=1
     awk "BEGIN { exit !($(spread a "$TILE_2") > 0.05) }" && tile_2_shows=1
     [[ -n "$program_moves" && -n "$tile_1_moves" && -n "$tile_2_shows" ]] && break
 done
@@ -156,16 +172,16 @@ PREVIEW_CORNER="250x130+350+180"
 layout_shows=""
 for _ in $(seq 1 40); do
     shot l
+    # The format ends in a newline: without it `read` returns 1 at the
+    # end of input, and set -e ends the script without a word.
     read -r mean sd < <("$IM" "$WORK/l.png" -crop "$PREVIEW_CORNER" -colorspace gray \
-        -format '%[fx:mean] %[fx:standard_deviation]' info:)
+        -format '%[fx:mean] %[fx:standard_deviation]\n' info:)
     awk "BEGIN { exit !($mean > 0.25 && $mean < 0.75 && $sd > 0.05) }" && layout_shows=1 && break
     sleep 0.5
 done
 [[ -n "$layout_shows" ]] && pass "preview monitor shows a layout" || fail "preview monitor blank with a layout on preview"
 
-if grep -E 'qrc:|\.qml:[0-9]+' "$WORK/console.log" >/dev/null; then
-    fail "QML warnings: $(grep -E 'qrc:|\.qml:[0-9]+' "$WORK/console.log" | head -3)"
-fi
+own_qml_warnings console.log && fail "QML warnings: $(own_qml_warnings console.log | head -3)"
 pass "no QML warnings"
 
 # lmix Show beside the mixer, same lmix-core: its window opens over the
@@ -207,9 +223,7 @@ until_true '[[ "$(standby)" == 3 ]]' && pass "show: space is GO after a header b
 key Escape
 until_true '[[ "$(cues_running)" == 0 ]]' && pass "show: Escape is panic" \
     || fail "show: Escape did not stop the cues ($(cues_running) running)"
-if grep -E 'qrc:|\.qml:[0-9]+' "$WORK/show.log" >/dev/null; then
-    fail "QML warnings (show): $(grep -E 'qrc:|\.qml:[0-9]+' "$WORK/show.log" | head -3)"
-fi
+own_qml_warnings show.log && fail "QML warnings (show): $(own_qml_warnings show.log | head -3)"
 pass "no QML warnings (show)"
 criticals="$(tail -n +"$((STROM_START_LINES + 1))" "$WORK/strom.log" | grep -c 'GStreamer-CRITICAL' || true)"
 [[ "$criticals" == 0 ]] || fail "$criticals GStreamer CRITICALs in strom.log"
