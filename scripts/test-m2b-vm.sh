@@ -2,6 +2,8 @@
 # M2b check without GPU: strom (CPU mixer) + lmix-core, driven over the
 # lmix API. Proves slot flows, preview/take, source swap and show file.
 # Picture quality, real latency and GPU paths: docs/HARDWARE-TODO.md.
+# With MIXER=cuda or gl the same checks run on a real GPU (acceptance on
+# hardware, H.27 ff.); they stay out of CI.
 #
 #   scripts/test-m2b-vm.sh            # builds, runs, cleans up
 #   CONSOLE_SHOT=out.png scripts/test-m2b-vm.sh
@@ -12,6 +14,14 @@
 #   LATENCY_BUDGET_MS=150             # p95 capture-to-program budget
 #   SETTLE_S=10                       # how long a check waits for its state
 #   STROM_GST_DEBUG=compositor:4      # GST_DEBUG for strom (gst.log)
+#   STROM_BIN=…/strom                 # skip scripts/fetch-strom.sh
+#   MIXER=cpu|cuda|gl                 # mixer (default cpu, software GL)
+#                                     #   cuda: NVIDIA; display output on Xvfb
+#                                     #   gl: the GPU's GL on this desktop
+#                                     #   session (needs WAYLAND_DISPLAY);
+#                                     #   its display output opens there and
+#                                     #   is not checked; SETTLE_S=30 under
+#                                     #   other GPU load (19.10.)
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -34,6 +44,12 @@ TAP_INTERVAL=1.5
 # shared CI container can lag several seconds behind real time; a slow
 # engine passes, a wrong state still fails.
 SETTLE_S="${SETTLE_S:-10}"
+MIXER="${MIXER:-cpu}"
+case "$MIXER" in
+    cpu | cuda) ;;
+    gl) [[ -n "${WAYLAND_DISPLAY:-}" ]] || { echo "MIXER=gl needs a Wayland session (WAYLAND_DISPLAY)" >&2; exit 2; } ;;
+    *) echo "MIXER is cpu, cuda or gl, not $MIXER" >&2; exit 2 ;;
+esac
 
 PIDS=()
 cleanup() {
@@ -102,22 +118,29 @@ wait_up() {
 
 # --- build ---
 # Prebuilt strom from CI when available (scripts/fetch-strom.sh).
-STROM_BIN="$("$ROOT/scripts/fetch-strom.sh")"
+STROM_BIN="${STROM_BIN:-$("$ROOT/scripts/fetch-strom.sh")}"
 (cd "$ROOT/workspace/lmix-core" && cargo build)
 CORE_BIN="${CARGO_TARGET_DIR:-$ROOT/workspace/lmix-core/target}/debug/lmix-core"
 
 # --- start ---
 # A screen for display outputs (engine side). On a desktop the engine
 # would open its windows there (Wayland first), so it only gets this one.
+# The GL mixer needs the GPU's GL, which Xvfb does not have: it stays on
+# the desktop session.
 ENGINE_DISPLAY=:94
 Xvfb "$ENGINE_DISPLAY" -screen 0 1280x720x24 >/dev/null 2>&1 &
 PIDS+=($!)
-(cd "$WORK" && unset WAYLAND_DISPLAY && GST_GL_WINDOW=x11 GST_DEBUG="${STROM_GST_DEBUG:-}" GST_DEBUG_FILE="$WORK/gst.log" GST_DEBUG_NO_COLOR=1 DISPLAY="$ENGINE_DISPLAY" LIBGL_ALWAYS_SOFTWARE=1 exec "$STROM_BIN" --host 127.0.0.1 --port "$STROM_PORT" --no-auto-restart --data-dir "$WORK/strom-data" >"$WORK/strom.log" 2>&1) &
+case "$MIXER" in
+    cpu) ENGINE_ENV=(-u WAYLAND_DISPLAY GST_GL_WINDOW=x11 DISPLAY="$ENGINE_DISPLAY" LIBGL_ALWAYS_SOFTWARE=1) ;;
+    cuda) ENGINE_ENV=(-u WAYLAND_DISPLAY GST_GL_WINDOW=x11 DISPLAY="$ENGINE_DISPLAY") ;;
+    gl) ENGINE_ENV=(GST_GL_WINDOW=wayland) ;;
+esac
+(cd "$WORK" && GST_DEBUG="${STROM_GST_DEBUG:-}" GST_DEBUG_FILE="$WORK/gst.log" GST_DEBUG_NO_COLOR=1 exec env "${ENGINE_ENV[@]}" "$STROM_BIN" --host 127.0.0.1 --port "$STROM_PORT" --no-auto-restart --data-dir "$WORK/strom-data" >"$WORK/strom.log" 2>&1) &
 PIDS+=($!)
 wait_up "$STROM/health" strom
 
 start_core() {
-    "$CORE_BIN" --strom "$STROM" --listen "127.0.0.1:${CORE_PORT}" --mixer cpu \
+    "$CORE_BIN" --strom "$STROM" --listen "127.0.0.1:${CORE_PORT}" --mixer "$MIXER" \
         --slots "$SLOTS" --autosave "$WORK/autosave.lmix" --shortcuts "$WORK/shortcuts.json" --layout-templates "$WORK/layout-templates.json" >>"$WORK/core.log" 2>&1 &
     CORE_PID=$!
     PIDS+=("$CORE_PID")
@@ -490,10 +513,17 @@ screen_orange() {
     DISPLAY="$ENGINE_DISPLAY" import -window root "$WORK/screen.png"
     [[ $(rgb "$WORK/screen.png" r) -gt 200 && $(rgb "$WORK/screen.png" b) -lt 60 ]]
 }
-wait_for "$SETTLE_S" screen_orange || true
-[[ "$(output_state Screen)" == running ]] && screen_orange || fail "display output does not show program"
-act '{"action":"stop_output","output":"Screen"}' >/dev/null
-pass "display output: program in a window on the engine screen"
+if [[ "$MIXER" == gl ]]; then
+    # It opens on the desktop, not on Xvfb: only that it runs.
+    [[ "$(output_state Screen)" == running ]] || fail "display output not running"
+    act '{"action":"stop_output","output":"Screen"}' >/dev/null
+    pass "display output: running (picture not checked on the GL mixer)"
+else
+    wait_for "$SETTLE_S" screen_orange || true
+    [[ "$(output_state Screen)" == running ]] && screen_orange || fail "display output does not show program"
+    act '{"action":"stop_output","output":"Screen"}' >/dev/null
+    pass "display output: program in a window on the engine screen"
+fi
 
 # --- failover (3.4): a source dies mid-transition, a stream breaks ---
 input_state() { curl -sf "$CORE/state" | jq -r ".inputs[] | select(.name==\"$1\") | .status"; }
@@ -718,12 +748,19 @@ library_empty() { [[ "$(curl -sf "$STINGER_API" | jq '.clips | length')" == 0 ]]
 wait_for "$SETTLE_S" library_empty || fail "removed clip still in strom's stinger library"
 pass "stinger: strom plays the clip with alpha over program, cuts underneath, locked until strom ends it"
 
-# --- looks (4.6): the CPU mixer has none; the action says so ---
-[[ "$(curl -sf "$CORE/state" | jq '.looks_available')" == false ]] || fail "CPU mixer claims looks"
+# --- looks (4.6): only the GL mixer has them; the others say so ---
 code="$(curl -s -o "$WORK/look.json" -w '%{http_code}' -X POST "$CORE/actions" -H 'content-type: application/json' \
     -d '{"action":"set_look","input":"Ball","look":{"brightness":0.3}}')"
-[[ "$code" != 200 ]] && grep -q "GL mixer" "$WORK/look.json" || fail "look on the CPU mixer: $code $(cat "$WORK/look.json")"
-pass "looks: refused with a reason on the CPU mixer (GL check: scripts/test-looks-gl.sh)"
+if [[ "$MIXER" == gl ]]; then
+    [[ "$(curl -sf "$CORE/state" | jq '.looks_available')" == true ]] || fail "GL mixer offers no looks"
+    [[ "$code" == 200 ]] || fail "look on the GL mixer: $code $(cat "$WORK/look.json")"
+    act '{"action":"set_look","input":"Ball","look":{"brightness":0.0}}' >/dev/null
+    pass "looks: accepted on the GL mixer (picture check: scripts/test-looks-gl.sh)"
+else
+    [[ "$(curl -sf "$CORE/state" | jq '.looks_available')" == false ]] || fail "$MIXER mixer claims looks"
+    [[ "$code" != 200 ]] && grep -q "GL mixer" "$WORK/look.json" || fail "look on the $MIXER mixer: $code $(cat "$WORK/look.json")"
+    pass "looks: refused with a reason on the $MIXER mixer (GL check: scripts/test-looks-gl.sh)"
+fi
 
 # --- layouts (4.6): Orange behind, Ball in the top right quarter ---
 act '{"action":"add_layout","name":"Interview","background":"Orange","boxes":[{"rect":{"x":0.5,"y":0.0,"w":0.5,"h":0.5},"input":"Ball","border_px":4}]}' >/dev/null
