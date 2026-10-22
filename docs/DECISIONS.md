@@ -4213,3 +4213,57 @@ die Encoder auf der GPU wie bei Program.
 
 **Geprüft**: Aufnahme mit Quelle Vorschau, Program schwarz, Vorschau
 Balken: Bild 30 im Mittel 130 (CPU) bzw. 140 (CUDA), schwarz wäre 0.
+
+## 2026-10-19 — T-Bar mit dem Effekt von Taste 1 (SWI.3)
+
+**Kontext**: Der T-Bar blendete immer, gleich welcher Effekt auf Taste 1
+lag: lmix setzte nur das Alpha des Vorschau-Pads.
+
+**Entscheidung**: strom hält den Take von Program zur Vorschau an einer
+Stelle (`POST …/blocks/vm/tbar {position, transition_type}`, strom #34):
+jeder Input-Pad geht direkt auf die Werte des Effekts an dieser Stelle
+(Schieben und Push verschieben die Pads, Dip geht in der Mitte durch
+Schwarz, Blende mischt), ohne Umweg über die Ruhelage: der Mischer rendert
+zwischen zwei Property-Schreibvorgängen, ein Umweg blitzte als Frame auf
+(Review strom #34). lmix schickt den Effekt von Taste 1 mit. Am Ende
+bleibt es ein Schnitt-Take wie bisher, zurück auf 0 zeigt Program wie
+vorher.
+- **Als Blende**: Schnitt (hat kein Dazwischen), Wischen (braucht die
+  Uniforms der Shader-Engine) und Stinger (ein Clip steht nicht still).
+- **Bei Fade to Black gesperrt** (`fade_to_black_on`, Review #123): der
+  T-Bar setzt die Pads wie ein Take zurück und brächte Program unter dem
+  Schwarz zurück, während FTB noch an ist. strom lehnt dann ebenso ab.
+- **Overlay-Blenden laufen weiter**: strom setzt beim Halten nur die
+  Input-Pads zurück, nicht die DSK-Ebenen (Review #123).
+- Layouts auf Vorschau bleiben beim T-Bar abgelehnt wie bisher, ebenso ein
+  Layout auf Program (die Pads gehören dann dem Layout; strom lehnt ab,
+  und der Ton blendete sonst ohne Bild; Review #123).
+- **Ein Take setzt den T-Bar auf 0**: jede Aktion, die Program wechselt
+  (Cut, Übergang, Stinger, Cut direkt), setzt in strom die Pads zurück;
+  lmix führt den T-Bar dann wieder ab 0, sonst käme die nächste Vorschau
+  an der alten Stelle von selbst auf Sendung (Review #123). Ebenso beim Wiederherstellen
+  (Neustart der Engine oder von lmix-core, Format, Show laden): lmix
+  schickt den T-Bar immer auf 0, auch wenn es selbst keinen gezogenen kennt
+  (ein weiter genutzter Mischer hielte ihn sonst), außer unter Fade to
+  Black. Wird das Vorschau-Input entfernt, geht der T-Bar vorher auf 0. Nicht erfasst: strom merkt sich das Halten nicht, ein
+  Geometrie-Refresh (ein Input ändert seine Größe) setzt die Pads zurück,
+  ohne dass lmix es erfährt; der nächste Zug am T-Bar stellt es wieder her.
+- **Gezogener T-Bar und Vorschau** (Review strom #34): ein anderes Input auf
+  die Vorschau kommt an der Stelle des T-Bars herein; ein Layout auf die
+  Vorschau und Fade to Black stellen ihn erst auf 0 (sonst stünde die alte
+  Vorschau halb auf Sendung, unter dem Schwarz sichtbar). Der nächste
+  Zug am T-Bar zeigt die Vorschau wieder an der Stelle, an der er steht.
+- **Laufende Animation**: strom lehnt den T-Bar ab, solange ein Take oder
+  die Aufblende nach Fade to Black die Input-Pads noch bewegt; lmix lehnt
+  ihn in dieser Zeit selbst ab (`ActionError::TransitionRunning`, ohne die Stellung zu
+  übernehmen, sonst blendete der Ton ohne Bild). Position 0 schickt dann
+  nichts, das Ende (1) bleibt ein Schnitt. Der nächste Fader-Schritt
+  danach greift.
+- **Anderes Seitenverhältnis**: deckt das neue Bild das alte nicht ganz,
+  blendet das alte mit dem T-Bar aus, damit am Ende keine Streifen
+  verschwinden (wie beim animierten Schieben).
+
+**Geprüft**: strom-Test auf dem CPU-Mischer (rot/blau, Schieben, Push, Dip,
+Blende, zurück); lmix gegen strom auf CPU und CUDA: Schieben links bei 0,5
+links schwarz, rechts Balken (0 | 221 bzw. 0 | 145), Blende bei 0,5 die
+Hälfte der Balken, am Ende der Take.
