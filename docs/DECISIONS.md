@@ -4283,8 +4283,13 @@ Bestand).
   Blende gehen gar nicht erst raus, die korrigierten an ihrer Stelle.
   0 stimmt in allen Fällen, in denen strom ablehnt: ein laufender Take
   setzt die Pads ohnehin zurück.
-- Jede Aktion mit einem Take (Program, Layout auf Program, Stinger) setzt
-  `fade_to_black` auf aus, wie strom.
+- Jede Aktion, die Program wechselt (Cut, Übergang, Stinger, Cut direkt,
+  Layout), setzt `fade_to_black` auf aus, wie strom. Ein Cut direkt auf
+  das Input, das schon auf Program liegt, erreicht in strom keinen Take
+  (`take_source` lässt ihn aus); das Schwarz bleibt (Review #124).
+- Ein Player, den der abgelehnte Schritt auf der Vorschau gestartet hat,
+  verhält sich wie beim Zurückziehen auf 0: pausiert, wenn sein Auto-Play
+  pausiert, sonst läuft er weiter.
 
 **Geprüft**: `a_refused_t_bar_goes_back_and_keeps_the_sound` (Service,
 NullEngine lehnt `TBar` ab), `a_take_lifts_fade_to_black_as_the_engine_does`;

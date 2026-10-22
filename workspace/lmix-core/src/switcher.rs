@@ -982,13 +982,9 @@ impl Switcher {
             self.t_bar = 0.0;
         }
         // The engine lifts fade to black with any take (cut, transition,
-        // stinger): program is back on air.
-        if commands.iter().any(|c| {
-            matches!(
-                c,
-                Command::Program { .. } | Command::ProgramLayout { .. } | Command::Stinger { .. }
-            )
-        }) {
+        // stinger): program is back on air. A cut to what is already on
+        // program reaches no take there (`take_source` skips it).
+        if self.show.program != program {
             self.fade_to_black = false;
         }
         commands.extend(self.playback_commands());
@@ -6426,6 +6422,10 @@ mod tests {
         sw.apply(Action::TBar { position: 0.0 }).unwrap();
         sw.apply(Action::FadeToBlack { duration_ms: 0 }).unwrap();
         assert!(sw.state().fade_to_black, "the next press fades to black");
+
+        // Cut direct to what is on program: no take, the black stays.
+        sw.apply(Action::CutDirect { input: named("B") }).unwrap();
+        assert!(sw.state().fade_to_black, "nothing was taken");
     }
 
     #[test]
