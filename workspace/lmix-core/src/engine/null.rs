@@ -24,6 +24,9 @@ pub struct NullEngine {
     /// Refuse every command, as a fresh engine without the mixer does.
     #[cfg(test)]
     refusing: std::sync::atomic::AtomicBool,
+    /// Refuse T-bar steps, as strom does while a take of its own runs.
+    #[cfg(test)]
+    refusing_t_bar: std::sync::atomic::AtomicBool,
     /// Media player reports a test sends.
     #[cfg(test)]
     players: Option<tokio::sync::broadcast::Sender<crate::clips::PlayerProgress>>,
@@ -104,6 +107,13 @@ impl NullEngine {
             .store(refusing, std::sync::atomic::Ordering::SeqCst);
     }
 
+    /// Refuse (`true`) or run every following T-bar step.
+    #[cfg(test)]
+    pub fn refuse_t_bar(&self, refusing: bool) {
+        self.refusing_t_bar
+            .store(refusing, std::sync::atomic::Ordering::SeqCst);
+    }
+
     /// Commands received so far.
     #[cfg(test)]
     pub fn log(&self) -> Vec<Command> {
@@ -144,6 +154,13 @@ impl Engine for NullEngine {
         {
             if self.refusing.load(std::sync::atomic::Ordering::SeqCst) {
                 return Err(EngineError::Refused("no mixer yet".into()));
+            }
+            if matches!(command, Command::TBar { .. })
+                && self
+                    .refusing_t_bar
+                    .load(std::sync::atomic::Ordering::SeqCst)
+            {
+                return Err(EngineError::Refused("a take is running".into()));
             }
             let slow = self.slow.lock().expect("slow lock").take();
             if let Some((takes, error)) = slow {

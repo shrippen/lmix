@@ -4267,3 +4267,25 @@ vorher.
 Blende, zurück); lmix gegen strom auf CPU und CUDA: Schieben links bei 0,5
 links schwarz, rechts Balken (0 | 221 bzw. 0 | 145), Blende bei 0,5 die
 Hälfte der Balken, am Ende der Take.
+
+## 2026-10-22 — T-Bar und Fade to Black folgen strom (SWI.3)
+
+**Kontext**: lmix rechnet die Sperre während eines Takes ab dem Befehl,
+strom ab dem Start der Animation (einige zehn ms später). Ein T-Bar-Schritt
+in diesem Rest kam bei strom nicht an, lmix übernahm ihn trotzdem und
+blendete den Ton (Review #123). Und strom hebt Fade to Black mit jedem
+Take auf, lmix blieb auf „an“ und sperrte danach den T-Bar (Review #123,
+Bestand).
+
+**Entscheidung**:
+- Lehnt strom einen T-Bar-Schritt ab, geht der T-Bar in lmix auf 0. Ton
+  und Player folgen Program wie ohne T-Bar; die Ton-Befehle mit der
+  Blende gehen gar nicht erst raus, die korrigierten an ihrer Stelle.
+  0 stimmt in allen Fällen, in denen strom ablehnt: ein laufender Take
+  setzt die Pads ohnehin zurück.
+- Jede Aktion mit einem Take (Program, Layout auf Program, Stinger) setzt
+  `fade_to_black` auf aus, wie strom.
+
+**Geprüft**: `a_refused_t_bar_goes_back_and_keeps_the_sound` (Service,
+NullEngine lehnt `TBar` ab), `a_take_lifts_fade_to_black_as_the_engine_does`;
+beide scheitern ohne den Fix.
