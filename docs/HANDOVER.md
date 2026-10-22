@@ -118,17 +118,16 @@ VSP und die Abnahme auf der RTX 3090.
 
 - Gitea `git.arianw.de/shrippen/lmix` ist führend, GitHub nur Spiegel.
   Branch → PR auf Gitea → Review → Merge über die Gitea-API.
-- Review: ein **neuer** Claude-Agent prüft jeden PR (`agent.md`
-  „Repository rule“, `REVIEW.md`). Sein Bericht geht unverändert als
-  Kommentar „## Claude-Review (neuer Agent) zu <commit>“ in den PR.
+- Review (seit 22.10.2026): zuerst PR-Agent, die Sitzung kommentiert
+  `/review` je Runde mit neuem Code; ein neuer Claude-Agent prüft die
+  **Wichtig** früherer Runden und reviewt, wenn PR-Agent zweimal scheitert.
+  Ablauf und Überschriften in `agent.md` („Repository rule“), `REVIEW.md`.
   Merge nur ohne offenes **Wichtig** und mit grüner CI (`github / test`,
   nach den Pfaden von `ci.yml`). Nach 3 Runden mit Wichtig: Eigentümer
   fragen. Bisher so gehandhabt (keine Regel): optionale Befunde mit
   einer Zeile beantworten und in den nächsten PR mitnehmen.
 - PRs an CI, Release, Packaging, `agent.md`, `REVIEW.md`, Geheimnissen
   oder Veröffentlichtem bestätigt der Eigentümer vor dem Merge in Worten.
-- PR-Agent läuft nur auf `/review` des Eigentümers (#112–#114);
-  Sitzungen schreiben kein `/review`.
 - Platz auf der Platte ist knapp: nach Builds `target/*/incremental`,
   `target/debug` löschen. Der VM-Gesamttest braucht
   `SWAGGER_UI_DOWNLOAD_URL` (lokale Kopie von swagger-ui 5.17.14), wenn
@@ -216,6 +215,7 @@ CI läuft auf GitHub (Status `github / test` am Commit auf Gitea). Seit
 18.10.2026 prüft vor jedem Merge ein neuer Claude-Agent (`agent.md`,
 `REVIEW.md`). PR-Agent läuft nur noch, wenn der Eigentümer `/review`
 kommentiert; sein Schlüssel hat das Kostenlimit erreicht (`todo.md`).
+(Stand 18.10.; seit 22.10. gilt die Arbeitsweise oben.)
 
 Unabhängig von `main` (gemergt):
 
