@@ -19,9 +19,11 @@ on:
 # A newer /review (alone or with options after a space) replaces a running one. Every other
 # comment gets a group of its own and cancels nothing: one that skips, and one that starts with
 # /review but goes on otherwise (a line break: it still runs, the check splits at any space;
-# /reviewed: the step Command ends the job before anything is installed).
+# /reviewed: the step Command ends the job before anything is installed). The group checks only
+# the comment; owner and PR are the job's if. Gitea 28 silently creates no run for a group that
+# nests the owner and PR check in brackets (22.10.2026).
 concurrency:
-  group: pr-agent-${{ github.event.issue.number }}-${{ (github.event.issue.pull_request && github.event.comment.user.login == github.repository_owner && (github.event.comment.body == '/review' || startsWith(github.event.comment.body, '/review '))) && 'review' || github.run_id }}
+  group: pr-agent-${{ github.event.issue.number }}-${{ (github.event.comment.body == '/review' || startsWith(github.event.comment.body, '/review ')) && 'review' || github.run_id }}
   cancel-in-progress: true
 
 jobs:
