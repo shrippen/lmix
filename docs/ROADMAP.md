@@ -424,9 +424,13 @@ Stufe 4 (Ausgabeziele, EXT.1–5) ✅ für HTTP und Home Assistant; DECISIONS
 Stufe 5, Teil Sicherheit (SAF): Panik, harter Stopp, Notfall-Liste, Standby
 nach Neustart ✅ ohne Ausblenden (mit Stufe 2); DECISIONS „Panik“.
 Stufe 5, Teil Bedienung: Restzeit als Ereignis (CTL.2) und feste OSC-Abonnenten
-(CTL.4) ✅; DECISIONS „Feste OSC-Abonnenten“. Offen: Zugangsschlüssel (CTL.5).
+(CTL.4) ✅; DECISIONS „Feste OSC-Abonnenten“. Zugangsschlüssel (CTL.5) ✅
+16./17.10.; DECISIONS „Zugangsschlüssel mit Rechten“, „Vertraute Adressen“.
 Stufe 7 (Show-Ansicht der Console, SUI.1–4, 9, 13) ✅ im Grundstand; DECISIONS
-„Show-Ansicht“. Ohne GPU offen in S1: CTL.5; mit Engine: Stufen 2 und 3.
+„Show-Ansicht“. Stufen 2 und 3 (Zonen, Klang- und Bild-Cues, Bühnen) mit
+der Engine gebaut; auf echter Hardware (19.10.): Klang-Cues ganz grün
+(GO 32,9 ms, Panik, 16 Klänge, zwei Geräte, Gerätekanäle), Bühnen nur
+ohne Sichtprüfung (H.38).
 
 ---
 

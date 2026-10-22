@@ -1,9 +1,86 @@
 # Übergabe: Stand M9 und Show-Modus S1 (in Arbeit), lokale Übernahme
 
-Stand 2026-10-18 abends (bis #114). Die Arbeit läuft lokal weiter (Arch, RTX 3090), Abnahme
+Stand 2026-10-19 abends (`main` bis #115, offen #116–#123, strom #29–#34). Die Arbeit läuft lokal weiter (Arch, RTX 3090), Abnahme
 auf echter Hardware.
 
-## Für den nächsten Agenten: Stand 18.10.2026 abends
+## Für den nächsten Agenten: Stand 19.10.2026 abends
+
+Kurz: Hardware-Nacht (01–07 Uhr) und ein Arbeitstag (08–20 Uhr) auf dem
+3090-Rechner. `main` ist unverändert (f2136cd); alles liegt in PRs, die
+der Eigentümer mergt. Die Arbeitsweise unten (Review, CI, Gitea) gilt
+weiter.
+
+### Merge-Reihenfolge
+
+**strom** (Gitea `shrippen/strom`, Basis `dev`; #33 auf #30):
+
+| PR | Branch | Inhalt |
+|---|---|---|
+| #29 | `lmix-cuda-hw-fixes` | CUDA-Mischer auf echter Hardware: Alpha nach Blende (`cudaconverter`-Bug umgangen), Stinger, Vorschaubilder im Vollbereich, Rampen-CRITICAL |
+| #30 | `lmix-zone-clock` | Live-Stille je Zone: Panik und Stopp erreichen laufende Klänge |
+| #31 | `lmix-device-channels` | Audio-Ausgänge mit Kanalpositionen in der Geräteliste |
+| #32 | `lmix-preview-out` | Vorschau-Ausgang `pvw_out` am Bildmischer (VSP), mit Zonen-Rändern |
+| #33 | `lmix-zone-latency` | Zone wartet weniger: GO bis hörbar 32,9 ms (SND.12) |
+| #34 | `lmix-tbar-effect` | T-Bar hält den Take mit seinem Effekt (SWI.3) |
+
+`lmix-pin-1019` (strom) wächst mit: Er ist der Merge aller strom-PRs
+oben (Stand siehe lmix #123). Jeder lmix-PR zeigt auf den Stand, den sein
+Text nennt (#121: `a016205` = #29–#33; #122: `fbd3dfb` mit den Rändern
+von #32; #123: der jüngste Stand mit #34 nach allen Review-Runden und den
+Review-Nachträgen von #29 und #33, Hash im PR-Text). Nach dem Merge in `dev` das Submodul
+auf `dev` stellen (kleiner PR).
+
+**lmix**:
+
+| PR | Basis | Inhalt |
+|---|---|---|
+| #116 | `main` | Hardware-Nacht: Ergebnisse, `pulsesink`-Puffer, `hw-sound-cues` |
+| #117 | #116 | Zonen auf Gerätekanälen (Kanalbelegung des Geräts) |
+| #119 | #117 | Vorschau-Monitor zeigt den Vorschau-Ausgang des Mischers (VSP) |
+| #121 | #119 | Stand 19.10.: Submodul mit #33, Doku, Upstream-Bericht |
+| #122 | #121 | Ausgänge mit Quelle Vorschau (OUT.2) |
+| #123 | #122 | T-Bar mit dem Effekt von Taste 1 (SWI.3) |
+| #118 | `main` | Nachzügler #111, Console `--theme` statt `--style`, Kleinigkeiten #104/#105 |
+| #120 | `main` | Abnahmetest mit `MIXER` (cpu, cuda, gl) auf echter Hardware |
+
+`todo.md`, `docs/DECISIONS.md` und dieses Dokument ändern mehrere PRs;
+beim Mergen von #118/#120 nach dem Stapel Konflikte dort von Hand lösen
+(beide Seiten behalten).
+
+### Ergebnisse 19.10. (Details in DECISIONS)
+
+- Klang-Cues auf echtem Gerät ganz grün (`hw-sound-cues`): GO 32,9 ms,
+  Panik, 16 Klänge, zwei Geräte, Gerätekanäle 3/4 (virtuelles 7.1).
+- Abnahmetest auf echter GPU: CPU und CUDA je 47/47 (GL nur nachts, er
+  öffnet Fenster auf dem Desktop).
+- VSP: Vorschau kommt aus dem Mischer, Layouts in der Vorschau sichtbar,
+  getestet auf CPU, GL und CUDA.
+- Latenz-„Sprung bei 16 Inputs“ war keiner: meist 56 ms, ab und zu
+  60–81 ms (mal je Input, mal je Lauf). Ursache offen.
+- T-Bar mit dem Effekt von Taste 1 (strom #34, lmix #123): nach vielen
+  Review-Runden hält strom jeden Pad direkt auf seinen Werten (kein Frame
+  über die Ruhelage), wartet auf laufende Takes, folgt der Vorschau; lmix
+  stellt den T-Bar bei Take, Layout, FTB und Wiederherstellen auf 0.
+  End to end CPU und CUDA, Abnahmetest 47/47 mit dem Pin.
+
+### Nächste Schritte (Reihenfolge)
+
+1. **Review-Befunde** der PRs oben einarbeiten, sobald der Eigentümer
+   Reviews anstößt.
+2. **OVL.3 im Vorschau-Bild**: wartet auf die Entscheidung in `todo.md`
+   („Für dich“); danach DSK-Ebenen am Vorschau-Compositor in strom.
+3. **OVL.5 Clean Feed und OVL.2 Rand um BiB-Overlays**: warten auf die
+   Entscheidungen (Entscheidungsseite 19.10., `todo.md`).
+4. **Latenz** (todo): einen erhöhten Lauf fangen, dann Aggregator-Fristen.
+5. **CEF/H.36**: Bau braucht die Freigabe (todo); dann H.36 und M7.0.
+6. Flakes im Console-Test (todo): „tile 1 still“ (abends wieder grün),
+   Show-Dialog. strom-GL-Tests `source_resize` und
+   `overlay_upload::tally_follows_a_cut…` sind auf dem 3090-Rechner rot,
+   auch ohne die PRs (todo).
+7. Hardware mit dem Eigentümer: H.38 (Bühne sehen), H.13, H.20, H.21,
+   echtes Mehrkanal-Interface (H.37), GL-Abnahme tagsüber mit Freigabe.
+
+## Stand 18.10.2026 abends (überholt, Arbeitsweise gilt weiter)
 
 Kurz: `main` ist sauber (alles bis #114 gemergt, kein eigener PR offen).
 Offen sind eine Frage an den Eigentümer, kleine Nachzügler aus Reviews,

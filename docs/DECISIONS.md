@@ -4143,3 +4143,62 @@ gar nichts (die Vorschau war kein Input).
 **Verworfen**: den PVW-Ausschnitt aus dem Multiview schneiden (halbe
 Auflösung, Beschriftung und Tally im Bild); einen Input-Selector statt des
 Compositors (keine Layouts auf Vorschau).
+
+## 2026-10-19 — Latenz: kein Sprung bei 16 Inputs (H.2, NFA.3)
+
+**Kontext**: In der Hardware-Nacht maß der CUDA-Mischer mit 16 Inputs
+durchgehend 81–83 ms, mit 8–15 Inputs 56 ms („Sprung genau bei 16“).
+
+**Messung** (19.10. vormittags, RTX 3090 ohne fremde Last, strom
+`lmix-pin-1019`, `scripts/soak-hardware.sh`, je 1 min):
+- 15 und 16 Inputs ohne Ausgänge: 56 ms; 16 mit Aufnahme und SRT: 56 ms;
+  15 mit Aufnahme und SRT: 56 ms, nach einer Minute 81 ms.
+- Fein (15 Inputs mit Ausgängen, alle 10 s, Program wechselt alle 30 s):
+  In 1 und 2 je 74 ms, In 3–6 je 60 ms, In 7–9 je 56 ms. Der Wert ändert
+  sich nur beim Schnitt und bleibt je Input gleich.
+
+**Ergebnis**: Die Latenz hängt nicht an der Zahl der Inputs. Rund 56 ms
+sind fest; darüber kommen ab und zu höhere Werte (60–81 ms), am Vormittag
+wechselnd mit dem Input auf Program, mittags je Lauf (siehe Nachmessung).
+Ursache offen: Phase der Quellen gegenüber dem Live-Aggregator (er gibt
+ein Bild aus, sobald alle aktiven Pads Daten haben) oder etwas je Lauf.
+NFA.3 (intern ≤ 2 Bilder = 66,7 ms) hält im Normalfall, nicht immer.
+
+**Nachmessung** (mittags, strom mit #29–#33, eigenes Skript: N Inputs,
+jeder 2 × auf Program, je 2 s gemessen): 9 Läufe mit 4–15 Inputs, Schnitt
+oder Blende, mit und ohne Aufnahme und SRT: 8-mal überall 56 ms, einmal
+überall 65 ms (für den ganzen Lauf, unabhängig vom Input). Die Werte über
+56 ms kommen also nur ab und zu, dann je Lauf oder ab einem Schnitt. Im
+Normalfall hält NFA.3 (≤ 66,7 ms).
+
+**Mischer-Latenz** (Eigenschaft `latency` des Bildmischers, strom-Standard
+20 ms, 16 Inputs mit Aufnahme und SRT, je 3 min): 20 ms 73 ms (ein
+erhöhter Lauf), 10 und 15 ms je 56 ms; Bildzahlen gleich (5834/5835
+Bilder in Aufnahme, ~5765 über SRT). Der feste Teil kommt also nicht aus
+dem Spielraum des Mischers, sondern von davor (Quelle, Inter-Kanal,
+`min-upstream-latency`).
+
+**Nächster Schritt**: einen Lauf mit erhöhtem Wert fangen (Skript mit
+Wiederholung, bis ein Wert über 56 ms kommt) und dann die Fristen des
+Programm-Mischers mit `GST_DEBUG=aggregator:6` ansehen; prüfen, ob der
+feste Teil (56 ms) kleiner geht (Mischer-Latenz, Slot-Puffer).
+
+## 2026-10-19 — GO bis hörbar: Zonen-Latenz 15 ms (SND.12)
+
+**Kontext**: SND.12 verlangt GO bis hörbar ≤ 50 ms. Gemessen 63–77 ms
+(Scarlett Solo, `hw-sound-cues`). Die Zone wartete die Latenz ihrer
+Pipeline: Mischer 30 ms, dazu die Live-Stille (strom #30) mit den
+1024 Samples (21 ms) von `audiotestsrc`, die sie als Latenz meldet, und
+`min-upstream-latency` 30 ms.
+
+**Entscheidung** (strom #33): Live-Stille in Blöcken von 5 ms (240
+Samples), Mischer-Block 5 ms, `min-upstream-latency` gleich dem Block,
+Mischer-Latenz 15 ms. Gemessen: GO bis erstes Sample am Gerät 44 ms
+Median (43–49 ms), 16 Klänge ohne Lücke. Mischer-Latenz 20 ms: 44–56 ms;
+10 ms: 21–35 ms, aber einmal 2 Lücken bei 16 Klängen gleichzeitig (der
+erste Puffer eines Klangs kommt zu spät). 15 ms lassen 10 ms mehr Luft
+dafür. Die Streuung zwischen Läufen ist groß (±10 ms, Rechner nicht
+leer); ein Lauf auf ruhigem Rechner steht aus.
+Mit allem zusammen (strom `lmix-pin-1019`: #29–#33) ist
+`hw-sound-cues` zum ersten Mal ganz grün: GO 32,9 ms Median (31,1–34,7),
+Panik, 16 Klänge, zwei Geräte, Gerätekanäle 3/4.
