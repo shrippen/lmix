@@ -2115,7 +2115,6 @@ fn now_ms() -> u64 {
         .map_or(0, |d| d.as_millis() as u64)
 }
 
-/// Reflect a `SetSlot` outcome in the input's status.
 /// The sound of `fix` for the slot `command` sets, taken out of `fix`:
 /// it goes out instead of `command`.
 fn bar_fix_for(fix: &mut Vec<Command>, command: &Command) -> Option<Command> {
@@ -2128,6 +2127,7 @@ fn bar_fix_for(fix: &mut Vec<Command>, command: &Command) -> Option<Command> {
     Some(fix.remove(at))
 }
 
+/// Reflect a `SetSlot` outcome in the input's status.
 fn mark_slot(sw: &mut Switcher, command: &Command, ok: bool) {
     let Command::SetSlot {
         slot,
