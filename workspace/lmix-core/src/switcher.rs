@@ -981,6 +981,12 @@ impl Switcher {
         if self.show.program != program {
             self.t_bar = 0.0;
         }
+        // The engine lifts fade to black with any take (cut, transition,
+        // stinger): program is back on air. A cut to what is already on
+        // program reaches no take there (`take_source` skips it).
+        if self.show.program != program {
+            self.fade_to_black = false;
+        }
         commands.extend(self.playback_commands());
         commands.extend(self.stinger_commands());
         let audio = self.audio_commands(ramp_ms);
@@ -3676,6 +3682,21 @@ impl Switcher {
             .is_some_and(|l| {
                 l.background == Some(input) || l.boxes.iter().any(|b| b.input == input && !b.hidden)
             })
+    }
+
+    /// The engine refused a T-bar step (a take of its own still runs, it
+    /// starts some ms after lmix sent it): the bar is back at 0, and the
+    /// commands that put sound and players back as program rests.
+    pub fn t_bar_refused(&mut self) -> Vec<Command> {
+        if self.t_bar == 0.0 {
+            return Vec::new();
+        }
+        let airing = self.airing();
+        self.t_bar = 0.0;
+        let mut commands = self.audio_commands(AUDIO_RAMP_MS);
+        let (_, off) = self.auto_play_commands(&airing);
+        commands.extend(off);
+        commands
     }
 
     /// The engine has finished the stinger (or it failed, or the mixer
@@ -6384,6 +6405,27 @@ mod tests {
         }
         sw.apply(Action::FadeToBlack { duration_ms: 0 }).unwrap();
         assert!(sw.apply(Action::TBar { position: 0.3 }).is_ok());
+    }
+
+    #[test]
+    fn a_take_lifts_fade_to_black_as_the_engine_does() {
+        let mut sw = two_inputs();
+        sw.apply(Action::CutDirect { input: named("A") }).unwrap();
+        sw.apply(Action::PreviewInput { input: named("B") })
+            .unwrap();
+        sw.apply(Action::FadeToBlack { duration_ms: 0 }).unwrap();
+
+        sw.apply(Action::Cut).unwrap();
+
+        assert!(!sw.state().fade_to_black, "program is back on air");
+        assert!(sw.apply(Action::TBar { position: 0.3 }).is_ok());
+        sw.apply(Action::TBar { position: 0.0 }).unwrap();
+        sw.apply(Action::FadeToBlack { duration_ms: 0 }).unwrap();
+        assert!(sw.state().fade_to_black, "the next press fades to black");
+
+        // Cut direct to what is on program: no take, the black stays.
+        sw.apply(Action::CutDirect { input: named("B") }).unwrap();
+        assert!(sw.state().fade_to_black, "nothing was taken");
     }
 
     #[test]

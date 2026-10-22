@@ -1882,8 +1882,20 @@ impl Service {
             return Ok(());
         }
         let mut first_error = None;
+        // After a refused T-bar step: what puts sound and players back.
+        // Its sound goes out in place of the batch's own, which mixed the
+        // bar in (no blend reaches the engine), the rest after the batch.
+        let mut bar_fix: Vec<Command> = Vec::new();
 
         for command in commands {
+            let fixed;
+            let command = match bar_fix_for(&mut bar_fix, command) {
+                Some(fix) => {
+                    fixed = fix;
+                    &fixed
+                }
+                None => command,
+            };
             // A new or emptied slot must not show the old source's frame.
             if let Command::SetSlot { slot, .. } = command {
                 self.forget_picture(Picture::Slot(*slot));
@@ -1932,10 +1944,19 @@ impl Service {
             if matches!(command, Command::Stinger { .. }) {
                 sw.stinger_finished();
             }
+            if matches!(command, Command::TBar { .. }) {
+                bar_fix = sw.t_bar_refused();
+            }
             tracing::warn!(?command, error = %e, "engine command failed");
             first_error.get_or_insert(ActionError::Engine {
                 message: e.to_string(),
             });
+        }
+
+        for command in &bar_fix {
+            if let Err(e) = self.engine.run(command).await {
+                tracing::warn!(?command, error = %e, "engine command failed");
+            }
         }
 
         if first_error.is_some() && self.engine_restarted().await {
@@ -2092,6 +2113,18 @@ fn now_ms() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |d| d.as_millis() as u64)
+}
+
+/// The sound of `fix` for the slot `command` sets, taken out of `fix`:
+/// it goes out instead of `command`.
+fn bar_fix_for(fix: &mut Vec<Command>, command: &Command) -> Option<Command> {
+    let Command::SetAudio { slot, .. } = command else {
+        return None;
+    };
+    let at = fix
+        .iter()
+        .position(|c| matches!(c, Command::SetAudio { slot: s, .. } if s == slot))?;
+    Some(fix.remove(at))
 }
 
 /// Reflect a `SetSlot` outcome in the input's status.
@@ -2994,6 +3027,65 @@ mod tests {
         assert_eq!(slot_commands(&engine), 1, "{:?}", engine.log());
         assert!(matches!(events.recv().await.unwrap(), Event::State { .. }));
         assert!(matches!(events.recv().await.unwrap(), Event::Tally { .. }));
+    }
+
+    /// strom refuses a bar step while a take of its own still runs: the
+    /// bar goes back to 0 and the sound stays with program, as on air.
+    #[tokio::test]
+    async fn a_refused_t_bar_goes_back_and_keeps_the_sound() {
+        let engine = Arc::new(NullEngine::default());
+        let service = Service::new(4, engine.clone(), None);
+        let named = |name: &str| InputRef::Text(name.into());
+        for name in ["A", "B"] {
+            service
+                .handle(Action::AddInput {
+                    source: SourceSpec::Pattern {
+                        pattern: TestPattern::Bars,
+                    },
+                    name: Some(name.into()),
+                })
+                .await
+                .unwrap();
+            service
+                .handle(Action::SetAudioFollow {
+                    input: named(name),
+                    follow: true,
+                })
+                .await
+                .unwrap();
+        }
+        service
+            .handle(Action::CutDirect { input: named("A") })
+            .await
+            .unwrap();
+        service
+            .handle(Action::PreviewInput { input: named("B") })
+            .await
+            .unwrap();
+
+        engine.refuse_t_bar(true);
+        let answer = service.handle(Action::TBar { position: 0.5 }).await;
+
+        assert!(answer.is_err(), "{answer:?}");
+        assert_eq!(service.state().await.t_bar, 0.0);
+        let log = engine.log();
+        let bar = log
+            .iter()
+            .rposition(|c| matches!(c, Command::TBar { .. }))
+            .expect("bar sent");
+        let after: Vec<(usize, f64, bool)> = log[bar..]
+            .iter()
+            .filter_map(|c| match c {
+                Command::SetAudio {
+                    slot, gain, muted, ..
+                } => Some((*slot, (*gain * 100.0).round() / 100.0, *muted)),
+                _ => None,
+            })
+            .collect();
+        assert!(
+            after.iter().all(|&(_, gain, _)| gain == 1.0),
+            "the blend reached the engine: {after:?}"
+        );
     }
 
     #[tokio::test(start_paused = true)]
