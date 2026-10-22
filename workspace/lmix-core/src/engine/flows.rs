@@ -2221,23 +2221,28 @@ mod tests {
         let screen = OutputSpec::Display {
             mode: DisplayMode::Window,
         };
-        let flow = output_flow(
-            OutputId::new(),
-            &screen,
-            Feed::Program,
-            None,
-            MixerBackend::Cuda,
-            Framerate::default(),
-            LiveMkv::Yes,
-        );
-        assert!(flow
-            .links
-            .iter()
-            .any(|l| l.from == "pgm:src" && l.to == "download"));
-        assert!(flow
-            .links
-            .iter()
-            .any(|l| l.from == "sysmem" && l.to == "convert"));
+        // Program, multiview and preview all come from the CUDA mixer.
+        for feed in [Feed::Program, Feed::Multiview, Feed::Preview] {
+            let flow = output_flow(
+                OutputId::new(),
+                &screen,
+                feed,
+                None,
+                MixerBackend::Cuda,
+                Framerate::default(),
+                LiveMkv::Yes,
+            );
+            assert!(
+                flow.links
+                    .iter()
+                    .any(|l| l.from == "pgm:src" && l.to == "download"),
+                "{feed:?}"
+            );
+            assert!(flow
+                .links
+                .iter()
+                .any(|l| l.from == "sysmem" && l.to == "convert"));
+        }
 
         let live = live_flow(
             LivePicture::Program,
