@@ -4347,7 +4347,8 @@ Concurrency-Gruppe von `pr-agent.yml` keinen Lauf an (#126 behoben).
 
 **Entscheidung** (Eigentümer, alle shrippen-Repos): Löst „PR-Agent nur auf
 `/review` des Eigentümers“ vom 18.10. ab. Die Sitzung kommentiert `/review`
-je Runde mit neuem Code, der Kommentar von PR-Agent ist das Review. Ein
+je Runde mit neuem Code oder neuer Basis, der Kommentar von PR-Agent ist
+das Review. Ein
 neuer Claude-Agent prüft die **Wichtig** früherer Runden (PR-Agent sieht
 keine früheren Runden) und reviewt selbst, wenn PR-Agent zweimal scheitert.
 Regel: `agent.md`, `REVIEW.md`.
