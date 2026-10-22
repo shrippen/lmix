@@ -37,7 +37,7 @@ use strom_types::stinger::{
     StingerAddClipRequest, StingerBeneath, StingerClip, StingerClipSettings, StingerLayout,
     StingerState, StingerTakeRequest, StingerTakeResponse,
 };
-use strom_types::vision_mixer::{NormRect, Source, Zone, ZoneBorder, TRANSITION_FOREGROUND_ZORDER};
+use strom_types::vision_mixer::{NormRect, Source, Zone, ZoneBorder};
 use strom_types::{Flow, FlowId, PipelineState, PropertyValue};
 use tokio::sync::{broadcast, watch, Mutex};
 
@@ -542,34 +542,15 @@ impl StromEngine {
         check(resp).await.map(|_| ())
     }
 
-    /// T-bar: the preview input's pad on the program compositor comes in
-    /// front (below the overlays) with the bar's position as opacity. The
-    /// take at the end, a cut, sets every pad back (strom resets them on
-    /// each take).
-    async fn t_bar(&self, slot: usize, position: f32) -> Result<(), EngineError> {
-        let path = format!(
-            "/flows/{}/elements/{MIXER_BLOCK}:mixer/pads/sink_{slot}/properties",
-            flows::mixer_id()
-        );
-        let properties = [
-            (
-                "zorder",
-                PropertyValue::UInt(u64::from(TRANSITION_FOREGROUND_ZORDER)),
-            ),
-            ("alpha", PropertyValue::Float(f64::from(position))),
-        ];
-        for (name, value) in properties {
-            let body = serde_json::json!({ "property_name": name, "value": value });
-            let resp = self
-                .http
-                .patch(self.url(&path))
-                .json(&body)
-                .send()
-                .await
-                .map_err(net)?;
-            check(resp).await?;
-        }
-        Ok(())
+    /// T-bar: strom holds the take from program to preview at `position`
+    /// with `effect` (its `tbar`); the take at the end, a cut, sets every
+    /// pad back.
+    async fn t_bar(&self, position: f32, effect: Effect) -> Result<(), EngineError> {
+        let body = serde_json::json!({
+            "position": f64::from(position),
+            "transition_type": wire_name(effect),
+        });
+        self.mixer_call("tbar", &body).await
     }
 
     /// Overlay `channel` is DSK layer `channel` of the vision mixer,
@@ -1145,7 +1126,7 @@ impl Engine for StromEngine {
                 duration_ms,
             } => self.overlay(*channel, *slot, *duration_ms).await,
             Command::OverlayPlace { channel, rect } => self.overlay_place(*channel, *rect).await,
-            Command::TBar { slot, position } => self.t_bar(*slot, *position).await,
+            Command::TBar { position, effect } => self.t_bar(*position, *effect).await,
             Command::SetStrip { slot, strip } => self.set_strip(*slot, strip).await,
             Command::Stinger { to, clip } => self.stinger(*to, clip).await,
             Command::StingerLibrary { clips } => self.stinger_library(clips).await,

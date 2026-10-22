@@ -282,7 +282,7 @@ Stand:
 |---|---|
 | 4.1 | ✅ 4 Overlay-Kanäle, seit 17.10. 8 (OVL.1, strom #16: 9 DSK-Ebenen mit Stinger) über die DSK-Ebenen des Mischers, Ein-/Ausblenden (strom-Patch `lmix-dsk-fade`), Tally rot, in Show-Datei; Console: Knöpfe je Kanal an der Kachel und Overlay-Leiste; ⚠ Position/Größe eines Overlays: über ein Layout (4.6) |
 | 4.2 | ✅ Stinger: Clip-Input (Alpha, z. B. WebM/VP9); seit 18.10. über strom-Stinger (#1010, STG): Bibliothek aus den Tasten, bildgenauer Cut am Cut-Punkt, unter den Overlays, nur zwischen Inputs; gesperrt solange er läuft; Console: Effekt „Stinger“ mit Dialog |
-| 4.3 | ✅ T-Bar: Vorschau wird beim Ziehen über Programm eingeblendet (Mischung), am Ende Take, zurück auf 0 ohne Wirkung; Position im Zustand; Console-Schieber; ⚠ nur Blende (andere Effekte am Ende als Cut), Ton folgt erst beim Take |
+| 4.3 | ✅ T-Bar: Vorschau wird beim Ziehen über Programm eingeblendet (Mischung), am Ende Take, zurück auf 0 ohne Wirkung; Position im Zustand; Console-Schieber; seit 19.10. mit dem Effekt von Taste 1 (Blende, Dip, Schieben, Push; Schnitt, Wischen und Stinger als Blende), Ton mit „folgt Bild“ blendet mit; bei Fade to Black gesperrt |
 | 4.6 | ✅ Looks je Input (Farbkorrektur, nur GL-Mischer, sonst Ablehnung mit Grund); Layouts: Hintergrund und bis zu 8 Boxen mit Rahmen als PiP-Komposition, in Vorschau/Programm wie ein Input, Tally für alle Inputs darin; strom-Patch `lmix-live-underlays`; Boxen frei ziehen und zuschneiden; Console: „Farbkorrektur…“ je Kachel, Layout-Leiste und -Dialog mit Fläche; ⚠ keine Bewegung zwischen Layouts |
 | 4.7 | ✅ Kanalzug je Input: Gain, Pan, Hochpass, 4-Band-EQ, Gate, Kompressor, Verzögerung (live, strom-Patch `lmix-live-offset`); 2 Aux-Busse (1 vor, 2 nach dem Fader) mit Sends je Input, Master, Pegel, Ausgang mit Aux-Ton (Mix-Minus); alles in Show-Datei; Console: „Kanalzug…“, „Aux…“, Ausgangsdialog „Ton“; Solo/PFL/AFL seit M2b; ⚠ vor/nach fest je Bus |
 | 4.4 | → M7 (Titel) |
@@ -424,9 +424,13 @@ Stufe 4 (Ausgabeziele, EXT.1–5) ✅ für HTTP und Home Assistant; DECISIONS
 Stufe 5, Teil Sicherheit (SAF): Panik, harter Stopp, Notfall-Liste, Standby
 nach Neustart ✅ ohne Ausblenden (mit Stufe 2); DECISIONS „Panik“.
 Stufe 5, Teil Bedienung: Restzeit als Ereignis (CTL.2) und feste OSC-Abonnenten
-(CTL.4) ✅; DECISIONS „Feste OSC-Abonnenten“. Offen: Zugangsschlüssel (CTL.5).
+(CTL.4) ✅; DECISIONS „Feste OSC-Abonnenten“. Zugangsschlüssel (CTL.5) ✅
+16./17.10.; DECISIONS „Zugangsschlüssel mit Rechten“, „Vertraute Adressen“.
 Stufe 7 (Show-Ansicht der Console, SUI.1–4, 9, 13) ✅ im Grundstand; DECISIONS
-„Show-Ansicht“. Ohne GPU offen in S1: CTL.5; mit Engine: Stufen 2 und 3.
+„Show-Ansicht“. Stufen 2 und 3 (Zonen, Klang- und Bild-Cues, Bühnen) mit
+der Engine gebaut; auf echter Hardware (19.10.): Klang-Cues ganz grün
+(GO 32,9 ms, Panik, 16 Klänge, zwei Geräte, Gerätekanäle), Bühnen nur
+ohne Sichtprüfung (H.38).
 
 ---
 

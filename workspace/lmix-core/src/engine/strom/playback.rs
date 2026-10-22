@@ -15,6 +15,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use serde::Serialize;
+use strom_types::discovery::DeviceResponse;
 use strom_types::show_playback::{
     AddPictureRequest, AddSoundRequest, FadeEnd, PictureEnd, PictureFadeRequest, PictureFit,
     ShowPlaybackState, SoundFadeRequest, SoundInfo, SoundRepeat, SoundRoute, SoundStart,
@@ -27,7 +28,9 @@ use lmix_types::stage;
 
 use super::{check, net, StromEngine};
 use crate::engine::flows::encode_path_segment;
-use crate::engine::playback_flow::{playback_flow, playback_flow_id, PLAYBACK_BLOCK};
+use crate::engine::playback_flow::{
+    playback_flow, playback_flow_id, DeviceChannels, PLAYBACK_BLOCK,
+};
 use crate::engine::EngineError;
 use crate::playback::{EnginePicture, EngineSound};
 use crate::switcher::{Playback, Preload};
@@ -170,9 +173,41 @@ impl StromEngine {
     /// Build the playback flow, or drop it without zones and stages.
     pub(super) async fn set_playback(&self, playback: &Playback) -> Result<(), EngineError> {
         self.playback.forget_all();
-        match playback_flow(playback) {
+        let named_device = playback
+            .zones
+            .iter()
+            .flat_map(|z| &z.outputs)
+            .any(|o| !o.device.is_empty());
+        let devices = if named_device {
+            self.device_channels().await
+        } else {
+            DeviceChannels::new()
+        };
+        match playback_flow(playback, &devices) {
             Some(flow) => self.put_flow(&flow).await,
             None => self.drop_flow(playback_flow_id()).await,
+        }
+    }
+
+    /// strom's audio outputs that say their channel positions, by
+    /// `node.name`; empty when strom cannot say (no discovery).
+    async fn device_channels(&self) -> DeviceChannels {
+        let url = self.url("/discovery/devices?category=audio_sink");
+        let found: Result<Vec<DeviceResponse>, EngineError> = async {
+            let resp = self.http.get(url).send().await.map_err(net)?;
+            check(resp).await?.json().await.map_err(net)
+        }
+        .await;
+        match found {
+            Ok(found) => found
+                .into_iter()
+                .filter(|d| !d.channel_positions.is_empty())
+                .filter_map(|d| Some((d.properties.get("node.name")?.clone(), d.channel_positions)))
+                .collect(),
+            Err(e) => {
+                tracing::warn!("audio outputs from strom: {e}; zones go unpositioned");
+                DeviceChannels::new()
+            }
         }
     }
 

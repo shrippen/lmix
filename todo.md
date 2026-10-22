@@ -4,22 +4,24 @@ Erledigtes abhaken (`[x]`, Datum) und nach einer Weile löschen; Details stehen 
 
 ## Für dich
 
-- [ ] Vorschau-Ausgang im strom-Mischer (VSP, DECISIONS „Entscheidungsseite 18.10.“). REC (#104), STG (#106, #109, #111) und RUN.8 (#105) sind gemergt (2026-10-18).
+- [ ] **Entscheiden: Overlays im Vorschau-Bild (OVL.3)**, jetzt wo die Vorschau aus dem Mischer kommt (VSP): zeigt die Vorschau (a) die Overlays, die gerade auf Program sind, plus die für den nächsten Take vorbereiteten, oder (b) nur die vorbereiteten? Für beides braucht strom DSK-Ebenen am Vorschau-Compositor, die vorbereiteten mit eigenem Input je Kanal. Mein Vorschlag: (a), so sieht die Vorschau aus wie Program nach dem Take.
+- [ ] **PRs vom 19.10. ansehen und mergen**, Reihenfolge in `docs/HANDOVER.md` („Stand 19.10. abends“): strom #29–#34, dann lmix #116 → #117 → #119 → #121 → #122 → #123 (Stapel), daneben #118 und #120 (Basis `main`). Mit dir: H.38 Bühne am Projektor ansehen (nachts waren die Bildschirme gedimmt), H.13, H.20, H.21.
+- [x] Entschieden 2026-10-19: Gerätekanäle einer Zone über die Kanalbelegung des Geräts (DECISIONS 19.10.).
+- [ ] Vorschau-Ausgang im strom-Mischer (VSP): gebaut 19.10. (strom #32, lmix #119), Console zeigt im Vorschau-Monitor den Mischer-Ausgang. Ansehen und mergen (die Zonen-Ränder auf dem Vorschau-Ausgang sind in strom #32 nachgezogen).
 - [ ] **Stinger-Sperre, Umfang (#109):** Darf lmix während eines Stingers auch Show öffnen/neu, Paket importieren und das Entfernen des Eingangs auf Program ablehnen? So ist es gebaut; Antwort steht aus.
 - [ ] Nachzügler aus dem Review von #111 (Stinger-Sperre, Tastentest), Console `--style` (jetzt `--theme`) und die Kleinigkeiten aus #104/#105: lmix #118 ansehen und mergen.
 - [ ] Review-Regel (REV.R): Repos ohne `agent.md` bekommen sie mit ihrem nächsten PR (Block wie in Kaiwa `agent.md`, eigenes `REVIEW.md`). Demo-Welt-Kopien (DEMO) beim nächsten Release je Projekt abgleichen (`sync-demo.py`).
 - [ ] Sitzung auf dem 3090-Rechner (HW, CEF): `cefsrc` bauen (H.36), Hardware-Abnahme H.13, H.20, H.21, H.37, H.38, GPU-Pfade, VA. Checkliste in `docs/HARDWARE-TODO.md`.
 - [ ] **S-E.3 entscheiden** (Klang-Cues: Abspieler je Zone oder verdeckte Inputs), mit Messung: Entscheidungsseite https://claude.ai/artifact/DAzFNWyRUKGiu4x5WUvFPo, „An Claude übergeben“. Danach S1 Stufe 2 (Zonen, Klang-Cues).
 - [ ] **PRs vom 16./17.10. ansehen und mergen**, Reihenfolge in `docs/HANDOVER.md`: #45, #51, #39, dann der Stapel #38 → #52.
-- [ ] Cue-Zeitgenauigkeit: 4-h-Lauf `DURATION_S=14400 scripts/test-cue-timing.sh` lief in der Nacht; Ergebnis in DECISIONS (oder neu starten, falls nicht eingetragen).
+- [x] Cue-Zeitgenauigkeit 4 h (2026-10-19, DECISIONS „Hardware-Nacht“): mit Echtzeit, neben Builds und Tests, 226 von 1 468 811 Schritten über 10 ms, spätestens 385,7 ms. Ein Lauf auf freiem Rechner steht aus (eine Nacht ohne andere Arbeit).
 - [x] PRs vom 16.10. gemergt (#28–#36, 2026-10-16); lmix #15–#25 und strom #7–#14 geschlossen, Inhalt war schon in `main` bzw. `dev`.
 - [ ] PR-Agent antwortet nur „Failed to review PR“: der OpenRouter-Schlüssel hat sein Monatslimit erreicht (5,49 $ von 5 $, Reset 1.11.). Limit anheben oder anderen Schlüssel/Modell setzen (`PR_AGENT_LLM_KEY`, `PR_AGENT_MODEL`). PR-Agent läuft nur auf `/review` des Eigentümers, kein Merge wartet sonst auf ihn (`agent.md`).
-- [ ] M7.0 (CEF gegen WPE): `cef` 152 ist installiert; `gstcefsrc` bauen lädt gstcefsrc und CEF 139 von außen und wurde heute nicht freigegeben. Freigeben, dann baue ich `cefsrc` nach `~/.local/lib/gstreamer-1.0`.
+- [ ] M7.0 / H.36 (CEF): `cefsrc` bauen ist freigegeben (18.10.), aber der Auto-Modus von Claude Code lehnt Download und Bau von gstcefsrc + CEF 139 ab („Code von außen“, 19.10.). Bau selbst anstoßen (`! cd ~/.cache && git clone https://github.com/centricular/gstcefsrc && …`) oder eine Freigaberegel setzen; danach mache ich H.36 und den CEF-Teil von M7.0.
 - [ ] Gitea-Actions: `concurrency.group` mit `${{ github.ref }}` trennte auf Gitea 1.27.3 die Refs offenbar nicht (Läufe 2509/2510, 2532). lmix prüft jetzt auf GitHub; betrifft noch die privaten Repos mit Gitea-CI.
 - [x] strom PR #3 (`lmix-player-sysmem`) gemergt.
 - [ ] CI läuft auf GitHub (`.github/workflows/ci.yml`, strom öffentlich, Paket `ghcr.io/shrippen/lmix-strom`): Secret `REGISTRY_TOKEN` auf Gitea löschen; in lokalen Kopien `git submodule sync workspace/strom` (Submodul-URL jetzt GitHub). strom `dev` hat `04b87d1` (DSK-Blende); dein lokales strom-`dev` mit `7615d6f` (NVDEC-Deinterlace) ist darauf noch nicht nachgezogen.
 - [ ] Demo-Welt-Kopien in 15 anderen Projekten veraltet (neuer Abschnitt `graufeld.stream`): `python3 shrippen.github.io/demo/tools/sync-demo.py`, dann je Projekt committen — soll ich?
-- [ ] Vorschau-Lücke ansehen (`scripts/run-local.sh`, Kachel anklicken) und entscheiden: Vorschau-Ausgang im strom-Mischer oder alte Ansicht halten, bis die neue ein Bild hat.
 - [ ] Entscheiden: S-E.3 Klang-Cues (#39) und S-E.13 Bühnen (#60), je A oder B; Vorschlag beide B, als ein strom-Block. Danach baue ich S1 Stufe 2 (Ton geht ohne GPU) und Stufe 3.
 - [ ] PRs vom 17.10. (#56–#84) liegen auf dem S1-Stapel über #54; Reihenfolge in `docs/HANDOVER.md`. strom #15–#17 zuerst (Submodul ab lmix #70).
 - [ ] Breeze-Bug melden (siehe unten).
@@ -62,8 +64,19 @@ enabled: !(/\&[^\&]/.test(control.text))
 
 ## Offen (Claude)
 
+- [ ] Zonen auf Gerätekanälen (H.37): gebaut 19.10. (strom #31, lmix #117), auf einem virtuellen 7.1-Gerät geprüft. Offen: ein echtes Mehrkanal-Interface und ein Pro-Audio-Profil (AUX-Kanäle, bleibt ohne Positionen) mit `MULTI=<sink> scripts/hw-sound-cues/run.sh`.
+- [ ] **Panik und Stopp erreichen laufende Klänge nicht** (H.37, DECISIONS 19.10.): Fix strom #30 (Live-Stille je Zone) ansehen und mergen, danach Submodul nachziehen und `QUIET=1 scripts/hw-sound-cues/run.sh` wiederholen.
+- [x] GO bis hörbar ≤ 50 ms (SND.12): 32,9 ms mit strom #33 (2026-10-19, DECISIONS „GO bis hörbar“). Ein Lauf auf ruhigem Rechner steht aus.
+- [ ] strom: PiP-Cut ohne schwarzen Frame (erst das Neue, dann die anderen aus; Crop nur an Pads, die gerade nicht auf Sendung sind) und Claim bis nach dem Zustandswechsel: strom #35 (22.10.), ansehen und mergen; danach Submodul nachziehen.
+- [ ] T-Bar folgt strom (22.10., lmix #124): lehnt strom einen Schritt ab, geht der T-Bar auf 0, Ton und Player wie ohne; ein Take hebt Fade to Black auch in lmix auf. Ansehen und mergen.
+- [ ] Latenz Quelle → PGM: meist 56 ms, ab und zu 60–81 ms (NFA.3 ≤ 66,7 ms hält im Normalfall; DECISIONS 19.10. „Latenz: kein Sprung bei 16 Inputs“; Ursache offen). Mittags 9 Läufe: 8-mal konstant 56 ms, einmal 65 ms; erhöhte Werte nur ab und zu. Nächster Schritt: einen erhöhten Lauf fangen, dann `GST_DEBUG=aggregator:6`; fester Teil (56 ms) kleiner?
+- [ ] `cudaconverter`-Alpha-Bug upstream melden: Text fertig in `docs/upstream/gstreamer-cudaconverter-alpha.md` (mit Repro, 19.10.); posten auf gitlab.freedesktop.org (Konto des Eigentümers). Den Workaround in strom #29 entfernen, sobald die Distributionen den Fix haben.
+- [ ] strom-Tests auf der RTX 3090 rot, auch auf `dev`: `nvdec_cuda_after_a_converted_format_stays_on_the_gpu`, `measure_idle_fx_slot_renders`; seit 19.10. abends auch die GL-Tests `vision_mixer_source_resize_test` (alle 8: „PGM never showed the landscape source“), `vision_mixer_overlay_upload_test::tally_follows_a_cut_on_the_same_frame_with_late_inputs` und `vision_mixer_fx_passthrough_test` (mit und ohne strom #34, debug und release); `gpu_stingers_land_frame_accurately` flakig unter GPU-Last (H.34).
+- [x] Abnahmetest mit Aufnahme der Vorschau, `Feed::Preview` im CUDA-Download-Test (2026-10-22, lmix #125).
+- [ ] Abnahmetest auf echter Hardware: `MIXER=cpu|cuda|gl` in `test-m2b-vm.sh` gebaut in lmix #120 (19.10.: CPU und CUDA 47/47), mit #120 abhaken. Die Facecam-CRITICALs der Nacht kamen am Tag nicht mehr; kein Filter.
+- [x] `scripts/test-console-qt.sh` „tile 1 still“ (2026-10-22, lmix #125): das Kachelbild ist 78×44 px, ein Ballschritt ändert ~9 px, die Schwelle lag bei 10; jetzt 3. Dazu ein stummer Abbruch (`read` ohne Zeilenende, #119) und Warnungen aus Qts Dateidialog in Breeze (seit qqc2-breeze-style 6.8.1) als Hinweis.
 - [ ] `scripts/test-titles.sh` schlug am 12.10. einmal fehl (direkt nach `test-web.sh`, Ausgabe nicht erhalten), danach 19-mal grün, am 17.10. in der Cloud 8-mal direkt nach `test-web.sh` grün; nicht nachstellbar. Bei der nächsten Wiederholung die Ausgabe sichern (`KEEP_WORK=1`) und die Ursache beheben.
-- [ ] Cue-Zeitgeber unter Last bis 146 ms spät (RUN.8, DECISIONS 17.10.): Echtzeit-Priorität per rtkit für den Zeitgeber-Thread, dann 4 h unter Last messen; zusätzlich 4 h auf freiem Rechner.
+- [ ] Cue-Zeitgeber unter Last (RUN.8): Echtzeit gebaut (#105), auf der RTX 3090 gemessen (DECISIONS 19.10.): 10 min Volllast 16,6 ms (ohne 133 ms), über rtkit 1,6 ms; 4 h neben Builds ein Ausreißer von 385,7 ms. Offen: 4 h auf freiem Rechner; hält 10 ms nicht, dann Zeitgeber ohne Switcher-Sperre (DECISIONS 18.10. „Grenze“).
 
 - [x] Demo-Modus mit Studio-Weber-Daten (2026-10-09, `demo/start.sh`).
 - [ ] Release-Build (wenn es einen gibt): `demo/` ausschließen und prüfen.

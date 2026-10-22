@@ -1440,6 +1440,10 @@ pub enum ActionError {
     UnknownLayoutTemplate { name: String },
     #[error("T-bar position is outside 0–1")]
     BadTBar,
+    #[error("fade to black is on; end it before using the T-bar")]
+    FadeToBlackOn,
+    #[error("a transition is still running; move the T-bar when it has landed")]
+    TransitionRunning,
     #[error("aux bus {bus} does not exist (1–{max})")]
     BadAuxBus { bus: u8, max: u8 },
     #[error("look: {field} is out of range")]

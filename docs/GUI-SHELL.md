@@ -66,8 +66,8 @@ die egui-Console:
 - Vorschau- und Programm-Monitor, Übergangsknöpfe (Cut, Slot 1–4),
   Input-Leiste als `GridView`: jede Kachel live, Klick = Vorschau,
   Doppelklick = direkt auf Programm, Tally als Balken plus Wort (PGM/PRV).
-- Bilder: `GET /api/live/program` bzw. `/api/live/inputs/{id}` liefert den
-  Socket; `unixfdsrc ! queue(leaky) ! glupload ! glcolorconvert !
+- Bilder: `GET /api/live/program`, `/api/live/preview` bzw.
+  `/api/live/inputs/{id}` liefert den Socket; `unixfdsrc ! queue(leaky) ! glupload ! glcolorconvert !
   qml6glsink(sync=false)` zeichnet in ein `GstGLQt6VideoItem`. Bricht der
   Socket (Engine-Neustart, neuer Flow), fragt die Kachel nach 1 s neu.
 - Rust-Backend (cxx-qt, `src/bridge.rs`): Zustand über WebSocket, Aktionen
@@ -129,7 +129,9 @@ Gefundene Fehler (behoben, lmix-core):
 - Tasten 1–9: Vorschau.
 
 Neu gegenüber egui: Kacheln per Drag & Drop umsortieren; Vorschau-Monitor
-in voller Größe (`/api/live/inputs/{id}?size=full`).
+in voller Größe. Seit 19.10. (VSP) zeigt er den Vorschau-Ausgang des
+strom-Mischers (`/api/live/preview`): Inputs und Layouts, wie ein Take sie
+auf Programm bringt; ein Klick auf eine Kachel baut keine Pipeline mehr.
 
 Technik: QML schickt Aktionen im JSON der API, Rust prüft sie
 (`Core.act`); Formulare baut Rust (`forms.rs`, getestet), Texte liegen in
@@ -141,7 +143,6 @@ scheitert; Menüs aus Listen baut deshalb `ChoiceMenu` ohne Repeater.
 
 Offen:
 - Demo-Modus mit den gemeinsamen Demodaten (`claude.md`-Regel).
-- Vorschau-Wechsel baut eine neue Pipeline (kurze Lücke).
 
 ## Schritt 3: Sprache, Kante, Parität (Stand 2026-10-09)
 

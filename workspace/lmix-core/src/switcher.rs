@@ -130,9 +130,9 @@ pub enum Command {
         /// Of the audio mixer, Hz (AUD.17).
         sample_rate: u32,
     },
-    /// Mix `slot` (preview) over program by `position` (0–1), as the
-    /// T-bar stands; 0 hides it again.
-    TBar { slot: usize, position: f32 },
+    /// Hold the take of preview at `position` (0–1) with `effect`, as
+    /// the T-bar stands (SWI.3); 0 shows program as it was.
+    TBar { position: f32, effect: Effect },
     /// Show `slot` on overlay `channel` (0-based) or take it off, faded
     /// over `duration_ms`.
     Overlay {
@@ -255,6 +255,8 @@ enum Bus {
 pub enum Feed {
     Program,
     Multiview,
+    /// The mixer's preview output (OUT.2).
+    Preview,
     /// One input's slot; `audio` when its source has sound.
     Slot {
         slot: usize,
@@ -517,6 +519,9 @@ pub struct Switcher {
     /// How long the lock holds without an end, counted again when the
     /// engine starts the take.
     stinger_hold: Duration,
+    /// Until a take or a fade to black with a duration has landed: the
+    /// engine refuses the T-bar meanwhile, so lmix does too.
+    moving_until: Option<Instant>,
     /// The engine's generation of the take behind the lock; only its
     /// end frees it.
     stinger_take: u64,
@@ -599,6 +604,7 @@ impl Switcher {
             t_bar: 0.0,
             stinger_until: None,
             stinger_hold: Duration::ZERO,
+            moving_until: None,
             stinger_take: 0,
             stinger_sent: Some(Vec::new()),
             looks_available: false,
@@ -950,7 +956,41 @@ impl Switcher {
         let ramp_ms = self.audio_ramp(&action);
         let leave_ms = self.leave_ms(&action);
         let airing = self.airing();
+        let program = self.show.program;
         let mut commands = self.apply_action(action)?;
+        let moving_ms = commands
+            .iter()
+            .map(|c| match c {
+                // A cut is done at once, whatever its button's duration.
+                Command::Program {
+                    effect: Effect::Cut,
+                    ..
+                }
+                | Command::ProgramLayout {
+                    effect: Effect::Cut,
+                    ..
+                } => 0,
+                Command::Program { duration_ms, .. }
+                | Command::ProgramLayout { duration_ms, .. }
+                | Command::FadeToBlack { duration_ms } => *duration_ms,
+                _ => 0,
+            })
+            .max()
+            .unwrap_or(0);
+        if moving_ms > 0 {
+            self.moving_until = Some(Instant::now() + Duration::from_millis(u64::from(moving_ms)));
+        }
+        // Any take (cut, transition, stinger, cut direct) rests the mixer's
+        // pads: a bar pulled before it starts again from 0.
+        if self.show.program != program {
+            self.t_bar = 0.0;
+        }
+        // The engine lifts fade to black with any take (cut, transition,
+        // stinger): program is back on air. A cut to what is already on
+        // program reaches no take there (`take_source` skips it).
+        if self.show.program != program {
+            self.fade_to_black = false;
+        }
         commands.extend(self.playback_commands());
         commands.extend(self.stinger_commands());
         let audio = self.audio_commands(ramp_ms);
@@ -1707,6 +1747,7 @@ impl Switcher {
     pub fn restore_commands(&mut self) -> Vec<Command> {
         // A new or restarted mixer runs no stinger; no end will come.
         self.stinger_finished();
+        self.moving_until = None;
         // First: a new format builds a new mixer, the rest sets it up.
         let mut commands = vec![Command::SetFormat {
             format: self.show.format,
@@ -1714,6 +1755,18 @@ impl Switcher {
             sample_rate: self.show.sample_rate,
         }];
         commands.extend(self.picture_commands());
+        // The T-bar goes back to 0, held or not: a reused mixer (same
+        // format, same program slot) keeps whatever bar it showed, also one
+        // a restarted lmix-core no longer knows of. Not under fade to
+        // black, which refuses it; the effect does not matter at 0.
+        if !self.fade_to_black {
+            let effect = self.t_bar_effect().unwrap_or(Effect::Fade);
+            commands.push(Command::TBar {
+                position: 0.0,
+                effect,
+            });
+        }
+        self.t_bar = 0.0;
         self.mix.clear();
         commands.extend(self.audio_commands(AUDIO_RAMP_MS));
         // A reused mixer may still hold solos from before.
@@ -2137,8 +2190,13 @@ impl Switcher {
         }
         let mut commands = Vec::new();
 
-        // A removed input leaves preview empty and program black.
+        // A removed input leaves preview empty and program black; a bar
+        // pulled towards it goes back first.
         if self.show.preview == Some(removed.id) {
+            if let Ok(back) = self.t_bar_back() {
+                commands.extend(back);
+            }
+            self.t_bar = 0.0;
             self.show.preview = None;
         }
         if self.show.program == Some(removed.id) {
@@ -2310,7 +2368,15 @@ impl Switcher {
         }
 
         self.show.preview = Some(entry.id);
-        Ok(vec![Command::Preview { slot: entry.slot }])
+        let mut commands = vec![Command::Preview { slot: entry.slot }];
+        // A pulled T-bar shows the new preview where the old one was.
+        if self.t_bar > 0.0 {
+            commands.push(Command::TBar {
+                position: self.t_bar,
+                effect: self.t_bar_effect()?,
+            });
+        }
+        Ok(commands)
     }
 
     /// Preview to program; the old program goes to preview (classic swap).
@@ -2395,19 +2461,23 @@ impl Switcher {
         ))
     }
 
-    /// T-bar (SWI.3): preview fades in over program as it is pulled; at
-    /// the end it is a take, back at the start nothing happened.
+    /// T-bar (SWI.3): preview comes in with button 1's effect as it is
+    /// pulled; at the end it is a take, back at the start nothing happened.
     fn t_bar(&mut self, position: f32) -> Result<Vec<Command>, ActionError> {
         if !(0.0..=1.0).contains(&position) {
             return Err(ActionError::BadTBar);
         }
         self.check_no_stinger()?;
+        // The bar would put program back on air under the black.
+        if self.fade_to_black {
+            return Err(ActionError::FadeToBlackOn);
+        }
         if position >= 1.0 {
             self.t_bar = 0.0;
             return self.take(Effect::Cut, 0);
         }
-        let slot = match self.bus_of(self.show.preview) {
-            Some(Bus::Slot(slot)) => slot,
+        match self.bus_of(self.show.preview) {
+            Some(Bus::Slot(_)) => {}
             Some(Bus::Layout(_)) => {
                 return Err(ActionError::BadLayout {
                     reason: "the T-bar mixes inputs only; take a layout with Cut or a transition"
@@ -2416,8 +2486,52 @@ impl Switcher {
             }
             None => return Err(ActionError::NoPreview),
         };
+        if let Some(Bus::Layout(_)) = self.bus_of(self.show.program) {
+            return Err(ActionError::BadLayout {
+                reason: "the T-bar mixes inputs only; take the layout off program with Cut or a transition"
+                    .into(),
+            });
+        }
+        // The engine refuses the bar while the pads still move (a take or
+        // fade to black with a duration); taking the position anyway would
+        // blend the sound without the picture. At 0 nothing is held then.
+        if self
+            .moving_until
+            .is_some_and(|until| Instant::now() < until)
+        {
+            if position == 0.0 {
+                self.t_bar = 0.0;
+                return Ok(Vec::new());
+            }
+            return Err(ActionError::TransitionRunning);
+        }
+        let effect = self.t_bar_effect()?;
         self.t_bar = position;
-        Ok(vec![Command::TBar { slot, position }])
+        Ok(vec![Command::TBar { position, effect }])
+    }
+
+    /// Button 1 steers the T-bar (SWI.3); a stinger's clip cannot stand
+    /// still, so its bar blends.
+    fn t_bar_effect(&self) -> Result<Effect, ActionError> {
+        Ok(match self.button(TransitionSlot(1))?.effect {
+            Effect::Stinger => Effect::Fade,
+            effect => effect,
+        })
+    }
+
+    /// Put a pulled T-bar back to the start, for what it cannot mix (a
+    /// layout on preview, the black): program shows as it rests until the
+    /// bar is moved again.
+    fn t_bar_back(&mut self) -> Result<Vec<Command>, ActionError> {
+        if self.t_bar == 0.0 {
+            return Ok(Vec::new());
+        }
+        let effect = self.t_bar_effect()?;
+        self.t_bar = 0.0;
+        Ok(vec![Command::TBar {
+            position: 0.0,
+            effect,
+        }])
     }
 
     fn transition(&mut self, slot: TransitionSlot) -> Result<Vec<Command>, ActionError> {
@@ -3273,8 +3387,11 @@ impl Switcher {
                 reference: entry.name.clone(),
             });
         }
+        let pip = entry.pip;
         self.show.preview = Some(entry.id);
-        Ok(vec![Command::PreviewLayout { pip: entry.pip }])
+        let mut commands = self.t_bar_back()?;
+        commands.push(Command::PreviewLayout { pip });
+        Ok(commands)
     }
 
     /// Background and boxes of a layout from an action: inputs with a
@@ -3570,6 +3687,21 @@ impl Switcher {
             .is_some_and(|l| {
                 l.background == Some(input) || l.boxes.iter().any(|b| b.input == input && !b.hidden)
             })
+    }
+
+    /// The engine refused a T-bar step (a take of its own still runs, it
+    /// starts some ms after lmix sent it): the bar is back at 0, and the
+    /// commands that put sound and players back as program rests.
+    pub fn t_bar_refused(&mut self) -> Vec<Command> {
+        if self.t_bar == 0.0 {
+            return Vec::new();
+        }
+        let airing = self.airing();
+        self.t_bar = 0.0;
+        let mut commands = self.audio_commands(AUDIO_RAMP_MS);
+        let (_, off) = self.auto_play_commands(&airing);
+        commands.extend(off);
+        commands
     }
 
     /// The engine has finished the stinger (or it failed, or the mixer
@@ -4186,6 +4318,7 @@ impl Switcher {
             (true, OutputSource::Multiview) => {
                 format!("{} (Multiview)", output.spec.default_name())
             }
+            (true, OutputSource::Preview) => format!("{} (Preview)", output.spec.default_name()),
             (true, OutputSource::Input(id)) => {
                 let input = self
                     .show
@@ -4200,12 +4333,13 @@ impl Switcher {
         Ok(Vec::new())
     }
 
-    /// Program, or the slot of the output's input; ISO outputs need an
-    /// input with a picture.
+    /// Program, the multiview, the preview, or the slot of the output's
+    /// input; ISO outputs need an input with a picture.
     fn feed_of(&self, output: &ShowOutput) -> Result<Feed, ActionError> {
         let id = match output.source {
             OutputSource::Program => return Ok(Feed::Program),
             OutputSource::Multiview => return Ok(Feed::Multiview),
+            OutputSource::Preview => return Ok(Feed::Preview),
             OutputSource::Input(id) => id,
         };
         let input = self
@@ -4524,8 +4658,10 @@ impl Switcher {
     /// strom refuses a fade during a stinger; it would invert the state.
     fn toggle_ftb(&mut self, duration_ms: u32) -> Result<Vec<Command>, ActionError> {
         self.check_no_stinger()?;
+        let mut commands = self.t_bar_back()?;
         self.fade_to_black = !self.fade_to_black;
-        Ok(vec![Command::FadeToBlack { duration_ms }])
+        commands.push(Command::FadeToBlack { duration_ms });
+        Ok(commands)
     }
 
     // ---- Lookup ----
@@ -6108,8 +6244,8 @@ mod tests {
         assert_eq!(
             half,
             [Command::TBar {
-                slot: 1,
-                position: 0.5
+                position: 0.5,
+                effect: Effect::Fade
             }]
         );
         assert_eq!(sw.state().t_bar, 0.5);
@@ -6166,6 +6302,142 @@ mod tests {
     }
 
     #[test]
+    fn t_bar_runs_the_effect_of_button_one() {
+        let mut sw = two_inputs();
+        sw.apply(Action::PreviewInput { input: named("B") })
+            .unwrap();
+        sw.apply(Action::SetTransition {
+            slot: TransitionSlot(1),
+            effect: Effect::PushLeft,
+            duration_ms: 800,
+            stinger: None,
+        })
+        .unwrap();
+
+        assert_eq!(
+            sw.apply(Action::TBar { position: 0.4 }).unwrap(),
+            [Command::TBar {
+                position: 0.4,
+                effect: Effect::PushLeft
+            }]
+        );
+        // Button 2's effect does not steer it.
+        sw.apply(Action::SetTransition {
+            slot: TransitionSlot(2),
+            effect: Effect::SlideRight,
+            duration_ms: 800,
+            stinger: None,
+        })
+        .unwrap();
+        assert!(matches!(
+            sw.apply(Action::TBar { position: 0.5 }).unwrap()[..],
+            [Command::TBar {
+                effect: Effect::PushLeft,
+                ..
+            }]
+        ));
+    }
+
+    #[test]
+    fn t_bar_of_a_stinger_button_blends() {
+        // A stinger's clip cannot stand still: its bar blends.
+        let mut sw = with_stinger();
+        sw.apply(Action::SetTransition {
+            slot: TransitionSlot(1),
+            effect: Effect::Stinger,
+            duration_ms: 1000,
+            stinger: Some(StingerSpec {
+                input: named("Sting"),
+                cut_ms: 400,
+            }),
+        })
+        .unwrap();
+        assert!(matches!(
+            sw.apply(Action::TBar { position: 0.5 }).unwrap()[..],
+            [Command::TBar {
+                effect: Effect::Fade,
+                ..
+            }]
+        ));
+    }
+
+    #[test]
+    fn a_pulled_t_bar_follows_preview_and_goes_back_for_what_it_cannot_mix() {
+        let mut sw = two_inputs();
+        add(&mut sw, "C");
+        sw.apply(Action::PreviewInput { input: named("B") })
+            .unwrap();
+        sw.apply(Action::TBar { position: 0.4 }).unwrap();
+
+        // Another input on preview comes in at the bar's position.
+        let cmds = sw
+            .apply(Action::PreviewInput { input: named("C") })
+            .unwrap();
+        assert!(
+            matches!(
+                cmds[..],
+                [Command::Preview { .. }, Command::TBar { position, .. }] if position == 0.4
+            ),
+            "{cmds:?}"
+        );
+
+        // Fade to black puts the bar back first: nothing of preview stays
+        // under the black.
+        let cmds = sw.apply(Action::FadeToBlack { duration_ms: 0 }).unwrap();
+        assert!(
+            matches!(
+                cmds[..],
+                [Command::TBar { position, .. }, Command::FadeToBlack { .. }] if position == 0.0
+            ),
+            "{cmds:?}"
+        );
+        assert_eq!(
+            sw.apply(Action::FadeToBlack { duration_ms: 0 }).unwrap(),
+            [Command::FadeToBlack { duration_ms: 0 }],
+            "the bar is back already"
+        );
+    }
+
+    #[test]
+    fn t_bar_waits_for_the_end_of_a_fade_to_black() {
+        let mut sw = two_inputs();
+        sw.apply(Action::PreviewInput { input: named("B") })
+            .unwrap();
+        sw.apply(Action::FadeToBlack { duration_ms: 0 }).unwrap();
+
+        for position in [0.3, 1.0] {
+            assert_eq!(
+                sw.apply(Action::TBar { position }),
+                Err(ActionError::FadeToBlackOn),
+                "{position}"
+            );
+        }
+        sw.apply(Action::FadeToBlack { duration_ms: 0 }).unwrap();
+        assert!(sw.apply(Action::TBar { position: 0.3 }).is_ok());
+    }
+
+    #[test]
+    fn a_take_lifts_fade_to_black_as_the_engine_does() {
+        let mut sw = two_inputs();
+        sw.apply(Action::CutDirect { input: named("A") }).unwrap();
+        sw.apply(Action::PreviewInput { input: named("B") })
+            .unwrap();
+        sw.apply(Action::FadeToBlack { duration_ms: 0 }).unwrap();
+
+        sw.apply(Action::Cut).unwrap();
+
+        assert!(!sw.state().fade_to_black, "program is back on air");
+        assert!(sw.apply(Action::TBar { position: 0.3 }).is_ok());
+        sw.apply(Action::TBar { position: 0.0 }).unwrap();
+        sw.apply(Action::FadeToBlack { duration_ms: 0 }).unwrap();
+        assert!(sw.state().fade_to_black, "the next press fades to black");
+
+        // Cut direct to what is on program: no take, the black stays.
+        sw.apply(Action::CutDirect { input: named("B") }).unwrap();
+        assert!(sw.state().fade_to_black, "nothing was taken");
+    }
+
+    #[test]
     fn t_bar_back_to_zero_and_bad_positions() {
         let mut sw = two_inputs();
         assert_eq!(
@@ -6180,8 +6452,8 @@ mod tests {
         assert_eq!(
             back,
             [Command::TBar {
-                slot: 1,
-                position: 0.0
+                position: 0.0,
+                effect: Effect::Fade
             }]
         );
         assert_eq!(
@@ -7071,6 +7343,164 @@ mod tests {
             sw.apply(Action::TBar { position: 0.5 }),
             Err(ActionError::BadLayout { .. })
         ));
+
+        // Nor from a layout on program: the mixer's pads are the layout's.
+        sw.apply(Action::Cut).unwrap();
+        sw.apply(Action::PreviewInput { input: named("B") })
+            .unwrap();
+        assert!(matches!(
+            sw.apply(Action::TBar { position: 0.5 }),
+            Err(ActionError::BadLayout { .. })
+        ));
+        assert_eq!(sw.state().t_bar, 0.0);
+    }
+
+    #[test]
+    fn a_restored_mixer_holds_no_t_bar() {
+        let mut sw = two_inputs();
+        add(&mut sw, "C");
+        sw.apply(Action::PreviewInput { input: named("B") })
+            .unwrap();
+        sw.apply(Action::TBar { position: 0.4 }).unwrap();
+        let cmds = sw.restore_commands();
+        assert!(
+            cmds.iter()
+                .any(|c| matches!(c, Command::TBar { position, .. } if *position == 0.0)),
+            "a reused mixer still holds the bar: {cmds:?}"
+        );
+        assert_eq!(sw.state().t_bar, 0.0);
+        assert_eq!(
+            sw.apply(Action::PreviewInput { input: named("C") })
+                .unwrap(),
+            [Command::Preview { slot: 2 }]
+        );
+    }
+
+    #[test]
+    fn the_t_bar_waits_for_a_running_take_and_keeps_its_sound() {
+        let mut sw = two_inputs();
+        sw.apply(Action::CutDirect { input: named("A") }).unwrap();
+        sw.apply(Action::PreviewInput { input: named("B") })
+            .unwrap();
+        sw.apply(Action::SetTransition {
+            slot: TransitionSlot(1),
+            effect: Effect::Fade,
+            duration_ms: 60_000,
+            stinger: None,
+        })
+        .unwrap();
+        sw.apply(Action::Transition {
+            slot: TransitionSlot(1),
+        })
+        .unwrap();
+        assert_eq!(
+            sw.apply(Action::TBar { position: 0.4 }),
+            Err(ActionError::TransitionRunning)
+        );
+        assert_eq!(sw.state().t_bar, 0.0, "no bar the engine does not show");
+        // Back to 0 sends nothing; the end of the bar is still a cut.
+        assert_eq!(sw.apply(Action::TBar { position: 0.0 }), Ok(Vec::new()));
+
+        // A cut button with a duration moves nothing: the bar is free.
+        let mut sw = two_inputs();
+        sw.apply(Action::CutDirect { input: named("A") }).unwrap();
+        sw.apply(Action::PreviewInput { input: named("B") })
+            .unwrap();
+        sw.apply(Action::SetTransition {
+            slot: TransitionSlot(2),
+            effect: Effect::Cut,
+            duration_ms: 60_000,
+            stinger: None,
+        })
+        .unwrap();
+        sw.apply(Action::Transition {
+            slot: TransitionSlot(2),
+        })
+        .unwrap();
+        assert!(sw.apply(Action::TBar { position: 0.4 }).is_ok());
+
+        // Fade to black back up with a duration, the same.
+        let mut sw = two_inputs();
+        sw.apply(Action::PreviewInput { input: named("B") })
+            .unwrap();
+        sw.apply(Action::FadeToBlack { duration_ms: 0 }).unwrap();
+        sw.apply(Action::FadeToBlack {
+            duration_ms: 60_000,
+        })
+        .unwrap();
+        assert_eq!(
+            sw.apply(Action::TBar { position: 0.4 }),
+            Err(ActionError::TransitionRunning)
+        );
+    }
+
+    #[test]
+    fn a_restarted_core_puts_a_bar_it_never_saw_back() {
+        // A restarted lmix-core knows no bar; the running mixer may hold one.
+        let mut sw = two_inputs();
+        let cmds = sw.restore_commands();
+        assert!(
+            cmds.iter()
+                .any(|c| matches!(c, Command::TBar { position, .. } if *position == 0.0)),
+            "{cmds:?}"
+        );
+        // Not under fade to black, which strom refuses the bar under.
+        sw.apply(Action::FadeToBlack { duration_ms: 0 }).unwrap();
+        assert!(!sw
+            .restore_commands()
+            .iter()
+            .any(|c| matches!(c, Command::TBar { .. })));
+    }
+
+    #[test]
+    fn removing_the_preview_under_a_pulled_bar_puts_it_back() {
+        let mut sw = two_inputs();
+        sw.apply(Action::PreviewInput { input: named("B") })
+            .unwrap();
+        sw.apply(Action::TBar { position: 0.4 }).unwrap();
+        let cmds = sw.apply(Action::RemoveInput { input: named("B") }).unwrap();
+        assert!(
+            matches!(cmds.first(), Some(Command::TBar { position, .. }) if *position == 0.0),
+            "{cmds:?}"
+        );
+        assert_eq!(sw.state().t_bar, 0.0);
+    }
+
+    #[test]
+    fn a_restored_show_without_buttons_still_puts_the_t_bar_back() {
+        let mut sw = two_inputs();
+        sw.apply(Action::PreviewInput { input: named("B") })
+            .unwrap();
+        sw.apply(Action::TBar { position: 0.4 }).unwrap();
+        // As a show file with "transitions": [] would load.
+        sw.show.transitions.clear();
+        let cmds = sw.restore_commands();
+        assert!(
+            cmds.iter().any(|c| matches!(
+                c,
+                Command::TBar { position, effect: Effect::Fade } if *position == 0.0
+            )),
+            "{cmds:?}"
+        );
+        assert_eq!(sw.state().t_bar, 0.0);
+    }
+
+    #[test]
+    fn a_take_while_the_t_bar_is_pulled_starts_it_again_from_zero() {
+        let mut sw = two_inputs();
+        add(&mut sw, "C");
+        sw.apply(Action::PreviewInput { input: named("B") })
+            .unwrap();
+        sw.apply(Action::TBar { position: 0.4 }).unwrap();
+        sw.apply(Action::Cut).unwrap();
+        assert_eq!(sw.state().t_bar, 0.0);
+
+        // The next preview stays off air.
+        assert_eq!(
+            sw.apply(Action::PreviewInput { input: named("C") })
+                .unwrap(),
+            [Command::Preview { slot: 2 }]
+        );
     }
 
     #[test]
@@ -8231,6 +8661,34 @@ mod tests {
     }
 
     #[test]
+    fn an_output_can_carry_the_preview() {
+        let mut sw = two_inputs();
+        sw.apply(Action::AddOutput {
+            spec: OutputSpec::Ndi {
+                name: "Desk".into(),
+            },
+            source: OutputSource::Preview,
+            name: None,
+            aux: None,
+        })
+        .unwrap();
+        assert!(sw.state().outputs[0].name.ends_with(" (Preview)"));
+
+        let cmds = sw
+            .apply(Action::StartOutput {
+                output: OutputRef::Number(1),
+            })
+            .unwrap();
+        assert!(matches!(
+            cmds[0],
+            Command::StartOutput {
+                feed: Feed::Preview,
+                ..
+            }
+        ));
+    }
+
+    #[test]
     fn iso_output_follows_its_input() {
         let mut sw = two_inputs();
         let b = sw.state().inputs[1].id;
@@ -8802,13 +9260,14 @@ mod tests {
         let cmds = fresh.replace(show, Some("x.lmix".into())).unwrap();
 
         // The format (a new mixer if it differs), then picture (slots,
-        // program, preview), then audio and the rest.
+        // program, preview), the T-bar at rest, then audio and the rest.
         assert!(matches!(cmds[0], Command::SetFormat { .. }));
         assert!(matches!(cmds[1], Command::SetSlot { slot: 0, .. }));
         assert!(matches!(cmds[2], Command::SetSlot { slot: 1, .. }));
         assert!(matches!(cmds[3], Command::Program { slot: None, .. }));
         assert_eq!(cmds[4], Command::Preview { slot: 1 });
-        assert!(matches!(cmds[5], Command::SetAudio { slot: 0, .. }));
+        assert!(matches!(cmds[5], Command::TBar { position, .. } if position == 0.0));
+        assert!(matches!(cmds[6], Command::SetAudio { slot: 0, .. }));
         assert_eq!(fresh.state().path.as_deref(), Some("x.lmix"));
     }
 

@@ -464,7 +464,22 @@ wait_for "$SETTLE_S" is output_state MV stopped || fail "multiview recording did
 mv_file="$(find "$WORK/strom-data" -path '*mv/*' -name '*.mp4' | head -1)"
 [[ "$(codecs "$mv_file")" == "aac,h264" ]] || fail "multiview recording: $(codecs "$mv_file")"
 act '{"action":"remove_output","output":"MV"}' >/dev/null
-pass "MultiCorder: ISO recordings per input (silent input video only, playlist with sound); multiview recorded"
+# The preview as an output (OUT.2), with program sound: Orange on preview,
+# Ball on program, so the recorded picture is orange.
+act '{"action":"cut_direct","input":"Ball"}' >/dev/null
+act '{"action":"preview_input","input":"Orange"}' >/dev/null
+act '{"action":"add_output","spec":{"kind":"record","folder":"pvw","container":"mp4"},"source":{"from":"preview"},"name":"PVW"}' >/dev/null
+act '{"action":"start_output","output":"PVW"}' >/dev/null
+sleep 4
+act '{"action":"stop_output","output":"PVW"}' >/dev/null
+wait_for "$SETTLE_S" is output_state PVW stopped || fail "preview recording did not stop"
+pvw_file="$(find "$WORK/strom-data" -path '*pvw/*' -name '*.mp4' | head -1)"
+[[ "$(codecs "$pvw_file")" == "aac,h264" ]] || fail "preview recording: $(codecs "$pvw_file")"
+ffmpeg -loglevel error -y -ss 2 -i "$pvw_file" -frames:v 1 "$WORK/pvw.png"
+[[ $(rgb "$WORK/pvw.png" r) -gt 200 && $(rgb "$WORK/pvw.png" b) -lt 60 ]] \
+    || fail "preview recording does not show the preview (r $(rgb "$WORK/pvw.png" r), b $(rgb "$WORK/pvw.png" b))"
+act '{"action":"remove_output","output":"PVW"}' >/dev/null
+pass "MultiCorder: ISO recordings per input (silent input video only, playlist with sound); multiview and preview recorded"
 
 # Display output: program in a window on the engine's screen. Orange on
 # program makes the window easy to recognize.

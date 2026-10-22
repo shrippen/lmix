@@ -320,8 +320,9 @@ AppShell {
                 label: qsTr("Preview")
                 detail: root.busLabel(root.show ? root.show.preview : null)
                 tally: KanteStyle.positiveTextColor
-                // As the input arrives, not the tile's small picture.
-                source: root.previewInput ? "full:" + root.previewInput.id : ""
+                // The mixer's preview output: an input or a layout, as a
+                // take brings it; it does not change pipelines on a click.
+                source: root.show && root.show.preview ? "preview" : ""
                 input: root.previewInput
                 // Quick play of preview (SWI.8).
                 onDoubleClicked: if (backend.connected && root.show && root.show.preview)

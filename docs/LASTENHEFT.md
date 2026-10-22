@@ -228,9 +228,9 @@ kann es, Console nicht.
 |---|---|---|---|
 | SWI.1 | Preview/Program-Paar; Input in Preview per Klick, Taste, Aktion | M | ✅ |
 | SWI.2 | Cut (Tausch PVW/PGM) und Cut direkt (Input sofort auf PGM) | M | ✅ |
-| SWI.3 | 4 Übergangstasten, je Effekt + Dauer einstellbar; Taste 1 steuert T-Bar | M | ◐ (T-Bar nur Blende, nicht Effekt von Taste 1) |
+| SWI.3 | 4 Übergangstasten, je Effekt + Dauer einstellbar; Taste 1 steuert T-Bar | M | ✅ (T-Bar mit dem Effekt von Taste 1 seit 19.10.: Blende, Dip, Schieben, Push; Schnitt, Wischen und Stinger als Blende) |
 | SWI.4 | Effektkatalog: Cut, Blende, 3D-Zoom, Schieben, Wischen, Würfel, Würfelzoom, Fliegen, Fliegen+Drehen, Kreuzzoom, Verschmelzen (SWI.6), Stinger 1–8 | M | ◐ (Cut, Blende, Dip, Schieben, Push, Wischen, Stinger; ohne 3D-Zoom, Würfel, Fliegen, Kreuzzoom, Verschmelzen) |
-| SWI.5 | T-Bar: manueller Fortschritt 0–100 %, per Maus, MIDI-Fader, Aktion | M | ◐ (Maus, MIDI, Aktion; Ton mit „folgt Bild“ blendet mit; nur Blende als Effekt) |
+| SWI.5 | T-Bar: manueller Fortschritt 0–100 %, per Maus, MIDI-Fader, Aktion | M | ◐ (Maus, MIDI, Aktion; Ton mit „folgt Bild“ blendet mit; Effekt von Taste 1 seit 19.10., SWI.3; bei Fade to Black gesperrt; nur Inputs, kein Layout auf Program oder Vorschau) |
 | SWI.6 | Verschmelzen: Ebenen, die in PVW und PGM vorkommen, wandern an ihre neue Position; Rest blendet | S | – |
 | SWI.7 | Stinger 1–8: Animations-Input, Dauer, Schnittpunkt, Zusatzeffekt, unter oder über Overlays; Dauer/Schnittpunkt aus Titelanimation übernehmbar | S | ◐ (4 Tasten, Clip + Schnittpunkt, über strom bildgenau; Dauer = Cliplänge; nur unter Overlays, nur zwischen Inputs (keine Layouts), ohne Zusatzeffekt, ohne Titelanimation; Track-Matte nur auf GL, DECISIONS 18.10. STG) |
 | SWI.8 | Schnellstart: Take mit eigenem Effekt (Standard ½ s Blende) und Start der Wiedergabe; optional per Klick ins Preview-Fenster | S | ✅ (Doppelklick ins Preview-Fenster) |
@@ -282,8 +282,8 @@ kann es, Console nicht.
 | ID | Anforderung | Prio | Stand |
 |---|---|---|---|
 | OUT.1 | Master-Format: Auflösung (SD bis 4K, Hochkant 1080×1920, frei), Bildrate (23,976–60, 50i/59,94i, optional 100/120), Seitenverhältnis | M | ◐ (`set_master_format`: Größe frei 320–7680 px, auch hochkant, Bildrate 23,976–60; ohne Halbbilder 50i/59,94i, ohne 100/120; Seitenverhältnis folgt der Größe) |
-| OUT.2 | Ausgang 1 = Program; Ausgang 2–4 mit Quelle Program/Preview/Multiview 1–2/Mix n/Input n; Overlay-Auswahl je Ausgang; Quelle live umschaltbar | M | ◐ (Ausgänge mit Quelle Program, Multiview oder Input, Ton aus Aux; ohne Preview (gibt der strom-Mischer nicht heraus), Mix, Overlay je Ausgang; Quelle nicht live umschaltbar) |
-| OUT.3 | Vollbild 1–2 auf Monitoren (Monitor, Rechteck, Cursor aus, immer oben); Quelle wie OUT.2 oder Wiederholungs-Multiview | M | ◐ (Fenster, Vollbild Wayland, DRM; Quelle Program/Input; Monitor wählt der Compositor, kein Rechteck; Prüfung auf Hardware offen, H.20) |
+| OUT.2 | Ausgang 1 = Program; Ausgang 2–4 mit Quelle Program/Preview/Multiview 1–2/Mix n/Input n; Overlay-Auswahl je Ausgang; Quelle live umschaltbar | M | ◐ (Ausgänge mit Quelle Program, Preview (seit 19.10., Vorschau-Ausgang des Mischers), Multiview oder Input, Ton aus Aux; ohne Mix, Overlay je Ausgang; Quelle nicht live umschaltbar) |
+| OUT.3 | Vollbild 1–2 auf Monitoren (Monitor, Rechteck, Cursor aus, immer oben); Quelle wie OUT.2 oder Wiederholungs-Multiview | M | ◐ (Fenster, Vollbild Wayland, DRM; Quelle wie OUT.2 (Program, Vorschau, Multiview, Input); Monitor wählt der Compositor, kein Rechteck; Prüfung auf Hardware offen, H.20) |
 | OUT.4 | Kartenausgang SDI/HDMI (DeckLink, AJA wenn Treiber), eigenes Format, Ton-Kanäle, Ton-Delay | S | – (E: DeckLink-Ausgang in strom) |
 | OUT.5 | Key+Fill-Ausgang (zwei Ports, gerade/vormultipliziert) | K | – |
 | OUT.6 | NDI- und OMT-Ausgang je Ausgang 1–4, mit Alpha, Ton-Bus, Skalierung, OMT-Qualität | M | ◐ (NDI je Ausgang mit Aux-Ton; ohne OMT, Alpha, Skalierung) |
