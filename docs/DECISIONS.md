@@ -4312,3 +4312,29 @@ Bestand).
 **Geprüft**: `a_refused_t_bar_goes_back_and_keeps_the_sound` (Service,
 NullEngine lehnt `TBar` ab), `a_take_lifts_fade_to_black_as_the_engine_does`;
 beide scheitern ohne den Fix.
+
+## 2026-10-22 — Latenz mit 8 Inputs: 56 ms, Ausreißer unter Last (NFA.3)
+
+**Kontext**: Am 19.10. lag die Latenz Quelle → PGM meist bei 56 ms, ab und
+zu bei 60–81 ms, mal je Input, mal je Lauf. Vermutung danach: Seit strom
+inaktive Pads nicht abwartet, wartet der Mischer nur auf das Input auf
+Program, und jedes Input läuft in eigener Bildphase (0–33 ms zum Raster
+des Mischers).
+
+**Messung** (RTX 3090, CUDA-Mischer, 8 Test-Inputs, strom
+`lmix-pin-1019`, je Lauf strom und lmix-core neu gestartet,
+`/api/latency/measure`):
+- 15 Läufe, Input 1 auf Program, je 3 Messungen à 5 s: 12 Läufe
+  56/56/56 ms, drei Läufe 65, 66 und 72–73 ms.
+- 8 Läufe, jedes der 8 Inputs nacheinander auf Program, je 4 s: 7 Läufe
+  alle 8 Inputs 56 ms; ein Lauf 56–108 ms.
+- Alle erhöhten Werte fielen in 18:02–18:05, als daneben strom
+  kompiliert und seine GPU-Tests liefen; davor und danach nur 56 ms.
+
+**Ergebnis**: Mit 8 Inputs ohne Ausgänge hat auf freiem Rechner jedes
+Input in jedem Lauf 56 ms; erhöhte Werte kamen hier nur mit Last
+daneben. Das widerlegt die Bildphase je Input nicht: am 19.10.
+vormittags (15 Inputs mit Aufnahme und SRT, ohne fremde Last) lag sie
+je Input verschieden (74/60/56 ms). Offen also: dieser Aufbau auf freiem
+Rechner mit dem Wiederholungs-Skript, und ob der feste Teil kleiner geht.
+NFA.3 (≤ 66,7 ms) hält im Normalfall.
