@@ -1,13 +1,13 @@
 # Übergabe: Stand M9 und Show-Modus S1 (in Arbeit), lokale Übernahme
 
-Stand 2026-10-22 abends (`main` mit allen PRs bis #125, strom `dev` mit #29–#37).
+Stand 2026-10-22 abends (`main` mit allen PRs bis #127, strom `dev` mit #29–#37). Die Arbeit läuft lokal weiter (Arch, RTX 3090), Abnahme
 auf echter Hardware.
 
 ## Für den nächsten Agenten: Stand 22.10.2026 abends
 
 Der Eigentümer hat am 22.10. das Mergen freigegeben: strom #29–#37 sind in
-`dev`, lmix #116–#125 in `main`, #118 und #120 danach; das Submodul zeigt
-auf strom `dev` (Pin-PR vom 22.10.). `lmix-pin-1019` (strom) wird damit
+`dev`; in lmix kamen #116–#125 in `main`, danach #118 und #120, zuletzt
+der Pin-PR #127: das Submodul zeigt auf strom `dev`. `lmix-pin-1019` (strom) wird damit
 nicht mehr gebraucht, ältere lmix-Commits zeigen aber noch auf ihn: nicht
 löschen.
 
@@ -31,7 +31,6 @@ Wie unten (19.10.), ohne Punkt 1 und 6; Punkt 4 ist jetzt „fester Teil
 der Latenz kleiner“.
 
 ## Stand 19.10.2026 abends (überholt)
-
 
 Kurz: Hardware-Nacht (01–07 Uhr) und ein Arbeitstag (08–20 Uhr) auf dem
 3090-Rechner. `main` ist unverändert (f2136cd); alles liegt in PRs, die

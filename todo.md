@@ -5,9 +5,10 @@ Erledigtes abhaken (`[x]`, Datum) und nach einer Weile löschen; Details stehen 
 ## Für dich
 
 - [ ] **Entscheiden: Overlays im Vorschau-Bild (OVL.3)**, jetzt wo die Vorschau aus dem Mischer kommt (VSP): zeigt die Vorschau (a) die Overlays, die gerade auf Program sind, plus die für den nächsten Take vorbereiteten, oder (b) nur die vorbereiteten? Für beides braucht strom DSK-Ebenen am Vorschau-Compositor, die vorbereiteten mit eigenem Input je Kanal. Mein Vorschlag: (a), so sieht die Vorschau aus wie Program nach dem Take.
-- [ ] **PRs vom 19.10. ansehen und mergen**, Reihenfolge in `docs/HANDOVER.md` („Stand 19.10. abends“): strom #29–#34, dann lmix #116 → #117 → #119 → #121 → #122 → #123 (Stapel), daneben #118 und #120 (Basis `main`). Mit dir: H.38 Bühne am Projektor ansehen (nachts waren die Bildschirme gedimmt), H.13, H.20, H.21.
+- [x] PRs vom 19.10. gemergt (2026-10-22): strom #29–#37 in `dev`, lmix #116–#125, #118, #120 in `main`, Submodul auf `dev` (#127).
+- [ ] Mit dir: H.38 Bühne am Projektor ansehen (nachts waren die Bildschirme gedimmt), H.13, H.20, H.21.
 - [x] Entschieden 2026-10-19: Gerätekanäle einer Zone über die Kanalbelegung des Geräts (DECISIONS 19.10.).
-- [ ] Vorschau-Ausgang im strom-Mischer (VSP): gebaut 19.10. (strom #32, lmix #119), Console zeigt im Vorschau-Monitor den Mischer-Ausgang. Ansehen und mergen (die Zonen-Ränder auf dem Vorschau-Ausgang sind in strom #32 nachgezogen).
+- [x] Vorschau-Ausgang im strom-Mischer (VSP): strom #32, lmix #119, gemergt 2026-10-22.
 - [ ] **Stinger-Sperre, Umfang (#109):** Darf lmix während eines Stingers auch Show öffnen/neu, Paket importieren und das Entfernen des Eingangs auf Program ablehnen? So ist es gebaut; Antwort steht aus.
 - [ ] Nachzügler aus dem Review von #111 (Stinger-Sperre, Tastentest): Liste in `docs/HANDOVER.md`, „Nächste Schritte“.
 - [ ] Review-Regel (REV.R): Repos ohne `agent.md` bekommen sie mit ihrem nächsten PR (Block wie in Kaiwa `agent.md`, eigenes `REVIEW.md`). Demo-Welt-Kopien (DEMO) beim nächsten Release je Projekt abgleichen (`sync-demo.py`).
@@ -65,10 +66,10 @@ enabled: !(/\&[^\&]/.test(control.text))
 ## Offen (Claude)
 
 - [ ] Zonen auf Gerätekanälen (H.37): gebaut 19.10. (strom #31, lmix #117), auf einem virtuellen 7.1-Gerät geprüft. Offen: ein echtes Mehrkanal-Interface und ein Pro-Audio-Profil (AUX-Kanäle, bleibt ohne Positionen) mit `MULTI=<sink> scripts/hw-sound-cues/run.sh`.
-- [ ] **Panik und Stopp erreichen laufende Klänge nicht** (H.37, DECISIONS 19.10.): Fix strom #30 (Live-Stille je Zone) ansehen und mergen, danach Submodul nachziehen und `QUIET=1 scripts/hw-sound-cues/run.sh` wiederholen.
+- [ ] **Panik und Stopp erreichen laufende Klänge** (H.37, DECISIONS 19.10.): Fix strom #30 gemergt und im Submodul (2026-10-22); offen: `QUIET=1 scripts/hw-sound-cues/run.sh` wiederholen.
 - [x] GO bis hörbar ≤ 50 ms (SND.12): 32,9 ms mit strom #33 (2026-10-19, DECISIONS „GO bis hörbar“). Ein Lauf auf ruhigem Rechner steht aus.
-- [ ] strom: PiP-Cut ohne schwarzen Frame (erst das Neue, dann die anderen aus; Crop nur an Pads, die gerade nicht auf Sendung sind) und Claim bis nach dem Zustandswechsel: strom #35 (22.10.), ansehen und mergen; danach Submodul nachziehen.
-- [ ] T-Bar folgt strom (22.10., lmix #124): lehnt strom einen Schritt ab, geht der T-Bar auf 0, Ton und Player wie ohne; ein Take hebt Fade to Black auch in lmix auf. Ansehen und mergen.
+- [x] strom: PiP-Cut ohne schwarzen Frame und Claim bis nach dem Zustandswechsel: strom #35, gemergt und im Submodul (2026-10-22).
+- [x] T-Bar folgt strom (lmix #124, gemergt 2026-10-22): lehnt strom einen Schritt ab, geht der T-Bar auf 0, Ton und Player wie ohne; ein Take hebt Fade to Black auch in lmix auf.
 - [ ] Latenz Quelle → PGM: auf freiem Rechner konstant 56 ms (22.10.: 15 Läufe mit Input 1 und 8 Läufe mit jedem der 8 Inputs, alle 56 ms, solange nichts daneben lief; 65–108 ms nur zwischen 18:02 und 18:05, als daneben strom kompiliert und getestet wurde). Die Vermutung „Bildphase je Input“ ist damit vom Tisch (DECISIONS 22.10. „Latenz: 56 ms fest, Ausreißer unter Last“). Offen: fester Teil (56 ms) kleiner? Ausreißer unter Last (H.34-Umfeld).
 - [ ] `cudaconverter`-Alpha-Bug upstream melden: Text fertig in `docs/upstream/gstreamer-cudaconverter-alpha.md` (mit Repro, 19.10.); posten auf gitlab.freedesktop.org (Konto des Eigentümers). Den Workaround in strom #29 entfernen, sobald die Distributionen den Fix haben.
 - [x] strom-Tests auf der RTX 3090 rot (2026-10-22, strom #36): die GL-Tests liefen ohne die NVIDIA-Erkennung des Servers (udmabuf-Umweg), GBR_10LE-Eingänge über den eingesetzten `videoconvert` ebenso; jetzt grün. `gpu_stingers_land_frame_accurately` bleibt flakig unter GPU-Last (H.34).
