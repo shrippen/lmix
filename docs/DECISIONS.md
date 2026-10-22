@@ -4338,3 +4338,17 @@ vormittags (15 Inputs mit Aufnahme und SRT, ohne fremde Last) lag sie
 je Input verschieden (74/60/56 ms). Offen also: dieser Aufbau auf freiem
 Rechner mit dem Wiederholungs-Skript, und ob der feste Teil kleiner geht.
 NFA.3 (≤ 66,7 ms) hält im Normalfall.
+
+## 2026-10-22 — PR-Agent prüft zuerst, Claude-Agent gleicht ab
+
+**Kontext**: Der Eigentümer hat Guthaben für die Claude-API. PR-Agent läuft
+mit `anthropic/claude-opus-5-5`. Seit dem 18.10. legte Gitea 28 für die
+Concurrency-Gruppe von `pr-agent.yml` keinen Lauf an (#126 behoben).
+
+**Entscheidung** (Eigentümer, alle shrippen-Repos): Löst „PR-Agent nur auf
+`/review` des Eigentümers“ vom 18.10. ab. Die Sitzung kommentiert `/review`
+je Runde mit neuem Code oder neuer Basis, der Kommentar von PR-Agent ist
+das Review. Ein
+neuer Claude-Agent prüft die **Wichtig** früherer Runden (PR-Agent sieht
+keine früheren Runden) und reviewt selbst, wenn PR-Agent zweimal scheitert.
+Regel: `agent.md`, `REVIEW.md`.

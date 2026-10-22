@@ -17,7 +17,7 @@ Erledigtes abhaken (`[x]`, Datum) und nach einer Weile löschen; Details stehen 
 - [ ] **PRs vom 16./17.10. ansehen und mergen**, Reihenfolge in `docs/HANDOVER.md`: #45, #51, #39, dann der Stapel #38 → #52.
 - [x] Cue-Zeitgenauigkeit 4 h (2026-10-19, DECISIONS „Hardware-Nacht“): mit Echtzeit, neben Builds und Tests, 226 von 1 468 811 Schritten über 10 ms, spätestens 385,7 ms. Ein Lauf auf freiem Rechner steht aus (eine Nacht ohne andere Arbeit).
 - [x] PRs vom 16.10. gemergt (#28–#36, 2026-10-16); lmix #15–#25 und strom #7–#14 geschlossen, Inhalt war schon in `main` bzw. `dev`.
-- [ ] PR-Agent antwortet nur „Failed to review PR“: der OpenRouter-Schlüssel hat sein Monatslimit erreicht (5,49 $ von 5 $, Reset 1.11.). Limit anheben oder anderen Schlüssel/Modell setzen (`PR_AGENT_LLM_KEY`, `PR_AGENT_MODEL`). PR-Agent läuft nur auf `/review` des Eigentümers, kein Merge wartet sonst auf ihn (`agent.md`).
+- [x] PR-Agent läuft wieder (22.10.2026): `anthropic/claude-opus-5-5` mit Claude-API-Schlüssel, Gitea-Lauf mit flacher Concurrency-Gruppe (#126). Die Sitzung postet `/review` je Runde (`agent.md`).
 - [ ] M7.0 / H.36 (CEF): `cefsrc` bauen ist freigegeben (18.10.), aber der Auto-Modus von Claude Code lehnt Download und Bau von gstcefsrc + CEF 139 ab („Code von außen“, 19.10.). Bau selbst anstoßen (`! cd ~/.cache && git clone https://github.com/centricular/gstcefsrc && …`) oder eine Freigaberegel setzen; danach mache ich H.36 und den CEF-Teil von M7.0.
 - [ ] Gitea-Actions: `concurrency.group` mit `${{ github.ref }}` trennte auf Gitea 1.27.3 die Refs offenbar nicht (Läufe 2509/2510, 2532). lmix prüft jetzt auf GitHub; betrifft noch die privaten Repos mit Gitea-CI.
 - [x] strom PR #3 (`lmix-player-sysmem`) gemergt.
