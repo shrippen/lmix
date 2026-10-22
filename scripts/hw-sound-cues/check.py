@@ -5,11 +5,14 @@ lmix-core with strom. Listens on the device's monitor source with `parec`.
   check.py <lmix-core url> <work dir>
 
 Environment: DEVICE (a PipeWire/Pulse sink), DEVICE2 (optional second sink
-for one zone on two devices). Checks, each printed as ok/FAIL:
+for one zone on two devices), MULTI (optional sink with more than four
+positioned channels). Checks, each printed as ok/FAIL:
   - GO to the first sample at the device, 10 preloaded GOs (SND.12: 50 ms);
   - a panic fades a playing sound out within its time (SAF.3);
   - 16 sounds at once without a gap (SND.4);
-  - with DEVICE2: one zone plays on both devices (SND.10).
+  - with DEVICE2: one zone plays on both devices (SND.10);
+  - with MULTI: a stereo zone on device channels 3 and 4 plays there and
+    nowhere else (SND.10).
 """
 import array
 import json
@@ -23,6 +26,7 @@ import urllib.request
 CORE, WORK = sys.argv[1], sys.argv[2]
 DEVICE = os.environ["DEVICE"]
 DEVICE2 = os.environ.get("DEVICE2", "")
+MULTI = os.environ.get("MULTI", "")
 RATE = 48000
 GO_BUDGET_MS = 50
 failed = False
@@ -56,10 +60,14 @@ class Recording:
     """The device's monitor from now on; `at(t)` is the sample index of
     monotonic time t (parec's own start lag makes latencies a little short)."""
 
-    def __init__(self, sink, name):
+    def __init__(self, sink, name, channel_map="front-left,front-right"):
+        # Without the sink's own map, the server remaps by position and a
+        # channel can look silent that is not.
+        self.channels = channel_map.count(",") + 1
         self.path = f"{WORK}/{name}.raw"
         self.proc = subprocess.Popen(["parec", "-d", sink + ".monitor", "--format=float32le",
-                                      f"--rate={RATE}", "--channels=2", "--latency-msec=5", self.path])
+                                      f"--rate={RATE}", f"--channels={self.channels}",
+                                      f"--channel-map={channel_map}", "--latency-msec=5", self.path])
         self.t0 = time.monotonic()
 
     def stop(self):
@@ -81,10 +89,20 @@ class Recording:
         s = self.samples[2 * max(self.frame(start), 0):2 * max(self.frame(end), 0)]
         return max((abs(x) for x in s), default=0.0)
 
+    def channel_peaks(self):
+        n = self.channels
+        return [max((abs(x) for x in self.samples[c::n]), default=0.0) for c in range(n)]
 
-def zone(*sinks):
+
+def channel_map(sink):
+    sinks = json.loads(subprocess.run(["pactl", "-f", "json", "list", "sinks"], check=True,
+                                      capture_output=True, text=True).stdout)
+    return next(s["channel_map"] for s in sinks if s["name"] == sink)
+
+
+def zone(*sinks, channels=(1, 2)):
     act({"action": "set_zone_patch", "patch": {"zone": "Hall", "outputs": [
-        {"device": s, "channels": [1, 2]} for s in sinks]}})
+        {"device": s, "channels": list(channels)} for s in sinks]}})
     time.sleep(3)
 
 
@@ -141,7 +159,7 @@ def main():
         time.sleep(0.12)
     time.sleep(0.5)
     start = time.monotonic()
-    time.sleep(8)
+    time.sleep(8.5)  # parec delivers a little late
     rec.stop()
     s = rec.samples[2 * rec.frame(start):2 * rec.frame(start + 8)]
     gaps, run = 0, 0
@@ -168,6 +186,22 @@ def main():
         b.stop()
         pa, pb = a.peak(a.t0, a.t0 + 2), b.peak(b.t0, b.t0 + 2)
         result(pa > 0.1 and pb > 0.1, f"one zone on two devices: peaks {pa:.2f} and {pb:.2f}")
+
+    # Device channels 3 and 4 of a positioned multichannel device.
+    if MULTI:
+        zone(MULTI, channels=(3, 4))
+        cue_list("Channels", [one], 501)
+        rec = Recording(MULTI, "channels", channel_map(MULTI))
+        time.sleep(0.5)
+        act({"action": "cue_go"})
+        time.sleep(1.5)
+        rec.stop()
+        peaks = rec.channel_peaks()
+        loud = [c + 1 for c, p in enumerate(peaks) if p > 0.1]
+        quiet = all(p < 0.001 for c, p in enumerate(peaks) if c + 1 not in (3, 4))
+        result(loud == [3, 4] and quiet,
+               f"zone on device channels 3 and 4 of {len(peaks)}: peaks "
+               + " ".join(f"{p:.2f}" for p in peaks))
 
     sys.exit(1 if failed else 0)
 

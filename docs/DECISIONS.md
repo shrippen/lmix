@@ -4059,14 +4059,36 @@ der ohne den Fix scheitert; die CUDA-Tests sind `#[ignore]`, laufen mit
   eine Live-Stille, wie jede Bühne ihr Live-Schwarz. Danach Panik wirksam
   (Spitze danach 0,000 statt 0,300, 3 von 3 Läufen), GO 68–77 ms.
 - Gerätekanäle 3/4: kein Mehrkanal-Interface hier. Auf einem 8-Kanal-Gerät
-  mit Positionen (virtuell, FL…SR) ist eine Zone auf [3, 4] auf allen Kanälen
-  stumm: lmix schickt einen 4-Kanal-Strom ohne Positionen, PipeWire ordnet nach
-  Position, nicht nach Index. Gerätekanal N ist so nur auf Geräten mit
-  „AUX“-Kanälen (Pro-Audio-Profil) adressierbar. **Entscheidung (User,
-  19.10.)**: lmix schickt den Strom mit Kanalzahl und -belegung des Geräts
-  (aus den Caps, die strom in die Geräteliste legt); Gerätekanal N ist der
-  N-te Kanal des Geräts, PipeWire ordnet dann 1:1, Pro-Audio-Geräte (AUX)
-  gehen denselben Weg. Ohne Angabe des Geräts wie bisher, mit Warnung.
+  mit Positionen (virtuell, FL…SR) landet eine Zone auf [3, 4] nicht auf 3/4:
+  lmix schickt einen 4-Kanal-Strom ohne Positionen, PipeWire ordnet nach
+  Position, nicht nach Index. (Nachts gemessen „auf allen Kanälen stumm“; das
+  war die Messung: `parec` ohne `--channel-map` ordnet selbst um. Mit der
+  Kanalbelegung des Geräts aufgenommen landet der 4-Kanal-Strom auf RL/RR,
+  den Kanälen 5/6.) Gerätekanal N ist so nur auf Geräten mit „AUX“-Kanälen
+  (Pro-Audio-Profil) adressierbar. **Entscheidung (User, 19.10.)**: lmix
+  schickt den Strom mit Kanalzahl und -belegung des Geräts (aus der
+  Geräteliste von strom); Gerätekanal N ist der N-te Kanal des Geräts. Ohne
+  Angabe des Geräts wie bisher, mit Warnung.
+  **Umgesetzt (19.10. tagsüber)**: strom führt Audio-Ausgänge in der
+  Geräteliste, mit `channel_positions` aus PipeWires `audio.position`
+  (strom #31). lmix-core holt sie beim Bau des
+  Playback-Flows und setzt vor den `pulsesink` `channel-mask` und alle
+  Kanäle des Geräts; die `mix-matrix` legt jeden Zonenkanal auf den
+  Stromkanal mit der Position seines Gerätekanals (GStreamer ordnet nach
+  Position, ALSA-5.1 etwa ist FL FR RL RR FC LFE). Ohne Positionen (Gerät
+  unbekannt, AUX-Kanäle, Mono) bleibt der Strom ohne Positionen; liegt ein
+  Kanal über 2, steht eine Warnung im Log.
+  **Folge für bestehende Einstellungen** (Review #117): Ein Gerät, das seine
+  Positionen meldet, bekommt jetzt genau die gewählten Kanäle. Eine
+  Mono-Zone auf Kanal 1 eines Stereo-Geräts spielt nur noch links (vorher
+  verteilte PipeWire den Mono-Strom auf beide Seiten); eine Stereo-Zone auf
+  1/2 eines 5.1/7.1-Geräts nur noch vorne links/rechts (vorher je nach
+  Upmix auch hinten). Gewollt nach der Entscheidung: Gerätekanal N ist der
+  N-te Kanal. Wer eine Mono-Zone auf beiden Seiten will, legt sie auf 1 und
+  2 (zwei Ausgänge) oder macht die Zone zweikanalig. Geprüft auf einem virtuellen
+  7.1-Gerät: jedes Paar landet genau auf seinen Kanälen, die übrigen
+  bleiben still (`scripts/hw-sound-cues/run.sh`, Schritt „channels 3/4“).
+  Offen: ein echtes Mehrkanal-Interface (H.37), Pro-Audio-Profil.
 
 **Bühnen (H.38)**: Vollbild als `waylandsink`, 1080p30-Video über die CPU:
 strom 185 % CPU für eine Bühne, 280 % für vier. Sichtprüfung nachts nicht
