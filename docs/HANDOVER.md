@@ -119,7 +119,7 @@ VSP und die Abnahme auf der RTX 3090.
 - Gitea `git.arianw.de/shrippen/lmix` ist führend, GitHub nur Spiegel.
   Branch → PR auf Gitea → Review → Merge über die Gitea-API.
 - Review (seit 22.10.2026): zuerst PR-Agent, die Sitzung kommentiert
-  `/review` je Runde mit neuem Code; ein neuer Claude-Agent prüft die
+  `/review` je Runde mit neuem Code oder neuer Basis; ein neuer Claude-Agent prüft die
   **Wichtig** früherer Runden und reviewt, wenn PR-Agent zweimal scheitert.
   Ablauf und Überschriften in `agent.md` („Repository rule“), `REVIEW.md`.
   Merge nur ohne offenes **Wichtig** und mit grüner CI (`github / test`,
