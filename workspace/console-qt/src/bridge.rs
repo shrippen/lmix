@@ -186,6 +186,8 @@ pub struct CoreRust {
     global_keys: QString,
     /// Feeds the global shortcut binder; started on first use.
     global: Option<tokio::sync::watch::Sender<Vec<crate::portal::Bind>>>,
+    /// This window binds the global keys of this computer (one window only).
+    global_claim: Option<std::fs::File>,
     /// Keyed by the item's address.
     live: HashMap<usize, Live>,
     next_generation: u64,
@@ -422,6 +424,17 @@ impl qobject::Core {
         if binds.is_empty() {
             return;
         }
+        // One window per computer binds: with two, a press would run twice.
+        let dir = std::env::var_os("XDG_RUNTIME_DIR")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(std::env::temp_dir);
+        let Some(claim) = crate::portal::claim(&dir) else {
+            self.as_mut().set_global_keys(QString::from(
+                "off:another lmix window on this computer binds them",
+            ));
+            return;
+        };
+        self.as_mut().rust_mut().global_claim = Some(claim);
         let (sender, receiver) = tokio::sync::watch::channel(binds);
         let pressed = self.qt_thread();
         let status = self.qt_thread();

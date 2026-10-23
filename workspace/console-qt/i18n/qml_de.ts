@@ -505,7 +505,7 @@
   <context>
     <name>AudioPage</name>
     <message>
-      <location filename="../qml/AudioPage.qml" line="+37" />
+      <location filename="../qml/AudioPage.qml" line="+41" />
       <source>Audio</source>
       <translation>Ton</translation>
     </message>
@@ -620,7 +620,7 @@
       <translation>Lautstärke von %1</translation>
     </message>
     <message>
-      <location line="+17" />
+      <location line="+19" />
       <source>On</source>
       <translation>An</translation>
     </message>
@@ -2394,7 +2394,7 @@
   <context>
     <name>OutputsPage</name>
     <message>
-      <location filename="../qml/OutputsPage.qml" line="+59" />
+      <location filename="../qml/OutputsPage.qml" line="+64" />
       <source>Outputs</source>
       <translation>Ausgänge</translation>
     </message>
@@ -2414,7 +2414,7 @@
       <translation>Alle Aufnahmen und Streams stoppen (fragt vorher); Mix und Show laufen weiter</translation>
     </message>
     <message>
-      <location line="+6" />
+      <location line="+7" />
       <source>+ Output</source>
       <translation>+ Ausgang</translation>
     </message>
@@ -3221,8 +3221,8 @@
     </message>
     <message>
       <location line="+9" />
-      <source>If two lmix windows on this computer run with this on, a key press runs twice.</source>
-      <translation>Laufen zwei lmix-Fenster auf diesem Rechner mit globalen Tasten, löst ein Druck doppelt aus.</translation>
+      <source>Only the first lmix window on this computer binds the keys; others leave them to it.</source>
+      <translation>Nur das erste lmix-Fenster auf diesem Rechner bindet die Tasten; weitere überlassen sie ihm.</translation>
     </message>
     <message>
       <location line="+5" />
@@ -3731,7 +3731,7 @@
   <context>
     <name>StopOutputDialog</name>
     <message>
-      <location filename="../qml/StopOutputDialog.qml" line="+22" />
+      <location filename="../qml/StopOutputDialog.qml" line="+23" />
       <source>Stop %1?</source>
       <translation>%1 stoppen?</translation>
     </message>
@@ -3739,6 +3739,11 @@
       <location line="+1" />
       <source>Stop all recordings?</source>
       <translation>Alle Aufnahmen stoppen?</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Stop all recordings and streams?</source>
+      <translation>Alle Aufnahmen und Streams stoppen?</translation>
     </message>
     <message>
       <location line="+1" />
@@ -3751,7 +3756,7 @@
       <translation>Alle Streams stoppen?</translation>
     </message>
     <message>
-      <location line="+19" />
+      <location line="+25" />
       <source>A stopped recording or stream cannot go on where it was.</source>
       <translation>Eine gestoppte Aufnahme oder ein gestoppter Stream lässt sich nicht an derselben Stelle fortsetzen.</translation>
     </message>

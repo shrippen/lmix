@@ -98,6 +98,19 @@ on_air() { [[ "$(curl -sf "$CORE/state" | jq -r '.program')" == "$ball" ]]; }
 wait_for on_air || fail "a press reported by the portal did not run the shortcut"
 pass "a press reported by the portal runs the shortcut"
 
+# A second window on the same computer leaves the keys to the first:
+# with both bound, a press would run its shortcut twice.
+before="$(wc -l <"$WORK/portal.out")"
+lmix "$WORK/config" >"$WORK/lmix-second.log" 2>&1 &
+second=$!
+second_up() { [[ "$(window '^lmix')" -ge 2 ]]; }
+wait_for second_up || fail "the second lmix window did not open"
+sleep 3
+[[ "$(wc -l <"$WORK/portal.out")" == "$before" ]] || fail "a second window bound the keys too: $(tail -n +"$((before + 1))" "$WORK/portal.out")"
+kill "$second"
+wait "$second" 2>/dev/null || true
+pass "a second lmix window leaves the keys to the first"
+
 # A changed key is bound again.
 act "{\"action\":\"set_shortcut\",\"target\":1,\"shortcut\":{\"label\":\"Ball on air\",\"key\":\"F9\",\"actions\":[{\"action\":\"cut_direct\",\"input\":\"Ball\"}]}}"
 rebound() { grep -q '"trigger":"F9"' "$WORK/portal.out"; }

@@ -28,7 +28,11 @@ AppPage {
     property int part: 0
     property string selectedId: ""
     readonly property var selected: soundInputs.find(i => i.id === selectedId) || soundInputs[0] || null
-    onSelectedChanged: if (selected) {
+    // A new state brings new objects: load only for another input, or
+    // edits in progress would be thrown away.
+    property string loadedId: ""
+    onSelectedChanged: if (selected && selected.id !== loadedId) {
+        loadedId = selected.id
         stripPanel.input = selected
         stripPanel.load()
     }

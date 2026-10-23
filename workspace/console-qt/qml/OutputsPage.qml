@@ -47,7 +47,12 @@ AppPage {
     }
     function stopGroup(group) {
         if (!safetySettings.confirmStop) {
-            act({ action: "stop_outputs", group: group })
+            if (group === "media") {
+                act({ action: "stop_outputs", group: "recordings" })
+                act({ action: "stop_outputs", group: "streams" })
+            } else {
+                act({ action: "stop_outputs", group: group })
+            }
             return
         }
         stopDialog.output = null
@@ -62,7 +67,8 @@ AppPage {
     busyColor: KanteStyle.negativeTextColor
     panicText: qsTr("Stop outputs")
     panicTip: qsTr("Stop every recording and stream (asks first); mix and show go on")
-    onPanicRequested: stopGroup("all")
+    // Recordings and streams only: screens and NDI may feed a stage.
+    onPanicRequested: stopGroup("media")
 
     tools: [
         KanteButton {

@@ -52,7 +52,7 @@ AppPage {
         target: KanteStyle
         property: "preferDark"
         value: true
-        when: viewSettings.darkRoom
+        when: viewSettings.darkRoom && root.visible
         restoreMode: Binding.RestoreBindingOrValue
     }
     Rectangle {
@@ -61,6 +61,7 @@ AppPage {
         z: 1000
         color: KanteStyle.scrimColor
         opacity: 0.6
-        visible: viewSettings.darkRoom
+        // Only over the Show page: the other pages stay as they are.
+        visible: viewSettings.darkRoom && root.visible
     }
 }

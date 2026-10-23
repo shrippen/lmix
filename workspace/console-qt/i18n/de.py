@@ -745,7 +745,6 @@ DE = {
     'Escape': 'Escape',
     'Export package…': 'Paket exportieren …',
     'Fade up': 'Aufblenden',
-    'If two lmix windows on this computer run with this on, a key press runs twice.': 'Laufen zwei lmix-Fenster auf diesem Rechner mit globalen Tasten, löst ein Druck doppelt aus.',
     'Import package…': 'Paket importieren …',
     'Input to preview': 'Input in die Vorschau',
     'Inputs from a show…': 'Inputs aus einer Show …',
@@ -823,4 +822,6 @@ DE = {
     'of the source': 'der Quelle',
     "show settings travel with the show, this computer's stay here": 'Show-Einstellungen reisen mit der Show, die dieses Rechners bleiben hier',
     'stopped': 'gestoppt',
+    'Only the first lmix window on this computer binds the keys; others leave them to it.': 'Nur das erste lmix-Fenster auf diesem Rechner bindet die Tasten; weitere überlassen sie ihm.',
+    'Stop all recordings and streams?': 'Alle Aufnahmen und Streams stoppen?',
 }

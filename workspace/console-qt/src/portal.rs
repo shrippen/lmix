@@ -238,6 +238,20 @@ async fn close(connection: &Connection, session: &OwnedObjectPath) {
     }
 }
 
+/// The right to bind global keys on this computer: one lmix window only,
+/// or a key press would run its shortcut once per window. Held while the
+/// file stays open; `None` while another window holds it.
+pub fn claim(dir: &std::path::Path) -> Option<std::fs::File> {
+    let file = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(dir.join("lmix-global-keys.lock"))
+        .ok()?;
+    file.try_lock().ok()?;
+    Some(file)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -248,6 +262,21 @@ mod tests {
         assert_eq!(trigger("Alt+A"), "ALT+a");
         assert_eq!(trigger("Meta+Space"), "LOGO+space");
         assert_eq!(trigger("F12"), "F12");
+    }
+
+    #[test]
+    fn only_one_window_claims_the_keys() {
+        let dir = std::env::temp_dir().join(format!("lmix-claim-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let first = claim(&dir);
+        assert!(first.is_some(), "the first window gets the keys");
+        assert!(
+            claim(&dir).is_none(),
+            "a second window must not bind them too"
+        );
+        drop(first);
+        assert!(claim(&dir).is_some(), "free again once the first is gone");
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

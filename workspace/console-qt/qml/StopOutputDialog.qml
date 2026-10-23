@@ -6,7 +6,8 @@ import Kante
 
 /**
  * Asks before a running output stops (UI.10): one output, or a group
- * (`streams`, `recordings`, `all`). The question can turn itself off.
+ * (`streams`, `recordings`, `all`, or `media`: recordings and streams,
+ * leaving screens and NDI). The question can turn itself off.
  */
 KanteDialog {
     id: dialog
@@ -21,6 +22,7 @@ KanteDialog {
     modal: true
     title: output ? qsTr("Stop %1?").arg(output.name)
         : (group === "recordings" ? qsTr("Stop all recordings?")
+        : group === "media" ? qsTr("Stop all recordings and streams?")
         : (group === "all" ? qsTr("Stop all outputs?") : qsTr("Stop all streams?")))
     standardButtons: QQC2.Dialog.Ok | QQC2.Dialog.Cancel
     kanteBarColor: KanteStyle.negativeTextColor
@@ -31,8 +33,14 @@ KanteDialog {
     onAccepted: {
         dialog.askAgainChosen(askAgain.checked)
         // By id: another window may renumber the outputs meanwhile.
-        dialog.act(output ? { action: "stop_output", output: output.id }
-            : { action: "stop_outputs", group: group })
+        if (output) {
+            dialog.act({ action: "stop_output", output: output.id })
+        } else if (group === "media") {
+            dialog.act({ action: "stop_outputs", group: "recordings" })
+            dialog.act({ action: "stop_outputs", group: "streams" })
+        } else {
+            dialog.act({ action: "stop_outputs", group: group })
+        }
     }
 
     ColumnLayout {
