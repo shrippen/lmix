@@ -246,7 +246,7 @@
   <context>
     <name>AppShell</name>
     <message>
-      <location filename="../qml/AppShell.qml" line="+250" />
+      <location filename="../qml/AppShell.qml" line="+268" />
       <source>Open show</source>
       <translation>Show öffnen</translation>
     </message>
@@ -333,18 +333,18 @@
     </message>
     <message>
       <location line="+0" />
-      <location line="+237" />
+      <location line="+243" />
       <source>Ctrl+1…%1</source>
       <translation>Strg+1…%1</translation>
     </message>
     <message>
-      <location line="-236" />
-      <location line="+260" />
+      <location line="-242" />
+      <location line="+266" />
       <source>Panic all</source>
       <translation>Panik: alles</translation>
     </message>
     <message>
-      <location line="-260" />
+      <location line="-266" />
       <source>button in the page bar</source>
       <translation>Knopf in der Seitenleiste</translation>
     </message>
@@ -409,7 +409,7 @@
       <translation>lmix-core nicht erreichbar</translation>
     </message>
     <message>
-      <location line="+70" />
+      <location line="+71" />
       <source>Running</source>
       <translation>Läuft</translation>
     </message>
@@ -429,7 +429,7 @@
       <translation>Fehler</translation>
     </message>
     <message>
-      <location line="+17" />
+      <location line="+22" />
       <source>Program</source>
       <translation>Programm</translation>
     </message>
@@ -439,12 +439,12 @@
       <translation>Alle Cues über die Panikzeit stoppen und Programm auf Schwarz blenden; Aufnahmen und Streams laufen weiter</translation>
     </message>
     <message>
-      <location line="-35" />
+      <location line="-40" />
       <source>%1 (Ctrl+%2)</source>
       <translation>%1 (Strg+%2)</translation>
     </message>
     <message>
-      <location line="-149" />
+      <location line="-150" />
       <source>New</source>
       <translation>Neu</translation>
     </message>
@@ -499,7 +499,7 @@
       <translation>System</translation>
     </message>
     <message>
-      <location line="+73" />
+      <location line="+74" />
       <source>This show file is in the older format %1 and was converted on opening. Saving it keeps the old file beside it (.v%1.bak).</source>
       <translation>Diese Show-Datei hat das ältere Format %1 und wurde beim Öffnen umgewandelt. Beim Speichern bleibt die alte Datei daneben erhalten (.v%1.bak).</translation>
     </message>
@@ -525,7 +525,7 @@
   <context>
     <name>AudioPage</name>
     <message>
-      <location filename="../qml/AudioPage.qml" line="+46" />
+      <location filename="../qml/AudioPage.qml" line="+48" />
       <source>Audio</source>
       <translation>Ton</translation>
     </message>
@@ -565,6 +565,11 @@
       <translation>Zonen</translation>
     </message>
     <message>
+      <location line="+0" />
+      <source>Sends</source>
+      <translation>Sends</translation>
+    </message>
+    <message>
       <location line="+7" />
       <source>Clear solo</source>
       <translation>Solo aus</translation>
@@ -575,7 +580,7 @@
       <translation>Noch kein Input mit Ton</translation>
     </message>
     <message>
-      <location line="+26" />
+      <location line="+52" />
       <source>%1 ch.</source>
       <translation>%1 Kan.</translation>
     </message>
@@ -605,7 +610,12 @@
       <translation>Kanalzug · %1 %2</translation>
     </message>
     <message>
-      <location line="+32" />
+      <location line="+47" />
+      <source>Send of %1 to %2</source>
+      <translation>Send von %1 auf %2</translation>
+    </message>
+    <message>
+      <location line="+22" />
       <source>Channel strip %1</source>
       <translation>Kanalzug %1</translation>
     </message>
@@ -640,7 +650,17 @@
       <translation>Lautstärke von %1</translation>
     </message>
     <message>
-      <location line="+17" />
+      <location line="+16" />
+      <source>Peak %1 dB</source>
+      <translation>Spitze %1 dB</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Volume %1</source>
+      <translation>Lautstärke %1</translation>
+    </message>
+    <message>
+      <location line="+9" />
       <source>On</source>
       <translation>An</translation>
     </message>
@@ -2193,7 +2213,7 @@
       <translation>Programm auf Schwarz und zurück (SWI.9); Show und Ausgänge laufen weiter</translation>
     </message>
     <message>
-      <location line="+71" />
+      <location line="+74" />
       <source>Layout %1 %2</source>
       <translation>Layout %1 %2</translation>
     </message>
@@ -2254,21 +2274,43 @@
     </message>
     <message>
       <location line="+15" />
+      <location line="+155" />
       <source>Preview</source>
       <translation>Vorschau</translation>
     </message>
     <message>
-      <location line="+36" />
+      <location line="-119" />
+      <location line="+118" />
       <source>Program</source>
       <translation>Programm</translation>
     </message>
     <message>
-      <location line="+11" />
+      <location line="-107" />
       <source>Inputs</source>
       <translation>Inputs</translation>
     </message>
     <message>
       <location line="+3" />
+      <source>Tiles</source>
+      <translation>Kacheln</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Buttons</source>
+      <translation>Tasten</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>A live tile per input</source>
+      <translation>Eine Live-Kachel je Input</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>A row for program and one for preview, a button per input</source>
+      <translation>Eine Reihe für Programm und eine für Vorschau, eine Taste je Input</translation>
+    </message>
+    <message>
+      <location line="+5" />
       <source>View</source>
       <translation>Ansicht</translation>
     </message>
@@ -2414,7 +2456,7 @@
   <context>
     <name>OutputsPage</name>
     <message>
-      <location filename="../qml/OutputsPage.qml" line="+62" />
+      <location filename="../qml/OutputsPage.qml" line="+68" />
       <source>Outputs</source>
       <translation>Ausgänge</translation>
     </message>
@@ -3164,7 +3206,7 @@
     <message>
       <location line="+39" />
       <source>Web page</source>
-      <translation>Web-Seite</translation>
+      <translation>Webseite</translation>
     </message>
     <message>
       <location line="+5" />
@@ -3259,11 +3301,12 @@
     <name>ShowPage</name>
     <message>
       <location filename="../qml/ShowPage.qml" line="+18" />
+      <location line="+24" />
       <source>Show</source>
       <translation>Show</translation>
     </message>
     <message>
-      <location line="+1" />
+      <location line="-23" />
       <source>Cue lists: %1</source>
       <translation>Cue-Listen: %1</translation>
     </message>
@@ -3287,11 +3330,26 @@
       <source>Escape</source>
       <translation>Escape</translation>
     </message>
+    <message>
+      <location line="+18" />
+      <source>Edit</source>
+      <translation>Bearbeiten</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Cues, zones, targets and the script can be changed</source>
+      <translation>Cues, Zonen, Ziele und das Drehbuch lassen sich ändern</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Only running the show: no buttons that change it</source>
+      <translation>Nur die Show fahren: keine Knöpfe, die sie ändern</translation>
+    </message>
   </context>
   <context>
     <name>ShowView</name>
     <message>
-      <location filename="../qml/ShowView.qml" line="+45" />
+      <location filename="../qml/ShowView.qml" line="+48" />
       <source>starts cue %1, which is not there</source>
       <translation>startet Cue %1, den es nicht gibt</translation>
     </message>
@@ -3441,12 +3499,12 @@
       <translation>Drehbuch: %1</translation>
     </message>
     <message>
-      <location line="+7" />
+      <location line="+8" />
       <source>Cues…</source>
       <translation>Cues…</translation>
     </message>
     <message>
-      <location line="+15" />
+      <location line="+16" />
       <source>Zones…</source>
       <translation>Zonen…</translation>
     </message>
@@ -3456,7 +3514,7 @@
       <translation>Die Klang-Zonen der Show und wo sie auf diesem Rechner spielen</translation>
     </message>
     <message>
-      <location line="+13" />
+      <location line="+14" />
       <source>Targets…</source>
       <translation>Ziele…</translation>
     </message>
@@ -3476,7 +3534,7 @@
       <translation>Alle Ziele fragen, an die Cues senden; wer nicht antwortet, steht in den Warnungen</translation>
     </message>
     <message>
-      <location line="+14" />
+      <location line="+15" />
       <source>Script…</source>
       <translation>Drehbuch…</translation>
     </message>
@@ -3751,7 +3809,7 @@
   <context>
     <name>StopOutputDialog</name>
     <message>
-      <location filename="../qml/StopOutputDialog.qml" line="+23" />
+      <location filename="../qml/StopOutputDialog.qml" line="+26" />
       <source>Stop %1?</source>
       <translation>%1 stoppen?</translation>
     </message>
@@ -3776,7 +3834,7 @@
       <translation>Alle Streams stoppen?</translation>
     </message>
     <message>
-      <location line="+25" />
+      <location line="+24" />
       <source>A stopped recording or stream cannot go on where it was.</source>
       <translation>Eine gestoppte Aufnahme oder ein gestoppter Stream lässt sich nicht an derselben Stelle fortsetzen.</translation>
     </message>
@@ -4045,7 +4103,7 @@
     <message>
       <location line="+1" />
       <source>Web page</source>
-      <translation>Web-Seite</translation>
+      <translation>Webseite</translation>
     </message>
     <message>
       <location line="+1" />
@@ -4336,12 +4394,7 @@
       <translation>Nichts in der Vorschau</translation>
     </message>
     <message>
-      <location line="+1" />
-      <source>%1 is on program; it cannot be in preview at the same time</source>
-      <translation>%1 ist auf Programm und kann nicht gleichzeitig in der Vorschau sein</translation>
-    </message>
-    <message>
-      <location line="+1" />
+      <location line="+4" />
       <source>Position %1 is outside 1–%2</source>
       <translation>Position %1 liegt außerhalb von 1–%2</translation>
     </message>

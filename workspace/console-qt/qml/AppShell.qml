@@ -616,7 +616,7 @@ Kirigami.ApplicationWindow {
                 Layout.fillWidth: true
                 Layout.leftMargin: Kirigami.Units.largeSpacing
                 Layout.rightMargin: Kirigami.Units.largeSpacing
-                visible: root.backend.message.length > 0
+                visible: text.length > 0
                 text: Texts.message(root.backend.message)
                 color: KanteStyle.negativeTextColor
                 wrapMode: Text.Wrap

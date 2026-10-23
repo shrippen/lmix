@@ -50,6 +50,9 @@ AppPage {
         property bool simple: false
         /** Ids of collapsed inputs, as JSON (UI.3). */
         property string collapsed: "[]"
+        /** Inputs as rows of buttons, program above preview, instead of
+         *  tiles (like a hardware switcher). */
+        property bool buttons: false
     }
     readonly property var collapsedIds: {
         try {
@@ -365,6 +368,13 @@ AppPage {
         RowLayout {
             Layout.fillWidth: true
             KanteSectionLabel { text: qsTr("Inputs") }
+            KanteSegmented {
+                activeFocusOnTab: false
+                model: [qsTr("Tiles"), qsTr("Buttons")]
+                currentIndex: viewSettings.buttons ? 1 : 0
+                tooltips: [qsTr("A live tile per input"), qsTr("A row for program and one for preview, a button per input")]
+                onActivated: index => viewSettings.buttons = index === 1
+            }
             KanteButton {
                 id: viewButton
                 text: qsTr("View")
@@ -456,8 +466,55 @@ AppPage {
             }
         }
 
+        // Buttons: program row cuts the input straight on, preview row puts
+        // it into preview (SWI.1, SWI.2).
+        ColumnLayout {
+            visible: viewSettings.buttons
+            Layout.fillWidth: true
+            spacing: Kirigami.Units.smallSpacing
+            Repeater {
+                model: [
+                    { label: qsTr("Program"), bus: "program", color: KanteStyle.negativeTextColor },
+                    { label: qsTr("Preview"), bus: "preview", color: KanteStyle.positiveTextColor }
+                ]
+                delegate: RowLayout {
+                    id: busRow
+                    required property var modelData
+                    Layout.fillWidth: true
+                    spacing: Kirigami.Units.smallSpacing
+                    KanteSectionLabel {
+                        Layout.preferredWidth: Kirigami.Units.gridUnit * 5
+                        text: busRow.modelData.label
+                        color: busRow.modelData.color
+                    }
+                    Flow {
+                        Layout.fillWidth: true
+                        spacing: Kirigami.Units.smallSpacing
+                        Repeater {
+                            model: root.inputs
+                            delegate: KanteButton {
+                                required property var modelData
+                                readonly property bool on: root.show !== null && root.show[busRow.modelData.bus] === modelData.id
+                                width: Kirigami.Units.gridUnit * 6
+                                height: Kirigami.Units.gridUnit * 2.5
+                                text: modelData.number + " " + modelData.name
+                                emphasis: on ? (busRow.modelData.bus === "program" ? KanteButton.Emphasis.Destructive : KanteButton.Emphasis.Primary)
+                                    : KanteButton.Emphasis.Normal
+                                enabled: root.backend.connected
+                                Accessible.name: busRow.modelData.label + " " + modelData.number + " " + modelData.name
+                                onClicked: root.act(busRow.modelData.bus === "program"
+                                    ? { action: "cut_direct", input: modelData.number }
+                                    : { action: "preview_input", input: modelData.number })
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         GridView {
             id: bar
+            visible: !viewSettings.buttons
             Layout.fillWidth: true
             Layout.preferredHeight: cellHeight * Math.max(1, Math.min(viewSettings.rows, Math.ceil(count / Math.max(1, Math.floor(width / cellWidth)))))
             cellWidth: Kirigami.Units.gridUnit * root.tileUnits[0] + Kirigami.Units.smallSpacing
