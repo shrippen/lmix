@@ -4478,3 +4478,23 @@ Namen oder Icons; der Dummy bleibt Kante (`docs/PLAN-SEITEN.md`,
 „Click-Dummy 2“). Die Bilder liegen nicht im Repo. Was daraus in die
 Umsetzung geht, nennt PLAN-SEITEN; neue Anforderungen daraus werden wie
 üblich mit Quelle (Handbuchseite) in die Lastenhefte eingetragen.
+
+## 2026-10-23 — Eine App mit Seiten statt zweier Programme (Konzept A)
+
+**Entscheidung (User 23.10.)**: Statt `lmix-mixer` und `lmix-show` ein
+Programm `lmix` mit Seiten (Mix, Show, Audio, Outputs, Setup; später Light)
+und einer Seitenleiste am Fuß, wie bei Resolve. Weitere Pulte (Ton, Licht)
+kommen als Seite, nicht als eigenes Programm. Mehrere Oberflächen greifen
+weiter parallel auf `lmix-core` zu, auch übers Netz (Arbeitsplätze mit
+Profil). Licht im Kern kommt dazu, aber später (todo). Ersetzt claude.md
+Entscheidung 7 („zwei Oberflächen“) und SUI.1.
+
+Verworfen: feste Sendeleiste oben mit Arbeitsbereichen links (Konzept B,
+kostet dauerhaft Höhe), getrennte Programme je Pult (vier Oberflächen zu
+betreuen). Entwürfe und Click-Dummies: Leinwand „lmix Arbeitsbereiche“,
+Plan und Reihenfolge in `docs/PLAN-SEITEN.md`.
+
+Für die Shell entschieden (Click-Dummy 1): Panik global in der Leiste und je
+Seite für ihren Bereich; globale Tasten immer, Seitentasten nur auf der
+sichtbaren Seite; Seiten lösbar auf einen zweiten Bildschirm; im Netz dürfen
+alle Arbeitsplätze alles, die Leiste zeigt, wer eine Seite zuletzt bediente.

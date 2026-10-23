@@ -1,14 +1,17 @@
 # Projekt: vMix- und QLab-Alternative für Linux als native Desktop-App
 
 ## Kontext
-Ziel: eine native Linux-Desktop-App mit zwei Bedienmodi über demselben `lmix-core`:
-- **Mischer**: Software-Vision-Mixer (PGM/PVW-Schalter) ca. auf vMix-Niveau
+Ziel: eine native Linux-Desktop-App `lmix` über einem gemeinsamen `lmix-core`, mit
+Seiten, zwischen denen eine Leiste am Fuß des Fensters umschaltet (wie Resolve;
+`docs/PLAN-SEITEN.md`):
+- **Mix**: Software-Vision-Mixer (PGM/PVW-Schalter) ca. auf vMix-Niveau
   (`docs/LASTENHEFT.md`).
 - **Show**: Ablauf nach Drehbuch, vorbereitete Cue-Folge mit GO, Vorbild QLab 5
   (`docs/LASTENHEFT-SHOW.md`; Theater, Ausstellung, Spieltisch).
+- **Audio**, **Outputs**, **Setup**; später **Light** (Lichtpult mit Effekten, todo).
 
-Beide teilen Engine, Inputs, Ausgänge, Ton, Aktionskatalog, Auslöser, APIs und
-Show-Datei. Medienkern = Strom (Eyevinn, Rust + GStreamer,
+Alle Seiten teilen Engine, Inputs, Ausgänge, Ton, Aktionskatalog, Auslöser, APIs
+und Show-Datei. Medienkern = Strom (Eyevinn, Rust + GStreamer,
 Lizenz MIT oder Apache-2.0, https://github.com/Eyevinn/strom).
 
 Projektebene: Früh-Prototyp aus Mache, der aber auf echtes Produkt hinausläuft.
@@ -34,8 +37,12 @@ Kommuniziere auf Deutsch, Code/Commits auf Englisch.
 6. Lizenzkompatibilität: Projekt muss MIT-kompatibel bleiben (kommerzielle Nutzung
    möglich). Kein GPL-Code (weder 2 noch 3) in das Repo. Jede neue Abhängigkeit
    prifen, Lizenz in der Commit-Meldung dokumentieren.
-7. Show-Modus = zweiter Bedienmodus über demselben `lmix-core`: ein Kern, zwei
-   Oberflächen (`lmix-mixer`, `lmix-show`), kein Plugin. Der Ablauf (Cue-Listen,
+7. Ein Kern, eine Oberfläche mit Seiten (User 2026-10-23, Konzept A,
+   `docs/PLAN-SEITEN.md`): ein Programm `lmix`, Seiten Mix, Show, Audio, Outputs,
+   Setup (später Light), Leiste am Fuß; ein Seitenwechsel hält nichts an. Neue
+   Pulte kommen als Seite, nicht als eigenes Programm oder Plugin. Mehrere
+   Oberflächen greifen parallel auf `lmix-core` zu, auch übers Netz (Arbeitsplätze
+   mit Profil; Bild im Netz über strom-Ausgänge wie WHEP/SRT). Der Ablauf (Cue-Listen,
    Standby, Zeiten, Panik) läuft in `lmix-core`, nicht in der Oberfläche; ein
    Console-Absturz hält keinen Cue an. Die Show nennt nur logische Namen (Zone,
    Bühne, Ausgabeziel); Geräte, Adressen und Geheimnisse liegen in den
@@ -53,7 +60,7 @@ Kommuniziere auf Deutsch, Code/Commits auf Englisch.
 workspace/
   strom/          ← Upstream-Klon (eigene Branch "dev", nur minimaler Diff erlaubt)
   lmix-core/      ← Steuerprozess (Show, Aktionen, Cue-Ablauf, API), headless
-  console-qt/     ← UNSER Client: Qt Quick/Kirigami über cxx-qt (Entscheidung 3.5)
+  console-qt/     ← UNSER Client, das Programm `lmix` mit Seiten: Qt Quick/Kirigami über cxx-qt (Entscheidung 3.5)
   selftest/       ← kopfloser Last- und Abnahmetest direkt an strom (M1b)
   (Drehbuch-Import: eigenes Werkzeug, spricht nur die API; lmix-core kennt kein
    Markdown, S-E.2)
