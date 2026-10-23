@@ -228,7 +228,9 @@ AppPage {
                     value: strip.input.audio.volume
                     Accessible.name: qsTr("Volume of %1").arg(strip.input.name)
                     onMoved: root.act({ action: "set_volume", input: strip.input.number, volume: Math.round(value) })
-                    KanteSliderSkin { control: fader }
+                    // No KanteSliderSkin yet: it draws horizontal sliders
+                    // only; the platform style draws this one until Kante
+                    // can (vertical slider skin, Kante PR).
                 }
             }
             QQC2.Label {
