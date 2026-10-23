@@ -4436,5 +4436,12 @@ auch wenn der Encoder die Verschiebung als Latenz meldet. Als
 GObject-Eigenschaft (`pad_properties` in einem Flow) geht ein negativer
 Offset nicht (Wertebereich ab 0).
 
-**Offen**: Ursache im Live-Recorder; danach der Ausgleich an allen
-AAC-Stellen in strom, und Meldung an GStreamer (gst-libav, fdkaac).
+Aber: auch ohne Ausgleich liegt die ISO-Aufnahme mal ein Bild daneben
+(`scripts/measure-av.sh`, `main`-Stand: +22 und −12 ms in zwei Läufen).
+Die Bildsprünge kommen also vielleicht nicht vom Ausgleich.
+
+**Offen**: woher die Sprünge um ganze Bilder kommen (Clip-Player, Live-
+Recorder?); danach der Ausgleich an allen AAC-Stellen in strom, und
+Meldung an GStreamer (gst-libav, fdkaac). Messen mit
+`scripts/measure-av.sh` (Clip, Aufnahme von Program und ISO,
+`scripts/av-offset.py`).
