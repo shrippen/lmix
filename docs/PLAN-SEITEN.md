@@ -176,7 +176,8 @@ Nach Bildschirmfotos (Ausnahme, DECISIONS 23.10.) zusätzlich:
 Seit #134 dazu (eigener PR): Mix-Ansicht „Buttons“ (Program-/Preview-
 Reihen), Show-Schalter Edit/Show, Audio-Matrix Inputs × Busse (AUD.13) und
 Spitzenwert in dB je Zug; ein Klick auf den Program-Input tut nichts, ohne
-Meldung (Owner 23.10.).
+Meldung (Owner 23.10.). Senken-Tasten unten auf der Mix-Seite gab es schon
+(Ausgangsleiste).
 
 Aus dem Dummy noch offen, **nur Oberfläche** (der Kern kann es):
 - Mix: Titelleiste der Kachel in Tally-Farbe (braucht Textfarben auf Rot
