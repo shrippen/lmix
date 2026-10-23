@@ -834,4 +834,5 @@ DE = {
     'Only running the show: no buttons that change it': 'Nur die Show fahren: keine Knöpfe, die sie ändern',
     'Sends': 'Sends',
     'Send of %1 to %2': 'Send von %1 auf %2',
+    'Peak %1 dB': 'Spitze %1 dB',
 }

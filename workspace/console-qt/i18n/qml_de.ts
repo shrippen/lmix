@@ -650,7 +650,17 @@
       <translation>Lautstärke von %1</translation>
     </message>
     <message>
-      <location line="+17" />
+      <location line="+16" />
+      <source>Peak %1 dB</source>
+      <translation>Spitze %1 dB</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Volume %1</source>
+      <translation>Lautstärke %1</translation>
+    </message>
+    <message>
+      <location line="+9" />
       <source>On</source>
       <translation>An</translation>
     </message>

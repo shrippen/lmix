@@ -306,11 +306,24 @@ AppPage {
                     KanteSliderSkin { control: fader }
                 }
             }
-            QQC2.Label {
+            RowLayout {
                 Layout.fillWidth: true
-                horizontalAlignment: Text.AlignHCenter
-                text: fader.value.toFixed(0)
-                font.family: KanteStyle.monoFamily
+                // Peak in dBFS, coloured by the meter's zones (AUD.12).
+                QQC2.Label {
+                    readonly property var level: root.levels[strip.input.id]
+                    Layout.fillWidth: true
+                    text: level === undefined || level <= -60 ? "−∞" : level.toFixed(1)
+                    font.family: KanteStyle.monoFamily
+                    color: level === undefined ? KanteStyle.mutedTextColor
+                        : level > -6 ? KanteStyle.negativeTextColor
+                        : level > -18 ? KanteStyle.warningColor : KanteStyle.positiveTextColor
+                    Accessible.name: qsTr("Peak %1 dB").arg(text)
+                }
+                QQC2.Label {
+                    text: fader.value.toFixed(0)
+                    font.family: KanteStyle.monoFamily
+                    Accessible.name: qsTr("Volume %1").arg(text)
+                }
             }
             RowLayout {
                 Layout.fillWidth: true
