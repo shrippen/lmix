@@ -30,15 +30,9 @@ AppPage {
     property string selectedId: ""
     readonly property var selected: outputs.find(o => o.id === selectedId) || outputs[0] || null
 
-    Settings {
-        id: safetySettings
-        category: "safety"
-        /** Ask before a running output (recording, stream) stops (UI.10). */
-        property bool confirmStop: true
-    }
 
     function stop(output) {
-        if (!safetySettings.confirmStop) {
+        if (!root.shell.confirmStop) {
             act({ action: "stop_output", output: output.id })
             return
         }
@@ -46,7 +40,7 @@ AppPage {
         stopDialog.open()
     }
     function stopGroup(group) {
-        if (!safetySettings.confirmStop) {
+        if (!root.shell.confirmStop) {
             if (group === "media") {
                 act({ action: "stop_outputs", group: "recordings" })
                 act({ action: "stop_outputs", group: "streams" })
@@ -97,8 +91,8 @@ AppPage {
             id: askBox
             focusPolicy: Qt.NoFocus
             text: qsTr("Ask before stopping")
-            checked: safetySettings.confirmStop
-            onToggled: safetySettings.confirmStop = checked
+            checked: root.shell.confirmStop
+            onToggled: root.shell.confirmStop = checked
             KanteCheckSkin { control: askBox }
         }
     ]
@@ -341,7 +335,7 @@ AppPage {
         parent: QQC2.Overlay.overlay
         anchors.centerIn: parent
         act: root.act
-        onAskAgainChosen: on => safetySettings.confirmStop = on
+        onAskAgainChosen: on => root.shell.confirmStop = on
     }
 
     AddOutputDialog {

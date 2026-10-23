@@ -53,6 +53,15 @@ Kirigami.ApplicationWindow {
     }
 
     Settings {
+        id: safetySettings
+        category: "safety"
+        /** Ask before a running output (recording, stream) stops (UI.10);
+         *  one setting for every page. */
+        property bool confirmStop: true
+    }
+    property alias confirmStop: safetySettings.confirmStop
+
+    Settings {
         id: pageSettings
         category: "pages"
         /** The page open last. */

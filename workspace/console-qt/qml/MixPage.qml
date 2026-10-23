@@ -74,12 +74,6 @@ AppPage {
     readonly property bool simple: backend.uiMode === "simple" || (backend.uiMode === "" && viewSettings.simple)
     readonly property var tileUnits: [[10, 9.5], [12, 11], [16, 14]][Math.max(0, Math.min(2, viewSettings.tileSize))]
 
-    Settings {
-        id: safetySettings
-        category: "safety"
-        /** Ask before a running output (recording, stream) stops (UI.10). */
-        property bool confirmStop: true
-    }
 
     readonly property var levels: backend.levels.length > 0 ? JSON.parse(backend.levels) : ({})
     readonly property var positions: backend.positions.length > 0 ? JSON.parse(backend.positions) : ({})
@@ -563,8 +557,8 @@ AppPage {
             act: root.act
             outputs: outputModel
             outputById: root.outputById
-            confirmStop: safetySettings.confirmStop
-            onConfirmStopChanged: safetySettings.confirmStop = confirmStop
+            confirmStop: root.shell.confirmStop
+            onConfirmStopChanged: root.shell.confirmStop = confirmStop
             onAddRequested: addOutputDialog.open()
         }
     }

@@ -413,22 +413,37 @@ impl qobject::Core {
                 key: e.key,
             })
             .collect();
-        if let Some(sender) = &self.rust().global {
-            sender.send_if_modified(|now| {
-                let changed = *now != binds;
-                *now = binds;
-                changed
-            });
+        if self.rust().global.is_some() {
+            // Switched off: another window may bind now. Switched on again
+            // while another holds the keys: bind nothing.
+            let binds = if binds.is_empty() {
+                self.as_mut().rust_mut().global_claim = None;
+                binds
+            } else if self.rust().global_claim.is_some() {
+                binds
+            } else if let Some(claim) = crate::portal::claim(&claim_dir()) {
+                self.as_mut().rust_mut().global_claim = Some(claim);
+                binds
+            } else {
+                self.as_mut().set_global_keys(QString::from(
+                    "off:another lmix window on this computer binds them",
+                ));
+                Vec::new()
+            };
+            if let Some(sender) = &self.rust().global {
+                sender.send_if_modified(|now| {
+                    let changed = *now != binds;
+                    *now = binds;
+                    changed
+                });
+            }
             return;
         }
         if binds.is_empty() {
             return;
         }
         // One window per computer binds: with two, a press would run twice.
-        let dir = std::env::var_os("XDG_RUNTIME_DIR")
-            .map(std::path::PathBuf::from)
-            .unwrap_or_else(std::env::temp_dir);
-        let Some(claim) = crate::portal::claim(&dir) else {
+        let Some(claim) = crate::portal::claim(&claim_dir()) else {
             self.as_mut().set_global_keys(QString::from(
                 "off:another lmix window on this computer binds them",
             ));
@@ -567,6 +582,13 @@ impl qobject::Core {
         };
         self.request_live(item, source);
     }
+}
+
+/// Where the lock of the global keys lies (portal::claim).
+fn claim_dir() -> std::path::PathBuf {
+    std::env::var_os("XDG_RUNTIME_DIR")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(std::env::temp_dir)
 }
 
 fn stop(mut live: Live) {
