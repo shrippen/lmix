@@ -4465,3 +4465,16 @@ dort Stille.
 **Offen**: SRT und RTMP Ende-zu-Ende messen (ein Mitschnitt mit
 `ffmpeg -i srt://… -c copy` streut schon ohne Ausgleich um ±500 ms und
 taugt dafür nicht), Meldung an GStreamer (gst-libav, fdkaac).
+
+## 2026-10-23 — Click-Dummy: einmalige Ausnahme von der Clean-Room-Regel
+
+Der Owner hat für einen Durchgang erlaubt, Bildschirmfotos der Vorbilder
+anzusehen (sonst nur Handbuchtext, claude.md Entscheidung 8). Angesehen:
+das Hauptfenster und der Tonmischer aus der vMix-Hilfe, Arbeitsfläche,
+Pult-Raster, Inspector und Licht-Dashboard aus der QLab-5-Doku, Umschalt-
+und Tonseite von ATEM Software Control (Herstellerseite), OBS Studio
+(Flathub). Übernommen wurden nur Anordnung und Abläufe, keine Gestaltung,
+Namen oder Icons; der Dummy bleibt Kante (`docs/PLAN-SEITEN.md`,
+„Click-Dummy 2“). Die Bilder liegen nicht im Repo. Was daraus in die
+Umsetzung geht, nennt PLAN-SEITEN; neue Anforderungen daraus werden wie
+üblich mit Quelle (Handbuchseite) in die Lastenhefte eingetragen.

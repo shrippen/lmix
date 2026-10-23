@@ -137,3 +137,19 @@ ergänzt:
 Bewusst nicht im Dummy: Replay, Gäste-Anrufe, Scripting (nicht im
 Lastenheft bzw. später), die Reiter der Input-Einstellungen (UI.8, bleiben
 ein Dialog aus der Kachel).
+
+Nach Bildschirmfotos (Ausnahme, DECISIONS 23.10.) zusätzlich:
+
+- **Show** nach Art der Arbeitsfläche eines Cue-Programms: GO mit
+  editierbarer Notiz, Leiste zum Anlegen je Cue-Art, Transportgruppe (alles
+  stoppen, pausieren, fortsetzen, ausblenden), Seitenleiste mit Reitern
+  Aktiv/Listen/Pads (laufende Cues als Fortschrittsfüllung mit negativer
+  Restzeit), Inspector unten mit Reitern (Basics, Triggers, Time & loops,
+  Levels, Actions), Schalter Edit/Show, Fußzeile mit Zählung und Warnungen,
+  Zeitfelder mit Fortschritt in der Liste.
+- **Mix**: Titelleiste der Kachel in Tally-Farbe, Overlay-Tasten 1–4, GO,
+  Cut, Ton je Kachel; Overlay-Raster 2×4 in der Übergangsspalte; Ansicht
+  „Buttons“ mit Program-/Preview-Tastenreihen wie an einem Hardware-Mischer;
+  „Pause inputs“, Basic-Modus.
+- **Audio**: je Zug Mini-Kurven für EQ und Dynamik, Spitzenwert in dB,
+  Pan, Umschalter ON/AFV, Abhör-Taste mit Kopfhörer.
