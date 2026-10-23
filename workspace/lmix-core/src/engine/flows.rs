@@ -327,25 +327,24 @@ pub fn mixer_flow(
     // Program for the outputs, each in its own flow (crash isolation): the
     // inter sink also consumes program when no output listens, so the tap
     // branch never stalls.
-    flow.blocks.push(block(PGM_OUT, INTER_OUTPUT_BLOCK, vec![]));
+    flow.blocks.push(mixer_out(PGM_OUT));
     flow.links.push(link(
         format!("{PGM_TAP}:video_out"),
         format!("{PGM_OUT}:sink"),
     ));
     // The multiview is rendered anyway (strom ends an unlinked pad in a
     // fakesink); this only hands it to outputs that ask (OUT.2).
-    flow.blocks.push(block(MV_OUT, INTER_OUTPUT_BLOCK, vec![]));
+    flow.blocks.push(mixer_out(MV_OUT));
     flow.links.push(link(
         format!("{MIXER_BLOCK}:multiview_out"),
         format!("{MV_OUT}:sink"),
     ));
-    flow.blocks.push(block(PVW_OUT, INTER_OUTPUT_BLOCK, vec![]));
+    flow.blocks.push(mixer_out(PVW_OUT));
     flow.links.push(link(
         format!("{MIXER_BLOCK}:{PREVIEW_OUTPUT_PAD}"),
         format!("{PVW_OUT}:sink"),
     ));
-    flow.blocks
-        .push(block(PGM_AUDIO_OUT, INTER_OUTPUT_BLOCK, vec![]));
+    flow.blocks.push(mixer_out(PGM_AUDIO_OUT));
     flow.links.push(link(
         format!("{AUDIO_MIXER}:main_out"),
         format!("{PGM_AUDIO_OUT}:sink"),
@@ -971,7 +970,7 @@ fn add_audio_mixer(flow: &mut Flow, slots: usize, monitor: MonitorOut, sample_ra
     // Aux buses on inter channels, for outputs that carry a bus's sound.
     for bus in 0..AUX_BUSES {
         let out = aux_out(bus);
-        flow.blocks.push(block(&out, INTER_OUTPUT_BLOCK, vec![]));
+        flow.blocks.push(mixer_out(&out));
         flow.links.push(link(
             format!("{AUDIO_MIXER}:aux_out_{}", bus + 1),
             format!("{out}:sink"),
@@ -1411,6 +1410,19 @@ fn block(id: &str, definition: &str, properties: Vec<(&str, PropertyValue)>) -> 
     }
 }
 
+/// An inter output of the mixer flow: hands frames on as the mixer makes
+/// them. Its live aggregators pace the mixer; a syncing sink holds each
+/// frame until its timestamp plus the latency of the whole mixer flow
+/// (its slowest branch, ~107–127 ms). Outputs got program 90 ms old,
+/// without the wait 0–62 ms (DECISIONS 23.10., NFA.3).
+fn mixer_out(id: &str) -> BlockInstance {
+    block(
+        id,
+        INTER_OUTPUT_BLOCK,
+        vec![("sync", PropertyValue::Bool(false))],
+    )
+}
+
 fn element(id: &str, kind: &str, properties: Vec<(&str, PropertyValue)>) -> Element {
     Element {
         id: id.into(),
@@ -1491,6 +1503,33 @@ mod tests {
         assert_eq!(slot_id(3), slot_id(3));
         assert_ne!(slot_id(3), slot_id(4));
         assert_ne!(slot_id(0), mixer_id());
+    }
+
+    #[test]
+    fn mixer_outputs_hand_on_without_waiting() {
+        let flow = mixer_flow(
+            2,
+            MixerBackend::Cuda,
+            MonitorOut::None,
+            MasterFormat::default(),
+            MultiviewLayout::default(),
+            48_000,
+        );
+
+        // Program, multiview, preview, program sound and every aux bus.
+        let outs: Vec<_> = flow
+            .blocks
+            .iter()
+            .filter(|b| b.block_definition_id == INTER_OUTPUT_BLOCK)
+            .collect();
+        assert_eq!(outs.len(), 4 + AUX_BUSES);
+        for out in outs {
+            assert!(
+                matches!(out.properties.get("sync"), Some(PropertyValue::Bool(false))),
+                "{} waits on the clock",
+                out.id
+            );
+        }
     }
 
     #[test]

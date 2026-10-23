@@ -4352,3 +4352,111 @@ das Review. Ein
 neuer Claude-Agent prüft die **Wichtig** früherer Runden (PR-Agent sieht
 keine früheren Runden) und reviewt selbst, wenn PR-Agent zweimal scheitert.
 Regel: `agent.md`, `REVIEW.md`.
+
+## 2026-10-23 — Mischer-Ausgänge ohne Sync: Program 90 → 0–85 ms (NFA.3)
+
+**Kontext**: Die feste Latenz von 56 ms (22.10.) war nicht die Latenz der
+Ausgänge. Bildalter an Messpunkten im Mischer-Flow (Buffer-Age-Probes,
+CUDA, Testbilder): Die Inputs kommen mit 0–5 ms am Mischer an, der
+Compositor gibt Program mit 4–52 ms aus (je Lauf verschieden: er wartet
+auf das nächste Bild des spätesten Inputs, die Bildphase). Danach hielt
+die `intersink` von `pgm_out` (strom-Standard `sync=true`) jedes Bild bis
+Zeitstempel + Latenz des ganzen Mischer-Flows (sein langsamster Zweig,
+107–127 ms) und staute die Queue davor. Gemessen wurde bisher am Eingang
+dieser Senke: 56 ms. Der Encoder einer Aufnahme bekam Program in jedem
+Lauf mit 90 ms, den Ton mit 129 ms. NFA.3 (≤ 2 Frames, 66,7 ms) hielt für
+die Ausgänge also nicht. Die Compositor-Werte `latency` und
+`min-upstream-latency` (je 20 ms) ändern daran nichts (auch 0/0 ergab
+56 ms an `pgm_out`).
+
+**Optionen**: (a) Pipeline-Latenz des Mischer-Flows senken (Zweige
+einzeln kürzen; jede neue Senke kann sie wieder heben); (b) die
+inter-Ausgänge des Mischers ohne Sync.
+
+**Entscheidung**: (b). Alle inter-Ausgänge des Mischer-Flows (Program,
+Multiview, Vorschau, Programmton, Aux-Busse) mit `sync=false`. Den Takt
+geben die Live-Aggregatoren (Bildmischer und Tonmischer laufen mit
+`force-live`); die Ausgangs-Flows sind getrennte Pipelines mit
+erhaltenen Zeitstempeln (Basiszeit 0), Encoder, Muxer und Senken richten
+sich nach den Zeitstempeln. Die Slot-Flows behalten `sync=true`: Dort
+taktet die Senke Clips aus Dateien.
+
+**Messung** (RTX 3090, unter fremder Last: Load 7–125 durch eine andere
+Sitzung; je Lauf strom und lmix-core neu, MKV-Aufnahme auf Program):
+- 2 Inputs, CUDA, 12 Läufe: vorher Encoder immer 90 ms; ohne Sync
+  0–62 ms (Mittel ~25 ms).
+- 8 Inputs, je Input auf Program: CUDA vorher 90 ms am Encoder, ohne
+  Sync 33/61/64 ms (`pgm_out` je Input 28–69 ms); CPU vorher 90 ms, ohne
+  Sync 45–85 ms (unter Load 125, CPU-Mischer selbst langsam).
+- GL, 4 Inputs, 3 Läufe (Load 132): vorher 90 ms, ohne Sync 9/14/68 ms.
+- Abnahmetest `MIXER=cuda scripts/test-m2b-vm.sh` 47/47.
+
+**Bild und Ton**: Vorher lagen sie fest 39 ms auseinander (90/129 ms),
+jetzt je Lauf verschieden. Alle Ausgänge mit Bild und Ton paaren nach
+Zeitstempeln (Muxer bei Aufnahme, SRT, RTMP; `ndisinkcombiner` bei
+NDI); dort wartet das Bild auf den späteren Ton, der Gewinn ist also der
+des Tons (an der Aufnahme 128–130 → 44–101 ms über alle Läufe). Voll wirkt er, wo nur Bild ankommt:
+Bildschirm-Ausgänge, Live-Bilder der Console. Der Tonweg ist der nächste
+Engpass. Die Latenz des Tonmischers (strom-Standard 30 ms) zu senken
+bringt nichts: mit 30/20/15/10 ms je ein Lauf, 4 Inputs, 60 s Aufnahme,
+Ton an `pgm_audio_out` je 48 ms (einmal 0 ms), Aussetzer gleich (je
+einer, wohl Messartefakt). Das Alter ist dort das Zeitraster des
+Ausgangs, kein Warten.
+
+**Lippensynchronität** (Clip mit Blitz und Piep zur selben Zeit, jede
+Sekunde, als einziger Input auf Program, CUDA, 25 s MKV-Aufnahme, je 3
+Läufe): Ton nach dem Bild, `main` 21,5/52,0/54,2 ms, ohne Sync
+32,8/40,5/49,0 ms (Median je Lauf). Unverändert; gemessen noch mit dem
+alten `av-offset.py`, das bei Lücken um ganze Bilder danebenlag (siehe
+„Ton in Aufnahmen hinter dem Bild“).
+
+`/api/latency` misst weiter am Eingang von `pgm_out`; das ist jetzt das
+Alter, mit dem die Ausgänge Program bekommen. Offen: die Bildphase
+(0–33 ms je Lauf); mit freiem Rechner wiederholen.
+
+## 2026-10-23 — Ton in Aufnahmen hinter dem Bild: AAC-Vorlauf
+
+**Befund**: Der konstante Teil des A/V-Versatzes (DECISIONS 23.10.
+„Mischer-Ausgänge ohne Sync“) ist der Vorlauf der AAC-Encoder.
+`avenc_aac` stellt 1024 Samples vor den Ton, `fdkaacenc` 2048, stempelt
+das erste Paket aber als ersten Ton, ohne Clipping-Meta; kein Muxer
+erfährt davon. Gemessen mit einem Clip aus Blitz und Piep (gleichzeitig,
+jede Sekunde), nur GStreamer, von FFmpeg und von GStreamer dekodiert:
+`avenc_aac` 21,4 ms, `fdkaacenc` 42,7 ms Ton nach Bild, in MKV und MP4
+gleich; rohes PCM 0 ms. In lmix: ISO-Aufnahme (Input direkt) 21 ms,
+Program 21 ms + Bildphase (0–33 ms), SRT 21–46 ms. Betrifft jede
+Aufnahme und jeden Stream mit AAC (lmix `add_aac`, strom SRT, RTMP,
+Live-Recorder, Audio-Encoder-Block).
+
+**Ausgleich** (strom, Branch `lmix-aac-delay`): jede Flow-Pipeline
+verschiebt den Ausgang jedes AAC-Encoders um den Vorlauf früher
+(`gst_pad_set_offset`, negativ) und meldet die Verschiebung als Latenz,
+damit Live-Muxer darauf warten. Angehängt an `deep-element-added`, also
+auch für lmix' eigenes `avenc_aac` in den Ausgangs-Flows und für Encoder,
+die ein Block erst zur Laufzeit anlegt. Gemessen (`scripts/measure-av.sh`,
+CUDA, je 4 Läufe à 30 s, unter fremder Last ~115):
+
+| | ohne Ausgleich | mit |
+|---|---|---|
+| ISO (Input direkt) | 21,0–22,0 ms | −0,3…+0,7 ms |
+| Program | 19–39 ms | −13…+22 ms |
+
+Was bei Program bleibt, ist die Bildphase des Compositors (innerhalb
+eines Bildes, je Lauf fest). Ein Lauf springt einmal um ein Bild: der
+Compositor wiederholt unter Last ein Bild, Ton und Bildzeitstempel
+laufen dabei lückenlos durch. Als GObject-Eigenschaft (`pad_properties`
+in einem Flow) geht ein negativer Offset nicht (Wertebereich ab 0),
+darum in strom selbst.
+
+Die früheren Befunde „Ton ganze Bilder daneben“ (mit Ausgleich −33/−67 ms)
+und „ISO springt um ein Bild“ (+22/−12 ms) waren Messfehler: Ohne eigene
+Zeitstempel ordnete `scripts/av-offset.py` bei Lücken in einer Aufnahme
+Bilder und Töne um ganze Bilder falsch zu (Testdatei mit 300 ms Lücke:
+−299…+368 ms statt 0). Seit dem Review von #131 nimmt es die Bildzeiten
+aus demselben Dekodierlauf und füllt Lücken im Ton auf. Die Werte oben
+und alle früheren (vor 23.10. 09:30) mit dem alten Skript gelten nur
+ohne Lücken.
+
+**Offen**: SRT und RTMP mit Ausgleich messen (der Test deckt den
+Mechanismus, nicht die Blöcke), Meldung an GStreamer (gst-libav,
+fdkaac).

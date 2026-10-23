@@ -38,6 +38,22 @@ cd ../selftest && cargo build --release
 - Testdatei: 1080p30 H.264 (Constrained Baseline, 8 Mbit/s, GOP 60,
   `videotestsrc pattern=ball` + `timeoverlay`, per NVENC erzeugt).
 
+## 2026-10-23 — Program an den Ausgängen, mit und ohne Sync
+
+Bildalter am Eingang des Encoders einer MKV-Aufnahme auf Program
+(Buffer-Age-Probe im Ausgangs-Flow), RTX 3090, Testbilder, unter fremder
+Last. Vorher (`sync=true` an den inter-Ausgängen des Mischers) zeigte
+`/api/latency` 56 ms, der Encoder bekam 90 ms. Details: DECISIONS
+23.10. „Mischer-Ausgänge ohne Sync“.
+
+| Aufbau | vorher | ohne Sync |
+|---|---|---|
+| CUDA, 2 Inputs, 6 + 6 Läufe | 90 ms | 0–62 ms |
+| CUDA, 8 Inputs, 3 Läufe | 90 ms | 33–64 ms |
+| CPU, 8 Inputs, 3 Läufe (Load 125) | 90 ms | 45–85 ms |
+| GL, 4 Inputs, 3 Läufe (Load 132) | 90 ms | 9–68 ms |
+| Ton an der Aufnahme | 128–130 ms | 44–101 ms |
+
 ## 2026-10-09 — M3, Dauerlauf NFA.7, NVIDIA RTX 3090, CUDA-Mischer
 
 `scripts/soak-hardware.sh`, 295 min, 16 Inputs (Testbilder), Programmwechsel
