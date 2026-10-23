@@ -4,6 +4,8 @@ Erledigtes abhaken (`[x]`, Datum) und nach einer Weile löschen; Details stehen 
 
 ## Für dich
 
+- [ ] **Eine App mit Seiten (Konzept A, entschieden 23.10.)**: Plan in `docs/PLAN-SEITEN.md`. Nächster Schritt mit dir: die Screens als Click-Dummy ausarbeiten (Leiste, Mix, Show, Audio, Outputs, Setup, Verbinden), dann claude.md und Doku umbauen, dann Code.
+- [ ] **Wichtig, später: Licht im Kern** (Lichtpult mit Effekten für Clubs, Seite „Light“; Entwurf A-Light auf der Leinwand). Vorher: Lastenheft-Teil Licht mit Clean-Room-Quellen (nur öffentliche Handbücher), DMX-Ausgabe (Art-Net, sACN, USB-DMX) mit Lizenzprüfung (MIT-kompatibel, kein GPL), Geräteprofile (Fixture-Format), Effekt-Engine und Beat aus dem Ton im Kern, Licht-Cues in der Show. Nicht vor der Seiten-Shell (PLAN-SEITEN Schritt 2).
 - [ ] **Entscheiden: Overlays im Vorschau-Bild (OVL.3)**, jetzt wo die Vorschau aus dem Mischer kommt (VSP): zeigt die Vorschau (a) die Overlays, die gerade auf Program sind, plus die für den nächsten Take vorbereiteten, oder (b) nur die vorbereiteten? Für beides braucht strom DSK-Ebenen am Vorschau-Compositor, die vorbereiteten mit eigenem Input je Kanal. Mein Vorschlag: (a), so sieht die Vorschau aus wie Program nach dem Take.
 - [x] PRs vom 19.10. gemergt (2026-10-22): strom #29–#37 in `dev`, lmix #116, #117, #119, #121–#125, danach #118 und #120 in `main`, Submodul auf `dev` (#127).
 - [ ] Mit dir: H.38 Bühne am Projektor ansehen (nachts waren die Bildschirme gedimmt), H.13, H.20, H.21.
