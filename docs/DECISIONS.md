@@ -4428,18 +4428,19 @@ Program 21 ms + Bildphase (0–33 ms), SRT 21–46 ms. Betrifft jede
 Aufnahme und jeden Stream mit AAC (lmix `add_aac`, strom SRT, RTMP,
 Live-Recorder, Audio-Encoder-Block).
 
-**Ausgleich** (strom, Branch `lmix-aac-delay`): jede Flow-Pipeline
-verschiebt den Ausgang jedes AAC-Encoders um den Vorlauf früher
+**Ausgleich** (strom #38, `dev` b262c87): jede Flow-Pipeline
+verschiebt den Ausgang jedes AAC-Encoders (`avenc_aac`, `fdkaacenc`,
+`faac`; `voaacenc` ungemessen, bleibt) um den Vorlauf früher
 (`gst_pad_set_offset`, negativ) und meldet die Verschiebung als Latenz,
 damit Live-Muxer darauf warten. Angehängt an `deep-element-added`, also
 auch für lmix' eigenes `avenc_aac` in den Ausgangs-Flows und für Encoder,
 die ein Block erst zur Laufzeit anlegt. Gemessen (`scripts/measure-av.sh`,
-CUDA, je 4 Läufe à 30 s, unter fremder Last ~115):
+CUDA, 4 + 2 Läufe à 25–30 s, unter fremder Last ~115):
 
 | | ohne Ausgleich | mit |
 |---|---|---|
 | ISO (Input direkt) | 21,0–22,0 ms | −0,3…+0,7 ms |
-| Program | 19–39 ms | −13…+22 ms |
+| Program | 19–39 ms | −31…+22 ms |
 
 Was bei Program bleibt, ist die Bildphase des Compositors (innerhalb
 eines Bildes, je Lauf fest). Ein Lauf springt einmal um ein Bild: der
@@ -4457,6 +4458,10 @@ aus demselben Dekodierlauf und füllt Lücken im Ton auf. Die Werte oben
 und alle früheren (vor 23.10. 09:30) mit dem alten Skript gelten nur
 ohne Lücken.
 
-**Offen**: SRT und RTMP mit Ausgleich messen (der Test deckt den
-Mechanismus, nicht die Blöcke), Meldung an GStreamer (gst-libav,
-fdkaac).
+Startet eine Aufnahme mit ihrem Flow, verwirft der Muxer das erste
+Paket (den Vorlauf); die ersten 21 ms Ton dekodieren ungenau, vorher war
+dort Stille.
+
+**Offen**: SRT und RTMP Ende-zu-Ende messen (ein Mitschnitt mit
+`ffmpeg -i srt://… -c copy` streut schon ohne Ausgleich um ±500 ms und
+taugt dafür nicht), Meldung an GStreamer (gst-libav, fdkaac).
