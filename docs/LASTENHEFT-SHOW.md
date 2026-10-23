@@ -265,7 +265,7 @@ QLab kennt keinen Import aus Texten; am nächsten kommt das Anlegen von Cues
 
 | ID | Anforderung | Prio | MS | Stand |
 |---|---|---|---|---|
-| SUI.1 | Show-Oberfläche als Seite Show des Programms lmix (neben Mix, Audio, Outputs, Setup am selben lmix-core; mehrere lmix-Fenster parallel möglich) | M | S1 | ◐ (2026-10-18 eigenes Programm `lmix-show`; als Seite geplant, DECISIONS 2026-10-23) |
+| SUI.1 | Show-Oberfläche als Seite Show des Programms lmix (neben Mix, Audio, Outputs, Setup am selben lmix-core; mehrere lmix-Fenster parallel möglich) | M | S1 | ✅ (Seite Show von `lmix`, DECISIONS 2026-10-23; bis dahin `lmix-show`) |
 | SUI.2 | Cue-Liste mit Spalten Nummer, Name, Art, Ziel, Vorwartezeit, Dauer, Nachwartezeit, Folge; Standby deutlich markiert; Gruppen einklappbar | M | S1 | ◐ (Nummer, Name, Notiz, Art mit Dauer, Vor/Nach/Folge unter „Erweitert“, Gruppen einklappbar; Ziel steht im Namen) |
 | SUI.3 | Großer GO-Knopf, Panik-Knopf, Standby-Name und Standby-Notiz in großer Schrift | M | S1 | ✅ |
 | SUI.4 | Laufende Cues mit Fortschrittsbalken, Restzeit, Stopp und Pause je Cue | M | S1 | ◐ (Fortschritt, Restzeit, Stopp je Cue; Pause mit RUN.5, S2) |
