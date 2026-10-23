@@ -115,7 +115,8 @@ AppPage {
                         }
                     }
                     Repeater {
-                        model: root.soundInputs
+                        // By id, like the strips: a send drag goes on.
+                        model: stripModel
                         delegate: SendRow {}
                     }
                 }
@@ -206,8 +207,9 @@ AppPage {
      *  cells go into the grid around it, so it is a list of items. */
     component SendRow: Repeater {
         id: sendRow
-        required property var modelData
-        readonly property var input: modelData
+        required property string key
+        readonly property var input: root.soundInputs.find(i => i.id === key)
+            || ({ id: key, number: 0, name: "", sends: [] })
         model: sendScroll.buses.length + 1
         delegate: Loader {
             required property int index

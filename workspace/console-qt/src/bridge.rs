@@ -619,14 +619,15 @@ impl qobject::Core {
 const KEYS_HELD_ELSEWHERE: &str = "off:another lmix window on this computer binds them";
 
 /// Where the lock of the global keys lies (portal::claim): the user's
-/// runtime directory, or a folder of the user's own in the temp directory,
-/// so another user's lock never blocks this one.
+/// runtime directory, else `~/.cache/lmix`; both belong to the user, so
+/// another user's lock never blocks this one (a shared temp folder could).
 fn claim_dir() -> std::path::PathBuf {
     if let Some(dir) = std::env::var_os("XDG_RUNTIME_DIR") {
         return dir.into();
     }
-    let user = std::env::var("USER").unwrap_or_else(|_| "unknown".into());
-    let dir = std::env::temp_dir().join(format!("lmix-{user}"));
+    let dir = std::env::var_os("HOME")
+        .map(|home| std::path::Path::new(&home).join(".cache/lmix"))
+        .unwrap_or_else(std::env::temp_dir);
     let _ = std::fs::create_dir_all(&dir);
     dir
 }

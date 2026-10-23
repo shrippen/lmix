@@ -173,15 +173,19 @@ Nach Bildschirmfotos (Ausnahme, DECISIONS 23.10.) zusätzlich:
   gewählten Inputs, Busse, Zonen), Outputs (Liste, Start/Stopp mit Rückfrage,
   Einzelheiten, Multiview), Setup (Show, Steuerung, dieser Rechner).
 
+Seit #134 dazu (eigener PR): Mix-Ansicht „Buttons“ (Program-/Preview-
+Reihen), Show-Schalter Edit/Show, Audio-Matrix Inputs × Busse (AUD.13) und
+Spitzenwert in dB je Zug; ein Klick auf den Program-Input tut nichts, ohne
+Meldung (Owner 23.10.).
+
 Aus dem Dummy noch offen, **nur Oberfläche** (der Kern kann es):
-- Mix: Ansicht „Buttons“ (Program-/Preview-Reihen), Titelleiste der Kachel
-  in Tally-Farbe, Overlay-Raster 2×4 und Overlay-Tasten je Kachel, schmaler
-  Tonmischer am Rand, Senken-Tasten unten.
-- Show: Schalter Edit/Show, Inspector unten mit Reitern, Seitenleiste
+- Mix: Titelleiste der Kachel in Tally-Farbe (braucht Textfarben auf Rot
+  und Grün in Kante), Overlay-Raster 2×4 und Overlay-Tasten je Kachel,
+  schmaler Tonmischer am Rand.
+- Show: Inspector unten mit Reitern, Seitenleiste
   Aktiv/Listen, laufende Cues als Fortschrittsfüllung mit negativer
   Restzeit, Leiste zum Anlegen je Cue-Art, Zeitfelder mit Fortschritt.
-- Audio: Matrix Inputs × Busse aus den Sends (AUD.13), Mini-Kurven EQ und
-  Dynamik je Zug, Spitzenwert in dB, ON/AFV als Umschalter.
+- Audio: Mini-Kurven EQ und Dynamik je Zug, ON/AFV als Umschalter.
 - Seiten lösbar auf einen zweiten Bildschirm (Entscheidung Click-Dummy 1).
 - Leiste: wer eine Seite zuletzt bediente (braucht die Kennung je
   Verbindung im Kern, siehe Schritt 4).
