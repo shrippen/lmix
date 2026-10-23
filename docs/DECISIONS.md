@@ -4406,14 +4406,15 @@ Ausgangs, kein Warten.
 **Lippensynchronität** (Clip mit Blitz und Piep zur selben Zeit, jede
 Sekunde, als einziger Input auf Program, CUDA, 25 s MKV-Aufnahme, je 3
 Läufe): Ton nach dem Bild, `main` 21,5/52,0/54,2 ms, ohne Sync
-32,8/40,5/49,0 ms (Median je Lauf). Unverändert, aber es gibt einen
-Versatz von 1–2 Frames, schon vorher (todo).
+32,8/40,5/49,0 ms (Median je Lauf). Unverändert; gemessen noch mit dem
+alten `av-offset.py`, das bei Lücken um ganze Bilder danebenlag (siehe
+„Ton in Aufnahmen hinter dem Bild“).
 
 `/api/latency` misst weiter am Eingang von `pgm_out`; das ist jetzt das
 Alter, mit dem die Ausgänge Program bekommen. Offen: die Bildphase
 (0–33 ms je Lauf); mit freiem Rechner wiederholen.
 
-## 2026-10-23 — Ton in Aufnahmen hinter dem Bild: AAC-Vorlauf (offen)
+## 2026-10-23 — Ton in Aufnahmen hinter dem Bild: AAC-Vorlauf
 
 **Befund**: Der konstante Teil des A/V-Versatzes (DECISIONS 23.10.
 „Mischer-Ausgänge ohne Sync“) ist der Vorlauf der AAC-Encoder.
@@ -4427,21 +4428,35 @@ Program 21 ms + Bildphase (0–33 ms), SRT 21–46 ms. Betrifft jede
 Aufnahme und jeden Stream mit AAC (lmix `add_aac`, strom SRT, RTMP,
 Live-Recorder, Audio-Encoder-Block).
 
-**Versucht** (geparkt, lokale Branches `aac-priming` in lmix und
-`lmix-aac-delay` in strom, nicht gepusht): den Encoder-Ausgang um den
-Vorlauf früher einordnen (`gst_pad_set_offset`, negativ). Ohne strom's
-Live-Recorder (Python, `matroskamux`, `mp4mux`, `mpegtsmux`) danach
-0 ms. In lmix landet der Ton aber um ganze Bilder daneben (−33/−67 ms),
-auch wenn der Encoder die Verschiebung als Latenz meldet. Als
-GObject-Eigenschaft (`pad_properties` in einem Flow) geht ein negativer
-Offset nicht (Wertebereich ab 0).
+**Ausgleich** (strom, Branch `lmix-aac-delay`): jede Flow-Pipeline
+verschiebt den Ausgang jedes AAC-Encoders um den Vorlauf früher
+(`gst_pad_set_offset`, negativ) und meldet die Verschiebung als Latenz,
+damit Live-Muxer darauf warten. Angehängt an `deep-element-added`, also
+auch für lmix' eigenes `avenc_aac` in den Ausgangs-Flows und für Encoder,
+die ein Block erst zur Laufzeit anlegt. Gemessen (`scripts/measure-av.sh`,
+CUDA, je 4 Läufe à 30 s, unter fremder Last ~115):
 
-Aber: auch ohne Ausgleich liegt die ISO-Aufnahme mal ein Bild daneben
-(`scripts/measure-av.sh`, `main`-Stand: +22 und −12 ms in zwei Läufen).
-Die Bildsprünge kommen also vielleicht nicht vom Ausgleich.
+| | ohne Ausgleich | mit |
+|---|---|---|
+| ISO (Input direkt) | 21,0–22,0 ms | −0,3…+0,7 ms |
+| Program | 19–39 ms | −13…+22 ms |
 
-**Offen**: woher die Sprünge um ganze Bilder kommen (Clip-Player, Live-
-Recorder?); danach der Ausgleich an allen AAC-Stellen in strom, und
-Meldung an GStreamer (gst-libav, fdkaac). Messen mit
-`scripts/measure-av.sh` (Clip, Aufnahme von Program und ISO,
-`scripts/av-offset.py`).
+Was bei Program bleibt, ist die Bildphase des Compositors (innerhalb
+eines Bildes, je Lauf fest). Ein Lauf springt einmal um ein Bild: der
+Compositor wiederholt unter Last ein Bild, Ton und Bildzeitstempel
+laufen dabei lückenlos durch. Als GObject-Eigenschaft (`pad_properties`
+in einem Flow) geht ein negativer Offset nicht (Wertebereich ab 0),
+darum in strom selbst.
+
+Die früheren Befunde „Ton ganze Bilder daneben“ (mit Ausgleich −33/−67 ms)
+und „ISO springt um ein Bild“ (+22/−12 ms) waren Messfehler: Ohne eigene
+Zeitstempel ordnete `scripts/av-offset.py` bei Lücken in einer Aufnahme
+Bilder und Töne um ganze Bilder falsch zu (Testdatei mit 300 ms Lücke:
+−299…+368 ms statt 0). Seit dem Review von #131 nimmt es die Bildzeiten
+aus demselben Dekodierlauf und füllt Lücken im Ton auf. Die Werte oben
+und alle früheren (vor 23.10. 09:30) mit dem alten Skript gelten nur
+ohne Lücken.
+
+**Offen**: SRT und RTMP mit Ausgleich messen (der Test deckt den
+Mechanismus, nicht die Blöcke), Meldung an GStreamer (gst-libav,
+fdkaac).

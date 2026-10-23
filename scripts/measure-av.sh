@@ -32,7 +32,12 @@ cleanup() {
 }
 trap cleanup EXIT
 
-act() { curl -sf -X POST -H 'content-type: application/json' -d "$1" "$CORE/actions" >/dev/null; }
+act() {
+    curl -sS -f -X POST -H 'content-type: application/json' -d "$1" "$CORE/actions" >/dev/null && return 0
+    echo "action failed: $1 (logs: $WORK)" >&2
+    KEEP_WORK=1
+    exit 1
+}
 wait_up() {
     for _ in $(seq 1 120); do curl -sf "$1" >/dev/null 2>&1 && return 0; sleep 0.5; done
     echo "$2 did not come up (logs: $WORK)" >&2
