@@ -27,6 +27,7 @@ mod engine;
 mod feedback;
 mod feeds;
 mod layouts;
+mod machine;
 mod metrics;
 mod midi;
 mod osc;
@@ -323,6 +324,7 @@ async fn main() -> anyhow::Result<()> {
     tokio::spawn(service.clone().forward_levels());
     tokio::spawn(service.clone().watch_failures());
     tokio::spawn(service.clone().forward_output_stats());
+    tokio::spawn(service.clone().watch_machine());
     tokio::spawn(service.clone().watch_players());
     tokio::spawn(service.clone().watch_stingers());
     tokio::spawn(service.clone().watch_playback());

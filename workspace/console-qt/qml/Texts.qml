@@ -140,6 +140,70 @@ QtObject {
         return qsTr("PGM %1 ms (p95 %2 ms)").arg(l.median_ms).arg(l.p95_ms)
     }
 
+    /** Core.machine as an object, or null while lmix-core sent none. */
+    function machine(json) {
+        try {
+            return json.length > 0 ? JSON.parse(json) : null
+        } catch (e) {
+            return null
+        }
+    }
+
+    /** The machine's load in a few words (header). */
+    function machineLoad(m) {
+        return m ? qsTr("CPU %1 %").arg(m.cpu_percent) : ""
+    }
+
+    /** How the cue timer runs (MachineLoad.cue_timer). */
+    function cueTimer(m) {
+        switch (m ? m.cue_timer : "") {
+        case "realtime": return qsTr("Cue timer at real-time priority")
+        case "normal": return qsTr("Cue timer at normal priority")
+        case "demoted": return qsTr("Cue timer lost its real-time priority")
+        case "stopped": return qsTr("Cue timer stopped")
+        }
+        return qsTr("Cue timer –")
+    }
+
+    /**
+     * What may keep cue times from holding (RUN.8): `{ level, text, detail }`,
+     * level 0 nothing, 1 a warning, 2 an error; `text` fits a status pill.
+     * The first that applies wins: a stopped timer, late cues, a loaded
+     * machine, no real time.
+     */
+    function machineWarning(m) {
+        if (!m) {
+            return { level: 0, text: "", detail: "" }
+        }
+        var load = qsTr("CPU %1 %, load %2 per core (%3 cores)").arg(m.cpu_percent)
+            .arg(Number(m.load_per_core).toLocaleString(Qt.locale(), "f", 1)).arg(m.cores)
+        if (m.cue_timer === "stopped") {
+            return { level: 2, text: qsTr("Cue timer stopped"),
+                detail: qsTr("Waits and follows of the cue lists no longer run. Restart lmix-core.") }
+        }
+        if (m.cues_late) {
+            return { level: 1, text: qsTr("Cues late"),
+                detail: qsTr("A cue step ran late in the last 30 s. %1.").arg(load) }
+        }
+        if (m.high) {
+            return { level: 1, text: qsTr("Machine loaded"),
+                detail: qsTr("Cues may run late. %1.").arg(load) }
+        }
+        if (m.cue_timer === "demoted") {
+            return { level: 1, text: qsTr("No real time"),
+                detail: qsTr("A cue step computed too long without a pause; the cue timer runs at normal priority until lmix-core restarts, and cues may run late on a busy machine.") }
+        }
+        if (m.cue_timer === "normal") {
+            return { level: 1, text: qsTr("No real time"), detail: timerHelp() }
+        }
+        return { level: 0, text: "", detail: load }
+    }
+
+    /** How to give the cue timer real-time priority. */
+    function timerHelp() {
+        return qsTr("The cue timer got no real-time priority, so cues may run late on a busy machine. Allow it with rtkit (running for the desktop session), or with a real-time limit for this user (group realtime, RLIMIT_RTPRIO).")
+    }
+
     /**
      * Short link state on an output button: rate, or that nobody receives.
      * "Mbit": Kante writes button text in capitals, and "MB/S" would read as bytes.

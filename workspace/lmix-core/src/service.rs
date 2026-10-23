@@ -45,6 +45,8 @@ const EVENT_BUFFER: usize = 256;
 const LEVELS_INTERVAL: std::time::Duration = std::time::Duration::from_millis(100);
 /// How often network outputs report their link health.
 const OUTPUT_STATS_INTERVAL: std::time::Duration = std::time::Duration::from_secs(1);
+/// How often the machine's load is reported (`Event::Machine`, RUN.8).
+const MACHINE_INTERVAL: std::time::Duration = std::time::Duration::from_secs(2);
 /// Silence: also stands in for "no reading" (JSON has no infinity).
 pub const LEVEL_FLOOR_DB: f32 = -100.0;
 
@@ -1143,6 +1145,48 @@ impl Service {
             if !unchanged {
                 let _ = self.events.send(Event::Outputs { stats });
             }
+        }
+    }
+
+    /// Report the machine's load and how the cue timer runs about every
+    /// two seconds (RUN.8), so the Console warns when cue times may not
+    /// hold. Without `/proc` (not Linux) nothing is reported; a read that
+    /// fails later (no file handle left) skips that report.
+    pub async fn watch_machine(self: Arc<Self>) {
+        let mut sampler = crate::machine::Sampler::default();
+        let mut tick = tokio::time::interval(MACHINE_INTERVAL);
+        tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        let mut reported = false;
+        let mut failing = false;
+        loop {
+            tick.tick().await;
+            let (Ok(stat), Ok(loadavg)) = (
+                tokio::fs::read_to_string("/proc/stat").await,
+                tokio::fs::read_to_string("/proc/loadavg").await,
+            ) else {
+                if !reported {
+                    tracing::warn!(
+                        "no /proc/stat or /proc/loadavg: the machine's load is not reported"
+                    );
+                    return;
+                }
+                if !failing {
+                    failing = true;
+                    tracing::warn!("reading the machine's load failed; trying again");
+                }
+                continue;
+            };
+            reported = true;
+            failing = false;
+            let over_budget = self.cue_lateness().await.over_budget;
+            let load = sampler.sample(
+                &stat,
+                &loadavg,
+                over_budget,
+                crate::realtime::priority(),
+                std::time::Instant::now(),
+            );
+            let _ = self.events.send(Event::Machine { load });
         }
     }
 

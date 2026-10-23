@@ -439,6 +439,9 @@ Kirigami.ApplicationWindow {
     readonly property var runningOutputs: show ? show.outputs.filter(o => o.status && o.status.state === "running") : []
     readonly property bool recording: runningOutputs.some(o => o.spec.kind === "record")
     readonly property bool streaming: runningOutputs.some(o => o.spec.kind === "srt" || o.spec.kind === "rtmp")
+    /** lmix-core's machine and cue timer (Core.machine, RUN.8), or null. */
+    readonly property var machine: Texts.machine(backend.machine)
+    readonly property var machineWarning: Texts.machineWarning(machine)
 
     pageStack.initialPage: Kirigami.Page {
         padding: 0
@@ -557,6 +560,28 @@ Kirigami.ApplicationWindow {
                         visible: root.streaming
                         status: KantePill.State.Running
                         text: qsTr("Stream")
+                    }
+                    // The machine's load, and a warning when cue times may
+                    // not hold (RUN.8); the tooltip says why.
+                    QQC2.Label {
+                        visible: root.machine !== null && root.machineWarning.level === 0
+                        text: Texts.machineLoad(root.machine)
+                        font.family: KanteStyle.monoFamily
+                        color: KanteStyle.mutedTextColor
+                        HoverHandler { id: loadHover }
+                        QQC2.ToolTip.visible: loadHover.hovered
+                        QQC2.ToolTip.text: Texts.cueTimer(root.machine) + "\n" + root.machineWarning.detail
+                    }
+                    KantePill {
+                        visible: root.machineWarning.level > 0
+                        status: root.machineWarning.level > 1 ? KantePill.State.Failed : KantePill.State.Locked
+                        text: root.machineWarning.text
+                        Accessible.role: Accessible.StaticText
+                        Accessible.name: root.machineWarning.text
+                        Accessible.description: root.machineWarning.detail
+                        HoverHandler { id: warnHover }
+                        QQC2.ToolTip.visible: warnHover.hovered
+                        QQC2.ToolTip.text: root.machineWarning.detail
                     }
                     KantePill {
                         status: root.backend.connected ? KantePill.State.Running : KantePill.State.Failed

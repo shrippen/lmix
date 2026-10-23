@@ -16,6 +16,7 @@ pub mod feed;
 pub mod graphics;
 pub mod input;
 pub mod layout;
+pub mod machine;
 pub mod midi;
 pub mod output;
 pub mod ptz;
@@ -46,6 +47,7 @@ pub use input::{
     Input, InputAudio, InputColor, InputId, InputPress, InputRef, InputStatus, Listen, Look,
     PageRunning, Playback, PlaybackState, SignalLoss, SourceSpec, TestPattern, Transport,
 };
+pub use machine::{MachineLoad, TimerPriority};
 pub use layout::{
     BoxCrop, BoxRect, BoxShown, BoxSpec, Layout, LayoutBox, LayoutTemplate, TemplateBox,
     TemplateInput,

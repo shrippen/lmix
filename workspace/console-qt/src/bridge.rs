@@ -45,6 +45,9 @@ pub mod qobject {
         #[qproperty(QString, positions)]
         /// Link health per output id: lmix `OutputStats` (JSON object).
         #[qproperty(QString, links)]
+        /// The load of lmix-core's machine and how its cue timer runs:
+        /// lmix `MachineLoad` as JSON, or empty while none came (RUN.8).
+        #[qproperty(QString, machine)]
         /// Capture devices (JSON list of lmix `Device`).
         #[qproperty(QString, devices)]
         /// Recently opened or saved show files (JSON list).
@@ -177,6 +180,7 @@ pub struct CoreRust {
     levels: QString,
     positions: QString,
     links: QString,
+    machine: QString,
     devices: QString,
     recent: QString,
     templates: QString,
@@ -245,6 +249,10 @@ async fn follow(thread: cxx_qt::CxxQtThread<qobject::Core>) {
                         let json = links_json(&stats);
                         thread.queue(move |core| core.set_links(QString::from(&json)))
                     }
+                    Ok(Event::Machine { load }) => {
+                        let json = serde_json::to_string(&load).unwrap_or_default();
+                        thread.queue(move |core| core.set_machine(QString::from(&json)))
+                    }
                     Ok(Event::Midi { midi }) => {
                         let json = serde_json::to_string(&midi).unwrap_or_default();
                         thread.queue(move |core| core.midi_received(QString::from(&json)))
@@ -256,7 +264,14 @@ async fn follow(thread: cxx_qt::CxxQtThread<qobject::Core>) {
                 }
             }
         }
-        if thread.queue(|core| core.set_connected(false)).is_err() {
+        // An old load would warn about a machine nobody hears from.
+        if thread
+            .queue(|mut core| {
+                core.as_mut().set_connected(false);
+                core.set_machine(QString::default());
+            })
+            .is_err()
+        {
             return;
         }
         tokio::time::sleep(RETRY).await;

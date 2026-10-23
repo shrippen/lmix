@@ -216,6 +216,26 @@ AppPage {
                     font.family: KanteStyle.monoFamily
                 }
             }
+            // The machine lmix-core runs on (RUN.8): cue times hold there.
+            KanteSettingRow {
+                Layout.fillWidth: true
+                titleWidth: root.titleWidth
+                title: qsTr("Cue timer")
+                hint: {
+                    var m = root.shell.machine
+                    if (m === null) {
+                        return qsTr("No report from lmix-core yet")
+                    }
+                    var w = root.shell.machineWarning
+                    return w.level > 0 ? w.text + ": " + w.detail : w.detail
+                }
+                QQC2.Label {
+                    text: Texts.cueTimer(root.shell.machine)
+                    color: root.shell.machineWarning.level > 1 ? KanteStyle.negativeTextColor
+                        : root.shell.machine !== null && root.shell.machine.cue_timer !== "realtime" ? KanteStyle.neutralTextColor
+                        : KanteStyle.mutedTextColor
+                }
+            }
         }
     }
 

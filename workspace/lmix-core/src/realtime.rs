@@ -32,6 +32,7 @@ const RT_TIME_HARD: Duration = Duration::from_millis(200);
 
 static REALTIME: AtomicBool = AtomicBool::new(false);
 static DEMOTED: AtomicBool = AtomicBool::new(false);
+static STOPPED: AtomicBool = AtomicBool::new(false);
 /// errno of a demotion the kernel refused (0: none).
 static DEMOTE_ERRNO: AtomicI32 = AtomicI32::new(0);
 /// The thread with real-time priority, for the SIGXCPU handler.
@@ -59,6 +60,42 @@ pub fn demotion_failed() -> Option<i32> {
 /// The cue thread ended: no real-time timer any more.
 pub fn ended() {
     REALTIME.store(false, Ordering::Relaxed);
+    STOPPED.store(true, Ordering::Relaxed);
+}
+
+/// How the cue timer runs, for clients (`Event::Machine`).
+pub fn priority() -> lmix_types::TimerPriority {
+    TimerFlags {
+        stopped: STOPPED.load(Ordering::Relaxed),
+        granted: granted(),
+        demoted: demoted(),
+    }
+    .priority()
+}
+
+/// What the cue thread and the SIGXCPU handler noted.
+struct TimerFlags {
+    stopped: bool,
+    granted: bool,
+    demoted: bool,
+}
+
+impl TimerFlags {
+    /// A stopped timer counts first: once it ended, nothing it was
+    /// granted helps the cues. A demotion counts before the grant, so a
+    /// lost priority never reads as real time.
+    fn priority(&self) -> lmix_types::TimerPriority {
+        use lmix_types::TimerPriority;
+        if self.stopped {
+            TimerPriority::Stopped
+        } else if self.demoted {
+            TimerPriority::Demoted
+        } else if self.granted {
+            TimerPriority::Realtime
+        } else {
+            TimerPriority::Normal
+        }
+    }
 }
 
 /// The calling thread's kernel id, for [`make_realtime`].
@@ -180,6 +217,26 @@ fn rtkit(tid: libc::pid_t) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_stopped_timer_says_so_before_its_priority() {
+        use lmix_types::TimerPriority;
+        let state = |stopped, granted, demoted| {
+            TimerFlags {
+                stopped,
+                granted,
+                demoted,
+            }
+            .priority()
+        };
+        // (stopped, granted, demoted)
+        assert_eq!(state(true, true, false), TimerPriority::Stopped);
+        assert_eq!(state(true, false, true), TimerPriority::Stopped);
+        assert_eq!(state(false, true, true), TimerPriority::Demoted);
+        assert_eq!(state(false, true, false), TimerPriority::Realtime);
+        assert_eq!(state(false, false, true), TimerPriority::Demoted);
+        assert_eq!(state(false, false, false), TimerPriority::Normal);
+    }
 
     /// A real-time thread that computes past the soft limit becomes a
     /// normal thread instead of ending the process. Needs the right to
