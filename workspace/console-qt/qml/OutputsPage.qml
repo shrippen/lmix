@@ -52,10 +52,11 @@ AppPage {
     }
     function stopGroup(group) {
         if (!root.shell.confirmStop) {
-            if (group === "media")
+            if (group === "media") {
                 stopMedia()
-            else
+            } else {
                 act({ action: "stop_outputs", group: group })
+            }
             return
         }
         stopDialog.output = null

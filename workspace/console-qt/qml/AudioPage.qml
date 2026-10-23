@@ -36,10 +36,12 @@ AppPage {
     // A new state brings new objects: load only for another input, or
     // edits in progress would be thrown away.
     property string loadedId: ""
-    onSelectedChanged: if (selected && selected.id !== loadedId) {
-        loadedId = selected.id
-        stripPanel.input = selected
-        stripPanel.load()
+    onSelectedChanged: {
+        if (selected && selected.id !== loadedId) {
+            loadedId = selected.id
+            stripPanel.input = selected
+            stripPanel.load()
+        }
     }
 
     pageId: "audio"

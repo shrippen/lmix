@@ -109,25 +109,31 @@ Kirigami.ApplicationWindow {
     readonly property var pageItems: {
         var list = []
         for (var i = 0; i < stack.children.length; i++) {
-            if (stack.children[i].pageId !== undefined)
+            if (stack.children[i].pageId !== undefined) {
                 list.push(stack.children[i])
+            }
         }
         return list
     }
     property string currentPage: "mix"
     readonly property var currentItem: pageItems.find(p => p.pageId === currentPage) || null
     function showPage(id) {
-        if (!pageItems.some(p => p.pageId === id))
+        if (!pageItems.some(p => p.pageId === id)) {
             return
+        }
         currentPage = id
         pageSettings.current = id
     }
-    onCurrentItemChanged: if (currentItem)
-        Qt.callLater(currentItem.takeFocus)
+    onCurrentItemChanged: {
+        if (currentItem) {
+            Qt.callLater(currentItem.takeFocus)
+        }
+    }
     onRestoreFocus: {
         root.requestActivate()
-        if (currentItem)
+        if (currentItem) {
             currentItem.takeFocus()
+        }
     }
 
     // Ctrl+1…n: the pages in the order of the bar.
@@ -236,18 +242,21 @@ Kirigami.ApplicationWindow {
         backend.setGlobalShortcuts(globalShortcutList)
         // `--page` for this run, else the page open last.
         showPage(backend.startPage !== "" ? backend.startPage : pageSettings.current)
-        if (!currentItem && pageItems.length > 0)
+        if (!currentItem && pageItems.length > 0) {
             showPage(pageItems[0].pageId)
+        }
         // Start options (UI.12): `--window maximized|fullscreen`.
-        if (backend.windowMode === "maximized")
+        if (backend.windowMode === "maximized") {
             root.showMaximized()
-        else if (backend.windowMode === "fullscreen")
+        } else if (backend.windowMode === "fullscreen") {
             root.showFullScreen()
+        }
         // The pages' entries go after the package entries.
         for (var p = 0; p < pageItems.length; p++) {
             var items = pageItems[p].fileItems
-            for (var i = 0; i < items.length; i++)
+            for (var i = 0; i < items.length; i++) {
                 fileMenu.addItem(items[i])
+            }
         }
     }
 
@@ -582,8 +591,9 @@ Kirigami.ApplicationWindow {
                 currentIndex: {
                     var n = 0
                     for (var i = 0; i < children.length; i++) {
-                        if (children[i] === root.currentItem)
+                        if (children[i] === root.currentItem) {
                             return i
+                        }
                     }
                     return 0
                 }
@@ -622,8 +632,13 @@ Kirigami.ApplicationWindow {
                 busy: root.pageItems.map(p => p.busy)
                 busyKinds: root.pageItems.map(p => p.busyKind)
                 kindNames: [qsTr("Running"), qsTr("Info"), qsTr("Warning"), qsTr("Error")]
-                currentIndex: root.pageItems.indexOf(root.currentItem)
                 onActivated: index => root.showPage(root.pageItems[index].pageId)
+                // A Binding, not a property binding: the bar sets its index
+                // itself on a click, which would cut a plain binding; this
+                // writes it again on every page change (Ctrl+n, --page).
+                Binding on currentIndex {
+                    value: root.pageItems.indexOf(root.currentItem)
+                }
 
                 QQC2.Label {
                     text: qsTr("Ctrl+1…%1").arg(root.pageItems.length)

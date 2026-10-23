@@ -40,10 +40,11 @@ FocusScope {
     default property alias content: area.data
 
     function takeFocus() {
-        if (focusTarget)
+        if (focusTarget) {
             focusTarget.forceActiveFocus()
-        else
+        } else {
             page.forceActiveFocus()
+        }
     }
 
     ColumnLayout {

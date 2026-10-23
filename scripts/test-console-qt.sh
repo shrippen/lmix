@@ -259,6 +259,42 @@ for page in "AUDIO 3" "OUTPUTS 4" "SETUP 5"; do
             || fail "Audio: fader drag ended early (volume $volume)"
     fi
 done
+# The page bar follows every page change: a click on a tab, then Ctrl+n,
+# then the tab again (a click once cut the bar's binding: it kept the
+# clicked tab marked and the next click on it did nothing).
+FIRST_TAB="25 879"
+click $FIRST_TAB
+sleep 2
+shot tab-mix
+xdotool windowfocus "$show_window"
+xdotool key ctrl+3
+sleep 2
+shot tab-audio
+click $FIRST_TAB
+sleep 2
+shot tab-mix-again
+# By the page title (top left): the pages' pictures move on their own.
+PAGE_TITLE="300x40+0+55"
+(($(moved tab-audio tab-mix-again "$PAGE_TITLE") > 50)) && (($(moved tab-mix tab-mix-again "$PAGE_TITLE") < 50)) \
+    && pass "page bar: a tab after Ctrl+n switches again" || fail "page bar: the tab did not switch back after Ctrl+n"
+
+# Panic all: cues stop, program fades to black, a running stream goes on.
+act '{"action":"start_output","output":1}'
+act '{"action":"cue_reset"}'
+xdotool windowfocus "$show_window"
+xdotool key ctrl+2
+sleep 1
+xdotool key space
+until_true '[[ "$(cues_running)" -ge 1 ]]' || fail "no cue running before Panic all"
+PANIC_ALL="1383 879"
+click $PANIC_ALL
+until_true '[[ "$(cues_running)" == 0 && "$(state | jq .fade_to_black)" == true ]]' \
+    && pass "Panic all: cues stopped, program black" || fail "Panic all: running $(cues_running), black $(state | jq .fade_to_black)"
+click $PANIC_ALL
+sleep 2
+[[ "$(state | jq .fade_to_black)" == true ]] && pass "Panic all twice: program stays black" || fail "a second Panic all faded program up"
+[[ "$(state | jq -r '.outputs[0].status.state')" == running ]] && pass "Panic all: the stream goes on" || fail "Panic all stopped the stream"
+
 own_qml_warnings console.log && fail "QML warnings (pages): $(own_qml_warnings console.log | head -3)"
 pass "no QML warnings (Audio, Outputs, Setup)"
 criticals="$(tail -n +"$((STROM_START_LINES + 1))" "$WORK/strom.log" | grep -c 'GStreamer-CRITICAL' || true)"
