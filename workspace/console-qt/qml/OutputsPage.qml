@@ -23,7 +23,8 @@ AppPage {
     readonly property var outputs: show && show.outputs ? show.outputs : []
     readonly property var links: backend.links.length > 0 ? JSON.parse(backend.links) : ({})
     readonly property var running: outputs.filter(o => o.status.state === "running")
-    readonly property var streams: outputs.filter(o => o.spec.kind === "srt" || o.spec.kind === "rtmp")
+    /** SRT streams: lmix-core's group `streams` (STR.1). */
+    readonly property var streams: outputs.filter(o => o.spec.kind === "srt")
     readonly property var recordings: outputs.filter(o => o.spec.kind === "record")
     function act(action) { shell.act(action) }
     // Rows by id: a new state keeps them (and their running-time timers).
@@ -43,14 +44,18 @@ AppPage {
         stopDialog.output = output
         stopDialog.open()
     }
+    /** Every running recording and stream (SRT, RTMP), one by one: the
+     *  core's groups cover SRT streams only. */
+    function stopMedia() {
+        running.filter(o => ["record", "srt", "rtmp"].indexOf(o.spec.kind) >= 0)
+            .forEach(o => act({ action: "stop_output", output: o.id }))
+    }
     function stopGroup(group) {
         if (!root.shell.confirmStop) {
-            if (group === "media") {
-                act({ action: "stop_outputs", group: "recordings" })
-                act({ action: "stop_outputs", group: "streams" })
-            } else {
+            if (group === "media")
+                stopMedia()
+            else
                 act({ action: "stop_outputs", group: group })
-            }
             return
         }
         stopDialog.output = null
@@ -341,6 +346,7 @@ AppPage {
         anchors.centerIn: parent
         act: root.act
         onAskAgainChosen: on => root.shell.confirmStop = on
+        onMediaRequested: root.stopMedia()
     }
 
     AddOutputDialog {

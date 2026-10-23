@@ -6,8 +6,9 @@ import Kante
 
 /**
  * Asks before a running output stops (UI.10): one output, or a group
- * (`streams`, `recordings`, `all`, or `media`: recordings and streams,
- * leaving screens and NDI). The question can turn itself off.
+ * (`streams`, `recordings`, `all`), or `media`: every recording and
+ * stream, leaving screens and NDI; the page stops those (mediaRequested).
+ * The question can turn itself off.
  */
 KanteDialog {
     id: dialog
@@ -18,6 +19,8 @@ KanteDialog {
     property string group: "streams"
     /** The user's answer to "Ask before stopping", after OK. */
     signal askAgainChosen(bool on)
+    /** OK for `media`: the page stops its recordings and streams. */
+    signal mediaRequested()
 
     modal: true
     title: output ? qsTr("Stop %1?").arg(output.name)
@@ -36,8 +39,7 @@ KanteDialog {
         if (output) {
             dialog.act({ action: "stop_output", output: output.id })
         } else if (group === "media") {
-            dialog.act({ action: "stop_outputs", group: "recordings" })
-            dialog.act({ action: "stop_outputs", group: "streams" })
+            dialog.mediaRequested()
         } else {
             dialog.act({ action: "stop_outputs", group: group })
         }

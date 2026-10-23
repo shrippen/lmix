@@ -6425,6 +6425,20 @@ mod tests {
         );
         assert!(sw.apply(off).unwrap().is_empty());
         assert!(!sw.state().fade_to_black);
+
+        // With a fade (Panic all sends the default length): the state is
+        // black from the first press, so a second during the fade does
+        // nothing either.
+        let on = Action::SetFadeToBlack {
+            on: true,
+            duration_ms: 1000,
+        };
+        assert_eq!(
+            sw.apply(on.clone()).unwrap(),
+            [Command::FadeToBlack { duration_ms: 1000 }]
+        );
+        assert!(sw.apply(on).unwrap().is_empty());
+        assert!(sw.state().fade_to_black);
     }
 
     #[test]

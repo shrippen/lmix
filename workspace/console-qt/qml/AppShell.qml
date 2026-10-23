@@ -429,7 +429,7 @@ Kirigami.ApplicationWindow {
 
     readonly property var runningOutputs: show ? show.outputs.filter(o => o.status && o.status.state === "running") : []
     readonly property bool recording: runningOutputs.some(o => o.spec.kind === "record")
-    readonly property bool streaming: runningOutputs.some(o => o.spec.kind === "srt" || o.spec.kind === "rtmp" || o.spec.kind === "whip")
+    readonly property bool streaming: runningOutputs.some(o => o.spec.kind === "srt" || o.spec.kind === "rtmp")
 
     pageStack.initialPage: Kirigami.Page {
         padding: 0
