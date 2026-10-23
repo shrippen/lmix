@@ -9,6 +9,8 @@ greifen weiter parallel auf `lmix-core` zu, auch übers Netz.
 
 Dieser Plan beschreibt die Reihenfolge. Umgesetzt wird erst, wenn die
 Screens mit dem User als Click-Dummy ausgearbeitet sind (Schritt 1).
+Verbindlich ist der Text hier („Click-Dummy 2“ und die Entscheidungen);
+die Leinwand ist Anschauung und liegt nicht im Repo.
 
 ## Grundsätze
 
@@ -75,7 +77,8 @@ Kern-Ablauf; es sind Ausgänge wie andere auch.
    Audio, Outputs, Setup, Verbinden/Profil. Je Screen: was drauf ist, was
    Dialog bleibt, Tastatur, was ein entfernter Arbeitsplatz darf. Die
    Shell-Entscheidungen stehen in DECISIONS (23.10.), der Inhalt je Seite
-   hier unter „Click-Dummy 2“; der Dummy ist Referenz für die Umsetzung.
+   hier unter „Click-Dummy 2“; dieser Text ist die Referenz für die
+   Umsetzung, die Leinwand Anschauung.
 2. **Shell mit Seitenleiste**: ein Binary `lmix` statt `lmix-mixer` und
    `lmix-show`, Seiten Mix und Show aus dem Bestand, Leiste mit Panik und
    Status. Kurzbefehle, Einstellungen und `.desktop`-Dateien migriert;
@@ -91,8 +94,10 @@ Kern-Ablauf; es sind Ausgänge wie andere auch.
 
 ## Entschieden für die Shell (User 23.10., Click-Dummy 1)
 
-- **Panik global und je Seite**: „Panic all“ in der Leiste stoppt alles;
-  jede Seite hat dazu eine eigene nur für ihren Bereich (Mix: Fade to
+- **Panik global und je Seite**: „Panic all“ in der Leiste stoppt die Show
+  und blendet Program auf Schwarz; Aufnahmen und Streams laufen weiter
+  (Vorschlag aus dem Dummy, siehe „Offen“). Jede Seite hat dazu eine eigene
+  nur für ihren Bereich (Mix: Fade to
   black, Show: Stop show, Audio: Audio off, Outputs: Stop outputs).
 - **Kurzbefehle global plus aktive Seite**: globale Tasten (Panik, GO, Cut,
   Seiten, Speichern) gelten immer, die Tasten einer Seite nur, solange sie
