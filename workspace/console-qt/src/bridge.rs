@@ -453,7 +453,7 @@ impl qobject::Core {
             self.as_mut()
                 .set_global_keys(QString::from(KEYS_HELD_ELSEWHERE));
             self.as_mut().set_global_held(true);
-            tracing::info!("global keys: another lmix window binds them");
+            tracing::debug!("global keys: another lmix window binds them");
             return;
         };
         tracing::info!("global keys: this window binds them");
