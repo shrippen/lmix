@@ -61,7 +61,8 @@ act '{"action":"cut_direct","input":"Bars"}'
 act '{"action":"add_shortcut","shortcut":{"label":"Ball on air","key":"Ctrl+Shift+F1","actions":[{"action":"cut_direct","input":"Ball"}]}}'
 
 window() { DISPLAY="$DISPLAY_NUM" xdotool search --name "$1" 2>/dev/null | wc -l; }
-lmix() { XDG_CONFIG_HOME="$1" DISPLAY="$DISPLAY_NUM" QT_QPA_PLATFORM=xcb LMIX_CORE="http://127.0.0.1:${PORT}" "$(target console-qt lmix)"; }
+# exec: started with &, the PID is lmix's own, so kill reaches it.
+lmix() { XDG_CONFIG_HOME="$1" DISPLAY="$DISPLAY_NUM" QT_QPA_PLATFORM=xcb LMIX_CORE="http://127.0.0.1:${PORT}" exec "$(target console-qt lmix)"; }
 
 # Switched off: binds nothing.
 mkdir -p "$WORK/off/lmix"
@@ -82,7 +83,8 @@ mkdir -p "$WORK/config/lmix"
 printf '[keys]\nglobal=false\n[view]\nrows=3\n' >"$WORK/config/lmix/mixer.conf"
 printf '[view]\ndarkRoom=false\n' >"$WORK/config/lmix/show.conf"
 lmix "$WORK/config" >"$WORK/lmix.log" 2>&1 &
-PIDS+=($!)
+first_window=$!
+PIDS+=($first_window)
 
 bound() { grep -q '"trigger":"CTRL+SHIFT+F1"' "$WORK/portal.out"; }
 wait_for bound || fail "lmix did not bind the shortcut key: $(cat "$WORK/portal.out")"
@@ -107,9 +109,16 @@ second_up() { [[ "$(window '^lmix')" -ge 2 ]]; }
 wait_for second_up || fail "the second lmix window did not open"
 sleep 3
 [[ "$(wc -l <"$WORK/portal.out")" == "$before" ]] || fail "a second window bound the keys too: $(tail -n +"$((before + 1))" "$WORK/portal.out")"
-kill "$second"
-wait "$second" 2>/dev/null || true
 pass "a second lmix window leaves the keys to the first"
+
+# The first window closes: the second takes the keys over by itself.
+kill "$first_window"
+wait "$first_window" 2>/dev/null || true
+PIDS+=($second)
+taken_over() { tail -n +"$((before + 1))" "$WORK/portal.out" | grep -q '"trigger":"CTRL+SHIFT+F1"'; }
+for _ in $(seq 1 6); do taken_over && break; sleep 2; done
+taken_over || fail "the second window did not take the keys over after the first closed"
+pass "the second window takes the keys over when the first closes"
 
 # A changed key is bound again.
 act "{\"action\":\"set_shortcut\",\"target\":1,\"shortcut\":{\"label\":\"Ball on air\",\"key\":\"F9\",\"actions\":[{\"action\":\"cut_direct\",\"input\":\"Ball\"}]}}"

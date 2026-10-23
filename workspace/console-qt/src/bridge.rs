@@ -65,6 +65,9 @@ pub mod qobject {
         /// Global shortcuts: "" off, "on:<count>" bound, "off:<reason>"
         /// when the desktop has no portal or refused.
         #[qproperty(QString, global_keys, cxx_name = "globalKeys")]
+        /// Another lmix window on this computer binds the global keys;
+        /// this one tries again (AppShell).
+        #[qproperty(bool, global_held, cxx_name = "globalHeld")]
         type Core = super::CoreRust;
 
         /// A global shortcut was pressed: the lmix shortcut id.
@@ -184,6 +187,7 @@ pub struct CoreRust {
     latency: QString,
     measuring: bool,
     global_keys: QString,
+    global_held: bool,
     /// Feeds the global shortcut binder; started on first use.
     global: Option<tokio::sync::watch::Sender<Vec<crate::portal::Bind>>>,
     /// This window binds the global keys of this computer (one window only).
@@ -418,16 +422,18 @@ impl qobject::Core {
             // while another holds the keys: bind nothing.
             let binds = if binds.is_empty() {
                 self.as_mut().rust_mut().global_claim = None;
+                self.as_mut().set_global_held(false);
                 binds
             } else if self.rust().global_claim.is_some() {
                 binds
             } else if let Some(claim) = crate::portal::claim(&claim_dir()) {
                 self.as_mut().rust_mut().global_claim = Some(claim);
+                self.as_mut().set_global_held(false);
                 binds
             } else {
-                self.as_mut().set_global_keys(QString::from(
-                    "off:another lmix window on this computer binds them",
-                ));
+                self.as_mut()
+                    .set_global_keys(QString::from(KEYS_HELD_ELSEWHERE));
+                self.as_mut().set_global_held(true);
                 Vec::new()
             };
             if let Some(sender) = &self.rust().global {
@@ -444,12 +450,15 @@ impl qobject::Core {
         }
         // One window per computer binds: with two, a press would run twice.
         let Some(claim) = crate::portal::claim(&claim_dir()) else {
-            self.as_mut().set_global_keys(QString::from(
-                "off:another lmix window on this computer binds them",
-            ));
+            self.as_mut()
+                .set_global_keys(QString::from(KEYS_HELD_ELSEWHERE));
+            self.as_mut().set_global_held(true);
+            tracing::info!("global keys: another lmix window binds them");
             return;
         };
+        tracing::info!("global keys: this window binds them");
         self.as_mut().rust_mut().global_claim = Some(claim);
+        self.as_mut().set_global_held(false);
         let (sender, receiver) = tokio::sync::watch::channel(binds);
         let pressed = self.qt_thread();
         let status = self.qt_thread();
@@ -583,6 +592,10 @@ impl qobject::Core {
         self.request_live(item, source);
     }
 }
+
+/// Status of the global keys while another lmix window binds them; the
+/// window tries again (AppShell) until that one is gone.
+const KEYS_HELD_ELSEWHERE: &str = "off:another lmix window on this computer binds them";
 
 /// Where the lock of the global keys lies (portal::claim).
 fn claim_dir() -> std::path::PathBuf {

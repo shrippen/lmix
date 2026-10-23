@@ -164,6 +164,14 @@ Kirigami.ApplicationWindow {
     readonly property string globalShortcutList: JSON.stringify(globalShortcuts
         ? keyedShortcuts.map(s => ({ id: s.id, label: s.label, key: s.key })) : [])
     onGlobalShortcutListChanged: backend.setGlobalShortcuts(globalShortcutList)
+    // Another window binds the keys: try again until it is gone, so GO and
+    // panic at the desktop come back when that window closes.
+    Timer {
+        interval: 3000
+        repeat: true
+        running: root.globalShortcuts && root.backend.globalHeld
+        onTriggered: root.backend.setGlobalShortcuts(root.globalShortcutList)
+    }
     Connections {
         target: root.backend
         function onGlobalShortcut(id) {
