@@ -66,9 +66,10 @@ Kern-Ablauf; es sind Ausgänge wie andere auch.
 
 0. **Doku** (eigener PR, vor dem Code): claude.md (Kontext, Entscheidung 7:
    „ein Kern, eine Shell mit Seiten“ statt „zwei Oberflächen“), DECISIONS
-   (Eintrag 23.10.), ROADMAP und Lastenhefte, wo „Bedienmodus“ oder die
-   Programmnamen stehen (GUI-SHELL, BUILD, HANDOVER, HARDWARE-TODO), todo
-   (Licht). Owner bestätigt den PR in Worten (ändert claude.md).
+   (Eintrag 23.10.), Lastenhefte und ROADMAP, wo „Bedienmodus“ oder die
+   Programmnamen als Anforderung stehen, todo (Licht). Was beschreibt, welche
+   Programme heute laufen (GUI-SHELL, BUILD, HANDOVER, HARDWARE-TODO,
+   Skripte), ändert sich mit dem Code in Schritt 2.
 1. **Click-Dummy mit dem User**, Screen für Screen, als interaktive
    Artboards auf der Leinwand: Seitenleiste und Kopfzeile, Mix, Show,
    Audio, Outputs, Setup, Verbinden/Profil. Je Screen: was drauf ist, was
@@ -103,11 +104,14 @@ Kern-Ablauf; es sind Ausgänge wie andere auch.
 - **Name**: Programm `lmix`; Seitennamen englisch (UI zuerst Englisch),
   deutsch über Übersetzung.
 
-## Offen, in den nächsten Click-Dummies zu klären
+## Offen
 
-- Je Seite: was drauf ist, was Dialog bleibt, Seiten-Tasten.
-- Was „Panic all“ genau umfasst, wenn eine Aufnahme läuft (Vorschlag im
-  Dummy: Aufnahmen und Streams laufen weiter).
+Schritt 1 ist abgeschlossen (Click-Dummies 1 und 2, unten; vom User
+angenommen 23.10.). Offen für die Umsetzung:
+
+- Was „Panic all“ genau umfasst, wenn eine Aufnahme läuft (im Dummy:
+  Aufnahmen und Streams laufen weiter).
+- Tasten je Seite über die heutigen hinaus (im Dummy vorgeschlagen).
 
 ## Click-Dummy 2: Seiten mit Inhalt (23.10.)
 

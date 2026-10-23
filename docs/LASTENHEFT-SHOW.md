@@ -3,8 +3,8 @@
 Stand 2026-10-16, Entwurf 3: abgeglichen mit dem QLab-5-Handbuch; Licht,
 Objekt-Audio, Effekt-Plugins und Timecode aufgenommen. Entscheidungen in §6
 (User 2026-10-16), S-E.3 und S-E.13 am 2026-10-17.
-Ergänzt `LASTENHEFT.md` (Bildmischer) um einen zweiten Bedienmodus über
-demselben `lmix-core`. Abweichungen von `claude.md`, `ROADMAP.md` oder
+Ergänzt `LASTENHEFT.md` (Bildmischer) um die Seite Show über demselben
+`lmix-core` (seit 2026-10-23 eine App mit Seiten, `docs/PLAN-SEITEN.md`). Abweichungen von `claude.md`, `ROADMAP.md` oder
 `LASTENHEFT.md` stehen in §6 zur Entscheidung, nicht stillschweigend.
 
 Dieses Dokument beschreibt **was** der Show-Modus können muss, nicht **wie**.
@@ -36,7 +36,7 @@ Es gelten CR.1 bis CR.8 aus `LASTENHEFT.md` sinngemäß, mit QLab statt vMix:
 
 | Begriff | Bedeutung | QLab-Pendant |
 |---|---|---|
-| Show-Modus | Bedienmodus mit Cue-Listen und GO, neben dem Mischer-Modus | — |
+| Show-Modus | Seite Show mit Cue-Listen und GO, neben der Seite Mix | — |
 | Cue | Ein Schritt im Ablauf: Nummer, Name, Art, Ziel, Zeiten, Folge, Notiz | Cue |
 | Cue-Liste | Geordnete Folge von Cues mit eigenem Standby. Eine Show hat eine oder mehrere | Cue List |
 | Raster | Freie Tastenfläche ohne Standby und ohne Reihenfolge | Cue Cart |
@@ -265,7 +265,7 @@ QLab kennt keinen Import aus Texten; am nächsten kommt das Anlegen von Cues
 
 | ID | Anforderung | Prio | MS | Stand |
 |---|---|---|---|---|
-| SUI.1 | Show-Oberfläche als eigenes Programm lmix-show (läuft neben lmix-mixer am selben lmix-core) | M | S1 | ✅ (`lmix-show`, DECISIONS 2026-10-18) |
+| SUI.1 | Show-Oberfläche als Seite Show des Programms lmix (neben Mix, Audio, Outputs, Setup am selben lmix-core; mehrere lmix-Fenster parallel möglich) | M | S1 | ◐ (2026-10-18 eigenes Programm `lmix-show`; als Seite geplant, DECISIONS 2026-10-23) |
 | SUI.2 | Cue-Liste mit Spalten Nummer, Name, Art, Ziel, Vorwartezeit, Dauer, Nachwartezeit, Folge; Standby deutlich markiert; Gruppen einklappbar | M | S1 | ◐ (Nummer, Name, Notiz, Art mit Dauer, Vor/Nach/Folge unter „Erweitert“, Gruppen einklappbar; Ziel steht im Namen) |
 | SUI.3 | Großer GO-Knopf, Panik-Knopf, Standby-Name und Standby-Notiz in großer Schrift | M | S1 | ✅ |
 | SUI.4 | Laufende Cues mit Fortschrittsbalken, Restzeit, Stopp und Pause je Cue | M | S1 | ◐ (Fortschritt, Restzeit, Stopp je Cue; Pause mit RUN.5, S2) |

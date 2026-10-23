@@ -12,7 +12,8 @@ sinnvoll ist: Altlasten fallen weg oder werden durch Heutiges ersetzt
 (§5a), ein sauberer Schnitt zu vMix-Namen und -Formaten ist zulässig. Jede
 Abweichung steht mit Grund in diesem Dokument.
 
-**Show-Modus**: Der zweite Bedienmodus (Showrunner nach QLab-Vorbild)
+**Show-Modus**: Die Seite Show (Showrunner nach QLab-Vorbild; eine App mit
+Seiten, DECISIONS 2026-10-23)
 hat ein eigenes Lastenheft, `LASTENHEFT-SHOW.md` (IDs CUE, RUN, SND, VIS,
 EXT, VAR, IMP, CTL, SAF, SUI, SSH, LGT, OBJ, FX, TC; Meilensteine S1–S3).
 Es setzt auf diesem Lastenheft auf und ändert es nicht.

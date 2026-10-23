@@ -4487,7 +4487,10 @@ und einer Seitenleiste am Fuß, wie bei Resolve. Weitere Pulte (Ton, Licht)
 kommen als Seite, nicht als eigenes Programm. Mehrere Oberflächen greifen
 weiter parallel auf `lmix-core` zu, auch übers Netz (Arbeitsplätze mit
 Profil). Licht im Kern kommt dazu, aber später (todo). Ersetzt claude.md
-Entscheidung 7 („zwei Oberflächen“) und SUI.1.
+Entscheidung 7 („zwei Oberflächen“) und SUI.1 (Lastenhefte und ROADMAP
+nachgezogen). Was beschreibt, welche Programme heute laufen (BUILD,
+HANDOVER, HARDWARE-TODO, GUI-SHELL, Skripte), ändert sich mit dem Code,
+im PR der Shell.
 
 Verworfen: feste Sendeleiste oben mit Arbeitsbereichen links (Konzept B,
 kostet dauerhaft Höhe), getrennte Programme je Pult (vier Oberflächen zu
