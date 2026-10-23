@@ -65,21 +65,36 @@ pub fn ended() {
 
 /// How the cue timer runs, for clients (`Event::Machine`).
 pub fn priority() -> lmix_types::TimerPriority {
-    priority_of(STOPPED.load(Ordering::Relaxed), granted(), demoted())
+    TimerFlags {
+        stopped: STOPPED.load(Ordering::Relaxed),
+        granted: granted(),
+        demoted: demoted(),
+    }
+    .priority()
 }
 
-/// A stopped timer counts before its priority: once it ended, nothing it
-/// was granted helps the cues.
-fn priority_of(stopped: bool, granted: bool, demoted: bool) -> lmix_types::TimerPriority {
-    use lmix_types::TimerPriority;
-    if stopped {
-        TimerPriority::Stopped
-    } else if granted {
-        TimerPriority::Realtime
-    } else if demoted {
-        TimerPriority::Demoted
-    } else {
-        TimerPriority::Normal
+/// What the cue thread and the SIGXCPU handler noted.
+struct TimerFlags {
+    stopped: bool,
+    granted: bool,
+    demoted: bool,
+}
+
+impl TimerFlags {
+    /// A stopped timer counts first: once it ended, nothing it was
+    /// granted helps the cues. A demotion counts before the grant, so a
+    /// lost priority never reads as real time.
+    fn priority(&self) -> lmix_types::TimerPriority {
+        use lmix_types::TimerPriority;
+        if self.stopped {
+            TimerPriority::Stopped
+        } else if self.demoted {
+            TimerPriority::Demoted
+        } else if self.granted {
+            TimerPriority::Realtime
+        } else {
+            TimerPriority::Normal
+        }
     }
 }
 
@@ -206,11 +221,21 @@ mod tests {
     #[test]
     fn a_stopped_timer_says_so_before_its_priority() {
         use lmix_types::TimerPriority;
-        assert_eq!(priority_of(true, true, false), TimerPriority::Stopped);
-        assert_eq!(priority_of(true, false, true), TimerPriority::Stopped);
-        assert_eq!(priority_of(false, true, false), TimerPriority::Realtime);
-        assert_eq!(priority_of(false, false, true), TimerPriority::Demoted);
-        assert_eq!(priority_of(false, false, false), TimerPriority::Normal);
+        let state = |stopped, granted, demoted| {
+            TimerFlags {
+                stopped,
+                granted,
+                demoted,
+            }
+            .priority()
+        };
+        // (stopped, granted, demoted)
+        assert_eq!(state(true, true, false), TimerPriority::Stopped);
+        assert_eq!(state(true, false, true), TimerPriority::Stopped);
+        assert_eq!(state(false, true, true), TimerPriority::Demoted);
+        assert_eq!(state(false, true, false), TimerPriority::Realtime);
+        assert_eq!(state(false, false, true), TimerPriority::Demoted);
+        assert_eq!(state(false, false, false), TimerPriority::Normal);
     }
 
     /// A real-time thread that computes past the soft limit becomes a

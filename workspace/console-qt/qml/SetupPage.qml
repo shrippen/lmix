@@ -223,8 +223,9 @@ AppPage {
                 title: qsTr("Cue timer")
                 hint: {
                     var m = root.shell.machine
-                    if (m === null)
+                    if (m === null) {
                         return qsTr("No report from lmix-core yet")
+                    }
                     var w = root.shell.machineWarning
                     return w.level > 0 ? w.text + ": " + w.detail : w.detail
                 }

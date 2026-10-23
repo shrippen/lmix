@@ -1150,22 +1150,34 @@ impl Service {
 
     /// Report the machine's load and how the cue timer runs about every
     /// two seconds (RUN.8), so the Console warns when cue times may not
-    /// hold. Without `/proc` (not Linux) nothing is reported.
+    /// hold. Without `/proc` (not Linux) nothing is reported; a read that
+    /// fails later (no file handle left) skips that report.
     pub async fn watch_machine(self: Arc<Self>) {
         let mut sampler = crate::machine::Sampler::default();
         let mut tick = tokio::time::interval(MACHINE_INTERVAL);
         tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        let mut reported = false;
+        let mut failing = false;
         loop {
             tick.tick().await;
             let (Ok(stat), Ok(loadavg)) = (
                 tokio::fs::read_to_string("/proc/stat").await,
                 tokio::fs::read_to_string("/proc/loadavg").await,
             ) else {
-                tracing::warn!(
-                    "no /proc/stat or /proc/loadavg: the machine's load is not reported"
-                );
-                return;
+                if !reported {
+                    tracing::warn!(
+                        "no /proc/stat or /proc/loadavg: the machine's load is not reported"
+                    );
+                    return;
+                }
+                if !failing {
+                    failing = true;
+                    tracing::warn!("reading the machine's load failed; trying again");
+                }
+                continue;
             };
+            reported = true;
+            failing = false;
             let over_budget = self.cue_lateness().await.over_budget;
             let load = sampler.sample(
                 &stat,

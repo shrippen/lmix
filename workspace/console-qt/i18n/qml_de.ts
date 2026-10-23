@@ -4375,17 +4375,17 @@
     </message>
     <message>
       <location line="+1" />
-      <location line="+15" />
+      <location line="+18" />
       <source>Cue timer stopped</source>
       <translation>Cue-Zeitgeber steht</translation>
     </message>
     <message>
-      <location line="-13" />
+      <location line="-16" />
       <source>Cue timer –</source>
       <translation>Cue-Zeitgeber –</translation>
     </message>
     <message>
-      <location line="+10" />
+      <location line="+13" />
       <source>CPU %1 %, load %2 per core (%3 cores)</source>
       <translation>CPU %1 %, Last %2 je Kern (%3 Kerne)</translation>
     </message>
@@ -4395,7 +4395,7 @@
       <translation>Wartezeiten und Folgen der Cue-Listen laufen nicht mehr. lmix-core neu starten.</translation>
     </message>
     <message>
-      <location line="+2" />
+      <location line="+3" />
       <source>Cues late</source>
       <translation>Cues zu spät</translation>
     </message>
@@ -4405,7 +4405,7 @@
       <translation>Ein Cue-Schritt kam in den letzten 30 s zu spät. %1.</translation>
     </message>
     <message>
-      <location line="+2" />
+      <location line="+3" />
       <source>Machine loaded</source>
       <translation>Rechner ausgelastet</translation>
     </message>
@@ -4415,18 +4415,18 @@
       <translation>Cues können zu spät kommen. %1.</translation>
     </message>
     <message>
-      <location line="+2" />
       <location line="+3" />
+      <location line="+4" />
       <source>No real time</source>
       <translation>Keine Echtzeit</translation>
     </message>
     <message>
-      <location line="-2" />
+      <location line="-3" />
       <source>A cue step computed too long without a pause; the cue timer runs at normal priority until lmix-core restarts, and cues may run late on a busy machine.</source>
       <translation>Ein Cue-Schritt hat zu lange ohne Pause gerechnet; der Cue-Zeitgeber läuft bis zum Neustart von lmix-core mit normaler Priorität, und auf einem ausgelasteten Rechner können Cues zu spät kommen.</translation>
     </message>
     <message>
-      <location line="+8" />
+      <location line="+10" />
       <source>The cue timer got no real-time priority, so cues may run late on a busy machine. Allow it with rtkit (running for the desktop session), or with a real-time limit for this user (group realtime, RLIMIT_RTPRIO).</source>
       <translation>Der Cue-Zeitgeber hat keine Echtzeit-Priorität bekommen; auf einem ausgelasteten Rechner können Cues zu spät kommen. Erlauben mit rtkit (läuft mit der Desktop-Sitzung) oder mit einem Echtzeit-Limit für diesen Benutzer (Gruppe realtime, RLIMIT_RTPRIO).</translation>
     </message>
