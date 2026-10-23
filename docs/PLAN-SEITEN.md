@@ -108,3 +108,32 @@ Kern-Ablauf; es sind Ausgänge wie andere auch.
 - Je Seite: was drauf ist, was Dialog bleibt, Seiten-Tasten.
 - Was „Panic all“ genau umfasst, wenn eine Aufnahme läuft (Vorschlag im
   Dummy: Aufnahmen und Streams laufen weiter).
+
+## Click-Dummy 2: Seiten mit Inhalt (23.10.)
+
+Je Seite ein klickbares Artboard (`D-Mix` … `D-Setup` auf der Leinwand),
+die Leiste verlinkt sie. Abgeglichen mit den Vorbildern über die
+Lastenhefte (Clean Room: nur die dort ausgewerteten Handbücher), danach
+ergänzt:
+
+- **Mix**: Kategoriefarbe und Tasten je Kachel (Cut, GO, Overlay 1/2, Ton,
+  Einstellungen; UI.2, INP.7), 8 Overlay-Kanäle (OVL.1), T-Bar bedienbar
+  (SWI.5), Tonmischer am Rand mit Audio folgt Video (UI.6, AUD.1, AUD.5),
+  Senken-Tasten in der Fußleiste (UI.1).
+- **Show**: Standby-Notiz groß (SUI.3), Doppel-GO-Sperre sichtbar (RUN.6),
+  Standby auf Nummer (RUN.2), Gruppen einklappbar, Ziel-Spalte (SUI.2),
+  Farbe je Cue und „gelaufen“ (CUE.1, SUI.12), Stopp/Pause je laufendem Cue
+  (SUI.4), Raster „Pads“ (RUN.12), Vorhören (RUN.10), Bühnenvorschau und
+  Zonen-Leiste (SUI.7, SUI.8), Warnliste (SUI.5), dunkle Raumansicht (SUI.6).
+- **Audio**: dB-Skala, Spitzenwert, Farbbänder (AUD.12), Bus-Tasten je Zug
+  (AUD.2), Matrix Inputs × Busse (AUD.13), Abhöre AFL/PFL (AUD.4),
+  Audio folgt Video je Zug (AUD.5), Begrenzer je Zone (SND.14).
+- **Outputs**: Ton-Bus je Ausgang (REC.1), Clean Feed (OVL.5), Dateiname
+  und Teilung (REC.4, REC.5), Marke ins Protokoll (REC.8), Verzögerung,
+  Puffer, Encoder-Last (STR.5, STR.7).
+- **Setup**: Show-Vorlagen und Einrichtungsassistent (UI.13), Startoptionen
+  (UI.12), Sperren je Ein-/Ausgabeklasse (RUN.9).
+
+Bewusst nicht im Dummy: Replay, Gäste-Anrufe, Scripting (nicht im
+Lastenheft bzw. später), die Reiter der Input-Einstellungen (UI.8, bleiben
+ein Dialog aus der Kachel).
