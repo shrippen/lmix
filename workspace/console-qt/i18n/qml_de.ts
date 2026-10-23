@@ -246,7 +246,7 @@
   <context>
     <name>AppShell</name>
     <message>
-      <location filename="../qml/AppShell.qml" line="+241" />
+      <location filename="../qml/AppShell.qml" line="+250" />
       <source>Open show</source>
       <translation>Show öffnen</translation>
     </message>
@@ -333,18 +333,18 @@
     </message>
     <message>
       <location line="+0" />
-      <location line="+241" />
+      <location line="+237" />
       <source>Ctrl+1…%1</source>
       <translation>Strg+1…%1</translation>
     </message>
     <message>
-      <location line="-240" />
-      <location line="+264" />
+      <location line="-236" />
+      <location line="+260" />
       <source>Panic all</source>
       <translation>Panik: alles</translation>
     </message>
     <message>
-      <location line="-264" />
+      <location line="-260" />
       <source>button in the page bar</source>
       <translation>Knopf in der Seitenleiste</translation>
     </message>
@@ -409,22 +409,42 @@
       <translation>lmix-core nicht erreichbar</translation>
     </message>
     <message>
-      <location line="+92" />
+      <location line="+70" />
+      <source>Running</source>
+      <translation>Läuft</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Info</source>
+      <translation>Info</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Warning</source>
+      <translation>Warnung</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Error</source>
+      <translation>Fehler</translation>
+    </message>
+    <message>
+      <location line="+17" />
       <source>Program</source>
       <translation>Programm</translation>
     </message>
     <message>
-      <location line="+14" />
+      <location line="+15" />
       <source>Stop every cue over the panic time and fade program to black; recordings and streams go on</source>
       <translation>Alle Cues über die Panikzeit stoppen und Programm auf Schwarz blenden; Aufnahmen und Streams laufen weiter</translation>
     </message>
     <message>
-      <location line="+21" />
+      <location line="-35" />
       <source>%1 (Ctrl+%2)</source>
       <translation>%1 (Strg+%2)</translation>
     </message>
     <message>
-      <location line="-209" />
+      <location line="-149" />
       <source>New</source>
       <translation>Neu</translation>
     </message>
@@ -505,7 +525,7 @@
   <context>
     <name>AudioPage</name>
     <message>
-      <location filename="../qml/AudioPage.qml" line="+41" />
+      <location filename="../qml/AudioPage.qml" line="+46" />
       <source>Audio</source>
       <translation>Ton</translation>
     </message>
@@ -585,7 +605,7 @@
       <translation>Kanalzug · %1 %2</translation>
     </message>
     <message>
-      <location line="+31" />
+      <location line="+32" />
       <source>Channel strip %1</source>
       <translation>Kanalzug %1</translation>
     </message>
@@ -620,7 +640,7 @@
       <translation>Lautstärke von %1</translation>
     </message>
     <message>
-      <location line="+19" />
+      <location line="+17" />
       <source>On</source>
       <translation>An</translation>
     </message>
@@ -2173,7 +2193,7 @@
       <translation>Programm auf Schwarz und zurück (SWI.9); Show und Ausgänge laufen weiter</translation>
     </message>
     <message>
-      <location line="+77" />
+      <location line="+71" />
       <source>Layout %1 %2</source>
       <translation>Layout %1 %2</translation>
     </message>
@@ -2346,7 +2366,7 @@
   <context>
     <name>OutputBar</name>
     <message>
-      <location filename="../qml/OutputBar.qml" line="+33" />
+      <location filename="../qml/OutputBar.qml" line="+36" />
       <source>Outputs</source>
       <translation>Ausgänge</translation>
     </message>
@@ -2394,7 +2414,7 @@
   <context>
     <name>OutputsPage</name>
     <message>
-      <location filename="../qml/OutputsPage.qml" line="+64" />
+      <location filename="../qml/OutputsPage.qml" line="+62" />
       <source>Outputs</source>
       <translation>Ausgänge</translation>
     </message>
@@ -2572,7 +2592,7 @@
       <translation>Programm</translation>
     </message>
     <message>
-      <location line="+65" />
+      <location line="+66" />
       <source>running</source>
       <translation>läuft</translation>
     </message>
@@ -3248,7 +3268,7 @@
       <translation>Cue-Listen: %1</translation>
     </message>
     <message>
-      <location line="+5" />
+      <location line="+4" />
       <source>GO</source>
       <translation>GO</translation>
     </message>

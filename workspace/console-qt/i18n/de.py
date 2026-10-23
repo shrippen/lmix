@@ -824,4 +824,7 @@ DE = {
     'stopped': 'gestoppt',
     'Only the first lmix window on this computer binds the keys; others leave them to it.': 'Nur das erste lmix-Fenster auf diesem Rechner bindet die Tasten; weitere überlassen sie ihm.',
     'Stop all recordings and streams?': 'Alle Aufnahmen und Streams stoppen?',
+    'Info': 'Info',
+    'Warning': 'Warnung',
+    'Error': 'Fehler',
 }

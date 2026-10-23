@@ -18,7 +18,6 @@ AppPage {
     title: qsTr("Show")
     subtitle: shell.show && shell.show.cue_lists ? qsTr("Cue lists: %1").arg(shell.show.cue_lists.length) : ""
     busy: shell.show !== null && (shell.show.running_cues || []).length > 0
-    busyColor: KanteStyle.neutralTextColor
     focusTarget: showView
     pageKeys: [
         { what: qsTr("GO"), key: qsTr("Space") },

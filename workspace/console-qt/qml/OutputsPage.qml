@@ -62,7 +62,7 @@ AppPage {
     title: qsTr("Outputs")
     subtitle: qsTr("%1 of %2 running").arg(running.length).arg(outputs.length)
     busy: running.length > 0
-    busyColor: KanteStyle.negativeTextColor
+    busyKind: KantePageBar.Kind.Info
     panicText: qsTr("Stop outputs")
     panicTip: qsTr("Stop every recording and stream (asks first); mix and show go on")
     // Recordings and streams only: screens and NDI may feed a stage.

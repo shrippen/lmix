@@ -24,7 +24,8 @@ FocusScope {
     property var pageKeys: []
     /** Something runs here (cues, a recording): a dot in the page bar. */
     property bool busy: false
-    property color busyColor: KanteStyle.neutralTextColor
+    /** How the dot reads: KantePageBar.Kind (Normal, Info, Warning, Error). */
+    property int busyKind: KantePageBar.Kind.Normal
     /** The page shows program itself; otherwise the bar shows it small. */
     property bool hasProgram: false
     /** Entries for the window's File menu. */

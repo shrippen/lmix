@@ -46,7 +46,7 @@ AppPage {
     title: qsTr("Audio")
     subtitle: show ? qsTr("%1 kHz · %2 aux buses").arg(show.sample_rate === 44100 ? "44.1" : "48").arg((show.aux_buses || []).length) : ""
     busy: soloing
-    busyColor: KanteStyle.warningColor
+    busyKind: KantePageBar.Kind.Warning
     panicText: master.mute ? qsTr("Audio on") : qsTr("Audio off")
     panicTip: qsTr("Mute the master of program sound and back; video, show and outputs go on")
     onPanicRequested: act({ action: "set_master", volume: master.volume, mute: !master.mute })
@@ -238,9 +238,7 @@ AppPage {
                     value: strip.input.audio.volume
                     Accessible.name: qsTr("Volume of %1").arg(strip.input.name)
                     onMoved: root.act({ action: "set_volume", input: strip.input.number, volume: Math.round(value) })
-                    // No KanteSliderSkin yet: it draws horizontal sliders
-                    // only; the platform style draws this one until Kante
-                    // can (vertical slider skin, Kante PR).
+                    KanteSliderSkin { control: fader }
                 }
             }
             QQC2.Label {

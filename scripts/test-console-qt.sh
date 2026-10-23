@@ -190,12 +190,14 @@ pass "no QML warnings"
 act '{"action":"add_cue_list","name":"Act 1","cues":[{"number":"1","name":"Doors","kind":"wait","duration_ms":120000},{"number":"2","name":"House","kind":"wait","duration_ms":120000},{"number":"3","name":"Lights","kind":"note"}]}'
 show_window="$(xdotool search --name '^lmix' 2>/dev/null | head -1 || true)"
 [[ -n "$show_window" ]] || fail "no lmix window"
-SHOW_TAB="173 868"
-click $SHOW_TAB
+# Pages by key (Ctrl+n): the tabs' places depend on their labels.
+xdotool windowfocus "$show_window"
+sleep 1
+xdotool key ctrl+2
 sleep 3
 shot show
 awk "BEGIN { exit !($(spread show 1400x700+20+60) > 0.05) }" && pass "Show page draws" || fail "Show page blank"
-PGM_SMALL="70x40+1210+830"
+PGM_SMALL="60x30+1262+862"
 small_shows=""
 for _ in $(seq 1 20); do
     shot s
@@ -235,9 +237,10 @@ pass "no QML warnings (show)"
 # (a light page is flat, so: it differs from the page before), no QML
 # warnings.
 prev=show
-for page in "AUDIO 286" "OUTPUTS 397" "SETUP 510"; do
-    read -r name x <<<"$page"
-    click "$x" 868
+for page in "AUDIO 3" "OUTPUTS 4" "SETUP 5"; do
+    read -r name n <<<"$page"
+    xdotool windowfocus "$show_window"
+    xdotool key "ctrl+$n"
     sleep 2
     shot "page-$name"
     (($(moved "$prev" "page-$name" 1400x700+20+60) > 5000)) && pass "$name page draws" || fail "$name page shows the page before"

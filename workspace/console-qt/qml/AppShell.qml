@@ -603,103 +603,50 @@ Kirigami.ApplicationWindow {
                 wrapMode: Text.Wrap
             }
 
-            // The page bar; one height whether program shows in it or not.
-            Rectangle {
+            // The page bar (KantePageBar): the pages, then program small
+            // where a page has none of its own, and Panic all.
+            KantePageBar {
+                id: pageBar
                 Layout.fillWidth: true
-                implicitHeight: Kirigami.Units.gridUnit * 3 + Kirigami.Units.smallSpacing * 2
-                color: KanteStyle.sunkenColor
-                RowLayout {
-                    id: barRow
-                    anchors.fill: parent
-                    anchors.leftMargin: Kirigami.Units.largeSpacing
-                    anchors.rightMargin: Kirigami.Units.largeSpacing
-                    spacing: Kirigami.Units.smallSpacing
+                model: root.pageItems.map(p => p.title)
+                tooltips: root.pageItems.map((p, i) => qsTr("%1 (Ctrl+%2)").arg(p.title).arg(i + 1))
+                busy: root.pageItems.map(p => p.busy)
+                busyKinds: root.pageItems.map(p => p.busyKind)
+                kindNames: [qsTr("Running"), qsTr("Info"), qsTr("Warning"), qsTr("Error")]
+                currentIndex: root.pageItems.indexOf(root.currentItem)
+                onActivated: index => root.showPage(root.pageItems[index].pageId)
 
-                    Repeater {
-                        model: root.pageItems
-                        delegate: PageButton {}
-                    }
-                    Item { Layout.fillWidth: true }
-                    QQC2.Label {
-                        text: qsTr("Ctrl+1…%1").arg(root.pageItems.length)
-                        font.family: KanteStyle.monoFamily
-                        color: KanteStyle.mutedTextColor
-                    }
-                    // Program, small, where the page has no picture of its own.
-                    Rectangle {
-                        visible: root.currentItem !== null && !root.currentItem.hasProgram
-                        Layout.preferredHeight: Kirigami.Units.gridUnit * 2.75
-                        Layout.preferredWidth: Layout.preferredHeight * 16 / 9
-                        color: "black"
-                        border.color: KanteStyle.negativeTextColor
-                        border.width: 1
-                        Accessible.role: Accessible.Graphic
-                        Accessible.name: qsTr("Program")
-                        LiveView {
-                            anchors.fill: parent
-                            anchors.margins: 1
-                            core: root.backend
-                            source: parent.visible ? "program" : ""
-                        }
-                    }
-                    KanteButton {
-                        focusPolicy: Qt.NoFocus
-                        emphasis: KanteButton.Emphasis.Destructive
-                        text: qsTr("Panic all")
-                        enabled: root.backend.connected
-                        QQC2.ToolTip.visible: hovered
-                        QQC2.ToolTip.text: qsTr("Stop every cue over the panic time and fade program to black; recordings and streams go on")
-                        onClicked: root.panicAll()
+                QQC2.Label {
+                    text: qsTr("Ctrl+1…%1").arg(root.pageItems.length)
+                    font.family: KanteStyle.monoFamily
+                    color: KanteStyle.mutedTextColor
+                }
+                Rectangle {
+                    visible: root.currentItem !== null && !root.currentItem.hasProgram
+                    implicitHeight: Kirigami.Units.gridUnit * 2.25
+                    implicitWidth: implicitHeight * 16 / 9
+                    color: KanteStyle.stageColor
+                    border.color: KanteStyle.negativeTextColor
+                    border.width: 1
+                    Accessible.role: Accessible.Graphic
+                    Accessible.name: qsTr("Program")
+                    LiveView {
+                        anchors.fill: parent
+                        anchors.margins: 1
+                        core: root.backend
+                        source: parent.visible ? "program" : ""
                     }
                 }
-            }
-        }
-    }
-
-    component PageButton: QQC2.AbstractButton {
-        id: pageButton
-        required property var modelData
-        required property int index
-        readonly property bool current: root.currentPage === modelData.pageId
-        focusPolicy: Qt.NoFocus
-        implicitWidth: Math.max(Kirigami.Units.gridUnit * 6, label.implicitWidth + Kirigami.Units.largeSpacing * 2)
-        implicitHeight: Kirigami.Units.gridUnit * 3
-        Accessible.name: modelData.title
-        Accessible.role: Accessible.PageTab
-        Accessible.selected: current
-        onClicked: root.showPage(modelData.pageId)
-        QQC2.ToolTip.visible: hovered
-        QQC2.ToolTip.text: qsTr("%1 (Ctrl+%2)").arg(modelData.title).arg(index + 1)
-
-        background: Rectangle {
-            color: pageButton.current ? KanteStyle.cardColor : (pageButton.hovered ? Qt.rgba(1, 1, 1, 0.04) : "transparent")
-            Rectangle {
-                anchors.top: parent.top
-                width: parent.width
-                height: 2
-                color: pageButton.current ? KanteStyle.focusColor : "transparent"
-            }
-        }
-        contentItem: Item {
-            QQC2.Label {
-                id: label
-                anchors.centerIn: parent
-                text: pageButton.modelData.title
-                font.family: KanteStyle.monoFamily
-                font.capitalization: Font.AllUppercase
-                font.letterSpacing: 1.5
-                color: pageButton.current ? KanteStyle.strongTextColor : KanteStyle.mutedTextColor
-            }
-            // Something runs on the page (cues, a recording).
-            Rectangle {
-                visible: pageButton.modelData.busy
-                anchors.top: parent.top
-                anchors.right: parent.right
-                anchors.margins: Kirigami.Units.smallSpacing
-                width: Kirigami.Units.smallSpacing * 1.5
-                height: width
-                radius: width / 2
-                color: pageButton.modelData.busyColor
+                KanteButton {
+                    focusPolicy: Qt.NoFocus
+                    emphasis: KanteButton.Emphasis.Destructive
+                    size: KanteButton.Size.Small
+                    text: qsTr("Panic all")
+                    enabled: root.backend.connected
+                    QQC2.ToolTip.visible: hovered
+                    QQC2.ToolTip.text: qsTr("Stop every cue over the panic time and fade program to black; recordings and streams go on")
+                    onClicked: root.panicAll()
+                }
             }
         }
     }

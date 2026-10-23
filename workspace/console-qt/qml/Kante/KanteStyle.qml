@@ -319,6 +319,14 @@ QtObject {
     readonly property color frameColor: themed ? palette.frame : tint(Kirigami.Theme.textColor, 0.12)
     readonly property color ruleColor: themed ? palette.rule : tint(Kirigami.Theme.textColor, 0.12)
     readonly property color dialogColor: themed ? palette.dialog : Kirigami.Theme.backgroundColor
+    /**
+     * Ground of picture areas (monitors, video previews, image stages): dark in every kind and
+     * scheme, Leinen and a light platform theme included, because colour is judged there and a
+     * beige or white ground misleads (web: `.stage`). Opaque; the platform has no such role.
+     */
+    readonly property color stageColor: palette.stage
+    /** Text and marks on stageColor (a "No signal" label, a safe-area frame). */
+    readonly property color stageTextColor: palette.stageText
 
     /** Top-right corner cut of cards (px), scaled with the grid unit; 0 in System. */
     readonly property int chamfer: active ? Math.round(KantePalette.chamfer * Kirigami.Units.gridUnit / 18) : 0

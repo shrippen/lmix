@@ -43,6 +43,8 @@ QtObject {
         readonly property color accentPressed: "#e5a823"
         readonly property color onState: "#141312"
         readonly property color scrim: "#9e141312"
+        readonly property color stage: "#282828"
+        readonly property color stageText: "#ebdbb2"
     }
 
     readonly property QtObject light: QtObject {
@@ -78,6 +80,8 @@ QtObject {
         readonly property color accentPressed: "#e5a823"
         readonly property color onState: "#fbf8ee"
         readonly property color scrim: "#80282828"
+        readonly property color stage: "#282828"
+        readonly property color stageText: "#ebdbb2"
     }
 
     // Brand mark fill (icon, badges); not for controls.
