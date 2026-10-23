@@ -120,7 +120,7 @@ KanteDialog {
             visible: dialog.globalKeys
             wrapMode: Text.Wrap
             color: KanteStyle.mutedTextColor
-            text: qsTr("If lmix Mixer and lmix Show both run with this on, a key press runs twice.")
+            text: qsTr("If two lmix windows on this computer run with this on, a key press runs twice.")
         }
 
         RowLayout {

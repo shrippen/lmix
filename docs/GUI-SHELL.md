@@ -56,7 +56,7 @@ Textur-Importpfad für Live-Monitore (H.4).
 
 ## Schritt 1: Prototyp (Stand 2026-10-09)
 
-`workspace/console-qt` (Binary `lmix-console`, seit 2026-10-18 `lmix-mixer` und `lmix-show`), Client von `lmix-core` wie
+`workspace/console-qt` (Binary `lmix-console`, 2026-10-18 `lmix-mixer` und `lmix-show`, seit 2026-10-23 `lmix` mit Seiten), Client von `lmix-core` wie
 die egui-Console:
 
 - Kirigami-Fenster mit Kante (Stil per `--theme kante|kante-light|system`,
@@ -179,3 +179,23 @@ VM-Test und Screenshot laufen über die Qt-Console (`test-m2b-vm.sh`
 `CONSOLE_SHOT`, `test-console-qt.sh`). Mit der egui-Console gingen der
 M1b-Modus direkt an strom und das Leistungs-Overlay (F3); Messwerte je
 Ansicht liefert die Qt-Console mit `RUST_LOG=lmix_mixer=debug`.
+
+## Eine App mit Seiten (2026-10-23)
+
+Ein Programm `lmix` statt `lmix-mixer` und `lmix-show` (DECISIONS
+2026-10-23, Plan und Reihenfolge in `docs/PLAN-SEITEN.md`):
+
+- `AppShell.qml` ist das Fenster: Kopfzeile (File-Menü, Show-Datei,
+  Aufnahme/Stream, Verbindung, Tasten-Übersicht, Uhr), die Seiten in einem
+  `StackLayout`, darunter die Seitenleiste mit „Panic all“ (Show-Panik und
+  Fade to black; Aufnahmen und Streams laufen weiter) und, wo die Seite kein
+  Program-Bild hat, Program klein.
+- `AppPage.qml` ist eine Seite: Titelzeile mit Werkzeugen und der eigenen
+  Panik der Seite, darunter der Inhalt. `MixPage.qml` (vorher MixerMain) und
+  `ShowPage.qml` (vorher ShowMain) sind die ersten Seiten.
+- Seitenwechsel über die Leiste oder Strg+1…n; `--page mix|show` beim Start,
+  sonst die zuletzt offene Seite. Seitentasten (1–9 im Mix, Leertaste und
+  Escape in der Show) wirken nur auf der sichtbaren Seite; die Belegungen
+  der Show (AUT.1–3) immer.
+- Einstellungen in `lmix.conf`, einmal aus `mixer.conf` und `show.conf`
+  übernommen (`app.rs`).

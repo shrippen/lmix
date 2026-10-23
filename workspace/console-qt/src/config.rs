@@ -8,18 +8,20 @@ struct Config {
     style: i32,
     window: String,
     mode: String,
+    page: String,
 }
 
 static CONFIG: OnceLock<Config> = OnceLock::new();
 static RUNTIME: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
 static HTTP: OnceLock<reqwest::Client> = OnceLock::new();
 
-pub fn init(core_url: &str, style: i32, window: &str, mode: &str) {
+pub fn init(core_url: &str, style: i32, window: &str, mode: &str, page: &str) {
     let _ = CONFIG.set(Config {
         core_url: core_url.trim_end_matches('/').to_string(),
         style,
         window: window.to_string(),
         mode: mode.to_string(),
+        page: page.to_string(),
     });
 }
 
@@ -39,6 +41,11 @@ pub fn window() -> &'static str {
 /// `simple` or `advanced` from the command line, or empty.
 pub fn mode() -> &'static str {
     &config().mode
+}
+
+/// The page to open on (`mix`, `show`, ...) from the command line, or empty.
+pub fn page() -> &'static str {
+    &config().page
 }
 
 /// `KanteStyle.Kind` asked for on the command line, or -1.

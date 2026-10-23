@@ -8,21 +8,36 @@ import Kante
 import org.lmix.console
 
 /**
- * lmix Mixer: switches inputs live (LASTENHEFT.md). The window around
- * it is AppShell, shared with lmix Show (DECISIONS 2026-10-18).
+ * The Mix page: switches inputs live (LASTENHEFT.md). The window around
+ * it is AppShell (docs/PLAN-SEITEN.md).
  */
-AppShell {
+AppPage {
     id: root
 
-    appName: qsTr("lmix Mixer")
+    /** The window (AppShell): show, actions, helpers. */
+    required property var shell
+    readonly property var show: shell.show
+    readonly property var inputs: shell.inputs
+    readonly property var backend: shell.backend
+    readonly property var shortcutKeys: shell.shortcutKeys
+    function act(action) { shell.act(action) }
+    function inputById(id) { return shell.inputById(id) }
+    function localPath(url) { return shell.localPath(url) }
+    function openShortcuts() { shell.openShortcuts() }
 
-    Settings {
-        id: keySettings
-        category: "keys"
-        /** Shortcut keys also work while the mixer is not in front;
-         *  off here, on in lmix Show (owner, 18.10.2026). */
-        property bool global: false
-    }
+    pageId: "mix"
+    title: qsTr("Mix")
+    subtitle: show && show.format
+        ? qsTr("%1p%2").arg(show.format.height).arg(Math.round(Number(show.format.framerate.split("/")[0]) / Number(show.format.framerate.split("/")[1] || 1)))
+        : ""
+    hasProgram: true
+    pageKeys: [
+        { what: qsTr("Input to preview"), key: "1…9" },
+        { what: qsTr("Quick play of preview"), key: qsTr("double click preview") }
+    ]
+    panicText: show && show.fade_to_black ? qsTr("Fade up") : qsTr("Fade to black")
+    panicTip: qsTr("Program to black and back (SWI.9); the show and outputs go on")
+    onPanicRequested: act({ action: "fade_to_black" })
 
     Settings {
         id: viewSettings
@@ -101,9 +116,6 @@ AppShell {
         return layout ? qsTr("Layout %1 %2").arg(layout.number).arg(layout.name) : ""
     }
 
-    globalShortcuts: keySettings.global
-    onGlobalShortcutsToggled: on => keySettings.global = on
-
     // Keys 1–9: that input into preview (not while a text field has focus:
     // fields take printable keys first).
     Instantiator {
@@ -111,7 +123,7 @@ AppShell {
         delegate: Shortcut {
             required property int index
             sequence: String(index + 1)
-            enabled: root.shortcutKeys.indexOf(String(index + 1)) < 0
+            enabled: root.visible && root.shortcutKeys.indexOf(String(index + 1)) < 0
             onActivated: {
                 var input = root.inputs[index]
                 if (input && input.id !== root.show.program && input.id !== root.show.preview) {
@@ -249,17 +261,11 @@ AppShell {
         inputs: root.inputs
     }
 
-    fileTools: [
-        KanteButton {
-            text: qsTr("From show…")
-            enabled: backend.connected
-            QQC2.ToolTip.visible: hovered
-            QQC2.ToolTip.text: qsTr("Add inputs of another show to this one")
-            onClicked: appendDialog.open()
-        }
-    ]
-
-    packageItems: [
+    fileItems: [
+        QQC2.MenuItem {
+            text: qsTr("Inputs from a show…")
+            onTriggered: appendDialog.open()
+        },
         QQC2.MenuItem {
             text: qsTr("Program format…")
             onTriggered: formatDialog.open()

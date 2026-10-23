@@ -4,15 +4,15 @@ Studio Weber world (demo/world.json, graufeld.stream; copied in by
 shrippen.github.io/demo/tools/sync-demo.py, never edit it here).
 
 Renders a synthetic clip per input (videotestsrc pattern, the input's name,
-a tone), starts strom, lmix-core, lmix Mixer and lmix Show on this machine,
+a tone), starts strom, lmix-core and lmix (Mix and Show page) on this machine,
 builds the show through the API and puts it on air. Nothing leaves the
 machine.
 
-    demo/start.sh [de|en]          interactive; closing the mixer ends it
+    demo/start.sh [de|en]          interactive; closing the window ends it
     SHOT_DIR=… SHOT_PLAN=… demo/start.sh de
                                    screenshots on a virtual display
                                    (shrippen.github.io/demo/tools/screenshots.py);
-                                   a shot's name is the program: mixer, show
+                                   a shot's name picks the page: mixer (Mix), show
 
 Internal tool for screenshots: never part of a release.
 """
@@ -44,7 +44,8 @@ SHOT_DISPLAY = ":96"
 SHOT_SIZE = "1440x900x24"
 # Until every live picture shows and the meters move.
 SHOT_SETTLE_S = 15
-APPS = ("mixer", "show")
+# Shot names and the page lmix opens on for each.
+APPS = {"mixer": "mix", "show": "show"}
 LOCALES = {"de": "de_DE.UTF-8", "en": "en_US.UTF-8"}
 # Kante follows the platform's brightness: a dark scheme gives Gruvbox,
 # none (a bare virtual display) gives Leinen.
@@ -61,8 +62,7 @@ def run(cmd, **kw):
 
 
 def build():
-    """Engine, lmix-core and the programs; returns the paths of the first
-    two and {app: path} of the programs."""
+    """Engine, lmix-core and lmix; returns their paths."""
     strom = run([str(ROOT / "scripts" / "fetch-strom.sh")], capture_output=True, text=True).stdout.strip()
     target = os.environ.get("CARGO_TARGET_DIR")
 
@@ -72,7 +72,7 @@ def build():
 
     core = str(release("lmix-core") / "lmix-core")
     console = release("console-qt")
-    return strom, core, {app: str(console / f"lmix-{app}") for app in APPS}
+    return strom, core, str(console / "lmix")
 
 
 def render(item, lang, folder):
@@ -183,7 +183,7 @@ def main():
     if lang not in LOCALES:
         sys.exit("usage: demo/start.sh [de|en]")
     shots = os.environ.get("SHOT_DIR")
-    strom, core, apps = build()
+    strom, core, lmix = build()
 
     work = Path(tempfile.mkdtemp(prefix="lmix-demo-"))
     live = Path(os.environ.get("XDG_RUNTIME_DIR", "/tmp")) / "lmix-demo"
@@ -246,19 +246,18 @@ def main():
 
         # Kante is the default style, the settings are fresh.
         def start(app):
-            return subprocess.Popen([apps[app]], env=env, stdout=log, stderr=log)
+            return subprocess.Popen([lmix, "--page", APPS[app]], env=env, stdout=log, stderr=log)
 
         if not shots:
-            procs.append(start("show"))
-            mixer_proc = start("mixer")
-            procs.append(mixer_proc)
-            mixer_proc.wait()
+            proc = start("mixer")
+            procs.append(proc)
+            proc.wait()
             return
         # One program at a time: each fills the virtual display.
         plan = json.loads(os.environ.get("SHOT_PLAN", "[]")) or [{"name": app} for app in APPS]
         for shot in plan:
             if shot["name"] not in APPS:
-                sys.exit(f"shot {shot['name']}: names a program ({', '.join(APPS)})")
+                sys.exit(f"shot {shot['name']}: names no page ({', '.join(APPS)})")
             proc = start(shot["name"])
             procs.append(proc)
             time.sleep(float(os.environ.get("DEMO_SETTLE_S", SHOT_SETTLE_S)))

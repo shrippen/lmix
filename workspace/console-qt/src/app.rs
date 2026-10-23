@@ -1,6 +1,6 @@
-//! lmix in Qt Quick / Kirigami (GUI-SHELL.md): the start shared by the
-//! two programs, mixer and show. Each is a client of lmix-core, with live
-//! monitors drawn by GStreamer straight into QML items; both can run at
+//! lmix in Qt Quick / Kirigami (GUI-SHELL.md): one window with pages
+//! (Mix, Show, ...; docs/PLAN-SEITEN.md). A client of lmix-core, with live
+//! monitors drawn by GStreamer straight into QML items; several can run at
 //! the same time against the same lmix-core.
 
 use clap::{CommandFactory, FromArgMatches, Parser, ValueEnum};
@@ -10,18 +10,12 @@ use std::path::{Path, PathBuf};
 
 use crate::{config, qt_translations};
 
-/// One of the programs: its name and window.
-pub struct App {
-    /// Qt application name: settings in `~/.config/lmix/<name>.conf`.
-    pub name: &'static str,
-    /// Binary, desktop file and Wayland app id, e.g. `lmix-mixer`.
-    pub id: &'static str,
-    /// `--help` line.
-    pub about: &'static str,
-    /// Root QML file of the window.
-    pub qml: &'static str,
-}
-
+/// Qt application name: settings in `~/.config/lmix/lmix.conf`; also the
+/// binary, desktop file and Wayland app id.
+const NAME: &str = "lmix";
+/// Settings of the two programs before the pages (2026-10-18 to 10-23).
+const MIXER_SETTINGS: &str = "mixer.conf";
+const SHOW_SETTINGS: &str = "show.conf";
 /// Settings of the one Console before the split (2026-10-18).
 const OLD_SETTINGS: &str = "console.conf";
 const ORGANIZATION: &str = "lmix";
@@ -64,10 +58,35 @@ struct Args {
     #[arg(long, value_enum, default_value_t = Window::Normal)]
     window: Window,
 
-    /// Mixer: simple (switching essentials) or advanced for this run;
-    /// without it the one chosen in the mixer (UI.7, UI.12).
+    /// Mix page: simple (switching essentials) or advanced for this run;
+    /// without it the one chosen on the page (UI.7, UI.12).
     #[arg(long, value_enum)]
     mode: Option<Mode>,
+
+    /// The page to open on; without it the one last open.
+    #[arg(long, value_enum)]
+    page: Option<Page>,
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+enum Page {
+    Mix,
+    Show,
+    Audio,
+    Outputs,
+    Setup,
+}
+
+impl Page {
+    fn name(self) -> &'static str {
+        match self {
+            Page::Mix => "mix",
+            Page::Show => "show",
+            Page::Audio => "audio",
+            Page::Outputs => "outputs",
+            Page::Setup => "setup",
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
@@ -92,31 +111,102 @@ fn settings_dir() -> Option<PathBuf> {
     Some(base.join(ORGANIZATION))
 }
 
-/// Copies the old `console.conf` to `<name>.conf` once, so style and view
-/// settings survive the split; later the two files go their own ways.
-/// Through `<name>.conf.tmp` and a rename: a copy cut short leaves no half
-/// file that would count as the program's own. True when it copied.
-fn adopt_old_settings(dir: &Path, name: &str) -> std::io::Result<bool> {
-    let own = dir.join(format!("{name}.conf"));
-    let old = dir.join(OLD_SETTINGS);
-    if own.exists() || !old.is_file() {
+/// Takes over the settings of the programs before the pages once:
+/// `mixer.conf` and `show.conf` merged into `lmix.conf`, or, before those,
+/// the one Console's `console.conf`. Through `lmix.conf.tmp` and a rename: a
+/// copy cut short leaves no half file that would count as the new one.
+/// True when it wrote one.
+fn adopt_old_settings(dir: &Path) -> std::io::Result<bool> {
+    let own = dir.join(format!("{NAME}.conf"));
+    if own.exists() {
         return Ok(false);
     }
-    let text = std::fs::read_to_string(&old)?;
-    let text = if name == "show" {
-        without_global_off(&text)
-    } else {
-        text
+    let read = |name: &str| -> std::io::Result<Option<String>> {
+        let path = dir.join(name);
+        if path.is_file() {
+            std::fs::read_to_string(path).map(Some)
+        } else {
+            Ok(None)
+        }
     };
-    let tmp = dir.join(format!("{name}.conf.tmp"));
+    let text = match (read(MIXER_SETTINGS)?, read(SHOW_SETTINGS)?) {
+        (None, None) => match read(OLD_SETTINGS)? {
+            Some(old) => without_global_off(&old),
+            None => return Ok(false),
+        },
+        (mixer, show) => merge_settings(mixer.as_deref().unwrap_or(""), show.as_deref()),
+    };
+    let tmp = dir.join(format!("{NAME}.conf.tmp"));
     std::fs::write(&tmp, text)?;
     std::fs::rename(&tmp, &own)?;
     Ok(true)
 }
 
+/// An INI file as sections in order, each with its lines (the header line
+/// first; lines before any header under "").
+fn sections(text: &str) -> Vec<(String, Vec<String>)> {
+    let mut out: Vec<(String, Vec<String>)> = vec![(String::new(), Vec::new())];
+    for line in text.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with('[') {
+            out.push((trimmed.to_string(), vec![line.to_string()]));
+        } else if !trimmed.is_empty() {
+            out.last_mut().unwrap().1.push(line.to_string());
+        }
+    }
+    out.retain(|(_, lines)| !lines.is_empty());
+    out
+}
+
+fn key_of(line: &str) -> Option<&str> {
+    line.split_once('=').map(|(key, _)| key.trim())
+}
+
+/// The mixer's settings with the show's added: a key both have stays the
+/// mixer's, except whether shortcut keys work at the desktop (`[keys]
+/// global`), which is the show's (on by default there, off in the mixer;
+/// one app keeps them on). A `global=true` of the mixer alone is kept.
+fn merge_settings(mixer: &str, show: Option<&str>) -> String {
+    let show_sections = show.map(sections).unwrap_or_default();
+    let show_has_global = show_sections
+        .iter()
+        .any(|(name, lines)| name == "[keys]" && lines.iter().any(|l| key_of(l) == Some("global")));
+    let mut merged = sections(mixer);
+    for (name, lines) in merged.iter_mut() {
+        if name == "[keys]" {
+            lines.retain(|l| {
+                key_of(l) != Some("global")
+                    || (!show_has_global && l.replace(' ', "").ends_with("=true"))
+            });
+        }
+    }
+    for (name, lines) in show_sections {
+        match merged.iter_mut().find(|(n, _)| *n == name) {
+            Some((_, have)) => {
+                for line in lines.into_iter().skip(usize::from(!name.is_empty())) {
+                    let present =
+                        key_of(&line).is_some_and(|k| have.iter().any(|h| key_of(h) == Some(k)));
+                    if !present {
+                        have.push(line);
+                    }
+                }
+            }
+            None => merged.push((name, lines)),
+        }
+    }
+    let mut out = String::new();
+    for (_, lines) in merged {
+        for line in lines {
+            out.push_str(&line);
+            out.push('\n');
+        }
+    }
+    out
+}
+
 /// The old console wrote its default `global=false` under `[keys]` into
-/// every file; kept, it would hide the show's default (on). Only a key the
-/// user switched on is carried over.
+/// every file; kept, it would hide the default (on). Only a key the user
+/// switched on is carried over.
 fn without_global_off(text: &str) -> String {
     let mut section = "";
     let mut out = String::with_capacity(text.len());
@@ -132,14 +222,17 @@ fn without_global_off(text: &str) -> String {
     out
 }
 
-/// Starts the program `app`; returns only by ending the process.
-pub fn run(app: &App) -> ! {
+/// Starts lmix; returns only by ending the process.
+pub fn run() -> ! {
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
         )
         .init();
-    let matches = Args::command().name(app.id).about(app.about).get_matches();
+    let matches = Args::command()
+        .name(NAME)
+        .about("lmix: mix, show, audio, outputs and setup in one window (Qt)")
+        .get_matches();
     let args = Args::from_arg_matches(&matches).unwrap_or_else(|e| e.exit());
     let window = match args.window {
         Window::Normal => "normal",
@@ -151,16 +244,23 @@ pub fn run(app: &App) -> ! {
         Some(Mode::Simple) => "simple",
         Some(Mode::Advanced) => "advanced",
     };
-    config::init(&args.core, args.theme.map_or(-1, Style::kind), window, mode);
+    let page = args.page.map_or("", Page::name);
+    config::init(
+        &args.core,
+        args.theme.map_or(-1, Style::kind),
+        window,
+        mode,
+        page,
+    );
 
     if let Some(dir) = settings_dir() {
-        match adopt_old_settings(&dir, app.name) {
+        match adopt_old_settings(&dir) {
             Ok(true) => tracing::info!(
-                "settings taken over from {}",
-                dir.join(OLD_SETTINGS).display()
+                "settings taken over into {}",
+                dir.join(format!("{NAME}.conf")).display()
             ),
             Ok(false) => {}
-            Err(e) => tracing::warn!("settings of {OLD_SETTINGS} not taken over: {e}"),
+            Err(e) => tracing::warn!("old settings not taken over: {e}"),
         }
     }
 
@@ -183,15 +283,13 @@ pub fn run(app: &App) -> ! {
         qt_app
             .as_mut()
             .set_organization_name(&QString::from(ORGANIZATION));
-        qt_app
-            .as_mut()
-            .set_application_name(&QString::from(app.name));
-        QGuiApplication::set_desktop_file_name(&QString::from(app.id));
+        qt_app.as_mut().set_application_name(&QString::from(NAME));
+        QGuiApplication::set_desktop_file_name(&QString::from(NAME));
         qt_translations::ffi::install_qt_translations();
     }
     let mut engine = QQmlApplicationEngine::new();
     if let Some(engine) = engine.as_mut() {
-        engine.load(&QUrl::from(&format!("{QML_DIR}{}", app.qml)));
+        engine.load(&QUrl::from(&format!("{QML_DIR}Main.qml")));
     }
     let code = qt_app.as_mut().map(|app| app.exec()).unwrap_or(1);
     // Live pipelines hold GL resources of the window; quit before Qt tears
@@ -212,68 +310,82 @@ mod tests {
         dir
     }
 
+    fn own(dir: &Path) -> String {
+        std::fs::read_to_string(dir.join("lmix.conf")).unwrap()
+    }
+
     #[test]
-    fn old_settings_are_copied_once() {
-        let dir = folder("copy");
-        std::fs::write(dir.join(OLD_SETTINGS), "[appearance]\nstyle=2\n").unwrap();
+    fn mixer_and_show_settings_merge_once() {
+        let dir = folder("merge");
+        std::fs::write(
+            dir.join(MIXER_SETTINGS),
+            "[appearance]\nstyle=2\n[keys]\nglobal=false\n[view]\ntileSize=2\nrows=3\n",
+        )
+        .unwrap();
+        std::fs::write(
+            dir.join(SHOW_SETTINGS),
+            "[appearance]\nstyle=0\n[view]\ndarkRoom=true\nrows=1\n",
+        )
+        .unwrap();
 
-        assert!(adopt_old_settings(&dir, "mixer").unwrap());
+        assert!(adopt_old_settings(&dir).unwrap());
+        // The mixer's style and rows win, the show's dark room is added,
+        // the mixer's default `global=false` is gone (on by default now).
         assert_eq!(
-            std::fs::read_to_string(dir.join("mixer.conf")).unwrap(),
-            "[appearance]\nstyle=2\n"
+            own(&dir),
+            "[appearance]\nstyle=2\n[keys]\n[view]\ntileSize=2\nrows=3\ndarkRoom=true\n"
         );
 
-        // The program's own file wins from then on.
-        std::fs::write(dir.join("mixer.conf"), "[appearance]\nstyle=0\n").unwrap();
-        assert!(!adopt_old_settings(&dir, "mixer").unwrap());
-        assert_eq!(
-            std::fs::read_to_string(dir.join("mixer.conf")).unwrap(),
-            "[appearance]\nstyle=0\n"
-        );
+        // lmix.conf wins from then on.
+        std::fs::write(dir.join("lmix.conf"), "[appearance]\nstyle=1\n").unwrap();
+        assert!(!adopt_old_settings(&dir).unwrap());
+        assert_eq!(own(&dir), "[appearance]\nstyle=1\n");
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn global_keys_come_from_the_show() {
+        assert_eq!(
+            merge_settings("[keys]\nglobal=true\n", Some("[keys]\nglobal=false\n")),
+            "[keys]\nglobal=false\n"
+        );
+        // Switched on in the mixer alone: stays on.
+        assert_eq!(
+            merge_settings("[keys]\nglobal=true\n", None),
+            "[keys]\nglobal=true\n"
+        );
+        assert_eq!(
+            merge_settings("[keys]\nglobal = true\n", Some("[view]\nx=1\n")),
+            "[keys]\nglobal = true\n[view]\nx=1\n"
+        );
     }
 
     #[test]
     fn a_copy_cut_short_is_redone() {
         let dir = folder("cut");
-        std::fs::write(dir.join(OLD_SETTINGS), "[appearance]\nstyle=2\n").unwrap();
+        std::fs::write(dir.join(SHOW_SETTINGS), "[appearance]\nstyle=2\n").unwrap();
         // What an earlier start left when it stopped mid-copy.
-        std::fs::write(dir.join("show.conf.tmp"), "[appear").unwrap();
+        std::fs::write(dir.join("lmix.conf.tmp"), "[appear").unwrap();
 
-        assert!(adopt_old_settings(&dir, "show").unwrap());
-        assert_eq!(
-            std::fs::read_to_string(dir.join("show.conf")).unwrap(),
-            "[appearance]\nstyle=2\n"
-        );
-        assert!(!dir.join("show.conf.tmp").exists());
+        assert!(adopt_old_settings(&dir).unwrap());
+        assert_eq!(own(&dir), "[appearance]\nstyle=2\n");
+        assert!(!dir.join("lmix.conf.tmp").exists());
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]
-    fn the_show_keeps_its_global_keys_default() {
-        let dir = folder("global");
-        let old = "[appearance]\nstyle=2\n[keys]\nglobal=false\n[view]\nglobal=false\n";
-        std::fs::write(dir.join(OLD_SETTINGS), old).unwrap();
+    fn the_old_console_settings_without_their_global_off() {
+        let dir = folder("console");
+        std::fs::write(
+            dir.join(OLD_SETTINGS),
+            "[appearance]\nstyle=2\n[keys]\nglobal=false\n[view]\nglobal=false\n",
+        )
+        .unwrap();
 
-        assert!(adopt_old_settings(&dir, "show").unwrap());
+        assert!(adopt_old_settings(&dir).unwrap());
         assert_eq!(
-            std::fs::read_to_string(dir.join("show.conf")).unwrap(),
+            own(&dir),
             "[appearance]\nstyle=2\n[keys]\n[view]\nglobal=false\n"
-        );
-        // The mixer's default is off anyway; its copy stays as it was.
-        assert!(adopt_old_settings(&dir, "mixer").unwrap());
-        assert_eq!(
-            std::fs::read_to_string(dir.join("mixer.conf")).unwrap(),
-            old
-        );
-
-        // Switched on, it stays on.
-        std::fs::remove_file(dir.join("show.conf")).unwrap();
-        std::fs::write(dir.join(OLD_SETTINGS), "[keys]\nglobal=true\n").unwrap();
-        assert!(adopt_old_settings(&dir, "show").unwrap());
-        assert_eq!(
-            std::fs::read_to_string(dir.join("show.conf")).unwrap(),
-            "[keys]\nglobal=true\n"
         );
         std::fs::remove_dir_all(&dir).unwrap();
     }
@@ -281,8 +393,8 @@ mod tests {
     #[test]
     fn nothing_to_adopt_without_old_settings() {
         let dir = folder("none");
-        assert!(!adopt_old_settings(&dir, "show").unwrap());
-        assert!(!dir.join("show.conf").exists());
+        assert!(!adopt_old_settings(&dir).unwrap());
+        assert!(!dir.join("lmix.conf").exists());
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }

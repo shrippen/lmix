@@ -246,7 +246,7 @@
   <context>
     <name>AppShell</name>
     <message>
-      <location filename="../qml/AppShell.qml" line="+158" />
+      <location filename="../qml/AppShell.qml" line="+220" />
       <source>Open show</source>
       <translation>Show öffnen</translation>
     </message>
@@ -321,7 +321,85 @@
       <translation>Leerer Ordner für Show und Medien des Pakets</translation>
     </message>
     <message>
-      <location line="+26" />
+      <location line="+25" />
+      <location line="+173" />
+      <source>Keys</source>
+      <translation>Tasten</translation>
+    </message>
+    <message>
+      <location line="-167" />
+      <source>Pages</source>
+      <translation>Seiten</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <location line="+241" />
+      <source>Ctrl+1…%1</source>
+      <translation>Strg+1…%1</translation>
+    </message>
+    <message>
+      <location line="-240" />
+      <location line="+264" />
+      <source>Panic all</source>
+      <translation>Panik: alles</translation>
+    </message>
+    <message>
+      <location line="-264" />
+      <source>button in the page bar</source>
+      <translation>Knopf in der Seitenleiste</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Always</source>
+      <translation>Immer</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Only on %1</source>
+      <translation>Nur auf %1</translation>
+    </message>
+    <message>
+      <location line="+61" />
+      <source>File</source>
+      <translation>Datei</translation>
+    </message>
+    <message>
+      <location line="+30" />
+      <source>Export package…</source>
+      <translation>Paket exportieren …</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Import package…</source>
+      <translation>Paket importieren …</translation>
+    </message>
+    <message>
+      <location line="+17" />
+      <source>Shortcuts…</source>
+      <translation>Belegungen…</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Style</source>
+      <translation>Stil</translation>
+    </message>
+    <message>
+      <location line="+18" />
+      <source>Unsaved show</source>
+      <translation>Ungespeicherte Show</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Rec</source>
+      <translation>Aufnahme</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Stream</source>
+      <translation>Stream</translation>
+    </message>
+    <message>
+      <location line="+4" />
       <source>lmix-core</source>
       <translation>lmix-core</translation>
     </message>
@@ -331,52 +409,47 @@
       <translation>lmix-core nicht erreichbar</translation>
     </message>
     <message>
-      <location line="+17" />
+      <location line="+92" />
+      <source>Program</source>
+      <translation>Programm</translation>
+    </message>
+    <message>
+      <location line="+14" />
+      <source>Stop every cue over the panic time and fade program to black; recordings and streams go on</source>
+      <translation>Alle Cues über die Panikzeit stoppen und Programm auf Schwarz blenden; Aufnahmen und Streams laufen weiter</translation>
+    </message>
+    <message>
+      <location line="+21" />
+      <source>%1 (Ctrl+%2)</source>
+      <translation>%1 (Strg+%2)</translation>
+    </message>
+    <message>
+      <location line="-209" />
       <source>New</source>
       <translation>Neu</translation>
     </message>
     <message>
-      <location line="+6" />
+      <location line="+4" />
       <source>Open…</source>
       <translation>Öffnen…</translation>
     </message>
     <message>
-      <location line="+7" />
+      <location line="+4" />
       <source>Recent</source>
       <translation>Zuletzt</translation>
     </message>
     <message>
-      <location line="+16" />
+      <location line="+6" />
       <source>Save</source>
       <translation>Speichern</translation>
     </message>
     <message>
-      <location line="+6" />
+      <location line="+4" />
       <source>Save as…</source>
       <translation>Speichern unter…</translation>
     </message>
     <message>
-      <location line="+7" />
-      <source>Package</source>
-      <translation>Paket</translation>
-    </message>
-    <message>
-      <location line="+3" />
-      <source>The show with its media in one file, to move it to another machine</source>
-      <translation>Die Show mit ihren Medien in einer Datei, um sie auf einen anderen Rechner zu bringen</translation>
-    </message>
-    <message>
-      <location line="+6" />
-      <source>Export…</source>
-      <translation>Exportieren…</translation>
-    </message>
-    <message>
-      <location line="+4" />
-      <source>Import…</source>
-      <translation>Importieren…</translation>
-    </message>
-    <message>
-      <location line="+5" />
+      <location line="+14" />
       <source>Export settings…</source>
       <translation>Einstellungen exportieren…</translation>
     </message>
@@ -391,37 +464,22 @@
       <translation>Werkseinstellungen…</translation>
     </message>
     <message>
-      <location line="+9" />
+      <location line="+12" />
       <source>Kante</source>
       <translation>Kante</translation>
     </message>
     <message>
-      <location line="+0" />
+      <location line="+1" />
       <source>Kante Light</source>
       <translation>Kante Light</translation>
     </message>
     <message>
-      <location line="+0" />
+      <location line="+1" />
       <source>System</source>
       <translation>System</translation>
     </message>
     <message>
-      <location line="+2" />
-      <source>Kante: Gruvbox dark, Leinen when the system theme is light</source>
-      <translation>Kante: Gruvbox dunkel, Leinen bei hellem Systemthema</translation>
-    </message>
-    <message>
-      <location line="+0" />
-      <source>Kante Light: only the shapes of Kante, on the system colours</source>
-      <translation>Kante Light: nur die Formen von Kante, auf den Systemfarben</translation>
-    </message>
-    <message>
-      <location line="+0" />
-      <source>System style (Breeze)</source>
-      <translation>Systemstil (Breeze)</translation>
-    </message>
-    <message>
-      <location line="+27" />
+      <location line="+73" />
       <source>This show file is in the older format %1 and was converted on opening. Saving it keeps the old file beside it (.v%1.bak).</source>
       <translation>Diese Show-Datei hat das ältere Format %1 und wurde beim Öffnen umgewandelt. Beim Speichern bleibt die alte Datei daneben erhalten (.v%1.bak).</translation>
     </message>
@@ -1927,19 +1985,54 @@
     </message>
   </context>
   <context>
-    <name>MixerMain</name>
+    <name>MixPage</name>
     <message>
-      <location filename="../qml/MixerMain.qml" line="+17" />
-      <source>lmix Mixer</source>
-      <translation>lmix Mischer</translation>
+      <location filename="../qml/MixPage.qml" line="+29" />
+      <source>Mix</source>
+      <translation>Mix</translation>
     </message>
     <message>
-      <location line="+84" />
+      <location line="+2" />
+      <source>%1p%2</source>
+      <translation>%1p%2</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Input to preview</source>
+      <translation>Input in die Vorschau</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Quick play of preview</source>
+      <translation>Schnellstart der Vorschau</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>double click preview</source>
+      <translation>Doppelklick in die Vorschau</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Fade up</source>
+      <translation>Aufblenden</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Fade to black</source>
+      <translation>Schwarzblende</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Program to black and back (SWI.9); the show and outputs go on</source>
+      <translation>Programm auf Schwarz und zurück (SWI.9); Show und Ausgänge laufen weiter</translation>
+    </message>
+    <message>
+      <location line="+77" />
       <source>Layout %1 %2</source>
       <translation>Layout %1 %2</translation>
     </message>
     <message>
-      <location line="+25" />
+      <location line="+22" />
       <source>Inputs from a show</source>
       <translation>Inputs aus einer Show</translation>
     </message>
@@ -1960,16 +2053,11 @@
     </message>
     <message>
       <location line="+110" />
-      <source>From show…</source>
-      <translation>Aus Show…</translation>
+      <source>Inputs from a show…</source>
+      <translation>Inputs aus einer Show …</translation>
     </message>
     <message>
-      <location line="+3" />
-      <source>Add inputs of another show to this one</source>
-      <translation>Inputs einer anderen Show hierher übernehmen</translation>
-    </message>
-    <message>
-      <location line="+7" />
+      <location line="+4" />
       <source>Program format…</source>
       <translation>Programmformat…</translation>
     </message>
@@ -2551,8 +2639,8 @@
     </message>
     <message>
       <location line="+9" />
-      <source>If lmix Mixer and lmix Show both run with this on, a key press runs twice.</source>
-      <translation>Laufen lmix Mischer und lmix Show beide mit globalen Tasten, löst ein Druck doppelt aus.</translation>
+      <source>If two lmix windows on this computer run with this on, a key press runs twice.</source>
+      <translation>Laufen zwei lmix-Fenster auf diesem Rechner mit globalen Tasten, löst ein Druck doppelt aus.</translation>
     </message>
     <message>
       <location line="+5" />
@@ -2566,16 +2654,36 @@
     </message>
   </context>
   <context>
-    <name>ShowMain</name>
+    <name>ShowPage</name>
     <message>
-      <location filename="../qml/ShowMain.qml" line="+15" />
-      <source>lmix Show</source>
-      <translation>lmix Show</translation>
+      <location filename="../qml/ShowPage.qml" line="+18" />
+      <source>Show</source>
+      <translation>Show</translation>
     </message>
     <message>
-      <location line="+33" />
-      <source>Shortcuts…</source>
-      <translation>Belegungen…</translation>
+      <location line="+1" />
+      <source>Cue lists: %1</source>
+      <translation>Cue-Listen: %1</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>GO</source>
+      <translation>GO</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Space</source>
+      <translation>Leertaste</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Panic, twice: stop at once</source>
+      <translation>Panik, zweimal: sofort stoppen</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Escape</source>
+      <translation>Escape</translation>
     </message>
   </context>
   <context>

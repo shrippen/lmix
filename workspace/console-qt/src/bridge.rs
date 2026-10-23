@@ -57,6 +57,8 @@ pub mod qobject {
         #[qproperty(QString, window_mode, cxx_name = "windowMode")]
         /// `simple` or `advanced` from the command line, or empty.
         #[qproperty(QString, ui_mode, cxx_name = "uiMode")]
+        /// The page asked for with `--page`, or empty.
+        #[qproperty(QString, start_page, cxx_name = "startPage")]
         /// Last latency measurement: lmix `Latency` as JSON, or empty.
         #[qproperty(QString, latency)]
         #[qproperty(bool, measuring)]
@@ -178,6 +180,7 @@ pub struct CoreRust {
     core_url: QString,
     window_mode: QString,
     ui_mode: QString,
+    start_page: QString,
     latency: QString,
     measuring: bool,
     global_keys: QString,
@@ -196,6 +199,7 @@ impl cxx_qt::Initialize for qobject::Core {
         self.as_mut()
             .set_window_mode(QString::from(config::window()));
         self.as_mut().set_ui_mode(QString::from(config::mode()));
+        self.as_mut().set_start_page(QString::from(config::page()));
         let thread = self.qt_thread();
         config::runtime().spawn(follow(thread));
         self.refresh_lists();

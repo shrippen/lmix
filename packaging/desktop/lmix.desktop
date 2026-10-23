@@ -1,0 +1,17 @@
+[Desktop Entry]
+Type=Application
+Name=lmix
+GenericName=Vision Mixer and Show Control
+GenericName[de]=Bildmischer und Showsteuerung
+Comment=Switch inputs live and run shows with GO
+Comment[de]=Inputs live schalten und Shows mit GO fahren
+Exec=lmix
+Terminal=false
+Categories=AudioVideo;Video;
+StartupWMClass=lmix
+Actions=Show;
+
+[Desktop Action Show]
+Name=Open on the Show page
+Name[de]=Auf der Seite Show öffnen
+Exec=lmix --page show

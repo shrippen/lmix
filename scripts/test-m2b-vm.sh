@@ -7,7 +7,7 @@
 #
 #   scripts/test-m2b-vm.sh            # builds, runs, cleans up
 #   CONSOLE_SHOT=out.png scripts/test-m2b-vm.sh
-#                                     # also screenshots lmix Mixer
+#                                     # also screenshots lmix (Mix page)
 #                                     # (lmix-core client) on Xvfb
 #   KEEP_WORK=1                       # keep logs and pictures
 #   WORK=dir                          # put them there (default: mktemp)
@@ -875,12 +875,12 @@ act '{"action":"set_input_color","input":"Ball","color":"cyan"}' >/dev/null
 curl -sf "$CORE/devices" | jq -e 'type == "array"' >/dev/null || fail "device list"
 pass "color tag; device list ($(curl -sf "$CORE/devices" | jq length) found)"
 
-# --- lmix Mixer as lmix-core client, on a virtual display ---
+# --- lmix as lmix-core client, on a virtual display ---
 if [[ -n "${CONSOLE_SHOT:-}" ]]; then
-    # lmix Mixer (needs Qt 6 with Kirigami and gst-plugin-qml6, BUILD.md),
+    # lmix (needs Qt 6 with Kirigami and gst-plugin-qml6, BUILD.md),
     # with its own settings, not the operator's.
     (cd "$ROOT/workspace/console-qt" && cargo build --release)
-    CONSOLE_BIN="${CARGO_TARGET_DIR:-$ROOT/workspace/console-qt/target}/release/lmix-mixer"
+    CONSOLE_BIN="${CARGO_TARGET_DIR:-$ROOT/workspace/console-qt/target}/release/lmix"
     Xvfb :93 -screen 0 1440x900x24 >/dev/null 2>&1 &
     PIDS+=($!)
     sleep 1

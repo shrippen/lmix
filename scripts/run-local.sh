@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
-# Engine, lmix-core and lmix Mixer on this machine, with a few test
-# inputs; closing the window stops everything. APP=show starts lmix Show
-# instead, APP=both the two (closing the mixer stops everything).
-# Arguments go to the program(s), e.g. --window maximized.
+# Engine, lmix-core and lmix on this machine, with a few test inputs;
+# closing the window stops everything. APP=show opens it on the Show page,
+# APP=both two windows, Mix and Show (closing the Mix one stops everything).
+# Arguments go to lmix, e.g. --window maximized.
 #
 #   scripts/run-local.sh              # CUDA mixer, 4 test inputs
 #   MIXER=gl INPUTS=8 scripts/run-local.sh
-#   APP=both scripts/run-local.sh     # mixer and show at once
+#   APP=both scripts/run-local.sh     # two windows, Mix and Show
 #   KEEP_WORK=1 scripts/run-local.sh  # keep logs (path printed at the end)
 set -euo pipefail
 
 MIXER="${MIXER:-cuda}"
 INPUTS="${INPUTS:-4}"
-APP="${APP:-mixer}"
-[[ "$APP" =~ ^(mixer|show|both)$ ]] || { echo "APP is mixer, show or both, not $APP" >&2; exit 1; }
+APP="${APP:-mix}"
+[[ "$APP" =~ ^(mix|show|both)$ ]] || { echo "APP is mix, show or both, not $APP" >&2; exit 1; }
 STROM_PORT="${STROM_PORT:-8500}"
 CORE_PORT="${CORE_PORT:-8600}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -62,12 +62,12 @@ act '{"action":"cut_direct","input":1}'
 
 export LMIX_CORE="http://127.0.0.1:${CORE_PORT}"
 case "$APP" in
-mixer | show)
-    "$CONSOLE_DIR/lmix-$APP" "$@" >"$WORK/$APP.log" 2>&1
+mix | show)
+    "$CONSOLE_DIR/lmix" --page "$APP" "$@" >"$WORK/lmix.log" 2>&1
     ;;
 both)
-    "$CONSOLE_DIR/lmix-show" "$@" >"$WORK/show.log" 2>&1 &
+    "$CONSOLE_DIR/lmix" --page show "$@" >"$WORK/lmix-show.log" 2>&1 &
     PIDS+=($!)
-    "$CONSOLE_DIR/lmix-mixer" "$@" >"$WORK/mixer.log" 2>&1
+    "$CONSOLE_DIR/lmix" --page mix "$@" >"$WORK/lmix.log" 2>&1
     ;;
 esac

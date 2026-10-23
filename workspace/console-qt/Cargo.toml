@@ -6,12 +6,8 @@ license = "MIT"
 publish = false
 
 [[bin]]
-name = "lmix-mixer"
-path = "src/mixer.rs"
-
-[[bin]]
-name = "lmix-show"
-path = "src/show.rs"
+name = "lmix"
+path = "src/main.rs"
 
 [dependencies]
 lmix-types = { path = "../lmix-types" }
