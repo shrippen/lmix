@@ -426,15 +426,27 @@ impl qobject::Core {
                 binds
             } else if self.rust().global_claim.is_some() {
                 binds
-            } else if let Some(claim) = crate::portal::claim(&claim_dir()) {
-                self.as_mut().rust_mut().global_claim = Some(claim);
-                self.as_mut().set_global_held(false);
-                binds
             } else {
-                self.as_mut()
-                    .set_global_keys(QString::from(KEYS_HELD_ELSEWHERE));
-                self.as_mut().set_global_held(true);
-                Vec::new()
+                match crate::portal::claim(&claim_dir()) {
+                    Ok(Some(claim)) => {
+                        self.as_mut().rust_mut().global_claim = Some(claim);
+                        self.as_mut().set_global_held(false);
+                        binds
+                    }
+                    Ok(None) => {
+                        self.as_mut()
+                            .set_global_keys(QString::from(KEYS_HELD_ELSEWHERE));
+                        self.as_mut().set_global_held(true);
+                        Vec::new()
+                    }
+                    Err(e) => {
+                        tracing::warn!("global keys: lock file not usable: {e}");
+                        self.as_mut()
+                            .set_global_keys(QString::from(format!("off:{e}")));
+                        self.as_mut().set_global_held(false);
+                        Vec::new()
+                    }
+                }
             };
             if let Some(sender) = &self.rust().global {
                 sender.send_if_modified(|now| {
@@ -449,12 +461,21 @@ impl qobject::Core {
             return;
         }
         // One window per computer binds: with two, a press would run twice.
-        let Some(claim) = crate::portal::claim(&claim_dir()) else {
-            self.as_mut()
-                .set_global_keys(QString::from(KEYS_HELD_ELSEWHERE));
-            self.as_mut().set_global_held(true);
-            tracing::debug!("global keys: another lmix window binds them");
-            return;
+        let claim = match crate::portal::claim(&claim_dir()) {
+            Ok(Some(claim)) => claim,
+            Ok(None) => {
+                self.as_mut()
+                    .set_global_keys(QString::from(KEYS_HELD_ELSEWHERE));
+                self.as_mut().set_global_held(true);
+                tracing::debug!("global keys: another lmix window binds them");
+                return;
+            }
+            Err(e) => {
+                tracing::warn!("global keys: lock file not usable: {e}");
+                self.as_mut()
+                    .set_global_keys(QString::from(format!("off:{e}")));
+                return;
+            }
         };
         tracing::info!("global keys: this window binds them");
         self.as_mut().rust_mut().global_claim = Some(claim);
@@ -597,11 +618,17 @@ impl qobject::Core {
 /// window tries again (AppShell) until that one is gone.
 const KEYS_HELD_ELSEWHERE: &str = "off:another lmix window on this computer binds them";
 
-/// Where the lock of the global keys lies (portal::claim).
+/// Where the lock of the global keys lies (portal::claim): the user's
+/// runtime directory, or a folder of the user's own in the temp directory,
+/// so another user's lock never blocks this one.
 fn claim_dir() -> std::path::PathBuf {
-    std::env::var_os("XDG_RUNTIME_DIR")
-        .map(std::path::PathBuf::from)
-        .unwrap_or_else(std::env::temp_dir)
+    if let Some(dir) = std::env::var_os("XDG_RUNTIME_DIR") {
+        return dir.into();
+    }
+    let user = std::env::var("USER").unwrap_or_else(|_| "unknown".into());
+    let dir = std::env::temp_dir().join(format!("lmix-{user}"));
+    let _ = std::fs::create_dir_all(&dir);
+    dir
 }
 
 fn stop(mut live: Live) {

@@ -182,7 +182,6 @@ Aus dem Dummy noch offen, **nur Oberfläche** (der Kern kann es):
   Restzeit, Leiste zum Anlegen je Cue-Art, Zeitfelder mit Fortschritt.
 - Audio: Matrix Inputs × Busse aus den Sends (AUD.13), Mini-Kurven EQ und
   Dynamik je Zug, Spitzenwert in dB, ON/AFV als Umschalter.
-- Kanalzug-Fader brauchen den senkrechten Slider aus Kante (in Arbeit).
 - Seiten lösbar auf einen zweiten Bildschirm (Entscheidung Click-Dummy 1).
 - Leiste: wer eine Seite zuletzt bediente (braucht die Kennung je
   Verbindung im Kern, siehe Schritt 4).

@@ -126,6 +126,7 @@ pub const ACTION_GROUPS: &[(&str, &[&str])] = &[
             "click_input",
             "go_input",
             "fade_to_black",
+            "set_fade_to_black",
             "t_bar",
             "set_midi_tbar",
         ],
@@ -969,6 +970,13 @@ pub enum Action {
     },
     /// Toggle fade to black of all sinks (SWI.9).
     FadeToBlack {
+        #[serde(default = "default_ftb_ms")]
+        duration_ms: u32,
+    },
+    /// Fade to black on or off, whatever it is now: a second press of a
+    /// panic sends the same and changes nothing (SWI.9).
+    SetFadeToBlack {
+        on: bool,
         #[serde(default = "default_ftb_ms")]
         duration_ms: u32,
     },

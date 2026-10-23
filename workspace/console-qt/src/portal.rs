@@ -240,16 +240,19 @@ async fn close(connection: &Connection, session: &OwnedObjectPath) {
 
 /// The right to bind global keys on this computer: one lmix window only,
 /// or a key press would run its shortcut once per window. Held while the
-/// file stays open; `None` while another window holds it.
-pub fn claim(dir: &std::path::Path) -> Option<std::fs::File> {
+/// file stays open; `Ok(None)` while another window holds it, an error
+/// when the lock file cannot be opened at all.
+pub fn claim(dir: &std::path::Path) -> std::io::Result<Option<std::fs::File>> {
     let file = std::fs::OpenOptions::new()
         .create(true)
         .truncate(false)
         .write(true)
-        .open(dir.join("lmix-global-keys.lock"))
-        .ok()?;
-    file.try_lock().ok()?;
-    Some(file)
+        .open(dir.join("lmix-global-keys.lock"))?;
+    match file.try_lock() {
+        Ok(()) => Ok(Some(file)),
+        Err(std::fs::TryLockError::WouldBlock) => Ok(None),
+        Err(std::fs::TryLockError::Error(e)) => Err(e),
+    }
 }
 
 #[cfg(test)]
@@ -268,15 +271,24 @@ mod tests {
     fn only_one_window_claims_the_keys() {
         let dir = std::env::temp_dir().join(format!("lmix-claim-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
-        let first = claim(&dir);
+        let first = claim(&dir).unwrap();
         assert!(first.is_some(), "the first window gets the keys");
         assert!(
-            claim(&dir).is_none(),
+            claim(&dir).unwrap().is_none(),
             "a second window must not bind them too"
         );
         drop(first);
-        assert!(claim(&dir).is_some(), "free again once the first is gone");
+        assert!(
+            claim(&dir).unwrap().is_some(),
+            "free again once the first is gone"
+        );
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_lock_that_cannot_be_opened_is_an_error() {
+        let dir = std::env::temp_dir().join(format!("lmix-claim-missing-{}", std::process::id()));
+        assert!(claim(&dir).is_err(), "not \"held by another window\"");
     }
 
     #[test]

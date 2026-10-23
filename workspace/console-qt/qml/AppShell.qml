@@ -99,8 +99,9 @@ Kirigami.ApplicationWindow {
      *  to black. Recordings and streams go on. */
     function panicAll() {
         act({ action: "cue_panic" })
-        if (show && !show.fade_to_black)
-            act({ action: "fade_to_black" })
+        // Set, not toggle: a second press before the new state comes back
+        // must not fade program up again.
+        act({ action: "set_fade_to_black", on: true })
     }
 
     // --- pages ---
