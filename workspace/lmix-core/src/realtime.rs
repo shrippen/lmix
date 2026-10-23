@@ -65,12 +65,18 @@ pub fn ended() {
 
 /// How the cue timer runs, for clients (`Event::Machine`).
 pub fn priority() -> lmix_types::TimerPriority {
+    priority_of(STOPPED.load(Ordering::Relaxed), granted(), demoted())
+}
+
+/// A stopped timer counts before its priority: once it ended, nothing it
+/// was granted helps the cues.
+fn priority_of(stopped: bool, granted: bool, demoted: bool) -> lmix_types::TimerPriority {
     use lmix_types::TimerPriority;
-    if STOPPED.load(Ordering::Relaxed) {
+    if stopped {
         TimerPriority::Stopped
-    } else if granted() {
+    } else if granted {
         TimerPriority::Realtime
-    } else if demoted() {
+    } else if demoted {
         TimerPriority::Demoted
     } else {
         TimerPriority::Normal
@@ -196,6 +202,16 @@ fn rtkit(tid: libc::pid_t) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_stopped_timer_says_so_before_its_priority() {
+        use lmix_types::TimerPriority;
+        assert_eq!(priority_of(true, true, false), TimerPriority::Stopped);
+        assert_eq!(priority_of(true, false, true), TimerPriority::Stopped);
+        assert_eq!(priority_of(false, true, false), TimerPriority::Realtime);
+        assert_eq!(priority_of(false, false, true), TimerPriority::Demoted);
+        assert_eq!(priority_of(false, false, false), TimerPriority::Normal);
+    }
 
     /// A real-time thread that computes past the soft limit becomes a
     /// normal thread instead of ending the process. Needs the right to
