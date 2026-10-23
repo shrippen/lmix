@@ -242,7 +242,7 @@ Prüft Bildinhalt (Helligkeit, Bewegung) über ImageMagick `convert`.
 
 ## Qt-Console (`workspace/console-qt`, Prototyp)
 
-Ein Programm `lmix` mit Seiten (Mix, Show; Audio, Outputs, Setup folgen;
+Ein Programm `lmix` mit Seiten (Mix, Show, Audio, Outputs, Setup;
 DECISIONS 2026-10-23, `docs/PLAN-SEITEN.md`), umgeschaltet über die Leiste am
 Fuß oder Strg+1…n. Mehrere Fenster laufen auch gleichzeitig am selben
 `lmix-core`.

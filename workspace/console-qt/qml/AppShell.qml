@@ -166,6 +166,27 @@ Kirigami.ApplicationWindow {
         shortcutsDialog.open()
     }
 
+    /** Opens one of the window's dialogs by name, for the Setup page. */
+    function openShellDialog(name) {
+        switch (name) {
+        case "newShow": newShowDialog.open(); break
+        case "exportPackage": exportDialog.open(); break
+        case "importPackage": importDialog.open(); break
+        case "exportSettings": exportSettingsDialog.open(); break
+        case "importSettings": importSettingsDialog.open(); break
+        case "resetSettings": resetSettingsDialog.open(); break
+        }
+    }
+
+    function setGlobalShortcuts(on) {
+        keySettings.global = on
+    }
+
+    function setStyle(kind) {
+        settings.style = kind
+        backend.style = -1
+    }
+
     ShortcutsDialog {
         id: shortcutsDialog
         onClosed: root.restoreFocus()
@@ -502,12 +523,12 @@ Kirigami.ApplicationWindow {
                     }
                     KantePill {
                         visible: root.recording
-                        status: KantePill.State.Failed
+                        status: KantePill.State.Running
                         text: qsTr("Rec")
                     }
                     KantePill {
                         visible: root.streaming
-                        status: KantePill.State.Failed
+                        status: KantePill.State.Running
                         text: qsTr("Stream")
                     }
                     KantePill {

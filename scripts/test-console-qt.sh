@@ -3,7 +3,8 @@
 # Mix page monitors and tiles show moving live pictures, clicks switch, no
 # QML warnings. Then the Show page through the page bar: it draws, space is
 # GO and Escape panic (also after a click on the header and a closed
-# dialog), the page bar shows program small, no QML warnings. Needs Qt 6 with Kirigami, gst-plugin-qml6
+# dialog), the page bar shows program small, no QML warnings. Then Audio,
+# Outputs and Setup draw without QML warnings. Needs Qt 6 with Kirigami, gst-plugin-qml6
 # (gstreamer1.0-qt6), Xvfb, xdotool, ImageMagick, jq.
 #
 #   scripts/test-console-qt.sh
@@ -229,6 +230,21 @@ until_true '[[ "$(cues_running)" == 0 ]]' && pass "show: Escape is panic" \
     || fail "show: Escape did not stop the cues ($(cues_running) running)"
 own_qml_warnings console.log && fail "QML warnings (show): $(own_qml_warnings console.log | head -3)"
 pass "no QML warnings (show)"
+
+# The other pages through the page bar: each draws something of its own
+# (a light page is flat, so: it differs from the page before), no QML
+# warnings.
+prev=show
+for page in "AUDIO 286" "OUTPUTS 397" "SETUP 510"; do
+    read -r name x <<<"$page"
+    click "$x" 868
+    sleep 2
+    shot "page-$name"
+    (($(moved "$prev" "page-$name" 1400x700+20+60) > 5000)) && pass "$name page draws" || fail "$name page shows the page before"
+    prev="page-$name"
+done
+own_qml_warnings console.log && fail "QML warnings (pages): $(own_qml_warnings console.log | head -3)"
+pass "no QML warnings (Audio, Outputs, Setup)"
 criticals="$(tail -n +"$((STROM_START_LINES + 1))" "$WORK/strom.log" | grep -c 'GStreamer-CRITICAL' || true)"
 [[ "$criticals" == 0 ]] || fail "$criticals GStreamer CRITICALs in strom.log"
 pass "no GStreamer CRITICALs (live flows)"

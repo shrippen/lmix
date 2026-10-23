@@ -191,9 +191,15 @@ Ein Programm `lmix` statt `lmix-mixer` und `lmix-show` (DECISIONS
   Fade to black; Aufnahmen und Streams laufen weiter) und, wo die Seite kein
   Program-Bild hat, Program klein.
 - `AppPage.qml` ist eine Seite: Titelzeile mit Werkzeugen und der eigenen
-  Panik der Seite, darunter der Inhalt. `MixPage.qml` (vorher MixerMain) und
-  `ShowPage.qml` (vorher ShowMain) sind die ersten Seiten.
-- Seitenwechsel über die Leiste oder Strg+1…n; `--page mix|show` beim Start,
+  Panik der Seite, darunter der Inhalt. `MixPage.qml` (vorher MixerMain),
+  `ShowPage.qml` (vorher ShowMain), `AudioPage.qml` (Kanalzüge mit Fader,
+  Pegel, Mute, AFL, AFV, daneben der Kanalzug des gewählten Inputs; Busse
+  aus `AuxBusPanel.qml`, das auch der Busse-Dialog nutzt; Zonen),
+  `OutputsPage.qml` (Liste mit Zustand, Laufzeit, Verbindung, Start/Stopp
+  mit Rückfrage `StopOutputDialog.qml`, Einzelheiten, Multiview) und
+  `SetupPage.qml` (Show, Steuerung, dieser Rechner; öffnet die vorhandenen
+  Dialoge).
+- Seitenwechsel über die Leiste oder Strg+1…n; `--page mix|show|audio|outputs|setup` beim Start,
   sonst die zuletzt offene Seite. Seitentasten (1–9 im Mix, Leertaste und
   Escape in der Show) wirken nur auf der sichtbaren Seite; die Belegungen
   der Show (AUT.1–3) immer.

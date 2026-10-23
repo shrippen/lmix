@@ -89,41 +89,12 @@ RowLayout {
         }
     }
 
-    KanteDialog {
+    StopOutputDialog {
         id: stopDialog
-        /** The output to stop; null stops all streams. */
-        property var output: null
         parent: QQC2.Overlay.overlay
         anchors.centerIn: parent
-        modal: true
-        title: output ? qsTr("Stop %1?").arg(output.name) : qsTr("Stop all streams?")
-        standardButtons: QQC2.Dialog.Ok | QQC2.Dialog.Cancel
-        kanteBarColor: KanteStyle.negativeTextColor
-        width: Kirigami.Units.gridUnit * 24
-        // KanteDialog has a child of its own, so it does not size to this.
-        contentHeight: stopColumn.implicitHeight
-        onOpened: askAgain.checked = true
-        onAccepted: {
-            bar.confirmStop = askAgain.checked
-            // By id: another Console may renumber the outputs meanwhile.
-            bar.act(output ? { action: "stop_output", output: output.id }
-                : { action: "stop_outputs", group: "streams" })
-        }
-
-        ColumnLayout {
-            id: stopColumn
-            width: parent.width
-            QQC2.Label {
-                Layout.fillWidth: true
-                text: qsTr("A stopped recording or stream cannot go on where it was.")
-                wrapMode: Text.WordWrap
-            }
-            QQC2.CheckBox {
-                id: askAgain
-                text: qsTr("Ask before stopping")
-                KanteCheckSkin { control: askAgain }
-            }
-        }
+        act: bar.act
+        onAskAgainChosen: on => bar.confirmStop = on
     }
 
     KanteButton {

@@ -14,4 +14,13 @@ AppShell {
     ShowPage {
         shell: shell
     }
+    AudioPage {
+        shell: shell
+    }
+    OutputsPage {
+        shell: shell
+    }
+    SetupPage {
+        shell: shell
+    }
 }
