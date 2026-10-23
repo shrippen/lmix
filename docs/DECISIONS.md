@@ -4465,3 +4465,39 @@ dort Stille.
 **Offen**: SRT und RTMP Ende-zu-Ende messen (ein Mitschnitt mit
 `ffmpeg -i srt://… -c copy` streut schon ohne Ausgleich um ±500 ms und
 taugt dafür nicht), Meldung an GStreamer (gst-libav, fdkaac).
+
+## 2026-10-23 — Click-Dummy: einmalige Ausnahme von der Clean-Room-Regel
+
+Der Owner hat für einen Durchgang erlaubt, Bildschirmfotos der Vorbilder
+anzusehen (sonst nur Handbuchtext, claude.md Entscheidung 8). Angesehen:
+das Hauptfenster und der Tonmischer aus der vMix-Hilfe, Arbeitsfläche,
+Pult-Raster, Inspector und Licht-Dashboard aus der QLab-5-Doku, Umschalt-
+und Tonseite von ATEM Software Control (Herstellerseite), OBS Studio
+(Flathub). Übernommen wurden nur Anordnung und Abläufe, keine Gestaltung,
+Namen oder Icons; der Dummy bleibt Kante (`docs/PLAN-SEITEN.md`,
+„Click-Dummy 2“). Die Bilder liegen nicht im Repo. Was daraus in die
+Umsetzung geht, nennt PLAN-SEITEN; neue Anforderungen daraus werden wie
+üblich mit Quelle (Handbuchseite) in die Lastenhefte eingetragen.
+
+## 2026-10-23 — Eine App mit Seiten statt zweier Programme (Konzept A)
+
+**Entscheidung (User 23.10.)**: Statt `lmix-mixer` und `lmix-show` ein
+Programm `lmix` mit Seiten (Mix, Show, Audio, Outputs, Setup; später Light)
+und einer Seitenleiste am Fuß, wie bei Resolve. Weitere Pulte (Ton, Licht)
+kommen als Seite, nicht als eigenes Programm. Mehrere Oberflächen greifen
+weiter parallel auf `lmix-core` zu, auch übers Netz (Arbeitsplätze mit
+Profil). Licht im Kern kommt dazu, aber später (todo). Ersetzt claude.md
+Entscheidung 7 („zwei Oberflächen“) und SUI.1 (Lastenhefte und ROADMAP
+nachgezogen). Was beschreibt, welche Programme heute laufen (BUILD,
+HANDOVER, HARDWARE-TODO, GUI-SHELL, Skripte), ändert sich mit dem Code,
+im PR der Shell.
+
+Verworfen: feste Sendeleiste oben mit Arbeitsbereichen links (Konzept B,
+kostet dauerhaft Höhe), getrennte Programme je Pult (vier Oberflächen zu
+betreuen). Entwürfe und Click-Dummies: Leinwand „lmix Arbeitsbereiche“,
+Plan und Reihenfolge in `docs/PLAN-SEITEN.md`.
+
+Für die Shell entschieden (Click-Dummy 1): Panik global in der Leiste und je
+Seite für ihren Bereich; globale Tasten immer, Seitentasten nur auf der
+sichtbaren Seite; Seiten lösbar auf einen zweiten Bildschirm; im Netz dürfen
+alle Arbeitsplätze alles, die Leiste zeigt, wer eine Seite zuletzt bediente.

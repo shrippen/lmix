@@ -403,7 +403,8 @@ Ersetzt M4.5 und den Gäste-Punkt in M6.
 
 ### Show-Modus (S1–S3)
 
-Zweiter Bedienmodus über demselben `lmix-core`, Anforderungen und
+Seite Show über demselben `lmix-core` (eine App mit Seiten, DECISIONS
+2026-10-23, `docs/PLAN-SEITEN.md`), Anforderungen und
 Abnahmen in `LASTENHEFT-SHOW.md` §7. Eigene Zählung S1–S3, unabhängig von
 M1–M9. S-E.1–12 entschieden (User 2026-10-16) bis auf S-E.3, das vor S1
 Stufe 2 mit Messungen erneut vorgelegt wird.
