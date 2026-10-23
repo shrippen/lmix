@@ -11,7 +11,7 @@
 #   KEEP_WORK=1 …                     # keep logs and recordings
 #   STROM_BIN=…/strom CORE_BIN=…/lmix-core …   # skip the builds
 #
-# Needs ffmpeg and Python 3 with numpy.
+# Needs ffmpeg, jq and Python 3 with numpy.
 set -euo pipefail
 
 MIXER="${MIXER:-cuda}"
@@ -41,6 +41,9 @@ wait_up() {
 }
 
 python3 -c 'import numpy' 2>/dev/null || { echo "needs numpy for Python 3" >&2; exit 1; }
+for tool in ffmpeg jq; do
+    command -v "$tool" >/dev/null || { echo "needs $tool" >&2; exit 1; }
+done
 
 # One white frame and a 1 kHz beep of one frame's length, every second.
 CLIP="$WORK/flashbeep.mp4"
@@ -83,7 +86,12 @@ for run in $(seq 1 "$RUNS"); do
     sleep 3
 
     for feed in pgm iso; do
-        read -r med min max n < <("$ROOT/scripts/av-offset.py" "$dir/$feed"/*.mkv)
+        if ! out="$("$ROOT/scripts/av-offset.py" "$dir/$feed"/*.mkv)"; then
+            echo "run $run $feed: not measured" >&2
+            KEEP_WORK=1
+            continue
+        fi
+        read -r med min max n <<<"$out"
         echo "run $run $feed: sound ${med} ms after picture (min ${min}, max ${max}, ${n} flashes)"
     done
     for pid in "${PIDS[@]}"; do kill "$pid" 2>/dev/null || true; done
