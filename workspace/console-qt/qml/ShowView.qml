@@ -24,6 +24,9 @@ ColumnLayout {
     property bool darkRoom: false
     /** Groups shown closed, by cue id (SUI.2). */
     property var closed: ({})
+    /** Edit mode: the buttons that change cues, zones, targets and the
+     *  script show; in show mode only running the show remains. */
+    property bool editing: true
 
     readonly property var lists: show && show.cue_lists ? show.cue_lists : []
     readonly property var list: {
@@ -217,6 +220,7 @@ ColumnLayout {
         }
         KanteButton {
             focusPolicy: Qt.NoFocus
+            visible: view.editing
             text: qsTr("Cues…")
             onClicked: cueListsDialog.open()
         }
@@ -232,6 +236,7 @@ ColumnLayout {
         }
         KanteButton {
             focusPolicy: Qt.NoFocus
+            visible: view.editing
             text: qsTr("Zones…")
             QQC2.ToolTip.visible: hovered
             QQC2.ToolTip.text: qsTr("The show's sound zones and where they play on this machine")
@@ -247,6 +252,7 @@ ColumnLayout {
         }
         KanteButton {
             focusPolicy: Qt.NoFocus
+            visible: view.editing
             text: qsTr("Targets…")
             QQC2.ToolTip.visible: hovered
             QQC2.ToolTip.text: qsTr("Output targets (HTTP, Home Assistant, OSC) and OSC subscribers of this machine")
@@ -270,6 +276,7 @@ ColumnLayout {
         }
         KanteButton {
             focusPolicy: Qt.NoFocus
+            visible: view.editing
             text: qsTr("Script…")
             QQC2.ToolTip.visible: hovered
             QQC2.ToolTip.text: qsTr("A folder of Markdown files with lmix-cue blocks; its lists follow every saved change")

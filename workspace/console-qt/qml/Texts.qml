@@ -174,7 +174,9 @@ QtObject {
         case "slots_full": return qsTr("All %1 mixer slots are in use").arg(e.slots)
         case "bad_transition_slot": return qsTr("Transition slot %1 does not exist (1–%2)").arg(e.slot).arg(e.max)
         case "no_preview": return qsTr("Nothing in preview")
-        case "on_program": return qsTr("%1 is on program; it cannot be in preview at the same time").arg(e.reference)
+        // Clicking what is on program into preview does nothing; no
+        // message for it (owner, 23.10.2026).
+        case "on_program": return ""
         case "bad_position": return qsTr("Position %1 is outside 1–%2").arg(e.number).arg(e.max)
         case "no_video": return qsTr("%1 has no picture (audio input)").arg(e.reference)
         case "no_transport": return qsTr("%1 has no transport (not a file, URL or playlist)").arg(e.reference)

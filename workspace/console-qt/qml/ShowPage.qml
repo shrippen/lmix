@@ -32,7 +32,22 @@ AppPage {
         property bool showAdvanced: false
         /** The show view dimmed for a dark room (SUI.6). */
         property bool darkRoom: false
+        /** Edit mode; off in show mode, where cues cannot be changed. */
+        property bool editing: true
     }
+
+    tools: [
+        KanteSegmented {
+            activeFocusOnTab: false
+            model: [qsTr("Edit"), qsTr("Show")]
+            currentIndex: viewSettings.editing ? 0 : 1
+            tooltips: [qsTr("Cues, zones, targets and the script can be changed"), qsTr("Only running the show: no buttons that change it")]
+            onActivated: index => {
+                viewSettings.editing = index === 0
+                root.takeFocus()
+            }
+        }
+    ]
 
     ShowView {
         id: showView
@@ -43,6 +58,7 @@ AppPage {
         onAdvancedChanged: viewSettings.showAdvanced = advanced
         darkRoom: viewSettings.darkRoom
         onDarkRoomChanged: viewSettings.darkRoom = darkRoom
+        editing: viewSettings.editing
     }
 
     // Dark room (SUI.6): Kante's dark scheme (no white), and the window
