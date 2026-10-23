@@ -87,15 +87,24 @@ Kern-Ablauf; es sind Ausgänge wie andere auch.
 5. **Licht** (später, siehe todo): eigener Lastenheft-Teil, dann Kern, dann
    Seite.
 
-## Offen, im Click-Dummy zu klären
+## Entschieden für die Shell (User 23.10., Click-Dummy 1)
 
-- **Panik**: eine Taste für alles (Show-Panik, Ton aus, Licht Blackout?)
-  oder je Seite eine eigene, mit der globalen in der Leiste?
-- **Kurzbefehle**: heute je Programm (`globalShortcuts`). Künftig global plus
-  je Seite? Was gilt, wenn die Seite gerade nicht sichtbar ist?
-- **Mehrere Fenster**: eine Seite auf einen zweiten Bildschirm lösen
-  (Show auf Monitor 2, Mix auf Monitor 1)?
-- **Rechte im Netz**: darf jeder Arbeitsplatz alles, oder gehört eine Seite
-  einem Platz (Licht nur vom Lichtpult)? Anzeige, wer was bedient.
+- **Panik global und je Seite**: „Panic all“ in der Leiste stoppt alles;
+  jede Seite hat dazu eine eigene nur für ihren Bereich (Mix: Fade to
+  black, Show: Stop show, Audio: Audio off, Outputs: Stop outputs).
+- **Kurzbefehle global plus aktive Seite**: globale Tasten (Panik, GO, Cut,
+  Seiten, Speichern) gelten immer, die Tasten einer Seite nur, solange sie
+  sichtbar ist. Eine Übersicht „Keys“ in der Kopfzeile zeigt beide.
+- **Seiten lösbar**: eine Seite lässt sich auf einen zweiten Bildschirm
+  lösen und zurückholen; die Leiste bleibt im Hauptfenster und zeigt die
+  gelöste Seite markiert.
+- **Rechte im Netz**: alle Arbeitsplätze dürfen alles; die Leiste zeigt je
+  Seite, wer sie zuletzt bedient hat.
 - **Name**: Programm `lmix`; Seitennamen englisch (UI zuerst Englisch),
   deutsch über Übersetzung.
+
+## Offen, in den nächsten Click-Dummies zu klären
+
+- Je Seite: was drauf ist, was Dialog bleibt, Seiten-Tasten.
+- Was „Panic all“ genau umfasst, wenn eine Aufnahme läuft (Vorschlag im
+  Dummy: Aufnahmen und Streams laufen weiter).
