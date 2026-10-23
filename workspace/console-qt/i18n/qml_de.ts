@@ -565,6 +565,11 @@
       <translation>Zonen</translation>
     </message>
     <message>
+      <location line="+0" />
+      <source>Sends</source>
+      <translation>Sends</translation>
+    </message>
+    <message>
       <location line="+7" />
       <source>Clear solo</source>
       <translation>Solo aus</translation>
@@ -575,7 +580,7 @@
       <translation>Noch kein Input mit Ton</translation>
     </message>
     <message>
-      <location line="+26" />
+      <location line="+52" />
       <source>%1 ch.</source>
       <translation>%1 Kan.</translation>
     </message>
@@ -605,7 +610,12 @@
       <translation>Kanalzug · %1 %2</translation>
     </message>
     <message>
-      <location line="+32" />
+      <location line="+47" />
+      <source>Send of %1 to %2</source>
+      <translation>Send von %1 auf %2</translation>
+    </message>
+    <message>
+      <location line="+22" />
       <source>Channel strip %1</source>
       <translation>Kanalzug %1</translation>
     </message>

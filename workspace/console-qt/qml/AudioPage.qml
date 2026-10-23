@@ -29,7 +29,7 @@ AppPage {
     readonly property bool soloing: soundInputs.some(i => i.listen !== "off")
     function act(action) { shell.act(action) }
 
-    /** 0 inputs, 1 buses, 2 zones. */
+    /** 0 inputs, 1 sends, 2 buses, 3 zones. */
     property int part: 0
     property string selectedId: ""
     readonly property var selected: soundInputs.find(i => i.id === selectedId) || soundInputs[0] || null
@@ -56,7 +56,7 @@ AppPage {
     tools: [
         KanteSegmented {
             activeFocusOnTab: false
-            model: [qsTr("Inputs"), qsTr("Buses"), qsTr("Zones")]
+            model: [qsTr("Inputs"), qsTr("Sends"), qsTr("Buses"), qsTr("Zones")]
             currentIndex: root.part
             onActivated: index => root.part = index
         },
@@ -92,6 +92,32 @@ AppPage {
                     anchors.centerIn: parent
                     visible: strips.count === 0
                     text: qsTr("No input with sound yet")
+                }
+            }
+
+            // Sends (AUD.13): inputs × aux buses, a level per cell.
+            QQC2.ScrollView {
+                id: sendScroll
+                contentWidth: availableWidth
+                readonly property var buses: root.show && root.show.aux_buses ? root.show.aux_buses : []
+                GridLayout {
+                    width: sendScroll.availableWidth
+                    columns: sendScroll.buses.length + 1
+                    columnSpacing: Kirigami.Units.smallSpacing
+                    rowSpacing: Kirigami.Units.smallSpacing
+                    Item { implicitWidth: Kirigami.Units.gridUnit * 8 }
+                    Repeater {
+                        model: sendScroll.buses
+                        delegate: KanteSectionLabel {
+                            required property int index
+                            Layout.fillWidth: true
+                            text: Texts.auxName(index)
+                        }
+                    }
+                    Repeater {
+                        model: root.soundInputs
+                        delegate: SendRow {}
+                    }
                 }
             }
 
@@ -174,6 +200,43 @@ AppPage {
         anchors.centerIn: parent
         act: root.act
         zones: root.show && root.show.zones ? root.show.zones : []
+    }
+
+    /** One input's sends: its name, then a level per bus (0–100). The
+     *  cells go into the grid around it, so it is a list of items. */
+    component SendRow: Repeater {
+        id: sendRow
+        required property var modelData
+        readonly property var input: modelData
+        model: sendScroll.buses.length + 1
+        delegate: Loader {
+            required property int index
+            Layout.fillWidth: index > 0
+            sourceComponent: index === 0 ? nameCell : levelCell
+            Component {
+                id: nameCell
+                QQC2.Label {
+                    text: sendRow.input.number + " " + sendRow.input.name
+                    elide: Text.ElideRight
+                }
+            }
+            Component {
+                id: levelCell
+                QQC2.Slider {
+                    id: send
+                    readonly property int bus: index
+                    from: 0
+                    to: 100
+                    stepSize: 1
+                    value: sendRow.input.sends && sendRow.input.sends.length >= bus ? sendRow.input.sends[bus - 1] : 0
+                    Accessible.name: qsTr("Send of %1 to %2").arg(sendRow.input.name).arg(Texts.auxName(bus - 1))
+                    onMoved: root.act({ action: "set_aux_send", input: sendRow.input.number, bus: bus, level: Math.round(value) })
+                    QQC2.ToolTip.visible: hovered || pressed
+                    QQC2.ToolTip.text: value.toFixed(0)
+                    KanteSliderSkin { control: send }
+                }
+            }
+        }
     }
 
     /** One input's channel strip. */

@@ -832,4 +832,6 @@ DE = {
     'Edit': 'Bearbeiten',
     'Cues, zones, targets and the script can be changed': 'Cues, Zonen, Ziele und das Drehbuch lassen sich ändern',
     'Only running the show: no buttons that change it': 'Nur die Show fahren: keine Knöpfe, die sie ändern',
+    'Sends': 'Sends',
+    'Send of %1 to %2': 'Send von %1 auf %2',
 }
