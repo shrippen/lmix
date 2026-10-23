@@ -310,6 +310,9 @@ pub enum Event {
     /// A note or controller message from a MIDI controller (to learn a
     /// binding).
     Midi { midi: crate::midi::MidiMessage },
+    /// How busy the machine is and how the cue timer runs, about every
+    /// two seconds (RUN.8).
+    Machine { load: crate::machine::MachineLoad },
     /// Where a clip or playlist input plays, about five times a second
     /// while it plays (UI.5).
     Position {

@@ -32,6 +32,7 @@ const RT_TIME_HARD: Duration = Duration::from_millis(200);
 
 static REALTIME: AtomicBool = AtomicBool::new(false);
 static DEMOTED: AtomicBool = AtomicBool::new(false);
+static STOPPED: AtomicBool = AtomicBool::new(false);
 /// errno of a demotion the kernel refused (0: none).
 static DEMOTE_ERRNO: AtomicI32 = AtomicI32::new(0);
 /// The thread with real-time priority, for the SIGXCPU handler.
@@ -59,6 +60,21 @@ pub fn demotion_failed() -> Option<i32> {
 /// The cue thread ended: no real-time timer any more.
 pub fn ended() {
     REALTIME.store(false, Ordering::Relaxed);
+    STOPPED.store(true, Ordering::Relaxed);
+}
+
+/// How the cue timer runs, for clients (`Event::Machine`).
+pub fn priority() -> lmix_types::TimerPriority {
+    use lmix_types::TimerPriority;
+    if STOPPED.load(Ordering::Relaxed) {
+        TimerPriority::Stopped
+    } else if granted() {
+        TimerPriority::Realtime
+    } else if demoted() {
+        TimerPriority::Demoted
+    } else {
+        TimerPriority::Normal
+    }
 }
 
 /// The calling thread's kernel id, for [`make_realtime`].

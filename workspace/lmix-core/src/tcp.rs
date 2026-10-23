@@ -8,7 +8,7 @@
 //! | `{"action": …}` | `OK` or `ER <error> <message>` |
 //! | `TALLY` | `TALLY <digits>`: per input 0 off, 1 program, 2 preview |
 //! | `STATE` | `STATE <json>` |
-//! | `SUB <topic>` | `OK`, then a line per change; topics `TALLY`, `STATE`, `LEVELS`, `OUTPUTS`, `MIDI`, `TITLE`, `POSITION`, `CUE`, `TARGET`, `ALL` |
+//! | `SUB <topic>` | `OK`, then a line per change; topics `TALLY`, `STATE`, `LEVELS`, `OUTPUTS`, `MIDI`, `TITLE`, `POSITION`, `CUE`, `TARGET`, `MACHINE`, `ALL` |
 //! | `UNSUB <topic>` | `OK` |
 //! | `QUIT` | closes |
 //! | `AUTH <password>` | `OK`; first line from the network when lmix-core has `--password` or `--access-keys` (API.7, CTL.5); a key's right limits the actions after it |
@@ -55,6 +55,7 @@ impl Topics {
     const POSITION: u16 = 64;
     const CUE: u16 = 128;
     const TARGET: u16 = 256;
+    const MACHINE: u16 = 512;
     const ALL: u16 = Self::TALLY
         | Self::STATE
         | Self::LEVELS
@@ -63,7 +64,8 @@ impl Topics {
         | Self::TITLE
         | Self::POSITION
         | Self::CUE
-        | Self::TARGET;
+        | Self::TARGET
+        | Self::MACHINE;
 
     fn parse(name: &str) -> Option<u16> {
         match name.to_ascii_uppercase().as_str() {
@@ -76,6 +78,7 @@ impl Topics {
             "POSITION" => Some(Self::POSITION),
             "CUE" => Some(Self::CUE),
             "TARGET" => Some(Self::TARGET),
+            "MACHINE" => Some(Self::MACHINE),
             "ALL" => Some(Self::ALL),
             _ => None,
         }
@@ -94,6 +97,7 @@ impl Topics {
             Event::Target { .. } => Self::TARGET,
             Event::Panic { .. } => Self::CUE,
             Event::Running { .. } => Self::CUE,
+            Event::Machine { .. } => Self::MACHINE,
         };
         self.0 & bit != 0
     }
@@ -331,6 +335,7 @@ fn event_line(event: &Event) -> String {
         Event::Running { cues } => format!("RUNNING {}\n", json(cues)),
         Event::Title { .. } => format!("TITLE {}\n", json(event)),
         Event::Position { .. } => format!("POSITION {}\n", json(event)),
+        Event::Machine { load } => format!("MACHINE {}\n", json(load)),
     }
 }
 
@@ -511,5 +516,26 @@ mod tests {
         let refused = lines.next_line().await.unwrap().unwrap();
         assert!(refused.starts_with("ER forbidden"), "{refused}");
         assert_eq!(lines.next_line().await.unwrap().unwrap(), "TALLY ");
+    }
+
+    #[test]
+    fn the_machine_topic_carries_the_load() {
+        let event = Event::Machine {
+            load: lmix_types::MachineLoad {
+                cpu_percent: 91,
+                load_per_core: 1.5,
+                cores: 4,
+                cue_timer: lmix_types::TimerPriority::Normal,
+                cues_late: false,
+                high: true,
+            },
+        };
+        let machine = Topics(Topics::parse("machine").unwrap());
+        assert!(machine.wants(&event));
+        assert!(Topics(Topics::ALL).wants(&event));
+        assert!(!Topics(Topics::parse("CUE").unwrap()).wants(&event));
+        let line = event_line(&event);
+        assert!(line.starts_with("MACHINE {"), "{line}");
+        assert!(line.contains(r#""cue_timer":"normal""#), "{line}");
     }
 }

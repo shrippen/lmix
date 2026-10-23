@@ -4514,3 +4514,33 @@ es schließt (Wiederholung alle 3 s). Ersetzt „jedes Programm bindet seine
 eigenen“ (2026-10-18). Geprüft mit `scripts/test-global-keys.sh` (Ersatz-
 Portal); am echten KDE-Portal H.40.
 
+
+## 2026-10-23 — Rechnerlast und Cue-Zeitgeber in der Oberfläche (RUN.8)
+
+**Kontext**: User-Entscheidung RUN.8 (18.10.): Bekommt der Zeitgeber keine
+Echtzeit-Priorität, warnt lmix. Bisher standen nur eine Zeile im Log und
+`lmix_cue_timer_realtime 0` in `/metrics`; wer am Pult sitzt, sah nichts.
+Der Branch `s1-rt` (17.10.) hatte dafür schon ein Lastereignis; sein
+Zeitgeber mit Warteschlange ist verworfen (Eintrag vom 18.10.), das
+Ereignis kommt hier auf den Stand von `main`.
+
+**Entscheidung**: lmix-core meldet alle 2 s `Event::Machine`: CPU-Last
+seit der letzten Meldung (`/proc/stat`), Last je Kern (1-Minuten-Mittel aus
+`/proc/loadavg` durch die Zahl der Kerne), wie der Zeitgeber läuft
+(`realtime`, `normal`, `demoted` nach der weichen RLIMIT_RTTIME-Grenze,
+`stopped`) und ob in den letzten 30 s ein Cue-Schritt über seinem Budget
+(10 ms) lag. „Ausgelastet“ ab 85 % CPU, ab Last 1,0 je Kern oder bei einem
+späten Schritt. Über TCP als Thema `MACHINE` (auch in `ALL`), über
+`/api/events` wie jedes Ereignis.
+
+**Oberfläche**: Oben in der Kopfzeile steht gedämpft „CPU 34 %“ (Tooltip:
+Zeitgeber und Last). Gibt es etwas zu warnen, steht dort statt dessen eine
+Statusmarke: „Cues zu spät“, „Rechner ausgelastet“ oder „Keine Echtzeit“
+(Warnung) und „Cue-Zeitgeber steht“ (Fehler); der Tooltip sagt, warum, und
+bei „Keine Echtzeit“, wie man sie erlaubt (rtkit, Gruppe `realtime`).
+Setup zeigt unter „lmix-core“ die Zeile „Cue-Zeitgeber“ mit demselben
+Text. Ohne Verbindung verschwindet die Meldung.
+
+**Grenze**: Die Last gilt für den Rechner von lmix-core, nicht für den der
+Oberfläche. Schwellen sind Erfahrungswerte (DECISIONS 17.10.: Ausreißer bis
+146 ms unter Volllast); sie liegen in `lmix-types` (`machine.rs`).

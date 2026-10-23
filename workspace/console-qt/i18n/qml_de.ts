@@ -322,29 +322,29 @@
     </message>
     <message>
       <location line="+25" />
-      <location line="+173" />
+      <location line="+198" />
       <source>Keys</source>
       <translation>Tasten</translation>
     </message>
     <message>
-      <location line="-167" />
+      <location line="-192" />
       <source>Pages</source>
       <translation>Seiten</translation>
     </message>
     <message>
       <location line="+0" />
-      <location line="+243" />
+      <location line="+268" />
       <source>Ctrl+1…%1</source>
       <translation>Strg+1…%1</translation>
     </message>
     <message>
-      <location line="-242" />
-      <location line="+266" />
+      <location line="-267" />
+      <location line="+291" />
       <source>Panic all</source>
       <translation>Panik: alles</translation>
     </message>
     <message>
-      <location line="-266" />
+      <location line="-291" />
       <source>button in the page bar</source>
       <translation>Knopf in der Seitenleiste</translation>
     </message>
@@ -359,7 +359,7 @@
       <translation>Nur auf %1</translation>
     </message>
     <message>
-      <location line="+61" />
+      <location line="+64" />
       <source>File</source>
       <translation>Datei</translation>
     </message>
@@ -399,7 +399,7 @@
       <translation>Stream</translation>
     </message>
     <message>
-      <location line="+4" />
+      <location line="+26" />
       <source>lmix-core</source>
       <translation>lmix-core</translation>
     </message>
@@ -444,7 +444,7 @@
       <translation>%1 (Strg+%2)</translation>
     </message>
     <message>
-      <location line="-150" />
+      <location line="-172" />
       <source>New</source>
       <translation>Neu</translation>
     </message>
@@ -499,7 +499,7 @@
       <translation>System</translation>
     </message>
     <message>
-      <location line="+74" />
+      <location line="+96" />
       <source>This show file is in the older format %1 and was converted on opening. Saving it keeps the old file beside it (.v%1.bak).</source>
       <translation>Diese Show-Datei hat das ältere Format %1 und wurde beim Öffnen umgewandelt. Beim Speichern bleibt die alte Datei daneben erhalten (.v%1.bak).</translation>
     </message>
@@ -580,7 +580,7 @@
       <translation>Noch kein Input mit Ton</translation>
     </message>
     <message>
-      <location line="+52" />
+      <location line="+53" />
       <source>%1 ch.</source>
       <translation>%1 Kan.</translation>
     </message>
@@ -610,7 +610,7 @@
       <translation>Kanalzug · %1 %2</translation>
     </message>
     <message>
-      <location line="+47" />
+      <location line="+48" />
       <source>Send of %1 to %2</source>
       <translation>Send von %1 auf %2</translation>
     </message>
@@ -3175,6 +3175,16 @@
       <source>offline</source>
       <translation>offline</translation>
     </message>
+    <message>
+      <location line="+10" />
+      <source>Cue timer</source>
+      <translation>Cue-Zeitgeber</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>No report from lmix-core yet</source>
+      <translation>Noch keine Meldung von lmix-core</translation>
+    </message>
   </context>
   <context>
     <name>ShortcutEditDialog</name>
@@ -4342,6 +4352,83 @@
       <location line="+1" />
       <source>PGM %1 ms (p95 %2 ms)</source>
       <translation>PGM %1 ms (p95 %2 ms)</translation>
+    </message>
+    <message>
+      <location line="+14" />
+      <source>CPU %1 %</source>
+      <translation>CPU %1 %</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Cue timer at real-time priority</source>
+      <translation>Cue-Zeitgeber mit Echtzeit-Priorität</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Cue timer at normal priority</source>
+      <translation>Cue-Zeitgeber mit normaler Priorität</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Cue timer lost its real-time priority</source>
+      <translation>Cue-Zeitgeber hat die Echtzeit-Priorität verloren</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <location line="+15" />
+      <source>Cue timer stopped</source>
+      <translation>Cue-Zeitgeber steht</translation>
+    </message>
+    <message>
+      <location line="-13" />
+      <source>Cue timer –</source>
+      <translation>Cue-Zeitgeber –</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>CPU %1 %, load %2 per core (%3 cores)</source>
+      <translation>CPU %1 %, Last %2 je Kern (%3 Kerne)</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Waits and follows of the cue lists no longer run. Restart lmix-core.</source>
+      <translation>Wartezeiten und Folgen der Cue-Listen laufen nicht mehr. lmix-core neu starten.</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Cues late</source>
+      <translation>Cues zu spät</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>A cue step ran late in the last 30 s. %1.</source>
+      <translation>Ein Cue-Schritt kam in den letzten 30 s zu spät. %1.</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Machine loaded</source>
+      <translation>Rechner ausgelastet</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Cues may run late. %1.</source>
+      <translation>Cues können zu spät kommen. %1.</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <location line="+3" />
+      <source>No real time</source>
+      <translation>Keine Echtzeit</translation>
+    </message>
+    <message>
+      <location line="-2" />
+      <source>A cue step computed too long without a pause; the cue timer runs at normal priority until lmix-core restarts, and cues may run late on a busy machine.</source>
+      <translation>Ein Cue-Schritt hat zu lange ohne Pause gerechnet; der Cue-Zeitgeber läuft bis zum Neustart von lmix-core mit normaler Priorität, und auf einem ausgelasteten Rechner können Cues zu spät kommen.</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>The cue timer got no real-time priority, so cues may run late on a busy machine. Allow it with rtkit (running for the desktop session), or with a real-time limit for this user (group realtime, RLIMIT_RTPRIO).</source>
+      <translation>Der Cue-Zeitgeber hat keine Echtzeit-Priorität bekommen; auf einem ausgelasteten Rechner können Cues zu spät kommen. Erlauben mit rtkit (läuft mit der Desktop-Sitzung) oder mit einem Echtzeit-Limit für diesen Benutzer (Gruppe realtime, RLIMIT_RTPRIO).</translation>
     </message>
     <message>
       <location line="+9" />
