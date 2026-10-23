@@ -7,6 +7,7 @@ over all flashes); positive means the sound comes after the picture.
 
     scripts/av-offset.py recording.mkv
 """
+import re
 import subprocess
 import sys
 
@@ -19,37 +20,36 @@ W, H = 64, 36
 PAIR_S = 0.5
 
 
-def probe(path, stream, entry):
-    out = subprocess.run(
-        ["ffprobe", "-v", "error", "-select_streams", stream,
-         "-show_entries", entry, "-of", "csv=p=0", path],
-        capture_output=True, text=True, check=True).stdout
-    return [x.strip(",") for x in out.split()]
-
-
 def flashes(path):
-    raw = subprocess.run(
-        ["ffmpeg", "-v", "error", "-i", path, "-vf", f"scale={W}:{H},format=gray",
-         "-f", "rawvideo", "-"], capture_output=True, check=True).stdout
-    level = np.frombuffer(raw, np.uint8).reshape(-1, W * H).mean(axis=1)
-    times = np.array([float(t) for t in probe(path, "v:0", "frame=best_effort_timestamp_time")])
-    n = min(len(level), len(times))
-    bright = level[:n] > 128
-    return times[:n][bright & ~np.r_[False, bright[:-1]]]
+    """Start times of the white frames, from one decoding pass: frame
+    timestamps come from showinfo, so a gap in the picture keeps them."""
+    run = subprocess.run(
+        ["ffmpeg", "-v", "info", "-i", path, "-map", "0:v:0", "-fps_mode", "passthrough",
+         "-vf", f"scale={W}:{H},format=gray,showinfo", "-f", "rawvideo", "-"],
+        capture_output=True, check=True)
+    level = np.frombuffer(run.stdout, np.uint8).reshape(-1, W * H).mean(axis=1)
+    times = np.array([float(t) for t in re.findall(rb"pts_time:\s*(-?[\d.]+)", run.stderr)])
+    if len(level) != len(times):
+        sys.exit(f"{path}: {len(level)} frames but {len(times)} timestamps")
+    bright = level > 128
+    return times[bright & ~np.r_[False, bright[:-1]]]
 
 
 def beeps(path):
+    """Start times of the beeps. aresample fills every gap in the sound
+    (over 1 ms) with silence from time 0, so sample index / rate is the
+    time; by default it would close small gaps only slowly."""
     raw = subprocess.run(
-        ["ffmpeg", "-v", "error", "-i", path, "-ac", "1", "-ar", str(RATE),
-         "-f", "f32le", "-"], capture_output=True, check=True).stdout
+        ["ffmpeg", "-v", "error", "-i", path, "-map", "0:a:0", "-ac", "1",
+         "-af", f"aresample={RATE}:async=1:min_hard_comp=0.001:first_pts=0", "-f", "f32le", "-"],
+        capture_output=True, check=True).stdout
     loud = np.abs(np.frombuffer(raw, np.float32)) > 0.2
     onsets = np.flatnonzero(loud & ~np.r_[False, loud[:-1]])
     if len(onsets) == 0:
-        return onsets
+        return onsets / RATE
     # One onset per beep: the sine crosses the threshold many times.
     onsets = onsets[np.r_[True, np.diff(onsets) > RATE // 10]]
-    start = float(probe(path, "a:0", "stream=start_time")[0])
-    return onsets / RATE + start
+    return onsets / RATE
 
 
 def main():
