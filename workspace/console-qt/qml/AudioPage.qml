@@ -21,6 +21,11 @@ AppPage {
     readonly property var levels: shell.backend.levels.length > 0 ? JSON.parse(shell.backend.levels) : ({})
     readonly property var master: show && show.master ? show.master : ({ volume: 100, mute: false })
     readonly property var soundInputs: show ? show.inputs.filter(i => i.has_audio) : []
+    // Strips by id: a new state (every fader step brings one) keeps the
+    // delegates, so a fader drag goes on.
+    KeyedModel { id: stripModel }
+    Component.onCompleted: stripModel.sync(soundInputs.map(i => i.id))
+    onSoundInputsChanged: stripModel.sync(soundInputs.map(i => i.id))
     readonly property bool soloing: soundInputs.some(i => i.listen !== "off")
     function act(action) { shell.act(action) }
 
@@ -77,7 +82,7 @@ AppPage {
                 spacing: Kirigami.Units.smallSpacing
                 clip: true
                 boundsBehavior: Flickable.StopAtBounds
-                model: root.soundInputs
+                model: stripModel
                 QQC2.ScrollBar.horizontal: QQC2.ScrollBar {}
                 delegate: Strip {}
 
@@ -172,8 +177,9 @@ AppPage {
     /** One input's channel strip. */
     component Strip: KanteCard {
         id: strip
-        required property var modelData
-        readonly property var input: modelData
+        required property string key
+        readonly property var input: root.soundInputs.find(i => i.id === key)
+            || ({ id: key, number: 0, name: "", audio: { on: false, follow_video: false, volume: 0 }, listen: "off" })
         readonly property bool onProgram: root.show !== null && root.show.program === input.id
         readonly property bool onPreview: root.show !== null && root.show.preview === input.id
         readonly property bool chosen: root.selected !== null && root.selected.id === input.id

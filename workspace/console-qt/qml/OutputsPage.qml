@@ -26,6 +26,10 @@ AppPage {
     readonly property var streams: outputs.filter(o => o.spec.kind === "srt" || o.spec.kind === "rtmp")
     readonly property var recordings: outputs.filter(o => o.spec.kind === "record")
     function act(action) { shell.act(action) }
+    // Rows by id: a new state keeps them (and their running-time timers).
+    KeyedModel { id: outputModel }
+    Component.onCompleted: outputModel.sync(outputs.map(o => o.id))
+    onOutputsChanged: outputModel.sync(outputs.map(o => o.id))
 
     property string selectedId: ""
     readonly property var selected: outputs.find(o => o.id === selectedId) || outputs[0] || null
@@ -124,7 +128,7 @@ AppPage {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     clip: true
-                    model: root.outputs
+                    model: outputModel
                     delegate: OutputRow {}
                     QQC2.ScrollBar.vertical: QQC2.ScrollBar {}
                     KanteEmptyState {
@@ -256,8 +260,9 @@ AppPage {
 
     component OutputRow: Rectangle {
         id: row
-        required property var modelData
-        readonly property var output: modelData
+        required property string key
+        readonly property var output: root.outputs.find(o => o.id === key)
+            || ({ id: key, number: 0, name: "", spec: { kind: "" }, status: { state: "stopped" } })
         readonly property bool isRunning: output.status.state === "running"
         readonly property var link: root.links[output.id]
         property string elapsed: ""

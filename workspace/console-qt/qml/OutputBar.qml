@@ -20,8 +20,11 @@ RowLayout {
     required property var outputs
     required property var outputById
     signal addRequested()
-    /** Ask before stopping a running output. */
+    /** Ask before stopping a running output (the shell's setting). */
     property bool confirmStop: true
+    /** The answer to "Ask before stopping" after a stop; the page writes
+     *  the setting, so `confirmStop` stays bound to it. */
+    signal confirmStopChosen(bool on)
 
     readonly property var links: core.links.length > 0 ? JSON.parse(core.links) : ({})
     /** SRT outputs, started and stopped together with one button (STR.1). */
@@ -94,7 +97,7 @@ RowLayout {
         parent: QQC2.Overlay.overlay
         anchors.centerIn: parent
         act: bar.act
-        onAskAgainChosen: on => bar.confirmStop = on
+        onAskAgainChosen: on => bar.confirmStopChosen(on)
     }
 
     KanteButton {

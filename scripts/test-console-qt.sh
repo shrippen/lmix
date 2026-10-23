@@ -242,6 +242,19 @@ for page in "AUDIO 286" "OUTPUTS 397" "SETUP 510"; do
     shot "page-$name"
     (($(moved "$prev" "page-$name" 1400x700+20+60) > 5000)) && pass "$name page draws" || fail "$name page shows the page before"
     prev="page-$name"
+    if [[ "$name" == AUDIO ]]; then
+        # A fader drag of several steps: each step brings a new state,
+        # and the strip must survive it (a rebuilt strip ended the drag
+        # after the first step, at about 93).
+        FADER_TOP="54 214"
+        xdotool mousemove $FADER_TOP mousedown 1
+        for y in 250 300 350 400 450 480; do xdotool mousemove 54 "$y"; sleep 0.15; done
+        xdotool mouseup 1
+        sleep 1
+        volume="$(state | jq '.inputs[0].audio.volume')"
+        ((volume < 70)) && pass "Audio: a fader drag goes on over state updates ($volume)" \
+            || fail "Audio: fader drag ended early (volume $volume)"
+    fi
 done
 own_qml_warnings console.log && fail "QML warnings (pages): $(own_qml_warnings console.log | head -3)"
 pass "no QML warnings (Audio, Outputs, Setup)"

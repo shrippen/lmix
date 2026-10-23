@@ -558,7 +558,7 @@ AppPage {
             outputs: outputModel
             outputById: root.outputById
             confirmStop: root.shell.confirmStop
-            onConfirmStopChanged: root.shell.confirmStop = confirmStop
+            onConfirmStopChosen: on => root.shell.confirmStop = on
             onAddRequested: addOutputDialog.open()
         }
     }
