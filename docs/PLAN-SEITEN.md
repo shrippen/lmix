@@ -45,7 +45,7 @@ die Leinwand ist Anschauung und liegt nicht im Repo.
 
 Dialoge, die heute nur aus Platzmangel Dialoge sind, werden Teile einer
 Seite; kurze Abfragen (Input hinzufügen, Bestätigungen) bleiben Dialoge.
-Welche genau, klärt Schritt 1.
+Welche, steht unter „Click-Dummy 2“; was davon schon Seite ist, unter „Stand“.
 
 ## Bild im Netz
 
@@ -163,3 +163,36 @@ Nach Bildschirmfotos (Ausnahme, DECISIONS 23.10.) zusätzlich:
   „Pause inputs“, Basic-Modus.
 - **Audio**: je Zug Mini-Kurven für EQ und Dynamik, Spitzenwert in dB,
   Pan, Umschalter ON/AFV, Abhör-Taste mit Kopfhörer.
+
+## Stand
+
+- **Schritt 2 erledigt**: ein Programm `lmix` mit Kopfzeile, Seitenleiste,
+  „Panic all“, Tasten-Übersicht, Strg+1…n, `--page`; Einstellungen aus
+  `mixer.conf` und `show.conf` übernommen (GUI-SHELL.md).
+- **Schritt 3 erledigt, erste Fassung**: Audio (Kanalzüge, Kanalzug des
+  gewählten Inputs, Busse, Zonen), Outputs (Liste, Start/Stopp mit Rückfrage,
+  Einzelheiten, Multiview), Setup (Show, Steuerung, dieser Rechner).
+
+Aus dem Dummy noch offen, **nur Oberfläche** (der Kern kann es):
+- Mix: Ansicht „Buttons“ (Program-/Preview-Reihen), Titelleiste der Kachel
+  in Tally-Farbe, Overlay-Raster 2×4 und Overlay-Tasten je Kachel, schmaler
+  Tonmischer am Rand, Senken-Tasten unten.
+- Show: Schalter Edit/Show, Inspector unten mit Reitern, Seitenleiste
+  Aktiv/Listen, laufende Cues als Fortschrittsfüllung mit negativer
+  Restzeit, Leiste zum Anlegen je Cue-Art, Zeitfelder mit Fortschritt.
+- Audio: Matrix Inputs × Busse aus den Sends (AUD.13), Mini-Kurven EQ und
+  Dynamik je Zug, Spitzenwert in dB, ON/AFV als Umschalter.
+- Seiten lösbar auf einen zweiten Bildschirm (Entscheidung Click-Dummy 1).
+- Leiste: wer eine Seite zuletzt bediente (braucht die Kennung je
+  Verbindung im Kern, siehe Schritt 4).
+
+**Braucht den Kern** (Lastenheft offen): Pause je Cue und alles (RUN.5),
+Vorhören (RUN.10), Pads/Raster (RUN.12), Sperren je Ein-/Ausgabeklasse
+(RUN.9), Markierung und „gelaufen“ (SUI.12), Zonen-Leiste mit Pegeln
+(SUI.8), Pause inputs (INP.12), Dateiteilung und Namensmuster (REC.4,
+REC.5), Marken ins Protokoll (REC.8), Sendeverzögerung (STR.5), Puffer und
+Encoder-Last (STR.7), Vorlagen und Assistent (UI.13).
+
+**Vor Schritt 4**: Anmeldung der Arbeitsplätze am Kern (Schlüssel bzw.
+Pairing, TLS im WAN); „alle dürfen alles“ gilt nur für angemeldete Plätze
+(Review #133).

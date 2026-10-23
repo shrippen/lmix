@@ -103,8 +103,15 @@ fn main() {
         QmlModule::new("org.lmix.console")
             .qml_files([
                 "qml/AppShell.qml",
-                "qml/MixerMain.qml",
-                "qml/ShowMain.qml",
+                "qml/Main.qml",
+                "qml/AppPage.qml",
+                "qml/MixPage.qml",
+                "qml/ShowPage.qml",
+                "qml/AudioPage.qml",
+                "qml/AuxBusPanel.qml",
+                "qml/OutputsPage.qml",
+                "qml/StopOutputDialog.qml",
+                "qml/SetupPage.qml",
                 "qml/LiveView.qml",
                 "qml/InputTile.qml",
                 "qml/SourceFields.qml",

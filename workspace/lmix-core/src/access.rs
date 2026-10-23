@@ -337,6 +337,7 @@ pub fn right_of(action: &Action) -> Right {
         | Action::ClickInput { .. }
         | Action::GoInput { .. }
         | Action::FadeToBlack { .. }
+        | Action::SetFadeToBlack { .. }
         | Action::TBar { .. }
         | Action::OverlayIn { .. }
         | Action::OverlayOut { .. }
@@ -575,6 +576,7 @@ async fn open_action(access: &Access, service: &Service, action: &Action) -> Opt
                 | Action::Cut
                 | Action::Transition { .. }
                 | Action::FadeToBlack { .. }
+                | Action::SetFadeToBlack { .. }
                 | Action::PreviewLayout { .. }
         );
     // What titles.html sends; data sets live in the show, no files.

@@ -4501,3 +4501,16 @@ Für die Shell entschieden (Click-Dummy 1): Panik global in der Leiste und je
 Seite für ihren Bereich; globale Tasten immer, Seitentasten nur auf der
 sichtbaren Seite; Seiten lösbar auf einen zweiten Bildschirm; im Netz dürfen
 alle Arbeitsplätze alles, die Leiste zeigt, wer eine Seite zuletzt bediente.
+
+## 2026-10-23 — Globale Tasten: ab Werk an, ein Fenster bindet
+
+Mit einem Programm `lmix` (Seiten) sind die globalen Tasten (AUT.12) ab Werk
+**an**, wie bisher in lmix Show (Owner 18.10.); die Vorgabe „im Mischer
+aus“ entfällt mit dem Mischer-Programm. Damit zwei lmix-Fenster einen Druck
+nicht doppelt auslösen, bindet nur ein Fenster je Rechner: das erste nimmt
+eine Sperre (`portal::claim`, Datei im Laufzeitverzeichnis des Benutzers),
+weitere zeigen „ein anderes lmix-Fenster bindet sie“ und übernehmen, sobald
+es schließt (Wiederholung alle 3 s). Ersetzt „jedes Programm bindet seine
+eigenen“ (2026-10-18). Geprüft mit `scripts/test-global-keys.sh` (Ersatz-
+Portal); am echten KDE-Portal H.40.
+

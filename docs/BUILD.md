@@ -242,9 +242,10 @@ Prüft Bildinhalt (Helligkeit, Bewegung) über ImageMagick `convert`.
 
 ## Qt-Console (`workspace/console-qt`, Prototyp)
 
-Ein Crate, zwei Programme über demselben `lmix-core` (DECISIONS
-2026-10-18): `lmix-mixer` (lmix Mischer: Inputs live schalten) und
-`lmix-show` (lmix Show: Cues mit GO). Beide laufen auch gleichzeitig.
+Ein Programm `lmix` mit Seiten (Mix, Show, Audio, Outputs, Setup;
+DECISIONS 2026-10-23, `docs/PLAN-SEITEN.md`), umgeschaltet über die Leiste am
+Fuß oder Strg+1…n. Mehrere Fenster laufen auch gleichzeitig am selben
+`lmix-core`.
 
 Ziel ist Linux allgemein, keine einzelne Distribution; entwickelt wird auf
 Arch. Gebraucht werden:
@@ -291,21 +292,22 @@ prüft, trägt sie hier ein.
 ```bash
 scripts/sync-kante.sh                 # Kante-QML ins Crate kopieren (nach Kante-Änderungen)
 cd workspace/console-qt
-cargo run --release --bin lmix-mixer -- --core http://127.0.0.1:8200 [--theme kante|kante-light|system]
-cargo run --release --bin lmix-show -- --core http://127.0.0.1:8200
+cargo run --release -- --core http://127.0.0.1:8200 [--page mix|show] [--theme kante|kante-light|system]
 ```
 
-Oder alles zusammen (strom, lmix-core, Mischer mit Testbildern; Schließen
-beendet alles): `scripts/run-local.sh` (`MIXER=gl`, `INPUTS=8`; `APP=show`
-startet die Show, `APP=both` beide).
+Oder alles zusammen (strom, lmix-core, lmix mit Testbildern; Schließen
+beendet alles): `scripts/run-local.sh` bzw. `./start-mixer.sh` (`MIXER=gl`,
+`INPUTS=8`; `APP=show` bzw. `./start-show.sh` öffnet auf der Seite Show,
+`APP=both` zwei Fenster).
 
-Einstellungen (Stil, Ansicht, Tasten) je Programm in
-`~/.config/lmix/mixer.conf` und `show.conf`. Beim ersten Start kopiert jedes
-Programm eine vorhandene `console.conf` (die eine Console bis 18.10.2026)
-einmal in seine Datei. Startmenü: `packaging/desktop/lmix-mixer.desktop` und
-`lmix-show.desktop` nach `~/.local/share/applications/`, die Programme im
-`PATH`. Globale Tasten (AUT.12) schaltet jedes Programm selbst (Belegungen…);
-ab Werk in der Show an, im Mischer aus.
+Einstellungen (Stil, Ansicht, Tasten, zuletzt offene Seite) in
+`~/.config/lmix/lmix.conf`. Beim ersten Start übernimmt lmix einmal
+`mixer.conf` und `show.conf` der zwei Programme bis 23.10.2026 (bei gleichen
+Schlüsseln gilt der Mischer, die globalen Tasten die Show), sonst eine
+`console.conf` (die eine Console bis 18.10.2026). Startmenü:
+`packaging/desktop/lmix.desktop` nach `~/.local/share/applications/`, `lmix`
+im `PATH`. Globale Tasten (AUT.12) ab Werk an, abschaltbar unter
+Belegungen…
 
 Sprache: Quelltexte englisch, Deutsch als Übersetzung; die Programme folgen der
 Systemsprache (`LANGUAGE=en LANG=en_US.UTF-8` erzwingt Englisch). Neue oder geänderte

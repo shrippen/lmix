@@ -8,49 +8,64 @@ import Kante
 import org.lmix.console
 
 /**
- * The window both programs share (mixer, show; DECISIONS 2026-10-18):
- * lmix-core, the style, the show file and this machine's settings, the
- * older-format notice and refusals. What a program adds goes into
- * `content` (the default), `fileTools` (after Recent), `tools` (right of
- * the style) and `packageItems` (the Package menu, after Import).
+ * The lmix window (docs/PLAN-SEITEN.md): a header with the file menu and
+ * the state of the show, the pages (Mix, Show, ...) one at a time, and the
+ * page bar at the foot with "Panic all". Pages are the children; each is
+ * an AppPage. Switching pages stops nothing: the run is in lmix-core.
  *
- *   [New][Open][Recent] fileTools [Save][Save as][Package] … [Style] tools
- *   ┌ content ─────────────────────────────────────────────────────────┐
+ *   lmix [File] show.lmix …        ● Rec ● Stream  lmix-core  [Keys]  20:14
+ *   ┌ page ────────────────────────────────────────────────────────────┐
  *   └──────────────────────────────────────────────────────────────────┘
  *   older format · refusal
+ *   [Mix][Show] …                         Ctrl+1…n  [PGM]  [Panic all]
  */
 Kirigami.ApplicationWindow {
     id: root
 
-    /** The program's name in the title bar, e.g. "lmix Mixer". */
-    required property string appName
-    default property alias content: area.data
-    property alias fileTools: fileToolsRow.data
-    property alias tools: toolsRow.data
-    /** Menu items put into the Package menu after Import. */
-    property list<QtObject> packageItems
-    /** Bind the keyed shortcuts at the desktop too (AUT.12): the
-     *  program's own setting (keys/global). Each program binds its own, so
-     *  with both on a press runs twice; the shortcuts dialog says so. */
-    property bool globalShortcuts: false
-    /** The switch in the shortcuts dialog was used. */
-    signal globalShortcutsToggled(bool on)
-    /** A shell dialog or menu closed: the program puts the keyboard focus
+    default property alias pages: stack.data
+    /** Shortcut keys also work while lmix is not in front (AUT.12). */
+    readonly property bool globalShortcuts: keySettings.global
+    /** A shell dialog or menu closed: the page puts the keyboard focus
      *  back where its keys work (the show view: space GO, Escape panic). */
     signal restoreFocus()
 
     readonly property Core backend: Core {}
 
-    title: show && show.path ? appName + " — " + show.path : appName
+    title: show && show.path ? "lmix — " + show.path : "lmix"
     width: Kirigami.Units.gridUnit * 80
     height: Kirigami.Units.gridUnit * 50
     color: KanteStyle.backgroundColor
+    pageStack.globalToolBar.style: Kirigami.ApplicationHeaderStyle.None
 
     Settings {
         id: settings
         category: "appearance"
         /** KanteStyle.Kind; Kante unless chosen otherwise. */
         property int style: KanteStyle.Kind.Kante
+    }
+
+    Settings {
+        id: keySettings
+        category: "keys"
+        /** On by default: GO and panic of the show work while another
+         *  window is in front (owner, 18.10.2026, for lmix Show). */
+        property bool global: true
+    }
+
+    Settings {
+        id: safetySettings
+        category: "safety"
+        /** Ask before a running output (recording, stream) stops (UI.10);
+         *  one setting for every page. */
+        property bool confirmStop: true
+    }
+    property alias confirmStop: safetySettings.confirmStop
+
+    Settings {
+        id: pageSettings
+        category: "pages"
+        /** The page open last. */
+        property string current: "mix"
     }
 
     Binding {
@@ -80,6 +95,60 @@ Kirigami.ApplicationWindow {
         return decodeURIComponent(url.toString().replace(/^file:\/\//, ""))
     }
 
+    /** Panic all: the show's cues stop over the panic time, program fades
+     *  to black. Recordings and streams go on. */
+    function panicAll() {
+        act({ action: "cue_panic" })
+        // Set, not toggle: a second press before the new state comes back
+        // must not fade program up again.
+        act({ action: "set_fade_to_black", on: true })
+    }
+
+    // --- pages ---
+
+    readonly property var pageItems: {
+        var list = []
+        for (var i = 0; i < stack.children.length; i++) {
+            if (stack.children[i].pageId !== undefined) {
+                list.push(stack.children[i])
+            }
+        }
+        return list
+    }
+    property string currentPage: "mix"
+    readonly property var currentItem: pageItems.find(p => p.pageId === currentPage) || null
+    function showPage(id) {
+        if (!pageItems.some(p => p.pageId === id)) {
+            return
+        }
+        currentPage = id
+        pageSettings.current = id
+    }
+    onCurrentItemChanged: {
+        if (currentItem) {
+            Qt.callLater(currentItem.takeFocus)
+        }
+    }
+    onRestoreFocus: {
+        root.requestActivate()
+        if (currentItem) {
+            currentItem.takeFocus()
+        }
+    }
+
+    // Ctrl+1…n: the pages in the order of the bar.
+    Instantiator {
+        model: root.pageItems.length
+        delegate: Shortcut {
+            required property int index
+            sequence: "Ctrl+" + (index + 1)
+            enabled: root.shortcutKeys.indexOf(sequence) < 0
+            onActivated: root.showPage(root.pageItems[index].pageId)
+        }
+    }
+
+    // --- shortcuts of the show ---
+
     readonly property var shortcuts: show && show.shortcuts ? show.shortcuts : []
     /** Shortcuts whose key runs them: one for all shows gives way to the
      *  show's with the same key (AUT.3). */
@@ -87,7 +156,7 @@ Kirigami.ApplicationWindow {
     readonly property var shortcutKeys: keyedShortcuts.map(s => s.key)
 
     // The shortcuts (AUT.1–3) while this window is in front; they win over
-    // the program's own keys.
+    // the pages' own keys.
     Instantiator {
         model: root.keyedShortcuts
         delegate: Shortcut {
@@ -102,6 +171,14 @@ Kirigami.ApplicationWindow {
     readonly property string globalShortcutList: JSON.stringify(globalShortcuts
         ? keyedShortcuts.map(s => ({ id: s.id, label: s.label, key: s.key })) : [])
     onGlobalShortcutListChanged: backend.setGlobalShortcuts(globalShortcutList)
+    // Another window binds the keys: try again until it is gone, so GO and
+    // panic at the desktop come back when that window closes.
+    Timer {
+        interval: 3000
+        repeat: true
+        running: root.globalShortcuts && root.backend.globalHeld
+        onTriggered: root.backend.setGlobalShortcuts(root.globalShortcutList)
+    }
     Connections {
         target: root.backend
         function onGlobalShortcut(id) {
@@ -111,6 +188,27 @@ Kirigami.ApplicationWindow {
 
     function openShortcuts() {
         shortcutsDialog.open()
+    }
+
+    /** Opens one of the window's dialogs by name, for the Setup page. */
+    function openShellDialog(name) {
+        switch (name) {
+        case "newShow": newShowDialog.open(); break
+        case "exportPackage": exportDialog.open(); break
+        case "importPackage": importDialog.open(); break
+        case "exportSettings": exportSettingsDialog.open(); break
+        case "importSettings": importSettingsDialog.open(); break
+        case "resetSettings": resetSettingsDialog.open(); break
+        }
+    }
+
+    function setGlobalShortcuts(on) {
+        keySettings.global = on
+    }
+
+    function setStyle(kind) {
+        settings.style = kind
+        backend.style = -1
     }
 
     ShortcutsDialog {
@@ -123,7 +221,7 @@ Kirigami.ApplicationWindow {
         shortcuts: root.shortcuts
         globalKeys: root.globalShortcuts
         globalStatus: root.backend.globalKeys
-        onGlobalKeysToggled: on => root.globalShortcutsToggled(on)
+        onGlobalKeysToggled: on => keySettings.global = on
         midiTbar: root.show ? root.show.midi_tbar : null
         onEditRequested: shortcut => {
             shortcutEditDialog.shortcut = shortcut
@@ -142,15 +240,27 @@ Kirigami.ApplicationWindow {
 
     Component.onCompleted: {
         backend.setGlobalShortcuts(globalShortcutList)
+        // `--page` for this run, else the page open last.
+        showPage(backend.startPage !== "" ? backend.startPage : pageSettings.current)
+        if (!currentItem && pageItems.length > 0) {
+            showPage(pageItems[0].pageId)
+        }
         // Start options (UI.12): `--window maximized|fullscreen`.
-        if (backend.windowMode === "maximized")
+        if (backend.windowMode === "maximized") {
             root.showMaximized()
-        else if (backend.windowMode === "fullscreen")
+        } else if (backend.windowMode === "fullscreen") {
             root.showFullScreen()
-        // After Export, Import and the separator.
-        for (var i = 0; i < packageItems.length; i++)
-            packageMenu.insertItem(3 + i, packageItems[i])
+        }
+        // The pages' entries go after the package entries.
+        for (var p = 0; p < pageItems.length; p++) {
+            var items = pageItems[p].fileItems
+            for (var i = 0; i < items.length; i++) {
+                fileMenu.addItem(items[i])
+            }
+        }
     }
+
+    // --- file dialogs ---
 
     FileDialog {
         id: openDialog
@@ -275,135 +385,225 @@ Kirigami.ApplicationWindow {
         format: root.show && root.show.format ? root.show.format : ({ width: 1920, height: 1080, framerate: "30/1" })
     }
 
-    pageStack.initialPage: Kirigami.Page {
-        title: root.appName
-        padding: Kirigami.Units.largeSpacing
+    // --- keys overview ---
 
-        actions: [
-            Kirigami.Action {
-                displayComponent: KantePill {
-                    status: root.backend.connected ? KantePill.State.Running : KantePill.State.Failed
-                    text: root.backend.connected ? qsTr("lmix-core") : qsTr("lmix-core offline")
-                }
+    KanteDialog {
+        id: keysDialog
+        onClosed: root.restoreFocus()
+        parent: QQC2.Overlay.overlay
+        anchors.centerIn: parent
+        title: qsTr("Keys")
+        modal: true
+        width: Kirigami.Units.gridUnit * 26
+        standardButtons: QQC2.Dialog.Close
+        contentHeight: keysColumn.implicitHeight
+        readonly property var always: [
+            { what: qsTr("Pages"), key: qsTr("Ctrl+1…%1").arg(root.pageItems.length) },
+            { what: qsTr("Panic all"), key: qsTr("button in the page bar") }
+        ].concat(root.keyedShortcuts.map(s => ({ what: s.label, key: s.key })))
+        ColumnLayout {
+            id: keysColumn
+            width: parent.width
+            KanteSectionLabel { text: qsTr("Always") }
+            Repeater {
+                model: keysDialog.always
+                delegate: KeyRow {}
             }
-        ]
+            KanteSectionLabel {
+                text: root.currentItem ? qsTr("Only on %1").arg(root.currentItem.title) : ""
+                visible: root.currentItem !== null && root.currentItem.pageKeys.length > 0
+            }
+            Repeater {
+                model: root.currentItem ? root.currentItem.pageKeys : []
+                delegate: KeyRow {}
+            }
+        }
+    }
+    component KeyRow: RowLayout {
+        required property var modelData
+        Layout.fillWidth: true
+        QQC2.Label {
+            Layout.fillWidth: true
+            text: modelData.what
+            elide: Text.ElideRight
+        }
+        QQC2.Label {
+            text: modelData.key
+            font.family: KanteStyle.monoFamily
+            color: KanteStyle.neutralTextColor
+        }
+    }
+
+    // --- the window ---
+
+    readonly property var runningOutputs: show ? show.outputs.filter(o => o.status && o.status.state === "running") : []
+    readonly property bool recording: runningOutputs.some(o => o.spec.kind === "record")
+    readonly property bool streaming: runningOutputs.some(o => o.spec.kind === "srt" || o.spec.kind === "rtmp")
+
+    pageStack.initialPage: Kirigami.Page {
+        padding: 0
+        globalToolBarStyle: Kirigami.ApplicationHeaderStyle.None
 
         ColumnLayout {
             anchors.fill: parent
-            spacing: Kirigami.Units.largeSpacing
+            spacing: 0
 
-            // The buttons take no focus: in the show, space and Escape stay
-            // with the show view.
-            RowLayout {
+            // The header: file menu and the state of the show. The buttons
+            // take no focus: in the show, space and Escape stay with the
+            // show view.
+            Rectangle {
                 Layout.fillWidth: true
-                spacing: Kirigami.Units.smallSpacing
+                implicitHeight: headerRow.implicitHeight + Kirigami.Units.smallSpacing * 2
+                color: KanteStyle.sunkenColor
+                RowLayout {
+                    id: headerRow
+                    anchors.fill: parent
+                    anchors.leftMargin: Kirigami.Units.largeSpacing
+                    anchors.rightMargin: Kirigami.Units.largeSpacing
+                    spacing: Kirigami.Units.largeSpacing
 
-                KanteButton {
-                    focusPolicy: Qt.NoFocus
-                    text: qsTr("New")
-                    enabled: root.backend.connected
-                    onClicked: newShowDialog.open()
-                }
-                KanteButton {
-                    focusPolicy: Qt.NoFocus
-                    text: qsTr("Open…")
-                    enabled: root.backend.connected
-                    onClicked: openDialog.open()
-                }
-                KanteButton {
-                    id: recentButton
-                    focusPolicy: Qt.NoFocus
-                    text: qsTr("Recent")
-                    enabled: root.backend.connected && root.recent.length > 0
-                    onClicked: recentMenu.popup(recentButton, 0, recentButton.height)
-                    ChoiceMenu {
-                        id: recentMenu
-                        choices: root.recent.map(path => ({ value: path, label: path }))
-                        onPicked: value => root.act({ action: "open_show", path: value })
+                    KanteHeading {
+                        level: 2
+                        pageTitle: true
+                        text: "lmix"
                     }
-                }
-                RowLayout {
-                    id: fileToolsRow
-                    visible: children.length > 0
-                    spacing: Kirigami.Units.smallSpacing
-                }
-                KanteButton {
-                    focusPolicy: Qt.NoFocus
-                    text: qsTr("Save")
-                    enabled: root.backend.connected
-                    onClicked: root.show && root.show.path ? root.act({ action: "save_show" }) : saveDialog.open()
-                }
-                KanteButton {
-                    focusPolicy: Qt.NoFocus
-                    text: qsTr("Save as…")
-                    enabled: root.backend.connected
-                    onClicked: saveDialog.open()
-                }
-                KanteButton {
-                    id: packageButton
-                    focusPolicy: Qt.NoFocus
-                    text: qsTr("Package")
-                    enabled: root.backend.connected
-                    QQC2.ToolTip.visible: hovered
-                    QQC2.ToolTip.text: qsTr("The show with its media in one file, to move it to another machine")
-                    onClicked: packageMenu.popup(packageButton, 0, packageButton.height)
-                    QQC2.Menu {
-                        id: packageMenu
-                        KantePopupSkin { popup: packageMenu }
-                        QQC2.MenuItem {
-                            text: qsTr("Export…")
-                            onTriggered: exportDialog.open()
-                        }
-                        QQC2.MenuItem {
-                            text: qsTr("Import…")
-                            onTriggered: importDialog.open()
-                        }
-                        QQC2.MenuSeparator {}
-                        QQC2.MenuItem {
-                            text: qsTr("Export settings…")
-                            onTriggered: exportSettingsDialog.open()
-                        }
-                        QQC2.MenuItem {
-                            text: qsTr("Import settings…")
-                            onTriggered: importSettingsDialog.open()
-                        }
-                        QQC2.MenuItem {
-                            text: qsTr("Factory settings…")
-                            onTriggered: resetSettingsDialog.open()
+                    KanteButton {
+                        id: fileButton
+                        focusPolicy: Qt.NoFocus
+                        emphasis: KanteButton.Emphasis.Quiet
+                        text: qsTr("File")
+                        enabled: root.backend.connected
+                        onClicked: fileMenu.popup(fileButton, 0, fileButton.height)
+                        QQC2.Menu {
+                            id: fileMenu
+                            KantePopupSkin { popup: fileMenu }
+                            QQC2.MenuItem {
+                                text: qsTr("New")
+                                onTriggered: newShowDialog.open()
+                            }
+                            QQC2.MenuItem {
+                                text: qsTr("Open…")
+                                onTriggered: openDialog.open()
+                            }
+                            ChoiceMenu {
+                                title: qsTr("Recent")
+                                enabled: root.recent.length > 0
+                                choices: root.recent.map(path => ({ value: path, label: path }))
+                                onPicked: value => root.act({ action: "open_show", path: value })
+                            }
+                            QQC2.MenuItem {
+                                text: qsTr("Save")
+                                onTriggered: root.show && root.show.path ? root.act({ action: "save_show" }) : saveDialog.open()
+                            }
+                            QQC2.MenuItem {
+                                text: qsTr("Save as…")
+                                onTriggered: saveDialog.open()
+                            }
+                            QQC2.MenuSeparator {}
+                            QQC2.MenuItem {
+                                text: qsTr("Export package…")
+                                onTriggered: exportDialog.open()
+                            }
+                            QQC2.MenuItem {
+                                text: qsTr("Import package…")
+                                onTriggered: importDialog.open()
+                            }
+                            QQC2.MenuSeparator {}
+                            QQC2.MenuItem {
+                                text: qsTr("Export settings…")
+                                onTriggered: exportSettingsDialog.open()
+                            }
+                            QQC2.MenuItem {
+                                text: qsTr("Import settings…")
+                                onTriggered: importSettingsDialog.open()
+                            }
+                            QQC2.MenuItem {
+                                text: qsTr("Factory settings…")
+                                onTriggered: resetSettingsDialog.open()
+                            }
+                            QQC2.MenuItem {
+                                text: qsTr("Shortcuts…")
+                                onTriggered: root.openShortcuts()
+                            }
+                            ChoiceMenu {
+                                title: qsTr("Style")
+                                readonly property var kinds: [KanteStyle.Kind.Kante, KanteStyle.Kind.KanteLight, KanteStyle.Kind.System]
+                                current: KanteStyle.kind
+                                choices: [
+                                    { value: KanteStyle.Kind.Kante, label: qsTr("Kante") },
+                                    { value: KanteStyle.Kind.KanteLight, label: qsTr("Kante Light") },
+                                    { value: KanteStyle.Kind.System, label: qsTr("System") }
+                                ]
+                                onPicked: value => {
+                                    settings.style = value
+                                    root.backend.style = -1
+                                }
+                            }
+                            QQC2.MenuSeparator {}
                         }
                     }
-                }
-                Item { Layout.fillWidth: true }
-                KanteSegmented {
-                    activeFocusOnTab: false
-                    readonly property var kinds: [KanteStyle.Kind.Kante, KanteStyle.Kind.KanteLight, KanteStyle.Kind.System]
-                    model: [qsTr("Kante"), qsTr("Kante Light"), qsTr("System")]
-                    currentIndex: kinds.indexOf(KanteStyle.kind)
-                    tooltips: [qsTr("Kante: Gruvbox dark, Leinen when the system theme is light"), qsTr("Kante Light: only the shapes of Kante, on the system colours"), qsTr("System style (Breeze)")]
-                    onActivated: index => {
-                        settings.style = kinds[index]
-                        root.backend.style = -1
+                    QQC2.Label {
+                        Layout.fillWidth: true
+                        text: root.show && root.show.path ? root.show.path : qsTr("Unsaved show")
+                        color: KanteStyle.mutedTextColor
+                        elide: Text.ElideMiddle
                     }
-                }
-                RowLayout {
-                    id: toolsRow
-                    visible: children.length > 0
-                    spacing: Kirigami.Units.smallSpacing
+                    KantePill {
+                        visible: root.recording
+                        status: KantePill.State.Running
+                        text: qsTr("Rec")
+                    }
+                    KantePill {
+                        visible: root.streaming
+                        status: KantePill.State.Running
+                        text: qsTr("Stream")
+                    }
+                    KantePill {
+                        status: root.backend.connected ? KantePill.State.Running : KantePill.State.Failed
+                        text: root.backend.connected ? qsTr("lmix-core") : qsTr("lmix-core offline")
+                    }
+                    KanteButton {
+                        focusPolicy: Qt.NoFocus
+                        emphasis: KanteButton.Emphasis.Quiet
+                        text: qsTr("Keys")
+                        onClicked: keysDialog.open()
+                    }
+                    QQC2.Label {
+                        id: clock
+                        font.family: KanteStyle.monoFamily
+                        color: KanteStyle.strongTextColor
+                        text: Qt.formatTime(new Date(), "hh:mm:ss")
+                        Timer {
+                            interval: 1000
+                            running: true
+                            repeat: true
+                            onTriggered: clock.text = Qt.formatTime(new Date(), "hh:mm:ss")
+                        }
+                    }
                 }
             }
 
-            // The program's part. Height from the page, not from the
-            // children: the monitors take what is left.
-            Item {
-                id: area
+            StackLayout {
+                id: stack
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                Layout.preferredHeight: 0
+                Layout.margins: Kirigami.Units.largeSpacing
+                currentIndex: {
+                    var n = 0
+                    for (var i = 0; i < children.length; i++) {
+                        if (children[i] === root.currentItem) {
+                            return i
+                        }
+                    }
+                    return 0
+                }
             }
 
             // An older show file, converted on opening (SHW.7).
             QQC2.Label {
                 Layout.fillWidth: true
+                Layout.leftMargin: Kirigami.Units.largeSpacing
+                Layout.rightMargin: Kirigami.Units.largeSpacing
                 visible: root.show !== null && !!root.show.older_format
                 text: root.show && root.show.older_format
                     ? qsTr("This show file is in the older format %1 and was converted on opening. Saving it keeps the old file beside it (.v%1.bak).").arg(root.show.older_format)
@@ -414,10 +614,63 @@ Kirigami.ApplicationWindow {
 
             QQC2.Label {
                 Layout.fillWidth: true
+                Layout.leftMargin: Kirigami.Units.largeSpacing
+                Layout.rightMargin: Kirigami.Units.largeSpacing
                 visible: root.backend.message.length > 0
                 text: Texts.message(root.backend.message)
                 color: KanteStyle.negativeTextColor
                 wrapMode: Text.Wrap
+            }
+
+            // The page bar (KantePageBar): the pages, then program small
+            // where a page has none of its own, and Panic all.
+            KantePageBar {
+                id: pageBar
+                Layout.fillWidth: true
+                model: root.pageItems.map(p => p.title)
+                tooltips: root.pageItems.map((p, i) => qsTr("%1 (Ctrl+%2)").arg(p.title).arg(i + 1))
+                busy: root.pageItems.map(p => p.busy)
+                busyKinds: root.pageItems.map(p => p.busyKind)
+                kindNames: [qsTr("Running"), qsTr("Info"), qsTr("Warning"), qsTr("Error")]
+                onActivated: index => root.showPage(root.pageItems[index].pageId)
+                // A Binding, not a property binding: the bar sets its index
+                // itself on a click, which would cut a plain binding; this
+                // writes it again on every page change (Ctrl+n, --page).
+                Binding on currentIndex {
+                    value: root.pageItems.indexOf(root.currentItem)
+                }
+
+                QQC2.Label {
+                    text: qsTr("Ctrl+1…%1").arg(root.pageItems.length)
+                    font.family: KanteStyle.monoFamily
+                    color: KanteStyle.mutedTextColor
+                }
+                Rectangle {
+                    visible: root.currentItem !== null && !root.currentItem.hasProgram
+                    implicitHeight: Kirigami.Units.gridUnit * 2.25
+                    implicitWidth: implicitHeight * 16 / 9
+                    color: KanteStyle.stageColor
+                    border.color: KanteStyle.negativeTextColor
+                    border.width: 1
+                    Accessible.role: Accessible.Graphic
+                    Accessible.name: qsTr("Program")
+                    LiveView {
+                        anchors.fill: parent
+                        anchors.margins: 1
+                        core: root.backend
+                        source: parent.visible ? "program" : ""
+                    }
+                }
+                KanteButton {
+                    focusPolicy: Qt.NoFocus
+                    emphasis: KanteButton.Emphasis.Destructive
+                    size: KanteButton.Size.Small
+                    text: qsTr("Panic all")
+                    enabled: root.backend.connected
+                    QQC2.ToolTip.visible: hovered
+                    QQC2.ToolTip.text: qsTr("Stop every cue over the panic time and fade program to black; recordings and streams go on")
+                    onClicked: root.panicAll()
+                }
             }
         }
     }

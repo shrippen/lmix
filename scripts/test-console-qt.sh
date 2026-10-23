@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# lmix Mixer against a real engine, on a virtual display (no GPU needed):
-# monitors and tiles show moving live pictures, clicks switch, no QML
-# warnings. Then lmix Show beside it against the same lmix-core: its
-# window draws, space is GO and Escape panic (also after a click on the
-# header and a closed dialog), no QML warnings. Needs Qt 6 with Kirigami, gst-plugin-qml6
+# lmix against a real engine, on a virtual display (no GPU needed): on the
+# Mix page monitors and tiles show moving live pictures, clicks switch, no
+# QML warnings. Then the Show page through the page bar: it draws, space is
+# GO and Escape panic (also after a click on the header and a closed
+# dialog), the page bar shows program small, no QML warnings. Then Audio,
+# Outputs and Setup draw without QML warnings. Needs Qt 6 with Kirigami, gst-plugin-qml6
 # (gstreamer1.0-qt6), Xvfb, xdotool, ImageMagick, jq.
 #
 #   scripts/test-console-qt.sh
@@ -99,16 +100,16 @@ sleep 2
 
 # The window opens at its default size (80 × 50 grid units of 18 px) at 0,0.
 unset WAYLAND_DISPLAY
-# Own settings: the programs write style, keys and view settings on use,
-# never into the operator's ~/.config/lmix/mixer.conf and show.conf.
+# Own settings: lmix writes style, keys, view and page settings on use,
+# never into the operator's ~/.config/lmix/lmix.conf.
 export XDG_CONFIG_HOME="$WORK/config" DISPLAY="$DISPLAY_NO" QT_QPA_PLATFORM=xcb QT_FORCE_STDERR_LOGGING=1 \
     LMIX_CORE="http://127.0.0.1:${CORE_PORT}"
-"$CONSOLE_DIR/lmix-mixer" >"$WORK/console.log" 2>&1 &
+"$CONSOLE_DIR/lmix" --page mix >"$WORK/console.log" 2>&1 &
 PIDS+=($!)
-PROGRAM_AREA="600x340+810+180"
-PREVIEW_AREA="600x340+20+180"
-TILE_1="200x75+12+608"
-TILE_2="200x75+232+608"
+PROGRAM_AREA="560x300+820+140"
+PREVIEW_AREA="560x300+40+140"
+TILE_1="200x50+12+540"
+TILE_2="200x50+232+540"
 # The tile's picture is about 78×44 px: the ball is 2–3 px wide and a
 # move changes about 9 px (19.10.–22.10.: 8.9 at fuzz 5 %). A still
 # picture changes none.
@@ -132,7 +133,7 @@ done
 [[ -n "$tile_1_moves" ]] && pass "tile 1 moves (ball)" || fail "tile 1 still"
 [[ -n "$tile_2_shows" ]] && pass "tile 2 shows its picture" || fail "tile 2 blank"
 
-click 330 645
+click 336 566
 becomes preview 2
 [[ "$(number_of preview)" == 2 ]] && pass "click on a tile: preview" || fail "preview is $(number_of preview), not 2"
 # Cut acts on what the Console shows: wait until its preview has the picture.
@@ -141,7 +142,7 @@ for _ in $(seq 1 60); do
     awk "BEGIN { exit !($(spread p "$PREVIEW_AREA") > 0.05) }" && break
     sleep 1
 done
-click 720 147
+click 720 128
 becomes program 2
 [[ "$(number_of program)" == 2 ]] && pass "Cut: program" || fail "program is $(number_of program) after Cut"
 # Two streams, not started: the output bar offers to start both (STR.1).
@@ -168,7 +169,7 @@ curl -sf -X POST "$CORE/actions" -H 'content-type: application/json' \
     -d '{"action":"preview_layout","layout":1}' >/dev/null
 layout_id="$(state | jq -r '.layouts[0].id')"
 for _ in $(seq 1 40); do [[ "$(state | jq -r .preview)" == "$layout_id" ]] && break; sleep 0.5; done
-PREVIEW_CORNER="250x130+350+180"
+PREVIEW_CORNER="250x130+340+140"
 layout_shows=""
 for _ in $(seq 1 40); do
     shot l
@@ -184,21 +185,26 @@ done
 own_qml_warnings console.log && fail "QML warnings: $(own_qml_warnings console.log | head -3)"
 pass "no QML warnings"
 
-# lmix Show beside the mixer, same lmix-core: its window opens over the
-# mixer's and draws the show view (not a flat colour).
+# The Show page through the page bar, same window: it draws the show
+# view (not a flat colour), and the bar shows program small.
 act '{"action":"add_cue_list","name":"Act 1","cues":[{"number":"1","name":"Doors","kind":"wait","duration_ms":120000},{"number":"2","name":"House","kind":"wait","duration_ms":120000},{"number":"3","name":"Lights","kind":"note"}]}'
-"$CONSOLE_DIR/lmix-show" >"$WORK/show.log" 2>&1 &
-PIDS+=($!)
-show_window=""
-for _ in $(seq 1 60); do
-    show_window="$(xdotool search --name '^lmix Show' 2>/dev/null | head -1 || true)"
-    [[ -n "$show_window" ]] && break
+show_window="$(xdotool search --name '^lmix' 2>/dev/null | head -1 || true)"
+[[ -n "$show_window" ]] || fail "no lmix window"
+# Pages by key (Ctrl+n): the tabs' places depend on their labels.
+xdotool windowfocus "$show_window"
+sleep 1
+xdotool key ctrl+2
+sleep 3
+shot show
+awk "BEGIN { exit !($(spread show 1400x700+20+60) > 0.05) }" && pass "Show page draws" || fail "Show page blank"
+PGM_SMALL="60x30+1262+862"
+small_shows=""
+for _ in $(seq 1 20); do
+    shot s
+    awk "BEGIN { exit !($(spread s "$PGM_SMALL") > 0.02) }" && small_shows=1 && break
     sleep 0.5
 done
-[[ -n "$show_window" ]] || fail "no lmix Show window"
-sleep 3
-import -window "$show_window" "$WORK/show.png"
-awk "BEGIN { exit !($(spread show 1400x800+20+40) > 0.05) }" && pass "lmix Show draws its window" || fail "lmix Show window blank"
+[[ -n "$small_shows" ]] && pass "page bar shows program small on the Show page" || fail "no program in the page bar"
 # No window manager: give the show window the keyboard; keys then go to
 # whatever has it (a dialog the show opens takes it over).
 standby() { state | jq '.cue_lists[0].standby'; }
@@ -210,22 +216,88 @@ until_true() { for _ in $(seq 1 20); do eval "$1" && return 0; sleep 0.5; done; 
 key space
 until_true '[[ "$(standby)" == 2 && "$(cues_running)" -ge 1 ]]' && pass "show: space is GO" \
     || fail "show: space did not GO (standby $(standby), running $(cues_running))"
-# A header button and its dialog (Save as…, left open with Escape) must
-# not keep the keys: Escape closes the dialog, the cue keeps running.
-click 383 73
+# A header button and its dialog (Keys, closed with Escape) must not
+# keep the keys: Escape closes the dialog, the cue keeps running.
+KEYS_BUTTON="1334 24"
+click $KEYS_BUTTON
 sleep 2
 key Escape
 sleep 1
-[[ "$(cues_running)" -ge 1 ]] || fail "show: Escape in the Save dialog reached the show (panic)"
+[[ "$(cues_running)" -ge 1 ]] || fail "show: Escape in the Keys dialog reached the show (panic)"
 key space
 until_true '[[ "$(standby)" == 3 ]]' && pass "show: space is GO after a header button and its dialog" \
-    || fail "show: no GO after Save as… (standby $(standby))"
+    || fail "show: no GO after the Keys dialog (standby $(standby))"
 key Escape
 until_true '[[ "$(cues_running)" == 0 ]]' && pass "show: Escape is panic" \
     || fail "show: Escape did not stop the cues ($(cues_running) running)"
-own_qml_warnings show.log && fail "QML warnings (show): $(own_qml_warnings show.log | head -3)"
+own_qml_warnings console.log && fail "QML warnings (show): $(own_qml_warnings console.log | head -3)"
 pass "no QML warnings (show)"
+
+# The other pages through the page bar: each draws something of its own
+# (a light page is flat, so: it differs from the page before), no QML
+# warnings.
+prev=show
+for page in "AUDIO 3" "OUTPUTS 4" "SETUP 5"; do
+    read -r name n <<<"$page"
+    xdotool windowfocus "$show_window"
+    xdotool key "ctrl+$n"
+    sleep 2
+    shot "page-$name"
+    (($(moved "$prev" "page-$name" 1400x700+20+60) > 5000)) && pass "$name page draws" || fail "$name page shows the page before"
+    prev="page-$name"
+    if [[ "$name" == AUDIO ]]; then
+        # A fader drag of several steps: each step brings a new state,
+        # and the strip must survive it (a rebuilt strip ended the drag
+        # after the first step, at about 93).
+        FADER_TOP="54 214"
+        xdotool mousemove $FADER_TOP mousedown 1
+        for y in 250 300 350 400 450 480; do xdotool mousemove 54 "$y"; sleep 0.15; done
+        xdotool mouseup 1
+        sleep 1
+        volume="$(state | jq '.inputs[0].audio.volume')"
+        ((volume < 70)) && pass "Audio: a fader drag goes on over state updates ($volume)" \
+            || fail "Audio: fader drag ended early (volume $volume)"
+    fi
+done
+# The page bar follows every page change: a click on a tab, then Ctrl+n,
+# then the tab again (a click once cut the bar's binding: it kept the
+# clicked tab marked and the next click on it did nothing).
+FIRST_TAB="25 879"
+click $FIRST_TAB
+sleep 2
+shot tab-mix
+xdotool windowfocus "$show_window"
+xdotool key ctrl+3
+sleep 2
+shot tab-audio
+click $FIRST_TAB
+sleep 2
+shot tab-mix-again
+# By the page title (top left): the pages' pictures move on their own.
+PAGE_TITLE="300x40+0+55"
+(($(moved tab-audio tab-mix-again "$PAGE_TITLE") > 50)) && (($(moved tab-mix tab-mix-again "$PAGE_TITLE") < 50)) \
+    && pass "page bar: a tab after Ctrl+n switches again" || fail "page bar: the tab did not switch back after Ctrl+n"
+
+# Panic all: cues stop, program fades to black, a running stream goes on.
+act '{"action":"start_output","output":1}'
+act '{"action":"cue_reset"}'
+xdotool windowfocus "$show_window"
+xdotool key ctrl+2
+sleep 1
+xdotool key space
+until_true '[[ "$(cues_running)" -ge 1 ]]' || fail "no cue running before Panic all"
+PANIC_ALL="1383 879"
+click $PANIC_ALL
+until_true '[[ "$(cues_running)" == 0 && "$(state | jq .fade_to_black)" == true ]]' \
+    && pass "Panic all: cues stopped, program black" || fail "Panic all: running $(cues_running), black $(state | jq .fade_to_black)"
+click $PANIC_ALL
+sleep 2
+[[ "$(state | jq .fade_to_black)" == true ]] && pass "Panic all twice: program stays black" || fail "a second Panic all faded program up"
+[[ "$(state | jq -r '.outputs[0].status.state')" == running ]] && pass "Panic all: the stream goes on" || fail "Panic all stopped the stream"
+
+own_qml_warnings console.log && fail "QML warnings (pages): $(own_qml_warnings console.log | head -3)"
+pass "no QML warnings (Audio, Outputs, Setup)"
 criticals="$(tail -n +"$((STROM_START_LINES + 1))" "$WORK/strom.log" | grep -c 'GStreamer-CRITICAL' || true)"
 [[ "$criticals" == 0 ]] || fail "$criticals GStreamer CRITICALs in strom.log"
 pass "no GStreamer CRITICALs (live flows)"
-echo "Qt mixer and show check passed"
+echo "lmix Mix and Show check passed"

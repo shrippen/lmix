@@ -114,13 +114,13 @@ KanteDialog {
                     : qsTr("Asking the desktop…")
             }
         }
-        // Mixer and show each bind their own (DECISIONS 2026-10-18).
+        // One window per computer binds them (portal.rs, claim).
         QQC2.Label {
             Layout.fillWidth: true
             visible: dialog.globalKeys
             wrapMode: Text.Wrap
             color: KanteStyle.mutedTextColor
-            text: qsTr("If lmix Mixer and lmix Show both run with this on, a key press runs twice.")
+            text: qsTr("Only the first lmix window on this computer binds the keys; others leave them to it.")
         }
 
         RowLayout {

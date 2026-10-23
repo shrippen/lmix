@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Starts lmix Show on this machine (engine, lmix-core, test inputs), see
+# Starts lmix on this machine, on the Show page (engine, lmix-core, test inputs), see
 # scripts/run-local.sh for the settings (MIXER, INPUTS, KEEP_WORK, ...).
 # Arguments go to the program, e.g. ./start-show.sh --window maximized
 set -euo pipefail

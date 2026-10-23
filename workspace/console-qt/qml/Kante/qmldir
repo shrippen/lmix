@@ -53,6 +53,7 @@ KanteMessage 1.0 KanteMessage.qml
 KanteMessageSkin 1.0 KanteMessageSkin.qml
 KanteNoteMark 1.0 KanteNoteMark.qml
 KanteOdometer 1.0 KanteOdometer.qml
+KantePageBar 1.0 KantePageBar.qml
 KantePageTitle 1.0 KantePageTitle.qml
 KantePath 1.0 KantePath.qml
 KantePill 1.0 KantePill.qml

@@ -246,7 +246,7 @@
   <context>
     <name>AppShell</name>
     <message>
-      <location filename="../qml/AppShell.qml" line="+158" />
+      <location filename="../qml/AppShell.qml" line="+250" />
       <source>Open show</source>
       <translation>Show öffnen</translation>
     </message>
@@ -321,7 +321,85 @@
       <translation>Leerer Ordner für Show und Medien des Pakets</translation>
     </message>
     <message>
-      <location line="+26" />
+      <location line="+25" />
+      <location line="+173" />
+      <source>Keys</source>
+      <translation>Tasten</translation>
+    </message>
+    <message>
+      <location line="-167" />
+      <source>Pages</source>
+      <translation>Seiten</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <location line="+237" />
+      <source>Ctrl+1…%1</source>
+      <translation>Strg+1…%1</translation>
+    </message>
+    <message>
+      <location line="-236" />
+      <location line="+260" />
+      <source>Panic all</source>
+      <translation>Panik: alles</translation>
+    </message>
+    <message>
+      <location line="-260" />
+      <source>button in the page bar</source>
+      <translation>Knopf in der Seitenleiste</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Always</source>
+      <translation>Immer</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Only on %1</source>
+      <translation>Nur auf %1</translation>
+    </message>
+    <message>
+      <location line="+61" />
+      <source>File</source>
+      <translation>Datei</translation>
+    </message>
+    <message>
+      <location line="+30" />
+      <source>Export package…</source>
+      <translation>Paket exportieren …</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Import package…</source>
+      <translation>Paket importieren …</translation>
+    </message>
+    <message>
+      <location line="+17" />
+      <source>Shortcuts…</source>
+      <translation>Belegungen…</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Style</source>
+      <translation>Stil</translation>
+    </message>
+    <message>
+      <location line="+18" />
+      <source>Unsaved show</source>
+      <translation>Ungespeicherte Show</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Rec</source>
+      <translation>Aufnahme</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Stream</source>
+      <translation>Stream</translation>
+    </message>
+    <message>
+      <location line="+4" />
       <source>lmix-core</source>
       <translation>lmix-core</translation>
     </message>
@@ -331,52 +409,67 @@
       <translation>lmix-core nicht erreichbar</translation>
     </message>
     <message>
+      <location line="+70" />
+      <source>Running</source>
+      <translation>Läuft</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Info</source>
+      <translation>Info</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Warning</source>
+      <translation>Warnung</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Error</source>
+      <translation>Fehler</translation>
+    </message>
+    <message>
       <location line="+17" />
+      <source>Program</source>
+      <translation>Programm</translation>
+    </message>
+    <message>
+      <location line="+15" />
+      <source>Stop every cue over the panic time and fade program to black; recordings and streams go on</source>
+      <translation>Alle Cues über die Panikzeit stoppen und Programm auf Schwarz blenden; Aufnahmen und Streams laufen weiter</translation>
+    </message>
+    <message>
+      <location line="-35" />
+      <source>%1 (Ctrl+%2)</source>
+      <translation>%1 (Strg+%2)</translation>
+    </message>
+    <message>
+      <location line="-149" />
       <source>New</source>
       <translation>Neu</translation>
     </message>
     <message>
-      <location line="+6" />
+      <location line="+4" />
       <source>Open…</source>
       <translation>Öffnen…</translation>
     </message>
     <message>
-      <location line="+7" />
+      <location line="+4" />
       <source>Recent</source>
       <translation>Zuletzt</translation>
     </message>
     <message>
-      <location line="+16" />
+      <location line="+6" />
       <source>Save</source>
       <translation>Speichern</translation>
     </message>
     <message>
-      <location line="+6" />
+      <location line="+4" />
       <source>Save as…</source>
       <translation>Speichern unter…</translation>
     </message>
     <message>
-      <location line="+7" />
-      <source>Package</source>
-      <translation>Paket</translation>
-    </message>
-    <message>
-      <location line="+3" />
-      <source>The show with its media in one file, to move it to another machine</source>
-      <translation>Die Show mit ihren Medien in einer Datei, um sie auf einen anderen Rechner zu bringen</translation>
-    </message>
-    <message>
-      <location line="+6" />
-      <source>Export…</source>
-      <translation>Exportieren…</translation>
-    </message>
-    <message>
-      <location line="+4" />
-      <source>Import…</source>
-      <translation>Importieren…</translation>
-    </message>
-    <message>
-      <location line="+5" />
+      <location line="+14" />
       <source>Export settings…</source>
       <translation>Einstellungen exportieren…</translation>
     </message>
@@ -391,37 +484,22 @@
       <translation>Werkseinstellungen…</translation>
     </message>
     <message>
-      <location line="+9" />
+      <location line="+12" />
       <source>Kante</source>
       <translation>Kante</translation>
     </message>
     <message>
-      <location line="+0" />
+      <location line="+1" />
       <source>Kante Light</source>
       <translation>Kante Light</translation>
     </message>
     <message>
-      <location line="+0" />
+      <location line="+1" />
       <source>System</source>
       <translation>System</translation>
     </message>
     <message>
-      <location line="+2" />
-      <source>Kante: Gruvbox dark, Leinen when the system theme is light</source>
-      <translation>Kante: Gruvbox dunkel, Leinen bei hellem Systemthema</translation>
-    </message>
-    <message>
-      <location line="+0" />
-      <source>Kante Light: only the shapes of Kante, on the system colours</source>
-      <translation>Kante Light: nur die Formen von Kante, auf den Systemfarben</translation>
-    </message>
-    <message>
-      <location line="+0" />
-      <source>System style (Breeze)</source>
-      <translation>Systemstil (Breeze)</translation>
-    </message>
-    <message>
-      <location line="+27" />
+      <location line="+73" />
       <source>This show file is in the older format %1 and was converted on opening. Saving it keeps the old file beside it (.v%1.bak).</source>
       <translation>Diese Show-Datei hat das ältere Format %1 und wurde beim Öffnen umgewandelt. Beim Speichern bleibt die alte Datei daneben erhalten (.v%1.bak).</translation>
     </message>
@@ -445,14 +523,160 @@
     </message>
   </context>
   <context>
+    <name>AudioPage</name>
+    <message>
+      <location filename="../qml/AudioPage.qml" line="+46" />
+      <source>Audio</source>
+      <translation>Ton</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>%1 kHz · %2 aux buses</source>
+      <translation>%1 kHz · %2 Aux-Busse</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Audio on</source>
+      <translation>Ton an</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Audio off</source>
+      <translation>Ton aus</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Mute the master of program sound and back; video, show and outputs go on</source>
+      <translation>Master des Programmtons stumm und zurück; Bild, Show und Ausgänge laufen weiter</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Inputs</source>
+      <translation>Inputs</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Buses</source>
+      <translation>Busse</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Zones</source>
+      <translation>Zonen</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Clear solo</source>
+      <translation>Solo aus</translation>
+    </message>
+    <message>
+      <location line="+28" />
+      <source>No input with sound yet</source>
+      <translation>Noch kein Input mit Ton</translation>
+    </message>
+    <message>
+      <location line="+26" />
+      <source>%1 ch.</source>
+      <translation>%1 Kan.</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>plays nowhere on this machine</source>
+      <translation>spielt auf diesem Rechner nirgends</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>default output</source>
+      <translation>Standardausgang</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>No zones yet</source>
+      <translation>Noch keine Zonen</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Zones…</source>
+      <translation>Zonen…</translation>
+    </message>
+    <message>
+      <location line="+20" />
+      <source>Channel strip · %1 %2</source>
+      <translation>Kanalzug · %1 %2</translation>
+    </message>
+    <message>
+      <location line="+32" />
+      <source>Channel strip %1</source>
+      <translation>Kanalzug %1</translation>
+    </message>
+    <message>
+      <location line="+14" />
+      <source>Edit this channel strip</source>
+      <translation>Diesen Kanalzug bearbeiten</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>PGM</source>
+      <translation>PGM</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>PVW</source>
+      <translation>PVW</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>AFV</source>
+      <translation>AFV</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Audio follows video: sound on with program, off without (AUD.5)</source>
+      <translation>Ton folgt Bild: Ton an mit Programm, aus ohne (AUD.5)</translation>
+    </message>
+    <message>
+      <location line="+20" />
+      <source>Volume of %1</source>
+      <translation>Lautstärke von %1</translation>
+    </message>
+    <message>
+      <location line="+17" />
+      <source>On</source>
+      <translation>An</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Muted</source>
+      <translation>Stumm</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>PFL</source>
+      <translation>PFL</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>AFL</source>
+      <translation>AFL</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Listen on the monitor after the fader (AFL)</source>
+      <translation>Auf dem Abhörweg hinter dem Fader hören (AFL)</translation>
+    </message>
+  </context>
+  <context>
     <name>AuxBusDialog</name>
     <message>
       <location filename="../qml/AuxBusDialog.qml" line="+26" />
       <source>Master and aux buses</source>
       <translation>Master und Aux-Busse</translation>
     </message>
+  </context>
+  <context>
+    <name>AuxBusPanel</name>
     <message>
-      <location line="+19" />
+      <location filename="../qml/AuxBusPanel.qml" line="+38" />
       <source>Master · program sound</source>
       <translation>Master · Programmton</translation>
     </message>
@@ -462,7 +686,13 @@
       <translation>Lautstärke Master</translation>
     </message>
     <message>
-      <location line="+19" />
+      <location line="+11" />
+      <location line="+72" />
+      <source>Mute</source>
+      <translation>Stumm</translation>
+    </message>
+    <message>
+      <location line="-64" />
       <source>Monitor · listening</source>
       <translation>Abhören</translation>
     </message>
@@ -475,12 +705,6 @@
       <location line="+38" />
       <source>Volume of aux %1</source>
       <translation>Lautstärke von Aux %1</translation>
-    </message>
-    <message>
-      <location line="-61" />
-      <location line="+72" />
-      <source>Mute</source>
-      <translation>Stumm</translation>
     </message>
   </context>
   <context>
@@ -1927,19 +2151,54 @@
     </message>
   </context>
   <context>
-    <name>MixerMain</name>
+    <name>MixPage</name>
     <message>
-      <location filename="../qml/MixerMain.qml" line="+17" />
-      <source>lmix Mixer</source>
-      <translation>lmix Mischer</translation>
+      <location filename="../qml/MixPage.qml" line="+29" />
+      <source>Mix</source>
+      <translation>Mix</translation>
     </message>
     <message>
-      <location line="+84" />
+      <location line="+2" />
+      <source>%1p%2</source>
+      <translation>%1p%2</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Input to preview</source>
+      <translation>Input in die Vorschau</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Quick play of preview</source>
+      <translation>Schnellstart der Vorschau</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>double click preview</source>
+      <translation>Doppelklick in die Vorschau</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Fade up</source>
+      <translation>Aufblenden</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Fade to black</source>
+      <translation>Schwarzblende</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Program to black and back (SWI.9); the show and outputs go on</source>
+      <translation>Programm auf Schwarz und zurück (SWI.9); Show und Ausgänge laufen weiter</translation>
+    </message>
+    <message>
+      <location line="+71" />
       <source>Layout %1 %2</source>
       <translation>Layout %1 %2</translation>
     </message>
     <message>
-      <location line="+25" />
+      <location line="+22" />
       <source>Inputs from a show</source>
       <translation>Inputs aus einer Show</translation>
     </message>
@@ -1960,16 +2219,11 @@
     </message>
     <message>
       <location line="+110" />
-      <source>From show…</source>
-      <translation>Aus Show…</translation>
+      <source>Inputs from a show…</source>
+      <translation>Inputs aus einer Show …</translation>
     </message>
     <message>
-      <location line="+3" />
-      <source>Add inputs of another show to this one</source>
-      <translation>Inputs einer anderen Show hierher übernehmen</translation>
-    </message>
-    <message>
-      <location line="+7" />
+      <location line="+4" />
       <source>Program format…</source>
       <translation>Programmformat…</translation>
     </message>
@@ -2112,7 +2366,7 @@
   <context>
     <name>OutputBar</name>
     <message>
-      <location filename="../qml/OutputBar.qml" line="+33" />
+      <location filename="../qml/OutputBar.qml" line="+36" />
       <source>Outputs</source>
       <translation>Ausgänge</translation>
     </message>
@@ -2142,27 +2396,7 @@
       <translation>%1 entfernen</translation>
     </message>
     <message>
-      <location line="+14" />
-      <source>Stop %1?</source>
-      <translation>%1 stoppen?</translation>
-    </message>
-    <message>
-      <location line="+0" />
-      <source>Stop all streams?</source>
-      <translation>Alle Streams stoppen?</translation>
-    </message>
-    <message>
-      <location line="+19" />
-      <source>A stopped recording or stream cannot go on where it was.</source>
-      <translation>Eine gestoppte Aufnahme oder ein gestoppter Stream lässt sich nicht an derselben Stelle fortsetzen.</translation>
-    </message>
-    <message>
-      <location line="+5" />
-      <source>Ask before stopping</source>
-      <translation>Vor dem Stoppen fragen</translation>
-    </message>
-    <message>
-      <location line="+8" />
+      <location line="+17" />
       <source>Stop all streams</source>
       <translation>Alle Streams stoppen</translation>
     </message>
@@ -2175,6 +2409,217 @@
       <location line="+15" />
       <source>+ Output</source>
       <translation>+ Ausgang</translation>
+    </message>
+  </context>
+  <context>
+    <name>OutputsPage</name>
+    <message>
+      <location filename="../qml/OutputsPage.qml" line="+62" />
+      <source>Outputs</source>
+      <translation>Ausgänge</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>%1 of %2 running</source>
+      <translation>%1 von %2 laufen</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Stop outputs</source>
+      <translation>Ausgänge stoppen</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Stop every recording and stream (asks first); mix and show go on</source>
+      <translation>Alle Aufnahmen und Streams stoppen (fragt vorher); Mix und Show laufen weiter</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>+ Output</source>
+      <translation>+ Ausgang</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Stop all streams</source>
+      <translation>Alle Streams stoppen</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Start all streams</source>
+      <translation>Alle Streams starten</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Stop all recordings</source>
+      <translation>Alle Aufnahmen stoppen</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Start all recordings</source>
+      <translation>Alle Aufnahmen starten</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Ask before stopping</source>
+      <translation>Vor dem Stoppen fragen</translation>
+    </message>
+    <message>
+      <location line="+23" />
+      <source>Output</source>
+      <translation>Ausgang</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <location line="+39" />
+      <source>Kind</source>
+      <translation>Art</translation>
+    </message>
+    <message>
+      <location line="-38" />
+      <source>State</source>
+      <translation>Zustand</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Time</source>
+      <translation>Zeit</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <location line="+47" />
+      <source>Link</source>
+      <translation>Verbindung</translation>
+    </message>
+    <message>
+      <location line="-34" />
+      <source>No outputs yet: + Output adds a recording, stream, NDI or screen</source>
+      <translation>Noch keine Ausgänge: + Ausgang fügt Aufnahme, Stream, NDI oder Bildschirm hinzu</translation>
+    </message>
+    <message>
+      <location line="+24" />
+      <source>Source</source>
+      <translation>Quelle</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Sound</source>
+      <translation>Ton</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>of the source</source>
+      <translation>der Quelle</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Target</source>
+      <translation>Ziel</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Video</source>
+      <translation>Video</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>%1 kbit/s</source>
+      <translation>%1 kbit/s</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>Failed</source>
+      <translation>Fehlgeschlagen</translation>
+    </message>
+    <message>
+      <location line="+17" />
+      <location line="+47" />
+      <source>Multiview</source>
+      <translation>Multiview</translation>
+    </message>
+    <message>
+      <location line="-44" />
+      <source>Program on the left</source>
+      <translation>Programm links</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Level meters</source>
+      <translation>Pegelanzeigen</translation>
+    </message>
+    <message>
+      <location line="+13" />
+      <source>Recording</source>
+      <translation>Aufnahme</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Stream SRT</source>
+      <translation>Stream SRT</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Stream RTMP</source>
+      <translation>Stream RTMP</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>NDI</source>
+      <translation>NDI</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Screen</source>
+      <translation>Bildschirm</translation>
+    </message>
+    <message>
+      <location line="+18" />
+      <source>Input %1 %2</source>
+      <translation>Input %1 %2</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Input</source>
+      <translation>Eingang</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Preview</source>
+      <translation>Vorschau</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Program</source>
+      <translation>Programm</translation>
+    </message>
+    <message>
+      <location line="+66" />
+      <source>running</source>
+      <translation>läuft</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>failed</source>
+      <translation>fehlgeschlagen</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>stopped</source>
+      <translation>gestoppt</translation>
+    </message>
+    <message>
+      <location line="+18" />
+      <source>Stop</source>
+      <translation>Stopp</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Start</source>
+      <translation>Start</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Remove</source>
+      <translation>Entfernen</translation>
     </message>
   </context>
   <context>
@@ -2445,6 +2890,251 @@
     </message>
   </context>
   <context>
+    <name>SetupPage</name>
+    <message>
+      <location filename="../qml/SetupPage.qml" line="+23" />
+      <source>Setup</source>
+      <translation>Setup</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>show settings travel with the show, this computer's stay here</source>
+      <translation>Show-Einstellungen reisen mit der Show, die dieses Rechners bleiben hier</translation>
+    </message>
+    <message>
+      <location line="+16" />
+      <source>Show</source>
+      <translation>Show</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Program format</source>
+      <translation>Programmformat</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>%1 × %2 at %3 fps</source>
+      <translation>%1 × %2 mit %3 fps</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Change…</source>
+      <translation>Ändern …</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Sound</source>
+      <translation>Ton</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>48 kHz by default; 44.1 kHz for music productions (AUD.17)</source>
+      <translation>Standard 48 kHz; 44,1 kHz für Musikproduktionen (AUD.17)</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>48 kHz</source>
+      <translation>48 kHz</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>44.1 kHz</source>
+      <translation>44,1 kHz</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Package</source>
+      <translation>Paket</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>The show with its media in one file, to move it to another machine</source>
+      <translation>Die Show mit ihren Medien in einer Datei, um sie auf einen anderen Rechner zu bringen</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <location line="+124" />
+      <source>Export…</source>
+      <translation>Exportieren…</translation>
+    </message>
+    <message>
+      <location line="-119" />
+      <location line="+124" />
+      <source>Import…</source>
+      <translation>Importieren…</translation>
+    </message>
+    <message>
+      <location line="-114" />
+      <source>Control</source>
+      <translation>Steuerung</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Targets</source>
+      <translation>Ziele</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Output targets (HTTP, Home Assistant, OSC) and OSC subscribers of this machine</source>
+      <translation>Ausgabeziele (HTTP, Home Assistant, OSC) und OSC-Abonnenten dieses Rechners</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Targets…</source>
+      <translation>Ziele…</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Check targets</source>
+      <translation>Ziele prüfen</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>Data sources</source>
+      <translation>Datenquellen</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>CSV, JSON or text files and addresses for title fields (DAT.1–5)</source>
+      <translation>CSV-, JSON- oder Textdateien und Adressen für Titelfelder (DAT.1–5)</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Data…</source>
+      <translation>Daten…</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Zones</source>
+      <translation>Zonen</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>The show's sound zones and where they play on this machine</source>
+      <translation>Die Klang-Zonen der Show und wo sie auf diesem Rechner spielen</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Zones…</source>
+      <translation>Zonen…</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Shortcuts</source>
+      <translation>Belegungen</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Keys, MIDI and OSC that run actions (AUT.1–3)</source>
+      <translation>Tasten, MIDI und OSC, die Aktionen auslösen (AUT.1–3)</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Shortcuts…</source>
+      <translation>Belegungen…</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Keys at the desktop</source>
+      <translation>Tasten am Desktop</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Shortcut keys work while lmix is not in front (AUT.12)</source>
+      <translation>Tasten wirken auch, wenn lmix nicht im Vordergrund ist (AUT.12)</translation>
+    </message>
+    <message>
+      <location line="+12" />
+      <source>This computer</source>
+      <translation>Dieser Rechner</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Style</source>
+      <translation>Stil</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Kante</source>
+      <translation>Kante</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Kante Light</source>
+      <translation>Kante Light</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>System</source>
+      <translation>System</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Kante: Gruvbox dark, Leinen when the system theme is light</source>
+      <translation>Kante: Gruvbox dunkel, Leinen bei hellem Systemthema</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Kante Light: only the shapes of Kante, on the system colours</source>
+      <translation>Kante Light: nur die Formen von Kante, auf den Systemfarben</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>System style (Breeze)</source>
+      <translation>Systemstil (Breeze)</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Lock</source>
+      <translation>Sperren</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>While locked, closing inputs, loading a show and stopping outputs are refused.</source>
+      <translation>Gesperrt lassen sich keine Inputs schließen, keine Show laden und keine Ausgänge stoppen.</translation>
+    </message>
+    <message>
+      <location line="+12" />
+      <source>Latency</source>
+      <translation>Latenz</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Measure</source>
+      <translation>Messen</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>Settings of this machine</source>
+      <translation>Einstellungen dieses Rechners</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Shortcuts for all shows, layout templates, targets, subscribers; no secrets</source>
+      <translation>Belegungen für alle Shows, Layout-Vorlagen, Ziele, Abonnenten; keine Geheimnisse</translation>
+    </message>
+    <message>
+      <location line="+14" />
+      <source>Factory settings…</source>
+      <translation>Werkseinstellungen…</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>lmix-core</source>
+      <translation>lmix-core</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>connected</source>
+      <translation>verbunden</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>offline</source>
+      <translation>offline</translation>
+    </message>
+  </context>
+  <context>
     <name>ShortcutEditDialog</name>
     <message>
       <location filename="../qml/ShortcutEditDialog.qml" line="+22" />
@@ -2551,8 +3241,8 @@
     </message>
     <message>
       <location line="+9" />
-      <source>If lmix Mixer and lmix Show both run with this on, a key press runs twice.</source>
-      <translation>Laufen lmix Mischer und lmix Show beide mit globalen Tasten, löst ein Druck doppelt aus.</translation>
+      <source>Only the first lmix window on this computer binds the keys; others leave them to it.</source>
+      <translation>Nur das erste lmix-Fenster auf diesem Rechner bindet die Tasten; weitere überlassen sie ihm.</translation>
     </message>
     <message>
       <location line="+5" />
@@ -2566,16 +3256,36 @@
     </message>
   </context>
   <context>
-    <name>ShowMain</name>
+    <name>ShowPage</name>
     <message>
-      <location filename="../qml/ShowMain.qml" line="+15" />
-      <source>lmix Show</source>
-      <translation>lmix Show</translation>
+      <location filename="../qml/ShowPage.qml" line="+18" />
+      <source>Show</source>
+      <translation>Show</translation>
     </message>
     <message>
-      <location line="+33" />
-      <source>Shortcuts…</source>
-      <translation>Belegungen…</translation>
+      <location line="+1" />
+      <source>Cue lists: %1</source>
+      <translation>Cue-Listen: %1</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>GO</source>
+      <translation>GO</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Space</source>
+      <translation>Leertaste</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Panic, twice: stop at once</source>
+      <translation>Panik, zweimal: sofort stoppen</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Escape</source>
+      <translation>Escape</translation>
     </message>
   </context>
   <context>
@@ -3036,6 +3746,44 @@
       <location line="+16" />
       <source>Stingers run between inputs only, not with layouts.</source>
       <translation>Stinger laufen nur zwischen Inputs, nicht mit Layouts.</translation>
+    </message>
+  </context>
+  <context>
+    <name>StopOutputDialog</name>
+    <message>
+      <location filename="../qml/StopOutputDialog.qml" line="+23" />
+      <source>Stop %1?</source>
+      <translation>%1 stoppen?</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Stop all recordings?</source>
+      <translation>Alle Aufnahmen stoppen?</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Stop all recordings and streams?</source>
+      <translation>Alle Aufnahmen und Streams stoppen?</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Stop all outputs?</source>
+      <translation>Alle Ausgänge stoppen?</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Stop all streams?</source>
+      <translation>Alle Streams stoppen?</translation>
+    </message>
+    <message>
+      <location line="+25" />
+      <source>A stopped recording or stream cannot go on where it was.</source>
+      <translation>Eine gestoppte Aufnahme oder ein gestoppter Stream lässt sich nicht an derselben Stelle fortsetzen.</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Ask before stopping</source>
+      <translation>Vor dem Stoppen fragen</translation>
     </message>
   </context>
   <context>

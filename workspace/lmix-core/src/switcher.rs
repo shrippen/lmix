@@ -1617,6 +1617,9 @@ impl Switcher {
                 stinger,
             } => self.set_transition(slot, effect, duration_ms, stinger),
             Action::FadeToBlack { duration_ms } => self.toggle_ftb(duration_ms),
+            // Already where it is asked to be: nothing to do (a second panic).
+            Action::SetFadeToBlack { on, .. } if on == self.fade_to_black => Ok(Vec::new()),
+            Action::SetFadeToBlack { duration_ms, .. } => self.toggle_ftb(duration_ms),
             Action::TBar { position } => self.t_bar(position),
             Action::OverlayIn {
                 channel,
@@ -6396,6 +6399,46 @@ mod tests {
             [Command::FadeToBlack { duration_ms: 0 }],
             "the bar is back already"
         );
+    }
+
+    #[test]
+    fn setting_fade_to_black_twice_keeps_it_black() {
+        let mut sw = two_inputs();
+        let on = Action::SetFadeToBlack {
+            on: true,
+            duration_ms: 0,
+        };
+        assert_eq!(
+            sw.apply(on.clone()).unwrap(),
+            [Command::FadeToBlack { duration_ms: 0 }]
+        );
+        // A second panic before the state came back: still black.
+        assert!(sw.apply(on).unwrap().is_empty());
+        assert!(sw.state().fade_to_black);
+        let off = Action::SetFadeToBlack {
+            on: false,
+            duration_ms: 0,
+        };
+        assert_eq!(
+            sw.apply(off.clone()).unwrap(),
+            [Command::FadeToBlack { duration_ms: 0 }]
+        );
+        assert!(sw.apply(off).unwrap().is_empty());
+        assert!(!sw.state().fade_to_black);
+
+        // With a fade (Panic all sends the default length): the state is
+        // black from the first press, so a second during the fade does
+        // nothing either.
+        let on = Action::SetFadeToBlack {
+            on: true,
+            duration_ms: 1000,
+        };
+        assert_eq!(
+            sw.apply(on.clone()).unwrap(),
+            [Command::FadeToBlack { duration_ms: 1000 }]
+        );
+        assert!(sw.apply(on).unwrap().is_empty());
+        assert!(sw.state().fade_to_black);
     }
 
     #[test]
