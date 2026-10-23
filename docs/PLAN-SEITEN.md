@@ -73,8 +73,9 @@ Kern-Ablauf; es sind Ausgänge wie andere auch.
 1. **Click-Dummy mit dem User**, Screen für Screen, als interaktive
    Artboards auf der Leinwand: Seitenleiste und Kopfzeile, Mix, Show,
    Audio, Outputs, Setup, Verbinden/Profil. Je Screen: was drauf ist, was
-   Dialog bleibt, Tastatur, was ein entfernter Arbeitsplatz darf. Ergebnis
-   je Screen in DECISIONS; der Dummy ist Referenz für die Umsetzung.
+   Dialog bleibt, Tastatur, was ein entfernter Arbeitsplatz darf. Die
+   Shell-Entscheidungen stehen in DECISIONS (23.10.), der Inhalt je Seite
+   hier unter „Click-Dummy 2“; der Dummy ist Referenz für die Umsetzung.
 2. **Shell mit Seitenleiste**: ein Binary `lmix` statt `lmix-mixer` und
    `lmix-show`, Seiten Mix und Show aus dem Bestand, Leiste mit Panik und
    Status. Kurzbefehle, Einstellungen und `.desktop`-Dateien migriert;

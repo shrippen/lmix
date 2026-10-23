@@ -60,7 +60,7 @@ Kommuniziere auf Deutsch, Code/Commits auf Englisch.
 workspace/
   strom/          ← Upstream-Klon (eigene Branch "dev", nur minimaler Diff erlaubt)
   lmix-core/      ← Steuerprozess (Show, Aktionen, Cue-Ablauf, API), headless
-  console-qt/     ← UNSER Client, das Programm `lmix` mit Seiten: Qt Quick/Kirigami über cxx-qt (Entscheidung 3.5)
+  console-qt/     ← UNSER Client: Qt Quick/Kirigami über cxx-qt (Entscheidung 3.5); wird das Programm `lmix` mit Seiten (PLAN-SEITEN)
   selftest/       ← kopfloser Last- und Abnahmetest direkt an strom (M1b)
   (Drehbuch-Import: eigenes Werkzeug, spricht nur die API; lmix-core kennt kein
    Markdown, S-E.2)
