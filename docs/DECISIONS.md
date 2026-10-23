@@ -4412,3 +4412,29 @@ Versatz von 1–2 Frames, schon vorher (todo).
 `/api/latency` misst weiter am Eingang von `pgm_out`; das ist jetzt das
 Alter, mit dem die Ausgänge Program bekommen. Offen: die Bildphase
 (0–33 ms je Lauf); mit freiem Rechner wiederholen.
+
+## 2026-10-23 — Ton in Aufnahmen hinter dem Bild: AAC-Vorlauf (offen)
+
+**Befund**: Der konstante Teil des A/V-Versatzes (DECISIONS 23.10.
+„Mischer-Ausgänge ohne Sync“) ist der Vorlauf der AAC-Encoder.
+`avenc_aac` stellt 1024 Samples vor den Ton, `fdkaacenc` 2048, stempelt
+das erste Paket aber als ersten Ton, ohne Clipping-Meta; kein Muxer
+erfährt davon. Gemessen mit einem Clip aus Blitz und Piep (gleichzeitig,
+jede Sekunde), nur GStreamer, von FFmpeg und von GStreamer dekodiert:
+`avenc_aac` 21,4 ms, `fdkaacenc` 42,7 ms Ton nach Bild, in MKV und MP4
+gleich; rohes PCM 0 ms. In lmix: ISO-Aufnahme (Input direkt) 21 ms,
+Program 21 ms + Bildphase (0–33 ms), SRT 21–46 ms. Betrifft jede
+Aufnahme und jeden Stream mit AAC (lmix `add_aac`, strom SRT, RTMP,
+Live-Recorder, Audio-Encoder-Block).
+
+**Versucht** (geparkt, lokale Branches `aac-priming` in lmix und
+`lmix-aac-delay` in strom, nicht gepusht): den Encoder-Ausgang um den
+Vorlauf früher einordnen (`gst_pad_set_offset`, negativ). Ohne strom's
+Live-Recorder (Python, `matroskamux`, `mp4mux`, `mpegtsmux`) danach
+0 ms. In lmix landet der Ton aber um ganze Bilder daneben (−33/−67 ms),
+auch wenn der Encoder die Verschiebung als Latenz meldet. Als
+GObject-Eigenschaft (`pad_properties` in einem Flow) geht ein negativer
+Offset nicht (Wertebereich ab 0).
+
+**Offen**: Ursache im Live-Recorder; danach der Ausgleich an allen
+AAC-Stellen in strom, und Meldung an GStreamer (gst-libav, fdkaac).
