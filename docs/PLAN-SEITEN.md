@@ -180,11 +180,13 @@ Meldung (Owner 23.10.). Senken-Tasten unten auf der Mix-Seite gab es schon
 (Ausgangsleiste), Overlay-Tasten je Kachel ebenso. Overlay-Kanäle als
 Raster 4 × 2 neben den Übergängen (24.10.): die Mittelspalte passt bei
 1440 × 900 ohne Scrollen; FTB dort fällt weg, es ist die Seitentaste
-„Schwarzblende“.
+„Schwarzblende“. Schmaler Tonmischer rechts (24.10.): Pegel, Fader und
+Stumm je Input mit Ton und für den Master, Weg zur Ton-Seite; abschaltbar
+unter Ansicht. Audio folgt Video bleibt auf der Ton-Seite.
 
 Aus dem Dummy noch offen, **nur Oberfläche** (der Kern kann es):
 - Mix: Titelleiste der Kachel in Tally-Farbe (braucht Textfarben auf Rot
-  und Grün in Kante), schmaler Tonmischer am Rand.
+  und Grün in Kante).
 - Show: Inspector unten mit Reitern, Seitenleiste
   Aktiv/Listen, laufende Cues als Fortschrittsfüllung mit negativer
   Restzeit, Leiste zum Anlegen je Cue-Art, Zeitfelder mit Fortschritt.
