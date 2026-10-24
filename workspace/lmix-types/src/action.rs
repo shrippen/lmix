@@ -254,6 +254,7 @@ pub const ACTION_GROUPS: &[(&str, &[&str])] = &[
             "set_triggers",
             "add_cue_list",
             "set_cue_list",
+            "update_cue",
             "remove_cue_list",
             "cue_go",
             "cue_start",
@@ -668,6 +669,20 @@ pub enum Action {
         cues: Vec<Cue>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         source: Option<String>,
+    },
+    /// Change fields of one cue (number or id) of a list, inside groups
+    /// too; without `list` the active list. `changes` is a JSON merge
+    /// patch of the cue (RFC 7386): only the fields it names change,
+    /// `null` clears one, e.g. `{"name": "Rain", "sound": {"gain_db":
+    /// -6}}`. The id stays; a list from a script is edited there. So two
+    /// clients, or two quick edits, change different fields without
+    /// sending the whole list from an older state. Standby and running
+    /// cues stay as with `set_cue_list`.
+    UpdateCue {
+        #[serde(default)]
+        list: Option<InputRef>,
+        cue: String,
+        changes: serde_json::Value,
     },
     /// Remove a cue list.
     RemoveCueList {

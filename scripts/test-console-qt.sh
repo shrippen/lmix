@@ -3,7 +3,8 @@
 # Mix page monitors and tiles show moving live pictures, clicks switch, no
 # QML warnings, the overlay grid and the narrow mixer are in reach. Then the Show page through the page bar: it draws, space is
 # GO and Escape panic (also after a click on the header and a closed
-# dialog), the page bar shows program small, no QML warnings. Then Audio,
+# dialog), the page bar shows program small, the inspector renames a cue,
+# no QML warnings. Then Audio,
 # Outputs and Setup draw without QML warnings. Needs Qt 6 with Kirigami, gst-plugin-qml6
 # (gstreamer1.0-qt6), Xvfb, xdotool, ImageMagick, jq.
 #
@@ -165,7 +166,9 @@ master_mute() { state | jq '.master.mute'; }
 click 1242 808
 for _ in $(seq 1 40); do [[ "$(audio_1)" == false ]] && break; sleep 0.5; done
 [[ "$(audio_1)" == false ]] && pass "mixer at the edge: input 1 muted" || fail "input 1 still on after M in the mixer"
+sleep 1 # not a double click on the same M
 click 1242 808
+for _ in $(seq 1 40); do [[ "$(audio_1)" == true ]] && break; sleep 0.5; done
 click 1396 808
 for _ in $(seq 1 40); do [[ "$(master_mute)" == true ]] && break; sleep 0.5; done
 [[ "$(audio_1)" == true && "$(master_mute)" == true ]] && pass "mixer at the edge: input 1 on, master muted" \
@@ -274,6 +277,120 @@ until_true '[[ "$(state | jq '.cue_lists[1].standby')" == 2 ]]' && pass "show si
 key Escape
 until_true '[[ "$(cues_running)" == 0 ]]' || fail "show side bar: Escape did not stop the cues"
 act '{"action":"set_active_cue_list","list":1}'
+# The inspector under the list (edit mode) shows the standby cue, 3
+# Lights: a new name goes to lmix-core on Enter, and space is GO again.
+INSPECTOR_NAME="500 719"
+until_true '[[ "$(state | jq '.cue_lists[0].standby')" == 3 ]]' || fail "inspector: standby not on cue 3"
+until_true '[[ "$(active_list)" == 1 ]]' || fail "inspector: list 1 not active"
+sleep 1 # the page shows list 1 again (it was set from outside)
+click $INSPECTOR_NAME
+xdotool key ctrl+a
+xdotool type --delay 20 "Lamps"
+key Return
+until_true '[[ "$(state | jq -r '.cue_lists[0].cues[2].name')" == Lamps ]]' && pass "inspector: a name typed there goes to the cue" \
+    || fail "inspector: cue 3 is named $(state | jq -r '.cue_lists[0].cues[2].name'), not Lamps"
+# Two quick edits: a name typed without Enter, then a follow on the
+# Triggers tab. Both stay (each sends only its own field).
+INSPECTOR_TRIGGERS_TAB="157 678"
+INSPECTOR_AFTER_WAIT="305 722"
+INSPECTOR_BASICS_TAB="61 678"
+click $INSPECTOR_NAME
+xdotool key ctrl+a
+xdotool type --delay 20 "Lamps 2"
+click $INSPECTOR_TRIGGERS_TAB
+click $INSPECTOR_AFTER_WAIT
+until_true '[[ "$(state | jq -r '.cue_lists[0].cues[2].follow')" == after_wait ]]' \
+    && [[ "$(state | jq -r '.cue_lists[0].cues[2].name')" == "Lamps 2" ]] \
+    && pass "inspector: two quick edits both stay" \
+    || fail "inspector: cue 3 $(state | jq -c '.cue_lists[0].cues[2] | {name, follow}')"
+# The choice follows the cue shown after a click: on cue 2 (waits for
+# GO) it shows that, and a click on After the post wait goes to cue 2.
+act '{"action":"cue_standby","to":{"index":2}}'
+until_true '[[ "$(standby)" == 2 ]]' || fail "inspector: standby not on cue 2"
+sleep 1 # the inspector shows cue 2
+click $INSPECTOR_AFTER_WAIT
+until_true '[[ "$(state | jq -r '.cue_lists[0].cues[1].follow')" == after_wait ]]' && pass "inspector: a choice follows the cue shown" \
+    || fail "inspector: a click on After the post wait left cue 2 at $(state | jq -r '.cue_lists[0].cues[1].follow')"
+act '{"action":"update_cue","list":1,"cue":"2","changes":{"follow":"none"}}'
+act '{"action":"cue_standby","to":{"index":3}}'
+until_true '[[ "$(standby)" == 3 ]]' || fail "inspector: standby not back on cue 3"
+sleep 1 # the inspector shows cue 3 again
+click $INSPECTOR_BASICS_TAB
+# Standby moves on from outside while a field is being typed in: what
+# is typed still goes to the cue it began with.
+click $INSPECTOR_NAME
+xdotool key ctrl+a
+act '{"action":"cue_standby","to":{"index":1}}'
+until_true '[[ "$(standby)" == 1 ]]' || fail "inspector: standby did not move from outside"
+xdotool type --delay 20 "Lamp"
+key Return
+until_true '[[ "$(state | jq -r '.cue_lists[0].cues[2].name')" == Lamp ]]' \
+    && [[ "$(state | jq -r '.cue_lists[0].cues[0].name')" == Doors ]] \
+    && pass "inspector: keeps its cue while standby moves" \
+    || fail "inspector: cue 3 $(state | jq -r '.cue_lists[0].cues[2].name'), cue 1 $(state | jq -r '.cue_lists[0].cues[0].name')"
+# Escape in a field is panic and leaves the field without saving, then
+# space is GO.
+act '{"action":"cue_standby","to":{"index":1}}'
+until_true '[[ "$(standby)" == 1 ]]' || fail "inspector: standby not on 1"
+key space
+until_true '[[ "$(cues_running)" -ge 1 ]]' || fail "inspector: GO started nothing"
+act '{"action":"cue_standby","to":{"index":3}}'
+until_true '[[ "$(standby)" == 3 ]]' || fail "inspector: standby not back on 3"
+name_before="$(state | jq -r '.cue_lists[0].cues[2].name')"
+click $INSPECTOR_NAME
+xdotool key End
+xdotool type --delay 20 " typo"
+key Escape
+until_true '[[ "$(cues_running)" == 0 ]]' && pass "inspector: Escape in a field is panic" \
+    || fail "inspector: Escape in a field left $(cues_running) cues running"
+sleep 1 # a save would have come back by now
+[[ "$(state | jq -r '.cue_lists[0].cues[2].name')" == "$name_before" ]] && pass "inspector: Escape drops what was typed" \
+    || fail "inspector: Escape saved the cue as $(state | jq -r '.cue_lists[0].cues[2].name')"
+key space
+until_true '[[ "$(standby)" == 4 ]]' && pass "inspector: space is GO after Enter or Escape in a field" \
+    || fail "inspector: no GO after editing (standby $(standby))"
+key Escape
+# A level by + and typed: each goes to the cue, and after Enter in the
+# box space is GO again. A fade cue at -10 dB, the Levels tab.
+act '{"action":"add_cue_list","name":"Look","cues":[{"number":"20","kind":"fade","duration_ms":3000,"fade":{"target":{"zone":"Main"},"gain_db":-10}}]}'
+act '{"action":"set_active_cue_list","list":3}'
+until_true '[[ "$(active_list)" == 3 ]]' || fail "inspector: list 3 not active"
+sleep 1 # the page shows list 3
+INSPECTOR_LEVELS_TAB="378 678"
+INSPECTOR_LEVEL_UP="233 722"
+INSPECTOR_LEVEL_TEXT="188 722"
+click $INSPECTOR_LEVELS_TAB
+click $INSPECTOR_LEVEL_UP
+until_true '[[ "$(state | jq '.cue_lists[2].cues[0].fade.gain_db')" == -9.5 ]]' && pass "inspector: + of a level goes to the cue" \
+    || fail "inspector: fade level $(state | jq '.cue_lists[2].cues[0].fade.gain_db'), not -9.5"
+click $INSPECTOR_LEVEL_TEXT
+xdotool key ctrl+a
+xdotool type --delay 20 -- "-6"
+key Return
+until_true '[[ "$(state | jq '.cue_lists[2].cues[0].fade.gain_db==-6')" == true ]]' && pass "inspector: a typed level goes to the cue" \
+    || fail "inspector: fade level $(state | jq '.cue_lists[2].cues[0].fade.gain_db'), not -6"
+# Escape in the box (the panic) drops what was typed there too.
+click $INSPECTOR_LEVEL_TEXT
+xdotool key ctrl+a
+xdotool type --delay 20 -- "-3"
+key Escape
+sleep 1 # a save would have come back by now
+[[ "$(state | jq '.cue_lists[2].cues[0].fade.gain_db==-6')" == true ]] && pass "inspector: Escape in a level drops what was typed" \
+    || fail "inspector: Escape saved the level as $(state | jq '.cue_lists[2].cues[0].fade.gain_db')"
+# The box shows a level changed afterwards: Enter there keeps it.
+act '{"action":"update_cue","list":3,"cue":"20","changes":{"fade":{"gain_db":-10}}}'
+sleep 1 # the page shows the new state
+click $INSPECTOR_LEVEL_TEXT
+key Return
+sleep 1 # a save would have come back by now
+[[ "$(state | jq '.cue_lists[2].cues[0].fade.gain_db==-10')" == true ]] && pass "inspector: the box follows the level after Escape" \
+    || fail "inspector: after Escape the box saved $(state | jq '.cue_lists[2].cues[0].fade.gain_db') over -10"
+key space
+until_true '[[ "$(state | jq '.cue_lists[2].standby')" == 2 ]]' && pass "inspector: space is GO after a level" \
+    || fail "inspector: no GO after a level (standby $(state | jq '.cue_lists[2].standby'))"
+key Escape
+click $INSPECTOR_BASICS_TAB
+act '{"action":"remove_cue_list","list":3}'
 own_qml_warnings console.log && fail "QML warnings (show): $(own_qml_warnings console.log | head -3)"
 pass "no QML warnings (show)"
 

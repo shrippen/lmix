@@ -3388,6 +3388,357 @@
     </message>
   </context>
   <context>
+    <name>ShowInspector</name>
+    <message>
+      <location filename="../qml/ShowInspector.qml" line="+54" />
+      <source>Basics</source>
+      <translation>Grundlagen</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Triggers</source>
+      <translation>Auslöser</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Time &amp; loops</source>
+      <translation>Zeit &amp; Schleifen</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Levels</source>
+      <translation>Pegel</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Actions</source>
+      <translation>Aktionen</translation>
+    </message>
+    <message>
+      <location line="+16" />
+      <source>From the script</source>
+      <translation>Aus dem Skript</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>Choose a cue in the list.</source>
+      <translation>Einen Cue in der Liste wählen.</translation>
+    </message>
+    <message>
+      <location line="+17" />
+      <source>Number</source>
+      <translation>Nummer</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Cue number</source>
+      <translation>Nummer des Cues</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Name</source>
+      <translation>Name</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Cue name</source>
+      <translation>Name des Cues</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>Kind</source>
+      <translation>Art</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Colour</source>
+      <translation>Farbe</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <location line="+4" />
+      <source>None</source>
+      <translation>Keine</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Note</source>
+      <translation>Notiz</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>For the operator, e.g. a stage direction; shown with standby</source>
+      <translation>Für die Bedienung, z. B. eine Regieanweisung; steht bei Standby</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Cue note</source>
+      <translation>Notiz zum Cue</translation>
+    </message>
+    <message>
+      <location line="+21" />
+      <source>Next cue</source>
+      <translation>Nächster Cue</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Waits for GO</source>
+      <translation>Wartet auf GO</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>After the post wait</source>
+      <translation>Nach der Nachwartezeit</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>When this one ends</source>
+      <translation>Wenn dieser endet</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>The next cue starts only with GO</source>
+      <translation>Der nächste Cue startet erst mit GO</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>The next cue starts when the post wait is over</source>
+      <translation>Der nächste Cue startet nach der Nachwartezeit</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>The next cue starts when this one ends</source>
+      <translation>Der nächste Cue startet, wenn dieser endet</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Stops others</source>
+      <translation>Stoppt andere</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>No</source>
+      <translation>Nein</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Same group</source>
+      <translation>Gleiche Gruppe</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Same list</source>
+      <translation>Gleiche Liste</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>All</source>
+      <translation>Alle</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Other cues play on</source>
+      <translation>Andere Cues laufen weiter</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Running cues of the same list or group stop when this one starts</source>
+      <translation>Laufende Cues derselben Liste oder Gruppe stoppen, wenn dieser startet</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Running cues of the same list stop when this one starts</source>
+      <translation>Laufende Cues derselben Liste stoppen, wenn dieser startet</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Every running cue stops when this one starts</source>
+      <translation>Jeder laufende Cue stoppt, wenn dieser startet</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>fading over</source>
+      <translation>mit Ausblendung über</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Fade of the cues it stops</source>
+      <translation>Ausblendung der Cues, die er stoppt</translation>
+    </message>
+    <message>
+      <location line="+18" />
+      <location line="+4" />
+      <source>Pre wait</source>
+      <translation>Vorwartezeit</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>From GO to what the cue does</source>
+      <translation>Von GO bis zu dem, was der Cue tut</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <location line="+4" />
+      <source>Post wait</source>
+      <translation>Nachwartezeit</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>From what the cue does to the next cue, when it follows after the post wait</source>
+      <translation>Von dem, was der Cue tut, bis zum nächsten Cue, wenn der nach der Nachwartezeit folgt</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <location line="+7" />
+      <source>Duration</source>
+      <translation>Dauer</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>How long the wait runs</source>
+      <translation>Wie lange die Wartezeit läuft</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>How long the fade takes</source>
+      <translation>Wie lange die Blende dauert</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>How long it counts as running, e.g. the length of the clip it starts; empty: it ends at once</source>
+      <translation>Wie lange er als laufend gilt, z. B. die Länge des Clips, den er startet; leer: er endet sofort</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Ends the cue after this time; empty: at the end of its file</source>
+      <translation>Beendet den Cue nach dieser Zeit; leer: am Ende seiner Datei</translation>
+    </message>
+    <message>
+      <location line="+13" />
+      <location line="+7" />
+      <source>Fade in</source>
+      <translation>Einblenden</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <location line="+7" />
+      <source>Fade out</source>
+      <translation>Ausblenden</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>When it is stopped; a panic uses the panic time</source>
+      <translation>Wenn er gestoppt wird; eine Panik nimmt die Panikzeit</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Plays</source>
+      <translation>Spielt</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>Once</source>
+      <translation>Einmal</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Times</source>
+      <translation>Mehrmals</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Until stopped</source>
+      <translation>Bis gestoppt</translation>
+    </message>
+    <message>
+      <location line="+13" />
+      <source>Plays in all</source>
+      <translation>Durchläufe insgesamt</translation>
+    </message>
+    <message>
+      <location line="+29" />
+      <source>A cue of this kind has no levels.</source>
+      <translation>Ein Cue dieser Art hat keine Pegel.</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <location line="+60" />
+      <source>Level</source>
+      <translation>Pegel</translation>
+    </message>
+    <message>
+      <location line="-49" />
+      <source>Level of the sound</source>
+      <translation>Pegel des Klangs</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>0 dB: as in the file; −60 dB: silence</source>
+      <translation>0 dB: wie in der Datei; −60 dB: Stille</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <location line="+39" />
+      <source>Opacity</source>
+      <translation>Deckkraft</translation>
+    </message>
+    <message>
+      <location line="-28" />
+      <source>Opacity of the picture</source>
+      <translation>Deckkraft des Bildes</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Layer</source>
+      <translation>Ebene</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Layer of the picture</source>
+      <translation>Ebene des Bildes</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>On the same layer the later cue is in front</source>
+      <translation>Auf derselben Ebene liegt der spätere Cue vorn</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>Brightness</source>
+      <translation>Helligkeit</translation>
+    </message>
+    <message>
+      <location line="+34" />
+      <source>%1 at the end of the fade</source>
+      <translation>%1 am Ende der Blende</translation>
+    </message>
+    <message>
+      <location line="+13" />
+      <source>Stop the cue when the fade is over</source>
+      <translation>Den Cue nach der Blende stoppen</translation>
+    </message>
+    <message>
+      <location line="+21" />
+      <source>Only an actions cue has actions.</source>
+      <translation>Nur ein Aktions-Cue hat Aktionen.</translation>
+    </message>
+    <message>
+      <location line="+16" />
+      <source>… and %1 more</source>
+      <translation>… und %1 weitere</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Edit actions…</source>
+      <translation>Aktionen bearbeiten …</translation>
+    </message>
+    <message>
+      <location line="+18" />
+      <source>Actions of %1</source>
+      <translation>Aktionen von %1</translation>
+    </message>
+  </context>
+  <context>
     <name>ShowPage</name>
     <message>
       <location filename="../qml/ShowPage.qml" line="+18" />
@@ -3507,7 +3858,7 @@
   <context>
     <name>ShowView</name>
     <message>
-      <location filename="../qml/ShowView.qml" line="+48" />
+      <location filename="../qml/ShowView.qml" line="+59" />
       <source>starts cue %1, which is not there</source>
       <translation>startet Cue %1, den es nicht gibt</translation>
     </message>
@@ -3537,7 +3888,7 @@
       <translation>nutzt Input %1, dessen Mediendatei fehlt</translation>
     </message>
     <message>
-      <location line="+62" />
+      <location line="+74" />
       <source>Wait %1</source>
       <translation>Warten %1</translation>
     </message>
@@ -3757,7 +4108,7 @@
       <translation>Noch keine Cue-Listen. Unter „Cues…“ eine anlegen oder mit „Drehbuch…“ einen Drehbuch-Ordner wählen.</translation>
     </message>
     <message>
-      <location line="+22" />
+      <location line="+27" />
       <source>No.</source>
       <translation>Nr.</translation>
     </message>
@@ -3787,7 +4138,7 @@
       <translation>Folge</translation>
     </message>
     <message>
-      <location line="+61" />
+      <location line="+68" />
       <source>Open group</source>
       <translation>Gruppe aufklappen</translation>
     </message>
@@ -3797,7 +4148,7 @@
       <translation>Gruppe zuklappen</translation>
     </message>
     <message>
-      <location line="+64" />
+      <location line="+73" />
       <source>Standby</source>
       <translation>Standby</translation>
     </message>

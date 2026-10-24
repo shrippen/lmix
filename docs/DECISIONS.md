@@ -4544,3 +4544,23 @@ Text. Ohne Verbindung verschwindet die Meldung.
 **Grenze**: Die Last gilt für den Rechner von lmix-core, nicht für den der
 Oberfläche. Schwellen sind Erfahrungswerte (DECISIONS 17.10.: Ausreißer bis
 146 ms unter Volllast); sie liegen in `lmix-types` (`machine.rs`).
+
+## 2026-10-24 — Einzelne Cues ändern: `update_cue` statt der ganzen Liste
+
+**Anlass**: Der Show-Inspector (#143) schickte jede Änderung als
+`set_cue_list` mit der ganzen Liste aus dem zuletzt empfangenen Zustand.
+Zwei Änderungen kurz nacheinander (ein Name ohne Enter, dann ein Klick auf
+einen Folge-Trigger) gingen beide vom selben alten Stand aus; die zweite
+brachte den alten Wert der ersten zurück, ein verlorener Folge-Trigger fiele
+erst in der Show auf (Review #143, Runde 4). Dasselbe gilt für zwei Clients.
+
+**Entscheidung** (Owner, 24.10.): eine Aktion im Kern. `update_cue` nimmt
+eine Liste (sonst die aktive), einen Cue (Nummer oder id, auch in Gruppen)
+und `changes`, einen JSON Merge Patch des Cues (RFC 7386): nur die genannten
+Felder ändern sich, verschachtelte Objekte (`sound`, `picture`, `fade`,
+`stop_others`) werden zusammengeführt, `null` löscht ein Feld. Der Cue wird
+mit seiner Liste geprüft wie bei `set_cue_list`; Standby und laufende Cues
+bleiben. Die id ändert sich nicht, eine Liste aus einem Skript wird dort
+bearbeitet (abgelehnt). Verworfen: eine lokale Kopie der Liste in der
+Oberfläche (hilft nicht gegen zwei Clients) und Sperren bis zur Antwort
+(spürbar beim schnellen Klicken).

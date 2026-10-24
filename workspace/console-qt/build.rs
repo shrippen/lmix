@@ -138,6 +138,8 @@ fn main() {
                 "qml/CueListsDialog.qml",
                 "qml/ShowView.qml",
                 "qml/ShowSidebar.qml",
+                "qml/ShowInspector.qml",
+                "qml/DurationField.qml",
                 "qml/TargetsDialog.qml",
                 "qml/ZonesDialog.qml",
                 "qml/OutputBar.qml",

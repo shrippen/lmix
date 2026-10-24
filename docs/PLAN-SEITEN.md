@@ -189,11 +189,22 @@ Audio folgt Video bleibt auf der Ton-Seite. Show: Seitenleiste mit den
 Reitern Aktiv und Listen (24.10.), laufende Cues als Fortschrittsfüllung
 mit abgelaufener und negativer Restzeit, Stopp je Cue; sie ersetzt die
 Karte „Running“ unten. Pause je Cue und der Reiter Pads warten auf den
-Kern (RUN.5, RUN.12).
+Kern (RUN.5, RUN.12). Inspector unter der Cue-Liste (24.10.,
+nur im Edit-Modus): Reiter Basics (Nummer, Name, Farbe, Notiz), Triggers
+(was den nächsten Cue startet, welche Cues dieser stoppt), Time & loops
+(Pre/Post wait, Dauer, Ein-/Ausblenden, Wiederholungen), Levels (Pegel
+eines Klangs, Deckkraft und Ebene eines Bildes, was eine Blende ändert),
+Actions (die Aktionen eines Aktions-Cues). Er zeigt den Standby-Cue oder
+den angeklickten, auch in einer Gruppe; jede Änderung geht sofort an den
+Kern, nur mit den geänderten Feldern (`update_cue`, DECISIONS 24.10.),
+Standby und laufende Cues bleiben. Listen aus
+einem Skript sind nur zu sehen.
 
 Aus dem Dummy noch offen, **nur Oberfläche** (der Kern kann es):
-- Show: Inspector unten mit Reitern, Leiste zum Anlegen je Cue-Art,
-  Zeitfelder mit Fortschritt.
+- Show: Leiste zum Anlegen je Cue-Art, Zeitfelder mit Fortschritt;
+  im Inspector Datei, Ziel und Zonen-Routing eines Klang-, Bild- oder
+  Blenden-Cues; eine unlesbare Zeit nach Enter nicht still verwerfen,
+  sondern im Feld lassen und markieren.
 - Audio: Mini-Kurven EQ und Dynamik je Zug, ON/AFV als Umschalter.
 - Seiten lösbar auf einen zweiten Bildschirm (Entscheidung Click-Dummy 1).
 - Leiste: wer eine Seite zuletzt bediente (braucht die Kennung je

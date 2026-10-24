@@ -17,6 +17,8 @@ ColumnLayout {
 
     required property var act
     required property var show
+    /** The window's Core (colour names in the inspector). */
+    required property var core
 
     /** More columns: waits and follows (SUI.13). */
     property bool advanced: false
@@ -33,6 +35,15 @@ ColumnLayout {
         var active = lists.find(l => l.active)
         return active !== undefined ? active : (lists.length > 0 ? lists[0] : null)
     }
+    /** The cue chosen for the inspector, by id; empty: the standby cue.
+     *  A new standby (GO, a click on a row) chooses that one again. */
+    property string selectedId: ""
+    readonly property var selectedCue: {
+        var found = list && selectedId !== "" ? findCue(list.cues, selectedId) : null
+        return found !== null ? found : standbyCue
+    }
+    readonly property int standbyAt: list ? list.standby : 0
+    onStandbyAtChanged: selectedId = ""
     readonly property var running: show && show.running_cues ? show.running_cues : []
     readonly property var runningIds: running.map(r => r.cue)
     readonly property var standbyCue: list && list.standby <= list.cues.length ? list.cues[list.standby - 1] : null
@@ -55,20 +66,33 @@ ColumnLayout {
         }
     }
 
+    /** The cue with `id` in `cues` or their groups, or null. */
+    function findCue(cues, id) {
+        for (var i = 0; i < cues.length; i++) {
+            if (cues[i].id === id) {
+                return cues[i]
+            }
+            var inside = findCue(cues[i].children || [], id)
+            if (inside) {
+                return inside
+            }
+        }
+        return null
+    }
+
+    /** Changes only the fields in `changes` (a JSON merge patch: nested
+     *  objects merge, null clears) of the cue with `id` in the active list,
+     *  inside groups too. Two quick edits each send only their own field,
+     *  so neither brings back an old value of the other; lmix-core keeps
+     *  standby and running cues (IMP.5). */
+    function updateCue(id, changes) {
+        act({ action: "update_cue", list: list.number, cue: id, changes: changes })
+    }
+
     /** "12 Rain" of the cue with `id` in any list, for a warning. */
     function cueLabel(listId, cueId) {
-        function find(cues) {
-            for (var i = 0; i < cues.length; i++) {
-                if (cues[i].id === cueId)
-                    return cues[i]
-                var inside = find(cues[i].children || [])
-                if (inside)
-                    return inside
-            }
-            return null
-        }
         var owner = lists.find(l => l.id === listId)
-        var cue = owner ? find(owner.cues) : null
+        var cue = owner ? findCue(owner.cues, cueId) : null
         if (!cue)
             return ""
         return (cue.number !== "" ? cue.number + " " : "") + cueName(cue)
@@ -368,139 +392,162 @@ ColumnLayout {
         spacing: Kirigami.Units.largeSpacing
         visible: view.list !== null
 
-        KanteCard {
+        ColumnLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
+            spacing: Kirigami.Units.largeSpacing
 
-            ColumnLayout {
-                anchors.fill: parent
-                anchors.margins: Kirigami.Units.smallSpacing
-                spacing: 0
+            KanteCard {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
 
-                // Column heads.
-                RowLayout {
-                    Layout.fillWidth: true
-                    Layout.bottomMargin: Kirigami.Units.smallSpacing
-                    KanteSectionLabel { Layout.preferredWidth: Kirigami.Units.gridUnit * 4; text: qsTr("No.") }
-                    KanteSectionLabel { Layout.fillWidth: true; text: qsTr("Cue") }
-                    KanteSectionLabel { Layout.preferredWidth: Kirigami.Units.gridUnit * 8; text: qsTr("Kind") }
-                    KanteSectionLabel { visible: view.advanced; Layout.preferredWidth: Kirigami.Units.gridUnit * 4; text: qsTr("Pre") }
-                    KanteSectionLabel { visible: view.advanced; Layout.preferredWidth: Kirigami.Units.gridUnit * 4; text: qsTr("Post") }
-                    KanteSectionLabel { visible: view.advanced; Layout.preferredWidth: Kirigami.Units.gridUnit * 6; text: qsTr("Follow") }
-                }
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: Kirigami.Units.smallSpacing
+                    spacing: 0
 
-                ListView {
-                    id: cueView
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    clip: true
-                    model: view.rows
-                    currentIndex: view.rows.findIndex(r => r.depth === 0 && r.top === (view.list ? view.list.standby : 0))
-                    highlightFollowsCurrentItem: false
-                    onCurrentIndexChanged: if (currentIndex >= 0) positionViewAtIndex(currentIndex, ListView.Contain)
-                    QQC2.ScrollBar.vertical: QQC2.ScrollBar {}
+                    // Column heads.
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Layout.bottomMargin: Kirigami.Units.smallSpacing
+                        KanteSectionLabel { Layout.preferredWidth: Kirigami.Units.gridUnit * 4; text: qsTr("No.") }
+                        KanteSectionLabel { Layout.fillWidth: true; text: qsTr("Cue") }
+                        KanteSectionLabel { Layout.preferredWidth: Kirigami.Units.gridUnit * 8; text: qsTr("Kind") }
+                        KanteSectionLabel { visible: view.advanced; Layout.preferredWidth: Kirigami.Units.gridUnit * 4; text: qsTr("Pre") }
+                        KanteSectionLabel { visible: view.advanced; Layout.preferredWidth: Kirigami.Units.gridUnit * 4; text: qsTr("Post") }
+                        KanteSectionLabel { visible: view.advanced; Layout.preferredWidth: Kirigami.Units.gridUnit * 6; text: qsTr("Follow") }
+                    }
 
-                    delegate: Rectangle {
-                        id: row
-                        required property var modelData
-                        required property int index
-                        readonly property var cue: modelData.cue
-                        readonly property bool standby: modelData.depth === 0 && view.list.standby === modelData.top
-                        readonly property bool runs: view.runningIds.indexOf(cue.id) >= 0
+                    ListView {
+                        id: cueView
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        clip: true
+                        model: view.rows
+                        currentIndex: view.rows.findIndex(r => r.depth === 0 && r.top === (view.list ? view.list.standby : 0))
+                        highlightFollowsCurrentItem: false
+                        onCurrentIndexChanged: if (currentIndex >= 0) positionViewAtIndex(currentIndex, ListView.Contain)
+                        QQC2.ScrollBar.vertical: QQC2.ScrollBar {}
 
-                        width: cueView.width
-                        implicitHeight: rowLayout.implicitHeight + Kirigami.Units.smallSpacing * 2
-                        color: standby ? KanteStyle.selectionColor : "transparent"
+                        delegate: Rectangle {
+                            id: row
+                            required property var modelData
+                            required property int index
+                            readonly property var cue: modelData.cue
+                            readonly property bool standby: modelData.depth === 0 && view.list.standby === modelData.top
+                            readonly property bool runs: view.runningIds.indexOf(cue.id) >= 0
+                            readonly property bool chosen: view.editing && inspector.cue !== null && inspector.cue.id === cue.id
 
-                        Rectangle {
-                            width: Kirigami.Units.smallSpacing
-                            height: parent.height
-                            visible: row.runs
-                            color: KanteStyle.accentColor
-                        }
+                            width: cueView.width
+                            implicitHeight: rowLayout.implicitHeight + Kirigami.Units.smallSpacing * 2
+                            color: standby ? KanteStyle.selectionColor : (chosen ? KanteStyle.tintHighlightColor : "transparent")
+                            border.width: chosen ? 1 : 0
+                            border.color: KanteStyle.focusColor
 
-                        TapHandler {
-                            onTapped: {
-                                view.forceActiveFocus()
-                                view.act({ action: "cue_standby", to: { index: row.modelData.top } })
+                            Rectangle {
+                                width: Kirigami.Units.smallSpacing
+                                height: parent.height
+                                visible: row.runs
+                                color: KanteStyle.accentColor
                             }
-                        }
 
-                        RowLayout {
-                            id: rowLayout
-                            anchors.fill: parent
-                            anchors.leftMargin: Kirigami.Units.largeSpacing
-                            anchors.rightMargin: Kirigami.Units.smallSpacing
-
-                            QQC2.Label {
-                                Layout.preferredWidth: Kirigami.Units.gridUnit * 4
-                                text: (row.standby ? "▶ " : "") + row.cue.number
-                                font.family: KanteStyle.monoFamily
+                            TapHandler {
+                                onTapped: {
+                                    view.forceActiveFocus()
+                                    // A cue in a group is only chosen; standby
+                                    // is always a cue at the top.
+                                    view.selectedId = row.cue.id
+                                    if (row.modelData.depth === 0) {
+                                        view.act({ action: "cue_standby", to: { index: row.modelData.top } })
+                                    }
+                                }
                             }
+
                             RowLayout {
-                                Layout.fillWidth: true
-                                Layout.leftMargin: row.modelData.depth * Kirigami.Units.gridUnit
-                                spacing: Kirigami.Units.smallSpacing
-                                KanteButton {
-                                    focusPolicy: Qt.NoFocus
-                                    visible: row.cue.kind === "group"
-                                    size: KanteButton.Size.Small
-                                    emphasis: KanteButton.Emphasis.Quiet
-                                    text: view.closed[row.cue.id] ? "▸" : "▾"
-                                    Accessible.name: view.closed[row.cue.id] ? qsTr("Open group") : qsTr("Close group")
-                                    onClicked: {
-                                        var next = Object.assign({}, view.closed)
-                                        next[row.cue.id] = !view.closed[row.cue.id]
-                                        view.closed = next
-                                    }
+                                id: rowLayout
+                                anchors.fill: parent
+                                anchors.leftMargin: Kirigami.Units.largeSpacing
+                                anchors.rightMargin: Kirigami.Units.smallSpacing
+
+                                QQC2.Label {
+                                    Layout.preferredWidth: Kirigami.Units.gridUnit * 4
+                                    text: (row.standby ? "▶ " : "") + row.cue.number
+                                    font.family: KanteStyle.monoFamily
                                 }
-                                ColumnLayout {
+                                RowLayout {
                                     Layout.fillWidth: true
-                                    spacing: 0
-                                    QQC2.Label {
-                                        Layout.fillWidth: true
-                                        text: view.cueName(row.cue)
-                                        font.bold: row.standby
-                                        font.italic: row.cue.kind === "note"
-                                        elide: Text.ElideRight
+                                    Layout.leftMargin: row.modelData.depth * Kirigami.Units.gridUnit
+                                    spacing: Kirigami.Units.smallSpacing
+                                    KanteButton {
+                                        focusPolicy: Qt.NoFocus
+                                        visible: row.cue.kind === "group"
+                                        size: KanteButton.Size.Small
+                                        emphasis: KanteButton.Emphasis.Quiet
+                                        text: view.closed[row.cue.id] ? "▸" : "▾"
+                                        Accessible.name: view.closed[row.cue.id] ? qsTr("Open group") : qsTr("Close group")
+                                        onClicked: {
+                                            var next = Object.assign({}, view.closed)
+                                            next[row.cue.id] = !view.closed[row.cue.id]
+                                            view.closed = next
+                                        }
                                     }
-                                    QQC2.Label {
+                                    ColumnLayout {
                                         Layout.fillWidth: true
-                                        visible: row.cue.note !== undefined && row.cue.note !== ""
-                                        text: row.cue.note || ""
-                                        color: KanteStyle.mutedTextColor
-                                        elide: Text.ElideRight
-                                        maximumLineCount: 1
+                                        spacing: 0
+                                        QQC2.Label {
+                                            Layout.fillWidth: true
+                                            text: view.cueName(row.cue)
+                                            font.bold: row.standby
+                                            font.italic: row.cue.kind === "note"
+                                            elide: Text.ElideRight
+                                        }
+                                        QQC2.Label {
+                                            Layout.fillWidth: true
+                                            visible: row.cue.note !== undefined && row.cue.note !== ""
+                                            text: row.cue.note || ""
+                                            color: KanteStyle.mutedTextColor
+                                            elide: Text.ElideRight
+                                            maximumLineCount: 1
+                                        }
                                     }
                                 }
-                            }
-                            QQC2.Label {
-                                Layout.preferredWidth: Kirigami.Units.gridUnit * 8
-                                text: view.kindLabel(row.cue) + (row.cue.duration_ms ? " · " + view.clock(row.cue.duration_ms) : "")
-                                color: KanteStyle.mutedTextColor
-                                elide: Text.ElideRight
-                            }
-                            QQC2.Label {
-                                visible: view.advanced
-                                Layout.preferredWidth: Kirigami.Units.gridUnit * 4
-                                text: row.cue.pre_wait_ms ? view.clock(row.cue.pre_wait_ms) : ""
-                                font.family: KanteStyle.monoFamily
-                            }
-                            QQC2.Label {
-                                visible: view.advanced
-                                Layout.preferredWidth: Kirigami.Units.gridUnit * 4
-                                text: row.cue.post_wait_ms ? view.clock(row.cue.post_wait_ms) : ""
-                                font.family: KanteStyle.monoFamily
-                            }
-                            QQC2.Label {
-                                visible: view.advanced
-                                Layout.preferredWidth: Kirigami.Units.gridUnit * 6
-                                text: view.followLabel(row.cue.follow)
-                                color: KanteStyle.mutedTextColor
+                                QQC2.Label {
+                                    Layout.preferredWidth: Kirigami.Units.gridUnit * 8
+                                    text: view.kindLabel(row.cue) + (row.cue.duration_ms ? " · " + view.clock(row.cue.duration_ms) : "")
+                                    color: KanteStyle.mutedTextColor
+                                    elide: Text.ElideRight
+                                }
+                                QQC2.Label {
+                                    visible: view.advanced
+                                    Layout.preferredWidth: Kirigami.Units.gridUnit * 4
+                                    text: row.cue.pre_wait_ms ? view.clock(row.cue.pre_wait_ms) : ""
+                                    font.family: KanteStyle.monoFamily
+                                }
+                                QQC2.Label {
+                                    visible: view.advanced
+                                    Layout.preferredWidth: Kirigami.Units.gridUnit * 4
+                                    text: row.cue.post_wait_ms ? view.clock(row.cue.post_wait_ms) : ""
+                                    font.family: KanteStyle.monoFamily
+                                }
+                                QQC2.Label {
+                                    visible: view.advanced
+                                    Layout.preferredWidth: Kirigami.Units.gridUnit * 6
+                                    text: view.followLabel(row.cue.follow)
+                                    color: KanteStyle.mutedTextColor
+                                }
                             }
                         }
                     }
                 }
+            }
+
+            ShowInspector {
+                id: inspector
+                Layout.fillWidth: true
+                Layout.preferredHeight: Kirigami.Units.gridUnit * 11
+                visible: view.editing
+                showView: view
+                core: view.core
             }
         }
 

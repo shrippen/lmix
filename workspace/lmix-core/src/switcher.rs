@@ -296,6 +296,7 @@ fn runs_automation(action: &Action) -> bool {
                 | Action::TitleReport { .. }
                 | Action::AddCueList { .. }
                 | Action::SetCueList { .. }
+                | Action::UpdateCue { .. }
                 | Action::RemoveCueList { .. }
                 | Action::CueGo { .. }
                 | Action::CueStart { .. }
@@ -374,6 +375,43 @@ fn check_cues(name: &str, cues: &[Cue]) -> Result<(), ActionError> {
 
 fn bad_cues(reason: String) -> ActionError {
     ActionError::BadCueList { reason }
+}
+
+/// `cue` with `changes`, a JSON merge patch (RFC 7386) of its fields; the
+/// id stays. The cue is checked with its list.
+fn patched_cue(cue: &Cue, changes: &serde_json::Value) -> Result<Cue, ActionError> {
+    let Some(fields) = changes.as_object() else {
+        return Err(bad_cues("changes are an object of cue fields".into()));
+    };
+    if fields.contains_key("id") {
+        return Err(bad_cues("the id of a cue does not change".into()));
+    }
+    let mut value = serde_json::to_value(cue).map_err(|e| bad_cues(e.to_string()))?;
+    merge_patch(&mut value, changes);
+    serde_json::from_value(value).map_err(|e| bad_cues(format!("changes: {e}")))
+}
+
+/// RFC 7386: objects merge key by key, `null` removes a key, anything
+/// else replaces.
+fn merge_patch(target: &mut serde_json::Value, patch: &serde_json::Value) {
+    let serde_json::Value::Object(patch) = patch else {
+        *target = patch.clone();
+        return;
+    };
+    if !target.is_object() {
+        *target = serde_json::Value::Object(serde_json::Map::new());
+    }
+    let target = target.as_object_mut().expect("made an object above");
+    for (key, value) in patch {
+        if value.is_null() {
+            target.remove(key);
+        } else {
+            merge_patch(
+                target.entry(key.clone()).or_insert(serde_json::Value::Null),
+                value,
+            );
+        }
+    }
 }
 
 /// One cue and its children, `depth` group levels down. Fields of
@@ -1090,20 +1128,24 @@ impl Switcher {
                 source,
             } => {
                 let index = self.find_cue_list(&list)?;
-                check_cues(&name, &cues)?;
-                let mut lists = self.show.cue_lists.clone();
-                let old = std::mem::replace(&mut lists[index].cues, cues);
-                lists[index].name = name;
-                lists[index].source = source;
-                check_unique(&lists)?;
-                self.show.cue_lists = lists;
-                // Editing during the show keeps standby (on the same cue
-                // when it is still there, IMP.5) and running cues.
+                self.replace_cues(index, name, cues, source)?;
+                Ok(Vec::new())
+            }
+            Action::UpdateCue { list, cue, changes } => {
+                let index = self.cue_list_or_active(list.as_ref())?;
                 let entry = &self.show.cue_lists[index];
-                self.cues.keep_standby(entry, &old);
-                self.cues
-                    .list_changed(&self.show.cue_lists, tokio::time::Instant::now());
-                self.sync_standby();
+                if let Some(source) = &entry.source {
+                    return Err(bad_cues(format!(
+                        "cue list {} comes from {source} and is edited there",
+                        entry.name
+                    )));
+                }
+                let mut cues = entry.cues.clone();
+                let target = crate::cues::find_cue_mut(&mut cues, &cue)
+                    .ok_or_else(|| bad_cues(format!("no cue {cue} in cue list {}", entry.name)))?;
+                *target = patched_cue(target, &changes)?;
+                let (name, source) = (entry.name.clone(), entry.source.clone());
+                self.replace_cues(index, name, cues, source)?;
                 Ok(Vec::new())
             }
             Action::RemoveCueList { list } => {
@@ -2976,6 +3018,31 @@ impl Switcher {
     /// When the cue lists have something due next.
     pub fn cue_deadline(&self) -> Option<tokio::time::Instant> {
         self.cues.deadline()
+    }
+
+    /// Gives the list at `index` new cues, name and source, checked; editing
+    /// during the show keeps standby (on the same cue when it is still
+    /// there, IMP.5) and running cues.
+    fn replace_cues(
+        &mut self,
+        index: usize,
+        name: String,
+        cues: Vec<Cue>,
+        source: Option<String>,
+    ) -> Result<(), ActionError> {
+        check_cues(&name, &cues)?;
+        let mut lists = self.show.cue_lists.clone();
+        let old = std::mem::replace(&mut lists[index].cues, cues);
+        lists[index].name = name;
+        lists[index].source = source;
+        check_unique(&lists)?;
+        self.show.cue_lists = lists;
+        let entry = &self.show.cue_lists[index];
+        self.cues.keep_standby(entry, &old);
+        self.cues
+            .list_changed(&self.show.cue_lists, tokio::time::Instant::now());
+        self.sync_standby();
+        Ok(())
     }
 
     /// `list`, or the active list without one.
@@ -8157,6 +8224,136 @@ mod tests {
             add(&mut sw, vec![Cue::empty(CueKind::Fade)]).is_err(),
             "no fade"
         );
+    }
+
+    #[test]
+    fn update_cue_changes_only_the_named_fields() {
+        let mut sw = two_inputs();
+        let t = tokio::time::Instant::now();
+        sw.apply(Action::SetGoGuard { ms: 0 }).unwrap();
+        let wait = |number: &str| Cue {
+            number: number.into(),
+            duration_ms: Some(60_000),
+            ..Cue::empty(CueKind::Wait)
+        };
+        let group = Cue {
+            number: "3".into(),
+            children: vec![wait("3.1")],
+            ..Cue::empty(CueKind::Group)
+        };
+        sw.apply(Action::AddCueList {
+            name: "Act".into(),
+            cues: vec![wait("1"), wait("2"), group],
+            source: None,
+        })
+        .unwrap();
+        sw.cue_go(None, t, None).unwrap();
+        let update = |sw: &mut Switcher, cue: &str, changes: serde_json::Value| {
+            sw.apply(Action::UpdateCue {
+                list: None,
+                cue: cue.into(),
+                changes,
+            })
+        };
+        let cues = |sw: &Switcher| sw.state().cue_lists[0].cues.clone();
+
+        // Two edits made from the same old state both stay: each names
+        // only its field.
+        update(&mut sw, "2", serde_json::json!({ "name": "House" })).unwrap();
+        update(&mut sw, "2", serde_json::json!({ "follow": "after_wait" })).unwrap();
+        let second = &cues(&sw)[1];
+        assert_eq!(second.name, "House");
+        assert_eq!(second.follow, lmix_types::cue::Follow::AfterWait);
+        assert_eq!(second.duration_ms, Some(60_000), "untouched");
+
+        // By id, inside a group; null clears a field.
+        let inner = cues(&sw)[2].children[0].id;
+        update(
+            &mut sw,
+            &inner.to_string(),
+            serde_json::json!({ "duration_ms": 5000, "note": "Cue the band" }),
+        )
+        .unwrap();
+        assert_eq!(cues(&sw)[2].children[0].duration_ms, Some(5000));
+        assert_eq!(cues(&sw)[2].children[0].note, "Cue the band");
+        update(&mut sw, "3.1", serde_json::json!({ "note": null })).unwrap();
+        assert_eq!(cues(&sw)[2].children[0].note, "");
+
+        // Standby and the running cue stay.
+        assert_eq!(sw.state().cue_lists[0].standby, 2);
+        assert_eq!(sw.state().running_cues.len(), 1);
+
+        // Refused, and nothing changes: the id, a field of another kind,
+        // a wait without its time, a number used elsewhere, no such cue,
+        // not an object.
+        let before = cues(&sw);
+        for (cue, changes) in [
+            ("1", serde_json::json!({ "id": inner.to_string() })),
+            (
+                "1",
+                serde_json::json!({ "fade": { "target": { "zone": "Main" } } }),
+            ),
+            ("1", serde_json::json!({ "duration_ms": null })),
+            ("1", serde_json::json!({ "number": "2" })),
+            ("9", serde_json::json!({ "name": "Nine" })),
+            ("1", serde_json::json!("Doors")),
+        ] {
+            assert!(
+                matches!(
+                    update(&mut sw, cue, changes.clone()),
+                    Err(ActionError::BadCueList { .. })
+                ),
+                "{cue} {changes}"
+            );
+        }
+        assert_eq!(cues(&sw), before);
+
+        // A list from a script is edited there.
+        sw.apply(Action::AddCueList {
+            name: "Script".into(),
+            cues: vec![wait("11")],
+            source: Some("script:act2.md".into()),
+        })
+        .unwrap();
+        assert!(sw
+            .apply(Action::UpdateCue {
+                list: Some(InputRef::Text("Script".into())),
+                cue: "11".into(),
+                changes: serde_json::json!({ "name": "Encore" }),
+            })
+            .is_err());
+    }
+
+    #[test]
+    fn update_cue_merges_nested_fields() {
+        let mut sw = two_inputs();
+        let sound = Cue {
+            number: "1".into(),
+            sound: Some(lmix_types::SoundCue {
+                file: "/fx/rain.flac".into(),
+                fade_in_ms: 2000,
+                ..Default::default()
+            }),
+            ..Cue::empty(CueKind::Sound)
+        };
+        sw.apply(Action::AddCueList {
+            name: "Sound".into(),
+            cues: vec![sound],
+            source: None,
+        })
+        .unwrap();
+        // Only the level changes; file and fade stay.
+        sw.apply(Action::UpdateCue {
+            list: None,
+            cue: "1".into(),
+            changes: serde_json::json!({ "sound": { "gain_db": -6.0 } }),
+        })
+        .unwrap();
+        let cue = &sw.state().cue_lists[0].cues[0];
+        let sound = cue.sound.as_ref().unwrap();
+        assert_eq!(sound.gain_db, -6.0);
+        assert_eq!(sound.file, "/fx/rain.flac");
+        assert_eq!(sound.fade_in_ms, 2000);
     }
 
     #[test]

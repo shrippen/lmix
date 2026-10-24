@@ -210,6 +210,19 @@ fn find_cue(cues: &[Cue], text: &str) -> Option<CueId> {
     None
 }
 
+/// The cue named `text` (id or number) anywhere below `cues`, to change.
+pub(crate) fn find_cue_mut<'a>(cues: &'a mut [Cue], text: &str) -> Option<&'a mut Cue> {
+    for cue in cues {
+        if cue.id.to_string() == text || (!cue.number.is_empty() && cue.number == text) {
+            return Some(cue);
+        }
+        if let Some(found) = find_cue_mut(&mut cue.children, text) {
+            return Some(found);
+        }
+    }
+    None
+}
+
 /// Last cue of the follow chain that starts at `start`.
 fn chain_end(cues: &[Cue], start: usize) -> usize {
     let mut i = start;
