@@ -297,11 +297,17 @@ until_true '[[ "$(state | jq -r '.cue_lists[0].cues[2].name')" == Lamp ]]' \
     && [[ "$(state | jq -r '.cue_lists[0].cues[0].name')" == Doors ]] \
     && pass "inspector: keeps its cue while standby moves" \
     || fail "inspector: cue 3 $(state | jq -r '.cue_lists[0].cues[2].name'), cue 1 $(state | jq -r '.cue_lists[0].cues[0].name')"
+# Escape in a field is panic and leaves the field, then space is GO.
+act '{"action":"cue_standby","to":{"index":1}}'
+until_true '[[ "$(standby)" == 1 ]]' || fail "inspector: standby not on 1"
+key space
+until_true '[[ "$(cues_running)" -ge 1 ]]' || fail "inspector: GO started nothing"
 act '{"action":"cue_standby","to":{"index":3}}'
 until_true '[[ "$(standby)" == 3 ]]' || fail "inspector: standby not back on 3"
-# Escape leaves a field (no panic), then space is GO.
 click $INSPECTOR_NAME
 key Escape
+until_true '[[ "$(cues_running)" == 0 ]]' && pass "inspector: Escape in a field is panic" \
+    || fail "inspector: Escape in a field left $(cues_running) cues running"
 key space
 until_true '[[ "$(standby)" == 4 ]]' && pass "inspector: space is GO after Enter or Escape in a field" \
     || fail "inspector: no GO after editing (standby $(standby))"

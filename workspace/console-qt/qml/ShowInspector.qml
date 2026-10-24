@@ -18,11 +18,11 @@ KanteCard {
     /** The window's Core, for the colour names. */
     required property var core
 
-    /** While a field here has the keyboard or the action dialog is open,
+    /** While a field here has the keyboard or a menu or dialog of it is open,
      *  the inspector keeps the cue it began with, also when standby moves
      *  on (a follow, a GO from MIDI, OSC or another client): what is typed
      *  goes to that cue, or nowhere when it is gone from the active list. */
-    readonly property bool holding: actionDialog.visible || hasFocusInside(Window.activeFocusItem)
+    readonly property bool holding: actionDialog.visible || colourMenu.visible || hasFocusInside(Window.activeFocusItem)
     property string heldId: ""
     // Let go only after the field that lost the keyboard saved its value
     // (editingFinished may come after the focus moved).
@@ -68,15 +68,12 @@ KanteCard {
         showView.forceActiveFocus()
     }
 
-    // Escape in a field leaves it (keeping what was typed there); the
-    // next Escape is the show's panic.
+    // Escape in a field is the show's panic as everywhere on the page
+    // (nothing may keep playing), and it leaves the field.
     Keys.onEscapePressed: event => {
-        if (hasFocusInside(Window.activeFocusItem)) {
-            refocus()
-            event.accepted = true
-        } else {
-            event.accepted = false
-        }
+        refocus()
+        showView.panic()
+        event.accepted = true
     }
 
     ColumnLayout {
