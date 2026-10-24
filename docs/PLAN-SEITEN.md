@@ -183,9 +183,11 @@ Raster 4 × 2 neben den Übergängen (24.10.): die Mittelspalte passt bei
 „Schwarzblende“. Titelleiste der Kachel in Tally-Farbe (24.10.): rot auf
 Program, grün in Preview, Schrift per `KanteStyle.inkOn` (die besser
 lesbare Farbe auf der Füllung, auch in Breeze; Kante hatte das schon).
+Schmaler Tonmischer rechts (24.10.): Pegel, Fader und Stumm je Input mit
+Ton und für den Master, Weg zur Ton-Seite; abschaltbar unter Ansicht.
+Audio folgt Video bleibt auf der Ton-Seite.
 
 Aus dem Dummy noch offen, **nur Oberfläche** (der Kern kann es):
-- Mix: schmaler Tonmischer am Rand.
 - Show: Inspector unten mit Reitern, Seitenleiste
   Aktiv/Listen, laufende Cues als Fortschrittsfüllung mit negativer
   Restzeit, Leiste zum Anlegen je Cue-Art, Zeitfelder mit Fortschritt.

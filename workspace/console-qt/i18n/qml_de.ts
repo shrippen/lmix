@@ -2213,7 +2213,7 @@
       <translation>Programm auf Schwarz und zurück (SWI.9); Show und Ausgänge laufen weiter</translation>
     </message>
     <message>
-      <location line="+74" />
+      <location line="+76" />
       <source>Layout %1 %2</source>
       <translation>Layout %1 %2</translation>
     </message>
@@ -2273,19 +2273,19 @@
       <translation>Einige Sekunden lang Aufnahme bis Programm messen</translation>
     </message>
     <message>
-      <location line="+15" />
-      <location line="+155" />
+      <location line="+21" />
+      <location line="+162" />
       <source>Preview</source>
       <translation>Vorschau</translation>
     </message>
     <message>
-      <location line="-119" />
-      <location line="+118" />
+      <location line="-126" />
+      <location line="+125" />
       <source>Program</source>
       <translation>Programm</translation>
     </message>
     <message>
-      <location line="-107" />
+      <location line="-114" />
       <source>Inputs</source>
       <translation>Inputs</translation>
     </message>
@@ -2341,6 +2341,11 @@
     </message>
     <message>
       <location line="+6" />
+      <source>Audio at the edge</source>
+      <translation>Ton am Rand</translation>
+    </message>
+    <message>
+      <location line="+7" />
       <source>Simple mode</source>
       <translation>Einfacher Modus</translation>
     </message>
@@ -2403,6 +2408,81 @@
       <location line="+5" />
       <source>+ Input</source>
       <translation>+ Input</translation>
+    </message>
+  </context>
+  <context>
+    <name>NarrowMixer</name>
+    <message>
+      <location filename="../qml/NarrowMixer.qml" line="+37" />
+      <source>Audio mixer</source>
+      <translation>Tonmischer</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>Audio</source>
+      <translation>Ton</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Audio page ›</source>
+      <translation>Ton-Seite ›</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Open the Audio page</source>
+      <translation>Ton-Seite öffnen</translation>
+    </message>
+    <message>
+      <location line="+38" />
+      <source>No sound</source>
+      <translation>Kein Ton</translation>
+    </message>
+    <message>
+      <location line="+12" />
+      <source>MST</source>
+      <comment>master, short</comment>
+      <translation>MST</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Master</source>
+      <translation>Master</translation>
+    </message>
+    <message>
+      <location line="+48" />
+      <source>Volume of %1</source>
+      <translation>Lautstärke von %1</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>%1: %2</source>
+      <translation>%1: %2</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>M</source>
+      <comment>mute, short</comment>
+      <translation>M</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Mute %1</source>
+      <translation>%1 stumm schalten</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Unmute %1</source>
+      <translation>Ton an für %1</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>%1 is on. Click: mute.</source>
+      <translation>%1 ist an. Klick: stumm.</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>%1 is muted. Click: on.</source>
+      <translation>%1 ist stumm. Klick: an.</translation>
     </message>
   </context>
   <context>

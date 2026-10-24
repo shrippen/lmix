@@ -53,6 +53,8 @@ AppPage {
         /** Inputs as rows of buttons, program above preview, instead of
          *  tiles (like a hardware switcher). */
         property bool buttons: false
+        /** The narrow audio mixer at the right edge. */
+        property bool mixer: true
     }
     readonly property var collapsedIds: {
         try {
@@ -309,314 +311,339 @@ AppPage {
         }
     ]
 
-    // The mixer area: monitors, inputs, layouts, outputs.
-    ColumnLayout {
+    // The mixer area: monitors, inputs, layouts, outputs; the sound at the
+    // right edge (click dummy), hidden in simple mode or from View.
+    RowLayout {
         anchors.fill: parent
         spacing: Kirigami.Units.largeSpacing
 
-        RowLayout {
+        ColumnLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
             spacing: Kirigami.Units.largeSpacing
 
-            Monitor {
-                label: qsTr("Preview")
-                detail: root.busLabel(root.show ? root.show.preview : null)
-                tally: KanteStyle.positiveTextColor
-                // The mixer's preview output: an input or a layout, as a
-                // take brings it; it does not change pipelines on a click.
-                source: root.show && root.show.preview ? "preview" : ""
-                input: root.previewInput
-                // Quick play of preview (SWI.8).
-                onDoubleClicked: if (backend.connected && root.show && root.show.preview)
-                    root.act({ action: "quick_play" })
-            }
-
-            // Scrolls when the window is low: its height no longer
-            // pushes the bars below the window (1440 × 900).
-            QQC2.ScrollView {
-                id: panelScroll
-                Layout.fillWidth: false
+            RowLayout {
+                Layout.fillWidth: true
                 Layout.fillHeight: true
-                Layout.preferredWidth: Kirigami.Units.gridUnit * 8
-                Layout.minimumHeight: Kirigami.Units.gridUnit * 6
-                contentWidth: availableWidth
-                contentHeight: transitionPanel.implicitHeight
-                QQC2.ScrollBar.horizontal.policy: QQC2.ScrollBar.AlwaysOff
+                spacing: Kirigami.Units.largeSpacing
 
-                TransitionPanel {
-                    id: transitionPanel
-                    width: panelScroll.availableWidth
-                    core: backend
-                    show: root.show
-                    act: root.act
-                    transitions: transitionModel
-                    transitionBySlot: root.transitionBySlot
+                Monitor {
+                    label: qsTr("Preview")
+                    detail: root.busLabel(root.show ? root.show.preview : null)
+                    tally: KanteStyle.positiveTextColor
+                    // The mixer's preview output: an input or a layout, as a
+                    // take brings it; it does not change pipelines on a click.
+                    source: root.show && root.show.preview ? "preview" : ""
+                    input: root.previewInput
+                    // Quick play of preview (SWI.8).
+                    onDoubleClicked: if (backend.connected && root.show && root.show.preview)
+                        root.act({ action: "quick_play" })
+                }
+
+                // Scrolls when the window is low: its height no longer
+                // pushes the bars below the window (1440 × 900).
+                QQC2.ScrollView {
+                    id: panelScroll
+                    Layout.fillWidth: false
+                    Layout.fillHeight: true
+                    Layout.preferredWidth: Kirigami.Units.gridUnit * 8
+                    Layout.minimumHeight: Kirigami.Units.gridUnit * 6
+                    contentWidth: availableWidth
+                    contentHeight: transitionPanel.implicitHeight
+                    QQC2.ScrollBar.horizontal.policy: QQC2.ScrollBar.AlwaysOff
+
+                    TransitionPanel {
+                        id: transitionPanel
+                        width: panelScroll.availableWidth
+                        core: backend
+                        show: root.show
+                        act: root.act
+                        transitions: transitionModel
+                        transitionBySlot: root.transitionBySlot
+                    }
+                }
+
+                Monitor {
+                    label: qsTr("Program")
+                    detail: root.busLabel(root.show ? root.show.program : null)
+                    tally: KanteStyle.negativeTextColor
+                    source: "program"
+                    peakDb: root.levels.program
+                    input: root.programInput
                 }
             }
 
-            Monitor {
-                label: qsTr("Program")
-                detail: root.busLabel(root.show ? root.show.program : null)
-                tally: KanteStyle.negativeTextColor
-                source: "program"
-                peakDb: root.levels.program
-                input: root.programInput
-            }
-        }
-
-        RowLayout {
-            Layout.fillWidth: true
-            KanteSectionLabel { text: qsTr("Inputs") }
-            KanteSegmented {
-                activeFocusOnTab: false
-                model: [qsTr("Tiles"), qsTr("Buttons")]
-                currentIndex: viewSettings.buttons ? 1 : 0
-                tooltips: [qsTr("A live tile per input"), qsTr("A row for program and one for preview, a button per input")]
-                onActivated: index => viewSettings.buttons = index === 1
-            }
-            KanteButton {
-                id: viewButton
-                text: qsTr("View")
-                emphasis: KanteButton.Emphasis.Quiet
-                onClicked: viewMenu.popup(viewButton, 0, viewButton.height)
-                QQC2.Menu {
-                    id: viewMenu
-                    KantePopupSkin { popup: viewMenu }
-                    ChoiceMenu {
-                        title: qsTr("Tile size")
-                        current: viewSettings.tileSize
-                        choices: [{ value: 0, label: qsTr("Small") }, { value: 1, label: qsTr("Medium") }, { value: 2, label: qsTr("Large") }]
-                        onPicked: value => viewSettings.tileSize = value
+            RowLayout {
+                Layout.fillWidth: true
+                KanteSectionLabel { text: qsTr("Inputs") }
+                KanteSegmented {
+                    activeFocusOnTab: false
+                    model: [qsTr("Tiles"), qsTr("Buttons")]
+                    currentIndex: viewSettings.buttons ? 1 : 0
+                    tooltips: [qsTr("A live tile per input"), qsTr("A row for program and one for preview, a button per input")]
+                    onActivated: index => viewSettings.buttons = index === 1
+                }
+                KanteButton {
+                    id: viewButton
+                    text: qsTr("View")
+                    emphasis: KanteButton.Emphasis.Quiet
+                    onClicked: viewMenu.popup(viewButton, 0, viewButton.height)
+                    QQC2.Menu {
+                        id: viewMenu
+                        KantePopupSkin { popup: viewMenu }
+                        ChoiceMenu {
+                            title: qsTr("Tile size")
+                            current: viewSettings.tileSize
+                            choices: [{ value: 0, label: qsTr("Small") }, { value: 1, label: qsTr("Medium") }, { value: 2, label: qsTr("Large") }]
+                            onPicked: value => viewSettings.tileSize = value
+                        }
+                        ChoiceMenu {
+                            title: qsTr("Rows")
+                            current: viewSettings.rows
+                            choices: [1, 2, 3, 4].map(n => ({ value: n, label: String(n) }))
+                            onPicked: value => viewSettings.rows = value
+                        }
+                        QQC2.MenuItem {
+                            text: qsTr("Audio at the edge")
+                            checkable: true
+                            checked: viewSettings.mixer
+                            enabled: !root.simple
+                            onTriggered: viewSettings.mixer = !viewSettings.mixer
+                        }
+                        QQC2.MenuItem {
+                            text: qsTr("Simple mode")
+                            checkable: true
+                            checked: root.simple
+                            enabled: backend.uiMode === ""
+                            onTriggered: viewSettings.simple = !viewSettings.simple
+                        }
                     }
-                    ChoiceMenu {
-                        title: qsTr("Rows")
-                        current: viewSettings.rows
-                        choices: [1, 2, 3, 4].map(n => ({ value: n, label: String(n) }))
-                        onPicked: value => viewSettings.rows = value
-                    }
-                    QQC2.MenuItem {
-                        text: qsTr("Simple mode")
-                        checkable: true
-                        checked: root.simple
-                        enabled: backend.uiMode === ""
-                        onTriggered: viewSettings.simple = !viewSettings.simple
+                }
+                Item { Layout.fillWidth: true }
+                KanteButton {
+                    visible: root.inputs.some(i => i.missing && i.missing.length > 0)
+                    text: qsTr("Find missing files…")
+                    emphasis: KanteButton.Emphasis.Primary
+                    QQC2.ToolTip.visible: hovered
+                    QQC2.ToolTip.text: qsTr("Inputs marked \"Missing\" lack media files: pick the folder they are in now. Inputs on program are left alone.")
+                    onClicked: relocateDialog.open()
+                }
+                KanteButton {
+                    text: qsTr("Clear solo")
+                    visible: root.inputs.some(i => i.listen !== "off")
+                    onClicked: root.act({ action: "clear_listen" })
+                }
+                KanteButton {
+                    text: qsTr("Bring back %1").arg(root.show ? root.show.restorable : "")
+                    visible: root.show !== null && !!root.show.restorable
+                    onClicked: root.act({ action: "restore_input" })
+                }
+                KanteButton {
+                    readonly property bool locked: root.show !== null && root.show.locked === true
+                    text: locked ? qsTr("Locked") : qsTr("Lock")
+                    emphasis: locked ? KanteButton.Emphasis.Destructive : KanteButton.Emphasis.Normal
+                    enabled: backend.connected
+                    QQC2.ToolTip.visible: hovered
+                    QQC2.ToolTip.text: qsTr("While locked, closing inputs, loading a show and stopping outputs are refused.")
+                    onClicked: root.act({ action: "set_lock", on: !locked })
+                }
+                KanteButton {
+                    visible: !root.simple
+                    text: qsTr("Shortcuts…")
+                    enabled: backend.connected
+                    onClicked: root.openShortcuts()
+                }
+                KanteButton {
+                    visible: !root.simple
+                    text: qsTr("Buses…")
+                    enabled: backend.connected
+                    onClicked: auxDialog.open()
+                }
+                KanteButton {
+                    visible: !root.simple
+                    text: qsTr("Titles…")
+                    enabled: backend.connected
+                    onClicked: titlesDialog.open()
+                }
+                KanteButton {
+                    visible: !root.simple
+                    text: qsTr("Data…")
+                    enabled: backend.connected
+                    onClicked: dataSourcesDialog.open()
+                }
+                KanteButton {
+                    text: qsTr("+ Input")
+                    enabled: backend.connected
+                    onClicked: {
+                        addInputDialog.replacing = null
+                        addInputDialog.open()
                     }
                 }
             }
-            Item { Layout.fillWidth: true }
-            KanteButton {
-                visible: root.inputs.some(i => i.missing && i.missing.length > 0)
-                text: qsTr("Find missing files…")
-                emphasis: KanteButton.Emphasis.Primary
-                QQC2.ToolTip.visible: hovered
-                QQC2.ToolTip.text: qsTr("Inputs marked \"Missing\" lack media files: pick the folder they are in now. Inputs on program are left alone.")
-                onClicked: relocateDialog.open()
-            }
-            KanteButton {
-                text: qsTr("Clear solo")
-                visible: root.inputs.some(i => i.listen !== "off")
-                onClicked: root.act({ action: "clear_listen" })
-            }
-            KanteButton {
-                text: qsTr("Bring back %1").arg(root.show ? root.show.restorable : "")
-                visible: root.show !== null && !!root.show.restorable
-                onClicked: root.act({ action: "restore_input" })
-            }
-            KanteButton {
-                readonly property bool locked: root.show !== null && root.show.locked === true
-                text: locked ? qsTr("Locked") : qsTr("Lock")
-                emphasis: locked ? KanteButton.Emphasis.Destructive : KanteButton.Emphasis.Normal
-                enabled: backend.connected
-                QQC2.ToolTip.visible: hovered
-                QQC2.ToolTip.text: qsTr("While locked, closing inputs, loading a show and stopping outputs are refused.")
-                onClicked: root.act({ action: "set_lock", on: !locked })
-            }
-            KanteButton {
-                visible: !root.simple
-                text: qsTr("Shortcuts…")
-                enabled: backend.connected
-                onClicked: root.openShortcuts()
-            }
-            KanteButton {
-                visible: !root.simple
-                text: qsTr("Buses…")
-                enabled: backend.connected
-                onClicked: auxDialog.open()
-            }
-            KanteButton {
-                visible: !root.simple
-                text: qsTr("Titles…")
-                enabled: backend.connected
-                onClicked: titlesDialog.open()
-            }
-            KanteButton {
-                visible: !root.simple
-                text: qsTr("Data…")
-                enabled: backend.connected
-                onClicked: dataSourcesDialog.open()
-            }
-            KanteButton {
-                text: qsTr("+ Input")
-                enabled: backend.connected
-                onClicked: {
-                    addInputDialog.replacing = null
-                    addInputDialog.open()
-                }
-            }
-        }
 
-        // Buttons: program row cuts the input straight on, preview row puts
-        // it into preview (SWI.1, SWI.2).
-        ColumnLayout {
-            visible: viewSettings.buttons
-            Layout.fillWidth: true
-            spacing: Kirigami.Units.smallSpacing
-            Repeater {
-                model: [
-                    { label: qsTr("Program"), bus: "program", color: KanteStyle.negativeTextColor },
-                    { label: qsTr("Preview"), bus: "preview", color: KanteStyle.positiveTextColor }
-                ]
-                delegate: RowLayout {
-                    id: busRow
-                    required property var modelData
-                    Layout.fillWidth: true
-                    spacing: Kirigami.Units.smallSpacing
-                    KanteSectionLabel {
-                        Layout.preferredWidth: Kirigami.Units.gridUnit * 5
-                        text: busRow.modelData.label
-                        color: busRow.modelData.color
-                    }
-                    Flow {
+            // Buttons: program row cuts the input straight on, preview row puts
+            // it into preview (SWI.1, SWI.2).
+            ColumnLayout {
+                visible: viewSettings.buttons
+                Layout.fillWidth: true
+                spacing: Kirigami.Units.smallSpacing
+                Repeater {
+                    model: [
+                        { label: qsTr("Program"), bus: "program", color: KanteStyle.negativeTextColor },
+                        { label: qsTr("Preview"), bus: "preview", color: KanteStyle.positiveTextColor }
+                    ]
+                    delegate: RowLayout {
+                        id: busRow
+                        required property var modelData
                         Layout.fillWidth: true
                         spacing: Kirigami.Units.smallSpacing
-                        Repeater {
-                            model: root.inputs
-                            delegate: KanteButton {
-                                required property var modelData
-                                readonly property bool on: root.show !== null && root.show[busRow.modelData.bus] === modelData.id
-                                width: Kirigami.Units.gridUnit * 6
-                                height: Kirigami.Units.gridUnit * 2.5
-                                text: modelData.number + " " + modelData.name
-                                emphasis: on ? (busRow.modelData.bus === "program" ? KanteButton.Emphasis.Destructive : KanteButton.Emphasis.Primary)
-                                    : KanteButton.Emphasis.Normal
-                                enabled: root.backend.connected
-                                Accessible.name: busRow.modelData.label + " " + modelData.number + " " + modelData.name
-                                onClicked: root.act(busRow.modelData.bus === "program"
-                                    ? { action: "cut_direct", input: modelData.number }
-                                    : { action: "preview_input", input: modelData.number })
+                        KanteSectionLabel {
+                            Layout.preferredWidth: Kirigami.Units.gridUnit * 5
+                            text: busRow.modelData.label
+                            color: busRow.modelData.color
+                        }
+                        Flow {
+                            Layout.fillWidth: true
+                            spacing: Kirigami.Units.smallSpacing
+                            Repeater {
+                                model: root.inputs
+                                delegate: KanteButton {
+                                    required property var modelData
+                                    readonly property bool on: root.show !== null && root.show[busRow.modelData.bus] === modelData.id
+                                    width: Kirigami.Units.gridUnit * 6
+                                    height: Kirigami.Units.gridUnit * 2.5
+                                    text: modelData.number + " " + modelData.name
+                                    emphasis: on ? (busRow.modelData.bus === "program" ? KanteButton.Emphasis.Destructive : KanteButton.Emphasis.Primary)
+                                        : KanteButton.Emphasis.Normal
+                                    enabled: root.backend.connected
+                                    Accessible.name: busRow.modelData.label + " " + modelData.number + " " + modelData.name
+                                    onClicked: root.act(busRow.modelData.bus === "program"
+                                        ? { action: "cut_direct", input: modelData.number }
+                                        : { action: "preview_input", input: modelData.number })
+                                }
                             }
                         }
                     }
                 }
             }
-        }
 
-        GridView {
-            id: bar
-            visible: !viewSettings.buttons
-            Layout.fillWidth: true
-            Layout.preferredHeight: cellHeight * Math.max(1, Math.min(viewSettings.rows, Math.ceil(count / Math.max(1, Math.floor(width / cellWidth)))))
-            cellWidth: Kirigami.Units.gridUnit * root.tileUnits[0] + Kirigami.Units.smallSpacing
-            cellHeight: Kirigami.Units.gridUnit * root.tileUnits[1]
-            clip: true
-            boundsBehavior: Flickable.StopAtBounds
-            model: inputModel
-            QQC2.ScrollBar.vertical: QQC2.ScrollBar {}
-            /** The tile being dragged to a new place, and where it would land. */
-            property var dragged: null
-            property int dropIndex: -1
-            function indexAtScene(point) {
-                var p = bar.mapFromItem(null, point.x, point.y)
-                return bar.indexAt(p.x + bar.contentX, p.y + bar.contentY)
-            }
-
-            delegate: InputTile {
-                id: tileDelegate
-                required property string key
-                required property int index
-                dropTarget: bar.dragged !== null && bar.dropIndex === index && bar.dragged.id !== key
-                onDragMoved: point => {
-                    bar.dragged = tileDelegate.input
-                    bar.dropIndex = bar.indexAtScene(point)
+            GridView {
+                id: bar
+                visible: !viewSettings.buttons
+                Layout.fillWidth: true
+                Layout.preferredHeight: cellHeight * Math.max(1, Math.min(viewSettings.rows, Math.ceil(count / Math.max(1, Math.floor(width / cellWidth)))))
+                cellWidth: Kirigami.Units.gridUnit * root.tileUnits[0] + Kirigami.Units.smallSpacing
+                cellHeight: Kirigami.Units.gridUnit * root.tileUnits[1]
+                clip: true
+                boundsBehavior: Flickable.StopAtBounds
+                model: inputModel
+                QQC2.ScrollBar.vertical: QQC2.ScrollBar {}
+                /** The tile being dragged to a new place, and where it would land. */
+                property var dragged: null
+                property int dropIndex: -1
+                function indexAtScene(point) {
+                    var p = bar.mapFromItem(null, point.x, point.y)
+                    return bar.indexAt(p.x + bar.contentX, p.y + bar.contentY)
                 }
-                onDragEnded: point => {
-                    // Collapsed inputs have no tile: the model's key, not the index into the inputs.
-                    var index = bar.indexAtScene(point)
-                    var target = index >= 0 && index < inputModel.count ? root.inputById(inputModel.get(index).key) : null
-                    if (bar.dragged && target && target.id !== bar.dragged.id) {
-                        root.act({ action: "move_input", input: bar.dragged.number, number: target.number })
+
+                delegate: InputTile {
+                    id: tileDelegate
+                    required property string key
+                    required property int index
+                    dropTarget: bar.dragged !== null && bar.dropIndex === index && bar.dragged.id !== key
+                    onDragMoved: point => {
+                        bar.dragged = tileDelegate.input
+                        bar.dropIndex = bar.indexAtScene(point)
                     }
-                    bar.dragged = null
-                    bar.dropIndex = -1
+                    onDragEnded: point => {
+                        // Collapsed inputs have no tile: the model's key, not the index into the inputs.
+                        var index = bar.indexAtScene(point)
+                        var target = index >= 0 && index < inputModel.count ? root.inputById(inputModel.get(index).key) : null
+                        if (bar.dragged && target && target.id !== bar.dragged.id) {
+                            root.act({ action: "move_input", input: bar.dragged.number, number: target.number })
+                        }
+                        bar.dragged = null
+                        bar.dropIndex = -1
+                    }
+                    width: bar.cellWidth - Kirigami.Units.smallSpacing
+                    height: bar.cellHeight - Kirigami.Units.smallSpacing
+                    core: backend
+                    input: root.inputById(key) || ({ id: key, number: 0, name: "", source: { kind: "pattern" }, status: "starting", audio: { on: false, follow_video: false, volume: 0 }, has_audio: false, listen: "off", signal_loss: "hold", color: null })
+                    act: root.act
+                    onProgram: root.show !== null && root.show.program === key
+                    onPreview: root.show !== null && root.show.preview === key
+                    overlays: root.show && root.show.overlays ? root.show.overlays : []
+                    overlayPreview: root.show && root.show.overlay_preview ? root.show.overlay_preview : []
+                    looksAvailable: root.show !== null && root.show.looks_available === true
+                    peakDb: root.levels[key]
+                    channelsDb: root.levels["ch:" + key]
+                    onTriggersRequested: {
+                        triggersDialog.graphics = null
+                        triggersDialog.input = tileDelegate.input
+                        triggersDialog.open()
+                    }
+                    onReplaceRequested: {
+                        addInputDialog.replacing = tileDelegate.input
+                        addInputDialog.open()
+                    }
+                    dynamicSlots: root.show && root.show.dynamic_inputs
+                        ? [1, 2, 3, 4].filter(n => root.show.dynamic_inputs[n - 1] === key) : []
+                    onSettingsRequested: {
+                        inputSettingsDialog.inputId = tileDelegate.input.id
+                        inputSettingsDialog.open()
+                    }
+                    onPtzRequested: {
+                        ptzDialog.inputId = tileDelegate.input.id
+                        ptzDialog.open()
+                    }
+                    onCollapseRequested: root.setCollapsed(tileDelegate.input.id, true)
                 }
-                width: bar.cellWidth - Kirigami.Units.smallSpacing
-                height: bar.cellHeight - Kirigami.Units.smallSpacing
+            }
+
+            CollapsedBar {
+                Layout.fillWidth: true
                 core: backend
-                input: root.inputById(key) || ({ id: key, number: 0, name: "", source: { kind: "pattern" }, status: "starting", audio: { on: false, follow_video: false, volume: 0 }, has_audio: false, listen: "off", signal_loss: "hold", color: null })
+                show: root.show
                 act: root.act
-                onProgram: root.show !== null && root.show.program === key
-                onPreview: root.show !== null && root.show.preview === key
-                overlays: root.show && root.show.overlays ? root.show.overlays : []
-                overlayPreview: root.show && root.show.overlay_preview ? root.show.overlay_preview : []
-                looksAvailable: root.show !== null && root.show.looks_available === true
-                peakDb: root.levels[key]
-                channelsDb: root.levels["ch:" + key]
-                onTriggersRequested: {
-                    triggersDialog.graphics = null
-                    triggersDialog.input = tileDelegate.input
-                    triggersDialog.open()
+                inputs: root.inputs
+                collapsed: root.collapsedIds
+                onExpandRequested: id => root.setCollapsed(id, false)
+            }
+
+            LayoutBar {
+                visible: !root.simple
+                Layout.fillWidth: true
+                core: backend
+                show: root.show
+                act: root.act
+                onEditRequested: layout => {
+                    layoutDialog.layout = layout
+                    layoutDialog.open()
                 }
-                onReplaceRequested: {
-                    addInputDialog.replacing = tileDelegate.input
-                    addInputDialog.open()
-                }
-                dynamicSlots: root.show && root.show.dynamic_inputs
-                    ? [1, 2, 3, 4].filter(n => root.show.dynamic_inputs[n - 1] === key) : []
-                onSettingsRequested: {
-                    inputSettingsDialog.inputId = tileDelegate.input.id
-                    inputSettingsDialog.open()
-                }
-                onPtzRequested: {
-                    ptzDialog.inputId = tileDelegate.input.id
-                    ptzDialog.open()
-                }
-                onCollapseRequested: root.setCollapsed(tileDelegate.input.id, true)
+            }
+
+            OutputBar {
+                Layout.fillWidth: true
+                core: backend
+                show: root.show
+                act: root.act
+                outputs: outputModel
+                outputById: root.outputById
+                confirmStop: root.shell.confirmStop
+                onConfirmStopChosen: on => root.shell.confirmStop = on
+                onAddRequested: addOutputDialog.open()
             }
         }
 
-        CollapsedBar {
-            Layout.fillWidth: true
+        NarrowMixer {
+            visible: viewSettings.mixer && !root.simple
+            Layout.fillHeight: true
+            Layout.preferredWidth: Kirigami.Units.gridUnit * 12
             core: backend
             show: root.show
             act: root.act
-            inputs: root.inputs
-            collapsed: root.collapsedIds
-            onExpandRequested: id => root.setCollapsed(id, false)
-        }
-
-        LayoutBar {
-            visible: !root.simple
-            Layout.fillWidth: true
-            core: backend
-            show: root.show
-            act: root.act
-            onEditRequested: layout => {
-                layoutDialog.layout = layout
-                layoutDialog.open()
-            }
-        }
-
-        OutputBar {
-            Layout.fillWidth: true
-            core: backend
-            show: root.show
-            act: root.act
-            outputs: outputModel
-            outputById: root.outputById
-            confirmStop: root.shell.confirmStop
-            onConfirmStopChosen: on => root.shell.confirmStop = on
-            onAddRequested: addOutputDialog.open()
+            levels: root.levels
+            onAudioPageRequested: root.shell.showPage("audio")
         }
     }
 
