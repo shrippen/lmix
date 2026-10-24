@@ -139,19 +139,22 @@ KanteCard {
                 anchors.leftMargin: Kirigami.Units.smallSpacing
                 anchors.rightMargin: anchors.leftMargin
                 KanteSectionLabel {
+                    id: numberLabel
                     text: tile.input.number
                     font.family: KanteStyle.monoFamily
-                    color: tile.titleInk(KanteStyle.active ? KanteStyle.mutedTextColor : Kirigami.Theme.textColor)
+                    // Kante's own colour, the tally ink only on the fill.
+                    Binding { target: numberLabel; property: "color"; value: KanteStyle.inkOn(tile.barColor); when: tile.tallyFill }
                 }
                 KanteSectionLabel {
                     text: Texts.sourceBadge(tile.input.source.kind)
                     color: tile.titleInk(KanteStyle.mutedTextColor)
                 }
                 KanteSectionLabel {
+                    id: nameLabel
                     Layout.fillWidth: true
                     text: tile.input.name
                     elide: Text.ElideRight
-                    color: tile.titleInk(KanteStyle.active ? KanteStyle.mutedTextColor : Kirigami.Theme.textColor)
+                    Binding { target: nameLabel; property: "color"; value: KanteStyle.inkOn(tile.barColor); when: tile.tallyFill }
                 }
                 // Media files not found (SHW.4).
                 KanteSectionLabel {
