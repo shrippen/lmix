@@ -357,6 +357,14 @@ xdotool type --delay 20 -- "-6"
 key Return
 until_true '[[ "$(state | jq '.cue_lists[2].cues[0].fade.gain_db==-6')" == true ]]' && pass "inspector: a typed level goes to the cue" \
     || fail "inspector: fade level $(state | jq '.cue_lists[2].cues[0].fade.gain_db'), not -6"
+# Escape in the box (the panic) drops what was typed there too.
+click $INSPECTOR_LEVEL_TEXT
+xdotool key ctrl+a
+xdotool type --delay 20 -- "-3"
+key Escape
+sleep 1 # a save would have come back by now
+[[ "$(state | jq '.cue_lists[2].cues[0].fade.gain_db==-6')" == true ]] && pass "inspector: Escape in a level drops what was typed" \
+    || fail "inspector: Escape saved the level as $(state | jq '.cue_lists[2].cues[0].fade.gain_db')"
 key space
 until_true '[[ "$(state | jq '.cue_lists[2].standby')" == 2 ]]' && pass "inspector: space is GO after a level" \
     || fail "inspector: no GO after a level (standby $(state | jq '.cue_lists[2].standby'))"

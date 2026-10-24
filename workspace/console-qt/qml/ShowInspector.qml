@@ -79,6 +79,12 @@ KanteCard {
                 item.typing = false
                 break
             }
+            // A spin box takes its text when it loses the keys: give it
+            // back its value first.
+            if (item.valueFromText !== undefined && item.contentItem) {
+                item.contentItem.text = item.textFromValue(item.value, item.locale)
+                break
+            }
         }
         refocus()
         showView.panic()
