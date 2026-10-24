@@ -76,15 +76,24 @@ function lmixPatch(doc, ops) {
   return doc;
 }
 
-/** Runs one action; resolves to the new state or throws the error text. */
-async function lmixAct(action) {
-  const resp = await fetch("/api/actions", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(action),
+/** The last action on its way: the next one waits for it. */
+let lmixActQueue = Promise.resolve();
+
+/** Runs one action; resolves to the new state or throws the error text.
+ *  Actions go out one after the other, in the order they were made: a
+ *  double click (click, click, GO) sent at once could arrive overtaken. */
+function lmixAct(action) {
+  const run = lmixActQueue.then(async () => {
+    const resp = await fetch("/api/actions", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(action),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    return resp.json();
   });
-  if (!resp.ok) throw new Error(await resp.text());
-  return resp.json();
+  lmixActQueue = run.catch(() => {});
+  return run;
 }
 
 /** Shows the connection state in the header's .state element. */
