@@ -292,13 +292,13 @@ prüft, trägt sie hier ein.
 ```bash
 scripts/sync-kante.sh                 # Kante-QML ins Crate kopieren (nach Kante-Änderungen)
 cd workspace/console-qt
-cargo run --release -- --core http://127.0.0.1:8200 [--page mix|show] [--theme kante|kante-light|system]
+cargo run --release -- --core http://127.0.0.1:8200 [--page mix|show|audio|outputs|setup] [--theme kante|kante-light|system]
 ```
 
 Oder alles zusammen (strom, lmix-core, lmix mit Testbildern; Schließen
-beendet alles): `scripts/run-local.sh` bzw. `./start-mixer.sh` (`MIXER=gl`,
-`INPUTS=8`; `APP=show` bzw. `./start-show.sh` öffnet auf der Seite Show,
-`APP=both` zwei Fenster).
+beendet alles): `./start.sh [mix|show|audio|outputs|setup|both]` bzw.
+`scripts/run-local.sh` mit `APP=…` (`MIXER=gl`, `INPUTS=8`; ohne Seite die
+zuletzt offene, `both` zwei Fenster Mix und Show).
 
 Einstellungen (Stil, Ansicht, Tasten, zuletzt offene Seite) in
 `~/.config/lmix/lmix.conf`. Beim ersten Start übernimmt lmix einmal

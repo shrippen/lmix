@@ -58,6 +58,14 @@ KanteCard {
         .map((id, i) => id === input.id ? i + 1 : 0)
         .filter(channel => channel > 0)
 
+    /** On program or in preview: the title bar is filled in the tally colour. */
+    readonly property bool tallyFill: onProgram || onPreview
+    /** A title text's colour: its own, or the ink that reads best on the
+     *  tally fill (inkOn: in Breeze white reads at 2.9:1 on its green). */
+    function titleInk(own) {
+        return tallyFill ? KanteStyle.inkOn(barColor) : own
+    }
+
     barColor: onProgram ? KanteStyle.negativeTextColor
         : (onPreview ? KanteStyle.positiveTextColor : "transparent")
     borderColor: dropTarget ? KanteStyle.focusColor : "transparent"
@@ -116,68 +124,86 @@ KanteCard {
             }
         }
 
-        RowLayout {
+        // Title bar: filled in the tally colour on program (red) and in
+        // preview (green), as on hardware multiviewers; its text then in
+        // the ink that reads best on that fill (KanteStyle.inkOn). Size
+        // and margins stay the same either way, so a take does not move
+        // the tiles.
+        Rectangle {
             Layout.fillWidth: true
-            KanteSectionLabel {
-                text: tile.input.number
-                font.family: KanteStyle.monoFamily
-            }
-            KanteSectionLabel {
-                text: Texts.sourceBadge(tile.input.source.kind)
-                color: KanteStyle.mutedTextColor
-            }
-            KanteSectionLabel {
-                Layout.fillWidth: true
-                text: tile.input.name
-                elide: Text.ElideRight
-            }
-            // Media files not found (SHW.4).
-            KanteSectionLabel {
-                readonly property var missing: tile.input.missing || []
-                visible: missing.length > 0
-                text: qsTr("Missing")
-                color: KanteStyle.negativeTextColor
-                Accessible.name: qsTr("Missing files: %1").arg(missing.join(", "))
-                QQC2.ToolTip.visible: missingHover.containsMouse
-                QQC2.ToolTip.text: qsTr("Not found:") + "\n" + missing.join("\n")
-                MouseArea { id: missingHover; anchors.fill: parent; hoverEnabled: true; acceptedButtons: Qt.NoButton }
-            }
-            KanteSwatch {
-                visible: tile.input.color !== null
-                size: KanteSwatch.Size.Dense
-                swatchColor: KanteStyle.labelColor(tile.input.color)
-            }
-            KanteSectionLabel {
-                visible: tile.input.color !== null
-                text: Texts.label("colors", tile.input.color)
-                color: KanteStyle.mutedTextColor
-            }
-            KanteSectionLabel {
-                visible: tile.onProgram || tile.onPreview
-                text: tile.onProgram ? qsTr("PGM") : qsTr("PRV")
-                color: tile.barColor
-            }
-            KanteSectionLabel {
-                visible: tile.dynamicSlots.length > 0
-                text: tile.dynamicSlots.map(n => "D" + n).join(" ")
-                color: KanteStyle.infoColor
-                Accessible.name: qsTr("Dynamic input %1").arg(tile.dynamicSlots.join(", "))
-            }
-            KanteSectionLabel {
-                visible: tile.overlayChannels.length > 0
-                text: qsTr("OVL %1").arg(tile.overlayChannels.join(" "))
-                color: KanteStyle.negativeTextColor
-            }
-            KanteSectionLabel {
-                visible: tile.preparedChannels.length > 0
-                text: qsTr("next OVL %1").arg(tile.preparedChannels.join(" "))
-                color: KanteStyle.positiveTextColor
-                Accessible.name: qsTr("Goes on overlay %1 with the next take").arg(tile.preparedChannels.join(", "))
-            }
-            KanteSectionLabel {
-                visible: tile.input.status !== "online"
-                text: tile.input.status === "offline" ? qsTr("offline") : qsTr("starting")
-                color: tile.input.status === "offline" ? KanteStyle.negativeTextColor : KanteStyle.mutedTextColor
+            implicitHeight: titleRow.implicitHeight + Kirigami.Units.smallSpacing
+            color: tile.tallyFill ? tile.barColor : "transparent"
+            RowLayout {
+                id: titleRow
+                anchors.fill: parent
+                anchors.leftMargin: Kirigami.Units.smallSpacing
+                anchors.rightMargin: anchors.leftMargin
+                KanteSectionLabel {
+                    id: numberLabel
+                    text: tile.input.number
+                    font.family: KanteStyle.monoFamily
+                    // Kante's own colour, the tally ink only on the fill.
+                    Binding { target: numberLabel; property: "color"; value: KanteStyle.inkOn(tile.barColor); when: tile.tallyFill }
+                }
+                KanteSectionLabel {
+                    text: Texts.sourceBadge(tile.input.source.kind)
+                    color: tile.titleInk(KanteStyle.mutedTextColor)
+                }
+                KanteSectionLabel {
+                    id: nameLabel
+                    Layout.fillWidth: true
+                    text: tile.input.name
+                    elide: Text.ElideRight
+                    Binding { target: nameLabel; property: "color"; value: KanteStyle.inkOn(tile.barColor); when: tile.tallyFill }
+                }
+                // Media files not found (SHW.4).
+                KanteSectionLabel {
+                    readonly property var missing: tile.input.missing || []
+                    visible: missing.length > 0
+                    text: qsTr("Missing")
+                    color: tile.titleInk(KanteStyle.negativeTextColor)
+                    Accessible.name: qsTr("Missing files: %1").arg(missing.join(", "))
+                    QQC2.ToolTip.visible: missingHover.containsMouse
+                    QQC2.ToolTip.text: qsTr("Not found:") + "\n" + missing.join("\n")
+                    MouseArea { id: missingHover; anchors.fill: parent; hoverEnabled: true; acceptedButtons: Qt.NoButton }
+                }
+                KanteSwatch {
+                    visible: tile.input.color !== null
+                    size: KanteSwatch.Size.Dense
+                    swatchColor: KanteStyle.labelColor(tile.input.color)
+                }
+                KanteSectionLabel {
+                    visible: tile.input.color !== null
+                    text: Texts.label("colors", tile.input.color)
+                    color: tile.titleInk(KanteStyle.mutedTextColor)
+                }
+                KanteSectionLabel {
+                    visible: tile.onProgram || tile.onPreview
+                    text: tile.onProgram ? qsTr("PGM") : qsTr("PRV")
+                    color: KanteStyle.inkOn(tile.barColor)
+                }
+                KanteSectionLabel {
+                    visible: tile.dynamicSlots.length > 0
+                    text: tile.dynamicSlots.map(n => "D" + n).join(" ")
+                    color: tile.titleInk(KanteStyle.infoColor)
+                    Accessible.name: qsTr("Dynamic input %1").arg(tile.dynamicSlots.join(", "))
+                }
+                KanteSectionLabel {
+                    visible: tile.overlayChannels.length > 0
+                    text: qsTr("OVL %1").arg(tile.overlayChannels.join(" "))
+                    color: tile.titleInk(KanteStyle.negativeTextColor)
+                }
+                KanteSectionLabel {
+                    visible: tile.preparedChannels.length > 0
+                    text: qsTr("next OVL %1").arg(tile.preparedChannels.join(" "))
+                    color: tile.titleInk(KanteStyle.positiveTextColor)
+                    Accessible.name: qsTr("Goes on overlay %1 with the next take").arg(tile.preparedChannels.join(", "))
+                }
+                KanteSectionLabel {
+                    visible: tile.input.status !== "online"
+                    text: tile.input.status === "offline" ? qsTr("offline") : qsTr("starting")
+                    color: tile.titleInk(tile.input.status === "offline" ? KanteStyle.negativeTextColor : KanteStyle.mutedTextColor)
+                }
             }
         }
 

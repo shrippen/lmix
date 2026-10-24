@@ -207,7 +207,7 @@ RUN.8, „Console in zwei Programme geteilt (Mischer, Show)“, PR-Agent nur auf
   `scripts/test-console-qt.sh` (13), `scripts/test-global-keys.sh` (5),
   `scripts/test-cue-timing.sh`. Unter Last (paralleler Build) scheitert
   der VM-Test gern an der Latenz – dann allein wiederholen.
-- Console starten: `scripts/run-local.sh` (`APP=show` oder `APP=both`).
+- Console starten: `./start.sh [Seite|both]` (bzw. `scripts/run-local.sh` mit `APP=…`).
 
 ## PRs in Merge-Reihenfolge, Stand 2026-10-18 (bis #102 gemergt)
 

@@ -109,6 +109,7 @@ fn main() {
                 "qml/ShowPage.qml",
                 "qml/AudioPage.qml",
                 "qml/AuxBusPanel.qml",
+                "qml/NarrowMixer.qml",
                 "qml/OutputsPage.qml",
                 "qml/StopOutputDialog.qml",
                 "qml/SetupPage.qml",
