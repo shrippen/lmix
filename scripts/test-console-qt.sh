@@ -3,7 +3,8 @@
 # Mix page monitors and tiles show moving live pictures, clicks switch, no
 # QML warnings, the overlay grid and the narrow mixer are in reach. Then the Show page through the page bar: it draws, space is
 # GO and Escape panic (also after a click on the header and a closed
-# dialog), the page bar shows program small, no QML warnings. Then Audio,
+# dialog), the page bar shows program small, the inspector renames a cue,
+# no QML warnings. Then Audio,
 # Outputs and Setup draw without QML warnings. Needs Qt 6 with Kirigami, gst-plugin-qml6
 # (gstreamer1.0-qt6), Xvfb, xdotool, ImageMagick, jq.
 #
@@ -274,6 +275,20 @@ until_true '[[ "$(state | jq '.cue_lists[1].standby')" == 2 ]]' && pass "show si
 key Escape
 until_true '[[ "$(cues_running)" == 0 ]]' || fail "show side bar: Escape did not stop the cues"
 act '{"action":"set_active_cue_list","list":1}'
+# The inspector under the list (edit mode) shows the standby cue, 3
+# Lights: a new name goes to lmix-core on Enter, and space is GO again.
+INSPECTOR_NAME="500 719"
+until_true '[[ "$(state | jq '.cue_lists[0].standby')" == 3 ]]' || fail "inspector: standby not on cue 3"
+click $INSPECTOR_NAME
+xdotool key ctrl+a
+xdotool type --delay 20 "Lamps"
+key Return
+until_true '[[ "$(state | jq -r '.cue_lists[0].cues[2].name')" == Lamps ]]' && pass "inspector: a name typed there goes to the cue" \
+    || fail "inspector: cue 3 is named $(state | jq -r '.cue_lists[0].cues[2].name'), not Lamps"
+key space
+until_true '[[ "$(standby)" == 4 ]]' && pass "inspector: space is GO after Enter in a field" \
+    || fail "inspector: no GO after editing (standby $(standby))"
+key Escape
 own_qml_warnings console.log && fail "QML warnings (show): $(own_qml_warnings console.log | head -3)"
 pass "no QML warnings (show)"
 
