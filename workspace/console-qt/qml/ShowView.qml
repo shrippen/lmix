@@ -7,7 +7,7 @@ import Kante
 
 /**
  * Show view (show mode SUI.1–4, SUI.13): the active cue list with its
- * standby, GO, panic and the running cues. Choosing a list makes it the
+ * standby, GO, panic and, in the side bar, the running cues and the lists. Choosing a list makes it the
  * active one, so GO here, the space key and GO from outside all mean the
  * same list. Times run on between two states of lmix-core, which sends one
  * when something happens, not every frame.
@@ -576,77 +576,14 @@ ColumnLayout {
                 wrapMode: Text.WordWrap
             }
         }
-    }
 
-    // Running cues (SUI.4).
-    KanteCard {
-        Layout.fillWidth: true
-        Layout.preferredHeight: runningColumn.implicitHeight + Kirigami.Units.smallSpacing * 2
-        visible: view.list !== null
-
-        ColumnLayout {
-            id: runningColumn
-            anchors.fill: parent
-            anchors.margins: Kirigami.Units.smallSpacing
-
-            RowLayout {
-                KanteSectionLabel { Layout.fillWidth: true; text: qsTr("Running: %1").arg(view.running.length) }
-                KanteButton {
-                    focusPolicy: Qt.NoFocus
-                    size: KanteButton.Size.Small
-                    text: qsTr("Stop all")
-                    enabled: view.running.length > 0
-                    onClicked: view.act({ action: "cue_stop" })
-                }
-            }
-            QQC2.Label {
-                visible: view.running.length === 0
-                text: qsTr("Nothing runs.")
-                color: KanteStyle.mutedTextColor
-            }
-            Repeater {
-                model: view.running
-
-                RowLayout {
-                    id: run
-                    required property var modelData
-                    readonly property real done: view.elapsed(modelData)
-                    Layout.fillWidth: true
-
-                    QQC2.Label {
-                        Layout.preferredWidth: Kirigami.Units.gridUnit * 4
-                        text: run.modelData.number
-                        font.family: KanteStyle.monoFamily
-                    }
-                    QQC2.Label {
-                        Layout.preferredWidth: Kirigami.Units.gridUnit * 12
-                        text: run.modelData.name
-                        elide: Text.ElideRight
-                    }
-                    QQC2.Label {
-                        Layout.preferredWidth: Kirigami.Units.gridUnit * 6
-                        text: run.modelData.phase === "pre_wait" ? qsTr("pre wait") : run.modelData.phase === "post_wait" ? qsTr("post wait") : qsTr("running")
-                        color: KanteStyle.mutedTextColor
-                    }
-                    KanteProgressBar {
-                        Layout.fillWidth: true
-                        indeterminate: run.modelData.total_ms === undefined || run.modelData.total_ms === null || run.modelData.total_ms === 0
-                        value: indeterminate ? 0 : Math.min(1, run.done / run.modelData.total_ms)
-                    }
-                    QQC2.Label {
-                        Layout.preferredWidth: Kirigami.Units.gridUnit * 5
-                        horizontalAlignment: Text.AlignRight
-                        text: run.modelData.total_ms ? "−" + view.clock(Math.max(0, run.modelData.total_ms - run.done)) : view.clock(run.done)
-                        font.family: KanteStyle.monoFamily
-                    }
-                    KanteButton {
-                        focusPolicy: Qt.NoFocus
-                        size: KanteButton.Size.Small
-                        text: qsTr("Stop")
-                        onClicked: view.act({ action: "cue_stop", list: run.modelData.list, cue: run.modelData.cue })
-                    }
-                }
-            }
+        // What runs (SUI.4) and the lists.
+        ShowSidebar {
+            Layout.preferredWidth: Kirigami.Units.gridUnit * 16
+            Layout.maximumWidth: Kirigami.Units.gridUnit * 16
+            Layout.fillHeight: true
+            showView: view
+            onEditLists: cueListsDialog.open()
         }
     }
 }

@@ -854,4 +854,12 @@ DE = {
     'No report from lmix-core yet': 'Noch keine Meldung von lmix-core',
     'All off': 'Alle aus',
     'with the next take: %1': 'mit dem nächsten Take: %1',
+    'Active': 'Aktiv',
+    'Lists': 'Listen',
+    'Cues: %1': 'Cues: %1',
+    'Stop cue %1': 'Cue %1 stoppen',
+    'Stop this cue': 'Diesen Cue stoppen',
+    'pre wait %1': 'Vorwartezeit %1',
+    'post wait %1': 'Nachwartezeit %1',
+    'Cue %1 %2, %3': 'Cue %1 %2, %3',
 }

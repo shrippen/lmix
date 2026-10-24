@@ -180,14 +180,16 @@ Meldung (Owner 23.10.). Senken-Tasten unten auf der Mix-Seite gab es schon
 (Ausgangsleiste), Overlay-Tasten je Kachel ebenso. Overlay-Kanäle als
 Raster 4 × 2 neben den Übergängen (24.10.): die Mittelspalte passt bei
 1440 × 900 ohne Scrollen; FTB dort fällt weg, es ist die Seitentaste
-„Schwarzblende“.
+„Schwarzblende“. Show: Seitenleiste mit den Reitern Aktiv und Listen
+(24.10.), laufende Cues als Fortschrittsfüllung mit abgelaufener und
+negativer Restzeit, Stopp je Cue; sie ersetzt die Karte „Running“ unten.
+Pause je Cue und der Reiter Pads warten auf den Kern (RUN.5, RUN.12).
 
 Aus dem Dummy noch offen, **nur Oberfläche** (der Kern kann es):
 - Mix: Titelleiste der Kachel in Tally-Farbe (braucht Textfarben auf Rot
   und Grün in Kante), schmaler Tonmischer am Rand.
-- Show: Inspector unten mit Reitern, Seitenleiste
-  Aktiv/Listen, laufende Cues als Fortschrittsfüllung mit negativer
-  Restzeit, Leiste zum Anlegen je Cue-Art, Zeitfelder mit Fortschritt.
+- Show: Inspector unten mit Reitern, Leiste zum Anlegen je Cue-Art,
+  Zeitfelder mit Fortschritt.
 - Audio: Mini-Kurven EQ und Dynamik je Zug, ON/AFV als Umschalter.
 - Seiten lösbar auf einen zweiten Bildschirm (Entscheidung Click-Dummy 1).
 - Leiste: wer eine Seite zuletzt bediente (braucht die Kennung je
