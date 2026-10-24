@@ -125,15 +125,16 @@ KanteCard {
 
         // Title bar: filled in the tally colour on program (red) and in
         // preview (green), as on hardware multiviewers; its text then in
-        // the colour for text on a state fill.
+        // the colour for text on a state fill. Size and margins stay the
+        // same either way, so a take does not move the tiles.
         Rectangle {
             Layout.fillWidth: true
-            implicitHeight: titleRow.implicitHeight + (tile.tallyFill ? Kirigami.Units.smallSpacing : 0)
+            implicitHeight: titleRow.implicitHeight + Kirigami.Units.smallSpacing
             color: tile.tallyFill ? tile.barColor : "transparent"
             RowLayout {
                 id: titleRow
                 anchors.fill: parent
-                anchors.leftMargin: tile.tallyFill ? Kirigami.Units.smallSpacing : 0
+                anchors.leftMargin: Kirigami.Units.smallSpacing
                 anchors.rightMargin: anchors.leftMargin
                 KanteSectionLabel {
                     text: tile.input.number
