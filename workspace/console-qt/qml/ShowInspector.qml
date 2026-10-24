@@ -55,12 +55,11 @@ KanteCard {
             showView.updateCue(cue.id, changes)
     }
 
-    /** Changes fields of the cue's sound, picture or fade. */
+    /** Changes fields of the cue's sound, picture or fade; the others of
+     *  it stay (merged in lmix-core). */
     function saveIn(part, changes) {
-        if (cue === null)
-            return
         var next = {}
-        next[part] = Object.assign({}, cue[part], changes)
+        next[part] = changes
         save(next)
     }
 
@@ -256,8 +255,7 @@ KanteCard {
                         currentIndex: Math.max(0, triggers.scopes.indexOf(triggers.stopOthers ? triggers.stopOthers.scope : null))
                         onActivated: index => {
                             var scope = triggers.scopes[index]
-                            var old = triggers.stopOthers
-                            inspector.save({ stop_others: scope === null ? null : { scope: scope, fade_ms: old ? old.fade_ms : 0 } })
+                            inspector.save({ stop_others: scope === null ? null : { scope: scope } })
                             inspector.refocus()
                         }
                     }
@@ -272,7 +270,7 @@ KanteCard {
                         maxMs: 600000
                         Accessible.name: qsTr("Fade of the cues it stops")
                         onAccepted: inspector.refocus()
-                        onEdited: value => inspector.save({ stop_others: Object.assign({}, triggers.stopOthers, { fade_ms: value }) })
+                        onEdited: value => inspector.save({ stop_others: { fade_ms: value } })
                     }
                 }
                 Item { Layout.fillHeight: true }
@@ -494,21 +492,25 @@ KanteCard {
                     color: KanteStyle.mutedTextColor
                 }
 
-                // Fade: only the values that are ticked change.
+                // Fade: only the values that are ticked change. A fixed
+                // model: a new state does not rebuild the rows (and the
+                // box being typed in).
                 Repeater {
-                    model: levels.fade === null ? [] : [
-                        { key: "gain_db", label: qsTr("Level"), from: -600, to: 120, scale: 10, unit: " dB", fallback: 0,
-                          shown: levels.fadeTarget.stage === undefined },
-                        { key: "opacity", label: qsTr("Opacity"), from: 0, to: 100, scale: 100, unit: " %", fallback: 1,
-                          shown: levels.fadeTarget.cue !== undefined },
-                        { key: "brightness", label: qsTr("Brightness"), from: 0, to: 100, scale: 100, unit: " %", fallback: 1,
-                          shown: levels.fadeTarget.stage !== undefined }
-                    ].filter(l => l.shown)
+                    model: [
+                        { key: "gain_db", label: qsTr("Level"), from: -600, to: 120, scale: 10, unit: " dB", fallback: 0 },
+                        { key: "opacity", label: qsTr("Opacity"), from: 0, to: 100, scale: 100, unit: " %", fallback: 1 },
+                        { key: "brightness", label: qsTr("Brightness"), from: 0, to: 100, scale: 100, unit: " %", fallback: 1 }
+                    ]
 
                     delegate: RowLayout {
                         id: fadeLevel
                         required property var modelData
-                        readonly property bool set: levels.fade[modelData.key] !== undefined && levels.fade[modelData.key] !== null
+                        readonly property bool set: levels.fade !== null && levels.fade[modelData.key] !== undefined && levels.fade[modelData.key] !== null
+                        // Level for a cue or zone, opacity for a cue,
+                        // brightness for a stage.
+                        visible: levels.fadeTarget !== null && (modelData.key === "gain_db" ? levels.fadeTarget.stage === undefined
+                                                                : modelData.key === "opacity" ? levels.fadeTarget.cue !== undefined
+                                                                : levels.fadeTarget.stage !== undefined)
                         Layout.columnSpan: 3
                         spacing: Kirigami.Units.largeSpacing
 

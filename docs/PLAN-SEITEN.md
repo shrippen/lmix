@@ -195,8 +195,9 @@ nur im Edit-Modus): Reiter Basics (Nummer, Name, Farbe, Notiz), Triggers
 (Pre/Post wait, Dauer, Ein-/Ausblenden, Wiederholungen), Levels (Pegel
 eines Klangs, Deckkraft und Ebene eines Bildes, was eine Blende ändert),
 Actions (die Aktionen eines Aktions-Cues). Er zeigt den Standby-Cue oder
-den angeklickten, auch in einer Gruppe; jede Änderung geht sofort als
-`set_cue_list` an den Kern, Standby und laufende Cues bleiben. Listen aus
+den angeklickten, auch in einer Gruppe; jede Änderung geht sofort an den
+Kern, nur mit den geänderten Feldern (`update_cue`, DECISIONS 24.10.),
+Standby und laufende Cues bleiben. Listen aus
 einem Skript sind nur zu sehen.
 
 Aus dem Dummy noch offen, **nur Oberfläche** (der Kern kann es):

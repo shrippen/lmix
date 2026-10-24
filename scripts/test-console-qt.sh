@@ -285,6 +285,21 @@ xdotool type --delay 20 "Lamps"
 key Return
 until_true '[[ "$(state | jq -r '.cue_lists[0].cues[2].name')" == Lamps ]]' && pass "inspector: a name typed there goes to the cue" \
     || fail "inspector: cue 3 is named $(state | jq -r '.cue_lists[0].cues[2].name'), not Lamps"
+# Two quick edits: a name typed without Enter, then a follow on the
+# Triggers tab. Both stay (each sends only its own field).
+INSPECTOR_TRIGGERS_TAB="157 678"
+INSPECTOR_AFTER_WAIT="305 722"
+INSPECTOR_BASICS_TAB="61 678"
+click $INSPECTOR_NAME
+xdotool key ctrl+a
+xdotool type --delay 20 "Lamps 2"
+click $INSPECTOR_TRIGGERS_TAB
+click $INSPECTOR_AFTER_WAIT
+until_true '[[ "$(state | jq -r '.cue_lists[0].cues[2].follow')" == after_wait ]]' \
+    && [[ "$(state | jq -r '.cue_lists[0].cues[2].name')" == "Lamps 2" ]] \
+    && pass "inspector: two quick edits both stay" \
+    || fail "inspector: cue 3 $(state | jq -c '.cue_lists[0].cues[2] | {name, follow}')"
+click $INSPECTOR_BASICS_TAB
 # Standby moves on from outside while a field is being typed in: what
 # is typed still goes to the cue it began with.
 click $INSPECTOR_NAME
@@ -319,7 +334,6 @@ act '{"action":"set_active_cue_list","list":3}'
 INSPECTOR_LEVELS_TAB="378 678"
 INSPECTOR_LEVEL_UP="233 722"
 INSPECTOR_LEVEL_TEXT="188 722"
-INSPECTOR_BASICS_TAB="61 678"
 click $INSPECTOR_LEVELS_TAB
 click $INSPECTOR_LEVEL_UP
 until_true '[[ "$(state | jq '.cue_lists[2].cues[0].fade.gain_db')" == -9.5 ]]' && pass "inspector: + of a level goes to the cue" \

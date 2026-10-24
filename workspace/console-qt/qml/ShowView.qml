@@ -78,14 +78,13 @@ ColumnLayout {
         return null
     }
 
-    /** Sends the active list with `changes` in the cue with `id` (inside
-     *  groups too); lmix-core keeps standby and running cues (IMP.5). */
+    /** Changes only the fields in `changes` (a JSON merge patch: nested
+     *  objects merge, null clears) of the cue with `id` in the active list,
+     *  inside groups too. Two quick edits each send only their own field,
+     *  so neither brings back an old value of the other; lmix-core keeps
+     *  standby and running cues (IMP.5). */
     function updateCue(id, changes) {
-        function apply(cues) {
-            return cues.map(c => c.id === id ? Object.assign({}, c, changes)
-                                             : (c.children && c.children.length > 0 ? Object.assign({}, c, { children: apply(c.children) }) : c))
-        }
-        act({ action: "set_cue_list", list: list.number, name: list.name, cues: apply(list.cues) })
+        act({ action: "update_cue", list: list.number, cue: id, changes: changes })
     }
 
     /** "12 Rain" of the cue with `id` in any list, for a warning. */

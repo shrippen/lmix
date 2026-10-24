@@ -248,6 +248,7 @@ pub fn right_of(action: &Action) -> Right {
         | Action::SetAutoPlay { .. }
         | Action::SetAtEnd { .. }
         | Action::SetCueList { .. }
+        | Action::UpdateCue { .. }
         | Action::SetDataAuto { .. }
         | Action::SetEmergencyList { .. }
         | Action::SetScriptFolder { .. }
