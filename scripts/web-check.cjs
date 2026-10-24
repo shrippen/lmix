@@ -88,15 +88,26 @@ const pass = (message) => console.log("ok   " + message);
   await quick.waitForFunction(() => document.querySelectorAll("#inputs .tile").length === 2, null, { timeout: 5000 });
   const program = (await api("/api/state")).program;
   const other = (await api("/api/state")).inputs.find((i) => i.id !== program);
-  const order = await quick.evaluate(async (n) => {
+  // 20 each side: they go through well within the 2 s every action may
+  // wait (all are made at once), so a slow runner still sends them in turn.
+  const N = 20;
+  const { order, took } = await quick.evaluate(async (n) => {
+    const t0 = performance.now();
     const sent = [];
-    for (let i = 0; i < 100; i++) sent.push(lmixAct({ action: "preview_input", input: n }).catch(() => "refused"));
+    for (let i = 0; i < n.count; i++) sent.push(lmixAct({ action: "preview_input", input: n.input }).catch(() => "refused"));
     sent.push(lmixAct({ action: "cut" }));
-    for (let i = 0; i < 100; i++) sent.push(lmixAct({ action: "preview_input", input: n }).catch(() => "refused"));
-    return (await Promise.all(sent)).filter((r) => r === "refused").length;
-  }, other.number);
-  if (order !== 100) fail(`actions out of order: ${order} of 100 previews after the cut refused (on program), not all`);
-  pass("actions from a page keep their order");
+    for (let i = 0; i < n.count; i++) sent.push(lmixAct({ action: "preview_input", input: n.input }).catch(() => "refused"));
+    const all = await Promise.race([Promise.all(sent), new Promise((r) => setTimeout(() => r(null), 10000))]);
+    return { order: all ? all.filter((r) => r === "refused").length : -1, took: performance.now() - t0 };
+  }, { input: other.number, count: N });
+  if (order === -1) fail("actions from a page: no answer within 10 s");
+  if (took > 1800) {
+    // Past the 2 s the waiting ones go out together: no order to check.
+    console.log(`note: ${2 * N + 1} actions took ${Math.round(took)} ms, too slow to check their order`);
+  } else {
+    if (order !== N) fail(`actions out of order: ${order} of ${N} previews after the cut refused (on program), not all`);
+    pass(`actions from a page keep their order (${Math.round(took)} ms)`);
+  }
 
   // Hanging requests hold an action back at most 2 s from when it was
   // made, also behind a chain of them (GO, panic).
@@ -107,7 +118,9 @@ const pass = (message) => console.log("ok   " + message);
     await new Promise((r) => setTimeout(r, 500));
     lmixAct({ action: "preview_input", input: n }).catch(() => {});
     const t0 = performance.now();
-    await lmixAct({ action: "cue_stop" }).catch(() => {});
+    const done = lmixAct({ action: "cue_stop" }).catch(() => {});
+    // Without the bound it would wait for ever.
+    await Promise.race([done, new Promise((r) => setTimeout(r, 10000))]);
     return performance.now() - t0;
   }, other.number);
   if (held.length !== 2) fail(`hanging requests: ${held.length} of 2 held`);

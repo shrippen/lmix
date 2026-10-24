@@ -80,7 +80,9 @@ function lmixPatch(doc, ops) {
  *  goes out at most LMIX_ACT_WAIT_MS after it was made, however many
  *  requests hang before it (Wi-Fi gone, a slow action in lmix-core): GO
  *  and panic are never held back longer. Hanging requests are not
- *  cancelled: what lmix-core gets, it does. */
+ *  cancelled: what lmix-core gets, it does. The price: behind a hanging
+ *  request, actions made close together go out together once their 2 s
+ *  are up, and may overtake each other again. */
 const LMIX_ACT_WAIT_MS = 2000;
 let lmixActQueue = Promise.resolve();
 
