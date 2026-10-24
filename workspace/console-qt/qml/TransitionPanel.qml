@@ -7,10 +7,11 @@ import Kante
 /**
  * Cut, the four transition buttons (click: take preview; right click:
  * effect and length), quick play of preview (SWI.8, the same menu without
- * the stinger), fade to black and the overlay channels (click: the
- * preview input on, or the overlay off; right click: the last input
- * again, the input prepared for the next take away, settings), with all
- * overlays off.
+ * the stinger), the T-bar and the overlay channels in a 4 × 2 grid
+ * (click: the preview input on, or the overlay off; right click: the last
+ * input again, the input prepared for the next take away, settings), with
+ * all overlays off. Fade to black is the page's own button (MixPage).
+ * Sized to fit beside the monitors at 1440 × 900 without scrolling.
  */
 ColumnLayout {
     id: panel
@@ -95,7 +96,6 @@ ColumnLayout {
             KanteButton {
                 id: take
                 anchors.fill: parent
-                size: KanteButton.Size.Large
                 text: button.modelData.slot + " " + panel.effectLabel(button.modelData.effect) + "\n" + button.modelData.duration_ms + " ms"
                 enabled: panel.core.connected && panel.canTake
                 onClicked: panel.act({ action: "transition", slot: button.modelData.slot })
@@ -153,7 +153,6 @@ ColumnLayout {
         KanteButton {
             id: quickButton
             anchors.fill: parent
-            size: KanteButton.Size.Large
             text: qsTr("Quick play") + "\n" + panel.effectLabel(quick.setting.effect) + " " + quick.setting.duration_ms + " ms"
             enabled: panel.core.connected && panel.canTake
             onClicked: panel.act({ action: "quick_play" })
@@ -188,51 +187,66 @@ ColumnLayout {
 
     // T-bar: preview fades in over program while pulled; at the end it is
     // taken. Moves are sent at most about 30 times a second.
-    KanteSectionLabel {
-        text: qsTr("T-bar")
-        color: KanteStyle.mutedTextColor
-    }
-    QQC2.Slider {
-        id: tBar
-        Layout.fillWidth: true
-        from: 0
-        to: 1
-        enabled: panel.core.connected && panel.canTake
-        value: pressed ? value : (panel.show ? panel.show.t_bar : 0)
-        Accessible.name: qsTr("T-bar")
-        QQC2.ToolTip.visible: hovered
-        QQC2.ToolTip.text: qsTr("Pull to mix preview in; at the end it goes to program.")
-        KanteSliderSkin { control: tBar }
-        onMoved: tBarSend.restart()
-        onPressedChanged: if (!pressed) {
-            tBarSend.stop()
-            panel.act({ action: "t_bar", position: value >= 0.98 ? 1 : value })
-        }
-        Timer {
-            id: tBarSend
-            interval: 33
-            onTriggered: panel.act({ action: "t_bar", position: Math.min(tBar.value, 0.99) })
-        }
-    }
-
-    KanteButton {
-        Layout.fillWidth: true
-        text: panel.show && panel.show.fade_to_black ? qsTr("FTB on") : qsTr("FTB")
-        emphasis: panel.show && panel.show.fade_to_black ? KanteButton.Emphasis.Destructive : KanteButton.Emphasis.Normal
-        enabled: panel.core.connected
-        onClicked: panel.act({ action: "fade_to_black" })
-    }
-
-    KanteSectionLabel {
-        visible: overlayRow.visible
-        text: qsTr("Overlays")
-        color: KanteStyle.mutedTextColor
-    }
+    // Label beside the bar, not above it: the column fits at 1440 × 900.
     RowLayout {
+        Layout.fillWidth: true
+        spacing: Kirigami.Units.smallSpacing
+        KanteSectionLabel {
+            text: qsTr("T-bar")
+            color: KanteStyle.mutedTextColor
+        }
+        QQC2.Slider {
+            id: tBar
+            Layout.fillWidth: true
+            from: 0
+            to: 1
+            enabled: panel.core.connected && panel.canTake
+            value: pressed ? value : (panel.show ? panel.show.t_bar : 0)
+            Accessible.name: qsTr("T-bar")
+            QQC2.ToolTip.visible: hovered
+            QQC2.ToolTip.text: qsTr("Pull to mix preview in; at the end it goes to program.")
+            KanteSliderSkin { control: tBar }
+            onMoved: tBarSend.restart()
+            onPressedChanged: if (!pressed) {
+                tBarSend.stop()
+                panel.act({ action: "t_bar", position: value >= 0.98 ? 1 : value })
+            }
+            Timer {
+                id: tBarSend
+                interval: 33
+                onTriggered: panel.act({ action: "t_bar", position: Math.min(tBar.value, 0.99) })
+            }
+        }
+    }
+
+    // Heading and "All off" in one row: the column fits at 1440 × 900.
+    RowLayout {
+        Layout.fillWidth: true
+        visible: overlayRow.visible
+        spacing: Kirigami.Units.smallSpacing
+        KanteSectionLabel {
+            Layout.fillWidth: true
+            text: qsTr("Overlays")
+            color: KanteStyle.mutedTextColor
+        }
+        KanteButton {
+            emphasis: KanteButton.Emphasis.Quiet
+            size: KanteButton.Size.Small
+            text: qsTr("All off")
+            enabled: panel.core.connected && panel.anyOverlay
+            Accessible.name: qsTr("All overlays off")
+            QQC2.ToolTip.visible: hovered
+            QQC2.ToolTip.text: qsTr("Takes every overlay channel off, each with its fade.")
+            onClicked: panel.act({ action: "overlay_out_all" })
+        }
+    }
+    GridLayout {
         id: overlayRow
         Layout.fillWidth: true
         visible: panel.overlays.length > 0
-        spacing: Kirigami.Units.smallSpacing
+        columns: 4
+        rowSpacing: Kirigami.Units.smallSpacing
+        columnSpacing: Kirigami.Units.smallSpacing
 
         Repeater {
             model: panel.overlays.length
@@ -248,6 +262,7 @@ ColumnLayout {
                 readonly property var prepared: panel.overlayPreview[index] ? panel.inputById(panel.overlayPreview[index]) : null
                 readonly property var settings: panel.overlayChannels[index] || null
                 Layout.fillWidth: true
+                Layout.preferredWidth: 1
                 implicitHeight: channelButton.implicitHeight
                 implicitWidth: channelButton.implicitWidth
 
@@ -257,14 +272,16 @@ ColumnLayout {
                     readonly property var shown: channelItem.shown
                     readonly property var last: channelItem.last
                     anchors.fill: parent
-                    // "→ n": goes on with the next take.
-                    text: channel + (shown ? "\n" + shown.number : "")
-                        + (channelItem.prepared ? "\n→ " + channelItem.prepared.number : "")
+                    size: KanteButton.Size.Small
+                    // The channel only; the fill says on (destructive) or
+                    // going on with the next take (primary), the tooltip what.
+                    text: String(channel)
                     emphasis: shown ? KanteButton.Emphasis.Destructive
                         : channelItem.prepared ? KanteButton.Emphasis.Primary : KanteButton.Emphasis.Normal
                     enabled: panel.core.connected && (shown !== null || panel.canTake)
-                    Accessible.name: shown ? qsTr("Overlay %1: %2, click to take off").arg(channel).arg(shown.name)
-                        : qsTr("Overlay %1: empty, click to show preview").arg(channel)
+                    Accessible.name: (shown ? qsTr("Overlay %1: %2, click to take off").arg(channel).arg(shown.name)
+                        : qsTr("Overlay %1: empty, click to show preview").arg(channel))
+                        + (channelItem.prepared ? ", " + qsTr("with the next take: %1").arg(channelItem.prepared.name) : "")
                     QQC2.ToolTip.visible: hovered
                     QQC2.ToolTip.text: (shown ? qsTr("Overlay %1 shows %2 %3. Click: take off.").arg(channel).arg(shown.number).arg(shown.name)
                         : last ? qsTr("Overlay %1 is empty. Click: show the preview input. Right click: %2 again.").arg(channel).arg(last.name)
@@ -311,14 +328,5 @@ ColumnLayout {
                 }
             }
         }
-    }
-    KanteButton {
-        Layout.fillWidth: true
-        visible: overlayRow.visible
-        text: qsTr("All overlays off")
-        enabled: panel.core.connected && panel.anyOverlay
-        QQC2.ToolTip.visible: hovered
-        QQC2.ToolTip.text: qsTr("Takes every overlay channel off, each with its fade.")
-        onClicked: panel.act({ action: "overlay_out_all" })
     }
 }

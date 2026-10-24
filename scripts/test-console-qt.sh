@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # lmix against a real engine, on a virtual display (no GPU needed): on the
 # Mix page monitors and tiles show moving live pictures, clicks switch, no
-# QML warnings. Then the Show page through the page bar: it draws, space is
+# QML warnings, the overlay grid is in reach. Then the Show page through the page bar: it draws, space is
 # GO and Escape panic (also after a click on the header and a closed
 # dialog), the page bar shows program small, no QML warnings. Then Audio,
 # Outputs and Setup draw without QML warnings. Needs Qt 6 with Kirigami, gst-plugin-qml6
@@ -145,6 +145,20 @@ done
 click 720 128
 becomes program 2
 [[ "$(number_of program)" == 2 ]] && pass "Cut: program" || fail "program is $(number_of program) after Cut"
+# The overlay grid beside the monitors is reachable at 1440 x 900 without
+# scrolling (#137): channel 1 shows preview, "All off" takes it off.
+act '{"action":"preview_input","input":1}'
+becomes preview 1
+overlay_1() { state | jq -r '.overlays[0] // "none"'; }
+click 664 450
+for _ in $(seq 1 40); do [[ "$(overlay_1)" != none ]] && break; sleep 0.5; done
+[[ "$(overlay_1)" != none ]] && pass "overlay 1 from the grid: on" || fail "overlay 1 not on after a click in the grid (hidden or moved?)"
+# Away first: the tooltip of channel 1 opens above it, over "All off".
+DISPLAY="$DISPLAY_NO" xdotool mousemove 1000 300
+sleep 1
+click 758 413
+for _ in $(seq 1 40); do [[ "$(overlay_1)" == none ]] && break; sleep 0.5; done
+[[ "$(overlay_1)" == none ]] && pass "overlays: All off" || fail "overlay 1 still on after All off"
 # Two streams, not started: the output bar offers to start both (STR.1).
 for port in 9921 9922; do
     curl -sf -X POST "$CORE/actions" -H 'content-type: application/json' \
