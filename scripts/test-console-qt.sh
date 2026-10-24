@@ -285,6 +285,20 @@ xdotool type --delay 20 "Lamps"
 key Return
 until_true '[[ "$(state | jq -r '.cue_lists[0].cues[2].name')" == Lamps ]]' && pass "inspector: a name typed there goes to the cue" \
     || fail "inspector: cue 3 is named $(state | jq -r '.cue_lists[0].cues[2].name'), not Lamps"
+# Standby moves on from outside while a field is being typed in: what
+# is typed still goes to the cue it began with.
+click $INSPECTOR_NAME
+xdotool key ctrl+a
+act '{"action":"cue_standby","to":{"index":1}}'
+until_true '[[ "$(standby)" == 1 ]]' || fail "inspector: standby did not move from outside"
+xdotool type --delay 20 "Lamp"
+key Return
+until_true '[[ "$(state | jq -r '.cue_lists[0].cues[2].name')" == Lamp ]]' \
+    && [[ "$(state | jq -r '.cue_lists[0].cues[0].name')" == Doors ]] \
+    && pass "inspector: keeps its cue while standby moves" \
+    || fail "inspector: cue 3 $(state | jq -r '.cue_lists[0].cues[2].name'), cue 1 $(state | jq -r '.cue_lists[0].cues[0].name')"
+act '{"action":"cue_standby","to":{"index":3}}'
+until_true '[[ "$(standby)" == 3 ]]' || fail "inspector: standby not back on 3"
 key space
 until_true '[[ "$(standby)" == 4 ]]' && pass "inspector: space is GO after Enter in a field" \
     || fail "inspector: no GO after editing (standby $(standby))"

@@ -18,20 +18,47 @@ KanteCard {
     /** The window's Core, for the colour names. */
     required property var core
 
-    readonly property var cue: showView.selectedCue
+    /** While a field here has the keyboard or the action dialog is open,
+     *  the inspector keeps the cue it began with, also when standby moves
+     *  on (a follow, a GO from MIDI, OSC or another client): what is typed
+     *  goes to that cue, or nowhere when it is gone from the active list. */
+    readonly property bool holding: actionDialog.visible || hasFocusInside(Window.activeFocusItem)
+    property string heldId: ""
+    // Let go only after the field that lost the keyboard saved its value
+    // (editingFinished may come after the focus moved).
+    onHoldingChanged: {
+        if (holding)
+            heldId = shown !== null ? shown.id : ""
+        else
+            Qt.callLater(() => { if (!holding) heldId = "" })
+    }
+    readonly property var shown: heldId !== "" ? (showView.list ? showView.findCue(showView.list.cues, heldId) : null)
+                                               : showView.selectedCue
+    readonly property var cue: shown
     readonly property bool editable: !showView.fromScript
     readonly property bool timed: cue !== null && ["wait", "actions", "sound", "picture", "fade"].indexOf(cue.kind) >= 0
     /** What the cue plays or shows, whose fades and repeats are edited. */
     readonly property var media: cue === null ? null : (cue.kind === "sound" ? cue.sound : (cue.kind === "picture" ? cue.picture : null))
     property int tab: 0
 
-    /** Changes the chosen cue's top-level fields. */
+    function hasFocusInside(item) {
+        for (; item; item = item.parent) {
+            if (item === inspector)
+                return true
+        }
+        return false
+    }
+
+    /** Changes the shown cue's top-level fields. */
     function save(changes) {
-        showView.updateCue(cue.id, changes)
+        if (cue !== null)
+            showView.updateCue(cue.id, changes)
     }
 
     /** Changes fields of the cue's sound, picture or fade. */
     function saveIn(part, changes) {
+        if (cue === null)
+            return
         var next = {}
         next[part] = Object.assign({}, cue[part], changes)
         save(next)

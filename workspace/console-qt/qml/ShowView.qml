@@ -435,7 +435,7 @@ ColumnLayout {
                             readonly property var cue: modelData.cue
                             readonly property bool standby: modelData.depth === 0 && view.list.standby === modelData.top
                             readonly property bool runs: view.runningIds.indexOf(cue.id) >= 0
-                            readonly property bool chosen: view.editing && view.selectedCue !== null && view.selectedCue.id === cue.id
+                            readonly property bool chosen: view.editing && inspector.cue !== null && inspector.cue.id === cue.id
 
                             width: cueView.width
                             implicitHeight: rowLayout.implicitHeight + Kirigami.Units.smallSpacing * 2
@@ -540,6 +540,7 @@ ColumnLayout {
             }
 
             ShowInspector {
+                id: inspector
                 Layout.fillWidth: true
                 Layout.preferredHeight: Kirigami.Units.gridUnit * 11
                 visible: view.editing
