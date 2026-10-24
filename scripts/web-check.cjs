@@ -98,19 +98,22 @@ const pass = (message) => console.log("ok   " + message);
   if (order !== 100) fail(`actions out of order: ${order} of 100 previews after the cut refused (on program), not all`);
   pass("actions from a page keep their order");
 
-  // A hanging request holds the next action back at most 2 s (GO, panic).
+  // Hanging requests hold an action back at most 2 s from when it was
+  // made, also behind a chain of them (GO, panic).
   const held = [];
-  await quick.route("**/api/actions", (route) => (held.length === 0 ? held.push(route) : route.continue()));
+  await quick.route("**/api/actions", (route) => (held.length < 2 ? held.push(route) : route.continue()));
   const waited = await quick.evaluate(async (n) => {
+    lmixAct({ action: "preview_input", input: n }).catch(() => {});
+    await new Promise((r) => setTimeout(r, 500));
     lmixAct({ action: "preview_input", input: n }).catch(() => {});
     const t0 = performance.now();
     await lmixAct({ action: "cue_stop" }).catch(() => {});
     return performance.now() - t0;
   }, other.number);
-  if (held.length !== 1) fail("hanging request: the first action did not hang");
-  if (waited < 1500 || waited > 4000) fail(`hanging request: the next action waited ${Math.round(waited)} ms, not about 2000`);
-  pass(`a hanging request holds the next action back ${Math.round(waited)} ms`);
-  await held[0].continue();
+  if (held.length !== 2) fail(`hanging requests: ${held.length} of 2 held`);
+  if (waited < 1500 || waited > 2900) fail(`hanging requests: the action behind two waited ${Math.round(waited)} ms, not about 2000`);
+  pass(`two hanging requests hold the next action back ${Math.round(waited)} ms`);
+  for (const route of held) await route.continue();
   await quick.close();
   await browser.close();
 })().catch((e) => fail(e.message));
