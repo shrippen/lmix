@@ -137,6 +137,7 @@ fn main() {
                 "qml/TriggersDialog.qml",
                 "qml/CueListsDialog.qml",
                 "qml/ShowView.qml",
+                "qml/ShowSidebar.qml",
                 "qml/TargetsDialog.qml",
                 "qml/ZonesDialog.qml",
                 "qml/OutputBar.qml",

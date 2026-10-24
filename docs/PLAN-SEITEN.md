@@ -185,12 +185,15 @@ Program, grün in Preview, Schrift per `KanteStyle.inkOn` (die besser
 lesbare Farbe auf der Füllung, auch in Breeze; Kante hatte das schon).
 Schmaler Tonmischer rechts (24.10.): Pegel, Fader und Stumm je Input mit
 Ton und für den Master, Weg zur Ton-Seite; abschaltbar unter Ansicht.
-Audio folgt Video bleibt auf der Ton-Seite.
+Audio folgt Video bleibt auf der Ton-Seite. Show: Seitenleiste mit den
+Reitern Aktiv und Listen (24.10.), laufende Cues als Fortschrittsfüllung
+mit abgelaufener und negativer Restzeit, Stopp je Cue; sie ersetzt die
+Karte „Running“ unten. Pause je Cue und der Reiter Pads warten auf den
+Kern (RUN.5, RUN.12).
 
 Aus dem Dummy noch offen, **nur Oberfläche** (der Kern kann es):
-- Show: Inspector unten mit Reitern, Seitenleiste
-  Aktiv/Listen, laufende Cues als Fortschrittsfüllung mit negativer
-  Restzeit, Leiste zum Anlegen je Cue-Art, Zeitfelder mit Fortschritt.
+- Show: Inspector unten mit Reitern, Leiste zum Anlegen je Cue-Art,
+  Zeitfelder mit Fortschritt.
 - Audio: Mini-Kurven EQ und Dynamik je Zug, ON/AFV als Umschalter.
 - Seiten lösbar auf einen zweiten Bildschirm (Entscheidung Click-Dummy 1).
 - Leiste: wer eine Seite zuletzt bediente (braucht die Kennung je

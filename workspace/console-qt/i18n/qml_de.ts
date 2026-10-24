@@ -1351,7 +1351,7 @@
   <context>
     <name>InputTile</name>
     <message>
-      <location filename="../qml/InputTile.qml" line="+66" />
+      <location filename="../qml/InputTile.qml" line="+74" />
       <source>Input %1 %2</source>
       <translation>Input %1 %2</translation>
     </message>
@@ -1376,7 +1376,7 @@
       <translation>Nur Ton</translation>
     </message>
     <message>
-      <location line="+40" />
+      <location line="+57" />
       <source>Missing</source>
       <translation>Fehlt</translation>
     </message>
@@ -1431,7 +1431,7 @@
       <translation>startet</translation>
     </message>
     <message>
-      <location line="+13" />
+      <location line="+14" />
       <source>Overlay</source>
       <translation>Overlay</translation>
     </message>
@@ -3437,6 +3437,74 @@
     </message>
   </context>
   <context>
+    <name>ShowSidebar</name>
+    <message>
+      <location filename="../qml/ShowSidebar.qml" line="+35" />
+      <source>Active</source>
+      <translation>Aktiv</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Lists</source>
+      <translation>Listen</translation>
+    </message>
+    <message>
+      <location line="+22" />
+      <source>Running: %1</source>
+      <translation>Läuft: %1</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Stop all</source>
+      <translation>Alle anhalten</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Nothing runs.</source>
+      <translation>Nichts läuft.</translation>
+    </message>
+    <message>
+      <location line="+23" />
+      <source>Cue %1 %2, %3</source>
+      <translation>Cue %1 %2, %3</translation>
+    </message>
+    <message>
+      <location line="+33" />
+      <source>pre wait %1</source>
+      <translation>Vorwartezeit %1</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>post wait %1</source>
+      <translation>Nachwartezeit %1</translation>
+    </message>
+    <message>
+      <location line="+18" />
+      <source>Stop cue %1</source>
+      <translation>Cue %1 stoppen</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Stop this cue</source>
+      <translation>Diesen Cue stoppen</translation>
+    </message>
+    <message>
+      <location line="+26" />
+      <source>emergency</source>
+      <translation>Notfall</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Cues: %1</source>
+      <translation>Cues: %1</translation>
+    </message>
+    <message>
+      <location line="+12" />
+      <source>Cues…</source>
+      <translation>Cues…</translation>
+    </message>
+  </context>
+  <context>
     <name>ShowView</name>
     <message>
       <location filename="../qml/ShowView.qml" line="+48" />
@@ -3777,41 +3845,6 @@
       <location line="+1" />
       <source> · GO again once let go</source>
       <translation> · GO erst nach Loslassen wieder</translation>
-    </message>
-    <message>
-      <location line="+20" />
-      <source>Running: %1</source>
-      <translation>Läuft: %1</translation>
-    </message>
-    <message>
-      <location line="+4" />
-      <source>Stop all</source>
-      <translation>Alle anhalten</translation>
-    </message>
-    <message>
-      <location line="+7" />
-      <source>Nothing runs.</source>
-      <translation>Nichts läuft.</translation>
-    </message>
-    <message>
-      <location line="+24" />
-      <source>pre wait</source>
-      <translation>Vorwartezeit</translation>
-    </message>
-    <message>
-      <location line="+0" />
-      <source>post wait</source>
-      <translation>Nachwartezeit</translation>
-    </message>
-    <message>
-      <location line="+0" />
-      <source>running</source>
-      <translation>läuft</translation>
-    </message>
-    <message>
-      <location line="+17" />
-      <source>Stop</source>
-      <translation>Stopp</translation>
     </message>
   </context>
   <context>

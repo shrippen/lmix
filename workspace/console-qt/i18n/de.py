@@ -867,4 +867,12 @@ DE = {
     '%1 is muted. Click: on.': '%1 ist stumm. Klick: an.',
     'Audio at the edge': 'Ton am Rand',
     'Audio mixer': 'Tonmischer',
+    'Active': 'Aktiv',
+    'Lists': 'Listen',
+    'Cues: %1': 'Cues: %1',
+    'Stop cue %1': 'Cue %1 stoppen',
+    'Stop this cue': 'Diesen Cue stoppen',
+    'pre wait %1': 'Vorwartezeit %1',
+    'post wait %1': 'Nachwartezeit %1',
+    'Cue %1 %2, %3': 'Cue %1 %2, %3',
 }
