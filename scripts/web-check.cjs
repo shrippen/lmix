@@ -98,14 +98,17 @@ const pass = (message) => console.log("ok   " + message);
     sent.push(lmixAct({ action: "cut" }));
     for (let i = 0; i < n.count; i++) sent.push(lmixAct({ action: "preview_input", input: n.input }).catch(() => "refused"));
     const all = await Promise.race([Promise.all(sent), new Promise((r) => setTimeout(() => r(null), 10000))]);
-    return { order: all ? all.filter((r) => r === "refused").length : -1, took: performance.now() - t0 };
+    // Each in its place: the previews before the cut go through, those
+    // after it are refused (a count alone would let swaps cancel out).
+    const wrong = all ? all.filter((r, i) => i !== n.count && (r === "refused") !== i > n.count).length : -1;
+    return { order: wrong, took: performance.now() - t0 };
   }, { input: other.number, count: N });
   if (order === -1) fail("actions from a page: no answer within 10 s");
   if (took > 1800) {
     // Past the 2 s the waiting ones go out together: no order to check.
     console.log(`note: ${2 * N + 1} actions took ${Math.round(took)} ms, too slow to check their order`);
   } else {
-    if (order !== N) fail(`actions out of order: ${order} of ${N} previews after the cut refused (on program), not all`);
+    if (order !== 0) fail(`actions out of order: ${order} of ${2 * N} previews on the wrong side of the cut`);
     pass(`actions from a page keep their order (${Math.round(took)} ms)`);
   }
 
@@ -124,7 +127,7 @@ const pass = (message) => console.log("ok   " + message);
     return performance.now() - t0;
   }, other.number);
   if (held.length !== 2) fail(`hanging requests: ${held.length} of 2 held`);
-  if (waited < 1500 || waited > 2900) fail(`hanging requests: the action behind two waited ${Math.round(waited)} ms, not about 2000`);
+  if (waited < 1800 || waited > 2900) fail(`hanging requests: the action behind two waited ${Math.round(waited)} ms, not about 2000`);
   pass(`two hanging requests hold the next action back ${Math.round(waited)} ms`);
   for (const route of held) await route.continue();
   await quick.close();
