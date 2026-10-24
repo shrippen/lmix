@@ -8325,6 +8325,38 @@ mod tests {
     }
 
     #[test]
+    fn update_cue_merges_nested_fields() {
+        let mut sw = two_inputs();
+        let sound = Cue {
+            number: "1".into(),
+            sound: Some(lmix_types::SoundCue {
+                file: "/fx/rain.flac".into(),
+                fade_in_ms: 2000,
+                ..Default::default()
+            }),
+            ..Cue::empty(CueKind::Sound)
+        };
+        sw.apply(Action::AddCueList {
+            name: "Sound".into(),
+            cues: vec![sound],
+            source: None,
+        })
+        .unwrap();
+        // Only the level changes; file and fade stay.
+        sw.apply(Action::UpdateCue {
+            list: None,
+            cue: "1".into(),
+            changes: serde_json::json!({ "sound": { "gain_db": -6.0 } }),
+        })
+        .unwrap();
+        let cue = &sw.state().cue_lists[0].cues[0];
+        let sound = cue.sound.as_ref().unwrap();
+        assert_eq!(sound.gain_db, -6.0);
+        assert_eq!(sound.file, "/fx/rain.flac");
+        assert_eq!(sound.fade_in_ms, 2000);
+    }
+
+    #[test]
     fn cue_lists_go_standby_and_edit() {
         let mut sw = two_inputs();
         let list = InputRef::Text("Opening".into());

@@ -45,8 +45,15 @@ KanteTextField {
         return minutes + ":" + (seconds < 10 ? "0" : "") + seconds.toFixed(digits)
     }
 
-    text: show(ms)
-    onMsChanged: if (!activeFocus) { text = show(ms) }
+    // What is typed stays until it is taken; a new state meanwhile does
+    // not overwrite it.
+    property bool typing: false
+    onActiveFocusChanged: if (activeFocus) { typing = true }
+    Binding on text {
+        when: !field.typing
+        value: field.show(field.ms)
+        restoreMode: Binding.RestoreNone
+    }
     invalid: parsed === undefined || (parsed === null && !optional)
     font.family: KanteStyle.monoFamily
     placeholderText: optional ? "–" : "0:00.0"
@@ -54,6 +61,6 @@ KanteTextField {
         if (!invalid && parsed !== ms) {
             edited(parsed)
         }
-        text = Qt.binding(() => show(ms))
+        typing = false
     }
 }
