@@ -20,7 +20,7 @@ import "."
  *                             technique (1.31): "slide", "hammer", "pull", "slap", "pop" or
  *                             "ghost" or "dead" (1.32), its tab sign above the head
  *                             (KanteTechniqueMark); a ghost note shows its fret in
- *                             parentheses, a dead note x. techniqueResult
+ *                             parentheses and no other sign (1.37), a dead note x. techniqueResult
  *                             (1.31): "", "played", "other", "unheard";
  *                             setTechniqueResult(index, result) changes one, resetStates()
  *                             undoes them too
@@ -495,18 +495,22 @@ Item {
                                     }
                                 }
                                 // Technique sign above the head, left of the state badge (1.31).
+                                // A ghost note's parentheses are its sign: its result frames the
+                                // head (1.37).
                                 KanteTechniqueMark {
                                     id: techniqueMark
-                                    visible: drawn
+                                    readonly property bool ghost: note.technique === "ghost"
+                                    visible: sign !== ""
+                                    signVisible: !ghost
                                     technique: note.technique
                                     result: note.techniqueResult
                                     // Quiet: muted, the result still told by the frame.
                                     color: note.full ? resultColor : KanteStyle.mutedTextColor
-                                    height: Math.round(lane.head * 0.5)
-                                    width: implicitWidth
+                                    height: ghost ? headBox.height : Math.round(lane.head * 0.5)
+                                    width: ghost ? headBox.width : implicitWidth
                                     // Its right edge stops short of the badge (which starts at 0.67 head).
-                                    x: headBox.x + lane.head * 0.62 - width
-                                    y: headBox.y - height - KanteStyle.unit(1)
+                                    x: ghost ? headBox.x : headBox.x + lane.head * 0.62 - width
+                                    y: ghost ? headBox.y : headBox.y - height - KanteStyle.unit(1)
                                 }
                                 Text {
                                     visible: !!note.n.label
