@@ -299,10 +299,37 @@ until_true '[[ "$(state | jq -r '.cue_lists[0].cues[2].name')" == Lamp ]]' \
     || fail "inspector: cue 3 $(state | jq -r '.cue_lists[0].cues[2].name'), cue 1 $(state | jq -r '.cue_lists[0].cues[0].name')"
 act '{"action":"cue_standby","to":{"index":3}}'
 until_true '[[ "$(standby)" == 3 ]]' || fail "inspector: standby not back on 3"
+# Escape leaves a field (no panic), then space is GO.
+click $INSPECTOR_NAME
+key Escape
 key space
-until_true '[[ "$(standby)" == 4 ]]' && pass "inspector: space is GO after Enter in a field" \
+until_true '[[ "$(standby)" == 4 ]]' && pass "inspector: space is GO after Enter or Escape in a field" \
     || fail "inspector: no GO after editing (standby $(standby))"
 key Escape
+# A level by + and typed: each goes to the cue, and after Enter in the
+# box space is GO again. A fade cue at -10 dB, the Levels tab.
+act '{"action":"add_cue_list","name":"Look","cues":[{"number":"20","kind":"fade","duration_ms":3000,"fade":{"target":{"zone":"Main"},"gain_db":-10}}]}'
+act '{"action":"set_active_cue_list","list":3}'
+INSPECTOR_LEVELS_TAB="378 678"
+INSPECTOR_LEVEL_UP="233 722"
+INSPECTOR_LEVEL_TEXT="188 722"
+INSPECTOR_BASICS_TAB="61 678"
+click $INSPECTOR_LEVELS_TAB
+click $INSPECTOR_LEVEL_UP
+until_true '[[ "$(state | jq '.cue_lists[2].cues[0].fade.gain_db')" == -9.5 ]]' && pass "inspector: + of a level goes to the cue" \
+    || fail "inspector: fade level $(state | jq '.cue_lists[2].cues[0].fade.gain_db'), not -9.5"
+click $INSPECTOR_LEVEL_TEXT
+xdotool key ctrl+a
+xdotool type --delay 20 -- "-6"
+key Return
+until_true '[[ "$(state | jq '.cue_lists[2].cues[0].fade.gain_db==-6')" == true ]]' && pass "inspector: a typed level goes to the cue" \
+    || fail "inspector: fade level $(state | jq '.cue_lists[2].cues[0].fade.gain_db'), not -6"
+key space
+until_true '[[ "$(state | jq '.cue_lists[2].standby')" == 2 ]]' && pass "inspector: space is GO after a level" \
+    || fail "inspector: no GO after a level (standby $(state | jq '.cue_lists[2].standby'))"
+key Escape
+click $INSPECTOR_BASICS_TAB
+act '{"action":"remove_cue_list","list":3}'
 own_qml_warnings console.log && fail "QML warnings (show): $(own_qml_warnings console.log | head -3)"
 pass "no QML warnings (show)"
 

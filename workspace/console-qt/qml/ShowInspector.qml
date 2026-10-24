@@ -68,6 +68,17 @@ KanteCard {
         showView.forceActiveFocus()
     }
 
+    // Escape in a field leaves it (keeping what was typed there); the
+    // next Escape is the show's panic.
+    Keys.onEscapePressed: event => {
+        if (hasFocusInside(Window.activeFocusItem)) {
+            refocus()
+            event.accepted = true
+        } else {
+            event.accepted = false
+        }
+    }
+
     ColumnLayout {
         anchors.fill: parent
         anchors.margins: Kirigami.Units.smallSpacing
@@ -124,26 +135,43 @@ KanteCard {
                 KanteTextField {
                     id: numberField
                     Layout.preferredWidth: Kirigami.Units.gridUnit * 6
-                    text: inspector.cue ? inspector.cue.number : ""
                     Accessible.name: qsTr("Cue number")
                     onAccepted: inspector.refocus()
                     onEditingFinished: {
                         if (inspector.cue && text.trim() !== inspector.cue.number)
                             inspector.save({ number: text.trim() })
-                        text = Qt.binding(() => inspector.cue ? inspector.cue.number : "")
+                        typing = false
+                    }
+                    // What is typed stays until it is saved; a new state
+                    // meanwhile does not overwrite it.
+                    property bool typing: false
+                    onActiveFocusChanged: if (activeFocus) typing = true
+                    Binding on text {
+                        when: !numberField.typing
+                        value: inspector.cue ? inspector.cue.number : ""
+                        restoreMode: Binding.RestoreNone
                     }
                 }
                 QQC2.Label { text: qsTr("Name") }
                 KanteTextField {
+                    id: nameField
                     Layout.fillWidth: true
-                    text: inspector.cue ? inspector.cue.name : ""
                     placeholderText: inspector.cue ? inspector.showView.cueName(Object.assign({}, inspector.cue, { name: "" })) : ""
                     Accessible.name: qsTr("Cue name")
                     onAccepted: inspector.refocus()
                     onEditingFinished: {
                         if (inspector.cue && text !== inspector.cue.name)
                             inspector.save({ name: text })
-                        text = Qt.binding(() => inspector.cue ? inspector.cue.name : "")
+                        typing = false
+                    }
+                    // What is typed stays until it is saved; a new state
+                    // meanwhile does not overwrite it.
+                    property bool typing: false
+                    onActiveFocusChanged: if (activeFocus) typing = true
+                    Binding on text {
+                        when: !nameField.typing
+                        value: inspector.cue ? inspector.cue.name : ""
+                        restoreMode: Binding.RestoreNone
                     }
                 }
 
@@ -177,13 +205,21 @@ KanteCard {
                     Layout.fillHeight: true
                     Layout.minimumHeight: Kirigami.Units.gridUnit * 2
                     wrapMode: TextEdit.Wrap
-                    text: inspector.cue ? (inspector.cue.note || "") : ""
                     placeholderText: qsTr("For the operator, e.g. a stage direction; shown with standby")
                     Accessible.name: qsTr("Cue note")
                     onEditingFinished: {
                         if (inspector.cue && text !== (inspector.cue.note || ""))
                             inspector.save({ note: text })
-                        text = Qt.binding(() => inspector.cue ? (inspector.cue.note || "") : "")
+                        typing = false
+                    }
+                    // What is typed stays until it is saved; a new state
+                    // meanwhile does not overwrite it.
+                    property bool typing: false
+                    onActiveFocusChanged: if (activeFocus) typing = true
+                    Binding on text {
+                        when: !noteArea.typing
+                        value: inspector.cue ? (inspector.cue.note || "") : ""
+                        restoreMode: Binding.RestoreNone
                     }
                     KanteFieldSkin { control: noteArea }
                 }
@@ -357,7 +393,10 @@ KanteCard {
                         editable: true
                         value: typeof timing.repeat === "object" ? timing.repeat.times : 2
                         Accessible.name: qsTr("Plays in all")
-                        onValueModified: inspector.saveIn(inspector.cue.kind, { repeat: { times: value } })
+                        onValueModified: {
+                            inspector.saveIn(inspector.cue.kind, { repeat: { times: value } })
+                            inspector.refocus()
+                        }
                     }
                 }
                 Item {
@@ -404,7 +443,10 @@ KanteCard {
                     textFromValue: v => (v / 10).toFixed(1) + " dB"
                     valueFromText: t => levels.db(t)
                     Accessible.name: qsTr("Level of the sound")
-                    onValueModified: inspector.saveIn("sound", { gain_db: value / 10 })
+                    onValueModified: {
+                        inspector.saveIn("sound", { gain_db: value / 10 })
+                        inspector.refocus()
+                    }
                 }
                 QQC2.Label {
                     visible: levels.kind === "sound"
@@ -427,7 +469,10 @@ KanteCard {
                     textFromValue: v => v + " %"
                     valueFromText: t => parseInt(t)
                     Accessible.name: qsTr("Opacity of the picture")
-                    onValueModified: inspector.saveIn("picture", { opacity: value / 100 })
+                    onValueModified: {
+                        inspector.saveIn("picture", { opacity: value / 100 })
+                        inspector.refocus()
+                    }
                 }
                 Item { visible: levels.kind === "picture" }
                 QQC2.Label {
@@ -441,7 +486,10 @@ KanteCard {
                     editable: true
                     value: inspector.cue && inspector.cue.picture ? inspector.cue.picture.layer : 1
                     Accessible.name: qsTr("Layer of the picture")
-                    onValueModified: inspector.saveIn("picture", { layer: value })
+                    onValueModified: {
+                        inspector.saveIn("picture", { layer: value })
+                        inspector.refocus()
+                    }
                 }
                 QQC2.Label {
                     visible: levels.kind === "picture"
@@ -495,6 +543,7 @@ KanteCard {
                                 var change = {}
                                 change[fadeLevel.modelData.key] = value / fadeLevel.modelData.scale
                                 inspector.saveIn("fade", change)
+                                inspector.refocus()
                             }
                         }
                     }
