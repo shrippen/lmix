@@ -365,6 +365,14 @@ key Escape
 sleep 1 # a save would have come back by now
 [[ "$(state | jq '.cue_lists[2].cues[0].fade.gain_db==-6')" == true ]] && pass "inspector: Escape in a level drops what was typed" \
     || fail "inspector: Escape saved the level as $(state | jq '.cue_lists[2].cues[0].fade.gain_db')"
+# The box shows a level changed afterwards: Enter there keeps it.
+act '{"action":"update_cue","list":3,"cue":"20","changes":{"fade":{"gain_db":-10}}}'
+sleep 1 # the page shows the new state
+click $INSPECTOR_LEVEL_TEXT
+key Return
+sleep 1 # a save would have come back by now
+[[ "$(state | jq '.cue_lists[2].cues[0].fade.gain_db==-10')" == true ]] && pass "inspector: the box follows the level after Escape" \
+    || fail "inspector: after Escape the box saved $(state | jq '.cue_lists[2].cues[0].fade.gain_db') over -10"
 key space
 until_true '[[ "$(state | jq '.cue_lists[2].standby')" == 2 ]]' && pass "inspector: space is GO after a level" \
     || fail "inspector: no GO after a level (standby $(state | jq '.cue_lists[2].standby'))"

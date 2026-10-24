@@ -79,15 +79,25 @@ KanteCard {
                 item.typing = false
                 break
             }
-            // A spin box takes its text when it loses the keys: give it
-            // back its value first.
+            // A spin box takes its text when it loses the keys: bind it to
+            // the value again first (shown at once, and still after).
             if (item.valueFromText !== undefined && item.contentItem) {
-                item.contentItem.text = item.textFromValue(item.value, item.locale)
+                item.contentItem.text = Qt.binding(() => item.textFromValue(item.value, item.locale))
                 break
             }
         }
         refocus()
         showView.panic()
+        event.accepted = true
+    }
+    // Enter that no field keeps (a spin box whose value did not change)
+    // gives the keys back to the show too.
+    Keys.onReturnPressed: event => {
+        refocus()
+        event.accepted = true
+    }
+    Keys.onEnterPressed: event => {
+        refocus()
         event.accepted = true
     }
 
