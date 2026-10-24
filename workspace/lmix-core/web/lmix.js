@@ -76,15 +76,38 @@ function lmixPatch(doc, ops) {
   return doc;
 }
 
-/** Runs one action; resolves to the new state or throws the error text. */
-async function lmixAct(action) {
-  const resp = await fetch("/api/actions", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(action),
+/** The last action on its way: the next one waits for its answer, but
+ *  goes out at most LMIX_ACT_WAIT_MS after it was made, however many
+ *  requests hang before it (Wi-Fi gone, a slow action in lmix-core): GO
+ *  and panic are never held back longer. Hanging requests are not
+ *  cancelled: what lmix-core gets, it does. The price: behind a hanging
+ *  request, actions made close together go out together once their 2 s
+ *  are up, and may overtake each other again. */
+const LMIX_ACT_WAIT_MS = 2000;
+let lmixActQueue = Promise.resolve();
+
+/** Runs one action; resolves to the new state or throws the error text.
+ *  Actions go out one after the other, in the order they were made: a
+ *  double click (click, click, GO) sent at once could arrive overtaken. */
+function lmixAct(action) {
+  let answered;
+  const gate = new Promise((open) => { answered = open; });
+  const deadline = new Promise((go) => setTimeout(go, LMIX_ACT_WAIT_MS));
+  const run = Promise.race([lmixActQueue, deadline]).then(async () => {
+    try {
+      const resp = await fetch("/api/actions", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(action),
+      });
+      if (!resp.ok) throw new Error(await resp.text());
+      return resp.json();
+    } finally {
+      answered();
+    }
   });
-  if (!resp.ok) throw new Error(await resp.text());
-  return resp.json();
+  lmixActQueue = gate;
+  return run;
 }
 
 /** Shows the connection state in the header's .state element. */
