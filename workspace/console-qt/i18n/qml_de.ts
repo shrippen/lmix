@@ -4822,34 +4822,34 @@
   <context>
     <name>TransitionPanel</name>
     <message>
-      <location filename="../qml/TransitionPanel.qml" line="+75" />
+      <location filename="../qml/TransitionPanel.qml" line="+76" />
       <source>Cut</source>
       <translation>Cut</translation>
     </message>
     <message>
-      <location line="+28" />
+      <location line="+27" />
       <source>Click: take preview. Right click: effect and length.</source>
       <translation>Klick: Vorschau übernehmen. Rechtsklick: Effekt und Dauer.</translation>
     </message>
     <message>
       <location line="+14" />
-      <location line="+58" />
+      <location line="+57" />
       <source>Effect</source>
       <translation>Effekt</translation>
     </message>
     <message>
-      <location line="-46" />
-      <location line="+52" />
+      <location line="-45" />
+      <location line="+51" />
       <source>Length</source>
       <translation>Dauer</translation>
     </message>
     <message>
-      <location line="-46" />
+      <location line="-45" />
       <source>Stinger clip and cut point…</source>
       <translation>Stinger-Clip und Cut-Punkt…</translation>
     </message>
     <message>
-      <location line="+22" />
+      <location line="+21" />
       <source>Quick play</source>
       <translation>Schnellstart</translation>
     </message>
@@ -4859,7 +4859,7 @@
       <translation>Klick: Vorschau mit diesem Effekt auf Programm und abspielen. Doppelklick auf den Vorschau-Monitor tut dasselbe. Rechtsklick: Effekt und Dauer.</translation>
     </message>
     <message>
-      <location line="+31" />
+      <location line="+35" />
       <location line="+10" />
       <source>T-bar</source>
       <translation>T-Bar</translation>
@@ -4870,22 +4870,17 @@
       <translation>Ziehen blendet die Vorschau ein; am Ende geht sie auf Programm.</translation>
     </message>
     <message>
-      <location line="+16" />
-      <source>FTB on</source>
-      <translation>FTB an</translation>
-    </message>
-    <message>
-      <location line="+0" />
-      <source>FTB</source>
-      <translation>FTB</translation>
-    </message>
-    <message>
-      <location line="+8" />
+      <location line="+22" />
       <source>Overlays</source>
       <translation>Overlays</translation>
     </message>
     <message>
-      <location line="+38" />
+      <location line="+6" />
+      <source>All off</source>
+      <translation>Alle aus</translation>
+    </message>
+    <message>
+      <location line="+47" />
       <source>Overlay %1: %2, click to take off</source>
       <translation>Overlay %1: %2, Klick nimmt es ab</translation>
     </message>
@@ -4893,6 +4888,11 @@
       <location line="+1" />
       <source>Overlay %1: empty, click to show preview</source>
       <translation>Overlay %1: leer, Klick zeigt die Vorschau</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>with the next take: %1</source>
+      <translation>mit dem nächsten Take: %1</translation>
     </message>
     <message>
       <location line="+2" />
@@ -4940,12 +4940,12 @@
       <translation>Einstellungen…</translation>
     </message>
     <message>
-      <location line="+14" />
+      <location line="-84" />
       <source>All overlays off</source>
       <translation>Alle Overlays aus</translation>
     </message>
     <message>
-      <location line="+3" />
+      <location line="+2" />
       <source>Takes every overlay channel off, each with its fade.</source>
       <translation>Nimmt alle Overlay-Kanäle heraus, jeden mit seiner Blende.</translation>
     </message>

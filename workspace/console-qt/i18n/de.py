@@ -852,4 +852,6 @@ DE = {
     'The cue timer got no real-time priority, so cues may run late on a busy machine. Allow it with rtkit (running for the desktop session), or with a real-time limit for this user (group realtime, RLIMIT_RTPRIO).': 'Der Cue-Zeitgeber hat keine Echtzeit-Priorität bekommen; auf einem ausgelasteten Rechner können Cues zu spät kommen. Erlauben mit rtkit (läuft mit der Desktop-Sitzung) oder mit einem Echtzeit-Limit für diesen Benutzer (Gruppe realtime, RLIMIT_RTPRIO).',
     'Cue timer': 'Cue-Zeitgeber',
     'No report from lmix-core yet': 'Noch keine Meldung von lmix-core',
+    'All off': 'Alle aus',
+    'with the next take: %1': 'mit dem nächsten Take: %1',
 }
