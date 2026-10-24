@@ -266,7 +266,9 @@ KanteCard {
                     activeFocusOnTab: false
                     model: [qsTr("Waits for GO"), qsTr("After the post wait"), qsTr("When this one ends")]
                     tooltips: [qsTr("The next cue starts only with GO"), qsTr("The next cue starts when the post wait is over"), qsTr("The next cue starts when this one ends")]
-                    currentIndex: inspector.cue ? Math.max(0, triggers.follows.indexOf(inspector.cue.follow)) : 0
+                    // KanteSegmented sets currentIndex on a click, which would end a
+                    // plain binding: this one follows the cue still.
+                    Binding on currentIndex { value: inspector.cue ? Math.max(0, triggers.follows.indexOf(inspector.cue.follow)) : 0 }
                     onActivated: index => {
                         inspector.save({ follow: triggers.follows[index] })
                         inspector.refocus()
@@ -281,7 +283,7 @@ KanteCard {
                         model: [qsTr("No"), qsTr("Same group"), qsTr("Same list"), qsTr("All")]
                         tooltips: [qsTr("Other cues play on"), qsTr("Running cues of the same list or group stop when this one starts"),
                                    qsTr("Running cues of the same list stop when this one starts"), qsTr("Every running cue stops when this one starts")]
-                        currentIndex: Math.max(0, triggers.scopes.indexOf(triggers.stopOthers ? triggers.stopOthers.scope : null))
+                        Binding on currentIndex { value: Math.max(0, triggers.scopes.indexOf(triggers.stopOthers ? triggers.stopOthers.scope : null)) }
                         onActivated: index => {
                             var scope = triggers.scopes[index]
                             inspector.save({ stop_others: scope === null ? null : { scope: scope } })
@@ -404,7 +406,7 @@ KanteCard {
                         id: repeatChoice
                         activeFocusOnTab: false
                         model: [qsTr("Once"), qsTr("Times"), qsTr("Until stopped")]
-                        currentIndex: timing.repeatKind
+                        Binding on currentIndex { value: timing.repeatKind }
                         onActivated: index => {
                             inspector.saveIn(inspector.cue.kind, { repeat: index === 0 ? "once" : (index === 1 ? { times: 2 } : "forever") })
                             inspector.refocus()

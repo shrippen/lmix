@@ -303,6 +303,18 @@ until_true '[[ "$(state | jq -r '.cue_lists[0].cues[2].follow')" == after_wait ]
     && [[ "$(state | jq -r '.cue_lists[0].cues[2].name')" == "Lamps 2" ]] \
     && pass "inspector: two quick edits both stay" \
     || fail "inspector: cue 3 $(state | jq -c '.cue_lists[0].cues[2] | {name, follow}')"
+# The choice follows the cue shown after a click: on cue 2 (waits for
+# GO) it shows that, and a click on After the post wait goes to cue 2.
+act '{"action":"cue_standby","to":{"index":2}}'
+until_true '[[ "$(standby)" == 2 ]]' || fail "inspector: standby not on cue 2"
+sleep 1 # the inspector shows cue 2
+click $INSPECTOR_AFTER_WAIT
+until_true '[[ "$(state | jq -r '.cue_lists[0].cues[1].follow')" == after_wait ]]' && pass "inspector: a choice follows the cue shown" \
+    || fail "inspector: a click on After the post wait left cue 2 at $(state | jq -r '.cue_lists[0].cues[1].follow')"
+act '{"action":"update_cue","list":1,"cue":"2","changes":{"follow":"none"}}'
+act '{"action":"cue_standby","to":{"index":3}}'
+until_true '[[ "$(standby)" == 3 ]]' || fail "inspector: standby not back on cue 3"
+sleep 1 # the inspector shows cue 3 again
 click $INSPECTOR_BASICS_TAB
 # Standby moves on from outside while a field is being typed in: what
 # is typed still goes to the cue it began with.
