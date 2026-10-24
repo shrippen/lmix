@@ -78,5 +78,25 @@ const pass = (message) => console.log("ok   " + message);
 
   if (errors.length) fail("page errors: " + errors.join("; "));
   pass("no page errors");
+
+  // Actions go out in the order they were made: quick clicks (a double
+  // click: click, click, GO) must not overtake each other on the way.
+  // A page of its own: the previews it sends after the cut are refused on
+  // purpose, which the browser logs as errors.
+  const quick = await browser.newPage();
+  await quick.goto(base + "/mixer");
+  await quick.waitForFunction(() => document.querySelectorAll("#inputs .tile").length === 2, null, { timeout: 5000 });
+  const program = (await api("/api/state")).program;
+  const other = (await api("/api/state")).inputs.find((i) => i.id !== program);
+  const order = await quick.evaluate(async (n) => {
+    const sent = [];
+    for (let i = 0; i < 100; i++) sent.push(lmixAct({ action: "preview_input", input: n }).catch(() => "refused"));
+    sent.push(lmixAct({ action: "cut" }));
+    for (let i = 0; i < 100; i++) sent.push(lmixAct({ action: "preview_input", input: n }).catch(() => "refused"));
+    return (await Promise.all(sent)).filter((r) => r === "refused").length;
+  }, other.number);
+  if (order !== 100) fail(`actions out of order: ${order} of 100 previews after the cut refused (on program), not all`);
+  pass("actions from a page keep their order");
+  await quick.close();
   await browser.close();
 })().catch((e) => fail(e.message));
