@@ -598,6 +598,8 @@ KanteCard {
                 spacing: Kirigami.Units.smallSpacing
 
                 readonly property var actions: inspector.cue && inspector.cue.kind === "actions" ? (inspector.cue.actions || []) : null
+                /** How many actions the preview lists. */
+                readonly property int shownActions: 6
 
                 QQC2.Label {
                     visible: actionsTab.actions === null
@@ -605,7 +607,7 @@ KanteCard {
                     color: KanteStyle.mutedTextColor
                 }
                 Repeater {
-                    model: actionsTab.actions === null ? [] : actionsTab.actions.slice(0, 6)
+                    model: actionsTab.actions === null ? [] : actionsTab.actions.slice(0, actionsTab.shownActions)
                     QQC2.Label {
                         required property var modelData
                         required property int index
@@ -616,8 +618,8 @@ KanteCard {
                     }
                 }
                 QQC2.Label {
-                    visible: actionsTab.actions !== null && actionsTab.actions.length > 6
-                    text: actionsTab.actions ? qsTr("… and %1 more").arg(actionsTab.actions.length - 6) : ""
+                    visible: actionsTab.actions !== null && actionsTab.actions.length > actionsTab.shownActions
+                    text: actionsTab.actions ? qsTr("… and %1 more").arg(actionsTab.actions.length - actionsTab.shownActions) : ""
                     color: KanteStyle.mutedTextColor
                 }
                 KanteButton {
