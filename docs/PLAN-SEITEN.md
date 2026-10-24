@@ -203,7 +203,8 @@ einem Skript sind nur zu sehen.
 Aus dem Dummy noch offen, **nur Oberfläche** (der Kern kann es):
 - Show: Leiste zum Anlegen je Cue-Art, Zeitfelder mit Fortschritt;
   im Inspector Datei, Ziel und Zonen-Routing eines Klang-, Bild- oder
-  Blenden-Cues.
+  Blenden-Cues; eine unlesbare Zeit nach Enter nicht still verwerfen,
+  sondern im Feld lassen und markieren.
 - Audio: Mini-Kurven EQ und Dynamik je Zug, ON/AFV als Umschalter.
 - Seiten lösbar auf einen zweiten Bildschirm (Entscheidung Click-Dummy 1).
 - Leiste: wer eine Seite zuletzt bediente (braucht die Kennung je
