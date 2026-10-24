@@ -76,10 +76,11 @@ function lmixPatch(doc, ops) {
   return doc;
 }
 
-/** The last action on its way: the next one waits for it, but no longer
- *  than LMIX_ACT_WAIT_MS, so a hanging request (Wi-Fi gone, a slow action
- *  in lmix-core) never holds back GO or panic. It is not cancelled: what
- *  lmix-core gets, it does. */
+/** The last action on its way: the next one waits for its answer, but
+ *  goes out at most LMIX_ACT_WAIT_MS after it was made, however many
+ *  requests hang before it (Wi-Fi gone, a slow action in lmix-core): GO
+ *  and panic are never held back longer. Hanging requests are not
+ *  cancelled: what lmix-core gets, it does. */
 const LMIX_ACT_WAIT_MS = 2000;
 let lmixActQueue = Promise.resolve();
 
@@ -87,12 +88,10 @@ let lmixActQueue = Promise.resolve();
  *  Actions go out one after the other, in the order they were made: a
  *  double click (click, click, GO) sent at once could arrive overtaken. */
 function lmixAct(action) {
-  // Opens the way for the next action: when this one is answered, or
-  // LMIX_ACT_WAIT_MS after it went out.
-  let next;
-  const gate = new Promise((open) => { next = open; });
-  const run = lmixActQueue.then(async () => {
-    const wait = setTimeout(next, LMIX_ACT_WAIT_MS);
+  let answered;
+  const gate = new Promise((open) => { answered = open; });
+  const deadline = new Promise((go) => setTimeout(go, LMIX_ACT_WAIT_MS));
+  const run = Promise.race([lmixActQueue, deadline]).then(async () => {
     try {
       const resp = await fetch("/api/actions", {
         method: "POST",
@@ -102,8 +101,7 @@ function lmixAct(action) {
       if (!resp.ok) throw new Error(await resp.text());
       return resp.json();
     } finally {
-      clearTimeout(wait);
-      next();
+      answered();
     }
   });
   lmixActQueue = gate;
