@@ -177,12 +177,14 @@ Seit #134 dazu (eigener PR): Mix-Ansicht „Buttons“ (Program-/Preview-
 Reihen), Show-Schalter Edit/Show, Audio-Matrix Inputs × Busse (AUD.13) und
 Spitzenwert in dB je Zug; ein Klick auf den Program-Input tut nichts, ohne
 Meldung (Owner 23.10.). Senken-Tasten unten auf der Mix-Seite gab es schon
-(Ausgangsleiste).
+(Ausgangsleiste), Overlay-Tasten je Kachel ebenso. Overlay-Kanäle als
+Raster 4 × 2 neben den Übergängen (24.10.): die Mittelspalte passt bei
+1440 × 900 ohne Scrollen; FTB dort fällt weg, es ist die Seitentaste
+„Schwarzblende“.
 
 Aus dem Dummy noch offen, **nur Oberfläche** (der Kern kann es):
 - Mix: Titelleiste der Kachel in Tally-Farbe (braucht Textfarben auf Rot
-  und Grün in Kante), Overlay-Raster 2×4 und Overlay-Tasten je Kachel,
-  schmaler Tonmischer am Rand.
+  und Grün in Kante), schmaler Tonmischer am Rand.
 - Show: Inspector unten mit Reitern, Seitenleiste
   Aktiv/Listen, laufende Cues als Fortschrittsfüllung mit negativer
   Restzeit, Leiste zum Anlegen je Cue-Art, Zeitfelder mit Fortschritt.
