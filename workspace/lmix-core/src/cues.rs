@@ -211,7 +211,7 @@ fn find_cue(cues: &[Cue], text: &str) -> Option<CueId> {
 }
 
 /// The cue named `text` (id or number) anywhere below `cues`, to change.
-pub fn find_cue_mut<'a>(cues: &'a mut [Cue], text: &str) -> Option<&'a mut Cue> {
+pub(crate) fn find_cue_mut<'a>(cues: &'a mut [Cue], text: &str) -> Option<&'a mut Cue> {
     for cue in cues {
         if cue.id.to_string() == text || (!cue.number.is_empty() && cue.number == text) {
             return Some(cue);

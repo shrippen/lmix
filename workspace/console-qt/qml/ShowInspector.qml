@@ -27,10 +27,11 @@ KanteCard {
     // Let go only after the field that lost the keyboard saved its value
     // (editingFinished may come after the focus moved).
     onHoldingChanged: {
-        if (holding)
+        if (holding) {
             heldId = shown !== null ? shown.id : ""
-        else
-            Qt.callLater(() => { if (!holding) heldId = "" })
+        } else {
+            Qt.callLater(() => { if (!holding) { heldId = "" } })
+        }
     }
     readonly property var shown: heldId !== "" ? (showView.list ? showView.findCue(showView.list.cues, heldId) : null)
                                                : showView.selectedCue
@@ -43,16 +44,18 @@ KanteCard {
 
     function hasFocusInside(item) {
         for (; item; item = item.parent) {
-            if (item === inspector)
+            if (item === inspector) {
                 return true
+            }
         }
         return false
     }
 
     /** Changes the shown cue's top-level fields. */
     function save(changes) {
-        if (cue !== null)
+        if (cue !== null) {
             showView.updateCue(cue.id, changes)
+        }
     }
 
     /** Changes fields of the cue's sound, picture or fade; the others of
@@ -134,14 +137,15 @@ KanteCard {
                     Accessible.name: qsTr("Cue number")
                     onAccepted: inspector.refocus()
                     onEditingFinished: {
-                        if (inspector.cue && text.trim() !== inspector.cue.number)
+                        if (inspector.cue && text.trim() !== inspector.cue.number) {
                             inspector.save({ number: text.trim() })
+                        }
                         typing = false
                     }
                     // What is typed stays until it is saved; a new state
                     // meanwhile does not overwrite it.
                     property bool typing: false
-                    onActiveFocusChanged: if (activeFocus) typing = true
+                    onActiveFocusChanged: if (activeFocus) { typing = true }
                     Binding on text {
                         when: !numberField.typing
                         value: inspector.cue ? inspector.cue.number : ""
@@ -156,14 +160,15 @@ KanteCard {
                     Accessible.name: qsTr("Cue name")
                     onAccepted: inspector.refocus()
                     onEditingFinished: {
-                        if (inspector.cue && text !== inspector.cue.name)
+                        if (inspector.cue && text !== inspector.cue.name) {
                             inspector.save({ name: text })
+                        }
                         typing = false
                     }
                     // What is typed stays until it is saved; a new state
                     // meanwhile does not overwrite it.
                     property bool typing: false
-                    onActiveFocusChanged: if (activeFocus) typing = true
+                    onActiveFocusChanged: if (activeFocus) { typing = true }
                     Binding on text {
                         when: !nameField.typing
                         value: inspector.cue ? inspector.cue.name : ""
@@ -204,14 +209,15 @@ KanteCard {
                     placeholderText: qsTr("For the operator, e.g. a stage direction; shown with standby")
                     Accessible.name: qsTr("Cue note")
                     onEditingFinished: {
-                        if (inspector.cue && text !== (inspector.cue.note || ""))
+                        if (inspector.cue && text !== (inspector.cue.note || "")) {
                             inspector.save({ note: text })
+                        }
                         typing = false
                     }
                     // What is typed stays until it is saved; a new state
                     // meanwhile does not overwrite it.
                     property bool typing: false
-                    onActiveFocusChanged: if (activeFocus) typing = true
+                    onActiveFocusChanged: if (activeFocus) { typing = true }
                     Binding on text {
                         when: !noteArea.typing
                         value: inspector.cue ? (inspector.cue.note || "") : ""

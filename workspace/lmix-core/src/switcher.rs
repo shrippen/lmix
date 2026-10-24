@@ -3020,7 +3020,6 @@ impl Switcher {
         self.cues.deadline()
     }
 
-    /// `list`, or the active list without one.
     /// Gives the list at `index` new cues, name and source, checked; editing
     /// during the show keeps standby (on the same cue when it is still
     /// there, IMP.5) and running cues.
@@ -3046,6 +3045,7 @@ impl Switcher {
         Ok(())
     }
 
+    /// `list`, or the active list without one.
     fn cue_list_or_active(&self, list: Option<&InputRef>) -> Result<usize, ActionError> {
         match list {
             Some(list) => self.find_cue_list(list),

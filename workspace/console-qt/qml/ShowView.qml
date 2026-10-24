@@ -69,11 +69,13 @@ ColumnLayout {
     /** The cue with `id` in `cues` or their groups, or null. */
     function findCue(cues, id) {
         for (var i = 0; i < cues.length; i++) {
-            if (cues[i].id === id)
+            if (cues[i].id === id) {
                 return cues[i]
+            }
             var inside = findCue(cues[i].children || [], id)
-            if (inside)
+            if (inside) {
                 return inside
+            }
         }
         return null
     }
@@ -455,8 +457,9 @@ ColumnLayout {
                                     // A cue in a group is only chosen; standby
                                     // is always a cue at the top.
                                     view.selectedId = row.cue.id
-                                    if (row.modelData.depth === 0)
+                                    if (row.modelData.depth === 0) {
                                         view.act({ action: "cue_standby", to: { index: row.modelData.top } })
+                                    }
                                 }
                             }
 

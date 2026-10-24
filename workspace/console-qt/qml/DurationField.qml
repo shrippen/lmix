@@ -21,19 +21,22 @@ KanteTextField {
     /** ms of `text`, null when empty, undefined when unreadable. */
     function read(text) {
         var t = text.trim().replace(",", ".")
-        if (t === "")
+        if (t === "") {
             return null
+        }
         var m = /^(?:(\d+):)?(\d+(?:\.\d*)?|\.\d+)$/.exec(t)
-        if (!m)
+        if (!m) {
             return undefined
+        }
         var seconds = (m[1] ? parseInt(m[1]) * 60 : 0) + parseFloat(m[2])
         var value = Math.round(seconds * 100) * 10
         return value <= maxMs ? value : undefined
     }
 
     function show(value) {
-        if (value === null || value === undefined)
+        if (value === null || value === undefined) {
             return ""
+        }
         var hundredths = Math.round(value / 10)
         var minutes = Math.floor(hundredths / 6000)
         var seconds = (hundredths % 6000) / 100
@@ -43,13 +46,14 @@ KanteTextField {
     }
 
     text: show(ms)
-    onMsChanged: if (!activeFocus) text = show(ms)
+    onMsChanged: if (!activeFocus) { text = show(ms) }
     invalid: parsed === undefined || (parsed === null && !optional)
     font.family: KanteStyle.monoFamily
     placeholderText: optional ? "–" : "0:00.0"
     onEditingFinished: {
-        if (!invalid && parsed !== ms)
+        if (!invalid && parsed !== ms) {
             edited(parsed)
+        }
         text = Qt.binding(() => show(ms))
     }
 }
