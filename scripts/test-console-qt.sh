@@ -244,6 +244,23 @@ until_true '[[ "$(standby)" == 3 ]]' && pass "show: space is GO after a header b
 key Escape
 until_true '[[ "$(cues_running)" == 0 ]]' && pass "show: Escape is panic" \
     || fail "show: Escape did not stop the cues ($(cues_running) running)"
+# The side bar: tab Lists, a click on the second list makes it the active
+# one, and space is GO there (the bar keeps no keys).
+act '{"action":"add_cue_list","name":"Encore","cues":[{"number":"11","name":"Bow","kind":"wait","duration_ms":30000}]}'
+active_list() { state | jq '[.cue_lists[] | .active] | index(true) + 1'; }
+SIDE_LISTS_TAB="1290 175"
+SIDE_LIST_2="1290 260"
+click $SIDE_LISTS_TAB
+sleep 1
+click $SIDE_LIST_2
+until_true '[[ "$(active_list)" == 2 ]]' && pass "show side bar: a click makes a list active" \
+    || fail "show side bar: list $(active_list) active, not 2"
+key space
+until_true '[[ "$(state | jq '.cue_lists[1].standby')" == 2 ]]' && pass "show side bar: space is GO after a click there" \
+    || fail "show side bar: no GO after a click in the side bar"
+key Escape
+until_true '[[ "$(cues_running)" == 0 ]]' || fail "show side bar: Escape did not stop the cues"
+act '{"action":"set_active_cue_list","list":1}'
 own_qml_warnings console.log && fail "QML warnings (show): $(own_qml_warnings console.log | head -3)"
 pass "no QML warnings (show)"
 
