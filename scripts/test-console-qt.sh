@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # lmix against a real engine, on a virtual display (no GPU needed): on the
 # Mix page monitors and tiles show moving live pictures, clicks switch, no
-# QML warnings, the overlay grid is in reach. Then the Show page through the page bar: it draws, space is
+# QML warnings, the overlay grid and the narrow mixer are in reach. Then the Show page through the page bar: it draws, space is
 # GO and Escape panic (also after a click on the header and a closed
 # dialog), the page bar shows program small, no QML warnings. Then Audio,
 # Outputs and Setup draw without QML warnings. Needs Qt 6 with Kirigami, gst-plugin-qml6
@@ -106,10 +106,10 @@ export XDG_CONFIG_HOME="$WORK/config" DISPLAY="$DISPLAY_NO" QT_QPA_PLATFORM=xcb 
     LMIX_CORE="http://127.0.0.1:${CORE_PORT}"
 "$CONSOLE_DIR/lmix" --page mix >"$WORK/console.log" 2>&1 &
 PIDS+=($!)
-PROGRAM_AREA="560x300+820+140"
-PREVIEW_AREA="560x300+40+140"
-TILE_1="200x50+12+540"
-TILE_2="200x50+232+540"
+PROGRAM_AREA="460x260+720+170"
+PREVIEW_AREA="460x260+40+180"
+TILE_1="200x40+12+568"
+TILE_2="200x40+232+568"
 # The tile's picture is about 78×44 px: the ball is 2–3 px wide and a
 # move changes about 9 px (19.10.–22.10.: 8.9 at fuzz 5 %). A still
 # picture changes none.
@@ -133,7 +133,7 @@ done
 [[ -n "$tile_1_moves" ]] && pass "tile 1 moves (ball)" || fail "tile 1 still"
 [[ -n "$tile_2_shows" ]] && pass "tile 2 shows its picture" || fail "tile 2 blank"
 
-click 336 566
+click 336 590
 becomes preview 2
 [[ "$(number_of preview)" == 2 ]] && pass "click on a tile: preview" || fail "preview is $(number_of preview), not 2"
 # Cut acts on what the Console shows: wait until its preview has the picture.
@@ -142,7 +142,7 @@ for _ in $(seq 1 60); do
     awk "BEGIN { exit !($(spread p "$PREVIEW_AREA") > 0.05) }" && break
     sleep 1
 done
-click 720 128
+click 608 128
 becomes program 2
 [[ "$(number_of program)" == 2 ]] && pass "Cut: program" || fail "program is $(number_of program) after Cut"
 # The overlay grid beside the monitors is reachable at 1440 x 900 without
@@ -150,15 +150,28 @@ becomes program 2
 act '{"action":"preview_input","input":1}'
 becomes preview 1
 overlay_1() { state | jq -r '.overlays[0] // "none"'; }
-click 664 450
+click 552 448
 for _ in $(seq 1 40); do [[ "$(overlay_1)" != none ]] && break; sleep 0.5; done
 [[ "$(overlay_1)" != none ]] && pass "overlay 1 from the grid: on" || fail "overlay 1 not on after a click in the grid (hidden or moved?)"
 # Away first: the tooltip of channel 1 opens above it, over "All off".
 DISPLAY="$DISPLAY_NO" xdotool mousemove 1000 300
 sleep 1
-click 758 413
+click 642 412
 for _ in $(seq 1 40); do [[ "$(overlay_1)" == none ]] && break; sleep 0.5; done
 [[ "$(overlay_1)" == none ]] && pass "overlays: All off" || fail "overlay 1 still on after All off"
+# The narrow mixer at the right edge: mute input 1 and the master there.
+audio_1() { state | jq '.inputs[0].audio.on'; }
+master_mute() { state | jq '.master.mute'; }
+click 1242 808
+for _ in $(seq 1 40); do [[ "$(audio_1)" == false ]] && break; sleep 0.5; done
+[[ "$(audio_1)" == false ]] && pass "mixer at the edge: input 1 muted" || fail "input 1 still on after M in the mixer"
+click 1242 808
+click 1396 808
+for _ in $(seq 1 40); do [[ "$(master_mute)" == true ]] && break; sleep 0.5; done
+[[ "$(audio_1)" == true && "$(master_mute)" == true ]] && pass "mixer at the edge: input 1 on, master muted" \
+    || fail "mixer: input 1 on $(audio_1), master mute $(master_mute)"
+click 1396 808
+for _ in $(seq 1 40); do [[ "$(master_mute)" == false ]] && break; sleep 0.5; done
 # Two streams, not started: the output bar offers to start both (STR.1).
 for port in 9921 9922; do
     curl -sf -X POST "$CORE/actions" -H 'content-type: application/json' \
@@ -183,7 +196,7 @@ curl -sf -X POST "$CORE/actions" -H 'content-type: application/json' \
     -d '{"action":"preview_layout","layout":1}' >/dev/null
 layout_id="$(state | jq -r '.layouts[0].id')"
 for _ in $(seq 1 40); do [[ "$(state | jq -r .preview)" == "$layout_id" ]] && break; sleep 0.5; done
-PREVIEW_CORNER="250x130+340+140"
+PREVIEW_CORNER="200x110+300+180"
 layout_shows=""
 for _ in $(seq 1 40); do
     shot l
