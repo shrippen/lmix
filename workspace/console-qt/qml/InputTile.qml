@@ -60,9 +60,10 @@ KanteCard {
 
     /** On program or in preview: the title bar is filled in the tally colour. */
     readonly property bool tallyFill: onProgram || onPreview
-    /** A title text's colour: its own, or the ink on the tally fill. */
+    /** A title text's colour: its own, or the ink that reads best on the
+     *  tally fill (inkOn: in Breeze white reads at 2.9:1 on its green). */
     function titleInk(own) {
-        return tallyFill ? KanteStyle.onStateColor : own
+        return tallyFill ? KanteStyle.inkOn(barColor) : own
     }
 
     barColor: onProgram ? KanteStyle.negativeTextColor
@@ -125,8 +126,9 @@ KanteCard {
 
         // Title bar: filled in the tally colour on program (red) and in
         // preview (green), as on hardware multiviewers; its text then in
-        // the colour for text on a state fill. Size and margins stay the
-        // same either way, so a take does not move the tiles.
+        // the ink that reads best on that fill (KanteStyle.inkOn). Size
+        // and margins stay the same either way, so a take does not move
+        // the tiles.
         Rectangle {
             Layout.fillWidth: true
             implicitHeight: titleRow.implicitHeight + Kirigami.Units.smallSpacing
@@ -175,7 +177,7 @@ KanteCard {
                 KanteSectionLabel {
                     visible: tile.onProgram || tile.onPreview
                     text: tile.onProgram ? qsTr("PGM") : qsTr("PRV")
-                    color: KanteStyle.onStateColor
+                    color: KanteStyle.inkOn(tile.barColor)
                 }
                 KanteSectionLabel {
                     visible: tile.dynamicSlots.length > 0

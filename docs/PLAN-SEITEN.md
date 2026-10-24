@@ -178,8 +178,8 @@ Reihen), Show-Schalter Edit/Show, Audio-Matrix Inputs × Busse (AUD.13) und
 Spitzenwert in dB je Zug; ein Klick auf den Program-Input tut nichts, ohne
 Meldung (Owner 23.10.). Senken-Tasten unten auf der Mix-Seite gab es schon
 (Ausgangsleiste). Titelleiste der Kachel in Tally-Farbe (24.10.): rot auf
-Program, grün in Preview, Schrift in Kantes `onStateColor` (Text auf einer
-Zustandsfüllung; Kante brauchte dafür nichts Neues).
+Program, grün in Preview, Schrift per `KanteStyle.inkOn` (die besser
+lesbare Farbe auf der Füllung, auch in Breeze; Kante hatte das schon).
 
 Aus dem Dummy noch offen, **nur Oberfläche** (der Kern kann es):
 - Mix: Overlay-Raster 2×4 und Overlay-Tasten je Kachel, schmaler
