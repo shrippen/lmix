@@ -71,8 +71,15 @@ KanteCard {
     }
 
     // Escape in a field is the show's panic as everywhere on the page
-    // (nothing may keep playing), and it leaves the field.
+    // (nothing may keep playing), and it leaves the field without saving
+    // what was typed.
     Keys.onEscapePressed: event => {
+        for (let item = Window.activeFocusItem; item && item !== inspector; item = item.parent) {
+            if (item.typing !== undefined) {
+                item.typing = false
+                break
+            }
+        }
         refocus()
         showView.panic()
         event.accepted = true

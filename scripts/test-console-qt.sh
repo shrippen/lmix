@@ -166,7 +166,9 @@ master_mute() { state | jq '.master.mute'; }
 click 1242 808
 for _ in $(seq 1 40); do [[ "$(audio_1)" == false ]] && break; sleep 0.5; done
 [[ "$(audio_1)" == false ]] && pass "mixer at the edge: input 1 muted" || fail "input 1 still on after M in the mixer"
+sleep 1 # not a double click on the same M
 click 1242 808
+for _ in $(seq 1 40); do [[ "$(audio_1)" == true ]] && break; sleep 0.5; done
 click 1396 808
 for _ in $(seq 1 40); do [[ "$(master_mute)" == true ]] && break; sleep 0.5; done
 [[ "$(audio_1)" == true && "$(master_mute)" == true ]] && pass "mixer at the edge: input 1 on, master muted" \
@@ -279,6 +281,8 @@ act '{"action":"set_active_cue_list","list":1}'
 # Lights: a new name goes to lmix-core on Enter, and space is GO again.
 INSPECTOR_NAME="500 719"
 until_true '[[ "$(state | jq '.cue_lists[0].standby')" == 3 ]]' || fail "inspector: standby not on cue 3"
+until_true '[[ "$(active_list)" == 1 ]]' || fail "inspector: list 1 not active"
+sleep 1 # the page shows list 1 again (it was set from outside)
 click $INSPECTOR_NAME
 xdotool key ctrl+a
 xdotool type --delay 20 "Lamps"
@@ -312,17 +316,24 @@ until_true '[[ "$(state | jq -r '.cue_lists[0].cues[2].name')" == Lamp ]]' \
     && [[ "$(state | jq -r '.cue_lists[0].cues[0].name')" == Doors ]] \
     && pass "inspector: keeps its cue while standby moves" \
     || fail "inspector: cue 3 $(state | jq -r '.cue_lists[0].cues[2].name'), cue 1 $(state | jq -r '.cue_lists[0].cues[0].name')"
-# Escape in a field is panic and leaves the field, then space is GO.
+# Escape in a field is panic and leaves the field without saving, then
+# space is GO.
 act '{"action":"cue_standby","to":{"index":1}}'
 until_true '[[ "$(standby)" == 1 ]]' || fail "inspector: standby not on 1"
 key space
 until_true '[[ "$(cues_running)" -ge 1 ]]' || fail "inspector: GO started nothing"
 act '{"action":"cue_standby","to":{"index":3}}'
 until_true '[[ "$(standby)" == 3 ]]' || fail "inspector: standby not back on 3"
+name_before="$(state | jq -r '.cue_lists[0].cues[2].name')"
 click $INSPECTOR_NAME
+xdotool key End
+xdotool type --delay 20 " typo"
 key Escape
 until_true '[[ "$(cues_running)" == 0 ]]' && pass "inspector: Escape in a field is panic" \
     || fail "inspector: Escape in a field left $(cues_running) cues running"
+sleep 1 # a save would have come back by now
+[[ "$(state | jq -r '.cue_lists[0].cues[2].name')" == "$name_before" ]] && pass "inspector: Escape drops what was typed" \
+    || fail "inspector: Escape saved the cue as $(state | jq -r '.cue_lists[0].cues[2].name')"
 key space
 until_true '[[ "$(standby)" == 4 ]]' && pass "inspector: space is GO after Enter or Escape in a field" \
     || fail "inspector: no GO after editing (standby $(standby))"
@@ -331,6 +342,8 @@ key Escape
 # box space is GO again. A fade cue at -10 dB, the Levels tab.
 act '{"action":"add_cue_list","name":"Look","cues":[{"number":"20","kind":"fade","duration_ms":3000,"fade":{"target":{"zone":"Main"},"gain_db":-10}}]}'
 act '{"action":"set_active_cue_list","list":3}'
+until_true '[[ "$(active_list)" == 3 ]]' || fail "inspector: list 3 not active"
+sleep 1 # the page shows list 3
 INSPECTOR_LEVELS_TAB="378 678"
 INSPECTOR_LEVEL_UP="233 722"
 INSPECTOR_LEVEL_TEXT="188 722"
