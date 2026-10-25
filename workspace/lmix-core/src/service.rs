@@ -1000,20 +1000,21 @@ impl Service {
     /// after building it, the old flow's, unless the flow does not run now
     /// (stopped behind lmix-core's back right after it).
     async fn own_stop(&self, flow: FlowId) -> bool {
-        let touch = self
-            .touched
-            .lock()
-            .expect("touched lock")
-            .get(&flow)
-            .copied();
+        let touch = self.touch_of(flow);
         match touch {
             // The old flow drains while the command builds anew.
             Some(Touch::Running) => true,
-            Some(touch @ Touch::Done { builds, .. }) if touch.is_recent() => {
-                !builds || self.engine.flow_running(flow).await
+            Some(done @ Touch::Done { builds, .. }) if done.is_recent() => {
+                // A command that came meanwhile rebuilds the flow (strom
+                // answers 404 in between): the stop is its old flow's.
+                !builds || self.engine.flow_running(flow).await || self.touch_of(flow) != touch
             }
             _ => false,
         }
+    }
+
+    fn touch_of(&self, flow: FlowId) -> Option<Touch> {
+        self.touched.lock().expect("touched lock").get(&flow).copied()
     }
 
     /// A running output that fails or is stopped behind lmix-core's back is
@@ -2144,7 +2145,7 @@ enum Origin {
 }
 
 /// lmix-core's last change of a flow.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 enum Touch {
     /// A command on it is still running.
     Running,
