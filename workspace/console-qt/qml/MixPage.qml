@@ -200,20 +200,25 @@ AppPage {
 
     // Remove at once, with a way back: the toast's Undo (or Ctrl+Z while it
     // shows) brings the input back with its settings (AUT.10).
-    // The toast waits for the state without the input: a refused removal
-    // shows nothing.
+    // The toast waits for the state without the input and with it to bring
+    // back: a refused removal shows nothing, and another show or a removal
+    // from elsewhere does not pass for this one.
     function removeInput(input) {
         root.removing = { id: input.id, number: input.number, name: input.name }
         root.act({ action: "remove_input", input: input.number })
     }
     property var removing: null
-    onInputsChanged: {
-        if (root.removing && !root.inputs.some(i => i.id === root.removing.id)) {
+    // Later: inputs and show change one after the other for one state.
+    onInputsChanged: Qt.callLater(root.removedOrNot)
+    function removedOrNot() {
+        if (!root.removing || root.inputs.some(i => i.id === root.removing.id))
+            return
+        if (root.show && root.show.restorable === root.removing.name) {
             removedToast.text = qsTr("Input %1 \u201c%2\u201d removed").arg(root.removing.number).arg(root.removing.name)
             removedToast.restores = root.removing.name
-            root.removing = null
             removedToast.show()
         }
+        root.removing = null
     }
 
     KanteToast {
@@ -654,7 +659,9 @@ AppPage {
                 model: inputModel
                 QQC2.ScrollBar.vertical: QQC2.ScrollBar {}
 
+                // On the view, not its content item (no height without tiles).
                 KanteEmptyState {
+                    parent: bar
                     anchors.centerIn: parent
                     width: Math.min(parent.width - 2 * Kirigami.Units.largeSpacing, implicitWidth)
                     visible: inputModel.count === 0

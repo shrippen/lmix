@@ -236,7 +236,7 @@ for _ in $(seq 1 20); do [[ -f "$WORK/keys.lmix" ]] && break; sleep 0.5; done
 for _ in $(seq 1 20); do [[ "$(state | jq -r .path)" == "$WORK/keys.lmix" ]] && break; sleep 0.5; done
 sleep 1
 rm -f "$WORK/keys.lmix"
-xdotool windowfocus "$(xdotool search --name '^lmix' 2>/dev/null | head -1)"
+DISPLAY="$DISPLAY_NO" xdotool windowfocus "$(DISPLAY="$DISPLAY_NO" xdotool search --name '^lmix' 2>/dev/null | head -1)"
 DISPLAY="$DISPLAY_NO" xdotool key ctrl+s
 for _ in $(seq 1 20); do [[ -f "$WORK/keys.lmix" ]] && break; sleep 0.5; done
 [[ -f "$WORK/keys.lmix" ]] && pass "Ctrl+S saves the show" || fail "Ctrl+S: no file saved"
@@ -369,10 +369,10 @@ pass "no QML warnings"
 # The Show page through the page bar, same window: it draws the show
 # view (not a flat colour), and the bar shows program small.
 act '{"action":"add_cue_list","name":"Act 1","cues":[{"number":"1","name":"Doors","kind":"wait","duration_ms":120000},{"number":"2","name":"House","kind":"wait","duration_ms":120000},{"number":"3","name":"Lights","kind":"note"}]}'
-show_window="$(xdotool search --name '^lmix' 2>/dev/null | head -1 || true)"
+show_window="$(DISPLAY="$DISPLAY_NO" xdotool search --name '^lmix' 2>/dev/null | head -1 || true)"
 [[ -n "$show_window" ]] || fail "no lmix window"
 # Pages by key (Ctrl+n): the tabs' places depend on their labels.
-xdotool windowfocus "$show_window"
+DISPLAY="$DISPLAY_NO" xdotool windowfocus "$show_window"
 sleep 1
 xdotool key ctrl+2
 sleep 3
@@ -391,7 +391,7 @@ done
 standby() { state | jq '.cue_lists[0].standby'; }
 cues_running() { state | jq '.running_cues | length'; }
 key() { xdotool key "$1"; }
-xdotool windowfocus "$show_window"
+DISPLAY="$DISPLAY_NO" xdotool windowfocus "$show_window"
 sleep 1
 until_true() { for _ in $(seq 1 20); do eval "$1" && return 0; sleep 0.5; done; return 1; }
 key space
@@ -551,7 +551,7 @@ pass "no QML warnings (show)"
 prev=show
 for page in "AUDIO 3" "OUTPUTS 4" "SETUP 5"; do
     read -r name n <<<"$page"
-    xdotool windowfocus "$show_window"
+    DISPLAY="$DISPLAY_NO" xdotool windowfocus "$show_window"
     xdotool key "ctrl+$n"
     sleep 2
     shot "page-$name"
@@ -578,7 +578,7 @@ FIRST_TAB="25 879"
 click $FIRST_TAB
 sleep 2
 shot tab-mix
-xdotool windowfocus "$show_window"
+DISPLAY="$DISPLAY_NO" xdotool windowfocus "$show_window"
 xdotool key ctrl+3
 sleep 2
 shot tab-audio
@@ -593,7 +593,7 @@ PAGE_TITLE="300x40+0+55"
 # Panic all: cues stop, program fades to black, a running stream goes on.
 act '{"action":"start_output","output":1}'
 act '{"action":"cue_reset"}'
-xdotool windowfocus "$show_window"
+DISPLAY="$DISPLAY_NO" xdotool windowfocus "$show_window"
 xdotool key ctrl+2
 sleep 1
 xdotool key space
