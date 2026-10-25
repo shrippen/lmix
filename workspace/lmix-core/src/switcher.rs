@@ -1445,8 +1445,16 @@ impl Switcher {
             Action::SetSend { input, bus, level } => self.set_send(&input, &bus, level),
             Action::SetPhonesSend { input, on, level } => self.set_phones_send(&input, on, level),
             Action::SetBus { bus, volume, mute } => self.set_bus(&bus, volume, mute, AUDIO_RAMP_MS),
-            Action::AddBus { name, pre_fader } => self.add_bus(name, pre_fader),
-            Action::RemoveBus { bus } => self.remove_bus(&bus),
+            // These build the mixer anew: program stops for a moment and
+            // running outputs restart, which the lock keeps from a show.
+            Action::AddBus { name, pre_fader } => {
+                self.check_unlocked()?;
+                self.add_bus(name, pre_fader)
+            }
+            Action::RemoveBus { bus } => {
+                self.check_unlocked()?;
+                self.remove_bus(&bus)
+            }
             Action::RenameBus { bus, name } => {
                 let index = self.find_bus(&bus)?;
                 let name = self.bus_name(&name, Some(index))?;
@@ -1458,6 +1466,7 @@ impl Switcher {
                 if self.show.buses[index].pre_fader == pre_fader {
                     return Ok(Vec::new());
                 }
+                self.check_unlocked()?;
                 self.show.buses[index].pre_fader = pre_fader;
                 Ok(self.mixer_rebuilt())
             }
@@ -1516,6 +1525,7 @@ impl Switcher {
                 if self.show.phones.pre_fader == pre_fader {
                     return Ok(Vec::new());
                 }
+                self.check_unlocked()?;
                 self.show.phones.pre_fader = pre_fader;
                 Ok(self.mixer_rebuilt())
             }
@@ -8562,7 +8572,7 @@ mod tests {
     }
 
     #[test]
-    fn the_lock_refuses_closing_and_stopping() {
+    fn the_lock_refuses_closing_stopping_and_rebuilding() {
         let mut sw = two_inputs();
         sw.apply(Action::SetLock { on: true }).unwrap();
         assert!(sw.state().locked);
@@ -8577,6 +8587,16 @@ mod tests {
             }),
             Err(ActionError::Locked)
         );
+        // Nor a bus change, which builds the mixer anew.
+        for action in [
+            Action::AddBus {
+                name: None,
+                pre_fader: false,
+            },
+            Action::SetPhonesTap { pre_fader: true },
+        ] {
+            assert_eq!(sw.apply(action), Err(ActionError::Locked));
+        }
         // Switching still works.
         sw.apply(Action::CutDirect { input: named("A") }).unwrap();
 
