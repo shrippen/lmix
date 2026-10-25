@@ -4588,3 +4588,54 @@ war fest 12 Rastereinheiten breit.
   Der Master ist der letzte Streifen.
 
 **Bricht**: die Einstellung `view/rows` wird nicht mehr gelesen.
+
+## 2026-10-25 — Busse frei anlegen, Kopfhörer als fester Weg (AUD.2, AUD.4)
+
+**Anlass**: Entwurf der Tonspalte (25.10., Zeichenfläche „Tonspalte: Master,
+Kopfhörer und Busse fest“): unten stehen die Ausgangswege fest, Master und
+Kopfhörer, dazu die Busse der Show. Sieben feste Busse A–G passten nicht
+dazu: eine kleine Show braucht keinen, eine große mehr Namen als Buchstaben.
+
+**Entscheidung**:
+- Master und Kopfhörer gibt es immer; eine Show legt bis 16 Busse an
+  (`add_bus`, `remove_bus`, `rename_bus`, `set_bus_tap`, `set_bus`,
+  `set_bus_listen`). Jeder Bus hat eine feste Id (UUID) und einen Namen
+  (1–40 Zeichen, eindeutig ohne Groß-/Kleinschreibung) und nimmt die Sends
+  vor oder nach den Fadern. Aktionen nennen einen Bus per Position, Id oder
+  Name (`BusRef`); Cues, Tasten und Ausgänge speichern die Id, damit
+  Umbenennen und Entfernen anderer Busse nichts verschieben.
+- Kopfhörer je Input: `phones { on, level }` (Standard an, 100), gesamt
+  `phones { volume, mute, pre_fader }` (`set_phones_send`, `set_phones`,
+  `set_phones_tap`). Solo (AFL/PFL) und Abhören eines Busses schalten den
+  Kopfhörer exklusiv auf die Solos, wie vorher den Monitor.
+- **Zonen (LASTENHEFT-SHOW S-E.4):** eine Zone ist ein logischer Ausgang
+  mit Rechner-Zuordnung, ein Bus eine Mischung der Inputs. Darum hat ein
+  Bus keine Geräteeinstellung; spielt er später in eine Zone (SND.23
+  Live-Ton in Zonen, SND.6 Fade-Ziel Zone), sagt deren Patch
+  (`targets.json`), welches Gerät er erreicht. Die feste Id ist dafür die
+  Verbindung; 16 Busse decken die 16 Zonen.
+- Engine: Aux 1 des strom-Mischers ist der Kopfhörer, Aux k+1 der k-te Bus;
+  der Monitor folgt Aux 1 (`monitor_source`, strom #42). Ausgänge
+  abonnieren `bus<id>_out`, nicht mehr die Busnummer.
+
+**Bricht** (vor dem ersten Release erlaubt): Show-Datei Version 3.
+`aux_buses`, `sends: [u8; 7]`, `monitor_volume` und `add_output … aux`
+fallen weg, ebenso `set_aux_send`, `set_aux_bus`, `set_monitor_volume` und
+`levels.monitor_peak_db`/`aux_peak_db` (jetzt `phones_peak_db` und
+`buses: [{ bus, peak_db }]`). Migration beim Laden: genutzte Busse A–G
+(mit Send, Ausgang oder geänderter Lautstärke) werden „Bus A“ … mit A vor
+den Fadern; Sends, Ausgänge, `monitor_volume` und gespeicherte Aktionen
+(Cues, Tasten, Auslöser) ziehen mit, unbenutzte Busse fallen weg.
+
+**Offen**:
+- strom kennt Buszahl und Abgriff nur beim Aufbau: Hinzufügen, Entfernen
+  und Abgriffwechsel bauen den Mischer neu auf, Program-Ton setzt kurz aus.
+  Live wäre eine strom-Erweiterung (Bus-Mischer zur Laufzeit).
+- Bus in den Master (strom routet Aux nicht in den Main), Bus → Zone.
+- Tonspalte nach dem Entwurf (feste Wege unten, Höhengriff, Kürzungen,
+  KH/S/⋯ je Kanal) als eigener Schritt; dieser Schritt stellt das Bus-Panel,
+  die Send-Matrix, den Kanalzug und den Ausgangsdialog um.
+
+**Geprüft**: lmix-types- und lmix-core-Tests (Migration, Busse kommen und
+gehen mit neuem Mischer, Ausgang hält seinen Bus, Kopfhörer-Sends und
+Bus-Abhören), console-qt-Tests, strom-Mischer-Tests.
