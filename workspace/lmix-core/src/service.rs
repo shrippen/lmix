@@ -862,6 +862,10 @@ impl Service {
             tracing::warn!("engine restarted, feeding it the show again");
             // Changes until the restore only touch the show.
             self.await_engine();
+            // A command that holds the switcher already still talks to the
+            // engine; the start waits for it, so neither overwrites what
+            // the other recorded (the mixer's buses).
+            drop(self.switcher.lock().await);
             while let Err(e) = self.engine.start(slots).await {
                 tracing::warn!(error = %e, "engine not ready, retrying");
                 tokio::time::sleep(ENGINE_CHECK).await;
@@ -3340,6 +3344,37 @@ mod tests {
         );
         service.handle(bars()).await.unwrap();
         assert_eq!(slot_commands(&engine), 3, "and actions run directly after");
+    }
+
+    /// The start of a restarted engine waits for a command that is
+    /// already running.
+    #[tokio::test(start_paused = true)]
+    async fn an_engine_start_waits_for_a_running_command() {
+        let engine = Arc::new(NullEngine::failing());
+        engine.set_instance("first");
+        let service = Service::new(4, engine.clone(), None);
+        tokio::spawn(service.clone().watch_engine(4));
+        tokio::task::yield_now().await;
+
+        engine.slow_next(
+            ENGINE_CHECK * 3,
+            FlowError {
+                flow: slot_id(3),
+                message: "elsewhere".into(),
+                kind: FlowFailure::Error,
+            },
+        );
+        let running = tokio::spawn({
+            let service = service.clone();
+            async move { service.handle(bars()).await }
+        });
+        tokio::task::yield_now().await;
+        engine.set_instance("second");
+        running.await.unwrap().unwrap();
+        tokio::time::sleep(ENGINE_CHECK * 2).await;
+
+        assert!(engine.starts() > 0, "the restarted engine was started");
+        assert!(!engine.started_during_a_command());
     }
 
     #[tokio::test(start_paused = true)]
