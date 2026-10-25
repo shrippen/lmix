@@ -283,7 +283,6 @@ QtObject {
         case "bad_t_bar": return qsTr("T-bar position is outside 0–1")
         case "fade_to_black_on": return qsTr("Fade to black is on; end it before using the T-bar")
         case "transition_running": return qsTr("A transition is still running; move the T-bar when it has landed")
-        case "bad_aux_bus": return qsTr("Aux bus %1 does not exist (1–%2)").arg(e.bus).arg(e.max)
         case "bad_look": return qsTr("Look: %1 is out of range").arg(e.field)
         case "no_looks": return qsTr("Looks need the GL mixer (lmix-core --mixer gl)")
         case "bad_strip": return qsTr("Channel strip: %1 is out of range").arg(e.field)

@@ -473,7 +473,7 @@ Zurückgestellt (User 2026-10-08).
 
 | ID | Anforderung | Prio | Stand |
 |---|---|---|---|
-| SHW.1 | Show enthält: Inputs mit allen Einstellungen, Overlays, Übergänge, Audio (Inputs + Busse), Ablauflisten, Kategorien, lokale Belegungen/Rückmeldungen/Skripte, Aufnahme, Streaming, Ausgänge, Karte, Datenquellen, Master-Format | M | ◐ (Inputs mit Einstellungen und Farb-Kategorien, Overlays, Übergänge, Audio samt Aux-Bussen, Layouts, Ablauflisten, Kurzbefehle, Auslöser, Ausgänge, Titel, Datenquellen; ohne Master-Format, Karte) |
+| SHW.1 | Show enthält: Inputs mit allen Einstellungen, Overlays, Übergänge, Audio (Inputs + Busse), Ablauflisten, Kategorien, lokale Belegungen/Rückmeldungen/Skripte, Aufnahme, Streaming, Ausgänge, Karte, Datenquellen, Master-Format | M | ◐ (Inputs mit Einstellungen und Farb-Kategorien, Overlays, Übergänge, Audio samt Bussen und Kopfhörer, Layouts, Ablauflisten, Kurzbefehle, Auslöser, Ausgänge, Titel, Datenquellen; ohne Master-Format, Karte) |
 | SHW.2 | Offenes, versioniertes, lesbares Format (JSON); Medien per Pfad | M | ✅ (JSON `lmix-show`, Version 2, Medien per Pfad) |
 | SHW.3 | Neu (mit Formatwahl), Öffnen (ersetzt), Anhängen (nur gewählte Inputs), Speichern, Speichern unter, zuletzt geöffnet | M | ✅ (Neu mit Programmformat, Öffnen, Anhängen gewählter Inputs, Speichern, Speichern unter, zuletzt geöffnet) |
 | SHW.4 | Fehlende Dateien: markieren, suchen lassen, sonst Input offline | M | ✅ (fehlende Mediendateien markiert, in einem Ordner nach Namen gesucht; fehlende Quelle: Input offline, kommt von selbst zurück) |

@@ -26,7 +26,9 @@ AppPage {
     KeyedModel { id: stripModel }
     Component.onCompleted: stripModel.sync(soundInputs.map(i => i.id))
     onSoundInputsChanged: stripModel.sync(soundInputs.map(i => i.id))
+    // A bus being listened to puts the headphones on the solos too.
     readonly property bool soloing: soundInputs.some(i => i.listen !== "off")
+        || (show && show.buses ? show.buses : []).some(b => b.listen)
     function act(action) { shell.act(action) }
 
     /** 0 inputs, 1 sends, 2 buses, 3 zones. */

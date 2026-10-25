@@ -4626,14 +4626,17 @@ dazu: eine kleine Show braucht keinen, eine große mehr Namen als Buchstaben.
 fallen weg, ebenso `set_aux_send`, `set_aux_bus`, `set_monitor_volume` und
 `levels.monitor_peak_db`/`aux_peak_db` (jetzt `phones_peak_db` und
 `buses: [{ bus, peak_db }]`). Migration beim Laden: genutzte Busse A–G
-(mit Send, Ausgang oder geänderter Lautstärke) werden „Bus A“ … mit A vor
+(mit Send, Ausgang, geänderter Lautstärke, Stumm oder einer gespeicherten
+Aktion, die ihn nennt) werden „Bus A“ … mit A vor
 den Fadern; Sends, Ausgänge, `monitor_volume` und gespeicherte Aktionen
 (Cues, Tasten, Auslöser) ziehen mit, unbenutzte Busse fallen weg. Die
 Tasten für alle Shows (`--shortcuts`) haben keine Version: migriert wird
 eine Datei, die eine Aktion von Version 2 enthält (`set_aux_send`,
 `set_aux_bus`, `set_monitor_volume`, `add_output … aux`), Aux B wird dort
 „Bus B“. Enthält sie nur `fade_volume` auf einen Bus, bleibt die Zahl
-stehen und meint nun die Position; eine solche Taste neu setzen.
+stehen und meint nun die Position; eine solche Taste neu setzen. Die
+Einstellungsdatei (SHW.8) hat eine Version: Version 1 wird beim Import
+vollständig migriert, auch `fade_volume`; sie heißt jetzt Version 2.
 
 **Offen**:
 - strom kennt Buszahl und Abgriff nur beim Aufbau: Hinzufügen, Entfernen

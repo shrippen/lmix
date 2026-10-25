@@ -589,7 +589,7 @@ AppPage {
                         emphasis: locked ? KanteButton.Emphasis.Destructive : KanteButton.Emphasis.Normal
                         enabled: backend.connected
                         QQC2.ToolTip.visible: hovered
-                        QQC2.ToolTip.text: qsTr("While locked, closing inputs, loading a show and stopping outputs are refused.")
+                        QQC2.ToolTip.text: qsTr("While locked, closing inputs, loading a show, stopping outputs and changes that rebuild the mixer (adding or removing a bus, its tap) are refused.")
                         onClicked: root.act({ action: "set_lock", on: !locked })
                     }
                     KanteButton {
@@ -600,6 +600,7 @@ AppPage {
                     KanteButton {
                         text: qsTr("Clear solo")
                         visible: root.inputs.some(i => i.listen !== "off")
+                            || (root.show && root.show.buses ? root.show.buses : []).some(b => b.listen)
                         onClicked: root.act({ action: "clear_listen" })
                     }
                     KanteButton {

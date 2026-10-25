@@ -756,9 +756,15 @@ pub fn migrate_shortcuts(value: &mut Value) {
             _ => false,
         };
     });
-    if !older {
-        return;
+    if older {
+        migrate_shortcut_actions(value);
     }
+}
+
+/// Shortcuts for all shows known to be of version 2 (a settings file of
+/// version 1) as version 3 has them: their actions name aux bus A–G "Bus A"
+/// …, also `fade_volume` to a bus.
+pub fn migrate_shortcut_actions(value: &mut Value) {
     rewrite_aux_actions(value, &|index| {
         Value::String(format!("Bus {}", AUX_LETTERS[index]))
     });

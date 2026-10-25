@@ -534,7 +534,7 @@ kein zweites GO, bis er losgelassen ist (Companion: Loslassen als
 | P5 Broadcast | Multiview wie gewohnt: Program links | ✅ Program links/rechts, Pegel an/aus (OUT.10); ⚠ Kachelzahl und zweite Multiview fehlen (strom) |
 | P5 Broadcast | Eine hängende Engine darf die Steuerung nicht einfrieren | ✅ jeder Engine-Aufruf mit 60 s Zeitlimit (B46 behoben) |
 | P5 Broadcast | Companion zeigt Restzeit des Clips auf der Taste | ✅ Abspielstand im Zustand (API.4) neben dem Ereignis `position` |
-| P6 Hochschule | In-Ear-Mixe für fünf Vortragende | ✅ sieben Aux-Busse A–G (AUD.2), A vor den Fadern; ⚠ Bus in den Master und Bus auf ein Gerät fehlen |
+| P6 Hochschule | In-Ear-Mixe für fünf Vortragende | ✅ bis zu 16 Busse frei anlegen, je Bus vor oder nach den Fadern (AUD.2); ⚠ Bus in den Master und Bus auf ein Gerät fehlen |
 | P7 Theater | Box im Layout nur für eine Szene zeigen, ohne das Layout neu zu bauen | ✅ „Sichtbar“ je Box, `show_box` für Kurzbefehle (LAY.2) |
 
 **Befunde**: B46 lmix-core hing einmal 37 min, weil ein Engine-Aufruf

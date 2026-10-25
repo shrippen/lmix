@@ -440,7 +440,7 @@
   <context>
     <name>AddOutputDialog</name>
     <message>
-      <location filename="../qml/AddOutputDialog.qml" line="+26" />
+      <location filename="../qml/AddOutputDialog.qml" line="+37" />
       <source>folder in the engine's media directory</source>
       <translation>Ordner im Medienverzeichnis der Engine</translation>
     </message>
@@ -867,7 +867,7 @@
   <context>
     <name>AudioPage</name>
     <message>
-      <location filename="../qml/AudioPage.qml" line="+48" />
+      <location filename="../qml/AudioPage.qml" line="+50" />
       <source>Audio</source>
       <translation>Ton</translation>
     </message>
@@ -923,7 +923,7 @@
     </message>
     <message>
       <location line="+17" />
-      <location line="+132" />
+      <location line="+133" />
       <source>Headphones</source>
       <translation>Kopfhörer</translation>
     </message>
@@ -1036,7 +1036,7 @@
   <context>
     <name>BusDialog</name>
     <message>
-      <location filename="../qml/BusDialog.qml" line="+23" />
+      <location filename="../qml/BusDialog.qml" line="+24" />
       <source>Master, headphones and buses</source>
       <translation>Master, Kopfhörer und Busse</translation>
     </message>
@@ -1044,7 +1044,7 @@
   <context>
     <name>BusPanel</name>
     <message>
-      <location filename="../qml/BusPanel.qml" line="+87" />
+      <location filename="../qml/BusPanel.qml" line="+90" />
       <source>Volume of %1</source>
       <translation>Lautstärke von %1</translation>
     </message>
@@ -1109,7 +1109,7 @@
       <translation>Vorhören</translation>
     </message>
     <message>
-      <location line="+8" />
+      <location line="+10" />
       <source>Remove %1</source>
       <translation>%1 entfernen</translation>
     </message>
@@ -1129,7 +1129,7 @@
       <translation>%1 nach den Fadern?</translation>
     </message>
     <message>
-      <location line="+10" />
+      <location line="+9" />
       <source>Add bus</source>
       <translation>Bus hinzufügen</translation>
     </message>
@@ -2735,7 +2735,7 @@
       <translation>Strg+Z</translation>
     </message>
     <message>
-      <location line="+86" />
+      <location line="+87" />
       <source>Inputs from a show…</source>
       <translation>Inputs aus einer Show …</translation>
     </message>
@@ -2751,18 +2751,18 @@
     </message>
     <message>
       <location line="+45" />
-      <location line="+223" />
+      <location line="+224" />
       <source>Preview</source>
       <translation>Vorschau</translation>
     </message>
     <message>
-      <location line="-178" />
-      <location line="+177" />
+      <location line="-179" />
+      <location line="+178" />
       <source>Program</source>
       <translation>Programm</translation>
     </message>
     <message>
-      <location line="-157" />
+      <location line="-158" />
       <source>Height of the monitors</source>
       <translation>Höhe der Monitore</translation>
     </message>
@@ -2866,7 +2866,12 @@
       <translation>Pegelanzeigen</translation>
     </message>
     <message>
-      <location line="+158" />
+      <location line="+58" />
+      <source>While locked, closing inputs, loading a show, stopping outputs and changes that rebuild the mixer (adding or removing a bus, its tap) are refused.</source>
+      <translation>Gesperrt lassen sich keine Inputs schließen, keine Show laden, keine Ausgänge stoppen und nichts ändern, was den Mischer neu aufbaut (Bus anlegen oder entfernen, sein Abgriff).</translation>
+    </message>
+    <message>
+      <location line="+101" />
       <source>No inputs yet</source>
       <translation>Noch keine Inputs</translation>
     </message>
@@ -2881,7 +2886,7 @@
       <translation>Breite der Tonspalte</translation>
     </message>
     <message>
-      <location line="-309" />
+      <location line="-310" />
       <source>Audio at the edge</source>
       <translation>Ton am Rand</translation>
     </message>
@@ -2891,7 +2896,7 @@
       <translation>Einfacher Modus</translation>
     </message>
     <message>
-      <location line="+92" />
+      <location line="+93" />
       <source>Find missing files…</source>
       <translation>Fehlende Dateien suchen…</translation>
     </message>
@@ -2901,7 +2906,7 @@
       <translation>Den mit „Fehlt“ markierten Inputs fehlen Mediendateien: den Ordner wählen, in dem sie jetzt liegen. Inputs auf Programm bleiben unverändert.</translation>
     </message>
     <message>
-      <location line="-9" />
+      <location line="-10" />
       <source>Clear solo</source>
       <translation>Solo aus</translation>
     </message>
@@ -2921,12 +2926,7 @@
       <translation>Sperren</translation>
     </message>
     <message>
-      <location line="+4" />
-      <source>While locked, closing inputs, loading a show and stopping outputs are refused.</source>
-      <translation>Gesperrt lassen sich keine Inputs schließen, keine Show laden und keine Ausgänge stoppen.</translation>
-    </message>
-    <message>
-      <location line="-10" />
+      <location line="-6" />
       <source>Shortcuts…</source>
       <translation>Belegungen…</translation>
     </message>
@@ -2947,7 +2947,7 @@
     </message>
     <message>
       <location line="-9" />
-      <location line="+140" />
+      <location line="+141" />
       <source>+ Input</source>
       <translation>+ Input</translation>
     </message>
@@ -3759,8 +3759,8 @@
     </message>
     <message>
       <location line="+1" />
-      <source>While locked, closing inputs, loading a show and stopping outputs are refused.</source>
-      <translation>Gesperrt lassen sich keine Inputs schließen, keine Show laden und keine Ausgänge stoppen.</translation>
+      <source>While locked, closing inputs, loading a show, stopping outputs and changes that rebuild the mixer (adding or removing a bus, its tap) are refused.</source>
+      <translation>Gesperrt lassen sich keine Inputs schließen, keine Show laden, keine Ausgänge stoppen und nichts ändern, was den Mischer neu aufbaut (Bus anlegen oder entfernen, sein Abgriff).</translation>
     </message>
     <message>
       <location line="+12" />
@@ -5746,11 +5746,6 @@
       <location line="+1" />
       <source>A transition is still running; move the T-bar when it has landed</source>
       <translation>Ein Übergang läuft noch; den T-Bar erst bewegen, wenn er fertig ist</translation>
-    </message>
-    <message>
-      <location line="+1" />
-      <source>Aux bus %1 does not exist (1–%2)</source>
-      <translation>Aux-Bus %1 gibt es nicht (1–%2)</translation>
     </message>
     <message>
       <location line="+1" />
