@@ -538,7 +538,7 @@ impl StromEngine {
         }
         if current().phones_pre_fader != wanted.phones_pre_fader {
             let taps = flows::tap_properties(slots, flows::PHONES_AUX, wanted.phones_pre_fader);
-            self.patch_audio_mixer(taps, AUDIO_RAMP_MS).await?;
+            self.patch_taps(taps).await?;
             let mut built = current();
             built.phones_pre_fader = wanted.phones_pre_fader;
             record(built);
@@ -547,7 +547,7 @@ impl StromEngine {
             match wants(bus.id) {
                 Some(pre) if pre != bus.pre_fader => {
                     let taps = flows::tap_properties(slots, bus.aux, pre);
-                    self.patch_audio_mixer(taps, AUDIO_RAMP_MS).await?;
+                    self.patch_taps(taps).await?;
                     let mut built = current();
                     for b in built.buses.iter_mut().filter(|b| b.id == bus.id) {
                         b.pre_fader = pre;
@@ -589,15 +589,20 @@ impl StromEngine {
             // would be refused for good.
             Err(e) => {
                 let channel = flows::bus_channel(id);
-                match self.list_aux_buses().await {
+                let found = match self.list_aux_buses().await {
                     Ok(buses) => buses
                         .dynamic
                         .iter()
                         .find(|b| b.channel == channel)
-                        .map(|b| b.aux)
-                        .ok_or(e),
-                    Err(_) => Err(e),
-                }
+                        .map(|b| b.aux),
+                    Err(_) => None,
+                };
+                let aux = found.ok_or(e)?;
+                // Added with the tap of that first try, maybe not this one.
+                let slots = self.slots.load(Ordering::Relaxed);
+                self.patch_taps(flows::tap_properties(slots, aux, pre_fader))
+                    .await?;
+                Ok(aux)
             }
         }
     }
@@ -1168,6 +1173,36 @@ impl StromEngine {
             .await
             .map_err(net)?;
         check(resp).await.map(|_| ())
+    }
+
+    /// Move sends' taps (`tap_properties`). strom answers a tap it could
+    /// not move with 200 and keeps the old one; that is a failure here, so
+    /// the bus is not recorded with a tap it does not have.
+    async fn patch_taps(&self, taps: Vec<(String, PropertyValue)>) -> Result<(), EngineError> {
+        let body = UpdateBlockPropertiesRequest {
+            properties: taps.into_iter().collect(),
+            ramp_ms: Some(AUDIO_RAMP_MS),
+            ramp_ms_overrides: None,
+        };
+        let path = format!(
+            "/flows/{}/blocks/{AUDIO_MIXER}/properties",
+            flows::mixer_id()
+        );
+        let resp = self
+            .http
+            .patch(self.url(&path))
+            .json(&body)
+            .send()
+            .await
+            .map_err(net)?;
+        let answer: serde_json::Value = check(resp).await?.json().await.unwrap_or_default();
+        match answer.get("rejected").and_then(|r| r.as_object()) {
+            Some(rejected) if !rejected.is_empty() => Err(EngineError::Refused(format!(
+                "strom kept the taps: {}",
+                serde_json::Value::Object(rejected.clone())
+            ))),
+            _ => Ok(()),
+        }
     }
 
     async fn post_empty(&self, path: &str) -> Result<(), EngineError> {

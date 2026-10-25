@@ -1811,7 +1811,10 @@ impl Switcher {
 
     /// The engine's buses after one came, went or changed its tap: the
     /// engine changes the running mixer (no rebuild, outputs play on),
-    /// then the bus masters, which count along the show's buses.
+    /// then the buses are set up, which count along the show's buses:
+    /// masters, every input's sends into them and their listening. A bus
+    /// the engine failed to add before comes now and gets them too; one it
+    /// has gets the same values again.
     fn buses_changed(&self) -> Vec<Command> {
         let format = Command::SetFormat {
             format: self.show.format,
@@ -1819,8 +1822,21 @@ impl Switcher {
             sample_rate: self.show.sample_rate,
             buses: self.mixer_buses(),
         };
+        let sends = self
+            .show
+            .inputs
+            .iter()
+            .filter(|i| i.source.has_audio())
+            .flat_map(|i| self.send_commands(i))
+            .filter(|c| matches!(c, Command::SetAuxSend { bus, .. } if *bus > 0));
+        let listening = self
+            .listen_commands()
+            .into_iter()
+            .filter(|c| matches!(c, Command::SetBusListen { .. }));
         std::iter::once(format)
             .chain(self.aux_bus_commands())
+            .chain(sends)
+            .chain(listening)
             .collect()
     }
 
@@ -7154,7 +7170,7 @@ mod tests {
     }
 
     #[test]
-    fn buses_come_and_go_with_a_new_audio_mixer() {
+    fn buses_come_and_go_on_the_running_audio_mixer() {
         let mut sw = two_inputs();
         let cmds = sw
             .apply(Action::AddBus {
@@ -7199,7 +7215,7 @@ mod tests {
         })
         .expect("its own name again");
 
-        // The tap builds the mixer anew, the same tap changes nothing.
+        // The tap changes the mixer, the same tap changes nothing.
         let cmds = sw
             .apply(Action::SetBusTap {
                 bus: bus("In-Ear"),
@@ -7248,6 +7264,50 @@ mod tests {
             }),
             Err(ActionError::TooManyBuses { .. })
         ));
+    }
+
+    /// Every bus change sets up all buses again: a bus the engine failed to
+    /// add before comes with this change, and its sends and listening with
+    /// it (they were refused while it was missing).
+    #[test]
+    fn a_bus_change_sends_every_bus_its_sends() {
+        let mut sw = two_inputs();
+        for _ in 0..2 {
+            sw.apply(Action::AddBus {
+                name: None,
+                pre_fader: false,
+            })
+            .unwrap();
+        }
+        sw.apply(Action::SetSend {
+            input: named("A"),
+            bus: BusRef::Number(2),
+            level: 70,
+        })
+        .unwrap();
+        sw.apply(Action::SetBusListen {
+            bus: BusRef::Number(2),
+            on: true,
+        })
+        .unwrap();
+        let slot = sw.state().inputs[0].slot;
+        let cmds = sw
+            .apply(Action::AddBus {
+                name: None,
+                pre_fader: false,
+            })
+            .unwrap();
+        assert!(matches!(&cmds[0], Command::SetFormat { .. }));
+        assert!(
+            cmds.iter().any(|c| matches!(
+                c,
+                Command::SetAuxSend { slot: s, bus: 2, gain } if *s == slot && *gain > 0.0
+            )),
+            "{cmds:?}"
+        );
+        assert!(cmds
+            .iter()
+            .any(|c| matches!(c, Command::SetBusListen { bus: 2, on: true })));
     }
 
     #[test]
