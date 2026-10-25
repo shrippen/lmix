@@ -602,6 +602,9 @@ pub struct Switcher {
     unreached: std::collections::BTreeMap<String, String>,
     /// The show file's older version, until saved (SHW.7).
     older_format: Option<u32>,
+    /// A new mixer was asked for and the engine has not built it yet
+    /// (`mixer_built`): the same format again asks once more.
+    mixer_pending: bool,
     status: HashMap<InputId, InputStatus>,
     /// Audio channel settings the engine has, per slot.
     mix: HashMap<usize, Mix>,
@@ -677,6 +680,7 @@ impl Switcher {
             cue_warnings: Vec::new(),
             unreached: Default::default(),
             older_format: None,
+            mixer_pending: false,
             status: HashMap::new(),
             mix: HashMap::new(),
             listen: HashMap::new(),
@@ -1452,9 +1456,15 @@ impl Switcher {
             Action::SetPhonesSend { input, on, level } => self.set_phones_send(&input, on, level),
             Action::SetBus { bus, volume, mute } => self.set_bus(&bus, volume, mute, AUDIO_RAMP_MS),
             // These change the running mixer (no rebuild), so the lock lets
-            // them through.
-            Action::AddBus { name, pre_fader } => self.add_bus(name, pre_fader),
-            Action::RemoveBus { bus } => self.remove_bus(&bus),
+            // them through; unless a new mixer is pending (`buses_changed`).
+            Action::AddBus { name, pre_fader } => {
+                self.check_bus_change()?;
+                self.add_bus(name, pre_fader)
+            }
+            Action::RemoveBus { bus } => {
+                self.check_bus_change()?;
+                self.remove_bus(&bus)
+            }
             Action::RenameBus { bus, name } => {
                 let index = self.find_bus(&bus)?;
                 let name = self.bus_name(&name, Some(index))?;
@@ -1466,6 +1476,7 @@ impl Switcher {
                 if self.show.buses[index].pre_fader == pre_fader {
                     return Ok(Vec::new());
                 }
+                self.check_bus_change()?;
                 self.show.buses[index].pre_fader = pre_fader;
                 Ok(self.buses_changed())
             }
@@ -1489,9 +1500,12 @@ impl Switcher {
                         max: lmix_types::output::FORMAT_MAX_PX,
                     });
                 }
-                if format == self.show.format {
+                if format == self.show.format && !self.mixer_pending {
                     return Ok(Vec::new());
                 }
+                // A new mixer: program stops for a moment and running
+                // outputs restart, which the lock keeps from a show.
+                self.check_unlocked()?;
                 self.show.format = format;
                 let mut commands = self.mixer_rebuilt();
                 commands.extend(self.page_commands());
@@ -1501,16 +1515,18 @@ impl Switcher {
                 if !lmix_types::output::SAMPLE_RATES.contains(&hz) {
                     return Err(ActionError::BadSampleRate { hz });
                 }
-                if hz == self.show.sample_rate {
+                if hz == self.show.sample_rate && !self.mixer_pending {
                     return Ok(Vec::new());
                 }
+                self.check_unlocked()?;
                 self.show.sample_rate = hz;
                 Ok(self.mixer_rebuilt())
             }
             Action::SetMultiview { layout } => {
-                if layout == self.show.multiview {
+                if layout == self.show.multiview && !self.mixer_pending {
                     return Ok(Vec::new());
                 }
+                self.check_unlocked()?;
                 self.show.multiview = layout;
                 Ok(self.mixer_rebuilt())
             }
@@ -1524,6 +1540,7 @@ impl Switcher {
                 if self.show.phones.pre_fader == pre_fader {
                     return Ok(Vec::new());
                 }
+                self.check_bus_change()?;
                 self.show.phones.pre_fader = pre_fader;
                 Ok(self.buses_changed())
             }
@@ -1821,7 +1838,11 @@ impl Switcher {
     /// masters, every input's sends into them and their listening. A bus
     /// the engine failed to add before comes now and gets them too; one it
     /// has gets the same values again.
-    fn buses_changed(&self) -> Vec<Command> {
+    fn buses_changed(&mut self) -> Vec<Command> {
+        // The engine builds the mixer the format asked for now: all again.
+        if self.mixer_pending {
+            return self.mixer_rebuilt();
+        }
         let format = Command::SetFormat {
             format: self.show.format,
             multiview: self.show.multiview,
@@ -1853,6 +1874,22 @@ impl Switcher {
             .chain(self.aux_bus_commands())
             .chain(std::iter::once(mix))
             .collect()
+    }
+
+    /// A bus change while a new mixer is pending builds that mixer
+    /// (`buses_changed`): running outputs restart, which the lock keeps
+    /// from a show.
+    fn check_bus_change(&self) -> Result<(), ActionError> {
+        if self.mixer_pending {
+            self.check_unlocked()?;
+        }
+        Ok(())
+    }
+
+    /// The engine built the mixer the show asks for (its `SetFormat`
+    /// went through).
+    pub fn mixer_built(&mut self) {
+        self.mixer_pending = false;
     }
 
     /// A new mixer for a new format or multiview, set up again; outputs
@@ -1892,6 +1929,8 @@ impl Switcher {
     /// Commands that rebuild the engine from the current show (start-up,
     /// engine restart): slots, program, preview, then every audio channel.
     pub fn restore_commands(&mut self) -> Vec<Command> {
+        // Its first command asks for the mixer; pending until it is built.
+        self.mixer_pending = true;
         // A new or restarted mixer runs no stinger; no end will come.
         self.stinger_finished();
         self.moving_until = None;
@@ -7336,6 +7375,61 @@ mod tests {
             .any(|c| matches!(c, Command::SetAuxSend { .. } | Command::SetBusListen { .. })));
     }
 
+    /// A bus change while the engine has not built the new mixer sets up
+    /// all of it: the engine builds the mixer now.
+    #[test]
+    fn a_bus_change_before_the_new_mixer_is_built_sets_up_all() {
+        let mut sw = two_inputs();
+        let upright = lmix_types::MasterFormat {
+            width: 1080,
+            height: 1920,
+            ..Default::default()
+        };
+        sw.apply(Action::SetMasterFormat { format: upright })
+            .unwrap();
+        let add = || Action::AddBus {
+            name: None,
+            pre_fader: false,
+        };
+        // The whole mixer: program and layouts too, not only the buses.
+        let full = |cmds: Vec<Command>| cmds.iter().any(|c| matches!(c, Command::Program { .. }));
+        assert!(full(sw.apply(add()).unwrap()));
+        sw.mixer_built();
+        assert!(!full(sw.apply(add()).unwrap()));
+    }
+
+    /// An opened show or a restore asks for its mixer too: until the
+    /// engine built it, its format again asks once more, and the lock keeps
+    /// a bus change (which would build it) from a show.
+    #[test]
+    fn a_restored_mixer_is_pending_until_built() {
+        let mut sw = two_inputs();
+        sw.restore_commands();
+        let format = sw.state().format;
+        assert!(!sw
+            .apply(Action::SetMasterFormat { format })
+            .unwrap()
+            .is_empty());
+        sw.apply(Action::SetLock { on: true }).unwrap();
+        assert_eq!(
+            sw.apply(Action::AddBus {
+                name: None,
+                pre_fader: false,
+            }),
+            Err(ActionError::Locked)
+        );
+        sw.mixer_built();
+        assert!(sw
+            .apply(Action::SetMasterFormat { format })
+            .unwrap()
+            .is_empty());
+        sw.apply(Action::AddBus {
+            name: None,
+            pre_fader: false,
+        })
+        .unwrap();
+    }
+
     #[test]
     fn a_bus_an_output_takes_stays() {
         let mut sw = with_buses();
@@ -7471,6 +7565,12 @@ mod tests {
             "the sources keep running"
         );
         assert_eq!(sw.state().format, upright);
+        // Until the engine built it, the same format asks again.
+        assert!(!sw
+            .apply(Action::SetMasterFormat { format: upright })
+            .unwrap()
+            .is_empty());
+        sw.mixer_built();
         assert!(
             sw.apply(Action::SetMasterFormat { format: upright })
                 .unwrap()
@@ -8704,10 +8804,34 @@ mod tests {
                 "{cmds:?}"
             );
         }
+        // A new mixer restarts the running outputs: format, rate and
+        // multiview wait for the unlock; the same value again is no change.
+        let upright = lmix_types::MasterFormat {
+            width: 1080,
+            height: 1920,
+            ..Default::default()
+        };
+        let mut multiview = sw.state().multiview;
+        multiview.program = match multiview.program {
+            lmix_types::ProgramSide::Left => lmix_types::ProgramSide::Right,
+            lmix_types::ProgramSide::Right => lmix_types::ProgramSide::Left,
+        };
+        for action in [
+            Action::SetMasterFormat { format: upright },
+            Action::SetSampleRate { hz: 44_100 },
+            Action::SetMultiview { layout: multiview },
+        ] {
+            assert_eq!(sw.apply(action), Err(ActionError::Locked));
+        }
+        let format = sw.state().format;
+        assert_eq!(sw.apply(Action::SetMasterFormat { format }), Ok(Vec::new()));
+        assert_eq!(sw.state().sample_rate, 48_000);
         // Switching still works.
         sw.apply(Action::CutDirect { input: named("A") }).unwrap();
 
         sw.apply(Action::SetLock { on: false }).unwrap();
+        sw.apply(Action::SetMasterFormat { format: upright })
+            .unwrap();
         sw.apply(Action::RemoveInput { input: named("A") }).unwrap();
     }
 
@@ -9441,6 +9565,7 @@ mod tests {
             "the sources keep running (the channel strips resample)"
         );
         assert_eq!(sw.state().sample_rate, 44_100);
+        sw.mixer_built();
         assert!(sw
             .apply(Action::SetSampleRate { hz: 44_100 })
             .unwrap()
@@ -9475,6 +9600,7 @@ mod tests {
             "the sources keep running"
         );
         assert_eq!(sw.state().multiview, layout);
+        sw.mixer_built();
         assert!(sw
             .apply(Action::SetMultiview { layout })
             .unwrap()

@@ -201,14 +201,21 @@ AppPage {
                         id: mvLeft
                         text: qsTr("Program on the left")
                         checked: mv.layout.program === "left"
-                        onToggled: root.act({ action: "set_multiview", layout: { program: checked ? "left" : "right", meters: mv.layout.meters } })
+                        // The core's state decides: a click asks, the binding comes back.
+                        onToggled: {
+                            root.act({ action: "set_multiview", layout: { program: checked ? "left" : "right", meters: mv.layout.meters } })
+                            checked = Qt.binding(() => mv.layout.program === "left")
+                        }
                         KanteCheckSkin { control: mvLeft }
                     }
                     QQC2.CheckBox {
                         id: mvMeters
                         text: qsTr("Level meters")
                         checked: mv.layout.meters === "shown"
-                        onToggled: root.act({ action: "set_multiview", layout: { program: mv.layout.program, meters: checked ? "shown" : "hidden" } })
+                        onToggled: {
+                            root.act({ action: "set_multiview", layout: { program: mv.layout.program, meters: checked ? "shown" : "hidden" } })
+                            checked = Qt.binding(() => mv.layout.meters === "shown")
+                        }
                         KanteCheckSkin { control: mvMeters }
                     }
                 }

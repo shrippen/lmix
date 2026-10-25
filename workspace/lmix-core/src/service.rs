@@ -2007,6 +2007,9 @@ impl Service {
             }
             mark_slot(sw, command, outcome.is_ok());
             mark_output(sw, command, &outcome);
+            if let (Ok(()), Command::SetFormat { .. }) = (&outcome, command) {
+                sw.mixer_built();
+            }
             // Only this take's end frees the lock, not an older one's.
             if let (Ok(()), Command::Stinger { .. }) = (&outcome, command) {
                 sw.stinger_started(self.engine.stinger_generation());
@@ -3395,6 +3398,35 @@ mod tests {
 
         assert_eq!(service.state().await.inputs[0].status, InputStatus::Online);
         assert_eq!(slot_commands(&engine), 1, "no failback rebuild");
+    }
+
+    /// A new format the engine did not build is asked for again when the
+    /// operator chooses it again; once built, the same format is no change.
+    #[tokio::test(start_paused = true)]
+    async fn a_format_the_engine_refused_is_tried_again() {
+        let engine = Arc::new(NullEngine::default());
+        let service = Service::new(4, engine.clone(), None);
+        let upright = || Action::SetMasterFormat {
+            format: lmix_types::MasterFormat {
+                width: 1080,
+                height: 1920,
+                ..Default::default()
+            },
+        };
+        let formats = |engine: &NullEngine| {
+            engine
+                .log()
+                .iter()
+                .filter(|c| matches!(c, Command::SetFormat { .. }))
+                .count()
+        };
+        engine.refuse(true);
+        assert!(service.handle(upright()).await.is_err());
+        engine.refuse(false);
+        service.handle(upright()).await.unwrap();
+        assert_eq!(formats(&engine), 2, "asked for again");
+        service.handle(upright()).await.unwrap();
+        assert_eq!(formats(&engine), 2, "built: no change");
     }
 
     #[tokio::test(start_paused = true)]

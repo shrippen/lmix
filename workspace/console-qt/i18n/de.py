@@ -310,7 +310,7 @@ DE = {
     'Bring back %1': '%1 zurückholen',
     'Locked': 'Gesperrt',
     'Lock': 'Sperren',
-    'While locked, closing inputs, loading a show and stopping outputs are refused.': 'Gesperrt lassen sich keine Inputs schließen, keine Show laden und keine Ausgänge stoppen.',
+    'While locked, closing inputs, loading a show, stopping outputs and changing format, sample rate or multiview are refused.': 'Gesperrt lassen sich keine Inputs schließen, keine Show laden, keine Ausgänge stoppen und weder Format noch Abtastrate noch Multiview ändern.',
     ' (cropped)': ' (beschnitten)',
     ' (locked)': ' (gesperrt)',
     'Lock box %1 in place': 'Box %1 an ihrem Platz sperren',

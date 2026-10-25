@@ -4703,3 +4703,33 @@ es der alte Flow. Sonst gilt der Stopp als Ausfall, mit Failback wie sonst.
 `a_stop_after_an_own_emptying_is_own`, `a_flow_runs_unless_strom_says_otherwise`,
 schlägt ohne den Fix fehl; `own_rebuild_stop_is_no_failure`,
 `stop_during_a_slow_own_rebuild_is_no_failure` unverändert grün).
+
+## 2026-10-25 — Sperre und Wiederholung beim neuen Mischer (SAF.6, OUT.1)
+
+**Anlass**: Zwei Punkte aus den Reviews von #150/#151 (todo). Format,
+Abtastrate und Multiview bauen den Mischer weiter neu auf: Program steht kurz,
+laufende Ausgänge starten neu. Die Sperre ließ das zu, obwohl sie das Stoppen
+von Ausgängen verbietet. Und scheiterte der Neuaufbau (strom antwortet nicht,
+der Flow erreicht PLAYING nicht), galt der Wunsch trotzdem als umgesetzt:
+dieselbe Wahl noch einmal tat nichts.
+
+**Entscheidung**:
+- Bei Sperre lehnt lmix-core einen neuen Wert für Format, Abtastrate und
+  Multiview ab (`locked`); derselbe Wert ist keine Änderung und geht durch, außer ein neuer Mischer steht noch aus (dann gilt er als neu und die Sperre lehnt ihn ab).
+  Tooltip und Hinweis der Sperre in der Console nennen die drei.
+- Scheitert der Neuaufbau, vergisst `set_format` in der Engine die gebauten
+  Busse: Der nächste `SetFormat`, auch mit demselben Wunsch, baut neu. Bis
+  dahin lehnt die Engine Befehle an Busse ab (sie kennt sie nicht).
+- Der Switcher merkt sich einen neuen Mischer, bis ein `SetFormat` durchging
+  (`mixer_pending` ab `restore_commands`, also auch beim Öffnen einer Show und
+  beim Restore; der Service meldet `mixer_built`). Bis dahin gilt dieselbe
+  Wahl von Format, Rate oder Multiview als neu und schickt alles noch einmal;
+  eine Busänderung schickt ebenfalls den ganzen Mischer, denn die Engine baut
+  ihn dann. Bei Sperre lehnt lmix-core sie darum in dieser Zeit ab.
+- Die Console stellt nach einer Ablehnung den Stand des Kerns wieder her
+  (Multiview-Schalter, Abtastrate).
+
+**Geprüft**: lmix-core-Tests (`the_lock_refuses_closing_and_stopping`,
+`a_failed_new_mixer_is_built_again`, `a_format_the_engine_refused_is_tried_again`,
+`a_bus_change_before_the_new_mixer_is_built_sets_up_all`,
+`a_restored_mixer_is_pending_until_built`).
