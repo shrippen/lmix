@@ -72,7 +72,7 @@ const LAYOUT_BORDER_COLOR: &str = "#FFFFFF";
 use super::flows::{self, MixerBackend, MonitorOut, AUDIO_MIXER, MIXER_BLOCK, PGM_TAP, SLOT_TAP};
 use super::meters::{self, EngineHealth, EngineLevels, FlowError};
 use super::{Engine, EngineError, LivePicture, Picture};
-use crate::switcher::{Command, EngineBox, LibraryClip, AUDIO_RAMP_MS};
+use crate::switcher::{Command, EngineBox, LibraryClip, MixerBuses, AUDIO_RAMP_MS};
 
 mod playback;
 
@@ -104,6 +104,10 @@ pub struct StromEngine {
     multiview: std::sync::Mutex<lmix_types::MultiviewLayout>,
     /// Sample rate of the audio mixer (AUD.17), with `format`.
     sample_rate: std::sync::Mutex<u32>,
+    /// The buses the audio mixer is built with (AUD.2); `None` for a
+    /// reused mixer that does not tell (built before), which the restore
+    /// then builds anew.
+    buses: std::sync::Mutex<Option<MixerBuses>>,
     /// Mixer inputs of the last `start`.
     slots: AtomicUsize,
     /// Ends of the stinger takes lmix starts (strom's events).
@@ -151,6 +155,7 @@ impl StromEngine {
             format: Default::default(),
             multiview: Default::default(),
             sample_rate: std::sync::Mutex::new(lmix_types::output::default_sample_rate()),
+            buses: Default::default(),
             slots: AtomicUsize::new(0),
             stingers: Arc::new(meters::Stingers::new(MIXER_BLOCK)),
             playback: Default::default(),
@@ -424,6 +429,12 @@ impl StromEngine {
         let format = *self.format.lock().expect("format lock");
         let multiview = *self.multiview.lock().expect("multiview lock");
         let sample_rate = *self.sample_rate.lock().expect("rate lock");
+        let buses = self
+            .buses
+            .lock()
+            .expect("buses lock")
+            .clone()
+            .unwrap_or_default();
         flows::mixer_flow(
             self.slots.load(Ordering::Relaxed),
             self.backend,
@@ -431,6 +442,7 @@ impl StromEngine {
             format,
             multiview,
             sample_rate,
+            &buses,
         )
     }
 
@@ -449,17 +461,24 @@ impl StromEngine {
         format: lmix_types::MasterFormat,
         multiview: lmix_types::MultiviewLayout,
         sample_rate: u32,
+        buses: &MixerBuses,
     ) -> Result<(), EngineError> {
         {
             let mut current = self.format.lock().expect("format lock");
             let mut current_view = self.multiview.lock().expect("multiview lock");
             let mut current_rate = self.sample_rate.lock().expect("rate lock");
-            if *current == format && *current_view == multiview && *current_rate == sample_rate {
+            let mut current_buses = self.buses.lock().expect("buses lock");
+            if *current == format
+                && *current_view == multiview
+                && *current_rate == sample_rate
+                && current_buses.as_ref() == Some(buses)
+            {
                 return Ok(());
             }
             *current = format;
             *current_view = multiview;
             *current_rate = sample_rate;
+            *current_buses = Some(buses.clone());
         }
         let flow = self.mixer_flow();
         self.build_mixer(&flow).await
@@ -1035,6 +1054,7 @@ impl Engine for StromEngine {
             if let Some(rate) = current.as_ref().and_then(flows::sample_rate_of) {
                 *self.sample_rate.lock().expect("rate lock") = rate;
             }
+            *self.buses.lock().expect("buses lock") = current.as_ref().and_then(flows::buses_of);
             return Ok(());
         }
         let wanted = self.mixer_flow();
@@ -1111,12 +1131,12 @@ impl Engine for StromEngine {
                 id,
                 spec,
                 feed,
-                aux,
+                bus,
             } => {
                 let framerate = self.format.lock().expect("format lock").framerate;
                 let live_mkv = *self.live_mkv.lock().expect("live mkv lock");
                 let flow =
-                    flows::output_flow(*id, spec, *feed, *aux, self.backend, framerate, live_mkv);
+                    flows::output_flow(*id, spec, *feed, *bus, self.backend, framerate, live_mkv);
                 self.put_flow(&flow).await
             }
             Command::StopOutput { id } => self.drop_flow(flows::output_flow_id(*id)).await,
@@ -1215,10 +1235,18 @@ impl Engine for StromEngine {
                 format,
                 multiview,
                 sample_rate,
-            } => self.set_format(*format, *multiview, *sample_rate).await,
-            Command::SetMonitor { gain } => {
+                buses,
+            } => {
+                self.set_format(*format, *multiview, *sample_rate, buses)
+                    .await
+            }
+            Command::SetMonitor { gain, ramp_ms } => {
                 let fader = ("monitor_fader".to_string(), PropertyValue::Float(*gain));
-                self.patch_audio_mixer(vec![fader], AUDIO_RAMP_MS).await
+                self.patch_audio_mixer(vec![fader], *ramp_ms).await
+            }
+            Command::SetBusListen { bus, on } => {
+                let afl = (format!("aux{}_afl", bus + 1), PropertyValue::Bool(*on));
+                self.patch_audio_mixer(vec![afl], AUDIO_RAMP_MS).await
             }
             Command::SetMaster {
                 gain,

@@ -271,6 +271,11 @@ pub fn right_of(action: &Action) -> Right {
         | Action::SetLayout { .. }
         | Action::SetLock { .. }
         | Action::SetDefaultDelay { .. }
+        | Action::AddBus { .. }
+        | Action::RemoveBus { .. }
+        | Action::RenameBus { .. }
+        | Action::SetBusTap { .. }
+        | Action::SetPhonesTap { .. }
         | Action::SetMasterFormat { .. }
         | Action::SetMultiview { .. }
         | Action::SetSampleRate { .. }
@@ -308,10 +313,12 @@ pub fn right_of(action: &Action) -> Right {
         | Action::SetAudioFollow { .. }
         | Action::SetVolume { .. }
         | Action::SetChannelStrip { .. }
-        | Action::SetAuxSend { .. }
-        | Action::SetAuxBus { .. }
+        | Action::SetSend { .. }
+        | Action::SetPhonesSend { .. }
+        | Action::SetBus { .. }
+        | Action::SetBusListen { .. }
         | Action::SetMaster { .. }
-        | Action::SetMonitorVolume { .. }
+        | Action::SetPhones { .. }
         | Action::FadeVolume { .. }
         | Action::SetListen { .. }
         | Action::ClearListen

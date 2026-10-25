@@ -14,27 +14,19 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::automation::Trigger;
+use crate::bus::BusRef;
 use crate::cue::{Cue, StandbyMove, StopMode};
 use crate::graphics::{
     BindingSpec, DataSourceSpec, Easing, LayerTransform, TitleData, TitleTrigger,
 };
 use crate::input::{
     AtEnd, AutoPlay, ChannelStrip, InputColor, InputPress, InputRef, Listen, Look, PageRunning,
-    SignalLoss, SourceSpec, Transport, AUX_BUSES,
+    SignalLoss, SourceSpec, Transport,
 };
 use crate::layout::{BoxRect, BoxSpec};
 use crate::output::{OutputGroup, OutputRef, OutputSource, OutputSpec};
 use crate::shortcut::ShortcutSpec;
 use crate::target::{HttpMethod, TargetSpec};
-
-/// 0-based index of aux bus `bus` (1-based, as in actions).
-pub fn aux_index(bus: u8) -> Result<usize, ActionError> {
-    let max = AUX_BUSES as u8;
-    if bus == 0 || bus > max {
-        return Err(ActionError::BadAuxBus { bus, max });
-    }
-    Ok(usize::from(bus - 1))
-}
 
 /// Clip and cut point of a stinger as an action names them.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -186,10 +178,17 @@ pub const ACTION_GROUPS: &[(&str, &[&str])] = &[
             "set_audio_follow",
             "set_volume",
             "set_channel_strip",
-            "set_aux_send",
-            "set_aux_bus",
+            "set_send",
+            "set_phones_send",
+            "add_bus",
+            "remove_bus",
+            "rename_bus",
+            "set_bus",
+            "set_bus_tap",
+            "set_bus_listen",
             "set_master",
-            "set_monitor_volume",
+            "set_phones",
+            "set_phones_tap",
             "set_default_delay",
             "fade_volume",
             "set_listen",
@@ -356,15 +355,15 @@ pub fn action_group(name: &str) -> Option<&'static str> {
 /// Longest level fade (AUD.14).
 pub const FADE_MAX_MS: u32 = 60_000;
 
-/// What a level fade moves (AUD.14): `{"input": "Cam 1"}`, `{"bus": 1}`
-/// or `"master"`.
+/// What a level fade moves (AUD.14): `{"input": "Cam 1"}`,
+/// `{"bus": "Stream"}`, `"master"` or `"phones"`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum VolumeTarget {
     Input(InputRef),
-    /// Aux bus 1–7 (A–G).
-    Bus(u8),
+    Bus(BusRef),
     Master,
+    Phones,
 }
 
 /// Every operation, whatever triggered it.
@@ -466,9 +465,9 @@ pub enum Action {
         /// Program (default) or one input (ISO, MultiCorder).
         #[serde(default)]
         source: OutputSource,
-        /// Sound from aux bus 1–7 (A–G) instead of the source's own.
+        /// Sound from this bus instead of the source's own.
         #[serde(default)]
-        aux: Option<u8>,
+        bus: Option<BusRef>,
         #[serde(default)]
         name: Option<String>,
     },
@@ -516,17 +515,57 @@ pub enum Action {
         input: InputRef,
         strip: ChannelStrip,
     },
-    /// Send an input to aux bus `bus` (1–7, A–G) at `level`, 0–100; 0 stops
-    /// the send.
-    SetAuxSend {
+    /// Send an input to bus `bus` at `level`, 0–100; 0 stops the send.
+    SetSend {
         input: InputRef,
-        bus: u8,
+        bus: BusRef,
         level: u8,
     },
-    /// Volume of the monitor bus, what solo listening and the headphones
-    /// hear, 0–100 (AUD.4).
-    SetMonitorVolume {
+    /// What an input sends to the headphones (AUD.4): on or off, and its
+    /// level there, 0–100.
+    SetPhonesSend {
+        input: InputRef,
+        on: bool,
+        level: u8,
+    },
+    /// The headphones: volume 0–100 and mute (AUD.4).
+    SetPhones {
         volume: u8,
+        mute: bool,
+    },
+    /// Whether the headphones take the sends before the channel faders.
+    /// The audio mixer is built anew (as for the sample rate).
+    SetPhonesTap {
+        pre_fader: bool,
+    },
+    /// A new bus at the end (AUD.2), named `name` or "Bus <n>"; the audio
+    /// mixer is built anew. No input sends to it yet.
+    AddBus {
+        #[serde(default)]
+        name: Option<String>,
+        #[serde(default)]
+        pre_fader: bool,
+    },
+    /// Remove a bus and every send to it; refused while an output takes
+    /// its sound. The audio mixer is built anew.
+    RemoveBus {
+        bus: BusRef,
+    },
+    RenameBus {
+        bus: BusRef,
+        name: String,
+    },
+    /// Whether a bus takes its sends before the channel faders; the audio
+    /// mixer is built anew.
+    SetBusTap {
+        bus: BusRef,
+        pre_fader: bool,
+    },
+    /// Listen to a bus on the headphones, after its master (like an
+    /// input's solo).
+    SetBusListen {
+        bus: BusRef,
+        on: bool,
     },
     /// Delay new inputs with sound get in their channel strip, 0–500 ms
     /// (AUD.6); inputs already there keep theirs.
@@ -554,7 +593,7 @@ pub enum Action {
         mute: bool,
     },
     /// Move a level to `volume` over `duration_ms` (AUD.14): an input's
-    /// fader, an aux bus or the master; mute stays as it is. The state
+    /// fader, a bus, the master or the headphones; mute stays as it is. The state
     /// shows the end value at once; a new level on the same target takes
     /// over from where the fade is.
     FadeVolume {
@@ -562,20 +601,21 @@ pub enum Action {
         volume: u8,
         duration_ms: u32,
     },
-    /// Master of aux bus `bus` (1–7, A–G): volume 0–100 and mute.
-    SetAuxBus {
-        bus: u8,
+    /// Master of a bus: volume 0–100 and mute.
+    SetBus {
+        bus: BusRef,
         volume: u8,
         mute: bool,
     },
-    /// Listen to an input on the monitor bus, before or after its fader.
-    /// While any input is soloed, the monitor bus carries only the solos;
-    /// otherwise it follows program.
+    /// Listen to an input on the headphones, before or after its fader.
+    /// While any input or bus is soloed, the headphones carry only the
+    /// solos; otherwise their own mix.
     SetListen {
         input: InputRef,
         listen: Listen,
     },
-    /// End every solo: the monitor bus follows program again.
+    /// End every solo, of inputs and buses: the headphones hear their own
+    /// mix again.
     ClearListen,
 
     /// Move an input to a 1-based position in the input bar (INP.3).
@@ -1469,8 +1509,16 @@ pub enum ActionError {
     FadeToBlackOn,
     #[error("a transition is still running; move the T-bar when it has landed")]
     TransitionRunning,
-    #[error("aux bus {bus} does not exist (1–{max})")]
-    BadAuxBus { bus: u8, max: u8 },
+    #[error("no bus matches {reference}")]
+    UnknownBus { reference: String },
+    #[error("a show has at most {max} buses besides master and headphones")]
+    TooManyBuses { max: usize },
+    #[error("bus name: 1–{max} characters, not empty")]
+    BadBusName { max: usize },
+    #[error("there is a bus {name} already")]
+    DuplicateBusName { name: String },
+    #[error("output {output} takes the sound of bus {bus}: give it another first")]
+    BusInUse { bus: String, output: String },
     #[error("look: {field} is out of range")]
     BadLook { field: String },
     #[error("looks need the GL mixer (lmix-core --mixer gl)")]

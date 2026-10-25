@@ -236,7 +236,7 @@ settled '[[ $(pgm_db) -lt $((full - 6)) ]]' || fail "volume 50 did not lower pro
 pass "sound: slots heard, mute, audio follows video, volume"
 
 # --- solo listening on the monitor bus: PFL before, AFL after the fader ---
-mon_db() { curl -sf "$CORE/audio/levels" | jq '.monitor_peak_db // -100 | floor'; }
+mon_db() { curl -sf "$CORE/audio/levels" | jq '.phones_peak_db // -100 | floor'; }
 settled '[[ $(mon_db) -gt $AUDIBLE_DB ]]' || fail "monitor does not follow program without solo"
 act '{"action":"set_audio","input":"Ball","on":false}' >/dev/null   # program now silent
 act '{"action":"set_listen","input":"Bars","listen":"pfl"}' >/dev/null
@@ -247,10 +247,10 @@ settled '[[ $(mon_db) -lt $SILENT_DB ]]' || fail "AFL of a muted input heard ($(
 act '{"action":"clear_listen"}' >/dev/null
 act '{"action":"set_audio","input":"Ball","on":true}' >/dev/null
 settled '[[ $(mon_db) -gt $AUDIBLE_DB ]]' || fail "monitor not back on program after clearing solos"
-act '{"action":"set_monitor_volume","volume":0}' >/dev/null
+act '{"action":"set_phones","volume":0,"mute":false}' >/dev/null
 settled '[[ $(mon_db) -lt $SILENT_DB ]]' || fail "monitor volume 0 still heard ($(mon_db) dB)"
 [[ $(pgm_db) -gt $AUDIBLE_DB ]] || fail "monitor volume took program down too"
-act '{"action":"set_monitor_volume","volume":100}' >/dev/null
+act '{"action":"set_phones","volume":100,"mute":false}' >/dev/null
 settled '[[ $(mon_db) -gt $AUDIBLE_DB ]]' || fail "monitor not back at volume 100"
 pass "solo: PFL hears a muted input, AFL does not, monitor back on program, own volume"
 
@@ -280,24 +280,44 @@ act '{"action":"fade_volume","target":"master","volume":100,"duration_ms":0}' >/
 settled '[[ $(pgm_db) -ge $((full - 2)) ]]' || fail "master not back ($full -> $(pgm_db) dB)"
 pass "level fade: master down over 2 s, back at once"
 
-# --- aux buses (4.7, AUD.2): A before the fader, B–G after it ---
-aux_db() { curl -sf "$CORE/audio/levels" | jq ".aux_peak_db[$1] // -100 | floor"; }
-act '{"action":"set_aux_send","input":"Ball","bus":1,"level":100}' >/dev/null
-act '{"action":"set_aux_send","input":"Ball","bus":2,"level":100}' >/dev/null
-settled '[[ $(aux_db 0) -gt $AUDIBLE_DB && $(aux_db 1) -gt $AUDIBLE_DB ]]' || fail "aux buses silent with sends up ($(aux_db 0), $(aux_db 1) dB)"
-# The last of the seven (AUD.2): G hears its send, and only that.
-[[ $(aux_db 6) -lt $SILENT_DB ]] || fail "aux G sounds without a send ($(aux_db 6) dB)"
-act '{"action":"set_aux_send","input":"Ball","bus":7,"level":100}' >/dev/null
-settled '[[ $(aux_db 6) -gt $AUDIBLE_DB ]]' || fail "aux G silent with its send up ($(aux_db 6) dB)"
-act '{"action":"set_aux_send","input":"Ball","bus":7,"level":0}' >/dev/null
+# --- buses (4.7, AUD.2): named, before or after the fader ---
+# Each new bus builds the audio mixer anew; program comes back.
+act '{"action":"add_bus","name":"In-Ear","pre_fader":true}' >/dev/null
+act '{"action":"add_bus","name":"Stream"}' >/dev/null
+act '{"action":"add_bus","name":"Spare"}' >/dev/null
+bus_db() { curl -sf "$CORE/audio/levels" | jq ".buses[$1].peak_db // -100 | floor"; }
+settled '[[ $(pgm_db) -gt $AUDIBLE_DB ]]' || fail "program silent after the mixer got its buses ($(pgm_db) dB)"
+act '{"action":"set_send","input":"Ball","bus":"In-Ear","level":100}' >/dev/null
+act '{"action":"set_send","input":"Ball","bus":"Stream","level":100}' >/dev/null
+settled '[[ $(bus_db 0) -gt $AUDIBLE_DB && $(bus_db 1) -gt $AUDIBLE_DB ]]' || fail "buses silent with sends up ($(bus_db 0), $(bus_db 1) dB)"
+[[ $(bus_db 2) -lt $SILENT_DB ]] || fail "a bus without sends sounds ($(bus_db 2) dB)"
 act '{"action":"set_audio","input":"Ball","on":false}' >/dev/null
-settled '[[ $(aux_db 1) -lt $SILENT_DB ]]' || fail "aux 2 (after the fader) hears a muted input ($(aux_db 1) dB)"
-[[ $(aux_db 0) -gt $AUDIBLE_DB ]] || fail "aux 1 (before the fader) lost a muted input"
-act '{"action":"set_aux_bus","bus":1,"volume":100,"mute":true}' >/dev/null
-settled '[[ $(aux_db 0) -lt $SILENT_DB ]]' || fail "muted aux 1 still sounds ($(aux_db 0) dB)"
-act '{"action":"set_aux_bus","bus":1,"volume":100,"mute":false}' >/dev/null
+settled '[[ $(bus_db 1) -lt $SILENT_DB ]]' || fail "Stream (after the fader) hears a muted input ($(bus_db 1) dB)"
+[[ $(bus_db 0) -gt $AUDIBLE_DB ]] || fail "In-Ear (before the fader) lost a muted input"
+act '{"action":"set_bus","bus":"In-Ear","volume":100,"mute":true}' >/dev/null
+settled '[[ $(bus_db 0) -lt $SILENT_DB ]]' || fail "muted In-Ear still sounds ($(bus_db 0) dB)"
+act '{"action":"set_bus","bus":"In-Ear","volume":100,"mute":false}' >/dev/null
 act '{"action":"set_audio","input":"Ball","on":true}' >/dev/null
-pass "aux buses: sends heard (A, B, G), before/after the fader, master mute"
+pass "buses: sends heard, a bus without sends silent, before/after the fader, master mute"
+
+# --- headphones (AUD.4): their own mix; a bus listened to on them ---
+sound_inputs="$(curl -sf "$CORE/state" | jq -r '.inputs[] | select(.has_audio) | .name')"
+phones_sends() {
+    local name
+    while read -r name; do
+        act "$(jq -cn --arg i "$name" --argjson on "$1" '{action:"set_phones_send",input:$i,on:$on,level:100}')" >/dev/null
+    done <<<"$sound_inputs"
+}
+phones_sends false
+settled '[[ $(mon_db) -lt $SILENT_DB ]]' || fail "headphones heard without a send ($(mon_db) dB)"
+[[ $(pgm_db) -gt $AUDIBLE_DB ]] || fail "the headphones' sends took program down"
+act '{"action":"set_bus_listen","bus":"Stream","on":true}' >/dev/null
+settled '[[ $(mon_db) -gt $AUDIBLE_DB ]]' || fail "Stream listened to but not heard ($(mon_db) dB)"
+act '{"action":"clear_listen"}' >/dev/null
+settled '[[ $(mon_db) -lt $SILENT_DB ]]' || fail "headphones still on Stream after clearing ($(mon_db) dB)"
+phones_sends true
+settled '[[ $(mon_db) -gt $AUDIBLE_DB ]]' || fail "headphones not back with their sends ($(mon_db) dB)"
+pass "headphones: own mix, silent without sends, a bus listened to"
 
 # --- more sources (2b.3): color, still image, playlist with transport ---
 MEDIA="$WORK/media"
@@ -677,15 +697,16 @@ code="$(curl -s -o /dev/null -w '%{http_code}' -X POST "$CORE/actions" -H 'conte
 act '{"action":"cut_direct","input":"Ball"}' >/dev/null
 act '{"action":"preview_input","input":"Orange"}' >/dev/null
 # Sound that follows video follows the T-bar (SWI.5): Ball fades out by
-# half (about -6 dB) and comes back when the bar goes back. Heard on aux
-# B, after the fader, where only Ball sends (program mixes other inputs).
-act '{"action":"set_aux_send","input":"Ball","bus":2,"level":100}' >/dev/null
+# half (about -6 dB) and comes back when the bar goes back. Heard on the
+# Stream bus, after the fader, where only Ball sends (program mixes other
+# inputs).
+act '{"action":"set_send","input":"Ball","bus":"Stream","level":100}' >/dev/null
 act '{"action":"set_audio_follow","input":"Ball","follow":true}' >/dev/null
-full=$(steady_db aux_db 1)
+full=$(steady_db bus_db 1)
 act '{"action":"t_bar","position":0.5}' >/dev/null
-settled '[[ $(aux_db 1) -le $((full - 4)) && $(aux_db 1) -gt $SILENT_DB ]]' || fail "Ball's sound did not follow the T-bar ($full -> $(aux_db 1) dB)"
+settled '[[ $(bus_db 1) -le $((full - 4)) && $(bus_db 1) -gt $SILENT_DB ]]' || fail "Ball's sound did not follow the T-bar ($full -> $(bus_db 1) dB)"
 act '{"action":"t_bar","position":0}' >/dev/null
-settled '[[ $(aux_db 1) -ge $((full - 2)) ]]' || fail "Ball's sound not back with the T-bar ($full -> $(aux_db 1) dB)"
+settled '[[ $(bus_db 1) -ge $((full - 2)) ]]' || fail "Ball's sound not back with the T-bar ($full -> $(bus_db 1) dB)"
 act '{"action":"set_audio_follow","input":"Ball","follow":false}' >/dev/null
 act '{"action":"t_bar","position":0.5}' >/dev/null
 half_mixed() { picture program "$WORK/tbar.jpg" || return 1; local r; r=$(rgb "$WORK/tbar.jpg" r); ((r > 80 && r < 200)); }

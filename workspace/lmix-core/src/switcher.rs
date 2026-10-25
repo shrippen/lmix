@@ -7,37 +7,46 @@
 //!   Action ──► Switcher::apply ──► new state + [Command] ──► engine driver
 //! ```
 
-use lmix_types::action::{
-    aux_index, AUTO_OFF_MAX_MS, DYNAMIC_SLOTS, OVERLAY_CHANNELS, TRANSITION_SLOTS,
-};
+use lmix_types::action::{AUTO_OFF_MAX_MS, DYNAMIC_SLOTS, OVERLAY_CHANNELS, TRANSITION_SLOTS};
 use lmix_types::automation::{AUTOMATION_ACTIONS, TRIGGERS, TRIGGER_DELAY_MAX_MS};
+use lmix_types::bus::BUS_NAME_MAX;
 use lmix_types::cue::{
     CueKind, CUES, CUE_WAIT_MAX_MS, CUE_WAIT_STEP_MS, GO_GUARD_MAX_MS, GROUP_CHILDREN, GROUP_DEPTH,
     PANIC_MAX_MS,
 };
-use lmix_types::input::{color_rgb, AUX_BUSES, REF_DYNAMIC, REF_PREVIEW, REF_PROGRAM, VOLUME_MAX};
+use lmix_types::input::{color_rgb, REF_DYNAMIC, REF_PREVIEW, REF_PROGRAM, VOLUME_MAX};
 use lmix_types::layout::{BORDER_MAX_PX, LAYOUTS, LAYOUT_BOXES, LAYOUT_TEMPLATES};
 use lmix_types::shortcut::SHORTCUT_ACTIONS;
 use lmix_types::state::API_VERSION;
 use lmix_types::{
-    Action, ActionError, AtEnd, AutoPlay, AuxBus, BoxCrop, BoxRect, BoxShown, BoxSpec,
-    ChannelStrip, Effect, Ingest, Input, InputColor, InputId, InputPress, InputRef, InputStatus,
-    Layout, LayoutBox, LayoutTemplate, Listen, Look, Output, OutputGroup, OutputId, OutputRef,
-    OutputSource, OutputSpec, OutputStatus, OverlayChannel, PageRunning, QuickPlay, Shortcut,
-    ShortcutSpec, ShowState, SignalLoss, SourceSpec, Stinger, StingerSpec, TemplateBox,
-    TemplateInput, Transition, TransitionSlot, Transport, VolumeTarget, FADE_MAX_MS,
+    find_bus, Action, ActionError, AtEnd, AutoPlay, BoxCrop, BoxRect, BoxShown, BoxSpec, BusId,
+    BusRef, ChannelStrip, Effect, Ingest, Input, InputColor, InputId, InputPress, InputRef,
+    InputStatus, Layout, LayoutBox, LayoutTemplate, Listen, Look, Output, OutputGroup, OutputId,
+    OutputRef, OutputSource, OutputSpec, OutputStatus, OverlayChannel, PageRunning, QuickPlay,
+    Shortcut, ShortcutSpec, ShowState, SignalLoss, SourceSpec, Stinger, StingerSpec, TemplateBox,
+    TemplateInput, Transition, TransitionSlot, Transport, VolumeTarget, BUSES, FADE_MAX_MS,
 };
 use lmix_types::{Cue, CueList, MidiKind, MidiMessage, Trigger, TriggerOn};
 
 use crate::cues::{Guard, Hold, Out, Runner};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
 use uuid::Uuid;
 
-use crate::show::{Show, ShowCueList, ShowInput, ShowLayout, ShowOutput, ShowShortcut};
+use crate::show::{Show, ShowBus, ShowCueList, ShowInput, ShowLayout, ShowOutput, ShowShortcut};
 
 mod graphics;
 pub use graphics::{Rows, TemplateRef};
+
+/// The buses of the audio mixer as the engine builds them (AUD.2, AUD.4):
+/// engine bus 0 is the headphones, then the show's buses in their order.
+/// Each takes its sends before the channel faders or after them.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct MixerBuses {
+    pub phones_pre_fader: bool,
+    /// Id and tap (`true`: before the fader) of each bus.
+    pub buses: Vec<(BusId, bool)>,
+}
 
 /// What the engine has to do after an action.
 #[derive(Clone, Debug, PartialEq)]
@@ -64,17 +73,20 @@ pub enum Command {
     },
     /// Toggle fade to black.
     FadeToBlack { duration_ms: u32 },
-    /// Solo `slot` on the monitor bus, or end its solo.
+    /// Solo `slot` on the headphones, or end its solo.
     SetListen { slot: usize, listen: Listen },
+    /// Listen to engine bus `bus` (see [`MixerBuses`]) on the headphones,
+    /// after its master.
+    SetBusListen { bus: usize, on: bool },
     /// Last frame (`Hold`) or black when the source of `slot` stalls.
     SetSignalLoss { slot: usize, mode: SignalLoss },
-    /// Start output `id` (replaces a running one); its sound from aux
-    /// bus `aux` (0-based) instead of the feed's.
+    /// Start output `id` (replaces a running one); its sound from bus
+    /// `bus` instead of the feed's.
     StartOutput {
         id: OutputId,
         spec: OutputSpec,
         feed: Feed,
-        aux: Option<usize>,
+        bus: Option<BusId>,
     },
     /// Stop output `id`; stopping a stopped one is fine.
     StopOutput { id: OutputId },
@@ -109,9 +121,10 @@ pub enum Command {
     /// Hold the commands after it back by `ms`; the service runs them
     /// later, without blocking other actions.
     Wait { ms: u32 },
-    /// Send of `slot` to aux bus `bus` (0-based), linear gain.
+    /// Send of `slot` to engine bus `bus` (see [`MixerBuses`]), linear
+    /// gain.
     SetAuxSend { slot: usize, bus: usize, gain: f64 },
-    /// Master of aux bus `bus` (0-based), reached over `ramp_ms`.
+    /// Master of engine bus `bus`, reached over `ramp_ms`.
     SetAuxBus {
         bus: usize,
         gain: f64,
@@ -120,8 +133,9 @@ pub enum Command {
     },
     /// Master of program sound, reached over `ramp_ms` (AUD.2, AUD.14).
     SetMaster { gain: f64, mute: bool, ramp_ms: u32 },
-    /// Level of the monitor bus (AUD.4).
-    SetMonitor { gain: f64 },
+    /// Level of the headphones (AUD.4), reached over `ramp_ms`; muted
+    /// they get 0.
+    SetMonitor { gain: f64, ramp_ms: u32 },
     /// Program in this format (OUT.1); the engine rebuilds its mixer only
     /// when it differs, and the commands after it set the mixer up again.
     SetFormat {
@@ -129,6 +143,9 @@ pub enum Command {
         multiview: lmix_types::MultiviewLayout,
         /// Of the audio mixer, Hz (AUD.17).
         sample_rate: u32,
+        /// The buses of the audio mixer: more, fewer or another tap build
+        /// it anew.
+        buses: MixerBuses,
     },
     /// Hold the take of preview at `position` (0–1) with `effect`, as
     /// the T-bar stands (SWI.3); 0 shows program as it was.
@@ -584,6 +601,8 @@ pub struct Switcher {
     mix: HashMap<usize, Mix>,
     /// Solos; runtime only, like a desk's solo buttons.
     listen: HashMap<InputId, Listen>,
+    /// Buses heard on the headphones; runtime only, like solos.
+    bus_listen: HashSet<BusId>,
     /// Engine address as senders reach it, for WHIP ingest links.
     ingest_base: Option<String>,
     /// Output states; runtime only.
@@ -655,6 +674,7 @@ impl Switcher {
             status: HashMap::new(),
             mix: HashMap::new(),
             listen: HashMap::new(),
+            bus_listen: HashSet::new(),
             ingest_base: None,
             clip_ms: HashMap::new(),
             output_status: HashMap::new(),
@@ -1422,9 +1442,37 @@ impl Switcher {
                 slot: self.page_slot(&input)?,
                 running,
             }]),
-            Action::SetAuxSend { input, bus, level } => self.set_aux_send(&input, bus, level),
-            Action::SetAuxBus { bus, volume, mute } => {
-                self.set_aux_bus(bus, volume, mute, AUDIO_RAMP_MS)
+            Action::SetSend { input, bus, level } => self.set_send(&input, &bus, level),
+            Action::SetPhonesSend { input, on, level } => self.set_phones_send(&input, on, level),
+            Action::SetBus { bus, volume, mute } => self.set_bus(&bus, volume, mute, AUDIO_RAMP_MS),
+            Action::AddBus { name, pre_fader } => self.add_bus(name, pre_fader),
+            Action::RemoveBus { bus } => self.remove_bus(&bus),
+            Action::RenameBus { bus, name } => {
+                let index = self.find_bus(&bus)?;
+                let name = self.bus_name(&name, Some(index))?;
+                self.show.buses[index].name = name;
+                Ok(Vec::new())
+            }
+            Action::SetBusTap { bus, pre_fader } => {
+                let index = self.find_bus(&bus)?;
+                if self.show.buses[index].pre_fader == pre_fader {
+                    return Ok(Vec::new());
+                }
+                self.show.buses[index].pre_fader = pre_fader;
+                Ok(self.mixer_rebuilt())
+            }
+            Action::SetBusListen { bus, on } => {
+                let id = self.show.buses[self.find_bus(&bus)?].id;
+                if on {
+                    self.bus_listen.insert(id);
+                } else {
+                    self.bus_listen.remove(&id);
+                }
+                Ok(self
+                    .engine_bus(id)
+                    .map(|bus| Command::SetBusListen { bus, on })
+                    .into_iter()
+                    .collect())
             }
             Action::SetMasterFormat { format } => {
                 if !format.is_valid() {
@@ -1458,12 +1506,18 @@ impl Switcher {
                 self.show.multiview = layout;
                 Ok(self.mixer_rebuilt())
             }
-            Action::SetMonitorVolume { volume } => {
+            Action::SetPhones { volume, mute } => {
                 check_volume(volume)?;
-                self.show.monitor_volume = volume;
-                Ok(vec![Command::SetMonitor {
-                    gain: fader_gain(volume),
-                }])
+                self.show.phones.volume = volume;
+                self.show.phones.mute = mute;
+                Ok(vec![self.phones_command(AUDIO_RAMP_MS)])
+            }
+            Action::SetPhonesTap { pre_fader } => {
+                if self.show.phones.pre_fader == pre_fader {
+                    return Ok(Vec::new());
+                }
+                self.show.phones.pre_fader = pre_fader;
+                Ok(self.mixer_rebuilt())
             }
             Action::SetDefaultDelay { ms } => {
                 if ms > ChannelStrip::DELAY_MAX_MS {
@@ -1476,7 +1530,7 @@ impl Switcher {
             }
             Action::SetMaster { volume, mute } => {
                 check_volume(volume)?;
-                self.show.master = AuxBus { volume, mute };
+                self.show.master = lmix_types::Fader { volume, mute };
                 Ok(vec![self.master_command(AUDIO_RAMP_MS)])
             }
             Action::FadeVolume {
@@ -1543,8 +1597,8 @@ impl Switcher {
                 spec,
                 source,
                 name,
-                aux,
-            } => self.add_output(spec, source, name, aux),
+                bus,
+            } => self.add_output(spec, source, name, bus),
             Action::RemoveOutput { output } => {
                 self.check_unlocked()?;
                 self.remove_output(&output)
@@ -1798,6 +1852,7 @@ impl Switcher {
             format: self.show.format,
             multiview: self.show.multiview,
             sample_rate: self.show.sample_rate,
+            buses: self.mixer_buses(),
         }];
         commands.extend(self.picture_commands());
         // The T-bar goes back to 0, held or not: a reused mixer (same
@@ -1831,7 +1886,7 @@ impl Switcher {
                 slot: input.slot,
                 strip: input.strip,
             });
-            commands.extend(send_commands(input));
+            commands.extend(self.send_commands(input));
         }
         commands.extend(self.aux_bus_commands());
         self.playback_sent = None;
@@ -1890,22 +1945,173 @@ impl Switcher {
         Some(Command::SetPreload { preload })
     }
 
+    /// The masters of the buses, of program and of the headphones. The
+    /// headphones' own bus stays at unity: their volume is the monitor's,
+    /// so it also sets how loud the solos are.
     fn aux_bus_commands(&self) -> Vec<Command> {
+        let phones = Command::SetAuxBus {
+            bus: 0,
+            gain: 1.0,
+            mute: false,
+            ramp_ms: AUDIO_RAMP_MS,
+        };
+        std::iter::once(phones)
+            .chain(
+                self.show
+                    .buses
+                    .iter()
+                    .enumerate()
+                    .map(|(i, bus)| Command::SetAuxBus {
+                        bus: i + 1,
+                        gain: fader_gain(bus.level.volume),
+                        mute: bus.level.mute,
+                        ramp_ms: AUDIO_RAMP_MS,
+                    }),
+            )
+            .chain(std::iter::once(self.master_command(AUDIO_RAMP_MS)))
+            .chain(std::iter::once(self.phones_command(AUDIO_RAMP_MS)))
+            .collect()
+    }
+
+    fn phones_command(&self, ramp_ms: u32) -> Command {
+        let phones = self.show.phones;
+        Command::SetMonitor {
+            gain: if phones.mute {
+                0.0
+            } else {
+                fader_gain(phones.volume)
+            },
+            ramp_ms,
+        }
+    }
+
+    /// The buses the engine's audio mixer is built with.
+    pub fn mixer_buses(&self) -> MixerBuses {
+        MixerBuses {
+            phones_pre_fader: self.show.phones.pre_fader,
+            buses: self
+                .show
+                .buses
+                .iter()
+                .map(|b| (b.id, b.pre_fader))
+                .collect(),
+        }
+    }
+
+    /// Engine bus of the show's bus `id` (0 is the headphones).
+    fn engine_bus(&self, id: BusId) -> Option<usize> {
         self.show
-            .aux_buses
+            .buses
+            .iter()
+            .position(|b| b.id == id)
+            .map(|i| i + 1)
+    }
+
+    /// The show's bus `bus` names.
+    fn find_bus(&self, bus: &BusRef) -> Result<usize, ActionError> {
+        let buses = self.buses_state();
+        let found = find_bus(&buses, bus).ok_or_else(|| ActionError::UnknownBus {
+            reference: bus.to_string(),
+        })?;
+        Ok(self
+            .show
+            .buses
+            .iter()
+            .position(|b| b.id == found.id)
+            .expect("found among the show's"))
+    }
+
+    /// `name` checked for a bus: trimmed, not empty, not too long, not
+    /// another bus's (ignoring case); `own` is the bus being renamed.
+    fn bus_name(&self, name: &str, own: Option<usize>) -> Result<String, ActionError> {
+        let name = name.trim();
+        if name.is_empty() || name.chars().count() > BUS_NAME_MAX {
+            return Err(ActionError::BadBusName { max: BUS_NAME_MAX });
+        }
+        let taken = self
+            .show
+            .buses
             .iter()
             .enumerate()
-            .map(|(bus, master)| Command::SetAuxBus {
-                bus,
-                gain: fader_gain(master.volume),
-                mute: master.mute,
-                ramp_ms: AUDIO_RAMP_MS,
+            .any(|(i, b)| Some(i) != own && b.name.to_lowercase() == name.to_lowercase());
+        if taken {
+            return Err(ActionError::DuplicateBusName { name: name.into() });
+        }
+        Ok(name.into())
+    }
+
+    fn buses_state(&self) -> Vec<lmix_types::Bus> {
+        self.show
+            .buses
+            .iter()
+            .map(|b| lmix_types::Bus {
+                id: b.id,
+                name: b.name.clone(),
+                pre_fader: b.pre_fader,
+                volume: b.level.volume,
+                mute: b.level.mute,
+                listen: self.bus_listen.contains(&b.id),
             })
-            .chain(std::iter::once(self.master_command(AUDIO_RAMP_MS)))
-            .chain(std::iter::once(Command::SetMonitor {
-                gain: fader_gain(self.show.monitor_volume),
-            }))
             .collect()
+    }
+
+    /// A new bus at the end; nobody sends to it yet.
+    fn add_bus(
+        &mut self,
+        name: Option<String>,
+        pre_fader: bool,
+    ) -> Result<Vec<Command>, ActionError> {
+        if self.show.buses.len() >= BUSES {
+            return Err(ActionError::TooManyBuses { max: BUSES });
+        }
+        let name = match name {
+            Some(name) => self.bus_name(&name, None)?,
+            None => (self.show.buses.len() + 1..)
+                .map(|n| format!("Bus {n}"))
+                .find(|n| self.bus_name(n, None).is_ok())
+                .expect("a free name"),
+        };
+        self.show.buses.push(ShowBus {
+            id: BusId::new(),
+            name,
+            pre_fader,
+            level: Default::default(),
+        });
+        Ok(self.mixer_rebuilt())
+    }
+
+    /// Remove a bus and the sends to it; not while an output takes it.
+    fn remove_bus(&mut self, bus: &BusRef) -> Result<Vec<Command>, ActionError> {
+        let index = self.find_bus(bus)?;
+        let id = self.show.buses[index].id;
+        if let Some(output) = self.show.outputs.iter().find(|o| o.bus == Some(id)) {
+            return Err(ActionError::BusInUse {
+                bus: self.show.buses[index].name.clone(),
+                output: output.name.clone(),
+            });
+        }
+        self.show.buses.remove(index);
+        for input in &mut self.show.inputs {
+            input.sends.remove(&id);
+        }
+        self.bus_listen.remove(&id);
+        Ok(self.mixer_rebuilt())
+    }
+
+    /// Every send of an input with sound, as the show has them: to the
+    /// headphones and to each bus (0 where it sends nothing).
+    fn send_commands(&self, input: &ShowInput) -> Vec<Command> {
+        let buses = self
+            .show
+            .buses
+            .iter()
+            .enumerate()
+            .map(|(i, bus)| Command::SetAuxSend {
+                slot: input.slot,
+                bus: i + 1,
+                gain: fader_gain(input.sends.get(&bus.id).copied().unwrap_or(0)),
+            });
+        std::iter::once(phones_send(input)).chain(buses).collect()
     }
 
     fn master_command(&self, ramp_ms: u32) -> Command {
@@ -1941,17 +2147,28 @@ impl Switcher {
         place.chain(shown).collect()
     }
 
-    /// Solo state of every input with sound, as the engine should have it.
+    /// Solo state of every input with sound and of every bus, as the
+    /// engine should have it.
     fn listen_commands(&self) -> Vec<Command> {
-        self.show
+        let inputs = self
+            .show
             .inputs
             .iter()
             .filter(|i| i.source.has_audio())
             .map(|i| Command::SetListen {
                 slot: i.slot,
                 listen: self.listen_of(i.id),
-            })
-            .collect()
+            });
+        let buses = self
+            .show
+            .buses
+            .iter()
+            .enumerate()
+            .map(|(i, b)| Command::SetBusListen {
+                bus: i + 1,
+                on: self.bus_listen.contains(&b.id),
+            });
+        inputs.chain(buses).collect()
     }
 
     fn listen_of(&self, id: InputId) -> Listen {
@@ -2013,7 +2230,8 @@ impl Switcher {
                 click: input.click,
                 go: input.go,
                 strip: input.strip,
-                sends: input.sends,
+                phones: input.phones,
+                sends: input.sends.clone(),
                 look: input.look,
                 triggers: input.triggers.clone(),
                 ingest: self.ingest_of(&input.source),
@@ -2046,12 +2264,12 @@ impl Switcher {
                 .overlay_last
                 .map(|id| id.filter(|id| self.slot_of(Some(*id)).is_some())),
             t_bar: self.t_bar,
-            aux_buses: self.show.aux_buses,
+            buses: self.buses_state(),
             master: self.show.master,
             format: self.show.format,
             multiview: self.show.multiview,
             sample_rate: self.show.sample_rate,
-            monitor_volume: self.show.monitor_volume,
+            phones: self.show.phones,
             default_delay_ms: self.show.default_delay_ms,
             looks_available: self.looks_available,
             locked: self.locked,
@@ -2187,7 +2405,8 @@ impl Switcher {
             click: InputPress::click(),
             go: InputPress::go(),
             strip,
-            sends: [0; AUX_BUSES],
+            phones: Default::default(),
+            sends: Default::default(),
             look: Look::default(),
             triggers: Vec::new(),
             ptz: None,
@@ -2213,11 +2432,8 @@ impl Switcher {
         }
         if source.has_audio() {
             commands.push(Command::SetStrip { slot, strip });
-            commands.extend((0..AUX_BUSES).map(|bus| Command::SetAuxSend {
-                slot,
-                bus,
-                gain: 0.0,
-            }));
+            let index = self.show.inputs.len() - 1;
+            commands.extend(self.send_commands(&self.show.inputs[index]));
         }
         Ok(commands)
     }
@@ -2367,7 +2583,7 @@ impl Switcher {
                 slot: entry.slot,
                 strip: entry.strip,
             });
-            commands.extend(send_commands(entry));
+            commands.extend(self.send_commands(&self.show.inputs[index]));
         }
         Ok(commands)
     }
@@ -3110,7 +3326,7 @@ impl Switcher {
                 slot: input.slot,
                 strip: input.strip,
             });
-            commands.extend(send_commands(&input));
+            commands.extend(self.send_commands(&input));
         }
         if self.looks_available && input.source.has_video() {
             commands.push(Command::SetLook {
@@ -3979,41 +4195,66 @@ impl Switcher {
         }])
     }
 
-    fn set_aux_send(
-        &mut self,
-        input: &InputRef,
-        bus: u8,
-        level: u8,
-    ) -> Result<Vec<Command>, ActionError> {
-        let bus = aux_index(bus)?;
-        check_volume(level)?;
+    /// The input `input` names, if it has sound.
+    fn sound_input(&self, input: &InputRef) -> Result<usize, ActionError> {
         let index = self.find(input)?;
-        let entry = &mut self.show.inputs[index];
+        let entry = &self.show.inputs[index];
         if !entry.source.has_audio() {
             return Err(ActionError::NoAudio {
                 reference: entry.name.clone(),
             });
         }
-        entry.sends[bus] = level;
+        Ok(index)
+    }
+
+    fn set_send(
+        &mut self,
+        input: &InputRef,
+        bus: &BusRef,
+        level: u8,
+    ) -> Result<Vec<Command>, ActionError> {
+        let id = self.show.buses[self.find_bus(bus)?].id;
+        check_volume(level)?;
+        let index = self.sound_input(input)?;
+        let engine_bus = self.engine_bus(id).expect("a bus of the show");
+        let entry = &mut self.show.inputs[index];
+        if level == 0 {
+            entry.sends.remove(&id);
+        } else {
+            entry.sends.insert(id, level);
+        }
         Ok(vec![Command::SetAuxSend {
             slot: entry.slot,
-            bus,
+            bus: engine_bus,
             gain: fader_gain(level),
         }])
     }
 
-    fn set_aux_bus(
+    fn set_phones_send(
         &mut self,
-        bus: u8,
+        input: &InputRef,
+        on: bool,
+        level: u8,
+    ) -> Result<Vec<Command>, ActionError> {
+        check_volume(level)?;
+        let index = self.sound_input(input)?;
+        let entry = &mut self.show.inputs[index];
+        entry.phones = lmix_types::PhonesSend { on, level };
+        Ok(vec![phones_send(entry)])
+    }
+
+    fn set_bus(
+        &mut self,
+        bus: &BusRef,
         volume: u8,
         mute: bool,
         ramp_ms: u32,
     ) -> Result<Vec<Command>, ActionError> {
-        let bus = aux_index(bus)?;
+        let index = self.find_bus(bus)?;
         check_volume(volume)?;
-        self.show.aux_buses[bus] = AuxBus { volume, mute };
+        self.show.buses[index].level = lmix_types::Fader { volume, mute };
         Ok(vec![Command::SetAuxBus {
-            bus,
+            bus: index + 1,
             gain: fader_gain(volume),
             mute,
             ramp_ms,
@@ -4039,13 +4280,18 @@ impl Switcher {
         match target {
             VolumeTarget::Input(input) => self.set_volume(input, volume),
             VolumeTarget::Bus(bus) => {
-                let mute = self.show.aux_buses[aux_index(*bus)?].mute;
-                self.set_aux_bus(*bus, volume, mute, ramp_ms)
+                let mute = self.show.buses[self.find_bus(bus)?].level.mute;
+                self.set_bus(bus, volume, mute, ramp_ms)
             }
             VolumeTarget::Master => {
                 check_volume(volume)?;
                 self.show.master.volume = volume;
                 Ok(vec![self.master_command(ramp_ms)])
+            }
+            VolumeTarget::Phones => {
+                check_volume(volume)?;
+                self.show.phones.volume = volume;
+                Ok(vec![self.phones_command(ramp_ms)])
             }
         }
     }
@@ -4366,11 +4612,12 @@ impl Switcher {
         spec: OutputSpec,
         source: OutputSource,
         name: Option<String>,
-        aux: Option<u8>,
+        bus: Option<BusRef>,
     ) -> Result<Vec<Command>, ActionError> {
-        if let Some(bus) = aux {
-            aux_index(bus)?;
-        }
+        let bus = match bus {
+            Some(bus) => Some(self.show.buses[self.find_bus(&bus)?].id),
+            None => None,
+        };
         if let Some(reason) = spec.problem() {
             return Err(ActionError::BadEncoding { reason });
         }
@@ -4379,7 +4626,7 @@ impl Switcher {
             name: name.unwrap_or_default(),
             spec,
             source,
-            aux,
+            bus,
         };
         self.feed_of(&output)?;
         let name = match (output.name.is_empty(), source) {
@@ -4445,8 +4692,8 @@ impl Switcher {
             id: output.id,
             spec: output.spec.clone(),
             feed: self.feed_of(output)?,
-            // Checked when the output was added.
-            aux: output.aux.and_then(|bus| aux_index(bus).ok()),
+            // A bus is not removed while an output takes it.
+            bus: output.bus,
         })
     }
 
@@ -4562,7 +4809,7 @@ impl Switcher {
                 name: o.name.clone(),
                 spec: o.spec.clone(),
                 source: o.source,
-                aux: o.aux,
+                bus: o.bus,
                 status: self.output_status.get(&o.id).cloned().unwrap_or_default(),
             })
             .collect()
@@ -4638,14 +4885,21 @@ impl Switcher {
             .filter(|i| self.listen_of(i.id) != Listen::Off)
             .map(|i| i.slot)
             .collect();
+        let buses: Vec<usize> = self
+            .bus_listen
+            .iter()
+            .filter_map(|id| self.engine_bus(*id))
+            .collect();
         self.listen.clear();
-        soloed
+        self.bus_listen.clear();
+        let inputs = soloed.into_iter().map(|slot| Command::SetListen {
+            slot,
+            listen: Listen::Off,
+        });
+        let buses = buses
             .into_iter()
-            .map(|slot| Command::SetListen {
-                slot,
-                listen: Listen::Off,
-            })
-            .collect()
+            .map(|bus| Command::SetBusListen { bus, on: false });
+        inputs.chain(buses).collect()
     }
 
     /// Audio follows the picture: a take fades sound as long as the
@@ -4991,17 +5245,14 @@ fn check_volume(volume: u8) -> Result<(), ActionError> {
     Ok(())
 }
 
-/// Every aux send of an input with sound, as the show has them.
-fn send_commands(input: &ShowInput) -> impl Iterator<Item = Command> + '_ {
-    input
-        .sends
-        .iter()
-        .enumerate()
-        .map(|(bus, level)| Command::SetAuxSend {
-            slot: input.slot,
-            bus,
-            gain: fader_gain(*level),
-        })
+/// What an input sends to the headphones (engine bus 0).
+fn phones_send(input: &ShowInput) -> Command {
+    let send = input.phones;
+    Command::SetAuxSend {
+        slot: input.slot,
+        bus: 0,
+        gain: if send.on { fader_gain(send.level) } else { 0.0 },
+    }
 }
 
 fn no_video_check(entry: &ShowInput) -> Result<(), ActionError> {
@@ -6687,53 +6938,301 @@ mod tests {
         }));
     }
 
-    #[test]
-    fn aux_sends_and_masters_are_kept_and_restored() {
+    /// Two inputs with sound, an in-ear bus before the faders and a
+    /// stream bus after them.
+    fn with_buses() -> Switcher {
         let mut sw = two_inputs();
+        sw.apply(Action::AddBus {
+            name: Some("In-Ear".into()),
+            pre_fader: true,
+        })
+        .unwrap();
+        sw.apply(Action::AddBus {
+            name: Some("Stream".into()),
+            pre_fader: false,
+        })
+        .unwrap();
+        sw
+    }
+
+    fn bus(name: &str) -> BusRef {
+        BusRef::Text(name.into())
+    }
+
+    #[test]
+    fn sends_and_bus_masters_are_kept_and_restored() {
+        let mut sw = with_buses();
 
         let cmds = sw
-            .apply(Action::SetAuxSend {
+            .apply(Action::SetSend {
                 input: named("B"),
-                bus: 2,
+                bus: bus("stream"),
                 level: 50,
+            })
+            .unwrap();
+        // Engine bus 0 is the headphones.
+        assert_eq!(
+            cmds,
+            [Command::SetAuxSend {
+                slot: 1,
+                bus: 2,
+                gain: fader_gain(50)
+            }]
+        );
+        let stream = sw.state().buses[1].id;
+        assert_eq!(
+            sw.state().inputs[1].sends,
+            std::collections::BTreeMap::from([(stream, 50)])
+        );
+
+        sw.apply(Action::SetBus {
+            bus: BusRef::Number(2),
+            volume: 80,
+            mute: true,
+        })
+        .unwrap();
+        let state = sw.state();
+        assert_eq!((state.buses[1].volume, state.buses[1].mute), (80, true));
+
+        let restore = sw.restore_commands();
+        for command in [
+            Command::SetAuxSend {
+                slot: 1,
+                bus: 2,
+                gain: fader_gain(50),
+            },
+            Command::SetAuxSend {
+                slot: 1,
+                bus: 1,
+                gain: 0.0,
+            },
+            Command::SetAuxBus {
+                bus: 2,
+                gain: fader_gain(80),
+                mute: true,
+                ramp_ms: AUDIO_RAMP_MS,
+            },
+        ] {
+            assert!(restore.contains(&command), "{command:?}");
+        }
+
+        sw.apply(Action::SetSend {
+            input: named("B"),
+            bus: bus("Stream"),
+            level: 0,
+        })
+        .unwrap();
+        assert!(sw.state().inputs[1].sends.is_empty(), "0 sends nothing");
+        assert!(matches!(
+            sw.apply(Action::SetSend {
+                input: named("B"),
+                bus: bus("Saal"),
+                level: 50,
+            }),
+            Err(ActionError::UnknownBus { .. })
+        ));
+    }
+
+    #[test]
+    fn buses_come_and_go_with_a_new_audio_mixer() {
+        let mut sw = two_inputs();
+        let cmds = sw
+            .apply(Action::AddBus {
+                name: None,
+                pre_fader: true,
+            })
+            .unwrap();
+        let id = sw.state().buses[0].id;
+        assert!(matches!(
+            &cmds[0],
+            Command::SetFormat { buses, .. } if buses.buses == [(id, true)]
+        ));
+        assert!(
+            !cmds.iter().any(|c| matches!(c, Command::SetSlot { .. })),
+            "the sources keep running"
+        );
+        sw.apply(Action::AddBus {
+            name: None,
+            pre_fader: false,
+        })
+        .unwrap();
+        let names: Vec<String> = sw.state().buses.iter().map(|b| b.name.clone()).collect();
+        assert_eq!(names, ["Bus 1", "Bus 2"]);
+
+        // Names: trimmed, not empty, not too long, each once.
+        for (name, refused) in [
+            ("  ", true),
+            ("bus 1", true),
+            (&"x".repeat(BUS_NAME_MAX + 1), true),
+            (" In-Ear ", false),
+        ] {
+            let result = sw.apply(Action::RenameBus {
+                bus: BusRef::Number(2),
+                name: name.to_string(),
+            });
+            assert_eq!(result.is_err(), refused, "{name:?}: {result:?}");
+        }
+        assert_eq!(sw.state().buses[1].name, "In-Ear");
+        sw.apply(Action::RenameBus {
+            bus: bus("in-ear"),
+            name: "In-Ear".into(),
+        })
+        .expect("its own name again");
+
+        // The tap builds the mixer anew, the same tap changes nothing.
+        let cmds = sw
+            .apply(Action::SetBusTap {
+                bus: bus("In-Ear"),
+                pre_fader: true,
+            })
+            .unwrap();
+        assert!(matches!(&cmds[0], Command::SetFormat { buses, .. } if buses.buses[1].1));
+        assert!(sw
+            .apply(Action::SetBusTap {
+                bus: bus("In-Ear"),
+                pre_fader: true,
+            })
+            .unwrap()
+            .is_empty());
+        let cmds = sw.apply(Action::SetPhonesTap { pre_fader: true }).unwrap();
+        assert!(matches!(&cmds[0], Command::SetFormat { buses, .. } if buses.phones_pre_fader));
+        assert!(sw.state().phones.pre_fader);
+
+        // Removing one drops its sends; the next takes its place.
+        sw.apply(Action::SetSend {
+            input: named("A"),
+            bus: BusRef::Number(1),
+            level: 70,
+        })
+        .unwrap();
+        sw.apply(Action::RemoveBus {
+            bus: BusRef::Number(1),
+        })
+        .unwrap();
+        let state = sw.state();
+        assert_eq!(state.buses.len(), 1);
+        assert_eq!(state.buses[0].name, "In-Ear");
+        assert!(state.inputs[0].sends.is_empty());
+
+        while sw.state().buses.len() < BUSES {
+            sw.apply(Action::AddBus {
+                name: None,
+                pre_fader: false,
+            })
+            .unwrap();
+        }
+        assert!(matches!(
+            sw.apply(Action::AddBus {
+                name: None,
+                pre_fader: false,
+            }),
+            Err(ActionError::TooManyBuses { .. })
+        ));
+    }
+
+    #[test]
+    fn a_bus_an_output_takes_stays() {
+        let mut sw = with_buses();
+        let srt = OutputSpec::Srt {
+            uri: "srt://cdn:9000".into(),
+            video_kbps: 6000,
+            encoding: Default::default(),
+        };
+        sw.apply(Action::AddOutput {
+            spec: srt,
+            source: OutputSource::Program,
+            name: Some("Mix minus".into()),
+            bus: Some(bus("Stream")),
+        })
+        .unwrap();
+        let stream = sw.state().buses[1].id;
+        assert_eq!(sw.state().outputs[0].bus, Some(stream));
+
+        let cmds = sw
+            .apply(Action::StartOutput {
+                output: OutputRef::Number(1),
+            })
+            .unwrap();
+        assert!(matches!(
+            cmds[..],
+            [Command::StartOutput {
+                feed: Feed::Program,
+                bus: Some(b),
+                ..
+            }] if b == stream
+        ));
+
+        assert!(matches!(
+            sw.apply(Action::RemoveBus { bus: bus("Stream") }),
+            Err(ActionError::BusInUse { .. })
+        ));
+        // Removing the other bus moves Stream to engine bus 1; the output
+        // keeps it by id.
+        sw.apply(Action::RemoveBus { bus: bus("In-Ear") }).unwrap();
+        assert_eq!(sw.engine_bus(stream), Some(1));
+        assert!(matches!(
+            sw.apply(Action::AddOutput {
+                spec: OutputSpec::Srt {
+                    uri: "srt://cdn:9001".into(),
+                    video_kbps: 6000,
+                    encoding: Default::default(),
+                },
+                source: OutputSource::Program,
+                name: None,
+                bus: Some(bus("In-Ear")),
+            }),
+            Err(ActionError::UnknownBus { .. })
+        ));
+    }
+
+    #[test]
+    fn inputs_send_to_the_headphones_and_buses_are_listened_to() {
+        let mut sw = with_buses();
+        let cmds = sw
+            .apply(Action::SetPhonesSend {
+                input: named("B"),
+                on: false,
+                level: 30,
             })
             .unwrap();
         assert_eq!(
             cmds,
             [Command::SetAuxSend {
                 slot: 1,
-                bus: 1,
-                gain: fader_gain(50)
+                bus: 0,
+                gain: 0.0
             }]
         );
-        assert_eq!(sw.state().inputs[1].sends, [0, 50, 0, 0, 0, 0, 0]);
-
-        sw.apply(Action::SetAuxBus {
-            bus: 1,
-            volume: 80,
-            mute: true,
+        sw.apply(Action::SetPhonesSend {
+            input: named("B"),
+            on: true,
+            level: 30,
         })
         .unwrap();
         assert_eq!(
-            sw.state().aux_buses[0],
-            AuxBus {
-                volume: 80,
-                mute: true
+            sw.state().inputs[1].phones,
+            lmix_types::PhonesSend {
+                on: true,
+                level: 30
             }
         );
-
-        let restore = sw.restore_commands();
-        assert!(restore.contains(&Command::SetAuxSend {
+        assert!(sw.restore_commands().contains(&Command::SetAuxSend {
             slot: 1,
-            bus: 1,
-            gain: fader_gain(50)
-        }));
-        assert!(restore.contains(&Command::SetAuxBus {
             bus: 0,
-            gain: fader_gain(80),
-            mute: true,
-            ramp_ms: AUDIO_RAMP_MS,
+            gain: fader_gain(30)
         }));
+
+        let cmds = sw
+            .apply(Action::SetBusListen {
+                bus: bus("Stream"),
+                on: true,
+            })
+            .unwrap();
+        assert_eq!(cmds, [Command::SetBusListen { bus: 2, on: true }]);
+        assert!(sw.state().buses[1].listen);
+        let cmds = sw.apply(Action::ClearListen).unwrap();
+        assert_eq!(cmds, [Command::SetBusListen { bus: 2, on: false }]);
+        assert!(!sw.state().buses[1].listen);
     }
 
     #[test]
@@ -6754,7 +7253,8 @@ mod tests {
             Command::SetFormat {
                 format: upright,
                 multiview: Default::default(),
-                sample_rate: 48_000
+                sample_rate: 48_000,
+                buses: MixerBuses::default(),
             }
         );
         assert!(cmds
@@ -6787,7 +7287,7 @@ mod tests {
     }
 
     #[test]
-    fn new_inputs_get_the_default_delay_and_the_monitor_its_volume() {
+    fn new_inputs_get_the_default_delay_and_the_headphones_their_volume() {
         let mut sw = Switcher::new(SLOTS);
         sw.apply(Action::SetDefaultDelay { ms: 40 }).unwrap();
 
@@ -6803,30 +7303,53 @@ mod tests {
             ..ChannelStrip::default()
         };
         assert!(cmds.contains(&Command::SetStrip { slot: 0, strip }));
+        assert!(
+            cmds.contains(&Command::SetAuxSend {
+                slot: 0,
+                bus: 0,
+                gain: 1.0
+            }),
+            "a new input is heard on the headphones"
+        );
         assert_eq!(sw.state().inputs[0].strip.delay_ms, 40);
         assert!(matches!(
             sw.apply(Action::SetDefaultDelay { ms: 501 }),
             Err(ActionError::BadStrip { .. })
         ));
 
-        let cmds = sw.apply(Action::SetMonitorVolume { volume: 50 }).unwrap();
+        let cmds = sw
+            .apply(Action::SetPhones {
+                volume: 50,
+                mute: false,
+            })
+            .unwrap();
+        let phones = Command::SetMonitor {
+            gain: fader_gain(50),
+            ramp_ms: AUDIO_RAMP_MS,
+        };
+        assert_eq!(cmds, std::slice::from_ref(&phones));
+        assert_eq!(sw.state().phones.volume, 50);
+        assert!(sw.restore_commands().contains(&phones));
+        let cmds = sw
+            .apply(Action::SetPhones {
+                volume: 50,
+                mute: true,
+            })
+            .unwrap();
         assert_eq!(
             cmds,
             [Command::SetMonitor {
-                gain: fader_gain(50)
+                gain: 0.0,
+                ramp_ms: AUDIO_RAMP_MS,
             }]
         );
-        assert_eq!(sw.state().monitor_volume, 50);
-        assert!(sw.restore_commands().contains(&Command::SetMonitor {
-            gain: fader_gain(50)
-        }));
     }
 
     #[test]
     fn levels_fade_over_their_time() {
-        let mut sw = two_inputs();
-        sw.apply(Action::SetAuxBus {
-            bus: 2,
+        let mut sw = with_buses();
+        sw.apply(Action::SetBus {
+            bus: bus("In-Ear"),
             volume: 80,
             mute: true,
         })
@@ -6847,7 +7370,9 @@ mod tests {
             "the end value at once"
         );
 
-        let cmds = sw.apply(fade(VolumeTarget::Bus(2), 0, 4000)).unwrap();
+        let cmds = sw
+            .apply(fade(VolumeTarget::Bus(bus("In-Ear")), 0, 4000))
+            .unwrap();
         assert_eq!(
             cmds,
             [Command::SetAuxBus {
@@ -6881,9 +7406,17 @@ mod tests {
             Err(ActionError::BadFade { .. })
         ));
         assert!(matches!(
-            sw.apply(fade(VolumeTarget::Bus(8), 50, 100)),
-            Err(ActionError::BadAuxBus { .. })
+            sw.apply(fade(VolumeTarget::Bus(BusRef::Number(3)), 50, 100)),
+            Err(ActionError::UnknownBus { .. })
         ));
+        let cmds = sw.apply(fade(VolumeTarget::Phones, 20, 2000)).unwrap();
+        assert_eq!(
+            cmds,
+            [Command::SetMonitor {
+                gain: fader_gain(20),
+                ramp_ms: 2000,
+            }]
+        );
         assert!(matches!(
             sw.apply(fade(VolumeTarget::Input(named("B")), 101, 100)),
             Err(ActionError::BadVolume { .. })
@@ -6896,68 +7429,6 @@ mod tests {
         );
         let json = r#"{"action":"fade_volume","target":"master","volume":0,"duration_ms":2000}"#;
         assert!(serde_json::from_str::<Action>(json).is_ok());
-    }
-
-    #[test]
-    fn aux_bus_numbers_are_checked() {
-        let mut sw = two_inputs();
-        for bus in [0, 8] {
-            assert!(matches!(
-                sw.apply(Action::SetAuxBus {
-                    bus,
-                    volume: 50,
-                    mute: false
-                }),
-                Err(ActionError::BadAuxBus { .. })
-            ));
-        }
-        let srt = OutputSpec::Srt {
-            uri: "srt://cdn:9000".into(),
-            video_kbps: 6000,
-            encoding: Default::default(),
-        };
-        assert!(matches!(
-            sw.apply(Action::AddOutput {
-                spec: srt,
-                source: OutputSource::Program,
-                name: None,
-                aux: Some(8),
-            }),
-            Err(ActionError::BadAuxBus { .. })
-        ));
-    }
-
-    #[test]
-    fn an_output_takes_its_sound_from_an_aux_bus() {
-        let mut sw = two_inputs();
-        let srt = OutputSpec::Srt {
-            uri: "srt://cdn:9000".into(),
-            video_kbps: 6000,
-            encoding: Default::default(),
-        };
-        sw.apply(Action::AddOutput {
-            spec: srt,
-            source: OutputSource::Program,
-            name: Some("Mix minus".into()),
-            aux: Some(1),
-        })
-        .unwrap();
-
-        let cmds = sw
-            .apply(Action::StartOutput {
-                output: OutputRef::Number(1),
-            })
-            .unwrap();
-
-        assert!(matches!(
-            cmds[..],
-            [Command::StartOutput {
-                feed: Feed::Program,
-                aux: Some(0),
-                ..
-            }]
-        ));
-        assert_eq!(sw.state().outputs[0].aux, Some(1));
     }
 
     const PREROLL: u32 = crate::engine::flows::STINGER_PREROLL_MS;
@@ -8680,7 +9151,7 @@ mod tests {
             spec: srt.clone(),
             source: OutputSource::Program,
             name: Some("Stream".into()),
-            aux: None,
+            bus: None,
         })
         .unwrap();
         let id = sw.state().outputs[0].id;
@@ -8696,7 +9167,7 @@ mod tests {
                 id,
                 spec: srt.clone(),
                 feed: Feed::Program,
-                aux: None,
+                bus: None,
             }]
         );
         sw.set_output_status(id, OutputStatus::Running { since_ms: 1 });
@@ -8706,7 +9177,7 @@ mod tests {
             id,
             spec: srt,
             feed: Feed::Program,
-            aux: None,
+            bus: None,
         }));
 
         let cmds = sw
@@ -8765,7 +9236,8 @@ mod tests {
             Command::SetFormat {
                 format: Default::default(),
                 multiview: layout,
-                sample_rate: 48_000
+                sample_rate: 48_000,
+                buses: MixerBuses::default(),
             }
         );
         assert!(
@@ -8795,7 +9267,7 @@ mod tests {
             spec,
             source: OutputSource::Program,
             name: None,
-            aux: None,
+            bus: None,
         };
         for bad in [
             rtmp("srt://cdn:9000", lmix_types::VideoCodec::H264),
@@ -8834,7 +9306,7 @@ mod tests {
             spec,
             source: OutputSource::Program,
             name: None,
-            aux: None,
+            bus: None,
         };
         assert!(matches!(
             sw.apply(add(spec(20_000))),
@@ -8874,7 +9346,7 @@ mod tests {
                 spec,
                 source: OutputSource::Program,
                 name: None,
-                aux: None,
+                bus: None,
             })
             .unwrap();
         }
@@ -8926,7 +9398,7 @@ mod tests {
             },
             source: OutputSource::Preview,
             name: None,
-            aux: None,
+            bus: None,
         })
         .unwrap();
         assert!(sw.state().outputs[0].name.ends_with(" (Preview)"));
@@ -8959,7 +9431,7 @@ mod tests {
             spec: rec,
             source: OutputSource::Input(b),
             name: None,
-            aux: None,
+            bus: None,
         })
         .unwrap();
         let output = sw.state().outputs[0].clone();
@@ -9359,40 +9831,11 @@ mod tests {
                     slot: 0,
                     strip: ChannelStrip::default()
                 },
+                // Heard on the headphones; the show has no buses.
                 Command::SetAuxSend {
                     slot: 0,
                     bus: 0,
-                    gain: 0.0
-                },
-                Command::SetAuxSend {
-                    slot: 0,
-                    bus: 1,
-                    gain: 0.0
-                },
-                Command::SetAuxSend {
-                    slot: 0,
-                    bus: 2,
-                    gain: 0.0
-                },
-                Command::SetAuxSend {
-                    slot: 0,
-                    bus: 3,
-                    gain: 0.0
-                },
-                Command::SetAuxSend {
-                    slot: 0,
-                    bus: 4,
-                    gain: 0.0
-                },
-                Command::SetAuxSend {
-                    slot: 0,
-                    bus: 5,
-                    gain: 0.0
-                },
-                Command::SetAuxSend {
-                    slot: 0,
-                    bus: 6,
-                    gain: 0.0
+                    gain: 1.0
                 },
                 Command::SetAudio {
                     slot: 0,

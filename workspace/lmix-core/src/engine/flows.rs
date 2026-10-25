@@ -24,15 +24,15 @@ use strom_types::{Flow, FlowId, PropertyValue};
 use uuid::Uuid;
 
 use lmix_types::action::OVERLAY_CHANNELS;
-use lmix_types::input::{color_rgb, AUX_BUSES, AUX_PRE_FADER};
+use lmix_types::input::color_rgb;
 use lmix_types::layout::LAYOUTS;
 use lmix_types::{
-    DisplayMode, Framerate, MasterFormat, MultiviewLayout, MultiviewMeters, OutputId, OutputSpec,
-    ProgramSide, RateMode, SourceSpec, VideoCodec, VideoEncoding,
+    BusId, DisplayMode, Framerate, MasterFormat, MultiviewLayout, MultiviewMeters, OutputId,
+    OutputSpec, ProgramSide, RateMode, SourceSpec, VideoCodec, VideoEncoding,
 };
 
 use super::LivePicture;
-use crate::switcher::Feed;
+use crate::switcher::{Feed, MixerBuses};
 
 /// Namespace of all lmix flow ids.
 pub(crate) const FLOW_NAMESPACE: Uuid = Uuid::from_u128(0x6c6d_6978_2d63_6f72_652d_666c_6f77_7321);
@@ -203,6 +203,7 @@ pub fn mixer_flow(
     format: MasterFormat,
     multiview: MultiviewLayout,
     sample_rate: u32,
+    buses: &MixerBuses,
 ) -> Flow {
     let mut flow = Flow::new(MIXER_NAME);
     flow.id = mixer_id();
@@ -317,7 +318,7 @@ pub fn mixer_flow(
     ));
 
     add_stinger_player(&mut flow, backend);
-    add_audio_mixer(&mut flow, slots, monitor, sample_rate);
+    add_audio_mixer(&mut flow, slots, monitor, sample_rate, buses);
 
     flow.blocks.push(block(PGM_TAP, THUMBNAIL_BLOCK, vec![]));
     flow.links.push(link(
@@ -506,7 +507,7 @@ pub fn output_flow(
     id: OutputId,
     spec: &OutputSpec,
     feed: Feed,
-    aux: Option<usize>,
+    bus: Option<BusId>,
     backend: MixerBackend,
     framerate: Framerate,
     live_mkv: LiveMkv,
@@ -527,9 +528,9 @@ pub fn output_flow(
         Feed::Preview => (pgm_channel(PVW_OUT), Some(pgm_channel(PGM_AUDIO_OUT))),
         Feed::Slot { slot, audio } => (slot_channel(slot), audio.then(|| slot_audio_channel(slot))),
     };
-    // An aux bus replaces the feed's sound (e.g. a mix-minus stream).
-    let audio = match aux {
-        Some(bus) => Some(pgm_channel(&aux_out(bus))),
+    // A bus replaces the feed's sound (e.g. a mix-minus stream).
+    let audio = match bus {
+        Some(bus) => Some(pgm_channel(&bus_out(bus))),
         None => audio,
     };
     // Screens show picture only.
@@ -883,9 +884,43 @@ pub fn audio_delay(slot: usize) -> String {
     format!("adelay{slot}")
 }
 
-/// Inter output of aux bus `bus` (0-based) in the mixer flow.
-fn aux_out(bus: usize) -> String {
-    format!("aux{}_out", bus + 1)
+/// Inter output of bus `bus` in the mixer flow: named by its id, so an
+/// output keeps it when other buses come and go.
+fn bus_out(bus: BusId) -> String {
+    format!("bus{}_out", bus.0.simple())
+}
+
+/// The buses a mixer flow's audio mixer was built with; `None` for one
+/// from before the headphones had their own bus.
+pub fn buses_of(flow: &Flow) -> Option<MixerBuses> {
+    let mix = flow.blocks.iter().find(|b| b.id == AUDIO_MIXER)?;
+    let uint = |key: &str| match mix.properties.get(key) {
+        Some(PropertyValue::UInt(n)) => Some(*n),
+        _ => None,
+    };
+    if uint("monitor_source") != Some(1) {
+        return None;
+    }
+    let count = uint("num_aux_buses")?;
+    let pre = |bus: u64| {
+        matches!(
+            mix.properties.get(&format!("ch1_aux{bus}_pre")),
+            Some(PropertyValue::Bool(true))
+        )
+    };
+    let id = |bus: u64| {
+        let from = format!("{AUDIO_MIXER}:aux_out_{bus}");
+        let to = flow.links.iter().find(|l| l.from == from)?.to.clone();
+        let hex = to.strip_prefix("bus")?.strip_suffix("_out:sink")?;
+        Uuid::try_parse(hex).ok().map(BusId)
+    };
+    let buses = (2..=count)
+        .map(|bus| id(bus).map(|id| (id, pre(bus))))
+        .collect::<Option<Vec<_>>>()?;
+    Some(MixerBuses {
+        phones_pre_fader: pre(1),
+        buses,
+    })
 }
 
 /// `inter` buffer of slot sound in the mixer: holds the longest delay.
@@ -893,7 +928,16 @@ const AUDIO_INTER_BUFFER_MS: &str = "1000";
 
 /// Sound of every slot into one audio mixer; its main mix is program
 /// audio (into the vision mixer, which meters it on the multiview).
-fn add_audio_mixer(flow: &mut Flow, slots: usize, monitor: MonitorOut, sample_rate: u32) {
+///
+/// Aux bus 1 is the headphones (AUD.4): the monitor follows it while
+/// nothing is soloed. The show's buses are aux 2 on (AUD.2).
+fn add_audio_mixer(
+    flow: &mut Flow,
+    slots: usize,
+    monitor: MonitorOut,
+    sample_rate: u32,
+    buses: &MixerBuses,
+) {
     for slot in 0..slots {
         let input = format!("ain{slot}");
         flow.blocks.push(block(
@@ -940,12 +984,21 @@ fn add_audio_mixer(flow: &mut Flow, slots: usize, monitor: MonitorOut, sample_ra
         ),
         (
             "num_aux_buses".to_string(),
-            PropertyValue::UInt(AUX_BUSES as u64),
+            PropertyValue::UInt(1 + buses.buses.len() as u64),
+        ),
+        ("monitor_source".to_string(), PropertyValue::UInt(1)),
+        // The stinger clip is heard on the headphones as on program.
+        (
+            format!("ch{}_aux1_level", stinger_channel(slots)),
+            PropertyValue::Float(1.0),
         ),
     ];
     // Pre or post fader is fixed when strom builds the mixer.
+    let taps: Vec<bool> = std::iter::once(buses.phones_pre_fader)
+        .chain(buses.buses.iter().map(|(_, pre)| *pre))
+        .collect();
     for slot in 0..slots {
-        for (bus, pre) in AUX_PRE_FADER.iter().enumerate() {
+        for (bus, pre) in taps.iter().enumerate() {
             properties.push((
                 format!("ch{}_aux{}_pre", audio_channel(slot), bus + 1),
                 PropertyValue::Bool(*pre),
@@ -967,17 +1020,19 @@ fn add_audio_mixer(flow: &mut Flow, slots: usize, monitor: MonitorOut, sample_ra
         format!("{AUDIO_MIXER}:main_out"),
         format!("{MIXER_BLOCK}:pgm_audio_in"),
     ));
-    // Aux buses on inter channels, for outputs that carry a bus's sound.
-    for bus in 0..AUX_BUSES {
-        let out = aux_out(bus);
+    // The show's buses on inter channels, for outputs that carry a bus's
+    // sound.
+    for (i, (bus, _)) in buses.buses.iter().enumerate() {
+        let out = bus_out(*bus);
         flow.blocks.push(mixer_out(&out));
         flow.links.push(link(
-            format!("{AUDIO_MIXER}:aux_out_{}", bus + 1),
+            format!("{AUDIO_MIXER}:aux_out_{}", i + 2),
             format!("{out}:sink"),
         ));
     }
 
-    // strom switches the monitor bus between program and the solos.
+    // strom switches the monitor between the headphones' bus and the
+    // solos.
     if monitor == MonitorOut::Auto {
         flow.elements
             .push(element(MONITOR_SINK, "autoaudiosink", vec![]));
@@ -1474,6 +1529,7 @@ mod tests {
             upright,
             layout,
             44_100,
+            &MixerBuses::default(),
         );
         // The multiview layout (OUT.10) and the sample rate (AUD.17) are
         // read back like the format.
@@ -1486,6 +1542,7 @@ mod tests {
             upright,
             MultiviewLayout::default(),
             48_000,
+            &MixerBuses::default(),
         );
         assert_eq!(multiview_of(&plain), MultiviewLayout::default());
 
@@ -1519,6 +1576,7 @@ mod tests {
 
     #[test]
     fn mixer_outputs_hand_on_without_waiting() {
+        // Program, multiview, preview, program sound and every bus.
         let flow = mixer_flow(
             2,
             MixerBackend::Cuda,
@@ -1526,15 +1584,14 @@ mod tests {
             MasterFormat::default(),
             MultiviewLayout::default(),
             48_000,
+            &two_buses(),
         );
-
-        // Program, multiview, preview, program sound and every aux bus.
         let outs: Vec<_> = flow
             .blocks
             .iter()
             .filter(|b| b.block_definition_id == INTER_OUTPUT_BLOCK)
             .collect();
-        assert_eq!(outs.len(), 4 + AUX_BUSES);
+        assert_eq!(outs.len(), 4 + 2);
         for out in outs {
             assert!(
                 matches!(out.properties.get("sync"), Some(PropertyValue::Bool(false))),
@@ -1553,6 +1610,7 @@ mod tests {
             MasterFormat::default(),
             MultiviewLayout::default(),
             48_000,
+            &MixerBuses::default(),
         );
 
         for slot in 0..3 {
@@ -1581,6 +1639,7 @@ mod tests {
             MasterFormat::default(),
             MultiviewLayout::default(),
             48_000,
+            &MixerBuses::default(),
         );
 
         assert_eq!(black_input(3), 3);
@@ -1600,6 +1659,7 @@ mod tests {
                 MasterFormat::default(),
                 MultiviewLayout::default(),
                 48_000,
+                &MixerBuses::default(),
             );
             let vm = flow.blocks.iter().find(|b| b.id == "vm").unwrap();
             matches!(
@@ -1780,6 +1840,7 @@ mod tests {
             MasterFormat::default(),
             MultiviewLayout::default(),
             48_000,
+            &MixerBuses::default(),
         );
 
         for slot in 0..3 {
@@ -1804,6 +1865,7 @@ mod tests {
             MasterFormat::default(),
             MultiviewLayout::default(),
             48_000,
+            &MixerBuses::default(),
         );
         assert!(heard
             .links
@@ -1820,6 +1882,7 @@ mod tests {
             MasterFormat::default(),
             MultiviewLayout::default(),
             48_000,
+            &MixerBuses::default(),
         );
 
         assert!(flow
@@ -1911,6 +1974,7 @@ mod tests {
             MasterFormat::default(),
             MultiviewLayout::default(),
             48_000,
+            &MixerBuses::default(),
         );
 
         // One DSK layer per overlay; strom draws the stinger beneath them.
@@ -1947,8 +2011,18 @@ mod tests {
         ));
     }
 
+    /// The headphones after the faders, an in-ear mix before them and a
+    /// stream mix after them.
+    fn two_buses() -> MixerBuses {
+        MixerBuses {
+            phones_pre_fader: false,
+            buses: vec![(BusId::new(), true), (BusId::new(), false)],
+        }
+    }
+
     #[test]
-    fn mixer_publishes_its_aux_buses() {
+    fn mixer_publishes_its_buses() {
+        let buses = two_buses();
         let flow = mixer_flow(
             2,
             MixerBackend::Cpu,
@@ -1956,29 +2030,48 @@ mod tests {
             MasterFormat::default(),
             MultiviewLayout::default(),
             48_000,
+            &buses,
         );
 
         let mix = flow.blocks.iter().find(|b| b.id == AUDIO_MIXER).unwrap();
+        let uint = |key: &str| match mix.properties.get(key) {
+            Some(PropertyValue::UInt(n)) => Some(*n),
+            _ => None,
+        };
+        // The headphones are aux 1, and the monitor follows them.
+        assert_eq!(uint("num_aux_buses"), Some(3));
+        assert_eq!(uint("monitor_source"), Some(1));
+        for (bus, pre) in [(1, false), (2, true), (3, false)] {
+            assert!(
+                matches!(mix.properties.get(&format!("ch2_aux{bus}_pre")), Some(PropertyValue::Bool(p)) if *p == pre),
+                "aux {bus}"
+            );
+        }
+        // The stinger (channel 3 of two slots) is heard on them too.
         assert!(matches!(
-            mix.properties.get("num_aux_buses"),
-            Some(PropertyValue::UInt(7))
+            mix.properties.get("ch3_aux1_level"),
+            Some(PropertyValue::Float(level)) if *level == 1.0
         ));
-        assert!(matches!(
-            mix.properties.get("ch2_aux1_pre"),
-            Some(PropertyValue::Bool(true))
-        ));
-        assert!(matches!(
-            mix.properties.get("ch2_aux2_pre"),
-            Some(PropertyValue::Bool(false))
-        ));
+        let stream = format!("bus{}_out:sink", buses.buses[1].0 .0.simple());
         assert!(flow
             .links
             .iter()
-            .any(|l| l.from == "mix:aux_out_2" && l.to == "aux2_out:sink"));
+            .any(|l| l.from == "mix:aux_out_3" && l.to == stream));
+        assert!(
+            !flow.links.iter().any(|l| l.from == "mix:aux_out_1"),
+            "the headphones are no output's sound"
+        );
+        // A reused mixer tells its buses.
+        assert_eq!(buses_of(&flow), Some(buses));
+        let mut old = flow.clone();
+        let mix = old.blocks.iter_mut().find(|b| b.id == AUDIO_MIXER).unwrap();
+        mix.properties.remove("monitor_source");
+        assert_eq!(buses_of(&old), None, "a mixer from before");
     }
 
     #[test]
-    fn an_aux_bus_replaces_the_output_sound() {
+    fn a_bus_replaces_the_output_sound() {
+        let bus = BusId::new();
         let spec = OutputSpec::Srt {
             uri: "srt://cdn:9000".into(),
             video_kbps: 6000,
@@ -1988,7 +2081,7 @@ mod tests {
             OutputId::new(),
             &spec,
             Feed::Program,
-            Some(0),
+            Some(bus),
             MixerBackend::Cpu,
             Framerate::default(),
             LiveMkv::Yes,
@@ -1997,7 +2090,7 @@ mod tests {
         let audio = flow.blocks.iter().find(|b| b.id == "pgm_audio").unwrap();
         assert!(matches!(
             audio.properties.get("channel"),
-            Some(PropertyValue::String(c)) if *c == format!("strom_{}_aux1_out", mixer_id())
+            Some(PropertyValue::String(c)) if *c == format!("strom_{}_bus{}_out", mixer_id(), bus.0.simple())
         ));
     }
 
@@ -2388,6 +2481,7 @@ mod tests {
                 MasterFormat::default(),
                 MultiviewLayout::default(),
                 48_000,
+                &MixerBuses::default(),
             ),
             slot,
         ] {

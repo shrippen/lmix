@@ -827,11 +827,23 @@ impl Service {
                 }
             })
             .collect();
+        // Engine bus 0 is the headphones, metered as the monitor (their mix
+        // or the solos); the show's buses follow.
+        let buses = sw
+            .show()
+            .buses
+            .iter()
+            .enumerate()
+            .map(|(i, bus)| lmix_types::BusPeak {
+                bus: bus.id,
+                peak_db: engine.aux.get(&(i + 1)).copied().and_then(fresh),
+            })
+            .collect();
         Levels {
             inputs,
             program_peak_db: engine.main.and_then(fresh),
-            monitor_peak_db: engine.monitor.and_then(fresh),
-            aux_peak_db: std::array::from_fn(|bus| engine.aux.get(&bus).copied().and_then(fresh)),
+            phones_peak_db: engine.monitor.and_then(fresh),
+            buses,
         }
     }
 
@@ -3300,7 +3312,7 @@ mod tests {
                 },
                 source: OutputSource::default(),
                 name: Some("Screen".into()),
-                aux: None,
+                bus: None,
             })
             .await
             .unwrap();
@@ -3508,7 +3520,7 @@ mod tests {
             "the old file, as it was"
         );
         let new = tokio::fs::read_to_string(&file).await.unwrap();
-        assert!(new.contains("\"version\": 2"), "{new}");
+        assert!(new.contains("\"version\": 3"), "{new}");
     }
 
     #[tokio::test]

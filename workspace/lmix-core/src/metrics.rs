@@ -460,8 +460,8 @@ mod tests {
                 channels_db: vec![-12.5, -20.0],
             }],
             program_peak_db: Some(-6.0),
-            monitor_peak_db: None,
-            aux_peak_db: Default::default(),
+            phones_peak_db: None,
+            buses: Vec::new(),
         };
         let slot = input.slot;
         state.inputs.push(input);
