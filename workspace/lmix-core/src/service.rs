@@ -823,16 +823,15 @@ impl Service {
                 }
             })
             .collect();
-        // Engine bus 0 is the headphones, metered as the monitor (their mix
-        // or the solos); the show's buses follow.
+        // The headphones are metered as the monitor (their mix or the
+        // solos).
         let buses = sw
             .show()
             .buses
             .iter()
-            .enumerate()
-            .map(|(i, bus)| lmix_types::BusPeak {
+            .map(|bus| lmix_types::BusPeak {
                 bus: bus.id,
-                peak_db: engine.aux.get(&(i + 1)).copied().and_then(fresh),
+                peak_db: engine.buses.get(&bus.id).copied().and_then(fresh),
             })
             .collect();
         Levels {

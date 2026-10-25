@@ -18,7 +18,7 @@
 
 use async_trait::async_trait;
 use lmix_types::{
-    BoxRect, ChannelStrip, Device, DeviceKind, Effect, Listen, Look, OutputId, OutputStats,
+    BoxRect, BusId, ChannelStrip, Device, DeviceKind, Effect, Listen, Look, OutputId, OutputStats,
     PageRunning, SignalLoss, SourceSpec, Transport,
 };
 use reqwest::StatusCode;
@@ -33,6 +33,7 @@ use strom_types::api::{
 };
 use strom_types::devtools::HtmlPageCommand;
 use strom_types::discovery::DeviceResponse;
+use strom_types::mixer::{AddMixerAuxBusRequest, MixerAuxBuses};
 use strom_types::stinger::{
     StingerAddClipRequest, StingerBeneath, StingerClip, StingerClipSettings, StingerLayout,
     StingerState, StingerTakeRequest, StingerTakeResponse,
@@ -104,10 +105,11 @@ pub struct StromEngine {
     multiview: std::sync::Mutex<lmix_types::MultiviewLayout>,
     /// Sample rate of the audio mixer (AUD.17), with `format`.
     sample_rate: std::sync::Mutex<u32>,
-    /// The buses the audio mixer is built with (AUD.2); `None` for a
-    /// reused mixer that does not tell (built before), which the restore
-    /// then builds anew.
-    buses: std::sync::Mutex<Option<MixerBuses>>,
+    /// The buses the audio mixer has (AUD.2), with strom's numbers; `None`
+    /// for a reused mixer that does not tell (built before), which the
+    /// restore then builds anew. Shared with the meters, which name a bus
+    /// by its number.
+    buses: Arc<std::sync::Mutex<Option<flows::BuiltBuses>>>,
     /// Mixer inputs of the last `start`.
     slots: AtomicUsize,
     /// Ends of the stinger takes lmix starts (strom's events).
@@ -459,6 +461,7 @@ impl StromEngine {
     }
 
     /// Program in `format` (OUT.1): a new mixer only when it differs.
+    /// Other buses alone change the running mixer (`patch_buses`).
     async fn set_format(
         &self,
         format: lmix_types::MasterFormat,
@@ -466,25 +469,154 @@ impl StromEngine {
         sample_rate: u32,
         buses: &MixerBuses,
     ) -> Result<(), EngineError> {
-        {
+        // `Some(true)`: the mixer is as wanted, `Some(false)`: only its
+        // buses differ, `None`: it is built anew.
+        let same = {
             let mut current = self.format.lock().expect("format lock");
             let mut current_view = self.multiview.lock().expect("multiview lock");
             let mut current_rate = self.sample_rate.lock().expect("rate lock");
             let mut current_buses = self.buses.lock().expect("buses lock");
-            if *current == format
+            let picture = *current == format
                 && *current_view == multiview
-                && *current_rate == sample_rate
-                && current_buses.as_ref() == Some(buses)
-            {
-                return Ok(());
+                && *current_rate == sample_rate;
+            match current_buses.as_ref() {
+                Some(built) if picture => Some(built.are(buses)),
+                _ => {
+                    *current = format;
+                    *current_view = multiview;
+                    *current_rate = sample_rate;
+                    *current_buses = Some(flows::BuiltBuses::numbered(buses));
+                    None
+                }
             }
-            *current = format;
-            *current_view = multiview;
-            *current_rate = sample_rate;
-            *current_buses = Some(buses.clone());
+        };
+        match same {
+            Some(true) => Ok(()),
+            Some(false) => self.patch_buses(buses).await,
+            None => {
+                let flow = self.mixer_flow();
+                self.build_mixer(&flow).await
+            }
         }
-        let flow = self.mixer_flow();
-        self.build_mixer(&flow).await
+    }
+
+    /// Bring the running audio mixer's buses to `wanted`: strom removes
+    /// and adds buses and moves taps while the mixer plays (AUD.2). Each
+    /// step is recorded as it succeeds, so after a failure the next
+    /// `SetFormat` does the rest.
+    async fn patch_buses(&self, wanted: &MixerBuses) -> Result<(), EngineError> {
+        let current = || {
+            self.buses
+                .lock()
+                .expect("buses lock")
+                .clone()
+                .expect("a mixer with known buses")
+        };
+        let record = |built: flows::BuiltBuses| {
+            *self.buses.lock().expect("buses lock") = Some(built);
+        };
+        let slots = self.slots.load(Ordering::Relaxed);
+        let wants = |id: BusId| wanted.buses.iter().find(|(w, _)| *w == id).map(|(_, pre)| *pre);
+
+        for bus in current().buses {
+            if wants(bus.id).is_none() {
+                self.remove_aux_bus(bus.aux).await?;
+                let mut built = current();
+                built.buses.retain(|b| b.id != bus.id);
+                record(built);
+            }
+        }
+        if current().phones_pre_fader != wanted.phones_pre_fader {
+            let taps = flows::tap_properties(slots, flows::PHONES_AUX, wanted.phones_pre_fader);
+            self.patch_audio_mixer(taps, AUDIO_RAMP_MS).await?;
+            let mut built = current();
+            built.phones_pre_fader = wanted.phones_pre_fader;
+            record(built);
+        }
+        for bus in current().buses {
+            match wants(bus.id) {
+                Some(pre) if pre != bus.pre_fader => {
+                    let taps = flows::tap_properties(slots, bus.aux, pre);
+                    self.patch_audio_mixer(taps, AUDIO_RAMP_MS).await?;
+                    let mut built = current();
+                    for b in built.buses.iter_mut().filter(|b| b.id == bus.id) {
+                        b.pre_fader = pre;
+                    }
+                    record(built);
+                }
+                _ => {}
+            }
+        }
+        for (id, pre_fader) in &wanted.buses {
+            if current().buses.iter().any(|b| b.id == *id) {
+                continue;
+            }
+            let aux = self.add_aux_bus(*id, *pre_fader).await?;
+            let mut built = current();
+            built.buses.push(flows::BuiltBus {
+                id: *id,
+                pre_fader: *pre_fader,
+                aux,
+            });
+            record(built);
+        }
+        // The show's order: engine bus numbers count along it.
+        let mut built = current();
+        built
+            .buses
+            .sort_by_key(|b| wanted.buses.iter().position(|(id, _)| *id == b.id));
+        record(built);
+        Ok(())
+    }
+
+    /// Add bus `id` to the running audio mixer, publishing on its channel.
+    /// Returns strom's number for it.
+    async fn add_aux_bus(&self, id: BusId, pre_fader: bool) -> Result<usize, EngineError> {
+        let channel = flows::bus_channel(id);
+        let body = AddMixerAuxBusRequest {
+            aux: None,
+            channel: channel.clone(),
+            pre_fader: Some(pre_fader),
+        };
+        let resp = self
+            .http
+            .post(self.url(&self.aux_buses_path()))
+            .json(&body)
+            .send()
+            .await
+            .map_err(net)?;
+        let buses: MixerAuxBuses = check(resp).await?.json().await.map_err(net)?;
+        buses
+            .dynamic
+            .iter()
+            .find(|b| b.channel == channel)
+            .map(|b| b.aux)
+            .ok_or_else(|| EngineError::Refused(format!("strom did not list bus {channel}")))
+    }
+
+    async fn remove_aux_bus(&self, aux: usize) -> Result<(), EngineError> {
+        let path = format!("{}/{aux}", self.aux_buses_path());
+        let resp = self
+            .http
+            .delete(self.url(&path))
+            .send()
+            .await
+            .map_err(net)?;
+        check(resp).await.map(|_| ())
+    }
+
+    fn aux_buses_path(&self) -> String {
+        format!("/flows/{}/blocks/{AUDIO_MIXER}/aux_buses", flows::mixer_id())
+    }
+
+    /// strom's aux number of engine bus `bus`.
+    fn aux(&self, bus: usize) -> Result<usize, EngineError> {
+        self.buses
+            .lock()
+            .expect("buses lock")
+            .as_ref()
+            .and_then(|b| b.aux(bus))
+            .ok_or_else(|| EngineError::Refused(format!("the audio mixer has no bus {bus}")))
     }
 
     /// A fader and its mute on the audio mixer, one write at a time.
@@ -1028,6 +1160,7 @@ impl Engine for StromEngine {
                 self.health.clone(),
                 self.players.clone(),
                 self.stingers.clone(),
+                self.buses.clone(),
             ));
         }
 
@@ -1216,7 +1349,7 @@ impl Engine for StromEngine {
             } => self.zone_level(*zone, *gain_db, *mute, *duration_ms).await,
             Command::SetAuxSend { slot, bus, gain } => {
                 let channel = flows::audio_channel(*slot);
-                let name = format!("ch{channel}_aux{}_level", bus + 1);
+                let name = format!("ch{channel}_aux{}_level", self.aux(*bus)?);
                 self.patch_audio_mixer(vec![(name, PropertyValue::Float(*gain))], AUDIO_RAMP_MS)
                     .await
             }
@@ -1226,9 +1359,10 @@ impl Engine for StromEngine {
                 mute,
                 ramp_ms,
             } => {
+                let aux = self.aux(*bus)?;
                 let level = Level {
-                    fader: format!("aux{}_fader", bus + 1),
-                    mute: format!("aux{}_mute", bus + 1),
+                    fader: format!("aux{aux}_fader"),
+                    mute: format!("aux{aux}_mute"),
                     gain: *gain,
                     muted: *mute,
                 };
@@ -1248,7 +1382,7 @@ impl Engine for StromEngine {
                 self.patch_audio_mixer(vec![fader], *ramp_ms).await
             }
             Command::SetBusListen { bus, on } => {
-                let afl = (format!("aux{}_afl", bus + 1), PropertyValue::Bool(*on));
+                let afl = (format!("aux{}_afl", self.aux(*bus)?), PropertyValue::Bool(*on));
                 self.patch_audio_mixer(vec![afl], AUDIO_RAMP_MS).await
             }
             Command::SetMaster {
@@ -1927,6 +2061,127 @@ mod tests {
             );
             tokio::time::sleep(std::time::Duration::from_millis(50)).await;
         }
+    }
+
+    /// A strom stand-in for the audio mixer's buses: adds them under the
+    /// lowest free number from 2, removes them, and records every request
+    /// as method, path and body.
+    async fn bus_strom() -> (
+        String,
+        std::sync::Arc<std::sync::Mutex<Vec<(String, String, serde_json::Value)>>>,
+    ) {
+        let calls = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let buses = std::sync::Arc::new(std::sync::Mutex::new(Vec::<(usize, String)>::new()));
+        let seen = calls.clone();
+        let app = axum::Router::new().fallback(move |request: axum::extract::Request| {
+            let (seen, buses) = (seen.clone(), buses.clone());
+            async move {
+                let method = request.method().to_string();
+                let path = request.uri().path().to_string();
+                let bytes = axum::body::to_bytes(request.into_body(), 1 << 20)
+                    .await
+                    .unwrap();
+                let body: serde_json::Value =
+                    serde_json::from_slice(&bytes).unwrap_or(serde_json::Value::Null);
+                seen.lock()
+                    .unwrap()
+                    .push((method.clone(), path.clone(), body.clone()));
+                let mut list = buses.lock().unwrap();
+                if path.ends_with("/aux_buses") && method == "POST" {
+                    let aux = (2..).find(|n| !list.iter().any(|(a, _)| a == n)).unwrap();
+                    list.push((aux, body["channel"].as_str().unwrap().to_string()));
+                } else if let Some((_, aux)) = path.rsplit_once("/aux_buses/") {
+                    let aux: usize = aux.parse().unwrap();
+                    list.retain(|(a, _)| *a != aux);
+                }
+                let dynamic: Vec<_> = list
+                    .iter()
+                    .map(|(aux, channel)| serde_json::json!({ "aux": aux, "channel": channel }))
+                    .collect();
+                axum::Json(serde_json::json!({
+                    "capacity": 17, "num_static": 1, "dynamic": dynamic
+                }))
+            }
+        });
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        (format!("http://{addr}"), calls)
+    }
+
+    /// Buses that come, go and change their tap change the running mixer:
+    /// no new flow, each bus keeps its number, and sends find them by it.
+    #[tokio::test]
+    async fn buses_change_the_running_mixer() {
+        let (url, calls) = bus_strom().await;
+        let engine = StromEngine::new(url, MixerBackend::Cpu, MonitorOut::None);
+        engine.slots.store(1, Ordering::Relaxed);
+        let (a, b, c) = (BusId::new(), BusId::new(), BusId::new());
+        let before = MixerBuses {
+            phones_pre_fader: false,
+            buses: vec![(a, true), (b, false)],
+        };
+        // Strom's numbers as the mixer was built: A aux 2, B aux 3.
+        *engine.buses.lock().unwrap() = Some(flows::BuiltBuses::numbered(&before));
+        // The stand-in knows B; A goes before anything is added.
+        let format = |buses: MixerBuses| Command::SetFormat {
+            format: *engine.format.lock().unwrap(),
+            multiview: *engine.multiview.lock().unwrap(),
+            sample_rate: *engine.sample_rate.lock().unwrap(),
+            buses,
+        };
+        let after = MixerBuses {
+            phones_pre_fader: true,
+            buses: vec![(b, true), (c, false)],
+        };
+        engine.run(&format(after.clone())).await.unwrap();
+
+        let calls_now = calls.lock().unwrap().clone();
+        let mixer = format!("/api/flows/{}/blocks/{AUDIO_MIXER}", flows::mixer_id());
+        let methods: Vec<(&str, String)> = calls_now
+            .iter()
+            .map(|(m, p, _)| (m.as_str(), p.trim_start_matches(&mixer).to_string()))
+            .collect();
+        assert_eq!(
+            methods,
+            [
+                ("DELETE", "/aux_buses/2".to_string()),
+                ("PATCH", "/properties".to_string()),
+                ("PATCH", "/properties".to_string()),
+                ("POST", "/aux_buses".to_string()),
+            ],
+            "no new mixer flow"
+        );
+        // The headphones and B before the faders, for the slot and the
+        // stinger alike.
+        assert_eq!(
+            calls_now[1].2["properties"],
+            serde_json::json!({ "ch1_aux1_pre": true, "ch2_aux1_pre": true })
+        );
+        assert_eq!(
+            calls_now[2].2["properties"],
+            serde_json::json!({ "ch1_aux3_pre": true, "ch2_aux3_pre": true })
+        );
+        assert_eq!(calls_now[3].2["channel"], flows::bus_channel(c));
+        assert_eq!(calls_now[3].2["pre_fader"], false);
+        let built = engine.buses.lock().unwrap().clone().unwrap();
+        assert!(built.are(&after));
+        // C took the free aux 2; as engine bus 2 its send goes there.
+        assert_eq!(built.aux(2), Some(2));
+        engine
+            .run(&Command::SetAuxSend {
+                slot: 0,
+                bus: 2,
+                gain: 1.0,
+            })
+            .await
+            .unwrap();
+        let last = calls.lock().unwrap().last().unwrap().2.clone();
+        assert_eq!(last["properties"], serde_json::json!({ "ch1_aux2_level": 1.0 }));
+        // The same buses again change nothing.
+        let count = calls.lock().unwrap().len();
+        engine.run(&format(after)).await.unwrap();
+        assert_eq!(calls.lock().unwrap().len(), count);
     }
 
     /// An engine that takes a request and never answers fails the call

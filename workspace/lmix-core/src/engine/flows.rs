@@ -19,6 +19,9 @@ use strom_types::flow::GStreamerClockType;
 use strom_types::stinger::{
     ENABLE_STINGER_PROPERTY, STINGER_INPUT_PAD, STINGER_MODE_PROPERTY, STINGER_PREROLL_PROPERTY,
 };
+use strom_types::mixer::{
+    parse_dynamic_aux_buses, DynamicAuxBus, DYNAMIC_AUX_BUSES_PROPERTY, MAX_AUX_BUSES_PROPERTY,
+};
 use strom_types::vision_mixer::{ENABLE_PREVIEW_OUT_PROPERTY, PREVIEW_OUTPUT_PAD};
 use strom_types::{Flow, FlowId, PropertyValue};
 use uuid::Uuid;
@@ -203,7 +206,7 @@ pub fn mixer_flow(
     format: MasterFormat,
     multiview: MultiviewLayout,
     sample_rate: u32,
-    buses: &MixerBuses,
+    buses: &BuiltBuses,
 ) -> Flow {
     let mut flow = Flow::new(MIXER_NAME);
     flow.id = mixer_id();
@@ -530,7 +533,7 @@ pub fn output_flow(
     };
     // A bus replaces the feed's sound (e.g. a mix-minus stream).
     let audio = match bus {
-        Some(bus) => Some(pgm_channel(&bus_out(bus))),
+        Some(bus) => Some(bus_channel(bus)),
         None => audio,
     };
     // Screens show picture only.
@@ -884,44 +887,129 @@ pub fn audio_delay(slot: usize) -> String {
     format!("adelay{slot}")
 }
 
-/// Inter output of bus `bus` in the mixer flow: named by its id, so an
-/// output keeps it when other buses come and go.
-fn bus_out(bus: BusId) -> String {
-    format!("bus{}_out", bus.0.simple())
+/// Inter channel of bus `bus`, which the audio mixer publishes it on:
+/// named by its id, so an output keeps it when other buses come and go.
+pub fn bus_channel(bus: BusId) -> String {
+    pgm_channel(&format!("bus{}_out", bus.0.simple()))
 }
 
-/// The buses a mixer flow's audio mixer was built with; `None` for one
-/// from before the headphones had their own bus.
-pub fn buses_of(flow: &Flow) -> Option<MixerBuses> {
+/// The bus of an inter channel `bus_channel` names.
+fn channel_bus(channel: &str) -> Option<BusId> {
+    let prefix = pgm_channel("bus");
+    let hex = channel.strip_prefix(&prefix)?.strip_suffix("_out")?;
+    Uuid::try_parse(hex).ok().map(BusId)
+}
+
+/// strom's aux bus of the headphones; the monitor follows it.
+pub const PHONES_AUX: usize = 1;
+
+/// The buses of a mixer flow's audio mixer as strom has them (AUD.2,
+/// AUD.4): aux 1 is the headphones, every show bus has an aux number of
+/// its own. strom adds and removes the show's buses while the mixer runs,
+/// so a bus keeps its number while others come and go; `buses` is in the
+/// show's order.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct BuiltBuses {
+    pub phones_pre_fader: bool,
+    pub buses: Vec<BuiltBus>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct BuiltBus {
+    pub id: BusId,
+    /// Tap: `true` before the channel faders.
+    pub pre_fader: bool,
+    /// strom's aux number.
+    pub aux: usize,
+}
+
+impl BuiltBuses {
+    /// A new mixer's buses: numbered in order after the headphones.
+    pub fn numbered(buses: &MixerBuses) -> Self {
+        Self {
+            phones_pre_fader: buses.phones_pre_fader,
+            buses: buses
+                .buses
+                .iter()
+                .enumerate()
+                .map(|(i, (id, pre_fader))| BuiltBus {
+                    id: *id,
+                    pre_fader: *pre_fader,
+                    aux: PHONES_AUX + 1 + i,
+                })
+                .collect(),
+        }
+    }
+
+    /// Whether these are the buses `wanted` asks for, in its order.
+    pub fn are(&self, wanted: &MixerBuses) -> bool {
+        self.phones_pre_fader == wanted.phones_pre_fader
+            && self.buses.len() == wanted.buses.len()
+            && self
+                .buses
+                .iter()
+                .zip(&wanted.buses)
+                .all(|(b, (id, pre))| b.id == *id && b.pre_fader == *pre)
+    }
+
+    /// strom's aux number of engine bus `bus` (0 is the headphones, then
+    /// the show's buses in their order, see [`MixerBuses`]).
+    pub fn aux(&self, bus: usize) -> Option<usize> {
+        match bus {
+            0 => Some(PHONES_AUX),
+            _ => self.buses.get(bus - 1).map(|b| b.aux),
+        }
+    }
+
+    /// The show's bus on strom's aux `aux`.
+    pub fn bus_on(&self, aux: usize) -> Option<BusId> {
+        self.buses.iter().find(|b| b.aux == aux).map(|b| b.id)
+    }
+}
+
+/// The buses a mixer flow's audio mixer has; `None` for one from before
+/// strom added buses at runtime (it is built anew).
+pub fn buses_of(flow: &Flow) -> Option<BuiltBuses> {
     let mix = flow.blocks.iter().find(|b| b.id == AUDIO_MIXER)?;
     let uint = |key: &str| match mix.properties.get(key) {
         Some(PropertyValue::UInt(n)) => Some(*n),
         _ => None,
     };
-    if uint("monitor_source") != Some(1) {
+    if uint("monitor_source") != Some(PHONES_AUX as u64)
+        || uint("num_aux_buses") != Some(PHONES_AUX as u64)
+        || uint(MAX_AUX_BUSES_PROPERTY) != Some(AUX_CAPACITY as u64)
+    {
         return None;
     }
-    let count = uint("num_aux_buses")?;
-    let pre = |bus: u64| {
+    let pre = |aux: usize| {
         matches!(
-            mix.properties.get(&format!("ch1_aux{bus}_pre")),
+            mix.properties.get(&format!("ch1_aux{aux}_pre")),
             Some(PropertyValue::Bool(true))
         )
     };
-    let id = |bus: u64| {
-        let from = format!("{AUDIO_MIXER}:aux_out_{bus}");
-        let to = flow.links.iter().find(|l| l.from == from)?.to.clone();
-        let hex = to.strip_prefix("bus")?.strip_suffix("_out:sink")?;
-        Uuid::try_parse(hex).ok().map(BusId)
+    let dynamic = match mix.properties.get(DYNAMIC_AUX_BUSES_PROPERTY) {
+        None => Vec::new(),
+        Some(PropertyValue::String(json)) => parse_dynamic_aux_buses(json).ok()?,
+        Some(_) => return None,
     };
-    let buses = (2..=count)
-        .map(|bus| id(bus).map(|id| (id, pre(bus))))
+    let buses = dynamic
+        .iter()
+        .map(|bus| {
+            channel_bus(&bus.channel).map(|id| BuiltBus {
+                id,
+                pre_fader: pre(bus.aux),
+                aux: bus.aux,
+            })
+        })
         .collect::<Option<Vec<_>>>()?;
-    Some(MixerBuses {
-        phones_pre_fader: pre(1),
+    Some(BuiltBuses {
+        phones_pre_fader: pre(PHONES_AUX),
         buses,
     })
 }
+
+/// strom's aux numbers: the headphones and room for every show bus.
+const AUX_CAPACITY: usize = PHONES_AUX + lmix_types::BUSES;
 
 /// `inter` buffer of slot sound in the mixer: holds the longest delay.
 const AUDIO_INTER_BUFFER_MS: &str = "1000";
@@ -930,13 +1018,15 @@ const AUDIO_INTER_BUFFER_MS: &str = "1000";
 /// audio (into the vision mixer, which meters it on the multiview).
 ///
 /// Aux bus 1 is the headphones (AUD.4): the monitor follows it while
-/// nothing is soloed. The show's buses are aux 2 on (AUD.2).
+/// nothing is soloed. The show's buses (AUD.2) are strom's dynamic buses:
+/// each publishes on its inter channel (`bus_channel`), and strom adds and
+/// removes them while the mixer runs.
 fn add_audio_mixer(
     flow: &mut Flow,
     slots: usize,
     monitor: MonitorOut,
     sample_rate: u32,
-    buses: &MixerBuses,
+    buses: &BuiltBuses,
 ) {
     for slot in 0..slots {
         let input = format!("ain{slot}");
@@ -984,30 +1074,44 @@ fn add_audio_mixer(
         ),
         (
             "num_aux_buses".to_string(),
-            PropertyValue::UInt(1 + buses.buses.len() as u64),
+            PropertyValue::UInt(PHONES_AUX as u64),
         ),
-        ("monitor_source".to_string(), PropertyValue::UInt(1)),
+        (
+            MAX_AUX_BUSES_PROPERTY.to_string(),
+            PropertyValue::UInt(AUX_CAPACITY as u64),
+        ),
+        (
+            DYNAMIC_AUX_BUSES_PROPERTY.to_string(),
+            PropertyValue::String(
+                serde_json::to_string(
+                    &buses
+                        .buses
+                        .iter()
+                        .map(|b| DynamicAuxBus {
+                            aux: b.aux,
+                            channel: bus_channel(b.id),
+                        })
+                        .collect::<Vec<_>>(),
+                )
+                .expect("buses serialize"),
+            ),
+        ),
+        (
+            "monitor_source".to_string(),
+            PropertyValue::UInt(PHONES_AUX as u64),
+        ),
         // The stinger clip is heard on the headphones as on program.
         (
             format!("ch{}_aux1_level", stinger_channel(slots)),
             PropertyValue::Float(1.0),
         ),
     ];
-    // Pre or post fader is fixed when strom builds the mixer; the stinger
-    // takes the same, so channel 1 always tells them (`buses_of`).
-    let taps: Vec<bool> = std::iter::once(buses.phones_pre_fader)
-        .chain(buses.buses.iter().map(|(_, pre)| *pre))
-        .collect();
-    let channels = (0..slots)
-        .map(audio_channel)
-        .chain(std::iter::once(stinger_channel(slots)));
-    for channel in channels {
-        for (bus, pre) in taps.iter().enumerate() {
-            properties.push((
-                format!("ch{channel}_aux{}_pre", bus + 1),
-                PropertyValue::Bool(*pre),
-            ));
-        }
+    // Every channel, the stinger's too, takes a bus's sound alike, so
+    // channel 1 always tells the tap (`buses_of`).
+    let taps = std::iter::once((PHONES_AUX, buses.phones_pre_fader))
+        .chain(buses.buses.iter().map(|b| (b.aux, b.pre_fader)));
+    for (aux, pre) in taps {
+        properties.extend(tap_properties(slots, aux, pre));
     }
     let properties = properties
         .iter()
@@ -1024,16 +1128,6 @@ fn add_audio_mixer(
         format!("{AUDIO_MIXER}:main_out"),
         format!("{MIXER_BLOCK}:pgm_audio_in"),
     ));
-    // The show's buses on inter channels, for outputs that carry a bus's
-    // sound.
-    for (i, (bus, _)) in buses.buses.iter().enumerate() {
-        let out = bus_out(*bus);
-        flow.blocks.push(mixer_out(&out));
-        flow.links.push(link(
-            format!("{AUDIO_MIXER}:aux_out_{}", i + 2),
-            format!("{out}:sink"),
-        ));
-    }
 
     // strom switches the monitor between the headphones' bus and the
     // solos.
@@ -1045,6 +1139,21 @@ fn add_audio_mixer(
             MONITOR_SINK.into(),
         ));
     }
+}
+
+/// The audio mixer properties that make every channel's send into aux
+/// `aux` tap before the faders (`pre_fader`) or after them.
+pub fn tap_properties(slots: usize, aux: usize, pre_fader: bool) -> Vec<(String, PropertyValue)> {
+    (0..slots)
+        .map(audio_channel)
+        .chain(std::iter::once(stinger_channel(slots)))
+        .map(|channel| {
+            (
+                format!("ch{channel}_aux{aux}_pre"),
+                PropertyValue::Bool(pre_fader),
+            )
+        })
+        .collect()
 }
 
 /// Block id of a web page or graphics page in a slot flow.
@@ -1533,7 +1642,7 @@ mod tests {
             upright,
             layout,
             44_100,
-            &MixerBuses::default(),
+            &BuiltBuses::default(),
         );
         // The multiview layout (OUT.10) and the sample rate (AUD.17) are
         // read back like the format.
@@ -1546,7 +1655,7 @@ mod tests {
             upright,
             MultiviewLayout::default(),
             48_000,
-            &MixerBuses::default(),
+            &BuiltBuses::default(),
         );
         assert_eq!(multiview_of(&plain), MultiviewLayout::default());
 
@@ -1580,7 +1689,8 @@ mod tests {
 
     #[test]
     fn mixer_outputs_hand_on_without_waiting() {
-        // Program, multiview, preview, program sound and every bus.
+        // Program, multiview, preview and program sound (the buses
+        // publish from the audio mixer, unsynced too).
         let flow = mixer_flow(
             2,
             MixerBackend::Cuda,
@@ -1588,14 +1698,14 @@ mod tests {
             MasterFormat::default(),
             MultiviewLayout::default(),
             48_000,
-            &two_buses(),
+            &BuiltBuses::numbered(&two_buses()),
         );
         let outs: Vec<_> = flow
             .blocks
             .iter()
             .filter(|b| b.block_definition_id == INTER_OUTPUT_BLOCK)
             .collect();
-        assert_eq!(outs.len(), 4 + 2);
+        assert_eq!(outs.len(), 4);
         for out in outs {
             assert!(
                 matches!(out.properties.get("sync"), Some(PropertyValue::Bool(false))),
@@ -1614,7 +1724,7 @@ mod tests {
             MasterFormat::default(),
             MultiviewLayout::default(),
             48_000,
-            &MixerBuses::default(),
+            &BuiltBuses::default(),
         );
 
         for slot in 0..3 {
@@ -1643,7 +1753,7 @@ mod tests {
             MasterFormat::default(),
             MultiviewLayout::default(),
             48_000,
-            &MixerBuses::default(),
+            &BuiltBuses::default(),
         );
 
         assert_eq!(black_input(3), 3);
@@ -1663,7 +1773,7 @@ mod tests {
                 MasterFormat::default(),
                 MultiviewLayout::default(),
                 48_000,
-                &MixerBuses::default(),
+                &BuiltBuses::default(),
             );
             let vm = flow.blocks.iter().find(|b| b.id == "vm").unwrap();
             matches!(
@@ -1844,7 +1954,7 @@ mod tests {
             MasterFormat::default(),
             MultiviewLayout::default(),
             48_000,
-            &MixerBuses::default(),
+            &BuiltBuses::default(),
         );
 
         for slot in 0..3 {
@@ -1869,7 +1979,7 @@ mod tests {
             MasterFormat::default(),
             MultiviewLayout::default(),
             48_000,
-            &MixerBuses::default(),
+            &BuiltBuses::default(),
         );
         assert!(heard
             .links
@@ -1886,7 +1996,7 @@ mod tests {
             MasterFormat::default(),
             MultiviewLayout::default(),
             48_000,
-            &MixerBuses::default(),
+            &BuiltBuses::default(),
         );
 
         assert!(flow
@@ -1978,7 +2088,7 @@ mod tests {
             MasterFormat::default(),
             MultiviewLayout::default(),
             48_000,
-            &MixerBuses::default(),
+            &BuiltBuses::default(),
         );
 
         // One DSK layer per overlay; strom draws the stinger beneath them.
@@ -2026,7 +2136,7 @@ mod tests {
 
     #[test]
     fn mixer_publishes_its_buses() {
-        let buses = two_buses();
+        let buses = BuiltBuses::numbered(&two_buses());
         let flow = mixer_flow(
             2,
             MixerBackend::Cpu,
@@ -2042,13 +2152,15 @@ mod tests {
             Some(PropertyValue::UInt(n)) => Some(*n),
             _ => None,
         };
-        // The headphones are aux 1, and the monitor follows them.
-        assert_eq!(uint("num_aux_buses"), Some(3));
+        // The headphones are aux 1, and the monitor follows them; the
+        // show's buses come and go at runtime, room for all of them.
+        assert_eq!(uint("num_aux_buses"), Some(1));
+        assert_eq!(uint("max_aux_buses"), Some(1 + lmix_types::BUSES as u64));
         assert_eq!(uint("monitor_source"), Some(1));
-        for (bus, pre) in [(1, false), (2, true), (3, false)] {
+        for (aux, pre) in [(1, false), (2, true), (3, false)] {
             assert!(
-                matches!(mix.properties.get(&format!("ch2_aux{bus}_pre")), Some(PropertyValue::Bool(p)) if *p == pre),
-                "aux {bus}"
+                matches!(mix.properties.get(&format!("ch2_aux{aux}_pre")), Some(PropertyValue::Bool(p)) if *p == pre),
+                "aux {aux}"
             );
         }
         // The stinger (channel 3 of two slots) is heard on them too.
@@ -2056,20 +2168,27 @@ mod tests {
             mix.properties.get("ch3_aux1_level"),
             Some(PropertyValue::Float(level)) if *level == 1.0
         ));
-        let stream = format!("bus{}_out:sink", buses.buses[1].0 .0.simple());
-        assert!(flow
-            .links
-            .iter()
-            .any(|l| l.from == "mix:aux_out_3" && l.to == stream));
+        assert!(matches!(
+            mix.properties.get("ch3_aux2_pre"),
+            Some(PropertyValue::Bool(true))
+        ));
+        // Each bus on its inter channel, which an output takes.
+        let Some(PropertyValue::String(json)) = mix.properties.get("dynamic_aux_buses") else {
+            panic!("no dynamic buses");
+        };
+        let dynamic = parse_dynamic_aux_buses(json).unwrap();
+        assert_eq!(dynamic.len(), 2);
+        assert_eq!(dynamic[1].aux, 3);
+        assert_eq!(dynamic[1].channel, bus_channel(buses.buses[1].id));
         assert!(
-            !flow.links.iter().any(|l| l.from == "mix:aux_out_1"),
-            "the headphones are no output's sound"
+            !flow.links.iter().any(|l| l.from.starts_with("mix:aux_out_")),
+            "no bus leaves through a pad"
         );
         // A reused mixer tells its buses.
         assert_eq!(buses_of(&flow), Some(buses.clone()));
         let mut old = flow.clone();
         let mix = old.blocks.iter_mut().find(|b| b.id == AUDIO_MIXER).unwrap();
-        mix.properties.remove("monitor_source");
+        mix.properties.remove("max_aux_buses");
         assert_eq!(buses_of(&old), None, "a mixer from before");
         // One without buses tells it too (not "unknown": a cold start
         // would build it twice).
@@ -2080,9 +2199,9 @@ mod tests {
             MasterFormat::default(),
             MultiviewLayout::default(),
             48_000,
-            &MixerBuses::default(),
+            &BuiltBuses::default(),
         );
-        assert_eq!(buses_of(&bare), Some(MixerBuses::default()));
+        assert_eq!(buses_of(&bare), Some(BuiltBuses::default()));
         // Nor without slots: the stinger's channel tells the taps.
         let empty = mixer_flow(
             0,
@@ -2094,6 +2213,25 @@ mod tests {
             &buses,
         );
         assert_eq!(buses_of(&empty), Some(buses));
+    }
+
+    #[test]
+    fn built_buses_keep_their_numbers() {
+        let wanted = two_buses();
+        let mut built = BuiltBuses::numbered(&wanted);
+        assert!(built.are(&wanted));
+        assert_eq!(built.aux(0), Some(PHONES_AUX));
+        assert_eq!(built.aux(1), Some(2));
+        assert_eq!(built.aux(3), None);
+        // The first bus went, the second keeps aux 3 as engine bus 1.
+        built.buses.remove(0);
+        assert_eq!(built.aux(1), Some(3));
+        assert_eq!(built.bus_on(3), Some(wanted.buses[1].0));
+        assert_eq!(built.bus_on(2), None);
+        assert!(!built.are(&wanted));
+        let mut other_tap = wanted.clone();
+        other_tap.phones_pre_fader = true;
+        assert!(!BuiltBuses::numbered(&wanted).are(&other_tap));
     }
 
     #[test]
@@ -2508,7 +2646,7 @@ mod tests {
                 MasterFormat::default(),
                 MultiviewLayout::default(),
                 48_000,
-                &MixerBuses::default(),
+                &BuiltBuses::default(),
             ),
             slot,
         ] {

@@ -1060,8 +1060,8 @@
     </message>
     <message>
       <location line="-55" />
-      <source>Program stops for a moment while the mixer is built anew; running outputs restart.</source>
-      <translation>Das Programm steht kurz, während der Mischer neu gebaut wird; laufende Ausgänge starten neu.</translation>
+      <source>Every input's send to it goes with it.</source>
+      <translation>Die Sends aller Inputs an diesen Bus fallen mit weg.</translation>
     </message>
     <message>
       <location line="+64" />
@@ -1089,17 +1089,7 @@
       <translation>Kopfhörer</translation>
     </message>
     <message>
-      <location line="+9" />
-      <source>Headphones before the faders?</source>
-      <translation>Kopfhörer vor den Fadern?</translation>
-    </message>
-    <message>
-      <location line="+0" />
-      <source>Headphones after the faders?</source>
-      <translation>Kopfhörer nach den Fadern?</translation>
-    </message>
-    <message>
-      <location line="+21" />
+      <location line="+29" />
       <source>Name of the bus</source>
       <translation>Name des Busses</translation>
     </message>
@@ -1114,22 +1104,12 @@
       <translation>%1 entfernen</translation>
     </message>
     <message>
-      <location line="+5" />
+      <location line="-162" />
       <source>Remove %1?</source>
       <translation>%1 entfernen?</translation>
     </message>
     <message>
-      <location line="+13" />
-      <source>%1 before the faders?</source>
-      <translation>%1 vor den Fadern?</translation>
-    </message>
-    <message>
-      <location line="+0" />
-      <source>%1 after the faders?</source>
-      <translation>%1 nach den Fadern?</translation>
-    </message>
-    <message>
-      <location line="+9" />
+      <location line="+187" />
       <source>Add bus</source>
       <translation>Bus hinzufügen</translation>
     </message>
@@ -1137,11 +1117,6 @@
       <location line="+3" />
       <source>A mix of its own for an output: in-ear, a stream, a recording.</source>
       <translation>Eine eigene Mischung für einen Ausgang: In-Ear, Stream, Aufnahme.</translation>
-    </message>
-    <message>
-      <location line="+1" />
-      <source>Add a bus?</source>
-      <translation>Einen Bus hinzufügen?</translation>
     </message>
   </context>
   <context>
@@ -2866,12 +2841,7 @@
       <translation>Pegelanzeigen</translation>
     </message>
     <message>
-      <location line="+58" />
-      <source>While locked, closing inputs, loading a show, stopping outputs and changes that rebuild the mixer (adding or removing a bus, its tap) are refused.</source>
-      <translation>Gesperrt lassen sich keine Inputs schließen, keine Show laden, keine Ausgänge stoppen und nichts ändern, was den Mischer neu aufbaut (Bus anlegen oder entfernen, sein Abgriff).</translation>
-    </message>
-    <message>
-      <location line="+101" />
+      <location line="+159" />
       <source>No inputs yet</source>
       <translation>Noch keine Inputs</translation>
     </message>
@@ -2896,7 +2866,12 @@
       <translation>Einfacher Modus</translation>
     </message>
     <message>
-      <location line="+93" />
+      <location line="+77" />
+      <source>While locked, closing inputs, loading a show and stopping outputs are refused.</source>
+      <translation>Gesperrt lassen sich keine Inputs schließen, keine Show laden und keine Ausgänge stoppen.</translation>
+    </message>
+    <message>
+      <location line="+16" />
       <source>Find missing files…</source>
       <translation>Fehlende Dateien suchen…</translation>
     </message>
@@ -3759,8 +3734,8 @@
     </message>
     <message>
       <location line="+1" />
-      <source>While locked, closing inputs, loading a show, stopping outputs and changes that rebuild the mixer (adding or removing a bus, its tap) are refused.</source>
-      <translation>Gesperrt lassen sich keine Inputs schließen, keine Show laden, keine Ausgänge stoppen und nichts ändern, was den Mischer neu aufbaut (Bus anlegen oder entfernen, sein Abgriff).</translation>
+      <source>While locked, closing inputs, loading a show and stopping outputs are refused.</source>
+      <translation>Gesperrt lassen sich keine Inputs schließen, keine Show laden und keine Ausgänge stoppen.</translation>
     </message>
     <message>
       <location line="+12" />

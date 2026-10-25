@@ -37,15 +37,15 @@ Item {
     Component.onCompleted: busModel.sync(buses.map(b => b.id))
     onBusesChanged: busModel.sync(buses.map(b => b.id))
 
-    /** Sends `action` after asking: it builds the mixer anew. */
-    function rebuild(action, question) {
-        rebuildDialog.action = action
-        rebuildDialog.title = question
-        rebuildDialog.open()
+    /** Removes `bus` after asking: its sends go with it. */
+    function remove(bus) {
+        removeDialog.action = { action: "remove_bus", bus: bus.id }
+        removeDialog.title = qsTr("Remove %1?").arg(bus.name)
+        removeDialog.open()
     }
 
     KanteDialog {
-        id: rebuildDialog
+        id: removeDialog
         property var action: null
         parent: QQC2.Overlay.overlay
         anchors.centerIn: parent
@@ -53,12 +53,12 @@ Item {
         width: Kirigami.Units.gridUnit * 24
         standardButtons: QQC2.Dialog.Ok | QQC2.Dialog.Cancel
         // KanteDialog has a child of its own, so it does not size to this.
-        contentHeight: rebuildText.implicitHeight
+        contentHeight: removeText.implicitHeight
         onAccepted: panel.act(action)
         QQC2.Label {
-            id: rebuildText
+            id: removeText
             width: parent.width
-            text: qsTr("Program stops for a moment while the mixer is built anew; running outputs restart.")
+            text: qsTr("Every input's send to it goes with it.")
             wrapMode: Text.WordWrap
         }
     }
@@ -155,8 +155,7 @@ Item {
             }
             TapSwitch {
                 on: panel.phones.pre_fader
-                onWanted: on => panel.rebuild({ action: "set_phones_tap", pre_fader: on },
-                    on ? qsTr("Headphones before the faders?") : qsTr("Headphones after the faders?"))
+                onWanted: on => panel.act({ action: "set_phones_tap", pre_fader: on })
             }
 
             Repeater {
@@ -207,8 +206,7 @@ Item {
                             QQC2.ToolTip.visible: hovered
                             QQC2.ToolTip.delay: Kirigami.Units.toolTipDelay
                             QQC2.ToolTip.text: text
-                            onClicked: panel.rebuild({ action: "remove_bus", bus: bus.modelData.id },
-                                qsTr("Remove %1?").arg(bus.modelData.name))
+                            onClicked: panel.remove(bus.modelData)
                         }
                     }
                     FaderRows {
@@ -220,8 +218,7 @@ Item {
                     }
                     TapSwitch {
                         on: bus.modelData.pre_fader
-                        onWanted: on => panel.rebuild({ action: "set_bus_tap", bus: bus.modelData.id, pre_fader: on },
-                            on ? qsTr("%1 before the faders?").arg(bus.modelData.name) : qsTr("%1 after the faders?").arg(bus.modelData.name))
+                        onWanted: on => panel.act({ action: "set_bus_tap", bus: bus.modelData.id, pre_fader: on })
                     }
                 }
             }
@@ -234,7 +231,7 @@ Item {
                 QQC2.ToolTip.visible: hovered
                 QQC2.ToolTip.delay: Kirigami.Units.toolTipDelay
                 QQC2.ToolTip.text: qsTr("A mix of its own for an output: in-ear, a stream, a recording.")
-                onClicked: panel.rebuild({ action: "add_bus" }, qsTr("Add a bus?"))
+                onClicked: panel.act({ action: "add_bus" })
             }
         }
     }
