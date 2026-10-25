@@ -221,7 +221,13 @@ setting_becomes() {
     return 1
 }
 drag_y() {
-    DISPLAY="$DISPLAY_NO" xdotool mousemove "$1" "$2" mousedown 1
+    # Over the grip first: right after a popup closed, a press without a move
+    # before it found no item under the pointer (once in a run).
+    DISPLAY="$DISPLAY_NO" xdotool mousemove "$1" "$(($2 + 3))"
+    sleep 0.3
+    DISPLAY="$DISPLAY_NO" xdotool mousemove "$1" "$2"
+    sleep 0.3
+    DISPLAY="$DISPLAY_NO" xdotool mousedown 1
     # In steps: a jump in one event is no drag for Qt.
     local y="$2"
     while (( y != $3 )); do
