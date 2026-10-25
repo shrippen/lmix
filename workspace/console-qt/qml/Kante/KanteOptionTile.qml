@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Shapes
 import QtQuick.Controls as QQC2
 import QtQuick.Layouts
 import org.kde.kirigami as Kirigami
@@ -41,22 +42,44 @@ QQC2.AbstractButton {
         borderColor: tile.checked ? "transparent" : KanteStyle.frameColor
         chamfer: KanteStyle.chamferSmall
 
-        Rectangle {
+        // Selection frame (2 px) and keyboard ring (1 px, further in on a chosen tile): outlines
+        // that follow the cut corner.
+        Outline {
             visible: tile.checked
-            anchors.fill: parent
-            color: "transparent"
-            border.color: KanteStyle.focusColor
-            border.width: 2
+            inset: 0
+            lineWidth: 2
         }
-        // Keyboard focus, chosen or not: a 1 px ring inside (on a chosen tile further in,
-        // apart from its 2 px frame, so the two read as a double ring).
-        Rectangle {
+        Outline {
             visible: tile.visualFocus
-            anchors.fill: parent
-            anchors.margins: tile.checked ? 4 : 2
-            color: "transparent"
-            border.color: KanteStyle.focusColor
-            border.width: 1
+            inset: tile.checked ? 4 : 2
+            lineWidth: 1
+        }
+    }
+
+    /** An outline of the card, `inset` px in, the cut corner kept. */
+    component Outline: Shape {
+        id: outline
+        property real inset: 0
+        property real lineWidth: 1
+        readonly property real d: inset + lineWidth / 2
+        // The card is the parent (an inline component does not see the file's ids).
+        readonly property real c: parent ? parent.chamfer : 0
+        // How far the cut runs along each edge at this inset: the cut moved in by d along its
+        // normal (45°: d·√2), none when the card has no cut corner (System).
+        readonly property real e: Math.max(0, c - d * (2 - Math.SQRT2))
+        anchors.fill: parent
+        antialiasing: true
+        ShapePath {
+            fillColor: "transparent"
+            strokeColor: KanteStyle.focusColor
+            strokeWidth: outline.lineWidth
+            joinStyle: ShapePath.MiterJoin
+            startX: outline.d; startY: outline.d
+            PathLine { x: outline.width - outline.d - outline.e; y: outline.d }
+            PathLine { x: outline.width - outline.d; y: outline.d + outline.e }
+            PathLine { x: outline.width - outline.d; y: outline.height - outline.d }
+            PathLine { x: outline.d; y: outline.height - outline.d }
+            PathLine { x: outline.d; y: outline.d }
         }
     }
 

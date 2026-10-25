@@ -16,7 +16,8 @@ import "."
  *   moved(value)  every change by drag, key or double click, already within the limits
  * Kante and Kante Light: three short lines in the muted text colour on a 1 px rule; on
  * hover, while dragged and with keyboard focus they turn the focus colour. System: the same
- * in the platform's colours. Screen readers get a slider with the value in px.
+ * in the platform's colours. Screen readers get a slider named `accessibleName` with the
+ * value in px as its description (an Item has no value interface of its own).
  */
 Item {
     id: handle
@@ -47,6 +48,7 @@ Item {
 
     Accessible.role: Accessible.Slider
     Accessible.name: accessibleName
+    Accessible.description: Math.round(value) + " px"
     Accessible.focusable: true
     Accessible.onIncreaseAction: setValue(value + step)
     Accessible.onDecreaseAction: setValue(value - step)
@@ -90,20 +92,27 @@ Item {
         event.accepted = true
     }
 
-    Rectangle {
-        anchors.centerIn: parent
-        width: handle.vertical ? parent.width : 1
-        height: handle.vertical ? 1 : parent.height
-        color: KanteStyle.ruleColor
+    // The rule in two pieces, paused at the grip (on any ground: page, card, dialog).
+    Repeater {
+        model: 2
+        Rectangle {
+            required property int index
+            readonly property real length: Math.max(0, ((handle.vertical ? handle.width : handle.height)
+                - (handle.vertical ? grip.width : grip.height)) / 2)
+            x: handle.vertical ? (index === 0 ? 0 : handle.width - length) : (handle.width - 1) / 2
+            y: handle.vertical ? (handle.height - 1) / 2 : (index === 0 ? 0 : handle.height - length)
+            width: handle.vertical ? length : 1
+            height: handle.vertical ? 1 : length
+            color: KanteStyle.ruleColor
+        }
     }
 
-    // The grip: three short lines across the drag direction, on the ground so the rule pauses there.
-    Rectangle {
+    // The grip: three short lines across the drag direction.
+    Item {
         id: grip
         anchors.centerIn: parent
         width: handle.vertical ? KanteStyle.unit(36) : KanteStyle.unit(8)
         height: handle.vertical ? KanteStyle.unit(8) : KanteStyle.unit(36)
-        color: KanteStyle.backgroundColor
 
         Grid {
             anchors.centerIn: parent

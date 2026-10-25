@@ -35,6 +35,9 @@ QQC2.MenuItem {
                                  : destructive ? KanteStyle.negativeTextColor
                                  : Kirigami.Theme.textColor
 
+    /** The value's label, for tests. */
+    readonly property alias valueLabel: valueLabel
+
     Accessible.name: text
     Accessible.description: valueText
 
@@ -70,11 +73,13 @@ QQC2.MenuItem {
             elide: Text.ElideRight
         }
         QQC2.Label {
+            id: valueLabel
             Layout.alignment: Qt.AlignVCenter
             visible: item.valueText.length > 0
             text: item.valueText
             font: KanteStyle.active ? KanteStyle.monoFont(KanteStyle.smallFont.pointSize) : KanteStyle.smallFont
-            color: KanteStyle.mutedTextColor
+            // Muted on the menu, the highlight's ink on the highlight (muted reads faintly there).
+            color: (item.highlighted || item.pressed) ? item.ink : KanteStyle.mutedTextColor
             elide: Text.ElideRight
             Layout.maximumWidth: Kirigami.Units.gridUnit * 9
         }
