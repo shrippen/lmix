@@ -1445,8 +1445,8 @@ impl Switcher {
             Action::SetSend { input, bus, level } => self.set_send(&input, &bus, level),
             Action::SetPhonesSend { input, on, level } => self.set_phones_send(&input, on, level),
             Action::SetBus { bus, volume, mute } => self.set_bus(&bus, volume, mute, AUDIO_RAMP_MS),
-            // These build the mixer anew: program stops for a moment and
-            // running outputs restart, which the lock keeps from a show.
+            // These change the running mixer (no rebuild), so the lock lets
+            // them through.
             Action::AddBus { name, pre_fader } => self.add_bus(name, pre_fader),
             Action::RemoveBus { bus } => self.remove_bus(&bus),
             Action::RenameBus { bus, name } => {
@@ -8612,7 +8612,9 @@ mod tests {
             let cmds = sw.apply(action).unwrap();
             assert!(matches!(cmds[0], Command::SetFormat { .. }));
             assert!(
-                !cmds.iter().any(|c| matches!(c, Command::StartOutput { .. } | Command::SetSlot { .. })),
+                !cmds
+                    .iter()
+                    .any(|c| matches!(c, Command::StartOutput { .. } | Command::SetSlot { .. })),
                 "{cmds:?}"
             );
         }

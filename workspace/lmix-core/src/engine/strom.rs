@@ -476,9 +476,8 @@ impl StromEngine {
             let mut current_view = self.multiview.lock().expect("multiview lock");
             let mut current_rate = self.sample_rate.lock().expect("rate lock");
             let mut current_buses = self.buses.lock().expect("buses lock");
-            let picture = *current == format
-                && *current_view == multiview
-                && *current_rate == sample_rate;
+            let picture =
+                *current == format && *current_view == multiview && *current_rate == sample_rate;
             match current_buses.as_ref() {
                 Some(built) if picture => Some(built.are(buses)),
                 _ => {
@@ -516,7 +515,18 @@ impl StromEngine {
             *self.buses.lock().expect("buses lock") = Some(built);
         };
         let slots = self.slots.load(Ordering::Relaxed);
-        let wants = |id: BusId| wanted.buses.iter().find(|(w, _)| *w == id).map(|(_, pre)| *pre);
+        let wants = |id: BusId| {
+            wanted
+                .buses
+                .iter()
+                .find(|(w, _)| *w == id)
+                .map(|(_, pre)| *pre)
+        };
+        // Commands count buses along the show from now on, also when a step
+        // below fails.
+        let mut built = current();
+        built.order = wanted.buses.iter().map(|(id, _)| *id).collect();
+        record(built);
 
         for bus in current().buses {
             if wants(bus.id).is_none() {
@@ -572,6 +582,27 @@ impl StromEngine {
     /// Add bus `id` to the running audio mixer, publishing on its channel.
     /// Returns strom's number for it.
     async fn add_aux_bus(&self, id: BusId, pre_fader: bool) -> Result<usize, EngineError> {
+        match self.post_aux_bus(id, pre_fader).await {
+            Ok(aux) => Ok(aux),
+            // strom may have added it and failed after (or the answer was
+            // lost): then the bus is there, on its channel, and a second add
+            // would be refused for good.
+            Err(e) => {
+                let channel = flows::bus_channel(id);
+                match self.list_aux_buses().await {
+                    Ok(buses) => buses
+                        .dynamic
+                        .iter()
+                        .find(|b| b.channel == channel)
+                        .map(|b| b.aux)
+                        .ok_or(e),
+                    Err(_) => Err(e),
+                }
+            }
+        }
+    }
+
+    async fn post_aux_bus(&self, id: BusId, pre_fader: bool) -> Result<usize, EngineError> {
         let channel = flows::bus_channel(id);
         let body = AddMixerAuxBusRequest {
             aux: None,
@@ -596,17 +627,36 @@ impl StromEngine {
 
     async fn remove_aux_bus(&self, aux: usize) -> Result<(), EngineError> {
         let path = format!("{}/{aux}", self.aux_buses_path());
+        let removed = match self.http.delete(self.url(&path)).send().await {
+            Ok(resp) => check(resp).await.map(|_| ()),
+            Err(e) => Err(net(e)),
+        };
+        // strom may have removed it and failed after: a bus it no longer
+        // lists is gone.
+        match removed {
+            Err(e) => match self.list_aux_buses().await {
+                Ok(buses) if !buses.dynamic.iter().any(|b| b.aux == aux) => Ok(()),
+                _ => Err(e),
+            },
+            ok => ok,
+        }
+    }
+
+    async fn list_aux_buses(&self) -> Result<MixerAuxBuses, EngineError> {
         let resp = self
             .http
-            .delete(self.url(&path))
+            .get(self.url(&self.aux_buses_path()))
             .send()
             .await
             .map_err(net)?;
-        check(resp).await.map(|_| ())
+        check(resp).await?.json().await.map_err(net)
     }
 
     fn aux_buses_path(&self) -> String {
-        format!("/flows/{}/blocks/{AUDIO_MIXER}/aux_buses", flows::mixer_id())
+        format!(
+            "/flows/{}/blocks/{AUDIO_MIXER}/aux_buses",
+            flows::mixer_id()
+        )
     }
 
     /// strom's aux number of engine bus `bus`.
@@ -1382,7 +1432,10 @@ impl Engine for StromEngine {
                 self.patch_audio_mixer(vec![fader], *ramp_ms).await
             }
             Command::SetBusListen { bus, on } => {
-                let afl = (format!("aux{}_afl", self.aux(*bus)?), PropertyValue::Bool(*on));
+                let afl = (
+                    format!("aux{}_afl", self.aux(*bus)?),
+                    PropertyValue::Bool(*on),
+                );
                 self.patch_audio_mixer(vec![afl], AUDIO_RAMP_MS).await
             }
             Command::SetMaster {
@@ -2066,15 +2119,32 @@ mod tests {
     /// A strom stand-in for the audio mixer's buses: adds them under the
     /// lowest free number from 2, removes them, and records every request
     /// as method, path and body.
-    async fn bus_strom() -> (
+    /// How the bus stand-in answers the first add or remove.
+    #[derive(Clone, Copy, PartialEq)]
+    enum FirstChange {
+        Done,
+        /// Done, but answered with an error (the answer lost, or a failure
+        /// after the change).
+        DoneButFailed,
+        /// Refused, nothing changed.
+        Refused,
+    }
+
+    /// strom's bus API for a running mixer with buses `known` (aux,
+    /// channel): lowest free number on add, 404 for a bus it does not have.
+    async fn bus_strom(
+        known: Vec<(usize, String)>,
+        first: FirstChange,
+    ) -> (
         String,
         std::sync::Arc<std::sync::Mutex<Vec<(String, String, serde_json::Value)>>>,
     ) {
         let calls = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
-        let buses = std::sync::Arc::new(std::sync::Mutex::new(Vec::<(usize, String)>::new()));
+        let buses = std::sync::Arc::new(std::sync::Mutex::new(known));
+        let first = std::sync::Arc::new(std::sync::Mutex::new(Some(first)));
         let seen = calls.clone();
         let app = axum::Router::new().fallback(move |request: axum::extract::Request| {
-            let (seen, buses) = (seen.clone(), buses.clone());
+            let (seen, buses, first) = (seen.clone(), buses.clone(), first.clone());
             async move {
                 let method = request.method().to_string();
                 let path = request.uri().path().to_string();
@@ -2087,20 +2157,40 @@ mod tests {
                     .unwrap()
                     .push((method.clone(), path.clone(), body.clone()));
                 let mut list = buses.lock().unwrap();
+                let change = (path.ends_with("/aux_buses") && method == "POST")
+                    || path.contains("/aux_buses/");
+                let how = if change {
+                    first.lock().unwrap().take().unwrap_or(FirstChange::Done)
+                } else {
+                    FirstChange::Done
+                };
+                let error = |status: StatusCode| (status, axum::Json(serde_json::json!({})));
+                if how == FirstChange::Refused {
+                    return error(StatusCode::INTERNAL_SERVER_ERROR);
+                }
                 if path.ends_with("/aux_buses") && method == "POST" {
                     let aux = (2..).find(|n| !list.iter().any(|(a, _)| a == n)).unwrap();
                     list.push((aux, body["channel"].as_str().unwrap().to_string()));
                 } else if let Some((_, aux)) = path.rsplit_once("/aux_buses/") {
                     let aux: usize = aux.parse().unwrap();
+                    if !list.iter().any(|(a, _)| *a == aux) {
+                        return error(StatusCode::NOT_FOUND);
+                    }
                     list.retain(|(a, _)| *a != aux);
+                }
+                if how == FirstChange::DoneButFailed {
+                    return error(StatusCode::INTERNAL_SERVER_ERROR);
                 }
                 let dynamic: Vec<_> = list
                     .iter()
                     .map(|(aux, channel)| serde_json::json!({ "aux": aux, "channel": channel }))
                     .collect();
-                axum::Json(serde_json::json!({
-                    "capacity": 17, "num_static": 1, "dynamic": dynamic
-                }))
+                (
+                    StatusCode::OK,
+                    axum::Json(serde_json::json!({
+                        "capacity": 17, "num_static": 1, "dynamic": dynamic
+                    })),
+                )
             }
         });
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -2113,17 +2203,18 @@ mod tests {
     /// no new flow, each bus keeps its number, and sends find them by it.
     #[tokio::test]
     async fn buses_change_the_running_mixer() {
-        let (url, calls) = bus_strom().await;
+        let (a, b, c) = (BusId::new(), BusId::new(), BusId::new());
+        // Strom's numbers as the mixer was built: A aux 2, B aux 3.
+        let known = vec![(2, flows::bus_channel(a)), (3, flows::bus_channel(b))];
+        let (url, calls) = bus_strom(known, FirstChange::Done).await;
         let engine = StromEngine::new(url, MixerBackend::Cpu, MonitorOut::None);
         engine.slots.store(1, Ordering::Relaxed);
-        let (a, b, c) = (BusId::new(), BusId::new(), BusId::new());
         let before = MixerBuses {
             phones_pre_fader: false,
             buses: vec![(a, true), (b, false)],
         };
-        // Strom's numbers as the mixer was built: A aux 2, B aux 3.
         *engine.buses.lock().unwrap() = Some(flows::BuiltBuses::numbered(&before));
-        // The stand-in knows B; A goes before anything is added.
+        // A goes before anything is added.
         let format = |buses: MixerBuses| Command::SetFormat {
             format: *engine.format.lock().unwrap(),
             multiview: *engine.multiview.lock().unwrap(),
@@ -2177,11 +2268,90 @@ mod tests {
             .await
             .unwrap();
         let last = calls.lock().unwrap().last().unwrap().2.clone();
-        assert_eq!(last["properties"], serde_json::json!({ "ch1_aux2_level": 1.0 }));
+        assert_eq!(
+            last["properties"],
+            serde_json::json!({ "ch1_aux2_level": 1.0 })
+        );
         // The same buses again change nothing.
         let count = calls.lock().unwrap().len();
         engine.run(&format(after)).await.unwrap();
         assert_eq!(calls.lock().unwrap().len(), count);
+    }
+
+    /// A bus change strom carried out but answered with an error is taken
+    /// as done: the patch reaches the show's buses, it does not stick on
+    /// the refusal a second try would get.
+    #[tokio::test]
+    async fn a_bus_change_done_but_failed_counts_as_done() {
+        let (a, b, c) = (BusId::new(), BusId::new(), BusId::new());
+        let known = vec![(2, flows::bus_channel(a)), (3, flows::bus_channel(b))];
+        for first in [FirstChange::DoneButFailed] {
+            let (url, _) = bus_strom(known.clone(), first).await;
+            let engine = StromEngine::new(url, MixerBackend::Cpu, MonitorOut::None);
+            engine.slots.store(1, Ordering::Relaxed);
+            *engine.buses.lock().unwrap() = Some(flows::BuiltBuses::numbered(&MixerBuses {
+                phones_pre_fader: false,
+                buses: vec![(a, false), (b, false)],
+            }));
+            // Removing A answers with an error, though strom removed it.
+            let only_b = MixerBuses {
+                phones_pre_fader: false,
+                buses: vec![(b, false)],
+            };
+            engine.patch_buses(&only_b).await.expect("remove A");
+            assert!(engine.buses.lock().unwrap().clone().unwrap().are(&only_b));
+            // So does adding C, though strom added it.
+            let (url, _) = bus_strom(vec![(3, flows::bus_channel(b))], first).await;
+            let engine2 = StromEngine::new(url, MixerBackend::Cpu, MonitorOut::None);
+            engine2.slots.store(1, Ordering::Relaxed);
+            *engine2.buses.lock().unwrap() = engine.buses.lock().unwrap().clone();
+            let with_c = MixerBuses {
+                phones_pre_fader: false,
+                buses: vec![(b, false), (c, false)],
+            };
+            engine2.patch_buses(&with_c).await.expect("add C");
+            let built = engine2.buses.lock().unwrap().clone().unwrap();
+            assert!(built.are(&with_c));
+            assert_eq!(built.aux(2), Some(2), "C on the number strom gave it");
+        }
+    }
+
+    /// When strom refuses to remove a bus, the show's buses keep their
+    /// commands: engine bus 1 is still the show's first bus, not the one
+    /// left over.
+    #[tokio::test]
+    async fn a_bus_strom_kept_takes_no_command_of_another() {
+        let (a, b) = (BusId::new(), BusId::new());
+        let known = vec![(2, flows::bus_channel(a)), (3, flows::bus_channel(b))];
+        let (url, calls) = bus_strom(known, FirstChange::Refused).await;
+        let engine = StromEngine::new(url, MixerBackend::Cpu, MonitorOut::None);
+        engine.slots.store(1, Ordering::Relaxed);
+        *engine.buses.lock().unwrap() = Some(flows::BuiltBuses::numbered(&MixerBuses {
+            phones_pre_fader: false,
+            buses: vec![(a, false), (b, false)],
+        }));
+        let only_b = MixerBuses {
+            phones_pre_fader: false,
+            buses: vec![(b, false)],
+        };
+        assert!(engine.patch_buses(&only_b).await.is_err());
+        engine
+            .run(&Command::SetAuxSend {
+                slot: 0,
+                bus: 1,
+                gain: 1.0,
+            })
+            .await
+            .unwrap();
+        let last = calls.lock().unwrap().last().unwrap().2.clone();
+        assert_eq!(
+            last["properties"],
+            serde_json::json!({ "ch1_aux3_level": 1.0 }),
+            "the send went to A's aux"
+        );
+        // The second try removes A.
+        engine.patch_buses(&only_b).await.expect("remove A again");
+        assert!(engine.buses.lock().unwrap().clone().unwrap().are(&only_b));
     }
 
     /// An engine that takes a request and never answers fails the call

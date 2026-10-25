@@ -16,11 +16,11 @@
 use strom_types::block::{BlockInstance, Position};
 use strom_types::element::{Element, Link};
 use strom_types::flow::GStreamerClockType;
-use strom_types::stinger::{
-    ENABLE_STINGER_PROPERTY, STINGER_INPUT_PAD, STINGER_MODE_PROPERTY, STINGER_PREROLL_PROPERTY,
-};
 use strom_types::mixer::{
     parse_dynamic_aux_buses, DynamicAuxBus, DYNAMIC_AUX_BUSES_PROPERTY, MAX_AUX_BUSES_PROPERTY,
+};
+use strom_types::stinger::{
+    ENABLE_STINGER_PROPERTY, STINGER_INPUT_PAD, STINGER_MODE_PROPERTY, STINGER_PREROLL_PROPERTY,
 };
 use strom_types::vision_mixer::{ENABLE_PREVIEW_OUT_PROPERTY, PREVIEW_OUTPUT_PAD};
 use strom_types::{Flow, FlowId, PropertyValue};
@@ -912,6 +912,11 @@ pub const PHONES_AUX: usize = 1;
 pub struct BuiltBuses {
     pub phones_pre_fader: bool,
     pub buses: Vec<BuiltBus>,
+    /// The show's buses in its order: engine bus `n` is the `n`-th of them.
+    /// Set before the buses are patched, so a bus a failed patch left over
+    /// (or did not add) is no engine bus and takes no command meant for
+    /// another.
+    pub order: Vec<BusId>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -938,6 +943,7 @@ impl BuiltBuses {
                     aux: PHONES_AUX + 1 + i,
                 })
                 .collect(),
+            order: buses.buses.iter().map(|(id, _)| *id).collect(),
         }
     }
 
@@ -950,6 +956,7 @@ impl BuiltBuses {
                 .iter()
                 .zip(&wanted.buses)
                 .all(|(b, (id, pre))| b.id == *id && b.pre_fader == *pre)
+            && self.order.iter().eq(wanted.buses.iter().map(|(id, _)| id))
     }
 
     /// strom's aux number of engine bus `bus` (0 is the headphones, then
@@ -957,7 +964,10 @@ impl BuiltBuses {
     pub fn aux(&self, bus: usize) -> Option<usize> {
         match bus {
             0 => Some(PHONES_AUX),
-            _ => self.buses.get(bus - 1).map(|b| b.aux),
+            _ => {
+                let id = self.order.get(bus - 1)?;
+                self.buses.iter().find(|b| b.id == *id).map(|b| b.aux)
+            }
         }
     }
 
@@ -1004,6 +1014,7 @@ pub fn buses_of(flow: &Flow) -> Option<BuiltBuses> {
         .collect::<Option<Vec<_>>>()?;
     Some(BuiltBuses {
         phones_pre_fader: pre(PHONES_AUX),
+        order: buses.iter().map(|b| b.id).collect(),
         buses,
     })
 }
@@ -2181,7 +2192,10 @@ mod tests {
         assert_eq!(dynamic[1].aux, 3);
         assert_eq!(dynamic[1].channel, bus_channel(buses.buses[1].id));
         assert!(
-            !flow.links.iter().any(|l| l.from.starts_with("mix:aux_out_")),
+            !flow
+                .links
+                .iter()
+                .any(|l| l.from.starts_with("mix:aux_out_")),
             "no bus leaves through a pad"
         );
         // A reused mixer tells its buses.
@@ -2225,6 +2239,7 @@ mod tests {
         assert_eq!(built.aux(3), None);
         // The first bus went, the second keeps aux 3 as engine bus 1.
         built.buses.remove(0);
+        built.order.remove(0);
         assert_eq!(built.aux(1), Some(3));
         assert_eq!(built.bus_on(3), Some(wanted.buses[1].0));
         assert_eq!(built.bus_on(2), None);

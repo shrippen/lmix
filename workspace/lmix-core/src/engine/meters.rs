@@ -79,7 +79,11 @@ fn parse_meter(element_id: &str, mixer_block: &str) -> Option<Meter> {
     }
     // strom's aux number, from 1.
     if let Some(aux) = name.strip_prefix("aux") {
-        return aux.parse::<usize>().ok().filter(|aux| *aux >= 1).map(Meter::Aux);
+        return aux
+            .parse::<usize>()
+            .ok()
+            .filter(|aux| *aux >= 1)
+            .map(Meter::Aux);
     }
     // Channels count from 1, slots from 0.
     let channel: usize = name.parse().ok()?;
@@ -284,9 +288,8 @@ pub async fn follow(
                         peak,
                         ..
                     }) if flow_id == mixer => {
-                        let bus_on = |aux: usize| {
-                            buses.lock().expect("buses lock").as_ref()?.bus_on(aux)
-                        };
+                        let bus_on =
+                            |aux: usize| buses.lock().expect("buses lock").as_ref()?.bus_on(aux);
                         record_meter(&levels, &element_id, mixer_block, &peak, bus_on)
                     }
                     Ok(StromEvent::BufferAgeProbe {
@@ -399,6 +402,32 @@ mod tests {
         let l = read.borrow();
         assert_eq!(l.slots[&1].0, -12.0, "loudest");
         assert_eq!(l.slot_channels[&1], [-12.0, -30.0]);
+    }
+
+    /// A bus meter lands on the bus strom's aux carries now: after A (aux
+    /// 2) went, aux 3 is still B's.
+    #[test]
+    fn bus_meters_follow_the_aux_numbers() {
+        use crate::engine::flows::BuiltBuses;
+        let (a, b) = (lmix_types::BusId::new(), lmix_types::BusId::new());
+        let mut built = BuiltBuses::numbered(&crate::switcher::MixerBuses {
+            phones_pre_fader: false,
+            buses: vec![(a, false), (b, false)],
+        });
+        built.buses.remove(0);
+        built.order.remove(0);
+        let (levels, read) = watch::channel(EngineLevels::default());
+
+        record_meter(&levels, "mix:meter:aux3", "mix", &[-6.0], |aux| {
+            built.bus_on(aux)
+        });
+        record_meter(&levels, "mix:meter:aux2", "mix", &[-9.0], |aux| {
+            built.bus_on(aux)
+        });
+
+        let l = read.borrow();
+        assert_eq!(l.buses[&b].0, -6.0);
+        assert!(!l.buses.contains_key(&a), "a bus that went has no meter");
     }
 
     #[test]
