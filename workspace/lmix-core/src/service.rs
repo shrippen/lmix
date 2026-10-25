@@ -2354,20 +2354,28 @@ mod tests {
         );
 
         // A file of today stays as it is: bus 3 is the third bus there,
-        // not aux C.
+        // not aux C, and a request body is the other side's JSON.
         let file = serde_json::json!([{
             "id": InputId::new(),
             "label": "Stream down",
-            "actions": [{"action": "fade_volume", "target": {"bus": 3}, "volume": 0, "duration_ms": 500}],
+            "actions": [
+                {"action": "fade_volume", "target": {"bus": 3}, "volume": 0, "duration_ms": 500},
+                {"action": "http_request", "target": "old", "body": {"action": "set_monitor_volume", "volume": 10}},
+            ],
         }]);
         let shortcuts = parse_shortcuts(&serde_json::to_vec(&file).unwrap()).unwrap();
         assert_eq!(
-            shortcuts[0].actions,
-            [Action::FadeVolume {
+            shortcuts[0].actions[0],
+            Action::FadeVolume {
                 target: lmix_types::action::VolumeTarget::Bus(lmix_types::BusRef::Number(3)),
                 volume: 0,
                 duration_ms: 500
-            }]
+            }
+        );
+        assert!(
+            matches!(&shortcuts[0].actions[1], Action::HttpRequest { body: Some(body), .. } if body["action"] == "set_monitor_volume"),
+            "{:?}",
+            shortcuts[0].actions[1]
         );
     }
 

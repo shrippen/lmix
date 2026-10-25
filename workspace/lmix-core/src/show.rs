@@ -629,15 +629,22 @@ fn aux_number(v: &Value) -> Option<usize> {
         .map(|n| n - 1)
 }
 
+/// Fields of an action that hold JSON of their own, sent elsewhere as it
+/// is (`http_request`, `ha_service`): no actions of lmix in there.
+const FOREIGN_JSON: [&str; 2] = ["body", "data"];
+
 /// Every saved action in `value` (shortcuts, cues, triggers, wherever they
 /// are, also inside a saved action: a cue that adds a shortcut).
 fn actions(value: &Value, f: &mut dyn FnMut(&Map<String, Value>)) {
     match value {
         Value::Object(map) => {
-            if map.get("action").is_some_and(Value::is_string) {
+            let action = map.get("action").is_some_and(Value::is_string);
+            if action {
                 f(map);
             }
-            map.values().for_each(|v| actions(v, f));
+            map.iter()
+                .filter(|(key, _)| !(action && FOREIGN_JSON.contains(&key.as_str())))
+                .for_each(|(_, v)| actions(v, f));
         }
         Value::Array(items) => items.iter().for_each(|v| actions(v, f)),
         _ => {}
@@ -647,8 +654,11 @@ fn actions(value: &Value, f: &mut dyn FnMut(&Map<String, Value>)) {
 fn actions_mut(value: &mut Value, f: &mut dyn FnMut(&mut Map<String, Value>)) {
     match value {
         Value::Object(map) => {
-            map.values_mut().for_each(|v| actions_mut(v, f));
-            if map.get("action").is_some_and(Value::is_string) {
+            let action = map.get("action").is_some_and(Value::is_string);
+            map.iter_mut()
+                .filter(|(key, _)| !(action && FOREIGN_JSON.contains(&key.as_str())))
+                .for_each(|(_, v)| actions_mut(v, f));
+            if action {
                 f(map);
             }
         }
