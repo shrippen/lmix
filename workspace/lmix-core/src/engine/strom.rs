@@ -1638,7 +1638,14 @@ impl Engine for StromEngine {
     /// waits for it), as for an engine that cannot tell.
     async fn flow_running(&self, flow: FlowId) -> bool {
         match tokio::time::timeout(FLOW_CHECK_TIMEOUT, self.get_flow(flow)).await {
-            Ok(Ok(Some(flow))) => flow.running,
+            // A flow that is still starting (READY, PAUSED) runs too.
+            Ok(Ok(Some(flow))) => {
+                flow.running
+                    || matches!(
+                        flow.gst_state,
+                        Some(PipelineState::Ready | PipelineState::Paused | PipelineState::Playing)
+                    )
+            }
             Ok(Ok(None)) => false,
             Ok(Err(_)) | Err(_) => true,
         }
