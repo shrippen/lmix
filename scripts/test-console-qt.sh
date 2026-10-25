@@ -92,7 +92,7 @@ wait_up "http://127.0.0.1:${STROM_PORT}/health" strom
 # what this check is about: only lines from here on count.
 STROM_START_LINES="$(wc -l <"$WORK/strom.log")"
 "$CORE_BIN" --strom "http://127.0.0.1:${STROM_PORT}" --listen "127.0.0.1:${CORE_PORT}" --mixer cpu \
-    --slots 2 --autosave "$WORK/autosave.lmix" --shortcuts "$WORK/shortcuts.json" --layout-templates "$WORK/layout-templates.json" --live-dir "$LIVE_DIR" >"$WORK/core.log" 2>&1 &
+    --slots 3 --autosave "$WORK/autosave.lmix" --shortcuts "$WORK/shortcuts.json" --layout-templates "$WORK/layout-templates.json" --live-dir "$LIVE_DIR" >"$WORK/core.log" 2>&1 &
 PIDS+=($!)
 wait_up "$CORE/state" lmix-core
 
@@ -212,6 +212,22 @@ for _ in $(seq 1 40); do
     sleep 0.5
 done
 [[ -n "$layout_shows" ]] && pass "preview monitor shows a layout" || fail "preview monitor blank with a layout on preview"
+
+# "+ Input": the dialog opens on the test pattern; Ball, a name and the
+# footer's "Add input" give an input of that pattern and name.
+click 1162 540
+sleep 2
+click 836 262
+click 940 320
+DISPLAY="$DISPLAY_NO" xdotool type --delay 30 "Dialog Ball"
+click 920 746
+added() { state | jq -r '.inputs[] | select(.name == "Dialog Ball") | .source.pattern'; }
+for _ in $(seq 1 40); do [[ -n "$(added)" ]] && break; sleep 0.5; done
+[[ "$(added)" == ball ]] && pass "add input: a pattern from the dialog" \
+    || fail "add input: got '$(added)' for the pattern of \"Dialog Ball\""
+act "{\"action\":\"remove_input\",\"input\":$(state | jq '.inputs[] | select(.name == "Dialog Ball") | .number')}"
+for _ in $(seq 1 40); do [[ -z "$(added)" ]] && break; sleep 0.5; done
+[[ -z "$(added)" ]] || fail "add input: \"Dialog Ball\" not removed again"
 
 # The grip under the monitors sets their height and keeps it in the
 # settings; a double click goes back to the standard height (15 grid units).
