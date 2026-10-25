@@ -601,6 +601,11 @@ AppPage {
                 readonly property int columns: Math.max(1, Math.floor((width + Kirigami.Units.smallSpacing) / (root.tileMinWidth + Kirigami.Units.smallSpacing)))
                 /** Height of a tile without its picture: the tiles report it. */
                 property real chrome: Kirigami.Units.gridUnit * 2
+                // Later, not while the grid lays out: a tile made by setting cellHeight
+                // would set it again (a binding loop, seen with a restored input).
+                function reportChrome(value) {
+                    chrome = value
+                }
                 cellWidth: Math.floor(width / columns)
                 cellHeight: Math.ceil((cellWidth - Kirigami.Units.smallSpacing - 2 * Kirigami.Units.smallSpacing) / root.aspect + chrome + Kirigami.Units.smallSpacing)
                 clip: true
@@ -637,8 +642,8 @@ AppPage {
                     width: bar.cellWidth - Kirigami.Units.smallSpacing
                     height: bar.cellHeight - Kirigami.Units.smallSpacing
                     detail: viewSettings.detail
-                    onChromeChanged: bar.chrome = chrome
-                    Component.onCompleted: bar.chrome = chrome
+                    onChromeChanged: Qt.callLater(bar.reportChrome, chrome)
+                    Component.onCompleted: Qt.callLater(bar.reportChrome, chrome)
                     core: backend
                     input: root.inputById(key) || ({ id: key, number: 0, name: "", source: { kind: "pattern" }, status: "starting", audio: { on: false, follow_video: false, volume: 0 }, has_audio: false, listen: "off", signal_loss: "hold", color: null })
                     act: root.act
