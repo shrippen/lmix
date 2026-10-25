@@ -494,7 +494,13 @@ impl StromEngine {
             Some(false) => self.patch_buses(buses).await,
             None => {
                 let flow = self.mixer_flow();
-                self.build_mixer(&flow).await
+                let built = self.build_mixer(&flow).await;
+                if built.is_err() {
+                    // Unknown buses build it anew: the same wish again
+                    // tries again instead of taking the failed one as done.
+                    *self.buses.lock().expect("buses lock") = None;
+                }
+                built
             }
         }
     }
@@ -1834,6 +1840,44 @@ mod tests {
         let addr = listener.local_addr().unwrap();
         tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
         (format!("http://{addr}"), calls)
+    }
+
+    /// A new format whose mixer strom does not build is tried again when
+    /// it is asked for again; it is not taken as done.
+    #[tokio::test]
+    async fn a_failed_new_mixer_is_built_again() {
+        let posts = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let seen = posts.clone();
+        let app = axum::Router::new().fallback(move |request: axum::extract::Request| {
+            let seen = seen.clone();
+            async move {
+                if request.method() == "POST" && request.uri().path() == "/api/flows" {
+                    seen.fetch_add(1, Ordering::SeqCst);
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        axum::Json(serde_json::json!({})),
+                    );
+                }
+                (StatusCode::OK, axum::Json(serde_json::json!({})))
+            }
+        });
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        let engine = StromEngine::new(
+            format!("http://{addr}"),
+            MixerBackend::Cpu,
+            MonitorOut::None,
+        );
+        let command = Command::SetFormat {
+            format: *engine.format.lock().unwrap(),
+            multiview: *engine.multiview.lock().unwrap(),
+            sample_rate: *engine.sample_rate.lock().unwrap(),
+            buses: MixerBuses::default(),
+        };
+        assert!(engine.run(&command).await.is_err());
+        assert!(engine.run(&command).await.is_err());
+        assert_eq!(posts.load(Ordering::SeqCst), 2);
     }
 
     /// A request the stinger stand-in strom received.

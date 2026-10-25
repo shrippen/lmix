@@ -161,7 +161,7 @@ AppPage {
                 Layout.fillWidth: true
                 titleWidth: root.titleWidth
                 title: qsTr("Lock")
-                hint: qsTr("While locked, closing inputs, loading a show and stopping outputs are refused.")
+                hint: qsTr("While locked, closing inputs, loading a show, stopping outputs and changing format, sample rate or multiview are refused.")
                 QQC2.Switch {
                     id: lockSwitch
                     checked: root.show !== null && root.show.locked === true

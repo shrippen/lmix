@@ -1492,6 +1492,9 @@ impl Switcher {
                 if format == self.show.format {
                     return Ok(Vec::new());
                 }
+                // A new mixer: program stops for a moment and running
+                // outputs restart, which the lock keeps from a show.
+                self.check_unlocked()?;
                 self.show.format = format;
                 let mut commands = self.mixer_rebuilt();
                 commands.extend(self.page_commands());
@@ -1504,6 +1507,7 @@ impl Switcher {
                 if hz == self.show.sample_rate {
                     return Ok(Vec::new());
                 }
+                self.check_unlocked()?;
                 self.show.sample_rate = hz;
                 Ok(self.mixer_rebuilt())
             }
@@ -1511,6 +1515,7 @@ impl Switcher {
                 if layout == self.show.multiview {
                     return Ok(Vec::new());
                 }
+                self.check_unlocked()?;
                 self.show.multiview = layout;
                 Ok(self.mixer_rebuilt())
             }
@@ -8704,10 +8709,34 @@ mod tests {
                 "{cmds:?}"
             );
         }
+        // A new mixer restarts the running outputs: format, rate and
+        // multiview wait for the unlock; the same value again is no change.
+        let upright = lmix_types::MasterFormat {
+            width: 1080,
+            height: 1920,
+            ..Default::default()
+        };
+        let mut multiview = sw.state().multiview;
+        multiview.program = match multiview.program {
+            lmix_types::ProgramSide::Left => lmix_types::ProgramSide::Right,
+            lmix_types::ProgramSide::Right => lmix_types::ProgramSide::Left,
+        };
+        for action in [
+            Action::SetMasterFormat { format: upright },
+            Action::SetSampleRate { hz: 44_100 },
+            Action::SetMultiview { layout: multiview },
+        ] {
+            assert_eq!(sw.apply(action), Err(ActionError::Locked));
+        }
+        let format = sw.state().format;
+        assert_eq!(sw.apply(Action::SetMasterFormat { format }), Ok(Vec::new()));
+        assert_eq!(sw.state().sample_rate, 48_000);
         // Switching still works.
         sw.apply(Action::CutDirect { input: named("A") }).unwrap();
 
         sw.apply(Action::SetLock { on: false }).unwrap();
+        sw.apply(Action::SetMasterFormat { format: upright })
+            .unwrap();
         sw.apply(Action::RemoveInput { input: named("A") }).unwrap();
     }
 

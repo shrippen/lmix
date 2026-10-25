@@ -2867,8 +2867,8 @@
     </message>
     <message>
       <location line="+77" />
-      <source>While locked, closing inputs, loading a show and stopping outputs are refused.</source>
-      <translation>Gesperrt lassen sich keine Inputs schließen, keine Show laden und keine Ausgänge stoppen.</translation>
+      <source>While locked, closing inputs, loading a show, stopping outputs and changing format, sample rate or multiview are refused.</source>
+      <translation>Gesperrt lassen sich keine Inputs schließen, keine Show laden, keine Ausgänge stoppen und weder Format noch Abtastrate noch Multiview ändern.</translation>
     </message>
     <message>
       <location line="+16" />
@@ -3734,8 +3734,8 @@
     </message>
     <message>
       <location line="+1" />
-      <source>While locked, closing inputs, loading a show and stopping outputs are refused.</source>
-      <translation>Gesperrt lassen sich keine Inputs schließen, keine Show laden und keine Ausgänge stoppen.</translation>
+      <source>While locked, closing inputs, loading a show, stopping outputs and changing format, sample rate or multiview are refused.</source>
+      <translation>Gesperrt lassen sich keine Inputs schließen, keine Show laden, keine Ausgänge stoppen und weder Format noch Abtastrate noch Multiview ändern.</translation>
     </message>
     <message>
       <location line="+12" />
