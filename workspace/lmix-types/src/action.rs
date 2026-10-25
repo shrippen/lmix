@@ -1445,6 +1445,8 @@ pub enum ActionError {
     BadColor { color: String },
     #[error("web page {url} is not an http:// or https:// address")]
     BadWebUrl { url: String },
+    #[error("capture mode {mode} is not a resolution like 1920x1080 or a frame rate like 30/1")]
+    BadDeviceMode { mode: String },
     #[error("{reference} shows no page (not a web or graphics input)")]
     NoPage { reference: String },
     #[error("volume {volume} is outside 0–{max}")]

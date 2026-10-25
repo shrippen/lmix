@@ -342,11 +342,9 @@ impl qobject::Core {
         options: &QString,
         name: &QString,
     ) -> bool {
-        let Some(source) = forms::source_with_options(
-            &kind.to_string(),
-            &value.to_string(),
-            &options.to_string(),
-        ) else {
+        let Some(source) =
+            forms::source_with_options(&kind.to_string(), &value.to_string(), &options.to_string())
+        else {
             return false;
         };
         let name = name.to_string().trim().to_string();
@@ -364,11 +362,9 @@ impl qobject::Core {
         value: &QString,
         options: &QString,
     ) -> bool {
-        let Some(source) = forms::source_with_options(
-            &kind.to_string(),
-            &value.to_string(),
-            &options.to_string(),
-        ) else {
+        let Some(source) =
+            forms::source_with_options(&kind.to_string(), &value.to_string(), &options.to_string())
+        else {
             return false;
         };
         self.send(Action::ReplaceSource {

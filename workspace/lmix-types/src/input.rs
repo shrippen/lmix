@@ -714,9 +714,60 @@ impl Device {
     }
 }
 
+/// A capture resolution as `1920x1080` (two positive numbers), in that
+/// form; `None` when the text is none.
+pub fn device_resolution(text: &str) -> Option<String> {
+    let (w, h) = text.trim().split_once('x')?;
+    let (w, h) = (w.parse::<u32>().ok()?, h.parse::<u32>().ok()?);
+    (w > 0 && h > 0).then(|| format!("{w}x{h}"))
+}
+
+/// A capture frame rate as `30/1` or `30000/1001` (a positive fraction),
+/// in that form; `None` when the text is none.
+pub fn device_framerate(text: &str) -> Option<String> {
+    let (n, d) = text.trim().split_once('/')?;
+    let (n, d) = (n.parse::<u32>().ok()?, d.parse::<u32>().ok()?);
+    (n > 0 && d > 0).then(|| format!("{n}/{d}"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_device_without_a_mode_reads_and_writes_as_before() {
+        let old: SourceSpec = serde_json::from_str(r#"{"kind":"device","id":"cam"}"#).unwrap();
+        assert_eq!(
+            old,
+            SourceSpec::Device {
+                id: "cam".into(),
+                resolution: None,
+                framerate: None
+            }
+        );
+        assert_eq!(
+            serde_json::to_string(&old).unwrap(),
+            r#"{"kind":"device","id":"cam"}"#
+        );
+    }
+
+    #[test]
+    fn device_modes_read_only_as_numbers() {
+        assert_eq!(
+            device_resolution(" 1920x1080 ").as_deref(),
+            Some("1920x1080")
+        );
+        assert_eq!(
+            device_framerate("30000/1001").as_deref(),
+            Some("30000/1001")
+        );
+        for bad in ["", "foo", "0x1080", "1920x", "1920*1080", "-1x2"] {
+            assert_eq!(device_resolution(bad), None, "{bad}");
+        }
+        for bad in ["", "30", "0/0", "30/0", "a/b"] {
+            assert_eq!(device_framerate(bad), None, "{bad}");
+        }
+    }
 
     #[test]
     fn old_colour_names_still_load() {

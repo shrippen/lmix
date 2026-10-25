@@ -140,24 +140,10 @@ pub fn source_with_options(kind: &str, value: &str, options: &str) -> Option<Sou
         ..
     } = &mut source
     {
-        *resolution = valid_resolution(&options.resolution);
-        *framerate = valid_framerate(&options.framerate);
+        *resolution = lmix_types::device_resolution(&options.resolution);
+        *framerate = lmix_types::device_framerate(&options.framerate);
     }
     Some(source)
-}
-
-/// `1920x1080`: two positive numbers.
-fn valid_resolution(text: &str) -> Option<String> {
-    let (w, h) = text.trim().split_once('x')?;
-    let (w, h) = (w.parse::<u32>().ok()?, h.parse::<u32>().ok()?);
-    (w > 0 && h > 0).then(|| format!("{w}x{h}"))
-}
-
-/// `30/1` or `30000/1001`: a positive fraction.
-fn valid_framerate(text: &str) -> Option<String> {
-    let (n, d) = text.trim().split_once('/')?;
-    let (n, d) = (n.parse::<u32>().ok()?, d.parse::<u32>().ok()?);
-    (n > 0 && d > 0).then(|| format!("{n}/{d}"))
 }
 
 /// `#rrggbb` in lower case, from QML's colour text (`#RRGGBB` or
@@ -329,7 +315,11 @@ mod tests {
     #[test]
     fn camera_mode_from_the_form() {
         assert_eq!(
-            source_with_options("device", "/dev/video0", r#"{"resolution":"1280x720","framerate":"60/1"}"#),
+            source_with_options(
+                "device",
+                "/dev/video0",
+                r#"{"resolution":"1280x720","framerate":"60/1"}"#
+            ),
             Some(SourceSpec::Device {
                 id: "/dev/video0".into(),
                 resolution: Some("1280x720".into()),

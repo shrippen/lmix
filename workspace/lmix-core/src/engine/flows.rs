@@ -1126,12 +1126,16 @@ fn add_source(flow: &mut Flow, source: &SourceSpec, env: &SlotEnv) -> Option<Str
             ];
             // The block asks the device for this mode at capture time.
             if let Some(resolution) = resolution {
-                properties.push(("video_resolution", PropertyValue::String(resolution.clone())));
+                properties.push((
+                    "video_resolution",
+                    PropertyValue::String(resolution.clone()),
+                ));
             }
             if let Some(framerate) = framerate {
                 properties.push(("video_framerate", PropertyValue::String(framerate.clone())));
             }
-            flow.blocks.push(block("dev", LOCAL_INPUT_BLOCK, properties));
+            flow.blocks
+                .push(block("dev", LOCAL_INPUT_BLOCK, properties));
             "dev:video_out".into()
         }
         SourceSpec::AudioDevice { .. } => return None,

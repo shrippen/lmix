@@ -327,7 +327,7 @@
       <translation>Die des Geräts</translation>
     </message>
     <message>
-      <location line="+140" />
+      <location line="+155" />
       <source>Pattern</source>
       <translation>Muster</translation>
     </message>
@@ -1713,7 +1713,7 @@
       <translation>startet</translation>
     </message>
     <message>
-      <location line="+29" />
+      <location line="+32" />
       <source>Overlay %1</source>
       <translation>Overlay %1</translation>
     </message>
@@ -2550,7 +2550,7 @@
       <translation>Einige Sekunden lang Aufnahme bis Programm messen</translation>
     </message>
     <message>
-      <location line="+40" />
+      <location line="+43" />
       <location line="+190" />
       <source>Preview</source>
       <translation>Vorschau</translation>
@@ -5244,6 +5244,11 @@
       <location line="+1" />
       <source>Colour %1 is not #rrggbb</source>
       <translation>Farbe %1 ist nicht #rrggbb</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Capture mode %1 is not a resolution like 1920x1080 or a frame rate like 30/1</source>
+      <translation>Aufnahmemodus %1 ist keine Auflösung wie 1920x1080 und keine Bildrate wie 30/1</translation>
     </message>
     <message>
       <location line="+1" />

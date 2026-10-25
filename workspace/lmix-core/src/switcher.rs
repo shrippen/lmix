@@ -4911,9 +4911,25 @@ fn program_then_preview(
 }
 
 /// Reject sources the engine cannot build: a color that is not
-/// `#rrggbb`, a web page that is not an http(s) address.
+/// `#rrggbb`, a web page that is not an http(s) address, a capture mode
+/// that is not `1920x1080` and `30/1`.
 fn check_source(source: &SourceSpec) -> Result<(), ActionError> {
     match source {
+        SourceSpec::Device {
+            resolution,
+            framerate,
+            ..
+        } => {
+            fn bad(mode: &Option<String>, read: fn(&str) -> Option<String>) -> Option<&str> {
+                mode.as_deref().filter(|m| read(m).is_none())
+            }
+            match bad(resolution, lmix_types::device_resolution)
+                .or(bad(framerate, lmix_types::device_framerate))
+            {
+                Some(mode) => Err(ActionError::BadDeviceMode { mode: mode.into() }),
+                None => Ok(()),
+            }
+        }
         SourceSpec::Color { color } if color_rgb(color).is_none() => Err(ActionError::BadColor {
             color: color.clone(),
         }),
@@ -9080,6 +9096,36 @@ mod tests {
             }),
             Err(ActionError::NoPage { .. })
         ));
+    }
+
+    #[test]
+    fn a_capture_mode_must_read_as_one() {
+        let mut sw = Switcher::new(SLOTS);
+        let device = |resolution: Option<&str>, framerate: Option<&str>| Action::AddInput {
+            source: SourceSpec::Device {
+                id: "cam".into(),
+                resolution: resolution.map(Into::into),
+                framerate: framerate.map(Into::into),
+            },
+            name: None,
+        };
+        for (resolution, framerate) in [
+            (Some("foo"), None),
+            (None, Some("0/0")),
+            (Some("1920x1080"), Some("30")),
+        ] {
+            assert!(
+                matches!(
+                    sw.apply(device(resolution, framerate)),
+                    Err(ActionError::BadDeviceMode { .. })
+                ),
+                "{resolution:?} {framerate:?}"
+            );
+        }
+        assert!(sw
+            .apply(device(Some("1920x1080"), Some("30000/1001")))
+            .is_ok());
+        assert!(sw.apply(device(None, None)).is_ok());
     }
 
     #[test]

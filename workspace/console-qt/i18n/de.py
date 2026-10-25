@@ -991,4 +991,5 @@ DE = {
     "The device's own": 'Die des Geräts',
     'The device delivers the closest mode it has and chooses its pixel format itself.': 'Das Gerät liefert den nächstliegenden Modus, den es hat, und wählt sein Pixelformat selbst.',
     'Then add another': 'Danach weiteren hinzufügen',
+    'Capture mode %1 is not a resolution like 1920x1080 or a frame rate like 30/1': 'Aufnahmemodus %1 ist keine Auflösung wie 1920x1080 und keine Bildrate wie 30/1',
 }

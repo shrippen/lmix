@@ -159,8 +159,23 @@ KanteDialog {
         core.refreshLists()
         textField.text = ""
         nameField.text = ""
+        // Each opening starts from the standard values, a replacement from what
+        // the input shows now: nothing of an earlier dialog stays chosen.
+        patternIndex = 0
+        colorValue = signalColors[0]
+        resolutionBox.currentIndex = 0
+        framerateBox.currentIndex = 0
         if (replacing && available.indexOf(replacing.source.kind) >= 0) {
-            kind = replacing.source.kind
+            const source = replacing.source
+            kind = source.kind
+            if (source.kind === "pattern") {
+                patternIndex = Math.max(0, patterns.findIndex(p => p.value === source.pattern))
+            } else if (source.kind === "color") {
+                colorValue = source.color
+            } else if (source.kind === "device") {
+                resolutionBox.currentIndex = Math.max(0, resolutions.findIndex(r => r.value === (source.resolution || "")))
+                framerateBox.currentIndex = Math.max(0, framerates.findIndex(r => r.value === (source.framerate || "")))
+            }
         }
     }
 
