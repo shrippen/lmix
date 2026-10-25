@@ -6,6 +6,9 @@ import "."
  * Toast: slides in from the right with the cut corner first, a 2 px line at the
  * bottom shows how long it stays. Call `show()`; it hides itself after `life`
  * ms (0: stays) and emits `closed`.
+ * Action (Kante 1.43, from lmix): `actionText` ("Undo") puts a button at the right end;
+ * a click emits `actionTriggered` and hides the toast. `actionShortcut` (e.g. "Ctrl+Z") is
+ * shown as a `KanteKeycap` beside it; the app handles the shortcut itself.
  */
 Item {
     id: toast
@@ -22,7 +25,10 @@ Item {
     property string text: ""
     property int life: 4000
     property bool shown: false
+    property string actionText: ""
+    property string actionShortcut: ""
     signal closed()
+    signal actionTriggered()
 
     readonly property color tone: {
         switch (kind) {
@@ -90,6 +96,21 @@ Item {
                 font: KanteStyle.defaultFont
                 wrapMode: Text.WordWrap
             }
+        }
+        KanteButton {
+            id: actionButton
+            visible: toast.actionText.length > 0
+            Layout.alignment: Qt.AlignVCenter
+            text: toast.actionText
+            onClicked: {
+                toast.actionTriggered()
+                toast.hide()
+            }
+        }
+        KanteKeycap {
+            visible: toast.actionText.length > 0 && toast.actionShortcut.length > 0
+            Layout.alignment: Qt.AlignVCenter
+            text: toast.actionShortcut
         }
     }
 

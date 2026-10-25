@@ -10,16 +10,18 @@
 #
 #   scripts/test-console-qt.sh
 #   KEEP_WORK=1 scripts/test-console-qt.sh   # keep logs and screenshots
+#   DISPLAY_NO=:96 STROM_PORT=8798 CORE_PORT=8898 scripts/test-console-qt.sh
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-STROM_PORT=8799
-CORE_PORT=8899
+# Display and ports can be moved, so two runs on one machine stay apart.
+STROM_PORT="${STROM_PORT:-8799}"
+CORE_PORT="${CORE_PORT:-8899}"
 CORE="http://127.0.0.1:${CORE_PORT}/api"
-DISPLAY_NO=:95
+DISPLAY_NO="${DISPLAY_NO:-:95}"
 WORK="$(mktemp -d)"
 # Unix socket paths must stay short (107 bytes).
-LIVE_DIR="${XDG_RUNTIME_DIR:-/tmp}/lmix-qt-test"
+LIVE_DIR="${XDG_RUNTIME_DIR:-/tmp}/lmix-qt-test${DISPLAY_NO#:}"
 PIDS=()
 
 cleanup() {
@@ -107,13 +109,12 @@ export XDG_CONFIG_HOME="$WORK/config" DISPLAY="$DISPLAY_NO" QT_QPA_PLATFORM=xcb 
     LMIX_CORE="http://127.0.0.1:${CORE_PORT}"
 "$CONSOLE_DIR/lmix" --page mix >"$WORK/console.log" 2>&1 &
 PIDS+=($!)
-PROGRAM_AREA="460x260+720+170"
-PREVIEW_AREA="460x260+40+180"
-TILE_1="200x40+12+568"
-TILE_2="200x40+232+568"
-# The tile's picture is about 78×44 px: the ball is 2–3 px wide and a
-# move changes about 9 px (19.10.–22.10.: 8.9 at fuzz 5 %). A still
-# picture changes none.
+PROGRAM_AREA="440x240+720+140"
+PREVIEW_AREA="440x240+40+140"
+TILE_1="180x90+14+580"
+TILE_2="180x90+212+580"
+# The tile's picture (medium, compact) is about 186×104 px: the ball is
+# a few px wide and a move changes some px. A still picture changes none.
 TILE_MOVED_PX=3
 # The live flows start a few seconds after the Console, and on a VM
 # software GL shares four cores with the CPU mixer: pictures can stall
@@ -134,7 +135,7 @@ done
 [[ -n "$tile_1_moves" ]] && pass "tile 1 moves (ball)" || fail "tile 1 still"
 [[ -n "$tile_2_shows" ]] && pass "tile 2 shows its picture" || fail "tile 2 blank"
 
-click 336 590
+click 303 630
 becomes preview 2
 [[ "$(number_of preview)" == 2 ]] && pass "click on a tile: preview" || fail "preview is $(number_of preview), not 2"
 # Cut acts on what the Console shows: wait until its preview has the picture.
@@ -163,17 +164,17 @@ for _ in $(seq 1 40); do [[ "$(overlay_1)" == none ]] && break; sleep 0.5; done
 # The narrow mixer at the right edge: mute input 1 and the master there.
 audio_1() { state | jq '.inputs[0].audio.on'; }
 master_mute() { state | jq '.master.mute'; }
-click 1242 808
+click 1243 805
 for _ in $(seq 1 40); do [[ "$(audio_1)" == false ]] && break; sleep 0.5; done
 [[ "$(audio_1)" == false ]] && pass "mixer at the edge: input 1 muted" || fail "input 1 still on after M in the mixer"
 sleep 1 # not a double click on the same M
-click 1242 808
+click 1243 805
 for _ in $(seq 1 40); do [[ "$(audio_1)" == true ]] && break; sleep 0.5; done
-click 1396 808
+click 1347 805
 for _ in $(seq 1 40); do [[ "$(master_mute)" == true ]] && break; sleep 0.5; done
 [[ "$(audio_1)" == true && "$(master_mute)" == true ]] && pass "mixer at the edge: input 1 on, master muted" \
     || fail "mixer: input 1 on $(audio_1), master mute $(master_mute)"
-click 1396 808
+click 1347 805
 for _ in $(seq 1 40); do [[ "$(master_mute)" == false ]] && break; sleep 0.5; done
 # Two streams, not started: the output bar offers to start both (STR.1).
 for port in 9921 9922; do
@@ -211,6 +212,80 @@ for _ in $(seq 1 40); do
     sleep 0.5
 done
 [[ -n "$layout_shows" ]] && pass "preview monitor shows a layout" || fail "preview monitor blank with a layout on preview"
+
+# The grip under the monitors sets their height and keeps it in the
+# settings; a double click goes back to the standard height (15 grid units).
+view_setting() { sed -n "s/^$1=//p" "$WORK"/config/lmix/lmix.conf 2>/dev/null; }
+setting_becomes() {
+    for _ in $(seq 1 20); do [[ "$(view_setting "$1")" == "$2" ]] && return 0; sleep 0.5; done
+    return 1
+}
+drag_y() {
+    # Over the grip first: right after a popup closed, a press without a move
+    # before it found no item under the pointer (once in a run).
+    DISPLAY="$DISPLAY_NO" xdotool mousemove "$1" "$(($2 + 3))"
+    sleep 0.3
+    DISPLAY="$DISPLAY_NO" xdotool mousemove "$1" "$2"
+    sleep 0.3
+    DISPLAY="$DISPLAY_NO" xdotool mousedown 1
+    # In steps: a jump in one event is no drag for Qt.
+    local y="$2"
+    while (( y != $3 )); do
+        (( y += ($3 > y ? 1 : -1) * ($3 - y > 8 || y - $3 > 8 ? 8 : 1) ))
+        sleep 0.03
+        DISPLAY="$DISPLAY_NO" xdotool mousemove "$1" "$y"
+    done
+    sleep 0.1
+    DISPLAY="$DISPLAY_NO" xdotool mouseup 1
+}
+drag_y 602 511 451
+setting_becomes monitorHeight 210 && pass "monitor grip: a drag sets the height" \
+    || fail "monitor grip: height $(view_setting monitorHeight) after a drag of 60 px up"
+# The grip stays put: the transition panel beside the monitors is higher.
+DISPLAY="$DISPLAY_NO" xdotool mousemove 602 511 click --repeat 2 --delay 80 1
+setting_becomes monitorHeight 270 && pass "monitor grip: a double click resets it" \
+    || fail "monitor grip: height $(view_setting monitorHeight) after a double click"
+
+# The grip left of the audio column: a drag to the left widens it, a
+# double click goes back to the standard width (12 grid units). A wide
+# column leaves less room than the input actions take in one row: they
+# wrap, and the column stays in the window with its grip at the pointer.
+drag_x() {
+    DISPLAY="$DISPLAY_NO" xdotool mousemove "$(($1 + 3))" "$2"
+    sleep 0.3
+    DISPLAY="$DISPLAY_NO" xdotool mousemove "$1" "$2"
+    sleep 0.3
+    DISPLAY="$DISPLAY_NO" xdotool mousedown 1
+    local x="$1"
+    while (( x != $3 )); do
+        (( x += ($3 > x ? 1 : -1) * ($3 - x > 8 || x - $3 > 8 ? 8 : 1) ))
+        sleep 0.03
+        DISPLAY="$DISPLAY_NO" xdotool mousemove "$x" "$2"
+    done
+    sleep 0.1
+    DISPLAY="$DISPLAY_NO" xdotool mouseup 1
+}
+drag_x 1205 300 765
+setting_becomes mixerWidth 656 && pass "audio grip: a drag widens the column" \
+    || fail "audio grip: width $(view_setting mixerWidth) after a drag of 440 px left"
+DISPLAY="$DISPLAY_NO" xdotool mousemove 765 300 click --repeat 2 --delay 80 1
+setting_becomes mixerWidth 216 && pass "audio grip: a double click resets it" \
+    || fail "audio grip: width $(view_setting mixerWidth) after a double click"
+
+# Detail: the tiles get the overlay buttons and the audio row, and the
+# monitors give them room, so a row of tiles is not cut off.
+click 304 540
+setting_becomes detail true || fail "Detail not stored after a click"
+sleep 2
+click 22 708
+for _ in $(seq 1 40); do [[ "$(overlay_1)" != none ]] && break; sleep 0.5; done
+[[ "$(overlay_1)" == "$(state | jq -r '.inputs[0].id')" ]] && pass "detail: overlay 1 from the tile" \
+    || fail "detail: overlay 1 is $(overlay_1) after a click on the tile's button"
+click 28 748
+for _ in $(seq 1 40); do [[ "$(audio_1)" == false ]] && break; sleep 0.5; done
+[[ "$(audio_1)" == false ]] && pass "detail: mute from the tile" || fail "detail: input 1 not muted from the tile (cut off?)"
+act '{"action":"set_audio","input":1,"on":true}'
+act '{"action":"overlay_out","channel":1}'
 
 own_qml_warnings console.log && fail "QML warnings: $(own_qml_warnings console.log | head -3)"
 pass "no QML warnings"

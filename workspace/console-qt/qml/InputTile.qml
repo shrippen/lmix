@@ -5,7 +5,8 @@ import org.kde.kirigami as Kirigami
 import Kante
 
 /**
- * One input of the input bar: live picture, number and name, audio strip.
+ * One input of the input bar: live picture in the program format, number
+ * and name; in detail also the overlay buttons and the audio strip.
  * Program and preview are a bar in the tally colour plus the word, never
  * colour alone. Click and double click do what the input is set to
  * (INP.8, INP.9; by default preview, and GO: quick play); right click:
@@ -32,6 +33,12 @@ KanteCard {
     property var channelsDb: undefined
     /** Another tile is dragged over this one: it would land here. */
     property bool dropTarget: false
+    /** Overlay buttons and the audio strip under the title; else picture
+     *  and title alone. */
+    property bool detail: false
+    /** Height without the picture: the bar sizes its cells by it. The same
+     *  for every tile, so a detail row stays when an input has no use for it. */
+    readonly property real chrome: column.implicitHeight + barHeight + 2 * Kirigami.Units.smallSpacing
     signal replaceRequested()
     signal triggersRequested()
     signal ptzRequested()
@@ -85,6 +92,7 @@ KanteCard {
     }
 
     ColumnLayout {
+        id: column
         anchors.fill: parent
         anchors.margins: Kirigami.Units.smallSpacing
         anchors.topMargin: tile.barHeight + Kirigami.Units.smallSpacing
@@ -207,45 +215,45 @@ KanteCard {
             }
         }
 
+        // Eight channels (OVL.1) in one row, sharing the tile's width.
         RowLayout {
             Layout.fillWidth: true
-            visible: tile.hasPicture && tile.overlays.length > 0
-            spacing: Kirigami.Units.smallSpacing
+            visible: tile.detail && tile.overlays.length > 0
+            // Audio only: the row keeps its room, so all tiles are as high.
+            opacity: tile.hasPicture ? 1 : 0
+            enabled: tile.hasPicture
+            spacing: KanteStyle.unit(2)
 
-            KanteSectionLabel {
-                // Small tiles (UI.3): the buttons alone, all eight in a row.
-                visible: tile.width >= Kirigami.Units.gridUnit * 16
-                text: qsTr("Overlay")
-                color: KanteStyle.mutedTextColor
-            }
-            // Eight channels (OVL.1) wrap onto a second row on small tiles.
-            Flow {
-                Layout.fillWidth: true
-                Repeater {
-                    model: tile.overlays.length
-                    KanteToolButton {
-                        id: overlayButton
-                        required property int index
-                        readonly property int channel: index + 1
-                        readonly property bool on: tile.overlays[index] === tile.input.id
-                        readonly property bool prepared: tile.overlayPreview[index] === tile.input.id
-                        text: prepared ? channel + "→" : channel
-                        checkable: true
-                        checked: on
-                        Accessible.name: qsTr("Overlay %1").arg(channel)
-                        QQC2.ToolTip.visible: hovered
-                        QQC2.ToolTip.text: (on ? qsTr("Take off overlay %1").arg(channel)
-                            : qsTr("Show on overlay %1").arg(channel))
-                            + ". " + (prepared ? qsTr("Goes on with the next take.") : qsTr("Right click: with the next take."))
-                        onClicked: tile.act(on ? { action: "overlay_out", channel: channel }
-                            : { action: "overlay_in", channel: channel, input: tile.ref() })
+            Repeater {
+                model: tile.overlays.length
+                KanteToolButton {
+                    id: overlayButton
+                    required property int index
+                    Layout.fillWidth: true
+                    Layout.preferredWidth: 1
+                    Layout.minimumWidth: 0
+                    // Narrow tiles: the style's padding would leave no room for the digit.
+                    leftPadding: 0
+                    rightPadding: 0
+                    readonly property int channel: index + 1
+                    readonly property bool on: tile.overlays[index] === tile.input.id
+                    readonly property bool prepared: tile.overlayPreview[index] === tile.input.id
+                    text: prepared ? channel + "→" : channel
+                    checkable: true
+                    checked: on
+                    Accessible.name: qsTr("Overlay %1").arg(channel)
+                    QQC2.ToolTip.visible: hovered
+                    QQC2.ToolTip.text: (on ? qsTr("Take off overlay %1").arg(channel)
+                        : qsTr("Show on overlay %1").arg(channel))
+                        + ". " + (prepared ? qsTr("Goes on with the next take.") : qsTr("Right click: with the next take."))
+                    onClicked: tile.act(on ? { action: "overlay_out", channel: channel }
+                        : { action: "overlay_in", channel: channel, input: tile.ref() })
 
-                        // OVL.3: prepared now, on air with the next take of preview.
-                        TapHandler {
-                            acceptedButtons: Qt.RightButton
-                            onTapped: tile.act({ action: "overlay_preview", channel: overlayButton.channel,
-                                input: overlayButton.prepared ? null : tile.ref() })
-                        }
+                    // OVL.3: prepared now, on air with the next take of preview.
+                    TapHandler {
+                        acceptedButtons: Qt.RightButton
+                        onTapped: tile.act({ action: "overlay_preview", channel: overlayButton.channel,
+                            input: overlayButton.prepared ? null : tile.ref() })
                     }
                 }
             }
@@ -253,7 +261,9 @@ KanteCard {
 
         RowLayout {
             Layout.fillWidth: true
-            visible: tile.hasAudio
+            visible: tile.detail
+            opacity: tile.hasAudio ? 1 : 0
+            enabled: tile.hasAudio
             spacing: Kirigami.Units.smallSpacing
 
             KanteToolButton {

@@ -1351,7 +1351,7 @@
   <context>
     <name>InputTile</name>
     <message>
-      <location filename="../qml/InputTile.qml" line="+74" />
+      <location filename="../qml/InputTile.qml" line="+81" />
       <source>Input %1 %2</source>
       <translation>Input %1 %2</translation>
     </message>
@@ -1371,7 +1371,7 @@
       <translation>Klick: %1. Doppelklick (GO): %2. Rechtsklick: mehr.</translation>
     </message>
     <message>
-      <location line="+30" />
+      <location line="+31" />
       <source>Audio only</source>
       <translation>Nur Ton</translation>
     </message>
@@ -1431,12 +1431,7 @@
       <translation>startet</translation>
     </message>
     <message>
-      <location line="+14" />
-      <source>Overlay</source>
-      <translation>Overlay</translation>
-    </message>
-    <message>
-      <location line="+17" />
+      <location line="+29" />
       <source>Overlay %1</source>
       <translation>Overlay %1</translation>
     </message>
@@ -1461,7 +1456,7 @@
       <translation>Rechtsklick: mit dem nächsten Take.</translation>
     </message>
     <message>
-      <location line="+25" />
+      <location line="+26" />
       <source>Mute</source>
       <translation>Stumm</translation>
     </message>
@@ -2213,7 +2208,7 @@
       <translation>Programm auf Schwarz und zurück (SWI.9); Show und Ausgänge laufen weiter</translation>
     </message>
     <message>
-      <location line="+76" />
+      <location line="+88" />
       <source>Layout %1 %2</source>
       <translation>Layout %1 %2</translation>
     </message>
@@ -2273,19 +2268,24 @@
       <translation>Einige Sekunden lang Aufnahme bis Programm messen</translation>
     </message>
     <message>
-      <location line="+21" />
-      <location line="+162" />
+      <location line="+40" />
+      <location line="+190" />
       <source>Preview</source>
       <translation>Vorschau</translation>
     </message>
     <message>
-      <location line="-126" />
-      <location line="+125" />
+      <location line="-145" />
+      <location line="+144" />
       <source>Program</source>
       <translation>Programm</translation>
     </message>
     <message>
-      <location line="-114" />
+      <location line="-124" />
+      <source>Height of the monitors</source>
+      <translation>Höhe der Monitore</translation>
+    </message>
+    <message>
+      <location line="+6" />
       <source>Inputs</source>
       <translation>Inputs</translation>
     </message>
@@ -2310,37 +2310,70 @@
       <translation>Eine Reihe für Programm und eine für Vorschau, eine Taste je Input</translation>
     </message>
     <message>
+      <location line="+6" />
+      <source>Compact</source>
+      <translation>Kompakt</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Detail</source>
+      <translation>Detail</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Picture and name</source>
+      <translation>Bild und Name</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Also overlay buttons and the audio strip</source>
+      <translation>Dazu Overlay-Tasten und Tonleiste</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>S</source>
+      <comment>small tiles</comment>
+      <translation>S</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>M</source>
+      <comment>medium tiles</comment>
+      <translation>M</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>L</source>
+      <comment>large tiles</comment>
+      <translation>L</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Small tiles</source>
+      <translation>Kleine Kacheln</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Medium tiles</source>
+      <translation>Mittlere Kacheln</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Large tiles</source>
+      <translation>Große Kacheln</translation>
+    </message>
+    <message>
       <location line="+5" />
       <source>View</source>
       <translation>Ansicht</translation>
     </message>
     <message>
-      <location line="+7" />
-      <source>Tile size</source>
-      <translation>Kachelgröße</translation>
+      <location line="+260" />
+      <source>Width of the audio column</source>
+      <translation>Breite der Tonspalte</translation>
     </message>
     <message>
-      <location line="+2" />
-      <source>Small</source>
-      <translation>Klein</translation>
-    </message>
-    <message>
-      <location line="+0" />
-      <source>Medium</source>
-      <translation>Mittel</translation>
-    </message>
-    <message>
-      <location line="+0" />
-      <source>Large</source>
-      <translation>Groß</translation>
-    </message>
-    <message>
-      <location line="+4" />
-      <source>Rows</source>
-      <translation>Reihen</translation>
-    </message>
-    <message>
-      <location line="+6" />
+      <location line="-253" />
       <source>Audio at the edge</source>
       <translation>Ton am Rand</translation>
     </message>
@@ -2413,7 +2446,7 @@
   <context>
     <name>NarrowMixer</name>
     <message>
-      <location filename="../qml/NarrowMixer.qml" line="+37" />
+      <location filename="../qml/NarrowMixer.qml" line="+49" />
       <source>Audio mixer</source>
       <translation>Tonmischer</translation>
     </message>
@@ -2433,12 +2466,12 @@
       <translation>Ton-Seite öffnen</translation>
     </message>
     <message>
-      <location line="+38" />
+      <location line="+8" />
       <source>No sound</source>
       <translation>Kein Ton</translation>
     </message>
     <message>
-      <location line="+12" />
+      <location line="+26" />
       <source>MST</source>
       <comment>master, short</comment>
       <translation>MST</translation>
@@ -2449,7 +2482,7 @@
       <translation>Master</translation>
     </message>
     <message>
-      <location line="+48" />
+      <location line="+46" />
       <source>Volume of %1</source>
       <translation>Lautstärke von %1</translation>
     </message>
@@ -3390,7 +3423,7 @@
   <context>
     <name>ShowInspector</name>
     <message>
-      <location filename="../qml/ShowInspector.qml" line="+54" />
+      <location filename="../qml/ShowInspector.qml" line="+114" />
       <source>Basics</source>
       <translation>Grundlagen</translation>
     </message>
@@ -3430,12 +3463,12 @@
       <translation>Nummer</translation>
     </message>
     <message>
-      <location line="+5" />
+      <location line="+4" />
       <source>Cue number</source>
       <translation>Nummer des Cues</translation>
     </message>
     <message>
-      <location line="+8" />
+      <location line="+18" />
       <source>Name</source>
       <translation>Name</translation>
     </message>
@@ -3445,7 +3478,7 @@
       <translation>Name des Cues</translation>
     </message>
     <message>
-      <location line="+9" />
+      <location line="+19" />
       <source>Kind</source>
       <translation>Art</translation>
     </message>
@@ -3466,7 +3499,7 @@
       <translation>Notiz</translation>
     </message>
     <message>
-      <location line="+10" />
+      <location line="+9" />
       <source>For the operator, e.g. a stage direction; shown with standby</source>
       <translation>Für die Bedienung, z. B. eine Regieanweisung; steht bei Standby</translation>
     </message>
@@ -3476,7 +3509,7 @@
       <translation>Notiz zum Cue</translation>
     </message>
     <message>
-      <location line="+21" />
+      <location line="+31" />
       <source>Next cue</source>
       <translation>Nächster Cue</translation>
     </message>
@@ -3511,7 +3544,7 @@
       <translation>Der nächste Cue startet, wenn dieser endet</translation>
     </message>
     <message>
-      <location line="+8" />
+      <location line="+10" />
       <source>Stops others</source>
       <translation>Stoppt andere</translation>
     </message>
@@ -3556,7 +3589,7 @@
       <translation>Jeder laufende Cue stoppt, wenn dieser startet</translation>
     </message>
     <message>
-      <location line="+11" />
+      <location line="+10" />
       <source>fading over</source>
       <translation>mit Ausblendung über</translation>
     </message>
@@ -3656,39 +3689,39 @@
       <translation>Durchläufe insgesamt</translation>
     </message>
     <message>
-      <location line="+29" />
+      <location line="+32" />
       <source>A cue of this kind has no levels.</source>
       <translation>Ein Cue dieser Art hat keine Pegel.</translation>
     </message>
     <message>
       <location line="+7" />
-      <location line="+60" />
+      <location line="+71" />
       <source>Level</source>
       <translation>Pegel</translation>
     </message>
     <message>
-      <location line="-49" />
+      <location line="-60" />
       <source>Level of the sound</source>
       <translation>Pegel des Klangs</translation>
     </message>
     <message>
-      <location line="+5" />
+      <location line="+8" />
       <source>0 dB: as in the file; −60 dB: silence</source>
       <translation>0 dB: wie in der Datei; −60 dB: Stille</translation>
     </message>
     <message>
       <location line="+7" />
-      <location line="+39" />
+      <location line="+46" />
       <source>Opacity</source>
       <translation>Deckkraft</translation>
     </message>
     <message>
-      <location line="-28" />
+      <location line="-35" />
       <source>Opacity of the picture</source>
       <translation>Deckkraft des Bildes</translation>
     </message>
     <message>
-      <location line="+6" />
+      <location line="+9" />
       <source>Layer</source>
       <translation>Ebene</translation>
     </message>
@@ -3698,7 +3731,7 @@
       <translation>Ebene des Bildes</translation>
     </message>
     <message>
-      <location line="+5" />
+      <location line="+8" />
       <source>On the same layer the later cue is in front</source>
       <translation>Auf derselben Ebene liegt der spätere Cue vorn</translation>
     </message>
@@ -3708,17 +3741,17 @@
       <translation>Helligkeit</translation>
     </message>
     <message>
-      <location line="+34" />
+      <location line="+38" />
       <source>%1 at the end of the fade</source>
       <translation>%1 am Ende der Blende</translation>
     </message>
     <message>
-      <location line="+13" />
+      <location line="+14" />
       <source>Stop the cue when the fade is over</source>
       <translation>Den Cue nach der Blende stoppen</translation>
     </message>
     <message>
-      <location line="+21" />
+      <location line="+23" />
       <source>Only an actions cue has actions.</source>
       <translation>Nur ein Aktions-Cue hat Aktionen.</translation>
     </message>
@@ -3888,7 +3921,7 @@
       <translation>nutzt Input %1, dessen Mediendatei fehlt</translation>
     </message>
     <message>
-      <location line="+74" />
+      <location line="+75" />
       <source>Wait %1</source>
       <translation>Warten %1</translation>
     </message>
@@ -4138,7 +4171,7 @@
       <translation>Folge</translation>
     </message>
     <message>
-      <location line="+68" />
+      <location line="+69" />
       <source>Open group</source>
       <translation>Gruppe aufklappen</translation>
     </message>
@@ -4148,7 +4181,7 @@
       <translation>Gruppe zuklappen</translation>
     </message>
     <message>
-      <location line="+73" />
+      <location line="+74" />
       <source>Standby</source>
       <translation>Standby</translation>
     </message>

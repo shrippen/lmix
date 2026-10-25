@@ -8,12 +8,17 @@ import Kante
  * The sound at a glance at the edge of the Mix page (PLAN-SEITEN, click
  * dummy): a narrow strip per input with sound (meter, fader, mute) and the
  * master, and the way to the Audio page for the rest (EQ, sends, buses).
+ * More strips than fit across go on in a new row, and the faders get
+ * shorter; up to four rows share the height, from the fifth it scrolls.
  *
  *   AUDIO          Audio page ›
- *   ▮│ ▮│ ▮│   ▮│
- *   ▮┼ ▮│ ▮┼   ▮┼      meter and fader per input, master last
- *   [M][M][M]  [M]
- *    1  2  3   MST
+ *   ▮│ ▮│ ▮│ ▮│
+ *   ▮┼ ▮│ ▮┼ ▮┼      meter and fader per input
+ *   [M][M][M][M]
+ *    1  2  3  4
+ *   ▮│ ▮│            the next row, master last
+ *   [M][M]
+ *    5 MST
  */
 KanteCard {
     id: mixer
@@ -27,12 +32,19 @@ KanteCard {
 
     readonly property var soundInputs: show ? show.inputs.filter(i => i.has_audio) : []
     readonly property var master: show && show.master ? show.master : ({ volume: 100, mute: false })
+    /** The master's key among the strips (input ids never start with a colon). */
+    readonly property string masterKey: ":master"
+    /** Rows that share the height before the column scrolls. */
+    readonly property int shownRows: 4
 
-    // Strips by id: a new state (every fader step brings one) keeps the
-    // delegates, so a fader drag goes on.
+    // Strips by id, the master last: a new state (every fader step brings
+    // one) keeps the delegates, so a fader drag goes on.
     KeyedModel { id: strips }
-    Component.onCompleted: strips.sync(soundInputs.map(i => i.id))
-    onSoundInputsChanged: strips.sync(soundInputs.map(i => i.id))
+    function syncStrips() {
+        strips.sync(soundInputs.map(i => i.id).concat([masterKey]))
+    }
+    Component.onCompleted: syncStrips()
+    onSoundInputsChanged: syncStrips()
 
     Accessible.name: qsTr("Audio mixer")
 
@@ -57,59 +69,46 @@ KanteCard {
             }
         }
 
-        RowLayout {
+        KanteEmptyState {
+            Layout.fillWidth: true
+            visible: mixer.soundInputs.length === 0
+            text: qsTr("No sound")
+        }
+
+        GridView {
+            id: grid
             Layout.fillWidth: true
             Layout.fillHeight: true
-            spacing: Kirigami.Units.smallSpacing
+            clip: true
+            boundsBehavior: Flickable.StopAtBounds
+            model: strips
+            QQC2.ScrollBar.vertical: QQC2.ScrollBar {}
 
-            ListView {
-                id: list
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                orientation: ListView.Horizontal
-                spacing: Kirigami.Units.smallSpacing
-                clip: true
-                boundsBehavior: Flickable.StopAtBounds
-                model: strips
-                QQC2.ScrollBar.horizontal: QQC2.ScrollBar {}
-                delegate: MiniStrip {
-                    required property string key
-                    readonly property var input: mixer.soundInputs.find(i => i.id === key)
-                        || ({ id: key, number: 0, name: "", audio: { on: false, volume: 0 } })
-                    height: ListView.view ? ListView.view.height : 0
-                    label: String(input.number)
-                    name: input.name
-                    level: mixer.levels[input.id]
-                    volume: input.audio.volume
-                    on: input.audio.on
-                    onVolumeMoved: v => mixer.act({ action: "set_volume", input: input.number, volume: v })
-                    onToggled: mixer.act({ action: "set_audio", input: input.number, on: !input.audio.on })
-                }
+            readonly property int perRow: Math.max(1, Math.floor(width / (Kirigami.Units.gridUnit * 2.5)))
+            // The model's count: the view's own changes while it lays out (a binding loop).
+            readonly property int rows: Math.ceil(strips.count / perRow)
+            cellWidth: Math.floor(width / perRow)
+            // Up to four rows fill the height; more scroll, at the height of four.
+            cellHeight: Math.max(Kirigami.Units.gridUnit * 6,
+                Math.floor(height / Math.max(1, Math.min(rows, mixer.shownRows))))
 
-                KanteEmptyState {
-                    anchors.centerIn: parent
-                    width: parent.width
-                    visible: list.count === 0
-                    text: qsTr("No sound")
-                }
-            }
-
-            Rectangle {
-                Layout.fillHeight: true
-                implicitWidth: 1
-                color: KanteStyle.ruleColor
-            }
-
-            MiniStrip {
-                Layout.fillHeight: true
-                label: qsTr("MST", "master, short")
-                name: qsTr("Master")
-                showScale: true
-                level: mixer.levels.program
-                volume: mixer.master.volume
-                on: !mixer.master.mute
-                onVolumeMoved: v => mixer.act({ action: "set_master", volume: v, mute: mixer.master.mute })
-                onToggled: mixer.act({ action: "set_master", volume: mixer.master.volume, mute: !mixer.master.mute })
+            delegate: MiniStrip {
+                required property string key
+                readonly property bool isMaster: key === mixer.masterKey
+                readonly property var input: isMaster ? null : (mixer.soundInputs.find(i => i.id === key)
+                    || ({ id: key, number: 0, name: "", audio: { on: false, volume: 0 } }))
+                width: grid.cellWidth - Kirigami.Units.smallSpacing
+                height: grid.cellHeight - Kirigami.Units.smallSpacing
+                label: isMaster ? qsTr("MST", "master, short") : String(input.number)
+                name: isMaster ? qsTr("Master") : input.name
+                showScale: isMaster && width >= Kirigami.Units.gridUnit * 3.5
+                level: isMaster ? mixer.levels.program : mixer.levels[input.id]
+                volume: isMaster ? mixer.master.volume : input.audio.volume
+                on: isMaster ? !mixer.master.mute : input.audio.on
+                onVolumeMoved: v => mixer.act(isMaster ? { action: "set_master", volume: v, mute: mixer.master.mute }
+                    : { action: "set_volume", input: input.number, volume: v })
+                onToggled: mixer.act(isMaster ? { action: "set_master", volume: mixer.master.volume, mute: !mixer.master.mute }
+                    : { action: "set_audio", input: input.number, on: !input.audio.on })
             }
         }
     }
@@ -127,10 +126,6 @@ KanteCard {
         signal volumeMoved(int volume)
         signal toggled()
 
-        // A nested layout fills by default; a strip keeps its width.
-        width: Kirigami.Units.gridUnit * (showScale ? 3.5 : 2.5)
-        Layout.fillWidth: false
-        Layout.preferredWidth: width
         spacing: Kirigami.Units.smallSpacing
 
         RowLayout {
