@@ -2039,13 +2039,9 @@ impl Service {
 }
 
 /// The shortcuts for all shows as `--shortcuts` keeps them; a file from
-/// before named buses (it does not read as it is) gets them as a migrated
-/// show does.
+/// before named buses gets them as a migrated show does.
 fn parse_shortcuts(bytes: &[u8]) -> Result<Vec<crate::show::ShowShortcut>, String> {
     let mut value: serde_json::Value = serde_json::from_slice(bytes).map_err(|e| e.to_string())?;
-    if let Ok(shortcuts) = serde_json::from_value(value.clone()) {
-        return Ok(shortcuts);
-    }
     crate::show::migrate_shortcuts(&mut value);
     serde_json::from_value(value).map_err(|e| e.to_string())
 }
@@ -2341,6 +2337,20 @@ mod tests {
                     mute: false
                 },
             ]
+        );
+
+        // An output from before takes its bus along (version 3 would read
+        // it and drop `aux` unseen).
+        let file = serde_json::json!([{
+            "id": InputId::new(),
+            "label": "In-ear out",
+            "actions": [{"action": "add_output", "spec": {"kind": "srt", "uri": "srt://:9000?mode=listener"}, "aux": 2}],
+        }]);
+        let shortcuts = parse_shortcuts(&serde_json::to_vec(&file).unwrap()).unwrap();
+        assert!(
+            matches!(&shortcuts[0].actions[0], Action::AddOutput { bus: Some(lmix_types::BusRef::Text(b)), .. } if b == "Bus B"),
+            "{:?}",
+            shortcuts[0].actions
         );
 
         // A file of today stays as it is: bus 3 is the third bus there,

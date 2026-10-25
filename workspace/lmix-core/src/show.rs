@@ -503,8 +503,10 @@ fn migrate_cue_labels(show: &mut serde_json::Value) {
     }
 }
 
-/// Letters of the aux buses of version 2.
-const AUX_LETTERS: [&str; 7] = ["A", "B", "C", "D", "E", "F", "G"];
+/// Letters of the aux buses of version 2, one per bus.
+const AUX_LETTERS: [&str; V2_AUX_BUSES] = ["A", "B", "C", "D", "E", "F", "G"];
+/// Aux buses of version 2 (1–7 in actions).
+const V2_AUX_BUSES: usize = 7;
 
 /// Version 2 to 3: aux buses A–G (1–7 in actions) become named buses
 /// ("Bus A", A before the faders), each one the show used: an input sent
@@ -519,8 +521,8 @@ fn migrate_aux_buses(show: &mut serde_json::Value) {
         Some(Value::Array(masters)) => masters,
         _ => Vec::new(),
     };
-    let mut used = [false; 7];
-    for (bus, master) in masters.iter().enumerate().take(7) {
+    let mut used = [false; V2_AUX_BUSES];
+    for (bus, master) in masters.iter().enumerate().take(V2_AUX_BUSES) {
         let volume = master.get("volume").and_then(Value::as_u64).unwrap_or(100);
         let mute = master.get("mute").and_then(Value::as_bool).unwrap_or(false);
         used[bus] |= volume != 100 || mute;
@@ -532,7 +534,7 @@ fn migrate_aux_buses(show: &mut serde_json::Value) {
         .flatten()
     {
         let sends = input.get("sends").and_then(Value::as_array);
-        for (bus, level) in sends.into_iter().flatten().enumerate().take(7) {
+        for (bus, level) in sends.into_iter().flatten().enumerate().take(V2_AUX_BUSES) {
             used[bus] |= level.as_u64().unwrap_or(0) > 0;
         }
     }
@@ -563,7 +565,7 @@ fn migrate_aux_buses(show: &mut serde_json::Value) {
     };
     *show = rest;
 
-    let buses: Vec<Value> = (0..7)
+    let buses: Vec<Value> = (0..V2_AUX_BUSES)
         .filter(|bus| used[*bus])
         .map(|bus| {
             let master = masters.get(bus);
@@ -592,7 +594,7 @@ fn migrate_aux_buses(show: &mut serde_json::Value) {
             Some(Value::Array(levels)) => levels
                 .iter()
                 .enumerate()
-                .take(7)
+                .take(V2_AUX_BUSES)
                 .filter(|(bus, level)| used[*bus] && level.as_u64().unwrap_or(0) > 0)
                 .map(|(bus, level)| (ids[bus].clone().unwrap_or_default(), level.clone()))
                 .collect(),
@@ -622,8 +624,9 @@ fn migrate_aux_buses(show: &mut serde_json::Value) {
 /// Aux bus 1–7 of a version 2 action, as an index.
 fn aux_number(v: &Value) -> Option<usize> {
     v.as_u64()
-        .filter(|n| (1..=7).contains(n))
-        .map(|n| n as usize - 1)
+        .and_then(|n| usize::try_from(n).ok())
+        .filter(|n| (1..=V2_AUX_BUSES).contains(n))
+        .map(|n| n - 1)
 }
 
 /// Every saved action in `value` (shortcuts, cues, triggers, wherever they
@@ -718,9 +721,22 @@ fn rewrite_aux_actions(value: &mut Value, bus: &dyn Fn(usize) -> Value) {
 /// The shortcuts for all shows (`--shortcuts`) of version 2 as version 3
 /// has them: their actions name aux bus A–G "Bus A" …, as a migrated show
 /// calls it (a name: there is no one show whose ids they could take). The
-/// file has no version: only for one that does not read as version 3
-/// (`fade_volume` to bus 3 is a position there, not aux C).
+/// file has no version, so only one with an action version 3 does not
+/// have is migrated (`set_aux_send`, `set_aux_bus`, `set_monitor_volume`,
+/// `add_output` with `aux`, which version 3 would drop unread): elsewhere
+/// `fade_volume` to bus 3 is a position, not aux C.
 pub fn migrate_shortcuts(value: &mut Value) {
+    let mut older = false;
+    actions(value, &mut |map| {
+        older |= match map.get("action").and_then(Value::as_str) {
+            Some("set_aux_send" | "set_aux_bus" | "set_monitor_volume") => true,
+            Some("add_output") => map.contains_key("aux"),
+            _ => false,
+        };
+    });
+    if !older {
+        return;
+    }
     rewrite_aux_actions(value, &|index| {
         Value::String(format!("Bus {}", AUX_LETTERS[index]))
     });
