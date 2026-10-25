@@ -271,6 +271,7 @@ AppPage {
         act: root.act
         core: backend
         inputs: root.inputs
+        buses: root.show && root.show.buses ? root.show.buses : []
         looksAvailable: root.show !== null && root.show.looks_available === true
         onReplaceRequested: input => {
             addInputDialog.replacing = input
@@ -312,14 +313,14 @@ AppPage {
         inputs: root.inputs
     }
 
-    AuxBusDialog {
-        id: auxDialog
+    BusDialog {
+        id: busDialog
         parent: QQC2.Overlay.overlay
         anchors.centerIn: parent
         act: root.act
-        buses: root.show ? root.show.aux_buses : []
+        buses: root.show && root.show.buses ? root.show.buses : []
         master: root.show && root.show.master ? root.show.master : ({ volume: 100, mute: false })
-        monitorVolume: root.show && root.show.monitor_volume !== undefined ? root.show.monitor_volume : 100
+        phones: root.show && root.show.phones ? root.show.phones : ({ volume: 100, mute: false, pre_fader: false })
         levels: root.levels
     }
 
@@ -328,6 +329,7 @@ AppPage {
         parent: QQC2.Overlay.overlay
         core: backend
         inputs: root.inputs
+        buses: root.show && root.show.buses ? root.show.buses : []
     }
 
     fileItems: [
@@ -572,7 +574,7 @@ AppPage {
                         visible: !root.simple
                         text: qsTr("Buses…")
                         enabled: backend.connected
-                        onClicked: auxDialog.open()
+                        onClicked: busDialog.open()
                     }
                     KanteButton {
                         visible: !root.simple
@@ -738,6 +740,7 @@ AppPage {
                     overlays: root.show && root.show.overlays ? root.show.overlays : []
                     overlayPreview: root.show && root.show.overlay_preview ? root.show.overlay_preview : []
                     looksAvailable: root.show !== null && root.show.looks_available === true
+                    buses: root.show && root.show.buses ? root.show.buses : []
                     peakDb: root.levels[key]
                     channelsDb: root.levels["ch:" + key]
                     onTriggersRequested: {

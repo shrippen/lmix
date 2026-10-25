@@ -8,20 +8,6 @@ import QtQuick
  */
 QtObject {
     /** Text of one value of a form list (Core.choices). */
-    /** Aux buses A–G (AUD.2): A takes its sends before the faders. */
-    readonly property int auxBuses: 7
-    function auxName(index) {
-        var letter = String.fromCharCode(65 + index)
-        return index === 0 ? qsTr("Aux %1 (before the faders)").arg(letter)
-            : qsTr("Aux %1 (after the faders)").arg(letter)
-    }
-    function auxNames() {
-        var names = []
-        for (var i = 0; i < auxBuses; i++)
-            names.push(auxName(i))
-        return names
-    }
-
     function label(list, value) {
         switch (list) {
         case "sources":
@@ -247,6 +233,11 @@ QtObject {
         case "bad_color": return qsTr("Colour %1 is not #rrggbb").arg(e.color)
         case "bad_device_mode": return qsTr("Capture mode %1 is not a resolution like 1920x1080 or a frame rate like 30/1").arg(e.mode)
         case "bad_volume": return qsTr("Volume %1 is outside 0–%2").arg(e.volume).arg(e.max)
+        case "unknown_bus": return qsTr("No bus matches %1").arg(e.reference)
+        case "too_many_buses": return qsTr("A show has at most %1 buses besides master and headphones").arg(e.max)
+        case "bad_bus_name": return qsTr("A bus name has 1–%1 characters").arg(e.max)
+        case "duplicate_bus_name": return qsTr("There is a bus %1 already").arg(e.name)
+        case "bus_in_use": return qsTr("Output %1 takes the sound of bus %2: give it another first").arg(e.output).arg(e.bus)
         case "no_show_path": return qsTr("The show has no file yet; give a path")
         case "show_file": return qsTr("Show file: %1").arg(e.message)
         case "engine": return qsTr("Engine: %1").arg(e.message)

@@ -28,6 +28,8 @@ KanteCard {
     property var overlayPreview: []
     /** The engine can apply looks (GL mixer). */
     property bool looksAvailable: false
+    /** `buses` of the show state, for the channel strip's sends. */
+    property var buses: []
     property var peakDb: undefined
     /** Peak per channel, dBFS: left, right (AUD.1); undefined before the first. */
     property var channelsDb: undefined
@@ -326,7 +328,7 @@ KanteCard {
                 checkable: true
                 checked: tile.input.listen !== "off"
                 QQC2.ToolTip.visible: hovered
-                QQC2.ToolTip.text: qsTr("Listen on the monitor bus after the fader (right click: before it)")
+                QQC2.ToolTip.text: qsTr("Listen on the headphones after the fader (right click: before it)")
                 onClicked: tile.act({ action: "set_listen", input: tile.ref(), listen: tile.input.listen === "off" ? "afl" : "off" })
             }
         }
@@ -608,6 +610,7 @@ KanteCard {
         anchors.centerIn: parent
         act: tile.act
         input: tile.input
+        buses: tile.buses
     }
 
     KanteDialog {

@@ -173,9 +173,9 @@ pub struct OutputForm {
     pub video_kbps: u32,
     #[serde(default)]
     pub name: String,
-    /// Aux bus for the sound; 0 keeps the source's own.
+    /// Id of the bus for the sound; empty keeps the source's own.
     #[serde(default)]
-    pub aux: u8,
+    pub bus: String,
     /// Codec, rate control, keyframes of SRT and recordings (STR.3).
     #[serde(default)]
     pub encoding: VideoEncoding,

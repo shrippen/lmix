@@ -12,7 +12,7 @@ use cxx_qt_lib::QString;
 use futures_util::StreamExt;
 use gstreamer as gst;
 use gstreamer::prelude::*;
-use lmix_types::{Action, Event, InputRef, Latency, Levels, LiveFeed, OutputStats};
+use lmix_types::{Action, BusRef, Event, InputRef, Latency, Levels, LiveFeed, OutputStats};
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 
 use crate::{config, forms};
@@ -292,7 +292,7 @@ async fn follow(thread: cxx_qt::CxxQtThread<qobject::Core>) {
 }
 
 /// `{ "<input id>": peak, "ch:<input id>": [left, right], "program": peak,
-/// "monitor": peak, "aux1": peak, … }`.
+/// "phones": peak, "bus:<bus id>": peak, … }`.
 fn levels_json(levels: &Levels) -> String {
     let mut map = serde_json::Map::new();
     for level in &levels.inputs {
@@ -307,12 +307,12 @@ fn levels_json(levels: &Levels) -> String {
     if let Some(peak) = levels.program_peak_db {
         map.insert("program".into(), peak.into());
     }
-    if let Some(peak) = levels.monitor_peak_db {
-        map.insert("monitor".into(), peak.into());
+    if let Some(peak) = levels.phones_peak_db {
+        map.insert("phones".into(), peak.into());
     }
-    for (bus, peak) in levels.aux_peak_db.iter().enumerate() {
-        if let Some(peak) = peak {
-            map.insert(format!("aux{}", bus + 1), (*peak).into());
+    for bus in &levels.buses {
+        if let Some(peak) = bus.peak_db {
+            map.insert(format!("bus:{}", bus.bus), peak.into());
         }
     }
     serde_json::Value::Object(map).to_string()
@@ -399,7 +399,7 @@ impl qobject::Core {
             spec,
             source: forms::output_source_of(&form.source),
             name: (!name.is_empty()).then_some(name),
-            aux: (form.aux > 0).then_some(form.aux),
+            bus: (!form.bus.is_empty()).then(|| BusRef::Text(form.bus.clone())),
         });
         true
     }

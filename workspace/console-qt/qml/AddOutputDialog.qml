@@ -10,6 +10,8 @@ KanteDialog {
 
     required property var core
     required property var inputs
+    /** `buses` of the show state. */
+    property var buses: []
 
     readonly property var kinds: Texts.choices("outputs", core.choices("outputs"))
     readonly property var containers: Texts.choices("containers", core.choices("containers"))
@@ -59,7 +61,7 @@ KanteDialog {
                 keyframe_ms: Math.round(keyframes.value * 1000)
             },
             name: nameField.text,
-            aux: dialog.carriesSound ? soundBox.currentIndex : 0
+            bus: dialog.carriesSound && soundBox.currentIndex > 0 && dialog.buses[soundBox.currentIndex - 1] ? dialog.buses[soundBox.currentIndex - 1].id : ""
         }))
     }
 
@@ -113,8 +115,8 @@ KanteDialog {
             id: soundBox
             visible: dialog.carriesSound
             Layout.fillWidth: true
-            // Index = aux bus number; 0 keeps the source's own sound.
-            model: [qsTr("As carried")].concat(Texts.auxNames())
+            // 0 keeps the source's own sound, then the buses.
+            model: [qsTr("As carried")].concat(dialog.buses.map(b => b.name))
             KanteFieldSkin { control: soundBox }
         }
 

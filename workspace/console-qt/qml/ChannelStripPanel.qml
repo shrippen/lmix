@@ -5,10 +5,11 @@ import org.kde.kirigami as Kirigami
 import Kante
 
 /**
- * Channel strip of an input with sound: trim, pan, delay (lip sync), aux
- * sends, high-pass, four-band EQ, gate and compressor. Strip changes go to
- * lmix-core as the whole strip, at most every 100 ms; sections switched
- * off keep their values. Aux sends are actions of their own. In the
+ * Channel strip of an input with sound: trim, pan, delay (lip sync), the
+ * sends to the headphones and the buses, high-pass, four-band EQ, gate and
+ * compressor. Strip changes go to lmix-core as the whole strip, at most
+ * every 100 ms; sections switched off keep their values. Sends are actions
+ * of their own. In the
  * channel strip dialog and the input settings (UI.8); `load()` takes the
  * input's strip.
  */
@@ -24,14 +25,23 @@ ColumnLayout {
     /** Working copy, sent as a whole. */
     property var strip: null
 
-    /** Aux send levels, set apart from the strip. */
-    property var sends: []
+    /** `buses` of the show state. */
+    property var buses: []
+    /** Send levels by bus id and to the headphones, set apart from the
+     *  strip. */
+    property var sends: ({})
+    property var phones: ({ on: true, level: 100 })
 
     function sendTo(bus, level) {
-        var s = sends.slice()
-        s[bus - 1] = level
+        var s = Object.assign({}, sends)
+        s[bus] = level
         sends = s
-        panel.act({ action: "set_aux_send", input: panel.input.number, bus: bus, level: level })
+        panel.act({ action: "set_send", input: panel.input.number, bus: bus, level: level })
+    }
+
+    function phonesTo(on, level) {
+        phones = { on: on, level: level }
+        panel.act({ action: "set_phones_send", input: panel.input.number, on: on, level: level })
     }
 
     function edit(change) {
@@ -43,7 +53,8 @@ ColumnLayout {
 
     function load() {
         strip = JSON.parse(JSON.stringify(input.strip))
-        sends = input.sends ? input.sends.slice() : []
+        sends = Object.assign({}, input.sends || {})
+        phones = input.phones ? Object.assign({}, input.phones) : { on: true, level: 100 }
     }
 
     Timer {
@@ -136,17 +147,30 @@ ColumnLayout {
         onClicked: panel.act({ action: "set_default_delay", ms: panel.strip.delay_ms })
     }
 
+    OnRow {
+        Layout.fillWidth: true
+        section: qsTr("Sends")
+        title: qsTr("To the headphones")
+        on: panel.phones.on
+        onToggled: on => panel.phonesTo(on, panel.phones.level)
+    }
+    SliderRow {
+        Layout.fillWidth: true
+        title: qsTr("Headphones level")
+        from: 0; to: 100; step: 1
+        live: panel.phones.on
+        value: panel.phones.level
+        onMoved: v => panel.phonesTo(panel.phones.on, Math.round(v))
+    }
     Repeater {
-        model: Texts.auxNames()
+        model: panel.buses
         SliderRow {
-            required property int index
-            required property string modelData
+            required property var modelData
             Layout.fillWidth: true
-            section: index === 0 ? qsTr("Aux sends") : ""
-            title: modelData
+            title: modelData.name
             from: 0; to: 100; step: 1
-            value: panel.sends[index] || 0
-            onMoved: v => panel.sendTo(index + 1, Math.round(v))
+            value: panel.sends[modelData.id] || 0
+            onMoved: v => panel.sendTo(modelData.id, Math.round(v))
         }
     }
 
