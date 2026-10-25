@@ -1,7 +1,7 @@
 //! The show: what gets saved to and loaded from a `.lmix` file (SHW.1–2).
 //!
 //! ```json
-//! { "format": "lmix-show", "version": 2, "show": { "inputs": [...], ... } }
+//! { "format": "lmix-show", "version": 3, "show": { "inputs": [...], ... } }
 //! ```
 //!
 //! Plain, versioned JSON so people and tools can read it. Media are
@@ -523,9 +523,12 @@ fn migrate_aux_buses(show: &mut serde_json::Value) {
     };
     let mut used = [false; V2_AUX_BUSES];
     for (bus, master) in masters.iter().enumerate().take(V2_AUX_BUSES) {
-        let volume = master.get("volume").and_then(Value::as_u64).unwrap_or(100);
+        let volume = master
+            .get("volume")
+            .and_then(Value::as_u64)
+            .unwrap_or(u64::from(lmix_types::input::full_volume()));
         let mute = master.get("mute").and_then(Value::as_bool).unwrap_or(false);
-        used[bus] |= volume != 100 || mute;
+        used[bus] |= volume != u64::from(lmix_types::input::full_volume()) || mute;
     }
     for input in show
         .get("inputs")
@@ -574,7 +577,7 @@ fn migrate_aux_buses(show: &mut serde_json::Value) {
                 "name": format!("Bus {}", AUX_LETTERS[bus]),
                 "pre_fader": bus == 0,
                 "level": {
-                    "volume": master.and_then(|m| m.get("volume")).cloned().unwrap_or(json!(100)),
+                    "volume": master.and_then(|m| m.get("volume")).cloned().unwrap_or(json!(lmix_types::input::full_volume())),
                     "mute": master.and_then(|m| m.get("mute")).cloned().unwrap_or(json!(false)),
                 },
             })
@@ -703,7 +706,9 @@ fn rewrite_aux_actions(value: &mut Value, bus: &dyn Fn(usize) -> Value) {
                 }
             }
             "set_monitor_volume" => {
-                let volume = map.remove("volume").unwrap_or(json!(100));
+                let volume = map
+                    .remove("volume")
+                    .unwrap_or(json!(lmix_types::input::full_volume()));
                 map.insert("action".into(), json!("set_phones"));
                 map.insert("volume".into(), volume);
                 map.insert("mute".into(), json!(false));

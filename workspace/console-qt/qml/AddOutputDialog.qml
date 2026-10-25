@@ -17,8 +17,9 @@ KanteDialog {
     property var soundNames: []
     function syncSoundNames() {
         const names = buses.map(b => b.name)
-        if (JSON.stringify(names) !== JSON.stringify(soundNames))
+        if (JSON.stringify(names) !== JSON.stringify(soundNames)) {
             soundNames = names
+        }
     }
     onBusesChanged: syncSoundNames()
     Component.onCompleted: syncSoundNames()

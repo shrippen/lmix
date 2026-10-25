@@ -180,8 +180,9 @@ Item {
                             Accessible.name: qsTr("Name of the bus")
                             onEditingFinished: {
                                 const wanted = text.trim()
-                                if (wanted.length > 0 && wanted !== bus.modelData.name)
+                                if (wanted.length > 0 && wanted !== bus.modelData.name) {
                                     panel.act({ action: "rename_bus", bus: bus.modelData.id, name: wanted })
+                                }
                                 // Back to the show's name: the new one, or the old
                                 // one when refused.
                                 text = Qt.binding(() => bus.modelData.name)
