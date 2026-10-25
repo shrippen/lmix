@@ -247,14 +247,6 @@ AppPage {
         inputs: root.inputs
     }
 
-    FormatDialog {
-        id: formatDialog
-        parent: QQC2.Overlay.overlay
-        anchors.centerIn: parent
-        act: root.act
-        format: root.show && root.show.format ? root.show.format : ({ width: 1920, height: 1080, framerate: "30/1" })
-    }
-
     AuxBusDialog {
         id: auxDialog
         parent: QQC2.Overlay.overlay
@@ -274,36 +266,10 @@ AppPage {
     }
 
     fileItems: [
-        QQC2.MenuItem {
+        KanteMenuItem {
             text: qsTr("Inputs from a show…")
+            icon.name: "document-import"
             onTriggered: appendDialog.open()
-        },
-        QQC2.MenuItem {
-            text: qsTr("Program format…")
-            onTriggered: formatDialog.open()
-        },
-        // OUT.10: program left or right, meters on the tiles;
-        // the mixer is built anew, like for the format.
-        QQC2.MenuItem {
-            readonly property var layout: root.show && root.show.multiview ? root.show.multiview : ({ program: "right", meters: "shown" })
-            text: qsTr("Multiview: program on the left")
-            checkable: true
-            checked: layout.program === "left"
-            onTriggered: root.act({ action: "set_multiview", layout: { program: checked ? "left" : "right", meters: layout.meters } })
-        },
-        QQC2.MenuItem {
-            readonly property var layout: root.show && root.show.multiview ? root.show.multiview : ({ program: "right", meters: "shown" })
-            text: qsTr("Multiview: level meters")
-            checkable: true
-            checked: layout.meters === "shown"
-            onTriggered: root.act({ action: "set_multiview", layout: { program: layout.program, meters: checked ? "shown" : "hidden" } })
-        },
-        // AUD.17: 48 kHz by default; 44.1 kHz for music productions.
-        QQC2.MenuItem {
-            text: qsTr("Sound at 44.1 kHz")
-            checkable: true
-            checked: root.show && root.show.sample_rate === 44100
-            onTriggered: root.act({ action: "set_sample_rate", hz: checked ? 44100 : 48000 })
         }
     ]
 
@@ -464,23 +430,40 @@ AppPage {
                     id: viewButton
                     text: qsTr("View")
                     emphasis: KanteButton.Emphasis.Quiet
-                    onClicked: viewMenu.popup(viewButton, 0, viewButton.height)
-                    QQC2.Menu {
-                        id: viewMenu
-                        KantePopupSkin { popup: viewMenu }
-                        QQC2.MenuItem {
-                            text: qsTr("Audio at the edge")
-                            checkable: true
-                            checked: viewSettings.mixer
-                            enabled: !root.simple
-                            onTriggered: viewSettings.mixer = !viewSettings.mixer
-                        }
-                        QQC2.MenuItem {
-                            text: qsTr("Simple mode")
-                            checkable: true
-                            checked: root.simple
-                            enabled: backend.uiMode === ""
-                            onTriggered: viewSettings.simple = !viewSettings.simple
+                    onClicked: viewPopover.openAt(viewButton)
+                    KantePopover {
+                        id: viewPopover
+                        title: qsTr("View")
+                        readonly property var multiview: root.show && root.show.multiview ? root.show.multiview : ({ program: "right", meters: "shown" })
+                        ColumnLayout {
+                            spacing: Kirigami.Units.smallSpacing
+                            KanteSwitch {
+                                text: qsTr("Audio at the edge")
+                                checked: viewSettings.mixer
+                                enabled: !root.simple
+                                onToggled: viewSettings.mixer = checked
+                            }
+                            KanteSwitch {
+                                text: qsTr("Simple mode")
+                                checked: root.simple
+                                enabled: backend.uiMode === ""
+                                onToggled: viewSettings.simple = checked
+                            }
+                            // OUT.10: program left or right, meters on the tiles;
+                            // the mixer is built anew, like for the format.
+                            KanteSectionLabel { text: qsTr("Multiview") }
+                            KanteSwitch {
+                                text: qsTr("Program on the left")
+                                checked: viewPopover.multiview.program === "left"
+                                enabled: backend.connected
+                                onToggled: root.act({ action: "set_multiview", layout: { program: checked ? "left" : "right", meters: viewPopover.multiview.meters } })
+                            }
+                            KanteSwitch {
+                                text: qsTr("Level meters")
+                                checked: viewPopover.multiview.meters === "shown"
+                                enabled: backend.connected
+                                onToggled: root.act({ action: "set_multiview", layout: { program: viewPopover.multiview.program, meters: checked ? "shown" : "hidden" } })
+                            }
                         }
                     }
                 }

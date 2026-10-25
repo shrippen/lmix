@@ -190,6 +190,41 @@ Kirigami.ApplicationWindow {
         shortcutsDialog.open()
     }
 
+    // --- file commands: the File menu and their keys ---
+
+    readonly property var fileKeys: ({ newShow: "Ctrl+N", open: "Ctrl+O", save: "Ctrl+S", saveAs: "Ctrl+Shift+S", shortcuts: "Ctrl+K" })
+
+    /** A key sequence as the user reads it: Strg+N in German. */
+    function keyLabel(sequence) {
+        return sequence.split("+").map(part => part === "Ctrl" ? qsTr("Ctrl", "key")
+            : part === "Shift" ? qsTr("Shift", "key") : part).join("+")
+    }
+
+    function fileCommand(name) {
+        if (!backend.connected) {
+            return
+        }
+        switch (name) {
+        case "new": newShowDialog.open(); break
+        case "open": openDialog.open(); break
+        case "save": root.show && root.show.path ? root.act({ action: "save_show" }) : saveDialog.open(); break
+        case "saveAs": saveDialog.open(); break
+        case "shortcuts": openShortcuts(); break
+        }
+    }
+
+    // A show's own shortcut on the same key wins, as for the pages.
+    Instantiator {
+        model: [["new", root.fileKeys.newShow], ["open", root.fileKeys.open], ["save", root.fileKeys.save],
+                ["saveAs", root.fileKeys.saveAs], ["shortcuts", root.fileKeys.shortcuts]]
+        delegate: Shortcut {
+            required property var modelData
+            sequence: modelData[1]
+            enabled: root.shortcutKeys.indexOf(sequence) < 0
+            onActivated: root.fileCommand(modelData[0])
+        }
+    }
+
     /** Opens one of the window's dialogs by name, for the Setup page. */
     function openShellDialog(name) {
         switch (name) {
@@ -250,13 +285,6 @@ Kirigami.ApplicationWindow {
             root.showMaximized()
         } else if (backend.windowMode === "fullscreen") {
             root.showFullScreen()
-        }
-        // The pages' entries go after the package entries.
-        for (var p = 0; p < pageItems.length; p++) {
-            var items = pageItems[p].fileItems
-            for (var i = 0; i < items.length; i++) {
-                fileMenu.addItem(items[i])
-            }
         }
     }
 
@@ -399,6 +427,11 @@ Kirigami.ApplicationWindow {
         contentHeight: keysColumn.implicitHeight
         readonly property var always: [
             { what: qsTr("Pages"), key: qsTr("Ctrl+1…%1").arg(root.pageItems.length) },
+            { what: qsTr("New show"), key: root.keyLabel(root.fileKeys.newShow) },
+            { what: qsTr("Open show"), key: root.keyLabel(root.fileKeys.open) },
+            { what: qsTr("Save show"), key: root.keyLabel(root.fileKeys.save) },
+            { what: qsTr("Save show as"), key: root.keyLabel(root.fileKeys.saveAs) },
+            { what: qsTr("Shortcuts"), key: root.keyLabel(root.fileKeys.shortcuts) },
             { what: qsTr("Panic all"), key: qsTr("button in the page bar") }
         ].concat(root.keyedShortcuts.map(s => ({ what: s.label, key: s.key })))
         ColumnLayout {
@@ -476,73 +509,128 @@ Kirigami.ApplicationWindow {
                         emphasis: KanteButton.Emphasis.Quiet
                         text: qsTr("File")
                         enabled: root.backend.connected
-                        onClicked: fileMenu.popup(fileButton, 0, fileButton.height)
+                        onClicked: {
+                            addPageItems()
+                            fileMenu.popup(fileButton, 0, fileButton.height)
+                        }
+                        // The pages' entries go to the exchange, after the package entries;
+                        // at the first opening, when the menu and the pages are complete.
+                        property bool pagesAdded: false
+                        function addPageItems() {
+                            if (pagesAdded) {
+                                return
+                            }
+                            pagesAdded = true
+                            var at = fileMenu.count
+                            for (var k = 0; k < fileMenu.count; k++) {
+                                if (fileMenu.itemAt(k) === importPackageItem) {
+                                    at = k + 1
+                                }
+                            }
+                            for (var p = 0; p < root.pageItems.length; p++) {
+                                var items = root.pageItems[p].fileItems
+                                for (var i = 0; i < items.length; i++) {
+                                    fileMenu.insertItem(at++, items[i])
+                                }
+                            }
+                        }
                         QQC2.Menu {
                             id: fileMenu
                             KantePopupSkin { popup: fileMenu }
-                            QQC2.MenuItem {
-                                text: qsTr("New")
-                                onTriggered: newShowDialog.open()
+                            // Sub menus get their row from here: icon, value.
+                            delegate: KanteMenuItem {
+                                iconRoom: true
+                                icon.name: subMenu && subMenu.iconName ? subMenu.iconName : ""
+                                valueText: subMenu && subMenu.valueText ? subMenu.valueText : ""
                             }
-                            QQC2.MenuItem {
+                            KanteMenuSection { text: qsTr("Show"); rule: false }
+                            KanteMenuItem {
+                                text: qsTr("New")
+                                icon.name: "document-new"
+                                shortcutText: root.keyLabel(root.fileKeys.newShow)
+                                onTriggered: root.fileCommand("new")
+                            }
+                            KanteMenuItem {
                                 text: qsTr("Open…")
-                                onTriggered: openDialog.open()
+                                icon.name: "document-open"
+                                shortcutText: root.keyLabel(root.fileKeys.open)
+                                onTriggered: root.fileCommand("open")
                             }
                             ChoiceMenu {
                                 title: qsTr("Recent")
+                                readonly property string iconName: "document-open-recent"
                                 enabled: root.recent.length > 0
                                 choices: root.recent.map(path => ({ value: path, label: path }))
                                 onPicked: value => root.act({ action: "open_show", path: value })
                             }
-                            QQC2.MenuItem {
+                            KanteMenuItem {
                                 text: qsTr("Save")
-                                onTriggered: root.show && root.show.path ? root.act({ action: "save_show" }) : saveDialog.open()
+                                icon.name: "document-save"
+                                shortcutText: root.keyLabel(root.fileKeys.save)
+                                onTriggered: root.fileCommand("save")
                             }
-                            QQC2.MenuItem {
+                            KanteMenuItem {
                                 text: qsTr("Save as…")
-                                onTriggered: saveDialog.open()
+                                icon.name: "document-save-as"
+                                shortcutText: root.keyLabel(root.fileKeys.saveAs)
+                                onTriggered: root.fileCommand("saveAs")
                             }
-                            QQC2.MenuSeparator {}
-                            QQC2.MenuItem {
+                            KanteMenuSection { id: exchangeSection; text: qsTr("Exchange") }
+                            KanteMenuItem {
                                 text: qsTr("Export package…")
+                                icon.name: "document-export"
                                 onTriggered: exportDialog.open()
                             }
-                            QQC2.MenuItem {
+                            KanteMenuItem {
+                                id: importPackageItem
                                 text: qsTr("Import package…")
+                                icon.name: "document-import"
                                 onTriggered: importDialog.open()
                             }
-                            QQC2.MenuSeparator {}
-                            QQC2.MenuItem {
-                                text: qsTr("Export settings…")
-                                onTriggered: exportSettingsDialog.open()
-                            }
-                            QQC2.MenuItem {
-                                text: qsTr("Import settings…")
-                                onTriggered: importSettingsDialog.open()
-                            }
-                            QQC2.MenuItem {
-                                text: qsTr("Factory settings…")
-                                onTriggered: resetSettingsDialog.open()
-                            }
-                            QQC2.MenuItem {
+                            KanteMenuSection { text: qsTr("Settings") }
+                            KanteMenuItem {
                                 text: qsTr("Shortcuts…")
-                                onTriggered: root.openShortcuts()
+                                icon.name: "configure-shortcuts"
+                                shortcutText: root.keyLabel(root.fileKeys.shortcuts)
+                                onTriggered: root.fileCommand("shortcuts")
                             }
                             ChoiceMenu {
                                 title: qsTr("Style")
-                                readonly property var kinds: [KanteStyle.Kind.Kante, KanteStyle.Kind.KanteLight, KanteStyle.Kind.System]
+                                readonly property string iconName: "draw-brush"
+                                readonly property string valueText: choices.filter(c => c.value === current).map(c => c.label).join("")
                                 current: KanteStyle.kind
                                 choices: [
                                     { value: KanteStyle.Kind.Kante, label: qsTr("Kante") },
                                     { value: KanteStyle.Kind.KanteLight, label: qsTr("Kante Light") },
                                     { value: KanteStyle.Kind.System, label: qsTr("System") }
                                 ]
-                                onPicked: value => {
-                                    settings.style = value
-                                    root.backend.style = -1
+                                onPicked: value => root.setStyle(value)
+                            }
+                            // Settings of this machine (SHW.8): rarely, so one level down;
+                            // factory settings last and red.
+                            QQC2.Menu {
+                                title: qsTr("This machine")
+                                readonly property string iconName: "configure"
+                                id: machineMenu
+                                KantePopupSkin { popup: machineMenu }
+                                KanteMenuItem {
+                                    text: qsTr("Export settings…")
+                                    icon.name: "document-export"
+                                    onTriggered: exportSettingsDialog.open()
+                                }
+                                KanteMenuItem {
+                                    text: qsTr("Import settings…")
+                                    icon.name: "document-import"
+                                    onTriggered: importSettingsDialog.open()
+                                }
+                                QQC2.MenuSeparator {}
+                                KanteMenuItem {
+                                    text: qsTr("Factory settings…")
+                                    icon.name: "edit-reset"
+                                    destructive: true
+                                    onTriggered: resetSettingsDialog.open()
                                 }
                             }
-                            QQC2.MenuSeparator {}
                         }
                     }
                     QQC2.Label {

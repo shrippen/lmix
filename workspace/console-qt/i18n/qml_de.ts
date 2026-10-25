@@ -528,12 +528,25 @@
   <context>
     <name>AppShell</name>
     <message>
-      <location filename="../qml/AppShell.qml" line="+268" />
+      <location filename="../qml/AppShell.qml" line="+199" />
+      <source>Ctrl</source>
+      <comment>key</comment>
+      <translation>Strg</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Shift</source>
+      <comment>key</comment>
+      <translation>Umschalt</translation>
+    </message>
+    <message>
+      <location line="+96" />
+      <location line="+135" />
       <source>Open show</source>
       <translation>Show öffnen</translation>
     </message>
     <message>
-      <location line="+1" />
+      <location line="-134" />
       <location line="+13" />
       <source>lmix shows (*.lmix)</source>
       <translation>lmix-Shows (*.lmix)</translation>
@@ -547,11 +560,12 @@
     </message>
     <message>
       <location line="-81" />
+      <location line="+125" />
       <source>Save show</source>
       <translation>Show speichern</translation>
     </message>
     <message>
-      <location line="+15" />
+      <location line="-110" />
       <source>Export settings</source>
       <translation>Einstellungen exportieren</translation>
     </message>
@@ -604,29 +618,44 @@
     </message>
     <message>
       <location line="+25" />
-      <location line="+198" />
+      <location line="+258" />
       <source>Keys</source>
       <translation>Tasten</translation>
     </message>
     <message>
-      <location line="-192" />
+      <location line="-252" />
       <source>Pages</source>
       <translation>Seiten</translation>
     </message>
     <message>
       <location line="+0" />
-      <location line="+268" />
+      <location line="+328" />
       <source>Ctrl+1…%1</source>
       <translation>Strg+1…%1</translation>
     </message>
     <message>
-      <location line="-267" />
-      <location line="+291" />
+      <location line="-327" />
+      <source>New show</source>
+      <translation>Neue Show</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Save show as</source>
+      <translation>Show speichern unter</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Shortcuts</source>
+      <translation>Belegungen</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <location line="+346" />
       <source>Panic all</source>
       <translation>Panik: alles</translation>
     </message>
     <message>
-      <location line="-291" />
+      <location line="-346" />
       <source>button in the page bar</source>
       <translation>Knopf in der Seitenleiste</translation>
     </message>
@@ -646,27 +675,102 @@
       <translation>Datei</translation>
     </message>
     <message>
-      <location line="+30" />
+      <location line="+36" />
+      <source>Show</source>
+      <translation>Show</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>New</source>
+      <translation>Neu</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Open…</source>
+      <translation>Öffnen…</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Recent</source>
+      <translation>Zuletzt</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Save</source>
+      <translation>Speichern</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Save as…</source>
+      <translation>Speichern unter…</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Exchange</source>
+      <translation>Austausch</translation>
+    </message>
+    <message>
+      <location line="+2" />
       <source>Export package…</source>
       <translation>Paket exportieren …</translation>
     </message>
     <message>
-      <location line="+4" />
+      <location line="+6" />
       <source>Import package…</source>
       <translation>Paket importieren …</translation>
     </message>
     <message>
-      <location line="+17" />
+      <location line="+4" />
+      <source>Settings</source>
+      <translation>Einstellungen</translation>
+    </message>
+    <message>
+      <location line="+2" />
       <source>Shortcuts…</source>
       <translation>Belegungen…</translation>
     </message>
     <message>
-      <location line="+4" />
+      <location line="+6" />
       <source>Style</source>
       <translation>Stil</translation>
     </message>
     <message>
-      <location line="+18" />
+      <location line="+5" />
+      <source>Kante</source>
+      <translation>Kante</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Kante Light</source>
+      <translation>Kante Light</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>System</source>
+      <translation>System</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>This machine</source>
+      <translation>Dieser Rechner</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Export settings…</source>
+      <translation>Einstellungen exportieren…</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Import settings…</source>
+      <translation>Einstellungen importieren…</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Factory settings…</source>
+      <translation>Werkseinstellungen…</translation>
+    </message>
+    <message>
+      <location line="+10" />
       <source>Unsaved show</source>
       <translation>Ungespeicherte Show</translation>
     </message>
@@ -691,7 +795,17 @@
       <translation>lmix-core nicht erreichbar</translation>
     </message>
     <message>
-      <location line="+71" />
+      <location line="+46" />
+      <source>This show file is in the older format %1 and was converted on opening. Saving it keeps the old file beside it (.v%1.bak).</source>
+      <translation>Diese Show-Datei hat das ältere Format %1 und wurde beim Öffnen umgewandelt. Beim Speichern bleibt die alte Datei daneben erhalten (.v%1.bak).</translation>
+    </message>
+    <message>
+      <location line="+22" />
+      <source>%1 (Ctrl+%2)</source>
+      <translation>%1 (Strg+%2)</translation>
+    </message>
+    <message>
+      <location line="+3" />
       <source>Running</source>
       <translation>Läuft</translation>
     </message>
@@ -719,71 +833,6 @@
       <location line="+15" />
       <source>Stop every cue over the panic time and fade program to black; recordings and streams go on</source>
       <translation>Alle Cues über die Panikzeit stoppen und Programm auf Schwarz blenden; Aufnahmen und Streams laufen weiter</translation>
-    </message>
-    <message>
-      <location line="-40" />
-      <source>%1 (Ctrl+%2)</source>
-      <translation>%1 (Strg+%2)</translation>
-    </message>
-    <message>
-      <location line="-172" />
-      <source>New</source>
-      <translation>Neu</translation>
-    </message>
-    <message>
-      <location line="+4" />
-      <source>Open…</source>
-      <translation>Öffnen…</translation>
-    </message>
-    <message>
-      <location line="+4" />
-      <source>Recent</source>
-      <translation>Zuletzt</translation>
-    </message>
-    <message>
-      <location line="+6" />
-      <source>Save</source>
-      <translation>Speichern</translation>
-    </message>
-    <message>
-      <location line="+4" />
-      <source>Save as…</source>
-      <translation>Speichern unter…</translation>
-    </message>
-    <message>
-      <location line="+14" />
-      <source>Export settings…</source>
-      <translation>Einstellungen exportieren…</translation>
-    </message>
-    <message>
-      <location line="+4" />
-      <source>Import settings…</source>
-      <translation>Einstellungen importieren…</translation>
-    </message>
-    <message>
-      <location line="+4" />
-      <source>Factory settings…</source>
-      <translation>Werkseinstellungen…</translation>
-    </message>
-    <message>
-      <location line="+12" />
-      <source>Kante</source>
-      <translation>Kante</translation>
-    </message>
-    <message>
-      <location line="+1" />
-      <source>Kante Light</source>
-      <translation>Kante Light</translation>
-    </message>
-    <message>
-      <location line="+1" />
-      <source>System</source>
-      <translation>System</translation>
-    </message>
-    <message>
-      <location line="+96" />
-      <source>This show file is in the older format %1 and was converted on opening. Saving it keeps the old file beside it (.v%1.bak).</source>
-      <translation>Diese Show-Datei hat das ältere Format %1 und wurde beim Öffnen umgewandelt. Beim Speichern bleibt die alte Datei daneben erhalten (.v%1.bak).</translation>
     </message>
   </context>
   <context>
@@ -2515,32 +2564,12 @@
       <translation>Ordner mit den fehlenden Dateien</translation>
     </message>
     <message>
-      <location line="+111" />
+      <location line="+103" />
       <source>Inputs from a show…</source>
       <translation>Inputs aus einer Show …</translation>
     </message>
     <message>
-      <location line="+4" />
-      <source>Program format…</source>
-      <translation>Programmformat…</translation>
-    </message>
-    <message>
-      <location line="+7" />
-      <source>Multiview: program on the left</source>
-      <translation>Multiview: Program links</translation>
-    </message>
-    <message>
-      <location line="+7" />
-      <source>Multiview: level meters</source>
-      <translation>Multiview: Pegelanzeigen</translation>
-    </message>
-    <message>
-      <location line="+7" />
-      <source>Sound at 44.1 kHz</source>
-      <translation>Ton mit 44,1 kHz</translation>
-    </message>
-    <message>
-      <location line="+15" />
+      <location line="+14" />
       <source>Latency</source>
       <translation>Latenz</translation>
     </message>
@@ -2551,18 +2580,18 @@
     </message>
     <message>
       <location line="+43" />
-      <location line="+190" />
+      <location line="+207" />
       <source>Preview</source>
       <translation>Vorschau</translation>
     </message>
     <message>
-      <location line="-145" />
-      <location line="+144" />
+      <location line="-162" />
+      <location line="+161" />
       <source>Program</source>
       <translation>Programm</translation>
     </message>
     <message>
-      <location line="-124" />
+      <location line="-141" />
       <source>Height of the monitors</source>
       <translation>Höhe der Monitore</translation>
     </message>
@@ -2646,26 +2675,42 @@
     </message>
     <message>
       <location line="+5" />
+      <location line="+5" />
       <source>View</source>
       <translation>Ansicht</translation>
     </message>
     <message>
-      <location line="+265" />
+      <location line="+18" />
+      <source>Multiview</source>
+      <translation>Multiview</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Program on the left</source>
+      <translation>Programm links</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Level meters</source>
+      <translation>Pegelanzeigen</translation>
+    </message>
+    <message>
+      <location line="+251" />
       <source>Width of the audio column</source>
       <translation>Breite der Tonspalte</translation>
     </message>
     <message>
-      <location line="-258" />
+      <location line="-272" />
       <source>Audio at the edge</source>
       <translation>Ton am Rand</translation>
     </message>
     <message>
-      <location line="+7" />
+      <location line="+6" />
       <source>Simple mode</source>
       <translation>Einfacher Modus</translation>
     </message>
     <message>
-      <location line="+11" />
+      <location line="+26" />
       <source>Find missing files…</source>
       <translation>Fehlende Dateien suchen…</translation>
     </message>
