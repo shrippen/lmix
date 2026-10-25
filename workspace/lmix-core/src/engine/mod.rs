@@ -82,6 +82,12 @@ pub trait Engine: Send + Sync {
     /// it kept streaming or recording).
     async fn output_running(&self, id: lmix_types::OutputId) -> bool;
 
+    /// Whether `flow` runs in the engine now. An engine that cannot tell
+    /// says yes.
+    async fn flow_running(&self, _flow: strom_types::FlowId) -> bool {
+        true
+    }
+
     /// Live picture for a Console on the engine's machine: path of a Unix
     /// socket with raw frames (`unixfdsrc`), started on the first call.
     async fn live(&self, _picture: LivePicture) -> Result<std::path::PathBuf, EngineError> {
