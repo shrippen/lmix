@@ -12,7 +12,7 @@
 #   KEEP_WORK=1                       # keep logs and pictures
 #   WORK=dir                          # put them there (default: mktemp)
 #   LATENCY_BUDGET_MS=150             # p95 capture-to-program budget
-#   SETTLE_S=10                       # how long a check waits for its state
+#   SETTLE_S=20                       # how long a check waits for its state
 #   STROM_GST_DEBUG=compositor:4      # GST_DEBUG for strom (gst.log)
 #   STROM_BIN=…/strom                 # skip scripts/fetch-strom.sh
 #   MIXER=cpu|cuda|gl                 # mixer (default cpu, software GL)
@@ -43,7 +43,11 @@ TAP_INTERVAL=1.5
 # Checks poll for the expected state up to this long. The CPU mixer in a
 # shared CI container can lag several seconds behind real time; a slow
 # engine passes, a wrong state still fails.
-SETTLE_S="${SETTLE_S:-10}"
+SETTLE_S="${SETTLE_S:-20}"
+# No request waits for ever: a hung one held CI for 2 h (todo.md). A
+# --max-time of its own (act, picture) comes later and wins.
+CURL_MAX_S=30
+curl() { command curl --max-time "$CURL_MAX_S" "$@"; }
 MIXER="${MIXER:-cpu}"
 case "$MIXER" in
     cpu | cuda) ;;
@@ -73,6 +77,10 @@ fail() {
     # Earlier trouble scrolls out of the tails (thumbnail polls fill them).
     echo "--- last 40 warnings and errors of strom.log" >&2
     grep -E 'WARN|ERROR' "$WORK/strom.log" | grep -v '/thumbnail' | tail -n 40 >&2 || true
+    # lmix-core answers a picture request from its last picture while the
+    # engine has none (504): a frozen program may be a stuck tap.
+    [[ -n "${MIXER_ID:-}" ]] && echo "--- strom program tap: HTTP $(curl -s -o /dev/null -w '%{http_code}' --max-time 5 \
+        "$STROM/api/flows/$MIXER_ID/blocks/tap_pgm/thumbnail")" >&2
     echo "--- strom flows" >&2
     curl -sf --max-time 5 "$STROM/api/flows" \
         | jq -c '.flows[] | {name, id, state, running}' >&2 || true
@@ -80,9 +88,13 @@ fail() {
 }
 pass() { echo "ok   $*"; }
 wait_for() {   # wait_for <seconds> <command…>: until the command succeeds
-    local seconds="$1"; shift
-    for _ in $(seq 1 "$((seconds * 2))"); do "$@" && return 0; sleep 0.5; done
-    return 1
+    # By the clock, not by tries: slow tries (pictures under load) made a
+    # wait of 20 s take half an hour (todo.md).
+    local deadline=$((SECONDS + $1)); shift
+    until "$@"; do
+        ((SECONDS < deadline)) || return 1
+        sleep 0.5
+    done
 }
 # settled <condition>: polls a bash condition (as for eval) until it holds.
 settled() { wait_for "$SETTLE_S" eval "$1"; }
@@ -169,10 +181,10 @@ MIXER_ID="$(curl -sf "$STROM/api/flows" | jq -r '.flows[] | select(.name | start
 # Pictures through lmix-core (503 until the tap has a frame; the first
 # request switches it on).
 picture() {
-    local path="$1" out="$2"
+    local path="$1" out="$2" deadline=$((SECONDS + SETTLE_S))
     rm -f "$out"
-    for _ in $(seq 1 20); do
-        curl -sf "$CORE/pictures/$path" -o "$out" && break
+    until curl -sf --max-time 10 "$CORE/pictures/$path" -o "$out"; do
+        ((SECONDS < deadline)) || break
         sleep 1
     done
     # A slot restarting (failover, signal loss) has no picture for a
@@ -407,10 +419,11 @@ act '{"action":"transport_input","input":"Clips","transport":"next"}' >/dev/null
 wait_for "$SETTLE_S" bright inputs/Clips "$WORK/now.jpg" || fail "bright clip b does not play"
 act '{"action":"transport_input","input":"Clips","transport":"pause"}' >/dev/null
 wait_for "$SETTLE_S" clips_still || fail "playlist did not pause"
-wait_for "$SETTLE_S" bright program "$WORK/hold.jpg" || fail "paused clip not on program"
-# Held: still there two seconds later, not just passing through.
-sleep 2
-bright program "$WORK/hold.jpg" || fail "paused clip not held on program"
+# Held: bright, and still bright two seconds later. Program lags the
+# mixer by seconds under load, so a late picture can show the b before
+# the "next", then a: such a pair is a try, not the end of the check.
+held_bright() { bright program "$WORK/hold.jpg" && sleep 2 && bright program "$WORK/hold.jpg"; }
+wait_for "$SETTLE_S" held_bright || fail "paused clip not held on program"
 act '{"action":"transport_input","input":"Clips","transport":"play"}' >/dev/null
 pass "paused clip held on program"
 
@@ -557,53 +570,49 @@ fi
 # --- failover (3.4): a source dies mid-transition, a stream breaks ---
 input_state() { curl -sf "$CORE/state" | jq -r ".inputs[] | select(.name==\"$1\") | .status"; }
 flow_id() { curl -sf "$STROM/api/flows" | jq -r ".flows[] | select(.name==\"$1\") | .id"; }
+# The Logo dies for good: with its file gone, the fail back (every 2-10 s)
+# cannot restart it until the file is back. A loss of only 2 s raced the
+# program picture, which lags the mixer by seconds on a busy runner.
+logo_slot="lmix slot $(curl -sf "$CORE/state" | jq '.inputs[] | select(.name=="Logo") | .slot')"
+kill_logo() {
+    mv "$MEDIA/logo.png" "$MEDIA/logo.gone"
+    curl -sf -X POST "$STROM/api/flows/$(flow_id "$logo_slot")/stop" >/dev/null
+    wait_for "$SETTLE_S" is input_state Logo offline || fail "dead source not marked offline"
+}
+revive_logo() {
+    mv "$MEDIA/logo.gone" "$MEDIA/logo.png"
+    wait_for "$((SETTLE_S + 15))" is input_state Logo online || fail "source did not fail back"
+}
+logo_pgm() { picture program "$WORK/logo-pgm.jpg" || return 1; [[ $(rgb "$WORK/logo-pgm.jpg" b) -gt 150 && $(rgb "$WORK/logo-pgm.jpg" r) -lt 80 ]]; }
 act '{"action":"cut_direct","input":"Ball"}' >/dev/null
-act '{"action":"preview_input","input":"Orange"}' >/dev/null
+act '{"action":"preview_input","input":"Logo"}' >/dev/null
 act '{"action":"set_transition","slot":1,"effect":"fade","duration_ms":3000}' >/dev/null
 act '{"action":"transition","slot":1}' >/dev/null
-# Two thirds into the fade: Orange is about 3/4 of the picture, so the
-# held frame is orange at once. At one third it was 1/4, and the check
-# raced the fail back (~2 s on GitHub, run 38962553235).
-sleep 2
-orange_slot="lmix slot $(curl -sf "$CORE/state" | jq '.inputs[] | select(.name=="Orange") | .slot')"
-curl -sf -X POST "$STROM/api/flows/$(flow_id "$orange_slot")/stop" >/dev/null
-# Hold: while the input is offline, program keeps fading to its last
-# frame (CPU compositor in the VM may show one black frame at the loss,
-# HARDWARE-TODO). The source fails back after ~2 s on a slow runner:
-# offline and the picture are checked in one loop, the state first, so a
-# picture taken while offline counts.
-saw_offline=""
-held_orange() {
-    local state
-    state="$(input_state Orange)"
-    [[ "$state" == offline ]] && saw_offline=1
-    picture program "$WORK/held.jpg" || return 1
-    [[ "$state" == offline && $(rgb "$WORK/held.jpg" r) -gt 150 ]]
-}
-if ! wait_for "$SETTLE_S" held_orange; then
-    [[ -n "$saw_offline" ]] || fail "dead source not marked offline"
-    fail "program lost the orange while the source was gone"
-fi
+sleep 2   # two thirds into the fade
+kill_logo
+# Hold: program fades on to the dead source's last frame (CPU compositor
+# in the VM may show one black frame at the loss, HARDWARE-TODO).
+wait_for "$SETTLE_S" logo_pgm || fail "program lost the logo while the source was gone"
+[[ "$(input_state Logo)" == offline ]] || fail "dead source back before its file"
 running="$(curl -sf "$STROM/api/flows/$MIXER_ID" | jq -r '.flow.running')"
 [[ "$running" == true ]] || fail "mixer stopped after source loss"
-wait_for "$((SETTLE_S + 15))" is input_state Orange online || fail "source did not fail back"
-orange_back() { picture inputs/Orange "$WORK/back.jpg" || return 1; [[ $(rgb "$WORK/back.jpg" r) -gt 200 ]]; }
-wait_for "$SETTLE_S" orange_back || fail "orange not back after failback"
+revive_logo
+wait_for "$SETTLE_S" is_logo || fail "logo not back after failback"
 pass "failover: source died mid-transition, program held its last frame, input failed back"
 
 # Signal loss per input: hold the last frame (default, above) or black.
 # A paused clip keeps sending its frame, so the source has to die.
-act '{"action":"set_signal_loss","input":"Orange","mode":"black"}' >/dev/null
-act '{"action":"cut_direct","input":"Orange"}' >/dev/null
-orange_pgm() { picture program "$WORK/orange-pgm.jpg" || return 1; [[ $(rgb "$WORK/orange-pgm.jpg" r) -gt 200 ]]; }
-wait_for "$SETTLE_S" orange_pgm || fail "orange not on program before the loss"
-curl -sf -X POST "$STROM/api/flows/$(flow_id "$orange_slot")/stop" >/dev/null
+act '{"action":"set_signal_loss","input":"Logo","mode":"black"}' >/dev/null
+act '{"action":"cut_direct","input":"Logo"}' >/dev/null
+wait_for "$SETTLE_S" logo_pgm || fail "logo not on program before the loss"
+kill_logo
 black_pgm() { picture program "$WORK/black.jpg" || return 1; [[ $(brightness "$WORK/black.jpg") -lt 5 ]]; }
 wait_for "$SETTLE_S" black_pgm || fail "dead source not black on program ($(brightness "$WORK/black.jpg"))"
-act '{"action":"set_signal_loss","input":"Orange","mode":"hold"}' >/dev/null
-wait_for "$((SETTLE_S + 15))" is input_state Orange online || fail "source did not fail back after the black check"
-wait_for "$SETTLE_S" orange_back || fail "orange not back after the black check"
-pass "signal loss: black when set, the source died"
+act '{"action":"set_signal_loss","input":"Logo","mode":"hold"}' >/dev/null
+revive_logo
+# Black ends when the source is back.
+wait_for "$SETTLE_S" logo_pgm || fail "program black after the source came back"
+pass "signal loss: black when set, the source died; back on program with it"
 
 act '{"action":"start_output","output":"Stream"}' >/dev/null
 sleep 2   # running for a while, then the link breaks
@@ -618,7 +627,7 @@ pass "failover: stream broke, was marked failed and restarted itself"
 act '{"action":"cut_direct","input":"Ball"}' >/dev/null
 overlay_shown() { picture program "$WORK/ovl.jpg" || return 1; [[ $(rgb "$WORK/ovl.jpg" r) -gt 200 ]]; }
 overlay_gone() { picture program "$WORK/ovl.jpg" || return 1; [[ $(rgb "$WORK/ovl.jpg" r) -lt 60 ]]; }
-# Orange was on program before: wait for Ball, or a late picture passes.
+# Wait for Ball: a late picture of an orange program would pass.
 wait_for "$SETTLE_S" overlay_gone || fail "ball not on program before the overlay"
 act '{"action":"overlay_in","channel":1,"input":"Orange","duration_ms":0}' >/dev/null
 wait_for "$SETTLE_S" overlay_shown || fail "overlay 1 not on program"
@@ -651,6 +660,8 @@ pass "overlays: channel 8 on and off"
 convert -size 1280x720 xc:none -fill '#ff0000' -draw 'rectangle 0,0 639,719' "$MEDIA/badge.png"
 act "{\"action\":\"add_input\",\"source\":{\"kind\":\"image\",\"path\":\"$MEDIA/badge.png\"},\"name\":\"Badge\"}" >/dev/null
 act '{"action":"cut_direct","input":"Orange"}' >/dev/null
+# Orange first: a late picture of Ball under the badge reads as lost alpha.
+wait_for "$SETTLE_S" overlay_shown || fail "orange not on program before the badge"
 act '{"action":"overlay_in","channel":1,"input":"Badge","duration_ms":0}' >/dev/null
 # Mean of colour channel $3 (r, g) in the left or right half, middle band.
 half() {
@@ -664,7 +675,7 @@ badge_over_orange() {
         && $(half "$WORK/badge.jpg" right r) -gt 200 && $(half "$WORK/badge.jpg" right g) -gt 90 ]]
 }
 wait_for "$SETTLE_S" badge_over_orange \
-    || fail "PNG alpha lost: right half $(half "$WORK/badge.jpg" right r)/$(half "$WORK/badge.jpg" right g) (r/g), want orange"
+    || fail "PNG alpha lost: right half $(half "$WORK/badge.jpg" right r)/$(half "$WORK/badge.jpg" right g) (r/g), want orange; left $(half "$WORK/badge.jpg" left r)/$(half "$WORK/badge.jpg" left g), want red"
 act '{"action":"overlay_out_all","duration_ms":0}' >/dev/null
 [[ "$(curl -sf "$CORE/state" | jq '.overlays[0]')" == null ]] || fail "badge overlay not off"
 # Its slot is needed later on.
