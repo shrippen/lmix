@@ -4681,7 +4681,7 @@ console-qt-Tests, `scripts/test-m2b-vm.sh` und `scripts/test-console-qt.sh`
 mit strom #43 (Busse zur Laufzeit) und #44 (Test-Race), beide gemergt
 25.10.; Sends und Abhören einer Busänderung gehen in einem PATCH.
 
-## 2026-10-26 — Sperre und Wiederholung beim neuen Mischer (SAF.6, OUT.1)
+## 2026-10-25 — Sperre und Wiederholung beim neuen Mischer (SAF.6, OUT.1)
 
 **Anlass**: Zwei Punkte aus den Reviews von #150/#151 (todo). Format,
 Abtastrate und Multiview bauen den Mischer weiter neu auf: Program steht kurz,
@@ -4694,9 +4694,15 @@ dieselbe Wahl noch einmal tat nichts.
 - Bei Sperre lehnt lmix-core einen neuen Wert für Format, Abtastrate und
   Multiview ab (`locked`); derselbe Wert ist keine Änderung und geht durch.
   Tooltip und Hinweis der Sperre in der Console nennen die drei.
-- Scheitert der Neuaufbau, vergisst `set_format` die gebauten Busse. Der
-  nächste `SetFormat`, auch mit demselben Wunsch, baut dann neu. Bis dahin
-  lehnt die Engine Befehle an Busse ab (sie kennt sie nicht).
+- Scheitert der Neuaufbau, vergisst `set_format` in der Engine die gebauten
+  Busse: Der nächste `SetFormat`, auch mit demselben Wunsch, baut neu. Bis
+  dahin lehnt die Engine Befehle an Busse ab (sie kennt sie nicht).
+- Der Switcher merkt sich einen neuen Mischer, bis ein `SetFormat` durchging
+  (`mixer_pending`, der Service meldet `mixer_built`). Bis dahin gilt dieselbe
+  Wahl von Format, Rate oder Multiview als neu und schickt alles noch einmal;
+  eine Busänderung schickt ebenfalls den ganzen Mischer, denn die Engine baut
+  ihn dann.
 
 **Geprüft**: lmix-core-Tests (`the_lock_refuses_closing_and_stopping`,
-`a_failed_new_mixer_is_built_again`, dieser schlägt ohne den Fix fehl).
+`a_failed_new_mixer_is_built_again`, `a_format_the_engine_refused_is_tried_again`,
+`a_bus_change_before_the_new_mixer_is_built_sets_up_all`).
