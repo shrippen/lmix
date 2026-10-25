@@ -993,14 +993,18 @@ fn add_audio_mixer(
             PropertyValue::Float(1.0),
         ),
     ];
-    // Pre or post fader is fixed when strom builds the mixer.
+    // Pre or post fader is fixed when strom builds the mixer; the stinger
+    // takes the same, so channel 1 always tells them (`buses_of`).
     let taps: Vec<bool> = std::iter::once(buses.phones_pre_fader)
         .chain(buses.buses.iter().map(|(_, pre)| *pre))
         .collect();
-    for slot in 0..slots {
+    let channels = (0..slots)
+        .map(audio_channel)
+        .chain(std::iter::once(stinger_channel(slots)));
+    for channel in channels {
         for (bus, pre) in taps.iter().enumerate() {
             properties.push((
-                format!("ch{}_aux{}_pre", audio_channel(slot), bus + 1),
+                format!("ch{channel}_aux{}_pre", bus + 1),
                 PropertyValue::Bool(*pre),
             ));
         }
@@ -2062,7 +2066,7 @@ mod tests {
             "the headphones are no output's sound"
         );
         // A reused mixer tells its buses.
-        assert_eq!(buses_of(&flow), Some(buses));
+        assert_eq!(buses_of(&flow), Some(buses.clone()));
         let mut old = flow.clone();
         let mix = old.blocks.iter_mut().find(|b| b.id == AUDIO_MIXER).unwrap();
         mix.properties.remove("monitor_source");
@@ -2079,6 +2083,17 @@ mod tests {
             &MixerBuses::default(),
         );
         assert_eq!(buses_of(&bare), Some(MixerBuses::default()));
+        // Nor without slots: the stinger's channel tells the taps.
+        let empty = mixer_flow(
+            0,
+            MixerBackend::Cpu,
+            MonitorOut::None,
+            MasterFormat::default(),
+            MultiviewLayout::default(),
+            48_000,
+            &buses,
+        );
+        assert_eq!(buses_of(&empty), Some(buses));
     }
 
     #[test]

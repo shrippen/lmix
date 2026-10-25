@@ -2038,17 +2038,21 @@ impl Service {
     }
 }
 
-/// A settings file of lmix-core read at start: `Ok(None)` when it is
-/// missing or unreadable (it starts empty and is written later), `Err`
-/// when it is broken and could not be set aside (never written over).
 /// The shortcuts for all shows as `--shortcuts` keeps them; a file from
-/// before named buses gets them as a migrated show does.
+/// before named buses (it does not read as it is) gets them as a migrated
+/// show does.
 fn parse_shortcuts(bytes: &[u8]) -> Result<Vec<crate::show::ShowShortcut>, String> {
     let mut value: serde_json::Value = serde_json::from_slice(bytes).map_err(|e| e.to_string())?;
+    if let Ok(shortcuts) = serde_json::from_value(value.clone()) {
+        return Ok(shortcuts);
+    }
     crate::show::migrate_shortcuts(&mut value);
     serde_json::from_value(value).map_err(|e| e.to_string())
 }
 
+/// A settings file of lmix-core read at start: `Ok(None)` when it is
+/// missing or unreadable (it starts empty and is written later), `Err`
+/// when it is broken and could not be set aside (never written over).
 async fn read_settings<T>(
     path: &std::path::Path,
     what: &str,
@@ -2337,6 +2341,23 @@ mod tests {
                     mute: false
                 },
             ]
+        );
+
+        // A file of today stays as it is: bus 3 is the third bus there,
+        // not aux C.
+        let file = serde_json::json!([{
+            "id": InputId::new(),
+            "label": "Stream down",
+            "actions": [{"action": "fade_volume", "target": {"bus": 3}, "volume": 0, "duration_ms": 500}],
+        }]);
+        let shortcuts = parse_shortcuts(&serde_json::to_vec(&file).unwrap()).unwrap();
+        assert_eq!(
+            shortcuts[0].actions,
+            [Action::FadeVolume {
+                target: lmix_types::action::VolumeTarget::Bus(lmix_types::BusRef::Number(3)),
+                volume: 0,
+                duration_ms: 500
+            }]
         );
     }
 

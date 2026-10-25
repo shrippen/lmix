@@ -503,13 +503,13 @@ fn migrate_cue_labels(show: &mut serde_json::Value) {
     }
 }
 
+/// Letters of the aux buses of version 2.
+const AUX_LETTERS: [&str; 7] = ["A", "B", "C", "D", "E", "F", "G"];
+
 /// Version 2 to 3: aux buses A–G (1–7 in actions) become named buses
 /// ("Bus A", A before the faders), each one the show used: an input sent
 /// to it, an output took its sound, a saved action named it, or its master
 /// was moved. The monitor volume is the headphones' (AUD.2, AUD.4).
-/// Letters of the aux buses of version 2.
-const AUX_LETTERS: [&str; 7] = ["A", "B", "C", "D", "E", "F", "G"];
-
 fn migrate_aux_buses(show: &mut serde_json::Value) {
     use serde_json::json;
     let Some(show) = show.as_object_mut() else {
@@ -666,23 +666,27 @@ fn aux_named(map: &Map<String, Value>) -> Option<usize> {
 
 /// The saved actions of version 2 in `value` as version 3 has them: aux
 /// bus `index` becomes `bus(index)`. A number that named no bus (0, 8)
-/// stays: the action is refused when it runs, as before, and the file
-/// still loads.
+/// becomes the name "Aux 8": refused when it runs, as before (a number
+/// would be a position now, and meet a bus once the show has eight), and
+/// the file still loads.
 fn rewrite_aux_actions(value: &mut Value, bus: &dyn Fn(usize) -> Value) {
     use serde_json::json;
     actions_mut(value, &mut |map| {
         let named = aux_named(map);
+        let bad = |map: &Map<String, Value>| match map.get("bus") {
+            Some(Value::Number(n)) => Some(json!(format!("Aux {n}"))),
+            _ => None,
+        };
         match map.get("action").and_then(Value::as_str).unwrap_or("") {
-            "set_aux_send" => {
-                map.insert("action".into(), json!("set_send"));
-                if let Some(index) = named {
-                    map.insert("bus".into(), bus(index));
-                }
-            }
-            "set_aux_bus" => {
-                map.insert("action".into(), json!("set_bus"));
-                if let Some(index) = named {
-                    map.insert("bus".into(), bus(index));
+            "set_aux_send" | "set_aux_bus" => {
+                let action = if map["action"] == "set_aux_send" {
+                    "set_send"
+                } else {
+                    "set_bus"
+                };
+                map.insert("action".into(), json!(action));
+                if let Some(to) = named.map(bus).or_else(|| bad(map)) {
+                    map.insert("bus".into(), to);
                 }
             }
             "set_monitor_volume" => {
@@ -692,8 +696,13 @@ fn rewrite_aux_actions(value: &mut Value, bus: &dyn Fn(usize) -> Value) {
                 map.insert("mute".into(), json!(false));
             }
             "fade_volume" => {
-                if let Some(index) = named {
-                    map.insert("target".into(), json!({ "bus": bus(index) }));
+                let to = match (named, map.get("target")) {
+                    (Some(index), _) => Some(bus(index)),
+                    (None, Some(Value::Object(target))) => bad(target),
+                    _ => None,
+                };
+                if let Some(to) = to {
+                    map.insert("target".into(), json!({ "bus": to }));
                 }
             }
             "add_output" => {
@@ -706,9 +715,11 @@ fn rewrite_aux_actions(value: &mut Value, bus: &dyn Fn(usize) -> Value) {
     });
 }
 
-/// The shortcuts for all shows (`--shortcuts`) as version 3 has them: their
-/// actions name aux bus A–G "Bus A" …, as a migrated show calls it (a
-/// name: there is no one show whose ids they could take).
+/// The shortcuts for all shows (`--shortcuts`) of version 2 as version 3
+/// has them: their actions name aux bus A–G "Bus A" …, as a migrated show
+/// calls it (a name: there is no one show whose ids they could take). The
+/// file has no version: only for one that does not read as version 3
+/// (`fade_volume` to bus 3 is a position there, not aux C).
 pub fn migrate_shortcuts(value: &mut Value) {
     rewrite_aux_actions(value, &|index| {
         Value::String(format!("Bus {}", AUX_LETTERS[index]))
@@ -1099,7 +1110,7 @@ mod tests {
                 // No bus 9: refused when it runs, the show still loads.
                 Action::SetSend {
                     input: lmix_types::InputRef::Number(1),
-                    bus: lmix_types::BusRef::Number(9),
+                    bus: lmix_types::BusRef::Text("Aux 9".into()),
                     level: 50
                 },
             ]

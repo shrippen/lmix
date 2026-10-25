@@ -5263,7 +5263,6 @@ fn check_volume(volume: u8) -> Result<(), ActionError> {
     Ok(())
 }
 
-/// What an input sends to the headphones (engine bus 0).
 /// The bus called `name` (ignoring case, as bus names are unique).
 fn find_bus_named(buses: &[ShowBus], name: &str) -> Option<BusId> {
     let name = name.to_lowercase();
@@ -5273,6 +5272,7 @@ fn find_bus_named(buses: &[ShowBus], name: &str) -> Option<BusId> {
         .map(|b| b.id)
 }
 
+/// What an input sends to the headphones (engine bus 0).
 fn phones_send(input: &ShowInput) -> Command {
     let send = input.phones;
     Command::SetAuxSend {
