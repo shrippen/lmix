@@ -5482,6 +5482,191 @@
       <source>Data source: %1</source>
       <translation>Datenquelle: %1</translation>
     </message>
+    <message>
+      <location line="+1" />
+      <source>Encoding: %1</source>
+      <translation>Encoding: %1</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Sample rate %1 Hz: 48000 or 44100</source>
+      <translation>Abtastrate %1 Hz: 48000 oder 44100</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>All %1 layouts are in use</source>
+      <translation>Alle %1 Layouts sind belegt</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>No layout %1</source>
+      <translation>Kein Layout %1</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Layout: %1</source>
+      <translation>Layout: %1</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>No cue list %1</source>
+      <translation>Keine Cue-Liste %1</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>No target %1</source>
+      <translation>Kein Ziel %1</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Target: %1</source>
+      <translation>Ziel: %1</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Zone: %1</source>
+      <translation>Zone: %1</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Sound: %1</source>
+      <translation>Klang: %1</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Stage: %1</source>
+      <translation>Bühne: %1</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Cue list: %1</source>
+      <translation>Cue-Liste: %1</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Triggers: %1</source>
+      <translation>Auslöser: %1</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>The show is locked: unlock it first</source>
+      <translation>Die Show ist gesperrt: erst entsperren</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>No removed input to bring back</source>
+      <translation>Kein entfernter Input zum Zurückholen</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>No shortcut %1</source>
+      <translation>Keine Belegung %1</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Shortcut: %1</source>
+      <translation>Belegung: %1</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>MIDI: %1</source>
+      <translation>MIDI: %1</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>A stinger is playing</source>
+      <translation>Ein Stinger läuft</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Stinger: %1</source>
+      <translation>Stinger: %1</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Quick play: %1</source>
+      <translation>Schnellstart: %1</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>%1 has no sound</source>
+      <translation>%1 hat keinen Ton</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Web page %1 is not an http:// or https:// address</source>
+      <translation>Webseite %1 ist keine http://- oder https://-Adresse</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>%1 shows no page (not a web or graphics input)</source>
+      <translation>%1 zeigt keine Seite (kein Web- oder Grafik-Input)</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>A level fade lasts 0–%1 ms, not %2</source>
+      <translation>Eine Pegelblende dauert 0–%1 ms, nicht %2</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Program format: even sides of %1–%2 pixels</source>
+      <translation>Program-Format: gerade Seitenlängen von %1–%2 Pixeln</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Overlay channel %1 does not exist (1–%2)</source>
+      <translation>Overlay-Kanal %1 gibt es nicht (1–%2)</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Overlay %1 has no input to show again</source>
+      <translation>Overlay %1 hat keinen Input, den es wieder zeigen kann</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Overlay %1: %2</source>
+      <translation>Overlay %1: %2</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>No layout template %1</source>
+      <translation>Keine Layout-Vorlage %1</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>T-bar position is outside 0–1</source>
+      <translation>Die T-Bar-Stellung liegt außerhalb von 0–1</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Fade to black is on; end it before using the T-bar</source>
+      <translation>Schwarzblende ist an; erst beenden, dann den T-Bar nutzen</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>A transition is still running; move the T-bar when it has landed</source>
+      <translation>Ein Übergang läuft noch; den T-Bar erst bewegen, wenn er fertig ist</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Aux bus %1 does not exist (1–%2)</source>
+      <translation>Aux-Bus %1 gibt es nicht (1–%2)</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Look: %1 is out of range</source>
+      <translation>Look: %1 liegt außerhalb des Bereichs</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Looks need the GL mixer (lmix-core --mixer gl)</source>
+      <translation>Looks brauchen den GL-Mischer (lmix-core --mixer gl)</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Channel strip: %1 is out of range</source>
+      <translation>Kanalzug: %1 liegt außerhalb des Bereichs</translation>
+    </message>
   </context>
   <context>
     <name>TitleField</name>
