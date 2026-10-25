@@ -533,13 +533,14 @@ pub enum Action {
         volume: u8,
         mute: bool,
     },
-    /// Whether the headphones take the sends before the channel faders.
-    /// The audio mixer is built anew (as for the sample rate).
+    /// Whether the headphones take the sends before the channel faders;
+    /// the running audio mixer changes, outputs play on.
     SetPhonesTap {
         pre_fader: bool,
     },
-    /// A new bus at the end (AUD.2), named `name` or "Bus <n>"; the audio
-    /// mixer is built anew. No input sends to it yet.
+    /// A new bus at the end (AUD.2), named `name` or "Bus <n>"; the
+    /// running audio mixer changes, outputs play on. No input sends to it
+    /// yet.
     AddBus {
         #[serde(default)]
         name: Option<String>,
@@ -547,7 +548,7 @@ pub enum Action {
         pre_fader: bool,
     },
     /// Remove a bus and every send to it; refused while an output takes
-    /// its sound. The audio mixer is built anew.
+    /// its sound. The running audio mixer changes, outputs play on.
     RemoveBus {
         bus: BusRef,
     },
@@ -555,8 +556,8 @@ pub enum Action {
         bus: BusRef,
         name: String,
     },
-    /// Whether a bus takes its sends before the channel faders; the audio
-    /// mixer is built anew.
+    /// Whether a bus takes its sends before the channel faders; the
+    /// running audio mixer changes, outputs play on.
     SetBusTap {
         bus: BusRef,
         pre_fader: bool,

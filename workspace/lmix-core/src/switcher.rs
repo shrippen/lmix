@@ -124,6 +124,12 @@ pub enum Command {
     /// Send of `slot` to engine bus `bus` (see [`MixerBuses`]), linear
     /// gain.
     SetAuxSend { slot: usize, bus: usize, gain: f64 },
+    /// Sends into engine buses (slot, bus, linear gain) and the buses'
+    /// listening, in one write: what a bus change sets up again.
+    SetBusMix {
+        sends: Vec<(usize, usize, f64)>,
+        listen: Vec<(usize, bool)>,
+    },
     /// Master of engine bus `bus`, reached over `ramp_ms`.
     SetAuxBus {
         bus: usize,
@@ -1828,15 +1834,24 @@ impl Switcher {
             .iter()
             .filter(|i| i.source.has_audio())
             .flat_map(|i| self.send_commands(i))
-            .filter(|c| matches!(c, Command::SetAuxSend { bus, .. } if *bus > 0));
-        let listening = self
+            .filter_map(|c| match c {
+                Command::SetAuxSend { slot, bus, gain } if bus > 0 => Some((slot, bus, gain)),
+                _ => None,
+            })
+            .collect();
+        let listen = self
             .listen_commands()
             .into_iter()
-            .filter(|c| matches!(c, Command::SetBusListen { .. }));
+            .filter_map(|c| match c {
+                Command::SetBusListen { bus, on } => Some((bus, on)),
+                _ => None,
+            })
+            .collect();
+        // One write for every send: a bus change also comes in a show.
+        let mix = Command::SetBusMix { sends, listen };
         std::iter::once(format)
             .chain(self.aux_bus_commands())
-            .chain(sends)
-            .chain(listening)
+            .chain(std::iter::once(mix))
             .collect()
     }
 
@@ -7298,16 +7313,27 @@ mod tests {
             })
             .unwrap();
         assert!(matches!(&cmds[0], Command::SetFormat { .. }));
-        assert!(
-            cmds.iter().any(|c| matches!(
-                c,
-                Command::SetAuxSend { slot: s, bus: 2, gain } if *s == slot && *gain > 0.0
-            )),
-            "{cmds:?}"
-        );
-        assert!(cmds
+        // All in one write, not one per send.
+        let mixes: Vec<_> = cmds
             .iter()
-            .any(|c| matches!(c, Command::SetBusListen { bus: 2, on: true })));
+            .filter_map(|c| match c {
+                Command::SetBusMix { sends, listen } => Some((sends, listen)),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(mixes.len(), 1, "{cmds:?}");
+        let (sends, listen) = mixes[0];
+        assert!(
+            sends
+                .iter()
+                .any(|&(s, bus, gain)| s == slot && bus == 2 && gain > 0.0),
+            "{sends:?}"
+        );
+        assert!(sends.iter().all(|&(_, bus, _)| bus > 0), "{sends:?}");
+        assert!(listen.contains(&(2, true)), "{listen:?}");
+        assert!(!cmds
+            .iter()
+            .any(|c| matches!(c, Command::SetAuxSend { .. } | Command::SetBusListen { .. })));
     }
 
     #[test]

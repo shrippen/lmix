@@ -509,7 +509,7 @@ impl StromEngine {
                 .lock()
                 .expect("buses lock")
                 .clone()
-                .expect("a mixer with known buses")
+                .ok_or_else(|| EngineError::Refused("the audio mixer is being built".into()))
         };
         let record = |built: flows::BuiltBuses| {
             *self.buses.lock().expect("buses lock") = Some(built);
@@ -524,31 +524,31 @@ impl StromEngine {
         };
         // Commands count buses along the show from now on, also when a step
         // below fails.
-        let mut built = current();
+        let mut built = current()?;
         built.order = wanted.buses.iter().map(|(id, _)| *id).collect();
         record(built);
 
-        for bus in current().buses {
+        for bus in current()?.buses {
             if wants(bus.id).is_none() {
                 self.remove_aux_bus(bus.aux).await?;
-                let mut built = current();
+                let mut built = current()?;
                 built.buses.retain(|b| b.id != bus.id);
                 record(built);
             }
         }
-        if current().phones_pre_fader != wanted.phones_pre_fader {
+        if current()?.phones_pre_fader != wanted.phones_pre_fader {
             let taps = flows::tap_properties(slots, flows::PHONES_AUX, wanted.phones_pre_fader);
             self.patch_taps(taps).await?;
-            let mut built = current();
+            let mut built = current()?;
             built.phones_pre_fader = wanted.phones_pre_fader;
             record(built);
         }
-        for bus in current().buses {
+        for bus in current()?.buses {
             match wants(bus.id) {
                 Some(pre) if pre != bus.pre_fader => {
                     let taps = flows::tap_properties(slots, bus.aux, pre);
                     self.patch_taps(taps).await?;
-                    let mut built = current();
+                    let mut built = current()?;
                     for b in built.buses.iter_mut().filter(|b| b.id == bus.id) {
                         b.pre_fader = pre;
                     }
@@ -558,11 +558,11 @@ impl StromEngine {
             }
         }
         for (id, pre_fader) in &wanted.buses {
-            if current().buses.iter().any(|b| b.id == *id) {
+            if current()?.buses.iter().any(|b| b.id == *id) {
                 continue;
             }
             let aux = self.add_aux_bus(*id, *pre_fader).await?;
-            let mut built = current();
+            let mut built = current()?;
             built.buses.push(flows::BuiltBus {
                 id: *id,
                 pre_fader: *pre_fader,
@@ -571,7 +571,7 @@ impl StromEngine {
             record(built);
         }
         // The show's order: engine bus numbers count along it.
-        let mut built = current();
+        let mut built = current()?;
         built
             .buses
             .sort_by_key(|b| wanted.buses.iter().position(|(id, _)| *id == b.id));
@@ -672,6 +672,50 @@ impl StromEngine {
             .as_ref()
             .and_then(|b| b.aux(bus))
             .ok_or_else(|| EngineError::Refused(format!("the audio mixer has no bus {bus}")))
+    }
+
+    /// Sends and listening of the buses in one PATCH. A bus the mixer
+    /// lacks is left out and named afterwards; the others are set.
+    async fn set_bus_mix(
+        &self,
+        sends: &[(usize, usize, f64)],
+        listen: &[(usize, bool)],
+    ) -> Result<(), EngineError> {
+        let mut properties = Vec::new();
+        let mut missing = std::collections::BTreeSet::new();
+        for &(slot, bus, gain) in sends {
+            match self.aux(bus) {
+                Ok(aux) => properties.push((
+                    format!("ch{}_aux{aux}_level", flows::audio_channel(slot)),
+                    PropertyValue::Float(gain),
+                )),
+                Err(_) => {
+                    missing.insert(bus);
+                }
+            }
+        }
+        for &(bus, on) in listen {
+            match self.aux(bus) {
+                Ok(aux) => properties.push((format!("aux{aux}_afl"), PropertyValue::Bool(on))),
+                Err(_) => {
+                    missing.insert(bus);
+                }
+            }
+        }
+        if !properties.is_empty() {
+            self.patch_audio_mixer(properties, AUDIO_RAMP_MS).await?;
+        }
+        match missing.first() {
+            None => Ok(()),
+            Some(_) => Err(EngineError::Refused(format!(
+                "the audio mixer has no bus {}",
+                missing
+                    .iter()
+                    .map(|b| b.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ))),
+        }
     }
 
     /// A fader and its mute on the audio mixer, one write at a time.
@@ -1438,6 +1482,7 @@ impl Engine for StromEngine {
                 self.patch_audio_mixer(vec![(name, PropertyValue::Float(*gain))], AUDIO_RAMP_MS)
                     .await
             }
+            Command::SetBusMix { sends, listen } => self.set_bus_mix(sends, listen).await,
             Command::SetAuxBus {
                 bus,
                 gain,
@@ -2306,6 +2351,24 @@ mod tests {
         assert_eq!(
             last["properties"],
             serde_json::json!({ "ch1_aux2_level": 1.0 })
+        );
+        // Every send and listening in one write; a bus the mixer lacks is
+        // named, the rest is set.
+        let count = calls.lock().unwrap().len();
+        let mix = engine
+            .run(&Command::SetBusMix {
+                sends: vec![(0, 1, 0.5), (0, 2, 0.25), (0, 5, 1.0)],
+                listen: vec![(2, true)],
+            })
+            .await;
+        assert!(matches!(mix, Err(EngineError::Refused(ref m)) if m.ends_with("bus 5")));
+        let calls_now = calls.lock().unwrap().clone();
+        assert_eq!(calls_now.len(), count + 1);
+        assert_eq!(
+            calls_now[count].2["properties"],
+            serde_json::json!({
+                "ch1_aux3_level": 0.5, "ch1_aux2_level": 0.25, "aux2_afl": true
+            })
         );
         // The same buses again change nothing.
         let count = calls.lock().unwrap().len();
