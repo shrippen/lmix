@@ -204,20 +204,21 @@ AppPage {
     // back: a refused removal shows nothing, and another show or a removal
     // from elsewhere does not pass for this one.
     function removeInput(input) {
-        // A locked show refuses, and the same refusal twice sets no new
-        // message: nothing to wait for.
-        root.removing = root.show && root.show.locked ? null : { id: input.id, number: input.number, name: input.name }
+        root.removing = { id: input.id, number: input.number, name: input.name }
         root.act({ action: "remove_input", input: input.number })
     }
     property var removing: null
     // Later: inputs and show change one after the other for one state.
     onInputsChanged: Qt.callLater(root.removedOrNot)
-    // A refusal (a locked show) ends the removal: the input may go
-    // another way later, and that is no removal from here.
+    // The core's refusal of this removal (a locked show, a stinger) ends
+    // it: the input may go another way later, and that is no removal from
+    // here. Answers to other actions leave it alone.
     Connections {
         target: backend
-        function onMessageChanged() {
-            if (backend.message.length > 0) {
+        function onAnswered(action, refusal) {
+            const answered = JSON.parse(action)
+            if (refusal.length > 0 && root.removing && answered.action === "remove_input"
+                    && String(answered.input) === String(root.removing.number)) {
                 root.removing = null
             }
         }

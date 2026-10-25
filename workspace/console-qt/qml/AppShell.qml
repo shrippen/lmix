@@ -213,8 +213,13 @@ Kirigami.ApplicationWindow {
 
     /** A key sequence as the user reads it: Strg+N in German. */
     function keyLabel(sequence) {
-        return sequence.split("+").map(part => part === "Ctrl" ? qsTr("Ctrl", "key")
-            : part === "Shift" ? qsTr("Shift", "key") : part).join("+")
+        return String(sequence).split("+").map(part => {
+            const lower = part.toLowerCase()
+            return lower === "ctrl" ? qsTr("Ctrl", "key")
+                : lower === "shift" ? qsTr("Shift", "key")
+                : lower === "alt" ? "Alt"
+                : part.length === 1 ? part.toUpperCase() : part
+        }).join("+")
     }
 
     function fileCommand(name) {

@@ -84,6 +84,12 @@ pub mod qobject {
         #[cxx_name = "setGlobalShortcuts"]
         fn set_global_shortcuts(self: Pin<&mut Core>, json: &QString);
 
+        /// lmix-core answered an action of this Console: the action as
+        /// JSON, and the refusal as in `message` (empty when it went
+        /// through). One per action, also for the same refusal twice.
+        #[qsignal]
+        fn answered(self: Pin<&mut Core>, action: QString, refusal: QString);
+
         /// A note or controller from a MIDI controller at lmix-core: lmix
         /// `MidiMessage` as JSON (to learn a binding).
         #[qsignal]
@@ -772,7 +778,11 @@ fn actions() -> &'static tokio::sync::mpsc::UnboundedSender<Queued> {
                     tracing::info!(?action, %reason, "lmix-core refused");
                 }
                 let text = refused.unwrap_or_default();
-                let _ = thread.queue(move |core| core.set_message(QString::from(&text)));
+                let json = serde_json::to_string(&action).unwrap_or_default();
+                let _ = thread.queue(move |mut core| {
+                    core.as_mut().set_message(QString::from(&text));
+                    core.answered(QString::from(&json), QString::from(&text));
+                });
             }
         });
         tx
