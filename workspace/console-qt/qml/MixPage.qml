@@ -335,8 +335,10 @@ AppPage {
             Layout.fillHeight: true
             spacing: Kirigami.Units.largeSpacing
             /** Height kept free under the monitors for the rows below and a row
-             *  of tiles; in detail the tiles are higher by their extra rows. */
+             *  of tiles; in detail the tiles are higher by their extra rows, and
+             *  wrapped input actions by their second row. */
             readonly property real inputsRoom: Kirigami.Units.gridUnit * 16 + Math.max(0, bar.chrome - Kirigami.Units.gridUnit * 2)
+                + Math.max(0, inputActions.height - addButton.height)
 
             // Preview and program in the program format, each centred in
             // its half; the transitions always in the middle of the page.
@@ -481,64 +483,73 @@ AppPage {
                         }
                     }
                 }
-                Item { Layout.fillWidth: true }
-                KanteButton {
-                    visible: root.inputs.some(i => i.missing && i.missing.length > 0)
-                    text: qsTr("Find missing files…")
-                    emphasis: KanteButton.Emphasis.Primary
-                    QQC2.ToolTip.visible: hovered
-                    QQC2.ToolTip.text: qsTr("Inputs marked \"Missing\" lack media files: pick the folder they are in now. Inputs on program are left alone.")
-                    onClicked: relocateDialog.open()
-                }
-                KanteButton {
-                    text: qsTr("Clear solo")
-                    visible: root.inputs.some(i => i.listen !== "off")
-                    onClicked: root.act({ action: "clear_listen" })
-                }
-                KanteButton {
-                    text: qsTr("Bring back %1").arg(root.show ? root.show.restorable : "")
-                    visible: root.show !== null && !!root.show.restorable
-                    onClicked: root.act({ action: "restore_input" })
-                }
-                KanteButton {
-                    readonly property bool locked: root.show !== null && root.show.locked === true
-                    text: locked ? qsTr("Locked") : qsTr("Lock")
-                    emphasis: locked ? KanteButton.Emphasis.Destructive : KanteButton.Emphasis.Normal
-                    enabled: backend.connected
-                    QQC2.ToolTip.visible: hovered
-                    QQC2.ToolTip.text: qsTr("While locked, closing inputs, loading a show and stopping outputs are refused.")
-                    onClicked: root.act({ action: "set_lock", on: !locked })
-                }
-                KanteButton {
-                    visible: !root.simple
-                    text: qsTr("Shortcuts…")
-                    enabled: backend.connected
-                    onClicked: root.openShortcuts()
-                }
-                KanteButton {
-                    visible: !root.simple
-                    text: qsTr("Buses…")
-                    enabled: backend.connected
-                    onClicked: auxDialog.open()
-                }
-                KanteButton {
-                    visible: !root.simple
-                    text: qsTr("Titles…")
-                    enabled: backend.connected
-                    onClicked: titlesDialog.open()
-                }
-                KanteButton {
-                    visible: !root.simple
-                    text: qsTr("Data…")
-                    enabled: backend.connected
-                    onClicked: dataSourcesDialog.open()
-                }
-                KanteButton {
-                    text: qsTr("+ Input")
-                    enabled: backend.connected
-                    onClicked: {
-                        addInputDialog.replacing = null
-                        addInputDialog.open()
+                // The actions at the right; in a narrow window they wrap into
+                // a second row instead of pushing the audio column out.
+                Flow {
+                    id: inputActions
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: implicitHeight
+                    layoutDirection: Qt.RightToLeft
+                    spacing: Kirigami.Units.smallSpacing
+                    KanteButton {
+                        id: addButton
+                        text: qsTr("+ Input")
+                        enabled: backend.connected
+                        onClicked: {
+                            addInputDialog.replacing = null
+                            addInputDialog.open()
+                        }
+                    }
+                    KanteButton {
+                        visible: !root.simple
+                        text: qsTr("Data…")
+                        enabled: backend.connected
+                        onClicked: dataSourcesDialog.open()
+                    }
+                    KanteButton {
+                        visible: !root.simple
+                        text: qsTr("Titles…")
+                        enabled: backend.connected
+                        onClicked: titlesDialog.open()
+                    }
+                    KanteButton {
+                        visible: !root.simple
+                        text: qsTr("Buses…")
+                        enabled: backend.connected
+                        onClicked: auxDialog.open()
+                    }
+                    KanteButton {
+                        visible: !root.simple
+                        text: qsTr("Shortcuts…")
+                        enabled: backend.connected
+                        onClicked: root.openShortcuts()
+                    }
+                    KanteButton {
+                        readonly property bool locked: root.show !== null && root.show.locked === true
+                        text: locked ? qsTr("Locked") : qsTr("Lock")
+                        emphasis: locked ? KanteButton.Emphasis.Destructive : KanteButton.Emphasis.Normal
+                        enabled: backend.connected
+                        QQC2.ToolTip.visible: hovered
+                        QQC2.ToolTip.text: qsTr("While locked, closing inputs, loading a show and stopping outputs are refused.")
+                        onClicked: root.act({ action: "set_lock", on: !locked })
+                    }
+                    KanteButton {
+                        text: qsTr("Bring back %1").arg(root.show ? root.show.restorable : "")
+                        visible: root.show !== null && !!root.show.restorable
+                        onClicked: root.act({ action: "restore_input" })
+                    }
+                    KanteButton {
+                        text: qsTr("Clear solo")
+                        visible: root.inputs.some(i => i.listen !== "off")
+                        onClicked: root.act({ action: "clear_listen" })
+                    }
+                    KanteButton {
+                        visible: root.inputs.some(i => i.missing && i.missing.length > 0)
+                        text: qsTr("Find missing files…")
+                        emphasis: KanteButton.Emphasis.Primary
+                        QQC2.ToolTip.visible: hovered
+                        QQC2.ToolTip.text: qsTr("Inputs marked \"Missing\" lack media files: pick the folder they are in now. Inputs on program are left alone.")
+                        onClicked: relocateDialog.open()
                     }
                 }
             }
