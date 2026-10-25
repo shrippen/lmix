@@ -27,6 +27,10 @@ ColumnLayout {
 
     /** `buses` of the show state. */
     property var buses: []
+    // Send rows by id: a new state keeps them, so a send drag goes on.
+    KeyedModel { id: busModel }
+    Component.onCompleted: busModel.sync(buses.map(b => b.id))
+    onBusesChanged: busModel.sync(buses.map(b => b.id))
     /** Send levels by bus id and to the headphones, set apart from the
      *  strip. */
     property var sends: ({})
@@ -163,14 +167,15 @@ ColumnLayout {
         onMoved: v => panel.phonesTo(panel.phones.on, Math.round(v))
     }
     Repeater {
-        model: panel.buses
+        model: busModel
         SliderRow {
-            required property var modelData
+            required property string key
+            readonly property var bus: panel.buses.find(b => b.id === key) || ({ id: key, name: "" })
             Layout.fillWidth: true
-            title: modelData.name
+            title: bus.name
             from: 0; to: 100; step: 1
-            value: panel.sends[modelData.id] || 0
-            onMoved: v => panel.sendTo(modelData.id, Math.round(v))
+            value: panel.sends[key] || 0
+            onMoved: v => panel.sendTo(key, Math.round(v))
         }
     }
 

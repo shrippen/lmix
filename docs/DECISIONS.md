@@ -4602,8 +4602,11 @@ dazu: eine kleine Show braucht keinen, eine große mehr Namen als Buchstaben.
   `set_bus_listen`). Jeder Bus hat eine feste Id (UUID) und einen Namen
   (1–40 Zeichen, eindeutig ohne Groß-/Kleinschreibung) und nimmt die Sends
   vor oder nach den Fadern. Aktionen nennen einen Bus per Position, Id oder
-  Name (`BusRef`); Cues, Tasten und Ausgänge speichern die Id, damit
-  Umbenennen und Entfernen anderer Busse nichts verschieben.
+  Name (`BusRef`). Ausgänge speichern die Id, damit Umbenennen und
+  Entfernen anderer Busse nichts verschieben. Gespeicherte Aktionen (Cues,
+  Tasten, Auslöser) behalten den Bezug, wie er geschrieben ist, wie bei
+  Inputs: eine Taste für alle Shows meint „Bus Stream“ oder „Bus 2“ in
+  jeder Show, eine Id gäbe es dort nicht. Die Console schreibt Ids.
 - Kopfhörer je Input: `phones { on, level }` (Standard an, 100), gesamt
   `phones { volume, mute, pre_fader }` (`set_phones_send`, `set_phones`,
   `set_phones_tap`). Solo (AFL/PFL) und Abhören eines Busses schalten den
@@ -4629,8 +4632,12 @@ den Fadern; Sends, Ausgänge, `monitor_volume` und gespeicherte Aktionen
 
 **Offen**:
 - strom kennt Buszahl und Abgriff nur beim Aufbau: Hinzufügen, Entfernen
-  und Abgriffwechsel bauen den Mischer neu auf, Program-Ton setzt kurz aus.
-  Live wäre eine strom-Erweiterung (Bus-Mischer zur Laufzeit).
+  und Abgriffwechsel bauen den Mischer-Flow neu auf, Bild- und Tonmischer
+  zusammen. Program steht kurz, laufende Ausgänge starten neu, wie beim
+  Formatwechsel; die Console fragt darum vorher. Abhilfe wäre ein
+  Bus-Mischer zur Laufzeit in strom oder ein eigener Flow für den
+  Tonmischer. Feste 17 Busse vorzuhalten scheidet aus: je Kanal und Bus
+  baut strom einen Send mit eigener Queue (bei zehn Kanälen 170 Threads).
 - Bus in den Master (strom routet Aux nicht in den Main), Bus → Zone.
 - Tonspalte nach dem Entwurf (feste Wege unten, Höhengriff, Kürzungen,
   KH/S/⋯ je Kanal) als eigener Schritt; dieser Schritt stellt das Bus-Panel,
@@ -4638,4 +4645,6 @@ den Fadern; Sends, Ausgänge, `monitor_volume` und gespeicherte Aktionen
 
 **Geprüft**: lmix-types- und lmix-core-Tests (Migration, Busse kommen und
 gehen mit neuem Mischer, Ausgang hält seinen Bus, Kopfhörer-Sends und
-Bus-Abhören), console-qt-Tests, strom-Mischer-Tests.
+Bus-Abhören), console-qt-Tests, strom-Mischer-Tests,
+`scripts/test-console-qt.sh` und `scripts/test-m2b-vm.sh` lokal mit dem
+strom aus #42 (Busse, Kopfhörer, Abhören eines Busses).

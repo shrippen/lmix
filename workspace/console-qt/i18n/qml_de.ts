@@ -1044,7 +1044,7 @@
   <context>
     <name>BusPanel</name>
     <message>
-      <location filename="../qml/BusPanel.qml" line="+53" />
+      <location filename="../qml/BusPanel.qml" line="+87" />
       <source>Volume of %1</source>
       <translation>Lautstärke von %1</translation>
     </message>
@@ -1054,14 +1054,19 @@
       <translation>Stumm</translation>
     </message>
     <message>
-      <location line="+11" />
+      <location line="+15" />
       <source>Before the faders</source>
       <translation>Vor den Fadern</translation>
     </message>
     <message>
-      <location line="+4" />
-      <source>On: the sends ignore the channel faders and on/off (a monitor mix). Changing it rebuilds the mixer: the sound drops out briefly.</source>
-      <translation>An: Die Sends übergehen Kanalfader und Ein/Aus (eine Monitormischung). Umschalten baut den Mischer neu auf: Der Ton setzt kurz aus.</translation>
+      <location line="-55" />
+      <source>Program stops for a moment while the mixer is built anew; running outputs restart.</source>
+      <translation>Das Programm steht kurz, während der Mischer neu gebaut wird; laufende Ausgänge starten neu.</translation>
+    </message>
+    <message>
+      <location line="+64" />
+      <source>On: the sends ignore the channel faders and on/off (a monitor mix).</source>
+      <translation>An: Die Sends übergehen Kanalfader und Ein/Aus (eine Monitormischung).</translation>
     </message>
     <message>
       <location line="+13" />
@@ -1084,12 +1089,22 @@
       <translation>Kopfhörer</translation>
     </message>
     <message>
-      <location line="+27" />
+      <location line="+9" />
+      <source>Headphones before the faders?</source>
+      <translation>Kopfhörer vor den Fadern?</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Headphones after the faders?</source>
+      <translation>Kopfhörer nach den Fadern?</translation>
+    </message>
+    <message>
+      <location line="+21" />
       <source>Name of the bus</source>
       <translation>Name des Busses</translation>
     </message>
     <message>
-      <location line="+15" />
+      <location line="+16" />
       <source>Listen</source>
       <translation>Vorhören</translation>
     </message>
@@ -1099,14 +1114,34 @@
       <translation>%1 entfernen</translation>
     </message>
     <message>
-      <location line="+26" />
+      <location line="+5" />
+      <source>Remove %1?</source>
+      <translation>%1 entfernen?</translation>
+    </message>
+    <message>
+      <location line="+13" />
+      <source>%1 before the faders?</source>
+      <translation>%1 vor den Fadern?</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>%1 after the faders?</source>
+      <translation>%1 nach den Fadern?</translation>
+    </message>
+    <message>
+      <location line="+10" />
       <source>Add bus</source>
       <translation>Bus hinzufügen</translation>
     </message>
     <message>
       <location line="+3" />
-      <source>A mix of its own for an output: in-ear, a stream, a recording. Adding one rebuilds the mixer: the sound drops out briefly.</source>
-      <translation>Eine eigene Mischung für einen Ausgang: In-Ear, Stream, Aufnahme. Hinzufügen baut den Mischer neu auf: Der Ton setzt kurz aus.</translation>
+      <source>A mix of its own for an output: in-ear, a stream, a recording.</source>
+      <translation>Eine eigene Mischung für einen Ausgang: In-Ear, Stream, Aufnahme.</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Add a bus?</source>
+      <translation>Einen Bus hinzufügen?</translation>
     </message>
   </context>
   <context>
@@ -1120,7 +1155,7 @@
   <context>
     <name>ChannelStripPanel</name>
     <message>
-      <location filename="../qml/ChannelStripPanel.qml" line="+118" />
+      <location filename="../qml/ChannelStripPanel.qml" line="+122" />
       <source>Input</source>
       <translation>Eingang</translation>
     </message>
@@ -1175,7 +1210,7 @@
       <translation>Pegel Kopfhörer</translation>
     </message>
     <message>
-      <location line="+20" />
+      <location line="+21" />
       <source>High-pass</source>
       <translation>Hochpass</translation>
     </message>

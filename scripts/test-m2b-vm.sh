@@ -281,12 +281,21 @@ settled '[[ $(pgm_db) -ge $((full - 2)) ]]' || fail "master not back ($full -> $
 pass "level fade: master down over 2 s, back at once"
 
 # --- buses (4.7, AUD.2): named, before or after the fader ---
-# Each new bus builds the audio mixer anew; program comes back.
+# Each new bus builds the mixer anew; program comes back. Three in a row
+# are three builds: program counts as back when it stays up for 3 s, not
+# in a gap between two builds (CI, 25.10.).
 act '{"action":"add_bus","name":"In-Ear","pre_fader":true}' >/dev/null
 act '{"action":"add_bus","name":"Stream"}' >/dev/null
 act '{"action":"add_bus","name":"Spare"}' >/dev/null
 bus_db() { curl -sf "$CORE/audio/levels" | jq ".buses[$1].peak_db // -100 | floor"; }
-settled '[[ $(pgm_db) -gt $AUDIBLE_DB ]]' || fail "program silent after the mixer got its buses ($(pgm_db) dB)"
+program_stays() {
+    local _
+    for _ in 1 2 3; do
+        [[ $(pgm_db) -gt $AUDIBLE_DB ]] || return 1
+        sleep 1
+    done
+}
+settled program_stays || fail "program silent after the mixer got its buses ($(pgm_db) dB)"
 act '{"action":"set_send","input":"Ball","bus":"In-Ear","level":100}' >/dev/null
 act '{"action":"set_send","input":"Ball","bus":"Stream","level":100}' >/dev/null
 settled '[[ $(bus_db 0) -gt $AUDIBLE_DB && $(bus_db 1) -gt $AUDIBLE_DB ]]' || fail "buses silent with sends up ($(bus_db 0), $(bus_db 1) dB)"
@@ -310,7 +319,7 @@ phones_sends() {
 }
 phones_sends false
 settled '[[ $(mon_db) -lt $SILENT_DB ]]' || fail "headphones heard without a send ($(mon_db) dB)"
-[[ $(pgm_db) -gt $AUDIBLE_DB ]] || fail "the headphones' sends took program down"
+settled '[[ $(pgm_db) -gt $AUDIBLE_DB ]]' || fail "the headphones' sends took program down ($(pgm_db) dB)"
 act '{"action":"set_bus_listen","bus":"Stream","on":true}' >/dev/null
 settled '[[ $(mon_db) -gt $AUDIBLE_DB ]]' || fail "Stream listened to but not heard ($(mon_db) dB)"
 act '{"action":"clear_listen"}' >/dev/null

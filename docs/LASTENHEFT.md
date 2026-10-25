@@ -258,8 +258,8 @@ kann es, Console nicht.
 | ID | Anforderung | Prio | Stand |
 |---|---|---|---|
 | AUD.1 | Jeder Input mit Ton erscheint als Kanalzug: Fader, Mute, Pegelanzeige L/R | M | ✅ (Pegel links und rechts auf der Kachel, `channels_db` in den Pegeln) |
-| AUD.2 | Busse: Master und Kopfhörer fest, dazu bis 16 frei angelegte, benannte Busse; Send je Input und Bus; Abgriff vor/nach dem Fader je Bus; Bus optional in Master; Bus-Ausgang auf Gerät (später über eine Zone, S-E.4) oder nur intern | M | ◐ (Master mit Pegel und Stumm; Busse anlegen, umbenennen, entfernen, Abgriff, Pegel, Stumm, Abhören; Send je Input; Bus auf Ausgang; Bus nicht in den Master; Hinzufügen, Entfernen und Abgriffwechsel bauen den Mischer neu auf, kurzer Aussetzer) |
-| AUD.3 | Sendepegel je Input und Bus (Bus-Mixer) | S | ◐ (Sends je Input auf 2 Aux-Busse) |
+| AUD.2 | Busse: Master und Kopfhörer fest, dazu bis 16 frei angelegte, benannte Busse; Send je Input und Bus; Abgriff vor/nach dem Fader je Bus; Bus optional in Master; Bus-Ausgang auf Gerät (später über eine Zone, S-E.4) oder nur intern | M | ◐ (Master mit Pegel und Stumm; Busse anlegen, umbenennen, entfernen, Abgriff, Pegel, Stumm, Abhören; Send je Input; Bus auf Ausgang; Bus nicht in den Master; Hinzufügen, Entfernen und Abgriffwechsel bauen den Mischer neu auf: Program steht kurz, mit Rückfrage) |
+| AUD.3 | Sendepegel je Input und Bus (Bus-Mixer) | S | ✓ (Send je Input auf jeden Bus und den Kopfhörer, Matrix auf der Audio-Seite und im Kanalzug) |
 | AUD.4 | Kopfhörer (Abhörweg) mit eigener Lautstärke je Input und gesamt; Solo AFL (Standard) / PFL, mehrfach-Solo, zerstörungsfrei; einen Bus abhören | M | ✓ (Send je Input an/aus mit Pegel, Abgriff vor/nach den Fadern, Lautstärke und Stumm gesamt; AFL als Standard, PFL im Menü, Mehrfach-Solo und Bus-Abhören schalten den Kopfhörer auf die Solos) |
 | AUD.5 | Audio folgt Video: Take schaltet Ton der beteiligten Inputs; je Input an/aus; global an/aus | M | ✅ |
 | AUD.6 | Gain (dB), Balance, Delay (ms), Standard-Delay für neue Inputs | M | ✅ (Gain, Pan, Delay; Standard-Delay für neue Inputs, `set_default_delay`) |
