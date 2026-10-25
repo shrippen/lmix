@@ -4678,4 +4678,5 @@ neu, die Console fragte vorher). Nutzer: „gehe den Neuaufbau des Mischers an�
 **Geprüft**: strom-Mischer- und API-Tests (Bus zur Laufzeit an, ab,
 Abgriff), lmix-core-Tests (`buses_change_the_running_mixer`),
 console-qt-Tests, `scripts/test-m2b-vm.sh` und `scripts/test-console-qt.sh`
-mit strom #43 (Busse zur Laufzeit, gemergt 25.10.).
+mit strom #43 (Busse zur Laufzeit) und #44 (Test-Race), beide gemergt
+25.10.; Sends und Abhören einer Busänderung gehen in einem PATCH.
