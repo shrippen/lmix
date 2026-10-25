@@ -43,15 +43,16 @@ pub use graphics::{
     TitleCall, TitleData, TitleLayer, TitlePhase, TitleTrigger,
 };
 pub use input::{
-    AtEnd, AutoPlay, AuxBus, ChannelStrip, Compressor, Device, DeviceKind, Eq4, Gate, Hpf, Ingest,
-    Input, InputAudio, InputColor, InputId, InputPress, InputRef, InputStatus, Listen, Look,
-    PageRunning, Playback, PlaybackState, SignalLoss, SourceSpec, TestPattern, Transport,
+    device_framerate, device_resolution, AtEnd, AutoPlay, AuxBus, ChannelStrip, Compressor, Device,
+    DeviceKind, Eq4, Gate, Hpf, Ingest, Input, InputAudio, InputColor, InputId, InputPress,
+    InputRef, InputStatus, Listen, Look, PageRunning, Playback, PlaybackState, SignalLoss,
+    SourceSpec, TestPattern, Transport,
 };
-pub use machine::{MachineLoad, TimerPriority};
 pub use layout::{
     BoxCrop, BoxRect, BoxShown, BoxSpec, Layout, LayoutBox, LayoutTemplate, TemplateBox,
     TemplateInput,
 };
+pub use machine::{MachineLoad, TimerPriority};
 pub use midi::{MidiBinding, MidiKind, MidiMessage};
 pub use output::{
     Container, DisplayMode, Framerate, MasterFormat, MultiviewLayout, MultiviewMeters, Output,

@@ -32,7 +32,21 @@ FocusScope {
     readonly property int count: colors.length + offset
     property int focusIndex: Math.max(0, currentIndex + offset)
     // The app sets currentIndex (another input chosen): the keyboard frame goes with it.
-    onCurrentIndexChanged: focusIndex = Math.max(0, currentIndex + offset)
+    onCurrentIndexChanged: if (ready) focusIndex = Math.max(0, currentIndex + offset)
+    // The handlers only after creation: while the properties arrive they would see half of
+    // them; once complete the frame starts on the chosen cell.
+    property bool ready: false
+    Component.onCompleted: {
+        focusIndex = Math.max(0, Math.min(currentIndex + offset, count - 1))
+        ready = true
+    }
+    // Fewer colours than before: the frame stays on a cell that is there.
+    // Colours that come later: the frame goes to the chosen one once it is there.
+    onCountChanged: if (ready) focusIndex = Math.max(0, Math.min(currentIndex >= 0 && currentIndex + offset < count
+        ? (focusIndex === 0 ? currentIndex + offset : focusIndex) : focusIndex, count - 1))
+    // "None" added or taken away: the frame stays on the same colour.
+    // (count may not have followed offset yet: the limit from colours and offset.)
+    onOffsetChanged: if (ready) focusIndex = Math.max(0, Math.min(focusIndex + (offset > 0 ? 1 : -1), colors.length + offset - 1))
 
     implicitWidth: row.implicitWidth
     implicitHeight: row.implicitHeight
@@ -42,9 +56,9 @@ FocusScope {
 
     Keys.onLeftPressed: focusIndex = Math.max(0, focusIndex - 1)
     Keys.onRightPressed: focusIndex = Math.min(count - 1, focusIndex + 1)
-    Keys.onSpacePressed: picked(focusIndex - offset)
-    Keys.onReturnPressed: picked(focusIndex - offset)
-    Keys.onEnterPressed: picked(focusIndex - offset)
+    Keys.onSpacePressed: if (count > 0) picked(focusIndex - offset)
+    Keys.onReturnPressed: if (count > 0) picked(focusIndex - offset)
+    Keys.onEnterPressed: if (count > 0) picked(focusIndex - offset)
 
     Row {
         id: row

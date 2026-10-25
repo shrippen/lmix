@@ -9,12 +9,64 @@ import "."
  *   Kante   nearly opaque panel with cut top-right and bottom-left corners, an accent bar
  *           on top, an uppercase title, Kante colors inside and Kante
  *           buttons in the footer (the accept button filled).
+ * Accept button (Kante 1.43, from lmix): `acceptText` names it after what it does ("Add
+ * input" instead of OK), `acceptEnabled` locks it while the form is incomplete (left unset,
+ * the button's own `enabled` stays as the app bound it). Both hold
+ * for the footer of every style, also after a switch at run time (Kante has its own footer;
+ * a text or lock set on the button itself was lost there).
  */
 QQC2.Dialog {
     id: control
 
     /** Color of the bar on top in Kante (accent; negative for destructive questions). */
     property color kanteBarColor: KanteStyle.accentColor
+    /** Text of the accept button (Ok, Save, Apply, Yes); "": the standard one. */
+    property string acceptText: ""
+    /** The accept button can be pressed; undefined (default): Kante leaves `enabled` alone,
+     *  so a dialog that binds it itself keeps its binding. */
+    property var acceptEnabled: undefined
+    // The standard texts of the buttons renamed so far, to give them back: [[button, text]].
+    property var standardTexts: []
+    // The button acceptEnabled has set, to free it when acceptEnabled is unset again.
+    property var lockedButton: null
+
+    /** The accept button of the footer shown now, or null. */
+    function acceptButton() {
+        for (const b of [QQC2.Dialog.Ok, QQC2.Dialog.Save, QQC2.Dialog.Apply, QQC2.Dialog.Yes]) {
+            const button = standardButton(b)
+            if (button) {
+                return button
+            }
+        }
+        return null
+    }
+    function applyAccept() {
+        const button = acceptButton()
+        if (!button) {
+            return
+        }
+        let kept = standardTexts.find(pair => pair[0] === button)
+        if (acceptText.length > 0) {
+            if (!kept) {
+                standardTexts.push([button, button.text])
+            }
+            button.text = acceptText
+        } else if (kept) {
+            button.text = kept[1]
+        }
+        if (acceptEnabled !== undefined) {
+            button.enabled = !!acceptEnabled
+            lockedButton = button
+        } else if (lockedButton === button) {
+            // Unset again: the button is free as before Kante touched it.
+            button.enabled = true
+            lockedButton = null
+        }
+    }
+    onAcceptTextChanged: applyAccept()
+    onAcceptEnabledChanged: applyAccept()
+    onStandardButtonsChanged: Qt.callLater(applyAccept)
+    Component.onCompleted: applyAccept()
 
     KanteScope { target: control.contentItem }
 
@@ -67,7 +119,11 @@ QQC2.Dialog {
         }
     }
     onHeaderChanged: kanteRestored(header, kanteHeader)
-    onFooterChanged: kanteRestored(footer, kanteFooter)
+    onFooterChanged: {
+        kanteRestored(footer, kanteFooter)
+        // The other footer has its own buttons: name and lock them too.
+        Qt.callLater(applyAccept)
+    }
 
     // The dim behind the dialog is Kante's scrim role (best effort: only when the style
     // provides the overlay attached object).

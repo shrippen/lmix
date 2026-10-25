@@ -20,7 +20,14 @@ QQC2.Popup {
     property Item anchorItem: null
     default property alias content: column.data
 
+    /** When it last closed: a press on its own button closes it, the click then must not reopen it. */
+    property real closedAt: 0
+    onAboutToHide: closedAt = Date.now()
+
     function openAt(item) {
+        if (item === anchorItem && Date.now() - closedAt < Qt.styleHints.mouseDoubleClickInterval) {
+            return
+        }
         anchorItem = item
         // In scene coordinates, against the window: below the item, above when there is no
         // room below and more above, shifted to stay inside.

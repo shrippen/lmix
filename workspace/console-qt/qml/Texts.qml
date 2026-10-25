@@ -245,6 +245,7 @@ QtObject {
         case "no_video": return qsTr("%1 has no picture (audio input)").arg(e.reference)
         case "no_transport": return qsTr("%1 has no transport (not a file, URL or playlist)").arg(e.reference)
         case "bad_color": return qsTr("Colour %1 is not #rrggbb").arg(e.color)
+        case "bad_device_mode": return qsTr("Capture mode %1 is not a resolution like 1920x1080 or a frame rate like 30/1").arg(e.mode)
         case "bad_volume": return qsTr("Volume %1 is outside 0–%2").arg(e.volume).arg(e.max)
         case "no_show_path": return qsTr("The show has no file yet; give a path")
         case "show_file": return qsTr("Show file: %1").arg(e.message)
