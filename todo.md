@@ -69,6 +69,7 @@ enabled: !(/\&[^\&]/.test(control.text))
 
 ## Offen (Claude)
 
+- [ ] **Kamera-Modi aus dem Gerät** (2026-10-25, Review #147): strom meldet bei `/discovery/devices` keine Modi, und `builtin.local_input` setzt Auflösung/Bildrate als festen Caps-Filter (der Kommentar dort, die Quelle wähle den nächstliegenden Modus, gilt für einen festen Filter nicht). Ein Modus, den die Kamera nicht hat, lässt den Input ohne Bild. In strom die Modi je Gerät melden (Caps aus dem `DeviceMonitor`) und im Dialog nur diese anbieten; auf Hardware (H.7) prüfen, wie der Input dann aussieht.
 - [ ] Zonen auf Gerätekanälen (H.37): gebaut 19.10. (strom #31, lmix #117), auf einem virtuellen 7.1-Gerät geprüft. Offen: ein echtes Mehrkanal-Interface und ein Pro-Audio-Profil (AUX-Kanäle, bleibt ohne Positionen) mit `MULTI=<sink> scripts/hw-sound-cues/run.sh`.
 - [ ] **Panik und Stopp erreichen laufende Klänge** (H.37, DECISIONS 19.10.): Fix strom #30 gemergt und im Submodul (2026-10-22); offen: `QUIET=1 scripts/hw-sound-cues/run.sh` wiederholen.
 - [x] GO bis hörbar ≤ 50 ms (SND.12): 32,9 ms mit strom #33 (2026-10-19, DECISIONS „GO bis hörbar“). Ein Lauf auf ruhigem Rechner steht aus.

@@ -412,12 +412,7 @@
       <translation>Bildrate</translation>
     </message>
     <message>
-      <location line="+11" />
-      <source>The device delivers the closest mode it has and chooses its pixel format itself.</source>
-      <translation>Das Gerät liefert den nächstliegenden Modus, den es hat, und wählt sein Pixelformat selbst.</translation>
-    </message>
-    <message>
-      <location line="+20" />
+      <location line="+31" />
       <source>Then add another</source>
       <translation>Danach weiteren hinzufügen</translation>
     </message>
@@ -427,7 +422,12 @@
       <translation>Name</translation>
     </message>
     <message>
-      <location line="+6" />
+      <location line="-9" />
+      <source>Only a mode the device offers: with any other the input stays without a picture. “The device's own” always works; the pixel format is the device's choice.</source>
+      <translation>Nur ein Modus, den das Gerät anbietet: Mit jedem anderen bleibt der Input ohne Bild. „Die des Geräts“ geht immer; das Pixelformat wählt das Gerät.</translation>
+    </message>
+    <message>
+      <location line="+15" />
       <source>optional</source>
       <translation>optional</translation>
     </message>

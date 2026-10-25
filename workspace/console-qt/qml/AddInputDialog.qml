@@ -429,7 +429,7 @@ KanteDialog {
             QQC2.Label {
                 visible: dialog.kind === "device"
                 Layout.fillWidth: true
-                text: qsTr("The device delivers the closest mode it has and chooses its pixel format itself.")
+                text: qsTr("Only a mode the device offers: with any other the input stays without a picture. “The device's own” always works; the pixel format is the device's choice.")
                 wrapMode: Text.WordWrap
                 font: KanteStyle.smallFont
                 color: KanteStyle.mutedTextColor
