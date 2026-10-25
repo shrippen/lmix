@@ -232,6 +232,9 @@ KanteCard {
                     Layout.fillWidth: true
                     Layout.preferredWidth: 1
                     Layout.minimumWidth: 0
+                    // Narrow tiles: the style's padding would leave no room for the digit.
+                    leftPadding: 0
+                    rightPadding: 0
                     readonly property int channel: index + 1
                     readonly property bool on: tile.overlays[index] === tile.input.id
                     readonly property bool prepared: tile.overlayPreview[index] === tile.input.id

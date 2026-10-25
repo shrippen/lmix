@@ -334,6 +334,9 @@ AppPage {
             Layout.fillWidth: true
             Layout.fillHeight: true
             spacing: Kirigami.Units.largeSpacing
+            /** Height kept free under the monitors for the rows below and a row
+             *  of tiles; in detail the tiles are higher by their extra rows. */
+            readonly property real inputsRoom: Kirigami.Units.gridUnit * 16 + Math.max(0, bar.chrome - Kirigami.Units.gridUnit * 2)
 
             // Preview and program in the program format, each centred in
             // its half; the transitions always in the middle of the page.
@@ -348,7 +351,7 @@ AppPage {
                 readonly property real halfWidth: Math.max(0, (width - panelScroll.width - 2 * spacing) / 2 - 2 * Kirigami.Units.smallSpacing)
                 /** Tallest picture: the half's width, and room left for the inputs below. */
                 readonly property real maxPictureHeight: Math.max(monitorHandle.from,
-                    Math.min(halfWidth / root.aspect, mixColumn.height - Kirigami.Units.gridUnit * 16))
+                    Math.min(halfWidth / root.aspect, mixColumn.height - mixColumn.inputsRoom))
                 readonly property real pictureHeight: Math.max(monitorHandle.from, Math.min(viewSettings.monitorHeight, maxPictureHeight))
 
                 Item {
@@ -380,7 +383,7 @@ AppPage {
                     Layout.fillHeight: true
                     Layout.preferredWidth: Kirigami.Units.gridUnit * 8
                     Layout.preferredHeight: Math.max(Kirigami.Units.gridUnit * 6,
-                        Math.min(transitionPanel.implicitHeight, mixColumn.height - Kirigami.Units.gridUnit * 16))
+                        Math.min(transitionPanel.implicitHeight, mixColumn.height - mixColumn.inputsRoom))
                     contentWidth: availableWidth
                     contentHeight: transitionPanel.implicitHeight
                     QQC2.ScrollBar.horizontal.policy: QQC2.ScrollBar.AlwaysOff

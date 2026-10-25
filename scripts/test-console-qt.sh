@@ -213,6 +213,48 @@ for _ in $(seq 1 40); do
 done
 [[ -n "$layout_shows" ]] && pass "preview monitor shows a layout" || fail "preview monitor blank with a layout on preview"
 
+# The grip under the monitors sets their height and keeps it in the
+# settings; a double click goes back to the standard height (15 grid units).
+view_setting() { sed -n "s/^$1=//p" "$WORK"/config/lmix/lmix.conf 2>/dev/null; }
+setting_becomes() {
+    for _ in $(seq 1 20); do [[ "$(view_setting "$1")" == "$2" ]] && return 0; sleep 0.5; done
+    return 1
+}
+drag_y() {
+    DISPLAY="$DISPLAY_NO" xdotool mousemove "$1" "$2" mousedown 1
+    # In steps: a jump in one event is no drag for Qt.
+    local y="$2"
+    while (( y != $3 )); do
+        (( y += ($3 > y ? 1 : -1) * ($3 - y > 8 || y - $3 > 8 ? 8 : 1) ))
+        sleep 0.03
+        DISPLAY="$DISPLAY_NO" xdotool mousemove "$1" "$y"
+    done
+    sleep 0.1
+    DISPLAY="$DISPLAY_NO" xdotool mouseup 1
+}
+drag_y 602 511 451
+setting_becomes monitorHeight 210 && pass "monitor grip: a drag sets the height" \
+    || fail "monitor grip: height $(view_setting monitorHeight) after a drag of 60 px up"
+# The grip stays put: the transition panel beside the monitors is higher.
+DISPLAY="$DISPLAY_NO" xdotool mousemove 602 511 click --repeat 2 --delay 80 1
+setting_becomes monitorHeight 270 && pass "monitor grip: a double click resets it" \
+    || fail "monitor grip: height $(view_setting monitorHeight) after a double click"
+
+# Detail: the tiles get the overlay buttons and the audio row, and the
+# monitors give them room, so a row of tiles is not cut off.
+click 304 540
+setting_becomes detail true || fail "Detail not stored after a click"
+sleep 2
+click 22 708
+for _ in $(seq 1 40); do [[ "$(overlay_1)" != none ]] && break; sleep 0.5; done
+[[ "$(overlay_1)" == "$(state | jq -r '.inputs[0].id')" ]] && pass "detail: overlay 1 from the tile" \
+    || fail "detail: overlay 1 is $(overlay_1) after a click on the tile's button"
+click 28 748
+for _ in $(seq 1 40); do [[ "$(audio_1)" == false ]] && break; sleep 0.5; done
+[[ "$(audio_1)" == false ]] && pass "detail: mute from the tile" || fail "detail: input 1 not muted from the tile (cut off?)"
+act '{"action":"set_audio","input":1,"on":true}'
+act '{"action":"overlay_out","channel":1}'
+
 own_qml_warnings console.log && fail "QML warnings: $(own_qml_warnings console.log | head -3)"
 pass "no QML warnings"
 
