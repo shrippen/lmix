@@ -288,6 +288,31 @@ for _ in $(seq 1 20); do [[ "$(multiview_program)" == left ]] && break; sleep 0.
     || fail "input menu: Ctrl+Z ran the toast's Undo, not the show's shortcut"
 act '{"action":"remove_shortcut","target":"Program left"}'
 act '{"action":"set_multiview","layout":{"program":"right","meters":"shown"}}'
+# A refused removal (locked show) is forgotten: when the input goes
+# another way later, no toast offers Undo for it.
+act '{"action":"add_input","source":{"kind":"pattern","pattern":"bars"},"name":"Spare"}'
+for _ in $(seq 1 40); do [[ -n "$(spare)" ]] && break; sleep 0.5; done
+# Lock and unlock with the bar's button: the Console's own unlock clears
+# the refusal's line, which would move the tiles below.
+locked() { state | jq -r '.locked // false'; }
+sleep 1
+click 780 540
+for _ in $(seq 1 20); do [[ "$(locked)" == true ]] && break; sleep 0.5; done
+[[ "$(locked)" == true ]] || fail "Lock button: show not locked"
+click 500 625 3
+sleep 1.5
+click 564 880
+sleep 1.5
+click 780 540
+for _ in $(seq 1 20); do [[ "$(locked)" == false ]] && break; sleep 0.5; done
+[[ "$(locked)" == false ]] || fail "Lock button: show still locked"
+act "{\"action\":\"remove_input\",\"input\":$(spare)}"
+for _ in $(seq 1 40); do [[ -z "$(spare)" ]] && break; sleep 0.5; done
+sleep 1
+DISPLAY="$DISPLAY_NO" xdotool key ctrl+z
+sleep 2
+[[ -z "$(spare)" ]] && pass "input menu: a refused removal is forgotten" \
+    || fail "input menu: Ctrl+Z brought back Spare, removed elsewhere after a refused removal"
 
 # The grip under the monitors sets their height and keeps it in the
 # settings; a double click goes back to the standard height (15 grid units).

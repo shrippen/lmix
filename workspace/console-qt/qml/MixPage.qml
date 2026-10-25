@@ -210,6 +210,16 @@ AppPage {
     property var removing: null
     // Later: inputs and show change one after the other for one state.
     onInputsChanged: Qt.callLater(root.removedOrNot)
+    // A refusal (a locked show) ends the removal: the input may go
+    // another way later, and that is no removal from here.
+    Connections {
+        target: backend
+        function onMessageChanged() {
+            if (backend.message.length > 0) {
+                root.removing = null
+            }
+        }
+    }
     function removedOrNot() {
         if (!root.removing || root.inputs.some(i => i.id === root.removing.id)) {
             return
