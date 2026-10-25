@@ -252,6 +252,23 @@ for _ in $(seq 1 40); do [[ "$(multiview_program)" == left ]] && break; sleep 0.
 DISPLAY="$DISPLAY_NO" xdotool key Escape
 act '{"action":"set_multiview","layout":{"program":"right","meters":"shown"}}'
 
+# The input's menu removes at once; Ctrl+Z while the toast shows brings
+# the input back. A spare third input, so the tiles of the checks below stay.
+act '{"action":"add_input","source":{"kind":"pattern","pattern":"bars"},"name":"Spare"}'
+spare() { state | jq -r '.inputs[] | select(.name == "Spare") | .number'; }
+for _ in $(seq 1 40); do [[ -n "$(spare)" ]] && break; sleep 0.5; done
+sleep 2
+click 500 625 3
+sleep 1.5
+click 564 880
+for _ in $(seq 1 40); do [[ -z "$(spare)" ]] && break; sleep 0.5; done
+[[ -z "$(spare)" ]] && pass "input menu: Remove" || fail "input menu: Spare still there after Remove"
+DISPLAY="$DISPLAY_NO" xdotool key ctrl+z
+for _ in $(seq 1 40); do [[ -n "$(spare)" ]] && break; sleep 0.5; done
+[[ -n "$(spare)" ]] && pass "input menu: Ctrl+Z brings it back" || fail "input menu: Spare not back after Ctrl+Z"
+act "{\"action\":\"remove_input\",\"input\":$(spare)}"
+for _ in $(seq 1 40); do [[ -z "$(spare)" ]] && break; sleep 0.5; done
+
 # The grip under the monitors sets their height and keeps it in the
 # settings; a double click goes back to the standard height (15 grid units).
 view_setting() { sed -n "s/^$1=//p" "$WORK"/config/lmix/lmix.conf 2>/dev/null; }

@@ -1682,7 +1682,7 @@
   <context>
     <name>InputTile</name>
     <message>
-      <location filename="../qml/InputTile.qml" line="+81" />
+      <location filename="../qml/InputTile.qml" line="+83" />
       <source>Input %1 %2</source>
       <translation>Input %1 %2</translation>
     </message>
@@ -1822,37 +1822,27 @@
       <translation>Auf dem Abhörbus hören, nach dem Fader (Rechtsklick: davor)</translation>
     </message>
     <message>
-      <location line="+11" />
-      <source>Settings…</source>
-      <translation>Einstellungen…</translation>
+      <location line="+233" />
+      <source>Copy link</source>
+      <translation>Link kopieren</translation>
     </message>
     <message>
-      <location line="+5" />
-      <source>Cut to program</source>
-      <translation>Direkt auf Programm</translation>
-    </message>
-    <message>
-      <location line="+5" />
+      <location line="-72" />
       <source>GO: %1</source>
       <translation>GO: %1</translation>
     </message>
     <message>
-      <location line="+5" />
+      <location line="+53" />
       <source>Collapse</source>
       <translation>Einklappen</translation>
     </message>
     <message>
-      <location line="+4" />
-      <source>Rename…</source>
-      <translation>Umbenennen…</translation>
-    </message>
-    <message>
-      <location line="+4" />
+      <location line="-119" />
       <source>Replace source…</source>
       <translation>Quelle ersetzen…</translation>
     </message>
     <message>
-      <location line="+4" />
+      <location line="+5" />
       <source>Colour correction…</source>
       <translation>Farbkorrektur…</translation>
     </message>
@@ -1862,7 +1852,37 @@
       <translation>Farbkorrektur (braucht den GL-Mischer)</translation>
     </message>
     <message>
+      <location line="+46" />
+      <source>Listen</source>
+      <translation>Vorhören</translation>
+    </message>
+    <message>
       <location line="+5" />
+      <source>Off</source>
+      <translation>Aus</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Before the fader (PFL)</source>
+      <translation>Vor dem Fader (PFL)</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>After the fader (AFL)</source>
+      <translation>Nach dem Fader (AFL)</translation>
+    </message>
+    <message>
+      <location line="+14" />
+      <source>Transport</source>
+      <translation>Wiedergabe steuern</translation>
+    </message>
+    <message>
+      <location line="+23" />
+      <source>Arrange</source>
+      <translation>Ordnen</translation>
+    </message>
+    <message>
+      <location line="+29" />
       <source>Triggers (%1)…</source>
       <translation>Auslöser (%1)…</translation>
     </message>
@@ -1872,12 +1892,12 @@
       <translation>Auslöser…</translation>
     </message>
     <message>
-      <location line="+4" />
+      <location line="+5" />
       <source>Dynamic input</source>
       <translation>Dynamischer Input</translation>
     </message>
     <message>
-      <location line="+2" />
+      <location line="+4" />
       <source>Clear dynamic %1</source>
       <translation>Dynamisch %1 leeren</translation>
     </message>
@@ -1887,27 +1907,27 @@
       <translation>Als dynamisch %1 setzen</translation>
     </message>
     <message>
-      <location line="+5" />
+      <location line="-122" />
       <source>PTZ…</source>
       <translation>PTZ…</translation>
     </message>
     <message>
-      <location line="+5" />
+      <location line="+100" />
       <source>Colour tag</source>
       <translation>Farbmarke</translation>
     </message>
     <message>
-      <location line="+1" />
+      <location line="-2" />
       <source>None</source>
       <translation>Keine</translation>
     </message>
     <message>
-      <location line="+6" />
+      <location line="-83" />
       <source>At the end</source>
       <translation>Am Ende</translation>
     </message>
     <message>
-      <location line="+2" />
+      <location line="+4" />
       <source>Loop</source>
       <translation>Schleife</translation>
     </message>
@@ -1917,52 +1937,67 @@
       <translation>Auf dem letzten Bild stehen bleiben</translation>
     </message>
     <message>
-      <location line="+6" />
+      <location line="-13" />
       <source>When the signal is lost</source>
       <translation>Bei Signalverlust</translation>
     </message>
     <message>
-      <location line="+3" />
+      <location line="-43" />
+      <source>Cut</source>
+      <translation>Cut</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Preview</source>
+      <translation>Vorschau</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Name</source>
+      <translation>Name</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Options</source>
+      <translation>Optionen</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Picture</source>
+      <translation>Bild</translation>
+    </message>
+    <message>
+      <location line="+22" />
       <source>Hold last frame</source>
       <translation>Letztes Bild halten</translation>
     </message>
     <message>
-      <location line="+6" />
+      <location line="+0" />
       <source>Black</source>
       <translation>Schwarz</translation>
     </message>
     <message>
-      <location line="+8" />
+      <location line="+15" />
       <source>Audio</source>
       <translation>Ton</translation>
     </message>
     <message>
-      <location line="+4" />
+      <location line="+2" />
       <source>Channel strip…</source>
       <translation>Kanalzug …</translation>
     </message>
     <message>
-      <location line="+4" />
+      <location line="+6" />
       <source>Audio follows video</source>
       <translation>Ton folgt Bild</translation>
     </message>
     <message>
-      <location line="+6" />
-      <source>Listen before the fader (PFL)</source>
-      <translation>Vor dem Fader hören (PFL)</translation>
-    </message>
-    <message>
-      <location line="+6" />
-      <source>Listen after the fader (AFL)</source>
-      <translation>Nach dem Fader hören (AFL)</translation>
-    </message>
-    <message>
-      <location line="+7" />
+      <location line="+21" />
       <source>Playback</source>
       <translation>Wiedergabe</translation>
     </message>
     <message>
-      <location line="+3" />
+      <location line="+12" />
       <source>Play</source>
       <translation>Abspielen</translation>
     </message>
@@ -1992,12 +2027,7 @@
       <translation>Eintrag abspielen</translation>
     </message>
     <message>
-      <location line="+8" />
-      <source>Send to this input (copy link)</source>
-      <translation>An diesen Input senden (Link kopieren)</translation>
-    </message>
-    <message>
-      <location line="+3" />
+      <location line="+56" />
       <source>WHIP (OBS, encoder): %1</source>
       <translation>WHIP (OBS, Encoder): %1</translation>
     </message>
@@ -2007,12 +2037,12 @@
       <translation>Browserseite (Gast): %1</translation>
     </message>
     <message>
-      <location line="+10" />
+      <location line="+11" />
       <source>Remove</source>
       <translation>Entfernen</translation>
     </message>
     <message>
-      <location line="+32" />
+      <location line="+34" />
       <source>Rename input %1</source>
       <translation>Input %1 umbenennen</translation>
     </message>
@@ -2564,7 +2594,27 @@
       <translation>Ordner mit den fehlenden Dateien</translation>
     </message>
     <message>
-      <location line="+103" />
+      <location line="+39" />
+      <source>Input %1 “%2” removed</source>
+      <translation>Input %1 „%2“ entfernt</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>Removed</source>
+      <translation>Entfernt</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Undo</source>
+      <translation>Rückgängig</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Ctrl+Z</source>
+      <translation>Strg+Z</translation>
+    </message>
+    <message>
+      <location line="+80" />
       <source>Inputs from a show…</source>
       <translation>Inputs aus einer Show …</translation>
     </message>
@@ -2695,12 +2745,12 @@
       <translation>Pegelanzeigen</translation>
     </message>
     <message>
-      <location line="+251" />
+      <location line="+252" />
       <source>Width of the audio column</source>
       <translation>Breite der Tonspalte</translation>
     </message>
     <message>
-      <location line="-272" />
+      <location line="-273" />
       <source>Audio at the edge</source>
       <translation>Ton am Rand</translation>
     </message>

@@ -199,6 +199,36 @@ AppPage {
         outputs: root.show ? root.show.outputs : []
     }
 
+    // Remove at once, with a way back: the toast's Undo (or Ctrl+Z while it
+    // shows) brings the input back with its settings (AUT.10).
+    function removeInput(input) {
+        root.act({ action: "remove_input", input: input.number })
+        removedToast.text = qsTr("Input %1 \u201c%2\u201d removed").arg(input.number).arg(input.name)
+        removedToast.show()
+    }
+
+    KanteToast {
+        id: removedToast
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        anchors.margins: Kirigami.Units.largeSpacing
+        z: 10
+        kind: KanteToast.Kind.Info
+        title: qsTr("Removed")
+        life: 8000
+        actionText: qsTr("Undo")
+        actionShortcut: qsTr("Ctrl+Z")
+        onActionTriggered: root.act({ action: "restore_input" })
+    }
+    Shortcut {
+        sequence: "Ctrl+Z"
+        enabled: removedToast.shown
+        onActivated: {
+            removedToast.hide()
+            root.act({ action: "restore_input" })
+        }
+    }
+
     InputSettingsDialog {
         id: inputSettingsDialog
         parent: QQC2.Overlay.overlay
@@ -658,6 +688,7 @@ AppPage {
                         addInputDialog.replacing = tileDelegate.input
                         addInputDialog.open()
                     }
+                    onRemoveRequested: root.removeInput(tileDelegate.input)
                     dynamicSlots: root.show && root.show.dynamic_inputs
                         ? [1, 2, 3, 4].filter(n => root.show.dynamic_inputs[n - 1] === key) : []
                     onSettingsRequested: {
