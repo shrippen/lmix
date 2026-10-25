@@ -268,6 +268,22 @@ for _ in $(seq 1 40); do [[ -n "$(spare)" ]] && break; sleep 0.5; done
 [[ -n "$(spare)" ]] && pass "input menu: Ctrl+Z brings it back" || fail "input menu: Spare not back after Ctrl+Z"
 act "{\"action\":\"remove_input\",\"input\":$(spare)}"
 for _ in $(seq 1 40); do [[ -z "$(spare)" ]] && break; sleep 0.5; done
+# A show's shortcut on Ctrl+Z wins over the toast's Undo.
+act '{"action":"add_input","source":{"kind":"pattern","pattern":"bars"},"name":"Spare"}'
+for _ in $(seq 1 40); do [[ -n "$(spare)" ]] && break; sleep 0.5; done
+act '{"action":"add_shortcut","shortcut":{"label":"Program left","key":"Ctrl+Z","actions":[{"action":"set_multiview","layout":{"program":"left","meters":"shown"}}]}}'
+sleep 1.5
+click 500 625 3
+sleep 1.5
+click 564 880
+for _ in $(seq 1 40); do [[ -z "$(spare)" ]] && break; sleep 0.5; done
+DISPLAY="$DISPLAY_NO" xdotool key ctrl+z
+for _ in $(seq 1 20); do [[ "$(multiview_program)" == left ]] && break; sleep 0.5; done
+[[ "$(multiview_program)" == left && -z "$(spare)" ]] \
+    && pass "input menu: a show's Ctrl+Z wins over Undo" \
+    || fail "input menu: Ctrl+Z ran the toast's Undo, not the show's shortcut"
+act '{"action":"remove_shortcut","target":"Program left"}'
+act '{"action":"set_multiview","layout":{"program":"right","meters":"shown"}}'
 
 # The grip under the monitors sets their height and keeps it in the
 # settings; a double click goes back to the standard height (15 grid units).

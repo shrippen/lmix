@@ -19,7 +19,6 @@ AppPage {
     readonly property var show: shell.show
     readonly property var inputs: shell.inputs
     readonly property var backend: shell.backend
-    readonly property var shortcutKeys: shell.shortcutKeys
     function act(action) { shell.act(action) }
     function inputById(id) { return shell.inputById(id) }
     function localPath(url) { return shell.localPath(url) }
@@ -134,7 +133,7 @@ AppPage {
         delegate: Shortcut {
             required property int index
             sequence: String(index + 1)
-            enabled: root.visible && root.shortcutKeys.indexOf(String(index + 1)) < 0
+            enabled: root.visible && !shell.keyTaken(sequence)
             onActivated: {
                 var input = root.inputs[index]
                 if (input && input.id !== root.show.program && input.id !== root.show.preview) {
@@ -201,10 +200,20 @@ AppPage {
 
     // Remove at once, with a way back: the toast's Undo (or Ctrl+Z while it
     // shows) brings the input back with its settings (AUT.10).
+    // The toast waits for the state without the input: a refused removal
+    // shows nothing.
     function removeInput(input) {
+        root.removing = { id: input.id, number: input.number, name: input.name }
         root.act({ action: "remove_input", input: input.number })
-        removedToast.text = qsTr("Input %1 \u201c%2\u201d removed").arg(input.number).arg(input.name)
-        removedToast.show()
+    }
+    property var removing: null
+    onInputsChanged: {
+        if (root.removing && !root.inputs.some(i => i.id === root.removing.id)) {
+            removedToast.text = qsTr("Input %1 \u201c%2\u201d removed").arg(root.removing.number).arg(root.removing.name)
+            removedToast.restores = root.removing.name
+            root.removing = null
+            removedToast.show()
+        }
     }
 
     KanteToast {
@@ -216,17 +225,20 @@ AppPage {
         kind: KanteToast.Kind.Info
         title: qsTr("Removed")
         life: 8000
-        actionText: qsTr("Undo")
-        actionShortcut: undoKey.free ? qsTr("Ctrl+Z") : ""
+        /** The removed input's name: Undo brings back only that one. */
+        property string restores
+        readonly property bool restorable: root.show !== null && root.show.restorable === restores
+        actionText: restorable ? qsTr("Undo") : ""
+        actionShortcut: undoKey.free && restorable ? qsTr("Ctrl+Z") : ""
         onActionTriggered: root.act({ action: "restore_input" })
     }
     // A show's own shortcut on Ctrl+Z wins, as for the File keys: two
     // shortcuts on one key would both stay silent.
     Shortcut {
         id: undoKey
-        readonly property bool free: shell.shortcutKeys.indexOf("Ctrl+Z") < 0
+        readonly property bool free: !shell.keyTaken("Ctrl+Z")
         sequence: "Ctrl+Z"
-        enabled: removedToast.shown && free
+        enabled: root.visible && removedToast.shown && removedToast.restorable && free
         onActivated: {
             removedToast.hide()
             root.act({ action: "restore_input" })

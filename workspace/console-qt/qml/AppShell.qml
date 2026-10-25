@@ -142,7 +142,7 @@ Kirigami.ApplicationWindow {
         delegate: Shortcut {
             required property int index
             sequence: "Ctrl+" + (index + 1)
-            enabled: root.shortcutKeys.indexOf(sequence) < 0
+            enabled: !root.keyTaken(sequence)
             onActivated: root.showPage(root.pageItems[index].pageId)
         }
     }
@@ -154,6 +154,11 @@ Kirigami.ApplicationWindow {
      *  show's with the same key (AUT.3). */
     readonly property var keyedShortcuts: shortcuts.filter(s => s.key && !s.key_shadowed)
     readonly property var shortcutKeys: keyedShortcuts.map(s => s.key)
+    /** A show's shortcut has `sequence` (Qt reads "ctrl+z" as "Ctrl+Z"): it wins over the window's own. */
+    function keyTaken(sequence) {
+        const wanted = String(sequence).toLowerCase()
+        return shortcutKeys.some(k => String(k).toLowerCase() === wanted)
+    }
 
     // The shortcuts (AUT.1–3) while this window is in front; they win over
     // the pages' own keys.
@@ -194,6 +199,11 @@ Kirigami.ApplicationWindow {
 
     readonly property var fileKeys: ({ newShow: "Ctrl+N", open: "Ctrl+O", save: "Ctrl+S", saveAs: "Ctrl+Shift+S", shortcuts: "Ctrl+K" })
 
+    /** A File key as the menu shows it; none while a show's shortcut has the key. */
+    function fileKeyLabel(sequence) {
+        return keyTaken(sequence) ? "" : keyLabel(sequence)
+    }
+
     /** A key sequence as the user reads it: Strg+N in German. */
     function keyLabel(sequence) {
         return sequence.split("+").map(part => part === "Ctrl" ? qsTr("Ctrl", "key")
@@ -220,7 +230,7 @@ Kirigami.ApplicationWindow {
         delegate: Shortcut {
             required property var modelData
             sequence: modelData[1]
-            enabled: root.shortcutKeys.indexOf(sequence) < 0
+            enabled: !root.keyTaken(sequence)
             onActivated: root.fileCommand(modelData[0])
         }
     }
@@ -427,13 +437,15 @@ Kirigami.ApplicationWindow {
         contentHeight: keysColumn.implicitHeight
         readonly property var always: [
             { what: qsTr("Pages"), key: qsTr("Ctrl+1…%1").arg(root.pageItems.length) },
-            { what: qsTr("New show"), key: root.keyLabel(root.fileKeys.newShow) },
-            { what: qsTr("Open show"), key: root.keyLabel(root.fileKeys.open) },
-            { what: qsTr("Save show"), key: root.keyLabel(root.fileKeys.save) },
-            { what: qsTr("Save show as"), key: root.keyLabel(root.fileKeys.saveAs) },
-            { what: qsTr("Shortcuts"), key: root.keyLabel(root.fileKeys.shortcuts) },
+        ].concat([
+            { what: qsTr("New show"), key: root.fileKeys.newShow },
+            { what: qsTr("Open show"), key: root.fileKeys.open },
+            { what: qsTr("Save show"), key: root.fileKeys.save },
+            { what: qsTr("Save show as"), key: root.fileKeys.saveAs },
+            { what: qsTr("Shortcuts"), key: root.fileKeys.shortcuts }
+        ].filter(k => !root.keyTaken(k.key)).map(k => ({ what: k.what, key: root.keyLabel(k.key) })), [
             { what: qsTr("Panic all"), key: qsTr("button in the page bar") }
-        ].concat(root.keyedShortcuts.map(s => ({ what: s.label, key: s.key })))
+        ].concat(root.keyedShortcuts.map(s => ({ what: s.label, key: s.key }))))
         ColumnLayout {
             id: keysColumn
             width: parent.width
@@ -547,13 +559,13 @@ Kirigami.ApplicationWindow {
                             KanteMenuItem {
                                 text: qsTr("New")
                                 icon.name: "document-new"
-                                shortcutText: root.keyLabel(root.fileKeys.newShow)
+                                shortcutText: root.fileKeyLabel(root.fileKeys.newShow)
                                 onTriggered: root.fileCommand("new")
                             }
                             KanteMenuItem {
                                 text: qsTr("Open…")
                                 icon.name: "document-open"
-                                shortcutText: root.keyLabel(root.fileKeys.open)
+                                shortcutText: root.fileKeyLabel(root.fileKeys.open)
                                 onTriggered: root.fileCommand("open")
                             }
                             ChoiceMenu {
@@ -566,13 +578,13 @@ Kirigami.ApplicationWindow {
                             KanteMenuItem {
                                 text: qsTr("Save")
                                 icon.name: "document-save"
-                                shortcutText: root.keyLabel(root.fileKeys.save)
+                                shortcutText: root.fileKeyLabel(root.fileKeys.save)
                                 onTriggered: root.fileCommand("save")
                             }
                             KanteMenuItem {
                                 text: qsTr("Save as…")
                                 icon.name: "document-save-as"
-                                shortcutText: root.keyLabel(root.fileKeys.saveAs)
+                                shortcutText: root.fileKeyLabel(root.fileKeys.saveAs)
                                 onTriggered: root.fileCommand("saveAs")
                             }
                             KanteMenuSection { id: exchangeSection; text: qsTr("Exchange") }
@@ -591,7 +603,7 @@ Kirigami.ApplicationWindow {
                             KanteMenuItem {
                                 text: qsTr("Shortcuts…")
                                 icon.name: "configure-shortcuts"
-                                shortcutText: root.keyLabel(root.fileKeys.shortcuts)
+                                shortcutText: root.fileKeyLabel(root.fileKeys.shortcuts)
                                 onTriggered: root.fileCommand("shortcuts")
                             }
                             ChoiceMenu {
