@@ -211,8 +211,9 @@ AppPage {
     // Later: inputs and show change one after the other for one state.
     onInputsChanged: Qt.callLater(root.removedOrNot)
     function removedOrNot() {
-        if (!root.removing || root.inputs.some(i => i.id === root.removing.id))
+        if (!root.removing || root.inputs.some(i => i.id === root.removing.id)) {
             return
+        }
         if (root.show && root.show.restorable === root.removing.name) {
             removedToast.text = qsTr("Input %1 \u201c%2\u201d removed").arg(root.removing.number).arg(root.removing.name)
             removedToast.restores = root.removing.name
