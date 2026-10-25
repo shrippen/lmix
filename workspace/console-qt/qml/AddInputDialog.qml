@@ -179,6 +179,7 @@ KanteDialog {
         if (replacing && available.indexOf(replacing.source.kind) >= 0) {
             const source = replacing.source
             kind = source.kind
+            textField.text = sourceText(source)
             if (source.kind === "pattern") {
                 patternIndex = Math.max(0, patterns.findIndex(p => p.value === source.pattern))
             } else if (source.kind === "color") {
@@ -190,6 +191,24 @@ KanteDialog {
                 framerateBox.currentIndex = Math.max(0, framerates.findIndex(r => r.value === (source.framerate || "")))
             }
         }
+    }
+
+    /** The text field's value of a source (the reverse of forms::source_of). */
+    function sourceText(source) {
+        switch (source.kind) {
+        case "image":
+        case "file": return source.path
+        case "playlist": return source.paths.join("; ")
+        case "url":
+        case "web": return source.url
+        case "srt": return source.uri
+        case "ndi": return source.name
+        case "whip": return source.endpoint
+        case "graphics": return source.graphics
+        case "device":
+        case "audio_device": return source.id
+        }
+        return ""
     }
 
     onAccepted: {
