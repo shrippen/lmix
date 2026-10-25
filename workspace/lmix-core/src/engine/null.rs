@@ -36,6 +36,14 @@ pub struct NullEngine {
     /// Stinger takes run so far, as the engine's generations count them.
     #[cfg(test)]
     stinger_takes: std::sync::atomic::AtomicU64,
+    /// Commands running now, starts so far, and whether one came while a
+    /// command ran.
+    #[cfg(test)]
+    commands_running: std::sync::atomic::AtomicUsize,
+    #[cfg(test)]
+    starts: std::sync::atomic::AtomicUsize,
+    #[cfg(test)]
+    start_during_command: std::sync::atomic::AtomicBool,
 }
 
 impl NullEngine {
@@ -91,6 +99,19 @@ impl NullEngine {
         let _ = errors.send(error);
     }
 
+    /// How often the engine was started.
+    #[cfg(test)]
+    pub fn starts(&self) -> usize {
+        self.starts.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    /// Whether a start came while a slow command ran.
+    #[cfg(test)]
+    pub fn started_during_a_command(&self) -> bool {
+        self.start_during_command
+            .load(std::sync::atomic::Ordering::SeqCst)
+    }
+
     /// Make the next command slow, reporting `error` halfway through.
     #[cfg(test)]
     pub fn slow_next(&self, takes: std::time::Duration, error: super::meters::FlowError) {
@@ -127,6 +148,14 @@ impl NullEngine {
 #[async_trait]
 impl Engine for NullEngine {
     async fn start(&self, _slots: usize) -> Result<(), EngineError> {
+        #[cfg(test)]
+        {
+            use std::sync::atomic::Ordering::SeqCst;
+            self.starts.fetch_add(1, SeqCst);
+            if self.commands_running.load(SeqCst) > 0 {
+                self.start_during_command.store(true, SeqCst);
+            }
+        }
         Ok(())
     }
 
@@ -176,9 +205,12 @@ impl Engine for NullEngine {
             }
             let slow = self.slow.lock().expect("slow lock").take();
             if let Some((takes, error)) = slow {
+                use std::sync::atomic::Ordering::SeqCst;
+                self.commands_running.fetch_add(1, SeqCst);
                 tokio::time::sleep(takes / 2).await;
                 self.fail(error);
                 tokio::time::sleep(takes / 2).await;
+                self.commands_running.fetch_sub(1, SeqCst);
             }
         }
         Ok(())
