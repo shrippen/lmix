@@ -9269,7 +9269,11 @@ mod tests {
 
         let cmds = sw
             .apply(Action::AddInput {
-                source: SourceSpec::Device { id: "cam".into() },
+                source: SourceSpec::Device {
+                    id: "cam".into(),
+                    resolution: None,
+                    framerate: None,
+                },
                 name: None,
             })
             .unwrap();

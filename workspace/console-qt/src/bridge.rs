@@ -95,11 +95,17 @@ pub mod qobject {
         #[qinvokable]
         fn act(self: Pin<&mut Core>, action: &QString) -> bool;
 
-        /// Add an input from the form; false while a needed field is empty.
+        /// Add an input from the form (`options`: `forms::SourceOptions` as
+        /// JSON); false while a needed field is empty.
         #[qinvokable]
         #[cxx_name = "addInput"]
-        fn add_input(self: Pin<&mut Core>, kind: &QString, value: &QString, name: &QString)
-            -> bool;
+        fn add_input(
+            self: Pin<&mut Core>,
+            kind: &QString,
+            value: &QString,
+            options: &QString,
+            name: &QString,
+        ) -> bool;
 
         /// Give input `number` a new source from the form; false while a
         /// needed field is empty.
@@ -110,6 +116,7 @@ pub mod qobject {
             number: i32,
             kind: &QString,
             value: &QString,
+            options: &QString,
         ) -> bool;
 
         /// Add an output from the form, as JSON (`forms::OutputForm`).
@@ -328,8 +335,18 @@ impl qobject::Core {
         }
     }
 
-    fn add_input(self: Pin<&mut Self>, kind: &QString, value: &QString, name: &QString) -> bool {
-        let Some(source) = forms::source_of(&kind.to_string(), &value.to_string()) else {
+    fn add_input(
+        self: Pin<&mut Self>,
+        kind: &QString,
+        value: &QString,
+        options: &QString,
+        name: &QString,
+    ) -> bool {
+        let Some(source) = forms::source_with_options(
+            &kind.to_string(),
+            &value.to_string(),
+            &options.to_string(),
+        ) else {
             return false;
         };
         let name = name.to_string().trim().to_string();
@@ -340,8 +357,18 @@ impl qobject::Core {
         true
     }
 
-    fn replace_source(self: Pin<&mut Self>, number: i32, kind: &QString, value: &QString) -> bool {
-        let Some(source) = forms::source_of(&kind.to_string(), &value.to_string()) else {
+    fn replace_source(
+        self: Pin<&mut Self>,
+        number: i32,
+        kind: &QString,
+        value: &QString,
+        options: &QString,
+    ) -> bool {
+        let Some(source) = forms::source_with_options(
+            &kind.to_string(),
+            &value.to_string(),
+            &options.to_string(),
+        ) else {
             return false;
         };
         self.send(Action::ReplaceSource {

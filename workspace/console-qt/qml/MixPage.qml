@@ -172,6 +172,7 @@ AppPage {
         id: addInputDialog
         parent: QQC2.Overlay.overlay
         core: backend
+        inputs: root.inputs
     }
 
     TriggersDialog {

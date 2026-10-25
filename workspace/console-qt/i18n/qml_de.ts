@@ -125,22 +125,304 @@
   <context>
     <name>AddInputDialog</name>
     <message>
-      <location filename="../qml/AddInputDialog.qml" line="+15" />
+      <location filename="../qml/AddInputDialog.qml" line="+32" />
       <source>Replace source of %1</source>
       <translation>Quelle von %1 ersetzen</translation>
     </message>
     <message>
       <location line="+0" />
+      <location line="+5" />
       <source>Add input</source>
       <translation>Input hinzufügen</translation>
     </message>
     <message>
-      <location line="+31" />
-      <source>Source</source>
-      <translation>Quelle</translation>
+      <location line="+0" />
+      <source>Replace source</source>
+      <translation>Quelle ersetzen</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Devices</source>
+      <translation>Geräte</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Media</source>
+      <translation>Medien</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Network</source>
+      <translation>Netzwerk</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Generated</source>
+      <translation>Erzeugt</translation>
+    </message>
+    <message>
+      <location line="+12" />
+      <source>Capture, webcam</source>
+      <translation>Capture, Webcam</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Mic, interface</source>
+      <translation>Mikro, Interface</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Video file</source>
+      <translation>Videodatei</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>PNG, JPG</source>
+      <translation>PNG, JPG</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Several files</source>
+      <translation>Mehrere Dateien</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>HLS, RTMP, RTSP</source>
+      <translation>HLS, RTMP, RTSP</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Caller, listener</source>
+      <translation>Caller, Listener</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>In the network</source>
+      <translation>Im Netzwerk</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Browser, OBS</source>
+      <translation>Browser, OBS</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>HTML page</source>
+      <translation>HTML-Seite</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Bars, ball</source>
+      <translation>Balken, Ball</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>A plain colour</source>
+      <translation>Eine Farbfläche</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Titles</source>
+      <translation>Titel</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Video from the device.</source>
+      <translation>Video vom Gerät.</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Sound only, as a channel of its own.</source>
+      <translation>Nur Ton, als eigener Kanal.</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Plays a file, looped; what happens at the end is set on the input.</source>
+      <translation>Spielt eine Datei in Schleife ab; was am Ende passiert, stellst du am Input ein.</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>A still picture.</source>
+      <translation>Ein Standbild.</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Files one after another, looped.</source>
+      <translation>Dateien nacheinander, in Schleife.</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Reads a stream from an address.</source>
+      <translation>Liest einen Stream von einer Adresse.</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Receives MPEG-TS over SRT.</source>
+      <translation>Empfängt MPEG-TS über SRT.</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>A source in the local network.</source>
+      <translation>Eine Quelle im lokalen Netz.</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Browsers, OBS or encoders send to this endpoint (WebRTC).</source>
+      <translation>Browser, OBS oder Encoder senden an diesen Endpunkt (WebRTC).</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Renders a web page, with its sound.</source>
+      <translation>Zeigt eine Webseite, mit ihrem Ton.</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>A test signal with a test tone.</source>
+      <translation>Ein Testsignal mit Testton.</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>A plain colour.</source>
+      <translation>Eine Farbfläche.</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>A graphics channel's titles over a transparent background.</source>
+      <translation>Die Titel eines Grafikkanals über transparentem Hintergrund.</translation>
     </message>
     <message>
       <location line="+8" />
+      <source>endpoint name, e.g. stage</source>
+      <translation>Endpunktname, z. B. buehne</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>channel number or name, e.g. 1</source>
+      <translation>Nummer oder Name des Kanals, z. B. 1</translation>
+    </message>
+    <message>
+      <location line="+12" />
+      <source>Black</source>
+      <translation>Schwarz</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>White</source>
+      <translation>Weiß</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Chroma green</source>
+      <translation>Chroma-Grün</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Chroma blue</source>
+      <translation>Chroma-Blau</translation>
+    </message>
+    <message>
+      <location line="+12" />
+      <location line="+7" />
+      <source>The device's own</source>
+      <translation>Die des Geräts</translation>
+    </message>
+    <message>
+      <location line="+140" />
+      <source>Pattern</source>
+      <translation>Muster</translation>
+    </message>
+    <message>
+      <location line="+13" />
+      <source>Colour</source>
+      <translation>Farbe</translation>
+    </message>
+    <message>
+      <location line="+12" />
+      <source>Other colour…</source>
+      <translation>Andere Farbe…</translation>
+    </message>
+    <message>
+      <location line="+17" />
+      <source>Found</source>
+      <translation>Gefunden</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Search devices again</source>
+      <translation>Geräte neu suchen</translation>
+    </message>
+    <message>
+      <location line="+22" />
+      <source>Input %1</source>
+      <translation>Input %1</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>free</source>
+      <translation>frei</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>No devices found</source>
+      <translation>Keine Geräte gefunden</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Files</source>
+      <translation>Dateien</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>File</source>
+      <translation>Datei</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Address</source>
+      <translation>Adresse</translation>
+    </message>
+    <message>
+      <location line="+14" />
+      <source>device id</source>
+      <translation>Geräte-ID</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Choose…</source>
+      <translation>Wählen…</translation>
+    </message>
+    <message>
+      <location line="+23" />
+      <source>Or drop files from the file manager here.</source>
+      <translation>Oder Dateien aus dem Dateimanager hier ablegen.</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>Options</source>
+      <translation>Optionen</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Resolution</source>
+      <translation>Auflösung</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Frame rate</source>
+      <translation>Bildrate</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>The device delivers the closest mode it has and chooses its pixel format itself.</source>
+      <translation>Das Gerät liefert den nächstliegenden Modus, den es hat, und wählt sein Pixelformat selbst.</translation>
+    </message>
+    <message>
+      <location line="+20" />
+      <source>Then add another</source>
+      <translation>Danach weiteren hinzufügen</translation>
+    </message>
+    <message>
+      <location line="-11" />
       <source>Name</source>
       <translation>Name</translation>
     </message>
@@ -2233,7 +2515,7 @@
       <translation>Ordner mit den fehlenden Dateien</translation>
     </message>
     <message>
-      <location line="+110" />
+      <location line="+111" />
       <source>Inputs from a show…</source>
       <translation>Inputs aus einer Show …</translation>
     </message>
@@ -2471,7 +2753,7 @@
       <translation>Kein Ton</translation>
     </message>
     <message>
-      <location line="+26" />
+      <location line="+27" />
       <source>MST</source>
       <comment>master, short</comment>
       <translation>MST</translation>
@@ -4229,40 +4511,6 @@
       <location line="+1" />
       <source> · GO again once let go</source>
       <translation> · GO erst nach Loslassen wieder</translation>
-    </message>
-  </context>
-  <context>
-    <name>SourceFields</name>
-    <message>
-      <location filename="../qml/SourceFields.qml" line="+44" />
-      <source>endpoint name, e.g. stage</source>
-      <translation>Endpunktname, z. B. buehne</translation>
-    </message>
-    <message>
-      <location line="+2" />
-      <source>channel number or name, e.g. 1</source>
-      <translation>Nummer oder Name des Kanals, z. B. 1</translation>
-    </message>
-    <message>
-      <location line="+1" />
-      <location line="+1" />
-      <source>device id</source>
-      <translation>Geräte-ID</translation>
-    </message>
-    <message>
-      <location line="+30" />
-      <source>Pick colour…</source>
-      <translation>Farbe wählen…</translation>
-    </message>
-    <message>
-      <location line="+41" />
-      <source>No devices found</source>
-      <translation>Keine Geräte gefunden</translation>
-    </message>
-    <message>
-      <location line="+6" />
-      <source>Search devices again</source>
-      <translation>Geräte neu suchen</translation>
     </message>
   </context>
   <context>

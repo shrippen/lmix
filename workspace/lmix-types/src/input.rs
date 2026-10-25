@@ -81,8 +81,16 @@ pub enum SourceSpec {
     Url { url: String },
     /// MPEG-TS over SRT, e.g. `srt://:9000?mode=listener` (SRC.12).
     Srt { uri: String },
-    /// Capture device id from discovery (SRC.1).
-    Device { id: String },
+    /// Capture device id from discovery (SRC.1), with the mode to capture
+    /// in: `resolution` as `1920x1080`, `framerate` as `30/1`; none: the
+    /// device's own.
+    Device {
+        id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        resolution: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        framerate: Option<String>,
+    },
     /// Solid color, `#rrggbb` (SRC.7).
     Color { color: String },
     /// Still image file, shown until replaced (SRC.4).
@@ -228,7 +236,7 @@ impl SourceSpec {
             Self::File { path } => file_stem(path),
             Self::Url { url } => url.clone(),
             Self::Srt { uri } => uri.clone(),
-            Self::Device { id } | Self::AudioDevice { id } => id.clone(),
+            Self::Device { id, .. } | Self::AudioDevice { id } => id.clone(),
             Self::Color { color } => format!("Color {color}"),
             Self::Image { path } => file_stem(path),
             Self::Playlist { paths } => match paths.first() {
@@ -693,6 +701,8 @@ impl Device {
         match self.kind {
             DeviceKind::Video => SourceSpec::Device {
                 id: self.id.clone(),
+                resolution: None,
+                framerate: None,
             },
             DeviceKind::Audio => SourceSpec::AudioDevice {
                 id: self.id.clone(),

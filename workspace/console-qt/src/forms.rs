@@ -107,10 +107,57 @@ pub fn source_of(kind: &str, value: &str) -> Option<SourceSpec> {
             css: String::new(),
         },
         "graphics" => SourceSpec::Graphics { graphics: text },
-        "device" => SourceSpec::Device { id: text },
+        "device" => SourceSpec::Device {
+            id: text,
+            resolution: None,
+            framerate: None,
+        },
         "audio_device" => SourceSpec::AudioDevice { id: text },
         _ => return None,
     })
+}
+
+/// Options of a source kind beyond its text, from the form as JSON: a
+/// camera's mode. Empty fields: the device's own.
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+pub struct SourceOptions {
+    /// `1920x1080`.
+    pub resolution: String,
+    /// `30/1`.
+    pub framerate: String,
+}
+
+/// `source_of` with the form's options (`SourceOptions` as JSON; empty or
+/// unreadable: none). A resolution or frame rate that does not read as one
+/// is left out.
+pub fn source_with_options(kind: &str, value: &str, options: &str) -> Option<SourceSpec> {
+    let options: SourceOptions = serde_json::from_str(options).unwrap_or_default();
+    let mut source = source_of(kind, value)?;
+    if let SourceSpec::Device {
+        resolution,
+        framerate,
+        ..
+    } = &mut source
+    {
+        *resolution = valid_resolution(&options.resolution);
+        *framerate = valid_framerate(&options.framerate);
+    }
+    Some(source)
+}
+
+/// `1920x1080`: two positive numbers.
+fn valid_resolution(text: &str) -> Option<String> {
+    let (w, h) = text.trim().split_once('x')?;
+    let (w, h) = (w.parse::<u32>().ok()?, h.parse::<u32>().ok()?);
+    (w > 0 && h > 0).then(|| format!("{w}x{h}"))
+}
+
+/// `30/1` or `30000/1001`: a positive fraction.
+fn valid_framerate(text: &str) -> Option<String> {
+    let (n, d) = text.trim().split_once('/')?;
+    let (n, d) = (n.parse::<u32>().ok()?, d.parse::<u32>().ok()?);
+    (n > 0 && d > 0).then(|| format!("{n}/{d}"))
 }
 
 /// `#rrggbb` in lower case, from QML's colour text (`#RRGGBB` or
@@ -277,6 +324,35 @@ mod tests {
         assert_eq!(source_of("color", "orange"), None);
         assert_eq!(source_of("pattern", "nope"), None);
         assert_eq!(source_of("teleport", "x"), None);
+    }
+
+    #[test]
+    fn camera_mode_from_the_form() {
+        assert_eq!(
+            source_with_options("device", "/dev/video0", r#"{"resolution":"1280x720","framerate":"60/1"}"#),
+            Some(SourceSpec::Device {
+                id: "/dev/video0".into(),
+                resolution: Some("1280x720".into()),
+                framerate: Some("60/1".into()),
+            })
+        );
+        assert_eq!(
+            source_with_options("device", "cam", r#"{"resolution":"","framerate":"fast"}"#),
+            Some(SourceSpec::Device {
+                id: "cam".into(),
+                resolution: None,
+                framerate: None,
+            }),
+            "empty: the device's own; unreadable: left out"
+        );
+        assert_eq!(
+            source_with_options("file", "/a.mp4", "not json"),
+            Some(SourceSpec::File {
+                path: "/a.mp4".into()
+            }),
+            "other kinds ignore the options"
+        );
+        assert_eq!(source_with_options("device", " ", "{}"), None);
     }
 
     #[test]
