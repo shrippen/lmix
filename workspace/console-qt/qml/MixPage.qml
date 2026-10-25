@@ -518,13 +518,20 @@ AppPage {
                                 text: qsTr("Program on the left")
                                 checked: viewPopover.multiview.program === "left"
                                 enabled: backend.connected
-                                onToggled: root.act({ action: "set_multiview", layout: { program: checked ? "left" : "right", meters: viewPopover.multiview.meters } })
+                                // The core's state decides: a click asks, the binding comes back.
+                                onToggled: {
+                                    root.act({ action: "set_multiview", layout: { program: checked ? "left" : "right", meters: viewPopover.multiview.meters } })
+                                    checked = Qt.binding(() => viewPopover.multiview.program === "left")
+                                }
                             }
                             KanteSwitch {
                                 text: qsTr("Level meters")
                                 checked: viewPopover.multiview.meters === "shown"
                                 enabled: backend.connected
-                                onToggled: root.act({ action: "set_multiview", layout: { program: viewPopover.multiview.program, meters: checked ? "shown" : "hidden" } })
+                                onToggled: {
+                                    root.act({ action: "set_multiview", layout: { program: viewPopover.multiview.program, meters: checked ? "shown" : "hidden" } })
+                                    checked = Qt.binding(() => viewPopover.multiview.meters === "shown")
+                                }
                             }
                         }
                     }

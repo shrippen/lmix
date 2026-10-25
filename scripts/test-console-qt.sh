@@ -258,6 +258,15 @@ act '{"action":"add_input","source":{"kind":"pattern","pattern":"bars"},"name":"
 spare() { state | jq -r '.inputs[] | select(.name == "Spare") | .number'; }
 for _ in $(seq 1 40); do [[ -n "$(spare)" ]] && break; sleep 0.5; done
 sleep 2
+# The menu's quick row: Preview closes the menu and puts Spare into preview.
+spare_id() { state | jq -r '.inputs[] | select(.name == "Spare") | .id'; }
+click 500 625 3
+sleep 1.5
+click 625 264
+for _ in $(seq 1 20); do [[ "$(state | jq -r .preview)" == "$(spare_id)" ]] && break; sleep 0.5; done
+[[ "$(state | jq -r .preview)" == "$(spare_id)" ]] && pass "input menu: Preview in the quick row" \
+    || fail "input menu: preview is $(state | jq -r .preview) after Preview in the quick row"
+sleep 1
 click 500 625 3
 sleep 1.5
 click 564 880

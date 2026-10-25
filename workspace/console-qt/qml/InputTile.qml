@@ -339,9 +339,11 @@ KanteCard {
         // Its whole text: the row widens the menu rather than cut "Preview".
         Layout.minimumWidth: implicitWidth
         focusPolicy: Qt.NoFocus
+        /** The menu it closes (an inline component sees no ids of the file). */
+        required property QQC2.Menu owner
         signal run()
         onClicked: {
-            menu.close()
+            owner.close()
             run()
         }
     }
@@ -395,23 +397,27 @@ KanteCard {
                 Layout.rightMargin: Kirigami.Units.largeSpacing
                 spacing: Kirigami.Units.smallSpacing
                 QuickButton {
+                    owner: menu
                     text: qsTr("Cut")
                     icon.name: "go-next"
                     enabled: !tile.onProgram
                     onRun: tile.act({ action: "cut_direct", input: tile.ref() })
                 }
                 QuickButton {
+                    owner: menu
                     text: qsTr("Preview")
                     icon.name: "view-visible"
                     enabled: !tile.onPreview && tile.hasPicture
                     onRun: tile.act({ action: "preview_input", input: tile.ref() })
                 }
                 QuickButton {
+                    owner: menu
                     text: qsTr("Name")
                     icon.name: "edit-rename"
                     onRun: renameDialog.open()
                 }
                 QuickButton {
+                    owner: menu
                     text: qsTr("Options")
                     icon.name: "configure"
                     onRun: tile.settingsRequested()
