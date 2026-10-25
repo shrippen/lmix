@@ -4639,13 +4639,8 @@ Einstellungsdatei (SHW.8) hat eine Version: Version 1 wird beim Import
 vollständig migriert, auch `fade_volume`; sie heißt jetzt Version 2.
 
 **Offen**:
-- strom kennt Buszahl und Abgriff nur beim Aufbau: Hinzufügen, Entfernen
-  und Abgriffwechsel bauen den Mischer-Flow neu auf, Bild- und Tonmischer
-  zusammen. Program steht kurz, laufende Ausgänge starten neu, wie beim
-  Formatwechsel; die Console fragt darum vorher. Abhilfe wäre ein
-  Bus-Mischer zur Laufzeit in strom oder ein eigener Flow für den
-  Tonmischer. Feste 17 Busse vorzuhalten scheidet aus: je Kanal und Bus
-  baut strom einen Send mit eigener Queue (bei zehn Kanälen 170 Threads).
+- ~~strom kennt Buszahl und Abgriff nur beim Aufbau~~ gelöst, siehe
+  „Busse zur Laufzeit“ unten.
 - Bus in den Master (strom routet Aux nicht in den Main), Bus → Zone.
 - Tonspalte nach dem Entwurf (feste Wege unten, Höhengriff, Kürzungen,
   KH/S/⋯ je Kanal) als eigener Schritt; dieser Schritt stellt das Bus-Panel,
@@ -4656,3 +4651,32 @@ gehen mit neuem Mischer, Ausgang hält seinen Bus, Kopfhörer-Sends und
 Bus-Abhören), console-qt-Tests, strom-Mischer-Tests,
 `scripts/test-console-qt.sh` und `scripts/test-m2b-vm.sh` lokal mit dem
 strom aus #42 (Busse, Kopfhörer, Abhören eines Busses).
+
+## 2026-10-25 — Busse zur Laufzeit (AUD.2)
+
+**Anlass**: Hinzufügen, Entfernen und Abgriffwechsel eines Busses bauten den
+ganzen Mischer-Flow neu auf (Program stand kurz, laufende Ausgänge starteten
+neu, die Console fragte vorher). Nutzer: „gehe den Neuaufbau des Mischers an“.
+
+**Entscheidung**:
+- strom legt Aux-Busse zur Laufzeit an und entfernt sie
+  (`POST`/`DELETE /api/flows/{flow}/blocks/{block}/aux_buses`): der Block
+  hält `max_aux_buses` Plätze vor, gebaut werden nur die belegten
+  (`dynamic_aux_buses`, gespeichert in den Block-Properties, damit ein
+  Neuaufbau dieselben Busse baut). Der Abgriff `chN_auxM_pre` schaltet live
+  um. Vorgehaltene Plätze kosten nichts: Sends mit Queue entstehen erst
+  mit dem Bus.
+- lmix: Aux 1 bleibt der Kopfhörer (statisch, `num_aux_buses=1`), jeder
+  Bus ist ein dynamischer Aux mit eigenem Kanal `bus<id>_out`; Kapazität
+  1 + 16. Ändern sich nur die Busse, patcht `set_format` den laufenden
+  Mischer (entfernen, Abgriffe, hinzufügen) statt neu zu bauen. Die
+  Rückfrage in der Console entfällt, die Sperre gilt für diese Aktionen
+  nicht mehr (sie unterbrechen nichts).
+
+**Offen**: Sperre für den Formatwechsel (todo), Bus in den Master, Bus → Zone.
+
+**Geprüft**: strom-Mischer- und API-Tests (Bus zur Laufzeit an, ab,
+Abgriff), lmix-core-Tests (`buses_change_the_running_mixer`),
+console-qt-Tests, `scripts/test-m2b-vm.sh` und `scripts/test-console-qt.sh`
+mit strom #43 (Busse zur Laufzeit) und #44 (Test-Race), beide gemergt
+25.10.; Sends und Abhören einer Busänderung gehen in einem PATCH.

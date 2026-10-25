@@ -124,6 +124,12 @@ pub enum Command {
     /// Send of `slot` to engine bus `bus` (see [`MixerBuses`]), linear
     /// gain.
     SetAuxSend { slot: usize, bus: usize, gain: f64 },
+    /// Sends into engine buses (slot, bus, linear gain) and the buses'
+    /// listening, in one write: what a bus change sets up again.
+    SetBusMix {
+        sends: Vec<(usize, usize, f64)>,
+        listen: Vec<(usize, bool)>,
+    },
     /// Master of engine bus `bus`, reached over `ramp_ms`.
     SetAuxBus {
         bus: usize,
@@ -1445,16 +1451,10 @@ impl Switcher {
             Action::SetSend { input, bus, level } => self.set_send(&input, &bus, level),
             Action::SetPhonesSend { input, on, level } => self.set_phones_send(&input, on, level),
             Action::SetBus { bus, volume, mute } => self.set_bus(&bus, volume, mute, AUDIO_RAMP_MS),
-            // These build the mixer anew: program stops for a moment and
-            // running outputs restart, which the lock keeps from a show.
-            Action::AddBus { name, pre_fader } => {
-                self.check_unlocked()?;
-                self.add_bus(name, pre_fader)
-            }
-            Action::RemoveBus { bus } => {
-                self.check_unlocked()?;
-                self.remove_bus(&bus)
-            }
+            // These change the running mixer (no rebuild), so the lock lets
+            // them through.
+            Action::AddBus { name, pre_fader } => self.add_bus(name, pre_fader),
+            Action::RemoveBus { bus } => self.remove_bus(&bus),
             Action::RenameBus { bus, name } => {
                 let index = self.find_bus(&bus)?;
                 let name = self.bus_name(&name, Some(index))?;
@@ -1466,9 +1466,8 @@ impl Switcher {
                 if self.show.buses[index].pre_fader == pre_fader {
                     return Ok(Vec::new());
                 }
-                self.check_unlocked()?;
                 self.show.buses[index].pre_fader = pre_fader;
-                Ok(self.mixer_rebuilt())
+                Ok(self.buses_changed())
             }
             Action::SetBusListen { bus, on } => {
                 let id = self.show.buses[self.find_bus(&bus)?].id;
@@ -1525,9 +1524,8 @@ impl Switcher {
                 if self.show.phones.pre_fader == pre_fader {
                     return Ok(Vec::new());
                 }
-                self.check_unlocked()?;
                 self.show.phones.pre_fader = pre_fader;
-                Ok(self.mixer_rebuilt())
+                Ok(self.buses_changed())
             }
             Action::SetDefaultDelay { ms } => {
                 if ms > ChannelStrip::DELAY_MAX_MS {
@@ -1817,6 +1815,46 @@ impl Switcher {
         Ok(commands)
     }
 
+    /// The engine's buses after one came, went or changed its tap: the
+    /// engine changes the running mixer (no rebuild, outputs play on),
+    /// then the buses are set up, which count along the show's buses:
+    /// masters, every input's sends into them and their listening. A bus
+    /// the engine failed to add before comes now and gets them too; one it
+    /// has gets the same values again.
+    fn buses_changed(&self) -> Vec<Command> {
+        let format = Command::SetFormat {
+            format: self.show.format,
+            multiview: self.show.multiview,
+            sample_rate: self.show.sample_rate,
+            buses: self.mixer_buses(),
+        };
+        let sends = self
+            .show
+            .inputs
+            .iter()
+            .filter(|i| i.source.has_audio())
+            .flat_map(|i| self.send_commands(i))
+            .filter_map(|c| match c {
+                Command::SetAuxSend { slot, bus, gain } if bus > 0 => Some((slot, bus, gain)),
+                _ => None,
+            })
+            .collect();
+        let listen = self
+            .listen_commands()
+            .into_iter()
+            .filter_map(|c| match c {
+                Command::SetBusListen { bus, on } => Some((bus, on)),
+                _ => None,
+            })
+            .collect();
+        // One write for every send: a bus change also comes in a show.
+        let mix = Command::SetBusMix { sends, listen };
+        std::iter::once(format)
+            .chain(self.aux_bus_commands())
+            .chain(std::iter::once(mix))
+            .collect()
+    }
+
     /// A new mixer for a new format or multiview, set up again; outputs
     /// restart. The sources keep running (no clip starts over).
     fn mixer_rebuilt(&mut self) -> Vec<Command> {
@@ -2087,7 +2125,7 @@ impl Switcher {
             pre_fader,
             level: Default::default(),
         });
-        Ok(self.mixer_rebuilt())
+        Ok(self.buses_changed())
     }
 
     /// Remove a bus and the sends to it; not while an output takes it.
@@ -2110,7 +2148,7 @@ impl Switcher {
             input.sends.remove(&id);
         }
         self.bus_listen.remove(&id);
-        Ok(self.mixer_rebuilt())
+        Ok(self.buses_changed())
     }
 
     /// Every send of an input with sound, as the show has them: to the
@@ -7147,7 +7185,7 @@ mod tests {
     }
 
     #[test]
-    fn buses_come_and_go_with_a_new_audio_mixer() {
+    fn buses_come_and_go_on_the_running_audio_mixer() {
         let mut sw = two_inputs();
         let cmds = sw
             .apply(Action::AddBus {
@@ -7192,7 +7230,7 @@ mod tests {
         })
         .expect("its own name again");
 
-        // The tap builds the mixer anew, the same tap changes nothing.
+        // The tap changes the mixer, the same tap changes nothing.
         let cmds = sw
             .apply(Action::SetBusTap {
                 bus: bus("In-Ear"),
@@ -7241,6 +7279,61 @@ mod tests {
             }),
             Err(ActionError::TooManyBuses { .. })
         ));
+    }
+
+    /// Every bus change sets up all buses again: a bus the engine failed to
+    /// add before comes with this change, and its sends and listening with
+    /// it (they were refused while it was missing).
+    #[test]
+    fn a_bus_change_sends_every_bus_its_sends() {
+        let mut sw = two_inputs();
+        for _ in 0..2 {
+            sw.apply(Action::AddBus {
+                name: None,
+                pre_fader: false,
+            })
+            .unwrap();
+        }
+        sw.apply(Action::SetSend {
+            input: named("A"),
+            bus: BusRef::Number(2),
+            level: 70,
+        })
+        .unwrap();
+        sw.apply(Action::SetBusListen {
+            bus: BusRef::Number(2),
+            on: true,
+        })
+        .unwrap();
+        let slot = sw.state().inputs[0].slot;
+        let cmds = sw
+            .apply(Action::AddBus {
+                name: None,
+                pre_fader: false,
+            })
+            .unwrap();
+        assert!(matches!(&cmds[0], Command::SetFormat { .. }));
+        // All in one write, not one per send.
+        let mixes: Vec<_> = cmds
+            .iter()
+            .filter_map(|c| match c {
+                Command::SetBusMix { sends, listen } => Some((sends, listen)),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(mixes.len(), 1, "{cmds:?}");
+        let (sends, listen) = mixes[0];
+        assert!(
+            sends
+                .iter()
+                .any(|&(s, bus, gain)| s == slot && bus == 2 && gain > 0.0),
+            "{sends:?}"
+        );
+        assert!(sends.iter().all(|&(_, bus, _)| bus > 0), "{sends:?}");
+        assert!(listen.contains(&(2, true)), "{listen:?}");
+        assert!(!cmds
+            .iter()
+            .any(|c| matches!(c, Command::SetAuxSend { .. } | Command::SetBusListen { .. })));
     }
 
     #[test]
@@ -8572,7 +8665,7 @@ mod tests {
     }
 
     #[test]
-    fn the_lock_refuses_closing_stopping_and_rebuilding() {
+    fn the_lock_refuses_closing_and_stopping() {
         let mut sw = two_inputs();
         sw.apply(Action::SetLock { on: true }).unwrap();
         assert!(sw.state().locked);
@@ -8587,15 +8680,29 @@ mod tests {
             }),
             Err(ActionError::Locked)
         );
-        // Nor a bus change, which builds the mixer anew.
+        // Bus changes stop nothing: the engine changes the running mixer.
         for action in [
             Action::AddBus {
                 name: None,
                 pre_fader: false,
             },
             Action::SetPhonesTap { pre_fader: true },
+            Action::SetBusTap {
+                bus: BusRef::Number(1),
+                pre_fader: true,
+            },
+            Action::RemoveBus {
+                bus: BusRef::Number(1),
+            },
         ] {
-            assert_eq!(sw.apply(action), Err(ActionError::Locked));
+            let cmds = sw.apply(action).unwrap();
+            assert!(matches!(cmds[0], Command::SetFormat { .. }));
+            assert!(
+                !cmds
+                    .iter()
+                    .any(|c| matches!(c, Command::StartOutput { .. } | Command::SetSlot { .. })),
+                "{cmds:?}"
+            );
         }
         // Switching still works.
         sw.apply(Action::CutDirect { input: named("A") }).unwrap();

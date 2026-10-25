@@ -28,8 +28,8 @@ pub struct EngineLevels {
     pub slot_channels: HashMap<usize, Vec<f32>>,
     pub main: Option<(f32, Instant)>,
     pub monitor: Option<(f32, Instant)>,
-    /// Aux buses, 0-based.
-    pub aux: HashMap<usize, (f32, Instant)>,
+    /// The show's buses (the headphones are `monitor`).
+    pub buses: HashMap<lmix_types::BusId, (f32, Instant)>,
     /// Buffer ages at the mixer's program output from the latest latency
     /// measurement, ms (newest last, at most `LATENCY_SAMPLES`).
     pub program_ages_ms: Vec<u64>,
@@ -77,9 +77,13 @@ fn parse_meter(element_id: &str, mixer_block: &str) -> Option<Meter> {
         "monitor" => return Some(Meter::Monitor),
         _ => {}
     }
-    // Aux buses count from 1 as well.
-    if let Some(bus) = name.strip_prefix("aux") {
-        return bus.parse::<usize>().ok()?.checked_sub(1).map(Meter::Aux);
+    // strom's aux number, from 1.
+    if let Some(aux) = name.strip_prefix("aux") {
+        return aux
+            .parse::<usize>()
+            .ok()
+            .filter(|aux| *aux >= 1)
+            .map(Meter::Aux);
     }
     // Channels count from 1, slots from 0.
     let channel: usize = name.parse().ok()?;
@@ -263,6 +267,7 @@ pub async fn follow(
     health: Arc<Mutex<EngineHealth>>,
     players: broadcast::Sender<crate::clips::PlayerProgress>,
     stingers: Arc<Stingers>,
+    buses: Arc<std::sync::Mutex<Option<super::flows::BuiltBuses>>>,
 ) {
     // Last state each player reported, added to its position reports.
     let mut player_states = HashMap::new();
@@ -283,7 +288,9 @@ pub async fn follow(
                         peak,
                         ..
                     }) if flow_id == mixer => {
-                        record_meter(&levels, &element_id, mixer_block, &peak)
+                        let bus_on =
+                            |aux: usize| buses.lock().expect("buses lock").as_ref()?.bus_on(aux);
+                        record_meter(&levels, &element_id, mixer_block, &peak, bus_on)
                     }
                     Ok(StromEvent::BufferAgeProbe {
                         flow_id, age_ms, ..
@@ -359,6 +366,7 @@ fn record_meter(
     element_id: &str,
     mixer_block: &str,
     peak: &[f64],
+    bus_on: impl Fn(usize) -> Option<lmix_types::BusId>,
 ) {
     let Some(meter) = parse_meter(element_id, mixer_block) else {
         return;
@@ -372,8 +380,11 @@ fn record_meter(
         }
         Meter::Main => l.main = Some(reading),
         Meter::Monitor => l.monitor = Some(reading),
-        Meter::Aux(bus) => {
-            l.aux.insert(bus, reading);
+        // The headphones' aux is metered as the monitor.
+        Meter::Aux(aux) => {
+            if let Some(bus) = bus_on(aux) {
+                l.buses.insert(bus, reading);
+            }
         }
     });
 }
@@ -386,11 +397,37 @@ mod tests {
     fn slots_keep_each_channel() {
         let (levels, read) = watch::channel(EngineLevels::default());
 
-        record_meter(&levels, "mix:meter:2", "mix", &[-12.0, -30.0]);
+        record_meter(&levels, "mix:meter:2", "mix", &[-12.0, -30.0], |_| None);
 
         let l = read.borrow();
         assert_eq!(l.slots[&1].0, -12.0, "loudest");
         assert_eq!(l.slot_channels[&1], [-12.0, -30.0]);
+    }
+
+    /// A bus meter lands on the bus strom's aux carries now: after A (aux
+    /// 2) went, aux 3 is still B's.
+    #[test]
+    fn bus_meters_follow_the_aux_numbers() {
+        use crate::engine::flows::BuiltBuses;
+        let (a, b) = (lmix_types::BusId::new(), lmix_types::BusId::new());
+        let mut built = BuiltBuses::numbered(&crate::switcher::MixerBuses {
+            phones_pre_fader: false,
+            buses: vec![(a, false), (b, false)],
+        });
+        built.buses.remove(0);
+        built.order.remove(0);
+        let (levels, read) = watch::channel(EngineLevels::default());
+
+        record_meter(&levels, "mix:meter:aux3", "mix", &[-6.0], |aux| {
+            built.bus_on(aux)
+        });
+        record_meter(&levels, "mix:meter:aux2", "mix", &[-9.0], |aux| {
+            built.bus_on(aux)
+        });
+
+        let l = read.borrow();
+        assert_eq!(l.buses[&b].0, -6.0);
+        assert!(!l.buses.contains_key(&a), "a bus that went has no meter");
     }
 
     #[test]
@@ -401,7 +438,7 @@ mod tests {
             parse_meter("mix:meter:monitor", "mix"),
             Some(Meter::Monitor)
         );
-        assert_eq!(parse_meter("mix:meter:aux1", "mix"), Some(Meter::Aux(0)));
+        assert_eq!(parse_meter("mix:meter:aux1", "mix"), Some(Meter::Aux(1)));
         assert_eq!(parse_meter("mix:meter:aux0", "mix"), None);
         assert_eq!(parse_meter("mix:meter:0", "mix"), None);
         assert_eq!(parse_meter("other:meter:1", "mix"), None);
