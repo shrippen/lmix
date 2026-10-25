@@ -4912,7 +4912,7 @@ fn program_then_preview(
 
 /// Reject sources the engine cannot build: a color that is not
 /// `#rrggbb`, a web page that is not an http(s) address, a capture mode
-/// that is not `1920x1080` and `30/1`.
+/// that is not written as `1920x1080` and `30/1`.
 fn check_source(source: &SourceSpec) -> Result<(), ActionError> {
     match source {
         SourceSpec::Device {
@@ -4921,7 +4921,8 @@ fn check_source(source: &SourceSpec) -> Result<(), ActionError> {
             ..
         } => {
             fn bad(mode: &Option<String>, read: fn(&str) -> Option<String>) -> Option<&str> {
-                mode.as_deref().filter(|m| read(m).is_none())
+                // Only the plain form: it goes to strom as written.
+                mode.as_deref().filter(|m| read(m).as_deref() != Some(*m))
             }
             match bad(resolution, lmix_types::device_resolution)
                 .or(bad(framerate, lmix_types::device_framerate))
@@ -9113,6 +9114,9 @@ mod tests {
             (Some("foo"), None),
             (None, Some("0/0")),
             (Some("1920x1080"), Some("30")),
+            (Some(" 1920x1080"), None),
+            (Some("+1920x1080"), None),
+            (None, Some("030/1")),
         ] {
             assert!(
                 matches!(
