@@ -321,13 +321,13 @@
       <translation>Chroma-Blau</translation>
     </message>
     <message>
-      <location line="+12" />
+      <location line="+16" />
       <location line="+7" />
       <source>The device's own</source>
       <translation>Die des Geräts</translation>
     </message>
     <message>
-      <location line="+155" />
+      <location line="+164" />
       <source>Pattern</source>
       <translation>Muster</translation>
     </message>
@@ -412,7 +412,12 @@
       <translation>Bildrate</translation>
     </message>
     <message>
-      <location line="+31" />
+      <location line="+11" />
+      <source>Only a mode the device offers uncompressed (not as MJPEG): with any other the input stays without a picture. “The device's own” always works.</source>
+      <translation>Nur ein Modus, den das Gerät unkomprimiert anbietet (nicht als MJPEG): Mit jedem anderen bleibt der Input ohne Bild. „Die des Geräts“ geht immer.</translation>
+    </message>
+    <message>
+      <location line="+20" />
       <source>Then add another</source>
       <translation>Danach weiteren hinzufügen</translation>
     </message>
@@ -422,12 +427,7 @@
       <translation>Name</translation>
     </message>
     <message>
-      <location line="-9" />
-      <source>Only a mode the device offers: with any other the input stays without a picture. “The device's own” always works; the pixel format is the device's choice.</source>
-      <translation>Nur ein Modus, den das Gerät anbietet: Mit jedem anderen bleibt der Input ohne Bild. „Die des Geräts“ geht immer; das Pixelformat wählt das Gerät.</translation>
-    </message>
-    <message>
-      <location line="+15" />
+      <location line="+6" />
       <source>optional</source>
       <translation>optional</translation>
     </message>
@@ -2650,12 +2650,12 @@
       <translation>Ansicht</translation>
     </message>
     <message>
-      <location line="+260" />
+      <location line="+265" />
       <source>Width of the audio column</source>
       <translation>Breite der Tonspalte</translation>
     </message>
     <message>
-      <location line="-253" />
+      <location line="-258" />
       <source>Audio at the edge</source>
       <translation>Ton am Rand</translation>
     </message>

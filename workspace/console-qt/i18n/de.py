@@ -989,7 +989,7 @@ DE = {
     'Resolution': 'Auflösung',
     'Frame rate': 'Bildrate',
     "The device's own": 'Die des Geräts',
-    "Only a mode the device offers: with any other the input stays without a picture. “The device's own” always works; the pixel format is the device's choice.": 'Nur ein Modus, den das Gerät anbietet: Mit jedem anderen bleibt der Input ohne Bild. „Die des Geräts“ geht immer; das Pixelformat wählt das Gerät.',
+    "Only a mode the device offers uncompressed (not as MJPEG): with any other the input stays without a picture. “The device's own” always works.": 'Nur ein Modus, den das Gerät unkomprimiert anbietet (nicht als MJPEG): Mit jedem anderen bleibt der Input ohne Bild. „Die des Geräts“ geht immer.',
     'Then add another': 'Danach weiteren hinzufügen',
     'Capture mode %1 is not a resolution like 1920x1080 or a frame rate like 30/1': 'Aufnahmemodus %1 ist keine Auflösung wie 1920x1080 und keine Bildrate wie 30/1',
 }

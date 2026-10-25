@@ -106,22 +106,31 @@ KanteDialog {
         return inputs.find(i => i.source && (i.source.id === pick || i.source.name === pick)) || null
     }
 
-    readonly property var resolutions: [
+    // A mode the replaced input has outside these lists comes second, so a
+    // replacement keeps it.
+    property string keptResolution: ""
+    property string keptFramerate: ""
+    readonly property var resolutions: withKept([
         { value: "", label: qsTr("The device's own") },
         { value: "3840x2160", label: "3840 × 2160" },
         { value: "1920x1080", label: "1920 × 1080" },
         { value: "1280x720", label: "1280 × 720" },
         { value: "640x480", label: "640 × 480" }
-    ]
-    readonly property var framerates: [
+    ], keptResolution)
+    readonly property var framerates: withKept([
         { value: "", label: qsTr("The device's own") },
         { value: "60/1", label: "60" },
+        { value: "60000/1001", label: "59.94" },
         { value: "50/1", label: "50" },
         { value: "30/1", label: "30" },
         { value: "30000/1001", label: "29.97" },
         { value: "25/1", label: "25" },
         { value: "24/1", label: "24" }
-    ]
+    ], keptFramerate)
+    function withKept(list, kept) {
+        return kept === "" || list.some(m => m.value === kept)
+            ? list : [list[0], { value: kept, label: kept }].concat(list.slice(1))
+    }
 
     readonly property string value: {
         switch (kind) {
@@ -163,6 +172,8 @@ KanteDialog {
         // the input shows now: nothing of an earlier dialog stays chosen.
         patternIndex = 0
         colorValue = signalColors[0]
+        keptResolution = ""
+        keptFramerate = ""
         resolutionBox.currentIndex = 0
         framerateBox.currentIndex = 0
         if (replacing && available.indexOf(replacing.source.kind) >= 0) {
@@ -173,6 +184,8 @@ KanteDialog {
             } else if (source.kind === "color") {
                 colorValue = source.color
             } else if (source.kind === "device") {
+                keptResolution = source.resolution || ""
+                keptFramerate = source.framerate || ""
                 resolutionBox.currentIndex = Math.max(0, resolutions.findIndex(r => r.value === (source.resolution || "")))
                 framerateBox.currentIndex = Math.max(0, framerates.findIndex(r => r.value === (source.framerate || "")))
             }
@@ -429,7 +442,7 @@ KanteDialog {
             QQC2.Label {
                 visible: dialog.kind === "device"
                 Layout.fillWidth: true
-                text: qsTr("Only a mode the device offers: with any other the input stays without a picture. “The device's own” always works; the pixel format is the device's choice.")
+                text: qsTr("Only a mode the device offers uncompressed (not as MJPEG): with any other the input stays without a picture. “The device's own” always works.")
                 wrapMode: Text.WordWrap
                 font: KanteStyle.smallFont
                 color: KanteStyle.mutedTextColor

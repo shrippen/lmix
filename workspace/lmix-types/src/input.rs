@@ -714,19 +714,19 @@ impl Device {
     }
 }
 
-/// A capture resolution as `1920x1080` (two positive numbers), in that
-/// form; `None` when the text is none.
+/// A capture resolution as `1920x1080` (two positive numbers, as strom
+/// takes them: `i32`), in that form; `None` when the text is none.
 pub fn device_resolution(text: &str) -> Option<String> {
     let (w, h) = text.trim().split_once('x')?;
-    let (w, h) = (w.parse::<u32>().ok()?, h.parse::<u32>().ok()?);
+    let (w, h) = (w.parse::<i32>().ok()?, h.parse::<i32>().ok()?);
     (w > 0 && h > 0).then(|| format!("{w}x{h}"))
 }
 
-/// A capture frame rate as `30/1` or `30000/1001` (a positive fraction),
-/// in that form; `None` when the text is none.
+/// A capture frame rate as `30/1` or `30000/1001` (a positive fraction of
+/// `i32`, as strom takes it), in that form; `None` when the text is none.
 pub fn device_framerate(text: &str) -> Option<String> {
     let (n, d) = text.trim().split_once('/')?;
-    let (n, d) = (n.parse::<u32>().ok()?, d.parse::<u32>().ok()?);
+    let (n, d) = (n.parse::<i32>().ok()?, d.parse::<i32>().ok()?);
     (n > 0 && d > 0).then(|| format!("{n}/{d}"))
 }
 
@@ -761,10 +761,18 @@ mod tests {
             device_framerate("30000/1001").as_deref(),
             Some("30000/1001")
         );
-        for bad in ["", "foo", "0x1080", "1920x", "1920*1080", "-1x2"] {
+        for bad in [
+            "",
+            "foo",
+            "0x1080",
+            "1920x",
+            "1920*1080",
+            "-1x2",
+            "3000000000x1080",
+        ] {
             assert_eq!(device_resolution(bad), None, "{bad}");
         }
-        for bad in ["", "30", "0/0", "30/0", "a/b"] {
+        for bad in ["", "30", "0/0", "30/0", "a/b", "3000000000/1"] {
             assert_eq!(device_framerate(bad), None, "{bad}");
         }
     }
