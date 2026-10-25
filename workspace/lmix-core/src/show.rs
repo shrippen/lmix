@@ -724,8 +724,15 @@ fn rewrite_aux_actions(value: &mut Value, bus: &dyn Fn(usize) -> Value) {
                 }
             }
             "add_output" => {
-                if let Some(index) = map.remove("aux").as_ref().and_then(aux_number) {
-                    map.insert("bus".into(), bus(index));
+                let to = match map.remove("aux") {
+                    Some(aux) => aux_number(&aux).map(bus).or_else(|| match aux {
+                        Value::Number(n) => Some(json!(format!("Aux {n}"))),
+                        _ => None,
+                    }),
+                    None => None,
+                };
+                if let Some(to) = to {
+                    map.insert("bus".into(), to);
                 }
             }
             _ => {}
@@ -1086,6 +1093,7 @@ mod tests {
             {"action": "fade_volume", "target": {"bus": 3}, "volume": 0, "duration_ms": 500},
             {"action": "set_monitor_volume", "volume": 30},
             {"action": "set_aux_send", "input": 1, "bus": 9, "level": 50},
+            {"action": "add_output", "spec": {"kind": "srt", "uri": "srt://:9000?mode=listener"}, "aux": 8},
             {"action": "add_shortcut", "shortcut": {"label": "B", "actions": [
                 {"action": "set_aux_send", "input": 1, "bus": 2, "level": 10},
             ]}},
@@ -1146,8 +1154,13 @@ mod tests {
                 },
             ]
         );
-        let Action::AddShortcut { shortcut } = &show.shortcuts[0].actions[5] else {
-            panic!("{:?}", show.shortcuts[0].actions[5]);
+        assert!(
+            matches!(&show.shortcuts[0].actions[5], Action::AddOutput { bus: Some(lmix_types::BusRef::Text(b)), .. } if b == "Aux 8"),
+            "an output on no bus is refused as before: {:?}",
+            show.shortcuts[0].actions[5]
+        );
+        let Action::AddShortcut { shortcut } = &show.shortcuts[0].actions[6] else {
+            panic!("{:?}", show.shortcuts[0].actions[6]);
         };
         assert_eq!(
             shortcut.actions,
