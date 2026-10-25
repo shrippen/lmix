@@ -263,6 +263,9 @@ sleep 1.5
 click 564 880
 for _ in $(seq 1 40); do [[ -z "$(spare)" ]] && break; sleep 0.5; done
 [[ -z "$(spare)" ]] && pass "input menu: Remove" || fail "input menu: Spare still there after Remove"
+# The toast waits for the Console's state without Spare, a moment after
+# the core's.
+sleep 1
 DISPLAY="$DISPLAY_NO" xdotool key ctrl+z
 for _ in $(seq 1 40); do [[ -n "$(spare)" ]] && break; sleep 0.5; done
 [[ -n "$(spare)" ]] && pass "input menu: Ctrl+Z brings it back" || fail "input menu: Spare not back after Ctrl+Z"
@@ -277,6 +280,7 @@ click 500 625 3
 sleep 1.5
 click 564 880
 for _ in $(seq 1 40); do [[ -z "$(spare)" ]] && break; sleep 0.5; done
+sleep 1
 DISPLAY="$DISPLAY_NO" xdotool key ctrl+z
 for _ in $(seq 1 20); do [[ "$(multiview_program)" == left ]] && break; sleep 0.5; done
 [[ "$(multiview_program)" == left && -z "$(spare)" ]] \
