@@ -989,13 +989,7 @@ impl Service {
                 Err(broadcast::error::RecvError::Lagged(_)) => continue,
                 Err(broadcast::error::RecvError::Closed) => return,
             };
-            let own_change = self
-                .touched
-                .lock()
-                .expect("touched lock")
-                .get(&error.flow)
-                .is_some_and(Touch::is_recent);
-            if error.kind == FlowFailure::Stopped && own_change {
+            if error.kind == FlowFailure::Stopped && self.own_stop(error.flow).await {
                 continue;
             }
             if self.output_failed(&error).await {
@@ -1003,6 +997,28 @@ impl Service {
             }
             self.slot_failed(&error).await;
         }
+    }
+
+    /// Whether a stop of `flow` is lmix-core's own: during a command on it,
+    /// or just after one. After its own stop or emptying that stop is it;
+    /// after building it, the old flow's, unless the flow does not run now
+    /// (stopped behind lmix-core's back right after it).
+    async fn own_stop(&self, flow: FlowId) -> bool {
+        let touch = self.touch_of(flow);
+        match touch {
+            // The old flow drains while the command builds anew.
+            Some(Touch::Running) => true,
+            Some(done @ Touch::Done { builds, .. }) if done.is_recent() => {
+                // A command that came meanwhile rebuilds the flow (strom
+                // answers 404 in between): the stop is its old flow's.
+                !builds || self.engine.flow_running(flow).await || self.touch_of(flow) != touch
+            }
+            _ => false,
+        }
+    }
+
+    fn touch_of(&self, flow: FlowId) -> Option<Touch> {
+        self.touched.lock().expect("touched lock").get(&flow).copied()
     }
 
     /// A running output that fails or is stopped behind lmix-core's back is
@@ -1981,10 +1997,13 @@ impl Service {
             // The window counts from the end: a rebuild's stop event may
             // trail the command (a drained stop takes over a second).
             if let Some(flow) = flow_of(command) {
-                self.touched
-                    .lock()
-                    .expect("touched lock")
-                    .insert(flow, Touch::Done(Instant::now()));
+                self.touched.lock().expect("touched lock").insert(
+                    flow,
+                    Touch::Done {
+                        at: Instant::now(),
+                        builds: builds_flow(command),
+                    },
+                );
             }
             mark_slot(sw, command, outcome.is_ok());
             mark_output(sw, command, &outcome);
@@ -2130,18 +2149,20 @@ enum Origin {
 }
 
 /// lmix-core's last change of a flow.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 enum Touch {
     /// A command on it is still running.
     Running,
-    Done(Instant),
+    /// Done at `at`; `builds`: it built the flow (not stopped or emptied
+    /// it).
+    Done { at: Instant, builds: bool },
 }
 
 impl Touch {
     fn is_recent(&self) -> bool {
         match self {
             Touch::Running => true,
-            Touch::Done(at) => at.elapsed() < OWN_STOP_WINDOW,
+            Touch::Done { at, .. } => at.elapsed() < OWN_STOP_WINDOW,
         }
     }
 }
@@ -2153,6 +2174,18 @@ fn flow_of(command: &Command) -> Option<FlowId> {
         Command::StartOutput { id, .. } | Command::StopOutput { id } => Some(output_flow_id(*id)),
         _ => None,
     }
+}
+
+/// Whether `command` builds its flow (`flow_of`), rather than stopping or
+/// emptying it.
+fn builds_flow(command: &Command) -> bool {
+    matches!(
+        command,
+        Command::SetSlot {
+            source: Some(_),
+            ..
+        } | Command::StartOutput { .. }
+    )
 }
 
 /// Reflect a start or stop in the output's status.
@@ -3298,6 +3331,46 @@ mod tests {
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
         assert_eq!(service.state().await.inputs[0].status, InputStatus::Online);
+    }
+
+    /// A stop right after a command of its own, of a flow that then does
+    /// not run, is a failure: the input fails back.
+    #[tokio::test(start_paused = true)]
+    async fn a_foreign_stop_just_after_an_own_command_is_a_failure() {
+        let engine = Arc::new(NullEngine::failing());
+        let service = Service::new(4, engine.clone(), None);
+        service.handle(bars()).await.unwrap();
+        tokio::spawn(service.clone().watch_failures());
+        tokio::task::yield_now().await;
+
+        engine.stop_flow(slot_id(0));
+        engine.fail(FlowError {
+            flow: slot_id(0),
+            message: "stopped".into(),
+            kind: FlowFailure::Stopped,
+        });
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+        assert_eq!(service.state().await.inputs[0].status, InputStatus::Offline);
+    }
+
+    /// Just after its own emptying or stop, a stop is lmix-core's own
+    /// even though the flow does not run (a new show empties a slot before
+    /// it builds it again); just after building it, only while it runs.
+    #[tokio::test(start_paused = true)]
+    async fn a_stop_after_an_own_emptying_is_own() {
+        let engine = Arc::new(NullEngine::default());
+        let service = Service::new(4, engine.clone(), None);
+        let flow = slot_id(0);
+        engine.stop_flow(flow);
+        let touch = |builds| Touch::Done {
+            at: Instant::now(),
+            builds,
+        };
+        service.touched.lock().unwrap().insert(flow, touch(false));
+        assert!(service.own_stop(flow).await);
+        service.touched.lock().unwrap().insert(flow, touch(true));
+        assert!(!service.own_stop(flow).await);
     }
 
     #[tokio::test(start_paused = true)]

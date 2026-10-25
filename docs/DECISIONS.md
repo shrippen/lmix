@@ -4680,3 +4680,26 @@ Abgriff), lmix-core-Tests (`buses_change_the_running_mixer`),
 console-qt-Tests, `scripts/test-m2b-vm.sh` und `scripts/test-console-qt.sh`
 mit strom #43 (Busse zur Laufzeit) und #44 (Test-Race), beide gemergt
 25.10.; Sends und Abhören einer Busänderung gehen in einem PATCH.
+
+## 2026-10-25 — Fremder Stopp kurz nach einem eigenen Befehl (INP.FB)
+
+**Anlass**: `watch_failures` überging jeden Stopp eines Flows bis 1 s nach
+einem eigenen Befehl darauf (`OWN_STOP_WINDOW`): Das ist der Stopp des alten
+Flows, den der Befehl ersetzt. Gesehen am 25.10.: Ein Slot-Flow stoppte 0,64 s
+nach dem Failback („input back“). Der Eingang blieb „online“, der Flow stand,
+und es gab keinen neuen Failback.
+
+**Entscheidung**: Läuft der Befehl noch, bleibt der Stopp übergangen (der
+alte Flow läuft aus). Hat er den Flow gestoppt oder den Slot geleert, ist ein
+Stopp im Fenster sein eigener (eine neue Show leert Slots, bevor sie sie
+wieder baut). Hat er ihn gebaut und ist das Fenster noch offen, fragt lmix-core
+die Engine, ob der Flow jetzt läuft (auch READY oder PAUSED, ein Flow im Anlauf) (`Engine::flow_running`, bei strom
+`GET /flows/{id}`). Ohne Auskunft gilt er als laufend: eine Engine, die es
+nicht weiß, strom mit einem Fehler oder ohne Antwort binnen 2 s
+(`FLOW_CHECK_TIMEOUT`; der Watcher wartet darauf). Nur wenn er läuft, war
+es der alte Flow. Sonst gilt der Stopp als Ausfall, mit Failback wie sonst.
+
+**Geprüft**: lmix-core-Tests (`a_foreign_stop_just_after_an_own_command_is_a_failure`,
+`a_stop_after_an_own_emptying_is_own`, `a_flow_runs_unless_strom_says_otherwise`,
+schlägt ohne den Fix fehl; `own_rebuild_stop_is_no_failure`,
+`stop_during_a_slow_own_rebuild_is_no_failure` unverändert grün).
