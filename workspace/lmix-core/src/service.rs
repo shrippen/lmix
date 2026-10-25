@@ -985,14 +985,26 @@ impl Service {
                 Err(broadcast::error::RecvError::Lagged(_)) => continue,
                 Err(broadcast::error::RecvError::Closed) => return,
             };
-            let own_change = self
+            let touch = self
                 .touched
                 .lock()
                 .expect("touched lock")
                 .get(&error.flow)
-                .is_some_and(Touch::is_recent);
-            if error.kind == FlowFailure::Stopped && own_change {
-                continue;
+                .copied();
+            if error.kind == FlowFailure::Stopped {
+                match touch {
+                    // The old flow drains while the command builds anew.
+                    Some(Touch::Running) => continue,
+                    // Just after a command of its own: the old flow's
+                    // stop, unless the flow does not run now (stopped
+                    // behind lmix-core's back right after it).
+                    Some(touch @ Touch::Done(_))
+                        if touch.is_recent() && self.engine.flow_running(error.flow).await =>
+                    {
+                        continue
+                    }
+                    _ => {}
+                }
             }
             if self.output_failed(&error).await {
                 continue;
@@ -3294,6 +3306,27 @@ mod tests {
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
         assert_eq!(service.state().await.inputs[0].status, InputStatus::Online);
+    }
+
+    /// A stop right after a command of its own, of a flow that then does
+    /// not run, is a failure: the input fails back.
+    #[tokio::test(start_paused = true)]
+    async fn a_foreign_stop_just_after_an_own_command_is_a_failure() {
+        let engine = Arc::new(NullEngine::failing());
+        let service = Service::new(4, engine.clone(), None);
+        service.handle(bars()).await.unwrap();
+        tokio::spawn(service.clone().watch_failures());
+        tokio::task::yield_now().await;
+
+        engine.stop_flow(slot_id(0));
+        engine.fail(FlowError {
+            flow: slot_id(0),
+            message: "stopped".into(),
+            kind: FlowFailure::Stopped,
+        });
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+        assert_eq!(service.state().await.inputs[0].status, InputStatus::Offline);
     }
 
     #[tokio::test(start_paused = true)]

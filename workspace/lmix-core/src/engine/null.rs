@@ -36,6 +36,9 @@ pub struct NullEngine {
     /// Stinger takes run so far, as the engine's generations count them.
     #[cfg(test)]
     stinger_takes: std::sync::atomic::AtomicU64,
+    /// Flows a test has stopped behind lmix-core's back.
+    #[cfg(test)]
+    stopped: Mutex<std::collections::HashSet<strom_types::FlowId>>,
 }
 
 impl NullEngine {
@@ -89,6 +92,13 @@ impl NullEngine {
     pub fn fail(&self, error: super::meters::FlowError) {
         let errors = self.errors.as_ref().expect("engine built with failing()");
         let _ = errors.send(error);
+    }
+
+    /// Stop `flow` as something outside lmix-core would: it no longer
+    /// runs.
+    #[cfg(test)]
+    pub fn stop_flow(&self, flow: strom_types::FlowId) {
+        self.stopped.lock().expect("stopped lock").insert(flow);
     }
 
     /// Make the next command slow, reporting `error` halfway through.
@@ -205,6 +215,11 @@ impl Engine for NullEngine {
 
     async fn output_running(&self, _id: lmix_types::OutputId) -> bool {
         false
+    }
+
+    #[cfg(test)]
+    async fn flow_running(&self, flow: strom_types::FlowId) -> bool {
+        !self.stopped.lock().expect("stopped lock").contains(&flow)
     }
 
     async fn measure_latency(&self, _seconds: u32) -> Result<(), EngineError> {

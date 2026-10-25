@@ -1627,7 +1627,11 @@ impl Engine for StromEngine {
     }
 
     async fn output_running(&self, id: OutputId) -> bool {
-        matches!(self.get_flow(flows::output_flow_id(id)).await, Ok(Some(flow)) if flow.running)
+        self.flow_running(flows::output_flow_id(id)).await
+    }
+
+    async fn flow_running(&self, flow: FlowId) -> bool {
+        matches!(self.get_flow(flow).await, Ok(Some(flow)) if flow.running)
     }
 
     /// SRT sender statistics of the output's flow, summed over its
