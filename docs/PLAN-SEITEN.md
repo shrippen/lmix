@@ -38,7 +38,7 @@ die Leinwand ist Anschauung und liegt nicht im Repo.
 |---|---|
 | `MixerMain.qml`, Monitore, `TransitionPanel`, `InputTile`, `LayoutBar` | Mix |
 | `ShowMain.qml`, `ShowView`, `CueListsDialog`, `TransportBar` | Show |
-| `ChannelStripPanel`, `ChannelStripDialog`, `AuxBusDialog`, `ZonesDialog` | Audio |
+| `ChannelStripPanel`, `ChannelStripDialog`, `BusDialog`, `ZonesDialog` | Audio |
 | `OutputBar`, `AddOutputDialog`, `TargetsDialog`, `FormatDialog` | Outputs |
 | `DataSourcesDialog`, `TriggersDialog`, `ShortcutsDialog`, Rechner-Einstellungen, Stil | Setup |
 | `AppShell.qml` (Datei-Menü, Stil, Hinweise) | Shell: Kopfzeile und Seitenleiste |

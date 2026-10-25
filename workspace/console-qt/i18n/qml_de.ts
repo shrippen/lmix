@@ -332,7 +332,7 @@
       <translation>Die des Geräts</translation>
     </message>
     <message>
-      <location line="+164" />
+      <location line="+182" />
       <source>Pattern</source>
       <translation>Muster</translation>
     </message>
@@ -440,7 +440,7 @@
   <context>
     <name>AddOutputDialog</name>
     <message>
-      <location filename="../qml/AddOutputDialog.qml" line="+24" />
+      <location filename="../qml/AddOutputDialog.qml" line="+37" />
       <source>folder in the engine's media directory</source>
       <translation>Ordner im Medienverzeichnis der Engine</translation>
     </message>
@@ -534,7 +534,7 @@
   <context>
     <name>AppShell</name>
     <message>
-      <location filename="../qml/AppShell.qml" line="+199" />
+      <location filename="../qml/AppShell.qml" line="+218" />
       <source>Ctrl</source>
       <comment>key</comment>
       <translation>Strg</translation>
@@ -546,13 +546,13 @@
       <translation>Umschalt</translation>
     </message>
     <message>
-      <location line="+96" />
-      <location line="+135" />
+      <location line="+99" />
+      <location line="+136" />
       <source>Open show</source>
       <translation>Show öffnen</translation>
     </message>
     <message>
-      <location line="-134" />
+      <location line="-135" />
       <location line="+13" />
       <source>lmix shows (*.lmix)</source>
       <translation>lmix-Shows (*.lmix)</translation>
@@ -566,12 +566,12 @@
     </message>
     <message>
       <location line="-81" />
-      <location line="+125" />
+      <location line="+126" />
       <source>Save show</source>
       <translation>Show speichern</translation>
     </message>
     <message>
-      <location line="-110" />
+      <location line="-111" />
       <source>Export settings</source>
       <translation>Einstellungen exportieren</translation>
     </message>
@@ -624,23 +624,23 @@
     </message>
     <message>
       <location line="+25" />
-      <location line="+258" />
+      <location line="+260" />
       <source>Keys</source>
       <translation>Tasten</translation>
     </message>
     <message>
-      <location line="-252" />
+      <location line="-254" />
       <source>Pages</source>
       <translation>Seiten</translation>
     </message>
     <message>
       <location line="+0" />
-      <location line="+328" />
+      <location line="+330" />
       <source>Ctrl+1…%1</source>
       <translation>Strg+1…%1</translation>
     </message>
     <message>
-      <location line="-327" />
+      <location line="-328" />
       <source>New show</source>
       <translation>Neue Show</translation>
     </message>
@@ -655,7 +655,7 @@
       <translation>Belegungen</translation>
     </message>
     <message>
-      <location line="+1" />
+      <location line="+2" />
       <location line="+346" />
       <source>Panic all</source>
       <translation>Panik: alles</translation>
@@ -867,14 +867,14 @@
   <context>
     <name>AudioPage</name>
     <message>
-      <location filename="../qml/AudioPage.qml" line="+48" />
+      <location filename="../qml/AudioPage.qml" line="+50" />
       <source>Audio</source>
       <translation>Ton</translation>
     </message>
     <message>
       <location line="+1" />
-      <source>%1 kHz · %2 aux buses</source>
-      <translation>%1 kHz · %2 Aux-Busse</translation>
+      <source>%1 kHz · buses: %2</source>
+      <translation>%1 kHz · Busse: %2</translation>
     </message>
     <message>
       <location line="+3" />
@@ -922,7 +922,13 @@
       <translation>Noch kein Input mit Ton</translation>
     </message>
     <message>
-      <location line="+53" />
+      <location line="+17" />
+      <location line="+133" />
+      <source>Headphones</source>
+      <translation>Kopfhörer</translation>
+    </message>
+    <message>
+      <location line="-91" />
       <source>%1 ch.</source>
       <translation>%1 Kan.</translation>
     </message>
@@ -952,12 +958,12 @@
       <translation>Kanalzug · %1 %2</translation>
     </message>
     <message>
-      <location line="+48" />
+      <location line="+52" />
       <source>Send of %1 to %2</source>
       <translation>Send von %1 auf %2</translation>
     </message>
     <message>
-      <location line="+22" />
+      <location line="+24" />
       <source>Channel strip %1</source>
       <translation>Kanalzug %1</translation>
     </message>
@@ -1023,56 +1029,125 @@
     </message>
     <message>
       <location line="+2" />
-      <source>Listen on the monitor after the fader (AFL)</source>
-      <translation>Auf dem Abhörweg hinter dem Fader hören (AFL)</translation>
+      <source>Listen on the headphones after the fader (AFL)</source>
+      <translation>Auf dem Kopfhörer hinter dem Fader hören (AFL)</translation>
     </message>
   </context>
   <context>
-    <name>AuxBusDialog</name>
+    <name>BusDialog</name>
     <message>
-      <location filename="../qml/AuxBusDialog.qml" line="+26" />
-      <source>Master and aux buses</source>
-      <translation>Master und Aux-Busse</translation>
+      <location filename="../qml/BusDialog.qml" line="+24" />
+      <source>Master, headphones and buses</source>
+      <translation>Master, Kopfhörer und Busse</translation>
     </message>
   </context>
   <context>
-    <name>AuxBusPanel</name>
+    <name>BusPanel</name>
     <message>
-      <location filename="../qml/AuxBusPanel.qml" line="+38" />
-      <source>Master · program sound</source>
-      <translation>Master · Programmton</translation>
-    </message>
-    <message>
-      <location line="+15" />
-      <source>Master volume</source>
-      <translation>Lautstärke Master</translation>
+      <location filename="../qml/BusPanel.qml" line="+90" />
+      <source>Volume of %1</source>
+      <translation>Lautstärke von %1</translation>
     </message>
     <message>
       <location line="+11" />
-      <location line="+72" />
       <source>Mute</source>
       <translation>Stumm</translation>
     </message>
     <message>
-      <location line="-64" />
-      <source>Monitor · listening</source>
-      <translation>Abhören</translation>
-    </message>
-    <message>
       <location line="+15" />
-      <source>Monitor volume</source>
-      <translation>Lautstärke Abhören</translation>
+      <source>Before the faders</source>
+      <translation>Vor den Fadern</translation>
     </message>
     <message>
-      <location line="+38" />
-      <source>Volume of aux %1</source>
-      <translation>Lautstärke von Aux %1</translation>
+      <location line="-55" />
+      <source>Program stops for a moment while the mixer is built anew; running outputs restart.</source>
+      <translation>Das Programm steht kurz, während der Mischer neu gebaut wird; laufende Ausgänge starten neu.</translation>
+    </message>
+    <message>
+      <location line="+64" />
+      <source>On: the sends ignore the channel faders and on/off (a monitor mix).</source>
+      <translation>An: Die Sends übergehen Kanalfader und Ein/Aus (eine Monitormischung).</translation>
+    </message>
+    <message>
+      <location line="+13" />
+      <source>Master · program sound</source>
+      <translation>Master · Programmton</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>master</source>
+      <translation>Master</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Headphones · listening</source>
+      <translation>Kopfhörer · Abhören</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>headphones</source>
+      <translation>Kopfhörer</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>Headphones before the faders?</source>
+      <translation>Kopfhörer vor den Fadern?</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Headphones after the faders?</source>
+      <translation>Kopfhörer nach den Fadern?</translation>
+    </message>
+    <message>
+      <location line="+21" />
+      <source>Name of the bus</source>
+      <translation>Name des Busses</translation>
+    </message>
+    <message>
+      <location line="+16" />
+      <source>Listen</source>
+      <translation>Vorhören</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>Remove %1</source>
+      <translation>%1 entfernen</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Remove %1?</source>
+      <translation>%1 entfernen?</translation>
+    </message>
+    <message>
+      <location line="+13" />
+      <source>%1 before the faders?</source>
+      <translation>%1 vor den Fadern?</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>%1 after the faders?</source>
+      <translation>%1 nach den Fadern?</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>Add bus</source>
+      <translation>Bus hinzufügen</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>A mix of its own for an output: in-ear, a stream, a recording.</source>
+      <translation>Eine eigene Mischung für einen Ausgang: In-Ear, Stream, Aufnahme.</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Add a bus?</source>
+      <translation>Einen Bus hinzufügen?</translation>
     </message>
   </context>
   <context>
     <name>ChannelStripDialog</name>
     <message>
-      <location filename="../qml/ChannelStripDialog.qml" line="+17" />
+      <location filename="../qml/ChannelStripDialog.qml" line="+19" />
       <source>Channel strip of %1 %2</source>
       <translation>Kanalzug von %1 %2</translation>
     </message>
@@ -1080,7 +1155,7 @@
   <context>
     <name>ChannelStripPanel</name>
     <message>
-      <location filename="../qml/ChannelStripPanel.qml" line="+107" />
+      <location filename="../qml/ChannelStripPanel.qml" line="+122" />
       <source>Input</source>
       <translation>Eingang</translation>
     </message>
@@ -1120,12 +1195,22 @@
       <translation>Neue Inputs mit Ton beginnen mit diesem Delay; vorhandene behalten ihres</translation>
     </message>
     <message>
-      <location line="+10" />
-      <source>Aux sends</source>
-      <translation>Aux-Sends</translation>
+      <location line="+6" />
+      <source>Sends</source>
+      <translation>Sends</translation>
     </message>
     <message>
-      <location line="+10" />
+      <location line="+1" />
+      <source>To the headphones</source>
+      <translation>Auf den Kopfhörer</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Headphones level</source>
+      <translation>Pegel Kopfhörer</translation>
+    </message>
+    <message>
+      <location line="+21" />
       <source>High-pass</source>
       <translation>Hochpass</translation>
     </message>
@@ -1510,7 +1595,7 @@
   <context>
     <name>InputSettingsDialog</name>
     <message>
-      <location filename="../qml/InputSettingsDialog.qml" line="+31" />
+      <location filename="../qml/InputSettingsDialog.qml" line="+33" />
       <source>General</source>
       <translation>Allgemein</translation>
     </message>
@@ -1650,7 +1735,7 @@
       <translation>Dieser Input hat keinen Ton.</translation>
     </message>
     <message>
-      <location line="+18" />
+      <location line="+19" />
       <source>%1 triggers run actions when this input goes on air, off air or ends.</source>
       <translation>%1 Auslöser führen Aktionen aus, wenn dieser Input auf Sendung geht, sie verlässt oder endet.</translation>
     </message>
@@ -1703,7 +1788,7 @@
   <context>
     <name>InputTile</name>
     <message>
-      <location filename="../qml/InputTile.qml" line="+83" />
+      <location filename="../qml/InputTile.qml" line="+85" />
       <source>Input %1 %2</source>
       <translation>Input %1 %2</translation>
     </message>
@@ -1838,22 +1923,17 @@
       <translation>Lautstärke %1</translation>
     </message>
     <message>
-      <location line="+9" />
-      <source>Listen on the monitor bus after the fader (right click: before it)</source>
-      <translation>Auf dem Abhörbus hören, nach dem Fader (Rechtsklick: davor)</translation>
-    </message>
-    <message>
-      <location line="+233" />
+      <location line="+248" />
       <source>Copy link</source>
       <translation>Link kopieren</translation>
     </message>
     <message>
-      <location line="+52" />
+      <location line="+53" />
       <source>Rename</source>
       <translation>Umbenennen</translation>
     </message>
     <message>
-      <location line="-124" />
+      <location line="-125" />
       <source>GO: %1</source>
       <translation>GO: %1</translation>
     </message>
@@ -1968,22 +2048,27 @@
       <translation>Bei Signalverlust</translation>
     </message>
     <message>
-      <location line="-43" />
+      <location line="-118" />
+      <source>Listen on the headphones after the fader (right click: before it)</source>
+      <translation>Auf dem Kopfhörer hören, nach dem Fader (Rechtsklick: davor)</translation>
+    </message>
+    <message>
+      <location line="+72" />
       <source>Cut</source>
       <translation>Cut</translation>
     </message>
     <message>
-      <location line="+6" />
+      <location line="+7" />
       <source>Preview</source>
       <translation>Vorschau</translation>
     </message>
     <message>
-      <location line="+6" />
+      <location line="+7" />
       <source>Name</source>
       <translation>Name</translation>
     </message>
     <message>
-      <location line="+5" />
+      <location line="+6" />
       <source>Options</source>
       <translation>Optionen</translation>
     </message>
@@ -2068,7 +2153,7 @@
       <translation>Entfernen</translation>
     </message>
     <message>
-      <location line="+34" />
+      <location line="+35" />
       <source>Rename input %1</source>
       <translation>Input %1 umbenennen</translation>
     </message>
@@ -2565,7 +2650,7 @@
   <context>
     <name>MixPage</name>
     <message>
-      <location filename="../qml/MixPage.qml" line="+29" />
+      <location filename="../qml/MixPage.qml" line="+28" />
       <source>Mix</source>
       <translation>Mix</translation>
     </message>
@@ -2630,17 +2715,17 @@
       <translation>Ordner mit den fehlenden Dateien</translation>
     </message>
     <message>
-      <location line="+39" />
+      <location line="+65" />
       <source>Input %1 “%2” removed</source>
       <translation>Input %1 „%2“ entfernt</translation>
     </message>
     <message>
-      <location line="+11" />
+      <location line="+14" />
       <source>Removed</source>
       <translation>Entfernt</translation>
     </message>
     <message>
-      <location line="+2" />
+      <location line="+5" />
       <source>Undo</source>
       <translation>Rückgängig</translation>
     </message>
@@ -2650,7 +2735,7 @@
       <translation>Strg+Z</translation>
     </message>
     <message>
-      <location line="+80" />
+      <location line="+87" />
       <source>Inputs from a show…</source>
       <translation>Inputs aus einer Show …</translation>
     </message>
@@ -2665,19 +2750,19 @@
       <translation>Einige Sekunden lang Aufnahme bis Programm messen</translation>
     </message>
     <message>
-      <location line="+43" />
-      <location line="+207" />
+      <location line="+45" />
+      <location line="+224" />
       <source>Preview</source>
       <translation>Vorschau</translation>
     </message>
     <message>
-      <location line="-162" />
-      <location line="+161" />
+      <location line="-179" />
+      <location line="+178" />
       <source>Program</source>
       <translation>Programm</translation>
     </message>
     <message>
-      <location line="-141" />
+      <location line="-158" />
       <source>Height of the monitors</source>
       <translation>Höhe der Monitore</translation>
     </message>
@@ -2776,12 +2861,17 @@
       <translation>Programm links</translation>
     </message>
     <message>
-      <location line="+6" />
+      <location line="+10" />
       <source>Level meters</source>
       <translation>Pegelanzeigen</translation>
     </message>
     <message>
-      <location line="+144" />
+      <location line="+58" />
+      <source>While locked, closing inputs, loading a show, stopping outputs and changes that rebuild the mixer (adding or removing a bus, its tap) are refused.</source>
+      <translation>Gesperrt lassen sich keine Inputs schließen, keine Show laden, keine Ausgänge stoppen und nichts ändern, was den Mischer neu aufbaut (Bus anlegen oder entfernen, sein Abgriff).</translation>
+    </message>
+    <message>
+      <location line="+101" />
       <source>No inputs yet</source>
       <translation>Noch keine Inputs</translation>
     </message>
@@ -2791,12 +2881,12 @@
       <translation>Kamera, Datei, Stream oder Testbild: Jeder Input bekommt hier eine Kachel.</translation>
     </message>
     <message>
-      <location line="+124" />
+      <location line="+125" />
       <source>Width of the audio column</source>
       <translation>Breite der Tonspalte</translation>
     </message>
     <message>
-      <location line="-290" />
+      <location line="-310" />
       <source>Audio at the edge</source>
       <translation>Ton am Rand</translation>
     </message>
@@ -2806,7 +2896,7 @@
       <translation>Einfacher Modus</translation>
     </message>
     <message>
-      <location line="+26" />
+      <location line="+93" />
       <source>Find missing files…</source>
       <translation>Fehlende Dateien suchen…</translation>
     </message>
@@ -2816,17 +2906,17 @@
       <translation>Den mit „Fehlt“ markierten Inputs fehlen Mediendateien: den Ordner wählen, in dem sie jetzt liegen. Inputs auf Programm bleiben unverändert.</translation>
     </message>
     <message>
-      <location line="+4" />
+      <location line="-10" />
       <source>Clear solo</source>
       <translation>Solo aus</translation>
     </message>
     <message>
-      <location line="+5" />
+      <location line="-5" />
       <source>Bring back %1</source>
       <translation>%1 zurückholen</translation>
     </message>
     <message>
-      <location line="+6" />
+      <location line="-8" />
       <source>Locked</source>
       <translation>Gesperrt</translation>
     </message>
@@ -2836,33 +2926,28 @@
       <translation>Sperren</translation>
     </message>
     <message>
-      <location line="+4" />
-      <source>While locked, closing inputs, loading a show and stopping outputs are refused.</source>
-      <translation>Gesperrt lassen sich keine Inputs schließen, keine Show laden und keine Ausgänge stoppen.</translation>
-    </message>
-    <message>
-      <location line="+5" />
+      <location line="-6" />
       <source>Shortcuts…</source>
       <translation>Belegungen…</translation>
     </message>
     <message>
-      <location line="+6" />
+      <location line="-6" />
       <source>Buses…</source>
       <translation>Busse…</translation>
     </message>
     <message>
-      <location line="+6" />
+      <location line="-6" />
       <source>Titles…</source>
       <translation>Titel…</translation>
     </message>
     <message>
-      <location line="+6" />
+      <location line="-6" />
       <source>Data…</source>
       <translation>Daten…</translation>
     </message>
     <message>
-      <location line="+5" />
-      <location line="+86" />
+      <location line="-9" />
+      <location line="+141" />
       <source>+ Input</source>
       <translation>+ Input</translation>
     </message>
@@ -3085,12 +3170,12 @@
       <translation>Ton</translation>
     </message>
     <message>
-      <location line="+0" />
+      <location line="+75" />
       <source>of the source</source>
       <translation>der Quelle</translation>
     </message>
     <message>
-      <location line="+1" />
+      <location line="-74" />
       <source>Target</source>
       <translation>Ziel</translation>
     </message>
@@ -3111,12 +3196,12 @@
     </message>
     <message>
       <location line="+17" />
-      <location line="+47" />
+      <location line="+52" />
       <source>Multiview</source>
       <translation>Multiview</translation>
     </message>
     <message>
-      <location line="-44" />
+      <location line="-49" />
       <source>Program on the left</source>
       <translation>Programm links</translation>
     </message>
@@ -3151,7 +3236,7 @@
       <translation>Bildschirm</translation>
     </message>
     <message>
-      <location line="+18" />
+      <location line="+23" />
       <source>Input %1 %2</source>
       <translation>Input %1 %2</translation>
     </message>
@@ -3674,8 +3759,8 @@
     </message>
     <message>
       <location line="+1" />
-      <source>While locked, closing inputs, loading a show and stopping outputs are refused.</source>
-      <translation>Gesperrt lassen sich keine Inputs schließen, keine Show laden und keine Ausgänge stoppen.</translation>
+      <source>While locked, closing inputs, loading a show, stopping outputs and changes that rebuild the mixer (adding or removing a bus, its tap) are refused.</source>
+      <translation>Gesperrt lassen sich keine Inputs schließen, keine Show laden, keine Ausgänge stoppen und nichts ändern, was den Mischer neu aufbaut (Bus anlegen oder entfernen, sein Abgriff).</translation>
     </message>
     <message>
       <location line="+12" />
@@ -4968,16 +5053,6 @@
     <name>Texts</name>
     <message>
       <location filename="../qml/Texts.qml" line="+15" />
-      <source>Aux %1 (before the faders)</source>
-      <translation>Aux %1 (vor den Fadern)</translation>
-    </message>
-    <message>
-      <location line="+1" />
-      <source>Aux %1 (after the faders)</source>
-      <translation>Aux %1 (nach den Fadern)</translation>
-    </message>
-    <message>
-      <location line="+13" />
       <source>Test pattern</source>
       <translation>Testbild</translation>
     </message>
@@ -5424,6 +5499,31 @@
     </message>
     <message>
       <location line="+1" />
+      <source>No bus matches %1</source>
+      <translation>Kein Bus passt zu %1</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>A show has at most %1 buses besides master and headphones</source>
+      <translation>Eine Show hat neben Master und Kopfhörer höchstens %1 Busse</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>A bus name has 1–%1 characters</source>
+      <translation>Ein Busname hat 1–%1 Zeichen</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>There is a bus %1 already</source>
+      <translation>Es gibt schon einen Bus %1</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Output %1 takes the sound of bus %2: give it another first</source>
+      <translation>Ausgang %1 nimmt den Ton von Bus %2: Gib ihm zuerst einen anderen</translation>
+    </message>
+    <message>
+      <location line="+1" />
       <source>The show has no file yet; give a path</source>
       <translation>Die Show hat noch keine Datei; bitte einen Pfad angeben</translation>
     </message>
@@ -5646,11 +5746,6 @@
       <location line="+1" />
       <source>A transition is still running; move the T-bar when it has landed</source>
       <translation>Ein Übergang läuft noch; den T-Bar erst bewegen, wenn er fertig ist</translation>
-    </message>
-    <message>
-      <location line="+1" />
-      <source>Aux bus %1 does not exist (1–%2)</source>
-      <translation>Aux-Bus %1 gibt es nicht (1–%2)</translation>
     </message>
     <message>
       <location line="+1" />

@@ -175,11 +175,7 @@ impl Service {
     /// written after each change. A file that cannot be read is left alone
     /// (renamed aside if it is broken) and the list starts empty.
     pub async fn use_shortcuts_file(&self, path: PathBuf) {
-        let read = read_settings(&path, "shortcuts for all shows", |bytes| {
-            serde_json::from_slice::<Vec<crate::show::ShowShortcut>>(bytes)
-                .map_err(|e| e.to_string())
-        })
-        .await;
+        let read = read_settings(&path, "shortcuts for all shows", parse_shortcuts).await;
         let mut sw = self.switcher.lock().await;
         sw.set_all_shows_shortcuts(read.clone().ok().flatten().unwrap_or_default());
         if read.is_ok() {
@@ -827,11 +823,23 @@ impl Service {
                 }
             })
             .collect();
+        // Engine bus 0 is the headphones, metered as the monitor (their mix
+        // or the solos); the show's buses follow.
+        let buses = sw
+            .show()
+            .buses
+            .iter()
+            .enumerate()
+            .map(|(i, bus)| lmix_types::BusPeak {
+                bus: bus.id,
+                peak_db: engine.aux.get(&(i + 1)).copied().and_then(fresh),
+            })
+            .collect();
         Levels {
             inputs,
             program_peak_db: engine.main.and_then(fresh),
-            monitor_peak_db: engine.monitor.and_then(fresh),
-            aux_peak_db: std::array::from_fn(|bus| engine.aux.get(&bus).copied().and_then(fresh)),
+            phones_peak_db: engine.monitor.and_then(fresh),
+            buses,
         }
     }
 
@@ -2030,6 +2038,14 @@ impl Service {
     }
 }
 
+/// The shortcuts for all shows as `--shortcuts` keeps them; a file from
+/// before named buses gets them as a migrated show does.
+fn parse_shortcuts(bytes: &[u8]) -> Result<Vec<crate::show::ShowShortcut>, String> {
+    let mut value: serde_json::Value = serde_json::from_slice(bytes).map_err(|e| e.to_string())?;
+    crate::show::migrate_shortcuts(&mut value);
+    serde_json::from_value(value).map_err(|e| e.to_string())
+}
+
 /// A settings file of lmix-core read at start: `Ok(None)` when it is
 /// missing or unreadable (it starts empty and is written later), `Err`
 /// when it is broken and could not be set aside (never written over).
@@ -2294,6 +2310,74 @@ mod tests {
     use lmix_types::{
         DisplayMode, InputRef, OutputRef, OutputSource, OutputSpec, SourceSpec, TestPattern,
     };
+
+    /// Shortcuts for all shows from before named buses still load: aux
+    /// bus B becomes "Bus B", the name a migrated show gives it.
+    #[test]
+    fn shortcuts_for_all_shows_from_before_buses_load() {
+        let file = serde_json::json!([{
+            "id": InputId::new(),
+            "label": "In-ear up",
+            "actions": [
+                {"action": "set_aux_send", "input": 1, "bus": 2, "level": 80},
+                {"action": "set_monitor_volume", "volume": 60},
+            ],
+        }]);
+        let shortcuts = parse_shortcuts(&serde_json::to_vec(&file).unwrap()).unwrap();
+        assert_eq!(
+            shortcuts[0].actions,
+            [
+                Action::SetSend {
+                    input: InputRef::Number(1),
+                    bus: lmix_types::BusRef::Text("Bus B".into()),
+                    level: 80
+                },
+                Action::SetPhones {
+                    volume: 60,
+                    mute: false
+                },
+            ]
+        );
+
+        // An output from before takes its bus along (version 3 would read
+        // it and drop `aux` unseen).
+        let file = serde_json::json!([{
+            "id": InputId::new(),
+            "label": "In-ear out",
+            "actions": [{"action": "add_output", "spec": {"kind": "srt", "uri": "srt://:9000?mode=listener"}, "aux": 2}],
+        }]);
+        let shortcuts = parse_shortcuts(&serde_json::to_vec(&file).unwrap()).unwrap();
+        assert!(
+            matches!(&shortcuts[0].actions[0], Action::AddOutput { bus: Some(lmix_types::BusRef::Text(b)), .. } if b == "Bus B"),
+            "{:?}",
+            shortcuts[0].actions
+        );
+
+        // A file of today stays as it is: bus 3 is the third bus there,
+        // not aux C, and a request body is the other side's JSON.
+        let file = serde_json::json!([{
+            "id": InputId::new(),
+            "label": "Stream down",
+            "actions": [
+                {"action": "fade_volume", "target": {"bus": 3}, "volume": 0, "duration_ms": 500},
+                {"action": "http_request", "target": "old", "body": {"action": "set_monitor_volume", "volume": 10}},
+            ],
+        }]);
+        let shortcuts = parse_shortcuts(&serde_json::to_vec(&file).unwrap()).unwrap();
+        assert_eq!(
+            shortcuts[0].actions[0],
+            Action::FadeVolume {
+                target: lmix_types::action::VolumeTarget::Bus(lmix_types::BusRef::Number(3)),
+                volume: 0,
+                duration_ms: 500
+            }
+        );
+        assert!(
+            matches!(&shortcuts[0].actions[1], Action::HttpRequest { body: Some(body), .. } if body["action"] == "set_monitor_volume"),
+            "{:?}",
+            shortcuts[0].actions[1]
+        );
+    }
 
     /// Slots the engine was told to build (other commands vary as
     /// features grow: audio, solo, signal loss).
@@ -3300,7 +3384,7 @@ mod tests {
                 },
                 source: OutputSource::default(),
                 name: Some("Screen".into()),
-                aux: None,
+                bus: None,
             })
             .await
             .unwrap();
@@ -3508,7 +3592,7 @@ mod tests {
             "the old file, as it was"
         );
         let new = tokio::fs::read_to_string(&file).await.unwrap();
-        assert!(new.contains("\"version\": 2"), "{new}");
+        assert!(new.contains("\"version\": 3"), "{new}");
     }
 
     #[tokio::test]

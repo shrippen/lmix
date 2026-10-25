@@ -4,7 +4,8 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::action::{Effect, TransitionSlot, DEFAULT_OVERLAY_MS, OVERLAY_CHANNELS};
-use crate::input::{AuxBus, Input, InputId, AUX_BUSES};
+use crate::bus::{Bus, BusPeak, Fader, Phones};
+use crate::input::{Input, InputId};
 use crate::layout::{BoxRect, Layout, LayoutTemplate};
 use crate::output::{Output, OutputStats};
 use crate::shortcut::Shortcut;
@@ -129,12 +130,13 @@ pub struct ShowState {
     /// T-bar position (0 = at rest, below 1 = preview partly mixed in).
     #[serde(default)]
     pub t_bar: f32,
-    /// Masters of the aux buses (bus 1 first).
+    /// The show's buses besides master and headphones, in their order
+    /// (AUD.2).
     #[serde(default)]
-    pub aux_buses: [AuxBus; AUX_BUSES],
+    pub buses: Vec<Bus>,
     /// Master of program sound (AUD.2).
     #[serde(default)]
-    pub master: AuxBus,
+    pub master: Fader,
     /// Picture size and rate of program (OUT.1).
     #[serde(default)]
     pub format: crate::output::MasterFormat,
@@ -144,9 +146,9 @@ pub struct ShowState {
     /// Sample rate of the audio mixer, Hz (AUD.17).
     #[serde(default = "crate::output::default_sample_rate")]
     pub sample_rate: u32,
-    /// Volume of the monitor bus, 0–100 (AUD.4).
-    #[serde(default = "crate::input::full_volume")]
-    pub monitor_volume: u8,
+    /// The headphones (AUD.4).
+    #[serde(default)]
+    pub phones: Phones,
     /// Delay of new inputs with sound, ms (AUD.6).
     #[serde(default)]
     pub default_delay_ms: u32,
@@ -248,12 +250,12 @@ pub struct Levels {
     /// Program mix after faders and mutes, dBFS; `None` before the first
     /// measurement.
     pub program_peak_db: Option<f32>,
-    /// Monitor bus (program, or the solos while any input is soloed).
+    /// Headphones (their mix, or the solos while any is soloed).
     #[serde(default)]
-    pub monitor_peak_db: Option<f32>,
-    /// Each aux bus after its master (bus 1 first).
+    pub phones_peak_db: Option<f32>,
+    /// Each bus after its master, in the show's order.
     #[serde(default)]
-    pub aux_peak_db: [Option<f32>; AUX_BUSES],
+    pub buses: Vec<BusPeak>,
 }
 
 /// Live picture for a client on the engine's machine (`GET /api/live/…`):

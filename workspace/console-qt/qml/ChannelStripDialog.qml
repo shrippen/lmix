@@ -13,6 +13,8 @@ KanteDialog {
     required property var act
     /** The input whose strip is edited; set before `open()`. */
     property var input: null
+    /** `buses` of the show state. */
+    property var buses: []
 
     title: input ? qsTr("Channel strip of %1 %2").arg(input.number).arg(input.name) : ""
     modal: true
@@ -33,6 +35,7 @@ KanteDialog {
             width: scroll.availableWidth
             act: dialog.act
             input: dialog.input
+            buses: dialog.buses
         }
     }
 }

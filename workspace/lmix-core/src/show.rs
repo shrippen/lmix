@@ -1,7 +1,7 @@
 //! The show: what gets saved to and loaded from a `.lmix` file (SHW.1–2).
 //!
 //! ```json
-//! { "format": "lmix-show", "version": 2, "show": { "inputs": [...], ... } }
+//! { "format": "lmix-show", "version": 3, "show": { "inputs": [...], ... } }
 //! ```
 //!
 //! Plain, versioned JSON so people and tools can read it. Media are
@@ -10,21 +10,26 @@
 use std::path::Path;
 
 use lmix_types::action::{OVERLAY_CHANNELS, TRANSITION_SLOTS};
-use lmix_types::input::AUX_BUSES;
+use std::collections::BTreeMap;
+
 use lmix_types::{
-    Action, AtEnd, AutoPlay, AuxBus, ChannelStrip, Cue, DataSourceSpec, Dataset, Effect,
+    Action, AtEnd, AutoPlay, BusId, ChannelStrip, Cue, DataSourceSpec, Dataset, Effect, Fader,
     FieldBinding, InputAudio, InputColor, InputId, InputPress, LayerTransform, LayoutBox, Look,
-    MidiBinding, OutputId, OutputSource, OutputSpec, OverlayChannel, QuickPlay, SignalLoss,
-    SourceSpec, TitleData, TitlePhase, TitleTrigger, Transition, TransitionSlot, Trigger,
+    MidiBinding, OutputId, OutputSource, OutputSpec, OverlayChannel, Phones, PhonesSend, QuickPlay,
+    SignalLoss, SourceSpec, TitleData, TitlePhase, TitleTrigger, Transition, TransitionSlot,
+    Trigger,
 };
 use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value};
 
 /// Marker of a show file.
 const FILE_FORMAT: &str = "lmix-show";
 /// Current file version; older versions get migrated on load.
 ///
 /// 2: cues of the show mode; a cue's `label` became `name` (CUE.21).
-const FILE_VERSION: u32 = 2;
+/// 3: named buses instead of aux buses A–G, headphones instead of the
+/// monitor volume (AUD.2, AUD.4).
+const FILE_VERSION: u32 = 3;
 /// Default length of a timed transition.
 const DEFAULT_TRANSITION_MS: u32 = 500;
 
@@ -58,8 +63,12 @@ pub struct ShowInput {
     pub go: InputPress,
     #[serde(default)]
     pub strip: ChannelStrip,
-    #[serde(default, deserialize_with = "padded")]
-    pub sends: [u8; AUX_BUSES],
+    /// What it sends to the headphones (AUD.4).
+    #[serde(default, skip_serializing_if = "is_default_phones_send")]
+    pub phones: PhonesSend,
+    /// Send level per bus; buses missing get nothing.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub sends: BTreeMap<BusId, u8>,
     #[serde(default)]
     pub look: Look,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -97,11 +106,12 @@ pub struct Show {
     /// kept too.
     #[serde(default, deserialize_with = "padded")]
     pub overlay_preview: [Option<InputId>; OVERLAY_CHANNELS as usize],
-    #[serde(default, deserialize_with = "padded")]
-    pub aux_buses: [AuxBus; AUX_BUSES],
+    /// Buses besides master and headphones, in their order (AUD.2).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub buses: Vec<ShowBus>,
     /// Master of program sound (AUD.2).
     #[serde(default)]
-    pub master: AuxBus,
+    pub master: Fader,
     /// Picture size and rate of program (OUT.1).
     #[serde(default)]
     pub format: lmix_types::MasterFormat,
@@ -117,9 +127,9 @@ pub struct Show {
         skip_serializing_if = "is_default_rate"
     )]
     pub sample_rate: u32,
-    /// Volume of the monitor bus (AUD.4).
-    #[serde(default = "lmix_types::input::full_volume")]
-    pub monitor_volume: u8,
+    /// The headphones (AUD.4).
+    #[serde(default, skip_serializing_if = "is_default_phones")]
+    pub phones: Phones,
     /// Delay of new inputs with sound (AUD.6).
     #[serde(default)]
     pub default_delay_ms: u32,
@@ -260,9 +270,20 @@ pub struct ShowOutput {
     pub spec: OutputSpec,
     #[serde(default)]
     pub source: OutputSource,
-    /// Sound from this aux bus (1–7, A–G) instead of the source's own.
+    /// Sound from this bus instead of the source's own.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub aux: Option<u8>,
+    pub bus: Option<BusId>,
+}
+
+/// One bus as saved; whether it is listened to is not.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ShowBus {
+    pub id: BusId,
+    pub name: String,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub pre_fader: bool,
+    #[serde(default)]
+    pub level: Fader,
 }
 
 impl Default for Show {
@@ -277,12 +298,12 @@ impl Default for Show {
             overlays: Default::default(),
             overlay_channels: Default::default(),
             overlay_preview: Default::default(),
-            aux_buses: Default::default(),
+            buses: Vec::new(),
             master: Default::default(),
             format: Default::default(),
             multiview: Default::default(),
             sample_rate: lmix_types::output::default_sample_rate(),
-            monitor_volume: lmix_types::input::full_volume(),
+            phones: Phones::default(),
             default_delay_ms: 0,
             layouts: Vec::new(),
             shortcuts: Vec::new(),
@@ -303,8 +324,7 @@ impl Default for Show {
 }
 
 /// A per-channel array saved with fewer entries (shows from before eight
-/// overlay channels, OVL.1, or seven aux buses, AUD.2): the missing ones
-/// get their default.
+/// overlay channels, OVL.1): the missing ones get their default.
 fn padded<'de, D, T, const N: usize>(deserializer: D) -> Result<[T; N], D::Error>
 where
     D: serde::Deserializer<'de>,
@@ -319,6 +339,14 @@ where
     }
     let mut saved = saved.into_iter();
     Ok(std::array::from_fn(|_| saved.next().unwrap_or_default()))
+}
+
+fn is_default_phones(phones: &Phones) -> bool {
+    *phones == Phones::default()
+}
+
+fn is_default_phones_send(send: &PhonesSend) -> bool {
+    *send == PhonesSend::default()
 }
 
 fn is_default_rate(hz: &u32) -> bool {
@@ -431,9 +459,12 @@ pub fn read_bytes(bytes: &[u8], name: &str) -> Result<Loaded, ShowFileError> {
             found: version,
         });
     }
-    if version < 2 {
-        if let Some(show) = value.get_mut("show") {
+    if let Some(show) = value.get_mut("show") {
+        if version < 2 {
             migrate_cue_labels(show);
+        }
+        if version < 3 {
+            migrate_aux_buses(show);
         }
     }
     let file: ShowFile = serde_json::from_value(value).map_err(|e| format_err(e.to_string()))?;
@@ -470,6 +501,273 @@ fn migrate_cue_labels(show: &mut serde_json::Value) {
             cue.insert("name".into(), label);
         }
     }
+}
+
+/// Letters of the aux buses of version 2, one per bus.
+const AUX_LETTERS: [&str; V2_AUX_BUSES] = ["A", "B", "C", "D", "E", "F", "G"];
+/// Aux buses of version 2 (1–7 in actions).
+const V2_AUX_BUSES: usize = 7;
+
+/// Version 2 to 3: aux buses A–G (1–7 in actions) become named buses
+/// ("Bus A", A before the faders), each one the show used: an input sent
+/// to it, an output took its sound, a saved action named it, or its master
+/// was moved. The monitor volume is the headphones' (AUD.2, AUD.4).
+fn migrate_aux_buses(show: &mut serde_json::Value) {
+    use serde_json::json;
+    let Some(show) = show.as_object_mut() else {
+        return;
+    };
+    let masters: Vec<Value> = match show.remove("aux_buses") {
+        Some(Value::Array(masters)) => masters,
+        _ => Vec::new(),
+    };
+    let mut used = [false; V2_AUX_BUSES];
+    for (bus, master) in masters.iter().enumerate().take(V2_AUX_BUSES) {
+        let volume = master
+            .get("volume")
+            .and_then(Value::as_u64)
+            .unwrap_or(u64::from(lmix_types::input::full_volume()));
+        let mute = master.get("mute").and_then(Value::as_bool).unwrap_or(false);
+        used[bus] |= volume != u64::from(lmix_types::input::full_volume()) || mute;
+    }
+    for input in show
+        .get("inputs")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+    {
+        let sends = input.get("sends").and_then(Value::as_array);
+        for (bus, level) in sends.into_iter().flatten().enumerate().take(V2_AUX_BUSES) {
+            used[bus] |= level.as_u64().unwrap_or(0) > 0;
+        }
+    }
+    for output in show
+        .get("outputs")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+    {
+        if let Some(bus) = output.get("aux").and_then(aux_number) {
+            used[bus] = true;
+        }
+    }
+    let mut rest = Value::Object(std::mem::take(show));
+    actions(&rest, &mut |map| {
+        if let Some(bus) = aux_named(map) {
+            used[bus] = true;
+        }
+    });
+    let ids: Vec<Option<String>> = used
+        .iter()
+        .map(|on| on.then(|| BusId::new().to_string()))
+        .collect();
+    let id = |bus: usize| ids[bus].clone().map(Value::String).unwrap_or(Value::Null);
+    rewrite_aux_actions(&mut rest, &id);
+    let Value::Object(rest) = rest else {
+        return;
+    };
+    *show = rest;
+
+    let buses: Vec<Value> = (0..V2_AUX_BUSES)
+        .filter(|bus| used[*bus])
+        .map(|bus| {
+            let master = masters.get(bus);
+            json!({
+                "id": id(bus),
+                "name": format!("Bus {}", AUX_LETTERS[bus]),
+                "pre_fader": bus == 0,
+                "level": {
+                    "volume": master.and_then(|m| m.get("volume")).cloned().unwrap_or(json!(lmix_types::input::full_volume())),
+                    "mute": master.and_then(|m| m.get("mute")).cloned().unwrap_or(json!(false)),
+                },
+            })
+        })
+        .collect();
+    show.insert("buses".into(), Value::Array(buses));
+    for input in show
+        .get_mut("inputs")
+        .and_then(Value::as_array_mut)
+        .into_iter()
+        .flatten()
+    {
+        let Some(input) = input.as_object_mut() else {
+            continue;
+        };
+        let sends: serde_json::Map<String, Value> = match input.remove("sends") {
+            Some(Value::Array(levels)) => levels
+                .iter()
+                .enumerate()
+                .take(V2_AUX_BUSES)
+                .filter(|(bus, level)| used[*bus] && level.as_u64().unwrap_or(0) > 0)
+                .map(|(bus, level)| (ids[bus].clone().unwrap_or_default(), level.clone()))
+                .collect(),
+            _ => serde_json::Map::new(),
+        };
+        input.insert("sends".into(), Value::Object(sends));
+    }
+    for output in show
+        .get_mut("outputs")
+        .and_then(Value::as_array_mut)
+        .into_iter()
+        .flatten()
+    {
+        if let Some(output) = output.as_object_mut() {
+            if let Some(aux) = output.remove("aux") {
+                if let Some(bus) = aux_number(&aux) {
+                    output.insert("bus".into(), id(bus));
+                }
+            }
+        }
+    }
+    if let Some(volume) = show.remove("monitor_volume") {
+        show.insert("phones".into(), json!({ "volume": volume }));
+    }
+}
+
+/// Aux bus 1–7 of a version 2 action, as an index.
+fn aux_number(v: &Value) -> Option<usize> {
+    v.as_u64()
+        .and_then(|n| usize::try_from(n).ok())
+        .filter(|n| (1..=V2_AUX_BUSES).contains(n))
+        .map(|n| n - 1)
+}
+
+/// Fields of an action that hold JSON of their own, sent elsewhere as it
+/// is (`http_request`, `ha_service`): no actions of lmix in there.
+const FOREIGN_JSON: [&str; 2] = ["body", "data"];
+
+/// Every saved action in `value` (shortcuts, cues, triggers, wherever they
+/// are, also inside a saved action: a cue that adds a shortcut).
+fn actions(value: &Value, f: &mut dyn FnMut(&Map<String, Value>)) {
+    match value {
+        Value::Object(map) => {
+            let action = map.get("action").is_some_and(Value::is_string);
+            if action {
+                f(map);
+            }
+            map.iter()
+                .filter(|(key, _)| !(action && FOREIGN_JSON.contains(&key.as_str())))
+                .for_each(|(_, v)| actions(v, f));
+        }
+        Value::Array(items) => items.iter().for_each(|v| actions(v, f)),
+        _ => {}
+    }
+}
+
+fn actions_mut(value: &mut Value, f: &mut dyn FnMut(&mut Map<String, Value>)) {
+    match value {
+        Value::Object(map) => {
+            let action = map.get("action").is_some_and(Value::is_string);
+            map.iter_mut()
+                .filter(|(key, _)| !(action && FOREIGN_JSON.contains(&key.as_str())))
+                .for_each(|(_, v)| actions_mut(v, f));
+            if action {
+                f(map);
+            }
+        }
+        Value::Array(items) => items.iter_mut().for_each(|v| actions_mut(v, f)),
+        _ => {}
+    }
+}
+
+/// The aux bus a version 2 action names, as an index.
+fn aux_named(map: &Map<String, Value>) -> Option<usize> {
+    match map.get("action")?.as_str()? {
+        "set_aux_send" | "set_aux_bus" => map.get("bus").and_then(aux_number),
+        "fade_volume" => map.get("target")?.get("bus").and_then(aux_number),
+        "add_output" => map.get("aux").and_then(aux_number),
+        _ => None,
+    }
+}
+
+/// The saved actions of version 2 in `value` as version 3 has them: aux
+/// bus `index` becomes `bus(index)`. A number that named no bus (0, 8)
+/// becomes the name "Aux 8": refused when it runs, as before (a number
+/// would be a position now, and meet a bus once the show has eight), and
+/// the file still loads.
+fn rewrite_aux_actions(value: &mut Value, bus: &dyn Fn(usize) -> Value) {
+    use serde_json::json;
+    actions_mut(value, &mut |map| {
+        let named = aux_named(map);
+        let bad = |map: &Map<String, Value>| match map.get("bus") {
+            Some(Value::Number(n)) => Some(json!(format!("Aux {n}"))),
+            _ => None,
+        };
+        match map.get("action").and_then(Value::as_str).unwrap_or("") {
+            "set_aux_send" | "set_aux_bus" => {
+                let action = if map["action"] == "set_aux_send" {
+                    "set_send"
+                } else {
+                    "set_bus"
+                };
+                map.insert("action".into(), json!(action));
+                if let Some(to) = named.map(bus).or_else(|| bad(map)) {
+                    map.insert("bus".into(), to);
+                }
+            }
+            "set_monitor_volume" => {
+                let volume = map
+                    .remove("volume")
+                    .unwrap_or(json!(lmix_types::input::full_volume()));
+                map.insert("action".into(), json!("set_phones"));
+                map.insert("volume".into(), volume);
+                map.insert("mute".into(), json!(false));
+            }
+            "fade_volume" => {
+                let to = match (named, map.get("target")) {
+                    (Some(index), _) => Some(bus(index)),
+                    (None, Some(Value::Object(target))) => bad(target),
+                    _ => None,
+                };
+                if let Some(to) = to {
+                    map.insert("target".into(), json!({ "bus": to }));
+                }
+            }
+            "add_output" => {
+                let to = match map.remove("aux") {
+                    Some(aux) => aux_number(&aux).map(bus).or_else(|| match aux {
+                        Value::Number(n) => Some(json!(format!("Aux {n}"))),
+                        _ => None,
+                    }),
+                    None => None,
+                };
+                if let Some(to) = to {
+                    map.insert("bus".into(), to);
+                }
+            }
+            _ => {}
+        }
+    });
+}
+
+/// The shortcuts for all shows (`--shortcuts`) of version 2 as version 3
+/// has them: their actions name aux bus A–G "Bus A" …, as a migrated show
+/// calls it (a name: there is no one show whose ids they could take). The
+/// file has no version, so only one with an action version 3 does not
+/// have is migrated (`set_aux_send`, `set_aux_bus`, `set_monitor_volume`,
+/// `add_output` with `aux`, which version 3 would drop unread): elsewhere
+/// `fade_volume` to bus 3 is a position, not aux C.
+pub fn migrate_shortcuts(value: &mut Value) {
+    let mut older = false;
+    actions(value, &mut |map| {
+        older |= match map.get("action").and_then(Value::as_str) {
+            Some("set_aux_send" | "set_aux_bus" | "set_monitor_volume") => true,
+            Some("add_output") => map.contains_key("aux"),
+            _ => false,
+        };
+    });
+    if older {
+        migrate_shortcut_actions(value);
+    }
+}
+
+/// Shortcuts for all shows known to be of version 2 (a settings file of
+/// version 1) as version 3 has them: their actions name aux bus A–G "Bus A"
+/// …, also `fade_volume` to a bus.
+pub fn migrate_shortcut_actions(value: &mut Value) {
+    rewrite_aux_actions(value, &|index| {
+        Value::String(format!("Bus {}", AUX_LETTERS[index]))
+    });
 }
 
 /// Write atomically: temp file next to the target, then rename, so a crash
@@ -526,6 +824,7 @@ mod tests {
 
     fn sample() -> Show {
         let id = InputId::new();
+        let in_ear = BusId::new();
         Show {
             inputs: vec![ShowInput {
                 id,
@@ -553,7 +852,11 @@ mod tests {
                     delay_ms: 40,
                     ..Default::default()
                 },
-                sends: [70, 0, 0, 0, 0, 0, 25],
+                phones: PhonesSend {
+                    on: false,
+                    level: 60,
+                },
+                sends: BTreeMap::from([(in_ear, 70)]),
                 look: Look {
                     saturation: 0.5,
                     ..Default::default()
@@ -638,19 +941,24 @@ mod tests {
                 background: Some(id),
                 boxes: Vec::new(),
             }],
-            aux_buses: [
-                AuxBus::default(),
-                AuxBus {
-                    volume: 60,
-                    mute: true,
+            buses: vec![
+                ShowBus {
+                    id: in_ear,
+                    name: "In-Ear Band".into(),
+                    pre_fader: true,
+                    level: Fader {
+                        volume: 60,
+                        mute: true,
+                    },
                 },
-                AuxBus::default(),
-                AuxBus::default(),
-                AuxBus::default(),
-                AuxBus::default(),
-                AuxBus::default(),
+                ShowBus {
+                    id: BusId::new(),
+                    name: "Stream".into(),
+                    pre_fader: false,
+                    level: Fader::default(),
+                },
             ],
-            master: AuxBus {
+            master: Fader {
                 volume: 90,
                 mute: false,
             },
@@ -664,7 +972,11 @@ mod tests {
                 ..Default::default()
             },
             sample_rate: 44_100,
-            monitor_volume: 70,
+            phones: Phones {
+                volume: 70,
+                mute: true,
+                pre_fader: true,
+            },
             default_delay_ms: 40,
             outputs: vec![ShowOutput {
                 id: OutputId::new(),
@@ -675,7 +987,7 @@ mod tests {
                     encoding: Default::default(),
                 },
                 source: OutputSource::Input(id),
-                aux: Some(2),
+                bus: Some(in_ear),
             }],
             graphics: vec![ShowGraphics {
                 id: InputId::new(),
@@ -766,17 +1078,112 @@ mod tests {
     }
 
     #[test]
+    fn aux_buses_become_named_buses() {
+        // A version 2 show: sends to A and C, an output on D, a shortcut on
+        // E and, inside a saved action, on B, F's master moved; G unused.
+        let mut v2 = serde_json::to_value(sample()).unwrap();
+        let show = v2.as_object_mut().unwrap();
+        show.remove("buses");
+        show.remove("phones");
+        show.insert("monitor_volume".into(), serde_json::json!(70));
+        show.insert(
+            "aux_buses".into(),
+            serde_json::json!([{}, {}, {}, {}, {}, {"volume": 40, "mute": true}, {}]),
+        );
+        show["inputs"][0]["sends"] = serde_json::json!([70, 0, 25, 0, 0, 0, 0]);
+        show["outputs"][0].as_object_mut().unwrap().remove("bus");
+        show["outputs"][0]["aux"] = serde_json::json!(4);
+        show["shortcuts"][0]["actions"] = serde_json::json!([
+            {"action": "set_aux_bus", "bus": 5, "volume": 80, "mute": false},
+            {"action": "set_aux_send", "input": 1, "bus": 1, "level": 50},
+            {"action": "fade_volume", "target": {"bus": 3}, "volume": 0, "duration_ms": 500},
+            {"action": "set_monitor_volume", "volume": 30},
+            {"action": "set_aux_send", "input": 1, "bus": 9, "level": 50},
+            {"action": "add_output", "spec": {"kind": "srt", "uri": "srt://:9000?mode=listener"}, "aux": 8},
+            {"action": "add_shortcut", "shortcut": {"label": "B", "actions": [
+                {"action": "set_aux_send", "input": 1, "bus": 2, "level": 10},
+            ]}},
+        ]);
+        let file = serde_json::json!({ "format": FILE_FORMAT, "version": 2, "show": v2 });
+        let loaded = read_bytes(&serde_json::to_vec(&file).unwrap(), "v2").unwrap();
+        assert_eq!(loaded.older, Some(2));
+        let show = loaded.show;
+
+        let names: Vec<&str> = show.buses.iter().map(|b| b.name.as_str()).collect();
+        assert_eq!(
+            names,
+            ["Bus A", "Bus B", "Bus C", "Bus D", "Bus E", "Bus F"]
+        );
+        let bus = |name: &str| show.buses.iter().find(|b| b.name == name).unwrap();
+        assert!(bus("Bus A").pre_fader && !bus("Bus C").pre_fader);
+        assert_eq!(
+            bus("Bus F").level,
+            Fader {
+                volume: 40,
+                mute: true
+            }
+        );
+        assert_eq!(
+            show.inputs[0].sends,
+            BTreeMap::from([(bus("Bus A").id, 70), (bus("Bus C").id, 25)])
+        );
+        assert_eq!(show.outputs[0].bus, Some(bus("Bus D").id));
+        assert_eq!(show.phones.volume, 70);
+        let text = |b: &str| lmix_types::BusRef::Text(bus(b).id.to_string());
+        assert_eq!(
+            show.shortcuts[0].actions[..5],
+            [
+                Action::SetBus {
+                    bus: text("Bus E"),
+                    volume: 80,
+                    mute: false
+                },
+                Action::SetSend {
+                    input: lmix_types::InputRef::Number(1),
+                    bus: text("Bus A"),
+                    level: 50
+                },
+                Action::FadeVolume {
+                    target: lmix_types::action::VolumeTarget::Bus(text("Bus C")),
+                    volume: 0,
+                    duration_ms: 500
+                },
+                Action::SetPhones {
+                    volume: 30,
+                    mute: false
+                },
+                // No bus 9: refused when it runs, the show still loads.
+                Action::SetSend {
+                    input: lmix_types::InputRef::Number(1),
+                    bus: lmix_types::BusRef::Text("Aux 9".into()),
+                    level: 50
+                },
+            ]
+        );
+        assert!(
+            matches!(&show.shortcuts[0].actions[5], Action::AddOutput { bus: Some(lmix_types::BusRef::Text(b)), .. } if b == "Aux 8"),
+            "an output on no bus is refused as before: {:?}",
+            show.shortcuts[0].actions[5]
+        );
+        let Action::AddShortcut { shortcut } = &show.shortcuts[0].actions[6] else {
+            panic!("{:?}", show.shortcuts[0].actions[6]);
+        };
+        assert_eq!(
+            shortcut.actions,
+            [Action::SetSend {
+                input: lmix_types::InputRef::Number(1),
+                bus: text("Bus B"),
+                level: 10
+            }]
+        );
+    }
+
+    #[test]
     fn shows_with_fewer_channels_still_load() {
         let mut saved = serde_json::to_value(sample()).unwrap();
         for key in ["overlays", "overlay_channels", "overlay_preview"] {
             saved[key].as_array_mut().unwrap().truncate(4);
         }
-        // Two aux buses before AUD.2.
-        saved["aux_buses"].as_array_mut().unwrap().truncate(2);
-        saved["inputs"][0]["sends"]
-            .as_array_mut()
-            .unwrap()
-            .truncate(2);
         let show: Show = serde_json::from_value(saved).unwrap();
         let id = show.inputs[0].id;
         assert_eq!(
@@ -786,9 +1193,6 @@ mod tests {
         assert_eq!(show.overlay_channels[1].auto_off_ms, Some(8000));
         assert_eq!(show.overlay_channels[7], OverlayChannel::default());
         assert_eq!(show.overlay_preview[0], Some(id));
-        assert_eq!(show.aux_buses[1].volume, 60);
-        assert_eq!(show.aux_buses[6], AuxBus::default());
-        assert_eq!(show.inputs[0].sends, [70, 0, 0, 0, 0, 0, 0]);
 
         let mut saved = serde_json::to_value(sample()).unwrap();
         saved["overlays"]

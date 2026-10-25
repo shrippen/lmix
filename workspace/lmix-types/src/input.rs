@@ -334,34 +334,9 @@ pub enum SignalLoss {
 /// Highest input volume (vMix scale, 100 = unity gain).
 pub const VOLUME_MAX: u8 = 100;
 
-/// Aux buses of the audio mixer, A–G (AUD.2), numbered 1–7 in actions.
-pub const AUX_BUSES: usize = 7;
-
-/// Which aux buses take their sends before the channel fader (and its
-/// on/off): bus A (1) is the monitor mix (in-ear, presenters hear
-/// themselves whatever is on air), B–G mixes after the fader.
-pub const AUX_PRE_FADER: [bool; AUX_BUSES] = [true, false, false, false, false, false, false];
-
 /// Volume 100: unity gain (serde default).
 pub fn full_volume() -> u8 {
     VOLUME_MAX
-}
-
-/// Master of an aux bus.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-pub struct AuxBus {
-    /// 0–100, 100 = unity gain.
-    pub volume: u8,
-    pub mute: bool,
-}
-
-impl Default for AuxBus {
-    fn default() -> Self {
-        Self {
-            volume: VOLUME_MAX,
-            mute: false,
-        }
-    }
 }
 
 /// Audio settings of an input (AUD).
@@ -555,7 +530,7 @@ impl Look {
     }
 }
 
-/// Solo listening on the monitor bus (headphones), not on program.
+/// Solo listening on the headphones, not on program.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Listen {
@@ -640,15 +615,19 @@ pub struct Input {
     /// What its GO does (INP.9).
     #[serde(default = "InputPress::go")]
     pub go: InputPress,
-    /// Solo on the monitor bus; not saved in the show file.
+    /// Solo on the headphones; not saved in the show file.
     #[serde(default)]
     pub listen: Listen,
     /// Channel strip (inputs with sound).
     #[serde(default)]
     pub strip: ChannelStrip,
-    /// Send level to each aux bus, 0–100 (100 = unity); 0 sends nothing.
+    /// What it sends to the headphones (AUD.4).
     #[serde(default)]
-    pub sends: [u8; AUX_BUSES],
+    pub phones: crate::bus::PhonesSend,
+    /// Send level to each bus, 0–100 (100 = unity); a bus missing here
+    /// gets nothing.
+    #[serde(default)]
+    pub sends: std::collections::BTreeMap<crate::bus::BusId, u8>,
     /// Colour correction (inputs with a picture).
     #[serde(default)]
     pub look: Look,

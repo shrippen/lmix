@@ -6,7 +6,7 @@ import Kante
 
 /**
  * An input's settings in tabs (UI.8): general (name, colour tag, signal
- * loss, click and GO, automatic playback of clips, source), colour, audio (channel strip and aux sends), triggers,
+ * loss, click and GO, automatic playback of clips, source), colour, audio (channel strip and sends), triggers,
  * PTZ and advanced (id, slot, links). Colour and audio are the panels of
  * their own dialogs; triggers, PTZ controls and a new source open those.
  * Changes go to lmix-core as they are made.
@@ -18,6 +18,8 @@ KanteDialog {
     required property var core
     /** lmix `Input`s of the show. */
     required property var inputs
+    /** `buses` of the show state. */
+    property var buses: []
     /** Looks need the GL mixer. */
     property bool looksAvailable: false
     /** Id of the input; set before `open()`. */
@@ -230,6 +232,7 @@ KanteDialog {
                         visible: dialog.input !== null && dialog.input.has_audio && strip.strip !== null
                         act: dialog.act
                         input: dialog.input
+                        buses: dialog.buses
                     }
                 }
 

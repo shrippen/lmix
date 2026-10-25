@@ -5,7 +5,7 @@
 # GO and Escape panic (also after a click on the header and a closed
 # dialog), the page bar shows program small, the inspector renames a cue,
 # no QML warnings. Then Audio,
-# Outputs and Setup draw without QML warnings. Needs Qt 6 with Kirigami, gst-plugin-qml6
+# Outputs and Setup draw without QML warnings, Audio with a bus. Needs Qt 6 with Kirigami, gst-plugin-qml6
 # (gstreamer1.0-qt6), Xvfb, xdotool, ImageMagick, jq.
 #
 #   scripts/test-console-qt.sh
@@ -585,7 +585,10 @@ pass "no QML warnings (show)"
 
 # The other pages through the page bar: each draws something of its own
 # (a light page is flat, so: it differs from the page before), no QML
-# warnings.
+# warnings. A bus draws its rows in the bus panel, the send matrix and
+# the channel strip.
+act '{"action":"add_bus","name":"Stream"}'
+until_true '[[ "$(state | jq ".buses | length")" == 1 ]]' || fail "add_bus: no bus in the state"
 prev=show
 for page in "AUDIO 3" "OUTPUTS 4" "SETUP 5"; do
     read -r name n <<<"$page"
@@ -609,6 +612,8 @@ for page in "AUDIO 3" "OUTPUTS 4" "SETUP 5"; do
             || fail "Audio: fader drag ended early (volume $volume)"
     fi
 done
+act '{"action":"remove_bus","bus":"Stream"}'
+until_true '[[ "$(state | jq ".buses | length")" == 0 ]]' || fail "remove_bus: the bus stays"
 # The page bar follows every page change: a click on a tab, then Ctrl+n,
 # then the tab again (a click once cut the bar's binding: it kept the
 # clicked tab marked and the next click on it did nothing).

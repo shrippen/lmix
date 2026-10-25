@@ -11,6 +11,7 @@
 
 pub mod action;
 pub mod automation;
+pub mod bus;
 pub mod cue;
 pub mod feed;
 pub mod graphics;
@@ -32,6 +33,7 @@ pub use action::{
     ACTION_GROUPS, FADE_MAX_MS,
 };
 pub use automation::{Trigger, TriggerOn};
+pub use bus::{find_bus, Bus, BusId, BusPeak, BusRef, Fader, Phones, PhonesSend, BUSES};
 pub use cue::{
     Cue, CueEvent, CueId, CueKind, CueList, CueTarget, Follow, GroupMode, RunPhase, RunningCue,
     StandbyMove, StopMode, StopOthers, StopScope,
@@ -43,7 +45,7 @@ pub use graphics::{
     TitleCall, TitleData, TitleLayer, TitlePhase, TitleTrigger,
 };
 pub use input::{
-    device_framerate, device_resolution, AtEnd, AutoPlay, AuxBus, ChannelStrip, Compressor, Device,
+    device_framerate, device_resolution, AtEnd, AutoPlay, ChannelStrip, Compressor, Device,
     DeviceKind, Eq4, Gate, Hpf, Ingest, Input, InputAudio, InputColor, InputId, InputPress,
     InputRef, InputStatus, Listen, Look, PageRunning, Playback, PlaybackState, SignalLoss,
     SourceSpec, TestPattern, Transport,

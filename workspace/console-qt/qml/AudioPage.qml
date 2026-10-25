@@ -9,7 +9,7 @@ import org.lmix.console
  * The Audio page (docs/PLAN-SEITEN.md): every input with sound as a
  * channel strip (fader, meter, mute, solo, audio follows video, tally),
  * the strip of the selected input to edit beside them (ChannelStripPanel),
- * the buses with master and monitor, and the show's zones. Its own panic
+ * master, headphones and the show's buses, and its zones. Its own panic
  * mutes the master; video, show and outputs go on.
  */
 AppPage {
@@ -26,7 +26,9 @@ AppPage {
     KeyedModel { id: stripModel }
     Component.onCompleted: stripModel.sync(soundInputs.map(i => i.id))
     onSoundInputsChanged: stripModel.sync(soundInputs.map(i => i.id))
+    // A bus being listened to puts the headphones on the solos too.
     readonly property bool soloing: soundInputs.some(i => i.listen !== "off")
+        || (show && show.buses ? show.buses : []).some(b => b.listen)
     function act(action) { shell.act(action) }
 
     /** 0 inputs, 1 sends, 2 buses, 3 zones. */
@@ -46,7 +48,7 @@ AppPage {
 
     pageId: "audio"
     title: qsTr("Audio")
-    subtitle: show ? qsTr("%1 kHz · %2 aux buses").arg(show.sample_rate === 44100 ? "44.1" : "48").arg((show.aux_buses || []).length) : ""
+    subtitle: show ? qsTr("%1 kHz · buses: %2").arg(show.sample_rate === 44100 ? "44.1" : "48").arg((show.buses || []).length) : ""
     busy: soloing
     busyKind: KantePageBar.Kind.Warning
     panicText: master.mute ? qsTr("Audio on") : qsTr("Audio off")
@@ -95,23 +97,28 @@ AppPage {
                 }
             }
 
-            // Sends (AUD.13): inputs × aux buses, a level per cell.
+            // Sends (AUD.13): inputs × headphones and buses, a level per cell.
             QQC2.ScrollView {
                 id: sendScroll
                 contentWidth: availableWidth
-                readonly property var buses: root.show && root.show.aux_buses ? root.show.aux_buses : []
+                readonly property var buses: root.show && root.show.buses ? root.show.buses : []
                 GridLayout {
                     width: sendScroll.availableWidth
-                    columns: sendScroll.buses.length + 1
+                    columns: sendScroll.buses.length + 2
                     columnSpacing: Kirigami.Units.smallSpacing
                     rowSpacing: Kirigami.Units.smallSpacing
                     Item { implicitWidth: Kirigami.Units.gridUnit * 8 }
+                    KanteSectionLabel {
+                        Layout.fillWidth: true
+                        text: qsTr("Headphones")
+                    }
                     Repeater {
                         model: sendScroll.buses
                         delegate: KanteSectionLabel {
-                            required property int index
+                            required property var modelData
                             Layout.fillWidth: true
-                            text: Texts.auxName(index)
+                            text: modelData.name
+                            elide: Text.ElideRight
                         }
                     }
                     Repeater {
@@ -122,11 +129,12 @@ AppPage {
                 }
             }
 
-            AuxBusPanel {
+            BusPanel {
                 act: root.act
-                buses: root.show ? root.show.aux_buses : []
+                core: root.shell.backend
+                buses: root.show && root.show.buses ? root.show.buses : []
                 master: root.master
-                monitorVolume: root.show && root.show.monitor_volume !== undefined ? root.show.monitor_volume : 100
+                phones: root.show && root.show.phones ? root.show.phones : ({ volume: 100, mute: false, pre_fader: false })
                 levels: root.levels
             }
 
@@ -189,6 +197,7 @@ AppPage {
                         id: stripPanel
                         Layout.fillWidth: true
                         act: root.act
+                        buses: root.show && root.show.buses ? root.show.buses : []
                     }
                 }
             }
@@ -203,14 +212,15 @@ AppPage {
         zones: root.show && root.show.zones ? root.show.zones : []
     }
 
-    /** One input's sends: its name, then a level per bus (0–100). The
-     *  cells go into the grid around it, so it is a list of items. */
+    /** One input's sends: its name, then a level to the headphones and per
+     *  bus (0–100). The cells go into the grid around it, so it is a list
+     *  of items. */
     component SendRow: Repeater {
         id: sendRow
         required property string key
         readonly property var input: root.soundInputs.find(i => i.id === key)
-            || ({ id: key, number: 0, name: "", sends: [] })
-        model: sendScroll.buses.length + 1
+            || ({ id: key, number: 0, name: "", sends: {}, phones: { on: true, level: 100 } })
+        model: sendScroll.buses.length + 2
         delegate: Loader {
             required property int index
             Layout.fillWidth: index > 0
@@ -226,13 +236,17 @@ AppPage {
                 id: levelCell
                 QQC2.Slider {
                     id: send
-                    readonly property int bus: index
+                    // null: the headphones.
+                    readonly property var bus: index > 1 ? sendScroll.buses[index - 2] : null
                     from: 0
                     to: 100
                     stepSize: 1
-                    value: sendRow.input.sends && sendRow.input.sends.length >= bus ? sendRow.input.sends[bus - 1] : 0
-                    Accessible.name: qsTr("Send of %1 to %2").arg(sendRow.input.name).arg(Texts.auxName(bus - 1))
-                    onMoved: root.act({ action: "set_aux_send", input: sendRow.input.number, bus: bus, level: Math.round(value) })
+                    value: bus === null ? (sendRow.input.phones ? sendRow.input.phones.level : 100)
+                        : (sendRow.input.sends && sendRow.input.sends[bus.id] !== undefined ? sendRow.input.sends[bus.id] : 0)
+                    Accessible.name: qsTr("Send of %1 to %2").arg(sendRow.input.name).arg(bus === null ? qsTr("Headphones") : bus.name)
+                    onMoved: root.act(bus === null
+                        ? { action: "set_phones_send", input: sendRow.input.number, on: sendRow.input.phones ? sendRow.input.phones.on : true, level: Math.round(value) }
+                        : { action: "set_send", input: sendRow.input.number, bus: bus.id, level: Math.round(value) })
                     QQC2.ToolTip.visible: hovered || pressed
                     QQC2.ToolTip.text: value.toFixed(0)
                     KanteSliderSkin { control: send }
@@ -342,7 +356,7 @@ AppPage {
                     emphasis: strip.input.listen !== "off" ? KanteButton.Emphasis.Primary : KanteButton.Emphasis.Normal
                     text: strip.input.listen === "pfl" ? qsTr("PFL") : qsTr("AFL")
                     QQC2.ToolTip.visible: hovered
-                    QQC2.ToolTip.text: qsTr("Listen on the monitor after the fader (AFL)")
+                    QQC2.ToolTip.text: qsTr("Listen on the headphones after the fader (AFL)")
                     onClicked: root.act({ action: "set_listen", input: strip.input.number, listen: strip.input.listen === "off" ? "afl" : "off" })
                 }
             }

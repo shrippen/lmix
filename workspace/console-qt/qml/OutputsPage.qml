@@ -165,7 +165,7 @@ AppPage {
                     KanteSectionLabel { text: detail.output ? detail.output.name : "" }
                     Detail { label: qsTr("Kind"); value: root.kindName(detail.spec) }
                     Detail { label: qsTr("Source"); value: detail.output ? root.sourceName(detail.output) : "" }
-                    Detail { label: qsTr("Sound"); value: detail.output && detail.output.aux ? Texts.auxName(detail.output.aux - 1) : qsTr("of the source") }
+                    Detail { label: qsTr("Sound"); value: root.busName(detail.output) }
                     Detail { label: qsTr("Target"); value: root.targetName(detail.spec) }
                     Detail {
                         visible: detail.spec.video_kbps !== undefined
@@ -236,6 +236,11 @@ AppPage {
         case "display": return spec.mode ? spec.mode.mode : ""
         }
         return ""
+    }
+    /** The bus whose sound an output carries, or the source's own. */
+    function busName(output) {
+        var bus = output && output.bus && show && show.buses ? show.buses.find(b => b.id === output.bus) : null
+        return bus ? bus.name : qsTr("of the source")
     }
     function sourceName(output) {
         var source = output.source || { from: "program" }
@@ -355,5 +360,6 @@ AppPage {
         parent: QQC2.Overlay.overlay
         core: root.backend
         inputs: root.shell.inputs
+        buses: root.show && root.show.buses ? root.show.buses : []
     }
 }

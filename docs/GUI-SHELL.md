@@ -194,7 +194,7 @@ Ein Programm `lmix` statt `lmix-mixer` und `lmix-show` (DECISIONS
   Panik der Seite, darunter der Inhalt. `MixPage.qml` (vorher MixerMain),
   `ShowPage.qml` (vorher ShowMain), `AudioPage.qml` (Kanalzüge mit Fader,
   Pegel, Mute, AFL, AFV, daneben der Kanalzug des gewählten Inputs; Busse
-  aus `AuxBusPanel.qml`, das auch der Busse-Dialog nutzt; Zonen),
+  aus `BusPanel.qml`, das auch der Busse-Dialog nutzt; Zonen),
   `OutputsPage.qml` (Liste mit Zustand, Laufzeit, Verbindung, Start/Stopp
   mit Rückfrage `StopOutputDialog.qml`, Einzelheiten, Multiview) und
   `SetupPage.qml` (Show, Steuerung, dieser Rechner; öffnet die vorhandenen

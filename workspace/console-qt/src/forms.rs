@@ -42,6 +42,13 @@ pub fn values(list: &str) -> Option<String> {
         "containers" => Container::ALL.map(name_of).to_vec(),
         "outputs" => OUTPUT_KINDS.iter().map(|k| k.to_string()).collect(),
         "durations" => return serde_json::to_string(&DURATION_PRESETS_MS).ok(),
+        // How many buses a show has at most, and how long their names are.
+        "bus_limits" => {
+            return Some(
+                serde_json::json!({ "buses": lmix_types::BUSES, "name_max": lmix_types::bus::BUS_NAME_MAX })
+                    .to_string(),
+            )
+        }
         _ => return None,
     };
     serde_json::to_string(&names).ok()
@@ -173,9 +180,9 @@ pub struct OutputForm {
     pub video_kbps: u32,
     #[serde(default)]
     pub name: String,
-    /// Aux bus for the sound; 0 keeps the source's own.
+    /// Id of the bus for the sound; empty keeps the source's own.
     #[serde(default)]
-    pub aux: u8,
+    pub bus: String,
     /// Codec, rate control, keyframes of SRT and recordings (STR.3).
     #[serde(default)]
     pub encoding: VideoEncoding,
@@ -397,6 +404,10 @@ mod tests {
             r#"["preview_input","cut_direct","quick_play","none"]"#
         );
         assert_eq!(values("durations").unwrap(), "[250,500,1000,2000]");
+        let limits: serde_json::Value =
+            serde_json::from_str(&values("bus_limits").unwrap()).unwrap();
+        assert_eq!(limits["buses"], lmix_types::BUSES);
+        assert_eq!(limits["name_max"], lmix_types::bus::BUS_NAME_MAX);
         assert_eq!(values("nope"), None);
     }
 
