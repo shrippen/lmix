@@ -15,8 +15,8 @@ import "."
  *
  * Keyboard: Tab moves between the controls, Space or Enter presses the focused one.
  * Anywhere in the bar: K play/pause, L loop, M metronome, C count-in, Home rewind,
- * + / − speed by 5 %. Every control has an accessible name; toggles are checkable
- * buttons (checked shows filled in Kante). The controls wrap onto a second line when
+ * + / − speed by 5 %. Every control has an accessible name; toggles are check boxes for
+ * screen readers and show their state by the lamp before the word alone (1.38). The controls wrap onto a second line when
  * the bar is narrow (large fonts, 200 %).
  */
 FocusScope {
@@ -86,25 +86,33 @@ FocusScope {
     }
 
     // A toggle: a square lamp before the word, filled when on (the state is not colour
-    // alone, and needs no icon theme).
+    // alone, and needs no icon theme). Only the lamp shows the state (1.38): a filled accent
+    // button for metronome and count-in competed with the play button.
     component Toggle: KanteToolButton {
         id: toggle
         property bool on: false
         signal requested()
         readonly property real lamp: KanteStyle.unit(10)
-        checkable: true
-        checked: on
         display: QQC2.AbstractButton.TextOnly
         focusPolicy: Qt.StrongFocus
         leftPadding: KanteStyle.unit(10) + lamp + KanteStyle.unit(6)
         rightPadding: KanteStyle.unit(10)
         implicitWidth: Math.ceil(leftPadding + words.advanceWidth + rightPadding + KanteStyle.unit(2))
         TextMetrics { id: words; font: toggle.font; text: toggle.text }
+        // Checkable and checked as the app says, so Qt reports the state to screen readers
+        // (it sets Accessible.checked from `checked` when a screen reader starts); not filled,
+        // the lamp shows it.
+        checkable: true
+        checked: on
+        fillChecked: false
         // The app owns the state: give the click to the app and show its answer.
         onToggled: {
             checked = Qt.binding(function () { return toggle.on })
             requested()
         }
+        Accessible.role: Accessible.CheckBox
+        Accessible.checkable: true
+        Accessible.checked: on
         Accessible.name: text
         Rectangle {
             x: KanteStyle.unit(10)

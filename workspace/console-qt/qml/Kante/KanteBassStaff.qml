@@ -41,6 +41,10 @@ import "."
  *              setNoteState(index, state[, cents]) / resetStates() change states
  *              without a new layout
  *   showCents  the cents beside offpitch signs (Full marks only; default true)
+ *   loopStart, loopEnd  loop range in seconds, -1 for none (1.35): a tint with bracket
+ *              edges as on KanteTabLane, one part per line; a loop that runs on to the
+ *              next line is open at the line end and goes on there without bracket. An
+ *              edge on a bar start or end sits on the bar line
  *
  * Pages line by line as KanteTabStaff: the top line holds the current bar, `systems - 1`
  * lines preview. The current note sits on a selection band, states show above the staff
@@ -65,6 +69,9 @@ Item {
     /** Chord symbols [{time, text}] (Kante 1.27); bars can carry one each as `chord`. */
     property var chords: []
     property real position: 0
+    /** Loop range in seconds, -1 for none (1.35). */
+    property real loopStart: -1
+    property real loopEnd: -1
     property int barsPerSystem: 0
     property int systems: 1
     property bool cursor: true
@@ -189,6 +196,9 @@ Item {
     readonly property real staffTop: sp * (hasChords ? 7.5 : 5.5)
     readonly property real systemHeight: staffTop + sp * 4 + sp * 5
     readonly property var layout: computeLayout(firstBar, perSystem, Math.max(1, systems), width, sp, notes, rests, barList, chordList)
+    /** Loop parts of the page, one per line: [{x, w, sys, left, right}] (1.35). */
+    readonly property var loopParts: loopLayout(firstBar, perSystem, Math.max(1, systems), width, barList,
+                                                loopStart, loopEnd)
 
     implicitWidth: KanteStyle.unit(720)
     implicitHeight: Math.ceil(systemHeight * Math.max(1, systems))
@@ -196,17 +206,18 @@ Item {
     Accessible.role: Accessible.Chart
     Accessible.name: accessibleName
     Accessible.description: {
-        var d = barText.arg(barList.length ? barList[currentBar].number : 1).arg(barList.length)
-        var ch = chordAt(position)
+        let d = barText.arg(barList.length ? barList[currentBar].number : 1).arg(barList.length)
+        const ch = chordAt(position)
         if (ch !== "") {
             d += ", " + chordText.arg(ch)
         }
-        if (currentIndex >= 0) {
-            var n = notes[currentIndex]
+        // notes can change before currentIndex follows (e.g. emptied while playing)
+        const n = currentIndex >= 0 ? notes[currentIndex] : undefined
+        if (n) {
             d += ", " + pitchName(Number(n.midi), barList.length ? barList[currentBar].key : keyFifths)
                 + " (" + KanteStyle.noteStateName(shownState(currentIndex, stateRevision)) + centsSuffix(currentIndex, stateRevision) + ")"
         }
-        var t = techniqueSummary(stateRevision)
+        const t = techniqueSummary(stateRevision)
         if (t !== "") {
             d += ", " + t
         }
@@ -415,6 +426,47 @@ Item {
     }
     function sysOf(b) {
         return Math.floor((b - firstBar) / perSystem)
+    }
+    /** x of a loop edge at time t in bar b: on the bar line at a bar start or end, else xOf. */
+    function loopX(t, b) {
+        var bar = barList[b]
+        var left = headerWidth + ((b - firstBar) % perSystem) * barWidth
+        if (Math.abs(t - bar.time) < 1e-3) {
+            return left
+        }
+        if (Math.abs(t - bar.end) < 1e-3) {
+            return left + barWidth
+        }
+        return xOf(t, b)
+    }
+    /**
+     * The loop cut into lines (1.35): per line the part of [from, to] it shows. left / right:
+     * the loop starts / ends on this line (bracket edge), else it runs on (open edge).
+     */
+    function loopLayout(first, per, nsys, w, bl, from, to) {
+        var out = []
+        if (w <= 0 || bl.length === 0 || from < 0 || to <= from) {
+            return out
+        }
+        var last = Math.min(bl.length - 1, first + per * nsys - 1)
+        for (var s = 0; s < nsys; s++) {
+            let b0 = first + s * per
+            let b1 = Math.min(last, b0 + per - 1)
+            if (b1 < b0) {
+                break
+            }
+            let t0 = Math.max(from, bl[b0].time)
+            let t1 = Math.min(to, bl[b1].end)
+            if (t1 <= t0 + 1e-6) {
+                continue
+            }
+            // The bar of each edge, kept on this line; the end belongs to the bar before it.
+            let x0 = loopX(t0, Math.max(b0, Math.min(b1, barAt(t0))))
+            let x1 = loopX(t1, Math.max(b0, Math.min(b1, barAt(t1 - 1e-3))))
+            out.push({ x: x0, w: Math.max(1, x1 - x0), sys: s, left: from >= bl[b0].time - 1e-6,
+                       right: to <= bl[b1].end + 1e-6 })
+        }
+        return out
     }
     function padLeft(b) {
         var bar = barList[b]
@@ -694,6 +746,35 @@ Item {
         if (ink === "muted") return KanteStyle.mutedTextColor
         if (ink === "" || ink === "pending" || ink === undefined) return KanteStyle.textColor
         return KanteStyle.noteStateColor(ink)
+    }
+
+    // Loop range (1.35): a tint with bracket edges ([ and ]) as on KanteTabLane, not colour
+    // alone; as high as the cursor, behind the staff.
+    Repeater {
+        model: staff.loopParts
+        delegate: Item {
+            id: loopPart
+            required property var modelData
+            x: modelData.x
+            y: modelData.sys * staff.systemHeight + staff.staffTop - staff.sp * 1.5
+            width: modelData.w
+            height: staff.sp * 7
+            Rectangle { anchors.fill: parent; color: KanteStyle.tintHighlightColor }
+            Repeater {
+                model: [loopPart.modelData.left, loopPart.modelData.right]
+                delegate: Item {
+                    required property int index
+                    required property var modelData
+                    visible: modelData === true
+                    x: index === 0 ? 0 : loopPart.width - width
+                    width: KanteStyle.unit(8)
+                    height: loopPart.height
+                    Rectangle { x: parent.index === 0 ? 0 : parent.width - width; width: 2; height: parent.height; color: KanteStyle.focusColor }
+                    Rectangle { width: parent.width; height: 2; color: KanteStyle.focusColor }
+                    Rectangle { y: parent.height - 2; width: parent.width; height: 2; color: KanteStyle.focusColor }
+                }
+            }
+        }
     }
 
     // Selection band behind the current note.
