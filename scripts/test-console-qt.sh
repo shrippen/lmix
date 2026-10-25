@@ -246,6 +246,30 @@ DISPLAY="$DISPLAY_NO" xdotool mousemove 602 511 click --repeat 2 --delay 80 1
 setting_becomes monitorHeight 270 && pass "monitor grip: a double click resets it" \
     || fail "monitor grip: height $(view_setting monitorHeight) after a double click"
 
+# The grip left of the audio column: a drag to the left widens it, a
+# double click goes back to the standard width (12 grid units).
+drag_x() {
+    DISPLAY="$DISPLAY_NO" xdotool mousemove "$(($1 + 3))" "$2"
+    sleep 0.3
+    DISPLAY="$DISPLAY_NO" xdotool mousemove "$1" "$2"
+    sleep 0.3
+    DISPLAY="$DISPLAY_NO" xdotool mousedown 1
+    local x="$1"
+    while (( x != $3 )); do
+        (( x += ($3 > x ? 1 : -1) * ($3 - x > 8 || x - $3 > 8 ? 8 : 1) ))
+        sleep 0.03
+        DISPLAY="$DISPLAY_NO" xdotool mousemove "$x" "$2"
+    done
+    sleep 0.1
+    DISPLAY="$DISPLAY_NO" xdotool mouseup 1
+}
+drag_x 1205 300 1145
+setting_becomes mixerWidth 276 && pass "audio grip: a drag widens the column" \
+    || fail "audio grip: width $(view_setting mixerWidth) after a drag of 60 px left"
+DISPLAY="$DISPLAY_NO" xdotool mousemove 1145 300 click --repeat 2 --delay 80 1
+setting_becomes mixerWidth 216 && pass "audio grip: a double click resets it" \
+    || fail "audio grip: width $(view_setting mixerWidth) after a double click"
+
 # Detail: the tiles get the overlay buttons and the audio row, and the
 # monitors give them room, so a row of tiles is not cut off.
 click 304 540
