@@ -4692,7 +4692,7 @@ dieselbe Wahl noch einmal tat nichts.
 
 **Entscheidung**:
 - Bei Sperre lehnt lmix-core einen neuen Wert für Format, Abtastrate und
-  Multiview ab (`locked`); derselbe Wert ist keine Änderung und geht durch.
+  Multiview ab (`locked`); derselbe Wert ist keine Änderung und geht durch, außer ein neuer Mischer steht noch aus (dann gilt er als neu und die Sperre lehnt ihn ab).
   Tooltip und Hinweis der Sperre in der Console nennen die drei.
 - Scheitert der Neuaufbau, vergisst `set_format` in der Engine die gebauten
   Busse: Der nächste `SetFormat`, auch mit demselben Wunsch, baut neu. Bis
