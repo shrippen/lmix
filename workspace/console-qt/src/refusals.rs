@@ -5,18 +5,52 @@
 /// (snake_case) and the names of its fields.
 fn variants() -> Vec<(String, Vec<String>)> {
     let source = include_str!("../../lmix-types/src/action.rs");
-    let start = source.find("pub enum ActionError {").expect("ActionError in action.rs");
+    let start = source
+        .find("pub enum ActionError {")
+        .expect("ActionError in action.rs");
     let body = &source[start..];
-    let body = &body[..body.find("\n}").expect("end of ActionError")];
-    body.lines()
-        .filter_map(|line| line.strip_prefix("    "))
-        .filter_map(|line| {
-            let name: String = line.chars().take_while(|c| c.is_ascii_alphanumeric()).collect();
+    let body = &body
+        [body.find('{').expect("ActionError {") + 1..body.find("\n}").expect("end of ActionError")];
+    // Without comments and attributes: each code comes from its name.
+    let code_lines: Vec<&str> = body
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.starts_with("//") && !line.starts_with("#["))
+        .collect();
+    assert!(
+        !body.contains("rename"),
+        "a variant of ActionError is renamed: read its code from the attribute"
+    );
+    // One variant up to its comma, fields over several lines too.
+    let mut variants = Vec::new();
+    let mut current = String::new();
+    let mut depth = 0;
+    for c in code_lines.join(" ").chars() {
+        match c {
+            '{' => depth += 1,
+            '}' => depth -= 1,
+            ',' if depth == 0 => {
+                variants.push(std::mem::take(&mut current));
+                continue;
+            }
+            _ => {}
+        }
+        current.push(c);
+    }
+    variants.push(current);
+    variants
+        .iter()
+        .map(|variant| variant.trim())
+        .filter_map(|variant| {
+            let name: String = variant
+                .chars()
+                .take_while(|c| c.is_ascii_alphanumeric())
+                .collect();
             if !name.starts_with(|c: char| c.is_ascii_uppercase()) {
                 return None;
             }
-            let fields = match (line.find('{'), line.rfind('}')) {
-                (Some(open), Some(close)) => line[open + 1..close]
+            let fields = match (variant.find('{'), variant.rfind('}')) {
+                (Some(open), Some(close)) => variant[open + 1..close]
                     .split(',')
                     .filter_map(|field| field.split(':').next())
                     .map(|field| field.trim().to_string())
@@ -46,7 +80,9 @@ fn fields_read(line: &str) -> Vec<String> {
             .chars()
             .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
             .collect();
-        if !before.is_some_and(|c| c.is_ascii_alphanumeric() || c == '_' || c == '.') && !name.is_empty() {
+        if !before.is_some_and(|c| c.is_ascii_alphanumeric() || c == '_' || c == '.')
+            && !name.is_empty()
+        {
             read.push(name);
         }
         rest = &rest[at + 2..];
@@ -58,7 +94,11 @@ fn fields_read(line: &str) -> Vec<String> {
 fn every_refusal_has_a_text() {
     let texts = include_str!("../qml/Texts.qml");
     let variants = variants();
-    assert!(variants.len() > 40, "only {} codes read from ActionError", variants.len());
+    assert!(
+        variants.len() > 40,
+        "only {} codes read from ActionError",
+        variants.len()
+    );
     let mut missing = Vec::new();
     let mut wrong = Vec::new();
     for (code, fields) in &variants {
@@ -74,6 +114,12 @@ fn every_refusal_has_a_text() {
             }
         }
     }
-    assert!(missing.is_empty(), "no text in Texts.message for {missing:?}");
-    assert!(wrong.is_empty(), "Texts.message reads fields the error does not have: {wrong:?}");
+    assert!(
+        missing.is_empty(),
+        "no text in Texts.message for {missing:?}"
+    );
+    assert!(
+        wrong.is_empty(),
+        "Texts.message reads fields the error does not have: {wrong:?}"
+    );
 }
