@@ -4692,7 +4692,9 @@ und es gab keinen neuen Failback.
 **Entscheidung**: Läuft der Befehl noch, bleibt der Stopp übergangen (der
 alte Flow läuft aus). Ist er fertig und das Fenster noch offen, fragt lmix-core
 die Engine, ob der Flow jetzt läuft (`Engine::flow_running`, bei strom
-`GET /flows/{id}`, eine Engine ohne Auskunft sagt ja). Nur wenn er läuft, war
+`GET /flows/{id}`). Ohne Auskunft gilt er als laufend: eine Engine, die es
+nicht weiß, strom mit einem Fehler oder ohne Antwort binnen 2 s
+(`FLOW_CHECK_TIMEOUT`; der Watcher wartet darauf). Nur wenn er läuft, war
 es der alte Flow. Sonst gilt der Stopp als Ausfall, mit Failback wie sonst.
 
 **Geprüft**: lmix-core-Tests (`a_foreign_stop_just_after_an_own_command_is_a_failure`,

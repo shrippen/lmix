@@ -124,6 +124,9 @@ pub struct StromEngine {
 /// lock, so a call that never returns would freeze lmix-core; the slowest
 /// real ones (a recording drained with EOS, a mixer rebuilt) take seconds.
 const ENGINE_CALL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
+/// How long the failure watcher waits for strom to tell whether a flow
+/// runs.
+const FLOW_CHECK_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(2);
 
 /// How often, and how many times, a new web page is asked to take its CSS.
 const PAGE_READY_POLL: std::time::Duration = std::time::Duration::from_millis(500);
@@ -1627,11 +1630,18 @@ impl Engine for StromEngine {
     }
 
     async fn output_running(&self, id: OutputId) -> bool {
-        self.flow_running(flows::output_flow_id(id)).await
+        matches!(self.get_flow(flows::output_flow_id(id)).await, Ok(Some(flow)) if flow.running)
     }
 
+    /// No for a flow strom has stopped or does not have; yes when strom
+    /// does not answer within `FLOW_CHECK_TIMEOUT` (the failure watcher
+    /// waits for it), as for an engine that cannot tell.
     async fn flow_running(&self, flow: FlowId) -> bool {
-        matches!(self.get_flow(flow).await, Ok(Some(flow)) if flow.running)
+        match tokio::time::timeout(FLOW_CHECK_TIMEOUT, self.get_flow(flow)).await {
+            Ok(Ok(Some(flow))) => flow.running,
+            Ok(Ok(None)) => false,
+            Ok(Err(_)) | Err(_) => true,
+        }
     }
 
     /// SRT sender statistics of the output's flow, summed over its
@@ -1838,6 +1848,44 @@ mod tests {
         let addr = listener.local_addr().unwrap();
         tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
         (format!("http://{addr}"), calls)
+    }
+
+    /// Whether a flow runs: strom's answer, a missing flow is stopped, and
+    /// no answer counts as running (the failure watcher keeps its window).
+    #[tokio::test]
+    async fn a_flow_runs_unless_strom_says_otherwise() {
+        let (stopped, missing, broken) = (FlowId::new_v4(), FlowId::new_v4(), FlowId::new_v4());
+        let app = axum::Router::new().fallback(move |request: axum::extract::Request| async move {
+            let path = request.uri().path().to_string();
+            if path.ends_with(&missing.to_string()) {
+                return (StatusCode::NOT_FOUND, axum::Json(serde_json::json!({})));
+            }
+            if path.ends_with(&broken.to_string()) {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    axum::Json(serde_json::json!({})),
+                );
+            }
+            let mut flow = Flow::new("stopped");
+            flow.id = stopped;
+            flow.running = false;
+            (
+                StatusCode::OK,
+                axum::Json(serde_json::json!({ "flow": flow })),
+            )
+        });
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        let engine = StromEngine::new(
+            format!("http://{addr}"),
+            MixerBackend::Cpu,
+            MonitorOut::None,
+        );
+
+        assert!(!engine.flow_running(stopped).await);
+        assert!(!engine.flow_running(missing).await);
+        assert!(engine.flow_running(broken).await);
     }
 
     /// A request the stinger stand-in strom received.
