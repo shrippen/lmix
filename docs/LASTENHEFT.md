@@ -162,7 +162,7 @@ kann es, Console nicht.
 
 | ID | Quelle | Details | Prio | Stand |
 |---|---|---|---|---|
-| SRC.1 | Capture-Gerät | V4L2, DeckLink (SDI/HDMI), Format/Auflösung/Bildrate/Interlaced/PsF wählbar, eingebetteter Ton bis 16 Kanäle | M | ◐ (V4L2 über die Geräteliste; ohne Format-/Bildratenwahl, ohne eingebetteten Ton; DeckLink E; H.7 offen) |
+| SRC.1 | Capture-Gerät | V4L2, DeckLink (SDI/HDMI), Format/Auflösung/Bildrate/Interlaced/PsF wählbar, eingebetteter Ton bis 16 Kanäle | M | ◐ (V4L2 über die Geräteliste, Auflösung und Bildrate wählbar (2026-10-25); ohne Pixelformat (strom bietet es nicht), ohne Interlaced/PsF, ohne eingebetteten Ton; DeckLink E; H.7 offen) |
 | SRC.2 | Videodatei | gängige Container/Codecs (MP4, MOV, MXF, MKV, TS, AVI), Alpha (ProRes 4444, QT-Animation, VP9), Interlaced erkannt | M | ✅ |
 | SRC.3 | Liste | mehrere Video-/Audiodateien als ein Input; Auto-Weiter, Auto-Erstes, Schleife, Mischen, Einträge abwählen/umsortieren, Gesamtrestzeit, M3U ein/aus | S | ◐ (Liste mit Weiter/Zurück, Eintrag wählen, Schleife; ohne Mischen, Abwählen, Restzeit, M3U) |
 | SRC.4 | Bild | PNG, JPEG, TIFF, BMP, WebP; Alpha | M | ✅ (Alpha bei PNG, WebP, TIFF in Programmgröße; geprüft mit PNG auf dem CPU-Mischer, GPU H.33) |
@@ -490,7 +490,7 @@ Zurückgestellt (User 2026-10-08).
 |---|---|---|---|
 | UI.1 | Hauptfenster: Preview links, Program rechts (Farbcodes einstellbar), Übergangsspalte dazwischen, Input-Leiste unten mit Live-Kacheln, Fußleiste mit Senken-Tasten | M | ◐ (Console) |
 | UI.2 | Input-Kachel: Titelzeile (Nummer, Name, Kategoriefarbe), Bild, Tasten: Schließen, Cut, Schleife, Overlay 1–8, GO, Ton, Großansicht, Einstellungen; Tally-Farbe | M | ◐ |
-| UI.3 | Mehrere Input-Reihen, Kachelgröße einstellbar, Einklappen einzelner Inputs, Bildlauf | S | ✅ (Kachelgröße, Reihen, Bildlauf, Einklappen je Console) |
+| UI.3 | Mehrere Input-Reihen, Kachelgröße einstellbar, Einklappen einzelner Inputs, Bildlauf | S | ✅ (Kachelgröße S/M/L, Kacheln füllen die Zeile, Bildlauf, Einklappen je Console; Monitore im Projektformat, Höhe per Ziehleiste) |
 | UI.4 | Kontextmenüs je Input-Typ (Liste-Einträge, Fotos, Titel-Presets, NDI-Quelle, Browser …) | S | ◐ (Wiedergabe, Playlist-Einträge, Senden an WHIP; ohne Fotos, NDI, Browser) |
 | UI.5 | Transportleiste unter PVW/PGM für Wiedergabe-Inputs | M | ✅ (Tasten, Position, Länge, Springen per Klick) |
 | UI.6 | Andockbare Bereiche (Audio, Wiederholung, Liste) und abdockbare Fenster für zweiten Monitor | S | – |

@@ -84,6 +84,12 @@ pub mod qobject {
         #[cxx_name = "setGlobalShortcuts"]
         fn set_global_shortcuts(self: Pin<&mut Core>, json: &QString);
 
+        /// lmix-core answered an action of this Console: the action as
+        /// JSON, and the refusal as in `message` (empty when it went
+        /// through). One per action, also for the same refusal twice.
+        #[qsignal]
+        fn answered(self: Pin<&mut Core>, action: QString, refusal: QString);
+
         /// A note or controller from a MIDI controller at lmix-core: lmix
         /// `MidiMessage` as JSON (to learn a binding).
         #[qsignal]
@@ -95,11 +101,17 @@ pub mod qobject {
         #[qinvokable]
         fn act(self: Pin<&mut Core>, action: &QString) -> bool;
 
-        /// Add an input from the form; false while a needed field is empty.
+        /// Add an input from the form (`options`: `forms::SourceOptions` as
+        /// JSON); false while a needed field is empty.
         #[qinvokable]
         #[cxx_name = "addInput"]
-        fn add_input(self: Pin<&mut Core>, kind: &QString, value: &QString, name: &QString)
-            -> bool;
+        fn add_input(
+            self: Pin<&mut Core>,
+            kind: &QString,
+            value: &QString,
+            options: &QString,
+            name: &QString,
+        ) -> bool;
 
         /// Give input `number` a new source from the form; false while a
         /// needed field is empty.
@@ -110,6 +122,7 @@ pub mod qobject {
             number: i32,
             kind: &QString,
             value: &QString,
+            options: &QString,
         ) -> bool;
 
         /// Add an output from the form, as JSON (`forms::OutputForm`).
@@ -328,8 +341,16 @@ impl qobject::Core {
         }
     }
 
-    fn add_input(self: Pin<&mut Self>, kind: &QString, value: &QString, name: &QString) -> bool {
-        let Some(source) = forms::source_of(&kind.to_string(), &value.to_string()) else {
+    fn add_input(
+        self: Pin<&mut Self>,
+        kind: &QString,
+        value: &QString,
+        options: &QString,
+        name: &QString,
+    ) -> bool {
+        let Some(source) =
+            forms::source_with_options(&kind.to_string(), &value.to_string(), &options.to_string())
+        else {
             return false;
         };
         let name = name.to_string().trim().to_string();
@@ -340,8 +361,16 @@ impl qobject::Core {
         true
     }
 
-    fn replace_source(self: Pin<&mut Self>, number: i32, kind: &QString, value: &QString) -> bool {
-        let Some(source) = forms::source_of(&kind.to_string(), &value.to_string()) else {
+    fn replace_source(
+        self: Pin<&mut Self>,
+        number: i32,
+        kind: &QString,
+        value: &QString,
+        options: &QString,
+    ) -> bool {
+        let Some(source) =
+            forms::source_with_options(&kind.to_string(), &value.to_string(), &options.to_string())
+        else {
             return false;
         };
         self.send(Action::ReplaceSource {
@@ -749,7 +778,11 @@ fn actions() -> &'static tokio::sync::mpsc::UnboundedSender<Queued> {
                     tracing::info!(?action, %reason, "lmix-core refused");
                 }
                 let text = refused.unwrap_or_default();
-                let _ = thread.queue(move |core| core.set_message(QString::from(&text)));
+                let json = serde_json::to_string(&action).unwrap_or_default();
+                let _ = thread.queue(move |mut core| {
+                    core.as_mut().set_message(QString::from(&text));
+                    core.answered(QString::from(&json), QString::from(&text));
+                });
             }
         });
         tx

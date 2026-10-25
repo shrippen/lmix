@@ -4911,9 +4911,26 @@ fn program_then_preview(
 }
 
 /// Reject sources the engine cannot build: a color that is not
-/// `#rrggbb`, a web page that is not an http(s) address.
+/// `#rrggbb`, a web page that is not an http(s) address, a capture mode
+/// that is not written as `1920x1080` and `30/1`.
 fn check_source(source: &SourceSpec) -> Result<(), ActionError> {
     match source {
+        SourceSpec::Device {
+            resolution,
+            framerate,
+            ..
+        } => {
+            fn bad(mode: &Option<String>, read: fn(&str) -> Option<String>) -> Option<&str> {
+                // Only the plain form: it goes to strom as written.
+                mode.as_deref().filter(|m| read(m).as_deref() != Some(*m))
+            }
+            match bad(resolution, lmix_types::device_resolution)
+                .or(bad(framerate, lmix_types::device_framerate))
+            {
+                Some(mode) => Err(ActionError::BadDeviceMode { mode: mode.into() }),
+                None => Ok(()),
+            }
+        }
         SourceSpec::Color { color } if color_rgb(color).is_none() => Err(ActionError::BadColor {
             color: color.clone(),
         }),
@@ -9083,6 +9100,39 @@ mod tests {
     }
 
     #[test]
+    fn a_capture_mode_must_read_as_one() {
+        let mut sw = Switcher::new(SLOTS);
+        let device = |resolution: Option<&str>, framerate: Option<&str>| Action::AddInput {
+            source: SourceSpec::Device {
+                id: "cam".into(),
+                resolution: resolution.map(Into::into),
+                framerate: framerate.map(Into::into),
+            },
+            name: None,
+        };
+        for (resolution, framerate) in [
+            (Some("foo"), None),
+            (None, Some("0/0")),
+            (Some("1920x1080"), Some("30")),
+            (Some(" 1920x1080"), None),
+            (Some("+1920x1080"), None),
+            (None, Some("030/1")),
+        ] {
+            assert!(
+                matches!(
+                    sw.apply(device(resolution, framerate)),
+                    Err(ActionError::BadDeviceMode { .. })
+                ),
+                "{resolution:?} {framerate:?}"
+            );
+        }
+        assert!(sw
+            .apply(device(Some("1920x1080"), Some("30000/1001")))
+            .is_ok());
+        assert!(sw.apply(device(None, None)).is_ok());
+    }
+
+    #[test]
     fn pages_need_a_web_address_and_graphics_a_channel() {
         let mut sw = Switcher::new(SLOTS);
         let add = |source: SourceSpec| Action::AddInput { source, name: None };
@@ -9269,7 +9319,11 @@ mod tests {
 
         let cmds = sw
             .apply(Action::AddInput {
-                source: SourceSpec::Device { id: "cam".into() },
+                source: SourceSpec::Device {
+                    id: "cam".into(),
+                    resolution: None,
+                    framerate: None,
+                },
                 name: None,
             })
             .unwrap();

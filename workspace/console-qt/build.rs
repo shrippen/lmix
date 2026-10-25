@@ -115,7 +115,6 @@ fn main() {
                 "qml/SetupPage.qml",
                 "qml/LiveView.qml",
                 "qml/InputTile.qml",
-                "qml/SourceFields.qml",
                 "qml/AddInputDialog.qml",
                 "qml/AddOutputDialog.qml",
                 "qml/TransitionPanel.qml",

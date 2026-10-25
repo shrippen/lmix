@@ -1115,15 +1115,27 @@ fn add_source(flow: &mut Flow, source: &SourceSpec, env: &SlotEnv) -> Option<Str
             ));
             "whip:video_out".into()
         }
-        SourceSpec::Device { id } => {
-            flow.blocks.push(block(
-                "dev",
-                LOCAL_INPUT_BLOCK,
-                vec![
-                    ("stream_mode", PropertyValue::String("video".into())),
-                    ("video_device", PropertyValue::String(id.clone())),
-                ],
-            ));
+        SourceSpec::Device {
+            id,
+            resolution,
+            framerate,
+        } => {
+            let mut properties = vec![
+                ("stream_mode", PropertyValue::String("video".into())),
+                ("video_device", PropertyValue::String(id.clone())),
+            ];
+            // The block asks the device for this mode at capture time.
+            if let Some(resolution) = resolution {
+                properties.push((
+                    "video_resolution",
+                    PropertyValue::String(resolution.clone()),
+                ));
+            }
+            if let Some(framerate) = framerate {
+                properties.push(("video_framerate", PropertyValue::String(framerate.clone())));
+            }
+            flow.blocks
+                .push(block("dev", LOCAL_INPUT_BLOCK, properties));
             "dev:video_out".into()
         }
         SourceSpec::AudioDevice { .. } => return None,
@@ -1722,11 +1734,41 @@ mod tests {
     fn device_slot_has_no_sound() {
         let flow = slot_flow(
             0,
-            &SourceSpec::Device { id: "cam".into() },
+            &SourceSpec::Device {
+                id: "cam".into(),
+                resolution: None,
+                framerate: None,
+            },
             &SlotEnv::new(MixerBackend::Cpu),
         );
 
         assert!(flow.blocks.iter().all(|b| b.id != SLOT_AUDIO_OUT));
+        let dev = flow.blocks.iter().find(|b| b.id == "dev").unwrap();
+        assert!(!dev.properties.contains_key("video_resolution"));
+        assert!(!dev.properties.contains_key("video_framerate"));
+    }
+
+    #[test]
+    fn device_slot_asks_for_its_mode() {
+        let flow = slot_flow(
+            0,
+            &SourceSpec::Device {
+                id: "cam".into(),
+                resolution: Some("1280x720".into()),
+                framerate: Some("60/1".into()),
+            },
+            &SlotEnv::new(MixerBackend::Cpu),
+        );
+
+        let dev = flow.blocks.iter().find(|b| b.id == "dev").unwrap();
+        assert!(matches!(
+            dev.properties.get("video_resolution"),
+            Some(PropertyValue::String(r)) if r == "1280x720"
+        ));
+        assert!(matches!(
+            dev.properties.get("video_framerate"),
+            Some(PropertyValue::String(f)) if f == "60/1"
+        ));
     }
 
     #[test]

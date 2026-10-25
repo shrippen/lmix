@@ -10,16 +10,18 @@
 #
 #   scripts/test-console-qt.sh
 #   KEEP_WORK=1 scripts/test-console-qt.sh   # keep logs and screenshots
+#   DISPLAY_NO=:96 STROM_PORT=8798 CORE_PORT=8898 scripts/test-console-qt.sh
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-STROM_PORT=8799
-CORE_PORT=8899
+# Display and ports can be moved, so two runs on one machine stay apart.
+STROM_PORT="${STROM_PORT:-8799}"
+CORE_PORT="${CORE_PORT:-8899}"
 CORE="http://127.0.0.1:${CORE_PORT}/api"
-DISPLAY_NO=:95
+DISPLAY_NO="${DISPLAY_NO:-:95}"
 WORK="$(mktemp -d)"
 # Unix socket paths must stay short (107 bytes).
-LIVE_DIR="${XDG_RUNTIME_DIR:-/tmp}/lmix-qt-test"
+LIVE_DIR="${XDG_RUNTIME_DIR:-/tmp}/lmix-qt-test${DISPLAY_NO#:}"
 PIDS=()
 
 cleanup() {
@@ -90,7 +92,7 @@ wait_up "http://127.0.0.1:${STROM_PORT}/health" strom
 # what this check is about: only lines from here on count.
 STROM_START_LINES="$(wc -l <"$WORK/strom.log")"
 "$CORE_BIN" --strom "http://127.0.0.1:${STROM_PORT}" --listen "127.0.0.1:${CORE_PORT}" --mixer cpu \
-    --slots 2 --autosave "$WORK/autosave.lmix" --shortcuts "$WORK/shortcuts.json" --layout-templates "$WORK/layout-templates.json" --live-dir "$LIVE_DIR" >"$WORK/core.log" 2>&1 &
+    --slots 3 --autosave "$WORK/autosave.lmix" --shortcuts "$WORK/shortcuts.json" --layout-templates "$WORK/layout-templates.json" --live-dir "$LIVE_DIR" >"$WORK/core.log" 2>&1 &
 PIDS+=($!)
 wait_up "$CORE/state" lmix-core
 
@@ -107,13 +109,12 @@ export XDG_CONFIG_HOME="$WORK/config" DISPLAY="$DISPLAY_NO" QT_QPA_PLATFORM=xcb 
     LMIX_CORE="http://127.0.0.1:${CORE_PORT}"
 "$CONSOLE_DIR/lmix" --page mix >"$WORK/console.log" 2>&1 &
 PIDS+=($!)
-PROGRAM_AREA="460x260+720+170"
-PREVIEW_AREA="460x260+40+180"
-TILE_1="200x40+12+568"
-TILE_2="200x40+232+568"
-# The tile's picture is about 78×44 px: the ball is 2–3 px wide and a
-# move changes about 9 px (19.10.–22.10.: 8.9 at fuzz 5 %). A still
-# picture changes none.
+PROGRAM_AREA="440x240+720+140"
+PREVIEW_AREA="440x240+40+140"
+TILE_1="180x90+14+580"
+TILE_2="180x90+212+580"
+# The tile's picture (medium, compact) is about 186×104 px: the ball is
+# a few px wide and a move changes some px. A still picture changes none.
 TILE_MOVED_PX=3
 # The live flows start a few seconds after the Console, and on a VM
 # software GL shares four cores with the CPU mixer: pictures can stall
@@ -134,7 +135,7 @@ done
 [[ -n "$tile_1_moves" ]] && pass "tile 1 moves (ball)" || fail "tile 1 still"
 [[ -n "$tile_2_shows" ]] && pass "tile 2 shows its picture" || fail "tile 2 blank"
 
-click 336 590
+click 303 630
 becomes preview 2
 [[ "$(number_of preview)" == 2 ]] && pass "click on a tile: preview" || fail "preview is $(number_of preview), not 2"
 # Cut acts on what the Console shows: wait until its preview has the picture.
@@ -163,17 +164,17 @@ for _ in $(seq 1 40); do [[ "$(overlay_1)" == none ]] && break; sleep 0.5; done
 # The narrow mixer at the right edge: mute input 1 and the master there.
 audio_1() { state | jq '.inputs[0].audio.on'; }
 master_mute() { state | jq '.master.mute'; }
-click 1242 808
+click 1243 805
 for _ in $(seq 1 40); do [[ "$(audio_1)" == false ]] && break; sleep 0.5; done
 [[ "$(audio_1)" == false ]] && pass "mixer at the edge: input 1 muted" || fail "input 1 still on after M in the mixer"
 sleep 1 # not a double click on the same M
-click 1242 808
+click 1243 805
 for _ in $(seq 1 40); do [[ "$(audio_1)" == true ]] && break; sleep 0.5; done
-click 1396 808
+click 1347 805
 for _ in $(seq 1 40); do [[ "$(master_mute)" == true ]] && break; sleep 0.5; done
 [[ "$(audio_1)" == true && "$(master_mute)" == true ]] && pass "mixer at the edge: input 1 on, master muted" \
     || fail "mixer: input 1 on $(audio_1), master mute $(master_mute)"
-click 1396 808
+click 1347 805
 for _ in $(seq 1 40); do [[ "$(master_mute)" == false ]] && break; sleep 0.5; done
 # Two streams, not started: the output bar offers to start both (STR.1).
 for port in 9921 9922; do
@@ -212,16 +213,204 @@ for _ in $(seq 1 40); do
 done
 [[ -n "$layout_shows" ]] && pass "preview monitor shows a layout" || fail "preview monitor blank with a layout on preview"
 
+# "+ Input": the dialog opens on the test pattern; Ball, a name and the
+# footer's "Add input" give an input of that pattern and name.
+click 1162 540
+sleep 2
+click 836 262
+click 940 320
+DISPLAY="$DISPLAY_NO" xdotool type --delay 30 "Dialog Ball"
+click 920 746
+added() { state | jq -r '.inputs[] | select(.name == "Dialog Ball") | .source.pattern'; }
+for _ in $(seq 1 40); do [[ -n "$(added)" ]] && break; sleep 0.5; done
+[[ "$(added)" == ball ]] && pass "add input: a pattern from the dialog" \
+    || fail "add input: got '$(added)' for the pattern of \"Dialog Ball\""
+act "{\"action\":\"remove_input\",\"input\":$(state | jq '.inputs[] | select(.name == "Dialog Ball") | .number')}"
+for _ in $(seq 1 40); do [[ -z "$(added)" ]] && break; sleep 0.5; done
+[[ -z "$(added)" ]] || fail "add input: \"Dialog Ball\" not removed again"
+
+# File keys: Ctrl+S saves a show that has a path (the menu shows the key).
+act "{\"action\":\"save_show\",\"path\":\"$WORK/keys.lmix\"}"
+for _ in $(seq 1 20); do [[ -f "$WORK/keys.lmix" ]] && break; sleep 0.5; done
+# The window learns the path with the next state: before it, Ctrl+S asks for one.
+for _ in $(seq 1 20); do [[ "$(state | jq -r .path)" == "$WORK/keys.lmix" ]] && break; sleep 0.5; done
+sleep 1
+rm -f "$WORK/keys.lmix"
+DISPLAY="$DISPLAY_NO" xdotool windowfocus "$(DISPLAY="$DISPLAY_NO" xdotool search --name '^lmix' 2>/dev/null | head -1)"
+DISPLAY="$DISPLAY_NO" xdotool key ctrl+s
+for _ in $(seq 1 20); do [[ -f "$WORK/keys.lmix" ]] && break; sleep 0.5; done
+[[ -f "$WORK/keys.lmix" ]] && pass "Ctrl+S saves the show" || fail "Ctrl+S: no file saved"
+
+# View as a popover: its switch sets the multiview's program side.
+multiview_program() { state | jq -r '.multiview.program // "right"'; }
+click 490 540
+sleep 1
+click 488 681
+for _ in $(seq 1 40); do [[ "$(multiview_program)" == left ]] && break; sleep 0.5; done
+[[ "$(multiview_program)" == left ]] && pass "View popover: program on the left" \
+    || fail "View popover: multiview program $(multiview_program) after its switch"
+DISPLAY="$DISPLAY_NO" xdotool key Escape
+act '{"action":"set_multiview","layout":{"program":"right","meters":"shown"}}'
+
+# The input's menu removes at once; Ctrl+Z while the toast shows brings
+# the input back. A spare third input, so the tiles of the checks below stay.
+act '{"action":"add_input","source":{"kind":"pattern","pattern":"bars"},"name":"Spare"}'
+spare() { state | jq -r '.inputs[] | select(.name == "Spare") | .number'; }
+for _ in $(seq 1 40); do [[ -n "$(spare)" ]] && break; sleep 0.5; done
+sleep 2
+# The menu's quick row: Preview closes the menu and puts Spare into preview.
+spare_id() { state | jq -r '.inputs[] | select(.name == "Spare") | .id'; }
+click 500 625 3
+sleep 1.5
+click 625 264
+for _ in $(seq 1 20); do [[ "$(state | jq -r .preview)" == "$(spare_id)" ]] && break; sleep 0.5; done
+[[ "$(state | jq -r .preview)" == "$(spare_id)" ]] && pass "input menu: Preview in the quick row" \
+    || fail "input menu: preview is $(state | jq -r .preview) after Preview in the quick row"
+sleep 1
+click 500 625 3
+sleep 1.5
+click 564 880
+for _ in $(seq 1 40); do [[ -z "$(spare)" ]] && break; sleep 0.5; done
+[[ -z "$(spare)" ]] && pass "input menu: Remove" || fail "input menu: Spare still there after Remove"
+# The toast waits for the Console's state without Spare, a moment after
+# the core's.
+sleep 1
+DISPLAY="$DISPLAY_NO" xdotool key ctrl+z
+for _ in $(seq 1 40); do [[ -n "$(spare)" ]] && break; sleep 0.5; done
+[[ -n "$(spare)" ]] && pass "input menu: Ctrl+Z brings it back" || fail "input menu: Spare not back after Ctrl+Z"
+act "{\"action\":\"remove_input\",\"input\":$(spare)}"
+for _ in $(seq 1 40); do [[ -z "$(spare)" ]] && break; sleep 0.5; done
+# A refused removal (locked show) is forgotten: when the input goes
+# another way later, no toast offers Undo for it. Before the show's Ctrl+Z
+# below: no toast is open here (Ctrl+Z above took the last one).
+act '{"action":"add_input","source":{"kind":"pattern","pattern":"bars"},"name":"Spare"}'
+for _ in $(seq 1 40); do [[ -n "$(spare)" ]] && break; sleep 0.5; done
+# Lock and unlock with the bar's button: the Console's own unlock clears
+# the refusal's line, which would move the tiles below.
+locked() { state | jq -r '.locked // false'; }
+sleep 1
+click 780 540
+for _ in $(seq 1 20); do [[ "$(locked)" == true ]] && break; sleep 0.5; done
+[[ "$(locked)" == true ]] || fail "Lock button: show not locked"
+# Twice: the same refusal again sets no new message, its answer counts.
+for _ in 1 2; do
+    click 500 625 3
+    sleep 1.5
+    click 564 880
+    sleep 1.5
+done
+click 780 540
+for _ in $(seq 1 20); do [[ "$(locked)" == false ]] && break; sleep 0.5; done
+[[ "$(locked)" == false ]] || fail "Lock button: show still locked"
+act "{\"action\":\"remove_input\",\"input\":$(spare)}"
+for _ in $(seq 1 40); do [[ -z "$(spare)" ]] && break; sleep 0.5; done
+sleep 1
+DISPLAY="$DISPLAY_NO" xdotool key ctrl+z
+sleep 2
+[[ -z "$(spare)" ]] && pass "input menu: a refused removal is forgotten" \
+    || fail "input menu: Ctrl+Z brought back Spare, removed elsewhere after a refused removal"
+# A show's shortcut on Ctrl+Z wins over the toast's Undo.
+act '{"action":"add_input","source":{"kind":"pattern","pattern":"bars"},"name":"Spare"}'
+for _ in $(seq 1 40); do [[ -n "$(spare)" ]] && break; sleep 0.5; done
+act '{"action":"add_shortcut","shortcut":{"label":"Program left","key":"Ctrl+Z","actions":[{"action":"set_multiview","layout":{"program":"left","meters":"shown"}}]}}'
+sleep 1.5
+click 500 625 3
+sleep 1.5
+click 564 880
+for _ in $(seq 1 40); do [[ -z "$(spare)" ]] && break; sleep 0.5; done
+sleep 1
+DISPLAY="$DISPLAY_NO" xdotool key ctrl+z
+for _ in $(seq 1 20); do [[ "$(multiview_program)" == left ]] && break; sleep 0.5; done
+[[ "$(multiview_program)" == left && -z "$(spare)" ]] \
+    && pass "input menu: a show's Ctrl+Z wins over Undo" \
+    || fail "input menu: Ctrl+Z ran the toast's Undo, not the show's shortcut"
+act '{"action":"remove_shortcut","target":"Program left"}'
+act '{"action":"set_multiview","layout":{"program":"right","meters":"shown"}}'
+
+# The grip under the monitors sets their height and keeps it in the
+# settings; a double click goes back to the standard height (15 grid units).
+view_setting() { sed -n "s/^$1=//p" "$WORK"/config/lmix/lmix.conf 2>/dev/null; }
+setting_becomes() {
+    for _ in $(seq 1 20); do [[ "$(view_setting "$1")" == "$2" ]] && return 0; sleep 0.5; done
+    return 1
+}
+drag_y() {
+    # Over the grip first: right after a popup closed, a press without a move
+    # before it found no item under the pointer (once in a run).
+    DISPLAY="$DISPLAY_NO" xdotool mousemove "$1" "$(($2 + 3))"
+    sleep 0.3
+    DISPLAY="$DISPLAY_NO" xdotool mousemove "$1" "$2"
+    sleep 0.3
+    DISPLAY="$DISPLAY_NO" xdotool mousedown 1
+    # In steps: a jump in one event is no drag for Qt.
+    local y="$2"
+    while (( y != $3 )); do
+        (( y += ($3 > y ? 1 : -1) * ($3 - y > 8 || y - $3 > 8 ? 8 : 1) ))
+        sleep 0.03
+        DISPLAY="$DISPLAY_NO" xdotool mousemove "$1" "$y"
+    done
+    sleep 0.1
+    DISPLAY="$DISPLAY_NO" xdotool mouseup 1
+}
+drag_y 602 511 451
+setting_becomes monitorHeight 210 && pass "monitor grip: a drag sets the height" \
+    || fail "monitor grip: height $(view_setting monitorHeight) after a drag of 60 px up"
+# The grip stays put: the transition panel beside the monitors is higher.
+DISPLAY="$DISPLAY_NO" xdotool mousemove 602 511 click --repeat 2 --delay 80 1
+setting_becomes monitorHeight 270 && pass "monitor grip: a double click resets it" \
+    || fail "monitor grip: height $(view_setting monitorHeight) after a double click"
+
+# The grip left of the audio column: a drag to the left widens it, a
+# double click goes back to the standard width (12 grid units). A wide
+# column leaves less room than the input actions take in one row: they
+# wrap, and the column stays in the window with its grip at the pointer.
+drag_x() {
+    DISPLAY="$DISPLAY_NO" xdotool mousemove "$(($1 + 3))" "$2"
+    sleep 0.3
+    DISPLAY="$DISPLAY_NO" xdotool mousemove "$1" "$2"
+    sleep 0.3
+    DISPLAY="$DISPLAY_NO" xdotool mousedown 1
+    local x="$1"
+    while (( x != $3 )); do
+        (( x += ($3 > x ? 1 : -1) * ($3 - x > 8 || x - $3 > 8 ? 8 : 1) ))
+        sleep 0.03
+        DISPLAY="$DISPLAY_NO" xdotool mousemove "$x" "$2"
+    done
+    sleep 0.1
+    DISPLAY="$DISPLAY_NO" xdotool mouseup 1
+}
+drag_x 1205 300 765
+setting_becomes mixerWidth 656 && pass "audio grip: a drag widens the column" \
+    || fail "audio grip: width $(view_setting mixerWidth) after a drag of 440 px left"
+DISPLAY="$DISPLAY_NO" xdotool mousemove 765 300 click --repeat 2 --delay 80 1
+setting_becomes mixerWidth 216 && pass "audio grip: a double click resets it" \
+    || fail "audio grip: width $(view_setting mixerWidth) after a double click"
+
+# Detail: the tiles get the overlay buttons and the audio row, and the
+# monitors give them room, so a row of tiles is not cut off.
+click 304 540
+setting_becomes detail true || fail "Detail not stored after a click"
+sleep 2
+click 22 708
+for _ in $(seq 1 40); do [[ "$(overlay_1)" != none ]] && break; sleep 0.5; done
+[[ "$(overlay_1)" == "$(state | jq -r '.inputs[0].id')" ]] && pass "detail: overlay 1 from the tile" \
+    || fail "detail: overlay 1 is $(overlay_1) after a click on the tile's button"
+click 28 748
+for _ in $(seq 1 40); do [[ "$(audio_1)" == false ]] && break; sleep 0.5; done
+[[ "$(audio_1)" == false ]] && pass "detail: mute from the tile" || fail "detail: input 1 not muted from the tile (cut off?)"
+act '{"action":"set_audio","input":1,"on":true}'
+act '{"action":"overlay_out","channel":1}'
+
 own_qml_warnings console.log && fail "QML warnings: $(own_qml_warnings console.log | head -3)"
 pass "no QML warnings"
 
 # The Show page through the page bar, same window: it draws the show
 # view (not a flat colour), and the bar shows program small.
 act '{"action":"add_cue_list","name":"Act 1","cues":[{"number":"1","name":"Doors","kind":"wait","duration_ms":120000},{"number":"2","name":"House","kind":"wait","duration_ms":120000},{"number":"3","name":"Lights","kind":"note"}]}'
-show_window="$(xdotool search --name '^lmix' 2>/dev/null | head -1 || true)"
+show_window="$(DISPLAY="$DISPLAY_NO" xdotool search --name '^lmix' 2>/dev/null | head -1 || true)"
 [[ -n "$show_window" ]] || fail "no lmix window"
 # Pages by key (Ctrl+n): the tabs' places depend on their labels.
-xdotool windowfocus "$show_window"
+DISPLAY="$DISPLAY_NO" xdotool windowfocus "$show_window"
 sleep 1
 xdotool key ctrl+2
 sleep 3
@@ -240,7 +429,7 @@ done
 standby() { state | jq '.cue_lists[0].standby'; }
 cues_running() { state | jq '.running_cues | length'; }
 key() { xdotool key "$1"; }
-xdotool windowfocus "$show_window"
+DISPLAY="$DISPLAY_NO" xdotool windowfocus "$show_window"
 sleep 1
 until_true() { for _ in $(seq 1 20); do eval "$1" && return 0; sleep 0.5; done; return 1; }
 key space
@@ -400,7 +589,7 @@ pass "no QML warnings (show)"
 prev=show
 for page in "AUDIO 3" "OUTPUTS 4" "SETUP 5"; do
     read -r name n <<<"$page"
-    xdotool windowfocus "$show_window"
+    DISPLAY="$DISPLAY_NO" xdotool windowfocus "$show_window"
     xdotool key "ctrl+$n"
     sleep 2
     shot "page-$name"
@@ -427,7 +616,7 @@ FIRST_TAB="25 879"
 click $FIRST_TAB
 sleep 2
 shot tab-mix
-xdotool windowfocus "$show_window"
+DISPLAY="$DISPLAY_NO" xdotool windowfocus "$show_window"
 xdotool key ctrl+3
 sleep 2
 shot tab-audio
@@ -442,7 +631,7 @@ PAGE_TITLE="300x40+0+55"
 # Panic all: cues stop, program fades to black, a running stream goes on.
 act '{"action":"start_output","output":1}'
 act '{"action":"cue_reset"}'
-xdotool windowfocus "$show_window"
+DISPLAY="$DISPLAY_NO" xdotool windowfocus "$show_window"
 xdotool key ctrl+2
 sleep 1
 xdotool key space

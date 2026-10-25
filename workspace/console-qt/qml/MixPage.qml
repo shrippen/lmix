@@ -19,7 +19,6 @@ AppPage {
     readonly property var show: shell.show
     readonly property var inputs: shell.inputs
     readonly property var backend: shell.backend
-    readonly property var shortcutKeys: shell.shortcutKeys
     function act(action) { shell.act(action) }
     function inputById(id) { return shell.inputById(id) }
     function localPath(url) { return shell.localPath(url) }
@@ -44,8 +43,14 @@ AppPage {
         category: "view"
         /** Input tiles: 0 small, 1 medium, 2 large (UI.3). */
         property int tileSize: 1
-        /** Rows of input tiles before the bar scrolls (UI.3). */
-        property int rows: 2
+        /** Tiles with overlay buttons and the audio strip (detail) or
+         *  picture and title alone (compact). */
+        property bool detail: false
+        /** Picture height of the monitors, px; the width follows the
+         *  program format. Set with the handle under them. */
+        property real monitorHeight: Kirigami.Units.gridUnit * 15
+        /** Width of the audio column at the right edge, px. */
+        property real mixerWidth: Kirigami.Units.gridUnit * 12
         /** Only the switching essentials (UI.7). */
         property bool simple: false
         /** Ids of collapsed inputs, as JSON (UI.3). */
@@ -77,7 +82,13 @@ AppPage {
     onCollapsedIdsChanged: syncInputs()
     /** Simple mode: `--mode` for this run, else the saved choice. */
     readonly property bool simple: backend.uiMode === "simple" || (backend.uiMode === "" && viewSettings.simple)
-    readonly property var tileUnits: [[10, 9.5], [12, 11], [16, 14]][Math.max(0, Math.min(2, viewSettings.tileSize))]
+    /** Smallest tile width per size, grid units: the tiles of a row share
+     *  what is left over, so they fill it (UI.3). */
+    readonly property real tileMinWidth: Kirigami.Units.gridUnit * [8, 10.5, 14.5][Math.max(0, Math.min(2, viewSettings.tileSize))]
+    /** Width over height of the program format: monitors and tiles show it
+     *  without bars. */
+    readonly property real aspect: show && show.format && show.format.height > 0
+        ? show.format.width / show.format.height : 16 / 9
 
 
     readonly property var levels: backend.levels.length > 0 ? JSON.parse(backend.levels) : ({})
@@ -122,7 +133,7 @@ AppPage {
         delegate: Shortcut {
             required property int index
             sequence: String(index + 1)
-            enabled: root.visible && root.shortcutKeys.indexOf(String(index + 1)) < 0
+            enabled: root.visible && !shell.keyTaken(sequence)
             onActivated: {
                 var input = root.inputs[index]
                 if (input && input.id !== root.show.program && input.id !== root.show.preview) {
@@ -160,6 +171,7 @@ AppPage {
         id: addInputDialog
         parent: QQC2.Overlay.overlay
         core: backend
+        inputs: root.inputs
     }
 
     TriggersDialog {
@@ -184,6 +196,72 @@ AppPage {
         coreUrl: backend.coreUrl
         inputs: root.inputs
         outputs: root.show ? root.show.outputs : []
+    }
+
+    // Remove at once, with a way back: the toast's Undo (or Ctrl+Z while it
+    // shows) brings the input back with its settings (AUT.10).
+    // The toast waits for the state without the input and with it to bring
+    // back: a refused removal shows nothing, and another show or a removal
+    // from elsewhere does not pass for this one.
+    function removeInput(input) {
+        root.removing = { id: input.id, number: input.number, name: input.name }
+        root.act({ action: "remove_input", input: input.number })
+    }
+    property var removing: null
+    // Later: inputs and show change one after the other for one state.
+    onInputsChanged: Qt.callLater(root.removedOrNot)
+    // The core's refusal of this removal (a locked show, a stinger) ends
+    // it: the input may go another way later, and that is no removal from
+    // here. Answers to other actions leave it alone.
+    Connections {
+        target: backend
+        function onAnswered(action, refusal) {
+            const answered = JSON.parse(action)
+            if (refusal.length > 0 && root.removing && answered.action === "remove_input"
+                    && String(answered.input) === String(root.removing.number)) {
+                root.removing = null
+            }
+        }
+    }
+    function removedOrNot() {
+        if (!root.removing || root.inputs.some(i => i.id === root.removing.id)) {
+            return
+        }
+        if (root.show && root.show.restorable === root.removing.name) {
+            removedToast.text = qsTr("Input %1 \u201c%2\u201d removed").arg(root.removing.number).arg(root.removing.name)
+            removedToast.restores = root.removing.name
+            removedToast.show()
+        }
+        root.removing = null
+    }
+
+    KanteToast {
+        id: removedToast
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        anchors.margins: Kirigami.Units.largeSpacing
+        z: 10
+        kind: KanteToast.Kind.Info
+        title: qsTr("Removed")
+        life: 8000
+        /** The removed input's name: Undo brings back only that one. */
+        property string restores
+        readonly property bool restorable: root.show !== null && root.show.restorable === restores
+        actionText: restorable ? qsTr("Undo") : ""
+        actionShortcut: undoKey.free && restorable ? qsTr("Ctrl+Z") : ""
+        onActionTriggered: root.act({ action: "restore_input" })
+    }
+    // A show's own shortcut on Ctrl+Z wins, as for the File keys: two
+    // shortcuts on one key would both stay silent.
+    Shortcut {
+        id: undoKey
+        readonly property bool free: !shell.keyTaken("Ctrl+Z")
+        sequence: "Ctrl+Z"
+        enabled: root.visible && removedToast.shown && removedToast.restorable && free
+        onActivated: {
+            removedToast.hide()
+            root.act({ action: "restore_input" })
+        }
     }
 
     InputSettingsDialog {
@@ -234,14 +312,6 @@ AppPage {
         inputs: root.inputs
     }
 
-    FormatDialog {
-        id: formatDialog
-        parent: QQC2.Overlay.overlay
-        anchors.centerIn: parent
-        act: root.act
-        format: root.show && root.show.format ? root.show.format : ({ width: 1920, height: 1080, framerate: "30/1" })
-    }
-
     AuxBusDialog {
         id: auxDialog
         parent: QQC2.Overlay.overlay
@@ -261,36 +331,10 @@ AppPage {
     }
 
     fileItems: [
-        QQC2.MenuItem {
+        KanteMenuItem {
             text: qsTr("Inputs from a show…")
+            icon.name: "document-import"
             onTriggered: appendDialog.open()
-        },
-        QQC2.MenuItem {
-            text: qsTr("Program format…")
-            onTriggered: formatDialog.open()
-        },
-        // OUT.10: program left or right, meters on the tiles;
-        // the mixer is built anew, like for the format.
-        QQC2.MenuItem {
-            readonly property var layout: root.show && root.show.multiview ? root.show.multiview : ({ program: "right", meters: "shown" })
-            text: qsTr("Multiview: program on the left")
-            checkable: true
-            checked: layout.program === "left"
-            onTriggered: root.act({ action: "set_multiview", layout: { program: checked ? "left" : "right", meters: layout.meters } })
-        },
-        QQC2.MenuItem {
-            readonly property var layout: root.show && root.show.multiview ? root.show.multiview : ({ program: "right", meters: "shown" })
-            text: qsTr("Multiview: level meters")
-            checkable: true
-            checked: layout.meters === "shown"
-            onTriggered: root.act({ action: "set_multiview", layout: { program: layout.program, meters: checked ? "shown" : "hidden" } })
-        },
-        // AUD.17: 48 kHz by default; 44.1 kHz for music productions.
-        QQC2.MenuItem {
-            text: qsTr("Sound at 44.1 kHz")
-            checkable: true
-            checked: root.show && root.show.sample_rate === 44100
-            onTriggered: root.act({ action: "set_sample_rate", hz: checked ? 44100 : 48000 })
         }
     ]
 
@@ -318,36 +362,62 @@ AppPage {
         spacing: Kirigami.Units.largeSpacing
 
         ColumnLayout {
+            id: mixColumn
             Layout.fillWidth: true
             Layout.fillHeight: true
             spacing: Kirigami.Units.largeSpacing
+            /** Height kept free under the monitors for the rows below and a row
+             *  of tiles; in detail the tiles are higher by their extra rows, and
+             *  wrapped input actions by their second row. */
+            readonly property real inputsRoom: Kirigami.Units.gridUnit * 16 + Math.max(0, bar.chrome - Kirigami.Units.gridUnit * 2)
+                + Math.max(0, inputActions.height - addButton.height)
 
+            // Preview and program in the program format, each centred in
+            // its half; the transitions always in the middle of the page.
             RowLayout {
+                id: monitorRow
                 Layout.fillWidth: true
-                Layout.fillHeight: true
+                // A nested layout fills by default: the inputs below get the rest.
+                Layout.fillHeight: false
                 spacing: Kirigami.Units.largeSpacing
 
-                Monitor {
-                    label: qsTr("Preview")
-                    detail: root.busLabel(root.show ? root.show.preview : null)
-                    tally: KanteStyle.positiveTextColor
-                    // The mixer's preview output: an input or a layout, as a
-                    // take brings it; it does not change pipelines on a click.
-                    source: root.show && root.show.preview ? "preview" : ""
-                    input: root.previewInput
-                    // Quick play of preview (SWI.8).
-                    onDoubleClicked: if (backend.connected && root.show && root.show.preview)
-                        root.act({ action: "quick_play" })
+                /** Room for one monitor's picture: its half of the row. */
+                readonly property real halfWidth: Math.max(0, (width - panelScroll.width - 2 * spacing) / 2 - 2 * Kirigami.Units.smallSpacing)
+                /** Tallest picture: the half's width, and room left for the inputs below. */
+                readonly property real maxPictureHeight: Math.max(monitorHandle.from,
+                    Math.min(halfWidth / root.aspect, mixColumn.height - mixColumn.inputsRoom))
+                readonly property real pictureHeight: Math.max(monitorHandle.from, Math.min(viewSettings.monitorHeight, maxPictureHeight))
+
+                Item {
+                    Layout.fillWidth: true
+                    Layout.preferredWidth: 1
+                    Layout.fillHeight: true
+                    implicitHeight: previewMonitor.implicitHeight
+                    Monitor {
+                        id: previewMonitor
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        label: qsTr("Preview")
+                        detail: root.busLabel(root.show ? root.show.preview : null)
+                        tally: KanteStyle.positiveTextColor
+                        // The mixer's preview output: an input or a layout, as a
+                        // take brings it; it does not change pipelines on a click.
+                        source: root.show && root.show.preview ? "preview" : ""
+                        input: root.previewInput
+                        // Quick play of preview (SWI.8).
+                        onDoubleClicked: if (backend.connected && root.show && root.show.preview)
+                            root.act({ action: "quick_play" })
+                    }
                 }
 
-                // Scrolls when the window is low: its height no longer
-                // pushes the bars below the window (1440 × 900).
+                // As high as it needs while there is room (the overlay grid in
+                // reach without scrolling, #137); scrolls when the window is low.
                 QQC2.ScrollView {
                     id: panelScroll
                     Layout.fillWidth: false
                     Layout.fillHeight: true
                     Layout.preferredWidth: Kirigami.Units.gridUnit * 8
-                    Layout.minimumHeight: Kirigami.Units.gridUnit * 6
+                    Layout.preferredHeight: Math.max(Kirigami.Units.gridUnit * 6,
+                        Math.min(transitionPanel.implicitHeight, mixColumn.height - mixColumn.inputsRoom))
                     contentWidth: availableWidth
                     contentHeight: transitionPanel.implicitHeight
                     QQC2.ScrollBar.horizontal.policy: QQC2.ScrollBar.AlwaysOff
@@ -363,14 +433,36 @@ AppPage {
                     }
                 }
 
-                Monitor {
-                    label: qsTr("Program")
-                    detail: root.busLabel(root.show ? root.show.program : null)
-                    tally: KanteStyle.negativeTextColor
-                    source: "program"
-                    peakDb: root.levels.program
-                    input: root.programInput
+                Item {
+                    Layout.fillWidth: true
+                    Layout.preferredWidth: 1
+                    Layout.fillHeight: true
+                    implicitHeight: programMonitor.implicitHeight
+                    Monitor {
+                        id: programMonitor
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        label: qsTr("Program")
+                        detail: root.busLabel(root.show ? root.show.program : null)
+                        tally: KanteStyle.negativeTextColor
+                        source: "program"
+                        peakDb: root.levels.program
+                        input: root.programInput
+                    }
                 }
+            }
+
+            // Drag: the monitors' height, the width follows the format; double click: back.
+            KanteSplitHandle {
+                id: monitorHandle
+                Layout.fillWidth: true
+                Layout.topMargin: -Kirigami.Units.largeSpacing / 2
+                Layout.bottomMargin: -Kirigami.Units.largeSpacing / 2
+                value: monitorRow.pictureHeight
+                from: Kirigami.Units.gridUnit * 4
+                to: monitorRow.maxPictureHeight
+                defaultValue: Math.min(Kirigami.Units.gridUnit * 15, to)
+                accessibleName: qsTr("Height of the monitors")
+                onMoved: v => viewSettings.monitorHeight = v
             }
 
             RowLayout {
@@ -383,100 +475,137 @@ AppPage {
                     tooltips: [qsTr("A live tile per input"), qsTr("A row for program and one for preview, a button per input")]
                     onActivated: index => viewSettings.buttons = index === 1
                 }
+                KanteSegmented {
+                    visible: !viewSettings.buttons
+                    activeFocusOnTab: false
+                    model: [qsTr("Compact"), qsTr("Detail")]
+                    currentIndex: viewSettings.detail ? 1 : 0
+                    tooltips: [qsTr("Picture and name"), qsTr("Also overlay buttons and the audio strip")]
+                    onActivated: index => viewSettings.detail = index === 1
+                }
+                KanteSegmented {
+                    visible: !viewSettings.buttons
+                    activeFocusOnTab: false
+                    model: [qsTr("S", "small tiles"), qsTr("M", "medium tiles"), qsTr("L", "large tiles")]
+                    currentIndex: viewSettings.tileSize
+                    tooltips: [qsTr("Small tiles"), qsTr("Medium tiles"), qsTr("Large tiles")]
+                    onActivated: index => viewSettings.tileSize = index
+                }
                 KanteButton {
                     id: viewButton
                     text: qsTr("View")
                     emphasis: KanteButton.Emphasis.Quiet
-                    onClicked: viewMenu.popup(viewButton, 0, viewButton.height)
-                    QQC2.Menu {
-                        id: viewMenu
-                        KantePopupSkin { popup: viewMenu }
-                        ChoiceMenu {
-                            title: qsTr("Tile size")
-                            current: viewSettings.tileSize
-                            choices: [{ value: 0, label: qsTr("Small") }, { value: 1, label: qsTr("Medium") }, { value: 2, label: qsTr("Large") }]
-                            onPicked: value => viewSettings.tileSize = value
-                        }
-                        ChoiceMenu {
-                            title: qsTr("Rows")
-                            current: viewSettings.rows
-                            choices: [1, 2, 3, 4].map(n => ({ value: n, label: String(n) }))
-                            onPicked: value => viewSettings.rows = value
-                        }
-                        QQC2.MenuItem {
-                            text: qsTr("Audio at the edge")
-                            checkable: true
-                            checked: viewSettings.mixer
-                            enabled: !root.simple
-                            onTriggered: viewSettings.mixer = !viewSettings.mixer
-                        }
-                        QQC2.MenuItem {
-                            text: qsTr("Simple mode")
-                            checkable: true
-                            checked: root.simple
-                            enabled: backend.uiMode === ""
-                            onTriggered: viewSettings.simple = !viewSettings.simple
+                    onClicked: viewPopover.openAt(viewButton)
+                    KantePopover {
+                        id: viewPopover
+                        title: qsTr("View")
+                        readonly property var multiview: root.show && root.show.multiview ? root.show.multiview : ({ program: "right", meters: "shown" })
+                        ColumnLayout {
+                            spacing: Kirigami.Units.smallSpacing
+                            KanteSwitch {
+                                text: qsTr("Audio at the edge")
+                                checked: viewSettings.mixer
+                                enabled: !root.simple
+                                onToggled: viewSettings.mixer = checked
+                            }
+                            KanteSwitch {
+                                text: qsTr("Simple mode")
+                                checked: root.simple
+                                enabled: backend.uiMode === ""
+                                onToggled: viewSettings.simple = checked
+                            }
+                            // OUT.10: program left or right, meters on the tiles;
+                            // the mixer is built anew, like for the format.
+                            KanteSectionLabel { text: qsTr("Multiview") }
+                            KanteSwitch {
+                                text: qsTr("Program on the left")
+                                checked: viewPopover.multiview.program === "left"
+                                enabled: backend.connected
+                                // The core's state decides: a click asks, the binding comes back.
+                                onToggled: {
+                                    root.act({ action: "set_multiview", layout: { program: checked ? "left" : "right", meters: viewPopover.multiview.meters } })
+                                    checked = Qt.binding(() => viewPopover.multiview.program === "left")
+                                }
+                            }
+                            KanteSwitch {
+                                text: qsTr("Level meters")
+                                checked: viewPopover.multiview.meters === "shown"
+                                enabled: backend.connected
+                                onToggled: {
+                                    root.act({ action: "set_multiview", layout: { program: viewPopover.multiview.program, meters: checked ? "shown" : "hidden" } })
+                                    checked = Qt.binding(() => viewPopover.multiview.meters === "shown")
+                                }
+                            }
                         }
                     }
                 }
-                Item { Layout.fillWidth: true }
-                KanteButton {
-                    visible: root.inputs.some(i => i.missing && i.missing.length > 0)
-                    text: qsTr("Find missing files…")
-                    emphasis: KanteButton.Emphasis.Primary
-                    QQC2.ToolTip.visible: hovered
-                    QQC2.ToolTip.text: qsTr("Inputs marked \"Missing\" lack media files: pick the folder they are in now. Inputs on program are left alone.")
-                    onClicked: relocateDialog.open()
-                }
-                KanteButton {
-                    text: qsTr("Clear solo")
-                    visible: root.inputs.some(i => i.listen !== "off")
-                    onClicked: root.act({ action: "clear_listen" })
-                }
-                KanteButton {
-                    text: qsTr("Bring back %1").arg(root.show ? root.show.restorable : "")
-                    visible: root.show !== null && !!root.show.restorable
-                    onClicked: root.act({ action: "restore_input" })
-                }
-                KanteButton {
-                    readonly property bool locked: root.show !== null && root.show.locked === true
-                    text: locked ? qsTr("Locked") : qsTr("Lock")
-                    emphasis: locked ? KanteButton.Emphasis.Destructive : KanteButton.Emphasis.Normal
-                    enabled: backend.connected
-                    QQC2.ToolTip.visible: hovered
-                    QQC2.ToolTip.text: qsTr("While locked, closing inputs, loading a show and stopping outputs are refused.")
-                    onClicked: root.act({ action: "set_lock", on: !locked })
-                }
-                KanteButton {
-                    visible: !root.simple
-                    text: qsTr("Shortcuts…")
-                    enabled: backend.connected
-                    onClicked: root.openShortcuts()
-                }
-                KanteButton {
-                    visible: !root.simple
-                    text: qsTr("Buses…")
-                    enabled: backend.connected
-                    onClicked: auxDialog.open()
-                }
-                KanteButton {
-                    visible: !root.simple
-                    text: qsTr("Titles…")
-                    enabled: backend.connected
-                    onClicked: titlesDialog.open()
-                }
-                KanteButton {
-                    visible: !root.simple
-                    text: qsTr("Data…")
-                    enabled: backend.connected
-                    onClicked: dataSourcesDialog.open()
-                }
-                KanteButton {
-                    text: qsTr("+ Input")
-                    enabled: backend.connected
-                    onClicked: {
-                        addInputDialog.replacing = null
-                        addInputDialog.open()
+                // The actions at the right; in a narrow window they wrap into
+                // a second row instead of pushing the audio column out.
+                Flow {
+                    id: inputActions
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: implicitHeight
+                    layoutDirection: Qt.RightToLeft
+                    spacing: Kirigami.Units.smallSpacing
+                    KanteButton {
+                        id: addButton
+                        text: qsTr("+ Input")
+                        enabled: backend.connected
+                        onClicked: {
+                            addInputDialog.replacing = null
+                            addInputDialog.open()
+                        }
+                    }
+                    KanteButton {
+                        visible: !root.simple
+                        text: qsTr("Data…")
+                        enabled: backend.connected
+                        onClicked: dataSourcesDialog.open()
+                    }
+                    KanteButton {
+                        visible: !root.simple
+                        text: qsTr("Titles…")
+                        enabled: backend.connected
+                        onClicked: titlesDialog.open()
+                    }
+                    KanteButton {
+                        visible: !root.simple
+                        text: qsTr("Buses…")
+                        enabled: backend.connected
+                        onClicked: auxDialog.open()
+                    }
+                    KanteButton {
+                        visible: !root.simple
+                        text: qsTr("Shortcuts…")
+                        enabled: backend.connected
+                        onClicked: root.openShortcuts()
+                    }
+                    KanteButton {
+                        readonly property bool locked: root.show !== null && root.show.locked === true
+                        text: locked ? qsTr("Locked") : qsTr("Lock")
+                        emphasis: locked ? KanteButton.Emphasis.Destructive : KanteButton.Emphasis.Normal
+                        enabled: backend.connected
+                        QQC2.ToolTip.visible: hovered
+                        QQC2.ToolTip.text: qsTr("While locked, closing inputs, loading a show and stopping outputs are refused.")
+                        onClicked: root.act({ action: "set_lock", on: !locked })
+                    }
+                    KanteButton {
+                        text: qsTr("Bring back %1").arg(root.show ? root.show.restorable : "")
+                        visible: root.show !== null && !!root.show.restorable
+                        onClicked: root.act({ action: "restore_input" })
+                    }
+                    KanteButton {
+                        text: qsTr("Clear solo")
+                        visible: root.inputs.some(i => i.listen !== "off")
+                        onClicked: root.act({ action: "clear_listen" })
+                    }
+                    KanteButton {
+                        visible: root.inputs.some(i => i.missing && i.missing.length > 0)
+                        text: qsTr("Find missing files…")
+                        emphasis: KanteButton.Emphasis.Primary
+                        QQC2.ToolTip.visible: hovered
+                        QQC2.ToolTip.text: qsTr("Inputs marked \"Missing\" lack media files: pick the folder they are in now. Inputs on program are left alone.")
+                        onClicked: relocateDialog.open()
                     }
                 }
             }
@@ -531,13 +660,44 @@ AppPage {
                 id: bar
                 visible: !viewSettings.buttons
                 Layout.fillWidth: true
-                Layout.preferredHeight: cellHeight * Math.max(1, Math.min(viewSettings.rows, Math.ceil(count / Math.max(1, Math.floor(width / cellWidth)))))
-                cellWidth: Kirigami.Units.gridUnit * root.tileUnits[0] + Kirigami.Units.smallSpacing
-                cellHeight: Kirigami.Units.gridUnit * root.tileUnits[1]
+                Layout.fillHeight: true
+                Layout.minimumHeight: Math.min(cellHeight, Kirigami.Units.gridUnit * 6)
+                // As many tiles per row as fit at the size's smallest width; they
+                // share the rest. The picture in the program format, the title
+                // (and in detail the overlay and audio rows) under it.
+                readonly property int columns: Math.max(1, Math.floor((width + Kirigami.Units.smallSpacing) / (root.tileMinWidth + Kirigami.Units.smallSpacing)))
+                /** Height of a tile without its picture: the tiles report it. */
+                property real chrome: Kirigami.Units.gridUnit * 2
+                // Later, not while the grid lays out: a tile made by setting cellHeight
+                // would set it again (a binding loop, seen with a restored input).
+                function reportChrome(value) {
+                    chrome = value
+                }
+                cellWidth: Math.floor(width / columns)
+                cellHeight: Math.ceil((cellWidth - Kirigami.Units.smallSpacing - 2 * Kirigami.Units.smallSpacing) / root.aspect + chrome + Kirigami.Units.smallSpacing)
                 clip: true
                 boundsBehavior: Flickable.StopAtBounds
                 model: inputModel
                 QQC2.ScrollBar.vertical: QQC2.ScrollBar {}
+
+                // On the view, not its content item (no height without tiles).
+                KanteEmptyState {
+                    parent: bar
+                    anchors.centerIn: parent
+                    width: Math.min(parent.width - 2 * Kirigami.Units.largeSpacing, implicitWidth)
+                    visible: inputModel.count === 0
+                    title: qsTr("No inputs yet")
+                    text: qsTr("A camera, a file, a stream or a test pattern: each gets a tile here.")
+                    KanteButton {
+                        text: qsTr("+ Input")
+                        emphasis: KanteButton.Emphasis.Primary
+                        enabled: backend.connected
+                        onClicked: {
+                            addInputDialog.replacing = null
+                            addInputDialog.open()
+                        }
+                    }
+                }
                 /** The tile being dragged to a new place, and where it would land. */
                 property var dragged: null
                 property int dropIndex: -1
@@ -567,6 +727,9 @@ AppPage {
                     }
                     width: bar.cellWidth - Kirigami.Units.smallSpacing
                     height: bar.cellHeight - Kirigami.Units.smallSpacing
+                    detail: viewSettings.detail
+                    onChromeChanged: Qt.callLater(bar.reportChrome, chrome)
+                    Component.onCompleted: Qt.callLater(bar.reportChrome, chrome)
                     core: backend
                     input: root.inputById(key) || ({ id: key, number: 0, name: "", source: { kind: "pattern" }, status: "starting", audio: { on: false, follow_video: false, volume: 0 }, has_audio: false, listen: "off", signal_loss: "hold", color: null })
                     act: root.act
@@ -586,6 +749,7 @@ AppPage {
                         addInputDialog.replacing = tileDelegate.input
                         addInputDialog.open()
                     }
+                    onRemoveRequested: root.removeInput(tileDelegate.input)
                     dynamicSlots: root.show && root.show.dynamic_inputs
                         ? [1, 2, 3, 4].filter(n => root.show.dynamic_inputs[n - 1] === key) : []
                     onSettingsRequested: {
@@ -635,10 +799,27 @@ AppPage {
             }
         }
 
+        // Drag: the audio column's width; double click: back.
+        KanteSplitHandle {
+            visible: audioColumn.visible
+            Layout.fillHeight: true
+            Layout.leftMargin: -Kirigami.Units.largeSpacing / 2
+            Layout.rightMargin: -Kirigami.Units.largeSpacing / 2
+            orientation: Qt.Horizontal
+            inverted: true
+            value: audioColumn.width
+            from: Kirigami.Units.gridUnit * 5
+            to: Math.max(from, root.width / 2)
+            defaultValue: Kirigami.Units.gridUnit * 12
+            accessibleName: qsTr("Width of the audio column")
+            onMoved: v => viewSettings.mixerWidth = v
+        }
+
         NarrowMixer {
+            id: audioColumn
             visible: viewSettings.mixer && !root.simple
             Layout.fillHeight: true
-            Layout.preferredWidth: Kirigami.Units.gridUnit * 12
+            Layout.preferredWidth: Math.max(Kirigami.Units.gridUnit * 5, Math.min(viewSettings.mixerWidth, root.width / 2))
             core: backend
             show: root.show
             act: root.act
@@ -660,14 +841,17 @@ AppPage {
         /** A double click into the picture. */
         signal doubleClicked()
 
-        Layout.fillWidth: true
-        Layout.fillHeight: true
-        Layout.preferredWidth: 1
+        // The picture in the program format, as high as the handle says.
+        readonly property real pictureHeight: monitorRow.pictureHeight
+        width: pictureHeight * root.aspect + 2 * Kirigami.Units.smallSpacing
+        implicitHeight: monitorColumn.implicitHeight + monitor.barHeight + 2 * Kirigami.Units.smallSpacing
+        height: implicitHeight
         barColor: tally
         Accessible.role: Accessible.Graphic
         Accessible.name: label + (detail ? ": " + detail : "")
 
         ColumnLayout {
+            id: monitorColumn
             anchors.fill: parent
             anchors.margins: Kirigami.Units.smallSpacing
             anchors.topMargin: monitor.barHeight + Kirigami.Units.smallSpacing
@@ -686,7 +870,7 @@ AppPage {
             LiveView {
                 id: view
                 Layout.fillWidth: true
-                Layout.fillHeight: true
+                Layout.preferredHeight: monitor.pictureHeight
                 core: root.backend
                 TapHandler {
                     onDoubleTapped: monitor.doubleClicked()
