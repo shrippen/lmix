@@ -50,6 +50,7 @@ KanteDialog {
     modal: true
     width: Kirigami.Units.gridUnit * 28
     standardButtons: QQC2.Dialog.Ok | QQC2.Dialog.Cancel
+    acceptText: qsTr("Apply")
     // KanteDialog has a child of its own (KanteScope), so the popup does not
     // size itself to this one.
     contentHeight: column.implicitHeight
@@ -73,7 +74,7 @@ KanteDialog {
         rect: pip.checked ? rect() : null
     })
 
-    Component.onCompleted: standardButton(QQC2.Dialog.Ok).enabled = Qt.binding(() => !pip.checked || dialog.rectInside)
+    acceptEnabled: !pip.checked || dialog.rectInside
 
     ColumnLayout {
         id: column

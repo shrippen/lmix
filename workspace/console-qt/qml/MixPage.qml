@@ -19,7 +19,6 @@ AppPage {
     readonly property var show: shell.show
     readonly property var inputs: shell.inputs
     readonly property var backend: shell.backend
-    readonly property var shortcutKeys: shell.shortcutKeys
     function act(action) { shell.act(action) }
     function inputById(id) { return shell.inputById(id) }
     function localPath(url) { return shell.localPath(url) }
@@ -134,7 +133,7 @@ AppPage {
         delegate: Shortcut {
             required property int index
             sequence: String(index + 1)
-            enabled: root.visible && root.shortcutKeys.indexOf(String(index + 1)) < 0
+            enabled: root.visible && !shell.keyTaken(sequence)
             onActivated: {
                 var input = root.inputs[index]
                 if (input && input.id !== root.show.program && input.id !== root.show.preview) {
@@ -199,6 +198,72 @@ AppPage {
         outputs: root.show ? root.show.outputs : []
     }
 
+    // Remove at once, with a way back: the toast's Undo (or Ctrl+Z while it
+    // shows) brings the input back with its settings (AUT.10).
+    // The toast waits for the state without the input and with it to bring
+    // back: a refused removal shows nothing, and another show or a removal
+    // from elsewhere does not pass for this one.
+    function removeInput(input) {
+        root.removing = { id: input.id, number: input.number, name: input.name }
+        root.act({ action: "remove_input", input: input.number })
+    }
+    property var removing: null
+    // Later: inputs and show change one after the other for one state.
+    onInputsChanged: Qt.callLater(root.removedOrNot)
+    // The core's refusal of this removal (a locked show, a stinger) ends
+    // it: the input may go another way later, and that is no removal from
+    // here. Answers to other actions leave it alone.
+    Connections {
+        target: backend
+        function onAnswered(action, refusal) {
+            const answered = JSON.parse(action)
+            if (refusal.length > 0 && root.removing && answered.action === "remove_input"
+                    && String(answered.input) === String(root.removing.number)) {
+                root.removing = null
+            }
+        }
+    }
+    function removedOrNot() {
+        if (!root.removing || root.inputs.some(i => i.id === root.removing.id)) {
+            return
+        }
+        if (root.show && root.show.restorable === root.removing.name) {
+            removedToast.text = qsTr("Input %1 \u201c%2\u201d removed").arg(root.removing.number).arg(root.removing.name)
+            removedToast.restores = root.removing.name
+            removedToast.show()
+        }
+        root.removing = null
+    }
+
+    KanteToast {
+        id: removedToast
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        anchors.margins: Kirigami.Units.largeSpacing
+        z: 10
+        kind: KanteToast.Kind.Info
+        title: qsTr("Removed")
+        life: 8000
+        /** The removed input's name: Undo brings back only that one. */
+        property string restores
+        readonly property bool restorable: root.show !== null && root.show.restorable === restores
+        actionText: restorable ? qsTr("Undo") : ""
+        actionShortcut: undoKey.free && restorable ? qsTr("Ctrl+Z") : ""
+        onActionTriggered: root.act({ action: "restore_input" })
+    }
+    // A show's own shortcut on Ctrl+Z wins, as for the File keys: two
+    // shortcuts on one key would both stay silent.
+    Shortcut {
+        id: undoKey
+        readonly property bool free: !shell.keyTaken("Ctrl+Z")
+        sequence: "Ctrl+Z"
+        enabled: root.visible && removedToast.shown && removedToast.restorable && free
+        onActivated: {
+            removedToast.hide()
+            root.act({ action: "restore_input" })
+        }
+    }
+
     InputSettingsDialog {
         id: inputSettingsDialog
         parent: QQC2.Overlay.overlay
@@ -247,14 +312,6 @@ AppPage {
         inputs: root.inputs
     }
 
-    FormatDialog {
-        id: formatDialog
-        parent: QQC2.Overlay.overlay
-        anchors.centerIn: parent
-        act: root.act
-        format: root.show && root.show.format ? root.show.format : ({ width: 1920, height: 1080, framerate: "30/1" })
-    }
-
     AuxBusDialog {
         id: auxDialog
         parent: QQC2.Overlay.overlay
@@ -274,36 +331,10 @@ AppPage {
     }
 
     fileItems: [
-        QQC2.MenuItem {
+        KanteMenuItem {
             text: qsTr("Inputs from a show…")
+            icon.name: "document-import"
             onTriggered: appendDialog.open()
-        },
-        QQC2.MenuItem {
-            text: qsTr("Program format…")
-            onTriggered: formatDialog.open()
-        },
-        // OUT.10: program left or right, meters on the tiles;
-        // the mixer is built anew, like for the format.
-        QQC2.MenuItem {
-            readonly property var layout: root.show && root.show.multiview ? root.show.multiview : ({ program: "right", meters: "shown" })
-            text: qsTr("Multiview: program on the left")
-            checkable: true
-            checked: layout.program === "left"
-            onTriggered: root.act({ action: "set_multiview", layout: { program: checked ? "left" : "right", meters: layout.meters } })
-        },
-        QQC2.MenuItem {
-            readonly property var layout: root.show && root.show.multiview ? root.show.multiview : ({ program: "right", meters: "shown" })
-            text: qsTr("Multiview: level meters")
-            checkable: true
-            checked: layout.meters === "shown"
-            onTriggered: root.act({ action: "set_multiview", layout: { program: layout.program, meters: checked ? "shown" : "hidden" } })
-        },
-        // AUD.17: 48 kHz by default; 44.1 kHz for music productions.
-        QQC2.MenuItem {
-            text: qsTr("Sound at 44.1 kHz")
-            checkable: true
-            checked: root.show && root.show.sample_rate === 44100
-            onTriggered: root.act({ action: "set_sample_rate", hz: checked ? 44100 : 48000 })
         }
     ]
 
@@ -464,23 +495,47 @@ AppPage {
                     id: viewButton
                     text: qsTr("View")
                     emphasis: KanteButton.Emphasis.Quiet
-                    onClicked: viewMenu.popup(viewButton, 0, viewButton.height)
-                    QQC2.Menu {
-                        id: viewMenu
-                        KantePopupSkin { popup: viewMenu }
-                        QQC2.MenuItem {
-                            text: qsTr("Audio at the edge")
-                            checkable: true
-                            checked: viewSettings.mixer
-                            enabled: !root.simple
-                            onTriggered: viewSettings.mixer = !viewSettings.mixer
-                        }
-                        QQC2.MenuItem {
-                            text: qsTr("Simple mode")
-                            checkable: true
-                            checked: root.simple
-                            enabled: backend.uiMode === ""
-                            onTriggered: viewSettings.simple = !viewSettings.simple
+                    onClicked: viewPopover.openAt(viewButton)
+                    KantePopover {
+                        id: viewPopover
+                        title: qsTr("View")
+                        readonly property var multiview: root.show && root.show.multiview ? root.show.multiview : ({ program: "right", meters: "shown" })
+                        ColumnLayout {
+                            spacing: Kirigami.Units.smallSpacing
+                            KanteSwitch {
+                                text: qsTr("Audio at the edge")
+                                checked: viewSettings.mixer
+                                enabled: !root.simple
+                                onToggled: viewSettings.mixer = checked
+                            }
+                            KanteSwitch {
+                                text: qsTr("Simple mode")
+                                checked: root.simple
+                                enabled: backend.uiMode === ""
+                                onToggled: viewSettings.simple = checked
+                            }
+                            // OUT.10: program left or right, meters on the tiles;
+                            // the mixer is built anew, like for the format.
+                            KanteSectionLabel { text: qsTr("Multiview") }
+                            KanteSwitch {
+                                text: qsTr("Program on the left")
+                                checked: viewPopover.multiview.program === "left"
+                                enabled: backend.connected
+                                // The core's state decides: a click asks, the binding comes back.
+                                onToggled: {
+                                    root.act({ action: "set_multiview", layout: { program: checked ? "left" : "right", meters: viewPopover.multiview.meters } })
+                                    checked = Qt.binding(() => viewPopover.multiview.program === "left")
+                                }
+                            }
+                            KanteSwitch {
+                                text: qsTr("Level meters")
+                                checked: viewPopover.multiview.meters === "shown"
+                                enabled: backend.connected
+                                onToggled: {
+                                    root.act({ action: "set_multiview", layout: { program: viewPopover.multiview.program, meters: checked ? "shown" : "hidden" } })
+                                    checked = Qt.binding(() => viewPopover.multiview.meters === "shown")
+                                }
+                            }
                         }
                     }
                 }
@@ -624,6 +679,25 @@ AppPage {
                 boundsBehavior: Flickable.StopAtBounds
                 model: inputModel
                 QQC2.ScrollBar.vertical: QQC2.ScrollBar {}
+
+                // On the view, not its content item (no height without tiles).
+                KanteEmptyState {
+                    parent: bar
+                    anchors.centerIn: parent
+                    width: Math.min(parent.width - 2 * Kirigami.Units.largeSpacing, implicitWidth)
+                    visible: inputModel.count === 0
+                    title: qsTr("No inputs yet")
+                    text: qsTr("A camera, a file, a stream or a test pattern: each gets a tile here.")
+                    KanteButton {
+                        text: qsTr("+ Input")
+                        emphasis: KanteButton.Emphasis.Primary
+                        enabled: backend.connected
+                        onClicked: {
+                            addInputDialog.replacing = null
+                            addInputDialog.open()
+                        }
+                    }
+                }
                 /** The tile being dragged to a new place, and where it would land. */
                 property var dragged: null
                 property int dropIndex: -1
@@ -675,6 +749,7 @@ AppPage {
                         addInputDialog.replacing = tileDelegate.input
                         addInputDialog.open()
                     }
+                    onRemoveRequested: root.removeInput(tileDelegate.input)
                     dynamicSlots: root.show && root.show.dynamic_inputs
                         ? [1, 2, 3, 4].filter(n => root.show.dynamic_inputs[n - 1] === key) : []
                     onSettingsRequested: {

@@ -229,6 +229,104 @@ act "{\"action\":\"remove_input\",\"input\":$(state | jq '.inputs[] | select(.na
 for _ in $(seq 1 40); do [[ -z "$(added)" ]] && break; sleep 0.5; done
 [[ -z "$(added)" ]] || fail "add input: \"Dialog Ball\" not removed again"
 
+# File keys: Ctrl+S saves a show that has a path (the menu shows the key).
+act "{\"action\":\"save_show\",\"path\":\"$WORK/keys.lmix\"}"
+for _ in $(seq 1 20); do [[ -f "$WORK/keys.lmix" ]] && break; sleep 0.5; done
+# The window learns the path with the next state: before it, Ctrl+S asks for one.
+for _ in $(seq 1 20); do [[ "$(state | jq -r .path)" == "$WORK/keys.lmix" ]] && break; sleep 0.5; done
+sleep 1
+rm -f "$WORK/keys.lmix"
+DISPLAY="$DISPLAY_NO" xdotool windowfocus "$(DISPLAY="$DISPLAY_NO" xdotool search --name '^lmix' 2>/dev/null | head -1)"
+DISPLAY="$DISPLAY_NO" xdotool key ctrl+s
+for _ in $(seq 1 20); do [[ -f "$WORK/keys.lmix" ]] && break; sleep 0.5; done
+[[ -f "$WORK/keys.lmix" ]] && pass "Ctrl+S saves the show" || fail "Ctrl+S: no file saved"
+
+# View as a popover: its switch sets the multiview's program side.
+multiview_program() { state | jq -r '.multiview.program // "right"'; }
+click 490 540
+sleep 1
+click 488 681
+for _ in $(seq 1 40); do [[ "$(multiview_program)" == left ]] && break; sleep 0.5; done
+[[ "$(multiview_program)" == left ]] && pass "View popover: program on the left" \
+    || fail "View popover: multiview program $(multiview_program) after its switch"
+DISPLAY="$DISPLAY_NO" xdotool key Escape
+act '{"action":"set_multiview","layout":{"program":"right","meters":"shown"}}'
+
+# The input's menu removes at once; Ctrl+Z while the toast shows brings
+# the input back. A spare third input, so the tiles of the checks below stay.
+act '{"action":"add_input","source":{"kind":"pattern","pattern":"bars"},"name":"Spare"}'
+spare() { state | jq -r '.inputs[] | select(.name == "Spare") | .number'; }
+for _ in $(seq 1 40); do [[ -n "$(spare)" ]] && break; sleep 0.5; done
+sleep 2
+# The menu's quick row: Preview closes the menu and puts Spare into preview.
+spare_id() { state | jq -r '.inputs[] | select(.name == "Spare") | .id'; }
+click 500 625 3
+sleep 1.5
+click 625 264
+for _ in $(seq 1 20); do [[ "$(state | jq -r .preview)" == "$(spare_id)" ]] && break; sleep 0.5; done
+[[ "$(state | jq -r .preview)" == "$(spare_id)" ]] && pass "input menu: Preview in the quick row" \
+    || fail "input menu: preview is $(state | jq -r .preview) after Preview in the quick row"
+sleep 1
+click 500 625 3
+sleep 1.5
+click 564 880
+for _ in $(seq 1 40); do [[ -z "$(spare)" ]] && break; sleep 0.5; done
+[[ -z "$(spare)" ]] && pass "input menu: Remove" || fail "input menu: Spare still there after Remove"
+# The toast waits for the Console's state without Spare, a moment after
+# the core's.
+sleep 1
+DISPLAY="$DISPLAY_NO" xdotool key ctrl+z
+for _ in $(seq 1 40); do [[ -n "$(spare)" ]] && break; sleep 0.5; done
+[[ -n "$(spare)" ]] && pass "input menu: Ctrl+Z brings it back" || fail "input menu: Spare not back after Ctrl+Z"
+act "{\"action\":\"remove_input\",\"input\":$(spare)}"
+for _ in $(seq 1 40); do [[ -z "$(spare)" ]] && break; sleep 0.5; done
+# A refused removal (locked show) is forgotten: when the input goes
+# another way later, no toast offers Undo for it. Before the show's Ctrl+Z
+# below: no toast is open here (Ctrl+Z above took the last one).
+act '{"action":"add_input","source":{"kind":"pattern","pattern":"bars"},"name":"Spare"}'
+for _ in $(seq 1 40); do [[ -n "$(spare)" ]] && break; sleep 0.5; done
+# Lock and unlock with the bar's button: the Console's own unlock clears
+# the refusal's line, which would move the tiles below.
+locked() { state | jq -r '.locked // false'; }
+sleep 1
+click 780 540
+for _ in $(seq 1 20); do [[ "$(locked)" == true ]] && break; sleep 0.5; done
+[[ "$(locked)" == true ]] || fail "Lock button: show not locked"
+# Twice: the same refusal again sets no new message, its answer counts.
+for _ in 1 2; do
+    click 500 625 3
+    sleep 1.5
+    click 564 880
+    sleep 1.5
+done
+click 780 540
+for _ in $(seq 1 20); do [[ "$(locked)" == false ]] && break; sleep 0.5; done
+[[ "$(locked)" == false ]] || fail "Lock button: show still locked"
+act "{\"action\":\"remove_input\",\"input\":$(spare)}"
+for _ in $(seq 1 40); do [[ -z "$(spare)" ]] && break; sleep 0.5; done
+sleep 1
+DISPLAY="$DISPLAY_NO" xdotool key ctrl+z
+sleep 2
+[[ -z "$(spare)" ]] && pass "input menu: a refused removal is forgotten" \
+    || fail "input menu: Ctrl+Z brought back Spare, removed elsewhere after a refused removal"
+# A show's shortcut on Ctrl+Z wins over the toast's Undo.
+act '{"action":"add_input","source":{"kind":"pattern","pattern":"bars"},"name":"Spare"}'
+for _ in $(seq 1 40); do [[ -n "$(spare)" ]] && break; sleep 0.5; done
+act '{"action":"add_shortcut","shortcut":{"label":"Program left","key":"Ctrl+Z","actions":[{"action":"set_multiview","layout":{"program":"left","meters":"shown"}}]}}'
+sleep 1.5
+click 500 625 3
+sleep 1.5
+click 564 880
+for _ in $(seq 1 40); do [[ -z "$(spare)" ]] && break; sleep 0.5; done
+sleep 1
+DISPLAY="$DISPLAY_NO" xdotool key ctrl+z
+for _ in $(seq 1 20); do [[ "$(multiview_program)" == left ]] && break; sleep 0.5; done
+[[ "$(multiview_program)" == left && -z "$(spare)" ]] \
+    && pass "input menu: a show's Ctrl+Z wins over Undo" \
+    || fail "input menu: Ctrl+Z ran the toast's Undo, not the show's shortcut"
+act '{"action":"remove_shortcut","target":"Program left"}'
+act '{"action":"set_multiview","layout":{"program":"right","meters":"shown"}}'
+
 # The grip under the monitors sets their height and keeps it in the
 # settings; a double click goes back to the standard height (15 grid units).
 view_setting() { sed -n "s/^$1=//p" "$WORK"/config/lmix/lmix.conf 2>/dev/null; }
@@ -309,10 +407,10 @@ pass "no QML warnings"
 # The Show page through the page bar, same window: it draws the show
 # view (not a flat colour), and the bar shows program small.
 act '{"action":"add_cue_list","name":"Act 1","cues":[{"number":"1","name":"Doors","kind":"wait","duration_ms":120000},{"number":"2","name":"House","kind":"wait","duration_ms":120000},{"number":"3","name":"Lights","kind":"note"}]}'
-show_window="$(xdotool search --name '^lmix' 2>/dev/null | head -1 || true)"
+show_window="$(DISPLAY="$DISPLAY_NO" xdotool search --name '^lmix' 2>/dev/null | head -1 || true)"
 [[ -n "$show_window" ]] || fail "no lmix window"
 # Pages by key (Ctrl+n): the tabs' places depend on their labels.
-xdotool windowfocus "$show_window"
+DISPLAY="$DISPLAY_NO" xdotool windowfocus "$show_window"
 sleep 1
 xdotool key ctrl+2
 sleep 3
@@ -331,7 +429,7 @@ done
 standby() { state | jq '.cue_lists[0].standby'; }
 cues_running() { state | jq '.running_cues | length'; }
 key() { xdotool key "$1"; }
-xdotool windowfocus "$show_window"
+DISPLAY="$DISPLAY_NO" xdotool windowfocus "$show_window"
 sleep 1
 until_true() { for _ in $(seq 1 20); do eval "$1" && return 0; sleep 0.5; done; return 1; }
 key space
@@ -491,7 +589,7 @@ pass "no QML warnings (show)"
 prev=show
 for page in "AUDIO 3" "OUTPUTS 4" "SETUP 5"; do
     read -r name n <<<"$page"
-    xdotool windowfocus "$show_window"
+    DISPLAY="$DISPLAY_NO" xdotool windowfocus "$show_window"
     xdotool key "ctrl+$n"
     sleep 2
     shot "page-$name"
@@ -518,7 +616,7 @@ FIRST_TAB="25 879"
 click $FIRST_TAB
 sleep 2
 shot tab-mix
-xdotool windowfocus "$show_window"
+DISPLAY="$DISPLAY_NO" xdotool windowfocus "$show_window"
 xdotool key ctrl+3
 sleep 2
 shot tab-audio
@@ -533,7 +631,7 @@ PAGE_TITLE="300x40+0+55"
 # Panic all: cues stop, program fades to black, a running stream goes on.
 act '{"action":"start_output","output":1}'
 act '{"action":"cue_reset"}'
-xdotool windowfocus "$show_window"
+DISPLAY="$DISPLAY_NO" xdotool windowfocus "$show_window"
 xdotool key ctrl+2
 sleep 1
 xdotool key space
