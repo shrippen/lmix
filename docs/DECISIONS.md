@@ -4698,11 +4698,15 @@ dieselbe Wahl noch einmal tat nichts.
   Busse: Der nächste `SetFormat`, auch mit demselben Wunsch, baut neu. Bis
   dahin lehnt die Engine Befehle an Busse ab (sie kennt sie nicht).
 - Der Switcher merkt sich einen neuen Mischer, bis ein `SetFormat` durchging
-  (`mixer_pending`, der Service meldet `mixer_built`). Bis dahin gilt dieselbe
+  (`mixer_pending` ab `restore_commands`, also auch beim Öffnen einer Show und
+  beim Restore; der Service meldet `mixer_built`). Bis dahin gilt dieselbe
   Wahl von Format, Rate oder Multiview als neu und schickt alles noch einmal;
   eine Busänderung schickt ebenfalls den ganzen Mischer, denn die Engine baut
-  ihn dann.
+  ihn dann. Bei Sperre lehnt lmix-core sie darum in dieser Zeit ab.
+- Die Console stellt nach einer Ablehnung den Stand des Kerns wieder her
+  (Multiview-Schalter, Abtastrate).
 
 **Geprüft**: lmix-core-Tests (`the_lock_refuses_closing_and_stopping`,
 `a_failed_new_mixer_is_built_again`, `a_format_the_engine_refused_is_tried_again`,
-`a_bus_change_before_the_new_mixer_is_built_sets_up_all`).
+`a_bus_change_before_the_new_mixer_is_built_sets_up_all`,
+`a_restored_mixer_is_pending_until_built`).

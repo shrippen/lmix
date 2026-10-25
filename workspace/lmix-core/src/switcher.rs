@@ -1456,9 +1456,15 @@ impl Switcher {
             Action::SetPhonesSend { input, on, level } => self.set_phones_send(&input, on, level),
             Action::SetBus { bus, volume, mute } => self.set_bus(&bus, volume, mute, AUDIO_RAMP_MS),
             // These change the running mixer (no rebuild), so the lock lets
-            // them through.
-            Action::AddBus { name, pre_fader } => self.add_bus(name, pre_fader),
-            Action::RemoveBus { bus } => self.remove_bus(&bus),
+            // them through; unless a new mixer is pending (`buses_changed`).
+            Action::AddBus { name, pre_fader } => {
+                self.check_bus_change()?;
+                self.add_bus(name, pre_fader)
+            }
+            Action::RemoveBus { bus } => {
+                self.check_bus_change()?;
+                self.remove_bus(&bus)
+            }
             Action::RenameBus { bus, name } => {
                 let index = self.find_bus(&bus)?;
                 let name = self.bus_name(&name, Some(index))?;
@@ -1470,6 +1476,7 @@ impl Switcher {
                 if self.show.buses[index].pre_fader == pre_fader {
                     return Ok(Vec::new());
                 }
+                self.check_bus_change()?;
                 self.show.buses[index].pre_fader = pre_fader;
                 Ok(self.buses_changed())
             }
@@ -1533,6 +1540,7 @@ impl Switcher {
                 if self.show.phones.pre_fader == pre_fader {
                     return Ok(Vec::new());
                 }
+                self.check_bus_change()?;
                 self.show.phones.pre_fader = pre_fader;
                 Ok(self.buses_changed())
             }
@@ -1868,6 +1876,16 @@ impl Switcher {
             .collect()
     }
 
+    /// A bus change while a new mixer is pending builds that mixer
+    /// (`buses_changed`): running outputs restart, which the lock keeps
+    /// from a show.
+    fn check_bus_change(&self) -> Result<(), ActionError> {
+        if self.mixer_pending {
+            self.check_unlocked()?;
+        }
+        Ok(())
+    }
+
     /// The engine built the mixer the show asks for (its `SetFormat`
     /// went through).
     pub fn mixer_built(&mut self) {
@@ -1877,7 +1895,6 @@ impl Switcher {
     /// A new mixer for a new format or multiview, set up again; outputs
     /// restart. The sources keep running (no clip starts over).
     fn mixer_rebuilt(&mut self) -> Vec<Command> {
-        self.mixer_pending = true;
         let before = self.playback_sent.clone();
         let mut commands = self.restore_commands();
         commands.retain(|c| !matches!(c, Command::SetSlot { .. }));
@@ -1912,6 +1929,8 @@ impl Switcher {
     /// Commands that rebuild the engine from the current show (start-up,
     /// engine restart): slots, program, preview, then every audio channel.
     pub fn restore_commands(&mut self) -> Vec<Command> {
+        // Its first command asks for the mixer; pending until it is built.
+        self.mixer_pending = true;
         // A new or restarted mixer runs no stinger; no end will come.
         self.stinger_finished();
         self.moving_until = None;
@@ -7377,6 +7396,38 @@ mod tests {
         assert!(full(sw.apply(add()).unwrap()));
         sw.mixer_built();
         assert!(!full(sw.apply(add()).unwrap()));
+    }
+
+    /// An opened show or a restore asks for its mixer too: until the
+    /// engine built it, its format again asks once more, and the lock keeps
+    /// a bus change (which would build it) from a show.
+    #[test]
+    fn a_restored_mixer_is_pending_until_built() {
+        let mut sw = two_inputs();
+        sw.restore_commands();
+        let format = sw.state().format;
+        assert!(!sw
+            .apply(Action::SetMasterFormat { format })
+            .unwrap()
+            .is_empty());
+        sw.apply(Action::SetLock { on: true }).unwrap();
+        assert_eq!(
+            sw.apply(Action::AddBus {
+                name: None,
+                pre_fader: false,
+            }),
+            Err(ActionError::Locked)
+        );
+        sw.mixer_built();
+        assert!(sw
+            .apply(Action::SetMasterFormat { format })
+            .unwrap()
+            .is_empty());
+        sw.apply(Action::AddBus {
+            name: None,
+            pre_fader: false,
+        })
+        .unwrap();
     }
 
     #[test]

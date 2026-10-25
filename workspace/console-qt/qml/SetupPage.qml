@@ -55,7 +55,11 @@ AppPage {
                 KanteSegmented {
                     model: [qsTr("48 kHz"), qsTr("44.1 kHz")]
                     currentIndex: root.show && root.show.sample_rate === 44100 ? 1 : 0
-                    onActivated: index => root.act({ action: "set_sample_rate", hz: index === 1 ? 44100 : 48000 })
+                    // The core's state decides (a locked show refuses): the binding comes back.
+                    onActivated: index => {
+                        root.act({ action: "set_sample_rate", hz: index === 1 ? 44100 : 48000 })
+                        currentIndex = Qt.binding(() => root.show && root.show.sample_rate === 44100 ? 1 : 0)
+                    }
                 }
             }
             KanteSettingRow {
