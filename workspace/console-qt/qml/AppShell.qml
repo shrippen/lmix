@@ -154,10 +154,17 @@ Kirigami.ApplicationWindow {
      *  show's with the same key (AUT.3). */
     readonly property var keyedShortcuts: shortcuts.filter(s => s.key && !s.key_shadowed)
     readonly property var shortcutKeys: keyedShortcuts.map(s => s.key)
-    /** A show's shortcut has `sequence` (Qt reads "ctrl+z" as "Ctrl+Z"): it wins over the window's own. */
+    /** A show's shortcut has `sequence`: it wins over the window's own. Qt
+     *  reads "ctrl+z" as "Ctrl+Z" and "Shift+Ctrl+S" as "Ctrl+Shift+S". */
     function keyTaken(sequence) {
-        const wanted = String(sequence).toLowerCase()
-        return shortcutKeys.some(k => String(k).toLowerCase() === wanted)
+        const wanted = keyForm(sequence)
+        return shortcutKeys.some(k => keyForm(k) === wanted)
+    }
+    /** A key sequence without case and with its modifiers in one order. */
+    function keyForm(sequence) {
+        const parts = String(sequence).toLowerCase().split("+")
+        const key = parts.pop()
+        return parts.sort().concat([key]).join("+")
     }
 
     // The shortcuts (AUT.1–3) while this window is in front; they win over
@@ -445,7 +452,7 @@ Kirigami.ApplicationWindow {
             { what: qsTr("Shortcuts"), key: root.fileKeys.shortcuts }
         ].filter(k => !root.keyTaken(k.key)).map(k => ({ what: k.what, key: root.keyLabel(k.key) })), [
             { what: qsTr("Panic all"), key: qsTr("button in the page bar") }
-        ].concat(root.keyedShortcuts.map(s => ({ what: s.label, key: s.key }))))
+        ].concat(root.keyedShortcuts.map(s => ({ what: s.label, key: root.keyLabel(s.key) }))))
         ColumnLayout {
             id: keysColumn
             width: parent.width

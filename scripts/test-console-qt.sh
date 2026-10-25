@@ -298,7 +298,9 @@ for _ in $(seq 1 20); do [[ "$(multiview_program)" == left ]] && break; sleep 0.
 act '{"action":"remove_shortcut","target":"Program left"}'
 act '{"action":"set_multiview","layout":{"program":"right","meters":"shown"}}'
 # A refused removal (locked show) is forgotten: when the input goes
-# another way later, no toast offers Undo for it.
+# another way later, no toast offers Undo for it. The toast of the check
+# before (8 s) has to be gone first, or its Undo would answer Ctrl+Z.
+sleep 8
 act '{"action":"add_input","source":{"kind":"pattern","pattern":"bars"},"name":"Spare"}'
 for _ in $(seq 1 40); do [[ -n "$(spare)" ]] && break; sleep 0.5; done
 # Lock and unlock with the bar's button: the Console's own unlock clears

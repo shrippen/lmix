@@ -204,7 +204,9 @@ AppPage {
     // back: a refused removal shows nothing, and another show or a removal
     // from elsewhere does not pass for this one.
     function removeInput(input) {
-        root.removing = { id: input.id, number: input.number, name: input.name }
+        // A locked show refuses, and the same refusal twice sets no new
+        // message: nothing to wait for.
+        root.removing = root.show && root.show.locked ? null : { id: input.id, number: input.number, name: input.name }
         root.act({ action: "remove_input", input: input.number })
     }
     property var removing: null
