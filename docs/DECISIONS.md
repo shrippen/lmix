@@ -4564,3 +4564,27 @@ bleiben. Die id ändert sich nicht, eine Liste aus einem Skript wird dort
 bearbeitet (abgelehnt). Verworfen: eine lokale Kopie der Liste in der
 Oberfläche (hilft nicht gegen zwei Clients) und Sperren bis zur Antwort
 (spürbar beim schnellen Klicken).
+
+## 2026-10-25 — Mix-Seite dichter: Monitore im Projektformat, Kacheln füllen
+
+**Anlass**: Test der Mix-Ansicht (25.10.): Vorschau und Programm füllten die
+halbe Höhe, mit Rand um ein festes 16:9-Bild, und ließen sich nicht
+verkleinern; die Kacheln zeigten ein Bild von etwa 70×40 px; die Tonspalte
+war fest 12 Rastereinheiten breit.
+
+**Entscheidung**:
+- Monitore im Seitenverhältnis des Programmformats (`show.format`), ohne
+  Rand, jeder mittig in seiner Hälfte; die Übergangsspalte steht immer in
+  der Mitte. Die Bildhöhe stellt eine Ziehleiste darunter
+  (`KanteSplitHandle`, Doppelklick: Standard), gespeichert unter
+  `view/monitorHeight`; die Breite folgt dem Format, höchstens die Hälfte.
+- Kacheln: S/M/L (kleinste Breite 8 / 10,5 / 14,5 Rastereinheiten) in der
+  Input-Leiste neben Kacheln/Tasten; so viele je Zeile, wie passen, sie
+  teilen den Rest, das Bild im Programmformat. Kompakt (Bild und Name) oder
+  Detail (dazu Overlay-Tasten und Tonleiste), `view/detail`. Das Raster
+  nimmt die restliche Höhe und scrollt; „Reihen“ im Ansicht-Menü entfällt.
+- Tonspalte: Breite per Griff (`view/mixerWidth`); Streifen umbrechen in
+  Zeilen, bis vier Zeilen teilen sich die Höhe, ab der fünften scrollt sie.
+  Der Master ist der letzte Streifen.
+
+**Bricht**: die Einstellung `view/rows` wird nicht mehr gelesen.

@@ -10,16 +10,18 @@
 #
 #   scripts/test-console-qt.sh
 #   KEEP_WORK=1 scripts/test-console-qt.sh   # keep logs and screenshots
+#   DISPLAY_NO=:96 STROM_PORT=8798 CORE_PORT=8898 scripts/test-console-qt.sh
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-STROM_PORT=8799
-CORE_PORT=8899
+# Display and ports can be moved, so two runs on one machine stay apart.
+STROM_PORT="${STROM_PORT:-8799}"
+CORE_PORT="${CORE_PORT:-8899}"
 CORE="http://127.0.0.1:${CORE_PORT}/api"
-DISPLAY_NO=:95
+DISPLAY_NO="${DISPLAY_NO:-:95}"
 WORK="$(mktemp -d)"
 # Unix socket paths must stay short (107 bytes).
-LIVE_DIR="${XDG_RUNTIME_DIR:-/tmp}/lmix-qt-test"
+LIVE_DIR="${XDG_RUNTIME_DIR:-/tmp}/lmix-qt-test${DISPLAY_NO#:}"
 PIDS=()
 
 cleanup() {
@@ -107,13 +109,12 @@ export XDG_CONFIG_HOME="$WORK/config" DISPLAY="$DISPLAY_NO" QT_QPA_PLATFORM=xcb 
     LMIX_CORE="http://127.0.0.1:${CORE_PORT}"
 "$CONSOLE_DIR/lmix" --page mix >"$WORK/console.log" 2>&1 &
 PIDS+=($!)
-PROGRAM_AREA="460x260+720+170"
-PREVIEW_AREA="460x260+40+180"
-TILE_1="200x40+12+568"
-TILE_2="200x40+232+568"
-# The tile's picture is about 78×44 px: the ball is 2–3 px wide and a
-# move changes about 9 px (19.10.–22.10.: 8.9 at fuzz 5 %). A still
-# picture changes none.
+PROGRAM_AREA="440x240+720+140"
+PREVIEW_AREA="440x240+40+140"
+TILE_1="180x90+14+580"
+TILE_2="180x90+212+580"
+# The tile's picture (medium, compact) is about 186×104 px: the ball is
+# a few px wide and a move changes some px. A still picture changes none.
 TILE_MOVED_PX=3
 # The live flows start a few seconds after the Console, and on a VM
 # software GL shares four cores with the CPU mixer: pictures can stall
@@ -134,7 +135,7 @@ done
 [[ -n "$tile_1_moves" ]] && pass "tile 1 moves (ball)" || fail "tile 1 still"
 [[ -n "$tile_2_shows" ]] && pass "tile 2 shows its picture" || fail "tile 2 blank"
 
-click 336 590
+click 303 630
 becomes preview 2
 [[ "$(number_of preview)" == 2 ]] && pass "click on a tile: preview" || fail "preview is $(number_of preview), not 2"
 # Cut acts on what the Console shows: wait until its preview has the picture.
@@ -163,17 +164,17 @@ for _ in $(seq 1 40); do [[ "$(overlay_1)" == none ]] && break; sleep 0.5; done
 # The narrow mixer at the right edge: mute input 1 and the master there.
 audio_1() { state | jq '.inputs[0].audio.on'; }
 master_mute() { state | jq '.master.mute'; }
-click 1242 808
+click 1243 805
 for _ in $(seq 1 40); do [[ "$(audio_1)" == false ]] && break; sleep 0.5; done
 [[ "$(audio_1)" == false ]] && pass "mixer at the edge: input 1 muted" || fail "input 1 still on after M in the mixer"
 sleep 1 # not a double click on the same M
-click 1242 808
+click 1243 805
 for _ in $(seq 1 40); do [[ "$(audio_1)" == true ]] && break; sleep 0.5; done
-click 1396 808
+click 1347 805
 for _ in $(seq 1 40); do [[ "$(master_mute)" == true ]] && break; sleep 0.5; done
 [[ "$(audio_1)" == true && "$(master_mute)" == true ]] && pass "mixer at the edge: input 1 on, master muted" \
     || fail "mixer: input 1 on $(audio_1), master mute $(master_mute)"
-click 1396 808
+click 1347 805
 for _ in $(seq 1 40); do [[ "$(master_mute)" == false ]] && break; sleep 0.5; done
 # Two streams, not started: the output bar offers to start both (STR.1).
 for port in 9921 9922; do

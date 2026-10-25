@@ -490,7 +490,7 @@ Zurückgestellt (User 2026-10-08).
 |---|---|---|---|
 | UI.1 | Hauptfenster: Preview links, Program rechts (Farbcodes einstellbar), Übergangsspalte dazwischen, Input-Leiste unten mit Live-Kacheln, Fußleiste mit Senken-Tasten | M | ◐ (Console) |
 | UI.2 | Input-Kachel: Titelzeile (Nummer, Name, Kategoriefarbe), Bild, Tasten: Schließen, Cut, Schleife, Overlay 1–8, GO, Ton, Großansicht, Einstellungen; Tally-Farbe | M | ◐ |
-| UI.3 | Mehrere Input-Reihen, Kachelgröße einstellbar, Einklappen einzelner Inputs, Bildlauf | S | ✅ (Kachelgröße, Reihen, Bildlauf, Einklappen je Console) |
+| UI.3 | Mehrere Input-Reihen, Kachelgröße einstellbar, Einklappen einzelner Inputs, Bildlauf | S | ✅ (Kachelgröße S/M/L, Kacheln füllen die Zeile, Bildlauf, Einklappen je Console; Monitore im Projektformat, Höhe per Ziehleiste) |
 | UI.4 | Kontextmenüs je Input-Typ (Liste-Einträge, Fotos, Titel-Presets, NDI-Quelle, Browser …) | S | ◐ (Wiedergabe, Playlist-Einträge, Senden an WHIP; ohne Fotos, NDI, Browser) |
 | UI.5 | Transportleiste unter PVW/PGM für Wiedergabe-Inputs | M | ✅ (Tasten, Position, Länge, Springen per Klick) |
 | UI.6 | Andockbare Bereiche (Audio, Wiederholung, Liste) und abdockbare Fenster für zweiten Monitor | S | – |
