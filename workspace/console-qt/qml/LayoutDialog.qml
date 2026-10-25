@@ -235,11 +235,12 @@ KanteDialog {
     modal: true
     width: Kirigami.Units.gridUnit * 40
     standardButtons: QQC2.Dialog.Ok | QQC2.Dialog.Cancel
+    acceptText: layout ? qsTr("Save layout") : qsTr("Add layout")
     // KanteDialog has a child of its own (KanteScope), so the popup does not
     // size itself to this one.
     contentHeight: column.implicitHeight
 
-    Component.onCompleted: standardButton(QQC2.Dialog.Ok).enabled = Qt.binding(() => dialog.valid)
+    acceptEnabled: dialog.valid
 
     onOpened: {
         nameField.text = ""

@@ -24,9 +24,10 @@ KanteDialog {
     modal: true
     width: Kirigami.Units.gridUnit * 28
     standardButtons: QQC2.Dialog.Ok | QQC2.Dialog.Cancel
+    acceptText: qsTr("Add inputs")
     contentHeight: column.implicitHeight
 
-    Component.onCompleted: standardButton(QQC2.Dialog.Ok).enabled = Qt.binding(() => dialog.ticked.length > 0)
+    acceptEnabled: dialog.ticked.length > 0
 
     onOpened: {
         inputs = []

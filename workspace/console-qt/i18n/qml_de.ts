@@ -4,7 +4,12 @@
   <context>
     <name>ActionListDialog</name>
     <message>
-      <location filename="../qml/ActionListDialog.qml" line="+51" />
+      <location filename="../qml/ActionListDialog.qml" line="+29" />
+      <source>Apply</source>
+      <translation>Übernehmen</translation>
+    </message>
+    <message>
+      <location line="+23" />
       <source>Label</source>
       <translation>Beschriftung</translation>
     </message>
@@ -451,11 +456,12 @@
     </message>
     <message>
       <location line="+3" />
+      <location line="+5" />
       <source>Add output</source>
       <translation>Ausgang hinzufügen</translation>
     </message>
     <message>
-      <location line="+47" />
+      <location line="+43" />
       <source>Output</source>
       <translation>Ausgang</translation>
     </message>
@@ -843,7 +849,12 @@
       <translation>Inputs aus %1</translation>
     </message>
     <message>
-      <location line="+48" />
+      <location line="+4" />
+      <source>Add inputs</source>
+      <translation>Inputs hinzufügen</translation>
+    </message>
+    <message>
+      <location line="+45" />
       <source>This show has no inputs.</source>
       <translation>Diese Show hat keine Inputs.</translation>
     </message>
@@ -1466,7 +1477,17 @@
       <translation>Neue Show</translation>
     </message>
     <message>
-      <location line="+24" />
+      <location line="+4" />
+      <source>Create show</source>
+      <translation>Show anlegen</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Change format</source>
+      <translation>Format ändern</translation>
+    </message>
+    <message>
+      <location line="+21" />
       <source>Size</source>
       <translation>Größe</translation>
     </message>
@@ -1827,7 +1848,12 @@
       <translation>Link kopieren</translation>
     </message>
     <message>
-      <location line="-72" />
+      <location line="+52" />
+      <source>Rename</source>
+      <translation>Umbenennen</translation>
+    </message>
+    <message>
+      <location line="-124" />
       <source>GO: %1</source>
       <translation>GO: %1</translation>
     </message>
@@ -2252,7 +2278,17 @@
       <translation>Neues Layout</translation>
     </message>
     <message>
-      <location line="+52" />
+      <location line="+4" />
+      <source>Save layout</source>
+      <translation>Layout speichern</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Add layout</source>
+      <translation>Layout hinzufügen</translation>
+    </message>
+    <message>
+      <location line="+49" />
       <source>Name</source>
       <translation>Name</translation>
     </message>
@@ -2392,12 +2428,12 @@
       <translation>+ Box</translation>
     </message>
     <message>
-      <location line="-545" />
+      <location line="-546" />
       <source>Empty</source>
       <translation>Leer</translation>
     </message>
     <message>
-      <location line="+432" />
+      <location line="+433" />
       <source>Select box %1</source>
       <translation>Box %1 wählen</translation>
     </message>
@@ -2745,12 +2781,22 @@
       <translation>Pegelanzeigen</translation>
     </message>
     <message>
-      <location line="+252" />
+      <location line="+144" />
+      <source>No inputs yet</source>
+      <translation>Noch keine Inputs</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>A camera, a file, a stream or a test pattern: each gets a tile here.</source>
+      <translation>Kamera, Datei, Stream oder Testbild: Jeder Input bekommt hier eine Kachel.</translation>
+    </message>
+    <message>
+      <location line="+124" />
       <source>Width of the audio column</source>
       <translation>Breite der Tonspalte</translation>
     </message>
     <message>
-      <location line="-273" />
+      <location line="-290" />
       <source>Audio at the edge</source>
       <translation>Ton am Rand</translation>
     </message>
@@ -2816,6 +2862,7 @@
     </message>
     <message>
       <location line="+5" />
+      <location line="+86" />
       <source>+ Input</source>
       <translation>+ Input</translation>
     </message>
@@ -3197,7 +3244,12 @@
       <translation>Overlay %1</translation>
     </message>
     <message>
-      <location line="+36" />
+      <location line="+4" />
+      <source>Apply</source>
+      <translation>Übernehmen</translation>
+    </message>
+    <message>
+      <location line="+33" />
       <source>Effect</source>
       <translation>Effekt</translation>
     </message>
@@ -3689,7 +3741,17 @@
       <translation>Neue Belegung</translation>
     </message>
     <message>
-      <location line="+38" />
+      <location line="+4" />
+      <source>Save shortcut</source>
+      <translation>Belegung speichern</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Add shortcut</source>
+      <translation>Belegung hinzufügen</translation>
+    </message>
+    <message>
+      <location line="+35" />
       <source>Label</source>
       <translation>Beschriftung</translation>
     </message>
@@ -4616,7 +4678,7 @@
       <translation>Stinger auf Taste %1</translation>
     </message>
     <message>
-      <location line="+33" />
+      <location line="+34" />
       <source>Clip</source>
       <translation>Clip</translation>
     </message>
@@ -4631,7 +4693,12 @@
       <translation>Erst den Stinger-Clip als Input anlegen (Datei, URL oder Playlist, die ihr erstes Stück spielt; bei WebM mit Alpha bleibt das Programm drumherum sichtbar).</translation>
     </message>
     <message>
-      <location line="+6" />
+      <location line="-43" />
+      <source>Apply</source>
+      <translation>Übernehmen</translation>
+    </message>
+    <message>
+      <location line="+49" />
       <source>Until the player reports the clip's length; the clip always plays to its end</source>
       <translation>Bis der Player die Cliplänge meldet; der Clip läuft immer bis zum Ende</translation>
     </message>
@@ -4684,7 +4751,12 @@
       <translation>Alle Streams stoppen?</translation>
     </message>
     <message>
-      <location line="+24" />
+      <location line="+2" />
+      <source>Stop</source>
+      <translation>Stopp</translation>
+    </message>
+    <message>
+      <location line="+23" />
       <source>A stopped recording or stream cannot go on where it was.</source>
       <translation>Eine gestoppte Aufnahme oder ein gestoppter Stream lässt sich nicht an derselben Stelle fortsetzen.</translation>
     </message>
@@ -5881,7 +5953,12 @@
       <translation>Auslöser von %1 %2</translation>
     </message>
     <message>
-      <location line="+19" />
+      <location line="+4" />
+      <source>Save triggers</source>
+      <translation>Auslöser speichern</translation>
+    </message>
+    <message>
+      <location line="+16" />
       <source>Actions of trigger %1</source>
       <translation>Aktionen von Auslöser %1</translation>
     </message>

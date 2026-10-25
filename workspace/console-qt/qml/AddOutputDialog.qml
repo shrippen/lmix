@@ -31,6 +31,7 @@ KanteDialog {
     anchors.centerIn: parent
     width: Kirigami.Units.gridUnit * 26
     standardButtons: QQC2.Dialog.Ok | QQC2.Dialog.Cancel
+    acceptText: qsTr("Add output")
 
     onOpened: {
         textField.text = ""
@@ -62,7 +63,7 @@ KanteDialog {
         }))
     }
 
-    Component.onCompleted: standardButton(QQC2.Dialog.Ok).enabled = Qt.binding(() => !dialog.needsText || textField.text.trim().length > 0)
+    acceptEnabled: !dialog.needsText || textField.text.trim().length > 0
 
     // KanteDialog has a child of its own (KanteScope), so the popup does not
     // size itself to this one.

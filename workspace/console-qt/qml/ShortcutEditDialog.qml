@@ -23,6 +23,7 @@ KanteDialog {
     modal: true
     width: Kirigami.Units.gridUnit * 38
     standardButtons: QQC2.Dialog.Ok | QQC2.Dialog.Cancel
+    acceptText: shortcut ? qsTr("Save shortcut") : qsTr("Add shortcut")
     // KanteDialog has a child of its own (KanteScope), so the popup does not
     // size itself to this one.
     contentHeight: column.implicitHeight
@@ -36,7 +37,7 @@ KanteDialog {
         actions.load(shortcut ? shortcut.actions : [])
     }
 
-    Component.onCompleted: standardButton(QQC2.Dialog.Ok).enabled = Qt.binding(() => actions.error === "" && actions.filled > 0 && label.text.trim() !== "")
+    acceptEnabled: actions.error === "" && actions.filled > 0 && label.text.trim() !== ""
 
     onAccepted: {
         var spec = { label: label.text.trim(), key: keyButton.sequence || null, midi: midi.binding, web: web.checked,

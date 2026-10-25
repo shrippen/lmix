@@ -54,6 +54,7 @@ KanteDialog {
     modal: true
     width: Kirigami.Units.gridUnit * 36
     standardButtons: QQC2.Dialog.Ok | QQC2.Dialog.Cancel
+    acceptText: qsTr("Save triggers")
     // KanteDialog has a child of its own (KanteScope), so the popup does not
     // size itself to this one.
     contentHeight: column.implicitHeight

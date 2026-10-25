@@ -217,12 +217,16 @@ AppPage {
         title: qsTr("Removed")
         life: 8000
         actionText: qsTr("Undo")
-        actionShortcut: qsTr("Ctrl+Z")
+        actionShortcut: undoKey.free ? qsTr("Ctrl+Z") : ""
         onActionTriggered: root.act({ action: "restore_input" })
     }
+    // A show's own shortcut on Ctrl+Z wins, as for the File keys: two
+    // shortcuts on one key would both stay silent.
     Shortcut {
+        id: undoKey
+        readonly property bool free: shell.shortcutKeys.indexOf("Ctrl+Z") < 0
         sequence: "Ctrl+Z"
-        enabled: removedToast.shown
+        enabled: removedToast.shown && free
         onActivated: {
             removedToast.hide()
             root.act({ action: "restore_input" })
@@ -637,6 +641,23 @@ AppPage {
                 boundsBehavior: Flickable.StopAtBounds
                 model: inputModel
                 QQC2.ScrollBar.vertical: QQC2.ScrollBar {}
+
+                KanteEmptyState {
+                    anchors.centerIn: parent
+                    width: Math.min(parent.width - 2 * Kirigami.Units.largeSpacing, implicitWidth)
+                    visible: inputModel.count === 0
+                    title: qsTr("No inputs yet")
+                    text: qsTr("A camera, a file, a stream or a test pattern: each gets a tile here.")
+                    KanteButton {
+                        text: qsTr("+ Input")
+                        emphasis: KanteButton.Emphasis.Primary
+                        enabled: backend.connected
+                        onClicked: {
+                            addInputDialog.replacing = null
+                            addInputDialog.open()
+                        }
+                    }
+                }
                 /** The tile being dragged to a new place, and where it would land. */
                 property var dragged: null
                 property int dropIndex: -1

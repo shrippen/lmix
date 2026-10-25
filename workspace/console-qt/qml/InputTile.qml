@@ -611,6 +611,8 @@ KanteCard {
         modal: true
         title: qsTr("Rename input %1").arg(tile.input.number)
         standardButtons: QQC2.Dialog.Ok | QQC2.Dialog.Cancel
+        acceptText: qsTr("Rename")
+        acceptEnabled: nameField.text.trim().length > 0
         onOpened: {
             nameField.text = tile.input.name
             nameField.forceActiveFocus()

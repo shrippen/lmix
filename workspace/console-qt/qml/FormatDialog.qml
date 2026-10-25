@@ -41,6 +41,7 @@ KanteDialog {
     modal: true
     width: Kirigami.Units.gridUnit * 24
     standardButtons: QQC2.Dialog.Ok | QQC2.Dialog.Cancel
+    acceptText: newShow ? qsTr("Create show") : qsTr("Change format")
     contentHeight: column.implicitHeight
 
     onOpened: {
