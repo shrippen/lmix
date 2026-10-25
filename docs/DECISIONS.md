@@ -4681,7 +4681,7 @@ console-qt-Tests, `scripts/test-m2b-vm.sh` und `scripts/test-console-qt.sh`
 mit strom #43 (Busse zur Laufzeit) und #44 (Test-Race), beide gemergt
 25.10.; Sends und Abhören einer Busänderung gehen in einem PATCH.
 
-## 2026-10-26 — Fremder Stopp kurz nach einem eigenen Befehl (INP.FB)
+## 2026-10-25 — Fremder Stopp kurz nach einem eigenen Befehl (INP.FB)
 
 **Anlass**: `watch_failures` überging jeden Stopp eines Flows bis 1 s nach
 einem eigenen Befehl darauf (`OWN_STOP_WINDOW`): Das ist der Stopp des alten
