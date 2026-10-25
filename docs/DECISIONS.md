@@ -4628,7 +4628,12 @@ fallen weg, ebenso `set_aux_send`, `set_aux_bus`, `set_monitor_volume` und
 `buses: [{ bus, peak_db }]`). Migration beim Laden: genutzte Busse A–G
 (mit Send, Ausgang oder geänderter Lautstärke) werden „Bus A“ … mit A vor
 den Fadern; Sends, Ausgänge, `monitor_volume` und gespeicherte Aktionen
-(Cues, Tasten, Auslöser) ziehen mit, unbenutzte Busse fallen weg.
+(Cues, Tasten, Auslöser) ziehen mit, unbenutzte Busse fallen weg. Die
+Tasten für alle Shows (`--shortcuts`) haben keine Version: migriert wird
+eine Datei, die eine Aktion von Version 2 enthält (`set_aux_send`,
+`set_aux_bus`, `set_monitor_volume`, `add_output … aux`), Aux B wird dort
+„Bus B“. Enthält sie nur `fade_volume` auf einen Bus, bleibt die Zahl
+stehen und meint nun die Position; eine solche Taste neu setzen.
 
 **Offen**:
 - strom kennt Buszahl und Abgriff nur beim Aufbau: Hinzufügen, Entfernen
