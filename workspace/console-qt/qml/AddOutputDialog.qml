@@ -12,6 +12,16 @@ KanteDialog {
     required property var inputs
     /** `buses` of the show state. */
     property var buses: []
+    // The sound choices change only with the buses' names: every state
+    // brings a new list, and a new model would reset the choice.
+    property var soundNames: []
+    function syncSoundNames() {
+        const names = buses.map(b => b.name)
+        if (JSON.stringify(names) !== JSON.stringify(soundNames))
+            soundNames = names
+    }
+    onBusesChanged: syncSoundNames()
+    Component.onCompleted: syncSoundNames()
 
     readonly property var kinds: Texts.choices("outputs", core.choices("outputs"))
     readonly property var containers: Texts.choices("containers", core.choices("containers"))
@@ -116,7 +126,7 @@ KanteDialog {
             visible: dialog.carriesSound
             Layout.fillWidth: true
             // 0 keeps the source's own sound, then the buses.
-            model: [qsTr("As carried")].concat(dialog.buses.map(b => b.name))
+            model: [qsTr("As carried")].concat(dialog.soundNames)
             KanteFieldSkin { control: soundBox }
         }
 

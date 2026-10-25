@@ -18,6 +18,9 @@ Item {
     id: panel
 
     required property var act
+    required property var core
+    /** `buses` at most and `name_max` characters of a name (lmix-types). */
+    readonly property var limits: JSON.parse(core.choices("bus_limits"))
     /** `buses` of the show state. */
     property var buses: []
     /** `master` of the show state. */
@@ -173,7 +176,7 @@ Item {
                             id: name
                             Layout.fillWidth: true
                             text: bus.modelData.name
-                            maximumLength: 40
+                            maximumLength: panel.limits.name_max
                             Accessible.name: qsTr("Name of the bus")
                             onEditingFinished: {
                                 const wanted = text.trim()
@@ -184,14 +187,15 @@ Item {
                                 text = Qt.binding(() => bus.modelData.name)
                             }
                         }
+                        // Shows the state; a click asks for the other.
                         KanteButton {
                             size: KanteButton.Size.Small
-                            checkable: true
-                            checked: bus.modelData.listen
-                            emphasis: checked ? KanteButton.Emphasis.Primary : KanteButton.Emphasis.Normal
+                            emphasis: bus.modelData.listen ? KanteButton.Emphasis.Primary : KanteButton.Emphasis.Normal
                             icon.name: "audio-headphones"
                             text: qsTr("Listen")
-                            onClicked: panel.act({ action: "set_bus_listen", bus: bus.modelData.id, on: checked })
+                            Accessible.checkable: true
+                            Accessible.checked: bus.modelData.listen
+                            onClicked: panel.act({ action: "set_bus_listen", bus: bus.modelData.id, on: !bus.modelData.listen })
                         }
                         KanteButton {
                             size: KanteButton.Size.Small
@@ -223,8 +227,7 @@ Item {
 
             KanteButton {
                 Layout.topMargin: Kirigami.Units.smallSpacing
-                // BUSES in lmix-types.
-                enabled: panel.buses.length < 16
+                enabled: panel.buses.length < panel.limits.buses
                 icon.name: "list-add"
                 text: qsTr("Add bus")
                 QQC2.ToolTip.visible: hovered

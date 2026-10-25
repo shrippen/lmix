@@ -318,6 +318,7 @@ AppPage {
         parent: QQC2.Overlay.overlay
         anchors.centerIn: parent
         act: root.act
+        core: backend
         buses: root.show && root.show.buses ? root.show.buses : []
         master: root.show && root.show.master ? root.show.master : ({ volume: 100, mute: false })
         phones: root.show && root.show.phones ? root.show.phones : ({ volume: 100, mute: false, pre_fader: false })

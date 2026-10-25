@@ -129,6 +129,7 @@ AppPage {
 
             BusPanel {
                 act: root.act
+                core: root.shell.backend
                 buses: root.show && root.show.buses ? root.show.buses : []
                 master: root.master
                 phones: root.show && root.show.phones ? root.show.phones : ({ volume: 100, mute: false, pre_fader: false })

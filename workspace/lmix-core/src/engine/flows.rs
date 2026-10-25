@@ -2067,6 +2067,18 @@ mod tests {
         let mix = old.blocks.iter_mut().find(|b| b.id == AUDIO_MIXER).unwrap();
         mix.properties.remove("monitor_source");
         assert_eq!(buses_of(&old), None, "a mixer from before");
+        // One without buses tells it too (not "unknown": a cold start
+        // would build it twice).
+        let bare = mixer_flow(
+            2,
+            MixerBackend::Cpu,
+            MonitorOut::None,
+            MasterFormat::default(),
+            MultiviewLayout::default(),
+            48_000,
+            &MixerBuses::default(),
+        );
+        assert_eq!(buses_of(&bare), Some(MixerBuses::default()));
     }
 
     #[test]

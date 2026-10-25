@@ -2091,7 +2091,12 @@ impl Switcher {
             });
         }
         self.show.buses.remove(index);
-        for input in &mut self.show.inputs {
+        for input in self
+            .show
+            .inputs
+            .iter_mut()
+            .chain(self.removed.iter_mut().map(|(_, input)| input))
+        {
             input.sends.remove(&id);
         }
         self.bus_listen.remove(&id);
@@ -3367,8 +3372,21 @@ impl Switcher {
         if chosen.len() > free {
             return Err(ActionError::SlotsFull { slots: self.slots });
         }
+        // Sends follow a bus of the same name here; to others they go.
+        let same_bus: HashMap<BusId, BusId> = other
+            .buses
+            .iter()
+            .filter_map(|theirs| {
+                let ours = find_bus_named(&self.show.buses, &theirs.name)?;
+                Some((theirs.id, ours))
+            })
+            .collect();
         let mut commands = Vec::new();
         for mut input in chosen {
+            input.sends = std::mem::take(&mut input.sends)
+                .into_iter()
+                .filter_map(|(bus, level)| Some((*same_bus.get(&bus)?, level)))
+                .collect();
             input.id = InputId::new();
             input.slot = self.free_slot().expect("counted above");
             input.triggers.clear();
@@ -5246,6 +5264,15 @@ fn check_volume(volume: u8) -> Result<(), ActionError> {
 }
 
 /// What an input sends to the headphones (engine bus 0).
+/// The bus called `name` (ignoring case, as bus names are unique).
+fn find_bus_named(buses: &[ShowBus], name: &str) -> Option<BusId> {
+    let name = name.to_lowercase();
+    buses
+        .iter()
+        .find(|b| b.name.to_lowercase() == name)
+        .map(|b| b.id)
+}
+
 fn phones_send(input: &ShowInput) -> Command {
     let send = input.phones;
     Command::SetAuxSend {
@@ -7031,6 +7058,82 @@ mod tests {
             }),
             Err(ActionError::UnknownBus { .. })
         ));
+    }
+
+    #[test]
+    fn sends_go_with_their_bus() {
+        let mut sw = with_buses();
+        for (input, to, level) in [
+            ("A", "Stream", 50),
+            ("B", "In-Ear", 30),
+            ("B", "Stream", 20),
+        ] {
+            sw.apply(Action::SetSend {
+                input: named(input),
+                bus: bus(to),
+                level,
+            })
+            .unwrap();
+        }
+        // A closed input loses its send to a bus that goes meanwhile.
+        sw.apply(Action::RemoveInput { input: named("A") }).unwrap();
+        sw.apply(Action::RemoveBus { bus: bus("In-Ear") }).unwrap();
+        sw.apply(Action::RestoreInput).unwrap();
+        let stream = sw.show().buses[0].id;
+        let sends = |sw: &Switcher, name: &str| {
+            sw.show()
+                .inputs
+                .iter()
+                .find(|i| i.name == name)
+                .unwrap()
+                .sends
+                .clone()
+        };
+        assert_eq!(
+            sends(&sw, "A"),
+            std::collections::BTreeMap::from([(stream, 50)])
+        );
+        assert_eq!(
+            sends(&sw, "B"),
+            std::collections::BTreeMap::from([(stream, 20)])
+        );
+        // Stream moved up to engine bus 1 and takes its sends there.
+        let slot = sw
+            .show()
+            .inputs
+            .iter()
+            .find(|i| i.name == "B")
+            .unwrap()
+            .slot;
+        assert!(sw.restore_commands().contains(&Command::SetAuxSend {
+            slot,
+            bus: 1,
+            gain: fader_gain(20),
+        }));
+
+        // Inputs of another show send to a bus of the same name here.
+        let mut other = with_buses();
+        other
+            .apply(Action::AddBus {
+                name: Some("Saal".into()),
+                pre_fader: false,
+            })
+            .unwrap();
+        for to in ["stream", "In-Ear", "Saal"] {
+            other
+                .apply(Action::SetSend {
+                    input: named("A"),
+                    bus: bus(to),
+                    level: 40,
+                })
+                .unwrap();
+        }
+        sw.apply(Action::RemoveInput { input: named("B") }).unwrap();
+        sw.append(other.show().clone(), &[1]).unwrap();
+        assert_eq!(
+            sends(&sw, "A (2)"),
+            std::collections::BTreeMap::from([(stream, 40)])
+        );
     }
 
     #[test]

@@ -11,6 +11,7 @@ KanteDialog {
     id: dialog
 
     required property var act
+    required property var core
     /** `buses` of the show state. */
     property var buses: []
     /** `master` of the show state. */
@@ -33,6 +34,7 @@ KanteDialog {
         id: panel
         anchors.fill: parent
         act: dialog.act
+        core: dialog.core
         buses: dialog.buses
         master: dialog.master
         phones: dialog.phones

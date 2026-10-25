@@ -175,11 +175,7 @@ impl Service {
     /// written after each change. A file that cannot be read is left alone
     /// (renamed aside if it is broken) and the list starts empty.
     pub async fn use_shortcuts_file(&self, path: PathBuf) {
-        let read = read_settings(&path, "shortcuts for all shows", |bytes| {
-            serde_json::from_slice::<Vec<crate::show::ShowShortcut>>(bytes)
-                .map_err(|e| e.to_string())
-        })
-        .await;
+        let read = read_settings(&path, "shortcuts for all shows", parse_shortcuts).await;
         let mut sw = self.switcher.lock().await;
         sw.set_all_shows_shortcuts(read.clone().ok().flatten().unwrap_or_default());
         if read.is_ok() {
@@ -2045,6 +2041,14 @@ impl Service {
 /// A settings file of lmix-core read at start: `Ok(None)` when it is
 /// missing or unreadable (it starts empty and is written later), `Err`
 /// when it is broken and could not be set aside (never written over).
+/// The shortcuts for all shows as `--shortcuts` keeps them; a file from
+/// before named buses gets them as a migrated show does.
+fn parse_shortcuts(bytes: &[u8]) -> Result<Vec<crate::show::ShowShortcut>, String> {
+    let mut value: serde_json::Value = serde_json::from_slice(bytes).map_err(|e| e.to_string())?;
+    crate::show::migrate_shortcuts(&mut value);
+    serde_json::from_value(value).map_err(|e| e.to_string())
+}
+
 async fn read_settings<T>(
     path: &std::path::Path,
     what: &str,
@@ -2306,6 +2310,35 @@ mod tests {
     use lmix_types::{
         DisplayMode, InputRef, OutputRef, OutputSource, OutputSpec, SourceSpec, TestPattern,
     };
+
+    /// Shortcuts for all shows from before named buses still load: aux
+    /// bus B becomes "Bus B", the name a migrated show gives it.
+    #[test]
+    fn shortcuts_for_all_shows_from_before_buses_load() {
+        let file = serde_json::json!([{
+            "id": InputId::new(),
+            "label": "In-ear up",
+            "actions": [
+                {"action": "set_aux_send", "input": 1, "bus": 2, "level": 80},
+                {"action": "set_monitor_volume", "volume": 60},
+            ],
+        }]);
+        let shortcuts = parse_shortcuts(&serde_json::to_vec(&file).unwrap()).unwrap();
+        assert_eq!(
+            shortcuts[0].actions,
+            [
+                Action::SetSend {
+                    input: InputRef::Number(1),
+                    bus: lmix_types::BusRef::Text("Bus B".into()),
+                    level: 80
+                },
+                Action::SetPhones {
+                    volume: 60,
+                    mute: false
+                },
+            ]
+        );
+    }
 
     /// Slots the engine was told to build (other commands vary as
     /// features grow: audio, solo, signal loss).

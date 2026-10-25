@@ -20,6 +20,7 @@ use lmix_types::{
     Trigger,
 };
 use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value};
 
 /// Marker of a show file.
 const FILE_FORMAT: &str = "lmix-show";
@@ -506,20 +507,17 @@ fn migrate_cue_labels(show: &mut serde_json::Value) {
 /// ("Bus A", A before the faders), each one the show used: an input sent
 /// to it, an output took its sound, a saved action named it, or its master
 /// was moved. The monitor volume is the headphones' (AUD.2, AUD.4).
+/// Letters of the aux buses of version 2.
+const AUX_LETTERS: [&str; 7] = ["A", "B", "C", "D", "E", "F", "G"];
+
 fn migrate_aux_buses(show: &mut serde_json::Value) {
-    use serde_json::{json, Value};
+    use serde_json::json;
     let Some(show) = show.as_object_mut() else {
         return;
     };
-    const LETTERS: [&str; 7] = ["A", "B", "C", "D", "E", "F", "G"];
     let masters: Vec<Value> = match show.remove("aux_buses") {
         Some(Value::Array(masters)) => masters,
         _ => Vec::new(),
-    };
-    let number = |v: &Value| {
-        v.as_u64()
-            .filter(|n| (1..=7).contains(n))
-            .map(|n| n as usize - 1)
     };
     let mut used = [false; 7];
     for (bus, master) in masters.iter().enumerate().take(7) {
@@ -544,75 +542,22 @@ fn migrate_aux_buses(show: &mut serde_json::Value) {
         .into_iter()
         .flatten()
     {
-        if let Some(bus) = output.get("aux").and_then(number) {
+        if let Some(bus) = output.get("aux").and_then(aux_number) {
             used[bus] = true;
-        }
-    }
-    // Saved actions: shortcuts, cues, triggers, wherever they are.
-    fn actions<'a>(value: &'a mut Value, found: &mut Vec<&'a mut serde_json::Map<String, Value>>) {
-        match value {
-            Value::Object(map) => {
-                if map.get("action").is_some_and(Value::is_string) {
-                    found.push(map);
-                } else {
-                    map.values_mut().for_each(|v| actions(v, found));
-                }
-            }
-            Value::Array(items) => items.iter_mut().for_each(|v| actions(v, found)),
-            _ => {}
         }
     }
     let mut rest = Value::Object(std::mem::take(show));
-    let mut found = Vec::new();
-    actions(&mut rest, &mut found);
-    let named = |map: &serde_json::Map<String, Value>| -> Option<usize> {
-        match map.get("action")?.as_str()? {
-            "set_aux_send" | "set_aux_bus" => map.get("bus").and_then(number),
-            "fade_volume" => map.get("target")?.get("bus").and_then(number),
-            "add_output" => map.get("aux").and_then(number),
-            _ => None,
-        }
-    };
-    for map in &found {
-        if let Some(bus) = named(map) {
+    actions(&rest, &mut |map| {
+        if let Some(bus) = aux_named(map) {
             used[bus] = true;
         }
-    }
+    });
     let ids: Vec<Option<String>> = used
         .iter()
         .map(|on| on.then(|| BusId::new().to_string()))
         .collect();
     let id = |bus: usize| ids[bus].clone().map(Value::String).unwrap_or(Value::Null);
-    for map in found {
-        let bus = named(map);
-        match map.get("action").and_then(Value::as_str).unwrap_or("") {
-            "set_aux_send" => {
-                map.insert("action".into(), json!("set_send"));
-                map.insert("bus".into(), bus.map(id).unwrap_or(Value::Null));
-            }
-            "set_aux_bus" => {
-                map.insert("action".into(), json!("set_bus"));
-                map.insert("bus".into(), bus.map(id).unwrap_or(Value::Null));
-            }
-            "set_monitor_volume" => {
-                let volume = map.remove("volume").unwrap_or(json!(100));
-                map.insert("action".into(), json!("set_phones"));
-                map.insert("volume".into(), volume);
-                map.insert("mute".into(), json!(false));
-            }
-            "fade_volume" => {
-                if let Some(bus) = bus {
-                    map.insert("target".into(), json!({ "bus": id(bus) }));
-                }
-            }
-            "add_output" => {
-                if let Some(aux) = map.remove("aux") {
-                    map.insert("bus".into(), number(&aux).map(id).unwrap_or(Value::Null));
-                }
-            }
-            _ => {}
-        }
-    }
+    rewrite_aux_actions(&mut rest, &id);
     let Value::Object(rest) = rest else {
         return;
     };
@@ -624,7 +569,7 @@ fn migrate_aux_buses(show: &mut serde_json::Value) {
             let master = masters.get(bus);
             json!({
                 "id": id(bus),
-                "name": format!("Bus {}", LETTERS[bus]),
+                "name": format!("Bus {}", AUX_LETTERS[bus]),
                 "pre_fader": bus == 0,
                 "level": {
                     "volume": master.and_then(|m| m.get("volume")).cloned().unwrap_or(json!(100)),
@@ -663,7 +608,7 @@ fn migrate_aux_buses(show: &mut serde_json::Value) {
     {
         if let Some(output) = output.as_object_mut() {
             if let Some(aux) = output.remove("aux") {
-                if let Some(bus) = number(&aux) {
+                if let Some(bus) = aux_number(&aux) {
                     output.insert("bus".into(), id(bus));
                 }
             }
@@ -672,6 +617,102 @@ fn migrate_aux_buses(show: &mut serde_json::Value) {
     if let Some(volume) = show.remove("monitor_volume") {
         show.insert("phones".into(), json!({ "volume": volume }));
     }
+}
+
+/// Aux bus 1–7 of a version 2 action, as an index.
+fn aux_number(v: &Value) -> Option<usize> {
+    v.as_u64()
+        .filter(|n| (1..=7).contains(n))
+        .map(|n| n as usize - 1)
+}
+
+/// Every saved action in `value` (shortcuts, cues, triggers, wherever they
+/// are, also inside a saved action: a cue that adds a shortcut).
+fn actions(value: &Value, f: &mut dyn FnMut(&Map<String, Value>)) {
+    match value {
+        Value::Object(map) => {
+            if map.get("action").is_some_and(Value::is_string) {
+                f(map);
+            }
+            map.values().for_each(|v| actions(v, f));
+        }
+        Value::Array(items) => items.iter().for_each(|v| actions(v, f)),
+        _ => {}
+    }
+}
+
+fn actions_mut(value: &mut Value, f: &mut dyn FnMut(&mut Map<String, Value>)) {
+    match value {
+        Value::Object(map) => {
+            map.values_mut().for_each(|v| actions_mut(v, f));
+            if map.get("action").is_some_and(Value::is_string) {
+                f(map);
+            }
+        }
+        Value::Array(items) => items.iter_mut().for_each(|v| actions_mut(v, f)),
+        _ => {}
+    }
+}
+
+/// The aux bus a version 2 action names, as an index.
+fn aux_named(map: &Map<String, Value>) -> Option<usize> {
+    match map.get("action")?.as_str()? {
+        "set_aux_send" | "set_aux_bus" => map.get("bus").and_then(aux_number),
+        "fade_volume" => map.get("target")?.get("bus").and_then(aux_number),
+        "add_output" => map.get("aux").and_then(aux_number),
+        _ => None,
+    }
+}
+
+/// The saved actions of version 2 in `value` as version 3 has them: aux
+/// bus `index` becomes `bus(index)`. A number that named no bus (0, 8)
+/// stays: the action is refused when it runs, as before, and the file
+/// still loads.
+fn rewrite_aux_actions(value: &mut Value, bus: &dyn Fn(usize) -> Value) {
+    use serde_json::json;
+    actions_mut(value, &mut |map| {
+        let named = aux_named(map);
+        match map.get("action").and_then(Value::as_str).unwrap_or("") {
+            "set_aux_send" => {
+                map.insert("action".into(), json!("set_send"));
+                if let Some(index) = named {
+                    map.insert("bus".into(), bus(index));
+                }
+            }
+            "set_aux_bus" => {
+                map.insert("action".into(), json!("set_bus"));
+                if let Some(index) = named {
+                    map.insert("bus".into(), bus(index));
+                }
+            }
+            "set_monitor_volume" => {
+                let volume = map.remove("volume").unwrap_or(json!(100));
+                map.insert("action".into(), json!("set_phones"));
+                map.insert("volume".into(), volume);
+                map.insert("mute".into(), json!(false));
+            }
+            "fade_volume" => {
+                if let Some(index) = named {
+                    map.insert("target".into(), json!({ "bus": bus(index) }));
+                }
+            }
+            "add_output" => {
+                if let Some(index) = map.remove("aux").as_ref().and_then(aux_number) {
+                    map.insert("bus".into(), bus(index));
+                }
+            }
+            _ => {}
+        }
+    });
+}
+
+/// The shortcuts for all shows (`--shortcuts`) as version 3 has them: their
+/// actions name aux bus A–G "Bus A" …, as a migrated show calls it (a
+/// name: there is no one show whose ids they could take).
+pub fn migrate_shortcuts(value: &mut Value) {
+    rewrite_aux_actions(value, &|index| {
+        Value::String(format!("Bus {}", AUX_LETTERS[index]))
+    });
 }
 
 /// Write atomically: temp file next to the target, then rename, so a crash
@@ -984,7 +1025,7 @@ mod tests {
     #[test]
     fn aux_buses_become_named_buses() {
         // A version 2 show: sends to A and C, an output on D, a shortcut on
-        // E, F's master moved; B and G unused.
+        // E and, inside a saved action, on B, F's master moved; G unused.
         let mut v2 = serde_json::to_value(sample()).unwrap();
         let show = v2.as_object_mut().unwrap();
         show.remove("buses");
@@ -1002,6 +1043,10 @@ mod tests {
             {"action": "set_aux_send", "input": 1, "bus": 1, "level": 50},
             {"action": "fade_volume", "target": {"bus": 3}, "volume": 0, "duration_ms": 500},
             {"action": "set_monitor_volume", "volume": 30},
+            {"action": "set_aux_send", "input": 1, "bus": 9, "level": 50},
+            {"action": "add_shortcut", "shortcut": {"label": "B", "actions": [
+                {"action": "set_aux_send", "input": 1, "bus": 2, "level": 10},
+            ]}},
         ]);
         let file = serde_json::json!({ "format": FILE_FORMAT, "version": 2, "show": v2 });
         let loaded = read_bytes(&serde_json::to_vec(&file).unwrap(), "v2").unwrap();
@@ -1009,7 +1054,10 @@ mod tests {
         let show = loaded.show;
 
         let names: Vec<&str> = show.buses.iter().map(|b| b.name.as_str()).collect();
-        assert_eq!(names, ["Bus A", "Bus C", "Bus D", "Bus E", "Bus F"]);
+        assert_eq!(
+            names,
+            ["Bus A", "Bus B", "Bus C", "Bus D", "Bus E", "Bus F"]
+        );
         let bus = |name: &str| show.buses.iter().find(|b| b.name == name).unwrap();
         assert!(bus("Bus A").pre_fader && !bus("Bus C").pre_fader);
         assert_eq!(
@@ -1027,7 +1075,7 @@ mod tests {
         assert_eq!(show.phones.volume, 70);
         let text = |b: &str| lmix_types::BusRef::Text(bus(b).id.to_string());
         assert_eq!(
-            show.shortcuts[0].actions,
+            show.shortcuts[0].actions[..5],
             [
                 Action::SetBus {
                     bus: text("Bus E"),
@@ -1048,7 +1096,24 @@ mod tests {
                     volume: 30,
                     mute: false
                 },
+                // No bus 9: refused when it runs, the show still loads.
+                Action::SetSend {
+                    input: lmix_types::InputRef::Number(1),
+                    bus: lmix_types::BusRef::Number(9),
+                    level: 50
+                },
             ]
+        );
+        let Action::AddShortcut { shortcut } = &show.shortcuts[0].actions[5] else {
+            panic!("{:?}", show.shortcuts[0].actions[5]);
+        };
+        assert_eq!(
+            shortcut.actions,
+            [Action::SetSend {
+                input: lmix_types::InputRef::Number(1),
+                bus: text("Bus B"),
+                level: 10
+            }]
         );
     }
 

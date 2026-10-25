@@ -451,6 +451,9 @@ impl StromEngine {
     /// playing pipeline, so wait for it. Its mutes are unknown again.
     async fn build_mixer(&self, flow: &Flow) -> Result<(), EngineError> {
         self.mutes.lock().expect("mutes lock").clear();
+        // What it is built with, so the show's SetFormat after a cold start
+        // does not build it a second time.
+        *self.buses.lock().expect("buses lock") = flows::buses_of(flow);
         self.put_flow(flow).await?;
         self.wait_playing(flow.id).await
     }
