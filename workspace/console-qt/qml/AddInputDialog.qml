@@ -284,11 +284,10 @@ KanteDialog {
             Layout.fillWidth: true
             spacing: Kirigami.Units.smallSpacing
 
-            QQC2.Label {
+            KanteHeading {
                 Layout.fillWidth: true
+                level: 3
                 text: Texts.label("sources", dialog.kind)
-                font: KanteStyle.headingFont(KanteStyle.defaultFont.pointSize * 1.1)
-                color: KanteStyle.strongTextColor
             }
             QQC2.Label {
                 Layout.fillWidth: true
