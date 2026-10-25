@@ -5102,7 +5102,7 @@
     <message>
       <location line="+1" />
       <source>No removed input to bring back</source>
-      <translation>Kein entferntes Input zum Zurückholen</translation>
+      <translation>Kein entfernter Input zum Zurückholen</translation>
     </message>
     <message>
       <location line="+1" />
@@ -5167,7 +5167,7 @@
     <message>
       <location line="+1" />
       <source>Overlay %1 has no input to show again</source>
-      <translation>Overlay %1 hat kein Input, das es wieder zeigen kann</translation>
+      <translation>Overlay %1 hat keinen Input, den es wieder zeigen kann</translation>
     </message>
     <message>
       <location line="+1" />
