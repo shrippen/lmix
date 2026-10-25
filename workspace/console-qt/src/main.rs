@@ -7,6 +7,8 @@ mod config;
 mod forms;
 mod portal;
 mod qt_translations;
+#[cfg(test)]
+mod refusals;
 
 fn main() {
     app::run();
