@@ -4752,6 +4752,11 @@ Bussen (25.10.) so.
 `slot_count` es schon tat). Der VM-Test zählt die Starts des Mischers über den
 Neustart.
 
+**Offen**: Warum der Neubau in der CI nicht in PLAYING kam (strom: „Failed
+to start flow“, 30 s nach dem Neustart). Ein gewollter Neubau nach einem
+Neustart (Mischer von vor den Laufzeit-Bussen, anderes Format) geht denselben
+Weg; todo.
+
 **Geprüft**: lmix-core-Test `mixer_publishes_its_buses` (Flow mit
 vorzeichenbehafteten Zahlen), Neustart gegen echtes strom mit und ohne Busse
 (ein Start vorher, keiner danach), `scripts/test-m2b-vm.sh`.
