@@ -950,6 +950,8 @@ pass "show saved, cleared, reopened"
 act '{"action":"start_output","output":"Stream"}' >/dev/null
 output_starts() { grep -c "Starting pipeline: lmix output" "$WORK/strom.log" || true; }
 starts_before="$(output_starts)"
+mixer_starts() { grep -c "Starting pipeline: lmix mixer" "$WORK/strom.log" || true; }
+mixer_before="$(mixer_starts)"
 
 # --- crash of lmix-core: engine keeps running, show comes back ---
 kill -9 "$CORE_PID"
@@ -963,10 +965,12 @@ wait_for "$SETTLE_S" is output_state Stream running || fail "running output not 
 [[ "$(curl -sf "$STROM/api/flows" | jq '[.flows[] | select(.name | startswith("lmix output"))] | length')" == 1 ]] \
     || fail "output flow duplicated"
 [[ "$(output_starts)" == "$starts_before" ]] || fail "output restarted instead of adopted"
-pass "lmix-core killed and restarted: mixer kept running, show resumed, output adopted"
+# The mixer too: a new one stops program for a moment (strom gives its numbers
+# back signed, which once made its buses unknown).
+[[ "$(mixer_starts)" == "$mixer_before" ]] || fail "mixer built anew instead of adopted"
+pass "lmix-core killed and restarted: mixer and output adopted, show resumed"
 
 # --- program format (OUT.1): upright 1080x1920, then back ---
-mixer_starts() { grep -c "Starting pipeline: lmix mixer" "$WORK/strom.log" || true; }
 before="$(mixer_starts)"
 act '{"action":"cut_direct","input":"Ball"}' >/dev/null
 act '{"action":"set_master_format","format":{"width":1080,"height":1920,"framerate":"25/1"}}' >/dev/null

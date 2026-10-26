@@ -418,8 +418,15 @@ pub fn format_of(flow: &Flow) -> Option<MasterFormat> {
 /// The sample rate the audio mixer of a mixer flow was built with.
 pub fn sample_rate_of(flow: &Flow) -> Option<u32> {
     let mix = flow.blocks.iter().find(|b| b.id == AUDIO_MIXER)?;
-    match mix.properties.get("sample_rate") {
-        Some(PropertyValue::UInt(hz)) => u32::try_from(*hz).ok(),
+    u32::try_from(whole(mix.properties.get("sample_rate")?)?).ok()
+}
+
+/// A whole number property: lmix writes it unsigned, strom gives it back
+/// signed (its stored flow keeps no type), so either counts.
+fn whole(value: &PropertyValue) -> Option<u64> {
+    match value {
+        PropertyValue::UInt(n) => Some(*n),
+        PropertyValue::Int(n) => u64::try_from(*n).ok(),
         _ => None,
     }
 }
@@ -981,10 +988,7 @@ impl BuiltBuses {
 /// strom added buses at runtime (it is built anew).
 pub fn buses_of(flow: &Flow) -> Option<BuiltBuses> {
     let mix = flow.blocks.iter().find(|b| b.id == AUDIO_MIXER)?;
-    let uint = |key: &str| match mix.properties.get(key) {
-        Some(PropertyValue::UInt(n)) => Some(*n),
-        _ => None,
-    };
+    let uint = |key: &str| whole(mix.properties.get(key)?);
     if uint("monitor_source") != Some(PHONES_AUX as u64)
         || uint("num_aux_buses") != Some(PHONES_AUX as u64)
         || uint(MAX_AUX_BUSES_PROPERTY) != Some(AUX_CAPACITY as u64)
@@ -2226,7 +2230,19 @@ mod tests {
             48_000,
             &buses,
         );
-        assert_eq!(buses_of(&empty), Some(buses));
+        assert_eq!(buses_of(&empty), Some(buses.clone()));
+        // As strom gives the flow back: its numbers signed. A restarted
+        // lmix-core adopts the running mixer instead of building it anew.
+        let mut returned = flow.clone();
+        for block in &mut returned.blocks {
+            for value in block.properties.values_mut() {
+                if let PropertyValue::UInt(n) = *value {
+                    *value = PropertyValue::Int(n as i64);
+                }
+            }
+        }
+        assert_eq!(buses_of(&returned), Some(buses));
+        assert_eq!(sample_rate_of(&returned), Some(48_000));
     }
 
     #[test]
