@@ -541,9 +541,10 @@ pub fn output_flow_id(id: OutputId) -> FlowId {
 /// the target needs it.
 ///
 /// ```text
-///   SRT:    pgm ─► videoenc ─► srt:video_in      pgm_audio ─► srt:audio_in_0 (AAC inside)
-///   Record: pgm ─► videoenc ─► rec:video_in      pgm_audio ─► aac ─► rec:audio_in_0
-///   NDI:    pgm ─────────────► ndi:video_in      pgm_audio ─► ndi:audio_in
+///   SRT:    pgm ─► videoenc ─► srt:video_in      pgm_audio ─► sound ─► srt:audio_in_0 (AAC inside)
+///   Record: pgm ─► videoenc ─► rec:video_in      pgm_audio ─► sound ─► aac ─► rec:audio_in_0
+///   NDI:    pgm ─────────────► ndi:video_in      pgm_audio ─► sound ─► ndi:audio_in
+///   (sound: one segment in running time, `OUTPUT_SOUND_TIMED`)
 /// ```
 pub fn output_flow(
     id: OutputId,
