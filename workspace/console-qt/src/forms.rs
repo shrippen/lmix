@@ -298,6 +298,24 @@ const SHORT_WORDS: &[(&str, &str)] = &[
     ("PUBLIKUM", "PUB"),
 ];
 
+/// `word` split where digits start or end, without the dashes there:
+/// "KAMERA-2" is "KAMERA" and "2".
+fn digit_runs(word: &str) -> Vec<String> {
+    let mut parts: Vec<String> = Vec::new();
+    for c in word.chars() {
+        let digit = c.is_ascii_digit();
+        match parts.last_mut() {
+            Some(last) if last.chars().all(|d| d.is_ascii_digit()) == digit => last.push(c),
+            _ => parts.push(c.to_string()),
+        }
+    }
+    parts
+        .into_iter()
+        .map(|part| part.trim_matches('-').to_string())
+        .filter(|part| !part.is_empty())
+        .collect()
+}
+
 /// `name` in at most `max` characters, in capitals, for a narrow strip:
 /// first the short forms of known words, then the words without their
 /// vowels, then the first word cut and the initials of the others. Numbers
@@ -315,10 +333,18 @@ pub fn short_name(name: &str, max: usize) -> String {
             .map(|(_, short)| *short)
     };
     let short = |w: &str| SHORT_WORDS.iter().any(|(_, s)| *s == w);
+    // Digits in a word are a word of their own ("MIKROFON2", "KAMERA-2"),
+    // so they stay whole too.
     let mut words: Vec<String> = up
         .split(|c: char| c.is_whitespace() || c == '_')
         .filter(|w| !w.is_empty())
-        .map(|w| fixed(w).unwrap_or(w).to_string())
+        .flat_map(|w| match fixed(w) {
+            Some(short) => vec![short.to_string()],
+            None => digit_runs(w)
+                .into_iter()
+                .map(|part| fixed(&part).map_or(part, str::to_string))
+                .collect(),
+        })
         .collect();
     if len(&words.join(" ")) <= max {
         return words.join(" ");
@@ -520,6 +546,10 @@ mod tests {
         assert_eq!(short_name("Atmo Publikum 2", 4), "ATP2");
         assert_eq!(short_name("Kamera 123", 3), "C123");
         assert_eq!(short_name("  ", 3), "");
+        assert_eq!(short_name("Mikrofon1", 5), "MIC 1");
+        assert_eq!(short_name("Mikrofon2", 4), "MIC2");
+        assert_eq!(short_name("Kamera-2", 4), "CAM2");
+        assert_eq!(short_name("In-Ear 3", 5), "IEM 3");
         for (name, max) in [
             ("Einspieler Intro", 4),
             ("Wohnzimmer Lampe", 3),

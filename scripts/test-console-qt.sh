@@ -194,6 +194,8 @@ for _ in $(seq 1 40); do [[ "$(phones_1)" == false ]] && break; sleep 0.5; done
     || fail "input 1 on the headphones $(phones_1) after PH"
 sleep 1
 click 1231 555
+for _ in $(seq 1 40); do [[ "$(phones_1)" == true ]] && break; sleep 0.5; done
+[[ "$(phones_1)" == true ]] || fail "input 1 not back on the headphones after a second PH"
 click 1400 630
 for _ in $(seq 1 40); do [[ "$(buses)" == 1 ]] && break; sleep 0.5; done
 [[ "$(buses)" == 1 ]] && pass "audio column: + Bus adds a bus" || fail "$(buses) buses after + Bus"
@@ -208,6 +210,21 @@ for _ in $(seq 1 40); do [[ "$(bus_name)" == "Stream Mix" ]] && break; sleep 0.5
 sleep 1
 [[ "$(bus_name)" == "Stream Mix" ]] && pass "audio column: Enter in the name field renames the bus" \
     || fail "bus named '$(bus_name)' after typing Stream Mix and Enter"
+# Its send in input 1's menu: a drag goes on over the states it brings
+# (one step only, if the rows were built anew with every state).
+click 1256 555
+sleep 1
+send_1() { state | jq --arg bus "$(state | jq -r '.buses[0].id')" '.inputs[0].sends[$bus] // 0'; }
+DISPLAY="$DISPLAY_NO" xdotool mousemove 1261 643
+sleep 0.3
+DISPLAY="$DISPLAY_NO" xdotool mousedown 1
+for x in $(seq 1265 5 1350); do sleep 0.05; DISPLAY="$DISPLAY_NO" xdotool mousemove "$x" 643; done
+sleep 0.1
+DISPLAY="$DISPLAY_NO" xdotool mouseup 1
+for _ in $(seq 1 20); do (( $(send_1) >= 50 )) && break; sleep 0.5; done
+(( $(send_1) >= 50 )) && pass "audio column: a send drag in the menu goes on" \
+    || fail "send of input 1 at $(send_1) after a drag across the menu's slider"
+DISPLAY="$DISPLAY_NO" xdotool key Escape
 # The Audio page adds its own further on.
 act "{\"action\":\"remove_bus\",\"bus\":\"$(state | jq -r '.buses[0].id')\"}"
 for _ in $(seq 1 40); do [[ "$(buses)" == 0 ]] && break; sleep 0.5; done

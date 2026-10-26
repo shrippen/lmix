@@ -81,8 +81,10 @@ KanteCard {
     // delegates, so a fader drag or a name being typed goes on.
     KeyedModel { id: inputStrips }
     KeyedModel { id: pathStrips }
+    KeyedModel { id: menuBuses }
     function syncStrips() {
         inputStrips.sync(soundInputs.map(i => i.id))
+        menuBuses.sync(buses.map(b => b.id))
         pathStrips.sync([masterKey, phonesKey].concat(buses.map(b => b.id)))
     }
     Component.onCompleted: syncStrips()
@@ -124,6 +126,12 @@ KanteCard {
     }
 
     Accessible.name: qsTr("Audio mixer")
+
+    // A click beside the fields ends editing a bus name (the strip buttons
+    // take no focus).
+    TapHandler {
+        onTapped: mixer.forceActiveFocus()
+    }
 
     ColumnLayout {
         id: column
@@ -333,6 +341,10 @@ KanteCard {
             }
             menu.key = key
             openAt(item)
+            // The press that closed it was on this button: it stays closed.
+            if (!menu.visible) {
+                menu.key = ""
+            }
         }
 
         // An input: its sends, the channel strip, sound follows picture.
@@ -347,13 +359,16 @@ KanteCard {
             color: KanteStyle.mutedTextColor
             text: qsTr("No bus yet. “+ Bus” below adds one.")
         }
+        // Rows by bus id: a new state (every send step brings one) keeps
+        // them, so a send drag goes on.
         Repeater {
-            model: menu.input ? mixer.buses : []
+            model: menu.input ? menuBuses : null
             RowLayout {
                 id: sendRow
-                required property var modelData
-                readonly property int level: menu.input && menu.input.sends && menu.input.sends[modelData.id] !== undefined
-                    ? menu.input.sends[modelData.id] : 0
+                required property string key
+                readonly property var modelData: mixer.busOf(key)
+                readonly property int level: menu.input && menu.input.sends && menu.input.sends[key] !== undefined
+                    ? menu.input.sends[key] : 0
                     QQC2.Label {
                     Layout.preferredWidth: Kirigami.Units.gridUnit * 5
                     text: sendRow.modelData.name
@@ -383,7 +398,7 @@ KanteCard {
             emphasis: KanteButton.Emphasis.Quiet
             text: qsTr("Channel strip: EQ, compressor …")
             onClicked: {
-                stripDialog.input = menu.input
+                stripDialog.inputId = menu.input.id
                 menu.close()
                 stripDialog.open()
             }
@@ -466,6 +481,9 @@ KanteCard {
 
     ChannelStripDialog {
         id: stripDialog
+        /** The input's id: the dialog follows its state (and its number, if moved). */
+        property string inputId: ""
+        input: mixer.soundInputs.find(i => i.id === inputId) || null
         parent: QQC2.Overlay.overlay
         anchors.centerIn: parent
         act: mixer.act
@@ -520,7 +538,7 @@ KanteCard {
         signal moved(int volume)
         Layout.fillHeight: true
         Layout.alignment: Qt.AlignHCenter
-        spacing: 2
+        spacing: KanteStyle.unit(2)
         KanteAudioMeter {
             Layout.fillHeight: true
             vertical: true
@@ -551,7 +569,7 @@ KanteCard {
         readonly property string fullName: input.number + " " + input.name
         readonly property var phonesSend: input.phones || ({ on: true, level: 100 })
         readonly property bool solo: !!input.listen && input.listen !== "off"
-        spacing: 2
+        spacing: KanteStyle.unit(2)
 
         Fader {
             name: strip.fullName
@@ -582,8 +600,8 @@ KanteCard {
         GridLayout {
             Layout.fillWidth: true
             columns: 2
-            rowSpacing: 2
-            columnSpacing: 2
+            rowSpacing: KanteStyle.unit(2)
+            columnSpacing: KanteStyle.unit(2)
             StripButton {
                 text: qsTr("M", "mute, short")
                 emphasis: strip.input.audio.on ? KanteButton.Emphasis.Normal : KanteButton.Emphasis.Destructive
@@ -648,7 +666,7 @@ KanteCard {
         signal toggled()
         signal listenToggled()
         signal renamed(string name)
-        spacing: 2
+        spacing: KanteStyle.unit(2)
 
         Fader {
             name: path.name
@@ -697,6 +715,12 @@ KanteCard {
                 }
             }
             onAccepted: focus = false
+            // Esc: the name stays as it was.
+            Keys.onEscapePressed: {
+                editing = false
+                text = Qt.binding(() => host.core.shortName(path.name, nameField.chars))
+                focus = false
+            }
             onEditingFinished: {
                 if (!editing) {
                     return
@@ -726,8 +750,8 @@ KanteCard {
         GridLayout {
             Layout.fillWidth: true
             columns: 2
-            rowSpacing: 2
-            columnSpacing: 2
+            rowSpacing: KanteStyle.unit(2)
+            columnSpacing: KanteStyle.unit(2)
             StripButton {
                 text: qsTr("M", "mute, short")
                 emphasis: path.on ? KanteButton.Emphasis.Normal : KanteButton.Emphasis.Destructive
