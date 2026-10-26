@@ -4810,3 +4810,30 @@ Ton-Seite.
 „+ Bus“, Umbenennen mit Enter und Esc, M, S und Abgriff am Bus, Send im
 Menü, Griff der Ausgangswege) und Screenshots auf
 Xvfb mit zehn Inputs und zwei Bussen.
+
+## 2026-10-26 — Neubau des Mischers: strom stoppt auch einen laufenden Start
+
+**Anlass**: In der CI kam der neu gebaute Mischer zweimal nicht in PLAYING
+(Läufe 40255351441 bei `set_master_format`, 40246938342 bei der
+Wiederherstellung nach dem Neustart von lmix-core). Program blieb weg, jeder
+weitere Befehl an den Mischer scheiterte. Im strom-Log: `intersink`
+`pgm_audio_out` „An active producer already exists“, also lief noch ein
+Mischer mit denselben inter-Kanälen.
+
+**Ursache** (in strom): `start_flow` trägt die Pipeline erst nach dem Start
+in seine Tabelle ein. Ein DELETE in diesem Fenster fand nichts zu stoppen,
+die Pipeline lief ohne Flow weiter. Nachgestellt mit dem Mischer-Flow von
+lmix: Start, 50 ms später DELETE, neu anlegen, neu starten; strom meldete in
+4 von 4 Runden „Pipeline already running“ (die alte Pipeline mit der alten
+Definition), in anderer Reihenfolge scheitert der Start wie in der CI. Wer
+in der CI den überlappenden Start auslöste, ist nicht belegt (naheliegend:
+ein Start, den das getötete lmix-core noch abgeschickt hatte).
+
+**Entscheidung**: strom #45 hält je Flow eine Sperre über Start, Stopp und
+Löschen; ein Löschen wartet den Start ab und stoppt dann, was er gebaut hat.
+lmix ändert nichts.
+
+**Geprüft**: strom-Test `test_delete_during_start_stops_the_pipeline` (ohne
+den Fix rot), Nachstellung mit dem strom-Binary des Branches (0 von 4), VM-
+Test in der CI.
+
