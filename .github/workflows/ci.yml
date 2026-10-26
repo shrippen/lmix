@@ -205,7 +205,6 @@ jobs:
             vm-work/*.log
             vm-work/*.jpg
             vm-work/*.png
-            vm-work/*-threads.txt
           retention-days: 7
 
   core:

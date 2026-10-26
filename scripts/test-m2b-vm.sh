@@ -69,7 +69,7 @@ fail() {
     echo "FAIL: $*" >&2
     # What the engine and lmix-core were doing (CI shows no files).
     local log
-    for log in strom.log core.log gst.log core-threads.txt strom-threads.txt strom-stuck-threads.txt; do
+    for log in strom.log core.log gst.log core-threads.log strom-threads.log strom-stuck-threads.log; do
         [[ -s "$WORK/$log" ]] || continue
         echo "--- last 60 lines of $log" >&2
         tail -n 60 "$WORK/$log" >&2
@@ -105,7 +105,10 @@ is() { [[ "$("$1" "$2")" == "$3" ]]; }
 # it from outside: with yama's ptrace_scope 1 (Arch, Ubuntu) only a parent
 # may, and gdb is no parent of strom or lmix-core. prctl(PR_SET_PTRACER,
 # any) by syscall number (157 on x86-64): perl-base is in every image.
-TRACEABLE=(perl -e 'syscall(157, 0x59616d61, -1, 0, 0, 0) == 0 or die "prctl: $!"; exec @ARGV or die "exec: $!"')
+# Only a help: without it (no yama, another CPU) the command runs as is.
+TRACEABLE=()
+[[ "$(uname -m)" == x86_64 ]] \
+    && TRACEABLE=(perl -e 'syscall(157, 0x59616d61, -1, 0, 0, 0) == 0 or warn "prctl: $!\n"; exec @ARGV or die "exec: $!"')
 # threads <pid> <file>: every thread's stack.
 threads() { gdb -p "$1" -batch -ex 'thread apply all bt' >"$2" 2>&1 || true; }
 
@@ -117,9 +120,9 @@ act() {
     code="${out##*$'\n'}"
     if [[ "$code" == 000 && -n "${CORE_PID:-}" ]]; then
         # lmix-core may wait on an engine call that hangs: both sides.
-        threads "$CORE_PID" "$WORK/core-threads.txt"
-        threads "$STROM_PID" "$WORK/strom-threads.txt"
-        fail "action $1 got no answer in 120 s; threads: $WORK/core-threads.txt, $WORK/strom-threads.txt"
+        threads "$CORE_PID" "$WORK/core-threads.log"
+        threads "$STROM_PID" "$WORK/strom-threads.log"
+        fail "action $1 got no answer in 120 s; threads: $WORK/core-threads.log, $WORK/strom-threads.log"
     fi
     [[ "$code" == 200 ]] || fail "action $1 -> $code ${out%$'\n'*}"
     printf '%s\n' "${out%$'\n'*}"
@@ -162,8 +165,8 @@ wait_up "$STROM/health" strom
 # output's bus switch, todo.md): strom gives up after 30 s and goes on, the
 # test fails later. The stuck thread is still stuck then: keep its stack.
 (until grep -q 'state change did not complete in time' "$WORK/strom.log" 2>/dev/null; do sleep 1; done
- threads "$STROM_PID" "$WORK/strom-stuck-threads.txt"
- echo "strom: a state change did not complete, threads in $WORK/strom-stuck-threads.txt" >&2) &
+ threads "$STROM_PID" "$WORK/strom-stuck-threads.log"
+ echo "strom: a state change did not complete, threads in $WORK/strom-stuck-threads.log" >&2) &
 PIDS+=($!)
 
 start_core() {
