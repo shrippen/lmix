@@ -246,7 +246,8 @@ while True:
         seen.append("event " + "/".join(args))
     elif addr == "/lmix/cue/running":
         name, remaining = args
-        seen.append("running " + (name or "-") + (" counting" if 0 < remaining <= 0.8 else ""))
+        # The last tick before the end may say 0 left: still counting (CI, 26.10.).
+        seen.append("running " + (name or "-") + (" counting" if 0 <= remaining <= 0.8 else ""))
         if not name:
             break
 # Repeats at the event rate count once.
