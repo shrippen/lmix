@@ -4794,9 +4794,14 @@ Ton-Seite.
 - Das Namensfeld steht im Menü, nicht im Streifen: im Streifen behielt es
   den Fokus, weil Klicks auf Knöpfe und Fader ihn nicht nehmen, und die
   Tasten der Show (Ziffern für Übergänge) landeten im Busnamen.
+  Fokussiert wird das Feld erst in `onOpened`: ein Klick, der das Menü eben
+  geschlossen hat, öffnet es nicht wieder, und ein Feld im geschlossenen
+  Menü behielte die Tasten. Umbenannt wird beim Schließen, nicht bei jedem
+  Fokusverlust (ein Fensterwechsel benannte sonst halb Getipptes um).
 - Das Menü legt seine Spalte vor dem Messen neu an (`forceLayout`): sonst
   maß es die Größe des vorigen Inhalts und legte sich unten über den eigenen
-  Knopf. Gehört in `KantePopover.openAt` (todo).
+  Knopf. Gehört in `KantePopover.openAt` (Kante #81); lmix lässt den Aufruf
+  nach dem nächsten Sync weg.
 - „Ausgang zuordnen“ aus dem Entwurf fehlt: es gibt keine Aktion, die den Bus
   eines bestehenden Ausgangs ändert (todo).
 

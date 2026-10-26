@@ -217,10 +217,22 @@ sleep 1
 DISPLAY="$DISPLAY_NO" xdotool key ctrl+a type "Weg"
 DISPLAY="$DISPLAY_NO" xdotool key Escape
 sleep 1
-DISPLAY="$DISPLAY_NO" xdotool type "x"
-sleep 1
 [[ "$(bus_name)" == "Stream Mix" ]] && pass "audio column: Esc in the bus menu keeps the name" \
     || fail "bus named '$(bus_name)' after Esc in the bus menu"
+# Opened from the name and closed, the menu leaves the show its keys (a
+# field in a closed menu would keep them). Esc closes it: on Xvfb a press
+# outside does not close a popover reliably (the View popover on main too).
+act '{"action":"add_shortcut","shortcut":{"label":"Input 1 off","key":"2","actions":[{"action":"set_audio","input":1,"on":false}]}}'
+click 1348 751
+sleep 1
+DISPLAY="$DISPLAY_NO" xdotool key Escape
+sleep 1
+DISPLAY="$DISPLAY_NO" xdotool key 2
+for _ in $(seq 1 40); do [[ "$(audio_1)" == false ]] && break; sleep 0.5; done
+[[ "$(audio_1)" == false && "$(bus_name)" == "Stream Mix" ]] && pass "audio column: after the bus menu the show has the keys" \
+    || fail "after the bus menu: input 1 on $(audio_1), bus named '$(bus_name)'"
+act '{"action":"remove_shortcut","target":"Input 1 off"}'
+act '{"action":"set_audio","input":1,"on":true}'
 # The bus's M, its S and "Solo off", its tap in the ⋯ menu.
 bus_mute() { state | jq '.buses[0].mute'; }
 bus_listen() { state | jq '.buses[0].listen'; }

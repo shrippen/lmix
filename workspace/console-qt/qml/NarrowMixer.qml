@@ -67,8 +67,13 @@ KanteCard {
     readonly property real smallCharWidth: smallMono.averageCharacterWidth
     /** The strip whose ⋯ menu is open, "" without. */
     readonly property string menuKey: menu.key
-    function openMenu(key, item, rename) {
-        menu.openFor(key, item, rename === true)
+    function openMenu(key, item) {
+        menu.openFor(key, item)
+    }
+    /** A bus's menu with its name to edit. */
+    function renameBus(key, item) {
+        menu.focusName = true
+        menu.openFor(key, item)
     }
 
     FontMetrics {
@@ -333,10 +338,22 @@ KanteCard {
         title: isMaster ? qsTr("Master") : isPhones ? qsTr("Headphones")
             : bus ? qsTr("Bus “%1”").arg(bus.name) : input ? qsTr("Input %1 %2").arg(input.number).arg(input.name) : ""
         onClosed: key = ""
+        /** Opened from the bus's name: its field takes the keys, but only
+         *  once open. A click that just closed the menu does not reopen it,
+         *  and a field in the closed menu would keep the show's keys. */
+        property bool focusName: false
+        onOpened: {
+            if (focusName) {
+                nameField.forceActiveFocus()
+                nameField.selectAll()
+            }
+            focusName = false
+        }
         // The content is a Column (no Layout): texts wrap at a set width.
 
-        function openFor(key, item, rename) {
+        function openFor(key, item) {
             if (menu.key === key && menu.opened) {
+                focusName = false
                 close()
                 return
             }
@@ -345,13 +362,10 @@ KanteCard {
             // would take the size of the one before and cover its button.
             contentItem.forceLayout()
             openAt(item)
-            if (rename) {
-                nameField.forceActiveFocus()
-                nameField.selectAll()
-            }
             // The press that closed it was on this button: it stays closed.
             if (!menu.visible) {
                 menu.key = ""
+                focusName = false
             }
         }
 
@@ -377,7 +391,7 @@ KanteCard {
                 readonly property var modelData: mixer.busOf(key)
                 readonly property int level: menu.input && menu.input.sends && menu.input.sends[key] !== undefined
                     ? menu.input.sends[key] : 0
-                    QQC2.Label {
+                QQC2.Label {
                     Layout.preferredWidth: Kirigami.Units.gridUnit * 5
                     text: sendRow.modelData.name
                     elide: Text.ElideRight
@@ -433,7 +447,8 @@ KanteCard {
             maximumLength: mixer.limits.name_max
             Accessible.name: qsTr("Name of the bus")
             placeholderText: qsTr("Name")
-            /** The bus being renamed: Enter and closing the menu both finish. */
+            /** The bus being renamed. Only closing renames (Enter closes):
+             *  losing the focus to another window must not. */
             property string busId: ""
             Connections {
                 target: menu
@@ -441,20 +456,20 @@ KanteCard {
                     nameField.busId = menu.bus ? menu.bus.id : ""
                     nameField.text = menu.bus ? menu.bus.name : ""
                 }
+                function onAboutToHide() {
+                    const bus = mixer.buses.find(b => b.id === nameField.busId)
+                    nameField.busId = ""
+                    const wanted = nameField.text.trim()
+                    if (bus && wanted.length > 0 && wanted !== bus.name) {
+                        mixer.act({ action: "rename_bus", bus: bus.id, name: wanted })
+                    }
+                }
             }
             onAccepted: menu.close()
             // Esc: the name stays as it was.
             Keys.onEscapePressed: {
                 busId = ""
                 menu.close()
-            }
-            onEditingFinished: {
-                const bus = mixer.buses.find(b => b.id === busId)
-                busId = ""
-                const wanted = text.trim()
-                if (bus && wanted.length > 0 && wanted !== bus.name) {
-                    mixer.act({ action: "rename_bus", bus: bus.id, name: wanted })
-                }
             }
         }
 
@@ -733,7 +748,7 @@ KanteCard {
             }
             TapHandler {
                 enabled: path.isBus
-                onTapped: host.openMenu(path.key, pathMore, true)
+                onTapped: host.renameBus(path.key, pathMore)
             }
             QQC2.ToolTip.visible: nameHover.hovered
             QQC2.ToolTip.delay: Kirigami.Units.toolTipDelay
