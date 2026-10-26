@@ -4768,5 +4768,5 @@ Ton-Seite.
 
 **Geprüft**: console-qt-Tests (`short_names_fit_and_keep_their_numbers`),
 `scripts/test-console-qt.sh` (M an Input und Master, S und „Solo aus“, KH,
-„+ Bus“, Spaltengriff) und Screenshots auf Xvfb mit zehn Inputs und zwei
-Bussen.
+„+ Bus“, Umbenennen mit Enter, Griff der Ausgangswege) und Screenshots auf
+Xvfb mit zehn Inputs und zwei Bussen.

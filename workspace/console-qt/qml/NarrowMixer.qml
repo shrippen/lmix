@@ -500,8 +500,8 @@ KanteCard {
         Layout.preferredWidth: 1
         size: KanteButton.Size.Small
         // Two side by side in a narrow strip: the text needs the room.
-        leftPadding: 2
-        rightPadding: 2
+        leftPadding: KanteStyle.unit(2)
+        rightPadding: KanteStyle.unit(2)
         focusPolicy: Qt.NoFocus
         emphasis: active ? KanteButton.Emphasis.Primary : KanteButton.Emphasis.Normal
         Accessible.checkable: true
@@ -662,8 +662,8 @@ KanteCard {
             text: host.core.shortName(path.name, host.nameChars)
             horizontalAlignment: Text.AlignHCenter
             clip: true
-            font.family: KanteStyle.monoFamily
-            font.bold: true
+            // The font nameChars is measured in, bold.
+            font: Qt.font({ family: host.smallFont.family, pointSize: host.smallFont.pointSize, bold: true })
             color: path.nameColor
             Accessible.ignored: true
             HoverHandler { id: fixedHover }
@@ -686,14 +686,22 @@ KanteCard {
             QQC2.ToolTip.visible: hovered && !activeFocus
             QQC2.ToolTip.delay: Kirigami.Units.toolTipDelay
             QQC2.ToolTip.text: qsTr("%1 · click and type: rename").arg(path.name)
+            /** Set while the name is edited: Enter brings editingFinished twice
+             *  (losing the focus, then the key), the second with the short form. */
+            property bool editing: false
             onActiveFocusChanged: {
                 if (activeFocus) {
+                    editing = true
                     text = path.name
                     selectAll()
                 }
             }
             onAccepted: focus = false
             onEditingFinished: {
+                if (!editing) {
+                    return
+                }
+                editing = false
                 const wanted = text.trim()
                 if (wanted.length > 0 && wanted !== path.name) {
                     path.renamed(wanted)

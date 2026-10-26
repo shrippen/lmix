@@ -197,6 +197,17 @@ click 1231 555
 click 1400 630
 for _ in $(seq 1 40); do [[ "$(buses)" == 1 ]] && break; sleep 0.5; done
 [[ "$(buses)" == 1 ]] && pass "audio column: + Bus adds a bus" || fail "$(buses) buses after + Bus"
+# Its name field: click, type, Enter renames it to the whole name typed
+# (not to the short form the field shows again after it).
+sleep 1
+click 1348 743
+DISPLAY="$DISPLAY_NO" xdotool key ctrl+a type "Stream Mix"
+DISPLAY="$DISPLAY_NO" xdotool key Return
+bus_name() { state | jq -r '.buses[0].name'; }
+for _ in $(seq 1 40); do [[ "$(bus_name)" == "Stream Mix" ]] && break; sleep 0.5; done
+sleep 1
+[[ "$(bus_name)" == "Stream Mix" ]] && pass "audio column: Enter in the name field renames the bus" \
+    || fail "bus named '$(bus_name)' after typing Stream Mix and Enter"
 # The Audio page adds its own further on.
 act "{\"action\":\"remove_bus\",\"bus\":\"$(state | jq -r '.buses[0].id')\"}"
 for _ in $(seq 1 40); do [[ "$(buses)" == 0 ]] && break; sleep 0.5; done
@@ -409,6 +420,15 @@ setting_becomes mixerWidth 656 && pass "audio grip: a drag widens the column" \
 DISPLAY="$DISPLAY_NO" xdotool mousemove 765 300 click --repeat 2 --delay 80 1
 setting_becomes mixerWidth 216 && pass "audio grip: a double click resets it" \
     || fail "audio grip: width $(view_setting mixerWidth) after a double click"
+# The grip over the output paths: a drag up makes them higher and keeps
+# the height, a double click goes back to following their rows (0).
+drag_y 1324 602 542
+for _ in $(seq 1 20); do (( $(view_setting mixerPathsHeight || echo 0) > 0 )) 2>/dev/null && break; sleep 0.5; done
+(( $(view_setting mixerPathsHeight) > 0 )) 2>/dev/null && pass "paths grip: a drag sets their height" \
+    || fail "paths grip: height '$(view_setting mixerPathsHeight)' after a drag of 60 px up"
+DISPLAY="$DISPLAY_NO" xdotool mousemove 1324 542 click --repeat 2 --delay 80 1
+setting_becomes mixerPathsHeight 0 && pass "paths grip: a double click resets it" \
+    || fail "paths grip: height $(view_setting mixerPathsHeight) after a double click"
 
 # Detail: the tiles get the overlay buttons and the audio row, and the
 # monitors give them room, so a row of tiles is not cut off.
