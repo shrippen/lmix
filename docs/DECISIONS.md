@@ -4867,5 +4867,43 @@ Engine-Test `an_output_takes_another_sound_on_air`, Service-Tests
 `an_inter_input_moves_to_another_channel_while_playing` (hört nach dem
 Wechsel den anderen Producer), `scripts/test-console-qt.sh` (Haken im
 Bus-Menü), VM-Test (laufender SRT-Ausgang auf den Bus und zurück, Kanal in
-strom, kein Neustart). Offen: Hörtest, ob der Wechsel knackt (todo).
+strom, kein Neustart). Gemessen statt gehört: „Buswechsel ohne Lücke“ (26.10.).
 
+## 2026-10-26 — Buswechsel ohne Lücke: der Ton eines Ausgangs in einem Segment (AUD.2)
+
+**Anlass**: Hörtest aus #151/#158 (todo): knackt der Abgriff-Wechsel eines
+Busses, knackt oder reißt der Buswechsel eines laufenden Ausgangs? Statt
+zu hören misst `scripts/measure-switch-gaps.sh`: ein Pattern-Input mit
+Sinus (440 Hz) auf Program und auf dem Bus „Stream“, eine Aufnahme nimmt
+Program und wechselt zehnmal auf den Bus und zurück, dann wechselt der Bus
+zehnmal vor/nach Fader. `scripts/switch-gaps.py` sucht in der Aufnahme
+Lücken (≥ 2 ms weit unter dem Ton) und Knackser (Block von 5 ms, der nicht
+als ein Sinus weitergeht); eine Sekunde Stummschaltung vorher legt die Uhr
+der Aufnahme fest.
+
+**Befund**: Der Abgriff-Wechsel ist sauber (keine Lücke, kein Knackser).
+Jeder Buswechsel ließ 19–39 ms Stille mit Knacksern an beiden Rändern; die
+Zeitstempel des Tons sprangen dabei um 5–26 ms zurück. Der `intersrc`
+bekommt vom anderen Producer (dessen Appsink) dessen Segment und Puffer,
+deren Raster bis zu einen Puffer früher liegt; der AAC-Encoder fing auf dem
+neuen Segment neu an und schrieb seinen Vorlauf als Stille (die Lücke
+besteht aus Nullen). Ein `audiorate` davor half nicht.
+
+**Entscheidung**: Im Ausgangs-Flow geht der Ton hinter dem Inter Input
+`pgm_audio` durch ein `identity single-segment=true` (Element `sound`), für
+SRT, RTMP, Aufnahme und NDI. Es rechnet die Zeitstempel in Laufzeit um und
+schluckt neue Segmente: der Encoder sieht einen Strom. Bild und Ton bleiben
+zusammen, weil Muxer nach Laufzeit verschachteln.
+
+**Geprüft**: A/B unter gleicher fremder Last (Load ~40), je drei Läufe mit
+21 Wechseln: vorher 14, 17, 13 Lücken, jetzt 0, 0 und einmal 9 (Aussetzer
+unter Last auch außerhalb der Wechsel). Ohne fremde Last zweimal 0 Lücken
+(Vorversuch, dasselbe Element nur in der Aufnahme).
+Lippensynchronität (`scripts/measure-av.sh`, CPU-Mischer): ISO 0 ms wie
+vorher, Program −25…+18 ms je Lauf, im bekannten Bereich der Bildphase.
+Engine-Test `every_output_takes_its_sound_in_one_segment`.
+
+**Offen**: Ein kurzer Knackser je Buswechsel bleibt (Phasensprung, Rest
+etwa −9 dB gegen den Ton): Program und Bus liegen leicht gegeneinander
+versetzt, ein harter Schnitt zwischen ihnen springt. Ob er stört, entscheidet
+ein Hörtest (todo).

@@ -503,6 +503,14 @@ impl LiveMkv {
 
 /// Block id of an output flow's inter input for sound.
 pub const OUTPUT_SOUND: &str = "pgm_audio";
+/// Element after it that the output's sound goes on from: one segment in
+/// running time. A running output that takes another bus's sound
+/// (`set_output_bus`) gets the other producer's segment and timestamps up
+/// to a buffer back; the AAC encoder started anew on it and left about
+/// 30 ms of silence at every switch (scripts/measure-switch-gaps.sh,
+/// DECISIONS 26.10.). Muxers interleave by running time: picture and
+/// sound stay together.
+const OUTPUT_SOUND_TIMED: &str = "sound";
 
 /// The inter channel an output takes its sound from, `None` without sound.
 pub fn output_sound(spec: &OutputSpec, feed: Feed, bus: Option<BusId>) -> Option<String> {
@@ -578,6 +586,17 @@ pub fn output_flow(
         ));
     }
     let sound = audio.is_some();
+    if sound {
+        flow.elements.push(element(
+            OUTPUT_SOUND_TIMED,
+            "identity",
+            vec![("single-segment", PropertyValue::Bool(true))],
+        ));
+        flow.links.push(link(
+            format!("{OUTPUT_SOUND}:src"),
+            OUTPUT_SOUND_TIMED.into(),
+        ));
+    }
     // Screens and NDI read frames on the CPU; the encoders take GPU memory.
     let on_gpu = matches!(feed, Feed::Program | Feed::Multiview | Feed::Preview)
         && backend == MixerBackend::Cuda;
@@ -602,7 +621,7 @@ pub fn output_flow(
                 .push(link("enc:encoded_out".into(), "srt:video_in".into()));
             if sound {
                 flow.links
-                    .push(link(format!("{OUTPUT_SOUND}:src"), "srt:audio_in_0".into()));
+                    .push(link(OUTPUT_SOUND_TIMED.into(), "srt:audio_in_0".into()));
             }
         }
         OutputSpec::Rtmp {
@@ -631,7 +650,7 @@ pub fn output_flow(
             // The block encodes raw sound to AAC itself.
             if sound {
                 flow.links
-                    .push(link(format!("{OUTPUT_SOUND}:src"), "rtmp:audio_in".into()));
+                    .push(link(OUTPUT_SOUND_TIMED.into(), "rtmp:audio_in".into()));
             }
         }
         OutputSpec::Record {
@@ -678,7 +697,7 @@ pub fn output_flow(
             flow.links.push(link(from, "ndi:video_in".into()));
             if sound {
                 flow.links
-                    .push(link(format!("{OUTPUT_SOUND}:src"), "ndi:audio_in".into()));
+                    .push(link(OUTPUT_SOUND_TIMED.into(), "ndi:audio_in".into()));
             }
         }
     }
@@ -744,7 +763,7 @@ fn add_aac(flow: &mut Flow, to: &str) {
     flow.elements.push(element("aac", "avenc_aac", vec![]));
     flow.elements.push(element("aacparse", "aacparse", vec![]));
     flow.links
-        .push(link(format!("{OUTPUT_SOUND}:src"), "aconv".into()));
+        .push(link(OUTPUT_SOUND_TIMED.into(), "aconv".into()));
     flow.links.push(link("aconv".into(), "aac".into()));
     flow.links.push(link("aac".into(), "aacparse".into()));
     flow.links.push(link("aacparse".into(), to.into()));
@@ -2339,7 +2358,8 @@ mod tests {
         ));
         for (from, to) in [
             ("enc:encoded_out", "rtmp:video_in"),
-            ("pgm_audio:src", "rtmp:audio_in"),
+            ("pgm_audio:src", "sound"),
+            ("sound", "rtmp:audio_in"),
         ] {
             assert!(
                 flow.links.iter().any(|l| l.from == from && l.to == to),
@@ -2668,6 +2688,66 @@ mod tests {
                 .all(|e| e.element_type != "cudadownload"),
             "the encoder takes GPU memory"
         );
+    }
+
+    #[test]
+    fn every_output_takes_its_sound_in_one_segment() {
+        let specs = [
+            OutputSpec::Srt {
+                uri: "srt://cdn:9000".into(),
+                video_kbps: 4000,
+                encoding: Default::default(),
+            },
+            OutputSpec::Rtmp {
+                url: "rtmp://a.rtmp.example.com/live2/".into(),
+                key: "k".into(),
+                video_kbps: 4000,
+                encoding: Default::default(),
+            },
+            OutputSpec::Record {
+                folder: "rec".into(),
+                container: lmix_types::Container::Mkv,
+                video_kbps: 4000,
+                encoding: Default::default(),
+            },
+            OutputSpec::Ndi {
+                name: "lmix".into(),
+            },
+        ];
+        for spec in &specs {
+            for live_mkv in [LiveMkv::Yes, LiveMkv::No] {
+                let flow = output_flow(
+                    OutputId::new(),
+                    spec,
+                    Feed::Program,
+                    None,
+                    MixerBackend::Cpu,
+                    Framerate::default(),
+                    live_mkv,
+                );
+                let timed = flow.elements.iter().find(|e| e.id == "sound").unwrap();
+                assert_eq!(timed.element_type, "identity");
+                assert!(matches!(
+                    timed.properties.get("single-segment"),
+                    Some(PropertyValue::Bool(true))
+                ));
+                let from_inter: Vec<_> = flow
+                    .links
+                    .iter()
+                    .filter(|l| l.from == "pgm_audio:src")
+                    .map(|l| l.to.as_str())
+                    .collect();
+                assert_eq!(
+                    from_inter,
+                    ["sound"],
+                    "{spec:?}: only the identity takes the inter input"
+                );
+                assert!(
+                    flow.links.iter().any(|l| l.from == "sound"),
+                    "{spec:?}: sound goes on"
+                );
+            }
+        }
     }
 
     #[test]
