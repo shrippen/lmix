@@ -4834,20 +4834,24 @@ impl Switcher {
             return Ok(Vec::new());
         }
         let feed = self.feed_of(entry)?;
-        let had_sound = crate::engine::flows::output_sound(&entry.spec, feed, entry.bus).is_some();
+        let sound = |bus| crate::engine::flows::output_sound(&entry.spec, feed, bus).is_some();
+        let on_air = sound(entry.bus) && sound(bus);
+        let running = self.output_running(entry.id);
+        // A restart stops it for a moment, which the lock refuses.
+        if running && !on_air {
+            self.check_unlocked()?;
+        }
         self.show.outputs[index].bus = bus;
         let entry = &self.show.outputs[index];
-        if !self.output_running(entry.id) {
-            return Ok(Vec::new());
-        }
-        if had_sound && crate::engine::flows::output_sound(&entry.spec, feed, bus).is_some() {
-            return Ok(vec![Command::SetOutputSound {
+        match (running, on_air) {
+            (false, _) => Ok(Vec::new()),
+            (true, true) => Ok(vec![Command::SetOutputSound {
                 id: entry.id,
                 feed,
                 bus,
-            }]);
+            }]),
+            (true, false) => Ok(vec![self.start_command(entry)?]),
         }
-        Ok(vec![self.start_command(entry)?])
     }
 
     fn stop_output(&mut self, output: &OutputRef) -> Result<Vec<Command>, ActionError> {
@@ -7625,6 +7629,27 @@ mod tests {
         .unwrap();
         let iso = sw.state().outputs[1].id;
         sw.set_output_status(iso, OutputStatus::Running { since_ms: 0 });
+        // Not while the lock holds (it stops it for a moment); the sound of
+        // the stream above may still change.
+        sw.apply(Action::SetLock { on: true }).unwrap();
+        assert!(matches!(
+            sw.apply(Action::SetOutputBus {
+                output: OutputRef::Text("ISO".into()),
+                bus: Some(bus("Stream")),
+            }),
+            Err(ActionError::Locked)
+        ));
+        assert_eq!(sw.state().outputs[1].bus, None);
+        assert_eq!(
+            sw.apply(Action::SetOutputBus {
+                output: output(),
+                bus: Some(bus("Stream")),
+            })
+            .unwrap()
+            .len(),
+            1
+        );
+        sw.apply(Action::SetLock { on: false }).unwrap();
         let cmds = sw
             .apply(Action::SetOutputBus {
                 output: OutputRef::Text("ISO".into()),

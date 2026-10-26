@@ -969,7 +969,6 @@ wait_for "$SETTLE_S" is output_state Stream running || fail "running output not 
 # back signed, which once made its buses unknown).
 [[ "$(mixer_starts)" == "$mixer_before" ]] || fail "mixer built anew instead of adopted"
 pass "lmix-core killed and restarted: mixer and output adopted, show resumed"
-pass "lmix-core killed and restarted: mixer and output adopted, show resumed"
 
 # --- a running output takes a bus's sound and back, on air (AUD.2) ---
 out_flow="$(curl -sf "$STROM/api/flows" | jq -r '.flows[] | select(.name | startswith("lmix output")) | .id')"

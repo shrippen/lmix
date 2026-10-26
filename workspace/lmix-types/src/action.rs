@@ -957,7 +957,8 @@ pub enum Action {
 
     // ---- Safety ----
     /// Lock or unlock (AUT.11): while locked, closing inputs, opening or
-    /// clearing the show and stopping or removing outputs are refused.
+    /// clearing the show, stopping or removing outputs and restarting one
+    /// for another bus are refused.
     SetLock {
         on: bool,
     },
