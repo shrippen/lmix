@@ -4733,3 +4733,25 @@ dieselbe Wahl noch einmal tat nichts.
 `a_failed_new_mixer_is_built_again`, `a_format_the_engine_refused_is_tried_again`,
 `a_bus_change_before_the_new_mixer_is_built_sets_up_all`,
 `a_restored_mixer_is_pending_until_built`).
+
+## 2026-10-26 — Neustart von lmix-core übernimmt den Mischer wieder
+
+**Anlass**: Die CI scheiterte nach dem Merge von #152 auf main: Nach dem
+Absturztest baute lmix-core den laufenden Mischer neu, der Neubau kam nicht
+in PLAYING, Program blieb weg. Lokal nachgestellt: Nach jedem Neustart von
+lmix-core startete der Mischer neu, mit und ohne Busse. Der Test prüfte nur,
+dass er den Absturz selbst überlebt.
+
+**Ursache**: lmix schreibt ganze Zahlen als `UInt`, strom gibt sie aus seinem
+gespeicherten Flow als `Int` zurück. `buses_of` (Kopfhörer- und Bus-Plätze)
+und `sample_rate_of` kannten nur `UInt`; die Busse galten als unbekannt, und
+das `SetFormat` der Wiederherstellung baute den Mischer neu. Seit den freien
+Bussen (25.10.) so.
+
+**Entscheidung**: Beim Zurücklesen gelten `Int` und `UInt` (`whole`, wie
+`slot_count` es schon tat). Der VM-Test zählt die Starts des Mischers über den
+Neustart.
+
+**Geprüft**: lmix-core-Test `mixer_publishes_its_buses` (Flow mit
+vorzeichenbehafteten Zahlen), Neustart gegen echtes strom mit und ohne Busse
+(ein Start vorher, keiner danach), `scripts/test-m2b-vm.sh`.
