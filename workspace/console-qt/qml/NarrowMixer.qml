@@ -357,6 +357,13 @@ KanteCard {
                 close()
                 return
             }
+            // Another strip's while open: closed first, so its name is kept
+            // or renamed and the new one starts afresh.
+            if (menu.opened) {
+                const name = focusName
+                close()
+                focusName = name
+            }
             menu.key = key
             // The column lays out on the next frame: measured now, the menu
             // would take the size of the one before and cover its button.
@@ -450,17 +457,21 @@ KanteCard {
             /** The bus being renamed. Only closing renames (Enter closes):
              *  losing the focus to another window must not. */
             property string busId: ""
+            /** The name when it opened: only what was typed renames, not a
+             *  rename from elsewhere while the menu was open. */
+            property string openedName: ""
             Connections {
                 target: menu
                 function onAboutToShow() {
                     nameField.busId = menu.bus ? menu.bus.id : ""
-                    nameField.text = menu.bus ? menu.bus.name : ""
+                    nameField.openedName = menu.bus ? menu.bus.name : ""
+                    nameField.text = nameField.openedName
                 }
                 function onAboutToHide() {
                     const bus = mixer.buses.find(b => b.id === nameField.busId)
                     nameField.busId = ""
                     const wanted = nameField.text.trim()
-                    if (bus && wanted.length > 0 && wanted !== bus.name) {
+                    if (bus && wanted.length > 0 && wanted !== nameField.openedName && wanted !== bus.name) {
                         mixer.act({ action: "rename_bus", bus: bus.id, name: wanted })
                     }
                 }
@@ -515,6 +526,8 @@ KanteCard {
             text: qsTr("Remove bus")
             onClicked: {
                 removeDialog.bus = menu.bus
+                // Removed, not renamed.
+                nameField.busId = ""
                 menu.close()
                 removeDialog.open()
             }

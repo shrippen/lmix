@@ -233,6 +233,17 @@ for _ in $(seq 1 40); do [[ "$(audio_1)" == false ]] && break; sleep 0.5; done
     || fail "after the bus menu: input 1 on $(audio_1), bus named '$(bus_name)'"
 act '{"action":"remove_shortcut","target":"Input 1 off"}'
 act '{"action":"set_audio","input":1,"on":true}'
+# Renamed elsewhere while its menu is open: closing it (its ⋯ again)
+# keeps the new name.
+click 1360 793
+sleep 1
+act "{\"action\":\"rename_bus\",\"bus\":\"$(state | jq -r '.buses[0].id')\",\"name\":\"Stream B\"}"
+sleep 1
+click 1360 793
+sleep 1
+[[ "$(bus_name)" == "Stream B" ]] && pass "audio column: closing the bus menu keeps a name given elsewhere" \
+    || fail "bus named '$(bus_name)' after a rename elsewhere and closing its menu"
+act "{\"action\":\"rename_bus\",\"bus\":\"$(state | jq -r '.buses[0].id')\",\"name\":\"Stream Mix\"}"
 # The bus's M, its S and "Solo off", its tap in the ⋯ menu.
 bus_mute() { state | jq '.buses[0].mute'; }
 bus_listen() { state | jq '.buses[0].listen'; }
