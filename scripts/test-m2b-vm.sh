@@ -165,7 +165,9 @@ wait_up "$STROM/health" strom
 # A pipeline that does not reach NULL in time (seen once in CI after an
 # output's bus switch, todo.md): strom gives up after 30 s and goes on, the
 # test fails later. The stuck thread is still stuck then: keep its stack.
-(until grep -q 'state change did not complete in time' "$WORK/strom.log" 2>/dev/null; do sleep 1; done
+# strom says "did not complete within" where it stops or drops a pipeline,
+# "did not complete in time" where it hands the error on (delete).
+(until grep -qE 'did not complete (in time|within)' "$WORK/strom.log" 2>/dev/null; do sleep 1; done
  threads "$STROM_PID" "$WORK/strom-stuck-threads.log"
  echo "strom: a state change did not complete, threads in $WORK/strom-stuck-threads.log" >&2) &
 PIDS+=($!)

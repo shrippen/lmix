@@ -246,8 +246,12 @@ while True:
         seen.append("event " + "/".join(args))
     elif addr == "/lmix/cue/running":
         name, remaining = args
-        # The last tick before the end may say 0 left: still counting (CI, 26.10.).
-        seen.append("running " + (name or "-") + (" counting" if 0 <= remaining <= 0.8 else ""))
+        # The last tick before the end may say 0 left (CI, 26.10.): skipped
+        # once the countdown was seen; a running cue without any time left
+        # (0 throughout) still shows as plain "running".
+        if name and remaining == 0 and seen and seen[-1].endswith(" counting"):
+            continue
+        seen.append("running " + (name or "-") + (" counting" if 0 < remaining <= 0.8 else ""))
         if not name:
             break
 # Repeats at the event rate count once.
