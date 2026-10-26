@@ -4733,3 +4733,40 @@ dieselbe Wahl noch einmal tat nichts.
 `a_failed_new_mixer_is_built_again`, `a_format_the_engine_refused_is_tried_again`,
 `a_bus_change_before_the_new_mixer_is_built_sets_up_all`,
 `a_restored_mixer_is_pending_until_built`).
+
+## 2026-10-26 — Tonspalte: Inputs oben, Ausgangswege fest unten (AUD.2, AUD.4)
+
+**Anlass**: Entwurf der Tonspalte (25.10., Zeichenfläche „Tonspalte: Master,
+Kopfhörer und Busse fest“). Die schmale Spalte am Rand der Mix-Seite zeigte
+nur Inputs und den Master. Kopfhörer, Busse, Solo und Sends gab es nur auf der
+Ton-Seite.
+
+**Entscheidung**:
+- Oben scrollen die Inputs, unten stehen die Ausgangswege fest: Master, dann
+  Kopfhörer, dann die Busse, „+ Bus“ in ihrer Kopfzeile (der Entwurf hatte ihn
+  als Zelle; als Zelle rutschte er in eine eigene Zeile, die man erst
+  scrollen musste). Ein Griff dazwischen setzt die Höhe der Ausgangswege,
+  mindestens eine Zeile je Teil (`view/mixerPathsHeight`; 0 = so viele
+  Zeilen wie nötig, höchstens die halbe Spalte, dahin auch der Doppelklick).
+- Je Input: M (stumm), S (Solo, nach dem Fader), KH (auf den Kopfhörer),
+  ⋯ (Sends an Busse, Kanalzug, Ton folgt Bild, Ton-Seite) und darunter die
+  Lautstärke auf dem Kopfhörer. „Solo aus“ in der Kopfzeile, solange ein Solo
+  oder Abhören an ist.
+- Je Bus: Name im Feld (klicken und tippen benennt um), darunter, was er
+  führt (`3 IN`, vor den Fadern `PRE 3`, höchstens 5 Zeichen), M, ⋯ (Abgriff,
+  Ausgänge mit ihm, Bus löschen mit Rückfrage) und S (auf dem Kopfhörer
+  abhören). Master (PGM) und Kopfhörer (MON) haben M und ⋯; der Kopfhörer
+  wählt dort seinen Abgriff. Der Master hat kein S: lmix-core kennt kein
+  Abhören des Masters.
+- Zu lange Namen kürzt `forms::short_name` (Rust, getestet, `Core.shortName`):
+  feste Kürzel deutsch und englisch (Master → MSTR, Kamera/Camera → CAM …),
+  dann Vokale weg, dann erstes Wort gekürzt und Anfangsbuchstaben; Zahlen
+  bleiben ganz. Der volle Name steht im Tooltip. Die Zeichenzahl folgt der
+  Breite des Streifens bzw. des Namensfelds.
+- „Ausgang zuordnen“ aus dem Entwurf fehlt: es gibt keine Aktion, die den Bus
+  eines bestehenden Ausgangs ändert (todo).
+
+**Geprüft**: console-qt-Tests (`short_names_fit_and_keep_their_numbers`),
+`scripts/test-console-qt.sh` (M an Input und Master, S und „Solo aus“, KH,
+„+ Bus“, Spaltengriff) und Screenshots auf Xvfb mit zehn Inputs und zwei
+Bussen.

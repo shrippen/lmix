@@ -161,21 +161,45 @@ sleep 1
 click 642 412
 for _ in $(seq 1 40); do [[ "$(overlay_1)" == none ]] && break; sleep 0.5; done
 [[ "$(overlay_1)" == none ]] && pass "overlays: All off" || fail "overlay 1 still on after All off"
-# The narrow mixer at the right edge: mute input 1 and the master there.
+# The audio column at the right edge (inputs on top, the ways out below):
+# mute input 1 and the master, solo input 1 and end it, take input 1 off
+# the headphones, add a bus.
 audio_1() { state | jq '.inputs[0].audio.on'; }
 master_mute() { state | jq '.master.mute'; }
-click 1243 805
+listen_1() { state | jq -r '.inputs[0].listen'; }
+phones_1() { state | jq '.inputs[0].phones.on'; }
+buses() { state | jq '.buses | length'; }
+click 1231 518
 for _ in $(seq 1 40); do [[ "$(audio_1)" == false ]] && break; sleep 0.5; done
-[[ "$(audio_1)" == false ]] && pass "mixer at the edge: input 1 muted" || fail "input 1 still on after M in the mixer"
+[[ "$(audio_1)" == false ]] && pass "audio column: input 1 muted" || fail "input 1 still on after M in the audio column"
 sleep 1 # not a double click on the same M
-click 1243 805
+click 1231 518
 for _ in $(seq 1 40); do [[ "$(audio_1)" == true ]] && break; sleep 0.5; done
-click 1347 805
+click 1231 827
 for _ in $(seq 1 40); do [[ "$(master_mute)" == true ]] && break; sleep 0.5; done
-[[ "$(audio_1)" == true && "$(master_mute)" == true ]] && pass "mixer at the edge: input 1 on, master muted" \
-    || fail "mixer: input 1 on $(audio_1), master mute $(master_mute)"
-click 1347 805
+[[ "$(audio_1)" == true && "$(master_mute)" == true ]] && pass "audio column: input 1 on, master muted" \
+    || fail "audio column: input 1 on $(audio_1), master mute $(master_mute)"
+click 1231 827
 for _ in $(seq 1 40); do [[ "$(master_mute)" == false ]] && break; sleep 0.5; done
+click 1256 518
+for _ in $(seq 1 40); do [[ "$(listen_1)" != off ]] && break; sleep 0.5; done
+[[ "$(listen_1)" != off ]] && pass "audio column: S solos input 1" || fail "input 1 listen $(listen_1) after S"
+sleep 1 # "Solo off" shows once the Console has the new state
+click 1300 123
+for _ in $(seq 1 40); do [[ "$(listen_1)" == off ]] && break; sleep 0.5; done
+[[ "$(listen_1)" == off ]] && pass "audio column: Solo off ends it" || fail "input 1 listen $(listen_1) after Solo off"
+click 1231 555
+for _ in $(seq 1 40); do [[ "$(phones_1)" == false ]] && break; sleep 0.5; done
+[[ "$(phones_1)" == false ]] && pass "audio column: PH takes input 1 off the headphones" \
+    || fail "input 1 on the headphones $(phones_1) after PH"
+sleep 1
+click 1231 555
+click 1400 630
+for _ in $(seq 1 40); do [[ "$(buses)" == 1 ]] && break; sleep 0.5; done
+[[ "$(buses)" == 1 ]] && pass "audio column: + Bus adds a bus" || fail "$(buses) buses after + Bus"
+# The Audio page adds its own further on.
+act "{\"action\":\"remove_bus\",\"bus\":\"$(state | jq -r '.buses[0].id')\"}"
+for _ in $(seq 1 40); do [[ "$(buses)" == 0 ]] && break; sleep 0.5; done
 # Two streams, not started: the output bar offers to start both (STR.1).
 for port in 9921 9922; do
     curl -sf -X POST "$CORE/actions" -H 'content-type: application/json' \

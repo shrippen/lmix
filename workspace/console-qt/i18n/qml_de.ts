@@ -2665,7 +2665,7 @@
       <translation>Programm auf Schwarz und zurück (SWI.9); Show und Ausgänge laufen weiter</translation>
     </message>
     <message>
-      <location line="+88" />
+      <location line="+90" />
       <source>Layout %1 %2</source>
       <translation>Layout %1 %2</translation>
     </message>
@@ -2930,43 +2930,205 @@
   <context>
     <name>NarrowMixer</name>
     <message>
-      <location filename="../qml/NarrowMixer.qml" line="+49" />
+      <location filename="../qml/NarrowMixer.qml" line="+126" />
       <source>Audio mixer</source>
       <translation>Tonmischer</translation>
     </message>
     <message>
-      <location line="+11" />
-      <source>Audio</source>
-      <translation>Ton</translation>
-    </message>
-    <message>
-      <location line="+6" />
+      <location line="+31" />
+      <location line="+305" />
       <source>Audio page ›</source>
       <translation>Ton-Seite ›</translation>
     </message>
     <message>
-      <location line="+1" />
+      <location line="-304" />
       <source>Open the Audio page</source>
       <translation>Ton-Seite öffnen</translation>
     </message>
     <message>
-      <location line="+8" />
+      <location line="+9" />
       <source>No sound</source>
       <translation>Kein Ton</translation>
     </message>
     <message>
-      <location line="+27" />
-      <source>MST</source>
-      <comment>master, short</comment>
-      <translation>MST</translation>
+      <location line="-61" />
+      <source>PRE %1</source>
+      <comment>bus taken before the faders, n inputs</comment>
+      <translation>PRE %1</translation>
     </message>
     <message>
       <location line="+1" />
+      <source>%1 IN</source>
+      <comment>n inputs send to the bus</comment>
+      <translation>%1 IN</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Inputs sending: %1, before the faders</source>
+      <translation>Inputs, die senden: %1, vor den Fadern</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Inputs sending: %1, after the faders</source>
+      <translation>Inputs, die senden: %1, nach den Fadern</translation>
+    </message>
+    <message>
+      <location line="+26" />
+      <source>Audio · %1 inputs</source>
+      <translation>Ton · %1 Inputs</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Solo off</source>
+      <translation>Solo aus</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>The headphones hear only the solos. Click: all again.</source>
+      <translation>Der Kopfhörer hört nur die Solos. Klick: wieder alle.</translation>
+    </message>
+    <message>
+      <location line="+52" />
+      <source>Height of the output paths</source>
+      <translation>Höhe der Ausgangswege</translation>
+    </message>
+    <message>
+      <location line="+22" />
+      <source>Output paths · %1</source>
+      <translation>Ausgangswege · %1</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>+ Bus</source>
+      <translation>+ Bus</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>A mix of its own for an output: in-ear, a stream, a recording.</source>
+      <translation>Eine eigene Mischung für einen Ausgang: In-Ear, Stream, Aufnahme.</translation>
+    </message>
+    <message>
+      <location line="+31" />
+      <location line="+59" />
       <source>Master</source>
       <translation>Master</translation>
     </message>
     <message>
-      <location line="+46" />
+      <location line="-58" />
+      <source>PGM</source>
+      <comment>program sound, short</comment>
+      <translation>PGM</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Program sound</source>
+      <translation>Programm-Ton</translation>
+    </message>
+    <message>
+      <location line="+14" />
+      <location line="+43" />
+      <source>Headphones</source>
+      <translation>Kopfhörer</translation>
+    </message>
+    <message>
+      <location line="-42" />
+      <source>MON</source>
+      <comment>listening, short</comment>
+      <translation>MON</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Listening</source>
+      <translation>Abhören</translation>
+    </message>
+    <message>
+      <location line="+42" />
+      <source>Bus “%1”</source>
+      <translation>Bus „%1“</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Input %1 %2</source>
+      <translation>Input %1 %2</translation>
+    </message>
+    <message>
+      <location line="+15" />
+      <source>Sends to buses</source>
+      <translation>Sends an Busse</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>No bus yet. “+ Bus” below adds one.</source>
+      <translation>Noch kein Bus. „+ Bus“ unten legt einen an.</translation>
+    </message>
+    <message>
+      <location line="+22" />
+      <source>Send to %1</source>
+      <translation>Send an %1</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <location line="+253" />
+      <source>off</source>
+      <translation>aus</translation>
+    </message>
+    <message>
+      <location line="-245" />
+      <source>Channel strip: EQ, compressor …</source>
+      <translation>Kanalzug: EQ, Kompressor …</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>Sound follows picture</source>
+      <translation>Ton folgt Bild</translation>
+    </message>
+    <message>
+      <location line="+15" />
+      <source>Before the faders</source>
+      <translation>Vor den Fadern</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>On: the sends ignore the channel faders and on/off (a monitor mix).</source>
+      <translation>An: Die Sends übergehen Kanalfader und Ein/Aus (eine Monitormischung).</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Hears every input with PH at its level there; while one is solo, only the solos.</source>
+      <translation>Hört jeden Input mit KH in seiner Lautstärke dort; bei Solo nur die Solos.</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>Outputs with it: %1</source>
+      <translation>Ausgänge damit: %1</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>No output carries it yet; an output takes it when it is added.</source>
+      <translation>Noch kein Ausgang führt ihn; ein Ausgang wählt ihn beim Anlegen.</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Remove bus</source>
+      <translation>Bus löschen</translation>
+    </message>
+    <message>
+      <location line="+12" />
+      <source>Every output without a bus carries the master.</source>
+      <translation>Jeder Ausgang ohne Bus führt den Master.</translation>
+    </message>
+    <message>
+      <location line="+28" />
+      <source>Remove %1?</source>
+      <translation>%1 entfernen?</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Every input's send to it goes with it.</source>
+      <translation>Die Sends aller Inputs an diesen Bus fallen mit weg.</translation>
+    </message>
+    <message>
+      <location line="+47" />
       <source>Volume of %1</source>
       <translation>Lautstärke von %1</translation>
     </message>
@@ -2976,30 +3138,124 @@
       <translation>%1: %2</translation>
     </message>
     <message>
-      <location line="+10" />
+      <location line="+49" />
+      <location line="+136" />
       <source>M</source>
       <comment>mute, short</comment>
       <translation>M</translation>
     </message>
     <message>
-      <location line="+1" />
+      <location line="-134" />
+      <location line="+136" />
       <source>Mute %1</source>
       <translation>%1 stumm schalten</translation>
     </message>
     <message>
-      <location line="+0" />
+      <location line="-136" />
+      <location line="+136" />
       <source>Unmute %1</source>
       <translation>Ton an für %1</translation>
     </message>
     <message>
-      <location line="+2" />
+      <location line="-135" />
+      <location line="+136" />
       <source>%1 is on. Click: mute.</source>
       <translation>%1 ist an. Klick: stumm.</translation>
     </message>
     <message>
-      <location line="+0" />
+      <location line="-136" />
+      <location line="+136" />
       <source>%1 is muted. Click: on.</source>
       <translation>%1 ist stumm. Klick: an.</translation>
+    </message>
+    <message>
+      <location line="-132" />
+      <location line="+146" />
+      <source>S</source>
+      <comment>solo, short</comment>
+      <translation>S</translation>
+    </message>
+    <message>
+      <location line="-144" />
+      <source>Solo %1</source>
+      <translation>Solo %1</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Solo: only this input on the headphones</source>
+      <translation>Solo: nur dieser Input auf dem Kopfhörer</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>PH</source>
+      <comment>on the headphones, short</comment>
+      <translation>KH</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>%1 on the headphones</source>
+      <translation>%1 auf dem Kopfhörer</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>On the headphones. Click: off.</source>
+      <translation>Auf dem Kopfhörer. Klick: aus.</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Not on the headphones. Click: on.</source>
+      <translation>Nicht auf dem Kopfhörer. Klick: an.</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <location line="+122" />
+      <source>More for %1</source>
+      <translation>Mehr zu %1</translation>
+    </message>
+    <message>
+      <location line="-121" />
+      <source>Sends to buses, channel strip</source>
+      <translation>Sends an Busse, Kanalzug</translation>
+    </message>
+    <message>
+      <location line="+12" />
+      <source>Level of %1 on the headphones</source>
+      <translation>Lautstärke von %1 auf dem Kopfhörer</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>On the headphones: %1</source>
+      <translation>Auf dem Kopfhörer: %1</translation>
+    </message>
+    <message>
+      <location line="+58" />
+      <source>Name of the bus</source>
+      <translation>Name des Busses</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>%1 · click and type: rename</source>
+      <translation>%1 · klicken und tippen: umbenennen</translation>
+    </message>
+    <message>
+      <location line="+47" />
+      <source>Tap, outputs, remove</source>
+      <translation>Abgriff, Ausgänge, löschen</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>More settings</source>
+      <translation>Mehr Einstellungen</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Listen to %1</source>
+      <translation>%1 abhören</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Listen to this bus on the headphones</source>
+      <translation>Diesen Bus auf dem Kopfhörer abhören</translation>
     </message>
   </context>
   <context>
@@ -3145,12 +3401,12 @@
       <translation>Ton</translation>
     </message>
     <message>
-      <location line="+75" />
+      <location line="+82" />
       <source>of the source</source>
       <translation>der Quelle</translation>
     </message>
     <message>
-      <location line="-74" />
+      <location line="-81" />
       <source>Target</source>
       <translation>Ziel</translation>
     </message>
@@ -3171,22 +3427,22 @@
     </message>
     <message>
       <location line="+17" />
-      <location line="+52" />
+      <location line="+59" />
       <source>Multiview</source>
       <translation>Multiview</translation>
     </message>
     <message>
-      <location line="-49" />
+      <location line="-56" />
       <source>Program on the left</source>
       <translation>Programm links</translation>
     </message>
     <message>
-      <location line="+7" />
+      <location line="+11" />
       <source>Level meters</source>
       <translation>Pegelanzeigen</translation>
     </message>
     <message>
-      <location line="+13" />
+      <location line="+16" />
       <source>Recording</source>
       <translation>Aufnahme</translation>
     </message>
@@ -3586,7 +3842,7 @@
       <translation>44,1 kHz</translation>
     </message>
     <message>
-      <location line="+8" />
+      <location line="+12" />
       <source>Package</source>
       <translation>Paket</translation>
     </message>

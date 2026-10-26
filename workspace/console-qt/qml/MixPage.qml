@@ -51,6 +51,8 @@ AppPage {
         property real monitorHeight: Kirigami.Units.gridUnit * 15
         /** Width of the audio column at the right edge, px. */
         property real mixerWidth: Kirigami.Units.gridUnit * 12
+        /** Height of the output paths at the foot of the audio column, px; 0: as many rows as they need. */
+        property real mixerPathsHeight: 0
         /** Only the switching essentials (UI.7). */
         property bool simple: false
         /** Ids of collapsed inputs, as JSON (UI.3). */
@@ -829,6 +831,8 @@ AppPage {
             show: root.show
             act: root.act
             levels: root.levels
+            pathsHeight: viewSettings.mixerPathsHeight
+            onPathsHeightMoved: h => viewSettings.mixerPathsHeight = h
             onAudioPageRequested: root.shell.showPage("audio")
         }
     }

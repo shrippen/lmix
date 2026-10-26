@@ -265,6 +265,99 @@ pub fn running_time(since_ms: u64, now_ms: u64) -> String {
     format!("{}:{:02}:{:02}", secs / 3600, secs / 60 % 60, secs % 60)
 }
 
+/// Short forms of words in names of inputs and buses, English and German.
+const SHORT_WORDS: &[(&str, &str)] = &[
+    ("MASTER", "MSTR"),
+    ("HEADPHONES", "PHN"),
+    ("KOPFHÖRER", "KH"),
+    ("CAMERA", "CAM"),
+    ("KAMERA", "CAM"),
+    ("MICROPHONE", "MIC"),
+    ("MIKROFON", "MIC"),
+    ("PRESENTER", "PRES"),
+    ("MODERATOR", "MOD"),
+    ("MODERATION", "MOD"),
+    ("GUEST", "GST"),
+    ("GAST", "GST"),
+    ("PHONE", "TEL"),
+    ("TELEFON", "TEL"),
+    ("ZUSCHALTUNG", "ZU"),
+    ("PRESENTATION", "PRES"),
+    ("PRÄSENTATION", "PRÄS"),
+    ("PLAYOUT", "MAZ"),
+    ("EINSPIELER", "MAZ"),
+    ("MUSIC", "MUS"),
+    ("MUSIKBETT", "MUSIK"),
+    ("STREAM", "STRM"),
+    ("RECORDING", "REC"),
+    ("AUFNAHME", "REC"),
+    ("BAND", "BND"),
+    ("IN-EAR", "IEM"),
+    ("LAPTOP", "LPT"),
+    ("AUDIENCE", "AUD"),
+    ("PUBLIKUM", "PUB"),
+];
+
+/// `name` in at most `max` characters, in capitals, for a narrow strip:
+/// first the short forms of known words, then the words without their
+/// vowels, then the first word cut and the initials of the others. Numbers
+/// stay whole (they tell "Camera 1" from "Camera 2"), even past `max`.
+pub fn short_name(name: &str, max: usize) -> String {
+    let len = |s: &str| s.chars().count();
+    let up = name.trim().to_uppercase();
+    if len(&up) <= max {
+        return up;
+    }
+    let fixed = |w: &str| {
+        SHORT_WORDS
+            .iter()
+            .find(|(long, _)| *long == w)
+            .map(|(_, short)| *short)
+    };
+    let short = |w: &str| SHORT_WORDS.iter().any(|(_, s)| *s == w);
+    let mut words: Vec<String> = up
+        .split(|c: char| c.is_whitespace() || c == '_')
+        .filter(|w| !w.is_empty())
+        .map(|w| fixed(w).unwrap_or(w).to_string())
+        .collect();
+    if len(&words.join(" ")) <= max {
+        return words.join(" ");
+    }
+    if len(&words.concat()) <= max {
+        return words.concat();
+    }
+    let number = |w: &str| w.chars().all(|c| c.is_ascii_digit());
+    for word in &mut words {
+        if !number(word) && !short(word) {
+            let mut chars = word.chars();
+            let first = chars.next().into_iter();
+            *word = first
+                .chain(chars.filter(|c| !"AEIOUÄÖÜ".contains(*c)))
+                .collect();
+        }
+    }
+    if len(&words.concat()) <= max {
+        return words.concat();
+    }
+    let digits: String = words
+        .iter()
+        .filter(|w| number(w))
+        .map(String::as_str)
+        .collect();
+    let rest: Vec<&String> = words.iter().filter(|w| !number(w)).collect();
+    let room = max.saturating_sub(len(&digits)).max(1);
+    let letters: String = match rest.as_slice() {
+        [] => String::new(),
+        [one] => one.to_string(),
+        [first, others @ ..] => {
+            let cut = room.saturating_sub(others.len()).max(1);
+            let initials = others.iter().filter_map(|w| w.chars().next());
+            first.chars().take(cut).chain(initials).collect()
+        }
+    };
+    letters.chars().take(room).chain(digits.chars()).collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -409,6 +502,31 @@ mod tests {
         assert_eq!(limits["buses"], lmix_types::BUSES);
         assert_eq!(limits["name_max"], lmix_types::bus::BUS_NAME_MAX);
         assert_eq!(values("nope"), None);
+    }
+
+    #[test]
+    fn short_names_fit_and_keep_their_numbers() {
+        assert_eq!(short_name("Stream", 6), "STREAM");
+        assert_eq!(short_name("Master", 5), "MSTR");
+        assert_eq!(short_name("Kopfhörer", 5), "KH");
+        assert_eq!(short_name("Headphones", 5), "PHN");
+        assert_eq!(short_name("Camera 12", 6), "CAM 12");
+        assert_eq!(short_name("Camera 12", 5), "CAM12");
+        assert_eq!(short_name("In-Ear Band", 7), "IEM BND");
+        assert_eq!(short_name("Mikrofon Gast", 5), "MICG");
+        assert_eq!(short_name("Interview", 5), "INTRV");
+        assert_eq!(short_name("Laptop Präsentation", 5), "LPTP");
+        assert_eq!(short_name("Telefon Zuschaltung Studio", 5), "TELZS");
+        assert_eq!(short_name("Atmo Publikum 2", 4), "ATP2");
+        assert_eq!(short_name("Kamera 123", 3), "C123");
+        assert_eq!(short_name("  ", 3), "");
+        for (name, max) in [
+            ("Einspieler Intro", 4),
+            ("Wohnzimmer Lampe", 3),
+            ("Schönes Grün", 5),
+        ] {
+            assert!(short_name(name, max).chars().count() <= max, "{name}");
+        }
     }
 
     #[test]
