@@ -2930,18 +2930,18 @@
   <context>
     <name>NarrowMixer</name>
     <message>
-      <location filename="../qml/NarrowMixer.qml" line="+126" />
+      <location filename="../qml/NarrowMixer.qml" line="+128" />
       <source>Audio mixer</source>
       <translation>Tonmischer</translation>
     </message>
     <message>
       <location line="+31" />
-      <location line="+305" />
+      <location line="+357" />
       <source>Audio page ›</source>
       <translation>Ton-Seite ›</translation>
     </message>
     <message>
-      <location line="-304" />
+      <location line="-356" />
       <source>Open the Audio page</source>
       <translation>Ton-Seite öffnen</translation>
     </message>
@@ -3008,13 +3008,13 @@
       <translation>Eine eigene Mischung für einen Ausgang: In-Ear, Stream, Aufnahme.</translation>
     </message>
     <message>
-      <location line="+31" />
-      <location line="+59" />
+      <location line="+39" />
+      <location line="+58" />
       <source>Master</source>
       <translation>Master</translation>
     </message>
     <message>
-      <location line="-58" />
+      <location line="-57" />
       <source>PGM</source>
       <comment>program sound, short</comment>
       <translation>PGM</translation>
@@ -3026,12 +3026,12 @@
     </message>
     <message>
       <location line="+14" />
-      <location line="+43" />
+      <location line="+42" />
       <source>Headphones</source>
       <translation>Kopfhörer</translation>
     </message>
     <message>
-      <location line="-42" />
+      <location line="-41" />
       <source>MON</source>
       <comment>listening, short</comment>
       <translation>MON</translation>
@@ -3042,7 +3042,7 @@
       <translation>Abhören</translation>
     </message>
     <message>
-      <location line="+42" />
+      <location line="+41" />
       <source>Bus “%1”</source>
       <translation>Bus „%1“</translation>
     </message>
@@ -3052,7 +3052,7 @@
       <translation>Input %1 %2</translation>
     </message>
     <message>
-      <location line="+15" />
+      <location line="+27" />
       <source>Sends to buses</source>
       <translation>Sends an Busse</translation>
     </message>
@@ -3062,18 +3062,18 @@
       <translation>Noch kein Bus. „+ Bus“ unten legt einen an.</translation>
     </message>
     <message>
-      <location line="+22" />
+      <location line="+24" />
       <source>Send to %1</source>
       <translation>Send an %1</translation>
     </message>
     <message>
       <location line="+8" />
-      <location line="+253" />
+      <location line="+288" />
       <source>off</source>
       <translation>aus</translation>
     </message>
     <message>
-      <location line="-245" />
+      <location line="-281" />
       <source>Channel strip: EQ, compressor …</source>
       <translation>Kanalzug: EQ, Kompressor …</translation>
     </message>
@@ -3083,7 +3083,12 @@
       <translation>Ton folgt Bild</translation>
     </message>
     <message>
-      <location line="+15" />
+      <location line="+18" />
+      <source>Name</source>
+      <translation>Name</translation>
+    </message>
+    <message>
+      <location line="+31" />
       <source>Before the faders</source>
       <translation>Vor den Fadern</translation>
     </message>
@@ -3108,7 +3113,7 @@
       <translation>Noch kein Ausgang führt ihn; ein Ausgang wählt ihn beim Anlegen.</translation>
     </message>
     <message>
-      <location line="+7" />
+      <location line="+6" />
       <source>Remove bus</source>
       <translation>Bus löschen</translation>
     </message>
@@ -3118,7 +3123,7 @@
       <translation>Jeder Ausgang ohne Bus führt den Master.</translation>
     </message>
     <message>
-      <location line="+28" />
+      <location line="+30" />
       <source>Remove %1?</source>
       <translation>%1 entfernen?</translation>
     </message>
@@ -3139,44 +3144,44 @@
     </message>
     <message>
       <location line="+49" />
-      <location line="+136" />
+      <location line="+113" />
       <source>M</source>
       <comment>mute, short</comment>
       <translation>M</translation>
     </message>
     <message>
-      <location line="-134" />
-      <location line="+136" />
+      <location line="-109" />
+      <location line="+113" />
       <source>Mute %1</source>
       <translation>%1 stumm schalten</translation>
     </message>
     <message>
-      <location line="-136" />
-      <location line="+136" />
+      <location line="-113" />
+      <location line="+113" />
       <source>Unmute %1</source>
       <translation>Ton an für %1</translation>
     </message>
     <message>
-      <location line="-135" />
-      <location line="+136" />
+      <location line="-112" />
+      <location line="+113" />
       <source>%1 is on. Click: mute.</source>
       <translation>%1 ist an. Klick: stumm.</translation>
     </message>
     <message>
-      <location line="-136" />
-      <location line="+136" />
+      <location line="-113" />
+      <location line="+113" />
       <source>%1 is muted. Click: on.</source>
       <translation>%1 ist stumm. Klick: an.</translation>
     </message>
     <message>
-      <location line="-132" />
-      <location line="+146" />
+      <location line="-109" />
+      <location line="+123" />
       <source>S</source>
       <comment>solo, short</comment>
       <translation>S</translation>
     </message>
     <message>
-      <location line="-144" />
+      <location line="-121" />
       <source>Solo %1</source>
       <translation>Solo %1</translation>
     </message>
@@ -3208,17 +3213,17 @@
     </message>
     <message>
       <location line="+7" />
-      <location line="+122" />
+      <location line="+99" />
       <source>More for %1</source>
       <translation>Mehr zu %1</translation>
     </message>
     <message>
-      <location line="-121" />
+      <location line="-98" />
       <source>Sends to buses, channel strip</source>
       <translation>Sends an Busse, Kanalzug</translation>
     </message>
     <message>
-      <location line="+12" />
+      <location line="+11" />
       <source>Level of %1 on the headphones</source>
       <translation>Lautstärke von %1 auf dem Kopfhörer</translation>
     </message>
@@ -3228,17 +3233,17 @@
       <translation>Auf dem Kopfhörer: %1</translation>
     </message>
     <message>
-      <location line="+58" />
+      <location line="+52" />
+      <source>%1 · click: rename</source>
+      <translation>%1 · Klick: umbenennen</translation>
+    </message>
+    <message>
+      <location line="-306" />
       <source>Name of the bus</source>
       <translation>Name des Busses</translation>
     </message>
     <message>
-      <location line="+3" />
-      <source>%1 · click and type: rename</source>
-      <translation>%1 · klicken und tippen: umbenennen</translation>
-    </message>
-    <message>
-      <location line="+47" />
+      <location line="+340" />
       <source>Tap, outputs, remove</source>
       <translation>Abgriff, Ausgänge, löschen</translation>
     </message>

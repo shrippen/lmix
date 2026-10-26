@@ -199,10 +199,11 @@ for _ in $(seq 1 40); do [[ "$(phones_1)" == true ]] && break; sleep 0.5; done
 click 1400 630
 for _ in $(seq 1 40); do [[ "$(buses)" == 1 ]] && break; sleep 0.5; done
 [[ "$(buses)" == 1 ]] && pass "audio column: + Bus adds a bus" || fail "$(buses) buses after + Bus"
-# Its name field: click, type, Enter renames it to the whole name typed
-# (not to the short form the field shows again after it).
+# Its name opens its menu with the name to edit: Enter renames it to the
+# whole name typed (not to the short form the strip shows).
 sleep 1
-click 1348 743
+click 1348 751
+sleep 1
 DISPLAY="$DISPLAY_NO" xdotool key ctrl+a type "Stream Mix"
 DISPLAY="$DISPLAY_NO" xdotool key Return
 bus_name() { state | jq -r '.buses[0].name'; }
@@ -210,6 +211,42 @@ for _ in $(seq 1 40); do [[ "$(bus_name)" == "Stream Mix" ]] && break; sleep 0.5
 sleep 1
 [[ "$(bus_name)" == "Stream Mix" ]] && pass "audio column: Enter in the name field renames the bus" \
     || fail "bus named '$(bus_name)' after typing Stream Mix and Enter"
+# Esc drops what was typed; afterwards no field has the keys.
+click 1348 751
+sleep 1
+DISPLAY="$DISPLAY_NO" xdotool key ctrl+a type "Weg"
+DISPLAY="$DISPLAY_NO" xdotool key Escape
+sleep 1
+DISPLAY="$DISPLAY_NO" xdotool type "x"
+sleep 1
+[[ "$(bus_name)" == "Stream Mix" ]] && pass "audio column: Esc in the bus menu keeps the name" \
+    || fail "bus named '$(bus_name)' after Esc in the bus menu"
+# The bus's M, its S and "Solo off", its tap in the ⋯ menu.
+bus_mute() { state | jq '.buses[0].mute'; }
+bus_listen() { state | jq '.buses[0].listen'; }
+bus_pre() { state | jq '.buses[0].pre_fader'; }
+click 1335 793
+for _ in $(seq 1 40); do [[ "$(bus_mute)" == true ]] && break; sleep 0.5; done
+[[ "$(bus_mute)" == true ]] && pass "audio column: M mutes the bus" || fail "bus mute $(bus_mute) after its M"
+sleep 1
+click 1335 793
+for _ in $(seq 1 40); do [[ "$(bus_mute)" == false ]] && break; sleep 0.5; done
+click 1347 827
+for _ in $(seq 1 40); do [[ "$(bus_listen)" == true ]] && break; sleep 0.5; done
+[[ "$(bus_listen)" == true ]] && pass "audio column: S listens to the bus" || fail "bus listen $(bus_listen) after its S"
+sleep 1
+click 1300 123
+for _ in $(seq 1 40); do [[ "$(bus_listen)" == false ]] && break; sleep 0.5; done
+[[ "$(bus_listen)" == false ]] && pass "audio column: Solo off ends listening to the bus" \
+    || fail "bus listen $(bus_listen) after Solo off"
+click 1360 793
+sleep 1
+click 1190 605
+for _ in $(seq 1 40); do [[ "$(bus_pre)" == true ]] && break; sleep 0.5; done
+[[ "$(bus_pre)" == true ]] && pass "audio column: the bus menu takes the bus before the faders" \
+    || fail "bus pre_fader $(bus_pre) after the switch in its menu"
+DISPLAY="$DISPLAY_NO" xdotool key Escape
+sleep 1
 # Its send in input 1's menu: a drag goes on over the states it brings
 # (one step only, if the rows were built anew with every state).
 click 1256 555

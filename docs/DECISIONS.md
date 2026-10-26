@@ -4779,7 +4779,8 @@ Ton-Seite.
   ⋯ (Sends an Busse, Kanalzug, Ton folgt Bild, Ton-Seite) und darunter die
   Lautstärke auf dem Kopfhörer. „Solo aus“ in der Kopfzeile, solange ein Solo
   oder Abhören an ist.
-- Je Bus: Name im Feld (klicken und tippen benennt um), darunter, was er
+- Je Bus: der Name (ein Klick öffnet sein ⋯-Menü mit dem Namen im Feld;
+  Enter oder Schließen benennt um, Esc nicht), darunter, was er
   führt (`3 IN`, vor den Fadern `PRE 3`, höchstens 5 Zeichen), M, ⋯ (Abgriff,
   Ausgänge mit ihm, Bus löschen mit Rückfrage) und S (auf dem Kopfhörer
   abhören). Master (PGM) und Kopfhörer (MON) haben M und ⋯; der Kopfhörer
@@ -4789,11 +4790,18 @@ Ton-Seite.
   feste Kürzel deutsch und englisch (Master → MSTR, Kamera/Camera → CAM …),
   dann Vokale weg, dann erstes Wort gekürzt und Anfangsbuchstaben; Zahlen
   bleiben ganz. Der volle Name steht im Tooltip. Die Zeichenzahl folgt der
-  Breite des Streifens bzw. des Namensfelds.
+  Breite des Streifens.
+- Das Namensfeld steht im Menü, nicht im Streifen: im Streifen behielt es
+  den Fokus, weil Klicks auf Knöpfe und Fader ihn nicht nehmen, und die
+  Tasten der Show (Ziffern für Übergänge) landeten im Busnamen.
+- Das Menü legt seine Spalte vor dem Messen neu an (`forceLayout`): sonst
+  maß es die Größe des vorigen Inhalts und legte sich unten über den eigenen
+  Knopf. Gehört in `KantePopover.openAt` (todo).
 - „Ausgang zuordnen“ aus dem Entwurf fehlt: es gibt keine Aktion, die den Bus
   eines bestehenden Ausgangs ändert (todo).
 
 **Geprüft**: console-qt-Tests (`short_names_fit_and_keep_their_numbers`),
 `scripts/test-console-qt.sh` (M an Input und Master, S und „Solo aus“, KH,
-„+ Bus“, Umbenennen mit Enter, Griff der Ausgangswege) und Screenshots auf
+„+ Bus“, Umbenennen mit Enter und Esc, M, S und Abgriff am Bus, Send im
+Menü, Griff der Ausgangswege) und Screenshots auf
 Xvfb mit zehn Inputs und zwei Bussen.

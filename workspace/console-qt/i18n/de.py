@@ -1061,7 +1061,7 @@ DE = {
     '%1 IN': '%1 IN',
     'PRE %1': 'PRE %1',
     '%1 on the headphones': '%1 auf dem Kopfhörer',
-    '%1 · click and type: rename': '%1 · klicken und tippen: umbenennen',
+    '%1 · click: rename': '%1 · Klick: umbenennen',
     'Inputs sending: %1, after the faders': 'Inputs, die senden: %1, nach den Fadern',
     'Inputs sending: %1, before the faders': 'Inputs, die senden: %1, vor den Fadern',
     '+ Bus': '+ Bus',

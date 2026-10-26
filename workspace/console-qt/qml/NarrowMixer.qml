@@ -67,8 +67,8 @@ KanteCard {
     readonly property real smallCharWidth: smallMono.averageCharacterWidth
     /** The strip whose ⋯ menu is open, "" without. */
     readonly property string menuKey: menu.key
-    function openMenu(key, item) {
-        menu.openFor(key, item)
+    function openMenu(key, item, rename) {
+        menu.openFor(key, item, rename === true)
     }
 
     FontMetrics {
@@ -126,12 +126,6 @@ KanteCard {
     }
 
     Accessible.name: qsTr("Audio mixer")
-
-    // A click beside the fields ends editing a bus name (the strip buttons
-    // take no focus).
-    TapHandler {
-        onTapped: mixer.forceActiveFocus()
-    }
 
     ColumnLayout {
         id: column
@@ -254,8 +248,16 @@ KanteCard {
                 QQC2.ScrollBar.vertical: QQC2.ScrollBar {}
                 cellWidth: mixer.cellWidth
                 cellHeight: mixer.rowHeight(height, Math.ceil(pathStrips.count / mixer.perRow))
-                // A bus added or removed: from the top (the master first).
-                onCountChanged: positionViewAtBeginning()
+                // A bus added: show it; removed: from the top (the master first).
+                property int lastCount: 0
+                onCountChanged: {
+                    if (count > lastCount && lastCount > 0) {
+                        positionViewAtEnd()
+                    } else {
+                        positionViewAtBeginning()
+                    }
+                    lastCount = count
+                }
 
                 delegate: Loader {
                     id: path
@@ -313,7 +315,6 @@ KanteCard {
                             onVolumeMoved: v => mixer.act({ action: "set_bus", bus: bus.id, volume: v, mute: bus.mute })
                             onToggled: mixer.act({ action: "set_bus", bus: bus.id, volume: bus.volume, mute: !bus.mute })
                             onListenToggled: mixer.act({ action: "set_bus_listen", bus: bus.id, on: !bus.listen })
-                            onRenamed: name => mixer.act({ action: "rename_bus", bus: bus.id, name: name })
                         }
                     }
                 }
@@ -334,13 +335,20 @@ KanteCard {
         onClosed: key = ""
         // The content is a Column (no Layout): texts wrap at a set width.
 
-        function openFor(key, item) {
+        function openFor(key, item, rename) {
             if (menu.key === key && menu.opened) {
                 close()
                 return
             }
             menu.key = key
+            // The column lays out on the next frame: measured now, the menu
+            // would take the size of the one before and cover its button.
+            contentItem.forceLayout()
             openAt(item)
+            if (rename) {
+                nameField.forceActiveFocus()
+                nameField.selectAll()
+            }
             // The press that closed it was on this button: it stays closed.
             if (!menu.visible) {
                 menu.key = ""
@@ -414,6 +422,40 @@ KanteCard {
                 mixer.act({ action: "set_audio_follow", input: menu.input.number, follow: want })
             }
             KanteCheckSkin { control: followSwitch; shape: KanteCheckSkin.Shape.Switch }
+        }
+
+        // A bus: its name. In the menu, not the strip: a field there kept
+        // the focus and took the shortcut keys.
+        KanteTextField {
+            id: nameField
+            visible: menu.bus !== null
+            width: Kirigami.Units.gridUnit * 14
+            maximumLength: mixer.limits.name_max
+            Accessible.name: qsTr("Name of the bus")
+            placeholderText: qsTr("Name")
+            /** The bus being renamed: Enter and closing the menu both finish. */
+            property string busId: ""
+            Connections {
+                target: menu
+                function onAboutToShow() {
+                    nameField.busId = menu.bus ? menu.bus.id : ""
+                    nameField.text = menu.bus ? menu.bus.name : ""
+                }
+            }
+            onAccepted: menu.close()
+            // Esc: the name stays as it was.
+            Keys.onEscapePressed: {
+                busId = ""
+                menu.close()
+            }
+            onEditingFinished: {
+                const bus = mixer.buses.find(b => b.id === busId)
+                busId = ""
+                const wanted = text.trim()
+                if (bus && wanted.length > 0 && wanted !== bus.name) {
+                    mixer.act({ action: "rename_bus", bus: bus.id, name: wanted })
+                }
+            }
         }
 
         // A bus or the headphones: where the sends are taken.
@@ -604,6 +646,8 @@ KanteCard {
             columnSpacing: KanteStyle.unit(2)
             StripButton {
                 text: qsTr("M", "mute, short")
+                // The name says the state; "checked" would mean the opposite.
+                Accessible.checkable: false
                 emphasis: strip.input.audio.on ? KanteButton.Emphasis.Normal : KanteButton.Emphasis.Destructive
                 Accessible.name: strip.input.audio.on ? qsTr("Mute %1").arg(strip.fullName) : qsTr("Unmute %1").arg(strip.fullName)
                 tip: strip.input.audio.on ? qsTr("%1 is on. Click: mute.").arg(strip.fullName) : qsTr("%1 is muted. Click: on.").arg(strip.fullName)
@@ -639,16 +683,15 @@ KanteCard {
             to: 100
             stepSize: 1
             value: strip.phonesSend.level
-            opacity: strip.phonesSend.on ? 1 : 0.4
             Accessible.name: qsTr("Level of %1 on the headphones").arg(strip.fullName)
             QQC2.ToolTip.visible: hovered || pressed
             QQC2.ToolTip.text: qsTr("On the headphones: %1").arg(strip.phonesSend.on ? Math.round(value) : qsTr("off"))
-            onMoved: host.act({ action: "set_phones_send", input: strip.input.number, on: true, level: Math.round(value) })
+            onMoved: host.act({ action: "set_phones_send", input: strip.input.number, on: strip.phonesSend.on, level: Math.round(value) })
             KanteSliderSkin { control: phonesLevel }
         }
     }
 
-    /** A way out: the master, the headphones or a bus (`isBus`: name as a field, S to listen). */
+    /** A way out: the master, the headphones or a bus (`isBus`: the name opens the menu, S to listen). */
     component PathStrip: ColumnLayout {
         id: path
         required property var host
@@ -656,7 +699,7 @@ KanteCard {
         property string name: ""
         property string line: ""
         property string lineLong: ""
-        property color nameColor: Kirigami.Theme.textColor
+        property color nameColor: KanteStyle.textColor
         property var level: undefined
         property int volume: 0
         property bool on: true
@@ -665,7 +708,6 @@ KanteCard {
         signal volumeMoved(int volume)
         signal toggled()
         signal listenToggled()
-        signal renamed(string name)
         spacing: KanteStyle.unit(2)
 
         Fader {
@@ -674,8 +716,9 @@ KanteCard {
             volume: path.volume
             onMoved: v => path.volumeMoved(v)
         }
+        // The name; a bus's opens its menu with the name to edit.
         QQC2.Label {
-            visible: !path.isBus
+            id: nameLabel
             Layout.fillWidth: true
             text: host.core.shortName(path.name, host.nameChars)
             horizontalAlignment: Text.AlignHCenter
@@ -684,55 +727,17 @@ KanteCard {
             font: Qt.font({ family: host.smallFont.family, pointSize: host.smallFont.pointSize, bold: true })
             color: path.nameColor
             Accessible.ignored: true
-            HoverHandler { id: fixedHover }
-            QQC2.ToolTip.visible: fixedHover.hovered
+            HoverHandler {
+                id: nameHover
+                cursorShape: path.isBus ? Qt.PointingHandCursor : Qt.ArrowCursor
+            }
+            TapHandler {
+                enabled: path.isBus
+                onTapped: host.openMenu(path.key, pathMore, true)
+            }
+            QQC2.ToolTip.visible: nameHover.hovered
             QQC2.ToolTip.delay: Kirigami.Units.toolTipDelay
-            QQC2.ToolTip.text: path.name
-        }
-        // The bus's name: short while it is not edited, whole while it is.
-        KanteTextField {
-            id: nameField
-            visible: path.isBus
-            Layout.fillWidth: true
-            horizontalAlignment: TextInput.AlignHCenter
-            font: host.smallFont
-            maximumLength: host.limits.name_max
-            // Characters that fit the field, not the strip: it has a frame and padding.
-            readonly property int chars: Math.max(3, Math.floor((width - leftPadding - rightPadding) / host.smallCharWidth))
-            text: host.core.shortName(path.name, chars)
-            Accessible.name: qsTr("Name of the bus")
-            QQC2.ToolTip.visible: hovered && !activeFocus
-            QQC2.ToolTip.delay: Kirigami.Units.toolTipDelay
-            QQC2.ToolTip.text: qsTr("%1 · click and type: rename").arg(path.name)
-            /** Set while the name is edited: Enter brings editingFinished twice
-             *  (losing the focus, then the key), the second with the short form. */
-            property bool editing: false
-            onActiveFocusChanged: {
-                if (activeFocus) {
-                    editing = true
-                    text = path.name
-                    selectAll()
-                }
-            }
-            onAccepted: focus = false
-            // Esc: the name stays as it was.
-            Keys.onEscapePressed: {
-                editing = false
-                text = Qt.binding(() => host.core.shortName(path.name, nameField.chars))
-                focus = false
-            }
-            onEditingFinished: {
-                if (!editing) {
-                    return
-                }
-                editing = false
-                const wanted = text.trim()
-                if (wanted.length > 0 && wanted !== path.name) {
-                    path.renamed(wanted)
-                }
-                // Back to the show's name: the new one, or the old one when refused.
-                text = Qt.binding(() => host.core.shortName(path.name, nameField.chars))
-            }
+            QQC2.ToolTip.text: path.isBus ? qsTr("%1 · click: rename").arg(path.name) : path.name
         }
         QQC2.Label {
             Layout.fillWidth: true
@@ -754,6 +759,8 @@ KanteCard {
             columnSpacing: KanteStyle.unit(2)
             StripButton {
                 text: qsTr("M", "mute, short")
+                // The name says the state; "checked" would mean the opposite.
+                Accessible.checkable: false
                 emphasis: path.on ? KanteButton.Emphasis.Normal : KanteButton.Emphasis.Destructive
                 Accessible.name: path.on ? qsTr("Mute %1").arg(path.name) : qsTr("Unmute %1").arg(path.name)
                 tip: path.on ? qsTr("%1 is on. Click: mute.").arg(path.name) : qsTr("%1 is muted. Click: on.").arg(path.name)
