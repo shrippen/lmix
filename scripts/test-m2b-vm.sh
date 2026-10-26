@@ -104,10 +104,11 @@ is() { [[ "$("$1" "$2")" == "$3" ]]; }
 # "${TRACEABLE[@]}" <command…> runs the command so that gdb may attach to
 # it from outside: with yama's ptrace_scope 1 (Arch, Ubuntu) only a parent
 # may, and gdb is no parent of strom or lmix-core. prctl(PR_SET_PTRACER,
-# any) by syscall number (157 on x86-64): perl-base is in every image.
-# Only a help: without it (no yama, another CPU) the command runs as is.
+# any) by syscall number (157 on x86-64) in perl (perl-base on Ubuntu).
+# Only a help: without it (no yama, another CPU, no perl) the command
+# runs as is.
 TRACEABLE=()
-[[ "$(uname -m)" == x86_64 ]] \
+[[ "$(uname -m)" == x86_64 ]] && command -v perl >/dev/null \
     && TRACEABLE=(perl -e 'syscall(157, 0x59616d61, -1, 0, 0, 0) == 0 or warn "prctl: $!\n"; exec @ARGV or die "exec: $!"')
 # threads <pid> <file>: every thread's stack.
 threads() { gdb -p "$1" -batch -ex 'thread apply all bt' >"$2" 2>&1 || true; }
