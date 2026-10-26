@@ -895,7 +895,7 @@ AppPage {
                 Layout.fillWidth: true
                 visible: monitor.peakDb !== undefined
                 level: monitor.peakDb
-                scale: true
+                showScale: true
             }
         }
     }

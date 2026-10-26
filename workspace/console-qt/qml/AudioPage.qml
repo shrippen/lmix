@@ -306,7 +306,7 @@ AppPage {
                 KanteAudioMeter {
                     Layout.fillHeight: true
                     vertical: true
-                    scale: true
+                    showScale: true
                     level: root.levels[strip.input.id]
                 }
                 QQC2.Slider {

@@ -11,6 +11,8 @@ import "."
  *   firstBinMs  lower edge of the first bin (e.g. −100)
  *   binMs       width of a bin (e.g. 10)
  *   meanMs      mean deviation; NaN for none
+ *   bandMinMs, bandMaxMs  a target band (1.44, e.g. +10…+30 for laid-back), labelled with
+ *               bandText; NaN for none
  */
 Item {
     id: hist
@@ -19,6 +21,9 @@ Item {
     property real firstBinMs: -100
     property real binMs: 10
     property real meanMs: NaN
+    property real bandMinMs: NaN
+    property real bandMaxMs: NaN
+    property string bandText: "Ziel"
     property string unit: "ms"
     property string earlyText: "früh"
     property string lateText: "spät"
@@ -69,6 +74,16 @@ Item {
         return out
     }
 
+    function bandLabel() {
+        return bandText + " " + ms(Math.min(bandMinMs, bandMaxMs)) + "…" + ms(Math.max(bandMinMs, bandMaxMs)) + " " + unit
+    }
+    function rangeList() {
+        const n = counts ? counts.length : 0
+        if (isNaN(bandMinMs) || isNaN(bandMaxMs) || n === 0) return []
+        const at = function (v) { return Math.max(0, Math.min(n, (v - firstBinMs) / binMs)) }
+        return [{ from: at(Math.min(bandMinMs, bandMaxMs)), to: at(Math.max(bandMinMs, bandMaxMs)), label: bandLabel() }]
+    }
+
     implicitWidth: KanteStyle.unit(420)
     implicitHeight: KanteStyle.unit(200)
 
@@ -77,6 +92,7 @@ Item {
     Accessible.description: countText.arg(total)
         + (isNaN(meanMs) ? "" : ", " + meanText + " " + ms(meanMs) + " " + unit
            + (Math.round(meanMs) < 0 ? " (" + earlyText + ")" : Math.round(meanMs) > 0 ? " (" + lateText + ")" : ""))
+        + (isNaN(bandMinMs) || isNaN(bandMaxMs) ? "" : ", " + bandLabel())
 
     KanteBarChart {
         id: bars
@@ -87,6 +103,7 @@ Item {
         edgeLabels: hist.edges()
         edgeUnit: hist.unit
         markers: hist.markerList()
+        ranges: hist.rangeList()
         axis: true
         wholeSteps: true
         barFill: 0.9

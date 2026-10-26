@@ -4798,10 +4798,10 @@ Ton-Seite.
   geschlossen hat, öffnet es nicht wieder, und ein Feld im geschlossenen
   Menü behielte die Tasten. Umbenannt wird beim Schließen, nicht bei jedem
   Fokusverlust (ein Fensterwechsel benannte sonst halb Getipptes um).
-- Das Menü legt seine Spalte vor dem Messen neu an (`forceLayout`): sonst
-  maß es die Größe des vorigen Inhalts und legte sich unten über den eigenen
-  Knopf. Gehört in `KantePopover.openAt` (Kante #81); lmix lässt den Aufruf
-  nach dem nächsten Sync weg.
+- Wechselt der Inhalt des Menüs vor dem Öffnen, maß es die Größe des vorigen
+  und legte sich unten über den eigenen Knopf. Behoben in `KantePopover.openAt`
+  (Kante #81, legt die Spalte vor dem Messen an); lmix hat Kante 5633df3 (1.45,
+  Pegelmesser `showScale` statt `scale`).
 - „Ausgang zuordnen“ aus dem Entwurf fehlt: es gibt keine Aktion, die den Bus
   eines bestehenden Ausgangs ändert (todo).
 

@@ -372,9 +372,6 @@ KanteCard {
                 close()
             }
             menu.key = key
-            // The column lays out on the next frame: measured now, the menu
-            // would take the size of the one before and cover its button.
-            contentItem.forceLayout()
             openAt(item)
             reopening = false
             // The press that closed it was on this button: it stays closed.
