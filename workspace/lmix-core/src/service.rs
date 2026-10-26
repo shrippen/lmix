@@ -51,6 +51,9 @@ const MACHINE_INTERVAL: std::time::Duration = std::time::Duration::from_secs(2);
 pub const LEVEL_FLOOR_DB: f32 = -100.0;
 
 pub struct Service {
+    /// Itself, for work it hands to a task of its own (the failback of an
+    /// output a command left failed).
+    me: std::sync::Weak<Service>,
     switcher: Mutex<Switcher>,
     engine: Arc<dyn Engine>,
     events: broadcast::Sender<Event>,
@@ -140,7 +143,8 @@ impl Service {
         switcher.set_looks_available(engine.looks_available());
         let templates = titles::scan(None);
         switcher.set_templates(titles::catalog(&templates));
-        Arc::new(Self {
+        Arc::new_cyclic(|me| Self {
+            me: me.clone(),
             switcher: Mutex::new(switcher),
             engine,
             events,
@@ -1048,16 +1052,24 @@ impl Service {
         );
         self.publish(&sw);
         drop(sw);
+        self.fail_back_output(id);
+        true
+    }
 
+    /// Start failed output `id` again until it runs (`restart_output`),
+    /// unless that is going on already.
+    fn fail_back_output(&self, id: OutputId) {
+        let Some(me) = self.me.upgrade() else {
+            return;
+        };
         if self
             .failing_back
             .lock()
             .expect("failback lock")
-            .insert(error.flow)
+            .insert(output_flow_id(id))
         {
-            tokio::spawn(self.clone().restart_output(id));
+            tokio::spawn(me.restart_output(id));
         }
-        true
     }
 
     /// Start a failed output again until it runs, or the operator stopped
@@ -2044,6 +2056,10 @@ impl Service {
                     if restarted.is_ok() {
                         continue;
                     }
+                    // Failed: tried again until it runs, as after a crash
+                    // (also across an engine restart, which restores only
+                    // running outputs).
+                    self.fail_back_output(*id);
                 }
             }
             // The engine cut instead (or could not); no end will come.
@@ -3482,6 +3498,79 @@ mod tests {
             state.outputs[0].status,
             lmix_types::OutputStatus::Running { .. }
         ));
+    }
+
+    /// An output whose sound the engine could not move and whose start anew
+    /// failed too is started again, with the new bus, until it runs.
+    #[tokio::test(start_paused = true)]
+    async fn an_output_that_could_not_take_the_other_sound_fails_back() {
+        let engine = Arc::new(NullEngine::default());
+        let service = Service::new(4, engine.clone(), None);
+        service
+            .handle(Action::AddBus {
+                name: Some("Mix minus".into()),
+                pre_fader: false,
+            })
+            .await
+            .unwrap();
+        service
+            .handle(Action::AddOutput {
+                spec: lmix_types::OutputSpec::Srt {
+                    uri: "srt://cdn:9000".into(),
+                    video_kbps: 6000,
+                    encoding: Default::default(),
+                },
+                source: lmix_types::OutputSource::Program,
+                bus: None,
+                name: Some("Stream".into()),
+            })
+            .await
+            .unwrap();
+        let output = || lmix_types::OutputRef::Text("Stream".into());
+        service
+            .handle(Action::StartOutput { output: output() })
+            .await
+            .unwrap();
+        engine.refuse(true);
+        let _ = service
+            .handle(Action::SetOutputBus {
+                output: output(),
+                bus: Some(lmix_types::BusRef::Text("Mix minus".into())),
+            })
+            .await;
+        let state = service.state().await;
+        let bus = state.buses[0].id;
+        assert_eq!(state.outputs[0].bus, Some(bus));
+        assert!(
+            matches!(
+                state.outputs[0].status,
+                lmix_types::OutputStatus::Failed { .. }
+            ),
+            "{:?}",
+            state.outputs[0].status
+        );
+
+        // The first try of the failback fails as well, a later one runs.
+        tokio::time::sleep(FAILBACK_FIRST + std::time::Duration::from_millis(100)).await;
+        engine.refuse(false);
+        tokio::time::sleep(FAILBACK_MAX * 2).await;
+        let state = service.state().await;
+        assert!(
+            matches!(
+                state.outputs[0].status,
+                lmix_types::OutputStatus::Running { .. }
+            ),
+            "{:?}",
+            state.outputs[0].status
+        );
+        assert!(
+            matches!(
+                engine.log().last(),
+                Some(Command::StartOutput { bus: Some(b), .. }) if *b == bus
+            ),
+            "{:?}",
+            engine.log()
+        );
     }
 
     /// A new format the engine did not build is asked for again when the
