@@ -1080,19 +1080,27 @@ impl Service {
             tokio::time::sleep(wait).await;
             wait = (wait * 2).min(FAILBACK_MAX);
             let mut sw = self.switcher.lock().await;
-            let Some(command) = sw.restart_command(id) else {
-                break;
+            let done = match sw.restart_command(id) {
+                None => true,
+                Some(command) => {
+                    let back = self.execute(&mut sw, &[command]).await.is_ok();
+                    if back {
+                        tracing::info!(output = %id, "output back");
+                        self.publish(&sw);
+                    }
+                    back
+                }
             };
-            if self.execute(&mut sw, &[command]).await.is_ok() {
-                tracing::info!(output = %id, "output back");
-                self.publish(&sw);
+            if done {
+                // Under the switcher's lock: a failure after it starts a
+                // failback of its own.
+                self.failing_back
+                    .lock()
+                    .expect("failback lock")
+                    .remove(&output_flow_id(id));
                 break;
             }
         }
-        self.failing_back
-            .lock()
-            .expect("failback lock")
-            .remove(&output_flow_id(id));
     }
 
     async fn slot_failed(self: &Arc<Self>, error: &FlowError) {
@@ -2060,6 +2068,12 @@ impl Service {
                     // (also across an engine restart, which restores only
                     // running outputs).
                     self.fail_back_output(*id);
+                    if let Err(e) = restarted {
+                        first_error.get_or_insert(ActionError::Engine {
+                            message: format!("output failed, starting it again: {e}"),
+                        });
+                    }
+                    continue;
                 }
             }
             // The engine cut instead (or could not); no end will come.
@@ -3532,12 +3546,16 @@ mod tests {
             .await
             .unwrap();
         engine.refuse(true);
-        let _ = service
+        let refused = service
             .handle(Action::SetOutputBus {
                 output: output(),
                 bus: Some(lmix_types::BusRef::Text("Mix minus".into())),
             })
             .await;
+        assert!(
+            matches!(&refused, Err(ActionError::Engine { message }) if message.starts_with("output failed")),
+            "{refused:?}"
+        );
         let state = service.state().await;
         let bus = state.buses[0].id;
         assert_eq!(state.outputs[0].bus, Some(bus));
