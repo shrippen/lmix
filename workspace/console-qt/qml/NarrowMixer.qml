@@ -337,13 +337,21 @@ KanteCard {
         readonly property var input: !isMaster && !isPhones && !bus ? mixer.soundInputs.find(i => i.id === key) || null : null
         title: isMaster ? qsTr("Master") : isPhones ? qsTr("Headphones")
             : bus ? qsTr("Bus “%1”").arg(bus.name) : input ? qsTr("Input %1 %2").arg(input.number).arg(input.name) : ""
-        onClosed: key = ""
+        onClosed: {
+            // Closed to open another strip's: with a fade out, Qt may say
+            // so only while the new one opens.
+            if (!reopening) {
+                key = ""
+                focusName = false
+            }
+        }
+        property bool reopening: false
         /** Opened from the bus's name: its field takes the keys, but only
          *  once open. A click that just closed the menu does not reopen it,
          *  and a field in the closed menu would keep the show's keys. */
         property bool focusName: false
         onOpened: {
-            if (focusName) {
+            if (focusName && nameField.visible) {
                 nameField.forceActiveFocus()
                 nameField.selectAll()
             }
@@ -360,15 +368,15 @@ KanteCard {
             // Another strip's while open: closed first, so its name is kept
             // or renamed and the new one starts afresh.
             if (menu.opened) {
-                const name = focusName
+                reopening = true
                 close()
-                focusName = name
             }
             menu.key = key
             // The column lays out on the next frame: measured now, the menu
             // would take the size of the one before and cover its button.
             contentItem.forceLayout()
             openAt(item)
+            reopening = false
             // The press that closed it was on this button: it stays closed.
             if (!menu.visible) {
                 menu.key = ""
@@ -460,6 +468,14 @@ KanteCard {
             /** The name when it opened: only what was typed renames, not a
              *  rename from elsewhere while the menu was open. */
             property string openedName: ""
+            // Renamed elsewhere before anything was typed: show the new name.
+            readonly property string busName: menu.bus ? menu.bus.name : ""
+            onBusNameChanged: {
+                if (menu.opened && busId === (menu.bus ? menu.bus.id : "") && text === openedName) {
+                    openedName = busName
+                    text = busName
+                }
+            }
             Connections {
                 target: menu
                 function onAboutToShow() {

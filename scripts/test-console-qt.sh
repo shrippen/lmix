@@ -238,7 +238,8 @@ act '{"action":"set_audio","input":1,"on":true}'
 click 1360 793
 sleep 1
 act "{\"action\":\"rename_bus\",\"bus\":\"$(state | jq -r '.buses[0].id')\",\"name\":\"Stream B\"}"
-sleep 1
+for _ in $(seq 1 40); do [[ "$(bus_name)" == "Stream B" ]] && break; sleep 0.5; done
+sleep 1 # the Console has the new state
 click 1360 793
 sleep 1
 [[ "$(bus_name)" == "Stream B" ]] && pass "audio column: closing the bus menu keeps a name given elsewhere" \
