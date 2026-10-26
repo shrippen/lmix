@@ -119,10 +119,8 @@ KanteCard {
         return bus.pre_fader ? qsTr("Inputs sending: %1, before the faders").arg(n)
             : qsTr("Inputs sending: %1, after the faders").arg(n)
     }
-    /** Names of the outputs that carry `bus`. */
-    function outputsOf(bus) {
-        return outputs.filter(o => o.bus === bus.id).map(o => o.name)
-    }
+    /** Outputs that carry sound (screens show picture only). */
+    readonly property var soundOutputs: outputs.filter(o => o.spec.kind !== "display")
 
     /** Fits as many rows as the height takes, at least one; more scroll. */
     function rowHeight(height, rows) {
@@ -527,10 +525,26 @@ KanteCard {
             width: Kirigami.Units.gridUnit * 14
             wrapMode: Text.WordWrap
             color: KanteStyle.mutedTextColor
-            text: {
-                const names = menu.bus ? mixer.outputsOf(menu.bus) : []
-                return names.length > 0 ? qsTr("Outputs with it: %1").arg(names.join(", "))
-                    : qsTr("No output carries it yet; an output takes it when it is added.")
+            text: mixer.soundOutputs.length > 0
+                ? qsTr("Outputs with its sound (running ones play on):")
+                : qsTr("No output with sound yet.")
+        }
+        // Ticked: the output's sound is this bus; unticked: its source's own.
+        Repeater {
+            model: menu.bus ? mixer.soundOutputs : []
+            delegate: QQC2.CheckBox {
+                id: outputBox
+                required property var modelData
+                focusPolicy: Qt.NoFocus
+                text: modelData.name
+                checked: menu.bus !== null && modelData.bus === menu.bus.id
+                onToggled: {
+                    const want = checked
+                    checked = Qt.binding(() => menu.bus !== null && outputBox.modelData.bus === menu.bus.id)
+                    mixer.act({ action: "set_output_bus", output: modelData.id,
+                                bus: want ? menu.bus.id : null })
+                }
+                KanteCheckSkin { control: outputBox }
             }
         }
         KanteButton {

@@ -90,6 +90,14 @@ pub enum Command {
     },
     /// Stop output `id`; stopping a stopped one is fine.
     StopOutput { id: OutputId },
+    /// Running output `id` takes its sound from bus `bus` instead of the
+    /// feed's, or the feed's again; it plays on. Only for an output that
+    /// had sound and keeps it (otherwise it is started anew).
+    SetOutputSound {
+        id: OutputId,
+        feed: Feed,
+        bus: Option<BusId>,
+    },
     /// Channel strip of the audio mixer channel of `slot`.
     SetStrip { slot: usize, strip: ChannelStrip },
     /// Layout on engine composition `pip`: background slot and boxes.
@@ -1628,6 +1636,7 @@ impl Switcher {
                 self.check_unlocked()?;
                 self.remove_output(&output)
             }
+            Action::SetOutputBus { output, bus } => self.set_output_bus(&output, bus.as_ref()),
             Action::StartOutput { output } => self.start_output(&output),
             Action::StopOutput { output } => {
                 self.check_unlocked()?;
@@ -4802,6 +4811,45 @@ impl Switcher {
         })
     }
 
+    /// A running output with sound before and after switches on air; one
+    /// that gains or loses its sound branch (an ISO of a silent input)
+    /// starts anew.
+    fn set_output_bus(
+        &mut self,
+        output: &OutputRef,
+        bus: Option<&BusRef>,
+    ) -> Result<Vec<Command>, ActionError> {
+        let index = self.find_output(output)?;
+        let bus = match bus {
+            Some(bus) => Some(self.show.buses[self.find_bus(bus)?].id),
+            None => None,
+        };
+        let entry = &self.show.outputs[index];
+        if bus.is_some() && matches!(entry.spec, OutputSpec::Display { .. }) {
+            return Err(ActionError::NoAudio {
+                reference: entry.name.clone(),
+            });
+        }
+        if entry.bus == bus {
+            return Ok(Vec::new());
+        }
+        let feed = self.feed_of(entry)?;
+        let had_sound = crate::engine::flows::output_sound(&entry.spec, feed, entry.bus).is_some();
+        self.show.outputs[index].bus = bus;
+        let entry = &self.show.outputs[index];
+        if !self.output_running(entry.id) {
+            return Ok(Vec::new());
+        }
+        if had_sound && crate::engine::flows::output_sound(&entry.spec, feed, bus).is_some() {
+            return Ok(vec![Command::SetOutputSound {
+                id: entry.id,
+                feed,
+                bus,
+            }]);
+        }
+        Ok(vec![self.start_command(entry)?])
+    }
+
     fn stop_output(&mut self, output: &OutputRef) -> Result<Vec<Command>, ActionError> {
         let id = self.show.outputs[self.find_output(output)?].id;
         Ok(vec![Command::StopOutput { id }])
@@ -7482,6 +7530,135 @@ mod tests {
                 bus: Some(bus("In-Ear")),
             }),
             Err(ActionError::UnknownBus { .. })
+        ));
+    }
+
+    #[test]
+    fn a_running_output_takes_another_bus_on_air() {
+        let mut sw = with_buses();
+        let srt = |port: u16| OutputSpec::Srt {
+            uri: format!("srt://cdn:{port}"),
+            video_kbps: 6000,
+            encoding: Default::default(),
+        };
+        sw.apply(Action::AddOutput {
+            spec: srt(9000),
+            source: OutputSource::Program,
+            name: Some("Stream".into()),
+            bus: None,
+        })
+        .unwrap();
+        let output = || OutputRef::Text("Stream".into());
+        let id = sw.state().outputs[0].id;
+        let stream = sw.state().buses[1].id;
+
+        // Stopped: only the show changes.
+        let cmds = sw
+            .apply(Action::SetOutputBus {
+                output: output(),
+                bus: Some(bus("Stream")),
+            })
+            .unwrap();
+        assert!(cmds.is_empty());
+        assert_eq!(sw.state().outputs[0].bus, Some(stream));
+        assert!(matches!(
+            sw.apply(Action::RemoveBus { bus: bus("Stream") }),
+            Err(ActionError::BusInUse { .. })
+        ));
+
+        // Running: it plays on with the other sound, also back to program's.
+        sw.set_output_status(id, OutputStatus::Running { since_ms: 0 });
+        let cmds = sw
+            .apply(Action::SetOutputBus {
+                output: output(),
+                bus: Some(bus("In-Ear")),
+            })
+            .unwrap();
+        let in_ear = sw.state().buses[0].id;
+        assert_eq!(
+            cmds,
+            [Command::SetOutputSound {
+                id,
+                feed: Feed::Program,
+                bus: Some(in_ear),
+            }]
+        );
+        let cmds = sw
+            .apply(Action::SetOutputBus {
+                output: output(),
+                bus: None,
+            })
+            .unwrap();
+        assert_eq!(
+            cmds,
+            [Command::SetOutputSound {
+                id,
+                feed: Feed::Program,
+                bus: None,
+            }]
+        );
+        assert_eq!(sw.state().outputs[0].bus, None);
+        // The same again changes nothing.
+        assert!(sw
+            .apply(Action::SetOutputBus {
+                output: output(),
+                bus: None,
+            })
+            .unwrap()
+            .is_empty());
+
+        // An ISO of a silent input has no sound to move: it starts anew.
+        sw.apply(Action::AddInput {
+            source: SourceSpec::Color {
+                color: "#ff8000".into(),
+            },
+            name: Some("Orange".into()),
+        })
+        .unwrap();
+        let orange = sw.state().inputs[2].id;
+        sw.apply(Action::AddOutput {
+            spec: srt(9001),
+            source: OutputSource::Input(orange),
+            name: Some("ISO".into()),
+            bus: None,
+        })
+        .unwrap();
+        let iso = sw.state().outputs[1].id;
+        sw.set_output_status(iso, OutputStatus::Running { since_ms: 0 });
+        let cmds = sw
+            .apply(Action::SetOutputBus {
+                output: OutputRef::Text("ISO".into()),
+                bus: Some(bus("Stream")),
+            })
+            .unwrap();
+        assert!(matches!(
+            cmds[..],
+            [Command::StartOutput { id, bus: Some(b), .. }] if id == iso && b == stream
+        ));
+
+        // A screen has no sound.
+        sw.apply(Action::AddOutput {
+            spec: OutputSpec::Display {
+                mode: lmix_types::DisplayMode::Window,
+            },
+            source: OutputSource::Program,
+            name: Some("Screen".into()),
+            bus: None,
+        })
+        .unwrap();
+        assert!(matches!(
+            sw.apply(Action::SetOutputBus {
+                output: OutputRef::Text("Screen".into()),
+                bus: Some(bus("Stream")),
+            }),
+            Err(ActionError::NoAudio { .. })
+        ));
+        assert!(matches!(
+            sw.apply(Action::SetOutputBus {
+                output: OutputRef::Text("Nope".into()),
+                bus: None,
+            }),
+            Err(ActionError::UnknownOutput { .. })
         ));
     }
 

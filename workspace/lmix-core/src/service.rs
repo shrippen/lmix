@@ -1018,7 +1018,11 @@ impl Service {
     }
 
     fn touch_of(&self, flow: FlowId) -> Option<Touch> {
-        self.touched.lock().expect("touched lock").get(&flow).copied()
+        self.touched
+            .lock()
+            .expect("touched lock")
+            .get(&flow)
+            .copied()
     }
 
     /// A running output that fails or is stopped behind lmix-core's back is

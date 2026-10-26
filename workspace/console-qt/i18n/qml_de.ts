@@ -2930,18 +2930,18 @@
   <context>
     <name>NarrowMixer</name>
     <message>
-      <location filename="../qml/NarrowMixer.qml" line="+128" />
+      <location filename="../qml/NarrowMixer.qml" line="+131" />
       <source>Audio mixer</source>
       <translation>Tonmischer</translation>
     </message>
     <message>
       <location line="+31" />
-      <location line="+357" />
+      <location line="+409" />
       <source>Audio page ›</source>
       <translation>Ton-Seite ›</translation>
     </message>
     <message>
-      <location line="-356" />
+      <location line="-408" />
       <source>Open the Audio page</source>
       <translation>Ton-Seite öffnen</translation>
     </message>
@@ -2951,7 +2951,7 @@
       <translation>Kein Ton</translation>
     </message>
     <message>
-      <location line="-61" />
+      <location line="-59" />
       <source>PRE %1</source>
       <comment>bus taken before the faders, n inputs</comment>
       <translation>PRE %1</translation>
@@ -2973,7 +2973,7 @@
       <translation>Inputs, die senden: %1, nach den Fadern</translation>
     </message>
     <message>
-      <location line="+26" />
+      <location line="+24" />
       <source>Audio · %1 inputs</source>
       <translation>Ton · %1 Inputs</translation>
     </message>
@@ -3052,7 +3052,7 @@
       <translation>Input %1 %2</translation>
     </message>
     <message>
-      <location line="+27" />
+      <location line="+48" />
       <source>Sends to buses</source>
       <translation>Sends an Busse</translation>
     </message>
@@ -3068,12 +3068,12 @@
     </message>
     <message>
       <location line="+8" />
-      <location line="+288" />
+      <location line="+319" />
       <source>off</source>
       <translation>aus</translation>
     </message>
     <message>
-      <location line="-281" />
+      <location line="-312" />
       <source>Channel strip: EQ, compressor …</source>
       <translation>Kanalzug: EQ, Kompressor …</translation>
     </message>
@@ -3088,7 +3088,7 @@
       <translation>Name</translation>
     </message>
     <message>
-      <location line="+31" />
+      <location line="+44" />
       <source>Before the faders</source>
       <translation>Vor den Fadern</translation>
     </message>
@@ -3103,22 +3103,12 @@
       <translation>Hört jeden Input mit KH in seiner Lautstärke dort; bei Solo nur die Solos.</translation>
     </message>
     <message>
-      <location line="+9" />
-      <source>Outputs with it: %1</source>
-      <translation>Ausgänge damit: %1</translation>
-    </message>
-    <message>
-      <location line="+1" />
-      <source>No output carries it yet; an output takes it when it is added.</source>
-      <translation>Noch kein Ausgang führt ihn; ein Ausgang wählt ihn beim Anlegen.</translation>
-    </message>
-    <message>
-      <location line="+6" />
+      <location line="+32" />
       <source>Remove bus</source>
       <translation>Bus löschen</translation>
     </message>
     <message>
-      <location line="+12" />
+      <location line="+14" />
       <source>Every output without a bus carries the master.</source>
       <translation>Jeder Ausgang ohne Bus führt den Master.</translation>
     </message>
@@ -3238,12 +3228,22 @@
       <translation>%1 · Klick: umbenennen</translation>
     </message>
     <message>
-      <location line="-306" />
+      <location line="-337" />
       <source>Name of the bus</source>
       <translation>Name des Busses</translation>
     </message>
     <message>
-      <location line="+340" />
+      <location line="+71" />
+      <source>Outputs with its sound (running ones play on):</source>
+      <translation>Ausgänge mit seinem Ton (laufende spielen weiter):</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>No output with sound yet.</source>
+      <translation>Noch kein Ausgang mit Ton.</translation>
+    </message>
+    <message>
+      <location line="+299" />
       <source>Tap, outputs, remove</source>
       <translation>Abgriff, Ausgänge, löschen</translation>
     </message>

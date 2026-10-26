@@ -275,6 +275,7 @@ pub fn right_of(action: &Action) -> Right {
         | Action::RemoveBus { .. }
         | Action::RenameBus { .. }
         | Action::SetBusTap { .. }
+        | Action::SetOutputBus { .. }
         | Action::SetPhonesTap { .. }
         | Action::SetMasterFormat { .. }
         | Action::SetMultiview { .. }

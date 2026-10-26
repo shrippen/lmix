@@ -1232,15 +1232,23 @@ impl StromEngine {
     /// not move with 200 and keeps the old one; that is a failure here, so
     /// the bus is not recorded with a tap it does not have.
     async fn patch_taps(&self, taps: Vec<(String, PropertyValue)>) -> Result<(), EngineError> {
+        self.patch_block(flows::mixer_id(), AUDIO_MIXER, taps).await
+    }
+
+    /// Set live properties of `block` in `flow`; one strom rejects (it
+    /// answers 200 and keeps the old value) is a failure.
+    async fn patch_block(
+        &self,
+        flow: FlowId,
+        block: &str,
+        properties: Vec<(String, PropertyValue)>,
+    ) -> Result<(), EngineError> {
         let body = UpdateBlockPropertiesRequest {
-            properties: taps.into_iter().collect(),
+            properties: properties.into_iter().collect(),
             ramp_ms: Some(AUDIO_RAMP_MS),
             ramp_ms_overrides: None,
         };
-        let path = format!(
-            "/flows/{}/blocks/{AUDIO_MIXER}/properties",
-            flows::mixer_id()
-        );
+        let path = format!("/flows/{flow}/blocks/{block}/properties");
         let resp = self
             .http
             .patch(self.url(&path))
@@ -1251,7 +1259,7 @@ impl StromEngine {
         let answer: serde_json::Value = check(resp).await?.json().await.unwrap_or_default();
         match answer.get("rejected").and_then(|r| r.as_object()) {
             Some(rejected) if !rejected.is_empty() => Err(EngineError::Refused(format!(
-                "strom kept the taps: {}",
+                "strom kept the old values: {}",
                 serde_json::Value::Object(rejected.clone())
             ))),
             _ => Ok(()),
@@ -1414,6 +1422,19 @@ impl Engine for StromEngine {
                 self.put_flow(&flow).await
             }
             Command::StopOutput { id } => self.drop_flow(flows::output_flow_id(*id)).await,
+            Command::SetOutputSound { id, feed, bus } => {
+                // The switcher sends it only for an output with sound before
+                // and after; one without would have no input to move.
+                let channel = flows::feed_sound(*feed, *bus).ok_or_else(|| {
+                    EngineError::Refused("the output has no sound to change".into())
+                })?;
+                self.patch_block(
+                    flows::output_flow_id(*id),
+                    flows::OUTPUT_SOUND,
+                    vec![("channel".into(), PropertyValue::String(channel))],
+                )
+                .await
+            }
             Command::Overlay {
                 channel,
                 slot,
@@ -2380,6 +2401,58 @@ mod tests {
         let addr = listener.local_addr().unwrap();
         tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
         (format!("http://{addr}"), calls)
+    }
+
+    /// A running output moves its sound input to the bus's channel, or
+    /// back to program's; nothing is built.
+    #[tokio::test]
+    async fn an_output_takes_another_sound_on_air() {
+        let (url, calls) = bus_strom(Vec::new(), FirstChange::Done).await;
+        let engine = StromEngine::new(url, MixerBackend::Cpu, MonitorOut::None);
+        let (id, bus) = (OutputId::new(), BusId::new());
+        for (bus, channel) in [
+            (Some(bus), flows::bus_channel(bus)),
+            (
+                None,
+                flows::feed_sound(crate::switcher::Feed::Program, None).unwrap(),
+            ),
+        ] {
+            engine
+                .run(&Command::SetOutputSound {
+                    id,
+                    feed: crate::switcher::Feed::Program,
+                    bus,
+                })
+                .await
+                .unwrap();
+            let (method, path, body) = calls.lock().unwrap().last().unwrap().clone();
+            assert_eq!(method, "PATCH");
+            assert_eq!(
+                path,
+                format!(
+                    "/api/flows/{}/blocks/{}/properties",
+                    flows::output_flow_id(id),
+                    flows::OUTPUT_SOUND
+                )
+            );
+            assert_eq!(
+                body["properties"],
+                serde_json::json!({ "channel": channel })
+            );
+        }
+        assert_eq!(calls.lock().unwrap().len(), 2, "no flow built or stopped");
+        // An ISO of a silent input has no sound input to move.
+        assert!(engine
+            .run(&Command::SetOutputSound {
+                id,
+                feed: crate::switcher::Feed::Slot {
+                    slot: 0,
+                    audio: false
+                },
+                bus: None,
+            })
+            .await
+            .is_err());
     }
 
     /// Buses that come, go and change their tap change the running mixer:
