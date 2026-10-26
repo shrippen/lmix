@@ -5,7 +5,7 @@ import "."
 /**
  * Audio level meter: a bar in dBFS with three zones (positive up to `warnAt`,
  * warning up to `dangerAt`, negative above), a peak-hold mark that falls back
- * after `holdMs`, and an optional scale under the bar (`scale`: the floor, both
+ * after `holdMs`, and an optional scale under the bar (`showScale`: the floor, both
  * zone limits and 0). Horizontal, or vertical with `vertical` (bottom up, scale
  * to the right). The tooltip names the value; `level` undefined = nothing measured.
  * Zone colours are the tier roles, so the meter reads the same in every kind.
@@ -20,7 +20,7 @@ Item {
     property real dangerAt: -6
     property bool vertical: false
     /** Labels under (vertical: beside) the bar. */
-    property bool scale: false
+    property bool showScale: false
     /** Peak hold in ms; 0 switches the mark off. */
     property int holdMs: 1500
     /** Bar thickness. */
@@ -48,8 +48,8 @@ Item {
         onTriggered: meter.held = meter.value
     }
 
-    implicitWidth: vertical ? thickness + (scale ? scaleRow.implicitWidth + KanteStyle.unit(4) : 0) : KanteStyle.unit(160)
-    implicitHeight: vertical ? KanteStyle.unit(160) : thickness + (scale ? scaleMetrics.height + KanteStyle.unit(2) : 0)
+    implicitWidth: vertical ? thickness + (showScale ? scaleRow.implicitWidth + KanteStyle.unit(4) : 0) : KanteStyle.unit(160)
+    implicitHeight: vertical ? KanteStyle.unit(160) : thickness + (showScale ? scaleMetrics.height + KanteStyle.unit(2) : 0)
 
     // The bar; zones are drawn along x and the item is rotated for vertical meters.
     Item {
@@ -98,7 +98,7 @@ Item {
     }
     Item {
         id: scaleRow
-        visible: meter.scale
+        visible: meter.showScale
         readonly property var marks: [meter.floor, meter.warnAt, meter.dangerAt, 0]
         readonly property real box: meter.vertical ? scaleMetrics.height : scaleMetrics.width
         readonly property real length: meter.vertical ? height : width

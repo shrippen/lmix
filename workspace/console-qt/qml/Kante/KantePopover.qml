@@ -29,6 +29,9 @@ QQC2.Popup {
             return
         }
         anchorItem = item
+        // Content changed just before (another item's settings, rows shown or hidden): the
+        // column lays it out only on the next frame, measured now it has the size before.
+        column.forceLayout()
         // In scene coordinates, against the window: below the item, above when there is no
         // room below and more above, shifted to stay inside.
         const win = item.Window.window
@@ -64,11 +67,16 @@ QQC2.Popup {
         popup: popover
     }
 
+    // As wide as the title too: the Column counts its width, which follows the Column.
+    implicitWidth: Math.max(implicitBackgroundWidth + leftInset + rightInset,
+                            Math.max(column.implicitWidth, titleLabel.visible ? titleLabel.implicitWidth : 0)
+                            + leftPadding + rightPadding)
     contentItem: Column {
         id: column
         spacing: KanteStyle.unit(10)
 
         KanteSectionLabel {
+            id: titleLabel
             visible: popover.title.length > 0
             text: popover.title
             width: parent.width

@@ -150,6 +150,11 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "runningTime"]
         fn running_time(self: &Core, since_ms: f64) -> QString;
+
+        /// `name` in at most `max` characters for a narrow strip (forms::short_name).
+        #[qinvokable]
+        #[cxx_name = "shortName"]
+        fn short_name(self: &Core, name: &QString, max: i32) -> QString;
     }
 
     unsafe extern "RustQt" {
@@ -548,6 +553,10 @@ impl qobject::Core {
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0, |d| d.as_millis() as u64);
         QString::from(&forms::running_time(since_ms.max(0.0) as u64, now_ms))
+    }
+
+    fn short_name(&self, name: &QString, max: i32) -> QString {
+        QString::from(&forms::short_name(&name.to_string(), max.max(1) as usize))
     }
 
     fn send(self: Pin<&mut Self>, action: Action) {

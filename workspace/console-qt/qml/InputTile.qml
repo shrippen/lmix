@@ -296,7 +296,7 @@ KanteCard {
                         level: stereo ? tile.channelsDb[0] : tile.peakDb
                         thickness: stereo ? KanteStyle.unit(4) : KanteStyle.unit(8)
                         holdMs: 2000
-                        scale: !stereo
+                        showScale: !stereo
                         Accessible.name: stereo ? qsTr("Level left") : qsTr("Level")
                     }
                     KanteAudioMeter {
@@ -305,7 +305,7 @@ KanteCard {
                         level: visible ? tile.channelsDb[1] : undefined
                         thickness: KanteStyle.unit(4)
                         holdMs: 2000
-                        scale: true
+                        showScale: true
                         Accessible.name: qsTr("Level right")
                     }
                 }

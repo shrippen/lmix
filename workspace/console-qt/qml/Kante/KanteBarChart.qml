@@ -23,6 +23,8 @@ import "."
  * left edge (2.5 = the middle of the third bar), `barFill` is the share of a column the
  * bar fills (1 = bars touch), `wholeSteps` keeps the axis on whole numbers (counts).
  * KanteTimingHistogram is configured this way.
+ * `ranges` (1.44) shade spans behind the bars [{from, to, label}], in columns as `markers`
+ * (e.g. a target band): a tint, dashed edges and the label at the top, not colour alone.
  */
 Item {
     id: chart
@@ -60,6 +62,7 @@ Item {
     property string edgeUnit: ""
     /** Vertical lines [{at, label, dashed}], `at` in columns from the left edge. */
     property var markers: []
+    property var ranges: []
     /** Axis steps on whole numbers only (counts): 1, 2, 5, 10, … */
     property bool wholeSteps: false
     /** Share of a column the bar fills. */
@@ -195,6 +198,41 @@ Item {
             text: chart.format(index * chart.axisStep)
             color: KanteStyle.mutedTextColor
             font: axisWidth.font
+        }
+    }
+
+    // Ranges behind the bars: tint and dashed edges; their labels follow the markers'.
+    Repeater {
+        model: chart.ranges
+        delegate: Item {
+            id: range
+            required property var modelData
+            required property int index
+            readonly property real from: Math.max(0, Math.min(chart.values.length, Number(modelData.from)))
+            readonly property real to: Math.max(0, Math.min(chart.values.length, Number(modelData.to)))
+            objectName: "kanteRange"
+            visible: !isNaN(from) && !isNaN(to) && to > from
+            x: chart.padLeft + from * chart.columnWidth
+            width: (to - from) * chart.columnWidth
+            height: chart.plotHeight
+            Rectangle {
+                anchors.fill: parent
+                color: KanteStyle.tint1Color
+            }
+            Shape {
+                anchors.fill: parent
+                ShapePath {
+                    strokeColor: KanteStyle.mutedTextColor
+                    strokeWidth: 1
+                    strokeStyle: ShapePath.DashLine
+                    dashPattern: [4, 3]
+                    fillColor: "transparent"
+                    startX: 0.5; startY: 0
+                    PathLine { x: 0.5; y: chart.plotHeight }
+                    PathMove { x: range.width - 0.5; y: 0 }
+                    PathLine { x: range.width - 0.5; y: chart.plotHeight }
+                }
+            }
         }
     }
 
@@ -348,6 +386,34 @@ Item {
                     color: KanteStyle.strongTextColor
                     font: KanteStyle.monoFont(KanteStyle.labelFont().pointSize * 0.85, true)
                 }
+            }
+        }
+    }
+
+    // Range labels above the bars, one row each below the marker labels.
+    Repeater {
+        model: chart.ranges
+        delegate: Rectangle {
+            id: rangeLabel
+            required property var modelData
+            required property int index
+            readonly property real from: Math.max(0, Math.min(chart.values.length, Number(modelData.from)))
+            readonly property real to: Math.max(0, Math.min(chart.values.length, Number(modelData.to)))
+            // Only with its band: a range clipped to nothing has no label either.
+            objectName: "kanteRangeLabel"
+            visible: !!modelData.label && !isNaN(from) && !isNaN(to) && to > from
+            x: Math.min(chart.padLeft + from * chart.columnWidth + KanteStyle.unit(3), chart.width - width)
+            y: (chart.markers.length + index) * (height + KanteStyle.unit(2))
+            z: 1
+            width: rangeText.implicitWidth + KanteStyle.unit(8)
+            height: rangeText.implicitHeight + KanteStyle.unit(2)
+            color: Qt.alpha(KanteStyle.dialogColor, 0.85)
+            Text {
+                id: rangeText
+                anchors.centerIn: parent
+                text: rangeLabel.modelData.label || ""
+                color: KanteStyle.mutedTextColor
+                font: KanteStyle.monoFont(KanteStyle.labelFont().pointSize * 0.85, true)
             }
         }
     }

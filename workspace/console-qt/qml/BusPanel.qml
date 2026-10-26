@@ -76,7 +76,7 @@ Item {
         KanteAudioMeter {
             Layout.fillWidth: true
             level: rows.level
-            scale: true
+            showScale: true
         }
         RowLayout {
             Layout.fillWidth: true
