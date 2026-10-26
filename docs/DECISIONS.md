@@ -4898,7 +4898,10 @@ zusammen, weil Muxer nach Laufzeit verschachteln.
 **Geprüft**: A/B unter gleicher fremder Last (Load ~40), je drei Läufe mit
 21 Wechseln: vorher 14, 17, 13 Lücken, jetzt 0, 0 und einmal 9 (Aussetzer
 unter Last auch außerhalb der Wechsel). Ohne fremde Last zweimal 0 Lücken
-(Vorversuch, dasselbe Element nur in der Aufnahme).
+(Vorversuch, dasselbe Element nur in der Aufnahme). SRT, wie ein Empfänger
+es bekommt (`OUTPUT=srt`, ffmpeg kopiert den Strom), je zwei Läufe: vorher
+14 und 12 Lücken, jetzt 1 und 0. RTMP und NDI nicht gemessen (kein
+Empfänger hier); RTMP kodiert den Ton im Block wie SRT.
 Lippensynchronität (`scripts/measure-av.sh`, CPU-Mischer): ISO 0 ms wie
 vorher, Program −25…+18 ms je Lauf, im bekannten Bereich der Bildphase.
 Engine-Test `every_output_takes_its_sound_in_one_segment`.
