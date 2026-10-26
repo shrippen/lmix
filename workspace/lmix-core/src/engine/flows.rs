@@ -602,7 +602,7 @@ pub fn output_flow(
                 .push(link("enc:encoded_out".into(), "srt:video_in".into()));
             if sound {
                 flow.links
-                    .push(link("pgm_audio:src".into(), "srt:audio_in_0".into()));
+                    .push(link(format!("{OUTPUT_SOUND}:src"), "srt:audio_in_0".into()));
             }
         }
         OutputSpec::Rtmp {
@@ -631,7 +631,7 @@ pub fn output_flow(
             // The block encodes raw sound to AAC itself.
             if sound {
                 flow.links
-                    .push(link("pgm_audio:src".into(), "rtmp:audio_in".into()));
+                    .push(link(format!("{OUTPUT_SOUND}:src"), "rtmp:audio_in".into()));
             }
         }
         OutputSpec::Record {
@@ -678,7 +678,7 @@ pub fn output_flow(
             flow.links.push(link(from, "ndi:video_in".into()));
             if sound {
                 flow.links
-                    .push(link("pgm_audio:src".into(), "ndi:audio_in".into()));
+                    .push(link(format!("{OUTPUT_SOUND}:src"), "ndi:audio_in".into()));
             }
         }
     }
@@ -744,7 +744,7 @@ fn add_aac(flow: &mut Flow, to: &str) {
     flow.elements.push(element("aac", "avenc_aac", vec![]));
     flow.elements.push(element("aacparse", "aacparse", vec![]));
     flow.links
-        .push(link("pgm_audio:src".into(), "aconv".into()));
+        .push(link(format!("{OUTPUT_SOUND}:src"), "aconv".into()));
     flow.links.push(link("aconv".into(), "aac".into()));
     flow.links.push(link("aac".into(), "aacparse".into()));
     flow.links.push(link("aacparse".into(), to.into()));

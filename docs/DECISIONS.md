@@ -4849,7 +4849,9 @@ Busses in der Tonspalte nannte darum nur, welche Ausgänge ihn führen.
 - Ein laufender Ausgang spielt weiter: lmix-core setzt am Inter Input
   `pgm_audio` des Ausgangs-Flows den Kanal (`SetOutputSound`), strom stellt
   den `intersrc` im Betrieb um und speichert den Kanal (strom #46), damit
-  ein Neustart von lmix-core den Ausgang weiter übernimmt. Nur ein Ausgang,
+  ein Neustart des Flows in strom ihn behält. Lehnt strom den Wechsel ab,
+  startet lmix-core den Ausgang mit dem Ton der Show neu: auf Sendung liegt
+  nie ein anderer Ton als angezeigt. Nur ein Ausgang,
   der dabei einen Tonzweig bekommt oder verliert (ISO eines Inputs ohne Ton),
   startet neu; das lehnt die Sperre ab, den reinen Tonwechsel nicht.
 - In der Tonspalte steht im Menü ⋯ des Busses jeder Ausgang mit Ton als

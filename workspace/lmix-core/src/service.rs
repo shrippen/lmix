@@ -2022,6 +2022,30 @@ impl Service {
             let Err(e) = outcome else {
                 continue;
             };
+            // The show has the other sound already: the output starts anew
+            // with it rather than go on with the old one unseen.
+            if let Command::SetOutputSound { id, .. } = command {
+                if let Some(start) = sw.output_start_command(*id) {
+                    tracing::warn!(output = %id, error = %e, "output did not take the other sound, restarting it");
+                    let flow = output_flow_id(*id);
+                    self.touched
+                        .lock()
+                        .expect("touched lock")
+                        .insert(flow, Touch::Running);
+                    let restarted = self.engine.run(&start).await;
+                    self.touched.lock().expect("touched lock").insert(
+                        flow,
+                        Touch::Done {
+                            at: Instant::now(),
+                            builds: true,
+                        },
+                    );
+                    mark_output(sw, &start, &restarted);
+                    if restarted.is_ok() {
+                        continue;
+                    }
+                }
+            }
             // The engine cut instead (or could not); no end will come.
             if matches!(command, Command::Stinger { .. }) {
                 sw.stinger_finished();
@@ -3402,6 +3426,62 @@ mod tests {
 
         assert_eq!(service.state().await.inputs[0].status, InputStatus::Online);
         assert_eq!(slot_commands(&engine), 1, "no failback rebuild");
+    }
+
+    /// An output whose sound the engine could not move starts anew with
+    /// the sound the show has now, instead of going on with the old one.
+    #[tokio::test(start_paused = true)]
+    async fn an_output_that_keeps_its_old_sound_starts_anew() {
+        let engine = Arc::new(NullEngine::default());
+        let service = Service::new(4, engine.clone(), None);
+        service
+            .handle(Action::AddBus {
+                name: Some("Mix minus".into()),
+                pre_fader: false,
+            })
+            .await
+            .unwrap();
+        service
+            .handle(Action::AddOutput {
+                spec: lmix_types::OutputSpec::Srt {
+                    uri: "srt://cdn:9000".into(),
+                    video_kbps: 6000,
+                    encoding: Default::default(),
+                },
+                source: lmix_types::OutputSource::Program,
+                bus: None,
+                name: Some("Stream".into()),
+            })
+            .await
+            .unwrap();
+        let output = || lmix_types::OutputRef::Text("Stream".into());
+        service
+            .handle(Action::StartOutput { output: output() })
+            .await
+            .unwrap();
+        engine.refuse_output_sound(true);
+        service
+            .handle(Action::SetOutputBus {
+                output: output(),
+                bus: Some(lmix_types::BusRef::Text("Mix minus".into())),
+            })
+            .await
+            .unwrap();
+        let state = service.state().await;
+        let bus = state.buses[0].id;
+        let log = engine.log();
+        assert!(
+            matches!(
+                &log[log.len() - 2..],
+                [Command::SetOutputSound { .. }, Command::StartOutput { bus: Some(b), .. }] if *b == bus
+            ),
+            "{log:?}"
+        );
+        assert_eq!(state.outputs[0].bus, Some(bus));
+        assert!(matches!(
+            state.outputs[0].status,
+            lmix_types::OutputStatus::Running { .. }
+        ));
     }
 
     /// A new format the engine did not build is asked for again when the

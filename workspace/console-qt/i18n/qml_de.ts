@@ -2930,18 +2930,18 @@
   <context>
     <name>NarrowMixer</name>
     <message>
-      <location filename="../qml/NarrowMixer.qml" line="+131" />
+      <location filename="../qml/NarrowMixer.qml" line="+146" />
       <source>Audio mixer</source>
       <translation>Tonmischer</translation>
     </message>
     <message>
       <location line="+31" />
-      <location line="+409" />
+      <location line="+412" />
       <source>Audio page ›</source>
       <translation>Ton-Seite ›</translation>
     </message>
     <message>
-      <location line="-408" />
+      <location line="-411" />
       <source>Open the Audio page</source>
       <translation>Ton-Seite öffnen</translation>
     </message>
@@ -2951,7 +2951,7 @@
       <translation>Kein Ton</translation>
     </message>
     <message>
-      <location line="-59" />
+      <location line="-74" />
       <source>PRE %1</source>
       <comment>bus taken before the faders, n inputs</comment>
       <translation>PRE %1</translation>
@@ -2973,7 +2973,7 @@
       <translation>Inputs, die senden: %1, nach den Fadern</translation>
     </message>
     <message>
-      <location line="+24" />
+      <location line="+39" />
       <source>Audio · %1 inputs</source>
       <translation>Ton · %1 Inputs</translation>
     </message>
@@ -3068,12 +3068,12 @@
     </message>
     <message>
       <location line="+8" />
-      <location line="+319" />
+      <location line="+322" />
       <source>off</source>
       <translation>aus</translation>
     </message>
     <message>
-      <location line="-312" />
+      <location line="-315" />
       <source>Channel strip: EQ, compressor …</source>
       <translation>Kanalzug: EQ, Kompressor …</translation>
     </message>
@@ -3103,7 +3103,17 @@
       <translation>Hört jeden Input mit KH in seiner Lautstärke dort; bei Solo nur die Solos.</translation>
     </message>
     <message>
-      <location line="+32" />
+      <location line="+8" />
+      <source>Outputs with its sound:</source>
+      <translation>Ausgänge mit seinem Ton:</translation>
+    </message>
+    <message>
+      <location line="+21" />
+      <source>A running output plays on with the other sound; an ISO of an input without sound starts anew.</source>
+      <translation>Ein laufender Ausgang spielt mit dem anderen Ton weiter; eine ISO eines Inputs ohne Ton startet neu.</translation>
+    </message>
+    <message>
+      <location line="+6" />
       <source>Remove bus</source>
       <translation>Bus löschen</translation>
     </message>
@@ -3228,22 +3238,17 @@
       <translation>%1 · Klick: umbenennen</translation>
     </message>
     <message>
-      <location line="-337" />
+      <location line="-340" />
       <source>Name of the bus</source>
       <translation>Name des Busses</translation>
     </message>
     <message>
-      <location line="+71" />
-      <source>Outputs with its sound (running ones play on):</source>
-      <translation>Ausgänge mit seinem Ton (laufende spielen weiter):</translation>
-    </message>
-    <message>
-      <location line="+1" />
+      <location line="+72" />
       <source>No output with sound yet.</source>
       <translation>Noch kein Ausgang mit Ton.</translation>
     </message>
     <message>
-      <location line="+299" />
+      <location line="+302" />
       <source>Tap, outputs, remove</source>
       <translation>Abgriff, Ausgänge, löschen</translation>
     </message>

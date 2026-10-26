@@ -27,6 +27,9 @@ pub struct NullEngine {
     /// Refuse T-bar steps, as strom does while a take of its own runs.
     #[cfg(test)]
     refusing_t_bar: std::sync::atomic::AtomicBool,
+    /// Refuse moving an output's sound, as strom does for a flow it lost.
+    #[cfg(test)]
+    refusing_output_sound: std::sync::atomic::AtomicBool,
     /// Media player reports a test sends.
     #[cfg(test)]
     players: Option<tokio::sync::broadcast::Sender<crate::clips::PlayerProgress>>,
@@ -148,6 +151,13 @@ impl NullEngine {
             .store(refusing, std::sync::atomic::Ordering::SeqCst);
     }
 
+    /// Refuse (`true`) or run every following change of an output's sound.
+    #[cfg(test)]
+    pub fn refuse_output_sound(&self, refusing: bool) {
+        self.refusing_output_sound
+            .store(refusing, std::sync::atomic::Ordering::SeqCst);
+    }
+
     /// Commands received so far.
     #[cfg(test)]
     pub fn log(&self) -> Vec<Command> {
@@ -212,6 +222,13 @@ impl Engine for NullEngine {
                     .load(std::sync::atomic::Ordering::SeqCst)
             {
                 return Err(EngineError::Refused("a take is running".into()));
+            }
+            if matches!(command, Command::SetOutputSound { .. })
+                && self
+                    .refusing_output_sound
+                    .load(std::sync::atomic::Ordering::SeqCst)
+            {
+                return Err(EngineError::Refused("pipeline not running".into()));
             }
             let slow = self.slow.lock().expect("slow lock").take();
             if let Some((takes, error)) = slow {

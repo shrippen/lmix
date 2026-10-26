@@ -4835,22 +4835,24 @@ impl Switcher {
         }
         let feed = self.feed_of(entry)?;
         let sound = |bus| crate::engine::flows::output_sound(&entry.spec, feed, bus).is_some();
-        let on_air = sound(entry.bus) && sound(bus);
+        let (before, after) = (sound(entry.bus), sound(bus));
         let running = self.output_running(entry.id);
         // A restart stops it for a moment, which the lock refuses.
-        if running && !on_air {
+        if running && before != after {
             self.check_unlocked()?;
         }
         self.show.outputs[index].bus = bus;
         let entry = &self.show.outputs[index];
-        match (running, on_air) {
-            (false, _) => Ok(Vec::new()),
-            (true, true) => Ok(vec![Command::SetOutputSound {
+        match (running, before, after) {
+            (true, true, true) => Ok(vec![Command::SetOutputSound {
                 id: entry.id,
                 feed,
                 bus,
             }]),
-            (true, false) => Ok(vec![self.start_command(entry)?]),
+            (true, b, a) if b != a => Ok(vec![self.start_command(entry)?]),
+            // Stopped, or no sound either way (a screen given a bus by
+            // the API losing it).
+            _ => Ok(Vec::new()),
         }
     }
 
@@ -4922,6 +4924,12 @@ impl Switcher {
             self.output_status.get(&id),
             Some(OutputStatus::Running { .. })
         )
+    }
+
+    /// Command that starts output `id` as the show has it, anew if it runs.
+    pub fn output_start_command(&self, id: OutputId) -> Option<Command> {
+        let output = self.show.outputs.iter().find(|o| o.id == id)?;
+        self.start_command(output).ok()
     }
 
     pub fn output_is_running(&self, id: OutputId) -> bool {
@@ -7678,6 +7686,27 @@ mod tests {
             }),
             Err(ActionError::NoAudio { .. })
         ));
+        // One given a bus by the API loses it without a restart: it had no
+        // sound either way.
+        sw.apply(Action::AddOutput {
+            spec: OutputSpec::Display {
+                mode: lmix_types::DisplayMode::Window,
+            },
+            source: OutputSource::Program,
+            name: Some("Screen 2".into()),
+            bus: Some(bus("Stream")),
+        })
+        .unwrap();
+        let screen = sw.state().outputs[3].id;
+        sw.set_output_status(screen, OutputStatus::Running { since_ms: 0 });
+        assert!(sw
+            .apply(Action::SetOutputBus {
+                output: OutputRef::Text("Screen 2".into()),
+                bus: None,
+            })
+            .unwrap()
+            .is_empty());
+        assert_eq!(sw.state().outputs[3].bus, None);
         assert!(matches!(
             sw.apply(Action::SetOutputBus {
                 output: OutputRef::Text("Nope".into()),
