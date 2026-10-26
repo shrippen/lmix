@@ -69,7 +69,7 @@ fail() {
     echo "FAIL: $*" >&2
     # What the engine and lmix-core were doing (CI shows no files).
     local log
-    for log in strom.log core.log gst.log core-threads.txt strom-threads.txt; do
+    for log in strom.log core.log gst.log core-threads.txt strom-threads.txt strom-stuck-threads.txt; do
         [[ -s "$WORK/$log" ]] || continue
         echo "--- last 60 lines of $log" >&2
         tail -n 60 "$WORK/$log" >&2
@@ -101,6 +101,14 @@ settled() { wait_for "$SETTLE_S" eval "$1"; }
 # is <state function> <name> <state>: evaluated anew on every try.
 is() { [[ "$("$1" "$2")" == "$3" ]]; }
 
+# "${TRACEABLE[@]}" <command…> runs the command so that gdb may attach to
+# it from outside: with yama's ptrace_scope 1 (Arch, Ubuntu) only a parent
+# may, and gdb is no parent of strom or lmix-core. prctl(PR_SET_PTRACER,
+# any) by syscall number (157 on x86-64): perl-base is in every image.
+TRACEABLE=(perl -e 'syscall(157, 0x59616d61, -1, 0, 0, 0) == 0 or die "prctl: $!"; exec @ARGV or die "exec: $!"')
+# threads <pid> <file>: every thread's stack.
+threads() { gdb -p "$1" -batch -ex 'thread apply all bt' >"$2" 2>&1 || true; }
+
 # A hung lmix-core (seen once, todo.md) fails the action after two
 # minutes and leaves its threads in the work folder.
 act() {
@@ -109,10 +117,8 @@ act() {
     code="${out##*$'\n'}"
     if [[ "$code" == 000 && -n "${CORE_PID:-}" ]]; then
         # lmix-core may wait on an engine call that hangs: both sides.
-        gdb -p "$CORE_PID" -batch -ex 'thread apply all bt' >"$WORK/core-threads.txt" 2>&1 || true
-        local strom_pid
-        strom_pid="$(pgrep -f -- "--port $STROM_PORT " | head -1)"
-        [[ -n "$strom_pid" ]] && { gdb -p "$strom_pid" -batch -ex 'thread apply all bt' >"$WORK/strom-threads.txt" 2>&1 || true; }
+        threads "$CORE_PID" "$WORK/core-threads.txt"
+        threads "$STROM_PID" "$WORK/strom-threads.txt"
         fail "action $1 got no answer in 120 s; threads: $WORK/core-threads.txt, $WORK/strom-threads.txt"
     fi
     [[ "$code" == 200 ]] || fail "action $1 -> $code ${out%$'\n'*}"
@@ -147,12 +153,21 @@ case "$MIXER" in
     cuda) ENGINE_ENV=(-u WAYLAND_DISPLAY GST_GL_WINDOW=x11 DISPLAY="$ENGINE_DISPLAY") ;;
     gl) ENGINE_ENV=(GST_GL_WINDOW=wayland) ;;
 esac
-(cd "$WORK" && GST_DEBUG="${STROM_GST_DEBUG:-}" GST_DEBUG_FILE="$WORK/gst.log" GST_DEBUG_NO_COLOR=1 exec env "${ENGINE_ENV[@]}" "$STROM_BIN" --host 127.0.0.1 --port "$STROM_PORT" --no-auto-restart --data-dir "$WORK/strom-data" >"$WORK/strom.log" 2>&1) &
-PIDS+=($!)
+(cd "$WORK" && GST_DEBUG="${STROM_GST_DEBUG:-}" GST_DEBUG_FILE="$WORK/gst.log" GST_DEBUG_NO_COLOR=1 exec env "${ENGINE_ENV[@]}" "${TRACEABLE[@]}" "$STROM_BIN" --host 127.0.0.1 --port "$STROM_PORT" --no-auto-restart --data-dir "$WORK/strom-data" >"$WORK/strom.log" 2>&1) &
+# The subshell execs strom: its pid is strom's.
+STROM_PID=$!
+PIDS+=("$STROM_PID")
 wait_up "$STROM/health" strom
+# A pipeline that does not reach NULL in time (seen once in CI after an
+# output's bus switch, todo.md): strom gives up after 30 s and goes on, the
+# test fails later. The stuck thread is still stuck then: keep its stack.
+(until grep -q 'state change did not complete in time' "$WORK/strom.log" 2>/dev/null; do sleep 1; done
+ threads "$STROM_PID" "$WORK/strom-stuck-threads.txt"
+ echo "strom: a state change did not complete, threads in $WORK/strom-stuck-threads.txt" >&2) &
+PIDS+=($!)
 
 start_core() {
-    "$CORE_BIN" --strom "$STROM" --listen "127.0.0.1:${CORE_PORT}" --mixer "$MIXER" \
+    "${TRACEABLE[@]}" "$CORE_BIN" --strom "$STROM" --listen "127.0.0.1:${CORE_PORT}" --mixer "$MIXER" \
         --slots "$SLOTS" --autosave "$WORK/autosave.lmix" --shortcuts "$WORK/shortcuts.json" --layout-templates "$WORK/layout-templates.json" >>"$WORK/core.log" 2>&1 &
     CORE_PID=$!
     PIDS+=("$CORE_PID")
