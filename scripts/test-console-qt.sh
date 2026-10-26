@@ -265,7 +265,7 @@ for _ in $(seq 1 40); do [[ "$(bus_listen)" == false ]] && break; sleep 0.5; don
     || fail "bus listen $(bus_listen) after Solo off"
 click 1360 793
 sleep 1
-click 1190 605
+click 1192 623
 for _ in $(seq 1 40); do [[ "$(bus_pre)" == true ]] && break; sleep 0.5; done
 [[ "$(bus_pre)" == true ]] && pass "audio column: the bus menu takes the bus before the faders" \
     || fail "bus pre_fader $(bus_pre) after the switch in its menu"
@@ -286,6 +286,23 @@ for _ in $(seq 1 20); do (( $(send_1) >= 50 )) && break; sleep 0.5; done
 (( $(send_1) >= 50 )) && pass "audio column: a send drag in the menu goes on" \
     || fail "send of input 1 at $(send_1) after a drag across the menu's slider"
 DISPLAY="$DISPLAY_NO" xdotool key Escape
+# An output gets the bus's sound from the bus menu (ticked), and its
+# source's own back (unticked).
+act '{"action":"add_output","spec":{"kind":"srt","uri":"srt://:9929?mode=listener"},"name":"Bus out"}'
+out_bus() { state | jq -r '.outputs[0].bus // "none"'; }
+sleep 1
+click 1360 793
+sleep 1
+click 1174 651
+for _ in $(seq 1 40); do [[ "$(out_bus)" != none ]] && break; sleep 0.5; done
+[[ "$(out_bus)" == "$(state | jq -r '.buses[0].id')" ]] && pass "audio column: the bus menu gives an output its sound" \
+    || fail "output bus $(out_bus) after ticking it in the bus menu"
+sleep 1
+click 1174 651
+for _ in $(seq 1 40); do [[ "$(out_bus)" == none ]] && break; sleep 0.5; done
+[[ "$(out_bus)" == none ]] || fail "output bus $(out_bus) after unticking it"
+DISPLAY="$DISPLAY_NO" xdotool key Escape
+act '{"action":"remove_output","output":"Bus out"}'
 # The Audio page adds its own further on.
 act "{\"action\":\"remove_bus\",\"bus\":\"$(state | jq -r '.buses[0].id')\"}"
 for _ in $(seq 1 40); do [[ "$(buses)" == 0 ]] && break; sleep 0.5; done

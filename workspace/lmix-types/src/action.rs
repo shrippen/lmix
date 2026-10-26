@@ -200,6 +200,7 @@ pub const ACTION_GROUPS: &[(&str, &[&str])] = &[
         &[
             "add_output",
             "remove_output",
+            "set_output_bus",
             "start_output",
             "stop_output",
             "start_outputs",
@@ -474,6 +475,14 @@ pub enum Action {
     /// Remove an output (stops it first).
     RemoveOutput {
         output: OutputRef,
+    },
+    /// Sound of an output from bus `bus`, or the source's own without
+    /// one. A running output plays on: it takes the other sound at once
+    /// (one with no sound before, an ISO of a silent input, restarts).
+    SetOutputBus {
+        output: OutputRef,
+        #[serde(default)]
+        bus: Option<BusRef>,
     },
     /// Start streaming / recording / sending.
     StartOutput {
@@ -948,7 +957,8 @@ pub enum Action {
 
     // ---- Safety ----
     /// Lock or unlock (AUT.11): while locked, closing inputs, opening or
-    /// clearing the show and stopping or removing outputs are refused.
+    /// clearing the show, stopping or removing outputs and restarting one
+    /// for another bus are refused.
     SetLock {
         on: bool,
     },

@@ -4837,3 +4837,35 @@ lmix ändert nichts.
 den Fix rot), Nachstellung mit dem strom-Binary des Branches (0 von 4), VM-
 Test in der CI.
 
+## 2026-10-26 — Ausgang nachträglich einem Bus zuordnen (AUD.2)
+
+**Anlass**: Den Bus eines Ausgangs wählte nur „+ Ausgang“; das Menü ⋯ des
+Busses in der Tonspalte nannte darum nur, welche Ausgänge ihn führen.
+
+**Entscheidung**:
+- Aktion `set_output_bus` (Gruppe „output“, Recht Bearbeiten): Ton aus dem
+  Bus oder, ohne Bus, wieder der eigene der Quelle. Ein Bildschirm hat keinen
+  Ton (`no_audio`).
+- Ein laufender Ausgang spielt weiter: lmix-core setzt am Inter Input
+  `pgm_audio` des Ausgangs-Flows den Kanal (`SetOutputSound`), strom stellt
+  den `intersrc` im Betrieb um und speichert den Kanal (strom #46), damit
+  ein Neustart des Flows in strom ihn behält. Lehnt strom den Wechsel ab,
+  startet lmix-core den Ausgang mit dem Ton der Show neu: auf Sendung liegt
+  nie ein anderer Ton als angezeigt. Scheitert auch das, ist der Ausgang
+  ausgefallen und der Failback startet ihn wie nach einem Absturz immer
+  wieder (auch über einen Neustart der Engine hinweg). Dieser Neustart
+  übergeht die Sperre wie jeder Failback. Nur ein Ausgang,
+  der dabei einen Tonzweig bekommt oder verliert (ISO eines Inputs ohne Ton),
+  startet neu; das lehnt die Sperre ab, den reinen Tonwechsel nicht.
+- In der Tonspalte steht im Menü ⋯ des Busses jeder Ausgang mit Ton als
+  Haken: an = Ton dieses Busses, aus = eigener Ton der Quelle.
+
+**Geprüft**: Switcher-Test `a_running_output_takes_another_bus_on_air`,
+Engine-Test `an_output_takes_another_sound_on_air`, Service-Tests
+`an_output_that_keeps_its_old_sound_starts_anew` und
+`an_output_that_could_not_take_the_other_sound_fails_back`, strom-Test
+`an_inter_input_moves_to_another_channel_while_playing` (hört nach dem
+Wechsel den anderen Producer), `scripts/test-console-qt.sh` (Haken im
+Bus-Menü), VM-Test (laufender SRT-Ausgang auf den Bus und zurück, Kanal in
+strom, kein Neustart). Offen: Hörtest, ob der Wechsel knackt (todo).
+

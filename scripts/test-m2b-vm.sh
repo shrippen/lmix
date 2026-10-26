@@ -970,6 +970,21 @@ wait_for "$SETTLE_S" is output_state Stream running || fail "running output not 
 [[ "$(mixer_starts)" == "$mixer_before" ]] || fail "mixer built anew instead of adopted"
 pass "lmix-core killed and restarted: mixer and output adopted, show resumed"
 
+# --- a running output takes a bus's sound and back, on air (AUD.2) ---
+out_flow="$(curl -sf "$STROM/api/flows" | jq -r '.flows[] | select(.name | startswith("lmix output")) | .id')"
+sound_channel() { curl -sf "$STROM/api/flows/$out_flow" | jq -r '.flow.blocks[] | select(.id=="pgm_audio") | .properties.channel'; }
+program_sound="$(sound_channel)"
+stream_bus="$(curl -sf "$CORE/state" | jq -r '.buses[] | select(.name=="Stream") | .id')"
+on_bus() { [[ "$(sound_channel)" == *"bus${stream_bus//-/}_out" ]]; }
+starts_before="$(output_starts)"
+act '{"action":"set_output_bus","output":"Stream","bus":"Stream"}' >/dev/null
+wait_for "$SETTLE_S" on_bus || fail "output sound on $(sound_channel), not the Stream bus"
+act '{"action":"set_output_bus","output":"Stream","bus":null}' >/dev/null
+settled '[[ "$(sound_channel)" == "$program_sound" ]]' || fail "output sound on $(sound_channel), not program's again"
+[[ "$(output_starts)" == "$starts_before" ]] || fail "output restarted for another sound"
+[[ "$(output_state Stream)" == running ]] || fail "output $(output_state Stream) after taking another sound"
+pass "output: a bus's sound and program's again on air, not restarted"
+
 # --- program format (OUT.1): upright 1080x1920, then back ---
 before="$(mixer_starts)"
 act '{"action":"cut_direct","input":"Ball"}' >/dev/null

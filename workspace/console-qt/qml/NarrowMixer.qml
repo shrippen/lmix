@@ -92,7 +92,10 @@ KanteCard {
         menuBuses.sync(buses.map(b => b.id))
         pathStrips.sync([masterKey, phonesKey].concat(buses.map(b => b.id)))
     }
-    Component.onCompleted: syncStrips()
+    Component.onCompleted: {
+        syncStrips()
+        syncSoundOutputs()
+    }
     onSoundInputsChanged: syncStrips()
     onBusesChanged: syncStrips()
 
@@ -119,9 +122,21 @@ KanteCard {
         return bus.pre_fader ? qsTr("Inputs sending: %1, before the faders").arg(n)
             : qsTr("Inputs sending: %1, after the faders").arg(n)
     }
-    /** Names of the outputs that carry `bus`. */
-    function outputsOf(bus) {
-        return outputs.filter(o => o.bus === bus.id).map(o => o.name)
+    /** Outputs that carry sound (screens show picture only): id and name.
+     *  Changed only with those: every state brings a new list, and a new
+     *  model would build the boxes in the bus menu anew under a click. */
+    property var soundOutputs: []
+    function syncSoundOutputs() {
+        const list = outputs.filter(o => o.spec.kind !== "display").map(o => ({ id: o.id, name: o.name }))
+        if (JSON.stringify(list) !== JSON.stringify(soundOutputs)) {
+            soundOutputs = list
+        }
+    }
+    onOutputsChanged: syncSoundOutputs()
+    /** The bus output `id` takes its sound from, or null. */
+    function outputBusOf(id) {
+        const output = outputs.find(o => o.id === id)
+        return output ? output.bus : null
     }
 
     /** Fits as many rows as the height takes, at least one; more scroll. */
@@ -527,10 +542,29 @@ KanteCard {
             width: Kirigami.Units.gridUnit * 14
             wrapMode: Text.WordWrap
             color: KanteStyle.mutedTextColor
-            text: {
-                const names = menu.bus ? mixer.outputsOf(menu.bus) : []
-                return names.length > 0 ? qsTr("Outputs with it: %1").arg(names.join(", "))
-                    : qsTr("No output carries it yet; an output takes it when it is added.")
+            text: mixer.soundOutputs.length > 0
+                ? qsTr("Outputs with its sound:")
+                : qsTr("No output with sound yet.")
+        }
+        // Ticked: the output's sound is this bus; unticked: its source's own.
+        Repeater {
+            model: menu.bus ? mixer.soundOutputs : []
+            delegate: QQC2.CheckBox {
+                id: outputBox
+                required property var modelData
+                focusPolicy: Qt.NoFocus
+                text: modelData.name
+                checked: menu.bus !== null && mixer.outputBusOf(modelData.id) === menu.bus.id
+                onToggled: {
+                    const want = checked
+                    checked = Qt.binding(() => menu.bus !== null && mixer.outputBusOf(outputBox.modelData.id) === menu.bus.id)
+                    mixer.act({ action: "set_output_bus", output: modelData.id,
+                                bus: want ? menu.bus.id : null })
+                }
+                KanteCheckSkin { control: outputBox }
+                QQC2.ToolTip.visible: hovered
+                QQC2.ToolTip.delay: Kirigami.Units.toolTipDelay
+                QQC2.ToolTip.text: qsTr("A running output plays on with the other sound; an ISO of an input without sound starts anew.")
             }
         }
         KanteButton {

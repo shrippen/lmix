@@ -501,6 +501,30 @@ impl LiveMkv {
     }
 }
 
+/// Block id of an output flow's inter input for sound.
+pub const OUTPUT_SOUND: &str = "pgm_audio";
+
+/// The inter channel an output takes its sound from, `None` without sound.
+pub fn output_sound(spec: &OutputSpec, feed: Feed, bus: Option<BusId>) -> Option<String> {
+    // Screens show picture only.
+    if matches!(spec, OutputSpec::Display { .. }) {
+        return None;
+    }
+    feed_sound(feed, bus)
+}
+
+/// The sound of `feed`, or of `bus` instead.
+pub fn feed_sound(feed: Feed, bus: Option<BusId>) -> Option<String> {
+    // A bus replaces the feed's sound (e.g. a mix-minus stream).
+    if let Some(bus) = bus {
+        return Some(bus_channel(bus));
+    }
+    match feed {
+        Feed::Program | Feed::Multiview | Feed::Preview => Some(pgm_channel(PGM_AUDIO_OUT)),
+        Feed::Slot { slot, audio } => audio.then(|| slot_audio_channel(slot)),
+    }
+}
+
 pub fn output_flow_id(id: OutputId) -> FlowId {
     Uuid::new_v5(&FLOW_NAMESPACE, format!("output-{id}").as_bytes())
 }
@@ -532,20 +556,14 @@ pub fn output_flow(
     // MultiCorder). A slot
     // without sound gets no audio branch: a recorder would wait forever
     // for a track that never comes.
-    let (video, audio) = match feed {
-        Feed::Program => (pgm_channel(PGM_OUT), Some(pgm_channel(PGM_AUDIO_OUT))),
-        Feed::Multiview => (pgm_channel(MV_OUT), Some(pgm_channel(PGM_AUDIO_OUT))),
-        Feed::Preview => (pgm_channel(PVW_OUT), Some(pgm_channel(PGM_AUDIO_OUT))),
-        Feed::Slot { slot, audio } => (slot_channel(slot), audio.then(|| slot_audio_channel(slot))),
+    let video = match feed {
+        Feed::Program => pgm_channel(PGM_OUT),
+        Feed::Multiview => pgm_channel(MV_OUT),
+        Feed::Preview => pgm_channel(PVW_OUT),
+        Feed::Slot { slot, .. } => slot_channel(slot),
     };
-    // A bus replaces the feed's sound (e.g. a mix-minus stream).
-    let audio = match bus {
-        Some(bus) => Some(bus_channel(bus)),
-        None => audio,
-    };
-    // Screens show picture only.
-    let audio = audio.filter(|_| !matches!(spec, OutputSpec::Display { .. }));
-    let channels = [("pgm", Some(video)), ("pgm_audio", audio.clone())];
+    let audio = output_sound(spec, feed, bus);
+    let channels = [("pgm", Some(video)), (OUTPUT_SOUND, audio.clone())];
     for (block_id, channel) in channels {
         let Some(channel) = channel else {
             continue;
@@ -584,7 +602,7 @@ pub fn output_flow(
                 .push(link("enc:encoded_out".into(), "srt:video_in".into()));
             if sound {
                 flow.links
-                    .push(link("pgm_audio:src".into(), "srt:audio_in_0".into()));
+                    .push(link(format!("{OUTPUT_SOUND}:src"), "srt:audio_in_0".into()));
             }
         }
         OutputSpec::Rtmp {
@@ -613,7 +631,7 @@ pub fn output_flow(
             // The block encodes raw sound to AAC itself.
             if sound {
                 flow.links
-                    .push(link("pgm_audio:src".into(), "rtmp:audio_in".into()));
+                    .push(link(format!("{OUTPUT_SOUND}:src"), "rtmp:audio_in".into()));
             }
         }
         OutputSpec::Record {
@@ -660,7 +678,7 @@ pub fn output_flow(
             flow.links.push(link(from, "ndi:video_in".into()));
             if sound {
                 flow.links
-                    .push(link("pgm_audio:src".into(), "ndi:audio_in".into()));
+                    .push(link(format!("{OUTPUT_SOUND}:src"), "ndi:audio_in".into()));
             }
         }
     }
@@ -726,7 +744,7 @@ fn add_aac(flow: &mut Flow, to: &str) {
     flow.elements.push(element("aac", "avenc_aac", vec![]));
     flow.elements.push(element("aacparse", "aacparse", vec![]));
     flow.links
-        .push(link("pgm_audio:src".into(), "aconv".into()));
+        .push(link(format!("{OUTPUT_SOUND}:src"), "aconv".into()));
     flow.links.push(link("aconv".into(), "aac".into()));
     flow.links.push(link("aac".into(), "aacparse".into()));
     flow.links.push(link("aacparse".into(), to.into()));
