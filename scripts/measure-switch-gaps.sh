@@ -9,7 +9,8 @@
 # marks the recording's clock. No GPU needed; stays out of CI (measures,
 # does not judge).
 #
-#   scripts/measure-switch-gaps.sh         # CPU mixer, 5 switches each
+#   scripts/measure-switch-gaps.sh         # CPU mixer, 5 cycles each (10 bus
+#                                          # switches, 10 tap switches)
 #   MIXER=cuda CYCLES=10 scripts/measure-switch-gaps.sh
 #   KEEP_WORK=1 …                          # keep logs and the recording
 #   STROM_BIN=…/strom CORE_BIN=…/lmix-core …   # skip the builds
