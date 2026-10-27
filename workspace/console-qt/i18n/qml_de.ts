@@ -3357,7 +3357,7 @@
       <translation>Ausgänge</translation>
     </message>
     <message>
-      <location line="+32" />
+      <location line="+35" />
       <source>Running</source>
       <translation>Läuft</translation>
     </message>
@@ -3593,7 +3593,7 @@
       <translation>Programm</translation>
     </message>
     <message>
-      <location line="+66" />
+      <location line="+68" />
       <source>running</source>
       <translation>läuft</translation>
     </message>
@@ -3623,7 +3623,7 @@
       <translation>Start</translation>
     </message>
     <message>
-      <location line="+7" />
+      <location line="+15" />
       <source>Remove</source>
       <translation>Entfernen</translation>
     </message>
@@ -4704,7 +4704,17 @@
       <translation>Läuft: %1</translation>
     </message>
     <message>
-      <location line="+5" />
+      <location line="+7" />
+      <source>Resume all</source>
+      <translation>Alle fortsetzen</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Pause all</source>
+      <translation>Alle pausieren</translation>
+    </message>
+    <message>
+      <location line="+7" />
       <source>Stop all</source>
       <translation>Alle anhalten</translation>
     </message>
@@ -4720,6 +4730,11 @@
     </message>
     <message>
       <location line="+33" />
+      <source>paused</source>
+      <translation>pausiert</translation>
+    </message>
+    <message>
+      <location line="+1" />
       <source>pre wait %1</source>
       <translation>Vorwartezeit %1</translation>
     </message>
@@ -4730,6 +4745,26 @@
     </message>
     <message>
       <location line="+18" />
+      <source>Resume cue %1</source>
+      <translation>Cue %1 fortsetzen</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Pause cue %1</source>
+      <translation>Cue %1 pausieren</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Resume this cue</source>
+      <translation>Diesen Cue fortsetzen</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Pause this cue</source>
+      <translation>Diesen Cue pausieren</translation>
+    </message>
+    <message>
+      <location line="+12" />
       <source>Stop cue %1</source>
       <translation>Cue %1 stoppen</translation>
     </message>
@@ -4787,7 +4822,7 @@
       <translation>nutzt Input %1, dessen Mediendatei fehlt</translation>
     </message>
     <message>
-      <location line="+75" />
+      <location line="+76" />
       <source>Wait %1</source>
       <translation>Warten %1</translation>
     </message>

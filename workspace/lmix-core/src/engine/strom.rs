@@ -76,6 +76,7 @@ use super::{Engine, EngineError, LivePicture, Picture};
 use crate::switcher::{Command, EngineBox, LibraryClip, MixerBuses, AUDIO_RAMP_MS};
 
 mod playback;
+use playback::Hold;
 
 pub struct StromEngine {
     base_url: String,
@@ -1489,6 +1490,10 @@ impl Engine for StromEngine {
                 then,
             } => self.fade_sound(id, *gain_db, *duration_ms, *then).await,
             Command::StopSound { id, fade_ms } => self.stop_sound(id.as_deref(), *fade_ms).await,
+            Command::PauseSound { id } => self.hold("sounds", id, Hold::Pause).await,
+            Command::ResumeSound { id } => self.hold("sounds", id, Hold::Resume).await,
+            Command::PausePicture { id } => self.hold("pictures", id, Hold::Pause).await,
+            Command::ResumePicture { id } => self.hold("pictures", id, Hold::Resume).await,
             Command::SetZoneLevel {
                 zone,
                 gain_db,

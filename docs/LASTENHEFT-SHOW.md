@@ -128,7 +128,7 @@ ausgeschlossen. **MS**: Meilenstein (§7). Stand: ✅ vorhanden · ◐ teilweise
 | RUN.2 | Standby setzen, unabhängig von laufenden Cues: einen Cue vor/zurück, eine ganze Folge vor/zurück, auf Nummer, auf Anfang | M | S1 | ✅ (`cue_standby`) |
 | RUN.3 | Mehrere Cues laufen gleichzeitig; Liste der laufenden Cues mit abgelaufener Zeit, Restzeit, Fortschritt | M | S1 | ✅ (`running_cues` im Zustand; Anzeige SUI.4) |
 | RUN.4 | Einzelnen laufenden Cue stoppen (mit seiner Ausblendung) oder hart stoppen | M | S1 | ◐ (`cue_stop`; Ausblendung ab Stufe 2) |
-| RUN.5 | Alles pausieren / fortsetzen, über alle Listen; einzelnen Cue pausieren | S | S2 | – |
+| RUN.5 | Alles pausieren / fortsetzen, über alle Listen; einzelnen Cue pausieren | S | S2 | ✅ (`cue_pause`/`cue_resume` je Cue, Liste oder alle; Wartezeiten stehen, Klänge und Bilder pausieren in strom; laufende Blenden laufen weiter; OSC `/lmix/cue/pause`, `/lmix/cue/resume`) |
 | RUN.6 | Schutz vor Doppel-GO: Mindestabstand einstellbar (Standard 300 ms, lmix-Wert), wirkt auf GO über alle Bedienwege, nicht auf direkte Auslöser, Folgen, Stopp, Panik; verworfenes GO sichtbar und als Ereignis; Option „erst nach Loslassen wieder scharf“ | M | S1 | ✅ (Abstand, Ereignis `go_ignored`, `set_go_rearm` `release` für MIDI, OSC `/lmix/cue/release`, Leertaste) |
 | RUN.7 | Mehrere Cue-Listen je Show, jede mit eigenem Standby; eine aktive Liste für GO; „Liste X starten“ = GO in X, ohne aktive Liste zu wechseln | M | S1 | ✅ |
 | RUN.8 | Zeitgenauigkeit: Wartezeiten und Folgen ± 10 ms über 4 h | M | S1 | ◐ (ohne Drift; freier Rechner 1 h: spätestens 5,2 ms; unter Last bis 146 ms, DECISIONS 17.10.; Echtzeit-Priorität gebaut, Warnung bei Last oder ohne Echtzeit in der Oberfläche (DECISIONS 23.10.), Messung auf dem 3090-Rechner H.39, 4 h frei offen) |
@@ -268,7 +268,7 @@ QLab kennt keinen Import aus Texten; am nächsten kommt das Anlegen von Cues
 | SUI.1 | Show-Oberfläche als Seite Show des Programms lmix (neben Mix, Audio, Outputs, Setup am selben lmix-core; mehrere lmix-Fenster parallel möglich) | M | S1 | ✅ (Seite Show von `lmix`, DECISIONS 2026-10-23; bis dahin `lmix-show`) |
 | SUI.2 | Cue-Liste mit Spalten Nummer, Name, Art, Ziel, Vorwartezeit, Dauer, Nachwartezeit, Folge; Standby deutlich markiert; Gruppen einklappbar | M | S1 | ◐ (Nummer, Name, Notiz, Art mit Dauer, Vor/Nach/Folge unter „Erweitert“, Gruppen einklappbar; Ziel steht im Namen) |
 | SUI.3 | Großer GO-Knopf, Panik-Knopf, Standby-Name und Standby-Notiz in großer Schrift | M | S1 | ✅ |
-| SUI.4 | Laufende Cues mit Fortschrittsbalken, Restzeit, Stopp und Pause je Cue | M | S1 | ◐ (Fortschritt, Restzeit, Stopp je Cue; Pause mit RUN.5, S2) |
+| SUI.4 | Laufende Cues mit Fortschrittsbalken, Restzeit, Stopp und Pause je Cue | M | S1 | ✅ (Fortschritt, Restzeit, Pause und Stopp je Cue, „Alle pausieren/fortsetzen“) |
 | SUI.5 | Warnliste: defekte Cues, fehlende Medien, fehlende Zonen-Geräte, nicht erreichbare Ausgabeziele; vor der Show prüfbar | S | S1 | ◐ (fehlende Start-Ziele, Ausgabeziele, Inputs, Mediendateien; Erreichbarkeit der Ziele: `check_targets`, „Ziele prüfen“, jedes Senden; Zonen-Geräte mit Stufe 2) |
 | SUI.6 | Dunkle Raumansicht: stark gedimmt, kein Weiß, für Bedienung im dunklen Raum (lmix) | S | S1 | ✅ (Knopf „Dunkel“: Kante dunkel und ein Schleier über dem Fenster) |
 | SUI.7 | Kleine Bühnenvorschau | S | S1 | ◐ (Live-Monitore) |

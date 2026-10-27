@@ -259,6 +259,8 @@ pub const ACTION_GROUPS: &[(&str, &[&str])] = &[
             "cue_go",
             "cue_start",
             "cue_stop",
+            "cue_pause",
+            "cue_resume",
             "cue_standby",
             "cue_reset",
             "set_active_cue_list",
@@ -288,7 +290,14 @@ pub const ACTION_GROUPS: &[(&str, &[&str])] = &[
     ),
     (
         "sound",
-        &["play_sound", "fade_sound", "stop_sound", "set_zone_level"],
+        &[
+            "play_sound",
+            "fade_sound",
+            "stop_sound",
+            "pause_sound",
+            "resume_sound",
+            "set_zone_level",
+        ],
     ),
     (
         "stages",
@@ -300,6 +309,8 @@ pub const ACTION_GROUPS: &[(&str, &[&str])] = &[
             "show_picture",
             "fade_picture",
             "stop_picture",
+            "pause_picture",
+            "resume_picture",
             "set_stage_level",
         ],
     ),
@@ -762,6 +773,22 @@ pub enum Action {
         #[serde(default)]
         mode: StopMode,
     },
+    /// Pause a running cue (number or id) with the cues it started, or
+    /// without `cue` every cue of the list, or without `list` every cue
+    /// (RUN.5): waits stand still, sounds and pictures pause.
+    CuePause {
+        #[serde(default)]
+        list: Option<InputRef>,
+        #[serde(default)]
+        cue: Option<String>,
+    },
+    /// Resume what `cue_pause` paused, the same way.
+    CueResume {
+        #[serde(default)]
+        list: Option<InputRef>,
+        #[serde(default)]
+        cue: Option<String>,
+    },
     /// Move standby without starting anything (RUN.2).
     CueStandby {
         #[serde(default)]
@@ -849,6 +876,14 @@ pub enum Action {
         #[serde(default)]
         fade_ms: u32,
     },
+    /// Pause sound `id` where it is (RUN.5).
+    PauseSound {
+        id: String,
+    },
+    /// Resume paused sound `id` where it was.
+    ResumeSound {
+        id: String,
+    },
     /// Level and mute of a zone, reached over `duration_ms` (SND.11).
     SetZoneLevel {
         zone: String,
@@ -895,6 +930,14 @@ pub enum Action {
         id: Option<String>,
         #[serde(default)]
         fade_ms: u32,
+    },
+    /// Pause picture `id`: its frame stays, a video keeps its place (RUN.5).
+    PausePicture {
+        id: String,
+    },
+    /// Resume paused picture `id` where it was.
+    ResumePicture {
+        id: String,
     },
     /// Brightness of a stage, 0 (black) to 1, over `duration_ms` (VIS.7).
     SetStageLevel {

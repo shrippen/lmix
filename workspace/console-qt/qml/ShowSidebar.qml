@@ -57,6 +57,16 @@ KanteCard {
                         text: qsTr("Running: %1").arg(side.showView.running.length)
                     }
                     KanteButton {
+                        id: pauseAll
+                        // Resume when anything is paused, else pause (RUN.5).
+                        readonly property bool anyPaused: side.showView.running.some(r => r.paused)
+                        focusPolicy: Qt.NoFocus
+                        size: KanteButton.Size.Small
+                        text: pauseAll.anyPaused ? qsTr("Resume all") : qsTr("Pause all")
+                        enabled: side.showView.running.length > 0
+                        onClicked: side.showView.act({ action: pauseAll.anyPaused ? "cue_resume" : "cue_pause" })
+                    }
+                    KanteButton {
                         focusPolicy: Qt.NoFocus
                         size: KanteButton.Size.Small
                         text: qsTr("Stop all")
@@ -122,9 +132,10 @@ KanteCard {
                                     Layout.fillWidth: true
                                     QQC2.Label {
                                         Layout.fillWidth: true
-                                        text: run.modelData.phase === "pre_wait" ? qsTr("pre wait %1").arg(side.showView.clock(run.done))
+                                        text: (run.modelData.paused ? qsTr("paused") + " · " : "")
+                                            + (run.modelData.phase === "pre_wait" ? qsTr("pre wait %1").arg(side.showView.clock(run.done))
                                             : run.modelData.phase === "post_wait" ? qsTr("post wait %1").arg(side.showView.clock(run.done))
-                                            : side.showView.clock(run.done)
+                                            : side.showView.clock(run.done))
                                         font.family: KanteStyle.monoFamily
                                     }
                                     QQC2.Label {
@@ -135,6 +146,21 @@ KanteCard {
                                         color: KanteStyle.strongTextColor
                                     }
                                 }
+                            }
+                            KanteButton {
+                                focusPolicy: Qt.NoFocus
+                                size: KanteButton.Size.Small
+                                emphasis: KanteButton.Emphasis.Quiet
+                                text: run.modelData.paused ? "▶" : "⏸"
+                                Accessible.name: run.modelData.paused ? qsTr("Resume cue %1").arg(run.modelData.number)
+                                    : qsTr("Pause cue %1").arg(run.modelData.number)
+                                QQC2.ToolTip.visible: hovered
+                                QQC2.ToolTip.text: run.modelData.paused ? qsTr("Resume this cue") : qsTr("Pause this cue")
+                                onClicked: side.showView.act({
+                                    action: run.modelData.paused ? "cue_resume" : "cue_pause",
+                                    list: run.modelData.list,
+                                    cue: run.modelData.cue
+                                })
                             }
                             KanteButton {
                                 focusPolicy: Qt.NoFocus

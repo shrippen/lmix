@@ -19,6 +19,8 @@
 //! | `/lmix/cue/go` | list, or none for the active one | `cue_go` |
 //! | `/lmix/cue/back` | list, or none | `cue_standby` previous |
 //! | `/lmix/cue/stop` | list, or none for every cue | `cue_stop` |
+//! | `/lmix/cue/pause` | list, or none for every cue | `cue_pause` (RUN.5) |
+//! | `/lmix/cue/resume` | list, or none for every cue | `cue_resume` |
 //! | `/lmix/cue/release` | none | the GO button is let go (RUN.6) |
 //! | `/lmix/panic` | time in ms (int) or s (float), or none | `cue_panic` (twice: hard stop) |
 //! | `/lmix/stop/hard` | – | `cue_hard_stop` |
@@ -361,6 +363,13 @@ pub fn request(message: &Message) -> Result<Request, String> {
         },
         ["stop", "hard"] => Action::CueHardStop,
         ["cue", "release"] => return Ok(Request::Release),
+        ["cue", step @ ("pause" | "resume")] => {
+            let list = arg(0).map(|_| input(0)).transpose()?;
+            match *step {
+                "pause" => Action::CuePause { list, cue: None },
+                _ => Action::CueResume { list, cue: None },
+            }
+        }
         ["cue", step @ ("go" | "back" | "stop")] => {
             let list = arg(0).map(|_| input(0)).transpose()?;
             match *step {
@@ -692,6 +701,20 @@ mod tests {
             Ok(Request::Action(Action::CueGo { list: None }))
         );
         assert_eq!(req("/lmix/cue/release", vec![]), Ok(Request::Release));
+        assert_eq!(
+            req("/lmix/cue/pause", vec![]),
+            Ok(Request::Action(Action::CuePause {
+                list: None,
+                cue: None
+            }))
+        );
+        assert_eq!(
+            req("/lmix/cue/resume", vec![Arg::Str("Main".into())]),
+            Ok(Request::Action(Action::CueResume {
+                list: Some(InputRef::Text("Main".into())),
+                cue: None
+            }))
+        );
         assert_eq!(
             req("/lmix/program", vec![Arg::Str("Cam".into())]),
             Ok(Request::Action(Action::CutDirect {

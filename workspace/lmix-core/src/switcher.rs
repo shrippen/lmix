@@ -59,7 +59,9 @@ pub enum Command {
     },
     /// Black with a banner in `slot`, whose input is a card while the
     /// cards are off (`set_cards`).
-    CardOff { slot: usize },
+    CardOff {
+        slot: usize,
+    },
     /// Loop the player of `slot` or let it stop at the end (INP.10);
     /// `items` are its files, unchanged.
     SetAtEnd {
@@ -68,7 +70,9 @@ pub enum Command {
         at_end: AtEnd,
     },
     /// Show `slot` in preview.
-    Preview { slot: usize },
+    Preview {
+        slot: usize,
+    },
     /// Bring `slot` on program; `None` is black. `Effect::Cut` for a hard cut.
     Program {
         slot: Option<usize>,
@@ -76,14 +80,25 @@ pub enum Command {
         duration_ms: u32,
     },
     /// Toggle fade to black.
-    FadeToBlack { duration_ms: u32 },
+    FadeToBlack {
+        duration_ms: u32,
+    },
     /// Solo `slot` on the headphones, or end its solo.
-    SetListen { slot: usize, listen: Listen },
+    SetListen {
+        slot: usize,
+        listen: Listen,
+    },
     /// Listen to engine bus `bus` (see [`MixerBuses`]) on the headphones,
     /// after its master.
-    SetBusListen { bus: usize, on: bool },
+    SetBusListen {
+        bus: usize,
+        on: bool,
+    },
     /// Last frame (`Hold`) or black when the source of `slot` stalls.
-    SetSignalLoss { slot: usize, mode: SignalLoss },
+    SetSignalLoss {
+        slot: usize,
+        mode: SignalLoss,
+    },
     /// Start output `id` (replaces a running one); its sound from bus
     /// `bus` instead of the feed's.
     StartOutput {
@@ -93,7 +108,9 @@ pub enum Command {
         bus: Option<BusId>,
     },
     /// Stop output `id`; stopping a stopped one is fine.
-    StopOutput { id: OutputId },
+    StopOutput {
+        id: OutputId,
+    },
     /// Running output `id` takes its sound from bus `bus` instead of the
     /// feed's, or the feed's again; it plays on. Only for an output that
     /// had sound and keeps it (otherwise it is started anew).
@@ -103,7 +120,10 @@ pub enum Command {
         bus: Option<BusId>,
     },
     /// Channel strip of the audio mixer channel of `slot`.
-    SetStrip { slot: usize, strip: ChannelStrip },
+    SetStrip {
+        slot: usize,
+        strip: ChannelStrip,
+    },
     /// Layout on engine composition `pip`: background slot and boxes.
     SetLayout {
         pip: usize,
@@ -111,7 +131,9 @@ pub enum Command {
         boxes: Vec<EngineBox>,
     },
     /// Show composition `pip` in preview.
-    PreviewLayout { pip: usize },
+    PreviewLayout {
+        pip: usize,
+    },
     /// Bring composition `pip` on program.
     ProgramLayout {
         pip: usize,
@@ -119,23 +141,43 @@ pub enum Command {
         duration_ms: u32,
     },
     /// Colour correction of the picture of `slot`.
-    SetLook { slot: usize, look: Look },
+    SetLook {
+        slot: usize,
+        look: Look,
+    },
     /// Run JavaScript in the page of `slot` (web or graphics input).
-    PageScript { slot: usize, script: String },
+    PageScript {
+        slot: usize,
+        script: String,
+    },
     /// Freeze the page of `slot`, or let it run.
-    PageRunning { slot: usize, running: PageRunning },
+    PageRunning {
+        slot: usize,
+        running: PageRunning,
+    },
     /// Stinger from program to `to` with `clip` (added to the library
     /// first if missing): the engine plays it and switches program at its
     /// cut point, frame-accurate.
-    Stinger { to: usize, clip: LibraryClip },
+    Stinger {
+        to: usize,
+        clip: LibraryClip,
+    },
     /// The engine's stinger clips: these and no others.
-    StingerLibrary { clips: Vec<LibraryClip> },
+    StingerLibrary {
+        clips: Vec<LibraryClip>,
+    },
     /// Hold the commands after it back by `ms`; the service runs them
     /// later, without blocking other actions.
-    Wait { ms: u32 },
+    Wait {
+        ms: u32,
+    },
     /// Send of `slot` to engine bus `bus` (see [`MixerBuses`]), linear
     /// gain.
-    SetAuxSend { slot: usize, bus: usize, gain: f64 },
+    SetAuxSend {
+        slot: usize,
+        bus: usize,
+        gain: f64,
+    },
     /// Sends into engine buses (slot, bus, linear gain) and the buses'
     /// listening, in one write: what a bus change sets up again.
     SetBusMix {
@@ -150,10 +192,17 @@ pub enum Command {
         ramp_ms: u32,
     },
     /// Master of program sound, reached over `ramp_ms` (AUD.2, AUD.14).
-    SetMaster { gain: f64, mute: bool, ramp_ms: u32 },
+    SetMaster {
+        gain: f64,
+        mute: bool,
+        ramp_ms: u32,
+    },
     /// Level of the headphones (AUD.4), reached over `ramp_ms`; muted
     /// they get 0.
-    SetMonitor { gain: f64, ramp_ms: u32 },
+    SetMonitor {
+        gain: f64,
+        ramp_ms: u32,
+    },
     /// Program in this format (OUT.1); the engine rebuilds its mixer only
     /// when it differs, and the commands after it set the mixer up again.
     SetFormat {
@@ -167,7 +216,10 @@ pub enum Command {
     },
     /// Hold the take of preview at `position` (0–1) with `effect`, as
     /// the T-bar stands (SWI.3); 0 shows program as it was.
-    TBar { position: f32, effect: Effect },
+    TBar {
+        position: f32,
+        effect: Effect,
+    },
     /// Show `slot` on overlay `channel` (0-based) or take it off, faded
     /// over `duration_ms`.
     Overlay {
@@ -182,11 +234,20 @@ pub enum Command {
         rect: Option<BoxRect>,
     },
     /// Play, pause, restart or step the media player of `slot`.
-    Transport { slot: usize, transport: Transport },
+    Transport {
+        slot: usize,
+        transport: Transport,
+    },
     /// Jump within the item the slot's media player plays.
-    Seek { slot: usize, position_ms: u64 },
+    Seek {
+        slot: usize,
+        position_ms: u64,
+    },
     /// Play item `index` (0-based) of the slot's playlist.
-    PlayItem { slot: usize, index: usize },
+    PlayItem {
+        slot: usize,
+        index: usize,
+    },
     /// Set the audio channel of `slot`: linear gain (1.0 = unity) and
     /// mute, faded over `ramp_ms`.
     SetAudio {
@@ -198,10 +259,14 @@ pub enum Command {
     /// The show's zones and stages with this machine's outputs; the
     /// engine builds its playback flow for them (running sounds and
     /// pictures stop). Without zones and stages: none.
-    SetPlayback { playback: Playback },
+    SetPlayback {
+        playback: Playback,
+    },
     /// Hold these sounds and pictures ready (decoded, waiting); the ones
     /// held before and not named go, unless they started meanwhile.
-    SetPreload { preload: Preload },
+    SetPreload {
+        preload: Preload,
+    },
     /// Play `sound` as `id`, replacing a sound of that id.
     PlaySound {
         id: String,
@@ -214,7 +279,17 @@ pub enum Command {
         then: lmix_types::AfterFade,
     },
     /// Stop sound `id`, or every sound.
-    StopSound { id: Option<String>, fade_ms: u32 },
+    StopSound {
+        id: Option<String>,
+        fade_ms: u32,
+    },
+    /// Pause sound `id` where it is, or resume it (RUN.5).
+    PauseSound {
+        id: String,
+    },
+    ResumeSound {
+        id: String,
+    },
     /// Show `picture` as `id`, replacing a picture of that id.
     ShowPicture {
         id: String,
@@ -227,7 +302,17 @@ pub enum Command {
         then: lmix_types::AfterFade,
     },
     /// Take picture `id`, or every picture, off its stage.
-    StopPicture { id: Option<String>, fade_ms: u32 },
+    StopPicture {
+        id: Option<String>,
+        fade_ms: u32,
+    },
+    /// Pause picture `id` where it is, or resume it (RUN.5).
+    PausePicture {
+        id: String,
+    },
+    ResumePicture {
+        id: String,
+    },
     /// Stage `stage` (place in the show) to its brightness.
     SetStageLevel {
         stage: usize,
@@ -336,6 +421,8 @@ fn runs_automation(action: &Action) -> bool {
                 | Action::CueGo { .. }
                 | Action::CueStart { .. }
                 | Action::CueStop { .. }
+                | Action::CuePause { .. }
+                | Action::CueResume { .. }
                 | Action::CueStandby { .. }
                 | Action::CueReset
                 | Action::SetActiveCueList { .. }
@@ -1294,6 +1381,8 @@ impl Switcher {
                 crate::playback::check_fade_time(fade_ms)?;
                 Ok(vec![Command::StopPicture { id, fade_ms }])
             }
+            Action::PausePicture { id } => Ok(vec![Command::PausePicture { id }]),
+            Action::ResumePicture { id } => Ok(vec![Command::ResumePicture { id }]),
             Action::SetStageLevel {
                 stage,
                 brightness,
@@ -1331,6 +1420,8 @@ impl Switcher {
                 crate::playback::check_fade_time(fade_ms)?;
                 Ok(vec![Command::StopSound { id, fade_ms }])
             }
+            Action::PauseSound { id } => Ok(vec![Command::PauseSound { id }]),
+            Action::ResumeSound { id } => Ok(vec![Command::ResumeSound { id }]),
             Action::SetZoneLevel {
                 zone,
                 gain_db,
@@ -1426,6 +1517,8 @@ impl Switcher {
             Action::CueGo { .. }
             | Action::CueStart { .. }
             | Action::CueStop { .. }
+            | Action::CuePause { .. }
+            | Action::CueResume { .. }
             | Action::CueReset
             | Action::CuePanic { .. }
             | Action::CueHardStop => Err(bad_cues("run through the service".into())),
@@ -3239,6 +3332,28 @@ impl Switcher {
     ) -> Result<Vec<Out>, ActionError> {
         let index = list.map(|l| self.find_cue_list(l)).transpose()?;
         self.cues.stop(&self.show.cue_lists, index, cue, now)
+    }
+
+    /// Pause cues (RUN.5), as [`Switcher::cue_stop`] picks them.
+    pub fn cue_pause(
+        &mut self,
+        list: Option<&InputRef>,
+        cue: Option<&str>,
+        now: tokio::time::Instant,
+    ) -> Result<Vec<Out>, ActionError> {
+        let index = list.map(|l| self.find_cue_list(l)).transpose()?;
+        self.cues.pause(&self.show.cue_lists, index, cue, now)
+    }
+
+    /// Resume paused cues, as [`Switcher::cue_stop`] picks them.
+    pub fn cue_resume(
+        &mut self,
+        list: Option<&InputRef>,
+        cue: Option<&str>,
+        now: tokio::time::Instant,
+    ) -> Result<Vec<Out>, ActionError> {
+        let index = list.map(|l| self.find_cue_list(l)).transpose()?;
+        self.cues.resume(&self.show.cue_lists, index, cue, now)
     }
 
     /// Stop every cue at once, every standby to the start (RUN.11).

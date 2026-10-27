@@ -95,6 +95,13 @@ impl Playing {
     }
 }
 
+/// Which way [`StromEngine::hold`] goes.
+#[derive(Clone, Copy, Debug)]
+pub(super) enum Hold {
+    Pause,
+    Resume,
+}
+
 /// What is held ready under an id.
 #[derive(Clone, Debug, PartialEq)]
 enum Ready {
@@ -294,6 +301,16 @@ impl StromEngine {
             }
         }
         Ok(())
+    }
+
+    /// Pause or resume `id` (`kind`: `sounds`, `pictures`, RUN.5).
+    pub(super) async fn hold(&self, kind: &str, id: &str, step: Hold) -> Result<(), EngineError> {
+        let verb = match step {
+            Hold::Pause => "pause",
+            Hold::Resume => "resume",
+        };
+        let path = format!("/{kind}/{}/{verb}", encode_path_segment(id));
+        self.playback_post(&path, &serde_json::json!({})).await
     }
 
     /// Let held `id` go (`kind`: `sounds`, `pictures`).

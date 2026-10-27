@@ -119,7 +119,8 @@ ColumnLayout {
     }
 
     function elapsed(run) {
-        return run.elapsed_ms + Math.max(0, now - stateAt)
+        // A paused cue's time stands still (RUN.5).
+        return run.paused ? run.elapsed_ms : run.elapsed_ms + Math.max(0, now - stateAt)
     }
 
     /** 1:05.3, or 0:12.0 */
