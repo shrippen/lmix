@@ -943,8 +943,13 @@ impl Service {
         }
         // A card output on air keeps the cards on, also when the engine
         // could not say it uses them (`adopt_cards`).
+        // Switched on, the card inputs the restore showed black get their
+        // cards again.
         if sw.runs_a_card_output() {
-            sw.adopt_cards();
+            let on = sw.set_cards(true);
+            if let Err(e) = self.execute(&mut sw, &on).await {
+                tracing::warn!("cards not taken back: {e}");
+            }
         }
         self.publish(&sw);
     }
@@ -3749,6 +3754,18 @@ mod tests {
         let autosave = dir.path().join("autosave.lmix");
         let engine = Arc::new(NullEngine::default());
         let first = Service::new(4, engine.clone(), Some(autosave.clone()));
+        let card = SourceSpec::Card {
+            device: 2,
+            mode: None,
+            pair: 1,
+        };
+        first
+            .handle(Action::AddInput {
+                source: card.clone(),
+                name: Some("SDI".into()),
+            })
+            .await
+            .unwrap();
         first
             .handle(Action::AddOutput {
                 spec: lmix_types::OutputSpec::Card {
@@ -3786,6 +3803,20 @@ mod tests {
             .log()
             .iter()
             .any(|c| matches!(c, Command::StopOutput { .. })));
+        // The input, black after the restore, has its card again.
+        let last_slot = engine.log().into_iter().rev().find(|c| {
+            matches!(
+                c,
+                Command::SetSlot { slot: 0, .. } | Command::CardOff { slot: 0 }
+            )
+        });
+        assert_eq!(
+            last_slot,
+            Some(Command::SetSlot {
+                slot: 0,
+                source: Some(card),
+            })
+        );
     }
 
     /// A card output failing back stops trying once the cards go off and

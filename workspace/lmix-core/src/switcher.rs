@@ -4894,7 +4894,7 @@ impl Switcher {
 
     /// Use the cards or let go of them: card inputs between their card
     /// and black with a banner, card outputs between running and waiting.
-    fn set_cards(&mut self, on: bool) -> Vec<Command> {
+    pub fn set_cards(&mut self, on: bool) -> Vec<Command> {
         if on == self.cards_on {
             return Vec::new();
         }
