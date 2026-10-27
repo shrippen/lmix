@@ -38,6 +38,9 @@ const OWN_STOP_WINDOW: std::time::Duration = std::time::Duration::from_secs(1);
 /// Failback retries: first after 2 s, doubling up to 10 s.
 const FAILBACK_FIRST: std::time::Duration = std::time::Duration::from_secs(2);
 const FAILBACK_MAX: std::time::Duration = std::time::Duration::from_secs(10);
+/// A failed output started again counts as running once its flow has run
+/// this long: one on a busy card starts and fails a second later.
+const OUTPUT_HOLD: std::time::Duration = std::time::Duration::from_secs(5);
 
 /// Events kept for slow subscribers before they miss some.
 const EVENT_BUFFER: usize = 256;
@@ -1073,34 +1076,63 @@ impl Service {
     }
 
     /// Start a failed output again until it runs, or the operator stopped
-    /// or removed it.
+    /// or removed it. It stays failed until a start holds (`OUTPUT_HOLD`).
     async fn restart_output(self: Arc<Self>, id: OutputId) {
         let mut wait = FAILBACK_FIRST;
         loop {
             tokio::time::sleep(wait).await;
             wait = (wait * 2).min(FAILBACK_MAX);
             let mut sw = self.switcher.lock().await;
+            let Some(command) = sw.restart_command(id) else {
+                self.end_failback(&mut sw, id);
+                break;
+            };
+            let failure = sw.output_failure(id);
+            if self.execute(&mut sw, &[command]).await.is_err() {
+                continue;
+            }
+
+            // Still failed while the start may not hold.
+            let since_ms = now_ms();
+            sw.hold_output(id, failure);
+            drop(sw);
+            tokio::time::sleep(OUTPUT_HOLD).await;
+            // Asked under the lock: a failure meanwhile waits for it and
+            // starts a failback of its own.
+            let mut sw = self.switcher.lock().await;
+            let running = self.engine.output_running(id).await;
+
+            // Stopped or removed meanwhile, or back; else again, later.
             let done = match sw.restart_command(id) {
                 None => true,
-                Some(command) => {
-                    let back = self.execute(&mut sw, &[command]).await.is_ok();
-                    if back {
-                        tracing::info!(output = %id, "output back");
-                        self.publish(&sw);
-                    }
-                    back
+                Some(_) if running => {
+                    tracing::info!(output = %id, "output back");
+                    sw.set_output_status(id, OutputStatus::Running { since_ms });
+                    self.publish(&sw);
+                    true
+                }
+                // Not held: failed again.
+                Some(_) => {
+                    let failure = sw.output_failure(id);
+                    sw.set_output_status(id, OutputStatus::Failed { message: failure });
+                    false
                 }
             };
             if done {
-                // Under the switcher's lock: a failure after it starts a
-                // failback of its own.
-                self.failing_back
-                    .lock()
-                    .expect("failback lock")
-                    .remove(&output_flow_id(id));
+                self.end_failback(&mut sw, id);
                 break;
             }
         }
+    }
+
+    /// The failback of output `id` is over, its hold too. Called under
+    /// the switcher's lock: a failure after it starts a failback of its own.
+    fn end_failback(&self, sw: &mut Switcher, id: OutputId) {
+        sw.end_hold(id);
+        self.failing_back
+            .lock()
+            .expect("failback lock")
+            .remove(&output_flow_id(id));
     }
 
     async fn slot_failed(self: &Arc<Self>, error: &FlowError) {
@@ -3512,6 +3544,197 @@ mod tests {
             state.outputs[0].status,
             lmix_types::OutputStatus::Running { .. }
         ));
+    }
+
+    /// An output whose flow fails right after each start (a busy card)
+    /// stays failed while it is started again, ever less often, and
+    /// counts as running once a start holds.
+    #[tokio::test(start_paused = true)]
+    async fn an_output_failing_after_each_start_stays_failed() {
+        let engine = Arc::new(NullEngine::failing());
+        let service = Service::new(4, engine.clone(), None);
+        tokio::spawn(service.clone().watch_failures());
+        tokio::task::yield_now().await;
+        service
+            .handle(Action::AddOutput {
+                spec: lmix_types::OutputSpec::Ndi { name: "PGM".into() },
+                source: lmix_types::OutputSource::Program,
+                bus: None,
+                name: Some("Card".into()),
+            })
+            .await
+            .unwrap();
+        engine.fail_outputs(true);
+        service
+            .handle(Action::StartOutput {
+                output: lmix_types::OutputRef::Text("Card".into()),
+            })
+            .await
+            .unwrap();
+
+        let status = || async { service.state().await.outputs[0].status.clone() };
+        let starts = || {
+            engine
+                .log()
+                .iter()
+                .filter(|c| matches!(c, Command::StartOutput { .. }))
+                .count()
+        };
+        // From its first failure on (1.5 s after the start).
+        let second = std::time::Duration::from_secs(1);
+        tokio::time::sleep(second * 2).await;
+        for _ in 0..60 {
+            tokio::time::sleep(second).await;
+            let now = status().await;
+            assert!(
+                matches!(now, lmix_types::OutputStatus::Failed { .. }),
+                "{now:?} after {} starts",
+                starts()
+            );
+        }
+        // Started again with growing pauses, not every two seconds.
+        assert!(starts() <= 10, "{} starts in a minute", starts());
+
+        engine.fail_outputs(false);
+        tokio::time::sleep(FAILBACK_MAX * 3).await;
+        let now = status().await;
+        assert!(
+            matches!(now, lmix_types::OutputStatus::Running { .. }),
+            "{now:?}"
+        );
+    }
+
+    /// An output failing while its failback asks whether it runs is not
+    /// taken for running: it fails back again.
+    #[tokio::test(start_paused = true)]
+    async fn an_output_failing_while_its_failback_asks_fails_back_again() {
+        let engine = Arc::new(NullEngine::failing());
+        let service = Service::new(4, engine.clone(), None);
+        tokio::spawn(service.clone().watch_failures());
+        tokio::task::yield_now().await;
+        service
+            .handle(Action::AddOutput {
+                spec: lmix_types::OutputSpec::Ndi { name: "PGM".into() },
+                source: lmix_types::OutputSource::Program,
+                bus: None,
+                name: Some("Card".into()),
+            })
+            .await
+            .unwrap();
+        engine.fail_outputs(true);
+        service
+            .handle(Action::StartOutput {
+                output: lmix_types::OutputRef::Text("Card".into()),
+            })
+            .await
+            .unwrap();
+        // Failed once; the failback's start holds, its question finds the
+        // output running but it fails meanwhile.
+        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+        engine.fail_outputs(false);
+        engine.fail_after_answer();
+
+        tokio::time::sleep(FAILBACK_MAX * 3).await;
+        let id = service.state().await.outputs[0].id;
+        assert!(engine.output_running(id).await, "not started again");
+        assert!(matches!(
+            service.state().await.outputs[0].status,
+            lmix_types::OutputStatus::Running { .. }
+        ));
+    }
+
+    /// A service with output "Card" failed once and started again: its
+    /// flow runs, the failback still holds it for failed.
+    async fn holding_output() -> (Arc<NullEngine>, Arc<Service>, lmix_types::OutputId) {
+        let engine = Arc::new(NullEngine::failing());
+        let service = Service::new(4, engine.clone(), None);
+        tokio::spawn(service.clone().watch_failures());
+        tokio::task::yield_now().await;
+        service
+            .handle(Action::AddBus {
+                name: Some("Mix minus".into()),
+                pre_fader: false,
+            })
+            .await
+            .unwrap();
+        service
+            .handle(Action::AddOutput {
+                spec: lmix_types::OutputSpec::Ndi { name: "PGM".into() },
+                source: lmix_types::OutputSource::Program,
+                bus: None,
+                name: Some("Card".into()),
+            })
+            .await
+            .unwrap();
+        engine.fail_outputs(true);
+        service
+            .handle(Action::StartOutput {
+                output: lmix_types::OutputRef::Text("Card".into()),
+            })
+            .await
+            .unwrap();
+        // Failed after 1.5 s, started again after 3.5 s, held until 8.5 s.
+        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+        engine.fail_outputs(false);
+        tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+        let id = service.state().await.outputs[0].id;
+        assert!(engine.output_running(id).await);
+        assert!(matches!(
+            service.state().await.outputs[0].status,
+            lmix_types::OutputStatus::Failed { .. }
+        ));
+        (engine, service, id)
+    }
+
+    /// Outputs stopped while a failback holds one stop its flow too.
+    #[tokio::test(start_paused = true)]
+    async fn stopping_outputs_stops_one_the_failback_holds() {
+        let (engine, service, id) = holding_output().await;
+        service
+            .handle(Action::StopOutputs {
+                group: lmix_types::OutputGroup::All,
+            })
+            .await
+            .unwrap();
+        tokio::time::sleep(FAILBACK_MAX * 3).await;
+        assert!(!engine.output_running(id).await, "flow still runs");
+        assert_eq!(
+            service.state().await.outputs[0].status,
+            lmix_types::OutputStatus::Stopped
+        );
+    }
+
+    /// An output stopped while the failback holds it no longer counts as
+    /// running.
+    #[tokio::test(start_paused = true)]
+    async fn stopping_an_output_the_failback_holds_ends_the_hold() {
+        let (engine, service, id) = holding_output().await;
+        service
+            .handle(Action::StopOutput {
+                output: lmix_types::OutputRef::Text("Card".into()),
+            })
+            .await
+            .unwrap();
+        tokio::time::sleep(FAILBACK_MAX * 3).await;
+        assert!(!engine.output_running(id).await, "flow still runs");
+        assert!(!service.switcher.lock().await.output_is_running(id));
+    }
+
+    /// A bus given to an output the failback holds reaches its flow.
+    #[tokio::test(start_paused = true)]
+    async fn a_bus_reaches_an_output_the_failback_holds() {
+        let (engine, service, _) = holding_output().await;
+        service
+            .handle(Action::SetOutputBus {
+                output: lmix_types::OutputRef::Text("Card".into()),
+                bus: Some(lmix_types::BusRef::Text("Mix minus".into())),
+            })
+            .await
+            .unwrap();
+        assert!(engine
+            .log()
+            .iter()
+            .any(|c| matches!(c, Command::SetOutputSound { bus: Some(_), .. })));
     }
 
     /// An output whose sound the engine could not move and whose start anew

@@ -38,6 +38,26 @@ cd ../selftest && cargo build --release
 - Testdatei: 1080p30 H.264 (Constrained Baseline, 8 Mbit/s, GOP 60,
   `videotestsrc pattern=ball` + `timeoverlay`, per NVENC erzeugt).
 
+## 2026-10-27 — SDI-Loop: Program über die Karte zurück (H.7)
+
+`scripts/measure-sdi-latency.sh` (DeckLink Quad 2, Kabel von Anschluss 1
+auf 2, CUDA-Mischer mit 30 fps, RTX 3090): Ein Clip blitzt einmal pro
+Sekunde auf Program. Program geht als Kartenausgang hinaus und kommt als
+Karten-Input zurück. Der aufgenommene Multiview zeigt beide;
+`scripts/sdi-latency.py` misst, wie viel später die Kachel des Inputs
+blitzt. Das ist der Weg aus dem Mischer hinaus, durch beide Anschlüsse und
+zurück in den Mischer. Auflösung: ein Mischerbild (33 ms).
+
+| Modus | Läufe | Input hinter Program |
+|---|---|---|
+| 1080p25 | 3 | 266, 300, 267 ms |
+| 1080i50 | 2 | 300, 267 ms |
+
+150 ms davon sind der Vorlauf am Kartenausgang (`CARD_LEAD_MS`, DECISIONS
+27.10.). Er sinkt erst, wenn die übrige Ursache später Bilder nach einem
+Neustart geklärt ist (todo). Ein Gerät hinter dem Kartenausgang sieht das
+Bild also etwa 150 ms plus Kartenweg nach Program.
+
 ## 2026-10-23 — Program an den Ausgängen, mit und ohne Sync
 
 Bildalter am Eingang des Encoders einer MKV-Aufnahme auf Program

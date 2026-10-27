@@ -50,6 +50,16 @@ pub struct NullEngine {
     starts: std::sync::atomic::AtomicUsize,
     #[cfg(test)]
     start_during_command: std::sync::atomic::AtomicBool,
+    /// Outputs started and not stopped or failed since.
+    #[cfg(test)]
+    running_outputs: Mutex<std::collections::HashSet<lmix_types::OutputId>>,
+    /// The next query whether an output runs answers yes, then the output
+    /// fails before the answer arrives (`fail_after_answer`).
+    #[cfg(test)]
+    failing_after_answer: std::sync::atomic::AtomicBool,
+    /// Every output fails right after its start, as one on a busy card.
+    #[cfg(test)]
+    failing_outputs: std::sync::atomic::AtomicBool,
 }
 
 impl NullEngine {
@@ -101,6 +111,10 @@ impl NullEngine {
     /// Report a flow failure as the engine would.
     #[cfg(test)]
     pub fn fail(&self, error: super::meters::FlowError) {
+        self.running_outputs
+            .lock()
+            .expect("outputs lock")
+            .retain(|id| super::flows::output_flow_id(*id) != error.flow);
         let errors = self.errors.as_ref().expect("engine built with failing()");
         let _ = errors.send(error);
     }
@@ -137,6 +151,21 @@ impl NullEngine {
         *self.instance.lock().expect("instance lock") = Some(instance.into());
     }
 
+    /// Let the next query whether an output runs answer yes and the output
+    /// fail before the answer arrives, as strom's may.
+    #[cfg(test)]
+    pub fn fail_after_answer(&self) {
+        self.failing_after_answer
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    /// Let every output fail right after its start (`true`) or run.
+    #[cfg(test)]
+    pub fn fail_outputs(&self, failing: bool) {
+        self.failing_outputs
+            .store(failing, std::sync::atomic::Ordering::SeqCst);
+    }
+
     /// Refuse (`true`) or run every following command.
     #[cfg(test)]
     pub fn refuse(&self, refusing: bool) {
@@ -162,6 +191,45 @@ impl NullEngine {
     #[cfg(test)]
     pub fn log(&self) -> Vec<Command> {
         self.log.lock().expect("log lock").clone()
+    }
+}
+
+/// How long after its start a failing output fails (`fail_outputs`).
+#[cfg(test)]
+const FAILING_OUTPUT_AFTER: std::time::Duration = std::time::Duration::from_millis(1500);
+
+#[cfg(test)]
+impl NullEngine {
+    /// Note an output's start or stop; with `fail_outputs` a started one
+    /// fails a moment later.
+    fn track_output(&self, command: &Command) {
+        let mut running = self.running_outputs.lock().expect("outputs lock");
+        match command {
+            Command::StartOutput { id, .. } => {
+                if !self
+                    .failing_outputs
+                    .load(std::sync::atomic::Ordering::SeqCst)
+                {
+                    running.insert(*id);
+                    return;
+                }
+                // strom reports it a moment after the start succeeded.
+                let errors = self.errors.clone().expect("engine built with failing()");
+                let error = super::meters::FlowError {
+                    flow: super::flows::output_flow_id(*id),
+                    message: "card busy".into(),
+                    kind: super::meters::FlowFailure::Error,
+                };
+                tokio::spawn(async move {
+                    tokio::time::sleep(FAILING_OUTPUT_AFTER).await;
+                    let _ = errors.send(error);
+                });
+            }
+            Command::StopOutput { id } => {
+                running.remove(id);
+            }
+            _ => {}
+        }
     }
 }
 
@@ -230,6 +298,7 @@ impl Engine for NullEngine {
             {
                 return Err(EngineError::Refused("pipeline not running".into()));
             }
+            self.track_output(command);
             let slow = self.slow.lock().expect("slow lock").take();
             if let Some((takes, error)) = slow {
                 use std::sync::atomic::Ordering::SeqCst;
@@ -263,6 +332,28 @@ impl Engine for NullEngine {
     }
 
     async fn output_running(&self, _id: lmix_types::OutputId) -> bool {
+        #[cfg(test)]
+        {
+            let running = self
+                .running_outputs
+                .lock()
+                .expect("outputs lock")
+                .contains(&_id);
+            if self
+                .failing_after_answer
+                .swap(false, std::sync::atomic::Ordering::SeqCst)
+            {
+                self.fail(super::meters::FlowError {
+                    flow: super::flows::output_flow_id(_id),
+                    message: "card lost".into(),
+                    kind: super::meters::FlowFailure::Error,
+                });
+                // The failure goes round before the answer comes back.
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            }
+            return running;
+        }
+        #[cfg(not(test))]
         false
     }
 
