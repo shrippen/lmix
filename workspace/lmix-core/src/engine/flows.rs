@@ -610,12 +610,16 @@ pub fn output_flow(
         Feed::Slot { slot, .. } => slot_channel(slot),
     };
     let audio = output_sound(spec, feed, bus);
-    let channels = [("pgm", Some(video)), (OUTPUT_SOUND, audio.clone())];
-    for (block_id, channel) in channels {
+    let delay_ms = card_sound_delay_ms(spec);
+    let channels = [
+        ("pgm", Some(video), 0),
+        (OUTPUT_SOUND, audio.clone(), delay_ms),
+    ];
+    for (block_id, channel, extra_ms) in channels {
         let Some(channel) = channel else {
             continue;
         };
-        flow.blocks.push(inter_input(block_id, channel, spec));
+        flow.blocks.push(inter_input(block_id, channel, extra_ms));
     }
     let sound = audio.is_some();
     if sound {
@@ -754,14 +758,10 @@ pub fn output_flow(
     flow
 }
 
-/// An output flow's inter input `id` of `channel`. A card's sound waits
-/// its delay in it.
-fn inter_input(id: &str, channel: String, spec: &OutputSpec) -> BlockInstance {
-    let delay_ms = match spec {
-        OutputSpec::Card { sound_delay_ms, .. } => *sound_delay_ms,
-        _ => 0,
-    };
-    let buffer_ms = OUTPUT_BUFFER_MS.parse::<u32>().expect("a number") + delay_ms;
+/// An output flow's inter input `id` of `channel`, buffering `extra_ms`
+/// more than the others (a card's sound waits its delay in it).
+fn inter_input(id: &str, channel: String, extra_ms: u32) -> BlockInstance {
+    let buffer_ms = OUTPUT_BUFFER_MS.parse::<u32>().expect("a number") + extra_ms;
     block(
         id,
         INTER_INPUT_BLOCK,
@@ -770,6 +770,14 @@ fn inter_input(id: &str, channel: String, spec: &OutputSpec) -> BlockInstance {
             ("max_time", PropertyValue::String(buffer_ms.to_string())),
         ],
     )
+}
+
+/// How much later a card output plays its sound; 0 for other outputs.
+fn card_sound_delay_ms(spec: &OutputSpec) -> u32 {
+    match spec {
+        OutputSpec::Card { sound_delay_ms, .. } => *sound_delay_ms,
+        _ => 0,
+    }
 }
 
 /// A card output's channel pairs that sound, 0-based, with their pads:
@@ -788,8 +796,11 @@ fn add_card_pairs(
         let pair = index as u32 + 1;
         let input = format!("card_bus{pair}");
         let timed = format!("card_bus{pair}_timed");
-        flow.blocks
-            .push(inter_input(&input, bus_channel(*bus), spec));
+        flow.blocks.push(inter_input(
+            &input,
+            bus_channel(*bus),
+            card_sound_delay_ms(spec),
+        ));
         // One segment, as for the output's own sound.
         flow.elements.push(element(
             &timed,
@@ -3589,6 +3600,8 @@ mod tests {
         // The sound waits its delay in the inter buffer.
         let sound = flow.blocks.iter().find(|b| b.id == OUTPUT_SOUND).unwrap();
         assert_eq!(text(sound, "max_time"), "700");
+        let picture = flow.blocks.iter().find(|b| b.id == "pgm").unwrap();
+        assert_eq!(text(picture, "max_time"), OUTPUT_BUFFER_MS);
     }
 
     /// Without sound and without buses the card plays picture only.
