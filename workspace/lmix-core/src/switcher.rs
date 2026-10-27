@@ -4938,7 +4938,7 @@ impl Switcher {
 
     /// While the cards are off: stop commands for the card outputs that
     /// run or fail back, which now wait for the cards.
-    pub fn release_card_outputs(&mut self) -> Vec<Command> {
+    fn release_card_outputs(&mut self) -> Vec<Command> {
         if self.cards_on {
             return Vec::new();
         }
@@ -4990,6 +4990,14 @@ impl Switcher {
     /// The engine still uses the cards from before a restart: they are on.
     pub fn adopt_cards(&mut self) {
         self.cards_on = true;
+    }
+
+    /// Whether a card output runs.
+    pub fn runs_a_card_output(&self) -> bool {
+        self.show
+            .outputs
+            .iter()
+            .any(|o| is_card(&o.spec) && self.output_running(o.id))
     }
 
     /// Whether output `id` waits for the cards.
