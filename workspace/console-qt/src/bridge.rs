@@ -400,6 +400,7 @@ impl qobject::Core {
         ) else {
             return false;
         };
+        let spec = forms::with_card_sound(spec, &form.card);
         let name = form.name.trim().to_string();
         self.send(Action::AddOutput {
             spec,

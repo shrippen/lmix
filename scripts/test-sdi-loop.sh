@@ -3,13 +3,18 @@
 # back into another. Program goes out on SDI_OUT and comes back in on
 # SDI_IN; the check wants the card listed, the output running without
 # refused frames, the picture back like the program and moving, and the
-# embedded sound back at the program's level. Needs the card, its driver
+# embedded sound back at the program's level. Then 8 channels with a bus
+# on pair 2 (channels 3/4), heard on the input's pair 2, and a sound
+# delay. Needs the card, its driver
 # (Desktop Video) and the GStreamer decklink plugin: stays out of CI.
 #
 #   scripts/test-sdi-loop.sh
 #   SDI_OUT=1 SDI_IN=2          # device numbers of the looped connectors
 #                               # (GStreamer's device-number, from 0)
-#   MODES="1080p25 1080i50"     # modes to run (default 1080p25 1080i50 720p50)
+#   MODES="1080p25 1080i50"     # modes to run (default 1080p25 1080i50 1080psf25 720p50)
+#   PAIR=2                      # pair the bus goes on, 2-8 (5-8: 16 channels)
+#   PAIR_MODE=1080p25           # mode of that part, the input set to it
+#   SOUND_DELAY_MS=200          # the card output's sound delay there
 #   MIXER=cuda|cpu              # default cuda
 #   STROM_BIN=…/strom           # skip scripts/fetch-strom.sh
 #   KEEP_WORK=1                 # keep logs and pictures
@@ -26,14 +31,22 @@ WORK="$(mktemp -d)"
 PIDS=()
 SDI_OUT="${SDI_OUT:-1}"
 SDI_IN="${SDI_IN:-2}"
-MODES="${MODES:-1080p25 1080i50 720p50}"
+MODES="${MODES:-1080p25 1080i50 1080psf25 720p50}"
 MIXER="${MIXER:-cuda}"
+PAIR="${PAIR:-2}"
+PAIR_MODE="${PAIR_MODE:-1080p25}"
+SOUND_DELAY_MS="${SOUND_DELAY_MS:-200}"
 # A card locks to a new signal within a few seconds.
 SETTLE=20
 # Thumbnail taps refresh about once a second.
 TAP_INTERVAL=1.5
 # Sound back from the cable may differ from the program by rounding only.
 LEVEL_TOLERANCE_DB=1
+# A silent pair meters below this.
+SILENT_DB=-60
+# The measured sound delay may fall short by this much (meter refresh,
+# polling).
+DELAY_SLACK_MS=100
 # Bars back from the cable, scaled and converted twice: normalised RMSE
 # (ImageMagick, 0-1) of the input's picture against the program's.
 MAX_PICTURE_RMSE=0.08
@@ -147,9 +160,10 @@ for mode in $MODES; do
     missed_before="$(missed)"
 
     # The input found the mode on the cable (it is on auto).
+    # PsF goes as interlaced fields; on auto the input takes it so.
     case "$mode" in
         720p*) want="width=(int)1280" ;;
-        *i*) want="interlace-mode=(string)interleaved" ;;
+        *i* | *psf*) want="interlace-mode=(string)interleaved" ;;
         *) want="interlace-mode=(string)progressive" ;;
     esac
     caps="$(input_caps)"
@@ -183,4 +197,63 @@ for mode in $MODES; do
     act '{"action":"remove_output","output":"SDI out"}'
     sleep 2
 done
+
+# Bus "Pair" on pair $PAIR (8 or 16 channels), played SOUND_DELAY_MS late; the
+# input, set to the mode, hears that pair. Silent while nothing is sent to
+# the bus, so program (pair 1) does not leak into it.
+act '{"action":"add_bus","name":"Pair"}'
+PAIR_BUS="$(state | jq -r '.buses[] | select(.name == "Pair") | .id')"
+CHANNELS=$((PAIR <= 4 ? 8 : 16))
+MORE_PAIRS="$(jq -cn --arg bus "$PAIR_BUS" --argjson n "$PAIR" '[range(2; $n) | null] + [$bus]')"
+act "{\"action\":\"replace_source\",\"input\":\"SDI in\",\"source\":{\"kind\":\"card\",\"device\":$SDI_IN,\"mode\":\"$PAIR_MODE\",\"pair\":$PAIR}}"
+act "{\"action\":\"add_output\",\"spec\":{\"kind\":\"card\",\"device\":$SDI_OUT,\"mode\":\"$PAIR_MODE\",\"channels\":\"$CHANNELS\",\"more_pairs\":$MORE_PAIRS,\"sound_delay_ms\":$SOUND_DELAY_MS},\"name\":\"SDI out\"}"
+before="$(refused)"
+act '{"action":"start_output","output":"SDI out"}'
+wait_for "$SETTLE" running || fail "pairs: output $(state | jq -c '.outputs')"
+wait_for "$SETTLE" online || fail "pairs: input not online"
+sleep 8
+[[ "$(refused)" == "$before" ]] || fail "pairs: the card refused frames"
+pass "$PAIR_MODE, $CHANNELS channels, $SOUND_DELAY_MS ms sound delay: output running, no frame refused"
+
+# The input runs in the mode and moves.
+picture inputs/3 "$WORK/pair-a.jpg"
+picture inputs/3 "$WORK/pair-b.jpg"
+cmp -s "$WORK/pair-a.jpg" "$WORK/pair-b.jpg" && fail "pairs: picture back stands still"
+pass "pairs: picture back moves"
+
+input_peak() { peak ".inputs[] | select(.input == \"$SDI_IN_ID\") | .peak_db"; }
+silent() { awk -v b="$(input_peak)" -v s="$SILENT_DB" 'BEGIN { exit !(b == "" || b + 0 < s) }'; }
+wait_for 5 silent || fail "pairs: pair $PAIR at $(input_peak) dB with nothing on the bus"
+pass "pairs: pair $PAIR silent while the bus is ($(input_peak) dB)"
+
+# How long the sound takes from the send to the input: the delay plus
+# the way round (meters refresh every few tens of ms). Measured with the
+# delay, then again without it; the difference is the delay.
+onset() {
+    act '{"action":"set_send","input":"Bars","bus":"Pair","level":0}'
+    wait_for 5 silent || fail "pairs: pair $PAIR still sounds without a send"
+    sleep 1
+    local sent
+    sent=$(date +%s%3N)
+    act '{"action":"set_send","input":"Bars","bus":"Pair","level":80}'
+    until sounding; do
+        (( $(date +%s%3N) - sent < 5000 )) || fail "pairs: pair $PAIR silent with Bars on the bus"
+        sleep 0.02
+    done
+    echo $(( $(date +%s%3N) - sent ))
+}
+sounding() { ! silent; }
+delayed="$(onset)"
+pass "pairs: pair $PAIR carries the bus ($(input_peak) dB) after $delayed ms"
+
+act '{"action":"remove_output","output":"SDI out"}'
+sleep 2
+act "{\"action\":\"add_output\",\"spec\":{\"kind\":\"card\",\"device\":$SDI_OUT,\"mode\":\"$PAIR_MODE\",\"channels\":\"$CHANNELS\",\"more_pairs\":$MORE_PAIRS},\"name\":\"SDI out\"}"
+act '{"action":"start_output","output":"SDI out"}'
+wait_for "$SETTLE" running || fail "pairs: output without delay $(state | jq -c '.outputs')"
+sleep 8
+plain="$(onset)"
+(( delayed - plain >= SOUND_DELAY_MS - DELAY_SLACK_MS )) \
+    || fail "pairs: sound delay $SOUND_DELAY_MS ms came out as $((delayed - plain)) ms"
+pass "pairs: sound delay $SOUND_DELAY_MS ms came out as $((delayed - plain)) ms"
 echo "SDI loop check passed"

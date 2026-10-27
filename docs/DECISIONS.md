@@ -4982,6 +4982,39 @@ bis dahin nur ein Neustart von strom (todo).
 `MODES="1080p25 1080i50 1080p25 720p50"` zweimal hintereinander bestanden,
 kleinster Abstand 7,9 ms, kein Bild verspätet, 0–3 verworfen beim Anlauf.
 
+## 2026-10-27 — SDI-Karte: 16 Kanäle, Ton-Delay, PsF (SRC.1, OUT.4)
+
+**Entscheidung**:
+- Input: `pair` (1–8) wählt das eingebettete Kanalpaar, das der Input
+  hört. Die Karte nimmt die wenigsten Kanäle, die es enthalten (2, 8, 16),
+  `audioconvert` mit `mix-matrix` greift die zwei heraus.
+- Ausgang: `channels` (2, 8, 16). Paar 1 trägt den Ton des Ausgangs,
+  `more_pairs` legt je weiteres Paar einen Bus auf (oder Stille). Jedes
+  Paar kommt per `mix-matrix` auf seine Kanäle, mehrere summiert ein
+  `audiomixer`. Ein Bus auf einem Paar lässt sich nicht löschen, solange
+  der Ausgang ihn nimmt (wie beim Ton des Ausgangs).
+- Ausgang: `sound_delay_ms` (0–500) spielt den Ton später als das Bild,
+  mit strom-Block `builtin.time_offset` (Pad-Offset). Der inter-Puffer des
+  Tons wächst um das Delay.
+- PsF (`1080psf25`, `1080psf2997`): der Treiber kennt keine PsF-Modi; die
+  Karte läuft im Halbbild-Modus derselben Feldrate (`1080i50`). Ausgang:
+  `interlace field-pattern=2:2` teilt jedes Vollbild in seine zwei Felder.
+  Input mit PsF-Modus: `capssetter` nimmt nur die Kennzeichnung
+  „interlaced“ weg, kein Deinterlacer. Auf „Erkennen“ gilt PsF als 1080i.
+- Verworfen: `identity ts-offset` für das Delay. Es verschiebt keine
+  Zeitstempel, sondern nur die eigene Wartezeit bei `sync=true`
+  (gemessen: 0 und 500 ms Delay gleich, 467/463 ms).
+
+**Geprüft**: `scripts/test-sdi-loop.sh` (Loop, CPU-Mischer): `1080psf25`
+hin und zurück (Bild wie Program, bewegt, Ton auf Pegel, kein Bild spät);
+8 Kanäle mit Bus auf Paar 2 und 16 Kanäle mit Bus auf Paar 7 (Input fest
+auf `1080psf25`): Paar stumm ohne Send auf den Bus, mit Send hörbar. Zeit
+vom Send bis zum Ton am Input: 431 ms ohne, 1000 ms mit 500 ms Delay.
+
+**Befund nebenbei**: die Kanal-Verzögerung der Inputs (AUD.6, DECISIONS
+„Kanalzug“) nutzt dasselbe `identity ts-offset` und ist damit vermutlich
+wirkungslos; der VM-Test prüft nur den gesetzten Wert (todo).
+
 ## 2026-10-27 — Kanal-Verzögerung wirkte nicht (AUD.6)
 
 **Befund**: Die Verzögerung je Input (`set_channel_strip … delay_ms`) lag

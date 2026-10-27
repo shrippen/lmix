@@ -10,6 +10,7 @@
 use lmix_types::action::{AUTO_OFF_MAX_MS, DYNAMIC_SLOTS, OVERLAY_CHANNELS, TRANSITION_SLOTS};
 use lmix_types::automation::{AUTOMATION_ACTIONS, TRIGGERS, TRIGGER_DELAY_MAX_MS};
 use lmix_types::bus::BUS_NAME_MAX;
+use lmix_types::card::CardChannels;
 use lmix_types::cue::{
     CueKind, CUES, CUE_WAIT_MAX_MS, CUE_WAIT_STEP_MS, GO_GUARD_MAX_MS, GROUP_CHILDREN, GROUP_DEPTH,
     PANIC_MAX_MS,
@@ -2180,7 +2181,8 @@ impl Switcher {
     fn remove_bus(&mut self, bus: &BusRef) -> Result<Vec<Command>, ActionError> {
         let index = self.find_bus(bus)?;
         let id = self.show.buses[index].id;
-        if let Some(output) = self.show.outputs.iter().find(|o| o.bus == Some(id)) {
+        let takes = |o: &&ShowOutput| o.bus == Some(id) || pair_buses(&o.spec).any(|b| b == id);
+        if let Some(output) = self.show.outputs.iter().find(takes) {
             return Err(ActionError::BusInUse {
                 bus: self.show.buses[index].name.clone(),
                 output: output.name.clone(),
@@ -4735,6 +4737,14 @@ impl Switcher {
         if let Some(reason) = spec.problem() {
             return Err(ActionError::BadEncoding { reason });
         }
+        if let Some(reason) = spec.card_problem() {
+            return Err(ActionError::BadCard { reason });
+        }
+        if let Some(bus) = pair_buses(&spec).find(|b| !self.show.buses.iter().any(|s| s.id == *b)) {
+            return Err(ActionError::UnknownBus {
+                reference: bus.to_string(),
+            });
+        }
         let output = ShowOutput {
             id: OutputId::new(),
             name: name.unwrap_or_default(),
@@ -5356,6 +5366,11 @@ fn check_source(source: &SourceSpec) -> Result<(), ActionError> {
         SourceSpec::Web { url, .. } if !is_web_address(url) => {
             Err(ActionError::BadWebUrl { url: url.clone() })
         }
+        SourceSpec::Card { pair, .. } if CardChannels::holding(*pair).is_none() => {
+            Err(ActionError::BadCard {
+                reason: format!("channel pair {pair}, 1 to 8"),
+            })
+        }
         _ => Ok(()),
     }
 }
@@ -5410,6 +5425,15 @@ fn check_volume(volume: u8) -> Result<(), ActionError> {
     Ok(())
 }
 
+/// The buses a card output plays on its further channel pairs.
+fn pair_buses(spec: &OutputSpec) -> impl Iterator<Item = BusId> + '_ {
+    let pairs = match spec {
+        OutputSpec::Card { more_pairs, .. } => more_pairs.as_slice(),
+        _ => &[],
+    };
+    pairs.iter().flatten().copied()
+}
+
 /// The bus called `name` (ignoring case, as bus names are unique).
 fn find_bus_named(buses: &[ShowBus], name: &str) -> Option<BusId> {
     let name = name.to_lowercase();
@@ -5441,7 +5465,7 @@ fn no_video_check(entry: &ShowInput) -> Result<(), ActionError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use lmix_types::{MidiBinding, TestPattern, VideoEncoding};
+    use lmix_types::{CardMode, MidiBinding, TestPattern, VideoEncoding, MAX_CARD_SOUND_DELAY_MS};
 
     const SLOTS: usize = 4;
 
@@ -7543,6 +7567,70 @@ mod tests {
             }),
             Err(ActionError::UnknownBus { .. })
         ));
+    }
+
+    /// A card plays buses on its further pairs (OUT.4): they must exist,
+    /// fit its channels and stay while it takes them.
+    #[test]
+    fn a_card_output_keeps_its_pair_buses() {
+        let mut sw = with_buses();
+        let stream = sw.state().buses[1].id;
+        let card = |more_pairs: Vec<Option<BusId>>, sound_delay_ms| OutputSpec::Card {
+            device: 0,
+            mode: CardMode::Hd1080p25,
+            channels: CardChannels::Eight,
+            more_pairs,
+            sound_delay_ms,
+        };
+        let add = |sw: &mut Switcher, spec| {
+            sw.apply(Action::AddOutput {
+                spec,
+                source: OutputSource::Program,
+                name: None,
+                bus: None,
+            })
+        };
+
+        assert!(matches!(
+            add(&mut sw, card(vec![None; 4], 0)),
+            Err(ActionError::BadCard { .. })
+        ));
+        assert!(matches!(
+            add(&mut sw, card(Vec::new(), MAX_CARD_SOUND_DELAY_MS + 1)),
+            Err(ActionError::BadCard { .. })
+        ));
+        assert!(matches!(
+            add(&mut sw, card(vec![Some(BusId::new())], 0)),
+            Err(ActionError::UnknownBus { .. })
+        ));
+
+        add(&mut sw, card(vec![None, Some(stream)], 40)).unwrap();
+        assert!(matches!(
+            sw.apply(Action::RemoveBus { bus: bus("Stream") }),
+            Err(ActionError::BusInUse { .. })
+        ));
+        sw.apply(Action::RemoveBus { bus: bus("In-Ear") }).unwrap();
+    }
+
+    /// A card input hears one of the eight pairs SDI carries.
+    #[test]
+    fn a_card_input_hears_pair_one_to_eight() {
+        let mut sw = Switcher::new(SLOTS);
+        let card = |pair| Action::AddInput {
+            source: SourceSpec::Card {
+                device: 0,
+                mode: None,
+                pair,
+            },
+            name: None,
+        };
+        for pair in [0, 9] {
+            assert!(matches!(
+                sw.apply(card(pair)),
+                Err(ActionError::BadCard { .. })
+            ));
+        }
+        sw.apply(card(8)).unwrap();
     }
 
     #[test]

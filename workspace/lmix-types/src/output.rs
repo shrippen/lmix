@@ -231,10 +231,19 @@ pub enum OutputSpec {
     Display { mode: DisplayMode },
     /// SDI or HDMI out of a playout card (DeckLink, OUT.4): uncompressed
     /// picture in `mode`, scaled to it, with the sound embedded.
-    /// `device` is the card's device number.
+    /// `device` is the card's device number. The output's sound is on
+    /// channels 1/2; `more_pairs` gives pairs 2, 3, … a bus each (none:
+    /// silent), as many as `channels` hold. `sound_delay_ms` plays the
+    /// sound later than the picture.
     Card {
         device: u32,
         mode: crate::card::CardMode,
+        #[serde(default, skip_serializing_if = "crate::card::CardChannels::is_default")]
+        channels: crate::card::CardChannels,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        more_pairs: Vec<Option<crate::bus::BusId>>,
+        #[serde(default, skip_serializing_if = "is_zero")]
+        sound_delay_ms: u32,
     },
 }
 
@@ -276,6 +285,31 @@ impl OutputSpec {
         self.encoding().and_then(VideoEncoding::problem)
     }
 
+    /// What is wrong with a card output's sound: more pairs than its
+    /// channels hold, a delay past `MAX_CARD_SOUND_DELAY_MS`.
+    pub fn card_problem(&self) -> Option<String> {
+        let Self::Card {
+            channels,
+            more_pairs,
+            sound_delay_ms,
+            ..
+        } = self
+        else {
+            return None;
+        };
+        let room = channels.pairs() as usize - 1;
+        if more_pairs.len() > room {
+            return Some(format!(
+                "{} channels hold {room} more pairs, not {}",
+                channels.count(),
+                more_pairs.len()
+            ));
+        }
+        let max = crate::card::MAX_CARD_SOUND_DELAY_MS;
+        (*sound_delay_ms > max)
+            .then(|| format!("sound delay {sound_delay_ms} ms, at most {max} ms"))
+    }
+
     /// Where an RTMP output publishes: server and stream key.
     pub fn rtmp_location(url: &str, key: &str) -> String {
         if key.is_empty() {
@@ -296,7 +330,7 @@ impl OutputSpec {
                 DisplayMode::Fullscreen => "Fullscreen".into(),
                 DisplayMode::Drm { connector } => format!("Screen {connector}"),
             },
-            Self::Card { device, mode } => {
+            Self::Card { device, mode, .. } => {
                 format!("Card {} {}", u64::from(*device) + 1, mode.nick())
             }
         }
@@ -467,6 +501,10 @@ pub fn default_sample_rate() -> u32 {
     SAMPLE_RATES[0]
 }
 
+fn is_zero(value: &u32) -> bool {
+    *value == 0
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -477,6 +515,9 @@ mod tests {
         let card = OutputSpec::Card {
             device: u32::MAX,
             mode: CardMode::Hd720p50,
+            channels: Default::default(),
+            more_pairs: Vec::new(),
+            sound_delay_ms: 0,
         };
         assert_eq!(card.default_name(), "Card 4294967296 720p50");
     }

@@ -35,7 +35,7 @@ pub use action::{
 };
 pub use automation::{Trigger, TriggerOn};
 pub use bus::{find_bus, Bus, BusId, BusPeak, BusRef, Fader, Phones, PhonesSend, BUSES};
-pub use card::{CardMode, Scan};
+pub use card::{CardChannels, CardMode, Scan, MAX_CARD_SOUND_DELAY_MS};
 pub use cue::{
     Cue, CueEvent, CueId, CueKind, CueList, CueTarget, Follow, GroupMode, RunPhase, RunningCue,
     StandbyMove, StopMode, StopOthers, StopScope,
