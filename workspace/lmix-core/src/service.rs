@@ -912,6 +912,18 @@ impl Service {
         known.as_deref().is_some_and(|known| known != current)
     }
 
+    /// Cards the engine still uses after lmix-core restarted stay on: a
+    /// restart in a show keeps the card outputs and inputs going. Before
+    /// `restore`.
+    pub async fn adopt_cards(&self) {
+        if self.engine.holds_cards().await {
+            tracing::info!("the engine uses the cards: they stay on");
+            let mut sw = self.switcher.lock().await;
+            sw.adopt_cards();
+            self.publish(&sw);
+        }
+    }
+
     /// Outputs still running in the engine after lmix-core restarted count
     /// as running again (their start time is unknown: now).
     pub async fn adopt_running_outputs(&self) {
@@ -928,6 +940,16 @@ impl Service {
         let mut sw = self.switcher.lock().await;
         for id in running {
             sw.set_output_status(id, OutputStatus::Running { since_ms: now_ms() });
+        }
+        // A card output on air keeps the cards on, also when the engine
+        // could not say it uses them (`adopt_cards`).
+        // Switched on, the card inputs the restore showed black get their
+        // cards again.
+        if sw.runs_a_card_output() {
+            let on = sw.set_cards(true);
+            if let Err(e) = self.execute(&mut sw, &on).await {
+                tracing::warn!("cards not taken back: {e}");
+            }
         }
         self.publish(&sw);
     }
@@ -1090,6 +1112,11 @@ impl Service {
             let failure = sw.output_failure(id);
             if self.execute(&mut sw, &[command]).await.is_err() {
                 continue;
+            }
+            // A card output waits for the cards instead.
+            if sw.output_waits_for_cards(id) {
+                self.end_failback(&mut sw, id);
+                break;
             }
 
             // Still failed while the start may not hold.
@@ -1998,6 +2025,8 @@ impl Service {
     /// Run commands in order. A failing slot marks its input offline and
     /// the rest still run; the first error is returned.
     async fn execute(&self, sw: &mut Switcher, commands: &[Command]) -> Result<(), ActionError> {
+        let gated = sw.cards_gate(commands.to_vec());
+        let commands = gated.as_slice();
         if !self.engine_ready.load(Ordering::SeqCst) {
             // Outputs keep what was asked, so restore starts them. No
             // stinger runs, so none will end.
@@ -2263,7 +2292,7 @@ impl Touch {
 /// Engine flow a command builds or stops.
 fn flow_of(command: &Command) -> Option<FlowId> {
     match command {
-        Command::SetSlot { slot, .. } => Some(slot_id(*slot)),
+        Command::SetSlot { slot, .. } | Command::CardOff { slot } => Some(slot_id(*slot)),
         Command::StartOutput { id, .. } | Command::StopOutput { id } => Some(output_flow_id(*id)),
         _ => None,
     }
@@ -2277,7 +2306,8 @@ fn builds_flow(command: &Command) -> bool {
         Command::SetSlot {
             source: Some(_),
             ..
-        } | Command::StartOutput { .. }
+        } | Command::CardOff { .. }
+            | Command::StartOutput { .. }
     )
 }
 
@@ -2287,6 +2317,8 @@ fn mark_output(sw: &mut Switcher, command: &Command, outcome: &Result<(), Engine
         (Command::StartOutput { id, .. }, Ok(())) => {
             (*id, OutputStatus::Running { since_ms: now_ms() })
         }
+        // Stopped for the cards: it waits for them.
+        (Command::StopOutput { id }, Ok(())) if sw.output_waits_for_cards(*id) => return,
         (Command::StopOutput { id }, Ok(())) => (*id, OutputStatus::Stopped),
         (Command::StartOutput { id, .. } | Command::StopOutput { id }, Err(e)) => (
             *id,
@@ -2319,12 +2351,13 @@ fn bar_fix_for(fix: &mut Vec<Command>, command: &Command) -> Option<Command> {
 
 /// Reflect a `SetSlot` outcome in the input's status.
 fn mark_slot(sw: &mut Switcher, command: &Command, ok: bool) {
-    let Command::SetSlot {
-        slot,
-        source: Some(_),
-    } = command
-    else {
-        return;
+    let slot = match command {
+        Command::SetSlot {
+            slot,
+            source: Some(_),
+        }
+        | Command::CardOff { slot } => slot,
+        _ => return,
     };
     let Some(input) = sw.show().inputs.iter().find(|i| i.slot == *slot) else {
         return;
@@ -3540,6 +3573,339 @@ mod tests {
             "{log:?}"
         );
         assert_eq!(state.outputs[0].bus, Some(bus));
+        assert!(matches!(
+            state.outputs[0].status,
+            lmix_types::OutputStatus::Running { .. }
+        ));
+    }
+
+    /// The cards start off: a card input shows black with a banner and a
+    /// started card output waits. On, both use the card; off again, both
+    /// let go of it. An output stopped while it waits stays stopped.
+    #[tokio::test]
+    async fn cards_are_used_only_while_switched_on() {
+        use lmix_types::{OutputRef, OutputStatus};
+        let engine = Arc::new(NullEngine::default());
+        let service = Service::new(4, engine.clone(), None);
+        let card = SourceSpec::Card {
+            device: 2,
+            mode: None,
+            pair: 1,
+        };
+        service
+            .handle(Action::AddInput {
+                source: card.clone(),
+                name: Some("SDI".into()),
+            })
+            .await
+            .unwrap();
+        for (name, device) in [("Beamer", 1), ("Spare", 3)] {
+            service
+                .handle(Action::AddOutput {
+                    spec: lmix_types::OutputSpec::Card {
+                        device,
+                        mode: lmix_types::CardMode::Hd1080p25,
+                        channels: Default::default(),
+                        more_pairs: Vec::new(),
+                        sound_delay_ms: 0,
+                    },
+                    source: lmix_types::OutputSource::Program,
+                    bus: None,
+                    name: Some(name.into()),
+                })
+                .await
+                .unwrap();
+            service
+                .handle(Action::StartOutput {
+                    output: OutputRef::Text(name.into()),
+                })
+                .await
+                .unwrap();
+        }
+        let status = |state: &lmix_types::ShowState, i: usize| state.outputs[i].status.clone();
+        let starts = || {
+            engine
+                .log()
+                .iter()
+                .filter(|c| matches!(c, Command::StartOutput { .. }))
+                .count()
+        };
+
+        // Off at the start.
+        let state = service.state().await;
+        assert!(!state.cards_on);
+        assert!(engine.log().contains(&Command::CardOff { slot: 0 }));
+        assert!(!engine.log().iter().any(|c| matches!(
+            c,
+            Command::SetSlot {
+                source: Some(SourceSpec::Card { .. }),
+                ..
+            }
+        )));
+        assert_eq!(starts(), 0);
+        assert_eq!(status(&state, 0), OutputStatus::CardsOff);
+
+        // The spare one stops waiting.
+        service
+            .handle(Action::StopOutput {
+                output: OutputRef::Text("Spare".into()),
+            })
+            .await
+            .unwrap();
+
+        service.handle(Action::SetCards { on: true }).await.unwrap();
+        let state = service.state().await;
+        assert!(state.cards_on);
+        assert!(engine.log().contains(&Command::SetSlot {
+            slot: 0,
+            source: Some(card.clone()),
+        }));
+        assert_eq!(starts(), 1);
+        assert!(matches!(status(&state, 0), OutputStatus::Running { .. }));
+        assert_eq!(status(&state, 1), OutputStatus::Stopped);
+
+        service
+            .handle(Action::SetCards { on: false })
+            .await
+            .unwrap();
+        let state = service.state().await;
+        let log = engine.log();
+        assert_eq!(
+            log.last(),
+            Some(&Command::StopOutput {
+                id: state.outputs[0].id
+            })
+        );
+        assert_eq!(
+            log.iter()
+                .filter(|c| **c == Command::CardOff { slot: 0 })
+                .count(),
+            2
+        );
+        assert_eq!(status(&state, 0), OutputStatus::CardsOff);
+    }
+
+    /// Card output "Beamer", started: it waits for the cards.
+    async fn waiting_card_output() -> (Arc<NullEngine>, Arc<Service>) {
+        let engine = Arc::new(NullEngine::default());
+        let service = Service::new(4, engine.clone(), None);
+        service
+            .handle(Action::AddOutput {
+                spec: lmix_types::OutputSpec::Card {
+                    device: 1,
+                    mode: lmix_types::CardMode::Hd1080p25,
+                    channels: Default::default(),
+                    more_pairs: Vec::new(),
+                    sound_delay_ms: 0,
+                },
+                source: lmix_types::OutputSource::Program,
+                bus: None,
+                name: Some("Beamer".into()),
+            })
+            .await
+            .unwrap();
+        service
+            .handle(Action::StartOutput {
+                output: lmix_types::OutputRef::Text("Beamer".into()),
+            })
+            .await
+            .unwrap();
+        (engine, service)
+    }
+
+    /// lmix-core restarted while the engine used the cards: they stay on,
+    /// the input keeps its card.
+    #[tokio::test]
+    async fn a_restart_keeps_cards_the_engine_uses() {
+        let engine = Arc::new(NullEngine::default());
+        let service = Service::new(4, engine.clone(), None);
+        service.await_engine();
+        let card = SourceSpec::Card {
+            device: 2,
+            mode: None,
+            pair: 1,
+        };
+        service
+            .handle(Action::AddInput {
+                source: card.clone(),
+                name: Some("SDI".into()),
+            })
+            .await
+            .unwrap();
+        engine.hold_cards();
+        service.adopt_cards().await;
+        service.restore().await.unwrap();
+        service.adopt_running_outputs().await;
+        let state = service.state().await;
+        assert!(state.cards_on);
+        let log = engine.log();
+        assert!(log.contains(&Command::SetSlot {
+            slot: 0,
+            source: Some(card),
+        }));
+        assert!(!log.contains(&Command::CardOff { slot: 0 }));
+    }
+
+    /// A card output still running after a restart turns the cards on
+    /// even when the engine could not say it uses them: it stays on air.
+    #[tokio::test]
+    async fn a_running_card_output_keeps_the_cards_on() {
+        let dir = tempfile::tempdir().unwrap();
+        let autosave = dir.path().join("autosave.lmix");
+        let engine = Arc::new(NullEngine::default());
+        let first = Service::new(4, engine.clone(), Some(autosave.clone()));
+        let card = SourceSpec::Card {
+            device: 2,
+            mode: None,
+            pair: 1,
+        };
+        first
+            .handle(Action::AddInput {
+                source: card.clone(),
+                name: Some("SDI".into()),
+            })
+            .await
+            .unwrap();
+        first
+            .handle(Action::AddOutput {
+                spec: lmix_types::OutputSpec::Card {
+                    device: 1,
+                    mode: lmix_types::CardMode::Hd1080p25,
+                    channels: Default::default(),
+                    more_pairs: Vec::new(),
+                    sound_delay_ms: 0,
+                },
+                source: lmix_types::OutputSource::Program,
+                bus: None,
+                name: Some("Beamer".into()),
+            })
+            .await
+            .unwrap();
+        first.handle(Action::SetCards { on: true }).await.unwrap();
+        first
+            .handle(Action::StartOutput {
+                output: lmix_types::OutputRef::Text("Beamer".into()),
+            })
+            .await
+            .unwrap();
+
+        let second = Service::new(4, engine.clone(), Some(autosave));
+        assert!(second.resume().await.unwrap());
+        second.adopt_cards().await;
+        second.adopt_running_outputs().await;
+        let state = second.state().await;
+        assert!(state.cards_on);
+        assert!(matches!(
+            state.outputs[0].status,
+            lmix_types::OutputStatus::Running { .. }
+        ));
+        assert!(!engine
+            .log()
+            .iter()
+            .any(|c| matches!(c, Command::StopOutput { .. })));
+        // The input, black after the restore, has its card again.
+        let last_slot = engine.log().into_iter().rev().find(|c| {
+            matches!(
+                c,
+                Command::SetSlot { slot: 0, .. } | Command::CardOff { slot: 0 }
+            )
+        });
+        assert_eq!(
+            last_slot,
+            Some(Command::SetSlot {
+                slot: 0,
+                source: Some(card),
+            })
+        );
+    }
+
+    /// A card output failing back stops trying once the cards go off and
+    /// waits for them.
+    #[tokio::test(start_paused = true)]
+    async fn switching_the_cards_off_ends_a_failback() {
+        let engine = Arc::new(NullEngine::failing());
+        let service = Service::new(4, engine.clone(), None);
+        tokio::spawn(service.clone().watch_failures());
+        tokio::task::yield_now().await;
+        service
+            .handle(Action::AddOutput {
+                spec: lmix_types::OutputSpec::Card {
+                    device: 1,
+                    mode: lmix_types::CardMode::Hd1080p25,
+                    channels: Default::default(),
+                    more_pairs: Vec::new(),
+                    sound_delay_ms: 0,
+                },
+                source: lmix_types::OutputSource::Program,
+                bus: None,
+                name: Some("Beamer".into()),
+            })
+            .await
+            .unwrap();
+        service.handle(Action::SetCards { on: true }).await.unwrap();
+        engine.fail_outputs(true);
+        service
+            .handle(Action::StartOutput {
+                output: lmix_types::OutputRef::Text("Beamer".into()),
+            })
+            .await
+            .unwrap();
+        tokio::time::sleep(std::time::Duration::from_secs(4)).await;
+        service
+            .handle(Action::SetCards { on: false })
+            .await
+            .unwrap();
+
+        let starts = || {
+            engine
+                .log()
+                .iter()
+                .filter(|c| matches!(c, Command::StartOutput { .. }))
+                .count()
+        };
+        let before = starts();
+        tokio::time::sleep(FAILBACK_MAX * 3).await;
+        assert_eq!(starts(), before, "started while the cards are off");
+        assert_eq!(
+            service.state().await.outputs[0].status,
+            lmix_types::OutputStatus::CardsOff
+        );
+    }
+
+    /// Outputs stopped as a group stop waiting for the cards too.
+    #[tokio::test]
+    async fn a_group_stop_ends_the_wait_for_the_cards() {
+        let (engine, service) = waiting_card_output().await;
+        service
+            .handle(Action::StopOutputs {
+                group: lmix_types::OutputGroup::All,
+            })
+            .await
+            .unwrap();
+        service.handle(Action::SetCards { on: true }).await.unwrap();
+        assert!(!engine
+            .log()
+            .iter()
+            .any(|c| matches!(c, Command::StartOutput { .. })));
+        assert_eq!(
+            service.state().await.outputs[0].status,
+            lmix_types::OutputStatus::Stopped
+        );
+    }
+
+    /// The lock refuses switching the cards off, which stops outputs; on
+    /// is allowed.
+    #[tokio::test]
+    async fn the_lock_keeps_the_cards_on() {
+        let (_engine, service) = waiting_card_output().await;
+        service.handle(Action::SetLock { on: true }).await.unwrap();
+        service.handle(Action::SetCards { on: true }).await.unwrap();
+        assert!(matches!(
+            service.handle(Action::SetCards { on: false }).await,
+            Err(ActionError::Locked)
+        ));
+        let state = service.state().await;
+        assert!(state.cards_on);
         assert!(matches!(
             state.outputs[0].status,
             lmix_types::OutputStatus::Running { .. }

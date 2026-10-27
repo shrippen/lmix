@@ -74,6 +74,7 @@ function lampOf(shortcut, state) {
       return shows(first.channel) ? "on" : ((state.overlay_last || [])[first.channel - 1] ? "ready" : "");
     case "fade_to_black": return on(state.fade_to_black);
     case "set_lock": return on(state.locked);
+    case "set_cards": return on(state.cards_on);
     case "start_output":
     case "stop_output": {
       const ref = first.output;

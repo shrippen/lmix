@@ -5036,3 +5036,40 @@ einem Clip, der gleichzeitig blitzt und piept, aufgenommen ohne und mit
 300 ms Verzögerung, live umgestellt. Vorher 0 ms Verschiebung, jetzt
 300 ms. Der VM-Test liest den Wert jetzt am Block.
 
+
+## 2026-10-27 — Karten-Schalter
+
+**Befund**: Eine DeckLink-Karte nimmt je Anschluss nur ein Programm.
+Läuft lmix, kommt keine andere Software an die Karte, auch wenn die Show
+sie gerade nicht braucht.
+
+**Entscheidung**: Ein Schalter für alle Karten (`set_cards { on }`,
+`ShowState.cards_on`), in der Werkzeugleiste der Console. Er steht beim
+Start des Core immer auf aus und wird nicht gespeichert: die Karten
+nimmt lmix nur, wenn jemand es will. Aus heißt:
+
+- Karten-Inputs bekommen statt der Karte einen schwarzen Flow mit dem
+  Banner „Card disabled“ und Stille (`Command::CardOff`); der Input
+  bleibt in der Show, Layouts und Program sehen schwarz.
+- Laufende oder ausgefallene Kartenausgänge stoppen und stehen auf
+  `cards_off`; ein Start in diesem Zustand wartet. Beim Einschalten
+  starten genau diese Ausgänge, die Inputs nehmen die Karte wieder.
+- Der Failback eines Kartenausgangs endet, solange die Karten aus sind.
+- Die Sperre (`set_lock`) lehnt das Ausschalten ab, weil es Ausgänge
+  stoppt; Einschalten geht. Ein Gruppen-Stopp beendet auch das Warten.
+- Ausnahme vom „aus beim Start“: Startet der Core neu, während strom
+  noch einen Flow mit Karte laufen hat (Absturz in der Show), übernimmt
+  er die Karten als an (`Engine::holds_cards`, vor `restore`). Die Karte
+  ist dann ohnehin nicht frei, und ein Neustart soll den Beamer nicht
+  abschalten. Auf der Karte geprüft: Core beendet und neu gestartet,
+  Ausgang läuft weiter; mit Karten aus bleibt es aus.
+
+Ein Schalter je Karte wäre feiner, aber die Karten hängen an einem
+Treiber, und die Frage ist im Betrieb „darf lmix an die Karten“.
+
+**Geprüft**: Test `cards_are_used_only_while_switched_on`;
+`scripts/test-sdi-loop.sh` prüft beim Start und nach dem Ausschalten das
+schwarze Bild mit Banner und dass einfaches GStreamer auf beiden
+Anschlüssen spielt und aufnimmt, danach läuft der Ausgang wieder.
+Ausreißer bei späten Bildern und der Delay-Messung treten auch ohne den
+Schalter auf (todo „GStreamer-Fehler melden“).

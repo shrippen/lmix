@@ -1352,6 +1352,7 @@ impl Engine for StromEngine {
                 Ok(())
             }
             Command::SetSlot { slot, source: None } => self.drop_flow(flows::slot_id(*slot)).await,
+            Command::CardOff { slot } => self.put_flow(&flows::card_off_flow(*slot)).await,
             Command::Preview { slot } => self.select_preview(*slot).await,
             Command::Program {
                 slot,
@@ -1646,6 +1647,19 @@ impl Engine for StromEngine {
 
     async fn output_running(&self, id: OutputId) -> bool {
         matches!(self.get_flow(flows::output_flow_id(id)).await, Ok(Some(flow)) if flow.running)
+    }
+
+    /// Asked once at the start; no answer counts as no cards.
+    async fn holds_cards(&self) -> bool {
+        let Ok(resp) = self.http.get(self.url("/flows")).send().await else {
+            return false;
+        };
+        let Ok(resp) = check(resp).await else {
+            return false;
+        };
+        resp.json::<strom_types::api::FlowListResponse>()
+            .await
+            .is_ok_and(|list| list.flows.iter().any(flows::uses_card))
     }
 
     /// No for a flow strom has stopped or does not have; yes when strom

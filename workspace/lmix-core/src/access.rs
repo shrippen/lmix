@@ -307,6 +307,7 @@ pub fn right_of(action: &Action) -> Right {
         | Action::SeekInput { .. }
         | Action::PlayItem { .. }
         | Action::StartOutput { .. }
+        | Action::SetCards { .. }
         | Action::StopOutput { .. }
         | Action::StartOutputs { .. }
         | Action::StopOutputs { .. }

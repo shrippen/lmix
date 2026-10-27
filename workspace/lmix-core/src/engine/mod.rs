@@ -82,6 +82,12 @@ pub trait Engine: Send + Sync {
     /// it kept streaming or recording).
     async fn output_running(&self, id: lmix_types::OutputId) -> bool;
 
+    /// Whether a running flow uses a capture card (lmix-core restarted
+    /// while the engine kept the cards).
+    async fn holds_cards(&self) -> bool {
+        false
+    }
+
     /// Whether `flow` runs in the engine now. An engine that cannot tell
     /// says yes.
     async fn flow_running(&self, _flow: strom_types::FlowId) -> bool {

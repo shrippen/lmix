@@ -585,6 +585,22 @@ AppPage {
                         enabled: backend.connected
                         onClicked: root.openShortcuts()
                     }
+                    // Cards are exclusive: lmix takes them only on this switch,
+                    // which starts off with every start of the core.
+                    KanteButton {
+                        readonly property bool cardsOn: root.show !== null && root.show.cards_on === true
+                        text: cardsOn ? qsTr("Cards on") : qsTr("Cards off")
+                        // Off stops outputs, which the lock refuses.
+                        readonly property bool locked: root.show !== null && root.show.locked === true
+                        emphasis: cardsOn ? KanteButton.Emphasis.Primary : KanteButton.Emphasis.Normal
+                        enabled: backend.connected && !(cardsOn && locked)
+                        QQC2.ToolTip.visible: hovered
+                        QQC2.ToolTip.text: cardsOn
+                            ? (locked ? qsTr("lmix uses the capture cards. Unlock to free them.")
+                                : qsTr("lmix uses the capture cards. Click to free them for other programs: card inputs turn black, card outputs stop."))
+                            : qsTr("The capture cards are free for other programs. Click to use them: card inputs and outputs start.")
+                        onClicked: root.act({ action: "set_cards", on: !cardsOn })
+                    }
                     KanteButton {
                         readonly property bool locked: root.show !== null && root.show.locked === true
                         text: locked ? qsTr("Locked") : qsTr("Lock")

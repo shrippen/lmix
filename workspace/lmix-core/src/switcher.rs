@@ -57,6 +57,9 @@ pub enum Command {
         slot: usize,
         source: Option<SourceSpec>,
     },
+    /// Black with a banner in `slot`, whose input is a card while the
+    /// cards are off (`set_cards`).
+    CardOff { slot: usize },
     /// Loop the player of `slot` or let it stop at the end (INP.10);
     /// `items` are its files, unchanged.
     SetAtEnd {
@@ -601,6 +604,8 @@ pub struct Switcher {
     looks_available: bool,
     /// Locked against closing, loading and stopping (AUT.11).
     locked: bool,
+    /// Cards in use (`set_cards`); off at every start.
+    cards_on: bool,
     /// Inputs closed last, with their place in the bar (AUT.10).
     removed: Vec<(usize, ShowInput)>,
     /// Standby and running cues of the cue lists.
@@ -687,6 +692,7 @@ impl Switcher {
             stinger_sent: Some(Vec::new()),
             looks_available: false,
             locked: false,
+            cards_on: false,
             removed: Vec::new(),
             cues: Runner::default(),
             cue_warnings: Vec::new(),
@@ -1426,6 +1432,13 @@ impl Switcher {
             Action::SetLock { on } => {
                 self.locked = on;
                 Ok(Vec::new())
+            }
+            Action::SetCards { on } => {
+                // Off stops the card outputs, which the lock refuses.
+                if !on && self.cards_on {
+                    self.check_unlocked()?;
+                }
+                Ok(self.set_cards(on))
             }
             Action::SetMidiTbar { midi } => {
                 if let Some(m) = &midi {
@@ -2380,6 +2393,7 @@ impl Switcher {
             default_delay_ms: self.show.default_delay_ms,
             looks_available: self.looks_available,
             locked: self.locked,
+            cards_on: self.cards_on,
             cue_lists: self
                 .show
                 .cue_lists
@@ -4870,7 +4884,125 @@ impl Switcher {
 
     fn stop_output(&mut self, output: &OutputRef) -> Result<Vec<Command>, ActionError> {
         let id = self.show.outputs[self.find_output(output)?].id;
+        // One waiting for the cards does not run: it just stops waiting.
+        if self.output_status.get(&id) == Some(&OutputStatus::CardsOff) {
+            self.set_output_status(id, OutputStatus::Stopped);
+            return Ok(Vec::new());
+        }
         Ok(vec![Command::StopOutput { id }])
+    }
+
+    /// Use the cards or let go of them: card inputs between their card
+    /// and black with a banner, card outputs between running and waiting.
+    pub fn set_cards(&mut self, on: bool) -> Vec<Command> {
+        if on == self.cards_on {
+            return Vec::new();
+        }
+        self.cards_on = on;
+        let inputs = self
+            .show
+            .inputs
+            .iter()
+            .filter(|i| matches!(i.source, SourceSpec::Card { .. }))
+            .map(|i| Command::SetSlot {
+                slot: i.slot,
+                source: Some(i.source.clone()),
+            });
+        let mut commands: Vec<Command> = inputs.collect();
+
+        if !on {
+            commands.extend(self.release_card_outputs());
+            return self.cards_gate(commands);
+        }
+        let starts: Vec<(OutputId, Result<Command, ActionError>)> = self
+            .show
+            .outputs
+            .iter()
+            .filter(|o| self.output_waits_for_cards(o.id))
+            .map(|o| (o.id, self.start_command(o)))
+            .collect();
+        for (id, start) in starts {
+            match start {
+                Ok(command) => commands.push(command),
+                // Its source went meanwhile: it fails rather than wait.
+                Err(e) => self.set_output_status(
+                    id,
+                    OutputStatus::Failed {
+                        message: e.to_string(),
+                    },
+                ),
+            }
+        }
+        commands
+    }
+
+    /// While the cards are off: stop commands for the card outputs that
+    /// run or fail back, which now wait for the cards.
+    fn release_card_outputs(&mut self) -> Vec<Command> {
+        if self.cards_on {
+            return Vec::new();
+        }
+        let active: Vec<OutputId> = self
+            .show
+            .outputs
+            .iter()
+            .filter(|o| is_card(&o.spec))
+            .filter(|o| {
+                matches!(
+                    self.output_status.get(&o.id),
+                    Some(OutputStatus::Running { .. } | OutputStatus::Failed { .. })
+                )
+            })
+            .map(|o| o.id)
+            .collect();
+        for id in &active {
+            self.set_output_status(*id, OutputStatus::CardsOff);
+        }
+        active
+            .into_iter()
+            .map(|id| Command::StopOutput { id })
+            .collect()
+    }
+
+    /// `commands` as the engine may run them: while the cards are off a
+    /// card input's slot shows black with a banner, and a card output
+    /// waits instead of starting.
+    pub fn cards_gate(&mut self, commands: Vec<Command>) -> Vec<Command> {
+        if self.cards_on {
+            return commands;
+        }
+        let mut gated = Vec::with_capacity(commands.len());
+        for command in commands {
+            match command {
+                Command::SetSlot {
+                    slot,
+                    source: Some(SourceSpec::Card { .. }),
+                } => gated.push(Command::CardOff { slot }),
+                Command::StartOutput { id, spec, .. } if is_card(&spec) => {
+                    self.set_output_status(id, OutputStatus::CardsOff);
+                }
+                command => gated.push(command),
+            }
+        }
+        gated
+    }
+
+    /// The engine still uses the cards from before a restart: they are on.
+    pub fn adopt_cards(&mut self) {
+        self.cards_on = true;
+    }
+
+    /// Whether a card output runs.
+    pub fn runs_a_card_output(&self) -> bool {
+        self.show
+            .outputs
+            .iter()
+            .any(|o| is_card(&o.spec) && self.output_running(o.id))
+    }
+
+    /// Whether output `id` waits for the cards.
+    pub fn output_waits_for_cards(&self, id: OutputId) -> bool {
+        self.output_status.get(&id) == Some(&OutputStatus::CardsOff)
     }
 
     /// Start commands for the outputs of `group` that do not run; an
@@ -4898,6 +5030,17 @@ impl Switcher {
     }
 
     fn stop_outputs(&mut self, group: OutputGroup) -> Vec<Command> {
+        // Ones waiting for the cards just stop waiting.
+        let waiting: Vec<OutputId> = self
+            .show
+            .outputs
+            .iter()
+            .filter(|o| group.holds(&o.spec) && self.output_waits_for_cards(o.id))
+            .map(|o| o.id)
+            .collect();
+        for id in waiting {
+            self.set_output_status(id, OutputStatus::Stopped);
+        }
         self.show
             .outputs
             .iter()
@@ -5449,6 +5592,10 @@ fn check_volume(volume: u8) -> Result<(), ActionError> {
         });
     }
     Ok(())
+}
+
+fn is_card(spec: &OutputSpec) -> bool {
+    matches!(spec, OutputSpec::Card { .. })
 }
 
 /// The buses a card output plays on its further channel pairs.

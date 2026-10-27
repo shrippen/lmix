@@ -202,7 +202,7 @@ pub fn render(snap: &Snapshot, resident: Option<u64>) -> String {
         let number = output.number.to_string();
         let running = match output.status {
             OutputStatus::Running { .. } => 1,
-            OutputStatus::Stopped => 0,
+            OutputStatus::Stopped | OutputStatus::CardsOff => 0,
             OutputStatus::Failed { .. } => -1,
         };
         f.sample(

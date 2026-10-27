@@ -79,6 +79,8 @@ for run in $(seq 1 "$RUNS"); do
         --layout-templates "$dir/layout-templates.json" >"$dir/core.log" 2>&1 &
     PIDS+=($!)
     wait_up "$CORE/state" lmix-core
+    # The cards start switched off.
+    act '{"action":"set_cards","on":true}'
 
     act "{\"action\":\"add_input\",\"source\":{\"kind\":\"file\",\"path\":\"$CLIP\"},\"name\":\"Flash\"}"
     act "{\"action\":\"add_input\",\"source\":{\"kind\":\"card\",\"device\":$SDI_IN},\"name\":\"SDI in\"}"

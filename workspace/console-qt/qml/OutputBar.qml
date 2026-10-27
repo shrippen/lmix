@@ -53,7 +53,10 @@ RowLayout {
                 : (status.state === "failed" ? KanteButton.Emphasis.Destructive : KanteButton.Emphasis.Normal)
             enabled: bar.core.connected
             onClicked: {
-                if (!running) {
+                // One waiting for the cards just stops waiting.
+                if (status.state === "cards_off") {
+                    bar.act({ action: "stop_output", output: modelData.number })
+                } else if (!running) {
                     bar.act({ action: "start_output", output: modelData.number })
                 } else if (bar.confirmStop) {
                     stopDialog.output = modelData
@@ -65,7 +68,9 @@ RowLayout {
 
             QQC2.ToolTip.visible: hovered
             QQC2.ToolTip.text: {
-                var state = running ? qsTr("Running") : (status.state === "failed" ? qsTr("Failed: %1").arg(status.message) : qsTr("Stopped"))
+                var state = running ? qsTr("Running")
+                    : (status.state === "failed" ? qsTr("Failed: %1").arg(status.message)
+                    : (status.state === "cards_off" ? qsTr("Waiting for the cards") : qsTr("Stopped")))
                 return state + (link ? "\n" + Texts.linkDetail(link) : "") + "\n" + qsTr("Click: start or stop. Right click: remove.")
             }
 

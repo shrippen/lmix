@@ -441,6 +441,7 @@ async fn connect(engine: Arc<dyn Engine>, service: Arc<Service>, slots: usize, s
     }
 
     tracing::info!("engine ready");
+    service.adopt_cards().await;
     if let Err(e) = service.restore().await {
         tracing::error!(error = %e, "restoring show to engine failed");
     }
