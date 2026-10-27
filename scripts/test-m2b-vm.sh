@@ -294,8 +294,8 @@ full=$(steady_db pgm_db)
 act '{"action":"set_channel_strip","input":"Ball","strip":{"gain_db":-20,"delay_ms":200}}' >/dev/null
 settled '[[ $(pgm_db) -lt $((full - 15)) ]]' || fail "strip gain -20 dB did not lower program ($full -> $(pgm_db) dB)"
 ball_slot="$(curl -sf "$CORE/state" | jq '.inputs[] | select(.name=="Ball") | .slot')"
-offset="$(curl -sf "$STROM/api/flows/$MIXER_ID/elements/adelay$ball_slot/properties" | jq '.properties["ts-offset"]')"
-[[ "$offset" == 200000000 ]] || fail "strip delay not in the engine (ts-offset $offset)"
+offset="$(curl -sf "$STROM/api/flows/$MIXER_ID/blocks/adelay$ball_slot/properties" | jq '.properties.offset_ms')"
+[[ "$(jq -n "$offset == 200")" == true ]] || fail "strip delay not in the engine (offset $offset ms)"
 [[ $(pgm_db) -gt $SILENT_DB ]] || fail "program silent after the delay change"
 act '{"action":"set_channel_strip","input":"Ball","strip":{}}' >/dev/null
 settled '[[ $(pgm_db) -ge $((full - 2)) ]]' || fail "strip reset did not restore program ($full -> $(pgm_db) dB)"

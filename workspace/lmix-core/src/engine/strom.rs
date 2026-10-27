@@ -780,28 +780,16 @@ impl StromEngine {
     }
 
     /// Channel strip: the audio mixer's channel properties, then the
-    /// channel delay on its own element.
+    /// channel delay on its own block.
     async fn set_strip(&self, slot: usize, strip: &ChannelStrip) -> Result<(), EngineError> {
         self.patch_audio_mixer(strip_properties(flows::audio_channel(slot), strip), 0)
             .await?;
-        let path = format!(
-            "/flows/{}/elements/{}/properties",
-            flows::mixer_id(),
-            flows::audio_delay(slot)
-        );
-        let delay_ns = i64::from(strip.delay_ms) * 1_000_000;
-        let body = serde_json::json!({
-            "property_name": "ts-offset",
-            "value": PropertyValue::Int(delay_ns),
-        });
-        let resp = self
-            .http
-            .patch(self.url(&path))
-            .json(&body)
-            .send()
+        let delay = vec![(
+            "offset_ms".to_string(),
+            PropertyValue::Float(f64::from(strip.delay_ms)),
+        )];
+        self.patch_block(flows::mixer_id(), &flows::audio_delay(slot), delay)
             .await
-            .map_err(net)?;
-        check(resp).await.map(|_| ())
     }
 
     /// T-bar: strom holds the take from program to preview at `position`
