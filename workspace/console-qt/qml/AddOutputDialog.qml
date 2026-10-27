@@ -4,7 +4,7 @@ import QtQuick.Controls as QQC2
 import org.kde.kirigami as Kirigami
 import Kante
 
-/** New output: stream, recording, NDI or screen, of program, preview, the multiview or one input. */
+/** New output: stream, recording, NDI, screen or SDI card, of program, preview, the multiview or one input. */
 KanteDialog {
     id: dialog
 
@@ -27,7 +27,14 @@ KanteDialog {
     readonly property var kinds: Texts.choices("outputs", core.choices("outputs"))
     readonly property var containers: Texts.choices("containers", core.choices("containers"))
     readonly property string kind: kinds[kindBox.currentIndex] ? kinds[kindBox.currentIndex].value : "srt"
-    readonly property bool needsText: kind !== "window" && kind !== "fullscreen"
+    readonly property bool isCard: kind === "card"
+    /** Typed in the text field; a card is picked from its own list. */
+    readonly property bool needsText: kind !== "window" && kind !== "fullscreen" && !isCard
+    /** The card connectors the engine found (`Device`s of kind card). */
+    readonly property var cards: (core.devices.length > 0 ? JSON.parse(core.devices) : []).filter(d => d.kind === "card")
+    readonly property var cardModes: Texts.choices("card_modes", core.choices("card_modes"))
+    /** Mode a new card output starts in. */
+    readonly property string defaultCardMode: "1080p25"
     readonly property bool encodes: kind === "srt" || kind === "rtmp" || kind === "record"
     /** Screens show picture only. */
     readonly property bool carriesSound: kind !== "window" && kind !== "fullscreen" && kind !== "drm"
@@ -47,6 +54,9 @@ KanteDialog {
     acceptText: qsTr("Add output")
 
     onOpened: {
+        core.refreshLists()
+        cardBox.currentIndex = 0
+        cardModeBox.currentIndex = Math.max(0, cardModes.findIndex(m => m.value === defaultCardMode))
         textField.text = ""
         nameField.text = ""
         soundBox.currentIndex = 0
@@ -61,7 +71,8 @@ KanteDialog {
         var container = dialog.containers[containerBox.currentIndex] ? dialog.containers[containerBox.currentIndex].value : "mkv"
         core.addOutput(JSON.stringify({
             kind: dialog.kind,
-            text: textField.text,
+            text: dialog.isCard ? (dialog.cards[cardBox.currentIndex] ? dialog.cards[cardBox.currentIndex].id : "") : textField.text,
+            mode: dialog.isCard && dialog.cardModes[cardModeBox.currentIndex] ? dialog.cardModes[cardModeBox.currentIndex].value : "",
             source: source,
             container: container,
             video_kbps: kbps.value,
@@ -76,7 +87,7 @@ KanteDialog {
         }))
     }
 
-    acceptEnabled: !dialog.needsText || textField.text.trim().length > 0
+    acceptEnabled: dialog.isCard ? dialog.cards.length > 0 : (!dialog.needsText || textField.text.trim().length > 0)
 
     // KanteDialog has a child of its own (KanteScope), so the popup does not
     // size itself to this one.
@@ -100,6 +111,29 @@ KanteDialog {
             visible: dialog.needsText
             Layout.fillWidth: true
             placeholderText: dialog.hints[dialog.kind] || ""
+        }
+        // OUT.4: a connector of a card and the mode it plays.
+        RowLayout {
+            visible: dialog.isCard
+            Layout.fillWidth: true
+            QQC2.ComboBox {
+                id: cardBox
+                Layout.fillWidth: true
+                model: dialog.cards
+                textRole: "name"
+                KanteFieldSkin { control: cardBox }
+            }
+            QQC2.ComboBox {
+                id: cardModeBox
+                model: dialog.cardModes
+                textRole: "label"
+                KanteFieldSkin { control: cardModeBox }
+            }
+        }
+        KanteEmptyState {
+            Layout.fillWidth: true
+            visible: dialog.isCard && dialog.cards.length === 0
+            text: qsTr("No card found")
         }
         // STR.2: the platform's stream key, apart from the server.
         KanteTextField {

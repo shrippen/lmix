@@ -104,6 +104,14 @@ pub enum SourceSpec {
     Whip { endpoint: String },
     /// Audio-only input: microphone or line-in by device id (AUD.1).
     AudioDevice { id: String },
+    /// SDI or HDMI on a capture card (DeckLink, SRC.1), with its embedded
+    /// sound: `device` is the card's device number, `mode` the video mode
+    /// to capture in; none: the card detects it.
+    Card {
+        device: u32,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        mode: Option<crate::card::CardMode>,
+    },
     /// Web page rendered by the engine's browser, with its sound (GFX.6):
     /// an http(s) address, and CSS added to the page.
     Web {
@@ -247,6 +255,7 @@ impl SourceSpec {
             Self::Whip { endpoint } => format!("WHIP {endpoint}"),
             Self::Web { url, .. } => url.clone(),
             Self::Graphics { graphics } => format!("Graphics {graphics}"),
+            Self::Card { device, .. } => format!("Card {}", device + 1),
         }
     }
 }
@@ -661,12 +670,16 @@ pub enum DeviceKind {
     Audio,
     /// NDI source on the network: [`SourceSpec::Ndi`] with the name.
     Ndi,
+    /// Connector of a capture card: [`SourceSpec::Card`], `id` its device
+    /// number.
+    Card,
 }
 
 /// A device the engine found.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct Device {
-    /// Goes into the source (`id`, or `name` for NDI).
+    /// Goes into the source (`id`, `name` for NDI, the device number for
+    /// a card).
     pub id: String,
     pub name: String,
     /// OS media API, e.g. "V4L2"; the same camera can appear once per API.
@@ -675,9 +688,10 @@ pub struct Device {
 }
 
 impl Device {
-    /// The source that shows this device.
-    pub fn source(&self) -> SourceSpec {
-        match self.kind {
+    /// The source that shows this device; `None` for a card whose id is
+    /// no device number.
+    pub fn source(&self) -> Option<SourceSpec> {
+        let source = match self.kind {
             DeviceKind::Video => SourceSpec::Device {
                 id: self.id.clone(),
                 resolution: None,
@@ -689,7 +703,12 @@ impl Device {
             DeviceKind::Ndi => SourceSpec::Ndi {
                 name: self.name.clone(),
             },
-        }
+            DeviceKind::Card => SourceSpec::Card {
+                device: self.id.parse().ok()?,
+                mode: None,
+            },
+        };
+        Some(source)
     }
 }
 

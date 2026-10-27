@@ -4,8 +4,8 @@
 //! passes strings.
 
 use lmix_types::{
-    Container, DisplayMode, Effect, InputColor, InputPress, OutputSource, OutputSpec, SourceSpec,
-    TestPattern, VideoEncoding,
+    CardMode, Container, DisplayMode, Effect, InputColor, InputPress, OutputSource, OutputSpec,
+    SourceSpec, TestPattern, VideoEncoding,
 };
 use serde::{Deserialize, Serialize};
 
@@ -40,6 +40,7 @@ pub fn values(list: &str) -> Option<String> {
         "colors" => InputColor::ALL.map(name_of).to_vec(),
         "presses" => InputPress::ALL.map(name_of).to_vec(),
         "containers" => Container::ALL.map(name_of).to_vec(),
+        "card_modes" => CardMode::ALL.map(|m| m.nick().to_string()).to_vec(),
         "outputs" => OUTPUT_KINDS.iter().map(|k| k.to_string()).collect(),
         "durations" => return serde_json::to_string(&DURATION_PRESETS_MS).ok(),
         // How many buses a show has at most, and how long their names are.
@@ -54,7 +55,7 @@ pub fn values(list: &str) -> Option<String> {
     serde_json::to_string(&names).ok()
 }
 
-const SOURCE_KINDS: [&str; 13] = [
+const SOURCE_KINDS: [&str; 14] = [
     "pattern",
     "color",
     "image",
@@ -68,13 +69,15 @@ const SOURCE_KINDS: [&str; 13] = [
     "graphics",
     "device",
     "audio_device",
+    "card",
 ];
 
-const OUTPUT_KINDS: [&str; 7] = [
+const OUTPUT_KINDS: [&str; 8] = [
     "srt",
     "rtmp",
     "record",
     "ndi",
+    "card",
     "window",
     "fullscreen",
     "drm",
@@ -120,6 +123,10 @@ pub fn source_of(kind: &str, value: &str) -> Option<SourceSpec> {
             framerate: None,
         },
         "audio_device" => SourceSpec::AudioDevice { id: text },
+        "card" => SourceSpec::Card {
+            device: text.parse().ok()?,
+            mode: None,
+        },
         _ => return None,
     })
 }
@@ -133,6 +140,8 @@ pub struct SourceOptions {
     pub resolution: String,
     /// `30/1`.
     pub framerate: String,
+    /// A card's mode, `1080i50`; empty: the card detects it.
+    pub mode: String,
 }
 
 /// `source_of` with the form's options (`SourceOptions` as JSON; empty or
@@ -149,6 +158,9 @@ pub fn source_with_options(kind: &str, value: &str, options: &str) -> Option<Sou
     {
         *resolution = lmix_types::device_resolution(&options.resolution);
         *framerate = lmix_types::device_framerate(&options.framerate);
+    }
+    if let SourceSpec::Card { mode, .. } = &mut source {
+        *mode = CardMode::from_nick(&options.mode);
     }
     Some(source)
 }
@@ -189,6 +201,9 @@ pub struct OutputForm {
     /// Stream key of an RTMP output, apart from its server.
     #[serde(default)]
     pub key: String,
+    /// A card output's mode, `1080i50`.
+    #[serde(default)]
+    pub mode: String,
 }
 
 /// The output the "add output" form describes; `None` while a needed
@@ -200,6 +215,7 @@ pub fn output_of(
     video_kbps: u32,
     encoding: VideoEncoding,
     key: &str,
+    mode: &str,
 ) -> Option<OutputSpec> {
     let text = text.trim().to_string();
     let needs_text = !matches!(kind, "window" | "fullscreen");
@@ -241,6 +257,10 @@ pub fn output_of(
             mode: DisplayMode::Drm {
                 connector: text.parse().ok()?,
             },
+        },
+        "card" => OutputSpec::Card {
+            device: text.parse().ok()?,
+            mode: CardMode::from_nick(mode)?,
         },
         _ => return None,
     })
@@ -474,22 +494,22 @@ mod tests {
     #[test]
     fn outputs_from_the_form() {
         assert_eq!(
-            output_of("window", "", "mkv", 0, VideoEncoding::default(), ""),
+            output_of("window", "", "mkv", 0, VideoEncoding::default(), "", ""),
             Some(OutputSpec::Display {
                 mode: DisplayMode::Window
             })
         );
         assert_eq!(
-            output_of("drm", "", "mkv", 0, VideoEncoding::default(), ""),
+            output_of("drm", "", "mkv", 0, VideoEncoding::default(), "", ""),
             None,
             "needs a connector"
         );
         assert_eq!(
-            output_of("drm", "x", "mkv", 0, VideoEncoding::default(), ""),
+            output_of("drm", "x", "mkv", 0, VideoEncoding::default(), "", ""),
             None
         );
         assert_eq!(
-            output_of("record", "show", "mp4", 0, VideoEncoding::default(), ""),
+            output_of("record", "show", "mp4", 0, VideoEncoding::default(), "", ""),
             Some(OutputSpec::Record {
                 folder: "show".into(),
                 container: Container::Mp4,
@@ -498,9 +518,45 @@ mod tests {
             })
         );
         assert_eq!(
-            output_of("srt", " ", "mkv", 8000, VideoEncoding::default(), ""),
+            output_of("srt", " ", "mkv", 8000, VideoEncoding::default(), "", ""),
             None
         );
+    }
+
+    /// A card goes by its device number, in a mode or (input) the one the
+    /// card detects.
+    #[test]
+    fn cards_from_the_form() {
+        assert_eq!(
+            source_with_options("card", "2", r#"{"mode":"1080i50"}"#),
+            Some(SourceSpec::Card {
+                device: 2,
+                mode: Some(CardMode::Hd1080i50)
+            })
+        );
+        assert_eq!(
+            source_with_options("card", "0", "{}"),
+            Some(SourceSpec::Card {
+                device: 0,
+                mode: None
+            })
+        );
+        assert_eq!(source_with_options("card", "two", "{}"), None);
+        assert_eq!(
+            output_of("card", "1", "", 0, VideoEncoding::default(), "", "720p50"),
+            Some(OutputSpec::Card {
+                device: 1,
+                mode: CardMode::Hd720p50
+            })
+        );
+        // An output needs a mode: the card plays what it is given.
+        assert_eq!(
+            output_of("card", "1", "", 0, VideoEncoding::default(), "", ""),
+            None
+        );
+        let modes: Vec<String> = serde_json::from_str(&values("card_modes").unwrap()).unwrap();
+        assert_eq!(modes.first().map(String::as_str), Some("720p50"));
+        assert_eq!(modes.len(), CardMode::ALL.len());
     }
 
     #[test]

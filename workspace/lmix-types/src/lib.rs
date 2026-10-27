@@ -12,6 +12,7 @@
 pub mod action;
 pub mod automation;
 pub mod bus;
+pub mod card;
 pub mod cue;
 pub mod feed;
 pub mod graphics;
@@ -34,6 +35,7 @@ pub use action::{
 };
 pub use automation::{Trigger, TriggerOn};
 pub use bus::{find_bus, Bus, BusId, BusPeak, BusRef, Fader, Phones, PhonesSend, BUSES};
+pub use card::{CardMode, Scan};
 pub use cue::{
     Cue, CueEvent, CueId, CueKind, CueList, CueTarget, Follow, GroupMode, RunPhase, RunningCue,
     StandbyMove, StopMode, StopOthers, StopScope,

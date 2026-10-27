@@ -30,8 +30,8 @@ use lmix_types::action::OVERLAY_CHANNELS;
 use lmix_types::input::color_rgb;
 use lmix_types::layout::LAYOUTS;
 use lmix_types::{
-    BusId, DisplayMode, Framerate, MasterFormat, MultiviewLayout, MultiviewMeters, OutputId,
-    OutputSpec, ProgramSide, RateMode, SourceSpec, VideoCodec, VideoEncoding,
+    BusId, CardMode, DisplayMode, Framerate, MasterFormat, MultiviewLayout, MultiviewMeters,
+    OutputId, OutputSpec, ProgramSide, RateMode, Scan, SourceSpec, VideoCodec, VideoEncoding,
 };
 
 use super::LivePicture;
@@ -61,6 +61,31 @@ const INTER_INPUT_BLOCK: &str = "builtin.inter_input";
 const VISION_MIXER_BLOCK: &str = "builtin.vision_mixer";
 const THUMBNAIL_BLOCK: &str = "builtin.thumbnail";
 const AUDIO_MIXER_BLOCK: &str = "builtin.mixer";
+const CARD_INPUT_BLOCK: &str = "builtin.decklink_input";
+const CARD_OUTPUT_BLOCK: &str = "builtin.decklink_output";
+
+/// Block id of a capture or playout card in a slot or output flow.
+const CARD: &str = "card";
+/// Deinterlacer after a card input; progressive pictures pass through.
+const CARD_DEINTERLACE: &str = "card_deinterlace";
+/// Caps of what a card output takes: its mode's size and rate, 8-bit.
+const CARD_PICTURE: &str = "card_picture";
+/// Weaves two pictures into one frame of an interlaced card mode.
+const CARD_WEAVE: &str = "card_weave";
+/// Sound as a card embeds it.
+const CARD_SOUND: &str = "card_sound";
+/// The cards' 8-bit picture format (DeckLink `8bit-yuv`).
+const CARD_FORMAT: &str = "UYVY";
+const CARD_SOUND_CAPS: &str = "audio/x-raw,format=S32LE,layout=interleaved,rate=48000,channels=2";
+/// Card mode of an input that the card detects itself.
+const CARD_AUTO: &str = "auto";
+/// How long before its time a frame goes to the card. Frames come over
+/// inter later than the output flow's latency says (it does not see all
+/// of the mixer's); with strom's 20 ms the card showed half of them late
+/// and dropped the rest. A later start on the same card in the same strom
+/// passed reliably only from 150 ms on; 60 and 100 ms failed some of them
+/// (DECISIONS 27.10.).
+const CARD_LEAD_MS: u64 = 150;
 
 /// Block id of the media player in file, URL and playlist slots.
 pub const PLAYER: &str = "player";
@@ -701,8 +726,103 @@ pub fn output_flow(
                     .push(link(OUTPUT_SOUND_TIMED.into(), "ndi:audio_in".into()));
             }
         }
+        OutputSpec::Card { device, mode } => {
+            let from = add_download(&mut flow, "pgm:src", on_gpu);
+            add_card_output(&mut flow, &from, *device, *mode, sound);
+        }
     }
     flow
+}
+
+/// Picture and sound to a playout card. The card takes its mode exactly
+/// and converts nothing: program is scaled (borders keep its aspect),
+/// brought to the mode's rate and format, for an interlaced mode woven
+/// into fields.
+///
+/// ```text
+///   pgm ─► convert ─► scale ─► rate ─► card_picture [─► card_weave] ─► card:video_in
+///   sound ─► convert ─► card_sound ─► card:audio_in
+/// ```
+fn add_card_output(flow: &mut Flow, from: &str, device: u32, mode: CardMode, sound: bool) {
+    let stream_mode = if sound { "audio_video" } else { "video" };
+    flow.blocks.push(block(
+        CARD,
+        CARD_OUTPUT_BLOCK,
+        vec![
+            ("device_number", PropertyValue::UInt(u64::from(device))),
+            ("mode", PropertyValue::String(mode.nick().into())),
+            ("stream_mode", PropertyValue::String(stream_mode.into())),
+            ("processing_deadline_ms", PropertyValue::UInt(CARD_LEAD_MS)),
+        ],
+    ));
+
+    // Picture in the mode's size and picture rate.
+    let (width, height) = mode.size();
+    let caps = format!(
+        "video/x-raw,format={CARD_FORMAT},width={width},height={height},framerate={},pixel-aspect-ratio=1/1,interlace-mode=progressive",
+        mode.picture_rate()
+    );
+    flow.elements
+        .push(element("card_convert", "videoconvert", vec![]));
+    flow.elements
+        .push(element("card_scale", "videoscale", vec![]));
+    // The first frame carries the mixer's running time (hours): from
+    // the segment start videorate would fill all of that with copies.
+    flow.elements.push(element(
+        "card_rate",
+        "videorate",
+        vec![("skip-to-first", PropertyValue::Bool(true))],
+    ));
+    flow.elements.push(element(
+        CARD_PICTURE,
+        "capsfilter",
+        vec![("caps", PropertyValue::String(caps))],
+    ));
+    flow.links.push(link(from.into(), "card_convert".into()));
+    flow.links
+        .push(link("card_convert".into(), "card_scale".into()));
+    flow.links
+        .push(link("card_scale".into(), "card_rate".into()));
+    flow.links
+        .push(link("card_rate".into(), CARD_PICTURE.into()));
+
+    // SDI sends the top field first; two pictures make one frame
+    // (interlace's default pattern is telecine).
+    let picture = match mode.scan() {
+        Scan::Progressive => CARD_PICTURE,
+        Scan::Interlaced => {
+            flow.elements.push(element(
+                CARD_WEAVE,
+                "interlace",
+                vec![
+                    ("top-field-first", PropertyValue::Bool(true)),
+                    ("field-pattern", PropertyValue::String("1:1".into())),
+                ],
+            ));
+            flow.links
+                .push(link(CARD_PICTURE.into(), CARD_WEAVE.into()));
+            CARD_WEAVE
+        }
+    };
+    flow.links
+        .push(link(picture.into(), format!("{CARD}:video_in")));
+
+    if !sound {
+        return;
+    }
+    flow.elements
+        .push(element("card_aconvert", "audioconvert", vec![]));
+    flow.elements.push(element(
+        CARD_SOUND,
+        "capsfilter",
+        vec![("caps", PropertyValue::String(CARD_SOUND_CAPS.into()))],
+    ));
+    flow.links
+        .push(link(OUTPUT_SOUND_TIMED.into(), "card_aconvert".into()));
+    flow.links
+        .push(link("card_aconvert".into(), CARD_SOUND.into()));
+    flow.links
+        .push(link(CARD_SOUND.into(), format!("{CARD}:audio_in")));
 }
 
 /// Picture to a screen. qos=false: strom drops upstream QoS at sinks with
@@ -1359,9 +1479,30 @@ fn add_source(flow: &mut Flow, source: &SourceSpec, env: &SlotEnv) -> Option<Str
                 .push(block("dev", LOCAL_INPUT_BLOCK, properties));
             "dev:video_out".into()
         }
+        SourceSpec::Card { device, mode } => add_card_input(flow, *device, *mode),
         SourceSpec::AudioDevice { .. } => return None,
     };
     Some(pad)
+}
+
+/// The card's picture and sound; returns the picture's pad. Interlaced
+/// signals (1080i) get deinterlaced: the mixer works in frames.
+fn add_card_input(flow: &mut Flow, device: u32, mode: Option<CardMode>) -> String {
+    let mode = mode.map_or(CARD_AUTO, CardMode::nick);
+    flow.blocks.push(block(
+        CARD,
+        CARD_INPUT_BLOCK,
+        vec![
+            ("device_number", PropertyValue::UInt(u64::from(device))),
+            ("mode", PropertyValue::String(mode.into())),
+            ("stream_mode", PropertyValue::String("audio_video".into())),
+        ],
+    ));
+    flow.elements
+        .push(element(CARD_DEINTERLACE, "deinterlace", vec![]));
+    flow.links
+        .push(link(format!("{CARD}:video_out"), CARD_DEINTERLACE.into()));
+    CARD_DEINTERLACE.into()
 }
 
 /// `videotestsrc` with `properties`, live, in the pattern format.
@@ -1564,6 +1705,7 @@ fn add_audio(flow: &mut Flow, slot: usize, source: &SourceSpec) -> Option<String
         SourceSpec::Ndi { .. } => "ndi:audio_out".into(),
         SourceSpec::Whip { .. } => "whip:audio_out".into(),
         SourceSpec::Web { .. } => format!("{WEB}:audio_out"),
+        SourceSpec::Card { .. } => format!("{CARD}:audio_out"),
         SourceSpec::AudioDevice { id } => {
             flow.blocks.push(block(
                 "adev",
@@ -2997,5 +3139,130 @@ mod tests {
             Some(PropertyValue::String(p)) if p == "[\"/a b.mp4\"]"
         ));
         assert!(flow.links.iter().any(|l| l.from == "player:video_out"));
+    }
+
+    fn card_block<'a>(flow: &'a Flow, definition: &str) -> &'a strom_types::BlockInstance {
+        flow.blocks
+            .iter()
+            .find(|b| b.block_definition_id == definition)
+            .expect("a card block")
+    }
+
+    fn caps_of<'a>(flow: &'a Flow, id: &str) -> &'a str {
+        let caps = flow.elements.iter().find(|e| e.id == id).expect(id);
+        match caps.properties.get("caps") {
+            Some(PropertyValue::String(c)) => c,
+            other => panic!("caps of {id}: {other:?}"),
+        }
+    }
+
+    /// An SDI input (SRC.1): the card's own block on its device, picture
+    /// deinterlaced (progressive passes through), embedded sound to the
+    /// slot's sound.
+    #[test]
+    fn card_input_captures_picture_and_sound() {
+        let source = SourceSpec::Card {
+            device: 2,
+            mode: Some(CardMode::Hd1080i50),
+        };
+        let flow = slot_flow(0, &source, &SlotEnv::new(MixerBackend::Cpu));
+        let card = card_block(&flow, CARD_INPUT_BLOCK);
+        assert_eq!(uint(card, "device_number"), 2);
+        assert_eq!(text(card, "mode"), "1080i50");
+        assert_eq!(text(card, "stream_mode"), "audio_video");
+        assert!(flow
+            .links
+            .iter()
+            .any(|l| l.from == format!("{CARD}:video_out") && l.to == CARD_DEINTERLACE));
+        assert!(flow
+            .links
+            .iter()
+            .any(|l| l.from == format!("{CARD}:audio_out")));
+
+        // Without a mode the card detects it.
+        let auto = SourceSpec::Card {
+            device: 0,
+            mode: None,
+        };
+        let flow = slot_flow(0, &auto, &SlotEnv::new(MixerBackend::Cpu));
+        assert_eq!(text(card_block(&flow, CARD_INPUT_BLOCK), "mode"), "auto");
+    }
+
+    /// An SDI output (OUT.4) gets program as the card takes it: scaled and
+    /// at the mode's rate in the card's 8-bit format, sound as 32-bit.
+    #[test]
+    fn card_output_sends_the_cards_format() {
+        let spec = OutputSpec::Card {
+            device: 1,
+            mode: CardMode::Hd720p50,
+        };
+        let flow = output_flow(
+            OutputId::new(),
+            &spec,
+            Feed::Program,
+            None,
+            MixerBackend::Cuda,
+            Framerate::Fps25,
+            LiveMkv::Yes,
+        );
+        let card = card_block(&flow, CARD_OUTPUT_BLOCK);
+        assert_eq!(uint(card, "device_number"), 1);
+        assert_eq!(text(card, "mode"), "720p50");
+        assert_eq!(text(card, "stream_mode"), "audio_video");
+        assert_eq!(uint(card, "processing_deadline_ms"), CARD_LEAD_MS);
+        let caps = caps_of(&flow, CARD_PICTURE);
+        assert!(caps.contains("format=UYVY"), "{caps}");
+        assert!(caps.contains("width=1280,height=720"), "{caps}");
+        assert!(caps.contains("framerate=50/1"), "{caps}");
+        assert!(caps_of(&flow, CARD_SOUND).contains("format=S32LE"));
+        // CUDA program is downloaded for the card.
+        assert!(flow
+            .elements
+            .iter()
+            .any(|e| e.element_type == "cudadownload"));
+        assert!(flow
+            .links
+            .iter()
+            .any(|l| l.from == CARD_PICTURE && l.to == format!("{CARD}:video_in")));
+        assert!(flow
+            .links
+            .iter()
+            .any(|l| l.from == CARD_SOUND && l.to == format!("{CARD}:audio_in")));
+    }
+
+    /// An interlaced mode weaves two pictures into one frame of two
+    /// fields, top field first as SDI sends it.
+    #[test]
+    fn interlaced_card_output_weaves_fields() {
+        let spec = OutputSpec::Card {
+            device: 0,
+            mode: CardMode::Hd1080i50,
+        };
+        let flow = output_flow(
+            OutputId::new(),
+            &spec,
+            Feed::Program,
+            None,
+            MixerBackend::Cpu,
+            Framerate::Fps25,
+            LiveMkv::Yes,
+        );
+        assert!(caps_of(&flow, CARD_PICTURE).contains("framerate=50/1"));
+        let weave = flow.elements.iter().find(|e| e.id == CARD_WEAVE).unwrap();
+        assert_eq!(weave.element_type, "interlace");
+        assert!(matches!(
+            weave.properties.get("top-field-first"),
+            Some(PropertyValue::Bool(true))
+        ));
+        // Two pictures make one frame; interlace's default is telecine
+        // (2:3), which the card does not take.
+        assert!(matches!(
+            weave.properties.get("field-pattern"),
+            Some(PropertyValue::String(p)) if p == "1:1"
+        ));
+        assert!(flow
+            .links
+            .iter()
+            .any(|l| l.from == CARD_WEAVE && l.to == format!("{CARD}:video_in")));
     }
 }

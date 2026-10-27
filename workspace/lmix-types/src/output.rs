@@ -229,6 +229,13 @@ pub enum OutputSpec {
     /// Picture on a screen of the engine machine (OUT.3): projector, LED
     /// wall, confidence monitor. Picture only.
     Display { mode: DisplayMode },
+    /// SDI or HDMI out of a playout card (DeckLink, OUT.4): uncompressed
+    /// picture in `mode`, scaled to it, with the sound embedded.
+    /// `device` is the card's device number.
+    Card {
+        device: u32,
+        mode: crate::card::CardMode,
+    },
 }
 
 /// How a display output reaches its screen.
@@ -289,6 +296,7 @@ impl OutputSpec {
                 DisplayMode::Fullscreen => "Fullscreen".into(),
                 DisplayMode::Drm { connector } => format!("Screen {connector}"),
             },
+            Self::Card { device, mode } => format!("Card {} {}", device + 1, mode.nick()),
         }
     }
 }
