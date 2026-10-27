@@ -4946,6 +4946,14 @@ impl Switcher {
         self.output_running(id)
     }
 
+    /// Why output `id` failed; empty when it did not.
+    pub fn output_failure(&self, id: OutputId) -> String {
+        match self.output_status.get(&id) {
+            Some(OutputStatus::Failed { message }) => message.clone(),
+            _ => String::new(),
+        }
+    }
+
     /// Start command for a failed output; `None` when it was stopped or
     /// removed meanwhile, or its input is gone.
     pub fn restart_command(&self, id: OutputId) -> Option<Command> {
