@@ -5057,6 +5057,12 @@ nimmt lmix nur, wenn jemand es will. Aus heißt:
 - Der Failback eines Kartenausgangs endet, solange die Karten aus sind.
 - Die Sperre (`set_lock`) lehnt das Ausschalten ab, weil es Ausgänge
   stoppt; Einschalten geht. Ein Gruppen-Stopp beendet auch das Warten.
+- Ausnahme vom „aus beim Start“: Startet der Core neu, während strom
+  noch einen Flow mit Karte laufen hat (Absturz in der Show), übernimmt
+  er die Karten als an (`Engine::holds_cards`, vor `restore`). Die Karte
+  ist dann ohnehin nicht frei, und ein Neustart soll den Beamer nicht
+  abschalten. Auf der Karte geprüft: Core beendet und neu gestartet,
+  Ausgang läuft weiter; mit Karten aus bleibt es aus.
 
 Ein Schalter je Karte wäre feiner, aber die Karten hängen an einem
 Treiber, und die Frage ist im Betrieb „darf lmix an die Karten“.

@@ -912,6 +912,18 @@ impl Service {
         known.as_deref().is_some_and(|known| known != current)
     }
 
+    /// Cards the engine still uses after lmix-core restarted stay on: a
+    /// restart in a show keeps the card outputs and inputs going. Before
+    /// `restore`.
+    pub async fn adopt_cards(&self) {
+        if self.engine.holds_cards().await {
+            tracing::info!("the engine uses the cards: they stay on");
+            let mut sw = self.switcher.lock().await;
+            sw.adopt_cards();
+            self.publish(&sw);
+        }
+    }
+
     /// Outputs still running in the engine after lmix-core restarted count
     /// as running again (their start time is unknown: now).
     pub async fn adopt_running_outputs(&self) {
@@ -3694,6 +3706,39 @@ mod tests {
             .await
             .unwrap();
         (engine, service)
+    }
+
+    /// lmix-core restarted while the engine used the cards: they stay on,
+    /// the input keeps its card.
+    #[tokio::test]
+    async fn a_restart_keeps_cards_the_engine_uses() {
+        let engine = Arc::new(NullEngine::default());
+        let service = Service::new(4, engine.clone(), None);
+        service.await_engine();
+        let card = SourceSpec::Card {
+            device: 2,
+            mode: None,
+            pair: 1,
+        };
+        service
+            .handle(Action::AddInput {
+                source: card.clone(),
+                name: Some("SDI".into()),
+            })
+            .await
+            .unwrap();
+        engine.hold_cards();
+        service.adopt_cards().await;
+        service.restore().await.unwrap();
+        service.adopt_running_outputs().await;
+        let state = service.state().await;
+        assert!(state.cards_on);
+        let log = engine.log();
+        assert!(log.contains(&Command::SetSlot {
+            slot: 0,
+            source: Some(card),
+        }));
+        assert!(!log.contains(&Command::CardOff { slot: 0 }));
     }
 
     /// Outputs stopped as a group stop waiting for the cards too.

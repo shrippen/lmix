@@ -4914,12 +4914,25 @@ impl Switcher {
             commands.extend(self.release_card_outputs());
             return self.cards_gate(commands);
         }
-        let waiting = self
+        let starts: Vec<(OutputId, Result<Command, ActionError>)> = self
             .show
             .outputs
             .iter()
-            .filter(|o| self.output_status.get(&o.id) == Some(&OutputStatus::CardsOff));
-        commands.extend(waiting.filter_map(|o| self.start_command(o).ok()));
+            .filter(|o| self.output_waits_for_cards(o.id))
+            .map(|o| (o.id, self.start_command(o)))
+            .collect();
+        for (id, start) in starts {
+            match start {
+                Ok(command) => commands.push(command),
+                // Its source went meanwhile: it fails rather than wait.
+                Err(e) => self.set_output_status(
+                    id,
+                    OutputStatus::Failed {
+                        message: e.to_string(),
+                    },
+                ),
+            }
+        }
         commands
     }
 
@@ -4975,6 +4988,11 @@ impl Switcher {
     }
 
     /// Whether output `id` waits for the cards.
+    /// The engine still uses the cards from before a restart: they are on.
+    pub fn adopt_cards(&mut self) {
+        self.cards_on = true;
+    }
+
     pub fn output_waits_for_cards(&self, id: OutputId) -> bool {
         self.output_status.get(&id) == Some(&OutputStatus::CardsOff)
     }

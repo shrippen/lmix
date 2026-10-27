@@ -1649,6 +1649,19 @@ impl Engine for StromEngine {
         matches!(self.get_flow(flows::output_flow_id(id)).await, Ok(Some(flow)) if flow.running)
     }
 
+    /// Asked once at the start; no answer counts as no cards.
+    async fn holds_cards(&self) -> bool {
+        let Ok(resp) = self.http.get(self.url("/flows")).send().await else {
+            return false;
+        };
+        let Ok(resp) = check(resp).await else {
+            return false;
+        };
+        resp.json::<strom_types::api::FlowListResponse>()
+            .await
+            .is_ok_and(|list| list.flows.iter().any(flows::uses_card))
+    }
+
     /// No for a flow strom has stopped or does not have; yes when strom
     /// does not answer within `FLOW_CHECK_TIMEOUT` (the failure watcher
     /// waits for it), as for an engine that cannot tell.

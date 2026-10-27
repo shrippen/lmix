@@ -218,6 +218,11 @@ pub fn mixer_id() -> FlowId {
     Uuid::new_v5(&FLOW_NAMESPACE, b"mixer")
 }
 
+/// Whether `flow` runs and uses a card, as an input or an output.
+pub fn uses_card(flow: &Flow) -> bool {
+    flow.running && flow.blocks.iter().any(|b| b.id == CARD)
+}
+
 pub fn slot_id(slot: usize) -> FlowId {
     Uuid::new_v5(&FLOW_NAMESPACE, format!("slot-{slot}").as_bytes())
 }

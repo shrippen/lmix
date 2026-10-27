@@ -53,6 +53,9 @@ pub struct NullEngine {
     /// Outputs started and not stopped or failed since.
     #[cfg(test)]
     running_outputs: Mutex<std::collections::HashSet<lmix_types::OutputId>>,
+    /// A flow uses a card, left from an earlier lmix-core.
+    #[cfg(test)]
+    holding_cards: std::sync::atomic::AtomicBool,
     /// The next query whether an output runs answers yes, then the output
     /// fails before the answer arrives (`fail_after_answer`).
     #[cfg(test)]
@@ -156,6 +159,13 @@ impl NullEngine {
     #[cfg(test)]
     pub fn fail_after_answer(&self) {
         self.failing_after_answer
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    /// Pretend a flow from an earlier lmix-core uses a card.
+    #[cfg(test)]
+    pub fn hold_cards(&self) {
+        self.holding_cards
             .store(true, std::sync::atomic::Ordering::SeqCst);
     }
 
@@ -355,6 +365,11 @@ impl Engine for NullEngine {
         }
         #[cfg(not(test))]
         false
+    }
+
+    #[cfg(test)]
+    async fn holds_cards(&self) -> bool {
+        self.holding_cards.load(std::sync::atomic::Ordering::SeqCst)
     }
 
     #[cfg(test)]
