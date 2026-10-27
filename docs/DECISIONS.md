@@ -4981,3 +4981,25 @@ bis dahin nur ein Neustart von strom (todo).
 **Geprüft danach** (150 ms, Patch): `scripts/test-sdi-loop.sh` mit
 `MODES="1080p25 1080i50 1080p25 720p50"` zweimal hintereinander bestanden,
 kleinster Abstand 7,9 ms, kein Bild verspätet, 0–3 verworfen beim Anlauf.
+
+## 2026-10-27 — Kanal-Verzögerung wirkte nicht (AUD.6)
+
+**Befund**: Die Verzögerung je Input (`set_channel_strip … delay_ms`) lag
+als `identity` mit `ts-offset` vor dem Mischer-Eingang. `ts-offset`
+verschiebt keine Zeitstempel; es zählt nur, wenn `identity` selbst
+synchronisiert (`sync=true`). Der Ton kam nie später. Der VM-Test prüfte
+nur, dass der Wert gesetzt war. Gefunden beim Ton-Delay der Karte
+(DECISIONS „SDI-Karte: 16 Kanäle“).
+
+**Entscheidung**: strom-Block `builtin.time_offset` statt `identity`
+(`adelay{slot}`). Er setzt einen Pad-Offset: der Mischer sieht die
+Puffer später und mischt sie später. `offset_ms` ist live änderbar
+(PATCH auf die Block-Eigenschaften). Der strom-Patch `lmix-live-offset`
+(`ts-offset` von `identity` live erlaubt) wird in lmix nicht mehr
+gebraucht.
+
+**Geprüft**: `scripts/test-channel-delay.sh` (neu, lokal): Program mit
+einem Clip, der gleichzeitig blitzt und piept, aufgenommen ohne und mit
+300 ms Verzögerung, live umgestellt. Vorher 0 ms Verschiebung, jetzt
+300 ms. Der VM-Test liest den Wert jetzt am Block.
+

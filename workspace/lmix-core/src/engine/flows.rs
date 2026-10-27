@@ -61,6 +61,8 @@ const INTER_INPUT_BLOCK: &str = "builtin.inter_input";
 const VISION_MIXER_BLOCK: &str = "builtin.vision_mixer";
 const THUMBNAIL_BLOCK: &str = "builtin.thumbnail";
 const AUDIO_MIXER_BLOCK: &str = "builtin.mixer";
+/// Shifts running times by a pad offset: mixers and sinks play later.
+const TIME_OFFSET_BLOCK: &str = "builtin.time_offset";
 const CARD_INPUT_BLOCK: &str = "builtin.decklink_input";
 const CARD_OUTPUT_BLOCK: &str = "builtin.decklink_output";
 
@@ -1065,7 +1067,7 @@ fn keyframe_frames(ms: u32, framerate: Framerate) -> u64 {
     (u64::from(ms) * num).div_ceil(1000 * den)
 }
 
-/// Element in the mixer flow that delays the sound of `slot`.
+/// Block in the mixer flow that delays the sound of `slot`.
 pub fn audio_delay(slot: usize) -> String {
     format!("adelay{slot}")
 }
@@ -1233,17 +1235,19 @@ fn add_audio_mixer(
                 ),
             ],
         ));
-        // Channel delay (lip sync): later timestamps, the mixer plays the
-        // sound that much later. Stays when the slot is rebuilt.
+        // Channel delay (lip sync): later running times, the mixer plays
+        // the sound that much later (identity's ts-offset only timed its
+        // own sync). Stays when the slot is rebuilt.
         let delay = audio_delay(slot);
-        flow.elements.push(element(
+        flow.blocks.push(block(
             &delay,
-            "identity",
-            vec![("ts-offset", PropertyValue::Int(0))],
+            TIME_OFFSET_BLOCK,
+            vec![("offset_ms", PropertyValue::Float(0.0))],
         ));
-        flow.links.push(link(format!("{input}:src"), delay.clone()));
+        flow.links
+            .push(link(format!("{input}:src"), format!("{delay}:in")));
         flow.links.push(link(
-            delay,
+            format!("{delay}:out"),
             format!("{AUDIO_MIXER}:input_{}", audio_channel(slot)),
         ));
     }
@@ -2176,11 +2180,16 @@ mod tests {
         for slot in 0..3 {
             let to = format!("mix:input_{}", slot + 1);
             let delay = audio_delay(slot);
+            let block = flow.blocks.iter().find(|b| b.id == delay).unwrap();
+            assert_eq!(block.block_definition_id, TIME_OFFSET_BLOCK);
             assert!(flow
                 .links
                 .iter()
-                .any(|l| l.from == format!("ain{slot}:src") && l.to == delay));
-            assert!(flow.links.iter().any(|l| l.from == delay && l.to == to));
+                .any(|l| l.from == format!("ain{slot}:src") && l.to == format!("{delay}:in")));
+            assert!(flow
+                .links
+                .iter()
+                .any(|l| l.from == format!("{delay}:out") && l.to == to));
         }
         assert!(flow
             .links
