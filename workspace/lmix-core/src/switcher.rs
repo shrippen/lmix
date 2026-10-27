@@ -9482,6 +9482,23 @@ mod tests {
             "{restored:?}"
         );
 
+        // The same show again: the same zones, still a new flow at 0 dB
+        // (the engine must not keep the old show's levels).
+        let same = sw.show().clone();
+        let commands = sw.replace(same, None).unwrap();
+        assert!(commands
+            .iter()
+            .any(|c| matches!(c, Command::SetPlayback { .. })));
+        assert!(!commands
+            .iter()
+            .any(|c| matches!(c, Command::SetZoneLevel { .. })));
+        assert_eq!(
+            zone(&sw, "Foyer"),
+            (0.0, false),
+            "another show starts at 0 dB"
+        );
+        sw.apply(level("Foyer", Some(-12.0), None)).unwrap();
+
         sw.apply(Action::RemoveZone {
             name: "Foyer".into(),
         })
