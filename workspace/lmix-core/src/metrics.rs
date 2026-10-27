@@ -462,6 +462,7 @@ mod tests {
             program_peak_db: Some(-6.0),
             phones_peak_db: None,
             buses: Vec::new(),
+            zones: Vec::new(),
         };
         let slot = input.slot;
         state.inputs.push(input);

@@ -1119,4 +1119,6 @@ DE = {
     'Sound follows picture': 'Ton folgt Bild',
     'Tap, outputs, remove': 'Abgriff, Ausgänge, löschen',
     'The headphones hear only the solos. Click: all again.': 'Der Kopfhörer hört nur die Solos. Klick: wieder alle.',
+    'Plays nowhere on this machine': 'Spielt auf diesem Rechner nirgends',
+    'Level of %1': 'Pegel von %1',
 }

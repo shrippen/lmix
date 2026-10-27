@@ -979,12 +979,12 @@
     </message>
     <message>
       <location line="+17" />
-      <location line="+133" />
+      <location line="+140" />
       <source>Headphones</source>
       <translation>Kopfhörer</translation>
     </message>
     <message>
-      <location line="-91" />
+      <location line="-98" />
       <source>%1 ch.</source>
       <translation>%1 Kan.</translation>
     </message>
@@ -999,7 +999,7 @@
       <translation>Standardausgang</translation>
     </message>
     <message>
-      <location line="+8" />
+      <location line="+15" />
       <source>No zones yet</source>
       <translation>Noch keine Zonen</translation>
     </message>
@@ -3357,7 +3357,7 @@
       <translation>Ausgänge</translation>
     </message>
     <message>
-      <location line="+32" />
+      <location line="+35" />
       <source>Running</source>
       <translation>Läuft</translation>
     </message>
@@ -3593,7 +3593,7 @@
       <translation>Programm</translation>
     </message>
     <message>
-      <location line="+66" />
+      <location line="+68" />
       <source>running</source>
       <translation>läuft</translation>
     </message>
@@ -3623,7 +3623,7 @@
       <translation>Start</translation>
     </message>
     <message>
-      <location line="+7" />
+      <location line="+15" />
       <source>Remove</source>
       <translation>Entfernen</translation>
     </message>
@@ -4757,7 +4757,7 @@
   <context>
     <name>ShowView</name>
     <message>
-      <location filename="../qml/ShowView.qml" line="+59" />
+      <location filename="../qml/ShowView.qml" line="+60" />
       <source>starts cue %1, which is not there</source>
       <translation>startet Cue %1, den es nicht gibt</translation>
     </message>
@@ -6689,6 +6689,34 @@
       <location line="+12" />
       <source>+ Trigger</source>
       <translation>+ Auslöser</translation>
+    </message>
+  </context>
+  <context>
+    <name>ZoneBar</name>
+    <message>
+      <location filename="../qml/ZoneBar.qml" line="+50" />
+      <source>Plays nowhere on this machine</source>
+      <translation>Spielt auf diesem Rechner nirgends</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Mute</source>
+      <translation>Stumm</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>Level of %1</source>
+      <translation>Pegel von %1</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>Volume of %1</source>
+      <translation>Lautstärke von %1</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>%1 dB</source>
+      <translation>%1 dB</translation>
     </message>
   </context>
   <context>

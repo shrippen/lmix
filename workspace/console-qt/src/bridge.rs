@@ -297,7 +297,7 @@ async fn follow(thread: cxx_qt::CxxQtThread<qobject::Core>) {
 }
 
 /// `{ "<input id>": peak, "ch:<input id>": [left, right], "program": peak,
-/// "phones": peak, "bus:<bus id>": peak, … }`.
+/// "phones": peak, "bus:<bus id>": peak, "zone:<name>": peak, … }`.
 fn levels_json(levels: &Levels) -> String {
     let mut map = serde_json::Map::new();
     for level in &levels.inputs {
@@ -318,6 +318,11 @@ fn levels_json(levels: &Levels) -> String {
     for bus in &levels.buses {
         if let Some(peak) = bus.peak_db {
             map.insert(format!("bus:{}", bus.bus), peak.into());
+        }
+    }
+    for zone in &levels.zones {
+        if let Some(peak) = zone.peak_db {
+            map.insert(format!("zone:{}", zone.zone), peak.into());
         }
     }
     serde_json::Value::Object(map).to_string()
@@ -888,6 +893,25 @@ fn live_path(source: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn zones_are_levelled_by_name() {
+        let levels = Levels {
+            zones: vec![
+                lmix_types::ZonePeak {
+                    zone: "Hall".into(),
+                    peak_db: Some(-9.0),
+                },
+                lmix_types::ZonePeak {
+                    zone: "Foyer".into(),
+                    peak_db: None,
+                },
+            ],
+            ..Default::default()
+        };
+        let map: serde_json::Value = serde_json::from_str(&levels_json(&levels)).unwrap();
+        assert_eq!(map, serde_json::json!({ "zone:Hall": -9.0 }));
+    }
 
     #[test]
     fn live_path_of_program_and_inputs() {

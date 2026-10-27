@@ -5073,3 +5073,29 @@ schwarze Bild mit Banner und dass einfaches GStreamer auf beiden
 Anschlüssen spielt und aufnimmt, danach läuft der Ausgang wieder.
 Ausreißer bei späten Bildern und der Delay-Messung treten auch ohne den
 Schalter auf (todo „GStreamer-Fehler melden“).
+
+## 2026-10-27 — Zonen-Leiste (SUI.8)
+
+**Entscheidung**: Jede Zone bekommt im Wiedergabe-Flow hinter ihrem
+Ausgang einen Meter-Block von strom (`builtin.meter`, `zone_meter_<i>`),
+also nach der Zonenlautstärke: die Leiste zeigt, was zu hören ist, auch
+bei einer Zone, die auf diesem Rechner nirgends spielt. Die Pegel stehen
+in `/api/audio/levels` unter `zones` (je Name, in der Reihenfolge der
+Show).
+
+Lautstärke und Stumm einer Zone merkt sich der Core jetzt (`gain_db`,
+`mute` in `ShowState.zones`): `set_zone_level` und Blenden-Cues auf eine
+Zone setzen den Zielwert, die Leiste zeigt ihn sofort, nicht den Weg der
+Blende. Wie ein Fader gehört er nicht zur Show: eine andere Show beginnt
+bei 0 dB, eine entfernte Zone vergisst ihren Wert. Baut lmix den Flow
+neu (Zonen geändert, strom neu gestartet), setzt es die gemerkten Werte
+sofort wieder; vorher fing ein neuer Flow still bei 0 dB an.
+
+Console: `ZoneBar` mit Meter, Regler (−60 bis +12 dB, wie Klang-Cues)
+und Stumm je Zone, unter der Show-Ansicht und im Reiter Zonen der
+Audio-Seite.
+
+**Geprüft**: `a_zone_keeps_its_level_in_the_state_and_a_new_flow`,
+`zones_are_metered_by_index`, `zones_are_levelled_by_name`, der Flow-Test;
+`scripts/test-show-playback.sh` mit echtem strom (Zone hat Pegel, solange
+ein Klang spielt; nach der Blende steht −20 dB im Zustand).

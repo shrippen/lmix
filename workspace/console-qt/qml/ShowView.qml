@@ -6,8 +6,9 @@ import org.kde.kirigami as Kirigami
 import Kante
 
 /**
- * Show view (show mode SUI.1–4, SUI.13): the active cue list with its
- * standby, GO, panic and, in the side bar, the running cues and the lists. Choosing a list makes it the
+ * Show view (show mode SUI.1–4, SUI.8, SUI.13): the active cue list with its
+ * standby, GO, panic and, in the side bar, the running cues and the lists;
+ * below, the zones. Choosing a list makes it the
  * active one, so GO here, the space key and GO from outside all mean the
  * same list. Times run on between two states of lmix-core, which sends one
  * when something happens, not every frame.
@@ -632,5 +633,15 @@ ColumnLayout {
             showView: view
             onEditLists: cueListsDialog.open()
         }
+    }
+
+    // Each zone's level and volume (SUI.8).
+    ZoneBar {
+        Layout.fillWidth: true
+        visible: view.show !== null && view.show.zones !== undefined && view.show.zones.length > 0
+        act: view.act
+        core: view.core
+        zones: view.show && view.show.zones ? view.show.zones : []
+        levels: view.core.levels.length > 0 ? JSON.parse(view.core.levels) : ({})
     }
 }

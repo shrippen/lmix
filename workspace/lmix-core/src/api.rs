@@ -8,7 +8,7 @@
 //! | `GET /api/tally` | tally per input: 0 off, 1 program, 2 preview |
 //! | `POST /api/latency/measure?seconds=N` | measure capture-to-program latency for N s (default 10) |
 //! | `GET /api/latency` | latest latency statistics (NFA.3) |
-//! | `GET /api/audio/levels` | audio levels per input and of program (dBFS) |
+//! | `GET /api/audio/levels` | audio levels per input, of program, the buses and the zones (dBFS) |
 //! | `GET /api/outputs/stats` | link health of running SRT outputs (rate, lost, dropped, RTT) |
 //! | `GET /api/shows/recent` | recently opened or saved show files, newest first |
 //! | `GET /api/devices` | capture devices for `SourceSpec::Device` |
