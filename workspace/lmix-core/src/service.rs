@@ -1097,8 +1097,10 @@ impl Service {
             sw.set_output_status(id, OutputStatus::Failed { message: failure });
             drop(sw);
             tokio::time::sleep(OUTPUT_HOLD).await;
-            let running = self.engine.output_running(id).await;
+            // Asked under the lock: a failure meanwhile waits for it and
+            // starts a failback of its own.
             let mut sw = self.switcher.lock().await;
+            let running = self.engine.output_running(id).await;
 
             // Stopped or removed meanwhile, or back; else again, later.
             let done = match sw.restart_command(id) {
@@ -3594,6 +3596,45 @@ mod tests {
             matches!(now, lmix_types::OutputStatus::Running { .. }),
             "{now:?}"
         );
+    }
+
+    /// An output failing while its failback asks whether it runs is not
+    /// taken for running: it fails back again.
+    #[tokio::test(start_paused = true)]
+    async fn an_output_failing_while_its_failback_asks_fails_back_again() {
+        let engine = Arc::new(NullEngine::failing());
+        let service = Service::new(4, engine.clone(), None);
+        tokio::spawn(service.clone().watch_failures());
+        tokio::task::yield_now().await;
+        service
+            .handle(Action::AddOutput {
+                spec: lmix_types::OutputSpec::Ndi { name: "PGM".into() },
+                source: lmix_types::OutputSource::Program,
+                bus: None,
+                name: Some("Card".into()),
+            })
+            .await
+            .unwrap();
+        engine.fail_outputs(true);
+        service
+            .handle(Action::StartOutput {
+                output: lmix_types::OutputRef::Text("Card".into()),
+            })
+            .await
+            .unwrap();
+        // Failed once; the failback's start holds, its question finds the
+        // output running but it fails meanwhile.
+        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+        engine.fail_outputs(false);
+        engine.fail_after_answer();
+
+        tokio::time::sleep(FAILBACK_MAX * 3).await;
+        let id = service.state().await.outputs[0].id;
+        assert!(engine.output_running(id).await, "not started again");
+        assert!(matches!(
+            service.state().await.outputs[0].status,
+            lmix_types::OutputStatus::Running { .. }
+        ));
     }
 
     /// An output whose sound the engine could not move and whose start anew

@@ -53,6 +53,10 @@ pub struct NullEngine {
     /// Outputs started and not stopped or failed since.
     #[cfg(test)]
     running_outputs: Mutex<std::collections::HashSet<lmix_types::OutputId>>,
+    /// The next query whether an output runs answers yes, then the output
+    /// fails before the answer arrives (`fail_after_answer`).
+    #[cfg(test)]
+    failing_after_answer: std::sync::atomic::AtomicBool,
     /// Every output fails right after its start, as one on a busy card.
     #[cfg(test)]
     failing_outputs: std::sync::atomic::AtomicBool,
@@ -145,6 +149,14 @@ impl NullEngine {
     #[cfg(test)]
     pub fn set_instance(&self, instance: &str) {
         *self.instance.lock().expect("instance lock") = Some(instance.into());
+    }
+
+    /// Let the next query whether an output runs answer yes and the output
+    /// fail before the answer arrives, as strom's may.
+    #[cfg(test)]
+    pub fn fail_after_answer(&self) {
+        self.failing_after_answer
+            .store(true, std::sync::atomic::Ordering::SeqCst);
     }
 
     /// Let every output fail right after its start (`true`) or run.
@@ -321,11 +333,26 @@ impl Engine for NullEngine {
 
     async fn output_running(&self, _id: lmix_types::OutputId) -> bool {
         #[cfg(test)]
-        return self
-            .running_outputs
-            .lock()
-            .expect("outputs lock")
-            .contains(&_id);
+        {
+            let running = self
+                .running_outputs
+                .lock()
+                .expect("outputs lock")
+                .contains(&_id);
+            if self
+                .failing_after_answer
+                .swap(false, std::sync::atomic::Ordering::SeqCst)
+            {
+                self.fail(super::meters::FlowError {
+                    flow: super::flows::output_flow_id(_id),
+                    message: "card lost".into(),
+                    kind: super::meters::FlowFailure::Error,
+                });
+                // The failure goes round before the answer comes back.
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            }
+            return running;
+        }
         #[cfg(not(test))]
         false
     }

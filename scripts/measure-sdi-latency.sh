@@ -65,8 +65,8 @@ if [[ -z "${CORE_BIN:-}" ]]; then
     CORE_BIN="${CARGO_TARGET_DIR:-$ROOT/workspace/lmix-core/target}/release/lmix-core"
 fi
 
-# One engine for all runs: a card output started a second time in the
-# same strom shows frames late (DECISIONS 27.10.); each run restarts it.
+# A fresh engine for each run: a card output started a second time in
+# the same strom shows frames late (DECISIONS 27.10.).
 for run in $(seq 1 "$RUNS"); do
     dir="$WORK/run$run"
     mkdir -p "$dir/mv"
@@ -94,7 +94,14 @@ for run in $(seq 1 "$RUNS"); do
     act '{"action":"stop_output","output":"MV"}'
     sleep 3
 
-    if out="$("$ROOT/scripts/sdi-latency.py" "$dir"/mv/*.mkv)"; then
+    # One recording: the output writes a single file while it runs.
+    shopt -s nullglob
+    recordings=("$dir"/mv/*.mkv)
+    shopt -u nullglob
+    if ((${#recordings[@]} != 1)); then
+        echo "run $run: ${#recordings[@]} recordings in $dir/mv, want one" >&2
+        KEEP_WORK=1
+    elif out="$("$ROOT/scripts/sdi-latency.py" "${recordings[0]}")"; then
         read -r med min max n <<<"$out"
         echo "run $run ($MODE, $MIXER): card input ${med} ms behind program (min ${min}, max ${max}, ${n} cells)"
     else
