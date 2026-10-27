@@ -1357,10 +1357,12 @@ impl Switcher {
                 let level = self.zone_levels.entry(zone).or_default();
                 level.gain_db = gain_db.unwrap_or(level.gain_db);
                 level.mute = mute.unwrap_or(level.mute);
+                // strom mutes by the level: both always, so a fade keeps a
+                // muted zone silent and unmuting brings its level back.
                 Ok(vec![Command::SetZoneLevel {
                     zone: index,
-                    gain_db,
-                    mute,
+                    gain_db: Some(level.gain_db),
+                    mute: Some(level.mute),
                     duration_ms,
                 }])
             }
@@ -9433,6 +9435,46 @@ mod tests {
                 duration_ms: 0,
             })
             .is_err());
+    }
+
+    /// strom mutes a zone by its level: every change sends both, so a
+    /// fade does not unmute a muted zone and unmuting brings the level
+    /// back (SUI.8).
+    #[test]
+    fn a_zone_change_sends_its_whole_level() {
+        let mut sw = two_inputs();
+        sw.apply(Action::SetZone {
+            zone: lmix_types::Zone {
+                name: "Hall".into(),
+                channels: 2,
+            },
+        })
+        .unwrap();
+        let mut send = |gain_db: Option<f32>, mute: Option<bool>| {
+            let commands = sw
+                .apply(Action::SetZoneLevel {
+                    zone: "Hall".into(),
+                    gain_db,
+                    mute,
+                    duration_ms: 500,
+                })
+                .unwrap();
+            match commands.as_slice() {
+                [Command::SetZoneLevel { gain_db, mute, .. }] => (*gain_db, *mute),
+                other => panic!("{other:?}"),
+            }
+        };
+        assert_eq!(send(None, Some(true)), (Some(0.0), Some(true)));
+        assert_eq!(
+            send(Some(-20.0), None),
+            (Some(-20.0), Some(true)),
+            "a fade keeps it muted"
+        );
+        assert_eq!(
+            send(None, Some(false)),
+            (Some(-20.0), Some(false)),
+            "unmuted at the level it got"
+        );
     }
 
     #[test]

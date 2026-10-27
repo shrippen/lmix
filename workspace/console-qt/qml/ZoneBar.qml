@@ -35,8 +35,10 @@ Flow {
             width: bar.zoneWidth
             spacing: 0
 
-            function set(gainDb, mute) {
-                bar.act({ action: "set_zone_level", zone: zone.modelData.name, gain_db: gainDb, mute: mute })
+            /** Sets only the fields in `changes` at once: mute alone leaves a
+             *  fade of the level running. */
+            function set(changes) {
+                bar.act(Object.assign({ action: "set_zone_level", zone: zone.modelData.name, duration_ms: 0 }, changes))
             }
 
             RowLayout {
@@ -54,7 +56,7 @@ Flow {
                     id: mute
                     text: qsTr("Mute")
                     checked: zone.modelData.mute
-                    onToggled: zone.set(zone.modelData.gain_db, checked)
+                    onToggled: zone.set({ mute: checked })
                     KanteCheckSkin { control: mute; shape: KanteCheckSkin.Shape.Switch }
                 }
             }
@@ -74,7 +76,7 @@ Flow {
                     stepSize: 0.5
                     value: zone.modelData.gain_db
                     Accessible.name: qsTr("Volume of %1").arg(zone.modelData.name)
-                    onMoved: zone.set(value, zone.modelData.mute)
+                    onMoved: zone.set({ gain_db: value })
                     KanteSliderSkin { control: volume }
                 }
                 QQC2.Label {

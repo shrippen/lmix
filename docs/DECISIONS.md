@@ -5086,7 +5086,12 @@ Show).
 Lautstärke und Stumm einer Zone merkt sich der Core jetzt (`gain_db`,
 `mute` in `ShowState.zones`): `set_zone_level` und Blenden-Cues auf eine
 Zone setzen den Zielwert, die Leiste zeigt ihn sofort, nicht den Weg der
-Blende. Wie ein Fader gehört er nicht zur Show: eine andere Show beginnt
+Blende. strom kennt Stumm nur als Lautstärke 0 und behält ohne Pegel die
+aktuelle Lautstärke; darum schickt lmix bei jeder Änderung Pegel und
+Stumm zusammen: eine Blende hält eine stumme Zone still (der neue Pegel
+wird gemerkt), Entstummen bringt den gemerkten Pegel zurück. Vorher
+machte eine Blende eine stumme Zone hörbar, und Entstummen ohne Pegel
+ließ sie still. Wie ein Fader gehört er nicht zur Show: eine andere Show beginnt
 bei 0 dB, eine entfernte Zone vergisst ihren Wert. Baut lmix den Flow
 neu (Zonen geändert, strom neu gestartet), setzt es die gemerkten Werte
 sofort wieder; vorher fing ein neuer Flow still bei 0 dB an.
@@ -5096,6 +5101,6 @@ und Stumm je Zone, unter der Show-Ansicht und im Reiter Zonen der
 Audio-Seite.
 
 **Geprüft**: `a_zone_keeps_its_level_in_the_state_and_a_new_flow`,
-`zones_are_metered_by_index`, `zones_are_levelled_by_name`, der Flow-Test;
+`a_zone_change_sends_its_whole_level`, `zones_are_metered_by_index`, `zones_are_levelled_by_name`, der Flow-Test;
 `scripts/test-show-playback.sh` mit echtem strom (Zone hat Pegel, solange
 ein Klang spielt; nach der Blende steht −20 dB im Zustand).
