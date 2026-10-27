@@ -44,6 +44,9 @@ TAP_INTERVAL=1.5
 LEVEL_TOLERANCE_DB=1
 # A silent pair meters below this.
 SILENT_DB=-60
+# The measured sound delay may fall short by this much (meter refresh,
+# polling).
+DELAY_SLACK_MS=100
 # Bars back from the cable, scaled and converted twice: normalised RMSE
 # (ImageMagick, 0-1) of the input's picture against the program's.
 MAX_PICTURE_RMSE=0.08
@@ -224,13 +227,33 @@ wait_for 5 silent || fail "pairs: pair $PAIR at $(input_peak) dB with nothing on
 pass "pairs: pair $PAIR silent while the bus is ($(input_peak) dB)"
 
 # How long the sound takes from the send to the input: the delay plus
-# the way round (meters refresh every few tens of ms).
-sent=$(date +%s%3N)
-act '{"action":"set_send","input":"Bars","bus":"Pair","level":80}'
+# the way round (meters refresh every few tens of ms). Measured with the
+# delay, then again without it; the difference is the delay.
+onset() {
+    act '{"action":"set_send","input":"Bars","bus":"Pair","level":0}'
+    wait_for 5 silent || fail "pairs: pair $PAIR still sounds without a send"
+    sleep 1
+    local sent
+    sent=$(date +%s%3N)
+    act '{"action":"set_send","input":"Bars","bus":"Pair","level":80}'
+    until sounding; do
+        (( $(date +%s%3N) - sent < 5000 )) || fail "pairs: pair $PAIR silent with Bars on the bus"
+        sleep 0.02
+    done
+    echo $(( $(date +%s%3N) - sent ))
+}
 sounding() { ! silent; }
-until sounding; do
-    (( $(date +%s%3N) - sent < 5000 )) || fail "pairs: pair $PAIR silent with Bars on the bus"
-    sleep 0.02
-done
-pass "pairs: pair $PAIR carries the bus ($(input_peak) dB) after $(( $(date +%s%3N) - sent )) ms"
+delayed="$(onset)"
+pass "pairs: pair $PAIR carries the bus ($(input_peak) dB) after $delayed ms"
+
+act '{"action":"remove_output","output":"SDI out"}'
+sleep 2
+act "{\"action\":\"add_output\",\"spec\":{\"kind\":\"card\",\"device\":$SDI_OUT,\"mode\":\"$PAIR_MODE\",\"channels\":\"$CHANNELS\",\"more_pairs\":$MORE_PAIRS},\"name\":\"SDI out\"}"
+act '{"action":"start_output","output":"SDI out"}'
+wait_for "$SETTLE" running || fail "pairs: output without delay $(state | jq -c '.outputs')"
+sleep 8
+plain="$(onset)"
+(( delayed - plain >= SOUND_DELAY_MS - DELAY_SLACK_MS )) \
+    || fail "pairs: sound delay $SOUND_DELAY_MS ms came out as $((delayed - plain)) ms"
+pass "pairs: sound delay $SOUND_DELAY_MS ms came out as $((delayed - plain)) ms"
 echo "SDI loop check passed"
