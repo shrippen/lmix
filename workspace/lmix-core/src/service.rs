@@ -1104,7 +1104,7 @@ impl Service {
 
             // Still failed while the start may not hold.
             let since_ms = now_ms();
-            sw.set_output_status(id, OutputStatus::Failed { message: failure });
+            sw.hold_output(id, failure);
             drop(sw);
             tokio::time::sleep(OUTPUT_HOLD).await;
             // Asked under the lock: a failure meanwhile waits for it and
@@ -1121,7 +1121,12 @@ impl Service {
                     self.publish(&sw);
                     true
                 }
-                Some(_) => false,
+                // Not held: failed again.
+                Some(_) => {
+                    let failure = sw.output_failure(id);
+                    sw.set_output_status(id, OutputStatus::Failed { message: failure });
+                    false
+                }
             };
             if done {
                 self.end_failback(id);
@@ -3757,6 +3762,84 @@ mod tests {
             service.state().await.outputs[0].status,
             lmix_types::OutputStatus::Running { .. }
         ));
+    }
+
+    /// A service with output "Card" failed once and started again: its
+    /// flow runs, the failback still holds it for failed.
+    async fn holding_output() -> (Arc<NullEngine>, Arc<Service>, lmix_types::OutputId) {
+        let engine = Arc::new(NullEngine::failing());
+        let service = Service::new(4, engine.clone(), None);
+        tokio::spawn(service.clone().watch_failures());
+        tokio::task::yield_now().await;
+        service
+            .handle(Action::AddBus {
+                name: Some("Mix minus".into()),
+                pre_fader: false,
+            })
+            .await
+            .unwrap();
+        service
+            .handle(Action::AddOutput {
+                spec: lmix_types::OutputSpec::Ndi { name: "PGM".into() },
+                source: lmix_types::OutputSource::Program,
+                bus: None,
+                name: Some("Card".into()),
+            })
+            .await
+            .unwrap();
+        engine.fail_outputs(true);
+        service
+            .handle(Action::StartOutput {
+                output: lmix_types::OutputRef::Text("Card".into()),
+            })
+            .await
+            .unwrap();
+        // Failed after 1.5 s, started again after 3.5 s, held until 8.5 s.
+        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+        engine.fail_outputs(false);
+        tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+        let id = service.state().await.outputs[0].id;
+        assert!(engine.output_running(id).await);
+        assert!(matches!(
+            service.state().await.outputs[0].status,
+            lmix_types::OutputStatus::Failed { .. }
+        ));
+        (engine, service, id)
+    }
+
+    /// Outputs stopped while a failback holds one stop its flow too.
+    #[tokio::test(start_paused = true)]
+    async fn stopping_outputs_stops_one_the_failback_holds() {
+        let (engine, service, id) = holding_output().await;
+        service
+            .handle(Action::StopOutputs {
+                group: lmix_types::OutputGroup::All,
+            })
+            .await
+            .unwrap();
+        tokio::time::sleep(FAILBACK_MAX * 3).await;
+        assert!(!engine.output_running(id).await, "flow still runs");
+        assert_eq!(
+            service.state().await.outputs[0].status,
+            lmix_types::OutputStatus::Stopped
+        );
+    }
+
+    /// A bus given to an output the failback holds reaches its flow.
+    #[tokio::test(start_paused = true)]
+    async fn a_bus_reaches_an_output_the_failback_holds() {
+        let (engine, service, _) = holding_output().await;
+        service
+            .handle(Action::SetOutputBus {
+                output: lmix_types::OutputRef::Text("Card".into()),
+                bus: Some(lmix_types::BusRef::Text("Mix minus".into())),
+            })
+            .await
+            .unwrap();
+        assert!(engine
+            .log()
+            .iter()
+            .any(|c| matches!(c, Command::SetOutputSound { bus: Some(_), .. })));
     }
 
     /// An output whose sound the engine could not move and whose start anew
