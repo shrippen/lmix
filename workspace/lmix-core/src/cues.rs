@@ -2134,6 +2134,30 @@ mod tests {
         );
     }
 
+    /// A picture cue pauses and resumes its picture, and it does not end
+    /// while paused (a video with a length).
+    #[test]
+    fn a_paused_picture_cue_pauses_its_picture() {
+        let mut clip = picture("Clip", lmix_types::PictureEnd::Stop);
+        clip.duration_ms = Some(1000);
+        let lists = vec![list(vec![clip])];
+        let id = lists[0].cues[0].id.to_string();
+        let mut runner = Runner::default();
+        let t = Instant::now();
+        runner.go(&lists, 0, t, Guard::time(0)).unwrap();
+
+        let out = runner.pause(&lists, None, None, after(t, 400)).unwrap();
+        assert_eq!(actions(&out), [Action::PausePicture { id: id.clone() }]);
+        assert!(runner.tick(&lists, after(t, 5000)).is_empty(), "held");
+        let out = runner.resume(&lists, None, None, after(t, 5000)).unwrap();
+        assert_eq!(actions(&out), [Action::ResumePicture { id }]);
+        assert!(events(&runner.tick(&lists, after(t, 5599))).is_empty());
+        assert_eq!(
+            events(&runner.tick(&lists, after(t, 5600))),
+            [CueEvent::Ended]
+        );
+    }
+
     /// A group pauses with the cues it runs; a second pause or a resume
     /// of a cue that runs changes nothing.
     #[test]

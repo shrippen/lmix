@@ -2,7 +2,8 @@
 # Sound and picture cues on strom (show mode SND, VIS; S-E.3 B, S-E.13 B):
 # a zone on this machine's default output and a stage in a window; a
 # sound cue that ends with its file and lets the next cue follow, a stop
-# with fade, fades on a zone and a stage, a picture cue, a panic. Runs
+# with fade, fades on a zone and a stage, a picture cue, pause and resume,
+# a panic. Runs
 # strom's Show Playback block for real. The VM has no sound card (the
 # default output is whatever autoaudiosink finds, a fakesink without
 # one) and shows the stage on Xvfb. What is heard and seen is checked by
@@ -158,14 +159,29 @@ within '[[ "$(running)" != *5* ]]' 2 || fail "cue 5 did not end with its picture
 ! grep -q "cue action failed" "$WORK/core.log" || fail "a cue action failed: $(grep 'cue action failed' "$WORK/core.log" | tail -1)"
 pass "picture cue shows, stage and opacity fade, the cue ends with its picture"
 
-# --- panic fades every sound and picture out ---
+# --- pause and resume every cue; panic fades every sound and picture out,
+# paused ones too ---
 act '{"action":"cue_go"}' || fail "GO 8 refused"
 act '{"action":"cue_go"}' || fail "GO 9 refused"
 within '[[ "$(sounds)" == *playing* && "$(pictures)" == *playing* ]]' 2 \
     || fail "cues 8 and 9 do not play: $(sounds) $(pictures)"
+paused_cues() { curl -sf "$CORE/api/state" | jq -r '[.running_cues[] | select(.paused) | .number] | join(",")'; }
+act '{"action":"cue_pause"}' || fail "pause refused"
+within '[[ "$(sounds)" == *paused* && "$(pictures)" == *paused* ]]' 2 \
+    || fail "pause left: $(sounds) $(pictures)"
+[[ "$(paused_cues)" == 8,9 ]] || fail "paused cues: $(paused_cues)"
+act '{"action":"cue_resume"}' || fail "resume refused"
+within '[[ "$(sounds)" == *playing* && "$(pictures)" == *playing* ]]' 2 \
+    || fail "resume left: $(sounds) $(pictures)"
+[[ -z "$(paused_cues)" ]] || fail "still paused: $(paused_cues)"
+pass "pause and resume every cue: the sound and the picture follow"
+act '{"action":"cue_pause"}' || fail "second pause refused"
+within '[[ "$(sounds)" == *paused* ]]' 2 || fail "not paused again: $(sounds)"
 act '{"action":"cue_panic","ms":400}' || fail "panic refused"
 within '[[ "$(sounds)" != *playing* && "$(pictures)" != *playing* ]]' 2 \
     || fail "panic left: $(sounds) $(pictures)"
+within '[[ "$(sounds)" != *paused* && "$(pictures)" != *paused* ]]' 2 \
+    || fail "panic left paused: $(sounds) $(pictures)"
 [[ "$(sounds)" == *ready* ]] || fail "the panic took the standby cue's preload: $(sounds)"
 [[ -z "$(running)" ]] || fail "cues run after the panic: $(running)"
 pass "panic stops every sound and picture, the standby cue stays ready"
