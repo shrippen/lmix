@@ -5359,5 +5359,10 @@ mod tests {
                 class: IoClass::Targets
             }
         );
+        // "Check targets" probes nothing either.
+        service.handle(Action::CheckTargets).await.unwrap();
+        let accepted =
+            tokio::time::timeout(std::time::Duration::from_millis(700), listener.accept()).await;
+        assert!(accepted.is_err(), "the check went out");
     }
 }
