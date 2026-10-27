@@ -49,7 +49,6 @@ python3 -c 'import numpy' 2>/dev/null || { echo "needs numpy for Python 3" >&2; 
 for tool in ffmpeg jq; do
     command -v "$tool" >/dev/null || { echo "needs $tool" >&2; exit 2; }
 done
-gst-inspect-1.0 decklinkvideosink >/dev/null 2>&1 || { echo "needs the GStreamer decklink plugin" >&2; exit 2; }
 # A card connector takes one user; an engine left over holds it.
 pgrep -f '^[^ ]*/strom --host' >/dev/null && { echo "another strom is running; it may hold the card" >&2; exit 2; }
 
@@ -68,6 +67,8 @@ if [[ "${DECKLINK_PLUGIN:-patched}" == patched ]]; then
     GST_PLUGIN_PATH="$("$ROOT/scripts/decklink-plugin.sh")${GST_PLUGIN_PATH:+:$GST_PLUGIN_PATH}"
     export GST_PLUGIN_PATH
 fi
+# The plugin to use, ours or the system's, is on the path by now.
+gst-inspect-1.0 decklinkvideosink >/dev/null 2>&1 || { echo "needs the GStreamer decklink plugin" >&2; exit 2; }
 if [[ -z "${CORE_BIN:-}" ]]; then
     (cd "$ROOT/workspace/lmix-core" && cargo build --release -q)
     CORE_BIN="${CARGO_TARGET_DIR:-$ROOT/workspace/lmix-core/target}/release/lmix-core"
