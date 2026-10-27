@@ -1863,6 +1863,17 @@ mod tests {
         assert!(runner.running(&lists, after(t, 100)).is_empty());
         let out = runner.toggle(&lists, Some(0), "2", after(t, 200)).unwrap();
         assert_eq!(events(&out), [CueEvent::Started], "and again");
+
+        // Pads as the emergency list still run with a panic (no GO there).
+        let out = runner.panic(&lists, Some(0), after(t, 300), 0);
+        assert_eq!(
+            events(&out)
+                .iter()
+                .filter(|e| **e == CueEvent::Started)
+                .count(),
+            2,
+            "both pads start"
+        );
     }
 
     #[test]

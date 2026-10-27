@@ -5078,7 +5078,9 @@ Schalter auf (todo „GStreamer-Fehler melden“).
 
 **Entscheidung**: Pads sind eine Cue-Liste mit `pads: true`
 (`set_cue_list_pads`, mit der Show gespeichert), kein eigenes Objekt: so
-gelten Bearbeiten, Farben, Stopp, Panik und Pause wie für jede Liste.
+gelten Bearbeiten, Farben, Stopp und Panik wie für jede Liste. Auch
+als Notfall-Liste (SAF.4) laufen Pads mit: die Panik startet ihre Cues
+direkt, ohne GO.
 Eine Pad-Liste hat kein GO (abgelehnt) und ist nie die aktive Liste:
 `set_active_cue_list` lehnt sie ab, und ohne Wahl ist die erste Liste
 aktiv, die keine Pads ist. Ihr Standby bleibt unberührt.
