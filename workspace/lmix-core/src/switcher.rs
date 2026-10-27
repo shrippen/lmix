@@ -625,6 +625,9 @@ pub struct Switcher {
     ingest_base: Option<String>,
     /// Output states; runtime only.
     output_status: HashMap<OutputId, OutputStatus>,
+    /// Failed outputs started again whose flow runs while the failback
+    /// waits to see it hold; they count as running for commands.
+    held_outputs: HashSet<OutputId>,
     /// Length of the item each player plays, by slot; runtime only.
     clip_ms: HashMap<usize, u64>,
     /// Templates, data source rows, title calls; runtime only.
@@ -697,6 +700,7 @@ impl Switcher {
             ingest_base: None,
             clip_ms: HashMap::new(),
             output_status: HashMap::new(),
+            held_outputs: Default::default(),
             titles: graphics::TitleRuntime::default(),
             dynamic_inputs: Default::default(),
             dynamic_values: Default::default(),
@@ -2616,11 +2620,7 @@ impl Switcher {
             .iter()
             .filter(|o| o.source == OutputSource::Input(removed.id))
         {
-            if self
-                .output_status
-                .get(&output.id)
-                .is_some_and(|s| matches!(s, OutputStatus::Running { .. }))
-            {
+            if self.output_running(output.id) {
                 commands.push(Command::StopOutput { id: output.id });
             }
         }
@@ -2632,6 +2632,7 @@ impl Switcher {
             .map(|o| o.id)
             .collect();
         for id in fed {
+            self.held_outputs.remove(&id);
             self.output_status.insert(
                 id,
                 OutputStatus::Failed {
@@ -4802,6 +4803,7 @@ impl Switcher {
         let index = self.find_output(output)?;
         let removed = self.show.outputs.remove(index);
         self.output_status.remove(&removed.id);
+        self.held_outputs.remove(&removed.id);
         Ok(vec![Command::StopOutput { id: removed.id }])
     }
 
@@ -4913,6 +4915,7 @@ impl Switcher {
             .map(|o| o.id)
             .collect();
         self.output_status.clear();
+        self.held_outputs.clear();
         running
             .into_iter()
             .map(|id| Command::StopOutput { id })
@@ -4929,11 +4932,13 @@ impl Switcher {
             .collect()
     }
 
+    /// Whether output `id`'s flow runs: running, or held by its failback.
     fn output_running(&self, id: OutputId) -> bool {
-        matches!(
-            self.output_status.get(&id),
-            Some(OutputStatus::Running { .. })
-        )
+        self.held_outputs.contains(&id)
+            || matches!(
+                self.output_status.get(&id),
+                Some(OutputStatus::Running { .. })
+            )
     }
 
     /// Command that starts output `id` as the show has it, anew if it runs.
@@ -4972,9 +4977,17 @@ impl Switcher {
 
     /// The engine reports what an output does.
     pub fn set_output_status(&mut self, id: OutputId, status: OutputStatus) {
+        self.held_outputs.remove(&id);
         if self.show.outputs.iter().any(|o| o.id == id) {
             self.output_status.insert(id, status);
         }
+    }
+
+    /// Failed output `id` was started again: still failed until its flow
+    /// holds, but running for commands meanwhile.
+    pub fn hold_output(&mut self, id: OutputId, failure: String) {
+        self.set_output_status(id, OutputStatus::Failed { message: failure });
+        self.held_outputs.insert(id);
     }
 
     pub fn output_ids(&self) -> Vec<OutputId> {
