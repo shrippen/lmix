@@ -10,6 +10,7 @@
 #   MIXER=gl INPUTS=8 scripts/run-local.sh
 #   APP=both scripts/run-local.sh     # two windows, Mix and Show
 #   KEEP_WORK=1 scripts/run-local.sh  # keep logs (path printed at the end)
+#   DECKLINK_PLUGIN=system …          # decklink plugin without lmix's patch
 set -euo pipefail
 
 MIXER="${MIXER:-cuda}"
@@ -42,6 +43,15 @@ wait_up() {
 }
 
 STROM_BIN="$("$ROOT/scripts/fetch-strom.sh")"
+# With a DeckLink card: GStreamer's decklink plugin with lmix's patch (a
+# card output started again shows every frame late without it).
+if [[ "${DECKLINK_PLUGIN:-patched}" == patched ]] && gst-inspect-1.0 decklinkvideosink >/dev/null 2>&1; then
+    if plugin="$("$ROOT/scripts/decklink-plugin.sh")"; then
+        export GST_PLUGIN_PATH="$plugin${GST_PLUGIN_PATH:+:$GST_PLUGIN_PATH}"
+    else
+        echo "run-local: decklink plugin without lmix's patch (scripts/decklink-plugin.sh failed)" >&2
+    fi
+fi
 (cd "$ROOT/workspace/lmix-core" && cargo build --release -q)
 (cd "$ROOT/workspace/console-qt" && cargo build --release -q)
 CORE_BIN="${CARGO_TARGET_DIR:-$ROOT/workspace/lmix-core/target}/release/lmix-core"

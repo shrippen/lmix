@@ -2,10 +2,15 @@
 # Install: copy both units to ~/.config/systemd/user/, then
 #   systemctl --user enable --now lmix-core.service
 # For a machine without login: `loginctl enable-linger <user>`.
+# With a DeckLink card, build GStreamer's decklink plugin with lmix's
+# patch (a card output started again shows every frame late without it),
+# again after each GStreamer update:
+#   LMIX_PLUGIN_DIR=~/.local/share/lmix/gstreamer scripts/decklink-plugin.sh
 [Unit]
 Description=lmix engine (strom)
 
 [Service]
+Environment=GST_PLUGIN_PATH=%h/.local/share/lmix/gstreamer
 ExecStart=%h/.local/bin/strom --host 127.0.0.1 --port 8099 --data-dir %S/lmix/strom
 Restart=on-failure
 RestartSec=2

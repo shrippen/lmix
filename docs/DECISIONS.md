@@ -5073,3 +5073,42 @@ schwarze Bild mit Banner und dass einfaches GStreamer auf beiden
 Anschlüssen spielt und aufnimmt, danach läuft der Ausgang wieder.
 Ausreißer bei späten Bildern und der Delay-Messung treten auch ohne den
 Schalter auf (todo „GStreamer-Fehler melden“).
+
+## 2026-10-27 — decklink-Plugin mit Patch, Vorlauf 60 ms
+
+**Befund**: Der Patch für die Epoche (oben, „SDI-/HDMI-Karte“, Offen)
+reichte allein nicht; spätere Starts zeigten mit ihm noch 150–205
+verspätete Bilder. Zwei weitere Ursachen in `decklinkvideosink`, beide
+mit `GST_DEBUG=decklinkvideosink:6` belegt:
+
+- Die Uhr des Sinks zählt erst ab ihrem ersten Lesen nach dem Start der
+  Karte (`gst_decklink_clock_get_internal_time`). Kommt das Lesen später
+  als `StartScheduledPlayback`, hinkt die Uhr der Wiedergabe der Karte
+  hinterher (gemessen 38 ms), jedes Bild wird so viel zu spät geplant.
+- `render()` rundet die Bildzeit auf das Bildraster ab. Damit frisst
+  das Runden bis zu eine Bilddauer (40 ms bei 25 fps) des Vorlaufs,
+  den das Warten davor lässt; ein Bild, gedacht für 0,193 s, geplant
+  für 0,160 s, kam um 0,163 s bei der Karte an.
+
+**Entscheidung**: lmix liefert GStreamers decklink-Plugin mit einem
+Patch aus drei Teilen aus (`packaging/gstreamer/decklink-start-on-frame-grid.patch`):
+Epoche aufs Raster, Uhr beim Start verankern, auf das nächste Raster
+aufrunden. `scripts/decklink-plugin.sh` baut nur `sys/decklink` aus
+dem gst-plugins-bad-Release, das zur installierten GStreamer-Version
+passt (Prüfsumme des Tarballs geprüft), und legt es in ein Verzeichnis
+für `GST_PLUGIN_PATH`; es baut neu, wenn sich Version oder Patch ändern.
+`run-local.sh`, `test-sdi-loop.sh` und `measure-sdi-latency.sh` nehmen
+es (`DECKLINK_PLUGIN=system` lässt das installierte), die systemd-Unit
+von strom zeigt mit `GST_PLUGIN_PATH` auf `~/.local/share/lmix/gstreamer`.
+Der Vorlauf `CARD_LEAD_MS` sinkt von 150 auf 60 ms.
+
+Verworfen: strom neu starten, wenn ein Kartenausgang neu startet (nimmt
+alle Flows mit), und ein höherer Vorlauf (half gegen die Epoche nicht,
+kostet Latenz). Die Meldung an GStreamer (`docs/upstream/gstreamer-decklink-restart.md`,
+jetzt mit allen drei Teilen) bleibt beim Owner; mit dem Fix upstream
+entfällt das eigene Plugin.
+
+**Geprüft**: `scripts/test-sdi-loop.sh` mit allen vier Modi im selben
+strom (je Lauf 4 Starts): mit Patch und 150 ms 3 von 3 Läufen ohne
+verspätetes oder verworfenes Bild, mit 60 ms ebenso 3 von 3. Nur mit
+dem Epochen-Teil: 153–205 verspätete Bilder bei einem Teil der Starts.

@@ -101,10 +101,11 @@ const STREAM_VIDEO: &str = "video";
 /// How long before its time a frame goes to the card. Frames come over
 /// inter later than the output flow's latency says (it does not see all
 /// of the mixer's); with strom's 20 ms the card showed half of them late
-/// and dropped the rest. A later start on the same card in the same strom
-/// passed reliably only from 150 ms on; 60 and 100 ms failed some of them
-/// (DECISIONS 27.10.).
-const CARD_LEAD_MS: u64 = 150;
+/// and dropped the rest. 60 ms passed every start, later ones on the
+/// same card in the same strom included, with GStreamer's decklink
+/// plugin patched (scripts/decklink-plugin.sh); without the patch later
+/// starts show their frames late however long the lead (DECISIONS 27.10.).
+const CARD_LEAD_MS: u64 = 60;
 
 /// Block id of the media player in file, URL and playlist slots.
 pub const PLAYER: &str = "player";
