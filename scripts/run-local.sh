@@ -45,7 +45,7 @@ wait_up() {
 STROM_BIN="$("$ROOT/scripts/fetch-strom.sh")"
 # With a DeckLink card: GStreamer's decklink plugin with lmix's patch (a
 # card output started again shows every frame late without it).
-if [[ "${DECKLINK_PLUGIN:-patched}" == patched ]] && gst-inspect-1.0 decklinkvideosink >/dev/null 2>&1; then
+if [[ "${DECKLINK_PLUGIN:-patched}" == patched ]] && compgen -G "/dev/blackmagic*" >/dev/null; then
     if plugin="$("$ROOT/scripts/decklink-plugin.sh")"; then
         export GST_PLUGIN_PATH="$plugin${GST_PLUGIN_PATH:+:$GST_PLUGIN_PATH}"
     else

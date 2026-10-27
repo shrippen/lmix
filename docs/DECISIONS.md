@@ -5095,7 +5095,8 @@ Patch aus drei Teilen aus (`packaging/gstreamer/decklink-start-on-frame-grid.pat
 Epoche aufs Raster, Uhr beim Start verankern, auf das nächste Raster
 aufrunden. `scripts/decklink-plugin.sh` baut nur `sys/decklink` aus
 dem gst-plugins-bad-Release, das zur installierten GStreamer-Version
-passt (Prüfsumme des Tarballs geprüft), und legt es in ein Verzeichnis
+passt (Prüfsumme gegen Übertragungsfehler; sie kommt vom selben Server,
+ist also keine Herkunftsprüfung), und legt es in ein Verzeichnis
 für `GST_PLUGIN_PATH`; es baut neu, wenn sich Version oder Patch ändern.
 `run-local.sh`, `test-sdi-loop.sh` und `measure-sdi-latency.sh` nehmen
 es (`DECKLINK_PLUGIN=system` lässt das installierte), die systemd-Unit
