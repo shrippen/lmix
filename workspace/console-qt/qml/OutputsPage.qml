@@ -284,6 +284,8 @@ AppPage {
         readonly property var output: root.outputs.find(o => o.id === key)
             || ({ id: key, number: 0, name: "", spec: { kind: "" }, status: { state: "stopped" } })
         readonly property bool isRunning: output.status.state === "running"
+        // Waiting for the cards: a stop just ends the wait.
+        readonly property bool isWaiting: output.status.state === "cards_off"
         readonly property var link: root.links[output.id]
         property string elapsed: ""
         width: ListView.view ? ListView.view.width : 0
@@ -343,9 +345,17 @@ AppPage {
             KanteButton {
                 size: KanteButton.Size.Small
                 emphasis: row.isRunning ? KanteButton.Emphasis.Destructive : KanteButton.Emphasis.Normal
-                text: row.isRunning ? qsTr("Stop") : qsTr("Start")
+                text: row.isRunning || row.isWaiting ? qsTr("Stop") : qsTr("Start")
                 enabled: root.backend.connected
-                onClicked: row.isRunning ? root.stop(row.output) : root.act({ action: "start_output", output: row.output.number })
+                onClicked: {
+                    if (row.isWaiting) {
+                        root.act({ action: "stop_output", output: row.output.number })
+                    } else if (row.isRunning) {
+                        root.stop(row.output)
+                    } else {
+                        root.act({ action: "start_output", output: row.output.number })
+                    }
+                }
             }
             KanteButton {
                 size: KanteButton.Size.Small

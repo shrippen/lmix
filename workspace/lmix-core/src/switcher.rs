@@ -4987,12 +4987,12 @@ impl Switcher {
         gated
     }
 
-    /// Whether output `id` waits for the cards.
     /// The engine still uses the cards from before a restart: they are on.
     pub fn adopt_cards(&mut self) {
         self.cards_on = true;
     }
 
+    /// Whether output `id` waits for the cards.
     pub fn output_waits_for_cards(&self, id: OutputId) -> bool {
         self.output_status.get(&id) == Some(&OutputStatus::CardsOff)
     }

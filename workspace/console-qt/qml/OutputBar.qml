@@ -53,7 +53,10 @@ RowLayout {
                 : (status.state === "failed" ? KanteButton.Emphasis.Destructive : KanteButton.Emphasis.Normal)
             enabled: bar.core.connected
             onClicked: {
-                if (!running) {
+                // One waiting for the cards just stops waiting.
+                if (status.state === "cards_off") {
+                    bar.act({ action: "stop_output", output: modelData.number })
+                } else if (!running) {
                     bar.act({ action: "start_output", output: modelData.number })
                 } else if (bar.confirmStop) {
                     stopDialog.output = modelData
