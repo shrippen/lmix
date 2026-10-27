@@ -4910,3 +4910,74 @@ Engine-Test `every_output_takes_its_sound_in_one_segment`.
 etwa −9 dB gegen den Ton): Program und Bus liegen leicht gegeneinander
 versetzt, ein harter Schnitt zwischen ihnen springt. Ob er stört, entscheidet
 ein Hörtest (todo).
+
+## 2026-10-27 — SDI-/HDMI-Karte als Input und Ausgang (SRC.1, OUT.4)
+
+**Anlass**: Auf dem Fedora-Rechner steckt eine DeckLink Quad 2 (acht
+Anschlüsse, Desktop Video 16.4, GStreamer 1.28.8). Ein Kabel verbindet zwei
+Anschlüsse (Loop): was lmix ausgibt, kommt auf dem anderen wieder an.
+
+**Entscheidung**:
+- Neuer Input `card` (`device`, `mode` oder automatisch) und neuer Ausgang
+  `card` (`device`, `mode`) mit den Blöcken `builtin.decklink_input` bzw.
+  `builtin.decklink_output` von strom. Die Modi heißen wie im Treiber
+  (`1080p25`, `1080i50`, `720p50` …, `CardMode`). strom listet die Karten
+  jetzt in der Geräteerkennung (strom #49); lmix zeigt sie als Geräte der
+  Art `card`, die Nummer ist GStreamers `device-number`.
+- Input: Bild hinter `deinterlace` (Halbbilder werden Vollbilder), Ton
+  S32LE 48 kHz Stereo wie von der Karte.
+- Ausgang: `videoconvert` → `videoscale` → `videorate skip-to-first=true` →
+  UYVY in Größe und Rate des Modus, bei Halbbild-Modi `interlace
+  top-field-first=true field-pattern=1:1` (Standard wäre Telecine 2:3, das
+  nimmt die Karte nicht); Ton S32LE 48 kHz. `skip-to-first`: das erste Bild
+  trägt die Laufzeit des Mischers (Stunden), `videorate` füllte sonst alles
+  ab Segmentanfang mit Kopien auf.
+- Die Karte taktet nach der Uhr (`sync` bleibt an). Zwei strom-Änderungen
+  (Branch `decklink-output-clock`): der Block belegt beim ersten Bild die
+  Kalibrierung der Kartenuhr vor (sonst plante `decklinkvideosink` die
+  ersten vier Sekunden Bilder 9 h in die Zukunft, die Warteschlange der
+  Karte lief voll, danach lehnte sie jedes Bild ab), und eine Vorlaufzeit
+  `processing_deadline_ms`. lmix setzt sie auf 150 ms (`CARD_LEAD_MS`):
+  der Ausgangs-Flow sieht über `inter` weniger Latenz als der Mischer hat
+  (160 gegen 173 ms), mit strom-Standard 20 ms kam jedes Bild ~20 ms zu
+  spät, die Karte zeigte die Hälfte verspätet und verwarf den Rest. Für den
+  ersten Start reichten schon 40 ms. Für spätere Starts auf derselben Karte
+  (siehe Offen) nicht: mit 60 ms scheiterte einer von zwei Läufen zu je vier
+  Starts, mit 100 ms zwei von drei, mit 150 ms bestanden zwei von zwei
+  (8 Starts). Das ist eine kleine Stichprobe; der Preis sind 150 ms mehr
+  Latenz am Kartenausgang.
+- Verworfen: `sync=false` am Sink. Dann plant `decklinkvideosink` jedes
+  Bild auf die Kartenzeit „jetzt“, umgerechnet als wäre sie Laufzeit; nach
+  der Kalibrierung ist das Zeit 0 und das Bild steht nach wenigen Sekunden.
+  `decklinkaudiosink` meldet mit `sync=false` keine Latenz und verwirft
+  jeden Tonpuffer als zu spät (die Karte spielte keinen Ton).
+- Kartenprofil: Die Anschlüsse 5–8 ließen sich erst nach Umstellen des
+  Kartenprofils auf `two-sub-devices-half` (Halbduplex) öffnen; das ist eine
+  Einstellung der Karte (bleibt gespeichert), nicht von lmix.
+
+**Geprüft**: `scripts/test-sdi-loop.sh` (Hardware, nicht in CI) mit
+CUDA-Mischer: je Modus läuft der Ausgang ohne abgelehntes Bild, der Input
+erkennt den Modus, das Bild kommt wie das Programm zurück und bewegt sich,
+der Ton kommt mit dem Pegel des Programms zurück (±0,1 dB), nach dem Anlauf
+zeigt die Karte kein Bild verspätet und verwirft keines. 1080p25, 1080i50
+und 720p50 bestanden.
+
+**Offen**: Startet ein Kartenausgang im selben strom-Prozess ein zweites
+Mal (Stopp/Start, Moduswechsel), sind mit System-GStreamer alle Bilder
+verspätet. Eine Ursache liegt in GStreamer (`decklinkvideosink`, auch in
+main): die Wiedergabe der Karte beginnt bei der Uhr-Epoche (wo die letzte
+Wiedergabe endete, irgendwo im Bildraster), die Bildzeiten rundet der Sink
+aber auf Vielfache der Bilddauer. Ein Patch, der die Epoche aufs Raster
+legt (`gst_decklink_video_sink_start_scheduled_playback`), behebt das in
+der Reproduktion ohne strom ganz (150 von 150 Bildern verspätet → 0). Mit
+strom und lmix genügt er allein nicht: der Abstand zwischen geplanter
+Bildzeit und Kartenuhr schwankt je Start zwischen etwa −6 und +25 ms und
+wächst mit dem Vorlauf nicht mit; einzelne Starts scheiterten auch mit
+positivem Abstand. Erst mit Patch und 150 ms Vorlauf bestanden alle
+Starts. Die übrige Ursache ist ungeklärt (Verdacht: die Kartenuhr setzt
+ihren Startpunkt erst beim ersten Lesen nach dem Start). Ohne Patch hilft
+bis dahin nur ein Neustart von strom (todo).
+
+**Geprüft danach** (150 ms, Patch): `scripts/test-sdi-loop.sh` mit
+`MODES="1080p25 1080i50 1080p25 720p50"` zweimal hintereinander bestanden,
+kleinster Abstand 7,9 ms, kein Bild verspätet, 0–3 verworfen beim Anlauf.
