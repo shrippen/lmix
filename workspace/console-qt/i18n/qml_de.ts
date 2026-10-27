@@ -341,13 +341,18 @@
       <translation>Erkennen</translation>
     </message>
     <message>
+      <location line="+2" />
+      <source>Channels %1/%2</source>
+      <translation>Kanäle %1/%2</translation>
+    </message>
+    <message>
       <location line="+7" />
       <location line="+7" />
       <source>The device's own</source>
       <translation>Die des Geräts</translation>
     </message>
     <message>
-      <location line="+187" />
+      <location line="+190" />
       <source>Pattern</source>
       <translation>Muster</translation>
     </message>
@@ -438,7 +443,12 @@
       <translation>Videomodus</translation>
     </message>
     <message>
-      <location line="+11" />
+      <location line="+7" />
+      <source>Sound</source>
+      <translation>Ton</translation>
+    </message>
+    <message>
+      <location line="+10" />
       <source>Only a mode the device offers uncompressed (not as MJPEG): with any other the input stays without a picture. “The device's own” always works.</source>
       <translation>Nur ein Modus, den das Gerät unkomprimiert anbietet (nicht als MJPEG): Mit jedem anderen bleibt der Input ohne Bild. „Die des Geräts“ geht immer.</translation>
     </message>
@@ -461,7 +471,7 @@
   <context>
     <name>AddOutputDialog</name>
     <message>
-      <location filename="../qml/AddOutputDialog.qml" line="+44" />
+      <location filename="../qml/AddOutputDialog.qml" line="+48" />
       <source>folder in the engine's media directory</source>
       <translation>Ordner im Medienverzeichnis der Engine</translation>
     </message>
@@ -482,7 +492,7 @@
       <translation>Ausgang hinzufügen</translation>
     </message>
     <message>
-      <location line="+47" />
+      <location line="+64" />
       <source>Output</source>
       <translation>Ausgang</translation>
     </message>
@@ -492,7 +502,27 @@
       <translation>Keine Karte gefunden</translation>
     </message>
     <message>
-      <location line="+7" />
+      <location line="+8" />
+      <source>Embedded channels</source>
+      <translation>Eingebettete Kanäle</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Sound delay (ms)</source>
+      <translation>Ton-Verzögerung (ms)</translation>
+    </message>
+    <message>
+      <location line="+18" />
+      <source>Channels %1/%2</source>
+      <translation>Kanäle %1/%2</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Silent</source>
+      <translation>Stumm</translation>
+    </message>
+    <message>
+      <location line="+10" />
       <source>Stream key</source>
       <translation>Stream-Schlüssel</translation>
     </message>
@@ -5562,6 +5592,11 @@
     </message>
     <message>
       <location line="+7" />
+      <source>%1 channels</source>
+      <translation>%1 Kanäle</translation>
+    </message>
+    <message>
+      <location line="+2" />
       <source>%1 ms</source>
       <translation>%1 ms</translation>
     </message>
@@ -5974,6 +6009,11 @@
       <location line="+1" />
       <source>%1 has no sound</source>
       <translation>%1 hat keinen Ton</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Card: %1</source>
+      <translation>Karte: %1</translation>
     </message>
     <message>
       <location line="+1" />

@@ -91,6 +91,8 @@ QtObject {
             break
         case "card_modes":
             return cardMode(value)
+        case "card_channels":
+            return qsTr("%1 channels").arg(value)
         case "durations":
             return qsTr("%1 ms").arg(value)
         }
@@ -120,11 +122,11 @@ QtObject {
 
     /** A card mode as people write it: `1080p2997` → `1080p 29.97`. */
     function cardMode(nick) {
-        const m = /^(\d+[pi])(\d+)$/.exec(nick)
+        const m = /^(\d+)(p|i|psf)(\d+)$/.exec(nick)
         if (!m)
             return String(nick)
         const fractions = { "2398": "23.98", "2997": "29.97", "5994": "59.94" }
-        return m[1] + " " + (fractions[m[2]] || m[2])
+        return m[1] + (m[2] === "psf" ? "PsF" : m[2]) + " " + (fractions[m[3]] || m[3])
     }
 
     /** `[{value, label}]` of a form list, from the values Core.choices gives. */
@@ -286,6 +288,7 @@ QtObject {
         case "bad_stinger": return qsTr("Stinger: %1").arg(e.reason)
         case "bad_quick_play": return qsTr("Quick play: %1").arg(e.reason)
         case "no_audio": return qsTr("%1 has no sound").arg(e.reference)
+        case "bad_card": return qsTr("Card: %1").arg(e.reason)
         case "bad_web_url": return qsTr("Web page %1 is not an http:// or https:// address").arg(e.url)
         case "no_page": return qsTr("%1 shows no page (not a web or graphics input)").arg(e.reference)
         case "bad_fade": return qsTr("A level fade lasts 0–%1 ms, not %2").arg(e.max).arg(e.duration_ms)

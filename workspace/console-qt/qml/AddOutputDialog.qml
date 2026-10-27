@@ -35,6 +35,10 @@ KanteDialog {
     readonly property var cardModes: Texts.choices("card_modes", core.choices("card_modes"))
     /** Mode a new card output starts in. */
     readonly property string defaultCardMode: "1080p25"
+    readonly property var cardChannels: Texts.choices("card_channels", core.choices("card_channels"))
+    readonly property int cardSoundDelayMax: JSON.parse(core.choices("card_limits")).sound_delay_ms
+    /** Channel pairs of the chosen channels: 1, 4 or 8. */
+    readonly property int cardPairs: cardChannels[cardChannelsBox.currentIndex] ? Number(cardChannels[cardChannelsBox.currentIndex].value) / 2 : 1
     readonly property bool encodes: kind === "srt" || kind === "rtmp" || kind === "record"
     /** Screens show picture only. */
     readonly property bool carriesSound: kind !== "window" && kind !== "fullscreen" && kind !== "drm"
@@ -56,6 +60,8 @@ KanteDialog {
     onOpened: {
         core.refreshLists()
         cardBox.currentIndex = 0
+        cardChannelsBox.currentIndex = 0
+        cardDelay.value = 0
         cardModeBox.currentIndex = Math.max(0, cardModes.findIndex(m => m.value === defaultCardMode))
         textField.text = ""
         nameField.text = ""
@@ -73,6 +79,11 @@ KanteDialog {
             kind: dialog.kind,
             text: dialog.isCard ? (dialog.cards[cardBox.currentIndex] ? dialog.cards[cardBox.currentIndex].id : "") : textField.text,
             mode: dialog.isCard && dialog.cardModes[cardModeBox.currentIndex] ? dialog.cardModes[cardModeBox.currentIndex].value : "",
+            card: dialog.isCard ? {
+                channels: dialog.cardChannels[cardChannelsBox.currentIndex] ? dialog.cardChannels[cardChannelsBox.currentIndex].value : "",
+                more_pairs: dialog.pairBuses(),
+                sound_delay_ms: cardDelay.value
+            } : {},
             source: source,
             container: container,
             video_kbps: kbps.value,
@@ -85,6 +96,16 @@ KanteDialog {
             name: nameField.text,
             bus: dialog.carriesSound && soundBox.currentIndex > 0 && dialog.buses[soundBox.currentIndex - 1] ? dialog.buses[soundBox.currentIndex - 1].id : ""
         }))
+    }
+
+    /** Bus id per further card pair; empty: silent. */
+    function pairBuses() {
+        var ids = []
+        for (var i = 0; i < pairRepeater.count; i++) {
+            const choice = pairRepeater.itemAt(i).choice
+            ids.push(choice > 0 && buses[choice - 1] ? buses[choice - 1].id : "")
+        }
+        return ids
     }
 
     acceptEnabled: dialog.isCard ? dialog.cards.length > 0 : (!dialog.needsText || textField.text.trim().length > 0)
@@ -134,6 +155,47 @@ KanteDialog {
             Layout.fillWidth: true
             visible: dialog.isCard && dialog.cards.length === 0
             text: qsTr("No card found")
+        }
+        // OUT.4: embedded channels, a bus on each further pair, and the
+        // sound later than the picture (lip sync).
+        GridLayout {
+            visible: dialog.isCard
+            Layout.fillWidth: true
+            columns: 2
+            QQC2.Label { text: qsTr("Embedded channels") }
+            QQC2.ComboBox {
+                id: cardChannelsBox
+                Layout.fillWidth: true
+                model: dialog.cardChannels
+                textRole: "label"
+                KanteFieldSkin { control: cardChannelsBox }
+            }
+            QQC2.Label { text: qsTr("Sound delay (ms)") }
+            QQC2.SpinBox {
+                id: cardDelay
+                from: 0
+                to: dialog.cardSoundDelayMax
+                stepSize: 10
+                editable: true
+                KanteFieldSkin { control: cardDelay }
+            }
+        }
+        Repeater {
+            id: pairRepeater
+            model: dialog.isCard ? dialog.cardPairs - 1 : 0
+            delegate: RowLayout {
+                required property int index
+                readonly property int choice: pairBox.currentIndex
+                Layout.fillWidth: true
+                // Pair 1 carries the output's sound; these start at 3/4.
+                QQC2.Label { text: qsTr("Channels %1/%2").arg(2 * index + 3).arg(2 * index + 4) }
+                QQC2.ComboBox {
+                    id: pairBox
+                    Layout.fillWidth: true
+                    model: [qsTr("Silent")].concat(dialog.soundNames)
+                    KanteFieldSkin { control: pairBox }
+                }
+            }
         }
         // STR.2: the platform's stream key, apart from the server.
         KanteTextField {

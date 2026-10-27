@@ -4,8 +4,8 @@
 //! passes strings.
 
 use lmix_types::{
-    CardMode, Container, DisplayMode, Effect, InputColor, InputPress, OutputSource, OutputSpec,
-    SourceSpec, TestPattern, VideoEncoding,
+    BusId, CardChannels, CardMode, Container, DisplayMode, Effect, InputColor, InputPress,
+    OutputSource, OutputSpec, SourceSpec, TestPattern, VideoEncoding,
 };
 use serde::{Deserialize, Serialize};
 
@@ -41,8 +41,16 @@ pub fn values(list: &str) -> Option<String> {
         "presses" => InputPress::ALL.map(name_of).to_vec(),
         "containers" => Container::ALL.map(name_of).to_vec(),
         "card_modes" => CardMode::ALL.map(|m| m.nick().to_string()).to_vec(),
+        "card_channels" => CardChannels::ALL.map(name_of).to_vec(),
         "outputs" => OUTPUT_KINDS.iter().map(|k| k.to_string()).collect(),
         "durations" => return serde_json::to_string(&DURATION_PRESETS_MS).ok(),
+        // A card output's longest sound delay.
+        "card_limits" => {
+            return Some(
+                serde_json::json!({ "sound_delay_ms": lmix_types::MAX_CARD_SOUND_DELAY_MS })
+                    .to_string(),
+            )
+        }
         // How many buses a show has at most, and how long their names are.
         "bus_limits" => {
             return Some(
@@ -126,6 +134,7 @@ pub fn source_of(kind: &str, value: &str) -> Option<SourceSpec> {
         "card" => SourceSpec::Card {
             device: text.parse().ok()?,
             mode: None,
+            pair: 1,
         },
         _ => return None,
     })
@@ -142,6 +151,8 @@ pub struct SourceOptions {
     pub framerate: String,
     /// A card's mode, `1080i50`; empty: the card detects it.
     pub mode: String,
+    /// A card's channel pair, 1 to 8; 0: the first.
+    pub pair: u32,
 }
 
 /// `source_of` with the form's options (`SourceOptions` as JSON; empty or
@@ -159,8 +170,9 @@ pub fn source_with_options(kind: &str, value: &str, options: &str) -> Option<Sou
         *resolution = lmix_types::device_resolution(&options.resolution);
         *framerate = lmix_types::device_framerate(&options.framerate);
     }
-    if let SourceSpec::Card { mode, .. } = &mut source {
+    if let SourceSpec::Card { mode, pair, .. } = &mut source {
         *mode = CardMode::from_nick(&options.mode);
+        *pair = options.pair.max(1);
     }
     Some(source)
 }
@@ -204,6 +216,48 @@ pub struct OutputForm {
     /// A card output's mode, `1080i50`.
     #[serde(default)]
     pub mode: String,
+    /// A card output's sound beyond its mode.
+    #[serde(default)]
+    pub card: CardSoundForm,
+}
+
+/// A card output's sound as the form sends it.
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+pub struct CardSoundForm {
+    /// `"2"`, `"8"` or `"16"`; empty: 2.
+    pub channels: String,
+    /// Bus id per pair from the second on; empty: silent.
+    pub more_pairs: Vec<String>,
+    pub sound_delay_ms: u32,
+}
+
+/// `spec` with the card sound of `form`; other outputs as they are.
+/// Pairs past the channels and trailing silent ones are left out.
+pub fn with_card_sound(mut spec: OutputSpec, form: &CardSoundForm) -> OutputSpec {
+    let OutputSpec::Card {
+        channels,
+        more_pairs,
+        sound_delay_ms,
+        ..
+    } = &mut spec
+    else {
+        return spec;
+    };
+    *channels = serde_json::from_value(serde_json::Value::String(form.channels.clone()))
+        .unwrap_or_default();
+    let room = channels.pairs() as usize - 1;
+    *more_pairs = form
+        .more_pairs
+        .iter()
+        .take(room)
+        .map(|id| serde_json::from_value::<BusId>(serde_json::Value::String(id.clone())).ok())
+        .collect();
+    while more_pairs.last() == Some(&None) {
+        more_pairs.pop();
+    }
+    *sound_delay_ms = form.sound_delay_ms;
+    spec
 }
 
 /// The output the "add output" form describes; `None` while a needed
@@ -261,6 +315,9 @@ pub fn output_of(
         "card" => OutputSpec::Card {
             device: text.parse().ok()?,
             mode: CardMode::from_nick(mode)?,
+            channels: CardChannels::default(),
+            more_pairs: Vec::new(),
+            sound_delay_ms: 0,
         },
         _ => return None,
     })
@@ -531,14 +588,24 @@ mod tests {
             source_with_options("card", "2", r#"{"mode":"1080i50"}"#),
             Some(SourceSpec::Card {
                 device: 2,
-                mode: Some(CardMode::Hd1080i50)
+                mode: Some(CardMode::Hd1080i50),
+                pair: 1,
             })
         );
         assert_eq!(
             source_with_options("card", "0", "{}"),
             Some(SourceSpec::Card {
                 device: 0,
-                mode: None
+                mode: None,
+                pair: 1,
+            })
+        );
+        assert_eq!(
+            source_with_options("card", "0", r#"{"pair":5}"#),
+            Some(SourceSpec::Card {
+                device: 0,
+                mode: None,
+                pair: 5,
             })
         );
         assert_eq!(source_with_options("card", "two", "{}"), None);
@@ -546,7 +613,10 @@ mod tests {
             output_of("card", "1", "", 0, VideoEncoding::default(), "", "720p50"),
             Some(OutputSpec::Card {
                 device: 1,
-                mode: CardMode::Hd720p50
+                mode: CardMode::Hd720p50,
+                channels: CardChannels::Two,
+                more_pairs: Vec::new(),
+                sound_delay_ms: 0,
             })
         );
         // An output needs a mode: the card plays what it is given.
@@ -554,6 +624,28 @@ mod tests {
             output_of("card", "1", "", 0, VideoEncoding::default(), "", ""),
             None
         );
+        // Sound: buses on pairs that fit the channels, trailing silence
+        // left out; not for other outputs.
+        let bus = BusId::new();
+        let form = CardSoundForm {
+            channels: "8".into(),
+            more_pairs: vec!["".into(), bus.0.to_string(), "".into(), bus.0.to_string()],
+            sound_delay_ms: 40,
+        };
+        let card = output_of("card", "1", "", 0, VideoEncoding::default(), "", "720p50").unwrap();
+        assert_eq!(
+            with_card_sound(card, &form),
+            OutputSpec::Card {
+                device: 1,
+                mode: CardMode::Hd720p50,
+                channels: CardChannels::Eight,
+                more_pairs: vec![None, Some(bus)],
+                sound_delay_ms: 40,
+            }
+        );
+        let ndi = OutputSpec::Ndi { name: "x".into() };
+        assert_eq!(with_card_sound(ndi.clone(), &form), ndi);
+
         let modes: Vec<String> = serde_json::from_str(&values("card_modes").unwrap()).unwrap();
         assert_eq!(modes.first().map(String::as_str), Some("720p50"));
         assert_eq!(modes.len(), CardMode::ALL.len());
