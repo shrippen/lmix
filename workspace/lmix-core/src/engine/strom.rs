@@ -1684,6 +1684,7 @@ impl Engine for StromEngine {
             let found: Vec<DeviceResponse> = check(resp).await?.json().await.map_err(net)?;
             devices.extend(found.into_iter().filter_map(|d| device_of(d, kind)));
         }
+        sort_cards(&mut devices);
         Ok(devices)
     }
 }
@@ -1717,6 +1718,19 @@ fn device_of(found: DeviceResponse, kind: DeviceKind) -> Option<Device> {
         name: name.to_string(),
         kind: DeviceKind::Card,
     })
+}
+
+/// Card connectors by number, in the places cards take among `devices`:
+/// strom lists them in no order (`0, 7, 2, …`).
+fn sort_cards(devices: &mut [Device]) {
+    let places: Vec<usize> = (0..devices.len())
+        .filter(|&i| devices[i].kind == DeviceKind::Card)
+        .collect();
+    let mut cards: Vec<Device> = places.iter().map(|&i| devices[i].clone()).collect();
+    cards.sort_by_key(|c| c.id.parse::<u32>().unwrap_or(u32::MAX));
+    for (place, card) in places.into_iter().zip(cards) {
+        devices[place] = card;
+    }
 }
 
 /// strom audio mixer properties of channel `channel` (1-based) for a strip.
@@ -1906,6 +1920,27 @@ mod tests {
             ),
             None
         );
+    }
+
+    /// Cards come by number; a camera keeps its place among them.
+    #[test]
+    fn cards_come_by_number() {
+        let device = |id: &str, kind| Device {
+            api: String::new(),
+            id: id.into(),
+            name: id.into(),
+            kind,
+        };
+        let mut devices = vec![
+            device("7", DeviceKind::Card),
+            device("cam", DeviceKind::Video),
+            device("0", DeviceKind::Card),
+            device("10", DeviceKind::Card),
+            device("2", DeviceKind::Card),
+        ];
+        sort_cards(&mut devices);
+        let ids: Vec<&str> = devices.iter().map(|d| d.id.as_str()).collect();
+        assert_eq!(ids, ["0", "cam", "2", "7", "10"]);
     }
 
     /// Bodies of page commands the stand-in strom received.
