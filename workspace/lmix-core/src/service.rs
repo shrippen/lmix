@@ -1481,11 +1481,22 @@ impl Service {
 
     /// Refuse `action` if it came in by a locked `class`.
     async fn check_way_in(&self, action: &Action, class: IoClass) -> Result<(), ActionError> {
-        let panic = matches!(action, Action::CuePanic { .. } | Action::CueHardStop);
-        if !panic && self.switcher.lock().await.io_locked(class) {
-            return Err(ActionError::IoLocked { class });
+        let is_panic = |a: &Action| matches!(a, Action::CuePanic { .. } | Action::CueHardStop);
+        let sw = self.switcher.lock().await;
+        if !sw.io_locked(class) || is_panic(action) {
+            return Ok(());
         }
-        Ok(())
+        // A pad or button that only stops the show is a panic too (MIDI
+        // has no other way to one).
+        if let Action::RunShortcut { target } = action {
+            if sw
+                .shortcut_actions(target)
+                .is_ok_and(|actions| !actions.is_empty() && actions.iter().all(is_panic))
+            {
+                return Ok(());
+            }
+        }
+        Err(ActionError::IoLocked { class })
     }
 
     /// Target `name`, and whether a request to it goes out.
@@ -5225,6 +5236,58 @@ mod tests {
             .handle_from(Action::SetLock { on: false }, IoClass::Osc)
             .await
             .is_ok());
+    }
+
+    /// RUN.9: MIDI locked refuses a pad, but a pad bound to the panic
+    /// still stops the show (over MIDI a panic only comes as a shortcut).
+    #[tokio::test]
+    async fn a_midi_panic_pad_goes_through_the_lock() {
+        use lmix_types::{MidiBinding, MidiKind, MidiMessage, ShortcutSpec};
+        let service = Service::new(4, Arc::new(NullEngine::default()), None);
+        for (number, label, actions) in [
+            (36, "Lock", vec![Action::SetLock { on: true }]),
+            (37, "Panic", vec![Action::CuePanic { ms: None }]),
+        ] {
+            let shortcut = ShortcutSpec {
+                all_shows: false,
+                label: label.into(),
+                key: None,
+                web: false,
+                color: None,
+                midi: Some(MidiBinding {
+                    kind: MidiKind::Note,
+                    channel: None,
+                    number,
+                }),
+                actions,
+            };
+            service
+                .handle(Action::AddShortcut { shortcut })
+                .await
+                .unwrap();
+        }
+        service
+            .handle(Action::SetIoLock {
+                class: IoClass::Midi,
+                on: true,
+            })
+            .await
+            .unwrap();
+        let pad = |number| MidiMessage {
+            kind: MidiKind::Note,
+            channel: 1,
+            number,
+            value: 100,
+        };
+
+        assert_eq!(
+            service.midi(pad(36), true).await.unwrap_err(),
+            ActionError::IoLocked {
+                class: IoClass::Midi
+            }
+        );
+        assert!(!service.state().await.locked);
+        service.midi(pad(37), true).await.unwrap();
     }
 
     /// RUN.9: with the targets locked a request is not sent, says so as

@@ -5080,7 +5080,8 @@ Schalter auf (todo „GStreamer-Fehler melden“).
 `osc`, `midi`, `tcp` (Steuerung rein) und `targets` (HTTP- und
 Home-Assistant-Anfragen an die Ausgabeziele). Gesperrt lehnt lmix ab, was
 auf dem Weg kommt (`io_locked`, OSC antwortet `/lmix/error`, TCP `ER`),
-außer Panik und harter Stopp: eine Sperre soll eine Probe ruhig halten,
+außer Panik und harter Stopp, auch als Kurzbefehl, der nur das tut (über
+MIDI kommt eine Panik nur so): eine Sperre soll eine Probe ruhig halten,
 nicht den Notaus nehmen. Entsperren geht nur über einen anderen Weg
 (sonst entsperrte ein fremdes Pult sich selbst). Gesperrte Ziele senden
 nichts; das Ereignis meldet `locked`, „Ziele prüfen“ prüft nichts, und
@@ -5097,5 +5098,6 @@ nichts aus.
 Console: Setup → Steuerung → „Sperren“, ein Schalter je Weg.
 
 **Geprüft**: Tests `a_locked_way_in_refuses_all_but_a_panic`,
+`a_midi_panic_pad_goes_through_the_lock`,
 `locked_targets_send_nothing_and_warn` (der Empfänger sieht keine
 Verbindung).
