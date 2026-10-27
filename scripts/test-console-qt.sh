@@ -35,6 +35,8 @@ trap cleanup EXIT
 pass() { echo "ok   $*"; }
 fail() {
     echo "FAIL: $*"
+    # What the screen showed when the check gave up.
+    shot failed 2>/dev/null || true
     KEEP_WORK=1
     exit 1
 }

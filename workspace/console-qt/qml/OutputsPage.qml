@@ -231,6 +231,7 @@ AppPage {
         case "rtmp": return qsTr("Stream RTMP")
         case "ndi": return qsTr("NDI")
         case "display": return qsTr("Screen")
+        case "card": return qsTr("SDI / HDMI")
         }
         return spec.kind || ""
     }
@@ -241,6 +242,7 @@ AppPage {
         case "rtmp": return spec.url
         case "ndi": return spec.name
         case "display": return spec.mode ? spec.mode.mode : ""
+        case "card": return qsTr("Card %1, %2").arg(spec.device + 1).arg(Texts.cardMode(spec.mode))
         }
         return ""
     }

@@ -25,6 +25,36 @@ sudo apt-get install libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
   libcairo2-dev graphviz
 ```
 
+**Fedora 44** (KDE, geprüft 2026-10-27; Rust aus dem Fedora-Paket, 1.99, die
+Pin-Version wird ignoriert):
+
+```bash
+sudo dnf install rust cargo clippy rustfmt rust-std-static gcc-c++ clang mold cmake \
+  gstreamer1-devel gstreamer1-plugins-base-devel gstreamer1-plugins-bad-free-devel \
+  gstreamer1-plugins-bad-free-extras libnice-devel libnice-gstreamer1 graphviz \
+  qt6-qtbase-devel qt6-qtdeclarative-devel qt6-qttools-devel qt6-linguist \
+  kf6-kirigami-devel gstreamer1-plugins-good-qt6 \
+  xdotool ImageMagick jq zstd
+```
+
+`gstreamer1-plugins-bad-free-extras` bringt `srtsink` und die DeckLink-Elemente.
+Für den CUDA-Mischer braucht Fedoras nvcodec-Plugin `libnvrtc` aus NVIDIAs
+CUDA-Repo (`cuda-nvrtc-13-2`, das Repo für fedora43 geht auch auf 44). Sie liegt
+nicht im Bibliothekspfad, und GStreamer sucht sie ohne Versionsnummer; ohne sie
+fehlen `cudacompositor` und `cudaconvertscale`. Einmalig:
+
+```bash
+echo /usr/local/cuda-13.2/targets/x86_64-linux/lib | sudo tee /etc/ld.so.conf.d/cuda-nvrtc.conf
+sudo ldconfig
+sudo dnf install cuda-nvrtc-devel-13-2   # libnvrtc.so ohne Versionsnummer
+```
+
+Ohne Root reicht für eine Sitzung
+`LD_LIBRARY_PATH=/usr/local/cuda-13.2/targets/x86_64-linux/lib GST_CUDA_NVRTC_LIBNAME=libnvrtc.so.13`.
+Danach einmal `~/.cache/gstreamer-1.0/registry.x86_64.bin` löschen. Kennt die
+Registry `cudacompositor` aus einem Lauf mit dieser Umgebung, fehlt sie aber
+im nächsten, schlägt der strom-Test `test_compositors_ignore_inactive_pads` fehl.
+
 **Nicht nötig**: `wasm32-unknown-unknown`-Target, `trunk`. Die Web-GUI ist für
 uns kein Ziel (Entscheidung 3). Fehlt `trunk`, fällt `backend/build.rs`
 automatisch auf eine Platzhalter-Seite zurück und kompiliert normal weiter —

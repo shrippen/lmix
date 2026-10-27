@@ -1694,15 +1694,41 @@ impl Engine for StromEngine {
             let url = self.url(&format!("/discovery/devices?category={category}"));
             let resp = self.http.get(url).send().await.map_err(net)?;
             let found: Vec<DeviceResponse> = check(resp).await?.json().await.map_err(net)?;
-            devices.extend(found.into_iter().map(|d| Device {
-                api: d.api_label(),
-                id: d.id,
-                name: d.name,
-                kind,
-            }));
+            devices.extend(found.into_iter().filter_map(|d| device_of(d, kind)));
         }
         Ok(devices)
     }
+}
+
+/// strom's api label of DeckLink cards.
+const DECKLINK_API: &str = "DeckLink";
+/// What strom appends to the name of a card's capture side.
+const CAPTURE_SUFFIX: &str = " (Video Capture)";
+
+/// lmix's view of a device strom found in `kind`'s category. A DeckLink
+/// connector is a card by its device number (both ways, SRC.1/OUT.4);
+/// `None` when strom gives no number for it.
+fn device_of(found: DeviceResponse, kind: DeviceKind) -> Option<Device> {
+    let api = found.api_label();
+    if api != DECKLINK_API || kind != DeviceKind::Video {
+        return Some(Device {
+            api,
+            id: found.id,
+            name: found.name,
+            kind,
+        });
+    }
+    let number = found.properties.get("device-number")?;
+    let name = found
+        .name
+        .strip_suffix(CAPTURE_SUFFIX)
+        .unwrap_or(&found.name);
+    Some(Device {
+        api,
+        id: number.clone(),
+        name: name.to_string(),
+        kind: DeviceKind::Card,
+    })
 }
 
 /// strom audio mixer properties of channel `channel` (1-based) for a strip.
@@ -1845,6 +1871,54 @@ fn level_writes(level: &Level, known: Option<bool>) -> Vec<(String, PropertyValu
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn discovered(name: &str, provider: &str, number: Option<&str>) -> DeviceResponse {
+        let properties: std::collections::HashMap<String, String> = number
+            .map(|n| [("device-number".to_string(), n.to_string())].into())
+            .unwrap_or_default();
+        serde_json::from_value(serde_json::json!({
+            "id": "dev-1", "name": name, "device_class": "Video/Source/Hardware",
+            "category": "videosource", "provider": provider, "properties": properties,
+            "first_seen_secs_ago": 0, "last_seen_secs_ago": 0
+        }))
+        .unwrap()
+    }
+
+    /// A DeckLink connector is a card device by its number; a camera
+    /// stays a video device by its id (SRC.1).
+    #[test]
+    fn decklink_connectors_are_card_devices() {
+        let card = device_of(
+            discovered(
+                "DeckLink Quad (3) (Video Capture)",
+                "decklinkdeviceprovider",
+                Some("2"),
+            ),
+            DeviceKind::Video,
+        )
+        .unwrap();
+        assert_eq!(card.kind, DeviceKind::Card);
+        assert_eq!(card.id, "2");
+        assert_eq!(card.name, "DeckLink Quad (3)");
+        assert_eq!(card.api, "DeckLink");
+
+        let camera = device_of(
+            discovered("Facecam", "v4l2deviceprovider", None),
+            DeviceKind::Video,
+        )
+        .unwrap();
+        assert_eq!(camera.kind, DeviceKind::Video);
+        assert_eq!(camera.id, "dev-1");
+
+        // A card without its number cannot be addressed.
+        assert_eq!(
+            device_of(
+                discovered("DeckLink", "decklinkdeviceprovider", None),
+                DeviceKind::Video
+            ),
+            None
+        );
+    }
 
     /// Bodies of page commands the stand-in strom received.
     static PAGE_BODIES: std::sync::Mutex<Vec<serde_json::Value>> =

@@ -176,6 +176,11 @@
       <translation>Mikro, Interface</translation>
     </message>
     <message>
+      <location line="+0" />
+      <source>DeckLink</source>
+      <translation>DeckLink</translation>
+    </message>
+    <message>
       <location line="+1" />
       <source>Video file</source>
       <translation>Videodatei</translation>
@@ -234,6 +239,11 @@
       <location line="+3" />
       <source>Video from the device.</source>
       <translation>Video vom Gerät.</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Picture and embedded sound from a connector of the card.</source>
+      <translation>Bild und eingebetteter Ton von einem Anschluss der Karte.</translation>
     </message>
     <message>
       <location line="+1" />
@@ -326,13 +336,18 @@
       <translation>Chroma-Blau</translation>
     </message>
     <message>
-      <location line="+16" />
+      <location line="+12" />
+      <source>Detect</source>
+      <translation>Erkennen</translation>
+    </message>
+    <message>
+      <location line="+7" />
       <location line="+7" />
       <source>The device's own</source>
       <translation>Die des Geräts</translation>
     </message>
     <message>
-      <location line="+182" />
+      <location line="+187" />
       <source>Pattern</source>
       <translation>Muster</translation>
     </message>
@@ -403,11 +418,12 @@
     </message>
     <message>
       <location line="+9" />
+      <location line="+26" />
       <source>Options</source>
       <translation>Optionen</translation>
     </message>
     <message>
-      <location line="+7" />
+      <location line="-19" />
       <source>Resolution</source>
       <translation>Auflösung</translation>
     </message>
@@ -415,6 +431,11 @@
       <location line="+7" />
       <source>Frame rate</source>
       <translation>Bildrate</translation>
+    </message>
+    <message>
+      <location line="+19" />
+      <source>Video mode</source>
+      <translation>Videomodus</translation>
     </message>
     <message>
       <location line="+11" />
@@ -440,7 +461,7 @@
   <context>
     <name>AddOutputDialog</name>
     <message>
-      <location filename="../qml/AddOutputDialog.qml" line="+37" />
+      <location filename="../qml/AddOutputDialog.qml" line="+44" />
       <source>folder in the engine's media directory</source>
       <translation>Ordner im Medienverzeichnis der Engine</translation>
     </message>
@@ -461,12 +482,17 @@
       <translation>Ausgang hinzufügen</translation>
     </message>
     <message>
-      <location line="+43" />
+      <location line="+47" />
       <source>Output</source>
       <translation>Ausgang</translation>
     </message>
     <message>
-      <location line="+19" />
+      <location line="+35" />
+      <source>No card found</source>
+      <translation>Keine Karte gefunden</translation>
+    </message>
+    <message>
+      <location line="+7" />
       <source>Stream key</source>
       <translation>Stream-Schlüssel</translation>
     </message>
@@ -2930,7 +2956,7 @@
   <context>
     <name>NarrowMixer</name>
     <message>
-      <location filename="../qml/NarrowMixer.qml" line="+146" />
+      <location filename="../qml/NarrowMixer.qml" line="+148" />
       <source>Audio mixer</source>
       <translation>Tonmischer</translation>
     </message>
@@ -2951,7 +2977,7 @@
       <translation>Kein Ton</translation>
     </message>
     <message>
-      <location line="-74" />
+      <location line="-73" />
       <source>PRE %1</source>
       <comment>bus taken before the faders, n inputs</comment>
       <translation>PRE %1</translation>
@@ -2973,7 +2999,7 @@
       <translation>Inputs, die senden: %1, nach den Fadern</translation>
     </message>
     <message>
-      <location line="+39" />
+      <location line="+38" />
       <source>Audio · %1 inputs</source>
       <translation>Ton · %1 Inputs</translation>
     </message>
@@ -3411,12 +3437,12 @@
       <translation>Ton</translation>
     </message>
     <message>
-      <location line="+82" />
+      <location line="+84" />
       <source>of the source</source>
       <translation>der Quelle</translation>
     </message>
     <message>
-      <location line="-81" />
+      <location line="-83" />
       <source>Target</source>
       <translation>Ziel</translation>
     </message>
@@ -3437,12 +3463,12 @@
     </message>
     <message>
       <location line="+17" />
-      <location line="+59" />
+      <location line="+61" />
       <source>Multiview</source>
       <translation>Multiview</translation>
     </message>
     <message>
-      <location line="-56" />
+      <location line="-58" />
       <source>Program on the left</source>
       <translation>Programm links</translation>
     </message>
@@ -3477,7 +3503,17 @@
       <translation>Bildschirm</translation>
     </message>
     <message>
-      <location line="+23" />
+      <location line="+1" />
+      <source>SDI / HDMI</source>
+      <translation>SDI / HDMI</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>Card %1, %2</source>
+      <translation>Karte %1, %2</translation>
+    </message>
+    <message>
+      <location line="+13" />
       <source>Input %1 %2</source>
       <translation>Input %1 %2</translation>
     </message>
@@ -5329,12 +5365,12 @@
     </message>
     <message>
       <location line="+1" />
-      <location line="+62" />
+      <location line="+63" />
       <source>NDI</source>
       <translation>NDI</translation>
     </message>
     <message>
-      <location line="-61" />
+      <location line="-62" />
       <source>WHIP (browser, OBS)</source>
       <translation>WHIP (Browser, OBS)</translation>
     </message>
@@ -5359,7 +5395,13 @@
       <translation>Ton (Mikrofon, Line)</translation>
     </message>
     <message>
-      <location line="+5" />
+      <location line="+1" />
+      <location line="+61" />
+      <source>SDI / HDMI card</source>
+      <translation>SDI-/HDMI-Karte</translation>
+    </message>
+    <message>
+      <location line="-56" />
       <source>Bars</source>
       <translation>Farbbalken</translation>
     </message>
@@ -5519,7 +5561,7 @@
       <translation>Bildschirm: Anschluss (ohne Desktop)</translation>
     </message>
     <message>
-      <location line="+4" />
+      <location line="+7" />
       <source>%1 ms</source>
       <translation>%1 ms</translation>
     </message>
@@ -5572,7 +5614,7 @@
       <translation>MIK</translation>
     </message>
     <message>
-      <location line="+14" />
+      <location line="+24" />
       <source>PGM latency –</source>
       <translation>PGM-Latenz –</translation>
     </message>

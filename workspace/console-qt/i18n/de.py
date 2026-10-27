@@ -2,6 +2,14 @@
 # scripts/update-translations.sh collects the sources and writes these
 # into qml_de.ts (i18n/fill.py). Keep it complete.
 DE = {
+    'Card %1, %2': 'Karte %1, %2',
+    'DeckLink': 'DeckLink',
+    'Detect': 'Erkennen',
+    'No card found': 'Keine Karte gefunden',
+    'Picture and embedded sound from a connector of the card.': 'Bild und eingebetteter Ton von einem Anschluss der Karte.',
+    'SDI / HDMI': 'SDI / HDMI',
+    'SDI / HDMI card': 'SDI-/HDMI-Karte',
+    'Video mode': 'Videomodus',
     'Picture': 'Bild',
     'Picture on %1': 'Bild auf %1',
     'Fade stage %1': 'Blende Bühne %1',

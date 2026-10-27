@@ -162,7 +162,7 @@ kann es, Console nicht.
 
 | ID | Quelle | Details | Prio | Stand |
 |---|---|---|---|---|
-| SRC.1 | Capture-Gerät | V4L2, DeckLink (SDI/HDMI), Format/Auflösung/Bildrate/Interlaced/PsF wählbar, eingebetteter Ton bis 16 Kanäle | M | ◐ (V4L2 über die Geräteliste, Auflösung und Bildrate wählbar (2026-10-25); ohne Pixelformat (strom bietet es nicht), ohne Interlaced/PsF, ohne eingebetteten Ton; DeckLink E; H.7 offen) |
+| SRC.1 | Capture-Gerät | V4L2, DeckLink (SDI/HDMI), Format/Auflösung/Bildrate/Interlaced/PsF wählbar, eingebetteter Ton bis 16 Kanäle | M | ◐ (V4L2 über die Geräteliste, Auflösung und Bildrate wählbar (2026-10-25); ohne Pixelformat (strom bietet es nicht), ohne Interlaced/PsF, ohne eingebetteten Ton; DeckLink-Karte als Input mit Modus oder automatisch, Halbbilder entflochten, eingebetteter Ton Stereo (2026-10-27, H.7 SDI-Loop bestanden); ohne PsF, ohne 16 Kanäle) |
 | SRC.2 | Videodatei | gängige Container/Codecs (MP4, MOV, MXF, MKV, TS, AVI), Alpha (ProRes 4444, QT-Animation, VP9), Interlaced erkannt | M | ✅ |
 | SRC.3 | Liste | mehrere Video-/Audiodateien als ein Input; Auto-Weiter, Auto-Erstes, Schleife, Mischen, Einträge abwählen/umsortieren, Gesamtrestzeit, M3U ein/aus | S | ◐ (Liste mit Weiter/Zurück, Eintrag wählen, Schleife; ohne Mischen, Abwählen, Restzeit, M3U) |
 | SRC.4 | Bild | PNG, JPEG, TIFF, BMP, WebP; Alpha | M | ✅ (Alpha bei PNG, WebP, TIFF in Programmgröße; geprüft mit PNG auf dem CPU-Mischer, GPU H.33) |
@@ -285,7 +285,7 @@ kann es, Console nicht.
 | OUT.1 | Master-Format: Auflösung (SD bis 4K, Hochkant 1080×1920, frei), Bildrate (23,976–60, 50i/59,94i, optional 100/120), Seitenverhältnis | M | ◐ (`set_master_format`: Größe frei 320–7680 px, auch hochkant, Bildrate 23,976–60; ohne Halbbilder 50i/59,94i, ohne 100/120; Seitenverhältnis folgt der Größe) |
 | OUT.2 | Ausgang 1 = Program; Ausgang 2–4 mit Quelle Program/Preview/Multiview 1–2/Mix n/Input n; Overlay-Auswahl je Ausgang; Quelle live umschaltbar | M | ◐ (Ausgänge mit Quelle Program, Preview (seit 19.10., Vorschau-Ausgang des Mischers), Multiview oder Input, Ton aus Aux; ohne Mix, Overlay je Ausgang; Quelle nicht live umschaltbar) |
 | OUT.3 | Vollbild 1–2 auf Monitoren (Monitor, Rechteck, Cursor aus, immer oben); Quelle wie OUT.2 oder Wiederholungs-Multiview | M | ◐ (Fenster, Vollbild Wayland, DRM; Quelle wie OUT.2 (Program, Vorschau, Multiview, Input); Monitor wählt der Compositor, kein Rechteck; Prüfung auf Hardware offen, H.20) |
-| OUT.4 | Kartenausgang SDI/HDMI (DeckLink, AJA wenn Treiber), eigenes Format, Ton-Kanäle, Ton-Delay | S | – (E: DeckLink-Ausgang in strom) |
+| OUT.4 | Kartenausgang SDI/HDMI (DeckLink, AJA wenn Treiber), eigenes Format, Ton-Kanäle, Ton-Delay | S | ◐ (DeckLink: Anschluss und Modus wählbar, Halbbild-Modi, eingebetteter Ton Stereo (2026-10-27, H.7); ohne AJA, ohne Ton-Kanäle und Ton-Delay; zweiter Start im selben strom-Prozess braucht einen GStreamer-Fix) |
 | OUT.5 | Key+Fill-Ausgang (zwei Ports, gerade/vormultipliziert) | K | – |
 | OUT.6 | NDI- und OMT-Ausgang je Ausgang 1–4, mit Alpha, Ton-Bus, Skalierung, OMT-Qualität | M | ◐ (NDI je Ausgang mit Aux-Ton; ohne OMT, Alpha, Skalierung) |
 | OUT.7 | Alle Kameras, Gäste und Audio-Inputs automatisch als NDI/OMT; Busse als reine Ton-Streams | S | – |

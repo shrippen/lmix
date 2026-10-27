@@ -229,6 +229,13 @@ pub enum OutputSpec {
     /// Picture on a screen of the engine machine (OUT.3): projector, LED
     /// wall, confidence monitor. Picture only.
     Display { mode: DisplayMode },
+    /// SDI or HDMI out of a playout card (DeckLink, OUT.4): uncompressed
+    /// picture in `mode`, scaled to it, with the sound embedded.
+    /// `device` is the card's device number.
+    Card {
+        device: u32,
+        mode: crate::card::CardMode,
+    },
 }
 
 /// How a display output reaches its screen.
@@ -289,6 +296,9 @@ impl OutputSpec {
                 DisplayMode::Fullscreen => "Fullscreen".into(),
                 DisplayMode::Drm { connector } => format!("Screen {connector}"),
             },
+            Self::Card { device, mode } => {
+                format!("Card {} {}", u64::from(*device) + 1, mode.nick())
+            }
         }
     }
 }
@@ -455,4 +465,19 @@ pub const SAMPLE_RATES: [u32; 2] = [48_000, 44_100];
 /// The default: broadcast and video run at 48 kHz.
 pub fn default_sample_rate() -> u32 {
     SAMPLE_RATES[0]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::CardMode;
+
+    #[test]
+    fn the_last_card_has_a_label() {
+        let card = OutputSpec::Card {
+            device: u32::MAX,
+            mode: CardMode::Hd720p50,
+        };
+        assert_eq!(card.default_name(), "Card 4294967296 720p50");
+    }
 }

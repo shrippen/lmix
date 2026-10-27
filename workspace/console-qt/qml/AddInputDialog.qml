@@ -39,7 +39,7 @@ KanteDialog {
 
     readonly property var available: core.choices("sources")
     readonly property var groups: [
-        { title: qsTr("Devices"), kinds: ["device", "audio_device"] },
+        { title: qsTr("Devices"), kinds: ["device", "card", "audio_device"] },
         { title: qsTr("Media"), kinds: ["file", "image", "playlist"] },
         { title: qsTr("Network"), kinds: ["url", "srt", "ndi", "whip", "web"] },
         { title: qsTr("Generated"), kinds: ["pattern", "color", "graphics"] }
@@ -47,14 +47,14 @@ KanteDialog {
      .filter(g => g.kinds.length > 0)
 
     readonly property var icons: ({
-        device: "camera-web", audio_device: "audio-input-microphone",
+        device: "camera-web", card: "video-display", audio_device: "audio-input-microphone",
         file: "video-x-generic", image: "image-x-generic", playlist: "view-media-playlist",
         url: "link", srt: "network-transmit-receive", ndi: "network-workgroup",
         whip: "webcam", web: "internet-web-browser",
         pattern: "view-grid", color: "color-fill", graphics: "insert-text"
     })
     readonly property var hints: ({
-        device: qsTr("Capture, webcam"), audio_device: qsTr("Mic, interface"),
+        device: qsTr("Capture, webcam"), card: qsTr("DeckLink"), audio_device: qsTr("Mic, interface"),
         file: qsTr("Video file"), image: qsTr("PNG, JPG"), playlist: qsTr("Several files"),
         url: qsTr("HLS, RTMP, RTSP"), srt: qsTr("Caller, listener"), ndi: qsTr("In the network"),
         whip: qsTr("Browser, OBS"), web: qsTr("HTML page"),
@@ -62,6 +62,7 @@ KanteDialog {
     })
     readonly property var about: ({
         device: qsTr("Video from the device."),
+        card: qsTr("Picture and embedded sound from a connector of the card."),
         audio_device: qsTr("Sound only, as a channel of its own."),
         file: qsTr("Plays a file, looped; what happens at the end is set on the input."),
         image: qsTr("A still picture."),
@@ -86,7 +87,7 @@ KanteDialog {
         graphics: qsTr("channel number or name, e.g. 1")
     })
 
-    readonly property bool picksDevice: kind === "device" || kind === "audio_device" || kind === "ndi"
+    readonly property bool picksDevice: kind === "device" || kind === "audio_device" || kind === "ndi" || kind === "card"
     readonly property bool picksFiles: kind === "file" || kind === "image" || kind === "playlist"
     readonly property bool typesAddress: ["url", "srt", "whip", "web", "graphics"].indexOf(kind) >= 0
 
@@ -99,12 +100,15 @@ KanteDialog {
     property string colorValue: "#000000"
 
     readonly property var allDevices: core.devices.length > 0 ? JSON.parse(core.devices) : []
-    readonly property string deviceKind: kind === "device" ? "video" : (kind === "audio_device" ? "audio" : (kind === "ndi" ? "ndi" : ""))
+    readonly property string deviceKind: kind === "device" ? "video" : (kind === "audio_device" ? "audio" : (kind === "ndi" || kind === "card" ? kind : ""))
     readonly property var deviceChoices: allDevices.filter(d => d.kind === deviceKind)
-    /** The input that already shows a device (by id, NDI by name), or null. */
+    /** The input that already shows a device (by id, NDI by name, a card by number), or null. */
     function inputOfDevice(pick) {
-        return inputs.find(i => i.source && (i.source.id === pick || i.source.name === pick)) || null
+        return inputs.find(i => i.source && (i.source.id === pick || i.source.name === pick
+            || (i.source.kind === "card" && String(i.source.device) === pick))) || null
     }
+    /** A card's modes; the first lets the card detect it. */
+    readonly property var cardModes: [{ value: "", label: qsTr("Detect") }].concat(Texts.choices("card_modes", core.choices("card_modes")))
 
     // A mode the replaced input has outside these lists comes second, so a
     // replacement keeps it.
@@ -139,10 +143,11 @@ KanteDialog {
         default: return textField.text
         }
     }
-    /** `forms::SourceOptions` as JSON: a camera's mode. */
+    /** `forms::SourceOptions` as JSON: a camera's or a card's mode. */
     readonly property string options: kind === "device"
         ? JSON.stringify({ resolution: resolutions[Math.max(0, resolutionBox.currentIndex)].value,
                            framerate: framerates[Math.max(0, framerateBox.currentIndex)].value })
+        : kind === "card" ? JSON.stringify({ mode: cardModes[Math.max(0, cardModeBox.currentIndex)].value })
         : "{}"
     readonly property bool complete: kind === "pattern" || kind === "color" || textField.text.trim().length > 0
 
@@ -176,6 +181,7 @@ KanteDialog {
         keptFramerate = ""
         resolutionBox.currentIndex = 0
         framerateBox.currentIndex = 0
+        cardModeBox.currentIndex = 0
         if (replacing && available.indexOf(replacing.source.kind) >= 0) {
             const source = replacing.source
             kind = source.kind
@@ -189,6 +195,8 @@ KanteDialog {
                 keptFramerate = source.framerate || ""
                 resolutionBox.currentIndex = Math.max(0, resolutions.findIndex(r => r.value === (source.resolution || "")))
                 framerateBox.currentIndex = Math.max(0, framerates.findIndex(r => r.value === (source.framerate || "")))
+            } else if (source.kind === "card") {
+                cardModeBox.currentIndex = Math.max(0, cardModes.findIndex(m => m.value === (source.mode || "")))
             }
         }
     }
@@ -207,6 +215,7 @@ KanteDialog {
         case "graphics": return source.graphics
         case "device":
         case "audio_device": return source.id
+        case "card": return String(source.device)
         }
         return ""
     }
@@ -454,6 +463,25 @@ KanteDialog {
                     id: framerateBox
                     Layout.fillWidth: true
                     model: dialog.framerates
+                    textRole: "label"
+                }
+            }
+            // A card's mode (SRC.1).
+            KanteSectionLabel {
+                visible: dialog.kind === "card"
+                Layout.topMargin: Kirigami.Units.smallSpacing
+                text: qsTr("Options")
+            }
+            GridLayout {
+                visible: dialog.kind === "card"
+                Layout.fillWidth: true
+                columns: 2
+                columnSpacing: Kirigami.Units.largeSpacing
+                QQC2.Label { text: qsTr("Video mode") }
+                KanteComboBox {
+                    id: cardModeBox
+                    Layout.fillWidth: true
+                    model: dialog.cardModes
                     textRole: "label"
                 }
             }

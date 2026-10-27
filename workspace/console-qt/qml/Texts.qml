@@ -25,6 +25,7 @@ QtObject {
             case "graphics": return qsTr("Graphics channel")
             case "device": return qsTr("Camera / capture")
             case "audio_device": return qsTr("Audio (mic, line)")
+            case "card": return qsTr("SDI / HDMI card")
             }
             break
         case "patterns":
@@ -85,8 +86,11 @@ QtObject {
             case "window": return qsTr("Screen: window")
             case "fullscreen": return qsTr("Screen: fullscreen (Wayland)")
             case "drm": return qsTr("Screen: connector (no desktop)")
+            case "card": return qsTr("SDI / HDMI card")
             }
             break
+        case "card_modes":
+            return cardMode(value)
         case "durations":
             return qsTr("%1 ms").arg(value)
         }
@@ -109,8 +113,18 @@ QtObject {
         case "web": return "WEB"
         case "graphics": return qsTr("GFX", "source badge: graphics channel")
         case "audio_device": return qsTr("MIC", "source badge: microphone, line in")
+        case "card": return "SDI"
         }
         return ""
+    }
+
+    /** A card mode as people write it: `1080p2997` → `1080p 29.97`. */
+    function cardMode(nick) {
+        const m = /^(\d+[pi])(\d+)$/.exec(nick)
+        if (!m)
+            return String(nick)
+        const fractions = { "2398": "23.98", "2997": "29.97", "5994": "59.94" }
+        return m[1] + " " + (fractions[m[2]] || m[2])
     }
 
     /** `[{value, label}]` of a form list, from the values Core.choices gives. */

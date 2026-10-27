@@ -396,6 +396,7 @@ impl qobject::Core {
             form.video_kbps,
             form.encoding,
             &form.key,
+            &form.mode,
         ) else {
             return false;
         };
