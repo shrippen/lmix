@@ -30,7 +30,10 @@ ColumnLayout {
      *  script show; in show mode only running the show remains. */
     property bool editing: true
 
-    readonly property var lists: show && show.cue_lists ? show.cue_lists : []
+    readonly property var allLists: show && show.cue_lists ? show.cue_lists : []
+    /** Lists GO can go to; pad lists are shown as pads (RUN.12). */
+    readonly property var lists: allLists.filter(l => !l.pads)
+    readonly property var padLists: allLists.filter(l => l.pads)
     readonly property var list: {
         var active = lists.find(l => l.active)
         return active !== undefined ? active : (lists.length > 0 ? lists[0] : null)
@@ -255,7 +258,7 @@ ColumnLayout {
             act: view.act
             inputs: view.show ? view.show.inputs : []
             outputs: view.show ? view.show.outputs : []
-            lists: view.lists
+            lists: view.allLists
             onClosed: view.forceActiveFocus()
         }
         KanteButton {
@@ -632,5 +635,14 @@ ColumnLayout {
             showView: view
             onEditLists: cueListsDialog.open()
         }
+    }
+
+    // Pads (RUN.12): their cues start and stop on their own.
+    PadGrid {
+        Layout.fillWidth: true
+        visible: view.padLists.length > 0
+        act: view.act
+        lists: view.padLists
+        runningIds: view.runningIds
     }
 }

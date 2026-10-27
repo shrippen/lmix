@@ -373,6 +373,9 @@ pub struct CueList {
     /// Runs with every panic and hard stop (SAF.4).
     #[serde(default)]
     pub emergency: bool,
+    /// A grid of pads: no standby, no GO (RUN.12).
+    #[serde(default)]
+    pub pads: bool,
 }
 
 /// Where a running cue is (RUN.3).

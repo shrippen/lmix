@@ -426,6 +426,7 @@ mod tests {
             active: true,
             source: None,
             emergency: false,
+            pads: false,
         }
     }
 

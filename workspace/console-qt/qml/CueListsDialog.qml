@@ -99,6 +99,19 @@ KanteDialog {
             }
         }
 
+        QQC2.Switch {
+            id: padsSwitch
+            visible: dialog.list !== null
+            text: qsTr("Pads: no standby and no GO, each cue starts and stops on its own")
+            checked: dialog.list !== null && dialog.list.pads === true
+            onToggled: {
+                const want = checked
+                checked = Qt.binding(() => dialog.list !== null && dialog.list.pads === true)
+                dialog.act({ action: "set_cue_list_pads", list: dialog.list.number, on: want })
+            }
+            KanteCheckSkin { control: padsSwitch; shape: KanteCheckSkin.Shape.Switch }
+        }
+
         QQC2.Label {
             Layout.fillWidth: true
             visible: dialog.fromScript
@@ -158,6 +171,7 @@ KanteDialog {
                             }
                             KanteButton {
                                 text: qsTr("Standby")
+                                visible: dialog.list.pads !== true
                                 enabled: !entry.isNext
                                 QQC2.ToolTip.visible: hovered
                                 QQC2.ToolTip.text: qsTr("Make this the cue GO starts next")
@@ -211,6 +225,7 @@ KanteDialog {
             }
             KanteButton {
                 text: qsTr("Back")
+                visible: dialog.list !== null && dialog.list.pads !== true
                 enabled: dialog.list !== null && dialog.list.standby > 1
                 onClicked: dialog.act({ action: "cue_standby", list: dialog.list.number, to: "previous" })
             }
@@ -218,6 +233,7 @@ KanteDialog {
                 text: dialog.list && dialog.list.standby <= dialog.list.cues.length
                     ? qsTr("GO: %1").arg(dialog.cueName(dialog.list.cues[dialog.list.standby - 1])) : qsTr("GO")
                 emphasis: KanteButton.Emphasis.Primary
+                visible: dialog.list !== null && dialog.list.pads !== true
                 enabled: dialog.list !== null && dialog.list.standby <= dialog.list.cues.length
                 onClicked: dialog.act({ action: "cue_go", list: dialog.list.number })
             }

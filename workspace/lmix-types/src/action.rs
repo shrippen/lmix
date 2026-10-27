@@ -258,6 +258,7 @@ pub const ACTION_GROUPS: &[(&str, &[&str])] = &[
             "remove_cue_list",
             "cue_go",
             "cue_start",
+            "cue_toggle",
             "cue_stop",
             "cue_standby",
             "cue_reset",
@@ -268,6 +269,7 @@ pub const ACTION_GROUPS: &[(&str, &[&str])] = &[
             "cue_hard_stop",
             "set_panic_time",
             "set_emergency_list",
+            "set_cue_list_pads",
             "set_script_folder",
             "add_shortcut",
             "set_shortcut",
@@ -752,6 +754,13 @@ pub enum Action {
         list: Option<InputRef>,
         cue: String,
     },
+    /// Start a cue (number or id) like `cue_start`, or stop it when it
+    /// runs: one button per pad (RUN.12).
+    CueToggle {
+        #[serde(default)]
+        list: Option<InputRef>,
+        cue: String,
+    },
     /// Stop a running cue (number or id), or without `cue` every cue of
     /// the list, or without `list` every cue (RUN.4).
     CueStop {
@@ -796,6 +805,13 @@ pub enum Action {
     /// Panic time of the show, 0–10 000 ms (SAF.2).
     SetPanicTime {
         ms: u32,
+    },
+    /// Make a list a grid of pads, or a list again (RUN.12): pads have no
+    /// standby and no GO, each cue starts and stops on its own
+    /// (`cue_toggle`); a pad list is never the active one.
+    SetCueListPads {
+        list: InputRef,
+        on: bool,
     },
     /// The list that runs with every panic and hard stop; `null` for none
     /// (SAF.4).

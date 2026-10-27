@@ -135,7 +135,7 @@ ausgeschlossen. **MS**: Meilenstein (§7). Stand: ✅ vorhanden · ◐ teilweise
 | RUN.9 | Sperren je Ein- und Ausgabeklasse (Netz rein/raus, HTTP, MIDI, OSC): z. B. Probe ohne Lichtpult oder kein fremdes GO; betroffene Cues zeigen Warnung; per Aktion und API schaltbar | S | S2 | – |
 | RUN.10 | Vorhören: einzelnen Cue ohne Vorwartezeit und Folge abspielen, Standby bleibt; Umleitung je Ausgabeart (unverändert, stumm, andere Zone, Monitorfenster) | S | S2 | – |
 | RUN.11 | Show zurücksetzen: harter Stopp, vorübergehende Änderungen verwerfen, alle Standbys auf den Anfang | S | S1 | ✅ |
-| RUN.12 | Raster: Tastenfläche ohne Standby für spontane Effekte, je Feld ein Cue; Companion-Taste je Feld | S | S2 | – |
+| RUN.12 | Raster: Tastenfläche ohne Standby für spontane Effekte, je Feld ein Cue; Companion-Taste je Feld | S | S2 | ✅ (Cue-Liste als Pads: `set_cue_list_pads`, kein GO, nie aktiv; `cue_toggle` startet oder stoppt; OSC `/lmix/cue/toggle <Liste> <Cue>` für Companion; Console: Raster unter der Show-Ansicht, Schalter im Listen-Dialog) |
 | RUN.13 | Ab Zeitpunkt starten (auch negativ ab Ende), gilt für die ganze Folge | K | S3 | – |
 | RUN.14 | Start mitten in der Show mit Zustand nachziehen: dauerhafte Klänge und Bühne des Abschnitts herstellen (lmix) | K | S3 | – |
 
