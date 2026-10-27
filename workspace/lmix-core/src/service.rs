@@ -1089,7 +1089,7 @@ impl Service {
             wait = (wait * 2).min(FAILBACK_MAX);
             let mut sw = self.switcher.lock().await;
             let Some(command) = sw.restart_command(id) else {
-                self.end_failback(id);
+                self.end_failback(&mut sw, id);
                 break;
             };
             let failure = sw.output_failure(id);
@@ -1098,7 +1098,7 @@ impl Service {
             }
             // A card output waits for the cards instead.
             if sw.output_waits_for_cards(id) {
-                self.end_failback(id);
+                self.end_failback(&mut sw, id);
                 break;
             }
 
@@ -1129,15 +1129,16 @@ impl Service {
                 }
             };
             if done {
-                self.end_failback(id);
+                self.end_failback(&mut sw, id);
                 break;
             }
         }
     }
 
-    /// The failback of output `id` is over. Called under the switcher's
-    /// lock: a failure after it starts a failback of its own.
-    fn end_failback(&self, id: OutputId) {
+    /// The failback of output `id` is over, its hold too. Called under
+    /// the switcher's lock: a failure after it starts a failback of its own.
+    fn end_failback(&self, sw: &mut Switcher, id: OutputId) {
+        sw.end_hold(id);
         self.failing_back
             .lock()
             .expect("failback lock")
@@ -3891,6 +3892,22 @@ mod tests {
             service.state().await.outputs[0].status,
             lmix_types::OutputStatus::Stopped
         );
+    }
+
+    /// An output stopped while the failback holds it no longer counts as
+    /// running.
+    #[tokio::test(start_paused = true)]
+    async fn stopping_an_output_the_failback_holds_ends_the_hold() {
+        let (engine, service, id) = holding_output().await;
+        service
+            .handle(Action::StopOutput {
+                output: lmix_types::OutputRef::Text("Card".into()),
+            })
+            .await
+            .unwrap();
+        tokio::time::sleep(FAILBACK_MAX * 3).await;
+        assert!(!engine.output_running(id).await, "flow still runs");
+        assert!(!service.switcher.lock().await.output_is_running(id));
     }
 
     /// A bus given to an output the failback holds reaches its flow.
