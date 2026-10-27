@@ -106,11 +106,15 @@ pub enum SourceSpec {
     AudioDevice { id: String },
     /// SDI or HDMI on a capture card (DeckLink, SRC.1), with its embedded
     /// sound: `device` is the card's device number, `mode` the video mode
-    /// to capture in; none: the card detects it.
+    /// to capture in; none: the card detects it (a PsF signal then counts
+    /// as interlaced). `pair` is the embedded channel pair the input
+    /// hears, 1 (channels 1/2) to 8 (15/16).
     Card {
         device: u32,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         mode: Option<crate::card::CardMode>,
+        #[serde(default = "first_pair", skip_serializing_if = "is_first_pair")]
+        pair: u32,
     },
     /// Web page rendered by the engine's browser, with its sound (GFX.6):
     /// an http(s) address, and CSS added to the page.
@@ -706,6 +710,7 @@ impl Device {
             DeviceKind::Card => SourceSpec::Card {
                 device: self.id.parse().ok()?,
                 mode: None,
+                pair: 1,
             },
         };
         Some(source)
@@ -728,6 +733,14 @@ pub fn device_framerate(text: &str) -> Option<String> {
     (n > 0 && d > 0).then(|| format!("{n}/{d}"))
 }
 
+fn first_pair() -> u32 {
+    1
+}
+
+fn is_first_pair(pair: &u32) -> bool {
+    *pair == 1
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -737,6 +750,7 @@ mod tests {
         let card = SourceSpec::Card {
             device: u32::MAX,
             mode: None,
+            pair: 1,
         };
         assert_eq!(card.default_name(), "Card 4294967296");
     }

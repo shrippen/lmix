@@ -109,6 +109,8 @@ KanteDialog {
     }
     /** A card's modes; the first lets the card detect it. */
     readonly property var cardModes: [{ value: "", label: qsTr("Detect") }].concat(Texts.choices("card_modes", core.choices("card_modes")))
+    /** The eight embedded pairs SDI carries: 1/2 … 15/16. */
+    readonly property var cardPairs: [1, 2, 3, 4, 5, 6, 7, 8].map(p => qsTr("Channels %1/%2").arg(2 * p - 1).arg(2 * p))
 
     // A mode the replaced input has outside these lists comes second, so a
     // replacement keeps it.
@@ -147,7 +149,8 @@ KanteDialog {
     readonly property string options: kind === "device"
         ? JSON.stringify({ resolution: resolutions[Math.max(0, resolutionBox.currentIndex)].value,
                            framerate: framerates[Math.max(0, framerateBox.currentIndex)].value })
-        : kind === "card" ? JSON.stringify({ mode: cardModes[Math.max(0, cardModeBox.currentIndex)].value })
+        : kind === "card" ? JSON.stringify({ mode: cardModes[Math.max(0, cardModeBox.currentIndex)].value,
+                                             pair: Math.max(0, cardPairBox.currentIndex) + 1 })
         : "{}"
     readonly property bool complete: kind === "pattern" || kind === "color" || textField.text.trim().length > 0
 
@@ -182,6 +185,7 @@ KanteDialog {
         resolutionBox.currentIndex = 0
         framerateBox.currentIndex = 0
         cardModeBox.currentIndex = 0
+        cardPairBox.currentIndex = 0
         if (replacing && available.indexOf(replacing.source.kind) >= 0) {
             const source = replacing.source
             kind = source.kind
@@ -197,6 +201,7 @@ KanteDialog {
                 framerateBox.currentIndex = Math.max(0, framerates.findIndex(r => r.value === (source.framerate || "")))
             } else if (source.kind === "card") {
                 cardModeBox.currentIndex = Math.max(0, cardModes.findIndex(m => m.value === (source.mode || "")))
+                cardPairBox.currentIndex = (source.pair || 1) - 1
             }
         }
     }
@@ -483,6 +488,12 @@ KanteDialog {
                     Layout.fillWidth: true
                     model: dialog.cardModes
                     textRole: "label"
+                }
+                QQC2.Label { text: qsTr("Sound") }
+                KanteComboBox {
+                    id: cardPairBox
+                    Layout.fillWidth: true
+                    model: dialog.cardPairs
                 }
             }
             QQC2.Label {

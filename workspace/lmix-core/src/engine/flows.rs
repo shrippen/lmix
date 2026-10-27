@@ -30,8 +30,9 @@ use lmix_types::action::OVERLAY_CHANNELS;
 use lmix_types::input::color_rgb;
 use lmix_types::layout::LAYOUTS;
 use lmix_types::{
-    BusId, CardMode, DisplayMode, Framerate, MasterFormat, MultiviewLayout, MultiviewMeters,
-    OutputId, OutputSpec, ProgramSide, RateMode, Scan, SourceSpec, VideoCodec, VideoEncoding,
+    BusId, CardChannels, CardMode, DisplayMode, Framerate, MasterFormat, MultiviewLayout,
+    MultiviewMeters, OutputId, OutputSpec, ProgramSide, RateMode, Scan, SourceSpec, VideoCodec,
+    VideoEncoding,
 };
 
 use super::LivePicture;
@@ -63,6 +64,8 @@ const THUMBNAIL_BLOCK: &str = "builtin.thumbnail";
 const AUDIO_MIXER_BLOCK: &str = "builtin.mixer";
 const CARD_INPUT_BLOCK: &str = "builtin.decklink_input";
 const CARD_OUTPUT_BLOCK: &str = "builtin.decklink_output";
+/// Shifts running times by a pad offset: sinks and mixers play later.
+const TIME_OFFSET_BLOCK: &str = "builtin.time_offset";
 
 /// Block id of a capture or playout card in a slot or output flow.
 const CARD: &str = "card";
@@ -74,9 +77,16 @@ const CARD_PICTURE: &str = "card_picture";
 const CARD_WEAVE: &str = "card_weave";
 /// Sound as a card embeds it.
 const CARD_SOUND: &str = "card_sound";
+/// Sums the channel pairs of a card output.
+const CARD_PAIRS: &str = "card_pairs";
+/// Plays a card output's sound later (lip sync).
+const CARD_SOUND_DELAY: &str = "card_sound_delay";
+/// Picks a card input's channel pair.
+const CARD_PAIR: &str = "card_pair";
+/// Lets a card input's PsF frames pass as the progressive frames they are.
+const CARD_PSF: &str = "card_psf";
 /// The cards' 8-bit picture format (DeckLink `8bit-yuv`).
 const CARD_FORMAT: &str = "UYVY";
-const CARD_SOUND_CAPS: &str = "audio/x-raw,format=S32LE,layout=interleaved,rate=48000,channels=2";
 /// Card mode of an input that the card detects itself.
 const CARD_AUTO: &str = "auto";
 /// strom's `stream_mode`: picture and sound, or picture only.
@@ -605,14 +615,7 @@ pub fn output_flow(
         let Some(channel) = channel else {
             continue;
         };
-        flow.blocks.push(block(
-            block_id,
-            INTER_INPUT_BLOCK,
-            vec![
-                ("channel", PropertyValue::String(channel)),
-                ("max_time", PropertyValue::String(OUTPUT_BUFFER_MS.into())),
-            ],
-        ));
+        flow.blocks.push(inter_input(block_id, channel, spec));
     }
     let sound = audio.is_some();
     if sound {
@@ -729,46 +732,112 @@ pub fn output_flow(
                     .push(link(OUTPUT_SOUND_TIMED.into(), "ndi:audio_in".into()));
             }
         }
-        OutputSpec::Card { device, mode } => {
+        OutputSpec::Card {
+            device,
+            mode,
+            channels,
+            more_pairs,
+            sound_delay_ms,
+        } => {
             let from = add_download(&mut flow, "pgm:src", on_gpu);
-            let stream = if sound {
-                CardStream::PictureAndSound
-            } else {
-                CardStream::Picture
+            let card = CardOut {
+                device: *device,
+                mode: *mode,
+                channels: *channels,
+                sound_delay_ms: *sound_delay_ms,
             };
-            add_card_output(&mut flow, &from, *device, *mode, stream);
+            let pairs = add_card_pairs(&mut flow, sound, more_pairs, spec);
+            add_card_output(&mut flow, &from, card, &pairs);
         }
     }
     flow
 }
 
+/// An output flow's inter input `id` of `channel`. A card's sound waits
+/// its delay in it.
+fn inter_input(id: &str, channel: String, spec: &OutputSpec) -> BlockInstance {
+    let delay_ms = match spec {
+        OutputSpec::Card { sound_delay_ms, .. } => *sound_delay_ms,
+        _ => 0,
+    };
+    let buffer_ms = OUTPUT_BUFFER_MS.parse::<u32>().expect("a number") + delay_ms;
+    block(
+        id,
+        INTER_INPUT_BLOCK,
+        vec![
+            ("channel", PropertyValue::String(channel)),
+            ("max_time", PropertyValue::String(buffer_ms.to_string())),
+        ],
+    )
+}
+
+/// A card output's channel pairs that sound, 0-based, with their pads:
+/// pair 0 the output's own sound, the others a bus each.
+fn add_card_pairs(
+    flow: &mut Flow,
+    sound: bool,
+    more_pairs: &[Option<BusId>],
+    spec: &OutputSpec,
+) -> Vec<(u32, String)> {
+    let mut pairs = Vec::new();
+    if sound {
+        pairs.push((0, OUTPUT_SOUND_TIMED.to_string()));
+    }
+    for (index, bus) in more_pairs.iter().enumerate() {
+        let Some(bus) = bus else {
+            continue;
+        };
+        let pair = index as u32 + 1;
+        let input = format!("card_bus{pair}");
+        let timed = format!("card_bus{pair}_timed");
+        flow.blocks
+            .push(inter_input(&input, bus_channel(*bus), spec));
+        // One segment, as for the output's own sound.
+        flow.elements.push(element(
+            &timed,
+            "identity",
+            vec![("single-segment", PropertyValue::Bool(true))],
+        ));
+        flow.links.push(link(format!("{input}:src"), timed.clone()));
+        pairs.push((pair, timed));
+    }
+    pairs
+}
+
+/// A playout card connector and how it plays.
+#[derive(Clone, Copy)]
+struct CardOut {
+    device: u32,
+    mode: CardMode,
+    channels: CardChannels,
+    sound_delay_ms: u32,
+}
+
 /// Picture and sound to a playout card. The card takes its mode exactly
 /// and converts nothing: program is scaled (borders keep its aspect),
 /// brought to the mode's rate and format, for an interlaced mode woven
-/// into fields.
+/// into fields, for PsF each frame split into two. Each pair that sounds
+/// is placed on its channels; several are summed.
 ///
 /// ```text
 ///   pgm ─► convert ─► scale ─► rate ─► card_picture [─► card_weave] ─► card:video_in
-///   sound ─► convert ─► card_sound ─► card:audio_in
+///   sound ─► place0 ─► card_sound ─► card_sound_delay ─► card:audio_in
+///   pairs:   sound ─► place0 ─┐
+///            bus  ─► place1 ─┴► card_pairs ─► card_sound ─► card_sound_delay ─► card:audio_in
 /// ```
-/// What a card output plays.
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum CardStream {
-    Picture,
-    PictureAndSound,
-}
-
-fn add_card_output(flow: &mut Flow, from: &str, device: u32, mode: CardMode, stream: CardStream) {
-    let stream_mode = match stream {
-        CardStream::Picture => STREAM_VIDEO,
-        CardStream::PictureAndSound => STREAM_AUDIO_VIDEO,
+fn add_card_output(flow: &mut Flow, from: &str, card: CardOut, pairs: &[(u32, String)]) {
+    let CardOut { device, mode, .. } = card;
+    let stream_mode = if pairs.is_empty() {
+        STREAM_VIDEO
+    } else {
+        STREAM_AUDIO_VIDEO
     };
     flow.blocks.push(block(
         CARD,
         CARD_OUTPUT_BLOCK,
         vec![
             ("device_number", PropertyValue::UInt(u64::from(device))),
-            ("mode", PropertyValue::String(mode.nick().into())),
+            ("mode", PropertyValue::String(mode.driver_mode().into())),
             ("stream_mode", PropertyValue::String(stream_mode.into())),
             ("processing_deadline_ms", PropertyValue::UInt(CARD_LEAD_MS)),
         ],
@@ -804,17 +873,23 @@ fn add_card_output(flow: &mut Flow, from: &str, device: u32, mode: CardMode, str
     flow.links
         .push(link("card_rate".into(), CARD_PICTURE.into()));
 
-    // SDI sends the top field first; two pictures make one frame
-    // (interlace's default pattern is telecine).
-    let picture = match mode.scan() {
-        Scan::Progressive => CARD_PICTURE,
-        Scan::Interlaced => {
+    // SDI sends the top field first. Interlaced: two pictures make one
+    // frame (interlace's default pattern is telecine). PsF: one picture
+    // makes both fields of its frame.
+    let pattern = match mode.scan() {
+        Scan::Progressive => None,
+        Scan::Interlaced => Some("1:1"),
+        Scan::Segmented => Some("2:2"),
+    };
+    let picture = match pattern {
+        None => CARD_PICTURE,
+        Some(pattern) => {
             flow.elements.push(element(
                 CARD_WEAVE,
                 "interlace",
                 vec![
                     ("top-field-first", PropertyValue::Bool(true)),
-                    ("field-pattern", PropertyValue::String("1:1".into())),
+                    ("field-pattern", PropertyValue::String(pattern.into())),
                 ],
             ));
             flow.links
@@ -825,22 +900,106 @@ fn add_card_output(flow: &mut Flow, from: &str, device: u32, mode: CardMode, str
     flow.links
         .push(link(picture.into(), format!("{CARD}:video_in")));
 
-    if stream == CardStream::Picture {
+    if pairs.is_empty() {
         return;
     }
-    flow.elements
-        .push(element("card_aconvert", "audioconvert", vec![]));
+    add_card_sound(flow, card, pairs);
+}
+
+/// The sound of a card output from its `pairs`: each on its channels,
+/// summed, delayed, in the card's format.
+fn add_card_sound(flow: &mut Flow, card: CardOut, pairs: &[(u32, String)]) {
+    let channels = card.channels.count();
+
+    // A single pair needs no mixer.
+    let summed = match pairs {
+        [(pair, pad)] => add_card_place(flow, pad, *pair, channels),
+        _ => {
+            flow.elements
+                .push(element(CARD_PAIRS, "audiomixer", vec![]));
+            for (pair, pad) in pairs {
+                let placed = add_card_place(flow, pad, *pair, channels);
+                flow.links.push(link(placed, CARD_PAIRS.into()));
+            }
+            CARD_PAIRS.to_string()
+        }
+    };
+
     flow.elements.push(element(
         CARD_SOUND,
         "capsfilter",
-        vec![("caps", PropertyValue::String(CARD_SOUND_CAPS.into()))],
+        vec![("caps", PropertyValue::String(card_sound_caps(channels)))],
     ));
+    // Later running times: the card plays the sound that much later.
+    // (identity's ts-offset only times its own sync, the sound kept its
+    // time.)
+    flow.blocks.push(block(
+        CARD_SOUND_DELAY,
+        TIME_OFFSET_BLOCK,
+        vec![(
+            "offset_ms",
+            PropertyValue::Float(f64::from(card.sound_delay_ms)),
+        )],
+    ));
+    flow.links.push(link(summed, CARD_SOUND.into()));
     flow.links
-        .push(link(OUTPUT_SOUND_TIMED.into(), "card_aconvert".into()));
-    flow.links
-        .push(link("card_aconvert".into(), CARD_SOUND.into()));
-    flow.links
-        .push(link(CARD_SOUND.into(), format!("{CARD}:audio_in")));
+        .push(link(CARD_SOUND.into(), format!("{CARD_SOUND_DELAY}:in")));
+    flow.links.push(link(
+        format!("{CARD_SOUND_DELAY}:out"),
+        format!("{CARD}:audio_in"),
+    ));
+}
+
+/// Stereo `pad` on pair `pair` (0-based) of `channels`, the others
+/// silent; returns the new pad.
+fn add_card_place(flow: &mut Flow, pad: &str, pair: u32, channels: u32) -> String {
+    let id = format!("card_place{pair}");
+    let mut properties = Vec::new();
+    if channels > 2 {
+        // Output channel 2·pair takes left, the next right.
+        let matrix = mix_matrix(channels, 2, |out, from| out == 2 * pair + from);
+        properties.push(("mix-matrix", PropertyValue::String(matrix)));
+    }
+    flow.elements.push(element(&id, "audioconvert", properties));
+    flow.elements.push(element(
+        &format!("{id}_caps"),
+        "capsfilter",
+        vec![("caps", PropertyValue::String(card_sound_caps(channels)))],
+    ));
+    flow.links.push(link(pad.into(), id.clone()));
+    flow.links.push(link(id.clone(), format!("{id}_caps")));
+    format!("{id}_caps")
+}
+
+/// `audioconvert`'s mix-matrix: a row per output channel, a column per
+/// input channel; `on(output, input)` passes the input fully.
+fn mix_matrix(outputs: u32, inputs: u32, on: impl Fn(u32, u32) -> bool) -> String {
+    let rows: Vec<String> = (0..outputs)
+        .map(|out| {
+            let cells: Vec<&str> = (0..inputs)
+                .map(|from| {
+                    if on(out, from) {
+                        "(float)1"
+                    } else {
+                        "(float)0"
+                    }
+                })
+                .collect();
+            format!("<{}>", cells.join(", "))
+        })
+        .collect();
+    format!("<{}>", rows.join(", "))
+}
+
+/// Sound as a card embeds it: 32-bit, 48 kHz; more than two channels
+/// without positions.
+fn card_sound_caps(channels: u32) -> String {
+    let mask = if channels > 2 {
+        ",channel-mask=(bitmask)0x0"
+    } else {
+        ""
+    };
+    format!("audio/x-raw,format=S32LE,layout=interleaved,rate=48000,channels={channels}{mask}")
 }
 
 /// Picture to a screen. qos=false: strom drops upstream QoS at sinks with
@@ -1497,33 +1656,82 @@ fn add_source(flow: &mut Flow, source: &SourceSpec, env: &SlotEnv) -> Option<Str
                 .push(block("dev", LOCAL_INPUT_BLOCK, properties));
             "dev:video_out".into()
         }
-        SourceSpec::Card { device, mode } => add_card_input(flow, *device, *mode),
+        SourceSpec::Card { device, mode, pair } => add_card_input(flow, *device, *mode, *pair),
         SourceSpec::AudioDevice { .. } => return None,
     };
     Some(pad)
 }
 
 /// The card's picture and sound; returns the picture's pad. Interlaced
-/// signals (1080i) get deinterlaced: the mixer works in frames.
-fn add_card_input(flow: &mut Flow, device: u32, mode: Option<CardMode>) -> String {
-    let mode = mode.map_or(CARD_AUTO, CardMode::nick);
+/// signals (1080i) get deinterlaced: the mixer works in frames. PsF
+/// frames come as interlaced; their fields are one frame, so they only
+/// lose the label. The card captures the fewest channels that hold `pair`.
+fn add_card_input(flow: &mut Flow, device: u32, mode: Option<CardMode>, pair: u32) -> String {
+    let driver_mode = mode.map_or(CARD_AUTO, CardMode::driver_mode);
+    let channels = CardChannels::holding(pair).unwrap_or_default();
     flow.blocks.push(block(
         CARD,
         CARD_INPUT_BLOCK,
         vec![
             ("device_number", PropertyValue::UInt(u64::from(device))),
-            ("mode", PropertyValue::String(mode.into())),
+            ("mode", PropertyValue::String(driver_mode.into())),
             (
                 "stream_mode",
                 PropertyValue::String(STREAM_AUDIO_VIDEO.into()),
             ),
+            (
+                "audio_channels",
+                PropertyValue::String(channels.count().to_string()),
+            ),
         ],
     ));
+    if mode.map(CardMode::scan) == Some(Scan::Segmented) {
+        flow.elements.push(element(
+            CARD_PSF,
+            "capssetter",
+            vec![(
+                "caps",
+                PropertyValue::String("video/x-raw,interlace-mode=progressive".into()),
+            )],
+        ));
+        flow.links
+            .push(link(format!("{CARD}:video_out"), CARD_PSF.into()));
+        return CARD_PSF.into();
+    }
     flow.elements
         .push(element(CARD_DEINTERLACE, "deinterlace", vec![]));
     flow.links
         .push(link(format!("{CARD}:video_out"), CARD_DEINTERLACE.into()));
     CARD_DEINTERLACE.into()
+}
+
+/// Channel pair `pair` (1-based) of a card input as stereo; returns its
+/// pad. The first pair of two channels passes as it is.
+fn add_card_pair(flow: &mut Flow, pair: u32) -> String {
+    let sound = format!("{CARD}:audio_out");
+    let channels = CardChannels::holding(pair).unwrap_or_default().count();
+    if channels == 2 {
+        return sound;
+    }
+    // Left from channel 2·(pair − 1), right from the next.
+    let matrix = mix_matrix(2, channels, |out, from| from == 2 * (pair - 1) + out);
+    flow.elements.push(element(
+        CARD_PAIR,
+        "audioconvert",
+        vec![("mix-matrix", PropertyValue::String(matrix))],
+    ));
+    flow.elements.push(element(
+        &format!("{CARD_PAIR}_caps"),
+        "capsfilter",
+        vec![(
+            "caps",
+            PropertyValue::String("audio/x-raw,channels=2".into()),
+        )],
+    ));
+    flow.links.push(link(sound, CARD_PAIR.into()));
+    flow.links
+        .push(link(CARD_PAIR.into(), format!("{CARD_PAIR}_caps")));
+    format!("{CARD_PAIR}_caps")
 }
 
 /// `videotestsrc` with `properties`, live, in the pattern format.
@@ -1726,7 +1934,7 @@ fn add_audio(flow: &mut Flow, slot: usize, source: &SourceSpec) -> Option<String
         SourceSpec::Ndi { .. } => "ndi:audio_out".into(),
         SourceSpec::Whip { .. } => "whip:audio_out".into(),
         SourceSpec::Web { .. } => format!("{WEB}:audio_out"),
-        SourceSpec::Card { .. } => format!("{CARD}:audio_out"),
+        SourceSpec::Card { pair, .. } => add_card_pair(flow, *pair),
         SourceSpec::AudioDevice { id } => {
             flow.blocks.push(block(
                 "adev",
@@ -3169,6 +3377,14 @@ mod tests {
             .expect("a card block")
     }
 
+    /// String property `key` of element `element`.
+    fn text_of<'a>(element: &'a Element, key: &str) -> &'a str {
+        match element.properties.get(key) {
+            Some(PropertyValue::String(v)) => v,
+            other => panic!("{key} of {}: {other:?}", element.id),
+        }
+    }
+
     fn caps_of<'a>(flow: &'a Flow, id: &str) -> &'a str {
         let caps = flow.elements.iter().find(|e| e.id == id).expect(id);
         match caps.properties.get("caps") {
@@ -3185,6 +3401,7 @@ mod tests {
         let source = SourceSpec::Card {
             device: 2,
             mode: Some(CardMode::Hd1080i50),
+            pair: 1,
         };
         let flow = slot_flow(0, &source, &SlotEnv::new(MixerBackend::Cpu));
         let card = card_block(&flow, CARD_INPUT_BLOCK);
@@ -3204,9 +3421,61 @@ mod tests {
         let auto = SourceSpec::Card {
             device: 0,
             mode: None,
+            pair: 1,
         };
         let flow = slot_flow(0, &auto, &SlotEnv::new(MixerBackend::Cpu));
         assert_eq!(text(card_block(&flow, CARD_INPUT_BLOCK), "mode"), "auto");
+        assert_eq!(
+            text(card_block(&flow, CARD_INPUT_BLOCK), "audio_channels"),
+            "2"
+        );
+    }
+
+    /// A card input hears one embedded pair: the card captures the fewest
+    /// channels that hold it, the pair's two go on as stereo.
+    #[test]
+    fn card_input_hears_its_pair() {
+        let source = SourceSpec::Card {
+            device: 0,
+            mode: None,
+            pair: 3,
+        };
+        let flow = slot_flow(0, &source, &SlotEnv::new(MixerBackend::Cpu));
+        assert_eq!(
+            text(card_block(&flow, CARD_INPUT_BLOCK), "audio_channels"),
+            "8"
+        );
+        let pick = flow.elements.iter().find(|e| e.id == CARD_PAIR).unwrap();
+        let zeros = "(float)0, (float)0, (float)0, (float)0";
+        assert_eq!(
+            text_of(pick, "mix-matrix"),
+            format!(
+                "<<{zeros}, (float)1, (float)0, (float)0, (float)0>, \
+                 <{zeros}, (float)0, (float)1, (float)0, (float)0>>"
+            )
+        );
+        assert!(flow
+            .links
+            .iter()
+            .any(|l| l.from == format!("{CARD}:audio_out") && l.to == CARD_PAIR));
+    }
+
+    /// PsF (1080psf25): the card runs at 1080i50, the two fields are one
+    /// frame, so they pass as it, not deinterlaced.
+    #[test]
+    fn psf_card_input_keeps_its_frames() {
+        let source = SourceSpec::Card {
+            device: 0,
+            mode: Some(CardMode::Hd1080psf25),
+            pair: 1,
+        };
+        let flow = slot_flow(0, &source, &SlotEnv::new(MixerBackend::Cpu));
+        assert_eq!(text(card_block(&flow, CARD_INPUT_BLOCK), "mode"), "1080i50");
+        assert!(flow
+            .elements
+            .iter()
+            .all(|e| e.element_type != "deinterlace"));
+        assert!(caps_of(&flow, CARD_PSF).contains("interlace-mode=progressive"));
     }
 
     /// An SDI output (OUT.4) gets program as the card takes it: scaled and
@@ -3216,6 +3485,9 @@ mod tests {
         let spec = OutputSpec::Card {
             device: 1,
             mode: CardMode::Hd720p50,
+            channels: CardChannels::Two,
+            more_pairs: Vec::new(),
+            sound_delay_ms: 0,
         };
         let flow = output_flow(
             OutputId::new(),
@@ -3248,7 +3520,106 @@ mod tests {
         assert!(flow
             .links
             .iter()
-            .any(|l| l.from == CARD_SOUND && l.to == format!("{CARD}:audio_in")));
+            .any(|l| l.from == format!("{CARD_SOUND_DELAY}:out")
+                && l.to == format!("{CARD}:audio_in")));
+    }
+
+    /// 16 channels: the output's sound on 1/2, bus A on pair 2, pair 3
+    /// silent, bus B on pair 4, summed, 200 ms late.
+    #[test]
+    fn card_output_places_pairs() {
+        let (a, b) = (BusId::new(), BusId::new());
+        let spec = OutputSpec::Card {
+            device: 0,
+            mode: CardMode::Hd1080p25,
+            channels: CardChannels::Sixteen,
+            more_pairs: vec![Some(a), None, Some(b)],
+            sound_delay_ms: 200,
+        };
+        let flow = output_flow(
+            OutputId::new(),
+            &spec,
+            Feed::Program,
+            None,
+            MixerBackend::Cpu,
+            Framerate::Fps25,
+            LiveMkv::Yes,
+        );
+        let channel = |id: &str| {
+            let block = flow.blocks.iter().find(|b| b.id == id).unwrap();
+            text(block, "channel")
+        };
+        assert_eq!(channel("card_bus1"), bus_channel(a));
+        assert_eq!(channel("card_bus3"), bus_channel(b));
+        assert!(flow.blocks.iter().all(|b| b.id != "card_bus2"));
+
+        // Each pair on its two channels of 16.
+        let placed = |pair: u32| {
+            let id = format!("card_place{pair}");
+            let place = flow.elements.iter().find(|e| e.id == id).unwrap();
+            let matrix = text_of(place, "mix-matrix");
+            let rows: Vec<&str> = matrix.split(">, <").collect();
+            assert_eq!(rows.len(), 16);
+            rows.iter()
+                .enumerate()
+                .filter(|(_, r)| r.contains("(float)1"))
+                .map(|(i, _)| i)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(placed(0), [0, 1]);
+        assert_eq!(placed(1), [2, 3]);
+        assert_eq!(placed(3), [6, 7]);
+        for pair in [0, 1, 3] {
+            let from = format!("card_place{pair}_caps");
+            assert!(flow
+                .links
+                .iter()
+                .any(|l| l.from == from && l.to == CARD_PAIRS));
+        }
+        assert!(caps_of(&flow, CARD_SOUND).contains("channels=16"));
+
+        let delay = flow
+            .blocks
+            .iter()
+            .find(|b| b.id == CARD_SOUND_DELAY)
+            .unwrap();
+        assert_eq!(delay.block_definition_id, TIME_OFFSET_BLOCK);
+        assert!(matches!(
+            delay.properties.get("offset_ms"),
+            Some(PropertyValue::Float(ms)) if *ms == 200.0
+        ));
+        // The sound waits its delay in the inter buffer.
+        let sound = flow.blocks.iter().find(|b| b.id == OUTPUT_SOUND).unwrap();
+        assert_eq!(text(sound, "max_time"), "700");
+    }
+
+    /// Without sound and without buses the card plays picture only.
+    #[test]
+    fn silent_card_output_plays_picture() {
+        let spec = OutputSpec::Card {
+            device: 0,
+            mode: CardMode::Hd1080p25,
+            channels: CardChannels::Eight,
+            more_pairs: vec![None],
+            sound_delay_ms: 0,
+        };
+        let flow = output_flow(
+            OutputId::new(),
+            &spec,
+            Feed::Slot {
+                slot: 0,
+                audio: false,
+            },
+            None,
+            MixerBackend::Cpu,
+            Framerate::Fps25,
+            LiveMkv::Yes,
+        );
+        assert_eq!(
+            text(card_block(&flow, CARD_OUTPUT_BLOCK), "stream_mode"),
+            "video"
+        );
+        assert!(flow.elements.iter().all(|e| e.id != CARD_SOUND));
     }
 
     /// An interlaced mode weaves two pictures into one frame of two
@@ -3258,6 +3629,9 @@ mod tests {
         let spec = OutputSpec::Card {
             device: 0,
             mode: CardMode::Hd1080i50,
+            channels: CardChannels::Two,
+            more_pairs: Vec::new(),
+            sound_delay_ms: 0,
         };
         let flow = output_flow(
             OutputId::new(),
@@ -3285,5 +3659,37 @@ mod tests {
             .links
             .iter()
             .any(|l| l.from == CARD_WEAVE && l.to == format!("{CARD}:video_in")));
+    }
+
+    /// PsF (1080psf25): 25 frames, each split into its two fields; the
+    /// card runs at 1080i50.
+    #[test]
+    fn psf_card_output_splits_frames() {
+        let spec = OutputSpec::Card {
+            device: 0,
+            mode: CardMode::Hd1080psf25,
+            channels: CardChannels::Two,
+            more_pairs: Vec::new(),
+            sound_delay_ms: 0,
+        };
+        let flow = output_flow(
+            OutputId::new(),
+            &spec,
+            Feed::Program,
+            None,
+            MixerBackend::Cpu,
+            Framerate::Fps25,
+            LiveMkv::Yes,
+        );
+        assert_eq!(
+            text(card_block(&flow, CARD_OUTPUT_BLOCK), "mode"),
+            "1080i50"
+        );
+        assert!(caps_of(&flow, CARD_PICTURE).contains("framerate=25/1"));
+        let weave = flow.elements.iter().find(|e| e.id == CARD_WEAVE).unwrap();
+        assert!(matches!(
+            weave.properties.get("field-pattern"),
+            Some(PropertyValue::String(p)) if p == "2:2"
+        ));
     }
 }
