@@ -296,7 +296,9 @@ impl OutputSpec {
                 DisplayMode::Fullscreen => "Fullscreen".into(),
                 DisplayMode::Drm { connector } => format!("Screen {connector}"),
             },
-            Self::Card { device, mode } => format!("Card {} {}", u64::from(*device) + 1, mode.nick()),
+            Self::Card { device, mode } => {
+                format!("Card {} {}", u64::from(*device) + 1, mode.nick())
+            }
         }
     }
 }
