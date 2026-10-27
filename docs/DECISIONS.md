@@ -5073,3 +5073,29 @@ schwarze Bild mit Banner und dass einfaches GStreamer auf beiden
 Anschlüssen spielt und aufnimmt, danach läuft der Ausgang wieder.
 Ausreißer bei späten Bildern und der Delay-Messung treten auch ohne den
 Schalter auf (todo „GStreamer-Fehler melden“).
+
+## 2026-10-27 — Wege rein und raus sperren (RUN.9)
+
+**Entscheidung**: `set_io_lock { class, on }` sperrt einen Weg einzeln:
+`osc`, `midi`, `tcp` (Steuerung rein) und `targets` (HTTP- und
+Home-Assistant-Anfragen an die Ausgabeziele). Gesperrt lehnt lmix ab, was
+auf dem Weg kommt (`io_locked`, OSC antwortet `/lmix/error`, TCP `ER`),
+außer Panik und harter Stopp: eine Sperre soll eine Probe ruhig halten,
+nicht den Notaus nehmen. Entsperren geht nur über einen anderen Weg
+(sonst entsperrte ein fremdes Pult sich selbst). Gesperrte Ziele senden
+nichts; das Ereignis meldet `locked`, „Ziele prüfen“ prüft nichts, und
+jeder Cue, der an ein Ziel sendet, zeigt die Warnung „network out is
+locked“. Wie die Karten ist jede Sperre beim Start des Core aus und steht
+nicht in der Show (Probe-Zustand, nicht Show-Inhalt).
+
+HTTP und WebSocket sind nicht sperrbar: die Console spricht darüber, und
+lmix unterscheidet die Console nicht von anderen HTTP-Clients. Dafür gibt
+es die Zugriffsschlüssel (Rechte je Platz). Ausgehendes OSC (Abos, feste
+Empfänger) und Tally (TSL, HTTP) bleiben offen; sie melden nur, sie lösen
+nichts aus.
+
+Console: Setup → Steuerung → „Sperren“, ein Schalter je Weg.
+
+**Geprüft**: Tests `a_locked_way_in_refuses_all_but_a_panic`,
+`locked_targets_send_nothing_and_warn` (der Empfänger sieht keine
+Verbindung).

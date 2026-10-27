@@ -223,6 +223,17 @@ QtObject {
             .arg(stats.packets_dropped).arg(rtt)
     }
 
+    /** A way in or out that can be locked (IoClass), as on the Setup switches. */
+    function ioClass(cls) {
+        switch (cls) {
+        case "osc": return qsTr("OSC in")
+        case "midi": return qsTr("MIDI in")
+        case "tcp": return qsTr("TCP in")
+        case "targets": return qsTr("Network out")
+        }
+        return cls
+    }
+
     /** A refusal or error (Core.message) as a sentence; empty when there is none. */
     function message(json) {
         if (json.length === 0)
@@ -280,6 +291,7 @@ QtObject {
         case "bad_cue_list": return qsTr("Cue list: %1").arg(e.reason)
         case "bad_triggers": return qsTr("Triggers: %1").arg(e.reason)
         case "locked": return qsTr("The show is locked: unlock it first")
+        case "io_locked": return qsTr("%1 is locked").arg(ioClass(e["class"]))
         case "nothing_to_restore": return qsTr("No removed input to bring back")
         case "unknown_shortcut": return qsTr("No shortcut %1").arg(e.reference)
         case "bad_shortcut": return qsTr("Shortcut: %1").arg(e.reason)
