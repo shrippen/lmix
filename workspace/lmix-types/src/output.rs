@@ -350,6 +350,8 @@ pub enum OutputStatus {
     Failed {
         message: String,
     },
+    /// A card output that would run, waiting while the cards are off.
+    CardsOff,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]

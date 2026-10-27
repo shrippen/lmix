@@ -205,6 +205,9 @@ pub struct ShowState {
     /// Locked against closing, loading and stopping (AUT.11).
     #[serde(default)]
     pub locked: bool,
+    /// lmix uses the capture and playout cards (`set_cards`).
+    #[serde(default)]
+    pub cards_on: bool,
     /// MIDI controller that moves the T-bar (AUT.1).
     #[serde(default)]
     pub midi_tbar: Option<crate::midi::MidiBinding>,

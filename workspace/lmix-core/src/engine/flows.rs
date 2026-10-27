@@ -83,6 +83,12 @@ const CARD_PAIRS: &str = "card_pairs";
 const CARD_SOUND_DELAY: &str = "card_sound_delay";
 /// Picks a card input's channel pair.
 const CARD_PAIR: &str = "card_pair";
+/// Banner on a card input's slot while the cards are off.
+const CARD_OFF_BANNER: &str = "card_off_banner";
+/// Its text: in the picture, so every monitor shows why it is black.
+const CARD_OFF_TEXT: &str = "Card disabled";
+/// Small against the picture (pango size at 1080 lines).
+const CARD_OFF_FONT: &str = "Sans 20";
 /// Lets a card input's PsF frames pass as the progressive frames they are.
 const CARD_PSF: &str = "card_psf";
 /// The cards' 8-bit picture format (DeckLink `8bit-yuv`).
@@ -1553,24 +1559,78 @@ pub fn slot_flow(slot: usize, source: &SourceSpec, env: &SlotEnv) -> Flow {
 
     // Sound-only sources publish no picture: their mixer input stays empty.
     if let Some(out) = add_source(&mut flow, source, env) {
-        flow.blocks.push(block(SLOT_TAP, THUMBNAIL_BLOCK, vec![]));
-        flow.links.push(link(out, format!("{SLOT_TAP}:video_in")));
-        flow.blocks
-            .push(block(SLOT_OUT, INTER_OUTPUT_BLOCK, vec![]));
-        flow.links.push(link(
-            format!("{SLOT_TAP}:video_out"),
-            format!("{SLOT_OUT}:sink"),
-        ));
+        publish_picture(&mut flow, out);
     }
 
     if let Some(sound) = add_audio(&mut flow, slot, source) {
         let sound = add_audio_format(&mut flow, sound);
-        flow.blocks
-            .push(block(SLOT_AUDIO_OUT, INTER_OUTPUT_BLOCK, vec![]));
-        flow.links
-            .push(link(sound, format!("{SLOT_AUDIO_OUT}:sink")));
+        publish_sound(&mut flow, sound);
     }
     flow
+}
+
+/// A slot whose input is a card while the cards are off (`set_cards`):
+/// black with a banner that says why, and silence.
+pub fn card_off_flow(slot: usize) -> Flow {
+    let mut flow = Flow::new(format!("lmix slot {slot}"));
+    flow.id = slot_id(slot);
+    share_timing(&mut flow);
+
+    let black = add_test_picture(
+        &mut flow,
+        vec![("pattern", PropertyValue::String("black".into()))],
+    );
+    flow.elements.push(element(
+        CARD_OFF_BANNER,
+        "textoverlay",
+        vec![
+            ("text", PropertyValue::String(CARD_OFF_TEXT.into())),
+            ("valignment", PropertyValue::String("bottom".into())),
+            ("halignment", PropertyValue::String("center".into())),
+            ("shaded-background", PropertyValue::Bool(true)),
+            ("font-desc", PropertyValue::String(CARD_OFF_FONT.into())),
+        ],
+    ));
+    flow.links.push(link(black, CARD_OFF_BANNER.into()));
+    publish_picture(&mut flow, CARD_OFF_BANNER.into());
+
+    flow.elements.push(element(
+        "silence",
+        "audiotestsrc",
+        vec![
+            ("is-live", PropertyValue::Bool(true)),
+            ("wave", PropertyValue::String("silence".into())),
+        ],
+    ));
+    flow.elements.push(element(
+        "silence_caps",
+        "capsfilter",
+        vec![("caps", PropertyValue::String(AUDIO_CAPS.into()))],
+    ));
+    flow.links
+        .push(link("silence".into(), "silence_caps".into()));
+    publish_sound(&mut flow, "silence_caps".into());
+    flow
+}
+
+/// The slot's picture from `out` to its thumbnail tap and inter channel.
+fn publish_picture(flow: &mut Flow, out: String) {
+    flow.blocks.push(block(SLOT_TAP, THUMBNAIL_BLOCK, vec![]));
+    flow.links.push(link(out, format!("{SLOT_TAP}:video_in")));
+    flow.blocks
+        .push(block(SLOT_OUT, INTER_OUTPUT_BLOCK, vec![]));
+    flow.links.push(link(
+        format!("{SLOT_TAP}:video_out"),
+        format!("{SLOT_OUT}:sink"),
+    ));
+}
+
+/// The slot's sound from `sound` to its inter channel.
+fn publish_sound(flow: &mut Flow, sound: String) {
+    flow.blocks
+        .push(block(SLOT_AUDIO_OUT, INTER_OUTPUT_BLOCK, vec![]));
+    flow.links
+        .push(link(sound, format!("{SLOT_AUDIO_OUT}:sink")));
 }
 
 /// Add the source and return the pad that carries its video; `None` for
@@ -3445,6 +3505,32 @@ mod tests {
             text(card_block(&flow, CARD_INPUT_BLOCK), "audio_channels"),
             "2"
         );
+    }
+
+    /// A card input while the cards are off: black with the banner on
+    /// the slot's channels, silence for its sound, no card block.
+    #[test]
+    fn card_off_slot_is_black_with_a_banner() {
+        let flow = card_off_flow(3);
+        assert_eq!(flow.id, slot_id(3));
+        assert!(flow
+            .blocks
+            .iter()
+            .all(|b| b.block_definition_id != CARD_INPUT_BLOCK));
+        let banner = flow
+            .elements
+            .iter()
+            .find(|e| e.id == CARD_OFF_BANNER)
+            .unwrap();
+        assert_eq!(text_of(banner, "text"), CARD_OFF_TEXT);
+        assert!(flow
+            .links
+            .iter()
+            .any(|l| l.from == CARD_OFF_BANNER && l.to == format!("{SLOT_TAP}:video_in")));
+        assert!(flow
+            .links
+            .iter()
+            .any(|l| l.to == format!("{SLOT_AUDIO_OUT}:sink")));
     }
 
     /// A card input hears one embedded pair: the card captures the fewest

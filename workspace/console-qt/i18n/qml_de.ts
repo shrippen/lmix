@@ -2782,18 +2782,18 @@
     </message>
     <message>
       <location line="+45" />
-      <location line="+224" />
+      <location line="+237" />
       <source>Preview</source>
       <translation>Vorschau</translation>
     </message>
     <message>
-      <location line="-179" />
-      <location line="+178" />
+      <location line="-192" />
+      <location line="+191" />
       <source>Program</source>
       <translation>Programm</translation>
     </message>
     <message>
-      <location line="-158" />
+      <location line="-171" />
       <source>Height of the monitors</source>
       <translation>Höhe der Monitore</translation>
     </message>
@@ -2897,7 +2897,27 @@
       <translation>Pegelanzeigen</translation>
     </message>
     <message>
-      <location line="+159" />
+      <location line="+56" />
+      <source>Cards on</source>
+      <translation>Karten an</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Cards off</source>
+      <translation>Karten aus</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>lmix uses the capture cards. Click to free them for other programs: card inputs turn black, card outputs stop.</source>
+      <translation>lmix nutzt die Capture-Karten. Klicken gibt sie für andere Programme frei: Karten-Eingänge werden schwarz, Karten-Ausgänge stoppen.</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>The capture cards are free for other programs. Click to use them: card inputs and outputs start.</source>
+      <translation>Die Capture-Karten sind für andere Programme frei. Klicken nutzt sie: Karten-Eingänge und -Ausgänge starten.</translation>
+    </message>
+    <message>
+      <location line="+110" />
       <source>No inputs yet</source>
       <translation>Noch keine Inputs</translation>
     </message>
@@ -2912,7 +2932,7 @@
       <translation>Breite der Tonspalte</translation>
     </message>
     <message>
-      <location line="-310" />
+      <location line="-323" />
       <source>Audio at the edge</source>
       <translation>Ton am Rand</translation>
     </message>
@@ -2922,7 +2942,7 @@
       <translation>Einfacher Modus</translation>
     </message>
     <message>
-      <location line="+77" />
+      <location line="+90" />
       <source>While locked, closing inputs, loading a show, stopping outputs and changing format, sample rate or multiview are refused.</source>
       <translation>Gesperrt lassen sich keine Inputs schließen, keine Show laden, keine Ausgänge stoppen und weder Format noch Abtastrate noch Multiview ändern.</translation>
     </message>
@@ -2957,7 +2977,7 @@
       <translation>Sperren</translation>
     </message>
     <message>
-      <location line="-6" />
+      <location line="-19" />
       <source>Shortcuts…</source>
       <translation>Belegungen…</translation>
     </message>
@@ -2978,7 +2998,7 @@
     </message>
     <message>
       <location line="-9" />
-      <location line="+141" />
+      <location line="+154" />
       <source>+ Input</source>
       <translation>+ Input</translation>
     </message>
@@ -3337,14 +3357,19 @@
       <translation>Läuft</translation>
     </message>
     <message>
-      <location line="+0" />
+      <location line="+1" />
       <source>Failed: %1</source>
       <translation>Fehler: %1</translation>
     </message>
     <message>
-      <location line="+0" />
+      <location line="+1" />
       <source>Stopped</source>
       <translation>Gestoppt</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Waiting for the cards</source>
+      <translation>Wartet auf die Karten</translation>
     </message>
     <message>
       <location line="+1" />
@@ -3568,14 +3593,19 @@
       <translation>läuft</translation>
     </message>
     <message>
-      <location line="+0" />
+      <location line="+1" />
       <source>failed</source>
       <translation>fehlgeschlagen</translation>
     </message>
     <message>
-      <location line="+0" />
+      <location line="+1" />
       <source>stopped</source>
       <translation>gestoppt</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>cards off</source>
+      <translation>Karten aus</translation>
     </message>
     <message>
       <location line="+18" />

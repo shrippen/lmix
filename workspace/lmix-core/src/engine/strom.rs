@@ -1352,6 +1352,7 @@ impl Engine for StromEngine {
                 Ok(())
             }
             Command::SetSlot { slot, source: None } => self.drop_flow(flows::slot_id(*slot)).await,
+            Command::CardOff { slot } => self.put_flow(&flows::card_off_flow(*slot)).await,
             Command::Preview { slot } => self.select_preview(*slot).await,
             Command::Program {
                 slot,

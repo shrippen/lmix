@@ -65,7 +65,9 @@ RowLayout {
 
             QQC2.ToolTip.visible: hovered
             QQC2.ToolTip.text: {
-                var state = running ? qsTr("Running") : (status.state === "failed" ? qsTr("Failed: %1").arg(status.message) : qsTr("Stopped"))
+                var state = running ? qsTr("Running")
+                    : (status.state === "failed" ? qsTr("Failed: %1").arg(status.message)
+                    : (status.state === "cards_off" ? qsTr("Waiting for the cards") : qsTr("Stopped")))
                 return state + (link ? "\n" + Texts.linkDetail(link) : "") + "\n" + qsTr("Click: start or stop. Right click: remove.")
             }
 

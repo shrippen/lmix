@@ -5,7 +5,9 @@
 # refused frames, the picture back like the program and moving, and the
 # embedded sound back at the program's level. Then 8 channels with a bus
 # on pair 2 (channels 3/4), heard on the input's pair 2, and a sound
-# delay. Needs the card, its driver
+# delay. The cards start switched off: the card input black with a
+# banner, the connectors free for plain GStreamer; switched off again at
+# the end, the output waits and the connectors are free. Needs the card, its driver
 # (Desktop Video) and the GStreamer decklink plugin: stays out of CI.
 #
 #   scripts/test-sdi-loop.sh
@@ -50,6 +52,10 @@ DELAY_SLACK_MS=100
 # Bars back from the cable, scaled and converted twice: normalised RMSE
 # (ImageMagick, 0-1) of the input's picture against the program's.
 MAX_PICTURE_RMSE=0.08
+# A switched off card input: black (mean brightness, 0-1) with a light
+# banner.
+MAX_BLACK_MEAN=0.1
+MIN_BANNER_MAX=0.5
 
 cleanup() {
     for pid in "${PIDS[@]}"; do kill "$pid" 2>/dev/null || true; done
@@ -95,6 +101,30 @@ picture() {
     curl -sf "$CORE/pictures/$1" -o "$2"
 }
 peak() { curl -sf "$CORE/audio/levels" | jq "$1"; }
+# Plain GStreamer plays on SDI_OUT and captures SDI_IN: fails while
+# another program holds a connector.
+cards_free() {
+    timeout 15 gst-launch-1.0 -q videotestsrc num-buffers=100 \
+        ! video/x-raw,format=UYVY,width=1920,height=1080,framerate=25/1 \
+        ! decklinkvideosink device-number="$SDI_OUT" mode=1080p25 >/dev/null 2>&1 &
+    local sink=$!
+    sleep 1
+    if ! timeout 10 gst-launch-1.0 -q decklinkvideosrc device-number="$SDI_IN" num-buffers=10 ! fakesink >/dev/null 2>&1; then
+        kill "$sink" 2>/dev/null || true
+        wait "$sink" 2>/dev/null || true
+        return 1
+    fi
+    wait "$sink"
+}
+# The card input shows black with the banner.
+card_off_picture() {
+    picture inputs/3 "$WORK/$1.jpg"
+    local mean max
+    read -r mean max <<<"$(magick "$WORK/$1.jpg" -colorspace Gray -format '%[fx:mean] %[fx:maxima]' info:)"
+    awk -v m="$mean" -v x="$max" -v a="$MAX_BLACK_MEAN" -v b="$MIN_BANNER_MAX" 'BEGIN { exit !(m <= a && x >= b) }' \
+        || fail "$1: card input not black with a banner (mean $mean, max $max)"
+    pass "$1: card input black with a banner (mean $mean, max $max)"
+}
 # The caps the card input's source negotiated, from the engine.
 input_caps() {
     local flow
@@ -140,6 +170,13 @@ act "{\"action\":\"add_input\",\"source\":{\"kind\":\"card\",\"device\":$SDI_IN}
 act '{"action":"set_audio","input":"SDI in","on":false}'
 online() { [[ "$(state | jq '[.inputs[] | select(.status == "online")] | length')" == 3 ]]; }
 wait_for "$SETTLE" online || fail "inputs not online: $(state | jq -c '[.inputs[] | {name, status}]')"
+[[ "$(state | jq .cards_on)" == false ]] || fail "cards on at start"
+card_off_picture cards-off-at-start
+cards_free || fail "cards held while switched off"
+pass "cards free while switched off"
+act '{"action":"set_cards","on":true}'
+sleep 3
+wait_for "$SETTLE" online || fail "inputs not online with the cards: $(state | jq -c '[.inputs[] | {name, status}]')"
 pass "inputs online"
 SDI_IN_ID="$(state | jq -r '.inputs[] | select(.name == "SDI in") | .id')"
 
@@ -256,4 +293,19 @@ plain="$(onset)"
 (( delayed - plain >= SOUND_DELAY_MS - DELAY_SLACK_MS )) \
     || fail "pairs: sound delay $SOUND_DELAY_MS ms came out as $((delayed - plain)) ms"
 pass "pairs: sound delay $SOUND_DELAY_MS ms came out as $((delayed - plain)) ms"
+
+# Switched off, the running output waits and the connectors are free;
+# switched on again, the output runs.
+act '{"action":"set_cards","on":false}'
+waits() { [[ "$(state | jq -r '.outputs[] | select(.name == "SDI out") | .status.state')" == cards_off ]]; }
+wait_for "$SETTLE" waits || fail "cards off: output $(state | jq -c '.outputs')"
+pass "cards off: output waits for the cards"
+sleep 3
+card_off_picture cards-off-at-end
+cards_free || fail "cards held after switching them off"
+pass "cards free after switching them off"
+act '{"action":"set_cards","on":true}'
+wait_for "$SETTLE" running || fail "cards on again: output $(state | jq -c '.outputs')"
+wait_for "$SETTLE" online || fail "cards on again: input not online"
+pass "cards on again: output running"
 echo "SDI loop check passed"

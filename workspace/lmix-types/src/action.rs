@@ -342,7 +342,7 @@ pub const ACTION_GROUPS: &[(&str, &[&str])] = &[
             "import_package",
         ],
     ),
-    ("safety", &["set_lock"]),
+    ("safety", &["set_lock", "set_cards"]),
 ];
 
 /// The group of an action by its name (`cut`, `title_load`).
@@ -960,6 +960,13 @@ pub enum Action {
     /// clearing the show, stopping or removing outputs and restarting one
     /// for another bus are refused.
     SetLock {
+        on: bool,
+    },
+    /// Use the capture and playout cards (DeckLink, SRC.1/OUT.4) or let
+    /// go of them, which only one program can use at a time. Off: card
+    /// inputs show black with a banner, card outputs stop and wait. On:
+    /// both come back. Off at every start of lmix-core, not in the show.
+    SetCards {
         on: bool,
     },
     /// Bind a MIDI controller (`cc`) to the T-bar: 0–127 moves it from

@@ -170,6 +170,7 @@ pub fn lamps(state: &ShowState, values: Lamps) -> HashMap<MidiBinding, u8> {
                     on(output_running(state, output))
                 }
                 Action::SetLock { .. } => on(state.locked),
+                Action::SetCards { .. } => on(state.cards_on),
                 _ => return None,
             };
             Some((binding, value))

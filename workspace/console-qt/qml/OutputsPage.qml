@@ -323,7 +323,9 @@ AppPage {
                     id: pill
                     status: row.isRunning ? KantePill.State.Running
                         : (row.output.status.state === "failed" ? KantePill.State.Failed : KantePill.State.Off)
-                    text: row.isRunning ? qsTr("running") : (row.output.status.state === "failed" ? qsTr("failed") : qsTr("stopped"))
+                    text: row.isRunning ? qsTr("running")
+                        : (row.output.status.state === "failed" ? qsTr("failed")
+                        : (row.output.status.state === "cards_off" ? qsTr("cards off") : qsTr("stopped")))
                 }
             }
             QQC2.Label {

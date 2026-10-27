@@ -929,6 +929,11 @@ impl Service {
         for id in running {
             sw.set_output_status(id, OutputStatus::Running { since_ms: now_ms() });
         }
+        // lmix-core starts with the cards off: let go of them.
+        let release = sw.release_card_outputs();
+        if let Err(e) = self.execute(&mut sw, &release).await {
+            tracing::warn!("card outputs not stopped: {e}");
+        }
         self.publish(&sw);
     }
 
@@ -1090,6 +1095,11 @@ impl Service {
             let failure = sw.output_failure(id);
             if self.execute(&mut sw, &[command]).await.is_err() {
                 continue;
+            }
+            // A card output waits for the cards instead.
+            if sw.output_waits_for_cards(id) {
+                self.end_failback(id);
+                break;
             }
 
             // Still failed while the start may not hold.
@@ -1992,6 +2002,8 @@ impl Service {
     /// Run commands in order. A failing slot marks its input offline and
     /// the rest still run; the first error is returned.
     async fn execute(&self, sw: &mut Switcher, commands: &[Command]) -> Result<(), ActionError> {
+        let gated = sw.cards_gate(commands.to_vec());
+        let commands = gated.as_slice();
         if !self.engine_ready.load(Ordering::SeqCst) {
             // Outputs keep what was asked, so restore starts them. No
             // stinger runs, so none will end.
@@ -2257,7 +2269,7 @@ impl Touch {
 /// Engine flow a command builds or stops.
 fn flow_of(command: &Command) -> Option<FlowId> {
     match command {
-        Command::SetSlot { slot, .. } => Some(slot_id(*slot)),
+        Command::SetSlot { slot, .. } | Command::CardOff { slot } => Some(slot_id(*slot)),
         Command::StartOutput { id, .. } | Command::StopOutput { id } => Some(output_flow_id(*id)),
         _ => None,
     }
@@ -2271,7 +2283,8 @@ fn builds_flow(command: &Command) -> bool {
         Command::SetSlot {
             source: Some(_),
             ..
-        } | Command::StartOutput { .. }
+        } | Command::CardOff { .. }
+            | Command::StartOutput { .. }
     )
 }
 
@@ -2281,6 +2294,8 @@ fn mark_output(sw: &mut Switcher, command: &Command, outcome: &Result<(), Engine
         (Command::StartOutput { id, .. }, Ok(())) => {
             (*id, OutputStatus::Running { since_ms: now_ms() })
         }
+        // Stopped for the cards: it waits for them.
+        (Command::StopOutput { id }, Ok(())) if sw.output_waits_for_cards(*id) => return,
         (Command::StopOutput { id }, Ok(())) => (*id, OutputStatus::Stopped),
         (Command::StartOutput { id, .. } | Command::StopOutput { id }, Err(e)) => (
             *id,
@@ -2313,12 +2328,13 @@ fn bar_fix_for(fix: &mut Vec<Command>, command: &Command) -> Option<Command> {
 
 /// Reflect a `SetSlot` outcome in the input's status.
 fn mark_slot(sw: &mut Switcher, command: &Command, ok: bool) {
-    let Command::SetSlot {
-        slot,
-        source: Some(_),
-    } = command
-    else {
-        return;
+    let slot = match command {
+        Command::SetSlot {
+            slot,
+            source: Some(_),
+        }
+        | Command::CardOff { slot } => slot,
+        _ => return,
     };
     let Some(input) = sw.show().inputs.iter().find(|i| i.slot == *slot) else {
         return;
@@ -3538,6 +3554,112 @@ mod tests {
             state.outputs[0].status,
             lmix_types::OutputStatus::Running { .. }
         ));
+    }
+
+    /// The cards start off: a card input shows black with a banner and a
+    /// started card output waits. On, both use the card; off again, both
+    /// let go of it. An output stopped while it waits stays stopped.
+    #[tokio::test]
+    async fn cards_are_used_only_while_switched_on() {
+        use lmix_types::{OutputRef, OutputStatus};
+        let engine = Arc::new(NullEngine::default());
+        let service = Service::new(4, engine.clone(), None);
+        let card = SourceSpec::Card {
+            device: 2,
+            mode: None,
+            pair: 1,
+        };
+        service
+            .handle(Action::AddInput {
+                source: card.clone(),
+                name: Some("SDI".into()),
+            })
+            .await
+            .unwrap();
+        for (name, device) in [("Beamer", 1), ("Spare", 3)] {
+            service
+                .handle(Action::AddOutput {
+                    spec: lmix_types::OutputSpec::Card {
+                        device,
+                        mode: lmix_types::CardMode::Hd1080p25,
+                        channels: Default::default(),
+                        more_pairs: Vec::new(),
+                        sound_delay_ms: 0,
+                    },
+                    source: lmix_types::OutputSource::Program,
+                    bus: None,
+                    name: Some(name.into()),
+                })
+                .await
+                .unwrap();
+            service
+                .handle(Action::StartOutput {
+                    output: OutputRef::Text(name.into()),
+                })
+                .await
+                .unwrap();
+        }
+        let status = |state: &lmix_types::ShowState, i: usize| state.outputs[i].status.clone();
+        let starts = || {
+            engine
+                .log()
+                .iter()
+                .filter(|c| matches!(c, Command::StartOutput { .. }))
+                .count()
+        };
+
+        // Off at the start.
+        let state = service.state().await;
+        assert!(!state.cards_on);
+        assert!(engine.log().contains(&Command::CardOff { slot: 0 }));
+        assert!(!engine.log().iter().any(|c| matches!(
+            c,
+            Command::SetSlot {
+                source: Some(SourceSpec::Card { .. }),
+                ..
+            }
+        )));
+        assert_eq!(starts(), 0);
+        assert_eq!(status(&state, 0), OutputStatus::CardsOff);
+
+        // The spare one stops waiting.
+        service
+            .handle(Action::StopOutput {
+                output: OutputRef::Text("Spare".into()),
+            })
+            .await
+            .unwrap();
+
+        service.handle(Action::SetCards { on: true }).await.unwrap();
+        let state = service.state().await;
+        assert!(state.cards_on);
+        assert!(engine.log().contains(&Command::SetSlot {
+            slot: 0,
+            source: Some(card.clone()),
+        }));
+        assert_eq!(starts(), 1);
+        assert!(matches!(status(&state, 0), OutputStatus::Running { .. }));
+        assert_eq!(status(&state, 1), OutputStatus::Stopped);
+
+        service
+            .handle(Action::SetCards { on: false })
+            .await
+            .unwrap();
+        let state = service.state().await;
+        let log = engine.log();
+        assert_eq!(
+            log.last(),
+            Some(&Command::StopOutput {
+                id: state.outputs[0].id
+            })
+        );
+        assert_eq!(
+            log.iter()
+                .filter(|c| **c == Command::CardOff { slot: 0 })
+                .count(),
+            2
+        );
+        assert_eq!(status(&state, 0), OutputStatus::CardsOff);
     }
 
     /// An output whose flow fails right after each start (a busy card)
