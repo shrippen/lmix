@@ -79,6 +79,9 @@ const CARD_FORMAT: &str = "UYVY";
 const CARD_SOUND_CAPS: &str = "audio/x-raw,format=S32LE,layout=interleaved,rate=48000,channels=2";
 /// Card mode of an input that the card detects itself.
 const CARD_AUTO: &str = "auto";
+/// strom's `stream_mode`: picture and sound, or picture only.
+const STREAM_AUDIO_VIDEO: &str = "audio_video";
+const STREAM_VIDEO: &str = "video";
 /// How long before its time a frame goes to the card. Frames come over
 /// inter later than the output flow's latency says (it does not see all
 /// of the mixer's); with strom's 20 ms the card showed half of them late
@@ -728,7 +731,12 @@ pub fn output_flow(
         }
         OutputSpec::Card { device, mode } => {
             let from = add_download(&mut flow, "pgm:src", on_gpu);
-            add_card_output(&mut flow, &from, *device, *mode, sound);
+            let stream = if sound {
+                CardStream::PictureAndSound
+            } else {
+                CardStream::Picture
+            };
+            add_card_output(&mut flow, &from, *device, *mode, stream);
         }
     }
     flow
@@ -743,8 +751,18 @@ pub fn output_flow(
 ///   pgm ─► convert ─► scale ─► rate ─► card_picture [─► card_weave] ─► card:video_in
 ///   sound ─► convert ─► card_sound ─► card:audio_in
 /// ```
-fn add_card_output(flow: &mut Flow, from: &str, device: u32, mode: CardMode, sound: bool) {
-    let stream_mode = if sound { "audio_video" } else { "video" };
+/// What a card output plays.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum CardStream {
+    Picture,
+    PictureAndSound,
+}
+
+fn add_card_output(flow: &mut Flow, from: &str, device: u32, mode: CardMode, stream: CardStream) {
+    let stream_mode = match stream {
+        CardStream::Picture => STREAM_VIDEO,
+        CardStream::PictureAndSound => STREAM_AUDIO_VIDEO,
+    };
     flow.blocks.push(block(
         CARD,
         CARD_OUTPUT_BLOCK,
@@ -807,7 +825,7 @@ fn add_card_output(flow: &mut Flow, from: &str, device: u32, mode: CardMode, sou
     flow.links
         .push(link(picture.into(), format!("{CARD}:video_in")));
 
-    if !sound {
+    if stream == CardStream::Picture {
         return;
     }
     flow.elements
@@ -1450,7 +1468,7 @@ fn add_source(flow: &mut Flow, source: &SourceSpec, env: &SlotEnv) -> Option<Str
                 WHIP_INPUT_BLOCK,
                 vec![
                     ("endpoint_id", PropertyValue::String(endpoint.clone())),
-                    ("mode", PropertyValue::String("audio_video".into())),
+                    ("mode", PropertyValue::String(STREAM_AUDIO_VIDEO.into())),
                     ("decode", PropertyValue::Bool(true)),
                 ],
             ));
@@ -1462,7 +1480,7 @@ fn add_source(flow: &mut Flow, source: &SourceSpec, env: &SlotEnv) -> Option<Str
             framerate,
         } => {
             let mut properties = vec![
-                ("stream_mode", PropertyValue::String("video".into())),
+                ("stream_mode", PropertyValue::String(STREAM_VIDEO.into())),
                 ("video_device", PropertyValue::String(id.clone())),
             ];
             // The block asks the device for this mode at capture time.
@@ -1495,7 +1513,10 @@ fn add_card_input(flow: &mut Flow, device: u32, mode: Option<CardMode>) -> Strin
         vec![
             ("device_number", PropertyValue::UInt(u64::from(device))),
             ("mode", PropertyValue::String(mode.into())),
-            ("stream_mode", PropertyValue::String("audio_video".into())),
+            (
+                "stream_mode",
+                PropertyValue::String(STREAM_AUDIO_VIDEO.into()),
+            ),
         ],
     ));
     flow.elements
@@ -1577,8 +1598,8 @@ enum PageKind {
 /// (strom `builtin.html_input`, Chromium through `cefsrc`).
 fn add_page(flow: &mut Flow, url: &str, kind: PageKind, format: &MasterFormat) -> String {
     let stream_mode = match kind {
-        PageKind::Web => "audio_video",
-        PageKind::Graphics => "video",
+        PageKind::Web => STREAM_AUDIO_VIDEO,
+        PageKind::Graphics => STREAM_VIDEO,
     };
     flow.blocks.push(block(
         WEB,

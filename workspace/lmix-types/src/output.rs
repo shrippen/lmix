@@ -296,7 +296,7 @@ impl OutputSpec {
                 DisplayMode::Fullscreen => "Fullscreen".into(),
                 DisplayMode::Drm { connector } => format!("Screen {connector}"),
             },
-            Self::Card { device, mode } => format!("Card {} {}", device + 1, mode.nick()),
+            Self::Card { device, mode } => format!("Card {} {}", u64::from(*device) + 1, mode.nick()),
         }
     }
 }
@@ -463,4 +463,19 @@ pub const SAMPLE_RATES: [u32; 2] = [48_000, 44_100];
 /// The default: broadcast and video run at 48 kHz.
 pub fn default_sample_rate() -> u32 {
     SAMPLE_RATES[0]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::CardMode;
+
+    #[test]
+    fn the_last_card_has_a_label() {
+        let card = OutputSpec::Card {
+            device: u32::MAX,
+            mode: CardMode::Hd720p50,
+        };
+        assert_eq!(card.default_name(), "Card 4294967296 720p50");
+    }
 }

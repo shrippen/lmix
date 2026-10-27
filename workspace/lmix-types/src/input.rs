@@ -255,7 +255,7 @@ impl SourceSpec {
             Self::Whip { endpoint } => format!("WHIP {endpoint}"),
             Self::Web { url, .. } => url.clone(),
             Self::Graphics { graphics } => format!("Graphics {graphics}"),
-            Self::Card { device, .. } => format!("Card {}", device + 1),
+            Self::Card { device, .. } => format!("Card {}", u64::from(*device) + 1),
         }
     }
 }
@@ -731,6 +731,15 @@ pub fn device_framerate(text: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_last_card_has_a_label() {
+        let card = SourceSpec::Card {
+            device: u32::MAX,
+            mode: None,
+        };
+        assert_eq!(card.default_name(), "Card 4294967296");
+    }
 
     #[test]
     fn a_device_without_a_mode_reads_and_writes_as_before() {
