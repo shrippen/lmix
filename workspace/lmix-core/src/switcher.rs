@@ -2413,6 +2413,7 @@ impl Switcher {
             running_cues: self
                 .cues
                 .running(&self.show.cue_lists, tokio::time::Instant::now()),
+            ran_cues: self.cues.ran(),
             go_guard_ms: self.show.go_guard_ms,
             go_rearm: self.show.go_rearm,
             panic_ms: self.show.panic_ms,
@@ -9688,6 +9689,32 @@ mod tests {
         assert_eq!(sound.gain_db, -6.0);
         assert_eq!(sound.file, "/fx/rain.flac");
         assert_eq!(sound.fade_in_ms, 2000);
+    }
+
+    /// A flag is part of the cue (SUI.12): set and cleared by an update,
+    /// saved with the show.
+    #[test]
+    fn a_cue_is_flagged_and_unflagged() {
+        let mut sw = two_inputs();
+        sw.apply(Action::AddCueList {
+            name: "Opening".into(),
+            cues: vec![cue("A", Action::Cut)],
+            source: None,
+        })
+        .unwrap();
+        let id = sw.show().cue_lists[0].cues[0].id.to_string();
+        let flag = |on| Action::UpdateCue {
+            list: None,
+            cue: id.clone(),
+            changes: serde_json::json!({ "flagged": on }),
+        };
+        sw.apply(flag(true)).unwrap();
+        assert!(sw.state().cue_lists[0].cues[0].flagged);
+        let saved = serde_json::to_value(&sw.show().cue_lists[0].cues[0]).unwrap();
+        assert_eq!(saved["flagged"], true);
+        sw.apply(flag(false)).unwrap();
+        let saved = serde_json::to_value(&sw.show().cue_lists[0].cues[0]).unwrap();
+        assert!(saved.get("flagged").is_none(), "not written while off");
     }
 
     #[test]

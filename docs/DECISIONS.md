@@ -5073,3 +5073,25 @@ schwarze Bild mit Banner und dass einfaches GStreamer auf beiden
 Anschlüssen spielt und aufnimmt, danach läuft der Ausgang wieder.
 Ausreißer bei späten Bildern und der Delay-Messung treten auch ohne den
 Schalter auf (todo „GStreamer-Fehler melden“).
+
+## 2026-10-27 — Cues markieren und „gelaufen“ (SUI.12)
+
+**Entscheidung**: Eine Markierung ist ein Feld des Cues (`flagged`), gesetzt
+und gelöscht über `update_cue` (`{"flagged": true}`) und mit der Show
+gespeichert: wer in der Probe einen Cue zum Nacharbeiten markiert, findet
+ihn morgen wieder. Ohne Markierung steht das Feld nicht in der Datei.
+Listen aus einem Skript werden dort bearbeitet und lassen sich daher in
+der Console nicht markieren.
+
+„Gelaufen“ ist dagegen Laufzeit: der Runner merkt sich jeden Cue, der
+gestartet wurde (auch Cues in Gruppen), bis zum Reset (RUN.11) oder zur
+nächsten Show; `ShowState.ran_cues`. Ein laufender Cue zählt als
+laufend, nicht als gelaufen.
+
+Console: in der Cue-Liste ein ⚑ je Zeile (beim Bearbeiten umschaltbar, im
+Show-Modus nur sichtbar, wenn gesetzt); gelaufene Zeilen bekommen einen
+leichten Hintergrund (Kante `tint1Color`), Standby und Auswahl behalten
+ihre Farben.
+
+**Geprüft**: `started_cues_count_as_ran_until_a_reset`,
+`a_cue_is_flagged_and_unflagged`.

@@ -276,7 +276,7 @@ QLab kennt keinen Import aus Texten; am nächsten kommt das Anlegen von Cues
 | SUI.9 | Gestaltung nach Kante (UI.9), Texte aus Katalogen de/en (NFA.11) | M | S1 | ✅ |
 | SUI.10 | Cues in der Oberfläche anlegen, bearbeiten, umsortieren, umnummerieren (wenn kein Drehbuch-Betrieb) | S | S2 | ◐ (Cue-Dialog AUT.14) |
 | SUI.11 | Standby unabhängig von der Auswahl (bearbeiten, während ein anderer Cue auf Standby steht) | S | S2 | – |
-| SUI.12 | Cue markieren (Prüfliste) und Zweitfarbe „bereits gelaufen“ | K | S2 | – |
+| SUI.12 | Cue markieren (Prüfliste) und Zweitfarbe „bereits gelaufen“ | K | S2 | ✅ (`flagged` am Cue über `update_cue`, gespeichert; `ShowState.ran_cues` bis Reset oder neue Show; Console: ⚑ je Zeile, gelaufene Zeilen getönt) |
 | SUI.13 | Felder und Funktionen je nach Modus zeigen oder verbergen; Seltenes hinter „Erweitert“ (S-E.5) (lmix) | S | S1 | ◐ („Erweitert“ in der Show-Ansicht) |
 
 ### 3.11 Show-Datei (SSH)
