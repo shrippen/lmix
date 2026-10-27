@@ -5425,7 +5425,6 @@ fn check_volume(volume: u8) -> Result<(), ActionError> {
     Ok(())
 }
 
-/// The bus called `name` (ignoring case, as bus names are unique).
 /// The buses a card output plays on its further channel pairs.
 fn pair_buses(spec: &OutputSpec) -> impl Iterator<Item = BusId> + '_ {
     let pairs = match spec {
@@ -5435,6 +5434,7 @@ fn pair_buses(spec: &OutputSpec) -> impl Iterator<Item = BusId> + '_ {
     pairs.iter().flatten().copied()
 }
 
+/// The bus called `name` (ignoring case, as bus names are unique).
 fn find_bus_named(buses: &[ShowBus], name: &str) -> Option<BusId> {
     let name = name.to_lowercase();
     buses

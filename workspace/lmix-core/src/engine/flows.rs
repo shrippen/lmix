@@ -746,7 +746,8 @@ pub fn output_flow(
                 channels: *channels,
                 sound_delay_ms: *sound_delay_ms,
             };
-            let pairs = add_card_pairs(&mut flow, sound, more_pairs, spec);
+            let own = sound.then_some(OUTPUT_SOUND_TIMED);
+            let pairs = add_card_pairs(&mut flow, own, more_pairs, spec);
             add_card_output(&mut flow, &from, card, &pairs);
         }
     }
@@ -772,17 +773,14 @@ fn inter_input(id: &str, channel: String, spec: &OutputSpec) -> BlockInstance {
 }
 
 /// A card output's channel pairs that sound, 0-based, with their pads:
-/// pair 0 the output's own sound, the others a bus each.
+/// pair 0 the output's own sound (`own`, its pad), the others a bus each.
 fn add_card_pairs(
     flow: &mut Flow,
-    sound: bool,
+    own: Option<&str>,
     more_pairs: &[Option<BusId>],
     spec: &OutputSpec,
 ) -> Vec<(u32, String)> {
-    let mut pairs = Vec::new();
-    if sound {
-        pairs.push((0, OUTPUT_SOUND_TIMED.to_string()));
-    }
+    let mut pairs: Vec<(u32, String)> = own.map(|pad| (0, pad.to_string())).into_iter().collect();
     for (index, bus) in more_pairs.iter().enumerate() {
         let Some(bus) = bus else {
             continue;
