@@ -2782,18 +2782,18 @@
     </message>
     <message>
       <location line="+45" />
-      <location line="+237" />
+      <location line="+240" />
       <source>Preview</source>
       <translation>Vorschau</translation>
     </message>
     <message>
-      <location line="-192" />
-      <location line="+191" />
+      <location line="-195" />
+      <location line="+194" />
       <source>Program</source>
       <translation>Programm</translation>
     </message>
     <message>
-      <location line="-171" />
+      <location line="-174" />
       <source>Height of the monitors</source>
       <translation>Höhe der Monitore</translation>
     </message>
@@ -2907,7 +2907,12 @@
       <translation>Karten aus</translation>
     </message>
     <message>
-      <location line="+5" />
+      <location line="+7" />
+      <source>lmix uses the capture cards. Unlock to free them.</source>
+      <translation>lmix nutzt die Capture-Karten. Zum Freigeben entsperren.</translation>
+    </message>
+    <message>
+      <location line="+1" />
       <source>lmix uses the capture cards. Click to free them for other programs: card inputs turn black, card outputs stop.</source>
       <translation>lmix nutzt die Capture-Karten. Klicken gibt sie für andere Programme frei: Karten-Eingänge werden schwarz, Karten-Ausgänge stoppen.</translation>
     </message>
@@ -2932,7 +2937,7 @@
       <translation>Breite der Tonspalte</translation>
     </message>
     <message>
-      <location line="-323" />
+      <location line="-326" />
       <source>Audio at the edge</source>
       <translation>Ton am Rand</translation>
     </message>
@@ -2942,7 +2947,7 @@
       <translation>Einfacher Modus</translation>
     </message>
     <message>
-      <location line="+90" />
+      <location line="+93" />
       <source>While locked, closing inputs, loading a show, stopping outputs and changing format, sample rate or multiview are refused.</source>
       <translation>Gesperrt lassen sich keine Inputs schließen, keine Show laden, keine Ausgänge stoppen und weder Format noch Abtastrate noch Multiview ändern.</translation>
     </message>
@@ -2977,7 +2982,7 @@
       <translation>Sperren</translation>
     </message>
     <message>
-      <location line="-19" />
+      <location line="-22" />
       <source>Shortcuts…</source>
       <translation>Belegungen…</translation>
     </message>
@@ -2998,7 +3003,7 @@
     </message>
     <message>
       <location line="-9" />
-      <location line="+154" />
+      <location line="+157" />
       <source>+ Input</source>
       <translation>+ Input</translation>
     </message>

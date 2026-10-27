@@ -1433,7 +1433,13 @@ impl Switcher {
                 self.locked = on;
                 Ok(Vec::new())
             }
-            Action::SetCards { on } => Ok(self.set_cards(on)),
+            Action::SetCards { on } => {
+                // Off stops the card outputs, which the lock refuses.
+                if !on && self.cards_on {
+                    self.check_unlocked()?;
+                }
+                Ok(self.set_cards(on))
+            }
             Action::SetMidiTbar { midi } => {
                 if let Some(m) = &midi {
                     let bad = |reason: &str| ActionError::BadMidi {
@@ -4998,6 +5004,17 @@ impl Switcher {
     }
 
     fn stop_outputs(&mut self, group: OutputGroup) -> Vec<Command> {
+        // Ones waiting for the cards just stop waiting.
+        let waiting: Vec<OutputId> = self
+            .show
+            .outputs
+            .iter()
+            .filter(|o| group.holds(&o.spec) && self.output_waits_for_cards(o.id))
+            .map(|o| o.id)
+            .collect();
+        for id in waiting {
+            self.set_output_status(id, OutputStatus::Stopped);
+        }
         self.show
             .outputs
             .iter()

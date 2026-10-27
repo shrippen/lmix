@@ -3667,6 +3667,74 @@ mod tests {
         assert_eq!(status(&state, 0), OutputStatus::CardsOff);
     }
 
+    /// Card output "Beamer", started: it waits for the cards.
+    async fn waiting_card_output() -> (Arc<NullEngine>, Arc<Service>) {
+        let engine = Arc::new(NullEngine::default());
+        let service = Service::new(4, engine.clone(), None);
+        service
+            .handle(Action::AddOutput {
+                spec: lmix_types::OutputSpec::Card {
+                    device: 1,
+                    mode: lmix_types::CardMode::Hd1080p25,
+                    channels: Default::default(),
+                    more_pairs: Vec::new(),
+                    sound_delay_ms: 0,
+                },
+                source: lmix_types::OutputSource::Program,
+                bus: None,
+                name: Some("Beamer".into()),
+            })
+            .await
+            .unwrap();
+        service
+            .handle(Action::StartOutput {
+                output: lmix_types::OutputRef::Text("Beamer".into()),
+            })
+            .await
+            .unwrap();
+        (engine, service)
+    }
+
+    /// Outputs stopped as a group stop waiting for the cards too.
+    #[tokio::test]
+    async fn a_group_stop_ends_the_wait_for_the_cards() {
+        let (engine, service) = waiting_card_output().await;
+        service
+            .handle(Action::StopOutputs {
+                group: lmix_types::OutputGroup::All,
+            })
+            .await
+            .unwrap();
+        service.handle(Action::SetCards { on: true }).await.unwrap();
+        assert!(!engine
+            .log()
+            .iter()
+            .any(|c| matches!(c, Command::StartOutput { .. })));
+        assert_eq!(
+            service.state().await.outputs[0].status,
+            lmix_types::OutputStatus::Stopped
+        );
+    }
+
+    /// The lock refuses switching the cards off, which stops outputs; on
+    /// is allowed.
+    #[tokio::test]
+    async fn the_lock_keeps_the_cards_on() {
+        let (_engine, service) = waiting_card_output().await;
+        service.handle(Action::SetLock { on: true }).await.unwrap();
+        service.handle(Action::SetCards { on: true }).await.unwrap();
+        assert!(matches!(
+            service.handle(Action::SetCards { on: false }).await,
+            Err(ActionError::Locked)
+        ));
+        let state = service.state().await;
+        assert!(state.cards_on);
+        assert!(matches!(
+            state.outputs[0].status,
+            lmix_types::OutputStatus::Running { .. }
+        ));
+    }
+
     /// An output whose flow fails right after each start (a busy card)
     /// stays failed while it is started again, ever less often, and
     /// counts as running once a start holds.

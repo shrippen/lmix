@@ -326,6 +326,7 @@ DE = {
     'Lock': 'Sperren',
     'Cards on': 'Karten an',
     'Cards off': 'Karten aus',
+    'lmix uses the capture cards. Unlock to free them.': 'lmix nutzt die Capture-Karten. Zum Freigeben entsperren.',
     'lmix uses the capture cards. Click to free them for other programs: card inputs turn black, card outputs stop.': 'lmix nutzt die Capture-Karten. Klicken gibt sie für andere Programme frei: Karten-Eingänge werden schwarz, Karten-Ausgänge stoppen.',
     'The capture cards are free for other programs. Click to use them: card inputs and outputs start.': 'Die Capture-Karten sind für andere Programme frei. Klicken nutzt sie: Karten-Eingänge und -Ausgänge starten.',
     'Waiting for the cards': 'Wartet auf die Karten',

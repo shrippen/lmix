@@ -590,11 +590,14 @@ AppPage {
                     KanteButton {
                         readonly property bool cardsOn: root.show !== null && root.show.cards_on === true
                         text: cardsOn ? qsTr("Cards on") : qsTr("Cards off")
+                        // Off stops outputs, which the lock refuses.
+                        readonly property bool locked: root.show !== null && root.show.locked === true
                         emphasis: cardsOn ? KanteButton.Emphasis.Primary : KanteButton.Emphasis.Normal
-                        enabled: backend.connected
+                        enabled: backend.connected && !(cardsOn && locked)
                         QQC2.ToolTip.visible: hovered
                         QQC2.ToolTip.text: cardsOn
-                            ? qsTr("lmix uses the capture cards. Click to free them for other programs: card inputs turn black, card outputs stop.")
+                            ? (locked ? qsTr("lmix uses the capture cards. Unlock to free them.")
+                                : qsTr("lmix uses the capture cards. Click to free them for other programs: card inputs turn black, card outputs stop."))
                             : qsTr("The capture cards are free for other programs. Click to use them: card inputs and outputs start.")
                         onClicked: root.act({ action: "set_cards", on: !cardsOn })
                     }

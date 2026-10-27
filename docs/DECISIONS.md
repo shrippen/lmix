@@ -5055,6 +5055,8 @@ nimmt lmix nur, wenn jemand es will. Aus heißt:
   `cards_off`; ein Start in diesem Zustand wartet. Beim Einschalten
   starten genau diese Ausgänge, die Inputs nehmen die Karte wieder.
 - Der Failback eines Kartenausgangs endet, solange die Karten aus sind.
+- Die Sperre (`set_lock`) lehnt das Ausschalten ab, weil es Ausgänge
+  stoppt; Einschalten geht. Ein Gruppen-Stopp beendet auch das Warten.
 
 Ein Schalter je Karte wäre feiner, aber die Karten hängen an einem
 Treiber, und die Frage ist im Betrieb „darf lmix an die Karten“.
