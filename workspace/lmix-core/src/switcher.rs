@@ -4880,7 +4880,7 @@ impl Switcher {
         let id = self.show.outputs[self.find_output(output)?].id;
         // One waiting for the cards does not run: it just stops waiting.
         if self.output_status.get(&id) == Some(&OutputStatus::CardsOff) {
-            self.output_status.insert(id, OutputStatus::Stopped);
+            self.set_output_status(id, OutputStatus::Stopped);
             return Ok(Vec::new());
         }
         Ok(vec![Command::StopOutput { id }])
@@ -4937,7 +4937,7 @@ impl Switcher {
             .map(|o| o.id)
             .collect();
         for id in &active {
-            self.output_status.insert(*id, OutputStatus::CardsOff);
+            self.set_output_status(*id, OutputStatus::CardsOff);
         }
         active
             .into_iter()
@@ -4960,7 +4960,7 @@ impl Switcher {
                     source: Some(SourceSpec::Card { .. }),
                 } => gated.push(Command::CardOff { slot }),
                 Command::StartOutput { id, spec, .. } if is_card(&spec) => {
-                    self.output_status.insert(id, OutputStatus::CardsOff);
+                    self.set_output_status(id, OutputStatus::CardsOff);
                 }
                 command => gated.push(command),
             }
