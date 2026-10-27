@@ -36,7 +36,7 @@ cleanup() {
     [[ "${KEEP_WORK:-}" == 1 ]] && echo "work: $WORK" || rm -rf "$WORK"
 }
 trap cleanup EXIT
-fail() { echo "FAIL: $*"; KEEP_WORK=1; exit 1; }
+fail() { echo "FAIL: $*" >&2; KEEP_WORK=1; exit 1; }
 act() { curl -sf -X POST -H 'content-type: application/json' -d "$1" "$CORE/actions" >/dev/null || fail "action $1"; }
 wait_up() {
     for _ in $(seq 1 120); do curl -sf "$1" >/dev/null 2>&1 && return 0; sleep 0.5; done
@@ -95,8 +95,9 @@ offset() {
     echo "${out%% *}"
 }
 
-plain="$(offset 0)"
-delayed="$(offset "$DELAY_MS")"
+# offset runs in a subshell: its failure is reported here, so the logs stay.
+plain="$(offset 0)" || fail "no measurement without delay (logs: $WORK)"
+delayed="$(offset "$DELAY_MS")" || fail "no measurement with $DELAY_MS ms (logs: $WORK)"
 shift_ms="$(awk -v a="$plain" -v b="$delayed" 'BEGIN { printf "%.0f", b - a }')"
 echo "delay $DELAY_MS ms moved the sound $shift_ms ms"
 awk -v s="$shift_ms" -v d="$DELAY_MS" -v t="$SLACK_MS" 'BEGIN { x = s - d; if (x < 0) x = -x; exit !(x <= t) }' \
