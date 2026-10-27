@@ -3,10 +3,9 @@
 # a zone on this machine's default output and a stage in a window; a
 # sound cue that ends with its file and lets the next cue follow, a stop
 # with fade, fades on a zone and a stage, a picture cue, pause and resume,
-# a panic. Runs
-# strom's Show Playback block for real. The VM has no sound card (the
-# default output is whatever autoaudiosink finds, a fakesink without
-# one) and shows the stage on Xvfb. What is heard and seen is checked by
+# a panic. Runs strom's Show Playback block for real. The VM has no
+# sound card (the default output is whatever autoaudiosink finds, a
+# fakesink without one) and shows the stage on Xvfb. What is heard and seen is checked by
 # strom's own tests (show_playback_test.rs, show_playback_stage_test.rs);
 # here it is the way from cue to engine and back.
 #
