@@ -4983,6 +4983,11 @@ impl Switcher {
         }
     }
 
+    /// The failback of output `id` is over: whatever its status says goes.
+    pub fn end_hold(&mut self, id: OutputId) {
+        self.held_outputs.remove(&id);
+    }
+
     /// Failed output `id` was started again: still failed until its flow
     /// holds, but running for commands meanwhile.
     pub fn hold_output(&mut self, id: OutputId, failure: String) {
