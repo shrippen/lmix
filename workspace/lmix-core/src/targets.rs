@@ -254,6 +254,7 @@ pub async fn probe(http: &reqwest::Client, target: &TargetConfig) -> Result<(), 
     match send(http, &first, &request).await {
         TargetResult::Ok => Ok(()),
         TargetResult::Failed { reason } => Err(reason),
+        TargetResult::Locked => Err("network out is locked".into()),
     }
 }
 
