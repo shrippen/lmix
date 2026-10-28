@@ -151,6 +151,23 @@ within '[[ "$(running)" != *4* ]]' 2 || fail "fade cue still running: $(running)
 (( $(zone_gain | cut -d. -f1) == -20 )) || fail "zone Hall at $(zone_gain) dB after the fade, not -20"
 pass "fade cue sets the zone level, which the state shows"
 
+# --- a new flow keeps the zone's level (a new zone rebuilds the flow) ---
+zone_volume() { curl -sf "$STROM/api/flows/$(playback_flow)/elements/show:zone_vol_0/properties" | jq -r '.properties.volume // "none"'; }
+at_minus_20() { [[ "$(zone_volume)" != none ]] && awk -v v="$(zone_volume)" 'BEGIN { exit !(v > 0.095 && v < 0.105) }'; }
+zone_names() { playback | jq -r '[.zones[].name] | join(",")'; }
+within 'at_minus_20' 2 || fail "zone Hall plays at volume $(zone_volume), not -20 dB"
+act '{"action":"set_zone","zone":{"name":"Foyer","channels":2}}' || fail "second zone refused"
+act '{"action":"set_zone_patch","patch":{"zone":"Foyer","outputs":[{"device":"","channels":[1,2]}]}}' \
+    || fail "second zone patch refused"
+within '[[ "$(zone_names)" == Hall,Foyer ]]' 10 || fail "the flow did not take the new zone: $(zone_names)"
+within 'at_minus_20' 3 || fail "zone Hall back at volume $(zone_volume) in the new flow, not -20 dB"
+act '{"action":"remove_zone","name":"Foyer"}' || fail "remove second zone refused"
+within '[[ "$(zone_names)" == Hall ]]' 10 || fail "the flow kept the removed zone: $(zone_names)"
+within 'at_minus_20' 3 || fail "zone Hall back at volume $(zone_volume) after removing a zone, not -20 dB"
+! grep -q "zones are not running\|flow is not running" "$WORK/core.log" \
+    || fail "a zone level met a flow that was not running: $(grep -m1 'not running' "$WORK/core.log")"
+pass "a new flow plays the zone at its level"
+
 # --- a picture cue shows until stopped; fades on the stage and the cue ---
 within '[[ "$(pictures)" == *ready* ]]' 3 || fail "the standby picture is not held ready: $(pictures)"
 act '{"action":"cue_go"}' || fail "GO 5 refused"
