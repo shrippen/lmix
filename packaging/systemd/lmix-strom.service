@@ -14,7 +14,7 @@ Environment=GST_PLUGIN_PATH=%h/.local/share/lmix/gstreamer
 # Says so in the log when that plugin is missing (GStreamer then loads its
 # own, unpatched one) or built for another GStreamer (GStreamer still
 # loads the old build, against the newer core, until it is rebuilt).
-ExecStartPre=-/bin/sh -c 'v="$$(gst-inspect-1.0 --version | sed -n "s/^GStreamer //p")"; grep -qs "^$$v " %h/.local/share/lmix/gstreamer/built || echo "lmix: decklink plugin not built for GStreamer $$v, run scripts/decklink-plugin.sh" >&2'
+ExecStartPre=-/bin/sh -c 'v="$$(gst-inspect-1.0 --version | sed -n "s/^GStreamer //p")"; grep -qs "^$$v " %h/.local/share/lmix/gstreamer/built || echo "lmix: decklink plugin not built for GStreamer $$v, run LMIX_PLUGIN_DIR=%h/.local/share/lmix/gstreamer scripts/decklink-plugin.sh" >&2'
 ExecStart=%h/.local/bin/strom --host 127.0.0.1 --port 8099 --data-dir %S/lmix/strom
 Restart=on-failure
 RestartSec=2
