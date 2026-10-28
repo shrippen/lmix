@@ -18,6 +18,8 @@ AppPage {
     readonly property var show: shell.show
     readonly property var backend: shell.backend
     function act(action) { shell.act(action) }
+    /** Whether the way in or out `cls` is locked (RUN.9). */
+    function ioLocked(cls) { return !!root.show && (root.show.io_locked || []).indexOf(cls) >= 0 }
 
     pageId: "setup"
     title: qsTr("Setup")
@@ -98,6 +100,53 @@ AppPage {
                         text: qsTr("Check targets")
                         enabled: root.backend.connected
                         onClicked: root.act({ action: "check_targets" })
+                    }
+                }
+            }
+            // RUN.9: each way in or out locked by itself; the core's
+            // state decides, a click asks.
+            KanteSettingRow {
+                Layout.fillWidth: true
+                titleWidth: root.titleWidth
+                title: qsTr("Lock")
+                hint: qsTr("Refuse what comes in that way (a panic still goes through) or send nothing out; e.g. a rehearsal without the lighting desk. Off at every start.")
+                Flow {
+                    spacing: Kirigami.Units.largeSpacing
+                    KanteSwitch {
+                        text: qsTr("OSC in")
+                        checked: root.ioLocked("osc")
+                        enabled: root.backend.connected
+                        onToggled: {
+                            root.act({ action: "set_io_lock", "class": "osc", on: checked })
+                            checked = Qt.binding(() => root.ioLocked("osc"))
+                        }
+                    }
+                    KanteSwitch {
+                        text: qsTr("MIDI in")
+                        checked: root.ioLocked("midi")
+                        enabled: root.backend.connected
+                        onToggled: {
+                            root.act({ action: "set_io_lock", "class": "midi", on: checked })
+                            checked = Qt.binding(() => root.ioLocked("midi"))
+                        }
+                    }
+                    KanteSwitch {
+                        text: qsTr("TCP in")
+                        checked: root.ioLocked("tcp")
+                        enabled: root.backend.connected
+                        onToggled: {
+                            root.act({ action: "set_io_lock", "class": "tcp", on: checked })
+                            checked = Qt.binding(() => root.ioLocked("tcp"))
+                        }
+                    }
+                    KanteSwitch {
+                        text: qsTr("Network out")
+                        checked: root.ioLocked("targets")
+                        enabled: root.backend.connected
+                        onToggled: {
+                            root.act({ action: "set_io_lock", "class": "targets", on: checked })
+                            checked = Qt.binding(() => root.ioLocked("targets"))
+                        }
                     }
                 }
             }

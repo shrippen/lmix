@@ -49,7 +49,7 @@ use std::collections::HashSet;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use lmix_types::{Action, Event, InputRef, ShowState};
+use lmix_types::{Action, Event, InputRef, IoClass, ShowState};
 use tokio::net::UdpSocket;
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::Mutex;
@@ -458,14 +458,14 @@ pub async fn serve(
             match request {
                 // GO waits for this sender's release (RUN.6).
                 Ok(Request::Action(action @ Action::CueGo { .. })) => {
-                    if let Err(error) = service.go_held(action, hold(peer)).await {
+                    if let Err(error) = service.go_held(action, hold(peer), IoClass::Osc).await {
                         let reply = encode("/lmix/error", &[&error.to_string()]);
                         let _ = socket.send_to(&reply, peer).await;
                     }
                 }
                 Ok(Request::Release) => service.release(hold(peer)).await,
                 Ok(Request::Action(action)) => {
-                    if let Err(error) = service.handle(action).await {
+                    if let Err(error) = service.handle_from(action, IoClass::Osc).await {
                         let reply = encode("/lmix/error", &[&error.to_string()]);
                         let _ = socket.send_to(&reply, peer).await;
                     }
