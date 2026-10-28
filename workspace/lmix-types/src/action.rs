@@ -342,7 +342,7 @@ pub const ACTION_GROUPS: &[(&str, &[&str])] = &[
             "import_package",
         ],
     ),
-    ("safety", &["set_lock", "set_cards"]),
+    ("safety", &["set_lock", "set_io_lock", "set_cards"]),
 ];
 
 /// The group of an action by its name (`cut`, `title_load`).
@@ -962,6 +962,14 @@ pub enum Action {
     SetLock {
         on: bool,
     },
+    /// Lock or unlock one way in or out (RUN.9): while locked, lmix
+    /// refuses what comes in that way (a panic still goes through) or
+    /// sends nothing out it. For a rehearsal without the lighting desk or
+    /// against a foreign GO. Off at every start of lmix-core.
+    SetIoLock {
+        class: IoClass,
+        on: bool,
+    },
     /// Use the capture and playout cards (DeckLink, SRC.1/OUT.4) or let
     /// go of them, which only one program can use at a time. Off: card
     /// inputs show black with a banner, card outputs stop and wait. On:
@@ -1432,6 +1440,34 @@ fn one() -> f64 {
     1.0
 }
 
+/// A way into or out of lmix that can be locked (RUN.9). The HTTP API
+/// and its WebSocket cannot: the console speaks through them.
+#[derive(
+    Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum IoClass {
+    /// OSC in (`--osc`).
+    Osc,
+    /// MIDI in (`--midi`).
+    Midi,
+    /// The text protocol in (`--tcp`).
+    Tcp,
+    /// HTTP and Home Assistant requests out to the targets (EXT.3).
+    Targets,
+}
+
+impl std::fmt::Display for IoClass {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Osc => "OSC in",
+            Self::Midi => "MIDI in",
+            Self::Tcp => "TCP in",
+            Self::Targets => "network out",
+        })
+    }
+}
+
 /// Why an action was refused. Clients show `message` (API.9: errors with
 /// a reason).
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error, Serialize, Deserialize, JsonSchema)]
@@ -1475,6 +1511,8 @@ pub enum ActionError {
     BadTriggers { reason: String },
     #[error("locked: unlock first")]
     Locked,
+    #[error("{class} is locked")]
+    IoLocked { class: IoClass },
     #[error("no closed input to bring back")]
     NothingToRestore,
     #[error("no shortcut {reference}")]

@@ -85,5 +85,9 @@ pub enum HttpMethod {
 #[serde(tag = "result", rename_all = "snake_case")]
 pub enum TargetResult {
     Ok,
-    Failed { reason: String },
+    Failed {
+        reason: String,
+    },
+    /// Not sent: the targets are locked (RUN.9).
+    Locked,
 }

@@ -5,7 +5,8 @@
 //! - a start cue whose cue or list is gone;
 //! - an action naming an input that is not there;
 //! - an HTTP or Home Assistant action naming no target of this machine,
-//!   or one that did not answer the last check or send;
+//!   or one that did not answer the last check or send, or while the
+//!   targets are locked (RUN.9);
 //! - an input a cue uses whose media file is missing.
 
 use std::collections::BTreeMap;
@@ -22,6 +23,8 @@ pub struct Machine<'a> {
     pub targets: &'a [TargetConfig],
     /// Targets that did not answer, with the reason.
     pub unreached: &'a BTreeMap<String, String>,
+    /// Nothing goes out to the targets (RUN.9).
+    pub targets_locked: bool,
     /// Inputs whose media are not there.
     pub missing: &'a dyn Fn(InputId) -> bool,
 }
@@ -88,6 +91,10 @@ fn walk(
             if let Some(name) = action_target(action) {
                 if !machine.targets.iter().any(|t| t.name == name) {
                     warn(CueProblem::TargetGone {
+                        target: name.to_string(),
+                    });
+                } else if machine.targets_locked {
+                    warn(CueProblem::TargetLocked {
                         target: name.to_string(),
                     });
                 } else if let Some(reason) = machine.unreached.get(name) {
@@ -228,6 +235,7 @@ mod tests {
         let machine = |missing: &'static dyn Fn(InputId) -> bool| Machine {
             targets: &[],
             unreached: &none,
+            targets_locked: false,
             missing,
         };
         let warnings = cue_warnings(&show, &machine(&|_| false));
@@ -248,6 +256,7 @@ mod tests {
             &Machine {
                 targets: &[],
                 unreached: &none,
+                targets_locked: false,
                 missing: &is_cam,
             },
         );
@@ -287,6 +296,7 @@ mod tests {
             &Machine {
                 targets: &targets,
                 unreached: &unreached,
+                targets_locked: false,
                 missing: &|_| false,
             },
         );

@@ -364,6 +364,7 @@ pub fn target(name: &str, result: &TargetResult, sub: &Subscription) -> Option<V
     let (result, reason) = match result {
         TargetResult::Ok => ("ok", String::new()),
         TargetResult::Failed { reason } => ("failed", reason.clone()),
+        TargetResult::Locked => ("locked", String::new()),
     };
     let values = Values {
         target: name.into(),
