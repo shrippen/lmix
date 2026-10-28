@@ -9,6 +9,8 @@ Seiten, zwischen denen eine Leiste am Fuß des Fensters umschaltet (wie Resolve;
 - **Show**: Ablauf nach Drehbuch, vorbereitete Cue-Folge mit GO, Vorbild QLab 5
   (`docs/LASTENHEFT-SHOW.md`; Theater, Ausstellung, Spieltisch).
 - **Audio**, **Outputs**, **Setup**; später **Light** (Lichtpult mit Effekten, todo).
+- Daneben **lmix tools**: Werkzeuge für NDI und OMT (Vorbild NDI Tools,
+  `docs/LASTENHEFT-TOOLS.md`; Clean Room nach TCR.1–4 dort).
 
 Alle Seiten teilen Engine, Inputs, Ausgänge, Ton, Aktionskatalog, Auslöser, APIs
 und Show-Datei. Medienkern = Strom (Eyevinn, Rust + GStreamer,

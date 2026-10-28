@@ -18,6 +18,11 @@ hat ein eigenes Lastenheft, `LASTENHEFT-SHOW.md` (IDs CUE, RUN, SND, VIS,
 EXT, VAR, IMP, CTL, SAF, SUI, SSH, LGT, OBJ, FX, TC; Meilensteine S1–S3).
 Es setzt auf diesem Lastenheft auf und ändert es nicht.
 
+**lmix tools**: Werkzeuge für NDI und OMT unter Linux (Monitor, Testbild,
+Bildschirm senden, virtuelle Kamera, Netzübersicht …, Vorbild NDI Tools)
+haben ein eigenes Lastenheft, `LASTENHEFT-TOOLS.md` (IDs TGM, TMO, TTP, TSC,
+TVC, TDI, TAN, TAU, TRC, TPL, TLA, TVS; Meilensteine T1–T3).
+
 ---
 
 ## 0. Clean-Room-Regeln
