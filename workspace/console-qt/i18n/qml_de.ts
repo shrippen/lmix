@@ -3941,7 +3941,7 @@
   <context>
     <name>SetupPage</name>
     <message>
-      <location filename="../qml/SetupPage.qml" line="+23" />
+      <location filename="../qml/SetupPage.qml" line="+25" />
       <source>Setup</source>
       <translation>Setup</translation>
     </message>
@@ -4002,18 +4002,18 @@
     </message>
     <message>
       <location line="+3" />
-      <location line="+124" />
+      <location line="+171" />
       <source>Export…</source>
       <translation>Exportieren…</translation>
     </message>
     <message>
-      <location line="-119" />
-      <location line="+124" />
+      <location line="-166" />
+      <location line="+171" />
       <source>Import…</source>
       <translation>Importieren…</translation>
     </message>
     <message>
-      <location line="-114" />
+      <location line="-161" />
       <source>Control</source>
       <translation>Steuerung</translation>
     </message>
@@ -4038,7 +4038,32 @@
       <translation>Ziele prüfen</translation>
     </message>
     <message>
+      <location line="+12" />
+      <source>Refuse what comes in that way (a panic still goes through) or send nothing out; e.g. a rehearsal without the lighting desk. Off at every start.</source>
+      <translation>Lehnt ab, was auf diesem Weg kommt (Panik geht immer durch), oder sendet nichts hinaus; z. B. eine Probe ohne Lichtpult. Bei jedem Start aus.</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>OSC in</source>
+      <translation>OSC rein</translation>
+    </message>
+    <message>
       <location line="+9" />
+      <source>MIDI in</source>
+      <translation>MIDI rein</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>TCP in</source>
+      <translation>TCP rein</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>Network out</source>
+      <translation>Netz raus</translation>
+    </message>
+    <message>
+      <location line="+13" />
       <source>Data sources</source>
       <translation>Datenquellen</translation>
     </message>
@@ -4133,7 +4158,8 @@
       <translation>Systemstil (Breeze)</translation>
     </message>
     <message>
-      <location line="+7" />
+      <location line="-98" />
+      <location line="+105" />
       <source>Lock</source>
       <translation>Sperren</translation>
     </message>
@@ -5834,7 +5860,27 @@
       <translation>%1 · verloren %2 · verworfen %3 · %4</translation>
     </message>
     <message>
-      <location line="+16" />
+      <location line="+7" />
+      <source>OSC in</source>
+      <translation>OSC rein</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>MIDI in</source>
+      <translation>MIDI rein</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>TCP in</source>
+      <translation>TCP rein</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Network out</source>
+      <translation>Netz raus</translation>
+    </message>
+    <message>
+      <location line="+17" />
       <source>No output matches %1</source>
       <translation>Kein Ausgang passt zu %1</translation>
     </message>
@@ -6042,6 +6088,11 @@
       <location line="+1" />
       <source>The show is locked: unlock it first</source>
       <translation>Die Show ist gesperrt: erst entsperren</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>%1 is locked</source>
+      <translation>%1 ist gesperrt</translation>
     </message>
     <message>
       <location line="+1" />

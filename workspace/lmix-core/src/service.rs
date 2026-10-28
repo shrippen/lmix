@@ -16,8 +16,8 @@ use std::sync::Arc;
 use std::time::{Instant, SystemTime};
 
 use lmix_types::{
-    Action, ActionError, Event, InputId, InputLevel, InputRef, InputStatus, Latency, Levels,
-    OutputId, OutputSpec, OutputStats, OutputStatus, ShowState, SignalLoss, Template,
+    Action, ActionError, Event, InputId, InputLevel, InputRef, InputStatus, IoClass, Latency,
+    Levels, OutputId, OutputSpec, OutputStats, OutputStatus, ShowState, SignalLoss, Template,
 };
 use strom_types::FlowId;
 use tokio::sync::{broadcast, Mutex, Notify};
@@ -255,11 +255,20 @@ impl Service {
         self: &Arc<Self>,
         target: crate::targets::TargetConfig,
         request: crate::targets::Request,
+        out: Outbound,
     ) {
+        if out == Outbound::Locked {
+            let _ = self.events.send(Event::Target {
+                target: target.name,
+                result: lmix_types::TargetResult::Locked,
+            });
+            return;
+        }
         let service = Arc::clone(self);
         tokio::spawn(async move {
             let result = crate::targets::send(&service.target_http, &target, &request).await;
             let reached = match &result {
+                lmix_types::TargetResult::Locked => return,
                 lmix_types::TargetResult::Failed { reason } => {
                     tracing::warn!(target = %target.name, %reason, "output target not reached");
                     Err(reason.clone())
@@ -1335,7 +1344,7 @@ impl Service {
             )
         };
         match action {
-            Some(action) => self.handle_as(action, Origin::Held(hold)).await.map(|_| ()),
+            Some(action) => self.go_held(action, hold, IoClass::Midi).await.map(|_| ()),
             None => Ok(()),
         }
     }
@@ -1345,7 +1354,9 @@ impl Service {
         self: &Arc<Self>,
         action: Action,
         held: crate::cues::Hold,
+        class: IoClass,
     ) -> Result<ShowState, ActionError> {
+        self.check_way_in(&action, class).await?;
         self.handle_as(action, Origin::Held(held)).await
     }
 
@@ -1457,6 +1468,51 @@ impl Service {
         self.switcher.lock().await.tally()
     }
 
+    /// [`Service::handle`] for an action that came in by `class` (RUN.9):
+    /// refused while that way is locked, a panic excepted.
+    pub async fn handle_from(
+        self: &Arc<Self>,
+        action: Action,
+        class: IoClass,
+    ) -> Result<ShowState, ActionError> {
+        self.check_way_in(&action, class).await?;
+        self.handle(action).await
+    }
+
+    /// Refuse `action` if it came in by a locked `class`.
+    async fn check_way_in(&self, action: &Action, class: IoClass) -> Result<(), ActionError> {
+        let is_panic = |a: &Action| matches!(a, Action::CuePanic { .. } | Action::CueHardStop);
+        let sw = self.switcher.lock().await;
+        if !sw.io_locked(class) || is_panic(action) {
+            return Ok(());
+        }
+        // A pad or button that only stops the show is a panic too (MIDI
+        // has no other way to one).
+        if let Action::RunShortcut { target } = action {
+            if sw
+                .shortcut_actions(target)
+                .is_ok_and(|actions| !actions.is_empty() && actions.iter().all(is_panic))
+            {
+                return Ok(());
+            }
+        }
+        Err(ActionError::IoLocked { class })
+    }
+
+    /// Target `name`, and whether a request to it goes out.
+    async fn target_and_out(
+        &self,
+        name: &str,
+    ) -> Result<(crate::targets::TargetConfig, Outbound), ActionError> {
+        let sw = self.switcher.lock().await;
+        let out = if sw.io_locked(IoClass::Targets) {
+            Outbound::Locked
+        } else {
+            Outbound::Open
+        };
+        Ok((sw.target(name)?, out))
+    }
+
     /// Run one action; publishes the new state. Commands after a
     /// `Command::Wait` (a stinger's cut and end, a clip's automatic pause
     /// after a fade) run later in the background.
@@ -1534,14 +1590,14 @@ impl Service {
                 headers,
                 body,
             } => {
-                let config = self.switcher.lock().await.target(target)?;
+                let (config, out) = self.target_and_out(target).await?;
                 let request = crate::targets::Request {
                     method: *method,
                     path: path.clone(),
                     headers: headers.clone(),
                     body: body.clone(),
                 };
-                self.send_to_target(config, request);
+                self.send_to_target(config, request, out);
                 return Ok(self.state().await);
             }
             Action::HaService {
@@ -1550,21 +1606,33 @@ impl Service {
                 entity,
                 data,
             } => {
-                let config = self.switcher.lock().await.target(target)?;
+                let (config, out) = self.target_and_out(target).await?;
                 let request =
                     crate::targets::ha_request(service, entity.as_deref(), data.as_ref())?;
-                self.send_to_target(config, request);
+                self.send_to_target(config, request, out);
                 return Ok(self.state().await);
             }
             Action::TestTarget { name } => {
-                let config = self.switcher.lock().await.target(name)?;
+                let (config, out) = self.target_and_out(name).await?;
+                if out == Outbound::Locked {
+                    return Err(ActionError::IoLocked {
+                        class: IoClass::Targets,
+                    });
+                }
                 let result = crate::targets::probe(&self.target_http, &config).await;
                 self.reached(name, result.clone()).await;
                 result.map_err(|reason| ActionError::BadTarget { reason })?;
                 return Ok(self.state().await);
             }
             Action::CheckTargets => {
-                let used = self.switcher.lock().await.used_targets();
+                let used = {
+                    let sw = self.switcher.lock().await;
+                    // Locked: nothing to probe, the cues warn already.
+                    if sw.io_locked(IoClass::Targets) {
+                        return Ok(sw.state());
+                    }
+                    sw.used_targets()
+                };
                 let probes = used
                     .iter()
                     .map(|t| crate::targets::probe(&self.target_http, t));
@@ -2272,6 +2340,13 @@ enum Origin {
         channel: u8,
         since: u64,
     },
+}
+
+/// Whether a request goes out to its target (RUN.9).
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Outbound {
+    Open,
+    Locked,
 }
 
 /// lmix-core's last change of a flow.
@@ -5122,5 +5197,176 @@ mod tests {
             .await
             .unwrap_err();
         assert_eq!(err, ActionError::NoShowPath);
+    }
+
+    /// RUN.9: a locked way in refuses actions, a panic still goes
+    /// through, and other ways in are not touched.
+    #[tokio::test]
+    async fn a_locked_way_in_refuses_all_but_a_panic() {
+        let service = Service::new(4, Arc::new(NullEngine::default()), None);
+        let lock = |on| Action::SetIoLock {
+            class: IoClass::Osc,
+            on,
+        };
+        let state = service.handle(lock(true)).await.unwrap();
+        assert_eq!(state.io_locked, [IoClass::Osc]);
+
+        assert_eq!(
+            service
+                .handle_from(Action::SetLock { on: false }, IoClass::Osc)
+                .await
+                .unwrap_err(),
+            ActionError::IoLocked {
+                class: IoClass::Osc
+            }
+        );
+        assert!(service
+            .handle_from(Action::SetLock { on: false }, IoClass::Tcp)
+            .await
+            .is_ok());
+        assert!(service
+            .handle_from(Action::CuePanic { ms: None }, IoClass::Osc)
+            .await
+            .is_ok());
+        assert!(
+            service
+                .handle_from(lock(false), IoClass::Osc)
+                .await
+                .is_err(),
+            "not unlocked from the way it locks"
+        );
+        service.handle(lock(false)).await.unwrap();
+        assert!(service
+            .handle_from(Action::SetLock { on: false }, IoClass::Osc)
+            .await
+            .is_ok());
+    }
+
+    /// RUN.9: MIDI locked refuses a pad, but a pad bound to the panic
+    /// still stops the show (over MIDI a panic only comes as a shortcut).
+    #[tokio::test]
+    async fn a_midi_panic_pad_goes_through_the_lock() {
+        use lmix_types::{MidiBinding, MidiKind, MidiMessage, ShortcutSpec};
+        let service = Service::new(4, Arc::new(NullEngine::default()), None);
+        for (number, label, actions) in [
+            (36, "Lock", vec![Action::SetLock { on: true }]),
+            (37, "Panic", vec![Action::CuePanic { ms: None }]),
+        ] {
+            let shortcut = ShortcutSpec {
+                all_shows: false,
+                label: label.into(),
+                key: None,
+                web: false,
+                color: None,
+                midi: Some(MidiBinding {
+                    kind: MidiKind::Note,
+                    channel: None,
+                    number,
+                }),
+                actions,
+            };
+            service
+                .handle(Action::AddShortcut { shortcut })
+                .await
+                .unwrap();
+        }
+        service
+            .handle(Action::SetIoLock {
+                class: IoClass::Midi,
+                on: true,
+            })
+            .await
+            .unwrap();
+        let pad = |number| MidiMessage {
+            kind: MidiKind::Note,
+            channel: 1,
+            number,
+            value: 100,
+        };
+
+        assert_eq!(
+            service.midi(pad(36), true).await.unwrap_err(),
+            ActionError::IoLocked {
+                class: IoClass::Midi
+            }
+        );
+        assert!(!service.state().await.locked);
+        service.midi(pad(37), true).await.unwrap();
+    }
+
+    /// RUN.9: with the targets locked a request is not sent, says so as
+    /// an event, and the cues that send warn.
+    #[tokio::test]
+    async fn locked_targets_send_nothing_and_warn() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let service = Service::new(4, Arc::new(NullEngine::default()), None);
+        service
+            .handle(Action::SetTarget {
+                target: lmix_types::TargetSpec {
+                    name: "Haus".into(),
+                    kind: lmix_types::TargetKind::Http,
+                    addresses: vec![format!("http://127.0.0.1:{port}")],
+                    secret: None,
+                    timeout_ms: 500,
+                },
+            })
+            .await
+            .unwrap();
+        let light = Action::HaService {
+            target: "Haus".into(),
+            service: "light.turn_on".into(),
+            entity: None,
+            data: None,
+        };
+        service
+            .handle(Action::AddCueList {
+                name: "Show".into(),
+                cues: vec![lmix_types::Cue::actions("Licht", vec![light.clone()])],
+                source: None,
+            })
+            .await
+            .unwrap();
+        let mut events = service.subscribe();
+
+        let state = service
+            .handle(Action::SetIoLock {
+                class: IoClass::Targets,
+                on: true,
+            })
+            .await
+            .unwrap();
+        let problems: Vec<_> = state.cue_warnings.iter().map(|w| &w.problem).collect();
+        assert!(
+            matches!(problems[..], [lmix_types::cue::CueProblem::TargetLocked { target }] if target == "Haus"),
+            "{problems:?}"
+        );
+
+        service.handle(light).await.unwrap();
+        let result = loop {
+            if let Event::Target { result, .. } = events.recv().await.unwrap() {
+                break result;
+            }
+        };
+        assert_eq!(result, lmix_types::TargetResult::Locked);
+        let accepted =
+            tokio::time::timeout(std::time::Duration::from_millis(300), listener.accept()).await;
+        assert!(accepted.is_err(), "the request went out");
+        assert_eq!(
+            service
+                .handle(Action::TestTarget {
+                    name: "Haus".into()
+                })
+                .await
+                .unwrap_err(),
+            ActionError::IoLocked {
+                class: IoClass::Targets
+            }
+        );
+        // "Check targets" probes nothing either.
+        service.handle(Action::CheckTargets).await.unwrap();
+        let accepted =
+            tokio::time::timeout(std::time::Duration::from_millis(700), listener.accept()).await;
+        assert!(accepted.is_err(), "the check went out");
     }
 }
