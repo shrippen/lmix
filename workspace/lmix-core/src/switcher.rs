@@ -606,6 +606,8 @@ pub struct Switcher {
     locked: bool,
     /// Cards in use (`set_cards`); off at every start.
     cards_on: bool,
+    /// Ways in and out that are locked (RUN.9); none at every start.
+    io_locked: std::collections::BTreeSet<lmix_types::IoClass>,
     /// Inputs closed last, with their place in the bar (AUT.10).
     removed: Vec<(usize, ShowInput)>,
     /// Standby and running cues of the cue lists.
@@ -693,6 +695,7 @@ impl Switcher {
             looks_available: false,
             locked: false,
             cards_on: false,
+            io_locked: Default::default(),
             removed: Vec::new(),
             cues: Runner::default(),
             cue_warnings: Vec::new(),
@@ -1431,6 +1434,15 @@ impl Switcher {
             | Action::CueHardStop => Err(bad_cues("run through the service".into())),
             Action::SetLock { on } => {
                 self.locked = on;
+                Ok(Vec::new())
+            }
+            Action::SetIoLock { class, on } => {
+                if on {
+                    self.io_locked.insert(class);
+                } else {
+                    self.io_locked.remove(&class);
+                }
+                self.refresh_warnings();
                 Ok(Vec::new())
             }
             Action::SetCards { on } => {
@@ -2394,6 +2406,7 @@ impl Switcher {
             looks_available: self.looks_available,
             locked: self.locked,
             cards_on: self.cards_on,
+            io_locked: self.io_locked.iter().copied().collect(),
             cue_lists: self
                 .show
                 .cue_lists
@@ -3296,6 +3309,11 @@ impl Switcher {
         self.older_format
     }
 
+    /// Whether `class` is locked (RUN.9).
+    pub fn io_locked(&self, class: lmix_types::IoClass) -> bool {
+        self.io_locked.contains(&class)
+    }
+
     /// Check the cue lists again (SUI.5): after changes of the show, the
     /// targets or the missing media.
     pub fn refresh_warnings(&mut self) {
@@ -3303,6 +3321,7 @@ impl Switcher {
         let machine = crate::checks::Machine {
             targets: &self.targets,
             unreached: &self.unreached,
+            targets_locked: self.io_locked(lmix_types::IoClass::Targets),
             missing: &missing,
         };
         self.cue_warnings = crate::checks::cue_warnings(&self.show, &machine);

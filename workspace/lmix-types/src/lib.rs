@@ -30,7 +30,7 @@ pub mod target;
 pub mod zone;
 
 pub use action::{
-    action_group, Action, ActionError, Effect, StingerSpec, TransitionSlot, VolumeTarget,
+    action_group, Action, ActionError, Effect, IoClass, StingerSpec, TransitionSlot, VolumeTarget,
     ACTION_GROUPS, FADE_MAX_MS,
 };
 pub use automation::{Trigger, TriggerOn};
