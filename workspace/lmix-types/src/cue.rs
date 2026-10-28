@@ -433,6 +433,8 @@ pub enum CueProblem {
     TargetGone { target: String },
     /// Its target did not answer the last check or send (SUI.5).
     TargetUnreached { target: String, reason: String },
+    /// The targets are locked: it would send nothing (RUN.9).
+    TargetLocked { target: String },
     /// An action names an input that is not there.
     InputGone { input: String },
     /// An input a cue uses has no media file.
@@ -450,6 +452,9 @@ impl CueProblem {
             }
             Self::TargetUnreached { target, reason } => {
                 format!("sends to target {target}, which did not answer: {reason}")
+            }
+            Self::TargetLocked { target } => {
+                format!("sends to target {target}, but network out is locked")
             }
             Self::InputGone { input } => format!("uses input {input}, which is not there"),
             Self::MediaMissing { input } => {

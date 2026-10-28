@@ -308,6 +308,7 @@ pub fn right_of(action: &Action) -> Right {
         | Action::PlayItem { .. }
         | Action::StartOutput { .. }
         | Action::SetCards { .. }
+        | Action::SetIoLock { .. }
         | Action::StopOutput { .. }
         | Action::StartOutputs { .. }
         | Action::StopOutputs { .. }

@@ -22,7 +22,7 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use lmix_types::{Action, Event};
+use lmix_types::{Action, Event, IoClass};
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::tcp::OwnedReadHalf;
 use tokio::net::{TcpListener, TcpStream};
@@ -268,7 +268,7 @@ async fn answer(line: &str, service: &Arc<Service>, topics: &mut Topics) -> Opti
             Ok(action) => action,
             Err(error) => return Some(format!("ER bad_action {}\n", one_line(&error.to_string()))),
         };
-        return Some(match service.handle(action).await {
+        return Some(match service.handle_from(action, IoClass::Tcp).await {
             Ok(_) => "OK\n".to_string(),
             Err(error) => {
                 let code = serde_json::to_value(&error)

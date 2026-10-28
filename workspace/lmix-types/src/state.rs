@@ -208,6 +208,9 @@ pub struct ShowState {
     /// Locked against closing, loading and stopping (AUT.11).
     #[serde(default)]
     pub locked: bool,
+    /// Ways in and out that are locked (`set_io_lock`, RUN.9).
+    #[serde(default)]
+    pub io_locked: Vec<crate::action::IoClass>,
     /// lmix uses the capture and playout cards (`set_cards`).
     #[serde(default)]
     pub cards_on: bool,
