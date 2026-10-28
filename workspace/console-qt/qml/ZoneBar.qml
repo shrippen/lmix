@@ -35,8 +35,9 @@ Flow {
             width: bar.zoneWidth
             spacing: 0
 
-            /** Sets only the fields in `changes` at once: mute alone leaves a
-             *  fade of the level running. */
+            /** Sets the fields in `changes` at once. The core sends the
+             *  zone's whole level (strom mutes by volume 0), so this also
+             *  ends a fade of the zone that a cue runs. */
             function set(changes) {
                 bar.act(Object.assign({ action: "set_zone_level", zone: zone.modelData.name, duration_ms: 0 }, changes))
             }
