@@ -17,7 +17,7 @@ The second time a `decklinkvideosink` on the same device starts scheduled playba
 
 ### How to reproduce
 
-GStreamer 1.28.8, DeckLink Quad 2, Desktop Video 16.4, Fedora 44. The code is the same on `main` (checked 2026-10-27).
+GStreamer 1.28.8, DeckLink Quad 2, Desktop Video 16.4, Fedora 44. The code is the same on `main` (checked 2026-10-27; reproduced again 2026-10-28).
 
 ```python
 import gi, sys, time
@@ -34,12 +34,14 @@ for run in (1, 2):
     p.set_state(Gst.State.NULL)
 ```
 
-With `GST_DEBUG=decklinkvideosink:5`, counting `Late Frame` and `Dropped Frame` per `Starting scheduled playback`:
+With `GST_DEBUG=decklinkvideosink:5`, counting `Late Frame` and `Dropped Frame` per `Starting scheduled playback`. In 8 of 10 runs of the script, the second playback has every frame late:
 
 ```
-run 1: playback starts at 0:00:00.000000000, 0 late, 0 dropped
-run 2: playback starts at 0:00:05.960102995, 150 late, 0 dropped   <- every frame
+run 1: playback starts at 0:00:00.000000000, 0 late, 1 dropped
+run 2: playback starts at 0:00:05.968715445, 150 late, 0 dropped   <- every frame
 ```
+
+In the other 2 runs the second playback had 1 late frame (start at 5.941 s and 5.960 s); whether it fails depends on where between two frames the first playback stopped.
 
 ### Expected behavior
 
@@ -74,11 +76,11 @@ Put the epoch on the frame grid before the start time is read, in `gst_decklink_
  
 ```
 
-With it, the same script gives:
+With it (and the two changes below), the second playback starts on the grid. In 5 of 5 runs of the script:
 
 ```
-run 1: playback starts at 0:00:00.000000000, 0 late, 4 dropped (first frames)
-run 2: playback starts at 0:00:06.000000000, 0 late, 1 dropped
+run 1: playback starts at 0:00:00.000000000, 0 or 1 late, 0 dropped
+run 2: playback starts at 0:00:06.000000000, 0 late, 0 dropped     (once 5.960, also on the grid)
 ```
 
 ### Two more causes of late frames
@@ -129,8 +131,6 @@ With only the change above, later starts in a real pipeline (strom flows with di
 ```
 
 With all three changes, three runs of four starts each (1080p25, 1080i50, 1080psf25, 720p50) in one process showed no late or dropped frame. The full patch is `packaging/gstreamer/decklink-start-on-frame-grid.patch` in lmix.
-
-<!-- Note for lmix (not for upstream): the reproduction above is the clean case. Before filing, re-run restart.py on the current GStreamer. -->
 
 ### Workaround
 
