@@ -18,6 +18,8 @@ RowLayout {
     required property var core
     required property var show
     required property var act
+    /** AppShell.askRemove: ask, then remove with a way back. */
+    property var askRemove: null
     signal editRequested(var layout)
 
     readonly property var layouts: show && show.layouts ? show.layouts : []
@@ -76,10 +78,12 @@ RowLayout {
                     QQC2.ToolTip.visible: hovered
                     QQC2.ToolTip.text: qsTr("Keeps its places for every show, under its name (one of the same name is replaced).")
                 }
-                QQC2.MenuItem {
+                KanteMenuItem {
                     text: qsTr("Remove")
+                    icon.name: "edit-delete"
+                    destructive: true
                     enabled: !entry.onProgram
-                    onTriggered: bar.act({ action: "remove_layout", layout: entry.modelData.number })
+                    onTriggered: bar.askRemove("layout", entry.modelData)
                 }
             }
         }

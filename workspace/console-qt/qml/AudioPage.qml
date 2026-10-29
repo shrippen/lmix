@@ -139,6 +139,7 @@ AppPage {
 
             BusPanel {
                 act: root.act
+                askRemove: root.shell.askRemove
                 core: root.shell.backend
                 buses: root.show && root.show.buses ? root.show.buses : []
                 master: root.master

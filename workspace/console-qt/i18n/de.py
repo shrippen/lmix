@@ -2,6 +2,19 @@
 # scripts/update-translations.sh collects the sources and writes these
 # into qml_de.ts (i18n/fill.py). Keep it complete.
 DE = {
+    'Remove input %1 %2?': 'Input %1 %2 entfernen?',
+    'Its picture leaves program, preview, the layouts and the overlays.': 'Sein Bild verschwindet aus Programm, Vorschau, den Layouts und den Overlays.',
+    'Remove input': 'Input entfernen',
+    'Input %1 %2 removed': 'Input %1 %2 entfernt',
+    'Remove layout %1?': 'Layout %1 entfernen?',
+    'Its boxes and their places go with it.': 'Seine Boxen und ihre Plätze gehen mit.',
+    'Remove layout': 'Layout entfernen',
+    'Layout %1 removed': 'Layout %1 entfernt',
+    'Remove bus %1?': 'Bus %1 entfernen?',
+    'Bus %1 removed': 'Bus %1 entfernt',
+    'Remove output %1?': 'Ausgang %1 entfernen?',
+    'Its address and settings go with it.': 'Seine Adresse und Einstellungen gehen mit.',
+    'Output %1 removed': 'Ausgang %1 entfernt',
     'Close': 'Schließen',
     'Older show format': 'Älteres Show-Format',
     'The Console tries again every second. The engine and its outputs keep running.': 'Die Console versucht es jede Sekunde erneut. Die Engine und ihre Ausgänge laufen weiter.',
@@ -1055,7 +1068,6 @@ DE = {
     'After the fader (AFL)': 'Nach dem Fader (AFL)',
     'Transport': 'Wiedergabe steuern',
     'Arrange': 'Ordnen',
-    'Input %1 “%2” removed': 'Input %1 „%2“ entfernt',
     'Removed': 'Entfernt',
     'Ctrl+Z': 'Strg+Z',
     'Add inputs': 'Inputs hinzufügen',
@@ -1090,7 +1102,6 @@ DE = {
     'On: the sends ignore the channel faders and on/off (a monitor mix).': 'An: Die Sends übergehen Kanalfader und Ein/Aus (eine Monitormischung).',
     'A mix of its own for an output: in-ear, a stream, a recording.': 'Eine eigene Mischung für einen Ausgang: In-Ear, Stream, Aufnahme.',
     "Every input's send to it goes with it.": 'Die Sends aller Inputs an diesen Bus fallen mit weg.',
-    'Remove %1?': '%1 entfernen?',
     # Audio column after the TonFest design.
     '%1 IN': '%1 IN',
     'PRE %1': 'PRE %1',

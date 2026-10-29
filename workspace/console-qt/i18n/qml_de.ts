@@ -590,7 +590,7 @@
   <context>
     <name>AppShell</name>
     <message>
-      <location filename="../qml/AppShell.qml" line="+272" />
+      <location filename="../qml/AppShell.qml" line="+273" />
       <source>Ctrl</source>
       <comment>key</comment>
       <translation>Strg</translation>
@@ -603,12 +603,12 @@
     </message>
     <message>
       <location line="+99" />
-      <location line="+161" />
+      <location line="+115" />
       <source>Open show</source>
       <translation>Show öffnen</translation>
     </message>
     <message>
-      <location line="-160" />
+      <location line="-114" />
       <location line="+13" />
       <source>lmix shows (*.lmix)</source>
       <translation>lmix-Shows (*.lmix)</translation>
@@ -616,18 +616,18 @@
     <message>
       <location line="-13" />
       <location line="+38" />
-      <location line="+78" />
+      <location line="+32" />
       <source>All files (*)</source>
       <translation>Alle Dateien (*)</translation>
     </message>
     <message>
-      <location line="-106" />
-      <location line="+151" />
+      <location line="-60" />
+      <location line="+105" />
       <source>Save show</source>
       <translation>Show speichern</translation>
     </message>
     <message>
-      <location line="-136" />
+      <location line="-90" />
       <source>Export settings</source>
       <translation>Einstellungen exportieren</translation>
     </message>
@@ -643,42 +643,7 @@
       <translation>Einstellungen importieren</translation>
     </message>
     <message>
-      <location line="+15" />
-      <source>Reset to factory settings?</source>
-      <translation>Auf Werkseinstellungen zurücksetzen?</translation>
-    </message>
-    <message>
-      <location line="+5" />
-      <source>Reset settings</source>
-      <translation>Einstellungen zurücksetzen</translation>
-    </message>
-    <message>
-      <location line="+2" />
-      <source>reset</source>
-      <translation>zurücksetzen</translation>
-    </message>
-    <message>
-      <location line="+15" />
-      <source>Removes the shortcuts for all shows, the layout templates, the output targets with their secrets and the OSC subscribers of this machine. The show stays. This cannot be undone.</source>
-      <translation>Entfernt die Kurzbefehle für alle Shows, die Layout-Vorlagen, die Ausgabeziele mit ihren Geheimnissen und die OSC-Abonnenten dieses Rechners. Die Show bleibt. Das lässt sich nicht rückgängig machen.</translation>
-    </message>
-    <message>
-      <location line="+3" />
-      <source>Export settings first…</source>
-      <translation>Vorher Einstellungen exportieren…</translation>
-    </message>
-    <message>
-      <location line="+10" />
-      <source>Type %1 to confirm.</source>
-      <translation>Zum Bestätigen %1 eingeben.</translation>
-    </message>
-    <message>
-      <location line="+6" />
-      <source>Confirmation word</source>
-      <translation>Bestätigungswort</translation>
-    </message>
-    <message>
-      <location line="+10" />
+      <location line="+20" />
       <source>Export show package</source>
       <translation>Show-Paket exportieren</translation>
     </message>
@@ -711,12 +676,12 @@
     </message>
     <message>
       <location line="+0" />
-      <location line="+395" />
+      <location line="+403" />
       <source>Ctrl+1…%1</source>
       <translation>Strg+1…%1</translation>
     </message>
     <message>
-      <location line="-393" />
+      <location line="-401" />
       <source>New show</source>
       <translation>Neue Show</translation>
     </message>
@@ -732,12 +697,12 @@
     </message>
     <message>
       <location line="+2" />
-      <location line="+442" />
+      <location line="+450" />
       <source>Panic all</source>
       <translation>Panik: alles</translation>
     </message>
     <message>
-      <location line="-442" />
+      <location line="-450" />
       <source>button in the page bar</source>
       <translation>Knopf in der Seitenleiste</translation>
     </message>
@@ -928,7 +893,7 @@
       <translation>Diese Show-Datei hat das ältere Format %1 und wurde beim Öffnen umgewandelt. Beim Speichern bleibt die alte Datei daneben erhalten (.v%1.bak).</translation>
     </message>
     <message>
-      <location line="+39" />
+      <location line="+47" />
       <source>%1 (Ctrl+%2)</source>
       <translation>%1 (Strg+%2)</translation>
     </message>
@@ -1051,7 +1016,7 @@
     </message>
     <message>
       <location line="+17" />
-      <location line="+133" />
+      <location line="+134" />
       <source>Headphones</source>
       <translation>Kopfhörer</translation>
     </message>
@@ -1177,7 +1142,7 @@
   <context>
     <name>BusDialog</name>
     <message>
-      <location filename="../qml/BusDialog.qml" line="+24" />
+      <location filename="../qml/BusDialog.qml" line="+25" />
       <source>Master, headphones and buses</source>
       <translation>Master, Kopfhörer und Busse</translation>
     </message>
@@ -1185,7 +1150,7 @@
   <context>
     <name>BusPanel</name>
     <message>
-      <location filename="../qml/BusPanel.qml" line="+95" />
+      <location filename="../qml/BusPanel.qml" line="+71" />
       <source>Volume of %1</source>
       <translation>Lautstärke von %1</translation>
     </message>
@@ -1200,12 +1165,7 @@
       <translation>Vor den Fadern</translation>
     </message>
     <message>
-      <location line="-55" />
-      <source>Every input's send to it goes with it.</source>
-      <translation>Die Sends aller Inputs an diesen Bus fallen mit weg.</translation>
-    </message>
-    <message>
-      <location line="+64" />
+      <location line="+9" />
       <source>On: the sends ignore the channel faders and on/off (a monitor mix).</source>
       <translation>An: Die Sends übergehen Kanalfader und Ein/Aus (eine Monitormischung).</translation>
     </message>
@@ -1245,12 +1205,7 @@
       <translation>%1 entfernen</translation>
     </message>
     <message>
-      <location line="-162" />
-      <source>Remove %1?</source>
-      <translation>%1 entfernen?</translation>
-    </message>
-    <message>
-      <location line="+187" />
+      <location line="+25" />
       <source>Add bus</source>
       <translation>Bus hinzufügen</translation>
     </message>
@@ -1618,6 +1573,44 @@
       <location line="+10" />
       <source>Loop</source>
       <translation>Schleife</translation>
+    </message>
+  </context>
+  <context>
+    <name>FactoryResetDialog</name>
+    <message>
+      <location filename="../qml/FactoryResetDialog.qml" line="+20" />
+      <source>reset</source>
+      <translation>zurücksetzen</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Reset to factory settings?</source>
+      <translation>Auf Werkseinstellungen zurücksetzen?</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Reset settings</source>
+      <translation>Einstellungen zurücksetzen</translation>
+    </message>
+    <message>
+      <location line="+17" />
+      <source>Removes the shortcuts for all shows, the layout templates, the output targets with their secrets and the OSC subscribers of this machine. The show stays. This cannot be undone.</source>
+      <translation>Entfernt die Kurzbefehle für alle Shows, die Layout-Vorlagen, die Ausgabeziele mit ihren Geheimnissen und die OSC-Abonnenten dieses Rechners. Die Show bleibt. Das lässt sich nicht rückgängig machen.</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Export settings first…</source>
+      <translation>Vorher Einstellungen exportieren…</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>Type %1 to confirm.</source>
+      <translation>Zum Bestätigen %1 eingeben.</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Confirmation word</source>
+      <translation>Bestätigungswort</translation>
     </message>
   </context>
   <context>
@@ -2323,7 +2316,7 @@
   <context>
     <name>LayoutBar</name>
     <message>
-      <location filename="../qml/LayoutBar.qml" line="+33" />
+      <location filename="../qml/LayoutBar.qml" line="+35" />
       <source>Layouts</source>
       <translation>Layouts</translation>
     </message>
@@ -2353,7 +2346,7 @@
       <translation>Entfernen</translation>
     </message>
     <message>
-      <location line="+9" />
+      <location line="+11" />
       <source>+ Layout</source>
       <translation>+ Layout</translation>
     </message>
@@ -2812,27 +2805,7 @@
       <translation>Ordner mit den fehlenden Dateien</translation>
     </message>
     <message>
-      <location line="+65" />
-      <source>Input %1 “%2” removed</source>
-      <translation>Input %1 „%2“ entfernt</translation>
-    </message>
-    <message>
-      <location line="+13" />
-      <source>Removed</source>
-      <translation>Entfernt</translation>
-    </message>
-    <message>
-      <location line="+5" />
-      <source>Undo</source>
-      <translation>Rückgängig</translation>
-    </message>
-    <message>
-      <location line="+1" />
-      <source>Ctrl+Z</source>
-      <translation>Strg+Z</translation>
-    </message>
-    <message>
-      <location line="+157" />
+      <location line="+183" />
       <source>Inputs from a show…</source>
       <translation>Inputs aus einer Show …</translation>
     </message>
@@ -2941,18 +2914,18 @@
       <translation>Große Kacheln</translation>
     </message>
     <message>
-      <location line="+472" />
+      <location line="+475" />
       <source>Level of %1</source>
       <translation>Pegel von %1</translation>
     </message>
     <message>
-      <location line="-499" />
+      <location line="-502" />
       <location line="+5" />
       <source>View</source>
       <translation>Ansicht</translation>
     </message>
     <message>
-      <location line="-548" />
+      <location line="-490" />
       <source>FTB</source>
       <comment>fade to black</comment>
       <translation>FTB</translation>
@@ -2968,7 +2941,7 @@
       <translation>Schwarzblende: Programm auf Schwarz und zurück (SWI.9); Show und Ausgänge laufen weiter</translation>
     </message>
     <message>
-      <location line="+584" />
+      <location line="+526" />
       <source>Multiview</source>
       <translation>Multiview</translation>
     </message>
@@ -3038,12 +3011,12 @@
       <translation>Kamera, Datei, Stream oder Testbild: Jeder Input bekommt hier eine Kachel.</translation>
     </message>
     <message>
-      <location line="+113" />
+      <location line="+115" />
       <source>Width of the audio column</source>
       <translation>Breite der Tonspalte</translation>
     </message>
     <message>
-      <location line="-379" />
+      <location line="-381" />
       <source>Audio at the edge</source>
       <translation>Ton am Rand</translation>
     </message>
@@ -3107,7 +3080,7 @@
   <context>
     <name>NarrowMixer</name>
     <message>
-      <location filename="../qml/NarrowMixer.qml" line="+151" />
+      <location filename="../qml/NarrowMixer.qml" line="+153" />
       <source>Audio mixer</source>
       <translation>Tonmischer</translation>
     </message>
@@ -3245,12 +3218,12 @@
     </message>
     <message>
       <location line="+13" />
-      <location line="+327" />
+      <location line="+307" />
       <source>off</source>
       <translation>aus</translation>
     </message>
     <message>
-      <location line="-320" />
+      <location line="-300" />
       <source>Channel strip: EQ, compressor …</source>
       <translation>Kanalzug: EQ, Kompressor …</translation>
     </message>
@@ -3300,17 +3273,7 @@
       <translation>Jeder Ausgang ohne Bus führt den Master.</translation>
     </message>
     <message>
-      <location line="+30" />
-      <source>Remove %1?</source>
-      <translation>%1 entfernen?</translation>
-    </message>
-    <message>
-      <location line="+8" />
-      <source>Every input's send to it goes with it.</source>
-      <translation>Die Sends aller Inputs an diesen Bus fallen mit weg.</translation>
-    </message>
-    <message>
-      <location line="+47" />
+      <location line="+65" />
       <source>Volume of %1</source>
       <translation>Lautstärke von %1</translation>
     </message>
@@ -3415,7 +3378,7 @@
       <translation>%1 · Klick: umbenennen</translation>
     </message>
     <message>
-      <location line="-350" />
+      <location line="-330" />
       <source>Name of the bus</source>
       <translation>Name des Busses</translation>
     </message>
@@ -3425,7 +3388,7 @@
       <translation>Noch kein Ausgang mit Ton.</translation>
     </message>
     <message>
-      <location line="+312" />
+      <location line="+292" />
       <source>Tap, outputs, remove</source>
       <translation>Abgriff, Ausgänge, löschen</translation>
     </message>
@@ -3448,7 +3411,7 @@
   <context>
     <name>OutputBar</name>
     <message>
-      <location filename="../qml/OutputBar.qml" line="+36" />
+      <location filename="../qml/OutputBar.qml" line="+38" />
       <source>Outputs</source>
       <translation>Ausgänge</translation>
     </message>
@@ -3478,12 +3441,12 @@
       <translation>Klick: starten oder stoppen. Rechtsklick: entfernen.</translation>
     </message>
     <message>
-      <location line="+19" />
+      <location line="+20" />
       <source>Remove %1</source>
       <translation>%1 entfernen</translation>
     </message>
     <message>
-      <location line="+17" />
+      <location line="+20" />
       <source>Stop all streams</source>
       <translation>Alle Streams stoppen</translation>
     </message>
@@ -3994,6 +3957,104 @@
       <location line="+9" />
       <source>A preset as a trigger of this input (goes into preview) moves the camera before it is taken.</source>
       <translation>Eine Position als Auslöser dieses Inputs (geht in die Vorschau) fährt die Kamera an, bevor er genommen wird.</translation>
+    </message>
+  </context>
+  <context>
+    <name>Removals</name>
+    <message>
+      <location filename="../qml/Removals.qml" line="+41" />
+      <source>Remove input %1 %2?</source>
+      <translation>Input %1 %2 entfernen?</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Its picture leaves program, preview, the layouts and the overlays.</source>
+      <translation>Sein Bild verschwindet aus Programm, Vorschau, den Layouts und den Overlays.</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Remove input</source>
+      <translation>Input entfernen</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Input %1 %2 removed</source>
+      <translation>Input %1 %2 entfernt</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Remove layout %1?</source>
+      <translation>Layout %1 entfernen?</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Its boxes and their places go with it.</source>
+      <translation>Seine Boxen und ihre Plätze gehen mit.</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Remove layout</source>
+      <translation>Layout entfernen</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Layout %1 removed</source>
+      <translation>Layout %1 entfernt</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Remove bus %1?</source>
+      <translation>Bus %1 entfernen?</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Every input's send to it goes with it.</source>
+      <translation>Die Sends aller Inputs an diesen Bus fallen mit weg.</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Remove bus</source>
+      <translation>Bus löschen</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Bus %1 removed</source>
+      <translation>Bus %1 entfernt</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Remove output %1?</source>
+      <translation>Ausgang %1 entfernen?</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Its address and settings go with it.</source>
+      <translation>Seine Adresse und Einstellungen gehen mit.</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Remove output</source>
+      <translation>Ausgang entfernen</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Output %1 removed</source>
+      <translation>Ausgang %1 entfernt</translation>
+    </message>
+    <message>
+      <location line="+90" />
+      <source>Removed</source>
+      <translation>Entfernt</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Undo</source>
+      <translation>Rückgängig</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Ctrl+Z</source>
+      <translation>Strg+Z</translation>
     </message>
   </context>
   <context>

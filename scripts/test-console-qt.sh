@@ -417,8 +417,13 @@ DISPLAY="$DISPLAY_NO" xdotool key ctrl+s
 for _ in $(seq 1 20); do [[ -f "$WORK/keys.lmix" ]] && break; sleep 0.5; done
 [[ -f "$WORK/keys.lmix" ]] && pass "Ctrl+S saves the show" || fail "Ctrl+S: no file saved"
 
-# The input's menu removes at once; Ctrl+Z while the toast shows brings
-# the input back. A spare third input, so the tiles of the checks below stay.
+# The input's menu asks before it removes (Enter keeps the input, the red
+# button removes); Ctrl+Z while the toast shows brings the input back. A
+# spare third input, so the tiles of the checks below stay.
+confirm_remove() {
+    sleep 1.5
+    click_on "Remove input|Input entfernen" --role button
+}
 act '{"action":"add_input","source":{"kind":"pattern","pattern":"bars"},"name":"Spare"}'
 spare() { state | jq -r '.inputs[] | select(.name == "Spare") | .number'; }
 for _ in $(seq 1 40); do [[ -n "$(spare)" ]] && break; sleep 0.5; done
@@ -435,6 +440,14 @@ sleep 1
 click_on -3 "Input 3 .*"
 sleep 1.5
 click_on "Remove|Entfernen"
+sleep 1.5
+DISPLAY="$DISPLAY_NO" xdotool key Return
+sleep 2
+[[ -n "$(spare)" ]] && pass "remove dialog: Enter keeps the input" || fail "remove dialog: Enter removed Spare"
+click_on -3 "Input 3 .*"
+sleep 1.5
+click_on "Remove|Entfernen"
+confirm_remove
 for _ in $(seq 1 40); do [[ -z "$(spare)" ]] && break; sleep 0.5; done
 [[ -z "$(spare)" ]] && pass "input menu: Remove" || fail "input menu: Spare still there after Remove"
 # The toast waits for the Console's state without Spare, a moment after
@@ -462,6 +475,7 @@ for _ in 1 2; do
     click_on -3 "Input 3 .*"
     sleep 1.5
     click_on "Remove|Entfernen"
+    confirm_remove
     sleep 1.5
 done
 click_on "Locked|Gesperrt" --role button
@@ -482,6 +496,7 @@ sleep 1.5
 click_on -3 "Input 3 .*"
 sleep 1.5
 click_on "Remove|Entfernen"
+confirm_remove
 for _ in $(seq 1 40); do [[ -z "$(spare)" ]] && break; sleep 0.5; done
 sleep 1
 DISPLAY="$DISPLAY_NO" xdotool key ctrl+z

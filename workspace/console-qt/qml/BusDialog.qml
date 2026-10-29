@@ -11,6 +11,7 @@ KanteDialog {
     id: dialog
 
     required property var act
+    required property var askRemove
     required property var core
     /** `buses` of the show state. */
     property var buses: []
@@ -34,6 +35,7 @@ KanteDialog {
         id: panel
         anchors.fill: parent
         act: dialog.act
+        askRemove: dialog.askRemove
         core: dialog.core
         buses: dialog.buses
         master: dialog.master
