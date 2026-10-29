@@ -49,10 +49,19 @@ TestCase {
 
     QtObject {
         id: fakeCore
+        property string devices: "[]"
         function choices(kind) {
-            return kind === "colors" ? JSON.stringify(["red", "green", "blue"])
-                : JSON.stringify({ buses: 8, name_max: 32 })
+            switch (kind) {
+            case "colors": return JSON.stringify(["red", "green", "blue"])
+            case "outputs": return JSON.stringify(["srt", "record"])
+            case "containers": return JSON.stringify(["mkv"])
+            case "card_modes": return JSON.stringify(["1080p25"])
+            case "card_channels": return JSON.stringify(["2"])
+            case "card_limits": return JSON.stringify({ sound_delay_ms: 1000 })
+            }
+            return JSON.stringify({ buses: 8, name_max: 32 })
         }
+        function refreshLists() {}
         function showLive(item, source) {}
         function releaseLive(item) {}
         function shortName(name, max) {
@@ -189,6 +198,17 @@ TestCase {
         compare(s.inputs[0].n, 1, "the old state stays as it was")
     }
 
+    function test_by_id_finds_like_find() {
+        var list = [{ id: "a", n: 1 }, { id: "b", n: 2 }, { id: "a", n: 3 }]
+        compare(StatePatch.byId(list, "b").n, 2)
+        compare(StatePatch.byId(list, "a").n, 1, "the first of two")
+        compare(StatePatch.byId(list, "c"), undefined)
+        compare(StatePatch.byId(null, "a"), undefined)
+        var other = [{ id: "b", n: 5 }]
+        compare(StatePatch.byId(other, "b").n, 5, "each list its own index")
+        compare(StatePatch.byId(list, "b").n, 2)
+    }
+
     /** What the tiles of `inputTile` reported, from their making on. */
     property var reported: []
 
@@ -219,6 +239,31 @@ TestCase {
         tile.destroy()
         wait(50)
         compare(reported.length, before, "nothing reported while it goes")
+    }
+
+    Component {
+        id: addOutputDialog
+        AddOutputDialog {
+            core: fakeCore
+        }
+    }
+
+    /** What an output carries stays chosen while a fader moves. */
+    function test_add_output_keeps_its_source_through_a_volume_change() {
+        var dialog = createTemporaryObject(addOutputDialog, test, { inputs: Data.state.inputs })
+        dialog.open()
+        tryVerify(() => dialog.opened)
+        var box = itemsOf(dialog.contentItem).find(i => i.model !== undefined && i.count === 3 + Data.state.inputs.length)
+        verify(box, "the source box")
+        box.currentIndex = 4
+        for (var v = 99; v > 89; v--) {
+            dialog.inputs = withVolume(v).inputs
+        }
+        compare(box.currentIndex, 4)
+        var renamed = withVolume(90)
+        renamed.inputs[0].name = "Renamed"
+        dialog.inputs = renamed.inputs
+        compare(box.model[3], "1 Renamed", "a new name shows")
     }
 
     /** The vertical volume slider of the first input strip. */

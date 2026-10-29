@@ -26,7 +26,7 @@ ColumnLayout {
     onInputsChanged: syncKeys()
     Component.onCompleted: syncKeys()
     function inputOf(key) {
-        return inputs.find(i => i.id === key) || null
+        return StatePatch.byId(inputs, key) || null
     }
 
     Repeater {

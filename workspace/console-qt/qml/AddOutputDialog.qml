@@ -22,6 +22,17 @@ KanteDialog {
         }
     }
     onBusesChanged: syncSoundNames()
+    // Likewise the inputs, which change with every fader move; followed
+    // while the dialog is open.
+    property var sourceNames: []
+    function syncSourceNames() {
+        const names = inputs.map(i => i.number + " " + i.name)
+        if (JSON.stringify(names) !== JSON.stringify(sourceNames)) {
+            sourceNames = names
+        }
+    }
+    onInputsChanged: if (visible) syncSourceNames()
+    onAboutToShow: syncSourceNames()
     Component.onCompleted: syncSoundNames()
 
     readonly property var kinds: Texts.choices("outputs", core.choices("outputs"))
@@ -210,7 +221,7 @@ KanteDialog {
         QQC2.ComboBox {
             id: sourceBox
             Layout.fillWidth: true
-            model: [qsTr("Program"), qsTr("Preview"), qsTr("Multiview")].concat(dialog.inputs.map(i => i.number + " " + i.name))
+            model: [qsTr("Program"), qsTr("Preview"), qsTr("Multiview")].concat(dialog.sourceNames)
             KanteFieldSkin { control: sourceBox }
         }
 

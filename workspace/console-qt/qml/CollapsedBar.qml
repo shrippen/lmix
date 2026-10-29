@@ -45,7 +45,7 @@ Flow {
         Item {
             id: entry
             required property string key
-            readonly property var modelData: bar.inputs.find(i => i.id === key) || ({ id: key, number: 0, name: "" })
+            readonly property var modelData: StatePatch.byId(bar.inputs, key) || ({ id: key, number: 0, name: "" })
             readonly property bool onProgram: bar.show !== null && bar.show.program === modelData.id
             readonly property bool onPreview: bar.show !== null && bar.show.preview === modelData.id
 

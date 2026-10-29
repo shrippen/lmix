@@ -31,7 +31,7 @@ ColumnLayout {
     readonly property bool anyOverlay: overlays.some(id => id !== null)
 
     function inputById(id) {
-        return show ? show.inputs.find(i => i.id === id) || null : null
+        return show ? StatePatch.byId(show.inputs, id) || null : null
     }
     readonly property var effects: Texts.choices("effects", core.choices("effects"))
     readonly property var durations: JSON.parse(core.choices("durations"))

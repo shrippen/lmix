@@ -18,9 +18,17 @@ AppPage {
     /** The window (AppShell): show, actions, helpers. */
     required property var shell
     readonly property var show: shell.show
-    readonly property var levels: shell.backend.levels.length > 0 ? JSON.parse(shell.backend.levels) : ({})
+    readonly property var levels: shell.levels
     readonly property var master: show && show.master ? show.master : ({ volume: 100, mute: false })
-    readonly property var soundInputs: show ? show.inputs.filter(i => i.has_audio) : []
+    /** The inputs, held while the page is hidden: it need not follow
+     *  every fader move on another page. */
+    property var inputs: []
+    Binding on inputs {
+        when: root.visible
+        value: root.shell.inputs
+        restoreMode: Binding.RestoreNone
+    }
+    readonly property var soundInputs: inputs.filter(i => i.has_audio)
     // Strips by id: a new state (every fader step brings one) keeps the
     // delegates, so a fader drag goes on.
     KeyedModel { id: stripModel }
@@ -34,7 +42,7 @@ AppPage {
     /** 0 inputs, 1 sends, 2 buses, 3 zones. */
     property int part: 0
     property string selectedId: ""
-    readonly property var selected: soundInputs.find(i => i.id === selectedId) || soundInputs[0] || null
+    readonly property var selected: StatePatch.byId(soundInputs, selectedId) || soundInputs[0] || null
     // A new state brings new objects: load only for another input, or
     // edits in progress would be thrown away.
     property string loadedId: ""
@@ -218,7 +226,7 @@ AppPage {
     component SendRow: Repeater {
         id: sendRow
         required property string key
-        readonly property var input: root.soundInputs.find(i => i.id === key)
+        readonly property var input: StatePatch.byId(root.soundInputs, key)
             || ({ id: key, number: 0, name: "", sends: {}, phones: { on: true, level: 100 } })
         model: sendScroll.buses.length + 2
         delegate: Loader {
@@ -259,7 +267,7 @@ AppPage {
     component Strip: KanteCard {
         id: strip
         required property string key
-        readonly property var input: root.soundInputs.find(i => i.id === key)
+        readonly property var input: StatePatch.byId(root.soundInputs, key)
             || ({ id: key, number: 0, name: "", audio: { on: false, follow_video: false, volume: 0 }, listen: "off" })
         readonly property bool onProgram: root.show !== null && root.show.program === input.id
         readonly property bool onPreview: root.show !== null && root.show.preview === input.id

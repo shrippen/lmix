@@ -91,6 +91,8 @@ Kirigami.ApplicationWindow {
         }
     }
     readonly property var inputs: show ? show.inputs : []
+    /** Peaks (Core.levels), parsed once for all pages. */
+    readonly property var levels: backend.levels.length > 0 ? JSON.parse(backend.levels) : ({})
     readonly property var recent: backend.recent.length > 0 ? JSON.parse(backend.recent) : []
 
     /** Send an lmix action (the API's JSON, as an object). */
@@ -99,7 +101,7 @@ Kirigami.ApplicationWindow {
     }
 
     function inputById(id) {
-        return inputs.find(i => i.id === id) || null
+        return StatePatch.byId(inputs, id) || null
     }
 
     function localPath(url) {

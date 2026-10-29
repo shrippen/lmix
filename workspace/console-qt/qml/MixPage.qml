@@ -93,7 +93,7 @@ AppPage {
         ? show.format.width / show.format.height : 16 / 9
 
 
-    readonly property var levels: backend.levels.length > 0 ? JSON.parse(backend.levels) : ({})
+    readonly property var levels: shell.levels
     readonly property var positions: backend.positions.length > 0 ? JSON.parse(backend.positions) : ({})
 
     KeyedModel { id: inputModel }
