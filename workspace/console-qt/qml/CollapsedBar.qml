@@ -6,8 +6,9 @@ import Kante
 
 /**
  * Collapsed inputs (UI.3): a button each instead of a tile, red on
- * program and green in preview like a tile. Click and double click (GO)
- * as on the tile; right click: expand or cut.
+ * program and green in preview like a tile. Click as on the tile, double
+ * click expands, right click opens the tile's menu (docs/DESIGN-DIALOGE.md
+ * M04; GO is in that menu).
  */
 Flow {
     id: bar
@@ -20,6 +21,8 @@ Flow {
     /** Ids of the collapsed ones. */
     required property var collapsed
     signal expandRequested(string id)
+    /** Right click: the page opens the input's menu (InputMenu). */
+    signal menuRequested(string id)
 
     // Keyed: buttons (and an open menu) survive state updates.
     KeyedModel { id: keys }
@@ -62,33 +65,18 @@ Flow {
                     : entry.onPreview ? KanteButton.Emphasis.Primary : KanteButton.Emphasis.Normal
                 enabled: bar.core.connected
                 Accessible.name: qsTr("Input %1 %2, collapsed").arg(entry.modelData.number).arg(entry.modelData.name)
-                // As on its tile (INP.8, INP.9).
+                // As on its tile (INP.8).
                 onClicked: bar.act({ action: "click_input", input: entry.modelData.id })
-                onDoubleClicked: bar.act({ action: "go_input", input: entry.modelData.id })
+                onDoubleClicked: bar.expandRequested(entry.modelData.id)
                 QQC2.ToolTip.visible: hovered
-                QQC2.ToolTip.text: qsTr("Click: %1. Double click (GO): %2. Right click: expand.")
+                QQC2.ToolTip.text: qsTr("Click: %1. Double click: expand. Right click: more.")
                     .arg(Texts.label("presses", entry.modelData.click || "preview_input"))
-                    .arg(Texts.label("presses", entry.modelData.go || "quick_play"))
             }
 
             TapHandler {
                 acceptedButtons: Qt.RightButton
                 enabled: bar.core.connected
-                onTapped: menu.popup()
-            }
-
-            QQC2.Menu {
-                id: menu
-                KantePopupSkin { popup: menu }
-                QQC2.MenuItem {
-                    text: qsTr("Expand")
-                    onTriggered: bar.expandRequested(entry.modelData.id)
-                }
-                QQC2.MenuItem {
-                    text: qsTr("Cut to program")
-                    enabled: !entry.onProgram
-                    onTriggered: bar.act({ action: "cut_direct", input: entry.modelData.id })
-                }
+                onTapped: bar.menuRequested(entry.modelData.id)
             }
         }
     }

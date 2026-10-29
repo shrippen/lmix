@@ -314,6 +314,76 @@ AppPage {
         }
     }
 
+    // The menu of every tile and collapsed input (M04).
+    InputMenu {
+        id: inputMenu
+        core: backend
+        act: root.act
+        inputs: root.inputs
+        show: root.show
+        onTriggersRequested: {
+            triggersDialog.graphics = null
+            triggersDialog.input = root.inputById(inputId)
+            triggersDialog.open()
+        }
+        onReplaceRequested: {
+            addInputDialog.replacing = root.inputById(inputId)
+            addInputDialog.open()
+        }
+        onRemoveRequested: root.removeInput(root.inputById(inputId))
+        onSettingsRequested: {
+            inputSettingsDialog.inputId = inputId
+            inputSettingsDialog.open()
+        }
+        onLookRequested: {
+            lookDialog.inputId = inputId
+            lookDialog.open()
+        }
+        onStripRequested: {
+            stripDialog.inputId = inputId
+            stripDialog.open()
+        }
+        onRenameRequested: {
+            renameDialog.inputId = inputId
+            renameDialog.open()
+        }
+        onPtzRequested: {
+            ptzDialog.inputId = inputId
+            ptzDialog.open()
+        }
+        onCollapseRequested: root.setCollapsed(inputId, true)
+        onExpandRequested: root.setCollapsed(inputId, false)
+    }
+
+    // One of each for all tiles (F13): a dialog per tile cost every tile
+    // its own popup tree.
+    LookDialog {
+        id: lookDialog
+        parent: QQC2.Overlay.overlay
+        anchors.centerIn: parent
+        act: root.act
+        property string inputId: ""
+        input: root.inputById(inputId) || null
+    }
+
+    ChannelStripDialog {
+        id: stripDialog
+        parent: QQC2.Overlay.overlay
+        anchors.centerIn: parent
+        act: root.act
+        property string inputId: ""
+        input: root.inputById(inputId) || null
+        buses: root.show && root.show.buses ? root.show.buses : []
+    }
+
+    RenameInputDialog {
+        id: renameDialog
+        parent: QQC2.Overlay.overlay
+        anchors.centerIn: parent
+        act: root.act
+        inputs: root.inputs
+    }
+
     PtzDialog {
         id: ptzDialog
         parent: QQC2.Overlay.overlay
@@ -853,32 +923,12 @@ AppPage {
                     onPreview: root.show !== null && root.show.preview === key
                     overlays: root.show && root.show.overlays ? root.show.overlays : []
                     overlayPreview: root.show && root.show.overlay_preview ? root.show.overlay_preview : []
-                    looksAvailable: root.show !== null && root.show.looks_available === true
-                    buses: root.show && root.show.buses ? root.show.buses : []
                     peakDb: root.levels.peak(key)
                     leftDb: root.levels.channel(key, 0)
                     rightDb: root.levels.channel(key, 1)
-                    onTriggersRequested: {
-                        triggersDialog.graphics = null
-                        triggersDialog.input = tileDelegate.input
-                        triggersDialog.open()
-                    }
-                    onReplaceRequested: {
-                        addInputDialog.replacing = tileDelegate.input
-                        addInputDialog.open()
-                    }
-                    onRemoveRequested: root.removeInput(tileDelegate.input)
                     dynamicSlots: root.show && root.show.dynamic_inputs
                         ? [1, 2, 3, 4].filter(n => root.show.dynamic_inputs[n - 1] === key) : []
-                    onSettingsRequested: {
-                        inputSettingsDialog.inputId = tileDelegate.input.id
-                        inputSettingsDialog.open()
-                    }
-                    onPtzRequested: {
-                        ptzDialog.inputId = tileDelegate.input.id
-                        ptzDialog.open()
-                    }
-                    onCollapseRequested: root.setCollapsed(tileDelegate.input.id, true)
+                    onMenuRequested: inputMenu.openFor(tileDelegate.input.id, false)
                 }
             }
 
@@ -890,6 +940,7 @@ AppPage {
                 inputs: root.inputs
                 collapsed: root.collapsedIds
                 onExpandRequested: id => root.setCollapsed(id, false)
+                onMenuRequested: id => inputMenu.openFor(id, true)
             }
 
             // Layouts and outputs in one row; in a narrow window the outputs
