@@ -78,7 +78,18 @@ Kirigami.ApplicationWindow {
         target: root.contentItem
     }
 
-    readonly property var show: backend.state.length > 0 ? JSON.parse(backend.state) : null
+    /** The show state (ShowState.qml), null until the first arrives. */
+    property var show: null
+    ShowState {
+        id: showState
+    }
+    Connections {
+        target: root.backend
+        function onStatePatched(patch) {
+            showState.patch(JSON.parse(patch))
+            root.show = showState
+        }
+    }
     readonly property var inputs: show ? show.inputs : []
     readonly property var recent: backend.recent.length > 0 ? JSON.parse(backend.recent) : []
 

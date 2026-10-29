@@ -136,6 +136,59 @@ TestCase {
         compare(after[0].text, "C")
     }
 
+    /** A fader move patches one value: everything else keeps its object. */
+    function test_a_patch_keeps_unchanged_parts() {
+        var s = StatePatch.apply(null, [{ p: [], v: JSON.parse(JSON.stringify(Data.state)) }])
+        var next = StatePatch.apply(s, [{ p: ["inputs", 0, "audio", "volume"], v: 42 }])
+        compare(next.inputs[0].audio.volume, 42)
+        compare(s.inputs[0].audio.volume, 100, "the old state stays as it was")
+        verify(next !== s && next.inputs !== s.inputs && next.inputs[0] !== s.inputs[0], "the path is copied")
+        verify(next.inputs[1] === s.inputs[1], "the other inputs are the same objects")
+        verify(next.overlays === s.overlays && next.buses === s.buses && next.format === s.format,
+            "the other parts are the same objects")
+        compare(JSON.stringify(next.inputs[0].strip), JSON.stringify(s.inputs[0].strip))
+    }
+
+    Component {
+        id: showStateComponent
+        ShowState {
+            property int programChanges: 0
+            property int inputsChanges: 0
+            onProgramChanged: programChanges++
+            onInputsChanged: inputsChanges++
+        }
+    }
+
+    /** Bindings on `show.program` stay quiet while a fader moves. */
+    function test_show_state_sets_only_touched_keys() {
+        var show = createTemporaryObject(showStateComponent, test)
+        show.patch([{ p: [], v: JSON.parse(JSON.stringify(Data.state)) }])
+        compare(show.program, Data.state.program)
+        compare(show.inputs.length, Data.state.inputs.length)
+        var program = show.programChanges, inputs = show.inputsChanges, overlays = show.overlays
+        for (var v = 99; v > 89; v--) {
+            show.patch([{ p: ["inputs", 0, "audio", "volume"], v: v }])
+        }
+        compare(show.inputs[0].audio.volume, 90)
+        compare(show.inputsChanges - inputs, 10)
+        compare(show.programChanges, program, "program untouched")
+        verify(show.overlays === overlays, "overlays untouched")
+        show.patch([{ p: ["program"], v: null }])
+        compare(show.program, null)
+    }
+
+    function test_a_patch_rebuilds_arrays_and_removes_keys() {
+        var s = { inputs: [{ id: "a", n: 1 }, { id: "b", n: 2 }], gone: 1 }
+        var next = StatePatch.apply(s, [
+            { p: ["inputs"], a: [{ k: 1 }, { v: { id: "c", n: 3 } }, { k: 0 }] },
+            { p: ["inputs", 2, "n"], v: 5 },
+            { p: ["gone"], d: true }
+        ])
+        compare(JSON.stringify(next), JSON.stringify({ inputs: [{ id: "b", n: 2 }, { id: "c", n: 3 }, { id: "a", n: 5 }] }))
+        verify(next.inputs[0] === s.inputs[1], "a kept element is the same object")
+        compare(s.inputs[0].n, 1, "the old state stays as it was")
+    }
+
     /** What the tiles of `inputTile` reported, from their making on. */
     property var reported: []
 

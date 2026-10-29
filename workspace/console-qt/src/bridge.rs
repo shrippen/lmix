@@ -16,7 +16,7 @@ use lmix_types::{Action, BusRef, Event, InputRef, Latency, Levels, LiveFeed, Out
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 
 use crate::latest::Latest;
-use crate::{config, forms};
+use crate::{config, forms, state_patch};
 
 #[cxx_qt::bridge]
 pub mod qobject {
@@ -32,7 +32,6 @@ pub mod qobject {
         #[qobject]
         #[qml_element]
         #[qproperty(bool, connected)]
-        #[qproperty(QString, state)]
         /// Last refusal or error as JSON: lmix-core's `{error, message}`
         /// (Texts.qml translates by `error.error`), or `{message}`; empty
         /// when the last action went through.
@@ -73,6 +72,12 @@ pub mod qobject {
         /// this one tries again (AppShell).
         #[qproperty(bool, global_held, cxx_name = "globalHeld")]
         type Core = super::CoreRust;
+
+        /// The show state changed: what changed, as `crate::state_patch`
+        /// operations (JSON list). The first one sets the whole state.
+        #[qsignal]
+        #[cxx_name = "statePatched"]
+        fn state_patched(self: Pin<&mut Core>, patch: QString);
 
         /// A global shortcut was pressed: the lmix shortcut id.
         #[qsignal]
@@ -193,7 +198,8 @@ struct Live {
 #[derive(Default)]
 pub struct CoreRust {
     connected: bool,
-    state: QString,
+    /// The show state QML has, the base of the next patch.
+    shown: serde_json::Value,
     message: QString,
     style: i32,
     levels: QString,
@@ -252,14 +258,19 @@ async fn follow(thread: cxx_qt::CxxQtThread<qobject::Core>) {
                 };
                 let queued = match serde_json::from_str(&text) {
                     Ok(Event::State { state: newer }) => {
-                        let json = serde_json::to_string(&newer).unwrap_or_default();
-                        if !state.put(json) {
+                        if !state.put(serde_json::to_value(&newer).unwrap_or_default()) {
                             continue;
                         }
                         let state = state.clone();
-                        thread.queue(move |core| {
-                            if let Some(json) = state.take() {
-                                core.set_state(QString::from(&json));
+                        thread.queue(move |mut core| {
+                            if let Some(newer) = state.take() {
+                                let ops = state_patch::diff(&core.shown, &newer);
+                                if ops.is_empty() {
+                                    return;
+                                }
+                                core.as_mut().rust_mut().shown = newer;
+                                let patch = serde_json::to_string(&ops).unwrap_or_default();
+                                core.state_patched(QString::from(&patch));
                             }
                         })
                     }

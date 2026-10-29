@@ -146,6 +146,7 @@ fn main() {
                 "qml/ChoiceMenu.qml",
                 "qml/KeyedModel.qml",
                 "qml/MoveThrottle.qml",
+                "qml/ShowState.qml",
                 "qml/TitleField.qml",
                 "qml/TitlesDialog.qml",
                 "qml/DataSourcesDialog.qml",
@@ -155,7 +156,8 @@ fn main() {
                 "qml/ChannelStripPanel.qml",
                 "qml/InputSettingsDialog.qml",
             ])
-            .qml_file(QmlFile::from("qml/Texts.qml").singleton(true)),
+            .qml_file(QmlFile::from("qml/Texts.qml").singleton(true))
+            .qml_file(QmlFile::from("qml/StatePatch.qml").singleton(true)),
     )
     .files([
         "src/bridge.rs",

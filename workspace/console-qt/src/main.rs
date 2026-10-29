@@ -12,6 +12,7 @@ mod qml_profile;
 mod qt_translations;
 #[cfg(test)]
 mod refusals;
+mod state_patch;
 
 fn main() {
     app::run();
