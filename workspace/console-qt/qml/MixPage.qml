@@ -79,7 +79,7 @@ AppPage {
         viewSettings.collapsed = JSON.stringify(ids)
     }
     function syncInputs() {
-        inputModel.sync(show ? show.inputs.filter(i => collapsedIds.indexOf(i.id) < 0).map(i => i.id) : [])
+        inputModel.sync(inputIds.filter(id => collapsedIds.indexOf(id) < 0))
     }
     onCollapsedIdsChanged: syncInputs()
     /** Simple mode: `--mode` for this run, else the saved choice. */
@@ -99,11 +99,18 @@ AppPage {
     KeyedModel { id: inputModel }
     KeyedModel { id: outputModel }
     KeyedModel { id: transitionModel }
-    // Reads `show` itself: `inputs` may not have followed it yet here.
-    onShowChanged: {
+    // By the parts of the show: `show` itself stays the same object
+    // (ShowState), and the ids only change when rows come, go or move.
+    readonly property var inputIds: show && show.inputIds ? show.inputIds : []
+    onInputIdsChanged: syncInputs()
+    readonly property var outputs: show && show.outputs ? show.outputs : []
+    onOutputsChanged: outputModel.sync(outputs.map(o => o.id))
+    readonly property var transitions: show && show.transitions ? show.transitions : []
+    onTransitionsChanged: transitionModel.sync(transitions.map(t => String(t.slot)))
+    Component.onCompleted: {
         syncInputs()
-        outputModel.sync(show ? show.outputs.map(o => o.id) : [])
-        transitionModel.sync(show ? show.transitions.map(t => String(t.slot)) : [])
+        outputModel.sync(outputs.map(o => o.id))
+        transitionModel.sync(transitions.map(t => String(t.slot)))
     }
 
     function outputById(id) {

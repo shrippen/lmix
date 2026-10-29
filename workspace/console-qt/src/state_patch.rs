@@ -240,6 +240,23 @@ mod tests {
         }
     }
 
+    /// `show` is one ShowState for good, so a handler for its change runs
+    /// once: new inputs got no tile, new outputs no button (29.10.2026).
+    #[test]
+    fn no_qml_waits_for_show_to_change() {
+        for entry in std::fs::read_dir(concat!(env!("CARGO_MANIFEST_DIR"), "/qml")).unwrap() {
+            let path = entry.unwrap().path();
+            if path.extension().is_some_and(|e| e == "qml") {
+                let text = std::fs::read_to_string(&path).unwrap();
+                assert!(
+                    !text.contains("onShowChanged"),
+                    "{}: follow a part of the show (onInputsChanged, …), not show itself",
+                    path.display()
+                );
+            }
+        }
+    }
+
     /// Random states from a few shapes, each pair round trips.
     #[test]
     fn random_pairs_round_trip() {
