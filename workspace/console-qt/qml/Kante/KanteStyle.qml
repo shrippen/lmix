@@ -57,6 +57,22 @@ QtObject {
      */
     property bool materialStyle: false
 
+    /**
+     * Presses a button from the keyboard (Return, Enter) as a click does (1.49). Qt 6.8 and
+     * later animate it; older versions only emit clicked().
+     */
+    function pressByKey(button, event) {
+        if (!button.enabled) {
+            event.accepted = false
+            return
+        }
+        if (typeof button.animateClick === "function") {
+            button.animateClick()
+        } else {
+            button.clicked()
+        }
+    }
+
     /** Leinen when the platform theme is light, unless preferDark. */
     readonly property bool light: !preferDark && Kirigami.Theme.backgroundColor.hslLightness > 0.5
     readonly property QtObject palette: light ? KantePalette.light : KantePalette.dark
@@ -277,6 +293,30 @@ QtObject {
         return parts.join(", ")
     }
     /**
+     * Rehearsal marks (Kante 1.50): the part names of one bar as one label. A name or a list
+     * of names; blanks and repeats are left out, the rest joined with " · ":
+     *   "Intro"                 "Intro"
+     *   ["Refrain", "B"]        "Refrain · B"
+     *   undefined, [], [""]     ""
+     */
+    function rehearsalText(names) {
+        if (names === undefined || names === null) {
+            return ""
+        }
+        // A list from QML or C++ is not always a JS Array: test for a length.
+        const list = typeof names === "string" || names.length === undefined ? [names] : names
+        const out = []
+        for (let i = 0; i < list.length; i++) {
+            const n = list[i] === undefined || list[i] === null ? "" : String(list[i]).trim()
+            if (n !== "" && out.indexOf(n) < 0) {
+                out.push(n)
+            }
+        }
+        return out.join(" \u00b7 ")
+    }
+    /** A rehearsal mark for screen readers (1.50), %1 the label: "Teil Refrain · B". An app translates it once. */
+    property string partText: "Teil %1"
+    /**
      * String colours (Kante 1.28), one per string, string 0 = the lowest, kept apart from the
      * note state colours. Presets (`stringPalettes`): "kante" six roles that differ in hue
      * (purple, cyan, yellow, strong text, muted, info), "mono" every string in the strong
@@ -284,6 +324,14 @@ QtObject {
      * strong text). `stringPalette` is the app's choice, set once; KanteTabLane, KanteTabStaff
      * and KanteFretboard follow it where their `stringColors` leave a string out. Colour is
      * never the only sign: strings keep their names and rows.
+     *
+     * "kante" in Kante and Kante Light (1.51) comes from the palette (string0..string5): on a
+     * light ground raspberry, blue, ochre, strong text, muted, cyan, at least 4.5:1 (the fret
+     * digits are drawn in it) and the four bass strings apart under deuteranopia; the platform
+     * roles gave the A string 1.7:1 at a beamer, and purple and cyan look alike with
+     * deuteranopia. Dark Kante keeps its colours; Kante Light on a dark system takes the dark
+     * palette's (before: the platform roles). Kante Light moves a colour that reads below
+     * 4.5:1 on an unusual platform ground (hue kept). System keeps the platform roles.
      */
     readonly property var stringPalettes: ["kante", "mono", "bright"]
     property string stringPalette: "kante"
@@ -292,9 +340,22 @@ QtObject {
         var p = preset !== undefined && preset !== null && preset !== "" ? String(preset) : stringPalette
         var list = p === "mono" ? [strongTextColor]
             : p === "bright" ? [warningColor, infoColor, accentTextColor, tagColor, focusColor, strongTextColor]
-            : [tagColor, focusColor, accentTextColor, strongTextColor, mutedTextColor, infoColor]
+            : kanteStrings
         var i = Math.max(0, Math.floor(Number(s) || 0))
         return list[i % list.length]
+    }
+    /** The "kante" preset, worked out once per theme, not per note. */
+    readonly property var kanteStrings: {
+        if (!active) {
+            return [tagColor, focusColor, accentTextColor, strongTextColor, mutedTextColor, infoColor]
+        }
+        const p = palette
+        const list = [p.string0, p.string1, p.string2, p.string3, p.string4, p.string5]
+        if (themed) {
+            return list
+        }
+        const ground = Qt.rgba(backgroundColor.r, backgroundColor.g, backgroundColor.b, 1)
+        return list.map(function (c) { return readable(c, ground) })
     }
     /** The colours of `count` strings (default 6) in `preset`, e.g. for `stringColors`. */
     function stringColors(count, preset) {
