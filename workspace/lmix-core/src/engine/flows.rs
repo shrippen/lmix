@@ -243,6 +243,10 @@ pub fn audio_channel(slot: usize) -> usize {
 
 /// Mixer input that always shows black: program when lmix has nothing on
 /// program (the engine always has some input there).
+/// Most slots a mixer flow takes: strom's vision mixer takes at most 32
+/// inputs, and black is one of them.
+pub const MAX_SLOTS: usize = 31;
+
 pub fn black_input(slots: usize) -> usize {
     slots
 }
