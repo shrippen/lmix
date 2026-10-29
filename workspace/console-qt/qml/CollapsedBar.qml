@@ -57,11 +57,6 @@ Flow {
             function click() {
                 bar.act({ action: "click_input", input: entry.modelData.id })
             }
-            Timer {
-                id: clickLater
-                interval: Qt.styleHints.mouseDoubleClickInterval
-                onTriggered: entry.click()
-            }
 
             implicitWidth: button.implicitWidth
             implicitHeight: button.implicitHeight
@@ -76,22 +71,21 @@ Flow {
                     : entry.onPreview ? KanteButton.Emphasis.Primary : KanteButton.Emphasis.Normal
                 enabled: bar.core.connected
                 Accessible.name: qsTr("Input %1 %2, collapsed").arg(entry.modelData.number).arg(entry.modelData.name)
-                // As on its tile (INP.8). A click that goes on air waits for a second one:
-                // a double click only expands and must not cut it to program first.
-                onClicked: {
-                    if (entry.clickOnAir) {
-                        clickLater.restart()
-                    } else {
-                        entry.click()
+                // As on its tile (INP.8), at once: a cut must not wait. A double click
+                // expands only where the click previews; where it goes on air, waiting
+                // to tell the two apart would make the cut late, so the menu expands.
+                onClicked: entry.click()
+                onDoubleClicked: {
+                    if (!entry.clickOnAir) {
+                        bar.expandRequested(entry.modelData.id)
                     }
                 }
-                onDoubleClicked: {
-                    clickLater.stop()
-                    bar.expandRequested(entry.modelData.id)
-                }
                 QQC2.ToolTip.visible: hovered
-                QQC2.ToolTip.text: qsTr("Click: %1. Double click: expand. Right click: more.")
-                    .arg(Texts.label("presses", entry.modelData.click || "preview_input"))
+                QQC2.ToolTip.text: entry.clickOnAir
+                    ? qsTr("Click: %1. Right click: more, also expand.")
+                        .arg(Texts.label("presses", entry.modelData.click))
+                    : qsTr("Click: %1. Double click: expand. Right click: more.")
+                        .arg(Texts.label("presses", entry.modelData.click || "preview_input"))
             }
 
             TapHandler {
