@@ -9,6 +9,9 @@ Seiten, zwischen denen eine Leiste am Fuß des Fensters umschaltet (wie Resolve;
 - **Show**: Ablauf nach Drehbuch, vorbereitete Cue-Folge mit GO, Vorbild QLab 5
   (`docs/LASTENHEFT-SHOW.md`; Theater, Ausstellung, Spieltisch).
 - **Audio**, **Outputs**, **Setup**; später **Light** (Lichtpult mit Effekten, todo).
+- Daneben **lmix tools** (eigenes Repo `../lmix-tools`): Werkzeuge für NDI und
+  OMT nach dem Vorbild der NDI Tools; gemeinsamer Code (OMT-Element, Quellen,
+  Videofläche) entsteht dort und wird hier genutzt (dort Lastenheft §6.3).
 
 Alle Seiten teilen Engine, Inputs, Ausgänge, Ton, Aktionskatalog, Auslöser, APIs
 und Show-Datei. Medienkern = Strom (Eyevinn, Rust + GStreamer,
