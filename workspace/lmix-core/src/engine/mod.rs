@@ -4,9 +4,10 @@
 //! inside `strom.rs` (layer rule: no holes through the driver layer).
 
 use async_trait::async_trait;
-use lmix_types::Device;
+use lmix_types::{Device, LiveTransport};
 
 use crate::switcher::Command;
+use flows::MixerBackend;
 
 pub mod flows;
 pub mod meters;
@@ -41,6 +42,21 @@ pub enum LivePicture {
     Preview,
     /// A slot at tile size.
     Slot(usize),
+    /// Every slot in one picture (see `flows::tiles_grid`).
+    Tiles,
+}
+
+impl LivePicture {
+    /// How its frames reach the Console: the CUDA mixer's pictures in GPU
+    /// memory. A slot's picture is scaled on the CPU (the fallback for
+    /// inputs that are not in the tile picture).
+    pub fn transport(self, backend: MixerBackend) -> LiveTransport {
+        match (self, backend) {
+            (LivePicture::Slot(_), _) => LiveTransport::UnixFd,
+            (_, MixerBackend::Cuda) => LiveTransport::CudaIpc,
+            _ => LiveTransport::UnixFd,
+        }
+    }
 }
 
 #[async_trait]
@@ -98,6 +114,11 @@ pub trait Engine: Send + Sync {
     /// socket with raw frames (`unixfdsrc`), started on the first call.
     async fn live(&self, _picture: LivePicture) -> Result<std::path::PathBuf, EngineError> {
         Err(EngineError::NoPictures)
+    }
+
+    /// How the frames of `picture` come over its socket.
+    fn live_transport(&self, _picture: LivePicture) -> LiveTransport {
+        LiveTransport::UnixFd
     }
 
     /// Position reports of the media players (clips and playlists).

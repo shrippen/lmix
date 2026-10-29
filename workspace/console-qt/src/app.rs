@@ -8,7 +8,7 @@ use cxx_qt_lib::{QGuiApplication, QQmlApplicationEngine, QString, QUrl};
 use gstreamer as gst;
 use std::path::{Path, PathBuf};
 
-use crate::{config, qt_translations};
+use crate::{config, gl_format, qt_translations};
 
 /// Qt application name: settings in `~/.config/lmix/lmix.conf`; also the
 /// binary, desktop file and Wayland app id.
@@ -264,8 +264,16 @@ pub fn run() -> ! {
         }
     }
 
-    // qml6glsink draws with the scene graph's OpenGL context.
+    // qml6glsink draws with the scene graph's OpenGL context, desktop GL
+    // so that the engine's GPU frames can be copied into it.
     std::env::set_var("QSG_RHI_BACKEND", "opengl");
+    gl_format::ffi::use_desktop_gl();
+    // Draw on the scene graph's own thread: Qt picks its basic loop here
+    // (Wayland, NVIDIA), which renders every frame of every live picture
+    // on the GUI thread (24 % of it with 31 live tiles, 3 % threaded).
+    if std::env::var_os("QSG_RENDER_LOOP").is_none() {
+        std::env::set_var("QSG_RENDER_LOOP", "threaded");
+    }
     if let Err(e) = gst::init() {
         eprintln!("GStreamer: {e}");
         std::process::exit(1);

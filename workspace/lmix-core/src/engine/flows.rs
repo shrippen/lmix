@@ -22,7 +22,10 @@ use strom_types::mixer::{
 use strom_types::stinger::{
     ENABLE_STINGER_PROPERTY, STINGER_INPUT_PAD, STINGER_MODE_PROPERTY, STINGER_PREROLL_PROPERTY,
 };
-use strom_types::vision_mixer::{ENABLE_PREVIEW_OUT_PROPERTY, PREVIEW_OUTPUT_PAD};
+use strom_types::vision_mixer::{
+    ENABLE_PREVIEW_OUT_PROPERTY, ENABLE_TILES_OUT_PROPERTY, PREVIEW_OUTPUT_PAD,
+    TILES_CELL_PROPERTY, TILES_COLUMNS_PROPERTY, TILES_OUTPUT_PAD,
+};
 use strom_types::{Flow, FlowId, PropertyValue};
 use uuid::Uuid;
 
@@ -30,9 +33,9 @@ use lmix_types::action::OVERLAY_CHANNELS;
 use lmix_types::input::color_rgb;
 use lmix_types::layout::LAYOUTS;
 use lmix_types::{
-    BusId, CardChannels, CardMode, DisplayMode, Framerate, MasterFormat, MultiviewLayout,
-    MultiviewMeters, OutputId, OutputSpec, ProgramSide, RateMode, Scan, SourceSpec, VideoCodec,
-    VideoEncoding,
+    BusId, CardChannels, CardMode, DisplayMode, Framerate, LiveTransport, MasterFormat,
+    MultiviewLayout, MultiviewMeters, OutputId, OutputSpec, ProgramSide, RateMode, Scan,
+    SourceSpec, VideoCodec, VideoEncoding,
 };
 
 use super::LivePicture;
@@ -145,6 +148,17 @@ const MV_OUT: &str = "mv_out";
 /// The mixer's preview output (VSP): the Console's preview monitor and
 /// outputs that carry the preview (OUT.2).
 const PVW_OUT: &str = "pvw_out";
+/// The mixer's tile output: every slot in one picture, for the Console's
+/// input tiles (`LivePicture::Tiles`).
+const TILES_OUT: &str = "tiles_out";
+/// Size of a slot's cell in the tile picture.
+pub const TILE_CELL: (u32, u32) = (640, 360);
+
+/// Columns and rows of the tile picture for `slots`: black, the mixer's
+/// input after the last slot, takes a cell too.
+pub fn tiles_grid(slots: usize) -> (usize, usize) {
+    strom_types::vision_mixer::tiles_grid(slots + 1, 0)
+}
 /// Outputs buffer a little more than the mixer: they are not on the
 /// switching path, an encoder hiccup must not drop frames.
 const OUTPUT_BUFFER_MS: &str = "500";
@@ -358,6 +372,17 @@ pub fn mixer_flow(
             (ENABLE_STINGER_PROPERTY, PropertyValue::Bool(true)),
             // Preview at program size, as the mixer composes it (VSP).
             (ENABLE_PREVIEW_OUT_PROPERTY, PropertyValue::Bool(true)),
+            // Every slot scaled on the mixer's GPU into one picture: the
+            // Console's input tiles, one stream for all.
+            (ENABLE_TILES_OUT_PROPERTY, PropertyValue::Bool(true)),
+            (
+                TILES_CELL_PROPERTY,
+                PropertyValue::String(format!("{}x{}", TILE_CELL.0, TILE_CELL.1)),
+            ),
+            (
+                TILES_COLUMNS_PROPERTY,
+                PropertyValue::UInt(tiles_grid(slots).0 as u64),
+            ),
             (
                 STINGER_PREROLL_PROPERTY,
                 PropertyValue::UInt(u64::from(STINGER_PREROLL_MS)),
@@ -400,6 +425,11 @@ pub fn mixer_flow(
     flow.links.push(link(
         format!("{MIXER_BLOCK}:{PREVIEW_OUTPUT_PAD}"),
         format!("{PVW_OUT}:sink"),
+    ));
+    flow.blocks.push(mixer_out(TILES_OUT));
+    flow.links.push(link(
+        format!("{MIXER_BLOCK}:{TILES_OUTPUT_PAD}"),
+        format!("{TILES_OUT}:sink"),
     ));
     flow.blocks.push(mixer_out(PGM_AUDIO_OUT));
     flow.links.push(link(
@@ -1095,6 +1125,7 @@ pub fn live_flow_id(which: LivePicture) -> FlowId {
     let name = match which {
         LivePicture::Program => "live-program".to_string(),
         LivePicture::Preview => "live-preview".to_string(),
+        LivePicture::Tiles => "live-tiles".to_string(),
         LivePicture::Slot(slot) => format!("live-slot-{slot}"),
     };
     Uuid::new_v5(&FLOW_NAMESPACE, name.as_bytes())
@@ -1105,6 +1136,7 @@ pub fn live_socket_name(which: LivePicture) -> String {
     match which {
         LivePicture::Program => "program.sock".into(),
         LivePicture::Preview => "preview.sock".into(),
+        LivePicture::Tiles => "tiles.sock".into(),
         LivePicture::Slot(slot) => format!("slot-{slot}.sock"),
     }
 }
@@ -1147,6 +1179,7 @@ pub fn live_flow(which: LivePicture, socket: &str, backend: MixerBackend, sink: 
     let (name, channel) = match which {
         LivePicture::Program => ("program".to_string(), pgm_channel(PGM_OUT)),
         LivePicture::Preview => ("preview".to_string(), pgm_channel(PVW_OUT)),
+        LivePicture::Tiles => ("tiles".to_string(), pgm_channel(TILES_OUT)),
         LivePicture::Slot(slot) => (format!("slot {slot}"), slot_channel(slot)),
     };
     let mut flow = Flow::new(format!("lmix live {name}"));
@@ -1160,6 +1193,24 @@ pub fn live_flow(which: LivePicture, socket: &str, backend: MixerBackend, sink: 
             ("max_time", PropertyValue::String(LIVE_BUFFER_MS.into())),
         ],
     ));
+    if which.transport(backend) == LiveTransport::CudaIpc {
+        // The CUDA mixer's frames stay in GPU memory: the Console maps
+        // them from this device, nothing crosses to the CPU.
+        flow.elements.push(element(
+            "sock",
+            "cudaipcsink",
+            vec![
+                ("address", PropertyValue::String(socket.into())),
+                // Legacy IPC handles: a Console that reads two pictures
+                // cannot open the second (CUDA_ERROR_INVALID_HANDLE).
+                ("ipc-mode", PropertyValue::String("mmap".into())),
+                ("sync", PropertyValue::Bool(false)),
+                ("qos", PropertyValue::Bool(false)),
+            ],
+        ));
+        flow.links.push(link("pgm:src".into(), "sock".into()));
+        return flow;
+    }
     flow.elements.push(element(
         "sock",
         "unixfdsink",
@@ -2193,7 +2244,7 @@ mod tests {
 
     #[test]
     fn mixer_outputs_hand_on_without_waiting() {
-        // Program, multiview, preview and program sound (the buses
+        // Program, multiview, preview, tiles and program sound (the buses
         // publish from the audio mixer, unsynced too).
         let flow = mixer_flow(
             2,
@@ -2209,7 +2260,7 @@ mod tests {
             .iter()
             .filter(|b| b.block_definition_id == INTER_OUTPUT_BLOCK)
             .collect();
-        assert_eq!(outs.len(), 4);
+        assert_eq!(outs.len(), 5);
         for out in outs {
             assert!(
                 matches!(out.properties.get("sync"), Some(PropertyValue::Bool(false))),
@@ -3036,7 +3087,7 @@ mod tests {
         let flow = live_flow(
             LivePicture::Preview,
             "/run/x/preview.sock",
-            MixerBackend::Cuda,
+            MixerBackend::Cpu,
             FdSink::CopiesItself,
         );
 
@@ -3044,7 +3095,7 @@ mod tests {
         assert!(flow
             .links
             .iter()
-            .any(|l| l.from == "sysmem" && l.to == "sock"));
+            .any(|l| l.from == "pgm:src" && l.to == "sock"));
         let pgm = flow.blocks.iter().find(|b| b.id == "pgm").unwrap();
         assert!(matches!(
             pgm.properties.get("channel"),
@@ -3055,6 +3106,99 @@ mod tests {
             live_flow_id(LivePicture::Program)
         );
         assert_eq!(live_socket_name(LivePicture::Preview), "preview.sock");
+    }
+
+    #[test]
+    fn cuda_live_pictures_stay_on_the_gpu() {
+        for which in [
+            LivePicture::Program,
+            LivePicture::Preview,
+            LivePicture::Tiles,
+        ] {
+            let flow = live_flow(
+                which,
+                "/run/x/p.sock",
+                MixerBackend::Cuda,
+                FdSink::CopiesItself,
+            );
+            let sock = flow.elements.iter().find(|e| e.id == "sock").unwrap();
+            assert_eq!(sock.element_type, "cudaipcsink", "{which:?}");
+            assert!(matches!(
+                sock.properties.get("ipc-mode"),
+                Some(PropertyValue::String(m)) if m == "mmap"
+            ));
+            assert!(flow
+                .elements
+                .iter()
+                .all(|e| e.element_type != "cudadownload"));
+            assert!(flow
+                .links
+                .iter()
+                .any(|l| l.from == "pgm:src" && l.to == "sock"));
+            assert_eq!(which.transport(MixerBackend::Cuda), LiveTransport::CudaIpc);
+        }
+        // A slot's own picture is scaled on the CPU, whatever the mixer.
+        assert_eq!(
+            LivePicture::Slot(0).transport(MixerBackend::Cuda),
+            LiveTransport::UnixFd
+        );
+        let gl = live_flow(
+            LivePicture::Tiles,
+            "/run/x/t.sock",
+            MixerBackend::Gl,
+            FdSink::CopiesItself,
+        );
+        let sock = gl.elements.iter().find(|e| e.id == "sock").unwrap();
+        assert_eq!(sock.element_type, "unixfdsink");
+        assert_eq!(
+            LivePicture::Tiles.transport(MixerBackend::Gl),
+            LiveTransport::UnixFd
+        );
+    }
+
+    #[test]
+    fn the_mixer_puts_every_slot_into_one_tile_picture() {
+        let flow = mixer_flow(
+            16,
+            MixerBackend::Cuda,
+            MonitorOut::None,
+            MasterFormat::default(),
+            MultiviewLayout::default(),
+            48_000,
+            &BuiltBuses::numbered(&two_buses()),
+        );
+        let vm = flow.blocks.iter().find(|b| b.id == MIXER_BLOCK).unwrap();
+        assert!(matches!(
+            vm.properties.get(ENABLE_TILES_OUT_PROPERTY),
+            Some(PropertyValue::Bool(true))
+        ));
+        // 16 slots and black: 17 cells, 5 × 4.
+        assert_eq!(tiles_grid(16), (5, 4));
+        assert!(matches!(
+            vm.properties.get(TILES_COLUMNS_PROPERTY),
+            Some(PropertyValue::UInt(5))
+        ));
+        assert!(matches!(
+            vm.properties.get(TILES_CELL_PROPERTY),
+            Some(PropertyValue::String(c)) if c == "640x360"
+        ));
+        assert!(flow
+            .links
+            .iter()
+            .any(|l| l.from == format!("{MIXER_BLOCK}:{TILES_OUTPUT_PAD}")
+                && l.to == "tiles_out:sink"));
+        let live = live_flow(
+            LivePicture::Tiles,
+            "/run/x/t.sock",
+            MixerBackend::Cuda,
+            FdSink::CopiesItself,
+        );
+        let pgm = live.blocks.iter().find(|b| b.id == "pgm").unwrap();
+        assert!(matches!(
+            pgm.properties.get("channel"),
+            Some(PropertyValue::String(c)) if *c == format!("strom_{}_tiles_out", mixer_id())
+        ));
+        assert_eq!(live_socket_name(LivePicture::Tiles), "tiles.sock");
     }
 
     #[test]
@@ -3113,16 +3257,8 @@ mod tests {
                 .any(|l| l.from == "sysmem" && l.to == "convert"));
         }
 
-        let live = live_flow(
-            LivePicture::Program,
-            "/run/x/program.sock",
-            MixerBackend::Cuda,
-            FdSink::CopiesItself,
-        );
-        assert!(live
-            .links
-            .iter()
-            .any(|l| l.from == "sysmem" && l.to == "sock"));
+        // The Console's program picture stays on the GPU (see
+        // `cuda_live_pictures_stay_on_the_gpu`).
 
         let record = OutputSpec::Record {
             folder: "show".into(),

@@ -5101,3 +5101,35 @@ Console: Setup → Steuerung → „Sperren“, ein Schalter je Weg.
 `a_midi_panic_pad_goes_through_the_lock`,
 `locked_targets_send_nothing_and_warn` (der Empfänger sieht keine
 Verbindung).
+
+## 2026-10-29 — Live-Kacheln aus einem Bild auf der GPU
+
+**Entscheidung**: Die Kacheln der Console kommen nicht mehr als ein Strom je
+Slot (CPU: Download, `videoscale`, `unixfdsink`, `glupload`), sondern als ein
+Bild: strom hat am Bildmischer einen Ausgang `tiles_out` (eigener Fork), der
+jeden Input auf der GPU des Mischers in seine Zelle eines Rasters setzt
+(Slot n in Zelle n, 640×360, Spalten von lmix-core vorgegeben). Mit dem
+CUDA-Mischer geht dieses Bild, wie Programm und Vorschau, per
+`cudaipcsink`/`cudaipcsrc` (`ipc-mode=mmap`; im Legacy-Modus kann die Console
+das zweite Bild aus derselben Engine nicht öffnen) zur Console und verlässt
+die GPU nie. Die Console zeichnet es einmal und schneidet die Zellen aus.
+Mit GL- oder CPU-Mischer läuft dasselbe Bild über `unixfdsink`.
+
+Dazu: Desktop-OpenGL statt GLES (Qt nahm auf Wayland mit NVIDIA GLES, und
+`cudadownload` kopiert nur mit Desktop-GL in eine Textur) und der threaded
+Render-Loop (Qt nahm hier den basic Loop, der jedes Bild im GUI-Thread zeichnet).
+
+**Gemessen** (`scripts/measure-tiles.sh`, 31 Inputs, CUDA, RTX 3070 Ti,
+Mix-Seite in kopflosem KWin):
+
+| | vorher | jetzt | ohne Fenster |
+|---|---|---|---|
+| strom | 508 % | 374–385 % | 369 % |
+| lmix | 149 % (GUI-Thread 39) | 41 % (GUI-Thread 3) | – |
+| GPU | 37 % | 25 % | 14 % |
+
+Die Kacheln kosten damit rund 57 % CPU statt 290 %; der zusätzliche
+Compositor im Mischer ist ohne Console nicht messbar. Ein Versuch mit einem
+Shader je Kachel auf einer gemeinsamen Textur statt `ShaderEffectSource` je
+Kachel brachte nichts Messbares und wurde verworfen.
+

@@ -1,7 +1,8 @@
 //! The QML side's only window to lmix-core: show state over WebSocket,
 //! actions over HTTP, and live pictures over the Unix sockets lmix-core
 //! hands out (`/api/live/…`), each drawn into a `GstGLQt6VideoItem` by
-//! `unixfdsrc ! glupload ! qml6glsink` without a copy through the GUI.
+//! `unixfdsrc ! glupload ! qml6glsink` (or from the GPU, `cudaipcsrc`)
+//! without a copy through the GUI.
 
 use std::collections::HashMap;
 use std::pin::Pin;
@@ -12,7 +13,10 @@ use cxx_qt_lib::QString;
 use futures_util::StreamExt;
 use gstreamer as gst;
 use gstreamer::prelude::*;
-use lmix_types::{Action, BusRef, Event, InputRef, Latency, Levels, LiveFeed, OutputStats};
+use lmix_types::{
+    Action, BusRef, Event, InputRef, Latency, Levels, LiveFeed, LiveTiles, LiveTransport,
+    OutputStats,
+};
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 
 use crate::latest::Latest;
@@ -49,6 +53,10 @@ pub mod qobject {
         /// The load of lmix-core's machine and how its cue timer runs:
         /// lmix `MachineLoad` as JSON, or empty while none came (RUN.8).
         #[qproperty(QString, machine)]
+        /// Where the slots sit in the tile picture (`showLive(item,
+        /// "tiles")`): `{columns, rows, cell_width, cell_height}` of lmix
+        /// `LiveTiles`, or empty while no tile picture runs.
+        #[qproperty(QString, tiles)]
         /// Capture devices (JSON list of lmix `Device`).
         #[qproperty(QString, devices)]
         /// Recently opened or saved show files (JSON list).
@@ -174,7 +182,7 @@ pub mod qobject {
     }
 
     unsafe extern "RustQt" {
-        /// Show `source` ("program", "preview" or an input id) in `item`, a
+        /// Show `source` ("program", "preview", "tiles" or an input id) in `item`, a
         /// `GstGLQt6VideoItem` whose scene graph is up.
         #[qinvokable]
         #[cxx_name = "showLive"]
@@ -221,6 +229,7 @@ pub struct CoreRust {
     positions: QString,
     links: QString,
     machine: QString,
+    tiles: QString,
     devices: QString,
     recent: QString,
     templates: QString,
@@ -647,6 +656,9 @@ impl qobject::Core {
 
     unsafe fn release_live(mut self: Pin<&mut Self>, item: *mut qobject::QQuickItem) {
         if let Some(live) = self.as_mut().rust_mut().live.remove(&(item as usize)) {
+            if live.source == TILES {
+                self.as_mut().set_tiles(QString::default());
+            }
             stop(live);
         }
     }
@@ -676,11 +688,11 @@ impl qobject::Core {
 
         let thread = self.qt_thread();
         config::runtime().spawn(async move {
-            let socket = loop {
+            let feed = loop {
                 tokio::select! {
                     _ = &mut rx => return,
-                    found = live_socket(&source) => match found {
-                        Ok(socket) => break socket,
+                    found = live_feed(&source) => match found {
+                        Ok(feed) => break feed,
                         Err(e) => tracing::debug!(%source, error = %e, "no live picture yet"),
                     },
                 }
@@ -689,12 +701,12 @@ impl qobject::Core {
                     _ = tokio::time::sleep(RETRY) => {}
                 }
             };
-            let _ = thread.queue(move |core| core.attach(item, generation, socket));
+            let _ = thread.queue(move |core| core.attach(item, generation, feed));
         });
     }
 
     /// Start the pipeline for `item` unless a newer request replaced it.
-    fn attach(mut self: Pin<&mut Self>, item: usize, generation: u64, socket: String) {
+    fn attach(mut self: Pin<&mut Self>, item: usize, generation: u64, feed: Feed) {
         let current = self
             .rust()
             .live
@@ -703,7 +715,8 @@ impl qobject::Core {
         if !current {
             return;
         }
-        let pipeline = match pipeline(item, &socket) {
+        let socket = &feed.socket;
+        let pipeline = match pipeline(item, socket, feed.transport) {
             Ok(pipeline) => pipeline,
             Err(e) => {
                 tracing::warn!(%socket, error = %e, "live pipeline failed");
@@ -731,6 +744,9 @@ impl qobject::Core {
         if let Some(live) = self.as_mut().rust_mut().live.get_mut(&item) {
             live.pipeline = Some(pipeline);
             live.stop = Some(tx);
+        }
+        if let Some(grid) = feed.grid {
+            self.as_mut().set_tiles(QString::from(&grid));
         }
     }
 
@@ -774,19 +790,37 @@ fn stop(mut live: Live) {
     }
 }
 
-/// `unixfdsrc ! glupload ! glcolorconvert ! qml6glsink` into `item`.
-fn pipeline(item: usize, socket: &str) -> Result<gst::Pipeline, String> {
+/// The frames of `socket` into `item`: `unixfdsrc ! glupload` from
+/// system memory, `cudaipcsrc ! cudadownload` from the engine's GPU (a
+/// copy on the GPU into a GL texture), then `glcolorconvert ! qml6glsink`.
+fn pipeline(item: usize, socket: &str, transport: LiveTransport) -> Result<gst::Pipeline, String> {
     let make = |name: &str| {
         gst::ElementFactory::make(name)
             .build()
             .map_err(|_| format!("GStreamer element {name} missing"))
     };
-    let src = make("unixfdsrc")?;
-    src.set_property("socket-path", socket);
+    let (src, upload) = match transport {
+        LiveTransport::UnixFd => {
+            let src = make("unixfdsrc")?;
+            src.set_property("socket-path", socket);
+            (src, make("glupload")?)
+        }
+        LiveTransport::CudaIpc => {
+            let src = make("cudaipcsrc")?;
+            src.set_property("address", socket);
+            (src, make("cudadownload")?)
+        }
+    };
     let queue = make("queue")?;
     queue.set_property("max-size-buffers", 2u32);
     queue.set_property_from_str("leaky", "downstream");
-    let upload = make("glupload")?;
+    let gl = make("capsfilter")?;
+    gl.set_property(
+        "caps",
+        gst::Caps::builder("video/x-raw")
+            .features(["memory:GLMemory"])
+            .build(),
+    );
     let convert = make("glcolorconvert")?;
     let sink = make("qml6glsink")?;
     // The engine paces the frames; drawing them on arrival keeps the
@@ -795,7 +829,7 @@ fn pipeline(item: usize, socket: &str) -> Result<gst::Pipeline, String> {
     sink.set_property("widget", item as gst::glib::Pointer);
 
     let pipeline = gst::Pipeline::new();
-    let elements = [&src, &queue, &upload, &convert, &sink];
+    let elements = [&src, &queue, &upload, &gl, &convert, &sink];
     pipeline.add_many(elements).map_err(|e| e.to_string())?;
     gst::Element::link_many(elements).map_err(|e| e.to_string())?;
     if tracing::enabled!(tracing::Level::DEBUG) {
@@ -937,8 +971,19 @@ async fn measure() -> Option<Latency> {
         .filter(|l| l.samples > 0)
 }
 
+/// `showLive`'s source for the tile picture.
+const TILES: &str = "tiles";
+
+/// A live picture's socket, how its frames come, and for the tile picture
+/// its grid (JSON for QML).
+struct Feed {
+    socket: String,
+    transport: LiveTransport,
+    grid: Option<String>,
+}
+
 /// Socket of a live picture on this machine.
-async fn live_socket(source: &str) -> Result<String, String> {
+async fn live_feed(source: &str) -> Result<Feed, String> {
     let path = live_path(source);
     let resp = config::http()
         .get(format!("{}{path}", config::core_url()))
@@ -948,14 +993,32 @@ async fn live_socket(source: &str) -> Result<String, String> {
     if !resp.status().is_success() {
         return Err(format!("{path}: {}", resp.status()));
     }
+    if source == TILES {
+        let tiles: LiveTiles = resp.json().await.map_err(|e| e.to_string())?;
+        let grid = serde_json::json!({
+            "columns": tiles.columns,
+            "rows": tiles.rows,
+            "cell_width": tiles.cell_width,
+            "cell_height": tiles.cell_height,
+        });
+        return Ok(Feed {
+            socket: tiles.socket,
+            transport: tiles.transport,
+            grid: Some(grid.to_string()),
+        });
+    }
     let feed: LiveFeed = resp.json().await.map_err(|e| e.to_string())?;
-    Ok(feed.socket)
+    Ok(Feed {
+        socket: feed.socket,
+        transport: feed.transport,
+        grid: None,
+    })
 }
 
 /// `program`, `preview` (the mixer's), or an input id (tile size).
 fn live_path(source: &str) -> String {
     match source {
-        "program" | "preview" => format!("/api/live/{source}"),
+        "program" | "preview" | TILES => format!("/api/live/{source}"),
         _ => format!("/api/live/inputs/{source}"),
     }
 }
@@ -969,6 +1032,7 @@ mod tests {
         assert_eq!(live_path("program"), "/api/live/program");
         assert_eq!(live_path("7d0c"), "/api/live/inputs/7d0c");
         assert_eq!(live_path("preview"), "/api/live/preview");
+        assert_eq!(live_path("tiles"), "/api/live/tiles");
     }
 
     #[test]

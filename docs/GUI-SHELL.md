@@ -67,9 +67,17 @@ die egui-Console:
   Input-Leiste als `GridView`: jede Kachel live, Klick = Vorschau,
   Doppelklick = direkt auf Programm, Tally als Balken plus Wort (PGM/PRV).
 - Bilder: `GET /api/live/program`, `/api/live/preview` bzw.
-  `/api/live/inputs/{id}` liefert den Socket; `unixfdsrc ! queue(leaky) ! glupload ! glcolorconvert !
-  qml6glsink(sync=false)` zeichnet in ein `GstGLQt6VideoItem`. Bricht der
-  Socket (Engine-Neustart, neuer Flow), fragt die Kachel nach 1 s neu.
+  `/api/live/inputs/{id}` liefert Socket und Transport; `unixfdsrc ! glupload`
+  aus dem Hauptspeicher, mit dem CUDA-Mischer `cudaipcsrc ! cudadownload` von
+  der GPU der Engine (eine Kopie auf der GPU), dann `glcolorconvert !
+  qml6glsink(sync=false)` in ein `GstGLQt6VideoItem`. Bricht der Socket
+  (Engine-Neustart, neuer Flow), fragt die Ansicht nach 1 s neu.
+- Kacheln: alle Slots in einem Bild (`GET /api/live/tiles`, Raster und
+  Zellgröße dazu). Der Mischer skaliert die Inputs auf seiner GPU in ein
+  Raster, die Console zeichnet es einmal (`TilesAtlas`, außerhalb des
+  Fensters), jede Kachel zeigt ihre Zelle (`ShaderEffectSource` mit
+  `sourceRect`). Desktop-OpenGL (die CUDA-GL-Kopie braucht PBOs) und der
+  threaded Render-Loop sind gesetzt.
 - Rust-Backend (cxx-qt, `src/bridge.rs`): Zustand über WebSocket, Aktionen
   über HTTP, eine Pipeline je Item.
 - Messsonde: mit `RUST_LOG=lmix=debug` meldet jede Ansicht alle

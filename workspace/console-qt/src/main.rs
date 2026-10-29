@@ -5,6 +5,7 @@ mod app;
 mod bridge;
 mod config;
 mod forms;
+mod gl_format;
 mod latest;
 mod portal;
 #[cfg(feature = "qml-profile")]

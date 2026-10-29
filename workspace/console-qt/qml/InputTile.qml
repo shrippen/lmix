@@ -124,6 +124,7 @@ KanteCard {
                 visible: tile.hasPicture
                 core: tile.core
                 source: tile.hasPicture ? tile.input.id : ""
+                cell: tile.input.slot ?? -1
             }
             QQC2.Label {
                 anchors.centerIn: parent

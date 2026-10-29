@@ -83,6 +83,13 @@ Kirigami.ApplicationWindow {
         target: root.contentItem
     }
 
+    /** Every input live in one picture; LiveView shows its cell of it. */
+    readonly property alias tilesAtlas: tilesAtlas
+    TilesAtlas {
+        id: tilesAtlas
+        core: root.backend
+    }
+
     /** The show state (ShowState.qml), null until the first arrives. */
     property var show: null
     ShowState {
