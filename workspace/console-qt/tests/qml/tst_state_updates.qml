@@ -1,7 +1,7 @@
 import QtQuick
 import QtTest
 import "../../qml"
-import "data/state.js" as Data
+import "fixtures/state.js" as Data
 
 /**
  * A state update that changes one value must not rebuild the parts that
