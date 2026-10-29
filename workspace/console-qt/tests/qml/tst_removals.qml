@@ -108,4 +108,31 @@ TestCase {
         wait(50)
         compare(toastOf(removals).shown, false)
     }
+
+    // The answer before the state, while the state still names an earlier
+    // removal: the toast waited for null only and was lost.
+    function test_the_answer_before_the_state_after_an_earlier_removal() {
+        const removals = createTemporaryObject(removalsComponent, test)
+        fakeShow.restorable = { kind: "bus", name: "Stream" }
+        removals.remove(removals.request("input", { number: 1, name: "Cam 1" }))
+        fakeCore.answered(JSON.stringify({ action: "remove_input", input: 1 }), "")
+        wait(50)
+        const toast = toastOf(removals)
+        compare(toast.shown, false)
+        fakeShow.restorable = { kind: "input", name: "Cam 1" }
+        tryCompare(toast, "shown", true)
+        compare(toast.text, "Input 1 \u201cCam 1\u201d removed")
+    }
+
+    // A removal from elsewhere comes between the answer and this state:
+    // no toast for something this one did not remove.
+    function test_a_removal_from_elsewhere_ends_the_wait() {
+        const removals = createTemporaryObject(removalsComponent, test)
+        removals.remove(removals.request("layout", { number: 1, name: "Wide" }))
+        fakeCore.answered(JSON.stringify({ action: "remove_layout", layout: 1 }), "")
+        fakeShow.restorable = { kind: "bus", name: "Stream" }
+        fakeShow.restorable = { kind: "layout", name: "Wide" }
+        wait(50)
+        compare(toastOf(removals).shown, false)
+    }
 }

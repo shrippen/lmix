@@ -3522,7 +3522,8 @@ impl Switcher {
     }
 
     /// What was removed last, back with its settings at its old place.
-    /// Refused (a full mixer, the lock), it stays to be brought back.
+    /// Refused (no free slot, layouts or buses full), it stays to be
+    /// brought back.
     fn restore(&mut self) -> Result<Vec<Command>, ActionError> {
         let removed = self.removed.pop().ok_or(ActionError::NothingToRestore)?;
         let result = match removed.clone() {
@@ -4985,13 +4986,16 @@ impl Switcher {
     }
 
     /// At its old place, stopped (removing stopped it); without a bus
-    /// removed since.
+    /// removed since, also among a card's further pairs (silent then).
+    /// The stack brings a bus back before an output removed earlier, so
+    /// this is a guard.
     fn restore_output(&mut self, index: usize, mut output: ShowOutput) -> Vec<Command> {
-        if output
-            .bus
-            .is_some_and(|bus| !self.show.buses.iter().any(|b| b.id == bus))
-        {
-            output.bus = None;
+        let buses: HashSet<BusId> = self.show.buses.iter().map(|b| b.id).collect();
+        output.bus = output.bus.filter(|bus| buses.contains(bus));
+        if let OutputSpec::Card { more_pairs, .. } = &mut output.spec {
+            for pair in more_pairs.iter_mut() {
+                *pair = pair.filter(|bus| buses.contains(bus));
+            }
         }
         let at = index.min(self.show.outputs.len());
         self.show.outputs.insert(at, output);
@@ -9543,6 +9547,46 @@ mod tests {
         let in_ear = sw.show().buses[0].id;
         let b = sw.show().inputs.iter().find(|i| i.name == "B").unwrap();
         assert_eq!(b.sends.get(&in_ear), Some(&30));
+    }
+
+    #[test]
+    fn an_output_comes_back_without_a_bus_gone_since() {
+        let mut sw = with_buses();
+        let stream = sw.show().buses[1].id;
+        sw.apply(Action::AddOutput {
+            spec: OutputSpec::Srt {
+                uri: "srt://cdn:9000".into(),
+                video_kbps: 6000,
+                encoding: Default::default(),
+            },
+            source: OutputSource::Program,
+            name: Some("CDN".into()),
+            bus: Some(bus("Stream")),
+        })
+        .unwrap();
+        // A card's further pair on the same bus, as a show file has it.
+        sw.show.outputs[0].spec = OutputSpec::Card {
+            device: 0,
+            mode: lmix_types::card::CardMode::Hd720p50,
+            channels: Default::default(),
+            more_pairs: vec![Some(stream), None],
+            sound_delay_ms: 0,
+        };
+        sw.apply(Action::RemoveOutput {
+            output: OutputRef::Number(1),
+        })
+        .unwrap();
+        sw.apply(Action::RemoveBus { bus: bus("Stream") }).unwrap();
+        // The bus's entry gone (the guard's case; the stack brings the bus
+        // back first).
+        sw.removed.retain(|r| !matches!(r, Removed::Bus { .. }));
+        sw.apply(Action::Restore).unwrap();
+        let back = &sw.show().outputs[0];
+        assert_eq!(back.bus, None);
+        assert!(matches!(
+            &back.spec,
+            OutputSpec::Card { more_pairs, .. } if more_pairs == &vec![None, None]
+        ));
     }
 
     #[test]

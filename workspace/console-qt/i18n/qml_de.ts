@@ -1333,12 +1333,12 @@
       <translation>Eingeklappt</translation>
     </message>
     <message>
-      <location line="+25" />
+      <location line="+36" />
       <source>Input %1 %2, collapsed</source>
       <translation>Input %1 %2, eingeklappt</translation>
     </message>
     <message>
-      <location line="+5" />
+      <location line="+15" />
       <source>Click: %1. Double click: expand. Right click: more.</source>
       <translation>Klick: %1. Doppelklick: aufklappen. Rechtsklick: mehr.</translation>
     </message>
@@ -1694,7 +1694,7 @@
   <context>
     <name>InputMenu</name>
     <message>
-      <location filename="../qml/InputMenu.qml" line="+111" />
+      <location filename="../qml/InputMenu.qml" line="+115" />
       <source>Cut</source>
       <translation>Cut</translation>
     </message>
@@ -2709,7 +2709,7 @@
   <context>
     <name>MessageToasts</name>
     <message>
-      <location filename="../qml/MessageToasts.qml" line="+71" />
+      <location filename="../qml/MessageToasts.qml" line="+73" />
       <source>Close</source>
       <translation>Schließen</translation>
     </message>
@@ -2805,7 +2805,7 @@
       <translation>Ordner mit den fehlenden Dateien</translation>
     </message>
     <message>
-      <location line="+183" />
+      <location line="+195" />
       <source>Inputs from a show…</source>
       <translation>Inputs aus einer Show …</translation>
     </message>
@@ -2925,7 +2925,7 @@
       <translation>Ansicht</translation>
     </message>
     <message>
-      <location line="-490" />
+      <location line="-502" />
       <source>FTB</source>
       <comment>fade to black</comment>
       <translation>FTB</translation>
@@ -2941,7 +2941,7 @@
       <translation>Schwarzblende: Programm auf Schwarz und zurück (SWI.9); Show und Ausgänge laufen weiter</translation>
     </message>
     <message>
-      <location line="+526" />
+      <location line="+538" />
       <source>Multiview</source>
       <translation>Multiview</translation>
     </message>
@@ -3265,7 +3265,7 @@
     <message>
       <location line="+6" />
       <source>Remove bus</source>
-      <translation>Bus löschen</translation>
+      <translation>Bus entfernen</translation>
     </message>
     <message>
       <location line="+14" />
@@ -4014,7 +4014,7 @@
     <message>
       <location line="+1" />
       <source>Remove bus</source>
-      <translation>Bus löschen</translation>
+      <translation>Bus entfernen</translation>
     </message>
     <message>
       <location line="+1" />
@@ -4042,7 +4042,7 @@
       <translation>Ausgang %1 entfernt</translation>
     </message>
     <message>
-      <location line="+90" />
+      <location line="+95" />
       <source>Removed</source>
       <translation>Entfernt</translation>
     </message>
@@ -4070,7 +4070,7 @@
       <translation>Umbenennen</translation>
     </message>
     <message>
-      <location line="+18" />
+      <location line="+22" />
       <source>Name</source>
       <translation>Name</translation>
     </message>

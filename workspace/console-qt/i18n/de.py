@@ -1133,7 +1133,7 @@ DE = {
     'No output with sound yet.': 'Noch kein Ausgang mit Ton.',
     'PH': 'KH',
     'Program sound': 'Programm-Ton',
-    'Remove bus': 'Bus löschen',
+    'Remove bus': 'Bus entfernen',
     'Send to %1': 'Send an %1',
     'Sends to buses': 'Sends an Busse',
     'Sends to buses, channel strip': 'Sends an Busse, Kanalzug',

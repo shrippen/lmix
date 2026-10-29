@@ -81,21 +81,26 @@ Item {
 
     property var pending: null
     readonly property var restorable: show ? show.restorable : null
-    onRestorableChanged: settle()
+    onRestorableChanged: settle(true)
 
-    /** The removal went through and is the one to bring back: the toast. */
-    function settle() {
-        if (!pending || !pending.answered || !restorable) {
+    /** The removal went through and is the one to bring back: the toast.
+     *  The answer may come before or after the state that names it; a
+     *  state that names something else after the answer (a removal from
+     *  elsewhere in between) ends the wait. */
+    function settle(stateChanged) {
+        if (!pending || !pending.answered) {
             return
         }
         const request = pending.request
-        if (restorable.kind === request.kind && restorable.name === request.name) {
+        if (restorable && restorable.kind === request.kind && restorable.name === request.name) {
             toast.text = request.removedText
             toast.removedKind = request.kind
             toast.restores = request.name
             toast.show()
+            pending = null
+        } else if (stateChanged) {
+            pending = null
         }
-        pending = null
     }
     function sameAction(answered, sent) {
         return answered.action === sent.action
@@ -114,7 +119,7 @@ Item {
             }
             removals.pending.answered = true
             // The state may have come first.
-            Qt.callLater(removals.settle)
+            removals.settle(false)
         }
     }
 
