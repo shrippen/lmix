@@ -4,9 +4,10 @@ import org.freedesktop.gstreamer.Qt6GLVideoItem
 /**
  * Every slot live in one picture, lmix-core's tile picture: the mixer
  * scales the inputs on its GPU into one grid, the frames come over one
- * socket (with the CUDA mixer without leaving the GPU) and are drawn once.
- * Input tiles show their cell of it (LiveView.cell). Runs while a tile
- * uses it; one per window.
+ * socket (with the CUDA mixer without leaving the GPU) as one texture.
+ * Input tiles draw their cell of it (LiveView.cell, AtlasCell); this
+ * item's video only lends the picture its GL context and draws nothing.
+ * Runs while a tile uses it; one per window.
  */
 Item {
     id: atlas
@@ -16,24 +17,12 @@ Item {
     property int users: 0
     /** `{columns, rows, cell_width, cell_height}`, null until it runs. */
     readonly property var grid: core.tiles !== "" ? JSON.parse(core.tiles) : null
-    readonly property alias video: video
     readonly property bool wanted: users > 0
 
-    // Never on screen: the tiles draw it, each its cell (hideSource).
-    // At the picture's own pixel size, so a cell is drawn 1:1.
+    // Never on screen; the sink needs an item in the window.
     x: -width - 1
-    width: grid ? grid.columns * grid.cell_width / Screen.devicePixelRatio : 1
-    height: grid ? grid.rows * grid.cell_height / Screen.devicePixelRatio : 1
-
-    /** Cell of `slot` in this item's coordinates. */
-    function cellRect(slot) {
-        if (!grid || slot < 0) {
-            return Qt.rect(0, 0, 0, 0)
-        }
-        const w = width / grid.columns
-        const h = height / grid.rows
-        return Qt.rect((slot % grid.columns) * w, Math.floor(slot / grid.columns) * h, w, h)
-    }
+    width: 1
+    height: 1
 
     GstGLQt6VideoItem {
         id: video

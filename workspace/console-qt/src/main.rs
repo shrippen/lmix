@@ -2,9 +2,11 @@
 //! (docs/PLAN-SEITEN.md).
 
 mod app;
+mod atlas_cell;
 mod bridge;
 mod config;
 mod forms;
+mod frame_gate;
 mod gl_format;
 mod latest;
 mod portal;

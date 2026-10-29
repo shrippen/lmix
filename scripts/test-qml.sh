@@ -2,7 +2,8 @@
 # QML tests of the console without engine or window: components get a
 # state from tests/qml/fixtures and are checked by counts (items rebuilt by a
 # state update, actions sent by a drag), so they run in CI. Offscreen;
-# tests/qml/stubs stands in for GStreamer's QML item.
+# tests/qml/stubs stands in for GStreamer's QML item and the Console's
+# AtlasCell.
 # Needs Qt 6 with qmltestrunner and Kirigami.
 #
 #   scripts/test-qml.sh

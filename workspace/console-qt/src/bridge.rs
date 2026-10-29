@@ -716,7 +716,7 @@ impl qobject::Core {
             return;
         }
         let socket = &feed.socket;
-        let pipeline = match pipeline(item, socket, feed.transport) {
+        let pipeline = match pipeline(item, socket, feed.transport, feed.grid.is_some()) {
             Ok(pipeline) => pipeline,
             Err(e) => {
                 tracing::warn!(%socket, error = %e, "live pipeline failed");
@@ -786,6 +786,10 @@ fn stop(mut live: Live) {
         let _ = stop.send(());
     }
     if let Some(pipeline) = live.pipeline.take() {
+        // The cells stop drawing its textures before they go.
+        if live.source == TILES {
+            crate::atlas_cell::ffi::atlas_clear();
+        }
         let _ = pipeline.set_state(gst::State::Null);
     }
 }
@@ -793,7 +797,18 @@ fn stop(mut live: Live) {
 /// The frames of `socket` into `item`: `unixfdsrc ! glupload` from
 /// system memory, `cudaipcsrc ! cudadownload` from the engine's GPU (a
 /// copy on the GPU into a GL texture), then `glcolorconvert ! qml6glsink`.
-fn pipeline(item: usize, socket: &str, transport: LiveTransport) -> Result<gst::Pipeline, String> {
+/// Every frame passes the window's frame gate (`frame_gate`).
+///
+/// The tile picture (`tiles`) goes to the cells instead (`AtlasCell`),
+/// as a texture from an appsink: a layer per tile would cost the window
+/// a second frame after each one. `item`'s sink stays for its GL context,
+/// shared with the scene graph, and gets no frames.
+fn pipeline(
+    item: usize,
+    socket: &str,
+    transport: LiveTransport,
+    tiles: bool,
+) -> Result<gst::Pipeline, String> {
     let make = |name: &str| {
         gst::ElementFactory::make(name)
             .build()
@@ -829,16 +844,108 @@ fn pipeline(item: usize, socket: &str, transport: LiveTransport) -> Result<gst::
     sink.set_property("widget", item as gst::glib::Pointer);
 
     let pipeline = gst::Pipeline::new();
-    let elements = [&src, &queue, &upload, &gl, &convert, &sink];
+    let elements = [&src, &queue, &upload, &gl, &convert];
     pipeline.add_many(elements).map_err(|e| e.to_string())?;
     gst::Element::link_many(elements).map_err(|e| e.to_string())?;
+    // With the window's other pictures: one frame of the window for all.
+    let member = crate::frame_gate::GATE.join();
+    let drawn: gst::Element = if tiles {
+        let tee = make("tee")?;
+        let to_sink = make("queue")?;
+        let to_cells = make("queue")?;
+        let cells = cells_sink(member)?;
+        sink.set_property("async", false);
+        pipeline
+            .add_many([&tee, &to_sink, &sink, &to_cells, cells.upcast_ref()])
+            .map_err(|e| e.to_string())?;
+        gst::Element::link_many([&convert, &tee, &to_sink, &sink]).map_err(|e| e.to_string())?;
+        gst::Element::link_many([&tee, &to_cells, cells.upcast_ref()])
+            .map_err(|e| e.to_string())?;
+        if let Some(pad) = sink.static_pad("sink") {
+            pad.add_probe(gst::PadProbeType::BUFFER, |_, _| gst::PadProbeReturn::Drop);
+        }
+        cells.upcast()
+    } else {
+        pipeline.add(&sink).map_err(|e| e.to_string())?;
+        convert.link(&sink).map_err(|e| e.to_string())?;
+        if let Some(pad) = sink.static_pad("sink") {
+            pad.add_probe(gst::PadProbeType::BUFFER, move |_, _| {
+                member.pass();
+                gst::PadProbeReturn::Ok
+            });
+        }
+        sink
+    };
     if tracing::enabled!(tracing::Level::DEBUG) {
-        measure_frames(&sink, socket.to_string());
+        measure_frames(&drawn, socket.to_string());
     }
     pipeline
         .set_state(gst::State::Playing)
         .map_err(|e| format!("live pipeline does not start: {e}"))?;
     Ok(pipeline)
+}
+
+/// The tile picture's frames to the cells: RGBA textures, each kept until
+/// three more came (the scene graph may still draw the last one). Mapped
+/// for GL here, as a sink would: a frame from the GPU copy
+/// (`cudadownload`) is only put into its texture then.
+fn cells_sink(member: crate::frame_gate::Member) -> Result<gstreamer_app::AppSink, String> {
+    let sink = gstreamer_app::AppSink::builder()
+        .caps(
+            &gst::Caps::builder("video/x-raw")
+                .features(["memory:GLMemory"])
+                .field("format", "RGBA")
+                .field("texture-target", "2D")
+                .build(),
+        )
+        .sync(false)
+        .max_buffers(1)
+        .drop(true)
+        .build();
+    let kept = std::sync::Mutex::new(std::collections::VecDeque::new());
+    sink.set_callbacks(
+        gstreamer_app::AppSinkCallbacks::builder()
+            .new_sample(move |sink| {
+                use gstreamer_gl::prelude::*;
+                let sample = sink.pull_sample().map_err(|_| gst::FlowError::Eos)?;
+                let (Some(buffer), Some(info)) = (
+                    sample.buffer_owned(),
+                    sample
+                        .caps()
+                        .and_then(|caps| gstreamer_video::VideoInfo::from_caps(caps).ok()),
+                ) else {
+                    return Ok(gst::FlowSuccess::Ok);
+                };
+                let Ok(frame) = gstreamer_gl::GLVideoFrame::from_buffer_readable(buffer, &info)
+                else {
+                    return Ok(gst::FlowSuccess::Ok);
+                };
+                let Ok(memory) = frame.memory(0) else {
+                    return Ok(gst::FlowSuccess::Ok);
+                };
+                let (texture, width, height) = (
+                    memory.texture_id(),
+                    memory.texture_width(),
+                    memory.texture_height(),
+                );
+                // Drawn by the scene graph's context: done in GStreamer's first.
+                if let Some(sync) = frame.buffer().meta::<gstreamer_gl::GLSyncMeta>() {
+                    sync.set_sync_point(memory.context());
+                    sync.wait_cpu(memory.context());
+                }
+                // Ready to draw: with the window's other pictures.
+                member.pass();
+                let mut kept = kept.lock().unwrap_or_else(|e| e.into_inner());
+                kept.push_back(frame);
+                if kept.len() > 3 {
+                    kept.pop_front();
+                }
+                crate::atlas_cell::ffi::atlas_frame(texture, width, height);
+                Ok(gst::FlowSuccess::Ok)
+            })
+            .build(),
+    );
+    Ok(sink)
 }
 
 /// Report every few seconds how many frames reached `sink` and how old

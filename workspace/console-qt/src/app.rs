@@ -8,7 +8,7 @@ use cxx_qt_lib::{QGuiApplication, QQmlApplicationEngine, QString, QUrl};
 use gstreamer as gst;
 use std::path::{Path, PathBuf};
 
-use crate::{config, gl_format, qt_translations};
+use crate::{atlas_cell, config, gl_format, qt_translations};
 
 /// Qt application name: settings in `~/.config/lmix/lmix.conf`; also the
 /// binary, desktop file and Wayland app id.
@@ -268,6 +268,7 @@ pub fn run() -> ! {
     // so that the engine's GPU frames can be copied into it.
     std::env::set_var("QSG_RHI_BACKEND", "opengl");
     gl_format::ffi::use_desktop_gl();
+    atlas_cell::ffi::register_atlas_cell();
     // Draw on the scene graph's own thread: Qt picks its basic loop here
     // (Wayland, NVIDIA), which renders every frame of every live picture
     // on the GUI thread (24 % of it with 31 live tiles, 3 % threaded).

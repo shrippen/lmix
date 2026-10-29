@@ -1,6 +1,7 @@
 import QtQuick
 import Kante
 import org.freedesktop.gstreamer.Qt6GLVideoItem
+import org.lmix.atlas
 
 /**
  * A live picture from the engine: `source` is "program", "preview", an
@@ -8,8 +9,8 @@ import org.freedesktop.gstreamer.Qt6GLVideoItem
  * stage stays dark in every style, as Kante's image stages do.
  *
  * An input with its `cell` (its slot) shows that cell of the window's
- * tile picture (TilesAtlas) instead of a stream of its own: one picture
- * for all tiles, cut up on the GPU.
+ * tile picture (TilesAtlas) instead of a stream of its own: one texture
+ * for all tiles, each drawing its part (AtlasCell).
  */
 Item {
     id: view
@@ -30,19 +31,16 @@ Item {
     }
 
     // The cell, fitted as forceAspectRatio fits the video.
-    ShaderEffectSource {
-        id: tile
-        readonly property real aspect: view.atlas && view.atlas.grid
-            ? view.atlas.grid.cell_width / view.atlas.grid.cell_height : 16 / 9
+    AtlasCell {
+        readonly property var grid: view.tiled ? view.atlas.grid : null
+        readonly property real aspect: grid ? grid.cell_width / grid.cell_height : 16 / 9
         anchors.centerIn: parent
         width: Math.min(parent.width, parent.height * aspect)
         height: width / aspect
-        visible: view.tiled && view.atlas.grid !== null
-        sourceItem: view.tiled ? view.atlas.video : null
-        sourceRect: view.tiled ? view.atlas.cellRect(view.cell) : Qt.rect(0, 0, 0, 0)
-        // Only while it draws: the atlas has to be drawn once to start.
-        hideSource: visible
-        smooth: true
+        visible: grid !== null
+        cell: view.cell
+        columns: grid ? grid.columns : 1
+        rows: grid ? grid.rows : 1
     }
 
     GstGLQt6VideoItem {

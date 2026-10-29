@@ -24,7 +24,7 @@ use strom_types::stinger::{
 };
 use strom_types::vision_mixer::{
     ENABLE_PREVIEW_OUT_PROPERTY, ENABLE_TILES_OUT_PROPERTY, PREVIEW_OUTPUT_PAD,
-    TILES_CELL_PROPERTY, TILES_COLUMNS_PROPERTY, TILES_OUTPUT_PAD,
+    TILES_CELL_PROPERTY, TILES_COLUMNS_PROPERTY, TILES_FORMAT_PROPERTY, TILES_OUTPUT_PAD,
 };
 use strom_types::{Flow, FlowId, PropertyValue};
 use uuid::Uuid;
@@ -382,6 +382,11 @@ pub fn mixer_flow(
             (
                 TILES_COLUMNS_PROPERTY,
                 PropertyValue::UInt(tiles_grid(slots).0 as u64),
+            ),
+            // What the Console draws: it shows the frames unconverted.
+            (
+                TILES_FORMAT_PROPERTY,
+                PropertyValue::String("RGBA".to_string()),
             ),
             (
                 STINGER_PREROLL_PROPERTY,
@@ -3181,6 +3186,10 @@ mod tests {
         assert!(matches!(
             vm.properties.get(TILES_CELL_PROPERTY),
             Some(PropertyValue::String(c)) if c == "640x360"
+        ));
+        assert!(matches!(
+            vm.properties.get(TILES_FORMAT_PROPERTY),
+            Some(PropertyValue::String(f)) if f == "RGBA"
         ));
         assert!(flow
             .links

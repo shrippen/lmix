@@ -164,10 +164,13 @@ fn main() {
         "src/bridge.rs",
         "src/qt_translations.rs",
         "src/gl_format.rs",
+        "src/atlas_cell.rs",
         "src/qml_profile.rs",
     ])
     .cpp_file("cpp/qt_translations.cpp")
     .cpp_file("cpp/gl_format.cpp")
+    .cpp_file("cpp/atlas_cell.h")
+    .cpp_file("cpp/atlas_cell.cpp")
     .cpp_file("cpp/qml_profile.cpp")
     .qrc(kante_qrc());
     if let Some(qrc) = translations_qrc() {

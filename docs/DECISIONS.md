@@ -5133,3 +5133,33 @@ Compositor im Mischer ist ohne Console nicht messbar. Ein Versuch mit einem
 Shader je Kachel auf einer gemeinsamen Textur statt `ShaderEffectSource` je
 Kachel brachte nichts Messbares und wurde verworfen.
 
+**Nachtrag, am selben Tag:** Das Fenster zeichnete 60 Bilder/s bei 30 fps
+Quellen. Nur das Kachelbild allein ergab schon 60: Jede `ShaderEffectSource`
+(auch mit `live: false` und `scheduleUpdate()`) fordert nach einem Wechsel
+ihrer Quelle einen zweiten Frame an. Darum zeichnet jetzt jede Kachel ihren
+Ausschnitt der Textur selbst (`AtlasCell`, C++, ein `QSGImageNode`); das Bild
+kommt über einen `appsink`, der es für GL abbildet (erst dann füllt
+`cudadownload` die Textur) und drei Bilder hält. Der `qml6glsink` von
+`TilesAtlas` bleibt nur für den geteilten GL-Kontext und bekommt keine
+Bilder. Dazu: strom liefert das Kachelbild in RGBA (`tiles_format`, eigener
+Fork), `glcolorconvert` läuft durch; die Bridge hält das jeweils erste von
+Programm und Kachelbild bis zu 4 ms an, damit beide in einen Frame fallen
+(`frame_gate`); die verbundene Pille „lmix-core“ atmet nicht mehr (ihre
+Animation hielt das Fenster immer auf 60 Bildern/s).
+
+| 31 Inputs, CUDA | vorher | jetzt |
+|---|---|---|
+| lmix | 42–46 % | 28–30 % |
+| davon Render-Thread | 25–26 % | 12–16 % |
+| davon GL-Thread (gstglcontext) | 10 % | 6–7 % |
+| Frames/s des Fensters | 60 | 43–51 |
+| GL-Mischer: lmix | 79 % | 67 % |
+
+RGBA allein brachte 3–4 Punkte (gstglcontext 10 → 7 %). Die Schranke allein
+nicht messbar, mit `AtlasCell` 60 → 43–51 Frames/s. Die übrigen Frames
+kommen von Bildern außer Takt (Pegel 10/s, Ton-Seite). Lastenheft: Das
+Programmbild wartet höchstens 4 ms (0,12 Frames) und kommt meist als
+letztes, also ohne Wartezeit (NFA.3: ≤ 3 Frames hinter Program, gemessen
+72 ms Bildalter am Sink); Kacheln weiter mit voller Bildrate (OUT.11), alles
+auf der GPU (NFA.1, G.2).
+

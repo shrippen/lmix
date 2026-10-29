@@ -9,6 +9,7 @@
 #   scripts/measure-tiles.sh                  # 31 inputs, CUDA mixer, 20 s
 #   INPUTS=8 MIXER=gl PHASE=30 scripts/measure-tiles.sh
 #   NO_WINDOW=1 …                             # engine and core only
+#   PAGE=setup …                              # another page than Mix
 #   STROM_BIN=workspace/strom/target/release/strom …   # a local strom
 #   KEEP_WORK=1 …                             # keep logs
 #   SHOT=$PWD/tiles.png dbus-run-session scripts/measure-tiles.sh
@@ -82,7 +83,7 @@ if [[ -z "${NO_WINDOW:-}" ]]; then
     XDG_CONFIG_HOME="$WORK/config" WAYLAND_DISPLAY="$SOCKET" QT_QPA_PLATFORM=wayland QT_FORCE_STDERR_LOGGING=1 \
         QT_LOGGING_RULES="qt.scenegraph.time.renderloop=true" QT_MESSAGE_PATTERN='%{time process} %{category} %{message}' \
         LMIX_CORE="http://127.0.0.1:${CORE_PORT}" env ${LMIX_ENV:-} \
-        "$LMIX_BIN" --page mix --window maximized >"$WORK/lmix.log" 2>&1 &
+        "$LMIX_BIN" --page "${PAGE:-mix}" --window maximized >"$WORK/lmix.log" 2>&1 &
     LMIX_PID=$!
     PIDS+=("$LMIX_PID")
 fi

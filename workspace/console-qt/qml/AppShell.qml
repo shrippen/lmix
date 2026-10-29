@@ -782,8 +782,10 @@ Kirigami.ApplicationWindow {
                         QQC2.ToolTip.visible: warnHover.hovered
                         QQC2.ToolTip.text: root.machineWarning.detail
                     }
+                    // Steady while connected: a breathing pill would redraw
+                    // the whole window at the display's rate, all the time.
                     KantePill {
-                        status: root.backend.connected ? KantePill.State.Running : KantePill.State.Failed
+                        status: root.backend.connected ? KantePill.State.Done : KantePill.State.Failed
                         text: root.backend.connected ? qsTr("lmix-core") : qsTr("lmix-core offline")
                     }
                     KanteButton {
