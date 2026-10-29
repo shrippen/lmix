@@ -10,6 +10,22 @@ use crate::layout::{BoxRect, Layout, LayoutTemplate};
 use crate::output::{Output, OutputStats};
 use crate::shortcut::Shortcut;
 
+/// What was removed last and `restore` brings back.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct Restorable {
+    pub kind: RemovedKind,
+    pub name: String,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum RemovedKind {
+    Input,
+    Layout,
+    Bus,
+    Output,
+}
+
 /// One transition button.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct Transition {
@@ -214,9 +230,9 @@ pub struct ShowState {
     /// MIDI controller that moves the T-bar (AUT.1).
     #[serde(default)]
     pub midi_tbar: Option<crate::midi::MidiBinding>,
-    /// Name of the input `restore_input` would bring back.
+    /// What `restore` would bring back.
     #[serde(default)]
-    pub restorable: Option<String>,
+    pub restorable: Option<Restorable>,
     /// Graphics channels (titles).
     #[serde(default)]
     pub graphics: Vec<crate::graphics::Graphics>,

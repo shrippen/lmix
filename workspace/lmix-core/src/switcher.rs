@@ -555,8 +555,49 @@ fn check_unique(lists: &[ShowCueList]) -> Result<(), ActionError> {
 /// Longest countdown of a `clip_end` trigger.
 const CLIP_COUNTDOWN_MAX_MS: u32 = 60_000;
 
-/// Closed inputs kept for `restore_input`.
+/// Removals kept for `restore`.
 const REMOVED_KEPT: usize = 10;
+
+/// Something removed, with what `restore` needs to bring it back (AUT.10,
+/// docs/DESIGN-DIALOGE.md rule 1): its place in its list and its settings.
+#[derive(Clone, Debug)]
+enum Removed {
+    Input {
+        index: usize,
+        input: ShowInput,
+    },
+    Layout {
+        index: usize,
+        layout: ShowLayout,
+    },
+    /// With the inputs' sends to it and whether it was listened to.
+    Bus {
+        index: usize,
+        bus: ShowBus,
+        sends: Vec<(InputId, u8)>,
+        listen: bool,
+    },
+    Output {
+        index: usize,
+        output: ShowOutput,
+    },
+}
+
+impl Removed {
+    fn restorable(&self) -> lmix_types::Restorable {
+        use lmix_types::RemovedKind;
+        let (kind, name) = match self {
+            Self::Input { input, .. } => (RemovedKind::Input, &input.name),
+            Self::Layout { layout, .. } => (RemovedKind::Layout, &layout.name),
+            Self::Bus { bus, .. } => (RemovedKind::Bus, &bus.name),
+            Self::Output { output, .. } => (RemovedKind::Output, &output.name),
+        };
+        lmix_types::Restorable {
+            kind,
+            name: name.clone(),
+        }
+    }
+}
 
 /// Anti-click fade for audio changes outside a transition.
 pub const AUDIO_RAMP_MS: u32 = 20;
@@ -608,8 +649,8 @@ pub struct Switcher {
     cards_on: bool,
     /// Ways in and out that are locked (RUN.9); none at every start.
     io_locked: std::collections::BTreeSet<lmix_types::IoClass>,
-    /// Inputs closed last, with their place in the bar (AUT.10).
-    removed: Vec<(usize, ShowInput)>,
+    /// Removed last, the newest at the end (AUT.10).
+    removed: Vec<Removed>,
     /// Standby and running cues of the cue lists.
     cues: Runner,
     /// What would go wrong when they run (SUI.5); see `refresh_warnings`.
@@ -1157,7 +1198,7 @@ impl Switcher {
                 self.check_unlocked()?;
                 self.remove(&input)
             }
-            Action::RestoreInput => self.restore_input(),
+            Action::Restore => self.restore(),
             Action::SetTriggers { input, triggers } => self.set_triggers(&input, triggers),
             Action::AddCueList { name, cues, source } => {
                 check_cues(&name, &cues)?;
@@ -1861,7 +1902,7 @@ impl Switcher {
         self.cues.restore_standby(&self.show.cue_lists);
         self.distinct_shortcut_ids();
         self.path = path;
-        // Closed inputs belong to the old show.
+        // Removals belong to the old show.
         self.removed.clear();
         self.status.clear();
         self.titles.reset();
@@ -2217,16 +2258,54 @@ impl Switcher {
                 output: output.name.clone(),
             });
         }
-        self.show.buses.remove(index);
-        for input in self
+        let bus = self.show.buses.remove(index);
+        let sends = self
             .show
             .inputs
             .iter_mut()
-            .chain(self.removed.iter_mut().map(|(_, input)| input))
-        {
-            input.sends.remove(&id);
+            .filter_map(|input| Some((input.id, input.sends.remove(&id)?)))
+            .collect();
+        let listen = self.bus_listen.remove(&id);
+        self.keep_removed(Removed::Bus {
+            index,
+            bus,
+            sends,
+            listen,
+        });
+        Ok(self.buses_changed())
+    }
+
+    /// At its old place with its sends, renamed when another bus took its
+    /// name meanwhile.
+    fn restore_bus(
+        &mut self,
+        index: usize,
+        mut bus: ShowBus,
+        sends: Vec<(InputId, u8)>,
+        listen: bool,
+    ) -> Result<Vec<Command>, ActionError> {
+        if self.show.buses.len() >= BUSES {
+            return Err(ActionError::TooManyBuses { max: BUSES });
         }
-        self.bus_listen.remove(&id);
+        let base = bus.name.clone();
+        let mut n = 2;
+        while self.bus_name(&bus.name, None).is_err() {
+            // " (n)" within the longest name: the base gives way.
+            let suffix = format!(" ({n})");
+            let keep = BUS_NAME_MAX.saturating_sub(suffix.chars().count());
+            bus.name = base.chars().take(keep).collect::<String>() + &suffix;
+            n += 1;
+        }
+        for (id, level) in sends {
+            if let Some(input) = self.show.inputs.iter_mut().find(|i| i.id == id) {
+                input.sends.insert(bus.id, level);
+            }
+        }
+        if listen {
+            self.bus_listen.insert(bus.id);
+        }
+        let at = index.min(self.show.buses.len());
+        self.show.buses.insert(at, bus);
         Ok(self.buses_changed())
     }
 
@@ -2436,7 +2515,7 @@ impl Switcher {
             feeds: self.feeds.clone(),
             zones: crate::zones::states(&self.show.zones, &self.zone_patches),
             stages: crate::stages::states(&self.show.stages, &self.stage_patches),
-            restorable: self.removed.last().map(|(_, input)| input.name.clone()),
+            restorable: self.removed.last().map(Removed::restorable),
             shortcuts: self
                 .show
                 .shortcuts
@@ -2579,10 +2658,10 @@ impl Switcher {
             self.check_no_stinger()?;
         }
         let removed = self.show.inputs.remove(index);
-        self.removed.push((index, removed.clone()));
-        if self.removed.len() > REMOVED_KEPT {
-            self.removed.remove(0);
-        }
+        self.keep_removed(Removed::Input {
+            index,
+            input: removed.clone(),
+        });
         let mut commands = Vec::new();
 
         // A removed input leaves preview empty and program black; a bar
@@ -3435,17 +3514,52 @@ impl Switcher {
         Ok(())
     }
 
-    /// The input closed last, back with its settings: in its old slot
-    /// when that is free, at its old place in the bar.
-    fn restore_input(&mut self) -> Result<Vec<Command>, ActionError> {
-        let (index, mut input) = self.removed.pop().ok_or(ActionError::NothingToRestore)?;
+    fn keep_removed(&mut self, removed: Removed) {
+        self.removed.push(removed);
+        if self.removed.len() > REMOVED_KEPT {
+            self.removed.remove(0);
+        }
+    }
+
+    /// What was removed last, back with its settings at its old place.
+    /// Refused (a full mixer, the lock), it stays to be brought back.
+    fn restore(&mut self) -> Result<Vec<Command>, ActionError> {
+        let removed = self.removed.pop().ok_or(ActionError::NothingToRestore)?;
+        let result = match removed.clone() {
+            Removed::Input { index, input } => self.restore_input(index, input),
+            Removed::Layout { index, layout } => self.restore_layout(index, layout),
+            Removed::Bus {
+                index,
+                bus,
+                sends,
+                listen,
+            } => self
+                .check_bus_change()
+                .and_then(|()| self.restore_bus(index, bus, sends, listen)),
+            Removed::Output { index, output } => Ok(self.restore_output(index, output)),
+        };
+        if result.is_err() {
+            self.removed.push(removed);
+        }
+        result
+    }
+
+    /// In its old slot when that is free, at its old place in the bar.
+    fn restore_input(
+        &mut self,
+        index: usize,
+        mut input: ShowInput,
+    ) -> Result<Vec<Command>, ActionError> {
+        // Sends to a bus that is gone go (the stack brings a bus back
+        // before an input closed earlier, so this is a guard).
+        input
+            .sends
+            .retain(|bus, _| self.show.buses.iter().any(|b| b.id == *bus));
         let slot_free = !self.show.inputs.iter().any(|i| i.slot == input.slot);
         if !slot_free {
-            let Some(slot) = self.free_slot() else {
-                self.removed.push((index, input));
-                return Err(ActionError::SlotsFull { slots: self.slots });
-            };
-            input.slot = slot;
+            input.slot = self
+                .free_slot()
+                .ok_or(ActionError::SlotsFull { slots: self.slots })?;
         }
         let mut commands = vec![
             Command::SetSlot {
@@ -3529,9 +3643,8 @@ impl Switcher {
                 input.name = format!("{base} ({n})");
                 n += 1;
             }
-            // Back in through the same door as a closed input.
-            self.removed.push((self.show.inputs.len(), input));
-            commands.extend(self.restore_input()?);
+            // In through the same door as a closed input.
+            commands.extend(self.restore_input(self.show.inputs.len(), input)?);
         }
         // Their sound as the mix says (follow video, mute), like any change.
         commands.extend(self.audio_commands(AUDIO_RAMP_MS));
@@ -3809,11 +3922,37 @@ impl Switcher {
             self.show.preview = None;
         }
         let removed = self.show.layouts.remove(index);
+        let pip = removed.pip;
+        self.keep_removed(Removed::Layout {
+            index,
+            layout: removed,
+        });
         Ok(vec![Command::SetLayout {
-            pip: removed.pip,
+            pip,
             background: None,
             boxes: Vec::new(),
         }])
+    }
+
+    /// At its old place, on a free picture-in-picture slot, without the
+    /// inputs removed since.
+    fn restore_layout(
+        &mut self,
+        index: usize,
+        mut layout: ShowLayout,
+    ) -> Result<Vec<Command>, ActionError> {
+        if self.show.layouts.iter().any(|l| l.pip == layout.pip) {
+            layout.pip = (0..LAYOUTS)
+                .find(|p| !self.show.layouts.iter().any(|l| l.pip == *p))
+                .ok_or(ActionError::LayoutsFull { max: LAYOUTS })?;
+        }
+        let present = |id: &InputId| self.show.inputs.iter().any(|i| i.id == *id);
+        layout.background = layout.background.filter(|id| present(id));
+        layout.boxes.retain(|b| present(&b.input));
+        let command = self.layout_command(&layout);
+        let at = index.min(self.show.layouts.len());
+        self.show.layouts.insert(at, layout);
+        Ok(vec![command])
     }
 
     fn preview_layout(&mut self, layout: &InputRef) -> Result<Vec<Command>, ActionError> {
@@ -4835,9 +4974,28 @@ impl Switcher {
     fn remove_output(&mut self, output: &OutputRef) -> Result<Vec<Command>, ActionError> {
         let index = self.find_output(output)?;
         let removed = self.show.outputs.remove(index);
-        self.output_status.remove(&removed.id);
-        self.held_outputs.remove(&removed.id);
-        Ok(vec![Command::StopOutput { id: removed.id }])
+        let id = removed.id;
+        self.output_status.remove(&id);
+        self.held_outputs.remove(&id);
+        self.keep_removed(Removed::Output {
+            index,
+            output: removed,
+        });
+        Ok(vec![Command::StopOutput { id }])
+    }
+
+    /// At its old place, stopped (removing stopped it); without a bus
+    /// removed since.
+    fn restore_output(&mut self, index: usize, mut output: ShowOutput) -> Vec<Command> {
+        if output
+            .bus
+            .is_some_and(|bus| !self.show.buses.iter().any(|b| b.id == bus))
+        {
+            output.bus = None;
+        }
+        let at = index.min(self.show.outputs.len());
+        self.show.outputs.insert(at, output);
+        Vec::new()
     }
 
     /// Starting a running output restarts it (e.g. after a failure).
@@ -6101,7 +6259,7 @@ mod tests {
             sw.apply(last(1)),
             Err(ActionError::NoOverlayLast { channel: 1 })
         );
-        sw.apply(Action::RestoreInput).unwrap();
+        sw.apply(Action::Restore).unwrap();
         assert!(sw.apply(last(1)).is_ok());
         assert_eq!(sw.state().overlays[0], Some(a));
     }
@@ -7438,10 +7596,10 @@ mod tests {
             })
             .unwrap();
         }
-        // A closed input loses its send to a bus that goes meanwhile.
-        sw.apply(Action::RemoveInput { input: named("A") }).unwrap();
+        // A bus goes with its sends; a closed input comes back with its own.
         sw.apply(Action::RemoveBus { bus: bus("In-Ear") }).unwrap();
-        sw.apply(Action::RestoreInput).unwrap();
+        sw.apply(Action::RemoveInput { input: named("A") }).unwrap();
+        sw.apply(Action::Restore).unwrap();
         let stream = sw.show().buses[0].id;
         let sends = |sw: &Switcher, name: &str| {
             sw.show()
@@ -9257,9 +9415,15 @@ mod tests {
         .unwrap();
         let a = sw.state().inputs[0].clone();
         sw.apply(Action::RemoveInput { input: named("A") }).unwrap();
-        assert_eq!(sw.state().restorable.as_deref(), Some("A"));
+        assert_eq!(
+            sw.state().restorable,
+            Some(lmix_types::Restorable {
+                kind: lmix_types::RemovedKind::Input,
+                name: "A".into()
+            })
+        );
 
-        let cmds = sw.apply(Action::RestoreInput).unwrap();
+        let cmds = sw.apply(Action::Restore).unwrap();
 
         let back = &sw.state().inputs[0];
         assert_eq!((back.id, back.number, back.slot), (a.id, 1, 0));
@@ -9270,8 +9434,145 @@ mod tests {
         }));
         assert_eq!(sw.state().restorable, None);
         assert_eq!(
-            sw.apply(Action::RestoreInput),
+            sw.apply(Action::Restore),
             Err(ActionError::NothingToRestore)
+        );
+    }
+
+    fn restorable(sw: &Switcher) -> Option<(lmix_types::RemovedKind, String)> {
+        sw.state().restorable.map(|r| (r.kind, r.name))
+    }
+
+    #[test]
+    fn restore_brings_back_the_newest_removal_first() {
+        use lmix_types::RemovedKind;
+        let mut sw = with_buses();
+        sw.apply(Action::AddLayout {
+            name: Some("Interview".into()),
+            background: Some(named("A")),
+            boxes: vec![BoxSpec {
+                rect: BoxRect {
+                    x: 0.5,
+                    y: 0.0,
+                    w: 0.5,
+                    h: 0.5,
+                },
+                input: named("B"),
+                border_px: 4,
+                crop: BoxCrop::default(),
+                locked: false,
+                hidden: false,
+            }],
+        })
+        .unwrap();
+        sw.apply(Action::AddOutput {
+            spec: OutputSpec::Srt {
+                uri: "srt://cdn:9000".into(),
+                video_kbps: 6000,
+                encoding: Default::default(),
+            },
+            source: OutputSource::Program,
+            name: Some("CDN".into()),
+            bus: Some(bus("Stream")),
+        })
+        .unwrap();
+        let layout = sw.state().layouts[0].clone();
+        let output = sw.state().outputs[0].clone();
+
+        sw.apply(Action::RemoveLayout {
+            layout: InputRef::Number(1),
+        })
+        .unwrap();
+        sw.apply(Action::RemoveOutput {
+            output: OutputRef::Number(1),
+        })
+        .unwrap();
+        sw.apply(Action::RemoveInput { input: named("B") }).unwrap();
+        assert_eq!(restorable(&sw), Some((RemovedKind::Input, "B".into())));
+
+        sw.apply(Action::Restore).unwrap();
+        assert_eq!(restorable(&sw), Some((RemovedKind::Output, "CDN".into())));
+        let cmds = sw.apply(Action::Restore).unwrap();
+        // Back stopped, with its id and bus.
+        assert!(cmds.is_empty());
+        let back = &sw.state().outputs[0];
+        assert_eq!((back.id, back.bus), (output.id, output.bus));
+        assert_eq!(
+            restorable(&sw),
+            Some((RemovedKind::Layout, "Interview".into()))
+        );
+
+        let cmds = sw.apply(Action::Restore).unwrap();
+        let back = &sw.state().layouts[0];
+        assert_eq!(back.id, layout.id);
+        assert_eq!(back.boxes.len(), 1);
+        assert!(matches!(cmds[..], [Command::SetLayout { ref boxes, .. }] if boxes.len() == 1));
+        assert_eq!(restorable(&sw), None);
+    }
+
+    #[test]
+    fn a_bus_comes_back_with_its_sends() {
+        let mut sw = with_buses();
+        sw.apply(Action::SetSend {
+            input: named("B"),
+            bus: bus("In-Ear"),
+            level: 30,
+        })
+        .unwrap();
+        // Closed before its bus goes: both come back, the send too.
+        sw.apply(Action::RemoveInput { input: named("A") }).unwrap();
+        sw.apply(Action::SetSend {
+            input: InputRef::Number(1),
+            bus: bus("Stream"),
+            level: 10,
+        })
+        .unwrap();
+        sw.apply(Action::RemoveInput { input: named("B") }).unwrap();
+        sw.apply(Action::Restore).unwrap();
+        sw.apply(Action::RemoveBus { bus: bus("In-Ear") }).unwrap();
+        // Taken meanwhile: it comes back under another name.
+        sw.apply(Action::AddBus {
+            name: Some("In-Ear".into()),
+            pre_fader: false,
+        })
+        .unwrap();
+        let cmds = sw.apply(Action::Restore).unwrap();
+        let names: Vec<_> = sw.show().buses.iter().map(|b| b.name.as_str()).collect();
+        assert_eq!(names, ["In-Ear (2)", "Stream", "In-Ear"]);
+        assert!(cmds.iter().any(|c| matches!(c, Command::SetFormat { .. })));
+        let in_ear = sw.show().buses[0].id;
+        let b = sw.show().inputs.iter().find(|i| i.name == "B").unwrap();
+        assert_eq!(b.sends.get(&in_ear), Some(&30));
+    }
+
+    #[test]
+    fn a_refused_restore_stays_to_be_brought_back() {
+        let mut sw = two_inputs();
+        for n in 0..LAYOUTS {
+            sw.apply(Action::AddLayout {
+                name: Some(format!("L{n}")),
+                background: None,
+                boxes: Vec::new(),
+            })
+            .unwrap();
+        }
+        sw.apply(Action::RemoveLayout {
+            layout: InputRef::Number(1),
+        })
+        .unwrap();
+        sw.apply(Action::AddLayout {
+            name: None,
+            background: None,
+            boxes: Vec::new(),
+        })
+        .unwrap();
+        assert_eq!(
+            sw.apply(Action::Restore),
+            Err(ActionError::LayoutsFull { max: LAYOUTS })
+        );
+        assert_eq!(
+            restorable(&sw),
+            Some((lmix_types::RemovedKind::Layout, "L0".into()))
         );
     }
 
