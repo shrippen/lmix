@@ -315,7 +315,7 @@ AppPage {
                     Layout.fillHeight: true
                     vertical: true
                     showScale: true
-                    level: root.levels[strip.input.id]
+                    level: root.levels.peak(strip.input.id)
                 }
                 QQC2.Slider {
                     id: fader
@@ -334,7 +334,7 @@ AppPage {
                 Layout.fillWidth: true
                 // Peak in dBFS, coloured by the meter's zones (AUD.12).
                 QQC2.Label {
-                    readonly property var level: root.levels[strip.input.id]
+                    readonly property var level: root.levels.peak(strip.input.id)
                     Layout.fillWidth: true
                     text: level === undefined || level <= -60 ? "−∞" : level.toFixed(1)
                     font.family: KanteStyle.monoFamily

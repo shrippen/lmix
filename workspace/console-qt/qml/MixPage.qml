@@ -457,7 +457,7 @@ AppPage {
                         detail: root.busLabel(root.show ? root.show.program : null)
                         tally: KanteStyle.negativeTextColor
                         source: "program"
-                        peakDb: root.levels.program
+                        peakDb: root.levels.peak("program")
                         input: root.programInput
                     }
                 }
@@ -730,8 +730,9 @@ AppPage {
                     overlayPreview: root.show && root.show.overlay_preview ? root.show.overlay_preview : []
                     looksAvailable: root.show !== null && root.show.looks_available === true
                     buses: root.show && root.show.buses ? root.show.buses : []
-                    peakDb: root.levels[key]
-                    channelsDb: root.levels["ch:" + key]
+                    peakDb: root.levels.peak(key)
+                    leftDb: root.levels.channel(key, 0)
+                    rightDb: root.levels.channel(key, 1)
                     onTriggersRequested: {
                         triggersDialog.graphics = null
                         triggersDialog.input = tileDelegate.input

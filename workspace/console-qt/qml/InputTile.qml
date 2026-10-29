@@ -31,8 +31,10 @@ KanteCard {
     /** `buses` of the show state, for the channel strip's sends. */
     property var buses: []
     property var peakDb: undefined
-    /** Peak per channel, dBFS: left, right (AUD.1); undefined before the first. */
-    property var channelsDb: undefined
+    /** Peak per channel, dBFS (AUD.1); undefined before the first, the
+     *  right one also for mono. */
+    property var leftDb: undefined
+    property var rightDb: undefined
     /** Another tile is dragged over this one: it would land here. */
     property bool dropTarget: false
     /** Overlay buttons and the audio strip under the title; else picture
@@ -303,8 +305,8 @@ KanteCard {
                     opacity: tile.audio.on ? 1 : 0.4
                     KanteAudioMeter {
                         Layout.fillWidth: true
-                        readonly property bool stereo: tile.channelsDb !== undefined && tile.channelsDb.length >= 2
-                        level: stereo ? tile.channelsDb[0] : tile.peakDb
+                        readonly property bool stereo: tile.rightDb !== undefined
+                        level: stereo ? tile.leftDb : tile.peakDb
                         thickness: stereo ? KanteStyle.unit(4) : KanteStyle.unit(8)
                         holdMs: 2000
                         showScale: !stereo
@@ -312,8 +314,8 @@ KanteCard {
                     }
                     KanteAudioMeter {
                         Layout.fillWidth: true
-                        visible: tile.channelsDb !== undefined && tile.channelsDb.length >= 2
-                        level: visible ? tile.channelsDb[1] : undefined
+                        visible: tile.rightDb !== undefined
+                        level: tile.rightDb
                         thickness: KanteStyle.unit(4)
                         holdMs: 2000
                         showScale: true

@@ -33,8 +33,11 @@ KanteCard {
     required property var core
     required property var show
     required property var act
-    /** Peaks per input id, `program`, `phones` and `bus:<id>` (Core.levels as an object). */
-    property var levels: ({})
+    /** AppShell.levels (`peak` per input id, `program`, `phones`, `bus:<id>`), or null. */
+    property var levels: null
+    function peak(key) {
+        return levels ? levels.peak(key) : undefined
+    }
     /** Height of the ways out, in px (stored by the page); 0: every row of them, at most half the column. */
     property real pathsHeight: 0
     signal pathsHeightMoved(real height)
@@ -296,7 +299,7 @@ KanteCard {
                             line: qsTr("PGM", "program sound, short")
                             lineLong: qsTr("Program sound")
                             nameColor: KanteStyle.negativeTextColor
-                            level: mixer.levels.program
+                            level: mixer.peak("program")
                             volume: mixer.master.volume
                             on: !mixer.master.mute
                             onVolumeMoved: v => mixer.act({ action: "set_master", volume: v, mute: mixer.master.mute })
@@ -311,7 +314,7 @@ KanteCard {
                             name: qsTr("Headphones")
                             line: qsTr("MON", "listening, short")
                             lineLong: qsTr("Listening")
-                            level: mixer.levels.phones
+                            level: mixer.peak("phones")
                             volume: mixer.phones.volume
                             on: !mixer.phones.mute
                             onVolumeMoved: v => mixer.act({ action: "set_phones", volume: v, mute: mixer.phones.mute })
@@ -328,7 +331,7 @@ KanteCard {
                             name: bus.name
                             line: mixer.busLine(bus)
                             lineLong: mixer.busLineLong(bus)
-                            level: mixer.levels["bus:" + bus.id]
+                            level: mixer.peak("bus:" + bus.id)
                             volume: bus.volume
                             on: !bus.mute
                             listening: bus.listen
@@ -700,7 +703,7 @@ KanteCard {
 
         Fader {
             name: strip.fullName
-            level: host.levels[strip.input.id]
+            level: host.peak(strip.input.id)
             volume: strip.input.audio.volume
             onMoved: v => host.act({ action: "set_volume", input: strip.input.number, volume: v })
         }

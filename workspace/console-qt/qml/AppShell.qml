@@ -91,8 +91,24 @@ Kirigami.ApplicationWindow {
         }
     }
     readonly property var inputs: show ? show.inputs : []
-    /** Peaks (Core.levels), parsed once for all pages. */
-    readonly property var levels: backend.levels.length > 0 ? JSON.parse(backend.levels) : ({})
+    /** Peaks in dBFS, undefined while none was measured: `peak(key)` of an
+     *  input id, "program", "phones" or "bus:<id>", `channel(id, i)` of an
+     *  input's channel. Read in a binding, they follow every measurement.
+     *  Numbers from Rust, no object per measurement: parsed as JSON 10
+     *  times a second, the levels fed the JS garbage collector, 20 % of the
+     *  GUI thread with 31 inputs (29.10.2026). */
+    readonly property QtObject levels: QtObject {
+        function peak(key) {
+            void root.backend.levelsTick
+            const db = root.backend.peak(key)
+            return isNaN(db) ? undefined : db
+        }
+        function channel(id, index) {
+            void root.backend.levelsTick
+            const db = root.backend.channel(id, index)
+            return isNaN(db) ? undefined : db
+        }
+    }
     readonly property var recent: backend.recent.length > 0 ? JSON.parse(backend.recent) : []
 
     /** Send an lmix action (the API's JSON, as an object). */

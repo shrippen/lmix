@@ -39,8 +39,9 @@ pub mod qobject {
         /// `KanteStyle.kind` from the command line (0 System, 1 Kante,
         /// 2 Kante Light), or -1: the one saved in the Console.
         #[qproperty(i32, style)]
-        /// Peak dBFS per input id, and `program` (JSON object).
-        #[qproperty(QString, levels)]
+        /// Counts the level measurements: a binding that reads it with
+        /// `peak` or `channel` follows them.
+        #[qproperty(i32, levels_tick, cxx_name = "levelsTick")]
         /// Where clips play: `{input id: [position ms, length ms]}`.
         #[qproperty(QString, positions)]
         /// Link health per output id: lmix `OutputStats` (JSON object).
@@ -161,6 +162,15 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "shortName"]
         fn short_name(self: &Core, name: &QString, max: i32) -> QString;
+
+        /// Peak dBFS of an input id, `program`, `phones` or `bus:<id>`;
+        /// NaN while none was measured.
+        #[qinvokable]
+        fn peak(self: &Core, key: &QString) -> f64;
+
+        /// Peak dBFS of channel `index` of an input; NaN without it.
+        #[qinvokable]
+        fn channel(self: &Core, input: &QString, index: i32) -> f64;
     }
 
     unsafe extern "RustQt" {
@@ -202,7 +212,12 @@ pub struct CoreRust {
     shown: serde_json::Value,
     message: QString,
     style: i32,
-    levels: QString,
+    levels_tick: i32,
+    /// The last levels by `peak`'s keys, and the channels per input id:
+    /// numbers for QML, not an object per measurement (garbage for its
+    /// collector 10 times a second, 20 % of the GUI thread with 31 inputs).
+    peaks: HashMap<String, f32>,
+    channels: HashMap<String, Vec<f32>>,
     positions: QString,
     links: QString,
     machine: QString,
@@ -292,14 +307,13 @@ async fn follow(thread: cxx_qt::CxxQtThread<qobject::Core>) {
                         })
                     }
                     Ok(Event::Levels { levels }) => {
-                        let json = levels_json(&levels);
-                        if !level.put(json) {
+                        if !level.put(levels) {
                             continue;
                         }
                         let level = level.clone();
-                        thread.queue(move |core| {
-                            if let Some(json) = level.take() {
-                                core.set_levels(QString::from(&json));
+                        thread.queue(move |mut core| {
+                            if let Some(levels) = level.take() {
+                                core.as_mut().take_levels(&levels);
                             }
                         })
                     }
@@ -336,31 +350,19 @@ async fn follow(thread: cxx_qt::CxxQtThread<qobject::Core>) {
     }
 }
 
-/// `{ "<input id>": peak, "ch:<input id>": [left, right], "program": peak,
-/// "phones": peak, "bus:<bus id>": peak, … }`.
-fn levels_json(levels: &Levels) -> String {
-    let mut map = serde_json::Map::new();
-    for level in &levels.inputs {
-        map.insert(level.input.to_string(), level.peak_db.into());
-        if !level.channels_db.is_empty() {
-            map.insert(
-                format!("ch:{}", level.input),
-                level.channels_db.clone().into(),
-            );
-        }
-    }
-    if let Some(peak) = levels.program_peak_db {
-        map.insert("program".into(), peak.into());
-    }
-    if let Some(peak) = levels.phones_peak_db {
-        map.insert("phones".into(), peak.into());
-    }
-    for bus in &levels.buses {
-        if let Some(peak) = bus.peak_db {
-            map.insert(format!("bus:{}", bus.bus), peak.into());
-        }
-    }
-    serde_json::Value::Object(map).to_string()
+/// `peak`'s keys and values: input ids, `program`, `phones`, `bus:<id>`.
+fn peaks_of(levels: &Levels) -> impl Iterator<Item = (String, f32)> + '_ {
+    let inputs = levels
+        .inputs
+        .iter()
+        .map(|l| (l.input.to_string(), l.peak_db));
+    let program = levels.program_peak_db.map(|p| ("program".to_string(), p));
+    let phones = levels.phones_peak_db.map(|p| ("phones".to_string(), p));
+    let buses = levels
+        .buses
+        .iter()
+        .filter_map(|b| Some((format!("bus:{}", b.bus), b.peak_db?)));
+    inputs.chain(program).chain(phones).chain(buses)
 }
 
 /// `{ "<output id>": OutputStats }`.
@@ -595,6 +597,39 @@ impl qobject::Core {
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0, |d| d.as_millis() as u64);
         QString::from(&forms::running_time(since_ms.max(0.0) as u64, now_ms))
+    }
+
+    fn take_levels(mut self: Pin<&mut Self>, levels: &Levels) {
+        {
+            let mut rust = self.as_mut().rust_mut();
+            rust.peaks.clear();
+            rust.peaks.extend(peaks_of(levels));
+            rust.channels.clear();
+            rust.channels.extend(
+                levels
+                    .inputs
+                    .iter()
+                    .filter(|l| !l.channels_db.is_empty())
+                    .map(|l| (l.input.to_string(), l.channels_db.clone())),
+            );
+        }
+        let tick = self.levels_tick().wrapping_add(1);
+        self.set_levels_tick(tick);
+    }
+
+    fn peak(&self, key: &QString) -> f64 {
+        self.peaks
+            .get(&key.to_string())
+            .map_or(f64::NAN, |&p| p.into())
+    }
+
+    fn channel(&self, input: &QString, index: i32) -> f64 {
+        let channels = self.channels.get(&input.to_string());
+        let at = usize::try_from(index).ok();
+        channels
+            .zip(at)
+            .and_then(|(c, i)| c.get(i))
+            .map_or(f64::NAN, |&p| p.into())
     }
 
     fn short_name(&self, name: &QString, max: i32) -> QString {
@@ -934,5 +969,23 @@ mod tests {
         assert_eq!(live_path("program"), "/api/live/program");
         assert_eq!(live_path("7d0c"), "/api/live/inputs/7d0c");
         assert_eq!(live_path("preview"), "/api/live/preview");
+    }
+
+    #[test]
+    fn peaks_by_the_keys_qml_asks_for() {
+        let input = "00000000-0000-0000-0000-000000000001";
+        let bus = "00000000-0000-0000-0000-000000000002";
+        let levels: Levels = serde_json::from_value(serde_json::json!({
+            "inputs": [{ "input": input, "peak_db": -12.0, "channels_db": [-12.0, -14.0] }],
+            "program_peak_db": -6.0,
+            "phones_peak_db": null,
+            "buses": [{ "bus": bus, "peak_db": -20.0 }, { "bus": "00000000-0000-0000-0000-000000000003", "peak_db": null }]
+        }))
+        .unwrap();
+        let peaks: HashMap<String, f32> = peaks_of(&levels).collect();
+        assert_eq!(peaks.len(), 3);
+        assert_eq!(peaks[input], -12.0);
+        assert_eq!(peaks["program"], -6.0);
+        assert_eq!(peaks[&format!("bus:{bus}")], -20.0);
     }
 }
