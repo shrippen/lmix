@@ -9561,6 +9561,47 @@ mod tests {
     }
 
     #[test]
+    fn a_listened_bus_is_listened_again() {
+        let mut sw = with_buses();
+        sw.apply(Action::SetBusListen {
+            bus: bus("In-Ear"),
+            on: true,
+        })
+        .unwrap();
+        sw.apply(Action::RemoveBus { bus: bus("In-Ear") }).unwrap();
+        sw.apply(Action::Restore).unwrap();
+        let id = sw.show().buses[0].id;
+        assert!(sw.bus_listen.contains(&id));
+        // Not listened when it went: not listened when it comes back.
+        sw.apply(Action::RemoveBus { bus: bus("Stream") }).unwrap();
+        sw.apply(Action::Restore).unwrap();
+        let stream = sw.show().buses[1].id;
+        assert!(!sw.bus_listen.contains(&stream));
+    }
+
+    #[test]
+    fn a_long_name_taken_meanwhile_gives_way_to_the_number() {
+        let mut sw = with_buses();
+        let long = "M".repeat(BUS_NAME_MAX);
+        sw.apply(Action::RenameBus {
+            bus: bus("In-Ear"),
+            name: long.clone(),
+        })
+        .unwrap();
+        sw.apply(Action::RemoveBus { bus: bus(&long) }).unwrap();
+        sw.apply(Action::AddBus {
+            name: Some(long.clone()),
+            pre_fader: false,
+        })
+        .unwrap();
+        sw.apply(Action::Restore).unwrap();
+        let back = &sw.show().buses[0].name;
+        assert_eq!(back.chars().count(), BUS_NAME_MAX);
+        assert!(back.ends_with(" (2)"), "{back}");
+        assert_eq!(back.trim_end_matches(" (2)"), &long[..BUS_NAME_MAX - 4]);
+    }
+
+    #[test]
     fn an_output_comes_back_without_a_bus_gone_since() {
         let mut sw = with_buses();
         let stream = sw.show().buses[1].id;
