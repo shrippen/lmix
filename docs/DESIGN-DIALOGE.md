@@ -118,7 +118,7 @@ kommt.
 | M01 Datei | A | „Zuletzt“ zeigt Dateinamen groß, Ordner und Datum klein darunter | – |
 | M02 Input-Kachel | A | Untermenüs, die für die Quelle nichts tun, entfallen; „Link kopieren“ und „Dynamischer Input“ ziehen in die Input-Einstellungen | Übernommen von der entfallenen Tafel 4 „Menü der Input-Kachel“ |
 | M03 ⋯ Weitere Input-Aktionen | A | `KanteMenuItem` mit Icon; „Input hinzufügen…“ im Menü; „In der Zeile ▸“ bleibt als Untermenü | Generell wären Icons für Menüeinträge gut. Nicht übermäßig, aber wo möglich für häufige Handlungen. (Regel 5) |
-| M04 Eingeklappte Kachel | B | Kein eigenes Menü: Doppelklick klappt aus, Rechtsklick zeigt das normale Kachelmenü | – |
+| M04 Eingeklappte Kachel | B | Kein eigenes Menü: Doppelklick klappt aus, Rechtsklick zeigt das normale Kachelmenü. Geht der Klick eines Inputs auf Sendung (Cut, Schnellstart), klappt nur das Menü aus: ein Doppelklick ließe den Cut auf den zweiten Klick warten | – |
 | M05 Layout | A | Icons, Entfernen rot und abgesetzt; mit Rückfrage und Toast (Regel 1) | – |
 | M06 Vorlagen | A | Am Knopf verankert; Entfernen rot und unten, mit Bestätigung | – |
 | M07 Ausgang | B | Volles Menü mit Kopf und Bitrate: Stoppen, Einstellungen, Adresse, Statistik; Entfernen gesperrt, solange er sendet | – |

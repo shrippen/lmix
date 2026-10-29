@@ -701,6 +701,7 @@ DE = {
     'Show %1 %2 again': '%1 %2 wieder zeigen',
     'Click': 'Klick',
     'Click: %1. Double click: expand. Right click: more.': 'Klick: %1. Doppelklick: aufklappen. Rechtsklick: mehr.',
+    'Click: %1. Right click: more, also expand.': 'Klick: %1. Rechtsklick: mehr, auch aufklappen.',
     'Click: %1. Double click (GO): %2. Right click: more.': 'Klick: %1. Doppelklick (GO): %2. Rechtsklick: mehr.',
     'Click: preview to program with this effect, and play it. Double click on the preview monitor does the same. Right click: effect and length.': 'Klick: Vorschau mit diesem Effekt auf Programm und abspielen. Doppelklick auf den Vorschau-Monitor tut dasselbe. Rechtsklick: Effekt und Dauer.',
     'GO of input': 'GO des Inputs',

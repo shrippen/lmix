@@ -603,12 +603,12 @@
     </message>
     <message>
       <location line="+99" />
-      <location line="+161" />
+      <location line="+115" />
       <source>Open show</source>
       <translation>Show öffnen</translation>
     </message>
     <message>
-      <location line="-160" />
+      <location line="-114" />
       <location line="+13" />
       <source>lmix shows (*.lmix)</source>
       <translation>lmix-Shows (*.lmix)</translation>
@@ -616,18 +616,18 @@
     <message>
       <location line="-13" />
       <location line="+38" />
-      <location line="+78" />
+      <location line="+32" />
       <source>All files (*)</source>
       <translation>Alle Dateien (*)</translation>
     </message>
     <message>
-      <location line="-106" />
-      <location line="+151" />
+      <location line="-60" />
+      <location line="+105" />
       <source>Save show</source>
       <translation>Show speichern</translation>
     </message>
     <message>
-      <location line="-136" />
+      <location line="-90" />
       <source>Export settings</source>
       <translation>Einstellungen exportieren</translation>
     </message>
@@ -643,42 +643,7 @@
       <translation>Einstellungen importieren</translation>
     </message>
     <message>
-      <location line="+15" />
-      <source>Reset to factory settings?</source>
-      <translation>Auf Werkseinstellungen zurücksetzen?</translation>
-    </message>
-    <message>
-      <location line="+5" />
-      <source>Reset settings</source>
-      <translation>Einstellungen zurücksetzen</translation>
-    </message>
-    <message>
-      <location line="+2" />
-      <source>reset</source>
-      <translation>zurücksetzen</translation>
-    </message>
-    <message>
-      <location line="+15" />
-      <source>Removes the shortcuts for all shows, the layout templates, the output targets with their secrets and the OSC subscribers of this machine. The show stays. This cannot be undone.</source>
-      <translation>Entfernt die Kurzbefehle für alle Shows, die Layout-Vorlagen, die Ausgabeziele mit ihren Geheimnissen und die OSC-Abonnenten dieses Rechners. Die Show bleibt. Das lässt sich nicht rückgängig machen.</translation>
-    </message>
-    <message>
-      <location line="+3" />
-      <source>Export settings first…</source>
-      <translation>Vorher Einstellungen exportieren…</translation>
-    </message>
-    <message>
-      <location line="+10" />
-      <source>Type %1 to confirm.</source>
-      <translation>Zum Bestätigen %1 eingeben.</translation>
-    </message>
-    <message>
-      <location line="+6" />
-      <source>Confirmation word</source>
-      <translation>Bestätigungswort</translation>
-    </message>
-    <message>
-      <location line="+10" />
+      <location line="+20" />
       <source>Export show package</source>
       <translation>Show-Paket exportieren</translation>
     </message>
@@ -1378,12 +1343,17 @@
       <translation>Eingeklappt</translation>
     </message>
     <message>
-      <location line="+25" />
+      <location line="+31" />
       <source>Input %1 %2, collapsed</source>
       <translation>Input %1 %2, eingeklappt</translation>
     </message>
     <message>
-      <location line="+5" />
+      <location line="+12" />
+      <source>Click: %1. Right click: more, also expand.</source>
+      <translation>Klick: %1. Rechtsklick: mehr, auch aufklappen.</translation>
+    </message>
+    <message>
+      <location line="+2" />
       <source>Click: %1. Double click: expand. Right click: more.</source>
       <translation>Klick: %1. Doppelklick: aufklappen. Rechtsklick: mehr.</translation>
     </message>
@@ -1621,6 +1591,44 @@
     </message>
   </context>
   <context>
+    <name>FactoryResetDialog</name>
+    <message>
+      <location filename="../qml/FactoryResetDialog.qml" line="+20" />
+      <source>reset</source>
+      <translation>zurücksetzen</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Reset to factory settings?</source>
+      <translation>Auf Werkseinstellungen zurücksetzen?</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Reset settings</source>
+      <translation>Einstellungen zurücksetzen</translation>
+    </message>
+    <message>
+      <location line="+17" />
+      <source>Removes the shortcuts for all shows, the layout templates, the output targets with their secrets and the OSC subscribers of this machine. The show stays. This cannot be undone.</source>
+      <translation>Entfernt die Kurzbefehle für alle Shows, die Layout-Vorlagen, die Ausgabeziele mit ihren Geheimnissen und die OSC-Abonnenten dieses Rechners. Die Show bleibt. Das lässt sich nicht rückgängig machen.</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Export settings first…</source>
+      <translation>Vorher Einstellungen exportieren…</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>Type %1 to confirm.</source>
+      <translation>Zum Bestätigen %1 eingeben.</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Confirmation word</source>
+      <translation>Bestätigungswort</translation>
+    </message>
+  </context>
+  <context>
     <name>FormatDialog</name>
     <message>
       <location filename="../qml/FormatDialog.qml" line="+21" />
@@ -1701,7 +1709,7 @@
   <context>
     <name>InputMenu</name>
     <message>
-      <location filename="../qml/InputMenu.qml" line="+111" />
+      <location filename="../qml/InputMenu.qml" line="+115" />
       <source>Cut</source>
       <translation>Cut</translation>
     </message>
@@ -2716,7 +2724,7 @@
   <context>
     <name>MessageToasts</name>
     <message>
-      <location filename="../qml/MessageToasts.qml" line="+71" />
+      <location filename="../qml/MessageToasts.qml" line="+73" />
       <source>Close</source>
       <translation>Schließen</translation>
     </message>
@@ -2832,7 +2840,7 @@
       <translation>Strg+Z</translation>
     </message>
     <message>
-      <location line="+157" />
+      <location line="+169" />
       <source>Inputs from a show…</source>
       <translation>Inputs aus einer Show …</translation>
     </message>
@@ -2952,7 +2960,7 @@
       <translation>Ansicht</translation>
     </message>
     <message>
-      <location line="-548" />
+      <location line="-560" />
       <source>FTB</source>
       <comment>fade to black</comment>
       <translation>FTB</translation>
@@ -2968,7 +2976,7 @@
       <translation>Schwarzblende: Programm auf Schwarz und zurück (SWI.9); Show und Ausgänge laufen weiter</translation>
     </message>
     <message>
-      <location line="+584" />
+      <location line="+596" />
       <source>Multiview</source>
       <translation>Multiview</translation>
     </message>
@@ -4009,7 +4017,7 @@
       <translation>Umbenennen</translation>
     </message>
     <message>
-      <location line="+18" />
+      <location line="+22" />
       <source>Name</source>
       <translation>Name</translation>
     </message>
