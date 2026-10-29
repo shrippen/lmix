@@ -2275,10 +2275,12 @@ impl Service {
 }
 
 /// The shortcuts for all shows as `--shortcuts` keeps them; a file from
-/// before named buses gets them as a migrated show does.
+/// before named buses gets them as a migrated show does, renamed actions
+/// their new name.
 fn parse_shortcuts(bytes: &[u8]) -> Result<Vec<crate::show::ShowShortcut>, String> {
     let mut value: serde_json::Value = serde_json::from_slice(bytes).map_err(|e| e.to_string())?;
     crate::show::migrate_shortcuts(&mut value);
+    crate::show::rename_actions(&mut value);
     serde_json::from_value(value).map_err(|e| e.to_string())
 }
 
@@ -2571,6 +2573,19 @@ mod tests {
     use lmix_types::{
         DisplayMode, InputRef, OutputRef, OutputSource, OutputSpec, SourceSpec, TestPattern,
     };
+
+    /// `restore_input` became `restore`: the shortcuts for all shows
+    /// (`--shortcuts`) with it still load.
+    #[test]
+    fn shortcuts_for_all_shows_with_restore_input_load() {
+        let file = serde_json::json!([{
+            "id": InputId::new(),
+            "label": "Back",
+            "actions": [{"action": "restore_input"}],
+        }]);
+        let shortcuts = parse_shortcuts(&serde_json::to_vec(&file).unwrap()).unwrap();
+        assert_eq!(shortcuts[0].actions, [Action::Restore]);
+    }
 
     /// Shortcuts for all shows from before named buses still load: aux
     /// bus B becomes "Bus B", the name a migrated show gives it.

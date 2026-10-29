@@ -1333,12 +1333,17 @@
       <translation>Eingeklappt</translation>
     </message>
     <message>
-      <location line="+36" />
+      <location line="+31" />
       <source>Input %1 %2, collapsed</source>
       <translation>Input %1 %2, eingeklappt</translation>
     </message>
     <message>
-      <location line="+15" />
+      <location line="+12" />
+      <source>Click: %1. Right click: more, also expand.</source>
+      <translation>Klick: %1. Rechtsklick: mehr, auch aufklappen.</translation>
+    </message>
+    <message>
+      <location line="+2" />
       <source>Click: %1. Double click: expand. Right click: more.</source>
       <translation>Klick: %1. Doppelklick: aufklappen. Rechtsklick: mehr.</translation>
     </message>
@@ -3933,7 +3938,7 @@
   <context>
     <name>Removals</name>
     <message>
-      <location filename="../qml/Removals.qml" line="+41" />
+      <location filename="../qml/Removals.qml" line="+42" />
       <source>Remove input %1 %2?</source>
       <translation>Input %1 %2 entfernen?</translation>
     </message>
@@ -4013,7 +4018,7 @@
       <translation>Ausgang %1 entfernt</translation>
     </message>
     <message>
-      <location line="+95" />
+      <location line="+101" />
       <source>Removed</source>
       <translation>Entfernt</translation>
     </message>

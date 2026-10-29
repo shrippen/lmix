@@ -5185,8 +5185,10 @@ Ctrl+Z ebenso.
 - `restorable` im Zustand nennt jetzt Art und Name (`{kind, name}`); der
   Toast der Console bietet Rückgängig nur, solange es seine Entfernung ist.
 - **Bricht:** `restore_input` heißt `restore`, `restorable` ist ein Objekt
-  statt eines Namens. Kurzbefehle und OSC-Aufrufe mit `restore_input` gehen
-  nicht mehr (vor dem ersten Release).
+  statt eines Namens. Gespeicherte Aktionen (Show, Einstellungen,
+  Kurzbefehle für alle Shows) liest lmix-core unter dem neuen Namen
+  (`RENAMED_ACTIONS` in show.rs, ohne Alias im Typ); OSC-Aufrufe mit
+  `restore_input` gehen nicht mehr (vor dem ersten Release).
 - Nicht im Stapel: Zonen, Ziele, Cues, Auslöser, Belegungen und Vorlagen
   (Regel 1 nennt sie auch; sie folgen), sowie Stoppen und Werkseinstellungen
   (nicht zurückzuholen, nur mit Rückfrage).

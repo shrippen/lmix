@@ -4,8 +4,8 @@ import "../../qml"
 
 /**
  * A collapsed input (CollapsedBar, docs/DESIGN-DIALOGE.md M04): a click acts
- * as on its tile, a double click only expands. A click that goes on air
- * waits for the double click, so expanding never cuts the input to program.
+ * as on its tile, at once. A double click expands an input whose click only
+ * previews; one whose click goes on air expands from its menu only.
  */
 TestCase {
     id: test
@@ -70,18 +70,26 @@ TestCase {
         compare(sent, [{ action: "click_input", input: "cam" }])
     }
 
-    function test_a_double_click_only_expands() {
-        const bar = makeBar()
-        mouseDoubleClickSequence(buttonNamed(bar, "Input 2 Clip, collapsed"))
-        compare(expanded, ["clip"])
-        wait(Qt.styleHints.mouseDoubleClickInterval + 100)
-        compare(sent.length, 0)
-    }
-
-    function test_a_cut_click_comes_after_the_wait() {
+    // A cut waited for a possible double click, 400-500 ms late on air.
+    function test_a_cut_click_acts_at_once() {
         const bar = makeBar()
         mouseClick(buttonNamed(bar, "Input 2 Clip, collapsed"))
-        compare(sent.length, 0)
-        tryCompare(test, "sent", [{ action: "click_input", input: "clip" }], Qt.styleHints.mouseDoubleClickInterval + 1000)
+        compare(sent, [{ action: "click_input", input: "clip" }])
+    }
+
+    // Its click goes on air: a double click is not to expand it (the menu
+    // does), and cuts once, not twice.
+    function test_a_double_click_on_a_cut_input_cuts_once() {
+        const bar = makeBar()
+        mouseDoubleClickSequence(buttonNamed(bar, "Input 2 Clip, collapsed"))
+        compare(expanded, [])
+        wait(Qt.styleHints.mouseDoubleClickInterval + 100)
+        compare(sent, [{ action: "click_input", input: "clip" }])
+    }
+
+    function test_a_double_click_expands_a_preview_input() {
+        const bar = makeBar()
+        mouseDoubleClickSequence(buttonNamed(bar, "Input 1 Cam, collapsed"))
+        compare(expanded, ["cam"])
     }
 }

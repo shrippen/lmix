@@ -575,12 +575,19 @@ enum Removed {
         index: usize,
         bus: ShowBus,
         sends: Vec<(InputId, u8)>,
-        listen: bool,
+        listen: Listened,
     },
     Output {
         index: usize,
         output: ShowOutput,
     },
+}
+
+/// Whether a removed bus was listened to, so it is again when it comes back.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Listened {
+    No,
+    Yes,
 }
 
 impl Removed {
@@ -2265,7 +2272,11 @@ impl Switcher {
             .iter_mut()
             .filter_map(|input| Some((input.id, input.sends.remove(&id)?)))
             .collect();
-        let listen = self.bus_listen.remove(&id);
+        let listen = if self.bus_listen.remove(&id) {
+            Listened::Yes
+        } else {
+            Listened::No
+        };
         self.keep_removed(Removed::Bus {
             index,
             bus,
@@ -2282,7 +2293,7 @@ impl Switcher {
         index: usize,
         mut bus: ShowBus,
         sends: Vec<(InputId, u8)>,
-        listen: bool,
+        listen: Listened,
     ) -> Result<Vec<Command>, ActionError> {
         if self.show.buses.len() >= BUSES {
             return Err(ActionError::TooManyBuses { max: BUSES });
@@ -2301,7 +2312,7 @@ impl Switcher {
                 input.sends.insert(bus.id, level);
             }
         }
-        if listen {
+        if listen == Listened::Yes {
             self.bus_listen.insert(bus.id);
         }
         let at = index.min(self.show.buses.len());
@@ -9547,6 +9558,47 @@ mod tests {
         let in_ear = sw.show().buses[0].id;
         let b = sw.show().inputs.iter().find(|i| i.name == "B").unwrap();
         assert_eq!(b.sends.get(&in_ear), Some(&30));
+    }
+
+    #[test]
+    fn a_listened_bus_is_listened_again() {
+        let mut sw = with_buses();
+        sw.apply(Action::SetBusListen {
+            bus: bus("In-Ear"),
+            on: true,
+        })
+        .unwrap();
+        sw.apply(Action::RemoveBus { bus: bus("In-Ear") }).unwrap();
+        sw.apply(Action::Restore).unwrap();
+        let id = sw.show().buses[0].id;
+        assert!(sw.bus_listen.contains(&id));
+        // Not listened when it went: not listened when it comes back.
+        sw.apply(Action::RemoveBus { bus: bus("Stream") }).unwrap();
+        sw.apply(Action::Restore).unwrap();
+        let stream = sw.show().buses[1].id;
+        assert!(!sw.bus_listen.contains(&stream));
+    }
+
+    #[test]
+    fn a_long_name_taken_meanwhile_gives_way_to_the_number() {
+        let mut sw = with_buses();
+        let long = "M".repeat(BUS_NAME_MAX);
+        sw.apply(Action::RenameBus {
+            bus: bus("In-Ear"),
+            name: long.clone(),
+        })
+        .unwrap();
+        sw.apply(Action::RemoveBus { bus: bus(&long) }).unwrap();
+        sw.apply(Action::AddBus {
+            name: Some(long.clone()),
+            pre_fader: false,
+        })
+        .unwrap();
+        sw.apply(Action::Restore).unwrap();
+        let back = &sw.show().buses[0].name;
+        assert_eq!(back.chars().count(), BUS_NAME_MAX);
+        assert!(back.ends_with(" (2)"), "{back}");
+        assert_eq!(back.trim_end_matches(" (2)"), &long[..BUS_NAME_MAX - 4]);
     }
 
     #[test]

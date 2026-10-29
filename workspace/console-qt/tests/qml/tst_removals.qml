@@ -77,14 +77,15 @@ TestCase {
 
     function test_removed_then_undo_brings_it_back() {
         const removals = createTemporaryObject(removalsComponent, test)
-        removals.ask("layout", { number: 2, name: "Interview" })
+        removals.ask("layout", { id: "l2", number: 2, name: "Interview" })
         const dialog = dialogOf(removals)
         tryCompare(dialog, "opened", true)
         dialog.accept()
-        compare(sent, [{ action: "remove_layout", layout: 2 }])
+        // By id: the number may move while the question is open.
+        compare(sent, [{ action: "remove_layout", layout: "l2" }])
         const toast = toastOf(removals)
         // Answered, but not yet in the state: no toast.
-        fakeCore.answered(JSON.stringify({ action: "remove_layout", layout: 2 }), "")
+        fakeCore.answered(JSON.stringify({ action: "remove_layout", layout: "l2" }), "")
         wait(50)
         compare(toast.shown, false)
         fakeShow.restorable = { kind: "layout", name: "Interview" }
@@ -101,8 +102,8 @@ TestCase {
 
     function test_a_refused_removal_shows_nothing() {
         const removals = createTemporaryObject(removalsComponent, test)
-        removals.remove(removals.request("output", { number: 1, name: "CDN" }))
-        fakeCore.answered(JSON.stringify({ action: "remove_output", output: 1 }), "Show is locked")
+        removals.remove(removals.request("output", { id: "o1", number: 1, name: "CDN" }))
+        fakeCore.answered(JSON.stringify({ action: "remove_output", output: "o1" }), "Show is locked")
         // The same name removed from elsewhere later does not pass for it.
         fakeShow.restorable = { kind: "output", name: "CDN" }
         wait(50)
@@ -114,8 +115,8 @@ TestCase {
     function test_the_answer_before_the_state_after_an_earlier_removal() {
         const removals = createTemporaryObject(removalsComponent, test)
         fakeShow.restorable = { kind: "bus", name: "Stream" }
-        removals.remove(removals.request("input", { number: 1, name: "Cam 1" }))
-        fakeCore.answered(JSON.stringify({ action: "remove_input", input: 1 }), "")
+        removals.remove(removals.request("input", { id: "i1", number: 1, name: "Cam 1" }))
+        fakeCore.answered(JSON.stringify({ action: "remove_input", input: "i1" }), "")
         wait(50)
         const toast = toastOf(removals)
         compare(toast.shown, false)
@@ -128,11 +129,21 @@ TestCase {
     // no toast for something this one did not remove.
     function test_a_removal_from_elsewhere_ends_the_wait() {
         const removals = createTemporaryObject(removalsComponent, test)
-        removals.remove(removals.request("layout", { number: 1, name: "Wide" }))
-        fakeCore.answered(JSON.stringify({ action: "remove_layout", layout: 1 }), "")
+        removals.remove(removals.request("layout", { id: "l1", number: 1, name: "Wide" }))
+        fakeCore.answered(JSON.stringify({ action: "remove_layout", layout: "l1" }), "")
         fakeShow.restorable = { kind: "bus", name: "Stream" }
         fakeShow.restorable = { kind: "layout", name: "Wide" }
         wait(50)
         compare(toastOf(removals).shown, false)
+    }
+
+    // Asked for input 3, input 1 removed elsewhere meanwhile: by number the
+    // removal would take the input that is 3 now.
+    function test_it_removes_what_it_asked_for() {
+        const removals = createTemporaryObject(removalsComponent, test)
+        for (const kind of ["input", "layout", "output"]) {
+            const asked = removals.request(kind, { id: "x-" + kind, number: 3, name: "Spare" })
+            compare(asked.action[kind], "x-" + kind, kind)
+        }
     }
 }
