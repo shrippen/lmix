@@ -96,9 +96,17 @@ for i in $(seq 1 "$INPUTS"); do
     act "{\"action\":\"add_input\",\"source\":{\"kind\":\"pattern\",\"pattern\":\"$pattern\"},\"name\":\"${pattern^} $i\"}"
 done
 act '{"action":"cut_direct","input":1}'
-echo "rec $(now)" >"$WORK/rec-start"
 act "{\"action\":\"add_output\",\"spec\":{\"kind\":\"record\",\"folder\":\"$WORK/rec\",\"container\":\"mkv\"},\"name\":\"Rec\"}"
 act '{"action":"start_output","output":"Rec"}'
+# The recording's first frame is about when its file gets data. Right
+# after adding 31 inputs, while they still start, that came 6 s after
+# the output ran (0.3 s once they ran, 29.10.2026), and frames placed by
+# the start went 6 s too early.
+for _ in $(seq 1 120); do
+    compgen -G "$WORK/rec/*" >/dev/null && [[ -s "$(ls "$WORK"/rec/* | head -1)" ]] && break
+    sleep 0.1
+done
+echo "rec $(now)" >"$WORK/rec-start"
 
 Xvfb "$DISPLAY_NO" -screen 0 1920x1080x24 >/dev/null 2>&1 &
 PIDS+=($!)

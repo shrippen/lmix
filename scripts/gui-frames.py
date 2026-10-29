@@ -118,8 +118,8 @@ def main():
         if phase == "fader" and cpu > env("GUI_CPU_MAX", 35):
             failures.append(f"GUI thread at {cpu} % while the fader moves")
 
-    rec = program_frames(work, float(open(f"{work}/rec-start").read().split()[1]) + 1.0)
-    print("program (recording, start placed to about ±1 s)")
+    rec = program_frames(work, float(open(f"{work}/rec-start").read().split()[1]))
+    print("program (recording, placed by when its file got data)")
     if not rec:
         failures.append("no recording of program")
     for a, b in spans:
