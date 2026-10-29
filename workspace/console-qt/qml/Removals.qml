@@ -79,15 +79,21 @@ Item {
         removals.act(asked.action)
     }
 
+    /** What made `settle` look again. */
+    enum Came {
+        Answer,
+        State
+    }
+
     property var pending: null
     readonly property var restorable: show ? show.restorable : null
-    onRestorableChanged: settle(true)
+    onRestorableChanged: settle(Removals.Came.State)
 
     /** The removal went through and is the one to bring back: the toast.
      *  The answer may come before or after the state that names it; a
      *  state that names something else after the answer (a removal from
      *  elsewhere in between) ends the wait. */
-    function settle(stateChanged) {
+    function settle(came) {
         if (!pending || !pending.answered) {
             return
         }
@@ -98,7 +104,7 @@ Item {
             toast.restores = request.name
             toast.show()
             pending = null
-        } else if (stateChanged) {
+        } else if (came === Removals.Came.State) {
             pending = null
         }
     }
@@ -119,7 +125,7 @@ Item {
             }
             removals.pending.answered = true
             // The state may have come first.
-            removals.settle(false)
+            removals.settle(Removals.Came.Answer)
         }
     }
 

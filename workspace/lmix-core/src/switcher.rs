@@ -575,12 +575,19 @@ enum Removed {
         index: usize,
         bus: ShowBus,
         sends: Vec<(InputId, u8)>,
-        listen: bool,
+        listen: Listened,
     },
     Output {
         index: usize,
         output: ShowOutput,
     },
+}
+
+/// Whether a removed bus was listened to, so it is again when it comes back.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Listened {
+    No,
+    Yes,
 }
 
 impl Removed {
@@ -2265,7 +2272,11 @@ impl Switcher {
             .iter_mut()
             .filter_map(|input| Some((input.id, input.sends.remove(&id)?)))
             .collect();
-        let listen = self.bus_listen.remove(&id);
+        let listen = if self.bus_listen.remove(&id) {
+            Listened::Yes
+        } else {
+            Listened::No
+        };
         self.keep_removed(Removed::Bus {
             index,
             bus,
@@ -2282,7 +2293,7 @@ impl Switcher {
         index: usize,
         mut bus: ShowBus,
         sends: Vec<(InputId, u8)>,
-        listen: bool,
+        listen: Listened,
     ) -> Result<Vec<Command>, ActionError> {
         if self.show.buses.len() >= BUSES {
             return Err(ActionError::TooManyBuses { max: BUSES });
@@ -2301,7 +2312,7 @@ impl Switcher {
                 input.sends.insert(bus.id, level);
             }
         }
-        if listen {
+        if listen == Listened::Yes {
             self.bus_listen.insert(bus.id);
         }
         let at = index.min(self.show.buses.len());
