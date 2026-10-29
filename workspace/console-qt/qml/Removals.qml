@@ -15,7 +15,8 @@ import Kante
  * one from elsewhere does not pass for this one.
  *
  * `ask(kind, item)` takes an lmix `Input`, `Layout`, `Bus` or `Output` of
- * the state, by its kind ("input", "layout", "bus", "output").
+ * the state, by its kind ("input", "layout", "bus", "output"). The removal
+ * names it by id: its number may move while the question is open.
  */
 Item {
     id: removals
@@ -37,14 +38,14 @@ Item {
     function texts(kind, item, named) {
         switch (kind) {
         case "input": return {
-            action: { action: "remove_input", input: item.number },
+            action: { action: "remove_input", input: item.id },
             question: qsTr("Remove input %1 %2?").arg(item.number).arg(named),
             consequence: qsTr("Its picture leaves program, preview, the layouts and the overlays."),
             acceptText: qsTr("Remove input"),
             removedText: qsTr("Input %1 %2 removed").arg(item.number).arg(named)
         }
         case "layout": return {
-            action: { action: "remove_layout", layout: item.number },
+            action: { action: "remove_layout", layout: item.id },
             question: qsTr("Remove layout %1?").arg(named),
             consequence: qsTr("Its boxes and their places go with it."),
             acceptText: qsTr("Remove layout"),
@@ -58,7 +59,7 @@ Item {
             removedText: qsTr("Bus %1 removed").arg(named)
         }
         case "output": return {
-            action: { action: "remove_output", output: item.number },
+            action: { action: "remove_output", output: item.id },
             question: qsTr("Remove output %1?").arg(named),
             consequence: qsTr("Its address and settings go with it."),
             acceptText: qsTr("Remove output"),
