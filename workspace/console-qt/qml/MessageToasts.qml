@@ -39,6 +39,8 @@ Item {
     ListModel {
         id: errors
     }
+    // A message from before (the Console's own, before the window was there).
+    Component.onCompleted: post(Texts.message(core.message))
 
     Connections {
         target: toasts.core
