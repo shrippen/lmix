@@ -96,11 +96,15 @@ ColumnLayout {
             KanteButton {
                 id: take
                 anchors.fill: parent
-                text: button.modelData.slot + " " + panel.effectLabel(button.modelData.effect) + "\n" + button.modelData.duration_ms + " ms"
+                // The length is in the tooltip and the menu: on the button it
+                // took a second line, and a cut has none to speak of.
+                text: button.modelData.slot + " " + panel.effectLabel(button.modelData.effect)
                 enabled: panel.core.connected && panel.canTake
                 onClicked: panel.act({ action: "transition", slot: button.modelData.slot })
                 QQC2.ToolTip.visible: hovered
-                QQC2.ToolTip.text: qsTr("Click: take preview. Right click: effect and length.")
+                QQC2.ToolTip.text: (button.modelData.effect === "cut" ? ""
+                    : Texts.label("durations", button.modelData.duration_ms) + ". ")
+                    + qsTr("Click: take preview. Right click: effect and length.")
             }
 
             TapHandler {
@@ -153,11 +157,12 @@ ColumnLayout {
         KanteButton {
             id: quickButton
             anchors.fill: parent
-            text: qsTr("Quick play") + "\n" + panel.effectLabel(quick.setting.effect) + " " + quick.setting.duration_ms + " ms"
+            text: qsTr("Quick play") + "\n" + panel.effectLabel(quick.setting.effect)
             enabled: panel.core.connected && panel.canTake
             onClicked: panel.act({ action: "quick_play" })
             QQC2.ToolTip.visible: hovered
-            QQC2.ToolTip.text: qsTr("Click: preview to program with this effect, and play it. Double click on the preview monitor does the same. Right click: effect and length.")
+            QQC2.ToolTip.text: (quick.setting.effect === "cut" ? ""
+                : Texts.label("durations", quick.setting.duration_ms) + ". ") + qsTr("Click: preview to program with this effect, and play it. Double click on the preview monitor does the same. Right click: effect and length.")
         }
 
         TapHandler {
@@ -186,36 +191,28 @@ ColumnLayout {
     }
 
     // T-bar: preview fades in over program while pulled; at the end it is
-    // taken. Moves are sent at most about 30 times a second.
-    // Label beside the bar, not above it: the column fits at 1440 × 900.
-    RowLayout {
+    // taken. Moves are sent at most about 30 times a second. Across the
+    // column, without a label (its name is for screen readers).
+    QQC2.Slider {
+        id: tBar
         Layout.fillWidth: true
-        spacing: Kirigami.Units.smallSpacing
-        KanteSectionLabel {
-            text: qsTr("T-bar")
-            color: KanteStyle.mutedTextColor
+        from: 0
+        to: 1
+        enabled: panel.core.connected && panel.canTake
+        value: pressed ? value : (panel.show ? panel.show.t_bar : 0)
+        Accessible.name: qsTr("T-bar")
+        QQC2.ToolTip.visible: hovered
+        QQC2.ToolTip.text: qsTr("Pull to mix preview in; at the end it goes to program.")
+        KanteSliderSkin { control: tBar }
+        onMoved: tBarSend.restart()
+        onPressedChanged: if (!pressed) {
+            tBarSend.stop()
+            panel.act({ action: "t_bar", position: value >= 0.98 ? 1 : value })
         }
-        QQC2.Slider {
-            id: tBar
-            Layout.fillWidth: true
-            from: 0
-            to: 1
-            enabled: panel.core.connected && panel.canTake
-            value: pressed ? value : (panel.show ? panel.show.t_bar : 0)
-            Accessible.name: qsTr("T-bar")
-            QQC2.ToolTip.visible: hovered
-            QQC2.ToolTip.text: qsTr("Pull to mix preview in; at the end it goes to program.")
-            KanteSliderSkin { control: tBar }
-            onMoved: tBarSend.restart()
-            onPressedChanged: if (!pressed) {
-                tBarSend.stop()
-                panel.act({ action: "t_bar", position: value >= 0.98 ? 1 : value })
-            }
-            Timer {
-                id: tBarSend
-                interval: 33
-                onTriggered: panel.act({ action: "t_bar", position: Math.min(tBar.value, 0.99) })
-            }
+        Timer {
+            id: tBarSend
+            interval: 33
+            onTriggered: panel.act({ action: "t_bar", position: Math.min(tBar.value, 0.99) })
         }
     }
 
