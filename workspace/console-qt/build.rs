@@ -116,6 +116,7 @@ fn main() {
                 "qml/SetupPage.qml",
                 "qml/LiveView.qml",
                 "qml/TilesAtlas.qml",
+                "qml/MessageToasts.qml",
                 "qml/InputTile.qml",
                 "qml/AddInputDialog.qml",
                 "qml/AddOutputDialog.qml",

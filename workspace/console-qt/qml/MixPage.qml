@@ -264,10 +264,9 @@ AppPage {
 
     KanteToast {
         id: removedToast
-        anchors.right: parent.right
-        anchors.bottom: parent.bottom
-        anchors.margins: Kirigami.Units.largeSpacing
-        z: 10
+        // With the window's other toasts (MessageToasts).
+        parent: root.shell.toastColumn
+        width: Kirigami.Units.gridUnit * 20
         kind: KanteToast.Kind.Info
         title: qsTr("Removed")
         life: 8000

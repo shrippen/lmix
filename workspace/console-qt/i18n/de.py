@@ -2,6 +2,9 @@
 # scripts/update-translations.sh collects the sources and writes these
 # into qml_de.ts (i18n/fill.py). Keep it complete.
 DE = {
+    'Close': 'Schließen',
+    'Older show format': 'Älteres Show-Format',
+    'The Console tries again every second. The engine and its outputs keep running.': 'Die Console versucht es jede Sekunde erneut. Die Engine und ihre Ausgänge laufen weiter.',
     'Card %1, %2': 'Karte %1, %2',
     'DeckLink': 'DeckLink',
     'Detect': 'Erkennen',
