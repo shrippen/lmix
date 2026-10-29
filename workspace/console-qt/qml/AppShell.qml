@@ -414,34 +414,13 @@ Kirigami.ApplicationWindow {
             root.restoreFocus()
         }
     }
-    KanteDialog {
+    FactoryResetDialog {
         id: resetSettingsDialog
         onClosed: root.restoreFocus()
         parent: QQC2.Overlay.overlay
         anchors.centerIn: parent
-        title: qsTr("Factory settings")
-        modal: true
-        width: Kirigami.Units.gridUnit * 24
-        standardButtons: QQC2.Dialog.Cancel
-        contentHeight: resetColumn.implicitHeight
-        ColumnLayout {
-            id: resetColumn
-            width: parent.width
-            QQC2.Label {
-                Layout.fillWidth: true
-                wrapMode: Text.WordWrap
-                text: qsTr("Remove the shortcuts for all shows, the layout templates, the output targets with their secrets and the OSC subscribers of this machine? The show stays.")
-            }
-            KanteButton {
-                Layout.alignment: Qt.AlignRight
-                emphasis: KanteButton.Emphasis.Destructive
-                text: qsTr("Remove all")
-                onClicked: {
-                    root.act({ action: "reset_settings" })
-                    resetSettingsDialog.close()
-                }
-            }
-        }
+        act: root.act
+        onBackupRequested: exportSettingsDialog.open()
     }
 
     // Show packages (SHW.6): show, media, data files, own templates.

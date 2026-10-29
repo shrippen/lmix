@@ -113,6 +113,7 @@ fn main() {
                 "qml/NarrowMixer.qml",
                 "qml/OutputsPage.qml",
                 "qml/StopOutputDialog.qml",
+                "qml/FactoryResetDialog.qml",
                 "qml/SetupPage.qml",
                 "qml/LiveView.qml",
                 "qml/TilesAtlas.qml",

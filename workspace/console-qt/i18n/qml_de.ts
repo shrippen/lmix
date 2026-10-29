@@ -603,12 +603,12 @@
     </message>
     <message>
       <location line="+99" />
-      <location line="+136" />
+      <location line="+161" />
       <source>Open show</source>
       <translation>Show öffnen</translation>
     </message>
     <message>
-      <location line="-135" />
+      <location line="-160" />
       <location line="+13" />
       <source>lmix shows (*.lmix)</source>
       <translation>lmix-Shows (*.lmix)</translation>
@@ -616,18 +616,18 @@
     <message>
       <location line="-13" />
       <location line="+38" />
-      <location line="+53" />
+      <location line="+78" />
       <source>All files (*)</source>
       <translation>Alle Dateien (*)</translation>
     </message>
     <message>
-      <location line="-81" />
-      <location line="+126" />
+      <location line="-106" />
+      <location line="+151" />
       <source>Save show</source>
       <translation>Show speichern</translation>
     </message>
     <message>
-      <location line="-111" />
+      <location line="-136" />
       <source>Export settings</source>
       <translation>Einstellungen exportieren</translation>
     </message>
@@ -643,22 +643,42 @@
       <translation>Einstellungen importieren</translation>
     </message>
     <message>
-      <location line="+12" />
-      <source>Factory settings</source>
-      <translation>Werkseinstellungen</translation>
-    </message>
-    <message>
-      <location line="+11" />
-      <source>Remove the shortcuts for all shows, the layout templates, the output targets with their secrets and the OSC subscribers of this machine? The show stays.</source>
-      <translation>Die Kurzbefehle für alle Shows, die Layout-Vorlagen, die Ausgabeziele mit ihren Geheimnissen und die OSC-Abonnenten dieses Rechners entfernen? Die Show bleibt.</translation>
+      <location line="+15" />
+      <source>Reset to factory settings?</source>
+      <translation>Auf Werkseinstellungen zurücksetzen?</translation>
     </message>
     <message>
       <location line="+5" />
-      <source>Remove all</source>
-      <translation>Alles entfernen</translation>
+      <source>Reset settings</source>
+      <translation>Einstellungen zurücksetzen</translation>
     </message>
     <message>
-      <location line="+13" />
+      <location line="+2" />
+      <source>reset</source>
+      <translation>zurücksetzen</translation>
+    </message>
+    <message>
+      <location line="+15" />
+      <source>Removes the shortcuts for all shows, the layout templates, the output targets with their secrets and the OSC subscribers of this machine. The show stays. This cannot be undone.</source>
+      <translation>Entfernt die Kurzbefehle für alle Shows, die Layout-Vorlagen, die Ausgabeziele mit ihren Geheimnissen und die OSC-Abonnenten dieses Rechners. Die Show bleibt. Das lässt sich nicht rückgängig machen.</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Export settings first…</source>
+      <translation>Vorher Einstellungen exportieren…</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>Type %1 to confirm.</source>
+      <translation>Zum Bestätigen %1 eingeben.</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Confirmation word</source>
+      <translation>Bestätigungswort</translation>
+    </message>
+    <message>
+      <location line="+10" />
       <source>Export show package</source>
       <translation>Show-Paket exportieren</translation>
     </message>
