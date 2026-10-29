@@ -1136,5 +1136,4 @@ DE = {
     'Page bar': 'Seitenleiste',
     'Program is black: click to fade up again': 'Programm ist schwarz: Klick blendet wieder auf',
     'The actions without room in the row, and which ones the row shows': 'Die Aktionen ohne Platz in der Zeile, und welche die Zeile zeigt',
-    'button in the header': 'Knopf in der Kopfzeile',
 }

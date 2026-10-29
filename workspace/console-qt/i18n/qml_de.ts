@@ -590,7 +590,7 @@
   <context>
     <name>AppShell</name>
     <message>
-      <location filename="../qml/AppShell.qml" line="+260" />
+      <location filename="../qml/AppShell.qml" line="+261" />
       <source>Ctrl</source>
       <comment>key</comment>
       <translation>Strg</translation>
@@ -680,23 +680,23 @@
     </message>
     <message>
       <location line="+25" />
-      <location line="+291" />
+      <location line="+297" />
       <source>Keys</source>
       <translation>Tasten</translation>
     </message>
     <message>
-      <location line="-285" />
+      <location line="-291" />
       <source>Pages</source>
       <translation>Seiten</translation>
     </message>
     <message>
       <location line="+0" />
-      <location line="+393" />
+      <location line="+385" />
       <source>Ctrl+1…%1</source>
       <translation>Strg+1…%1</translation>
     </message>
     <message>
-      <location line="-391" />
+      <location line="-383" />
       <source>New show</source>
       <translation>Neue Show</translation>
     </message>
@@ -712,14 +712,14 @@
     </message>
     <message>
       <location line="+2" />
-      <location line="+317" />
+      <location line="+432" />
       <source>Panic all</source>
       <translation>Panik: alles</translation>
     </message>
     <message>
-      <location line="-317" />
-      <source>button in the header</source>
-      <translation>Knopf in der Kopfzeile</translation>
+      <location line="-432" />
+      <source>button in the page bar</source>
+      <translation>Knopf in der Seitenleiste</translation>
     </message>
     <message>
       <location line="+5" />
@@ -852,7 +852,7 @@
       <translation>Werkseinstellungen…</translation>
     </message>
     <message>
-      <location line="+29" />
+      <location line="+35" />
       <source>Unsaved show</source>
       <translation>Ungespeicherte Show</translation>
     </message>
@@ -877,7 +877,22 @@
       <translation>lmix-core nicht erreichbar</translation>
     </message>
     <message>
-      <location line="+77" />
+      <location line="+26" />
+      <source>Locked</source>
+      <translation>Gesperrt</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Lock</source>
+      <translation>Sperren</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>While locked, closing inputs, loading a show, stopping outputs and changing format, sample rate or multiview are refused.</source>
+      <translation>Gesperrt lassen sich keine Inputs schließen, keine Show laden, keine Ausgänge stoppen und weder Format noch Abtastrate noch Multiview ändern.</translation>
+    </message>
+    <message>
+      <location line="+33" />
       <source>This show file is in the older format %1 and was converted on opening. Saving it keeps the old file beside it (.v%1.bak).</source>
       <translation>Diese Show-Datei hat das ältere Format %1 und wurde beim Öffnen umgewandelt. Beim Speichern bleibt die alte Datei daneben erhalten (.v%1.bak).</translation>
     </message>
@@ -912,7 +927,13 @@
       <translation>Programm</translation>
     </message>
     <message>
-      <location line="-77" />
+      <location line="+42" />
+      <source>Panic</source>
+      <comment>stops everything</comment>
+      <translation>Panik</translation>
+    </message>
+    <message>
+      <location line="+4" />
       <source>Stop every cue over the panic time and fade program to black; recordings and streams go on</source>
       <translation>Alle Cues über die Panikzeit stoppen und Programm auf Schwarz blenden; Aufnahmen und Streams laufen weiter</translation>
     </message>
@@ -2893,12 +2914,12 @@
       <translation>Große Kacheln</translation>
     </message>
     <message>
-      <location line="+505" />
+      <location line="+491" />
       <source>Level of %1</source>
       <translation>Pegel von %1</translation>
     </message>
     <message>
-      <location line="-532" />
+      <location line="-518" />
       <location line="+5" />
       <source>View</source>
       <translation>Ansicht</translation>
@@ -2975,7 +2996,7 @@
       <translation>Die Capture-Karten sind für andere Programme frei. Klicken nutzt sie: Karten-Eingänge und -Ausgänge starten.</translation>
     </message>
     <message>
-      <location line="+66" />
+      <location line="+52" />
       <source>In the row</source>
       <translation>In der Zeile</translation>
     </message>
@@ -2995,7 +3016,7 @@
       <translation>Breite der Tonspalte</translation>
     </message>
     <message>
-      <location line="-412" />
+      <location line="-398" />
       <source>Audio at the edge</source>
       <translation>Ton am Rand</translation>
     </message>
@@ -3005,12 +3026,7 @@
       <translation>Einfacher Modus</translation>
     </message>
     <message>
-      <location line="+145" />
-      <source>While locked, closing inputs, loading a show, stopping outputs and changing format, sample rate or multiview are refused.</source>
-      <translation>Gesperrt lassen sich keine Inputs schließen, keine Show laden, keine Ausgänge stoppen und weder Format noch Abtastrate noch Multiview ändern.</translation>
-    </message>
-    <message>
-      <location line="-55" />
+      <location line="+90" />
       <source>Find missing files…</source>
       <translation>Fehlende Dateien suchen…</translation>
     </message>
@@ -3030,18 +3046,7 @@
       <translation>%1 zurückholen</translation>
     </message>
     <message>
-      <location line="+31" />
-      <source>Locked</source>
-      <translation>Gesperrt</translation>
-    </message>
-    <message>
-      <location line="-4" />
-      <location line="+4" />
-      <source>Lock</source>
-      <translation>Sperren</translation>
-    </message>
-    <message>
-      <location line="+10" />
+      <location line="+27" />
       <location line="+3" />
       <source>Shortcuts…</source>
       <translation>Belegungen…</translation>
@@ -3065,9 +3070,9 @@
       <translation>Daten…</translation>
     </message>
     <message>
-      <location line="-109" />
+      <location line="-95" />
       <location line="+3" />
-      <location line="+198" />
+      <location line="+184" />
       <source>+ Input</source>
       <translation>+ Input</translation>
     </message>

@@ -585,7 +585,7 @@ AppPage {
                     /** The actions by priority, highest first; those with a
                      *  `key` can be set to stay in the menu. */
                     readonly property var actions: [addButton, missingButton, soloButton, restoreButton,
-                        cardsButton, lockButton, shortcutsButton, busesButton, titlesButton, dataButton]
+                        cardsButton, shortcutsButton, busesButton, titlesButton, dataButton]
                     /** Keys of the actions in the bar: as many as fit, by priority. */
                     readonly property var inBar: {
                         var room = width - moreButton.implicitWidth
@@ -678,20 +678,6 @@ AppPage {
                                     : qsTr("lmix uses the capture cards. Click to free them for other programs: card inputs turn black, card outputs stop."))
                                 : qsTr("The capture cards are free for other programs. Click to use them: card inputs and outputs start.")
                             onClicked: root.act({ action: "set_cards", on: !cardsOn })
-                        }
-                        KanteButton {
-                            id: lockButton
-                            readonly property string key: "lock"
-                            readonly property string barName: qsTr("Lock")
-                            readonly property bool wanted: true
-                            visible: inputActions.inBar[key] === true
-                            readonly property bool locked: root.show !== null && root.show.locked === true
-                            text: locked ? qsTr("Locked") : qsTr("Lock")
-                            emphasis: locked ? KanteButton.Emphasis.Destructive : KanteButton.Emphasis.Normal
-                            enabled: backend.connected
-                            QQC2.ToolTip.visible: hovered
-                            QQC2.ToolTip.text: qsTr("While locked, closing inputs, loading a show, stopping outputs and changing format, sample rate or multiview are refused.")
-                            onClicked: root.act({ action: "set_lock", on: !locked })
                         }
                         KanteButton {
                             id: shortcutsButton

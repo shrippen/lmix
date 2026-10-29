@@ -8,10 +8,11 @@ import Kante
  * One page of the lmix window (AppShell): its content, and what the
  * window's header shows for it while it is the current page: title,
  * subtitle, tools and its own panic, which stops only what the page is
- * about ("Panic all" beside it stops everything). The header holds them,
- * so the page keeps its height for the content.
+ * about ("Panic all" beside it stops everything; both at the right of the
+ * page bar). The header holds the rest, so the page keeps its height for
+ * the content.
  *
- *   lmix  File  MIX 1080p30  tools …   …   [FTB] [Panic all]
+ *   lmix  File | MIX 1080p30  tools …   …   [Lock]
  *   ┌ content ─────────────────────────────────────────────────────┐
  */
 FocusScope {

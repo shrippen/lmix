@@ -9,16 +9,17 @@ import org.lmix.console
 
 /**
  * The lmix window (docs/PLAN-SEITEN.md): a header with the file menu and
- * the state of the show and the current page's title row, the pages (Mix,
- * Show, ...) one at a time, and the page bar at the foot (narrow or a
- * colour band, as chosen in File > Settings). Pages are the children; each
+ * the state of the show, the current page's title row and the lock, the
+ * pages (Mix, Show, ...) one at a time, and the page bar at the foot with
+ * the page's panic and "Panic all" (narrow or a colour band, as chosen in
+ * the File menu; in the band the panics go up). Pages are the children; each
  * is an AppPage. Switching pages stops nothing: the run is in lmix-core.
  *
- *   lmix [File] MIX 1080p30 tools  show.lmix … ● Rec  lmix-core [Keys] 20:14 [FTB] [Panic all]
+ *   lmix [File] | MIX 1080p30 tools  show.lmix … ● Rec  lmix-core [Keys] 20:14 [Lock]
  *   ┌ page ────────────────────────────────────────────────────────────┐
  *   └──────────────────────────────────────────────────────────────────┘
  *   older format · refusal
- *   [Mix][Show] …                                       Ctrl+1…n  [PGM]
+ *   [Mix][Show] …                         Ctrl+1…n  [PGM]  [FTB] [Panic]
  */
 Kirigami.ApplicationWindow {
     id: root
@@ -498,7 +499,7 @@ Kirigami.ApplicationWindow {
             { what: qsTr("Save show as"), key: root.fileKeys.saveAs },
             { what: qsTr("Shortcuts"), key: root.fileKeys.shortcuts }
         ].filter(k => !root.keyTaken(k.key)).map(k => ({ what: k.what, key: root.keyLabel(k.key) })), [
-            { what: qsTr("Panic all"), key: qsTr("button in the header") }
+            { what: qsTr("Panic all"), key: qsTr("button in the page bar") }
         ].concat(root.keyedShortcuts.map(s => ({ what: s.label, key: root.keyLabel(s.key) }))))
         ColumnLayout {
             id: keysColumn
@@ -711,6 +712,12 @@ Kirigami.ApplicationWindow {
                             }
                         }
                     }
+                    QQC2.Label {
+                        visible: root.currentItem !== null
+                        text: "|"
+                        color: KanteStyle.mutedTextColor
+                        Accessible.ignored: true
+                    }
                     // The current page's title row (AppPage): title, subtitle, tools.
                     KanteHeading {
                         visible: root.currentItem !== null
@@ -790,36 +797,22 @@ Kirigami.ApplicationWindow {
                             onTriggered: clock.text = Qt.formatTime(new Date(), "hh:mm:ss")
                         }
                     }
-                    // The page's own panic (Mix: FTB), then the one for everything.
+                    // Global: the lock refuses what would break the show (closing
+                    // inputs, loading a show, stopping outputs, …) on every page.
                     KanteButton {
-                        id: pagePanic
-                        readonly property bool active: root.currentItem !== null && root.currentItem.panicActive
-                        visible: root.currentItem !== null && root.currentItem.panicText.length > 0
+                        readonly property bool locked: root.show !== null && root.show.locked === true
                         focusPolicy: Qt.NoFocus
-                        emphasis: KanteButton.Emphasis.Destructive
                         size: KanteButton.Size.Small
-                        text: root.currentItem ? root.currentItem.panicText : ""
-                        QQC2.ToolTip.visible: hovered && root.currentItem !== null && root.currentItem.panicTip.length > 0
-                        QQC2.ToolTip.text: root.currentItem ? root.currentItem.panicTip : ""
-                        onClicked: root.currentItem.panicRequested()
-                        // In force (program black): the button pulses until it is ended.
-                        SequentialAnimation on opacity {
-                            running: pagePanic.active
-                            loops: Animation.Infinite
-                            NumberAnimation { to: 0.45; duration: 600 }
-                            NumberAnimation { to: 1; duration: 600 }
-                            onRunningChanged: if (!running) pagePanic.opacity = 1
-                        }
-                    }
-                    KanteButton {
-                        focusPolicy: Qt.NoFocus
-                        emphasis: KanteButton.Emphasis.Destructive
-                        size: KanteButton.Size.Small
-                        text: qsTr("Panic all")
+                        text: locked ? qsTr("Locked") : qsTr("Lock")
+                        emphasis: locked ? KanteButton.Emphasis.Destructive : KanteButton.Emphasis.Normal
                         enabled: root.backend.connected
                         QQC2.ToolTip.visible: hovered
-                        QQC2.ToolTip.text: qsTr("Stop every cue over the panic time and fade program to black; recordings and streams go on")
-                        onClicked: root.panicAll()
+                        QQC2.ToolTip.text: qsTr("While locked, closing inputs, loading a show, stopping outputs and changing format, sample rate or multiview are refused.")
+                        onClicked: root.act({ action: "set_lock", on: !locked })
+                    }
+                    // Up here only while the page bar is a band (it has no room).
+                    PanicButtons {
+                        visible: settings.pageBar === KantePageBar.Density.Band
                     }
                 }
             }
@@ -903,7 +896,46 @@ Kirigami.ApplicationWindow {
                         source: parent.visible ? "program" : ""
                     }
                 }
+                PanicButtons {}
             }
+        }
+    }
+
+    // The page's own panic (Mix: FTB), then the one for everything; at the
+    // right of the page bar, in the header while the bar is a band.
+    component PanicButtons: RowLayout {
+        id: panics
+        spacing: Kirigami.Units.smallSpacing
+        KanteButton {
+            id: pagePanic
+            readonly property bool active: root.currentItem !== null && root.currentItem.panicActive
+            visible: root.currentItem !== null && root.currentItem.panicText.length > 0
+            focusPolicy: Qt.NoFocus
+            emphasis: KanteButton.Emphasis.Destructive
+            size: KanteButton.Size.Small
+            text: root.currentItem ? root.currentItem.panicText : ""
+            QQC2.ToolTip.visible: hovered && root.currentItem !== null && root.currentItem.panicTip.length > 0
+            QQC2.ToolTip.text: root.currentItem ? root.currentItem.panicTip : ""
+            onClicked: root.currentItem.panicRequested()
+            // In force (program black): the button pulses until it is ended.
+            SequentialAnimation on opacity {
+                running: pagePanic.active && panics.visible
+                loops: Animation.Infinite
+                NumberAnimation { to: 0.45; duration: 600 }
+                NumberAnimation { to: 1; duration: 600 }
+                onRunningChanged: if (!running) pagePanic.opacity = 1
+            }
+        }
+        KanteButton {
+            focusPolicy: Qt.NoFocus
+            emphasis: KanteButton.Emphasis.Destructive
+            size: KanteButton.Size.Small
+            text: qsTr("Panic", "stops everything")
+            Accessible.name: qsTr("Panic all")
+            enabled: root.backend.connected
+            QQC2.ToolTip.visible: hovered
+            QQC2.ToolTip.text: qsTr("Stop every cue over the panic time and fade program to black; recordings and streams go on")
+            onClicked: root.panicAll()
         }
     }
 }
