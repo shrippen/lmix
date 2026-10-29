@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # QML tests of the console without engine or window: components get a
 # state from tests/qml/data and are checked by counts (items rebuilt by a
-# state update, actions sent by a drag), so they run in CI. Offscreen.
+# state update, actions sent by a drag), so they run in CI. Offscreen;
+# tests/qml/stubs stands in for GStreamer's QML item.
 # Needs Qt 6 with qmltestrunner and Kirigami.
 #
 #   scripts/test-qml.sh
@@ -21,4 +22,4 @@ done
 [[ -n "$runner" ]] || { echo "qmltestrunner not found (Qt 6 declarative tools)" >&2; exit 2; }
 
 export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-offscreen}"
-exec "$runner" -import "$QML" -input "$ROOT/workspace/console-qt/tests/qml" "$@"
+exec "$runner" -import "$QML" -import "$ROOT/workspace/console-qt/tests/qml/stubs" -input "$ROOT/workspace/console-qt/tests/qml" "$@"

@@ -1,0 +1,3 @@
+# For directory imports (tests/qml): the singletons. The app gets its
+# qmldir from build.rs (cxx-qt), which ignores this one.
+singleton Texts Texts.qml

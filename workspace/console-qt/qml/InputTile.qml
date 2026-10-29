@@ -41,6 +41,17 @@ KanteCard {
     /** Height without the picture: the bar sizes its cells by it. The same
      *  for every tile, so a detail row stays when an input has no use for it. */
     readonly property real chrome: column.implicitHeight + barHeight + 2 * Kirigami.Units.smallSpacing
+    /** `chrome` of a tile that is made and not being destroyed. On the way
+     *  it is smaller; a bar sized by that made its last row fit, built it,
+     *  grew and dropped it again, once a second (29.10.2026). */
+    signal chromeSettled(real value)
+    property bool made: false
+    onChromeChanged: if (made) chromeSettled(chrome)
+    Component.onCompleted: {
+        made = true
+        chromeSettled(chrome)
+    }
+    Component.onDestruction: made = false
     signal replaceRequested()
     signal triggersRequested()
     signal ptzRequested()

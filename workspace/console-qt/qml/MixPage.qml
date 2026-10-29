@@ -713,8 +713,7 @@ AppPage {
                     width: bar.cellWidth - Kirigami.Units.smallSpacing
                     height: bar.cellHeight - Kirigami.Units.smallSpacing
                     detail: viewSettings.detail
-                    onChromeChanged: Qt.callLater(bar.reportChrome, chrome)
-                    Component.onCompleted: Qt.callLater(bar.reportChrome, chrome)
+                    onChromeSettled: value => Qt.callLater(bar.reportChrome, value)
                     core: backend
                     input: root.inputById(key) || ({ id: key, number: 0, name: "", source: { kind: "pattern" }, status: "starting", audio: { on: false, follow_video: false, volume: 0 }, has_audio: false, listen: "off", signal_loss: "hold", color: null })
                     act: root.act

@@ -50,8 +50,11 @@ TestCase {
     QtObject {
         id: fakeCore
         function choices(kind) {
-            return JSON.stringify({ buses: 8, name_max: 32 })
+            return kind === "colors" ? JSON.stringify(["red", "green", "blue"])
+                : JSON.stringify({ buses: 8, name_max: 32 })
         }
+        function showLive(item, source) {}
+        function releaseLive(item) {}
         function shortName(name, max) {
             return name.slice(0, max)
         }
@@ -131,6 +134,38 @@ TestCase {
         after = choiceItems(menu)
         compare(after.length, 1)
         compare(after[0].text, "C")
+    }
+
+    /** What the tiles of `inputTile` reported, from their making on. */
+    property var reported: []
+
+    Component {
+        id: inputTile
+        InputTile {
+            width: 300
+            height: 200
+            core: fakeCore
+            act: function (action) {}
+            onChromeSettled: value => test.reported.push(value)
+        }
+    }
+
+    /** A tile reports its chrome once it is made and stops when it goes;
+     *  the smaller heights on the way made the bar's last row come and go. */
+    function test_a_tile_reports_only_its_settled_chrome() {
+        reported = []
+        var tile = inputTile.createObject(test, { input: Data.state.inputs[0] })
+        verify(tile.made)
+        waitForRendering(tile)
+        var chrome = tile.chrome
+        verify(reported.length > 0, "reported once made")
+        for (var i = 0; i < reported.length; i++) {
+            compare(reported[i], chrome, "report " + i)
+        }
+        var before = reported.length
+        tile.destroy()
+        wait(50)
+        compare(reported.length, before, "nothing reported while it goes")
     }
 
     /** The vertical volume slider of the first input strip. */
