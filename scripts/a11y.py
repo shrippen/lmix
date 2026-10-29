@@ -75,7 +75,12 @@ def find(args):
             ]
             if len(hits) > args.nth:
                 box = hits[args.nth]
-                print(box.x + box.width // 2, box.y + box.height // 2)
+                if args.box is None:
+                    print(box.x + box.width // 2, box.y + box.height // 2)
+                else:
+                    # The box less `--box` of its size on each side, as a crop geometry.
+                    dx, dy = int(box.width * args.box), int(box.height * args.box)
+                    print(f"{box.width - 2 * dx}x{box.height - 2 * dy}+{box.x + dx}+{box.y + dy}")
                 return 0
         if time.monotonic() >= deadline:
             print(f"no showing control named /{args.name}/", file=sys.stderr)
@@ -103,6 +108,8 @@ def main():
     f.add_argument("--within")
     f.add_argument("--nth", type=int, default=0)
     f.add_argument("--wait", type=float, default=5)
+    f.add_argument("--box", type=float, metavar="INSET",
+                   help="print the box (WxH+X+Y) less this fraction on each side instead of its centre")
     f.set_defaults(run=find)
     sub.add_parser("dump").set_defaults(run=dump)
     args = parser.parse_args()
