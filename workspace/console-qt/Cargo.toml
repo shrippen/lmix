@@ -5,6 +5,10 @@ edition = "2021"
 license = "MIT"
 publish = false
 
+[features]
+# Qt's QML profiler service (scripts/profile-gui.sh); never in a release.
+qml-profile = []
+
 [[bin]]
 name = "lmix"
 path = "src/main.rs"

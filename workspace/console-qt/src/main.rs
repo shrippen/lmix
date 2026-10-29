@@ -7,6 +7,8 @@ mod config;
 mod forms;
 mod latest;
 mod portal;
+#[cfg(feature = "qml-profile")]
+mod qml_profile;
 mod qt_translations;
 #[cfg(test)]
 mod refusals;

@@ -157,11 +157,26 @@ fn main() {
             ])
             .qml_file(QmlFile::from("qml/Texts.qml").singleton(true)),
     )
-    .files(["src/bridge.rs", "src/qt_translations.rs"])
+    .files([
+        "src/bridge.rs",
+        "src/qt_translations.rs",
+        "src/qml_profile.rs",
+    ])
     .cpp_file("cpp/qt_translations.cpp")
+    .cpp_file("cpp/qml_profile.cpp")
     .qrc(kante_qrc());
     if let Some(qrc) = translations_qrc() {
         builder = builder.qrc(qrc);
+    }
+    // Qt's QML profiler service: never in a release build.
+    if std::env::var_os("CARGO_FEATURE_QML_PROFILE").is_some() {
+        // SAFETY: one define read by cpp/qml_profile.cpp only; no flag that
+        // changes how cxx-qt's own code is built.
+        builder = unsafe {
+            builder.cc_builder(|cc| {
+                cc.define("LMIX_QML_PROFILE", None);
+            })
+        };
     }
     builder.qt_module("Quick").build();
 }

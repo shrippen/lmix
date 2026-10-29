@@ -287,6 +287,13 @@ pub fn run() -> ! {
         QGuiApplication::set_desktop_file_name(&QString::from(NAME));
         qt_translations::ffi::install_qt_translations();
     }
+    #[cfg(feature = "qml-profile")]
+    if let Some(port) = std::env::var("LMIX_QML_PROFILE_PORT")
+        .ok()
+        .and_then(|p| p.parse().ok())
+    {
+        crate::qml_profile::ffi::start_qml_profiler(port);
+    }
     let mut engine = QQmlApplicationEngine::new();
     if let Some(engine) = engine.as_mut() {
         engine.load(&QUrl::from(&format!("{QML_DIR}Main.qml")));
