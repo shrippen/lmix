@@ -10,7 +10,7 @@ Prints percentiles per phase and exits 1 when a budget is exceeded:
 
     GAP_P95_MS   frame gap of the window while the fader moves (default 50)
     GAP_MAX_MS   longest frame gap while the fader moves (default 250)
-    GUI_CPU_MAX  CPU of the GUI thread while the fader moves, % (default 80)
+    GUI_CPU_MAX  CPU of the GUI thread while the fader moves, % (default 35)
     RECOVER      frames per second after the drag, share of before (default 0.8)
     program: no picture the same as the one before (the ball moves every frame)
 """
@@ -110,9 +110,12 @@ def main():
     for line in open(f"{work}/threads"):
         phase, rest = line.split(" ", 1)
         m = re.search(r"\blmix\(\d+\)=(\d+)%", rest)
-        cpu = int(m.group(1)) if m else 0
+        if not m:
+            failures.append(f"no GUI thread in the {phase} measurement")
+            continue
+        cpu = int(m.group(1))
         print(f"  {phase:6} {cpu:3d} %")
-        if phase == "fader" and cpu > env("GUI_CPU_MAX", 80):
+        if phase == "fader" and cpu > env("GUI_CPU_MAX", 35):
             failures.append(f"GUI thread at {cpu} % while the fader moves")
 
     rec = program_frames(work, float(open(f"{work}/rec-start").read().split()[1]) + 1.0)

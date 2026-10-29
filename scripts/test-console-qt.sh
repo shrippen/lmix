@@ -345,6 +345,18 @@ for _ in $(seq 1 40); do
 done
 [[ -n "$layout_shows" ]] && pass "preview monitor shows a layout" || fail "preview monitor blank with a layout on preview"
 
+# View as a popover: its switch sets the multiview's program side. Before
+# an input is removed: its "Bring back" widens the tools to two rows.
+multiview_program() { state | jq -r '.multiview.program // "right"'; }
+click 490 540
+sleep 1
+click 488 681
+for _ in $(seq 1 40); do [[ "$(multiview_program)" == left ]] && break; sleep 0.5; done
+[[ "$(multiview_program)" == left ]] && pass "View popover: program on the left" \
+    || fail "View popover: multiview program $(multiview_program) after its switch"
+DISPLAY="$DISPLAY_NO" xdotool key Escape
+act '{"action":"set_multiview","layout":{"program":"right","meters":"shown"}}'
+
 # "+ Input": the dialog opens on the test pattern; Ball, a name and the
 # footer's "Add input" give an input of that pattern and name.
 click 1162 540
@@ -372,17 +384,6 @@ DISPLAY="$DISPLAY_NO" xdotool windowfocus "$(DISPLAY="$DISPLAY_NO" xdotool searc
 DISPLAY="$DISPLAY_NO" xdotool key ctrl+s
 for _ in $(seq 1 20); do [[ -f "$WORK/keys.lmix" ]] && break; sleep 0.5; done
 [[ -f "$WORK/keys.lmix" ]] && pass "Ctrl+S saves the show" || fail "Ctrl+S: no file saved"
-
-# View as a popover: its switch sets the multiview's program side.
-multiview_program() { state | jq -r '.multiview.program // "right"'; }
-click 490 540
-sleep 1
-click 488 681
-for _ in $(seq 1 40); do [[ "$(multiview_program)" == left ]] && break; sleep 0.5; done
-[[ "$(multiview_program)" == left ]] && pass "View popover: program on the left" \
-    || fail "View popover: multiview program $(multiview_program) after its switch"
-DISPLAY="$DISPLAY_NO" xdotool key Escape
-act '{"action":"set_multiview","layout":{"program":"right","meters":"shown"}}'
 
 # The input's menu removes at once; Ctrl+Z while the toast shows brings
 # the input back. A spare third input, so the tiles of the checks below stay.

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Does the window keep drawing while a fader moves, and program too?
-# Engine, lmix-core and lmix (Mix page, Xvfb) with four pattern inputs,
+# Engine, lmix-core and lmix (Mix page, Xvfb) with INPUTS pattern inputs,
 # the ball on program and a recording of it. Idle, then a fader drag
 # (set_volume on input 1 at RATE per second straight to lmix-core: more
 # than the window's own fader sends, which passes at most one per 33 ms),
@@ -12,6 +12,7 @@
 #
 #   scripts/measure-gui-frames.sh                 # CUDA mixer, 10 s phases
 #   MIXER=cpu PHASE=20 RATE=60 scripts/measure-gui-frames.sh
+#   INPUTS=31 …                                   # many inputs (default 4)
 #   KEEP_WORK=1 …                                 # keep logs and the recording
 #   GAP_P95_MS=40 …                               # a tighter budget
 #
@@ -24,6 +25,7 @@ CORE_PORT="${CORE_PORT:-8891}"
 DISPLAY_NO="${DISPLAY_NO:-:93}"
 MIXER="${MIXER:-cuda}"
 RATE="${RATE:-40}"
+INPUTS="${INPUTS:-4}"
 PHASE="${PHASE:-10}"
 CORE="http://127.0.0.1:${CORE_PORT}/api"
 WORK="$(mktemp -d)"
@@ -66,7 +68,9 @@ def snap():
     return out
 a = snap(); time.sleep(secs); b = snap()
 rows = sorted(((b[t][1] - a.get(t, (0, 0))[1]) / hz / secs * 100, b[t][0], t) for t in b)
-print(label, " ".join(f"{n}({t})={p:.0f}%" for p, n, t in reversed(rows[-5:])), flush=True)
+# The busiest five, and the GUI thread (the main one) always.
+shown = list(reversed(rows[-5:])) + [r for r in rows[:-5] if r[2] == str(pid)]
+print(label, " ".join(f"{n}({t})={p:.0f}%" for p, n, t in shown), flush=True)
 EOF
 }
 
@@ -82,12 +86,14 @@ mkdir -p "$LIVE_DIR" "$WORK/rec" "$WORK/config"
 PIDS+=($!)
 wait_up "http://127.0.0.1:${STROM_PORT}/health" strom
 "$CORE_BIN" --strom "http://127.0.0.1:${STROM_PORT}" --listen "127.0.0.1:${CORE_PORT}" --mixer "$MIXER" \
-    --slots 4 --autosave "$WORK/autosave.lmix" --shortcuts "$WORK/shortcuts.json" \
+    --slots "$INPUTS" --autosave "$WORK/autosave.lmix" --shortcuts "$WORK/shortcuts.json" \
     --layout-templates "$WORK/layout-templates.json" --live-dir "$LIVE_DIR" >"$WORK/core.log" 2>&1 &
 PIDS+=($!)
 wait_up "$CORE/state" lmix-core
-for pattern in ball bars snow checkers; do
-    act "{\"action\":\"add_input\",\"source\":{\"kind\":\"pattern\",\"pattern\":\"$pattern\"},\"name\":\"${pattern^}\"}"
+patterns=(ball bars snow checkers)
+for i in $(seq 1 "$INPUTS"); do
+    pattern="${patterns[$(((i - 1) % ${#patterns[@]}))]}"
+    act "{\"action\":\"add_input\",\"source\":{\"kind\":\"pattern\",\"pattern\":\"$pattern\"},\"name\":\"${pattern^} $i\"}"
 done
 act '{"action":"cut_direct","input":1}'
 echo "rec $(now)" >"$WORK/rec-start"
