@@ -97,4 +97,12 @@ TestCase {
         tryCompare(shownToasts(toasts), "length", toasts.limit)
         compare(shownToasts(toasts)[0].text, "Refusal 3")
     }
+
+    function test_a_message_from_before_shows() {
+        fakeCore.message = refusal("No live picture")
+        var toasts = createTemporaryObject(toastsComponent, test)
+        tryCompare(shownToasts(toasts), "length", 1)
+        compare(shownToasts(toasts)[0].text, "No live picture")
+        fakeCore.message = ""
+    }
 }
