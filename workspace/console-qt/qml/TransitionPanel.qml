@@ -124,34 +124,17 @@ ColumnLayout {
                     onTapped: menu.popup()
                 }
 
-                QQC2.Menu {
+                EffectMenu {
                     id: menu
-                    KantePopupSkin { popup: menu }
-
-                    ChoiceMenu {
-                        title: qsTr("Effect")
-                        choices: panel.effects
-                        current: button.modelData.effect
-                        onPicked: value => {
-                            // A stinger needs its clip and cut point first.
-                            if (value === "stinger")
-                                panel.editStinger(button.modelData)
-                            else
-                                panel.act({ action: "set_transition", slot: button.modelData.slot, effect: value, duration_ms: button.modelData.duration_ms })
-                        }
-                    }
-                    ChoiceMenu {
-                        title: qsTr("Length")
-                        choices: panel.durations.map(ms => ({ value: ms, label: Texts.label("durations", ms) }))
-                        current: button.modelData.duration_ms
-                        onPicked: value => panel.act(panel.withLength(button.modelData, value))
-                    }
-                    QQC2.MenuItem {
-                        text: qsTr("Stinger clip and cut point…")
-                        visible: button.modelData.effect === "stinger"
-                        height: visible ? implicitHeight : 0
-                        onTriggered: panel.editStinger(button.modelData)
-                    }
+                    heading: qsTr("Button %1 · Effect").arg(button.modelData.slot)
+                    effects: panel.effects
+                    effect: button.modelData.effect
+                    duration: button.modelData.duration_ms
+                    durations: panel.durations
+                    onEffectPicked: value => panel.act({ action: "set_transition", slot: button.modelData.slot, effect: value, duration_ms: button.modelData.duration_ms })
+                    onLengthPicked: ms => panel.act(panel.withLength(button.modelData, ms))
+                    // A stinger needs its clip and cut point first.
+                    onStingerRequested: panel.editStinger(button.modelData)
                 }
             }
         }
@@ -183,22 +166,16 @@ ColumnLayout {
             onTapped: quickMenu.popup()
         }
 
-        QQC2.Menu {
+        EffectMenu {
             id: quickMenu
-            KantePopupSkin { popup: quickMenu }
-
-            ChoiceMenu {
-                title: qsTr("Effect")
-                choices: panel.effects.filter(e => e.value !== "stinger")
-                current: quick.setting.effect
-                onPicked: value => panel.act({ action: "set_quick_play", effect: value, duration_ms: quick.setting.duration_ms })
-            }
-            ChoiceMenu {
-                title: qsTr("Length")
-                choices: panel.durations.map(ms => ({ value: ms, label: Texts.label("durations", ms) }))
-                current: quick.setting.duration_ms
-                onPicked: value => panel.act({ action: "set_quick_play", effect: quick.setting.effect, duration_ms: value })
-            }
+            heading: qsTr("Quick play · Effect")
+            effects: panel.effects
+            stinger: false
+            effect: quick.setting.effect
+            duration: quick.setting.duration_ms
+            durations: panel.durations
+            onEffectPicked: value => panel.act({ action: "set_quick_play", effect: value, duration_ms: quick.setting.duration_ms })
+            onLengthPicked: ms => panel.act({ action: "set_quick_play", effect: quick.setting.effect, duration_ms: ms })
         }
     }
 
@@ -312,26 +289,43 @@ ColumnLayout {
                     onTapped: channelMenu.popup()
                 }
 
+                // M10 A: a head with the channel's state, icons, the
+                // settings set apart.
                 QQC2.Menu {
                     id: channelMenu
                     KantePopupSkin { popup: channelMenu }
+                    KanteMenuSection {
+                        width: parent ? parent.width : implicitWidth
+                        rule: false
+                        text: channelItem.shown
+                            ? qsTr("Overlay %1 · on · %2").arg(channelItem.channel).arg(channelItem.shown.name)
+                            : qsTr("Overlay %1 · off").arg(channelItem.channel)
+                    }
                     // Texts never empty: a hidden item with none loops on its width.
-                    QQC2.MenuItem {
+                    KanteMenuItem {
                         visible: channelItem.shown === null && channelItem.last !== null
                         height: visible ? implicitHeight : 0
+                        icon.name: "view-visible"
                         text: qsTr("Show %1 %2 again").arg(channelItem.last ? channelItem.last.number : "")
                             .arg(channelItem.last ? channelItem.last.name : "")
                         onTriggered: panel.act({ action: "overlay_last", channel: channelItem.channel })
                     }
-                    QQC2.MenuItem {
+                    KanteMenuItem {
                         visible: channelItem.prepared !== null
                         height: visible ? implicitHeight : 0
+                        icon.name: "edit-clear"
                         text: qsTr("Not with the next take: %1 %2").arg(channelItem.prepared ? channelItem.prepared.number : "")
                             .arg(channelItem.prepared ? channelItem.prepared.name : "")
                         onTriggered: panel.act({ action: "overlay_preview", channel: channelItem.channel, input: null })
                     }
-                    QQC2.MenuItem {
+                    QQC2.MenuSeparator {
+                        visible: (channelItem.shown === null && channelItem.last !== null) || channelItem.prepared !== null
+                        height: visible ? implicitHeight : 0
+                    }
+                    KanteMenuItem {
                         text: qsTr("Settings…")
+                        icon.name: "configure"
+                        valueText: channelItem.settings && channelItem.settings.rect ? qsTr("In a box") : ""
                         onTriggered: {
                             overlayDialog.channel = channelItem.channel
                             overlayDialog.settings = channelItem.settings

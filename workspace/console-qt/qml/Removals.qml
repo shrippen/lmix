@@ -15,8 +15,9 @@ import Kante
  * one from elsewhere does not pass for this one.
  *
  * `ask(kind, item)` takes an lmix `Input`, `Layout`, `Bus` or `Output` of
- * the state, by its kind ("input", "layout", "bus", "output"). The removal
- * names it by id: its number may move while the question is open.
+ * the state, by its kind ("input", "layout", "bus", "output"), or a layout
+ * template ("template", asked without a way back). The removal names it
+ * by id: its number may move while the question is open.
  */
 Item {
     id: removals
@@ -58,6 +59,15 @@ Item {
             acceptText: qsTr("Remove bus"),
             removedText: qsTr("Bus %1 removed").arg(named)
         }
+        // Not kept for Undo (rule 1 names templates too; they follow): the
+        // question says so.
+        case "template": return {
+            action: { action: "remove_layout_template", template: item.name },
+            question: qsTr("Remove template %1?").arg(named),
+            consequence: qsTr("Layouts made from it stay. The template cannot be brought back."),
+            acceptText: qsTr("Remove template"),
+            undo: false
+        }
         case "output": return {
             action: { action: "remove_output", output: item.id },
             question: qsTr("Remove output %1?").arg(named),
@@ -76,7 +86,7 @@ Item {
     }
     /** Remove now, with the toast to bring it back. */
     function remove(asked) {
-        pending = { request: asked, answered: false }
+        pending = asked.undo === false ? null : { request: asked, answered: false }
         removals.act(asked.action)
     }
 

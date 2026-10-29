@@ -146,4 +146,17 @@ TestCase {
             compare(asked.action[kind], "x-" + kind, kind)
         }
     }
+
+    // Templates are not in the stack of removals: a question, then gone,
+    // no toast waiting for a way back that never comes.
+    function test_a_template_asks_and_goes_without_undo() {
+        const removals = createTemporaryObject(removalsComponent, test)
+        removals.ask("template", { name: "Interview" })
+        const dialog = dialogOf(removals)
+        tryCompare(dialog, "opened", true)
+        compare(dialog.title, "Remove template \u201cInterview\u201d?")
+        dialog.accept()
+        compare(sent, [{ action: "remove_layout_template", template: "Interview" }])
+        compare(removals.pending, null)
+    }
 }
