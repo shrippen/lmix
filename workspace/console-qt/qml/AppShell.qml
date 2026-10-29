@@ -9,15 +9,16 @@ import org.lmix.console
 
 /**
  * The lmix window (docs/PLAN-SEITEN.md): a header with the file menu and
- * the state of the show, the pages (Mix, Show, ...) one at a time, and the
- * page bar at the foot with "Panic all". Pages are the children; each is
- * an AppPage. Switching pages stops nothing: the run is in lmix-core.
+ * the state of the show and the current page's title row, the pages (Mix,
+ * Show, ...) one at a time, and the page bar at the foot (narrow or a
+ * colour band, as chosen in File > Settings). Pages are the children; each
+ * is an AppPage. Switching pages stops nothing: the run is in lmix-core.
  *
- *   lmix [File] show.lmix …        ● Rec ● Stream  lmix-core  [Keys]  20:14
+ *   lmix [File] MIX 1080p30 tools  show.lmix … ● Rec  lmix-core [Keys] 20:14 [FTB] [Panic all]
  *   ┌ page ────────────────────────────────────────────────────────────┐
  *   └──────────────────────────────────────────────────────────────────┘
  *   older format · refusal
- *   [Mix][Show] …                         Ctrl+1…n  [PGM]  [Panic all]
+ *   [Mix][Show] …                                       Ctrl+1…n  [PGM]
  */
 Kirigami.ApplicationWindow {
     id: root
@@ -42,6 +43,9 @@ Kirigami.ApplicationWindow {
         category: "appearance"
         /** KanteStyle.Kind; Kante unless chosen otherwise. */
         property int style: KanteStyle.Kind.Kante
+        /** KantePageBar.Density of the page bar: Normal, Compact or a
+         *  band only, for more room on the pages. */
+        property int pageBar: KantePageBar.Density.Normal
     }
 
     Settings {
@@ -146,6 +150,14 @@ Kirigami.ApplicationWindow {
     }
     property string currentPage: "mix"
     readonly property var currentItem: pageItems.find(p => p.pageId === currentPage) || null
+    // The current page's tools sit in the header; the others go back to their page.
+    onPageItemsChanged: placeTools()
+    function placeTools() {
+        for (var i = 0; i < pageItems.length; i++) {
+            var tools = pageItems[i].toolsItem
+            tools.parent = pageItems[i] === currentItem ? pageToolsSlot : pageItems[i]
+        }
+    }
     function showPage(id) {
         if (!pageItems.some(p => p.pageId === id)) {
             return
@@ -154,6 +166,7 @@ Kirigami.ApplicationWindow {
         pageSettings.current = id
     }
     onCurrentItemChanged: {
+        placeTools()
         if (currentItem) {
             Qt.callLater(currentItem.takeFocus)
         }
@@ -485,7 +498,7 @@ Kirigami.ApplicationWindow {
             { what: qsTr("Save show as"), key: root.fileKeys.saveAs },
             { what: qsTr("Shortcuts"), key: root.fileKeys.shortcuts }
         ].filter(k => !root.keyTaken(k.key)).map(k => ({ what: k.what, key: root.keyLabel(k.key) })), [
-            { what: qsTr("Panic all"), key: qsTr("button in the page bar") }
+            { what: qsTr("Panic all"), key: qsTr("button in the header") }
         ].concat(root.keyedShortcuts.map(s => ({ what: s.label, key: root.keyLabel(s.key) }))))
         ColumnLayout {
             id: keysColumn
@@ -659,6 +672,18 @@ Kirigami.ApplicationWindow {
                                 ]
                                 onPicked: value => root.setStyle(value)
                             }
+                            ChoiceMenu {
+                                title: qsTr("Page bar")
+                                readonly property string iconName: "view-split-top-bottom"
+                                readonly property string valueText: choices.filter(c => c.value === current).map(c => c.label).join("")
+                                current: settings.pageBar
+                                choices: [
+                                    { value: KantePageBar.Density.Normal, label: qsTr("Normal") },
+                                    { value: KantePageBar.Density.Compact, label: qsTr("Narrow") },
+                                    { value: KantePageBar.Density.Band, label: qsTr("Colour band") }
+                                ]
+                                onPicked: value => settings.pageBar = value
+                            }
                             // Settings of this machine (SHW.8): rarely, so one level down;
                             // factory settings last and red.
                             QQC2.Menu {
@@ -685,6 +710,25 @@ Kirigami.ApplicationWindow {
                                 }
                             }
                         }
+                    }
+                    // The current page's title row (AppPage): title, subtitle, tools.
+                    KanteHeading {
+                        visible: root.currentItem !== null
+                        level: 2
+                        pageTitle: true
+                        text: root.currentItem ? root.currentItem.title : ""
+                    }
+                    QQC2.Label {
+                        visible: root.currentItem !== null && root.currentItem.subtitle.length > 0
+                        text: root.currentItem ? root.currentItem.subtitle : ""
+                        font.family: KanteStyle.monoFamily
+                        color: KanteStyle.mutedTextColor
+                        elide: Text.ElideRight
+                        Layout.maximumWidth: Kirigami.Units.gridUnit * 20
+                    }
+                    RowLayout {
+                        id: pageToolsSlot
+                        spacing: Kirigami.Units.smallSpacing
                     }
                     QQC2.Label {
                         Layout.fillWidth: true
@@ -746,6 +790,37 @@ Kirigami.ApplicationWindow {
                             onTriggered: clock.text = Qt.formatTime(new Date(), "hh:mm:ss")
                         }
                     }
+                    // The page's own panic (Mix: FTB), then the one for everything.
+                    KanteButton {
+                        id: pagePanic
+                        readonly property bool active: root.currentItem !== null && root.currentItem.panicActive
+                        visible: root.currentItem !== null && root.currentItem.panicText.length > 0
+                        focusPolicy: Qt.NoFocus
+                        emphasis: KanteButton.Emphasis.Destructive
+                        size: KanteButton.Size.Small
+                        text: root.currentItem ? root.currentItem.panicText : ""
+                        QQC2.ToolTip.visible: hovered && root.currentItem !== null && root.currentItem.panicTip.length > 0
+                        QQC2.ToolTip.text: root.currentItem ? root.currentItem.panicTip : ""
+                        onClicked: root.currentItem.panicRequested()
+                        // In force (program black): the button pulses until it is ended.
+                        SequentialAnimation on opacity {
+                            running: pagePanic.active
+                            loops: Animation.Infinite
+                            NumberAnimation { to: 0.45; duration: 600 }
+                            NumberAnimation { to: 1; duration: 600 }
+                            onRunningChanged: if (!running) pagePanic.opacity = 1
+                        }
+                    }
+                    KanteButton {
+                        focusPolicy: Qt.NoFocus
+                        emphasis: KanteButton.Emphasis.Destructive
+                        size: KanteButton.Size.Small
+                        text: qsTr("Panic all")
+                        enabled: root.backend.connected
+                        QQC2.ToolTip.visible: hovered
+                        QQC2.ToolTip.text: qsTr("Stop every cue over the panic time and fade program to black; recordings and streams go on")
+                        onClicked: root.panicAll()
+                    }
                 }
             }
 
@@ -789,10 +864,11 @@ Kirigami.ApplicationWindow {
             }
 
             // The page bar (KantePageBar): the pages, then program small
-            // where a page has none of its own, and Panic all.
+            // where a page has none of its own (not in the band).
             KantePageBar {
                 id: pageBar
                 Layout.fillWidth: true
+                density: settings.pageBar
                 model: root.pageItems.map(p => p.title)
                 tooltips: root.pageItems.map((p, i) => qsTr("%1 (Ctrl+%2)").arg(p.title).arg(i + 1))
                 busy: root.pageItems.map(p => p.busy)
@@ -826,16 +902,6 @@ Kirigami.ApplicationWindow {
                         core: root.backend
                         source: parent.visible ? "program" : ""
                     }
-                }
-                KanteButton {
-                    focusPolicy: Qt.NoFocus
-                    emphasis: KanteButton.Emphasis.Destructive
-                    size: KanteButton.Size.Small
-                    text: qsTr("Panic all")
-                    enabled: root.backend.connected
-                    QQC2.ToolTip.visible: hovered
-                    QQC2.ToolTip.text: qsTr("Stop every cue over the panic time and fade program to black; recordings and streams go on")
-                    onClicked: root.panicAll()
                 }
             }
         }
