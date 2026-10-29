@@ -15,6 +15,7 @@ use gstreamer::prelude::*;
 use lmix_types::{Action, BusRef, Event, InputRef, Latency, Levels, LiveFeed, OutputStats};
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 
+use crate::latest::Latest;
 use crate::{config, forms};
 
 #[cxx_qt::bridge]
@@ -241,14 +242,26 @@ async fn follow(thread: cxx_qt::CxxQtThread<qobject::Core>) {
         if let Ok((mut stream, _)) = connect_async(&url).await {
             let _ = thread.queue(|core| core.set_connected(true));
             let mut positions: HashMap<String, (u64, u64)> = HashMap::new();
+            // Only the newest of each reaches the GUI thread (crate::latest).
+            let state = Latest::new();
+            let position = Latest::new();
+            let level = Latest::new();
             while let Some(Ok(message)) = stream.next().await {
                 let Message::Text(text) = message else {
                     continue;
                 };
                 let queued = match serde_json::from_str(&text) {
-                    Ok(Event::State { state }) => {
-                        let json = serde_json::to_string(&state).unwrap_or_default();
-                        thread.queue(move |core| core.set_state(QString::from(&json)))
+                    Ok(Event::State { state: newer }) => {
+                        let json = serde_json::to_string(&newer).unwrap_or_default();
+                        if !state.put(json) {
+                            continue;
+                        }
+                        let state = state.clone();
+                        thread.queue(move |core| {
+                            if let Some(json) = state.take() {
+                                core.set_state(QString::from(&json));
+                            }
+                        })
                     }
                     Ok(Event::Position {
                         input,
@@ -257,11 +270,27 @@ async fn follow(thread: cxx_qt::CxxQtThread<qobject::Core>) {
                     }) => {
                         positions.insert(input.to_string(), (position_ms, duration_ms));
                         let json = serde_json::to_string(&positions).unwrap_or_default();
-                        thread.queue(move |core| core.set_positions(QString::from(&json)))
+                        if !position.put(json) {
+                            continue;
+                        }
+                        let position = position.clone();
+                        thread.queue(move |core| {
+                            if let Some(json) = position.take() {
+                                core.set_positions(QString::from(&json));
+                            }
+                        })
                     }
                     Ok(Event::Levels { levels }) => {
                         let json = levels_json(&levels);
-                        thread.queue(move |core| core.set_levels(QString::from(&json)))
+                        if !level.put(json) {
+                            continue;
+                        }
+                        let level = level.clone();
+                        thread.queue(move |core| {
+                            if let Some(json) = level.take() {
+                                core.set_levels(QString::from(&json));
+                            }
+                        })
                     }
                     Ok(Event::Outputs { stats }) => {
                         let json = links_json(&stats);
