@@ -101,7 +101,7 @@ Kirigami.ApplicationWindow {
     }
 
     function inputById(id) {
-        return StatePatch.byId(inputs, id) || null
+        return show ? show.inputById(id) || null : null
     }
 
     function localPath(url) {

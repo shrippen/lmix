@@ -226,7 +226,7 @@ AppPage {
     component SendRow: Repeater {
         id: sendRow
         required property string key
-        readonly property var input: StatePatch.byId(root.soundInputs, key)
+        readonly property var input: (root.show ? root.show.inputById(key) : undefined)
             || ({ id: key, number: 0, name: "", sends: {}, phones: { on: true, level: 100 } })
         model: sendScroll.buses.length + 2
         delegate: Loader {
@@ -267,7 +267,7 @@ AppPage {
     component Strip: KanteCard {
         id: strip
         required property string key
-        readonly property var input: StatePatch.byId(root.soundInputs, key)
+        readonly property var input: (root.show ? root.show.inputById(key) : undefined)
             || ({ id: key, number: 0, name: "", audio: { on: false, follow_video: false, volume: 0 }, listen: "off" })
         readonly property bool onProgram: root.show !== null && root.show.program === input.id
         readonly property bool onPreview: root.show !== null && root.show.preview === input.id

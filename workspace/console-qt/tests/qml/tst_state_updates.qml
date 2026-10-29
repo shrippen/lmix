@@ -186,6 +186,29 @@ TestCase {
         compare(show.program, null)
     }
 
+    /** One input's cell changes with that input alone; the ids stay
+     *  while no input comes, goes or moves. */
+    function test_show_state_cells_follow_one_input() {
+        var show = createTemporaryObject(showStateComponent, test)
+        show.patch([{ p: [], v: JSON.parse(JSON.stringify(Data.state)) }])
+        var first = Data.state.inputs[0].id, second = Data.state.inputs[1].id
+        var ids = show.inputIds, cells = show.cells
+        var secondChanges = 0
+        show.cells[second].valueChanged.connect(() => secondChanges++)
+        for (var v = 99; v > 89; v--) {
+            show.patch([{ p: ["inputs", 0, "audio", "volume"], v: v }])
+        }
+        compare(show.inputById(first).audio.volume, 90)
+        compare(secondChanges, 0, "the second input's cell stays quiet")
+        verify(show.inputIds === ids && show.cells === cells, "ids and cells kept")
+        var added = { id: "new", number: 9, name: "New" }
+        show.patch([{ p: ["inputs"], a: show.inputs.map((i, n) => ({ k: n })).concat([{ v: added }]) }])
+        compare(show.inputIds[show.inputIds.length - 1], "new")
+        compare(show.inputById("new").name, "New")
+        verify(show.cells[second] === cells[second], "an old cell stays")
+        compare(show.inputById("gone"), undefined)
+    }
+
     function test_a_patch_rebuilds_arrays_and_removes_keys() {
         var s = { inputs: [{ id: "a", n: 1 }, { id: "b", n: 2 }], gone: 1 }
         var next = StatePatch.apply(s, [

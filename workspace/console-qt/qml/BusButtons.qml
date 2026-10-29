@@ -20,13 +20,12 @@ ColumnLayout {
     // Keyed by input: a state update hands over every input as a new
     // object, and a Repeater on the list itself made all buttons anew.
     KeyedModel { id: inputKeys }
-    function syncKeys() {
-        inputKeys.sync(inputs.map(i => i.id))
-    }
-    onInputsChanged: syncKeys()
-    Component.onCompleted: syncKeys()
+    // Ids from ShowState: anew only when inputs come, go or move.
+    readonly property var inputIds: show && show.inputIds ? show.inputIds : inputs.map(i => i.id)
+    onInputIdsChanged: inputKeys.sync(inputIds)
+    Component.onCompleted: inputKeys.sync(inputIds)
     function inputOf(key) {
-        return StatePatch.byId(inputs, key) || null
+        return (show && show.inputById ? show.inputById(key) : StatePatch.byId(inputs, key)) || null
     }
 
     Repeater {

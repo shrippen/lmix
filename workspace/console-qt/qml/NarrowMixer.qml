@@ -100,7 +100,7 @@ KanteCard {
     onBusesChanged: syncStrips()
 
     function inputOf(key) {
-        return StatePatch.byId(soundInputs, key)
+        return (show && show.inputById ? show.inputById(key) : StatePatch.byId(soundInputs, key))
             || ({ id: key, number: 0, name: "", audio: { on: false, volume: 0, follow_video: false }, listen: "off", phones: { on: false, level: 100 }, sends: {} })
     }
     function busOf(key) {
@@ -349,7 +349,7 @@ KanteCard {
         readonly property bool isMaster: key === mixer.masterKey
         readonly property bool isPhones: key === mixer.phonesKey
         readonly property var bus: mixer.buses.find(b => b.id === key) || null
-        readonly property var input: !isMaster && !isPhones && !bus ? StatePatch.byId(mixer.soundInputs, key) || null : null
+        readonly property var input: !isMaster && !isPhones && !bus ? (mixer.show && mixer.show.inputById ? mixer.show.inputById(key) : StatePatch.byId(mixer.soundInputs, key)) || null : null
         title: isMaster ? qsTr("Master") : isPhones ? qsTr("Headphones")
             : bus ? qsTr("Bus “%1”").arg(bus.name) : input ? qsTr("Input %1 %2").arg(input.number).arg(input.name) : ""
         onClosed: {
@@ -605,7 +605,7 @@ KanteCard {
         id: stripDialog
         /** The input's id: the dialog follows its state (and its number, if moved). */
         property string inputId: ""
-        input: StatePatch.byId(mixer.soundInputs, inputId) || null
+        input: (mixer.show && mixer.show.inputById ? mixer.show.inputById(inputId) : StatePatch.byId(mixer.soundInputs, inputId)) || null
         parent: QQC2.Overlay.overlay
         anchors.centerIn: parent
         act: mixer.act

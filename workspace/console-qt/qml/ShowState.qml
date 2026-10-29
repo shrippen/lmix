@@ -31,6 +31,55 @@ QtObject {
                 console.warn("show state key not in ShowState.qml:", key)
             }
         }
+        if (touched.inputs) {
+            followInputs()
+        }
+    }
+
+    // Per input, so a binding on one input runs again only when that one
+    // changes: `inputs` itself is new with every fader step of any input,
+    // and with 31 inputs every tile, strip and button looked again.
+
+    /** Ids of the inputs in their order; anew only when inputs come, go or move. */
+    property var inputIds: []
+    /** Input id → cell (`value`: the input); anew together with `inputIds`. */
+    property var cells: ({})
+    property Component cellComponent: Component {
+        QtObject {
+            property var value
+        }
+    }
+
+    /** The input with this id, or undefined. */
+    function inputById(id) {
+        var cell = cells[id]
+        return cell ? cell.value : undefined
+    }
+
+    function followInputs() {
+        var list = inputs || []
+        var ids = list.map(i => i.id)
+        if (ids.length !== inputIds.length || ids.some((id, i) => id !== inputIds[i])) {
+            var next = {}
+            for (var i = 0; i < ids.length; i++) {
+                next[ids[i]] = cells[ids[i]] || cellComponent.createObject(state)
+            }
+            for (var gone in cells) {
+                if (!(gone in next)) {
+                    cells[gone].destroy()
+                }
+            }
+            for (var j = 0; j < list.length; j++) {
+                next[ids[j]].value = list[j]
+            }
+            cells = next
+            inputIds = ids
+            return
+        }
+        // Unchanged inputs are the same objects (StatePatch): no change.
+        for (var k = 0; k < list.length; k++) {
+            cells[ids[k]].value = list[k]
+        }
     }
 
     property var api_version
