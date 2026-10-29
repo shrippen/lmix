@@ -632,50 +632,13 @@ AppPage {
                 }
             }
 
-            // Buttons: program row cuts the input straight on, preview row puts
-            // it into preview (SWI.1, SWI.2).
-            ColumnLayout {
+            BusButtons {
                 visible: viewSettings.buttons
                 Layout.fillWidth: true
-                spacing: Kirigami.Units.smallSpacing
-                Repeater {
-                    model: [
-                        { label: qsTr("Program"), bus: "program", color: KanteStyle.negativeTextColor },
-                        { label: qsTr("Preview"), bus: "preview", color: KanteStyle.positiveTextColor }
-                    ]
-                    delegate: RowLayout {
-                        id: busRow
-                        required property var modelData
-                        Layout.fillWidth: true
-                        spacing: Kirigami.Units.smallSpacing
-                        KanteSectionLabel {
-                            Layout.preferredWidth: Kirigami.Units.gridUnit * 5
-                            text: busRow.modelData.label
-                            color: busRow.modelData.color
-                        }
-                        Flow {
-                            Layout.fillWidth: true
-                            spacing: Kirigami.Units.smallSpacing
-                            Repeater {
-                                model: root.inputs
-                                delegate: KanteButton {
-                                    required property var modelData
-                                    readonly property bool on: root.show !== null && root.show[busRow.modelData.bus] === modelData.id
-                                    width: Kirigami.Units.gridUnit * 6
-                                    height: Kirigami.Units.gridUnit * 2.5
-                                    text: modelData.number + " " + modelData.name
-                                    emphasis: on ? (busRow.modelData.bus === "program" ? KanteButton.Emphasis.Destructive : KanteButton.Emphasis.Primary)
-                                        : KanteButton.Emphasis.Normal
-                                    enabled: root.backend.connected
-                                    Accessible.name: busRow.modelData.label + " " + modelData.number + " " + modelData.name
-                                    onClicked: root.act(busRow.modelData.bus === "program"
-                                        ? { action: "cut_direct", input: modelData.number }
-                                        : { action: "preview_input", input: modelData.number })
-                                }
-                            }
-                        }
-                    }
-                }
+                show: root.show
+                inputs: root.inputs
+                act: root.act
+                connected: root.backend.connected
             }
 
             GridView {

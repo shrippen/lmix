@@ -106,6 +106,7 @@ fn main() {
                 "qml/Main.qml",
                 "qml/AppPage.qml",
                 "qml/MixPage.qml",
+                "qml/BusButtons.qml",
                 "qml/ShowPage.qml",
                 "qml/AudioPage.qml",
                 "qml/BusPanel.qml",
