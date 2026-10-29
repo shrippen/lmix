@@ -510,10 +510,13 @@ drag_y() {
     sleep 0.1
     DISPLAY="$DISPLAY_NO" xdotool mouseup 1
 }
+# At 1440 x 900 the monitors are as high as their halves let them (270 px)
+# and lower than the transitions beside them: a drag up does not shrink
+# them below the row the transitions hold open.
 drag_y 602 511 451
-setting_becomes monitorHeight 210 && pass "monitor grip: a drag sets the height" \
+setting_becomes monitorHeight 270 && pass "monitor grip: monitors stay as high as the transitions" \
     || fail "monitor grip: height $(view_setting monitorHeight) after a drag of 60 px up"
-# The grip stays put: the transition panel beside the monitors is higher.
+# The grip stays put; a double click keeps the height.
 DISPLAY="$DISPLAY_NO" xdotool mousemove 602 511 click --repeat 2 --delay 80 1
 setting_becomes monitorHeight 270 && pass "monitor grip: a double click resets it" \
     || fail "monitor grip: height $(view_setting monitorHeight) after a double click"

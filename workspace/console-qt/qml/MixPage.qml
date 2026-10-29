@@ -396,9 +396,13 @@ AppPage {
                 /** Room for one monitor's picture: its half of the row. */
                 readonly property real halfWidth: Math.max(0, (width - panelScroll.width - 2 * spacing) / 2 - 2 * Kirigami.Units.smallSpacing)
                 /** Tallest picture: the half's width, and room left for the inputs below. */
-                readonly property real maxPictureHeight: Math.max(monitorHandle.from,
+                readonly property real maxPictureHeight: Math.max(Kirigami.Units.gridUnit * 4,
                     Math.min(halfWidth / root.aspect, mixColumn.height - mixColumn.inputsRoom))
                 readonly property real pictureHeight: Math.max(monitorHandle.from, Math.min(viewSettings.monitorHeight, maxPictureHeight))
+                /** Lowest picture: the monitors as high as the transitions beside them,
+                 *  so a drag does not shrink them below the row the panel holds open. */
+                readonly property real minPictureHeight: Math.min(maxPictureHeight, Math.max(Kirigami.Units.gridUnit * 4,
+                    panelScroll.Layout.preferredHeight - Math.max(previewMonitor.chrome, programMonitor.chrome)))
 
                 Item {
                     Layout.fillWidth: true
@@ -470,7 +474,7 @@ AppPage {
                 Layout.topMargin: -Kirigami.Units.largeSpacing / 2
                 Layout.bottomMargin: -Kirigami.Units.largeSpacing / 2
                 value: monitorRow.pictureHeight
-                from: Kirigami.Units.gridUnit * 4
+                from: monitorRow.minPictureHeight
                 to: monitorRow.maxPictureHeight
                 defaultValue: Math.min(Kirigami.Units.gridUnit * 15, to)
                 accessibleName: qsTr("Height of the monitors")
@@ -838,6 +842,14 @@ AppPage {
 
         // The picture in the program format, as high as the handle says.
         readonly property real pictureHeight: monitorRow.pictureHeight
+        /** Height of all but the picture: bar, label, transport and meter,
+         *  from those parts alone (not from the picture's height, which
+         *  follows it: a binding loop). */
+        readonly property real chrome: monitor.barHeight + 2 * Kirigami.Units.smallSpacing
+            + monitorLabels.implicitHeight
+            + (monitorTransport.visible ? monitorColumn.spacing + monitorTransport.implicitHeight : 0)
+            + (monitorMeter.visible ? monitorColumn.spacing + monitorMeter.implicitHeight : 0)
+            + monitorColumn.spacing
         width: pictureHeight * root.aspect + 2 * Kirigami.Units.smallSpacing
         implicitHeight: monitorColumn.implicitHeight + monitor.barHeight + 2 * Kirigami.Units.smallSpacing
         height: implicitHeight
@@ -852,6 +864,7 @@ AppPage {
             anchors.topMargin: monitor.barHeight + Kirigami.Units.smallSpacing
 
             RowLayout {
+                id: monitorLabels
                 KanteSectionLabel {
                     text: monitor.label
                     color: monitor.tally
@@ -872,12 +885,14 @@ AppPage {
                 }
             }
             TransportBar {
+                id: monitorTransport
                 Layout.fillWidth: true
                 input: monitor.input
                 act: root.act
                 position: monitor.input && root.positions[monitor.input.id] ? root.positions[monitor.input.id] : null
             }
             KanteAudioMeter {
+                id: monitorMeter
                 Layout.fillWidth: true
                 visible: monitor.peakDb !== undefined
                 level: monitor.peakDb
