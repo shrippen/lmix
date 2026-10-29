@@ -61,7 +61,11 @@ KanteDialog {
             id: typed
             Layout.fillWidth: true
             Accessible.name: qsTr("Confirmation word")
-            onAccepted: if (dialog.acceptEnabled) dialog.accept()
+            onAccepted: {
+                if (dialog.acceptEnabled) {
+                    dialog.accept()
+                }
+            }
         }
     }
 }

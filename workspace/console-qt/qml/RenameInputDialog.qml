@@ -34,12 +34,20 @@ KanteDialog {
         }
     }
     // Removed while open: nothing left to rename.
-    onInputChanged: if (visible && input === null) close()
+    onInputChanged: {
+        if (visible && input === null) {
+            close()
+        }
+    }
 
     KanteTextField {
         id: nameField
         width: Kirigami.Units.gridUnit * 18
         Accessible.name: qsTr("Name")
-        onAccepted: if (dialog.acceptEnabled) dialog.accept()
+        onAccepted: {
+            if (dialog.acceptEnabled) {
+                dialog.accept()
+            }
+        }
     }
 }

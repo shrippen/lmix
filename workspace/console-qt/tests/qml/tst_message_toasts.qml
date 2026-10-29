@@ -42,16 +42,38 @@ TestCase {
         return shown
     }
 
+    /** Clicks the toast's own button, as the operator would. */
+    function clickClose(toast) {
+        var button = buttonIn(toast)
+        verify(button !== null, "the toast has a Close button")
+        // In from the right: click once it is there.
+        tryCompare(toast.transform[0], "x", 0)
+        mouseClick(button)
+    }
+    function buttonIn(item) {
+        for (var i = 0; i < item.children.length; i++) {
+            var child = item.children[i]
+            if (child.text === "Close" && child.clicked !== undefined) {
+                return child
+            }
+            var found = buttonIn(child)
+            if (found) {
+                return found
+            }
+        }
+        return null
+    }
+
     function test_a_refusal_stays_until_closed() {
-        var toasts = createTemporaryObject(toastsComponent, test)
+        // In the window: the TestCase itself is not shown, clicks would miss.
+        var toasts = createTemporaryObject(toastsComponent, test.Window.contentItem)
         fakeCore.answered("{}", refusal("Show is locked"))
         fakeCore.answered("{}", "")
         tryCompare(shownToasts(toasts), "length", 1)
         var toast = shownToasts(toasts)[0]
         compare(toast.text, "Show is locked")
         compare(toast.life, 0)
-        toast.actionTriggered()
-        toast.hide()
+        clickClose(toast)
         tryCompare(shownToasts(toasts), "length", 0)
         // Refused again after closing: it comes back.
         fakeCore.answered("{}", refusal("Show is locked"))

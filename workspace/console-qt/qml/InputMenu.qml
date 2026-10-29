@@ -61,7 +61,11 @@ QQC2.Menu {
         popup()
     }
     // Removed while open: nothing left to act on.
-    onInputChanged: if (visible && input.id === "") close()
+    onInputChanged: {
+        if (visible && input.id === "") {
+            close()
+        }
+    }
 
     KantePopupSkin { popup: menu }
     delegate: KanteMenuItem {

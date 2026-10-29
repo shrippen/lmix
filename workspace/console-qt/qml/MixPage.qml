@@ -364,6 +364,12 @@ AppPage {
         act: root.act
         property string inputId: ""
         input: root.inputById(inputId) || null
+        // Removed while open: nothing left to edit.
+        onInputChanged: {
+            if (visible && input === null) {
+                close()
+            }
+        }
     }
 
     ChannelStripDialog {
@@ -373,6 +379,12 @@ AppPage {
         act: root.act
         property string inputId: ""
         input: root.inputById(inputId) || null
+        // Removed while open: nothing left to edit.
+        onInputChanged: {
+            if (visible && input === null) {
+                close()
+            }
+        }
         buses: root.show && root.show.buses ? root.show.buses : []
     }
 
