@@ -11,7 +11,17 @@
 #   scripts/test-console-qt.sh
 #   KEEP_WORK=1 scripts/test-console-qt.sh   # keep logs and screenshots
 #   DISPLAY_NO=:96 STROM_PORT=8798 CORE_PORT=8898 scripts/test-console-qt.sh
+#
+# Clicks find their control by its accessible name (scripts/a11y.py,
+# needs at-spi2-core and PyGObject) where a row may gain a button, else
+# by pixel. A failure keeps a screenshot and the named controls.
 set -euo pipefail
+
+# In a D-Bus session of its own: lmix on an accessibility bus of its
+# own, apart from the desktop's.
+if [[ -z "${LMIX_TEST_SESSION:-}" ]]; then
+    LMIX_TEST_SESSION=1 exec dbus-run-session --config-file="$(dirname "$0")/test-session.conf" -- "$0" "$@"
+fi
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # Display and ports can be moved, so two runs on one machine stay apart.
@@ -37,6 +47,7 @@ fail() {
     echo "FAIL: $*"
     # What the screen showed when the check gave up.
     shot failed 2>/dev/null || true
+    DISPLAY="$DISPLAY_NO" python3 "$ROOT/scripts/a11y.py" dump >"$WORK/failed-controls.txt" 2>&1 || true
     KEEP_WORK=1
     exit 1
 }
@@ -71,6 +82,15 @@ own_qml_warnings() {
     grep -vE "$QT_KDE_QML" <<<"$found" | grep .
 }
 click() { DISPLAY="$DISPLAY_NO" xdotool mousemove "$1" "$2" click "${3:-1}"; }
+# Clicks the showing control whose accessible name matches $1 (a regex:
+# give the English and the German name), `-3` first for the right
+# button; further arguments go to `a11y.py find` (--role, --within, --nth).
+click_on() {
+    local button=1 at
+    [[ "$1" == -3 ]] && button=3 && shift
+    at="$(DISPLAY="$DISPLAY_NO" python3 "$ROOT/scripts/a11y.py" find "$@")" || fail "no control named /$1/ on the screen"
+    click "${at% *}" "${at#* }" "$button"
+}
 # Waits up to 60 s until the input in `preview`/`program` has number $2
 # (a busy VM handles clicks late).
 becomes() {
@@ -84,6 +104,11 @@ CORE_BIN="${CARGO_TARGET_DIR:-$ROOT/workspace/lmix-core/target}/release/lmix-cor
 CONSOLE_DIR="${CARGO_TARGET_DIR:-$ROOT/workspace/console-qt/target}/release"
 
 Xvfb "$DISPLAY_NO" -screen 0 1440x900x24 >/dev/null 2>&1 &
+PIDS+=($!)
+/usr/libexec/at-spi-bus-launcher --launch-immediately >/dev/null 2>&1 &
+PIDS+=($!)
+sleep 0.5
+/usr/libexec/at-spi2-registryd >/dev/null 2>&1 &
 PIDS+=($!)
 (cd "$WORK" && unset WAYLAND_DISPLAY && GST_GL_WINDOW=x11 DISPLAY="$DISPLAY_NO" exec "$STROM_BIN" \
     --host 127.0.0.1 --port "$STROM_PORT" --no-auto-restart --data-dir "$WORK/strom-data" \
@@ -108,7 +133,7 @@ unset WAYLAND_DISPLAY
 # Own settings: lmix writes style, keys, view and page settings on use,
 # never into the operator's ~/.config/lmix/lmix.conf.
 export XDG_CONFIG_HOME="$WORK/config" DISPLAY="$DISPLAY_NO" QT_QPA_PLATFORM=xcb QT_FORCE_STDERR_LOGGING=1 \
-    LMIX_CORE="http://127.0.0.1:${CORE_PORT}"
+    QT_LINUX_ACCESSIBILITY_ALWAYS_ON=1 LMIX_CORE="http://127.0.0.1:${CORE_PORT}"
 "$CONSOLE_DIR/lmix" --page mix >"$WORK/console.log" 2>&1 &
 PIDS+=($!)
 PROGRAM_AREA="440x240+720+140"
@@ -154,13 +179,13 @@ becomes program 2
 act '{"action":"preview_input","input":1}'
 becomes preview 1
 overlay_1() { state | jq -r '.overlays[0] // "none"'; }
-click 552 448
+click_on "Overlay 1: .*" --role button
 for _ in $(seq 1 40); do [[ "$(overlay_1)" != none ]] && break; sleep 0.5; done
 [[ "$(overlay_1)" != none ]] && pass "overlay 1 from the grid: on" || fail "overlay 1 not on after a click in the grid (hidden or moved?)"
 # Away first: the tooltip of channel 1 opens above it, over "All off".
 DISPLAY="$DISPLAY_NO" xdotool mousemove 1000 300
 sleep 1
-click 642 412
+click_on "All overlays off|Alle Overlays aus" --role button
 for _ in $(seq 1 40); do [[ "$(overlay_1)" == none ]] && break; sleep 0.5; done
 [[ "$(overlay_1)" == none ]] && pass "overlays: All off" || fail "overlay 1 still on after All off"
 # The audio column at the right edge (inputs on top, the ways out below):
@@ -348,7 +373,7 @@ done
 # View as a popover: its switch sets the multiview's program side. Before
 # an input is removed: its "Bring back" widens the tools to two rows.
 multiview_program() { state | jq -r '.multiview.program // "right"'; }
-click 490 540
+click_on "View|Ansicht" --role button
 sleep 1
 click 488 681
 for _ in $(seq 1 40); do [[ "$(multiview_program)" == left ]] && break; sleep 0.5; done
@@ -359,7 +384,7 @@ act '{"action":"set_multiview","layout":{"program":"right","meters":"shown"}}'
 
 # "+ Input": the dialog opens on the test pattern; Ball, a name and the
 # footer's "Add input" give an input of that pattern and name.
-click 1162 540
+click_on "\\+ Input" --role button
 sleep 2
 click 836 262
 click 940 320
@@ -422,7 +447,7 @@ for _ in $(seq 1 40); do [[ -n "$(spare)" ]] && break; sleep 0.5; done
 # the refusal's line, which would move the tiles below.
 locked() { state | jq -r '.locked // false'; }
 sleep 1
-click 780 540
+click_on "Lock|Sperren" --role button
 for _ in $(seq 1 20); do [[ "$(locked)" == true ]] && break; sleep 0.5; done
 [[ "$(locked)" == true ]] || fail "Lock button: show not locked"
 # Twice: the same refusal again sets no new message, its answer counts.
@@ -432,7 +457,7 @@ for _ in 1 2; do
     click 564 880
     sleep 1.5
 done
-click 780 540
+click_on "Locked|Gesperrt" --role button
 for _ in $(seq 1 20); do [[ "$(locked)" == false ]] && break; sleep 0.5; done
 [[ "$(locked)" == false ]] || fail "Lock button: show still locked"
 act "{\"action\":\"remove_input\",\"input\":$(spare)}"
@@ -530,14 +555,14 @@ setting_becomes mixerPathsHeight 0 && pass "paths grip: a double click resets it
 
 # Detail: the tiles get the overlay buttons and the audio row, and the
 # monitors give them room, so a row of tiles is not cut off.
-click 304 540
+click_on "Detail"
 setting_becomes detail true || fail "Detail not stored after a click"
 sleep 2
-click 22 708
+click_on "Overlay 1" --role "check box" --within "Input 1 .*"
 for _ in $(seq 1 40); do [[ "$(overlay_1)" != none ]] && break; sleep 0.5; done
 [[ "$(overlay_1)" == "$(state | jq -r '.inputs[0].id')" ]] && pass "detail: overlay 1 from the tile" \
     || fail "detail: overlay 1 is $(overlay_1) after a click on the tile's button"
-click 28 748
+click_on "Mute|Stumm" --role "check box" --within "Input 1 .*"
 for _ in $(seq 1 40); do [[ "$(audio_1)" == false ]] && break; sleep 0.5; done
 [[ "$(audio_1)" == false ]] && pass "detail: mute from the tile" || fail "detail: input 1 not muted from the tile (cut off?)"
 act '{"action":"set_audio","input":1,"on":true}'
