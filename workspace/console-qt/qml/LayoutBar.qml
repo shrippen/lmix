@@ -119,6 +119,7 @@ RowLayout {
                 choices: bar.templateChoices
                 onPicked: value => bar.act({ action: "load_layout_template", template: value })
             }
+            QQC2.MenuSeparator {}
             KanteMenuItem {
                 text: qsTr("Import…")
                 icon.name: "document-import"
