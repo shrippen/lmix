@@ -5101,3 +5101,53 @@ Console: Setup → Steuerung → „Sperren“, ein Schalter je Weg.
 `a_midi_panic_pad_goes_through_the_lock`,
 `locked_targets_send_nothing_and_warn` (der Empfänger sieht keine
 Verbindung).
+
+## 2026-10-29 — Plugins: Steuerung als WASM, Companion, fremde GStreamer-Plugins
+
+**Kontext**: Die Show soll mit Geräten und Programmen sprechen, die wir nicht
+alle vorhersehen. Recherche mit Stichprobe von 11 Companion-Modulen und
+Auszählung von 600 ausgelieferten (`bitfocus/companion-bundled-modules`):
+nur 12 haben native Teile, 599 nutzen noch Base-API 1.x, die Repos meist
+schon 2.x. Bericht: https://claude.ai/artifact/RdoFocHWJ6FKVfXihcD3Cn
+
+**Entscheidung, Steuer-Plugins**:
+- Eigenes Format `lmix-plugin/1`: WebAssembly-Komponenten (Component Model,
+  WIT-Welt `lmix:plugin@1`) in einem eigenen Prozess `lmix-plugin-host`
+  (wasmtime, ein Store je Verbindung). Der Kern spricht JSON-RPC mit dem
+  Host; ein Plugin-Fehler lässt nur seine Aktion fehlschlagen.
+- Netz über ein eigenes `lmix:net` (TCP, UDP, TLS, WebSocket) statt
+  `wasi:sockets`, dazu `lmix:timer`, `lmix:serial`, `wasi:http`. Rechte im
+  Manifest hängen an der Konfiguration (`$config.host`), der Host prüft jede
+  Verbindung. Ereignisgetrieben, weil Imports aus JS unter WASI 0.2
+  synchron sein müssen.
+- `exec` (eigener Prozess, gleicher JSON-RPC) bleibt als Ausnahme mit Warnung:
+  USB-HID, Hersteller-SDKs, externe Programme, GPL-Plugins Dritter, Python.
+- Sandbox: Landlock, `no_new_privs`, cgroup für Host und exec-Plugins.
+- SDKs: Rust und JS (ComponentizeJS) zuerst, Python nur über `exec`.
+- Verteilung: von Hand und über einen Index auf GitHub mit
+  minisign-Signaturen. GPL-Plugins Dritter nur als getrennte Programme, nie
+  im lmix-Paket. Eine Show bringt nie Code mit.
+- Reihenfolge: der Plugin-Host kommt nach K1 (OSC-Cue, lmix-Modul für
+  Companion aus S2).
+
+**Entscheidung, Companion**: erst koppeln (K1), dann ein Prototyp (K2), der
+Module in GitHub-CI automatisch nach WASM übersetzt (esbuild mit Shims für
+`@companion-module/base` 1.x/2.x und Node-APIs, ComponentizeJS). Node nur in
+dieser CI, nie zur Laufzeit von lmix. Übersetzte Module mit freier Lizenz
+(MIT, ISC, BSD, Apache-2.0) kommen mit ihrer Lizenz und Prüfstatus in den
+Index.
+
+**Entscheidung, Bild und Ton**: kein eigenes Plugin-Format. Lokale Quelle
+und Senke zuerst über PipeWire, später unixfd. Fremde GStreamer-Plugins
+sind erlaubt: lmix führt eine Liste getesteter Plugins mit Versionsnummer;
+alles, was nicht darauf steht, warnt beim Installieren und beim Hinzufügen
+der Quelle („kann Performance- und Stabilitätseinbußen mit sich bringen“).
+Nach einem Absturz von strom ordnet lmix ihn einem Plugin zu (Crash-Handler
+in strom schreibt Stack und Speicherbelegung, lmix-core löst sie beim
+Neustart über die Registry auf) und schlägt vor, es abzuschalten. Der
+Crash-Handler kommt in den strom-Fork und später als Vorschlag zu Eyevinn.
+
+**Verworfen**: Prozess je Plugin als einziger Weg (WASM bietet Isolation
+ohne Prozess je Plugin), Extism und Javy (keine echten Imports, keine
+Timer), Companion-Module mit Node zur Laufzeit hosten, native Plugins im
+Kern.
