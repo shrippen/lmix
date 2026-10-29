@@ -888,6 +888,7 @@ DE = {
     '%1 is on. Click: mute.': '%1 ist an. Klick: stumm.',
     '%1 is muted. Click: on.': '%1 ist stumm. Klick: an.',
     'Audio at the edge': 'Ton am Rand',
+    'Page': 'Seite',
     'Audio mixer': 'Tonmischer',
     'Active': 'Aktiv',
     'Lists': 'Listen',

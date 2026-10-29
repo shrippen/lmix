@@ -2836,7 +2836,7 @@
     </message>
     <message>
       <location line="+9" />
-      <location line="+12" />
+      <location line="+17" />
       <source>Inputs</source>
       <translation>Inputs</translation>
     </message>
@@ -2881,51 +2881,17 @@
       <translation>Dazu Overlay-Tasten und Tonleiste</translation>
     </message>
     <message>
-      <location line="+5" />
-      <source>S</source>
-      <comment>small tiles</comment>
-      <translation>S</translation>
-    </message>
-    <message>
-      <location line="+0" />
-      <source>M</source>
-      <comment>medium tiles</comment>
-      <translation>M</translation>
-    </message>
-    <message>
-      <location line="+0" />
-      <source>L</source>
-      <comment>large tiles</comment>
-      <translation>L</translation>
-    </message>
-    <message>
-      <location line="+2" />
-      <source>Small tiles</source>
-      <translation>Kleine Kacheln</translation>
-    </message>
-    <message>
-      <location line="+0" />
-      <source>Medium tiles</source>
-      <translation>Mittlere Kacheln</translation>
-    </message>
-    <message>
-      <location line="+0" />
-      <source>Large tiles</source>
-      <translation>Große Kacheln</translation>
-    </message>
-    <message>
-      <location line="+475" />
+      <location line="+490" />
       <source>Level of %1</source>
       <translation>Pegel von %1</translation>
     </message>
     <message>
-      <location line="-502" />
-      <location line="+5" />
+      <location line="-515" />
       <source>View</source>
       <translation>Ansicht</translation>
     </message>
     <message>
-      <location line="-502" />
+      <location line="-497" />
       <source>FTB</source>
       <comment>fade to black</comment>
       <translation>FTB</translation>
@@ -2941,7 +2907,7 @@
       <translation>Schwarzblende: Programm auf Schwarz und zurück (SWI.9); Show und Ausgänge laufen weiter</translation>
     </message>
     <message>
-      <location line="+538" />
+      <location line="+534" />
       <source>Multiview</source>
       <translation>Multiview</translation>
     </message>
@@ -2956,7 +2922,12 @@
       <translation>Pegelanzeigen</translation>
     </message>
     <message>
-      <location line="+48" />
+      <location line="+10" />
+      <source>Page</source>
+      <translation>Seite</translation>
+    </message>
+    <message>
+      <location line="+55" />
       <source>More input actions</source>
       <translation>Weitere Input-Aktionen</translation>
     </message>
@@ -3016,7 +2987,7 @@
       <translation>Breite der Tonspalte</translation>
     </message>
     <message>
-      <location line="-381" />
+      <location line="-360" />
       <source>Audio at the edge</source>
       <translation>Ton am Rand</translation>
     </message>
@@ -3026,7 +2997,7 @@
       <translation>Einfacher Modus</translation>
     </message>
     <message>
-      <location line="+90" />
+      <location line="+69" />
       <source>Find missing files…</source>
       <translation>Fehlende Dateien suchen…</translation>
     </message>
@@ -6345,6 +6316,42 @@
       <location line="+1" />
       <source>Channel strip: %1 is out of range</source>
       <translation>Kanalzug: %1 liegt außerhalb des Bereichs</translation>
+    </message>
+  </context>
+  <context>
+    <name>TileSizePicker</name>
+    <message>
+      <location filename="../qml/TileSizePicker.qml" line="+23" />
+      <source>S</source>
+      <comment>small tiles</comment>
+      <translation>S</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Small tiles</source>
+      <translation>Kleine Kacheln</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>M</source>
+      <comment>medium tiles</comment>
+      <translation>M</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Medium tiles</source>
+      <translation>Mittlere Kacheln</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>L</source>
+      <comment>large tiles</comment>
+      <translation>L</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Large tiles</source>
+      <translation>Große Kacheln</translation>
     </message>
   </context>
   <context>

@@ -158,6 +158,7 @@ fn main() {
                 "qml/TransportBar.qml",
                 "qml/PtzDialog.qml",
                 "qml/RenameInputDialog.qml",
+                "qml/TileSizePicker.qml",
                 "qml/LookPanel.qml",
                 "qml/ChannelStripPanel.qml",
                 "qml/InputSettingsDialog.qml",
