@@ -17,6 +17,18 @@ ColumnLayout {
 
     spacing: Kirigami.Units.smallSpacing
 
+    // Keyed by input: a state update hands over every input as a new
+    // object, and a Repeater on the list itself made all buttons anew.
+    KeyedModel { id: inputKeys }
+    function syncKeys() {
+        inputKeys.sync(inputs.map(i => i.id))
+    }
+    onInputsChanged: syncKeys()
+    Component.onCompleted: syncKeys()
+    function inputOf(key) {
+        return inputs.find(i => i.id === key) || null
+    }
+
     Repeater {
         model: [
             { label: qsTr("Program"), bus: "program", color: KanteStyle.negativeTextColor },
@@ -36,20 +48,21 @@ ColumnLayout {
                 Layout.fillWidth: true
                 spacing: Kirigami.Units.smallSpacing
                 Repeater {
-                    model: rows.inputs
+                    model: inputKeys
                     delegate: KanteButton {
-                        required property var modelData
-                        readonly property bool on: rows.show !== null && rows.show[busRow.modelData.bus] === modelData.id
+                        required property string key
+                        readonly property var input: rows.inputOf(key) || ({ id: key, number: 0, name: "" })
+                        readonly property bool on: rows.show !== null && rows.show[busRow.modelData.bus] === key
                         width: Kirigami.Units.gridUnit * 6
                         height: Kirigami.Units.gridUnit * 2.5
-                        text: modelData.number + " " + modelData.name
+                        text: input.number + " " + input.name
                         emphasis: on ? (busRow.modelData.bus === "program" ? KanteButton.Emphasis.Destructive : KanteButton.Emphasis.Primary)
                             : KanteButton.Emphasis.Normal
                         enabled: rows.connected
-                        Accessible.name: busRow.modelData.label + " " + modelData.number + " " + modelData.name
+                        Accessible.name: busRow.modelData.label + " " + input.number + " " + input.name
                         onClicked: rows.act(busRow.modelData.bus === "program"
-                            ? { action: "cut_direct", input: modelData.number }
-                            : { action: "preview_input", input: modelData.number })
+                            ? { action: "cut_direct", input: input.number }
+                            : { action: "preview_input", input: input.number })
                     }
                 }
             }

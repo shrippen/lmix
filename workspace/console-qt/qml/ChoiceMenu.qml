@@ -17,8 +17,27 @@ QQC2.Menu {
     KantePopupSkin { popup: menu }
 
     property var made: []
+    /** The choices `made` shows: a state update hands over equal ones as a new list. */
+    property string madeFrom: ""
+
+    // Keys sorted and lists as lists: set at creation, the same choices
+    // arrive as a Qt list with sorted keys.
+    function canonical(value) {
+        if (value !== null && typeof value === "object" && typeof value.length === "number") {
+            return "[" + Array.from(value).map(canonical).join(",") + "]"
+        }
+        if (value !== null && typeof value === "object") {
+            return "{" + Object.keys(value).sort().map(k => JSON.stringify(k) + ":" + canonical(value[k])).join(",") + "}"
+        }
+        return JSON.stringify(value)
+    }
 
     function rebuild() {
+        var from = canonical(choices)
+        if (from === madeFrom) {
+            return
+        }
+        madeFrom = from
         for (var i = 0; i < made.length; i++) {
             menu.removeItem(made[i])
             made[i].destroy()

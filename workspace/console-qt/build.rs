@@ -145,6 +145,7 @@ fn main() {
                 "qml/OutputBar.qml",
                 "qml/ChoiceMenu.qml",
                 "qml/KeyedModel.qml",
+                "qml/MoveThrottle.qml",
                 "qml/TitleField.qml",
                 "qml/TitlesDialog.qml",
                 "qml/DataSourcesDialog.qml",

@@ -431,8 +431,13 @@ KanteCard {
                     stepSize: 1
                     value: sendRow.level
                     Accessible.name: qsTr("Send to %1").arg(sendRow.modelData.name)
-                    onMoved: mixer.act({ action: "set_send", input: menu.input.number, bus: sendRow.modelData.id, level: Math.round(value) })
+                    onMoved: sendThrottle.push(Math.round(value))
+                    onPressedChanged: if (!pressed) { sendThrottle.flush() }
                     KanteSliderSkin { control: sendSlider }
+                    MoveThrottle {
+                        id: sendThrottle
+                        onPassed: level => mixer.act({ action: "set_send", input: menu.input.number, bus: sendRow.modelData.id, level: level })
+                    }
                 }
                 QQC2.Label {
                     Layout.preferredWidth: Kirigami.Units.gridUnit * 2
@@ -672,8 +677,13 @@ KanteCard {
             Accessible.name: qsTr("Volume of %1").arg(fader.name)
             QQC2.ToolTip.visible: hovered || pressed
             QQC2.ToolTip.text: qsTr("%1: %2").arg(fader.name).arg(Math.round(value))
-            onMoved: fader.moved(Math.round(value))
+            onMoved: faderThrottle.push(Math.round(value))
+            onPressedChanged: if (!pressed) { faderThrottle.flush() }
             KanteSliderSkin { control: slider }
+            MoveThrottle {
+                id: faderThrottle
+                onPassed: volume => fader.moved(volume)
+            }
         }
     }
 
@@ -761,8 +771,13 @@ KanteCard {
             Accessible.name: qsTr("Level of %1 on the headphones").arg(strip.fullName)
             QQC2.ToolTip.visible: hovered || pressed
             QQC2.ToolTip.text: qsTr("On the headphones: %1").arg(strip.phonesSend.on ? Math.round(value) : qsTr("off"))
-            onMoved: host.act({ action: "set_phones_send", input: strip.input.number, on: strip.phonesSend.on, level: Math.round(value) })
+            onMoved: phonesThrottle.push(Math.round(value))
+            onPressedChanged: if (!pressed) { phonesThrottle.flush() }
             KanteSliderSkin { control: phonesLevel }
+            MoveThrottle {
+                id: phonesThrottle
+                onPassed: level => host.act({ action: "set_phones_send", input: strip.input.number, on: strip.phonesSend.on, level: level })
+            }
         }
     }
 
