@@ -5413,6 +5413,8 @@ Kachelbild an.
   mehr; ein Neustart der Console in der Frist sieht kein Flackern.
 - **Kein Polling:** lmix-core schläft bis zum Fristende oder bis zur
   nächsten Anfrage; eine Anfrage bei hellem Bild schickt strom nichts.
+- **Abgelehnt wird wiederholt:** Nimmt strom das Dunkelschalten nicht an,
+  versucht lmix-core es eine Frist später wieder, bis es dunkel ist.
 - **Übernahme:** Ein neues lmix-core, das ein helles Kachelbild übernimmt,
   gibt ihm ab dem Start eine Frist; die Console des alten fragt in ihr
   beim neuen nach.

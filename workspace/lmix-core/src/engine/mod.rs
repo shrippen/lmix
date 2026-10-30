@@ -117,8 +117,11 @@ pub trait Engine: Send + Sync {
     }
 
     /// No Console watches the tile picture any more (its lease ran out):
-    /// the engine may stop drawing it until `live` asks again.
-    async fn dim_tiles(&self) {}
+    /// the engine may stop drawing it until `live` asks again. False while
+    /// it is not dark yet (the engine refused), so it is tried again.
+    async fn dim_tiles(&self) -> bool {
+        true
+    }
 
     /// How the frames of `picture` come over its socket.
     fn live_transport(&self, _picture: LivePicture) -> LiveTransport {

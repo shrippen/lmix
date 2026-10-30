@@ -51,6 +51,9 @@ pub struct NullEngine {
     /// Times the tile picture went dark (`dim_tiles`).
     #[cfg(test)]
     dims: std::sync::atomic::AtomicUsize,
+    /// The next this many `dim_tiles` do not get the tiles dark.
+    #[cfg(test)]
+    dims_failing: std::sync::atomic::AtomicUsize,
     #[cfg(test)]
     start_during_command: std::sync::atomic::AtomicBool,
     /// Outputs started and not stopped or failed since.
@@ -142,6 +145,13 @@ impl NullEngine {
     #[cfg(test)]
     pub fn dims(&self) -> usize {
         self.dims.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    /// The next `times` attempts to darken the tiles fail.
+    #[cfg(test)]
+    pub fn fail_dims(&self, times: usize) {
+        self.dims_failing
+            .store(times, std::sync::atomic::Ordering::SeqCst);
     }
 
     /// Whether a start came while a slow command ran.
@@ -254,9 +264,18 @@ impl NullEngine {
 
 #[async_trait]
 impl Engine for NullEngine {
-    async fn dim_tiles(&self) {
+    async fn dim_tiles(&self) -> bool {
         #[cfg(test)]
-        self.dims.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        {
+            use std::sync::atomic::Ordering::SeqCst;
+            self.dims.fetch_add(1, SeqCst);
+            let failing = self.dims_failing.load(SeqCst);
+            if failing > 0 {
+                self.dims_failing.store(failing - 1, SeqCst);
+                return false;
+            }
+        }
+        true
     }
 
     async fn start(&self, _slots: usize) -> Result<(), EngineError> {

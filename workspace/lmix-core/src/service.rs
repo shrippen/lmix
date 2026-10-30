@@ -837,9 +837,10 @@ impl Service {
                     tokio::time::sleep_until(until).await;
                 }
                 // Held while the engine darkens: an ask waits, then lights.
+                // Still lit (strom refused): again a lease later, no polling.
                 Some(_) => {
-                    *lease = None;
-                    self.engine.dim_tiles().await;
+                    let dark = self.engine.dim_tiles().await;
+                    *lease = (!dark).then(|| tokio::time::Instant::now() + TILES_LEASE);
                 }
             }
         }
@@ -4410,6 +4411,24 @@ mod tests {
         let _ = service.live_tiles().await;
         tokio::time::sleep(TILES_LEASE + quarter).await;
         assert_eq!(engine.dims(), 2, "a Console came back and left");
+    }
+
+    /// Tiles the engine could not get dark are tried again a lease later,
+    /// not polled; dark, they rest.
+    #[tokio::test(start_paused = true)]
+    async fn tiles_that_stay_lit_are_dimmed_again_a_lease_later() {
+        let engine = Arc::new(NullEngine::default());
+        engine.fail_dims(1);
+        let service = Service::new(4, engine.clone(), None);
+        tokio::spawn(service.clone().watch_tiles());
+        let quarter = TILES_LEASE / 4;
+
+        tokio::time::sleep(TILES_LEASE + quarter).await;
+        assert_eq!(engine.dims(), 1, "refused");
+        tokio::time::sleep(TILES_LEASE).await;
+        assert_eq!(engine.dims(), 2, "tried again");
+        tokio::time::sleep(TILES_LEASE * 3).await;
+        assert_eq!(engine.dims(), 2, "dark: no more tries");
     }
 
     /// A takeover keeps tiles lit that a Console of the lmix-core before
