@@ -191,9 +191,8 @@ struct Args {
     #[arg(long, env = "LMIX_GOOGLE_API_KEY", hide_env_values = true)]
     google_api_key: Option<String>,
 
-    /// How long before its time a frame goes to a DeckLink card, in ms:
-    /// 60 with GStreamer's decklink plugin patched
-    /// (scripts/decklink-plugin.sh), else the default.
+    /// How long before its time a frame goes to a DeckLink card, in ms
+    /// (the sink's processing deadline).
     #[arg(long, env = "LMIX_CARD_LEAD_MS", default_value_t = engine::flows::CARD_LEAD_MS)]
     card_lead_ms: u64,
 

@@ -101,16 +101,14 @@ const CARD_AUTO: &str = "auto";
 /// strom's `stream_mode`: picture and sound, or picture only.
 const STREAM_AUDIO_VIDEO: &str = "audio_video";
 const STREAM_VIDEO: &str = "video";
-/// How long before its time a frame goes to the card. Frames come over
-/// inter later than the output flow's latency says (it does not see all
-/// of the mixer's); with strom's 20 ms the card showed half of them late
-/// and dropped the rest. Without GStreamer's decklink plugin patched
-/// (scripts/decklink-plugin.sh) the card's clock lags by up to 38 ms and
-/// rounding down costs up to 40 ms, so the lead stays at 150 ms, which
-/// passed every first start; later starts in the same strom show their
-/// frames late however long the lead. With the patch 60 ms passed every
-/// start (DECISIONS 27.10.), set by `--card-lead-ms`.
-pub const CARD_LEAD_MS: u64 = 150;
+/// How long before its time a frame goes to the card (the sink's
+/// processing deadline), GStreamer's default. `decklink2sink` queues
+/// frames on the card in its own count rather than at their clock
+/// times, so a frame that comes late over inter waits in that queue
+/// instead of being shown late: on the SDI loop 0 and 20 ms gave the
+/// same latency and no late frame (DECISIONS 30.10.). The old
+/// `decklinkvideosink` needed 60–150 ms. `--card-lead-ms` sets it.
+pub const CARD_LEAD_MS: u64 = 20;
 static CARD_LEAD: std::sync::OnceLock<u64> = std::sync::OnceLock::new();
 
 /// The lead for card outputs from `--card-lead-ms`; set once at start.
@@ -3783,9 +3781,8 @@ mod tests {
         assert_eq!(uint(card, "device_number"), 1);
         assert_eq!(text(card, "mode"), "720p50");
         assert_eq!(text(card, "stream_mode"), "audio_video");
-        // Without --card-lead-ms the lead that holds without the patched
-        // decklink plugin (review of #169).
-        assert_eq!(uint(card, "processing_deadline_ms"), 150);
+        // Without --card-lead-ms GStreamer's default lead.
+        assert_eq!(uint(card, "processing_deadline_ms"), 20);
         let caps = caps_of(&flow, CARD_PICTURE);
         assert!(caps.contains("format=UYVY"), "{caps}");
         assert!(caps.contains("width=1280,height=720"), "{caps}");
