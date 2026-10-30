@@ -5590,3 +5590,27 @@ Größe M nach Regel 3.
 - **„Belegungen…“ im Fuß** öffnet den Dialog der Kurzbefehle. Der Knopf steht
   am Anfang des Fußes, über `KanteDialog.footerStart` (Kante 1.57, für diesen
   Dialog eingeführt).
+
+## 2026-10-31 — Vorschaubild-Abgriff hält beim Andocken die Quelle an (vm-check)
+
+`vm-check` scheiterte ab und zu mit „color input not orange“ oder „preview
+picture dark“: strom beantwortete jede Abfrage des Abgriffs 20–30 s lang
+sofort mit 504, der Zweig war aktiv, es kam kein Bild. Dasselbe Muster in
+6 der 40 fehlgeschlagenen CI-Läufe seit 25.10. (zuletzt 41077744669).
+
+- **Ursache in strom** (`gst/thumbnail_tap.rs`): Beim ersten Abruf hängt
+  der Abgriff einen Zweig (Queue, Skalierer, Appsink) an das Tee. Er
+  verband das Tee-Pad, bevor die Elemente liefen, und startete sie dann
+  von der Queue abwärts. Ein Element, das noch nicht läuft, antwortet auf
+  einen Puffer mit FLUSHING; das Tee verzeiht mit `allow-not-linked` nur
+  NOT_LINKED und gibt FLUSHING nach oben. Die Quelle (oder der Compositor
+  beim Program-Abgriff) hält dann ihren Task an, ohne Fehler. Der Flow
+  gilt als laufend, Bild und Abgriff stehen.
+- **Entscheidung:** den Zweig von der Senke her starten und das Tee-Pad
+  erst danach verbinden (das übliche Vorgehen für Zweige an laufenden
+  Pipelines). Verworfen: das FLUSHING des Zweigs per Pad-Probe am Tee
+  schlucken (verdeckt nur den Fall, kostet eine Probe je Puffer) und im
+  Test länger warten (die Quelle kommt nie wieder).
+- **Beleg:** strom-Test `test_attaching_never_stops_the_tapped_chain`
+  (strom #55) hängt den Zweig 200-mal an eine Quelle ohne Takt an und ab; ohne die
+  Änderung steht die Kette schon beim ersten Mal, mit ihr nie.
