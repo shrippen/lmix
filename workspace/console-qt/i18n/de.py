@@ -1150,8 +1150,12 @@ DE = {
     'Sound follows picture': 'Ton folgt Bild',
     'Tap, outputs, remove': 'Abgriff, Ausgänge, löschen',
     'The headphones hear only the solos. Click: all again.': 'Der Kopfhörer hört nur die Solos. Klick: wieder alle.',
+    'Mark cue': 'Cue markieren',
+    'Unmark cue': 'Markierung entfernen',
+    'Marked: click to clear': 'Markiert: Klick entfernt die Markierung',
+    'Mark for a look later': 'Zum späteren Ansehen markieren',
+
     'Plays nowhere on this machine': 'Spielt auf diesem Rechner nirgends',
-    'Level of %1': 'Pegel von %1',
 
     'Cards on and off': 'Karten an und aus',
     'Colour band': 'Farbband',

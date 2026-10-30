@@ -4996,7 +4996,7 @@
   <context>
     <name>ShowView</name>
     <message>
-      <location filename="../qml/ShowView.qml" line="+62" />
+      <location filename="../qml/ShowView.qml" line="+64" />
       <source>starts cue %1, which is not there</source>
       <translation>startet Cue %1, den es nicht gibt</translation>
     </message>
@@ -5276,7 +5276,7 @@
       <translation>Folge</translation>
     </message>
     <message>
-      <location line="+69" />
+      <location line="+74" />
       <source>Open group</source>
       <translation>Gruppe aufklappen</translation>
     </message>
@@ -5286,7 +5286,27 @@
       <translation>Gruppe zuklappen</translation>
     </message>
     <message>
-      <location line="+74" />
+      <location line="+60" />
+      <source>Unmark cue</source>
+      <translation>Markierung entfernen</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Mark cue</source>
+      <translation>Cue markieren</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Marked: click to clear</source>
+      <translation>Markiert: Klick entfernt die Markierung</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Mark for a look later</source>
+      <translation>Zum späteren Ansehen markieren</translation>
+    </message>
+    <message>
+      <location line="+26" />
       <source>Standby</source>
       <translation>Standby</translation>
     </message>
@@ -7021,7 +7041,7 @@
   <context>
     <name>ZoneBar</name>
     <message>
-      <location filename="../qml/ZoneBar.qml" line="+53" />
+      <location filename="../qml/ZoneBar.qml" line="+60" />
       <source>Plays nowhere on this machine</source>
       <translation>Spielt auf diesem Rechner nirgends</translation>
     </message>

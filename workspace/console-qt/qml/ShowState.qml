@@ -110,6 +110,7 @@ QtObject {
     property var shortcuts
     property var cue_lists
     property var running_cues
+    property var ran_cues
     property var go_guard_ms
     property var go_rearm
     property var panic_ms
