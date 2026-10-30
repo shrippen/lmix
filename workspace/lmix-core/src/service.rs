@@ -874,11 +874,22 @@ impl Service {
                 peak_db: engine.buses.get(&bus.id).copied().and_then(fresh),
             })
             .collect();
+        let zones = sw
+            .show()
+            .zones
+            .iter()
+            .enumerate()
+            .map(|(i, zone)| lmix_types::ZonePeak {
+                zone: zone.name.clone(),
+                peak_db: engine.zones.get(&i).copied().and_then(fresh),
+            })
+            .collect();
         Levels {
             inputs,
             program_peak_db: engine.main.and_then(fresh),
             phones_peak_db: engine.monitor.and_then(fresh),
             buses,
+            zones,
         }
     }
 

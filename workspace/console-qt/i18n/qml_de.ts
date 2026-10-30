@@ -590,7 +590,7 @@
   <context>
     <name>AppShell</name>
     <message>
-      <location filename="../qml/AppShell.qml" line="+273" />
+      <location filename="../qml/AppShell.qml" line="+274" />
       <source>Ctrl</source>
       <comment>key</comment>
       <translation>Strg</translation>
@@ -1016,12 +1016,12 @@
     </message>
     <message>
       <location line="+17" />
-      <location line="+134" />
+      <location line="+141" />
       <source>Headphones</source>
       <translation>Kopfhörer</translation>
     </message>
     <message>
-      <location line="-91" />
+      <location line="-98" />
       <source>%1 ch.</source>
       <translation>%1 Kan.</translation>
     </message>
@@ -1036,7 +1036,7 @@
       <translation>Standardausgang</translation>
     </message>
     <message>
-      <location line="+8" />
+      <location line="+15" />
       <source>No zones yet</source>
       <translation>Noch keine Zonen</translation>
     </message>
@@ -1606,7 +1606,7 @@
       <translation>Nach links</translation>
     </message>
     <message>
-      <location line="+52" />
+      <location line="+57" />
       <source>ms</source>
       <comment>milliseconds</comment>
       <translation>ms</translation>
@@ -3094,12 +3094,12 @@
     </message>
     <message>
       <location line="+31" />
-      <location line="+417" />
+      <location line="+286" />
       <source>Audio page ›</source>
       <translation>Ton-Seite ›</translation>
     </message>
     <message>
-      <location line="-416" />
+      <location line="-285" />
       <source>Open the Audio page</source>
       <translation>Ton-Seite öffnen</translation>
     </message>
@@ -3167,12 +3167,12 @@
     </message>
     <message>
       <location line="+39" />
-      <location line="+58" />
+      <location line="+59" />
       <source>Master</source>
       <translation>Master</translation>
     </message>
     <message>
-      <location line="-57" />
+      <location line="-58" />
       <source>PGM</source>
       <comment>program sound, short</comment>
       <translation>PGM</translation>
@@ -3184,12 +3184,12 @@
     </message>
     <message>
       <location line="+14" />
-      <location line="+42" />
+      <location line="+43" />
       <source>Headphones</source>
       <translation>Kopfhörer</translation>
     </message>
     <message>
-      <location line="-41" />
+      <location line="-42" />
       <source>MON</source>
       <comment>listening, short</comment>
       <translation>MON</translation>
@@ -3200,7 +3200,7 @@
       <translation>Abhören</translation>
     </message>
     <message>
-      <location line="+41" />
+      <location line="+42" />
       <source>Bus “%1”</source>
       <translation>Bus „%1“</translation>
     </message>
@@ -3210,48 +3210,38 @@
       <translation>Input %1 %2</translation>
     </message>
     <message>
-      <location line="+48" />
-      <source>Sends to buses</source>
-      <translation>Sends an Busse</translation>
-    </message>
-    <message>
-      <location line="+7" />
+      <location line="+129" />
       <source>No bus yet. “+ Bus” below adds one.</source>
       <translation>Noch kein Bus. „+ Bus“ unten legt einen an.</translation>
     </message>
     <message>
-      <location line="+24" />
+      <location line="+25" />
       <source>Send to %1</source>
       <translation>Send an %1</translation>
     </message>
     <message>
       <location line="+13" />
-      <location line="+307" />
+      <location line="+285" />
       <source>off</source>
       <translation>aus</translation>
     </message>
     <message>
-      <location line="-300" />
-      <source>Channel strip: EQ, compressor …</source>
-      <translation>Kanalzug: EQ, Kompressor …</translation>
-    </message>
-    <message>
-      <location line="+10" />
+      <location line="-273" />
       <source>Sound follows picture</source>
       <translation>Ton folgt Bild</translation>
     </message>
     <message>
-      <location line="+18" />
+      <location line="-117" />
       <source>Name</source>
       <translation>Name</translation>
     </message>
     <message>
-      <location line="+44" />
+      <location line="+136" />
       <source>Before the faders</source>
       <translation>Vor den Fadern</translation>
     </message>
     <message>
-      <location line="+11" />
+      <location line="+10" />
       <source>On: the sends ignore the channel faders and on/off (a monitor mix).</source>
       <translation>An: Die Sends übergehen Kanalfader und Ein/Aus (eine Monitormischung).</translation>
     </message>
@@ -3261,27 +3251,52 @@
       <translation>Hört jeden Input mit KH in seiner Lautstärke dort; bei Solo nur die Solos.</translation>
     </message>
     <message>
-      <location line="+8" />
-      <source>Outputs with its sound:</source>
-      <translation>Ausgänge mit seinem Ton:</translation>
-    </message>
-    <message>
-      <location line="+21" />
+      <location line="+32" />
       <source>A running output plays on with the other sound; an ISO of an input without sound starts anew.</source>
       <translation>Ein laufender Ausgang spielt mit dem anderen Ton weiter; eine ISO eines Inputs ohne Ton startet neu.</translation>
     </message>
     <message>
-      <location line="+6" />
+      <location line="+43" />
       <source>Remove bus</source>
       <translation>Bus entfernen</translation>
     </message>
     <message>
-      <location line="+14" />
+      <location line="-35" />
       <source>Every output without a bus carries the master.</source>
       <translation>Jeder Ausgang ohne Bus führt den Master.</translation>
     </message>
     <message>
-      <location line="+65" />
+      <location line="-133" />
+      <source>Sends</source>
+      <translation>Sends</translation>
+    </message>
+    <message>
+      <location line="+52" />
+      <source>Sound</source>
+      <translation>Ton</translation>
+    </message>
+    <message>
+      <location line="+18" />
+      <source>Tap</source>
+      <translation>Abgriff</translation>
+    </message>
+    <message>
+      <location line="+30" />
+      <source>Outputs with its sound</source>
+      <translation>Ausgänge mit seinem Ton</translation>
+    </message>
+    <message>
+      <location line="+52" />
+      <source>Channel strip…</source>
+      <translation>Kanalzug …</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>EQ, compressor …</source>
+      <translation>EQ, Kompressor …</translation>
+    </message>
+    <message>
+      <location line="+79" />
       <source>Volume of %1</source>
       <translation>Lautstärke von %1</translation>
     </message>
@@ -3386,17 +3401,17 @@
       <translation>%1 · Klick: umbenennen</translation>
     </message>
     <message>
-      <location line="-330" />
+      <location line="-448" />
       <source>Name of the bus</source>
       <translation>Name des Busses</translation>
     </message>
     <message>
-      <location line="+72" />
+      <location line="+168" />
       <source>No output with sound yet.</source>
       <translation>Noch kein Ausgang mit Ton.</translation>
     </message>
     <message>
-      <location line="+292" />
+      <location line="+314" />
       <source>Tap, outputs, remove</source>
       <translation>Abgriff, Ausgänge, löschen</translation>
     </message>
@@ -4981,7 +4996,7 @@
   <context>
     <name>ShowView</name>
     <message>
-      <location filename="../qml/ShowView.qml" line="+59" />
+      <location filename="../qml/ShowView.qml" line="+62" />
       <source>starts cue %1, which is not there</source>
       <translation>startet Cue %1, den es nicht gibt</translation>
     </message>
@@ -5402,9 +5417,29 @@
       <translation>Alle Streams stoppen?</translation>
     </message>
     <message>
-      <location line="+2" />
-      <source>Stop</source>
-      <translation>Stopp</translation>
+      <location line="+3" />
+      <source>Stop output</source>
+      <translation>Ausgang stoppen</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Stop recordings</source>
+      <translation>Aufnahmen stoppen</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Stop recordings and streams</source>
+      <translation>Aufnahmen und Streams stoppen</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Stop all outputs</source>
+      <translation>Alle Ausgänge stoppen</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Stop streams</source>
+      <translation>Streams stoppen</translation>
     </message>
     <message>
       <location line="+23" />
@@ -6373,7 +6408,7 @@
   <context>
     <name>TileSizePicker</name>
     <message>
-      <location filename="../qml/TileSizePicker.qml" line="+25" />
+      <location filename="../qml/TileSizePicker.qml" line="+26" />
       <source>S</source>
       <comment>small tiles</comment>
       <translation>S</translation>
@@ -6981,6 +7016,34 @@
       <location line="+12" />
       <source>+ Trigger</source>
       <translation>+ Auslöser</translation>
+    </message>
+  </context>
+  <context>
+    <name>ZoneBar</name>
+    <message>
+      <location filename="../qml/ZoneBar.qml" line="+53" />
+      <source>Plays nowhere on this machine</source>
+      <translation>Spielt auf diesem Rechner nirgends</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Mute</source>
+      <translation>Stumm</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>Level of %1</source>
+      <translation>Pegel von %1</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>Volume of %1</source>
+      <translation>Lautstärke von %1</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>%1 dB</source>
+      <translation>%1 dB</translation>
     </message>
   </context>
   <context>

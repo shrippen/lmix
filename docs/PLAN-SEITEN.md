@@ -212,8 +212,7 @@ Aus dem Dummy noch offen, **nur Oberfläche** (der Kern kann es):
 
 **Braucht den Kern** (Lastenheft offen): Pause je Cue und alles (RUN.5),
 Vorhören (RUN.10), Pads/Raster (RUN.12), Sperren je Ein-/Ausgabeklasse
-(RUN.9), Markierung und „gelaufen“ (SUI.12), Zonen-Leiste mit Pegeln
-(SUI.8), Pause inputs (INP.12), Dateiteilung und Namensmuster (REC.4,
+(RUN.9), Markierung und „gelaufen“ (SUI.12), Pause inputs (INP.12), Dateiteilung und Namensmuster (REC.4,
 REC.5), Marken ins Protokoll (REC.8), Sendeverzögerung (STR.5), Puffer und
 Encoder-Last (STR.7), Vorlagen und Assistent (UI.13).
 

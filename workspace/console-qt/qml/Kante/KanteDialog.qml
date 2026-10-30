@@ -14,12 +14,56 @@ import "."
  * the button's own `enabled` stays as the app bound it). Both hold
  * for the footer of every style, also after a switch at run time (Kante has its own footer;
  * a text or lock set on the button itself was lost there).
+ * Size (Kante 1.55, from lmix): `size` Small, Medium or Large is 24, 36 or 48 grid units
+ * wide and at most 90 % of the window, also in height (taller content scrolls in the app's
+ * own ScrollView; the dialog does not clip it); Fit (default) sizes to the content as
+ * before.
+ * Destructive (Kante 1.55, from lmix): a question whose yes removes or resets something:
+ * the bar on top and the accept button in the negative colour, Cancel before it; the
+ * button says what goes (`acceptText: "Remove bus"`). In the Kante style only: System and
+ * Kante Light keep the platform's dialog and button order.
+ * Since 1.55 `acceptText` also holds when the button box sets its standard texts again
+ * (a language change, also the one at start with the app's translations): it read "OK"
+ * in German before.
  */
 QQC2.Dialog {
     id: control
 
+    enum Size { Fit, Small, Medium, Large }
+    /** Width by step (see above); Fit: the content's. */
+    property int size: KanteDialog.Size.Fit
+    /** The yes removes or resets something (see above). */
+    property bool destructive: false
     /** Color of the bar on top in Kante (accent; negative for destructive questions). */
-    property color kanteBarColor: KanteStyle.accentColor
+    property color kanteBarColor: destructive ? KanteStyle.negativeTextColor : KanteStyle.accentColor
+
+    /** Width of `size` in pixels, 0 for Fit. */
+    readonly property real sizeWidth: size === KanteDialog.Size.Small ? Kirigami.Units.gridUnit * 24
+        : size === KanteDialog.Size.Medium ? Kirigami.Units.gridUnit * 36
+        : size === KanteDialog.Size.Large ? Kirigami.Units.gridUnit * 48 : 0
+    // The window, not the parent item (a dialog may hang on a small one); no limit
+    // before it has one.
+    readonly property real kanteRoomWidth: control.parent && control.parent.Window.width > 0 ? control.parent.Window.width : Infinity
+    readonly property real kanteRoomHeight: control.parent && control.parent.Window.height > 0 ? control.parent.Window.height : Infinity
+    // Only for a size step: a width or height set here counts as the app's, and Qt no longer
+    // fits a Fit dialog taller than the window into it. Back to Fit they are reset, not
+    // restored: a restored value would count as the app's too.
+    Binding on width {
+        when: control.sizeWidth > 0
+        value: Math.min(control.sizeWidth, control.kanteRoomWidth * 0.9)
+        restoreMode: Binding.RestoreNone
+    }
+    Binding on height {
+        when: control.sizeWidth > 0
+        value: Math.min(control.implicitHeight, control.kanteRoomHeight * 0.9)
+        restoreMode: Binding.RestoreNone
+    }
+    onSizeWidthChanged: {
+        if (sizeWidth === 0) {
+            width = undefined
+            height = undefined
+        }
+    }
     /** Text of the accept button (Ok, Save, Apply, Yes); "": the standard one. */
     property string acceptText: ""
     /** The accept button can be pressed; undefined (default): Kante leaves `enabled` alone,
@@ -49,8 +93,24 @@ QQC2.Dialog {
         let kept = standardTexts.find(pair => pair[0] === button)
         if (acceptText.length > 0) {
             if (!kept) {
-                standardTexts.push([button, button.text])
+                // The button, its standard text, the name set last.
+                kept = [button, button.text, ""]
+                standardTexts.push(kept)
+                // The button box sets the standard texts again when the language changes
+                // (at start, once the app's translations are in): the name comes back on
+                // top, and the new standard text is the one to give back.
+                button.textChanged.connect(() => {
+                    if (control.acceptText.length > 0 && button.text !== control.acceptText) {
+                        kept[1] = button.text
+                        button.text = control.acceptText
+                    }
+                })
+            } else if (button.text !== acceptText && button.text !== kept[2]) {
+                // Its standard text may have changed while unset (a language change); the
+                // name set last is no standard text.
+                kept[1] = button.text
             }
+            kept[2] = acceptText
             button.text = acceptText
         } else if (kept) {
             button.text = kept[1]
@@ -101,9 +161,21 @@ QQC2.Dialog {
         spacing: Kirigami.Units.smallSpacing
         padding: control.padding
         background: null
+        // Cancel before the red button (lmix rule 1): whoever reads from the left meets
+        // the way out first.
+        Binding on buttonLayout {
+            when: control.destructive
+            value: QQC2.DialogButtonBox.GnomeLayout
+            restoreMode: Binding.RestoreBindingOrValue
+        }
+        // Yes accepts a yes/no question: red there too, as Ok.
         delegate: KanteButton {
-            emphasis: QQC2.DialogButtonBox.buttonRole === QQC2.DialogButtonBox.AcceptRole
-                      ? KanteButton.Emphasis.Primary : KanteButton.Emphasis.Normal
+            readonly property int role: QQC2.DialogButtonBox.buttonRole
+            emphasis: role === QQC2.DialogButtonBox.AcceptRole
+                      ? (control.destructive ? KanteButton.Emphasis.Destructive : KanteButton.Emphasis.Primary)
+                      : role === QQC2.DialogButtonBox.YesRole && control.destructive
+                      ? KanteButton.Emphasis.Destructive
+                      : KanteButton.Emphasis.Normal
         }
     }
 

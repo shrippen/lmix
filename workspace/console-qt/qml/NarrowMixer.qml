@@ -355,7 +355,8 @@ KanteCard {
         readonly property bool isPhones: key === mixer.phonesKey
         readonly property var bus: mixer.buses.find(b => b.id === key) || null
         readonly property var input: !isMaster && !isPhones && !bus ? (mixer.show && mixer.show.inputById ? mixer.show.inputById(key) : StatePatch.byId(mixer.soundInputs, key)) || null : null
-        title: isMaster ? qsTr("Master") : isPhones ? qsTr("Headphones")
+        /** The name on top, where no field holds it (all but a bus). */
+        readonly property string heading: isMaster ? qsTr("Master") : isPhones ? qsTr("Headphones")
             : bus ? qsTr("Bus “%1”").arg(bus.name) : input ? qsTr("Input %1 %2").arg(input.number).arg(input.name) : ""
         onClosed: {
             // Closed to open another strip's: with a fade out, Qt may say
@@ -401,207 +402,260 @@ KanteCard {
             }
         }
 
-        // An input: its sends, the channel strip, sound follows picture.
-        KanteSectionLabel {
-            visible: menu.input !== null
-            text: qsTr("Sends to buses")
-        }
-        QQC2.Label {
-            visible: menu.input !== null && mixer.buses.length === 0
-            width: Kirigami.Units.gridUnit * 14
-            wrapMode: Text.WordWrap
-            color: KanteStyle.mutedTextColor
-            text: qsTr("No bus yet. “+ Bus” below adds one.")
-        }
-        // Rows by bus id: a new state (every send step brings one) keeps
-        // them, so a send drag goes on.
-        Repeater {
-            model: menu.input ? menuBuses : null
+        // P02 A (docs/DESIGN-DIALOGE.md): the name and the audio page on
+        // top, groups with a heading, switches, the strip and Remove in
+        // the foot. One width: texts wrap, the menu does not jump.
+        ColumnLayout {
+            width: Kirigami.Units.gridUnit * 18
+            spacing: Kirigami.Units.smallSpacing
+
             RowLayout {
-                id: sendRow
-                required property string key
-                readonly property var modelData: mixer.busOf(key)
-                readonly property int level: menu.input && menu.input.sends && menu.input.sends[key] !== undefined
-                    ? menu.input.sends[key] : 0
+                Layout.fillWidth: true
+                // A bus: its name. In the menu, not the strip: a field there
+                // kept the focus and took the shortcut keys.
+                KanteTextField {
+                    id: nameField
+                    visible: menu.bus !== null
+                    Layout.fillWidth: true
+                    maximumLength: mixer.limits.name_max
+                    Accessible.name: qsTr("Name of the bus")
+                    placeholderText: qsTr("Name")
+                    /** The bus being renamed. Only closing renames (Enter closes):
+                     *  losing the focus to another window must not. */
+                    property string busId: ""
+                    /** The name when it opened: only what was typed renames, not a
+                     *  rename from elsewhere while the menu was open. */
+                    property string openedName: ""
+                    // Renamed elsewhere before anything was typed: show the new name.
+                    readonly property string busName: menu.bus ? menu.bus.name : ""
+                    onBusNameChanged: {
+                        if (menu.opened && busId === (menu.bus ? menu.bus.id : "") && text === openedName) {
+                            openedName = busName
+                            text = busName
+                        }
+                    }
+                    Connections {
+                        target: menu
+                        function onAboutToShow() {
+                            nameField.busId = menu.bus ? menu.bus.id : ""
+                            nameField.openedName = menu.bus ? menu.bus.name : ""
+                            nameField.text = nameField.openedName
+                        }
+                        function onAboutToHide() {
+                            const bus = mixer.buses.find(b => b.id === nameField.busId)
+                            nameField.busId = ""
+                            const wanted = nameField.text.trim()
+                            if (bus && wanted.length > 0 && wanted !== nameField.openedName && wanted !== bus.name) {
+                                mixer.act({ action: "rename_bus", bus: bus.id, name: wanted })
+                            }
+                        }
+                    }
+                    onAccepted: menu.close()
+                    // Esc: the name stays as it was.
+                    Keys.onEscapePressed: {
+                        busId = ""
+                        menu.close()
+                    }
+                }
                 QQC2.Label {
-                    Layout.preferredWidth: Kirigami.Units.gridUnit * 5
-                    text: sendRow.modelData.name
+                    visible: menu.bus === null
+                    Layout.fillWidth: true
+                    text: menu.heading
+                    font.bold: true
                     elide: Text.ElideRight
                 }
-                QQC2.Slider {
-                    id: sendSlider
-                    Layout.preferredWidth: Kirigami.Units.gridUnit * 7
-                    from: 0
-                    to: 100
-                    stepSize: 1
-                    value: sendRow.level
-                    Accessible.name: qsTr("Send to %1").arg(sendRow.modelData.name)
-                    onMoved: sendThrottle.push(Math.round(value))
-                    onPressedChanged: if (!pressed) { sendThrottle.flush() }
-                    KanteSliderSkin { control: sendSlider }
-                    MoveThrottle {
-                        id: sendThrottle
-                        onPassed: level => mixer.act({ action: "set_send", input: menu.input.number, bus: sendRow.modelData.id, level: level })
-                    }
-                }
-                QQC2.Label {
-                    Layout.preferredWidth: Kirigami.Units.gridUnit * 2
-                    horizontalAlignment: Text.AlignRight
-                    font.family: KanteStyle.monoFamily
-                    text: sendSlider.value > 0 ? sendSlider.value.toFixed(0) : qsTr("off")
-                }
-            }
-        }
-        KanteButton {
-            visible: menu.input !== null
-            emphasis: KanteButton.Emphasis.Quiet
-            text: qsTr("Channel strip: EQ, compressor …")
-            onClicked: {
-                stripDialog.inputId = menu.input.id
-                menu.close()
-                stripDialog.open()
-            }
-        }
-        QQC2.Switch {
-            id: followSwitch
-            visible: menu.input !== null
-            text: qsTr("Sound follows picture")
-            checked: menu.input ? menu.input.audio.follow_video : false
-            onToggled: {
-                const want = checked
-                checked = Qt.binding(() => menu.input ? menu.input.audio.follow_video : false)
-                mixer.act({ action: "set_audio_follow", input: menu.input.number, follow: want })
-            }
-            KanteCheckSkin { control: followSwitch; shape: KanteCheckSkin.Shape.Switch }
-        }
-
-        // A bus: its name. In the menu, not the strip: a field there kept
-        // the focus and took the shortcut keys.
-        KanteTextField {
-            id: nameField
-            visible: menu.bus !== null
-            width: Kirigami.Units.gridUnit * 14
-            maximumLength: mixer.limits.name_max
-            Accessible.name: qsTr("Name of the bus")
-            placeholderText: qsTr("Name")
-            /** The bus being renamed. Only closing renames (Enter closes):
-             *  losing the focus to another window must not. */
-            property string busId: ""
-            /** The name when it opened: only what was typed renames, not a
-             *  rename from elsewhere while the menu was open. */
-            property string openedName: ""
-            // Renamed elsewhere before anything was typed: show the new name.
-            readonly property string busName: menu.bus ? menu.bus.name : ""
-            onBusNameChanged: {
-                if (menu.opened && busId === (menu.bus ? menu.bus.id : "") && text === openedName) {
-                    openedName = busName
-                    text = busName
-                }
-            }
-            Connections {
-                target: menu
-                function onAboutToShow() {
-                    nameField.busId = menu.bus ? menu.bus.id : ""
-                    nameField.openedName = menu.bus ? menu.bus.name : ""
-                    nameField.text = nameField.openedName
-                }
-                function onAboutToHide() {
-                    const bus = mixer.buses.find(b => b.id === nameField.busId)
-                    nameField.busId = ""
-                    const wanted = nameField.text.trim()
-                    if (bus && wanted.length > 0 && wanted !== nameField.openedName && wanted !== bus.name) {
-                        mixer.act({ action: "rename_bus", bus: bus.id, name: wanted })
+                KanteButton {
+                    emphasis: KanteButton.Emphasis.Quiet
+                    size: KanteButton.Size.Small
+                    text: qsTr("Audio page ›")
+                    onClicked: {
+                        menu.close()
+                        mixer.audioPageRequested()
                     }
                 }
             }
-            onAccepted: menu.close()
-            // Esc: the name stays as it was.
-            Keys.onEscapePressed: {
-                busId = ""
-                menu.close()
-            }
-        }
 
-        // A bus or the headphones: where the sends are taken.
-        QQC2.Switch {
-            id: tapSwitch
-            visible: menu.bus !== null || menu.isPhones
-            readonly property bool tap: menu.bus ? menu.bus.pre_fader : mixer.phones.pre_fader
-            text: qsTr("Before the faders")
-            checked: tap
-            onToggled: {
-                const want = checked
-                checked = Qt.binding(() => tapSwitch.tap)
-                mixer.act(menu.bus ? { action: "set_bus_tap", bus: menu.bus.id, pre_fader: want }
-                    : { action: "set_phones_tap", pre_fader: want })
+            // An input: its sends, sound follows picture.
+            KanteSectionLabel {
+                visible: menu.input !== null
+                Layout.fillWidth: true
+                text: qsTr("Sends")
             }
-            KanteCheckSkin { control: tapSwitch; shape: KanteCheckSkin.Shape.Switch }
-            QQC2.ToolTip.visible: hovered
-            QQC2.ToolTip.delay: Kirigami.Units.toolTipDelay
-            QQC2.ToolTip.text: qsTr("On: the sends ignore the channel faders and on/off (a monitor mix).")
-        }
-        QQC2.Label {
-            visible: menu.isPhones
-            width: Kirigami.Units.gridUnit * 14
-            wrapMode: Text.WordWrap
-            color: KanteStyle.mutedTextColor
-            text: qsTr("Hears every input with PH at its level there; while one is solo, only the solos.")
-        }
-        QQC2.Label {
-            visible: menu.bus !== null
-            width: Kirigami.Units.gridUnit * 14
-            wrapMode: Text.WordWrap
-            color: KanteStyle.mutedTextColor
-            text: mixer.soundOutputs.length > 0
-                ? qsTr("Outputs with its sound:")
-                : qsTr("No output with sound yet.")
-        }
-        // Ticked: the output's sound is this bus; unticked: its source's own.
-        Repeater {
-            model: menu.bus ? mixer.soundOutputs : []
-            delegate: QQC2.CheckBox {
-                id: outputBox
-                required property var modelData
-                focusPolicy: Qt.NoFocus
-                text: modelData.name
-                checked: menu.bus !== null && mixer.outputBusOf(modelData.id) === menu.bus.id
+            QQC2.Label {
+                visible: menu.input !== null && mixer.buses.length === 0
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                color: KanteStyle.mutedTextColor
+                text: qsTr("No bus yet. “+ Bus” below adds one.")
+            }
+            // Rows by bus id: a new state (every send step brings one) keeps
+            // them, so a send drag goes on.
+            Repeater {
+                model: menu.input ? menuBuses : null
+                RowLayout {
+                    id: sendRow
+                    required property string key
+                    readonly property var modelData: mixer.busOf(key)
+                    readonly property int level: menu.input && menu.input.sends && menu.input.sends[key] !== undefined
+                        ? menu.input.sends[key] : 0
+                    Layout.fillWidth: true
+                    QQC2.Label {
+                        Layout.preferredWidth: Kirigami.Units.gridUnit * 5
+                        text: sendRow.modelData.name
+                        elide: Text.ElideRight
+                    }
+                    QQC2.Slider {
+                        id: sendSlider
+                        Layout.fillWidth: true
+                        from: 0
+                        to: 100
+                        stepSize: 1
+                        value: sendRow.level
+                        Accessible.name: qsTr("Send to %1").arg(sendRow.modelData.name)
+                        onMoved: sendThrottle.push(Math.round(value))
+                        onPressedChanged: if (!pressed) { sendThrottle.flush() }
+                        KanteSliderSkin { control: sendSlider }
+                        MoveThrottle {
+                            id: sendThrottle
+                            onPassed: level => mixer.act({ action: "set_send", input: menu.input.number, bus: sendRow.modelData.id, level: level })
+                        }
+                    }
+                    QQC2.Label {
+                        Layout.preferredWidth: Kirigami.Units.gridUnit * 2
+                        horizontalAlignment: Text.AlignRight
+                        font.family: KanteStyle.monoFamily
+                        text: sendSlider.value > 0 ? sendSlider.value.toFixed(0) : qsTr("off")
+                    }
+                }
+            }
+            KanteSectionLabel {
+                visible: menu.input !== null
+                Layout.fillWidth: true
+                text: qsTr("Sound")
+            }
+            KanteSwitch {
+                id: followSwitch
+                visible: menu.input !== null
+                text: qsTr("Sound follows picture")
+                checked: menu.input ? menu.input.audio.follow_video : false
                 onToggled: {
                     const want = checked
-                    checked = Qt.binding(() => menu.bus !== null && mixer.outputBusOf(outputBox.modelData.id) === menu.bus.id)
-                    mixer.act({ action: "set_output_bus", output: modelData.id,
-                                bus: want ? menu.bus.id : null })
+                    checked = Qt.binding(() => menu.input ? menu.input.audio.follow_video : false)
+                    mixer.act({ action: "set_audio_follow", input: menu.input.number, follow: want })
                 }
-                KanteCheckSkin { control: outputBox }
+            }
+
+            // A bus or the headphones: where the sends are taken.
+            KanteSectionLabel {
+                visible: menu.bus !== null || menu.isPhones
+                Layout.fillWidth: true
+                text: qsTr("Tap")
+            }
+            KanteSwitch {
+                id: tapSwitch
+                visible: menu.bus !== null || menu.isPhones
+                readonly property bool tap: menu.bus ? menu.bus.pre_fader : mixer.phones.pre_fader
+                text: qsTr("Before the faders")
+                checked: tap
+                onToggled: {
+                    const want = checked
+                    checked = Qt.binding(() => tapSwitch.tap)
+                    mixer.act(menu.bus ? { action: "set_bus_tap", bus: menu.bus.id, pre_fader: want }
+                        : { action: "set_phones_tap", pre_fader: want })
+                }
                 QQC2.ToolTip.visible: hovered
                 QQC2.ToolTip.delay: Kirigami.Units.toolTipDelay
-                QQC2.ToolTip.text: qsTr("A running output plays on with the other sound; an ISO of an input without sound starts anew.")
+                QQC2.ToolTip.text: qsTr("On: the sends ignore the channel faders and on/off (a monitor mix).")
             }
-        }
-        KanteButton {
-            visible: menu.bus !== null
-            emphasis: KanteButton.Emphasis.Destructive
-            text: qsTr("Remove bus")
-            onClicked: {
-                const bus = menu.bus
-                // Removed, not renamed.
-                nameField.busId = ""
-                menu.close()
-                mixer.askRemove("bus", bus)
+            QQC2.Label {
+                visible: menu.isPhones
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                color: KanteStyle.mutedTextColor
+                text: qsTr("Hears every input with PH at its level there; while one is solo, only the solos.")
             }
-        }
-        QQC2.Label {
-            visible: menu.isMaster
-            width: Kirigami.Units.gridUnit * 14
-            wrapMode: Text.WordWrap
-            color: KanteStyle.mutedTextColor
-            text: qsTr("Every output without a bus carries the master.")
-        }
-        KanteButton {
-            emphasis: KanteButton.Emphasis.Quiet
-            text: qsTr("Audio page ›")
-            onClicked: {
-                menu.close()
-                mixer.audioPageRequested()
+            // A bus: the outputs that carry it. On: the output's sound is
+            // this bus; off: its source's own.
+            KanteSectionLabel {
+                visible: menu.bus !== null
+                Layout.fillWidth: true
+                text: qsTr("Outputs with its sound")
+            }
+            QQC2.Label {
+                visible: menu.bus !== null && mixer.soundOutputs.length === 0
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                color: KanteStyle.mutedTextColor
+                text: qsTr("No output with sound yet.")
+            }
+            Repeater {
+                model: menu.bus ? mixer.soundOutputs : []
+                delegate: KanteSwitch {
+                    id: outputSwitch
+                    required property var modelData
+                    focusPolicy: Qt.NoFocus
+                    text: modelData.name
+                    checked: menu.bus !== null && mixer.outputBusOf(modelData.id) === menu.bus.id
+                    onToggled: {
+                        const want = checked
+                        checked = Qt.binding(() => menu.bus !== null && mixer.outputBusOf(outputSwitch.modelData.id) === menu.bus.id)
+                        mixer.act({ action: "set_output_bus", output: modelData.id,
+                                    bus: want ? menu.bus.id : null })
+                    }
+                    QQC2.ToolTip.visible: hovered
+                    QQC2.ToolTip.delay: Kirigami.Units.toolTipDelay
+                    QQC2.ToolTip.text: qsTr("A running output plays on with the other sound; an ISO of an input without sound starts anew.")
+                }
+            }
+            QQC2.Label {
+                visible: menu.isMaster
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                color: KanteStyle.mutedTextColor
+                text: qsTr("Every output without a bus carries the master.")
+            }
+
+            // The foot: the strip on the left, Remove on the right, both quiet.
+            Rectangle {
+                visible: foot.visible
+                Layout.fillWidth: true
+                Layout.topMargin: Kirigami.Units.smallSpacing
+                implicitHeight: 1
+                color: KanteStyle.ruleColor
+            }
+            RowLayout {
+                id: foot
+                visible: menu.input !== null || menu.bus !== null
+                Layout.fillWidth: true
+                KanteButton {
+                    visible: menu.input !== null
+                    emphasis: KanteButton.Emphasis.Quiet
+                    size: KanteButton.Size.Small
+                    text: qsTr("Channel strip…")
+                    QQC2.ToolTip.visible: hovered
+                    QQC2.ToolTip.delay: Kirigami.Units.toolTipDelay
+                    QQC2.ToolTip.text: qsTr("EQ, compressor …")
+                    onClicked: {
+                        stripDialog.inputId = menu.input.id
+                        menu.close()
+                        stripDialog.open()
+                    }
+                }
+                Item { Layout.fillWidth: true }
+                KanteButton {
+                    visible: menu.bus !== null
+                    emphasis: KanteButton.Emphasis.Quiet
+                    destructive: true
+                    size: KanteButton.Size.Small
+                    text: qsTr("Remove bus")
+                    onClicked: {
+                        const bus = menu.bus
+                        // Removed, not renamed.
+                        nameField.busId = ""
+                        menu.close()
+                        mixer.askRemove("bus", bus)
+                    }
+                }
             }
         }
     }

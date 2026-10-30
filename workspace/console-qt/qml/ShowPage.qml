@@ -55,6 +55,7 @@ AppPage {
         act: root.shell.act
         show: root.shell.show
         core: root.shell.backend
+        levels: root.shell.levels
         advanced: viewSettings.showAdvanced
         onAdvancedChanged: viewSettings.showAdvanced = advanced
         darkRoom: viewSettings.darkRoom

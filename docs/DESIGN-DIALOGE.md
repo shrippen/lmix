@@ -1,12 +1,12 @@
 # Dialoge, Menüs und Popovers: Entscheidungen
 
-Stand 2026-10-29. **Entschieden (User)** über die Wahlseite der Design-Durchsicht.
+Stand 2026-10-30. **Entschieden (User)** über die Wahlseite der Design-Durchsicht.
 Quelle der Tafeln: Canvas „lmix: Popups und Menüs“
 (https://claude.ai/artifact/65MRcnoQmnS57Rfe8itDve). Dort ist die gewählte Spalte jeder
 Tafel markiert, und die Notiz des Users steht darunter. Die Antworten auf die Nachfragen
 liegen in einem eigenen Artefakt, „lmix Nachfragen“
-(https://claude.ai/artifact/8L3Lw8VsEJUGm4Rafnpyn8). Runde 1 der Nachfragen ist beantwortet
-(Abschnitt „Antworten auf die Nachfragen“), Runde 2 steht oben auf derselben Seite.
+(https://claude.ai/artifact/8L3Lw8VsEJUGm4Rafnpyn8). Beide Runden der Nachfragen
+sind beantwortet (Abschnitt „Antworten auf die Nachfragen“).
 
 Dieses Dokument ist die verbindliche Vorgabe für den Umbau der QML-Oberfläche
 (`workspace/console-qt/qml`). Was hier nicht steht, bleibt wie heute. Bausteine, die
@@ -55,7 +55,7 @@ Regel, gilt die Regel.
    - Dazu kommt der Knopf „Als Fenster lösen“. Das Fenster zeigt alle vier Scopes, lässt
      sich auf einen zweiten Monitor ziehen (Ort und Größe bleiben gespeichert), folgt dem
      Blatt oder hält einen Input fest. Schließen holt die Scopes in die Leiste zurück. Die
-     Werte misst die Engine; die GUI zeigt sie nur an. Entwurf in Runde 2 der Nachfragen.
+     Werte misst die Engine; die GUI zeigt sie nur an. Entwurf in Runde 2 der Nachfragen, bestätigt.
 5. **Icons in Menüs:**
    - Icons bekommen die häufigen Handlungen, und zwar nicht übermäßig, aber überall dort,
      wo es ein eindeutiges Icon gibt (Notiz zu M03).
@@ -84,8 +84,8 @@ kommt.
 | D03 Master, Kopfhörer und Busse | A | Jeder Bus als Karte mit Zahlenwert und Abgriff im Klartext. **Abweichend von A:** Entfernen mit Rückfrage und Toast (Regel 1). **Neu:** Name und Farbe der Busse sind hier bearbeitbar; der Entwurf im Antworten-Artefakt ist so übernommen | Entfernen mit Rückfrage! Außerdem soll man hier Namen und Farbe der Busse bearbeiten können. |
 | D04 Belegungen | B | Liste links, Bearbeiten rechts, Änderungen gelten sofort; „Belegung bearbeiten“ entfällt als zweiter Dialog | – |
 | D05 Zonen | B | Liste links, gewählte Zone rechts, Änderungen gelten sofort (gleiches Muster wie D04) | – |
-| D06 PTZ | geändert | **Nur das Seitenblatt** (Regel 3), kein Popover: Steuerkreuz aus Icons mit 44 px, Tempo, Zoom, **Fokus als Regler mit Knopf „Auto“** (bei Auto ruht der Regler und zeigt den Wert, Ziehen schaltet Auto aus), Positionen 1–8 als Raster mit Abrufen oder Speichern als sichtbarem Modus; die Adresse in den Einstellungen. **Dazu in der Detail-Kachel** (Ansicht → Detail) bei PTZ-Inputs die Positionen 1–4 und vier Pfeile für kleine Korrekturen (Umschalt: größerer Schritt), abschaltbar im Popover Ansicht. Ob die Knöpfe als eigene Zeile (A) oder auf dem Bild (B) sitzen, ist offen (Runde 2) | A und B umsetzen. Nachfrage: „Ich will nur das Seitenblatt. Darin für Fokus auch einen Slider und den Knopf für Auto. Für PTZ-Inputs in der erweiterten Kachelansicht die Positionen 1–4 und die Pfeiltasten als Option, damit man ohne extra etwas aufzurufen kleine Korrekturen machen kann.“ |
-| D07 Cue-Listen | Clickdummy, Abgleich offen | Show-Seite wie im Clickdummy: Listen links, Cues auf der Seite bearbeiten, Inspector rechts; der Dialog „Cues…“ entfällt. Runde 2 prüft den Dummy gegen `LASTENHEFT-SHOW.md` (Standby je Liste, Folgen, Gruppe, Panik und harter Stopp, Notfall-Liste, Warnliste, Dunkel, Erweitert) und listet, was der Seite noch fehlt | Das brauche ich wohl als Clickdummy der ganzen Seite. Nachfrage: „Sieht auf den ersten Blick gut aus, vergleiche nochmal mit Lastenheft von qlab.“ |
+| D06 PTZ | geändert | **Nur das Seitenblatt** (Regel 3), kein Popover: Steuerkreuz aus Icons mit 44 px, Tempo, Zoom, **Fokus als Regler mit Knopf „Auto“** (bei Auto ruht der Regler und zeigt den Wert, Ziehen schaltet Auto aus), Positionen 1–8 als Raster mit Abrufen oder Speichern als sichtbarem Modus; die Adresse in den Einstellungen. **Dazu in der Detail-Kachel** (Ansicht → Detail) bei PTZ-Inputs die Positionen 1–4 und vier Pfeile für kleine Korrekturen (Umschalt: größerer Schritt), abschaltbar im Popover Ansicht. Die Knöpfe liegen **auf dem Bild** (B, Runde 2): Pfeile an den Rändern, Positionen unten links; sie erscheinen bei Maus über dem Bild oder Fokus auf der Kachel, dann gehen auch die Pfeiltasten. Die Kachel wird nicht höher | A und B umsetzen. Nachfrage: „Ich will nur das Seitenblatt. Darin für Fokus auch einen Slider und den Knopf für Auto. Für PTZ-Inputs in der erweiterten Kachelansicht die Positionen 1–4 und die Pfeiltasten als Option, damit man ohne extra etwas aufzurufen kleine Korrekturen machen kann.“ |
+| D07 Cue-Listen | Clickdummy, bestätigt | Show-Seite wie im Clickdummy: Listen links, Cues auf der Seite bearbeiten, Inspector rechts; der Dialog „Cues…“ entfällt. Der Dummy aus Runde 2 ist gegen `LASTENHEFT-SHOW.md` geprüft und bestätigt (Standby je Liste, Folgen und Wartezeiten, Gruppe als Zeitleiste, Notiz- und Warte-Cues, unscharfe Cues, Pausieren, Vorhören, Zurücksetzen, Panik über die Panikdauer und harter Stopp, Notfall-Liste, Warnliste, Dunkel, Bühnenvorschau, Erweitert); was ihm fehlt, steht unter „Offene Punkte“ | Das brauche ich wohl als Clickdummy der ganzen Seite. Nachfrage: „Sieht auf den ersten Blick gut aus, vergleiche nochmal mit Lastenheft von qlab.“ |
 | D08 Datenquellen | B | Zweistufig: erst Datei und Art, dann die Vorschau prüfen; danach eine schlanke Liste. Abspielen gehört an den Titel-Kanal | – |
 | D09 Input-Einstellungen | Heute | Bleibt bei den Tabs | – |
 | D10 Ziele und Abonnenten | A | Zwei Tabs, je eine Liste; Bearbeiten öffnet das Formular als Dialog mit Speichern im Fuß | – |
@@ -101,7 +101,7 @@ kommt.
 | F04 Inputs aus einer Show | A | Liste mit fester Höhe und Scrollen, „Alle/Keine“, die Anzahl im primären Knopf, der Dateiname im Titel | – |
 | F05 Stinger | B | Zeitleiste mit Vorschaubild; Cut-Marke und Ende ziehen. **Dazu:** Pfeiltasten gehen Bild für Bild weiter, Umschalt 10 Bilder (Entwurf im Antworten-Artefakt so übernommen) | Mit den Pfeiltasten kann man Bild für Bild durchgehen. |
 | F06 Belegung bearbeiten | B | Entfällt als eigener Dialog (siehe D04 B) | – |
-| F07 Overlay-Kanal | Mischung | Aus B die Box im 16:9-Rahmen zum Ziehen (die Vorschau ist wichtig), aus A die Gruppen und die Prozentfelder für genaue Werte (Entwurf übernommen). **Neu:** Seitenverhältnis der Box festlegbar (Frei, Wie Quelle, 16:9, 4:3, 1:1, 9:16); gekoppelt folgt Höhe der Breite und umgekehrt, in Pixeln des Programms, die Ecke hält das Verhältnis (Entwurf in Runde 2) | Mischung aus A und B. B hat die Vorschau, das ist wichtig. Prozentwerte lassen sich dort aber nicht genau einstellen; das kann Vorschlag A besser. |
+| F07 Overlay-Kanal | Mischung | Aus B die Box im 16:9-Rahmen zum Ziehen (die Vorschau ist wichtig), aus A die Gruppen und die Prozentfelder für genaue Werte (Entwurf übernommen). **Neu:** Seitenverhältnis der Box festlegbar (Frei, Wie Quelle, 16:9, 4:3, 1:1, 9:16); gekoppelt folgt Höhe der Breite und umgekehrt, in Pixeln des Programms, die Ecke hält das Verhältnis (Entwurf in Runde 2, bestätigt) | Mischung aus A und B. B hat die Vorschau, das ist wichtig. Prozentwerte lassen sich dort aber nicht genau einstellen; das kann Vorschlag A besser. |
 | F08 Auslöser | A | Je Auslöser eine Karte in Klartext; die Liste scrollt, „+ Auslöser“ unten links | – |
 | F09 Input hinzufügen | A | Feste Höhe, nur der rechte Teil scrollt, die Vorschau oben | – |
 | F10 Ausgang hinzufügen | Mischung | Die Arten als Kacheln (aus B), sonst das Formularraster aus A (Entwurf übernommen) | Arten als Kacheln, sonst wie Vorschlag A. |
@@ -157,18 +157,25 @@ Runde 1, beantwortet am 2026-10-29. Die Tabellen oben sind entsprechend nachgezo
 | Dateidialog (S01, Regel 6) | passt so | – |
 | Icons in Menüs (M03, Regel 5) | passt so | – |
 
-Runde 2 (offen): PTZ-Kachel A oder B, gekoppeltes Seitenverhältnis der Overlay-Box,
-lösbares Scope-Fenster, Show-Dummy mit Abgleich gegen `LASTENHEFT-SHOW.md`.
+Runde 2, beantwortet am 2026-10-30.
+
+| Nachfrage | Antwort |
+|---|---|
+| PTZ in der Detail-Kachel (D06) | B, auf dem Bild |
+| Seitenverhältnis der Overlay-Box (F07) | passt so |
+| Scopes als eigenes Fenster lösen (D01, Regel 4) | passt so |
+| Show-Seite gegen das Show-Lastenheft (D07) | passt so |
 
 ## Offene Punkte
 
-- D07 Cue-Listen: Abgleich mit dem Show-Lastenheft in Runde 2. Im Dummy fehlen noch:
+- D07 Cue-Listen: Der Dummy ist bestätigt. Für diese Punkte des Show-Lastenhefts braucht die
+  Seite noch einen Platz:
   weitere Gruppenmodi (CUE.4–6), Start-Cue (CUE.10), andere beim Start ausblenden
   (CUE.11), Zweit- und direkte Auslöser (CUE.14, CUE.16), Sperren je Klasse (RUN.9),
   Raster ohne Standby (RUN.12), Zonen-Leiste (SUI.8), Umsortieren und Umnummerieren
   (SUI.10), Prüfliste (SUI.12) und die Show-Sperre (SAF.8).
-- D06 PTZ: Knöpfe in der Detail-Kachel als eigene Zeile (A) oder auf dem Bild (B), Runde 2.
-- F07 Overlay und D01 Scopes-Fenster: Entwürfe in Runde 2, Bestätigung steht aus.
+- D06 PTZ, Knöpfe auf dem Bild: Bei Kachelgröße S sind die Ziele klein. Beim Bau prüfen, ob
+  sie dort die 24 px aus WCAG 2.5.8 halten; sonst zeigt S nur die Pfeiltasten über den Fokus.
 - D11 Titel: entschieden (A, Vorschau im Dialog). Damit ist Titel kein Liveeditor mehr
   im Sinn von Regel 3; die Regel ist angepasst. Eine Overlay-Vorschau in der Engine
   (OVL.3) wird dafür nicht gebraucht.

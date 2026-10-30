@@ -359,7 +359,8 @@ async fn follow(thread: cxx_qt::CxxQtThread<qobject::Core>) {
     }
 }
 
-/// `peak`'s keys and values: input ids, `program`, `phones`, `bus:<id>`.
+/// `peak`'s keys and values: input ids, `program`, `phones`, `bus:<id>`,
+/// `zone:<name>`.
 fn peaks_of(levels: &Levels) -> impl Iterator<Item = (String, f32)> + '_ {
     let inputs = levels
         .inputs
@@ -371,7 +372,15 @@ fn peaks_of(levels: &Levels) -> impl Iterator<Item = (String, f32)> + '_ {
         .buses
         .iter()
         .filter_map(|b| Some((format!("bus:{}", b.bus), b.peak_db?)));
-    inputs.chain(program).chain(phones).chain(buses)
+    let zones = levels
+        .zones
+        .iter()
+        .filter_map(|z| Some((format!("zone:{}", z.zone), z.peak_db?)));
+    inputs
+        .chain(program)
+        .chain(phones)
+        .chain(buses)
+        .chain(zones)
 }
 
 /// `{ "<output id>": OutputStats }`.
@@ -1133,6 +1142,25 @@ fn live_path(source: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn zones_are_levelled_by_name() {
+        let levels = Levels {
+            zones: vec![
+                lmix_types::ZonePeak {
+                    zone: "Hall".into(),
+                    peak_db: Some(-9.0),
+                },
+                lmix_types::ZonePeak {
+                    zone: "Foyer".into(),
+                    peak_db: None,
+                },
+            ],
+            ..Default::default()
+        };
+        let peaks: HashMap<String, f32> = peaks_of(&levels).collect();
+        assert_eq!(peaks, HashMap::from([("zone:Hall".to_string(), -9.0)]));
+    }
 
     #[test]
     fn live_path_of_program_and_inputs() {
