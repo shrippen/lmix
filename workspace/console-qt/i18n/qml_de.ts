@@ -1357,12 +1357,12 @@
     </message>
     <message>
       <location line="+16" />
-      <location line="+145" />
+      <location line="+159" />
       <source>Cue %1</source>
       <translation>Cue %1</translation>
     </message>
     <message>
-      <location line="-145" />
+      <location line="-159" />
       <source>New cue</source>
       <translation>Neuer Cue</translation>
     </message>
@@ -1382,7 +1382,12 @@
       <translation>Liste entfernen</translation>
     </message>
     <message>
-      <location line="+11" />
+      <location line="+9" />
+      <source>Pads: no standby and no GO, each cue starts and stops on its own</source>
+      <translation>Pads: kein Standby und kein GO, jeder Cue startet und stoppt für sich</translation>
+    </message>
+    <message>
+      <location line="+15" />
       <source>This list comes from %1 and is edited there; reload the script to change it.</source>
       <translation>Diese Liste kommt aus %1 und wird dort bearbeitet; zum Ändern das Drehbuch neu laden.</translation>
     </message>
@@ -1402,7 +1407,7 @@
       <translation>Standby</translation>
     </message>
     <message>
-      <location line="+3" />
+      <location line="+4" />
       <source>Make this the cue GO starts next</source>
       <translation>Diesen Cue auf Standby setzen: GO startet ihn als nächsten</translation>
     </message>
@@ -1437,7 +1442,7 @@
       <translation>Zurück</translation>
     </message>
     <message>
-      <location line="+6" />
+      <location line="+7" />
       <source>GO: %1</source>
       <translation>GO: %1</translation>
     </message>
@@ -3853,6 +3858,39 @@
     </message>
   </context>
   <context>
+    <name>PadGrid</name>
+    <message>
+      <location filename="../qml/PadGrid.qml" line="+33" />
+      <source>Pads</source>
+      <translation>Pads</translation>
+    </message>
+    <message>
+      <location line="+30" />
+      <source>Stop %1</source>
+      <translation>%1 stoppen</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Start %1</source>
+      <translation>Start %1</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Runs: click to stop</source>
+      <translation>Läuft: Klick stoppt</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Click to start</source>
+      <translation>Klick startet</translation>
+    </message>
+    <message>
+      <location line="+16" />
+      <source>No cues in %1 yet</source>
+      <translation>Noch keine Cues in %1</translation>
+    </message>
+  </context>
+  <context>
     <name>PtzDialog</name>
     <message>
       <location filename="../qml/PtzDialog.qml" line="+51" />
@@ -4996,7 +5034,7 @@
   <context>
     <name>ShowView</name>
     <message>
-      <location filename="../qml/ShowView.qml" line="+64" />
+      <location filename="../qml/ShowView.qml" line="+67" />
       <source>starts cue %1, which is not there</source>
       <translation>startet Cue %1, den es nicht gibt</translation>
     </message>

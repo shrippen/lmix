@@ -198,6 +198,7 @@ mod tests {
             cues,
             source: None,
             standby: None,
+            pads: false,
         });
         show
     }

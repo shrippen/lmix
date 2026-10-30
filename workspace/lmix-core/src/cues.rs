@@ -240,11 +240,12 @@ impl Runner {
         self.standby.get(&list).copied().unwrap_or(0)
     }
 
-    /// The active list (RUN.7); the first one while none is set.
+    /// The active list (RUN.7), the one GO goes to: the chosen one, else
+    /// the first; never a pad list (RUN.12).
     pub fn active(&self, lists: &[ShowCueList]) -> Option<usize> {
         self.active
-            .and_then(|id| lists.iter().position(|l| l.id == id))
-            .or_else(|| (!lists.is_empty()).then_some(0))
+            .and_then(|id| lists.iter().position(|l| l.id == id && !l.pads))
+            .or_else(|| lists.iter().position(|l| !l.pads))
     }
 
     pub fn set_active(&mut self, list: InputId) {
@@ -260,6 +261,9 @@ impl Runner {
         guard: Guard,
     ) -> Result<Vec<Out>, ActionError> {
         let entry = &lists[list];
+        if entry.pads {
+            return Err(bad("pads have no GO: start each cue on its own"));
+        }
         let early = self
             .last_go
             .is_some_and(|last| now.duration_since(last) < ms(guard.ms));
@@ -326,6 +330,24 @@ impl Runner {
         self.spawn(lists[list].id, cue, None, now, follow, &mut out);
         out.extend(self.tick(lists, now));
         Ok(out)
+    }
+
+    /// Start the cue `text` like `start`, or stop it while it runs: one
+    /// button per pad (RUN.12).
+    pub fn toggle(
+        &mut self,
+        lists: &[ShowCueList],
+        list: Option<usize>,
+        text: &str,
+        now: Instant,
+    ) -> Result<Vec<Out>, ActionError> {
+        let (list, id) =
+            Self::locate(lists, list, text).ok_or_else(|| bad(format!("no cue {text}")))?;
+        if self.runs.iter().any(|r| r.cue == id) {
+            self.stop(lists, Some(list), Some(&id.to_string()), now)
+        } else {
+            self.start(lists, Some(list), &id.to_string(), now)
+        }
     }
 
     /// The list and id of the cue `text`, in `list` first.
@@ -1090,6 +1112,7 @@ mod tests {
             cues,
             source: None,
             standby: None,
+            pads: false,
         }
     }
 
@@ -1819,6 +1842,46 @@ mod tests {
         assert_eq!(events(&out), [CueEvent::Stopped]);
         assert_eq!(runner.standby(lists[0].id), 0);
         assert_eq!(runner.deadline(), None);
+    }
+
+    /// Pads (RUN.12): no GO, never the active list, a cue toggles.
+    #[test]
+    fn pads_take_no_go_and_toggle() {
+        let mut rain = wait("Rain", 5000);
+        rain.number = "2".into();
+        let mut pads = list(vec![wait("Thunder", 5000), rain]);
+        pads.pads = true;
+        let lists = vec![pads, list(vec![wait("A", 100)])];
+        let mut runner = Runner::default();
+        let t = Instant::now();
+        assert_eq!(
+            runner.active(&lists),
+            Some(1),
+            "the first list that is not pads"
+        );
+        runner.set_active(lists[0].id);
+        assert_eq!(runner.active(&lists), Some(1));
+        assert!(runner.go(&lists, 0, t, Guard::time(0)).is_err());
+
+        let out = runner.toggle(&lists, Some(0), "2", t).unwrap();
+        assert_eq!(events(&out), [CueEvent::Started]);
+        assert_eq!(runner.standby(lists[0].id), 0, "standby stays");
+        let out = runner.toggle(&lists, Some(0), "2", after(t, 100)).unwrap();
+        assert_eq!(events(&out), [CueEvent::Stopped]);
+        assert!(runner.running(&lists, after(t, 100)).is_empty());
+        let out = runner.toggle(&lists, Some(0), "2", after(t, 200)).unwrap();
+        assert_eq!(events(&out), [CueEvent::Started], "and again");
+
+        // Pads as the emergency list still run with a panic (no GO there).
+        let out = runner.panic(&lists, Some(0), after(t, 300), 0);
+        assert_eq!(
+            events(&out)
+                .iter()
+                .filter(|e| **e == CueEvent::Started)
+                .count(),
+            2,
+            "both pads start"
+        );
     }
 
     /// A cue counts as ran from its start until a reset (SUI.12), a cue

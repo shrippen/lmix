@@ -5103,6 +5103,32 @@ Console: Setup → Steuerung → „Sperren“, ein Schalter je Weg.
 `locked_targets_send_nothing_and_warn` (der Empfänger sieht keine
 Verbindung).
 
+## 2026-10-27 — Pads (RUN.12)
+
+**Entscheidung**: Pads sind eine Cue-Liste mit `pads: true`
+(`set_cue_list_pads`, mit der Show gespeichert), kein eigenes Objekt: so
+gelten Bearbeiten, Farben, Stopp und Panik wie für jede Liste. Auch
+als Notfall-Liste (SAF.4) laufen Pads mit: die Panik startet ihre Cues
+direkt, ohne GO.
+Eine Pad-Liste hat kein GO (abgelehnt) und ist nie die aktive Liste:
+`set_active_cue_list` lehnt sie ab, und ohne Wahl ist die erste Liste
+aktiv, die keine Pads ist. Ihr Standby bleibt unberührt.
+
+Ein Pad ist ein Knopf: `cue_toggle` startet den Cue wie `cue_start` oder
+stoppt ihn, solange er läuft (mit seiner Ausblendung). Companion braucht
+dafür kein Modul: `/lmix/cue/toggle <Liste> <Cue>` (neu, ebenso
+`/lmix/cue/start`), die Rückmeldung „läuft“ kommt wie bisher über einen
+OSC-Abonnenten (CTL.4).
+
+Console: unter der Show-Ansicht ein Raster je Pad-Liste (bei mehreren eine
+Auswahl), ein Knopf je Cue der obersten Ebene, laufende hervorgehoben, die
+Cue-Farbe als Streifen darunter. Im Listen-Dialog der Schalter „Pads“;
+GO, Zurück und Standby fehlen dort für Pads. Die Auswahl der Liste in der
+Show-Ansicht zeigt nur Listen mit GO.
+
+**Geprüft**: `pads_take_no_go_and_toggle`, `a_list_becomes_pads`, OSC-Test
+für `/lmix/cue/toggle` und `/lmix/cue/start`.
+
 ## 2026-10-27 — Cues markieren und „gelaufen“ (SUI.12)
 
 **Entscheidung**: Eine Markierung ist ein Feld des Cues (`flagged`), gesetzt

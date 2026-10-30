@@ -211,7 +211,7 @@ Aus dem Dummy noch offen, **nur Oberfläche** (der Kern kann es):
   Verbindung im Kern, siehe Schritt 4).
 
 **Braucht den Kern** (Lastenheft offen): Pause je Cue und alles (RUN.5),
-Vorhören (RUN.10), Pads/Raster (RUN.12), Sperren je Ein-/Ausgabeklasse
+Vorhören (RUN.10), Sperren je Ein-/Ausgabeklasse
 (RUN.9), Pause inputs (INP.12), Dateiteilung und Namensmuster (REC.4,
 REC.5), Marken ins Protokoll (REC.8), Sendeverzögerung (STR.5), Puffer und
 Encoder-Last (STR.7), Vorlagen und Assistent (UI.13).

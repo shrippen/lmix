@@ -342,6 +342,7 @@ fn runs_automation(action: &Action) -> bool {
                 | Action::RemoveCueList { .. }
                 | Action::CueGo { .. }
                 | Action::CueStart { .. }
+                | Action::CueToggle { .. }
                 | Action::CueStop { .. }
                 | Action::CueStandby { .. }
                 | Action::CueReset
@@ -352,6 +353,7 @@ fn runs_automation(action: &Action) -> bool {
                 | Action::CueHardStop
                 | Action::SetPanicTime { .. }
                 | Action::SetEmergencyList { .. }
+                | Action::SetCueListPads { .. }
                 | Action::SetScriptFolder { .. }
                 | Action::SetZone { .. }
                 | Action::RemoveZone { .. }
@@ -1227,6 +1229,7 @@ impl Switcher {
                     cues,
                     source,
                     standby: None,
+                    pads: false,
                 });
                 check_unique(&lists)?;
                 self.show.cue_lists = lists;
@@ -1277,6 +1280,11 @@ impl Switcher {
                     return Err(bad_cues(format!("the panic time is 0–{PANIC_MAX_MS} ms")));
                 }
                 self.show.panic_ms = ms;
+                Ok(Vec::new())
+            }
+            Action::SetCueListPads { list, on } => {
+                let index = self.find_cue_list(&list)?;
+                self.show.cue_lists[index].pads = on;
                 Ok(Vec::new())
             }
             Action::SetEmergencyList { list } => {
@@ -1438,6 +1446,9 @@ impl Switcher {
             }
             Action::SetActiveCueList { list } => {
                 let index = self.find_cue_list(&list)?;
+                if self.show.cue_lists[index].pads {
+                    return Err(bad_cues("pads are never the active list".into()));
+                }
                 self.cues.set_active(self.show.cue_lists[index].id);
                 Ok(Vec::new())
             }
@@ -1493,6 +1504,7 @@ impl Switcher {
             // the like below).
             Action::CueGo { .. }
             | Action::CueStart { .. }
+            | Action::CueToggle { .. }
             | Action::CueStop { .. }
             | Action::CueReset
             | Action::CuePanic { .. }
@@ -2539,6 +2551,7 @@ impl Switcher {
                     active: self.cues.active(&self.show.cue_lists) == Some(i),
                     source: l.source.clone(),
                     emergency: self.show.emergency_list == Some(l.id),
+                    pads: l.pads,
                 })
                 .collect(),
             running_cues: self
@@ -3369,6 +3382,17 @@ impl Switcher {
         }
         let index = list.map(|l| self.find_cue_list(l)).transpose()?;
         self.cues.start(&self.show.cue_lists, index, cue, now)
+    }
+
+    /// Start a cue, or stop it while it runs (RUN.12).
+    pub fn cue_toggle(
+        &mut self,
+        list: Option<&InputRef>,
+        cue: &str,
+        now: tokio::time::Instant,
+    ) -> Result<Vec<Out>, ActionError> {
+        let index = list.map(|l| self.find_cue_list(l)).transpose()?;
+        self.cues.toggle(&self.show.cue_lists, index, cue, now)
     }
 
     /// Stop one cue, a list's cues or every cue (RUN.4).
@@ -10329,6 +10353,37 @@ mod tests {
         assert_eq!(sound.gain_db, -6.0);
         assert_eq!(sound.file, "/fx/rain.flac");
         assert_eq!(sound.fade_in_ms, 2000);
+    }
+
+    /// A list becomes pads and back (RUN.12); pads are saved and are
+    /// never the active list.
+    #[test]
+    fn a_list_becomes_pads() {
+        let mut sw = two_inputs();
+        for name in ["Show", "Pads"] {
+            sw.apply(Action::AddCueList {
+                name: name.into(),
+                cues: vec![cue("A", Action::Cut)],
+                source: None,
+            })
+            .unwrap();
+        }
+        let pads = InputRef::Text("Pads".into());
+        let set = |on| Action::SetCueListPads {
+            list: pads.clone(),
+            on,
+        };
+        sw.apply(set(true)).unwrap();
+        assert!(sw.state().cue_lists[1].pads);
+        let saved = serde_json::to_value(&sw.show().cue_lists[1]).unwrap();
+        assert_eq!(saved["pads"], true);
+        assert!(sw
+            .apply(Action::SetActiveCueList { list: pads.clone() })
+            .is_err());
+        sw.apply(set(false)).unwrap();
+        let saved = serde_json::to_value(&sw.show().cue_lists[1]).unwrap();
+        assert!(saved.get("pads").is_none(), "not written while off");
+        sw.apply(Action::SetActiveCueList { list: pads }).unwrap();
     }
 
     /// A flag is part of the cue (SUI.12): set and cleared by an update,

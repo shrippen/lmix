@@ -230,6 +230,7 @@ mod tests {
             active: true,
             source: None,
             emergency: false,
+            pads: false,
         };
         let mut state = empty_state();
         state.cue_lists = vec![list.clone()];
