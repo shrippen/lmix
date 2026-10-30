@@ -6059,7 +6059,7 @@ fn no_video_check(entry: &ShowInput) -> Result<(), ActionError> {
 
 /// Whether two input names are the same: case does not count, so one
 /// name stays one input in actions, "cam 1" finding "Cam 1" (INP.2).
-pub fn same_input_name(a: &str, b: &str) -> bool {
+pub(crate) fn same_input_name(a: &str, b: &str) -> bool {
     a.to_lowercase() == b.to_lowercase()
 }
 
