@@ -35,7 +35,7 @@ KanteDialog {
     width: Math.min(Kirigami.Units.gridUnit * 46, parent ? parent.width - Kirigami.Units.gridUnit * 2 : Kirigami.Units.gridUnit * 46)
     standardButtons: QQC2.Dialog.Ok | QQC2.Dialog.Cancel
     acceptText: replacing ? qsTr("Replace source") : qsTr("Add input")
-    acceptEnabled: complete
+    acceptEnabled: complete && !nameTaken
 
     readonly property var available: core.choices("sources")
     readonly property var groups: [
@@ -152,6 +152,12 @@ KanteDialog {
         : kind === "card" ? JSON.stringify({ mode: cardModes[Math.max(0, cardModeBox.currentIndex)].value,
                                              pair: Math.max(0, cardPairBox.currentIndex) + 1 })
         : "{}"
+    /** Another input has the typed name (case aside): lmix-core would
+     *  refuse it and what was typed here would be gone (INP.2). */
+    readonly property bool nameTaken: {
+        const typed = nameField.text.trim().toLowerCase()
+        return !replacing && typed.length > 0 && inputs.some(i => i.name.toLowerCase() === typed)
+    }
     readonly property bool complete: kind === "pattern" || kind === "color" || textField.text.trim().length > 0
 
     function choose(k) {
@@ -512,9 +518,19 @@ KanteDialog {
             }
             KanteTextField {
                 id: nameField
+                objectName: "inputName"
                 visible: !dialog.replacing
                 Layout.fillWidth: true
                 placeholderText: qsTr("optional")
+                invalid: dialog.nameTaken
+            }
+            QQC2.Label {
+                objectName: "nameTaken"
+                visible: dialog.nameTaken
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                color: KanteStyle.negativeTextColor
+                text: qsTr("Another input has this name.")
             }
             QQC2.CheckBox {
                 id: another
