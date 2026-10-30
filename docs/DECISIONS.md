@@ -5467,3 +5467,101 @@ Umsetzung von `docs/DESIGN-DIALOGE.md` (Tafel 3/M08, M03, M07, M11, M12).
   bei jeder neuen Zeile.
 - **Cue-Farbe (M12):** `KanteSwatchPicker` im `KantePopover`, „Keine“ als
   erstes Feld.
+
+## 2026-10-30 — Kartenausgang über decklink2sink (OUT.4)
+
+**Anlass**: GStreamer hat auf die Meldung zum verspäteten zweiten Start
+(work item 5391, `docs/upstream/gstreamer-decklink-restart.md`)
+geantwortet: `decklink2sink` (neues Plugin `decklink2`, seit 20.10. auf
+`main`, ab GStreamer 1.30) ist der Weg, `decklinkvideosink` wird künftig
+fallengelassen und bekommt den Fix nicht. Am 29.10. bestand decklink2,
+gegen 1.28.8 gebaut, 10 von 10 Läufen und 12 Starts mit Moduswechsel.
+
+**Entscheidung**:
+- strom-Block `builtin.decklink_output` spielt über `decklink2sink`. Der
+  Sink nimmt Ton nur an den Bildern (als Meta), darum laufen Bild und Ton
+  mit Ton durch `decklink2combiner` (Pads `video`, `audio`; 2, 8 oder 16
+  Kanäle S32LE wie bisher); Bild allein geht direkt in den Sink, Ton
+  allein bekommt schwarze Bilder. Die Uhr-Vorbelegung für
+  `decklinkvideosink` (27.10.) ist entfernt: decklink2 bietet keine
+  eigene Uhr und plant die Bilder nach eigener Zählung.
+- Fehlt das Plugin, scheitert der Kartenausgang mit „decklink2sink not
+  found: … GStreamer 1.30 … GST_PLUGIN_PATH“; lmix-core hängt „build it
+  with scripts/decklink-plugin.sh“ an.
+- `scripts/decklink-plugin.sh` baut `sys/decklink2` aus einem festen
+  GStreamer-`main`-Commit (Commit-Id geprüft, Sparse-Checkout per git)
+  gegen die installierte GStreamer nach `~/.local/share/lmix/gstreamer`
+  (`LMIX_PLUGIN_DIR`); `gst_plugin_set_static_features_flag()` (erst 1.29)
+  wird für ältere GStreamer per Makro übergangen. Hat das System
+  decklink2 schon, baut es nichts. Der Patch für `decklinkvideosink` und
+  `DECKLINK_PLUGIN=system` sind weg (vor dem ersten Release ohne
+  Übergang); ein altes `libgstdecklink.so` im Plugin-Ordner löscht das
+  Skript.
+- Karten-Inputs bleiben auf `decklinkvideosrc`: dort ist kein Fehler
+  bekannt, und Geräteerkennung und Modus-Erkennung hängen daran. Umstellen
+  auf `decklink2src`, wenn GStreamer den alten Teil fallen lässt. Die
+  Geräte von `decklink2deviceprovider` (Klasse `Video/Audio/…`) landen in
+  strom unter „Other“ und doppeln die Karten in lmix nicht.
+- Vorlauf (`CARD_LEAD_MS`, `--card-lead-ms`) 20 ms statt 150 (60 mit
+  Patch), GStreamers Standard: decklink2 hält die Bilder in einer
+  Warteschlange auf der Karte (Vorlauf 7 Bilder, nachgefüllt durch
+  Wiederholen, wenn sie unter 3 fällt) statt sie auf Uhrzeiten zu legen;
+  ein über inter spätes Bild wartet dort, statt zu spät zu kommen.
+  Gemessen gaben 0 und 20 ms dieselbe Latenz und kein spätes Bild.
+- Nebenbei behoben: Der Mischer der Kanalpaare (`card_pairs`,
+  `audiomixer`) begann bei Laufzeit 0 und füllte erst die Stunden bis zur
+  Laufzeit des Mischers auf; ein Bus auf Paar 2 kam darum 24 s und mehr
+  zu spät (todo 27.10., nicht Karte oder Treiber, wuchs mit der Laufzeit
+  des Rechners). Mit decklink2 hielt das sogar das Bild an, weil der
+  Combiner auf den Ton wartet. Jetzt `start-time-selection=first`.
+
+**Geprüft** (Quad 2, Desktop Video 16.4, GStreamer 1.28.8, Fedora 44,
+CUDA-Mischer; andere Agenten bauten parallel, Last 1–27):
+`scripts/test-sdi-loop.sh` mit allen vier Modi und Paaren dreimal
+bestanden (kein Bild spät, verworfen, wiederholt oder übersprungen;
+Paar 2 nach 0,7–1,0 s; Ton-Delay 200 ms als 136–329 ms gemessen, die
+Messung ist grob). Skript aus der Meldung mit `decklink2sink`, je 12
+Starts mit Moduswechsel (1080p25, 1080i50, 720p50) in einem Prozess:
+bei Last 0,4 und 20 kein spätes, verworfenes oder doppeltes Bild, bei
+Last 42 zwei Starts mit solchen Bildern (Einzelheiten nicht
+festgehalten; das Testbild selbst kam unter der Last vermutlich zu
+spät). Latenz SDI-Loop 1080p25
+(`scripts/measure-sdi-latency.sh`, Last unter 1,1): 433, 400, 433 ms mit
+20 ms Vorlauf, 433, 366, 400 ms mit 0 ms; vorher (decklinkvideosink,
+150 ms) 266–300 ms.
+
+**Nachtrag (Review strom #53)**: Endet oder stockt der Ton, hielt der
+Combiner das Bild an (auf der Karte 11 statt 97 Bilder in 4 s). Der Ton
+geht jetzt über einen `audiomixer` mit stiller Live-Quelle in den
+Combiner. Die Stille übernimmt Format, Rate und Kanäle des ersten Tons,
+der Mixer reicht den Ton also unverändert durch; spätere Formatwechsel
+wandelt er, Kanal- oder Ratenwechsel brechen ab (in lmix kommen sie
+nicht vor: `card_sound` legt die Caps fest, eine andere Kanalzahl baut
+den Flow neu). Eine Eigenschaft für die Kanalzahl braucht der Block
+nicht. Kommen 500 ms nach dem ersten Bild keine Caps am Ton (etwa ein
+inter-Kanal ohne Produzent), startet die Stille selbst, in S32LE, 48 kHz
+und den Kanälen, die `card_sound` anbietet: Das Bild läuft weiter, statt
+ohne Meldung schwarz zu bleiben. Hinter dem Mixer hält ein Capsfilter
+den Ton auf S32LE. Ihre Puffer sind 480 Samples (10 ms) lang: der
+Mixer kostet dann laut Latenz-Query 10 ms (sein Ausgabepuffer), mit den
+1024 Samples von `audiotestsrc` waren es 21 ms. Der Ausgang bietet nur
+noch die Formate an, die `decklink2sink` kennt (kein 12-bit-RGB),
+Unbekanntes scheitert mit Meldung statt Panic. Danach
+`test-sdi-loop.sh` bestanden, Latenz 400, 434, 400 ms (Last 1,0 bis 1,6). Der Loop misst nur auf
+etwa 33 ms genau (die Werte springen in diesen Schritten zwischen 366,
+400 und 433 ms); die 10 ms des Mixers zeigt er nicht, er sieht nur, dass
+nichts um einen ganzen Schritt dazukam.
+
+**Nachtrag (Puffer der Karte)**: decklink2 war so etwa 130 ms langsamer,
+weil es 7 Bilder vorhält (280 ms bei 25p, 140 ms bei 50p). Der strom-Block
+hat jetzt `buffered_frames` (2–12, Standard 7 wie GStreamer; zwei unter dem `max-buffered-frames` 14 des Sinks, über dem er verwirft): Er setzt
+`n-preroll-frames`, `min-buffered-frames` folgt zwei darunter (1 bis 3,
+GStreamers 3 bei 7). lmix stellt 3 ein (`CARD_FRAMES`, `--card-frames`).
+Mit 2 Bildern verwarf oder wiederholte die Karte schon ohne strom in 2
+von 6 Starts Bilder. Geprüft unter Last (Load 32–35: `soak-hardware.sh`
+mit 16 Inputs, CUDA, Aufnahme, ISO und 2 SRT-Streams, dazu 22 CPU-Brenner
+und Speicherkopien): `test-sdi-loop.sh` dreimal bestanden, 18 Starts in
+vier Modi ohne spätes, verworfenes oder wiederholtes Bild („Underrun“
+zählt mit); Latenz SDI-Loop 1080p25 267, 300, 267 ms (auf leerem Rechner
+267, 234, 267 ms), mit 7 Bildern 400–433 ms. Der Soak lief dabei ohne
+Fehler weiter (Latenz Quelle → Program 26–28 ms).

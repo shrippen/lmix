@@ -2,19 +2,19 @@
 # Install: copy both units to ~/.config/systemd/user/, then
 #   systemctl --user enable --now lmix-core.service
 # For a machine without login: `loginctl enable-linger <user>`.
-# With a DeckLink card, build GStreamer's decklink plugin with lmix's
-# patch (a card output started again shows every frame late without it),
-# again after each GStreamer update:
-#   LMIX_PLUGIN_DIR=~/.local/share/lmix/gstreamer scripts/decklink-plugin.sh
+# With a DeckLink card, build GStreamer's decklink2 plugin, which card
+# outputs need (GStreamer ships it from 1.30 on), again after each
+# GStreamer update:
+#   scripts/decklink-plugin.sh   (into ~/.local/share/lmix/gstreamer)
 [Unit]
 Description=lmix engine (strom)
 
 [Service]
 Environment=GST_PLUGIN_PATH=%h/.local/share/lmix/gstreamer
-# Says so in the log when that plugin is missing (GStreamer then loads its
-# own, unpatched one) or built for another GStreamer (GStreamer still
-# loads the old build, against the newer core, until it is rebuilt).
-ExecStartPre=-/bin/sh -c 'v="$$(gst-inspect-1.0 --version | sed -n "s/^GStreamer //p")"; grep -qs "^$$v " %h/.local/share/lmix/gstreamer/built || echo "lmix: decklink plugin not built for GStreamer $$v, run LMIX_PLUGIN_DIR=%h/.local/share/lmix/gstreamer scripts/decklink-plugin.sh" >&2'
+# Says so in the log when that plugin is missing (card outputs then fail)
+# or built for another GStreamer (GStreamer still loads the old build,
+# against the newer core, until it is rebuilt).
+ExecStartPre=-/bin/sh -c 'gst-inspect-1.0 decklink2sink >/dev/null 2>&1 || echo "lmix: no decklink2 plugin, card outputs fail: run scripts/decklink-plugin.sh" >&2; b=%h/.local/share/lmix/gstreamer/built; v="$$(gst-inspect-1.0 --version | sed -n "s/^GStreamer //p")"; [ ! -f "$$b" ] || grep -qs "^$$v " "$$b" || echo "lmix: decklink2 plugin built for another GStreamer than $$v: run scripts/decklink-plugin.sh" >&2'
 ExecStart=%h/.local/bin/strom --host 127.0.0.1 --port 8099 --data-dir %S/lmix/strom
 Restart=on-failure
 RestartSec=2

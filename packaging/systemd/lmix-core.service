@@ -12,8 +12,6 @@
 #   LMIX_OPEN_PAGES=tally,keys   (pages usable without the password)
 #   LMIX_TALLY_HTTP=http://192.168.1.60/tally   (tally lights over HTTP)
 #   LMIX_GOOGLE_API_KEY=…   (Google Sheets as data sources; keep core.env private)
-#   LMIX_CARD_LEAD_MS=60   (DeckLink outputs, once the patched decklink plugin
-#                           is built, see lmix-strom.service; default 150)
 [Unit]
 Description=lmix control core
 Wants=lmix-strom.service

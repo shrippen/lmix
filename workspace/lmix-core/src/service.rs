@@ -1157,7 +1157,7 @@ impl Service {
         sw.set_output_status(
             id,
             OutputStatus::Failed {
-                message: error.message.clone(),
+                message: output_failure(&error.message),
             },
         );
         self.publish(&sw);
@@ -2488,12 +2488,23 @@ fn mark_output(sw: &mut Switcher, command: &Command, outcome: &Result<(), Engine
         (Command::StartOutput { id, .. } | Command::StopOutput { id }, Err(e)) => (
             *id,
             OutputStatus::Failed {
-                message: e.to_string(),
+                message: output_failure(&e.to_string()),
             },
         ),
         _ => return,
     };
     sw.set_output_status(id, status);
+}
+
+/// The engine's `message` for a failed output; for a card output that
+/// lacks GStreamer's decklink2 plugin (until GStreamer 1.30) with the
+/// way to build it.
+fn output_failure(message: &str) -> String {
+    if message.contains("decklink2") && message.contains("not found") {
+        format!("{message} (build it with scripts/decklink-plugin.sh, then restart strom)")
+    } else {
+        message.to_string()
+    }
 }
 
 fn now_ms() -> u64 {
@@ -2632,11 +2643,27 @@ async fn save(sw: &mut Switcher, path: Option<String>) -> Result<(), ActionError
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
     use crate::engine::null::NullEngine;
     use lmix_types::{
         DisplayMode, InputRef, OutputRef, OutputSource, OutputSpec, SourceSpec, TestPattern,
     };
+
+    /// A card output that fails for want of the decklink2 plugin says
+    /// how to build it; other failures stay as they are.
+    #[test]
+    fn a_missing_decklink2_plugin_names_the_script() {
+        let missing = "engine refused: 500: Failed to create element: decklink2sink not found: \
+                       the DeckLink output needs GStreamer's decklink2 plugin";
+        let message = output_failure(missing);
+        assert!(message.starts_with(missing), "{message}");
+        assert!(message.contains("scripts/decklink-plugin.sh"), "{message}");
+        assert_eq!(
+            output_failure("srt: connection refused"),
+            "srt: connection refused"
+        );
+    }
 
     /// `restore_input` became `restore`: the shortcuts for all shows
     /// (`--shortcuts`) with it still load.

@@ -37,7 +37,10 @@ sudo dnf install rust cargo clippy rustfmt rust-std-static gcc-c++ clang mold cm
   xdotool ImageMagick jq zstd
 ```
 
-`gstreamer1-plugins-bad-free-extras` bringt `srtsink` und die DeckLink-Elemente.
+`gstreamer1-plugins-bad-free-extras` bringt `srtsink` und die DeckLink-Elemente
+für Karten-Inputs. Kartenausgänge spielen über `decklink2sink`, das erst GStreamer
+1.30 mitbringt; bis dahin baut es `scripts/decklink-plugin.sh` (braucht `git`,
+nach `~/.local/share/lmix/gstreamer`, DECISIONS 30.10.).
 Für den CUDA-Mischer braucht Fedoras nvcodec-Plugin `libnvrtc` aus NVIDIAs
 CUDA-Repo (`cuda-nvrtc-13-2`, das Repo für fedora43 geht auch auf 44). Sie liegt
 nicht im Bibliothekspfad, und GStreamer sucht sie ohne Versionsnummer; ohne sie
