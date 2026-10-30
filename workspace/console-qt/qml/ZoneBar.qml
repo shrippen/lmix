@@ -18,8 +18,8 @@ Flow {
     required property var core
     /** `zones` of the show state. */
     property var zones: []
-    /** Levels as the bridge gives them (`zone:<name>`). */
-    property var levels: ({})
+    /** AppShell.levels, or null. */
+    property var levels: null
     /** Width of one zone. */
     property real zoneWidth: Kirigami.Units.gridUnit * 14
     /** `min_db` and `max_db` of a zone's volume (lmix-types). */
@@ -63,7 +63,7 @@ Flow {
             }
             KanteAudioMeter {
                 Layout.fillWidth: true
-                level: bar.levels["zone:" + zone.modelData.name] ?? -100
+                level: (bar.levels ? bar.levels.peak("zone:" + zone.modelData.name) : undefined) ?? -100
                 showScale: true
                 Accessible.name: qsTr("Level of %1").arg(zone.modelData.name)
             }

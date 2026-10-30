@@ -1,7 +1,8 @@
 //! The QML side's only window to lmix-core: show state over WebSocket,
 //! actions over HTTP, and live pictures over the Unix sockets lmix-core
 //! hands out (`/api/live/…`), each drawn into a `GstGLQt6VideoItem` by
-//! `unixfdsrc ! glupload ! qml6glsink` without a copy through the GUI.
+//! `unixfdsrc ! glupload ! qml6glsink` (or from the GPU, `cudaipcsrc`)
+//! without a copy through the GUI.
 
 use std::collections::HashMap;
 use std::pin::Pin;
@@ -12,10 +13,14 @@ use cxx_qt_lib::QString;
 use futures_util::StreamExt;
 use gstreamer as gst;
 use gstreamer::prelude::*;
-use lmix_types::{Action, BusRef, Event, InputRef, Latency, Levels, LiveFeed, OutputStats};
+use lmix_types::{
+    Action, BusRef, Event, InputRef, Latency, Levels, LiveFeed, LiveTiles, LiveTransport,
+    OutputStats,
+};
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 
-use crate::{config, forms};
+use crate::latest::Latest;
+use crate::{config, forms, state_patch};
 
 #[cxx_qt::bridge]
 pub mod qobject {
@@ -31,7 +36,6 @@ pub mod qobject {
         #[qobject]
         #[qml_element]
         #[qproperty(bool, connected)]
-        #[qproperty(QString, state)]
         /// Last refusal or error as JSON: lmix-core's `{error, message}`
         /// (Texts.qml translates by `error.error`), or `{message}`; empty
         /// when the last action went through.
@@ -39,8 +43,9 @@ pub mod qobject {
         /// `KanteStyle.kind` from the command line (0 System, 1 Kante,
         /// 2 Kante Light), or -1: the one saved in the Console.
         #[qproperty(i32, style)]
-        /// Peak dBFS per input id, and `program` (JSON object).
-        #[qproperty(QString, levels)]
+        /// Counts the level measurements: a binding that reads it with
+        /// `peak` or `channel` follows them.
+        #[qproperty(i32, levels_tick, cxx_name = "levelsTick")]
         /// Where clips play: `{input id: [position ms, length ms]}`.
         #[qproperty(QString, positions)]
         /// Link health per output id: lmix `OutputStats` (JSON object).
@@ -48,6 +53,10 @@ pub mod qobject {
         /// The load of lmix-core's machine and how its cue timer runs:
         /// lmix `MachineLoad` as JSON, or empty while none came (RUN.8).
         #[qproperty(QString, machine)]
+        /// Where the slots sit in the tile picture (`showLive(item,
+        /// "tiles")`): `{columns, rows, cell_width, cell_height}` of lmix
+        /// `LiveTiles`, or empty while no tile picture runs.
+        #[qproperty(QString, tiles)]
         /// Capture devices (JSON list of lmix `Device`).
         #[qproperty(QString, devices)]
         /// Recently opened or saved show files (JSON list).
@@ -72,6 +81,12 @@ pub mod qobject {
         /// this one tries again (AppShell).
         #[qproperty(bool, global_held, cxx_name = "globalHeld")]
         type Core = super::CoreRust;
+
+        /// The show state changed: what changed, as `crate::state_patch`
+        /// operations (JSON list). The first one sets the whole state.
+        #[qsignal]
+        #[cxx_name = "statePatched"]
+        fn state_patched(self: Pin<&mut Core>, patch: QString);
 
         /// A global shortcut was pressed: the lmix shortcut id.
         #[qsignal]
@@ -155,10 +170,19 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "shortName"]
         fn short_name(self: &Core, name: &QString, max: i32) -> QString;
+
+        /// Peak dBFS of an input id, `program`, `phones` or `bus:<id>`;
+        /// NaN while none was measured.
+        #[qinvokable]
+        fn peak(self: &Core, key: &QString) -> f64;
+
+        /// Peak dBFS of channel `index` of an input; NaN without it.
+        #[qinvokable]
+        fn channel(self: &Core, input: &QString, index: i32) -> f64;
     }
 
     unsafe extern "RustQt" {
-        /// Show `source` ("program", "preview" or an input id) in `item`, a
+        /// Show `source` ("program", "preview", "tiles" or an input id) in `item`, a
         /// `GstGLQt6VideoItem` whose scene graph is up.
         #[qinvokable]
         #[cxx_name = "showLive"]
@@ -192,13 +216,20 @@ struct Live {
 #[derive(Default)]
 pub struct CoreRust {
     connected: bool,
-    state: QString,
+    /// The show state QML has, the base of the next patch.
+    shown: serde_json::Value,
     message: QString,
     style: i32,
-    levels: QString,
+    levels_tick: i32,
+    /// The last levels by `peak`'s keys, and the channels per input id:
+    /// numbers for QML, not an object per measurement (garbage for its
+    /// collector 10 times a second, 20 % of the GUI thread with 31 inputs).
+    peaks: HashMap<String, f32>,
+    channels: HashMap<String, Vec<f32>>,
     positions: QString,
     links: QString,
     machine: QString,
+    tiles: QString,
     devices: QString,
     recent: QString,
     templates: QString,
@@ -241,14 +272,31 @@ async fn follow(thread: cxx_qt::CxxQtThread<qobject::Core>) {
         if let Ok((mut stream, _)) = connect_async(&url).await {
             let _ = thread.queue(|core| core.set_connected(true));
             let mut positions: HashMap<String, (u64, u64)> = HashMap::new();
+            // Only the newest of each reaches the GUI thread (crate::latest).
+            let state = Latest::new();
+            let position = Latest::new();
+            let level = Latest::new();
             while let Some(Ok(message)) = stream.next().await {
                 let Message::Text(text) = message else {
                     continue;
                 };
                 let queued = match serde_json::from_str(&text) {
-                    Ok(Event::State { state }) => {
-                        let json = serde_json::to_string(&state).unwrap_or_default();
-                        thread.queue(move |core| core.set_state(QString::from(&json)))
+                    Ok(Event::State { state: newer }) => {
+                        if !state.put(serde_json::to_value(&newer).unwrap_or_default()) {
+                            continue;
+                        }
+                        let state = state.clone();
+                        thread.queue(move |mut core| {
+                            if let Some(newer) = state.take() {
+                                let ops = state_patch::diff(&core.shown, &newer);
+                                if ops.is_empty() {
+                                    return;
+                                }
+                                core.as_mut().rust_mut().shown = newer;
+                                let patch = serde_json::to_string(&ops).unwrap_or_default();
+                                core.state_patched(QString::from(&patch));
+                            }
+                        })
                     }
                     Ok(Event::Position {
                         input,
@@ -257,11 +305,26 @@ async fn follow(thread: cxx_qt::CxxQtThread<qobject::Core>) {
                     }) => {
                         positions.insert(input.to_string(), (position_ms, duration_ms));
                         let json = serde_json::to_string(&positions).unwrap_or_default();
-                        thread.queue(move |core| core.set_positions(QString::from(&json)))
+                        if !position.put(json) {
+                            continue;
+                        }
+                        let position = position.clone();
+                        thread.queue(move |core| {
+                            if let Some(json) = position.take() {
+                                core.set_positions(QString::from(&json));
+                            }
+                        })
                     }
                     Ok(Event::Levels { levels }) => {
-                        let json = levels_json(&levels);
-                        thread.queue(move |core| core.set_levels(QString::from(&json)))
+                        if !level.put(levels) {
+                            continue;
+                        }
+                        let level = level.clone();
+                        thread.queue(move |mut core| {
+                            if let Some(levels) = level.take() {
+                                core.as_mut().take_levels(&levels);
+                            }
+                        })
                     }
                     Ok(Event::Outputs { stats }) => {
                         let json = links_json(&stats);
@@ -296,36 +359,28 @@ async fn follow(thread: cxx_qt::CxxQtThread<qobject::Core>) {
     }
 }
 
-/// `{ "<input id>": peak, "ch:<input id>": [left, right], "program": peak,
-/// "phones": peak, "bus:<bus id>": peak, "zone:<name>": peak, … }`.
-fn levels_json(levels: &Levels) -> String {
-    let mut map = serde_json::Map::new();
-    for level in &levels.inputs {
-        map.insert(level.input.to_string(), level.peak_db.into());
-        if !level.channels_db.is_empty() {
-            map.insert(
-                format!("ch:{}", level.input),
-                level.channels_db.clone().into(),
-            );
-        }
-    }
-    if let Some(peak) = levels.program_peak_db {
-        map.insert("program".into(), peak.into());
-    }
-    if let Some(peak) = levels.phones_peak_db {
-        map.insert("phones".into(), peak.into());
-    }
-    for bus in &levels.buses {
-        if let Some(peak) = bus.peak_db {
-            map.insert(format!("bus:{}", bus.bus), peak.into());
-        }
-    }
-    for zone in &levels.zones {
-        if let Some(peak) = zone.peak_db {
-            map.insert(format!("zone:{}", zone.zone), peak.into());
-        }
-    }
-    serde_json::Value::Object(map).to_string()
+/// `peak`'s keys and values: input ids, `program`, `phones`, `bus:<id>`,
+/// `zone:<name>`.
+fn peaks_of(levels: &Levels) -> impl Iterator<Item = (String, f32)> + '_ {
+    let inputs = levels
+        .inputs
+        .iter()
+        .map(|l| (l.input.to_string(), l.peak_db));
+    let program = levels.program_peak_db.map(|p| ("program".to_string(), p));
+    let phones = levels.phones_peak_db.map(|p| ("phones".to_string(), p));
+    let buses = levels
+        .buses
+        .iter()
+        .filter_map(|b| Some((format!("bus:{}", b.bus), b.peak_db?)));
+    let zones = levels
+        .zones
+        .iter()
+        .filter_map(|z| Some((format!("zone:{}", z.zone), z.peak_db?)));
+    inputs
+        .chain(program)
+        .chain(phones)
+        .chain(buses)
+        .chain(zones)
 }
 
 /// `{ "<output id>": OutputStats }`.
@@ -562,6 +617,39 @@ impl qobject::Core {
         QString::from(&forms::running_time(since_ms.max(0.0) as u64, now_ms))
     }
 
+    fn take_levels(mut self: Pin<&mut Self>, levels: &Levels) {
+        {
+            let mut rust = self.as_mut().rust_mut();
+            rust.peaks.clear();
+            rust.peaks.extend(peaks_of(levels));
+            rust.channels.clear();
+            rust.channels.extend(
+                levels
+                    .inputs
+                    .iter()
+                    .filter(|l| !l.channels_db.is_empty())
+                    .map(|l| (l.input.to_string(), l.channels_db.clone())),
+            );
+        }
+        let tick = self.levels_tick().wrapping_add(1);
+        self.set_levels_tick(tick);
+    }
+
+    fn peak(&self, key: &QString) -> f64 {
+        self.peaks
+            .get(&key.to_string())
+            .map_or(f64::NAN, |&p| p.into())
+    }
+
+    fn channel(&self, input: &QString, index: i32) -> f64 {
+        let channels = self.channels.get(&input.to_string());
+        let at = usize::try_from(index).ok();
+        channels
+            .zip(at)
+            .and_then(|(c, i)| c.get(i))
+            .map_or(f64::NAN, |&p| p.into())
+    }
+
     fn short_name(&self, name: &QString, max: i32) -> QString {
         QString::from(&forms::short_name(&name.to_string(), max.max(1) as usize))
     }
@@ -577,6 +665,9 @@ impl qobject::Core {
 
     unsafe fn release_live(mut self: Pin<&mut Self>, item: *mut qobject::QQuickItem) {
         if let Some(live) = self.as_mut().rust_mut().live.remove(&(item as usize)) {
+            if live.source == TILES {
+                self.as_mut().set_tiles(QString::default());
+            }
             stop(live);
         }
     }
@@ -606,11 +697,11 @@ impl qobject::Core {
 
         let thread = self.qt_thread();
         config::runtime().spawn(async move {
-            let socket = loop {
+            let feed = loop {
                 tokio::select! {
                     _ = &mut rx => return,
-                    found = live_socket(&source) => match found {
-                        Ok(socket) => break socket,
+                    found = live_feed(&source) => match found {
+                        Ok(feed) => break feed,
                         Err(e) => tracing::debug!(%source, error = %e, "no live picture yet"),
                     },
                 }
@@ -619,12 +710,12 @@ impl qobject::Core {
                     _ = tokio::time::sleep(RETRY) => {}
                 }
             };
-            let _ = thread.queue(move |core| core.attach(item, generation, socket));
+            let _ = thread.queue(move |core| core.attach(item, generation, feed));
         });
     }
 
     /// Start the pipeline for `item` unless a newer request replaced it.
-    fn attach(mut self: Pin<&mut Self>, item: usize, generation: u64, socket: String) {
+    fn attach(mut self: Pin<&mut Self>, item: usize, generation: u64, feed: Feed) {
         let current = self
             .rust()
             .live
@@ -633,7 +724,8 @@ impl qobject::Core {
         if !current {
             return;
         }
-        let pipeline = match pipeline(item, &socket) {
+        let socket = &feed.socket;
+        let pipeline = match pipeline(item, socket, feed.transport, feed.grid.is_some()) {
             Ok(pipeline) => pipeline,
             Err(e) => {
                 tracing::warn!(%socket, error = %e, "live pipeline failed");
@@ -661,6 +753,9 @@ impl qobject::Core {
         if let Some(live) = self.as_mut().rust_mut().live.get_mut(&item) {
             live.pipeline = Some(pipeline);
             live.stop = Some(tx);
+        }
+        if let Some(grid) = feed.grid {
+            self.as_mut().set_tiles(QString::from(&grid));
         }
     }
 
@@ -700,23 +795,56 @@ fn stop(mut live: Live) {
         let _ = stop.send(());
     }
     if let Some(pipeline) = live.pipeline.take() {
+        // The cells stop drawing its textures before they go.
+        if live.source == TILES {
+            crate::atlas_cell::ffi::atlas_clear();
+        }
         let _ = pipeline.set_state(gst::State::Null);
     }
 }
 
-/// `unixfdsrc ! glupload ! glcolorconvert ! qml6glsink` into `item`.
-fn pipeline(item: usize, socket: &str) -> Result<gst::Pipeline, String> {
+/// The frames of `socket` into `item`: `unixfdsrc ! glupload` from
+/// system memory, `cudaipcsrc ! cudadownload` from the engine's GPU (a
+/// copy on the GPU into a GL texture), then `glcolorconvert ! qml6glsink`.
+/// Every frame passes the window's frame gate (`frame_gate`).
+///
+/// The tile picture (`tiles`) goes to the cells instead (`AtlasCell`),
+/// as a texture from an appsink: a layer per tile would cost the window
+/// a second frame after each one. `item`'s sink stays for its GL context,
+/// shared with the scene graph, and gets no frames.
+fn pipeline(
+    item: usize,
+    socket: &str,
+    transport: LiveTransport,
+    tiles: bool,
+) -> Result<gst::Pipeline, String> {
     let make = |name: &str| {
         gst::ElementFactory::make(name)
             .build()
             .map_err(|_| format!("GStreamer element {name} missing"))
     };
-    let src = make("unixfdsrc")?;
-    src.set_property("socket-path", socket);
+    let (src, upload) = match transport {
+        LiveTransport::UnixFd => {
+            let src = make("unixfdsrc")?;
+            src.set_property("socket-path", socket);
+            (src, make("glupload")?)
+        }
+        LiveTransport::CudaIpc => {
+            let src = make("cudaipcsrc")?;
+            src.set_property("address", socket);
+            (src, make("cudadownload")?)
+        }
+    };
     let queue = make("queue")?;
     queue.set_property("max-size-buffers", 2u32);
     queue.set_property_from_str("leaky", "downstream");
-    let upload = make("glupload")?;
+    let gl = make("capsfilter")?;
+    gl.set_property(
+        "caps",
+        gst::Caps::builder("video/x-raw")
+            .features(["memory:GLMemory"])
+            .build(),
+    );
     let convert = make("glcolorconvert")?;
     let sink = make("qml6glsink")?;
     // The engine paces the frames; drawing them on arrival keeps the
@@ -725,16 +853,108 @@ fn pipeline(item: usize, socket: &str) -> Result<gst::Pipeline, String> {
     sink.set_property("widget", item as gst::glib::Pointer);
 
     let pipeline = gst::Pipeline::new();
-    let elements = [&src, &queue, &upload, &convert, &sink];
+    let elements = [&src, &queue, &upload, &gl, &convert];
     pipeline.add_many(elements).map_err(|e| e.to_string())?;
     gst::Element::link_many(elements).map_err(|e| e.to_string())?;
+    // With the window's other pictures: one frame of the window for all.
+    let member = crate::frame_gate::GATE.join();
+    let drawn: gst::Element = if tiles {
+        let tee = make("tee")?;
+        let to_sink = make("queue")?;
+        let to_cells = make("queue")?;
+        let cells = cells_sink(member)?;
+        sink.set_property("async", false);
+        pipeline
+            .add_many([&tee, &to_sink, &sink, &to_cells, cells.upcast_ref()])
+            .map_err(|e| e.to_string())?;
+        gst::Element::link_many([&convert, &tee, &to_sink, &sink]).map_err(|e| e.to_string())?;
+        gst::Element::link_many([&tee, &to_cells, cells.upcast_ref()])
+            .map_err(|e| e.to_string())?;
+        if let Some(pad) = sink.static_pad("sink") {
+            pad.add_probe(gst::PadProbeType::BUFFER, |_, _| gst::PadProbeReturn::Drop);
+        }
+        cells.upcast()
+    } else {
+        pipeline.add(&sink).map_err(|e| e.to_string())?;
+        convert.link(&sink).map_err(|e| e.to_string())?;
+        if let Some(pad) = sink.static_pad("sink") {
+            pad.add_probe(gst::PadProbeType::BUFFER, move |_, _| {
+                member.pass();
+                gst::PadProbeReturn::Ok
+            });
+        }
+        sink
+    };
     if tracing::enabled!(tracing::Level::DEBUG) {
-        measure_frames(&sink, socket.to_string());
+        measure_frames(&drawn, socket.to_string());
     }
     pipeline
         .set_state(gst::State::Playing)
         .map_err(|e| format!("live pipeline does not start: {e}"))?;
     Ok(pipeline)
+}
+
+/// The tile picture's frames to the cells: RGBA textures, each kept until
+/// three more came (the scene graph may still draw the last one). Mapped
+/// for GL here, as a sink would: a frame from the GPU copy
+/// (`cudadownload`) is only put into its texture then.
+fn cells_sink(member: crate::frame_gate::Member) -> Result<gstreamer_app::AppSink, String> {
+    let sink = gstreamer_app::AppSink::builder()
+        .caps(
+            &gst::Caps::builder("video/x-raw")
+                .features(["memory:GLMemory"])
+                .field("format", "RGBA")
+                .field("texture-target", "2D")
+                .build(),
+        )
+        .sync(false)
+        .max_buffers(1)
+        .drop(true)
+        .build();
+    let kept = std::sync::Mutex::new(std::collections::VecDeque::new());
+    sink.set_callbacks(
+        gstreamer_app::AppSinkCallbacks::builder()
+            .new_sample(move |sink| {
+                use gstreamer_gl::prelude::*;
+                let sample = sink.pull_sample().map_err(|_| gst::FlowError::Eos)?;
+                let (Some(buffer), Some(info)) = (
+                    sample.buffer_owned(),
+                    sample
+                        .caps()
+                        .and_then(|caps| gstreamer_video::VideoInfo::from_caps(caps).ok()),
+                ) else {
+                    return Ok(gst::FlowSuccess::Ok);
+                };
+                let Ok(frame) = gstreamer_gl::GLVideoFrame::from_buffer_readable(buffer, &info)
+                else {
+                    return Ok(gst::FlowSuccess::Ok);
+                };
+                let Ok(memory) = frame.memory(0) else {
+                    return Ok(gst::FlowSuccess::Ok);
+                };
+                let (texture, width, height) = (
+                    memory.texture_id(),
+                    memory.texture_width(),
+                    memory.texture_height(),
+                );
+                // Drawn by the scene graph's context: done in GStreamer's first.
+                if let Some(sync) = frame.buffer().meta::<gstreamer_gl::GLSyncMeta>() {
+                    sync.set_sync_point(memory.context());
+                    sync.wait_cpu(memory.context());
+                }
+                // Ready to draw: with the window's other pictures.
+                member.pass();
+                let mut kept = kept.lock().unwrap_or_else(|e| e.into_inner());
+                kept.push_back(frame);
+                if kept.len() > 3 {
+                    kept.pop_front();
+                }
+                crate::atlas_cell::ffi::atlas_frame(texture, width, height);
+                Ok(gst::FlowSuccess::Ok)
+            })
+            .build(),
+    );
+    Ok(sink)
 }
 
 /// Report every few seconds how many frames reached `sink` and how old
@@ -867,8 +1087,19 @@ async fn measure() -> Option<Latency> {
         .filter(|l| l.samples > 0)
 }
 
+/// `showLive`'s source for the tile picture.
+const TILES: &str = "tiles";
+
+/// A live picture's socket, how its frames come, and for the tile picture
+/// its grid (JSON for QML).
+struct Feed {
+    socket: String,
+    transport: LiveTransport,
+    grid: Option<String>,
+}
+
 /// Socket of a live picture on this machine.
-async fn live_socket(source: &str) -> Result<String, String> {
+async fn live_feed(source: &str) -> Result<Feed, String> {
     let path = live_path(source);
     let resp = config::http()
         .get(format!("{}{path}", config::core_url()))
@@ -878,14 +1109,32 @@ async fn live_socket(source: &str) -> Result<String, String> {
     if !resp.status().is_success() {
         return Err(format!("{path}: {}", resp.status()));
     }
+    if source == TILES {
+        let tiles: LiveTiles = resp.json().await.map_err(|e| e.to_string())?;
+        let grid = serde_json::json!({
+            "columns": tiles.columns,
+            "rows": tiles.rows,
+            "cell_width": tiles.cell_width,
+            "cell_height": tiles.cell_height,
+        });
+        return Ok(Feed {
+            socket: tiles.socket,
+            transport: tiles.transport,
+            grid: Some(grid.to_string()),
+        });
+    }
     let feed: LiveFeed = resp.json().await.map_err(|e| e.to_string())?;
-    Ok(feed.socket)
+    Ok(Feed {
+        socket: feed.socket,
+        transport: feed.transport,
+        grid: None,
+    })
 }
 
 /// `program`, `preview` (the mixer's), or an input id (tile size).
 fn live_path(source: &str) -> String {
     match source {
-        "program" | "preview" => format!("/api/live/{source}"),
+        "program" | "preview" | TILES => format!("/api/live/{source}"),
         _ => format!("/api/live/inputs/{source}"),
     }
 }
@@ -909,8 +1158,8 @@ mod tests {
             ],
             ..Default::default()
         };
-        let map: serde_json::Value = serde_json::from_str(&levels_json(&levels)).unwrap();
-        assert_eq!(map, serde_json::json!({ "zone:Hall": -9.0 }));
+        let peaks: HashMap<String, f32> = peaks_of(&levels).collect();
+        assert_eq!(peaks, HashMap::from([("zone:Hall".to_string(), -9.0)]));
     }
 
     #[test]
@@ -918,5 +1167,24 @@ mod tests {
         assert_eq!(live_path("program"), "/api/live/program");
         assert_eq!(live_path("7d0c"), "/api/live/inputs/7d0c");
         assert_eq!(live_path("preview"), "/api/live/preview");
+        assert_eq!(live_path("tiles"), "/api/live/tiles");
+    }
+
+    #[test]
+    fn peaks_by_the_keys_qml_asks_for() {
+        let input = "00000000-0000-0000-0000-000000000001";
+        let bus = "00000000-0000-0000-0000-000000000002";
+        let levels: Levels = serde_json::from_value(serde_json::json!({
+            "inputs": [{ "input": input, "peak_db": -12.0, "channels_db": [-12.0, -14.0] }],
+            "program_peak_db": -6.0,
+            "phones_peak_db": null,
+            "buses": [{ "bus": bus, "peak_db": -20.0 }, { "bus": "00000000-0000-0000-0000-000000000003", "peak_db": null }]
+        }))
+        .unwrap();
+        let peaks: HashMap<String, f32> = peaks_of(&levels).collect();
+        assert_eq!(peaks.len(), 3);
+        assert_eq!(peaks[input], -12.0);
+        assert_eq!(peaks["program"], -6.0);
+        assert_eq!(peaks[&format!("bus:{bus}")], -20.0);
     }
 }

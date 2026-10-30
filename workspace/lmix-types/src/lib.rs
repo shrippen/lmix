@@ -68,8 +68,8 @@ pub use shortcut::{Shortcut, ShortcutSpec};
 pub use sound::{AfterFade, FadeCue, FadeTarget, SoundCue, SoundRepeat, SoundRoute};
 pub use stage::{PictureCue, PictureEnd, PictureFit, Stage, StageOutput, StagePatch, StageState};
 pub use state::{
-    Event, InputLevel, Latency, Levels, LiveFeed, OverlayChannel, QuickPlay, ShowState, Stinger,
-    Transition, ZonePeak,
+    Event, InputLevel, Latency, Levels, LiveFeed, LiveTiles, LiveTransport, OverlayChannel,
+    QuickPlay, RemovedKind, Restorable, ShowState, Stinger, Transition, ZonePeak,
 };
 pub use target::{HttpMethod, Target, TargetKind, TargetResult, TargetSpec};
 pub use zone::{Zone, ZoneOutput, ZonePatch, ZoneState};

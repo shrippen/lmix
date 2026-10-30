@@ -362,7 +362,7 @@ AppPage {
                 emphasis: KanteButton.Emphasis.Quiet
                 text: qsTr("Remove")
                 enabled: root.backend.connected && !row.isRunning
-                onClicked: root.act({ action: "remove_output", output: row.output.number })
+                onClicked: root.shell.askRemove("output", row.output)
             }
         }
     }

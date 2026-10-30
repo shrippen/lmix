@@ -33,8 +33,13 @@ KanteCard {
     required property var core
     required property var show
     required property var act
-    /** Peaks per input id, `program`, `phones` and `bus:<id>` (Core.levels as an object). */
-    property var levels: ({})
+    /** AppShell.askRemove: ask, then remove with a way back. */
+    required property var askRemove
+    /** AppShell.levels (`peak` per input id, `program`, `phones`, `bus:<id>`), or null. */
+    property var levels: null
+    function peak(key) {
+        return levels ? levels.peak(key) : undefined
+    }
     /** Height of the ways out, in px (stored by the page); 0: every row of them, at most half the column. */
     property real pathsHeight: 0
     signal pathsHeightMoved(real height)
@@ -100,7 +105,7 @@ KanteCard {
     onBusesChanged: syncStrips()
 
     function inputOf(key) {
-        return soundInputs.find(i => i.id === key)
+        return (show && show.inputById ? show.inputById(key) : StatePatch.byId(soundInputs, key))
             || ({ id: key, number: 0, name: "", audio: { on: false, volume: 0, follow_video: false }, listen: "off", phones: { on: false, level: 100 }, sends: {} })
     }
     function busOf(key) {
@@ -296,7 +301,7 @@ KanteCard {
                             line: qsTr("PGM", "program sound, short")
                             lineLong: qsTr("Program sound")
                             nameColor: KanteStyle.negativeTextColor
-                            level: mixer.levels.program
+                            level: mixer.peak("program")
                             volume: mixer.master.volume
                             on: !mixer.master.mute
                             onVolumeMoved: v => mixer.act({ action: "set_master", volume: v, mute: mixer.master.mute })
@@ -311,7 +316,7 @@ KanteCard {
                             name: qsTr("Headphones")
                             line: qsTr("MON", "listening, short")
                             lineLong: qsTr("Listening")
-                            level: mixer.levels.phones
+                            level: mixer.peak("phones")
                             volume: mixer.phones.volume
                             on: !mixer.phones.mute
                             onVolumeMoved: v => mixer.act({ action: "set_phones", volume: v, mute: mixer.phones.mute })
@@ -328,7 +333,7 @@ KanteCard {
                             name: bus.name
                             line: mixer.busLine(bus)
                             lineLong: mixer.busLineLong(bus)
-                            level: mixer.levels["bus:" + bus.id]
+                            level: mixer.peak("bus:" + bus.id)
                             volume: bus.volume
                             on: !bus.mute
                             listening: bus.listen
@@ -349,7 +354,7 @@ KanteCard {
         readonly property bool isMaster: key === mixer.masterKey
         readonly property bool isPhones: key === mixer.phonesKey
         readonly property var bus: mixer.buses.find(b => b.id === key) || null
-        readonly property var input: !isMaster && !isPhones && !bus ? mixer.soundInputs.find(i => i.id === key) || null : null
+        readonly property var input: !isMaster && !isPhones && !bus ? (mixer.show && mixer.show.inputById ? mixer.show.inputById(key) : StatePatch.byId(mixer.soundInputs, key)) || null : null
         title: isMaster ? qsTr("Master") : isPhones ? qsTr("Headphones")
             : bus ? qsTr("Bus “%1”").arg(bus.name) : input ? qsTr("Input %1 %2").arg(input.number).arg(input.name) : ""
         onClosed: {
@@ -431,8 +436,13 @@ KanteCard {
                     stepSize: 1
                     value: sendRow.level
                     Accessible.name: qsTr("Send to %1").arg(sendRow.modelData.name)
-                    onMoved: mixer.act({ action: "set_send", input: menu.input.number, bus: sendRow.modelData.id, level: Math.round(value) })
+                    onMoved: sendThrottle.push(Math.round(value))
+                    onPressedChanged: if (!pressed) { sendThrottle.flush() }
                     KanteSliderSkin { control: sendSlider }
+                    MoveThrottle {
+                        id: sendThrottle
+                        onPassed: level => mixer.act({ action: "set_send", input: menu.input.number, bus: sendRow.modelData.id, level: level })
+                    }
                 }
                 QQC2.Label {
                     Layout.preferredWidth: Kirigami.Units.gridUnit * 2
@@ -572,11 +582,11 @@ KanteCard {
             emphasis: KanteButton.Emphasis.Destructive
             text: qsTr("Remove bus")
             onClicked: {
-                removeDialog.bus = menu.bus
+                const bus = menu.bus
                 // Removed, not renamed.
                 nameField.busId = ""
                 menu.close()
-                removeDialog.open()
+                mixer.askRemove("bus", bus)
             }
         }
         QQC2.Label {
@@ -600,31 +610,11 @@ KanteCard {
         id: stripDialog
         /** The input's id: the dialog follows its state (and its number, if moved). */
         property string inputId: ""
-        input: mixer.soundInputs.find(i => i.id === inputId) || null
+        input: (mixer.show && mixer.show.inputById ? mixer.show.inputById(inputId) : StatePatch.byId(mixer.soundInputs, inputId)) || null
         parent: QQC2.Overlay.overlay
         anchors.centerIn: parent
         act: mixer.act
         buses: mixer.buses
-    }
-
-    KanteDialog {
-        id: removeDialog
-        property var bus: null
-        parent: QQC2.Overlay.overlay
-        anchors.centerIn: parent
-        modal: true
-        width: Kirigami.Units.gridUnit * 24
-        title: bus ? qsTr("Remove %1?").arg(bus.name) : ""
-        standardButtons: QQC2.Dialog.Ok | QQC2.Dialog.Cancel
-        // KanteDialog has a child of its own, so it does not size to this.
-        contentHeight: removeText.implicitHeight
-        onAccepted: mixer.act({ action: "remove_bus", bus: bus.id })
-        QQC2.Label {
-            id: removeText
-            width: parent.width
-            text: qsTr("Every input's send to it goes with it.")
-            wrapMode: Text.WordWrap
-        }
     }
 
     /** A small button of a strip; `active` shows it on. */
@@ -672,8 +662,13 @@ KanteCard {
             Accessible.name: qsTr("Volume of %1").arg(fader.name)
             QQC2.ToolTip.visible: hovered || pressed
             QQC2.ToolTip.text: qsTr("%1: %2").arg(fader.name).arg(Math.round(value))
-            onMoved: fader.moved(Math.round(value))
+            onMoved: faderThrottle.push(Math.round(value))
+            onPressedChanged: if (!pressed) { faderThrottle.flush() }
             KanteSliderSkin { control: slider }
+            MoveThrottle {
+                id: faderThrottle
+                onPassed: volume => fader.moved(volume)
+            }
         }
     }
 
@@ -690,7 +685,7 @@ KanteCard {
 
         Fader {
             name: strip.fullName
-            level: host.levels[strip.input.id]
+            level: host.peak(strip.input.id)
             volume: strip.input.audio.volume
             onMoved: v => host.act({ action: "set_volume", input: strip.input.number, volume: v })
         }
@@ -761,8 +756,13 @@ KanteCard {
             Accessible.name: qsTr("Level of %1 on the headphones").arg(strip.fullName)
             QQC2.ToolTip.visible: hovered || pressed
             QQC2.ToolTip.text: qsTr("On the headphones: %1").arg(strip.phonesSend.on ? Math.round(value) : qsTr("off"))
-            onMoved: host.act({ action: "set_phones_send", input: strip.input.number, on: strip.phonesSend.on, level: Math.round(value) })
+            onMoved: phonesThrottle.push(Math.round(value))
+            onPressedChanged: if (!pressed) { phonesThrottle.flush() }
             KanteSliderSkin { control: phonesLevel }
+            MoveThrottle {
+                id: phonesThrottle
+                onPassed: level => host.act({ action: "set_phones_send", input: strip.input.number, on: strip.phonesSend.on, level: level })
+            }
         }
     }
 

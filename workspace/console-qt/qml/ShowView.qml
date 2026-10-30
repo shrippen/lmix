@@ -20,6 +20,8 @@ ColumnLayout {
     required property var show
     /** The window's Core (colour names in the inspector). */
     required property var core
+    /** AppShell.levels, or null: the zones' levels. */
+    property var levels: null
 
     /** More columns: waits and follows (SUI.13). */
     property bool advanced: false
@@ -102,7 +104,8 @@ ColumnLayout {
     /** When the last state came, and now (for running times). */
     property real stateAt: Date.now()
     property real now: Date.now()
-    onShowChanged: stateAt = Date.now()
+    // When the running cues came: `show` stays the same object (ShowState).
+    onRunningChanged: stateAt = Date.now()
 
     Timer {
         interval: 100
@@ -642,6 +645,6 @@ ColumnLayout {
         act: view.act
         core: view.core
         zones: view.show && view.show.zones ? view.show.zones : []
-        levels: view.core.levels.length > 0 ? JSON.parse(view.core.levels) : ({})
+        levels: view.levels
     }
 }

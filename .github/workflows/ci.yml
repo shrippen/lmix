@@ -16,12 +16,14 @@
 # (scripts/test-m2b-vm.sh). The latency regression check of ROADMAP 3.4.
 #
 # core, console: tests without an engine: cargo test of lmix-types,
-# lmix-core, lmix-script and console-qt; lmix-core headless (text
+# lmix-core, lmix-script and console-qt; QML tests of the console
+# (scripts/test-qml.sh, offscreen); lmix-core headless (text
 # protocol, OSC, MIDI, metrics); script import (lmix-script); titles and browser pages in Chromium (Playwright).
 #
 # Stays local: scripts/test-console-qt.sh (Console on Xvfb with a real
 # strom, slow in the VM), scripts/test-global-keys.sh (D-Bus session),
-# scripts/test-looks-gl.sh (GPU).
+# scripts/test-looks-gl.sh (GPU), scripts/measure-gui-frames.sh (time
+# budget, real machine).
 #
 # Needs the secret GITEA_TOKEN: a Gitea token with write access to the
 # repository (commit statuses).
@@ -39,6 +41,7 @@ on:
       - workspace/strom
       - scripts/test-m2b-vm.sh
       - scripts/test-headless.sh
+      - scripts/test-qml.sh
       - scripts/test-script.sh
       - scripts/test-titles.sh
       - scripts/test-web.sh
@@ -280,6 +283,9 @@ jobs:
 
       - name: cargo test
         run: cd workspace/console-qt && cargo test
+
+      - name: QML tests
+        run: scripts/test-qml.sh
 
   # Also runs when a check failed or was cancelled, so Gitea never keeps
   # a stale "pending".
