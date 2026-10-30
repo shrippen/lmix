@@ -142,4 +142,18 @@ TestCase {
         compare(right.checked, true, "\u25b6")
         compare(picked, ["fade", "slide_right", "slide_right"])
     }
+
+    // A length set elsewhere (750 ms over OSC) is none of the segments:
+    // both arrows took the shortest, not the next one their way.
+    function test_arrows_from_a_length_between_the_segments() {
+        const menu = createTemporaryObject(menuComponent, test.Window.contentItem, { duration: 750 })
+        const length = lengths(menu)
+        length.step(1)
+        length.step(-1)
+        compare(picked, [1000, 500])
+        menu.duration = 2000
+        length.step(1)
+        length.step(-1)
+        compare(picked, [1000, 500, 1000])
+    }
 }

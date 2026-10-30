@@ -190,8 +190,13 @@ QQC2.Menu {
         Keys.onLeftPressed: step(-1)
         Keys.onRightPressed: step(1)
         function step(by) {
-            const next = Math.max(0, Math.min(menu.durations.length - 1, current + by))
-            if (next !== current) {
+            // A length between the segments (set over OSC): the next one
+            // its way, none past the ends.
+            const next = current >= 0
+                ? Math.max(0, Math.min(menu.durations.length - 1, current + by))
+                : by > 0 ? menu.durations.findIndex(ms => ms > menu.duration)
+                : menu.durations.reduce((last, ms, i) => ms < menu.duration ? i : last, -1)
+            if (next >= 0 && next !== current) {
                 menu.lengthPicked(menu.durations[next])
             }
         }
