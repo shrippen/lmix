@@ -225,69 +225,10 @@ AppPage {
         outputs: root.show ? root.show.outputs : []
     }
 
-    // Remove at once, with a way back: the toast's Undo (or Ctrl+Z while it
-    // shows) brings the input back with its settings (AUT.10).
-    // The toast waits for the state without the input and with it to bring
-    // back: a refused removal shows nothing, and another show or a removal
-    // from elsewhere does not pass for this one.
+    // Asked first, then a toast brings it back with its settings (rule 1
+    // of docs/DESIGN-DIALOGE.md, AUT.10).
     function removeInput(input) {
-        root.removing = { id: input.id, number: input.number, name: input.name }
-        root.act({ action: "remove_input", input: input.number })
-    }
-    property var removing: null
-    // Later: inputs and show change one after the other for one state.
-    onInputsChanged: Qt.callLater(root.removedOrNot)
-    // The core's refusal of this removal (a locked show, a stinger) ends
-    // it: the input may go another way later, and that is no removal from
-    // here. Answers to other actions leave it alone.
-    Connections {
-        target: backend
-        function onAnswered(action, refusal) {
-            const answered = JSON.parse(action)
-            if (refusal.length > 0 && root.removing && answered.action === "remove_input"
-                    && String(answered.input) === String(root.removing.number)) {
-                root.removing = null
-            }
-        }
-    }
-    function removedOrNot() {
-        if (!root.removing || root.inputs.some(i => i.id === root.removing.id)) {
-            return
-        }
-        if (root.show && root.show.restorable === root.removing.name) {
-            removedToast.text = qsTr("Input %1 \u201c%2\u201d removed").arg(root.removing.number).arg(root.removing.name)
-            removedToast.restores = root.removing.name
-            removedToast.show()
-        }
-        root.removing = null
-    }
-
-    KanteToast {
-        id: removedToast
-        // With the window's other toasts (MessageToasts).
-        parent: root.shell.toastColumn
-        width: Kirigami.Units.gridUnit * 20
-        kind: KanteToast.Kind.Info
-        title: qsTr("Removed")
-        life: 8000
-        /** The removed input's name: Undo brings back only that one. */
-        property string restores
-        readonly property bool restorable: root.show !== null && root.show.restorable === restores
-        actionText: restorable ? qsTr("Undo") : ""
-        actionShortcut: undoKey.free && restorable ? qsTr("Ctrl+Z") : ""
-        onActionTriggered: root.act({ action: "restore_input" })
-    }
-    // A show's own shortcut on Ctrl+Z wins, as for the File keys: two
-    // shortcuts on one key would both stay silent.
-    Shortcut {
-        id: undoKey
-        readonly property bool free: !shell.keyTaken("Ctrl+Z")
-        sequence: "Ctrl+Z"
-        enabled: root.visible && removedToast.shown && removedToast.restorable && free
-        onActivated: {
-            removedToast.hide()
-            root.act({ action: "restore_input" })
-        }
+        root.shell.askRemove("input", input)
     }
 
     InputSettingsDialog {
@@ -426,6 +367,7 @@ AppPage {
         parent: QQC2.Overlay.overlay
         anchors.centerIn: parent
         act: root.act
+        askRemove: root.shell.askRemove
         core: backend
         buses: root.show && root.show.buses ? root.show.buses : []
         master: root.show && root.show.master ? root.show.master : ({ volume: 100, mute: false })
@@ -736,8 +678,8 @@ AppPage {
                             readonly property string key: "restore"
                             readonly property bool wanted: root.show !== null && !!root.show.restorable
                             visible: inputActions.inBar[key] === true
-                            text: qsTr("Bring back %1").arg(root.show ? root.show.restorable : "")
-                            onClicked: root.act({ action: "restore_input" })
+                            text: qsTr("Bring back %1").arg(root.show && root.show.restorable ? root.show.restorable.name : "")
+                            onClicked: root.act({ action: "restore" })
                         }
                         // Cards are exclusive: lmix takes them only on this switch,
                         // which starts off with every start of the core.
@@ -968,6 +910,7 @@ AppPage {
                     core: backend
                     show: root.show
                     act: root.act
+                    askRemove: root.shell.askRemove
                     onEditRequested: layout => {
                         layoutDialog.layout = layout
                         layoutDialog.open()
@@ -981,6 +924,7 @@ AppPage {
                     outputs: outputModel
                     outputById: root.outputById
                     confirmStop: root.shell.confirmStop
+                    askRemove: root.shell.askRemove
                     onConfirmStopChosen: on => root.shell.confirmStop = on
                     onAddRequested: addOutputDialog.open()
                 }
@@ -1011,6 +955,7 @@ AppPage {
             core: backend
             show: root.show
             act: root.act
+            askRemove: root.shell.askRemove
             levels: root.levels
             pathsHeight: viewSettings.mixerPathsHeight
             onPathsHeightMoved: h => viewSettings.mixerPathsHeight = h

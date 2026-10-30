@@ -33,6 +33,8 @@ KanteCard {
     required property var core
     required property var show
     required property var act
+    /** AppShell.askRemove: ask, then remove with a way back. */
+    required property var askRemove
     /** AppShell.levels (`peak` per input id, `program`, `phones`, `bus:<id>`), or null. */
     property var levels: null
     function peak(key) {
@@ -580,11 +582,11 @@ KanteCard {
             emphasis: KanteButton.Emphasis.Destructive
             text: qsTr("Remove bus")
             onClicked: {
-                removeDialog.bus = menu.bus
+                const bus = menu.bus
                 // Removed, not renamed.
                 nameField.busId = ""
                 menu.close()
-                removeDialog.open()
+                mixer.askRemove("bus", bus)
             }
         }
         QQC2.Label {
@@ -613,26 +615,6 @@ KanteCard {
         anchors.centerIn: parent
         act: mixer.act
         buses: mixer.buses
-    }
-
-    KanteDialog {
-        id: removeDialog
-        property var bus: null
-        parent: QQC2.Overlay.overlay
-        anchors.centerIn: parent
-        modal: true
-        width: Kirigami.Units.gridUnit * 24
-        title: bus ? qsTr("Remove %1?").arg(bus.name) : ""
-        standardButtons: QQC2.Dialog.Ok | QQC2.Dialog.Cancel
-        // KanteDialog has a child of its own, so it does not size to this.
-        contentHeight: removeText.implicitHeight
-        onAccepted: mixer.act({ action: "remove_bus", bus: bus.id })
-        QQC2.Label {
-            id: removeText
-            width: parent.width
-            text: qsTr("Every input's send to it goes with it.")
-            wrapMode: Text.WordWrap
-        }
     }
 
     /** A small button of a strip; `active` shows it on. */

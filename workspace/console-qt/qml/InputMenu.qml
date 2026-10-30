@@ -293,7 +293,7 @@ QQC2.Menu {
         }
     }
     QQC2.MenuSeparator {}
-    // Removed at once; the page's toast brings it back (restore_input).
+    // Asked first; the toast brings it back (Removals, restore).
     KanteMenuItem {
         text: qsTr("Remove")
         icon.name: "edit-delete"

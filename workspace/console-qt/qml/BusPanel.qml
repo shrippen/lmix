@@ -18,6 +18,8 @@ Item {
     id: panel
 
     required property var act
+    /** AppShell.askRemove: ask, then remove with a way back. */
+    required property var askRemove
     required property var core
     /** `buses` at most and `name_max` characters of a name (lmix-types). */
     readonly property var limits: JSON.parse(core.choices("bus_limits"))
@@ -41,32 +43,6 @@ Item {
     KeyedModel { id: busModel }
     Component.onCompleted: busModel.sync(buses.map(b => b.id))
     onBusesChanged: busModel.sync(buses.map(b => b.id))
-
-    /** Removes `bus` after asking: its sends go with it. */
-    function remove(bus) {
-        removeDialog.action = { action: "remove_bus", bus: bus.id }
-        removeDialog.title = qsTr("Remove %1?").arg(bus.name)
-        removeDialog.open()
-    }
-
-    KanteDialog {
-        id: removeDialog
-        property var action: null
-        parent: QQC2.Overlay.overlay
-        anchors.centerIn: parent
-        modal: true
-        width: Kirigami.Units.gridUnit * 24
-        standardButtons: QQC2.Dialog.Ok | QQC2.Dialog.Cancel
-        // KanteDialog has a child of its own, so it does not size to this.
-        contentHeight: removeText.implicitHeight
-        onAccepted: panel.act(action)
-        QQC2.Label {
-            id: removeText
-            width: parent.width
-            text: qsTr("Every input's send to it goes with it.")
-            wrapMode: Text.WordWrap
-        }
-    }
 
     /** A meter over volume and mute. */
     component FaderRows: ColumnLayout {
@@ -211,7 +187,7 @@ Item {
                             QQC2.ToolTip.visible: hovered
                             QQC2.ToolTip.delay: Kirigami.Units.toolTipDelay
                             QQC2.ToolTip.text: text
-                            onClicked: panel.remove(bus.modelData)
+                            onClicked: panel.askRemove("bus", bus.modelData)
                         }
                     }
                     FaderRows {

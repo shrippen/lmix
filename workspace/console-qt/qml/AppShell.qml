@@ -83,9 +83,10 @@ Kirigami.ApplicationWindow {
         target: root.contentItem
     }
 
-    /** Where toasts stack, bottom right (MessageToasts); a page's own
-     *  toast takes it as its parent. */
-    readonly property alias toastColumn: toasts.column
+    /** Remove after asking, with a toast to bring it back (Removals). */
+    function askRemove(kind, item) {
+        removals.ask(kind, item)
+    }
 
     /** Every input live in one picture; LiveView shows its cell of it. */
     readonly property alias tilesAtlas: tilesAtlas
@@ -853,6 +854,14 @@ Kirigami.ApplicationWindow {
                     anchors.bottom: parent.bottom
                     z: 10
                     core: root.backend
+                }
+                Removals {
+                    id: removals
+                    core: root.backend
+                    act: root.act
+                    show: root.show
+                    column: toasts.column
+                    undoKeyFree: !root.keyTaken("Ctrl+Z")
                 }
             }
 

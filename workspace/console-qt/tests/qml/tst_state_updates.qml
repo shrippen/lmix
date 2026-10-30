@@ -84,6 +84,7 @@ TestCase {
             height: 800
             core: fakeCore
             act: function (action) {}
+            askRemove: function (kind, item) {}
         }
     }
 

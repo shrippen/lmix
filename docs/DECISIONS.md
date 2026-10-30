@@ -1110,7 +1110,8 @@ Kurzbefehle können keine Kurzbefehle auslösen oder ändern (keine
 Schleifen); Tasten sind eindeutig, eine Show-Taste gewinnt gegen 1–9.
 **Wiederherstellen und Sperre**: `restore_input` holt den zuletzt
 geschlossenen Input mit Id, Einstellungen, Platz und Slot zurück (die
-letzten zehn, solange die Show offen ist). `set_lock` sperrt Schließen von
+letzten zehn, solange die Show offen ist; seit 2026-10-29 `restore` für
+Inputs, Layouts, Busse und Ausgänge, siehe dort). `set_lock` sperrt Schließen von
 Inputs, Show öffnen/leeren und Ausgänge stoppen/entfernen; Umschalten geht
 weiter. Die Sperre gilt nur zur Laufzeit.
 **Auslöser**: je Input bis zu 8: bei Programm an/aus, Vorschau, Overlay
@@ -5163,3 +5164,31 @@ letztes, also ohne Wartezeit (NFA.3: ≤ 3 Frames hinter Program, gemessen
 72 ms Bildalter am Sink); Kacheln weiter mit voller Bildrate (OUT.11), alles
 auf der GPU (NFA.1, G.2).
 
+## 2026-10-29 — Entfernen mit Rückfrage und Rückgängig
+
+Regel 1 aus `docs/DESIGN-DIALOGE.md`. Inputs, Layouts, Busse und Ausgänge
+fragen vor dem Entfernen (roter Balken, die Frage als Titel, der Knopf mit
+Verb und Objekt; Enter behält). Danach bietet ein Toast „Rückgängig“ an,
+Ctrl+Z ebenso.
+
+- **Ein Stapel im Kern:** lmix-core hält die letzten zehn Entfernungen
+  aller vier Arten in einem Stapel. `restore` (vorher `restore_input`, nur
+  für Inputs) holt die oberste zurück, an ihren alten Platz und mit ihren
+  Einstellungen. Ein Bus kommt mit den Sends der Inputs zurück. Hat ein
+  anderer Bus inzwischen seinen Namen, heißt er „Name (2)“.
+- **Was sich inzwischen geändert hat, gilt:** Ein Layout kommt ohne die
+  Inputs zurück, die seither gegangen sind, und auf einem freien
+  Bild-im-Bild-Platz. Ein Ausgang kommt gestoppt zurück, ohne einen
+  inzwischen entfernten Bus.
+- **Abgelehnt bleibt es liegen:** Sind alle Layouts belegt oder alle Busse,
+  lehnt `restore` ab, und die Entfernung bleibt die oberste.
+- `restorable` im Zustand nennt jetzt Art und Name (`{kind, name}`); der
+  Toast der Console bietet Rückgängig nur, solange es seine Entfernung ist.
+- **Bricht:** `restore_input` heißt `restore`, `restorable` ist ein Objekt
+  statt eines Namens. Gespeicherte Aktionen (Show, Einstellungen,
+  Kurzbefehle für alle Shows) liest lmix-core unter dem neuen Namen
+  (`RENAMED_ACTIONS` in show.rs, ohne Alias im Typ); OSC-Aufrufe mit
+  `restore_input` gehen nicht mehr (vor dem ersten Release).
+- Nicht im Stapel: Zonen, Ziele, Cues, Auslöser, Belegungen und Vorlagen
+  (Regel 1 nennt sie auch; sie folgen), sowie Stoppen und Werkseinstellungen
+  (nicht zurückzuholen, nur mit Rückfrage).

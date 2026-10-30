@@ -63,6 +63,9 @@ pub fn parse(bytes: &[u8]) -> Result<SettingsFile, String> {
             crate::show::migrate_shortcut_actions(shortcuts);
         }
     }
+    if let Some(shortcuts) = value.get_mut("shortcuts") {
+        crate::show::rename_actions(shortcuts);
+    }
     let envelope: Envelope = serde_json::from_value(value).map_err(|e| e.to_string())?;
     if envelope.format != FORMAT {
         return Err(format!(
@@ -89,6 +92,21 @@ mod tests {
         assert_eq!(parse(&to_bytes(&settings)).unwrap(), settings);
         assert!(parse(br#"{"format":"lmix-show","version":1}"#).is_err());
         assert!(parse(br#"{"format":"lmix-settings","version":9}"#).is_err());
+    }
+
+    /// `restore_input` became `restore`: shortcuts for all shows that
+    /// have it still load.
+    #[test]
+    fn restore_input_shortcuts_load_as_restore() {
+        let file = format!(
+            r#"{{"format":"lmix-settings","version":{VERSION},"shortcuts":[
+                {{"id":"6f1c0f7e-2d1b-4c55-9a43-0d3f2a9b8c11","label":"Back","actions":[
+                    {{"action":"restore_input"}}
+                ]}}
+            ]}}"#
+        );
+        let settings = parse(file.as_bytes()).expect("loads");
+        assert_eq!(settings.shortcuts[0].actions, [lmix_types::Action::Restore]);
     }
 
     #[test]
