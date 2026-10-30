@@ -196,9 +196,10 @@ struct Args {
     #[arg(long, env = "LMIX_CARD_LEAD_MS", default_value_t = engine::flows::CARD_LEAD_MS)]
     card_lead_ms: u64,
 
-    /// Frames a DeckLink card queues before playback; each one is a
-    /// frame of delay.
-    #[arg(long, env = "LMIX_CARD_FRAMES", default_value_t = engine::flows::CARD_FRAMES)]
+    /// Frames a DeckLink card queues before playback (2–12); each one
+    /// is a frame of delay.
+    #[arg(long, env = "LMIX_CARD_FRAMES", default_value_t = engine::flows::CARD_FRAMES,
+          value_parser = clap::value_parser!(u64).range(2..=12))]
     card_frames: u64,
 
     /// Show file to open at start; without it the last autosave is resumed.

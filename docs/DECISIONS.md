@@ -5483,7 +5483,7 @@ nichts um einen ganzen Schritt dazukam.
 
 **Nachtrag (Puffer der Karte)**: decklink2 war so etwa 130 ms langsamer,
 weil es 7 Bilder vorhält (280 ms bei 25p, 140 ms bei 50p). Der strom-Block
-hat jetzt `buffered_frames` (2–14, Standard 7 wie GStreamer): Er setzt
+hat jetzt `buffered_frames` (2–12, Standard 7 wie GStreamer; zwei unter dem `max-buffered-frames` 14 des Sinks, über dem er verwirft): Er setzt
 `n-preroll-frames`, `min-buffered-frames` folgt zwei darunter (1 bis 3,
 GStreamers 3 bei 7). lmix stellt 3 ein (`CARD_FRAMES`, `--card-frames`).
 Mit 2 Bildern verwarf oder wiederholte die Karte schon ohne strom in 2
