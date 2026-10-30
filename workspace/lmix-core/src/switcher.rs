@@ -784,6 +784,9 @@ pub struct Switcher {
     /// Failed outputs started again whose flow runs while the failback
     /// waits to see it hold; they count as running for commands.
     held_outputs: HashSet<OutputId>,
+    /// Outputs whose failback runs (the service's loop): failed, they are
+    /// started again with what the show has then.
+    failing_back: HashSet<OutputId>,
     /// Length of the item each player plays, by slot; runtime only.
     clip_ms: HashMap<usize, u64>,
     /// Templates, data source rows, title calls; runtime only.
@@ -862,6 +865,7 @@ impl Switcher {
             clip_ms: HashMap::new(),
             output_status: HashMap::new(),
             held_outputs: Default::default(),
+            failing_back: Default::default(),
             titles: graphics::TitleRuntime::default(),
             dynamic_inputs: Default::default(),
             dynamic_values: Default::default(),
@@ -1842,7 +1846,8 @@ impl Switcher {
                 spec,
                 source,
                 name,
-            } => self.update_output(&output, spec, source, name),
+                bus,
+            } => self.update_output(&output, spec, source, name, bus),
             Action::RemoveOutput { output } => {
                 self.check_unlocked()?;
                 self.remove_output(&output)
@@ -5156,14 +5161,15 @@ impl Switcher {
             Some(bus) => Some(self.show.buses[self.find_bus(&bus)?].id),
             None => None,
         };
-        let output = self.checked_output(OutputId::new(), spec, source, name, bus)?;
+        let output = self.checked_output(OutputId::new(), spec, source, name, bus, None)?;
         self.show.outputs.push(output);
         Ok(Vec::new())
     }
 
     /// Another spec, source and name for an output that does not send;
-    /// its id, place and bus stay (a screen has no sound, so it drops
-    /// the bus). The settings before go on the stack `restore` takes
+    /// its id and place stay. `bus` left out keeps its sound (a screen
+    /// has none, so it drops the bus); given, a screen refuses one. The
+    /// settings before, bus included, go on the stack `restore` takes
     /// from.
     fn update_output(
         &mut self,
@@ -5171,23 +5177,36 @@ impl Switcher {
         spec: OutputSpec,
         source: OutputSource,
         name: Option<String>,
+        bus: Option<Option<BusRef>>,
     ) -> Result<Vec<Command>, ActionError> {
         let index = self.find_output(output)?;
         let old = &self.show.outputs[index];
         self.check_not_sending(old)?;
-        let bus = old
-            .bus
-            .filter(|_| !matches!(spec, OutputSpec::Display { .. }));
-        let new = self.checked_output(old.id, spec, source, name, bus)?;
+        let screen = matches!(spec, OutputSpec::Display { .. });
+        let bus = match bus {
+            None => old.bus.filter(|_| !screen),
+            Some(None) => None,
+            Some(Some(_)) if screen => {
+                return Err(ActionError::NoAudio {
+                    reference: old.name.clone(),
+                })
+            }
+            Some(Some(bus)) => Some(self.show.buses[self.find_bus(&bus)?].id),
+        };
+        let old = &self.show.outputs[index];
+        let new = self.checked_output(old.id, spec, source, name, bus, Some(old.source))?;
         let before = std::mem::replace(&mut self.show.outputs[index], new);
         self.keep_removed(Removed::OutputSettings { output: before });
         Ok(Vec::new())
     }
 
-    /// A running output (also one its failback holds) or one waiting for
-    /// the cards would send with settings it was not started with.
+    /// A running output, one waiting for the cards or one its failback
+    /// starts again would send with settings it was not started with.
     fn check_not_sending(&self, output: &ShowOutput) -> Result<(), ActionError> {
-        if self.output_running(output.id) || self.output_waits_for_cards(output.id) {
+        if self.output_running(output.id)
+            || self.output_waits_for_cards(output.id)
+            || self.output_fails_back(output.id)
+        {
             return Err(ActionError::OutputSending {
                 reference: output.name.clone(),
             });
@@ -5214,13 +5233,17 @@ impl Switcher {
                 *pair = pair.filter(known);
             }
         }
-        self.feed_of(&output)?;
+        if output.source != self.show.outputs[index].source {
+            self.feed_of(&output)?;
+        }
         self.show.outputs[index] = output;
         Ok(Vec::new())
     }
 
     /// The output as adding or updating sets it: the spec checked, a
-    /// name given when none is (`add_output`).
+    /// name given when none is (`add_output`). The source it has had
+    /// (`kept`) passes as it is: an ISO whose input was removed may get a
+    /// new name or address and stays failed until it gets a source.
     fn checked_output(
         &self,
         id: OutputId,
@@ -5228,6 +5251,7 @@ impl Switcher {
         source: OutputSource,
         name: Option<String>,
         bus: Option<BusId>,
+        kept: Option<OutputSource>,
     ) -> Result<ShowOutput, ActionError> {
         if let Some(reason) = spec.problem() {
             return Err(ActionError::BadEncoding { reason });
@@ -5247,7 +5271,9 @@ impl Switcher {
             source,
             bus,
         };
-        self.feed_of(&output)?;
+        if kept != Some(source) {
+            self.feed_of(&output)?;
+        }
         let name = match (output.name.is_empty(), source) {
             (false, _) => output.name.clone(),
             (true, OutputSource::Program) => output.spec.default_name(),
@@ -5627,9 +5653,28 @@ impl Switcher {
         }
     }
 
-    /// The failback of output `id` is over: whatever its status says goes.
-    pub fn end_hold(&mut self, id: OutputId) {
+    /// The service's failback starts failed output `id` again until it
+    /// runs or is stopped.
+    pub fn begin_failback(&mut self, id: OutputId) {
+        self.failing_back.insert(id);
+    }
+
+    /// The failback of output `id` is over, its hold too: whatever its
+    /// status says goes.
+    pub fn end_failback(&mut self, id: OutputId) {
         self.held_outputs.remove(&id);
+        self.failing_back.remove(&id);
+    }
+
+    /// Whether the failback is to start output `id` again: held, or
+    /// failed with its failback running (stopped, it does not).
+    fn output_fails_back(&self, id: OutputId) -> bool {
+        self.held_outputs.contains(&id)
+            || (self.failing_back.contains(&id)
+                && matches!(
+                    self.output_status.get(&id),
+                    Some(OutputStatus::Failed { .. })
+                ))
     }
 
     /// Failed output `id` was started again: still failed until its flow
@@ -5656,6 +5701,7 @@ impl Switcher {
                 source: o.source,
                 bus: o.bus,
                 status: self.output_status.get(&o.id).cloned().unwrap_or_default(),
+                failback: self.output_fails_back(o.id),
             })
             .collect()
     }
@@ -9916,6 +9962,7 @@ mod tests {
                 },
                 source: OutputSource::Preview,
                 name: Some("Desk".into()),
+                bus: None,
             })
             .unwrap();
         // Stopped: only the show changes.
@@ -9942,6 +9989,7 @@ mod tests {
             spec: srt_at(9001),
             source: OutputSource::Preview,
             name: None,
+            bus: None,
         })
         .unwrap();
         assert!(sw.state().outputs[0].name.ends_with(" (Preview)"));
@@ -9956,6 +10004,7 @@ mod tests {
             spec: srt_at(9100),
             source: OutputSource::Multiview,
             name: Some("Wall".into()),
+            bus: None,
         })
         .unwrap();
         assert_eq!(
@@ -9979,6 +10028,7 @@ mod tests {
             spec: srt_at(9100),
             source: OutputSource::Program,
             name: Some("Wall".into()),
+            bus: None,
         };
         for status in [
             OutputStatus::Running { since_ms: 0 },
@@ -10016,6 +10066,217 @@ mod tests {
         assert_eq!(sw.state().outputs[0].name, "CDN");
     }
 
+    // Between two tries of its failback a failed output is not held, yet
+    // the next try would start it with whatever the show has then.
+    #[test]
+    fn an_output_its_failback_starts_again_keeps_its_settings() {
+        let mut sw = two_outputs();
+        let id = sw.state().outputs[0].id;
+        let update = || Action::UpdateOutput {
+            output: OutputRef::Number(1),
+            spec: OutputSpec::Display {
+                mode: lmix_types::DisplayMode::Fullscreen,
+            },
+            source: OutputSource::Program,
+            name: Some("Wall".into()),
+            bus: None,
+        };
+        // Failed and nothing tries again: fixing it is what editing is for.
+        let failed = || OutputStatus::Failed {
+            message: "refused".into(),
+        };
+        sw.set_output_status(id, failed());
+        assert!(!sw.state().outputs[0].failback);
+        sw.apply(update()).unwrap();
+        sw.apply(Action::Restore).unwrap();
+
+        sw.begin_failback(id);
+        assert!(sw.state().outputs[0].failback);
+        assert!(matches!(
+            sw.apply(update()),
+            Err(ActionError::OutputSending { .. })
+        ));
+        let start = sw.restart_command(id);
+        assert!(
+            matches!(
+                start,
+                Some(Command::StartOutput {
+                    spec: OutputSpec::Srt { .. },
+                    ..
+                })
+            ),
+            "{start:?}"
+        );
+
+        // Stopped while its failback still runs: free at once.
+        sw.set_output_status(id, OutputStatus::Stopped);
+        assert!(!sw.state().outputs[0].failback);
+        sw.apply(update()).unwrap();
+        // Failed again, its failback over: free too.
+        sw.set_output_status(id, failed());
+        sw.begin_failback(id);
+        sw.end_failback(id);
+        assert!(!sw.state().outputs[0].failback);
+        sw.apply(Action::Restore).unwrap();
+        assert_eq!(sw.state().outputs[0].name, "CDN");
+    }
+
+    #[test]
+    fn an_output_takes_its_bus_with_the_update() {
+        let mut sw = two_outputs();
+        let (in_ear, stream) = (sw.state().buses[0].id, sw.state().buses[1].id);
+        let update = |spec, bus| Action::UpdateOutput {
+            output: OutputRef::Number(1),
+            spec,
+            source: OutputSource::Program,
+            name: Some("CDN".into()),
+            bus,
+        };
+        // Left out, the bus stays; given, it changes; null, it goes.
+        sw.apply(update(srt_at(9001), None)).unwrap();
+        assert_eq!(sw.state().outputs[0].bus, Some(stream));
+        sw.apply(update(srt_at(9001), Some(Some(bus("In-Ear")))))
+            .unwrap();
+        assert_eq!(sw.state().outputs[0].bus, Some(in_ear));
+        sw.apply(update(srt_at(9001), Some(None))).unwrap();
+        assert_eq!(sw.state().outputs[0].bus, None);
+        // Undo brings back the bus with the rest, one step each.
+        sw.apply(Action::Restore).unwrap();
+        assert_eq!(sw.state().outputs[0].bus, Some(in_ear));
+        sw.apply(Action::Restore).unwrap();
+        assert_eq!(sw.state().outputs[0].bus, Some(stream));
+
+        // A refused update changes nothing, the bus neither.
+        let rtmp = OutputSpec::Rtmp {
+            url: "http://example.com".into(),
+            key: String::new(),
+            video_kbps: 6000,
+            encoding: Default::default(),
+        };
+        assert!(sw.apply(update(rtmp, Some(None))).is_err());
+        assert_eq!(sw.state().outputs[0].bus, Some(stream));
+
+        // A screen has no sound: a kept bus goes, a given one is refused.
+        let screen = || OutputSpec::Display {
+            mode: lmix_types::DisplayMode::Window,
+        };
+        assert!(matches!(
+            sw.apply(update(screen(), Some(Some(bus("Stream"))))),
+            Err(ActionError::NoAudio { .. })
+        ));
+        sw.apply(update(screen(), None)).unwrap();
+        assert_eq!(sw.state().outputs[0].bus, None);
+        // It no longer holds the bus back.
+        sw.apply(Action::RemoveBus { bus: bus("Stream") }).unwrap();
+    }
+
+    #[test]
+    fn an_update_without_bus_keeps_it_and_null_clears_it() {
+        let parse = |bus: &str| {
+            let json = format!(
+                r#"{{"action":"update_output","output":1,"spec":{{"kind":"ndi","name":"A"}}{bus}}}"#
+            );
+            match serde_json::from_str::<Action>(&json).unwrap() {
+                Action::UpdateOutput { bus, .. } => bus,
+                other => panic!("{other:?}"),
+            }
+        };
+        assert_eq!(parse(""), None);
+        assert_eq!(parse(r#","bus":null"#), Some(None));
+        assert_eq!(parse(r#","bus":"Stream""#), Some(Some(bus("Stream"))));
+    }
+
+    #[test]
+    fn restore_sets_the_bus_back_after_a_bus_change() {
+        let mut sw = two_outputs();
+        let stream = sw.state().buses[1].id;
+        sw.apply(Action::UpdateOutput {
+            output: OutputRef::Number(1),
+            spec: srt_at(9001),
+            source: OutputSource::Program,
+            name: Some("CDN".into()),
+            bus: None,
+        })
+        .unwrap();
+        sw.apply(Action::SetOutputBus {
+            output: OutputRef::Number(1),
+            bus: Some(bus("In-Ear")),
+        })
+        .unwrap();
+        sw.apply(Action::Restore).unwrap();
+        assert_eq!(sw.state().outputs[0].bus, Some(stream));
+        assert_eq!(sw.state().outputs[0].spec, srt_at(9000));
+    }
+
+    #[test]
+    fn restore_leaves_out_a_bus_removed_since() {
+        let mut sw = with_buses();
+        let card = |more_pairs| OutputSpec::Card {
+            device: 0,
+            mode: lmix_types::CardMode::from_nick("1080p25").unwrap(),
+            channels: lmix_types::CardChannels::Eight,
+            more_pairs,
+            sound_delay_ms: 0,
+        };
+        let (in_ear, stream) = (sw.state().buses[0].id, sw.state().buses[1].id);
+        sw.apply(Action::AddOutput {
+            spec: card(vec![Some(in_ear), Some(stream)]),
+            source: OutputSource::Program,
+            name: Some("SDI".into()),
+            bus: Some(bus("Stream")),
+        })
+        .unwrap();
+        // Off both buses, then Stream goes.
+        sw.apply(Action::UpdateOutput {
+            output: OutputRef::Number(1),
+            spec: card(vec![Some(in_ear)]),
+            source: OutputSource::Program,
+            name: Some("SDI".into()),
+            bus: Some(None),
+        })
+        .unwrap();
+        sw.apply(Action::RemoveBus { bus: bus("Stream") }).unwrap();
+        // The stack brings the bus back first; it went for good here.
+        sw.removed.retain(|r| !matches!(r, Removed::Bus { .. }));
+
+        sw.apply(Action::Restore).unwrap();
+        let back = &sw.state().outputs[0];
+        assert_eq!(back.bus, None);
+        assert_eq!(back.spec, card(vec![Some(in_ear), None]));
+    }
+
+    // An ISO whose input went may be renamed; a new source must be there.
+    #[test]
+    fn an_iso_without_its_input_keeps_its_source() {
+        let mut sw = two_inputs();
+        let b = sw.state().inputs[1].id;
+        sw.apply(Action::AddOutput {
+            spec: srt_at(9000),
+            source: OutputSource::Input(b),
+            name: Some("ISO".into()),
+            bus: None,
+        })
+        .unwrap();
+        sw.apply(Action::RemoveInput { input: named("B") }).unwrap();
+        sw.removed.clear();
+        let update = |source| Action::UpdateOutput {
+            output: OutputRef::Number(1),
+            spec: srt_at(9001),
+            source,
+            name: Some("ISO B".into()),
+            bus: None,
+        };
+        sw.apply(update(OutputSource::Input(b))).unwrap();
+        assert_eq!(sw.state().outputs[0].source, OutputSource::Input(b));
+        assert_eq!(sw.state().outputs[0].name, "ISO B");
+        assert!(matches!(
+            sw.apply(update(OutputSource::Input(InputId::new()))),
+            Err(ActionError::UnknownInput { .. })
+        ));
+        sw.apply(Action::Restore).unwrap();
+        assert_eq!(sw.state().outputs[0].name, "ISO");
+    }
+
     #[test]
     fn an_output_update_is_checked_like_adding() {
         let mut sw = two_outputs();
@@ -10025,6 +10286,7 @@ mod tests {
             spec,
             source,
             name: Some("Changed".into()),
+            bus: None,
         };
         let rtmp = OutputSpec::Rtmp {
             url: "http://example.com".into(),
@@ -10058,6 +10320,7 @@ mod tests {
                 spec: srt_at(9000),
                 source: OutputSource::Program,
                 name: None,
+                bus: None,
             }),
             Err(ActionError::UnknownOutput { .. })
         ));

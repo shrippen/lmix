@@ -381,6 +381,16 @@ pub enum VolumeTarget {
     Phones,
 }
 
+/// A field that may be left out (`None`) or given, also as `null`
+/// (`Some(None)`).
+fn given<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    T::deserialize(deserializer).map(Some)
+}
+
 /// Every operation, whatever triggered it.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "action", rename_all = "snake_case")]
@@ -490,9 +500,11 @@ pub enum Action {
         name: Option<String>,
     },
     /// Replace an output's spec, source and name as `add_output` sets
-    /// them; it keeps its id, number and bus. Refused while it sends or
-    /// waits for the cards (stop it first); `restore` brings back the
-    /// settings before.
+    /// them; it keeps its id and number. `bus` left out keeps its sound
+    /// (a screen drops it), `null` gives it the source's own. Refused
+    /// while it sends, waits for the cards or its failback is to start it
+    /// again (stop it first); `restore` brings back the settings before,
+    /// bus included.
     UpdateOutput {
         output: OutputRef,
         spec: OutputSpec,
@@ -500,6 +512,12 @@ pub enum Action {
         source: OutputSource,
         #[serde(default)]
         name: Option<String>,
+        #[serde(
+            default,
+            deserialize_with = "given",
+            skip_serializing_if = "Option::is_none"
+        )]
+        bus: Option<Option<BusRef>>,
     },
     /// Remove an output (stops it first).
     RemoveOutput {
