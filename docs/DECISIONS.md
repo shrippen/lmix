@@ -5410,10 +5410,12 @@ Größe M nach Regel 3.
 - **Suche oben:** Sie hat beim Öffnen den Fokus und filtert über Beschreibung
   und Taste. Wörter suchen als Teiltext, die Reihenfolge ist egal. Mit „+“
   getippt („strg+s“) ist es eine Taste, und jeder Teil muss eine Kappe sein.
-  Sonst fände „Strg+S“ jeden Eintrag mit einem „s“. Beim Schließen wird die
-  Suche geleert.
+  Sonst fände „Strg+S“ jeden Eintrag mit einem „s“. Der letzte Teil gilt
+  schon, wenn er erst angefangen ist („strg+um“ findet Umschalt), und ein „+“
+  am Ende zählt nicht. Bereiche lösen sich auf: „strg+3“ findet „Strg+1…5“.
+  Beim Schließen wird die Suche geleert.
 - **Gesten** wie „Doppelklick in die Vorschau“ sind keine Taste. Sie stehen als
   `gesture` im Eintrag und gedämpft statt einer Kappe da.
-- **„Belegungen…“ im Fuß** öffnet den Dialog der Kurzbefehle. Weil
-  `KanteDialog` keinen eigenen Knopf am Anfang des Fußes kennt, ist es der
-  Standardknopf Hilfe, umbenannt. Er steht in jedem Layout links.
+- **„Belegungen…“ im Fuß** öffnet den Dialog der Kurzbefehle. Der Knopf steht
+  am Anfang des Fußes, über `KanteDialog.footerStart` (Kante 1.57, für diesen
+  Dialog eingeführt).

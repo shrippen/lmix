@@ -2362,17 +2362,17 @@
       <translation>Eigene Belegungen</translation>
     </message>
     <message>
-      <location line="+25" />
+      <location line="+47" />
       <source>Keys</source>
       <translation>Tasten</translation>
     </message>
     <message>
-      <location line="+15" />
+      <location line="+6" />
       <source>Shortcuts…</source>
       <translation>Belegungen…</translation>
     </message>
     <message>
-      <location line="+15" />
+      <location line="+21" />
       <location line="+1" />
       <source>Search keys</source>
       <translation>Tasten suchen</translation>

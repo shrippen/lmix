@@ -102,6 +102,42 @@ TestCase {
         compare(dialog.groups[0].keys[0].what, "Sea weather on")
     }
 
+    function test_a_trailing_plus_is_ignored() {
+        var dialog = openDialog()
+        dialog.query = "ctrl+"
+        compare(dialog.groups.map(g => g.keys.length), [2, 1])
+        compare(titles(dialog), ["Always", "Own shortcuts"])
+    }
+
+    function test_the_last_part_of_a_key_is_a_prefix() {
+        var dialog = openDialog()
+        dialog.own = [{ what: "Save all", key: "Ctrl+Shift+S" }]
+        dialog.query = "ctrl+shi"
+        compare(titles(dialog), ["Own shortcuts"])
+        dialog.query = "shift+ctrl+"
+        compare(titles(dialog), ["Own shortcuts"])
+        dialog.own = []
+        dialog.query = "ctrl+sa"
+        compare(dialog.groups.length, 0)
+        dialog.query = "ctrl+s"
+        compare(dialog.groups[0].keys.map(k => k.what), ["Save show"])
+        dialog.query = "ctr+s"
+        compare(dialog.groups.length, 0)
+    }
+
+    function test_a_range_finds_each_of_its_keys() {
+        var dialog = openDialog()
+        dialog.query = "ctrl+3"
+        compare(titles(dialog), ["Always"])
+        compare(dialog.groups[0].keys.map(k => k.what), ["Pages"])
+        dialog.query = "ctrl+6"
+        compare(dialog.groups.length, 0)
+        dialog.query = "+7"
+        compare(dialog.groups.length, 0)
+        dialog.query = "7"
+        compare(titles(dialog), ["Only on Mix"])
+    }
+
     function test_search_finds_gestures() {
         var dialog = openDialog()
         dialog.query = "double"
@@ -121,9 +157,12 @@ TestCase {
         var dialog = openDialog()
         var asked = 0
         dialog.shortcutsRequested.connect(() => asked++)
-        var button = dialog.standardButton(QQC2.Dialog.Help)
-        verify(button)
+        // An own button at the start of the footer, no standard one.
+        verify(!dialog.standardButton(QQC2.Dialog.Help))
+        compare(dialog.footerStart.length, 1)
+        var button = dialog.footerStart[0]
         compare(button.text, "Shortcuts…")
+        compare(button.parent.parent, dialog.footer)
         button.clicked()
         compare(asked, 1)
         tryCompare(dialog, "visible", false)
