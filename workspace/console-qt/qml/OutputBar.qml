@@ -5,7 +5,8 @@ import org.kde.kirigami as Kirigami
 import Kante
 
 /**
- * Outputs: one button each (click starts or stops; right click removes),
+ * Outputs: one button each (click starts or stops; right click opens its
+ * menu, OutputMenu),
  * state as a pill, running time and link health. "+ Output" adds one.
  * Stopping a running output asks first unless `confirmStop` is off
  * (UI.10); the question can turn it off. With two or more streams, one
@@ -20,6 +21,8 @@ RowLayout {
     required property var outputs
     required property var outputById
     signal addRequested()
+    /** Settings… in an output's menu: its details on the Outputs page. */
+    signal settingsRequested(string outputId)
     /** Ask before stopping a running output (the shell's setting). */
     property bool confirmStop: true
     /** AppShell.askRemove: ask, then remove with a way back. */
@@ -73,7 +76,7 @@ RowLayout {
                 var state = running ? qsTr("Running")
                     : (status.state === "failed" ? qsTr("Failed: %1").arg(status.message)
                     : (status.state === "cards_off" ? qsTr("Waiting for the cards") : qsTr("Stopped")))
-                return state + (link ? "\n" + Texts.linkDetail(link) : "") + "\n" + qsTr("Click: start or stop. Right click: remove.")
+                return state + (link ? "\n" + Texts.linkDetail(link) : "") + "\n" + qsTr("Click: start or stop. Right click: menu.")
             }
 
             Timer {
@@ -88,17 +91,16 @@ RowLayout {
                 acceptedButtons: Qt.RightButton
                 onTapped: menu.popup()
             }
-            QQC2.Menu {
+            OutputMenu {
                 id: menu
-                KantePopupSkin { popup: menu }
-                // Not while it sends (M07): stop it first.
-                KanteMenuItem {
-                    text: qsTr("Remove %1").arg(button.modelData.name)
-                    icon.name: "edit-delete"
-                    destructive: true
-                    enabled: !button.running
-                    onTriggered: bar.askRemove("output", button.modelData)
-                }
+                output: button.modelData
+                link: button.link
+                elapsed: button.elapsed
+                // A click on the button starts or stops alike.
+                onStartRequested: button.clicked()
+                onStopRequested: button.clicked()
+                onSettingsRequested: bar.settingsRequested(button.modelData.id)
+                onRemoveRequested: bar.askRemove("output", button.modelData)
             }
         }
     }

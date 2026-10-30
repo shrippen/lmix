@@ -165,6 +165,7 @@ fn main() {
                 "qml/MoreActionsMenu.qml",
                 "qml/CueColourButton.qml",
                 "qml/BindingMenu.qml",
+                "qml/OutputMenu.qml",
                 "qml/LookPanel.qml",
                 "qml/ChannelStripPanel.qml",
                 "qml/InputSettingsDialog.qml",

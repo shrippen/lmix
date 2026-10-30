@@ -914,6 +914,7 @@ AppPage {
                     askRemove: root.shell.askRemove
                     onConfirmStopChosen: on => root.shell.confirmStop = on
                     onAddRequested: addOutputDialog.open()
+                    onSettingsRequested: outputId => root.shell.showOutput(outputId)
                 }
             }
         }
