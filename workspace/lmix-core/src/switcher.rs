@@ -2024,6 +2024,7 @@ impl Switcher {
         commands.extend(self.clear_listen());
         commands.extend(self.stop_all_outputs());
         self.show = show;
+        self.distinct_input_names();
         self.zone_levels.clear();
         self.older_format = None;
         // Cues of the old show stop without a word; nothing starts, and
@@ -2753,7 +2754,11 @@ impl Switcher {
             .free_slot()
             .ok_or(ActionError::SlotsFull { slots: self.slots })?;
         let id = InputId::new();
-        let name = name.unwrap_or_else(|| source.default_name());
+        // A typed name is refused when taken, one from the source numbered.
+        let name = match name {
+            Some(name) => self.input_name(name, None)?,
+            None => self.free_input_name(&source.default_name()),
+        };
         // A new input's sound comes the show's default delay late (AUD.6).
         let strip = ChannelStrip {
             delay_ms: self.show.default_delay_ms,
@@ -2955,8 +2960,57 @@ impl Switcher {
 
     fn rename(&mut self, input: &InputRef, name: String) -> Result<Vec<Command>, ActionError> {
         let index = self.find(input)?;
-        self.show.inputs[index].name = name;
+        let own = self.show.inputs[index].id;
+        self.show.inputs[index].name = self.input_name(name, Some(own))?;
         Ok(Vec::new())
+    }
+
+    /// Whether an input other than `own` is called `name`, ignoring case:
+    /// names pick inputs in actions (INP.2).
+    fn input_name_taken(&self, name: &str, own: Option<InputId>) -> bool {
+        let name = name.to_lowercase();
+        self.show
+            .inputs
+            .iter()
+            .any(|i| Some(i.id) != own && i.name.to_lowercase() == name)
+    }
+
+    /// `name` typed for an input (`own` when renaming it), refused when
+    /// another input has it.
+    fn input_name(&self, name: String, own: Option<InputId>) -> Result<String, ActionError> {
+        if self.input_name_taken(&name, own) {
+            return Err(ActionError::DuplicateInputName { name });
+        }
+        Ok(name)
+    }
+
+    /// `name` for an input not in the bar, or "name (2)", "name (3)" …
+    /// when taken: a second "Cam 1" becomes "Cam 1 (2)".
+    fn free_input_name(&self, name: &str) -> String {
+        if !self.input_name_taken(name, None) {
+            return name.into();
+        }
+        (2..)
+            .map(|n| format!("{name} ({n})"))
+            .find(|n| !self.input_name_taken(n, None))
+            .expect("a free name")
+    }
+
+    /// Inputs named like one before them (a show saved before names were
+    /// one per input) get a number; the first keeps the name, as actions
+    /// naming it picked the first.
+    fn distinct_input_names(&mut self) {
+        for index in 1..self.show.inputs.len() {
+            let name = self.show.inputs[index].name.to_lowercase();
+            let earlier = self.show.inputs[..index]
+                .iter()
+                .any(|i| i.name.to_lowercase() == name);
+            if !earlier {
+                continue;
+            }
+            let base = self.show.inputs[index].name.clone();
+            self.show.inputs[index].name = self.free_input_name(&base);
+        }
     }
 
     fn set_color(
@@ -3750,6 +3804,8 @@ impl Switcher {
                 .free_slot()
                 .ok_or(ActionError::SlotsFull { slots: self.slots })?;
         }
+        // Taken meanwhile: it comes back under another name.
+        input.name = self.free_input_name(&input.name);
         let mut commands = vec![
             Command::SetSlot {
                 slot: input.slot,
@@ -3825,13 +3881,6 @@ impl Switcher {
             input.id = InputId::new();
             input.slot = self.free_slot().expect("counted above");
             input.triggers.clear();
-            // Names pick inputs in actions: a second "Cam 1" becomes "Cam 1 (2)".
-            let base = input.name.clone();
-            let mut n = 2;
-            while self.show.inputs.iter().any(|i| i.name == input.name) {
-                input.name = format!("{base} ({n})");
-                n += 1;
-            }
             // In through the same door as a closed input.
             commands.extend(self.restore_input(self.show.inputs.len(), input)?);
         }
@@ -6034,6 +6083,89 @@ mod tests {
         add(&mut sw, "A");
         add(&mut sw, "B");
         sw
+    }
+
+    /// Names of the show's inputs, in the bar's order.
+    fn input_names(sw: &Switcher) -> Vec<&str> {
+        sw.show().inputs.iter().map(|i| i.name.as_str()).collect()
+    }
+
+    #[test]
+    fn a_typed_input_name_is_taken_once_ignoring_case() {
+        let mut sw = two_inputs();
+        let typed = sw.apply(Action::AddInput {
+            source: pattern(TestPattern::Bars),
+            name: Some("a".into()),
+        });
+        assert!(
+            matches!(typed, Err(ActionError::DuplicateInputName { ref name }) if name == "a"),
+            "{typed:?}"
+        );
+        let renamed = sw.apply(Action::RenameInput {
+            input: named("B"),
+            name: "A".into(),
+        });
+        assert!(
+            matches!(renamed, Err(ActionError::DuplicateInputName { .. })),
+            "{renamed:?}"
+        );
+        // Its own name in other letters is no other input's.
+        sw.apply(Action::RenameInput {
+            input: named("A"),
+            name: "a".into(),
+        })
+        .unwrap();
+        assert_eq!(input_names(&sw), ["a", "B"]);
+    }
+
+    #[test]
+    fn a_name_from_the_source_gets_a_number() {
+        let mut sw = Switcher::new(SLOTS);
+        for _ in 0..3 {
+            sw.apply(Action::AddInput {
+                source: pattern(TestPattern::Bars),
+                name: None,
+            })
+            .unwrap();
+        }
+        assert_eq!(
+            input_names(&sw),
+            ["Pattern Bars", "Pattern Bars (2)", "Pattern Bars (3)"]
+        );
+    }
+
+    #[test]
+    fn a_restored_input_whose_name_was_taken_is_renamed() {
+        let mut sw = two_inputs();
+        sw.apply(Action::RemoveInput { input: named("A") }).unwrap();
+        add(&mut sw, "a");
+        sw.apply(Action::Restore).unwrap();
+        assert_eq!(input_names(&sw), ["A (2)", "B", "a"]);
+    }
+
+    #[test]
+    fn an_appended_input_gets_a_number_ignoring_case() {
+        let mut sw = two_inputs();
+        let mut other = Switcher::new(SLOTS);
+        add(&mut other, "a");
+        sw.append(other.show().clone(), &[]).unwrap();
+        assert_eq!(input_names(&sw), ["A", "B", "a (2)"]);
+    }
+
+    #[test]
+    fn a_loaded_show_with_twin_names_gets_numbers() {
+        let mut built = Switcher::new(SLOTS);
+        for name in ["A", "B", "C"] {
+            add(&mut built, name);
+        }
+        let mut show = built.show().clone();
+        // Saved before names were one per input.
+        for (input, name) in show.inputs.iter_mut().zip(["Cam", "cam", "Cam (2)"]) {
+            input.name = name.into();
+        }
+        let mut sw = Switcher::new(SLOTS);
+        sw.replace(show, None).unwrap();
+        assert_eq!(input_names(&sw), ["Cam", "cam (3)", "Cam (2)"]);
     }
 
     #[test]

@@ -5396,3 +5396,22 @@ Ctrl+Z ebenso.
 - Nicht im Stapel: Zonen, Ziele, Cues, Auslöser, Belegungen und Vorlagen
   (Regel 1 nennt sie auch; sie folgen), sowie Stoppen und Werkseinstellungen
   (nicht zurückzuholen, nur mit Rückfrage).
+
+## 2026-10-30 — Inputnamen eindeutig
+
+Aktionen wählen Inputs auch per Name; zwei „Cam 1“ trafen immer den
+ersten. Bisher machte nur der Import aus einer anderen Show den Namen
+eindeutig. Entscheidung des Users: wie bei Bussen (INP.2).
+
+- **Eingetippt wird abgelehnt:** Anlegen mit Namen (Console-Feld
+  „optional“, API, OSC) und Umbenennen auf einen vergebenen Namen lehnt
+  lmix-core ab (`duplicate_input_name`), Groß-/Kleinschreibung egal. Die
+  Console zeigt es als Toast wie beim Bus. Der eigene Name in anderer
+  Schreibung bleibt erlaubt.
+- **Selbst vergeben wird nummeriert:** Name aus der Quelle (Anlegen ohne
+  Namen), Rückgängig nach Entfernen und Import heißen „Name (2)“,
+  „Name (3)“ …
+- **Bricht:** Shows mit doppelten Namen benennt das Laden einmal um; der
+  erste behält den Namen (ihn trafen Aktionen schon), die späteren werden
+  nummeriert. Eine Aktion, die einen späteren Doppelgänger in anderer
+  Schreibung nannte („cam 1“ neben „Cam 1“), trifft ihn danach nicht mehr.

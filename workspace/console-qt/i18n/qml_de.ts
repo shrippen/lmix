@@ -5099,7 +5099,7 @@
       <translation>nutzt Input %1, dessen Mediendatei fehlt</translation>
     </message>
     <message>
-      <location line="+76" />
+      <location line="+77" />
       <source>Wait %1</source>
       <translation>Warten %1</translation>
     </message>
@@ -6241,6 +6241,11 @@
       <location line="+1" />
       <source>There is a bus %1 already</source>
       <translation>Es gibt schon einen Bus %1</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>There is an input %1 already</source>
+      <translation>Es gibt schon einen Input %1</translation>
     </message>
     <message>
       <location line="+1" />
