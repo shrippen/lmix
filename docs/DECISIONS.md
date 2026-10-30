@@ -5462,11 +5462,16 @@ spät). Latenz SDI-Loop 1080p25
 **Nachtrag (Review strom #53)**: Endet oder stockt der Ton, hielt der
 Combiner das Bild an (auf der Karte 11 statt 97 Bilder in 4 s). Der Ton
 geht jetzt über einen `audiomixer` mit stiller Live-Quelle in den
-Combiner. Die Stille übernimmt die Caps des Tons (Format, Rate, Kanäle,
-auch bei späteren Wechseln), der Mixer reicht den Ton also unverändert
-durch, S32LE bleibt S32LE; eine Eigenschaft für die Kanalzahl braucht der
-Block nicht. Sie startet mit den ersten Caps des Tons, bis dahin wartet
-das Bild wie ohne Mixer. Ihre Puffer sind 480 Samples (10 ms) lang: der
+Combiner. Die Stille übernimmt Format, Rate und Kanäle des ersten Tons,
+der Mixer reicht den Ton also unverändert durch; spätere Formatwechsel
+wandelt er, Kanal- oder Ratenwechsel brechen ab (in lmix kommen sie
+nicht vor: `card_sound` legt die Caps fest, eine andere Kanalzahl baut
+den Flow neu). Eine Eigenschaft für die Kanalzahl braucht der Block
+nicht. Kommen 500 ms nach dem ersten Bild keine Caps am Ton (etwa ein
+inter-Kanal ohne Produzent), startet die Stille selbst, in S32LE, 48 kHz
+und den Kanälen, die `card_sound` anbietet: Das Bild läuft weiter, statt
+ohne Meldung schwarz zu bleiben. Hinter dem Mixer hält ein Capsfilter
+den Ton auf S32LE. Ihre Puffer sind 480 Samples (10 ms) lang: der
 Mixer kostet dann laut Latenz-Query 10 ms (sein Ausgabepuffer), mit den
 1024 Samples von `audiotestsrc` waren es 21 ms. Der Ausgang bietet nur
 noch die Formate an, die `decklink2sink` kennt (kein 12-bit-RGB),
