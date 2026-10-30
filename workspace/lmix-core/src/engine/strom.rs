@@ -2101,6 +2101,37 @@ mod tests {
         assert!(engine.flow_running(broken).await);
     }
 
+    /// A new playback flow forgets the zones' last levels: they are by
+    /// index, and after a zone is removed the next one would show the
+    /// removed zone's level (review of #171).
+    #[tokio::test]
+    async fn a_new_playback_forgets_the_zone_levels() {
+        let app = axum::Router::new()
+            .fallback(|| async { (StatusCode::OK, axum::Json(serde_json::json!({}))) });
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        let engine = StromEngine::new(
+            format!("http://{addr}"),
+            MixerBackend::Cpu,
+            MonitorOut::None,
+        );
+        engine
+            .levels
+            .send_modify(|l| _ = l.zones.insert(0, (-9.0, std::time::Instant::now())));
+
+        let playback = crate::switcher::Playback {
+            zones: Vec::new(),
+            stages: Vec::new(),
+            framerate: lmix_types::Framerate::Fps25,
+        };
+        engine.set_playback(&playback).await.unwrap();
+
+        assert!(engine.levels.borrow().zones.is_empty());
+    }
+
+    /// A new format whose mixer strom does not build is tried again when
+    /// it is asked for again; it is not taken as done.
     /// The tile picture costs the CPU mixer as much again as the rest
     /// (strom 480 % of a core against 290 % with 7 slots, 30.10.2026), so
     /// it stays dark until a Console asks for it: a new mixer has its tile

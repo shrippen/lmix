@@ -1,0 +1,60 @@
+--- a/sys/decklink/gstdecklinkvideosink.cpp
++++ b/sys/decklink/gstdecklinkvideosink.cpp
+@@ -2234,8 +2234,11 @@
+     frame_duration =
+         gst_util_uint64_scale_int (GST_SECOND, self->output->mode->fps_d,
+         self->output->mode->fps_n);
+-    running_time = gst_util_uint64_scale (running_time, 1, frame_duration);
+-    running_time = gst_util_uint64_scale_ceil (running_time, frame_duration, 1);
++    // Up to the next frame slot: rounded down, a frame lands up to one
++    // frame duration before its time, which eats the 30 ms the wait above
++    // leaves, and it reaches the card late.
++    running_time = gst_util_uint64_scale_ceil (running_time, 1, frame_duration);
++    running_time = gst_util_uint64_scale (running_time, frame_duration, 1);
+ 
+     if (clock_time >= running_time) {
+       GST_DEBUG_OBJECT (self, "Video frame %p is being scheduled late and may be dropped", frame);
+@@ -2404,6 +2407,21 @@
+         "Elements are not set to PAUSED yet");
+     return;
+   }
++  // Frames are scheduled on multiples of the frame duration in the
++  // clock's internal time (see render()). Playback has to start on that
++  // grid too, or every frame falls between two of the card's frame slots.
++  // The epoch carries on from the previous playback and is anywhere.
++  {
++    GstClockTime frame_duration =
++        gst_util_uint64_scale_int (GST_SECOND, self->output->mode->fps_d,
++        self->output->mode->fps_n);
++    GstClockTime now =
++        self->output->clock_epoch + self->output->clock_last_time;
++    GstClockTime aligned =
++        gst_util_uint64_scale_ceil (now, 1, frame_duration) * frame_duration;
++    self->output->clock_epoch += aligned - now;
++  }
++
+   // Need to unlock to get the clock time
+   g_mutex_unlock (&self->output->lock);
+ 
+@@ -2437,6 +2455,21 @@
+       "Starting scheduled playback at %" GST_TIME_FORMAT,
+       GST_TIME_ARGS (start_time));
+ 
++  // The clock counts from its first reading after the start (see
++  // gst_decklink_clock_get_internal_time()), which may come tens of
++  // milliseconds after the card starts, and then lags the card's playback
++  // by as much: frames arrive late. Anchor it here, where playback starts
++  // at start_time.
++  {
++    BMDTimeValue now;
++    if (self->output->output->GetHardwareReferenceClock (GST_SECOND, &now,
++            NULL, NULL) == S_OK && now >= 0) {
++      GstClockTime last = self->output->clock_last_time;
++      self->output->clock_start_time =
++          (GstClockTime) now > last ? (GstClockTime) now - last : 0;
++    }
++  }
++
+   res =
+       self->output->output->StartScheduledPlayback (start_time,
+       GST_SECOND, 1.0);

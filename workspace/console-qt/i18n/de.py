@@ -1150,6 +1150,9 @@ DE = {
     'Sound follows picture': 'Ton folgt Bild',
     'Tap, outputs, remove': 'Abgriff, Ausgänge, löschen',
     'The headphones hear only the solos. Click: all again.': 'Der Kopfhörer hört nur die Solos. Klick: wieder alle.',
+    'Plays nowhere on this machine': 'Spielt auf diesem Rechner nirgends',
+    'Level of %1': 'Pegel von %1',
+
     'Cards on and off': 'Karten an und aus',
     'Colour band': 'Farbband',
     'Fade to black: program to black and back (SWI.9); the show and outputs go on': 'Schwarzblende: Programm auf Schwarz und zurück (SWI.9); Show und Ausgänge laufen weiter',

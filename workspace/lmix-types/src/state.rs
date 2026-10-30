@@ -278,6 +278,17 @@ pub struct Levels {
     /// Each bus after its master, in the show's order.
     #[serde(default)]
     pub buses: Vec<BusPeak>,
+    /// Each zone after its level, in the show's order (SUI.8).
+    #[serde(default)]
+    pub zones: Vec<ZonePeak>,
+}
+
+/// A zone's level as it plays (SUI.8).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct ZonePeak {
+    pub zone: String,
+    /// Loudest channel, dBFS; `None` before the first measurement.
+    pub peak_db: Option<f32>,
 }
 
 /// Live picture for a client on the engine's machine (`GET /api/live/…`):

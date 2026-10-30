@@ -5103,6 +5103,82 @@ Console: Setup → Steuerung → „Sperren“, ein Schalter je Weg.
 `locked_targets_send_nothing_and_warn` (der Empfänger sieht keine
 Verbindung).
 
+## 2026-10-27 — decklink-Plugin mit Patch, Vorlauf 60 ms mit ihm
+
+**Befund**: Der Patch für die Epoche (oben, „SDI-/HDMI-Karte“, Offen)
+reichte allein nicht; spätere Starts zeigten mit ihm noch 150–205
+verspätete Bilder. Zwei weitere Ursachen in `decklinkvideosink`, beide
+mit `GST_DEBUG=decklinkvideosink:6` belegt:
+
+- Die Uhr des Sinks zählt erst ab ihrem ersten Lesen nach dem Start der
+  Karte (`gst_decklink_clock_get_internal_time`). Kommt das Lesen später
+  als `StartScheduledPlayback`, hinkt die Uhr der Wiedergabe der Karte
+  hinterher (gemessen 38 ms), jedes Bild wird so viel zu spät geplant.
+- `render()` rundet die Bildzeit auf das Bildraster ab. Damit frisst
+  das Runden bis zu eine Bilddauer (40 ms bei 25 fps) des Vorlaufs,
+  den das Warten davor lässt; ein Bild, gedacht für 0,193 s, geplant
+  für 0,160 s, kam um 0,163 s bei der Karte an.
+
+**Entscheidung**: lmix liefert GStreamers decklink-Plugin mit einem
+Patch aus drei Teilen aus (`packaging/gstreamer/decklink-start-on-frame-grid.patch`):
+Epoche aufs Raster, Uhr beim Start verankern, auf das nächste Raster
+aufrunden. `scripts/decklink-plugin.sh` baut nur `sys/decklink` aus
+dem gst-plugins-bad-Release, das zur installierten GStreamer-Version
+passt (Prüfsumme gegen Übertragungsfehler; sie kommt vom selben Server,
+ist also keine Herkunftsprüfung), und legt es in ein Verzeichnis
+für `GST_PLUGIN_PATH`; es baut neu, wenn sich Version oder Patch ändern.
+`run-local.sh`, `test-sdi-loop.sh` und `measure-sdi-latency.sh` nehmen
+es (`DECKLINK_PLUGIN=system` lässt das installierte), die systemd-Unit
+von strom zeigt mit `GST_PLUGIN_PATH` auf `~/.local/share/lmix/gstreamer`.
+Der Vorlauf sinkt mit dem Patch auf 60 ms; ohne bleibt er bei 150 ms,
+denn beide Ursachen treffen auch den ersten Start (bis 38 + 40 ms). Weil
+lmix-core nicht sieht, welches Plugin strom lädt, setzt ihn
+`--card-lead-ms` (`LMIX_CARD_LEAD_MS`): Die Skripte setzen 60, sobald
+sie das Plugin gebaut haben, in der systemd-Einrichtung steht er in
+`core.env` (Review #169).
+
+Verworfen: strom neu starten, wenn ein Kartenausgang neu startet (nimmt
+alle Flows mit), und ein höherer Vorlauf (half gegen die Epoche nicht,
+kostet Latenz). Die Meldung an GStreamer (`docs/upstream/gstreamer-decklink-restart.md`,
+jetzt mit allen drei Teilen) bleibt beim Owner; mit dem Fix upstream
+entfällt das eigene Plugin.
+
+**Geprüft**: `scripts/test-sdi-loop.sh` mit allen vier Modi im selben
+strom (je Lauf 4 Starts): mit Patch und 150 ms 3 von 3 Läufen ohne
+verspätetes oder verworfenes Bild, mit 60 ms ebenso 3 von 3. Nur mit
+dem Epochen-Teil: 153–205 verspätete Bilder bei einem Teil der Starts.
+
+## 2026-10-27 — Zonen-Leiste (SUI.8)
+
+**Entscheidung**: Jede Zone bekommt im Wiedergabe-Flow hinter ihrem
+Ausgang einen Meter-Block von strom (`builtin.meter`, `zone_meter_<i>`),
+also nach der Zonenlautstärke: die Leiste zeigt, was zu hören ist, auch
+bei einer Zone, die auf diesem Rechner nirgends spielt. Die Pegel stehen
+in `/api/audio/levels` unter `zones` (je Name, in der Reihenfolge der
+Show).
+
+Lautstärke und Stumm einer Zone merkt sich der Core jetzt (`gain_db`,
+`mute` in `ShowState.zones`): `set_zone_level` und Blenden-Cues auf eine
+Zone setzen den Zielwert, die Leiste zeigt ihn sofort, nicht den Weg der
+Blende. strom kennt Stumm nur als Lautstärke 0 und behält ohne Pegel die
+aktuelle Lautstärke; darum schickt lmix bei jeder Änderung Pegel und
+Stumm zusammen: eine Blende hält eine stumme Zone still (der neue Pegel
+wird gemerkt), Entstummen bringt den gemerkten Pegel zurück. Vorher
+machte eine Blende eine stumme Zone hörbar, und Entstummen ohne Pegel
+ließ sie still. Wie ein Fader gehört er nicht zur Show: eine andere Show beginnt
+bei 0 dB, eine entfernte Zone vergisst ihren Wert. Baut lmix den Flow
+neu (Zonen geändert, strom neu gestartet), setzt es die gemerkten Werte
+sofort wieder; vorher fing ein neuer Flow still bei 0 dB an.
+
+Console: `ZoneBar` mit Meter, Regler (−60 bis +12 dB, wie Klang-Cues)
+und Stumm je Zone, unter der Show-Ansicht und im Reiter Zonen der
+Audio-Seite.
+
+**Geprüft**: `a_zone_keeps_its_level_in_the_state_and_a_new_flow`,
+`a_zone_change_sends_its_whole_level`, `zones_are_metered_by_index`, `zones_are_levelled_by_name`, der Flow-Test;
+`scripts/test-show-playback.sh` mit echtem strom (Zone hat Pegel, solange
+ein Klang spielt; nach der Blende steht −20 dB im Zustand).
+
 ## 2026-10-29 — Plugins: Steuerung als WASM, Companion, fremde GStreamer-Plugins
 
 **Kontext**: Die Show soll mit Geräten und Programmen sprechen, die wir nicht

@@ -109,9 +109,10 @@ Kirigami.ApplicationWindow {
     }
     readonly property var inputs: show ? show.inputs : []
     /** Peaks in dBFS, undefined while none was measured: `peak(key)` of an
-     *  input id, "program", "phones" or "bus:<id>", `channel(id, i)` of an
-     *  input's channel. Read in a binding, they follow every measurement.
-     *  Numbers from Rust, no object per measurement: parsed as JSON 10
+     *  input id, "program", "phones", "bus:<id>" or "zone:<name>",
+     *  `channel(id, i)` of an input's channel. Read in a binding, they
+     *  follow every measurement. Numbers from Rust, no object per
+     *  measurement: parsed as JSON 10
      *  times a second, the levels fed the JS garbage collector, 20 % of the
      *  GUI thread with 31 inputs (29.10.2026). */
     readonly property QtObject levels: QtObject {

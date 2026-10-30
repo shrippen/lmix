@@ -19,6 +19,7 @@
 #   SOUND_DELAY_MS=200          # the card output's sound delay there
 #   MIXER=cuda|cpu              # default cuda
 #   STROM_BIN=…/strom           # skip scripts/fetch-strom.sh
+#   DECKLINK_PLUGIN=system      # GStreamer's decklink plugin without lmix's patch
 #   KEEP_WORK=1                 # keep logs and pictures
 #   STROM_GST_DEBUG=decklink:6  # more GST_DEBUG for strom (gst.log)
 #   HOLD=600                    # on failure, keep strom and lmix-core up so long
@@ -97,8 +98,12 @@ state() { curl -sf "$CORE/state"; }
 # the tap; the second waits for a fresh frame.
 picture() {
     curl -sf "$CORE/pictures/$1" -o /dev/null || true
-    sleep "$TAP_INTERVAL"
-    curl -sf "$CORE/pictures/$1" -o "$2"
+    # The engine answers 504 while the tap has no frame yet.
+    for _ in 1 2 3 4 5; do
+        sleep "$TAP_INTERVAL"
+        curl -sf "$CORE/pictures/$1" -o "$2" && return 0
+    done
+    fail "no picture of $1"
 }
 peak() { curl -sf "$CORE/audio/levels" | jq "$1"; }
 # Plain GStreamer plays on SDI_OUT and captures SDI_IN: fails while
@@ -135,12 +140,21 @@ input_caps() {
 }
 
 command -v magick >/dev/null || { echo "needs ImageMagick (magick)" >&2; exit 2; }
-gst-inspect-1.0 decklinkvideosink >/dev/null 2>&1 || { echo "needs the GStreamer decklink plugin" >&2; exit 2; }
 
 # A card connector takes one user; an engine left over holds it.
 pgrep -f '^[^ ]*/strom --host' >/dev/null && { echo "another strom is running; it may hold the card" >&2; exit 2; }
 
 STROM_BIN="${STROM_BIN:-$("$ROOT/scripts/fetch-strom.sh")}"
+# GStreamer's decklink plugin with lmix's patch (a card output started
+# again shows every frame late without it); DECKLINK_PLUGIN=system keeps
+# the installed one.
+if [[ "${DECKLINK_PLUGIN:-patched}" == patched ]]; then
+    GST_PLUGIN_PATH="$("$ROOT/scripts/decklink-plugin.sh")${GST_PLUGIN_PATH:+:$GST_PLUGIN_PATH}"
+    # The lead that holds with the patch (flows.rs CARD_LEAD_MS).
+    export GST_PLUGIN_PATH LMIX_CARD_LEAD_MS="${LMIX_CARD_LEAD_MS:-60}"
+fi
+# The plugin to use, ours or the system's, is on the path by now.
+gst-inspect-1.0 decklinkvideosink >/dev/null 2>&1 || { echo "needs the GStreamer decklink plugin" >&2; exit 2; }
 (cd "$ROOT/workspace/lmix-core" && cargo build --release)
 CORE_BIN="${CARGO_TARGET_DIR:-$ROOT/workspace/lmix-core/target}/release/lmix-core"
 
@@ -182,12 +196,12 @@ SDI_IN_ID="$(state | jq -r '.inputs[] | select(.name == "SDI in") | .id')"
 
 refused() { grep -c 'Failed to schedule' "$WORK/strom.log" || true; }
 missed() { grep -cE '(Late|Dropped) Frame' "$WORK/gst.log" || true; }
+running() { [[ "$(state | jq -r '.outputs[] | select(.name == "SDI out") | .status.state')" == running ]]; }
 for mode in $MODES; do
     act '{"action":"cut_direct","input":"Bars"}'
     act "{\"action\":\"add_output\",\"spec\":{\"kind\":\"card\",\"device\":$SDI_OUT,\"mode\":\"$mode\"},\"name\":\"SDI out\"}"
     before="$(refused)"
     act '{"action":"start_output","output":"SDI out"}'
-    running() { [[ "$(state | jq -r '.outputs[] | select(.name == "SDI out") | .status.state')" == running ]]; }
     wait_for "$SETTLE" running || fail "$mode: output $(state | jq -c '.outputs')"
     # The input notices the new mode and starts over.
     sleep 8
@@ -280,7 +294,7 @@ onset() {
     echo $(( $(date +%s%3N) - sent ))
 }
 sounding() { ! silent; }
-delayed="$(onset)"
+delayed="$(onset)" || { delayed="${delayed%%$'\n'*}"; fail "${delayed#FAIL: }"; }
 pass "pairs: pair $PAIR carries the bus ($(input_peak) dB) after $delayed ms"
 
 act '{"action":"remove_output","output":"SDI out"}'
@@ -289,7 +303,7 @@ act "{\"action\":\"add_output\",\"spec\":{\"kind\":\"card\",\"device\":$SDI_OUT,
 act '{"action":"start_output","output":"SDI out"}'
 wait_for "$SETTLE" running || fail "pairs: output without delay $(state | jq -c '.outputs')"
 sleep 8
-plain="$(onset)"
+plain="$(onset)" || { plain="${plain%%$'\n'*}"; fail "${plain#FAIL: }"; }
 (( delayed - plain >= SOUND_DELAY_MS - DELAY_SLACK_MS )) \
     || fail "pairs: sound delay $SOUND_DELAY_MS ms came out as $((delayed - plain)) ms"
 pass "pairs: sound delay $SOUND_DELAY_MS ms came out as $((delayed - plain)) ms"
