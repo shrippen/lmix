@@ -590,7 +590,7 @@
   <context>
     <name>AppShell</name>
     <message>
-      <location filename="../qml/AppShell.qml" line="+274" />
+      <location filename="../qml/AppShell.qml" line="+283" />
       <source>Ctrl</source>
       <comment>key</comment>
       <translation>Strg</translation>
@@ -1127,6 +1127,14 @@
     </message>
   </context>
   <context>
+    <name>BindingMenu</name>
+    <message>
+      <location filename="../qml/BindingMenu.qml" line="+23" />
+      <source>Not bound</source>
+      <translation>Nicht verbunden</translation>
+    </message>
+  </context>
+  <context>
     <name>BusButtons</name>
     <message>
       <location filename="../qml/BusButtons.qml" line="+33" />
@@ -1346,6 +1354,25 @@
       <location line="+2" />
       <source>Click: %1. Double click: expand. Right click: more.</source>
       <translation>Klick: %1. Doppelklick: ausklappen. Rechtsklick: mehr.</translation>
+    </message>
+  </context>
+  <context>
+    <name>CueColourButton</name>
+    <message>
+      <location filename="../qml/CueColourButton.qml" line="+21" />
+      <location line="+28" />
+      <source>None</source>
+      <translation>Keine</translation>
+    </message>
+    <message>
+      <location line="-11" />
+      <source>Colour: %1</source>
+      <translation>Farbe: %1</translation>
+    </message>
+    <message>
+      <location line="+13" />
+      <source>Cue colour</source>
+      <translation>Cue-Farbe</translation>
     </message>
   </context>
   <context>
@@ -1588,30 +1615,30 @@
   <context>
     <name>EffectMenu</name>
     <message>
-      <location filename="../qml/EffectMenu.qml" line="+112" />
+      <location filename="../qml/EffectMenu.qml" line="+113" />
       <source>Stinger…</source>
       <translation>Stinger…</translation>
     </message>
     <message>
       <location line="+14" />
-      <location line="+60" />
+      <location line="+48" />
       <source>Length</source>
       <translation>Dauer</translation>
     </message>
     <message>
-      <location line="-45" />
-      <location line="+20" />
+      <location line="-34" />
+      <location line="+9" />
       <source>To the right</source>
       <translation>Nach rechts</translation>
     </message>
     <message>
-      <location line="-20" />
-      <location line="+20" />
+      <location line="-9" />
+      <location line="+9" />
       <source>To the left</source>
       <translation>Nach links</translation>
     </message>
     <message>
-      <location line="+57" />
+      <location line="+56" />
       <source>ms</source>
       <comment>milliseconds</comment>
       <translation>ms</translation>
@@ -2923,12 +2950,17 @@
       <translation>Dazu Overlay-Tasten und Tonleiste</translation>
     </message>
     <message>
-      <location line="+490" />
+      <location line="+99" />
+      <source>Add input…</source>
+      <translation>Input hinzufügen…</translation>
+    </message>
+    <message>
+      <location line="+366" />
       <source>Level of %1</source>
       <translation>Pegel von %1</translation>
     </message>
     <message>
-      <location line="-515" />
+      <location line="-490" />
       <source>View</source>
       <translation>Ansicht</translation>
     </message>
@@ -2979,7 +3011,7 @@
       <translation>Die Aktionen ohne Platz in der Zeile, und welche die Zeile zeigt</translation>
     </message>
     <message>
-      <location line="+49" />
+      <location line="+54" />
       <source>Cards on and off</source>
       <translation>Karten an und aus</translation>
     </message>
@@ -3009,12 +3041,7 @@
       <translation>Die Capture-Karten sind für andere Programme frei. Klicken nutzt sie: Karten-Eingänge und -Ausgänge starten.</translation>
     </message>
     <message>
-      <location line="+52" />
-      <source>In the row</source>
-      <translation>In der Zeile</translation>
-    </message>
-    <message>
-      <location line="+76" />
+      <location line="+97" />
       <source>No inputs yet</source>
       <translation>Noch keine Inputs</translation>
     </message>
@@ -3024,12 +3051,12 @@
       <translation>Kamera, Datei, Stream oder Testbild: Jeder Input bekommt hier eine Kachel.</translation>
     </message>
     <message>
-      <location line="+115" />
+      <location line="+116" />
       <source>Width of the audio column</source>
       <translation>Breite der Tonspalte</translation>
     </message>
     <message>
-      <location line="-360" />
+      <location line="-335" />
       <source>Audio at the edge</source>
       <translation>Ton am Rand</translation>
     </message>
@@ -3039,7 +3066,7 @@
       <translation>Einfacher Modus</translation>
     </message>
     <message>
-      <location line="+69" />
+      <location line="+72" />
       <source>Find missing files…</source>
       <translation>Fehlende Dateien suchen…</translation>
     </message>
@@ -3049,45 +3076,53 @@
       <translation>Den mit „Fehlt“ markierten Inputs fehlen Mediendateien: den Ordner wählen, in dem sie jetzt liegen. Inputs auf Programm bleiben unverändert.</translation>
     </message>
     <message>
-      <location line="+9" />
+      <location line="+10" />
       <source>Clear solo</source>
       <translation>Solo aus</translation>
     </message>
     <message>
-      <location line="+8" />
+      <location line="+9" />
       <source>Bring back %1</source>
       <translation>%1 zurückholen</translation>
     </message>
     <message>
-      <location line="+27" />
+      <location line="+28" />
       <location line="+3" />
       <source>Shortcuts…</source>
       <translation>Belegungen…</translation>
     </message>
     <message>
-      <location line="+7" />
+      <location line="+8" />
       <location line="+3" />
       <source>Buses…</source>
       <translation>Busse…</translation>
     </message>
     <message>
-      <location line="+7" />
+      <location line="+8" />
       <location line="+3" />
       <source>Titles…</source>
       <translation>Titel…</translation>
     </message>
     <message>
-      <location line="+7" />
+      <location line="+8" />
       <location line="+3" />
       <source>Data…</source>
       <translation>Daten…</translation>
     </message>
     <message>
-      <location line="-95" />
+      <location line="-102" />
       <location line="+3" />
-      <location line="+184" />
+      <location line="+156" />
       <source>+ Input</source>
       <translation>+ Input</translation>
+    </message>
+  </context>
+  <context>
+    <name>MoreActionsMenu</name>
+    <message>
+      <location filename="../qml/MoreActionsMenu.qml" line="+31" />
+      <source>In the row</source>
+      <translation>In der Zeile</translation>
     </message>
   </context>
   <context>
@@ -3439,7 +3474,7 @@
   <context>
     <name>OutputBar</name>
     <message>
-      <location filename="../qml/OutputBar.qml" line="+38" />
+      <location filename="../qml/OutputBar.qml" line="+41" />
       <source>Outputs</source>
       <translation>Ausgänge</translation>
     </message>
@@ -3465,16 +3500,11 @@
     </message>
     <message>
       <location line="+1" />
-      <source>Click: start or stop. Right click: remove.</source>
-      <translation>Klick: starten oder stoppen. Rechtsklick: entfernen.</translation>
+      <source>Click: start or stop. Right click: menu.</source>
+      <translation>Klick: starten oder stoppen. Rechtsklick: Menü.</translation>
     </message>
     <message>
-      <location line="+20" />
-      <source>Remove %1</source>
-      <translation>%1 entfernen</translation>
-    </message>
-    <message>
-      <location line="+20" />
+      <location line="+39" />
       <source>Stop all streams</source>
       <translation>Alle Streams stoppen</translation>
     </message>
@@ -3487,6 +3517,84 @@
       <location line="+15" />
       <source>+ Output</source>
       <translation>+ Ausgang</translation>
+    </message>
+  </context>
+  <context>
+    <name>OutputMenu</name>
+    <message>
+      <location filename="../qml/OutputMenu.qml" line="+36" />
+      <source>%1 kbit/s</source>
+      <translation>%1 kbit/s</translation>
+    </message>
+    <message>
+      <location line="+59" />
+      <source>Stop…</source>
+      <translation>Stoppen…</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Start</source>
+      <translation>Start</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Settings…</source>
+      <translation>Einstellungen…</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Copy address</source>
+      <translation>Adresse kopieren</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>Statistics</source>
+      <translation>Statistik</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Running</source>
+      <translation>Läuft</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Rate</source>
+      <translation>Rate</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Packets lost</source>
+      <translation>Pakete verloren</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Packets dropped</source>
+      <translation>Pakete verworfen</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Round trip</source>
+      <translation>Umlaufzeit</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>%1 ms</source>
+      <translation>%1 ms</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Remove…</source>
+      <translation>Entfernen…</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>sending</source>
+      <translation>sendet</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>Stop it first, then remove it.</source>
+      <translation>Erst stoppen, dann entfernen.</translation>
     </message>
   </context>
   <context>
@@ -3584,12 +3692,12 @@
       <translation>Ton</translation>
     </message>
     <message>
-      <location line="+84" />
+      <location line="+62" />
       <source>of the source</source>
       <translation>der Quelle</translation>
     </message>
     <message>
-      <location line="-83" />
+      <location line="-61" />
       <source>Target</source>
       <translation>Ziel</translation>
     </message>
@@ -3610,12 +3718,12 @@
     </message>
     <message>
       <location line="+17" />
-      <location line="+61" />
+      <location line="+39" />
       <source>Multiview</source>
       <translation>Multiview</translation>
     </message>
     <message>
-      <location line="-58" />
+      <location line="-36" />
       <source>Program on the left</source>
       <translation>Programm links</translation>
     </message>
@@ -3625,42 +3733,7 @@
       <translation>Pegelanzeigen</translation>
     </message>
     <message>
-      <location line="+16" />
-      <source>Recording</source>
-      <translation>Aufnahme</translation>
-    </message>
-    <message>
-      <location line="+1" />
-      <source>Stream SRT</source>
-      <translation>Stream SRT</translation>
-    </message>
-    <message>
-      <location line="+1" />
-      <source>Stream RTMP</source>
-      <translation>Stream RTMP</translation>
-    </message>
-    <message>
-      <location line="+1" />
-      <source>NDI</source>
-      <translation>NDI</translation>
-    </message>
-    <message>
-      <location line="+1" />
-      <source>Screen</source>
-      <translation>Bildschirm</translation>
-    </message>
-    <message>
-      <location line="+1" />
-      <source>SDI / HDMI</source>
-      <translation>SDI / HDMI</translation>
-    </message>
-    <message>
-      <location line="+11" />
-      <source>Card %1, %2</source>
-      <translation>Karte %1, %2</translation>
-    </message>
-    <message>
-      <location line="+13" />
+      <location line="+23" />
       <source>Input %1 %2</source>
       <translation>Input %1 %2</translation>
     </message>
@@ -4631,13 +4704,7 @@
       <translation>Farbe</translation>
     </message>
     <message>
-      <location line="+4" />
-      <location line="+4" />
-      <source>None</source>
-      <translation>Keine</translation>
-    </message>
-    <message>
-      <location line="+8" />
+      <location line="+9" />
       <source>Note</source>
       <translation>Notiz</translation>
     </message>
@@ -5099,7 +5166,7 @@
       <translation>nutzt Input %1, dessen Mediendatei fehlt</translation>
     </message>
     <message>
-      <location line="+76" />
+      <location line="+77" />
       <source>Wait %1</source>
       <translation>Warten %1</translation>
     </message>
@@ -5783,11 +5850,12 @@
     <message>
       <location line="+1" />
       <location line="+63" />
+      <location line="+147" />
       <source>NDI</source>
       <translation>NDI</translation>
     </message>
     <message>
-      <location line="-62" />
+      <location line="-209" />
       <source>WHIP (browser, OBS)</source>
       <translation>WHIP (Browser, OBS)</translation>
     </message>
@@ -5959,11 +6027,12 @@
     </message>
     <message>
       <location line="+1" />
+      <location line="+145" />
       <source>Recording</source>
       <translation>Aufnahme</translation>
     </message>
     <message>
-      <location line="+2" />
+      <location line="-143" />
       <source>Screen: window</source>
       <translation>Bildschirm: Fenster</translation>
     </message>
@@ -6148,7 +6217,32 @@
       <translation>%1 · verloren %2 · verworfen %3 · %4</translation>
     </message>
     <message>
-      <location line="+7" />
+      <location line="+8" />
+      <source>Stream SRT</source>
+      <translation>Stream SRT</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Stream RTMP</source>
+      <translation>Stream RTMP</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Screen</source>
+      <translation>Bildschirm</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>SDI / HDMI</source>
+      <translation>SDI / HDMI</translation>
+    </message>
+    <message>
+      <location line="+12" />
+      <source>Card %1, %2</source>
+      <translation>Karte %1, %2</translation>
+    </message>
+    <message>
+      <location line="+8" />
       <source>OSC in</source>
       <translation>OSC rein</translation>
     </message>
@@ -6580,12 +6674,7 @@
       <translation>Titel</translation>
     </message>
     <message>
-      <location line="+19" />
-      <source>Not bound</source>
-      <translation>Nicht verbunden</translation>
-    </message>
-    <message>
-      <location line="+39" />
+      <location line="+54" />
       <source>New graphics channel</source>
       <translation>Neuer Grafikkanal</translation>
     </message>
