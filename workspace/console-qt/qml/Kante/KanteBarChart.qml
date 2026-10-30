@@ -44,6 +44,8 @@ Item {
     /** Colour of part k of every stack; the data palette where missing. */
     property var stackColors: []
     property bool axis: false
+    /** Title of the value axis, written upwards left of its labels (1.49; e.g. "Noten"). */
+    property string axisTitle: ""
     property int valueFormat: KanteBarChart.ValueFormat.Number
     /** Optional function (number) -> string for the axis; overrides `valueFormat`. */
     property var formatter: null
@@ -95,7 +97,8 @@ Item {
     readonly property int gridLines: axis ? Math.round(scaleMax / axisStep) + 1 : 3
     readonly property real labelHeight: compact ? 0 : KanteStyle.unit(16)
     readonly property real plotHeight: height - labelHeight
-    readonly property real padLeft: axis ? axisWidth.width + KanteStyle.unit(8) : 0
+    readonly property real padLeft: axis ? axisWidth.width + KanteStyle.unit(8)
+                                           + (axisTitleText.visible ? axisTitleText.height + KanteStyle.unit(4) : 0) : 0
     readonly property real plotWidth: width - padLeft
 
     function niceStep(raw) {
@@ -170,6 +173,22 @@ Item {
         id: axisWidth
         font: KanteStyle.monoFont(KanteStyle.labelFont().pointSize * 0.85, false)
         text: chart.format(chart.scaleMax)
+    }
+
+    // Axis title, turned upwards; rotation keeps the centre, so x and y place the turned box
+    // at the left edge, centred on the plot.
+    Text {
+        id: axisTitleText
+        objectName: "kanteAxisTitle"
+        visible: chart.axis && !chart.compact && chart.axisTitle !== ""
+        width: Math.min(implicitWidth, chart.plotHeight)
+        elide: Text.ElideRight
+        text: chart.axisTitle
+        color: KanteStyle.mutedTextColor
+        font: axisWidth.font
+        rotation: -90
+        x: (height - width) / 2
+        y: (chart.plotHeight - height) / 2
     }
 
     implicitWidth: KanteStyle.unit(compact ? 120 : 260)

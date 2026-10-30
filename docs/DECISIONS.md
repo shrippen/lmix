@@ -5101,3 +5101,65 @@ Console: Setup → Steuerung → „Sperren“, ein Schalter je Weg.
 `a_midi_panic_pad_goes_through_the_lock`,
 `locked_targets_send_nothing_and_warn` (der Empfänger sieht keine
 Verbindung).
+
+## 2026-10-29 — Live-Kacheln aus einem Bild auf der GPU
+
+**Entscheidung**: Die Kacheln der Console kommen nicht mehr als ein Strom je
+Slot (CPU: Download, `videoscale`, `unixfdsink`, `glupload`), sondern als ein
+Bild: strom hat am Bildmischer einen Ausgang `tiles_out` (eigener Fork), der
+jeden Input auf der GPU des Mischers in seine Zelle eines Rasters setzt
+(Slot n in Zelle n, 640×360, Spalten von lmix-core vorgegeben). Mit dem
+CUDA-Mischer geht dieses Bild, wie Programm und Vorschau, per
+`cudaipcsink`/`cudaipcsrc` (`ipc-mode=mmap`; im Legacy-Modus kann die Console
+das zweite Bild aus derselben Engine nicht öffnen) zur Console und verlässt
+die GPU nie. Die Console zeichnet es einmal und schneidet die Zellen aus.
+Mit GL- oder CPU-Mischer läuft dasselbe Bild über `unixfdsink`.
+
+Dazu: Desktop-OpenGL statt GLES (Qt nahm auf Wayland mit NVIDIA GLES, und
+`cudadownload` kopiert nur mit Desktop-GL in eine Textur) und der threaded
+Render-Loop (Qt nahm hier den basic Loop, der jedes Bild im GUI-Thread zeichnet).
+
+**Gemessen** (`scripts/measure-tiles.sh`, 31 Inputs, CUDA, RTX 3070 Ti,
+Mix-Seite in kopflosem KWin):
+
+| | vorher | jetzt | ohne Fenster |
+|---|---|---|---|
+| strom | 508 % | 374–385 % | 369 % |
+| lmix | 149 % (GUI-Thread 39) | 41 % (GUI-Thread 3) | – |
+| GPU | 37 % | 25 % | 14 % |
+
+Die Kacheln kosten damit rund 57 % CPU statt 290 %; der zusätzliche
+Compositor im Mischer ist ohne Console nicht messbar. Ein Versuch mit einem
+Shader je Kachel auf einer gemeinsamen Textur statt `ShaderEffectSource` je
+Kachel brachte nichts Messbares und wurde verworfen.
+
+**Nachtrag, am selben Tag:** Das Fenster zeichnete 60 Bilder/s bei 30 fps
+Quellen. Nur das Kachelbild allein ergab schon 60: Jede `ShaderEffectSource`
+(auch mit `live: false` und `scheduleUpdate()`) fordert nach einem Wechsel
+ihrer Quelle einen zweiten Frame an. Darum zeichnet jetzt jede Kachel ihren
+Ausschnitt der Textur selbst (`AtlasCell`, C++, ein `QSGImageNode`); das Bild
+kommt über einen `appsink`, der es für GL abbildet (erst dann füllt
+`cudadownload` die Textur) und drei Bilder hält. Der `qml6glsink` von
+`TilesAtlas` bleibt nur für den geteilten GL-Kontext und bekommt keine
+Bilder. Dazu: strom liefert das Kachelbild in RGBA (`tiles_format`, eigener
+Fork), `glcolorconvert` läuft durch; die Bridge hält das jeweils erste von
+Programm und Kachelbild bis zu 4 ms an, damit beide in einen Frame fallen
+(`frame_gate`); die verbundene Pille „lmix-core“ atmet nicht mehr (ihre
+Animation hielt das Fenster immer auf 60 Bildern/s).
+
+| 31 Inputs, CUDA | vorher | jetzt |
+|---|---|---|
+| lmix | 42–46 % | 28–30 % |
+| davon Render-Thread | 25–26 % | 12–16 % |
+| davon GL-Thread (gstglcontext) | 10 % | 6–7 % |
+| Frames/s des Fensters | 60 | 43–51 |
+| GL-Mischer: lmix | 79 % | 67 % |
+
+RGBA allein brachte 3–4 Punkte (gstglcontext 10 → 7 %). Die Schranke allein
+nicht messbar, mit `AtlasCell` 60 → 43–51 Frames/s. Die übrigen Frames
+kommen von Bildern außer Takt (Pegel 10/s, Ton-Seite). Lastenheft: Das
+Programmbild wartet höchstens 4 ms (0,12 Frames) und kommt meist als
+letztes, also ohne Wartezeit (NFA.3: ≤ 3 Frames hinter Program, gemessen
+72 ms Bildalter am Sink); Kacheln weiter mit voller Bildrate (OUT.11), alles
+auf der GPU (NFA.1, G.2).
+

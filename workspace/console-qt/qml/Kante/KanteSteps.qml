@@ -9,6 +9,8 @@ import "."
  *   current   thick accent bar, the number on a filled primary square, the step framed
  *             with a 2 px outline, its label in the strong text colour
  *   upcoming  thin bar, the number in a hollow square, muted label
+ *   skipped   a passed step in `skipped` (1.49): muted 4 px bar, a dash in a hollow square,
+ *             so a step the user left out never shows the done check (Kontra: latency)
  *
  * Screen readers hear each step as "Schritt 2 von 4: Erkennen, aktuell"; the words come
  * from `stepText` and `stateNames`, an app sets its translations once.
@@ -27,7 +29,9 @@ Item {
     property int current: 0
     /** Words of a step for screen readers; %1 its number, %2 the count. */
     property string stepText: "Schritt %1 von %2"
-    property var stateNames: ({ done: "erledigt", current: "aktuell", upcoming: "offen" })
+    property var stateNames: ({ done: "erledigt", current: "aktuell", upcoming: "offen", skipped: "übersprungen" })
+    /** Indexes of passed steps the user skipped (1.49). */
+    property var skipped: []
 
     property alias spacing: row.spacing
 
@@ -70,9 +74,11 @@ Item {
                 id: step
                 required property int index
                 required property var modelData
-                readonly property bool done: index < steps.current
+                readonly property bool passed: index < steps.current
+                readonly property bool skippedStep: passed && (steps.skipped || []).indexOf(index) >= 0
+                readonly property bool done: passed && !skippedStep
                 readonly property bool now: index === steps.current
-                readonly property string stateKey: done ? "done" : (now ? "current" : "upcoming")
+                readonly property string stateKey: skippedStep ? "skipped" : (done ? "done" : (now ? "current" : "upcoming"))
                 readonly property real signSize: Math.max(KanteStyle.unit(20), number.implicitHeight + KanteStyle.unit(4))
                 readonly property bool named: !steps.compact || now
                 /** Width with the label shown. */
@@ -93,11 +99,12 @@ Item {
                     border.width: 2
                     border.color: KanteStyle.accentTextColor
                 }
-                // Bar: 4 px done, 6 px current, 2 px upcoming.
+                // Bar: 4 px done or skipped, 6 px current, 2 px upcoming.
                 Rectangle {
                     width: parent.width
-                    height: KanteStyle.unit(step.now ? 6 : (step.done ? 4 : 2))
-                    color: step.done ? KanteStyle.positiveTextColor : (step.now ? KanteStyle.accentColor : KanteStyle.frameColor)
+                    height: KanteStyle.unit(step.now ? 6 : (step.passed ? 4 : 2))
+                    color: step.done ? KanteStyle.positiveTextColor
+                         : (step.now ? KanteStyle.accentColor : (step.skippedStep ? KanteStyle.mutedTextColor : KanteStyle.frameColor))
                 }
                 // Sign: check on a filled square (done), number on a filled square (current),
                 // number in a hollow square (upcoming).
@@ -122,7 +129,7 @@ Item {
                         id: number
                         visible: !step.done
                         anchors.centerIn: parent
-                        text: (step.index + 1 < 10 ? "0" : "") + (step.index + 1)
+                        text: step.skippedStep ? "–" : (step.index + 1 < 10 ? "0" : "") + (step.index + 1)
                         color: step.now ? KanteStyle.primaryTextColor : KanteStyle.mutedTextColor
                         font: KanteStyle.monoFont(KanteStyle.labelFont().pointSize, step.now)
                     }

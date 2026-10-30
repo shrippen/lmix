@@ -471,7 +471,7 @@
   <context>
     <name>AddOutputDialog</name>
     <message>
-      <location filename="../qml/AddOutputDialog.qml" line="+48" />
+      <location filename="../qml/AddOutputDialog.qml" line="+59" />
       <source>folder in the engine's media directory</source>
       <translation>Ordner im Medienverzeichnis der Engine</translation>
     </message>
@@ -590,7 +590,7 @@
   <context>
     <name>AppShell</name>
     <message>
-      <location filename="../qml/AppShell.qml" line="+218" />
+      <location filename="../qml/AppShell.qml" line="+261" />
       <source>Ctrl</source>
       <comment>key</comment>
       <translation>Strg</translation>
@@ -680,23 +680,23 @@
     </message>
     <message>
       <location line="+25" />
-      <location line="+260" />
+      <location line="+297" />
       <source>Keys</source>
       <translation>Tasten</translation>
     </message>
     <message>
-      <location line="-254" />
+      <location line="-291" />
       <source>Pages</source>
       <translation>Seiten</translation>
     </message>
     <message>
       <location line="+0" />
-      <location line="+330" />
+      <location line="+385" />
       <source>Ctrl+1…%1</source>
       <translation>Strg+1…%1</translation>
     </message>
     <message>
-      <location line="-328" />
+      <location line="-383" />
       <source>New show</source>
       <translation>Neue Show</translation>
     </message>
@@ -712,12 +712,12 @@
     </message>
     <message>
       <location line="+2" />
-      <location line="+346" />
+      <location line="+432" />
       <source>Panic all</source>
       <translation>Panik: alles</translation>
     </message>
     <message>
-      <location line="-346" />
+      <location line="-432" />
       <source>button in the page bar</source>
       <translation>Knopf in der Seitenleiste</translation>
     </message>
@@ -812,6 +812,26 @@
       <translation>System</translation>
     </message>
     <message>
+      <location line="+5" />
+      <source>Page bar</source>
+      <translation>Seitenleiste</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Normal</source>
+      <translation>Normal</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Narrow</source>
+      <translation>Schmal</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Colour band</source>
+      <translation>Farbband</translation>
+    </message>
+    <message>
       <location line="+7" />
       <source>This machine</source>
       <translation>Dieser Rechner</translation>
@@ -832,7 +852,7 @@
       <translation>Werkseinstellungen…</translation>
     </message>
     <message>
-      <location line="+10" />
+      <location line="+35" />
       <source>Unsaved show</source>
       <translation>Ungespeicherte Show</translation>
     </message>
@@ -857,12 +877,27 @@
       <translation>lmix-core nicht erreichbar</translation>
     </message>
     <message>
-      <location line="+46" />
+      <location line="+26" />
+      <source>Locked</source>
+      <translation>Gesperrt</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Lock</source>
+      <translation>Sperren</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>While locked, closing inputs, loading a show, stopping outputs and changing format, sample rate or multiview are refused.</source>
+      <translation>Gesperrt lassen sich keine Inputs schließen, keine Show laden, keine Ausgänge stoppen und weder Format noch Abtastrate noch Multiview ändern.</translation>
+    </message>
+    <message>
+      <location line="+33" />
       <source>This show file is in the older format %1 and was converted on opening. Saving it keeps the old file beside it (.v%1.bak).</source>
       <translation>Diese Show-Datei hat das ältere Format %1 und wurde beim Öffnen umgewandelt. Beim Speichern bleibt die alte Datei daneben erhalten (.v%1.bak).</translation>
     </message>
     <message>
-      <location line="+22" />
+      <location line="+23" />
       <source>%1 (Ctrl+%2)</source>
       <translation>%1 (Strg+%2)</translation>
     </message>
@@ -892,7 +927,13 @@
       <translation>Programm</translation>
     </message>
     <message>
-      <location line="+15" />
+      <location line="+42" />
+      <source>Panic</source>
+      <comment>stops everything</comment>
+      <translation>Panik</translation>
+    </message>
+    <message>
+      <location line="+4" />
       <source>Stop every cue over the panic time and fade program to black; recordings and streams go on</source>
       <translation>Alle Cues über die Panikzeit stoppen und Programm auf Schwarz blenden; Aufnahmen und Streams laufen weiter</translation>
     </message>
@@ -923,7 +964,7 @@
   <context>
     <name>AudioPage</name>
     <message>
-      <location filename="../qml/AudioPage.qml" line="+50" />
+      <location filename="../qml/AudioPage.qml" line="+58" />
       <source>Audio</source>
       <translation>Ton</translation>
     </message>
@@ -1090,6 +1131,19 @@
     </message>
   </context>
   <context>
+    <name>BusButtons</name>
+    <message>
+      <location filename="../qml/BusButtons.qml" line="+33" />
+      <source>Program</source>
+      <translation>Programm</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Preview</source>
+      <translation>Vorschau</translation>
+    </message>
+  </context>
+  <context>
     <name>BusDialog</name>
     <message>
       <location filename="../qml/BusDialog.qml" line="+24" />
@@ -1100,7 +1154,7 @@
   <context>
     <name>BusPanel</name>
     <message>
-      <location filename="../qml/BusPanel.qml" line="+90" />
+      <location filename="../qml/BusPanel.qml" line="+95" />
       <source>Volume of %1</source>
       <translation>Lautstärke von %1</translation>
     </message>
@@ -1819,7 +1873,7 @@
   <context>
     <name>InputTile</name>
     <message>
-      <location filename="../qml/InputTile.qml" line="+85" />
+      <location filename="../qml/InputTile.qml" line="+98" />
       <source>Input %1 %2</source>
       <translation>Input %1 %2</translation>
     </message>
@@ -2339,7 +2393,7 @@
   <context>
     <name>LayoutDialog</name>
     <message>
-      <location filename="../qml/LayoutDialog.qml" line="+69" />
+      <location filename="../qml/LayoutDialog.qml" line="+80" />
       <source>Top right quarter</source>
       <translation>Viertel oben rechts</translation>
     </message>
@@ -2706,22 +2760,7 @@
       <translation>Doppelklick in die Vorschau</translation>
     </message>
     <message>
-      <location line="+2" />
-      <source>Fade up</source>
-      <translation>Aufblenden</translation>
-    </message>
-    <message>
-      <location line="+0" />
-      <source>Fade to black</source>
-      <translation>Schwarzblende</translation>
-    </message>
-    <message>
-      <location line="+1" />
-      <source>Program to black and back (SWI.9); the show and outputs go on</source>
-      <translation>Programm auf Schwarz und zurück (SWI.9); Show und Ausgänge laufen weiter</translation>
-    </message>
-    <message>
-      <location line="+90" />
+      <location line="+118" />
       <source>Layout %1 %2</source>
       <translation>Layout %1 %2</translation>
     </message>
@@ -2781,29 +2820,28 @@
       <translation>Einige Sekunden lang Aufnahme bis Programm messen</translation>
     </message>
     <message>
-      <location line="+45" />
-      <location line="+240" />
+      <location line="+50" />
       <source>Preview</source>
       <translation>Vorschau</translation>
     </message>
     <message>
-      <location line="-195" />
-      <location line="+194" />
+      <location line="+45" />
       <source>Program</source>
       <translation>Programm</translation>
     </message>
     <message>
-      <location line="-174" />
+      <location line="+20" />
       <source>Height of the monitors</source>
       <translation>Höhe der Monitore</translation>
     </message>
     <message>
-      <location line="+6" />
+      <location line="+9" />
+      <location line="+12" />
       <source>Inputs</source>
       <translation>Inputs</translation>
     </message>
     <message>
-      <location line="+3" />
+      <location line="+2" />
       <source>Tiles</source>
       <translation>Kacheln</translation>
     </message>
@@ -2823,7 +2861,7 @@
       <translation>Eine Reihe für Programm und eine für Vorschau, eine Taste je Input</translation>
     </message>
     <message>
-      <location line="+6" />
+      <location line="+5" />
       <source>Compact</source>
       <translation>Kompakt</translation>
     </message>
@@ -2843,7 +2881,7 @@
       <translation>Dazu Overlay-Tasten und Tonleiste</translation>
     </message>
     <message>
-      <location line="+6" />
+      <location line="+5" />
       <source>S</source>
       <comment>small tiles</comment>
       <translation>S</translation>
@@ -2876,13 +2914,34 @@
       <translation>Große Kacheln</translation>
     </message>
     <message>
-      <location line="+5" />
+      <location line="+491" />
+      <source>Level of %1</source>
+      <translation>Pegel von %1</translation>
+    </message>
+    <message>
+      <location line="-518" />
       <location line="+5" />
       <source>View</source>
       <translation>Ansicht</translation>
     </message>
     <message>
-      <location line="+18" />
+      <location line="-479" />
+      <source>FTB</source>
+      <comment>fade to black</comment>
+      <translation>FTB</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Program is black: click to fade up again</source>
+      <translation>Programm ist schwarz: Klick blendet wieder auf</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Fade to black: program to black and back (SWI.9); the show and outputs go on</source>
+      <translation>Schwarzblende: Programm auf Schwarz und zurück (SWI.9); Show und Ausgänge laufen weiter</translation>
+    </message>
+    <message>
+      <location line="+515" />
       <source>Multiview</source>
       <translation>Multiview</translation>
     </message>
@@ -2897,7 +2956,22 @@
       <translation>Pegelanzeigen</translation>
     </message>
     <message>
-      <location line="+56" />
+      <location line="+48" />
+      <source>More input actions</source>
+      <translation>Weitere Input-Aktionen</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>The actions without room in the row, and which ones the row shows</source>
+      <translation>Die Aktionen ohne Platz in der Zeile, und welche die Zeile zeigt</translation>
+    </message>
+    <message>
+      <location line="+49" />
+      <source>Cards on and off</source>
+      <translation>Karten an und aus</translation>
+    </message>
+    <message>
+      <location line="+4" />
       <source>Cards on</source>
       <translation>Karten an</translation>
     </message>
@@ -2922,7 +2996,12 @@
       <translation>Die Capture-Karten sind für andere Programme frei. Klicken nutzt sie: Karten-Eingänge und -Ausgänge starten.</translation>
     </message>
     <message>
-      <location line="+110" />
+      <location line="+52" />
+      <source>In the row</source>
+      <translation>In der Zeile</translation>
+    </message>
+    <message>
+      <location line="+76" />
       <source>No inputs yet</source>
       <translation>Noch keine Inputs</translation>
     </message>
@@ -2932,12 +3011,12 @@
       <translation>Kamera, Datei, Stream oder Testbild: Jeder Input bekommt hier eine Kachel.</translation>
     </message>
     <message>
-      <location line="+125" />
+      <location line="+132" />
       <source>Width of the audio column</source>
       <translation>Breite der Tonspalte</translation>
     </message>
     <message>
-      <location line="-326" />
+      <location line="-398" />
       <source>Audio at the edge</source>
       <translation>Ton am Rand</translation>
     </message>
@@ -2947,12 +3026,7 @@
       <translation>Einfacher Modus</translation>
     </message>
     <message>
-      <location line="+93" />
-      <source>While locked, closing inputs, loading a show, stopping outputs and changing format, sample rate or multiview are refused.</source>
-      <translation>Gesperrt lassen sich keine Inputs schließen, keine Show laden, keine Ausgänge stoppen und weder Format noch Abtastrate noch Multiview ändern.</translation>
-    </message>
-    <message>
-      <location line="+16" />
+      <location line="+90" />
       <source>Find missing files…</source>
       <translation>Fehlende Dateien suchen…</translation>
     </message>
@@ -2962,48 +3036,43 @@
       <translation>Den mit „Fehlt“ markierten Inputs fehlen Mediendateien: den Ordner wählen, in dem sie jetzt liegen. Inputs auf Programm bleiben unverändert.</translation>
     </message>
     <message>
-      <location line="-10" />
+      <location line="+9" />
       <source>Clear solo</source>
       <translation>Solo aus</translation>
     </message>
     <message>
-      <location line="-5" />
+      <location line="+8" />
       <source>Bring back %1</source>
       <translation>%1 zurückholen</translation>
     </message>
     <message>
-      <location line="-8" />
-      <source>Locked</source>
-      <translation>Gesperrt</translation>
-    </message>
-    <message>
-      <location line="+0" />
-      <source>Lock</source>
-      <translation>Sperren</translation>
-    </message>
-    <message>
-      <location line="-22" />
+      <location line="+27" />
+      <location line="+3" />
       <source>Shortcuts…</source>
       <translation>Belegungen…</translation>
     </message>
     <message>
-      <location line="-6" />
+      <location line="+7" />
+      <location line="+3" />
       <source>Buses…</source>
       <translation>Busse…</translation>
     </message>
     <message>
-      <location line="-6" />
+      <location line="+7" />
+      <location line="+3" />
       <source>Titles…</source>
       <translation>Titel…</translation>
     </message>
     <message>
-      <location line="-6" />
+      <location line="+7" />
+      <location line="+3" />
       <source>Data…</source>
       <translation>Daten…</translation>
     </message>
     <message>
-      <location line="-9" />
-      <location line="+157" />
+      <location line="-95" />
+      <location line="+3" />
+      <location line="+184" />
       <source>+ Input</source>
       <translation>+ Input</translation>
     </message>
@@ -3011,18 +3080,18 @@
   <context>
     <name>NarrowMixer</name>
     <message>
-      <location filename="../qml/NarrowMixer.qml" line="+148" />
+      <location filename="../qml/NarrowMixer.qml" line="+151" />
       <source>Audio mixer</source>
       <translation>Tonmischer</translation>
     </message>
     <message>
       <location line="+31" />
-      <location line="+412" />
+      <location line="+417" />
       <source>Audio page ›</source>
       <translation>Ton-Seite ›</translation>
     </message>
     <message>
-      <location line="-411" />
+      <location line="-416" />
       <source>Open the Audio page</source>
       <translation>Ton-Seite öffnen</translation>
     </message>
@@ -3148,13 +3217,13 @@
       <translation>Send an %1</translation>
     </message>
     <message>
-      <location line="+8" />
-      <location line="+322" />
+      <location line="+13" />
+      <location line="+327" />
       <source>off</source>
       <translation>aus</translation>
     </message>
     <message>
-      <location line="-315" />
+      <location line="-320" />
       <source>Channel strip: EQ, compressor …</source>
       <translation>Kanalzug: EQ, Kompressor …</translation>
     </message>
@@ -3224,45 +3293,45 @@
       <translation>%1: %2</translation>
     </message>
     <message>
-      <location line="+49" />
-      <location line="+113" />
+      <location line="+54" />
+      <location line="+118" />
       <source>M</source>
       <comment>mute, short</comment>
       <translation>M</translation>
     </message>
     <message>
-      <location line="-109" />
-      <location line="+113" />
+      <location line="-114" />
+      <location line="+118" />
       <source>Mute %1</source>
       <translation>%1 stumm schalten</translation>
     </message>
     <message>
-      <location line="-113" />
-      <location line="+113" />
+      <location line="-118" />
+      <location line="+118" />
       <source>Unmute %1</source>
       <translation>Ton an für %1</translation>
     </message>
     <message>
-      <location line="-112" />
-      <location line="+113" />
+      <location line="-117" />
+      <location line="+118" />
       <source>%1 is on. Click: mute.</source>
       <translation>%1 ist an. Klick: stumm.</translation>
     </message>
     <message>
-      <location line="-113" />
-      <location line="+113" />
+      <location line="-118" />
+      <location line="+118" />
       <source>%1 is muted. Click: on.</source>
       <translation>%1 ist stumm. Klick: an.</translation>
     </message>
     <message>
-      <location line="-109" />
-      <location line="+123" />
+      <location line="-114" />
+      <location line="+128" />
       <source>S</source>
       <comment>solo, short</comment>
       <translation>S</translation>
     </message>
     <message>
-      <location line="-121" />
+      <location line="-126" />
       <source>Solo %1</source>
       <translation>Solo %1</translation>
     </message>
@@ -3294,12 +3363,12 @@
     </message>
     <message>
       <location line="+7" />
-      <location line="+99" />
+      <location line="+104" />
       <source>More for %1</source>
       <translation>Mehr zu %1</translation>
     </message>
     <message>
-      <location line="-98" />
+      <location line="-103" />
       <source>Sends to buses, channel strip</source>
       <translation>Sends an Busse, Kanalzug</translation>
     </message>
@@ -3314,12 +3383,12 @@
       <translation>Auf dem Kopfhörer: %1</translation>
     </message>
     <message>
-      <location line="+52" />
+      <location line="+57" />
       <source>%1 · click: rename</source>
       <translation>%1 · Klick: umbenennen</translation>
     </message>
     <message>
-      <location line="-340" />
+      <location line="-350" />
       <source>Name of the bus</source>
       <translation>Name des Busses</translation>
     </message>
@@ -3329,7 +3398,7 @@
       <translation>Noch kein Ausgang mit Ton.</translation>
     </message>
     <message>
-      <location line="+302" />
+      <location line="+312" />
       <source>Tap, outputs, remove</source>
       <translation>Abgriff, Ausgänge, löschen</translation>
     </message>
@@ -4813,7 +4882,7 @@
       <translation>nutzt Input %1, dessen Mediendatei fehlt</translation>
     </message>
     <message>
-      <location line="+75" />
+      <location line="+76" />
       <source>Wait %1</source>
       <translation>Warten %1</translation>
     </message>
@@ -6428,45 +6497,44 @@
   <context>
     <name>TransitionPanel</name>
     <message>
-      <location filename="../qml/TransitionPanel.qml" line="+76" />
+      <location filename="../qml/TransitionPanel.qml" line="+77" />
       <source>Cut</source>
       <translation>Cut</translation>
     </message>
     <message>
-      <location line="+27" />
+      <location line="+41" />
       <source>Click: take preview. Right click: effect and length.</source>
       <translation>Klick: Vorschau übernehmen. Rechtsklick: Effekt und Dauer.</translation>
     </message>
     <message>
       <location line="+14" />
-      <location line="+57" />
+      <location line="+59" />
       <source>Effect</source>
       <translation>Effekt</translation>
     </message>
     <message>
-      <location line="-45" />
-      <location line="+51" />
+      <location line="-47" />
+      <location line="+53" />
       <source>Length</source>
       <translation>Dauer</translation>
     </message>
     <message>
-      <location line="-45" />
+      <location line="-47" />
       <source>Stinger clip and cut point…</source>
       <translation>Stinger-Clip und Cut-Punkt…</translation>
     </message>
     <message>
-      <location line="+21" />
+      <location line="+22" />
       <source>Quick play</source>
       <translation>Schnellstart</translation>
     </message>
     <message>
-      <location line="+4" />
+      <location line="+5" />
       <source>Click: preview to program with this effect, and play it. Double click on the preview monitor does the same. Right click: effect and length.</source>
       <translation>Klick: Vorschau mit diesem Effekt auf Programm und abspielen. Doppelklick auf den Vorschau-Monitor tut dasselbe. Rechtsklick: Effekt und Dauer.</translation>
     </message>
     <message>
-      <location line="+35" />
-      <location line="+10" />
+      <location line="+38" />
       <source>T-bar</source>
       <translation>T-Bar</translation>
     </message>
@@ -6476,7 +6544,7 @@
       <translation>Ziehen blendet die Vorschau ein; am Ende geht sie auf Programm.</translation>
     </message>
     <message>
-      <location line="+22" />
+      <location line="+21" />
       <source>Overlays</source>
       <translation>Overlays</translation>
     </message>
@@ -6486,7 +6554,7 @@
       <translation>Alle aus</translation>
     </message>
     <message>
-      <location line="+47" />
+      <location line="+51" />
       <source>Overlay %1: %2, click to take off</source>
       <translation>Overlay %1: %2, Klick nimmt es ab</translation>
     </message>
@@ -6546,7 +6614,7 @@
       <translation>Einstellungen…</translation>
     </message>
     <message>
-      <location line="-84" />
+      <location line="-88" />
       <source>All overlays off</source>
       <translation>Alle Overlays aus</translation>
     </message>

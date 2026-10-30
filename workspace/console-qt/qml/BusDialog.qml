@@ -19,7 +19,7 @@ KanteDialog {
     /** `phones` of the show state. */
     property var phones: ({ volume: 100, mute: false, pre_fader: false })
     /** Levels as the bridge gives them. */
-    property var levels: ({})
+    property var levels: null
 
     title: qsTr("Master, headphones and buses")
     modal: true

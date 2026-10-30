@@ -127,5 +127,4 @@ RowLayout {
         onClicked: bar.addRequested()
     }
 
-    Item { Layout.fillWidth: true }
 }

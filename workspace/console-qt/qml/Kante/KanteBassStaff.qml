@@ -29,6 +29,11 @@ import "."
  *              chord (1.27): a chord symbol at the start of the bar
  *              number (1.28): the bar's label, e.g. the written bar number (unrolled
  *              repeats read "5, 6, 5, 6"); a number or a string, left out: index + 1
+ *              section (1.50): the part that starts with the bar ("Refrain", "B", or a
+ *              list ["Refrain", "B"] → "Refrain · B"), a rehearsal mark
+ *              (KanteRehearsalMark) on top of the line, cut short before the next mark;
+ *              with sections the staff moves down by their row. Screen readers hear the
+ *              part of the current bar ("Teil Refrain · B", KanteStyle.partText)
  *   chords     (1.27) [{time, text}]: chord symbols at a time in seconds, above the staff
  *              over the note at that time; with the chords of `bars`, sorted by time.
  *              "#" shows as ♯, a "b" after a note letter or before a digit as ♭
@@ -193,7 +198,10 @@ Item {
         : Math.max(1, Math.floor((width - headerWidth) / Math.max(1, minBarWidth)))
     readonly property int firstBar: Math.max(0, Math.floor(currentBar / perSystem) * perSystem)
     readonly property real barWidth: (width - headerWidth) / perSystem
-    readonly property real staffTop: sp * (hasChords ? 7.5 : 5.5)
+    /** Any bar with a section: then a row for the rehearsal marks on top (1.50). */
+    readonly property bool hasSections: barList.some(function (b) { return b.section !== "" })
+    readonly property real sectionRow: hasSections ? markProbe.implicitHeight + sp * 0.5 : 0
+    readonly property real staffTop: sectionRow + sp * (hasChords ? 7.5 : 5.5)
     readonly property real systemHeight: staffTop + sp * 4 + sp * 5
     readonly property var layout: computeLayout(firstBar, perSystem, Math.max(1, systems), width, sp, notes, rests, barList, chordList)
     /** Loop parts of the page, one per line: [{x, w, sys, left, right}] (1.35). */
@@ -207,6 +215,10 @@ Item {
     Accessible.name: accessibleName
     Accessible.description: {
         let d = barText.arg(barList.length ? barList[currentBar].number : 1).arg(barList.length)
+        const part = barList.length ? barList[currentBar].part : ""
+        if (part !== "") {
+            d += ", " + KanteStyle.partText.arg(part)
+        }
         const ch = chordAt(position)
         if (ch !== "") {
             d += ", " + chordText.arg(ch)
@@ -321,7 +333,7 @@ Item {
             out.push({ time: Number(o.time) || 0, num: num, den: den, changed: changed,
                        key: key, fromKey: fromKey, keyChanged: i > 0 && key !== fromKey,
                        chord: o.chord !== undefined && o.chord !== null ? String(o.chord) : "",
-                       number: barLabel(o, i) })
+                       number: barLabel(o, i), section: KanteStyle.rehearsalText(o.section), part: "" })
         }
         // Seconds per quarter, from the notes (median of time step / beats): sizes a bar
         // when none or only the start of the last one is given.
@@ -337,7 +349,8 @@ Item {
         for (var k2 = 0; ns && k2 < ns.length; k2++) lastEnd = Math.max(lastEnd, Number(ns[k2].time) + (Number(ns[k2].beats) || 0) * spq)
         for (var r = 0; rs && r < rs.length; r++) lastEnd = Math.max(lastEnd, Number(rs[r].time) + (Number(rs[r].beats) || 0) * spq)
         if (out.length === 0) {
-            out.push({ time: 0, num: 4, den: 4, changed: true, key: key, fromKey: key, keyChanged: false, chord: "", number: "1" })
+            out.push({ time: 0, num: 4, den: 4, changed: true, key: key, fromKey: key, keyChanged: false, chord: "", number: "1",
+                       section: "", part: "" })
         }
         for (var j = 0; j < out.length; j++) {
             if (j + 1 < out.length) {
@@ -350,10 +363,15 @@ Item {
                     var prev = out[out.length - 1]
                     out.push({ time: prev.end, end: prev.end + len, num: prev.num, den: prev.den, changed: false,
                                key: prev.key, fromKey: prev.key, keyChanged: false, chord: "",
-                               number: isNaN(Number(prev.number)) ? String(out.length + 1) : String(Number(prev.number) + 1) })
+                               number: isNaN(Number(prev.number)) ? String(out.length + 1) : String(Number(prev.number) + 1),
+                               section: "", part: "" })
                 }
                 break
             }
+        }
+        // The part in effect: this bar's section or the last one before it (1.50).
+        for (let p = 0; p < out.length; p++) {
+            out[p].part = out[p].section !== "" ? out[p].section : (p > 0 ? out[p - 1].part : "")
         }
         return out
     }
@@ -488,7 +506,7 @@ Item {
 
     // ── Layout ───────────────────────────────────────────────────────
     function computeLayout(first, per, nsys, w, sp, ns, rs, bl, cl) {
-        var L = { glyphs: [], rects: [], polys: [], ties: [], marks: [], techniques: [], boxes: {} }
+        var L = { glyphs: [], rects: [], polys: [], ties: [], marks: [], techniques: [], sections: [], boxes: {} }
         if (w <= 0 || bl.length === 0) {
             return L
         }
@@ -554,6 +572,21 @@ Item {
                 }
             }
         }
+        // Rehearsal marks (1.50): over the first bar of a part, as wide as the room up to the
+        // next mark on the line (or the line's end).
+        for (let ms = 0; ms < nsys; ms++) {
+            let mFirst = first + ms * per
+            let mLast = Math.min(last, mFirst + per - 1)
+            for (let mb = mLast, mRight = headerWidth + (mLast - mFirst + 1) * barWidth; mb >= mFirst; mb--) {
+                if (bl[mb].section === "") {
+                    continue
+                }
+                let mx = headerWidth + (mb - mFirst) * barWidth + sp * 0.2
+                L.sections.push({ x: mx, y: ms * systemHeight, text: bl[mb].section, maxW: mRight - mx - sp * 0.6 })
+                mRight = mx
+            }
+        }
+        L.sections.reverse()
         var from = bl[first].time, to = bl[last].end
         // Chord symbols: above the staff, left-aligned over the note at their time; one
         // that would run into the previous one on its line moves right.
@@ -564,7 +597,7 @@ Item {
             var cb = barAt(ct), csys = sysOf(cb)
             var label = chordLabel(cl[ci].text)
             var cx = Math.max(xOf(ct, cb) - sp * 0.6, (chordRight[csys] || 0) + sp * 0.8)
-            L.glyphs.push({ x: cx, y: csys * systemHeight + sp * 3.2, g: "", text: label, ink: "chord", chord: true })
+            L.glyphs.push({ x: cx, y: csys * systemHeight + sectionRow + sp * 3.2, g: "", text: label, ink: "chord", chord: true })
             chordRight[csys] = cx + label.length * sp * 0.95
         }
         // Rests.
@@ -620,10 +653,10 @@ Item {
             for (var q = 10; q <= sp_.pos; q += 2) {
                 L.rects.push({ x: x - sp * 0.4, y: yOf(q, sys) - ledgerT / 2, w: headW + sp * 0.8, h: ledgerT, ink: "" })
             }
-            L.marks.push({ x: x + headW / 2, y: sys * systemHeight + sp * 1.0, index: i })
+            L.marks.push({ x: x + headW / 2, y: sys * systemHeight + sectionRow + sp * 1.0, index: i })
             // The technique sign under the state sign, above the chord symbols (1.31).
             if (n.technique) {
-                L.techniques.push({ x: x + headW / 2, y: sys * systemHeight + sp * 2.4, index: i, technique: String(n.technique) })
+                L.techniques.push({ x: x + headW / 2, y: sys * systemHeight + sectionRow + sp * 2.4, index: i, technique: String(n.technique) })
             }
             L.boxes[i] = { x: x, w: headW, sys: sys }
             var unit = bl[b].den === 8 && bl[b].num % 3 === 0 ? 1.5 : 1
@@ -746,6 +779,21 @@ Item {
         if (ink === "muted") return KanteStyle.mutedTextColor
         if (ink === "" || ink === "pending" || ink === undefined) return KanteStyle.textColor
         return KanteStyle.noteStateColor(ink)
+    }
+
+    // Rehearsal marks (1.50); the probe measures the row.
+    KanteRehearsalMark { id: markProbe; visible: false; text: "A"; pixelSize: staff.sp * 1.4; Accessible.ignored: true }
+    Repeater {
+        model: staff.layout.sections
+        delegate: KanteRehearsalMark {
+            required property var modelData
+            x: modelData.x
+            y: modelData.y + Math.round((staff.sectionRow - height) / 2)
+            text: modelData.text
+            pixelSize: staff.sp * 1.4
+            maximumWidth: modelData.maxW
+            Accessible.ignored: true
+        }
     }
 
     // Loop range (1.35): a tint with bracket edges ([ and ]) as on KanteTabLane, not colour

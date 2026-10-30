@@ -1,0 +1,2 @@
+module org.freedesktop.gstreamer.Qt6GLVideoItem
+GstGLQt6VideoItem 1.0 GstGLQt6VideoItem.qml

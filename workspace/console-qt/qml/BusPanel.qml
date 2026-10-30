@@ -28,7 +28,12 @@ Item {
     /** `phones` of the show state. */
     property var phones: ({ volume: 100, mute: false, pre_fader: false })
     /** Levels as the bridge gives them (`program`, `phones`, `bus:<id>`). */
-    property var levels: ({})
+    /** AppShell.levels, or null. */
+    property var levels: null
+    function peak(key) {
+        const db = levels ? levels.peak(key) : undefined
+        return db !== undefined ? db : -100
+    }
     readonly property real contentHeight: column.implicitHeight
 
     // Rows by id: a new state (every fader step brings one) keeps them, so
@@ -138,7 +143,7 @@ Item {
             KanteSectionLabel { text: qsTr("Master · program sound") }
             FaderRows {
                 name: qsTr("master")
-                level: panel.levels.program !== undefined ? panel.levels.program : -100
+                level: panel.peak("program")
                 volume: panel.master.volume
                 mute: panel.master.mute
                 onChanged: (volume, mute) => panel.act({ action: "set_master", volume: volume, mute: mute })
@@ -148,7 +153,7 @@ Item {
             KanteSectionLabel { text: qsTr("Headphones · listening") }
             FaderRows {
                 name: qsTr("headphones")
-                level: panel.levels.phones !== undefined ? panel.levels.phones : -100
+                level: panel.peak("phones")
                 volume: panel.phones.volume
                 mute: panel.phones.mute
                 onChanged: (volume, mute) => panel.act({ action: "set_phones", volume: volume, mute: mute })
@@ -211,7 +216,7 @@ Item {
                     }
                     FaderRows {
                         name: bus.modelData.name
-                        level: panel.levels["bus:" + bus.modelData.id] !== undefined ? panel.levels["bus:" + bus.modelData.id] : -100
+                        level: panel.peak("bus:" + bus.modelData.id)
                         volume: bus.modelData.volume
                         mute: bus.modelData.mute
                         onChanged: (volume, mute) => panel.act({ action: "set_bus", bus: bus.modelData.id, volume: volume, mute: mute })

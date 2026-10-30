@@ -141,5 +141,4 @@ RowLayout {
         onAccepted: bar.act({ action: "export_layout_templates", path: bar.localPath(selectedFile) })
     }
 
-    Item { Layout.fillWidth: true }
 }

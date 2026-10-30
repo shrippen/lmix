@@ -67,9 +67,26 @@ die egui-Console:
   Input-Leiste als `GridView`: jede Kachel live, Klick = Vorschau,
   Doppelklick = direkt auf Programm, Tally als Balken plus Wort (PGM/PRV).
 - Bilder: `GET /api/live/program`, `/api/live/preview` bzw.
-  `/api/live/inputs/{id}` liefert den Socket; `unixfdsrc ! queue(leaky) ! glupload ! glcolorconvert !
-  qml6glsink(sync=false)` zeichnet in ein `GstGLQt6VideoItem`. Bricht der
-  Socket (Engine-Neustart, neuer Flow), fragt die Kachel nach 1 s neu.
+  `/api/live/inputs/{id}` liefert Socket und Transport; `unixfdsrc ! glupload`
+  aus dem Hauptspeicher, mit dem CUDA-Mischer `cudaipcsrc ! cudadownload` von
+  der GPU der Engine (eine Kopie auf der GPU), dann `glcolorconvert !
+  qml6glsink(sync=false)` in ein `GstGLQt6VideoItem`. Bricht der Socket
+  (Engine-Neustart, neuer Flow), fragt die Ansicht nach 1 s neu.
+- Kacheln: alle Slots in einem Bild (`GET /api/live/tiles`, Raster und
+  Zellgröße dazu), in RGBA (`tiles_format`), so dass die Console nichts
+  umrechnet. Der Mischer skaliert die Inputs auf seiner GPU in ein Raster;
+  die Console holt jedes Bild als GL-Textur aus einem `appsink`, und jede
+  Kachel zeichnet ihren Ausschnitt direkt (`AtlasCell`, `cpp/atlas_cell.h`:
+  ein `QSGImageNode` mit `sourceRect`, keine Ebene je Kachel). `TilesAtlas`
+  hält nur den `qml6glsink`, dessen GL-Kontext Qt und GStreamer teilen; er
+  bekommt keine Bilder. Desktop-OpenGL (die CUDA-GL-Kopie braucht PBOs) und
+  der threaded Render-Loop sind gesetzt.
+- Ein Frame des Fensters für alle Bilder: Programm und Kachelbild kommen
+  rund 1 ms versetzt; die Bridge hält das erste höchstens 4 ms an, bis das
+  andere da ist (`src/frame_gate.rs`), sonst zeichnet Qt jedes Bild in einem
+  eigenen Frame. Dauerhafte Animationen (z. B. eine atmende Pille) halten
+  das Fenster auf der Bildrate des Bildschirms; in der Kopfzeile ist darum
+  „lmix-core“ verbunden ruhig (Pille „Done“).
 - Rust-Backend (cxx-qt, `src/bridge.rs`): Zustand über WebSocket, Aktionen
   über HTTP, eine Pipeline je Item.
 - Messsonde: mit `RUST_LOG=lmix=debug` meldet jede Ansicht alle
