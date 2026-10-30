@@ -47,6 +47,10 @@ QQC2.Button {
     property bool busy: false
     /** Sits on a hard 4 px shadow and presses into it (a big, single action). */
     property bool raised: false
+    /** Removes or resets (1.55): a Normal or Quiet button with the text in the negative
+     *  colour, for a removal that should not outweigh the actions beside it (Destructive
+     *  is the filled red one). Filled buttons keep their ink. */
+    property bool destructive: false
 
     // Return and Enter press a focused button like Space (1.49, WCAG 2.1.1): Qt Quick
     // Controls take only Space, so keyboard users pressed Return and nothing happened.
@@ -81,8 +85,9 @@ QQC2.Button {
         case KanteButton.Emphasis.Primary: return KanteStyle.primaryTextColor
         case KanteButton.Emphasis.Destructive: return KanteStyle.onStateColor
         case KanteButton.Emphasis.Data: return KanteStyle.focusColor
-        case KanteButton.Emphasis.Quiet: return hovered ? KanteStyle.strongTextColor : KanteStyle.mutedTextColor
-        default: return KanteStyle.textColor
+        case KanteButton.Emphasis.Quiet:
+            return destructive ? KanteStyle.negativeTextColor : hovered ? KanteStyle.strongTextColor : KanteStyle.mutedTextColor
+        default: return destructive ? KanteStyle.negativeTextColor : KanteStyle.textColor
         }
     }
     readonly property color kanteFrame: emphasis === KanteButton.Emphasis.Data
@@ -207,6 +212,14 @@ QQC2.Button {
         property: "opacity"
         value: 0
         when: control.drawn && control.contentItem !== null
+        restoreMode: Binding.RestoreBindingOrValue
+    }
+    // Not drawn here (System, Kante Light): the platform's label in the negative colour.
+    Binding {
+        target: control
+        property: "palette.buttonText"
+        value: KanteStyle.negativeTextColor
+        when: !control.drawn && control.destructive && !control.filled
         restoreMode: Binding.RestoreBindingOrValue
     }
     Binding {
