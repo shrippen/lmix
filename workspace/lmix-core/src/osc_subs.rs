@@ -475,6 +475,7 @@ mod tests {
             elapsed_ms: 1500,
             total_ms: Some(4000),
             remaining_ms: Some(2500),
+            paused: false,
         };
         let mut sub = Subscription::default();
         sub.add(wish(&strings(&["running", "name", "remaining"])).unwrap());

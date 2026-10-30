@@ -188,8 +188,8 @@ Ton und für den Master, Weg zur Ton-Seite; abschaltbar unter Ansicht.
 Audio folgt Video bleibt auf der Ton-Seite. Show: Seitenleiste mit den
 Reitern Aktiv und Listen (24.10.), laufende Cues als Fortschrittsfüllung
 mit abgelaufener und negativer Restzeit, Stopp je Cue; sie ersetzt die
-Karte „Running“ unten. Pause je Cue und der Reiter Pads warten auf den
-Kern (RUN.5, RUN.12). Inspector unter der Cue-Liste (24.10.,
+Karte „Running“ unten. Pause je Cue und „Alle pausieren/fortsetzen“ dort
+seit RUN.5 (27.10.); der Reiter Pads wartet auf den Kern (RUN.12). Inspector unter der Cue-Liste (24.10.,
 nur im Edit-Modus): Reiter Basics (Nummer, Name, Farbe, Notiz), Triggers
 (was den nächsten Cue startet, welche Cues dieser stoppt), Time & loops
 (Pre/Post wait, Dauer, Ein-/Ausblenden, Wiederholungen), Levels (Pegel
@@ -210,8 +210,7 @@ Aus dem Dummy noch offen, **nur Oberfläche** (der Kern kann es):
 - Leiste: wer eine Seite zuletzt bediente (braucht die Kennung je
   Verbindung im Kern, siehe Schritt 4).
 
-**Braucht den Kern** (Lastenheft offen): Pause je Cue und alles (RUN.5),
-Vorhören (RUN.10), Sperren je Ein-/Ausgabeklasse
+**Braucht den Kern** (Lastenheft offen): Vorhören (RUN.10), Sperren je Ein-/Ausgabeklasse
 (RUN.9), Pause inputs (INP.12), Dateiteilung und Namensmuster (REC.4,
 REC.5), Marken ins Protokoll (REC.8), Sendeverzögerung (STR.5), Puffer und
 Encoder-Last (STR.7), Vorlagen und Assistent (UI.13).

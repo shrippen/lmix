@@ -73,6 +73,8 @@ struct Run {
     kind: CueKind,
     /// A sound cue's fade when it is stopped (SND.2).
     fade_out_ms: u32,
+    /// Since when it is paused (RUN.5); its times stand still.
+    paused_at: Option<Instant>,
 }
 
 impl Run {
@@ -376,6 +378,21 @@ impl Runner {
         cue: Option<&str>,
         now: Instant,
     ) -> Result<Vec<Out>, ActionError> {
+        let victims = self.select(lists, list, cue)?;
+        let mut out = Vec::new();
+        self.stop_runs(&victims, now, SoundEnd::Own, &mut out);
+        out.extend(self.tick(lists, now));
+        Ok(out)
+    }
+
+    /// Runs of the cue `cue` (number or id) of `list`, or of every cue
+    /// of the list, or of every cue.
+    fn select(
+        &self,
+        lists: &[ShowCueList],
+        list: Option<usize>,
+        cue: Option<&str>,
+    ) -> Result<Vec<u64>, ActionError> {
         let list_id = list.map(|l| lists[l].id);
         let cue_id = match cue {
             Some(text) => Some(
@@ -385,15 +402,93 @@ impl Runner {
             ),
             None => None,
         };
-        let victims: Vec<u64> = self
+        Ok(self
             .runs
             .iter()
             .filter(|r| list_id.is_none_or(|l| r.list == l))
             .filter(|r| cue_id.is_none_or(|c| r.cue == c))
             .map(|r| r.id)
-            .collect();
+            .collect())
+    }
+
+    /// `ids` and every run they started, down the groups.
+    fn with_children(&self, ids: &[u64]) -> Vec<u64> {
+        let mut all: Vec<u64> = ids.to_vec();
+        let mut i = 0;
+        while i < all.len() {
+            let id = all[i];
+            all.extend(
+                self.runs
+                    .iter()
+                    .filter(|r| r.parent == Some(id) && !all.contains(&r.id))
+                    .map(|r| r.id)
+                    .collect::<Vec<_>>(),
+            );
+            i += 1;
+        }
+        all
+    }
+
+    /// Pause the cue `cue` of `list`, or every cue of the list, or every
+    /// cue (RUN.5), with the cues they started: waits and follows stand
+    /// still, sounds and pictures pause. A fade that runs goes on to its
+    /// end.
+    pub fn pause(
+        &mut self,
+        lists: &[ShowCueList],
+        list: Option<usize>,
+        cue: Option<&str>,
+        now: Instant,
+    ) -> Result<Vec<Out>, ActionError> {
+        let ids = self.with_children(&self.select(lists, list, cue)?);
         let mut out = Vec::new();
-        self.stop_runs(&victims, now, SoundEnd::Own, &mut out);
+        for run in self
+            .runs
+            .iter_mut()
+            .filter(|r| ids.contains(&r.id) && r.paused_at.is_none())
+        {
+            run.paused_at = Some(now);
+            if let Some(action) = media_action(run, PauseStep::Pause) {
+                out.push(action);
+            }
+            out.push(Out::Event {
+                list: run.list,
+                cue: Some(run.cue),
+                what: CueEvent::Paused,
+            });
+        }
+        Ok(out)
+    }
+
+    /// Resume what [`Runner::pause`] paused: every time comes as much
+    /// later as the pause took.
+    pub fn resume(
+        &mut self,
+        lists: &[ShowCueList],
+        list: Option<usize>,
+        cue: Option<&str>,
+        now: Instant,
+    ) -> Result<Vec<Out>, ActionError> {
+        let ids = self.with_children(&self.select(lists, list, cue)?);
+        let mut out = Vec::new();
+        for run in self.runs.iter_mut().filter(|r| ids.contains(&r.id)) {
+            let Some(since) = run.paused_at.take() else {
+                continue;
+            };
+            let held = now.saturating_duration_since(since);
+            run.start += held;
+            run.fire_at += held;
+            run.end_at = run.end_at.map(|t| t + held);
+            run.follow_at = run.follow_at.map(|t| t + held);
+            if let Some(action) = media_action(run, PauseStep::Resume) {
+                out.push(action);
+            }
+            out.push(Out::Event {
+                list: run.list,
+                cue: Some(run.cue),
+                what: CueEvent::Resumed,
+            });
+        }
         out.extend(self.tick(lists, now));
         Ok(out)
     }
@@ -576,6 +671,9 @@ impl Runner {
 
     /// The step `run` waits for, and when.
     fn due(&self, run: &Run) -> Option<(Instant, Step)> {
+        if run.paused_at.is_some() {
+            return None;
+        }
         if !run.fired {
             return Some((run.fire_at, Step::Fire));
         }
@@ -659,6 +757,7 @@ impl Runner {
                 (_, Some(picture)) => picture.fade_out_ms,
                 _ => 0,
             },
+            paused_at: None,
         });
         self.ran.insert(cue.id);
         out.push(Out::Event {
@@ -964,19 +1063,7 @@ impl Runner {
     /// Stop runs `ids` and everything they started; their sounds as
     /// `sounds` says.
     fn stop_runs(&mut self, ids: &[u64], t: Instant, sounds: SoundEnd, out: &mut Vec<Out>) {
-        let mut stopped: Vec<u64> = ids.to_vec();
-        let mut i = 0;
-        while i < stopped.len() {
-            let id = stopped[i];
-            stopped.extend(
-                self.runs
-                    .iter()
-                    .filter(|r| r.parent == Some(id) && !stopped.contains(&r.id))
-                    .map(|r| r.id)
-                    .collect::<Vec<_>>(),
-            );
-            i += 1;
-        }
+        let stopped = self.with_children(ids);
         let parents: Vec<Option<u64>> = self
             .runs
             .iter()
@@ -1028,7 +1115,8 @@ impl Runner {
             .filter_map(|run| {
                 let list = lists.iter().position(|l| l.id == run.list)?;
                 let cue = Self::cue(lists, list, run.cue)?;
-                let elapsed = now.saturating_duration_since(run.start).as_millis() as u64;
+                let at = run.paused_at.unwrap_or(now);
+                let elapsed = at.saturating_duration_since(run.start).as_millis() as u64;
                 let phase = match (run.fired, run.ended) {
                     (false, _) => RunPhase::PreWait,
                     (true, false) => RunPhase::Running,
@@ -1045,10 +1133,39 @@ impl Runner {
                     remaining_ms: run
                         .total
                         .map(|d| (d.as_millis() as u64).saturating_sub(elapsed)),
+                    paused: run.paused_at.is_some(),
                 })
             })
             .collect()
     }
+}
+
+/// Which way a pause goes.
+#[derive(Clone, Copy, Debug)]
+enum PauseStep {
+    Pause,
+    Resume,
+}
+
+/// The pause or resume of `run`'s sound or picture; none while it has
+/// not started one or is over.
+fn media_action(run: &Run, step: PauseStep) -> Option<Out> {
+    if !run.fired || run.ended {
+        return None;
+    }
+    let id = media_id(run.cue);
+    let action = match (run.kind, step) {
+        (CueKind::Sound, PauseStep::Pause) => Action::PauseSound { id },
+        (CueKind::Sound, PauseStep::Resume) => Action::ResumeSound { id },
+        (CueKind::Picture, PauseStep::Pause) => Action::PausePicture { id },
+        (CueKind::Picture, PauseStep::Resume) => Action::ResumePicture { id },
+        _ => return None,
+    };
+    Some(Out::Actions {
+        list: run.list,
+        cue: run.cue,
+        actions: vec![action],
+    })
 }
 
 /// How stopped runs stop their sounds and pictures.
@@ -2044,5 +2161,155 @@ mod tests {
             runner.running(&lists, t).is_empty(),
             "the running cue is gone"
         );
+    }
+
+    /// RUN.5: a paused cue holds its time; resumed, its end and follow
+    /// come as late as the pause took.
+    #[test]
+    fn a_paused_wait_holds_its_time_and_follow() {
+        let mut first = wait("W", 1000);
+        first.follow = Follow::AfterEnd;
+        let lists = vec![list(vec![first, cut("Next")])];
+        let mut runner = Runner::default();
+        let t = Instant::now();
+        runner.go(&lists, 0, t, Guard::time(0)).unwrap();
+
+        let out = runner.pause(&lists, None, None, after(t, 400)).unwrap();
+        assert_eq!(events(&out), [CueEvent::Paused]);
+        assert_eq!(runner.deadline(), None, "nothing due while paused");
+        assert!(fired(&lists, &runner.tick(&lists, after(t, 2000))).is_empty());
+        let running = runner.running(&lists, after(t, 2000));
+        assert!(running[0].paused);
+        assert_eq!(running[0].elapsed_ms, 400, "time stands still");
+
+        let out = runner.resume(&lists, None, None, after(t, 2000)).unwrap();
+        assert_eq!(events(&out), [CueEvent::Resumed]);
+        assert!(!runner.running(&lists, after(t, 2000))[0].paused);
+        assert!(fired(&lists, &runner.tick(&lists, after(t, 2599))).is_empty());
+        assert_eq!(
+            fired(&lists, &runner.tick(&lists, after(t, 2600))),
+            ["Next"]
+        );
+    }
+
+    /// A paused cue's sound or picture pauses with it; one still in its
+    /// pre wait has nothing to pause yet.
+    #[test]
+    fn a_paused_sound_cue_pauses_its_sound() {
+        let mut rain = sound("Rain", 0);
+        rain.number = "1".into();
+        let mut late = sound("Late", 0);
+        late.number = "2".into();
+        late.pre_wait_ms = 1000;
+        let lists = vec![list(vec![rain, late])];
+        let rain = lists[0].cues[0].id.to_string();
+        let mut runner = Runner::default();
+        let t = Instant::now();
+        runner.go(&lists, 0, t, Guard::time(0)).unwrap();
+        runner.go(&lists, 0, after(t, 10), Guard::time(0)).unwrap();
+
+        let out = runner.pause(&lists, Some(0), None, after(t, 100)).unwrap();
+        assert_eq!(actions(&out), [Action::PauseSound { id: rain.clone() }]);
+        assert_eq!(events(&out), [CueEvent::Paused, CueEvent::Paused]);
+        let out = runner
+            .resume(&lists, Some(0), Some("1"), after(t, 200))
+            .unwrap();
+        assert_eq!(actions(&out), [Action::ResumeSound { id: rain }]);
+        assert_eq!(
+            runner
+                .running(&lists, after(t, 200))
+                .iter()
+                .map(|r| r.paused)
+                .collect::<Vec<_>>(),
+            [false, true],
+            "cue 2 stays paused"
+        );
+        // Its pre wait goes on from 90 ms.
+        let out = runner.resume(&lists, None, None, after(t, 5000)).unwrap();
+        assert!(actions(&out).is_empty());
+        assert!(fired(&lists, &runner.tick(&lists, after(t, 5909))).is_empty());
+        assert_eq!(
+            fired(&lists, &runner.tick(&lists, after(t, 5910))),
+            ["Late"]
+        );
+    }
+
+    /// A picture cue pauses and resumes its picture, and it does not end
+    /// while paused (a video with a length).
+    #[test]
+    fn a_paused_picture_cue_pauses_its_picture() {
+        let mut clip = picture("Clip", lmix_types::PictureEnd::Stop);
+        clip.duration_ms = Some(1000);
+        let lists = vec![list(vec![clip])];
+        let id = lists[0].cues[0].id.to_string();
+        let mut runner = Runner::default();
+        let t = Instant::now();
+        runner.go(&lists, 0, t, Guard::time(0)).unwrap();
+
+        let out = runner.pause(&lists, None, None, after(t, 400)).unwrap();
+        assert_eq!(actions(&out), [Action::PausePicture { id: id.clone() }]);
+        assert!(runner.tick(&lists, after(t, 5000)).is_empty(), "held");
+        let out = runner.resume(&lists, None, None, after(t, 5000)).unwrap();
+        assert_eq!(actions(&out), [Action::ResumePicture { id }]);
+        assert!(events(&runner.tick(&lists, after(t, 5599))).is_empty());
+        assert_eq!(
+            events(&runner.tick(&lists, after(t, 5600))),
+            [CueEvent::Ended]
+        );
+    }
+
+    /// A group pauses with the cues it runs; a second pause or a resume
+    /// of a cue that runs changes nothing.
+    #[test]
+    fn a_group_pauses_with_its_children() {
+        let group = Cue {
+            name: "G".into(),
+            number: "G".into(),
+            mode: Some(GroupMode::Timeline),
+            children: vec![wait("A", 1000), wait("B", 2000)],
+            ..Cue::empty(CueKind::Group)
+        };
+        let lists = vec![list(vec![group])];
+        let mut runner = Runner::default();
+        let t = Instant::now();
+        runner.go(&lists, 0, t, Guard::time(0)).unwrap();
+
+        let out = runner
+            .pause(&lists, Some(0), Some("G"), after(t, 500))
+            .unwrap();
+        assert_eq!(events(&out).len(), 3, "the group and both children");
+        let again = runner.pause(&lists, None, None, after(t, 600)).unwrap();
+        assert!(events(&again).is_empty());
+        assert!(runner.tick(&lists, after(t, 9000)).is_empty());
+
+        runner.resume(&lists, None, None, after(t, 9000)).unwrap();
+        let out = runner.tick(&lists, after(t, 10_500));
+        assert_eq!(
+            events(&out),
+            [CueEvent::Ended, CueEvent::Ended, CueEvent::Ended]
+        );
+        let out = runner.resume(&lists, None, None, after(t, 10_500)).unwrap();
+        assert!(events(&out).is_empty());
+    }
+
+    /// A paused cue stops like a running one.
+    #[test]
+    fn a_paused_cue_stops() {
+        let lists = vec![list(vec![sound("Rain", 1000)])];
+        let rain = lists[0].cues[0].id.to_string();
+        let mut runner = Runner::default();
+        let t = Instant::now();
+        runner.go(&lists, 0, t, Guard::time(0)).unwrap();
+        runner.pause(&lists, None, None, after(t, 100)).unwrap();
+
+        let out = runner.stop(&lists, None, None, after(t, 200)).unwrap();
+        assert_eq!(
+            actions(&out),
+            [Action::StopSound {
+                id: Some(rain),
+                fade_ms: 1000
+            }]
+        );
+        assert!(runner.running(&lists, after(t, 200)).is_empty());
     }
 }

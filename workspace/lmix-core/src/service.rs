@@ -1681,6 +1681,8 @@ impl Service {
             | Action::CueStart { .. }
             | Action::CueToggle { .. }
             | Action::CueStop { .. }
+            | Action::CuePause { .. }
+            | Action::CueResume { .. }
             | Action::CueReset
             | Action::CuePanic { .. }
             | Action::CueHardStop => {
@@ -1701,6 +1703,12 @@ impl Service {
                         }
                         Action::CueStop { list, cue, .. } => {
                             sw.cue_stop(list.as_ref(), cue.as_deref(), now)?
+                        }
+                        Action::CuePause { list, cue } => {
+                            sw.cue_pause(list.as_ref(), cue.as_deref(), now)?
+                        }
+                        Action::CueResume { list, cue } => {
+                            sw.cue_resume(list.as_ref(), cue.as_deref(), now)?
                         }
                         Action::CuePanic { ms } => sw.cue_panic(now, *ms)?,
                         Action::CueHardStop => sw.cue_hard_stop(now),

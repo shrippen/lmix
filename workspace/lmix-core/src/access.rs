@@ -300,10 +300,14 @@ pub fn right_of(action: &Action) -> Right {
         | Action::PlaySound { .. }
         | Action::FadeSound { .. }
         | Action::StopSound { .. }
+        | Action::PauseSound { .. }
+        | Action::ResumeSound { .. }
         | Action::SetZoneLevel { .. }
         | Action::ShowPicture { .. }
         | Action::FadePicture { .. }
         | Action::StopPicture { .. }
+        | Action::PausePicture { .. }
+        | Action::ResumePicture { .. }
         | Action::SetStageLevel { .. }
         | Action::SeekInput { .. }
         | Action::PlayItem { .. }
@@ -332,6 +336,8 @@ pub fn right_of(action: &Action) -> Right {
         | Action::CueStart { .. }
         | Action::CueToggle { .. }
         | Action::CueStop { .. }
+        | Action::CuePause { .. }
+        | Action::CueResume { .. }
         | Action::CueStandby { .. }
         | Action::CueReset
         | Action::SetActiveCueList { .. }

@@ -245,6 +245,7 @@ mod tests {
                 elapsed_ms: 1000,
                 total_ms: Some(1000 + left),
                 remaining_ms: Some(left),
+                paused: false,
             })
             .into_iter()
             .collect();

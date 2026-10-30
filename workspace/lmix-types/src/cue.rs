@@ -410,6 +410,9 @@ pub struct RunningCue {
     /// `total_ms` less `elapsed_ms`, done for the client (CTL.2).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub remaining_ms: Option<u64>,
+    /// Paused (RUN.5): its times stand still.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub paused: bool,
 }
 
 /// Something that would go wrong when a cue runs (SUI.5).
@@ -474,6 +477,9 @@ pub enum CueEvent {
     Started,
     Ended,
     Stopped,
+    /// Paused, or resumed (RUN.5).
+    Paused,
+    Resumed,
     /// A GO came sooner than the guard allows and was dropped (RUN.6).
     GoIgnored,
     /// Its action failed; times and follows go on (CUE.19).

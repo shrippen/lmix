@@ -5103,6 +5103,36 @@ Console: Setup → Steuerung → „Sperren“, ein Schalter je Weg.
 `locked_targets_send_nothing_and_warn` (der Empfänger sieht keine
 Verbindung).
 
+## 2026-10-27 — Cues pausieren (RUN.5)
+
+**Entscheidung**: `cue_pause` und `cue_resume` wählen wie `cue_stop`
+einen Cue (Nummer oder Id), alle Cues einer Liste oder alle Cues; ein
+Cue nimmt die Cues mit, die er gestartet hat (Gruppen). Pausiert stehen
+seine Zeiten still: Vorwartezeit, Dauer, Nachwartezeit und Folge kommen
+nach dem Fortsetzen um die Pausenlänge später (der Runner verschiebt
+alle Zeitpunkte des Laufs). Ein Klang- oder Bild-Cue pausiert dazu sein
+Medium (`pause_sound`/`pause_picture`, strom #51): der Klang wird still,
+ein Video behält sein Bild auf der Bühne, beide laufen an der Stelle
+weiter. Ein Cue in der Vorwartezeit hat noch kein Medium, er wartet nur.
+
+- Eine laufende Blende (Fade-Cue, Ausblendung beim Stopp) läuft in der
+  Pause weiter; strom führt sie in der Zeit der Zonen. Eine Blende
+  anzuhalten bräuchte einen eigenen Weg in strom, und im Betrieb ist
+  eine Pause mitten in einer Blende selten.
+- Stopp, Panik und Reset erreichen pausierte Cues wie laufende.
+- Ein neues GO während einer Pause startet normal; „Alle pausieren“ ist
+  kein Zustand der Show, nur eine Aktion auf das, was gerade läuft.
+- Console: in der Seitenleiste der Show je Cue ⏸/▶ und oben „Alle
+  pausieren“ (bzw. „Alle fortsetzen“, sobald etwas pausiert ist); ein
+  pausierter Cue zeigt „pausiert“ und seine Zeit steht. OSC
+  `/lmix/cue/pause` und `/lmix/cue/resume` (Liste oder alle).
+
+**Geprüft**: Tests `a_paused_wait_holds_its_time_and_follow`,
+`a_paused_sound_cue_pauses_its_sound`, `a_group_pauses_with_its_children`,
+`a_paused_cue_stops`; in strom `a_paused_sound_resumes_where_it_was`
+und `a_paused_video_holds_its_frame_and_resumes` (beide scheitern ohne
+die Sperre).
+
 ## 2026-10-27 — Pads (RUN.12)
 
 **Entscheidung**: Pads sind eine Cue-Liste mit `pads: true`
