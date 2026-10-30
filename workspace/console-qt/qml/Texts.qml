@@ -264,6 +264,7 @@ QtObject {
         case "too_many_buses": return qsTr("A show has at most %1 buses besides master and headphones").arg(e.max)
         case "bad_bus_name": return qsTr("A bus name has 1–%1 characters").arg(e.max)
         case "duplicate_bus_name": return qsTr("There is a bus %1 already").arg(e.name)
+        case "duplicate_input_name": return qsTr("There is an input %1 already").arg(e.name)
         case "bus_in_use": return qsTr("Output %1 takes the sound of bus %2: give it another first").arg(e.output).arg(e.bus)
         case "no_show_path": return qsTr("The show has no file yet; give a path")
         case "show_file": return qsTr("Show file: %1").arg(e.message)
