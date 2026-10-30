@@ -913,12 +913,6 @@ fn add_card_output(flow: &mut Flow, from: &str, card: CardOut, pairs: &[(u32, St
                 "processing_deadline_ms",
                 PropertyValue::UInt(card_lead_ms()),
             ),
-            // The block fills gaps in the sound with silence in as many
-            // channels as the sound has.
-            (
-                "audio_channels",
-                PropertyValue::String(card.channels.count().to_string()),
-            ),
         ],
     ));
 
@@ -3787,8 +3781,8 @@ mod tests {
         assert_eq!(uint(card, "device_number"), 1);
         assert_eq!(text(card, "mode"), "720p50");
         assert_eq!(text(card, "stream_mode"), "audio_video");
-        // The block fills gaps in the sound with silence in its channels.
-        assert_eq!(text(card, "audio_channels"), "2");
+        // The block takes format and channels from the sound itself.
+        assert!(!card.properties.contains_key("audio_channels"));
         // Without --card-lead-ms GStreamer's default lead.
         assert_eq!(uint(card, "processing_deadline_ms"), 20);
         let caps = caps_of(&flow, CARD_PICTURE);
@@ -3865,10 +3859,6 @@ mod tests {
                 .any(|l| l.from == from && l.to == CARD_PAIRS));
         }
         assert!(caps_of(&flow, CARD_SOUND).contains("channels=16"));
-        assert_eq!(
-            text(card_block(&flow, CARD_OUTPUT_BLOCK), "audio_channels"),
-            "16"
-        );
         // The sound carries the mixer's running time (hours): from zero
         // the mixer would fill all of that first, and the card, which
         // takes the sound with the picture, waited for it.

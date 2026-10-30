@@ -5462,11 +5462,19 @@ spät). Latenz SDI-Loop 1080p25
 **Nachtrag (Review strom #53)**: Endet oder stockt der Ton, hielt der
 Combiner das Bild an (auf der Karte 11 statt 97 Bilder in 4 s). Der Ton
 geht jetzt über einen `audiomixer` mit stiller Live-Quelle in den
-Combiner; die Stille braucht die Kanalzahl des Tons, darum gibt lmix dem
-Block `audio_channels` mit. Der Ausgang bietet nur noch die Formate an,
-die `decklink2sink` kennt (kein 12-bit-RGB), Unbekanntes scheitert mit
-Meldung statt Panic. Danach `test-sdi-loop.sh` bestanden, Latenz 433,
-433, 366 ms (unverändert).
+Combiner. Die Stille übernimmt die Caps des Tons (Format, Rate, Kanäle,
+auch bei späteren Wechseln), der Mixer reicht den Ton also unverändert
+durch, S32LE bleibt S32LE; eine Eigenschaft für die Kanalzahl braucht der
+Block nicht. Sie startet mit den ersten Caps des Tons, bis dahin wartet
+das Bild wie ohne Mixer. Ihre Puffer sind 480 Samples (10 ms) lang: der
+Mixer kostet dann laut Latenz-Query 10 ms (sein Ausgabepuffer), mit den
+1024 Samples von `audiotestsrc` waren es 21 ms. Der Ausgang bietet nur
+noch die Formate an, die `decklink2sink` kennt (kein 12-bit-RGB),
+Unbekanntes scheitert mit Meldung statt Panic. Danach
+`test-sdi-loop.sh` bestanden, Latenz 400, 434, 400 ms (Last 1,0 bis 1,6). Der Loop misst nur auf
+etwa 33 ms genau (die Werte springen in diesen Schritten zwischen 366,
+400 und 433 ms); die 10 ms des Mixers zeigt er nicht, er sieht nur, dass
+nichts um einen ganzen Schritt dazukam.
 
 **Offen (zur Entscheidung)**: decklink2 ist so etwa 130 ms langsamer,
 weil es 7 Bilder vorhält (280 ms bei 25p, 140 ms bei 50p). Ein Versuch
