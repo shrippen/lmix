@@ -9490,6 +9490,43 @@ mod tests {
         assert_eq!(left, vec![second]);
     }
 
+    // The stack brings back the newest first, so an input removed after a
+    // layout is back before it; the guard is for an input gone otherwise
+    // (here by hand). A box of a missing input would reach the engine.
+    #[test]
+    fn a_layout_comes_back_without_inputs_gone_since() {
+        let mut sw = with_buses();
+        sw.apply(Action::AddLayout {
+            name: Some("Interview".into()),
+            background: Some(named("A")),
+            boxes: vec![BoxSpec {
+                rect: BoxRect {
+                    x: 0.5,
+                    y: 0.0,
+                    w: 0.5,
+                    h: 0.5,
+                },
+                input: named("B"),
+                border_px: 4,
+                crop: BoxCrop::default(),
+                locked: false,
+                hidden: false,
+            }],
+        })
+        .unwrap();
+        sw.apply(Action::RemoveLayout {
+            layout: InputRef::Number(1),
+        })
+        .unwrap();
+        let b = sw.state().inputs.iter().find(|i| i.name == "B").unwrap().id;
+        sw.show.inputs.retain(|i| i.id != b);
+        sw.apply(Action::Restore).unwrap();
+        let layout = &sw.state().layouts[0];
+        assert_eq!(layout.name, "Interview");
+        assert!(layout.boxes.is_empty(), "{:?}", layout.boxes);
+        assert!(layout.background.is_some(), "A is still there");
+    }
+
     #[test]
     fn restore_brings_back_the_newest_removal_first() {
         use lmix_types::RemovedKind;
