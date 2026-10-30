@@ -5411,7 +5411,11 @@ eindeutig. Entscheidung des Users: wie bei Bussen (INP.2).
 - **Selbst vergeben wird nummeriert:** Name aus der Quelle (Anlegen ohne
   Namen), Rückgängig nach Entfernen und Import heißen „Name (2)“,
   „Name (3)“ …
+- **Suche wie Eindeutigkeit:** Aktionen, Show-Prüfung und Rückmeldungen
+  (Tally/Feedback) finden einen Input per Name ohne Groß-/Kleinschreibung
+  („cam 1“ findet „Cam 1“). Layouts, Ausgänge, Cue-Listen und Kurzbefehle
+  suchen eigens und bleiben, wie sie sind.
 - **Bricht:** Shows mit doppelten Namen benennt das Laden einmal um; der
   erste behält den Namen (ihn trafen Aktionen schon), die späteren werden
   nummeriert. Eine Aktion, die einen späteren Doppelgänger in anderer
-  Schreibung nannte („cam 1“ neben „Cam 1“), trifft ihn danach nicht mehr.
+  Schreibung nannte („cam 1“ neben „Cam 1“), trifft danach den ersten.

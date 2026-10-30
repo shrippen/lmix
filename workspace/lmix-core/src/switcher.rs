@@ -2968,11 +2968,10 @@ impl Switcher {
     /// Whether an input other than `own` is called `name`, ignoring case:
     /// names pick inputs in actions (INP.2).
     fn input_name_taken(&self, name: &str, own: Option<InputId>) -> bool {
-        let name = name.to_lowercase();
         self.show
             .inputs
             .iter()
-            .any(|i| Some(i.id) != own && i.name.to_lowercase() == name)
+            .any(|i| Some(i.id) != own && same_input_name(&i.name, name))
     }
 
     /// `name` typed for an input (`own` when renaming it), refused when
@@ -3001,10 +3000,10 @@ impl Switcher {
     /// naming it picked the first.
     fn distinct_input_names(&mut self) {
         for index in 1..self.show.inputs.len() {
-            let name = self.show.inputs[index].name.to_lowercase();
+            let name = &self.show.inputs[index].name;
             let earlier = self.show.inputs[..index]
                 .iter()
-                .any(|i| i.name.to_lowercase() == name);
+                .any(|i| same_input_name(&i.name, name));
             if !earlier {
                 continue;
             }
@@ -5876,7 +5875,10 @@ impl Switcher {
         if let Ok(uuid) = Uuid::parse_str(text) {
             return by_id(Some(InputId(uuid)));
         }
-        self.show.inputs.iter().position(|i| i.name == text)
+        self.show
+            .inputs
+            .iter()
+            .position(|i| same_input_name(&i.name, text))
     }
 }
 
@@ -6055,6 +6057,12 @@ fn no_video_check(entry: &ShowInput) -> Result<(), ActionError> {
     })
 }
 
+/// Whether two input names are the same: case does not count, so one
+/// name stays one input in actions, "cam 1" finding "Cam 1" (INP.2).
+pub fn same_input_name(a: &str, b: &str) -> bool {
+    a.to_lowercase() == b.to_lowercase()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -6116,6 +6124,16 @@ mod tests {
         })
         .unwrap();
         assert_eq!(input_names(&sw), ["a", "B"]);
+    }
+
+    /// Names are one per input ignoring case, so actions find them so.
+    #[test]
+    fn an_action_finds_an_input_by_name_ignoring_case() {
+        let mut sw = two_inputs();
+        sw.apply(Action::PreviewInput { input: named("b") })
+            .unwrap();
+        let state = sw.state();
+        assert_eq!(state.preview, Some(state.inputs[1].id));
     }
 
     #[test]
