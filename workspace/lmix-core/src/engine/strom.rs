@@ -52,6 +52,8 @@ const ERROR_BUFFER: usize = 64;
 const PLAYER_BUFFER: usize = 128;
 /// Vision mixer compositors whose input pads follow `SignalLoss`.
 const MIXER_COMPOSITORS: [&str; 2] = ["mixer", "mv_comp"];
+/// The mixer's compositor of the tile picture (strom's `tiles_out`).
+const TILES_COMPOSITOR: &str = "tiles_comp";
 /// `max-last-buffer-repeat` default: repeat until end of stream.
 const REPEAT_FOREVER_NS: u64 = u64::MAX;
 /// `SignalLoss::Black`: this long without a frame, then black.
@@ -96,6 +98,9 @@ pub struct StromEngine {
     pages: String,
     /// One live flow is set up at a time (two Consoles asking at once).
     live_setup: Mutex<()>,
+    /// A Console asked for the tile picture; until then its pads stay
+    /// dark (see [`StromEngine::show_tiles`]).
+    tiles_watched: AtomicBool,
     /// Mute of each audio mixer channel and bus as last sent (see
     /// [`level_writes`]); forgotten at every start.
     mutes: std::sync::Mutex<std::collections::HashMap<String, bool>>,
@@ -156,6 +161,7 @@ impl StromEngine {
             live_dir: default_live_dir(),
             pages: flows::DEFAULT_PAGES.into(),
             live_setup: Mutex::new(()),
+            tiles_watched: AtomicBool::new(false),
             mutes: Default::default(),
             format: Default::default(),
             multiview: Default::default(),
@@ -460,7 +466,50 @@ impl StromEngine {
         // does not build it a second time.
         *self.buses.lock().expect("buses lock") = flows::buses_of(flow);
         self.put_flow(flow).await?;
-        self.wait_playing(flow.id).await
+        self.wait_playing(flow.id).await?;
+        self.show_tiles().await;
+        Ok(())
+    }
+
+    /// The tile picture's pads at alpha 1 once a Console asked for it, else
+    /// at 0: the compositor skips a pad at 0 without scaling it, and the
+    /// tile picture costs the CPU mixer as much again as the rest (strom
+    /// 480 % of a core against 290 % with 7 slots, 30.10.2026). A failure
+    /// only costs that load or the Console its tiles, so it is logged.
+    async fn show_tiles(&self) {
+        let alpha = if self.tiles_watched.load(Ordering::Relaxed) {
+            1.0
+        } else {
+            0.0
+        };
+        let pads = self.black.load(Ordering::Relaxed) + 1;
+        for pad in 0..pads {
+            let path = format!(
+                "/flows/{}/elements/{MIXER_BLOCK}:{TILES_COMPOSITOR}/pads/sink_{pad}/properties",
+                flows::mixer_id()
+            );
+            let body = serde_json::json!({ "property_name": "alpha", "value": alpha });
+            let sent = async {
+                let resp = self
+                    .http
+                    .patch(self.url(&path))
+                    .json(&body)
+                    .send()
+                    .await
+                    .map_err(net)?;
+                check(resp).await.map(|_| ())
+            };
+            if let Err(e) = sent.await {
+                tracing::warn!("tile picture pad {pad} to alpha {alpha}: {e}");
+            }
+        }
+    }
+
+    /// A Console shows the tile picture: from now on its pads are lit.
+    async fn watch_tiles(&self) {
+        if !self.tiles_watched.swap(true, Ordering::Relaxed) {
+            self.show_tiles().await;
+        }
     }
 
     /// Program in `format` (OUT.1): a new mixer only when it differs.
@@ -1325,6 +1374,8 @@ impl Engine for StromEngine {
                 *self.sample_rate.lock().expect("rate lock") = rate;
             }
             *self.buses.lock().expect("buses lock") = current.as_ref().and_then(flows::buses_of);
+            // An lmix-core before this one may have lit them.
+            self.show_tiles().await;
             return Ok(());
         }
         let wanted = self.mixer_flow();
@@ -1554,6 +1605,9 @@ impl Engine for StromEngine {
     }
 
     async fn live(&self, picture: LivePicture) -> Result<PathBuf, EngineError> {
+        if picture == LivePicture::Tiles {
+            self.watch_tiles().await;
+        }
         let socket = self.live_dir.join(flows::live_socket_name(picture));
         let id = flows::live_flow_id(picture);
         let _setup = self.live_setup.lock().await;
@@ -2035,6 +2089,81 @@ mod tests {
         assert!(!engine.flow_running(stopped).await);
         assert!(!engine.flow_running(missing).await);
         assert!(engine.flow_running(broken).await);
+    }
+
+    /// The tile picture costs the CPU mixer as much again as the rest
+    /// (strom 480 % of a core against 290 % with 7 slots, 30.10.2026), so
+    /// it stays dark until a Console asks for it: a new mixer has its tile
+    /// pads at alpha 0, which the compositor skips without scaling.
+    #[tokio::test]
+    async fn the_tiles_stay_dark_until_watched() {
+        let patches = std::sync::Arc::new(std::sync::Mutex::new(
+            Vec::<(String, serde_json::Value)>::new(),
+        ));
+        let seen = patches.clone();
+        let app = axum::Router::new().fallback(move |request: axum::extract::Request| {
+            let seen = seen.clone();
+            async move {
+                let (parts, body) = request.into_parts();
+                let path = parts.uri.path().to_string();
+                if parts.method == "PATCH" {
+                    let body = axum::body::to_bytes(body, usize::MAX).await.unwrap();
+                    let body = serde_json::from_slice(&body).unwrap_or_default();
+                    seen.lock().unwrap().push((path, body));
+                    return (StatusCode::OK, axum::Json(serde_json::json!({})));
+                }
+                if parts.method == "GET" && path == format!("/api/flows/{}", flows::mixer_id()) {
+                    let mut flow = Flow::new("mixer");
+                    flow.id = flows::mixer_id();
+                    flow.running = true;
+                    flow.gst_state = Some(PipelineState::Playing);
+                    return (
+                        StatusCode::OK,
+                        axum::Json(serde_json::json!({ "flow": flow })),
+                    );
+                }
+                (StatusCode::OK, axum::Json(serde_json::json!({})))
+            }
+        });
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        let engine = StromEngine::new(
+            format!("http://{addr}"),
+            MixerBackend::Cpu,
+            MonitorOut::None,
+        );
+        engine.slots.store(2, Ordering::Relaxed);
+        engine.black.store(flows::black_input(2), Ordering::Relaxed);
+        let tiles = |alpha: f64| {
+            let pads = flows::black_input(2) + 1;
+            (0..pads)
+                .map(|i| {
+                    (
+                        format!(
+                            "/api/flows/{}/elements/{MIXER_BLOCK}:tiles_comp/pads/sink_{i}/properties",
+                            flows::mixer_id()
+                        ),
+                        serde_json::json!({ "property_name": "alpha", "value": alpha }),
+                    )
+                })
+                .collect::<Vec<_>>()
+        };
+
+        engine.build_mixer(&engine.mixer_flow()).await.unwrap();
+        assert_eq!(*patches.lock().unwrap(), tiles(0.0), "a new mixer");
+
+        patches.lock().unwrap().clear();
+        engine.watch_tiles().await;
+        assert_eq!(*patches.lock().unwrap(), tiles(1.0), "a Console asks");
+
+        patches.lock().unwrap().clear();
+        engine.build_mixer(&engine.mixer_flow()).await.unwrap();
+        assert_eq!(
+            *patches.lock().unwrap(),
+            tiles(1.0),
+            "rebuilt while watched"
+        );
     }
 
     /// A new format whose mixer strom does not build is tried again when
