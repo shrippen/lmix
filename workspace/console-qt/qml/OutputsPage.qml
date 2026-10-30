@@ -377,6 +377,6 @@ AppPage {
         inputs: root.shell.inputs
         buses: root.show && root.show.buses ? root.show.buses : []
         outputs: root.outputs
-        onUpdateRequested: (before, actions) => root.shell.changeOutput(before, actions)
+        onUpdateRequested: (before, action) => root.shell.changeOutput(before, action)
     }
 }

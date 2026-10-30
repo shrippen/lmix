@@ -88,8 +88,8 @@ Kirigami.ApplicationWindow {
         removals.ask(kind, item)
     }
     /** An output's new settings, with a toast to bring the old back. */
-    function changeOutput(output, actions) {
-        removals.change(output, actions)
+    function changeOutput(output, action) {
+        removals.change(output, action)
     }
 
     /** Every input live in one picture; LiveView shows its cell of it. */

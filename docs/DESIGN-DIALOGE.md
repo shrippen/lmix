@@ -121,7 +121,7 @@ kommt.
 | M04 Eingeklappte Kachel | B | Kein eigenes Menü: Doppelklick klappt aus, Rechtsklick zeigt das normale Kachelmenü. Geht der Klick eines Inputs auf Sendung (Cut, Schnellstart), klappt nur das Menü aus: ein Doppelklick ließe den Cut auf den zweiten Klick warten | – |
 | M05 Layout | A | Icons, Entfernen rot und abgesetzt; mit Rückfrage und Toast (Regel 1) | – |
 | M06 Vorlagen | A | Am Knopf verankert; Entfernen rot und unten, mit Bestätigung | – |
-| M07 Ausgang | B | Volles Menü mit Kopf und Bitrate: Stoppen, Einstellungen, Adresse, Statistik; Entfernen gesperrt, solange er sendet. „Einstellungen…“ öffnet den Ausgangsdialog zum Bearbeiten (`update_output`); beim Senden zeigt er die Werte gesperrt mit Hinweis (DECISIONS 2026-10-30) ✅ | – |
+| M07 Ausgang | B | Volles Menü mit Kopf und Bitrate: Stoppen, Einstellungen, Adresse, Statistik; Entfernen gesperrt, solange er sendet. „Einstellungen…“ öffnet den Ausgangsdialog zum Bearbeiten (`update_output`); beim Senden (auch im Failback) zeigt er die Werte gesperrt mit Hinweis (DECISIONS 2026-10-30) ✅ | – |
 | M08 Übergangsknopf und Schnellstart | A | Eine Ebene: Effekte als Liste, die Dauer als Chips; Schnellstart ebenso, ohne Stinger | – |
 | M10 Overlay-Kanal | A | Statuskopf (an/aus, Inhalt), Icons, der Zustand des Schalters rechts | – |
 | M11 Bindung (Titel) | A | Abschnitte je Quelle, Spalten ohne Wiederholung, der aktuelle Wert als Beispiel | – |

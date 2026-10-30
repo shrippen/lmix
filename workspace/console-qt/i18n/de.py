@@ -1229,4 +1229,6 @@ DE = {
     'The output is sending. Stop it first to change its settings.': 'Der Ausgang sendet. Erst stoppen, dann lassen sich seine Einstellungen ändern.',
     'Changed': 'Geändert',
     'Settings of output %1 changed': 'Einstellungen von Ausgang %1 geändert',
+    'Card %1 (not found)': 'Karte %1 (nicht gefunden)',
+    'Removed input': 'Entfernter Input',
 }

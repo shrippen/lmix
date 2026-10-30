@@ -5600,17 +5600,29 @@ Outputs (Eintrag vom selben Tag oben).
 
 **Entscheidung**:
 - Aktion `update_output` (Gruppe „output“, Recht Bearbeiten): ersetzt
-  Spec, Quelle und Namen eines Ausgangs; Id, Nummer und Bus bleiben. Sie
-  prüft wie `add_output` (Kodierung, Karte, Busse der weiteren Kartenpaare,
-  ISO nur mit Bild) und benennt ohne Namen wie beim Anlegen. Ein
-  Bildschirm hat keinen Ton: wird ein Ausgang zum Bildschirm, verliert er
-  den Bus. Den Ton ändert weiter `set_output_bus`; die Console schickt sie
-  nach `update_output`, wenn sich der Ton im Formular geändert hat.
-- Abgelehnt, solange der Ausgang sendet (auch im Failback gehalten) oder
-  auf die Karten wartet: neuer Fehler `output_sending`. Ein laufender
-  Ausgang würde sonst mit anderen Einstellungen in der Show stehen, als er
-  sendet. Verworfen: im Betrieb neu starten (eine Lücke auf Sendung, die
-  niemand ausgelöst hat).
+  Spec, Quelle, Namen und auf Wunsch den Bus eines Ausgangs; Id und Nummer
+  bleiben. `bus` weggelassen behält den Ton, `null` gibt den eigenen der
+  Quelle, ein Name den Bus: eine Aktion, ein Rückgängig-Schritt, und eine
+  Ablehnung ändert nichts (Review #190; zuerst schickte die Console danach
+  `set_output_bus`, das auch bei abgelehntem Update durchging). Sie prüft
+  wie `add_output` (Kodierung, Karte, Busse der weiteren Kartenpaare, ISO
+  nur mit Bild) und benennt ohne Namen wie beim Anlegen. Die Quelle, die
+  der Ausgang schon hat, geht ungeprüft durch: ein ISO, dessen Input
+  entfernt ist, lässt sich umbenennen und bleibt ausgefallen. Ein
+  Bildschirm hat keinen Ton: er verliert einen behaltenen Bus, einen
+  genannten lehnt er ab (`no_audio`).
+- Abgelehnt, solange der Ausgang sendet, auf die Karten wartet oder sein
+  Failback ihn wieder starten wird: neuer Fehler `output_sending`. Ein
+  laufender Ausgang würde sonst mit anderen Einstellungen in der Show
+  stehen, als er sendet, und der nächste Failback-Versuch startete ihn mit
+  den neuen (Review #190: zwischen zwei Versuchen steht er auf `failed`,
+  nicht gehalten). Darum merkt sich der Switcher, welche Ausgänge im
+  Failback sind (`begin_failback`, gesetzt unter seiner Sperre, wenn der
+  Service den Failback startet), und der Zustand zeigt es als
+  `Output.failback`. Ein ausgefallener Ausgang ohne Failback (oder einer,
+  der gestoppt wurde) bleibt änderbar: eine falsche Adresse zu
+  korrigieren ist der häufigste Grund. Verworfen: im Betrieb neu starten
+  (eine Lücke auf Sendung, die niemand ausgelöst hat).
 - Rückgängig über `restore`: die Einstellungen davor kommen auf denselben
   Stapel wie Entferntes (`restorable.kind` = `output_settings`, mit dem
   alten Namen); `restore` setzt sie mit dem Bus von damals zurück, auch
@@ -5623,17 +5635,31 @@ Outputs (Eintrag vom selben Tag oben).
   öffnet ihn aus dem Menü in der Leiste und aus der Detailkarte der Seite
   Outputs. **Sendet der Ausgang, bleibt der Menüeintrag aktiv**, der Dialog
   zeigt die Einstellungen gesperrt mit dem Hinweis „Der Ausgang sendet.
-  Erst stoppen …“ (`KanteCallout`). Grund: anders als Entfernen hat das
-  Ansehen auch beim Senden einen Zweck (Adresse, Rate prüfen), und der
-  Ausgang kann starten oder stoppen, während der Dialog offen ist; die
-  Sperre muss also ohnehin im Dialog leben. Wird der Ausgang anderswo
-  entfernt, schließt der Dialog.
+  Erst stoppen …“ (`KanteCallout`), ebenso beim Warten auf die Karten und
+  bei `failback`. Grund: anders als Entfernen hat das Ansehen auch beim
+  Senden einen Zweck (Adresse, Rate prüfen), und der Ausgang kann starten
+  oder stoppen, während der Dialog offen ist; die Sperre muss also ohnehin
+  im Dialog leben. Wird der Ausgang anderswo entfernt, schließt der
+  Dialog. Ein Quell-Input, der weg ist, oder eine Karte, die die Engine
+  nicht meldet, bleibt gewählt („Entfernter Input“, „Karte n (nicht
+  gefunden)“): wer nur den Namen ändert, ändert Quelle und Gerät nicht.
+  Eine Ablehnung zeigt der Fehler-Toast wie jede andere.
 
 **Geprüft**: Switcher-Tests `an_output_takes_new_settings_in_its_place`,
 `restore_brings_back_an_outputs_settings_before`,
-`a_sending_output_keeps_its_settings`, `an_output_update_is_checked_like_adding`;
-Console `forms::the_form_adds_or_updates_an_output`; QML-Tests
-`tst_add_output_dialog` (Füllen, Speichern mit und ohne Buswechsel,
-Sperre beim Senden und Warten, entfernt während offen, danach leer zum
-Anlegen), `tst_removals` (Toast nach dem Ändern, abgelehnt ohne Toast),
-`tst_outputs_page` (Einstellungen… der Detailkarte).
+`a_sending_output_keeps_its_settings`,
+`an_output_its_failback_starts_again_keeps_its_settings`,
+`an_output_takes_its_bus_with_the_update` (auch: Bildschirm verliert den
+Bus, Ablehnung ändert ihn nicht), `an_update_without_bus_keeps_it_and_null_clears_it`,
+`restore_sets_the_bus_back_after_a_bus_change`,
+`restore_leaves_out_a_bus_removed_since` (Bus und `more_pairs`),
+`an_iso_without_its_input_keeps_its_source`,
+`an_output_update_is_checked_like_adding`; Service-Test
+`an_output_failing_back_keeps_its_settings` (zwischen zwei Versuchen
+abgelehnt, gestoppt änderbar, danach kein Start); Console
+`forms::the_form_adds_or_updates_an_output`; QML-Tests
+`tst_add_output_dialog` (Füllen, eine Aktion mit dem Ton, Sperre beim
+Senden, Warten und Failback, fehlende Quelle und Karte bleiben, entfernt
+während offen, danach leer zum Anlegen), `tst_removals` (Toast nach dem
+Ändern, abgelehnt ohne Toast), `tst_outputs_page` (Einstellungen… der
+Detailkarte).

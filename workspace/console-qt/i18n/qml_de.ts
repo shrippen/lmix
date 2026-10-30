@@ -476,7 +476,12 @@
   <context>
     <name>AddOutputDialog</name>
     <message>
-      <location filename="../qml/AddOutputDialog.qml" line="+99" />
+      <location filename="../qml/AddOutputDialog.qml" line="+46" />
+      <source>Card %1 (not found)</source>
+      <translation>Karte %1 (nicht gefunden)</translation>
+    </message>
+    <message>
+      <location line="+64" />
       <source>folder in the engine's media directory</source>
       <translation>Ordner im Medienverzeichnis der Engine</translation>
     </message>
@@ -507,7 +512,7 @@
       <translation>Speichern</translation>
     </message>
     <message>
-      <location line="+167" />
+      <location line="+168" />
       <source>The output is sending. Stop it first to change its settings.</source>
       <translation>Der Ausgang sendet. Erst stoppen, dann lassen sich seine Einstellungen ändern.</translation>
     </message>
@@ -565,6 +570,11 @@
       <location line="+0" />
       <source>Preview</source>
       <translation>Vorschau</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Removed input</source>
+      <translation>Entfernter Input</translation>
     </message>
     <message>
       <location line="+6" />
@@ -4131,7 +4141,7 @@
   <context>
     <name>Removals</name>
     <message>
-      <location filename="../qml/Removals.qml" line="+47" />
+      <location filename="../qml/Removals.qml" line="+48" />
       <source>Remove input %1 %2?</source>
       <translation>Input %1 %2 entfernen?</translation>
     </message>

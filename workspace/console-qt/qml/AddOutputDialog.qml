@@ -8,10 +8,11 @@ import Kante
  * New output: stream, recording, NDI, screen or SDI card, of program,
  * preview, the multiview or one input. `edit(id)` opens it for an output
  * there (Settings… in its menu, M07): the fields hold its settings, Save
- * sends `update_output` (and `set_output_bus` when the sound changed)
- * through `updateRequested`. While that output sends or waits for the
- * cards the fields are locked and a line says to stop it first: lmix-core
- * refuses the change then.
+ * hands one `update_output` (sound included) to `updateRequested`. While
+ * that output sends, waits for the cards or its failback is to start it
+ * again, the fields are locked and a line says to stop it first:
+ * lmix-core refuses the change then. A source input or card that is gone
+ * stays chosen, marked missing, so saving other fields keeps it.
  */
 KanteDialog {
     id: dialog
@@ -27,12 +28,22 @@ KanteDialog {
     readonly property bool editing: editId !== ""
     /** The output being edited as the state has it now. */
     readonly property var edited: editing ? outputs.find(o => o.id === editId) || null : null
-    /** It sends or waits for the cards: stop it first (lmix-core refuses). */
+    /** It sends, waits for the cards or fails back: stop it first
+     *  (lmix-core refuses). A failed one nothing retries is open. */
     readonly property bool locked: edited !== null
-        && (edited.status.state === "running" || edited.status.state === "cards_off")
-    /** Save in edit mode: `before` the output as it was, `actions` to send
-     *  in order (`update_output`, then maybe `set_output_bus`). */
-    signal updateRequested(var before, var actions)
+        && (edited.status.state === "running" || edited.status.state === "cards_off" || edited.failback === true)
+    /** Save in edit mode: `before` the output as it was, `action` its
+     *  `update_output`. */
+    signal updateRequested(var before, var action)
+    /** Id of the edited output's source input when it is gone; it stays
+     *  the choice after the inputs. */
+    property string missingInput: ""
+    /** Device of the edited output's card when the engine lists none
+     *  such; it stays the choice after the cards. */
+    property string missingCard: ""
+    /** The cards to choose from, the missing one last. */
+    readonly property var cardChoices: missingCard === "" ? cards
+        : cards.concat([{ id: missingCard, name: qsTr("Card %1 (not found)").arg(Number(missingCard) + 1) }])
     /** Open for output `id` with its settings. */
     function edit(id) {
         editId = id
@@ -110,10 +121,12 @@ KanteDialog {
 
     onOpened: core.refreshLists()
     // The cards come in after opening: the edited output's card again.
-    onCardsChanged: {
-        if (visible && edited && edited.spec.kind === "card") {
-            cardBox.currentIndex = Math.max(0, cards.findIndex(c => c.id === String(edited.spec.device)))
-        }
+    onCardsChanged: if (visible && edited && edited.spec.kind === "card") pickCard(edited.spec)
+    /** The card of `spec`, also when the engine does not list it. */
+    function pickCard(spec) {
+        const device = spec.kind === "card" ? String(spec.device) : ""
+        missingCard = device !== "" && !cards.some(c => c.id === device) ? device : ""
+        cardBox.currentIndex = Math.max(0, cardChoices.findIndex(c => c.id === device))
     }
 
     /** The form before it shows: the edited output's settings, or empty
@@ -130,6 +143,8 @@ KanteDialog {
             fill({ name: "", spec: { kind: kinds[0] ? kinds[0].value : "srt" }, source: { from: "program" }, bus: null })
             filled = false
         }
+        missingCard = ""
+        missingInput = ""
         cardBox.currentIndex = 0
         cardChannelsBox.currentIndex = 0
         cardDelay.value = 0
@@ -171,7 +186,7 @@ KanteDialog {
         kindBox.currentIndex = Math.max(0, kinds.findIndex(k => k.value === kindOf(spec)))
         textField.text = textOf(spec)
         keyField.text = spec.key || ""
-        cardBox.currentIndex = Math.max(0, cards.findIndex(c => c.id === String(spec.device)))
+        pickCard(spec)
         cardModeBox.currentIndex = Math.max(0, cardModes.findIndex(m => m.value === (spec.mode && spec.kind === "card" ? spec.mode : defaultCardMode)))
         cardChannelsBox.currentIndex = Math.max(0, cardChannels.findIndex(c => c.value === String(spec.channels || "2")))
         cardDelay.value = spec.sound_delay_ms || 0
@@ -181,9 +196,12 @@ KanteDialog {
         keyframes.value = encoding.keyframe_ms !== undefined ? Math.round(encoding.keyframe_ms / 1000) : 2
         containerBox.currentIndex = Math.max(0, containers.findIndex(c => c.value === (spec.container || "mkv")))
         const source = output.source || { from: "program" }
+        const at = source.from === "input" ? inputs.findIndex(i => i.id === source.input) : -1
+        // Before the index: the choices change with it.
+        missingInput = source.from === "input" && at < 0 ? source.input : ""
         sourceBox.currentIndex = source.from === "preview" ? 1
             : source.from === "multiview" ? 2
-            : source.from === "input" ? 3 + Math.max(0, inputs.findIndex(i => i.id === source.input))
+            : source.from === "input" ? 3 + (at >= 0 ? at : inputs.length)
             : 0
         soundBox.currentIndex = busChoice(output.bus)
         nameField.text = output.name
@@ -195,11 +213,12 @@ KanteDialog {
         var source = sourceBox.currentIndex <= 0 ? "program"
                    : sourceBox.currentIndex === 1 ? "preview"
                    : sourceBox.currentIndex === 2 ? "multiview"
-                   : dialog.inputs[sourceBox.currentIndex - 3].id
+                   : dialog.inputs[sourceBox.currentIndex - 3] ? dialog.inputs[sourceBox.currentIndex - 3].id
+                   : dialog.missingInput
         var container = dialog.containers[containerBox.currentIndex] ? dialog.containers[containerBox.currentIndex].value : "mkv"
         return JSON.stringify({
             kind: dialog.kind,
-            text: dialog.isCard ? (dialog.cards[cardBox.currentIndex] ? dialog.cards[cardBox.currentIndex].id : "") : textField.text,
+            text: dialog.isCard ? (dialog.cardChoices[cardBox.currentIndex] ? dialog.cardChoices[cardBox.currentIndex].id : "") : textField.text,
             mode: dialog.isCard && dialog.cardModes[cardModeBox.currentIndex] ? dialog.cardModes[cardModeBox.currentIndex].value : "",
             card: dialog.isCard ? {
                 channels: dialog.cardChannels[cardChannelsBox.currentIndex] ? dialog.cardChannels[cardChannelsBox.currentIndex].value : "",
@@ -233,16 +252,9 @@ KanteDialog {
             return
         }
         const update = core.updateOutputAction(editId, form())
-        if (update.length === 0) {
-            return
+        if (update.length > 0) {
+            updateRequested(edited, JSON.parse(update))
         }
-        const actions = [JSON.parse(update)]
-        // A screen has no sound: the update drops its bus by itself.
-        const bus = chosenBus()
-        if (dialog.carriesSound && bus !== (edited.bus || "")) {
-            actions.push({ action: "set_output_bus", output: editId, bus: bus === "" ? null : bus })
-        }
-        updateRequested(edited, actions)
     }
 
     /** Bus id per further card pair; empty: silent. */
@@ -256,7 +268,7 @@ KanteDialog {
     }
 
     acceptEnabled: !dialog.locked
-        && (dialog.isCard ? dialog.cards.length > 0 : (!dialog.needsText || textField.text.trim().length > 0))
+        && (dialog.isCard ? dialog.cardChoices.length > 0 : (!dialog.needsText || textField.text.trim().length > 0))
 
     // KanteDialog has a child of its own (KanteScope), so the popup does not
     // size itself to this one.
@@ -304,7 +316,7 @@ KanteDialog {
                 QQC2.ComboBox {
                     id: cardBox
                     Layout.fillWidth: true
-                    model: dialog.cards
+                    model: dialog.cardChoices
                     textRole: "name"
                     KanteFieldSkin { control: cardBox }
                 }
@@ -317,7 +329,7 @@ KanteDialog {
             }
             KanteEmptyState {
                 Layout.fillWidth: true
-                visible: dialog.isCard && dialog.cards.length === 0
+                visible: dialog.isCard && dialog.cardChoices.length === 0
                 text: qsTr("No card found")
             }
             // OUT.4: embedded channels, a bus on each further pair, and the
@@ -377,6 +389,7 @@ KanteDialog {
                 id: sourceBox
                 Layout.fillWidth: true
                 model: [qsTr("Program"), qsTr("Preview"), qsTr("Multiview")].concat(dialog.sourceNames)
+                    .concat(dialog.missingInput !== "" ? [qsTr("Removed input")] : [])
                 KanteFieldSkin { control: sourceBox }
             }
 

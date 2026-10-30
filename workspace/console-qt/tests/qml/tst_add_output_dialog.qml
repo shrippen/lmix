@@ -4,9 +4,10 @@ import "../../qml"
 
 /**
  * Editing an output (AddOutputDialog's edit mode, M07 Settings…): the
- * form holds its settings, Save sends `update_output` and, only when the
- * sound changed, `set_output_bus`; while it sends the fields are locked
- * with a line saying so; a new output afterwards starts empty again.
+ * form holds its settings, Save hands on one `update_output` with the
+ * sound in it; while it sends, waits for the cards or fails back the
+ * fields are locked with a line saying so; a source input or card that is
+ * gone stays chosen; a new output afterwards starts empty again.
  */
 TestCase {
     id: test
@@ -21,6 +22,7 @@ TestCase {
     QtObject {
         id: fakeCore
         property string devices: ""
+    readonly property string cardDevices: JSON.stringify([{ id: "0", name: "DeckLink 1", kind: "card" }, { id: "1", name: "DeckLink 2", kind: "card" }])
         function choices(list) {
             switch (list) {
             case "outputs": return JSON.stringify(["srt", "rtmp", "record", "ndi", "card", "window", "fullscreen", "drm"])
@@ -62,7 +64,7 @@ TestCase {
             inputs: test.inputs
             buses: test.buses
             outputs: test.outputs
-            onUpdateRequested: (before, actions) => test.updates.push({ before: before, actions: actions })
+            onUpdateRequested: (before, action) => test.updates.push({ before: before, action: action })
         }
     }
 
@@ -70,6 +72,7 @@ TestCase {
         added = []
         updates = []
         outputs = [output("stopped")]
+        fakeCore.devices = ""
     }
 
     function opened(dialog) {
@@ -94,25 +97,53 @@ TestCase {
         verify(dialog.acceptEnabled)
     }
 
-    function test_save_sends_the_update_and_the_bus_only_when_it_changed() {
+    function test_save_sends_one_update_with_the_sound() {
         const dialog = createTemporaryObject(dialogComponent, test)
         dialog.edit("o1")
         opened(dialog)
         dialog.accept()
         compare(updates.length, 1)
         compare(updates[0].before.name, "CDN")
-        compare(updates[0].actions.length, 1, "same sound: no set_output_bus")
-        compare(updates[0].actions[0].action, "update_output")
-        compare(updates[0].actions[0].output, "o1")
+        compare(updates[0].action.action, "update_output")
+        compare(updates[0].action.output, "o1")
+        compare(updates[0].action.form.bus, "b2")
         compare(added.length, 0)
 
-        // Back to the source's own sound: the bus goes with its own action.
-        outputs = [Object.assign(output("stopped"), { bus: "b1" })]
+        // Back to the source's own sound: in the same action.
         dialog.edit("o1")
         opened(dialog)
         dialog.soundIndex = 0
         dialog.accept()
-        compare(updates[1].actions[1], { action: "set_output_bus", output: "o1", bus: null })
+        compare(updates.length, 2)
+        compare(updates[1].action.form.bus, "")
+    }
+
+    // Saving only a new name keeps what is gone as it was.
+    function test_a_missing_source_or_card_stays_chosen() {
+        outputs = [Object.assign(output("failed"), { source: { from: "input", input: "gone" } })]
+        const dialog = createTemporaryObject(dialogComponent, test)
+        dialog.edit("o1")
+        opened(dialog)
+        compare(JSON.parse(dialog.form()).source, "gone")
+        dialog.reject()
+        tryCompare(dialog, "visible", false)
+
+        fakeCore.devices = fakeCore.cardDevices
+        outputs = [Object.assign(output("stopped"), {
+            spec: { kind: "card", device: 7, mode: "1080i50" }, source: { from: "program" } })]
+        dialog.edit("o1")
+        opened(dialog)
+        compare(JSON.parse(dialog.form()).text, "7", "not the first card")
+        compare(dialog.cardChoices[dialog.cardChoices.length - 1].name, "Card 8 (not found)")
+        // A listed card is picked as it is.
+        dialog.reject()
+        tryCompare(dialog, "visible", false)
+        outputs = [Object.assign(output("stopped"), {
+            spec: { kind: "card", device: 1, mode: "1080i50" }, source: { from: "program" } })]
+        dialog.edit("o1")
+        opened(dialog)
+        compare(JSON.parse(dialog.form()).text, "1")
+        compare(dialog.cardChoices.length, 2)
     }
 
     function test_a_sending_output_is_shown_locked() {
@@ -131,9 +162,14 @@ TestCase {
         dialog.accept()
         compare(updates.length, 0)
 
-        // Waiting for the cards locks it too; stopped elsewhere, it opens.
+        // Waiting for the cards locks it too, and a failback about to
+        // start it again; failed with nothing retrying, it is open.
         outputs = [output("cards_off")]
         verify(dialog.locked)
+        outputs = [Object.assign(output("failed"), { failback: true })]
+        verify(dialog.locked)
+        outputs = [output("failed")]
+        verify(!dialog.locked)
         outputs = [output("stopped")]
         compare(fields.enabled, true)
         compare(hint.visible, false)

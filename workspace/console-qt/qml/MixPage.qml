@@ -382,7 +382,7 @@ AppPage {
         inputs: root.inputs
         buses: root.show && root.show.buses ? root.show.buses : []
         outputs: root.show && root.show.outputs ? root.show.outputs : []
-        onUpdateRequested: (before, actions) => root.shell.changeOutput(before, actions)
+        onUpdateRequested: (before, action) => root.shell.changeOutput(before, action)
     }
 
     fileItems: [

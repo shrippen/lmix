@@ -343,8 +343,8 @@ pub fn add_output_action(form: &str) -> Option<Action> {
     })
 }
 
-/// The same form for an output already there (its id): new spec, source
-/// and name. Its bus stays; the form's goes with `set_output_bus`.
+/// The same form for an output already there (its id): new spec,
+/// source, name and sound in one action, so a refusal changes nothing.
 pub fn update_output_action(output: &str, form: &str) -> Option<Action> {
     let form = serde_json::from_str::<OutputForm>(form).ok()?;
     let (spec, source, name) = output_parts(&form)?;
@@ -353,6 +353,7 @@ pub fn update_output_action(output: &str, form: &str) -> Option<Action> {
         spec,
         source,
         name,
+        bus: Some((!form.bus.is_empty()).then(|| BusRef::Text(form.bus.clone()))),
     })
 }
 
@@ -616,16 +617,29 @@ mod tests {
                 bus: Some(BusRef::Text("b1".into())),
             })
         );
-        // The bus is not the update's: `set_output_bus` changes it.
+        // The sound goes with the update; none chosen: the source's own.
         assert_eq!(
             update_output_action("o1", &form.replace(r#""name":"  ""#, r#""name":"Desk""#)),
             Some(Action::UpdateOutput {
                 output: OutputRef::Text("o1".into()),
-                spec,
+                spec: spec.clone(),
                 source: OutputSource::Preview,
                 name: Some("Desk".into()),
+                bus: Some(Some(BusRef::Text("b1".into()))),
             })
         );
+        let own = update_output_action("o1", &form.replace(r#""bus":"b1""#, r#""bus":"""#));
+        assert!(matches!(
+            own,
+            Some(Action::UpdateOutput {
+                bus: Some(None),
+                ..
+            })
+        ));
+        // As JSON: null, not left out (left out keeps the bus).
+        let json = serde_json::to_value(own.unwrap()).unwrap();
+        assert_eq!(json["bus"], serde_json::Value::Null);
+        assert!(json.as_object().unwrap().contains_key("bus"));
         // A needed field empty, or no form at all.
         assert_eq!(update_output_action("o1", &form.replace("Desk", "")), None);
         assert_eq!(update_output_action("o1", "{"), None);
