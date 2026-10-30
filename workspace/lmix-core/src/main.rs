@@ -450,6 +450,8 @@ async fn connect(engine: Arc<dyn Engine>, service: Arc<Service>, slots: usize, s
     }
 
     tracing::info!("engine ready");
+    // After the start: a takeover may have kept the tiles lit.
+    tokio::spawn(service.clone().watch_tiles());
     service.adopt_cards().await;
     if let Err(e) = service.restore().await {
         tracing::error!(error = %e, "restoring show to engine failed");

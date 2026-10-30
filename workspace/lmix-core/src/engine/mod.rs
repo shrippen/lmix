@@ -116,6 +116,10 @@ pub trait Engine: Send + Sync {
         Err(EngineError::NoPictures)
     }
 
+    /// No Console watches the tile picture any more (its lease ran out):
+    /// the engine may stop drawing it until `live` asks again.
+    async fn dim_tiles(&self) {}
+
     /// How the frames of `picture` come over its socket.
     fn live_transport(&self, _picture: LivePicture) -> LiveTransport {
         LiveTransport::UnixFd

@@ -15,6 +15,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Instant, SystemTime};
 
+use lmix_types::state::TILES_LEASE;
 use lmix_types::{
     Action, ActionError, Event, InputId, InputLevel, InputRef, InputStatus, IoClass, Latency,
     Levels, LiveFeed, LiveTiles, OutputId, OutputSpec, OutputStats, OutputStatus, ShowState,
@@ -98,6 +99,11 @@ pub struct Service {
     /// A failed command found a new engine process: check now, not at the
     /// next poll.
     engine_changed: Notify,
+    /// Until when the tile picture stays lit (`watch_tiles`); `None` once
+    /// it went dark.
+    tiles_lease: Mutex<Option<tokio::time::Instant>>,
+    /// A Console asked for the tiles (ends `watch_tiles`' wait while dark).
+    tiles_asked: Notify,
     /// The templates folder (`--templates`), if any.
     templates_dir: std::sync::Mutex<Option<PathBuf>>,
     /// Built-in and folder templates as last scanned.
@@ -162,6 +168,8 @@ impl Service {
             engine_ready: AtomicBool::new(true),
             engine_instance: std::sync::Mutex::new(None),
             engine_changed: Notify::new(),
+            tiles_lease: Mutex::new(None),
+            tiles_asked: Notify::new(),
             templates_dir: std::sync::Mutex::new(None),
             templates: std::sync::Mutex::new(templates),
             source_times: std::sync::Mutex::new(HashMap::new()),
@@ -792,7 +800,12 @@ impl Service {
 
     /// Every slot in one picture, and where each one sits in it.
     pub async fn live_tiles(&self) -> Result<LiveTiles, EngineError> {
+        // Every ask is a lease (see `watch_tiles`), held while it lights.
+        let mut lease = self.tiles_lease.lock().await;
+        *lease = Some(tokio::time::Instant::now() + TILES_LEASE);
+        self.tiles_asked.notify_one();
         let feed = self.live_feed(LivePicture::Tiles).await?;
+        drop(lease);
         let (columns, rows) = flows::tiles_grid(self.switcher.lock().await.slots());
         let (cell_width, cell_height) = flows::TILE_CELL;
         Ok(LiveTiles {
@@ -803,6 +816,33 @@ impl Service {
             cell_width,
             cell_height,
         })
+    }
+
+    /// Tiles nobody asked for in a lease go dark (`Engine::dim_tiles`):
+    /// with them strom's CPU mixer needs 480 % of a core instead of 300 %
+    /// (30.10.2026). It sleeps until the lease runs out, never polls. It
+    /// begins with one lease: a takeover keeps tiles lit that a Console of
+    /// the lmix-core before reads, and that Console asks this one next.
+    pub async fn watch_tiles(self: Arc<Self>) {
+        *self.tiles_lease.lock().await = Some(tokio::time::Instant::now() + TILES_LEASE);
+        loop {
+            let mut lease = self.tiles_lease.lock().await;
+            match *lease {
+                None => {
+                    drop(lease);
+                    self.tiles_asked.notified().await;
+                }
+                Some(until) if tokio::time::Instant::now() < until => {
+                    drop(lease);
+                    tokio::time::sleep_until(until).await;
+                }
+                // Held while the engine darkens: an ask waits, then lights.
+                Some(_) => {
+                    *lease = None;
+                    self.engine.dim_tiles().await;
+                }
+            }
+        }
     }
 
     async fn live_feed(&self, picture: LivePicture) -> Result<LiveFeed, EngineError> {
@@ -4344,6 +4384,44 @@ mod tests {
         assert_eq!(formats(&engine), 2, "asked for again");
         service.handle(upright()).await.unwrap();
         assert_eq!(formats(&engine), 2, "built: no change");
+    }
+
+    /// The tile picture costs strom as much again as the rest: a Console
+    /// that shows it asks every third of `TILES_LEASE`; a lease after the
+    /// last ask it goes dark, once, without polling in between.
+    #[tokio::test(start_paused = true)]
+    async fn the_tiles_go_dark_a_lease_after_the_last_ask() {
+        let engine = Arc::new(NullEngine::default());
+        let service = Service::new(4, engine.clone(), None);
+        tokio::spawn(service.clone().watch_tiles());
+        let quarter = TILES_LEASE / 4;
+
+        tokio::time::sleep(quarter * 2).await;
+        // The null engine has no pictures; the ask counts all the same.
+        let _ = service.live_tiles().await;
+        tokio::time::sleep(quarter * 3).await;
+        assert_eq!(engine.dims(), 0, "asked within the lease");
+
+        tokio::time::sleep(quarter * 2).await;
+        assert_eq!(engine.dims(), 1, "a lease after the last ask");
+        tokio::time::sleep(TILES_LEASE * 3).await;
+        assert_eq!(engine.dims(), 1, "dark once");
+
+        let _ = service.live_tiles().await;
+        tokio::time::sleep(TILES_LEASE + quarter).await;
+        assert_eq!(engine.dims(), 2, "a Console came back and left");
+    }
+
+    /// A takeover keeps tiles lit that a Console of the lmix-core before
+    /// read: from the start it has one lease to ask again.
+    #[tokio::test(start_paused = true)]
+    async fn tiles_nobody_asks_for_go_dark_a_lease_after_the_start() {
+        let engine = Arc::new(NullEngine::default());
+        let service = Service::new(4, engine.clone(), None);
+        tokio::spawn(service.clone().watch_tiles());
+
+        tokio::time::sleep(TILES_LEASE + TILES_LEASE / 4).await;
+        assert_eq!(engine.dims(), 1);
     }
 
     #[tokio::test(start_paused = true)]

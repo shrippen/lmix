@@ -99,9 +99,12 @@ pub struct StromEngine {
     pages: String,
     /// One live flow is set up at a time (two Consoles asking at once).
     live_setup: Mutex<()>,
-    /// A Console asked for the tile picture; until then its pads stay
-    /// dark (see [`StromEngine::show_tiles`]).
+    /// A Console asked for the tile picture and its lease has not run
+    /// out; else its pads stay dark (see [`StromEngine::show_tiles`]).
     tiles_watched: AtomicBool,
+    /// strom took alpha 1 on every tile pad of the running mixer: a
+    /// Console asking again (every few seconds) costs no PATCH.
+    tiles_lit: AtomicBool,
     /// One `show_tiles` at a time: a rebuild's 0 and a Console's 1 would
     /// otherwise interleave pad by pad.
     tiles_setup: Mutex<()>,
@@ -166,6 +169,7 @@ impl StromEngine {
             pages: flows::DEFAULT_PAGES.into(),
             live_setup: Mutex::new(()),
             tiles_watched: AtomicBool::new(false),
+            tiles_lit: AtomicBool::new(false),
             tiles_setup: Mutex::new(()),
             mutes: Default::default(),
             format: Default::default(),
@@ -470,13 +474,15 @@ impl StromEngine {
         // What it is built with, so the show's SetFormat after a cold start
         // does not build it a second time.
         *self.buses.lock().expect("buses lock") = flows::buses_of(flow);
+        // A new mixer's tile pads are dark.
+        self.tiles_lit.store(false, Ordering::Relaxed);
         self.put_flow(flow).await?;
         self.wait_playing(flow.id).await?;
         self.show_tiles().await;
         Ok(())
     }
 
-    /// The tile picture's pads at alpha 1 once a Console asked for it, else
+    /// The tile picture's pads at alpha 1 while a Console's lease runs, else
     /// at 0: the compositor skips a pad at 0 without scaling it, and the
     /// tile picture costs the CPU mixer as much again as the rest (strom
     /// 480 % of a core against 290 % with 7 slots, 30.10.2026). A failure
@@ -489,6 +495,7 @@ impl StromEngine {
             0.0
         };
         let pads = self.black.load(Ordering::Relaxed) + 1;
+        let mut all_taken = true;
         for pad in 0..pads {
             let path = format!(
                 "/flows/{}/elements/{MIXER_BLOCK}:{TILES_COMPOSITOR}/pads/sink_{pad}/properties",
@@ -507,14 +514,21 @@ impl StromEngine {
             };
             if let Err(e) = sent.await {
                 tracing::warn!("tile picture pad {pad} to alpha {alpha}: {e}");
+                all_taken = false;
             }
         }
+        self.tiles_lit
+            .store(alpha == 1.0 && all_taken, Ordering::Relaxed);
     }
 
     /// A Console shows the tile picture: from now on its pads are lit.
-    /// Each request lights them again, so a failed PATCH is not final.
+    /// Lit already, nothing is sent; after a failed PATCH the next request
+    /// tries again.
     async fn watch_tiles(&self) {
         self.tiles_watched.store(true, Ordering::Relaxed);
+        if self.tiles_lit.load(Ordering::Relaxed) {
+            return;
+        }
         self.show_tiles().await;
     }
 
@@ -1660,6 +1674,13 @@ impl Engine for StromEngine {
         picture.transport(self.backend)
     }
 
+    async fn dim_tiles(&self) {
+        if !self.tiles_watched.swap(false, Ordering::Relaxed) {
+            return;
+        }
+        self.show_tiles().await;
+    }
+
     /// strom answers 504 while a tap has no frame yet (the first request
     /// switches it on).
     async fn picture(&self, picture: Picture) -> Result<Vec<u8>, EngineError> {
@@ -2154,8 +2175,11 @@ mod tests {
             Vec::<(String, serde_json::Value)>::new(),
         ));
         let seen = patches.clone();
+        // strom refuses the pads' PATCHes while set.
+        let failing = std::sync::Arc::new(AtomicBool::new(false));
+        let fails = failing.clone();
         let app = axum::Router::new().fallback(move |request: axum::extract::Request| {
-            let seen = seen.clone();
+            let (seen, fails) = (seen.clone(), fails.clone());
             async move {
                 let (parts, body) = request.into_parts();
                 let path = parts.uri.path().to_string();
@@ -2163,6 +2187,12 @@ mod tests {
                     let body = axum::body::to_bytes(body, usize::MAX).await.unwrap();
                     let body = serde_json::from_slice(&body).unwrap_or_default();
                     seen.lock().unwrap().push((path, body));
+                    if fails.load(Ordering::Relaxed) {
+                        return (
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            axum::Json(serde_json::json!({})),
+                        );
+                    }
                     return (StatusCode::OK, axum::Json(serde_json::json!({})));
                 }
                 if parts.method == "GET" && path == format!("/api/flows/{}", flows::mixer_id()) {
@@ -2210,10 +2240,30 @@ mod tests {
         engine.watch_tiles().await;
         assert_eq!(*patches.lock().unwrap(), tiles(1.0), "a Console asks");
 
-        // Every request lights them again: a failed PATCH is not final.
+        // A Console asks again every third of the lease: lit, that costs
+        // strom nothing.
         patches.lock().unwrap().clear();
         engine.watch_tiles().await;
-        assert_eq!(*patches.lock().unwrap(), tiles(1.0), "a Console asks again");
+        assert!(patches.lock().unwrap().is_empty(), "a Console asks again");
+
+        // No Console asked for a lease: dark, once.
+        patches.lock().unwrap().clear();
+        engine.dim_tiles().await;
+        assert_eq!(*patches.lock().unwrap(), tiles(0.0), "nobody watches");
+        patches.lock().unwrap().clear();
+        engine.dim_tiles().await;
+        assert!(patches.lock().unwrap().is_empty(), "dark already");
+        engine.watch_tiles().await;
+        assert_eq!(*patches.lock().unwrap(), tiles(1.0), "a Console comes back");
+
+        // A failed PATCH is not final: the next ask lights them again.
+        engine.dim_tiles().await;
+        failing.store(true, Ordering::Relaxed);
+        engine.watch_tiles().await;
+        failing.store(false, Ordering::Relaxed);
+        patches.lock().unwrap().clear();
+        engine.watch_tiles().await;
+        assert_eq!(*patches.lock().unwrap(), tiles(1.0), "after a failure");
 
         patches.lock().unwrap().clear();
         engine.build_mixer(&engine.mixer_flow()).await.unwrap();

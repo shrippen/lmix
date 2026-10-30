@@ -48,6 +48,9 @@ pub struct NullEngine {
     commands_running: std::sync::atomic::AtomicUsize,
     #[cfg(test)]
     starts: std::sync::atomic::AtomicUsize,
+    /// Times the tile picture went dark (`dim_tiles`).
+    #[cfg(test)]
+    dims: std::sync::atomic::AtomicUsize,
     #[cfg(test)]
     start_during_command: std::sync::atomic::AtomicBool,
     /// Outputs started and not stopped or failed since.
@@ -133,6 +136,12 @@ impl NullEngine {
     #[cfg(test)]
     pub fn starts(&self) -> usize {
         self.starts.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    /// Times the tile picture went dark so far.
+    #[cfg(test)]
+    pub fn dims(&self) -> usize {
+        self.dims.load(std::sync::atomic::Ordering::SeqCst)
     }
 
     /// Whether a start came while a slow command ran.
@@ -245,6 +254,11 @@ impl NullEngine {
 
 #[async_trait]
 impl Engine for NullEngine {
+    async fn dim_tiles(&self) {
+        #[cfg(test)]
+        self.dims.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    }
+
     async fn start(&self, _slots: usize) -> Result<(), EngineError> {
         #[cfg(test)]
         {

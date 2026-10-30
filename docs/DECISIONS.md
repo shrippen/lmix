@@ -5396,3 +5396,26 @@ Ctrl+Z ebenso.
 - Nicht im Stapel: Zonen, Ziele, Cues, Auslöser, Belegungen und Vorlagen
   (Regel 1 nennt sie auch; sie folgen), sowie Stoppen und Werkseinstellungen
   (nicht zurückzuholen, nur mit Rückfrage).
+
+## 2026-10-30 — Kachelbild dunkel, wenn keine Console mehr zusieht
+
+Seit #183 zeichnet der CPU-Mischer das Kachelbild erst, wenn eine Console
+es anfordert (strom 480 % eines Kerns statt 300 %). Die Console fragt
+`GET /api/live/tiles` einmal und liest dann direkt aus strom's Socket;
+`unixfdsink` sagt nicht, ob noch jemand liest. Geschlossen blieb das
+Kachelbild an.
+
+- **Frist statt Zählen:** Jede Anfrage gibt dem Kachelbild 10 s
+  (`TILES_LEASE`); eine Console, die es zeigt, fragt alle 3 s erneut.
+  Ohne Anfrage in der Frist wird es dunkel (`Engine::dim_tiles`, Pads auf
+  alpha 0). 10 s: zwei verlorene Anfragen einer beschäftigten Console
+  machen es nicht dunkel, eine geschlossene kostet nach Sekunden nichts
+  mehr; ein Neustart der Console in der Frist sieht kein Flackern.
+- **Kein Polling:** lmix-core schläft bis zum Fristende oder bis zur
+  nächsten Anfrage; eine Anfrage bei hellem Bild schickt strom nichts.
+- **Übernahme:** Ein neues lmix-core, das ein helles Kachelbild übernimmt,
+  gibt ihm ab dem Start eine Frist; die Console des alten fragt in ihr
+  beim neuen nach.
+- Verworfen: die WebSocket-Verbindung der Console als Zuschauer zählen
+  (auch Fernbedienungen ohne Kacheln halten sie) und Leser am Socket
+  zählen (strom kann es nicht).
