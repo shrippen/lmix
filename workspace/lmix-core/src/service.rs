@@ -17,12 +17,13 @@ use std::time::{Instant, SystemTime};
 
 use lmix_types::{
     Action, ActionError, Event, InputId, InputLevel, InputRef, InputStatus, IoClass, Latency,
-    Levels, OutputId, OutputSpec, OutputStats, OutputStatus, ShowState, SignalLoss, Template,
+    Levels, LiveFeed, LiveTiles, OutputId, OutputSpec, OutputStats, OutputStatus, ShowState,
+    SignalLoss, Template,
 };
 use strom_types::FlowId;
 use tokio::sync::{broadcast, Mutex, Notify};
 
-use crate::engine::flows::{output_flow_id, slot_id};
+use crate::engine::flows::{self, output_flow_id, slot_id};
 use crate::engine::meters::{FlowError, FlowFailure};
 use crate::engine::{meters, Engine, EngineError, LivePicture, Picture};
 use crate::recent::Recent;
@@ -775,18 +776,41 @@ impl Service {
     pub async fn live_input(
         &self,
         input: &InputRef,
-    ) -> Result<Result<std::path::PathBuf, EngineError>, ActionError> {
+    ) -> Result<Result<LiveFeed, EngineError>, ActionError> {
         let slot = self.switcher.lock().await.slot_for(input)?;
-        Ok(self.engine.live(LivePicture::Slot(slot)).await)
+        Ok(self.live_feed(LivePicture::Slot(slot)).await)
     }
 
-    pub async fn live_program(&self) -> Result<std::path::PathBuf, EngineError> {
-        self.engine.live(LivePicture::Program).await
+    pub async fn live_program(&self) -> Result<LiveFeed, EngineError> {
+        self.live_feed(LivePicture::Program).await
     }
 
     /// The mixer's preview: an input, a layout, whatever a take brings.
-    pub async fn live_preview(&self) -> Result<std::path::PathBuf, EngineError> {
-        self.engine.live(LivePicture::Preview).await
+    pub async fn live_preview(&self) -> Result<LiveFeed, EngineError> {
+        self.live_feed(LivePicture::Preview).await
+    }
+
+    /// Every slot in one picture, and where each one sits in it.
+    pub async fn live_tiles(&self) -> Result<LiveTiles, EngineError> {
+        let feed = self.live_feed(LivePicture::Tiles).await?;
+        let (columns, rows) = flows::tiles_grid(self.switcher.lock().await.slots());
+        let (cell_width, cell_height) = flows::TILE_CELL;
+        Ok(LiveTiles {
+            socket: feed.socket,
+            transport: feed.transport,
+            columns: columns as u32,
+            rows: rows as u32,
+            cell_width,
+            cell_height,
+        })
+    }
+
+    async fn live_feed(&self, picture: LivePicture) -> Result<LiveFeed, EngineError> {
+        let socket = self.engine.live(picture).await?;
+        Ok(LiveFeed {
+            socket: socket.to_string_lossy().into_owned(),
+            transport: self.engine.live_transport(picture),
+        })
     }
 
     pub async fn program_picture(&self) -> Result<Vec<u8>, EngineError> {
@@ -2251,10 +2275,12 @@ impl Service {
 }
 
 /// The shortcuts for all shows as `--shortcuts` keeps them; a file from
-/// before named buses gets them as a migrated show does.
+/// before named buses gets them as a migrated show does, renamed actions
+/// their new name.
 fn parse_shortcuts(bytes: &[u8]) -> Result<Vec<crate::show::ShowShortcut>, String> {
     let mut value: serde_json::Value = serde_json::from_slice(bytes).map_err(|e| e.to_string())?;
     crate::show::migrate_shortcuts(&mut value);
+    crate::show::rename_actions(&mut value);
     serde_json::from_value(value).map_err(|e| e.to_string())
 }
 
@@ -2547,6 +2573,19 @@ mod tests {
     use lmix_types::{
         DisplayMode, InputRef, OutputRef, OutputSource, OutputSpec, SourceSpec, TestPattern,
     };
+
+    /// `restore_input` became `restore`: the shortcuts for all shows
+    /// (`--shortcuts`) with it still load.
+    #[test]
+    fn shortcuts_for_all_shows_with_restore_input_load() {
+        let file = serde_json::json!([{
+            "id": InputId::new(),
+            "label": "Back",
+            "actions": [{"action": "restore_input"}],
+        }]);
+        let shortcuts = parse_shortcuts(&serde_json::to_vec(&file).unwrap()).unwrap();
+        assert_eq!(shortcuts[0].actions, [Action::Restore]);
+    }
 
     /// Shortcuts for all shows from before named buses still load: aux
     /// bus B becomes "Bus B", the name a migrated show gives it.

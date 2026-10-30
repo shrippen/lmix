@@ -22,6 +22,8 @@ RowLayout {
     signal addRequested()
     /** Ask before stopping a running output (the shell's setting). */
     property bool confirmStop: true
+    /** AppShell.askRemove: ask, then remove with a way back. */
+    property var askRemove: null
     /** The answer to "Ask before stopping" after a stop; the page writes
      *  the setting, so `confirmStop` stays bound to it. */
     signal confirmStopChosen(bool on)
@@ -89,9 +91,13 @@ RowLayout {
             QQC2.Menu {
                 id: menu
                 KantePopupSkin { popup: menu }
-                QQC2.MenuItem {
+                // Not while it sends (M07): stop it first.
+                KanteMenuItem {
                     text: qsTr("Remove %1").arg(button.modelData.name)
-                    onTriggered: bar.act({ action: "remove_output", output: button.modelData.number })
+                    icon.name: "edit-delete"
+                    destructive: true
+                    enabled: !button.running
+                    onTriggered: bar.askRemove("output", button.modelData)
                 }
             }
         }
@@ -127,5 +133,4 @@ RowLayout {
         onClicked: bar.addRequested()
     }
 
-    Item { Layout.fillWidth: true }
 }

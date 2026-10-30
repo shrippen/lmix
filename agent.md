@@ -54,6 +54,7 @@ Rule 7: Use the body to explain what and why vs. how. Assume the code explains t
   lmix-core mid-flow, drop the connection, rebuild flows in random order). A crash found
   this way gets a regression test with the input that caused it.
 
+
 ## GUI rule
 
 - Every GUI of this project is generated from Kante, not inspired by it: landing pages,
