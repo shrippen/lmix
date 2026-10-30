@@ -22,7 +22,7 @@ KanteCard {
      *  the inspector keeps the cue it began with, also when standby moves
      *  on (a follow, a GO from MIDI, OSC or another client): what is typed
      *  goes to that cue, or nowhere when it is gone from the active list. */
-    readonly property bool holding: actionDialog.visible || colourMenu.visible || hasFocusInside(Window.activeFocusItem)
+    readonly property bool holding: actionDialog.visible || colourPicker.popover.visible || hasFocusInside(Window.activeFocusItem)
     property string heldId: ""
     // Let go only after the field that lost the keyboard saved its value
     // (editingFinished may come after the focus moved).
@@ -205,17 +205,11 @@ KanteCard {
                     color: KanteStyle.mutedTextColor
                 }
                 QQC2.Label { text: qsTr("Colour") }
-                KanteButton {
-                    id: colourButton
-                    focusPolicy: Qt.NoFocus
-                    text: inspector.cue && inspector.cue.color ? Texts.label("colors", inspector.cue.color) : qsTr("None")
-                    onClicked: colourMenu.popup(colourButton, 0, colourButton.height)
-                    ChoiceMenu {
-                        id: colourMenu
-                        choices: [{ value: null, label: qsTr("None") }].concat(Texts.choices("colors", inspector.core.choices("colors")))
-                        current: inspector.cue ? (inspector.cue.color || null) : null
-                        onPicked: value => inspector.save({ color: value })
-                    }
+                CueColourButton {
+                    id: colourPicker
+                    tags: JSON.parse(inspector.core.choices("colors"))
+                    current: inspector.cue ? (inspector.cue.color || null) : null
+                    onPicked: value => inspector.save({ color: value })
                 }
 
                 QQC2.Label {

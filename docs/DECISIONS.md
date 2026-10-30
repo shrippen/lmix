@@ -5420,6 +5420,54 @@ eindeutig. Entscheidung des Users: wie bei Bussen (INP.2).
   nummeriert. Eine Aktion, die einen späteren Doppelgänger in anderer
   Schreibung nannte („cam 1“ neben „Cam 1“), trifft danach den ersten.
 
+## 2026-10-30 — Kachelbild dunkel, wenn keine Console mehr zusieht
+
+Seit #183 zeichnet der CPU-Mischer das Kachelbild erst, wenn eine Console
+es anfordert (strom 480 % eines Kerns statt 300 %). Die Console fragt
+`GET /api/live/tiles` einmal und liest dann direkt aus strom's Socket;
+`unixfdsink` sagt nicht, ob noch jemand liest. Geschlossen blieb das
+Kachelbild an.
+
+- **Frist statt Zählen:** Jede Anfrage gibt dem Kachelbild 10 s
+  (`TILES_LEASE`); eine Console, die es zeigt, fragt alle 3 s erneut.
+  Ohne Anfrage in der Frist wird es dunkel (`Engine::dim_tiles`, Pads auf
+  alpha 0). 10 s: zwei verlorene Anfragen einer beschäftigten Console
+  machen es nicht dunkel, eine geschlossene kostet nach Sekunden nichts
+  mehr; ein Neustart der Console in der Frist sieht kein Flackern.
+- **Kein Polling:** lmix-core schläft bis zum Fristende oder bis zur
+  nächsten Anfrage; eine Anfrage bei hellem Bild schickt strom nichts.
+- **Abgelehnt wird wiederholt:** Nimmt strom das Dunkelschalten nicht an,
+  versucht lmix-core es eine Frist später wieder, bis es dunkel ist.
+- **Übernahme:** Ein neues lmix-core, das ein helles Kachelbild übernimmt,
+  gibt ihm ab dem Start eine Frist; die Console des alten fragt in ihr
+  beim neuen nach.
+- Verworfen: die WebSocket-Verbindung der Console als Zuschauer zählen
+  (auch Fernbedienungen ohne Kacheln halten sie) und Leser am Socket
+  zählen (strom kann es nicht).
+
+## 2026-10-30 — Menüs: Effekt, Weitere Aktionen, Ausgang, Bindung, Cue-Farbe
+
+Umsetzung von `docs/DESIGN-DIALOGE.md` (Tafel 3/M08, M03, M07, M11, M12).
+
+- **Zeilenende in Kante:** `KanteMenuItem.trailing` (Kante 1.56) nimmt
+  Knöpfe und Segmente am Ende einer Menüzeile auf. Das Effektmenü baut
+  Richtung (◀ ▶) und Dauer damit, statt eigener Menüzeilen (#181).
+- **Weitere Aktionen (M03):** eigenes Bauteil `MoreActionsMenu`, Icons nur
+  wo eindeutig (Regel 5); „+ Input“ heißt im Menü „Input hinzufügen…“.
+- **Ausgang (M07):** Kopf mit Name, Art und Bitrate beim Senden. Gemessen
+  gibt es sie nur für SRT (`Core.links`); sonst zeigt der Kopf die
+  eingestellte Videorate. „Einstellungen…“ öffnet die Details auf der
+  Seite Outputs: ein Formular zum Ändern eines Ausgangs gibt es noch
+  nicht. „Statistik“ zeigt Laufzeit und Rate, bei SRT dazu Pakete und
+  RTT; Bildstatistik je Ausgang (späte, verworfene Bilder) liefert der Kern
+  der Console nicht. Die Adresse steht ohne Pfad und Query im Menü, damit
+  ein Stream-Key nicht zu sehen ist; kopiert wird sie ganz.
+- **Bindung (M11):** die Beispielwerte kommen aus `data_sources[].current`;
+  die Einträge entstehen nur neu, wenn Quellen oder Spalten wechseln, nicht
+  bei jeder neuen Zeile.
+- **Cue-Farbe (M12):** `KanteSwatchPicker` im `KantePopover`, „Keine“ als
+  erstes Feld.
+
 ## 2026-10-30 — Kartenausgang über decklink2sink (OUT.4)
 
 **Anlass**: GStreamer hat auf die Meldung zum verspäteten zweiten Start

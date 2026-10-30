@@ -320,6 +320,10 @@ pub enum LiveTransport {
 /// `n` of a grid of `columns` × `rows` cells, row by row, each picture
 /// fitted into its cell. A Console shows its input tiles from this one
 /// stream instead of one per input.
+///
+/// The tile picture costs the mixer as much again as the rest, so it stays
+/// lit [`TILES_LEASE`] after the last request: a Console that shows it asks
+/// again every third of that.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct LiveTiles {
     pub socket: String,
@@ -329,6 +333,11 @@ pub struct LiveTiles {
     pub cell_width: u32,
     pub cell_height: u32,
 }
+
+/// How long the tile picture stays lit after the last `GET /api/live/tiles`
+/// (see [`LiveTiles`]). Long enough for two missed requests of a busy
+/// Console, short enough that a closed one stops costing within seconds.
+pub const TILES_LEASE: std::time::Duration = std::time::Duration::from_secs(10);
 
 /// Latency from capture at a source to the program output of the mixer
 /// (NFA.3), from the last measurement.

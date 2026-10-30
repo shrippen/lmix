@@ -22,6 +22,14 @@ import "."
  * the bar on top and the accept button in the negative colour, Cancel before it; the
  * button says what goes (`acceptText: "Remove bus"`). In the Kante style only: System and
  * Kante Light keep the platform's dialog and button order.
+ * Footer start (Kante 1.58, from lmix): `footerStart` takes the app's own buttons
+ * (KanteButton) and puts them at the start of the footer, before the standard buttons and
+ * apart from them, such as "Shortcuts…" beside Close in lmix's keys overview. Every style
+ * does it, also after a switch at run time; the footer makes room for them, in width and
+ * height, also without a standard button. They are no standard buttons: their own
+ * `onClicked`, no accept or reject, no role; one taken out of the list leaves the footer.
+ * Right to left (LayoutMirroring, as Kirigami's window sets it for an RTL language) the
+ * start is on the right: the own buttons stand there, the standard buttons on the left.
  * Since 1.55 `acceptText` also holds when the button box sets its standard texts again
  * (a language change, also the one at start with the app's translations): it read "OK"
  * in German before.
@@ -74,6 +82,77 @@ QQC2.Dialog {
     // The buttons acceptEnabled has set (each footer has its own), to free them all when
     // acceptEnabled is unset again.
     property var lockedButtons: []
+
+    /** The app's buttons at the start of the footer (see above). */
+    property list<Item> footerStart
+    // Not a child: it goes into the footer shown now, whichever style made it. Right to
+    // left (LayoutMirroring, inherited from the window) its anchors and order mirror, so
+    // it stands at the right, the first button outermost.
+    readonly property Item kanteFooterStart: Row {
+        objectName: "kanteFooterStart"
+        anchors.left: parent ? parent.left : undefined
+        anchors.leftMargin: parent ? parent.padding : 0
+        anchors.verticalCenter: parent ? parent.verticalCenter : undefined
+        spacing: Kirigami.Units.smallSpacing
+    }
+    // The buttons placed so far: one no longer in footerStart leaves the footer again.
+    property var kanteFooterPlaced: []
+    function placeFooterStart() {
+        const now = []
+        for (let i = 0; i < footerStart.length; ++i) {
+            now.push(footerStart[i])
+            footerStart[i].parent = kanteFooterStart
+        }
+        for (const item of kanteFooterPlaced) {
+            if (now.indexOf(item) < 0 && item.parent === kanteFooterStart) {
+                item.parent = null
+            }
+        }
+        kanteFooterPlaced = now
+    }
+    onFooterStartChanged: placeFooterStart()
+    Binding {
+        target: control.kanteFooterStart
+        property: "parent"
+        value: control.footer
+        when: control.footer !== null && control.footerStart.length > 0
+        restoreMode: Binding.RestoreNone
+    }
+    // The standard buttons move over for them: from the left, or right to left from the
+    // right, where the footer start mirrors to.
+    readonly property bool kanteFooterMirrored: kanteFooterStart.LayoutMirroring.enabled
+    Binding {
+        target: control.footer
+        property: "leftPadding"
+        value: control.footer ? control.footer.padding + control.kanteFooterStart.implicitWidth + Kirigami.Units.largeSpacing : 0
+        when: control.footer !== null && control.footerStart.length > 0 && !control.kanteFooterMirrored
+        restoreMode: Binding.RestoreBindingOrValue
+    }
+    Binding {
+        target: control.footer
+        property: "rightPadding"
+        value: control.footer ? control.footer.padding + control.kanteFooterStart.implicitWidth + Kirigami.Units.largeSpacing : 0
+        when: control.footer !== null && control.footerStart.length > 0 && control.kanteFooterMirrored
+        restoreMode: Binding.RestoreBindingOrValue
+    }
+    // The platform's footer hides without standard buttons: shown for them too.
+    Binding {
+        target: control.footer
+        property: "visible"
+        value: true
+        when: control.footer !== null && control.footerStart.length > 0
+        restoreMode: Binding.RestoreBindingOrValue
+    }
+    // And the footer is as high as they are, also without a standard button.
+    Binding {
+        target: control.footer
+        property: "implicitHeight"
+        value: control.footer ? Math.max(control.footer.implicitBackgroundHeight + control.footer.topInset + control.footer.bottomInset,
+                                         Math.max(control.footer.implicitContentHeight, control.kanteFooterStart.implicitHeight)
+                                         + control.footer.topPadding + control.footer.bottomPadding) : 0
+        when: control.footer !== null && control.footerStart.length > 0
+        restoreMode: Binding.RestoreBindingOrValue
+    }
 
     /** The accept button of the footer shown now, or null. */
     function acceptButton() {
@@ -132,7 +211,10 @@ QQC2.Dialog {
     onAcceptTextChanged: applyAccept()
     onAcceptEnabledChanged: applyAccept()
     onStandardButtonsChanged: Qt.callLater(applyAccept)
-    Component.onCompleted: applyAccept()
+    Component.onCompleted: {
+        applyAccept()
+        placeFooterStart()
+    }
 
     KanteScope { target: control.contentItem }
 
@@ -155,7 +237,7 @@ QQC2.Dialog {
     }
 
     readonly property Item kanteFooter: QQC2.DialogButtonBox {
-        visible: count > 0
+        visible: count > 0 || control.footerStart.length > 0
         standardButtons: control.standardButtons
         alignment: Qt.AlignRight
         spacing: Kirigami.Units.smallSpacing

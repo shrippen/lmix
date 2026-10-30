@@ -223,6 +223,31 @@ QtObject {
             .arg(stats.packets_dropped).arg(rtt)
     }
 
+    /** An output's kind (`spec.kind`). */
+    function outputKind(spec) {
+        switch (spec.kind) {
+        case "record": return qsTr("Recording")
+        case "srt": return qsTr("Stream SRT")
+        case "rtmp": return qsTr("Stream RTMP")
+        case "ndi": return qsTr("NDI")
+        case "display": return qsTr("Screen")
+        case "card": return qsTr("SDI / HDMI")
+        }
+        return spec.kind || ""
+    }
+    /** Where an output goes: folder, address, NDI name, mode or card. */
+    function outputTarget(spec) {
+        switch (spec.kind) {
+        case "record": return spec.folder
+        case "srt": return spec.uri
+        case "rtmp": return spec.url
+        case "ndi": return spec.name
+        case "display": return spec.mode ? spec.mode.mode : ""
+        case "card": return qsTr("Card %1, %2").arg(spec.device + 1).arg(cardMode(spec.mode))
+        }
+        return ""
+    }
+
     /** A way in or out that can be locked (IoClass), as on the Setup switches. */
     function ioClass(cls) {
         switch (cls) {
