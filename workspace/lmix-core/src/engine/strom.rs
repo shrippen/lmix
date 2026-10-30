@@ -1379,7 +1379,12 @@ impl Engine for StromEngine {
                 *self.sample_rate.lock().expect("rate lock") = rate;
             }
             *self.buses.lock().expect("buses lock") = current.as_ref().and_then(flows::buses_of);
-            // An lmix-core before this one may have lit them.
+            // A Console of the lmix-core before this one may still read
+            // the tiles: their live flow runs on, and it asks no more.
+            let tiles = self.get_flow(flows::live_flow_id(LivePicture::Tiles)).await;
+            if tiles.ok().flatten().is_some_and(|f| f.running) {
+                self.tiles_watched.store(true, Ordering::Relaxed);
+            }
             self.show_tiles().await;
             return Ok(());
         }
@@ -2174,6 +2179,62 @@ mod tests {
             tiles(1.0),
             "rebuilt while watched"
         );
+    }
+
+    /// An lmix-core that takes over a running mixer whose tiles a Console
+    /// still reads (their live flow runs) keeps them lit: that Console
+    /// does not ask again (review of #183).
+    #[tokio::test]
+    async fn a_takeover_keeps_watched_tiles_lit() {
+        let probe = StromEngine::new(String::new(), MixerBackend::Cpu, MonitorOut::None);
+        probe.slots.store(2, Ordering::Relaxed);
+        let mut mixer = probe.mixer_flow();
+        mixer.running = true;
+        let mut tiles = Flow::new("tiles");
+        tiles.id = flows::live_flow_id(LivePicture::Tiles);
+        tiles.running = true;
+        let flows_by_id = std::sync::Arc::new(std::collections::HashMap::from([
+            (format!("/api/flows/{}", mixer.id), mixer),
+            (format!("/api/flows/{}", tiles.id), tiles),
+        ]));
+        let alphas = std::sync::Arc::new(std::sync::Mutex::new(Vec::<serde_json::Value>::new()));
+        let seen = alphas.clone();
+        let app = axum::Router::new().fallback(move |request: axum::extract::Request| {
+            let (seen, flows_by_id) = (seen.clone(), flows_by_id.clone());
+            async move {
+                let (parts, body) = request.into_parts();
+                let path = parts.uri.path().to_string();
+                if parts.method == "PATCH" && path.contains(":tiles_comp/") {
+                    let body: serde_json::Value = serde_json::from_slice(
+                        &axum::body::to_bytes(body, usize::MAX).await.unwrap(),
+                    )
+                    .unwrap();
+                    seen.lock().unwrap().push(body["value"].clone());
+                } else if parts.method == "GET" {
+                    if let Some(flow) = flows_by_id.get(&path) {
+                        return (
+                            StatusCode::OK,
+                            axum::Json(serde_json::json!({ "flow": flow })),
+                        );
+                    }
+                }
+                (StatusCode::OK, axum::Json(serde_json::json!({})))
+            }
+        });
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        let engine = StromEngine::new(
+            format!("http://{addr}"),
+            MixerBackend::Cpu,
+            MonitorOut::None,
+        );
+
+        engine.start(2).await.unwrap();
+
+        let alphas = alphas.lock().unwrap().clone();
+        assert!(!alphas.is_empty(), "the tile pads are set");
+        assert!(alphas.iter().all(|a| a == 1.0), "{alphas:?}");
     }
 
     /// A new format whose mixer strom does not build is tried again when
