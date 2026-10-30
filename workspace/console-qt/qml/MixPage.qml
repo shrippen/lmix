@@ -534,65 +534,78 @@ AppPage {
                     text: qsTr("View")
                     emphasis: KanteButton.Emphasis.Quiet
                     onClicked: viewPopover.openAt(viewButton)
+                    // P01 A: two columns, the inputs left, the multiview and
+                    // the page right; the button names it, so no title.
                     KantePopover {
                         id: viewPopover
-                        title: qsTr("View")
                         readonly property var multiview: root.show && root.show.multiview ? root.show.multiview : ({ program: "right", meters: "shown" })
-                        ColumnLayout {
-                            spacing: Kirigami.Units.smallSpacing
-                            KanteSectionLabel { text: qsTr("Inputs") }
-                            KanteSegmented {
-                                model: [qsTr("Tiles"), qsTr("Buttons")]
-                                currentIndex: viewSettings.buttons ? 1 : 0
-                                tooltips: [qsTr("A live tile per input"), qsTr("A row for program and one for preview, a button per input")]
-                                onActivated: index => viewSettings.buttons = index === 1
-                            }
-                            KanteSegmented {
-                                visible: !viewSettings.buttons
-                                model: [qsTr("Compact"), qsTr("Detail")]
-                                currentIndex: viewSettings.detail ? 1 : 0
-                                tooltips: [qsTr("Picture and name"), qsTr("Also overlay buttons and the audio strip")]
-                                onActivated: index => viewSettings.detail = index === 1
-                            }
-                            KanteSegmented {
-                                visible: !viewSettings.buttons
-                                model: [qsTr("S", "small tiles"), qsTr("M", "medium tiles"), qsTr("L", "large tiles")]
-                                currentIndex: viewSettings.tileSize
-                                tooltips: [qsTr("Small tiles"), qsTr("Medium tiles"), qsTr("Large tiles")]
-                                onActivated: index => viewSettings.tileSize = index
-                            }
-                            KanteSwitch {
-                                text: qsTr("Audio at the edge")
-                                checked: viewSettings.mixer
-                                enabled: !root.simple
-                                onToggled: viewSettings.mixer = checked
-                            }
-                            KanteSwitch {
-                                text: qsTr("Simple mode")
-                                checked: root.simple
-                                enabled: backend.uiMode === ""
-                                onToggled: viewSettings.simple = checked
-                            }
-                            // OUT.10: program left or right, meters on the tiles;
-                            // the mixer is built anew, like for the format.
-                            KanteSectionLabel { text: qsTr("Multiview") }
-                            KanteSwitch {
-                                text: qsTr("Program on the left")
-                                checked: viewPopover.multiview.program === "left"
-                                enabled: backend.connected
-                                // The core's state decides: a click asks, the binding comes back.
-                                onToggled: {
-                                    root.act({ action: "set_multiview", layout: { program: checked ? "left" : "right", meters: viewPopover.multiview.meters } })
-                                    checked = Qt.binding(() => viewPopover.multiview.program === "left")
+                        GridLayout {
+                            columns: 2
+                            columnSpacing: Kirigami.Units.largeSpacing * 2
+                            ColumnLayout {
+                                Layout.alignment: Qt.AlignTop
+                                spacing: Kirigami.Units.smallSpacing
+                                KanteSectionLabel { text: qsTr("Inputs") }
+                                KanteSegmented {
+                                    model: [qsTr("Tiles"), qsTr("Buttons")]
+                                    currentIndex: viewSettings.buttons ? 1 : 0
+                                    tooltips: [qsTr("A live tile per input"), qsTr("A row for program and one for preview, a button per input")]
+                                    onActivated: index => viewSettings.buttons = index === 1
+                                }
+                                KanteSegmented {
+                                    visible: !viewSettings.buttons
+                                    model: [qsTr("Compact"), qsTr("Detail")]
+                                    currentIndex: viewSettings.detail ? 1 : 0
+                                    tooltips: [qsTr("Picture and name"), qsTr("Also overlay buttons and the audio strip")]
+                                    onActivated: index => viewSettings.detail = index === 1
+                                }
+                                TileSizePicker {
+                                    Layout.fillWidth: true
+                                    visible: !viewSettings.buttons
+                                    currentIndex: viewSettings.tileSize
+                                    onActivated: index => viewSettings.tileSize = index
                                 }
                             }
-                            KanteSwitch {
-                                text: qsTr("Level meters")
-                                checked: viewPopover.multiview.meters === "shown"
-                                enabled: backend.connected
-                                onToggled: {
-                                    root.act({ action: "set_multiview", layout: { program: viewPopover.multiview.program, meters: checked ? "shown" : "hidden" } })
-                                    checked = Qt.binding(() => viewPopover.multiview.meters === "shown")
+                            ColumnLayout {
+                                Layout.alignment: Qt.AlignTop
+                                spacing: Kirigami.Units.smallSpacing
+                                // OUT.10: program left or right, meters on the tiles;
+                                // the mixer is built anew, like for the format.
+                                KanteSectionLabel { text: qsTr("Multiview") }
+                                KanteSwitch {
+                                    text: qsTr("Program on the left")
+                                    checked: viewPopover.multiview.program === "left"
+                                    enabled: backend.connected
+                                    // The core's state decides: a click asks, the binding comes back.
+                                    onToggled: {
+                                        root.act({ action: "set_multiview", layout: { program: checked ? "left" : "right", meters: viewPopover.multiview.meters } })
+                                        checked = Qt.binding(() => viewPopover.multiview.program === "left")
+                                    }
+                                }
+                                KanteSwitch {
+                                    text: qsTr("Level meters")
+                                    checked: viewPopover.multiview.meters === "shown"
+                                    enabled: backend.connected
+                                    onToggled: {
+                                        root.act({ action: "set_multiview", layout: { program: viewPopover.multiview.program, meters: checked ? "shown" : "hidden" } })
+                                        checked = Qt.binding(() => viewPopover.multiview.meters === "shown")
+                                    }
+                                }
+                                KanteSectionLabel {
+                                    Layout.topMargin: Kirigami.Units.smallSpacing
+                                    text: qsTr("Page")
+                                }
+                                KanteSwitch {
+                                    text: qsTr("Audio at the edge")
+                                    checked: viewSettings.mixer
+                                    enabled: !root.simple
+                                    onToggled: viewSettings.mixer = checked
+                                }
+                                KanteSwitch {
+                                    text: qsTr("Simple mode")
+                                    checked: root.simple
+                                    enabled: backend.uiMode === ""
+                                    onToggled: viewSettings.simple = checked
                                 }
                             }
                         }

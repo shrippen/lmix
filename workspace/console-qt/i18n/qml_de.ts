@@ -1581,6 +1581,38 @@
     </message>
   </context>
   <context>
+    <name>EffectMenu</name>
+    <message>
+      <location filename="../qml/EffectMenu.qml" line="+112" />
+      <source>Stinger…</source>
+      <translation>Stinger…</translation>
+    </message>
+    <message>
+      <location line="+14" />
+      <location line="+60" />
+      <source>Length</source>
+      <translation>Dauer</translation>
+    </message>
+    <message>
+      <location line="-45" />
+      <location line="+20" />
+      <source>To the right</source>
+      <translation>Nach rechts</translation>
+    </message>
+    <message>
+      <location line="-20" />
+      <location line="+20" />
+      <source>To the left</source>
+      <translation>Nach links</translation>
+    </message>
+    <message>
+      <location line="+52" />
+      <source>ms</source>
+      <comment>milliseconds</comment>
+      <translation>ms</translation>
+    </message>
+  </context>
+  <context>
     <name>FactoryResetDialog</name>
     <message>
       <location filename="../qml/FactoryResetDialog.qml" line="+20" />
@@ -2331,22 +2363,22 @@
       <translation>Klick: in die Vorschau. Rechtsklick: bearbeiten oder entfernen.</translation>
     </message>
     <message>
-      <location line="+14" />
+      <location line="+15" />
       <source>Edit…</source>
       <translation>Bearbeiten…</translation>
     </message>
     <message>
-      <location line="+4" />
+      <location line="+5" />
       <source>Save as template</source>
       <translation>Als Vorlage speichern</translation>
     </message>
     <message>
-      <location line="+3" />
+      <location line="+4" />
       <source>Keeps its places for every show, under its name (one of the same name is replaced).</source>
       <translation>Behält seine Plätze für jede Show, unter seinem Namen (eine gleichnamige wird ersetzt).</translation>
     </message>
     <message>
-      <location line="+3" />
+      <location line="+4" />
       <source>Remove</source>
       <translation>Entfernen</translation>
     </message>
@@ -2356,12 +2388,12 @@
       <translation>+ Layout</translation>
     </message>
     <message>
-      <location line="+6" />
+      <location line="+7" />
       <source>Templates</source>
       <translation>Vorlagen</translation>
     </message>
     <message>
-      <location line="+4" />
+      <location line="+5" />
       <source>Layout templates, kept for every show: a new layout from one, import, export.</source>
       <translation>Layout-Vorlagen, für jede Show: ein neues Layout daraus, Import, Export.</translation>
     </message>
@@ -2371,22 +2403,22 @@
       <translation>Neues Layout aus</translation>
     </message>
     <message>
-      <location line="+6" />
-      <source>Remove template</source>
-      <translation>Vorlage entfernen</translation>
-    </message>
-    <message>
-      <location line="+6" />
+      <location line="+8" />
       <source>Import…</source>
       <translation>Importieren…</translation>
     </message>
     <message>
-      <location line="+4" />
+      <location line="+5" />
       <source>Export all…</source>
       <translation>Alle exportieren…</translation>
     </message>
     <message>
       <location line="+9" />
+      <source>Remove template…</source>
+      <translation>Vorlage entfernen…</translation>
+    </message>
+    <message>
+      <location line="+16" />
       <source>Import layout templates</source>
       <translation>Layout-Vorlagen importieren</translation>
     </message>
@@ -2841,7 +2873,7 @@
     </message>
     <message>
       <location line="+9" />
-      <location line="+12" />
+      <location line="+17" />
       <source>Inputs</source>
       <translation>Inputs</translation>
     </message>
@@ -2886,51 +2918,17 @@
       <translation>Dazu Overlay-Tasten und Tonleiste</translation>
     </message>
     <message>
-      <location line="+5" />
-      <source>S</source>
-      <comment>small tiles</comment>
-      <translation>S</translation>
-    </message>
-    <message>
-      <location line="+0" />
-      <source>M</source>
-      <comment>medium tiles</comment>
-      <translation>M</translation>
-    </message>
-    <message>
-      <location line="+0" />
-      <source>L</source>
-      <comment>large tiles</comment>
-      <translation>L</translation>
-    </message>
-    <message>
-      <location line="+2" />
-      <source>Small tiles</source>
-      <translation>Kleine Kacheln</translation>
-    </message>
-    <message>
-      <location line="+0" />
-      <source>Medium tiles</source>
-      <translation>Mittlere Kacheln</translation>
-    </message>
-    <message>
-      <location line="+0" />
-      <source>Large tiles</source>
-      <translation>Große Kacheln</translation>
-    </message>
-    <message>
-      <location line="+475" />
+      <location line="+490" />
       <source>Level of %1</source>
       <translation>Pegel von %1</translation>
     </message>
     <message>
-      <location line="-502" />
-      <location line="+5" />
+      <location line="-515" />
       <source>View</source>
       <translation>Ansicht</translation>
     </message>
     <message>
-      <location line="-502" />
+      <location line="-497" />
       <source>FTB</source>
       <comment>fade to black</comment>
       <translation>FTB</translation>
@@ -2946,7 +2944,7 @@
       <translation>Schwarzblende: Programm auf Schwarz und zurück (SWI.9); Show und Ausgänge laufen weiter</translation>
     </message>
     <message>
-      <location line="+538" />
+      <location line="+534" />
       <source>Multiview</source>
       <translation>Multiview</translation>
     </message>
@@ -2961,7 +2959,12 @@
       <translation>Pegelanzeigen</translation>
     </message>
     <message>
-      <location line="+48" />
+      <location line="+10" />
+      <source>Page</source>
+      <translation>Seite</translation>
+    </message>
+    <message>
+      <location line="+55" />
       <source>More input actions</source>
       <translation>Weitere Input-Aktionen</translation>
     </message>
@@ -3021,7 +3024,7 @@
       <translation>Breite der Tonspalte</translation>
     </message>
     <message>
-      <location line="-381" />
+      <location line="-360" />
       <source>Audio at the edge</source>
       <translation>Ton am Rand</translation>
     </message>
@@ -3031,7 +3034,7 @@
       <translation>Einfacher Modus</translation>
     </message>
     <message>
-      <location line="+90" />
+      <location line="+69" />
       <source>Find missing files…</source>
       <translation>Fehlende Dateien suchen…</translation>
     </message>
@@ -3967,7 +3970,7 @@
   <context>
     <name>Removals</name>
     <message>
-      <location filename="../qml/Removals.qml" line="+42" />
+      <location filename="../qml/Removals.qml" line="+43" />
       <source>Remove input %1 %2?</source>
       <translation>Input %1 %2 entfernen?</translation>
     </message>
@@ -4027,7 +4030,22 @@
       <translation>Bus %1 entfernt</translation>
     </message>
     <message>
-      <location line="+4" />
+      <location line="+6" />
+      <source>Remove template %1?</source>
+      <translation>Vorlage %1 entfernen?</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Layouts made from it stay. The template cannot be brought back.</source>
+      <translation>Layouts, die daraus entstanden sind, bleiben. Die Vorlage lässt sich nicht zurückholen.</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Remove template</source>
+      <translation>Vorlage entfernen</translation>
+    </message>
+    <message>
+      <location line="+5" />
       <source>Remove output %1?</source>
       <translation>Ausgang %1 entfernen?</translation>
     </message>
@@ -6353,6 +6371,42 @@
     </message>
   </context>
   <context>
+    <name>TileSizePicker</name>
+    <message>
+      <location filename="../qml/TileSizePicker.qml" line="+25" />
+      <source>S</source>
+      <comment>small tiles</comment>
+      <translation>S</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Small tiles</source>
+      <translation>Kleine Kacheln</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>M</source>
+      <comment>medium tiles</comment>
+      <translation>M</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Medium tiles</source>
+      <translation>Mittlere Kacheln</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>L</source>
+      <comment>large tiles</comment>
+      <translation>L</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Large tiles</source>
+      <translation>Große Kacheln</translation>
+    </message>
+  </context>
+  <context>
     <name>TitleField</name>
     <message>
       <location filename="../qml/TitleField.qml" line="+74" />
@@ -6618,24 +6672,7 @@
       <translation>Klick: Vorschau übernehmen. Rechtsklick: Effekt und Dauer.</translation>
     </message>
     <message>
-      <location line="+14" />
-      <location line="+59" />
-      <source>Effect</source>
-      <translation>Effekt</translation>
-    </message>
-    <message>
-      <location line="-47" />
-      <location line="+53" />
-      <source>Length</source>
-      <translation>Dauer</translation>
-    </message>
-    <message>
-      <location line="-47" />
-      <source>Stinger clip and cut point…</source>
-      <translation>Stinger-Clip und Cut-Punkt…</translation>
-    </message>
-    <message>
-      <location line="+22" />
+      <location line="+37" />
       <source>Quick play</source>
       <translation>Schnellstart</translation>
     </message>
@@ -6645,7 +6682,12 @@
       <translation>Klick: Vorschau mit diesem Effekt auf Programm und abspielen. Doppelklick auf den Vorschau-Monitor tut dasselbe. Rechtsklick: Effekt und Dauer.</translation>
     </message>
     <message>
-      <location line="+38" />
+      <location line="+11" />
+      <source>Quick play · Effect</source>
+      <translation>Schnellstart · Effekt</translation>
+    </message>
+    <message>
+      <location line="+21" />
       <source>T-bar</source>
       <translation>T-Bar</translation>
     </message>
@@ -6710,27 +6752,47 @@
       <translation>Rechtsklick: Einstellungen.</translation>
     </message>
     <message>
-      <location line="+18" />
+      <location line="+20" />
+      <source>Overlay %1 · on · %2</source>
+      <translation>Overlay %1 · an · %2</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Overlay %1 · off</source>
+      <translation>Overlay %1 · aus</translation>
+    </message>
+    <message>
+      <location line="+7" />
       <source>Show %1 %2 again</source>
       <translation>%1 %2 wieder zeigen</translation>
     </message>
     <message>
-      <location line="+7" />
+      <location line="+8" />
       <source>Not with the next take: %1 %2</source>
       <translation>Nicht mit dem nächsten Take: %1 %2</translation>
     </message>
     <message>
-      <location line="+5" />
+      <location line="+9" />
       <source>Settings…</source>
       <translation>Einstellungen…</translation>
     </message>
     <message>
-      <location line="-88" />
+      <location line="+2" />
+      <source>In a box</source>
+      <translation>In einer Box</translation>
+    </message>
+    <message>
+      <location line="-105" />
       <source>All overlays off</source>
       <translation>Alle Overlays aus</translation>
     </message>
     <message>
-      <location line="+2" />
+      <location line="-94" />
+      <source>Button %1 · Effect</source>
+      <translation>Knopf %1 · Effekt</translation>
+    </message>
+    <message>
+      <location line="+96" />
       <source>Takes every overlay channel off, each with its fade.</source>
       <translation>Nimmt alle Overlay-Kanäle heraus, jeden mit seiner Blende.</translation>
     </message>
