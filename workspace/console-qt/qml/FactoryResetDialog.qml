@@ -21,8 +21,8 @@ KanteDialog {
 
     title: qsTr("Reset to factory settings?")
     modal: true
-    width: Kirigami.Units.gridUnit * 24
-    kanteBarColor: KanteStyle.negativeTextColor
+    destructive: true
+    size: KanteDialog.Size.Small
     standardButtons: QQC2.Dialog.Ok | QQC2.Dialog.Cancel
     acceptText: qsTr("Reset settings")
     acceptEnabled: typed.text.trim().toLowerCase() === word.toLowerCase()

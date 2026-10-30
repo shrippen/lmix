@@ -21,10 +21,13 @@ import "."
  * while the bar has focus; `activated(index)` fires on every change made in the bar.
  *
  * `density` (1.54) saves height: Normal (heightMedium), Compact (three quarters of heightSmall,
- * smaller labels) and Band, a strip of unit(8) with one coloured segment per page in place of
- * the labels: the current page in the focus colour, a busy page in its kind's colour, the others
- * quiet; the label shows as the tooltip and stays the tab's accessible name. In Band the leading
- * and trailing items are hidden (they do not fit the strip); the app shows them elsewhere.
+ * at least as high as the leading and trailing items; smaller labels) and Band, a strip of
+ * unit(8) with one coloured segment per page in place of the labels: the current page in the
+ * focus colour, a busy page in its kind's colour, the others half as high in the muted text
+ * colour; the tooltip shows the label (then the page's tooltip), which stays the tab's
+ * accessible name. In Band the leading and trailing items are hidden (they do not fit the
+ * strip); the app shows them elsewhere. The segments tell the busy kinds apart by colour only,
+ * and the current page shows no busy state: keep Normal or Compact where an error must be seen.
  */
 FocusScope {
     id: bar
@@ -60,8 +63,10 @@ FocusScope {
 
     readonly property int count: rep.count
 
+    // Compact grows for leading or trailing items taller than it (a small button).
     implicitHeight: band ? KanteStyle.unit(8)
-                  : density === KantePageBar.Density.Compact ? Math.round(KanteStyle.heightSmall * 0.75)
+                  : density === KantePageBar.Density.Compact
+                    ? Math.max(Math.round(KanteStyle.heightSmall * 0.75), leadingRow.implicitHeight, trailingRow.implicitHeight)
                   : KanteStyle.heightMedium
     /** The tabs' labels: smaller in Compact. */
     readonly property font tabFont: {
@@ -69,14 +74,21 @@ FocusScope {
         if (density !== KantePageBar.Density.Compact) {
             return f
         }
-        return Qt.font({
+        // The label font as it is (weight, spacing), only smaller; by pixels when it has no
+        // point size.
+        const size = f.pointSize > 0
+            ? { pointSize: Math.max(6, f.pointSize * 0.85) }
+            : { pixelSize: Math.max(8, Math.round(f.pixelSize * 0.85)) }
+        return Qt.font(Object.assign({
             family: f.family,
-            pointSize: Math.max(6, f.pointSize * 0.85),
+            weight: f.weight,
+            italic: f.italic,
             capitalization: f.capitalization,
             letterSpacing: f.letterSpacing
-        })
+        }, size))
     }
-    implicitWidth: leadingRow.implicitWidth + row.implicitWidth + trailingRow.implicitWidth + 4 * KanteStyle.unit(8)
+    // Band hides the leading and trailing items: they take no room there.
+    implicitWidth: (band ? 0 : leadingRow.implicitWidth + trailingRow.implicitWidth) + row.implicitWidth + 4 * KanteStyle.unit(8)
     activeFocusOnTab: true
 
     Accessible.role: Accessible.PageTabList
@@ -163,7 +175,8 @@ FocusScope {
 
     Flickable {
         id: flick
-        anchors.left: leadingRow.right
+        // Hidden in Band, the leading row keeps its width: the segments start at the edge.
+        anchors.left: bar.band ? parent.left : leadingRow.right
         anchors.leftMargin: leadingRow.visible && leadingRow.children.length > 0 ? KanteStyle.unit(8) : 0
         anchors.right: bar.band ? parent.right : trailingRow.left
         anchors.rightMargin: KanteStyle.unit(8)
@@ -210,16 +223,20 @@ FocusScope {
                         visible: !bar.band && !tab.current && hover.hovered
                         color: KanteStyle.tint1Color
                     }
-                    // Band: one segment per page, a gap of one rule between them.
+                    // Band: one segment per page, a gap of one rule between them. The others
+                    // in the muted text colour (at least 3:1 on the ground: they show the pages
+                    // and where to click) and half as high, so the current and a busy page
+                    // stand out by their height too, not by colour alone.
                     Rectangle {
                         objectName: "kantePageSegment"
+                        readonly property bool full: tab.current || tab.busy
                         visible: bar.band
                         anchors.fill: parent
-                        anchors.topMargin: 1
+                        anchors.topMargin: full ? 1 : Math.round(parent.height / 2)
                         anchors.rightMargin: 1
                         color: tab.current ? KanteStyle.focusColor
                              : tab.busy ? bar.kindColor(tab.kind)
-                             : hover.hovered ? KanteStyle.tint2Color : KanteStyle.tint1Color
+                             : hover.hovered ? KanteStyle.strongTextColor : KanteStyle.mutedTextColor
                     }
                     // The raised current tab. Shapes outside the flickable are still painted by
                     // the software renderer (it ignores the clip for them): draw only in view.
@@ -277,7 +294,11 @@ FocusScope {
 
                     HoverHandler { id: hover }
                     TapHandler { onTapped: bar.select(tab.index) }
-                    QQC2.ToolTip.text: bar.band && tab.tip.length === 0 ? String(tab.modelData) : tab.tip
+                    // In Band the tooltip is the only place the name shows: the name, then its tip.
+                    readonly property string shownTip: !bar.band ? tab.tip
+                        : tab.tip.length > 0 ? String(tab.modelData) + "\n" + tab.tip
+                        : String(tab.modelData)
+                    QQC2.ToolTip.text: shownTip
                     QQC2.ToolTip.visible: hover.hovered && (bar.band || tab.tip.length > 0)
                     QQC2.ToolTip.delay: 500
                     Accessible.role: Accessible.PageTab
