@@ -1003,6 +1003,7 @@ DE = {
     'Picture and name': 'Bild und Name',
     'Also overlay buttons and the audio strip': 'Dazu Overlay-Tasten und Tonleiste',
     'S': 'S',
+    'ms': 'ms',
     'L': 'L',
     'Small tiles': 'Kleine Kacheln',
     'Medium tiles': 'Mittlere Kacheln',

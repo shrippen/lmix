@@ -1609,7 +1609,7 @@
       <location line="+52" />
       <source>ms</source>
       <comment>milliseconds</comment>
-      <translation type="unfinished" />
+      <translation>ms</translation>
     </message>
   </context>
   <context>
