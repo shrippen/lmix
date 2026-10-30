@@ -8,12 +8,17 @@
 #   scripts/run-local.sh              # CUDA mixer, 4 test inputs
 #   APP=audio scripts/run-local.sh    # on the Audio page
 #   MIXER=gl INPUTS=8 scripts/run-local.sh
+#   SLOTS=31 scripts/run-local.sh     # mixer slots (most inputs at once); lmix-core's default otherwise
 #   APP=both scripts/run-local.sh     # two windows, Mix and Show
 #   KEEP_WORK=1 scripts/run-local.sh  # keep logs (path printed at the end)
 set -euo pipefail
 
 MIXER="${MIXER:-cuda}"
 INPUTS="${INPUTS:-4}"
+# Slots are what a show can hold, the test inputs only fill some: without
+# SLOTS lmix-core takes its default (16), never fewer than INPUTS.
+SLOTS="${SLOTS:-}"
+((INPUTS <= 16)) || SLOTS="${SLOTS:-$INPUTS}"
 APP="${APP:-}"
 [[ "$APP" =~ ^(|mix|show|audio|outputs|setup|both)$ ]] \
     || { echo "APP is mix, show, audio, outputs, setup, both or empty, not $APP" >&2; exit 1; }
@@ -52,7 +57,7 @@ CONSOLE_DIR="${CARGO_TARGET_DIR:-$ROOT/workspace/console-qt/target}/release"
 PIDS+=($!)
 wait_up "http://127.0.0.1:${STROM_PORT}/health" strom
 "$CORE_BIN" --strom "http://127.0.0.1:${STROM_PORT}" --listen "127.0.0.1:${CORE_PORT}" --mixer "$MIXER" \
-    --slots "$INPUTS" --autosave "$WORK/autosave.lmix" --shortcuts "$WORK/shortcuts.json" --layout-templates "$WORK/layout-templates.json" --live-dir "$LIVE_DIR" >"$WORK/core.log" 2>&1 &
+    ${SLOTS:+--slots "$SLOTS"} --autosave "$WORK/autosave.lmix" --shortcuts "$WORK/shortcuts.json" --layout-templates "$WORK/layout-templates.json" --live-dir "$LIVE_DIR" >"$WORK/core.log" 2>&1 &
 PIDS+=($!)
 wait_up "$CORE/state" lmix-core
 

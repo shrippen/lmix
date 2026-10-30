@@ -45,6 +45,12 @@ QtObject {
         readonly property color scrim: "#9e141312"
         readonly property color stage: "#282828"
         readonly property color stageText: "#ebdbb2"
+        readonly property color string0: "#d3869b"
+        readonly property color string1: "#5ccfc4"
+        readonly property color string2: "#fabd2f"
+        readonly property color string3: "#fbf1c7"
+        readonly property color string4: "#bdae93"
+        readonly property color string5: "#5ccfc4"
     }
 
     readonly property QtObject light: QtObject {
@@ -82,6 +88,12 @@ QtObject {
         readonly property color scrim: "#80282828"
         readonly property color stage: "#282828"
         readonly property color stageText: "#ebdbb2"
+        readonly property color string0: "#bc2f6c"
+        readonly property color string1: "#076678"
+        readonly property color string2: "#8a5a00"
+        readonly property color string3: "#282828"
+        readonly property color string4: "#665c54"
+        readonly property color string5: "#0f6b66"
     }
 
     // Brand mark fill (icon, badges); not for controls.

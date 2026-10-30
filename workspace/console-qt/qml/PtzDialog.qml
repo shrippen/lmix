@@ -18,7 +18,7 @@ KanteDialog {
     required property var inputs
     /** Id of the input whose camera moves; set before `open()`. */
     property string inputId: ""
-    readonly property var input: inputs.find(i => i.id === inputId) || null
+    readonly property var input: StatePatch.byId(inputs, inputId) || null
     /** Store the next preset pressed instead of going there. */
     property bool storing: false
 

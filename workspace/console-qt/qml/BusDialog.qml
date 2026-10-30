@@ -11,6 +11,7 @@ KanteDialog {
     id: dialog
 
     required property var act
+    required property var askRemove
     required property var core
     /** `buses` of the show state. */
     property var buses: []
@@ -19,7 +20,7 @@ KanteDialog {
     /** `phones` of the show state. */
     property var phones: ({ volume: 100, mute: false, pre_fader: false })
     /** Levels as the bridge gives them. */
-    property var levels: ({})
+    property var levels: null
 
     title: qsTr("Master, headphones and buses")
     modal: true
@@ -34,6 +35,7 @@ KanteDialog {
         id: panel
         anchors.fill: parent
         act: dialog.act
+        askRemove: dialog.askRemove
         core: dialog.core
         buses: dialog.buses
         master: dialog.master

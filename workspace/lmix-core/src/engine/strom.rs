@@ -18,8 +18,8 @@
 
 use async_trait::async_trait;
 use lmix_types::{
-    BoxRect, BusId, ChannelStrip, Device, DeviceKind, Effect, Listen, Look, OutputId, OutputStats,
-    PageRunning, SignalLoss, SourceSpec, Transport,
+    BoxRect, BusId, ChannelStrip, Device, DeviceKind, Effect, Listen, LiveTransport, Look,
+    OutputId, OutputStats, PageRunning, SignalLoss, SourceSpec, Transport,
 };
 use reqwest::StatusCode;
 use serde::Serialize;
@@ -1578,6 +1578,10 @@ impl Engine for StromEngine {
             .await?;
         self.wait_playing(id).await?;
         Ok(socket)
+    }
+
+    fn live_transport(&self, picture: LivePicture) -> LiveTransport {
+        picture.transport(self.backend)
     }
 
     /// strom answers 504 while a tap has no frame yet (the first request

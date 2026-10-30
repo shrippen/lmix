@@ -11,7 +11,17 @@
 #   scripts/test-console-qt.sh
 #   KEEP_WORK=1 scripts/test-console-qt.sh   # keep logs and screenshots
 #   DISPLAY_NO=:96 STROM_PORT=8798 CORE_PORT=8898 scripts/test-console-qt.sh
+#
+# Clicks find their control by its accessible name (scripts/a11y.py,
+# needs at-spi2-core and PyGObject) where a row may gain a button, else
+# by pixel. A failure keeps a screenshot and the named controls.
 set -euo pipefail
+
+# In a D-Bus session of its own: lmix on an accessibility bus of its
+# own, apart from the desktop's.
+if [[ -z "${LMIX_TEST_SESSION:-}" ]]; then
+    LMIX_TEST_SESSION=1 exec dbus-run-session --config-file="$(dirname "$0")/test-session.conf" -- "$0" "$@"
+fi
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # Display and ports can be moved, so two runs on one machine stay apart.
@@ -37,6 +47,7 @@ fail() {
     echo "FAIL: $*"
     # What the screen showed when the check gave up.
     shot failed 2>/dev/null || true
+    DISPLAY="$DISPLAY_NO" python3 "$ROOT/scripts/a11y.py" dump >"$WORK/failed-controls.txt" 2>&1 || true
     KEEP_WORK=1
     exit 1
 }
@@ -71,6 +82,15 @@ own_qml_warnings() {
     grep -vE "$QT_KDE_QML" <<<"$found" | grep .
 }
 click() { DISPLAY="$DISPLAY_NO" xdotool mousemove "$1" "$2" click "${3:-1}"; }
+# Clicks the showing control whose accessible name matches $1 (a regex:
+# give the English and the German name), `-3` first for the right
+# button; further arguments go to `a11y.py find` (--role, --within, --nth).
+click_on() {
+    local button=1 at
+    [[ "$1" == -3 ]] && button=3 && shift
+    at="$(DISPLAY="$DISPLAY_NO" python3 "$ROOT/scripts/a11y.py" find "$@")" || fail "no control named /$1/ on the screen"
+    click "${at% *}" "${at#* }" "$button"
+}
 # Waits up to 60 s until the input in `preview`/`program` has number $2
 # (a busy VM handles clicks late).
 becomes() {
@@ -84,6 +104,11 @@ CORE_BIN="${CARGO_TARGET_DIR:-$ROOT/workspace/lmix-core/target}/release/lmix-cor
 CONSOLE_DIR="${CARGO_TARGET_DIR:-$ROOT/workspace/console-qt/target}/release"
 
 Xvfb "$DISPLAY_NO" -screen 0 1440x900x24 >/dev/null 2>&1 &
+PIDS+=($!)
+/usr/libexec/at-spi-bus-launcher --launch-immediately >/dev/null 2>&1 &
+PIDS+=($!)
+sleep 0.5
+/usr/libexec/at-spi2-registryd >/dev/null 2>&1 &
 PIDS+=($!)
 (cd "$WORK" && unset WAYLAND_DISPLAY && GST_GL_WINDOW=x11 DISPLAY="$DISPLAY_NO" exec "$STROM_BIN" \
     --host 127.0.0.1 --port "$STROM_PORT" --no-auto-restart --data-dir "$WORK/strom-data" \
@@ -108,13 +133,18 @@ unset WAYLAND_DISPLAY
 # Own settings: lmix writes style, keys, view and page settings on use,
 # never into the operator's ~/.config/lmix/lmix.conf.
 export XDG_CONFIG_HOME="$WORK/config" DISPLAY="$DISPLAY_NO" QT_QPA_PLATFORM=xcb QT_FORCE_STDERR_LOGGING=1 \
-    LMIX_CORE="http://127.0.0.1:${CORE_PORT}"
+    QT_LINUX_ACCESSIBILITY_ALWAYS_ON=1 LMIX_CORE="http://127.0.0.1:${CORE_PORT}"
 "$CONSOLE_DIR/lmix" --page mix >"$WORK/console.log" 2>&1 &
 PIDS+=($!)
-PROGRAM_AREA="440x240+720+140"
-PREVIEW_AREA="440x240+40+140"
-TILE_1="180x90+14+580"
-TILE_2="180x90+212+580"
+# Regions inside the pictures, from where the monitors and tiles are on
+# the screen (their boxes less the label rows at the edges).
+box_of() {
+    DISPLAY="$DISPLAY_NO" python3 "$ROOT/scripts/a11y.py" find "$1" --box "$2" --wait 60
+}
+PROGRAM_AREA="$(box_of "(Program|Programm): .*" 0.15)" || fail "no program monitor on the screen"
+PREVIEW_AREA="$(box_of "(Preview|Vorschau)(: .*)?" 0.15)" || fail "no preview monitor on the screen"
+TILE_1="$(box_of "Input 1 .*" 0.25)" || fail "no tile of input 1 on the screen"
+TILE_2="$(box_of "Input 2 .*" 0.25)" || fail "no tile of input 2 on the screen"
 # The tile's picture (medium, compact) is about 186×104 px: the ball is
 # a few px wide and a move changes some px. A still picture changes none.
 TILE_MOVED_PX=3
@@ -137,7 +167,7 @@ done
 [[ -n "$tile_1_moves" ]] && pass "tile 1 moves (ball)" || fail "tile 1 still"
 [[ -n "$tile_2_shows" ]] && pass "tile 2 shows its picture" || fail "tile 2 blank"
 
-click 303 630
+click_on "Input 2 .*"
 becomes preview 2
 [[ "$(number_of preview)" == 2 ]] && pass "click on a tile: preview" || fail "preview is $(number_of preview), not 2"
 # Cut acts on what the Console shows: wait until its preview has the picture.
@@ -146,7 +176,7 @@ for _ in $(seq 1 60); do
     awk "BEGIN { exit !($(spread p "$PREVIEW_AREA") > 0.05) }" && break
     sleep 1
 done
-click 608 128
+click_on "Cut" --role button
 becomes program 2
 [[ "$(number_of program)" == 2 ]] && pass "Cut: program" || fail "program is $(number_of program) after Cut"
 # The overlay grid beside the monitors is reachable at 1440 x 900 without
@@ -154,13 +184,13 @@ becomes program 2
 act '{"action":"preview_input","input":1}'
 becomes preview 1
 overlay_1() { state | jq -r '.overlays[0] // "none"'; }
-click 552 448
+click_on "Overlay 1: .*" --role button
 for _ in $(seq 1 40); do [[ "$(overlay_1)" != none ]] && break; sleep 0.5; done
 [[ "$(overlay_1)" != none ]] && pass "overlay 1 from the grid: on" || fail "overlay 1 not on after a click in the grid (hidden or moved?)"
 # Away first: the tooltip of channel 1 opens above it, over "All off".
 DISPLAY="$DISPLAY_NO" xdotool mousemove 1000 300
 sleep 1
-click 642 412
+click_on "All overlays off|Alle Overlays aus" --role button
 for _ in $(seq 1 40); do [[ "$(overlay_1)" == none ]] && break; sleep 0.5; done
 [[ "$(overlay_1)" == none ]] && pass "overlays: All off" || fail "overlay 1 still on after All off"
 # The audio column at the right edge (inputs on top, the ways out below):
@@ -187,7 +217,7 @@ click 1256 518
 for _ in $(seq 1 40); do [[ "$(listen_1)" != off ]] && break; sleep 0.5; done
 [[ "$(listen_1)" != off ]] && pass "audio column: S solos input 1" || fail "input 1 listen $(listen_1) after S"
 sleep 1 # "Solo off" shows once the Console has the new state
-click 1300 123
+click_on "Solo off|Solo aus" --role button
 for _ in $(seq 1 40); do [[ "$(listen_1)" == off ]] && break; sleep 0.5; done
 [[ "$(listen_1)" == off ]] && pass "audio column: Solo off ends it" || fail "input 1 listen $(listen_1) after Solo off"
 click 1231 555
@@ -261,7 +291,7 @@ click 1347 827
 for _ in $(seq 1 40); do [[ "$(bus_listen)" == true ]] && break; sleep 0.5; done
 [[ "$(bus_listen)" == true ]] && pass "audio column: S listens to the bus" || fail "bus listen $(bus_listen) after its S"
 sleep 1
-click 1300 123
+click_on "Solo off|Solo aus" --role button
 for _ in $(seq 1 40); do [[ "$(bus_listen)" == false ]] && break; sleep 0.5; done
 [[ "$(bus_listen)" == false ]] && pass "audio column: Solo off ends listening to the bus" \
     || fail "bus listen $(bus_listen) after Solo off"
@@ -332,7 +362,9 @@ curl -sf -X POST "$CORE/actions" -H 'content-type: application/json' \
     -d '{"action":"preview_layout","layout":1}' >/dev/null
 layout_id="$(state | jq -r '.layouts[0].id')"
 for _ in $(seq 1 40); do [[ "$(state | jq -r .preview)" == "$layout_id" ]] && break; sleep 0.5; done
-PREVIEW_CORNER="200x110+300+180"
+# The top right quarter of the preview's picture, where the layout has input 2.
+read -r pw ph px py < <(sed 's/[x+]/ /g' <<<"$PREVIEW_AREA")
+PREVIEW_CORNER="$((pw / 2 - 20))x$((ph / 2 - 20))+$((px + pw / 2 + 10))+$((py + 10))"
 layout_shows=""
 for _ in $(seq 1 40); do
     shot l
@@ -345,9 +377,21 @@ for _ in $(seq 1 40); do
 done
 [[ -n "$layout_shows" ]] && pass "preview monitor shows a layout" || fail "preview monitor blank with a layout on preview"
 
+# View as a popover: its switch sets the multiview's program side. Before
+# an input is removed: its "Bring back" widens the tools to two rows.
+multiview_program() { state | jq -r '.multiview.program // "right"'; }
+click_on "View|Ansicht" --role button
+sleep 1
+click_on "Program on the left|Programm links"
+for _ in $(seq 1 40); do [[ "$(multiview_program)" == left ]] && break; sleep 0.5; done
+[[ "$(multiview_program)" == left ]] && pass "View popover: program on the left" \
+    || fail "View popover: multiview program $(multiview_program) after its switch"
+DISPLAY="$DISPLAY_NO" xdotool key Escape
+act '{"action":"set_multiview","layout":{"program":"right","meters":"shown"}}'
+
 # "+ Input": the dialog opens on the test pattern; Ball, a name and the
 # footer's "Add input" give an input of that pattern and name.
-click 1162 540
+click_on "\\+ Input" --role button
 sleep 2
 click 836 262
 click 940 320
@@ -373,35 +417,37 @@ DISPLAY="$DISPLAY_NO" xdotool key ctrl+s
 for _ in $(seq 1 20); do [[ -f "$WORK/keys.lmix" ]] && break; sleep 0.5; done
 [[ -f "$WORK/keys.lmix" ]] && pass "Ctrl+S saves the show" || fail "Ctrl+S: no file saved"
 
-# View as a popover: its switch sets the multiview's program side.
-multiview_program() { state | jq -r '.multiview.program // "right"'; }
-click 490 540
-sleep 1
-click 488 681
-for _ in $(seq 1 40); do [[ "$(multiview_program)" == left ]] && break; sleep 0.5; done
-[[ "$(multiview_program)" == left ]] && pass "View popover: program on the left" \
-    || fail "View popover: multiview program $(multiview_program) after its switch"
-DISPLAY="$DISPLAY_NO" xdotool key Escape
-act '{"action":"set_multiview","layout":{"program":"right","meters":"shown"}}'
-
-# The input's menu removes at once; Ctrl+Z while the toast shows brings
-# the input back. A spare third input, so the tiles of the checks below stay.
+# The input's menu asks before it removes (Enter keeps the input, the red
+# button removes); Ctrl+Z while the toast shows brings the input back. A
+# spare third input, so the tiles of the checks below stay.
+confirm_remove() {
+    sleep 1.5
+    click_on "Remove input|Input entfernen" --role button
+}
 act '{"action":"add_input","source":{"kind":"pattern","pattern":"bars"},"name":"Spare"}'
 spare() { state | jq -r '.inputs[] | select(.name == "Spare") | .number'; }
 for _ in $(seq 1 40); do [[ -n "$(spare)" ]] && break; sleep 0.5; done
 sleep 2
 # The menu's quick row: Preview closes the menu and puts Spare into preview.
 spare_id() { state | jq -r '.inputs[] | select(.name == "Spare") | .id'; }
-click 500 625 3
+click_on -3 "Input 3 .*"
 sleep 1.5
-click 625 264
+click_on "Preview|Vorschau" --role button
 for _ in $(seq 1 20); do [[ "$(state | jq -r .preview)" == "$(spare_id)" ]] && break; sleep 0.5; done
 [[ "$(state | jq -r .preview)" == "$(spare_id)" ]] && pass "input menu: Preview in the quick row" \
     || fail "input menu: preview is $(state | jq -r .preview) after Preview in the quick row"
 sleep 1
-click 500 625 3
+click_on -3 "Input 3 .*"
 sleep 1.5
-click 564 880
+click_on "Remove|Entfernen"
+sleep 1.5
+DISPLAY="$DISPLAY_NO" xdotool key Return
+sleep 2
+[[ -n "$(spare)" ]] && pass "remove dialog: Enter keeps the input" || fail "remove dialog: Enter removed Spare"
+click_on -3 "Input 3 .*"
+sleep 1.5
+click_on "Remove|Entfernen"
+confirm_remove
 for _ in $(seq 1 40); do [[ -z "$(spare)" ]] && break; sleep 0.5; done
 [[ -z "$(spare)" ]] && pass "input menu: Remove" || fail "input menu: Spare still there after Remove"
 # The toast waits for the Console's state without Spare, a moment after
@@ -421,17 +467,18 @@ for _ in $(seq 1 40); do [[ -n "$(spare)" ]] && break; sleep 0.5; done
 # the refusal's line, which would move the tiles below.
 locked() { state | jq -r '.locked // false'; }
 sleep 1
-click 780 540
+click_on "Lock|Sperren" --role button
 for _ in $(seq 1 20); do [[ "$(locked)" == true ]] && break; sleep 0.5; done
 [[ "$(locked)" == true ]] || fail "Lock button: show not locked"
 # Twice: the same refusal again sets no new message, its answer counts.
 for _ in 1 2; do
-    click 500 625 3
+    click_on -3 "Input 3 .*"
     sleep 1.5
-    click 564 880
+    click_on "Remove|Entfernen"
+    confirm_remove
     sleep 1.5
 done
-click 780 540
+click_on "Locked|Gesperrt" --role button
 for _ in $(seq 1 20); do [[ "$(locked)" == false ]] && break; sleep 0.5; done
 [[ "$(locked)" == false ]] || fail "Lock button: show still locked"
 act "{\"action\":\"remove_input\",\"input\":$(spare)}"
@@ -446,9 +493,10 @@ act '{"action":"add_input","source":{"kind":"pattern","pattern":"bars"},"name":"
 for _ in $(seq 1 40); do [[ -n "$(spare)" ]] && break; sleep 0.5; done
 act '{"action":"add_shortcut","shortcut":{"label":"Program left","key":"Ctrl+Z","actions":[{"action":"set_multiview","layout":{"program":"left","meters":"shown"}}]}}'
 sleep 1.5
-click 500 625 3
+click_on -3 "Input 3 .*"
 sleep 1.5
-click 564 880
+click_on "Remove|Entfernen"
+confirm_remove
 for _ in $(seq 1 40); do [[ -z "$(spare)" ]] && break; sleep 0.5; done
 sleep 1
 DISPLAY="$DISPLAY_NO" xdotool key ctrl+z
@@ -484,18 +532,30 @@ drag_y() {
     sleep 0.1
     DISPLAY="$DISPLAY_NO" xdotool mouseup 1
 }
-drag_y 602 511 451
-setting_becomes monitorHeight 210 && pass "monitor grip: a drag sets the height" \
-    || fail "monitor grip: height $(view_setting monitorHeight) after a drag of 60 px up"
-# The grip stays put: the transition panel beside the monitors is higher.
-DISPLAY="$DISPLAY_NO" xdotool mousemove 602 511 click --repeat 2 --delay 80 1
-setting_becomes monitorHeight 270 && pass "monitor grip: a double click resets it" \
+# At 1440 x 900 the monitors are 270 px high, a little lower than the
+# transitions beside them: a drag of 100 px up stops at their height.
+grip="$(DISPLAY="$DISPLAY_NO" python3 "$ROOT/scripts/a11y.py" find "Height of the monitors|Höhe der Monitore")" \
+    || fail "no grip under the monitors"
+grip_x="${grip% *}" grip_y="${grip#* }"
+drag_y "$grip_x" "$grip_y" "$((grip_y - 100))"
+for _ in $(seq 1 20); do [[ -n "$(view_setting monitorHeight)" ]] && break; sleep 0.5; done
+height="$(view_setting monitorHeight)"
+awk "BEGIN { exit !($height > 170 && $height < 270) }" && pass "monitor grip: monitors stay as high as the transitions ($height)" \
+    || fail "monitor grip: height '$height' after a drag of 100 px up"
+# A double click goes back to the standard height (15 grid units), or
+# the most the halves beside the transitions give (a little less).
+grip="$(DISPLAY="$DISPLAY_NO" python3 "$ROOT/scripts/a11y.py" find "Height of the monitors|Höhe der Monitore")"
+DISPLAY="$DISPLAY_NO" xdotool mousemove ${grip% *} ${grip#* } click --repeat 2 --delay 80 1
+for _ in $(seq 1 20); do [[ "$(view_setting monitorHeight)" != "$height" ]] && break; sleep 0.5; done
+awk "BEGIN { exit !($(view_setting monitorHeight) > 250 && $(view_setting monitorHeight) <= 270) }" \
+    && pass "monitor grip: a double click resets it" \
     || fail "monitor grip: height $(view_setting monitorHeight) after a double click"
 
 # The grip left of the audio column: a drag to the left widens it, a
 # double click goes back to the standard width (12 grid units). A wide
-# column leaves less room than the input actions take in one row: they
-# wrap, and the column stays in the window with its grip at the pointer.
+# column leaves less room than the input actions take in one row: the
+# last ones go to the "⋯" menu, and the column stays in the window with
+# its grip at the pointer.
 drag_x() {
     DISPLAY="$DISPLAY_NO" xdotool mousemove "$(($1 + 3))" "$2"
     sleep 0.3
@@ -514,6 +574,15 @@ drag_x() {
 drag_x 1205 300 765
 setting_becomes mixerWidth 656 && pass "audio grip: a drag widens the column" \
     || fail "audio grip: width $(view_setting mixerWidth) after a drag of 440 px left"
+sleep 1
+! DISPLAY="$DISPLAY_NO" python3 "$ROOT/scripts/a11y.py" find "Data…|Daten…" --role button --wait 1 >/dev/null 2>&1 \
+    || fail "input actions: Data… still in the row beside a wide audio column"
+click_on "More input actions|Weitere Input-Aktionen" --role button
+sleep 1
+DISPLAY="$DISPLAY_NO" python3 "$ROOT/scripts/a11y.py" find "Data…|Daten…" --role "menu item" >/dev/null 2>&1 \
+    && pass "input actions: what has no room is in the ⋯ menu" || fail "input actions: Data… neither in the row nor in the ⋯ menu"
+DISPLAY="$DISPLAY_NO" xdotool key Escape
+sleep 1
 DISPLAY="$DISPLAY_NO" xdotool mousemove 765 300 click --repeat 2 --delay 80 1
 setting_becomes mixerWidth 216 && pass "audio grip: a double click resets it" \
     || fail "audio grip: width $(view_setting mixerWidth) after a double click"
@@ -529,14 +598,17 @@ setting_becomes mixerPathsHeight 0 && pass "paths grip: a double click resets it
 
 # Detail: the tiles get the overlay buttons and the audio row, and the
 # monitors give them room, so a row of tiles is not cut off.
-click 304 540
+click_on "View|Ansicht" --role button
+sleep 1
+click_on "Detail"
 setting_becomes detail true || fail "Detail not stored after a click"
+DISPLAY="$DISPLAY_NO" xdotool key Escape
 sleep 2
-click 22 708
+click_on "Overlay 1" --role "check box" --within "Input 1 .*"
 for _ in $(seq 1 40); do [[ "$(overlay_1)" != none ]] && break; sleep 0.5; done
 [[ "$(overlay_1)" == "$(state | jq -r '.inputs[0].id')" ]] && pass "detail: overlay 1 from the tile" \
     || fail "detail: overlay 1 is $(overlay_1) after a click on the tile's button"
-click 28 748
+click_on "Mute|Stumm" --role "check box" --within "Input 1 .*"
 for _ in $(seq 1 40); do [[ "$(audio_1)" == false ]] && break; sleep 0.5; done
 [[ "$(audio_1)" == false ]] && pass "detail: mute from the tile" || fail "detail: input 1 not muted from the tile (cut off?)"
 act '{"action":"set_audio","input":1,"on":true}'
@@ -557,7 +629,7 @@ xdotool key ctrl+2
 sleep 3
 shot show
 awk "BEGIN { exit !($(spread show 1400x700+20+60) > 0.05) }" && pass "Show page draws" || fail "Show page blank"
-PGM_SMALL="60x30+1262+862"
+PGM_SMALL="$(box_of "Program|Programm" 0.1)" || fail "no program in the page bar"
 small_shows=""
 for _ in $(seq 1 20); do
     shot s
@@ -578,8 +650,7 @@ until_true '[[ "$(standby)" == 2 && "$(cues_running)" -ge 1 ]]' && pass "show: s
     || fail "show: space did not GO (standby $(standby), running $(cues_running))"
 # A header button and its dialog (Keys, closed with Escape) must not
 # keep the keys: Escape closes the dialog, the cue keeps running.
-KEYS_BUTTON="1334 24"
-click $KEYS_BUTTON
+click_on "Keys|Tasten" --role button
 sleep 2
 key Escape
 sleep 1
@@ -594,11 +665,11 @@ until_true '[[ "$(cues_running)" == 0 ]]' && pass "show: Escape is panic" \
 # one, and space is GO there (the bar keeps no keys).
 act '{"action":"add_cue_list","name":"Encore","cues":[{"number":"11","name":"Bow","kind":"wait","duration_ms":30000}]}'
 active_list() { state | jq '[.cue_lists[] | .active] | index(true) + 1'; }
-SIDE_LISTS_TAB="1290 175"
-SIDE_LIST_2="1290 260"
-click $SIDE_LISTS_TAB
+click_on "Lists|Listen" --role "page tab"
 sleep 1
-click $SIDE_LIST_2
+# The second list's row, under the tab.
+lists_tab="$(DISPLAY="$DISPLAY_NO" python3 "$ROOT/scripts/a11y.py" find "Lists|Listen" --role "page tab")"
+click "${lists_tab% *}" "$((${lists_tab#* } + 85))"
 until_true '[[ "$(active_list)" == 2 ]]' && pass "show side bar: a click makes a list active" \
     || fail "show side bar: list $(active_list) active, not 2"
 key space
@@ -609,11 +680,11 @@ until_true '[[ "$(cues_running)" == 0 ]]' || fail "show side bar: Escape did not
 act '{"action":"set_active_cue_list","list":1}'
 # The inspector under the list (edit mode) shows the standby cue, 3
 # Lights: a new name goes to lmix-core on Enter, and space is GO again.
-INSPECTOR_NAME="500 719"
+inspector_name() { click_on "Cue name|Name des Cues" --role text; }
 until_true '[[ "$(state | jq '.cue_lists[0].standby')" == 3 ]]' || fail "inspector: standby not on cue 3"
 until_true '[[ "$(active_list)" == 1 ]]' || fail "inspector: list 1 not active"
 sleep 1 # the page shows list 1 again (it was set from outside)
-click $INSPECTOR_NAME
+inspector_name
 xdotool key ctrl+a
 xdotool type --delay 20 "Lamps"
 key Return
@@ -621,14 +692,20 @@ until_true '[[ "$(state | jq -r '.cue_lists[0].cues[2].name')" == Lamps ]]' && p
     || fail "inspector: cue 3 is named $(state | jq -r '.cue_lists[0].cues[2].name'), not Lamps"
 # Two quick edits: a name typed without Enter, then a follow on the
 # Triggers tab. Both stay (each sends only its own field).
-INSPECTOR_TRIGGERS_TAB="157 678"
-INSPECTOR_AFTER_WAIT="305 722"
-INSPECTOR_BASICS_TAB="61 678"
-click $INSPECTOR_NAME
+# The inspector's rows by its tabs (the page's height places them).
+inspector_tab() { click_on "$1" --role "page tab"; }
+below_tabs() {
+    local at
+    at="$(DISPLAY="$DISPLAY_NO" python3 "$ROOT/scripts/a11y.py" find "Basics|Grundlagen" --role "page tab")" \
+        || fail "no inspector on the screen"
+    click "$1" "$((${at#* } + 44))"
+}
+INSPECTOR_AFTER_WAIT=305
+inspector_name
 xdotool key ctrl+a
 xdotool type --delay 20 "Lamps 2"
-click $INSPECTOR_TRIGGERS_TAB
-click $INSPECTOR_AFTER_WAIT
+inspector_tab "Triggers|Auslöser"
+below_tabs $INSPECTOR_AFTER_WAIT
 until_true '[[ "$(state | jq -r '.cue_lists[0].cues[2].follow')" == after_wait ]]' \
     && [[ "$(state | jq -r '.cue_lists[0].cues[2].name')" == "Lamps 2" ]] \
     && pass "inspector: two quick edits both stay" \
@@ -638,17 +715,17 @@ until_true '[[ "$(state | jq -r '.cue_lists[0].cues[2].follow')" == after_wait ]
 act '{"action":"cue_standby","to":{"index":2}}'
 until_true '[[ "$(standby)" == 2 ]]' || fail "inspector: standby not on cue 2"
 sleep 1 # the inspector shows cue 2
-click $INSPECTOR_AFTER_WAIT
+below_tabs $INSPECTOR_AFTER_WAIT
 until_true '[[ "$(state | jq -r '.cue_lists[0].cues[1].follow')" == after_wait ]]' && pass "inspector: a choice follows the cue shown" \
     || fail "inspector: a click on After the post wait left cue 2 at $(state | jq -r '.cue_lists[0].cues[1].follow')"
 act '{"action":"update_cue","list":1,"cue":"2","changes":{"follow":"none"}}'
 act '{"action":"cue_standby","to":{"index":3}}'
 until_true '[[ "$(standby)" == 3 ]]' || fail "inspector: standby not back on cue 3"
 sleep 1 # the inspector shows cue 3 again
-click $INSPECTOR_BASICS_TAB
+inspector_tab "Basics|Grundlagen"
 # Standby moves on from outside while a field is being typed in: what
 # is typed still goes to the cue it began with.
-click $INSPECTOR_NAME
+inspector_name
 xdotool key ctrl+a
 act '{"action":"cue_standby","to":{"index":1}}'
 until_true '[[ "$(standby)" == 1 ]]' || fail "inspector: standby did not move from outside"
@@ -667,7 +744,7 @@ until_true '[[ "$(cues_running)" -ge 1 ]]' || fail "inspector: GO started nothin
 act '{"action":"cue_standby","to":{"index":3}}'
 until_true '[[ "$(standby)" == 3 ]]' || fail "inspector: standby not back on 3"
 name_before="$(state | jq -r '.cue_lists[0].cues[2].name')"
-click $INSPECTOR_NAME
+inspector_name
 xdotool key End
 xdotool type --delay 20 " typo"
 key Escape
@@ -686,21 +763,20 @@ act '{"action":"add_cue_list","name":"Look","cues":[{"number":"20","kind":"fade"
 act '{"action":"set_active_cue_list","list":3}'
 until_true '[[ "$(active_list)" == 3 ]]' || fail "inspector: list 3 not active"
 sleep 1 # the page shows list 3
-INSPECTOR_LEVELS_TAB="378 678"
-INSPECTOR_LEVEL_UP="233 722"
-INSPECTOR_LEVEL_TEXT="188 722"
-click $INSPECTOR_LEVELS_TAB
-click $INSPECTOR_LEVEL_UP
+INSPECTOR_LEVEL_UP=233
+INSPECTOR_LEVEL_TEXT=188
+inspector_tab "Levels|Pegel"
+below_tabs $INSPECTOR_LEVEL_UP
 until_true '[[ "$(state | jq '.cue_lists[2].cues[0].fade.gain_db')" == -9.5 ]]' && pass "inspector: + of a level goes to the cue" \
     || fail "inspector: fade level $(state | jq '.cue_lists[2].cues[0].fade.gain_db'), not -9.5"
-click $INSPECTOR_LEVEL_TEXT
+below_tabs $INSPECTOR_LEVEL_TEXT
 xdotool key ctrl+a
 xdotool type --delay 20 -- "-6"
 key Return
 until_true '[[ "$(state | jq '.cue_lists[2].cues[0].fade.gain_db==-6')" == true ]]' && pass "inspector: a typed level goes to the cue" \
     || fail "inspector: fade level $(state | jq '.cue_lists[2].cues[0].fade.gain_db'), not -6"
 # Escape in the box (the panic) drops what was typed there too.
-click $INSPECTOR_LEVEL_TEXT
+below_tabs $INSPECTOR_LEVEL_TEXT
 xdotool key ctrl+a
 xdotool type --delay 20 -- "-3"
 key Escape
@@ -710,7 +786,7 @@ sleep 1 # a save would have come back by now
 # The box shows a level changed afterwards: Enter there keeps it.
 act '{"action":"update_cue","list":3,"cue":"20","changes":{"fade":{"gain_db":-10}}}'
 sleep 1 # the page shows the new state
-click $INSPECTOR_LEVEL_TEXT
+below_tabs $INSPECTOR_LEVEL_TEXT
 key Return
 sleep 1 # a save would have come back by now
 [[ "$(state | jq '.cue_lists[2].cues[0].fade.gain_db==-10')" == true ]] && pass "inspector: the box follows the level after Escape" \
@@ -719,7 +795,7 @@ key space
 until_true '[[ "$(state | jq '.cue_lists[2].standby')" == 2 ]]' && pass "inspector: space is GO after a level" \
     || fail "inspector: no GO after a level (standby $(state | jq '.cue_lists[2].standby'))"
 key Escape
-click $INSPECTOR_BASICS_TAB
+inspector_tab "Basics|Grundlagen"
 act '{"action":"remove_cue_list","list":3}'
 own_qml_warnings console.log && fail "QML warnings (show): $(own_qml_warnings console.log | head -3)"
 pass "no QML warnings (show)"
@@ -769,8 +845,9 @@ shot tab-audio
 click $FIRST_TAB
 sleep 2
 shot tab-mix-again
-# By the page title (top left): the pages' pictures move on their own.
-PAGE_TITLE="300x40+0+55"
+# By the page title (in the header, after the file menu): the pages'
+# pictures move on their own.
+PAGE_TITLE="200x40+110+4"
 (($(moved tab-audio tab-mix-again "$PAGE_TITLE") > 50)) && (($(moved tab-mix tab-mix-again "$PAGE_TITLE") < 50)) \
     && pass "page bar: a tab after Ctrl+n switches again" || fail "page bar: the tab did not switch back after Ctrl+n"
 
@@ -782,11 +859,10 @@ xdotool key ctrl+2
 sleep 1
 xdotool key space
 until_true '[[ "$(cues_running)" -ge 1 ]]' || fail "no cue running before Panic all"
-PANIC_ALL="1383 879"
-click $PANIC_ALL
+click_on "Panic all|Panik: alles" --role button
 until_true '[[ "$(cues_running)" == 0 && "$(state | jq .fade_to_black)" == true ]]' \
     && pass "Panic all: cues stopped, program black" || fail "Panic all: running $(cues_running), black $(state | jq .fade_to_black)"
-click $PANIC_ALL
+click_on "Panic all|Panik: alles" --role button
 sleep 2
 [[ "$(state | jq .fade_to_black)" == true ]] && pass "Panic all twice: program stays black" || fail "a second Panic all faded program up"
 [[ "$(state | jq -r '.outputs[0].status.state')" == running ]] && pass "Panic all: the stream goes on" || fail "Panic all stopped the stream"
