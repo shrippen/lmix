@@ -123,19 +123,15 @@ KanteDialog {
         outputs: dialog.outputs
     }
 
-    ChoiceMenu {
+    BindingMenu {
         id: bindMenu
-        choices: {
-            var list = [{ value: "", label: qsTr("Not bound") }]
-            for (var i = 0; i < dialog.sources.length; i++) {
-                var s = dialog.sources[i]
-                for (var j = 0; j < s.columns.length; j++)
-                    list.push({ value: JSON.stringify({ source: s.id, column: s.columns[j] }), label: s.name + ": " + s.columns[j] })
-            }
-            return list
+        sources: dialog.sources
+        bound: {
+            const b = dialog.loaded && dialog.loaded.bindings ? dialog.loaded.bindings.find(x => x.field === dialog.binding) : null
+            return b ? { source: b.source, column: b.column } : null
         }
-        onPicked: value => dialog.act({ action: "title_bind", graphics: dialog.ref(), layer: dialog.layer,
-            field: dialog.binding, binding: value === "" ? null : JSON.parse(value) })
+        onPicked: binding => dialog.act({ action: "title_bind", graphics: dialog.ref(), layer: dialog.layer,
+            field: dialog.binding, binding: binding })
     }
 
     QQC2.ScrollView {

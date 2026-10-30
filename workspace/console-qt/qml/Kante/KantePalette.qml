@@ -107,6 +107,18 @@ QtObject {
     readonly property int heightSmall: 32
     readonly property int heightMedium: 40
     readonly property int heightLarge: 48
+    // Lines (px, not scaled): borders, marking lines, the colour edge of an entry; dash pattern.
+    readonly property int lineBorder: 1
+    readonly property int lineMark: 2
+    readonly property int lineEdge: 3
+    readonly property var dash: [6, 4]
+    // Tint levels and opacities.
+    readonly property real levelWash: 0.06
+    readonly property real levelFill: 0.12
+    readonly property real levelStrongFill: 0.22
+    readonly property real levelEdge: 0.4
+    readonly property real levelDone: 0.6
+    readonly property real levelDim: 0.5
 
     // Type
     readonly property string headingFamily: "Rajdhani"

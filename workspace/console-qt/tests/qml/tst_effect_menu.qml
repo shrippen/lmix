@@ -70,12 +70,12 @@ TestCase {
 
     function test_one_row_per_effect_and_the_lengths_last() {
         const menu = createTemporaryObject(menuComponent, test.Window.contentItem)
-        compare(texts(menu), ["Cut", "Fade", "Slide", "Stinger…", "Length"])
+        compare(texts(menu), ["Cut", "Fade", "Slide", "Stinger…", ""])
         const slide = itemNamed(menu, "Slide")
         compare(slide.checked, true)
         compare(slide.current, 1)
         menu.stinger = false
-        compare(texts(menu), ["Cut", "Fade", "Slide", "Length"])
+        compare(texts(menu), ["Cut", "Fade", "Slide", ""])
     }
 
     function test_choices_report() {
@@ -96,7 +96,7 @@ TestCase {
         menu.open()
         tryCompare(menu, "opened", true)
         const length = lengths(menu)
-        const segmented = length.contentItem.children.find(c => c.select !== undefined)
+        const segmented = length.trailing.find(c => c.select !== undefined)
         compare(segmented.currentIndex, 1)
         segmented.select(0)
         compare(picked, [250])
@@ -116,7 +116,7 @@ TestCase {
                 shown.push(menu.itemAt(i).text)
             }
         }
-        compare(shown, ["Button 1 · Effect", "Cut", "Fade", "Slide", "Stinger…", "Length", "Length"])
+        compare(shown, ["Button 1 · Effect", "Cut", "Fade", "Slide", "Stinger…", "Length", ""])
     }
 
     // A click on the effect already chosen toggled its tick off, and the
@@ -137,7 +137,7 @@ TestCase {
         compare(slide.checked, true, "Slide")
         menu.open()
         tryCompare(menu, "opened", true)
-        const right = slide.contentItem.children.find(c => c.text === "\u25b6")
+        const right = slide.trailing.find(c => c.text === "\u25b6")
         mouseClick(right)
         compare(right.checked, true, "\u25b6")
         compare(picked, ["fade", "slide_right", "slide_right"])
@@ -155,5 +155,18 @@ TestCase {
         length.step(1)
         length.step(-1)
         compare(picked, [1000, 500, 1000])
+    }
+
+    // The direction and length rows were MenuItems of their own (#181):
+    // they are KanteMenuItems now, their buttons and segments at the end.
+    function test_rows_are_kante_menu_items() {
+        const menu = createTemporaryObject(menuComponent, test.Window.contentItem)
+        const slide = itemNamed(menu, "Slide")
+        verify(slide.trailing !== undefined, "Slide is a KanteMenuItem")
+        compare(slide.trailing.filter(c => c.text === "\u25c0" || c.text === "\u25b6").length, 2)
+        const length = lengths(menu)
+        verify(length.trailing !== undefined, "Length is a KanteMenuItem")
+        verify(length.trailing.some(c => c.objectName === "segments"))
+        compare(length.Accessible.name, "Length")
     }
 }

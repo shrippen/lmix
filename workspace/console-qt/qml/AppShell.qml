@@ -172,6 +172,15 @@ Kirigami.ApplicationWindow {
             tools.parent = pageItems[i] === currentItem ? pageToolsSlot : pageItems[i]
         }
     }
+    /** An output's details on the Outputs page (its menu's Settings…). */
+    function showOutput(outputId) {
+        const page = pageItems.find(p => p.pageId === "outputs")
+        if (!page) {
+            return
+        }
+        page.selectedId = outputId
+        showPage("outputs")
+    }
     function showPage(id) {
         if (!pageItems.some(p => p.pageId === id)) {
             return

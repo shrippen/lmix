@@ -5444,3 +5444,26 @@ Kachelbild an.
 - Verworfen: die WebSocket-Verbindung der Console als Zuschauer zählen
   (auch Fernbedienungen ohne Kacheln halten sie) und Leser am Socket
   zählen (strom kann es nicht).
+
+## 2026-10-30 — Menüs: Effekt, Weitere Aktionen, Ausgang, Bindung, Cue-Farbe
+
+Umsetzung von `docs/DESIGN-DIALOGE.md` (Tafel 3/M08, M03, M07, M11, M12).
+
+- **Zeilenende in Kante:** `KanteMenuItem.trailing` (Kante 1.56) nimmt
+  Knöpfe und Segmente am Ende einer Menüzeile auf. Das Effektmenü baut
+  Richtung (◀ ▶) und Dauer damit, statt eigener Menüzeilen (#181).
+- **Weitere Aktionen (M03):** eigenes Bauteil `MoreActionsMenu`, Icons nur
+  wo eindeutig (Regel 5); „+ Input“ heißt im Menü „Input hinzufügen…“.
+- **Ausgang (M07):** Kopf mit Name, Art und Bitrate beim Senden. Gemessen
+  gibt es sie nur für SRT (`Core.links`); sonst zeigt der Kopf die
+  eingestellte Videorate. „Einstellungen…“ öffnet die Details auf der
+  Seite Outputs: ein Formular zum Ändern eines Ausgangs gibt es noch
+  nicht. „Statistik“ zeigt Laufzeit und Rate, bei SRT dazu Pakete und
+  RTT; Bildstatistik je Ausgang (späte, verworfene Bilder) liefert der Kern
+  der Console nicht. Die Adresse steht ohne Pfad und Query im Menü, damit
+  ein Stream-Key nicht zu sehen ist; kopiert wird sie ganz.
+- **Bindung (M11):** die Beispielwerte kommen aus `data_sources[].current`;
+  die Einträge entstehen nur neu, wenn Quellen oder Spalten wechseln, nicht
+  bei jeder neuen Zeile.
+- **Cue-Farbe (M12):** `KanteSwatchPicker` im `KantePopover`, „Keine“ als
+  erstes Feld.
