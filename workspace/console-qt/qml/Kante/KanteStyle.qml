@@ -430,6 +430,47 @@ QtObject {
     /** Smallest cut (stickers, small buttons); 0 in System. */
     readonly property int cutSmall: active ? unit(KantePalette.cutSmall) : 0
 
+    // ── Lines, markers and tints (Kante 1.56) ─────────────────────────────
+    // In every style, so a view drawn by hand (a time grid, a board) needs no sizes of its own.
+    // Weights, dash, levels and opacities come from tokens/palette.json (shape.lines, levels).
+    /** Borders and grid lines (web: 1 px borders). */
+    readonly property int borderWidth: KantePalette.lineBorder
+    /** Lines that mark: today, the picked day, the now line, an underline (web: 2 px lines). */
+    readonly property int lineWidth: KantePalette.lineMark
+    /** The colour edge of an entry: a calendar's or a project's colour on its left side. */
+    readonly property int edgeWidth: KantePalette.lineEdge
+    /** Its corners: square in the Kante style, slightly round elsewhere. */
+    readonly property int edgeRadius: themed ? 0 : 1
+    /** Small markers (day dots, legend keys): square in the Kante style, round elsewhere. */
+    readonly property int markerSize: Math.max(4, Math.round(Kirigami.Units.gridUnit / 4))
+    readonly property int markerRadius: themed ? 0 : Math.floor(markerSize / 2)
+    /** A thin meter (a day's load, progress inside a row). */
+    readonly property int meterHeight: Math.max(3, Math.round(Kirigami.Units.gridUnit / 5))
+    readonly property int meterRadius: themed ? 0 : Math.floor(meterHeight / 2)
+    /** Narrowest combo box in the Kante style (KanteFieldSkin), 120 px at a grid unit of 18. */
+    readonly property int comboMinimumWidth: unit(120)
+    /** A colour swatch in a legend or a menu. */
+    readonly property int swatchSize: Math.round(Kirigami.Units.gridUnit * 0.7)
+    /** Dash pattern of an edge that runs past its room (ShapePath.dashPattern, in line widths). */
+    readonly property var dashPattern: KantePalette.dash
+    /**
+     * Tint levels of a colour over the ground, for tint(c, level): wash (a tray, a quiet
+     * area), fill (free time, a draft), strongFill (a planned block), edge (the border of
+     * such an area).
+     */
+    readonly property real washLevel: KantePalette.levelWash
+    readonly property real fillLevel: KantePalette.levelFill
+    readonly property real strongFillLevel: KantePalette.levelStrongFill
+    readonly property real edgeLevel: KantePalette.levelEdge
+    /** Opacity of something done (a completed task). */
+    readonly property real doneOpacity: KantePalette.levelDone
+    /** Opacity of something out of range or minor: a day of another month, half-hour lines. */
+    readonly property real dimOpacity: KantePalette.levelDim
+    /** Height of one minute in an hour grid (an hour is 1.5 grid units). */
+    readonly property real minuteHeight: Kirigami.Units.gridUnit / 40
+    /** Height of one entry line in a month cell. */
+    readonly property real calendarEntryHeight: Kirigami.Units.gridUnit * 1.1
+
     // ── Motion ───────────────────────────────────────────────────────────
     // Warm and mechanical, never glitch. An app binds `motion` to its own
     // "animations" setting; without platform animations (durations 0) nothing moves.

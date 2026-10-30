@@ -13,7 +13,7 @@ import "."
  *   valueText     the current value of a setting the item opens, e.g. "Hold last frame"
  *   shortcutText  the shortcut as shown; empty: the action's shortcut (native text)
  *   destructive   the negative text colour (Remove, Factory settings)
- *   trailing      items at the row's end, after the value, in a row (1.56, from lmix: ◀ ▶ of a
+ *   trailing      items at the row's end, after the value, in a row (1.57, from lmix: ◀ ▶ of a
  *                 direction, the lengths as `KanteSegmented`); they take their own clicks, a
  *                 click beside them triggers the item. Draw them in `ink` to follow the highlight
  * Kante and Kante Light: the shortcut as `KanteKeycap`, the value in mono, small and muted.
@@ -38,7 +38,7 @@ QQC2.MenuItem {
                                  : destructive ? KanteStyle.negativeTextColor
                                  : Kirigami.Theme.textColor
 
-    /** Items at the row's end (1.56), laid out in a row after the value. */
+    /** Items at the row's end (1.57), laid out in a row after the value. */
     property alias trailing: trailingRow.data
 
     /** The value's label, for tests. */
