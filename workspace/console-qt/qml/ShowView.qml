@@ -33,7 +33,10 @@ ColumnLayout {
      *  script show; in show mode only running the show remains. */
     property bool editing: true
 
-    readonly property var lists: show && show.cue_lists ? show.cue_lists : []
+    readonly property var allLists: show && show.cue_lists ? show.cue_lists : []
+    /** Lists GO can go to; pad lists are shown as pads (RUN.12). */
+    readonly property var lists: allLists.filter(l => !l.pads)
+    readonly property var padLists: allLists.filter(l => l.pads)
     readonly property var list: {
         var active = lists.find(l => l.active)
         return active !== undefined ? active : (lists.length > 0 ? lists[0] : null)
@@ -49,6 +52,8 @@ ColumnLayout {
     onStandbyAtChanged: selectedId = ""
     readonly property var running: show && show.running_cues ? show.running_cues : []
     readonly property var runningIds: running.map(r => r.cue)
+    /** Cues that started since the show was opened or reset (SUI.12). */
+    readonly property var ranIds: show && show.ran_cues ? show.ran_cues : []
     readonly property var standbyCue: list && list.standby <= list.cues.length ? list.cues[list.standby - 1] : null
     readonly property bool fromScript: list !== null && list.source !== undefined && list.source !== null
     /** What would go wrong when the lists run (SUI.5). */
@@ -260,7 +265,7 @@ ColumnLayout {
             act: view.act
             inputs: view.show ? view.show.inputs : []
             outputs: view.show ? view.show.outputs : []
-            lists: view.lists
+            lists: view.allLists
             onClosed: view.forceActiveFocus()
         }
         KanteButton {
@@ -441,11 +446,16 @@ ColumnLayout {
                             readonly property var cue: modelData.cue
                             readonly property bool standby: modelData.depth === 0 && view.list.standby === modelData.top
                             readonly property bool runs: view.runningIds.indexOf(cue.id) >= 0
+                            readonly property bool ran: !runs && view.ranIds.indexOf(cue.id) >= 0
                             readonly property bool chosen: view.editing && inspector.cue !== null && inspector.cue.id === cue.id
 
                             width: cueView.width
                             implicitHeight: rowLayout.implicitHeight + Kirigami.Units.smallSpacing * 2
-                            color: standby ? KanteStyle.selectionColor : (chosen ? KanteStyle.tintHighlightColor : "transparent")
+                            // Ran: a second colour, so the way through the
+                            // show stays visible (SUI.12).
+                            color: standby ? KanteStyle.selectionColor
+                                : chosen ? KanteStyle.tintHighlightColor
+                                : ran ? KanteStyle.tint1Color : "transparent"
                             border.width: chosen ? 1 : 0
                             border.color: KanteStyle.focusColor
 
@@ -539,6 +549,21 @@ ColumnLayout {
                                     Layout.preferredWidth: Kirigami.Units.gridUnit * 6
                                     text: view.followLabel(row.cue.follow)
                                     color: KanteStyle.mutedTextColor
+                                }
+                                // Marked for a look later (SUI.12); set
+                                // while editing, shown always.
+                                KanteButton {
+                                    focusPolicy: Qt.NoFocus
+                                    visible: row.cue.flagged === true || (view.editing && !view.fromScript)
+                                    enabled: view.editing && !view.fromScript
+                                    size: KanteButton.Size.Small
+                                    emphasis: KanteButton.Emphasis.Quiet
+                                    text: row.cue.flagged === true ? "⚑" : "⚐"
+                                    Accessible.name: row.cue.flagged === true ? qsTr("Unmark cue") : qsTr("Mark cue")
+                                    QQC2.ToolTip.visible: hovered
+                                    QQC2.ToolTip.delay: Kirigami.Units.toolTipDelay
+                                    QQC2.ToolTip.text: row.cue.flagged === true ? qsTr("Marked: click to clear") : qsTr("Mark for a look later")
+                                    onClicked: view.updateCue(row.cue.id, { flagged: row.cue.flagged !== true })
                                 }
                             }
                         }
@@ -639,6 +664,14 @@ ColumnLayout {
         }
     }
 
+    // Pads (RUN.12): their cues start and stop on their own.
+    PadGrid {
+        Layout.fillWidth: true
+        visible: view.padLists.length > 0
+        act: view.act
+        lists: view.padLists
+        runningIds: view.runningIds
+    }
     // Each zone's level and volume (SUI.8).
     ZoneBar {
         Layout.fillWidth: true

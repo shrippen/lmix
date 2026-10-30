@@ -251,6 +251,7 @@ pub fn right_of(action: &Action) -> Right {
         | Action::UpdateCue { .. }
         | Action::SetDataAuto { .. }
         | Action::SetEmergencyList { .. }
+        | Action::SetCueListPads { .. }
         | Action::SetScriptFolder { .. }
         | Action::ExportSettings { .. }
         | Action::ImportSettings { .. }
@@ -333,6 +334,7 @@ pub fn right_of(action: &Action) -> Right {
         | Action::ShowBox { .. }
         | Action::CueGo { .. }
         | Action::CueStart { .. }
+        | Action::CueToggle { .. }
         | Action::CueStop { .. }
         | Action::CuePause { .. }
         | Action::CueResume { .. }

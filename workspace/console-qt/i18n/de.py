@@ -1157,8 +1157,19 @@ DE = {
     'Sound follows picture': 'Ton folgt Bild',
     'Tap, outputs, remove': 'Abgriff, Ausgänge, löschen',
     'The headphones hear only the solos. Click: all again.': 'Der Kopfhörer hört nur die Solos. Klick: wieder alle.',
+    'Pads': 'Pads',
+    'Stop %1': '%1 stoppen',
+    'Runs: click to stop': 'Läuft: Klick stoppt',
+    'Click to start': 'Klick startet',
+    'No cues in %1 yet': 'Noch keine Cues in %1',
+    'Pads: no standby and no GO, each cue starts and stops on its own': 'Pads: kein Standby und kein GO, jeder Cue startet und stoppt für sich',
+
+    'Mark cue': 'Cue markieren',
+    'Unmark cue': 'Markierung entfernen',
+    'Marked: click to clear': 'Markiert: Klick entfernt die Markierung',
+    'Mark for a look later': 'Zum späteren Ansehen markieren',
+
     'Plays nowhere on this machine': 'Spielt auf diesem Rechner nirgends',
-    'Level of %1': 'Pegel von %1',
 
     'Cards on and off': 'Karten an und aus',
     'Colour band': 'Farbband',

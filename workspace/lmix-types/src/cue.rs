@@ -50,7 +50,9 @@ pub const PANIC_DEFAULT_MS: u32 = 1000;
 pub const PANIC_MAX_MS: u32 = 10_000;
 
 /// Stable identity of a cue; survives renumbering and reordering (CUE.1).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
+#[derive(
+    Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema,
+)]
 #[serde(transparent)]
 pub struct CueId(pub Uuid);
 
@@ -173,6 +175,9 @@ pub struct Cue {
     pub note: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub color: Option<InputColor>,
+    /// Marked for a look later, e.g. in a rehearsal (SUI.12).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub flagged: bool,
     /// From the start to the action, 0–1 h in steps of 10 ms.
     #[serde(default)]
     pub pre_wait_ms: u32,
@@ -230,6 +235,7 @@ impl Cue {
             kind,
             note: String::new(),
             color: None,
+            flagged: false,
             pre_wait_ms: 0,
             post_wait_ms: 0,
             follow: Follow::None,
@@ -373,6 +379,9 @@ pub struct CueList {
     /// Runs with every panic and hard stop (SAF.4).
     #[serde(default)]
     pub emergency: bool,
+    /// A grid of pads: no standby, no GO (RUN.12).
+    #[serde(default)]
+    pub pads: bool,
 }
 
 /// Where a running cue is (RUN.3).

@@ -187,6 +187,9 @@ pub struct ShowState {
     /// Cues that run now, in start order (RUN.3).
     #[serde(default)]
     pub running_cues: Vec<crate::cue::RunningCue>,
+    /// Cues that started since the show was opened or reset (SUI.12).
+    #[serde(default)]
+    pub ran_cues: Vec<crate::cue::CueId>,
     /// Shortest gap between two GOs (RUN.6).
     #[serde(default)]
     pub go_guard_ms: u32,

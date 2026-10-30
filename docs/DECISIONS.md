@@ -5133,6 +5133,99 @@ weiter. Ein Cue in der Vorwartezeit hat noch kein Medium, er wartet nur.
 und `a_paused_video_holds_its_frame_and_resumes` (beide scheitern ohne
 die Sperre).
 
+## 2026-10-27 — Pads (RUN.12)
+
+**Entscheidung**: Pads sind eine Cue-Liste mit `pads: true`
+(`set_cue_list_pads`, mit der Show gespeichert), kein eigenes Objekt: so
+gelten Bearbeiten, Farben, Stopp und Panik wie für jede Liste. Auch
+als Notfall-Liste (SAF.4) laufen Pads mit: die Panik startet ihre Cues
+direkt, ohne GO.
+Eine Pad-Liste hat kein GO (abgelehnt) und ist nie die aktive Liste:
+`set_active_cue_list` lehnt sie ab, und ohne Wahl ist die erste Liste
+aktiv, die keine Pads ist. Ihr Standby bleibt unberührt.
+
+Ein Pad ist ein Knopf: `cue_toggle` startet den Cue wie `cue_start` oder
+stoppt ihn, solange er läuft (mit seiner Ausblendung). Companion braucht
+dafür kein Modul: `/lmix/cue/toggle <Liste> <Cue>` (neu, ebenso
+`/lmix/cue/start`), die Rückmeldung „läuft“ kommt wie bisher über einen
+OSC-Abonnenten (CTL.4).
+
+Console: unter der Show-Ansicht ein Raster je Pad-Liste (bei mehreren eine
+Auswahl), ein Knopf je Cue der obersten Ebene, laufende hervorgehoben, die
+Cue-Farbe als Streifen darunter. Im Listen-Dialog der Schalter „Pads“;
+GO, Zurück und Standby fehlen dort für Pads. Die Auswahl der Liste in der
+Show-Ansicht zeigt nur Listen mit GO.
+
+**Geprüft**: `pads_take_no_go_and_toggle`, `a_list_becomes_pads`, OSC-Test
+für `/lmix/cue/toggle` und `/lmix/cue/start`.
+
+## 2026-10-27 — Cues markieren und „gelaufen“ (SUI.12)
+
+**Entscheidung**: Eine Markierung ist ein Feld des Cues (`flagged`), gesetzt
+und gelöscht über `update_cue` (`{"flagged": true}`) und mit der Show
+gespeichert: wer in der Probe einen Cue zum Nacharbeiten markiert, findet
+ihn morgen wieder. Ohne Markierung steht das Feld nicht in der Datei.
+Listen aus einem Skript werden dort bearbeitet und lassen sich daher in
+der Console nicht markieren.
+
+„Gelaufen“ ist dagegen Laufzeit: der Runner merkt sich jeden Cue, der
+gestartet wurde (auch Cues in Gruppen), bis zum Reset (RUN.11) oder zur
+nächsten Show; `ShowState.ran_cues`. Ein laufender Cue zählt als
+laufend, nicht als gelaufen.
+
+Console: in der Cue-Liste ein ⚑ je Zeile (beim Bearbeiten umschaltbar, im
+Show-Modus nur sichtbar, wenn gesetzt); gelaufene Zeilen bekommen einen
+leichten Hintergrund (Kante `tint1Color`), Standby und Auswahl behalten
+ihre Farben.
+
+**Geprüft**: `started_cues_count_as_ran_until_a_reset`,
+`a_cue_is_flagged_and_unflagged`.
+
+## 2026-10-27 — decklink-Plugin mit Patch, Vorlauf 60 ms mit ihm
+
+**Befund**: Der Patch für die Epoche (oben, „SDI-/HDMI-Karte“, Offen)
+reichte allein nicht; spätere Starts zeigten mit ihm noch 150–205
+verspätete Bilder. Zwei weitere Ursachen in `decklinkvideosink`, beide
+mit `GST_DEBUG=decklinkvideosink:6` belegt:
+
+- Die Uhr des Sinks zählt erst ab ihrem ersten Lesen nach dem Start der
+  Karte (`gst_decklink_clock_get_internal_time`). Kommt das Lesen später
+  als `StartScheduledPlayback`, hinkt die Uhr der Wiedergabe der Karte
+  hinterher (gemessen 38 ms), jedes Bild wird so viel zu spät geplant.
+- `render()` rundet die Bildzeit auf das Bildraster ab. Damit frisst
+  das Runden bis zu eine Bilddauer (40 ms bei 25 fps) des Vorlaufs,
+  den das Warten davor lässt; ein Bild, gedacht für 0,193 s, geplant
+  für 0,160 s, kam um 0,163 s bei der Karte an.
+
+**Entscheidung**: lmix liefert GStreamers decklink-Plugin mit einem
+Patch aus drei Teilen aus (`packaging/gstreamer/decklink-start-on-frame-grid.patch`):
+Epoche aufs Raster, Uhr beim Start verankern, auf das nächste Raster
+aufrunden. `scripts/decklink-plugin.sh` baut nur `sys/decklink` aus
+dem gst-plugins-bad-Release, das zur installierten GStreamer-Version
+passt (Prüfsumme gegen Übertragungsfehler; sie kommt vom selben Server,
+ist also keine Herkunftsprüfung), und legt es in ein Verzeichnis
+für `GST_PLUGIN_PATH`; es baut neu, wenn sich Version oder Patch ändern.
+`run-local.sh`, `test-sdi-loop.sh` und `measure-sdi-latency.sh` nehmen
+es (`DECKLINK_PLUGIN=system` lässt das installierte), die systemd-Unit
+von strom zeigt mit `GST_PLUGIN_PATH` auf `~/.local/share/lmix/gstreamer`.
+Der Vorlauf sinkt mit dem Patch auf 60 ms; ohne bleibt er bei 150 ms,
+denn beide Ursachen treffen auch den ersten Start (bis 38 + 40 ms). Weil
+lmix-core nicht sieht, welches Plugin strom lädt, setzt ihn
+`--card-lead-ms` (`LMIX_CARD_LEAD_MS`): Die Skripte setzen 60, sobald
+sie das Plugin gebaut haben, in der systemd-Einrichtung steht er in
+`core.env` (Review #169).
+
+Verworfen: strom neu starten, wenn ein Kartenausgang neu startet (nimmt
+alle Flows mit), und ein höherer Vorlauf (half gegen die Epoche nicht,
+kostet Latenz). Die Meldung an GStreamer (`docs/upstream/gstreamer-decklink-restart.md`,
+jetzt mit allen drei Teilen) bleibt beim Owner; mit dem Fix upstream
+entfällt das eigene Plugin.
+
+**Geprüft**: `scripts/test-sdi-loop.sh` mit allen vier Modi im selben
+strom (je Lauf 4 Starts): mit Patch und 150 ms 3 von 3 Läufen ohne
+verspätetes oder verworfenes Bild, mit 60 ms ebenso 3 von 3. Nur mit
+dem Epochen-Teil: 153–205 verspätete Bilder bei einem Teil der Starts.
+
 ## 2026-10-27 — Zonen-Leiste (SUI.8)
 
 **Entscheidung**: Jede Zone bekommt im Wiedergabe-Flow hinter ihrem

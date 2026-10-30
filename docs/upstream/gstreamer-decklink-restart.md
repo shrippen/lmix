@@ -17,7 +17,7 @@ The second time a `decklinkvideosink` on the same device starts scheduled playba
 
 ### How to reproduce
 
-GStreamer 1.28.8, DeckLink Quad 2, Desktop Video 16.4, Fedora 44. The code is the same on `main` (checked 2026-10-27).
+GStreamer 1.28.8, DeckLink Quad 2, Desktop Video 16.4, Fedora 44. The code is the same on `main` (checked 2026-10-27; reproduced again 2026-10-28).
 
 ```python
 import gi, sys, time
@@ -34,12 +34,14 @@ for run in (1, 2):
     p.set_state(Gst.State.NULL)
 ```
 
-With `GST_DEBUG=decklinkvideosink:5`, counting `Late Frame` and `Dropped Frame` per `Starting scheduled playback`:
+With `GST_DEBUG=decklinkvideosink:5`, counting `Late Frame` and `Dropped Frame` per `Starting scheduled playback`. In 8 of 10 runs of the script, the second playback has every frame late:
 
 ```
-run 1: playback starts at 0:00:00.000000000, 0 late, 0 dropped
-run 2: playback starts at 0:00:05.960102995, 150 late, 0 dropped   <- every frame
+run 1: playback starts at 0:00:00.000000000, 0 late, 1 dropped
+run 2: playback starts at 0:00:05.968715445, 150 late, 0 dropped   <- every frame
 ```
+
+In the other 2 runs the second playback had 1 late frame (start at 5.941 s and 5.960 s); whether it fails depends on where between two frames the first playback stopped.
 
 ### Expected behavior
 
@@ -74,16 +76,61 @@ Put the epoch on the frame grid before the start time is read, in `gst_decklink_
  
 ```
 
-With it, the same script gives:
+With it (and the two changes below), the second playback starts on the grid. In 5 of 5 runs of the script:
 
 ```
-run 1: playback starts at 0:00:00.000000000, 0 late, 4 dropped (first frames)
-run 2: playback starts at 0:00:06.000000000, 0 late, 1 dropped
+run 1: playback starts at 0:00:00.000000000, 0 or 1 late, 0 dropped
+run 2: playback starts at 0:00:06.000000000, 0 late, 0 dropped     (once 5.960, also on the grid)
 ```
 
-In lmix (strom flows with direct media timing, `scripts/test-sdi-loop.sh` on an SDI loop) every start after the first plays all frames late without the fix. With the fix, later starts there still failed now and then until the sink's `processing-deadline` was raised to 150 ms; that part may come from our pipeline and is not part of this report.
+### Two more causes of late frames
 
-<!-- Note for lmix (not for upstream): the reproduction above is the clean case. Before filing, re-run restart.py on the current GStreamer. -->
+With only the change above, later starts in a real pipeline (strom flows with direct media timing on an SDI loop, `scripts/test-sdi-loop.sh` in lmix) still showed 150–205 late frames now and then. Two more things in the sink make frames late; both show on the first start too, but there the margin usually hides them.
+
+**The clock starts counting late.** `gst_decklink_clock_get_internal_time()` sets `clock_start_time` at its first reading after the card started, not when playback starts. If that reading comes tens of milliseconds after `StartScheduledPlayback()`, the internal time lags the card's playback by as much (38 ms measured), and every frame is scheduled that much too late. Anchoring the clock where playback starts fixes it:
+
+```diff
+@@ -2437,6 +2455,21 @@
+       "Starting scheduled playback at %" GST_TIME_FORMAT,
+       GST_TIME_ARGS (start_time));
+ 
++  // The clock counts from its first reading after the start (see
++  // gst_decklink_clock_get_internal_time()), which may come tens of
++  // milliseconds after the card starts, and then lags the card's playback
++  // by as much: frames arrive late. Anchor it here, where playback starts
++  // at start_time.
++  {
++    BMDTimeValue now;
++    if (self->output->output->GetHardwareReferenceClock (GST_SECOND, &now,
++            NULL, NULL) == S_OK && now >= 0) {
++      GstClockTime last = self->output->clock_last_time;
++      self->output->clock_start_time =
++          (GstClockTime) now > last ? (GstClockTime) now - last : 0;
++    }
++  }
++
+   res =
+       self->output->output->StartScheduledPlayback (start_time,
+       GST_SECOND, 1.0);
+```
+
+**`render()` rounds down.** It schedules a frame on the frame slot at or before its running time. The wait before it leaves the frame 30 ms ahead of its time (`processing-deadline`); rounding down takes up to one frame duration of that (40 ms at 25 fps), so the frame reaches the card after its slot. Logged on one late frame: running time 0.193 s, scheduled for 0.160 s, handed to the card at 0.163 s. Rounding up keeps the margin:
+
+```diff
+@@ -2234,8 +2234,11 @@
+     frame_duration =
+         gst_util_uint64_scale_int (GST_SECOND, self->output->mode->fps_d,
+         self->output->mode->fps_n);
+-    running_time = gst_util_uint64_scale (running_time, 1, frame_duration);
+-    running_time = gst_util_uint64_scale_ceil (running_time, frame_duration, 1);
++    // Up to the next frame slot: rounded down, a frame lands up to one
++    // frame duration before its time, which eats the 30 ms the wait above
++    // leaves, and it reaches the card late.
++    running_time = gst_util_uint64_scale_ceil (running_time, 1, frame_duration);
++    running_time = gst_util_uint64_scale (running_time, frame_duration, 1);
+```
+
+With all three changes, three runs of four starts each (1080p25, 1080i50, 1080psf25, 720p50) in one process showed no late or dropped frame. The full patch is `packaging/gstreamer/decklink-start-on-frame-grid.patch` in lmix.
 
 ### Workaround
 

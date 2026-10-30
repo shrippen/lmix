@@ -231,6 +231,9 @@ pub struct ShowCueList {
     /// runs after a load.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub standby: Option<lmix_types::CueId>,
+    /// A grid of pads: no standby, no GO (RUN.12).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub pads: bool,
 }
 
 /// One shortcut as saved.
@@ -927,6 +930,7 @@ mod tests {
                 cues: vec![Cue::actions("Bars", vec![Action::Cut])],
                 source: None,
                 standby: None,
+                pads: false,
             }],
             go_guard_ms: 120,
             go_rearm: lmix_types::cue::GoRearm::Release,

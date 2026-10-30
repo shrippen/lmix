@@ -135,7 +135,7 @@ ausgeschlossen. **MS**: Meilenstein (§7). Stand: ✅ vorhanden · ◐ teilweise
 | RUN.9 | Sperren je Ein- und Ausgabeklasse (Netz rein/raus, HTTP, MIDI, OSC): z. B. Probe ohne Lichtpult oder kein fremdes GO; betroffene Cues zeigen Warnung; per Aktion und API schaltbar | S | S2 | ◐ (`set_io_lock`: OSC, MIDI, TCP rein und Ziele raus; Panik geht immer durch; Cues an Ziele warnen; Setup → Steuerung. HTTP/WebSocket nicht sperrbar, die Console spricht darüber) |
 | RUN.10 | Vorhören: einzelnen Cue ohne Vorwartezeit und Folge abspielen, Standby bleibt; Umleitung je Ausgabeart (unverändert, stumm, andere Zone, Monitorfenster) | S | S2 | – |
 | RUN.11 | Show zurücksetzen: harter Stopp, vorübergehende Änderungen verwerfen, alle Standbys auf den Anfang | S | S1 | ✅ |
-| RUN.12 | Raster: Tastenfläche ohne Standby für spontane Effekte, je Feld ein Cue; Companion-Taste je Feld | S | S2 | – |
+| RUN.12 | Raster: Tastenfläche ohne Standby für spontane Effekte, je Feld ein Cue; Companion-Taste je Feld | S | S2 | ✅ (Cue-Liste als Pads: `set_cue_list_pads`, kein GO, nie aktiv; `cue_toggle` startet oder stoppt; OSC `/lmix/cue/toggle <Liste> <Cue>` für Companion; Console: Raster unter der Show-Ansicht, Schalter im Listen-Dialog) |
 | RUN.13 | Ab Zeitpunkt starten (auch negativ ab Ende), gilt für die ganze Folge | K | S3 | – |
 | RUN.14 | Start mitten in der Show mit Zustand nachziehen: dauerhafte Klänge und Bühne des Abschnitts herstellen (lmix) | K | S3 | – |
 
@@ -277,7 +277,7 @@ QLab kennt keinen Import aus Texten; am nächsten kommt das Anlegen von Cues
 | SUI.9 | Gestaltung nach Kante (UI.9), Texte aus Katalogen de/en (NFA.11) | M | S1 | ✅ |
 | SUI.10 | Cues in der Oberfläche anlegen, bearbeiten, umsortieren, umnummerieren (wenn kein Drehbuch-Betrieb) | S | S2 | ◐ (Cue-Dialog AUT.14) |
 | SUI.11 | Standby unabhängig von der Auswahl (bearbeiten, während ein anderer Cue auf Standby steht) | S | S2 | – |
-| SUI.12 | Cue markieren (Prüfliste) und Zweitfarbe „bereits gelaufen“ | K | S2 | – |
+| SUI.12 | Cue markieren (Prüfliste) und Zweitfarbe „bereits gelaufen“ | K | S2 | ✅ (`flagged` am Cue über `update_cue`, gespeichert; `ShowState.ran_cues` bis Reset oder neue Show; Console: ⚑ je Zeile, gelaufene Zeilen getönt) |
 | SUI.13 | Felder und Funktionen je nach Modus zeigen oder verbergen; Seltenes hinter „Erweitert“ (S-E.5) (lmix) | S | S1 | ◐ („Erweitert“ in der Show-Ansicht) |
 
 ### 3.11 Show-Datei (SSH)

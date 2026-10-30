@@ -1679,6 +1679,7 @@ impl Service {
             }
             Action::CueGo { .. }
             | Action::CueStart { .. }
+            | Action::CueToggle { .. }
             | Action::CueStop { .. }
             | Action::CuePause { .. }
             | Action::CueResume { .. }
@@ -1697,6 +1698,9 @@ impl Service {
                             sw.cue_go(list.as_ref(), now, held)?
                         }
                         Action::CueStart { list, cue } => sw.cue_start(list.as_ref(), cue, now)?,
+                        Action::CueToggle { list, cue } => {
+                            sw.cue_toggle(list.as_ref(), cue, now)?
+                        }
                         Action::CueStop { list, cue, .. } => {
                             sw.cue_stop(list.as_ref(), cue.as_deref(), now)?
                         }

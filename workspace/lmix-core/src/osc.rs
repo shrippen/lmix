@@ -21,6 +21,8 @@
 //! | `/lmix/cue/stop` | list, or none for every cue | `cue_stop` |
 //! | `/lmix/cue/pause` | list, or none for every cue | `cue_pause` (RUN.5) |
 //! | `/lmix/cue/resume` | list, or none for every cue | `cue_resume` |
+//! | `/lmix/cue/start` | list, cue (number or id) | `cue_start` |
+//! | `/lmix/cue/toggle` | list, cue (number or id) | `cue_toggle`: a pad (RUN.12) |
 //! | `/lmix/cue/release` | none | the GO button is let go (RUN.6) |
 //! | `/lmix/panic` | time in ms (int) or s (float), or none | `cue_panic` (twice: hard stop) |
 //! | `/lmix/stop/hard` | – | `cue_hard_stop` |
@@ -370,6 +372,19 @@ pub fn request(message: &Message) -> Result<Request, String> {
                 _ => Action::CueResume { list, cue: None },
             }
         }
+        // A pad's button: a list and a cue (RUN.12).
+        ["cue", step @ ("start" | "toggle")] => {
+            let list = Some(input(0)?);
+            let cue = match arg(1) {
+                Some(Arg::Str(cue)) => cue.clone(),
+                Some(Arg::Int(number)) => number.to_string(),
+                _ => return Err("a list and a cue (number or id)".into()),
+            };
+            match *step {
+                "start" => Action::CueStart { list, cue },
+                _ => Action::CueToggle { list, cue },
+            }
+        }
         ["cue", step @ ("go" | "back" | "stop")] => {
             let list = arg(0).map(|_| input(0)).transpose()?;
             match *step {
@@ -715,6 +730,27 @@ mod tests {
                 cue: None
             }))
         );
+        assert_eq!(
+            req(
+                "/lmix/cue/toggle",
+                vec![Arg::Str("Pads".into()), Arg::Int(3)]
+            ),
+            Ok(Request::Action(Action::CueToggle {
+                list: Some(InputRef::Text("Pads".into())),
+                cue: "3".into()
+            }))
+        );
+        assert_eq!(
+            req(
+                "/lmix/cue/start",
+                vec![Arg::Int(2), Arg::Str("Thunder".into())]
+            ),
+            Ok(Request::Action(Action::CueStart {
+                list: Some(InputRef::Number(2)),
+                cue: "Thunder".into()
+            }))
+        );
+        assert!(req("/lmix/cue/toggle", vec![Arg::Int(2)]).is_err());
         assert_eq!(
             req("/lmix/program", vec![Arg::Str("Cam".into())]),
             Ok(Request::Action(Action::CutDirect {

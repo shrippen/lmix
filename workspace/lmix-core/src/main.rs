@@ -191,6 +191,12 @@ struct Args {
     #[arg(long, env = "LMIX_GOOGLE_API_KEY", hide_env_values = true)]
     google_api_key: Option<String>,
 
+    /// How long before its time a frame goes to a DeckLink card, in ms:
+    /// 60 with GStreamer's decklink plugin patched
+    /// (scripts/decklink-plugin.sh), else the default.
+    #[arg(long, env = "LMIX_CARD_LEAD_MS", default_value_t = engine::flows::CARD_LEAD_MS)]
+    card_lead_ms: u64,
+
     /// Show file to open at start; without it the last autosave is resumed.
     #[arg(long, env = "LMIX_SHOW")]
     show: Option<String>,
@@ -269,6 +275,7 @@ async fn main() -> anyhow::Result<()> {
     if let Some(key) = args.google_api_key.clone().filter(|k| !k.trim().is_empty()) {
         datasource::set_google_api_key(key.trim().to_string());
     }
+    engine::flows::set_card_lead_ms(args.card_lead_ms);
     metrics::started();
     let engine: Arc<dyn Engine> = match args.engine {
         EngineKind::Strom => {
