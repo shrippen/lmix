@@ -2325,9 +2325,17 @@ mod tests {
 
         engine.start(2).await.unwrap();
 
-        let alphas = alphas.lock().unwrap().clone();
-        assert!(!alphas.is_empty(), "the tile pads are set");
-        assert!(alphas.iter().all(|a| a == 1.0), "{alphas:?}");
+        let lit = alphas.lock().unwrap().clone();
+        assert!(!lit.is_empty(), "the tile pads are set");
+        assert!(lit.iter().all(|a| a == 1.0), "{lit:?}");
+
+        // No Console of this lmix-core asked within the lease: strom gets
+        // the pads dark (review of #187).
+        alphas.lock().unwrap().clear();
+        engine.dim_tiles().await;
+        let dark = alphas.lock().unwrap().clone();
+        assert_eq!(dark.len(), lit.len(), "{dark:?}");
+        assert!(dark.iter().all(|a| a == 0.0), "{dark:?}");
     }
 
     /// Whether a Console still reads the tiles is unknown when strom does
