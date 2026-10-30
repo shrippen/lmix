@@ -1583,18 +1583,18 @@
   <context>
     <name>EffectMenu</name>
     <message>
-      <location filename="../qml/EffectMenu.qml" line="+103" />
+      <location filename="../qml/EffectMenu.qml" line="+112" />
       <source>Stinger…</source>
       <translation>Stinger…</translation>
     </message>
     <message>
-      <location line="+13" />
-      <location line="+54" />
+      <location line="+14" />
+      <location line="+60" />
       <source>Length</source>
       <translation>Dauer</translation>
     </message>
     <message>
-      <location line="-40" />
+      <location line="-45" />
       <location line="+20" />
       <source>To the right</source>
       <translation>Nach rechts</translation>
@@ -1604,6 +1604,12 @@
       <location line="+20" />
       <source>To the left</source>
       <translation>Nach links</translation>
+    </message>
+    <message>
+      <location line="+52" />
+      <source>ms</source>
+      <comment>milliseconds</comment>
+      <translation type="unfinished" />
     </message>
   </context>
   <context>
@@ -2397,7 +2403,7 @@
       <translation>Neues Layout aus</translation>
     </message>
     <message>
-      <location line="+7" />
+      <location line="+8" />
       <source>Import…</source>
       <translation>Importieren…</translation>
     </message>
