@@ -48,10 +48,12 @@ davor und danach beschäftigt).
 |---|---|
 | decklink2, Vorlauf 20 ms (Standard) | 433, 400, 433 ms |
 | decklink2, Vorlauf 0 ms | 433, 366, 400 ms |
-| decklink2, 3 Bilder vorgehalten (Versuch, nicht im Code) | 267, 234, 267 ms |
+| decklink2, 3 Bilder vorgehalten, leerer Rechner | 267, 234, 267 ms |
+| decklink2, 3 Bilder vorgehalten, Load 32 (Soak + CPU-Brenner) | 267, 300, 267 ms |
 
 Der Vorlauf ändert nichts mehr; was zählt, ist der Puffer der Karte
-(Standard 7 Bilder = 280 ms bei 25p).
+(GStreamers Standard 7 Bilder = 280 ms bei 25p). lmix stellt 3 ein
+(`--card-frames`, DECISIONS 30.10., Nachtrag Puffer der Karte).
 
 ## 2026-10-27 — SDI-Loop: Program über die Karte zurück (H.7)
 

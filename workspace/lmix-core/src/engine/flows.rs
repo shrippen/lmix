@@ -120,6 +120,22 @@ fn card_lead_ms() -> u64 {
     CARD_LEAD.get().copied().unwrap_or(CARD_LEAD_MS)
 }
 
+/// Frames queued on the card before playback, each one frame of
+/// delay. `decklink2sink`'s own 7 cost about 130 ms more on the SDI
+/// loop at 25p; 3 held under load, 2 dropped or repeated frames (DECISIONS
+/// 30.10.). `--card-frames` sets it.
+pub const CARD_FRAMES: u64 = 3;
+static CARD_FRAMES_SET: std::sync::OnceLock<u64> = std::sync::OnceLock::new();
+
+/// The card queue from `--card-frames`; set once at start.
+pub fn set_card_frames(frames: u64) {
+    let _ = CARD_FRAMES_SET.set(frames);
+}
+
+fn card_frames() -> u64 {
+    CARD_FRAMES_SET.get().copied().unwrap_or(CARD_FRAMES)
+}
+
 /// Block id of the media player in file, URL and playlist slots.
 pub const PLAYER: &str = "player";
 /// Alpha of `Color` sources: fully opaque.
@@ -913,6 +929,7 @@ fn add_card_output(flow: &mut Flow, from: &str, card: CardOut, pairs: &[(u32, St
                 "processing_deadline_ms",
                 PropertyValue::UInt(card_lead_ms()),
             ),
+            ("buffered_frames", PropertyValue::UInt(card_frames())),
         ],
     ));
 
@@ -3785,6 +3802,8 @@ mod tests {
         assert!(!card.properties.contains_key("audio_channels"));
         // Without --card-lead-ms GStreamer's default lead.
         assert_eq!(uint(card, "processing_deadline_ms"), 20);
+        // Without --card-frames three frames on the card, not seven.
+        assert_eq!(uint(card, "buffered_frames"), 3);
         let caps = caps_of(&flow, CARD_PICTURE);
         assert!(caps.contains("format=UYVY"), "{caps}");
         assert!(caps.contains("width=1280,height=720"), "{caps}");

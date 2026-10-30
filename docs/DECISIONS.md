@@ -5481,11 +5481,16 @@ etwa 33 ms genau (die Werte springen in diesen Schritten zwischen 366,
 400 und 433 ms); die 10 ms des Mixers zeigt er nicht, er sieht nur, dass
 nichts um einen ganzen Schritt dazukam.
 
-**Offen (zur Entscheidung)**: decklink2 ist so etwa 130 ms langsamer,
-weil es 7 Bilder vorhält (280 ms bei 25p, 140 ms bei 50p). Ein Versuch
-mit `n-preroll-frames=3`, `min-buffered-frames=1` (nicht im Code) gab
-267, 234, 267 ms und bestand `test-sdi-loop.sh`, allerdings auf leerem
-Rechner; mit 2 Bildern Vorlauf verwarf oder wiederholte die Karte schon
-ohne strom in 2 von 6 Starts Bilder. Vorschlag: eine Eigenschaft
-„gepufferte Bilder“ am strom-Block, lmix stellt 3 ein, nach einem Lauf
-unter Last.
+**Nachtrag (Puffer der Karte)**: decklink2 war so etwa 130 ms langsamer,
+weil es 7 Bilder vorhält (280 ms bei 25p, 140 ms bei 50p). Der strom-Block
+hat jetzt `buffered_frames` (2–14, Standard 7 wie GStreamer): Er setzt
+`n-preroll-frames`, `min-buffered-frames` folgt zwei darunter (1 bis 3,
+GStreamers 3 bei 7). lmix stellt 3 ein (`CARD_FRAMES`, `--card-frames`).
+Mit 2 Bildern verwarf oder wiederholte die Karte schon ohne strom in 2
+von 6 Starts Bilder. Geprüft unter Last (Load 32–35: `soak-hardware.sh`
+mit 16 Inputs, CUDA, Aufnahme, ISO und 2 SRT-Streams, dazu 22 CPU-Brenner
+und Speicherkopien): `test-sdi-loop.sh` dreimal bestanden, 18 Starts in
+vier Modi ohne spätes, verworfenes oder wiederholtes Bild („Underrun“
+zählt mit); Latenz SDI-Loop 1080p25 267, 300, 267 ms (auf leerem Rechner
+267, 234, 267 ms), mit 7 Bildern 400–433 ms. Der Soak lief dabei ohne
+Fehler weiter (Latenz Quelle → Program 26–28 ms).

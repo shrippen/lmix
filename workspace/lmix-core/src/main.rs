@@ -196,6 +196,11 @@ struct Args {
     #[arg(long, env = "LMIX_CARD_LEAD_MS", default_value_t = engine::flows::CARD_LEAD_MS)]
     card_lead_ms: u64,
 
+    /// Frames a DeckLink card queues before playback; each one is a
+    /// frame of delay.
+    #[arg(long, env = "LMIX_CARD_FRAMES", default_value_t = engine::flows::CARD_FRAMES)]
+    card_frames: u64,
+
     /// Show file to open at start; without it the last autosave is resumed.
     #[arg(long, env = "LMIX_SHOW")]
     show: Option<String>,
@@ -275,6 +280,7 @@ async fn main() -> anyhow::Result<()> {
         datasource::set_google_api_key(key.trim().to_string());
     }
     engine::flows::set_card_lead_ms(args.card_lead_ms);
+    engine::flows::set_card_frames(args.card_frames);
     metrics::started();
     let engine: Arc<dyn Engine> = match args.engine {
         EngineKind::Strom => {
