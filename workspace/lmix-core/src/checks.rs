@@ -171,7 +171,11 @@ fn find_input(show: &Show, reference: &str) -> Lookup {
         Err(_) => inputs
             .iter()
             .find(|i| i.id.to_string() == reference)
-            .or_else(|| inputs.iter().find(|i| i.name == reference)),
+            .or_else(|| {
+                inputs
+                    .iter()
+                    .find(|i| crate::switcher::same_input_name(&i.name, reference))
+            }),
     };
     found.map_or(Lookup::Gone, |i| Lookup::Here(i.id))
 }
@@ -226,7 +230,7 @@ mod tests {
             ..Cue::empty(CueKind::Group)
         };
         let show = show_with(vec![
-            Cue::actions("Fine", vec![cut("Cam"), cut("preview")]),
+            Cue::actions("Fine", vec![cut("Cam"), cut("cam"), cut("preview")]),
             start,
             Cue::actions("Light", vec![light]),
             group,

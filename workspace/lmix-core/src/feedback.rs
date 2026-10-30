@@ -86,7 +86,7 @@ fn input_of(state: &ShowState, input: &InputRef) -> Option<InputId> {
         InputRef::Text(t) => state
             .inputs
             .iter()
-            .find(|i| i.id.to_string() == *t || i.name == *t)
+            .find(|i| i.id.to_string() == *t || crate::switcher::same_input_name(&i.name, t))
             .map(|i| i.id),
     }
 }
@@ -413,6 +413,9 @@ mod tests {
             Some(id)
         );
         assert_eq!(input_of(&state, &InputRef::Text("dynamic2".into())), None);
+        // A name in other letters, as actions find it.
+        let name = state.inputs[0].name.to_uppercase();
+        assert_eq!(input_of(&state, &InputRef::Text(name)), Some(id));
         assert!(!output_running(&state, &OutputRef::Number(0)));
     }
 

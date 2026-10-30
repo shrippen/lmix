@@ -147,7 +147,7 @@ kann es, Console nicht.
 | ID | Anforderung | Prio | Stand |
 |---|---|---|---|
 | INP.1 | Inputs zur Laufzeit hinzufügen, entfernen, ersetzen, ohne Aussetzer auf Program | M | ✅ |
-| INP.2 | Jeder Input hat laufende Nummer (1…n), Namen (änderbar), feste ID (UUID); Ansprache in Aktionen über alle drei | M | ✅ |
+| INP.2 | Jeder Input hat laufende Nummer (1…n), Namen (änderbar, eindeutig, Groß-/Kleinschreibung egal), feste ID (UUID); Ansprache in Aktionen über alle drei | M | ✅ |
 | INP.3 | Reihenfolge per Drag & Drop ändern; Nummern folgen der Reihenfolge | M | ✅ |
 | INP.4 | "Quelle ändern": neue Quelle, alle Einstellungen bleiben | S | ✅ |
 | INP.5 | Virtueller Input: Kopie, die Bild der Quelle teilt, eigene Einstellungen hat | S | – |

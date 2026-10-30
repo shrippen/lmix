@@ -2732,6 +2732,16 @@ mod tests {
         }
     }
 
+    /// Bars again, under a name of its own (names are one per input).
+    fn more_bars() -> Action {
+        Action::AddInput {
+            source: SourceSpec::Pattern {
+                pattern: TestPattern::Bars,
+            },
+            name: Some("Bars 2".into()),
+        }
+    }
+
     #[tokio::test]
     async fn an_osc_subscriber_gets_standby_remaining_time_and_panic() {
         use lmix_types::{Cue, CueKind, Feed, FeedMessage, FeedOn, TargetKind, TargetSpec};
@@ -4391,7 +4401,7 @@ mod tests {
             2,
             "restarted engine: show fed again"
         );
-        service.handle(bars()).await.unwrap();
+        service.handle(more_bars()).await.unwrap();
         assert_eq!(slot_commands(&engine), 3, "and actions run directly after");
     }
 
@@ -4488,7 +4498,7 @@ mod tests {
                 .any(|c| matches!(c, Command::StartOutput { .. })),
             "and starts the output asked for"
         );
-        service.handle(bars()).await.unwrap();
+        service.handle(more_bars()).await.unwrap();
         assert_eq!(slot_commands(&engine), 2, "later actions run directly");
     }
 
