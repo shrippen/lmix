@@ -28,6 +28,8 @@ import "."
  * does it, also after a switch at run time; the footer makes room for them, in width and
  * height, also without a standard button. They are no standard buttons: their own
  * `onClicked`, no accept or reject, no role; one taken out of the list leaves the footer.
+ * Right to left (LayoutMirroring, as Kirigami's window sets it for an RTL language) the
+ * start is on the right: the own buttons stand there, the standard buttons on the left.
  * Since 1.55 `acceptText` also holds when the button box sets its standard texts again
  * (a language change, also the one at start with the app's translations): it read "OK"
  * in German before.
@@ -83,7 +85,9 @@ QQC2.Dialog {
 
     /** The app's buttons at the start of the footer (see above). */
     property list<Item> footerStart
-    // Not a child: it goes into the footer shown now, whichever style made it.
+    // Not a child: it goes into the footer shown now, whichever style made it. Right to
+    // left (LayoutMirroring, inherited from the window) its anchors and order mirror, so
+    // it stands at the right, the first button outermost.
     readonly property Item kanteFooterStart: Row {
         objectName: "kanteFooterStart"
         anchors.left: parent ? parent.left : undefined
@@ -114,12 +118,21 @@ QQC2.Dialog {
         when: control.footer !== null && control.footerStart.length > 0
         restoreMode: Binding.RestoreNone
     }
-    // The standard buttons move over for them.
+    // The standard buttons move over for them: from the left, or right to left from the
+    // right, where the footer start mirrors to.
+    readonly property bool kanteFooterMirrored: kanteFooterStart.LayoutMirroring.enabled
     Binding {
         target: control.footer
         property: "leftPadding"
         value: control.footer ? control.footer.padding + control.kanteFooterStart.implicitWidth + Kirigami.Units.largeSpacing : 0
-        when: control.footer !== null && control.footerStart.length > 0
+        when: control.footer !== null && control.footerStart.length > 0 && !control.kanteFooterMirrored
+        restoreMode: Binding.RestoreBindingOrValue
+    }
+    Binding {
+        target: control.footer
+        property: "rightPadding"
+        value: control.footer ? control.footer.padding + control.kanteFooterStart.implicitWidth + Kirigami.Units.largeSpacing : 0
+        when: control.footer !== null && control.footerStart.length > 0 && control.kanteFooterMirrored
         restoreMode: Binding.RestoreBindingOrValue
     }
     // The platform's footer hides without standard buttons: shown for them too.
