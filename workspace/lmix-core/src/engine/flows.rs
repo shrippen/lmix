@@ -990,8 +990,17 @@ fn add_card_sound(flow: &mut Flow, card: CardOut, pairs: &[(u32, String)]) {
     let summed = match pairs {
         [(pair, pad)] => add_card_place(flow, pad, *pair, channels),
         _ => {
-            flow.elements
-                .push(element(CARD_PAIRS, "audiomixer", vec![]));
+            // The sound carries the mixer's running time (hours): from
+            // zero the mixer filled all of that first, and pair 2 came
+            // tens of seconds late (todo 27.10.).
+            flow.elements.push(element(
+                CARD_PAIRS,
+                "audiomixer",
+                vec![(
+                    "start-time-selection",
+                    PropertyValue::String("first".into()),
+                )],
+            ));
             for (pair, pad) in pairs {
                 let placed = add_card_place(flow, pad, *pair, channels);
                 flow.links.push(link(placed, CARD_PAIRS.into()));
@@ -3851,6 +3860,11 @@ mod tests {
                 .any(|l| l.from == from && l.to == CARD_PAIRS));
         }
         assert!(caps_of(&flow, CARD_SOUND).contains("channels=16"));
+        // The sound carries the mixer's running time (hours): from zero
+        // the mixer would fill all of that first, and the card, which
+        // takes the sound with the picture, waited for it.
+        let pairs = flow.elements.iter().find(|e| e.id == CARD_PAIRS).unwrap();
+        assert_eq!(text_of(pairs, "start-time-selection"), "first");
 
         let delay = flow
             .blocks
