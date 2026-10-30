@@ -169,6 +169,28 @@ TestCase {
         compare(whats(dialog), [])
     }
 
+    function test_a_letter_typed_last_may_start_a_function_key() {
+        var dialog = openDialog()
+        dialog.always = []
+        dialog.pageKeys = []
+        dialog.own = [
+            { what: "Quit", key: "Alt+F4" },
+            { what: "Lights", key: "Alt+F12" },
+            { what: "Find", key: "Alt+F" },
+            { what: "Sea weather on", key: "F2" }
+        ]
+        // Still typing "alt+f4": the list does not empty on the way.
+        dialog.query = "alt+f"
+        compare(whats(dialog), ["Quit", "Lights", "Find"])
+        dialog.query = "alt+f1"
+        compare(whats(dialog), ["Lights"])
+        dialog.query = "alt+f4"
+        compare(whats(dialog), ["Quit"])
+        // A part typed before the last one is done: "f" is the key F only.
+        dialog.query = "f+alt"
+        compare(whats(dialog), ["Find"])
+    }
+
     function test_a_plus_in_a_name_finds_it_too() {
         var dialog = openDialog()
         dialog.own = [{ what: "Ton+Licht", key: "F5" }]

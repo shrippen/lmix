@@ -40,8 +40,9 @@ KanteDialog {
      *  a number also finds a range of keys ("3" finds 1…5). Typed as a key ("ctrl+s",
      *  a "+" after its first part) it may be one: each part takes a cap of the entry's
      *  key of its own, in any order; the last part, while typed, may be the start of a
-     *  longer cap ("ctrl+sh" finds Shift), a part of one character must be the cap
-     *  ("strg+s" finds Strg+S, not Strg+Leertaste). A "+" at the end, the next part not
+     *  longer cap ("ctrl+sh" finds Shift, "alt+f" Alt+F4), a part of one character
+     *  is that key or a numbered one ("strg+s" finds Strg+S, not Strg+Leertaste);
+     *  parts typed before it are done and match whole. A "+" at the end, the next part not
      *  typed yet, counts for nothing. Such a text also finds a description with it
      *  ("Ton+Licht"). */
     function matches(entry, text) {
@@ -80,10 +81,11 @@ KanteDialog {
         return false
     }
 
-    /** `cap` is the typed `part`, or, `typing` a part of two characters or more, starts
-     *  with it. */
+    /** `cap` is the typed `part`, or, `typing` it, starts with it: a part of two
+     *  characters or more any cap, one letter only a numbered key ("f" for F4). */
     function capFits(cap, part, typing) {
-        return cap === part || (typing && part.length > 1 && cap.startsWith(part)) || inRange(cap, part)
+        return cap === part || inRange(cap, part) || (typing && cap.startsWith(part)
+            && (part.length > 1 || /^\d+$/.test(cap.slice(part.length))))
     }
 
     /** `cap` is a range of numbered keys ("1…9") and holds the number `part`. */
