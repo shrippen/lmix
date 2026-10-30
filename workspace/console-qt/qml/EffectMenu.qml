@@ -97,8 +97,11 @@ QQC2.Menu {
             property var row
             text: row.label
             checkable: true
-            // `menu` is gone first when the menu goes.
+            // `menu` is gone first when the menu goes. The state decides,
+            // not the click: a click toggles, the binding comes back (the
+            // effect may stay the same, or the core refuse).
             checked: !!menu && menu.effect === row.value
+            onToggled: checked = Qt.binding(() => !!menu && menu.effect === row.value)
             onTriggered: menu.effectPicked(row.value)
         }
     }
@@ -109,6 +112,7 @@ QQC2.Menu {
             text: qsTr("Stinger…")
             checkable: true
             checked: !!menu && menu.effect === "stinger"
+            onToggled: checked = Qt.binding(() => !!menu && menu.effect === "stinger")
             onTriggered: menu.stingerRequested()
         }
     }
@@ -131,6 +135,7 @@ QQC2.Menu {
         readonly property int current: menu ? row.directions.indexOf(menu.effect) : -1
         checkable: true
         checked: current >= 0
+        onToggled: checked = Qt.binding(() => current >= 0)
         text: row.label
         Accessible.name: row.label
         Accessible.description: current === 1 ? qsTr("To the right") : current === 0 ? qsTr("To the left") : ""
@@ -160,6 +165,7 @@ QQC2.Menu {
                     text: modelData.arrow
                     checkable: true
                     checked: direction.current === index
+                    onToggled: checked = Qt.binding(() => direction.current === index)
                     focusPolicy: Qt.NoFocus
                     // As high as the other rows.
                     Layout.preferredHeight: Kirigami.Units.iconSizes.small + Kirigami.Units.smallSpacing

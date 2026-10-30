@@ -118,4 +118,28 @@ TestCase {
         }
         compare(shown, ["Button 1 · Effect", "Cut", "Fade", "Slide", "Stinger…", "Length", "Length"])
     }
+
+    // A click on the effect already chosen toggled its tick off, and the
+    // binding never came back: the tick stayed gone while it was in force.
+    function test_a_click_on_the_chosen_effect_keeps_its_tick() {
+        const menu = createTemporaryObject(menuComponent, test.Window.contentItem, { effect: "fade" })
+        menu.open()
+        tryCompare(menu, "opened", true)
+        const fade = itemNamed(menu, "Fade")
+        mouseClick(fade)
+        compare(picked, ["fade"])
+        compare(fade.checked, true, "Fade")
+        menu.effect = "slide_right"
+        menu.open()
+        tryCompare(menu, "opened", true)
+        const slide = itemNamed(menu, "Slide")
+        mouseClick(slide, slide.width / 4, slide.height / 2)
+        compare(slide.checked, true, "Slide")
+        menu.open()
+        tryCompare(menu, "opened", true)
+        const right = slide.contentItem.children.find(c => c.text === "\u25b6")
+        mouseClick(right)
+        compare(right.checked, true, "\u25b6")
+        compare(picked, ["fade", "slide_right", "slide_right"])
+    }
 }
