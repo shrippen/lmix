@@ -1,6 +1,7 @@
 # German texts of the Qt Console, keyed by the English source.
 # scripts/update-translations.sh collects the sources and writes these
-# into qml_de.ts (i18n/fill.py). Keep it complete.
+# into qml_de.ts (i18n/fill.py). Keep it complete. A (source, comment)
+# key wins over the source alone, for a word with two meanings.
 DE = {
     'Add input…': 'Input hinzufügen…',
     'Click: start or stop. Right click: menu.': 'Klick: starten oder stoppen. Rechtsklick: Menü.',
@@ -778,7 +779,6 @@ DE = {
     '%1p%2': '%1p%2',
     'Cue lists: %1': 'Cue-Listen: %1',
     'Always': 'Immer',
-    'Ctrl+1…%1': 'Strg+1…%1',
     'Escape': 'Escape',
     'Export package…': 'Paket exportieren …',
     'Fade up': 'Aufblenden',
@@ -802,6 +802,9 @@ DE = {
     'Unsaved show': 'Ungespeicherte Show',
     'button in the page bar': 'Knopf in der Seitenleiste',
     'double click preview': 'Doppelklick in die Vorschau',
+    'Own shortcuts': 'Eigene Belegungen',
+    'Search keys': 'Tasten suchen',
+    'No key matches "%1".': 'Keine Taste passt zu „%1“.',
     '%1 kbit/s': '%1 kbit/s',
     '%1 of %2 running': '%1 von %2 laufen',
     '%1 × %2 at %3 fps': '%1 × %2 mit %3 fps',
@@ -1084,6 +1087,19 @@ DE = {
     'Save show as': 'Show speichern unter',
     'Ctrl': 'Strg',
     'Shift': 'Umschalt',
+    'Alt': 'Alt',
+    'Meta': 'Meta',
+    'Return': 'Eingabe',
+    'Enter': 'Enter',
+    'Tab': 'Tab',
+    'Backspace': 'Rücktaste',
+    'Del': 'Entf',
+    'Ins': 'Einfg',
+    # "Home" is also the PTZ home position (Grundstellung).
+    ('Home', 'key'): 'Pos1',
+    'End': 'Ende',
+    'PgUp': 'Bild auf',
+    'PgDown': 'Bild ab',
     'Settings': 'Einstellungen',
     'Copy link': 'Link kopieren',
     'Listen': 'Vorhören',

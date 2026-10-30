@@ -20,8 +20,8 @@ AppPage {
     busy: shell.show !== null && (shell.show.running_cues || []).length > 0
     focusTarget: showView
     pageKeys: [
-        { what: qsTr("GO"), key: qsTr("Space") },
-        { what: qsTr("Panic, twice: stop at once"), key: qsTr("Escape") }
+        { what: qsTr("GO"), key: Texts.keyLabel("Space") },
+        { what: qsTr("Panic, twice: stop at once"), key: Texts.keyLabel("Escape") }
     ]
     // The show view has its own panic (SUI.3): stops only the cues.
 

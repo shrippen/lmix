@@ -595,25 +595,13 @@
   <context>
     <name>AppShell</name>
     <message>
-      <location filename="../qml/AppShell.qml" line="+283" />
-      <source>Ctrl</source>
-      <comment>key</comment>
-      <translation>Strg</translation>
-    </message>
-    <message>
-      <location line="+1" />
-      <source>Shift</source>
-      <comment>key</comment>
-      <translation>Umschalt</translation>
-    </message>
-    <message>
-      <location line="+99" />
-      <location line="+115" />
+      <location filename="../qml/AppShell.qml" line="+372" />
+      <location line="+110" />
       <source>Open show</source>
       <translation>Show öffnen</translation>
     </message>
     <message>
-      <location line="-114" />
+      <location line="-109" />
       <location line="+13" />
       <source>lmix shows (*.lmix)</source>
       <translation>lmix-Shows (*.lmix)</translation>
@@ -627,12 +615,12 @@
     </message>
     <message>
       <location line="-60" />
-      <location line="+105" />
+      <location line="+100" />
       <source>Save show</source>
       <translation>Show speichern</translation>
     </message>
     <message>
-      <location line="-90" />
+      <location line="-85" />
       <source>Export settings</source>
       <translation>Einstellungen exportieren</translation>
     </message>
@@ -669,24 +657,17 @@
       <translation>Leerer Ordner für Show und Medien des Pakets</translation>
     </message>
     <message>
-      <location line="+25" />
-      <location line="+299" />
+      <location line="+292" />
       <source>Keys</source>
       <translation>Tasten</translation>
     </message>
     <message>
-      <location line="-293" />
+      <location line="-266" />
       <source>Pages</source>
       <translation>Seiten</translation>
     </message>
     <message>
-      <location line="+0" />
-      <location line="+403" />
-      <source>Ctrl+1…%1</source>
-      <translation>Strg+1…%1</translation>
-    </message>
-    <message>
-      <location line="-401" />
+      <location line="+2" />
       <source>New show</source>
       <translation>Neue Show</translation>
     </message>
@@ -702,27 +683,17 @@
     </message>
     <message>
       <location line="+2" />
-      <location line="+450" />
+      <location line="+423" />
       <source>Panic all</source>
       <translation>Panik: alles</translation>
     </message>
     <message>
-      <location line="-450" />
+      <location line="-423" />
       <source>button in the page bar</source>
       <translation>Knopf in der Seitenleiste</translation>
     </message>
     <message>
-      <location line="+5" />
-      <source>Always</source>
-      <translation>Immer</translation>
-    </message>
-    <message>
-      <location line="+6" />
-      <source>Only on %1</source>
-      <translation>Nur auf %1</translation>
-    </message>
-    <message>
-      <location line="+64" />
+      <location line="+48" />
       <source>File</source>
       <translation>Datei</translation>
     </message>
@@ -2388,6 +2359,45 @@
     </message>
   </context>
   <context>
+    <name>KeysDialog</name>
+    <message>
+      <location filename="../qml/KeysDialog.qml" line="+33" />
+      <source>Always</source>
+      <translation>Immer</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Only on %1</source>
+      <translation>Nur auf %1</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Own shortcuts</source>
+      <translation>Eigene Belegungen</translation>
+    </message>
+    <message>
+      <location line="+71" />
+      <source>Keys</source>
+      <translation>Tasten</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Shortcuts…</source>
+      <translation>Belegungen…</translation>
+    </message>
+    <message>
+      <location line="+21" />
+      <location line="+1" />
+      <source>Search keys</source>
+      <translation>Tasten suchen</translation>
+    </message>
+    <message>
+      <location line="+21" />
+      <source>No key matches "%1".</source>
+      <translation>Keine Taste passt zu „%1“.</translation>
+    </message>
+  </context>
+  <context>
     <name>LayoutBar</name>
     <message>
       <location filename="../qml/LayoutBar.qml" line="+35" />
@@ -3484,7 +3494,7 @@
       <translation>Ausgänge</translation>
     </message>
     <message>
-      <location line="+35" />
+      <location line="+36" />
       <source>Running</source>
       <translation>Läuft</translation>
     </message>
@@ -3509,7 +3519,7 @@
       <translation>Klick: starten oder stoppen. Rechtsklick: Menü.</translation>
     </message>
     <message>
-      <location line="+39" />
+      <location line="+38" />
       <source>Stop all streams</source>
       <translation>Alle Streams stoppen</translation>
     </message>
@@ -3597,7 +3607,7 @@
       <translation>sendet</translation>
     </message>
     <message>
-      <location line="+10" />
+      <location line="+11" />
       <source>Stop it first, then remove it.</source>
       <translation>Erst stoppen, dann entfernen.</translation>
     </message>
@@ -4709,7 +4719,7 @@
       <translation>Farbe</translation>
     </message>
     <message>
-      <location line="+9" />
+      <location line="+10" />
       <source>Note</source>
       <translation>Notiz</translation>
     </message>
@@ -5005,19 +5015,9 @@
       <translation>GO</translation>
     </message>
     <message>
-      <location line="+0" />
-      <source>Space</source>
-      <translation>Leertaste</translation>
-    </message>
-    <message>
       <location line="+1" />
       <source>Panic, twice: stop at once</source>
       <translation>Panik, zweimal: sofort stoppen</translation>
-    </message>
-    <message>
-      <location line="+0" />
-      <source>Escape</source>
-      <translation>Escape</translation>
     </message>
     <message>
       <location line="+18" />
@@ -6600,6 +6600,126 @@
       <location line="+1" />
       <source>Channel strip: %1 is out of range</source>
       <translation>Kanalzug: %1 liegt außerhalb des Bereichs</translation>
+    </message>
+    <message>
+      <location line="+15" />
+      <source>Ctrl</source>
+      <comment>key</comment>
+      <translation>Strg</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Shift</source>
+      <comment>key</comment>
+      <translation>Umschalt</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Alt</source>
+      <comment>key</comment>
+      <translation>Alt</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Meta</source>
+      <comment>key</comment>
+      <translation>Meta</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Space</source>
+      <comment>key</comment>
+      <translation>Leertaste</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Return</source>
+      <comment>key</comment>
+      <translation>Eingabe</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Enter</source>
+      <comment>key</comment>
+      <translation>Enter</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Escape</source>
+      <comment>key</comment>
+      <translation>Escape</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Tab</source>
+      <comment>key</comment>
+      <translation>Tab</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Backspace</source>
+      <comment>key</comment>
+      <translation>Rücktaste</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Del</source>
+      <comment>key</comment>
+      <translation>Entf</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Ins</source>
+      <comment>key</comment>
+      <translation>Einfg</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Home</source>
+      <comment>key</comment>
+      <translation>Pos1</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>End</source>
+      <comment>key</comment>
+      <translation>Ende</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>PgUp</source>
+      <comment>key</comment>
+      <translation>Bild auf</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>PgDown</source>
+      <comment>key</comment>
+      <translation>Bild ab</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Left</source>
+      <comment>key</comment>
+      <translation>Links</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Right</source>
+      <comment>key</comment>
+      <translation>Rechts</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Up</source>
+      <comment>key</comment>
+      <translation>Hoch</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Down</source>
+      <comment>key</comment>
+      <translation>Runter</translation>
     </message>
   </context>
   <context>

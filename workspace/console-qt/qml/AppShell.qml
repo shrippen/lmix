@@ -273,18 +273,7 @@ Kirigami.ApplicationWindow {
 
     /** A File key as the menu shows it; none while a show's shortcut has the key. */
     function fileKeyLabel(sequence) {
-        return keyTaken(sequence) ? "" : keyLabel(sequence)
-    }
-
-    /** A key sequence as the user reads it: Strg+N in German. */
-    function keyLabel(sequence) {
-        return String(sequence).split("+").map(part => {
-            const lower = part.toLowerCase()
-            return lower === "ctrl" ? qsTr("Ctrl", "key")
-                : lower === "shift" ? qsTr("Shift", "key")
-                : lower === "alt" ? "Alt"
-                : part.length === 1 ? part.toUpperCase() : part
-        }).join("+")
+        return keyTaken(sequence) ? "" : Texts.keyLabel(sequence)
     }
 
     function fileCommand(name) {
@@ -481,58 +470,26 @@ Kirigami.ApplicationWindow {
 
     // --- keys overview ---
 
-    KanteDialog {
+    KeysDialog {
         id: keysDialog
         onClosed: root.restoreFocus()
         parent: QQC2.Overlay.overlay
         anchors.centerIn: parent
-        title: qsTr("Keys")
-        modal: true
-        width: Kirigami.Units.gridUnit * 26
-        standardButtons: QQC2.Dialog.Close
-        contentHeight: keysColumn.implicitHeight
-        readonly property var always: [
-            { what: qsTr("Pages"), key: qsTr("Ctrl+1…%1").arg(root.pageItems.length) },
+        always: [
+            { what: qsTr("Pages"), key: Texts.keyLabel("Ctrl+1…" + root.pageItems.length) },
         ].concat([
             { what: qsTr("New show"), key: root.fileKeys.newShow },
             { what: qsTr("Open show"), key: root.fileKeys.open },
             { what: qsTr("Save show"), key: root.fileKeys.save },
             { what: qsTr("Save show as"), key: root.fileKeys.saveAs },
             { what: qsTr("Shortcuts"), key: root.fileKeys.shortcuts }
-        ].filter(k => !root.keyTaken(k.key)).map(k => ({ what: k.what, key: root.keyLabel(k.key) })), [
-            { what: qsTr("Panic all"), key: qsTr("button in the page bar") }
-        ].concat(root.keyedShortcuts.map(s => ({ what: s.label, key: root.keyLabel(s.key) }))))
-        ColumnLayout {
-            id: keysColumn
-            width: parent.width
-            KanteSectionLabel { text: qsTr("Always") }
-            Repeater {
-                model: keysDialog.always
-                delegate: KeyRow {}
-            }
-            KanteSectionLabel {
-                text: root.currentItem ? qsTr("Only on %1").arg(root.currentItem.title) : ""
-                visible: root.currentItem !== null && root.currentItem.pageKeys.length > 0
-            }
-            Repeater {
-                model: root.currentItem ? root.currentItem.pageKeys : []
-                delegate: KeyRow {}
-            }
-        }
-    }
-    component KeyRow: RowLayout {
-        required property var modelData
-        Layout.fillWidth: true
-        QQC2.Label {
-            Layout.fillWidth: true
-            text: modelData.what
-            elide: Text.ElideRight
-        }
-        QQC2.Label {
-            text: modelData.key
-            font.family: KanteStyle.monoFamily
-            color: KanteStyle.neutralTextColor
-        }
+        ].filter(k => !root.keyTaken(k.key)).map(k => ({ what: k.what, key: Texts.keyLabel(k.key) })), [
+            { what: qsTr("Panic all"), gesture: qsTr("button in the page bar") }
+        ])
+        pageTitle: root.currentItem ? root.currentItem.title : ""
+        pageKeys: root.currentItem ? root.currentItem.pageKeys : []
+        own: root.keyedShortcuts.map(s => ({ what: s.label, key: Texts.keyLabel(s.key) }))
+        onShortcutsRequested: root.openShortcuts()
     }
 
     // --- the window ---
@@ -895,7 +852,7 @@ Kirigami.ApplicationWindow {
                 }
 
                 QQC2.Label {
-                    text: qsTr("Ctrl+1…%1").arg(root.pageItems.length)
+                    text: Texts.keyLabel("Ctrl+1…" + root.pageItems.length)
                     font.family: KanteStyle.monoFamily
                     color: KanteStyle.mutedTextColor
                 }

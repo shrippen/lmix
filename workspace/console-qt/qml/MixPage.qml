@@ -32,7 +32,7 @@ AppPage {
     hasProgram: true
     pageKeys: [
         { what: qsTr("Input to preview"), key: "1…9" },
-        { what: qsTr("Quick play of preview"), key: qsTr("double click preview") }
+        { what: qsTr("Quick play of preview"), gesture: qsTr("double click preview") }
     ]
     panicText: qsTr("FTB", "fade to black")
     panicActive: !!show && show.fade_to_black === true
