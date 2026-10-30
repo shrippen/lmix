@@ -655,6 +655,8 @@ AppPage {
                         }
                         KanteButton {
                             id: addButton
+                            readonly property string menuName: qsTr("Add input…")
+                            readonly property string iconName: "list-add"
                             readonly property string key: "add"
                             readonly property string barName: qsTr("+ Input")
                             readonly property bool wanted: true
@@ -668,6 +670,7 @@ AppPage {
                         }
                         KanteButton {
                             id: missingButton
+                            readonly property string iconName: "edit-find"
                             readonly property string key: "missing"
                             readonly property bool wanted: root.inputs.some(i => i.missing && i.missing.length > 0)
                             visible: inputActions.inBar[key] === true
@@ -679,6 +682,7 @@ AppPage {
                         }
                         KanteButton {
                             id: soloButton
+                            readonly property string iconName: "edit-clear"
                             readonly property string key: "solo"
                             readonly property bool wanted: root.inputs.some(i => i.listen !== "off")
                                 || (root.show && root.show.buses ? root.show.buses : []).some(b => b.listen)
@@ -688,6 +692,7 @@ AppPage {
                         }
                         KanteButton {
                             id: restoreButton
+                            readonly property string iconName: "edit-undo"
                             readonly property string key: "restore"
                             readonly property bool wanted: root.show !== null && !!root.show.restorable
                             visible: inputActions.inBar[key] === true
@@ -717,6 +722,7 @@ AppPage {
                         }
                         KanteButton {
                             id: shortcutsButton
+                            readonly property string iconName: "configure-shortcuts"
                             readonly property string key: "shortcuts"
                             readonly property string barName: qsTr("Shortcuts…")
                             readonly property bool wanted: !root.simple
@@ -727,6 +733,7 @@ AppPage {
                         }
                         KanteButton {
                             id: busesButton
+                            readonly property string iconName: "view-media-equalizer"
                             readonly property string key: "buses"
                             readonly property string barName: qsTr("Buses…")
                             readonly property bool wanted: !root.simple
@@ -737,6 +744,7 @@ AppPage {
                         }
                         KanteButton {
                             id: titlesButton
+                            readonly property string iconName: "draw-text"
                             readonly property string key: "titles"
                             readonly property string barName: qsTr("Titles…")
                             readonly property bool wanted: !root.simple
@@ -747,6 +755,7 @@ AppPage {
                         }
                         KanteButton {
                             id: dataButton
+                            readonly property string iconName: "table"
                             readonly property string key: "data"
                             readonly property string barName: qsTr("Data…")
                             readonly property bool wanted: !root.simple
@@ -757,46 +766,11 @@ AppPage {
                         }
                     }
 
-                    // The menu's items are made here, not by a Repeater (see ChoiceMenu).
-                    QQC2.Menu {
+                    MoreActionsMenu {
                         id: moreMenu
-                        KantePopupSkin { popup: moreMenu }
-                        QQC2.MenuSeparator {}
-                        QQC2.Menu {
-                            id: barMenu
-                            title: qsTr("In the row")
-                            KantePopupSkin { popup: barMenu }
-                        }
-                        Component.onCompleted: {
-                            var actions = inputActions.actions
-                            for (var i = 0; i < actions.length; i++) {
-                                moreMenu.insertItem(i, overflowItem.createObject(null, { button: actions[i] }))
-                                if (actions[i].barName !== undefined)
-                                    barMenu.addItem(barItem.createObject(null, { button: actions[i] }))
-                            }
-                        }
-                    }
-                    Component {
-                        id: overflowItem
-                        QQC2.MenuItem {
-                            property var button
-                            text: button.text
-                            visible: button.wanted && !button.visible
-                            height: visible ? implicitHeight : 0
-                            enabled: button.enabled
-                            onTriggered: button.clicked()
-                        }
-                    }
-                    // Checked: in the row while it fits; unchecked: always in the menu.
-                    Component {
-                        id: barItem
-                        QQC2.MenuItem {
-                            property var button
-                            text: button.barName
-                            checkable: true
-                            checked: root.menuOnly.indexOf(button.key) < 0
-                            onToggled: root.setMenuOnly(button.key, !checked)
-                        }
+                        actions: inputActions.actions
+                        menuOnly: root.menuOnly
+                        onMenuOnlyChosen: (key, on) => root.setMenuOnly(key, on)
                     }
                 }
             }
