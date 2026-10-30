@@ -22,6 +22,11 @@ import "."
  * the bar on top and the accept button in the negative colour, Cancel before it; the
  * button says what goes (`acceptText: "Remove bus"`). In the Kante style only: System and
  * Kante Light keep the platform's dialog and button order.
+ * Footer start (Kante 1.57, from lmix): `footerStart` takes the app's own buttons
+ * (KanteButton) and puts them at the start of the footer, before the standard buttons and
+ * apart from them, such as "Shortcuts…" beside Close in lmix's keys overview. Every style
+ * does it, also after a switch at run time; the footer makes room for them. They are no
+ * standard buttons: their own `onClicked`, no accept or reject, no role.
  * Since 1.55 `acceptText` also holds when the button box sets its standard texts again
  * (a language change, also the one at start with the app's translations): it read "OK"
  * in German before.
@@ -74,6 +79,38 @@ QQC2.Dialog {
     // The buttons acceptEnabled has set (each footer has its own), to free them all when
     // acceptEnabled is unset again.
     property var lockedButtons: []
+
+    /** The app's buttons at the start of the footer (see above). */
+    property list<Item> footerStart
+    // Not a child: it goes into the footer shown now, whichever style made it.
+    readonly property Item kanteFooterStart: Row {
+        objectName: "kanteFooterStart"
+        anchors.left: parent ? parent.left : undefined
+        anchors.leftMargin: parent ? parent.padding : 0
+        anchors.verticalCenter: parent ? parent.verticalCenter : undefined
+        spacing: Kirigami.Units.smallSpacing
+    }
+    function placeFooterStart() {
+        for (let i = 0; i < footerStart.length; ++i) {
+            footerStart[i].parent = kanteFooterStart
+        }
+    }
+    onFooterStartChanged: placeFooterStart()
+    Binding {
+        target: control.kanteFooterStart
+        property: "parent"
+        value: control.footer
+        when: control.footer !== null && control.footerStart.length > 0
+        restoreMode: Binding.RestoreNone
+    }
+    // The standard buttons move over for them.
+    Binding {
+        target: control.footer
+        property: "leftPadding"
+        value: control.footer ? control.footer.padding + control.kanteFooterStart.implicitWidth + Kirigami.Units.largeSpacing : 0
+        when: control.footer !== null && control.footerStart.length > 0
+        restoreMode: Binding.RestoreBindingOrValue
+    }
 
     /** The accept button of the footer shown now, or null. */
     function acceptButton() {
@@ -132,7 +169,10 @@ QQC2.Dialog {
     onAcceptTextChanged: applyAccept()
     onAcceptEnabledChanged: applyAccept()
     onStandardButtonsChanged: Qt.callLater(applyAccept)
-    Component.onCompleted: applyAccept()
+    Component.onCompleted: {
+        applyAccept()
+        placeFooterStart()
+    }
 
     KanteScope { target: control.contentItem }
 
@@ -155,7 +195,7 @@ QQC2.Dialog {
     }
 
     readonly property Item kanteFooter: QQC2.DialogButtonBox {
-        visible: count > 0
+        visible: count > 0 || control.footerStart.length > 0
         standardButtons: control.standardButtons
         alignment: Qt.AlignRight
         spacing: Kirigami.Units.smallSpacing
