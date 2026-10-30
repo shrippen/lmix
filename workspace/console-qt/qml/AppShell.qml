@@ -83,6 +83,10 @@ Kirigami.ApplicationWindow {
         target: root.contentItem
     }
 
+    /** Where toasts stack, bottom right (MessageToasts); a page's own
+     *  toast takes it as its parent. */
+    readonly property alias toastColumn: toasts.column
+
     /** Every input live in one picture; LiveView shows its cell of it. */
     readonly property alias tilesAtlas: tilesAtlas
     TilesAtlas {
@@ -410,34 +414,13 @@ Kirigami.ApplicationWindow {
             root.restoreFocus()
         }
     }
-    KanteDialog {
+    FactoryResetDialog {
         id: resetSettingsDialog
         onClosed: root.restoreFocus()
         parent: QQC2.Overlay.overlay
         anchors.centerIn: parent
-        title: qsTr("Factory settings")
-        modal: true
-        width: Kirigami.Units.gridUnit * 24
-        standardButtons: QQC2.Dialog.Cancel
-        contentHeight: resetColumn.implicitHeight
-        ColumnLayout {
-            id: resetColumn
-            width: parent.width
-            QQC2.Label {
-                Layout.fillWidth: true
-                wrapMode: Text.WordWrap
-                text: qsTr("Remove the shortcuts for all shows, the layout templates, the output targets with their secrets and the OSC subscribers of this machine? The show stays.")
-            }
-            KanteButton {
-                Layout.alignment: Qt.AlignRight
-                emphasis: KanteButton.Emphasis.Destructive
-                text: qsTr("Remove all")
-                onClicked: {
-                    root.act({ action: "reset_settings" })
-                    resetSettingsDialog.close()
-                }
-            }
-        }
+        act: root.act
+        onBackupRequested: exportSettingsDialog.open()
     }
 
     // Show packages (SHW.6): show, media, data files, own templates.
@@ -826,43 +809,51 @@ Kirigami.ApplicationWindow {
                 }
             }
 
-            StackLayout {
-                id: stack
+            // Banners for what lasts (rule 2, docs/DESIGN-DIALOGE.md);
+            // everything else is a toast.
+            KanteBanner {
                 Layout.fillWidth: true
-                Layout.fillHeight: true
-                Layout.margins: Kirigami.Units.largeSpacing
-                currentIndex: {
-                    var n = 0
-                    for (var i = 0; i < children.length; i++) {
-                        if (children[i] === root.currentItem) {
-                            return i
-                        }
-                    }
-                    return 0
-                }
+                visible: !root.backend.connected
+                danger: true
+                title: qsTr("lmix-core offline")
+                text: qsTr("The Console tries again every second. The engine and its outputs keep running.")
             }
-
             // An older show file, converted on opening (SHW.7).
-            QQC2.Label {
+            KanteBanner {
                 Layout.fillWidth: true
-                Layout.leftMargin: Kirigami.Units.largeSpacing
-                Layout.rightMargin: Kirigami.Units.largeSpacing
                 visible: root.show !== null && !!root.show.older_format
+                title: qsTr("Older show format")
                 text: root.show && root.show.older_format
                     ? qsTr("This show file is in the older format %1 and was converted on opening. Saving it keeps the old file beside it (.v%1.bak).").arg(root.show.older_format)
                     : ""
-                color: KanteStyle.infoColor
-                wrapMode: Text.Wrap
             }
 
-            QQC2.Label {
+            Item {
                 Layout.fillWidth: true
-                Layout.leftMargin: Kirigami.Units.largeSpacing
-                Layout.rightMargin: Kirigami.Units.largeSpacing
-                visible: text.length > 0
-                text: Texts.message(root.backend.message)
-                color: KanteStyle.negativeTextColor
-                wrapMode: Text.Wrap
+                Layout.fillHeight: true
+                Layout.margins: Kirigami.Units.largeSpacing
+
+                StackLayout {
+                    id: stack
+                    anchors.fill: parent
+                    currentIndex: {
+                        var n = 0
+                        for (var i = 0; i < children.length; i++) {
+                            if (children[i] === root.currentItem) {
+                                return i
+                            }
+                        }
+                        return 0
+                    }
+                }
+
+                MessageToasts {
+                    id: toasts
+                    anchors.right: parent.right
+                    anchors.bottom: parent.bottom
+                    z: 10
+                    core: root.backend
+                }
             }
 
             // The page bar (KantePageBar): the pages, then program small

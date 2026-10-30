@@ -6,8 +6,10 @@ import Kante
 
 /**
  * Collapsed inputs (UI.3): a button each instead of a tile, red on
- * program and green in preview like a tile. Click and double click (GO)
- * as on the tile; right click: expand or cut.
+ * program and green in preview like a tile. A click acts as on the tile,
+ * at once; a right click opens the tile's menu, with Expand and GO
+ * (docs/DESIGN-DIALOGE.md M04). A double click expands only an input whose
+ * click previews.
  */
 Flow {
     id: bar
@@ -20,6 +22,8 @@ Flow {
     /** Ids of the collapsed ones. */
     required property var collapsed
     signal expandRequested(string id)
+    /** Right click: the page opens the input's menu (InputMenu). */
+    signal menuRequested(string id)
 
     // Keyed: buttons (and an open menu) survive state updates.
     KeyedModel { id: keys }
@@ -49,6 +53,12 @@ Flow {
             readonly property bool onProgram: bar.show !== null && bar.show.program === modelData.id
             readonly property bool onPreview: bar.show !== null && bar.show.preview === modelData.id
 
+            /** Its click puts it on program (cut, quick play), not only into preview. */
+            readonly property bool clickOnAir: ["cut_direct", "quick_play"].indexOf(modelData.click || "preview_input") >= 0
+            function click() {
+                bar.act({ action: "click_input", input: entry.modelData.id })
+            }
+
             implicitWidth: button.implicitWidth
             implicitHeight: button.implicitHeight
             width: implicitWidth
@@ -62,33 +72,30 @@ Flow {
                     : entry.onPreview ? KanteButton.Emphasis.Primary : KanteButton.Emphasis.Normal
                 enabled: bar.core.connected
                 Accessible.name: qsTr("Input %1 %2, collapsed").arg(entry.modelData.number).arg(entry.modelData.name)
-                // As on its tile (INP.8, INP.9).
-                onClicked: bar.act({ action: "click_input", input: entry.modelData.id })
-                onDoubleClicked: bar.act({ action: "go_input", input: entry.modelData.id })
+                // As on its tile (INP.8), at once: a cut must not wait. A double click
+                // expands only where the click previews; where it goes on air, waiting
+                // to tell the two apart would make the cut late, so the menu expands.
+                onClicked: entry.click()
+                // Stays connected for every input: a handled double click
+                // takes the press that would have clicked a second time, so
+                // a cut input cuts once.
+                onDoubleClicked: {
+                    if (!entry.clickOnAir) {
+                        bar.expandRequested(entry.modelData.id)
+                    }
+                }
                 QQC2.ToolTip.visible: hovered
-                QQC2.ToolTip.text: qsTr("Click: %1. Double click (GO): %2. Right click: expand.")
-                    .arg(Texts.label("presses", entry.modelData.click || "preview_input"))
-                    .arg(Texts.label("presses", entry.modelData.go || "quick_play"))
+                QQC2.ToolTip.text: entry.clickOnAir
+                    ? qsTr("Click: %1. Right click: menu, with Expand.")
+                        .arg(Texts.label("presses", entry.modelData.click))
+                    : qsTr("Click: %1. Double click: expand. Right click: more.")
+                        .arg(Texts.label("presses", entry.modelData.click || "preview_input"))
             }
 
             TapHandler {
                 acceptedButtons: Qt.RightButton
                 enabled: bar.core.connected
-                onTapped: menu.popup()
-            }
-
-            QQC2.Menu {
-                id: menu
-                KantePopupSkin { popup: menu }
-                QQC2.MenuItem {
-                    text: qsTr("Expand")
-                    onTriggered: bar.expandRequested(entry.modelData.id)
-                }
-                QQC2.MenuItem {
-                    text: qsTr("Cut to program")
-                    enabled: !entry.onProgram
-                    onTriggered: bar.act({ action: "cut_direct", input: entry.modelData.id })
-                }
+                onTapped: bar.menuRequested(entry.modelData.id)
             }
         }
     }
