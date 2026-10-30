@@ -58,7 +58,7 @@ use engine::strom::StromEngine;
 use engine::Engine;
 use service::Service;
 
-/// Mixer slots by default; strom's vision mixer takes up to 32.
+/// Mixer slots by default; at most `flows::MAX_SLOTS`.
 const DEFAULT_SLOTS: usize = 16;
 
 #[derive(Clone, Copy, Debug, ValueEnum)]
@@ -102,8 +102,10 @@ struct Args {
     #[arg(long, env = "LMIX_LIVE_DIR")]
     live_dir: Option<PathBuf>,
 
-    /// Mixer slots (inputs fed at the same time).
-    #[arg(long, default_value_t = DEFAULT_SLOTS)]
+    /// Mixer slots (inputs fed at the same time), 1 to 31: 32 made a
+    /// mixer the engine refused, over and over (29.10.2026).
+    #[arg(long, default_value_t = DEFAULT_SLOTS,
+          value_parser = clap::builder::RangedU64ValueParser::<usize>::new().range(1..=engine::flows::MAX_SLOTS as u64))]
     slots: usize,
 
     /// Address of the text protocol over TCP (API.5); off without it.
@@ -189,6 +191,12 @@ struct Args {
     #[arg(long, env = "LMIX_GOOGLE_API_KEY", hide_env_values = true)]
     google_api_key: Option<String>,
 
+    /// How long before its time a frame goes to a DeckLink card, in ms:
+    /// 60 with GStreamer's decklink plugin patched
+    /// (scripts/decklink-plugin.sh), else the default.
+    #[arg(long, env = "LMIX_CARD_LEAD_MS", default_value_t = engine::flows::CARD_LEAD_MS)]
+    card_lead_ms: u64,
+
     /// Show file to open at start; without it the last autosave is resumed.
     #[arg(long, env = "LMIX_SHOW")]
     show: Option<String>,
@@ -267,6 +275,7 @@ async fn main() -> anyhow::Result<()> {
     if let Some(key) = args.google_api_key.clone().filter(|k| !k.trim().is_empty()) {
         datasource::set_google_api_key(key.trim().to_string());
     }
+    engine::flows::set_card_lead_ms(args.card_lead_ms);
     metrics::started();
     let engine: Arc<dyn Engine> = match args.engine {
         EngineKind::Strom => {
@@ -545,4 +554,17 @@ fn spawn_cue_timer(service: std::sync::Arc<service::Service>) {
             "cue timer gave up real-time priority for the rest of the run: a cue step computed past RLIMIT_RTTIME's soft limit without a pause (RUN.8)"
         );
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn slots_stay_within_the_vision_mixer() {
+        let slots = |n: &str| Args::try_parse_from(["lmix-core", "--slots", n]).map(|a| a.slots);
+        assert_eq!(slots("31").unwrap(), engine::flows::MAX_SLOTS);
+        assert!(slots("32").is_err());
+        assert!(slots("0").is_err());
+    }
 }

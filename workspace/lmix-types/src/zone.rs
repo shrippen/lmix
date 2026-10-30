@@ -63,4 +63,9 @@ pub struct ZoneState {
     pub channels: u8,
     /// Empty: the zone plays nowhere on this machine (SND.16 warns).
     pub outputs: Vec<ZoneOutput>,
+    /// Level the zone is set to or fading to, dB (SND.11, SUI.8).
+    #[serde(default)]
+    pub gain_db: f32,
+    #[serde(default)]
+    pub mute: bool,
 }

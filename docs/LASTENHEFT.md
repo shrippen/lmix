@@ -18,6 +18,12 @@ hat ein eigenes Lastenheft, `LASTENHEFT-SHOW.md` (IDs CUE, RUN, SND, VIS,
 EXT, VAR, IMP, CTL, SAF, SUI, SSH, LGT, OBJ, FX, TC; Meilensteine S1–S3).
 Es setzt auf diesem Lastenheft auf und ändert es nicht.
 
+**lmix tools**: Werkzeuge für NDI und OMT unter Linux (Monitor, Test
+Patterns, Screen Capture, Virtual Camera, Discovery …, Vorbild NDI Tools)
+sind ein eigenes Projekt mit eigenem Lastenheft:
+<https://github.com/shrippen/lmix-tools> (`docs/LASTENHEFT.md`). Das
+OMT-Element für SRC.11 und OUT.6 entsteht dort und wird von strom geladen.
+
 ---
 
 ## 0. Clean-Room-Regeln
@@ -515,6 +521,28 @@ Aus den Persona-Durchläufen (`PERSONAS.md`).
 | OPS.3 | Monitoring: Gesundheitszustand und Metriken (Drops, Latenz, Encoder, Pegel, Speicher) über HTTP, Prometheus-Format (P5) | S | ✅ |
 | OPS.4 | Zeitplan: Show laden, Aufnahme und Stream starten/stoppen zu festen Zeiten, mit Namen für Dateien (REC.9) (P6) | K | – |
 
+### 3.22 Erweiterungen (PLG) (lmix)
+
+Plugins für Geräte und Programme, die lmix nicht selbst kennt, und fremde
+Bild- und Ton-Bausteine. Entscheidung 2026-10-29 (E.13, `DECISIONS.md`);
+Audio-Effekte bleiben bei AUD.11.
+
+| ID | Anforderung | Prio | Stand |
+|---|---|---|---|
+| PLG.1 | Steuer-Plugins im Format `lmix-plugin/1`: WebAssembly-Komponenten (WIT-Welt `lmix:plugin@1`) liefern Aktionen, Rückmeldungen und Variablen; in Aktionsfolgen, Shortcuts und Cues nutzbar wie eingebaute Aktionen | S | – |
+| PLG.2 | Plugin-Host als eigener Prozess (`lmix-plugin-host`); lmix-core spricht JSON-RPC mit ihm. Ein Plugin-Fehler oder -Absturz lässt nur seine Aktion fehlschlagen, nie Kern, Engine oder Ablauf (NFA.6) | S | – |
+| PLG.3 | Netz und Geräte nur über eigene Schnittstellen (`lmix:net` mit TCP, UDP, TLS, WebSocket; `lmix:timer`, `lmix:serial`, `wasi:http`); ereignisgetrieben | S | – |
+| PLG.4 | Rechte im Manifest, an die Konfiguration gebunden (z. B. nur `$config.host`); der Host prüft jede Verbindung und verweigert alles andere | S | – |
+| PLG.5 | Ausnahme `exec`: Plugin als eigenes Programm mit demselben JSON-RPC, für USB-HID, Hersteller-SDKs, externe Programme, GPL-Plugins Dritter und Python; beim Einrichten eine Warnung | K | – |
+| PLG.6 | Sandbox für Host und `exec`-Plugins: Landlock, `no_new_privs`, eigene cgroup | S | – |
+| PLG.7 | SDKs für Rust und JavaScript (ComponentizeJS); Python nur über `exec` | K | – |
+| PLG.8 | Verteilung von Hand und über einen Index auf GitHub, Pakete mit minisign signiert; GPL-Plugins Dritter nur als getrennte Programme, nie im lmix-Paket (NFA.9). Eine Show bringt nie Code mit | S | – |
+| PLG.9 | Companion: erst koppeln (API.11, lmix-Modul für Companion); danach Prototyp, der Companion-Module in GitHub-CI nach WASM übersetzt (Shims für `@companion-module/base` 1.x/2.x und Node-APIs). Node nur in dieser CI, nie zur Laufzeit von lmix; nur Module mit freier Lizenz (MIT, ISC, BSD, Apache-2.0), mit Lizenz und Prüfstatus im Index | K | – |
+| PLG.10 | Bild und Ton: kein eigenes Plugin-Format. Lokale Quelle und Senke für andere Programme über PipeWire, später unixfd | S | – |
+| PLG.11 | Fremde GStreamer-Plugins erlaubt. lmix führt eine Liste getesteter Plugins mit Version; jedes andere warnt beim Installieren und beim Hinzufügen der Quelle („kann Performance- und Stabilitätseinbußen mit sich bringen“) | S | – |
+| PLG.12 | Nach einem Absturz von strom ordnet lmix ihn einem Plugin zu: ein Crash-Handler in strom schreibt Stack und Speicherbelegung, lmix-core löst sie beim Neustart über die Registry auf und schlägt vor, das Plugin abzuschalten. Der Crash-Handler geht als Vorschlag an Eyevinn/strom | S | – |
+| PLG.13 | Reihenfolge: Plugin-Host nach der Kopplung mit Companion (PLG.9, erster Schritt) und dem OSC-Cue | — | (Plan) |
+
 ## 4. Nichtfunktionale Anforderungen (NFA)
 
 | ID | Anforderung | Prio |
@@ -604,6 +632,7 @@ nicht nach, sondern ersetzt sie durch Heutiges oder lässt sie weg
 | T.1/T.2 | Titelsystem | Kein CasparCG-Server (nach Analyse: zweite Engine, zweiter Takt, Bild per NDI). Titel-Fähigkeiten nach dem Vorbild CasparCG, gerendert in strom (§3.11) |
 | E.12 | Lizenz | lmix bleibt MIT-kompatibel (`claude.md` Entscheidung 6 unverändert) |
 | E.11 | Submixe | Wie vMix: bis 15 Mix-Inputs mit Preview/Program, Cut/Übergang, Overlays, Stinger; als Quelle für Ausgänge und Vollbild (SWI.10) |
+| E.13 | Plugins (User, 2026-10-29) | Steuer-Plugins als WebAssembly in einem eigenen Host-Prozess, `exec` als Ausnahme; Companion erst koppeln, Module später nach WASM übersetzen; für Bild und Ton kein eigenes Format, fremde GStreamer-Plugins mit Warnung und Absturz-Zuordnung (§3.22, `DECISIONS.md` 2026-10-29). Verworfen: nur Prozess je Plugin, Extism/Javy, Companion-Module mit Node zur Laufzeit, native Plugins im Kern |
 | — | Wiederholung, Gäste | Später (Priorität L) |
 | — | Prioritäten | AUD.11, OUT.16, PER.5, SRC.23 auf S; SHW.9 auf X; aus Persona-Durchlauf UI.7, SRC.28 auf S |
 

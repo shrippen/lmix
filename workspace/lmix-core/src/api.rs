@@ -8,7 +8,7 @@
 //! | `GET /api/tally` | tally per input: 0 off, 1 program, 2 preview |
 //! | `POST /api/latency/measure?seconds=N` | measure capture-to-program latency for N s (default 10) |
 //! | `GET /api/latency` | latest latency statistics (NFA.3) |
-//! | `GET /api/audio/levels` | audio levels per input and of program (dBFS) |
+//! | `GET /api/audio/levels` | audio levels per input, of program, the buses and the zones (dBFS) |
 //! | `GET /api/outputs/stats` | link health of running SRT outputs (rate, lost, dropped, RTT) |
 //! | `GET /api/shows/recent` | recently opened or saved show files, newest first |
 //! | `GET /api/devices` | capture devices for `SourceSpec::Device` |
@@ -33,7 +33,7 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use lmix_types::{Action, ActionError, Event, InputRef, LiveFeed};
+use lmix_types::{Action, ActionError, Event, InputRef};
 use tokio::sync::broadcast::error::RecvError;
 
 use crate::engine::EngineError;
@@ -61,6 +61,7 @@ pub fn router(service: Arc<Service>) -> Router {
         .route("/api/pictures/inputs/{input}", get(input_picture))
         .route("/api/live/program", get(live_program))
         .route("/api/live/preview", get(live_preview))
+        .route("/api/live/tiles", get(live_tiles))
         .route("/api/live/inputs/{input}", get(live_input))
         .route("/api/templates", get(templates))
         .route("/api/data/{source}", get(data_table))
@@ -204,13 +205,14 @@ async fn live_input(State(service): State<Arc<Service>>, Path(input): Path<Strin
     }
 }
 
+async fn live_tiles(State(service): State<Arc<Service>>) -> Response {
+    live_response(service.live_tiles().await)
+}
+
 /// Socket of a live picture; 404 when the engine has none (no engine).
-fn live_response(feed: Result<std::path::PathBuf, EngineError>) -> Response {
+fn live_response<T: serde::Serialize>(feed: Result<T, EngineError>) -> Response {
     match feed {
-        Ok(socket) => Json(LiveFeed {
-            socket: socket.to_string_lossy().into_owned(),
-        })
-        .into_response(),
+        Ok(feed) => Json(feed).into_response(),
         Err(EngineError::NoPictures) => StatusCode::NOT_FOUND.into_response(),
         Err(error) => (StatusCode::BAD_GATEWAY, error.to_string()).into_response(),
     }

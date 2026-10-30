@@ -204,6 +204,7 @@ ausgeschlossen. **MS**: Meilenstein (§7). Stand: ✅ vorhanden · ◐ teilweise
 | EXT.8 | Netz-Cue mit Dauer: wiederholt senden oder einen Wert blenden | K | S3 | – |
 | EXT.9 | MIDI-Cue: Note, CC, Programmwechsel, MSC | K | S3 | – |
 | EXT.10 | Art-Net/sACN-Cue für einfache DMX-Werte mit Fade | K | S3 | – |
+| EXT.11 | Plugin-Cue: eine Aktion eines Steuer-Plugins (`LASTENHEFT.md` PLG.1) mit ihren Parametern; Fehler wie bei EXT.3 angezeigt, nie den Ablauf blockierend (lmix) | S | nach S2 | – |
 
 ### 3.6 Variablen (VAR) (lmix)
 
@@ -272,11 +273,11 @@ QLab kennt keinen Import aus Texten; am nächsten kommt das Anlegen von Cues
 | SUI.5 | Warnliste: defekte Cues, fehlende Medien, fehlende Zonen-Geräte, nicht erreichbare Ausgabeziele; vor der Show prüfbar | S | S1 | ◐ (fehlende Start-Ziele, Ausgabeziele, Inputs, Mediendateien; Erreichbarkeit der Ziele: `check_targets`, „Ziele prüfen“, jedes Senden; Zonen-Geräte mit Stufe 2) |
 | SUI.6 | Dunkle Raumansicht: stark gedimmt, kein Weiß, für Bedienung im dunklen Raum (lmix) | S | S1 | ✅ (Knopf „Dunkel“: Kante dunkel und ein Schleier über dem Fenster) |
 | SUI.7 | Kleine Bühnenvorschau | S | S1 | ◐ (Live-Monitore) |
-| SUI.8 | Zonen-Leiste: Pegel und Lautstärke je Zone | S | S1 | – |
+| SUI.8 | Zonen-Leiste: Pegel und Lautstärke je Zone | S | S1 | ✅ (Pegel nach der Zonenlautstärke in `/api/audio/levels`, Lautstärke und Stumm im Zustand; Leiste unter der Show-Ansicht und im Reiter Zonen der Audio-Seite) |
 | SUI.9 | Gestaltung nach Kante (UI.9), Texte aus Katalogen de/en (NFA.11) | M | S1 | ✅ |
 | SUI.10 | Cues in der Oberfläche anlegen, bearbeiten, umsortieren, umnummerieren (wenn kein Drehbuch-Betrieb) | S | S2 | ◐ (Cue-Dialog AUT.14) |
 | SUI.11 | Standby unabhängig von der Auswahl (bearbeiten, während ein anderer Cue auf Standby steht) | S | S2 | – |
-| SUI.12 | Cue markieren (Prüfliste) und Zweitfarbe „bereits gelaufen“ | K | S2 | – |
+| SUI.12 | Cue markieren (Prüfliste) und Zweitfarbe „bereits gelaufen“ | K | S2 | ✅ (`flagged` am Cue über `update_cue`, gespeichert; `ShowState.ran_cues` bis Reset oder neue Show; Console: ⚑ je Zeile, gelaufene Zeilen getönt) |
 | SUI.13 | Felder und Funktionen je nach Modus zeigen oder verbergen; Seltenes hinter „Erweitert“ (S-E.5) (lmix) | S | S1 | ◐ („Erweitert“ in der Show-Ansicht) |
 
 ### 3.11 Show-Datei (SSH)

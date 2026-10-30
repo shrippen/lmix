@@ -18,6 +18,8 @@ Item {
     id: panel
 
     required property var act
+    /** AppShell.askRemove: ask, then remove with a way back. */
+    required property var askRemove
     required property var core
     /** `buses` at most and `name_max` characters of a name (lmix-types). */
     readonly property var limits: JSON.parse(core.choices("bus_limits"))
@@ -28,7 +30,12 @@ Item {
     /** `phones` of the show state. */
     property var phones: ({ volume: 100, mute: false, pre_fader: false })
     /** Levels as the bridge gives them (`program`, `phones`, `bus:<id>`). */
-    property var levels: ({})
+    /** AppShell.levels, or null. */
+    property var levels: null
+    function peak(key) {
+        const db = levels ? levels.peak(key) : undefined
+        return db !== undefined ? db : -100
+    }
     readonly property real contentHeight: column.implicitHeight
 
     // Rows by id: a new state (every fader step brings one) keeps them, so
@@ -36,32 +43,6 @@ Item {
     KeyedModel { id: busModel }
     Component.onCompleted: busModel.sync(buses.map(b => b.id))
     onBusesChanged: busModel.sync(buses.map(b => b.id))
-
-    /** Removes `bus` after asking: its sends go with it. */
-    function remove(bus) {
-        removeDialog.action = { action: "remove_bus", bus: bus.id }
-        removeDialog.title = qsTr("Remove %1?").arg(bus.name)
-        removeDialog.open()
-    }
-
-    KanteDialog {
-        id: removeDialog
-        property var action: null
-        parent: QQC2.Overlay.overlay
-        anchors.centerIn: parent
-        modal: true
-        width: Kirigami.Units.gridUnit * 24
-        standardButtons: QQC2.Dialog.Ok | QQC2.Dialog.Cancel
-        // KanteDialog has a child of its own, so it does not size to this.
-        contentHeight: removeText.implicitHeight
-        onAccepted: panel.act(action)
-        QQC2.Label {
-            id: removeText
-            width: parent.width
-            text: qsTr("Every input's send to it goes with it.")
-            wrapMode: Text.WordWrap
-        }
-    }
 
     /** A meter over volume and mute. */
     component FaderRows: ColumnLayout {
@@ -138,7 +119,7 @@ Item {
             KanteSectionLabel { text: qsTr("Master · program sound") }
             FaderRows {
                 name: qsTr("master")
-                level: panel.levels.program !== undefined ? panel.levels.program : -100
+                level: panel.peak("program")
                 volume: panel.master.volume
                 mute: panel.master.mute
                 onChanged: (volume, mute) => panel.act({ action: "set_master", volume: volume, mute: mute })
@@ -148,7 +129,7 @@ Item {
             KanteSectionLabel { text: qsTr("Headphones · listening") }
             FaderRows {
                 name: qsTr("headphones")
-                level: panel.levels.phones !== undefined ? panel.levels.phones : -100
+                level: panel.peak("phones")
                 volume: panel.phones.volume
                 mute: panel.phones.mute
                 onChanged: (volume, mute) => panel.act({ action: "set_phones", volume: volume, mute: mute })
@@ -206,12 +187,12 @@ Item {
                             QQC2.ToolTip.visible: hovered
                             QQC2.ToolTip.delay: Kirigami.Units.toolTipDelay
                             QQC2.ToolTip.text: text
-                            onClicked: panel.remove(bus.modelData)
+                            onClicked: panel.askRemove("bus", bus.modelData)
                         }
                     }
                     FaderRows {
                         name: bus.modelData.name
-                        level: panel.levels["bus:" + bus.modelData.id] !== undefined ? panel.levels["bus:" + bus.modelData.id] : -100
+                        level: panel.peak("bus:" + bus.modelData.id)
                         volume: bus.modelData.volume
                         mute: bus.modelData.mute
                         onChanged: (volume, mute) => panel.act({ action: "set_bus", bus: bus.modelData.id, volume: volume, mute: mute })

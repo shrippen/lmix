@@ -242,7 +242,7 @@ pub fn right_of(action: &Action) -> Right {
         | Action::RenameGraphics { .. }
         | Action::RenameInput { .. }
         | Action::ReplaceSource { .. }
-        | Action::RestoreInput
+        | Action::Restore
         | Action::SaveLayoutTemplate { .. }
         | Action::SaveShow { .. }
         | Action::SetAutoPlay { .. }

@@ -15,7 +15,7 @@
 //! so waits and follows never drift (RUN.8): a chain of a hundred 20 ms
 //! waits ends 2 s after GO however late each tick is.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::time::Duration;
 
 use tokio::time::Instant;
@@ -116,6 +116,8 @@ pub struct Runner {
     /// A panic runs until then; another panic before is a hard stop.
     panic_until: Option<Instant>,
     late: Lateness,
+    /// Cues that started since the show was opened or reset (SUI.12).
+    ran: BTreeSet<CueId>,
 }
 
 /// A button whose release is reported: a MIDI note or controller, an
@@ -444,6 +446,7 @@ impl Runner {
         self.standby.clear();
         self.last_go = None;
         self.panic_until = None;
+        self.ran.clear();
         out
     }
 
@@ -658,11 +661,17 @@ impl Runner {
                 _ => 0,
             },
         });
+        self.ran.insert(cue.id);
         out.push(Out::Event {
             list,
             cue: Some(cue.id),
             what: CueEvent::Started,
         });
+    }
+
+    /// Cues that started since the show was opened or reset (SUI.12).
+    pub fn ran(&self) -> Vec<CueId> {
+        self.ran.iter().copied().collect()
     }
 
     fn run_mut(&mut self, id: u64) -> Option<&mut Run> {
@@ -1874,6 +1883,34 @@ mod tests {
             2,
             "both pads start"
         );
+    }
+
+    /// A cue counts as ran from its start until a reset (SUI.12), a cue
+    /// in a group too.
+    #[test]
+    fn started_cues_count_as_ran_until_a_reset() {
+        let group = Cue {
+            number: "G".into(),
+            mode: Some(GroupMode::Timeline),
+            children: vec![wait("In", 100)],
+            ..Cue::empty(CueKind::Group)
+        };
+        let lists = vec![list(vec![wait("A", 10), group, cut("Later")])];
+        let mut runner = Runner::default();
+        let t = Instant::now();
+        runner.go(&lists, 0, t, Guard::time(0)).unwrap();
+        runner.tick(&lists, after(t, 50));
+        runner.go(&lists, 0, after(t, 50), Guard::time(0)).unwrap();
+
+        let mut want = vec![
+            lists[0].cues[0].id,
+            lists[0].cues[1].id,
+            lists[0].cues[1].children[0].id,
+        ];
+        want.sort();
+        assert_eq!(runner.ran(), want, "ended or running, not the standby");
+        runner.reset(after(t, 60));
+        assert!(runner.ran().is_empty());
     }
 
     #[test]

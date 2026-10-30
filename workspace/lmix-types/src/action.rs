@@ -128,7 +128,6 @@ pub const ACTION_GROUPS: &[(&str, &[&str])] = &[
         &[
             "add_input",
             "remove_input",
-            "restore_input",
             "replace_source",
             "rename_input",
             "set_input_color",
@@ -336,6 +335,7 @@ pub const ACTION_GROUPS: &[(&str, &[&str])] = &[
             "import_settings",
             "reset_settings",
             "new_show",
+            "restore",
             "save_show",
             "open_show",
             "append_show",
@@ -384,8 +384,10 @@ pub enum Action {
     RemoveInput {
         input: InputRef,
     },
-    /// Bring back the input closed last, with its settings (AUT.10).
-    RestoreInput,
+    /// Bring back what was removed last, an input, layout, bus or output,
+    /// with its settings (AUT.10; docs/DESIGN-DIALOGE.md rule 1). The last
+    /// ten removals are kept while the show is open.
+    Restore,
     /// Change what an input shows, keeping its settings (INP.4).
     ReplaceSource {
         input: InputRef,
@@ -1529,7 +1531,7 @@ pub enum ActionError {
     Locked,
     #[error("{class} is locked")]
     IoLocked { class: IoClass },
-    #[error("no closed input to bring back")]
+    #[error("nothing removed to bring back")]
     NothingToRestore,
     #[error("no shortcut {reference}")]
     UnknownShortcut { reference: String },

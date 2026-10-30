@@ -9,15 +9,17 @@ import org.lmix.console
 
 /**
  * The lmix window (docs/PLAN-SEITEN.md): a header with the file menu and
- * the state of the show, the pages (Mix, Show, ...) one at a time, and the
- * page bar at the foot with "Panic all". Pages are the children; each is
- * an AppPage. Switching pages stops nothing: the run is in lmix-core.
+ * the state of the show, the current page's title row and the lock, the
+ * pages (Mix, Show, ...) one at a time, and the page bar at the foot with
+ * the page's panic and "Panic all" (narrow or a colour band, as chosen in
+ * the File menu; in the band the panics go up). Pages are the children; each
+ * is an AppPage. Switching pages stops nothing: the run is in lmix-core.
  *
- *   lmix [File] show.lmix …        ● Rec ● Stream  lmix-core  [Keys]  20:14
+ *   lmix [File] | MIX 1080p30 tools  show.lmix … ● Rec  lmix-core [Keys] 20:14 [Lock]
  *   ┌ page ────────────────────────────────────────────────────────────┐
  *   └──────────────────────────────────────────────────────────────────┘
  *   older format · refusal
- *   [Mix][Show] …                         Ctrl+1…n  [PGM]  [Panic all]
+ *   [Mix][Show] …                         Ctrl+1…n  [PGM]  [FTB] [Panic]
  */
 Kirigami.ApplicationWindow {
     id: root
@@ -42,6 +44,9 @@ Kirigami.ApplicationWindow {
         category: "appearance"
         /** KanteStyle.Kind; Kante unless chosen otherwise. */
         property int style: KanteStyle.Kind.Kante
+        /** KantePageBar.Density of the page bar: Normal, Compact or a
+         *  band only, for more room on the pages. */
+        property int pageBar: KantePageBar.Density.Normal
     }
 
     Settings {
@@ -78,8 +83,50 @@ Kirigami.ApplicationWindow {
         target: root.contentItem
     }
 
-    readonly property var show: backend.state.length > 0 ? JSON.parse(backend.state) : null
+    /** Remove after asking, with a toast to bring it back (Removals). */
+    function askRemove(kind, item) {
+        removals.ask(kind, item)
+    }
+
+    /** Every input live in one picture; LiveView shows its cell of it. */
+    readonly property alias tilesAtlas: tilesAtlas
+    TilesAtlas {
+        id: tilesAtlas
+        core: root.backend
+    }
+
+    /** The show state (ShowState.qml), null until the first arrives. */
+    property var show: null
+    ShowState {
+        id: showState
+    }
+    Connections {
+        target: root.backend
+        function onStatePatched(patch) {
+            showState.patch(JSON.parse(patch))
+            root.show = showState
+        }
+    }
     readonly property var inputs: show ? show.inputs : []
+    /** Peaks in dBFS, undefined while none was measured: `peak(key)` of an
+     *  input id, "program", "phones", "bus:<id>" or "zone:<name>",
+     *  `channel(id, i)` of an input's channel. Read in a binding, they
+     *  follow every measurement. Numbers from Rust, no object per
+     *  measurement: parsed as JSON 10
+     *  times a second, the levels fed the JS garbage collector, 20 % of the
+     *  GUI thread with 31 inputs (29.10.2026). */
+    readonly property QtObject levels: QtObject {
+        function peak(key) {
+            void root.backend.levelsTick
+            const db = root.backend.peak(key)
+            return isNaN(db) ? undefined : db
+        }
+        function channel(id, index) {
+            void root.backend.levelsTick
+            const db = root.backend.channel(id, index)
+            return isNaN(db) ? undefined : db
+        }
+    }
     readonly property var recent: backend.recent.length > 0 ? JSON.parse(backend.recent) : []
 
     /** Send an lmix action (the API's JSON, as an object). */
@@ -88,7 +135,7 @@ Kirigami.ApplicationWindow {
     }
 
     function inputById(id) {
-        return inputs.find(i => i.id === id) || null
+        return show ? show.inputById(id) || null : null
     }
 
     function localPath(url) {
@@ -117,6 +164,14 @@ Kirigami.ApplicationWindow {
     }
     property string currentPage: "mix"
     readonly property var currentItem: pageItems.find(p => p.pageId === currentPage) || null
+    // The current page's tools sit in the header; the others go back to their page.
+    onPageItemsChanged: placeTools()
+    function placeTools() {
+        for (var i = 0; i < pageItems.length; i++) {
+            var tools = pageItems[i].toolsItem
+            tools.parent = pageItems[i] === currentItem ? pageToolsSlot : pageItems[i]
+        }
+    }
     function showPage(id) {
         if (!pageItems.some(p => p.pageId === id)) {
             return
@@ -125,6 +180,7 @@ Kirigami.ApplicationWindow {
         pageSettings.current = id
     }
     onCurrentItemChanged: {
+        placeTools()
         if (currentItem) {
             Qt.callLater(currentItem.takeFocus)
         }
@@ -360,34 +416,13 @@ Kirigami.ApplicationWindow {
             root.restoreFocus()
         }
     }
-    KanteDialog {
+    FactoryResetDialog {
         id: resetSettingsDialog
         onClosed: root.restoreFocus()
         parent: QQC2.Overlay.overlay
         anchors.centerIn: parent
-        title: qsTr("Factory settings")
-        modal: true
-        width: Kirigami.Units.gridUnit * 24
-        standardButtons: QQC2.Dialog.Cancel
-        contentHeight: resetColumn.implicitHeight
-        ColumnLayout {
-            id: resetColumn
-            width: parent.width
-            QQC2.Label {
-                Layout.fillWidth: true
-                wrapMode: Text.WordWrap
-                text: qsTr("Remove the shortcuts for all shows, the layout templates, the output targets with their secrets and the OSC subscribers of this machine? The show stays.")
-            }
-            KanteButton {
-                Layout.alignment: Qt.AlignRight
-                emphasis: KanteButton.Emphasis.Destructive
-                text: qsTr("Remove all")
-                onClicked: {
-                    root.act({ action: "reset_settings" })
-                    resetSettingsDialog.close()
-                }
-            }
-        }
+        act: root.act
+        onBackupRequested: exportSettingsDialog.open()
     }
 
     // Show packages (SHW.6): show, media, data files, own templates.
@@ -630,6 +665,18 @@ Kirigami.ApplicationWindow {
                                 ]
                                 onPicked: value => root.setStyle(value)
                             }
+                            ChoiceMenu {
+                                title: qsTr("Page bar")
+                                readonly property string iconName: "view-split-top-bottom"
+                                readonly property string valueText: choices.filter(c => c.value === current).map(c => c.label).join("")
+                                current: settings.pageBar
+                                choices: [
+                                    { value: KantePageBar.Density.Normal, label: qsTr("Normal") },
+                                    { value: KantePageBar.Density.Compact, label: qsTr("Narrow") },
+                                    { value: KantePageBar.Density.Band, label: qsTr("Colour band") }
+                                ]
+                                onPicked: value => settings.pageBar = value
+                            }
                             // Settings of this machine (SHW.8): rarely, so one level down;
                             // factory settings last and red.
                             QQC2.Menu {
@@ -656,6 +703,31 @@ Kirigami.ApplicationWindow {
                                 }
                             }
                         }
+                    }
+                    QQC2.Label {
+                        visible: root.currentItem !== null
+                        text: "|"
+                        color: KanteStyle.mutedTextColor
+                        Accessible.ignored: true
+                    }
+                    // The current page's title row (AppPage): title, subtitle, tools.
+                    KanteHeading {
+                        visible: root.currentItem !== null
+                        level: 2
+                        pageTitle: true
+                        text: root.currentItem ? root.currentItem.title : ""
+                    }
+                    QQC2.Label {
+                        visible: root.currentItem !== null && root.currentItem.subtitle.length > 0
+                        text: root.currentItem ? root.currentItem.subtitle : ""
+                        font.family: KanteStyle.monoFamily
+                        color: KanteStyle.mutedTextColor
+                        elide: Text.ElideRight
+                        Layout.maximumWidth: Kirigami.Units.gridUnit * 20
+                    }
+                    RowLayout {
+                        id: pageToolsSlot
+                        spacing: Kirigami.Units.smallSpacing
                     }
                     QQC2.Label {
                         Layout.fillWidth: true
@@ -695,8 +767,10 @@ Kirigami.ApplicationWindow {
                         QQC2.ToolTip.visible: warnHover.hovered
                         QQC2.ToolTip.text: root.machineWarning.detail
                     }
+                    // Steady while connected: a breathing pill would redraw
+                    // the whole window at the display's rate, all the time.
                     KantePill {
-                        status: root.backend.connected ? KantePill.State.Running : KantePill.State.Failed
+                        status: root.backend.connected ? KantePill.State.Done : KantePill.State.Failed
                         text: root.backend.connected ? qsTr("lmix-core") : qsTr("lmix-core offline")
                     }
                     KanteButton {
@@ -717,53 +791,87 @@ Kirigami.ApplicationWindow {
                             onTriggered: clock.text = Qt.formatTime(new Date(), "hh:mm:ss")
                         }
                     }
-                }
-            }
-
-            StackLayout {
-                id: stack
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                Layout.margins: Kirigami.Units.largeSpacing
-                currentIndex: {
-                    var n = 0
-                    for (var i = 0; i < children.length; i++) {
-                        if (children[i] === root.currentItem) {
-                            return i
-                        }
+                    // Global: the lock refuses what would break the show (closing
+                    // inputs, loading a show, stopping outputs, …) on every page.
+                    KanteButton {
+                        readonly property bool locked: root.show !== null && root.show.locked === true
+                        focusPolicy: Qt.NoFocus
+                        size: KanteButton.Size.Small
+                        text: locked ? qsTr("Locked") : qsTr("Lock")
+                        emphasis: locked ? KanteButton.Emphasis.Destructive : KanteButton.Emphasis.Normal
+                        enabled: root.backend.connected
+                        QQC2.ToolTip.visible: hovered
+                        QQC2.ToolTip.text: qsTr("While locked, closing inputs, loading a show, stopping outputs and changing format, sample rate or multiview are refused.")
+                        onClicked: root.act({ action: "set_lock", on: !locked })
                     }
-                    return 0
+                    // Up here only while the page bar is a band (it has no room).
+                    PanicButtons {
+                        visible: settings.pageBar === KantePageBar.Density.Band
+                    }
                 }
             }
 
-            // An older show file, converted on opening (SHW.7).
-            QQC2.Label {
+            // Banners for what lasts (rule 2, docs/DESIGN-DIALOGE.md);
+            // everything else is a toast.
+            KanteBanner {
                 Layout.fillWidth: true
-                Layout.leftMargin: Kirigami.Units.largeSpacing
-                Layout.rightMargin: Kirigami.Units.largeSpacing
+                visible: !root.backend.connected
+                danger: true
+                title: qsTr("lmix-core offline")
+                text: qsTr("The Console tries again every second. The engine and its outputs keep running.")
+            }
+            // An older show file, converted on opening (SHW.7).
+            KanteBanner {
+                Layout.fillWidth: true
                 visible: root.show !== null && !!root.show.older_format
+                title: qsTr("Older show format")
                 text: root.show && root.show.older_format
                     ? qsTr("This show file is in the older format %1 and was converted on opening. Saving it keeps the old file beside it (.v%1.bak).").arg(root.show.older_format)
                     : ""
-                color: KanteStyle.infoColor
-                wrapMode: Text.Wrap
             }
 
-            QQC2.Label {
+            Item {
                 Layout.fillWidth: true
-                Layout.leftMargin: Kirigami.Units.largeSpacing
-                Layout.rightMargin: Kirigami.Units.largeSpacing
-                visible: text.length > 0
-                text: Texts.message(root.backend.message)
-                color: KanteStyle.negativeTextColor
-                wrapMode: Text.Wrap
+                Layout.fillHeight: true
+                Layout.margins: Kirigami.Units.largeSpacing
+
+                StackLayout {
+                    id: stack
+                    anchors.fill: parent
+                    currentIndex: {
+                        var n = 0
+                        for (var i = 0; i < children.length; i++) {
+                            if (children[i] === root.currentItem) {
+                                return i
+                            }
+                        }
+                        return 0
+                    }
+                }
+
+                MessageToasts {
+                    id: toasts
+                    anchors.right: parent.right
+                    anchors.bottom: parent.bottom
+                    z: 10
+                    core: root.backend
+                }
+                Removals {
+                    id: removals
+                    core: root.backend
+                    act: root.act
+                    show: root.show
+                    column: toasts.column
+                    undoKeyFree: !root.keyTaken("Ctrl+Z")
+                }
             }
 
             // The page bar (KantePageBar): the pages, then program small
-            // where a page has none of its own, and Panic all.
+            // where a page has none of its own (not in the band).
             KantePageBar {
                 id: pageBar
                 Layout.fillWidth: true
+                density: settings.pageBar
                 model: root.pageItems.map(p => p.title)
                 tooltips: root.pageItems.map((p, i) => qsTr("%1 (Ctrl+%2)").arg(p.title).arg(i + 1))
                 busy: root.pageItems.map(p => p.busy)
@@ -798,17 +906,46 @@ Kirigami.ApplicationWindow {
                         source: parent.visible ? "program" : ""
                     }
                 }
-                KanteButton {
-                    focusPolicy: Qt.NoFocus
-                    emphasis: KanteButton.Emphasis.Destructive
-                    size: KanteButton.Size.Small
-                    text: qsTr("Panic all")
-                    enabled: root.backend.connected
-                    QQC2.ToolTip.visible: hovered
-                    QQC2.ToolTip.text: qsTr("Stop every cue over the panic time and fade program to black; recordings and streams go on")
-                    onClicked: root.panicAll()
-                }
+                PanicButtons {}
             }
+        }
+    }
+
+    // The page's own panic (Mix: FTB), then the one for everything; at the
+    // right of the page bar, in the header while the bar is a band.
+    component PanicButtons: RowLayout {
+        id: panics
+        spacing: Kirigami.Units.smallSpacing
+        KanteButton {
+            id: pagePanic
+            readonly property bool active: root.currentItem !== null && root.currentItem.panicActive
+            visible: root.currentItem !== null && root.currentItem.panicText.length > 0
+            focusPolicy: Qt.NoFocus
+            emphasis: KanteButton.Emphasis.Destructive
+            size: KanteButton.Size.Small
+            text: root.currentItem ? root.currentItem.panicText : ""
+            QQC2.ToolTip.visible: hovered && root.currentItem !== null && root.currentItem.panicTip.length > 0
+            QQC2.ToolTip.text: root.currentItem ? root.currentItem.panicTip : ""
+            onClicked: root.currentItem.panicRequested()
+            // In force (program black): the button pulses until it is ended.
+            SequentialAnimation on opacity {
+                running: pagePanic.active && panics.visible
+                loops: Animation.Infinite
+                NumberAnimation { to: 0.45; duration: 600 }
+                NumberAnimation { to: 1; duration: 600 }
+                onRunningChanged: if (!running) pagePanic.opacity = 1
+            }
+        }
+        KanteButton {
+            focusPolicy: Qt.NoFocus
+            emphasis: KanteButton.Emphasis.Destructive
+            size: KanteButton.Size.Small
+            text: qsTr("Panic", "stops everything")
+            Accessible.name: qsTr("Panic all")
+            enabled: root.backend.connected
+            QQC2.ToolTip.visible: hovered
+            QQC2.ToolTip.text: qsTr("Stop every cue over the panic time and fade program to black; recordings and streams go on")
+            onClicked: root.panicAll()
         }
     }
 }

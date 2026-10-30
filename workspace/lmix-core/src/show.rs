@@ -469,6 +469,7 @@ pub fn read_bytes(bytes: &[u8], name: &str) -> Result<Loaded, ShowFileError> {
         if version < 3 {
             migrate_aux_buses(show);
         }
+        rename_actions(show);
     }
     let file: ShowFile = serde_json::from_value(value).map_err(|e| format_err(e.to_string()))?;
     Ok(Loaded {
@@ -739,6 +740,24 @@ fn rewrite_aux_actions(value: &mut Value, bus: &dyn Fn(usize) -> Value) {
                 }
             }
             _ => {}
+        }
+    });
+}
+
+/// Actions renamed before the first release, old name → new. A saved one
+/// is read by its new name whatever the file's version: the old name is
+/// no action any more, so nothing else could mean it.
+const RENAMED_ACTIONS: [(&str, &str); 1] = [("restore_input", "restore")];
+
+/// Every saved action in `value` by its current name (`RENAMED_ACTIONS`):
+/// shows, the settings' shortcuts and those for all shows.
+pub fn rename_actions(value: &mut Value) {
+    actions_mut(value, &mut |map| {
+        let Some(name) = map.get("action").and_then(Value::as_str) else {
+            return;
+        };
+        if let Some((_, to)) = RENAMED_ACTIONS.iter().find(|(from, _)| *from == name) {
+            map.insert("action".into(), Value::String((*to).into()));
         }
     });
 }
@@ -1079,6 +1098,27 @@ mod tests {
         let err = load(&path).await.unwrap_err();
 
         assert!(matches!(err, ShowFileError::TooNew { .. }), "{err}");
+    }
+
+    /// `restore_input` became `restore` (it brings back any removal): a
+    /// saved one, also inside a saved action, is read as `restore`, and a
+    /// show of the current version still loads.
+    #[test]
+    fn restore_input_is_read_as_restore() {
+        let mut show = serde_json::to_value(sample()).unwrap();
+        show["shortcuts"][0]["actions"] = serde_json::json!([
+            {"action": "restore_input"},
+            {"action": "add_shortcut", "shortcut": {"label": "B", "actions": [
+                {"action": "restore_input"},
+            ]}},
+        ]);
+        let file =
+            serde_json::json!({ "format": FILE_FORMAT, "version": FILE_VERSION, "show": show });
+        let loaded = read_bytes(&serde_json::to_vec(&file).unwrap(), "now").unwrap();
+        let actions = &loaded.show.shortcuts[0].actions;
+        assert_eq!(actions[0], Action::Restore);
+        let json = serde_json::to_string(actions).unwrap();
+        assert!(!json.contains("restore_input"), "{json}");
     }
 
     #[test]
