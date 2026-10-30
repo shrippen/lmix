@@ -352,7 +352,7 @@
       <translation>Die des Geräts</translation>
     </message>
     <message>
-      <location line="+190" />
+      <location line="+196" />
       <source>Pattern</source>
       <translation>Muster</translation>
     </message>
@@ -453,17 +453,22 @@
       <translation>Nur ein Modus, den das Gerät unkomprimiert anbietet (nicht als MJPEG): Mit jedem anderen bleibt der Input ohne Bild. „Die des Geräts“ geht immer.</translation>
     </message>
     <message>
-      <location line="+20" />
+      <location line="+25" />
+      <source>Another input has this name.</source>
+      <translation>Ein anderer Input hat diesen Namen.</translation>
+    </message>
+    <message>
+      <location line="+5" />
       <source>Then add another</source>
       <translation>Danach weiteren hinzufügen</translation>
     </message>
     <message>
-      <location line="-11" />
+      <location line="-21" />
       <source>Name</source>
       <translation>Name</translation>
     </message>
     <message>
-      <location line="+6" />
+      <location line="+7" />
       <source>optional</source>
       <translation>optional</translation>
     </message>
@@ -2004,7 +2009,7 @@
       <translation>Name</translation>
     </message>
     <message>
-      <location line="+10" />
+      <location line="+16" />
       <source>Colour tag</source>
       <translation>Farbmarke</translation>
     </message>
