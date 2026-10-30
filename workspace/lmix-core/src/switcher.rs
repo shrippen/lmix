@@ -5361,9 +5361,11 @@ impl Switcher {
         let outputs = &self.show.outputs;
         let index = match output {
             OutputRef::Number(n) => (*n as usize).checked_sub(1).filter(|i| *i < outputs.len()),
+            // An id first, as for layouts: the console removes by id.
             OutputRef::Text(text) => outputs
                 .iter()
-                .position(|o| o.name == *text || o.id.to_string() == *text),
+                .position(|o| o.id.to_string() == *text)
+                .or_else(|| outputs.iter().position(|o| o.name == *text)),
         };
         index.ok_or_else(unknown)
     }
@@ -9456,6 +9458,36 @@ mod tests {
 
     fn restorable(sw: &Switcher) -> Option<(lmix_types::RemovedKind, String)> {
         sw.state().restorable.map(|r| (r.kind, r.name))
+    }
+
+    // The console removes by id (Removals.qml): an id wins over a name, also
+    // a name that reads like another's id, as for layouts.
+    #[test]
+    fn an_output_by_id_is_that_one() {
+        let mut sw = with_buses();
+        let srt = |port: u16| OutputSpec::Srt {
+            uri: format!("srt://cdn:{port}"),
+            video_kbps: 6000,
+            encoding: Default::default(),
+        };
+        for port in [9000, 9001] {
+            sw.apply(Action::AddOutput {
+                spec: srt(port),
+                source: OutputSource::Program,
+                name: Some("CDN".into()),
+                bus: Some(bus("Stream")),
+            })
+            .unwrap();
+        }
+        let second = sw.state().outputs[1].id.to_string();
+        // No action renames an output.
+        sw.show.outputs[0].name = second.clone();
+        sw.apply(Action::RemoveOutput {
+            output: OutputRef::Text(second.clone()),
+        })
+        .unwrap();
+        let left: Vec<String> = sw.state().outputs.iter().map(|o| o.name.clone()).collect();
+        assert_eq!(left, vec![second]);
     }
 
     #[test]
