@@ -25,8 +25,9 @@ import "."
  * Footer start (Kante 1.57, from lmix): `footerStart` takes the app's own buttons
  * (KanteButton) and puts them at the start of the footer, before the standard buttons and
  * apart from them, such as "Shortcuts…" beside Close in lmix's keys overview. Every style
- * does it, also after a switch at run time; the footer makes room for them. They are no
- * standard buttons: their own `onClicked`, no accept or reject, no role.
+ * does it, also after a switch at run time; the footer makes room for them, in width and
+ * height, also without a standard button. They are no standard buttons: their own
+ * `onClicked`, no accept or reject, no role; one taken out of the list leaves the footer.
  * Since 1.55 `acceptText` also holds when the button box sets its standard texts again
  * (a language change, also the one at start with the app's translations): it read "OK"
  * in German before.
@@ -90,10 +91,20 @@ QQC2.Dialog {
         anchors.verticalCenter: parent ? parent.verticalCenter : undefined
         spacing: Kirigami.Units.smallSpacing
     }
+    // The buttons placed so far: one no longer in footerStart leaves the footer again.
+    property var kanteFooterPlaced: []
     function placeFooterStart() {
+        const now = []
         for (let i = 0; i < footerStart.length; ++i) {
+            now.push(footerStart[i])
             footerStart[i].parent = kanteFooterStart
         }
+        for (const item of kanteFooterPlaced) {
+            if (now.indexOf(item) < 0 && item.parent === kanteFooterStart) {
+                item.parent = null
+            }
+        }
+        kanteFooterPlaced = now
     }
     onFooterStartChanged: placeFooterStart()
     Binding {
@@ -108,6 +119,24 @@ QQC2.Dialog {
         target: control.footer
         property: "leftPadding"
         value: control.footer ? control.footer.padding + control.kanteFooterStart.implicitWidth + Kirigami.Units.largeSpacing : 0
+        when: control.footer !== null && control.footerStart.length > 0
+        restoreMode: Binding.RestoreBindingOrValue
+    }
+    // The platform's footer hides without standard buttons: shown for them too.
+    Binding {
+        target: control.footer
+        property: "visible"
+        value: true
+        when: control.footer !== null && control.footerStart.length > 0
+        restoreMode: Binding.RestoreBindingOrValue
+    }
+    // And the footer is as high as they are, also without a standard button.
+    Binding {
+        target: control.footer
+        property: "implicitHeight"
+        value: control.footer ? Math.max(control.footer.implicitBackgroundHeight + control.footer.topInset + control.footer.bottomInset,
+                                         Math.max(control.footer.implicitContentHeight, control.kanteFooterStart.implicitHeight)
+                                         + control.footer.topPadding + control.footer.bottomPadding) : 0
         when: control.footer !== null && control.footerStart.length > 0
         restoreMode: Binding.RestoreBindingOrValue
     }
