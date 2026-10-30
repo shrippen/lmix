@@ -2603,6 +2603,12 @@ async fn save(sw: &mut Switcher, path: Option<String>) -> Result<(), ActionError
 #[cfg(test)]
 mod tests {
 
+    use super::*;
+    use crate::engine::null::NullEngine;
+    use lmix_types::{
+        DisplayMode, InputRef, OutputRef, OutputSource, OutputSpec, SourceSpec, TestPattern,
+    };
+
     /// A card output that fails for want of the decklink2 plugin says
     /// how to build it; other failures stay as they are.
     #[test]
@@ -2617,11 +2623,6 @@ mod tests {
             "srt: connection refused"
         );
     }
-    use super::*;
-    use crate::engine::null::NullEngine;
-    use lmix_types::{
-        DisplayMode, InputRef, OutputRef, OutputSource, OutputSpec, SourceSpec, TestPattern,
-    };
 
     /// `restore_input` became `restore`: the shortcuts for all shows
     /// (`--shortcuts`) with it still load.
