@@ -27,11 +27,18 @@ Flow {
 
     spacing: Kirigami.Units.largeSpacing
 
+    // Rows by name: every volume step brings a new state, and a rebuilt
+    // row would end the drag under the finger.
+    KeyedModel { id: zoneModel }
+    Component.onCompleted: zoneModel.sync(zones.map(z => z.name))
+    onZonesChanged: zoneModel.sync(zones.map(z => z.name))
+
     Repeater {
-        model: bar.zones
+        model: zoneModel
         delegate: ColumnLayout {
             id: zone
-            required property var modelData
+            required property string key
+            readonly property var modelData: bar.zones.find(z => z.name === key) ?? { name: key, gain_db: 0, mute: false, outputs: [] }
             width: bar.zoneWidth
             spacing: 0
 
