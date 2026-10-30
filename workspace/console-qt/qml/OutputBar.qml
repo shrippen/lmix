@@ -57,18 +57,19 @@ RowLayout {
             emphasis: running ? KanteButton.Emphasis.Primary
                 : (status.state === "failed" ? KanteButton.Emphasis.Destructive : KanteButton.Emphasis.Normal)
             enabled: bar.core.connected
-            onClicked: {
-                // One waiting for the cards just stops waiting.
-                if (status.state === "cards_off") {
-                    bar.act({ action: "stop_output", output: modelData.number })
-                } else if (!running) {
-                    bar.act({ action: "start_output", output: modelData.number })
-                } else if (bar.confirmStop) {
+            // One waiting for the cards just stops waiting.
+            onClicked: running || status.state === "cards_off" ? stop() : start()
+            function start() {
+                bar.act({ action: "start_output", output: modelData.number })
+            }
+            /** Asks first while it sends (UI.10); a stop never starts. */
+            function stop() {
+                if (running && bar.confirmStop) {
                     stopDialog.output = modelData
                     stopDialog.open()
-                } else {
-                    bar.act({ action: "stop_output", output: modelData.number })
+                    return
                 }
+                bar.act({ action: "stop_output", output: modelData.number })
             }
 
             QQC2.ToolTip.visible: hovered
@@ -96,9 +97,8 @@ RowLayout {
                 output: button.modelData
                 link: button.link
                 elapsed: button.elapsed
-                // A click on the button starts or stops alike.
-                onStartRequested: button.clicked()
-                onStopRequested: button.clicked()
+                onStartRequested: button.start()
+                onStopRequested: button.stop()
                 onSettingsRequested: bar.settingsRequested(button.modelData.id)
                 onRemoveRequested: bar.askRemove("output", button.modelData)
             }
