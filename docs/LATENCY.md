@@ -38,6 +38,21 @@ cd ../selftest && cargo build --release
 - Testdatei: 1080p30 H.264 (Constrained Baseline, 8 Mbit/s, GOP 60,
   `videotestsrc pattern=ball` + `timeoverlay`, per NVENC erzeugt).
 
+## 2026-10-30 — SDI-Loop mit decklink2sink (H.7)
+
+Wie unten, Kartenausgang jetzt über `decklink2sink` (DECISIONS 30.10.),
+1080p25, CUDA-Mischer, 3 Läufe je Zeile, Last unter 1,1 (andere Agenten
+davor und danach beschäftigt).
+
+| Aufbau | Input hinter Program |
+|---|---|
+| decklink2, Vorlauf 20 ms (Standard) | 433, 400, 433 ms |
+| decklink2, Vorlauf 0 ms | 433, 366, 400 ms |
+| decklink2, 3 Bilder vorgehalten (Versuch, nicht im Code) | 267, 234, 267 ms |
+
+Der Vorlauf ändert nichts mehr; was zählt, ist der Puffer der Karte
+(Standard 7 Bilder = 280 ms bei 25p).
+
 ## 2026-10-27 — SDI-Loop: Program über die Karte zurück (H.7)
 
 `scripts/measure-sdi-latency.sh` (DeckLink Quad 2, Kabel von Anschluss 1
