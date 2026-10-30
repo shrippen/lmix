@@ -5614,10 +5614,13 @@ Optionen:
   (`docs/upstream/STROM.md`).
 
 Entscheidung: `lmix-core` fragt für laufende RTMP- und Aufnahme-Ausgänge
-einmal je Sekunde `output-bytes` ab und nimmt die Rate aus zwei Lesungen
-(`engine/output_rate.rs`). Die erste Lesung, eine über 3 s alte und ein
-Zähler, der zurückging (Neustart, Wiederverbindung von `rtmp2sink`), geben
-keine Rate; dann zeigt die Console die eingestellte. `OutputStats` hat jetzt
+einmal je Sekunde `output-bytes` ab und nimmt die Rate über die Lesungen
+der letzten 4 s (`engine/output_rate.rs`), nicht zwischen zwei Lesungen:
+fragmentiertes MP4 schreibt ein Fragment je Sekunde, je Sekunde gelesen
+fällt mal keins, mal zwei in eine Lesung (in der VM-Prüfung stand eine
+MP4-Aufnahme so auf 0 kbit/s). Die erste Lesung, eine Lücke von 4 s und ein Zähler, der
+zurückging (Neustart, Wiederverbindung von `rtmp2sink`), geben keine Rate;
+dann zeigt die Console die eingestellte. `OutputStats` hat jetzt
 `kbps` für alle drei Arten und `srt: Option<SrtLink>` mit Verbindung,
 Paketverlusten und RTT nur für SRT (bricht das JSON von `outputs` und
 `/api/outputs/stats`; vor dem ersten Release erlaubt, Console,
