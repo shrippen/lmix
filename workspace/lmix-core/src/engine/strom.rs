@@ -1381,8 +1381,15 @@ impl Engine for StromEngine {
             *self.buses.lock().expect("buses lock") = current.as_ref().and_then(flows::buses_of);
             // A Console of the lmix-core before this one may still read
             // the tiles: their live flow runs on, and it asks no more.
-            let tiles = self.get_flow(flows::live_flow_id(LivePicture::Tiles)).await;
-            if tiles.ok().flatten().is_some_and(|f| f.running) {
+            // Unknown counts as read: lit costs load at most, dark the picture.
+            let read = match self.get_flow(flows::live_flow_id(LivePicture::Tiles)).await {
+                Ok(flow) => flow.is_some_and(|f| f.running),
+                Err(e) => {
+                    tracing::warn!("tiles flow at takeover: {e}; keeping the tiles lit");
+                    true
+                }
+            };
+            if read {
                 self.tiles_watched.store(true, Ordering::Relaxed);
             }
             self.show_tiles().await;
@@ -2242,6 +2249,67 @@ mod tests {
                     .unwrap();
                     seen.lock().unwrap().push(body["value"].clone());
                 } else if parts.method == "GET" {
+                    if let Some(flow) = flows_by_id.get(&path) {
+                        return (
+                            StatusCode::OK,
+                            axum::Json(serde_json::json!({ "flow": flow })),
+                        );
+                    }
+                }
+                (StatusCode::OK, axum::Json(serde_json::json!({})))
+            }
+        });
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        let engine = StromEngine::new(
+            format!("http://{addr}"),
+            MixerBackend::Cpu,
+            MonitorOut::None,
+        );
+
+        engine.start(2).await.unwrap();
+
+        let alphas = alphas.lock().unwrap().clone();
+        assert!(!alphas.is_empty(), "the tile pads are set");
+        assert!(alphas.iter().all(|a| a == 1.0), "{alphas:?}");
+    }
+
+    /// Whether a Console still reads the tiles is unknown when strom does
+    /// not answer for their flow: lit costs load at most, dark the picture.
+    #[tokio::test]
+    async fn a_takeover_keeps_the_tiles_lit_when_strom_cannot_say() {
+        let probe = StromEngine::new(String::new(), MixerBackend::Cpu, MonitorOut::None);
+        probe.slots.store(2, Ordering::Relaxed);
+        let mut mixer = probe.mixer_flow();
+        mixer.running = true;
+        let mut tiles = Flow::new("tiles");
+        tiles.id = flows::live_flow_id(LivePicture::Tiles);
+        tiles.running = true;
+        let flows_by_id = std::sync::Arc::new(std::collections::HashMap::from([
+            (format!("/api/flows/{}", mixer.id), mixer),
+            (format!("/api/flows/{}", tiles.id), tiles),
+        ]));
+        let alphas = std::sync::Arc::new(std::sync::Mutex::new(Vec::<serde_json::Value>::new()));
+        let seen = alphas.clone();
+        let app = axum::Router::new().fallback(move |request: axum::extract::Request| {
+            let (seen, flows_by_id) = (seen.clone(), flows_by_id.clone());
+            async move {
+                let (parts, body) = request.into_parts();
+                let path = parts.uri.path().to_string();
+                if parts.method == "PATCH" && path.contains(":tiles_comp/") {
+                    let body: serde_json::Value = serde_json::from_slice(
+                        &axum::body::to_bytes(body, usize::MAX).await.unwrap(),
+                    )
+                    .unwrap();
+                    seen.lock().unwrap().push(body["value"].clone());
+                } else if parts.method == "GET" {
+                    if path.ends_with(&flows::live_flow_id(LivePicture::Tiles).to_string()) {
+                        return (
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            axum::Json(serde_json::json!({})),
+                        );
+                    }
                     if let Some(flow) = flows_by_id.get(&path) {
                         return (
                             StatusCode::OK,
