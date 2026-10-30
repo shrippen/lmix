@@ -31,9 +31,10 @@ TestCase {
             act: action => test.sent.push(action)
             inputs: [
                 { id: "cam", number: 1, name: "Cam", click: "preview_input" },
-                { id: "clip", number: 2, name: "Clip", click: "cut_direct" }
+                { id: "clip", number: 2, name: "Clip", click: "cut_direct" },
+                { id: "jingle", number: 3, name: "Jingle", click: "quick_play" }
             ]
-            collapsed: ["cam", "clip"]
+            collapsed: ["cam", "clip", "jingle"]
             onExpandRequested: id => test.expanded.push(id)
         }
     }
@@ -79,12 +80,14 @@ TestCase {
 
     // Its click goes on air: a double click is not to expand it (the menu
     // does), and cuts once, not twice.
+    // Quick play goes on air too.
     function test_a_double_click_on_a_cut_input_cuts_once() {
         const bar = makeBar()
         mouseDoubleClickSequence(buttonNamed(bar, "Input 2 Clip, collapsed"))
+        mouseDoubleClickSequence(buttonNamed(bar, "Input 3 Jingle, collapsed"))
         compare(expanded, [])
         wait(Qt.styleHints.mouseDoubleClickInterval + 100)
-        compare(sent, [{ action: "click_input", input: "clip" }])
+        compare(sent, [{ action: "click_input", input: "clip" }, { action: "click_input", input: "jingle" }])
     }
 
     function test_a_double_click_expands_a_preview_input() {
