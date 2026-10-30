@@ -6,9 +6,10 @@ import Kante
 
 /**
  * Collapsed inputs (UI.3): a button each instead of a tile, red on
- * program and green in preview like a tile. Click as on the tile, double
- * click expands, right click opens the tile's menu (docs/DESIGN-DIALOGE.md
- * M04; GO is in that menu).
+ * program and green in preview like a tile. A click acts as on the tile,
+ * at once; a right click opens the tile's menu, with Expand and GO
+ * (docs/DESIGN-DIALOGE.md M04). A double click expands only an input whose
+ * click previews.
  */
 Flow {
     id: bar
@@ -75,6 +76,9 @@ Flow {
                 // expands only where the click previews; where it goes on air, waiting
                 // to tell the two apart would make the cut late, so the menu expands.
                 onClicked: entry.click()
+                // Stays connected for every input: a handled double click
+                // takes the press that would have clicked a second time, so
+                // a cut input cuts once.
                 onDoubleClicked: {
                     if (!entry.clickOnAir) {
                         bar.expandRequested(entry.modelData.id)
@@ -82,7 +86,7 @@ Flow {
                 }
                 QQC2.ToolTip.visible: hovered
                 QQC2.ToolTip.text: entry.clickOnAir
-                    ? qsTr("Click: %1. Right click: more, also expand.")
+                    ? qsTr("Click: %1. Right click: menu, with Expand.")
                         .arg(Texts.label("presses", entry.modelData.click))
                     : qsTr("Click: %1. Double click: expand. Right click: more.")
                         .arg(Texts.label("presses", entry.modelData.click || "preview_input"))

@@ -1338,7 +1338,7 @@
   <context>
     <name>CollapsedBar</name>
     <message>
-      <location filename="../qml/CollapsedBar.qml" line="+42" />
+      <location filename="../qml/CollapsedBar.qml" line="+43" />
       <source>Collapsed</source>
       <translation>Eingeklappt</translation>
     </message>
@@ -1348,14 +1348,14 @@
       <translation>Input %1 %2, eingeklappt</translation>
     </message>
     <message>
-      <location line="+12" />
-      <source>Click: %1. Right click: more, also expand.</source>
-      <translation>Klick: %1. Rechtsklick: mehr, auch aufklappen.</translation>
+      <location line="+15" />
+      <source>Click: %1. Right click: menu, with Expand.</source>
+      <translation>Klick: %1. Rechtsklick: Menü, darin Ausklappen.</translation>
     </message>
     <message>
       <location line="+2" />
       <source>Click: %1. Double click: expand. Right click: more.</source>
-      <translation>Klick: %1. Doppelklick: aufklappen. Rechtsklick: mehr.</translation>
+      <translation>Klick: %1. Doppelklick: ausklappen. Rechtsklick: mehr.</translation>
     </message>
   </context>
   <context>
