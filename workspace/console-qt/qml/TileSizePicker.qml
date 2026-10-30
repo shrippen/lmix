@@ -14,8 +14,9 @@ RowLayout {
 
     property int currentIndex: 1
     signal activated(int index)
-    /** Width of each picture. */
+    /** Width of each picture, and the gap between its tiles. */
     readonly property real across: Kirigami.Units.gridUnit * 3
+    readonly property real gap: KanteStyle.unit(2)
 
     spacing: Kirigami.Units.smallSpacing
 
@@ -47,19 +48,18 @@ RowLayout {
                 Item {
                     Layout.alignment: Qt.AlignHCenter
                     implicitWidth: picker.across
-                    implicitHeight: (picker.across / 2) * 9 / 16 * 2 + 2
+                    implicitHeight: ((picker.across - picker.gap) / 2) * 9 / 16 * 2 + picker.gap
                     Grid {
                         id: picture
                         anchors.centerIn: parent
                         columns: tile.modelData.columns
-                        spacing: 2
+                        spacing: picker.gap
                         Repeater {
                             model: tile.modelData.columns * tile.modelData.rows
                             Rectangle {
                                 width: (picker.across - picture.spacing * (picture.columns - 1)) / picture.columns
                                 height: width * 9 / 16
                                 color: tile.checked ? KanteStyle.focusColor : KanteStyle.mutedTextColor
-                                opacity: tile.checked ? 1 : 0.6
                             }
                         }
                     }
