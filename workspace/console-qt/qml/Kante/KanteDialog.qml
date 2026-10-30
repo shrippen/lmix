@@ -20,7 +20,8 @@ import "."
  * before.
  * Destructive (Kante 1.55, from lmix): a question whose yes removes or resets something:
  * the bar on top and the accept button in the negative colour, Cancel before it; the
- * button says what goes (`acceptText: "Remove bus"`).
+ * button says what goes (`acceptText: "Remove bus"`). In the Kante style only: System and
+ * Kante Light keep the platform's dialog and button order.
  * Since 1.55 `acceptText` also holds when the button box sets its standard texts again
  * (a language change, also the one at start with the app's translations): it read "OK"
  * in German before.
