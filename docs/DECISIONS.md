@@ -5397,6 +5397,54 @@ Ctrl+Z ebenso.
   (Regel 1 nennt sie auch; sie folgen), sowie Stoppen und Werkseinstellungen
   (nicht zurückzuholen, nur mit Rückfrage).
 
+## 2026-10-30 — Inputnamen eindeutig
+
+Aktionen wählen Inputs auch per Name; zwei „Cam 1“ trafen immer den
+ersten. Bisher machte nur der Import aus einer anderen Show den Namen
+eindeutig. Entscheidung des Users: wie bei Bussen (INP.2).
+
+- **Eingetippt wird abgelehnt:** Anlegen mit Namen (Console-Feld
+  „optional“, API, OSC) und Umbenennen auf einen vergebenen Namen lehnt
+  lmix-core ab (`duplicate_input_name`), Groß-/Kleinschreibung egal. Die
+  Console zeigt es als Toast wie beim Bus. Der eigene Name in anderer
+  Schreibung bleibt erlaubt.
+- **Selbst vergeben wird nummeriert:** Name aus der Quelle (Anlegen ohne
+  Namen), Rückgängig nach Entfernen und Import heißen „Name (2)“,
+  „Name (3)“ …
+- **Suche wie Eindeutigkeit:** Aktionen, Show-Prüfung und Rückmeldungen
+  (Tally/Feedback) finden einen Input per Name ohne Groß-/Kleinschreibung
+  („cam 1“ findet „Cam 1“). Layouts, Ausgänge, Cue-Listen und Kurzbefehle
+  suchen eigens und bleiben, wie sie sind.
+- **Bricht:** Shows mit doppelten Namen benennt das Laden einmal um; der
+  erste behält den Namen (ihn trafen Aktionen schon), die späteren werden
+  nummeriert. Eine Aktion, die einen späteren Doppelgänger in anderer
+  Schreibung nannte („cam 1“ neben „Cam 1“), trifft danach den ersten.
+
+## 2026-10-30 — Kachelbild dunkel, wenn keine Console mehr zusieht
+
+Seit #183 zeichnet der CPU-Mischer das Kachelbild erst, wenn eine Console
+es anfordert (strom 480 % eines Kerns statt 300 %). Die Console fragt
+`GET /api/live/tiles` einmal und liest dann direkt aus strom's Socket;
+`unixfdsink` sagt nicht, ob noch jemand liest. Geschlossen blieb das
+Kachelbild an.
+
+- **Frist statt Zählen:** Jede Anfrage gibt dem Kachelbild 10 s
+  (`TILES_LEASE`); eine Console, die es zeigt, fragt alle 3 s erneut.
+  Ohne Anfrage in der Frist wird es dunkel (`Engine::dim_tiles`, Pads auf
+  alpha 0). 10 s: zwei verlorene Anfragen einer beschäftigten Console
+  machen es nicht dunkel, eine geschlossene kostet nach Sekunden nichts
+  mehr; ein Neustart der Console in der Frist sieht kein Flackern.
+- **Kein Polling:** lmix-core schläft bis zum Fristende oder bis zur
+  nächsten Anfrage; eine Anfrage bei hellem Bild schickt strom nichts.
+- **Abgelehnt wird wiederholt:** Nimmt strom das Dunkelschalten nicht an,
+  versucht lmix-core es eine Frist später wieder, bis es dunkel ist.
+- **Übernahme:** Ein neues lmix-core, das ein helles Kachelbild übernimmt,
+  gibt ihm ab dem Start eine Frist; die Console des alten fragt in ihr
+  beim neuen nach.
+- Verworfen: die WebSocket-Verbindung der Console als Zuschauer zählen
+  (auch Fernbedienungen ohne Kacheln halten sie) und Leser am Socket
+  zählen (strom kann es nicht).
+
 ## 2026-10-30 — Tastenübersicht mit Tastenkappen und Suche (S02)
 
 Tafel S02, Wahl A aus `docs/DESIGN-DIALOGE.md`. Die Übersicht „Tasten“ ist

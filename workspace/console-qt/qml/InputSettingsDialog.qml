@@ -70,7 +70,7 @@ KanteDialog {
         tab = 0
         tabBar.currentIndex = 0
         sync()
-        name.text = input ? input.name : ""
+        name.text = Qt.binding(() => dialog.input ? dialog.input.name : "")
         look.load()
         if (input && input.has_audio)
             strip.load()
@@ -106,9 +106,15 @@ KanteDialog {
                         title: qsTr("Name")
                         KanteTextField {
                             id: name
+                            objectName: "inputName"
                             Layout.preferredWidth: Kirigami.Units.gridUnit * 16
-                            onEditingFinished: if (dialog.input && text.trim() !== "" && text.trim() !== dialog.input.name)
-                                dialog.act({ action: "rename_input", input: dialog.ref(), name: text.trim() })
+                            onEditingFinished: {
+                                if (dialog.input && text.trim() !== "" && text.trim() !== dialog.input.name)
+                                    dialog.act({ action: "rename_input", input: dialog.ref(), name: text.trim() })
+                                // Back to the show's name: the new one, or the old
+                                // one when refused (a name another input has).
+                                text = Qt.binding(() => dialog.input ? dialog.input.name : "")
+                            }
                         }
                     }
                     KanteSettingRow {
