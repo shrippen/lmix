@@ -1810,6 +1810,11 @@ impl Engine for StromEngine {
                 let path = format!("/flows/{flow}/output-bytes");
                 let resp = self.http.get(self.url(&path)).send().await.ok()?;
                 let read: OutputBytesResponse = check(resp).await.ok()?.json().await.ok()?;
+                // No counted element (the splitmuxsink Recorder, MKV before
+                // GStreamer 1.26) is no measurement, not 0 bytes.
+                if read.stats.outputs.is_empty() {
+                    return None;
+                }
                 let bytes = read.stats.outputs.values().map(|c| c.bytes).sum();
                 let kbps = self.output_rates.lock().expect("output rates lock").rate(
                     id,
@@ -2226,6 +2231,39 @@ mod tests {
         assert_eq!(engine.output_stats(id, &display).await, None);
         let path = format!("/api/flows/{}/output-bytes", flows::output_flow_id(id));
         assert_eq!(*asked.lock().unwrap(), [path.clone(), path]);
+    }
+
+    /// A recording strom keeps no counter for (MKV before GStreamer 1.26,
+    /// `splitmuxsink`): strom answers no outputs, and that is no rate, not
+    /// 0 kbit/s, so the Console shows the configured one (review of #191).
+    #[tokio::test]
+    async fn an_output_without_a_counter_reports_no_rate() {
+        let app = axum::Router::new().fallback(|| async {
+            axum::Json(serde_json::json!({
+                "flow_id": FlowId::nil(),
+                "stats": { "outputs": {} }
+            }))
+        });
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        let engine = StromEngine::new(
+            format!("http://{addr}"),
+            MixerBackend::Cpu,
+            MonitorOut::None,
+        );
+        let id = OutputId::new();
+        let spec = OutputSpec::Record {
+            folder: "rec".into(),
+            container: lmix_types::Container::Mkv,
+            video_kbps: 6000,
+            encoding: Default::default(),
+        };
+
+        for _ in 0..3 {
+            assert_eq!(engine.output_stats(id, &spec).await, None);
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
     }
 
     /// A new playback flow forgets the zones' last levels: they are by
