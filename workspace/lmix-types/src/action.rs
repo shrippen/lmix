@@ -198,6 +198,7 @@ pub const ACTION_GROUPS: &[(&str, &[&str])] = &[
         "output",
         &[
             "add_output",
+            "update_output",
             "remove_output",
             "set_output_bus",
             "start_output",
@@ -396,8 +397,9 @@ pub enum Action {
         input: InputRef,
     },
     /// Bring back what was removed last, an input, layout, bus or output,
-    /// with its settings (AUT.10; docs/DESIGN-DIALOGE.md rule 1). The last
-    /// ten removals are kept while the show is open.
+    /// with its settings (AUT.10; docs/DESIGN-DIALOGE.md rule 1), or the
+    /// settings an output had before `update_output`. The last ten are
+    /// kept while the show is open.
     Restore,
     /// Change what an input shows, keeping its settings (INP.4).
     ReplaceSource {
@@ -484,6 +486,18 @@ pub enum Action {
         /// Sound from this bus instead of the source's own.
         #[serde(default)]
         bus: Option<BusRef>,
+        #[serde(default)]
+        name: Option<String>,
+    },
+    /// Replace an output's spec, source and name as `add_output` sets
+    /// them; it keeps its id, number and bus. Refused while it sends or
+    /// waits for the cards (stop it first); `restore` brings back the
+    /// settings before.
+    UpdateOutput {
+        output: OutputRef,
+        spec: OutputSpec,
+        #[serde(default)]
+        source: OutputSource,
         #[serde(default)]
         name: Option<String>,
     },
@@ -1536,6 +1550,8 @@ impl std::fmt::Display for IoClass {
 pub enum ActionError {
     #[error("no output matches {reference}")]
     UnknownOutput { reference: String },
+    #[error("output {reference} sends: stop it first")]
+    OutputSending { reference: String },
     #[error("encoding: {reason}")]
     BadEncoding { reason: String },
     #[error("sample rate {hz} Hz: 48000 or 44100")]

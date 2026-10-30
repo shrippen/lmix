@@ -677,6 +677,10 @@ enum Removed {
         index: usize,
         output: ShowOutput,
     },
+    /// An output's settings before `update_output`, found again by id.
+    OutputSettings {
+        output: ShowOutput,
+    },
 }
 
 /// Whether a removed bus was listened to, so it is again when it comes back.
@@ -694,6 +698,7 @@ impl Removed {
             Self::Layout { layout, .. } => (RemovedKind::Layout, &layout.name),
             Self::Bus { bus, .. } => (RemovedKind::Bus, &bus.name),
             Self::Output { output, .. } => (RemovedKind::Output, &output.name),
+            Self::OutputSettings { output } => (RemovedKind::OutputSettings, &output.name),
         };
         lmix_types::Restorable {
             kind,
@@ -1832,6 +1837,12 @@ impl Switcher {
                 name,
                 bus,
             } => self.add_output(spec, source, name, bus),
+            Action::UpdateOutput {
+                output,
+                spec,
+                source,
+                name,
+            } => self.update_output(&output, spec, source, name),
             Action::RemoveOutput { output } => {
                 self.check_unlocked()?;
                 self.remove_output(&output)
@@ -3779,6 +3790,7 @@ impl Switcher {
                 .check_bus_change()
                 .and_then(|()| self.restore_bus(index, bus, sends, listen)),
             Removed::Output { index, output } => Ok(self.restore_output(index, output)),
+            Removed::OutputSettings { output } => self.restore_output_settings(output),
         };
         if result.is_err() {
             self.removed.push(removed);
@@ -5144,6 +5156,79 @@ impl Switcher {
             Some(bus) => Some(self.show.buses[self.find_bus(&bus)?].id),
             None => None,
         };
+        let output = self.checked_output(OutputId::new(), spec, source, name, bus)?;
+        self.show.outputs.push(output);
+        Ok(Vec::new())
+    }
+
+    /// Another spec, source and name for an output that does not send;
+    /// its id, place and bus stay (a screen has no sound, so it drops
+    /// the bus). The settings before go on the stack `restore` takes
+    /// from.
+    fn update_output(
+        &mut self,
+        output: &OutputRef,
+        spec: OutputSpec,
+        source: OutputSource,
+        name: Option<String>,
+    ) -> Result<Vec<Command>, ActionError> {
+        let index = self.find_output(output)?;
+        let old = &self.show.outputs[index];
+        self.check_not_sending(old)?;
+        let bus = old
+            .bus
+            .filter(|_| !matches!(spec, OutputSpec::Display { .. }));
+        let new = self.checked_output(old.id, spec, source, name, bus)?;
+        let before = std::mem::replace(&mut self.show.outputs[index], new);
+        self.keep_removed(Removed::OutputSettings { output: before });
+        Ok(Vec::new())
+    }
+
+    /// A running output (also one its failback holds) or one waiting for
+    /// the cards would send with settings it was not started with.
+    fn check_not_sending(&self, output: &ShowOutput) -> Result<(), ActionError> {
+        if self.output_running(output.id) || self.output_waits_for_cards(output.id) {
+            return Err(ActionError::OutputSending {
+                reference: output.name.clone(),
+            });
+        }
+        Ok(())
+    }
+
+    /// The settings back, at the output's place now, with the bus it had
+    /// then (also undoing a `set_output_bus` since); a bus removed since
+    /// leaves it, or a card's further pair, without. Gone meanwhile (a
+    /// new show), there is nothing to change.
+    fn restore_output_settings(
+        &mut self,
+        mut output: ShowOutput,
+    ) -> Result<Vec<Command>, ActionError> {
+        let Some(index) = self.show.outputs.iter().position(|o| o.id == output.id) else {
+            return Ok(Vec::new());
+        };
+        self.check_not_sending(&self.show.outputs[index])?;
+        let known = |bus: &BusId| self.show.buses.iter().any(|b| b.id == *bus);
+        output.bus = output.bus.filter(known);
+        if let OutputSpec::Card { more_pairs, .. } = &mut output.spec {
+            for pair in more_pairs.iter_mut() {
+                *pair = pair.filter(known);
+            }
+        }
+        self.feed_of(&output)?;
+        self.show.outputs[index] = output;
+        Ok(Vec::new())
+    }
+
+    /// The output as adding or updating sets it: the spec checked, a
+    /// name given when none is (`add_output`).
+    fn checked_output(
+        &self,
+        id: OutputId,
+        spec: OutputSpec,
+        source: OutputSource,
+        name: Option<String>,
+        bus: Option<BusId>,
+    ) -> Result<ShowOutput, ActionError> {
         if let Some(reason) = spec.problem() {
             return Err(ActionError::BadEncoding { reason });
         }
@@ -5156,7 +5241,7 @@ impl Switcher {
             });
         }
         let output = ShowOutput {
-            id: OutputId::new(),
+            id,
             name: name.unwrap_or_default(),
             spec,
             source,
@@ -5180,8 +5265,7 @@ impl Switcher {
                 format!("{} ({input})", output.spec.default_name())
             }
         };
-        self.show.outputs.push(ShowOutput { name, ..output });
-        Ok(Vec::new())
+        Ok(ShowOutput { name, ..output })
     }
 
     /// Program, the multiview, the preview, or the slot of the output's
@@ -9792,6 +9876,196 @@ mod tests {
 
     // The console removes by id (Removals.qml): an id wins over a name, also
     // a name that reads like another's id, as for layouts.
+    fn srt_at(port: u16) -> OutputSpec {
+        OutputSpec::Srt {
+            uri: format!("srt://cdn:{port}"),
+            video_kbps: 6000,
+            encoding: Default::default(),
+        }
+    }
+
+    /// Two outputs, "CDN" on bus Stream and "Rec" after it.
+    fn two_outputs() -> Switcher {
+        let mut sw = with_buses();
+        sw.apply(Action::AddOutput {
+            spec: srt_at(9000),
+            source: OutputSource::Program,
+            name: Some("CDN".into()),
+            bus: Some(bus("Stream")),
+        })
+        .unwrap();
+        sw.apply(Action::AddOutput {
+            spec: OutputSpec::Ndi { name: "Rec".into() },
+            source: OutputSource::Program,
+            name: Some("Rec".into()),
+            bus: None,
+        })
+        .unwrap();
+        sw
+    }
+
+    #[test]
+    fn an_output_takes_new_settings_in_its_place() {
+        let mut sw = two_outputs();
+        let before = sw.state().outputs[0].clone();
+        let cmds = sw
+            .apply(Action::UpdateOutput {
+                output: OutputRef::Text(before.id.to_string()),
+                spec: OutputSpec::Ndi {
+                    name: "Desk".into(),
+                },
+                source: OutputSource::Preview,
+                name: Some("Desk".into()),
+            })
+            .unwrap();
+        // Stopped: only the show changes.
+        assert!(cmds.is_empty());
+        let after = sw.state().outputs[0].clone();
+        assert_eq!(
+            (after.id, after.number, after.bus),
+            (before.id, 1, before.bus)
+        );
+        assert_eq!(
+            after.spec,
+            OutputSpec::Ndi {
+                name: "Desk".into()
+            }
+        );
+        assert_eq!(after.source, OutputSource::Preview);
+        assert_eq!(after.name, "Desk");
+        assert_eq!(sw.state().outputs[1].name, "Rec");
+        assert_eq!(sw.show.outputs[0].name, "Desk");
+
+        // Without a name it is named as when added.
+        sw.apply(Action::UpdateOutput {
+            output: OutputRef::Number(1),
+            spec: srt_at(9001),
+            source: OutputSource::Preview,
+            name: None,
+        })
+        .unwrap();
+        assert!(sw.state().outputs[0].name.ends_with(" (Preview)"));
+    }
+
+    #[test]
+    fn restore_brings_back_an_outputs_settings_before() {
+        let mut sw = two_outputs();
+        let before = sw.state().outputs[0].clone();
+        sw.apply(Action::UpdateOutput {
+            output: OutputRef::Number(1),
+            spec: srt_at(9100),
+            source: OutputSource::Multiview,
+            name: Some("Wall".into()),
+        })
+        .unwrap();
+        assert_eq!(
+            restorable(&sw),
+            Some((lmix_types::RemovedKind::OutputSettings, "CDN".into()))
+        );
+
+        let cmds = sw.apply(Action::Restore).unwrap();
+        assert!(cmds.is_empty());
+        let back = sw.state().outputs[0].clone();
+        assert_eq!(back, before);
+        assert_eq!(restorable(&sw), None);
+    }
+
+    #[test]
+    fn a_sending_output_keeps_its_settings() {
+        let mut sw = two_outputs();
+        let id = sw.state().outputs[0].id;
+        let update = || Action::UpdateOutput {
+            output: OutputRef::Number(1),
+            spec: srt_at(9100),
+            source: OutputSource::Program,
+            name: Some("Wall".into()),
+        };
+        for status in [
+            OutputStatus::Running { since_ms: 0 },
+            OutputStatus::CardsOff,
+        ] {
+            sw.set_output_status(id, status);
+            assert_eq!(
+                sw.apply(update()),
+                Err(ActionError::OutputSending {
+                    reference: "CDN".into()
+                })
+            );
+            assert_eq!(sw.state().outputs[0].name, "CDN");
+            assert_eq!(restorable(&sw), None);
+        }
+        // Held by its failback, it runs too.
+        sw.hold_output(id, "gone".into());
+        assert!(matches!(
+            sw.apply(update()),
+            Err(ActionError::OutputSending { .. })
+        ));
+
+        // Stopped, it changes; its old settings do not come back while
+        // it sends again, and wait to be brought back.
+        sw.set_output_status(id, OutputStatus::Stopped);
+        sw.apply(update()).unwrap();
+        sw.set_output_status(id, OutputStatus::Running { since_ms: 0 });
+        assert!(matches!(
+            sw.apply(Action::Restore),
+            Err(ActionError::OutputSending { .. })
+        ));
+        assert_eq!(sw.state().outputs[0].name, "Wall");
+        sw.set_output_status(id, OutputStatus::Stopped);
+        sw.apply(Action::Restore).unwrap();
+        assert_eq!(sw.state().outputs[0].name, "CDN");
+    }
+
+    #[test]
+    fn an_output_update_is_checked_like_adding() {
+        let mut sw = two_outputs();
+        let before = sw.state().outputs[0].clone();
+        let update = |spec, source| Action::UpdateOutput {
+            output: OutputRef::Number(1),
+            spec,
+            source,
+            name: Some("Changed".into()),
+        };
+        let rtmp = OutputSpec::Rtmp {
+            url: "http://example.com".into(),
+            key: String::new(),
+            video_kbps: 6000,
+            encoding: Default::default(),
+        };
+        assert!(matches!(
+            sw.apply(update(rtmp, OutputSource::Program)),
+            Err(ActionError::BadEncoding { .. })
+        ));
+        let card = |more_pairs| OutputSpec::Card {
+            device: 0,
+            mode: lmix_types::CardMode::from_nick("1080p25").unwrap(),
+            channels: Default::default(),
+            more_pairs,
+            sound_delay_ms: 0,
+        };
+        let stream = sw.state().buses[1].id;
+        assert!(matches!(
+            sw.apply(update(card(vec![Some(stream)]), OutputSource::Program)),
+            Err(ActionError::BadCard { .. })
+        ));
+        assert!(matches!(
+            sw.apply(update(srt_at(9000), OutputSource::Input(InputId::new()))),
+            Err(ActionError::UnknownInput { .. })
+        ));
+        assert!(matches!(
+            sw.apply(Action::UpdateOutput {
+                output: OutputRef::Number(3),
+                spec: srt_at(9000),
+                source: OutputSource::Program,
+                name: None,
+            }),
+            Err(ActionError::UnknownOutput { .. })
+        ));
+        // Refused, nothing changed and nothing to bring back.
+        assert_eq!(sw.state().outputs[0], before);
+        assert_eq!(restorable(&sw), None);
+    }
+
     #[test]
     fn an_output_by_id_is_that_one() {
         let mut sw = with_buses();
