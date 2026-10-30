@@ -18,6 +18,8 @@ RowLayout {
     required property var core
     required property var show
     required property var act
+    /** AppShell.askRemove: ask, then remove with a way back. */
+    property var askRemove: null
     signal editRequested(var layout)
 
     readonly property var layouts: show && show.layouts ? show.layouts : []
@@ -66,20 +68,26 @@ RowLayout {
             QQC2.Menu {
                 id: menu
                 KantePopupSkin { popup: menu }
-                QQC2.MenuItem {
+                // M05: icons, Remove red and set apart.
+                KanteMenuItem {
                     text: qsTr("Edit…")
+                    icon.name: "document-edit"
                     onTriggered: bar.editRequested(entry.modelData)
                 }
-                QQC2.MenuItem {
+                KanteMenuItem {
                     text: qsTr("Save as template")
+                    icon.name: "document-save-as"
                     onTriggered: bar.act({ action: "save_layout_template", layout: entry.modelData.number })
                     QQC2.ToolTip.visible: hovered
                     QQC2.ToolTip.text: qsTr("Keeps its places for every show, under its name (one of the same name is replaced).")
                 }
-                QQC2.MenuItem {
+                QQC2.MenuSeparator {}
+                KanteMenuItem {
                     text: qsTr("Remove")
+                    icon.name: "edit-delete"
+                    destructive: true
                     enabled: !entry.onProgram
-                    onTriggered: bar.act({ action: "remove_layout", layout: entry.modelData.number })
+                    onTriggered: bar.askRemove("layout", entry.modelData)
                 }
             }
         }
@@ -92,9 +100,11 @@ RowLayout {
     }
 
     KanteButton {
+        id: templateButton
         text: qsTr("Templates")
         enabled: bar.core.connected
-        onClicked: templateMenu.popup()
+        // M06: at the button, not where the pointer is.
+        onClicked: templateMenu.popup(templateButton, 0, templateButton.height)
         QQC2.ToolTip.visible: hovered
         QQC2.ToolTip.text: qsTr("Layout templates, kept for every show: a new layout from one, import, export.")
 
@@ -104,25 +114,38 @@ RowLayout {
 
             ChoiceMenu {
                 title: qsTr("New layout from")
+                icon.name: "list-add"
                 enabled: bar.templates.length > 0 && bar.layouts.length < 4
                 choices: bar.templateChoices
                 onPicked: value => bar.act({ action: "load_layout_template", template: value })
             }
-            ChoiceMenu {
-                title: qsTr("Remove template")
-                enabled: bar.templates.length > 0
-                choices: bar.templateChoices
-                onPicked: value => bar.act({ action: "remove_layout_template", template: value })
-            }
-            QQC2.MenuItem {
+            QQC2.MenuSeparator {}
+            KanteMenuItem {
                 text: qsTr("Import…")
+                icon.name: "document-import"
                 onTriggered: importDialog.open()
             }
-            QQC2.MenuItem {
+            KanteMenuItem {
                 text: qsTr("Export all…")
+                icon.name: "document-export"
                 enabled: bar.templates.length > 0
                 onTriggered: exportDialog.open()
             }
+            // Red and at the bottom, with a question (rule 1). A submenu's
+            // entry cannot be red: this one opens the list of templates.
+            QQC2.MenuSeparator {}
+            KanteMenuItem {
+                text: qsTr("Remove template…")
+                icon.name: "edit-delete"
+                destructive: true
+                enabled: bar.templates.length > 0
+                onTriggered: removeTemplateMenu.popup(templateButton, 0, templateButton.height)
+            }
+        }
+        ChoiceMenu {
+            id: removeTemplateMenu
+            choices: bar.templateChoices
+            onPicked: value => bar.askRemove("template", { name: value })
         }
     }
 
@@ -141,5 +164,4 @@ RowLayout {
         onAccepted: bar.act({ action: "export_layout_templates", path: bar.localPath(selectedFile) })
     }
 
-    Item { Layout.fillWidth: true }
 }

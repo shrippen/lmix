@@ -180,6 +180,8 @@ impl StromEngine {
     /// Build the playback flow, or drop it without zones and stages.
     pub(super) async fn set_playback(&self, playback: &Playback) -> Result<(), EngineError> {
         self.playback.forget_all();
+        // Zone levels are by index: a removed zone's would go to the next.
+        self.levels.send_modify(|l| l.zones.clear());
         let named_device = playback
             .zones
             .iter()

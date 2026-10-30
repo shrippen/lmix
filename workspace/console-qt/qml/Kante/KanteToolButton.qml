@@ -18,6 +18,11 @@ import "."
 QQC2.ToolButton {
     id: control
 
+    // Return and Enter press a focused button like Space (1.49, WCAG 2.1.1): Qt Quick
+    // Controls take only Space, so keyboard users pressed Return and nothing happened.
+    Keys.onReturnPressed: function (event) { KanteStyle.pressByKey(control, event) }
+    Keys.onEnterPressed: function (event) { KanteStyle.pressByKey(control, event) }
+
     property bool fillChecked: true
     readonly property bool filled: checked && fillChecked
     readonly property color kanteInk: filled ? KanteStyle.accentForegroundColor : KanteStyle.textColor

@@ -17,7 +17,14 @@ ListModel {
         return -1
     }
 
+    /** The keys of the last sync: most state updates bring the same. */
+    property var synced: []
+
     function sync(keys) {
+        if (keys.length === synced.length && keys.every((k, i) => k === synced[i])) {
+            return
+        }
+        synced = Array.from(keys)
         for (var i = count - 1; i >= 0; i--) {
             if (keys.indexOf(get(i).key) < 0) {
                 remove(i)

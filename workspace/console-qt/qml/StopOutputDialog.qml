@@ -28,9 +28,13 @@ KanteDialog {
         : group === "media" ? qsTr("Stop all recordings and streams?")
         : (group === "all" ? qsTr("Stop all outputs?") : qsTr("Stop all streams?")))
     standardButtons: QQC2.Dialog.Ok | QQC2.Dialog.Cancel
-    acceptText: qsTr("Stop")
-    kanteBarColor: KanteStyle.negativeTextColor
-    width: Kirigami.Units.gridUnit * 24
+    // Verb and object, as the question (F02).
+    acceptText: output ? qsTr("Stop output")
+        : group === "recordings" ? qsTr("Stop recordings")
+        : group === "media" ? qsTr("Stop recordings and streams")
+        : group === "all" ? qsTr("Stop all outputs") : qsTr("Stop streams")
+    destructive: true
+    size: KanteDialog.Size.Small
     // KanteDialog has a child of its own, so it does not size to this.
     contentHeight: stopColumn.implicitHeight
     onOpened: askAgain.checked = true

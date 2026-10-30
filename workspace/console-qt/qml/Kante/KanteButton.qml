@@ -47,6 +47,16 @@ QQC2.Button {
     property bool busy: false
     /** Sits on a hard 4 px shadow and presses into it (a big, single action). */
     property bool raised: false
+    /** Removes or resets (1.55): a Normal or Quiet button with the text in the negative
+     *  colour, for a removal that should not outweigh the actions beside it (Destructive
+     *  is the filled red one). Filled buttons keep their ink. Kante style only: System and
+     *  Kante Light keep the platform's button (its styles do not take a label colour). */
+    property bool destructive: false
+
+    // Return and Enter press a focused button like Space (1.49, WCAG 2.1.1): Qt Quick
+    // Controls take only Space, so keyboard users pressed Return and nothing happened.
+    Keys.onReturnPressed: function (event) { KanteStyle.pressByKey(control, event) }
+    Keys.onEnterPressed: function (event) { KanteStyle.pressByKey(control, event) }
 
     /** Kante draws this button: always in Kante, only the primary one in Kante Light. */
     readonly property bool drawn: KanteStyle.themed || (KanteStyle.active && emphasis === KanteButton.Emphasis.Primary)
@@ -76,8 +86,9 @@ QQC2.Button {
         case KanteButton.Emphasis.Primary: return KanteStyle.primaryTextColor
         case KanteButton.Emphasis.Destructive: return KanteStyle.onStateColor
         case KanteButton.Emphasis.Data: return KanteStyle.focusColor
-        case KanteButton.Emphasis.Quiet: return hovered ? KanteStyle.strongTextColor : KanteStyle.mutedTextColor
-        default: return KanteStyle.textColor
+        case KanteButton.Emphasis.Quiet:
+            return destructive ? KanteStyle.negativeTextColor : hovered ? KanteStyle.strongTextColor : KanteStyle.mutedTextColor
+        default: return destructive ? KanteStyle.negativeTextColor : KanteStyle.textColor
         }
     }
     readonly property color kanteFrame: emphasis === KanteButton.Emphasis.Data

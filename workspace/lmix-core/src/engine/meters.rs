@@ -30,6 +30,8 @@ pub struct EngineLevels {
     pub monitor: Option<(f32, Instant)>,
     /// The show's buses (the headphones are `monitor`).
     pub buses: HashMap<lmix_types::BusId, (f32, Instant)>,
+    /// The show's zones by index, after their level (SUI.8).
+    pub zones: HashMap<usize, (f32, Instant)>,
     /// Buffer ages at the mixer's program output from the latest latency
     /// measurement, ms (newest last, at most `LATENCY_SAMPLES`).
     pub program_ages_ms: Vec<u64>,
@@ -292,6 +294,14 @@ pub async fn follow(
                             |aux: usize| buses.lock().expect("buses lock").as_ref()?.bus_on(aux);
                         record_meter(&levels, &element_id, mixer_block, &peak, bus_on)
                     }
+                    Ok(StromEvent::MeterData {
+                        flow_id,
+                        element_id,
+                        peak,
+                        ..
+                    }) if flow_id == super::playback_flow::playback_flow_id() => {
+                        record_zone(&levels, &element_id, &peak)
+                    }
                     Ok(StromEvent::BufferAgeProbe {
                         flow_id, age_ms, ..
                     }) if flow_id == mixer => {
@@ -389,9 +399,31 @@ fn record_meter(
     });
 }
 
+/// A zone meter's reading (SUI.8); other meters of the flow are ignored.
+fn record_zone(levels: &watch::Sender<EngineLevels>, element_id: &str, peak: &[f64]) {
+    if let Some(zone) = super::playback_flow::metered_zone(element_id) {
+        let reading = (loudest(peak), Instant::now());
+        levels.send_modify(|l| {
+            l.zones.insert(zone, reading);
+        });
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn zones_are_metered_by_index() {
+        let (levels, read) = watch::channel(EngineLevels::default());
+
+        record_zone(&levels, "zone_meter_1", &[-20.0, -8.0]);
+        record_zone(&levels, "show", &[0.0]);
+
+        let l = read.borrow();
+        assert_eq!(l.zones[&1].0, -8.0, "loudest");
+        assert_eq!(l.zones.len(), 1);
+    }
 
     #[test]
     fn slots_keep_each_channel() {

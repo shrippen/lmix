@@ -3,9 +3,9 @@
 //! and screens (`ZonePatch`, `StagePatch`).
 //!
 //! ```text
-//!   show:zone_out_0  ─► tee ─► audioconvert (zone ch → device ch) ─► caps ─► volume ─► pulsesink
-//!                          └► … one branch per output of the zone
-//!   show:zone_out_1  ─► fakesink                     (the zone plays nowhere here)
+//!   show:zone_out_0  ─► meter ─► tee ─► audioconvert (zone ch → device ch) ─► caps ─► volume ─► pulsesink
+//!                                   └► … one branch per output of the zone
+//!   show:zone_out_1  ─► meter ─► fakesink                 (the zone plays nowhere here)
 //!   show:stage_out_0 ─► tee ─► queue ─► videoconvert ─► glimagesink / waylandsink / kmssink
 //!   show:stage_out_1 ─► fakesink                     (the stage shows nowhere here)
 //! ```
@@ -26,6 +26,17 @@ use crate::switcher::Playback;
 pub const PLAYBACK_BLOCK: &str = "show";
 
 const SHOW_PLAYBACK_BLOCK: &str = "builtin.show_playback";
+const METER_BLOCK: &str = "builtin.meter";
+
+/// Block id of zone `i`'s meter; strom reports its level under this id.
+pub fn zone_meter(i: usize) -> String {
+    format!("zone_meter_{i}")
+}
+
+/// The zone whose meter `element_id` is.
+pub fn metered_zone(element_id: &str) -> Option<usize> {
+    element_id.strip_prefix("zone_meter_")?.parse().ok()
+}
 
 pub fn playback_flow_id() -> FlowId {
     Uuid::new_v5(&super::flows::FLOW_NAMESPACE, b"show-playback")
@@ -82,7 +93,22 @@ pub fn playback_flow(playback: &Playback, devices: &DeviceChannels) -> Option<Fl
         ));
     }
     for (i, zone) in playback.zones.iter().enumerate() {
-        let out = format!("{PLAYBACK_BLOCK}:zone_out_{i}");
+        // Metered after the zone's level, as it is heard (SUI.8).
+        let meter = zone_meter(i);
+        flow.blocks.push(BlockInstance {
+            id: meter.clone(),
+            block_definition_id: METER_BLOCK.into(),
+            name: None,
+            properties: HashMap::new(),
+            position: Position { x: 0.0, y: 0.0 },
+            runtime_data: None,
+            computed_external_pads: None,
+        });
+        flow.links.push(link(
+            format!("{PLAYBACK_BLOCK}:zone_out_{i}"),
+            format!("{meter}:audio_in"),
+        ));
+        let out = format!("{meter}:audio_out");
         match zone.outputs.as_slice() {
             [] => {
                 let sink = format!("z{i}_nowhere");
@@ -362,6 +388,8 @@ mod tests {
             name: name.into(),
             channels,
             outputs,
+            gain_db: 0.0,
+            mute: false,
         }
     }
 
@@ -521,10 +549,18 @@ mod tests {
             .map(|l| (l.from.as_str(), l.to.as_str()))
             .collect();
 
-        assert!(links.contains(&("show:zone_out_0", "z0o0_map")));
-        assert!(links.contains(&("show:zone_out_1", "z1_tee")));
+        // Each zone is metered on its way out (SUI.8).
+        assert!(links.contains(&("show:zone_out_0", "zone_meter_0:audio_in")));
+        assert!(links.contains(&("zone_meter_0:audio_out", "z0o0_map")));
+        assert!(links.contains(&("zone_meter_1:audio_out", "z1_tee")));
         assert!(links.contains(&("z1o1_queue", "z1o1_map")));
-        assert!(links.contains(&("show:zone_out_2", "z2_nowhere")));
+        assert!(links.contains(&("zone_meter_2:audio_out", "z2_nowhere")));
+        assert!(flow
+            .blocks
+            .iter()
+            .any(|b| b.id == "zone_meter_2" && b.block_definition_id == "builtin.meter"));
+        assert_eq!(metered_zone("zone_meter_2"), Some(2));
+        assert_eq!(metered_zone("show"), None);
         let sink = |id: &str| flow.elements.iter().find(|e| e.id == id).unwrap();
         // The default output finds its sink itself, ALSA without a sound
         // server (SNF.1).
