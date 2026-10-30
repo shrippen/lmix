@@ -5103,7 +5103,7 @@ Console: Setup → Steuerung → „Sperren“, ein Schalter je Weg.
 `locked_targets_send_nothing_and_warn` (der Empfänger sieht keine
 Verbindung).
 
-## 2026-10-27 — decklink-Plugin mit Patch, Vorlauf 60 ms
+## 2026-10-27 — decklink-Plugin mit Patch, Vorlauf 60 ms mit ihm
 
 **Befund**: Der Patch für die Epoche (oben, „SDI-/HDMI-Karte“, Offen)
 reichte allein nicht; spätere Starts zeigten mit ihm noch 150–205
@@ -5130,7 +5130,12 @@ für `GST_PLUGIN_PATH`; es baut neu, wenn sich Version oder Patch ändern.
 `run-local.sh`, `test-sdi-loop.sh` und `measure-sdi-latency.sh` nehmen
 es (`DECKLINK_PLUGIN=system` lässt das installierte), die systemd-Unit
 von strom zeigt mit `GST_PLUGIN_PATH` auf `~/.local/share/lmix/gstreamer`.
-Der Vorlauf `CARD_LEAD_MS` sinkt von 150 auf 60 ms.
+Der Vorlauf sinkt mit dem Patch auf 60 ms; ohne bleibt er bei 150 ms,
+denn beide Ursachen treffen auch den ersten Start (bis 38 + 40 ms). Weil
+lmix-core nicht sieht, welches Plugin strom lädt, setzt ihn
+`--card-lead-ms` (`LMIX_CARD_LEAD_MS`): Die Skripte setzen 60, sobald
+sie das Plugin gebaut haben, in der systemd-Einrichtung steht er in
+`core.env` (Review #169).
 
 Verworfen: strom neu starten, wenn ein Kartenausgang neu startet (nimmt
 alle Flows mit), und ein höherer Vorlauf (half gegen die Epoche nicht,

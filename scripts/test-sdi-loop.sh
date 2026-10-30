@@ -150,7 +150,8 @@ STROM_BIN="${STROM_BIN:-$("$ROOT/scripts/fetch-strom.sh")}"
 # the installed one.
 if [[ "${DECKLINK_PLUGIN:-patched}" == patched ]]; then
     GST_PLUGIN_PATH="$("$ROOT/scripts/decklink-plugin.sh")${GST_PLUGIN_PATH:+:$GST_PLUGIN_PATH}"
-    export GST_PLUGIN_PATH
+    # The lead that holds with the patch (flows.rs CARD_LEAD_MS).
+    export GST_PLUGIN_PATH LMIX_CARD_LEAD_MS="${LMIX_CARD_LEAD_MS:-60}"
 fi
 # The plugin to use, ours or the system's, is on the path by now.
 gst-inspect-1.0 decklinkvideosink >/dev/null 2>&1 || { echo "needs the GStreamer decklink plugin" >&2; exit 2; }

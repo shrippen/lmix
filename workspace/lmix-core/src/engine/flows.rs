@@ -104,11 +104,23 @@ const STREAM_VIDEO: &str = "video";
 /// How long before its time a frame goes to the card. Frames come over
 /// inter later than the output flow's latency says (it does not see all
 /// of the mixer's); with strom's 20 ms the card showed half of them late
-/// and dropped the rest. 60 ms passed every start, later ones on the
-/// same card in the same strom included, with GStreamer's decklink
-/// plugin patched (scripts/decklink-plugin.sh); without the patch later
-/// starts show their frames late however long the lead (DECISIONS 27.10.).
-const CARD_LEAD_MS: u64 = 60;
+/// and dropped the rest. Without GStreamer's decklink plugin patched
+/// (scripts/decklink-plugin.sh) the card's clock lags by up to 38 ms and
+/// rounding down costs up to 40 ms, so the lead stays at 150 ms, which
+/// passed every first start; later starts in the same strom show their
+/// frames late however long the lead. With the patch 60 ms passed every
+/// start (DECISIONS 27.10.), set by `--card-lead-ms`.
+pub const CARD_LEAD_MS: u64 = 150;
+static CARD_LEAD: std::sync::OnceLock<u64> = std::sync::OnceLock::new();
+
+/// The lead for card outputs from `--card-lead-ms`; set once at start.
+pub fn set_card_lead_ms(ms: u64) {
+    let _ = CARD_LEAD.set(ms);
+}
+
+fn card_lead_ms() -> u64 {
+    CARD_LEAD.get().copied().unwrap_or(CARD_LEAD_MS)
+}
 
 /// Block id of the media player in file, URL and playlist slots.
 pub const PLAYER: &str = "player";
@@ -899,7 +911,10 @@ fn add_card_output(flow: &mut Flow, from: &str, card: CardOut, pairs: &[(u32, St
             ("device_number", PropertyValue::UInt(u64::from(device))),
             ("mode", PropertyValue::String(mode.driver_mode().into())),
             ("stream_mode", PropertyValue::String(stream_mode.into())),
-            ("processing_deadline_ms", PropertyValue::UInt(CARD_LEAD_MS)),
+            (
+                "processing_deadline_ms",
+                PropertyValue::UInt(card_lead_ms()),
+            ),
         ],
     ));
 
@@ -3759,7 +3774,9 @@ mod tests {
         assert_eq!(uint(card, "device_number"), 1);
         assert_eq!(text(card, "mode"), "720p50");
         assert_eq!(text(card, "stream_mode"), "audio_video");
-        assert_eq!(uint(card, "processing_deadline_ms"), CARD_LEAD_MS);
+        // Without --card-lead-ms the lead that holds without the patched
+        // decklink plugin (review of #169).
+        assert_eq!(uint(card, "processing_deadline_ms"), 150);
         let caps = caps_of(&flow, CARD_PICTURE);
         assert!(caps.contains("format=UYVY"), "{caps}");
         assert!(caps.contains("width=1280,height=720"), "{caps}");

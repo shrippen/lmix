@@ -53,6 +53,8 @@ STROM_BIN="$("$ROOT/scripts/fetch-strom.sh")"
 if [[ "${DECKLINK_PLUGIN:-patched}" == patched ]] && compgen -G "/dev/blackmagic*" >/dev/null; then
     if plugin="$("$ROOT/scripts/decklink-plugin.sh")"; then
         export GST_PLUGIN_PATH="$plugin${GST_PLUGIN_PATH:+:$GST_PLUGIN_PATH}"
+        # The lead that holds with the patch (flows.rs CARD_LEAD_MS).
+        export LMIX_CARD_LEAD_MS="${LMIX_CARD_LEAD_MS:-60}"
     else
         echo "run-local: decklink plugin without lmix's patch (scripts/decklink-plugin.sh failed)" >&2
     fi
