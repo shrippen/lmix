@@ -41,6 +41,19 @@ Rule 7: Use the body to explain what and why vs. how. Assume the code explains t
     and for performance problems and crashes too: stutter, late frames, a hang, a panic, a
     leak. The test stays in the suite; a one-off script run is not a test.
   - Name the failure in the commit or PR: the test and what it printed before the fix.
+- Performance in tests: **count, don't time.** CI asserts on counts that do not depend on the
+  machine: events, bytes and requests per operator action, state rebuilds, delegate
+  rebuilds, frames scheduled, late and dropped (`output-stats`), queue levels. A budget is a
+  number in the test, with a comment that says where it comes from.
+- Time budgets (frame gaps, latency, CPU, switch gaps) run on real hardware only, not in
+  CI: as a script under `scripts/` that prints percentiles and exits non-zero over budget,
+  listed in its header with the hardware it needs.
+- Hunt crashes actively, don't wait for them: property tests on random action sequences
+  (`proptest`; no panic, invariants hold), fuzzing of every parser of outside input (show
+  file, action JSON, OSC, TCP, TSL, MIDI), and chaos runs (kill and restart the engine or
+  lmix-core mid-flow, drop the connection, rebuild flows in random order). A crash found
+  this way gets a regression test with the input that caused it.
+
 
 ## GUI rule
 
