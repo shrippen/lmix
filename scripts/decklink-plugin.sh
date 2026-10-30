@@ -11,7 +11,8 @@
 #   LMIX_PLUGIN_DIR=…   # where to put it (default ~/.local/share/lmix/gstreamer);
 #                       # rebuilt there when GStreamer or the commit changes
 #
-# Prints nothing when the installed GStreamer has decklink2 already.
+# Prints nothing when the installed GStreamer has decklink2 already, and
+# removes its own build then.
 # Needs git, g++, pkg-config and the GStreamer development files
 # (Fedora: gstreamer1-devel gstreamer1-plugins-base-devel; Ubuntu:
 # libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev).
@@ -26,12 +27,19 @@ MODULES="gstreamer-video-1.0 gstreamer-audio-1.0 gstreamer-base-1.0 gstreamer-1.
 
 log() { echo "decklink-plugin: $*" >&2; }
 
-VERSION="$(pkg-config --modversion gstreamer-1.0)" || { log "no GStreamer development files"; exit 2; }
+OUT="${LMIX_PLUGIN_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/lmix/gstreamer}"
+# The system's decklink2 (GStreamer 1.30): no development files needed,
+# and our own build goes, or it would shadow the system's on
+# GST_PLUGIN_PATH.
 if env -u GST_PLUGIN_PATH gst-inspect-1.0 decklink2sink >/dev/null 2>&1; then
-    log "GStreamer $VERSION has decklink2"
+    rm -f "$OUT/libgstdecklink2.so" "$OUT/built"
+    log "the installed GStreamer has decklink2"
     exit 0
 fi
-OUT="${LMIX_PLUGIN_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/lmix/gstreamer}"
+for tool in git g++ pkg-config; do
+    command -v "$tool" >/dev/null || { log "needs $tool"; exit 2; }
+done
+VERSION="$(pkg-config --modversion gstreamer-1.0)" || { log "no GStreamer development files"; exit 2; }
 BUILT="$VERSION ${COMMIT:0:12}"
 if [[ -f "$OUT/libgstdecklink2.so" && "$(cat "$OUT/built" 2>/dev/null)" == "$BUILT" ]]; then
     echo "$OUT"
