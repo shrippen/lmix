@@ -3,7 +3,8 @@
 # state from tests/qml/fixtures and are checked by counts (items rebuilt by a
 # state update, actions sent by a drag), so they run in CI. Offscreen;
 # tests/qml/stubs stands in for GStreamer's QML item and the Console's
-# AtlasCell.
+# AtlasCell, and org.lmix.console (a placeholder: the pages import the app's
+# module; their types come from the directory import).
 # Needs Qt 6 with qmltestrunner and Kirigami.
 #
 #   scripts/test-qml.sh
