@@ -85,6 +85,8 @@ TestCase {
         menu.output = Object.assign({}, stream, { status: { state: "stopped" } })
         compare(remove.enabled, true)
         verify(!named(menu, "removeHint").visible)
+        // Hidden, it takes no room: an empty line stood under Remove….
+        compare(named(menu, "removeHint").height, 0)
         remove.triggered()
         entry(menu, "Start").triggered()
         entry(menu, "Settings…").triggered()

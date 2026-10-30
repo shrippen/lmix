@@ -154,6 +154,7 @@ QQC2.Menu {
     QQC2.Label {
         objectName: "removeHint"
         visible: outputMenu.sending
+        height: visible ? implicitHeight : 0
         width: parent ? parent.width : implicitWidth
         leftPadding: Kirigami.Units.largeSpacing
         rightPadding: Kirigami.Units.largeSpacing
