@@ -18,6 +18,12 @@ hat ein eigenes Lastenheft, `LASTENHEFT-SHOW.md` (IDs CUE, RUN, SND, VIS,
 EXT, VAR, IMP, CTL, SAF, SUI, SSH, LGT, OBJ, FX, TC; Meilensteine S1–S3).
 Es setzt auf diesem Lastenheft auf und ändert es nicht.
 
+**lmix tools**: Werkzeuge für NDI und OMT unter Linux (Monitor, Test
+Patterns, Screen Capture, Virtual Camera, Discovery …, Vorbild NDI Tools)
+sind ein eigenes Projekt mit eigenem Lastenheft:
+<https://github.com/shrippen/lmix-tools> (`docs/LASTENHEFT.md`). Das
+OMT-Element für SRC.11 und OUT.6 entsteht dort und wird von strom geladen.
+
 ---
 
 ## 0. Clean-Room-Regeln
