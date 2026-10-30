@@ -101,6 +101,9 @@ pub struct StromEngine {
     /// A Console asked for the tile picture; until then its pads stay
     /// dark (see [`StromEngine::show_tiles`]).
     tiles_watched: AtomicBool,
+    /// One `show_tiles` at a time: a rebuild's 0 and a Console's 1 would
+    /// otherwise interleave pad by pad.
+    tiles_setup: Mutex<()>,
     /// Mute of each audio mixer channel and bus as last sent (see
     /// [`level_writes`]); forgotten at every start.
     mutes: std::sync::Mutex<std::collections::HashMap<String, bool>>,
@@ -162,6 +165,7 @@ impl StromEngine {
             pages: flows::DEFAULT_PAGES.into(),
             live_setup: Mutex::new(()),
             tiles_watched: AtomicBool::new(false),
+            tiles_setup: Mutex::new(()),
             mutes: Default::default(),
             format: Default::default(),
             multiview: Default::default(),
@@ -477,6 +481,7 @@ impl StromEngine {
     /// 480 % of a core against 290 % with 7 slots, 30.10.2026). A failure
     /// only costs that load or the Console its tiles, so it is logged.
     async fn show_tiles(&self) {
+        let _setup = self.tiles_setup.lock().await;
         let alpha = if self.tiles_watched.load(Ordering::Relaxed) {
             1.0
         } else {
@@ -506,10 +511,10 @@ impl StromEngine {
     }
 
     /// A Console shows the tile picture: from now on its pads are lit.
+    /// Each request lights them again, so a failed PATCH is not final.
     async fn watch_tiles(&self) {
-        if !self.tiles_watched.swap(true, Ordering::Relaxed) {
-            self.show_tiles().await;
-        }
+        self.tiles_watched.store(true, Ordering::Relaxed);
+        self.show_tiles().await;
     }
 
     /// Program in `format` (OUT.1): a new mixer only when it differs.
@@ -2156,6 +2161,11 @@ mod tests {
         patches.lock().unwrap().clear();
         engine.watch_tiles().await;
         assert_eq!(*patches.lock().unwrap(), tiles(1.0), "a Console asks");
+
+        // Every request lights them again: a failed PATCH is not final.
+        patches.lock().unwrap().clear();
+        engine.watch_tiles().await;
+        assert_eq!(*patches.lock().unwrap(), tiles(1.0), "a Console asks again");
 
         patches.lock().unwrap().clear();
         engine.build_mixer(&engine.mixer_flow()).await.unwrap();
