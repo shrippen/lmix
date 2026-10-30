@@ -22,7 +22,7 @@ import "."
  * the bar on top and the accept button in the negative colour, Cancel before it; the
  * button says what goes (`acceptText: "Remove bus"`). In the Kante style only: System and
  * Kante Light keep the platform's dialog and button order.
- * Footer start (Kante 1.57, from lmix): `footerStart` takes the app's own buttons
+ * Footer start (Kante 1.58, from lmix): `footerStart` takes the app's own buttons
  * (KanteButton) and puts them at the start of the footer, before the standard buttons and
  * apart from them, such as "Shortcuts…" beside Close in lmix's keys overview. Every style
  * does it, also after a switch at run time; the footer makes room for them, in width and
