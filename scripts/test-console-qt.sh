@@ -297,7 +297,8 @@ for _ in $(seq 1 40); do [[ "$(bus_listen)" == false ]] && break; sleep 0.5; don
     || fail "bus listen $(bus_listen) after Solo off"
 click 1360 793
 sleep 1
-click 1192 623
+# By name: the menu's layout moves (P02).
+click_on "Before the faders|Vor den Fadern" --role "check box"
 for _ in $(seq 1 40); do [[ "$(bus_pre)" == true ]] && break; sleep 0.5; done
 [[ "$(bus_pre)" == true ]] && pass "audio column: the bus menu takes the bus before the faders" \
     || fail "bus pre_fader $(bus_pre) after the switch in its menu"
@@ -308,29 +309,35 @@ sleep 1
 click 1256 555
 sleep 1
 send_1() { state | jq --arg bus "$(state | jq -r '.buses[0].id')" '.inputs[0].sends[$bus] // 0'; }
-DISPLAY="$DISPLAY_NO" xdotool mousemove 1261 643
+# From the slider's left end (its handle at 0) to past its middle; found
+# by name, as the menu's layout moves (P02).
+box="$(DISPLAY="$DISPLAY_NO" python3 "$ROOT/scripts/a11y.py" find "Send to Stream Mix|Send an Stream Mix" --role slider --box 0)" \
+    || fail "no send slider in input 1's menu"
+IFS='x+' read -r sw sh sx sy <<<"$box"
+sy=$((sy + sh / 2))
+DISPLAY="$DISPLAY_NO" xdotool mousemove $((sx + 4)) "$sy"
 sleep 0.3
 DISPLAY="$DISPLAY_NO" xdotool mousedown 1
-for x in $(seq 1265 5 1350); do sleep 0.05; DISPLAY="$DISPLAY_NO" xdotool mousemove "$x" 643; done
+for x in $(seq $((sx + 8)) 5 $((sx + sw * 3 / 4))); do sleep 0.05; DISPLAY="$DISPLAY_NO" xdotool mousemove "$x" "$sy"; done
 sleep 0.1
 DISPLAY="$DISPLAY_NO" xdotool mouseup 1
 for _ in $(seq 1 20); do (( $(send_1) >= 50 )) && break; sleep 0.5; done
 (( $(send_1) >= 50 )) && pass "audio column: a send drag in the menu goes on" \
     || fail "send of input 1 at $(send_1) after a drag across the menu's slider"
 DISPLAY="$DISPLAY_NO" xdotool key Escape
-# An output gets the bus's sound from the bus menu (ticked), and its
-# source's own back (unticked).
+# An output gets the bus's sound from the bus menu (switched on), and its
+# source's own back (off).
 act '{"action":"add_output","spec":{"kind":"srt","uri":"srt://:9929?mode=listener"},"name":"Bus out"}'
 out_bus() { state | jq -r '.outputs[0].bus // "none"'; }
 sleep 1
 click 1360 793
 sleep 1
-click 1174 651
+click_on "Bus out" --role "check box"
 for _ in $(seq 1 40); do [[ "$(out_bus)" != none ]] && break; sleep 0.5; done
 [[ "$(out_bus)" == "$(state | jq -r '.buses[0].id')" ]] && pass "audio column: the bus menu gives an output its sound" \
     || fail "output bus $(out_bus) after ticking it in the bus menu"
 sleep 1
-click 1174 651
+click_on "Bus out" --role "check box"
 for _ in $(seq 1 40); do [[ "$(out_bus)" == none ]] && break; sleep 0.5; done
 [[ "$(out_bus)" == none ]] || fail "output bus $(out_bus) after unticking it"
 DISPLAY="$DISPLAY_NO" xdotool key Escape

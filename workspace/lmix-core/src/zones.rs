@@ -94,6 +94,8 @@ pub fn states(zones: &[Zone], patches: &[ZonePatch]) -> Vec<ZoneState> {
                         .collect()
                 })
                 .unwrap_or_default(),
+            gain_db: 0.0,
+            mute: false,
         })
         .collect()
 }

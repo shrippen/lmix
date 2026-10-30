@@ -147,8 +147,8 @@ Item {
         anchors.centerIn: parent
         modal: true
         title: request ? request.question : ""
-        width: Kirigami.Units.gridUnit * 24
-        kanteBarColor: KanteStyle.negativeTextColor
+        destructive: true
+        size: KanteDialog.Size.Small
         standardButtons: QQC2.Dialog.Ok | QQC2.Dialog.Cancel
         acceptText: request ? request.acceptText : ""
         // KanteDialog has a child of its own, so it does not size to this.
