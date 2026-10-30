@@ -174,6 +174,13 @@ AppPage {
                         }
                     }
                 }
+                ZoneBar {
+                    Layout.fillWidth: true
+                    act: root.act
+                    core: root.shell.backend
+                    zones: root.show && root.show.zones ? root.show.zones : []
+                    levels: root.levels
+                }
                 QQC2.Label {
                     visible: !root.show || !root.show.zones || root.show.zones.length === 0
                     text: qsTr("No zones yet")

@@ -590,7 +590,7 @@
   <context>
     <name>AppShell</name>
     <message>
-      <location filename="../qml/AppShell.qml" line="+273" />
+      <location filename="../qml/AppShell.qml" line="+274" />
       <source>Ctrl</source>
       <comment>key</comment>
       <translation>Strg</translation>
@@ -1016,12 +1016,12 @@
     </message>
     <message>
       <location line="+17" />
-      <location line="+134" />
+      <location line="+141" />
       <source>Headphones</source>
       <translation>Kopfhörer</translation>
     </message>
     <message>
-      <location line="-91" />
+      <location line="-98" />
       <source>%1 ch.</source>
       <translation>%1 Kan.</translation>
     </message>
@@ -1036,7 +1036,7 @@
       <translation>Standardausgang</translation>
     </message>
     <message>
-      <location line="+8" />
+      <location line="+15" />
       <source>No zones yet</source>
       <translation>Noch keine Zonen</translation>
     </message>
@@ -4996,7 +4996,7 @@
   <context>
     <name>ShowView</name>
     <message>
-      <location filename="../qml/ShowView.qml" line="+59" />
+      <location filename="../qml/ShowView.qml" line="+62" />
       <source>starts cue %1, which is not there</source>
       <translation>startet Cue %1, den es nicht gibt</translation>
     </message>
@@ -6408,7 +6408,7 @@
   <context>
     <name>TileSizePicker</name>
     <message>
-      <location filename="../qml/TileSizePicker.qml" line="+25" />
+      <location filename="../qml/TileSizePicker.qml" line="+26" />
       <source>S</source>
       <comment>small tiles</comment>
       <translation>S</translation>
@@ -7016,6 +7016,34 @@
       <location line="+12" />
       <source>+ Trigger</source>
       <translation>+ Auslöser</translation>
+    </message>
+  </context>
+  <context>
+    <name>ZoneBar</name>
+    <message>
+      <location filename="../qml/ZoneBar.qml" line="+53" />
+      <source>Plays nowhere on this machine</source>
+      <translation>Spielt auf diesem Rechner nirgends</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Mute</source>
+      <translation>Stumm</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>Level of %1</source>
+      <translation>Pegel von %1</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>Volume of %1</source>
+      <translation>Lautstärke von %1</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>%1 dB</source>
+      <translation>%1 dB</translation>
     </message>
   </context>
   <context>

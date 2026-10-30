@@ -58,6 +58,13 @@ pub fn values(list: &str) -> Option<String> {
                     .to_string(),
             )
         }
+        // The range of a zone's volume (SUI.8).
+        "level_limits" => {
+            return Some(
+                serde_json::json!({ "min_db": lmix_types::sound::SOUND_GAIN_MIN_DB, "max_db": lmix_types::sound::SOUND_GAIN_MAX_DB })
+                    .to_string(),
+            )
+        }
         _ => return None,
     };
     serde_json::to_string(&names).ok()

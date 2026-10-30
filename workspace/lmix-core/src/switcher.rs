@@ -30,7 +30,7 @@ use lmix_types::{
 use lmix_types::{Cue, CueList, MidiKind, MidiMessage, Trigger, TriggerOn};
 
 use crate::cues::{Guard, Hold, Out, Runner};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::time::{Duration, Instant};
 use uuid::Uuid;
 
@@ -250,6 +250,13 @@ pub struct Playback {
     pub stages: Vec<lmix_types::StageState>,
     /// Of the stages: the program's.
     pub framerate: lmix_types::Framerate,
+}
+
+/// Level and mute of a zone (SND.11).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+struct ZoneLevel {
+    gain_db: f32,
+    mute: bool,
 }
 
 /// Sounds and pictures the engine holds ready, by id.
@@ -700,6 +707,9 @@ pub struct Switcher {
     feeds: Vec<lmix_types::Feed>,
     /// Where the show's zones play on this machine (SND.10).
     zone_patches: Vec<lmix_types::ZonePatch>,
+    /// Level and mute each zone is set to, by name; a zone not in here
+    /// plays at 0 dB (SND.11). Not part of the show, like a fader move.
+    zone_levels: BTreeMap<String, ZoneLevel>,
     stage_patches: Vec<lmix_types::StagePatch>,
     /// The zones and stages the engine got last; `None`: send them again.
     playback_sent: Option<Playback>,
@@ -766,6 +776,7 @@ impl Switcher {
             targets: Vec::new(),
             feeds: Vec::new(),
             zone_patches: Vec::new(),
+            zone_levels: BTreeMap::new(),
             stage_patches: Vec::new(),
             playback_sent: None,
             preload_sent: None,
@@ -1287,6 +1298,7 @@ impl Switcher {
                     });
                 }
                 self.show.zones.retain(|z| z.name != name);
+                self.zone_levels.remove(&name);
                 Ok(Vec::new())
             }
             Action::SetZonePatch { patch } => {
@@ -1388,15 +1400,20 @@ impl Switcher {
                 mute,
                 duration_ms,
             } => {
-                let zone = crate::playback::zone_index(&self.show.zones, &zone)?;
+                let index = crate::playback::zone_index(&self.show.zones, &zone)?;
                 if let Some(db) = gain_db {
                     crate::playback::check_level(db)?;
                 }
                 crate::playback::check_fade_time(duration_ms)?;
+                let level = self.zone_levels.entry(zone).or_default();
+                level.gain_db = gain_db.unwrap_or(level.gain_db);
+                level.mute = mute.unwrap_or(level.mute);
+                // strom mutes by the level: both always, so a fade keeps a
+                // muted zone silent and unmuting brings its level back.
                 Ok(vec![Command::SetZoneLevel {
-                    zone,
-                    gain_db,
-                    mute,
+                    zone: index,
+                    gain_db: Some(level.gain_db),
+                    mute: Some(level.mute),
                     duration_ms,
                 }])
             }
@@ -1902,6 +1919,7 @@ impl Switcher {
         commands.extend(self.clear_listen());
         commands.extend(self.stop_all_outputs());
         self.show = show;
+        self.zone_levels.clear();
         self.older_format = None;
         // Cues of the old show stop without a word; nothing starts, and
         // standby is where the show kept it (SAF.6).
@@ -2080,6 +2098,16 @@ impl Switcher {
         if self.playback_sent.as_ref() != Some(&playback) {
             self.playback_sent = Some(playback.clone());
             commands.push(Command::SetPlayback { playback });
+            // A new flow plays every zone at 0 dB.
+            commands.extend(self.show.zones.iter().enumerate().filter_map(|(zone, z)| {
+                let level = self.zone_levels.get(&z.name)?;
+                Some(Command::SetZoneLevel {
+                    zone,
+                    gain_db: Some(level.gain_db),
+                    mute: Some(level.mute),
+                    duration_ms: 0,
+                })
+            }));
             // A new flow holds nothing ready.
             self.preload_sent = None;
         }
@@ -2524,7 +2552,16 @@ impl Switcher {
             cue_warnings: self.cue_warnings.clone(),
             targets: self.targets.iter().map(|t| t.public()).collect(),
             feeds: self.feeds.clone(),
-            zones: crate::zones::states(&self.show.zones, &self.zone_patches),
+            zones: crate::zones::states(&self.show.zones, &self.zone_patches)
+                .into_iter()
+                .map(|mut zone| {
+                    if let Some(level) = self.zone_levels.get(&zone.name) {
+                        zone.gain_db = level.gain_db;
+                        zone.mute = level.mute;
+                    }
+                    zone
+                })
+                .collect(),
             stages: crate::stages::states(&self.show.stages, &self.stage_patches),
             restorable: self.removed.last().map(Removed::restorable),
             shortcuts: self
@@ -9883,6 +9920,124 @@ mod tests {
                 duration_ms: 0,
             })
             .is_err());
+    }
+
+    /// strom mutes a zone by its level: every change sends both, so a
+    /// fade does not unmute a muted zone and unmuting brings the level
+    /// back (SUI.8).
+    #[test]
+    fn a_zone_change_sends_its_whole_level() {
+        let mut sw = two_inputs();
+        sw.apply(Action::SetZone {
+            zone: lmix_types::Zone {
+                name: "Hall".into(),
+                channels: 2,
+            },
+        })
+        .unwrap();
+        let mut send = |gain_db: Option<f32>, mute: Option<bool>| {
+            let commands = sw
+                .apply(Action::SetZoneLevel {
+                    zone: "Hall".into(),
+                    gain_db,
+                    mute,
+                    duration_ms: 500,
+                })
+                .unwrap();
+            match commands.as_slice() {
+                [Command::SetZoneLevel { gain_db, mute, .. }] => (*gain_db, *mute),
+                other => panic!("{other:?}"),
+            }
+        };
+        assert_eq!(send(None, Some(true)), (Some(0.0), Some(true)));
+        assert_eq!(
+            send(Some(-20.0), None),
+            (Some(-20.0), Some(true)),
+            "a fade keeps it muted"
+        );
+        assert_eq!(
+            send(None, Some(false)),
+            (Some(-20.0), Some(false)),
+            "unmuted at the level it got"
+        );
+    }
+
+    #[test]
+    fn a_zone_keeps_its_level_in_the_state_and_a_new_flow() {
+        let mut sw = two_inputs();
+        for name in ["Hall", "Foyer"] {
+            sw.apply(Action::SetZone {
+                zone: lmix_types::Zone {
+                    name: name.into(),
+                    channels: 2,
+                },
+            })
+            .unwrap();
+        }
+        let level = |zone: &str, gain_db: Option<f32>, mute: Option<bool>| Action::SetZoneLevel {
+            zone: zone.into(),
+            gain_db,
+            mute,
+            duration_ms: 2000,
+        };
+        sw.apply(level("Foyer", Some(-12.0), None)).unwrap();
+        sw.apply(level("Foyer", None, Some(true))).unwrap();
+        let zone = |sw: &Switcher, name: &str| {
+            let state = sw.state();
+            let z = state.zones.iter().find(|z| z.name == name).unwrap();
+            (z.gain_db, z.mute)
+        };
+        assert_eq!(zone(&sw, "Foyer"), (-12.0, true), "where the fade goes");
+        assert_eq!(zone(&sw, "Hall"), (0.0, false));
+
+        // A restore builds the flow again, which starts at 0 dB.
+        let restored: Vec<_> = sw
+            .restore_commands()
+            .into_iter()
+            .filter(|c| matches!(c, Command::SetZoneLevel { .. }))
+            .collect();
+        assert!(
+            matches!(
+                restored.as_slice(),
+                [Command::SetZoneLevel {
+                    zone: 1,
+                    gain_db: Some(g),
+                    mute: Some(true),
+                    duration_ms: 0,
+                }] if *g == -12.0
+            ),
+            "{restored:?}"
+        );
+
+        // The same show again: the same zones, still a new flow at 0 dB
+        // (the engine must not keep the old show's levels).
+        let same = sw.show().clone();
+        let commands = sw.replace(same, None).unwrap();
+        assert!(commands
+            .iter()
+            .any(|c| matches!(c, Command::SetPlayback { .. })));
+        assert!(!commands
+            .iter()
+            .any(|c| matches!(c, Command::SetZoneLevel { .. })));
+        assert_eq!(
+            zone(&sw, "Foyer"),
+            (0.0, false),
+            "another show starts at 0 dB"
+        );
+        sw.apply(level("Foyer", Some(-12.0), None)).unwrap();
+
+        sw.apply(Action::RemoveZone {
+            name: "Foyer".into(),
+        })
+        .unwrap();
+        sw.apply(Action::SetZone {
+            zone: lmix_types::Zone {
+                name: "Foyer".into(),
+                channels: 2,
+            },
+        })
+        .unwrap();
+        assert_eq!(zone(&sw, "Foyer"), (0.0, false), "a new zone of the name");
     }
 
     #[test]
