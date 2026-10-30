@@ -174,7 +174,9 @@ AppPage {
                     }
                     Detail {
                         visible: detail.output !== null && root.links[detail.output.id] !== undefined
-                        label: qsTr("Link")
+                        // Measured: SRT with its link health, RTMP and recordings their rate.
+                        label: detail.output && root.links[detail.output.id] && root.links[detail.output.id].srt
+                            ? qsTr("Link") : qsTr("Rate")
                         value: detail.output && root.links[detail.output.id] ? Texts.linkDetail(root.links[detail.output.id]) : ""
                     }
                     Detail {

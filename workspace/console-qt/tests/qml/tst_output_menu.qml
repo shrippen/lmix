@@ -18,7 +18,11 @@ TestCase {
 
     readonly property var stream: ({ id: "o1", number: 1, name: "Sendehaus",
         spec: { kind: "srt", uri: "srt://example.org:9921?streamid=secret" }, status: { state: "running", since_ms: 0 } })
-    readonly property var stats: ({ output: "o1", connected: true, kbps: 6000, packets_lost: 3, packets_dropped: 0, rtt_ms: 12 })
+    readonly property var stats: ({ output: "o1", kbps: 6000,
+        srt: { connected: true, packets_lost: 3, packets_dropped: 0, rtt_ms: 12 } })
+    readonly property var rtmp: ({ id: "o2", number: 2, name: "Plattform",
+        spec: { kind: "rtmp", url: "rtmp://live.example/app", key: "key", video_kbps: 4500 },
+        status: { state: "running", since_ms: 0 } })
 
     Component {
         id: menuComponent
@@ -69,6 +73,33 @@ TestCase {
         menu.link = undefined
         menu.output = Object.assign({}, stream, { spec: { kind: "rtmp", url: "rtmp://live.example/app/key", video_kbps: 4500 } })
         compare(menu.rate, "4500 kbit/s")
+    }
+
+    // RTMP and recordings: the measured rate in the head, not the one set,
+    // and no SRT rows under Statistics.
+    function test_rtmp_and_recordings_show_the_measured_rate() {
+        const menu = createTemporaryObject(menuComponent, test.Window.contentItem)
+        menu.output = rtmp
+        menu.link = { output: "o2", kbps: 4730 }
+        compare(menu.rate, Texts.linkRate(menu.link))
+        compare(menu.rate, qsTr("%1 Mbit/s").arg(Number(4.7).toLocaleString(Qt.locale(), "f", 1)))
+        const stats = entry(menu, "Statistics")
+        menu.open()
+        stats.subMenu.open()
+        tryCompare(stats.subMenu, "opened", true)
+        const rows = []
+        for (let i = 0; i < stats.subMenu.count; i++) {
+            const item = stats.subMenu.itemAt(i)
+            if (item.valueText !== undefined && item.visible) {
+                rows.push(item.text + "=" + item.valueText)
+            }
+        }
+        compare(rows, ["Running=00:01:05", "Rate=" + menu.rate])
+        // An SRT output nobody receives says so.
+        menu.link = { output: "o1", kbps: 0, srt: { connected: false, packets_lost: 0, packets_dropped: 0, rtt_ms: null } }
+        compare(menu.rate, "no receiver")
+        // The tooltip of an RTMP or recording output is its rate alone.
+        compare(Texts.linkDetail({ output: "o2", kbps: 4730 }), Texts.linkRate({ output: "o2", kbps: 4730 }))
     }
 
     function test_remove_is_locked_while_it_sends() {
