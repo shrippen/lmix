@@ -14,8 +14,8 @@ use futures_util::StreamExt;
 use gstreamer as gst;
 use gstreamer::prelude::*;
 use lmix_types::{
-    Action, BusRef, Event, InputRef, Latency, Levels, LiveFeed, LiveTiles, LiveTransport,
-    OutputStats,
+    state::TILES_LEASE, Action, BusRef, Event, InputRef, Latency, Levels, LiveFeed, LiveTiles,
+    LiveTransport, OutputStats,
 };
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 
@@ -736,9 +736,13 @@ impl qobject::Core {
         let (tx, rx) = tokio::sync::oneshot::channel();
         let bus = pipeline.bus().expect("pipeline has a bus");
         let thread = self.qt_thread();
+        let tiles = feed.grid.is_some();
         config::runtime().spawn(async move {
             let mut messages =
                 bus.stream_filtered(&[gst::MessageType::Error, gst::MessageType::Eos]);
+            // Asks on its own, so a slow lmix-core holds up no stop; ends
+            // with this task.
+            let _renewal = tiles.then(|| Renewal(config::runtime().spawn(renew_tiles())));
             tokio::select! {
                 _ = rx => return,
                 message = messages.next() => {
@@ -1089,6 +1093,9 @@ async fn measure() -> Option<Latency> {
 
 /// `showLive`'s source for the tile picture.
 const TILES: &str = "tiles";
+/// How often a shown tile picture is asked for again: three times a
+/// lease, so one or two lost asks do not darken it.
+const TILES_RENEW: Duration = Duration::from_secs(TILES_LEASE.as_secs() / 3);
 
 /// A live picture's socket, how its frames come, and for the tile picture
 /// its grid (JSON for QML).
@@ -1129,6 +1136,29 @@ async fn live_feed(source: &str) -> Result<Feed, String> {
         transport: feed.transport,
         grid: None,
     })
+}
+
+/// The tile picture stays lit a lease after the last ask: a shown one is
+/// asked for again every `TILES_RENEW` (the first ask was just now).
+async fn renew_tiles() {
+    let mut renew = tokio::time::interval(TILES_RENEW);
+    renew.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    renew.tick().await;
+    loop {
+        renew.tick().await;
+        if let Err(e) = live_feed(TILES).await {
+            tracing::debug!(error = %e, "tile lease not renewed");
+        }
+    }
+}
+
+/// Stops the renewal of a tile picture when its watch ends.
+struct Renewal(tokio::task::JoinHandle<()>);
+
+impl Drop for Renewal {
+    fn drop(&mut self) {
+        self.0.abort();
+    }
 }
 
 /// `program`, `preview` (the mixer's), or an input id (tile size).
