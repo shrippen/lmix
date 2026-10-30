@@ -368,15 +368,25 @@ pub struct Output {
     pub status: OutputStatus,
 }
 
-/// Link health of a running network output (SRT), about once a second
-/// (STR.1: the streamer sees a weak link before the stream breaks).
+/// What a running SRT, RTMP or recording output measures, about once a
+/// second (STR.1: the streamer sees a weak link before the stream breaks;
+/// M07: the menu shows the rate it sends).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct OutputStats {
     pub output: OutputId,
+    /// Measured rate: sent on the network (SRT, RTMP, with protocol
+    /// framing) or written to disk (recording).
+    pub kbps: u32,
+    /// Link health, SRT only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub srt: Option<SrtLink>,
+}
+
+/// Link health of a running SRT output.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct SrtLink {
     /// A receiver is connected.
     pub connected: bool,
-    /// Current send rate.
-    pub kbps: u32,
     /// Packets lost on the way (reported by the receiver), since start.
     pub packets_lost: u64,
     /// Packets dropped before sending because they were too late, since

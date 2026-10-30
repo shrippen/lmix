@@ -1312,24 +1312,32 @@ impl Service {
         }
     }
 
-    /// Publish the link health of running SRT outputs once a second;
-    /// runs for the process life.
+    /// Publish the measured rate of running SRT, RTMP and recording
+    /// outputs (SRT with its link health) once a second; runs for the
+    /// process life.
     pub async fn forward_output_stats(self: Arc<Self>) {
         loop {
             tokio::time::sleep(OUTPUT_STATS_INTERVAL).await;
-            let running: Vec<OutputId> = {
+            let running: Vec<(OutputId, OutputSpec)> = {
                 let sw = self.switcher.lock().await;
                 sw.show()
                     .outputs
                     .iter()
-                    .filter(|o| matches!(o.spec, OutputSpec::Srt { .. }))
+                    .filter(|o| {
+                        matches!(
+                            o.spec,
+                            OutputSpec::Srt { .. }
+                                | OutputSpec::Rtmp { .. }
+                                | OutputSpec::Record { .. }
+                        )
+                    })
                     .filter(|o| sw.output_is_running(o.id))
-                    .map(|o| o.id)
+                    .map(|o| (o.id, o.spec.clone()))
                     .collect()
             };
             let mut stats = Vec::with_capacity(running.len());
-            for id in running {
-                stats.extend(self.engine.output_stats(id).await);
+            for (id, spec) in running {
+                stats.extend(self.engine.output_stats(id, &spec).await);
             }
             let unchanged = {
                 let mut last = self.output_stats.lock().expect("output stats lock");
