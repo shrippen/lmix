@@ -10,7 +10,6 @@
 #   scripts/measure-sdi-latency.sh
 #   SDI_OUT=1 SDI_IN=2 MODE=1080p25 MIXER=cuda|cpu RUNS=3 SECS=15 …
 #   STROM_BIN=…/strom CORE_BIN=…/lmix-core …   # skip the builds
-#   DECKLINK_PLUGIN=system                      # decklink plugin without lmix's patch
 #   KEEP_WORK=1 …                              # keep logs and recordings
 #
 # Needs ffmpeg, jq and Python 3 with numpy.
@@ -60,23 +59,19 @@ ffmpeg -v error -y \
     -c:v libx264 -preset veryfast -g 25 -pix_fmt yuv420p "$CLIP"
 
 STROM_BIN="${STROM_BIN:-$("$ROOT/scripts/fetch-strom.sh")}"
-# GStreamer's decklink plugin with lmix's patch (a card output started
-# again shows every frame late without it); DECKLINK_PLUGIN=system keeps
-# the installed one.
-if [[ "${DECKLINK_PLUGIN:-patched}" == patched ]]; then
-    GST_PLUGIN_PATH="$("$ROOT/scripts/decklink-plugin.sh")${GST_PLUGIN_PATH:+:$GST_PLUGIN_PATH}"
-    # The lead that holds with the patch (flows.rs CARD_LEAD_MS).
-    export GST_PLUGIN_PATH LMIX_CARD_LEAD_MS="${LMIX_CARD_LEAD_MS:-60}"
-fi
-# The plugin to use, ours or the system's, is on the path by now.
-gst-inspect-1.0 decklinkvideosink >/dev/null 2>&1 || { echo "needs the GStreamer decklink plugin" >&2; exit 2; }
+# The card output plays through GStreamer's decklink2 plugin (GStreamer
+# 1.30; built by scripts/decklink-plugin.sh before), the input through
+# its decklink plugin.
+plugin="$("$ROOT/scripts/decklink-plugin.sh")" || { echo "scripts/decklink-plugin.sh failed" >&2; exit 2; }
+export GST_PLUGIN_PATH="$plugin${GST_PLUGIN_PATH:+:$GST_PLUGIN_PATH}"
+gst-inspect-1.0 decklink2sink >/dev/null 2>&1 || { echo "needs GStreamer's decklink2 plugin (scripts/decklink-plugin.sh)" >&2; exit 2; }
+gst-inspect-1.0 decklinkvideosrc >/dev/null 2>&1 || { echo "needs GStreamer's decklink plugin" >&2; exit 2; }
 if [[ -z "${CORE_BIN:-}" ]]; then
     (cd "$ROOT/workspace/lmix-core" && cargo build --release -q)
     CORE_BIN="${CARGO_TARGET_DIR:-$ROOT/workspace/lmix-core/target}/release/lmix-core"
 fi
 
-# A fresh engine for each run: a card output started a second time in
-# the same strom shows frames late (DECISIONS 27.10.).
+# A fresh engine for each run: each run measures a first start.
 for run in $(seq 1 "$RUNS"); do
     dir="$WORK/run$run"
     mkdir -p "$dir/mv"
