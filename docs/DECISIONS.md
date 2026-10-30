@@ -5590,3 +5590,47 @@ Größe M nach Regel 3.
 - **„Belegungen…“ im Fuß** öffnet den Dialog der Kurzbefehle. Der Knopf steht
   am Anfang des Fußes, über `KanteDialog.footerStart` (Kante 1.57, für diesen
   Dialog eingeführt).
+
+## 2026-10-30 — Gemessene Bitrate auch für RTMP und Aufnahme (M07)
+
+Kontext: Der Kopf des Ausgangsmenüs zeigt die Bitrate, solange der Ausgang
+sendet (`docs/DESIGN-DIALOGE.md` M07). Gemessen war sie nur für SRT
+(`srt-stats`, B32); RTMP und Aufnahme zeigten die eingestellte Rate.
+
+Optionen:
+- Element-Eigenschaften aus strom lesen (`GET …/elements/{id}/properties`):
+  liest alle Eigenschaften eines Elements und kann keine `GstStructure`, also
+  nicht `rtmp2sink.stats`. Verworfen.
+- Ein Byte-Zähler als Pad-Probe auf dem kodierten Strom: kostet je Puffer
+  einen Probe-Aufruf und zählt nicht, was wirklich auf die Leitung geht.
+  Verworfen.
+- **Gewählt:** neue strom-API `GET /flows/{id}/output-bytes` (Stil von
+  `srt-stats`), Bytes seit Start je Ausgangs-Element. RTMP: `out-bytes-total`
+  aus `rtmp2sink.stats`, die Bytes auf dem Socket mit RTMP-Rahmen; im
+  Streaming-Thread läuft dafür nichts zusätzlich. Live Recorder: die
+  Datei-Senke zählt jeden Schreibvorgang (Kopf eingeschlossen) in einen
+  `AtomicU64`, eine atomare Addition je Schreibvorgang, gelesen ohne Sperre.
+  strom-PR auf `dev` (Branch `output-bytes`); auch für upstream gedacht
+  (`docs/upstream/STROM.md`).
+
+Entscheidung: `lmix-core` fragt für laufende RTMP- und Aufnahme-Ausgänge
+einmal je Sekunde `output-bytes` ab und nimmt die Rate aus zwei Lesungen
+(`engine/output_rate.rs`). Die erste Lesung, eine über 3 s alte und ein
+Zähler, der zurückging (Neustart, Wiederverbindung von `rtmp2sink`), geben
+keine Rate; dann zeigt die Console die eingestellte. `OutputStats` hat jetzt
+`kbps` für alle drei Arten und `srt: Option<SrtLink>` mit Verbindung,
+Paketverlusten und RTT nur für SRT (bricht das JSON von `outputs` und
+`/api/outputs/stats`; vor dem ersten Release erlaubt, Console,
+`/metrics` und `soak-hardware.sh` angepasst). „kein Empfänger“ gibt es nur
+für SRT. Die alte Aufnahme über `splitmuxsink` (MKV vor GStreamer 1.26)
+zählt nicht und zeigt weiter die eingestellte Rate.
+
+Messung (lokal, CPU-Mischer, Testbild „ball“, Aufnahme MKV und RTMP an einen
+lokalen ffmpeg-Empfänger, beide 4000 kbit/s eingestellt): gemeldet Aufnahme
+240–350 kbit/s, RTMP 250–375 kbit/s; die Aufnahme-Dateien wuchsen im selben
+Zeitraum um 266–269 kbit/s, RTMP etwas darüber (Rahmen). Mit CBR dasselbe:
+der x264-Encoder bleibt bei einem einfachen Bild weit unter der eingestellten
+Rate, das zeigte die eingestellte Rate bisher nicht. Kosten: 1000 Abfragen
+von `output-bytes` hintereinander erhöhten die CPU-Zeit von strom um etwa
+0,6 ms je Abfrage (im Rauschen der zwei laufenden Encoder); bei einer Abfrage
+je Sekunde und Ausgang vernachlässigbar.
