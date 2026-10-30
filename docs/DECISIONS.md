@@ -5459,6 +5459,15 @@ spät). Latenz SDI-Loop 1080p25
 20 ms Vorlauf, 433, 366, 400 ms mit 0 ms; vorher (decklinkvideosink,
 150 ms) 266–300 ms.
 
+**Nachtrag (Review strom #53)**: Endet oder stockt der Ton, hielt der
+Combiner das Bild an (auf der Karte 11 statt 97 Bilder in 4 s). Der Ton
+geht jetzt über einen `audiomixer` mit stiller Live-Quelle in den
+Combiner; die Stille braucht die Kanalzahl des Tons, darum gibt lmix dem
+Block `audio_channels` mit. Der Ausgang bietet nur noch die Formate an,
+die `decklink2sink` kennt (kein 12-bit-RGB), Unbekanntes scheitert mit
+Meldung statt Panic. Danach `test-sdi-loop.sh` bestanden, Latenz 433,
+433, 366 ms (unverändert).
+
 **Offen (zur Entscheidung)**: decklink2 ist so etwa 130 ms langsamer,
 weil es 7 Bilder vorhält (280 ms bei 25p, 140 ms bei 50p). Ein Versuch
 mit `n-preroll-frames=3`, `min-buffered-frames=1` (nicht im Code) gab
