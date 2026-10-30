@@ -1122,6 +1122,8 @@ DE = {
     'A show has at most %1 buses besides master and headphones': 'Eine Show hat neben Master und Kopfhörer höchstens %1 Busse',
     'A bus name has 1–%1 characters': 'Ein Busname hat 1–%1 Zeichen',
     'There is a bus %1 already': 'Es gibt schon einen Bus %1',
+    'There is an input %1 already': 'Es gibt schon einen Input %1',
+    'Another input has this name.': 'Ein anderer Input hat diesen Namen.',
     'Output %1 takes the sound of bus %2: give it another first': 'Ausgang %1 nimmt den Ton von Bus %2: Gib ihm zuerst einen anderen',
     'On: the sends ignore the channel faders and on/off (a monitor mix).': 'An: Die Sends übergehen Kanalfader und Ein/Aus (eine Monitormischung).',
     'A mix of its own for an output: in-ear, a stream, a recording.': 'Eine eigene Mischung für einen Ausgang: In-Ear, Stream, Aufnahme.',

@@ -1636,6 +1636,8 @@ pub enum ActionError {
     BadBusName { max: usize },
     #[error("there is a bus {name} already")]
     DuplicateBusName { name: String },
+    #[error("there is an input {name} already")]
+    DuplicateInputName { name: String },
     #[error("output {output} takes the sound of bus {bus}: give it another first")]
     BusInUse { bus: String, output: String },
     #[error("look: {field} is out of range")]
