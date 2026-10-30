@@ -5590,3 +5590,50 @@ Größe M nach Regel 3.
 - **„Belegungen…“ im Fuß** öffnet den Dialog der Kurzbefehle. Der Knopf steht
   am Anfang des Fußes, über `KanteDialog.footerStart` (Kante 1.57, für diesen
   Dialog eingeführt).
+
+## 2026-10-30 — Ausgang nachträglich ändern (M07 „Einstellungen…“)
+
+**Anlass**: Einen Ausgang konnte man nach dem Anlegen nicht mehr ändern
+(Adresse, Art, Quelle, Kodierung, Name), nur entfernen und neu anlegen.
+„Einstellungen…“ im Menü des Ausgangs sprang darum nur auf die Seite
+Outputs (Eintrag vom selben Tag oben).
+
+**Entscheidung**:
+- Aktion `update_output` (Gruppe „output“, Recht Bearbeiten): ersetzt
+  Spec, Quelle und Namen eines Ausgangs; Id, Nummer und Bus bleiben. Sie
+  prüft wie `add_output` (Kodierung, Karte, Busse der weiteren Kartenpaare,
+  ISO nur mit Bild) und benennt ohne Namen wie beim Anlegen. Ein
+  Bildschirm hat keinen Ton: wird ein Ausgang zum Bildschirm, verliert er
+  den Bus. Den Ton ändert weiter `set_output_bus`; die Console schickt sie
+  nach `update_output`, wenn sich der Ton im Formular geändert hat.
+- Abgelehnt, solange der Ausgang sendet (auch im Failback gehalten) oder
+  auf die Karten wartet: neuer Fehler `output_sending`. Ein laufender
+  Ausgang würde sonst mit anderen Einstellungen in der Show stehen, als er
+  sendet. Verworfen: im Betrieb neu starten (eine Lücke auf Sendung, die
+  niemand ausgelöst hat).
+- Rückgängig über `restore`: die Einstellungen davor kommen auf denselben
+  Stapel wie Entferntes (`restorable.kind` = `output_settings`, mit dem
+  alten Namen); `restore` setzt sie mit dem Bus von damals zurück, auch
+  nach einem `set_output_bus` danach, und lehnt ab, solange der Ausgang
+  sendet. Verworfen: ein eigener Rückgängig-Stapel für Änderungen (zwei
+  Stapel unter einem Strg+Z). Die Console zeigt nach dem Speichern einen
+  Toast „Geändert“ mit „Rückgängig“ (`Removals.change`).
+- Console: `AddOutputDialog` hat einen Bearbeiten-Modus (Titel „Ausgang
+  einstellen“, Knopf „Speichern“, Felder aus dem Ausgang). „Einstellungen…“
+  öffnet ihn aus dem Menü in der Leiste und aus der Detailkarte der Seite
+  Outputs. **Sendet der Ausgang, bleibt der Menüeintrag aktiv**, der Dialog
+  zeigt die Einstellungen gesperrt mit dem Hinweis „Der Ausgang sendet.
+  Erst stoppen …“ (`KanteCallout`). Grund: anders als Entfernen hat das
+  Ansehen auch beim Senden einen Zweck (Adresse, Rate prüfen), und der
+  Ausgang kann starten oder stoppen, während der Dialog offen ist; die
+  Sperre muss also ohnehin im Dialog leben. Wird der Ausgang anderswo
+  entfernt, schließt der Dialog.
+
+**Geprüft**: Switcher-Tests `an_output_takes_new_settings_in_its_place`,
+`restore_brings_back_an_outputs_settings_before`,
+`a_sending_output_keeps_its_settings`, `an_output_update_is_checked_like_adding`;
+Console `forms::the_form_adds_or_updates_an_output`; QML-Tests
+`tst_add_output_dialog` (Füllen, Speichern mit und ohne Buswechsel,
+Sperre beim Senden und Warten, entfernt während offen, danach leer zum
+Anlegen), `tst_removals` (Toast nach dem Ändern, abgelehnt ohne Toast),
+`tst_outputs_page` (Einstellungen… der Detailkarte).

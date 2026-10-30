@@ -100,6 +100,35 @@ TestCase {
         compare(toast.actionText, "")
     }
 
+    // An output's new settings: no question, both actions in order, the
+    // toast brings back the settings before.
+    function test_changed_settings_come_back_with_undo() {
+        const removals = createTemporaryObject(removalsComponent, test)
+        const update = { action: "update_output", output: "o1", spec: { kind: "ndi", name: "Desk" } }
+        const bus = { action: "set_output_bus", output: "o1", bus: null }
+        removals.change({ id: "o1", name: "CDN" }, [update, bus])
+        compare(sent, [update, bus])
+        const toast = toastOf(removals)
+        fakeCore.answered(JSON.stringify(update), "")
+        fakeShow.restorable = { kind: "output_settings", name: "CDN" }
+        tryCompare(toast, "shown", true)
+        compare(toast.title, "Changed")
+        compare(toast.text, "Settings of output “CDN” changed")
+        compare(toast.actionText, "Undo")
+        toast.actionTriggered()
+        compare(sent[2], { action: "restore" })
+    }
+
+    function test_a_refused_change_shows_nothing() {
+        const removals = createTemporaryObject(removalsComponent, test)
+        const update = { action: "update_output", output: "o1", spec: { kind: "ndi", name: "Desk" } }
+        removals.change({ id: "o1", name: "CDN" }, [update])
+        fakeCore.answered(JSON.stringify(update), "{\"error\":{\"error\":\"output_sending\"}}")
+        fakeShow.restorable = { kind: "output_settings", name: "CDN" }
+        wait(50)
+        compare(toastOf(removals).shown, false)
+    }
+
     function test_a_refused_removal_shows_nothing() {
         const removals = createTemporaryObject(removalsComponent, test)
         removals.remove(removals.request("output", { id: "o1", number: 1, name: "CDN" }))

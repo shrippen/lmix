@@ -4,8 +4,8 @@
 //! passes strings.
 
 use lmix_types::{
-    BusId, CardChannels, CardMode, Container, DisplayMode, Effect, InputColor, InputPress,
-    OutputSource, OutputSpec, SourceSpec, TestPattern, VideoEncoding,
+    Action, BusId, BusRef, CardChannels, CardMode, Container, DisplayMode, Effect, InputColor,
+    InputPress, OutputRef, OutputSource, OutputSpec, SourceSpec, TestPattern, VideoEncoding,
 };
 use serde::{Deserialize, Serialize};
 
@@ -330,6 +330,52 @@ pub fn output_of(
     })
 }
 
+/// What the add-output form describes, as `add_output` takes it; `None`
+/// while a needed field is empty.
+pub fn add_output_action(form: &str) -> Option<Action> {
+    let form = serde_json::from_str::<OutputForm>(form).ok()?;
+    let (spec, source, name) = output_parts(&form)?;
+    Some(Action::AddOutput {
+        spec,
+        source,
+        name,
+        bus: (!form.bus.is_empty()).then(|| BusRef::Text(form.bus.clone())),
+    })
+}
+
+/// The same form for an output already there (its id): new spec, source
+/// and name. Its bus stays; the form's goes with `set_output_bus`.
+pub fn update_output_action(output: &str, form: &str) -> Option<Action> {
+    let form = serde_json::from_str::<OutputForm>(form).ok()?;
+    let (spec, source, name) = output_parts(&form)?;
+    Some(Action::UpdateOutput {
+        output: OutputRef::Text(output.to_string()),
+        spec,
+        source,
+        name,
+    })
+}
+
+/// Spec, source and name (none when blank: lmix-core names it).
+fn output_parts(form: &OutputForm) -> Option<(OutputSpec, OutputSource, Option<String>)> {
+    let spec = output_of(
+        &form.kind,
+        &form.text,
+        &form.container,
+        form.video_kbps,
+        form.encoding,
+        &form.key,
+        &form.mode,
+    )?;
+    let spec = with_card_sound(spec, &form.card);
+    let name = form.name.trim().to_string();
+    Some((
+        spec,
+        output_source_of(&form.source),
+        (!name.is_empty()).then_some(name),
+    ))
+}
+
 /// Program, the preview, the multiview, or one input by id (ISO,
 /// MultiCorder).
 pub fn output_source_of(input: &str) -> OutputSource {
@@ -553,6 +599,36 @@ mod tests {
             "other kinds ignore the options"
         );
         assert_eq!(source_with_options("device", " ", "{}"), None);
+    }
+
+    #[test]
+    fn the_form_adds_or_updates_an_output() {
+        let form = r#"{"kind":"ndi","text":" Desk ","source":"preview","video_kbps":0,"name":"  ","bus":"b1"}"#;
+        let spec = OutputSpec::Ndi {
+            name: "Desk".into(),
+        };
+        assert_eq!(
+            add_output_action(form),
+            Some(Action::AddOutput {
+                spec: spec.clone(),
+                source: OutputSource::Preview,
+                name: None,
+                bus: Some(BusRef::Text("b1".into())),
+            })
+        );
+        // The bus is not the update's: `set_output_bus` changes it.
+        assert_eq!(
+            update_output_action("o1", &form.replace(r#""name":"  ""#, r#""name":"Desk""#)),
+            Some(Action::UpdateOutput {
+                output: OutputRef::Text("o1".into()),
+                spec,
+                source: OutputSource::Preview,
+                name: Some("Desk".into()),
+            })
+        );
+        // A needed field empty, or no form at all.
+        assert_eq!(update_output_action("o1", &form.replace("Desk", "")), None);
+        assert_eq!(update_output_action("o1", "{"), None);
     }
 
     #[test]
