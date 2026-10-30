@@ -24,7 +24,7 @@ KanteDialog {
     property bool looksAvailable: false
     /** Id of the input; set before `open()`. */
     property string inputId: ""
-    readonly property var input: inputs.find(i => i.id === inputId) || null
+    readonly property var input: StatePatch.byId(inputs, inputId) || null
 
     signal replaceRequested(var input)
     signal triggersRequested(var input)

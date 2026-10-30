@@ -10,6 +10,22 @@ use crate::layout::{BoxRect, Layout, LayoutTemplate};
 use crate::output::{Output, OutputStats};
 use crate::shortcut::Shortcut;
 
+/// What was removed last and `restore` brings back.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct Restorable {
+    pub kind: RemovedKind,
+    pub name: String,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum RemovedKind {
+    Input,
+    Layout,
+    Bus,
+    Output,
+}
+
 /// One transition button.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct Transition {
@@ -217,9 +233,9 @@ pub struct ShowState {
     /// MIDI controller that moves the T-bar (AUT.1).
     #[serde(default)]
     pub midi_tbar: Option<crate::midi::MidiBinding>,
-    /// Name of the input `restore_input` would bring back.
+    /// What `restore` would bring back.
     #[serde(default)]
-    pub restorable: Option<String>,
+    pub restorable: Option<Restorable>,
     /// Graphics channels (titles).
     #[serde(default)]
     pub graphics: Vec<crate::graphics::Graphics>,
@@ -268,11 +284,39 @@ pub struct Levels {
 }
 
 /// Live picture for a client on the engine's machine (`GET /api/live/…`):
-/// a Unix socket with raw frames, read with GStreamer's `unixfdsrc`.
+/// a Unix socket with raw frames, read as `transport` says.
 /// Clients elsewhere use the JPEG pictures.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct LiveFeed {
     pub socket: String,
+    #[serde(default)]
+    pub transport: LiveTransport,
+}
+
+/// How a live picture's frames come over its socket.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum LiveTransport {
+    /// Frames in system memory, read with `unixfdsrc`.
+    #[default]
+    UnixFd,
+    /// Frames in GPU memory of the engine's CUDA device, read with
+    /// `cudaipcsrc`: they never leave the GPU.
+    CudaIpc,
+}
+
+/// Every slot live in one picture (`GET /api/live/tiles`): slot `n` in cell
+/// `n` of a grid of `columns` × `rows` cells, row by row, each picture
+/// fitted into its cell. A Console shows its input tiles from this one
+/// stream instead of one per input.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct LiveTiles {
+    pub socket: String,
+    pub transport: LiveTransport,
+    pub columns: u32,
+    pub rows: u32,
+    pub cell_width: u32,
+    pub cell_height: u32,
 }
 
 /// Latency from capture at a source to the program output of the mixer

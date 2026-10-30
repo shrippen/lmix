@@ -1110,7 +1110,8 @@ Kurzbefehle können keine Kurzbefehle auslösen oder ändern (keine
 Schleifen); Tasten sind eindeutig, eine Show-Taste gewinnt gegen 1–9.
 **Wiederherstellen und Sperre**: `restore_input` holt den zuletzt
 geschlossenen Input mit Id, Einstellungen, Platz und Slot zurück (die
-letzten zehn, solange die Show offen ist). `set_lock` sperrt Schließen von
+letzten zehn, solange die Show offen ist; seit 2026-10-29 `restore` für
+Inputs, Layouts, Busse und Ausgänge, siehe dort). `set_lock` sperrt Schließen von
 Inputs, Show öffnen/leeren und Ausgänge stoppen/entfernen; Umschalten geht
 weiter. Die Sperre gilt nur zur Laufzeit.
 **Auslöser**: je Input bis zu 8: bei Programm an/aus, Vorschau, Overlay
@@ -5123,3 +5124,143 @@ ihre Farben.
 
 **Geprüft**: `started_cues_count_as_ran_until_a_reset`,
 `a_cue_is_flagged_and_unflagged`.
+
+## 2026-10-29 — Plugins: Steuerung als WASM, Companion, fremde GStreamer-Plugins
+
+**Kontext**: Die Show soll mit Geräten und Programmen sprechen, die wir nicht
+alle vorhersehen. Recherche mit Stichprobe von 11 Companion-Modulen und
+Auszählung von 600 ausgelieferten (`bitfocus/companion-bundled-modules`):
+nur 12 haben native Teile, 599 nutzen noch Base-API 1.x, die Repos meist
+schon 2.x. Bericht: https://claude.ai/artifact/RdoFocHWJ6FKVfXihcD3Cn
+
+**Entscheidung, Steuer-Plugins**:
+- Eigenes Format `lmix-plugin/1`: WebAssembly-Komponenten (Component Model,
+  WIT-Welt `lmix:plugin@1`) in einem eigenen Prozess `lmix-plugin-host`
+  (wasmtime, ein Store je Verbindung). Der Kern spricht JSON-RPC mit dem
+  Host; ein Plugin-Fehler lässt nur seine Aktion fehlschlagen.
+- Netz über ein eigenes `lmix:net` (TCP, UDP, TLS, WebSocket) statt
+  `wasi:sockets`, dazu `lmix:timer`, `lmix:serial`, `wasi:http`. Rechte im
+  Manifest hängen an der Konfiguration (`$config.host`), der Host prüft jede
+  Verbindung. Ereignisgetrieben, weil Imports aus JS unter WASI 0.2
+  synchron sein müssen.
+- `exec` (eigener Prozess, gleicher JSON-RPC) bleibt als Ausnahme mit Warnung:
+  USB-HID, Hersteller-SDKs, externe Programme, GPL-Plugins Dritter, Python.
+- Sandbox: Landlock, `no_new_privs`, cgroup für Host und exec-Plugins.
+- SDKs: Rust und JS (ComponentizeJS) zuerst, Python nur über `exec`.
+- Verteilung: von Hand und über einen Index auf GitHub mit
+  minisign-Signaturen. GPL-Plugins Dritter nur als getrennte Programme, nie
+  im lmix-Paket. Eine Show bringt nie Code mit.
+- Reihenfolge: der Plugin-Host kommt nach K1 (OSC-Cue, lmix-Modul für
+  Companion aus S2).
+
+**Entscheidung, Companion**: erst koppeln (K1), dann ein Prototyp (K2), der
+Module in GitHub-CI automatisch nach WASM übersetzt (esbuild mit Shims für
+`@companion-module/base` 1.x/2.x und Node-APIs, ComponentizeJS). Node nur in
+dieser CI, nie zur Laufzeit von lmix. Übersetzte Module mit freier Lizenz
+(MIT, ISC, BSD, Apache-2.0) kommen mit ihrer Lizenz und Prüfstatus in den
+Index.
+
+**Entscheidung, Bild und Ton**: kein eigenes Plugin-Format. Lokale Quelle
+und Senke zuerst über PipeWire, später unixfd. Fremde GStreamer-Plugins
+sind erlaubt: lmix führt eine Liste getesteter Plugins mit Versionsnummer;
+alles, was nicht darauf steht, warnt beim Installieren und beim Hinzufügen
+der Quelle („kann Performance- und Stabilitätseinbußen mit sich bringen“).
+Nach einem Absturz von strom ordnet lmix ihn einem Plugin zu (Crash-Handler
+in strom schreibt Stack und Speicherbelegung, lmix-core löst sie beim
+Neustart über die Registry auf) und schlägt vor, es abzuschalten. Der
+Crash-Handler kommt in den strom-Fork und später als Vorschlag zu Eyevinn.
+
+**Verworfen**: Prozess je Plugin als einziger Weg (WASM bietet Isolation
+ohne Prozess je Plugin), Extism und Javy (keine echten Imports, keine
+Timer), Companion-Module mit Node zur Laufzeit hosten, native Plugins im
+Kern.
+
+## 2026-10-29 — Live-Kacheln aus einem Bild auf der GPU
+
+**Entscheidung**: Die Kacheln der Console kommen nicht mehr als ein Strom je
+Slot (CPU: Download, `videoscale`, `unixfdsink`, `glupload`), sondern als ein
+Bild: strom hat am Bildmischer einen Ausgang `tiles_out` (eigener Fork), der
+jeden Input auf der GPU des Mischers in seine Zelle eines Rasters setzt
+(Slot n in Zelle n, 640×360, Spalten von lmix-core vorgegeben). Mit dem
+CUDA-Mischer geht dieses Bild, wie Programm und Vorschau, per
+`cudaipcsink`/`cudaipcsrc` (`ipc-mode=mmap`; im Legacy-Modus kann die Console
+das zweite Bild aus derselben Engine nicht öffnen) zur Console und verlässt
+die GPU nie. Die Console zeichnet es einmal und schneidet die Zellen aus.
+Mit GL- oder CPU-Mischer läuft dasselbe Bild über `unixfdsink`.
+
+Dazu: Desktop-OpenGL statt GLES (Qt nahm auf Wayland mit NVIDIA GLES, und
+`cudadownload` kopiert nur mit Desktop-GL in eine Textur) und der threaded
+Render-Loop (Qt nahm hier den basic Loop, der jedes Bild im GUI-Thread zeichnet).
+
+**Gemessen** (`scripts/measure-tiles.sh`, 31 Inputs, CUDA, RTX 3070 Ti,
+Mix-Seite in kopflosem KWin):
+
+| | vorher | jetzt | ohne Fenster |
+|---|---|---|---|
+| strom | 508 % | 374–385 % | 369 % |
+| lmix | 149 % (GUI-Thread 39) | 41 % (GUI-Thread 3) | – |
+| GPU | 37 % | 25 % | 14 % |
+
+Die Kacheln kosten damit rund 57 % CPU statt 290 %; der zusätzliche
+Compositor im Mischer ist ohne Console nicht messbar. Ein Versuch mit einem
+Shader je Kachel auf einer gemeinsamen Textur statt `ShaderEffectSource` je
+Kachel brachte nichts Messbares und wurde verworfen.
+
+**Nachtrag, am selben Tag:** Das Fenster zeichnete 60 Bilder/s bei 30 fps
+Quellen. Nur das Kachelbild allein ergab schon 60: Jede `ShaderEffectSource`
+(auch mit `live: false` und `scheduleUpdate()`) fordert nach einem Wechsel
+ihrer Quelle einen zweiten Frame an. Darum zeichnet jetzt jede Kachel ihren
+Ausschnitt der Textur selbst (`AtlasCell`, C++, ein `QSGImageNode`); das Bild
+kommt über einen `appsink`, der es für GL abbildet (erst dann füllt
+`cudadownload` die Textur) und drei Bilder hält. Der `qml6glsink` von
+`TilesAtlas` bleibt nur für den geteilten GL-Kontext und bekommt keine
+Bilder. Dazu: strom liefert das Kachelbild in RGBA (`tiles_format`, eigener
+Fork), `glcolorconvert` läuft durch; die Bridge hält das jeweils erste von
+Programm und Kachelbild bis zu 4 ms an, damit beide in einen Frame fallen
+(`frame_gate`); die verbundene Pille „lmix-core“ atmet nicht mehr (ihre
+Animation hielt das Fenster immer auf 60 Bildern/s).
+
+| 31 Inputs, CUDA | vorher | jetzt |
+|---|---|---|
+| lmix | 42–46 % | 28–30 % |
+| davon Render-Thread | 25–26 % | 12–16 % |
+| davon GL-Thread (gstglcontext) | 10 % | 6–7 % |
+| Frames/s des Fensters | 60 | 43–51 |
+| GL-Mischer: lmix | 79 % | 67 % |
+
+RGBA allein brachte 3–4 Punkte (gstglcontext 10 → 7 %). Die Schranke allein
+nicht messbar, mit `AtlasCell` 60 → 43–51 Frames/s. Die übrigen Frames
+kommen von Bildern außer Takt (Pegel 10/s, Ton-Seite). Lastenheft: Das
+Programmbild wartet höchstens 4 ms (0,12 Frames) und kommt meist als
+letztes, also ohne Wartezeit (NFA.3: ≤ 3 Frames hinter Program, gemessen
+72 ms Bildalter am Sink); Kacheln weiter mit voller Bildrate (OUT.11), alles
+auf der GPU (NFA.1, G.2).
+
+## 2026-10-29 — Entfernen mit Rückfrage und Rückgängig
+
+Regel 1 aus `docs/DESIGN-DIALOGE.md`. Inputs, Layouts, Busse und Ausgänge
+fragen vor dem Entfernen (roter Balken, die Frage als Titel, der Knopf mit
+Verb und Objekt; Enter behält). Danach bietet ein Toast „Rückgängig“ an,
+Ctrl+Z ebenso.
+
+- **Ein Stapel im Kern:** lmix-core hält die letzten zehn Entfernungen
+  aller vier Arten in einem Stapel. `restore` (vorher `restore_input`, nur
+  für Inputs) holt die oberste zurück, an ihren alten Platz und mit ihren
+  Einstellungen. Ein Bus kommt mit den Sends der Inputs zurück. Hat ein
+  anderer Bus inzwischen seinen Namen, heißt er „Name (2)“.
+- **Was sich inzwischen geändert hat, gilt:** Ein Layout kommt ohne die
+  Inputs zurück, die seither gegangen sind, und auf einem freien
+  Bild-im-Bild-Platz. Ein Ausgang kommt gestoppt zurück, ohne einen
+  inzwischen entfernten Bus.
+- **Abgelehnt bleibt es liegen:** Sind alle Layouts belegt oder alle Busse,
+  lehnt `restore` ab, und die Entfernung bleibt die oberste.
+- `restorable` im Zustand nennt jetzt Art und Name (`{kind, name}`); der
+  Toast der Console bietet Rückgängig nur, solange es seine Entfernung ist.
+- **Bricht:** `restore_input` heißt `restore`, `restorable` ist ein Objekt
+  statt eines Namens. Gespeicherte Aktionen (Show, Einstellungen,
+  Kurzbefehle für alle Shows) liest lmix-core unter dem neuen Namen
+  (`RENAMED_ACTIONS` in show.rs, ohne Alias im Typ); OSC-Aufrufe mit
+  `restore_input` gehen nicht mehr (vor dem ersten Release).
+- Nicht im Stapel: Zonen, Ziele, Cues, Auslöser, Belegungen und Vorlagen
+  (Regel 1 nennt sie auch; sie folgen), sowie Stoppen und Werkseinstellungen
+  (nicht zurückzuholen, nur mit Rückfrage).

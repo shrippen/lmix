@@ -103,7 +103,8 @@ ColumnLayout {
     /** When the last state came, and now (for running times). */
     property real stateAt: Date.now()
     property real now: Date.now()
-    onShowChanged: stateAt = Date.now()
+    // When the running cues came: `show` stays the same object (ShowState).
+    onRunningChanged: stateAt = Date.now()
 
     Timer {
         interval: 100
