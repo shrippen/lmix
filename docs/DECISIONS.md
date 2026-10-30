@@ -5410,9 +5410,11 @@ Größe M nach Regel 3.
 - **Suche oben:** Sie hat beim Öffnen den Fokus und filtert über Beschreibung
   und Taste. Wörter suchen als Teiltext, die Reihenfolge ist egal. Mit „+“
   getippt („strg+s“) ist es eine Taste, und jeder Teil muss eine Kappe sein.
-  Sonst fände „Strg+S“ jeden Eintrag mit einem „s“. Der letzte Teil gilt
-  schon, wenn er erst angefangen ist („strg+um“ findet Umschalt), und ein „+“
-  am Ende zählt nicht. Bereiche lösen sich auf: „strg+3“ findet „Strg+1…5“.
+  Sonst fände „Strg+S“ jeden Eintrag mit einem „s“. Jeder Teil belegt eine
+  eigene Kappe. Der letzte Teil gilt schon, wenn er erst angefangen ist
+  („strg+um“ findet Umschalt), aber nur ab zwei Zeichen: „strg+s“ findet nicht
+  Strg+Leertaste. Ein „+“ am Ende zählt nicht. Eine Beschreibung mit „+“
+  („Ton+Licht“) findet die Suche auch. Bereiche lösen sich auf: „strg+3“ findet „Strg+1…5“.
   Beim Schließen wird die Suche geleert.
 - **Gesten** wie „Doppelklick in die Vorschau“ sind keine Taste. Sie stehen als
   `gesture` im Eintrag und gedämpft statt einer Kappe da.

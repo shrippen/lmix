@@ -38,30 +38,52 @@ KanteDialog {
 
     /** `entry` has every word of `text` in its description, key or gesture, case aside;
      *  a number also finds a range of keys ("3" finds 1…5). Typed as a key ("ctrl+s",
-     *  a "+" after its first part) it is one: each part must be a cap of the entry's key,
-     *  in any order, the last one typed so far only its start ("ctrl+sh" finds Shift);
-     *  a "+" at the end, the next part not typed yet, counts for nothing. */
+     *  a "+" after its first part) it may be one: each part takes a cap of the entry's
+     *  key of its own, in any order; the last part, while typed, may be the start of a
+     *  longer cap ("ctrl+sh" finds Shift), a part of one character must be the cap
+     *  ("strg+s" finds Strg+S, not Strg+Leertaste). A "+" at the end, the next part not
+     *  typed yet, counts for nothing. Such a text also finds a description with it
+     *  ("Ton+Licht"). */
     function matches(entry, text) {
         let typed = String(text).trim().toLowerCase()
         if (typed.length === 0) {
             return true
         }
         if (typed.indexOf("+") > 0) {
+            const told = [entry.what, entry.gesture].filter(s => !!s).join(" ").toLowerCase()
+            if (told.indexOf(typed) >= 0) {
+                return true
+            }
             if (typed.endsWith("+") && !typed.endsWith("++")) {
                 typed = typed.slice(0, -1)
             }
             const have = entry.key ? caps(entry.key).map(c => c.toLowerCase()) : []
             const parts = caps(typed).map(p => p.trim())
-            return parts.every((part, i) => have.some(cap => capFits(cap, part, i === parts.length - 1)))
+            return assign(parts, have, 0, [])
         }
         const hay = [entry.what, entry.key, entry.gesture].filter(s => !!s).join(" ").toLowerCase()
         const have = entry.key ? caps(entry.key) : []
         return typed.split(/\s+/).every(w => hay.indexOf(w) >= 0 || have.some(cap => inRange(cap, w)))
     }
 
-    /** `cap` is the typed `part`, or starts with it while it is still being typed. */
+    /** Parts `i`.. each find a cap not `taken` yet (a key has a handful of caps). */
+    function assign(parts, have, i, taken) {
+        if (i === parts.length) {
+            return true
+        }
+        for (let c = 0; c < have.length; ++c) {
+            if (taken.indexOf(c) < 0 && capFits(have[c], parts[i], i === parts.length - 1)
+                    && assign(parts, have, i + 1, taken.concat([c]))) {
+                return true
+            }
+        }
+        return false
+    }
+
+    /** `cap` is the typed `part`, or, `typing` a part of two characters or more, starts
+     *  with it. */
     function capFits(cap, part, typing) {
-        return cap === part || (typing && cap.startsWith(part)) || inRange(cap, part)
+        return cap === part || (typing && part.length > 1 && cap.startsWith(part)) || inRange(cap, part)
     }
 
     /** `cap` is a range of numbered keys ("1…9") and holds the number `part`. */

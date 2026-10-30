@@ -138,6 +138,44 @@ TestCase {
         compare(titles(dialog), ["Only on Mix"])
     }
 
+    function whats(dialog) {
+        return [].concat(...dialog.groups.map(g => g.keys.map(k => k.what)))
+    }
+
+    function test_each_part_takes_a_cap_of_its_own() {
+        var dialog = openDialog()
+        dialog.always = []
+        dialog.pageKeys = []
+        dialog.own = [
+            { what: "Save", key: "Strg+S" },
+            { what: "New all", key: "Strg+Umschalt+N" },
+            { what: "Play", key: "Strg+Leertaste" },
+            { what: "Save en", key: "Ctrl+S" },
+            { what: "New en", key: "Ctrl+Shift+N" },
+            { what: "Play en", key: "Ctrl+Space" }
+        ]
+        dialog.query = "strg+s"
+        compare(whats(dialog), ["Save"])
+        dialog.query = "ctrl+s"
+        compare(whats(dialog), ["Save en"])
+        dialog.query = "strg+um"
+        compare(whats(dialog), ["New all"])
+        dialog.query = "ctrl+shift+n"
+        compare(whats(dialog), ["New en"])
+        dialog.query = "ctrl+sp"
+        compare(whats(dialog), ["Play en"])
+        // A cap counts once: Strg does not stand for two parts.
+        dialog.query = "strg+strg"
+        compare(whats(dialog), [])
+    }
+
+    function test_a_plus_in_a_name_finds_it_too() {
+        var dialog = openDialog()
+        dialog.own = [{ what: "Ton+Licht", key: "F5" }]
+        dialog.query = "ton+licht"
+        compare(whats(dialog), ["Ton+Licht"])
+    }
+
     function test_search_finds_gestures() {
         var dialog = openDialog()
         dialog.query = "double"
