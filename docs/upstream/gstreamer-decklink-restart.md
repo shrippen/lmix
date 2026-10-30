@@ -135,3 +135,19 @@ With all three changes, three runs of four starts each (1080p25, 1080i50, 1080ps
 ### Workaround
 
 None found from outside the element: the epoch and the rounding are internal. Restarting the process resets the epoch.
+
+---
+
+## Stand (lmix, nicht Teil der Meldung)
+
+- 2026-10-28 eingereicht: https://gitlab.freedesktop.org/gstreamer/gstreamer/-/work_items/5391.
+- 2026-10-29: Upstream fragte nach `decklink2sink` (neues Plugin, seit 20.10. auf `main`).
+  Gegen 1.28.8 gebaut: 10 von 10 Läufen des Skripts oben und 12 Starts mit Moduswechsel
+  (1080p25, 1080i50, 720p50) in einem Prozess ohne spätes, verworfenes oder doppeltes Bild
+  (`output-stats`); als Antwort ergänzt.
+- 2026-10-30, Antwort von GStreamer: `decklink2sink` ist der Weg, `decklinkvideosink` wird
+  künftig fallengelassen und bekommt den Fix nicht. lmix spielt Kartenausgänge seitdem über
+  `decklink2sink` (strom-Block `builtin.decklink_output`, DECISIONS 30.10.);
+  `scripts/decklink-plugin.sh` baut decklink2 bis GStreamer 1.30 selbst. Der Patch oben
+  (`packaging/gstreamer/decklink-start-on-frame-grid.patch`) ist aus lmix entfernt und nur
+  noch in der Git-Geschichte (Commit `8690d20e`). Für lmix ist die Meldung erledigt.

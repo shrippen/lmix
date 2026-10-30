@@ -163,10 +163,10 @@ AppPage {
                     readonly property var output: root.selected
                     readonly property var spec: output ? output.spec : ({})
                     KanteSectionLabel { text: detail.output ? detail.output.name : "" }
-                    Detail { label: qsTr("Kind"); value: root.kindName(detail.spec) }
+                    Detail { label: qsTr("Kind"); value: Texts.outputKind(detail.spec) }
                     Detail { label: qsTr("Source"); value: detail.output ? root.sourceName(detail.output) : "" }
                     Detail { label: qsTr("Sound"); value: root.busName(detail.output) }
-                    Detail { label: qsTr("Target"); value: root.targetName(detail.spec) }
+                    Detail { label: qsTr("Target"); value: Texts.outputTarget(detail.spec) }
                     Detail {
                         visible: detail.spec.video_kbps !== undefined
                         label: qsTr("Video")
@@ -224,28 +224,6 @@ AppPage {
         }
     }
 
-    function kindName(spec) {
-        switch (spec.kind) {
-        case "record": return qsTr("Recording")
-        case "srt": return qsTr("Stream SRT")
-        case "rtmp": return qsTr("Stream RTMP")
-        case "ndi": return qsTr("NDI")
-        case "display": return qsTr("Screen")
-        case "card": return qsTr("SDI / HDMI")
-        }
-        return spec.kind || ""
-    }
-    function targetName(spec) {
-        switch (spec.kind) {
-        case "record": return spec.folder
-        case "srt": return spec.uri
-        case "rtmp": return spec.url
-        case "ndi": return spec.name
-        case "display": return spec.mode ? spec.mode.mode : ""
-        case "card": return qsTr("Card %1, %2").arg(spec.device + 1).arg(Texts.cardMode(spec.mode))
-        }
-        return ""
-    }
     /** The bus whose sound an output carries, or the source's own. */
     function busName(output) {
         var bus = output && output.bus && show && show.buses ? show.buses.find(b => b.id === output.bus) : null
@@ -315,7 +293,7 @@ AppPage {
             }
             QQC2.Label {
                 Layout.preferredWidth: Kirigami.Units.gridUnit * 6
-                text: root.kindName(row.output.spec)
+                text: Texts.outputKind(row.output.spec)
                 color: KanteStyle.mutedTextColor
             }
             Item {

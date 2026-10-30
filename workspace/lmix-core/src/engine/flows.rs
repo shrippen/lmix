@@ -101,16 +101,14 @@ const CARD_AUTO: &str = "auto";
 /// strom's `stream_mode`: picture and sound, or picture only.
 const STREAM_AUDIO_VIDEO: &str = "audio_video";
 const STREAM_VIDEO: &str = "video";
-/// How long before its time a frame goes to the card. Frames come over
-/// inter later than the output flow's latency says (it does not see all
-/// of the mixer's); with strom's 20 ms the card showed half of them late
-/// and dropped the rest. Without GStreamer's decklink plugin patched
-/// (scripts/decklink-plugin.sh) the card's clock lags by up to 38 ms and
-/// rounding down costs up to 40 ms, so the lead stays at 150 ms, which
-/// passed every first start; later starts in the same strom show their
-/// frames late however long the lead. With the patch 60 ms passed every
-/// start (DECISIONS 27.10.), set by `--card-lead-ms`.
-pub const CARD_LEAD_MS: u64 = 150;
+/// How long before its time a frame goes to the card (the sink's
+/// processing deadline), GStreamer's default. `decklink2sink` queues
+/// frames on the card in its own count rather than at their clock
+/// times, so a frame that comes late over inter waits in that queue
+/// instead of being shown late: on the SDI loop 0 and 20 ms gave the
+/// same latency and no late frame (DECISIONS 30.10.). The old
+/// `decklinkvideosink` needed 60–150 ms. `--card-lead-ms` sets it.
+pub const CARD_LEAD_MS: u64 = 20;
 static CARD_LEAD: std::sync::OnceLock<u64> = std::sync::OnceLock::new();
 
 /// The lead for card outputs from `--card-lead-ms`; set once at start.
@@ -120,6 +118,22 @@ pub fn set_card_lead_ms(ms: u64) {
 
 fn card_lead_ms() -> u64 {
     CARD_LEAD.get().copied().unwrap_or(CARD_LEAD_MS)
+}
+
+/// Frames queued on the card before playback, each one frame of
+/// delay. `decklink2sink`'s own 7 cost about 130 ms more on the SDI
+/// loop at 25p; 3 held under load, 2 dropped or repeated frames (DECISIONS
+/// 30.10.). `--card-frames` sets it.
+pub const CARD_FRAMES: u64 = 3;
+static CARD_FRAMES_SET: std::sync::OnceLock<u64> = std::sync::OnceLock::new();
+
+/// The card queue from `--card-frames`; set once at start.
+pub fn set_card_frames(frames: u64) {
+    let _ = CARD_FRAMES_SET.set(frames);
+}
+
+fn card_frames() -> u64 {
+    CARD_FRAMES_SET.get().copied().unwrap_or(CARD_FRAMES)
 }
 
 /// Block id of the media player in file, URL and playlist slots.
@@ -915,6 +929,7 @@ fn add_card_output(flow: &mut Flow, from: &str, card: CardOut, pairs: &[(u32, St
                 "processing_deadline_ms",
                 PropertyValue::UInt(card_lead_ms()),
             ),
+            ("buffered_frames", PropertyValue::UInt(card_frames())),
         ],
     ));
 
@@ -990,8 +1005,17 @@ fn add_card_sound(flow: &mut Flow, card: CardOut, pairs: &[(u32, String)]) {
     let summed = match pairs {
         [(pair, pad)] => add_card_place(flow, pad, *pair, channels),
         _ => {
-            flow.elements
-                .push(element(CARD_PAIRS, "audiomixer", vec![]));
+            // The sound carries the mixer's running time (hours): from
+            // zero the mixer filled all of that first, and pair 2 came
+            // tens of seconds late (todo 27.10.).
+            flow.elements.push(element(
+                CARD_PAIRS,
+                "audiomixer",
+                vec![(
+                    "start-time-selection",
+                    PropertyValue::String("first".into()),
+                )],
+            ));
             for (pair, pad) in pairs {
                 let placed = add_card_place(flow, pad, *pair, channels);
                 flow.links.push(link(placed, CARD_PAIRS.into()));
@@ -3774,9 +3798,12 @@ mod tests {
         assert_eq!(uint(card, "device_number"), 1);
         assert_eq!(text(card, "mode"), "720p50");
         assert_eq!(text(card, "stream_mode"), "audio_video");
-        // Without --card-lead-ms the lead that holds without the patched
-        // decklink plugin (review of #169).
-        assert_eq!(uint(card, "processing_deadline_ms"), 150);
+        // The block takes format and channels from the sound itself.
+        assert!(!card.properties.contains_key("audio_channels"));
+        // Without --card-lead-ms GStreamer's default lead.
+        assert_eq!(uint(card, "processing_deadline_ms"), 20);
+        // Without --card-frames three frames on the card, not seven.
+        assert_eq!(uint(card, "buffered_frames"), 3);
         let caps = caps_of(&flow, CARD_PICTURE);
         assert!(caps.contains("format=UYVY"), "{caps}");
         assert!(caps.contains("width=1280,height=720"), "{caps}");
@@ -3851,6 +3878,11 @@ mod tests {
                 .any(|l| l.from == from && l.to == CARD_PAIRS));
         }
         assert!(caps_of(&flow, CARD_SOUND).contains("channels=16"));
+        // The sound carries the mixer's running time (hours): from zero
+        // the mixer would fill all of that first, and the card, which
+        // takes the sound with the picture, waited for it.
+        let pairs = flow.elements.iter().find(|e| e.id == CARD_PAIRS).unwrap();
+        assert_eq!(text_of(pairs, "start-time-selection"), "first");
 
         let delay = flow
             .blocks

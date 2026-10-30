@@ -7,7 +7,8 @@ import Kante
 /**
  * Effect and length of a transition button or of quick play, on one level
  * (docs/DESIGN-DIALOGE.md M08 A): the effects as a list, a direction as
- * ◀ ▶ behind its name, the lengths as segments under it.
+ * ◀ ▶ at the end of its row, the lengths as segments under it; all rows
+ * are KanteMenuItems (the ends in `trailing`).
  *   heading    "Button 1 · Effect"
  *   effects    `[{value, label}]` (Texts.choices("effects", …))
  *   effect     the current effect; `duration` the current length in ms
@@ -127,9 +128,9 @@ QQC2.Menu {
     }
     LengthItem {}
 
-    /** One effect in both directions: ◀ ▶ behind the name; a click on the
-     *  row keeps the current direction (left when it is another effect). */
-    component DirectionItem: QQC2.MenuItem {
+    /** One effect in both directions: ◀ ▶ at the row's end; a click on
+     *  the row keeps the current direction (left when it is another effect). */
+    component DirectionItem: KanteMenuItem {
         id: direction
         property var row: ({ value: "", label: "", directions: ["", ""] })
         readonly property int current: menu ? row.directions.indexOf(menu.effect) : -1
@@ -137,7 +138,6 @@ QQC2.Menu {
         checked: current >= 0
         onToggled: checked = Qt.binding(() => current >= 0)
         text: row.label
-        Accessible.name: row.label
         Accessible.description: current === 1 ? qsTr("To the right") : current === 0 ? qsTr("To the left") : ""
         onTriggered: menu.effectPicked(row.directions[Math.max(0, current)])
         Keys.onLeftPressed: pick(0)
@@ -146,44 +146,33 @@ QQC2.Menu {
             menu.effectPicked(row.directions[side])
             menu.close()
         }
-        contentItem: RowLayout {
-            spacing: Kirigami.Units.smallSpacing * 2
-            Item {
-                Layout.preferredWidth: direction.indicator ? direction.indicator.width : 0
-            }
-            QQC2.Label {
-                Layout.fillWidth: true
-                text: direction.text
-                font: direction.font
-                color: direction.highlighted ? Kirigami.Theme.highlightedTextColor : Kirigami.Theme.textColor
-            }
-            Repeater {
-                model: [{ arrow: "◀", name: qsTr("To the left") }, { arrow: "▶", name: qsTr("To the right") }]
-                KanteToolButton {
-                    required property var modelData
-                    required property int index
-                    text: modelData.arrow
-                    checkable: true
-                    checked: direction.current === index
-                    onToggled: checked = Qt.binding(() => direction.current === index)
-                    focusPolicy: Qt.NoFocus
-                    // As high as the other rows.
-                    Layout.preferredHeight: Kirigami.Units.iconSizes.small + Kirigami.Units.smallSpacing
-                    Layout.preferredWidth: Kirigami.Units.iconSizes.small + Kirigami.Units.smallSpacing * 2
-                    padding: 0
-                    Accessible.name: direction.text + " " + modelData.name
-                    onClicked: direction.pick(index)
-                }
+        trailing: Repeater {
+            model: [{ arrow: "◀", name: qsTr("To the left") }, { arrow: "▶", name: qsTr("To the right") }]
+            KanteToolButton {
+                required property var modelData
+                required property int index
+                text: modelData.arrow
+                checkable: true
+                checked: direction.current === index
+                onToggled: checked = Qt.binding(() => direction.current === index)
+                focusPolicy: Qt.NoFocus
+                // As high as the other rows.
+                Layout.preferredHeight: Kirigami.Units.iconSizes.small + Kirigami.Units.smallSpacing
+                Layout.preferredWidth: Kirigami.Units.iconSizes.small + Kirigami.Units.smallSpacing * 2
+                padding: 0
+                Accessible.name: direction.text + " " + modelData.name
+                onClicked: direction.pick(index)
             }
         }
     }
 
-    /** The lengths as segments; Left and Right move to the next one. */
-    component LengthItem: QQC2.MenuItem {
+    /** The lengths as segments under the section "Length" (the row shows
+     *  no text of its own); Left and Right move to the next one. */
+    component LengthItem: KanteMenuItem {
         id: length
         objectName: "lengths"
         readonly property int current: menu.durations.indexOf(menu.duration)
-        text: qsTr("Length")
+        Accessible.name: qsTr("Length")
         Accessible.description: Texts.label("durations", menu.duration)
         // The row is no choice of its own: the segments are.
         onTriggered: {}
@@ -200,10 +189,9 @@ QQC2.Menu {
                 menu.lengthPicked(menu.durations[next])
             }
         }
-        contentItem: RowLayout {
-            spacing: Kirigami.Units.smallSpacing
+        trailing: [
             KanteSegmented {
-                id: lengths
+                objectName: "segments"
                 model: menu.durations.map(ms => String(ms))
                 tooltips: menu.durations.map(ms => Texts.label("durations", ms))
                 currentIndex: length.current
@@ -213,12 +201,12 @@ QQC2.Menu {
                     menu.lengthPicked(menu.durations[index])
                     currentIndex = Qt.binding(() => length.current)
                 }
-            }
+            },
             QQC2.Label {
                 text: qsTr("ms", "milliseconds")
                 font: KanteStyle.active ? KanteStyle.monoFont(KanteStyle.smallFont.pointSize) : KanteStyle.smallFont
-                color: KanteStyle.mutedTextColor
+                color: length.highlighted ? length.ink : KanteStyle.mutedTextColor
             }
-        }
+        ]
     }
 }

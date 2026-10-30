@@ -11,7 +11,6 @@
 #   SLOTS=31 scripts/run-local.sh     # mixer slots (most inputs at once); lmix-core's default otherwise
 #   APP=both scripts/run-local.sh     # two windows, Mix and Show
 #   KEEP_WORK=1 scripts/run-local.sh  # keep logs (path printed at the end)
-#   DECKLINK_PLUGIN=system …          # decklink plugin without lmix's patch
 set -euo pipefail
 
 MIXER="${MIXER:-cuda}"
@@ -48,15 +47,13 @@ wait_up() {
 }
 
 STROM_BIN="$("$ROOT/scripts/fetch-strom.sh")"
-# With a DeckLink card: GStreamer's decklink plugin with lmix's patch (a
-# card output started again shows every frame late without it).
-if [[ "${DECKLINK_PLUGIN:-patched}" == patched ]] && compgen -G "/dev/blackmagic*" >/dev/null; then
+# With a DeckLink card: GStreamer's decklink2 plugin for card outputs
+# (GStreamer 1.30, built by scripts/decklink-plugin.sh before).
+if compgen -G "/dev/blackmagic*" >/dev/null; then
     if plugin="$("$ROOT/scripts/decklink-plugin.sh")"; then
         export GST_PLUGIN_PATH="$plugin${GST_PLUGIN_PATH:+:$GST_PLUGIN_PATH}"
-        # The lead that holds with the patch (flows.rs CARD_LEAD_MS).
-        export LMIX_CARD_LEAD_MS="${LMIX_CARD_LEAD_MS:-60}"
     else
-        echo "run-local: decklink plugin without lmix's patch (scripts/decklink-plugin.sh failed)" >&2
+        echo "run-local: no decklink2 plugin (scripts/decklink-plugin.sh failed), card outputs will not start" >&2
     fi
 fi
 (cd "$ROOT/workspace/lmix-core" && cargo build --release -q)

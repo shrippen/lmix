@@ -3,6 +3,20 @@
 # into qml_de.ts (i18n/fill.py). Keep it complete. A (source, comment)
 # key wins over the source alone, for a word with two meanings.
 DE = {
+    'Add input…': 'Input hinzufügen…',
+    'Click: start or stop. Right click: menu.': 'Klick: starten oder stoppen. Rechtsklick: Menü.',
+    'Colour: %1': 'Farbe: %1',
+    'Copy address': 'Adresse kopieren',
+    'Cue colour': 'Cue-Farbe',
+    'Packets dropped': 'Pakete verworfen',
+    'Packets lost': 'Pakete verloren',
+    'Rate': 'Rate',
+    'Remove…': 'Entfernen…',
+    'Round trip': 'Umlaufzeit',
+    'Statistics': 'Statistik',
+    'Stop it first, then remove it.': 'Erst stoppen, dann entfernen.',
+    'Stop…': 'Stoppen…',
+    'sending': 'sendet',
     'Remove input %1 %2?': 'Input %1 %2 entfernen?',
     'Its picture leaves program, preview, the layouts and the overlays.': 'Sein Bild verschwindet aus Programm, Vorschau, den Layouts und den Overlays.',
     'Remove input': 'Input entfernen',

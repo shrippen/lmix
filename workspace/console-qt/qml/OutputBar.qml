@@ -5,7 +5,8 @@ import org.kde.kirigami as Kirigami
 import Kante
 
 /**
- * Outputs: one button each (click starts or stops; right click removes),
+ * Outputs: one button each (click starts or stops; right click opens its
+ * menu, OutputMenu),
  * state as a pill, running time and link health. "+ Output" adds one.
  * Stopping a running output asks first unless `confirmStop` is off
  * (UI.10); the question can turn it off. With two or more streams, one
@@ -20,6 +21,8 @@ RowLayout {
     required property var outputs
     required property var outputById
     signal addRequested()
+    /** Settings… in an output's menu: its details on the Outputs page. */
+    signal settingsRequested(string outputId)
     /** Ask before stopping a running output (the shell's setting). */
     property bool confirmStop: true
     /** AppShell.askRemove: ask, then remove with a way back. */
@@ -54,18 +57,19 @@ RowLayout {
             emphasis: running ? KanteButton.Emphasis.Primary
                 : (status.state === "failed" ? KanteButton.Emphasis.Destructive : KanteButton.Emphasis.Normal)
             enabled: bar.core.connected
-            onClicked: {
-                // One waiting for the cards just stops waiting.
-                if (status.state === "cards_off") {
-                    bar.act({ action: "stop_output", output: modelData.number })
-                } else if (!running) {
-                    bar.act({ action: "start_output", output: modelData.number })
-                } else if (bar.confirmStop) {
+            // One waiting for the cards just stops waiting.
+            onClicked: running || status.state === "cards_off" ? stop() : start()
+            function start() {
+                bar.act({ action: "start_output", output: modelData.number })
+            }
+            /** Asks first while it sends (UI.10); a stop never starts. */
+            function stop() {
+                if (running && bar.confirmStop) {
                     stopDialog.output = modelData
                     stopDialog.open()
-                } else {
-                    bar.act({ action: "stop_output", output: modelData.number })
+                    return
                 }
+                bar.act({ action: "stop_output", output: modelData.number })
             }
 
             QQC2.ToolTip.visible: hovered
@@ -73,7 +77,7 @@ RowLayout {
                 var state = running ? qsTr("Running")
                     : (status.state === "failed" ? qsTr("Failed: %1").arg(status.message)
                     : (status.state === "cards_off" ? qsTr("Waiting for the cards") : qsTr("Stopped")))
-                return state + (link ? "\n" + Texts.linkDetail(link) : "") + "\n" + qsTr("Click: start or stop. Right click: remove.")
+                return state + (link ? "\n" + Texts.linkDetail(link) : "") + "\n" + qsTr("Click: start or stop. Right click: menu.")
             }
 
             Timer {
@@ -88,17 +92,15 @@ RowLayout {
                 acceptedButtons: Qt.RightButton
                 onTapped: menu.popup()
             }
-            QQC2.Menu {
+            OutputMenu {
                 id: menu
-                KantePopupSkin { popup: menu }
-                // Not while it sends (M07): stop it first.
-                KanteMenuItem {
-                    text: qsTr("Remove %1").arg(button.modelData.name)
-                    icon.name: "edit-delete"
-                    destructive: true
-                    enabled: !button.running
-                    onTriggered: bar.askRemove("output", button.modelData)
-                }
+                output: button.modelData
+                link: button.link
+                elapsed: button.elapsed
+                onStartRequested: button.start()
+                onStopRequested: button.stop()
+                onSettingsRequested: bar.settingsRequested(button.modelData.id)
+                onRemoveRequested: bar.askRemove("output", button.modelData)
             }
         }
     }
