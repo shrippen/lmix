@@ -2,8 +2,8 @@
 # Sound and picture cues on strom (show mode SND, VIS; S-E.3 B, S-E.13 B):
 # a zone on this machine's default output and a stage in a window; a
 # sound cue that ends with its file and lets the next cue follow, a stop
-# with fade, fades on a zone and a stage, a picture cue, pause and resume,
-# a panic. Runs strom's Show Playback block for real. The VM has no
+# with fade, fades on a zone and a stage, a zone muted during its fade, a
+# picture cue, pause and resume, a panic. Runs strom's Show Playback block for real. The VM has no
 # sound card (the default output is whatever autoaudiosink finds, a
 # fakesink without one) and shows the stage on Xvfb. What is heard and seen is checked by
 # strom's own tests (show_playback_test.rs, show_playback_stage_test.rs);
@@ -167,6 +167,24 @@ within 'at_minus_20' 3 || fail "zone Hall back at volume $(zone_volume) after re
 ! grep -q "zones are not running\|flow is not running" "$WORK/core.log" \
     || fail "a zone level met a flow that was not running: $(grep -m1 'not running' "$WORK/core.log")"
 pass "a new flow plays the zone at its level"
+
+# --- muted while a fade runs on the zone, unmuted after it: at the fade's
+# target, not at the level before (SUI.8) ---
+at_volume() { [[ "$(zone_volume)" != none ]] && awk -v v="$(zone_volume)" -v w="$1" 'BEGIN { exit !(v > w - 0.005 && v < w + 0.005) }'; }
+zone_muted() { curl -sf "$CORE/api/state" | jq -r '.zones[] | select(.name == "Hall") | .mute'; }
+act '{"action":"set_zone_level","zone":"Hall","gain_db":-6,"duration_ms":2000}' || fail "zone fade refused"
+sleep 0.5
+act '{"action":"set_zone_level","zone":"Hall","mute":true}' || fail "zone mute refused"
+within 'at_volume 0' 1 || fail "zone Hall muted during its fade plays at volume $(zone_volume)"
+[[ "$(zone_muted)" == true ]] || fail "zone Hall not muted in the state"
+# Past the fade's end: it must not have unmuted the zone.
+sleep 2
+at_volume 0 || fail "the fade unmuted zone Hall: volume $(zone_volume)"
+act '{"action":"set_zone_level","zone":"Hall","mute":false}' || fail "zone unmute refused"
+# -6 dB: volume 0.501.
+within 'at_volume 0.501' 1 || fail "zone Hall unmuted at volume $(zone_volume), not the fade's -6 dB"
+(( $(zone_gain | cut -d. -f1) == -6 )) || fail "zone Hall at $(zone_gain) dB in the state, not -6"
+pass "muted during a fade, unmuted at the fade's target"
 
 # --- a picture cue shows until stopped; fades on the stage and the cue ---
 within '[[ "$(pictures)" == *ready* ]]' 3 || fail "the standby picture is not held ready: $(pictures)"
