@@ -595,25 +595,8 @@
   <context>
     <name>AppShell</name>
     <message>
-<<<<<<< HEAD
-      <location filename="../qml/AppShell.qml" line="+363" />
+      <location filename="../qml/AppShell.qml" line="+372" />
       <location line="+110" />
-=======
-      <location filename="../qml/AppShell.qml" line="+283" />
-      <source>Ctrl</source>
-      <comment>key</comment>
-      <translation>Strg</translation>
-    </message>
-    <message>
-      <location line="+1" />
-      <source>Shift</source>
-      <comment>key</comment>
-      <translation>Umschalt</translation>
-    </message>
-    <message>
-      <location line="+99" />
-      <location line="+115" />
->>>>>>> origin/main
       <source>Open show</source>
       <translation>Show öffnen</translation>
     </message>
@@ -3511,7 +3494,7 @@
       <translation>Ausgänge</translation>
     </message>
     <message>
-      <location line="+35" />
+      <location line="+36" />
       <source>Running</source>
       <translation>Läuft</translation>
     </message>
@@ -3536,7 +3519,7 @@
       <translation>Klick: starten oder stoppen. Rechtsklick: Menü.</translation>
     </message>
     <message>
-      <location line="+39" />
+      <location line="+38" />
       <source>Stop all streams</source>
       <translation>Alle Streams stoppen</translation>
     </message>
@@ -3624,7 +3607,7 @@
       <translation>sendet</translation>
     </message>
     <message>
-      <location line="+10" />
+      <location line="+11" />
       <source>Stop it first, then remove it.</source>
       <translation>Erst stoppen, dann entfernen.</translation>
     </message>
@@ -4736,7 +4719,7 @@
       <translation>Farbe</translation>
     </message>
     <message>
-      <location line="+9" />
+      <location line="+10" />
       <source>Note</source>
       <translation>Notiz</translation>
     </message>
