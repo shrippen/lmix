@@ -8,7 +8,7 @@ use cxx_qt_lib::{QGuiApplication, QQmlApplicationEngine, QString, QUrl};
 use gstreamer as gst;
 use std::path::{Path, PathBuf};
 
-use crate::{config, qt_translations};
+use crate::{atlas_cell, config, gl_format, qt_translations};
 
 /// Qt application name: settings in `~/.config/lmix/lmix.conf`; also the
 /// binary, desktop file and Wayland app id.
@@ -264,8 +264,17 @@ pub fn run() -> ! {
         }
     }
 
-    // qml6glsink draws with the scene graph's OpenGL context.
+    // qml6glsink draws with the scene graph's OpenGL context, desktop GL
+    // so that the engine's GPU frames can be copied into it.
     std::env::set_var("QSG_RHI_BACKEND", "opengl");
+    gl_format::ffi::use_desktop_gl();
+    atlas_cell::ffi::register_atlas_cell();
+    // Draw on the scene graph's own thread: Qt picks its basic loop here
+    // (Wayland, NVIDIA), which renders every frame of every live picture
+    // on the GUI thread (24 % of it with 31 live tiles, 3 % threaded).
+    if std::env::var_os("QSG_RENDER_LOOP").is_none() {
+        std::env::set_var("QSG_RENDER_LOOP", "threaded");
+    }
     if let Err(e) = gst::init() {
         eprintln!("GStreamer: {e}");
         std::process::exit(1);
@@ -286,6 +295,13 @@ pub fn run() -> ! {
         qt_app.as_mut().set_application_name(&QString::from(NAME));
         QGuiApplication::set_desktop_file_name(&QString::from(NAME));
         qt_translations::ffi::install_qt_translations();
+    }
+    #[cfg(feature = "qml-profile")]
+    if let Some(port) = std::env::var("LMIX_QML_PROFILE_PORT")
+        .ok()
+        .and_then(|p| p.parse().ok())
+    {
+        crate::qml_profile::ffi::start_qml_profiler(port);
     }
     let mut engine = QQmlApplicationEngine::new();
     if let Some(engine) = engine.as_mut() {

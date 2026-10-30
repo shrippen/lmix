@@ -21,6 +21,17 @@ KanteDialog {
 
     /** Inputs with a picture. */
     readonly property var pictures: inputs.filter(i => i.source.kind !== "audio_device")
+    // The boxes' choices change only with a name or number, followed while
+    // the dialog is open: the inputs change with every fader move.
+    property var pictureNames: []
+    function syncPictureNames() {
+        const names = pictures.map(i => i.number + " " + i.name)
+        if (JSON.stringify(names) !== JSON.stringify(pictureNames)) {
+            pictureNames = names
+        }
+    }
+    onPicturesChanged: if (visible) syncPictureNames()
+    onAboutToShow: syncPictureNames()
     readonly property int maxBoxes: 8
     readonly property int frameWidth: 4
     /** Positions snap to this fraction of the picture. */
@@ -298,7 +309,7 @@ KanteDialog {
             QQC2.ComboBox {
                 id: background
                 Layout.fillWidth: true
-                model: [qsTr("Black")].concat(dialog.pictures.map(i => i.number + " " + i.name))
+                model: [qsTr("Black")].concat(dialog.pictureNames)
                 onActivated: dialog.record()
                 KanteFieldSkin { control: background }
             }
@@ -527,7 +538,7 @@ KanteDialog {
                 QQC2.ComboBox {
                     id: inputBox
                     Layout.fillWidth: true
-                    model: [qsTr("Choose input")].concat(dialog.pictures.map(i => i.number + " " + i.name))
+                    model: [qsTr("Choose input")].concat(dialog.pictureNames)
                     currentIndex: boxRow.modelData.input ? dialog.pictureIndex(boxRow.modelData.input) + 1 : 0
                     Accessible.name: qsTr("Input of box %1").arg(boxRow.index + 1)
                     onActivated: index => dialog.edit(boxRow.index, { input: index > 0 ? dialog.pictures[index - 1].id : null })

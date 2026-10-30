@@ -34,8 +34,10 @@ AppPage {
         { what: qsTr("Input to preview"), key: "1…9" },
         { what: qsTr("Quick play of preview"), key: qsTr("double click preview") }
     ]
-    panicText: show && show.fade_to_black ? qsTr("Fade up") : qsTr("Fade to black")
-    panicTip: qsTr("Program to black and back (SWI.9); the show and outputs go on")
+    panicText: qsTr("FTB", "fade to black")
+    panicActive: !!show && show.fade_to_black === true
+    panicTip: panicActive ? qsTr("Program is black: click to fade up again")
+        : qsTr("Fade to black: program to black and back (SWI.9); the show and outputs go on")
     onPanicRequested: act({ action: "fade_to_black" })
 
     Settings {
@@ -62,6 +64,22 @@ AppPage {
         property bool buttons: false
         /** The narrow audio mixer at the right edge. */
         property bool mixer: true
+        /** Keys of the input actions kept in the "⋯" menu, as JSON. */
+        property string menuOnly: "[]"
+    }
+    readonly property var menuOnly: {
+        try {
+            const keys = JSON.parse(viewSettings.menuOnly)
+            return Array.isArray(keys) ? keys : []
+        } catch (e) {
+            return []
+        }
+    }
+    function setMenuOnly(key, on) {
+        const keys = menuOnly.filter(k => k !== key)
+        if (on)
+            keys.push(key)
+        viewSettings.menuOnly = JSON.stringify(keys)
     }
     readonly property var collapsedIds: {
         try {
@@ -79,7 +97,7 @@ AppPage {
         viewSettings.collapsed = JSON.stringify(ids)
     }
     function syncInputs() {
-        inputModel.sync(show ? show.inputs.filter(i => collapsedIds.indexOf(i.id) < 0).map(i => i.id) : [])
+        inputModel.sync(inputIds.filter(id => collapsedIds.indexOf(id) < 0))
     }
     onCollapsedIdsChanged: syncInputs()
     /** Simple mode: `--mode` for this run, else the saved choice. */
@@ -93,17 +111,24 @@ AppPage {
         ? show.format.width / show.format.height : 16 / 9
 
 
-    readonly property var levels: backend.levels.length > 0 ? JSON.parse(backend.levels) : ({})
+    readonly property var levels: shell.levels
     readonly property var positions: backend.positions.length > 0 ? JSON.parse(backend.positions) : ({})
 
     KeyedModel { id: inputModel }
     KeyedModel { id: outputModel }
     KeyedModel { id: transitionModel }
-    // Reads `show` itself: `inputs` may not have followed it yet here.
-    onShowChanged: {
+    // By the parts of the show: `show` itself stays the same object
+    // (ShowState), and the ids only change when rows come, go or move.
+    readonly property var inputIds: show && show.inputIds ? show.inputIds : []
+    onInputIdsChanged: syncInputs()
+    readonly property var outputs: show && show.outputs ? show.outputs : []
+    onOutputsChanged: outputModel.sync(outputs.map(o => o.id))
+    readonly property var transitions: show && show.transitions ? show.transitions : []
+    onTransitionsChanged: transitionModel.sync(transitions.map(t => String(t.slot)))
+    Component.onCompleted: {
         syncInputs()
-        outputModel.sync(show ? show.outputs.map(o => o.id) : [])
-        transitionModel.sync(show ? show.transitions.map(t => String(t.slot)) : [])
+        outputModel.sync(outputs.map(o => o.id))
+        transitionModel.sync(transitions.map(t => String(t.slot)))
     }
 
     function outputById(id) {
@@ -200,70 +225,10 @@ AppPage {
         outputs: root.show ? root.show.outputs : []
     }
 
-    // Remove at once, with a way back: the toast's Undo (or Ctrl+Z while it
-    // shows) brings the input back with its settings (AUT.10).
-    // The toast waits for the state without the input and with it to bring
-    // back: a refused removal shows nothing, and another show or a removal
-    // from elsewhere does not pass for this one.
+    // Asked first, then a toast brings it back with its settings (rule 1
+    // of docs/DESIGN-DIALOGE.md, AUT.10).
     function removeInput(input) {
-        root.removing = { id: input.id, number: input.number, name: input.name }
-        root.act({ action: "remove_input", input: input.number })
-    }
-    property var removing: null
-    // Later: inputs and show change one after the other for one state.
-    onInputsChanged: Qt.callLater(root.removedOrNot)
-    // The core's refusal of this removal (a locked show, a stinger) ends
-    // it: the input may go another way later, and that is no removal from
-    // here. Answers to other actions leave it alone.
-    Connections {
-        target: backend
-        function onAnswered(action, refusal) {
-            const answered = JSON.parse(action)
-            if (refusal.length > 0 && root.removing && answered.action === "remove_input"
-                    && String(answered.input) === String(root.removing.number)) {
-                root.removing = null
-            }
-        }
-    }
-    function removedOrNot() {
-        if (!root.removing || root.inputs.some(i => i.id === root.removing.id)) {
-            return
-        }
-        if (root.show && root.show.restorable === root.removing.name) {
-            removedToast.text = qsTr("Input %1 \u201c%2\u201d removed").arg(root.removing.number).arg(root.removing.name)
-            removedToast.restores = root.removing.name
-            removedToast.show()
-        }
-        root.removing = null
-    }
-
-    KanteToast {
-        id: removedToast
-        anchors.right: parent.right
-        anchors.bottom: parent.bottom
-        anchors.margins: Kirigami.Units.largeSpacing
-        z: 10
-        kind: KanteToast.Kind.Info
-        title: qsTr("Removed")
-        life: 8000
-        /** The removed input's name: Undo brings back only that one. */
-        property string restores
-        readonly property bool restorable: root.show !== null && root.show.restorable === restores
-        actionText: restorable ? qsTr("Undo") : ""
-        actionShortcut: undoKey.free && restorable ? qsTr("Ctrl+Z") : ""
-        onActionTriggered: root.act({ action: "restore_input" })
-    }
-    // A show's own shortcut on Ctrl+Z wins, as for the File keys: two
-    // shortcuts on one key would both stay silent.
-    Shortcut {
-        id: undoKey
-        readonly property bool free: !shell.keyTaken("Ctrl+Z")
-        sequence: "Ctrl+Z"
-        enabled: root.visible && removedToast.shown && removedToast.restorable && free
-        onActivated: {
-            removedToast.hide()
-            root.act({ action: "restore_input" })
-        }
+        root.shell.askRemove("input", input)
     }
 
     InputSettingsDialog {
@@ -288,6 +253,88 @@ AppPage {
             ptzDialog.inputId = input.id
             ptzDialog.open()
         }
+    }
+
+    // The menu of every tile and collapsed input (M04).
+    InputMenu {
+        id: inputMenu
+        core: backend
+        act: root.act
+        inputs: root.inputs
+        show: root.show
+        onTriggersRequested: {
+            triggersDialog.graphics = null
+            triggersDialog.input = root.inputById(inputId)
+            triggersDialog.open()
+        }
+        onReplaceRequested: {
+            addInputDialog.replacing = root.inputById(inputId)
+            addInputDialog.open()
+        }
+        onRemoveRequested: root.removeInput(root.inputById(inputId))
+        onSettingsRequested: {
+            inputSettingsDialog.inputId = inputId
+            inputSettingsDialog.open()
+        }
+        onLookRequested: {
+            lookDialog.inputId = inputId
+            lookDialog.open()
+        }
+        onStripRequested: {
+            stripDialog.inputId = inputId
+            stripDialog.open()
+        }
+        onRenameRequested: {
+            renameDialog.inputId = inputId
+            renameDialog.open()
+        }
+        onPtzRequested: {
+            ptzDialog.inputId = inputId
+            ptzDialog.open()
+        }
+        onCollapseRequested: root.setCollapsed(inputId, true)
+        onExpandRequested: root.setCollapsed(inputId, false)
+    }
+
+    // One of each for all tiles (F13): a dialog per tile cost every tile
+    // its own popup tree.
+    LookDialog {
+        id: lookDialog
+        parent: QQC2.Overlay.overlay
+        anchors.centerIn: parent
+        act: root.act
+        property string inputId: ""
+        input: root.inputById(inputId) || null
+        // Removed while open: nothing left to edit.
+        onInputChanged: {
+            if (visible && input === null) {
+                close()
+            }
+        }
+    }
+
+    ChannelStripDialog {
+        id: stripDialog
+        parent: QQC2.Overlay.overlay
+        anchors.centerIn: parent
+        act: root.act
+        property string inputId: ""
+        input: root.inputById(inputId) || null
+        // Removed while open: nothing left to edit.
+        onInputChanged: {
+            if (visible && input === null) {
+                close()
+            }
+        }
+        buses: root.show && root.show.buses ? root.show.buses : []
+    }
+
+    RenameInputDialog {
+        id: renameDialog
+        parent: QQC2.Overlay.overlay
+        anchors.centerIn: parent
+        act: root.act
+        inputs: root.inputs
     }
 
     PtzDialog {
@@ -320,6 +367,7 @@ AppPage {
         parent: QQC2.Overlay.overlay
         anchors.centerIn: parent
         act: root.act
+        askRemove: root.shell.askRemove
         core: backend
         buses: root.show && root.show.buses ? root.show.buses : []
         master: root.show && root.show.master ? root.show.master : ({ volume: 100, mute: false })
@@ -373,9 +421,9 @@ AppPage {
             spacing: Kirigami.Units.largeSpacing
             /** Height kept free under the monitors for the rows below and a row
              *  of tiles; in detail the tiles are higher by their extra rows, and
-             *  wrapped input actions by their second row. */
-            readonly property real inputsRoom: Kirigami.Units.gridUnit * 16 + Math.max(0, bar.chrome - Kirigami.Units.gridUnit * 2)
-                + Math.max(0, inputActions.height - addButton.height)
+             *  wrapped outputs by their second row. */
+            readonly property real inputsRoom: Kirigami.Units.gridUnit * 14 + Math.max(0, bar.chrome - Kirigami.Units.gridUnit * 2)
+                + Math.max(0, footRow.height - toolRow.height)
 
             // Preview and program in the program format, each centred in
             // its half; the transitions always in the middle of the page.
@@ -387,11 +435,16 @@ AppPage {
                 spacing: Kirigami.Units.largeSpacing
 
                 /** Room for one monitor's picture: its half of the row. */
-                readonly property real halfWidth: Math.max(0, (width - panelScroll.width - 2 * spacing) / 2 - 2 * Kirigami.Units.smallSpacing)
+                readonly property real halfWidth: Math.max(0, (width - panelScroll.width - 2 * spacing) / 2 - 2 * Kirigami.Units.smallSpacing
+                    - Math.max(previewMonitor.side, programMonitor.side))
                 /** Tallest picture: the half's width, and room left for the inputs below. */
-                readonly property real maxPictureHeight: Math.max(monitorHandle.from,
+                readonly property real maxPictureHeight: Math.max(Kirigami.Units.gridUnit * 4,
                     Math.min(halfWidth / root.aspect, mixColumn.height - mixColumn.inputsRoom))
                 readonly property real pictureHeight: Math.max(monitorHandle.from, Math.min(viewSettings.monitorHeight, maxPictureHeight))
+                /** Lowest picture: the monitors as high as the transitions beside them,
+                 *  so a drag does not shrink them below the row the panel holds open. */
+                readonly property real minPictureHeight: Math.min(maxPictureHeight, Math.max(Kirigami.Units.gridUnit * 4,
+                    panelScroll.Layout.preferredHeight - Math.max(previewMonitor.chrome, programMonitor.chrome)))
 
                 Item {
                     Layout.fillWidth: true
@@ -420,7 +473,7 @@ AppPage {
                     id: panelScroll
                     Layout.fillWidth: false
                     Layout.fillHeight: true
-                    Layout.preferredWidth: Kirigami.Units.gridUnit * 8
+                    Layout.preferredWidth: Kirigami.Units.gridUnit * 10
                     Layout.preferredHeight: Math.max(Kirigami.Units.gridUnit * 6,
                         Math.min(transitionPanel.implicitHeight, mixColumn.height - mixColumn.inputsRoom))
                     contentWidth: availableWidth
@@ -450,7 +503,7 @@ AppPage {
                         detail: root.busLabel(root.show ? root.show.program : null)
                         tally: KanteStyle.negativeTextColor
                         source: "program"
-                        peakDb: root.levels.program
+                        peakDb: root.levels.peak("program")
                         input: root.programInput
                     }
                 }
@@ -463,219 +516,298 @@ AppPage {
                 Layout.topMargin: -Kirigami.Units.largeSpacing / 2
                 Layout.bottomMargin: -Kirigami.Units.largeSpacing / 2
                 value: monitorRow.pictureHeight
-                from: Kirigami.Units.gridUnit * 4
+                from: monitorRow.minPictureHeight
                 to: monitorRow.maxPictureHeight
                 defaultValue: Math.min(Kirigami.Units.gridUnit * 15, to)
                 accessibleName: qsTr("Height of the monitors")
                 onMoved: v => viewSettings.monitorHeight = v
             }
 
+            // One row: the view in a popover, the actions at the right by
+            // priority; what does not fit, or is set to the menu, goes to "⋯".
             RowLayout {
+                id: toolRow
                 Layout.fillWidth: true
                 KanteSectionLabel { text: qsTr("Inputs") }
-                KanteSegmented {
-                    activeFocusOnTab: false
-                    model: [qsTr("Tiles"), qsTr("Buttons")]
-                    currentIndex: viewSettings.buttons ? 1 : 0
-                    tooltips: [qsTr("A live tile per input"), qsTr("A row for program and one for preview, a button per input")]
-                    onActivated: index => viewSettings.buttons = index === 1
-                }
-                KanteSegmented {
-                    visible: !viewSettings.buttons
-                    activeFocusOnTab: false
-                    model: [qsTr("Compact"), qsTr("Detail")]
-                    currentIndex: viewSettings.detail ? 1 : 0
-                    tooltips: [qsTr("Picture and name"), qsTr("Also overlay buttons and the audio strip")]
-                    onActivated: index => viewSettings.detail = index === 1
-                }
-                KanteSegmented {
-                    visible: !viewSettings.buttons
-                    activeFocusOnTab: false
-                    model: [qsTr("S", "small tiles"), qsTr("M", "medium tiles"), qsTr("L", "large tiles")]
-                    currentIndex: viewSettings.tileSize
-                    tooltips: [qsTr("Small tiles"), qsTr("Medium tiles"), qsTr("Large tiles")]
-                    onActivated: index => viewSettings.tileSize = index
-                }
                 KanteButton {
                     id: viewButton
                     text: qsTr("View")
                     emphasis: KanteButton.Emphasis.Quiet
                     onClicked: viewPopover.openAt(viewButton)
+                    // P01 A: two columns, the inputs left, the multiview and
+                    // the page right; the button names it, so no title.
                     KantePopover {
                         id: viewPopover
-                        title: qsTr("View")
                         readonly property var multiview: root.show && root.show.multiview ? root.show.multiview : ({ program: "right", meters: "shown" })
-                        ColumnLayout {
-                            spacing: Kirigami.Units.smallSpacing
-                            KanteSwitch {
-                                text: qsTr("Audio at the edge")
-                                checked: viewSettings.mixer
-                                enabled: !root.simple
-                                onToggled: viewSettings.mixer = checked
-                            }
-                            KanteSwitch {
-                                text: qsTr("Simple mode")
-                                checked: root.simple
-                                enabled: backend.uiMode === ""
-                                onToggled: viewSettings.simple = checked
-                            }
-                            // OUT.10: program left or right, meters on the tiles;
-                            // the mixer is built anew, like for the format.
-                            KanteSectionLabel { text: qsTr("Multiview") }
-                            KanteSwitch {
-                                text: qsTr("Program on the left")
-                                checked: viewPopover.multiview.program === "left"
-                                enabled: backend.connected
-                                // The core's state decides: a click asks, the binding comes back.
-                                onToggled: {
-                                    root.act({ action: "set_multiview", layout: { program: checked ? "left" : "right", meters: viewPopover.multiview.meters } })
-                                    checked = Qt.binding(() => viewPopover.multiview.program === "left")
+                        GridLayout {
+                            columns: 2
+                            columnSpacing: Kirigami.Units.largeSpacing * 2
+                            ColumnLayout {
+                                Layout.alignment: Qt.AlignTop
+                                spacing: Kirigami.Units.smallSpacing
+                                KanteSectionLabel { text: qsTr("Inputs") }
+                                KanteSegmented {
+                                    model: [qsTr("Tiles"), qsTr("Buttons")]
+                                    currentIndex: viewSettings.buttons ? 1 : 0
+                                    tooltips: [qsTr("A live tile per input"), qsTr("A row for program and one for preview, a button per input")]
+                                    onActivated: index => viewSettings.buttons = index === 1
+                                }
+                                KanteSegmented {
+                                    visible: !viewSettings.buttons
+                                    model: [qsTr("Compact"), qsTr("Detail")]
+                                    currentIndex: viewSettings.detail ? 1 : 0
+                                    tooltips: [qsTr("Picture and name"), qsTr("Also overlay buttons and the audio strip")]
+                                    onActivated: index => viewSettings.detail = index === 1
+                                }
+                                TileSizePicker {
+                                    Layout.fillWidth: true
+                                    visible: !viewSettings.buttons
+                                    currentIndex: viewSettings.tileSize
+                                    onActivated: index => viewSettings.tileSize = index
                                 }
                             }
-                            KanteSwitch {
-                                text: qsTr("Level meters")
-                                checked: viewPopover.multiview.meters === "shown"
-                                enabled: backend.connected
-                                onToggled: {
-                                    root.act({ action: "set_multiview", layout: { program: viewPopover.multiview.program, meters: checked ? "shown" : "hidden" } })
-                                    checked = Qt.binding(() => viewPopover.multiview.meters === "shown")
+                            ColumnLayout {
+                                Layout.alignment: Qt.AlignTop
+                                spacing: Kirigami.Units.smallSpacing
+                                // OUT.10: program left or right, meters on the tiles;
+                                // the mixer is built anew, like for the format.
+                                KanteSectionLabel { text: qsTr("Multiview") }
+                                KanteSwitch {
+                                    text: qsTr("Program on the left")
+                                    checked: viewPopover.multiview.program === "left"
+                                    enabled: backend.connected
+                                    // The core's state decides: a click asks, the binding comes back.
+                                    onToggled: {
+                                        root.act({ action: "set_multiview", layout: { program: checked ? "left" : "right", meters: viewPopover.multiview.meters } })
+                                        checked = Qt.binding(() => viewPopover.multiview.program === "left")
+                                    }
+                                }
+                                KanteSwitch {
+                                    text: qsTr("Level meters")
+                                    checked: viewPopover.multiview.meters === "shown"
+                                    enabled: backend.connected
+                                    onToggled: {
+                                        root.act({ action: "set_multiview", layout: { program: viewPopover.multiview.program, meters: checked ? "shown" : "hidden" } })
+                                        checked = Qt.binding(() => viewPopover.multiview.meters === "shown")
+                                    }
+                                }
+                                KanteSectionLabel {
+                                    Layout.topMargin: Kirigami.Units.smallSpacing
+                                    text: qsTr("Page")
+                                }
+                                KanteSwitch {
+                                    text: qsTr("Audio at the edge")
+                                    checked: viewSettings.mixer
+                                    enabled: !root.simple
+                                    onToggled: viewSettings.mixer = checked
+                                }
+                                KanteSwitch {
+                                    text: qsTr("Simple mode")
+                                    checked: root.simple
+                                    enabled: backend.uiMode === ""
+                                    onToggled: viewSettings.simple = checked
                                 }
                             }
                         }
                     }
                 }
-                // The actions at the right; in a narrow window they wrap into
-                // a second row instead of pushing the audio column out.
-                Flow {
+
+                Item {
                     id: inputActions
                     Layout.fillWidth: true
-                    Layout.preferredHeight: implicitHeight
-                    layoutDirection: Qt.RightToLeft
-                    spacing: Kirigami.Units.smallSpacing
-                    KanteButton {
-                        id: addButton
-                        text: qsTr("+ Input")
-                        enabled: backend.connected
-                        onClicked: {
-                            addInputDialog.replacing = null
-                            addInputDialog.open()
+                    Layout.minimumWidth: moreButton.implicitWidth
+                    implicitHeight: moreButton.implicitHeight
+
+                    /** The actions by priority, highest first; those with a
+                     *  `key` can be set to stay in the menu. */
+                    readonly property var actions: [addButton, missingButton, soloButton, restoreButton,
+                        cardsButton, shortcutsButton, busesButton, titlesButton, dataButton]
+                    /** Keys of the actions in the bar: as many as fit, by priority. */
+                    readonly property var inBar: {
+                        var room = width - moreButton.implicitWidth
+                        var keys = {}
+                        for (var i = 0; i < actions.length; i++) {
+                            var action = actions[i]
+                            if (!action.wanted || root.menuOnly.indexOf(action.key) >= 0)
+                                continue
+                            var need = action.implicitWidth + actionRow.spacing
+                            if (need <= room) {
+                                keys[action.key] = true
+                                room -= need
+                            }
+                        }
+                        return keys
+                    }
+
+                    Row {
+                        id: actionRow
+                        anchors.right: parent.right
+                        layoutDirection: Qt.RightToLeft
+                        spacing: Kirigami.Units.smallSpacing
+
+                        KanteButton {
+                            id: moreButton
+                            text: "⋯"
+                            Accessible.name: qsTr("More input actions")
+                            QQC2.ToolTip.visible: hovered
+                            QQC2.ToolTip.text: qsTr("The actions without room in the row, and which ones the row shows")
+                            onClicked: moreMenu.popup(moreButton, 0, moreButton.height)
+                        }
+                        KanteButton {
+                            id: addButton
+                            readonly property string key: "add"
+                            readonly property string barName: qsTr("+ Input")
+                            readonly property bool wanted: true
+                            visible: inputActions.inBar[key] === true
+                            text: qsTr("+ Input")
+                            enabled: backend.connected
+                            onClicked: {
+                                addInputDialog.replacing = null
+                                addInputDialog.open()
+                            }
+                        }
+                        KanteButton {
+                            id: missingButton
+                            readonly property string key: "missing"
+                            readonly property bool wanted: root.inputs.some(i => i.missing && i.missing.length > 0)
+                            visible: inputActions.inBar[key] === true
+                            text: qsTr("Find missing files…")
+                            emphasis: KanteButton.Emphasis.Primary
+                            QQC2.ToolTip.visible: hovered
+                            QQC2.ToolTip.text: qsTr("Inputs marked \"Missing\" lack media files: pick the folder they are in now. Inputs on program are left alone.")
+                            onClicked: relocateDialog.open()
+                        }
+                        KanteButton {
+                            id: soloButton
+                            readonly property string key: "solo"
+                            readonly property bool wanted: root.inputs.some(i => i.listen !== "off")
+                                || (root.show && root.show.buses ? root.show.buses : []).some(b => b.listen)
+                            visible: inputActions.inBar[key] === true
+                            text: qsTr("Clear solo")
+                            onClicked: root.act({ action: "clear_listen" })
+                        }
+                        KanteButton {
+                            id: restoreButton
+                            readonly property string key: "restore"
+                            readonly property bool wanted: root.show !== null && !!root.show.restorable
+                            visible: inputActions.inBar[key] === true
+                            text: qsTr("Bring back %1").arg(root.show && root.show.restorable ? root.show.restorable.name : "")
+                            onClicked: root.act({ action: "restore" })
+                        }
+                        // Cards are exclusive: lmix takes them only on this switch,
+                        // which starts off with every start of the core.
+                        KanteButton {
+                            id: cardsButton
+                            readonly property string key: "cards"
+                            readonly property string barName: qsTr("Cards on and off")
+                            readonly property bool wanted: true
+                            visible: inputActions.inBar[key] === true
+                            readonly property bool cardsOn: root.show !== null && root.show.cards_on === true
+                            text: cardsOn ? qsTr("Cards on") : qsTr("Cards off")
+                            // Off stops outputs, which the lock refuses.
+                            readonly property bool locked: root.show !== null && root.show.locked === true
+                            emphasis: cardsOn ? KanteButton.Emphasis.Primary : KanteButton.Emphasis.Normal
+                            enabled: backend.connected && !(cardsOn && locked)
+                            QQC2.ToolTip.visible: hovered
+                            QQC2.ToolTip.text: cardsOn
+                                ? (locked ? qsTr("lmix uses the capture cards. Unlock to free them.")
+                                    : qsTr("lmix uses the capture cards. Click to free them for other programs: card inputs turn black, card outputs stop."))
+                                : qsTr("The capture cards are free for other programs. Click to use them: card inputs and outputs start.")
+                            onClicked: root.act({ action: "set_cards", on: !cardsOn })
+                        }
+                        KanteButton {
+                            id: shortcutsButton
+                            readonly property string key: "shortcuts"
+                            readonly property string barName: qsTr("Shortcuts…")
+                            readonly property bool wanted: !root.simple
+                            visible: inputActions.inBar[key] === true
+                            text: qsTr("Shortcuts…")
+                            enabled: backend.connected
+                            onClicked: root.openShortcuts()
+                        }
+                        KanteButton {
+                            id: busesButton
+                            readonly property string key: "buses"
+                            readonly property string barName: qsTr("Buses…")
+                            readonly property bool wanted: !root.simple
+                            visible: inputActions.inBar[key] === true
+                            text: qsTr("Buses…")
+                            enabled: backend.connected
+                            onClicked: busDialog.open()
+                        }
+                        KanteButton {
+                            id: titlesButton
+                            readonly property string key: "titles"
+                            readonly property string barName: qsTr("Titles…")
+                            readonly property bool wanted: !root.simple
+                            visible: inputActions.inBar[key] === true
+                            text: qsTr("Titles…")
+                            enabled: backend.connected
+                            onClicked: titlesDialog.open()
+                        }
+                        KanteButton {
+                            id: dataButton
+                            readonly property string key: "data"
+                            readonly property string barName: qsTr("Data…")
+                            readonly property bool wanted: !root.simple
+                            visible: inputActions.inBar[key] === true
+                            text: qsTr("Data…")
+                            enabled: backend.connected
+                            onClicked: dataSourcesDialog.open()
                         }
                     }
-                    KanteButton {
-                        visible: !root.simple
-                        text: qsTr("Data…")
-                        enabled: backend.connected
-                        onClicked: dataSourcesDialog.open()
+
+                    // The menu's items are made here, not by a Repeater (see ChoiceMenu).
+                    QQC2.Menu {
+                        id: moreMenu
+                        KantePopupSkin { popup: moreMenu }
+                        QQC2.MenuSeparator {}
+                        QQC2.Menu {
+                            id: barMenu
+                            title: qsTr("In the row")
+                            KantePopupSkin { popup: barMenu }
+                        }
+                        Component.onCompleted: {
+                            var actions = inputActions.actions
+                            for (var i = 0; i < actions.length; i++) {
+                                moreMenu.insertItem(i, overflowItem.createObject(null, { button: actions[i] }))
+                                if (actions[i].barName !== undefined)
+                                    barMenu.addItem(barItem.createObject(null, { button: actions[i] }))
+                            }
+                        }
                     }
-                    KanteButton {
-                        visible: !root.simple
-                        text: qsTr("Titles…")
-                        enabled: backend.connected
-                        onClicked: titlesDialog.open()
+                    Component {
+                        id: overflowItem
+                        QQC2.MenuItem {
+                            property var button
+                            text: button.text
+                            visible: button.wanted && !button.visible
+                            height: visible ? implicitHeight : 0
+                            enabled: button.enabled
+                            onTriggered: button.clicked()
+                        }
                     }
-                    KanteButton {
-                        visible: !root.simple
-                        text: qsTr("Buses…")
-                        enabled: backend.connected
-                        onClicked: busDialog.open()
-                    }
-                    KanteButton {
-                        visible: !root.simple
-                        text: qsTr("Shortcuts…")
-                        enabled: backend.connected
-                        onClicked: root.openShortcuts()
-                    }
-                    // Cards are exclusive: lmix takes them only on this switch,
-                    // which starts off with every start of the core.
-                    KanteButton {
-                        readonly property bool cardsOn: root.show !== null && root.show.cards_on === true
-                        text: cardsOn ? qsTr("Cards on") : qsTr("Cards off")
-                        // Off stops outputs, which the lock refuses.
-                        readonly property bool locked: root.show !== null && root.show.locked === true
-                        emphasis: cardsOn ? KanteButton.Emphasis.Primary : KanteButton.Emphasis.Normal
-                        enabled: backend.connected && !(cardsOn && locked)
-                        QQC2.ToolTip.visible: hovered
-                        QQC2.ToolTip.text: cardsOn
-                            ? (locked ? qsTr("lmix uses the capture cards. Unlock to free them.")
-                                : qsTr("lmix uses the capture cards. Click to free them for other programs: card inputs turn black, card outputs stop."))
-                            : qsTr("The capture cards are free for other programs. Click to use them: card inputs and outputs start.")
-                        onClicked: root.act({ action: "set_cards", on: !cardsOn })
-                    }
-                    KanteButton {
-                        readonly property bool locked: root.show !== null && root.show.locked === true
-                        text: locked ? qsTr("Locked") : qsTr("Lock")
-                        emphasis: locked ? KanteButton.Emphasis.Destructive : KanteButton.Emphasis.Normal
-                        enabled: backend.connected
-                        QQC2.ToolTip.visible: hovered
-                        QQC2.ToolTip.text: qsTr("While locked, closing inputs, loading a show, stopping outputs and changing format, sample rate or multiview are refused.")
-                        onClicked: root.act({ action: "set_lock", on: !locked })
-                    }
-                    KanteButton {
-                        text: qsTr("Bring back %1").arg(root.show ? root.show.restorable : "")
-                        visible: root.show !== null && !!root.show.restorable
-                        onClicked: root.act({ action: "restore_input" })
-                    }
-                    KanteButton {
-                        text: qsTr("Clear solo")
-                        visible: root.inputs.some(i => i.listen !== "off")
-                            || (root.show && root.show.buses ? root.show.buses : []).some(b => b.listen)
-                        onClicked: root.act({ action: "clear_listen" })
-                    }
-                    KanteButton {
-                        visible: root.inputs.some(i => i.missing && i.missing.length > 0)
-                        text: qsTr("Find missing files…")
-                        emphasis: KanteButton.Emphasis.Primary
-                        QQC2.ToolTip.visible: hovered
-                        QQC2.ToolTip.text: qsTr("Inputs marked \"Missing\" lack media files: pick the folder they are in now. Inputs on program are left alone.")
-                        onClicked: relocateDialog.open()
+                    // Checked: in the row while it fits; unchecked: always in the menu.
+                    Component {
+                        id: barItem
+                        QQC2.MenuItem {
+                            property var button
+                            text: button.barName
+                            checkable: true
+                            checked: root.menuOnly.indexOf(button.key) < 0
+                            onToggled: root.setMenuOnly(button.key, !checked)
+                        }
                     }
                 }
             }
 
-            // Buttons: program row cuts the input straight on, preview row puts
-            // it into preview (SWI.1, SWI.2).
-            ColumnLayout {
+            BusButtons {
                 visible: viewSettings.buttons
                 Layout.fillWidth: true
-                spacing: Kirigami.Units.smallSpacing
-                Repeater {
-                    model: [
-                        { label: qsTr("Program"), bus: "program", color: KanteStyle.negativeTextColor },
-                        { label: qsTr("Preview"), bus: "preview", color: KanteStyle.positiveTextColor }
-                    ]
-                    delegate: RowLayout {
-                        id: busRow
-                        required property var modelData
-                        Layout.fillWidth: true
-                        spacing: Kirigami.Units.smallSpacing
-                        KanteSectionLabel {
-                            Layout.preferredWidth: Kirigami.Units.gridUnit * 5
-                            text: busRow.modelData.label
-                            color: busRow.modelData.color
-                        }
-                        Flow {
-                            Layout.fillWidth: true
-                            spacing: Kirigami.Units.smallSpacing
-                            Repeater {
-                                model: root.inputs
-                                delegate: KanteButton {
-                                    required property var modelData
-                                    readonly property bool on: root.show !== null && root.show[busRow.modelData.bus] === modelData.id
-                                    width: Kirigami.Units.gridUnit * 6
-                                    height: Kirigami.Units.gridUnit * 2.5
-                                    text: modelData.number + " " + modelData.name
-                                    emphasis: on ? (busRow.modelData.bus === "program" ? KanteButton.Emphasis.Destructive : KanteButton.Emphasis.Primary)
-                                        : KanteButton.Emphasis.Normal
-                                    enabled: root.backend.connected
-                                    Accessible.name: busRow.modelData.label + " " + modelData.number + " " + modelData.name
-                                    onClicked: root.act(busRow.modelData.bus === "program"
-                                        ? { action: "cut_direct", input: modelData.number }
-                                        : { action: "preview_input", input: modelData.number })
-                                }
-                            }
-                        }
-                    }
-                }
+                show: root.show
+                inputs: root.inputs
+                act: root.act
+                connected: root.backend.connected
             }
 
             GridView {
@@ -750,8 +882,7 @@ AppPage {
                     width: bar.cellWidth - Kirigami.Units.smallSpacing
                     height: bar.cellHeight - Kirigami.Units.smallSpacing
                     detail: viewSettings.detail
-                    onChromeChanged: Qt.callLater(bar.reportChrome, chrome)
-                    Component.onCompleted: Qt.callLater(bar.reportChrome, chrome)
+                    onChromeSettled: value => Qt.callLater(bar.reportChrome, value)
                     core: backend
                     input: root.inputById(key) || ({ id: key, number: 0, name: "", source: { kind: "pattern" }, status: "starting", audio: { on: false, follow_video: false, volume: 0 }, has_audio: false, listen: "off", signal_loss: "hold", color: null })
                     act: root.act
@@ -759,31 +890,12 @@ AppPage {
                     onPreview: root.show !== null && root.show.preview === key
                     overlays: root.show && root.show.overlays ? root.show.overlays : []
                     overlayPreview: root.show && root.show.overlay_preview ? root.show.overlay_preview : []
-                    looksAvailable: root.show !== null && root.show.looks_available === true
-                    buses: root.show && root.show.buses ? root.show.buses : []
-                    peakDb: root.levels[key]
-                    channelsDb: root.levels["ch:" + key]
-                    onTriggersRequested: {
-                        triggersDialog.graphics = null
-                        triggersDialog.input = tileDelegate.input
-                        triggersDialog.open()
-                    }
-                    onReplaceRequested: {
-                        addInputDialog.replacing = tileDelegate.input
-                        addInputDialog.open()
-                    }
-                    onRemoveRequested: root.removeInput(tileDelegate.input)
+                    peakDb: root.levels.peak(key)
+                    leftDb: root.levels.channel(key, 0)
+                    rightDb: root.levels.channel(key, 1)
                     dynamicSlots: root.show && root.show.dynamic_inputs
                         ? [1, 2, 3, 4].filter(n => root.show.dynamic_inputs[n - 1] === key) : []
-                    onSettingsRequested: {
-                        inputSettingsDialog.inputId = tileDelegate.input.id
-                        inputSettingsDialog.open()
-                    }
-                    onPtzRequested: {
-                        ptzDialog.inputId = tileDelegate.input.id
-                        ptzDialog.open()
-                    }
-                    onCollapseRequested: root.setCollapsed(tileDelegate.input.id, true)
+                    onMenuRequested: inputMenu.openFor(tileDelegate.input.id, false)
                 }
             }
 
@@ -795,30 +907,40 @@ AppPage {
                 inputs: root.inputs
                 collapsed: root.collapsedIds
                 onExpandRequested: id => root.setCollapsed(id, false)
+                onMenuRequested: id => inputMenu.openFor(id, true)
             }
 
-            LayoutBar {
-                visible: !root.simple
+            // Layouts and outputs in one row; in a narrow window the outputs
+            // wrap under the layouts.
+            Flow {
+                id: footRow
                 Layout.fillWidth: true
-                core: backend
-                show: root.show
-                act: root.act
-                onEditRequested: layout => {
-                    layoutDialog.layout = layout
-                    layoutDialog.open()
+                Layout.preferredHeight: implicitHeight
+                spacing: Kirigami.Units.gridUnit
+
+                LayoutBar {
+                    visible: !root.simple
+                    core: backend
+                    show: root.show
+                    act: root.act
+                    askRemove: root.shell.askRemove
+                    onEditRequested: layout => {
+                        layoutDialog.layout = layout
+                        layoutDialog.open()
+                    }
                 }
-            }
 
-            OutputBar {
-                Layout.fillWidth: true
-                core: backend
-                show: root.show
-                act: root.act
-                outputs: outputModel
-                outputById: root.outputById
-                confirmStop: root.shell.confirmStop
-                onConfirmStopChosen: on => root.shell.confirmStop = on
-                onAddRequested: addOutputDialog.open()
+                OutputBar {
+                    core: backend
+                    show: root.show
+                    act: root.act
+                    outputs: outputModel
+                    outputById: root.outputById
+                    confirmStop: root.shell.confirmStop
+                    askRemove: root.shell.askRemove
+                    onConfirmStopChosen: on => root.shell.confirmStop = on
+                    onAddRequested: addOutputDialog.open()
+                }
             }
         }
 
@@ -846,6 +968,7 @@ AppPage {
             core: backend
             show: root.show
             act: root.act
+            askRemove: root.shell.askRemove
             levels: root.levels
             pathsHeight: viewSettings.mixerPathsHeight
             onPathsHeightMoved: h => viewSettings.mixerPathsHeight = h
@@ -868,7 +991,16 @@ AppPage {
 
         // The picture in the program format, as high as the handle says.
         readonly property real pictureHeight: monitorRow.pictureHeight
-        width: pictureHeight * root.aspect + 2 * Kirigami.Units.smallSpacing
+        /** Height of all but the picture: bar, label and transport, from
+         *  those parts alone (not from the picture's height, which follows
+         *  it: a binding loop). */
+        readonly property real chrome: monitor.barHeight + 2 * Kirigami.Units.smallSpacing
+            + monitorLabels.implicitHeight
+            + (monitorTransport.visible ? monitorColumn.spacing + monitorTransport.implicitHeight : 0)
+            + monitorColumn.spacing
+        /** Width beside the picture: the meter's bar at its right edge. */
+        readonly property real side: monitorMeter.visible ? monitorMeter.implicitWidth + pictureRow.spacing : 0
+        width: pictureHeight * root.aspect + side + 2 * Kirigami.Units.smallSpacing
         implicitHeight: monitorColumn.implicitHeight + monitor.barHeight + 2 * Kirigami.Units.smallSpacing
         height: implicitHeight
         barColor: tally
@@ -882,6 +1014,7 @@ AppPage {
             anchors.topMargin: monitor.barHeight + Kirigami.Units.smallSpacing
 
             RowLayout {
+                id: monitorLabels
                 KanteSectionLabel {
                     text: monitor.label
                     color: monitor.tally
@@ -892,26 +1025,36 @@ AppPage {
                     elide: Text.ElideRight
                 }
             }
-            LiveView {
-                id: view
+            // The level as a bar at the picture's right edge, bottom up.
+            RowLayout {
+                id: pictureRow
                 Layout.fillWidth: true
-                Layout.preferredHeight: monitor.pictureHeight
-                core: root.backend
-                TapHandler {
-                    onDoubleTapped: monitor.doubleClicked()
+                spacing: Kirigami.Units.smallSpacing
+                LiveView {
+                    id: view
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: monitor.pictureHeight
+                    core: root.backend
+                    TapHandler {
+                        onDoubleTapped: monitor.doubleClicked()
+                    }
+                }
+                KanteAudioMeter {
+                    id: monitorMeter
+                    // The picture's height, not the meter's own (it would raise a low monitor).
+                    Layout.preferredHeight: monitor.pictureHeight
+                    visible: monitor.peakDb !== undefined
+                    vertical: true
+                    level: monitor.peakDb
+                    Accessible.name: qsTr("Level of %1").arg(monitor.label)
                 }
             }
             TransportBar {
+                id: monitorTransport
                 Layout.fillWidth: true
                 input: monitor.input
                 act: root.act
                 position: monitor.input && root.positions[monitor.input.id] ? root.positions[monitor.input.id] : null
-            }
-            KanteAudioMeter {
-                Layout.fillWidth: true
-                visible: monitor.peakDb !== undefined
-                level: monitor.peakDb
-                showScale: true
             }
         }
     }

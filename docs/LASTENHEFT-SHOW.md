@@ -204,6 +204,7 @@ ausgeschlossen. **MS**: Meilenstein (§7). Stand: ✅ vorhanden · ◐ teilweise
 | EXT.8 | Netz-Cue mit Dauer: wiederholt senden oder einen Wert blenden | K | S3 | – |
 | EXT.9 | MIDI-Cue: Note, CC, Programmwechsel, MSC | K | S3 | – |
 | EXT.10 | Art-Net/sACN-Cue für einfache DMX-Werte mit Fade | K | S3 | – |
+| EXT.11 | Plugin-Cue: eine Aktion eines Steuer-Plugins (`LASTENHEFT.md` PLG.1) mit ihren Parametern; Fehler wie bei EXT.3 angezeigt, nie den Ablauf blockierend (lmix) | S | nach S2 | – |
 
 ### 3.6 Variablen (VAR) (lmix)
 

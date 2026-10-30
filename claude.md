@@ -9,6 +9,9 @@ Seiten, zwischen denen eine Leiste am Fuß des Fensters umschaltet (wie Resolve;
 - **Show**: Ablauf nach Drehbuch, vorbereitete Cue-Folge mit GO, Vorbild QLab 5
   (`docs/LASTENHEFT-SHOW.md`; Theater, Ausstellung, Spieltisch).
 - **Audio**, **Outputs**, **Setup**; später **Light** (Lichtpult mit Effekten, todo).
+- Daneben **lmix tools** (eigenes Repo `../lmix-tools`): Werkzeuge für NDI und
+  OMT nach dem Vorbild der NDI Tools; gemeinsamer Code (OMT-Element, Quellen,
+  Videofläche) entsteht dort und wird hier genutzt (dort Lastenheft §6.3).
 
 Alle Seiten teilen Engine, Inputs, Ausgänge, Ton, Aktionskatalog, Auslöser, APIs
 und Show-Datei. Medienkern = Strom (Eyevinn, Rust + GStreamer,
@@ -78,6 +81,26 @@ workspace/
   lmix-core/, console-qt/ oder einen OmtBlock. Nur wenn ein Feature ohne Server-Änderung
   nicht machbar ist: Server-Änderung, und dann ein eigener, sauberer, upstream-
   tauglicher Commit dafür (mit Begründung im Commit, PR-fähig).
+- Jede Änderung an strom geht auch nach upstream (Eyevinn/strom; User 2026-10-29).
+  `dev` ist ein Zwischenstand, kein dauerhafter Fork. Für jedes Thema auf `dev` gibt
+  es ein Issue oder einen PR bei Eyevinn, außer der User hat es ausdrücklich als
+  lmix-eigen entschieden (dann mit Grund im Verzeichnis unten).
+  - Wie: Upstream zieht laut seiner `CLAUDE.md` ein gutes Issue (Fehler, Richtung,
+    Testfall) einem PR vor. Darum große Features und alles mit einer Entscheidung
+    für die Maintainer zuerst als Issue, kleine Fehlerbehebungen gleich als PR.
+    Es gelten upstreams Regeln: `CLAUDE.md`/`AGENTS.md` im strom-Repo, Englisch,
+    keine internen Hostnamen oder Adressen, der PR-Text nach
+    `.github/PULL_REQUEST_TEMPLATE.md` mit Belegen und gelaufenen Tests.
+  - Neue strom-Arbeit beginnt auf einem Branch von upstream `main` (nicht von `dev`)
+    und kommt per Merge auf `dev`; so bleibt der Branch upstream-tauglich.
+  - Weg: Branch nach Gitea pushen (Remote `gitea`), Gitea spiegelt nach
+    github.com/shrippen/strom, von dort der PR an Eyevinn/strom per `gh pr create`
+    (Ausnahme von „GitHub nur zum Nachsehen“). Issues, PRs und Kommentare bei
+    Eyevinn erst nach Freigabe durch den User einreichen; Text vorher zeigen.
+  - Verzeichnis: `docs/upstream/STROM.md` führt jedes Thema auf `dev` mit Stand
+    (offen, Issue #, PR #, gemergt, lmix-eigen mit Grund). Ist es upstream gemergt,
+    beim nächsten Abgleich upstreams Fassung übernehmen und den eigenen Stand
+    streichen.
 - Persona-Durchläufe (`docs/PERSONAS.md`, `docs/LASTENHEFT.md` §9): jede neue
   oder geänderte Funktion gegen die betroffenen Personas prüfen; jede
   Meilenstein-Abnahme spielt mindestens 5 Personas durch, Befunde in PERSONAS.md.

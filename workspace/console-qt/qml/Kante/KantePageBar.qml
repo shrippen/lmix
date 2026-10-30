@@ -19,6 +19,12 @@ import "."
  * and a "Panic" button); `leading` takes items for the left end. The tabs scroll sideways when
  * they do not fit and the current tab is kept in view. Left / Right (Home / End) move the page
  * while the bar has focus; `activated(index)` fires on every change made in the bar.
+ *
+ * `density` (1.54) saves height: Normal (heightMedium), Compact (three quarters of heightSmall,
+ * smaller labels) and Band, a strip of unit(8) with one coloured segment per page in place of
+ * the labels: the current page in the focus colour, a busy page in its kind's colour, the others
+ * quiet; the label shows as the tooltip and stays the tab's accessible name. In Band the leading
+ * and trailing items are hidden (they do not fit the strip); the app shows them elsewhere.
  */
 FocusScope {
     id: bar
@@ -30,6 +36,12 @@ FocusScope {
         Error
     }
 
+    enum Density {
+        Normal,
+        Compact,
+        Band
+    }
+
     property var model: []
     property var tooltips: []
     property var busy: []
@@ -37,6 +49,8 @@ FocusScope {
     /** Words for the busy kinds (screen readers), in Kind order; an app sets its translations once. */
     property var kindNames: ["Läuft", "Info", "Warnung", "Fehler"]
     property int currentIndex: 0
+    property int density: KantePageBar.Density.Normal
+    readonly property bool band: density === KantePageBar.Density.Band
     signal activated(int index)
 
     /** Items at the right end of the bar (the default property). */
@@ -46,7 +60,22 @@ FocusScope {
 
     readonly property int count: rep.count
 
-    implicitHeight: KanteStyle.heightMedium
+    implicitHeight: band ? KanteStyle.unit(8)
+                  : density === KantePageBar.Density.Compact ? Math.round(KanteStyle.heightSmall * 0.75)
+                  : KanteStyle.heightMedium
+    /** The tabs' labels: smaller in Compact. */
+    readonly property font tabFont: {
+        const f = KanteStyle.labelFont()
+        if (density !== KantePageBar.Density.Compact) {
+            return f
+        }
+        return Qt.font({
+            family: f.family,
+            pointSize: Math.max(6, f.pointSize * 0.85),
+            capitalization: f.capitalization,
+            letterSpacing: f.letterSpacing
+        })
+    }
     implicitWidth: leadingRow.implicitWidth + row.implicitWidth + trailingRow.implicitWidth + 4 * KanteStyle.unit(8)
     activeFocusOnTab: true
 
@@ -125,6 +154,7 @@ FocusScope {
 
     RowLayout {
         id: leadingRow
+        visible: !bar.band
         anchors.left: parent.left
         anchors.leftMargin: children.length > 0 ? KanteStyle.unit(8) : 0
         anchors.verticalCenter: parent.verticalCenter
@@ -134,8 +164,8 @@ FocusScope {
     Flickable {
         id: flick
         anchors.left: leadingRow.right
-        anchors.leftMargin: leadingRow.children.length > 0 ? KanteStyle.unit(8) : 0
-        anchors.right: trailingRow.left
+        anchors.leftMargin: leadingRow.visible && leadingRow.children.length > 0 ? KanteStyle.unit(8) : 0
+        anchors.right: bar.band ? parent.right : trailingRow.left
         anchors.rightMargin: KanteStyle.unit(8)
         height: parent.height
         contentWidth: row.implicitWidth
@@ -177,22 +207,33 @@ FocusScope {
                     // Hover: the tint role, square.
                     Rectangle {
                         anchors.fill: parent
-                        visible: !tab.current && hover.hovered
+                        visible: !bar.band && !tab.current && hover.hovered
                         color: KanteStyle.tint1Color
+                    }
+                    // Band: one segment per page, a gap of one rule between them.
+                    Rectangle {
+                        objectName: "kantePageSegment"
+                        visible: bar.band
+                        anchors.fill: parent
+                        anchors.topMargin: 1
+                        anchors.rightMargin: 1
+                        color: tab.current ? KanteStyle.focusColor
+                             : tab.busy ? bar.kindColor(tab.kind)
+                             : hover.hovered ? KanteStyle.tint2Color : KanteStyle.tint1Color
                     }
                     // The raised current tab. Shapes outside the flickable are still painted by
                     // the software renderer (it ignores the clip for them): draw only in view.
                     KantePolygon {
                         objectName: "kantePageTab"
                         anchors.fill: parent
-                        visible: tab.current && tab.inView
+                        visible: !bar.band && tab.current && tab.inView
                         fillColor: KanteStyle.cardColor
                         cutTopRight: KanteStyle.chamferSmall
                     }
                     // Marker line along the top edge of the current tab.
                     Rectangle {
                         objectName: "kantePageMarker"
-                        visible: tab.current
+                        visible: !bar.band && tab.current
                         width: parent.width - KanteStyle.chamferSmall
                         height: Math.max(2, KanteStyle.unit(3))
                         color: KanteStyle.focusColor
@@ -202,18 +243,21 @@ FocusScope {
                         objectName: "kantePageFocus"
                         anchors.fill: parent
                         visible: tab.current && tab.inView && bar.activeFocus
-                        strokeColor: KanteStyle.focusColor
+                        strokeColor: bar.band ? KanteStyle.strongTextColor : KanteStyle.focusColor
                         strokeWidth: 1
                         cutTopRight: KanteStyle.chamferSmall
                     }
 
+                    // In Band the labels keep their width (so the segments sit where the tabs
+                    // would) but are not drawn.
                     RowLayout {
                         id: content
                         anchors.centerIn: parent
                         spacing: KanteStyle.unit(6)
+                        opacity: bar.band ? 0 : 1
                         Text {
                             text: tab.modelData
-                            font: KanteStyle.labelFont()
+                            font: bar.tabFont
                             color: tab.ink
                             Behavior on color { ColorAnimation { duration: KanteStyle.durationFast } }
                         }
@@ -233,8 +277,8 @@ FocusScope {
 
                     HoverHandler { id: hover }
                     TapHandler { onTapped: bar.select(tab.index) }
-                    QQC2.ToolTip.text: tab.tip
-                    QQC2.ToolTip.visible: hover.hovered && tab.tip.length > 0
+                    QQC2.ToolTip.text: bar.band && tab.tip.length === 0 ? String(tab.modelData) : tab.tip
+                    QQC2.ToolTip.visible: hover.hovered && (bar.band || tab.tip.length > 0)
                     QQC2.ToolTip.delay: 500
                     Accessible.role: Accessible.PageTab
                     Accessible.name: String(tab.modelData)
@@ -248,6 +292,7 @@ FocusScope {
 
     RowLayout {
         id: trailingRow
+        visible: !bar.band
         anchors.right: parent.right
         anchors.rightMargin: children.length > 0 ? KanteStyle.unit(8) : 0
         anchors.verticalCenter: parent.verticalCenter

@@ -17,7 +17,8 @@ import "."
  *                    setNoteState(index, state[, cents]), resetStates(), stateOf(i),
  *                    centsOf(i), stateRevision: one note at a time, as the tab lane
  *   bars             bar start times in seconds (numbers or {time, number}), a line across
- *                    with the bar number (`number` or index + 1) at the left
+ *                    with the bar number (`number` or index + 1) at the left; `section`
+ *                    (1.50) as KanteTabLane: a rehearsal mark right of the bar number
  *   position         the current time in seconds (sits on the play line)
  *   pixelsPerSecond  speed of the fall
  *   playLine         where the play line is, 0..1 of the height from the bottom (default
@@ -135,6 +136,12 @@ Item {
 
     /** Index of the next note to play (first with time ≥ position), -1 after the last. */
     readonly property int nextIndex: firstAtOrAfter(position)
+    /** Per bar: {text, part} of its rehearsal mark (1.50). */
+    readonly property var sectionList: sectionsOf(bars)
+    readonly property bool hasSections: sectionList.some(function (o) { return o.text !== "" })
+    /** The part being played (1.50): changes only when the bar does, not every frame. */
+    readonly property int currentBarIndex: hasSections ? barIndexAt(position) : -1
+    readonly property string currentPart: currentBarIndex >= 0 && sectionList[currentBarIndex] ? sectionList[currentBarIndex].part : ""
 
     // ── Geometry: time runs upwards from the play line ───────────────
     readonly property real playY: Math.round(height * (1 - Math.max(0, Math.min(1, playLine))))
@@ -185,7 +192,37 @@ Item {
                 parts.push(KanteStyle.noteStateName(st) + " " + counts[st])
             }
         })
+        // The part being played comes first (1.50).
+        if (currentPart !== "") {
+            parts.unshift(KanteStyle.partText.arg(currentPart))
+        }
         return parts.join(", ")
+    }
+    /**
+     * Rehearsal marks by bar (1.50), as KanteTabLane: [{text, part}], part the mark in
+     * effect (this bar's or the last one before it).
+     */
+    function sectionsOf(list) {
+        const out = []
+        for (let i = 0; list && i < list.length; i++) {
+            const o = list[i]
+            const text = typeof o === "object" && o !== null ? KanteStyle.rehearsalText(o.section) : ""
+            out.push({ text: text, part: text !== "" ? text : (i > 0 ? out[i - 1].part : "") })
+        }
+        return out
+    }
+    /** Index of the last bar that starts at or before t, -1 before the first. */
+    function barIndexAt(t) {
+        let a = 0, b = bars ? bars.length : 0
+        while (a < b) {
+            const m = (a + b) >> 1
+            if (barTime(bars[m]) <= t + 1e-6) {
+                a = m + 1
+            } else {
+                b = m
+            }
+        }
+        return a - 1
     }
     function barLabel(o, i) {
         var n = typeof o === "object" && o !== null ? o.number : undefined
@@ -272,6 +309,19 @@ Item {
                         color: KanteStyle.mutedTextColor
                         font: labelMetrics.font
                     }
+                    // Rehearsal mark (1.50) above the bar line, right of the number: shown only
+                    // while whole in the plot (the software renderer does not clip a Shape).
+                    KanteRehearsalMark {
+                        readonly property var sec: lane.sectionList[parent.index]
+                        // Read only for a bar with a mark: the others cost nothing per frame.
+                        readonly property real plotY: text !== "" ? parent.y + y + strip.y : 0
+                        visible: text !== "" && plotY >= 0 && plotY + height <= plot.height
+                        x: KanteStyle.unit(3) + (lane.barNumbers ? labelMetrics.width + KanteStyle.unit(8) : 0)
+                        y: -height - KanteStyle.unit(2)
+                        text: sec ? sec.text : ""
+                        maximumWidth: plot.width - x - KanteStyle.unit(4)
+                        Accessible.ignored: true
+                    }
                 }
             }
 
@@ -329,6 +379,18 @@ Item {
                                     width: lane.head
                                     height: lane.head
                                     color: note.hollow ? KanteStyle.backgroundColor : note.fill
+                                }
+                                // A wrong note's head is framed in the strong text colour (1.49): with deuteranopia its
+                                // red read like a string's ochre, and the cross badge alone was too small.
+                                Rectangle {
+                                    objectName: "kanteWrongFrame"
+                                    readonly property real w: Math.max(2, Math.round(lane.head * 0.12))
+                                    visible: note.full && note.st === "wrong"
+                                    anchors.fill: headBox
+                                    anchors.margins: -w
+                                    color: "transparent"
+                                    border.width: w
+                                    border.color: KanteStyle.strongTextColor
                                 }
                                 Loader {
                                     active: note.hollow && note.headIn

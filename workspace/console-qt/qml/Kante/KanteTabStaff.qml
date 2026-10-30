@@ -35,7 +35,12 @@ import "."
  *                ends with a repeat sign (repeatEnd), else open (the last ending). A bracket
  *                that runs on to the next line goes on there without number and hook. With
  *                endings the staff moves down by the bracket row, without them the layout is
- *                the old one
+ *                the old one;
+ *                section (Kante 1.50): the part that starts with the bar ("Refrain", "B", or
+ *                a list ["Refrain", "B"] → "Refrain · B"), a rehearsal mark
+ *                (KanteRehearsalMark) above the bar, cut short before the next mark on the
+ *                line. With sections the staff moves down by their row; screen readers hear
+ *                the part of the current bar ("Teil Refrain · B", KanteStyle.partText)
  *   position     the current time in seconds
  *   barsPerSystem  bars per line, 0 = as many as fit (`minBarWidth` each)
  *   systems      lines shown
@@ -192,7 +197,10 @@ Item {
     /** Any bar with endings: then a row for the volta brackets above the bar numbers. */
     readonly property bool hasEndings: barList.some(function (b) { return b.endings.length > 0 })
     readonly property real endingRow: hasEndings ? ls * 1.6 : 0
-    readonly property real staffTop: endingRow + markRow + ls * 0.5
+    /** Any bar with a section: then a row for the rehearsal marks on top (1.50). */
+    readonly property bool hasSections: barList.some(function (b) { return b.section !== "" })
+    readonly property real sectionRow: hasSections ? markProbe.implicitHeight + ls * 0.4 : 0
+    readonly property real staffTop: sectionRow + endingRow + markRow + ls * 0.5
     readonly property real staffHeight: (Math.max(1, strings) - 1) * ls
     readonly property real systemHeight: staffTop + staffHeight + (rhythm ? ls * 3.2 : ls * 0.8) + ls * 0.4
     readonly property real headerWidth: Math.round(nameMetrics.width + ls * 2.6)
@@ -212,6 +220,9 @@ Item {
     Accessible.description: {
         let d = barText.arg(barList.length ? barList[currentBar].number : 1).arg(barList.length)
         const cb = barList[currentBar]
+        if (cb && cb.part !== "") {
+            d += ", " + KanteStyle.partText.arg(cb.part)
+        }
         if (cb && cb.endings.length > 0) {
             d += ", " + endingText.arg(cb.endings.join(", "))
         }
@@ -270,7 +281,8 @@ Item {
             var b = list[i]
             var o = typeof b === "object" && b !== null ? b : { time: b }
             out.push({ time: Number(o.time) || 0, repeatStart: !!o.repeatStart, repeatEnd: !!o.repeatEnd,
-                       endings: endingsOf(o.endings), number: barLabel(o, i) })
+                       endings: endingsOf(o.endings), number: barLabel(o, i),
+                       section: KanteStyle.rehearsalText(o.section), part: "" })
         }
         var lastEnd = 0
         for (var k = 0; ns && k < ns.length; k++) {
@@ -278,7 +290,11 @@ Item {
         }
         if (out.length === 0) {
             out.push({ time: ns && ns.length ? Math.min(0, Number(ns[0].time)) : 0, repeatStart: false, repeatEnd: false,
-                       endings: [], number: "1" })
+                       endings: [], number: "1", section: "", part: "" })
+        }
+        // The part in effect: this bar's section or the last one before it (1.50).
+        for (let p = 0; p < out.length; p++) {
+            out[p].part = out[p].section !== "" ? out[p].section : (p > 0 ? out[p - 1].part : "")
         }
         for (var j = 0; j < out.length; j++) {
             if (j + 1 < out.length) {
@@ -396,7 +412,7 @@ Item {
     }
 
     function computeLayout(first, per, nsys, w, ls, ns, bl, nstr, lowTop, withRhythm) {
-        var L = { lines: [], frets: [], marks: [], rects: [], flags: [], heads: [], endings: [], boxes: {} }
+        var L = { lines: [], frets: [], marks: [], rects: [], flags: [], heads: [], endings: [], sections: [], boxes: {} }
         if (w <= 0 || bl.length === 0) {
             return L
         }
@@ -420,7 +436,7 @@ Item {
                 var bx = headerWidth + c * barWidth
                 var bar = bl[bi]
                 L.lines.push({ x: bx + barWidth - 1, y: top, w: 1, h: staffHeight + 1, kind: "bar" })
-                L.heads.push({ y: sy + endingRow, x: bx, number: bar.number })
+                L.heads.push({ y: sy + sectionRow + endingRow, x: bx, number: bar.number })
                 if (bar.repeatStart) {
                     L.lines.push({ x: bx, y: top, w: Math.max(2, ls * 0.25), h: staffHeight + 1, kind: "bar" })
                     L.rects.push({ x: bx + ls * 0.5, y: 0, sys: s, kind: "dots" })
@@ -431,6 +447,21 @@ Item {
                 }
             }
         }
+        // Rehearsal marks (1.50): over the first bar of a part, as wide as the room up to the
+        // next mark on the line (or the line's end).
+        for (let ms = 0; ms < nsys; ms++) {
+            let mFirst = first + ms * per
+            let mLast = Math.min(last, mFirst + per - 1)
+            for (let mb = mLast, mRight = headerWidth + (mLast - mFirst + 1) * barWidth; mb >= mFirst; mb--) {
+                if (bl[mb].section === "") {
+                    continue
+                }
+                let mx = headerWidth + (mb - mFirst) * barWidth + ls * 0.2
+                L.sections.push({ x: mx, y: ms * systemHeight, sys: ms, text: bl[mb].section, maxW: mRight - mx - ls * 0.5 })
+                mRight = mx
+            }
+        }
+        L.sections.reverse()
         // Volta brackets: one per run of bars with the same endings, cut at the end of a line.
         for (var es = 0; es < nsys; es++) {
             var eFirst = first + es * per
@@ -450,7 +481,7 @@ Item {
                 var ex1 = headerWidth + (runEnd - eFirst + 1) * barWidth
                 L.endings.push({
                     x: ex0 + (starts ? ls * 0.25 : 0), w: ex1 - ex0 - (starts ? ls * 0.25 : 0) - (ends ? ls * 0.5 : 0),
-                    y: es * systemHeight + ls * 0.3, sys: es,
+                    y: es * systemHeight + sectionRow + ls * 0.3, sys: es,
                     text: starts ? bl[eb].endings.map(function (n) { return n + "." }).join(", ") : "",
                     left: starts, right: ends && bl[runEnd].repeatEnd
                 })
@@ -497,7 +528,7 @@ Item {
         for (var o = 0; o < onsets.length; o++) {
             var on = onsets[o]
             // One sign per onset (a chord shows its first non-pending state); hidden while pending.
-            L.marks.push({ x: on.x, y: on.sys * systemHeight + endingRow + markRow / 2, indices: on.indices })
+            L.marks.push({ x: on.x, y: on.sys * systemHeight + sectionRow + endingRow + markRow / 2, indices: on.indices })
         }
         if (!withRhythm) {
             return L
@@ -608,7 +639,9 @@ Item {
             height: modelData.h
             color: modelData.kind === "line" ? staff.stringColor(modelData.str)
                  : modelData.kind === "bar" ? KanteStyle.textColor : KanteStyle.textColor
-            opacity: modelData.kind === "line" ? 0.7 : 1
+            // On a light ground the string lines take their full colour: at 0.7 they missed 3:1
+            // (1.51, a beamer in Kante Light).
+            opacity: modelData.kind === "line" && !(KanteStyle.active && KanteStyle.light) ? 0.7 : 1
         }
     }
 
@@ -662,6 +695,22 @@ Item {
                 font.weight: Font.Bold
                 font.pixelSize: Math.round(staff.ls * 0.8)
             }
+        }
+    }
+
+    // Rehearsal marks (1.50); the probe measures the row.
+    KanteRehearsalMark { id: markProbe; visible: false; text: "A"; pixelSize: staff.ls; Accessible.ignored: true }
+    Repeater {
+        model: staff.layout.sections
+        delegate: KanteRehearsalMark {
+            required property var modelData
+            x: modelData.x
+            y: modelData.y + Math.round((staff.sectionRow - height) / 2)
+            text: modelData.text
+            pixelSize: staff.ls
+            maximumWidth: modelData.maxW
+            groundColor: staff.groundColor
+            Accessible.ignored: true
         }
     }
 

@@ -5,6 +5,10 @@ edition = "2021"
 license = "MIT"
 publish = false
 
+[features]
+# Qt's QML profiler service (scripts/profile-gui.sh); never in a release.
+qml-profile = []
+
 [[bin]]
 name = "lmix"
 path = "src/main.rs"
@@ -16,6 +20,9 @@ cxx = "1"
 cxx-qt = "0.10"
 cxx-qt-lib = { version = "0.10", features = ["qt_full"] }
 gstreamer = { version = "0.25", features = ["v1_24"] }
+gstreamer-app = { version = "0.25", features = ["v1_24"] }
+gstreamer-gl = { version = "0.25", features = ["v1_24"] }
+gstreamer-video = { version = "0.25", features = ["v1_24"] }
 clap = { version = "4", features = ["derive", "env"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }
 tokio-tungstenite = "0.29"
@@ -29,3 +36,6 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [build-dependencies]
 cxx-qt-build = "0.10"
+
+[dev-dependencies]
+schemars = "1"
