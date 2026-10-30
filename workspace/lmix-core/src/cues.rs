@@ -240,9 +240,8 @@ impl Runner {
         self.standby.get(&list).copied().unwrap_or(0)
     }
 
-    /// The active list (RUN.7); the first one while none is set.
-    /// The list GO goes to: the chosen one, else the first; never a pad
-    /// list (RUN.12).
+    /// The active list (RUN.7), the one GO goes to: the chosen one, else
+    /// the first; never a pad list (RUN.12).
     pub fn active(&self, lists: &[ShowCueList]) -> Option<usize> {
         self.active
             .and_then(|id| lists.iter().position(|l| l.id == id && !l.pads))
