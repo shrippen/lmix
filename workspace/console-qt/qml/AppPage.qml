@@ -22,8 +22,8 @@ FocusScope {
     required property string pageId
     required property string title
     property string subtitle
-    /** Keys that work only while this page is shown, as
-     *  `{ what, key }`, for the keys overview. */
+    /** Keys that work only while this page is shown, as `{ what, key }`
+     *  (or `{ what, gesture }` for a mouse gesture), for the keys overview. */
     property var pageKeys: []
     /** Something runs here (cues, a recording): a dot in the page bar. */
     property bool busy: false

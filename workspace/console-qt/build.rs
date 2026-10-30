@@ -137,6 +137,7 @@ fn main() {
                 "qml/AppendShowDialog.qml",
                 "qml/LayoutDialog.qml",
                 "qml/ShortcutsDialog.qml",
+                "qml/KeysDialog.qml",
                 "qml/ShortcutEditDialog.qml",
                 "qml/ActionRows.qml",
                 "qml/MidiLearnButton.qml",

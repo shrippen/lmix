@@ -472,17 +472,12 @@ Kirigami.ApplicationWindow {
 
     // --- keys overview ---
 
-    KanteDialog {
+    KeysDialog {
         id: keysDialog
         onClosed: root.restoreFocus()
         parent: QQC2.Overlay.overlay
         anchors.centerIn: parent
-        title: qsTr("Keys")
-        modal: true
-        width: Kirigami.Units.gridUnit * 26
-        standardButtons: QQC2.Dialog.Close
-        contentHeight: keysColumn.implicitHeight
-        readonly property var always: [
+        always: [
             { what: qsTr("Pages"), key: qsTr("Ctrl+1…%1").arg(root.pageItems.length) },
         ].concat([
             { what: qsTr("New show"), key: root.fileKeys.newShow },
@@ -491,39 +486,12 @@ Kirigami.ApplicationWindow {
             { what: qsTr("Save show as"), key: root.fileKeys.saveAs },
             { what: qsTr("Shortcuts"), key: root.fileKeys.shortcuts }
         ].filter(k => !root.keyTaken(k.key)).map(k => ({ what: k.what, key: root.keyLabel(k.key) })), [
-            { what: qsTr("Panic all"), key: qsTr("button in the page bar") }
-        ].concat(root.keyedShortcuts.map(s => ({ what: s.label, key: root.keyLabel(s.key) }))))
-        ColumnLayout {
-            id: keysColumn
-            width: parent.width
-            KanteSectionLabel { text: qsTr("Always") }
-            Repeater {
-                model: keysDialog.always
-                delegate: KeyRow {}
-            }
-            KanteSectionLabel {
-                text: root.currentItem ? qsTr("Only on %1").arg(root.currentItem.title) : ""
-                visible: root.currentItem !== null && root.currentItem.pageKeys.length > 0
-            }
-            Repeater {
-                model: root.currentItem ? root.currentItem.pageKeys : []
-                delegate: KeyRow {}
-            }
-        }
-    }
-    component KeyRow: RowLayout {
-        required property var modelData
-        Layout.fillWidth: true
-        QQC2.Label {
-            Layout.fillWidth: true
-            text: modelData.what
-            elide: Text.ElideRight
-        }
-        QQC2.Label {
-            text: modelData.key
-            font.family: KanteStyle.monoFamily
-            color: KanteStyle.neutralTextColor
-        }
+            { what: qsTr("Panic all"), gesture: qsTr("button in the page bar") }
+        ])
+        pageTitle: root.currentItem ? root.currentItem.title : ""
+        pageKeys: root.currentItem ? root.currentItem.pageKeys : []
+        own: root.keyedShortcuts.map(s => ({ what: s.label, key: root.keyLabel(s.key) }))
+        onShortcutsRequested: root.openShortcuts()
     }
 
     // --- the window ---

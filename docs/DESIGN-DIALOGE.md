@@ -134,7 +134,7 @@ kommt.
 | P01 Ansicht | A | Zwei Spalten, ohne doppelten Titel; Größen als kleine Kachelbilder, Schalter statt Häkchen | – |
 | P02 Tonspalte | A | `KanteSwitch`, feste Breite M, Gruppen mit Überschrift; Entfernen als roter Textknopf unten rechts, mit Rückfrage und Toast | – |
 | S01 Datei- und Ordnerdialoge | Mischung | Regel 6 | A sieht als Vorschlag gut aus, es soll aber wie in B ein gemeinsames Bauteil werden. Es darf trotzdem Varianten und Anpassungen je Aufruf geben. |
-| S02 Tasten | A | Tastenkappen in zwei Spalten mit Suche; die eigenen Belegungen als dritte Gruppe | – |
+| S02 Tasten | A | Tastenkappen in zwei Spalten mit Suche; die eigenen Belegungen als dritte Gruppe. Umgesetzt in `KeysDialog.qml` (DECISIONS 2026-10-30) | – |
 | 1 Dialograhmen | Mischung | Regel 3 | Bei Liveeditoren ist ein Seitenblatt nützlich und sinnvoll, sonst Vorschlag A |
 | 2 Destruktive Aktionen | Mischung | Regel 1 | Entfernen bekommt immer einen Bestätigungsdialog und danach einen Toast zum Zurückholen. |
 | 4 Meldungen | B | Regel 2 | Alle Meldungen landen als Toast unten rechts, Banner für Dauerzustände. Das Hilfesystem ist ein eigenes Thema, mit dem ich mich separat beschäftigen möchte. |

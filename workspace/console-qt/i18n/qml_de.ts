@@ -603,12 +603,12 @@
     </message>
     <message>
       <location line="+99" />
-      <location line="+115" />
+      <location line="+110" />
       <source>Open show</source>
       <translation>Show öffnen</translation>
     </message>
     <message>
-      <location line="-114" />
+      <location line="-109" />
       <location line="+13" />
       <source>lmix shows (*.lmix)</source>
       <translation>lmix-Shows (*.lmix)</translation>
@@ -622,12 +622,12 @@
     </message>
     <message>
       <location line="-60" />
-      <location line="+105" />
+      <location line="+100" />
       <source>Save show</source>
       <translation>Show speichern</translation>
     </message>
     <message>
-      <location line="-90" />
+      <location line="-85" />
       <source>Export settings</source>
       <translation>Einstellungen exportieren</translation>
     </message>
@@ -664,24 +664,23 @@
       <translation>Leerer Ordner für Show und Medien des Pakets</translation>
     </message>
     <message>
-      <location line="+25" />
-      <location line="+299" />
+      <location line="+292" />
       <source>Keys</source>
       <translation>Tasten</translation>
     </message>
     <message>
-      <location line="-293" />
+      <location line="-266" />
       <source>Pages</source>
       <translation>Seiten</translation>
     </message>
     <message>
       <location line="+0" />
-      <location line="+403" />
+      <location line="+376" />
       <source>Ctrl+1…%1</source>
       <translation>Strg+1…%1</translation>
     </message>
     <message>
-      <location line="-401" />
+      <location line="-374" />
       <source>New show</source>
       <translation>Neue Show</translation>
     </message>
@@ -697,27 +696,17 @@
     </message>
     <message>
       <location line="+2" />
-      <location line="+450" />
+      <location line="+423" />
       <source>Panic all</source>
       <translation>Panik: alles</translation>
     </message>
     <message>
-      <location line="-450" />
+      <location line="-423" />
       <source>button in the page bar</source>
       <translation>Knopf in der Seitenleiste</translation>
     </message>
     <message>
-      <location line="+5" />
-      <source>Always</source>
-      <translation>Immer</translation>
-    </message>
-    <message>
-      <location line="+6" />
-      <source>Only on %1</source>
-      <translation>Nur auf %1</translation>
-    </message>
-    <message>
-      <location line="+64" />
+      <location line="+48" />
       <source>File</source>
       <translation>Datei</translation>
     </message>
@@ -2353,6 +2342,45 @@
       <location line="+1" />
       <source>Minute</source>
       <translation>Minute</translation>
+    </message>
+  </context>
+  <context>
+    <name>KeysDialog</name>
+    <message>
+      <location filename="../qml/KeysDialog.qml" line="+33" />
+      <source>Always</source>
+      <translation>Immer</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Only on %1</source>
+      <translation>Nur auf %1</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Own shortcuts</source>
+      <translation>Eigene Belegungen</translation>
+    </message>
+    <message>
+      <location line="+25" />
+      <source>Keys</source>
+      <translation>Tasten</translation>
+    </message>
+    <message>
+      <location line="+15" />
+      <source>Shortcuts…</source>
+      <translation>Belegungen…</translation>
+    </message>
+    <message>
+      <location line="+15" />
+      <location line="+1" />
+      <source>Search keys</source>
+      <translation>Tasten suchen</translation>
+    </message>
+    <message>
+      <location line="+21" />
+      <source>No key matches "%1".</source>
+      <translation>Keine Taste passt zu „%1“.</translation>
     </message>
   </context>
   <context>
@@ -5099,7 +5127,7 @@
       <translation>nutzt Input %1, dessen Mediendatei fehlt</translation>
     </message>
     <message>
-      <location line="+76" />
+      <location line="+77" />
       <source>Wait %1</source>
       <translation>Warten %1</translation>
     </message>

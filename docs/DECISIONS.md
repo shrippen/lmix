@@ -5396,3 +5396,24 @@ Ctrl+Z ebenso.
 - Nicht im Stapel: Zonen, Ziele, Cues, Auslöser, Belegungen und Vorlagen
   (Regel 1 nennt sie auch; sie folgen), sowie Stoppen und Werkseinstellungen
   (nicht zurückzuholen, nur mit Rückfrage).
+
+## 2026-10-30 — Tastenübersicht mit Tastenkappen und Suche (S02)
+
+Tafel S02, Wahl A aus `docs/DESIGN-DIALOGE.md`. Die Übersicht „Tasten“ ist
+ein eigenes Bauteil (`KeysDialog.qml`, vorher im AppShell). Sie zeigt jede
+Taste als `KanteKeycap`, eine Kappe je Teil („Strg“ „K“), in zwei Spalten,
+Größe M nach Regel 3.
+
+- **Drei Gruppen:** Immer (Seiten, Datei, Panik), nur auf der Seite, die
+  gerade offen ist, und als dritte die eigenen Belegungen der Show und für
+  alle Shows (vorher unter „Immer“ eingereiht). Leere Gruppen fallen weg.
+- **Suche oben:** Sie hat beim Öffnen den Fokus und filtert über Beschreibung
+  und Taste. Wörter suchen als Teiltext, die Reihenfolge ist egal. Mit „+“
+  getippt („strg+s“) ist es eine Taste, und jeder Teil muss eine Kappe sein.
+  Sonst fände „Strg+S“ jeden Eintrag mit einem „s“. Beim Schließen wird die
+  Suche geleert.
+- **Gesten** wie „Doppelklick in die Vorschau“ sind keine Taste. Sie stehen als
+  `gesture` im Eintrag und gedämpft statt einer Kappe da.
+- **„Belegungen…“ im Fuß** öffnet den Dialog der Kurzbefehle. Weil
+  `KanteDialog` keinen eigenen Knopf am Anfang des Fußes kennt, ist es der
+  Standardknopf Hilfe, umbenannt. Er steht in jedem Layout links.
