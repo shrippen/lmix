@@ -163,6 +163,7 @@ fn main() {
                 "qml/TileSizePicker.qml",
                 "qml/EffectMenu.qml",
                 "qml/MoreActionsMenu.qml",
+                "qml/CueColourButton.qml",
                 "qml/LookPanel.qml",
                 "qml/ChannelStripPanel.qml",
                 "qml/InputSettingsDialog.qml",
