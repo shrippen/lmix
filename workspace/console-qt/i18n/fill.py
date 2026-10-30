@@ -17,9 +17,11 @@ tree = ET.parse(path)
 missing = set()
 for message in tree.iter("message"):
     source = message.find("source").text
+    comment = message.find("comment")
     translation = message.find("translation")
-    if source in DE:
-        translation.text = DE[source]
+    key = (source, comment.text) if comment is not None else None
+    if key in DE or source in DE:
+        translation.text = DE[key] if key in DE else DE[source]
         translation.attrib.pop("type", None)
     else:
         missing.add(source)

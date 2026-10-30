@@ -1,6 +1,7 @@
 # German texts of the Qt Console, keyed by the English source.
 # scripts/update-translations.sh collects the sources and writes these
-# into qml_de.ts (i18n/fill.py). Keep it complete.
+# into qml_de.ts (i18n/fill.py). Keep it complete. A (source, comment)
+# key wins over the source alone, for a word with two meanings.
 DE = {
     'Remove input %1 %2?': 'Input %1 %2 entfernen?',
     'Its picture leaves program, preview, the layouts and the overlays.': 'Sein Bild verschwindet aus Programm, Vorschau, den Layouts und den Overlays.',
@@ -764,7 +765,6 @@ DE = {
     '%1p%2': '%1p%2',
     'Cue lists: %1': 'Cue-Listen: %1',
     'Always': 'Immer',
-    'Ctrl+1…%1': 'Strg+1…%1',
     'Escape': 'Escape',
     'Export package…': 'Paket exportieren …',
     'Fade up': 'Aufblenden',
@@ -1073,6 +1073,19 @@ DE = {
     'Save show as': 'Show speichern unter',
     'Ctrl': 'Strg',
     'Shift': 'Umschalt',
+    'Alt': 'Alt',
+    'Meta': 'Meta',
+    'Return': 'Eingabe',
+    'Enter': 'Enter',
+    'Tab': 'Tab',
+    'Backspace': 'Rücktaste',
+    'Del': 'Entf',
+    'Ins': 'Einfg',
+    # "Home" is also the PTZ home position (Grundstellung).
+    ('Home', 'key'): 'Pos1',
+    'End': 'Ende',
+    'PgUp': 'Bild auf',
+    'PgDown': 'Bild ab',
     'Settings': 'Einstellungen',
     'Copy link': 'Link kopieren',
     'Listen': 'Vorhören',

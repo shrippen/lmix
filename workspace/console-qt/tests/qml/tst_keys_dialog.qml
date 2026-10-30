@@ -191,6 +191,21 @@ TestCase {
         compare(whats(dialog), ["Find"])
     }
 
+    function test_key_names_read_as_in_the_rest_of_the_dialog() {
+        // One helper for the built-in keys and the own bindings (Texts.keyLabel):
+        // the names a binding is stored with become the names the dialog shows.
+        compare(Texts.keyLabel("Ctrl+Space"), Texts.keyLabel("Ctrl") + "+" + Texts.keyLabel("Space"))
+        compare(Texts.keyLabel("ctrl+shift+s"), "Ctrl+Shift+S")
+        compare(Texts.keyLabel("alt+return"), "Alt+Return")
+        compare(Texts.keyLabel("Esc"), Texts.keyLabel("Escape"))
+        compare(Texts.keyLabel("Delete"), Texts.keyLabel("Del"))
+        compare(Texts.keyLabel("pgup"), "PgUp")
+        compare(Texts.keyLabel("left"), "Left")
+        compare(Texts.keyLabel("f4"), "F4")
+        compare(Texts.keyLabel("Ctrl++"), "Ctrl++")
+        compare(Texts.keyLabel("Ctrl+1…5"), "Ctrl+1…5")
+    }
+
     function test_a_plus_in_a_name_finds_it_too() {
         var dialog = openDialog()
         dialog.own = [{ what: "Ton+Licht", key: "F5" }]

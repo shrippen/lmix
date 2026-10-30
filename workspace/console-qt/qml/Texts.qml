@@ -318,4 +318,43 @@ QtObject {
         }
         return m.message || json
     }
+
+    /** A key sequence as the user reads it, in the names the keys overview and the
+     *  menus show: "Ctrl+Space" is Strg+Leertaste in German, "Esc" and "Escape" one
+     *  key, a letter in capitals. Takes Qt's names in any case; "Ctrl++" is two keys. */
+    function keyLabel(sequence) {
+        return (String(sequence).match(/[^+]+|\+(?=$)/g) || []).map(keyName).join("+")
+    }
+
+    /** One key of a sequence (keyLabel). */
+    function keyName(part) {
+        switch (part.toLowerCase()) {
+        case "ctrl": return qsTr("Ctrl", "key")
+        case "shift": return qsTr("Shift", "key")
+        case "alt": return qsTr("Alt", "key")
+        case "meta": return qsTr("Meta", "key")
+        case "space": return qsTr("Space", "key")
+        case "return": return qsTr("Return", "key")
+        case "enter": return qsTr("Enter", "key")
+        case "esc":
+        case "escape": return qsTr("Escape", "key")
+        case "tab": return qsTr("Tab", "key")
+        case "backspace": return qsTr("Backspace", "key")
+        case "del":
+        case "delete": return qsTr("Del", "key")
+        case "ins":
+        case "insert": return qsTr("Ins", "key")
+        case "home": return qsTr("Home", "key")
+        case "end": return qsTr("End", "key")
+        case "pgup":
+        case "pageup": return qsTr("PgUp", "key")
+        case "pgdown":
+        case "pagedown": return qsTr("PgDown", "key")
+        case "left": return qsTr("Left", "key")
+        case "right": return qsTr("Right", "key")
+        case "up": return qsTr("Up", "key")
+        case "down": return qsTr("Down", "key")
+        }
+        return part.length === 1 || /^f\d+$/i.test(part) ? part.toUpperCase() : part
+    }
 }
