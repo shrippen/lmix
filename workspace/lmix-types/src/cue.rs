@@ -229,6 +229,10 @@ pub struct Cue {
     /// `mood`: what it sets.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mood: Option<MoodCue>,
+    /// `sound`, `picture`, `actions`: the mood layer it takes when it
+    /// fires (MOOD.5): the mood fades out there until the next change.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub layer: Option<crate::LayerId>,
 }
 
 impl Cue {
@@ -264,6 +268,7 @@ impl Cue {
             fade: None,
             picture: None,
             mood: None,
+            layer: None,
         }
     }
 

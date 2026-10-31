@@ -3333,12 +3333,12 @@
       <translation>Stimmungen</translation>
     </message>
     <message>
-      <location line="+481" />
+      <location line="+495" />
       <source>Panic</source>
       <translation>Panik</translation>
     </message>
     <message>
-      <location line="-475" />
+      <location line="-489" />
       <source>Stops every cue and sound; the panic mood runs</source>
       <translation>Stoppt alle Cues und Klänge, die Panik-Stimmung läuft</translation>
     </message>
@@ -3359,12 +3359,12 @@
     </message>
     <message>
       <location line="+1" />
-      <location line="+395" />
+      <location line="+411" />
       <source>Off</source>
       <translation>Aus</translation>
     </message>
     <message>
-      <location line="-345" />
+      <location line="-348" />
       <source>Done</source>
       <translation>Fertig</translation>
     </message>
@@ -3405,14 +3405,25 @@
       <translation>Alle Stimmungen und Oneshots</translation>
     </message>
     <message>
-      <location line="-208" />
-      <location line="+248" />
-      <location line="+251" />
+      <location line="-221" />
+      <location line="+261" />
+      <location line="+254" />
       <source>Panic mood</source>
       <translation>Panik-Stimmung</translation>
     </message>
     <message>
-      <location line="-251" />
+      <location line="-385" />
+      <location line="+361" />
+      <source>Cue</source>
+      <translation>Cue</translation>
+    </message>
+    <message>
+      <location line="-361" />
+      <source>Cue (gone)</source>
+      <translation>Cue (entfernt)</translation>
+    </message>
+    <message>
+      <location line="+131" />
       <source>Now</source>
       <translation>Jetzt</translation>
     </message>
@@ -3509,7 +3520,7 @@
       <translation>Ebenen</translation>
     </message>
     <message>
-      <location line="+15" />
+      <location line="+17" />
       <source>Base</source>
       <translation>Basis</translation>
     </message>
@@ -5111,7 +5122,7 @@
   <context>
     <name>ShowInspector</name>
     <message>
-      <location filename="../qml/ShowInspector.qml" line="+180" />
+      <location filename="../qml/ShowInspector.qml" line="+183" />
       <source>Basics</source>
       <translation>Grundlagen</translation>
     </message>
@@ -5208,12 +5219,12 @@
     </message>
     <message>
       <location line="+8" />
-      <location line="+96" />
+      <location line="+126" />
       <source>Stage</source>
       <translation>Bühne</translation>
     </message>
     <message>
-      <location line="-82" />
+      <location line="-112" />
       <source>Stage of the picture</source>
       <translation>Bühne des Bildes</translation>
     </message>
@@ -5243,7 +5254,27 @@
       <translation>Wie lange die Ebenen blenden, die sich ändern; leer: die der Ebene, sonst die Wechselzeit der Show</translation>
     </message>
     <message>
-      <location line="+8" />
+      <location line="+21" />
+      <source>None</source>
+      <translation>Keine</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Layer (gone)</source>
+      <translation>Ebene (entfernt)</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Mood layer the cue takes</source>
+      <translation>Stimmungsebene, die der Cue übernimmt</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>When the cue starts, the mood fades out on this layer; the next mood change stops the cue</source>
+      <translation>Startet der Cue, blendet die Stimmung auf dieser Ebene aus; der nächste Stimmungswechsel stoppt den Cue</translation>
+    </message>
+    <message>
+      <location line="+12" />
       <source>Fades</source>
       <translation>Blendet</translation>
     </message>
@@ -5510,7 +5541,8 @@
       <translation>Deckkraft des Bildes</translation>
     </message>
     <message>
-      <location line="+9" />
+      <location line="-394" />
+      <location line="+403" />
       <source>Layer</source>
       <translation>Ebene</translation>
     </message>

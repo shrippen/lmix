@@ -664,6 +664,15 @@ impl Service {
                     let _ = self.events.send(Event::Panic { mode });
                 }
                 crate::cues::Out::Mood { actions } => self.run_mood_actions(actions).await,
+                crate::cues::Out::TakeLayer { list, cue, layer } => {
+                    let actions = {
+                        let mut sw = self.switcher.lock().await;
+                        let actions = sw.mood_take(layer, list, cue);
+                        self.publish(&sw);
+                        actions
+                    };
+                    self.run_mood_actions(actions).await;
+                }
                 crate::cues::Out::Actions { list, cue, actions } => {
                     for action in actions {
                         let Err(e) = Box::pin(self.handle_as(action, Origin::Operator)).await
@@ -3113,6 +3122,76 @@ mod tests {
             "and stopped: it may run all the same"
         );
         assert!(state.mood.layers.is_empty(), "the layer is off");
+    }
+
+    #[tokio::test]
+    async fn a_cue_takes_its_layer_until_the_next_mood() {
+        use lmix_types::{Cue, LayerOrigin};
+        let service = Service::new(4, Arc::new(NullEngine::default()), None);
+        service.handle(bars()).await.unwrap();
+        let moods = scene_moods();
+        let licht = moods.layers[0].id;
+        service.handle(Action::SetMoods { moods }).await.unwrap();
+        service
+            .handle(Action::SetMood {
+                mood: "Szene / Dunkel".into(),
+                fade_ms: None,
+            })
+            .await
+            .unwrap();
+        let light = Cue {
+            layer: Some(licht),
+            ..Cue::actions(
+                "Hell",
+                vec![Action::SetFadeToBlack {
+                    on: false,
+                    duration_ms: 0,
+                }],
+            )
+        };
+        let mut wrong = light.clone();
+        wrong.kind = lmix_types::CueKind::Note;
+        wrong.actions.clear();
+        let refused = service
+            .handle(Action::AddCueList {
+                name: "Show".into(),
+                cues: vec![wrong],
+                source: None,
+            })
+            .await;
+        assert!(refused.is_err(), "a note takes no layer");
+        service
+            .handle(Action::AddCueList {
+                name: "Show".into(),
+                cues: vec![light.clone()],
+                source: None,
+            })
+            .await
+            .unwrap();
+        let state = service.handle(Action::CueGo { list: None }).await.unwrap();
+        assert!(!state.fade_to_black, "the cue's light");
+        let list = state.cue_lists[0].id;
+        assert_eq!(
+            state.mood.layers[0].origin,
+            LayerOrigin::Cue {
+                list,
+                cue: light.id
+            }
+        );
+
+        // The same mood again sets its light, though it is the same.
+        let state = service
+            .handle(Action::SetMood {
+                mood: "Szene / Dunkel".into(),
+                fade_ms: None,
+            })
+            .await
+            .unwrap();
+        assert!(state.fade_to_black, "the mood's light again");
+        assert!(matches!(
+            state.mood.layers[0].origin,
+            LayerOrigin::Mood { .. }
+        ));
     }
 
     #[tokio::test]

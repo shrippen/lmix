@@ -40,6 +40,9 @@ KanteCard {
     readonly property var cue: shown
     readonly property bool editable: !showView.fromScript
     readonly property bool isMood: cue !== null && cue.kind === "mood"
+    /** The show's mood layers, for a cue that takes one (MOOD.5). */
+    readonly property var moodLayers: showView.show && showView.show.moods && showView.show.moods.layers ? showView.show.moods.layers : []
+    readonly property bool takesLayer: cue !== null && moodLayers.length > 0 && ["sound", "picture", "actions"].indexOf(cue.kind) >= 0
     readonly property bool timed: cue !== null && ["wait", "actions", "sound", "picture", "fade"].indexOf(cue.kind) >= 0
     /** What the cue plays or shows, whose fades and repeats are edited. */
     readonly property var media: cue === null ? null : (cue.kind === "sound" ? cue.sound : (cue.kind === "picture" ? cue.picture : null))
@@ -365,6 +368,36 @@ KanteCard {
                     QQC2.ToolTip.text: qsTr("How long the changing layers fade; empty: each layer's own, else the show's change time")
                     onAccepted: inspector.refocus()
                     onEdited: value => inspector.saveIn("mood", { fade_ms: value })
+                }
+
+                // The mood layer the cue takes while it runs (MOOD.5).
+                QQC2.Label {
+                    visible: inspector.takesLayer
+                    text: qsTr("Layer")
+                }
+                KanteComboBox {
+                    id: layerBox
+                    objectName: "layerBox"
+                    visible: inspector.takesLayer
+                    Layout.columnSpan: 3
+                    Layout.preferredWidth: Kirigami.Units.gridUnit * 12
+                    focusPolicy: Qt.NoFocus
+                    readonly property string taken: inspector.cue && inspector.cue.layer ? inspector.cue.layer : ""
+                    readonly property var ids: [""].concat(inspector.moodLayers.map(l => l.id))
+                    // A layer that is gone stays named, marked.
+                    readonly property bool missing: ids.indexOf(taken) < 0
+                    model: [qsTr("None")].concat(inspector.moodLayers.map(l => l.name)).concat(missing ? [qsTr("Layer (gone)")] : [])
+                    currentIndex: missing ? ids.length : ids.indexOf(taken)
+                    invalid: missing
+                    Accessible.name: qsTr("Mood layer the cue takes")
+                    QQC2.ToolTip.visible: hovered
+                    QQC2.ToolTip.text: qsTr("When the cue starts, the mood fades out on this layer; the next mood change stops the cue")
+                    onActivated: index => {
+                        if (index < ids.length) {
+                            inspector.save({ layer: ids[index] === "" ? null : ids[index] })
+                        }
+                        inspector.refocus()
+                    }
                 }
 
                 // What a fade fades (SND.6, VIS.4, VIS.7).

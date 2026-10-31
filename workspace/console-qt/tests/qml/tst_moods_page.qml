@@ -99,6 +99,17 @@ TestCase {
         compare(fakeShell.acted, [{ action: "set_mood", mood: "g-tavern" }])
     }
 
+    function test_a_cue_on_a_layer_says_which() {
+        const p = page()
+        fakeShell.show = Object.assign({}, fakeShell.show, { mood: {
+            mood: "g-tavern",
+            layers: [{ layer: "l-music", origin: { kind: "cue", list: "list-pads", cue: "p-thunder" } }]
+        } })
+        const music = findChild(p, "layer:Music")
+        compare(music.source, "Cue")
+        compare(p.cueLabel(music.origin.origin), "Thunder")
+    }
+
     function test_the_panic_mood_says_so() {
         const p = page()
         fakeShell.show = Object.assign({}, fakeShell.show, { mood: {

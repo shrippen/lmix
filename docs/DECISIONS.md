@@ -6278,3 +6278,35 @@ abgewiesen, GO setzt die Variante und ihr Licht), `checks::tests`
 (entfernte Stimmung warnt), `an_unnamed_mood_cue_says_its_mood`, `tst_show_moods.qml`
 (Reihenfolge und Namen, Klick und „+“, im Show-Modus nur Setzen,
 Inspector mit entfernter Stimmung).
+
+## 2026-10-31 — Stimmungen: letzter Befehl gewinnt (MOOD Stufe 3b)
+
+**Anlass**: MOOD.5: Ein Cue soll eine Ebene der Stimmung übernehmen
+können (der Gewitter-Klang statt der Atmo), bis die nächste Stimmung
+kommt.
+
+**Entscheidung**:
+- Cue-Feld `layer` (Id einer Ebene) bei Klang-, Bild- und Aktions-Cues;
+  bei anderen Arten weist die Cue-Prüfung es ab. Feuert der Cue, gibt der
+  Cue-Runner vor den eigenen Aktionen `Out::TakeLayer` aus: die Engine
+  blendet aus, was die Stimmung dort hat (Blende der Ebene, sonst die
+  Wechselzeit), stoppt einen anderen Cue, der die Ebene hatte, und trägt
+  die Herkunft `cue` (`list`, `cue`) ein. Eine Ebene, die die Show nicht
+  hat, bleibt unberührt.
+- Der nächste Stimmungswechsel stoppt den Cue (`cue_stop` mit seiner
+  Ausblendung) und setzt den Inhalt der Stimmung, auch wenn es dieselbe
+  Stimmung ist: verglichen wird mit dem, was läuft, und dort läuft der Cue.
+- Die Seite Stimmungen zeigt beim Inspector „Cue“ und Nummer und Name des
+  Cues; der Show-Inspector hat das Feld „Ebene“ (keine oder eine Ebene der
+  Show).
+
+**Noch nicht**: Endet der Cue von selbst oder stoppt ihn der Bediener,
+bleibt die Ebene beim Cue (still), bis die nächste Stimmung kommt; das
+Gleiche gilt weiter für einen Klang einer Ebene, der von selbst endet
+(Stufe 1). Beides zusammen mit `media_ended` für Ebenen.
+
+**Geprüft**: `moods::tests` (`a_cue_takes_a_layer_until_the_next_change`,
+`the_last_cue_on_a_layer_wins`), Service-Test
+`a_cue_takes_its_layer_until_the_next_mood` (Note mit Ebene abgewiesen,
+GO übernimmt, dieselbe Stimmung holt die Ebene zurück),
+`tst_show_moods.qml` (Feld „Ebene“), `tst_moods_page.qml` (Herkunft Cue).

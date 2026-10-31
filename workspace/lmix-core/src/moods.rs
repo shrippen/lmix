@@ -5,12 +5,15 @@
 //! change get actions; what stays the same runs on untouched (MOOD.4).
 //! A layer's sound or picture plays as its own media id
 //! `mood-<layer>-<n>`, a new one per change, so the old fades out while
-//! the new fades in.
+//! the new fades in. A cue that names a layer takes it (MOOD.5, last
+//! command wins): the mood fades out there, and the next change stops the
+//! cue and sets the layer again, even to what it had.
 
 use std::collections::BTreeMap;
 
 use lmix_types::{
-    Action, LayerContent, LayerId, LayerNow, LayerOrigin, MoodFade, MoodId, MoodNow, Moods,
+    Action, CueId, InputId, InputRef, LayerContent, LayerId, LayerNow, LayerOrigin, MoodFade,
+    MoodId, MoodNow, Moods, StopMode,
 };
 
 /// What runs on one layer.
@@ -136,6 +139,37 @@ impl MoodRunner {
         out
     }
 
+    /// Cue `cue` of `list` fires and names `layer` (MOOD.5): what the
+    /// mood has there fades out (the layer's fade, else the change time),
+    /// a cue that had the layer stops; the layer is the cue's. A layer the
+    /// show does not have: nothing.
+    pub fn take(
+        &mut self,
+        moods: &Moods,
+        layer: LayerId,
+        list: InputId,
+        cue: CueId,
+    ) -> Vec<Action> {
+        let Some(own) = moods.layers.iter().find(|l| l.id == layer) else {
+            return Vec::new();
+        };
+        let mut out = Vec::new();
+        let taken = LayerOrigin::Cue { list, cue };
+        if self.layers.get(&layer).is_some_and(|p| p.origin == taken) {
+            return out;
+        }
+        self.stop(layer, own.fade_ms.unwrap_or(moods.change_ms), &mut out);
+        self.layers.insert(
+            layer,
+            Playing {
+                content: LayerContent::Off,
+                media: None,
+                origin: taken,
+            },
+        );
+        out
+    }
+
     /// The sound or picture `id` did not start (a file missing, a zone
     /// gone): its layer is off, so the same mood again tries again.
     pub fn media_failed(&mut self, id: &str) {
@@ -186,6 +220,15 @@ impl MoodRunner {
         let Some(playing) = self.layers.remove(&layer) else {
             return;
         };
+        // A cue's: it stops with its own fade.
+        if let LayerOrigin::Cue { list, cue } = playing.origin {
+            out.push(Action::CueStop {
+                list: Some(InputRef::Text(list.to_string())),
+                cue: Some(cue.to_string()),
+                mode: StopMode::Fade,
+            });
+            return;
+        }
         let Some(id) = playing.media else {
             return;
         };
@@ -347,6 +390,62 @@ mod tests {
             music: m,
             picture: p,
         }
+    }
+
+    #[test]
+    fn a_cue_takes_a_layer_until_the_next_change() {
+        let t = tavern();
+        let mut runner = MoodRunner::default();
+        runner.set(&t.moods, "Tavern", None, 0).expect("set");
+        let (list, cue) = (InputId::new(), CueId::new());
+
+        // The lute fades out over the change time; the cue has the layer.
+        let out = runner.take(&t.moods, t.music, list, cue);
+        assert!(
+            matches!(&out[..], [Action::StopSound { fade_ms: 3000, .. }]),
+            "{out:?}"
+        );
+        let now = runner.now(&t.moods, 0);
+        assert_eq!(now.layers[1].origin, LayerOrigin::Cue { list, cue });
+        assert!(
+            runner.take(&t.moods, t.music, list, cue).is_empty(),
+            "taken already"
+        );
+
+        // The same mood again: the cue stops and the lute comes back,
+        // though the mood has not changed; the light stays untouched.
+        let out = runner.set(&t.moods, "Tavern", None, 0).expect("set");
+        assert_eq!(out.len(), 2, "{out:?}");
+        assert!(
+            matches!(&out[0], Action::CueStop { cue: Some(c), mode: StopMode::Fade, .. }
+            if *c == cue.to_string())
+        );
+        assert!(
+            matches!(&out[1], Action::PlaySound { sound, .. } if sound.file == "/sounds/lute.wav")
+        );
+    }
+
+    #[test]
+    fn the_last_cue_on_a_layer_wins() {
+        let t = tavern();
+        let mut runner = MoodRunner::default();
+        let list = InputId::new();
+        let (first, second) = (CueId::new(), CueId::new());
+        assert!(
+            runner.take(&t.moods, t.light, list, first).is_empty(),
+            "nothing ran there"
+        );
+        let out = runner.take(&t.moods, t.light, list, second);
+        assert!(
+            matches!(&out[..], [Action::CueStop { cue: Some(c), .. }] if *c == first.to_string())
+        );
+        assert!(
+            runner
+                .take(&t.moods, LayerId::new(), list, first)
+                .is_empty(),
+            "no such layer"
+        );
+        assert_eq!(runner.now(&t.moods, 0).layers.len(), 1);
     }
 
     #[test]

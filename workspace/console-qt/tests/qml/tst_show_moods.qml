@@ -6,7 +6,8 @@ import "../../qml"
  * Moods in the Show page (MOOD.6): the side bar's Moods tab sets a mood
  * with a click and, in edit mode, adds a cue that sets it after the chosen
  * cue; a mood cue reads as its mood, and the inspector chooses the mood
- * and its fade.
+ * and its fade, and the layer a sound, picture or actions cue takes
+ * (MOOD.5).
  */
 TestCase {
     id: test
@@ -36,7 +37,8 @@ TestCase {
                 cues: [
                     cue("1", "note"),
                     cue("2", "mood", { mood: { mood: "v-night" } }),
-                    cue("3", "mood", { mood: { mood: "gone", fade_ms: 2000 } })
+                    cue("3", "mood", { mood: { mood: "gone", fade_ms: 2000 } }),
+                    cue("4", "sound", { sound: { file: "/fx/rain.flac" }, layer: "l-light" })
                 ]
             }],
             moods: {
@@ -138,5 +140,20 @@ TestCase {
         waitForRendering(view)
         verify(!box.missing)
         compare(box.currentIndex, 1)
+    }
+
+    function test_a_sound_cue_takes_a_layer_or_none() {
+        const view = makeView()
+        view.selectedId = "id-4"
+        waitForRendering(view)
+        const box = findChild(view, "layerBox")
+        verify(box.visible)
+        compare(box.currentIndex, 1, "Light")
+        box.activated(0)
+        compare(sent, [{ action: "update_cue", list: 1, cue: "id-4", changes: { layer: null } }])
+
+        view.selectedId = "id-1"
+        waitForRendering(view)
+        verify(!box.visible, "a note takes no layer")
     }
 }

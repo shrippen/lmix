@@ -289,8 +289,16 @@ impl Moods {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum LayerOrigin {
-    Mood { mood: MoodId },
+    Mood {
+        mood: MoodId,
+    },
     Panic,
+    /// A cue that names the layer took it (last command wins); the next
+    /// mood change stops it.
+    Cue {
+        list: crate::InputId,
+        cue: crate::CueId,
+    },
 }
 
 /// One layer now, for the state.
