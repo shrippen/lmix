@@ -547,7 +547,9 @@ Vision-Mixer (PGM und Multiview): unendlich = halten, 400 ms = danach
 Schwarz. Gespeichert in der Show-Datei. Die Kachelbilder von `lmix-core`
 folgen dem (halten = letztes Bild weiterreichen). Eine Umstellung wirkt ab
 dem nächsten Frame der Quelle; bei bereits stehender Quelle erst, wenn sie
-wieder läuft.
+wieder läuft. (Überholt 31.10.: „unendlich“ als GST_CLOCK_TIME_NONE hielt
+das Bild für immer, „halten“ ist jetzt `u64::MAX - 1`, und Schwarz wirkt
+auch bei stehender Quelle sofort.)
 **Fehler aus Schritt 2 behoben**: strom übernimmt bei `transition` immer
 seine Vorschau ins Programm und ignoriert `to_input`. Ein `cut_direct` auf
 einen Input außerhalb der Vorschau und das Schalten auf Schwarz trafen
@@ -5591,6 +5593,418 @@ Größe M nach Regel 3.
   am Anfang des Fußes, über `KanteDialog.footerStart` (Kante 1.57, für diesen
   Dialog eingeführt).
 
+## 2026-10-31 — Seiten lösbar auf einen zweiten Bildschirm
+
+Entscheidung aus Click-Dummy 1 (`docs/PLAN-SEITEN.md`): Jede Seite (Mix,
+Show, Audio, Ausgänge, Einrichtung) kann in ein eigenes Fenster, etwa auf
+einen zweiten Bildschirm, und zurück.
+
+- **Ein Fenster je Seite**, Titel „lmix — Mix“ (taugt für KWin-Regeln). In
+  der Titelzeile der Seite „Eigenes Fenster“ (Symbol `tab-detach`); zurück
+  über „Zurück ins Hauptfenster“ oder durch Schließen des Fensters, wie beim
+  Scopes-Fenster (Regel 4).
+- **Das Hauptfenster behält eine Seite.** Schließen des Hauptfensters
+  beendet lmix; gelöste Seiten öffnen beim nächsten Start wieder in ihrem
+  Fenster, am selben Ort (`lmix.conf`, `[pages] windows`, JSON mit Ort,
+  Bildschirm und normal/maximiert/Vollbild; der Ort wird in die vorhandenen
+  Bildschirme eingepasst). Das erste Lösen geht auf einen anderen
+  Bildschirm, wenn es einen gibt. Unter Wayland setzt KWin den Ort.
+- **Seitenleiste:** Eine gelöste Seite trägt „↗“; Klick oder Strg+n holt ihr
+  Fenster nach vorn. Strg+n, die Datei-Tasten und die Show-Kurzbefehle
+  gelten in jedem lmix-Fenster (`Qt.ApplicationShortcut`).
+- **Panik in jedem Fenster:** Der Fuß des Seitenfensters hat die Panik der
+  Seite und „Alles Panik“ (`PanicButtons.qml`, auch im Hauptfenster).
+- **Meldungen, Entfernen-Leiste und Dialoge der Shell** erscheinen in dem
+  Fenster, in dem gerade gearbeitet wird.
+- **Eine Verbindung, ein Bild:** Alle Fenster sprechen mit demselben Core.
+  Die Seite wird beim Lösen und Zurückholen neu gebaut, nicht umgehängt
+  (das neue Bild fragt erst an, wenn sein Video-Item bereit ist, dann ist
+  das alte schon weg): Das Videobild hängt am GL-Kontext seines
+  Fensters, Popups am Overlay. Alle GL-Kontexte teilen eine Gruppe
+  (`AA_ShareOpenGLContexts`), die Kachelbilder kommen weiter aus dem einen
+  `TilesAtlas` im Hauptfenster (Hüllen je Fenster in `atlas_cell.cpp`). Das
+  kleine Program-Bild der Leiste fällt weg, solange Program in einem
+  gelösten Fenster sichtbar ist. Was nur auf dem Bildschirm steht (etwa
+  eine Auswahl), geht beim Lösen verloren.
+- **Keine Aufnahme-/Stream-Pille im Seitenfenster:** Ihr Atmen würde das
+  Fenster ständig neu zeichnen.
+- **Breaking** (vor dem ersten Release): `Main.qml` gibt die Seiten als
+  `AppShell.PageEntry` an statt als Kinder. Nichts zu migrieren.
+
+**Messung** (`scripts/measure-gui-frames.sh`, CPU-Mixer, Xvfb, je 10 s
+Ruhe/Fader/Ruhe; `DETACH=1` löst Mix maximiert, das Hauptfenster zeigt
+Show): vorher 81/81/78 fps und 82/82/82 fps, GUI-Thread 4/10/4 %; mit der
+Änderung, Mix im Hauptfenster 79/80/80 fps, 4/12/4 %. Mix gelöst: das
+Mix-Fenster 75/69/74 fps, das Hauptfenster daneben 36/58/38 fps, der
+GUI-Thread für beide zusammen 4/12/4 %, Program-Aufnahme ohne doppeltes
+Bild. Die Bilder des Hauptfensters kommen von der atmenden Aufnahme-Pille
+in seinem Kopf (Bestand). Ein zweiter Durchgang lief unter Last anderer
+Builds (Load 30) und fiel angedockt wie gelöst gleich ab (Ruhe danach
+13–15 fps), sagt also nichts über das Lösen.
+## 2026-10-31 — Audio: Kurven je Kanalzug, ON/AFV als Umschalter
+
+Aus dem Dummy offen, nur Oberfläche (`docs/PLAN-SEITEN.md` „Stand“,
+Artboard `D-Audio` der Leinwand „lmix Arbeitsbereiche“). Der Kern bleibt
+unverändert.
+
+- **Zwei kleine Kurven je Zug** (`StripCurve.qml`): EQ (Hochpass und vier
+  Bänder) über der Frequenz, Dynamik (Gate und Kompressor) als Pegel aus
+  über Pegel ein. Ein Tooltip nennt die Werte und den Wert unter dem
+  Zeiger; ein Klick wählt den Zug. Ist ein Teil aus, ist die Kurve flach
+  bzw. gerade und blass, wie der Kern ihn durchreicht.
+- **Groß im Kanalzug** (Seitenkarte, Dialog, Input-Einstellungen): beide
+  Kurven mit dB links, Frequenz (20 Hz–20 kHz, logarithmisch) bzw.
+  Pegel ein (−60…0 dB) darunter, Überschrift mit den Einheiten und einer
+  Anzeige beim Überfahren. Sie folgen den Reglern während des Ziehens.
+- **Gerechnet wie strom** (`StripCurves.qml`), nicht geschätzt: Hochpass
+  `audiocheblimit` (Tschebyscheff Typ 1, 4 Pole, 0,25 dB Welligkeit; mit
+  Sinustönen durch das Element nachgemessen, Abweichung unter 0,001 dB),
+  EQ vier Glocken-Biquads nach dem Audio EQ Cookbook bei 80/400/2000/
+  8000 Hz, Q 1 (strom-Standard, lmix sendet nur die Verstärkung), bei der
+  Abtastrate der Show; Gate mit −60 dB Absenkung und ohne Hysterese, ein
+  harter Schritt; Kompressor wie `lsp-dsp-units` (Knie −6 dB). Gegen
+  dessen `curve()` nachgerechnet. Näherung ist nur, dass es statische
+  Kurven sind: Attack, Release und Detektor fehlen.
+- **Ein Fund dabei**: lsp-plugins-rs legt das Knie von der Schwelle bis
+  1,5 × Schwelle und beginnt die Gerade danach neu; die Kurve springt dort
+  um ~1,4 dB nach oben (bei 4 : 1). Gezeichnet, wie der Kern es tut;
+  upstream melden steht in `todo.md`.
+- **ON/AFV** ist ein Umschalter (`KanteSegmented`) statt der Taste AFV:
+  ON = Ton immer, AFV = nur mit Program. Er zeigt den Zustand des Kerns,
+  nicht den Klick (nach einer Ablehnung bleibt er stehen). „On/Muted“
+  wird die Taste „Mute“, schaltbar, rot gedrückt, solange der Zug stumm
+  ist; vorher hätten zwei „On“ nebeneinander gestanden.
+- **Nur bei neuen Werten gezeichnet**: StatePatch behält das Objekt
+  `strip`, solange es sich nicht ändert; die Kurve hängt nur daran. Ein
+  Test prüft, dass zehn Fader-Schritte keine Kurve neu rechnen und ein
+  geänderter EQ nur die zwei des Zugs. Kante fehlt eine x-Achse am
+  Linien-Diagramm (und eine Skala bis genau 0); die Skala darunter ist aus
+  Kante-Tokens gesetzt, Kante erweitern steht in `todo.md`.
+
+**Gemessen** (31.10., RTX 3070 Ti, Fedora 44, Qt 6.11.2):
+- QML allein (qmltestrunner, offscreen, 40 Züge mit EQ, Hochpass und
+  Kompressor an): die Seite aufbauen 258 ms statt 217 ms auf `main`
+  (+1 ms je Zug für zwei Kurven), ein Fader-Schritt 0,216 statt
+  0,192 ms (die Bindungen des einen Zugs, keine Kurve neu).
+- Ganze App (`PAGE=audio INPUTS=31 scripts/measure-gui-frames.sh`, CUDA,
+  Xvfb, Fader mit 40 Schritten/s, je zwei Läufe): GUI-Thread beim
+  Ziehen 44–45 % gegen 44–48 % auf `main`, Bildabstand p95 116–131 ms
+  gegen 123–166 ms. Kein Unterschied über dem Rauschen. Über dem Budget
+  des Skripts (35 %, p95 50 ms) liegt die Audio-Seite mit 31 Zügen auf
+  Xvfb schon auf `main`, auch ohne Ziehen (35–43 %); eigener Punkt in
+  `todo.md`.
+
+## 2026-10-31 — Audio-Seite im Budget: Bilder, nicht Pegel
+
+Auf der Audio-Seite lag der GUI-Thread mit 31 Inputs (CUDA, Xvfb,
+`PAGE=audio INPUTS=31 scripts/measure-gui-frames.sh`) beim Ziehen eines
+Faders bei 42–48 %, ohne Ziehen bei 35 % (Budget 35 %, p95 50 ms; todo.md).
+Vermutet waren die 31 Pegelanzeigen. Gesucht mit `scripts/profile-gui.sh`
+(jetzt mit `PAGE`) und Varianten einzeln gemessen:
+
+- **QML ist es nicht:** QML/JS zusammen 9 % des GUI-Threads beim Ziehen,
+  davon 7,8 % das Einspielen der Zustände (alle Seiten); die Pegel
+  (`levels.peak`, 31 je Takt) und die Züge wenige Promille.
+- **Ursache 1, der Programm-Monitor in der Seitenleiste:** Auf Xvfb gibt es
+  keine CUDA-GL-Interop (`gst_cuda_memory_copy_ensure_gl_interop: CUDA call
+  failed`). `cudadownload` liefert dann GL-Speicher, den `glcolorconvert`
+  nicht lesen kann; das Bild brach vor seinem ersten Frame, nach 1 s wurde
+  die Pipeline auf dem GUI-Thread neu gebaut, 52-mal in 30 s, unsichtbar
+  (ein schwarzer Monitor). Ohne Monitor: 43 → 26–28 %. **Entscheidung:**
+  Bricht ein Bild von der GPU in `glcolorconvert`, bevor es einen Frame
+  zeigte, kommen solche Bilder danach über den Systemspeicher
+  (`cudadownload ! video/x-raw ! glupload`, `NO_CUDA_GL` in `bridge.rs`).
+  Mit Interop (NVIDIA-Anzeige) ändert sich nach dem Code nichts, solange
+  dort kein solcher Bruch vorkommt; gilt für den ganzen Prozess bis zum
+  Neustart, die Warnung im Log nennt Socket und Fehler. Auf echter
+  Hardware noch nicht geprüft. Verworfen: den Neuaufbau
+  nur seltener versuchen (der Monitor bliebe schwarz), das Problem als
+  Eigenheit von Xvfb stehen lassen (dasselbe gilt für eine Anzeige an
+  einer anderen GPU als der des Mischers). Auf Xvfb zeigen Programm und
+  Vorschau damit erstmals Bilder.
+- **Ursache 2, verborgene Bilder:** Die Kacheln der nicht sichtbaren
+  Mix-Seite hielten das Kachelbild am Laufen (30 fps dekodiert, jede
+  Kachel forderte einen Frame des Fensters an), ebenso liefen Programm und
+  Vorschau der Mix-Seite weiter, wenn man sie verließ (nach dem Code; die
+  Messung startet auf der Audio-Seite). Allein das: 43 →
+  25 %. **Entscheidung:** `LiveView` zählt sich nur im Kachelbild, solange
+  es sichtbar ist, und gibt sein eigenes Bild 2 s nach dem Verbergen frei
+  (wie `TilesAtlas`), so übersteht ein Seitenwechsel es ohne Neuaufbau.
+  Kein Eingriff in `AppShell` (dort arbeitet eine andere Sitzung an
+  abgelösten Seiten; ein Fenster zeigt seine Seite, `visible` stimmt auch
+  dort).
+- **Klein:** Die Züge vergleichen sich mit `selectedKey` statt mit dem
+  Objekt `selected`, das bei jedem Fader-Schritt des gewählten Zugs neu
+  ist (vorher lief `chosen` jedes Zugs je Schritt).
+- **Wächter:** `gui-frames.py` zählt gebrochene Bilder während der Messung
+  (`BROKE_MAX`, Standard 0); QML-Tests `tst_live_view.qml` (verborgen
+  → frei nach der Haltezeit, Seitenwechsel behält das Bild, neue Quelle
+  im Verborgenen) und in `tst_strip_curves.qml` (zehn Fader-Schritte
+  ändern `selectedKey` nicht). Das Zeitbudget selbst bleibt lokal: es
+  braucht eine echte Maschine (CI-VMs ohne GPU, Laufzeiten schwanken).
+  Die Mess-Skripte verweigern ein belegtes Display: Ein Lauf auf `:93`
+  bekam einmal eine Panik, die niemand ausgelöst hatte, vermutlich Tasten
+  einer anderen Sitzung auf demselben Xvfb.
+
+**Gemessen** (31.10., RTX 3070 Ti, Fedora 44, Qt 6.11.2, CUDA-Mischer,
+Xvfb, 31 Inputs, Fader 40 Schritte/s, abwechselnd gemessen, Last 3–19
+auf 24 Kernen durch andere Sitzungen):
+
+| | GUI-Thread ruhig / Ziehen | p95 Ziehen | Bilder/s | gebrochen |
+|---|---|---|---|---|
+| Audio, vorher (3 Läufe) | 34–35 % / 42–43 % | 109–112 ms | 42–45 | 52 |
+| Audio, nur Monitor aus (2) | 18 % / 26–28 % | 20–21 ms | 53–57 | – |
+| Audio, nur verborgene Bilder aus (2) | 18–19 % / 25 % | 18–19 ms | 53–59 | ja (17 in 15 s) |
+| Audio, jetzt (3) | 4 % / 12 % | 19–21 ms | 73–78 | 0 |
+| Mix, vorher (2) | 20–21 % / 27–28 % | 21–22 ms | 54–57 | 26 |
+| Mix, jetzt (2) | 7–8 % / 15 % | 16–18 ms | 88–103 | 0 |
+
+Program in der Aufnahme fror in keinem Lauf. Mehr Bilder/s heißt hier:
+Programm und Vorschau zeigen jetzt Bilder; das kostet den Render-Thread
+(Software-GL), nicht den GUI-Thread. Dass das Fenster mehr Frames zeichnet
+als die Quellen liefern, steht als eigener Punkt in `todo.md`.
+## 2026-10-31 — Show: Cues anlegen, Zeitfelder, Datei, Ziel und Kreuzungen im Inspector
+
+**Anlass**: Offene Punkte „nur Oberfläche“ aus dem Click-Dummy
+(`PLAN-SEITEN.md`, „Stand“).
+
+**Entscheidung**:
+- **Leiste über der Cue-Liste** (nur Edit, nicht für Listen aus einem
+  Skript): Klang, Bild, Blende, Aktionen, Warten, Notiz, Start. Der neue Cue
+  kommt hinter den gewählten (auch in einer Gruppe), ist Standby hinter dem
+  Ende, ans Ende; der Inspector zeigt ihn danach. Was die Art braucht, wird
+  vorher gefragt (Datei, Aktionen) oder vom gewählten Cue genommen: eine
+  Blende blendet den gewählten Klang oder das Bild in 5 s aus und stoppt ihn
+  (sonst die erste Zone auf Stille, sonst die erste Bühne auf Schwarz); ein
+  Start startet den gewählten Cue; ein Bild geht auf die erste Bühne; Warten
+  dauert 5 s. Nummer und Name bleiben leer (der Name folgt aus Art und Ziel,
+  CUE.1). Keine Gruppe in der Leiste: eine Gruppe braucht Kinder, und Cues
+  in eine Gruppe verschieben gehört zum Umsortieren (SUI.10, offen).
+  Verworfen: ein Menü „+ Cue ▾“ (ein Klick mehr; der Dummy zeigt eine
+  Leiste) und automatische Nummern (die Nummer ist in der ganzen Show
+  eindeutig; eine geratene stößt an eine andere Liste).
+- **Kern: `add_cue`** (einzige Kern-Änderung). Mit `set_cue_list` hätte die
+  Leiste die ganze Liste aus dem letzten Zustand geschickt; eine Änderung im
+  Inspector kurz davor käme mit altem Wert zurück (wie vor `update_cue`,
+  24.10.). `add_cue` nennt nur den neuen Cue: hinter einem Cue (Nummer oder
+  id, auch in Gruppen) oder ans Ende; Standby und laufende Cues bleiben.
+  Die Oberfläche gibt die id mit, so wählt sie den Cue, sobald er da ist.
+- **Zeitfelder mit Fortschritt**: Vorwartezeit, Dauer und Nachwartezeit
+  (Dauer jetzt eigene Spalte, die beiden anderen unter „Erweitert“). Läuft
+  ihr Teil, zeigt das Feld die vergangene Zeit und füllt sich
+  (`KanteProgressBar`, wie die laufenden Cues der Seitenleiste); ein Teil,
+  der vorbei ist, bleibt voll. Nur laufende Zeilen hängen am Takt (100 ms).
+- **Inspector**: Datei, Bühne und was eine Blende blendet stehen unter
+  Basics (wie das Ziel eines Cues dort hingehört), die Kreuzungen eines
+  Klangs unter Levels (Dateikanal → Zone und Kanal, Pegel je Kreuzung;
+  keine heißt Kanal n auf Kanal n der ersten Zone). Wechselt das Ziel einer
+  Blende die Art, fällt der alte Wert weg und der passende wird gesetzt wie
+  im Reiter Levels (Zone: Pegel, Bühne: Helligkeit, Bild: Deckkraft, Klang:
+  Pegel); nur ein Cue stoppt nach der Blende. Ein Ziel, das es nicht mehr
+  gibt, bleibt rot markiert stehen. Kreuzungen gehen als ganze Liste; bis
+  der Zustand zurück ist, baut die nächste Änderung auf der gesendeten auf.
+  Eine Kreuzung entfernen fragt nicht (ein Feld des Cues, keine Sache nach
+  Regel 1).
+- **Unlesbare Zeit und Pfad**: bleiben nach Enter oder beim Verlassen im
+  Feld, rot markiert, Enter behält die Tasten im Feld; weg sind sie, wenn
+  sie lesbar sind, mit Escape oder bei einem anderen Cue. Ein Pfad muss
+  absolut sein (wie der Kern ihn prüft).
+## 2026-10-31 — Mischer wächst mit
+
+**Kontext** (todo 29.10.): Die feste Slot-Zahl (`--slots`, Standard 16,
+höchstens 31) fällt weg. lmix-core legt Mischer-Eingänge an, wenn ein Input
+dazukommt, und gibt sie wieder frei, während Program läuft; der Mischer-Flow
+wird dafür nicht neu gebaut. Vorher zu klären: wächst die Latenzstufe bei
+16 Slots (19.10.: 56 → 83 ms) mit der Zahl der Eingänge?
+
+**Latenz gegen Eingangszahl** (`scripts/measure-input-latency.sh`, CUDA,
+RTX 3070 Ti, Rechner mit fremder Last, je Anzahl ein frischer strom; ein
+Wert je Lauf, er bleibt im Lauf für jeden Input auf Program gleich):
+
+| Eingänge | alt (feste Slots), ms | neu (wächst mit), ms |
+|---|---|---|
+| 1 | 7 | 7 |
+| 2 | 5 | 45, 25 |
+| 4 | 6, 53; früher 43, 52, 46, 42, 47 | 71, 48, 32, 53 |
+| 8 | 86, 38; früher 81 | 80, 83, 72 |
+| 16 | 83; früher 82, 87, 53, 76, 84 | 83, 66 |
+| 24–31 | 75, 56, 107, 86, 85, 82 | 83 (24), 75 (32) |
+| 40 | – | 74, 87, 81 |
+
+CPU-Mischer (alt): 4 Eingänge 14/49, 8: 73/47, 16: 94/61, 31: 121/83 ms.
+
+**Ergebnis**: Die Stufe ist keine Eigenschaft von 16 Slots. Der Wert hängt
+an der Phase der Quellen je Lauf (der Mischer gibt ein Bild aus, wenn das
+späteste Pad da ist); je mehr Quellen, desto eher liegt eine spät, darum
+steigt der typische Wert bis etwa 8 Eingänge und bleibt dann bei 66–87 ms,
+auch mit 40. Alt und neu verhalten sich gleich. Sie wächst nicht weiter mit
+der Eingangszahl und hält das Wachsen nicht auf. NFA.3 (≤ 66,7 ms) hält mit
+vielen Quellen oft nicht; das ist eine eigene Aufgabe (todo).
+
+**Entscheidung** (strom #56, #57; lmix):
+- Bildmischer mit Platz für 128 Eingänge (`max_inputs`), gebaut mit einem:
+  Schwarz ist fester Eingang 0, Slot s ist Eingang s + 1. Ein neuer Input
+  bekommt seinen Eingang per `POST …/vm/inputs` (dynamischer Eingang aus dem
+  Inter-Kanal des Slots), ein entfernter verliert ihn per `DELETE`. Damit
+  sind bis 127 Slots möglich (`MAX_SLOTS`).
+- Audiomischer ebenso (`max_channels`, `POST/DELETE …/mix/channels`): der
+  Stinger ist fester Kanal 1, Slot s ist Kanal s + 2. Die Ton-Verzögerung
+  des Slots liegt im Kanal (`chN_delay`), nicht mehr in einem Block je Slot;
+  ein neuer Kanal bekommt die Abgriffe der Busse.
+- Leere Kapazität kostet nichts: strom-CPU mit 1, 4 und 16 Eingängen wie
+  vorher (10/42/166 % gegen 8/43/166 %).
+- strom gibt einen Eingang nicht frei, solange er auf Program, Preview, in
+  einem Layout oder einer Blende ist (409). lmix-core merkt ihn sich und
+  versucht es nach dem nächsten Schalten wieder; ein Slot, der vorher neu
+  belegt wird, behält ihn.
+- Kachelbild: 20 Zellen (5 × 4) für die Slots 0–19, unabhängig von der
+  Eingangszahl (strom `tiles_cells`, `tiles_first_input`). Spätere Slots
+  holen in der Console einen eigenen Stream (LiveView). Ein Kachelbild für
+  alle 127 wäre bei gleicher Bildgröße zu klein je Zelle.
+- Der OpenGL-Mischer kann keine Eingänge im Lauf anlegen: er bleibt bei
+  16 festen Slots (`GL_SLOTS`); nur die Tonkanäle wachsen.
+- Ein laufender lmix-core übernimmt einen Mischer, den ein früherer gebaut
+  hat, mit dessen Eingängen (aus den gespeicherten dynamischen Eingängen).
+
+**Messung Wachsen** (`scripts/measure-mixer-growth.sh`: ein Ball mit Ton
+auf Program und aufgenommen, 40 Inputs im Abstand von rund 0,7 s angelegt,
+alle auf Program geprüft, dann alle entfernt; Prüfung der Aufnahme auf
+fehlende und wiederholte Bilder, `scripts/frozen-frames.py`, und Lücken im
+Ton, `scripts/switch-gaps.py`):
+- CUDA, 6 Läufe mit 40: kein fehlendes Bild. Vier Läufe ganz ohne Lücke;
+  einer mit einer Tonlücke von rund 55 ms beim Anlegen des 39. Inputs,
+  einer mit einem wiederholten Bild etwa 2 s nach dem Entfernen. strom bei
+  41 Eingängen 470–540 % CPU, 1,2 GB GPU-Speicher, Latenz 77–86 ms.
+- Gegenprobe mit 15 Inputs, je 2 Läufe alt und neu: alle ohne Lücke.
+- Kanal oder Eingang ohne Quelle anlegen (direkt per strom-API, 20-mal):
+  ohne Lücke und ohne Knack.
+- Je Input ein Knack im Ton: der eigene Ton des neuen Inputs, bis sein
+  Ton direkt nach dem Anlegen abgeschaltet ist; alt ebenso.
+- CPU-Mischer, 40: ohne Lücke (2705 Bilder, kein fehlendes, kein
+  wiederholtes, Ton ohne Lücke); strom 1428 % CPU bei 41 Eingängen (200 %
+  mit einem), Latenz 90 ms.
+
+Die zwei einzelnen Aussetzer kamen bei Lastspitzen (Lastmittel bis 25
+durch andere Arbeiten, strom ohne `CAP_SYS_NICE`, also ohne hohe Priorität
+seiner Streaming-Threads); strom meldet dabei nichts. Ob sie am Wachsen
+liegen oder an der Last, klärt ein Lauf auf ruhigem Rechner (todo).
+
+**Was bricht** (vor dem ersten Release erlaubt): `--slots` gibt es nicht
+mehr (Skripte und Demo angepasst). Der Mischer-Flow heißt „lmix mixer 11“;
+ein Mischer eines älteren lmix-core wird neu gebaut. strom: der statische
+Eingang eines Audiomischer-Kanals ist jetzt `delay_N:offset_identity`.
+## 2026-10-31 — Vorschaubild-Abgriff hält beim Andocken die Quelle an (vm-check)
+
+`vm-check` scheiterte ab und zu mit „color input not orange“ oder „preview
+picture dark“: strom beantwortete jede Abfrage des Abgriffs 20–30 s lang
+sofort mit 504, der Zweig war aktiv, es kam kein Bild. Dasselbe Muster in
+6 der 40 fehlgeschlagenen CI-Läufe seit 25.10. (zuletzt 41077744669).
+
+- **Ursache in strom** (`gst/thumbnail_tap.rs`): Beim ersten Abruf hängt
+  der Abgriff einen Zweig (Queue, Skalierer, Appsink) an das Tee. Er
+  verband das Tee-Pad, bevor die Elemente liefen, und startete sie dann
+  von der Queue abwärts. Ein Element, das noch nicht läuft, antwortet auf
+  einen Puffer mit FLUSHING; das Tee verzeiht mit `allow-not-linked` nur
+  NOT_LINKED und gibt FLUSHING nach oben. Die Quelle (oder der Compositor
+  beim Program-Abgriff) hält dann ihren Task an, ohne Fehler. Der Flow
+  gilt als laufend, Bild und Abgriff stehen.
+- **Entscheidung:** den Zweig von der Senke her starten und das Tee-Pad
+  erst danach verbinden (das übliche Vorgehen für Zweige an laufenden
+  Pipelines). Verworfen: das FLUSHING des Zweigs per Pad-Probe am Tee
+  schlucken (verdeckt nur den Fall, kostet eine Probe je Puffer) und im
+  Test länger warten (die Quelle kommt nie wieder).
+- **Beleg:** strom-Test `test_attaching_never_stops_the_tapped_chain`
+  (strom #55) hängt den Zweig 200-mal an eine Quelle ohne Takt an und ab; ohne die
+  Änderung steht die Kette schon beim ersten Mal, mit ihr nie.
+
+## 2026-10-31 — vm-check: gehaltenes Bild bleibt stehen, RTMP ohne Video
+
+Die beiden häufigsten Fehler von `vm-check` seit 25.10. („dead source not
+black on program (35)“ etwa 12-mal, „RTMP output delivered nothing“ etwa
+7-mal) haben je eine echte Ursache, keine im Test. Lokal reproduzierbar
+im Container mit `taskset -c 0,1`.
+
+- **Gehaltenes Bild (lmix-core `engine/strom.rs`):** „Hold“ setzte
+  `max-last-buffer-repeat` am Compositor-Pad auf `u64::MAX`, das ist
+  GST_CLOCK_TIME_NONE. Läuft ein Pad mit NONE trocken, behält der
+  Compositor (`videoaggregator` 1.24 bis 1.28) das Bild mit offenem
+  Ende; kein späterer Wert holt es wieder heraus, auch 400 ms nicht. Im
+  Test kam das Logo nach dem Failover zurück, stockte unter Last kurz
+  (noch im Modus „hold“), die verspäteten Bilder danach verwirft der
+  Live-Compositor still, und das nach „black“ getötete Logo (Helligkeit
+  35 = Blau) blieb für immer auf Program. **Entscheidung:** „Hold“ heißt
+  jetzt `u64::MAX - 1` (584 Jahre, eine gültige Zeit). Verworfen: das
+  Pad beim Wechsel neu anlegen (Eingriff in den Mischer-Flow, an dem
+  gerade anders gearbeitet wird) und im Test länger warten (das Bild
+  geht nie). Beleg: ein GStreamer-Skript ohne lmix (NONE: bleibt 255,
+  `MAX - 1`: 0) und ein neuer Schritt im VM-Test, der beim gehaltenen
+  toten Logo auf „black“ schaltet; ohne die Änderung rot, ohne Last.
+- **RTMP ohne Video (strom `gst/pipeline/construction.rs`):** Senken
+  aus Blöcken (RTMP, SRT) laufen mit `qos=true`, an `add_element`
+  vorbei, also ohne die Probe, die strom an allen anderen Senken die
+  QoS-Events nach oben verwirft. Hinter `flvmux` meldet die Senke die
+  Laufzeit des Stroms, den der Muxer zuletzt durchließ. Kam das Video
+  unter Last 6 s hinter der Uhr an, ließ der Muxer den Ton durch, und
+  `videoconvert` vor dem Encoder warf jedes Videobild als zu spät weg
+  (Log: „falling behind 100 %, jitter 6 s“). Ein echter Stream hätte
+  ebenso kein Bild mehr gehabt, solange das Video zurücklag.
+  **Entscheidung:** Block-Senken bekommen dieselbe Probe wie die
+  übrigen (strom-PR auf `dev`). Beleg: strom-Test
+  `a_block_sink_does_not_send_qos_events_upstream` (ohne die Änderung
+  rot) und ein Skript mit 3 s verspätetem Video (0 statt 150 Bilder im
+  Encoder, mit der Probe 150).
+- **Messwerte, die irreführen:** `current-level-time` der Queues und
+  der Compositor-Pads (14 s bei 2 Puffern, 54 s bei 0 Bytes) und
+  `latency_min` aus `/api/flows/{id}/debug` (summiert die Queues) sind
+  keine Verzögerung; die Mischer-Uhr lief in den Läufen in Echtzeit.
+  strom #48 („Zeitstempel springen unter Last“) bekommt dazu einen
+  Kommentar.
+## 2026-10-30 — Gemessene Bitrate auch für RTMP und Aufnahme (M07)
+
+Kontext: Der Kopf des Ausgangsmenüs zeigt die Bitrate, solange der Ausgang
+sendet (`docs/DESIGN-DIALOGE.md` M07). Gemessen war sie nur für SRT
+(`srt-stats`, B32); RTMP und Aufnahme zeigten die eingestellte Rate.
+
+Optionen:
+- Element-Eigenschaften aus strom lesen (`GET …/elements/{id}/properties`):
+  liest alle Eigenschaften eines Elements und kann keine `GstStructure`, also
+  nicht `rtmp2sink.stats`. Verworfen.
+- Ein Byte-Zähler als Pad-Probe auf dem kodierten Strom: kostet je Puffer
+  einen Probe-Aufruf und zählt nicht, was wirklich auf die Leitung geht.
+  Verworfen.
+- **Gewählt:** neue strom-API `GET /flows/{id}/output-bytes` (Stil von
+  `srt-stats`), Bytes seit Start je Ausgangs-Element. RTMP: `out-bytes-total`
+  aus `rtmp2sink.stats`, die Bytes auf dem Socket mit RTMP-Rahmen; im
+  Streaming-Thread läuft dafür nichts zusätzlich. Live Recorder: die
+  Datei-Senke zählt jeden Schreibvorgang (Kopf eingeschlossen) in einen
+  `AtomicU64`, eine atomare Addition je Schreibvorgang, gelesen ohne Sperre.
+  strom-PR auf `dev` (Branch `output-bytes`); auch für upstream gedacht
+  (`docs/upstream/STROM.md`).
+
+Entscheidung: `lmix-core` fragt für laufende RTMP- und Aufnahme-Ausgänge
+einmal je Sekunde `output-bytes` ab und nimmt die Rate über die Lesungen
+der letzten 4 s (`engine/output_rate.rs`), nicht zwischen zwei Lesungen:
+fragmentiertes MP4 schreibt ein Fragment je Sekunde, je Sekunde gelesen
+fällt mal keins, mal zwei in eine Lesung (in der VM-Prüfung stand eine
+MP4-Aufnahme so auf 0 kbit/s). Die erste Lesung, eine Lücke von 4 s und ein Zähler, der
+zurückging (Neustart, Wiederverbindung von `rtmp2sink`), geben keine Rate;
+dann zeigt die Console die eingestellte. `OutputStats` hat jetzt
+`kbps` für alle drei Arten und `srt: Option<SrtLink>` mit Verbindung,
+Paketverlusten und RTT nur für SRT (bricht das JSON von `outputs` und
+`/api/outputs/stats`; vor dem ersten Release erlaubt, Console,
+`/metrics` und `soak-hardware.sh` angepasst). „kein Empfänger“ gibt es nur
+für SRT. Die alte Aufnahme über `splitmuxsink` (MKV vor GStreamer 1.26)
+zählt nicht und zeigt weiter die eingestellte Rate.
+
+Messung (lokal, CPU-Mischer, Testbild „ball“, Aufnahme MKV und RTMP an einen
+lokalen ffmpeg-Empfänger, beide 4000 kbit/s eingestellt): gemeldet Aufnahme
+240–350 kbit/s, RTMP 250–375 kbit/s; die Aufnahme-Dateien wuchsen im selben
+Zeitraum um 266–269 kbit/s, RTMP etwas darüber (Rahmen). Mit CBR dasselbe:
+der x264-Encoder bleibt bei einem einfachen Bild weit unter der eingestellten
+Rate, das zeigte die eingestellte Rate bisher nicht. Kosten: 1000 Abfragen
+von `output-bytes` hintereinander erhöhten die CPU-Zeit von strom um etwa
+0,6 ms je Abfrage (im Rauschen der zwei laufenden Encoder); bei einer Abfrage
+je Sekunde und Ausgang vernachlässigbar.
 ## 2026-10-30 — Ausgang nachträglich ändern (M07 „Einstellungen…“)
 
 **Anlass**: Einen Ausgang konnte man nach dem Anlegen nicht mehr ändern
@@ -5598,7 +6012,6 @@ Größe M nach Regel 3.
 „Einstellungen…“ im Menü des Ausgangs sprang darum nur auf die Seite
 Outputs (Eintrag vom selben Tag oben).
 
-**Entscheidung**:
 - Aktion `update_output` (Gruppe „output“, Recht Bearbeiten): ersetzt
   Spec, Quelle, Namen und auf Wunsch den Bus eines Ausgangs; Id und Nummer
   bleiben. `bus` weggelassen behält den Ton, `null` gibt den eigenen der

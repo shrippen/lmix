@@ -207,20 +207,24 @@ QtObject {
     }
 
     /**
-     * Short link state on an output button: rate, or that nobody receives.
+     * Short measured state of an output (`OutputStats`): the rate it sends or
+     * writes, or for SRT that nobody receives.
      * "Mbit": Kante writes button text in capitals, and "MB/S" would read as bytes.
      */
     function linkRate(stats) {
-        if (!stats.connected)
+        if (stats.srt && !stats.srt.connected)
             return qsTr("no receiver")
         return qsTr("%1 Mbit/s").arg(Number(stats.kbps / 1000).toLocaleString(Qt.locale(), "f", 1))
     }
 
-    /** Link details for the tooltip. */
+    /** Link details for the tooltip: the rate, for SRT with the link health. */
     function linkDetail(stats) {
-        var rtt = stats.rtt_ms === null || stats.rtt_ms === undefined ? qsTr("RTT –") : qsTr("RTT %1 ms").arg(stats.rtt_ms)
-        return qsTr("%1 · lost %2 · dropped %3 · %4").arg(linkRate(stats)).arg(stats.packets_lost)
-            .arg(stats.packets_dropped).arg(rtt)
+        var link = stats.srt
+        if (!link)
+            return linkRate(stats)
+        var rtt = link.rtt_ms === null || link.rtt_ms === undefined ? qsTr("RTT –") : qsTr("RTT %1 ms").arg(link.rtt_ms)
+        return qsTr("%1 · lost %2 · dropped %3 · %4").arg(linkRate(stats)).arg(link.packets_lost)
+            .arg(link.packets_dropped).arg(rtt)
     }
 
     /** An output's kind (`spec.kind`). */

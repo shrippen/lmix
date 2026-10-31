@@ -7,7 +7,8 @@ import org.lmix.console
 
 /**
  * The Audio page (docs/PLAN-SEITEN.md): every input with sound as a
- * channel strip (fader, meter, mute, solo, audio follows video, tally),
+ * channel strip (EQ and dynamics as small curves, fader, meter, ON/AFV,
+ * mute, solo, tally),
  * the strip of the selected input to edit beside them (ChannelStripPanel),
  * master, headphones and the show's buses, and its zones. Its own panic
  * mutes the master; video, show and outputs go on.
@@ -29,6 +30,7 @@ AppPage {
         restoreMode: Binding.RestoreNone
     }
     readonly property var soundInputs: inputs.filter(i => i.has_audio)
+    readonly property int sampleRate: show && show.sample_rate ? show.sample_rate : 48000
     // Strips by id: a new state (every fader step brings one) keeps the
     // delegates, so a fader drag goes on.
     KeyedModel { id: stripModel }
@@ -43,6 +45,9 @@ AppPage {
     property int part: 0
     property string selectedId: ""
     readonly property var selected: StatePatch.byId(soundInputs, selectedId) || soundInputs[0] || null
+    /** Its id: new only when another strip is chosen. `selected` is anew
+     *  with each fader step of it, and every strip looked again. */
+    readonly property string selectedKey: selected ? selected.id : ""
     // A new state brings new objects: load only for another input, or
     // edits in progress would be thrown away.
     property string loadedId: ""
@@ -214,6 +219,7 @@ AppPage {
                         Layout.fillWidth: true
                         act: root.act
                         buses: root.show && root.show.buses ? root.show.buses : []
+                        sampleRate: root.sampleRate
                     }
                 }
             }
@@ -279,7 +285,7 @@ AppPage {
             || ({ id: key, number: 0, name: "", audio: { on: false, follow_video: false, volume: 0 }, listen: "off" })
         readonly property bool onProgram: root.show !== null && root.show.program === input.id
         readonly property bool onPreview: root.show !== null && root.show.preview === input.id
-        readonly property bool chosen: root.selected !== null && root.selected.id === input.id
+        readonly property bool chosen: root.selectedKey === key
         width: Kirigami.Units.gridUnit * 6
         height: ListView.view ? ListView.view.height - Kirigami.Units.gridUnit : 0
         barColor: onProgram ? KanteStyle.negativeTextColor : (onPreview ? KanteStyle.positiveTextColor : (chosen ? KanteStyle.focusColor : "transparent"))
@@ -307,14 +313,20 @@ AppPage {
                 font.family: KanteStyle.monoFamily
                 color: strip.onProgram ? KanteStyle.negativeTextColor : KanteStyle.positiveTextColor
             }
-            KanteButton {
+            // EQ and dynamics at a glance; a click edits the strip.
+            StripCurve {
+                objectName: "eq-" + strip.key
                 Layout.fillWidth: true
-                size: KanteButton.Size.Small
-                emphasis: strip.input.audio.follow_video ? KanteButton.Emphasis.Primary : KanteButton.Emphasis.Normal
-                text: qsTr("AFV")
-                QQC2.ToolTip.visible: hovered
-                QQC2.ToolTip.text: qsTr("Audio follows video: sound on with program, off without (AUD.5)")
-                onClicked: root.act({ action: "set_audio_follow", input: strip.input.number, follow: !strip.input.audio.follow_video })
+                channel: strip.input.strip || null
+                sampleRate: root.sampleRate
+                onActivated: root.selectedId = strip.input.id
+            }
+            StripCurve {
+                objectName: "dyn-" + strip.key
+                Layout.fillWidth: true
+                channel: strip.input.strip || null
+                dynamics: true
+                onActivated: root.selectedId = strip.input.id
             }
             RowLayout {
                 Layout.fillWidth: true
@@ -357,14 +369,40 @@ AppPage {
                     Accessible.name: qsTr("Volume %1").arg(text)
                 }
             }
+            // ON: sound always (unless muted); AFV: only while on program.
+            KanteSegmented {
+                id: follow
+                objectName: "follow-" + strip.key
+                Layout.alignment: Qt.AlignHCenter
+                model: [qsTr("ON"), qsTr("AFV")]
+                tooltips: [qsTr("Sound on, whatever is on program"),
+                    qsTr("Audio follows video: sound on with program, off without (AUD.5)")]
+                currentIndex: strip.input.audio.follow_video ? 1 : 0
+                Accessible.name: qsTr("Sound of %1").arg(strip.input.name)
+                onActivated: index => {
+                    // select() set the index: back to the state, which
+                    // the core confirms (or not).
+                    currentIndex = Qt.binding(() => strip.input.audio.follow_video ? 1 : 0)
+                    root.act({ action: "set_audio_follow", input: strip.input.number, follow: index === 1 })
+                }
+            }
             RowLayout {
                 Layout.fillWidth: true
                 KanteButton {
+                    id: mute
+                    objectName: "mute-" + strip.key
                     Layout.fillWidth: true
                     size: KanteButton.Size.Small
-                    emphasis: strip.input.audio.on ? KanteButton.Emphasis.Normal : KanteButton.Emphasis.Destructive
-                    text: strip.input.audio.on ? qsTr("On") : qsTr("Muted")
-                    onClicked: root.act({ action: "set_audio", input: strip.input.number, on: !strip.input.audio.on })
+                    checkable: true
+                    checked: !strip.input.audio.on
+                    emphasis: checked ? KanteButton.Emphasis.Destructive : KanteButton.Emphasis.Normal
+                    text: qsTr("Mute")
+                    Accessible.name: qsTr("Mute %1").arg(strip.input.name)
+                    onToggled: {
+                        var on = !checked
+                        checked = Qt.binding(() => !strip.input.audio.on)
+                        root.act({ action: "set_audio", input: strip.input.number, on: on })
+                    }
                 }
                 KanteButton {
                     Layout.fillWidth: true

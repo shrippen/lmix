@@ -1,9 +1,10 @@
 import QtQuick
 
 // Stand-in for gst-plugin-qml6's item in the QML tests: no GStreamer
-// there, and no picture is needed to count items.
+// there, and no picture is needed to count items. A test sets
+// itemInitialized, as the scene graph does once the item is drawn.
 Item {
     property bool forceAspectRatio: false
     property bool acceptEvents: true
-    readonly property bool itemInitialized: false
+    property bool itemInitialized: false
 }

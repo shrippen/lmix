@@ -58,9 +58,6 @@ use engine::strom::StromEngine;
 use engine::Engine;
 use service::Service;
 
-/// Mixer slots by default; at most `flows::MAX_SLOTS`.
-const DEFAULT_SLOTS: usize = 16;
-
 #[derive(Clone, Copy, Debug, ValueEnum)]
 enum EngineKind {
     /// strom over REST.
@@ -101,12 +98,6 @@ struct Args {
     /// default `$XDG_RUNTIME_DIR/lmix/live`.
     #[arg(long, env = "LMIX_LIVE_DIR")]
     live_dir: Option<PathBuf>,
-
-    /// Mixer slots (inputs fed at the same time), 1 to 31: 32 made a
-    /// mixer the engine refused, over and over (29.10.2026).
-    #[arg(long, default_value_t = DEFAULT_SLOTS,
-          value_parser = clap::builder::RangedU64ValueParser::<usize>::new().range(1..=engine::flows::MAX_SLOTS as u64))]
-    slots: usize,
 
     /// Address of the text protocol over TCP (API.5); off without it.
     #[arg(long, env = "LMIX_TCP")]
@@ -295,7 +286,12 @@ async fn main() -> anyhow::Result<()> {
         EngineKind::None => Arc::new(NullEngine::default()),
     };
 
-    let service = Service::new(args.slots, engine.clone(), Some(args.autosave));
+    // The mixer grows with the show up to the engine's most slots.
+    let slots = match args.engine {
+        EngineKind::Strom => args.mixer.max_slots(),
+        EngineKind::None => engine::flows::MAX_SLOTS,
+    };
+    let service = Service::new(slots, engine.clone(), Some(args.autosave));
     service.await_engine();
     let public_url = args
         .public_url
@@ -330,12 +326,7 @@ async fn main() -> anyhow::Result<()> {
     }
 
     // The engine may come up after us: keep trying, then feed it the show.
-    tokio::spawn(connect(
-        engine,
-        service.clone(),
-        args.slots,
-        args.start_outputs.clone(),
-    ));
+    tokio::spawn(connect(engine, service.clone(), args.start_outputs.clone()));
     tokio::spawn(service.clone().forward_levels());
     tokio::spawn(service.clone().watch_failures());
     tokio::spawn(service.clone().forward_output_stats());
@@ -446,9 +437,9 @@ async fn stopped() {
 /// Wait between engine start attempts.
 const ENGINE_RETRY: Duration = Duration::from_secs(2);
 
-async fn connect(engine: Arc<dyn Engine>, service: Arc<Service>, slots: usize, start: Vec<String>) {
+async fn connect(engine: Arc<dyn Engine>, service: Arc<Service>, start: Vec<String>) {
     loop {
-        match engine.start(slots).await {
+        match engine.start().await {
             Ok(()) => break,
             Err(e) => tracing::warn!(error = %e, "engine not ready, retrying"),
         }
@@ -467,7 +458,7 @@ async fn connect(engine: Arc<dyn Engine>, service: Arc<Service>, slots: usize, s
     // only adopted, never restarted (no gap in a recording).
     service.adopt_running_outputs().await;
     start_outputs(&service, &start).await;
-    service.watch_engine(slots).await;
+    service.watch_engine().await;
 }
 
 /// Start the outputs `--start-outputs` names, unless they run already.
@@ -569,10 +560,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn slots_stay_within_the_vision_mixer() {
-        let slots = |n: &str| Args::try_parse_from(["lmix-core", "--slots", n]).map(|a| a.slots);
-        assert_eq!(slots("31").unwrap(), engine::flows::MAX_SLOTS);
-        assert!(slots("32").is_err());
-        assert!(slots("0").is_err());
+    fn the_slot_count_is_gone() {
+        // The mixer grows with the show: no fixed count to set.
+        assert!(Args::try_parse_from(["lmix-core", "--slots", "16"]).is_err());
     }
 }

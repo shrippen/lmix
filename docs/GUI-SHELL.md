@@ -72,8 +72,8 @@ die egui-Console:
   der GPU der Engine (eine Kopie auf der GPU), dann `glcolorconvert !
   qml6glsink(sync=false)` in ein `GstGLQt6VideoItem`. Bricht der Socket
   (Engine-Neustart, neuer Flow), fragt die Ansicht nach 1 s neu.
-- Kacheln: alle Slots in einem Bild (`GET /api/live/tiles`, Raster und
-  Zellgröße dazu), in RGBA (`tiles_format`), so dass die Console nichts
+- Kacheln: die ersten 20 Slots in einem Bild (`GET /api/live/tiles`, Raster
+  5 × 4 und Zellgröße dazu; spätere Slots holen ihren eigenen Stream), in RGBA (`tiles_format`), so dass die Console nichts
   umrechnet. Der Mischer skaliert die Inputs auf seiner GPU in ein Raster;
   die Console holt jedes Bild als GL-Textur aus einem `appsink`, und jede
   Kachel zeichnet ihren Ausschnitt direkt (`AtlasCell`, `cpp/atlas_cell.h`:
@@ -222,3 +222,38 @@ Ein Programm `lmix` statt `lmix-mixer` und `lmix-show` (DECISIONS
   der Show (AUT.1–3) immer.
 - Einstellungen in `lmix.conf`, einmal aus `mixer.conf` und `show.conf`
   übernommen (`app.rs`).
+
+## Seiten im eigenen Fenster (2026-10-31)
+
+Eine Seite lässt sich in ein eigenes Fenster lösen, etwa auf einen zweiten
+Bildschirm (Entscheidung Click-Dummy 1, `docs/PLAN-SEITEN.md`, DECISIONS
+2026-10-31):
+
+- `Main.qml` gibt die Seiten als `AppShell.PageEntry` (Kennung und
+  Component); `AppShell` macht jede Seite selbst, im `StackLayout` oder in
+  einem `PageWindow.qml`. Lösen und Zurückholen bauen die Seite neu
+  (`remake`): die alte geht (verzögert, `destroy()`), die neue entsteht
+  gleich. Kein Bild läuft doppelt, weil ein `LiveView` sein Bild erst
+  anfragt, wenn sein Video-Item im neuen Fenster bereit ist; bis dahin ist
+  die alte Seite samt Anfrage weg.
+  Umhängen ginge nicht sauber: das GStreamer-Item hängt am GL-Kontext seines
+  Fensters, und Dialoge mit `parent: Overlay.overlay` blieben im alten
+  Fenster.
+- Alle Fenster teilen das eine `Core` (eine Verbindung zu lmix-core) und das
+  eine Kachelbild: `TilesAtlas` bleibt im Hauptfenster, ein `PageWindow`
+  reicht es als `tilesAtlas` weiter. Dafür teilen alle GL-Kontexte eine
+  Gruppe (`Qt::AA_ShareOpenGLContexts`, `cpp/gl_format.cpp`), und
+  `AtlasCell` hält die Texturhüllen je Fenster (jedes Fenster hat seinen
+  Render-Thread).
+- Was die Seite nur auf dem Bildschirm hielt (Auswahl), geht beim Lösen;
+  was sie in den Einstellungen hält, bleibt.
+- Meldungen, die Rückfrage beim Entfernen und die Dialoge der Shell öffnen
+  im Fenster, in dem man arbeitet (`operatorWindow`); danach geht der Fokus
+  dorthin zurück.
+- `PageArrangement.qml` liest und schreibt `[pages] windows` in `lmix.conf`
+  (JSON je Seite: gelöst, Lage, Größe, Bildschirm, maximiert/Vollbild) und
+  passt einen Platz auf einen vorhandenen Bildschirm ein.
+
+Messung (Xvfb, CPU-Mischer, 4 Inputs, Aufnahme läuft,
+`scripts/measure-gui-frames.sh`, je zwei Läufe; `DETACH=1`: Mix im eigenen
+Fenster, Hauptfenster auf Show): siehe DECISIONS 2026-10-31.

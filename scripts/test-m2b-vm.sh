@@ -31,8 +31,6 @@ STROM="http://127.0.0.1:${STROM_PORT}"
 CORE="http://127.0.0.1:${CORE_PORT}/api"
 WORK="${WORK:-$(mktemp -d)}"
 mkdir -p "$WORK"
-# Mixer slots for the test; small to fit a VM.
-SLOTS=7   # six inputs plus a stinger clip
 # Mean brightness (0-100) bars or snow exceed; black is 0.
 MIN_BRIGHTNESS=30
 # Audio levels (dBFS): a test tone is above, silence below.
@@ -174,7 +172,7 @@ PIDS+=($!)
 
 start_core() {
     "${TRACEABLE[@]}" "$CORE_BIN" --strom "$STROM" --listen "127.0.0.1:${CORE_PORT}" --mixer "$MIXER" \
-        --slots "$SLOTS" --autosave "$WORK/autosave.lmix" --shortcuts "$WORK/shortcuts.json" --layout-templates "$WORK/layout-templates.json" >>"$WORK/core.log" 2>&1 &
+        --autosave "$WORK/autosave.lmix" --shortcuts "$WORK/shortcuts.json" --layout-templates "$WORK/layout-templates.json" >>"$WORK/core.log" 2>&1 &
     CORE_PID=$!
     PIDS+=("$CORE_PID")
     wait_up "$CORE/state" lmix-core
@@ -294,7 +292,8 @@ full=$(steady_db pgm_db)
 act '{"action":"set_channel_strip","input":"Ball","strip":{"gain_db":-20,"delay_ms":200}}' >/dev/null
 settled '[[ $(pgm_db) -lt $((full - 15)) ]]' || fail "strip gain -20 dB did not lower program ($full -> $(pgm_db) dB)"
 ball_slot="$(curl -sf "$CORE/state" | jq '.inputs[] | select(.name=="Ball") | .slot')"
-offset="$(curl -sf "$STROM/api/flows/$MIXER_ID/blocks/adelay$ball_slot/properties" | jq '.properties.offset_ms')"
+# The slot's delay is its audio mixer channel's (slot + 2, after the stinger).
+offset="$(curl -sf "$STROM/api/flows/$MIXER_ID/blocks/mix/properties" | jq ".properties.ch$((ball_slot + 2))_delay")"
 [[ "$(jq -n "$offset == 200")" == true ]] || fail "strip delay not in the engine (offset $offset ms)"
 [[ $(pgm_db) -gt $SILENT_DB ]] || fail "program silent after the delay change"
 act '{"action":"set_channel_strip","input":"Ball","strip":{}}' >/dev/null
@@ -426,8 +425,10 @@ pass "transport: pause, play, next; playback in the state"
 # --- paused clip: strom repeats its last frame (no signal loss) ---
 act '{"action":"cut_direct","input":"Clips"}' >/dev/null
 # Straight to program from outside preview: the mixer must follow lmix.
+# Its mixer input: its slot after black (input 0).
+clips_input=$(( $(curl -sf "$CORE/state" | jq '.inputs[] | select(.name=="Clips") | .slot') + 1 ))
 mixer_pgm="$(curl -sf "$STROM/api/flows/$MIXER_ID/blocks/vm/state" | jq '.program_input')"
-[[ "$mixer_pgm" == 4 ]] || fail "cut_direct: mixer program is input $mixer_pgm, not Clips (4)"
+[[ "$mixer_pgm" == "$clips_input" ]] || fail "cut_direct: mixer program is input $mixer_pgm, not Clips ($clips_input)"
 # Pause in the bright clip b, well before its end: start b afresh with
 # "next" from the dark clip a (from b, "next" goes to a first). Paused
 # near its end, b would roll over to a before the pause takes hold.
@@ -465,8 +466,8 @@ act '{"action":"transport_input","input":"Clips","transport":"pause"}' >/dev/nul
 wait_for "$SETTLE_S" clips_still || fail "clip did not pause before quick play"
 act '{"action":"quick_play","input":"Clips"}' >/dev/null
 [[ "$(curl -sf "$CORE/state" | jq -r '.program')" == "$clips_id" ]] || fail "quick play: Clips not on program"
-mixer_on_clips() { [[ "$(curl -sf "$STROM/api/flows/$MIXER_ID/blocks/vm/state" | jq '.program_input')" == 4 ]]; }
-wait_for "$SETTLE_S" mixer_on_clips || fail "quick play: mixer program is not Clips (4)"
+mixer_on_clips() { [[ "$(curl -sf "$STROM/api/flows/$MIXER_ID/blocks/vm/state" | jq '.program_input')" == "$clips_input" ]]; }
+wait_for "$SETTLE_S" mixer_on_clips || fail "quick play: mixer program is not Clips ($clips_input)"
 wait_for "$SETTLE_S" clips_move || fail "quick play: clip does not play"
 pass "quick play: paused clip off air to program, playing"
 
@@ -483,8 +484,12 @@ settled '[[ "$(output_state Rec)" == running && "$(output_state Stream)" == runn
 timeout "$((SETTLE_S + 5))" gst-launch-1.0 -q srtsrc uri="srt://127.0.0.1:9911" ! filesink location="$WORK/srt.ts" &
 receiver=$!
 # Link health while the receiver is connected (B32).
-stream_link() { curl -sf "$CORE/outputs/stats" | jq -e '.[] | select(.connected and .kbps > 0)' >/dev/null; }
+stream_link() { curl -sf "$CORE/outputs/stats" | jq -e '.[] | select(.srt.connected and .kbps > 0)' >/dev/null; }
 wait_for "$SETTLE_S" stream_link || fail "no link health for the SRT output: $(curl -sf "$CORE/outputs/stats")"
+# The recording's measured rate, from strom's byte counter (M07).
+output_id() { curl -sf "$CORE/state" | jq -r ".outputs[] | select(.name==\"$1\") | .id"; }
+rec_rate() { curl -sf "$CORE/outputs/stats" | jq -e --arg id "$(output_id Rec)" '.[] | select(.output == $id and .srt == null and .kbps > 0)' >/dev/null; }
+wait_for "$SETTLE_S" rec_rate || fail "no measured rate for the recording: $(curl -sf "$CORE/outputs/stats")"
 wait "$receiver" || true
 [[ $(stat -c %s "$WORK/srt.ts" 2>/dev/null || echo 0) -gt 50000 ]] || fail "SRT output delivered nothing"
 act '{"action":"stop_output","output":"Rec"}' >/dev/null
@@ -617,9 +622,15 @@ wait_for "$SETTLE_S" logo_pgm || fail "program lost the logo while the source wa
 [[ "$(input_state Logo)" == offline ]] || fail "dead source back before its file"
 running="$(curl -sf "$STROM/api/flows/$MIXER_ID" | jq -r '.flow.running')"
 [[ "$running" == true ]] || fail "mixer stopped after source loss"
+# Black while the frame is held: the held frame goes. Held "forever"
+# as GST_CLOCK_TIME_NONE, the compositor kept it for good.
+black_pgm() { picture program "$WORK/black.jpg" || return 1; [[ $(brightness "$WORK/black.jpg") -lt 5 ]]; }
+act '{"action":"set_signal_loss","input":"Logo","mode":"black"}' >/dev/null
+wait_for "$SETTLE_S" black_pgm || fail "held dead source not black after switching to black ($(brightness "$WORK/black.jpg"))"
+act '{"action":"set_signal_loss","input":"Logo","mode":"hold"}' >/dev/null
 revive_logo
 wait_for "$SETTLE_S" is_logo || fail "logo not back after failback"
-pass "failover: source died mid-transition, program held its last frame, input failed back"
+pass "failover: source died mid-transition, program held its last frame (black on demand), input failed back"
 
 # Signal loss per input: hold the last frame (default, above) or black.
 # A paused clip keeps sending its frame, so the source has to die.
@@ -627,7 +638,6 @@ act '{"action":"set_signal_loss","input":"Logo","mode":"black"}' >/dev/null
 act '{"action":"cut_direct","input":"Logo"}' >/dev/null
 wait_for "$SETTLE_S" logo_pgm || fail "logo not on program before the loss"
 kill_logo
-black_pgm() { picture program "$WORK/black.jpg" || return 1; [[ $(brightness "$WORK/black.jpg") -lt 5 ]]; }
 wait_for "$SETTLE_S" black_pgm || fail "dead source not black on program ($(brightness "$WORK/black.jpg"))"
 act '{"action":"set_signal_loss","input":"Logo","mode":"hold"}' >/dev/null
 revive_logo

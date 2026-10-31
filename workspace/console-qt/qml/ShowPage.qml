@@ -63,8 +63,8 @@ AppPage {
         editing: viewSettings.editing
     }
 
-    // Dark room (SUI.6): Kante's dark scheme (no white), and the window
-    // under its scrim; clicks go through.
+    // Dark room (SUI.6): Kante's dark scheme (no white), and the page's
+    // window (the main one, or its own) under its scrim; clicks go through.
     Binding {
         target: KanteStyle
         property: "preferDark"
@@ -73,7 +73,7 @@ AppPage {
         restoreMode: Binding.RestoreBindingOrValue
     }
     Rectangle {
-        parent: root.shell.contentItem
+        parent: root.Window.contentItem
         anchors.fill: parent
         z: 1000
         color: KanteStyle.scrimColor

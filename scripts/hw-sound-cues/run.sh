@@ -57,7 +57,7 @@ CORE_BIN="${CARGO_TARGET_DIR:-$ROOT/workspace/lmix-core/target}/release/lmix-cor
     --data-dir "$WORK/strom-data" >"$WORK/strom.log" 2>&1) &
 PIDS+=($!)
 wait_up "http://127.0.0.1:$STROM_PORT/health" strom
-"$CORE_BIN" --strom "http://127.0.0.1:$STROM_PORT" --listen "127.0.0.1:$CORE_PORT" --mixer cpu --slots 1 \
+"$CORE_BIN" --strom "http://127.0.0.1:$STROM_PORT" --listen "127.0.0.1:$CORE_PORT" --mixer cpu \
     --autosave "$WORK/autosave.lmix" --shortcuts "$WORK/shortcuts.json" \
     --layout-templates "$WORK/layout-templates.json" --targets "$WORK/targets.json" \
     >"$WORK/core.log" 2>&1 &

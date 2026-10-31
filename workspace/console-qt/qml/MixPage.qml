@@ -239,6 +239,7 @@ AppPage {
         core: backend
         inputs: root.inputs
         buses: root.show && root.show.buses ? root.show.buses : []
+        sampleRate: root.show && root.show.sample_rate ? root.show.sample_rate : 48000
         looksAvailable: root.show !== null && root.show.looks_available === true
         onReplaceRequested: input => {
             addInputDialog.replacing = input
@@ -327,6 +328,7 @@ AppPage {
             }
         }
         buses: root.show && root.show.buses ? root.show.buses : []
+        sampleRate: root.show && root.show.sample_rate ? root.show.sample_rate : 48000
     }
 
     RenameInputDialog {

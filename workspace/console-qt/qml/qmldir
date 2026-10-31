@@ -2,3 +2,4 @@
 # qmldir from build.rs (cxx-qt), which ignores this one.
 singleton StatePatch StatePatch.qml
 singleton Texts Texts.qml
+singleton StripCurves StripCurves.qml

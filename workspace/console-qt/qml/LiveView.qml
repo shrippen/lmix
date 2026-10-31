@@ -10,7 +10,13 @@ import org.lmix.atlas
  *
  * An input with its `cell` (its slot) shows that cell of the window's
  * tile picture (TilesAtlas) instead of a stream of its own: one texture
- * for all tiles, each drawing its part (AtlasCell).
+ * for all tiles, each drawing its part (AtlasCell). Slots past the
+ * picture's cells get their own stream.
+ *
+ * Only while it is shown: on a page that is not (or a tile that is not),
+ * the picture stops after `holdMs`, as the tile picture does, so a page
+ * change keeps it running. A hidden picture still made the window draw
+ * every frame of it, and decoded it (31.10.2026).
  */
 Item {
     id: view
@@ -22,8 +28,13 @@ Item {
     property int cell: -1
 
     readonly property var atlas: Window.window ? Window.window.tilesAtlas ?? null : null
+    // The picture has cells for the first slots only (lmix-core's
+    // TILE_CELLS); a later slot shows a stream of its own. Until the
+    // picture runs its size is open: the tile counts itself in.
+    readonly property var atlasGrid: atlas !== null ? atlas.grid : null
     readonly property bool tiled: atlas !== null && cell >= 0 && source !== ""
         && source !== "program" && source !== "preview"
+        && (atlasGrid === null || cell < atlasGrid.columns * atlasGrid.rows)
 
     Rectangle {
         anchors.fill: parent
@@ -66,21 +77,54 @@ Item {
         }
     }
 
+    /** How long a hidden picture keeps running (a page change). */
+    property int holdMs: 2000
+    /** The source asked of the core for the video, "" for none. */
+    property string asked: ""
+
+    Timer {
+        id: hold
+        interval: view.holdMs
+        onTriggered: {
+            if (!view.visible && view.asked !== "") {
+                view.asked = ""
+                view.core.releaseLive(video)
+            }
+        }
+    }
+
     function apply() {
-        count(tiled)
+        // `visible` is false too while a page above it is hidden.
+        count(tiled && visible)
         if (!video.itemInitialized) {
             return
         }
-        if (source === "" || tiled) {
+        var want = source === "" || tiled ? "" : source
+        if (want !== "" && want === asked && !visible) {
+            if (!hold.running) {
+                hold.restart()
+            }
+            return
+        }
+        hold.stop()
+        if (!visible) {
+            want = ""
+        }
+        if (want === asked) {
+            return
+        }
+        asked = want
+        if (want === "") {
             core.releaseLive(video)
         } else {
-            core.showLive(video, source)
+            core.showLive(video, want)
         }
     }
 
     onSourceChanged: apply()
     onTiledChanged: apply()
-    Component.onCompleted: count(tiled)
+    onVisibleChanged: apply()
+    Component.onCompleted: count(tiled && visible)
     Component.onDestruction: {
         count(false)
         core.releaseLive(video)
