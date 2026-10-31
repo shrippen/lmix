@@ -863,7 +863,10 @@ impl Service {
                 }
                 crate::cues::Out::Actions { list, cue, actions } => {
                     for action in actions {
-                        if self.panicked_since(since) {
+                        // A panic from a cue always goes.
+                        if self.panicked_since(since)
+                            && !matches!(action, Action::CuePanic { .. } | Action::CueHardStop)
+                        {
                             break;
                         }
                         let Err(e) = Box::pin(self.handle_as(action, Origin::Cue { since })).await
@@ -2074,11 +2077,12 @@ impl Service {
                     // Under the lock: whatever was worked out before this
                     // panic sees it, whatever after does not.
                     // A reset stops all as well: what was worked out before
-                    // it starts nothing after it either.
-                    let since = if matches!(
-                        action,
-                        Action::CuePanic { .. } | Action::CueHardStop | Action::CueReset
-                    ) {
+                    // it starts nothing after it either. Not one a cue gives:
+                    // the rest of that cue still runs.
+                    let since = if matches!(action, Action::CuePanic { .. } | Action::CueHardStop)
+                        || (matches!(action, Action::CueReset)
+                            && !matches!(origin, Origin::Cue { .. }))
+                    {
                         self.panics.fetch_add(1, Ordering::AcqRel) + 1
                     } else {
                         self.panics.load(Ordering::Acquire)
