@@ -198,13 +198,15 @@ Actions (die Aktionen eines Aktions-Cues). Er zeigt den Standby-Cue oder
 den angeklickten, auch in einer Gruppe; jede Änderung geht sofort an den
 Kern, nur mit den geänderten Feldern (`update_cue`, DECISIONS 24.10.),
 Standby und laufende Cues bleiben. Listen aus
-einem Skript sind nur zu sehen.
+einem Skript sind nur zu sehen. Seit 31.10. (DECISIONS): eine Leiste über
+der Liste legt je Art einen Cue hinter dem gewählten an (Klang, Bild,
+Blende, Aktionen, Warten, Notiz, Start; über `add_cue`), Vorwartezeit, Dauer
+und Nachwartezeit füllen sich, solange ihr Teil läuft; der Inspector zeigt
+Datei, Bühne und das Ziel einer Blende (Basics) und die Kreuzungen eines
+Klangs (Levels); eine unlesbare Zeit oder ein relativer Pfad bleibt
+markiert im Feld. Eine Gruppe anlegen wartet aufs Umsortieren (SUI.10).
 
 Aus dem Dummy noch offen, **nur Oberfläche** (der Kern kann es):
-- Show: Leiste zum Anlegen je Cue-Art, Zeitfelder mit Fortschritt;
-  im Inspector Datei, Ziel und Zonen-Routing eines Klang-, Bild- oder
-  Blenden-Cues; eine unlesbare Zeit nach Enter nicht still verwerfen,
-  sondern im Feld lassen und markieren.
 - Audio: Mini-Kurven EQ und Dynamik je Zug, ON/AFV als Umschalter.
 - Seiten lösbar auf einen zweiten Bildschirm (Entscheidung Click-Dummy 1).
 - Leiste: wer eine Seite zuletzt bediente (braucht die Kennung je

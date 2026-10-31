@@ -5590,3 +5590,50 @@ Größe M nach Regel 3.
 - **„Belegungen…“ im Fuß** öffnet den Dialog der Kurzbefehle. Der Knopf steht
   am Anfang des Fußes, über `KanteDialog.footerStart` (Kante 1.57, für diesen
   Dialog eingeführt).
+
+## 2026-10-31 — Show: Cues anlegen, Zeitfelder, Datei, Ziel und Kreuzungen im Inspector
+
+**Anlass**: Offene Punkte „nur Oberfläche“ aus dem Click-Dummy
+(`PLAN-SEITEN.md`, „Stand“).
+
+**Entscheidung**:
+- **Leiste über der Cue-Liste** (nur Edit, nicht für Listen aus einem
+  Skript): Klang, Bild, Blende, Aktionen, Warten, Notiz, Start. Der neue Cue
+  kommt hinter den gewählten (auch in einer Gruppe), ist Standby hinter dem
+  Ende, ans Ende; der Inspector zeigt ihn danach. Was die Art braucht, wird
+  vorher gefragt (Datei, Aktionen) oder vom gewählten Cue genommen: eine
+  Blende blendet den gewählten Klang oder das Bild in 5 s aus und stoppt ihn
+  (sonst die erste Zone auf Stille, sonst die erste Bühne auf Schwarz); ein
+  Start startet den gewählten Cue; ein Bild geht auf die erste Bühne; Warten
+  dauert 5 s. Nummer und Name bleiben leer (der Name folgt aus Art und Ziel,
+  CUE.1). Keine Gruppe in der Leiste: eine Gruppe braucht Kinder, und Cues
+  in eine Gruppe verschieben gehört zum Umsortieren (SUI.10, offen).
+  Verworfen: ein Menü „+ Cue ▾“ (ein Klick mehr; der Dummy zeigt eine
+  Leiste) und automatische Nummern (die Nummer ist in der ganzen Show
+  eindeutig; eine geratene stößt an eine andere Liste).
+- **Kern: `add_cue`** (einzige Kern-Änderung). Mit `set_cue_list` hätte die
+  Leiste die ganze Liste aus dem letzten Zustand geschickt; eine Änderung im
+  Inspector kurz davor käme mit altem Wert zurück (wie vor `update_cue`,
+  24.10.). `add_cue` nennt nur den neuen Cue: hinter einem Cue (Nummer oder
+  id, auch in Gruppen) oder ans Ende; Standby und laufende Cues bleiben.
+  Die Oberfläche gibt die id mit, so wählt sie den Cue, sobald er da ist.
+- **Zeitfelder mit Fortschritt**: Vorwartezeit, Dauer und Nachwartezeit
+  (Dauer jetzt eigene Spalte, die beiden anderen unter „Erweitert“). Läuft
+  ihr Teil, zeigt das Feld die vergangene Zeit und füllt sich
+  (`KanteProgressBar`, wie die laufenden Cues der Seitenleiste); ein Teil,
+  der vorbei ist, bleibt voll. Nur laufende Zeilen hängen am Takt (100 ms).
+- **Inspector**: Datei, Bühne und was eine Blende blendet stehen unter
+  Basics (wie das Ziel eines Cues dort hingehört), die Kreuzungen eines
+  Klangs unter Levels (Dateikanal → Zone und Kanal, Pegel je Kreuzung;
+  keine heißt Kanal n auf Kanal n der ersten Zone). Wechselt das Ziel einer
+  Blende die Art, fällt der alte Wert weg und der passende wird gesetzt wie
+  im Reiter Levels (Zone: Pegel, Bühne: Helligkeit, Bild: Deckkraft, Klang:
+  Pegel); nur ein Cue stoppt nach der Blende. Ein Ziel, das es nicht mehr
+  gibt, bleibt rot markiert stehen. Kreuzungen gehen als ganze Liste; bis
+  der Zustand zurück ist, baut die nächste Änderung auf der gesendeten auf.
+  Eine Kreuzung entfernen fragt nicht (ein Feld des Cues, keine Sache nach
+  Regel 1).
+- **Unlesbare Zeit und Pfad**: bleiben nach Enter oder beim Verlassen im
+  Feld, rot markiert, Enter behält die Tasten im Feld; weg sind sie, wenn
+  sie lesbar sind, mit Escape oder bei einem anderen Cue. Ein Pfad muss
+  absolut sein (wie der Kern ihn prüft).
