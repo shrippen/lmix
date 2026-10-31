@@ -5593,6 +5593,58 @@ Größe M nach Regel 3.
   am Anfang des Fußes, über `KanteDialog.footerStart` (Kante 1.57, für diesen
   Dialog eingeführt).
 
+## 2026-10-31 — Audio: Kurven je Kanalzug, ON/AFV als Umschalter
+
+Aus dem Dummy offen, nur Oberfläche (`docs/PLAN-SEITEN.md` „Stand“,
+Artboard `D-Audio` der Leinwand „lmix Arbeitsbereiche“). Der Kern bleibt
+unverändert.
+
+- **Zwei kleine Kurven je Zug** (`StripCurve.qml`): EQ (Hochpass und vier
+  Bänder) über der Frequenz, Dynamik (Gate und Kompressor) als Pegel aus
+  über Pegel ein. Ein Tooltip nennt die Werte und den Wert unter dem
+  Zeiger; ein Klick wählt den Zug. Ist ein Teil aus, ist die Kurve flach
+  bzw. gerade und blass, wie der Kern ihn durchreicht.
+- **Groß im Kanalzug** (Seitenkarte, Dialog, Input-Einstellungen): beide
+  Kurven mit dB links, Frequenz (20 Hz–20 kHz, logarithmisch) bzw.
+  Pegel ein (−60…0 dB) darunter, Überschrift mit den Einheiten und einer
+  Anzeige beim Überfahren. Sie folgen den Reglern während des Ziehens.
+- **Gerechnet wie strom** (`StripCurves.qml`), nicht geschätzt: Hochpass
+  `audiocheblimit` (Tschebyscheff Typ 1, 4 Pole, 0,25 dB Welligkeit; mit
+  Sinustönen durch das Element nachgemessen, Abweichung unter 0,001 dB),
+  EQ vier Glocken-Biquads nach dem Audio EQ Cookbook bei 80/400/2000/
+  8000 Hz, Q 1 (strom-Standard, lmix sendet nur die Verstärkung), bei der
+  Abtastrate der Show; Gate mit −60 dB Absenkung und ohne Hysterese, ein
+  harter Schritt; Kompressor wie `lsp-dsp-units` (Knie −6 dB). Gegen
+  dessen `curve()` nachgerechnet. Näherung ist nur, dass es statische
+  Kurven sind: Attack, Release und Detektor fehlen.
+- **Ein Fund dabei**: lsp-plugins-rs legt das Knie von der Schwelle bis
+  1,5 × Schwelle und beginnt die Gerade danach neu; die Kurve springt dort
+  um ~1,4 dB nach oben (bei 4 : 1). Gezeichnet, wie der Kern es tut;
+  upstream melden steht in `todo.md`.
+- **ON/AFV** ist ein Umschalter (`KanteSegmented`) statt der Taste AFV:
+  ON = Ton immer, AFV = nur mit Program. Er zeigt den Zustand des Kerns,
+  nicht den Klick (nach einer Ablehnung bleibt er stehen). „On/Muted“
+  wird die Taste „Mute“, schaltbar, rot gedrückt, solange der Zug stumm
+  ist; vorher hätten zwei „On“ nebeneinander gestanden.
+- **Nur bei neuen Werten gezeichnet**: StatePatch behält das Objekt
+  `strip`, solange es sich nicht ändert; die Kurve hängt nur daran. Ein
+  Test prüft, dass zehn Fader-Schritte keine Kurve neu rechnen und ein
+  geänderter EQ nur die zwei des Zugs. Kante fehlt eine x-Achse am
+  Linien-Diagramm (und eine Skala bis genau 0); die Skala darunter ist aus
+  Kante-Tokens gesetzt, Kante erweitern steht in `todo.md`.
+
+**Gemessen** (31.10., RTX 3070 Ti, Fedora 44, Qt 6.11.2):
+- QML allein (qmltestrunner, offscreen, 40 Züge mit EQ, Hochpass und
+  Kompressor an): die Seite aufbauen 258 ms statt 217 ms auf `main`
+  (+1 ms je Zug für zwei Kurven), ein Fader-Schritt 0,216 statt
+  0,192 ms (die Bindungen des einen Zugs, keine Kurve neu).
+- Ganze App (`PAGE=audio INPUTS=31 scripts/measure-gui-frames.sh`, CUDA,
+  Xvfb, Fader mit 40 Schritten/s, je zwei Läufe): GUI-Thread beim
+  Ziehen 44–45 % gegen 44–48 % auf `main`, Bildabstand p95 116–131 ms
+  gegen 123–166 ms. Kein Unterschied über dem Rauschen. Über dem Budget
+  des Skripts (35 %, p95 50 ms) liegt die Audio-Seite mit 31 Zügen auf
+  Xvfb schon auf `main`, auch ohne Ziehen (35–43 %); eigener Punkt in
+  `todo.md`.
 ## 2026-10-31 — Show: Cues anlegen, Zeitfelder, Datei, Ziel und Kreuzungen im Inspector
 
 **Anlass**: Offene Punkte „nur Oberfläche“ aus dem Click-Dummy

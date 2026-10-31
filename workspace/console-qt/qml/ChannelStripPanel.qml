@@ -7,7 +7,7 @@ import Kante
 /**
  * Channel strip of an input with sound: trim, pan, delay (lip sync), the
  * sends to the headphones and the buses, high-pass, four-band EQ, gate and
- * compressor. Strip changes go to lmix-core as the whole strip, at most
+ * compressor, with the curves of EQ and dynamics (StripCurve). Strip changes go to lmix-core as the whole strip, at most
  * every 100 ms; sections switched off keep their values. Sends are actions
  * of their own. In the
  * channel strip dialog and the input settings (UI.8); `load()` takes the
@@ -27,6 +27,8 @@ ColumnLayout {
 
     /** `buses` of the show state. */
     property var buses: []
+    /** The show's sample rate, for the EQ curve. */
+    property int sampleRate: 48000
     // Send rows by id: a new state keeps them, so a send drag goes on.
     KeyedModel { id: busModel }
     Component.onCompleted: busModel.sync(buses.map(b => b.id))
@@ -215,6 +217,15 @@ ColumnLayout {
             onMoved: v => panel.edit(s => s.eq.gain_db[index] = v)
         }
     }
+    // High-pass and EQ together, as they sound; follows the sliders.
+    StripCurve {
+        Layout.fillWidth: true
+        Layout.topMargin: Kirigami.Units.smallSpacing
+        Layout.bottomMargin: Kirigami.Units.largeSpacing
+        detail: true
+        channel: panel.strip
+        sampleRate: panel.sampleRate
+    }
 
     OnRow {
         Layout.fillWidth: true
@@ -254,5 +265,13 @@ ColumnLayout {
         live: panel.strip ? panel.strip.compressor.on : false
         value: panel.strip ? panel.strip.compressor.ratio : 4
         onMoved: v => panel.edit(s => s.compressor.ratio = v)
+    }
+    // Gate and compressor: level out over level in.
+    StripCurve {
+        Layout.fillWidth: true
+        Layout.topMargin: Kirigami.Units.smallSpacing
+        detail: true
+        dynamics: true
+        channel: panel.strip
     }
 }
