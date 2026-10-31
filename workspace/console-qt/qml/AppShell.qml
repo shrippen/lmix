@@ -179,6 +179,8 @@ Kirigami.ApplicationWindow {
     property var pageItems: []
     /** The windows of detached pages (PageWindow), by page id. */
     property var pageWindows: ({})
+    /** Page windows given back, until they are gone (remake). */
+    property var leavingWindows: []
     /** lmix quits: windows that close now keep their pages out. */
     property bool quitting: false
     readonly property var pageOrder: {
@@ -274,7 +276,16 @@ Kirigami.ApplicationWindow {
         pageItems = items
         if (win !== undefined) {
             win.page = null
-            win.release()
+            // Held until it is gone: the garbage collector would take it
+            // down with the old page still in it.
+            leavingWindows.push(win)
+            win.Component.destruction.connect(() => {
+                const at = leavingWindows.indexOf(win)
+                if (at >= 0) {
+                    leavingWindows.splice(at, 1)
+                }
+            })
+            win.release(old)
         }
     }
 

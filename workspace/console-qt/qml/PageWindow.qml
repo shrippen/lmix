@@ -44,14 +44,24 @@ QQC2.ApplicationWindow {
     minimumWidth: Kirigami.Units.gridUnit * 30
     minimumHeight: Kirigami.Units.gridUnit * 20
 
-    /** The page went back: hide, then go. Its dialogs go first, while the
-     *  window still stands: torn down with the window, a Kante dialog
-     *  restored its background into an item already gone (SIGSEGV in
-     *  QQmlBind, tst_app_shell). */
-    function release() {
+    /** The page went back: hide, then go once `gone` (the old page, being
+     *  destroyed) is gone. Its dialogs go first, while the window still
+     *  stands: torn down with the window, a Kante dialog restored its
+     *  background into an item already gone (SIGSEGV in QQmlBind,
+     *  tst_app_shell). A timer alone is not enough: a deferred delete
+     *  waits for its event loop, a timer's fires in any. */
+    function release(gone) {
         visible = false
         removalsLoader.active = false
-        destroy(100)
+        if (gone) {
+            gone.Component.destruction.connect(() => {
+                if (win) {
+                    win.destroy()
+                }
+            })
+        } else {
+            destroy()
+        }
     }
     /** lmix quits: the page and its dialogs go now, before the engine
      *  takes the window down (the same crash at the end). */
