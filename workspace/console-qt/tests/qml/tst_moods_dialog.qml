@@ -286,6 +286,20 @@ TestCase {
         compare(d.groups.length, 4)
     }
 
+    function test_an_edit_after_a_removal_builds_on_it() {
+        slow = true
+        const d = createTemporaryObject(answeredComponent, test)
+        d.open()
+        d.chosenId = "g-tavern"
+        findChild(d.contentItem, "removePlace").clicked()
+        accept()
+        compare(d.groups.map(g => g.name), ["Forest"], "shows the removal at once")
+        findChild(d.contentItem, "addGroup").clicked()
+        compare(acted[1].moods.groups.map(g => g.name), ["Forest", "Group"])
+        d.close()
+        compare(d.draft, null, "closing lets go of edits never answered")
+    }
+
     function test_a_refused_edit_drops_the_draft() {
         slow = true
         const d = createTemporaryObject(answeredComponent, test)

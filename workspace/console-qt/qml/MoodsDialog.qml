@@ -66,7 +66,13 @@ KanteDialog {
 
     /** What an action list dialog edits: { where: "mood" | "panic", layer }. */
     property var editingActions: null
-    onClosed: pending = {}
+    // An edit that never got an answer (one the bridge did not take) must
+    // not hold the draft for good.
+    onClosed: {
+        pending = {}
+        draft = null
+        inFlight = 0
+    }
     // Once every edit is answered, the next state holds them all; without
     // a core (tests) nothing answers, and the state is taken at once.
     onStateMoodsChanged: {
@@ -123,14 +129,17 @@ KanteDialog {
         change(copy)
         return copy
     }
-    /** Changes a copy of the moods with `change` and sends it whole. */
-    function edit(change) {
-        const copy = changed(change)
+    /** The set_moods action for `copy`, shown at once as the draft. */
+    function sending(copy) {
         if (core) {
             draft = copy
             inFlight++
         }
-        act({ action: "set_moods", moods: copy })
+        return { action: "set_moods", moods: copy }
+    }
+    /** Changes a copy of the moods with `change` and sends it whole. */
+    function edit(change) {
+        act(sending(changed(change)))
     }
     /** Asks before a removal (docs/DESIGN-DIALOGE.md rule 1) and removes
         with `request.change` from the moods as they are then; `request.name`
@@ -143,7 +152,7 @@ KanteDialog {
             consequence: request.consequence,
             acceptText: request.acceptText,
             removedText: request.removedText,
-            makeAction: () => ({ action: "set_moods", moods: dialog.changed(request.change) })
+            makeAction: () => dialog.sending(dialog.changed(request.change))
         })
     }
     /** In `copy`: the group of `place`, and its variant or null. */
@@ -378,7 +387,7 @@ KanteDialog {
                     editable: true
                     value: mediaDialog.sound && mediaDialog.media ? Math.round((mediaDialog.media.gain_db || 0) * 10) : 0
                     textFromValue: v => (v / 10).toFixed(1) + " dB"
-                    valueFromText: t => Math.round(parseFloat(t.replace(",", ".").replace(/[^0-9.\-]/g, "")) * 10)
+                    valueFromText: t => Math.round(parseFloat(t.replace(",", ".").replace("\u2212", "-").replace(/[^0-9.\-]/g, "")) * 10)
                     Accessible.name: qsTr("Level of the sound")
                     onValueModified: dialog.changeMediaFields({ gain_db: value / 10 })
                 }

@@ -140,7 +140,7 @@ ColumnLayout {
     /** The mood `id` dropped: a cue that sets it, where it was shown. */
     function moodDropped(id, scenePosition) {
         moodDragMoved(scenePosition)
-        if (moodDropAfter !== null) {
+        if (editing && moodDropAfter !== null) {
             addCue({ kind: "mood", mood: { mood: id } }, moodDropAfter)
         }
         moodDropAfter = null
