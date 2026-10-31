@@ -1378,4 +1378,10 @@ DE = {
     'Remove variant': 'Variante entfernen',
     'Remove variant %1?': 'Variante %1 entfernen?',
     'Variant %1 removed': 'Variante %1 entfernt',
+    'Drag to move': 'Zum Verschieben ziehen',
+    'It fades in and out with the layer: its own fade, else the change time.': 'Blendet mit der Ebene ein und aus: mit ihrer eigenen Blende, sonst mit der Wechselzeit.',
+    'Level and crosspoints of the sound': 'Pegel und Kreuzungspunkte des Klangs',
+    'Level…': 'Pegel…',
+    'On the same layer the later picture is in front': 'Auf derselben Ebene liegt das spätere Bild vorn',
+    'Opacity and layer of the picture': 'Deckkraft und Ebene des Bilds',
 }

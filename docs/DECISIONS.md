@@ -6373,12 +6373,9 @@ nur über die API.
   den gültigen. Bühne und Schleife eines neuen Bilds oder Klangs warten mit
   ihm auf die Datei.
 
-**Noch nicht**: Pegel, Blenden und Routing eines Klangs oder Bilds einer
-Ebene (der Dialog setzt Datei, Bühne und Schleife; der Rest bleibt beim
-Standard oder kommt über die API). Ziehen zum Umsortieren; Ebenen und
-Sammlungen haben nur „Hoch“. Der Aktionsdialog zeigt 8 Aktionen, lmix-core
-nimmt 16 (wie bei Aktions-Cues). Zwei Änderungen schneller als die
-Antwort des Kerns gehen beide vom alten Stand aus, die zweite gewinnt.
+**Noch nicht**: Pegel und Routing je Ebene, Ziehen, „Runter“, 16
+Aktionen, schnelle Änderungen und Rückgängig über `restore` kamen mit
+Stufe 5a („Stimmungen: Nacharbeiten am Bearbeiten“).
 
 **Geprüft**: `tst_moods_dialog.qml` (Umbenennen ändert nur den Namen,
 Variante zurück zur Basis, neuer Klang wartet auf die Datei, Bild braucht
@@ -6386,3 +6383,45 @@ eine Bühne und behält sie bis zur Datei, abgelehnter Name, Rückfrage und
 Rückgängig, Gruppe verlässt die Sammlungen, freie Namen ohne Groß- und
 Kleinschreibung und UUIDs, Ebene verlässt Stimmungen und Panik, Panik nur
 aus oder Aktionen, Sammlungen).
+
+## 2026-10-31 — Stimmungen: Nacharbeiten am Bearbeiten (MOOD Stufe 5a)
+
+**Anlass**: Was nach Stufe 4b offen war (DECISIONS „Stimmungen bearbeiten“,
+„Noch nicht“), und das Ziehen in die Cue-Liste (MOOD.6).
+
+**Entscheidung**:
+- Entfernen wie überall (DESIGN-DIALOGE Regel 1): die Frage und der Toast
+  mit „Rückgängig“ und Strg+Z kommen von `Removals` (neu `askWith`: der
+  Aufrufer formuliert, die Aktion entsteht erst beim Bestätigen aus dem
+  Stand dann). lmix-core legt bei einem `set_moods`, das eine Gruppe,
+  Variante, Ebene oder Sammlung entfernt, die Stimmungen davor auf den
+  `restore`-Stapel (`RemovedKind::Mood`, benannt nach dem Entfernten:
+  Gruppe, „Gruppe / Variante“, Ebene, Sammlung). `restore` bringt sie nur
+  zurück, solange die Stimmungen seitdem unverändert sind; sonst lehnt es
+  ab (das nähme die Änderung eines anderen Clients mit) und der Eintrag
+  geht vom Stapel. Das Rückgängig im Dialog selbst entfällt.
+- Schnelle Änderungen: wie `SoundRoutes` baut die nächste Änderung auf
+  dem Gesendeten auf (`draft`), bis jede beantwortet ist und der Zustand
+  kommt; eine Ablehnung verwirft den Entwurf.
+- Umsortieren: Gruppen und Varianten durch Ziehen in der Liste (eine
+  Variante nur in ihrer Gruppe), Ebenen und Sammlungen am Griff ⠿;
+  dazu „Runter“ neben „Hoch“.
+- „Pegel…“ je Klang oder Bild einer Ebene: Pegel und Kreuzungspunkte
+  (`SoundRoutes`) bzw. Deckkraft und Bildebene. Ein- und Ausblenden
+  bleiben weg: die Engine blendet mit der Ebene (ihre Blende, sonst die
+  Wechselzeit) und überschreibt die des Klangs.
+- Aktionszeilen: 16 wie lmix-core (`AUTOMATION_ACTIONS`,
+  `SHORTCUT_ACTIONS`); acht stehen da, jede weitere erscheint, wenn die
+  letzte belegt ist. Gilt für Kurzbefehle, Auslöser, Cues und Stimmungen.
+- Show-Ansicht: eine Stimmung aus dem Reiter Stimmungen in die Cue-Liste
+  ziehen legt im Bearbeiten einen Cue an, der sie setzt, nach der Zeile
+  unter dem Zeiger (unter den Zeilen: nach der letzten); eine Linie zeigt
+  die Stelle.
+
+**Bricht**: nichts gespeichertes; `restorable` kennt die Art `mood`.
+
+**Geprüft**: `switcher::tests::restore_brings_back_removed_moods_while_unchanged`,
+`tst_moods_dialog.qml` (Entfernen über Removals mit Namen und mit dem
+Stand beim Bestätigen, schnelle Änderungen, Ablehnung, Ziehen von Gruppen
+und Ebenen, Pegel), `tst_removals.qml` (`askWith`), `tst_action_rows.qml`,
+`tst_show_moods.qml` (Ziehen in die Liste, daneben, im Show-Modus).

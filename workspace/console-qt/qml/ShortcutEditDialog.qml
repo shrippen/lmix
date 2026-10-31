@@ -7,7 +7,7 @@ import Kante
 /**
  * One shortcut: label, key (pressed, not typed), MIDI note or controller
  * (learned from the controller), shown on the web page "Keys", and up to
- * eight actions run in order.
+ * sixteen actions run in order.
  */
 KanteDialog {
     id: dialog

@@ -765,6 +765,38 @@ fn makes_sound_or_light(action: &Action) -> bool {
     )
 }
 
+/// What `after` lacks of `before`, by name: a group first (its variants go
+/// with it), then a variant ("Group / Variant"), a layer, a collection.
+/// None: nothing was removed.
+fn removed_from_moods(before: &lmix_types::Moods, after: &lmix_types::Moods) -> Option<String> {
+    let groups: std::collections::HashSet<_> = after.groups.iter().map(|g| g.id).collect();
+    let variants: std::collections::HashSet<_> = after
+        .groups
+        .iter()
+        .flat_map(|g| g.variants.iter().map(|v| v.id))
+        .collect();
+    if let Some(group) = before.groups.iter().find(|g| !groups.contains(&g.id)) {
+        return Some(group.name.clone());
+    }
+    for group in &before.groups {
+        if let Some(variant) = group.variants.iter().find(|v| !variants.contains(&v.id)) {
+            return Some(format!("{} / {}", group.name, variant.name));
+        }
+    }
+    if let Some(layer) = before
+        .layers
+        .iter()
+        .find(|l| !after.layers.iter().any(|a| a.id == l.id))
+    {
+        return Some(layer.name.clone());
+    }
+    before
+        .collections
+        .iter()
+        .find(|c| !after.collections.iter().any(|a| a.id == c.id))
+        .map(|c| c.name.clone())
+}
+
 /// Milliseconds since the Unix epoch, for times the clients draw.
 fn unix_ms() -> u64 {
     std::time::SystemTime::now()
@@ -830,6 +862,13 @@ enum Removed {
     OutputSettings {
         output: ShowOutput,
     },
+    /// The moods before a `set_moods` that removed something, and after
+    /// it: they come back only while nothing has changed them since.
+    Moods {
+        before: Box<lmix_types::Moods>,
+        after: Box<lmix_types::Moods>,
+        name: String,
+    },
 }
 
 /// Whether a removed bus was listened to, so it is again when it comes back.
@@ -848,6 +887,7 @@ impl Removed {
             Self::Bus { bus, .. } => (RemovedKind::Bus, &bus.name),
             Self::Output { output, .. } => (RemovedKind::Output, &output.name),
             Self::OutputSettings { output } => (RemovedKind::OutputSettings, &output.name),
+            Self::Moods { name, .. } => (RemovedKind::Mood, name),
         };
         lmix_types::Restorable {
             kind,
@@ -1778,7 +1818,15 @@ impl Switcher {
             | Action::SetMood { .. } => Err(bad_cues("run through the service".into())),
             Action::SetMoods { moods } => {
                 check_moods(&moods)?;
-                self.show.moods = moods;
+                let removed = removed_from_moods(&self.show.moods, &moods);
+                let before = std::mem::replace(&mut self.show.moods, moods);
+                if let Some(name) = removed {
+                    self.keep_removed(Removed::Moods {
+                        before: Box::new(before),
+                        after: Box::new(self.show.moods.clone()),
+                        name,
+                    });
+                }
                 Ok(Vec::new())
             }
             Action::SetLock { on } => {
@@ -4039,6 +4087,17 @@ impl Switcher {
     /// brought back.
     fn restore(&mut self) -> Result<Vec<Command>, ActionError> {
         let removed = self.removed.pop().ok_or(ActionError::NothingToRestore)?;
+        if let Removed::Moods { before, after, .. } = removed {
+            // Changed since (another console, the API): bringing the old
+            // moods back would undo that too. It cannot come back then.
+            if self.show.moods != *after {
+                return Err(ActionError::BadMood {
+                    reason: "changed since the removal: it cannot come back".into(),
+                });
+            }
+            self.show.moods = *before;
+            return Ok(Vec::new());
+        }
         let result = match removed.clone() {
             Removed::Input { index, input } => self.restore_input(index, input),
             Removed::Layout { index, layout } => self.restore_layout(index, layout),
@@ -4052,6 +4111,7 @@ impl Switcher {
                 .and_then(|()| self.restore_bus(index, bus, sends, listen)),
             Removed::Output { index, output } => Ok(self.restore_output(index, output)),
             Removed::OutputSettings { output } => self.restore_output_settings(output),
+            Removed::Moods { .. } => unreachable!("brought back above"),
         };
         if result.is_err() {
             self.removed.push(removed);
@@ -10295,6 +10355,68 @@ mod tests {
         assert!(cmds.is_empty());
         let back = sw.state().outputs[0].clone();
         assert_eq!(back, before);
+        assert_eq!(restorable(&sw), None);
+    }
+
+    #[test]
+    fn restore_brings_back_removed_moods_while_unchanged() {
+        let moods = |json: serde_json::Value| -> lmix_types::Moods {
+            serde_json::from_value(json).expect("moods")
+        };
+        let full = moods(serde_json::json!({
+            "layers": [{"id": "00000000-0000-4000-8000-000000000001", "name": "Light"}],
+            "groups": [{"id": "00000000-0000-4000-8000-000000000002", "name": "Tavern",
+                        "variants": [{"id": "00000000-0000-4000-8000-000000000003", "name": "Night"}]}],
+            "collections": [{"id": "00000000-0000-4000-8000-000000000004", "name": "Act 1"}]
+        }));
+        let mut sw = Switcher::new(SLOTS);
+        sw.apply(Action::SetMoods {
+            moods: full.clone(),
+        })
+        .unwrap();
+        assert_eq!(restorable(&sw), None, "adding removes nothing");
+
+        let mut no_night = full.clone();
+        no_night.groups[0].variants.clear();
+        sw.apply(Action::SetMoods {
+            moods: no_night.clone(),
+        })
+        .unwrap();
+        assert_eq!(
+            restorable(&sw),
+            Some((lmix_types::RemovedKind::Mood, "Tavern / Night".into()))
+        );
+        assert!(sw.apply(Action::Restore).unwrap().is_empty());
+        assert_eq!(sw.show().moods, full);
+
+        // A group names itself, not its variants; a layer and a collection too.
+        let mut empty = full.clone();
+        empty.groups.clear();
+        sw.apply(Action::SetMoods { moods: empty }).unwrap();
+        assert_eq!(restorable(&sw).unwrap().1, "Tavern");
+        sw.apply(Action::Restore).unwrap();
+        let mut no_layer = full.clone();
+        no_layer.layers.clear();
+        sw.apply(Action::SetMoods { moods: no_layer }).unwrap();
+        assert_eq!(restorable(&sw).unwrap().1, "Light");
+        sw.apply(Action::Restore).unwrap();
+
+        // Changed since: it cannot come back, and goes from the stack.
+        sw.apply(Action::SetMoods {
+            moods: no_night.clone(),
+        })
+        .unwrap();
+        let mut renamed = no_night;
+        renamed.groups[0].name = "Inn".into();
+        sw.apply(Action::SetMoods {
+            moods: renamed.clone(),
+        })
+        .unwrap();
+        assert!(matches!(
+            sw.apply(Action::Restore),
+            Err(ActionError::BadMood { .. })
+        ));
+        assert_eq!(sw.show().moods, renamed);
         assert_eq!(restorable(&sw), None);
     }
 

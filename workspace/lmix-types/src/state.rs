@@ -27,6 +27,9 @@ pub enum RemovedKind {
     Output,
     /// An output's settings before `update_output`.
     OutputSettings,
+    /// The moods before a `set_moods` that removed a group, variant,
+    /// layer or collection; named after it.
+    Mood,
 }
 
 /// One transition button.

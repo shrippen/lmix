@@ -19,6 +19,12 @@ import Kante
  * template ("template", asked without a way back). The removal names it
  * by id: its number may move while the question is open.
  *
+ * `askWith(request)` asks a removal its caller words, e.g. of a mood
+ * (`set_moods` without it): { kind, name, question, consequence,
+ * acceptText, removedText } and `makeAction()`, which builds the action
+ * when it is accepted (from the state then); `kind` and `name` as lmix-core
+ * names the removal in `restorable`.
+ *
  * `change(output, action)` sends an output's new settings (Settings…,
  * `update_output`) without a question; its toast brings back the
  * settings before, which lmix-core keeps on the same stack. A refusal
@@ -89,8 +95,16 @@ Item {
         dialog.request = request(kind, item)
         dialog.open()
     }
+    /** Ask a removal worded by the caller (see above). */
+    function askWith(request) {
+        dialog.request = request
+        dialog.open()
+    }
     /** Remove now, with the toast to bring it back. */
     function remove(asked) {
+        if (asked.makeAction) {
+            asked.action = asked.makeAction()
+        }
         pending = asked.undo === false ? null : { request: asked, answered: false }
         removals.act(asked.action)
     }

@@ -108,6 +108,10 @@ Kirigami.ApplicationWindow {
     function askRemove(kind, item) {
         workedIn().ask(kind, item)
     }
+    /** Remove after asking, worded by the caller (Removals.askWith). */
+    function askRemoveWith(request) {
+        workedIn().askWith(request)
+    }
     /** An output's new settings, with a toast to bring the old back. */
     function changeOutput(output, action) {
         workedIn().change(output, action)

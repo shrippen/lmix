@@ -249,6 +249,21 @@ KanteCard {
                         leadingWidth: Kirigami.Units.gridUnit
                         selected: side.showView.show !== null && side.showView.show.mood
                             && side.showView.show.mood.mood === modelData.id
+                        opacity: moodDrag.active ? 0.5 : 1
+                        // Into the list while editing: a cue that sets it
+                        // (MOOD.6). On an item over the whole row: the row's
+                        // default property is its marker.
+                        Item {
+                            parent: moodRow
+                            anchors.fill: parent
+                            DragHandler {
+                                id: moodDrag
+                                target: null
+                                enabled: side.showView.editing && !side.showView.fromScript && side.showView.list !== null
+                                onCentroidChanged: if (active) side.showView.moodDragMoved(centroid.scenePosition)
+                                onActiveChanged: if (!active) side.showView.moodDropped(moodRow.modelData.id, centroid.scenePosition)
+                            }
+                        }
                         onClicked: {
                             side.showView.act({ action: "set_mood", mood: modelData.id })
                             side.showView.forceActiveFocus()
