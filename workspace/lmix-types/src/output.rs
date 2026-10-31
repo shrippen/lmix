@@ -366,6 +366,10 @@ pub struct Output {
     #[serde(default)]
     pub bus: Option<crate::bus::BusId>,
     pub status: OutputStatus,
+    /// Failed, and the failback is about to start it again (or is
+    /// starting it): it counts as sending, its settings are locked.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub failback: bool,
 }
 
 /// What a running SRT, RTMP or recording output measures, about once a
