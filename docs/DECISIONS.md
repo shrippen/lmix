@@ -6255,9 +6255,17 @@ Reiter, 3b das Cue-Feld „Ebene“ (MOOD.5).
   API (gleiche Prüfung, gleiche Blendzeiten, Herkunft „Stimmung“) und endet
   sofort; scheitert er (Stimmung entfernt), meldet die Liste den Cue als
   gescheitert. Kein eigener Weg im Cue-Runner, keine Dauer.
-- Eine Stimmung, die es nicht mehr gibt, prüft der Kern beim Anlegen des
-  Cues nicht (die Cue-Prüfung kennt die Show nicht); die Oberfläche zeigt
-  ihn als „Stimmung (entfernt)“ und markiert die Auswahl im Inspector.
+- Eine Stimmung, die es nicht mehr gibt, weist der Kern beim Anlegen des
+  Cues nicht ab (die Cue-Prüfung kennt die Show nicht), aber die
+  Show-Prüfung warnt (SUI.5, `mood_gone`), ein unbenannter Cue heißt
+  „Stimmung (entfernt)“ und der Inspector markiert die Auswahl. Ein
+  Mood-Cue ohne Stimmung (Show-Datei von Hand) meldet sich bei GO als
+  gescheitert.
+- Ein unbenannter Mood-Cue heißt nach seiner Stimmung („Gruppe /
+  Variante“), auch in OSC-Feeds und laufenden Cues
+  (`Cue::display_name_with`).
+- Vorladen (SND.12): Ein Mood-Cue auf Standby lädt die Klänge und Bilder
+  seiner Ebenen noch nicht vor; sie öffnen erst bei GO. Mit Stufe 4.
 - Reiter Stimmungen als dritter Reiter der Seitenleiste: Basis, darunter
   die Varianten; ein Klick setzt die Stimmung, die gesetzte ist markiert.
   Im Bearbeiten legt „+“ einen Cue an, der sie setzt, nach dem gewählten
@@ -6266,6 +6274,7 @@ Reiter, 3b das Cue-Feld „Ebene“ (MOOD.5).
   die Wechselzeit).
 
 **Geprüft**: Service-Test `a_mood_cue_sets_its_mood` (ohne Stimmung
-abgewiesen, GO setzt die Variante und ihr Licht), `tst_show_moods.qml`
+abgewiesen, GO setzt die Variante und ihr Licht), `checks::tests`
+(entfernte Stimmung warnt), `an_unnamed_mood_cue_says_its_mood`, `tst_show_moods.qml`
 (Reihenfolge und Namen, Klick und „+“, im Show-Modus nur Setzen,
 Inspector mit entfernter Stimmung).

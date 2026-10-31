@@ -2833,9 +2833,7 @@ impl Switcher {
                     pads: l.pads,
                 })
                 .collect(),
-            running_cues: self
-                .cues
-                .running(&self.show.cue_lists, tokio::time::Instant::now()),
+            running_cues: self.running_cues(),
             ran_cues: self.cues.ran(),
             go_guard_ms: self.show.go_guard_ms,
             go_rearm: self.show.go_rearm,
@@ -3805,6 +3803,29 @@ impl Switcher {
     /// is off again, so setting the mood once more tries again.
     pub fn mood_media_failed(&mut self, id: &str) {
         self.moods.media_failed(id);
+    }
+
+    /// The running cues; an unnamed mood cue by its mood (MOOD.6).
+    fn running_cues(&self) -> Vec<lmix_types::RunningCue> {
+        fn find(cues: &[Cue], id: lmix_types::CueId) -> Option<&Cue> {
+            cues.iter()
+                .find_map(|c| (c.id == id).then_some(c).or_else(|| find(&c.children, id)))
+        }
+        let mut running = self
+            .cues
+            .running(&self.show.cue_lists, tokio::time::Instant::now());
+        for run in &mut running {
+            let cue = self
+                .show
+                .cue_lists
+                .iter()
+                .filter(|l| l.id == run.list)
+                .find_map(|l| find(&l.cues, run.cue));
+            if let Some(cue) = cue.filter(|c| c.kind == CueKind::Mood) {
+                run.name = cue.display_name_with(&self.show.moods);
+            }
+        }
+        running
     }
 
     /// Set a mood (MOOD.4): the actions that change its layers.

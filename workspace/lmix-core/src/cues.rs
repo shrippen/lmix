@@ -832,17 +832,25 @@ impl Runner {
             CueKind::Start => self.fire_start(lists, list, &cue, t, out),
             // As `set_mood` from the API: the service sets it under the
             // switcher's lock and runs what the layers do (MOOD.6).
-            CueKind::Mood => {
-                let mood = cue.mood.clone().expect("checked: a mood cue has one");
-                out.push(Out::Actions {
+            CueKind::Mood => match cue.mood.clone() {
+                Some(mood) => out.push(Out::Actions {
                     list: run.list,
                     cue: cue.id,
                     actions: vec![Action::SetMood {
                         mood: mood.mood.to_string(),
                         fade_ms: mood.fade_ms,
                     }],
-                });
-            }
+                }),
+                // A show file changed by hand: its cue lists are not
+                // checked on opening.
+                None => out.push(Out::Event {
+                    list: run.list,
+                    cue: Some(cue.id),
+                    what: CueEvent::Failed {
+                        reason: "a mood cue needs a mood".into(),
+                    },
+                }),
+            },
             CueKind::Sound => {
                 let sound = cue.sound.clone().unwrap_or_default();
                 out.push(Out::Actions {

@@ -1335,4 +1335,5 @@ DE = {
     'Mood the cue sets': 'Stimmung, die der Cue setzt',
     'Fade of the mood change': 'Blende des Stimmungswechsels',
     "How long the changing layers fade; empty: each layer's own, else the show's change time": 'Wie lange die Ebenen blenden, die sich ändern; leer: die der Ebene, sonst die Wechselzeit der Show',
+    'sets a mood that is not there': 'setzt eine Stimmung, die es nicht gibt',
 }

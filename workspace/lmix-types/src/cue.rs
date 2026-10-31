@@ -267,6 +267,17 @@ impl Cue {
         }
     }
 
+    /// [`Cue::display_name`] with the show's moods: an unnamed mood cue
+    /// says the mood it sets, "Group / Variant" (MOOD.6).
+    pub fn display_name_with(&self, moods: &crate::Moods) -> String {
+        match (&self.mood, self.name.is_empty()) {
+            (Some(mood), true) => moods
+                .find(mood.mood)
+                .map_or_else(|| self.display_name(), |place| place.name()),
+            _ => self.display_name(),
+        }
+    }
+
     /// The name, or one from kind and target when it is empty (CUE.1),
     /// e.g. "Wait 2.5 s" or "Start 12".
     pub fn display_name(&self) -> String {
@@ -462,6 +473,8 @@ pub enum CueProblem {
     InputGone { input: String },
     /// An input a cue uses has no media file.
     MediaMissing { input: String },
+    /// A mood cue's mood is not in the show (MOOD.6).
+    MoodGone,
 }
 
 impl CueProblem {
@@ -483,6 +496,7 @@ impl CueProblem {
             Self::MediaMissing { input } => {
                 format!("uses input {input}, whose media file is missing")
             }
+            Self::MoodGone => "sets a mood that is not there".into(),
         }
     }
 }
@@ -508,6 +522,32 @@ pub enum CueEvent {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_unnamed_mood_cue_says_its_mood() {
+        let forest = crate::MoodGroup {
+            id: crate::MoodId::new(),
+            name: "Wald".into(),
+            color: None,
+            base: Default::default(),
+            variants: Vec::new(),
+        };
+        let mut cue = Cue {
+            mood: Some(MoodCue {
+                mood: forest.id,
+                fade_ms: None,
+            }),
+            ..Cue::empty(CueKind::Mood)
+        };
+        let moods = crate::Moods {
+            groups: vec![forest],
+            ..Default::default()
+        };
+        assert_eq!(cue.display_name_with(&moods), "Wald");
+        assert_eq!(cue.display_name_with(&crate::Moods::default()), "Mood");
+        cue.name = "Nebel".into();
+        assert_eq!(cue.display_name_with(&moods), "Nebel");
+    }
 
     #[test]
     fn a_cue_needs_only_its_kind() {

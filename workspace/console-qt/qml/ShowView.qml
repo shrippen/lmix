@@ -76,6 +76,7 @@ ColumnLayout {
         case "target_unreached": return qsTr("sends to target %1, which did not answer: %2").arg(w.target).arg(w.reason)
         case "input_gone": return qsTr("uses input %1, which is not there").arg(w.input)
         case "media_missing": return qsTr("uses input %1, whose media file is missing").arg(w.input)
+        case "mood_gone": return qsTr("sets a mood that is not there")
         default: return w.message
         }
     }

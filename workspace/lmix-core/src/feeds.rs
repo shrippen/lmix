@@ -77,13 +77,13 @@ fn packets(feed: &Feed, on: FeedOn, v: &Values) -> Vec<Send> {
         .collect()
 }
 
-fn standby_values(list: &CueList) -> (String, Values) {
+fn standby_values(list: &CueList, moods: &lmix_types::Moods) -> (String, Values) {
     let cue = list.cues.get(list.standby as usize - 1);
     let key = cue.map_or_else(|| "end".to_string(), |c| c.id.to_string());
     let values = Values {
         list: list.name.clone(),
         number: cue.map(|c| c.number.clone()).unwrap_or_default(),
-        name: cue.map(|c| c.display_name()).unwrap_or_default(),
+        name: cue.map(|c| c.display_name_with(moods)).unwrap_or_default(),
         note: cue.map(|c| c.note.clone()).unwrap_or_default(),
         ..Values::default()
     };
@@ -135,7 +135,7 @@ impl Tracker {
         self.standby
             .retain(|(feed, _), _| state.feeds.iter().any(|f| &f.name == feed));
         for list in &state.cue_lists {
-            let (key, values) = standby_values(list);
+            let (key, values) = standby_values(list, &state.moods);
             for feed in &state.feeds {
                 let slot = (feed.name.clone(), list.id);
                 if self.standby.get(&slot) != Some(&key) {

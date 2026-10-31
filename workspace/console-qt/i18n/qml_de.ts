@@ -3333,12 +3333,12 @@
       <translation>Stimmungen</translation>
     </message>
     <message>
-      <location line="+478" />
+      <location line="+481" />
       <source>Panic</source>
       <translation>Panik</translation>
     </message>
     <message>
-      <location line="-472" />
+      <location line="-475" />
       <source>Stops every cue and sound; the panic mood runs</source>
       <translation>Stoppt alle Cues und Klänge, die Panik-Stimmung läuft</translation>
     </message>
@@ -3353,7 +3353,7 @@
       <translation>Zurück zur Stimmung davor</translation>
     </message>
     <message>
-      <location line="+95" />
+      <location line="+98" />
       <source>%1 actions</source>
       <translation>%1 Aktionen</translation>
     </message>
@@ -3405,8 +3405,8 @@
       <translation>Alle Stimmungen und Oneshots</translation>
     </message>
     <message>
-      <location line="-205" />
-      <location line="+245" />
+      <location line="-208" />
+      <location line="+248" />
       <location line="+251" />
       <source>Panic mood</source>
       <translation>Panik-Stimmung</translation>
@@ -5753,6 +5753,11 @@
       <location line="+1" />
       <source>uses input %1, whose media file is missing</source>
       <translation>nutzt Input %1, dessen Mediendatei fehlt</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>sets a mood that is not there</source>
+      <translation>setzt eine Stimmung, die es nicht gibt</translation>
     </message>
     <message>
       <location line="+109" />
