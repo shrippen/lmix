@@ -1003,6 +1003,11 @@ pub struct Switcher {
     playback_sent: Option<Playback>,
     /// What the engine was last told to hold ready; `None`: tell it again.
     preload_sent: Option<Preload>,
+    /// While cue or mood actions run, one after the other: what is held
+    /// ready stays as it is, so their starts take it (MOOD.6).
+    /// A count, shared with the service's guards (`Service::hold_preload`):
+    /// a cancelled caller still lets go.
+    preload_held: std::sync::Arc<std::sync::atomic::AtomicU32>,
     targets_changed: bool,
     /// Media files not found per input (SHW.4); the service checks.
     missing: HashMap<InputId, Vec<String>>,
@@ -1070,6 +1075,7 @@ impl Switcher {
             stage_patches: Vec::new(),
             playback_sent: None,
             preload_sent: None,
+            preload_held: Default::default(),
             targets_changed: false,
             missing: HashMap::new(),
             overlay_last: Default::default(),
@@ -2459,15 +2465,32 @@ impl Switcher {
         commands
     }
 
+    /// The count that holds what is held ready while cue or mood actions
+    /// run: a stop before a start would otherwise drop the very sound it
+    /// starts. Above 0, nothing new is preloaded.
+    pub fn preload_hold(&self) -> std::sync::Arc<std::sync::atomic::AtomicU32> {
+        self.preload_held.clone()
+    }
+
     /// What the engine should hold ready, when it changed: the standby
     /// cue of every list, if it plays a sound or shows a picture, so GO
     /// starts it at once (SND.12).
     pub fn preload_commands(&mut self) -> Option<Command> {
+        use lmix_types::LayerContent;
+        if self.preload_held.load(std::sync::atomic::Ordering::Acquire) > 0 {
+            return None;
+        }
         let mut preload = Preload::default();
+        // A mood cue: what its mood would start now (MOOD.6).
+        let mut moods = Vec::new();
         for list in &self.show.cue_lists {
             let Some(cue) = list.cues.get(self.cues.standby(list.id)) else {
                 continue;
             };
+            if let (CueKind::Mood, Some(mood)) = (cue.kind, &cue.mood) {
+                moods.push((mood.mood.to_string(), mood.fade_ms));
+                continue;
+            }
             let id = crate::cues::media_id(cue.id);
             match (&cue.sound, &cue.picture) {
                 (Some(sound), _) if cue.kind == CueKind::Sound => {
@@ -2482,6 +2505,23 @@ impl Switcher {
                     }
                 }
                 _ => {}
+            }
+        }
+        for (id, content) in self.moods.prepare(&self.show.moods, &moods) {
+            match content {
+                LayerContent::Sound { sound } => {
+                    if let Ok(sound) = crate::playback::engine_sound(&sound, &self.show.zones) {
+                        preload.sounds.push((id, sound));
+                    }
+                }
+                LayerContent::Picture { picture } => {
+                    if let Ok(picture) =
+                        crate::playback::engine_picture(&picture, &self.show.stages)
+                    {
+                        preload.pictures.push((id, picture));
+                    }
+                }
+                LayerContent::Off | LayerContent::Actions { .. } => {}
             }
         }
         if self.preload_sent.as_ref() == Some(&preload) {
@@ -3852,10 +3892,31 @@ impl Switcher {
         }
     }
 
-    /// The sound or picture `id` of a mood layer did not start: the layer
-    /// is off again, so setting the mood once more tries again.
-    pub fn mood_media_failed(&mut self, id: &str) {
-        self.moods.media_failed(id);
+    /// The sound or picture `id` of a mood layer did not start, played to
+    /// its end or was stopped: the layer is off, so setting the mood once
+    /// more starts it again. Whether a layer had it.
+    pub fn mood_media_gone(&mut self, id: &str) -> bool {
+        self.moods.media_gone(id)
+    }
+
+    /// Cue `cue` of `list` ended, stopped or failed: a sound or picture
+    /// cue gives back the layer it took (MOOD.5). An actions cue keeps it:
+    /// what it set (a light) stays until the next mood.
+    pub fn mood_cue_over(&mut self, list: InputId, cue: lmix_types::CueId) -> bool {
+        fn find(cues: &[Cue], id: lmix_types::CueId) -> Option<&Cue> {
+            cues.iter()
+                .find_map(|c| (c.id == id).then_some(c).or_else(|| find(&c.children, id)))
+        }
+        let media = self
+            .show
+            .cue_lists
+            .iter()
+            .find(|l| l.id == list)
+            .and_then(|l| find(&l.cues, cue))
+            .is_some_and(|c| {
+                c.layer.is_some() && matches!(c.kind, CueKind::Sound | CueKind::Picture)
+            });
+        media && self.moods.cue_over(list, cue)
     }
 
     /// The running cues; an unnamed mood cue by its mood (MOOD.6).
@@ -11403,6 +11464,63 @@ mod tests {
         assert!(
             ready(&sw.restore_commands()).is_some(),
             "a restore holds it ready again"
+        );
+    }
+
+    #[test]
+    fn a_mood_cue_on_standby_holds_its_layers_ready() {
+        let mut sw = two_inputs();
+        sw.apply(Action::SetZone {
+            zone: lmix_types::Zone {
+                name: "Hall".into(),
+                channels: 2,
+            },
+        })
+        .unwrap();
+        let moods: lmix_types::Moods = serde_json::from_value(serde_json::json!({
+            "layers": [{"id": "00000000-0000-4000-8000-000000000001", "name": "Music"}],
+            "groups": [{"id": "00000000-0000-4000-8000-000000000002", "name": "Forest",
+                        "base": {"00000000-0000-4000-8000-000000000001":
+                                 {"kind": "sound", "sound": {"file": "/fx/birds.wav"}}}}]
+        }))
+        .unwrap();
+        let forest = moods.groups[0].id;
+        sw.apply(Action::SetMoods { moods }).unwrap();
+        let cue = Cue {
+            mood: Some(lmix_types::MoodCue {
+                mood: forest,
+                fade_ms: Some(2000),
+            }),
+            ..Cue::empty(CueKind::Mood)
+        };
+        let commands = sw
+            .apply(Action::AddCueList {
+                name: "Show".into(),
+                cues: vec![cue],
+                source: None,
+            })
+            .unwrap();
+        let held = commands
+            .iter()
+            .find_map(|c| match c {
+                Command::SetPreload { preload } => Some(preload.sounds.clone()),
+                _ => None,
+            })
+            .expect("held ready");
+        assert_eq!(held.len(), 1);
+        assert_eq!(held[0].1.uri, "file:///fx/birds.wav");
+        assert_eq!(held[0].1.fade_in_ms, 2000, "as the cue will start it");
+
+        // GO plays it under the id it was held under.
+        let actions = sw.set_mood("Forest", Some(2000)).unwrap();
+        assert!(actions
+            .iter()
+            .any(|a| matches!(a, Action::PlaySound { id, .. } if *id == held[0].0)));
+        // The mood runs now: nothing more to hold.
+        let next = sw.preload_commands();
+        assert!(
+            matches!(&next, Some(Command::SetPreload { preload }) if preload.sounds.is_empty()),
+            "{next:?}"
         );
     }
 

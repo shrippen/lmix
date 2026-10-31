@@ -160,6 +160,36 @@ const MEDIA_CHECK: std::time::Duration = std::time::Duration::from_secs(3);
 /// How often it moves auto-advancing data sources on when due.
 const AUTO_CHECK: std::time::Duration = std::time::Duration::from_millis(250);
 
+/// See [`Service::hold_preload`]. Dropped without [`PreloadHold::release`]
+/// (a client that went away cancels its action), it preloads on its own.
+struct PreloadHold {
+    held: Arc<std::sync::atomic::AtomicU32>,
+    service: std::sync::Weak<Service>,
+    released: bool,
+}
+
+impl PreloadHold {
+    /// Lets go; the caller preloads the standby then.
+    fn release(mut self) {
+        self.released = true;
+    }
+}
+
+impl Drop for PreloadHold {
+    fn drop(&mut self) {
+        self.held.fetch_sub(1, Ordering::AcqRel);
+        if self.released {
+            return;
+        }
+        if let (Some(service), Ok(runtime)) = (
+            self.service.upgrade(),
+            tokio::runtime::Handle::try_current(),
+        ) {
+            runtime.spawn(async move { service.preload_standby().await });
+        }
+    }
+}
+
 impl Service {
     pub fn new(slots: usize, engine: Arc<dyn Engine>, autosave: Option<PathBuf>) -> Arc<Self> {
         let (events, _) = broadcast::channel(EVENT_BUFFER);
@@ -605,7 +635,6 @@ impl Service {
                 out
             };
             self.run_cue_outs(out).await;
-            self.preload_standby().await;
         }
     }
 
@@ -633,13 +662,20 @@ impl Service {
             let out = {
                 let mut sw = self.switcher.lock().await;
                 let out = sw.media_ended(&id, tokio::time::Instant::now());
-                if !out.is_empty() {
+                // A mood layer's sound or picture: the layer is off.
+                let layer = sw.mood_media_gone(&id);
+                if !out.is_empty() || layer {
                     self.publish(&sw);
                 }
-                out
+                (out, layer)
             };
+            let (out, layer) = out;
             self.cue_wake.notify_one();
             self.run_cue_outs(out).await;
+            // The layer is off: a mood cue on standby starts it again.
+            if layer {
+                self.preload_standby().await;
+            }
         }
     }
 
@@ -724,9 +760,28 @@ impl Service {
     /// Run cue actions and send cue events. A failing action stops the
     /// rest of its cue and is reported; times and follows go on (CUE.19).
     async fn run_cue_outs(self: &Arc<Self>, out: Vec<crate::cues::Out>) {
+        let hold = self.hold_preload().await;
+        self.run_cue_outs_held(out).await;
+        hold.release();
+        self.preload_standby().await;
+    }
+
+    async fn run_cue_outs_held(self: &Arc<Self>, out: Vec<crate::cues::Out>) {
         for o in out {
             match o {
                 crate::cues::Out::Event { list, cue, what } => {
+                    if let (
+                        Some(id),
+                        lmix_types::CueEvent::Ended
+                        | lmix_types::CueEvent::Stopped
+                        | lmix_types::CueEvent::Failed { .. },
+                    ) = (cue, &what)
+                    {
+                        let mut sw = self.switcher.lock().await;
+                        if sw.mood_cue_over(list, id) {
+                            self.publish(&sw);
+                        }
+                    }
                     let _ = self.events.send(Event::Cue { list, cue, what });
                 }
                 crate::cues::Out::StopPlayback { fade_ms } => {
@@ -761,6 +816,14 @@ impl Service {
                             continue;
                         };
                         tracing::warn!(error = %e, %cue, "cue action failed; the rest of the cue is skipped");
+                        // Its sound or picture did not start: the layer it
+                        // took is off (MOOD.5).
+                        {
+                            let mut sw = self.switcher.lock().await;
+                            if sw.mood_cue_over(list, cue) {
+                                self.publish(&sw);
+                            }
+                        }
                         let what = lmix_types::CueEvent::Failed {
                             reason: e.to_string(),
                         };
@@ -776,9 +839,29 @@ impl Service {
         }
     }
 
+    /// Holds what is held ready until the guard is released or dropped
+    /// (`Switcher::preload_hold`).
+    async fn hold_preload(&self) -> PreloadHold {
+        let held = self.switcher.lock().await.preload_hold();
+        held.fetch_add(1, Ordering::AcqRel);
+        PreloadHold {
+            held,
+            service: self.me.clone(),
+            released: false,
+        }
+    }
+
     /// Actions of a mood's layers, each on its own: a light that does not
     /// answer keeps neither the music nor the picture back (MOOD.4).
     async fn run_mood_actions(self: &Arc<Self>, actions: Vec<Action>) {
+        // What a mood cue on standby held ready is for these starts.
+        let hold = self.hold_preload().await;
+        self.run_mood_actions_held(actions).await;
+        hold.release();
+        self.preload_standby().await;
+    }
+
+    async fn run_mood_actions_held(self: &Arc<Self>, actions: Vec<Action>) {
         for action in actions {
             // A start that failed may run all the same (made, then its
             // fade-in failed): stopped, so no later change leaves it
@@ -805,7 +888,7 @@ impl Service {
                 if let Some((id, stop)) = media {
                     let _ = Box::pin(self.handle_as(stop, Origin::Operator)).await;
                     let mut sw = self.switcher.lock().await;
-                    sw.mood_media_failed(&id);
+                    sw.mood_media_gone(&id);
                     self.publish(&sw);
                 }
             }
@@ -1861,6 +1944,8 @@ impl Service {
                     self.publish(&sw);
                     actions
                 };
+                // Then preloads again: a mood cue on standby now starts
+                // other layers, or the same with another fade.
                 self.run_mood_actions(actions).await;
                 return Ok(self.state().await);
             }
@@ -1910,7 +1995,6 @@ impl Service {
                 self.cue_wake.notify_one();
                 // What is due at once runs before the answer, like a cut.
                 self.run_cue_outs(out).await;
-                self.preload_standby().await;
                 return Ok(self.state().await);
             }
             _ => {}
@@ -3205,6 +3289,104 @@ mod tests {
         assert!(state.mood.layers.is_empty(), "the layer is off");
     }
 
+    /// MOOD.6: a mood cue's GO plays what was held ready for it; the stop
+    /// of the old sound before it does not drop that first.
+    #[tokio::test]
+    async fn a_mood_cue_plays_what_was_held_ready() {
+        use crate::switcher::Command;
+        use lmix_types::{Cue, CueKind, LayerContent, MoodGroup, MoodId};
+        let engine = Arc::new(NullEngine::default());
+        let service = Service::new(4, engine.clone(), None);
+        service.handle(bars()).await.unwrap();
+        service
+            .handle(Action::SetZone {
+                zone: lmix_types::Zone {
+                    name: "Saal".into(),
+                    channels: 2,
+                },
+            })
+            .await
+            .unwrap();
+        let mut moods = scene_moods();
+        let licht = moods.layers[0].id;
+        let sound = |file: &str| LayerContent::Sound {
+            sound: lmix_types::SoundCue {
+                file: file.into(),
+                ..Default::default()
+            },
+        };
+        moods.groups[0]
+            .base
+            .insert(licht, sound("/sounds/rain.wav"));
+        let town = MoodId::new();
+        moods.groups.push(MoodGroup {
+            id: town,
+            name: "Stadt".into(),
+            color: None,
+            base: [(licht, sound("/sounds/town.wav"))].into(),
+            variants: Vec::new(),
+        });
+        service.handle(Action::SetMoods { moods }).await.unwrap();
+        service
+            .handle(Action::SetMood {
+                mood: "Szene".into(),
+                fade_ms: None,
+            })
+            .await
+            .unwrap();
+        let cue = Cue {
+            mood: Some(lmix_types::MoodCue {
+                mood: town,
+                fade_ms: None,
+            }),
+            ..Cue::empty(CueKind::Mood)
+        };
+        service
+            .handle(Action::AddCueList {
+                name: "Show".into(),
+                cues: vec![cue],
+                source: None,
+            })
+            .await
+            .unwrap();
+        service.handle(Action::CueGo { list: None }).await.unwrap();
+
+        let log = engine.log();
+        let played = log
+            .iter()
+            .rposition(|c| matches!(c, Command::PlaySound { sound, .. } if sound.uri.ends_with("town.wav")))
+            .expect("the town plays");
+        let Command::PlaySound { id, .. } = &log[played] else {
+            unreachable!()
+        };
+        let held = log[..played]
+            .iter()
+            .rev()
+            .find_map(|c| match c {
+                Command::SetPreload { preload } => Some(preload),
+                _ => None,
+            })
+            .expect("held ready before");
+        assert!(
+            held.sounds.iter().any(|(ready, _)| ready == id),
+            "the last preload before the start still holds it: {log:?}"
+        );
+    }
+
+    /// A client that goes away mid GO drops the hold: preloading goes on.
+    #[tokio::test]
+    async fn a_dropped_hold_lets_the_preload_go_on() {
+        let service = Service::new(4, Arc::new(NullEngine::default()), None);
+        let held = service.switcher.lock().await.preload_hold();
+        let outer = service.hold_preload().await;
+        let inner = service.hold_preload().await;
+        assert_eq!(held.load(Ordering::Acquire), 2);
+        inner.release();
+        assert_eq!(held.load(Ordering::Acquire), 1, "the other still holds");
+        drop(outer);
+        assert_eq!(held.load(Ordering::Acquire), 0);
+    }
+
     #[tokio::test]
     async fn a_cue_takes_its_layer_until_the_next_mood() {
         use lmix_types::{Cue, LayerOrigin};
@@ -3273,6 +3455,67 @@ mod tests {
             state.mood.layers[0].origin,
             LayerOrigin::Mood { .. }
         ));
+    }
+
+    #[tokio::test]
+    async fn a_sound_cue_gives_its_layer_back_when_it_stops() {
+        use lmix_types::{Cue, LayerOrigin};
+        let service = Service::new(4, Arc::new(NullEngine::default()), None);
+        service.handle(bars()).await.unwrap();
+        service
+            .handle(Action::SetZone {
+                zone: lmix_types::Zone {
+                    name: "Saal".into(),
+                    channels: 2,
+                },
+            })
+            .await
+            .unwrap();
+        let moods = scene_moods();
+        let licht = moods.layers[0].id;
+        service.handle(Action::SetMoods { moods }).await.unwrap();
+        service
+            .handle(Action::SetMood {
+                mood: "Szene".into(),
+                fade_ms: None,
+            })
+            .await
+            .unwrap();
+        let rain = Cue {
+            name: "Regen".into(),
+            layer: Some(licht),
+            sound: Some(lmix_types::SoundCue {
+                file: "/sounds/rain.wav".into(),
+                repeat: lmix_types::SoundRepeat::Forever,
+                ..Default::default()
+            }),
+            ..Cue::empty(lmix_types::CueKind::Sound)
+        };
+        service
+            .handle(Action::AddCueList {
+                name: "Show".into(),
+                cues: vec![rain.clone()],
+                source: None,
+            })
+            .await
+            .unwrap();
+        let state = service.handle(Action::CueGo { list: None }).await.unwrap();
+        let list = state.cue_lists[0].id;
+        assert_eq!(
+            state.mood.layers[0].origin,
+            LayerOrigin::Cue { list, cue: rain.id }
+        );
+
+        // Stopped by the operator: the layer is off, not the cue's (still).
+        let state = service
+            .handle(Action::CueStop {
+                list: None,
+                cue: Some(rain.id.to_string()),
+                mode: lmix_types::StopMode::Hard,
+            })
+            .await
+            .unwrap();
+        assert!(state.mood.layers.is_empty(), "{:?}", state.mood.layers);
     }
 
     #[tokio::test]

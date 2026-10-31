@@ -6426,6 +6426,66 @@ Stand beim Bestätigen, schnelle Änderungen, Ablehnung, Ziehen von Gruppen
 und Ebenen, Pegel), `tst_removals.qml` (`askWith`), `tst_action_rows.qml`,
 `tst_show_moods.qml` (Ziehen in die Liste, daneben, im Show-Modus).
 
+## 2026-10-31 — Stimmungen: Ebenen, die enden (MOOD Stufe 5b)
+
+**Anlass**: Stufe 1 und 3b ließen offen, dass eine Ebene als laufend gilt,
+wenn ihr Klang von selbst endet, von anderswo gestoppt wird (`stop_sound`
+ohne Id) oder der Cue, der sie übernommen hat, endet (MOOD.4, MOOD.5).
+
+**Entscheidung**:
+- Die Engine meldet über `playback_ended` jeden Klang und jedes Bild, das
+  vorbei ist: zu Ende gespielt, gestoppt (auch alle auf einmal) oder mit
+  dem Wiedergabe-Flow weg. Ist es das einer Ebene (Medien-Id
+  `mood-<Ebene>-<n>`), ist die Ebene aus (`MoodRunner::media_gone`, wie
+  schon bei einem Start, der scheitert). Dieselbe Stimmung noch einmal
+  startet den Inhalt dann wieder, denn verglichen wird mit dem, was läuft.
+  Ein Wechsel, der den alten Klang ausblendet, trifft schon die neue
+  Medien-Id: dessen Ende ändert nichts.
+- Endet, stoppt oder scheitert ein Klang- oder Bild-Cue, der eine Ebene
+  übernommen hat, ist sie aus (`MoodRunner::cue_over`), auch nicht mehr
+  „Cue“ im Inspector. Ein Aktions-Cue behält die Ebene bis zur nächsten
+  Stimmung: er endet gleich nach seinen Aktionen, das Licht, das er
+  gesetzt hat, bleibt aber.
+- Ein Cue, den ein Stimmungswechsel stoppt, hat die Ebene schon abgegeben:
+  sein Ende ändert nichts mehr (nur die Herkunft dieses Cues zählt).
+
+**Geprüft**: `moods::tests::a_layer_whose_cue_or_sound_is_over_is_off`,
+`service::tests::a_sound_cue_gives_its_layer_back_when_it_stops`; der
+Aktions-Cue in `a_cue_takes_its_layer_until_the_next_mood` behält die
+Ebene.
+
+## 2026-10-31 — Stimmungen: Vorladen (MOOD Stufe 5c)
+
+**Anlass**: Ein Mood-Cue auf Standby lud nichts vor (MOOD.6); der erste
+Klang einer Stimmung kam darum später als der eines Klang-Cues.
+
+**Entscheidung**:
+- Für jeden Mood-Cue auf Standby fragt `preload_commands` den
+  `MoodRunner`, was diese Stimmung mit der Blende des Cues starten würde
+  (`MoodRunner::prepare`), und hält diese Klänge und Bilder bereit wie
+  die eines Klang- oder Bild-Cues.
+- Vorgeladen wird unter der Medien-Id, unter der die Stimmung sie dann
+  startet: der Runner merkt sich die Id je Ebene und Inhalt und nimmt sie
+  beim Start (`ready_id`). Die Engine nimmt Vorgeladenes nur bei gleicher
+  Id und gleichem Klang (auch `fade_in_ms`), darum trägt der vorgeladene
+  Inhalt schon die Blende, mit der die Ebene einblenden wird.
+- Ebenen, deren Inhalt schon läuft, lädt er nicht vor; nach jeder
+  gesetzten Stimmung und wenn eine Ebene endet, wird das Vorladen neu
+  berechnet.
+- Solange die Aktionen eines Cues oder einer Stimmung nacheinander laufen,
+  bleibt das Vorgeladene stehen (`Service::hold_preload`, ein Wächter, der
+  auch loslässt, wenn der Aufrufer abbricht); erst danach
+  wird neu berechnet. Sonst rechnete schon das Stoppen des alten Klangs
+  (vor dem Start des neuen) das Vorladen neu, ohne den Klang, den die
+  Stimmung gleich startet, und die Engine verwarf ihn. Das hilft ebenso
+  einem Klang-Cue, der eine Ebene übernimmt: deren Stopp kommt vor
+  seinem Start.
+
+**Geprüft**: `moods::tests::what_a_mood_would_start_is_held_ready_under_the_id_it_plays_as`,
+`switcher::tests::a_mood_cue_on_standby_holds_its_layers_ready`,
+`service::tests::a_mood_cue_plays_what_was_held_ready`,
+`service::tests::a_dropped_hold_lets_the_preload_go_on`.
+
 ## 2026-10-31 — Stimmungen: Panik nach der Notfall-Liste (MOOD Stufe 5d)
 
 **Anlass**: Die Panik-Stimmung lief nach der Notfall-Liste (MOOD.9), aber
