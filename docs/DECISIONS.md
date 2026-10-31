@@ -547,7 +547,9 @@ Vision-Mixer (PGM und Multiview): unendlich = halten, 400 ms = danach
 Schwarz. Gespeichert in der Show-Datei. Die Kachelbilder von `lmix-core`
 folgen dem (halten = letztes Bild weiterreichen). Eine Umstellung wirkt ab
 dem nächsten Frame der Quelle; bei bereits stehender Quelle erst, wenn sie
-wieder läuft.
+wieder läuft. (Überholt 31.10.: „unendlich“ als GST_CLOCK_TIME_NONE hielt
+das Bild für immer, „halten“ ist jetzt `u64::MAX - 1`, und Schwarz wirkt
+auch bei stehender Quelle sofort.)
 **Fehler aus Schritt 2 behoben**: strom übernimmt bei `transition` immer
 seine Vorschau ins Programm und ignoriert `to_input`. Ein `cut_direct` auf
 einen Input außerhalb der Vorschau und das Schalten auf Schwarz trafen
