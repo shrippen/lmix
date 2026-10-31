@@ -524,7 +524,6 @@ impl Service {
                 out
             };
             self.run_cue_outs(out).await;
-            self.preload_standby().await;
         }
     }
 
@@ -557,10 +556,15 @@ impl Service {
                 if !out.is_empty() || layer {
                     self.publish(&sw);
                 }
-                out
+                (out, layer)
             };
+            let (out, layer) = out;
             self.cue_wake.notify_one();
             self.run_cue_outs(out).await;
+            // The layer is off: a mood cue on standby starts it again.
+            if layer {
+                self.preload_standby().await;
+            }
         }
     }
 
@@ -645,6 +649,16 @@ impl Service {
     /// Run cue actions and send cue events. A failing action stops the
     /// rest of its cue and is reported; times and follows go on (CUE.19).
     async fn run_cue_outs(self: &Arc<Self>, out: Vec<crate::cues::Out>) {
+        if out.is_empty() {
+            return;
+        }
+        self.switcher.lock().await.hold_preload();
+        self.run_cue_outs_held(out).await;
+        self.switcher.lock().await.release_preload();
+        self.preload_standby().await;
+    }
+
+    async fn run_cue_outs_held(self: &Arc<Self>, out: Vec<crate::cues::Out>) {
         for o in out {
             match o {
                 crate::cues::Out::Event { list, cue, what } => {
@@ -720,6 +734,14 @@ impl Service {
     /// Actions of a mood's layers, each on its own: a light that does not
     /// answer keeps neither the music nor the picture back (MOOD.4).
     async fn run_mood_actions(self: &Arc<Self>, actions: Vec<Action>) {
+        // What a mood cue on standby held ready is for these starts.
+        self.switcher.lock().await.hold_preload();
+        self.run_mood_actions_held(actions).await;
+        self.switcher.lock().await.release_preload();
+        self.preload_standby().await;
+    }
+
+    async fn run_mood_actions_held(self: &Arc<Self>, actions: Vec<Action>) {
         for action in actions {
             // A start that failed may run all the same (made, then its
             // fade-in failed): stopped, so no later change leaves it
@@ -1802,10 +1824,9 @@ impl Service {
                     self.publish(&sw);
                     actions
                 };
+                // Then preloads again: a mood cue on standby now starts
+                // other layers, or the same with another fade.
                 self.run_mood_actions(actions).await;
-                // A mood cue on standby now starts other layers, or the
-                // same with another fade.
-                self.preload_standby().await;
                 return Ok(self.state().await);
             }
             Action::CueGo { .. }
@@ -1854,7 +1875,6 @@ impl Service {
                 self.cue_wake.notify_one();
                 // What is due at once runs before the answer, like a cut.
                 self.run_cue_outs(out).await;
-                self.preload_standby().await;
                 return Ok(self.state().await);
             }
             _ => {}
@@ -3147,6 +3167,90 @@ mod tests {
             "and stopped: it may run all the same"
         );
         assert!(state.mood.layers.is_empty(), "the layer is off");
+    }
+
+    /// MOOD.6: a mood cue's GO plays what was held ready for it; the stop
+    /// of the old sound before it does not drop that first.
+    #[tokio::test]
+    async fn a_mood_cue_plays_what_was_held_ready() {
+        use crate::switcher::Command;
+        use lmix_types::{Cue, CueKind, LayerContent, MoodGroup, MoodId};
+        let engine = Arc::new(NullEngine::default());
+        let service = Service::new(4, engine.clone(), None);
+        service.handle(bars()).await.unwrap();
+        service
+            .handle(Action::SetZone {
+                zone: lmix_types::Zone {
+                    name: "Saal".into(),
+                    channels: 2,
+                },
+            })
+            .await
+            .unwrap();
+        let mut moods = scene_moods();
+        let licht = moods.layers[0].id;
+        let sound = |file: &str| LayerContent::Sound {
+            sound: lmix_types::SoundCue {
+                file: file.into(),
+                ..Default::default()
+            },
+        };
+        moods.groups[0]
+            .base
+            .insert(licht, sound("/sounds/rain.wav"));
+        let town = MoodId::new();
+        moods.groups.push(MoodGroup {
+            id: town,
+            name: "Stadt".into(),
+            color: None,
+            base: [(licht, sound("/sounds/town.wav"))].into(),
+            variants: Vec::new(),
+        });
+        service.handle(Action::SetMoods { moods }).await.unwrap();
+        service
+            .handle(Action::SetMood {
+                mood: "Szene".into(),
+                fade_ms: None,
+            })
+            .await
+            .unwrap();
+        let cue = Cue {
+            mood: Some(lmix_types::MoodCue {
+                mood: town,
+                fade_ms: None,
+            }),
+            ..Cue::empty(CueKind::Mood)
+        };
+        service
+            .handle(Action::AddCueList {
+                name: "Show".into(),
+                cues: vec![cue],
+                source: None,
+            })
+            .await
+            .unwrap();
+        service.handle(Action::CueGo { list: None }).await.unwrap();
+
+        let log = engine.log();
+        let played = log
+            .iter()
+            .rposition(|c| matches!(c, Command::PlaySound { sound, .. } if sound.uri.ends_with("town.wav")))
+            .expect("the town plays");
+        let Command::PlaySound { id, .. } = &log[played] else {
+            unreachable!()
+        };
+        let held = log[..played]
+            .iter()
+            .rev()
+            .find_map(|c| match c {
+                Command::SetPreload { preload } => Some(preload),
+                _ => None,
+            })
+            .expect("held ready before");
+        assert!(
+            held.sounds.iter().any(|(ready, _)| ready == id),
+            "the last preload before the start still holds it: {log:?}"
+        );
     }
 
     #[tokio::test]
