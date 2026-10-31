@@ -383,7 +383,7 @@ KanteDialog {
                                 const named = "\u201c" + (place.variant ? place.group.name + " / " + place.variant.name : place.group.name) + "\u201d"
                                 dialog.askRemove({
                                     question: place.variant ? qsTr("Remove variant %1?").arg(named) : qsTr("Remove group %1?").arg(named),
-                                    consequence: (variants > 0 ? qsTr("Its %1 variants go with it. ").arg(variants) : "")
+                                    consequence: (variants > 0 ? qsTr("Its variants go with it (%1). ").arg(variants) : "")
                                         + qsTr("Collections forget it; mood cues that set it are marked."),
                                     acceptText: place.variant ? qsTr("Remove variant") : qsTr("Remove group"),
                                     removedText: place.variant ? qsTr("Variant %1 removed").arg(named) : qsTr("Group %1 removed").arg(named),
@@ -623,7 +623,6 @@ KanteDialog {
                             emphasis: KanteButton.Emphasis.Destructive
                             onClicked: {
                                 const id = layerRow.modelData.id
-                                const at = layerRow.index
                                 const named = "\u201c" + layerRow.modelData.name + "\u201d"
                                 dialog.askRemove({
                                     question: qsTr("Remove layer %1?").arg(named),
@@ -631,7 +630,8 @@ KanteDialog {
                                     acceptText: qsTr("Remove layer"),
                                     removedText: qsTr("Layer %1 removed").arg(named),
                                     change: copy => {
-                                        copy.layers.splice(at, 1)
+                                        // By id: the order may change while it asks.
+                                        copy.layers = copy.layers.filter(l => l.id !== id)
                                         copy.groups.forEach(g => {
                                             delete (g.base || {})[id]
                                             ;(g.variants || []).forEach(v => delete (v.layers || {})[id])
@@ -690,14 +690,14 @@ KanteDialog {
                             text: qsTr("Remove")
                             emphasis: KanteButton.Emphasis.Destructive
                             onClicked: {
-                                const at = collectionRow.index
+                                const id = collectionRow.modelData.id
                                 const named = "\u201c" + collectionRow.modelData.name + "\u201d"
                                 dialog.askRemove({
                                     question: qsTr("Remove collection %1?").arg(named),
                                     consequence: qsTr("Its moods and one-shots stay."),
                                     acceptText: qsTr("Remove collection"),
                                     removedText: qsTr("Collection %1 removed").arg(named),
-                                    change: copy => copy.collections.splice(at, 1)
+                                    change: copy => copy.collections = copy.collections.filter(c => c.id !== id)
                                 })
                             }
                         }

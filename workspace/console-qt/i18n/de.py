@@ -1366,7 +1366,7 @@ DE = {
     'Collections forget it; mood cues that set it are marked.': 'Sammlungen vergessen sie; Stimmungs-Cues, die sie setzen, werden markiert.',
     'Every mood and the panic mood forget what they had on it; cues that take it are marked.': 'Jede Stimmung und die Panik-Stimmung vergessen, was sie darauf hatten; Cues, die sie übernehmen, werden markiert.',
     'Group %1 removed': 'Gruppe %1 entfernt',
-    'Its %1 variants go with it. ': 'Ihre %1 Varianten gehen mit. ',
+    'Its variants go with it (%1). ': 'Ihre Varianten gehen mit (%1). ',
     'Its moods and one-shots stay.': 'Ihre Stimmungen und Oneshots bleiben.',
     'Layer %1 removed': 'Ebene %1 entfernt',
     'Remove collection': 'Sammlung entfernen',

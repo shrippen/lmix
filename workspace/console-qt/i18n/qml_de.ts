@@ -3436,12 +3436,7 @@
       <translation>Gruppe %1 entfernen?</translation>
     </message>
     <message>
-      <location line="+1" />
-      <source>Its %1 variants go with it. </source>
-      <translation>Ihre %1 Varianten gehen mit. </translation>
-    </message>
-    <message>
-      <location line="+1" />
+      <location line="+2" />
       <source>Collections forget it; mood cues that set it are marked.</source>
       <translation>Sammlungen vergessen sie; Stimmungs-Cues, die sie setzen, werden markiert.</translation>
     </message>
@@ -3466,7 +3461,7 @@
       <translation>Gruppe %1 entfernt</translation>
     </message>
     <message>
-      <location line="+240" />
+      <location line="+239" />
       <source>Remove layer %1?</source>
       <translation>Ebene %1 entfernen?</translation>
     </message>
@@ -3486,12 +3481,17 @@
       <translation>Ebene %1 entfernt</translation>
     </message>
     <message>
-      <location line="-214" />
+      <location line="-213" />
       <source>Add layers first (Layers tab): what a mood sets, e.g. light, music, ambience.</source>
       <translation>Zuerst Ebenen anlegen (Reiter Ebenen): was eine Stimmung setzt, z. B. Licht, Musik, Atmo.</translation>
     </message>
     <message>
-      <location line="+1" />
+      <location line="-32" />
+      <source>Its variants go with it (%1). </source>
+      <translation>Ihre Varianten gehen mit (%1). </translation>
+    </message>
+    <message>
+      <location line="+33" />
       <source>Choose a group or variant, or add one.</source>
       <translation>Eine Gruppe oder Variante wählen oder hinzufügen.</translation>
     </message>
