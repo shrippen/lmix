@@ -1005,7 +1005,9 @@ pub struct Switcher {
     preload_sent: Option<Preload>,
     /// While cue or mood actions run, one after the other: what is held
     /// ready stays as it is, so their starts take it (MOOD.6).
-    preload_held: u32,
+    /// A count, shared with the service's guards (`Service::hold_preload`):
+    /// a cancelled caller still lets go.
+    preload_held: std::sync::Arc<std::sync::atomic::AtomicU32>,
     targets_changed: bool,
     /// Media files not found per input (SHW.4); the service checks.
     missing: HashMap<InputId, Vec<String>>,
@@ -1073,7 +1075,7 @@ impl Switcher {
             stage_patches: Vec::new(),
             playback_sent: None,
             preload_sent: None,
-            preload_held: 0,
+            preload_held: Default::default(),
             targets_changed: false,
             missing: HashMap::new(),
             overlay_last: Default::default(),
@@ -2463,16 +2465,11 @@ impl Switcher {
         commands
     }
 
-    /// Hold what is held ready while cue or mood actions run: a stop
-    /// before a start would otherwise drop the very sound it starts.
-    pub fn hold_preload(&mut self) {
-        self.preload_held += 1;
-    }
-
-    /// The end of [`Switcher::hold_preload`]; the caller then preloads
-    /// the standby again.
-    pub fn release_preload(&mut self) {
-        self.preload_held = self.preload_held.saturating_sub(1);
+    /// The count that holds what is held ready while cue or mood actions
+    /// run: a stop before a start would otherwise drop the very sound it
+    /// starts. Above 0, nothing new is preloaded.
+    pub fn preload_hold(&self) -> std::sync::Arc<std::sync::atomic::AtomicU32> {
+        self.preload_held.clone()
     }
 
     /// What the engine should hold ready, when it changed: the standby
@@ -2480,7 +2477,7 @@ impl Switcher {
     /// starts it at once (SND.12).
     pub fn preload_commands(&mut self) -> Option<Command> {
         use lmix_types::LayerContent;
-        if self.preload_held > 0 {
+        if self.preload_held.load(std::sync::atomic::Ordering::Acquire) > 0 {
             return None;
         }
         let mut preload = Preload::default();

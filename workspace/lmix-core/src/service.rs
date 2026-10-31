@@ -146,6 +146,36 @@ const MEDIA_CHECK: std::time::Duration = std::time::Duration::from_secs(3);
 /// How often it moves auto-advancing data sources on when due.
 const AUTO_CHECK: std::time::Duration = std::time::Duration::from_millis(250);
 
+/// See [`Service::hold_preload`]. Dropped without [`PreloadHold::release`]
+/// (a client that went away cancels its action), it preloads on its own.
+struct PreloadHold {
+    held: Arc<std::sync::atomic::AtomicU32>,
+    service: std::sync::Weak<Service>,
+    released: bool,
+}
+
+impl PreloadHold {
+    /// Lets go; the caller preloads the standby then.
+    fn release(mut self) {
+        self.released = true;
+    }
+}
+
+impl Drop for PreloadHold {
+    fn drop(&mut self) {
+        self.held.fetch_sub(1, Ordering::AcqRel);
+        if self.released {
+            return;
+        }
+        if let (Some(service), Ok(runtime)) = (
+            self.service.upgrade(),
+            tokio::runtime::Handle::try_current(),
+        ) {
+            runtime.spawn(async move { service.preload_standby().await });
+        }
+    }
+}
+
 impl Service {
     pub fn new(slots: usize, engine: Arc<dyn Engine>, autosave: Option<PathBuf>) -> Arc<Self> {
         let (events, _) = broadcast::channel(EVENT_BUFFER);
@@ -649,12 +679,9 @@ impl Service {
     /// Run cue actions and send cue events. A failing action stops the
     /// rest of its cue and is reported; times and follows go on (CUE.19).
     async fn run_cue_outs(self: &Arc<Self>, out: Vec<crate::cues::Out>) {
-        if out.is_empty() {
-            return;
-        }
-        self.switcher.lock().await.hold_preload();
+        let hold = self.hold_preload().await;
         self.run_cue_outs_held(out).await;
-        self.switcher.lock().await.release_preload();
+        hold.release();
         self.preload_standby().await;
     }
 
@@ -731,13 +758,25 @@ impl Service {
         }
     }
 
+    /// Holds what is held ready until the guard is released or dropped
+    /// (`Switcher::preload_hold`).
+    async fn hold_preload(&self) -> PreloadHold {
+        let held = self.switcher.lock().await.preload_hold();
+        held.fetch_add(1, Ordering::AcqRel);
+        PreloadHold {
+            held,
+            service: self.me.clone(),
+            released: false,
+        }
+    }
+
     /// Actions of a mood's layers, each on its own: a light that does not
     /// answer keeps neither the music nor the picture back (MOOD.4).
     async fn run_mood_actions(self: &Arc<Self>, actions: Vec<Action>) {
         // What a mood cue on standby held ready is for these starts.
-        self.switcher.lock().await.hold_preload();
+        let hold = self.hold_preload().await;
         self.run_mood_actions_held(actions).await;
-        self.switcher.lock().await.release_preload();
+        hold.release();
         self.preload_standby().await;
     }
 
@@ -3251,6 +3290,20 @@ mod tests {
             held.sounds.iter().any(|(ready, _)| ready == id),
             "the last preload before the start still holds it: {log:?}"
         );
+    }
+
+    /// A client that goes away mid GO drops the hold: preloading goes on.
+    #[tokio::test]
+    async fn a_dropped_hold_lets_the_preload_go_on() {
+        let service = Service::new(4, Arc::new(NullEngine::default()), None);
+        let held = service.switcher.lock().await.preload_hold();
+        let outer = service.hold_preload().await;
+        let inner = service.hold_preload().await;
+        assert_eq!(held.load(Ordering::Acquire), 2);
+        inner.release();
+        assert_eq!(held.load(Ordering::Acquire), 1, "the other still holds");
+        drop(outer);
+        assert_eq!(held.load(Ordering::Acquire), 0);
     }
 
     #[tokio::test]

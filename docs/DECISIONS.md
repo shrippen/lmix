@@ -6473,7 +6473,8 @@ Klang einer Stimmung kam darum später als der eines Klang-Cues.
   gesetzten Stimmung und wenn eine Ebene endet, wird das Vorladen neu
   berechnet.
 - Solange die Aktionen eines Cues oder einer Stimmung nacheinander laufen,
-  bleibt das Vorgeladene stehen (`Switcher::hold_preload`); erst danach
+  bleibt das Vorgeladene stehen (`Service::hold_preload`, ein Wächter, der
+  auch loslässt, wenn der Aufrufer abbricht); erst danach
   wird neu berechnet. Sonst rechnete schon das Stoppen des alten Klangs
   (vor dem Start des neuen) das Vorladen neu, ohne den Klang, den die
   Stimmung gleich startet, und die Engine verwarf ihn. Das hilft ebenso
@@ -6482,4 +6483,5 @@ Klang einer Stimmung kam darum später als der eines Klang-Cues.
 
 **Geprüft**: `moods::tests::what_a_mood_would_start_is_held_ready_under_the_id_it_plays_as`,
 `switcher::tests::a_mood_cue_on_standby_holds_its_layers_ready`,
-`service::tests::a_mood_cue_plays_what_was_held_ready`.
+`service::tests::a_mood_cue_plays_what_was_held_ready`,
+`service::tests::a_dropped_hold_lets_the_preload_go_on`.
