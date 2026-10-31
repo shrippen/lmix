@@ -36,8 +36,10 @@ KanteDialog {
     readonly property var stateMoods: show && show.moods ? show.moods : ({})
     /** What was sent and not yet back in the state, or null. */
     property var draft: null
+    /** The moods of edits sent and not yet answered, oldest first. */
+    property var unanswered: []
     /** Edits sent and not yet answered. */
-    property int inFlight: 0
+    readonly property int inFlight: unanswered.length
     /** The moods edits build on and the dialog shows. */
     readonly property var moods: draft !== null ? draft : stateMoods
     readonly property var layers: moods.layers || []
@@ -71,7 +73,7 @@ KanteDialog {
     onClosed: {
         pending = {}
         draft = null
-        inFlight = 0
+        unanswered = []
     }
     // Once every edit is answered, the next state holds them all; without
     // a core (tests) nothing answers, and the state is taken at once.
@@ -85,10 +87,16 @@ KanteDialog {
         target: dialog.core
         enabled: dialog.inFlight > 0
         function onAnswered(action, refusal) {
-            if (JSON.parse(action).action !== "set_moods") {
+            const answered = JSON.parse(action)
+            // Only this dialog's: other parts of the Console set moods too.
+            const at = answered.action === "set_moods"
+                ? dialog.unanswered.findIndex(sent => dialog.covers(sent, answered.moods)) : -1
+            if (at < 0) {
                 return
             }
-            dialog.inFlight = Math.max(0, dialog.inFlight - 1)
+            const rest = dialog.unanswered.slice()
+            rest.splice(at, 1)
+            dialog.unanswered = rest
             if (refusal.length > 0) {
                 dialog.draft = null
             } else if (dialog.inFlight === 0) {
@@ -133,9 +141,31 @@ KanteDialog {
     function sending(copy) {
         if (core) {
             draft = copy
-            inFlight++
+            unanswered = unanswered.concat([JSON.parse(JSON.stringify(copy))])
         }
         return { action: "set_moods", moods: copy }
+    }
+    /** `answered` (as the Console writes the action back) holds everything
+        of `sent`: what it adds and an empty field it leaves out do not
+        count, numbers only up to rounding. */
+    function covers(sent, answered) {
+        const empty = v => v === null || v === undefined || (Array.isArray(v) && v.length === 0)
+            || (typeof v === "object" && !Array.isArray(v) && Object.keys(v).length === 0)
+        if (empty(sent)) {
+            return empty(answered)
+        }
+        if (typeof sent === "number") {
+            return typeof answered === "number" && Math.abs(sent - answered) < 1e-6
+        }
+        if (Array.isArray(sent)) {
+            return Array.isArray(answered) && answered.length === sent.length
+                && sent.every((item, i) => covers(item, answered[i]))
+        }
+        if (typeof sent === "object") {
+            return answered !== null && typeof answered === "object"
+                && Object.keys(sent).every(key => covers(sent[key], answered[key]))
+        }
+        return sent === answered
     }
     /** Changes a copy of the moods with `change` and sends it whole. */
     function edit(change) {
@@ -255,7 +285,8 @@ KanteDialog {
     }
 
     /** A handle to drag a row of a list to another place; the row it is
-        over is marked. */
+        over is marked. Only the handle: a list that scrolls stays
+        flickable over the rest of the row (on touch, too). */
     component DragGrip: QQC2.Label {
         id: grip
         /** A dragged row is over this one. */
@@ -263,6 +294,8 @@ KanteDialog {
         readonly property alias active: gripDrag.active
         signal moved(point scenePosition)
         signal dropped(point scenePosition)
+        /** The drag is over, dropped or taken away. */
+        signal ended()
         text: "\u2807"
         font.pixelSize: Kirigami.Units.gridUnit
         color: over ? KanteStyle.focusColor : KanteStyle.mutedTextColor
@@ -272,12 +305,14 @@ KanteDialog {
             id: gripHover
             cursorShape: Qt.SizeVerCursor
         }
-        DragHandler {
+        DropDrag {
             id: gripDrag
-            target: null
             xAxis.enabled: false
-            onCentroidChanged: if (active) grip.moved(centroid.scenePosition)
-            onActiveChanged: if (!active) grip.dropped(centroid.scenePosition)
+            // The grip is for moving: a list it is in does not take the drag over to scroll.
+            grabPermissions: PointerHandler.CanTakeOverFromAnything
+            onMoved: position => grip.moved(position)
+            onDropped: position => grip.dropped(position)
+            onEnded: grip.ended()
         }
     }
 
@@ -419,6 +454,7 @@ KanteDialog {
                     text: qsTr("Layer")
                 }
                 KanteSpinBox {
+                    objectName: "mediaPictureLayer"
                     visible: !mediaDialog.sound
                     from: 0
                     to: 999
@@ -506,7 +542,8 @@ KanteDialog {
                         delegate: KanteListRow {
                             id: placeRow
                             required property var modelData
-                            objectName: "place:" + (modelData.variant ? modelData.group.name + "/" + modelData.variant.name : modelData.group.name)
+                            readonly property string path: modelData.variant ? modelData.group.name + "/" + modelData.variant.name : modelData.group.name
+                            objectName: "place:" + path
                             width: ListView.view.width
                             density: KanteListRow.Density.Compact
                             leadingText: modelData.variant ? "›" : ""
@@ -514,26 +551,18 @@ KanteDialog {
                             text: modelData.variant ? modelData.variant.name : modelData.group.name
                             selected: dialog.chosenId === modelData.id
                             dropTarget: dialog.dragList === "places" && dialog.dropAt === modelData.id
-                            opacity: placeDrag.active ? 0.5 : 1
+                            opacity: placeGrip.active ? 0.5 : 1
                             onClicked: dialog.chosenId = modelData.id
-                            // Over the whole row: the row's default property is its marker.
-                            Item {
-                                parent: placeRow
-                                anchors.fill: parent
-                                DragHandler {
-                                    id: placeDrag
-                                    target: null
-                                    yAxis.enabled: true
-                                    xAxis.enabled: false
-                                    onCentroidChanged: if (active) {
-                                        dialog.dragList = "places"
-                                        dialog.dropAt = dialog.placeUnder(centroid.scenePosition)
-                                    }
-                                    onActiveChanged: if (!active) {
-                                        dialog.dropPlace(placeRow.modelData, dialog.placeUnder(centroid.scenePosition))
-                                        dialog.dragList = ""
-                                    }
+                            trailing: DragGrip {
+                                id: placeGrip
+                                objectName: "placeGrip:" + placeRow.path
+                                over: placeRow.dropTarget
+                                onMoved: position => {
+                                    dialog.dragList = "places"
+                                    dialog.dropAt = dialog.placeUnder(position)
                                 }
+                                onDropped: position => dialog.dropPlace(placeRow.modelData, dialog.placeUnder(position))
+                                onEnded: dialog.dragList = ""
                             }
                         }
                     }
@@ -824,10 +853,8 @@ KanteDialog {
                                 dialog.dragList = "layers"
                                 dialog.dropAt = dialog.rowUnder(layerRows, position)
                             }
-                            onDropped: position => {
-                                dialog.dropRow("layers", layerRow.index, dialog.rowUnder(layerRows, position))
-                                dialog.dragList = ""
-                            }
+                            onDropped: position => dialog.dropRow("layers", layerRow.index, dialog.rowUnder(layerRows, position))
+                            onEnded: dialog.dragList = ""
                         }
                         KanteTextField {
                             objectName: "layerName:" + layerRow.index
@@ -930,10 +957,8 @@ KanteDialog {
                                 dialog.dragList = "collections"
                                 dialog.dropAt = dialog.rowUnder(collectionRows, position)
                             }
-                            onDropped: position => {
-                                dialog.dropRow("collections", collectionRow.index, dialog.rowUnder(collectionRows, position))
-                                dialog.dragList = ""
-                            }
+                            onDropped: position => dialog.dropRow("collections", collectionRow.index, dialog.rowUnder(collectionRows, position))
+                            onEnded: dialog.dragList = ""
                         }
                         KanteTextField {
                             objectName: "collectionName:" + collectionRow.index

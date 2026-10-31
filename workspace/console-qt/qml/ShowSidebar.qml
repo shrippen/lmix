@@ -256,12 +256,12 @@ KanteCard {
                         Item {
                             parent: moodRow
                             anchors.fill: parent
-                            DragHandler {
+                            DropDrag {
                                 id: moodDrag
-                                target: null
                                 enabled: side.showView.editing && !side.showView.fromScript && side.showView.list !== null
-                                onCentroidChanged: if (active) side.showView.moodDragMoved(centroid.scenePosition)
-                                onActiveChanged: if (!active) side.showView.moodDropped(moodRow.modelData.id, centroid.scenePosition)
+                                onMoved: position => side.showView.moodDragMoved(position)
+                                onDropped: position => side.showView.moodDropped(moodRow.modelData.id, position)
+                                onEnded: side.showView.moodDropAfter = null
                             }
                         }
                         onClicked: {

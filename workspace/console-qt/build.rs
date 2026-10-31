@@ -150,6 +150,7 @@ fn main() {
                 "qml/ShowView.qml",
                 "qml/ShowSidebar.qml",
                 "qml/MoodsDialog.qml",
+                "qml/DropDrag.qml",
                 "qml/MoodsPage.qml",
                 "qml/ShowInspector.qml",
                 "qml/DurationField.qml",
