@@ -12,6 +12,7 @@ use flows::MixerBackend;
 pub mod flows;
 pub mod meters;
 pub mod null;
+pub mod output_rate;
 pub mod playback_flow;
 pub mod strom;
 
@@ -156,9 +157,14 @@ pub trait Engine: Send + Sync {
         meters::EngineHealth::default()
     }
 
-    /// Link health of a running network output; `None` for other kinds
-    /// or while unknown.
-    async fn output_stats(&self, _id: lmix_types::OutputId) -> Option<lmix_types::OutputStats> {
+    /// Measured rate (and SRT link health) of a running SRT, RTMP or
+    /// recording output of `spec`; `None` for other kinds or while
+    /// unknown.
+    async fn output_stats(
+        &self,
+        _id: lmix_types::OutputId,
+        _spec: &lmix_types::OutputSpec,
+    ) -> Option<lmix_types::OutputStats> {
         None
     }
 }
