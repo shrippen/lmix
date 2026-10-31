@@ -6535,10 +6535,23 @@ konnte zu früh enden. Ein abgebrochenes Ziehen galt als Ablegen.
   in die Cue-Liste.
 - Aktionsliste und Kurzbefehl: der Inhalt scrollt, höchstens 70 % der
   Fensterhöhe (wie die Einstellungen eines Inputs).
-- Der Entwurf merkt sich die gesendeten Stimmungen und zählt nur
-  Antworten, deren Stimmungen dazu passen (leere Felder, die lmix-core
-  beim Zurückschreiben weglässt, zählen nicht). Fremde Antworten und
-  fremde Ablehnungen lassen ihn stehen.
+- Der Entwurf zählt nur seine eigenen Antworten, und zwar kanonisch
+  verglichen: Beim Senden lässt der Dialog die `set_moods`-Aktion von der
+  Bridge lesen und neu schreiben (`core.canonicalAction`, dieselbe
+  Serialisierung wie im Signal `answered`) und merkt sich diesen Text;
+  eine Antwort gehört ihm, wenn sie gleich lautet. Ein toleranter
+  Vergleich gegen das Gesendete reichte nicht, weil lmix-types beim
+  Schreiben auch nicht leere Werte weglässt (`repeat: "once"`,
+  `false`-Felder, unbekannte Felder einer JSON-Aktion) und f32-Werte rundet;
+  dann endete der Entwurf nie und spätere Bearbeitungen überschrieben
+  fremde Änderungen (etwa ein Rückgängig). Fremde Antworten und fremde
+  Ablehnungen lassen ihn stehen. Eine Aktion, die die Bridge nicht lesen
+  kann (leere kanonische Form, `act` gibt false), wartet auf keine
+  Antwort; `AppShell.act` gibt dafür das Ergebnis von `backend.act` zurück.
+- `DropDrag` meldet `ended` genau einmal je Ziehen, nach `dropped`, wenn
+  abgelegt wird (Qt setzt `active` vor dem Wechsel des Grabs zurück). Baut
+  das Ablegen die Zeile neu, fällt ihr `ended` mit weg; die Ablege-
+  Funktionen räumen die Anzeige darum selbst ab.
 - Das Drehfeld „Ebene“ eines Bilds im Pegel-Dialog hat einen
   `objectName` und einen Test.
 

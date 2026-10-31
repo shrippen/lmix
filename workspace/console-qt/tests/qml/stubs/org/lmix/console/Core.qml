@@ -37,6 +37,14 @@ QtObject {
         acted = acted.concat([JSON.parse(action)])
         return true
     }
+    function canonicalAction(action) {
+        try {
+            const parsed = JSON.parse(action)
+            return typeof parsed.action === "string" ? JSON.stringify(parsed) : ""
+        } catch (e) {
+            return ""
+        }
+    }
     function setGlobalShortcuts(json) {}
     function addInput(kind, a, b, c, d) { return true }
     function replaceSource(id, kind, a, b, c) { return true }

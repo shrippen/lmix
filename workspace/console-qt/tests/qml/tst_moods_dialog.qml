@@ -48,12 +48,18 @@ TestCase {
     property bool slow: false
     /** Like lmix-core refusing every edit. */
     property bool refuse: false
+    /** Like the bridge not taking the action (`act` false). */
+    property bool unsent: false
     /** Like lmix-core: what it takes becomes the show's. */
     function act(action) {
         acted.push(action)
+        if (unsent) {
+            return false
+        }
         if (action.action === "set_moods" && !refuse && !slow) {
             show = Object.assign({}, show, { moods: action.moods })
         }
+        return true
     }
 
     Component {
@@ -70,6 +76,7 @@ TestCase {
         acted = []
         refuse = false
         slow = false
+        unsent = false
         asked = null
         show = { moods: JSON.parse(JSON.stringify(test.moods)), stages: [{ name: "Back" }], inputs: [], outputs: [] }
     }
@@ -78,6 +85,30 @@ TestCase {
         id: fakeCore
         signal answered(string action, string refusal)
         function choices(what) { return "[]" }
+        /** Like lmix-core's types reading and writing an action: keys in a
+            fixed order, empty fields and the default `repeat: "once"` left
+            out; "" for no action. */
+        function canonicalAction(json) {
+            const write = v => {
+                if (Array.isArray(v)) {
+                    return v.map(write)
+                }
+                if (v !== null && typeof v === "object") {
+                    const out = {}
+                    Object.keys(v).sort().forEach(k => {
+                        const empty = v[k] === null || v[k] === undefined || (Array.isArray(v[k]) && v[k].length === 0)
+                            || (typeof v[k] === "object" && v[k] !== null && !Array.isArray(v[k]) && Object.keys(v[k]).length === 0)
+                        if (!empty && !(k === "repeat" && v[k] === "once")) {
+                            out[k] = write(v[k])
+                        }
+                    })
+                    return out
+                }
+                return v
+            }
+            const action = JSON.parse(json)
+            return typeof action.action === "string" ? JSON.stringify(write(action)) : ""
+        }
     }
     Component {
         id: answeredComponent
@@ -90,26 +121,9 @@ TestCase {
     }
 
     /** Like the Console answering `action`: written back by lmix-core's
-        types, which leave empty fields out. */
+        types (fakeCore.canonicalAction). */
     function answer(action, refusal) {
-        const strip = v => {
-            if (Array.isArray(v)) {
-                return v.map(strip)
-            }
-            if (v !== null && typeof v === "object") {
-                const out = {}
-                Object.keys(v).forEach(k => {
-                    const empty = v[k] === null || (Array.isArray(v[k]) && v[k].length === 0)
-                        || (typeof v[k] === "object" && v[k] !== null && !Array.isArray(v[k]) && Object.keys(v[k]).length === 0)
-                    if (!empty) {
-                        out[k] = strip(v[k])
-                    }
-                })
-                return out
-            }
-            return v
-        }
-        fakeCore.answered(JSON.stringify(strip(action)), refusal)
+        fakeCore.answered(fakeCore.canonicalAction(JSON.stringify(action)), refusal)
     }
 
     function dialog() {
@@ -356,6 +370,42 @@ TestCase {
         compare(d.inFlight, 0)
         show = Object.assign({}, show, { moods: acted[0].moods })
         compare(d.draft, null)
+    }
+
+    function test_an_answer_written_otherwise_still_ends_the_draft() {
+        slow = true
+        const d = createTemporaryObject(answeredComponent, test)
+        d.open()
+        d.chosenId = "g-tavern"
+        const loop = findChild(d.contentItem, "loop:Music")
+        verify(loop.checked)
+        loop.toggle()
+        loop.toggled()
+        compare(acted[0].moods.groups[0].base["l-music"].sound.repeat, "once")
+        // lmix-core leaves the default repeat out of its answer.
+        verify(fakeCore.canonicalAction(JSON.stringify(acted[0])).indexOf("once") < 0)
+        compare(d.inFlight, 1)
+        answer(acted[0], "")
+        compare(d.inFlight, 0)
+        show = Object.assign({}, show, { moods: acted[0].moods })
+        compare(d.draft, null)
+        // Changes from elsewhere (an Undo) show again and stay.
+        const other = JSON.parse(JSON.stringify(acted[0].moods))
+        other.groups[1].name = "Woods"
+        show = Object.assign({}, show, { moods: other })
+        compare(d.groups[1].name, "Woods")
+    }
+
+    function test_an_edit_not_sent_is_not_waited_for() {
+        slow = true
+        unsent = true
+        const d = createTemporaryObject(answeredComponent, test)
+        d.open()
+        findChild(d.contentItem, "addGroup").clicked()
+        compare(acted.length, 1)
+        compare(d.inFlight, 0)
+        compare(d.draft, null)
+        compare(d.groups.length, 2)
     }
 
     /** A real drag of `item` from its middle onto the middle of `onto`. */

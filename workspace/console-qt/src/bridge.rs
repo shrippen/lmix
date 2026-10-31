@@ -118,6 +118,13 @@ pub mod qobject {
         #[qinvokable]
         fn act(self: Pin<&mut Core>, action: &QString) -> bool;
 
+        /// An action's JSON exactly as `answered` will report it (read as
+        /// an lmix action and written again); empty when it is no valid
+        /// action. Lets QML recognise its own answers by string equality.
+        #[qinvokable]
+        #[cxx_name = "canonicalAction"]
+        fn canonical_action(self: &Core, action: &QString) -> QString;
+
         /// Add an input from the form (`options`: `forms::SourceOptions` as
         /// JSON); false while a needed field is empty.
         #[qinvokable]
@@ -422,6 +429,10 @@ impl qobject::Core {
                 false
             }
         }
+    }
+
+    fn canonical_action(&self, action: &QString) -> QString {
+        QString::from(&canonical_action(&action.to_string()))
     }
 
     fn add_input(
@@ -1079,6 +1090,15 @@ fn actions() -> &'static tokio::sync::mpsc::UnboundedSender<Queued> {
     })
 }
 
+/// `json` as an lmix action written again as `answered` reports it
+/// (`actions()`); empty when it is no valid action.
+fn canonical_action(json: &str) -> String {
+    serde_json::from_str::<Action>(json)
+        .ok()
+        .and_then(|action| serde_json::to_string(&action).ok())
+        .unwrap_or_default()
+}
+
 /// `{message}` for an error the Console found itself.
 fn plain_message(text: &str) -> String {
     serde_json::json!({ "message": text }).to_string()
@@ -1222,6 +1242,22 @@ fn live_path(source: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn canonical_action_is_what_answered_reports() {
+        let layer = "6f1c2c1e-2b8a-4c55-9a3e-0d6c9e1b7a10";
+        let sent = format!(
+            r#"{{"action":"set_moods","moods":{{"layers":[{{"id":"{layer}","name":"Rain"}}],"groups":[],"collections":[],"panic":{{"{layer}":{{"kind":"sound","sound":{{"file":"rain.wav","repeat":"once"}}}}}},"change_ms":3000,"inside_ms":1000,"unknown":true}}}}"#
+        );
+        let canonical = canonical_action(&sent);
+        let action: Action = serde_json::from_str(&sent).unwrap();
+        assert_eq!(canonical, serde_json::to_string(&action).unwrap());
+        // Dropped on the way: the default repeat and the unknown field.
+        assert!(!canonical.contains("once") && !canonical.contains("unknown"));
+        assert_eq!(canonical_action(&canonical), canonical);
+        assert_eq!(canonical_action(r#"{"action":"no_such_action"}"#), "");
+        assert_eq!(canonical_action("not json"), "");
+    }
 
     #[test]
     fn zones_are_levelled_by_name() {

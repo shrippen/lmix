@@ -36,7 +36,9 @@ KanteDialog {
     readonly property var stateMoods: show && show.moods ? show.moods : ({})
     /** What was sent and not yet back in the state, or null. */
     property var draft: null
-    /** The moods of edits sent and not yet answered, oldest first. */
+    /** Edits sent and not yet answered, oldest first: each set_moods as
+        lmix-core's types write it (`core.canonicalAction`), the form
+        `answered` reports it in. */
     property var unanswered: []
     /** Edits sent and not yet answered. */
     readonly property int inFlight: unanswered.length
@@ -68,8 +70,8 @@ KanteDialog {
 
     /** What an action list dialog edits: { where: "mood" | "panic", layer }. */
     property var editingActions: null
-    // An edit that never got an answer (one the bridge did not take) must
-    // not hold the draft for good.
+    // An edit that never got an answer (lmix-core gone) must not hold the
+    // draft for good.
     onClosed: {
         pending = {}
         draft = null
@@ -87,10 +89,9 @@ KanteDialog {
         target: dialog.core
         enabled: dialog.inFlight > 0
         function onAnswered(action, refusal) {
-            const answered = JSON.parse(action)
             // Only this dialog's: other parts of the Console set moods too.
-            const at = answered.action === "set_moods"
-                ? dialog.unanswered.findIndex(sent => dialog.covers(sent, answered.moods)) : -1
+            // Both sides are lmix-core's own writing, so equal strings.
+            const at = dialog.unanswered.indexOf(action)
             if (at < 0) {
                 return
             }
@@ -137,39 +138,27 @@ KanteDialog {
         change(copy)
         return copy
     }
-    /** The set_moods action for `copy`, shown at once as the draft. */
+    /** The set_moods action for `copy`, shown at once as the draft until
+        it is answered. An action the core cannot read is not waited for. */
     function sending(copy) {
+        const action = { action: "set_moods", moods: copy }
         if (core) {
-            draft = copy
-            unanswered = unanswered.concat([JSON.parse(JSON.stringify(copy))])
+            const canonical = core.canonicalAction(JSON.stringify(action))
+            if (canonical.length > 0) {
+                draft = copy
+                unanswered = unanswered.concat([canonical])
+            }
         }
-        return { action: "set_moods", moods: copy }
-    }
-    /** `answered` (as the Console writes the action back) holds everything
-        of `sent`: what it adds and an empty field it leaves out do not
-        count, numbers only up to rounding. */
-    function covers(sent, answered) {
-        const empty = v => v === null || v === undefined || (Array.isArray(v) && v.length === 0)
-            || (typeof v === "object" && !Array.isArray(v) && Object.keys(v).length === 0)
-        if (empty(sent)) {
-            return empty(answered)
-        }
-        if (typeof sent === "number") {
-            return typeof answered === "number" && Math.abs(sent - answered) < 1e-6
-        }
-        if (Array.isArray(sent)) {
-            return Array.isArray(answered) && answered.length === sent.length
-                && sent.every((item, i) => covers(item, answered[i]))
-        }
-        if (typeof sent === "object") {
-            return answered !== null && typeof answered === "object"
-                && Object.keys(sent).every(key => covers(sent[key], answered[key]))
-        }
-        return sent === answered
+        return action
     }
     /** Changes a copy of the moods with `change` and sends it whole. */
     function edit(change) {
-        act(sending(changed(change)))
+        const before = { draft: draft, unanswered: unanswered }
+        if (act(sending(changed(change))) === false) {
+            // Not sent: no answer comes, the dialog shows what it did.
+            unanswered = before.unanswered
+            draft = inFlight > 0 ? before.draft : null
+        }
     }
     /** Asks before a removal (docs/DESIGN-DIALOGE.md rule 1) and removes
         with `request.change` from the moods as they are then; `request.name`
@@ -341,6 +330,8 @@ KanteDialog {
         place of a variant of its own group, or first when dropped on the
         head; anything else stays. */
     function dropPlace(from, toId) {
+        // The edit rebuilds the rows, and the dragged row's `ended` with them.
+        dragList = ""
         const to = places.find(p => p.id === toId)
         if (!to || to.id === from.id || (from.variant && to.group.id !== from.group.id)) {
             return
@@ -360,6 +351,7 @@ KanteDialog {
     }
     /** A layer or collection from `index` to `at`. */
     function dropRow(key, index, at) {
+        dragList = ""
         if (at >= 0 && at !== index) {
             edit(copy => move(copy[key], index, at - index))
         }
@@ -777,6 +769,7 @@ KanteDialog {
                                         }
                                     }
                                     QQC2.CheckBox {
+                                        objectName: "loop:" + layerEdit.modelData.name
                                         visible: layerEdit.media !== null
                                         text: qsTr("Loop")
                                         checked: layerEdit.media !== null && layerEdit.media.repeat === "forever"
