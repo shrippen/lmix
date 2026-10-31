@@ -21,7 +21,7 @@ KanteDialog {
     /** Subscriber being edited, by name; "" for a new one. */
     property string editingFeed: ""
     readonly property var kinds: ["http", "osc_udp", "osc_tcp"]
-    readonly property var occasions: ["standby", "running", "panic"]
+    readonly property var occasions: ["standby", "running", "panic", "mood"]
 
     function kindLabel(kind) {
         switch (kind) {
@@ -35,6 +35,7 @@ KanteDialog {
         switch (on) {
         case "running": return qsTr("Running cue")
         case "panic": return qsTr("Panic")
+        case "mood": return qsTr("Mood")
         default: return qsTr("Standby")
         }
     }
@@ -238,7 +239,7 @@ KanteDialog {
             Layout.fillWidth: true
             visible: dialog.feeds.length === 0
             wrapMode: Text.WordWrap
-            text: qsTr("No subscribers yet. A subscriber sends standby, the running cue's remaining time and panic to an OSC (UDP) target, e.g. Companion's custom variables. Placeholders: {list} {number} {name} {note} {remaining} {elapsed} {total} {mode}.")
+            text: qsTr("No subscribers yet. A subscriber sends standby, the running cue's remaining time, panic and the mood to an OSC (UDP) target, e.g. Companion's custom variables. Placeholders: {list} {number} {name} {note} {remaining} {elapsed} {total} {mode} {mood} {previous}.")
         }
         Repeater {
             model: dialog.feeds

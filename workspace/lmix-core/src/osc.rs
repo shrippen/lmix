@@ -364,6 +364,19 @@ pub fn request(message: &Message) -> Result<Request, String> {
             },
         },
         ["stop", "hard"] => Action::CueHardStop,
+        // A mood by id, group or "group / variant", with an optional fade
+        // in ms (MOOD.11).
+        ["mood"] => Action::SetMood {
+            mood: match arg(0) {
+                Some(Arg::Str(text)) => text.clone(),
+                _ => return Err("/lmix/mood needs a mood (id or name)".into()),
+            },
+            fade_ms: match arg(1) {
+                Some(Arg::Int(ms)) => Some(u32::try_from(*ms).map_err(|_| "a fade in ms")?),
+                Some(Arg::Float(s)) => Some((s * 1000.0).round() as u32),
+                _ => None,
+            },
+        },
         ["cue", "release"] => return Ok(Request::Release),
         ["cue", step @ ("pause" | "resume")] => {
             let list = arg(0).map(|_| input(0)).transpose()?;
@@ -716,6 +729,29 @@ mod tests {
             Ok(Request::Action(Action::CueGo { list: None }))
         );
         assert_eq!(req("/lmix/cue/release", vec![]), Ok(Request::Release));
+        assert_eq!(
+            req("/lmix/mood", vec![Arg::Str("Wald / Nacht".into())]),
+            Ok(Request::Action(Action::SetMood {
+                mood: "Wald / Nacht".into(),
+                fade_ms: None
+            }))
+        );
+        assert_eq!(
+            req("/lmix/mood", vec![Arg::Str("Wald".into()), Arg::Int(500)]),
+            Ok(Request::Action(Action::SetMood {
+                mood: "Wald".into(),
+                fade_ms: Some(500)
+            }))
+        );
+        assert_eq!(
+            req("/lmix/mood", vec![Arg::Str("Wald".into()), Arg::Float(1.5)]),
+            Ok(Request::Action(Action::SetMood {
+                mood: "Wald".into(),
+                fade_ms: Some(1500)
+            })),
+            "a float is seconds"
+        );
+        assert!(req("/lmix/mood", vec![]).is_err());
         assert_eq!(
             req("/lmix/cue/pause", vec![]),
             Ok(Request::Action(Action::CuePause {

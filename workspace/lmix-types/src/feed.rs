@@ -11,7 +11,8 @@
 //!
 //! Placeholders: `{list}`, `{number}`, `{name}`, `{note}` (the standby
 //! cue, or the running one), `{remaining}`, `{elapsed}`, `{total}` (s,
-//! one decimal), `{mode}` (`fade` or `hard`, panic). An argument that is
+//! one decimal), `{mode}` (`fade` or `hard`, panic), `{mood}` and
+//! `{previous}` (the mood set and the one before). An argument that is
 //! one time placeholder alone goes as a float, everything else as text.
 
 use schemars::JsonSchema;
@@ -37,6 +38,9 @@ pub enum FeedOn {
     Running,
     /// A panic or hard stop.
     Panic,
+    /// The mood set changed (and once when the subscriber is set),
+    /// MOOD.11: `{mood}` and `{previous}`, "Group / Variant" or empty.
+    Mood,
 }
 
 /// One message of a subscriber.
