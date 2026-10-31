@@ -936,7 +936,7 @@
   <context>
     <name>AudioPage</name>
     <message>
-      <location filename="../qml/AudioPage.qml" line="+58" />
+      <location filename="../qml/AudioPage.qml" line="+60" />
       <source>Audio</source>
       <translation>Ton</translation>
     </message>
@@ -992,12 +992,12 @@
     </message>
     <message>
       <location line="+17" />
-      <location line="+141" />
+      <location line="+142" />
       <source>Headphones</source>
       <translation>Kopfhörer</translation>
     </message>
     <message>
-      <location line="-98" />
+      <location line="-99" />
       <source>%1 ch.</source>
       <translation>%1 Kan.</translation>
     </message>
@@ -1027,7 +1027,7 @@
       <translation>Kanalzug · %1 %2</translation>
     </message>
     <message>
-      <location line="+52" />
+      <location line="+53" />
       <source>Send of %1 to %2</source>
       <translation>Send von %1 auf %2</translation>
     </message>
@@ -1052,17 +1052,42 @@
       <translation>PVW</translation>
     </message>
     <message>
-      <location line="+9" />
+      <location line="+66" />
       <source>AFV</source>
       <translation>AFV</translation>
     </message>
     <message>
-      <location line="+2" />
+      <location line="+0" />
+      <source>ON</source>
+      <translation>AN</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Sound on, whatever is on program</source>
+      <translation>Ton an, egal was auf Programm ist</translation>
+    </message>
+    <message>
+      <location line="+1" />
       <source>Audio follows video: sound on with program, off without (AUD.5)</source>
       <translation>Ton folgt Bild: Ton an mit Programm, aus ohne (AUD.5)</translation>
     </message>
     <message>
-      <location line="+20" />
+      <location line="+2" />
+      <source>Sound of %1</source>
+      <translation>Ton von %1</translation>
+    </message>
+    <message>
+      <location line="+18" />
+      <source>Mute</source>
+      <translation>Stumm</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Mute %1</source>
+      <translation>%1 stumm schalten</translation>
+    </message>
+    <message>
+      <location line="-52" />
       <source>Volume of %1</source>
       <translation>Lautstärke von %1</translation>
     </message>
@@ -1077,17 +1102,7 @@
       <translation>Lautstärke %1</translation>
     </message>
     <message>
-      <location line="+9" />
-      <source>On</source>
-      <translation>An</translation>
-    </message>
-    <message>
-      <location line="+0" />
-      <source>Muted</source>
-      <translation>Stumm</translation>
-    </message>
-    <message>
-      <location line="+7" />
+      <location line="+42" />
       <source>PFL</source>
       <translation>PFL</translation>
     </message>
@@ -1210,7 +1225,7 @@
   <context>
     <name>ChannelStripPanel</name>
     <message>
-      <location filename="../qml/ChannelStripPanel.qml" line="+122" />
+      <location filename="../qml/ChannelStripPanel.qml" line="+124" />
       <source>Input</source>
       <translation>Eingang</translation>
     </message>
@@ -1272,13 +1287,13 @@
     <message>
       <location line="+1" />
       <location line="+16" />
-      <location line="+21" />
+      <location line="+30" />
       <location line="+16" />
       <source>On</source>
       <translation>An</translation>
     </message>
     <message>
-      <location line="-47" />
+      <location line="-56" />
       <source>Cutoff</source>
       <translation>Grenzfrequenz</translation>
     </message>
@@ -1288,7 +1303,7 @@
       <translation>EQ</translation>
     </message>
     <message>
-      <location line="+21" />
+      <location line="+30" />
       <source>Gate</source>
       <translation>Gate</translation>
     </message>
@@ -5615,6 +5630,74 @@
       <location line="+5" />
       <source>Ask before stopping</source>
       <translation>Vor dem Stoppen fragen</translation>
+    </message>
+  </context>
+  <context>
+    <name>StripCurve</name>
+    <message>
+      <location filename="../qml/StripCurve.qml" line="+46" />
+      <source>Gate and compressor off</source>
+      <translation>Gate und Kompressor aus</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>High-pass and EQ off</source>
+      <translation>Hochpass und EQ aus</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Gate closes at %1</source>
+      <translation>Gate schließt bei %1</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Compressor from %1 at %2 : 1</source>
+      <translation>Kompressor ab %1 mit %2 : 1</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>High-pass at %1</source>
+      <translation>Hochpass bei %1</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>EQ %1</source>
+      <translation>EQ %1</translation>
+    </message>
+    <message>
+      <location line="+14" />
+      <source>In %1, out %2</source>
+      <translation>Ein %1, aus %2</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>At %1: %2</source>
+      <translation>Bei %1: %2</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Dynamics</source>
+      <translation>Dynamik</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>EQ</source>
+      <translation>EQ</translation>
+    </message>
+    <message>
+      <location line="+39" />
+      <source>Level out over level in (dB)</source>
+      <translation>Pegel aus über Pegel ein (dB)</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Gain (dB) over frequency (Hz)</source>
+      <translation>Verstärkung (dB) über Frequenz (Hz)</translation>
+    </message>
+    <message>
+      <location line="+23" />
+      <source>in %1</source>
+      <translation>ein %1</translation>
     </message>
   </context>
   <context>
