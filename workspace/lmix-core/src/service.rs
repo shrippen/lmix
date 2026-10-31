@@ -1803,6 +1803,9 @@ impl Service {
                     actions
                 };
                 self.run_mood_actions(actions).await;
+                // A mood cue on standby now starts other layers, or the
+                // same with another fade.
+                self.preload_standby().await;
                 return Ok(self.state().await);
             }
             Action::CueGo { .. }

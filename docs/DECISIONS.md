@@ -6453,3 +6453,24 @@ ohne Id) oder der Cue, der sie übernommen hat, endet (MOOD.4, MOOD.5).
 `service::tests::a_sound_cue_gives_its_layer_back_when_it_stops`; der
 Aktions-Cue in `a_cue_takes_its_layer_until_the_next_mood` behält die
 Ebene.
+
+## 2026-10-31 — Stimmungen: Vorladen (MOOD Stufe 5c)
+
+**Anlass**: Ein Mood-Cue auf Standby lud nichts vor (MOOD.6); der erste
+Klang einer Stimmung kam darum später als der eines Klang-Cues.
+
+**Entscheidung**:
+- Für jeden Mood-Cue auf Standby fragt `preload_commands` den
+  `MoodRunner`, was diese Stimmung mit der Blende des Cues starten würde
+  (`MoodRunner::prepare`), und hält diese Klänge und Bilder bereit wie
+  die eines Klang- oder Bild-Cues.
+- Vorgeladen wird unter der Medien-Id, unter der die Stimmung sie dann
+  startet: der Runner merkt sich die Id je Ebene und Inhalt und nimmt sie
+  beim Start (`ready_id`). Die Engine nimmt Vorgeladenes nur bei gleicher
+  Id und gleichem Klang (auch `fade_in_ms`), darum trägt der vorgeladene
+  Inhalt schon die Blende, mit der die Ebene einblenden wird.
+- Ebenen, deren Inhalt schon läuft, lädt er nicht vor; nach jeder
+  gesetzten Stimmung wird das Vorladen neu berechnet.
+
+**Geprüft**: `moods::tests::what_a_mood_would_start_is_held_ready_under_the_id_it_plays_as`,
+`switcher::tests::a_mood_cue_on_standby_holds_its_layers_ready`.

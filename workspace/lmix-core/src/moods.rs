@@ -25,6 +25,26 @@ struct Playing {
     origin: LayerOrigin,
 }
 
+/// A sound or picture as a layer starts it, fading in over `fade_ms`;
+/// None for actions and off.
+fn with_fade_in(content: &LayerContent, fade_ms: u32) -> Option<LayerContent> {
+    match content {
+        LayerContent::Sound { sound } => Some(LayerContent::Sound {
+            sound: lmix_types::SoundCue {
+                fade_in_ms: fade_ms,
+                ..sound.clone()
+            },
+        }),
+        LayerContent::Picture { picture } => Some(LayerContent::Picture {
+            picture: lmix_types::PictureCue {
+                fade_in_ms: fade_ms,
+                ..picture.clone()
+            },
+        }),
+        LayerContent::Off | LayerContent::Actions { .. } => None,
+    }
+}
+
 /// Whether `action` fades a layer's sound or picture.
 fn fades(action: &Action) -> bool {
     matches!(
@@ -44,6 +64,17 @@ pub struct MoodRunner {
     /// Media ids handed out, for new ones.
     started: u64,
     fading: Option<MoodFade>,
+    /// Sounds and pictures held ready for the moods standby cues set, with
+    /// the ids they will play under (SND.12, MOOD.6).
+    prepared: Vec<Prepared>,
+}
+
+/// A sound or picture held ready: as it will start (its fade in set).
+#[derive(Clone, Debug)]
+struct Prepared {
+    layer: LayerId,
+    content: LayerContent,
+    id: String,
 }
 
 impl MoodRunner {
@@ -61,24 +92,13 @@ impl MoodRunner {
         let place = moods
             .lookup(text)
             .ok_or_else(|| format!("no mood {text}"))?;
-        let inside = self
-            .mood
-            .and_then(|id| moods.find(id))
-            .is_some_and(|was| was.group.id == place.group.id);
-        let change = if inside {
-            moods.inside_ms
-        } else {
-            moods.change_ms
-        };
+        let change = self.change_ms(moods, place);
         let id = place.id();
         let mut out = Vec::new();
         let mut longest = 0;
         for layer in &moods.layers {
             let want = moods.content(place, layer.id);
-            let same = self.layers.get(&layer.id).is_some_and(|p| {
-                p.content == *want && matches!(p.origin, LayerOrigin::Mood { .. })
-            });
-            if same {
+            if self.same(layer.id, want) {
                 if let Some(playing) = self.layers.get_mut(&layer.id) {
                     playing.origin = LayerOrigin::Mood { mood: id };
                 }
@@ -123,6 +143,77 @@ impl MoodRunner {
             duration_ms: longest,
         });
         Ok(out)
+    }
+
+    /// What setting each of `wanted` (mood text, fade) now would start as
+    /// sound or picture, each as it will start and with the id it will
+    /// play under, for the engine to hold ready. The same start keeps its
+    /// id, so the engine keeps it ready; [`MoodRunner::set`] then plays it
+    /// under that id.
+    pub fn prepare(
+        &mut self,
+        moods: &Moods,
+        wanted: &[(String, Option<u32>)],
+    ) -> Vec<(String, LayerContent)> {
+        let mut next: Vec<Prepared> = Vec::new();
+        for (text, fade_ms) in wanted {
+            let Some(place) = moods.lookup(text) else {
+                continue;
+            };
+            let change = self.change_ms(moods, place);
+            for layer in &moods.layers {
+                let want = moods.content(place, layer.id);
+                if self.same(layer.id, want) {
+                    continue;
+                }
+                let fade = fade_ms.or(layer.fade_ms).unwrap_or(change);
+                let Some(content) = with_fade_in(want, fade) else {
+                    continue;
+                };
+                if next
+                    .iter()
+                    .any(|p| p.layer == layer.id && p.content == content)
+                {
+                    continue;
+                }
+                let kept = self
+                    .prepared
+                    .iter()
+                    .find(|p| p.layer == layer.id && p.content == content)
+                    .map(|p| p.id.clone());
+                let id = kept.unwrap_or_else(|| self.media_id(layer.id));
+                next.push(Prepared {
+                    layer: layer.id,
+                    content,
+                    id,
+                });
+            }
+        }
+        self.prepared = next;
+        self.prepared
+            .iter()
+            .map(|p| (p.id.clone(), p.content.clone()))
+            .collect()
+    }
+
+    /// The change time from the mood now to `place`: within one group its own.
+    fn change_ms(&self, moods: &Moods, place: lmix_types::mood::MoodPlace<'_>) -> u32 {
+        let inside = self
+            .mood
+            .and_then(|id| moods.find(id))
+            .is_some_and(|was| was.group.id == place.group.id);
+        if inside {
+            moods.inside_ms
+        } else {
+            moods.change_ms
+        }
+    }
+
+    /// The mood runs `want` on `layer` already.
+    fn same(&self, layer: LayerId, want: &LayerContent) -> bool {
+        self.layers
+            .get(&layer)
+            .is_some_and(|p| p.content == *want && matches!(p.origin, LayerOrigin::Mood { .. }))
     }
 
     /// Panic or hard stop (MOOD.9): every sound and picture is stopped
@@ -277,23 +368,19 @@ impl MoodRunner {
                 out.extend(actions.iter().cloned());
                 None
             }
-            LayerContent::Sound { sound } => {
-                let id = self.media_id(layer);
-                let mut sound = sound.clone();
-                sound.fade_in_ms = fade_ms;
-                out.push(Action::PlaySound {
-                    id: id.clone(),
-                    sound,
-                });
-                Some(id)
-            }
-            LayerContent::Picture { picture } => {
-                let id = self.media_id(layer);
-                let mut picture = picture.clone();
-                picture.fade_in_ms = fade_ms;
-                out.push(Action::ShowPicture {
-                    id: id.clone(),
-                    picture,
+            LayerContent::Sound { .. } | LayerContent::Picture { .. } => {
+                let starts = with_fade_in(content, fade_ms).expect("sound or picture");
+                let id = self.ready_id(layer, &starts);
+                out.push(match starts {
+                    LayerContent::Sound { sound } => Action::PlaySound {
+                        id: id.clone(),
+                        sound,
+                    },
+                    LayerContent::Picture { picture } => Action::ShowPicture {
+                        id: id.clone(),
+                        picture,
+                    },
+                    _ => unreachable!("sound or picture"),
                 });
                 Some(id)
             }
@@ -306,6 +393,18 @@ impl MoodRunner {
                 origin,
             },
         );
+    }
+
+    /// The id `starts` was held ready under, else a new one.
+    fn ready_id(&mut self, layer: LayerId, starts: &LayerContent) -> String {
+        match self
+            .prepared
+            .iter()
+            .position(|p| p.layer == layer && p.content == *starts)
+        {
+            Some(at) => self.prepared.remove(at).id,
+            None => self.media_id(layer),
+        }
     }
 
     fn media_id(&mut self, layer: LayerId) -> String {
@@ -479,6 +578,53 @@ mod tests {
             matches!(&out[..], [Action::PlaySound { .. }]),
             "the lute again, no cue to stop: {out:?}"
         );
+    }
+
+    #[test]
+    fn what_a_mood_would_start_is_held_ready_under_the_id_it_plays_as() {
+        let t = tavern();
+        let mut runner = MoodRunner::default();
+        runner.set(&t.moods, "Tavern", None, 0).expect("set");
+        let fight = vec![("Tavern / Fight".to_string(), None)];
+
+        // Only the drums change, over the group's own change time.
+        let ready = runner.prepare(&t.moods, &fight);
+        assert_eq!(ready.len(), 1, "{ready:?}");
+        let (id, LayerContent::Sound { sound }) = &ready[0] else {
+            panic!("the drums: {ready:?}")
+        };
+        assert_eq!(sound.file, "/sounds/drums.wav");
+        assert_eq!(sound.fade_in_ms, t.moods.inside_ms);
+        let again = runner.prepare(&t.moods, &fight);
+        assert_eq!(again[0].0, *id, "the same start keeps its id");
+
+        let out = runner
+            .set(&t.moods, "Tavern / Fight", None, 0)
+            .expect("set");
+        assert!(
+            out.iter()
+                .any(|a| matches!(a, Action::PlaySound { id: played, .. } if played == id)),
+            "plays what was held ready: {out:?}"
+        );
+        // Used: the next start of the drums gets a new id.
+        runner.set(&t.moods, "Tavern", None, 0).expect("set");
+        assert!(runner.prepare(&t.moods, &[]).is_empty());
+        let out = runner
+            .set(&t.moods, "Tavern / Fight", None, 0)
+            .expect("set");
+        assert!(!out
+            .iter()
+            .any(|a| matches!(a, Action::PlaySound { id: played, .. } if played == id)));
+
+        // Another fade is another start: not what was held ready.
+        let ready = runner.prepare(&t.moods, &[("Forest".to_string(), Some(500))]);
+        assert!(ready
+            .iter()
+            .all(|(_, c)| matches!(c, LayerContent::Sound { sound } if sound.fade_in_ms == 500)));
+        let out = runner.set(&t.moods, "Forest", None, 0).expect("set");
+        assert!(!out.iter().any(
+            |a| matches!(a, Action::PlaySound { id: played, .. } if ready.iter().any(|(r, _)| r == played))
+        ));
     }
 
     #[test]
