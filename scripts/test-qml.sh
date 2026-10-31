@@ -10,7 +10,8 @@
 # Needs Qt 6 with qmltestrunner and Kirigami.
 #
 #   scripts/test-qml.sh
-#   scripts/test-qml.sh -functions test_a_fader_drag_sends_few_moves
+#   scripts/test-qml.sh StateUpdates::test_a_fader_drag_sends_few_moves
+# (-functions only lists the test functions.)
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"

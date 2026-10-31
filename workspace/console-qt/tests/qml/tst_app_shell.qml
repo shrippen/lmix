@@ -244,6 +244,18 @@ TestCase {
         tryCompare(win.removals, "asking", true)
     }
 
+    // So does changing an output's settings: its toast and Undo there.
+    function test_an_output_change_toasts_in_the_window_worked_in() {
+        shell.detachPage("mix")
+        const win = shell.pageWindows["mix"]
+        tryCompare(win, "visible", true)
+        win.requestActivate()
+        tryCompare(win, "active", true)
+        shell.changeOutput({ name: "Stream" }, { action: "update_output", output: "Stream" })
+        verify(win.removals.pending !== null, "the toast waits in the page's window")
+        compare(win.removals.pending.request.kind, "output_settings")
+    }
+
     // Shell dialogs open in the window worked in each time, not in the one
     // they last opened in (gone with its page).
     function test_shell_dialogs_open_where_asked() {
