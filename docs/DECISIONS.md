@@ -5653,7 +5653,7 @@ auf Program und aufgenommen, 40 Inputs im Abstand von rund 0,7 s angelegt,
 alle auf Program geprüft, dann alle entfernt; Prüfung der Aufnahme auf
 fehlende und wiederholte Bilder, `scripts/frozen-frames.py`, und Lücken im
 Ton, `scripts/switch-gaps.py`):
-- CUDA, 4 Läufe mit 40: kein fehlendes Bild. Zwei Läufe ganz ohne Lücke;
+- CUDA, 6 Läufe mit 40: kein fehlendes Bild. Vier Läufe ganz ohne Lücke;
   einer mit einer Tonlücke von rund 55 ms beim Anlegen des 39. Inputs,
   einer mit einem wiederholten Bild etwa 2 s nach dem Entfernen. strom bei
   41 Eingängen 470–540 % CPU, 1,2 GB GPU-Speicher, Latenz 77–86 ms.
