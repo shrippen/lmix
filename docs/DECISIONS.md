@@ -6312,3 +6312,24 @@ Gleiche gilt weiter für einen Klang einer Ebene, der von selbst endet
 `a_cue_takes_its_layer_until_the_next_mood` (Note mit Ebene abgewiesen,
 GO übernimmt, dieselbe Stimmung holt die Ebene zurück),
 `tst_show_moods.qml` (Feld „Ebene“), `tst_moods_page.qml` (Herkunft Cue).
+
+## 2026-10-31 — Stimmungen über OSC und Companion (MOOD Stufe 4a)
+
+**Anlass**: MOOD.11: Stimmung setzen über jeden Bedienweg.
+
+**Entscheidung**:
+- API und Kurzbefehle hatten `set_mood` schon (Stufe 1; Kurzbefehle
+  sperren nur Aktionen, die Kurzbefehle ändern).
+- OSC: `/lmix/mood <Stimmung> [Blende]`, die Stimmung als Id, Gruppenname
+  oder „Gruppe / Variante“, die Blende in ms (Ganzzahl) oder s
+  (Kommazahl), wie `/lmix/panic`. Über `/lmix/action` ging es schon als
+  JSON; die eigene Adresse ist für Companion-Tasten ohne JSON.
+- Companion bekommt kein eigenes Modul (wie RUN.12, DECISIONS „Pads“):
+  Tasten senden OSC, die Rückmeldung kommt über die festen Abonnenten
+  (CTL.4) mit dem neuen Anlass `mood`. Er geht, wenn sich die gesetzte
+  Stimmung ändert, und einmal, wenn der Abonnent angelegt wird; Platzhalter
+  `{mood}` und `{previous}` („Gruppe / Variante“, leer ohne Stimmung).
+  Nach einer Panik ist keine Stimmung gesetzt: `{mood}` ist leer.
+
+**Geprüft**: `osc::tests` (`/lmix/mood` mit und ohne Blende, ohne
+Stimmung abgewiesen), `feeds::tests::the_mood_goes_when_it_changes`.

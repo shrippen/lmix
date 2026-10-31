@@ -3,7 +3,8 @@
 //! The service calls [`Tracker::tick`] at the cue event rate; standby
 //! messages go when a list's standby changed, running messages every tick
 //! while a cue of the list runs and once more, with empty values, when
-//! the last one ended. Panic messages go with every panic.
+//! the last one ended. Panic messages go with every panic, mood messages
+//! when the mood set changes (MOOD.11).
 //!
 //! ```text
 //!   state ──tick──► Tracker (last standby per subscriber and list)
@@ -30,6 +31,8 @@ struct Values {
     elapsed_ms: Option<u64>,
     total_ms: Option<u64>,
     mode: String,
+    mood: String,
+    previous: String,
 }
 
 fn seconds(ms: Option<u64>) -> String {
@@ -47,6 +50,8 @@ fn render(template: &str, v: &Values) -> String {
         .replace("{elapsed}", &seconds(v.elapsed_ms))
         .replace("{total}", &seconds(v.total_ms))
         .replace("{mode}", &v.mode)
+        .replace("{mood}", &v.mood)
+        .replace("{previous}", &v.previous)
 }
 
 fn arg(template: &str, v: &Values) -> Arg {
@@ -113,6 +118,8 @@ fn running_values(list: &CueList, run: Option<&RunningCue>) -> Values {
 pub struct Tracker {
     /// Standby cue (or "end") per subscriber and list.
     standby: HashMap<(String, InputId), String>,
+    /// Mood (its id, or empty) per subscriber.
+    mood: HashMap<String, String>,
     /// Lists that had a running cue at the last tick.
     running: HashSet<InputId>,
     /// Subscribers as last seen: a changed one gets everything anew.
@@ -134,6 +141,25 @@ impl Tracker {
             .retain(|name, _| state.feeds.iter().any(|f| &f.name == name));
         self.standby
             .retain(|(feed, _), _| state.feeds.iter().any(|f| &f.name == feed));
+        self.mood
+            .retain(|feed, _| state.feeds.iter().any(|f| &f.name == feed));
+        let key = state.mood.mood.map(|m| m.to_string()).unwrap_or_default();
+        let name = |id: Option<lmix_types::MoodId>| {
+            id.and_then(|id| state.moods.find(id))
+                .map(|place| place.name())
+                .unwrap_or_default()
+        };
+        let mood = Values {
+            mood: name(state.mood.mood),
+            previous: name(state.mood.previous),
+            ..Values::default()
+        };
+        for feed in &state.feeds {
+            if self.mood.get(&feed.name) != Some(&key) {
+                out.extend(packets(feed, FeedOn::Mood, &mood));
+                self.mood.insert(feed.name.clone(), key.clone());
+            }
+        }
         for list in &state.cue_lists {
             let (key, values) = standby_values(list, &state.moods);
             for feed in &state.feeds {
@@ -164,6 +190,7 @@ impl Tracker {
     /// Subscriber `name` gets its standby again at the next tick.
     fn feed_changed(&mut self, name: &str) {
         self.standby.retain(|(feed, _), _| feed != name);
+        self.mood.remove(name);
     }
 }
 
@@ -301,6 +328,45 @@ mod tests {
         assert_eq!(after.len(), 1, "once more, empty");
         assert!(!text(&after[0].1).contains("Wald"));
         assert!(tracker.tick(&state(1, None)).is_empty());
+    }
+
+    #[test]
+    fn the_mood_goes_when_it_changes() {
+        let forest = lmix_types::MoodGroup {
+            id: lmix_types::MoodId::new(),
+            name: "Wald".into(),
+            color: None,
+            base: Default::default(),
+            variants: vec![lmix_types::MoodVariant {
+                id: lmix_types::MoodId::new(),
+                name: "Nacht".into(),
+                layers: Default::default(),
+            }],
+        };
+        let mut state = empty_state();
+        state.feeds = vec![Feed {
+            messages: vec![FeedMessage {
+                on: FeedOn::Mood,
+                address: "/cv/mood".into(),
+                args: vec!["{mood}".into(), "{previous}".into()],
+            }],
+            ..feed()
+        }];
+        state.mood.mood = Some(forest.variants[0].id);
+        state.mood.previous = Some(forest.id);
+        state.moods.groups.push(forest);
+        let mut tracker = Tracker::default();
+
+        let first = tracker.tick(&state);
+        assert_eq!(first.len(), 1, "once when the subscriber is set");
+        let packet = text(&first[0].1);
+        assert!(
+            packet.contains("Wald / Nacht") && packet.contains("Wald "),
+            "{packet}"
+        );
+        assert!(tracker.tick(&state).is_empty(), "no change, nothing sent");
+        state.mood.mood = None;
+        assert_eq!(tracker.tick(&state).len(), 1, "none set: empty");
     }
 
     #[test]

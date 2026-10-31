@@ -37,6 +37,9 @@ pub enum FeedOn {
     Running,
     /// A panic or hard stop.
     Panic,
+    /// The mood set changed (and once when the subscriber is set),
+    /// MOOD.11: `{mood}` and `{previous}`, "Group / Variant" or empty.
+    Mood,
 }
 
 /// One message of a subscriber.

@@ -6423,6 +6423,11 @@
     </message>
     <message>
       <location line="+1" />
+      <source>Mood</source>
+      <translation>Stimmung</translation>
+    </message>
+    <message>
+      <location line="+1" />
       <source>Standby</source>
       <translation>Standby</translation>
     </message>
@@ -6543,8 +6548,8 @@
     </message>
     <message>
       <location line="+6" />
-      <source>No subscribers yet. A subscriber sends standby, the running cue's remaining time and panic to an OSC (UDP) target, e.g. Companion's custom variables. Placeholders: {list} {number} {name} {note} {remaining} {elapsed} {total} {mode}.</source>
-      <translation>Noch keine Abonnenten. Ein Abonnent schickt Standby, die Restzeit des laufenden Cues und Panik an ein OSC-Ziel (UDP), z. B. an Companions eigene Variablen. Platzhalter: {list} {number} {name} {note} {remaining} {elapsed} {total} {mode}.</translation>
+      <source>No subscribers yet. A subscriber sends standby, the running cue's remaining time, panic and the mood to an OSC (UDP) target, e.g. Companion's custom variables. Placeholders: {list} {number} {name} {note} {remaining} {elapsed} {total} {mode} {mood} {previous}.</source>
+      <translation>Noch keine Abonnenten. Ein Abonnent schickt Standby, die Restzeit des laufenden Cues, Panik und die Stimmung an ein OSC-Ziel (UDP), z. B. an Companions eigene Variablen. Platzhalter: {list} {number} {name} {note} {remaining} {elapsed} {total} {mode} {mood} {previous}.</translation>
     </message>
     <message>
       <location line="+18" />

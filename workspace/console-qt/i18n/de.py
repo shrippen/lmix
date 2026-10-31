@@ -460,7 +460,7 @@ DE = {
     'Addresses': 'Adressen',
     'Cancel': 'Abbrechen',
     'HTTP': 'HTTP',
-    "No subscribers yet. A subscriber sends standby, the running cue's remaining time and panic to an OSC (UDP) target, e.g. Companion's custom variables. Placeholders: {list} {number} {name} {note} {remaining} {elapsed} {total} {mode}.": 'Noch keine Abonnenten. Ein Abonnent schickt Standby, die Restzeit des laufenden Cues und Panik an ein OSC-Ziel (UDP), z. B. an Companions eigene Variablen. Platzhalter: {list} {number} {name} {note} {remaining} {elapsed} {total} {mode}.',
+    "No subscribers yet. A subscriber sends standby, the running cue's remaining time, panic and the mood to an OSC (UDP) target, e.g. Companion's custom variables. Placeholders: {list} {number} {name} {note} {remaining} {elapsed} {total} {mode} {mood} {previous}.": 'Noch keine Abonnenten. Ein Abonnent schickt Standby, die Restzeit des laufenden Cues, Panik und die Stimmung an ein OSC-Ziel (UDP), z. B. an Companions eigene Variablen. Platzhalter: {list} {number} {name} {note} {remaining} {elapsed} {total} {mode} {mood} {previous}.',
     'No targets yet. Cues send to a target by its name, e.g. Home Assistant for light, or Companion for buttons.': 'Noch keine Ziele. Cues senden an ein Ziel über seinen Namen, z. B. Home Assistant für Licht oder Companion für Tasten.',
     'OSC (TCP)': 'OSC (TCP)',
     'OSC (UDP)': 'OSC (UDP)',
