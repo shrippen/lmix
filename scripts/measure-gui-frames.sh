@@ -13,11 +13,12 @@
 #   scripts/measure-gui-frames.sh                 # CUDA mixer, 10 s phases
 #   MIXER=cpu PHASE=20 RATE=60 scripts/measure-gui-frames.sh
 #   INPUTS=31 …                                   # many inputs (default 4)
-#   PAGE=audio INPUTS=40 …                        # another page (default mix);
-#                                                 # inputs past 31 get no slot
+#   PAGE=audio INPUTS=40 …                        # another page (default mix)
 #   LMIX_BIN=…/lmix …                             # another build of lmix (a baseline)
 #   KEEP_WORK=1 …                                 # keep logs and the recording
 #   GAP_P95_MS=40 …                               # a tighter budget
+#   DETACH=1 …            # the Mix page in a window of its own (maximized),
+#                         # the main window on the Show page
 #
 # Needs Xvfb, ffmpeg, jq, bc, Python 3, Qt 6 with Kirigami and gst-plugin-qml6.
 set -euo pipefail
@@ -29,8 +30,6 @@ DISPLAY_NO="${DISPLAY_NO:-:93}"
 MIXER="${MIXER:-cuda}"
 RATE="${RATE:-40}"
 INPUTS="${INPUTS:-4}"
-# At most 31 mixer slots (lmix-core --slots); more inputs wait without one.
-SLOTS="${SLOTS:-$((INPUTS < 31 ? INPUTS : 31))}"
 PAGE="${PAGE:-mix}"
 PHASE="${PHASE:-10}"
 CORE="http://127.0.0.1:${CORE_PORT}/api"
@@ -91,14 +90,20 @@ STROM_BIN="$("$ROOT/scripts/fetch-strom.sh")"
 (cd "$ROOT/workspace/console-qt" && cargo build --release -q)
 CORE_BIN="${CARGO_TARGET_DIR:-$ROOT/workspace/lmix-core/target}/release/lmix-core"
 LMIX_BIN="${LMIX_BIN:-${CARGO_TARGET_DIR:-$ROOT/workspace/console-qt/target}/release/lmix}"
-mkdir -p "$LIVE_DIR" "$WORK/rec" "$WORK/config"
+mkdir -p "$LIVE_DIR" "$WORK/rec" "$WORK/config/lmix"
+if [[ "${DETACH:-}" == 1 ]]; then
+    # As lmix keeps a detached page (AppShell, PageArrangement).
+    printf '[pages]\nwindows="{\\"mix\\":{\\"detached\\":true,\\"visibility\\":\\"maximized\\"}}"\n' \
+        >"$WORK/config/lmix/lmix.conf"
+    PAGE=show
+fi
 
 (cd "$WORK" && exec "$STROM_BIN" --host 127.0.0.1 --port "$STROM_PORT" --no-auto-restart \
     --data-dir "$WORK/strom-data" >"$WORK/strom.log" 2>&1) &
 PIDS+=($!)
 wait_up "http://127.0.0.1:${STROM_PORT}/health" strom
 "$CORE_BIN" --strom "http://127.0.0.1:${STROM_PORT}" --listen "127.0.0.1:${CORE_PORT}" --mixer "$MIXER" \
-    --slots "$SLOTS" --autosave "$WORK/autosave.lmix" --shortcuts "$WORK/shortcuts.json" \
+    --autosave "$WORK/autosave.lmix" --shortcuts "$WORK/shortcuts.json" \
     --layout-templates "$WORK/layout-templates.json" --live-dir "$LIVE_DIR" >"$WORK/core.log" 2>&1 &
 PIDS+=($!)
 wait_up "$CORE/state" lmix-core
@@ -124,7 +129,7 @@ Xvfb "$DISPLAY_NO" -screen 0 1920x1080x24 >/dev/null 2>&1 &
 PIDS+=($!)
 sleep 1
 XDG_CONFIG_HOME="$WORK/config" DISPLAY="$DISPLAY_NO" QT_QPA_PLATFORM=xcb QT_FORCE_STDERR_LOGGING=1 \
-    QT_LOGGING_RULES="qt.scenegraph.time.renderloop=true" QT_MESSAGE_PATTERN='%{time process} %{category} %{message}' \
+    QT_LOGGING_RULES="qt.scenegraph.time.renderloop=true" QT_MESSAGE_PATTERN='%{time process} %{category} %{threadid} %{message}' \
     RUST_LOG=info,lmix=debug LMIX_CORE="http://127.0.0.1:${CORE_PORT}" \
     "$LMIX_BIN" --page "$PAGE" --window maximized >"$WORK/lmix.log" 2>&1 &
 LMIX_PID=$!

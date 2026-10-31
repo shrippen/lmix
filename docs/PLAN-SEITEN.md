@@ -198,7 +198,13 @@ Actions (die Aktionen eines Aktions-Cues). Er zeigt den Standby-Cue oder
 den angeklickten, auch in einer Gruppe; jede Änderung geht sofort an den
 Kern, nur mit den geänderten Feldern (`update_cue`, DECISIONS 24.10.),
 Standby und laufende Cues bleiben. Listen aus
-einem Skript sind nur zu sehen.
+einem Skript sind nur zu sehen. Seit 31.10. (DECISIONS): eine Leiste über
+der Liste legt je Art einen Cue hinter dem gewählten an (Klang, Bild,
+Blende, Aktionen, Warten, Notiz, Start; über `add_cue`), Vorwartezeit, Dauer
+und Nachwartezeit füllen sich, solange ihr Teil läuft; der Inspector zeigt
+Datei, Bühne und das Ziel einer Blende (Basics) und die Kreuzungen eines
+Klangs (Levels); eine unlesbare Zeit oder ein relativer Pfad bleibt
+markiert im Feld. Eine Gruppe anlegen wartet aufs Umsortieren (SUI.10).
 
 Audio, Kanalzüge (31.10., DECISIONS 31.10.): je Zug zwei kleine Kurven,
 EQ (Hochpass und vier Bänder) und Dynamik (Gate und Kompressor),
@@ -208,12 +214,21 @@ Kurven groß mit beschrifteten Achsen und folgen den Reglern. ON/AFV ist
 ein Umschalter (Ton immer an oder Audio folgt Video), Stumm eine eigene
 Taste.
 
+Seiten lösbar (31.10., Entscheidung Click-Dummy 1, DECISIONS 31.10.): der
+Knopf „Eigenes Fenster“ in der Kopfzeile legt die offene Seite in ein
+eigenes Fenster („lmix — Mix“), beim ersten Mal auf einen anderen
+Bildschirm als das Hauptfenster. Zurück über „Zurück ins Hauptfenster“
+oder durch Schließen des Fensters. Die Leiste bleibt im Hauptfenster und
+markiert die gelöste Seite („MIX ↗“); ein Klick oder Strg+n holt ihr
+Fenster nach vorn. Das Seitenfenster hat oben Titel, Werkzeuge der Seite,
+Uhr und „Tasten“, unten die Panik der Seite und „Panic all“. Globale Tasten
+gelten in jedem lmix-Fenster, die Tasten einer Seite in ihrem Fenster.
+Welche Seiten gelöst sind, Größe, Lage, Bildschirm und maximiert/Vollbild
+merkt sich der Rechner (`lmix.conf`, `[pages] windows`); unter Wayland
+setzt KWin die Lage. Eine Verbindung zum Kern und ein Kachelbild für alle
+Fenster; das Hauptfenster behält mindestens eine Seite.
+
 Aus dem Dummy noch offen, **nur Oberfläche** (der Kern kann es):
-- Show: Leiste zum Anlegen je Cue-Art, Zeitfelder mit Fortschritt;
-  im Inspector Datei, Ziel und Zonen-Routing eines Klang-, Bild- oder
-  Blenden-Cues; eine unlesbare Zeit nach Enter nicht still verwerfen,
-  sondern im Feld lassen und markieren.
-- Seiten lösbar auf einen zweiten Bildschirm (Entscheidung Click-Dummy 1).
 - Leiste: wer eine Seite zuletzt bediente (braucht die Kennung je
   Verbindung im Kern, siehe Schritt 4).
 

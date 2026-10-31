@@ -8,8 +8,7 @@
 #
 #   scripts/profile-gui.sh                        # 8 inputs, CUDA mixer
 #   INPUTS=31 MIXER=cpu PHASE=10 scripts/profile-gui.sh
-#   PAGE=audio INPUTS=31 …                        # another page (default mix);
-#                                                 # inputs past 31 get no slot
+#   PAGE=audio INPUTS=31 …                        # another page (default mix)
 #   KEEP_WORK=1 …                                 # keep the trace (.qtd, opens in Qt Creator)
 #
 # Needs Xvfb, bc, Python 3, qmlprofiler (Qt 6), Qt 6 with Kirigami and gst-plugin-qml6.
@@ -22,8 +21,6 @@ PROFILE_PORT="${PROFILE_PORT:-3768}"
 DISPLAY_NO="${DISPLAY_NO:-:94}"
 MIXER="${MIXER:-cuda}"
 INPUTS="${INPUTS:-8}"
-# At most 31 mixer slots (lmix-core --slots); more inputs wait without one.
-SLOTS="${SLOTS:-$((INPUTS < 31 ? INPUTS : 31))}"
 PAGE="${PAGE:-mix}"
 RATE="${RATE:-40}"
 PHASE="${PHASE:-10}"
@@ -74,7 +71,7 @@ mkdir -p "$LIVE_DIR" "$WORK/config"
 PIDS+=($!)
 wait_up "http://127.0.0.1:${STROM_PORT}/health" strom
 "$CORE_BIN" --strom "http://127.0.0.1:${STROM_PORT}" --listen "127.0.0.1:${CORE_PORT}" --mixer "$MIXER" \
-    --slots "$SLOTS" --autosave "$WORK/autosave.lmix" --shortcuts "$WORK/shortcuts.json" \
+    --autosave "$WORK/autosave.lmix" --shortcuts "$WORK/shortcuts.json" \
     --layout-templates "$WORK/layout-templates.json" --live-dir "$LIVE_DIR" >"$WORK/core.log" 2>&1 &
 PIDS+=($!)
 wait_up "$CORE/state" lmix-core

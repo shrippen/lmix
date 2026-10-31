@@ -38,27 +38,44 @@ void updateCells()
 }
 
 // Scene graph wrappers of the frames' textures (a pool of a few that
-// GStreamer reuses); render thread only. The textures stay GStreamer's.
-QHash<std::uint32_t, QSGTexture *> &wrappers()
+// GStreamer reuses), per window: a page in a window of its own draws the
+// same texture (the windows' GL contexts share it, gl_format.cpp) through
+// its own scene graph. Each window's are made, used and deleted on its
+// render thread; with several windows there are several threads, hence
+// the lock. The textures stay GStreamer's.
+struct Wrappers {
+    QSize size;
+    QHash<std::uint32_t, QSGTexture *> textures;
+};
+QMutex wrapperLock;
+
+QHash<QQuickWindow *, Wrappers> &wrappers()
 {
-    static QHash<std::uint32_t, QSGTexture *> map;
+    static QHash<QQuickWindow *, Wrappers> map;
     return map;
 }
 
-void dropWrappers()
+// The window's scene graph goes: its wrappers with it.
+void dropWrappers(QQuickWindow *window)
 {
-    qDeleteAll(wrappers());
-    wrappers().clear();
+    QMutexLocker locker(&wrapperLock);
+    auto it = wrappers().find(window);
+    if (it != wrappers().end()) {
+        qDeleteAll(it->textures);
+        wrappers().erase(it);
+    }
 }
 
 QSGTexture *wrap(QQuickWindow *window, const Frame &frame)
 {
-    static QSize size;
-    if (frame.size != size) {
-        dropWrappers();
-        size = frame.size;
+    QMutexLocker locker(&wrapperLock);
+    auto &own = wrappers()[window];
+    if (frame.size != own.size) {
+        qDeleteAll(own.textures);
+        own.textures.clear();
+        own.size = frame.size;
     }
-    auto &map = wrappers();
+    auto &map = own.textures;
     auto it = map.find(frame.texture);
     if (it == map.end()) {
         auto *texture = QNativeInterface::QSGOpenGLTexture::fromNative(
@@ -77,9 +94,11 @@ AtlasCell::AtlasCell(QQuickItem *parent)
     setFlag(ItemHasContents);
     cells().append(this);
     connect(this, &QQuickItem::windowChanged, this, [](QQuickWindow *window) {
-        if (window) {
-            connect(window, &QQuickWindow::sceneGraphInvalidated, window, dropWrappers,
-                    Qt::DirectConnection);
+        // Once per window, however many cells it has.
+        if (window && !window->property("lmixAtlasWatched").toBool()) {
+            window->setProperty("lmixAtlasWatched", true);
+            connect(window, &QQuickWindow::sceneGraphInvalidated, window,
+                    [window] { dropWrappers(window); }, Qt::DirectConnection);
         }
     });
 }

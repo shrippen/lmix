@@ -3,8 +3,10 @@
 # state from tests/qml/fixtures and are checked by counts (items rebuilt by a
 # state update, actions sent by a drag), so they run in CI. Offscreen;
 # tests/qml/stubs stands in for GStreamer's QML item and the Console's
-# AtlasCell, and org.lmix.console (a placeholder: the pages import the app's
-# module; their types come from the directory import).
+# AtlasCell, and org.lmix.console for the Rust backend `Core` (the pages
+# import the app's module; their own types come from the directory import).
+# Settings go to a folder of their own, removed afterwards: a test of the
+# window (detached pages) must not leave its places in the user's settings.
 # Needs Qt 6 with qmltestrunner and Kirigami.
 #
 #   scripts/test-qml.sh
@@ -24,4 +26,7 @@ done
 [[ -n "$runner" ]] || { echo "qmltestrunner not found (Qt 6 declarative tools)" >&2; exit 2; }
 
 export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-offscreen}"
-exec "$runner" -import "$QML" -import "$ROOT/workspace/console-qt/tests/qml/stubs" -input "$ROOT/workspace/console-qt/tests/qml" "$@"
+XDG_CONFIG_HOME="$(mktemp -d)"
+export XDG_CONFIG_HOME
+trap 'rm -rf "$XDG_CONFIG_HOME"' EXIT
+"$runner" -import "$QML" -import "$ROOT/workspace/console-qt/tests/qml/stubs" -input "$ROOT/workspace/console-qt/tests/qml" "$@"

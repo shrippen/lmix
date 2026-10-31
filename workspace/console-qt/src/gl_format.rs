@@ -4,8 +4,8 @@
 pub mod ffi {
     unsafe extern "C++" {
         include!("console-qt/cpp/gl_format.h");
-        /// Desktop OpenGL instead of OpenGL ES; before the application
-        /// object.
+        /// Desktop OpenGL instead of OpenGL ES, one share group for all
+        /// windows; before the application object.
         fn use_desktop_gl();
     }
 }

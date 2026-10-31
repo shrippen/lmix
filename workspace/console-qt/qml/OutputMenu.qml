@@ -9,7 +9,7 @@ import Kante
  * kind and the bitrate while it sends; Start or Stop…, Settings…, Copy
  * address, Statistics ▸; Remove last and red, locked while it sends.
  *   output   the output (`ShowState.outputs`)
- *   link     its link stats (SRT: `Core.links`), or undefined
+ *   link     what it measures (`Core.links`: SRT, RTMP, recording), or undefined
  *   elapsed  its running time as shown
  * `startRequested()`, `stopRequested()`, `settingsRequested()`,
  * `removeRequested()`; the owner asks before stopping and removing.
@@ -30,7 +30,9 @@ QQC2.Menu {
     /** A stop ends a run or the wait for the cards. */
     readonly property bool stoppable: sending || phase === "cards_off"
     readonly property string address: Texts.outputTarget(output.spec) || ""
-    /** The rate while it sends: measured on a link, else the one set. */
+    /** SRT's link health, else undefined. */
+    readonly property var srt: link ? link.srt : undefined
+    /** The rate while it sends: measured, else (not yet, other kinds) the one set. */
     readonly property string rate: !sending ? ""
         : link ? Texts.linkRate(link)
         : output.spec.video_kbps !== undefined ? qsTr("%1 kbit/s").arg(output.spec.video_kbps) : ""
@@ -119,24 +121,25 @@ QQC2.Menu {
         KantePopupSkin { popup: stats }
         KanteMenuItem { text: qsTr("Running"); valueText: outputMenu.elapsed }
         KanteMenuItem { text: qsTr("Rate"); valueText: outputMenu.rate }
+        // SRT only: the link's health.
         KanteMenuItem {
             text: qsTr("Packets lost")
-            visible: !!outputMenu.link
+            visible: !!outputMenu.srt
             height: visible ? implicitHeight : 0
-            valueText: outputMenu.link ? String(outputMenu.link.packets_lost) : ""
+            valueText: outputMenu.srt ? String(outputMenu.srt.packets_lost) : ""
         }
         KanteMenuItem {
             text: qsTr("Packets dropped")
-            visible: !!outputMenu.link
+            visible: !!outputMenu.srt
             height: visible ? implicitHeight : 0
-            valueText: outputMenu.link ? String(outputMenu.link.packets_dropped) : ""
+            valueText: outputMenu.srt ? String(outputMenu.srt.packets_dropped) : ""
         }
         KanteMenuItem {
             text: qsTr("Round trip")
-            visible: !!outputMenu.link
+            visible: !!outputMenu.srt
             height: visible ? implicitHeight : 0
-            valueText: outputMenu.link && outputMenu.link.rtt_ms !== null && outputMenu.link.rtt_ms !== undefined
-                ? qsTr("%1 ms").arg(outputMenu.link.rtt_ms) : "–"
+            valueText: outputMenu.srt && outputMenu.srt.rtt_ms !== null && outputMenu.srt.rtt_ms !== undefined
+                ? qsTr("%1 ms").arg(outputMenu.srt.rtt_ms) : "–"
         }
     }
 

@@ -10,7 +10,8 @@ import org.lmix.atlas
  *
  * An input with its `cell` (its slot) shows that cell of the window's
  * tile picture (TilesAtlas) instead of a stream of its own: one texture
- * for all tiles, each drawing its part (AtlasCell).
+ * for all tiles, each drawing its part (AtlasCell). Slots past the
+ * picture's cells get their own stream.
  *
  * Only while it is shown: on a page that is not (or a tile that is not),
  * the picture stops after `holdMs`, as the tile picture does, so a page
@@ -27,8 +28,13 @@ Item {
     property int cell: -1
 
     readonly property var atlas: Window.window ? Window.window.tilesAtlas ?? null : null
+    // The picture has cells for the first slots only (lmix-core's
+    // TILE_CELLS); a later slot shows a stream of its own. Until the
+    // picture runs its size is open: the tile counts itself in.
+    readonly property var atlasGrid: atlas !== null ? atlas.grid : null
     readonly property bool tiled: atlas !== null && cell >= 0 && source !== ""
         && source !== "program" && source !== "preview"
+        && (atlasGrid === null || cell < atlasGrid.columns * atlasGrid.rows)
 
     Rectangle {
         anchors.fill: parent
