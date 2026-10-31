@@ -5,8 +5,10 @@ import "../../qml"
 /**
  * Editing the moods (MOOD.12, MOOD.9): every edit sends the whole moods
  * (`set_moods`) with only that change; a variant's layer can take the
- * base's again; a new sound waits for its file; a removed group or layer
- * leaves nothing behind; the panic mood holds actions only.
+ * base's again; a new sound or picture waits for its file, keeping what
+ * is chosen meanwhile; a refused name does not stay; a removal asks
+ * first, leaves nothing behind and can be undone; the panic mood holds
+ * actions only.
  */
 TestCase {
     id: test
@@ -36,10 +38,12 @@ TestCase {
 
     property var show: null
     property var acted: []
+    /** Like lmix-core refusing every edit. */
+    property bool refuse: false
     /** Like lmix-core: what it takes becomes the show's. */
     function act(action) {
         acted.push(action)
-        if (action.action === "set_moods") {
+        if (action.action === "set_moods" && !refuse) {
             show = Object.assign({}, show, { moods: action.moods })
         }
     }
@@ -55,6 +59,7 @@ TestCase {
 
     function init() {
         acted = []
+        refuse = false
         show = { moods: JSON.parse(JSON.stringify(test.moods)), stages: [{ name: "Back" }], inputs: [], outputs: [] }
     }
 
@@ -114,6 +119,11 @@ TestCase {
         const d = dialog()
         d.chosenId = "g-tavern"
         findChild(d.contentItem, "removePlace").clicked()
+        compare(acted.length, 0, "it asks first")
+        const ask = findChild(d, "removeDialog")
+        tryVerify(() => ask.opened)
+        compare(ask.title, "Remove group \u201cTavern\u201d?")
+        ask.accept()
         const moods = sent()
         compare(moods.groups.map(g => g.id), ["g-forest"])
         compare(moods.collections[0].moods, ["g-forest"])
@@ -135,8 +145,8 @@ TestCase {
     function test_a_removed_layer_leaves_the_moods_and_the_panic() {
         const d = dialog()
         d.tab = 1
-        const remove = findChild(d.contentItem, "removeLayer:0")
-        remove.clicked()
+        findChild(d.contentItem, "removeLayer:0").clicked()
+        findChild(d, "removeDialog").accept()
         const moods = sent()
         compare(moods.layers.map(l => l.id), ["l-music"])
         compare(Object.keys(moods.groups[0].base), ["l-music"])
@@ -166,5 +176,68 @@ TestCase {
         field.editingFinished()
         compare(show.moods.collections[1].name, "Act 2")
         compare(show.moods.collections[0], test.moods.collections[0])
+    }
+
+    function test_a_picture_keeps_its_stage_until_the_file_comes() {
+        show = Object.assign({}, show, { stages: [{ name: "Back" }, { name: "Front" }] })
+        const d = dialog()
+        d.chosenId = "g-forest"
+        const kind = findChild(d.contentItem, "kind:Light")
+        kind.activated(kind.model.indexOf("Picture"))
+        const stage = findChild(d.contentItem, "stage:Light")
+        stage.activated(1)
+        compare(acted.length, 0)
+        compare(stage.currentText, "Front")
+        findChild(d.contentItem, "file:Light").edited("/pictures/sea.mp4")
+        compare(sent().groups[1].base["l-light"].picture, { file: "/pictures/sea.mp4", stage: "Front", repeat: "forever" })
+    }
+
+    function test_a_refused_name_does_not_stay() {
+        const d = dialog()
+        d.chosenId = "g-tavern"
+        refuse = true
+        const field = findChild(d.contentItem, "moodName")
+        field.text = "Forest"
+        field.editingFinished()
+        compare(acted.length, 1)
+        compare(field.text, "Tavern")
+        refuse = false
+        field.text = "Inn"
+        field.editingFinished()
+        compare(field.text, "Inn")
+    }
+
+    function test_a_removal_can_be_undone() {
+        const d = dialog()
+        d.tab = 2
+        findChild(d.contentItem, "removeCollection:0").clicked()
+        const ask = findChild(d, "removeDialog")
+        ask.reject()
+        compare(acted.length, 0, "cancelled: nothing")
+        findChild(d.contentItem, "removeCollection:0").clicked()
+        ask.accept()
+        compare(show.moods.collections, [])
+        const undo = findChild(d.contentItem, "undo")
+        verify(undo.visible)
+        undo.clicked()
+        compare(show.moods, test.moods)
+        verify(!undo.visible)
+    }
+
+    function test_another_edit_ends_the_undo() {
+        const d = dialog()
+        d.tab = 2
+        findChild(d.contentItem, "removeCollection:0").clicked()
+        findChild(d, "removeDialog").accept()
+        findChild(d.contentItem, "addCollection").clicked()
+        verify(!findChild(d.contentItem, "undo").visible)
+    }
+
+    function test_new_names_are_free_without_case() {
+        show.moods.groups[1].name = "group"
+        show = Object.assign({}, show)
+        const d = dialog()
+        findChild(d.contentItem, "addGroup").clicked()
+        compare(show.moods.groups[2].name, "Group 2")
     }
 }

@@ -6362,13 +6362,27 @@ nur über die API.
   wenn die Show eine Bühne hat. Aktionen über den Aktionsdialog der Cues.
 - Entfernen räumt auf: eine Gruppe nimmt ihre Varianten mit und fällt aus
   den Sammlungen, eine Ebene aus Gruppen, Varianten und Panik-Stimmung.
-  Ids neuer Einträge sind UUIDs wie die neuer Cues.
+  Ids neuer Einträge sind UUIDs wie die neuer Cues; neue Namen sind frei
+  ohne Rücksicht auf Groß- und Kleinschreibung, wie lmix-core vergleicht.
+- Entfernen fragt wie überall (DESIGN-DIALOGE Regel 1): roter Dialog mit
+  der Folge. Das „Rückgängig“ zeigt der Dialog selbst statt eines Toasts:
+  `restore` von lmix-core kennt die Stimmungen nicht, darum schickt es die
+  Stimmungen von vorher zurück. Es gilt nur bis zur nächsten Änderung (sonst
+  nähme es diese mit) und bis der Dialog schließt.
+- Ein abgelehnter Name bleibt nicht im Feld stehen, das Feld zeigt wieder
+  den gültigen. Bühne und Schleife eines neuen Bilds oder Klangs warten mit
+  ihm auf die Datei.
 
 **Noch nicht**: Pegel, Blenden und Routing eines Klangs oder Bilds einer
 Ebene (der Dialog setzt Datei, Bühne und Schleife; der Rest bleibt beim
-Standard oder kommt über die API). Ziehen zum Umsortieren.
+Standard oder kommt über die API). Ziehen zum Umsortieren; Ebenen und
+Sammlungen haben nur „Hoch“. Der Aktionsdialog zeigt 8 Aktionen, lmix-core
+nimmt 16 (wie bei Aktions-Cues). Zwei Änderungen schneller als die
+Antwort des Kerns gehen beide vom alten Stand aus, die zweite gewinnt.
 
 **Geprüft**: `tst_moods_dialog.qml` (Umbenennen ändert nur den Namen,
 Variante zurück zur Basis, neuer Klang wartet auf die Datei, Bild braucht
-eine Bühne, Gruppe verlässt die Sammlungen, freie Namen und UUIDs, Ebene
-verlässt Stimmungen und Panik, Panik nur aus oder Aktionen, Sammlungen).
+eine Bühne und behält sie bis zur Datei, abgelehnter Name, Rückfrage und
+Rückgängig, Gruppe verlässt die Sammlungen, freie Namen ohne Groß- und
+Kleinschreibung und UUIDs, Ebene verlässt Stimmungen und Panik, Panik nur
+aus oder Aktionen, Sammlungen).

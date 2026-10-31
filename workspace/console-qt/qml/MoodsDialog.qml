@@ -44,7 +44,8 @@ KanteDialog {
     }
     /** The group or variant being edited, by id. */
     property string chosenId: ""
-    /** Layers of the chosen mood whose new sound or picture waits for its file: { layer id: kind }. */
+    /** Layers of the chosen mood whose new sound or picture waits for its
+        file, with what is chosen so far: { layer id: content }. */
     property var pending: ({})
     readonly property var chosen: places.find(p => p.id === chosenId) || null
     property int tab: 0
@@ -53,6 +54,14 @@ KanteDialog {
 
     /** What an action list dialog edits: { where: "mood" | "panic", layer }. */
     property var editingActions: null
+    /** The moods before the last removal, for Undo; null after any other edit. */
+    property var undoMoods: null
+    property string undoText: ""
+
+    onClosed: {
+        pending = {}
+        undoMoods = null
+    }
 
     title: qsTr("Moods")
     modal: true
@@ -71,10 +80,29 @@ KanteDialog {
     }
     /** Changes a copy of the moods with `change` and sends it whole. */
     function edit(change) {
+        undoMoods = null
         const copy = Object.assign({ layers: [], groups: [], collections: [], panic: {}, change_ms: 3000, inside_ms: 1000 },
                                    JSON.parse(JSON.stringify(moods)))
         change(copy)
         act({ action: "set_moods", moods: copy })
+    }
+    /** Asks before a removal (docs/DESIGN-DIALOGE.md rule 1), then edits
+        with `request.change` and offers Undo: lmix-core keeps no way back
+        for the moods, so Undo sends them as they were. */
+    function askRemove(request) {
+        removeDialog.request = request
+        removeDialog.open()
+    }
+    function remove(request) {
+        const before = JSON.parse(JSON.stringify(moods))
+        edit(request.change)
+        undoMoods = before
+        undoText = request.removedText
+    }
+    function undo() {
+        const before = undoMoods
+        undoMoods = null
+        act({ action: "set_moods", moods: before })
     }
     /** In `copy`: the group of `place`, and its variant or null. */
     function find(copy, place) {
@@ -84,7 +112,9 @@ KanteDialog {
     /** A name not yet among `names`: "Name", "Name 2" … */
     function freeName(base, names) {
         let name = base
-        for (let n = 2; names.indexOf(name) >= 0; n++) {
+        // lmix-core compares names without case.
+        const taken = names.map(n => n.toLowerCase())
+        for (let n = 2; taken.indexOf(name.toLowerCase()) >= 0; n++) {
             name = base + " " + n
         }
         return name
@@ -96,11 +126,11 @@ KanteDialog {
         }
         return chosen.variant ? (chosen.variant.layers || {})[layerId] : (chosen.group.base || {})[layerId]
     }
-    /** Contents to choose from; a variant also takes the base's. */
-    function kinds() {
+    /** Contents to choose from, for a layer that has `current`; a variant also takes the base's. */
+    function kinds(current) {
         const out = [{ kind: "off", label: qsTr("Off") }, { kind: "sound", label: qsTr("Sound") }]
         // A picture names its stage.
-        if (stages.length > 0) {
+        if (stages.length > 0 || current === "picture") {
             out.push({ kind: "picture", label: qsTr("Picture") })
         }
         out.push({ kind: "actions", label: qsTr("Actions") })
@@ -109,7 +139,7 @@ KanteDialog {
     /** Sets what the chosen mood has on `layerId`; null takes the base's. */
     function setContent(layerId, content) {
         const place = chosen
-        waitFor(layerId, "")
+        waitFor(layerId, null)
         edit(copy => {
             const at = find(copy, place)
             const map = at.variant ? (at.variant.layers = at.variant.layers || {}) : (at.group.base = at.group.base || {})
@@ -129,22 +159,36 @@ KanteDialog {
         default: return { kind: kind }
         }
     }
-    function waitFor(layerId, kind) {
+    /** Keeps `content` waiting for its file on `layerId`; null: nothing waits. */
+    function waitFor(layerId, content) {
         const next = Object.assign({}, pending)
-        if (kind === "") {
+        if (content === null) {
             delete next[layerId]
         } else {
-            next[layerId] = kind
+            next[layerId] = content
         }
         pending = next
+    }
+    /** A changed sound or picture: out with its file, else it waits on. */
+    function changeMedia(layerId, content) {
+        if (content[content.kind].file === "") {
+            waitFor(layerId, content)
+        } else {
+            setContent(layerId, content)
+        }
     }
     /** A new content of `kind` for a layer; sound and picture wait for their file, actions ask for theirs. */
     function chooseKind(layerId, kind) {
         switch (kind) {
         case "base": setContent(layerId, null); break
         case "off": setContent(layerId, { kind: "off" }); break
-        case "sound": case "picture": waitFor(layerId, kind); break
-        case "actions": waitFor(layerId, ""); openActions("mood", layerId, []); break
+        case "sound": case "picture": {
+            // Back to what is kept: nothing waits.
+            const stored = own(layerId)
+            waitFor(layerId, stored !== undefined && stored.kind === kind ? null : fresh(kind))
+            break
+        }
+        case "actions": waitFor(layerId, null); openActions("mood", layerId, []); break
         }
     }
     function openActions(where, layerId, actions) {
@@ -178,10 +222,55 @@ KanteDialog {
         }
     }
 
+    KanteDialog {
+        id: removeDialog
+        objectName: "removeDialog"
+        property var request: null
+        parent: QQC2.Overlay.overlay
+        anchors.centerIn: parent
+        modal: true
+        title: request ? request.question : ""
+        destructive: true
+        size: KanteDialog.Size.Small
+        standardButtons: QQC2.Dialog.Ok | QQC2.Dialog.Cancel
+        acceptText: request ? request.acceptText : ""
+        // KanteDialog has a child of its own, so it does not size to this.
+        contentHeight: consequence.implicitHeight
+        onOpened: consequence.forceActiveFocus()
+        onAccepted: dialog.remove(request)
+
+        QQC2.Label {
+            id: consequence
+            width: parent.width
+            text: removeDialog.request ? removeDialog.request.consequence : ""
+            wrapMode: Text.WordWrap
+            // Enter keeps it: removing takes the button.
+            focus: true
+            Keys.onReturnPressed: removeDialog.reject()
+            Keys.onEnterPressed: removeDialog.reject()
+        }
+    }
+
     ColumnLayout {
         id: column
         width: parent.width
         spacing: Kirigami.Units.smallSpacing
+
+        // After a removal: what went, and the way back (rule 1).
+        RowLayout {
+            visible: dialog.undoMoods !== null
+            Layout.fillWidth: true
+            QQC2.Label {
+                Layout.fillWidth: true
+                elide: Text.ElideRight
+                text: dialog.undoText
+            }
+            KanteButton {
+                objectName: "undo"
+                text: qsTr("Undo")
+                onClicked: dialog.undo()
+            }
+        }
 
         KanteTabBar {
             Layout.fillWidth: true
@@ -287,21 +376,28 @@ KanteDialog {
                             text: qsTr("Remove")
                             emphasis: KanteButton.Emphasis.Destructive
                             enabled: dialog.chosen !== null
-                            QQC2.ToolTip.visible: hovered
-                            QQC2.ToolTip.text: qsTr("A group goes with its variants; collections forget it")
                             onClicked: {
                                 const place = dialog.chosen
                                 const gone = place.variant ? [place.variant.id] : [place.group.id].concat((place.group.variants || []).map(v => v.id))
-                                dialog.edit(copy => {
-                                    const at = dialog.find(copy, place)
-                                    if (at.variant) {
-                                        at.group.variants.splice(at.group.variants.indexOf(at.variant), 1)
-                                    } else {
-                                        copy.groups.splice(copy.groups.indexOf(at.group), 1)
+                                const variants = place.variant ? 0 : (place.group.variants || []).length
+                                const named = "\u201c" + (place.variant ? place.group.name + " / " + place.variant.name : place.group.name) + "\u201d"
+                                dialog.askRemove({
+                                    question: place.variant ? qsTr("Remove variant %1?").arg(named) : qsTr("Remove group %1?").arg(named),
+                                    consequence: (variants > 0 ? qsTr("Its %1 variants go with it. ").arg(variants) : "")
+                                        + qsTr("Collections forget it; mood cues that set it are marked."),
+                                    acceptText: place.variant ? qsTr("Remove variant") : qsTr("Remove group"),
+                                    removedText: place.variant ? qsTr("Variant %1 removed").arg(named) : qsTr("Group %1 removed").arg(named),
+                                    change: copy => {
+                                        const at = dialog.find(copy, place)
+                                        if (at.variant) {
+                                            at.group.variants.splice(at.group.variants.indexOf(at.variant), 1)
+                                        } else {
+                                            copy.groups.splice(copy.groups.indexOf(at.group), 1)
+                                        }
+                                        copy.collections.forEach(c => c.moods = (c.moods || []).filter(m => gone.indexOf(m) < 0))
+                                        dialog.chosenId = ""
                                     }
-                                    copy.collections.forEach(c => c.moods = (c.moods || []).filter(m => gone.indexOf(m) < 0))
                                 })
-                                dialog.chosenId = ""
                             }
                         }
                     }
@@ -338,6 +434,8 @@ KanteDialog {
                                 if (place && name !== "" && name !== was) {
                                     dialog.edit(copy => { const at = dialog.find(copy, place); (at.variant || at.group).name = name })
                                 }
+                                // The kept name again; a refused one does not stay.
+                                text = Qt.binding(() => dialog.chosen ? (dialog.chosen.variant ? dialog.chosen.variant.name : dialog.chosen.group.name) : "")
                             }
                         }
                         CueColourButton {
@@ -367,10 +465,11 @@ KanteDialog {
                                     required property var modelData
                                     readonly property var stored: dialog.own(modelData.id)
                                     // Sound and picture wait for their file before they go out.
-                                    readonly property string waiting: dialog.pending[modelData.id] || ""
-                                    readonly property string kind: waiting !== "" ? waiting
+                                    readonly property var waiting: dialog.pending[modelData.id] || null
+                                    readonly property string kind: waiting ? waiting.kind
                                         : stored === undefined ? (dialog.chosen && dialog.chosen.variant ? "base" : "off") : stored.kind
-                                    readonly property var content: stored !== undefined && stored.kind === kind ? stored : dialog.fresh(kind)
+                                    readonly property var content: waiting ? waiting
+                                        : stored !== undefined && stored.kind === kind ? stored : dialog.fresh(kind)
                                     /** The sound or picture, while it is one. */
                                     readonly property var media: kind === "sound" || kind === "picture" ? content[kind] || null : null
                                     Layout.fillWidth: true
@@ -384,7 +483,7 @@ KanteDialog {
                                     KanteComboBox {
                                         objectName: "kind:" + layerEdit.modelData.name
                                         Layout.preferredWidth: Kirigami.Units.gridUnit * 7
-                                        readonly property var choices: dialog.kinds()
+                                        readonly property var choices: dialog.kinds(layerEdit.kind)
                                         model: choices.map(c => c.label)
                                         currentIndex: choices.findIndex(c => c.kind === layerEdit.kind)
                                         Accessible.name: layerEdit.modelData.name
@@ -409,36 +508,35 @@ KanteDialog {
                                         onEdited: path => {
                                             const next = JSON.parse(JSON.stringify(layerEdit.content))
                                             next[layerEdit.kind].file = path
-                                            dialog.setContent(layerEdit.modelData.id, next)
+                                            dialog.changeMedia(layerEdit.modelData.id, next)
                                         }
                                     }
                                     KanteComboBox {
                                         visible: layerEdit.kind === "picture" && dialog.stages.length > 1
                                         Layout.preferredWidth: Kirigami.Units.gridUnit * 6
+                                        objectName: "stage:" + layerEdit.modelData.name
                                         model: dialog.stages
-                                        currentIndex: layerEdit.kind === "picture" ? dialog.stages.indexOf(layerEdit.content.picture.stage) : -1
+                                        currentIndex: layerEdit.kind === "picture" && layerEdit.media ? dialog.stages.indexOf(layerEdit.media.stage) : -1
                                         Accessible.name: qsTr("Stage of the picture")
                                         onActivated: index => {
                                             const next = JSON.parse(JSON.stringify(layerEdit.content))
                                             next.picture.stage = dialog.stages[index]
-                                            if (next.picture.file !== "") {
-                                                dialog.setContent(layerEdit.modelData.id, next)
-                                            }
+                                            dialog.changeMedia(layerEdit.modelData.id, next)
                                         }
                                     }
                                     QQC2.CheckBox {
-                                        visible: layerEdit.waiting === "" && (layerEdit.kind === "sound" || layerEdit.kind === "picture")
+                                        visible: layerEdit.media !== null
                                         text: qsTr("Loop")
                                         checked: layerEdit.media !== null && layerEdit.media.repeat === "forever"
                                         onToggled: {
                                             const next = JSON.parse(JSON.stringify(layerEdit.content))
                                             next[layerEdit.kind].repeat = checked ? "forever" : "once"
-                                            dialog.setContent(layerEdit.modelData.id, next)
+                                            dialog.changeMedia(layerEdit.modelData.id, next)
                                         }
                                     }
                                     KanteButton {
                                         visible: layerEdit.kind === "actions"
-                                        text: layerEdit.kind === "actions" ? qsTr("Actions: %1…").arg(layerEdit.content.actions.length) : ""
+                                        text: layerEdit.kind === "actions" && layerEdit.content.actions ? qsTr("Actions: %1…").arg(layerEdit.content.actions.length) : ""
                                         onClicked: dialog.openActions("mood", layerEdit.modelData.id, layerEdit.content.actions)
                                     }
                                     Item { Layout.fillWidth: true; visible: layerEdit.kind === "off" || layerEdit.kind === "base" }
@@ -494,6 +592,7 @@ KanteDialog {
                                 if (name !== "" && name !== layerRow.modelData.name) {
                                     dialog.edit(copy => copy.layers[layerRow.index].name = name)
                                 }
+                                text = Qt.binding(() => layerRow.modelData.name)
                             }
                         }
                         DurationField {
@@ -522,17 +621,23 @@ KanteDialog {
                             objectName: "removeLayer:" + layerRow.index
                             text: qsTr("Remove")
                             emphasis: KanteButton.Emphasis.Destructive
-                            QQC2.ToolTip.visible: hovered
-                            QQC2.ToolTip.text: qsTr("The moods forget what they had on it")
                             onClicked: {
                                 const id = layerRow.modelData.id
-                                dialog.edit(copy => {
-                                    copy.layers.splice(layerRow.index, 1)
-                                    copy.groups.forEach(g => {
-                                        delete (g.base || {})[id]
-                                        ;(g.variants || []).forEach(v => delete (v.layers || {})[id])
-                                    })
-                                    delete copy.panic[id]
+                                const at = layerRow.index
+                                const named = "\u201c" + layerRow.modelData.name + "\u201d"
+                                dialog.askRemove({
+                                    question: qsTr("Remove layer %1?").arg(named),
+                                    consequence: qsTr("Every mood and the panic mood forget what they had on it; cues that take it are marked."),
+                                    acceptText: qsTr("Remove layer"),
+                                    removedText: qsTr("Layer %1 removed").arg(named),
+                                    change: copy => {
+                                        copy.layers.splice(at, 1)
+                                        copy.groups.forEach(g => {
+                                            delete (g.base || {})[id]
+                                            ;(g.variants || []).forEach(v => delete (v.layers || {})[id])
+                                        })
+                                        delete copy.panic[id]
+                                    }
                                 })
                             }
                         }
@@ -572,6 +677,7 @@ KanteDialog {
                                 if (name !== "" && name !== collectionRow.modelData.name) {
                                     dialog.edit(copy => copy.collections[collectionRow.index].name = name)
                                 }
+                                text = Qt.binding(() => collectionRow.modelData.name)
                             }
                         }
                         KanteButton {
@@ -580,9 +686,20 @@ KanteDialog {
                             onClicked: dialog.edit(copy => dialog.move(copy.collections, collectionRow.index, -1))
                         }
                         KanteButton {
+                            objectName: "removeCollection:" + collectionRow.index
                             text: qsTr("Remove")
                             emphasis: KanteButton.Emphasis.Destructive
-                            onClicked: dialog.edit(copy => copy.collections.splice(collectionRow.index, 1))
+                            onClicked: {
+                                const at = collectionRow.index
+                                const named = "\u201c" + collectionRow.modelData.name + "\u201d"
+                                dialog.askRemove({
+                                    question: qsTr("Remove collection %1?").arg(named),
+                                    consequence: qsTr("Its moods and one-shots stay."),
+                                    acceptText: qsTr("Remove collection"),
+                                    removedText: qsTr("Collection %1 removed").arg(named),
+                                    change: copy => copy.collections.splice(at, 1)
+                                })
+                            }
                         }
                     }
                 }
@@ -637,7 +754,7 @@ KanteDialog {
                         }
                         KanteButton {
                             visible: panicEdit.acts
-                            text: panicEdit.acts ? qsTr("Actions: %1…").arg(panicEdit.content.actions.length) : ""
+                            text: panicEdit.acts && panicEdit.content.actions ? qsTr("Actions: %1…").arg(panicEdit.content.actions.length) : ""
                             onClicked: dialog.openActions("panic", panicEdit.modelData.id, panicEdit.content.actions)
                         }
                         Item { Layout.fillWidth: true }
