@@ -106,7 +106,10 @@ Kirigami.ApplicationWindow {
 
     /** Remove after asking, with a toast to bring it back (Removals). */
     function askRemove(kind, item) {
-        removals.ask(kind, item)
+        // In the window the operator works in: its question, its Undo.
+        const win = operatorWindow()
+        const here = win !== root && win.removals ? win.removals : removals
+        here.ask(kind, item)
     }
 
     /** Every input live in one picture; LiveView shows its cell of it. */
@@ -257,8 +260,9 @@ Kirigami.ApplicationWindow {
 
     /** Page `id` made anew where the settings now say: in the stack or in
      *  a window of its own. What the page held only on screen (a
-     *  selection) goes; what it keeps in the settings stays. One page at a
-     *  time, so no picture runs twice. */
+     *  selection) goes; what it keeps in the settings stays. The old page
+     *  goes deferred; no picture runs twice, as a LiveView asks for its
+     *  picture only once its video item is ready in the new window. */
     function remake(id) {
         const index = pageOrder.indexOf(id)
         const old = pageItems[index]
@@ -866,13 +870,13 @@ Kirigami.ApplicationWindow {
                             KanteMenuItem {
                                 text: qsTr("Export package…")
                                 icon.name: "document-export"
-                                onTriggered: exportDialog.open()
+                                onTriggered: root.openFileHere(exportDialog)
                             }
                             KanteMenuItem {
                                 id: importPackageItem
                                 text: qsTr("Import package…")
                                 icon.name: "document-import"
-                                onTriggered: importDialog.open()
+                                onTriggered: root.openFileHere(importDialog)
                             }
                             KanteMenuSection { text: qsTr("Settings") }
                             KanteMenuItem {
@@ -915,19 +919,19 @@ Kirigami.ApplicationWindow {
                                 KanteMenuItem {
                                     text: qsTr("Export settings…")
                                     icon.name: "document-export"
-                                    onTriggered: exportSettingsDialog.open()
+                                    onTriggered: root.openFileHere(exportSettingsDialog)
                                 }
                                 KanteMenuItem {
                                     text: qsTr("Import settings…")
                                     icon.name: "document-import"
-                                    onTriggered: importSettingsDialog.open()
+                                    onTriggered: root.openFileHere(importSettingsDialog)
                                 }
                                 QQC2.MenuSeparator {}
                                 KanteMenuItem {
                                     text: qsTr("Factory settings…")
                                     icon.name: "edit-reset"
                                     destructive: true
-                                    onTriggered: resetSettingsDialog.open()
+                                    onTriggered: root.openHere(resetSettingsDialog)
                                 }
                             }
                         }

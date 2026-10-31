@@ -232,6 +232,34 @@ TestCase {
         wait(200)
     }
 
+    // Removing from a detached page asks in its window, with its Undo there.
+    function test_a_removal_asks_in_the_window_worked_in() {
+        shell.detachPage("mix")
+        const win = shell.pageWindows["mix"]
+        tryCompare(win, "visible", true)
+        win.requestActivate()
+        tryCompare(win, "active", true)
+        compare(shell.operatorWindow(), win)
+        shell.askRemove("input", { id: "i3", name: "Spare", number: 3 })
+        tryCompare(win.removals, "asking", true)
+    }
+
+    // Shell dialogs open in the window worked in each time, not in the one
+    // they last opened in (gone with its page).
+    function test_shell_dialogs_open_where_asked() {
+        shell.detachPage("setup")
+        const win = shell.pageWindows["setup"]
+        tryCompare(win, "visible", true)
+        win.requestActivate()
+        tryCompare(win, "active", true)
+        shell.openShellDialog("resetSettings")
+        compare(shell.dialogWindow, win)
+        shell.dockPage("setup")
+        tryVerify(() => !shell.pageWindowActive)
+        shell.openShellDialog("resetSettings")
+        compare(shell.dialogWindow, shell)
+    }
+
     function test_the_small_program_only_without_one_elsewhere() {
         shell.showPage("show")
         verify(!shell.programElsewhere)

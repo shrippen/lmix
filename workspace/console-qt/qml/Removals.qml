@@ -97,6 +97,8 @@ Item {
     }
 
     property var pending: null
+    /** The question is open (tst_app_shell: in which window). */
+    readonly property bool asking: dialog.opened
     readonly property var restorable: show ? show.restorable : null
     onRestorableChanged: settle(Removals.Came.State)
 

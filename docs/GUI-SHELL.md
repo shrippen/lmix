@@ -232,7 +232,10 @@ Bildschirm (Entscheidung Click-Dummy 1, `docs/PLAN-SEITEN.md`, DECISIONS
 - `Main.qml` gibt die Seiten als `AppShell.PageEntry` (Kennung und
   Component); `AppShell` macht jede Seite selbst, im `StackLayout` oder in
   einem `PageWindow.qml`. Lösen und Zurückholen bauen die Seite neu
-  (`remake`): erst die alte weg, dann die neue, so läuft kein Bild doppelt.
+  (`remake`): die alte geht (verzögert, `destroy()`), die neue entsteht
+  gleich. Kein Bild läuft doppelt, weil ein `LiveView` sein Bild erst
+  anfragt, wenn sein Video-Item im neuen Fenster bereit ist; bis dahin ist
+  die alte Seite samt Anfrage weg.
   Umhängen ginge nicht sauber: das GStreamer-Item hängt am GL-Kontext seines
   Fensters, und Dialoge mit `parent: Overlay.overlay` blieben im alten
   Fenster.

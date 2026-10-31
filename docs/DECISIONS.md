@@ -5615,8 +5615,9 @@ einen zweiten Bildschirm, und zurück.
 - **Meldungen, Entfernen-Leiste und Dialoge der Shell** erscheinen in dem
   Fenster, in dem gerade gearbeitet wird.
 - **Eine Verbindung, ein Bild:** Alle Fenster sprechen mit demselben Core.
-  Die Seite wird beim Lösen und Zurückholen neu gebaut (das alte Exemplar
-  geht zuerst), nicht umgehängt: Das Videobild hängt am GL-Kontext seines
+  Die Seite wird beim Lösen und Zurückholen neu gebaut, nicht umgehängt
+  (das neue Bild fragt erst an, wenn sein Video-Item bereit ist, dann ist
+  das alte schon weg): Das Videobild hängt am GL-Kontext seines
   Fensters, Popups am Overlay. Alle GL-Kontexte teilen eine Gruppe
   (`AA_ShareOpenGLContexts`), die Kachelbilder kommen weiter aus dem einen
   `TilesAtlas` im Hauptfenster (Hüllen je Fenster in `atlas_cell.cpp`). Das
