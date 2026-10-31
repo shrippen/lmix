@@ -6512,3 +6512,40 @@ nach der der Panik-Stimmung ankommen und gewinnen.
 **Geprüft**: `service::tests::requests_to_one_target_go_out_in_order`
 (die erste Anfrage antwortet langsam, die zweite kommt trotzdem danach).
 `service::tests::a_silent_backup_address_holds_up_nothing`.
+
+## 2026-11-01 — Stimmungen: Bedienung nachgebessert (MOOD Stufe 6b)
+
+**Anlass**: Offene Punkte aus den Reviews von „Stimmungen bearbeiten“ und
+„Nacharbeiten am Bearbeiten“ (Stufe 5a): In der Liste der Gruppen und
+Varianten sortierte Ziehen über die ganze Zeile um, statt zu scrollen; auf
+Touch blieb nur die Bildlaufleiste. Mit 16 Aktionszeilen wurden der Dialog
+der Aktionsliste und der Kurzbefehl-Dialog höher als das Fenster. Der
+Entwurf zählte jede `set_moods`-Antwort der Console, auch fremde, und
+konnte zu früh enden. Ein abgebrochenes Ziehen galt als Ablegen.
+
+**Entscheidung**:
+- Gruppen und Varianten zieht man am Griff ⠿ wie Ebenen und Sammlungen;
+  der Rest der Zeile gehört der Liste zum Scrollen. Den Griff übernimmt
+  die Liste nicht (`grabPermissions`), ein begonnenes Umsortieren bleibt
+  eins.
+- Ziehen legt nur ab, wenn der Zeiger losgelassen wird (`DropDrag`: die
+  Freigabe kommt mit dem losgelassenen Punkt). Nimmt etwas anderes das
+  Ziehen weg (ein anderes Fenster, eine Liste), endet es ohne Ablegen.
+  Gilt für die Griffe im Stimmungen-Dialog und das Ziehen einer Stimmung
+  in die Cue-Liste.
+- Aktionsliste und Kurzbefehl: der Inhalt scrollt, höchstens 70 % der
+  Fensterhöhe (wie die Einstellungen eines Inputs).
+- Der Entwurf merkt sich die gesendeten Stimmungen und zählt nur
+  Antworten, deren Stimmungen dazu passen (leere Felder, die lmix-core
+  beim Zurückschreiben weglässt, zählen nicht). Fremde Antworten und
+  fremde Ablehnungen lassen ihn stehen.
+- Das Drehfeld „Ebene“ eines Bilds im Pegel-Dialog hat einen
+  `objectName` und einen Test.
+
+**Bricht**: nichts.
+
+**Geprüft**: `tst_moods_dialog.qml` (Umsortieren am Griff, Ziehen neben
+dem Griff bewegt nichts, weggenommenes Ziehen legt nicht ab, Deckkraft und
+Ebene eines Bilds, nur eigene Antworten beenden den Entwurf),
+`tst_action_rows.qml` (16 Zeilen scrollen in beiden Dialogen und bleiben
+im Fenster), `tst_show_moods.qml`; alle QML-Tests (254).
