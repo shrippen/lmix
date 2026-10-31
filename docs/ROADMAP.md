@@ -441,10 +441,10 @@ je ein PR:
 
 | Stufe | Inhalt | IDs |
 |---|---|---|
-| 1 Modell und Engine | Typen `Moods` (Ebenen, Gruppen mit Basis und Varianten, Sammlungen, Panik-Stimmung) in der Show-Datei; reine Engine in `lmix-core` (Vergleich je Ebene, Überblenden, Herkunft je Ebene); Aktionen `set_mood`, `set_moods`; Zustand; Tests | MOOD.1–5, 9 |
-| 2 Seite Stimmungen | Console-Seite nach Entwurf E mit einklappbaren Seitenleisten, Sammlungen, Oneshot-Leiste (Pads), Inspector mit Ebenen und Herkunft | MOOD.7, 8, 10 |
-| 3 Show | Cue-Art „Stimmung setzen“, Reiter Stimmungen in der Show-Ansicht, letzter Befehl gewinnt für Klang- und Aktionsebenen | MOOD.5, 6 |
-| 4 Bearbeiten | Ebenen, Gruppen, Varianten, Sammlungen, Panik-Stimmung in der Oberfläche; OSC und Kurzbefehle; Demodaten | MOOD.9, 11–13 |
+| 1 Modell und Engine | Typen `Moods` (Ebenen, Stimmungsgruppen mit Basis und Varianten, Sammlungen, Panik-Stimmung) in der Show-Datei; reine Engine in `lmix-core` (Vergleich je Ebene, Überblenden, Herkunft je Ebene); Aktionen `set_mood`, `set_moods`; Zustand; Tests | MOOD.1–4, 9 |
+| 2 Seite Stimmungen | Console-Seite nach Entwurf E mit einklappbaren Seitenleisten, Sammlungen, Oneshot-Leiste (Pads), Inspector mit Ebenen und Herkunft; Demo-Modus mit Stimmungen aus Studio Weber | MOOD.7, 8, 10, 13 |
+| 3 Show | Cue-Art „Stimmung setzen“, Reiter Stimmungen in der Show-Ansicht, Cue-Feld „Ebene“ (letzter Befehl gewinnt) | MOOD.5, 6 |
+| 4 Bearbeiten | Ebenen, Stimmungsgruppen, Varianten, Sammlungen, Panik-Stimmung in der Oberfläche; OSC, Kurzbefehle, Companion-Modul | MOOD.9, 11, 12 |
 
 ---
 
