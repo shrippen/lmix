@@ -794,6 +794,11 @@ impl Service {
         tokio::spawn(async move { me.run_mood_actions(actions, since).await })
     }
 
+    /// Whether `origin` is a cue's or mood's action from before a panic.
+    fn stale(&self, origin: Origin) -> bool {
+        matches!(origin, Origin::Cue { since } if self.panicked_since(since))
+    }
+
     /// Whether a panic came after `since`.
     fn panicked_since(&self, since: u64) -> bool {
         self.panics.load(Ordering::Acquire) != since
@@ -847,6 +852,9 @@ impl Service {
                 crate::cues::Out::TakeLayer { list, cue, layer } => {
                     let actions = {
                         let mut sw = self.switcher.lock().await;
+                        if self.panicked_since(since) {
+                            continue;
+                        }
                         let actions = sw.mood_take(layer, list, cue);
                         self.publish(&sw);
                         actions
@@ -858,7 +866,7 @@ impl Service {
                         if self.panicked_since(since) {
                             break;
                         }
-                        let Err(e) = Box::pin(self.handle_as(action, Origin::Operator)).await
+                        let Err(e) = Box::pin(self.handle_as(action, Origin::Cue { since })).await
                         else {
                             continue;
                         };
@@ -935,7 +943,7 @@ impl Service {
                 )),
                 _ => None,
             };
-            if let Err(e) = Box::pin(self.handle_as(action, Origin::Operator)).await {
+            if let Err(e) = Box::pin(self.handle_as(action, Origin::Cue { since })).await {
                 tracing::warn!(error = %e, "mood action failed");
                 if let Some((id, stop)) = media {
                     let _ = Box::pin(self.handle_as(stop, Origin::Operator)).await;
@@ -1938,6 +1946,9 @@ impl Service {
                 body,
             } => {
                 let (config, out) = self.target_and_out(target).await?;
+                if self.stale(origin) {
+                    return Ok(self.state().await);
+                }
                 let request = crate::targets::Request {
                     method: *method,
                     path: path.clone(),
@@ -1954,6 +1965,11 @@ impl Service {
                 data,
             } => {
                 let (config, out) = self.target_and_out(target).await?;
+                // After a panic's own requests at worst: one address sends
+                // in order, the panic mood's come later and win.
+                if self.stale(origin) {
+                    return Ok(self.state().await);
+                }
                 let request =
                     crate::targets::ha_request(service, entity.as_deref(), data.as_ref())?;
                 self.send_to_target(config, request, out);
@@ -1992,6 +2008,9 @@ impl Service {
             Action::SetMood { mood, fade_ms } => {
                 let (actions, since) = {
                     let mut sw = self.switcher.lock().await;
+                    if self.stale(origin) {
+                        return Ok(sw.state());
+                    }
                     let actions = sw.set_mood(mood, *fade_ms)?;
                     self.publish(&sw);
                     (actions, self.panics.load(Ordering::Acquire))
@@ -2016,6 +2035,12 @@ impl Service {
             | Action::CueHardStop => {
                 let out = {
                     let mut sw = self.switcher.lock().await;
+                    // A panic from a cue always goes.
+                    if self.stale(origin)
+                        && !matches!(action, Action::CuePanic { .. } | Action::CueHardStop)
+                    {
+                        return Ok(sw.state());
+                    }
                     let now = tokio::time::Instant::now();
                     let out = match &action {
                         Action::CueGo { list } => {
@@ -2048,7 +2073,12 @@ impl Service {
                     self.publish(&sw);
                     // Under the lock: whatever was worked out before this
                     // panic sees it, whatever after does not.
-                    let since = if matches!(action, Action::CuePanic { .. } | Action::CueHardStop) {
+                    // A reset stops all as well: what was worked out before
+                    // it starts nothing after it either.
+                    let since = if matches!(
+                        action,
+                        Action::CuePanic { .. } | Action::CueHardStop | Action::CueReset
+                    ) {
                         self.panics.fetch_add(1, Ordering::AcqRel) + 1
                     } else {
                         self.panics.load(Ordering::Acquire)
@@ -2219,6 +2249,11 @@ impl Service {
                 return Ok(sw.state());
             }
         }
+        // Checked under the lock a panic takes: one that came after the
+        // cue was worked out wins.
+        if self.stale(origin) {
+            return Ok(sw.state());
+        }
         let before = sw.on_air();
         let file_action = matches!(
             action,
@@ -2352,7 +2387,7 @@ impl Service {
         if let (Some(report), Ok(())) = (report, &result) {
             // Like an input's triggers: none for what a trigger did.
             if let (
-                Origin::Operator | Origin::Held(_),
+                Origin::Operator | Origin::Held(_) | Origin::Cue { .. },
                 Event::Title {
                     graphics,
                     layer,
@@ -2725,6 +2760,11 @@ enum Origin {
     /// what went on at `since`.
     AutoOff {
         channel: u8,
+        since: u64,
+    },
+    /// An action of a cue or a mood, worked out when the panics stood at
+    /// `since`: after another panic it starts nothing (SAF.1, MOOD.9).
+    Cue {
         since: u64,
     },
 }
@@ -3481,6 +3521,69 @@ mod tests {
         };
         service.handle(Action::CuePanic { ms: None }).await.unwrap();
         service.run_mood_actions(actions, since).await;
+        assert!(
+            !engine
+                .log()
+                .iter()
+                .any(|c| matches!(c, Command::PlaySound { .. })),
+            "the rain does not start after the panic"
+        );
+    }
+
+    /// The check is under the lock the panic takes: a mood cue whose
+    /// set_mood waits for that lock starts nothing once it gets it.
+    #[tokio::test]
+    async fn a_mood_cue_waiting_for_the_lock_starts_nothing_after_a_panic() {
+        use crate::switcher::Command;
+        use lmix_types::LayerContent;
+        let engine = Arc::new(NullEngine::default());
+        let service = Service::new(4, engine.clone(), None);
+        service.handle(bars()).await.unwrap();
+        service
+            .handle(Action::SetZone {
+                zone: lmix_types::Zone {
+                    name: "Saal".into(),
+                    channels: 2,
+                },
+            })
+            .await
+            .unwrap();
+        let mut moods = scene_moods();
+        let licht = moods.layers[0].id;
+        moods.groups[0].base.insert(
+            licht,
+            LayerContent::Sound {
+                sound: lmix_types::SoundCue {
+                    file: "/sounds/rain.wav".into(),
+                    ..Default::default()
+                },
+            },
+        );
+        service.handle(Action::SetMoods { moods }).await.unwrap();
+        let since = service.panics.load(Ordering::Acquire);
+        let out = vec![crate::cues::Out::Actions {
+            list: InputId::new(),
+            cue: lmix_types::CueId::new(),
+            actions: vec![Action::SetMood {
+                mood: "Szene".into(),
+                fade_ms: None,
+            }],
+        }];
+        let run = {
+            // The panic holds the lock while the cue's action waits for it.
+            let mut sw = service.switcher.lock().await;
+            // Past the checks before the lock (the preload hold takes it
+            // too, so straight to the actions).
+            let me = Arc::clone(&service);
+            let run = tokio::spawn(async move { me.run_cue_outs_held(out, since).await });
+            for _ in 0..10 {
+                tokio::task::yield_now().await;
+            }
+            sw.cue_panic(tokio::time::Instant::now(), None).unwrap();
+            service.panics.fetch_add(1, Ordering::AcqRel);
+            run
+        };
+        run.await.unwrap();
         assert!(
             !engine
                 .log()

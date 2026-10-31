@@ -1170,14 +1170,15 @@ impl Runner {
         }
     }
 
-    /// Cues that run, in start order (RUN.3).
-    /// Whether a run of cue `cue` of `list` is still going.
+    /// Whether a run of cue `cue` of `list` fired and is still going (one
+    /// in its pre wait has taken nothing yet).
     pub fn plays(&self, list: InputId, cue: CueId) -> bool {
         self.runs
             .iter()
-            .any(|r| r.list == list && r.cue == cue && !r.ended)
+            .any(|r| r.list == list && r.cue == cue && r.fired && !r.ended)
     }
 
+    /// Cues that run, in start order (RUN.3).
     pub fn running(&self, lists: &[ShowCueList], now: Instant) -> Vec<RunningCue> {
         self.runs
             .iter()

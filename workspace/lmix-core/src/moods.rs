@@ -280,9 +280,6 @@ impl MoodRunner {
         self.layers.len() != before
     }
 
-    /// Cue `cue` of `list` is over (ended, stopped, failed): the layers it
-    /// took are off (MOOD.5), so the next mood starts its content there.
-    /// Whether it had one.
     /// Whether cue `cue` of `list` holds a layer.
     pub fn holds(&self, list: InputId, cue: CueId) -> bool {
         self.layers
@@ -299,6 +296,9 @@ impl MoodRunner {
         };
     }
 
+    /// Cue `cue` of `list` is over (ended, stopped, failed): the layers it
+    /// took are off (MOOD.5), so the next mood starts its content there.
+    /// Whether it had one.
     pub fn cue_over(&mut self, list: InputId, cue: CueId) -> bool {
         let before = self.layers.len();
         self.layers
