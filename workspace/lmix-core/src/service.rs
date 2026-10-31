@@ -806,7 +806,7 @@ impl Service {
         self.tiles_asked.notify_one();
         let feed = self.live_feed(LivePicture::Tiles).await?;
         drop(lease);
-        let (columns, rows) = flows::tiles_grid(self.switcher.lock().await.slots());
+        let (columns, rows) = flows::tiles_grid();
         let (cell_width, cell_height) = flows::TILE_CELL;
         Ok(LiveTiles {
             socket: feed.socket,
@@ -937,7 +937,7 @@ impl Service {
     /// Notice when the engine process changes (crash and restart) and feed
     /// the new one the whole show, running outputs included. Runs for the
     /// process life once the engine was first fed.
-    pub async fn watch_engine(self: Arc<Self>, slots: usize) {
+    pub async fn watch_engine(self: Arc<Self>) {
         let first = self.engine.instance().await;
         self.set_instance(first);
         loop {
@@ -958,7 +958,7 @@ impl Service {
             // engine; the start waits for it, so neither overwrites what
             // the other recorded (the mixer's buses).
             drop(self.switcher.lock().await);
-            while let Err(e) = self.engine.start(slots).await {
+            while let Err(e) = self.engine.start().await {
                 tracing::warn!(error = %e, "engine not ready, retrying");
                 tokio::time::sleep(ENGINE_CHECK).await;
             }
@@ -4486,7 +4486,7 @@ mod tests {
         engine.set_instance("first");
         let service = Service::new(4, engine.clone(), None);
         service.handle(bars()).await.unwrap();
-        tokio::spawn(service.clone().watch_engine(4));
+        tokio::spawn(service.clone().watch_engine());
         tokio::time::sleep(ENGINE_CHECK * 3).await;
         assert_eq!(slot_commands(&engine), 1, "same engine: nothing again");
 
@@ -4509,7 +4509,7 @@ mod tests {
         let engine = Arc::new(NullEngine::failing());
         engine.set_instance("first");
         let service = Service::new(4, engine.clone(), None);
-        tokio::spawn(service.clone().watch_engine(4));
+        tokio::spawn(service.clone().watch_engine());
         tokio::task::yield_now().await;
 
         engine.slow_next(
@@ -4538,7 +4538,7 @@ mod tests {
         let engine = Arc::new(NullEngine::default());
         engine.set_instance("first");
         let service = Service::new(4, engine.clone(), None);
-        tokio::spawn(service.clone().watch_engine(4));
+        tokio::spawn(service.clone().watch_engine());
         tokio::task::yield_now().await;
 
         // strom restarted; the watcher has not polled yet.

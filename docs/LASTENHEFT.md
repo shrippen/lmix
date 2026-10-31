@@ -162,7 +162,7 @@ kann es, Console nicht.
 | INP.14 | Seitenverhältnis je Input überschreiben | S | – |
 | INP.15 | Feste Bildverzögerung je Live-Input in Frames | S | – |
 | INP.16 | Input als Schnappschuss (PNG/JPEG, Alpha erhalten) | K | – |
-| INP.17 | Bis 1000 Inputs im Projekt (Länge der Tally-Liste der TCP-API); Live-Dekodierung nur durch Hardware begrenzt, Ziel ≥ 16 Live-Quellen gleichzeitig (lmix) | M | ◐ (16 × 1080p30 gemessen; ein Input je Mischer-Slot, Standard 16, `--slots`) |
+| INP.17 | Bis 1000 Inputs im Projekt (Länge der Tally-Liste der TCP-API); Live-Dekodierung nur durch Hardware begrenzt, Ziel ≥ 16 Live-Quellen gleichzeitig (lmix) | M | ◐ (16 × 1080p30 gemessen; 40 Testbilder nacheinander im Lauf angelegt; der Mischer wächst mit, bis 127 Inputs, der OpenGL-Mischer fest 16) |
 
 ### 3.2 Quelltypen (SRC)
 

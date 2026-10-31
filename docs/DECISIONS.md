@@ -5590,3 +5590,88 @@ Größe M nach Regel 3.
 - **„Belegungen…“ im Fuß** öffnet den Dialog der Kurzbefehle. Der Knopf steht
   am Anfang des Fußes, über `KanteDialog.footerStart` (Kante 1.57, für diesen
   Dialog eingeführt).
+
+## 2026-10-31 — Mischer wächst mit
+
+**Kontext** (todo 29.10.): Die feste Slot-Zahl (`--slots`, Standard 16,
+höchstens 31) fällt weg. lmix-core legt Mischer-Eingänge an, wenn ein Input
+dazukommt, und gibt sie wieder frei, während Program läuft; der Mischer-Flow
+wird dafür nicht neu gebaut. Vorher zu klären: wächst die Latenzstufe bei
+16 Slots (19.10.: 56 → 83 ms) mit der Zahl der Eingänge?
+
+**Latenz gegen Eingangszahl** (`scripts/measure-input-latency.sh`, CUDA,
+RTX 3070 Ti, Rechner mit fremder Last, je Anzahl ein frischer strom; ein
+Wert je Lauf, er bleibt im Lauf für jeden Input auf Program gleich):
+
+| Eingänge | alt (feste Slots), ms | neu (wächst mit), ms |
+|---|---|---|
+| 1 | 7 | 7 |
+| 2 | 5 | 45, 25 |
+| 4 | 6, 53; früher 43, 52, 46, 42, 47 | 71, 48, 32, 53 |
+| 8 | 86, 38; früher 81 | 80, 83, 72 |
+| 16 | 83; früher 82, 87, 53, 76, 84 | 83, 66 |
+| 24–31 | 75, 56, 107, 86, 85, 82 | 83 (24), 75 (32) |
+| 40 | – | 74, 87, 81 |
+
+CPU-Mischer (alt): 4 Eingänge 14/49, 8: 73/47, 16: 94/61, 31: 121/83 ms.
+
+**Ergebnis**: Die Stufe ist keine Eigenschaft von 16 Slots. Der Wert hängt
+an der Phase der Quellen je Lauf (der Mischer gibt ein Bild aus, wenn das
+späteste Pad da ist); je mehr Quellen, desto eher liegt eine spät, darum
+steigt der typische Wert bis etwa 8 Eingänge und bleibt dann bei 66–87 ms,
+auch mit 40. Alt und neu verhalten sich gleich. Sie wächst nicht weiter mit
+der Eingangszahl und hält das Wachsen nicht auf. NFA.3 (≤ 66,7 ms) hält mit
+vielen Quellen oft nicht; das ist eine eigene Aufgabe (todo).
+
+**Entscheidung** (strom #56, #57; lmix):
+- Bildmischer mit Platz für 128 Eingänge (`max_inputs`), gebaut mit einem:
+  Schwarz ist fester Eingang 0, Slot s ist Eingang s + 1. Ein neuer Input
+  bekommt seinen Eingang per `POST …/vm/inputs` (dynamischer Eingang aus dem
+  Inter-Kanal des Slots), ein entfernter verliert ihn per `DELETE`. Damit
+  sind bis 127 Slots möglich (`MAX_SLOTS`).
+- Audiomischer ebenso (`max_channels`, `POST/DELETE …/mix/channels`): der
+  Stinger ist fester Kanal 1, Slot s ist Kanal s + 2. Die Ton-Verzögerung
+  des Slots liegt im Kanal (`chN_delay`), nicht mehr in einem Block je Slot;
+  ein neuer Kanal bekommt die Abgriffe der Busse.
+- Leere Kapazität kostet nichts: strom-CPU mit 1, 4 und 16 Eingängen wie
+  vorher (10/42/166 % gegen 8/43/166 %).
+- strom gibt einen Eingang nicht frei, solange er auf Program, Preview, in
+  einem Layout oder einer Blende ist (409). lmix-core merkt ihn sich und
+  versucht es nach dem nächsten Schalten wieder; ein Slot, der vorher neu
+  belegt wird, behält ihn.
+- Kachelbild: 20 Zellen (5 × 4) für die Slots 0–19, unabhängig von der
+  Eingangszahl (strom `tiles_cells`, `tiles_first_input`). Spätere Slots
+  holen in der Console einen eigenen Stream (LiveView). Ein Kachelbild für
+  alle 127 wäre bei gleicher Bildgröße zu klein je Zelle.
+- Der OpenGL-Mischer kann keine Eingänge im Lauf anlegen: er bleibt bei
+  16 festen Slots (`GL_SLOTS`); nur die Tonkanäle wachsen.
+- Ein laufender lmix-core übernimmt einen Mischer, den ein früherer gebaut
+  hat, mit dessen Eingängen (aus den gespeicherten dynamischen Eingängen).
+
+**Messung Wachsen** (`scripts/measure-mixer-growth.sh`: ein Ball mit Ton
+auf Program und aufgenommen, 40 Inputs im Abstand von rund 0,7 s angelegt,
+alle auf Program geprüft, dann alle entfernt; Prüfung der Aufnahme auf
+fehlende und wiederholte Bilder, `scripts/frozen-frames.py`, und Lücken im
+Ton, `scripts/switch-gaps.py`):
+- CUDA, 4 Läufe mit 40: kein fehlendes Bild. Zwei Läufe ganz ohne Lücke;
+  einer mit einer Tonlücke von rund 55 ms beim Anlegen des 39. Inputs,
+  einer mit einem wiederholten Bild etwa 2 s nach dem Entfernen. strom bei
+  41 Eingängen 470–540 % CPU, 1,2 GB GPU-Speicher, Latenz 77–86 ms.
+- Gegenprobe mit 15 Inputs, je 2 Läufe alt und neu: alle ohne Lücke.
+- Kanal oder Eingang ohne Quelle anlegen (direkt per strom-API, 20-mal):
+  ohne Lücke und ohne Knack.
+- Je Input ein Knack im Ton: der eigene Ton des neuen Inputs, bis sein
+  Ton direkt nach dem Anlegen abgeschaltet ist; alt ebenso.
+- CPU-Mischer, 40: ohne Lücke (2705 Bilder, kein fehlendes, kein
+  wiederholtes, Ton ohne Lücke); strom 1428 % CPU bei 41 Eingängen (200 %
+  mit einem), Latenz 90 ms.
+
+Die zwei einzelnen Aussetzer kamen bei Lastspitzen (Lastmittel bis 25
+durch andere Arbeiten, strom ohne `CAP_SYS_NICE`, also ohne hohe Priorität
+seiner Streaming-Threads); strom meldet dabei nichts. Ob sie am Wachsen
+liegen oder an der Last, klärt ein Lauf auf ruhigem Rechner (todo).
+
+**Was bricht** (vor dem ersten Release erlaubt): `--slots` gibt es nicht
+mehr (Skripte und Demo angepasst). Der Mischer-Flow heißt „lmix mixer 11“;
+ein Mischer eines älteren lmix-core wird neu gebaut. strom: der statische
+Eingang eines Audiomischer-Kanals ist jetzt `delay_N:offset_identity`.

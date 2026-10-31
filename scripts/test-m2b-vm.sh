@@ -31,8 +31,6 @@ STROM="http://127.0.0.1:${STROM_PORT}"
 CORE="http://127.0.0.1:${CORE_PORT}/api"
 WORK="${WORK:-$(mktemp -d)}"
 mkdir -p "$WORK"
-# Mixer slots for the test; small to fit a VM.
-SLOTS=7   # six inputs plus a stinger clip
 # Mean brightness (0-100) bars or snow exceed; black is 0.
 MIN_BRIGHTNESS=30
 # Audio levels (dBFS): a test tone is above, silence below.
@@ -174,7 +172,7 @@ PIDS+=($!)
 
 start_core() {
     "${TRACEABLE[@]}" "$CORE_BIN" --strom "$STROM" --listen "127.0.0.1:${CORE_PORT}" --mixer "$MIXER" \
-        --slots "$SLOTS" --autosave "$WORK/autosave.lmix" --shortcuts "$WORK/shortcuts.json" --layout-templates "$WORK/layout-templates.json" >>"$WORK/core.log" 2>&1 &
+        --autosave "$WORK/autosave.lmix" --shortcuts "$WORK/shortcuts.json" --layout-templates "$WORK/layout-templates.json" >>"$WORK/core.log" 2>&1 &
     CORE_PID=$!
     PIDS+=("$CORE_PID")
     wait_up "$CORE/state" lmix-core

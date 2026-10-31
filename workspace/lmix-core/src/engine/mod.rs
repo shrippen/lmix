@@ -61,8 +61,9 @@ impl LivePicture {
 
 #[async_trait]
 pub trait Engine: Send + Sync {
-    /// Build the mixer with `slots` inputs; idempotent.
-    async fn start(&self, slots: usize) -> Result<(), EngineError>;
+    /// Build the mixer, or keep the running one; idempotent. Its slots
+    /// come with the restore that follows.
+    async fn start(&self) -> Result<(), EngineError>;
 
     /// Identity of the running engine process; a new one means the engine
     /// restarted and lost the show. `None`: the engine cannot tell.

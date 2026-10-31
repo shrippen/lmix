@@ -17,14 +17,18 @@ use strom_types::block::{BlockInstance, Position};
 use strom_types::element::{Element, Link};
 use strom_types::flow::GStreamerClockType;
 use strom_types::mixer::{
-    parse_dynamic_aux_buses, DynamicAuxBus, DYNAMIC_AUX_BUSES_PROPERTY, MAX_AUX_BUSES_PROPERTY,
+    parse_dynamic_aux_buses, parse_dynamic_channels, DynamicAuxBus, DynamicChannel,
+    DYNAMIC_AUX_BUSES_PROPERTY, DYNAMIC_CHANNELS_PROPERTY, MAX_AUX_BUSES_PROPERTY,
+    MAX_CHANNELS_PROPERTY,
 };
 use strom_types::stinger::{
     ENABLE_STINGER_PROPERTY, STINGER_INPUT_PAD, STINGER_MODE_PROPERTY, STINGER_PREROLL_PROPERTY,
 };
 use strom_types::vision_mixer::{
-    ENABLE_PREVIEW_OUT_PROPERTY, ENABLE_TILES_OUT_PROPERTY, PREVIEW_OUTPUT_PAD,
-    TILES_CELL_PROPERTY, TILES_COLUMNS_PROPERTY, TILES_FORMAT_PROPERTY, TILES_OUTPUT_PAD,
+    parse_dynamic_inputs, DynamicInput, DynamicInputSource, PadMap, DYNAMIC_INPUTS_PROPERTY,
+    ENABLE_PREVIEW_OUT_PROPERTY, ENABLE_TILES_OUT_PROPERTY, MAX_INPUTS_PROPERTY,
+    MAX_INPUT_CAPACITY, PREVIEW_OUTPUT_PAD, TILES_CELLS_PROPERTY, TILES_CELL_PROPERTY,
+    TILES_COLUMNS_PROPERTY, TILES_FIRST_INPUT_PROPERTY, TILES_FORMAT_PROPERTY, TILES_OUTPUT_PAD,
 };
 use strom_types::{Flow, FlowId, PropertyValue};
 use uuid::Uuid;
@@ -37,6 +41,8 @@ use lmix_types::{
     MultiviewLayout, MultiviewMeters, OutputId, OutputSpec, ProgramSide, RateMode, Scan,
     SourceSpec, VideoCodec, VideoEncoding,
 };
+
+use std::collections::BTreeSet;
 
 use super::LivePicture;
 use crate::switcher::{Feed, MixerBuses};
@@ -150,7 +156,7 @@ const MONITOR_SINK: &str = "monitor_sink";
 pub const AUDIO_MIXER: &str = "mix";
 /// Mixer flow name; a new layout gets a new name, so `start` rebuilds a
 /// running mixer of an older lmix instead of reusing it.
-pub const MIXER_NAME: &str = "lmix mixer 10";
+pub const MIXER_NAME: &str = "lmix mixer 11";
 /// Block id of the vision mixer in the mixer flow.
 pub const MIXER_BLOCK: &str = "vm";
 /// Block id of the stinger clip player in the mixer flow: strom's stinger
@@ -180,11 +186,16 @@ const PVW_OUT: &str = "pvw_out";
 const TILES_OUT: &str = "tiles_out";
 /// Size of a slot's cell in the tile picture.
 pub const TILE_CELL: (u32, u32) = (640, 360);
+/// Cells of the tile picture: slot `n` in cell `n`, black in none. The
+/// picture keeps its size however many slots there are (the size of the
+/// tile picture of 16 slots before the mixer grew, 3200 × 1440); the
+/// Console shows a slot beyond the cells from a stream of its own.
+pub const TILE_CELLS: usize = 20;
+const TILE_COLUMNS: usize = 5;
 
-/// Columns and rows of the tile picture for `slots`: black, the mixer's
-/// input after the last slot, takes a cell too.
-pub fn tiles_grid(slots: usize) -> (usize, usize) {
-    strom_types::vision_mixer::tiles_grid(slots + 1, 0)
+/// Columns and rows of the tile picture.
+pub fn tiles_grid() -> (usize, usize) {
+    strom_types::vision_mixer::tiles_grid(TILE_CELLS, TILE_COLUMNS)
 }
 /// Outputs buffer a little more than the mixer: they are not on the
 /// switching path, an encoder hiccup must not drop frames.
@@ -203,7 +214,7 @@ const LIVE_INPUT_CAPS: &str = "video/x-raw,width=640,height=360";
 
 /// Subscriber buffer of the mixer's inter inputs: low latency, some jitter
 /// headroom (strom offers 100–2000 ms).
-const INTER_BUFFER_MS: &str = "100";
+const INTER_BUFFER_MS: u64 = 100;
 
 /// Test tone of patterns: a different pitch per slot, quiet.
 const TONE_BASE_HZ: f64 = 440.0;
@@ -277,24 +288,142 @@ fn slot_audio_channel(slot: usize) -> String {
     format!("strom_{}_{}", slot_id(slot), SLOT_AUDIO_OUT)
 }
 
-/// Audio mixer channel of a slot (strom counts from 1).
+/// Audio mixer channel of the stinger clip's sound, built with the flow
+/// (strom counts from 1).
+pub const STINGER_CHANNEL: usize = 1;
+
+/// Audio mixer channel of a slot: after the stinger's.
 pub fn audio_channel(slot: usize) -> usize {
-    slot + 1
+    slot + 2
+}
+
+/// The slot whose sound audio mixer channel `channel` is.
+pub fn channel_slot(channel: usize) -> Option<usize> {
+    channel.checked_sub(2)
 }
 
 /// Mixer input that always shows black: program when lmix has nothing on
-/// program (the engine always has some input there).
-/// Most slots a mixer flow takes: strom's vision mixer takes at most 32
-/// inputs, and black is one of them.
-pub const MAX_SLOTS: usize = 31;
+/// program (the engine always has some input there). Built with the
+/// flow; the slots' inputs come after it.
+pub const BLACK_INPUT: usize = 0;
 
-pub fn black_input(slots: usize) -> usize {
-    slots
+/// Vision mixer input of a slot.
+pub fn mixer_input(slot: usize) -> usize {
+    slot + 1
 }
 
-/// Mixer: one inter input per slot, plus black, into the vision mixer.
+/// The slot of vision mixer input `input`; `None` for black.
+pub fn input_slot(input: usize) -> Option<usize> {
+    input.checked_sub(1)
+}
+
+/// Most slots: strom's vision mixer has at most 128 inputs and its audio
+/// mixer as many channels; black and the stinger take one each.
+pub const MAX_SLOTS: usize = MAX_INPUT_CAPACITY - 1;
+
+/// Slots of the OpenGL mixer, which takes no inputs while it runs: they
+/// are all built with the flow.
+pub const GL_SLOTS: usize = 16;
+
+impl MixerBackend {
+    /// Whether the vision mixer takes inputs while it runs: the slots
+    /// then come and go with the show, else all are built with it.
+    pub fn grows(self) -> bool {
+        self != Self::Gl
+    }
+
+    /// Most slots of a show on this mixer.
+    pub fn max_slots(self) -> usize {
+        if self.grows() {
+            MAX_SLOTS
+        } else {
+            GL_SLOTS
+        }
+    }
+
+    /// Input slots of the vision mixer: black and the slots.
+    fn capacity(self) -> usize {
+        self.max_slots() + 1
+    }
+}
+
+/// The slots whose inputs a mixer flow has: picture into the vision
+/// mixer, sound into the audio mixer.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct MixerSlots {
+    pub video: BTreeSet<usize>,
+    pub audio: BTreeSet<usize>,
+}
+
+/// The vision mixer's dynamic input of `slot`.
+pub fn slot_input(slot: usize) -> DynamicInput {
+    DynamicInput {
+        index: mixer_input(slot),
+        source: DynamicInputSource::Inter {
+            channel: slot_channel(slot),
+            max_time_ms: Some(INTER_BUFFER_MS),
+        },
+        label: None,
+    }
+}
+
+/// The audio mixer's dynamic channel of `slot`.
+pub fn slot_sound(slot: usize) -> DynamicChannel {
+    DynamicChannel {
+        channel: audio_channel(slot),
+        source: slot_audio_channel(slot),
+        max_time_ms: Some(AUDIO_INTER_BUFFER_MS),
+    }
+}
+
+/// The slots a mixer flow was built with, from its stored dynamic inputs
+/// and channels; `None` for one that does not tell.
+pub fn slots_of(flow: &Flow) -> Option<MixerSlots> {
+    let block = |id: &str| flow.blocks.iter().find(|b| b.id == id);
+    let text = |b: &BlockInstance, key: &str| match b.properties.get(key) {
+        None => Some(String::new()),
+        Some(PropertyValue::String(s)) => Some(s.clone()),
+        Some(_) => None,
+    };
+    let vm = block(MIXER_BLOCK)?;
+    let video = match text(vm, DYNAMIC_INPUTS_PROPERTY) {
+        // The OpenGL mixer has all its slots.
+        _ if flow
+            .links
+            .iter()
+            .any(|l| l.from == format!("{}:src", slot_block(0))) =>
+        {
+            (0..GL_SLOTS).collect()
+        }
+        Some(json) => parse_dynamic_inputs(&json)
+            .ok()?
+            .iter()
+            .filter_map(|i| input_slot(i.index))
+            .collect(),
+        None => return None,
+    };
+    let mix = block(AUDIO_MIXER)?;
+    let audio = parse_dynamic_channels(&text(mix, DYNAMIC_CHANNELS_PROPERTY)?)
+        .ok()?
+        .iter()
+        .filter_map(|c| channel_slot(c.channel))
+        .collect();
+    Some(MixerSlots { video, audio })
+}
+
+/// Block id of slot `slot`'s inter input in a mixer flow built with all
+/// its slots (OpenGL).
+fn slot_block(slot: usize) -> String {
+    format!("in{slot}")
+}
+
+/// Mixer: black and the slots' inputs into the vision mixer, their sound
+/// into the audio mixer. A mixer that grows (see [`MixerBackend::grows`])
+/// is built with the inputs of `slots` (strom's dynamic inputs and
+/// channels) and takes more while it runs; the OpenGL mixer is built with
+/// all its slots.
 pub fn mixer_flow(
-    slots: usize,
+    slots: &MixerSlots,
     backend: MixerBackend,
     monitor: MonitorOut,
     format: MasterFormat,
@@ -306,20 +435,25 @@ pub fn mixer_flow(
     flow.id = mixer_id();
     share_timing(&mut flow);
 
-    for slot in 0..slots {
-        let input = format!("in{slot}");
-        flow.blocks.push(block(
-            &input,
-            INTER_INPUT_BLOCK,
-            vec![
-                ("channel", PropertyValue::String(slot_channel(slot))),
-                ("max_time", PropertyValue::String(INTER_BUFFER_MS.into())),
-            ],
-        ));
-        flow.links.push(link(
-            format!("{input}:src"),
-            format!("{MIXER_BLOCK}:video_in_{slot}"),
-        ));
+    if !backend.grows() {
+        for slot in 0..GL_SLOTS {
+            let input = slot_block(slot);
+            flow.blocks.push(block(
+                &input,
+                INTER_INPUT_BLOCK,
+                vec![
+                    ("channel", PropertyValue::String(slot_channel(slot))),
+                    (
+                        "max_time",
+                        PropertyValue::String(INTER_BUFFER_MS.to_string()),
+                    ),
+                ],
+            ));
+            flow.links.push(link(
+                format!("{input}:src"),
+                format!("{MIXER_BLOCK}:video_in_{}", mixer_input(slot)),
+            ));
+        }
     }
 
     // DSK layers, fed over `inter`: one per overlay. The channel is
@@ -332,7 +466,10 @@ pub fn mixer_flow(
             INTER_INPUT_BLOCK,
             vec![
                 ("channel", PropertyValue::String(OVERLAY_IDLE.into())),
-                ("max_time", PropertyValue::String(INTER_BUFFER_MS.into())),
+                (
+                    "max_time",
+                    PropertyValue::String(INTER_BUFFER_MS.to_string()),
+                ),
             ],
         ));
         flow.links.push(link(
@@ -341,7 +478,6 @@ pub fn mixer_flow(
         ));
     }
 
-    let black = black_input(slots);
     flow.elements.push(element(
         "black",
         "videotestsrc",
@@ -358,14 +494,27 @@ pub fn mixer_flow(
     flow.links.push(link("black".into(), "black_caps".into()));
     flow.links.push(link(
         "black_caps".into(),
-        format!("{MIXER_BLOCK}:video_in_{black}"),
+        format!("{MIXER_BLOCK}:video_in_{BLACK_INPUT}"),
     ));
 
+    let (num_inputs, dynamic): (usize, Vec<DynamicInput>) = if backend.grows() {
+        (1, slots.video.iter().map(|s| slot_input(*s)).collect())
+    } else {
+        (backend.capacity(), Vec::new())
+    };
     flow.blocks.push(block(
         MIXER_BLOCK,
         VISION_MIXER_BLOCK,
         vec![
-            ("num_inputs", PropertyValue::Int(black as i64 + 1)),
+            ("num_inputs", PropertyValue::UInt(num_inputs as u64)),
+            (
+                MAX_INPUTS_PROPERTY,
+                PropertyValue::UInt(backend.capacity() as u64),
+            ),
+            (
+                DYNAMIC_INPUTS_PROPERTY,
+                PropertyValue::String(serde_json::to_string(&dynamic).expect("inputs serialize")),
+            ),
             // Program size and rate (OUT.1); the multiview keeps its own.
             ("pgm_resolution", PropertyValue::String(format.resolution())),
             (
@@ -399,16 +548,21 @@ pub fn mixer_flow(
             (ENABLE_STINGER_PROPERTY, PropertyValue::Bool(true)),
             // Preview at program size, as the mixer composes it (VSP).
             (ENABLE_PREVIEW_OUT_PROPERTY, PropertyValue::Bool(true)),
-            // Every slot scaled on the mixer's GPU into one picture: the
-            // Console's input tiles, one stream for all.
+            // The slots scaled on the mixer's GPU into one picture: the
+            // Console's input tiles, one stream for all. Black has no cell.
             (ENABLE_TILES_OUT_PROPERTY, PropertyValue::Bool(true)),
             (
                 TILES_CELL_PROPERTY,
                 PropertyValue::String(format!("{}x{}", TILE_CELL.0, TILE_CELL.1)),
             ),
             (
+                TILES_FIRST_INPUT_PROPERTY,
+                PropertyValue::UInt(mixer_input(0) as u64),
+            ),
+            (TILES_CELLS_PROPERTY, PropertyValue::UInt(TILE_CELLS as u64)),
+            (
                 TILES_COLUMNS_PROPERTY,
-                PropertyValue::UInt(tiles_grid(slots).0 as u64),
+                PropertyValue::UInt(tiles_grid().0 as u64),
             ),
             // What the Console draws: it shows the frames unconverted.
             (
@@ -431,7 +585,7 @@ pub fn mixer_flow(
     ));
 
     add_stinger_player(&mut flow, backend);
-    add_audio_mixer(&mut flow, slots, monitor, sample_rate, buses);
+    add_audio_mixer(&mut flow, &slots.audio, monitor, sample_rate, buses);
 
     flow.blocks.push(block(PGM_TAP, THUMBNAIL_BLOCK, vec![]));
     flow.links.push(link(
@@ -480,7 +634,7 @@ pub fn overlay_layer(channel: usize) -> usize {
 }
 
 /// strom's stinger source: a media player in stinger mode on the mixer's
-/// stinger input, its sound on the audio mixer channel after the slots.
+/// stinger input, its sound on audio mixer channel `STINGER_CHANNEL`.
 /// The engine fills its playlist (`Command::StingerLibrary`). Like the
 /// slot players, it hands frames over in system memory unless the mixer
 /// is CUDA's.
@@ -500,11 +654,6 @@ fn add_stinger_player(flow: &mut Flow, backend: MixerBackend) {
         format!("{STINGER_PLAYER}:video_out"),
         format!("{MIXER_BLOCK}:{STINGER_INPUT_PAD}"),
     ));
-}
-
-/// Audio mixer channel of the stinger clip's sound: after the slots'.
-pub fn stinger_channel(slots: usize) -> usize {
-    audio_channel(slots)
 }
 
 /// Program picture size: strom's default `pgm_resolution`, which the
@@ -572,10 +721,10 @@ pub fn multiview_of(flow: &Flow) -> MultiviewLayout {
     }
 }
 
-/// Pad of DSK `layer` (0-based) on the program compositor: after the
-/// mixer's inputs, which end with black.
-pub fn dsk_pad(black: usize, layer: usize) -> String {
-    format!("sink_{}", black + 1 + layer)
+/// Pad of DSK `layer` (0-based) on the program compositor of a mixer on
+/// `backend`: after its input slots.
+pub fn dsk_pad(backend: MixerBackend, layer: usize) -> String {
+    PadMap::sink(PadMap::new(backend.capacity(), DSK_LAYERS, LAYOUTS).dist_dsk(layer))
 }
 
 /// Block id of the `inter` input feeding DSK `layer` (0-based).
@@ -1344,11 +1493,6 @@ fn keyframe_frames(ms: u32, framerate: Framerate) -> u64 {
     (u64::from(ms) * num).div_ceil(1000 * den)
 }
 
-/// Block in the mixer flow that delays the sound of `slot`.
-pub fn audio_delay(slot: usize) -> String {
-    format!("adelay{slot}")
-}
-
 /// Inter channel of bus `bus`, which the audio mixer publishes it on:
 /// named by its id, so an output keeps it when other buses come and go.
 pub fn bus_channel(bus: BusId) -> String {
@@ -1482,7 +1626,7 @@ pub fn buses_of(flow: &Flow) -> Option<BuiltBuses> {
 const AUX_CAPACITY: usize = PHONES_AUX + lmix_types::BUSES;
 
 /// `inter` buffer of slot sound in the mixer: holds the longest delay.
-const AUDIO_INTER_BUFFER_MS: &str = "1000";
+const AUDIO_INTER_BUFFER_MS: u64 = 1000;
 
 /// Sound of every slot into one audio mixer; its main mix is program
 /// audio (into the vision mixer, which meters it on the multiview).
@@ -1493,46 +1637,27 @@ const AUDIO_INTER_BUFFER_MS: &str = "1000";
 /// removes them while the mixer runs.
 fn add_audio_mixer(
     flow: &mut Flow,
-    slots: usize,
+    slots: &BTreeSet<usize>,
     monitor: MonitorOut,
     sample_rate: u32,
     buses: &BuiltBuses,
 ) {
-    for slot in 0..slots {
-        let input = format!("ain{slot}");
-        flow.blocks.push(block(
-            &input,
-            INTER_INPUT_BLOCK,
-            vec![
-                ("channel", PropertyValue::String(slot_audio_channel(slot))),
-                // Room for the channel delay (ChannelStrip::DELAY_MAX_MS).
-                (
-                    "max_time",
-                    PropertyValue::String(AUDIO_INTER_BUFFER_MS.into()),
-                ),
-            ],
-        ));
-        // Channel delay (lip sync): later running times, the mixer plays
-        // the sound that much later (identity's ts-offset only timed its
-        // own sync). Stays when the slot is rebuilt.
-        let delay = audio_delay(slot);
-        flow.blocks.push(block(
-            &delay,
-            TIME_OFFSET_BLOCK,
-            vec![("offset_ms", PropertyValue::Float(0.0))],
-        ));
-        flow.links
-            .push(link(format!("{input}:src"), format!("{delay}:in")));
-        flow.links.push(link(
-            format!("{delay}:out"),
-            format!("{AUDIO_MIXER}:input_{}", audio_channel(slot)),
-        ));
-    }
+    // A slot's sound is a dynamic channel, from its inter channel, with
+    // room for the channel delay (ChannelStrip::DELAY_MAX_MS).
+    let channels: Vec<DynamicChannel> = slots.iter().map(|s| slot_sound(*s)).collect();
     let mut properties = vec![
-        // The slots, then the stinger clip.
+        // The stinger clip, then the slots as they come.
         (
             "num_channels".to_string(),
-            PropertyValue::UInt(slots as u64 + 1),
+            PropertyValue::UInt(STINGER_CHANNEL as u64),
+        ),
+        (
+            MAX_CHANNELS_PROPERTY.to_string(),
+            PropertyValue::UInt(audio_channel(MAX_SLOTS - 1) as u64),
+        ),
+        (
+            DYNAMIC_CHANNELS_PROPERTY.to_string(),
+            PropertyValue::String(serde_json::to_string(&channels).expect("channels serialize")),
         ),
         // The bus rate (AUD.17). Without it the mixer, running before
         // the first slot sounds, settles on 44.1 kHz and refuses the slots.
@@ -1574,7 +1699,7 @@ fn add_audio_mixer(
         ),
         // The stinger clip is heard on the headphones as on program.
         (
-            format!("ch{}_aux1_level", stinger_channel(slots)),
+            format!("ch{STINGER_CHANNEL}_aux1_level"),
             PropertyValue::Float(1.0),
         ),
     ];
@@ -1594,7 +1719,7 @@ fn add_audio_mixer(
     // The stinger clip's sound goes to program at unity, no strip.
     flow.links.push(link(
         format!("{STINGER_PLAYER}:audio_out"),
-        format!("{AUDIO_MIXER}:input_{}", stinger_channel(slots)),
+        format!("{AUDIO_MIXER}:input_{STINGER_CHANNEL}"),
     ));
     flow.links.push(link(
         format!("{AUDIO_MIXER}:main_out"),
@@ -1613,12 +1738,16 @@ fn add_audio_mixer(
     }
 }
 
-/// The audio mixer properties that make every channel's send into aux
-/// `aux` tap before the faders (`pre_fader`) or after them.
-pub fn tap_properties(slots: usize, aux: usize, pre_fader: bool) -> Vec<(String, PropertyValue)> {
-    (0..slots)
-        .map(audio_channel)
-        .chain(std::iter::once(stinger_channel(slots)))
+/// The audio mixer properties that make the sends of the stinger's and
+/// `slots`' channels into aux `aux` tap before the faders (`pre_fader`)
+/// or after them.
+pub fn tap_properties<'a>(
+    slots: impl IntoIterator<Item = &'a usize>,
+    aux: usize,
+    pre_fader: bool,
+) -> Vec<(String, PropertyValue)> {
+    std::iter::once(STINGER_CHANNEL)
+        .chain(slots.into_iter().map(|s| audio_channel(*s)))
         .map(|channel| {
             (
                 format!("ch{channel}_aux{aux}_pre"),
@@ -2224,6 +2353,14 @@ fn link(from: String, to: String) -> Link {
 mod tests {
     use super::*;
 
+    /// Slots `0..n` with picture and sound.
+    fn slots(n: usize) -> MixerSlots {
+        MixerSlots {
+            video: (0..n).collect(),
+            audio: (0..n).collect(),
+        }
+    }
+
     #[test]
     fn the_mixer_carries_its_format() {
         let upright = MasterFormat {
@@ -2236,7 +2373,7 @@ mod tests {
             meters: MultiviewMeters::Hidden,
         };
         let flow = mixer_flow(
-            2,
+            &slots(2),
             MixerBackend::Cpu,
             MonitorOut::None,
             upright,
@@ -2249,7 +2386,7 @@ mod tests {
         assert_eq!(multiview_of(&flow), layout);
         assert_eq!(sample_rate_of(&flow), Some(44_100));
         let plain = mixer_flow(
-            2,
+            &slots(2),
             MixerBackend::Cpu,
             MonitorOut::None,
             upright,
@@ -2292,7 +2429,7 @@ mod tests {
         // Program, multiview, preview, tiles and program sound (the buses
         // publish from the audio mixer, unsynced too).
         let flow = mixer_flow(
-            2,
+            &slots(2),
             MixerBackend::Cuda,
             MonitorOut::None,
             MasterFormat::default(),
@@ -2315,19 +2452,75 @@ mod tests {
         }
     }
 
+    /// The vision mixer's stored dynamic inputs and the audio mixer's
+    /// dynamic channels of a mixer flow.
+    fn dynamic_of(flow: &Flow) -> (Vec<DynamicInput>, Vec<DynamicChannel>) {
+        let text = |block: &str, key: &str| {
+            let b = flow.blocks.iter().find(|b| b.id == block).unwrap();
+            match b.properties.get(key) {
+                Some(PropertyValue::String(s)) => s.clone(),
+                other => panic!("{block}.{key}: {other:?}"),
+            }
+        };
+        (
+            parse_dynamic_inputs(&text(MIXER_BLOCK, DYNAMIC_INPUTS_PROPERTY)).unwrap(),
+            parse_dynamic_channels(&text(AUDIO_MIXER, DYNAMIC_CHANNELS_PROPERTY)).unwrap(),
+        )
+    }
+
     #[test]
-    fn mixer_subscribes_each_slot_channel() {
+    fn a_mixer_that_grows_is_built_with_the_slots_it_has() {
+        let built = MixerSlots {
+            video: [0, 4].into(),
+            audio: [4].into(),
+        };
         let flow = mixer_flow(
-            3,
-            MixerBackend::Cpu,
+            &built,
+            MixerBackend::Cuda,
             MonitorOut::None,
             MasterFormat::default(),
             MultiviewLayout::default(),
             48_000,
             &BuiltBuses::default(),
         );
+        // No inter input block per slot: strom's dynamic inputs and
+        // channels, each on its slot's channel.
+        assert!(!flow.blocks.iter().any(|b| b.id == "in0"));
+        let (inputs, channels) = dynamic_of(&flow);
+        assert_eq!(inputs, [slot_input(0), slot_input(4)]);
+        assert_eq!(inputs[1].index, 5, "slot 4 after black");
+        assert!(matches!(
+            &inputs[1].source,
+            DynamicInputSource::Inter { channel, .. } if *channel == slot_channel(4)
+        ));
+        assert_eq!(channels, [slot_sound(4)]);
+        assert_eq!(channels[0].channel, 6, "slot 4 after the stinger");
+        // Read back by a later lmix-core (reuse).
+        assert_eq!(slots_of(&flow), Some(built));
+        // Room for every slot.
+        let vm = flow.blocks.iter().find(|b| b.id == MIXER_BLOCK).unwrap();
+        assert!(matches!(
+            vm.properties.get(MAX_INPUTS_PROPERTY),
+            Some(PropertyValue::UInt(n)) if *n as usize == MAX_SLOTS + 1
+        ));
+        assert!(matches!(
+            vm.properties.get("num_inputs"),
+            Some(PropertyValue::UInt(1))
+        ));
+    }
 
-        for slot in 0..3 {
+    #[test]
+    fn the_gl_mixer_has_all_its_slots() {
+        let flow = mixer_flow(
+            &MixerSlots::default(),
+            MixerBackend::Gl,
+            MonitorOut::None,
+            MasterFormat::default(),
+            MultiviewLayout::default(),
+            48_000,
+            &BuiltBuses::default(),
+        );
+        for slot in 0..GL_SLOTS {
             let input = flow
                 .blocks
                 .iter()
@@ -2340,14 +2533,23 @@ mod tests {
             assert!(flow
                 .links
                 .iter()
-                .any(|l| l.to == format!("vm:video_in_{slot}")));
+                .any(|l| l.to == format!("vm:video_in_{}", slot + 1)));
         }
+        let (inputs, _) = dynamic_of(&flow);
+        assert!(inputs.is_empty());
+        assert_eq!(
+            slots_of(&flow).map(|s| s.video.len()),
+            Some(GL_SLOTS),
+            "read back with all its slots"
+        );
+        assert_eq!(MixerBackend::Gl.max_slots(), GL_SLOTS);
+        assert_eq!(MixerBackend::Cuda.max_slots(), MAX_SLOTS);
     }
 
     #[test]
-    fn mixer_has_black_after_slots() {
+    fn mixer_has_black_first() {
         let flow = mixer_flow(
-            3,
+            &slots(3),
             MixerBackend::Cpu,
             MonitorOut::None,
             MasterFormat::default(),
@@ -2356,18 +2558,20 @@ mod tests {
             &BuiltBuses::default(),
         );
 
-        assert_eq!(black_input(3), 3);
+        assert_eq!(BLACK_INPUT, 0);
+        assert_eq!(input_slot(BLACK_INPUT), None);
+        assert_eq!(input_slot(mixer_input(3)), Some(3));
         assert!(flow
             .links
             .iter()
-            .any(|l| l.from == "black_caps" && l.to == "vm:video_in_3"));
+            .any(|l| l.from == "black_caps" && l.to == "vm:video_in_0"));
     }
 
     #[test]
     fn only_the_gl_mixer_downloads_program() {
         let download = |backend| {
             let flow = mixer_flow(
-                2,
+                &slots(2),
                 backend,
                 MonitorOut::None,
                 MasterFormat::default(),
@@ -2548,7 +2752,7 @@ mod tests {
     #[test]
     fn mixer_mixes_every_slot_sound() {
         let flow = mixer_flow(
-            3,
+            &slots(3),
             MixerBackend::Cpu,
             MonitorOut::None,
             MasterFormat::default(),
@@ -2557,20 +2761,18 @@ mod tests {
             &BuiltBuses::default(),
         );
 
-        for slot in 0..3 {
-            let to = format!("mix:input_{}", slot + 1);
-            let delay = audio_delay(slot);
-            let block = flow.blocks.iter().find(|b| b.id == delay).unwrap();
-            assert_eq!(block.block_definition_id, TIME_OFFSET_BLOCK);
-            assert!(flow
-                .links
-                .iter()
-                .any(|l| l.from == format!("ain{slot}:src") && l.to == format!("{delay}:in")));
-            assert!(flow
-                .links
-                .iter()
-                .any(|l| l.from == format!("{delay}:out") && l.to == to));
-        }
+        // Each slot's sound is a channel of its own, its delay in it
+        // (`chN_delay`): no block per slot.
+        let (_, channels) = dynamic_of(&flow);
+        assert_eq!(channels, (0..3).map(slot_sound).collect::<Vec<_>>());
+        assert!(!flow
+            .blocks
+            .iter()
+            .any(|b| b.block_definition_id == TIME_OFFSET_BLOCK));
+        assert!(flow
+            .links
+            .iter()
+            .any(|l| l.from == format!("{STINGER_PLAYER}:audio_out") && l.to == "mix:input_1"));
         assert!(flow
             .links
             .iter()
@@ -2578,7 +2780,7 @@ mod tests {
         assert!(flow.elements.iter().all(|e| e.id != MONITOR_SINK));
 
         let heard = mixer_flow(
-            3,
+            &slots(3),
             MixerBackend::Cpu,
             MonitorOut::Auto,
             MasterFormat::default(),
@@ -2595,7 +2797,7 @@ mod tests {
     #[test]
     fn mixer_publishes_program_for_outputs() {
         let flow = mixer_flow(
-            2,
+            &slots(2),
             MixerBackend::Cpu,
             MonitorOut::None,
             MasterFormat::default(),
@@ -2687,7 +2889,7 @@ mod tests {
     #[test]
     fn mixer_plays_stingers_through_strom() {
         let flow = mixer_flow(
-            2,
+            &slots(2),
             MixerBackend::Cpu,
             MonitorOut::None,
             MasterFormat::default(),
@@ -2713,7 +2915,8 @@ mod tests {
         ));
 
         // The stinger source: a player in stinger mode, picture into the
-        // mixer, sound into the audio mixer after the slots.
+        // mixer, sound into the audio mixer's first channel, before the
+        // slots'.
         let player = flow.blocks.iter().find(|b| b.id == STINGER_PLAYER).unwrap();
         assert_eq!(player.block_definition_id, MEDIA_PLAYER_BLOCK);
         assert!(matches!(
@@ -2722,11 +2925,11 @@ mod tests {
         ));
         let linked = |from: &str, to: &str| flow.links.iter().any(|l| l.from == from && l.to == to);
         assert!(linked("stinger:video_out", "vm:stinger_in"));
-        assert!(linked("stinger:audio_out", "mix:input_3"));
+        assert!(linked("stinger:audio_out", "mix:input_1"));
         let mix = flow.blocks.iter().find(|b| b.id == AUDIO_MIXER).unwrap();
         assert!(matches!(
             mix.properties.get("num_channels"),
-            Some(PropertyValue::UInt(3))
+            Some(PropertyValue::UInt(1))
         ));
     }
 
@@ -2743,7 +2946,7 @@ mod tests {
     fn mixer_publishes_its_buses() {
         let buses = BuiltBuses::numbered(&two_buses());
         let flow = mixer_flow(
-            2,
+            &slots(2),
             MixerBackend::Cpu,
             MonitorOut::None,
             MasterFormat::default(),
@@ -2763,18 +2966,19 @@ mod tests {
         assert_eq!(uint("max_aux_buses"), Some(1 + lmix_types::BUSES as u64));
         assert_eq!(uint("monitor_source"), Some(1));
         for (aux, pre) in [(1, false), (2, true), (3, false)] {
+            // Slot 1's channel (3).
             assert!(
-                matches!(mix.properties.get(&format!("ch2_aux{aux}_pre")), Some(PropertyValue::Bool(p)) if *p == pre),
+                matches!(mix.properties.get(&format!("ch3_aux{aux}_pre")), Some(PropertyValue::Bool(p)) if *p == pre),
                 "aux {aux}"
             );
         }
-        // The stinger (channel 3 of two slots) is heard on them too.
+        // The stinger (channel 1) is heard on them too.
         assert!(matches!(
-            mix.properties.get("ch3_aux1_level"),
+            mix.properties.get("ch1_aux1_level"),
             Some(PropertyValue::Float(level)) if *level == 1.0
         ));
         assert!(matches!(
-            mix.properties.get("ch3_aux2_pre"),
+            mix.properties.get("ch1_aux2_pre"),
             Some(PropertyValue::Bool(true))
         ));
         // Each bus on its inter channel, which an output takes.
@@ -2801,7 +3005,7 @@ mod tests {
         // One without buses tells it too (not "unknown": a cold start
         // would build it twice).
         let bare = mixer_flow(
-            2,
+            &slots(2),
             MixerBackend::Cpu,
             MonitorOut::None,
             MasterFormat::default(),
@@ -2812,7 +3016,7 @@ mod tests {
         assert_eq!(buses_of(&bare), Some(BuiltBuses::default()));
         // Nor without slots: the stinger's channel tells the taps.
         let empty = mixer_flow(
-            0,
+            &slots(0),
             MixerBackend::Cpu,
             MonitorOut::None,
             MasterFormat::default(),
@@ -3204,7 +3408,7 @@ mod tests {
     #[test]
     fn the_mixer_puts_every_slot_into_one_tile_picture() {
         let flow = mixer_flow(
-            16,
+            &slots(16),
             MixerBackend::Cuda,
             MonitorOut::None,
             MasterFormat::default(),
@@ -3217,11 +3421,20 @@ mod tests {
             vm.properties.get(ENABLE_TILES_OUT_PROPERTY),
             Some(PropertyValue::Bool(true))
         ));
-        // 16 slots and black: 17 cells, 5 × 4.
-        assert_eq!(tiles_grid(16), (5, 4));
+        // 20 cells, 5 × 4, from slot 0 on (black has none), however
+        // many slots there are.
+        assert_eq!(tiles_grid(), (5, 4));
         assert!(matches!(
             vm.properties.get(TILES_COLUMNS_PROPERTY),
             Some(PropertyValue::UInt(5))
+        ));
+        assert!(matches!(
+            vm.properties.get(TILES_CELLS_PROPERTY),
+            Some(PropertyValue::UInt(20))
+        ));
+        assert!(matches!(
+            vm.properties.get(TILES_FIRST_INPUT_PROPERTY),
+            Some(PropertyValue::UInt(1))
         ));
         assert!(matches!(
             vm.properties.get(TILES_CELL_PROPERTY),
@@ -3411,7 +3624,7 @@ mod tests {
 
         for flow in [
             mixer_flow(
-                2,
+                &slots(2),
                 MixerBackend::Cpu,
                 MonitorOut::None,
                 MasterFormat::default(),
