@@ -55,9 +55,15 @@ const MACHINE_INTERVAL: std::time::Duration = std::time::Duration::from_secs(2);
 /// Silence: also stands in for "no reading" (JSON has no infinity).
 pub const LEVEL_FLOOR_DB: f32 = -100.0;
 
-/// Requests waiting for one output target.
-type TargetQueue =
-    tokio::sync::mpsc::UnboundedSender<(crate::targets::TargetConfig, crate::targets::Request)>;
+/// Requests waiting for one address of an output target, each with when
+/// it was sent and where its answer goes.
+type TargetQueue = tokio::sync::mpsc::UnboundedSender<TargetJob>;
+type TargetJob = (
+    crate::targets::TargetConfig,
+    crate::targets::Request,
+    Instant,
+    tokio::sync::oneshot::Sender<Result<(), String>>,
+);
 
 pub struct Service {
     /// Itself, for work it hands to a task of its own (the failback of an
@@ -70,9 +76,10 @@ pub struct Service {
     cue_wake: tokio::sync::Notify,
     /// Client for output targets (each request has its target's limit).
     target_http: reqwest::Client,
-    /// One queue per output target: its requests go out one after the
-    /// other, in the order they were sent (MOOD.9).
-    target_queues: std::sync::Mutex<HashMap<String, TargetQueue>>,
+    /// One queue per address of an output target (name, address): its
+    /// requests go out one after the other, in the order they were sent
+    /// (MOOD.9).
+    target_queues: std::sync::Mutex<HashMap<(String, String), TargetQueue>>,
     /// Written after every change, read back after a crash (SHW.5).
     autosave: Option<PathBuf>,
     /// Players the operator moved (jump, item, restart, previous), and
@@ -267,9 +274,10 @@ impl Service {
     }
 
     /// Send `request` to `target` in the background; how it went is an
-    /// event, the caller never waits (EXT.3). Requests to one target
+    /// event, the caller never waits (EXT.3). Requests to one address
     /// arrive in the order they were sent: the panic mood's light comes
-    /// after the emergency list's (MOOD.9).
+    /// after the emergency list's (MOOD.9). A backup address that does not
+    /// answer holds up only itself.
     fn send_to_target(
         self: &Arc<Self>,
         target: crate::targets::TargetConfig,
@@ -283,47 +291,85 @@ impl Service {
             });
             return;
         }
-        let mut queues = self.target_queues.lock().expect("target queues lock");
-        let mut job = (target, request);
-        if let Some(queue) = queues.get(&job.0.name) {
-            match queue.send(job) {
-                Ok(()) => return,
-                Err(tokio::sync::mpsc::error::SendError(back)) => job = back,
+        let answers = match crate::targets::sendable(&target) {
+            Err(reason) => vec![Err(reason)],
+            Ok(()) => {
+                let now = Instant::now();
+                let mut queues = self.target_queues.lock().expect("target queues lock");
+                target
+                    .addresses
+                    .iter()
+                    .map(|address| {
+                        let (answer, answered) = tokio::sync::oneshot::channel();
+                        let job = (target.clone(), request.clone(), now, answer);
+                        self.queue(&mut queues, &target.name, address, job);
+                        Ok(answered)
+                    })
+                    .collect()
             }
-        }
-        let (queue, mut jobs) = tokio::sync::mpsc::unbounded_channel();
-        let name = job.0.name.clone();
-        let _ = queue.send(job);
-        queues.insert(name, queue);
-        // Holds the service only while it sends: a dropped service drops
-        // the queues, and this ends.
-        let me = Arc::downgrade(self);
+        };
+        let service = Arc::clone(self);
         tokio::spawn(async move {
-            while let Some((target, request)) = jobs.recv().await {
-                let Some(service) = me.upgrade() else { return };
-                service.send_now(&target, &request).await;
+            let mut results = Vec::with_capacity(answers.len());
+            for answer in answers {
+                results.push(match answer {
+                    Ok(answered) => answered
+                        .await
+                        .unwrap_or_else(|_| Err("not sent".to_string())),
+                    Err(reason) => Err(reason),
+                });
             }
+            let result = crate::targets::combine(results);
+            let reached = match &result {
+                lmix_types::TargetResult::Failed { reason } => {
+                    tracing::warn!(target = %target.name, %reason, "output target not reached");
+                    Err(reason.clone())
+                }
+                _ => Ok(()),
+            };
+            service.reached(&target.name, reached).await;
+            let _ = service.events.send(Event::Target {
+                target: target.name.clone(),
+                result,
+            });
         });
     }
 
-    async fn send_now(
+    /// `job` into the queue of `address`, with a worker for it if it has
+    /// none yet.
+    fn queue(
         &self,
-        target: &crate::targets::TargetConfig,
-        request: &crate::targets::Request,
+        queues: &mut HashMap<(String, String), TargetQueue>,
+        name: &str,
+        address: &str,
+        job: TargetJob,
     ) {
-        let result = crate::targets::send(&self.target_http, target, request).await;
-        let reached = match &result {
-            lmix_types::TargetResult::Locked => return,
-            lmix_types::TargetResult::Failed { reason } => {
-                tracing::warn!(target = %target.name, %reason, "output target not reached");
-                Err(reason.clone())
-            }
-            lmix_types::TargetResult::Ok => Ok(()),
+        let key = (name.to_string(), address.to_string());
+        let job = match queues.get(&key) {
+            Some(queue) => match queue.send(job) {
+                Ok(()) => return,
+                Err(tokio::sync::mpsc::error::SendError(back)) => back,
+            },
+            None => job,
         };
-        self.reached(&target.name, reached).await;
-        let _ = self.events.send(Event::Target {
-            target: target.name.clone(),
-            result,
+        let (queue, mut jobs) = tokio::sync::mpsc::unbounded_channel::<TargetJob>();
+        let _ = queue.send(job);
+        queues.insert(key, queue);
+        // Ends when the service, and with it the queue, is gone.
+        let http = self.target_http.clone();
+        let address = address.to_string();
+        tokio::spawn(async move {
+            while let Some((target, request, sent, answer)) = jobs.recv().await {
+                // Waited past its own limit behind one that did not answer:
+                // too late to matter, and it would hold up the next.
+                let limit = std::time::Duration::from_millis(u64::from(target.timeout_ms));
+                let result = if sent.elapsed() > limit {
+                    Err(format!("{address}: not sent, waited too long"))
+                } else {
+                    crate::targets::send_one(&http, &target, &address, &request).await
+                };
+                let _ = answer.send(result);
+            }
         });
     }
 
@@ -3568,6 +3614,76 @@ mod tests {
             order.push(request.split(' ').nth(1).unwrap_or_default().to_string());
         }
         assert_eq!(order, ["/first", "/second"]);
+    }
+
+    /// A backup address that takes the connection and never answers holds
+    /// up neither the main address nor the next requests (EXT.1, MOOD.9).
+    #[tokio::test]
+    async fn a_silent_backup_address_holds_up_nothing() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let main = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let silent = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addresses = vec![
+            format!("http://{}", main.local_addr().unwrap()),
+            format!("http://{}", silent.local_addr().unwrap()),
+        ];
+        let (seen_tx, mut seen) = tokio::sync::mpsc::channel(4);
+        tokio::spawn(async move {
+            while let Ok((mut stream, _)) = main.accept().await {
+                let mut buf = vec![0; 8192];
+                let n = stream.read(&mut buf).await.unwrap_or(0);
+                let _ = seen_tx
+                    .send(String::from_utf8_lossy(&buf[..n]).into_owned())
+                    .await;
+                let _ = stream
+                    .write_all(b"HTTP/1.1 200 OK\r\ncontent-length: 0\r\nconnection: close\r\n\r\n")
+                    .await;
+            }
+        });
+        tokio::spawn(async move {
+            let mut held = Vec::new();
+            while let Ok((stream, _)) = silent.accept().await {
+                held.push(stream);
+            }
+        });
+        let service = Service::new(4, Arc::new(NullEngine::default()), None);
+        service
+            .handle(Action::SetTarget {
+                target: lmix_types::TargetSpec {
+                    name: "Licht".into(),
+                    kind: lmix_types::TargetKind::Http,
+                    addresses,
+                    secret: None,
+                    timeout_ms: 3000,
+                },
+            })
+            .await
+            .unwrap();
+        let start = tokio::time::Instant::now();
+        for path in ["/first", "/second", "/third"] {
+            service
+                .handle(Action::HttpRequest {
+                    target: "Licht".into(),
+                    method: lmix_types::HttpMethod::Post,
+                    path: path.into(),
+                    headers: Default::default(),
+                    body: None,
+                })
+                .await
+                .unwrap();
+        }
+        for path in ["/first", "/second", "/third"] {
+            let request = tokio::time::timeout(std::time::Duration::from_secs(5), seen.recv())
+                .await
+                .unwrap()
+                .unwrap();
+            assert!(request.starts_with(&format!("POST {path} ")), "{request}");
+        }
+        assert!(
+            start.elapsed() < std::time::Duration::from_millis(1000),
+            "the main address answers at once: {:?}",
+            start.elapsed()
+        );
     }
 
     #[tokio::test]

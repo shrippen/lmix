@@ -6434,15 +6434,21 @@ Setzten beide dasselbe Ziel (Saallicht), konnte die Anfrage der Notfall-Liste
 nach der der Panik-Stimmung ankommen und gewinnen.
 
 **Entscheidung**:
-- Jedes Ausgabeziel hat eine eigene Warteschlange: seine Anfragen gehen
-  nacheinander hinaus, in der Reihenfolge, in der sie abgeschickt wurden
-  (`Service::send_to_target`). Wer abschickt, wartet weiter nie (EXT.3).
+- Jede Adresse eines Ausgabeziels hat eine eigene Warteschlange: ihre
+  Anfragen gehen nacheinander hinaus, in der Reihenfolge, in der sie
+  abgeschickt wurden (`Service::send_to_target`). Wer abschickt, wartet
+  weiter nie (EXT.3); das Ergebnis je Anfrage fasst wie bisher alle
+  Adressen zusammen (erreicht, wenn eine erfolgreich antwortet).
+- Je Adresse, nicht je Ziel: eine Ersatzadresse (EXT.1), die nicht
+  antwortet, hält nur sich selbst auf, nicht die Hauptadresse.
 - Das gilt für alle Anfragen, nicht nur für die Panik: zwei Cues
   hintereinander auf dasselbe Gerät kommen ebenso in ihrer Reihenfolge an.
-  Ein Ziel, das nicht antwortet, hält nur seine eigenen späteren Anfragen
-  auf (je bis zu seinem Zeitlimit), andere Ziele nicht.
+- Eine Anfrage, die hinter einer hängenden länger als ihr Zeitlimit
+  gewartet hat, geht nicht mehr hinaus und gilt an dieser Adresse als
+  gescheitert: zu spät, um noch zu zählen, und sie hielte die nächste auf.
 - Was die Notfall-Liste erst später startet (Wartezeit, Folge-Cue), läuft
   nach der Panik-Stimmung; „danach“ heißt: nach dem, was sofort startet.
 
 **Geprüft**: `service::tests::requests_to_one_target_go_out_in_order`
 (die erste Anfrage antwortet langsam, die zweite kommt trotzdem danach).
+`service::tests::a_silent_backup_address_holds_up_nothing`.
