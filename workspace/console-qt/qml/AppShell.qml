@@ -106,14 +106,17 @@ Kirigami.ApplicationWindow {
 
     /** Remove after asking, with a toast to bring it back (Removals). */
     function askRemove(kind, item) {
-        // In the window the operator works in: its question, its Undo.
-        const win = operatorWindow()
-        const here = win !== root && win.removals ? win.removals : removals
-        here.ask(kind, item)
+        workedIn().ask(kind, item)
     }
     /** An output's new settings, with a toast to bring the old back. */
     function changeOutput(output, action) {
-        removals.change(output, action)
+        workedIn().change(output, action)
+    }
+    /** Removals of the window the operator works in: its question, its
+     *  toast, its Undo. */
+    function workedIn() {
+        const win = operatorWindow()
+        return win !== root && win.removals ? win.removals : removals
     }
 
     /** Every input live in one picture; LiveView shows its cell of it. */

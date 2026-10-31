@@ -41,6 +41,7 @@ QtObject {
     function addInput(kind, a, b, c, d) { return true }
     function replaceSource(id, kind, a, b, c) { return true }
     function addOutput(form) { return true }
+    function updateOutputAction(output, form) { return "" }
     function refreshLists() {}
     function measureLatency() {}
     function choices(list) { return "[]" }
