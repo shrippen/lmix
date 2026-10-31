@@ -169,10 +169,12 @@ fn main() {
                 "qml/OutputMenu.qml",
                 "qml/LookPanel.qml",
                 "qml/ChannelStripPanel.qml",
+                "qml/StripCurve.qml",
                 "qml/InputSettingsDialog.qml",
             ])
             .qml_file(QmlFile::from("qml/Texts.qml").singleton(true))
-            .qml_file(QmlFile::from("qml/StatePatch.qml").singleton(true)),
+            .qml_file(QmlFile::from("qml/StatePatch.qml").singleton(true))
+            .qml_file(QmlFile::from("qml/StripCurves.qml").singleton(true)),
     )
     .files([
         "src/bridge.rs",
