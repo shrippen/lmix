@@ -125,6 +125,43 @@ TestCase {
         verify(!add.visible, "show mode: only setting")
     }
 
+    function test_a_mood_dragged_into_the_list_comes_after_the_row_under_it() {
+        const view = makeView()
+        const list = moodsTab(view)
+        const forest = findChild(list, "mood:Forest")
+        const cues = findChild(view, "cueView")
+        const target = cues.itemAtIndex(1)
+        const from = forest.mapToItem(view, forest.width / 2, forest.height / 2)
+        const to = target.mapToItem(view, target.width / 2, target.height / 2)
+        mousePress(view, from.x, from.y)
+        for (let step = 1; step <= 10; step++) {
+            mouseMove(view, from.x + (to.x - from.x) * step / 10, from.y + (to.y - from.y) * step / 10, -1, Qt.LeftButton)
+        }
+        compare(view.moodDropAfter, target.cue.id, "the line under that row")
+        verify(findChild(target, "moodDrop").visible)
+        mouseRelease(view, to.x, to.y)
+        compare(sent.length, 1)
+        compare(sent[0].action, "add_cue")
+        compare(sent[0].after, target.cue.id)
+        compare(sent[0].cue.mood, { mood: "g-forest" })
+        compare(view.moodDropAfter, null)
+
+        // Dropped beside the list: nothing; in show mode it does not drag.
+        mousePress(view, from.x, from.y)
+        for (let step = 1; step <= 5; step++) {
+            mouseMove(view, from.x + step * 5, from.y + step * 5, -1, Qt.LeftButton)
+        }
+        mouseRelease(view, from.x + 25, from.y + 25)
+        compare(sent.length, 1)
+        view.editing = false
+        mousePress(view, from.x, from.y)
+        for (let step = 1; step <= 10; step++) {
+            mouseMove(view, from.x + (to.x - from.x) * step / 10, from.y + (to.y - from.y) * step / 10, -1, Qt.LeftButton)
+        }
+        mouseRelease(view, to.x, to.y)
+        compare(sent.length, 1)
+    }
+
     function test_the_inspector_chooses_the_mood_and_keeps_a_gone_one_marked() {
         const view = makeView()
         view.selectedId = "id-3"

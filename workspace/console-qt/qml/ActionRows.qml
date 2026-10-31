@@ -5,7 +5,9 @@ import org.kde.kirigami as Kirigami
 import Kante
 
 /**
- * Up to eight actions run in order, as editor rows. Actions come from a
+ * Up to sixteen actions run in order, as editor rows (lmix-core's
+ * AUTOMATION_ACTIONS and SHORTCUT_ACTIONS): eight show, another one
+ * each time the last shown is used. Actions come from a
  * few presets; anything else as JSON, the same text the API takes.
  * Shared by shortcuts, triggers and cues.
  */
@@ -18,8 +20,12 @@ ColumnLayout {
     property string error: ""
     /** Rows that hold an action. */
     property int filled: 0
+    /** The last row that holds an action, -1 for none. */
+    property int lastUsed: -1
 
-    readonly property int rows: 8
+    readonly property int rows: 16
+    /** Rows shown: eight, and one after the last used. */
+    readonly property int shown: Math.max(8, Math.min(rows, lastUsed + 2))
     /** Preset kinds; `param` says what the second field picks. */
     readonly property var kinds: [
         { kind: "", label: qsTr("—"), param: "" },
@@ -135,12 +141,16 @@ ColumnLayout {
     /** Counts the rows in use and says which JSON row does not parse. */
     function validate() {
         var count = 0
+        var last = -1
         for (var r = 0; r < rows; r++) {
             var used = actionRows.itemAt(r)
-            if (used && kinds[used.kindIndex].kind !== "")
+            if (used && kinds[used.kindIndex].kind !== "") {
                 count++
+                last = r
+            }
         }
         filled = count
+        lastUsed = last
         for (var i = 0; i < rows; i++) {
             var row = actionRows.itemAt(i)
             if (!row || kinds[row.kindIndex].kind !== "json")
@@ -171,6 +181,7 @@ ColumnLayout {
             onJsonChanged: editor.validate()
             readonly property string param: editor.kinds[kindBox.currentIndex].param
             Layout.fillWidth: true
+            visible: row.index < editor.shown
 
             QQC2.Label {
                 text: (row.index + 1) + "."

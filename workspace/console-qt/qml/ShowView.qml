@@ -119,6 +119,33 @@ ColumnLayout {
         selectedId = made.id
     }
 
+    /** A mood dragged from the side bar (MOOD.6): the cue it would come
+     *  after, by id ("" at the start of an empty list), or null when it is
+     *  not over the list. */
+    property var moodDropAfter: null
+    /** Where a dragged mood would land, for the pointer at `scenePosition`:
+     *  after the row under it, after the last row below them. */
+    function moodDragMoved(scenePosition) {
+        var p = cueView.mapFromItem(null, scenePosition.x, scenePosition.y)
+        if (!list || p.x < 0 || p.y < 0 || p.x > cueView.width || p.y > cueView.height) {
+            moodDropAfter = null
+            return
+        }
+        var at = cueView.indexAt(p.x, p.y + cueView.contentY)
+        if (at < 0) {
+            at = rows.length - 1
+        }
+        moodDropAfter = at >= 0 ? rows[at].cue.id : ""
+    }
+    /** The mood `id` dropped: a cue that sets it, where it was shown. */
+    function moodDropped(id, scenePosition) {
+        moodDragMoved(scenePosition)
+        if (editing && moodDropAfter !== null) {
+            addCue({ kind: "mood", mood: { mood: id } }, moodDropAfter)
+        }
+        moodDropAfter = null
+    }
+
     /** A random cue id (UUID version 4). */
     function newId() {
         return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => {
@@ -502,6 +529,7 @@ ColumnLayout {
 
                     ListView {
                         id: cueView
+                        objectName: "cueView"
                         Layout.fillWidth: true
                         Layout.fillHeight: true
                         clip: true
@@ -547,6 +575,15 @@ ColumnLayout {
                                 height: parent.height
                                 visible: row.runs
                                 color: KanteStyle.accentColor
+                            }
+                            // Where a dragged mood would come: after this row.
+                            Rectangle {
+                                objectName: "moodDrop"
+                                width: parent.width
+                                height: 2
+                                anchors.bottom: parent.bottom
+                                visible: view.moodDropAfter === row.cue.id
+                                color: KanteStyle.focusColor
                             }
 
                             TapHandler {

@@ -187,4 +187,28 @@ TestCase {
         compare(sent, [{ action: "remove_layout_template", template: "Interview" }])
         compare(removals.pending, null)
     }
+
+    // A removal its caller words, built when it is accepted (the moods).
+    function test_a_worded_removal_builds_its_action_when_accepted() {
+        const removals = createTemporaryObject(removalsComponent, test)
+        let built = 0
+        removals.askWith({
+            kind: "mood", name: "Tavern",
+            question: "Remove group \u201cTavern\u201d?", consequence: "", acceptText: "Remove group",
+            removedText: "Group \u201cTavern\u201d removed",
+            makeAction: () => { built++; return { action: "set_moods", moods: { groups: [] } } }
+        })
+        const dialog = dialogOf(removals)
+        tryCompare(dialog, "opened", true)
+        compare(dialog.title, "Remove group \u201cTavern\u201d?")
+        compare(built, 0, "not yet")
+        dialog.accept()
+        compare(sent, [{ action: "set_moods", moods: { groups: [] } }])
+        fakeCore.answered(JSON.stringify(sent[0]), "")
+        fakeShow.restorable = { kind: "mood", name: "Tavern" }
+        const toast = toastOf(removals)
+        tryCompare(toast, "shown", true)
+        compare(toast.text, "Group \u201cTavern\u201d removed")
+        compare(toast.actionText, "Undo")
+    }
 }

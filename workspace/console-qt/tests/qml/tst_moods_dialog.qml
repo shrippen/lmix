@@ -6,9 +6,9 @@ import "../../qml"
  * Editing the moods (MOOD.12, MOOD.9): every edit sends the whole moods
  * (`set_moods`) with only that change; a variant's layer can take the
  * base's again; a new sound or picture waits for its file, keeping what
- * is chosen meanwhile; a refused name does not stay; a removal asks
- * first, leaves nothing behind and can be undone; the panic mood holds
- * actions only.
+ * is chosen meanwhile; a refused name does not stay; quick edits build
+ * on each other until the state has them; a removal asks (Removals) and
+ * leaves nothing behind; the panic mood holds actions only.
  */
 TestCase {
     id: test
@@ -38,12 +38,19 @@ TestCase {
 
     property var show: null
     property var acted: []
+    /** The removal asked (Removals.askWith), or null. */
+    property var asked: null
+    function askRemove(request) { asked = request }
+    /** Accepts the removal asked. */
+    function accept() { act(asked.makeAction()) }
+    /** Like lmix-core answering later: the state does not change yet. */
+    property bool slow: false
     /** Like lmix-core refusing every edit. */
     property bool refuse: false
     /** Like lmix-core: what it takes becomes the show's. */
     function act(action) {
         acted.push(action)
-        if (action.action === "set_moods" && !refuse) {
+        if (action.action === "set_moods" && !refuse && !slow) {
             show = Object.assign({}, show, { moods: action.moods })
         }
     }
@@ -52,6 +59,7 @@ TestCase {
         id: dialogComponent
         MoodsDialog {
             act: test.act
+            askRemove: test.askRemove
             show: test.show
             core: null
         }
@@ -60,7 +68,24 @@ TestCase {
     function init() {
         acted = []
         refuse = false
+        slow = false
+        asked = null
         show = { moods: JSON.parse(JSON.stringify(test.moods)), stages: [{ name: "Back" }], inputs: [], outputs: [] }
+    }
+
+    QtObject {
+        id: fakeCore
+        signal answered(string action, string refusal)
+        function choices(what) { return "[]" }
+    }
+    Component {
+        id: answeredComponent
+        MoodsDialog {
+            act: test.act
+            askRemove: test.askRemove
+            show: test.show
+            core: fakeCore
+        }
     }
 
     function dialog() {
@@ -120,14 +145,15 @@ TestCase {
         d.chosenId = "g-tavern"
         findChild(d.contentItem, "removePlace").clicked()
         compare(acted.length, 0, "it asks first")
-        const ask = findChild(d, "removeDialog")
-        tryVerify(() => ask.opened)
-        compare(ask.title, "Remove group \u201cTavern\u201d?")
-        ask.accept()
+        // As lmix-core names the removal, for the toast's Undo.
+        compare(asked.kind, "mood")
+        compare(asked.name, "Tavern")
+        compare(asked.question, "Remove group \u201cTavern\u201d?")
+        accept()
         const moods = sent()
         compare(moods.groups.map(g => g.id), ["g-forest"])
         compare(moods.collections[0].moods, ["g-forest"])
-        compare(d.chosenId, "")
+        compare(d.chosen, null)
     }
 
     function test_a_new_group_and_variant_get_free_names() {
@@ -146,7 +172,8 @@ TestCase {
         const d = dialog()
         d.tab = 1
         findChild(d.contentItem, "removeLayer:0").clicked()
-        findChild(d, "removeDialog").accept()
+        compare(asked.name, "Light")
+        accept()
         const moods = sent()
         compare(moods.layers.map(l => l.id), ["l-music"])
         compare(Object.keys(moods.groups[0].base), ["l-music"])
@@ -207,37 +234,130 @@ TestCase {
         compare(field.text, "Inn")
     }
 
-    function test_a_removal_can_be_undone() {
-        const d = dialog()
-        d.tab = 2
-        findChild(d.contentItem, "removeCollection:0").clicked()
-        const ask = findChild(d, "removeDialog")
-        ask.reject()
-        compare(acted.length, 0, "cancelled: nothing")
-        findChild(d.contentItem, "removeCollection:0").clicked()
-        ask.accept()
-        compare(show.moods.collections, [])
-        const undo = findChild(d.contentItem, "undo")
-        verify(undo.visible)
-        undo.clicked()
-        compare(show.moods, test.moods)
-        verify(!undo.visible)
-    }
-
-    function test_another_edit_ends_the_undo() {
-        const d = dialog()
-        d.tab = 2
-        findChild(d.contentItem, "removeCollection:0").clicked()
-        findChild(d, "removeDialog").accept()
-        findChild(d.contentItem, "addCollection").clicked()
-        verify(!findChild(d.contentItem, "undo").visible)
-    }
-
     function test_new_names_are_free_without_case() {
         show.moods.groups[1].name = "group"
         show = Object.assign({}, show)
         const d = dialog()
         findChild(d.contentItem, "addGroup").clicked()
         compare(show.moods.groups[2].name, "Group 2")
+    }
+
+    function test_a_variant_and_a_collection_name_their_removal() {
+        const d = dialog()
+        d.chosenId = "v-night"
+        findChild(d.contentItem, "removePlace").clicked()
+        compare(asked.name, "Tavern / Night")
+        d.tab = 2
+        findChild(d.contentItem, "removeCollection:0").clicked()
+        compare(asked.name, "Act 1")
+        compare(acted.length, 0)
+    }
+
+    // The removal is built when it is accepted, from the moods then.
+    function test_a_removal_keeps_what_changed_while_it_asked() {
+        const d = dialog()
+        d.tab = 2
+        findChild(d.contentItem, "removeCollection:0").clicked()
+        const moods = JSON.parse(JSON.stringify(show.moods))
+        moods.groups[1].name = "Woods"
+        show = Object.assign({}, show, { moods: moods })
+        accept()
+        const out = sent()
+        compare(out.collections, [])
+        compare(out.groups[1].name, "Woods")
+    }
+
+    function test_quick_edits_build_on_each_other() {
+        slow = true
+        const d = createTemporaryObject(answeredComponent, test)
+        d.open()
+        findChild(d.contentItem, "addGroup").clicked()
+        findChild(d.contentItem, "addGroup").clicked()
+        compare(acted.length, 2)
+        compare(acted[1].moods.groups.map(g => g.name), ["Tavern", "Forest", "Group", "Group 2"])
+        compare(d.groups.length, 4, "shows what was sent")
+        // A state before all answers keeps the draft.
+        show = Object.assign({}, show, { moods: acted[0].moods })
+        compare(d.groups.length, 4)
+        fakeCore.answered(JSON.stringify({ action: "set_moods" }), "")
+        fakeCore.answered(JSON.stringify({ action: "set_moods" }), "")
+        show = Object.assign({}, show, { moods: acted[1].moods })
+        compare(d.draft, null)
+        compare(d.groups.length, 4)
+    }
+
+    function test_an_edit_after_a_removal_builds_on_it() {
+        slow = true
+        const d = createTemporaryObject(answeredComponent, test)
+        d.open()
+        d.chosenId = "g-tavern"
+        findChild(d.contentItem, "removePlace").clicked()
+        accept()
+        compare(d.groups.map(g => g.name), ["Forest"], "shows the removal at once")
+        findChild(d.contentItem, "addGroup").clicked()
+        compare(acted[1].moods.groups.map(g => g.name), ["Forest", "Group"])
+        d.close()
+        compare(d.draft, null, "closing lets go of edits never answered")
+    }
+
+    function test_a_refused_edit_drops_the_draft() {
+        slow = true
+        const d = createTemporaryObject(answeredComponent, test)
+        d.open()
+        findChild(d.contentItem, "addGroup").clicked()
+        verify(d.draft !== null)
+        fakeCore.answered(JSON.stringify({ action: "set_moods" }), "too many groups")
+        compare(d.draft, null)
+        compare(d.groups.length, 2)
+    }
+
+    /** A real drag of `item` from its middle onto the middle of `onto`. */
+    function drag(item, onto) {
+        const from = item.mapToItem(null, item.width / 2, item.height / 2)
+        const to = onto.mapToItem(null, onto.width / 2, onto.height / 2)
+        const root = test.Window.contentItem
+        mousePress(root, from.x, from.y)
+        for (let step = 1; step <= 10; step++) {
+            mouseMove(root, from.x + (to.x - from.x) * step / 10, from.y + (to.y - from.y) * step / 10, -1, Qt.LeftButton)
+        }
+        mouseRelease(root, to.x, to.y)
+    }
+
+    function test_places_are_dragged_into_order() {
+        const d = dialog()
+        waitForRendering(d.contentItem)
+        drag(findChild(d.contentItem, "place:Forest"), findChild(d.contentItem, "place:Tavern"))
+        compare(show.moods.groups.map(g => g.name), ["Forest", "Tavern"])
+        // A variant stays in its group: dropped on another group, nothing.
+        acted = []
+        drag(findChild(d.contentItem, "place:Tavern/Night"), findChild(d.contentItem, "place:Forest"))
+        compare(acted.length, 0)
+    }
+
+    function test_layers_are_dragged_by_their_grip() {
+        const d = dialog()
+        d.tab = 1
+        waitForRendering(d.contentItem)
+        // Straight up: the grip moves rows, not sideways.
+        drag(findChild(d.contentItem, "layerGrip:1"), findChild(d.contentItem, "layerGrip:0"))
+        compare(show.moods.layers.map(l => l.name), ["Music", "Light"])
+        compare(d.dragList, "")
+    }
+
+    function test_a_layer_sound_gets_its_level_and_crosspoints() {
+        show = Object.assign({}, show, { zones: [{ name: "Hall", channels: 2 }] })
+        const d = dialog()
+        d.chosenId = "g-tavern"
+        findChild(d.contentItem, "media:Music").clicked()
+        const media = findChild(d, "mediaDialog")
+        tryVerify(() => media.opened)
+        compare(media.title, "Layer Music")
+        const level = findChild(media.contentItem, "mediaLevel")
+        level.value = -60
+        level.valueModified()
+        compare(sent().groups[0].base["l-music"].sound, { file: "/sounds/lute.wav", repeat: "forever", gain_db: -6 })
+        // The rest of the moods stays as it was.
+        compare(sent().groups[0].base["l-light"], test.moods.groups[0].base["l-light"])
+        media.close()
     }
 }

@@ -10,7 +10,10 @@ import Kante
  * the layers and change times, collections, and as an advanced tab the
  * panic mood (MOOD.9). Every edit goes to lmix-core at once as the whole
  * (`set_moods`), which checks it; a refused one leaves the moods as they
- * were.
+ * were. Until the state brings an edit back, the next builds on what was
+ * sent (`draft`), so quick edits all stay. A removal asks first and gets
+ * the window's toast with Undo (Removals, `askRemove`): lmix-core keeps
+ * the moods before it for `restore`.
  *
  *   MOODS | LAYERS | COLLECTIONS | PANIC MOOD
  *   ▌Tavern          │ Name   [Tavern      ]  Colour [■]
@@ -26,8 +29,17 @@ KanteDialog {
     required property var show
     /** The core, for the colour names. */
     required property var core
+    /** Asks a removal and sends it (AppShell.askRemoveWith). */
+    required property var askRemove
 
-    readonly property var moods: show && show.moods ? show.moods : ({})
+    /** The moods of the state. */
+    readonly property var stateMoods: show && show.moods ? show.moods : ({})
+    /** What was sent and not yet back in the state, or null. */
+    property var draft: null
+    /** Edits sent and not yet answered. */
+    property int inFlight: 0
+    /** The moods edits build on and the dialog shows. */
+    readonly property var moods: draft !== null ? draft : stateMoods
     readonly property var layers: moods.layers || []
     readonly property var groups: moods.groups || []
     readonly property var collections: moods.collections || []
@@ -54,13 +66,45 @@ KanteDialog {
 
     /** What an action list dialog edits: { where: "mood" | "panic", layer }. */
     property var editingActions: null
-    /** The moods before the last removal, for Undo; null after any other edit. */
-    property var undoMoods: null
-    property string undoText: ""
-
+    // An edit that never got an answer (one the bridge did not take) must
+    // not hold the draft for good.
     onClosed: {
         pending = {}
-        undoMoods = null
+        draft = null
+        inFlight = 0
+    }
+    // Once every edit is answered, the next state holds them all; without
+    // a core (tests) nothing answers, and the state is taken at once.
+    onStateMoodsChanged: {
+        if (inFlight === 0) {
+            draft = null
+        }
+    }
+
+    Connections {
+        target: dialog.core
+        enabled: dialog.inFlight > 0
+        function onAnswered(action, refusal) {
+            if (JSON.parse(action).action !== "set_moods") {
+                return
+            }
+            dialog.inFlight = Math.max(0, dialog.inFlight - 1)
+            if (refusal.length > 0) {
+                dialog.draft = null
+            } else if (dialog.inFlight === 0) {
+                // The state may have come before the answer.
+                settle.restart()
+            }
+        }
+    }
+    Timer {
+        id: settle
+        interval: 1000
+        onTriggered: {
+            if (dialog.inFlight === 0) {
+                dialog.draft = null
+            }
+        }
     }
 
     title: qsTr("Moods")
@@ -78,31 +122,38 @@ KanteDialog {
             return (c === "x" ? r : (r % 4) + 8).toString(16)
         })
     }
-    /** Changes a copy of the moods with `change` and sends it whole. */
-    function edit(change) {
-        undoMoods = null
+    /** A copy of the moods, changed with `change`. */
+    function changed(change) {
         const copy = Object.assign({ layers: [], groups: [], collections: [], panic: {}, change_ms: 3000, inside_ms: 1000 },
                                    JSON.parse(JSON.stringify(moods)))
         change(copy)
-        act({ action: "set_moods", moods: copy })
+        return copy
     }
-    /** Asks before a removal (docs/DESIGN-DIALOGE.md rule 1), then edits
-        with `request.change` and offers Undo: lmix-core keeps no way back
-        for the moods, so Undo sends them as they were. */
-    function askRemove(request) {
-        removeDialog.request = request
-        removeDialog.open()
+    /** The set_moods action for `copy`, shown at once as the draft. */
+    function sending(copy) {
+        if (core) {
+            draft = copy
+            inFlight++
+        }
+        return { action: "set_moods", moods: copy }
     }
+    /** Changes a copy of the moods with `change` and sends it whole. */
+    function edit(change) {
+        act(sending(changed(change)))
+    }
+    /** Asks before a removal (docs/DESIGN-DIALOGE.md rule 1) and removes
+        with `request.change` from the moods as they are then; `request.name`
+        is the name lmix-core gives the removal (`restorable`). */
     function remove(request) {
-        const before = JSON.parse(JSON.stringify(moods))
-        edit(request.change)
-        undoMoods = before
-        undoText = request.removedText
-    }
-    function undo() {
-        const before = undoMoods
-        undoMoods = null
-        act({ action: "set_moods", moods: before })
+        askRemove({
+            kind: "mood",
+            name: request.name,
+            question: request.question,
+            consequence: request.consequence,
+            acceptText: request.acceptText,
+            removedText: request.removedText,
+            makeAction: () => dialog.sending(dialog.changed(request.change))
+        })
     }
     /** In `copy`: the group of `place`, and its variant or null. */
     function find(copy, place) {
@@ -203,6 +254,202 @@ KanteDialog {
         }
     }
 
+    /** A handle to drag a row of a list to another place; the row it is
+        over is marked. */
+    component DragGrip: QQC2.Label {
+        id: grip
+        /** A dragged row is over this one. */
+        property bool over: false
+        readonly property alias active: gripDrag.active
+        signal moved(point scenePosition)
+        signal dropped(point scenePosition)
+        text: "\u2807"
+        font.pixelSize: Kirigami.Units.gridUnit
+        color: over ? KanteStyle.focusColor : KanteStyle.mutedTextColor
+        QQC2.ToolTip.visible: gripHover.hovered
+        QQC2.ToolTip.text: qsTr("Drag to move")
+        HoverHandler {
+            id: gripHover
+            cursorShape: Qt.SizeVerCursor
+        }
+        DragHandler {
+            id: gripDrag
+            target: null
+            xAxis.enabled: false
+            onCentroidChanged: if (active) grip.moved(centroid.scenePosition)
+            onActiveChanged: if (!active) grip.dropped(centroid.scenePosition)
+        }
+    }
+
+    /** A drag to reorder: which list ("places", "layers", "collections")
+        and the row it would go to (a place by id, else an index). */
+    property string dragList: ""
+    property var dropAt: null
+    /** The row of `repeater` under the pointer at `scenePosition`, or -1. */
+    function rowUnder(repeater, scenePosition) {
+        for (let i = 0; i < repeater.count; i++) {
+            const row = repeater.itemAt(i)
+            const p = row.mapFromItem(null, scenePosition.x, scenePosition.y)
+            if (p.y >= 0 && p.y < row.height) {
+                return i
+            }
+        }
+        return -1
+    }
+    /** The place under the pointer, by id, or "". */
+    function placeUnder(scenePosition) {
+        const p = placesView.mapFromItem(null, scenePosition.x, scenePosition.y)
+        const at = placesView.indexAt(p.x, p.y + placesView.contentY)
+        return at >= 0 ? places[at].id : ""
+    }
+    /** A group goes to the place of the group dropped on; a variant to the
+        place of a variant of its own group, or first when dropped on the
+        head; anything else stays. */
+    function dropPlace(from, toId) {
+        const to = places.find(p => p.id === toId)
+        if (!to || to.id === from.id || (from.variant && to.group.id !== from.group.id)) {
+            return
+        }
+        edit(copy => {
+            if (!from.variant) {
+                const at = copy.groups.findIndex(g => g.id === to.group.id)
+                const index = copy.groups.findIndex(g => g.id === from.group.id)
+                move(copy.groups, index, at - index)
+            } else if (to.group.id === from.group.id) {
+                const group = copy.groups.find(g => g.id === from.group.id)
+                const index = group.variants.findIndex(v => v.id === from.variant.id)
+                const at = to.variant ? group.variants.findIndex(v => v.id === to.variant.id) : 0
+                move(group.variants, index, at - index)
+            }
+        })
+    }
+    /** A layer or collection from `index` to `at`. */
+    function dropRow(key, index, at) {
+        if (at >= 0 && at !== index) {
+            edit(copy => move(copy[key], index, at - index))
+        }
+    }
+
+    /** The layer whose sound or picture the level dialog edits. */
+    property string mediaLayer: ""
+    /** Its content now: waiting for a file, or kept. */
+    readonly property var mediaContent: mediaLayer === "" ? null
+        : (pending[mediaLayer] || own(mediaLayer) || null)
+    function openMedia(layerId) {
+        mediaLayer = layerId
+        mediaDialog.open()
+    }
+    /** The sound or picture of the level dialog with `changes`. */
+    function changeMediaFields(changes) {
+        const next = JSON.parse(JSON.stringify(mediaContent))
+        Object.assign(next[next.kind], changes)
+        changeMedia(mediaLayer, next)
+    }
+
+    // Level and crosspoints of a sound, opacity and layer of a picture. Its
+    // fades are the layer's (its own or the change time), not the file's.
+    KanteDialog {
+        id: mediaDialog
+        objectName: "mediaDialog"
+        readonly property var media: dialog.mediaContent && (dialog.mediaContent.kind === "sound" || dialog.mediaContent.kind === "picture")
+            ? dialog.mediaContent[dialog.mediaContent.kind] : null
+        readonly property bool sound: dialog.mediaContent !== null && dialog.mediaContent.kind === "sound"
+        parent: QQC2.Overlay.overlay
+        anchors.centerIn: parent
+        modal: true
+        title: {
+            const layer = dialog.layers.find(l => l.id === dialog.mediaLayer)
+            return layer ? qsTr("Layer %1").arg(layer.name) : ""
+        }
+        standardButtons: QQC2.Dialog.Close
+        width: Kirigami.Units.gridUnit * 30
+        contentHeight: mediaColumn.implicitHeight
+        onClosed: dialog.mediaLayer = ""
+
+        ColumnLayout {
+            id: mediaColumn
+            width: parent.width
+            spacing: Kirigami.Units.smallSpacing
+
+            GridLayout {
+                columns: 3
+                columnSpacing: Kirigami.Units.largeSpacing
+                QQC2.Label {
+                    visible: mediaDialog.sound
+                    text: qsTr("Level")
+                }
+                KanteSpinBox {
+                    objectName: "mediaLevel"
+                    visible: mediaDialog.sound
+                    from: -600
+                    to: 120
+                    stepSize: 5
+                    editable: true
+                    value: mediaDialog.sound && mediaDialog.media ? Math.round((mediaDialog.media.gain_db || 0) * 10) : 0
+                    textFromValue: v => (v / 10).toFixed(1) + " dB"
+                    valueFromText: t => Math.round(parseFloat(t.replace(",", ".").replace("\u2212", "-").replace(/[^0-9.\-]/g, "")) * 10)
+                    Accessible.name: qsTr("Level of the sound")
+                    onValueModified: dialog.changeMediaFields({ gain_db: value / 10 })
+                }
+                QQC2.Label {
+                    visible: mediaDialog.sound
+                    text: qsTr("0 dB: as in the file; −60 dB: silence")
+                    color: KanteStyle.mutedTextColor
+                }
+                QQC2.Label {
+                    visible: !mediaDialog.sound
+                    text: qsTr("Opacity")
+                }
+                KanteSpinBox {
+                    objectName: "mediaOpacity"
+                    visible: !mediaDialog.sound
+                    from: 0
+                    to: 100
+                    stepSize: 5
+                    editable: true
+                    value: !mediaDialog.sound && mediaDialog.media ? Math.round((mediaDialog.media.opacity ?? 1) * 100) : 100
+                    textFromValue: v => v + " %"
+                    valueFromText: t => parseInt(t)
+                    Accessible.name: qsTr("Opacity of the picture")
+                    onValueModified: dialog.changeMediaFields({ opacity: value / 100 })
+                }
+                Item { visible: !mediaDialog.sound }
+                QQC2.Label {
+                    visible: !mediaDialog.sound
+                    text: qsTr("Layer")
+                }
+                KanteSpinBox {
+                    visible: !mediaDialog.sound
+                    from: 0
+                    to: 999
+                    editable: true
+                    value: !mediaDialog.sound && mediaDialog.media ? (mediaDialog.media.layer ?? 1) : 1
+                    Accessible.name: qsTr("Layer of the picture")
+                    onValueModified: dialog.changeMediaFields({ layer: value })
+                }
+                QQC2.Label {
+                    visible: !mediaDialog.sound
+                    text: qsTr("On the same layer the later picture is in front")
+                    color: KanteStyle.mutedTextColor
+                }
+            }
+            SoundRoutes {
+                visible: mediaDialog.sound
+                Layout.fillWidth: true
+                key: dialog.chosenId + dialog.mediaLayer
+                routes: mediaDialog.sound && mediaDialog.media ? (mediaDialog.media.routes || []) : []
+                zones: dialog.show && dialog.show.zones ? dialog.show.zones : []
+                onEdited: routes => dialog.changeMediaFields({ routes: routes })
+            }
+            QQC2.Label {
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                color: KanteStyle.mutedTextColor
+                text: qsTr("It fades in and out with the layer: its own fade, else the change time.")
+            }
+        }
+    }
+
     ActionListDialog {
         id: actionsDialog
         parent: QQC2.Overlay.overlay
@@ -222,55 +469,10 @@ KanteDialog {
         }
     }
 
-    KanteDialog {
-        id: removeDialog
-        objectName: "removeDialog"
-        property var request: null
-        parent: QQC2.Overlay.overlay
-        anchors.centerIn: parent
-        modal: true
-        title: request ? request.question : ""
-        destructive: true
-        size: KanteDialog.Size.Small
-        standardButtons: QQC2.Dialog.Ok | QQC2.Dialog.Cancel
-        acceptText: request ? request.acceptText : ""
-        // KanteDialog has a child of its own, so it does not size to this.
-        contentHeight: consequence.implicitHeight
-        onOpened: consequence.forceActiveFocus()
-        onAccepted: dialog.remove(request)
-
-        QQC2.Label {
-            id: consequence
-            width: parent.width
-            text: removeDialog.request ? removeDialog.request.consequence : ""
-            wrapMode: Text.WordWrap
-            // Enter keeps it: removing takes the button.
-            focus: true
-            Keys.onReturnPressed: removeDialog.reject()
-            Keys.onEnterPressed: removeDialog.reject()
-        }
-    }
-
     ColumnLayout {
         id: column
         width: parent.width
         spacing: Kirigami.Units.smallSpacing
-
-        // After a removal: what went, and the way back (rule 1).
-        RowLayout {
-            visible: dialog.undoMoods !== null
-            Layout.fillWidth: true
-            QQC2.Label {
-                Layout.fillWidth: true
-                elide: Text.ElideRight
-                text: dialog.undoText
-            }
-            KanteButton {
-                objectName: "undo"
-                text: qsTr("Undo")
-                onClicked: dialog.undo()
-            }
-        }
 
         KanteTabBar {
             Layout.fillWidth: true
@@ -293,6 +495,7 @@ KanteDialog {
                     Layout.fillHeight: true
 
                     ListView {
+                        id: placesView
                         objectName: "places"
                         Layout.fillWidth: true
                         Layout.fillHeight: true
@@ -301,6 +504,7 @@ KanteDialog {
                         boundsBehavior: Flickable.StopAtBounds
                         QQC2.ScrollBar.vertical: QQC2.ScrollBar {}
                         delegate: KanteListRow {
+                            id: placeRow
                             required property var modelData
                             objectName: "place:" + (modelData.variant ? modelData.group.name + "/" + modelData.variant.name : modelData.group.name)
                             width: ListView.view.width
@@ -309,7 +513,28 @@ KanteDialog {
                             leadingWidth: Kirigami.Units.gridUnit
                             text: modelData.variant ? modelData.variant.name : modelData.group.name
                             selected: dialog.chosenId === modelData.id
+                            dropTarget: dialog.dragList === "places" && dialog.dropAt === modelData.id
+                            opacity: placeDrag.active ? 0.5 : 1
                             onClicked: dialog.chosenId = modelData.id
+                            // Over the whole row: the row's default property is its marker.
+                            Item {
+                                parent: placeRow
+                                anchors.fill: parent
+                                DragHandler {
+                                    id: placeDrag
+                                    target: null
+                                    yAxis.enabled: true
+                                    xAxis.enabled: false
+                                    onCentroidChanged: if (active) {
+                                        dialog.dragList = "places"
+                                        dialog.dropAt = dialog.placeUnder(centroid.scenePosition)
+                                    }
+                                    onActiveChanged: if (!active) {
+                                        dialog.dropPlace(placeRow.modelData, dialog.placeUnder(centroid.scenePosition))
+                                        dialog.dragList = ""
+                                    }
+                                }
+                            }
                         }
                     }
                     Flow {
@@ -380,22 +605,20 @@ KanteDialog {
                                 const place = dialog.chosen
                                 const gone = place.variant ? [place.variant.id] : [place.group.id].concat((place.group.variants || []).map(v => v.id))
                                 const variants = place.variant ? 0 : (place.group.variants || []).length
-                                const named = "\u201c" + (place.variant ? place.group.name + " / " + place.variant.name : place.group.name) + "\u201d"
-                                dialog.askRemove({
+                                const name = place.variant ? place.group.name + " / " + place.variant.name : place.group.name
+                                const named = "\u201c" + name + "\u201d"
+                                dialog.remove({
+                                    name: name,
                                     question: place.variant ? qsTr("Remove variant %1?").arg(named) : qsTr("Remove group %1?").arg(named),
                                     consequence: (variants > 0 ? qsTr("Its variants go with it (%1). ").arg(variants) : "")
                                         + qsTr("Collections forget it; mood cues that set it are marked."),
                                     acceptText: place.variant ? qsTr("Remove variant") : qsTr("Remove group"),
                                     removedText: place.variant ? qsTr("Variant %1 removed").arg(named) : qsTr("Group %1 removed").arg(named),
+                                    // By id: the moods may change while it asks.
                                     change: copy => {
-                                        const at = dialog.find(copy, place)
-                                        if (at.variant) {
-                                            at.group.variants.splice(at.group.variants.indexOf(at.variant), 1)
-                                        } else {
-                                            copy.groups.splice(copy.groups.indexOf(at.group), 1)
-                                        }
+                                        copy.groups = copy.groups.filter(g => gone.indexOf(g.id) < 0)
+                                        copy.groups.forEach(g => g.variants = (g.variants || []).filter(v => gone.indexOf(v.id) < 0))
                                         copy.collections.forEach(c => c.moods = (c.moods || []).filter(m => gone.indexOf(m) < 0))
-                                        dialog.chosenId = ""
                                     }
                                 })
                             }
@@ -535,6 +758,14 @@ KanteDialog {
                                         }
                                     }
                                     KanteButton {
+                                        objectName: "media:" + layerEdit.modelData.name
+                                        visible: layerEdit.media !== null
+                                        text: qsTr("Level…")
+                                        QQC2.ToolTip.visible: hovered
+                                        QQC2.ToolTip.text: layerEdit.kind === "sound" ? qsTr("Level and crosspoints of the sound") : qsTr("Opacity and layer of the picture")
+                                        onClicked: dialog.openMedia(layerEdit.modelData.id)
+                                    }
+                                    KanteButton {
                                         visible: layerEdit.kind === "actions"
                                         text: layerEdit.kind === "actions" && layerEdit.content.actions ? qsTr("Actions: %1…").arg(layerEdit.content.actions.length) : ""
                                         onClicked: dialog.openActions("mood", layerEdit.modelData.id, layerEdit.content.actions)
@@ -577,12 +808,27 @@ KanteDialog {
                 }
                 KanteSectionLabel { text: qsTr("Layers") }
                 Repeater {
+                    id: layerRows
                     model: dialog.layers
                     delegate: RowLayout {
                         id: layerRow
                         required property var modelData
                         required property int index
                         Layout.fillWidth: true
+                        opacity: layerGrip.active ? 0.5 : 1
+                        DragGrip {
+                            id: layerGrip
+                            objectName: "layerGrip:" + layerRow.index
+                            over: dialog.dragList === "layers" && dialog.dropAt === layerRow.index
+                            onMoved: position => {
+                                dialog.dragList = "layers"
+                                dialog.dropAt = dialog.rowUnder(layerRows, position)
+                            }
+                            onDropped: position => {
+                                dialog.dropRow("layers", layerRow.index, dialog.rowUnder(layerRows, position))
+                                dialog.dragList = ""
+                            }
+                        }
                         KanteTextField {
                             objectName: "layerName:" + layerRow.index
                             Layout.fillWidth: true
@@ -618,13 +864,19 @@ KanteDialog {
                             onClicked: dialog.edit(copy => dialog.move(copy.layers, layerRow.index, -1))
                         }
                         KanteButton {
+                            text: qsTr("Down")
+                            enabled: layerRow.index < dialog.layers.length - 1
+                            onClicked: dialog.edit(copy => dialog.move(copy.layers, layerRow.index, 1))
+                        }
+                        KanteButton {
                             objectName: "removeLayer:" + layerRow.index
                             text: qsTr("Remove")
                             emphasis: KanteButton.Emphasis.Destructive
                             onClicked: {
                                 const id = layerRow.modelData.id
                                 const named = "\u201c" + layerRow.modelData.name + "\u201d"
-                                dialog.askRemove({
+                                dialog.remove({
+                                    name: layerRow.modelData.name,
                                     question: qsTr("Remove layer %1?").arg(named),
                                     consequence: qsTr("Every mood and the panic mood forget what they had on it; cues that take it are marked."),
                                     acceptText: qsTr("Remove layer"),
@@ -662,12 +914,27 @@ KanteDialog {
                     text: qsTr("What a collection holds is put together on the Moods page (Compose).")
                 }
                 Repeater {
+                    id: collectionRows
                     model: dialog.collections
                     delegate: RowLayout {
                         id: collectionRow
                         required property var modelData
                         required property int index
                         Layout.fillWidth: true
+                        opacity: collectionGrip.active ? 0.5 : 1
+                        DragGrip {
+                            id: collectionGrip
+                            objectName: "collectionGrip:" + collectionRow.index
+                            over: dialog.dragList === "collections" && dialog.dropAt === collectionRow.index
+                            onMoved: position => {
+                                dialog.dragList = "collections"
+                                dialog.dropAt = dialog.rowUnder(collectionRows, position)
+                            }
+                            onDropped: position => {
+                                dialog.dropRow("collections", collectionRow.index, dialog.rowUnder(collectionRows, position))
+                                dialog.dragList = ""
+                            }
+                        }
                         KanteTextField {
                             objectName: "collectionName:" + collectionRow.index
                             Layout.fillWidth: true
@@ -686,13 +953,19 @@ KanteDialog {
                             onClicked: dialog.edit(copy => dialog.move(copy.collections, collectionRow.index, -1))
                         }
                         KanteButton {
+                            text: qsTr("Down")
+                            enabled: collectionRow.index < dialog.collections.length - 1
+                            onClicked: dialog.edit(copy => dialog.move(copy.collections, collectionRow.index, 1))
+                        }
+                        KanteButton {
                             objectName: "removeCollection:" + collectionRow.index
                             text: qsTr("Remove")
                             emphasis: KanteButton.Emphasis.Destructive
                             onClicked: {
                                 const id = collectionRow.modelData.id
                                 const named = "\u201c" + collectionRow.modelData.name + "\u201d"
-                                dialog.askRemove({
+                                dialog.remove({
+                                    name: collectionRow.modelData.name,
                                     question: qsTr("Remove collection %1?").arg(named),
                                     consequence: qsTr("Its moods and one-shots stay."),
                                     acceptText: qsTr("Remove collection"),

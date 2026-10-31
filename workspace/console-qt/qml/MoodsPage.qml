@@ -269,7 +269,8 @@ AppPage {
         anchors.centerIn: parent
         act: root.shell.act
         show: root.show
-        core: root.shell.backend
+        core: root.shell.backend || null
+        askRemove: root.shell.askRemoveWith
     }
 
     RowLayout {

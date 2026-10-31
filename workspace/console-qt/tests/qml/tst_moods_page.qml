@@ -48,6 +48,7 @@ TestCase {
         property var acted: []
         function act(action) { acted.push(action) }
         function keyTaken(sequence) { return false }
+        function askRemoveWith(request) {}
     }
 
     Component {

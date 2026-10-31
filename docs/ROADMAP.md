@@ -447,13 +447,18 @@ je ein PR:
 | 3b Ebenen | Cue-Feld „Ebene“ (letzter Befehl gewinnt), Herkunft Cue | MOOD.5 |
 | 4a Bedienwege | OSC `/lmix/mood`, Kurzbefehle, Companion über OSC und Abonnenten (Anlass `mood`) | MOOD.11 |
 | 4b Bearbeiten | Ebenen, Stimmungsgruppen, Varianten, Sammlungen, Panik-Stimmung in der Oberfläche | MOOD.9, 12 |
+| 5a Nacharbeiten | Entfernen mit Toast und Strg+Z (`restore` kennt Stimmungen), schnelle Änderungen, Ziehen zum Umsortieren, Pegel und Routing je Ebene, 16 Aktionen, Stimmung in die Cue-Liste ziehen | MOOD.6, 12 |
+| 5b Ebenen-Ende | Endet der Klang oder Cue einer Ebene, ist sie aus; `stop_sound` ohne Id stoppt auch die Ebenen | MOOD.4, 5 |
+| 5c Vorladen | Mood-Cue auf Standby lädt die Klänge und Bilder seiner Ebenen vor | MOOD.6 |
+| 5d Panik | Panik-Stimmung sicher nach der Notfall-Liste | MOOD.9 |
 
 Stand: Stufe 1 ✅ (31.10., DECISIONS „Stimmungen: Modell und Engine“),
 Stufe 2 ✅ (31.10., DECISIONS „Stimmungen: die Seite“),
 Stufe 3a ✅ (31.10., DECISIONS „Stimmungen in der Show“),
 Stufe 3b ✅ (31.10., DECISIONS „Stimmungen: letzter Befehl gewinnt“),
 Stufe 4a ✅ (31.10., DECISIONS „Stimmungen über OSC und Companion“),
-Stufe 4b ✅ (31.10., DECISIONS „Stimmungen bearbeiten“).
+Stufe 4b ✅ (31.10., DECISIONS „Stimmungen bearbeiten“),
+Stufe 5a ✅ (31.10., DECISIONS „Stimmungen: Nacharbeiten am Bearbeiten“).
 
 ---
 
