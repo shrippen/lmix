@@ -12,6 +12,7 @@ use flows::MixerBackend;
 pub mod flows;
 pub mod meters;
 pub mod null;
+pub mod output_rate;
 pub mod playback_flow;
 pub mod strom;
 
@@ -61,8 +62,9 @@ impl LivePicture {
 
 #[async_trait]
 pub trait Engine: Send + Sync {
-    /// Build the mixer with `slots` inputs; idempotent.
-    async fn start(&self, slots: usize) -> Result<(), EngineError>;
+    /// Build the mixer, or keep the running one; idempotent. Its slots
+    /// come with the restore that follows.
+    async fn start(&self) -> Result<(), EngineError>;
 
     /// Identity of the running engine process; a new one means the engine
     /// restarted and lost the show. `None`: the engine cannot tell.
@@ -156,9 +158,14 @@ pub trait Engine: Send + Sync {
         meters::EngineHealth::default()
     }
 
-    /// Link health of a running network output; `None` for other kinds
-    /// or while unknown.
-    async fn output_stats(&self, _id: lmix_types::OutputId) -> Option<lmix_types::OutputStats> {
+    /// Measured rate (and SRT link health) of a running SRT, RTMP or
+    /// recording output of `spec`; `None` for other kinds or while
+    /// unknown.
+    async fn output_stats(
+        &self,
+        _id: lmix_types::OutputId,
+        _spec: &lmix_types::OutputSpec,
+    ) -> Option<lmix_types::OutputStats> {
         None
     }
 }

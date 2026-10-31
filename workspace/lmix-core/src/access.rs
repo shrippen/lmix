@@ -237,6 +237,7 @@ pub fn right_of(action: &Action) -> Right {
         | Action::RemoveLayout { .. }
         | Action::RemoveLayoutTemplate { .. }
         | Action::RemoveOutput { .. }
+        | Action::UpdateOutput { .. }
         | Action::RemoveShortcut { .. }
         | Action::RemoveTarget { .. }
         | Action::RenameGraphics { .. }
@@ -248,6 +249,7 @@ pub fn right_of(action: &Action) -> Right {
         | Action::SetAutoPlay { .. }
         | Action::SetAtEnd { .. }
         | Action::SetCueList { .. }
+        | Action::AddCue { .. }
         | Action::UpdateCue { .. }
         | Action::SetDataAuto { .. }
         | Action::SetEmergencyList { .. }

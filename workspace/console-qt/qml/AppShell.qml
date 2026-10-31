@@ -111,6 +111,10 @@ Kirigami.ApplicationWindow {
         const here = win !== root && win.removals ? win.removals : removals
         here.ask(kind, item)
     }
+    /** An output's new settings, with a toast to bring the old back. */
+    function changeOutput(output, action) {
+        removals.change(output, action)
+    }
 
     /** Every input live in one picture; LiveView shows its cell of it. */
     readonly property alias tilesAtlas: tilesAtlas
@@ -334,15 +338,6 @@ Kirigami.ApplicationWindow {
             page.toolsItem.parent = win !== undefined ? win.toolsSlot
                 : page === currentItem ? pageToolsSlot : page
         }
-    }
-    /** An output's details on the Outputs page (its menu's Settings…). */
-    function showOutput(outputId) {
-        const page = pageItems.find(p => p && p.pageId === "outputs")
-        if (!page) {
-            return
-        }
-        page.selectedId = outputId
-        showPage("outputs")
     }
     /** Page `id` to the front: in the main window, or its own window. */
     function showPage(id) {

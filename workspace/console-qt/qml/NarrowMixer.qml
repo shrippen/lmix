@@ -669,6 +669,7 @@ KanteCard {
         anchors.centerIn: parent
         act: mixer.act
         buses: mixer.buses
+        sampleRate: mixer.show && mixer.show.sample_rate ? mixer.show.sample_rate : 48000
     }
 
     /** A small button of a strip; `active` shows it on. */

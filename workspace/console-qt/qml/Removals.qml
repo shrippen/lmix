@@ -18,6 +18,11 @@ import Kante
  * the state, by its kind ("input", "layout", "bus", "output"), or a layout
  * template ("template", asked without a way back). The removal names it
  * by id: its number may move while the question is open.
+ *
+ * `change(output, action)` sends an output's new settings (Settings…,
+ * `update_output`) without a question; its toast brings back the
+ * settings before, which lmix-core keeps on the same stack. A refusal
+ * shows as every other one (MessageToasts), without this toast.
  */
 Item {
     id: removals
@@ -89,6 +94,19 @@ Item {
         pending = asked.undo === false ? null : { request: asked, answered: false }
         removals.act(asked.action)
     }
+    /** New settings for `output` (the state's, before): the toast brings
+     *  them back. The core names the settings by the name they had. */
+    function change(output, action) {
+        const named = "\u201c" + output.name + "\u201d"
+        pending = { request: {
+            kind: "output_settings",
+            name: output.name,
+            action: action,
+            title: qsTr("Changed"),
+            removedText: qsTr("Settings of output %1 changed").arg(named)
+        }, answered: false }
+        removals.act(action)
+    }
 
     /** What made `settle` look again. */
     enum Came {
@@ -113,6 +131,7 @@ Item {
         const request = pending.request
         if (restorable && restorable.kind === request.kind && restorable.name === request.name) {
             toast.text = request.removedText
+            toast.title = request.title || qsTr("Removed")
             toast.removedKind = request.kind
             toast.restores = request.name
             toast.show()
@@ -176,7 +195,6 @@ Item {
         parent: removals.column
         width: Kirigami.Units.gridUnit * 20
         kind: KanteToast.Kind.Info
-        title: qsTr("Removed")
         life: 8000
         /** What it brings back: only that one, not a removal since. */
         property string removedKind

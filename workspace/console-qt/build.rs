@@ -151,6 +151,10 @@ fn main() {
                 "qml/ShowSidebar.qml",
                 "qml/ShowInspector.qml",
                 "qml/DurationField.qml",
+                "qml/CueTime.qml",
+                "qml/CueAddBar.qml",
+                "qml/PathField.qml",
+                "qml/SoundRoutes.qml",
                 "qml/TargetsDialog.qml",
                 "qml/ZonesDialog.qml",
                 "qml/OutputBar.qml",
@@ -172,10 +176,12 @@ fn main() {
                 "qml/OutputMenu.qml",
                 "qml/LookPanel.qml",
                 "qml/ChannelStripPanel.qml",
+                "qml/StripCurve.qml",
                 "qml/InputSettingsDialog.qml",
             ])
             .qml_file(QmlFile::from("qml/Texts.qml").singleton(true))
-            .qml_file(QmlFile::from("qml/StatePatch.qml").singleton(true)),
+            .qml_file(QmlFile::from("qml/StatePatch.qml").singleton(true))
+            .qml_file(QmlFile::from("qml/StripCurves.qml").singleton(true)),
     )
     .files([
         "src/bridge.rs",
