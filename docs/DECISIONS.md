@@ -5643,3 +5643,70 @@ unverändert.
   des Skripts (35 %, p95 50 ms) liegt die Audio-Seite mit 31 Zügen auf
   Xvfb schon auf `main`, auch ohne Ziehen (35–43 %); eigener Punkt in
   `todo.md`.
+
+## 2026-10-31 — Audio-Seite im Budget: Bilder, nicht Pegel
+
+Auf der Audio-Seite lag der GUI-Thread mit 31 Inputs (CUDA, Xvfb,
+`PAGE=audio INPUTS=31 scripts/measure-gui-frames.sh`) beim Ziehen eines
+Faders bei 42–48 %, ohne Ziehen bei 35 % (Budget 35 %, p95 50 ms; todo.md).
+Vermutet waren die 31 Pegelanzeigen. Gesucht mit `scripts/profile-gui.sh`
+(jetzt mit `PAGE`) und Varianten einzeln gemessen:
+
+- **QML ist es nicht:** QML/JS zusammen 9 % des GUI-Threads beim Ziehen,
+  davon 7,8 % das Einspielen der Zustände (alle Seiten); die Pegel
+  (`levels.peak`, 31 je Takt) und die Züge wenige Promille.
+- **Ursache 1, der Programm-Monitor in der Seitenleiste:** Auf Xvfb gibt es
+  keine CUDA-GL-Interop (`gst_cuda_memory_copy_ensure_gl_interop: CUDA call
+  failed`). `cudadownload` liefert dann GL-Speicher, den `glcolorconvert`
+  nicht lesen kann; das Bild brach vor seinem ersten Frame, nach 1 s wurde
+  die Pipeline auf dem GUI-Thread neu gebaut, 52-mal in 30 s, unsichtbar
+  (ein schwarzer Monitor). Ohne Monitor: 43 → 26–28 %. **Entscheidung:**
+  Bricht ein Bild von der GPU in `glcolorconvert`, bevor es einen Frame
+  zeigte, kommen solche Bilder danach über den Systemspeicher
+  (`cudadownload ! video/x-raw ! glupload`, `NO_CUDA_GL` in `bridge.rs`).
+  Mit Interop (NVIDIA-Anzeige) ändert sich nichts. Verworfen: den Neuaufbau
+  nur seltener versuchen (der Monitor bliebe schwarz), das Problem als
+  Eigenheit von Xvfb stehen lassen (dasselbe gilt für eine Anzeige an
+  einer anderen GPU als der des Mischers). Auf Xvfb zeigen Programm und
+  Vorschau damit erstmals Bilder.
+- **Ursache 2, verborgene Bilder:** Die Kacheln der nicht sichtbaren
+  Mix-Seite hielten das Kachelbild am Laufen (30 fps dekodiert, jede
+  Kachel forderte einen Frame des Fensters an), ebenso liefen Programm und
+  Vorschau der Mix-Seite weiter, wenn man sie verließ (nach dem Code; die
+  Messung startet auf der Audio-Seite). Allein das: 43 →
+  25 %. **Entscheidung:** `LiveView` zählt sich nur im Kachelbild, solange
+  es sichtbar ist, und gibt sein eigenes Bild 2 s nach dem Verbergen frei
+  (wie `TilesAtlas`), so übersteht ein Seitenwechsel es ohne Neuaufbau.
+  Kein Eingriff in `AppShell` (dort arbeitet eine andere Sitzung an
+  abgelösten Seiten; ein Fenster zeigt seine Seite, `visible` stimmt auch
+  dort).
+- **Klein:** Die Züge vergleichen sich mit `selectedKey` statt mit dem
+  Objekt `selected`, das bei jedem Fader-Schritt des gewählten Zugs neu
+  ist (vorher lief `chosen` jedes Zugs je Schritt).
+- **Wächter:** `gui-frames.py` zählt gebrochene Bilder während der Messung
+  (`BROKE_MAX`, Standard 0); QML-Tests `tst_live_view.qml` (verborgen
+  → frei nach der Haltezeit, Seitenwechsel behält das Bild, neue Quelle
+  im Verborgenen) und in `tst_strip_curves.qml` (zehn Fader-Schritte
+  ändern `selectedKey` nicht). Das Zeitbudget selbst bleibt lokal: es
+  braucht eine echte Maschine (CI-VMs ohne GPU, Laufzeiten schwanken).
+  Die Mess-Skripte verweigern ein belegtes Display: Ein Lauf auf `:93`
+  bekam einmal eine Panik, die niemand ausgelöst hatte, vermutlich Tasten
+  einer anderen Sitzung auf demselben Xvfb.
+
+**Gemessen** (31.10., RTX 3070 Ti, Fedora 44, Qt 6.11.2, CUDA-Mischer,
+Xvfb, 31 Inputs, Fader 40 Schritte/s, abwechselnd gemessen, Last 3–19
+auf 24 Kernen durch andere Sitzungen):
+
+| | GUI-Thread ruhig / Ziehen | p95 Ziehen | Bilder/s | gebrochen |
+|---|---|---|---|---|
+| Audio, vorher (3 Läufe) | 34–35 % / 42–43 % | 109–112 ms | 42–45 | 52 |
+| Audio, nur Monitor aus (2) | 18 % / 26–28 % | 20–21 ms | 53–57 | – |
+| Audio, nur verborgene Bilder aus (2) | 18–19 % / 25 % | 18–19 ms | 53–59 | ja (17 in 15 s) |
+| Audio, jetzt (3) | 4 % / 12 % | 19–21 ms | 73–78 | 0 |
+| Mix, vorher (2) | 20–21 % / 27–28 % | 21–22 ms | 54–57 | 26 |
+| Mix, jetzt (2) | 7–8 % / 15 % | 16–18 ms | 88–103 | 0 |
+
+Program in der Aufnahme fror in keinem Lauf. Mehr Bilder/s heißt hier:
+Programm und Vorschau zeigen jetzt Bilder; das kostet den Render-Thread
+(Software-GL), nicht den GUI-Thread. Dass das Fenster mehr Frames zeichnet
+als die Quellen liefern, steht als eigener Punkt in `todo.md`.
