@@ -5659,3 +5659,121 @@ im Container mit `taskset -c 0,1`.
   keine Verzögerung; die Mischer-Uhr lief in den Läufen in Echtzeit.
   strom #48 („Zeitstempel springen unter Last“) bekommt dazu einen
   Kommentar.
+## 2026-10-30 — Gemessene Bitrate auch für RTMP und Aufnahme (M07)
+
+Kontext: Der Kopf des Ausgangsmenüs zeigt die Bitrate, solange der Ausgang
+sendet (`docs/DESIGN-DIALOGE.md` M07). Gemessen war sie nur für SRT
+(`srt-stats`, B32); RTMP und Aufnahme zeigten die eingestellte Rate.
+
+Optionen:
+- Element-Eigenschaften aus strom lesen (`GET …/elements/{id}/properties`):
+  liest alle Eigenschaften eines Elements und kann keine `GstStructure`, also
+  nicht `rtmp2sink.stats`. Verworfen.
+- Ein Byte-Zähler als Pad-Probe auf dem kodierten Strom: kostet je Puffer
+  einen Probe-Aufruf und zählt nicht, was wirklich auf die Leitung geht.
+  Verworfen.
+- **Gewählt:** neue strom-API `GET /flows/{id}/output-bytes` (Stil von
+  `srt-stats`), Bytes seit Start je Ausgangs-Element. RTMP: `out-bytes-total`
+  aus `rtmp2sink.stats`, die Bytes auf dem Socket mit RTMP-Rahmen; im
+  Streaming-Thread läuft dafür nichts zusätzlich. Live Recorder: die
+  Datei-Senke zählt jeden Schreibvorgang (Kopf eingeschlossen) in einen
+  `AtomicU64`, eine atomare Addition je Schreibvorgang, gelesen ohne Sperre.
+  strom-PR auf `dev` (Branch `output-bytes`); auch für upstream gedacht
+  (`docs/upstream/STROM.md`).
+
+Entscheidung: `lmix-core` fragt für laufende RTMP- und Aufnahme-Ausgänge
+einmal je Sekunde `output-bytes` ab und nimmt die Rate über die Lesungen
+der letzten 4 s (`engine/output_rate.rs`), nicht zwischen zwei Lesungen:
+fragmentiertes MP4 schreibt ein Fragment je Sekunde, je Sekunde gelesen
+fällt mal keins, mal zwei in eine Lesung (in der VM-Prüfung stand eine
+MP4-Aufnahme so auf 0 kbit/s). Die erste Lesung, eine Lücke von 4 s und ein Zähler, der
+zurückging (Neustart, Wiederverbindung von `rtmp2sink`), geben keine Rate;
+dann zeigt die Console die eingestellte. `OutputStats` hat jetzt
+`kbps` für alle drei Arten und `srt: Option<SrtLink>` mit Verbindung,
+Paketverlusten und RTT nur für SRT (bricht das JSON von `outputs` und
+`/api/outputs/stats`; vor dem ersten Release erlaubt, Console,
+`/metrics` und `soak-hardware.sh` angepasst). „kein Empfänger“ gibt es nur
+für SRT. Die alte Aufnahme über `splitmuxsink` (MKV vor GStreamer 1.26)
+zählt nicht und zeigt weiter die eingestellte Rate.
+
+Messung (lokal, CPU-Mischer, Testbild „ball“, Aufnahme MKV und RTMP an einen
+lokalen ffmpeg-Empfänger, beide 4000 kbit/s eingestellt): gemeldet Aufnahme
+240–350 kbit/s, RTMP 250–375 kbit/s; die Aufnahme-Dateien wuchsen im selben
+Zeitraum um 266–269 kbit/s, RTMP etwas darüber (Rahmen). Mit CBR dasselbe:
+der x264-Encoder bleibt bei einem einfachen Bild weit unter der eingestellten
+Rate, das zeigte die eingestellte Rate bisher nicht. Kosten: 1000 Abfragen
+von `output-bytes` hintereinander erhöhten die CPU-Zeit von strom um etwa
+0,6 ms je Abfrage (im Rauschen der zwei laufenden Encoder); bei einer Abfrage
+je Sekunde und Ausgang vernachlässigbar.
+## 2026-10-30 — Ausgang nachträglich ändern (M07 „Einstellungen…“)
+
+**Anlass**: Einen Ausgang konnte man nach dem Anlegen nicht mehr ändern
+(Adresse, Art, Quelle, Kodierung, Name), nur entfernen und neu anlegen.
+„Einstellungen…“ im Menü des Ausgangs sprang darum nur auf die Seite
+Outputs (Eintrag vom selben Tag oben).
+
+**Entscheidung**:
+- Aktion `update_output` (Gruppe „output“, Recht Bearbeiten): ersetzt
+  Spec, Quelle, Namen und auf Wunsch den Bus eines Ausgangs; Id und Nummer
+  bleiben. `bus` weggelassen behält den Ton, `null` gibt den eigenen der
+  Quelle, ein Name den Bus: eine Aktion, ein Rückgängig-Schritt, und eine
+  Ablehnung ändert nichts (Review #190; zuerst schickte die Console danach
+  `set_output_bus`, das auch bei abgelehntem Update durchging). Sie prüft
+  wie `add_output` (Kodierung, Karte, Busse der weiteren Kartenpaare, ISO
+  nur mit Bild) und benennt ohne Namen wie beim Anlegen. Die Quelle, die
+  der Ausgang schon hat, geht ungeprüft durch: ein ISO, dessen Input
+  entfernt ist, lässt sich umbenennen und bleibt ausgefallen. Ein
+  Bildschirm hat keinen Ton: er verliert einen behaltenen Bus, einen
+  genannten lehnt er ab (`no_audio`).
+- Abgelehnt, solange der Ausgang sendet, auf die Karten wartet oder sein
+  Failback ihn wieder starten wird: neuer Fehler `output_sending`. Ein
+  laufender Ausgang würde sonst mit anderen Einstellungen in der Show
+  stehen, als er sendet, und der nächste Failback-Versuch startete ihn mit
+  den neuen (Review #190: zwischen zwei Versuchen steht er auf `failed`,
+  nicht gehalten). Darum merkt sich der Switcher, welche Ausgänge im
+  Failback sind (`begin_failback`, gesetzt unter seiner Sperre, wenn der
+  Service den Failback startet), und der Zustand zeigt es als
+  `Output.failback`. Ein ausgefallener Ausgang ohne Failback (oder einer,
+  der gestoppt wurde) bleibt änderbar: eine falsche Adresse zu
+  korrigieren ist der häufigste Grund. Verworfen: im Betrieb neu starten
+  (eine Lücke auf Sendung, die niemand ausgelöst hat).
+- Rückgängig über `restore`: die Einstellungen davor kommen auf denselben
+  Stapel wie Entferntes (`restorable.kind` = `output_settings`, mit dem
+  alten Namen); `restore` setzt sie mit dem Bus von damals zurück, auch
+  nach einem `set_output_bus` danach, und lehnt ab, solange der Ausgang
+  sendet. Verworfen: ein eigener Rückgängig-Stapel für Änderungen (zwei
+  Stapel unter einem Strg+Z). Die Console zeigt nach dem Speichern einen
+  Toast „Geändert“ mit „Rückgängig“ (`Removals.change`).
+- Console: `AddOutputDialog` hat einen Bearbeiten-Modus (Titel „Ausgang
+  einstellen“, Knopf „Speichern“, Felder aus dem Ausgang). „Einstellungen…“
+  öffnet ihn aus dem Menü in der Leiste und aus der Detailkarte der Seite
+  Outputs. **Sendet der Ausgang, bleibt der Menüeintrag aktiv**, der Dialog
+  zeigt die Einstellungen gesperrt mit dem Hinweis „Der Ausgang sendet.
+  Erst stoppen …“ (`KanteCallout`), ebenso beim Warten auf die Karten und
+  bei `failback`. Grund: anders als Entfernen hat das Ansehen auch beim
+  Senden einen Zweck (Adresse, Rate prüfen), und der Ausgang kann starten
+  oder stoppen, während der Dialog offen ist; die Sperre muss also ohnehin
+  im Dialog leben. Wird der Ausgang anderswo entfernt, schließt der
+  Dialog. Ein Quell-Input, der weg ist, oder eine Karte, die die Engine
+  nicht meldet, bleibt gewählt („Entfernter Input“, „Karte n (nicht
+  gefunden)“): wer nur den Namen ändert, ändert Quelle und Gerät nicht.
+  Eine Ablehnung zeigt der Fehler-Toast wie jede andere.
+
+**Geprüft**: Switcher-Tests `an_output_takes_new_settings_in_its_place`,
+`restore_brings_back_an_outputs_settings_before`,
+`a_sending_output_keeps_its_settings`,
+`an_output_its_failback_starts_again_keeps_its_settings`,
+`an_output_takes_its_bus_with_the_update` (auch: Bildschirm verliert den
+Bus, Ablehnung ändert ihn nicht), `an_update_without_bus_keeps_it_and_null_clears_it`,
+`restore_sets_the_bus_back_after_a_bus_change`,
+`restore_leaves_out_a_bus_removed_since` (Bus und `more_pairs`),
+`an_iso_without_its_input_keeps_its_source`,
+`an_output_update_is_checked_like_adding`; Service-Test
+`an_output_failing_back_keeps_its_settings` (zwischen zwei Versuchen
+abgelehnt, gestoppt änderbar, danach kein Start); Console
+`forms::the_form_adds_or_updates_an_output`; QML-Tests
+`tst_add_output_dialog` (Füllen, eine Aktion mit dem Ton, Sperre beim
+Senden, Warten und Failback, fehlende Quelle und Karte bleiben, entfernt
+während offen, danach leer zum Anlegen), `tst_removals` (Toast nach dem
+Ändern, abgelehnt ohne Toast), `tst_outputs_page` (Einstellungen… der
+Detailkarte).

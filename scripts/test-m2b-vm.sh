@@ -483,8 +483,12 @@ settled '[[ "$(output_state Rec)" == running && "$(output_state Stream)" == runn
 timeout "$((SETTLE_S + 5))" gst-launch-1.0 -q srtsrc uri="srt://127.0.0.1:9911" ! filesink location="$WORK/srt.ts" &
 receiver=$!
 # Link health while the receiver is connected (B32).
-stream_link() { curl -sf "$CORE/outputs/stats" | jq -e '.[] | select(.connected and .kbps > 0)' >/dev/null; }
+stream_link() { curl -sf "$CORE/outputs/stats" | jq -e '.[] | select(.srt.connected and .kbps > 0)' >/dev/null; }
 wait_for "$SETTLE_S" stream_link || fail "no link health for the SRT output: $(curl -sf "$CORE/outputs/stats")"
+# The recording's measured rate, from strom's byte counter (M07).
+output_id() { curl -sf "$CORE/state" | jq -r ".outputs[] | select(.name==\"$1\") | .id"; }
+rec_rate() { curl -sf "$CORE/outputs/stats" | jq -e --arg id "$(output_id Rec)" '.[] | select(.output == $id and .srt == null and .kbps > 0)' >/dev/null; }
+wait_for "$SETTLE_S" rec_rate || fail "no measured rate for the recording: $(curl -sf "$CORE/outputs/stats")"
 wait "$receiver" || true
 [[ $(stat -c %s "$WORK/srt.ts" 2>/dev/null || echo 0) -gt 50000 ]] || fail "SRT output delivered nothing"
 act '{"action":"stop_output","output":"Rec"}' >/dev/null

@@ -1224,4 +1224,11 @@ DE = {
     'Remove template %1?': 'Vorlage %1 entfernen?',
     'Remove template…': 'Vorlage entfernen…',
     'Layouts made from it stay. The template cannot be brought back.': 'Layouts, die daraus entstanden sind, bleiben. Die Vorlage lässt sich nicht zurückholen.',
+    'Output %1 sends: stop it first': 'Ausgang %1 sendet: erst stoppen',
+    'Output settings': 'Ausgang einstellen',
+    'The output is sending. Stop it first to change its settings.': 'Der Ausgang sendet. Erst stoppen, dann lassen sich seine Einstellungen ändern.',
+    'Changed': 'Geändert',
+    'Settings of output %1 changed': 'Einstellungen von Ausgang %1 geändert',
+    'Card %1 (not found)': 'Karte %1 (nicht gefunden)',
+    'Removed input': 'Entfernter Input',
 }

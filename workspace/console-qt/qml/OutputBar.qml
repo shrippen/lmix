@@ -21,7 +21,7 @@ RowLayout {
     required property var outputs
     required property var outputById
     signal addRequested()
-    /** Settings… in an output's menu: its details on the Outputs page. */
+    /** Settings… in an output's menu: the page opens its settings. */
     signal settingsRequested(string outputId)
     /** Ask before stopping a running output (the shell's setting). */
     property bool confirmStop: true

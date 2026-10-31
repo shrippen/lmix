@@ -198,6 +198,7 @@ pub const ACTION_GROUPS: &[(&str, &[&str])] = &[
         "output",
         &[
             "add_output",
+            "update_output",
             "remove_output",
             "set_output_bus",
             "start_output",
@@ -380,6 +381,16 @@ pub enum VolumeTarget {
     Phones,
 }
 
+/// A field that may be left out (`None`) or given, also as `null`
+/// (`Some(None)`).
+fn given<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    T::deserialize(deserializer).map(Some)
+}
+
 /// Every operation, whatever triggered it.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "action", rename_all = "snake_case")]
@@ -396,8 +407,9 @@ pub enum Action {
         input: InputRef,
     },
     /// Bring back what was removed last, an input, layout, bus or output,
-    /// with its settings (AUT.10; docs/DESIGN-DIALOGE.md rule 1). The last
-    /// ten removals are kept while the show is open.
+    /// with its settings (AUT.10; docs/DESIGN-DIALOGE.md rule 1), or the
+    /// settings an output had before `update_output`. The last ten are
+    /// kept while the show is open.
     Restore,
     /// Change what an input shows, keeping its settings (INP.4).
     ReplaceSource {
@@ -486,6 +498,26 @@ pub enum Action {
         bus: Option<BusRef>,
         #[serde(default)]
         name: Option<String>,
+    },
+    /// Replace an output's spec, source and name as `add_output` sets
+    /// them; it keeps its id and number. `bus` left out keeps its sound
+    /// (a screen drops it), `null` gives it the source's own. Refused
+    /// while it sends, waits for the cards or its failback is to start it
+    /// again (stop it first); `restore` brings back the settings before,
+    /// bus included.
+    UpdateOutput {
+        output: OutputRef,
+        spec: OutputSpec,
+        #[serde(default)]
+        source: OutputSource,
+        #[serde(default)]
+        name: Option<String>,
+        #[serde(
+            default,
+            deserialize_with = "given",
+            skip_serializing_if = "Option::is_none"
+        )]
+        bus: Option<Option<BusRef>>,
     },
     /// Remove an output (stops it first).
     RemoveOutput {
@@ -1536,6 +1568,8 @@ impl std::fmt::Display for IoClass {
 pub enum ActionError {
     #[error("no output matches {reference}")]
     UnknownOutput { reference: String },
+    #[error("output {reference} sends: stop it first")]
+    OutputSending { reference: String },
     #[error("encoding: {reason}")]
     BadEncoding { reason: String },
     #[error("sample rate {hz} Hz: 48000 or 44100")]
