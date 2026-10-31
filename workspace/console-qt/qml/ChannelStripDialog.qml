@@ -15,6 +15,8 @@ KanteDialog {
     property var input: null
     /** `buses` of the show state. */
     property var buses: []
+    /** The show's sample rate, for the EQ curve. */
+    property int sampleRate: 48000
 
     title: input ? qsTr("Channel strip of %1 %2").arg(input.number).arg(input.name) : ""
     modal: true
@@ -36,6 +38,7 @@ KanteDialog {
             act: dialog.act
             input: dialog.input
             buses: dialog.buses
+            sampleRate: dialog.sampleRate
         }
     }
 }

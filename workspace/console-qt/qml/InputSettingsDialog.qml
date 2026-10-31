@@ -20,6 +20,8 @@ KanteDialog {
     required property var inputs
     /** `buses` of the show state. */
     property var buses: []
+    /** The show's sample rate, for the EQ curve. */
+    property int sampleRate: 48000
     /** Looks need the GL mixer. */
     property bool looksAvailable: false
     /** Id of the input; set before `open()`. */
@@ -239,6 +241,7 @@ KanteDialog {
                         act: dialog.act
                         input: dialog.input
                         buses: dialog.buses
+                        sampleRate: dialog.sampleRate
                     }
                 }
 
