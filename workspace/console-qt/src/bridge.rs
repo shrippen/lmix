@@ -6,6 +6,8 @@
 
 use std::collections::HashMap;
 use std::pin::Pin;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 
 use cxx_qt::{CxxQtType, Threading};
@@ -201,6 +203,15 @@ pub mod qobject {
 /// Wait between reconnect attempts, and before a broken picture is asked
 /// for again.
 const RETRY: Duration = Duration::from_secs(1);
+
+/// The window's GL cannot take frames from the engine's GPU directly (no
+/// CUDA–GL interop: Mesa, Xvfb, a display on another GPU). `cudadownload`
+/// then hands out GL memory that `glcolorconvert` cannot read, the picture
+/// broke before its first frame and was built anew every second, on the
+/// GUI thread (15 % of it, Xvfb, 31.10.2026). Set by the first such
+/// break; from then on such pictures come through system memory
+/// (`cudadownload ! glupload`).
+static NO_CUDA_GL: AtomicBool = AtomicBool::new(false);
 
 /// One item's picture: the pipeline and what it shows.
 struct Live {
@@ -725,7 +736,14 @@ impl qobject::Core {
             return;
         }
         let socket = &feed.socket;
-        let pipeline = match pipeline(item, socket, feed.transport, feed.grid.is_some()) {
+        let first_frame = Arc::new(AtomicBool::new(false));
+        let pipeline = match pipeline(
+            item,
+            socket,
+            feed.transport,
+            feed.grid.is_some(),
+            &first_frame,
+        ) {
             Ok(pipeline) => pipeline,
             Err(e) => {
                 tracing::warn!(%socket, error = %e, "live pipeline failed");
@@ -737,6 +755,8 @@ impl qobject::Core {
         let bus = pipeline.bus().expect("pipeline has a bus");
         let thread = self.qt_thread();
         let tiles = feed.grid.is_some();
+        let from_gpu = feed.transport == LiveTransport::CudaIpc;
+        let socket = socket.clone();
         config::runtime().spawn(async move {
             let mut messages =
                 bus.stream_filtered(&[gst::MessageType::Error, gst::MessageType::Eos]);
@@ -747,7 +767,20 @@ impl qobject::Core {
                 _ = rx => return,
                 message = messages.next() => {
                     if let Some(message) = message {
-                        tracing::info!(?message, "live picture broke, asking again");
+                        tracing::info!(%socket, ?message, "live picture broke, asking again");
+                        let in_convert = message
+                            .src()
+                            .is_some_and(|src| src.name().starts_with("glcolorconvert"));
+                        if from_gpu
+                            && !tiles
+                            && in_convert
+                            && !first_frame.load(Ordering::Relaxed)
+                            && !NO_CUDA_GL.swap(true, Ordering::Relaxed)
+                        {
+                            tracing::warn!(
+                                "no CUDA-GL interop for this window: pictures from the GPU go through system memory"
+                            );
+                        }
                     }
                 }
             }
@@ -809,8 +842,10 @@ fn stop(mut live: Live) {
 
 /// The frames of `socket` into `item`: `unixfdsrc ! glupload` from
 /// system memory, `cudaipcsrc ! cudadownload` from the engine's GPU (a
-/// copy on the GPU into a GL texture), then `glcolorconvert ! qml6glsink`.
-/// Every frame passes the window's frame gate (`frame_gate`).
+/// copy on the GPU into a GL texture; through system memory without
+/// CUDA–GL interop, `NO_CUDA_GL`), then `glcolorconvert ! qml6glsink`.
+/// Every frame passes the window's frame gate (`frame_gate`) and sets
+/// `first_frame`.
 ///
 /// The tile picture (`tiles`) goes to the cells instead (`AtlasCell`),
 /// as a texture from an appsink: a layer per tile would cost the window
@@ -821,22 +856,31 @@ fn pipeline(
     socket: &str,
     transport: LiveTransport,
     tiles: bool,
+    first_frame: &Arc<AtomicBool>,
 ) -> Result<gst::Pipeline, String> {
     let make = |name: &str| {
         gst::ElementFactory::make(name)
             .build()
             .map_err(|_| format!("GStreamer element {name} missing"))
     };
+    // Between the queue and GL memory: glupload, cudadownload, or both
+    // with system memory between them (NO_CUDA_GL).
     let (src, upload) = match transport {
         LiveTransport::UnixFd => {
             let src = make("unixfdsrc")?;
             src.set_property("socket-path", socket);
-            (src, make("glupload")?)
+            (src, vec![make("glupload")?])
         }
         LiveTransport::CudaIpc => {
             let src = make("cudaipcsrc")?;
             src.set_property("address", socket);
-            (src, make("cudadownload")?)
+            if !tiles && NO_CUDA_GL.load(Ordering::Relaxed) {
+                let system = make("capsfilter")?;
+                system.set_property("caps", gst::Caps::new_empty_simple("video/x-raw"));
+                (src, vec![make("cudadownload")?, system, make("glupload")?])
+            } else {
+                (src, vec![make("cudadownload")?])
+            }
         }
     };
     let queue = make("queue")?;
@@ -857,9 +901,15 @@ fn pipeline(
     sink.set_property("widget", item as gst::glib::Pointer);
 
     let pipeline = gst::Pipeline::new();
-    let elements = [&src, &queue, &upload, &gl, &convert];
-    pipeline.add_many(elements).map_err(|e| e.to_string())?;
-    gst::Element::link_many(elements).map_err(|e| e.to_string())?;
+    let elements: Vec<&gst::Element> = [&src, &queue]
+        .into_iter()
+        .chain(upload.iter())
+        .chain([&gl, &convert])
+        .collect();
+    pipeline
+        .add_many(elements.iter().copied())
+        .map_err(|e| e.to_string())?;
+    gst::Element::link_many(elements.iter().copied()).map_err(|e| e.to_string())?;
     // With the window's other pictures: one frame of the window for all.
     let member = crate::frame_gate::GATE.join();
     let drawn: gst::Element = if tiles {
@@ -881,8 +931,10 @@ fn pipeline(
     } else {
         pipeline.add(&sink).map_err(|e| e.to_string())?;
         convert.link(&sink).map_err(|e| e.to_string())?;
+        let first_frame = Arc::clone(first_frame);
         if let Some(pad) = sink.static_pad("sink") {
             pad.add_probe(gst::PadProbeType::BUFFER, move |_, _| {
+                first_frame.store(true, Ordering::Relaxed);
                 member.pass();
                 gst::PadProbeReturn::Ok
             });
