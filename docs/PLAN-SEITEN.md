@@ -200,12 +200,19 @@ Kern, nur mit den geänderten Feldern (`update_cue`, DECISIONS 24.10.),
 Standby und laufende Cues bleiben. Listen aus
 einem Skript sind nur zu sehen.
 
+Audio, Kanalzüge (31.10., DECISIONS 31.10.): je Zug zwei kleine Kurven,
+EQ (Hochpass und vier Bänder) und Dynamik (Gate und Kompressor),
+gerechnet wie strom sie anwendet; ein Tooltip zeigt die Werte und den
+Wert unter dem Zeiger, ein Klick öffnet den Kanalzug. Dort stehen beide
+Kurven groß mit beschrifteten Achsen und folgen den Reglern. ON/AFV ist
+ein Umschalter (Ton immer an oder Audio folgt Video), Stumm eine eigene
+Taste.
+
 Aus dem Dummy noch offen, **nur Oberfläche** (der Kern kann es):
 - Show: Leiste zum Anlegen je Cue-Art, Zeitfelder mit Fortschritt;
   im Inspector Datei, Ziel und Zonen-Routing eines Klang-, Bild- oder
   Blenden-Cues; eine unlesbare Zeit nach Enter nicht still verwerfen,
   sondern im Feld lassen und markieren.
-- Audio: Mini-Kurven EQ und Dynamik je Zug, ON/AFV als Umschalter.
 - Seiten lösbar auf einen zweiten Bildschirm (Entscheidung Click-Dummy 1).
 - Leiste: wer eine Seite zuletzt bediente (braucht die Kennung je
   Verbindung im Kern, siehe Schritt 4).
