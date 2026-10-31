@@ -48,6 +48,9 @@ pub enum Out {
     Panic { mode: StopMode },
     /// Stop every sound and picture, faded out over `fade_ms`.
     StopPlayback { fade_ms: u32 },
+    /// Actions of the moods (MOOD.9: the panic mood), each on its own: one
+    /// failing does not keep the others back.
+    Mood { actions: Vec<Action> },
 }
 
 /// One started cue.
@@ -1263,7 +1266,10 @@ mod tests {
                     let l = lists.iter().position(|e| e.id == *list)?;
                     Runner::cue(lists, l, *cue).map(|c| c.name.clone())
                 }
-                Out::Event { .. } | Out::Panic { .. } | Out::StopPlayback { .. } => None,
+                Out::Event { .. }
+                | Out::Panic { .. }
+                | Out::StopPlayback { .. }
+                | Out::Mood { .. } => None,
             })
             .collect()
     }
@@ -1272,7 +1278,10 @@ mod tests {
         out.iter()
             .filter_map(|o| match o {
                 Out::Event { what, .. } => Some(what.clone()),
-                Out::Actions { .. } | Out::Panic { .. } | Out::StopPlayback { .. } => None,
+                Out::Actions { .. }
+                | Out::Panic { .. }
+                | Out::StopPlayback { .. }
+                | Out::Mood { .. } => None,
             })
             .collect()
     }

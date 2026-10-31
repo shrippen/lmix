@@ -15,7 +15,7 @@ die Leinwand ist Anschauung und liegt nicht im Repo.
 ## Grundsätze
 
 - **Eine Shell, eine Codebasis.** Ein Programm `lmix` mit den Seiten Mix,
-  Show, Audio, Outputs, Setup (später Light). Seiten bauen auf gemeinsamen
+  Show, Stimmungen, Audio, Outputs, Setup (später Light). Seiten bauen auf gemeinsamen
   Bausteinen auf (Monitor, Kanalzug, Cue-Liste, Pad-Raster, Inspector,
   Statusleiste), nicht jede Seite eigene.
 - **Seitenwechsel hält nichts an.** Der Ablauf liegt in `lmix-core`
@@ -189,7 +189,7 @@ Audio folgt Video bleibt auf der Ton-Seite. Show: Seitenleiste mit den
 Reitern Aktiv und Listen (24.10.), laufende Cues als Fortschrittsfüllung
 mit abgelaufener und negativer Restzeit, Stopp je Cue; sie ersetzt die
 Karte „Running“ unten. Pause je Cue und „Alle pausieren/fortsetzen“ dort
-seit RUN.5 (27.10.); der Reiter Pads wartet auf den Kern (RUN.12). Inspector unter der Cue-Liste (24.10.,
+seit RUN.5 (27.10.); die Pads (RUN.12) stehen als Raster unter der Cue-Liste. Inspector unter der Cue-Liste (24.10.,
 nur im Edit-Modus): Reiter Basics (Nummer, Name, Farbe, Notiz), Triggers
 (was den nächsten Cue startet, welche Cues dieser stoppt), Time & loops
 (Pre/Post wait, Dauer, Ein-/Ausblenden, Wiederholungen), Levels (Pegel
@@ -248,7 +248,8 @@ Reihenfolge (Entwurf E, DECISIONS 2026-10-31, `LASTENHEFT-SHOW.md`
 §3.16). Links die Sammlungen (einklappbar), in der Mitte die Gruppen mit
 ihren Varianten und oben die aktuelle Stimmung mit dem Übergang, rechts
 der Inspector mit den Ebenen und ihrer Herkunft (einklappbar), unten die
-Oneshots. Show und Stimmungen teilen den Kern: eine Stimmung, die die
+Oneshots. Die Panik der Seite ist die der Show (`cue_panic`): sie stoppt
+alles und setzt damit die Panik-Stimmung (MOOD.9). Show und Stimmungen teilen den Kern: eine Stimmung, die die
 Show per Cue setzt, zeigt die Seite als aktuell, und ein Cue, der eine
 Ebene übernimmt, steht im Inspector als deren Herkunft.
 

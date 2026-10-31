@@ -6104,13 +6104,13 @@ Zusätzen, H Karte mit Inseln.
 - **Panik setzt die Stimmung „Panik“**, anpassbar (z. B. Saallicht an).
   Das Anpassen ist eine erweiterte Funktion, die Panik-Stimmung steht
   nicht dauernd auf der Seite. Damit die Panik verlässlich still und
-  schwarz macht (SAF.1, VIS.8), sind Klang- und Bild-Ebenen dort immer
-  aus; nur Aktions-Ebenen sind anpassbar. Sie laufen sofort mit der
+  schwarz macht (SAF.1, VIS.8), ist dort jede Ebene aus oder hat
+  Aktionen, nie Klang oder Bild; anpassbar sind nur die Aktionen. Sie laufen sofort mit der
   Panik, auch beim harten Stopp, nach der Notfall-Liste (SAF.4), die
   bleibt, wie sie ist.
 - **Blendzeit**: die des Aufrufs, sonst die der Ebene, sonst die
   Wechselzeit der Show (Standard 3 s), innerhalb einer Stimmungsgruppe
-  eine eigene, kürzere (Standard 1 s).
+  die Gruppenwechselzeit (Standard 1 s), wie sie eingestellt ist.
 - **Begriff**: im Code und im Lastenheft „Stimmungsgruppe“ (`MoodGroup`),
   weil „Gruppe“ schon der Gruppen-Cue ist (CUE.4); auf der Seite
   Stimmungen heißt sie kurz „Gruppe“.
@@ -6121,7 +6121,7 @@ Zusätzen, H Karte mit Inseln.
   mehreren stehen.
 - **Oneshots** können alles sein, haben ihren eigenen Pool und gehören
   ebenfalls zu Sammlungen. Auf der Seite Stimmungen als Leiste unten, in
-  der Show-Ansicht bleiben sie im Reiter Pads. Der Oneshot-Pool sind die
+  der Show-Ansicht bleiben sie im Raster Pads unter der Cue-Liste. Der Oneshot-Pool sind die
   Pads der Show (RUN.12), Sammlungen verweisen auf ihre Cue-Ids.
 - Seitenleisten Sammlungen und Inspector sind einklappbar.
 
@@ -6130,4 +6130,61 @@ ohne Migration, ein fehlendes Feld ist leer). Die Engine ist rein wie der
 `Runner` und liefert nur Aktionen für die Ebenen, die sich ändern; Klang
 und Bild laufen über dieselben Medien-Aktionen wie Cues. Planung in
 `ROADMAP.md` („Seite Stimmungen“) und `LASTENHEFT-SHOW.md` §3.16.
+
+## 2026-10-31 — Stimmungen: Modell und Engine (MOOD Stufe 1)
+
+**Anlass**: Stufe 1 der Seite Stimmungen (Eintrag oben, ROADMAP „Seite
+Stimmungen“): Typen, Engine und Aktionen im Kern, ohne Oberfläche.
+
+**Entscheidung**:
+- `lmix-types::mood`: `Moods` mit `layers`, `groups` (`MoodGroup` mit
+  `base` und `variants`), `collections`, `panic`, `change_ms`,
+  `inside_ms`; Feld `moods` der Show-Datei und des Zustands. Gruppen und
+  Varianten teilen einen Id-Raum (`MoodId`), so findet eine Id jede
+  Stimmung. Inhalte einer Ebene: `off`, `sound`, `picture`, `actions`.
+- Aktionen `set_moods` (alles auf einmal, Recht Bearbeiten, wie
+  `set_cue_list`) und `set_mood` (Bedienen; Id, Gruppenname oder
+  „Gruppe / Variante“, Groß-/Kleinschreibung egal). Darum darf kein
+  Name „/“ enthalten, Gruppennamen und Variantennamen einer Gruppe sind
+  eindeutig. Eine Ebene mit Aktionen darf keine Automatik (Cues,
+  Kurzbefehle, Stimmungen) auslösen, wie ein Aktions-Cue.
+- Engine `lmix-core::moods::MoodRunner`, rein wie der Cue-Runner: sie
+  merkt sich je Ebene Inhalt, Medien-Id und Herkunft und gibt beim
+  Wechsel nur Aktionen für Ebenen, die sich ändern. Klang und Bild spielen
+  unter `mood-<Ebene>-<n>`, eine neue Id je Wechsel: das alte blendet mit
+  `stop_sound`/`stop_picture` aus, das neue mit seiner Einblendzeit
+  (= Blendzeit des Wechsels) ein. Aktionen laufen einmal, wenn die Ebene
+  sie bekommt. Der Service führt jede Aktion für sich aus; scheitert eine
+  (Licht antwortet nicht), laufen die anderen Ebenen trotzdem.
+- Panik und harter Stopp hängen die Aktionen der Panik-Stimmung als
+  `Out::Mood` hinter die Notfall-Liste; die Engine vergisst, was lief
+  (Klang und Bild stoppt schon `StopPlayback`). „Alles zurücksetzen“
+  (RUN.11) und eine neue Show vergessen die Stimmung ebenso.
+- Der Zustand `mood` nennt die gesetzte und die vorige Stimmung, die
+  Herkunft je Ebene und den laufenden Übergang (`fading`, Beginn in
+  Unix-ms und Dauer), damit die Seite den Fortschritt zeichnet, ohne dass
+  der Kern im Takt Zustände schickt.
+
+**Noch nicht**: Ein Klang einer Ebene, der von selbst endet, steht weiter
+als laufend in der Ebene (`media_ended` kennt nur Cue-Ids); ein
+`stop_sound` ohne Id stoppt die Stimmung, ohne dass die Engine es merkt.
+Beides mit Stufe 3, wenn Cues Ebenen übernehmen (MOOD.5). Dass bei
+gleichem Ziel die Panik-Stimmung nach der Notfall-Liste ankommt, sichert
+der Kern noch nicht zu: HTTP- und Home-Assistant-Anfragen laufen je als
+eigene Task. Und wie beim Cue-Pfad laufen die Aktionen einer Stimmung
+erst nach der Freigabe des Switchers; eine Panik genau dazwischen stoppt
+einen Klang, der danach erst startet, nicht (Bestand, gemeinsam mit den
+Cues zu schließen, etwa mit einer Panik-Generation).
+
+**Nach dem Review**: Die Panik-Stimmung weist auch Aktionen ab, die Klang
+oder Bühne starten oder aufhellen (`play_sound`, `show_picture`,
+`set_stage_level` …). `fading` zählt nur Ebenen, deren Klang oder Bild
+blendet. Startet der Klang oder das Bild einer Ebene nicht, ist die Ebene
+wieder aus; dieselbe Stimmung noch einmal versucht es erneut.
+
+**Geprüft**: `moods::tests` (Basis, Variante mit Gruppenwechselzeit,
+gleiche Stimmung ohne Aktion, andere Gruppe, Blendzeit von Aufruf und
+Ebene, Panik nur Aktionen, Ebene entfernt), Service-Tests
+`a_mood_runs_its_layers_and_panic_sets_the_panic_mood` (mit Speichern,
+Laden und neuer Show) und `moods_are_checked_before_they_are_kept`.
 

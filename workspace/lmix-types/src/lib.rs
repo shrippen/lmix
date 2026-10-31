@@ -20,6 +20,7 @@ pub mod input;
 pub mod layout;
 pub mod machine;
 pub mod midi;
+pub mod mood;
 pub mod output;
 pub mod ptz;
 pub mod shortcut;
@@ -58,6 +59,10 @@ pub use layout::{
 };
 pub use machine::{MachineLoad, TimerPriority};
 pub use midi::{MidiBinding, MidiKind, MidiMessage};
+pub use mood::{
+    LayerContent, LayerId, LayerNow, LayerOrigin, MoodCollection, MoodFade, MoodGroup, MoodId,
+    MoodLayer, MoodNow, MoodVariant, Moods,
+};
 pub use output::{
     Container, DisplayMode, Framerate, MasterFormat, MultiviewLayout, MultiviewMeters, Output,
     OutputGroup, OutputId, OutputRef, OutputSource, OutputSpec, OutputStats, OutputStatus,

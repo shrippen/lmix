@@ -663,6 +663,7 @@ impl Service {
                     tracing::warn!(?mode, "panic");
                     let _ = self.events.send(Event::Panic { mode });
                 }
+                crate::cues::Out::Mood { actions } => self.run_mood_actions(actions).await,
                 crate::cues::Out::Actions { list, cue, actions } => {
                     for action in actions {
                         let Err(e) = Box::pin(self.handle_as(action, Origin::Operator)).await
@@ -680,6 +681,25 @@ impl Service {
                         });
                         break;
                     }
+                }
+            }
+        }
+    }
+
+    /// Actions of a mood's layers, each on its own: a light that does not
+    /// answer keeps neither the music nor the picture back (MOOD.4).
+    async fn run_mood_actions(self: &Arc<Self>, actions: Vec<Action>) {
+        for action in actions {
+            let media = match &action {
+                Action::PlaySound { id, .. } | Action::ShowPicture { id, .. } => Some(id.clone()),
+                _ => None,
+            };
+            if let Err(e) = Box::pin(self.handle_as(action, Origin::Operator)).await {
+                tracing::warn!(error = %e, "mood action failed");
+                if let Some(id) = media {
+                    let mut sw = self.switcher.lock().await;
+                    sw.mood_media_failed(&id);
+                    self.publish(&sw);
                 }
             }
         }
@@ -1725,6 +1745,16 @@ impl Service {
                 for (target, result) in used.iter().zip(results) {
                     self.reached(&target.name, result).await;
                 }
+                return Ok(self.state().await);
+            }
+            Action::SetMood { mood, fade_ms } => {
+                let actions = {
+                    let mut sw = self.switcher.lock().await;
+                    let actions = sw.set_mood(mood, *fade_ms)?;
+                    self.publish(&sw);
+                    actions
+                };
+                self.run_mood_actions(actions).await;
                 return Ok(self.state().await);
             }
             Action::CueGo { .. }
@@ -2897,6 +2927,190 @@ mod tests {
             }
         }
         assert!(panic.contains("fade"), "{panic}");
+    }
+
+    /// A show with one layer "Licht": Szene cuts Bars to program, its
+    /// variant Dunkel fades to black; the panic mood takes black off.
+    fn scene_moods() -> lmix_types::Moods {
+        use lmix_types::{LayerContent, LayerId, MoodGroup, MoodId, MoodLayer, MoodVariant};
+        let licht = LayerId::new();
+        let actions = |action: Action| LayerContent::Actions {
+            actions: vec![action],
+        };
+        lmix_types::Moods {
+            layers: vec![MoodLayer {
+                id: licht,
+                name: "Licht".into(),
+                fade_ms: None,
+            }],
+            groups: vec![MoodGroup {
+                id: MoodId::new(),
+                name: "Szene".into(),
+                color: None,
+                base: [(
+                    licht,
+                    actions(Action::CutDirect {
+                        input: InputRef::Text("Bars".into()),
+                    }),
+                )]
+                .into(),
+                variants: vec![MoodVariant {
+                    id: MoodId::new(),
+                    name: "Dunkel".into(),
+                    layers: [(
+                        licht,
+                        actions(Action::SetFadeToBlack {
+                            on: true,
+                            duration_ms: 0,
+                        }),
+                    )]
+                    .into(),
+                }],
+            }],
+            panic: [(
+                licht,
+                actions(Action::SetFadeToBlack {
+                    on: false,
+                    duration_ms: 0,
+                }),
+            )]
+            .into(),
+            ..Default::default()
+        }
+    }
+
+    #[tokio::test]
+    async fn a_mood_runs_its_layers_and_panic_sets_the_panic_mood() {
+        use lmix_types::{LayerOrigin, MoodId};
+        let dir = tempfile::tempdir().unwrap();
+        let service = Service::new(4, Arc::new(NullEngine::default()), None);
+        service.handle(bars()).await.unwrap();
+        let moods = scene_moods();
+        let scene = moods.groups[0].id;
+        let dark = moods.groups[0].variants[0].id;
+        service
+            .handle(Action::SetMoods {
+                moods: moods.clone(),
+            })
+            .await
+            .unwrap();
+
+        let state = service
+            .handle(Action::SetMood {
+                mood: "Szene".into(),
+                fade_ms: None,
+            })
+            .await
+            .unwrap();
+        assert!(state.program.is_some(), "the layer cut Bars to program");
+        assert_eq!(state.mood.mood, Some(scene));
+        let state = service
+            .handle(Action::SetMood {
+                mood: dark.to_string(),
+                fade_ms: None,
+            })
+            .await
+            .unwrap();
+        assert!(state.fade_to_black, "the variant's own light");
+        assert_eq!(state.mood.previous, Some(scene));
+
+        let state = service.handle(Action::CuePanic { ms: None }).await.unwrap();
+        assert!(!state.fade_to_black, "the panic mood ran");
+        assert_eq!(state.mood.mood, None);
+        assert_eq!(state.mood.layers[0].origin, LayerOrigin::Panic);
+
+        // Kept with the show; a new show has none.
+        let file = dir.path().join("moods.lmix").display().to_string();
+        service
+            .handle(Action::SaveShow {
+                path: Some(file.clone()),
+            })
+            .await
+            .unwrap();
+        service
+            .handle(Action::NewShow { format: None })
+            .await
+            .unwrap();
+        let state = service.state().await;
+        assert!(state.moods.is_empty());
+        assert_eq!(state.mood, lmix_types::MoodNow::default());
+        let state = service
+            .handle(Action::OpenShow { path: file })
+            .await
+            .unwrap();
+        assert_eq!(state.moods, moods);
+        assert!(service
+            .handle(Action::SetMood {
+                mood: MoodId::new().to_string(),
+                fade_ms: None,
+            })
+            .await
+            .is_err());
+    }
+
+    #[tokio::test]
+    async fn moods_are_checked_before_they_are_kept() {
+        use lmix_types::{LayerContent, LayerId};
+        let service = Service::new(4, Arc::new(NullEngine::default()), None);
+        let good = scene_moods();
+        let licht = good.layers[0].id;
+        let mut sound_in_panic = good.clone();
+        sound_in_panic.panic.insert(
+            licht,
+            LayerContent::Sound {
+                sound: lmix_types::SoundCue {
+                    file: "/sounds/alarm.wav".into(),
+                    ..Default::default()
+                },
+            },
+        );
+        let mut loops = good.clone();
+        loops.groups[0].base.insert(
+            licht,
+            LayerContent::Actions {
+                actions: vec![Action::SetMood {
+                    mood: "Szene".into(),
+                    fade_ms: None,
+                }],
+            },
+        );
+        let mut no_layer = good.clone();
+        no_layer.groups[0]
+            .base
+            .insert(LayerId::new(), LayerContent::Off);
+        let mut twice = good.clone();
+        twice.groups.push(good.groups[0].clone());
+        let mut alarm = good.clone();
+        alarm.panic.insert(
+            licht,
+            LayerContent::Actions {
+                actions: vec![Action::PlaySound {
+                    id: "alarm".into(),
+                    sound: lmix_types::SoundCue {
+                        file: "/sounds/alarm.wav".into(),
+                        ..Default::default()
+                    },
+                }],
+            },
+        );
+        let mut slash = good.clone();
+        slash.groups[0].variants[0].name = "Dunkel / Nacht".into();
+        for bad in [sound_in_panic, alarm, loops, no_layer, twice, slash] {
+            assert!(
+                matches!(
+                    service
+                        .handle(Action::SetMoods { moods: bad.clone() })
+                        .await,
+                    Err(ActionError::BadMood { .. })
+                ),
+                "{bad:?}"
+            );
+        }
+        assert!(service.state().await.moods.is_empty(), "nothing kept");
+        service
+            .handle(Action::SetMoods { moods: good })
+            .await
+            .unwrap();
     }
 
     #[tokio::test]

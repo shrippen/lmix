@@ -320,6 +320,7 @@ QtObject {
         case "bad_sound": return qsTr("Sound: %1").arg(e.reason)
         case "bad_stage": return qsTr("Stage: %1").arg(e.reason)
         case "bad_cue_list": return qsTr("Cue list: %1").arg(e.reason)
+        case "bad_mood": return qsTr("Mood: %1").arg(e.reason)
         case "bad_triggers": return qsTr("Triggers: %1").arg(e.reason)
         case "locked": return qsTr("The show is locked: unlock it first")
         case "io_locked": return qsTr("%1 is locked").arg(ioClass(e["class"]))

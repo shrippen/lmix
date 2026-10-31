@@ -253,6 +253,7 @@ pub fn right_of(action: &Action) -> Right {
         | Action::UpdateCue { .. }
         | Action::SetDataAuto { .. }
         | Action::SetEmergencyList { .. }
+        | Action::SetMoods { .. }
         | Action::SetCueListPads { .. }
         | Action::SetScriptFolder { .. }
         | Action::ExportSettings { .. }
@@ -345,6 +346,7 @@ pub fn right_of(action: &Action) -> Right {
         | Action::SetActiveCueList { .. }
         | Action::CuePanic { .. }
         | Action::CueHardStop
+        | Action::SetMood { .. }
         | Action::TestTarget { .. }
         | Action::CheckTargets
         | Action::HttpRequest { .. }
