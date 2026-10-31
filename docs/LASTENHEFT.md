@@ -162,7 +162,7 @@ kann es, Console nicht.
 | INP.14 | Seitenverhältnis je Input überschreiben | S | – |
 | INP.15 | Feste Bildverzögerung je Live-Input in Frames | S | – |
 | INP.16 | Input als Schnappschuss (PNG/JPEG, Alpha erhalten) | K | – |
-| INP.17 | Bis 1000 Inputs im Projekt (Länge der Tally-Liste der TCP-API); Live-Dekodierung nur durch Hardware begrenzt, Ziel ≥ 16 Live-Quellen gleichzeitig (lmix) | M | ◐ (16 × 1080p30 gemessen; ein Input je Mischer-Slot, Standard 16, `--slots`) |
+| INP.17 | Bis 1000 Inputs im Projekt (Länge der Tally-Liste der TCP-API); Live-Dekodierung nur durch Hardware begrenzt, Ziel ≥ 16 Live-Quellen gleichzeitig (lmix) | M | ◐ (16 × 1080p30 gemessen; 40 Testbilder nacheinander im Lauf angelegt; der Mischer wächst mit, bis 127 Inputs, der OpenGL-Mischer fest 16) |
 
 ### 3.2 Quelltypen (SRC)
 
@@ -289,7 +289,7 @@ kann es, Console nicht.
 | ID | Anforderung | Prio | Stand |
 |---|---|---|---|
 | OUT.1 | Master-Format: Auflösung (SD bis 4K, Hochkant 1080×1920, frei), Bildrate (23,976–60, 50i/59,94i, optional 100/120), Seitenverhältnis | M | ◐ (`set_master_format`: Größe frei 320–7680 px, auch hochkant, Bildrate 23,976–60; ohne Halbbilder 50i/59,94i, ohne 100/120; Seitenverhältnis folgt der Größe) |
-| OUT.2 | Ausgang 1 = Program; Ausgang 2–4 mit Quelle Program/Preview/Multiview 1–2/Mix n/Input n; Overlay-Auswahl je Ausgang; Quelle live umschaltbar | M | ◐ (Ausgänge mit Quelle Program, Preview (seit 19.10., Vorschau-Ausgang des Mischers), Multiview oder Input, Ton aus Aux; ohne Mix, Overlay je Ausgang; Quelle nicht live umschaltbar) |
+| OUT.2 | Ausgang 1 = Program; Ausgang 2–4 mit Quelle Program/Preview/Multiview 1–2/Mix n/Input n; Overlay-Auswahl je Ausgang; Quelle live umschaltbar | M | ◐ (Ausgänge mit Quelle Program, Preview (seit 19.10., Vorschau-Ausgang des Mischers), Multiview oder Input, Ton aus Aux; ohne Mix, Overlay je Ausgang; Quelle nur gestoppt änderbar (`update_output`), nicht live) |
 | OUT.3 | Vollbild 1–2 auf Monitoren (Monitor, Rechteck, Cursor aus, immer oben); Quelle wie OUT.2 oder Wiederholungs-Multiview | M | ◐ (Fenster, Vollbild Wayland, DRM; Quelle wie OUT.2 (Program, Vorschau, Multiview, Input); Monitor wählt der Compositor, kein Rechteck; Prüfung auf Hardware offen, H.20) |
 | OUT.4 | Kartenausgang SDI/HDMI (DeckLink, AJA wenn Treiber), eigenes Format, Ton-Kanäle, Ton-Delay | S | ◐ (DeckLink: Anschluss und Modus wählbar, Halbbild-Modi, eingebetteter Ton mit 2, 8 oder 16 Kanälen und Ton-Delay (2026-10-27, H.7, #164); ohne AJA; seit 2026-10-30 über `decklink2sink`, auch der zweite Start im selben strom-Prozess) |
 | OUT.5 | Key+Fill-Ausgang (zwei Ports, gerade/vormultipliziert) | K | – |

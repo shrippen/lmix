@@ -547,7 +547,9 @@ Vision-Mixer (PGM und Multiview): unendlich = halten, 400 ms = danach
 Schwarz. Gespeichert in der Show-Datei. Die Kachelbilder von `lmix-core`
 folgen dem (halten = letztes Bild weiterreichen). Eine Umstellung wirkt ab
 dem nächsten Frame der Quelle; bei bereits stehender Quelle erst, wenn sie
-wieder läuft.
+wieder läuft. (Überholt 31.10.: „unendlich“ als GST_CLOCK_TIME_NONE hielt
+das Bild für immer, „halten“ ist jetzt `u64::MAX - 1`, und Schwarz wirkt
+auch bei stehender Quelle sofort.)
 **Fehler aus Schritt 2 behoben**: strom übernimmt bei `transition` immer
 seine Vorschau ins Programm und ignoriert `to_input`. Ein `cut_direct` auf
 einen Input außerhalb der Vorschau und das Schalten auf Schwarz trafen
@@ -5637,3 +5639,270 @@ Größe M nach Regel 3.
   Feld, rot markiert, Enter behält die Tasten im Feld; weg sind sie, wenn
   sie lesbar sind, mit Escape oder bei einem anderen Cue. Ein Pfad muss
   absolut sein (wie der Kern ihn prüft).
+## 2026-10-31 — Mischer wächst mit
+
+**Kontext** (todo 29.10.): Die feste Slot-Zahl (`--slots`, Standard 16,
+höchstens 31) fällt weg. lmix-core legt Mischer-Eingänge an, wenn ein Input
+dazukommt, und gibt sie wieder frei, während Program läuft; der Mischer-Flow
+wird dafür nicht neu gebaut. Vorher zu klären: wächst die Latenzstufe bei
+16 Slots (19.10.: 56 → 83 ms) mit der Zahl der Eingänge?
+
+**Latenz gegen Eingangszahl** (`scripts/measure-input-latency.sh`, CUDA,
+RTX 3070 Ti, Rechner mit fremder Last, je Anzahl ein frischer strom; ein
+Wert je Lauf, er bleibt im Lauf für jeden Input auf Program gleich):
+
+| Eingänge | alt (feste Slots), ms | neu (wächst mit), ms |
+|---|---|---|
+| 1 | 7 | 7 |
+| 2 | 5 | 45, 25 |
+| 4 | 6, 53; früher 43, 52, 46, 42, 47 | 71, 48, 32, 53 |
+| 8 | 86, 38; früher 81 | 80, 83, 72 |
+| 16 | 83; früher 82, 87, 53, 76, 84 | 83, 66 |
+| 24–31 | 75, 56, 107, 86, 85, 82 | 83 (24), 75 (32) |
+| 40 | – | 74, 87, 81 |
+
+CPU-Mischer (alt): 4 Eingänge 14/49, 8: 73/47, 16: 94/61, 31: 121/83 ms.
+
+**Ergebnis**: Die Stufe ist keine Eigenschaft von 16 Slots. Der Wert hängt
+an der Phase der Quellen je Lauf (der Mischer gibt ein Bild aus, wenn das
+späteste Pad da ist); je mehr Quellen, desto eher liegt eine spät, darum
+steigt der typische Wert bis etwa 8 Eingänge und bleibt dann bei 66–87 ms,
+auch mit 40. Alt und neu verhalten sich gleich. Sie wächst nicht weiter mit
+der Eingangszahl und hält das Wachsen nicht auf. NFA.3 (≤ 66,7 ms) hält mit
+vielen Quellen oft nicht; das ist eine eigene Aufgabe (todo).
+
+**Entscheidung** (strom #56, #57; lmix):
+- Bildmischer mit Platz für 128 Eingänge (`max_inputs`), gebaut mit einem:
+  Schwarz ist fester Eingang 0, Slot s ist Eingang s + 1. Ein neuer Input
+  bekommt seinen Eingang per `POST …/vm/inputs` (dynamischer Eingang aus dem
+  Inter-Kanal des Slots), ein entfernter verliert ihn per `DELETE`. Damit
+  sind bis 127 Slots möglich (`MAX_SLOTS`).
+- Audiomischer ebenso (`max_channels`, `POST/DELETE …/mix/channels`): der
+  Stinger ist fester Kanal 1, Slot s ist Kanal s + 2. Die Ton-Verzögerung
+  des Slots liegt im Kanal (`chN_delay`), nicht mehr in einem Block je Slot;
+  ein neuer Kanal bekommt die Abgriffe der Busse.
+- Leere Kapazität kostet nichts: strom-CPU mit 1, 4 und 16 Eingängen wie
+  vorher (10/42/166 % gegen 8/43/166 %).
+- strom gibt einen Eingang nicht frei, solange er auf Program, Preview, in
+  einem Layout oder einer Blende ist (409). lmix-core merkt ihn sich und
+  versucht es nach dem nächsten Schalten wieder; ein Slot, der vorher neu
+  belegt wird, behält ihn.
+- Kachelbild: 20 Zellen (5 × 4) für die Slots 0–19, unabhängig von der
+  Eingangszahl (strom `tiles_cells`, `tiles_first_input`). Spätere Slots
+  holen in der Console einen eigenen Stream (LiveView). Ein Kachelbild für
+  alle 127 wäre bei gleicher Bildgröße zu klein je Zelle.
+- Der OpenGL-Mischer kann keine Eingänge im Lauf anlegen: er bleibt bei
+  16 festen Slots (`GL_SLOTS`); nur die Tonkanäle wachsen.
+- Ein laufender lmix-core übernimmt einen Mischer, den ein früherer gebaut
+  hat, mit dessen Eingängen (aus den gespeicherten dynamischen Eingängen).
+
+**Messung Wachsen** (`scripts/measure-mixer-growth.sh`: ein Ball mit Ton
+auf Program und aufgenommen, 40 Inputs im Abstand von rund 0,7 s angelegt,
+alle auf Program geprüft, dann alle entfernt; Prüfung der Aufnahme auf
+fehlende und wiederholte Bilder, `scripts/frozen-frames.py`, und Lücken im
+Ton, `scripts/switch-gaps.py`):
+- CUDA, 6 Läufe mit 40: kein fehlendes Bild. Vier Läufe ganz ohne Lücke;
+  einer mit einer Tonlücke von rund 55 ms beim Anlegen des 39. Inputs,
+  einer mit einem wiederholten Bild etwa 2 s nach dem Entfernen. strom bei
+  41 Eingängen 470–540 % CPU, 1,2 GB GPU-Speicher, Latenz 77–86 ms.
+- Gegenprobe mit 15 Inputs, je 2 Läufe alt und neu: alle ohne Lücke.
+- Kanal oder Eingang ohne Quelle anlegen (direkt per strom-API, 20-mal):
+  ohne Lücke und ohne Knack.
+- Je Input ein Knack im Ton: der eigene Ton des neuen Inputs, bis sein
+  Ton direkt nach dem Anlegen abgeschaltet ist; alt ebenso.
+- CPU-Mischer, 40: ohne Lücke (2705 Bilder, kein fehlendes, kein
+  wiederholtes, Ton ohne Lücke); strom 1428 % CPU bei 41 Eingängen (200 %
+  mit einem), Latenz 90 ms.
+
+Die zwei einzelnen Aussetzer kamen bei Lastspitzen (Lastmittel bis 25
+durch andere Arbeiten, strom ohne `CAP_SYS_NICE`, also ohne hohe Priorität
+seiner Streaming-Threads); strom meldet dabei nichts. Ob sie am Wachsen
+liegen oder an der Last, klärt ein Lauf auf ruhigem Rechner (todo).
+
+**Was bricht** (vor dem ersten Release erlaubt): `--slots` gibt es nicht
+mehr (Skripte und Demo angepasst). Der Mischer-Flow heißt „lmix mixer 11“;
+ein Mischer eines älteren lmix-core wird neu gebaut. strom: der statische
+Eingang eines Audiomischer-Kanals ist jetzt `delay_N:offset_identity`.
+## 2026-10-31 — Vorschaubild-Abgriff hält beim Andocken die Quelle an (vm-check)
+
+`vm-check` scheiterte ab und zu mit „color input not orange“ oder „preview
+picture dark“: strom beantwortete jede Abfrage des Abgriffs 20–30 s lang
+sofort mit 504, der Zweig war aktiv, es kam kein Bild. Dasselbe Muster in
+6 der 40 fehlgeschlagenen CI-Läufe seit 25.10. (zuletzt 41077744669).
+
+- **Ursache in strom** (`gst/thumbnail_tap.rs`): Beim ersten Abruf hängt
+  der Abgriff einen Zweig (Queue, Skalierer, Appsink) an das Tee. Er
+  verband das Tee-Pad, bevor die Elemente liefen, und startete sie dann
+  von der Queue abwärts. Ein Element, das noch nicht läuft, antwortet auf
+  einen Puffer mit FLUSHING; das Tee verzeiht mit `allow-not-linked` nur
+  NOT_LINKED und gibt FLUSHING nach oben. Die Quelle (oder der Compositor
+  beim Program-Abgriff) hält dann ihren Task an, ohne Fehler. Der Flow
+  gilt als laufend, Bild und Abgriff stehen.
+- **Entscheidung:** den Zweig von der Senke her starten und das Tee-Pad
+  erst danach verbinden (das übliche Vorgehen für Zweige an laufenden
+  Pipelines). Verworfen: das FLUSHING des Zweigs per Pad-Probe am Tee
+  schlucken (verdeckt nur den Fall, kostet eine Probe je Puffer) und im
+  Test länger warten (die Quelle kommt nie wieder).
+- **Beleg:** strom-Test `test_attaching_never_stops_the_tapped_chain`
+  (strom #55) hängt den Zweig 200-mal an eine Quelle ohne Takt an und ab; ohne die
+  Änderung steht die Kette schon beim ersten Mal, mit ihr nie.
+
+## 2026-10-31 — vm-check: gehaltenes Bild bleibt stehen, RTMP ohne Video
+
+Die beiden häufigsten Fehler von `vm-check` seit 25.10. („dead source not
+black on program (35)“ etwa 12-mal, „RTMP output delivered nothing“ etwa
+7-mal) haben je eine echte Ursache, keine im Test. Lokal reproduzierbar
+im Container mit `taskset -c 0,1`.
+
+- **Gehaltenes Bild (lmix-core `engine/strom.rs`):** „Hold“ setzte
+  `max-last-buffer-repeat` am Compositor-Pad auf `u64::MAX`, das ist
+  GST_CLOCK_TIME_NONE. Läuft ein Pad mit NONE trocken, behält der
+  Compositor (`videoaggregator` 1.24 bis 1.28) das Bild mit offenem
+  Ende; kein späterer Wert holt es wieder heraus, auch 400 ms nicht. Im
+  Test kam das Logo nach dem Failover zurück, stockte unter Last kurz
+  (noch im Modus „hold“), die verspäteten Bilder danach verwirft der
+  Live-Compositor still, und das nach „black“ getötete Logo (Helligkeit
+  35 = Blau) blieb für immer auf Program. **Entscheidung:** „Hold“ heißt
+  jetzt `u64::MAX - 1` (584 Jahre, eine gültige Zeit). Verworfen: das
+  Pad beim Wechsel neu anlegen (Eingriff in den Mischer-Flow, an dem
+  gerade anders gearbeitet wird) und im Test länger warten (das Bild
+  geht nie). Beleg: ein GStreamer-Skript ohne lmix (NONE: bleibt 255,
+  `MAX - 1`: 0) und ein neuer Schritt im VM-Test, der beim gehaltenen
+  toten Logo auf „black“ schaltet; ohne die Änderung rot, ohne Last.
+- **RTMP ohne Video (strom `gst/pipeline/construction.rs`):** Senken
+  aus Blöcken (RTMP, SRT) laufen mit `qos=true`, an `add_element`
+  vorbei, also ohne die Probe, die strom an allen anderen Senken die
+  QoS-Events nach oben verwirft. Hinter `flvmux` meldet die Senke die
+  Laufzeit des Stroms, den der Muxer zuletzt durchließ. Kam das Video
+  unter Last 6 s hinter der Uhr an, ließ der Muxer den Ton durch, und
+  `videoconvert` vor dem Encoder warf jedes Videobild als zu spät weg
+  (Log: „falling behind 100 %, jitter 6 s“). Ein echter Stream hätte
+  ebenso kein Bild mehr gehabt, solange das Video zurücklag.
+  **Entscheidung:** Block-Senken bekommen dieselbe Probe wie die
+  übrigen (strom-PR auf `dev`). Beleg: strom-Test
+  `a_block_sink_does_not_send_qos_events_upstream` (ohne die Änderung
+  rot) und ein Skript mit 3 s verspätetem Video (0 statt 150 Bilder im
+  Encoder, mit der Probe 150).
+- **Messwerte, die irreführen:** `current-level-time` der Queues und
+  der Compositor-Pads (14 s bei 2 Puffern, 54 s bei 0 Bytes) und
+  `latency_min` aus `/api/flows/{id}/debug` (summiert die Queues) sind
+  keine Verzögerung; die Mischer-Uhr lief in den Läufen in Echtzeit.
+  strom #48 („Zeitstempel springen unter Last“) bekommt dazu einen
+  Kommentar.
+## 2026-10-30 — Gemessene Bitrate auch für RTMP und Aufnahme (M07)
+
+Kontext: Der Kopf des Ausgangsmenüs zeigt die Bitrate, solange der Ausgang
+sendet (`docs/DESIGN-DIALOGE.md` M07). Gemessen war sie nur für SRT
+(`srt-stats`, B32); RTMP und Aufnahme zeigten die eingestellte Rate.
+
+Optionen:
+- Element-Eigenschaften aus strom lesen (`GET …/elements/{id}/properties`):
+  liest alle Eigenschaften eines Elements und kann keine `GstStructure`, also
+  nicht `rtmp2sink.stats`. Verworfen.
+- Ein Byte-Zähler als Pad-Probe auf dem kodierten Strom: kostet je Puffer
+  einen Probe-Aufruf und zählt nicht, was wirklich auf die Leitung geht.
+  Verworfen.
+- **Gewählt:** neue strom-API `GET /flows/{id}/output-bytes` (Stil von
+  `srt-stats`), Bytes seit Start je Ausgangs-Element. RTMP: `out-bytes-total`
+  aus `rtmp2sink.stats`, die Bytes auf dem Socket mit RTMP-Rahmen; im
+  Streaming-Thread läuft dafür nichts zusätzlich. Live Recorder: die
+  Datei-Senke zählt jeden Schreibvorgang (Kopf eingeschlossen) in einen
+  `AtomicU64`, eine atomare Addition je Schreibvorgang, gelesen ohne Sperre.
+  strom-PR auf `dev` (Branch `output-bytes`); auch für upstream gedacht
+  (`docs/upstream/STROM.md`).
+
+Entscheidung: `lmix-core` fragt für laufende RTMP- und Aufnahme-Ausgänge
+einmal je Sekunde `output-bytes` ab und nimmt die Rate über die Lesungen
+der letzten 4 s (`engine/output_rate.rs`), nicht zwischen zwei Lesungen:
+fragmentiertes MP4 schreibt ein Fragment je Sekunde, je Sekunde gelesen
+fällt mal keins, mal zwei in eine Lesung (in der VM-Prüfung stand eine
+MP4-Aufnahme so auf 0 kbit/s). Die erste Lesung, eine Lücke von 4 s und ein Zähler, der
+zurückging (Neustart, Wiederverbindung von `rtmp2sink`), geben keine Rate;
+dann zeigt die Console die eingestellte. `OutputStats` hat jetzt
+`kbps` für alle drei Arten und `srt: Option<SrtLink>` mit Verbindung,
+Paketverlusten und RTT nur für SRT (bricht das JSON von `outputs` und
+`/api/outputs/stats`; vor dem ersten Release erlaubt, Console,
+`/metrics` und `soak-hardware.sh` angepasst). „kein Empfänger“ gibt es nur
+für SRT. Die alte Aufnahme über `splitmuxsink` (MKV vor GStreamer 1.26)
+zählt nicht und zeigt weiter die eingestellte Rate.
+
+Messung (lokal, CPU-Mischer, Testbild „ball“, Aufnahme MKV und RTMP an einen
+lokalen ffmpeg-Empfänger, beide 4000 kbit/s eingestellt): gemeldet Aufnahme
+240–350 kbit/s, RTMP 250–375 kbit/s; die Aufnahme-Dateien wuchsen im selben
+Zeitraum um 266–269 kbit/s, RTMP etwas darüber (Rahmen). Mit CBR dasselbe:
+der x264-Encoder bleibt bei einem einfachen Bild weit unter der eingestellten
+Rate, das zeigte die eingestellte Rate bisher nicht. Kosten: 1000 Abfragen
+von `output-bytes` hintereinander erhöhten die CPU-Zeit von strom um etwa
+0,6 ms je Abfrage (im Rauschen der zwei laufenden Encoder); bei einer Abfrage
+je Sekunde und Ausgang vernachlässigbar.
+## 2026-10-30 — Ausgang nachträglich ändern (M07 „Einstellungen…“)
+
+**Anlass**: Einen Ausgang konnte man nach dem Anlegen nicht mehr ändern
+(Adresse, Art, Quelle, Kodierung, Name), nur entfernen und neu anlegen.
+„Einstellungen…“ im Menü des Ausgangs sprang darum nur auf die Seite
+Outputs (Eintrag vom selben Tag oben).
+
+- Aktion `update_output` (Gruppe „output“, Recht Bearbeiten): ersetzt
+  Spec, Quelle, Namen und auf Wunsch den Bus eines Ausgangs; Id und Nummer
+  bleiben. `bus` weggelassen behält den Ton, `null` gibt den eigenen der
+  Quelle, ein Name den Bus: eine Aktion, ein Rückgängig-Schritt, und eine
+  Ablehnung ändert nichts (Review #190; zuerst schickte die Console danach
+  `set_output_bus`, das auch bei abgelehntem Update durchging). Sie prüft
+  wie `add_output` (Kodierung, Karte, Busse der weiteren Kartenpaare, ISO
+  nur mit Bild) und benennt ohne Namen wie beim Anlegen. Die Quelle, die
+  der Ausgang schon hat, geht ungeprüft durch: ein ISO, dessen Input
+  entfernt ist, lässt sich umbenennen und bleibt ausgefallen. Ein
+  Bildschirm hat keinen Ton: er verliert einen behaltenen Bus, einen
+  genannten lehnt er ab (`no_audio`).
+- Abgelehnt, solange der Ausgang sendet, auf die Karten wartet oder sein
+  Failback ihn wieder starten wird: neuer Fehler `output_sending`. Ein
+  laufender Ausgang würde sonst mit anderen Einstellungen in der Show
+  stehen, als er sendet, und der nächste Failback-Versuch startete ihn mit
+  den neuen (Review #190: zwischen zwei Versuchen steht er auf `failed`,
+  nicht gehalten). Darum merkt sich der Switcher, welche Ausgänge im
+  Failback sind (`begin_failback`, gesetzt unter seiner Sperre, wenn der
+  Service den Failback startet), und der Zustand zeigt es als
+  `Output.failback`. Ein ausgefallener Ausgang ohne Failback (oder einer,
+  der gestoppt wurde) bleibt änderbar: eine falsche Adresse zu
+  korrigieren ist der häufigste Grund. Verworfen: im Betrieb neu starten
+  (eine Lücke auf Sendung, die niemand ausgelöst hat).
+- Rückgängig über `restore`: die Einstellungen davor kommen auf denselben
+  Stapel wie Entferntes (`restorable.kind` = `output_settings`, mit dem
+  alten Namen); `restore` setzt sie mit dem Bus von damals zurück, auch
+  nach einem `set_output_bus` danach, und lehnt ab, solange der Ausgang
+  sendet. Verworfen: ein eigener Rückgängig-Stapel für Änderungen (zwei
+  Stapel unter einem Strg+Z). Die Console zeigt nach dem Speichern einen
+  Toast „Geändert“ mit „Rückgängig“ (`Removals.change`).
+- Console: `AddOutputDialog` hat einen Bearbeiten-Modus (Titel „Ausgang
+  einstellen“, Knopf „Speichern“, Felder aus dem Ausgang). „Einstellungen…“
+  öffnet ihn aus dem Menü in der Leiste und aus der Detailkarte der Seite
+  Outputs. **Sendet der Ausgang, bleibt der Menüeintrag aktiv**, der Dialog
+  zeigt die Einstellungen gesperrt mit dem Hinweis „Der Ausgang sendet.
+  Erst stoppen …“ (`KanteCallout`), ebenso beim Warten auf die Karten und
+  bei `failback`. Grund: anders als Entfernen hat das Ansehen auch beim
+  Senden einen Zweck (Adresse, Rate prüfen), und der Ausgang kann starten
+  oder stoppen, während der Dialog offen ist; die Sperre muss also ohnehin
+  im Dialog leben. Wird der Ausgang anderswo entfernt, schließt der
+  Dialog. Ein Quell-Input, der weg ist, oder eine Karte, die die Engine
+  nicht meldet, bleibt gewählt („Entfernter Input“, „Karte n (nicht
+  gefunden)“): wer nur den Namen ändert, ändert Quelle und Gerät nicht.
+  Eine Ablehnung zeigt der Fehler-Toast wie jede andere.
+
+**Geprüft**: Switcher-Tests `an_output_takes_new_settings_in_its_place`,
+`restore_brings_back_an_outputs_settings_before`,
+`a_sending_output_keeps_its_settings`,
+`an_output_its_failback_starts_again_keeps_its_settings`,
+`an_output_takes_its_bus_with_the_update` (auch: Bildschirm verliert den
+Bus, Ablehnung ändert ihn nicht), `an_update_without_bus_keeps_it_and_null_clears_it`,
+`restore_sets_the_bus_back_after_a_bus_change`,
+`restore_leaves_out_a_bus_removed_since` (Bus und `more_pairs`),
+`an_iso_without_its_input_keeps_its_source`,
+`an_output_update_is_checked_like_adding`; Service-Test
+`an_output_failing_back_keeps_its_settings` (zwischen zwei Versuchen
+abgelehnt, gestoppt änderbar, danach kein Start); Console
+`forms::the_form_adds_or_updates_an_output`; QML-Tests
+`tst_add_output_dialog` (Füllen, eine Aktion mit dem Ton, Sperre beim
+Senden, Warten und Failback, fehlende Quelle und Karte bleiben, entfernt
+während offen, danach leer zum Anlegen), `tst_removals` (Toast nach dem
+Ändern, abgelehnt ohne Toast), `tst_outputs_page` (Einstellungen… der
+Detailkarte).

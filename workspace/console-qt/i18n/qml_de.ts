@@ -476,7 +476,12 @@
   <context>
     <name>AddOutputDialog</name>
     <message>
-      <location filename="../qml/AddOutputDialog.qml" line="+59" />
+      <location filename="../qml/AddOutputDialog.qml" line="+46" />
+      <source>Card %1 (not found)</source>
+      <translation>Karte %1 (nicht gefunden)</translation>
+    </message>
+    <message>
+      <location line="+64" />
       <source>folder in the engine's media directory</source>
       <translation>Ordner im Medienverzeichnis der Engine</translation>
     </message>
@@ -497,7 +502,22 @@
       <translation>Ausgang hinzufügen</translation>
     </message>
     <message>
-      <location line="+64" />
+      <location line="-5" />
+      <source>Output settings</source>
+      <translation>Ausgang einstellen</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Save</source>
+      <translation>Speichern</translation>
+    </message>
+    <message>
+      <location line="+168" />
+      <source>The output is sending. Stop it first to change its settings.</source>
+      <translation>Der Ausgang sendet. Erst stoppen, dann lassen sich seine Einstellungen ändern.</translation>
+    </message>
+    <message>
+      <location line="+10" />
       <source>Output</source>
       <translation>Ausgang</translation>
     </message>
@@ -527,7 +547,7 @@
       <translation>Stumm</translation>
     </message>
     <message>
-      <location line="+10" />
+      <location line="+12" />
       <source>Stream key</source>
       <translation>Stream-Schlüssel</translation>
     </message>
@@ -550,6 +570,11 @@
       <location line="+0" />
       <source>Preview</source>
       <translation>Vorschau</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Removed input</source>
+      <translation>Entfernter Input</translation>
     </message>
     <message>
       <location line="+6" />
@@ -595,7 +620,7 @@
   <context>
     <name>AppShell</name>
     <message>
-      <location filename="../qml/AppShell.qml" line="+372" />
+      <location filename="../qml/AppShell.qml" line="+367" />
       <location line="+110" />
       <source>Open show</source>
       <translation>Show öffnen</translation>
@@ -3023,7 +3048,7 @@
       <translation>Ordner mit den fehlenden Dateien</translation>
     </message>
     <message>
-      <location line="+195" />
+      <location line="+197" />
       <source>Inputs from a show…</source>
       <translation>Inputs aus einer Show …</translation>
     </message>
@@ -3114,7 +3139,7 @@
       <translation>Ansicht</translation>
     </message>
     <message>
-      <location line="-497" />
+      <location line="-499" />
       <source>FTB</source>
       <comment>fade to black</comment>
       <translation>FTB</translation>
@@ -3130,7 +3155,7 @@
       <translation>Schwarzblende: Programm auf Schwarz und zurück (SWI.9); Show und Ausgänge laufen weiter</translation>
     </message>
     <message>
-      <location line="+534" />
+      <location line="+536" />
       <source>Multiview</source>
       <translation>Multiview</translation>
     </message>
@@ -3671,7 +3696,7 @@
   <context>
     <name>OutputMenu</name>
     <message>
-      <location filename="../qml/OutputMenu.qml" line="+36" />
+      <location filename="../qml/OutputMenu.qml" line="+38" />
       <source>%1 kbit/s</source>
       <translation>%1 kbit/s</translation>
     </message>
@@ -3711,7 +3736,7 @@
       <translation>Rate</translation>
     </message>
     <message>
-      <location line="+2" />
+      <location line="+3" />
       <source>Packets lost</source>
       <translation>Pakete verloren</translation>
     </message>
@@ -3805,12 +3830,12 @@
     </message>
     <message>
       <location line="+1" />
-      <location line="+39" />
+      <location line="+54" />
       <source>Kind</source>
       <translation>Art</translation>
     </message>
     <message>
-      <location line="-38" />
+      <location line="-53" />
       <source>State</source>
       <translation>Zustand</translation>
     </message>
@@ -3821,17 +3846,22 @@
     </message>
     <message>
       <location line="+1" />
-      <location line="+47" />
+      <location line="+64" />
       <source>Link</source>
       <translation>Verbindung</translation>
     </message>
     <message>
-      <location line="-34" />
+      <location line="-51" />
       <source>No outputs yet: + Output adds a recording, stream, NDI or screen</source>
       <translation>Noch keine Ausgänge: + Ausgang fügt Aufnahme, Stream, NDI oder Bildschirm hinzu</translation>
     </message>
     <message>
-      <location line="+24" />
+      <location line="+33" />
+      <source>Settings…</source>
+      <translation>Einstellungen…</translation>
+    </message>
+    <message>
+      <location line="+6" />
       <source>Source</source>
       <translation>Quelle</translation>
     </message>
@@ -3841,12 +3871,17 @@
       <translation>Ton</translation>
     </message>
     <message>
-      <location line="+62" />
+      <location line="+11" />
+      <source>Rate</source>
+      <translation>Rate</translation>
+    </message>
+    <message>
+      <location line="+53" />
       <source>of the source</source>
       <translation>der Quelle</translation>
     </message>
     <message>
-      <location line="-61" />
+      <location line="-63" />
       <source>Target</source>
       <translation>Ziel</translation>
     </message>
@@ -3861,7 +3896,7 @@
       <translation>%1 kbit/s</translation>
     </message>
     <message>
-      <location line="+9" />
+      <location line="+11" />
       <source>Failed</source>
       <translation>Fehlgeschlagen</translation>
     </message>
@@ -4253,7 +4288,7 @@
   <context>
     <name>Removals</name>
     <message>
-      <location filename="../qml/Removals.qml" line="+43" />
+      <location filename="../qml/Removals.qml" line="+48" />
       <source>Remove input %1 %2?</source>
       <translation>Input %1 %2 entfernen?</translation>
     </message>
@@ -4348,12 +4383,22 @@
       <translation>Ausgang %1 entfernt</translation>
     </message>
     <message>
-      <location line="+101" />
+      <location line="+24" />
+      <source>Changed</source>
+      <translation>Geändert</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Settings of output %1 changed</source>
+      <translation>Einstellungen von Ausgang %1 geändert</translation>
+    </message>
+    <message>
+      <location line="+26" />
       <source>Removed</source>
       <translation>Entfernt</translation>
     </message>
     <message>
-      <location line="+7" />
+      <location line="+70" />
       <source>Undo</source>
       <translation>Rückgängig</translation>
     </message>
@@ -6147,12 +6192,12 @@
     <message>
       <location line="+1" />
       <location line="+63" />
-      <location line="+147" />
+      <location line="+151" />
       <source>NDI</source>
       <translation>NDI</translation>
     </message>
     <message>
-      <location line="-209" />
+      <location line="-213" />
       <source>WHIP (browser, OBS)</source>
       <translation>WHIP (Browser, OBS)</translation>
     </message>
@@ -6324,12 +6369,12 @@
     </message>
     <message>
       <location line="+1" />
-      <location line="+145" />
+      <location line="+149" />
       <source>Recording</source>
       <translation>Aufnahme</translation>
     </message>
     <message>
-      <location line="-143" />
+      <location line="-147" />
       <source>Screen: window</source>
       <translation>Bildschirm: Fenster</translation>
     </message>
@@ -6489,7 +6534,7 @@
       <translation>Der Cue-Zeitgeber hat keine Echtzeit-Priorität bekommen; auf einem ausgelasteten Rechner können Cues zu spät kommen. Erlauben mit rtkit (läuft mit der Desktop-Sitzung) oder mit einem Echtzeit-Limit für diesen Benutzer (Gruppe realtime, RLIMIT_RTPRIO).</translation>
     </message>
     <message>
-      <location line="+9" />
+      <location line="+10" />
       <source>no receiver</source>
       <translation>kein Empfänger</translation>
     </message>
@@ -6499,7 +6544,7 @@
       <translation>%1 Mbit/s</translation>
     </message>
     <message>
-      <location line="+5" />
+      <location line="+8" />
       <source>RTT –</source>
       <translation>RTT –</translation>
     </message>
@@ -6562,6 +6607,11 @@
       <location line="+17" />
       <source>No output matches %1</source>
       <translation>Kein Ausgang passt zu %1</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Output %1 sends: stop it first</source>
+      <translation>Ausgang %1 sendet: erst stoppen</translation>
     </message>
     <message>
       <location line="+1" />
