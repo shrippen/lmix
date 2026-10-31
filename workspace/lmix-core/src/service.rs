@@ -55,6 +55,10 @@ const MACHINE_INTERVAL: std::time::Duration = std::time::Duration::from_secs(2);
 /// Silence: also stands in for "no reading" (JSON has no infinity).
 pub const LEVEL_FLOOR_DB: f32 = -100.0;
 
+/// Requests waiting for one output target.
+type TargetQueue =
+    tokio::sync::mpsc::UnboundedSender<(crate::targets::TargetConfig, crate::targets::Request)>;
+
 pub struct Service {
     /// Itself, for work it hands to a task of its own (the failback of an
     /// output a command left failed).
@@ -66,6 +70,9 @@ pub struct Service {
     cue_wake: tokio::sync::Notify,
     /// Client for output targets (each request has its target's limit).
     target_http: reqwest::Client,
+    /// One queue per output target: its requests go out one after the
+    /// other, in the order they were sent (MOOD.9).
+    target_queues: std::sync::Mutex<HashMap<String, TargetQueue>>,
     /// Written after every change, read back after a crash (SHW.5).
     autosave: Option<PathBuf>,
     /// Players the operator moved (jump, item, restart, previous), and
@@ -160,6 +167,7 @@ impl Service {
             events,
             cue_wake: tokio::sync::Notify::new(),
             target_http: crate::datasource::client(),
+            target_queues: std::sync::Mutex::new(HashMap::new()),
             recent: Mutex::new(Recent::load(autosave.as_deref())),
             pictures: std::sync::Mutex::new(HashMap::new()),
             touched: std::sync::Mutex::new(HashMap::new()),
@@ -259,7 +267,9 @@ impl Service {
     }
 
     /// Send `request` to `target` in the background; how it went is an
-    /// event, the caller never waits (EXT.3).
+    /// event, the caller never waits (EXT.3). Requests to one target
+    /// arrive in the order they were sent: the panic mood's light comes
+    /// after the emergency list's (MOOD.9).
     fn send_to_target(
         self: &Arc<Self>,
         target: crate::targets::TargetConfig,
@@ -273,22 +283,47 @@ impl Service {
             });
             return;
         }
-        let service = Arc::clone(self);
+        let mut queues = self.target_queues.lock().expect("target queues lock");
+        let mut job = (target, request);
+        if let Some(queue) = queues.get(&job.0.name) {
+            match queue.send(job) {
+                Ok(()) => return,
+                Err(tokio::sync::mpsc::error::SendError(back)) => job = back,
+            }
+        }
+        let (queue, mut jobs) = tokio::sync::mpsc::unbounded_channel();
+        let name = job.0.name.clone();
+        let _ = queue.send(job);
+        queues.insert(name, queue);
+        // Holds the service only while it sends: a dropped service drops
+        // the queues, and this ends.
+        let me = Arc::downgrade(self);
         tokio::spawn(async move {
-            let result = crate::targets::send(&service.target_http, &target, &request).await;
-            let reached = match &result {
-                lmix_types::TargetResult::Locked => return,
-                lmix_types::TargetResult::Failed { reason } => {
-                    tracing::warn!(target = %target.name, %reason, "output target not reached");
-                    Err(reason.clone())
-                }
-                lmix_types::TargetResult::Ok => Ok(()),
-            };
-            service.reached(&target.name, reached).await;
-            let _ = service.events.send(Event::Target {
-                target: target.name.clone(),
-                result,
-            });
+            while let Some((target, request)) = jobs.recv().await {
+                let Some(service) = me.upgrade() else { return };
+                service.send_now(&target, &request).await;
+            }
+        });
+    }
+
+    async fn send_now(
+        &self,
+        target: &crate::targets::TargetConfig,
+        request: &crate::targets::Request,
+    ) {
+        let result = crate::targets::send(&self.target_http, target, request).await;
+        let reached = match &result {
+            lmix_types::TargetResult::Locked => return,
+            lmix_types::TargetResult::Failed { reason } => {
+                tracing::warn!(target = %target.name, %reason, "output target not reached");
+                Err(reason.clone())
+            }
+            lmix_types::TargetResult::Ok => Ok(()),
+        };
+        self.reached(&target.name, reached).await;
+        let _ = self.events.send(Event::Target {
+            target: target.name.clone(),
+            result,
         });
     }
 
@@ -3469,6 +3504,70 @@ mod tests {
                 .await,
             Err(ActionError::UnknownTarget { .. })
         ));
+    }
+
+    /// MOOD.9: requests to one target arrive in order, even when the first
+    /// is slow, so the panic mood's light comes after the emergency list's.
+    #[tokio::test]
+    async fn requests_to_one_target_go_out_in_order() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = format!("http://{}", listener.local_addr().unwrap());
+        let (done_tx, mut done) = tokio::sync::mpsc::channel(4);
+        tokio::spawn(async move {
+            while let Ok((mut stream, _)) = listener.accept().await {
+                let done_tx = done_tx.clone();
+                // Each on its own: a later request does not wait here.
+                tokio::spawn(async move {
+                    let mut buf = vec![0; 8192];
+                    let n = stream.read(&mut buf).await.unwrap_or(0);
+                    let request = String::from_utf8_lossy(&buf[..n]).into_owned();
+                    if request.starts_with("POST /first") {
+                        tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+                    }
+                    let _ = done_tx.send(request).await;
+                    let _ = stream
+                        .write_all(
+                            b"HTTP/1.1 200 OK\r\ncontent-length: 0\r\nconnection: close\r\n\r\n",
+                        )
+                        .await;
+                });
+            }
+        });
+        let service = Service::new(4, Arc::new(NullEngine::default()), None);
+        service
+            .handle(Action::SetTarget {
+                target: lmix_types::TargetSpec {
+                    name: "Licht".into(),
+                    kind: lmix_types::TargetKind::Http,
+                    addresses: vec![address],
+                    secret: None,
+                    timeout_ms: 2000,
+                },
+            })
+            .await
+            .unwrap();
+        for path in ["/first", "/second"] {
+            service
+                .handle(Action::HttpRequest {
+                    target: "Licht".into(),
+                    method: lmix_types::HttpMethod::Post,
+                    path: path.into(),
+                    headers: Default::default(),
+                    body: None,
+                })
+                .await
+                .unwrap();
+        }
+        let mut order = Vec::new();
+        for _ in 0..2 {
+            let request = tokio::time::timeout(std::time::Duration::from_secs(5), done.recv())
+                .await
+                .unwrap()
+                .unwrap();
+            order.push(request.split(' ').nth(1).unwrap_or_default().to_string());
+        }
+        assert_eq!(order, ["/first", "/second"]);
     }
 
     #[tokio::test]

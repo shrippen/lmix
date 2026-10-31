@@ -6425,3 +6425,24 @@ aus oder Aktionen, Sammlungen).
 Stand beim Bestätigen, schnelle Änderungen, Ablehnung, Ziehen von Gruppen
 und Ebenen, Pegel), `tst_removals.qml` (`askWith`), `tst_action_rows.qml`,
 `tst_show_moods.qml` (Ziehen in die Liste, daneben, im Show-Modus).
+
+## 2026-10-31 — Stimmungen: Panik nach der Notfall-Liste (MOOD Stufe 5d)
+
+**Anlass**: Die Panik-Stimmung lief nach der Notfall-Liste (MOOD.9), aber
+HTTP- und Home-Assistant-Anfragen gingen je in einer eigenen Task hinaus.
+Setzten beide dasselbe Ziel (Saallicht), konnte die Anfrage der Notfall-Liste
+nach der der Panik-Stimmung ankommen und gewinnen.
+
+**Entscheidung**:
+- Jedes Ausgabeziel hat eine eigene Warteschlange: seine Anfragen gehen
+  nacheinander hinaus, in der Reihenfolge, in der sie abgeschickt wurden
+  (`Service::send_to_target`). Wer abschickt, wartet weiter nie (EXT.3).
+- Das gilt für alle Anfragen, nicht nur für die Panik: zwei Cues
+  hintereinander auf dasselbe Gerät kommen ebenso in ihrer Reihenfolge an.
+  Ein Ziel, das nicht antwortet, hält nur seine eigenen späteren Anfragen
+  auf (je bis zu seinem Zeitlimit), andere Ziele nicht.
+- Was die Notfall-Liste erst später startet (Wartezeit, Folge-Cue), läuft
+  nach der Panik-Stimmung; „danach“ heißt: nach dem, was sofort startet.
+
+**Geprüft**: `service::tests::requests_to_one_target_go_out_in_order`
+(die erste Anfrage antwortet langsam, die zweite kommt trotzdem danach).
