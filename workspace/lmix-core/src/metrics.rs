@@ -223,7 +223,7 @@ pub fn render(snap: &Snapshot, resident: Option<u64>) -> String {
         &mut out,
         "lmix_output_kbps",
         "gauge",
-        "Send rate of a network output.",
+        "Measured rate of a stream or recording output.",
     );
     for (number, name, s) in &outputs_with_stats {
         f.sample(
@@ -232,30 +232,34 @@ pub fn render(snap: &Snapshot, resident: Option<u64>) -> String {
             s.kbps,
         );
     }
+    let links: Vec<_> = outputs_with_stats
+        .iter()
+        .filter_map(|(number, name, s)| Some((number, name, s.srt.as_ref()?)))
+        .collect();
     let mut f = Family::new(
         &mut out,
         "lmix_output_packets_lost_total",
         "counter",
-        "Packets the receiver reported lost.",
+        "Packets the receiver reported lost (SRT).",
     );
-    for (number, name, s) in &outputs_with_stats {
+    for (number, name, link) in &links {
         f.sample(
             "lmix_output_packets_lost_total",
             &[("output", number), ("name", name)],
-            s.packets_lost,
+            link.packets_lost,
         );
     }
     let mut f = Family::new(
         &mut out,
         "lmix_output_packets_dropped_total",
         "counter",
-        "Packets dropped before sending (link too slow).",
+        "Packets dropped before sending, link too slow (SRT).",
     );
-    for (number, name, s) in &outputs_with_stats {
+    for (number, name, link) in &links {
         f.sample(
             "lmix_output_packets_dropped_total",
             &[("output", number), ("name", name)],
-            s.packets_dropped,
+            link.packets_dropped,
         );
     }
 

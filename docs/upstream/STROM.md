@@ -68,6 +68,7 @@ Abgleich mit upstream: `git fetch https://github.com/Eyevinn/strom main` und
 | Monitor folgt einem Aux-Bus; Aux-Busse im Lauf | #42, #43 | Issue | offen |
 | Inter Input wechselt den Kanal im Lauf | #46 | PR | offen |
 | DeckLink-Karten als Videoquellen auflisten | #49 | PR | offen |
+| Byte-Zähler der Ausgänge (`/flows/{id}/output-bytes`: RTMP, Live Recorder) | 4323915 | PR | offen; passt ohne Konflikt auf upstream `main` |
 
 ## Von upstream übernommen (nichts zu tun)
 
