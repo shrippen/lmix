@@ -383,6 +383,8 @@ AppPage {
         core: backend
         inputs: root.inputs
         buses: root.show && root.show.buses ? root.show.buses : []
+        outputs: root.show && root.show.outputs ? root.show.outputs : []
+        onUpdateRequested: (before, action) => root.shell.changeOutput(before, action)
     }
 
     fileItems: [
@@ -915,8 +917,8 @@ AppPage {
                     confirmStop: root.shell.confirmStop
                     askRemove: root.shell.askRemove
                     onConfirmStopChosen: on => root.shell.confirmStop = on
-                    onAddRequested: addOutputDialog.open()
-                    onSettingsRequested: outputId => root.shell.showOutput(outputId)
+                    onAddRequested: addOutputDialog.add()
+                    onSettingsRequested: outputId => addOutputDialog.edit(outputId)
                 }
             }
         }

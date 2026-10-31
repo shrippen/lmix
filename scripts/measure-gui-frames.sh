@@ -13,8 +13,7 @@
 #   scripts/measure-gui-frames.sh                 # CUDA mixer, 10 s phases
 #   MIXER=cpu PHASE=20 RATE=60 scripts/measure-gui-frames.sh
 #   INPUTS=31 …                                   # many inputs (default 4)
-#   PAGE=audio INPUTS=40 …                        # another page (default mix);
-#                                                 # inputs past 31 get no slot
+#   PAGE=audio INPUTS=40 …                        # another page (default mix)
 #   LMIX_BIN=…/lmix …                             # another build of lmix (a baseline)
 #   KEEP_WORK=1 …                                 # keep logs and the recording
 #   GAP_P95_MS=40 …                               # a tighter budget
@@ -29,8 +28,6 @@ DISPLAY_NO="${DISPLAY_NO:-:93}"
 MIXER="${MIXER:-cuda}"
 RATE="${RATE:-40}"
 INPUTS="${INPUTS:-4}"
-# At most 31 mixer slots (lmix-core --slots); more inputs wait without one.
-SLOTS="${SLOTS:-$((INPUTS < 31 ? INPUTS : 31))}"
 PAGE="${PAGE:-mix}"
 PHASE="${PHASE:-10}"
 CORE="http://127.0.0.1:${CORE_PORT}/api"
@@ -92,7 +89,7 @@ mkdir -p "$LIVE_DIR" "$WORK/rec" "$WORK/config"
 PIDS+=($!)
 wait_up "http://127.0.0.1:${STROM_PORT}/health" strom
 "$CORE_BIN" --strom "http://127.0.0.1:${STROM_PORT}" --listen "127.0.0.1:${CORE_PORT}" --mixer "$MIXER" \
-    --slots "$SLOTS" --autosave "$WORK/autosave.lmix" --shortcuts "$WORK/shortcuts.json" \
+    --autosave "$WORK/autosave.lmix" --shortcuts "$WORK/shortcuts.json" \
     --layout-templates "$WORK/layout-templates.json" --live-dir "$LIVE_DIR" >"$WORK/core.log" 2>&1 &
 PIDS+=($!)
 wait_up "$CORE/state" lmix-core

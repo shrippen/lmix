@@ -476,7 +476,12 @@
   <context>
     <name>AddOutputDialog</name>
     <message>
-      <location filename="../qml/AddOutputDialog.qml" line="+59" />
+      <location filename="../qml/AddOutputDialog.qml" line="+46" />
+      <source>Card %1 (not found)</source>
+      <translation>Karte %1 (nicht gefunden)</translation>
+    </message>
+    <message>
+      <location line="+64" />
       <source>folder in the engine's media directory</source>
       <translation>Ordner im Medienverzeichnis der Engine</translation>
     </message>
@@ -497,7 +502,22 @@
       <translation>Ausgang hinzufügen</translation>
     </message>
     <message>
-      <location line="+64" />
+      <location line="-5" />
+      <source>Output settings</source>
+      <translation>Ausgang einstellen</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Save</source>
+      <translation>Speichern</translation>
+    </message>
+    <message>
+      <location line="+168" />
+      <source>The output is sending. Stop it first to change its settings.</source>
+      <translation>Der Ausgang sendet. Erst stoppen, dann lassen sich seine Einstellungen ändern.</translation>
+    </message>
+    <message>
+      <location line="+10" />
       <source>Output</source>
       <translation>Ausgang</translation>
     </message>
@@ -527,7 +547,7 @@
       <translation>Stumm</translation>
     </message>
     <message>
-      <location line="+10" />
+      <location line="+12" />
       <source>Stream key</source>
       <translation>Stream-Schlüssel</translation>
     </message>
@@ -550,6 +570,11 @@
       <location line="+0" />
       <source>Preview</source>
       <translation>Vorschau</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Removed input</source>
+      <translation>Entfernter Input</translation>
     </message>
     <message>
       <location line="+6" />
@@ -595,7 +620,7 @@
   <context>
     <name>AppShell</name>
     <message>
-      <location filename="../qml/AppShell.qml" line="+372" />
+      <location filename="../qml/AppShell.qml" line="+367" />
       <location line="+110" />
       <source>Open show</source>
       <translation>Show öffnen</translation>
@@ -1217,7 +1242,7 @@
   <context>
     <name>ChannelStripDialog</name>
     <message>
-      <location filename="../qml/ChannelStripDialog.qml" line="+19" />
+      <location filename="../qml/ChannelStripDialog.qml" line="+21" />
       <source>Channel strip of %1 %2</source>
       <translation>Kanalzug von %1 %2</translation>
     </message>
@@ -1345,6 +1370,140 @@
       <location line="+2" />
       <source>Click: %1. Double click: expand. Right click: more.</source>
       <translation>Klick: %1. Doppelklick: ausklappen. Rechtsklick: mehr.</translation>
+    </message>
+  </context>
+  <context>
+    <name>CueAddBar</name>
+    <message>
+      <location filename="../qml/CueAddBar.qml" line="+91" />
+      <source>Add</source>
+      <translation>Neu</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Sound</source>
+      <translation>Ton</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Plays a sound file into the zones</source>
+      <translation>Spielt eine Klangdatei in die Zonen</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Picture</source>
+      <translation>Bild</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Shows a video or still on stage %1</source>
+      <translation>Zeigt ein Video oder Standbild auf Bühne %1</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>The show has no stage yet</source>
+      <translation>Die Show hat noch keine Bühne</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Fade</source>
+      <translation>Blende</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Fades out cue %1 and stops it</source>
+      <translation>Blendet Cue %1 aus und stoppt ihn</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Fades zone %1 to silence</source>
+      <translation>Blendet Zone %1 auf Stille</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Fades stage %1 to black</source>
+      <translation>Blendet Bühne %1 auf Schwarz</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>The show has nothing to fade: no sound or picture chosen, no zone, no stage</source>
+      <translation>Die Show hat nichts zum Blenden: kein Klang oder Bild gewählt, keine Zone, keine Bühne</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Actions</source>
+      <translation>Aktionen</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Runs actions of the catalogue, e.g. a cut or a title</source>
+      <translation>Führt Aktionen des Katalogs aus, z. B. einen Schnitt oder einen Titel</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>Wait</source>
+      <translation>Warten</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Only runs for a while, e.g. before the next cue follows</source>
+      <translation>Läuft nur eine Weile, z. B. bevor der nächste Cue folgt</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Note</source>
+      <translation>Notiz</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Does nothing: a stage direction or a section mark</source>
+      <translation>Tut nichts: eine Regieanweisung oder eine Abschnittsmarke</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Start</source>
+      <translation>Start</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Starts cue %1 without moving standby</source>
+      <translation>Startet Cue %1, ohne Standby zu bewegen</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Choose the cue it starts first</source>
+      <translation>Erst den Cue wählen, den er startet</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Sound file</source>
+      <translation>Klangdatei</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Sound files (*.wav *.flac *.ogg *.opus *.mp3 *.aif *.aiff *.m4a)</source>
+      <translation>Klangdateien (*.wav *.flac *.ogg *.opus *.mp3 *.aif *.aiff *.m4a)</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <location line="+7" />
+      <source>All files (*)</source>
+      <translation>Alle Dateien (*)</translation>
+    </message>
+    <message>
+      <location line="-1" />
+      <source>Video or still</source>
+      <translation>Video oder Standbild</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Videos and stills (*.mp4 *.mov *.mkv *.webm *.png *.jpg *.jpeg)</source>
+      <translation>Videos und Standbilder (*.mp4 *.mov *.mkv *.webm *.png *.jpg *.jpeg)</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>Actions of the new cue</source>
+      <translation>Aktionen des neuen Cues</translation>
     </message>
   </context>
   <context>
@@ -1982,7 +2141,7 @@
   <context>
     <name>InputSettingsDialog</name>
     <message>
-      <location filename="../qml/InputSettingsDialog.qml" line="+33" />
+      <location filename="../qml/InputSettingsDialog.qml" line="+35" />
       <source>General</source>
       <translation>Allgemein</translation>
     </message>
@@ -2122,7 +2281,7 @@
       <translation>Dieser Input hat keinen Ton.</translation>
     </message>
     <message>
-      <location line="+19" />
+      <location line="+20" />
       <source>%1 triggers run actions when this input goes on air, off air or ends.</source>
       <translation>%1 Auslöser führen Aktionen aus, wenn dieser Input auf Sendung geht, sie verlässt oder endet.</translation>
     </message>
@@ -2904,7 +3063,7 @@
       <translation>Ordner mit den fehlenden Dateien</translation>
     </message>
     <message>
-      <location line="+195" />
+      <location line="+199" />
       <source>Inputs from a show…</source>
       <translation>Inputs aus einer Show …</translation>
     </message>
@@ -2995,7 +3154,7 @@
       <translation>Ansicht</translation>
     </message>
     <message>
-      <location line="-497" />
+      <location line="-501" />
       <source>FTB</source>
       <comment>fade to black</comment>
       <translation>FTB</translation>
@@ -3011,7 +3170,7 @@
       <translation>Schwarzblende: Programm auf Schwarz und zurück (SWI.9); Show und Ausgänge laufen weiter</translation>
     </message>
     <message>
-      <location line="+534" />
+      <location line="+538" />
       <source>Multiview</source>
       <translation>Multiview</translation>
     </message>
@@ -3291,12 +3450,12 @@
     </message>
     <message>
       <location line="+13" />
-      <location line="+285" />
+      <location line="+286" />
       <source>off</source>
       <translation>aus</translation>
     </message>
     <message>
-      <location line="-273" />
+      <location line="-274" />
       <source>Sound follows picture</source>
       <translation>Ton folgt Bild</translation>
     </message>
@@ -3366,7 +3525,7 @@
       <translation>EQ, Kompressor …</translation>
     </message>
     <message>
-      <location line="+79" />
+      <location line="+80" />
       <source>Volume of %1</source>
       <translation>Lautstärke von %1</translation>
     </message>
@@ -3471,7 +3630,7 @@
       <translation>%1 · Klick: umbenennen</translation>
     </message>
     <message>
-      <location line="-448" />
+      <location line="-449" />
       <source>Name of the bus</source>
       <translation>Name des Busses</translation>
     </message>
@@ -3481,7 +3640,7 @@
       <translation>Noch kein Ausgang mit Ton.</translation>
     </message>
     <message>
-      <location line="+314" />
+      <location line="+315" />
       <source>Tap, outputs, remove</source>
       <translation>Abgriff, Ausgänge, löschen</translation>
     </message>
@@ -3552,7 +3711,7 @@
   <context>
     <name>OutputMenu</name>
     <message>
-      <location filename="../qml/OutputMenu.qml" line="+36" />
+      <location filename="../qml/OutputMenu.qml" line="+38" />
       <source>%1 kbit/s</source>
       <translation>%1 kbit/s</translation>
     </message>
@@ -3592,7 +3751,7 @@
       <translation>Rate</translation>
     </message>
     <message>
-      <location line="+2" />
+      <location line="+3" />
       <source>Packets lost</source>
       <translation>Pakete verloren</translation>
     </message>
@@ -3686,12 +3845,12 @@
     </message>
     <message>
       <location line="+1" />
-      <location line="+39" />
+      <location line="+54" />
       <source>Kind</source>
       <translation>Art</translation>
     </message>
     <message>
-      <location line="-38" />
+      <location line="-53" />
       <source>State</source>
       <translation>Zustand</translation>
     </message>
@@ -3702,17 +3861,22 @@
     </message>
     <message>
       <location line="+1" />
-      <location line="+47" />
+      <location line="+64" />
       <source>Link</source>
       <translation>Verbindung</translation>
     </message>
     <message>
-      <location line="-34" />
+      <location line="-51" />
       <source>No outputs yet: + Output adds a recording, stream, NDI or screen</source>
       <translation>Noch keine Ausgänge: + Ausgang fügt Aufnahme, Stream, NDI oder Bildschirm hinzu</translation>
     </message>
     <message>
-      <location line="+24" />
+      <location line="+33" />
+      <source>Settings…</source>
+      <translation>Einstellungen…</translation>
+    </message>
+    <message>
+      <location line="+6" />
       <source>Source</source>
       <translation>Quelle</translation>
     </message>
@@ -3722,12 +3886,17 @@
       <translation>Ton</translation>
     </message>
     <message>
-      <location line="+62" />
+      <location line="+11" />
+      <source>Rate</source>
+      <translation>Rate</translation>
+    </message>
+    <message>
+      <location line="+53" />
       <source>of the source</source>
       <translation>der Quelle</translation>
     </message>
     <message>
-      <location line="-61" />
+      <location line="-63" />
       <source>Target</source>
       <translation>Ziel</translation>
     </message>
@@ -3742,7 +3911,7 @@
       <translation>%1 kbit/s</translation>
     </message>
     <message>
-      <location line="+9" />
+      <location line="+11" />
       <source>Failed</source>
       <translation>Fehlgeschlagen</translation>
     </message>
@@ -3994,6 +4163,14 @@
     </message>
   </context>
   <context>
+    <name>PathField</name>
+    <message>
+      <location filename="../qml/PathField.qml" line="+67" />
+      <source>Choose…</source>
+      <translation>Wählen…</translation>
+    </message>
+  </context>
+  <context>
     <name>PtzDialog</name>
     <message>
       <location filename="../qml/PtzDialog.qml" line="+51" />
@@ -4126,7 +4303,7 @@
   <context>
     <name>Removals</name>
     <message>
-      <location filename="../qml/Removals.qml" line="+43" />
+      <location filename="../qml/Removals.qml" line="+48" />
       <source>Remove input %1 %2?</source>
       <translation>Input %1 %2 entfernen?</translation>
     </message>
@@ -4221,12 +4398,22 @@
       <translation>Ausgang %1 entfernt</translation>
     </message>
     <message>
-      <location line="+101" />
+      <location line="+24" />
+      <source>Changed</source>
+      <translation>Geändert</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Settings of output %1 changed</source>
+      <translation>Einstellungen von Ausgang %1 geändert</translation>
+    </message>
+    <message>
+      <location line="+26" />
       <source>Removed</source>
       <translation>Entfernt</translation>
     </message>
     <message>
-      <location line="+7" />
+      <location line="+70" />
       <source>Undo</source>
       <translation>Rückgängig</translation>
     </message>
@@ -4669,7 +4856,7 @@
   <context>
     <name>ShowInspector</name>
     <message>
-      <location filename="../qml/ShowInspector.qml" line="+114" />
+      <location filename="../qml/ShowInspector.qml" line="+179" />
       <source>Basics</source>
       <translation>Grundlagen</translation>
     </message>
@@ -4734,7 +4921,89 @@
       <translation>Farbe</translation>
     </message>
     <message>
+      <location line="+11" />
+      <source>File</source>
+      <translation>Datei</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>Video or still</source>
+      <translation>Video oder Standbild</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Sound file</source>
+      <translation>Klangdatei</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Videos and stills (*.mp4 *.mov *.mkv *.webm *.png *.jpg *.jpeg)</source>
+      <translation>Videos und Standbilder (*.mp4 *.mov *.mkv *.webm *.png *.jpg *.jpeg)</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <location line="+1" />
+      <source>All files (*)</source>
+      <translation>Alle Dateien (*)</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Sound files (*.wav *.flac *.ogg *.opus *.mp3 *.aif *.aiff *.m4a)</source>
+      <translation>Klangdateien (*.wav *.flac *.ogg *.opus *.mp3 *.aif *.aiff *.m4a)</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <location line="+51" />
+      <source>Stage</source>
+      <translation>Bühne</translation>
+    </message>
+    <message>
+      <location line="-37" />
+      <source>Stage of the picture</source>
+      <translation>Bühne des Bildes</translation>
+    </message>
+    <message>
       <location line="+10" />
+      <source>Fades</source>
+      <translation>Blendet</translation>
+    </message>
+    <message>
+      <location line="+27" />
+      <source>Cue</source>
+      <translation>Cue</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Zone</source>
+      <translation>Zone</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>A sound or picture cue: its level or opacity</source>
+      <translation>Ein Klang- oder Bild-Cue: sein Pegel oder seine Deckkraft</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>A zone: its level</source>
+      <translation>Eine Zone: ihr Pegel</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>A stage: its brightness</source>
+      <translation>Eine Bühne: ihre Helligkeit</translation>
+    </message>
+    <message>
+      <location line="+23" />
+      <source>What the fade fades</source>
+      <translation>Was die Blende blendet</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>The show has none yet.</source>
+      <translation>Die Show hat noch keine.</translation>
+    </message>
+    <message>
+      <location line="+7" />
       <source>Note</source>
       <translation>Notiz</translation>
     </message>
@@ -4834,13 +5103,13 @@
       <translation>mit Ausblendung über</translation>
     </message>
     <message>
-      <location line="+7" />
+      <location line="+8" />
       <source>Fade of the cues it stops</source>
       <translation>Ausblendung der Cues, die er stoppt</translation>
     </message>
     <message>
       <location line="+18" />
-      <location line="+4" />
+      <location line="+5" />
       <source>Pre wait</source>
       <translation>Vorwartezeit</translation>
     </message>
@@ -4851,7 +5120,7 @@
     </message>
     <message>
       <location line="+4" />
-      <location line="+4" />
+      <location line="+5" />
       <source>Post wait</source>
       <translation>Nachwartezeit</translation>
     </message>
@@ -4862,7 +5131,7 @@
     </message>
     <message>
       <location line="+7" />
-      <location line="+7" />
+      <location line="+8" />
       <source>Duration</source>
       <translation>Dauer</translation>
     </message>
@@ -4888,13 +5157,13 @@
     </message>
     <message>
       <location line="+13" />
-      <location line="+7" />
+      <location line="+8" />
       <source>Fade in</source>
       <translation>Einblenden</translation>
     </message>
     <message>
       <location line="+6" />
-      <location line="+7" />
+      <location line="+8" />
       <source>Fade out</source>
       <translation>Ausblenden</translation>
     </message>
@@ -4935,12 +5204,12 @@
     </message>
     <message>
       <location line="+7" />
-      <location line="+71" />
+      <location line="+92" />
       <source>Level</source>
       <translation>Pegel</translation>
     </message>
     <message>
-      <location line="-60" />
+      <location line="-81" />
       <source>Level of the sound</source>
       <translation>Pegel des Klangs</translation>
     </message>
@@ -4950,7 +5219,7 @@
       <translation>0 dB: wie in der Datei; −60 dB: Stille</translation>
     </message>
     <message>
-      <location line="+7" />
+      <location line="+28" />
       <location line="+46" />
       <source>Opacity</source>
       <translation>Deckkraft</translation>
@@ -5156,7 +5425,7 @@
   <context>
     <name>ShowView</name>
     <message>
-      <location filename="../qml/ShowView.qml" line="+67" />
+      <location filename="../qml/ShowView.qml" line="+73" />
       <source>starts cue %1, which is not there</source>
       <translation>startet Cue %1, den es nicht gibt</translation>
     </message>
@@ -5186,18 +5455,18 @@
       <translation>nutzt Input %1, dessen Mediendatei fehlt</translation>
     </message>
     <message>
-      <location line="+77" />
+      <location line="+99" />
       <source>Wait %1</source>
       <translation>Warten %1</translation>
     </message>
     <message>
       <location line="+1" />
-      <location line="+24" />
+      <location line="+38" />
       <source>Note</source>
       <translation>Notiz</translation>
     </message>
     <message>
-      <location line="-23" />
+      <location line="-37" />
       <source>Group</source>
       <translation>Gruppe</translation>
     </message>
@@ -5208,29 +5477,29 @@
     </message>
     <message>
       <location line="+0" />
-      <location line="+24" />
+      <location line="+38" />
       <source>Start</source>
       <translation>Start</translation>
     </message>
     <message>
-      <location line="-23" />
-      <location line="+24" />
+      <location line="-37" />
+      <location line="+38" />
       <source>Sound</source>
       <translation>Ton</translation>
     </message>
     <message>
-      <location line="-23" />
-      <location line="+24" />
+      <location line="-37" />
+      <location line="+38" />
       <source>Picture</source>
       <translation>Bild</translation>
     </message>
     <message>
-      <location line="-22" />
+      <location line="-36" />
       <source>Actions</source>
       <translation>Aktionen</translation>
     </message>
     <message>
-      <location line="+7" />
+      <location line="+21" />
       <source>Fade %1</source>
       <translation>Blende %1</translation>
     </message>
@@ -5406,7 +5675,7 @@
       <translation>Noch keine Cue-Listen. Unter „Cues…“ eine anlegen oder mit „Drehbuch…“ einen Drehbuch-Ordner wählen.</translation>
     </message>
     <message>
-      <location line="+27" />
+      <location line="+35" />
       <source>No.</source>
       <translation>Nr.</translation>
     </message>
@@ -5427,6 +5696,11 @@
     </message>
     <message>
       <location line="+1" />
+      <source>Duration</source>
+      <translation>Dauer</translation>
+    </message>
+    <message>
+      <location line="+1" />
       <source>Post</source>
       <translation>Nach</translation>
     </message>
@@ -5436,7 +5710,7 @@
       <translation>Folge</translation>
     </message>
     <message>
-      <location line="+74" />
+      <location line="+85" />
       <source>Open group</source>
       <translation>Gruppe aufklappen</translation>
     </message>
@@ -5446,7 +5720,7 @@
       <translation>Gruppe zuklappen</translation>
     </message>
     <message>
-      <location line="+60" />
+      <location line="+73" />
       <source>Unmark cue</source>
       <translation>Markierung entfernen</translation>
     </message>
@@ -5514,6 +5788,69 @@
       <location line="+1" />
       <source> · GO again once let go</source>
       <translation> · GO erst nach Loslassen wieder</translation>
+    </message>
+  </context>
+  <context>
+    <name>SoundRoutes</name>
+    <message>
+      <location filename="../qml/SoundRoutes.qml" line="+109" />
+      <source>Crosspoints</source>
+      <translation>Kreuzungen</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>The show has no zones yet (Zones…).</source>
+      <translation>Die Show hat noch keine Zonen (Zonen…).</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>File channel n plays on channel n of zone %1.</source>
+      <translation>Dateikanal n spielt auf Kanal n von Zone %1.</translation>
+    </message>
+    <message>
+      <location line="+20" />
+      <source>File</source>
+      <translation>Datei</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>File channel of crosspoint %1</source>
+      <translation>Dateikanal der Kreuzung %1</translation>
+    </message>
+    <message>
+      <location line="+13" />
+      <source>Zone of crosspoint %1</source>
+      <translation>Zone der Kreuzung %1</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>Zone channel of crosspoint %1</source>
+      <translation>Zonenkanal der Kreuzung %1</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>Level of crosspoint %1</source>
+      <translation>Pegel der Kreuzung %1</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Remove crosspoint %1</source>
+      <translation>Kreuzung %1 entfernen</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Remove this crosspoint</source>
+      <translation>Diese Kreuzung entfernen</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>+ Crosspoint</source>
+      <translation>+ Kreuzung</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Send one more file channel to a zone channel</source>
+      <translation>Einen weiteren Dateikanal auf einen Zonenkanal legen</translation>
     </message>
   </context>
   <context>
@@ -5635,7 +5972,7 @@
   <context>
     <name>StripCurve</name>
     <message>
-      <location filename="../qml/StripCurve.qml" line="+46" />
+      <location filename="../qml/StripCurve.qml" line="+47" />
       <source>Gate and compressor off</source>
       <translation>Gate und Kompressor aus</translation>
     </message>
@@ -5938,12 +6275,12 @@
     <message>
       <location line="+1" />
       <location line="+63" />
-      <location line="+147" />
+      <location line="+151" />
       <source>NDI</source>
       <translation>NDI</translation>
     </message>
     <message>
-      <location line="-209" />
+      <location line="-213" />
       <source>WHIP (browser, OBS)</source>
       <translation>WHIP (Browser, OBS)</translation>
     </message>
@@ -6115,12 +6452,12 @@
     </message>
     <message>
       <location line="+1" />
-      <location line="+145" />
+      <location line="+149" />
       <source>Recording</source>
       <translation>Aufnahme</translation>
     </message>
     <message>
-      <location line="-143" />
+      <location line="-147" />
       <source>Screen: window</source>
       <translation>Bildschirm: Fenster</translation>
     </message>
@@ -6280,7 +6617,7 @@
       <translation>Der Cue-Zeitgeber hat keine Echtzeit-Priorität bekommen; auf einem ausgelasteten Rechner können Cues zu spät kommen. Erlauben mit rtkit (läuft mit der Desktop-Sitzung) oder mit einem Echtzeit-Limit für diesen Benutzer (Gruppe realtime, RLIMIT_RTPRIO).</translation>
     </message>
     <message>
-      <location line="+9" />
+      <location line="+10" />
       <source>no receiver</source>
       <translation>kein Empfänger</translation>
     </message>
@@ -6290,7 +6627,7 @@
       <translation>%1 Mbit/s</translation>
     </message>
     <message>
-      <location line="+5" />
+      <location line="+8" />
       <source>RTT –</source>
       <translation>RTT –</translation>
     </message>
@@ -6353,6 +6690,11 @@
       <location line="+17" />
       <source>No output matches %1</source>
       <translation>Kein Ausgang passt zu %1</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Output %1 sends: stop it first</source>
+      <translation>Ausgang %1 sendet: erst stoppen</translation>
     </message>
     <message>
       <location line="+1" />

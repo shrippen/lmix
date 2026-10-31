@@ -278,7 +278,7 @@ impl Engine for NullEngine {
         true
     }
 
-    async fn start(&self, _slots: usize) -> Result<(), EngineError> {
+    async fn start(&self) -> Result<(), EngineError> {
         #[cfg(test)]
         {
             use std::sync::atomic::Ordering::SeqCst;
