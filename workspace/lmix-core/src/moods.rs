@@ -175,10 +175,24 @@ impl MoodRunner {
         out
     }
 
-    /// The sound or picture `id` did not start (a file missing, a zone
-    /// gone): its layer is off, so the same mood again tries again.
-    pub fn media_failed(&mut self, id: &str) {
+    /// The sound or picture `id` is gone: it did not start (a file
+    /// missing, a zone gone), played to its end, or was stopped from
+    /// elsewhere (`stop_sound` without id). Its layer is off, so the same
+    /// mood again starts it again. Whether a layer had it.
+    pub fn media_gone(&mut self, id: &str) -> bool {
+        let before = self.layers.len();
         self.layers.retain(|_, p| p.media.as_deref() != Some(id));
+        self.layers.len() != before
+    }
+
+    /// Cue `cue` of `list` is over (ended, stopped, failed): the layers it
+    /// took are off (MOOD.5), so the next mood starts its content there.
+    /// Whether it had one.
+    pub fn cue_over(&mut self, list: InputId, cue: CueId) -> bool {
+        let before = self.layers.len();
+        self.layers
+            .retain(|_, p| p.origin != LayerOrigin::Cue { list, cue });
+        self.layers.len() != before
     }
 
     /// Everything stopped (reset, a new show): no layer runs, no mood is
@@ -431,6 +445,43 @@ mod tests {
     }
 
     #[test]
+    fn a_layer_whose_cue_or_sound_is_over_is_off() {
+        let t = tavern();
+        let mut runner = MoodRunner::default();
+        let out = runner.set(&t.moods, "Tavern", None, 0).expect("set");
+        let Some(Action::PlaySound { id, .. }) =
+            out.iter().find(|a| matches!(a, Action::PlaySound { .. }))
+        else {
+            panic!("plays the lute: {out:?}")
+        };
+        assert!(runner.media_gone(id), "the lute played to its end");
+        assert!(!runner.media_gone(id), "once");
+        assert!(runner
+            .now(&t.moods, 0)
+            .layers
+            .iter()
+            .all(|l| l.layer != t.music));
+        // The same mood again starts it again, the light stays.
+        let out = runner.set(&t.moods, "Tavern", None, 0).expect("set");
+        assert!(matches!(&out[..], [Action::PlaySound { .. }]), "{out:?}");
+
+        let (list, cue) = (InputId::new(), CueId::new());
+        runner.take(&t.moods, t.music, list, cue);
+        assert!(!runner.cue_over(list, CueId::new()), "another cue");
+        assert!(runner.cue_over(list, cue));
+        assert!(runner
+            .now(&t.moods, 0)
+            .layers
+            .iter()
+            .all(|l| l.layer != t.music));
+        let out = runner.set(&t.moods, "Tavern", None, 0).expect("set");
+        assert!(
+            matches!(&out[..], [Action::PlaySound { .. }]),
+            "the lute again, no cue to stop: {out:?}"
+        );
+    }
+
+    #[test]
     fn the_last_cue_on_a_layer_wins() {
         let t = tavern();
         let mut runner = MoodRunner::default();
@@ -636,7 +687,7 @@ mod tests {
         let Some(Action::PlaySound { id, .. }) = out.get(1) else {
             panic!("plays the lute: {out:?}")
         };
-        runner.media_failed(id);
+        runner.media_gone(id);
         assert!(!runner
             .now(&t.moods, 0)
             .layers

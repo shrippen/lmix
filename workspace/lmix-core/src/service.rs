@@ -552,7 +552,9 @@ impl Service {
             let out = {
                 let mut sw = self.switcher.lock().await;
                 let out = sw.media_ended(&id, tokio::time::Instant::now());
-                if !out.is_empty() {
+                // A mood layer's sound or picture: the layer is off.
+                let layer = sw.mood_media_gone(&id);
+                if !out.is_empty() || layer {
                     self.publish(&sw);
                 }
                 out
@@ -646,6 +648,18 @@ impl Service {
         for o in out {
             match o {
                 crate::cues::Out::Event { list, cue, what } => {
+                    if let (
+                        Some(id),
+                        lmix_types::CueEvent::Ended
+                        | lmix_types::CueEvent::Stopped
+                        | lmix_types::CueEvent::Failed { .. },
+                    ) = (cue, &what)
+                    {
+                        let mut sw = self.switcher.lock().await;
+                        if sw.mood_cue_over(list, id) {
+                            self.publish(&sw);
+                        }
+                    }
                     let _ = self.events.send(Event::Cue { list, cue, what });
                 }
                 crate::cues::Out::StopPlayback { fade_ms } => {
@@ -680,6 +694,14 @@ impl Service {
                             continue;
                         };
                         tracing::warn!(error = %e, %cue, "cue action failed; the rest of the cue is skipped");
+                        // Its sound or picture did not start: the layer it
+                        // took is off (MOOD.5).
+                        {
+                            let mut sw = self.switcher.lock().await;
+                            if sw.mood_cue_over(list, cue) {
+                                self.publish(&sw);
+                            }
+                        }
                         let what = lmix_types::CueEvent::Failed {
                             reason: e.to_string(),
                         };
@@ -724,7 +746,7 @@ impl Service {
                 if let Some((id, stop)) = media {
                     let _ = Box::pin(self.handle_as(stop, Origin::Operator)).await;
                     let mut sw = self.switcher.lock().await;
-                    sw.mood_media_failed(&id);
+                    sw.mood_media_gone(&id);
                     self.publish(&sw);
                 }
             }
@@ -3192,6 +3214,67 @@ mod tests {
             state.mood.layers[0].origin,
             LayerOrigin::Mood { .. }
         ));
+    }
+
+    #[tokio::test]
+    async fn a_sound_cue_gives_its_layer_back_when_it_stops() {
+        use lmix_types::{Cue, LayerOrigin};
+        let service = Service::new(4, Arc::new(NullEngine::default()), None);
+        service.handle(bars()).await.unwrap();
+        service
+            .handle(Action::SetZone {
+                zone: lmix_types::Zone {
+                    name: "Saal".into(),
+                    channels: 2,
+                },
+            })
+            .await
+            .unwrap();
+        let moods = scene_moods();
+        let licht = moods.layers[0].id;
+        service.handle(Action::SetMoods { moods }).await.unwrap();
+        service
+            .handle(Action::SetMood {
+                mood: "Szene".into(),
+                fade_ms: None,
+            })
+            .await
+            .unwrap();
+        let rain = Cue {
+            name: "Regen".into(),
+            layer: Some(licht),
+            sound: Some(lmix_types::SoundCue {
+                file: "/sounds/rain.wav".into(),
+                repeat: lmix_types::SoundRepeat::Forever,
+                ..Default::default()
+            }),
+            ..Cue::empty(lmix_types::CueKind::Sound)
+        };
+        service
+            .handle(Action::AddCueList {
+                name: "Show".into(),
+                cues: vec![rain.clone()],
+                source: None,
+            })
+            .await
+            .unwrap();
+        let state = service.handle(Action::CueGo { list: None }).await.unwrap();
+        let list = state.cue_lists[0].id;
+        assert_eq!(
+            state.mood.layers[0].origin,
+            LayerOrigin::Cue { list, cue: rain.id }
+        );
+
+        // Stopped by the operator: the layer is off, not the cue's (still).
+        let state = service
+            .handle(Action::CueStop {
+                list: None,
+                cue: Some(rain.id.to_string()),
+                mode: lmix_types::StopMode::Hard,
+            })
+            .await
+            .unwrap();
+        assert!(state.mood.layers.is_empty(), "{:?}", state.mood.layers);
     }
 
     #[tokio::test]

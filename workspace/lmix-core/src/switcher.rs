@@ -3852,10 +3852,31 @@ impl Switcher {
         }
     }
 
-    /// The sound or picture `id` of a mood layer did not start: the layer
-    /// is off again, so setting the mood once more tries again.
-    pub fn mood_media_failed(&mut self, id: &str) {
-        self.moods.media_failed(id);
+    /// The sound or picture `id` of a mood layer did not start, played to
+    /// its end or was stopped: the layer is off, so setting the mood once
+    /// more starts it again. Whether a layer had it.
+    pub fn mood_media_gone(&mut self, id: &str) -> bool {
+        self.moods.media_gone(id)
+    }
+
+    /// Cue `cue` of `list` ended, stopped or failed: a sound or picture
+    /// cue gives back the layer it took (MOOD.5). An actions cue keeps it:
+    /// what it set (a light) stays until the next mood.
+    pub fn mood_cue_over(&mut self, list: InputId, cue: lmix_types::CueId) -> bool {
+        fn find(cues: &[Cue], id: lmix_types::CueId) -> Option<&Cue> {
+            cues.iter()
+                .find_map(|c| (c.id == id).then_some(c).or_else(|| find(&c.children, id)))
+        }
+        let media = self
+            .show
+            .cue_lists
+            .iter()
+            .find(|l| l.id == list)
+            .and_then(|l| find(&l.cues, cue))
+            .is_some_and(|c| {
+                c.layer.is_some() && matches!(c.kind, CueKind::Sound | CueKind::Picture)
+            });
+        media && self.moods.cue_over(list, cue)
     }
 
     /// The running cues; an unnamed mood cue by its mood (MOOD.6).

@@ -6425,3 +6425,31 @@ aus oder Aktionen, Sammlungen).
 Stand beim Bestätigen, schnelle Änderungen, Ablehnung, Ziehen von Gruppen
 und Ebenen, Pegel), `tst_removals.qml` (`askWith`), `tst_action_rows.qml`,
 `tst_show_moods.qml` (Ziehen in die Liste, daneben, im Show-Modus).
+
+## 2026-10-31 — Stimmungen: Ebenen, die enden (MOOD Stufe 5b)
+
+**Anlass**: Stufe 1 und 3b ließen offen, dass eine Ebene als laufend gilt,
+wenn ihr Klang von selbst endet, von anderswo gestoppt wird (`stop_sound`
+ohne Id) oder der Cue, der sie übernommen hat, endet (MOOD.4, MOOD.5).
+
+**Entscheidung**:
+- Die Engine meldet über `playback_ended` jeden Klang und jedes Bild, das
+  vorbei ist: zu Ende gespielt, gestoppt (auch alle auf einmal) oder mit
+  dem Wiedergabe-Flow weg. Ist es das einer Ebene (Medien-Id
+  `mood-<Ebene>-<n>`), ist die Ebene aus (`MoodRunner::media_gone`, wie
+  schon bei einem Start, der scheitert). Dieselbe Stimmung noch einmal
+  startet den Inhalt dann wieder, denn verglichen wird mit dem, was läuft.
+  Ein Wechsel, der den alten Klang ausblendet, trifft schon die neue
+  Medien-Id: dessen Ende ändert nichts.
+- Endet, stoppt oder scheitert ein Klang- oder Bild-Cue, der eine Ebene
+  übernommen hat, ist sie aus (`MoodRunner::cue_over`), auch nicht mehr
+  „Cue“ im Inspector. Ein Aktions-Cue behält die Ebene bis zur nächsten
+  Stimmung: er endet gleich nach seinen Aktionen, das Licht, das er
+  gesetzt hat, bleibt aber.
+- Ein Cue, den ein Stimmungswechsel stoppt, hat die Ebene schon abgegeben:
+  sein Ende ändert nichts mehr (nur die Herkunft dieses Cues zählt).
+
+**Geprüft**: `moods::tests::a_layer_whose_cue_or_sound_is_over_is_off`,
+`service::tests::a_sound_cue_gives_its_layer_back_when_it_stops`; der
+Aktions-Cue in `a_cue_takes_its_layer_until_the_next_mood` behält die
+Ebene.
