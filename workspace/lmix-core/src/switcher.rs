@@ -579,6 +579,7 @@ fn check_cue(cue: &Cue, depth: usize) -> Result<(), ActionError> {
         || !own(cue.sound.is_some(), CueKind::Sound)
         || !own(cue.fade.is_some(), CueKind::Fade)
         || !own(cue.picture.is_some(), CueKind::Picture)
+        || !own(cue.mood.is_some(), CueKind::Mood)
         || !own(
             cue.mode.is_some() || !cue.children.is_empty(),
             CueKind::Group,
@@ -598,6 +599,14 @@ fn check_cue(cue: &Cue, depth: usize) -> Result<(), ActionError> {
             }
         }
         CueKind::Note => {}
+        CueKind::Mood => match &cue.mood {
+            None => return bad("a mood cue needs a mood"),
+            Some(mood) => {
+                if let Some(ms) = mood.fade_ms {
+                    crate::playback::check_fade_time(ms)?;
+                }
+            }
+        },
         CueKind::Wait if cue.duration_ms.is_none() => return bad("a wait needs duration_ms"),
         CueKind::Wait => {}
         CueKind::Start => {
@@ -2824,9 +2833,7 @@ impl Switcher {
                     pads: l.pads,
                 })
                 .collect(),
-            running_cues: self
-                .cues
-                .running(&self.show.cue_lists, tokio::time::Instant::now()),
+            running_cues: self.running_cues(),
             ran_cues: self.cues.ran(),
             go_guard_ms: self.show.go_guard_ms,
             go_rearm: self.show.go_rearm,
@@ -3796,6 +3803,29 @@ impl Switcher {
     /// is off again, so setting the mood once more tries again.
     pub fn mood_media_failed(&mut self, id: &str) {
         self.moods.media_failed(id);
+    }
+
+    /// The running cues; an unnamed mood cue by its mood (MOOD.6).
+    fn running_cues(&self) -> Vec<lmix_types::RunningCue> {
+        fn find(cues: &[Cue], id: lmix_types::CueId) -> Option<&Cue> {
+            cues.iter()
+                .find_map(|c| (c.id == id).then_some(c).or_else(|| find(&c.children, id)))
+        }
+        let mut running = self
+            .cues
+            .running(&self.show.cue_lists, tokio::time::Instant::now());
+        for run in &mut running {
+            let cue = self
+                .show
+                .cue_lists
+                .iter()
+                .filter(|l| l.id == run.list)
+                .find_map(|l| find(&l.cues, run.cue));
+            if let Some(cue) = cue.filter(|c| c.kind == CueKind::Mood) {
+                run.name = cue.display_name_with(&self.show.moods);
+            }
+        }
+        running
     }
 
     /// Set a mood (MOOD.4): the actions that change its layers.

@@ -443,11 +443,13 @@ je ein PR:
 |---|---|---|
 | 1 Modell und Engine | Typen `Moods` (Ebenen, Stimmungsgruppen mit Basis und Varianten, Sammlungen, Panik-Stimmung) in der Show-Datei; reine Engine in `lmix-core` (Vergleich je Ebene, Überblenden, Herkunft je Ebene); Aktionen `set_mood`, `set_moods`; Zustand; Tests | MOOD.1–4, 9 |
 | 2 Seite Stimmungen | Console-Seite nach Entwurf E mit einklappbaren Seitenleisten, Sammlungen, Oneshot-Leiste (Pads), Inspector mit Ebenen und Herkunft; Demo-Modus mit Stimmungen aus Studio Weber | MOOD.7, 8, 10, 13 |
-| 3 Show | Cue-Art „Stimmung setzen“, Reiter Stimmungen in der Show-Ansicht, Cue-Feld „Ebene“ (letzter Befehl gewinnt) | MOOD.5, 6 |
+| 3a Show | Cue-Art „Stimmung setzen“, Reiter Stimmungen in der Show-Ansicht | MOOD.6 |
+| 3b Ebenen | Cue-Feld „Ebene“ (letzter Befehl gewinnt), Herkunft Cue | MOOD.5 |
 | 4 Bearbeiten | Ebenen, Stimmungsgruppen, Varianten, Sammlungen, Panik-Stimmung in der Oberfläche; OSC, Kurzbefehle, Companion-Modul | MOOD.9, 11, 12 |
 
 Stand: Stufe 1 ✅ (31.10., DECISIONS „Stimmungen: Modell und Engine“),
-Stufe 2 ✅ (31.10., DECISIONS „Stimmungen: die Seite“).
+Stufe 2 ✅ (31.10., DECISIONS „Stimmungen: die Seite“),
+Stufe 3a ✅ (31.10., DECISIONS „Stimmungen in der Show“).
 
 ---
 

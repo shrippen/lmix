@@ -5,12 +5,15 @@ import org.kde.kirigami as Kirigami
 import Kante
 
 /**
- * The Show page's side bar (PLAN-SEITEN, click dummy): what runs, and the
- * cue lists. Running cues fill their row as they go, with the time gone and
+ * The Show page's side bar (PLAN-SEITEN, click dummy): what runs, the
+ * cue lists and the moods (MOOD.6). Running cues fill their row as they go, with the time gone and
  * the time left (SUI.4); a list chosen here becomes the active one, so GO
  * means it. Pause and pads wait for the core (RUN.5, RUN.12).
  *
- *   ACTIVE 2 | LISTS
+ * A click on a mood sets it; in edit mode "+" adds a cue that sets it,
+ * after the chosen cue.
+ *
+ *   ACTIVE 2 | LISTS | MOODS
  *   ▌▓▓▓▓▓▓▓░░░░░░  3 · Rain        ✕
  *   ▌ 0:12.4            −0:47.6
  */
@@ -32,8 +35,8 @@ KanteCard {
         KanteTabBar {
             Layout.fillWidth: true
             activeFocusOnTab: false
-            model: [qsTr("Active"), qsTr("Lists")]
-            counts: [String(side.showView.running.length), String(side.showView.lists.length)]
+            model: [qsTr("Active"), qsTr("Lists"), qsTr("Moods")]
+            counts: [String(side.showView.running.length), String(side.showView.lists.length), String(side.showView.moods.length)]
             currentIndex: side.tab
             onActivated: index => {
                 side.tab = index
@@ -210,6 +213,64 @@ KanteCard {
                     visible: side.showView.editing
                     text: qsTr("Cues…")
                     onClicked: side.editLists()
+                }
+            }
+
+            // Moods: a click sets one, "+" makes it a cue.
+            ColumnLayout {
+                spacing: 0
+
+                QQC2.Label {
+                    Layout.fillWidth: true
+                    visible: side.showView.moods.length === 0
+                    text: qsTr("No moods yet: they come on the Moods page.")
+                    wrapMode: Text.Wrap
+                    color: KanteStyle.mutedTextColor
+                }
+                ListView {
+                    objectName: "moods"
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    clip: true
+                    model: side.showView.moods
+                    boundsBehavior: Flickable.StopAtBounds
+                    QQC2.ScrollBar.vertical: QQC2.ScrollBar {}
+
+                    delegate: KanteListRow {
+                        id: moodRow
+                        required property var modelData
+                        objectName: "mood:" + modelData.name
+                        width: ListView.view.width
+                        focusOnClick: false
+                        density: KanteListRow.Density.Compact
+                        text: modelData.variant ? modelData.variant.name : modelData.group.name
+                        // Variants under their group's base.
+                        leadingText: modelData.variant ? "›" : ""
+                        leadingWidth: Kirigami.Units.gridUnit
+                        selected: side.showView.show !== null && side.showView.show.mood
+                            && side.showView.show.mood.mood === modelData.id
+                        onClicked: {
+                            side.showView.act({ action: "set_mood", mood: modelData.id })
+                            side.showView.forceActiveFocus()
+                        }
+                        KanteSwatch {
+                            visible: !moodRow.modelData.variant && !!moodRow.modelData.group.color
+                            swatchColor: moodRow.modelData.group.color ? KanteStyle.labelColor(moodRow.modelData.group.color) : "transparent"
+                            size: KanteSwatch.Size.Small
+                        }
+                        trailing: KanteButton {
+                            objectName: "addMood"
+                            visible: side.showView.editing && !side.showView.fromScript && side.showView.list !== null
+                            focusPolicy: Qt.NoFocus
+                            size: KanteButton.Size.Small
+                            text: "+"
+                            Accessible.name: qsTr("Add a cue that sets %1").arg(moodRow.modelData.name)
+                            QQC2.ToolTip.visible: hovered
+                            QQC2.ToolTip.text: qsTr("Add a cue that sets this mood, after the chosen cue")
+                            onClicked: side.showView.addCue({ kind: "mood", mood: { mood: moodRow.modelData.id } },
+                                                            side.showView.selectedCue !== null ? side.showView.selectedCue.id : "")
+                        }
+                    }
                 }
             }
         }

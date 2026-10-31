@@ -3333,12 +3333,12 @@
       <translation>Stimmungen</translation>
     </message>
     <message>
-      <location line="+478" />
+      <location line="+481" />
       <source>Panic</source>
       <translation>Panik</translation>
     </message>
     <message>
-      <location line="-472" />
+      <location line="-475" />
       <source>Stops every cue and sound; the panic mood runs</source>
       <translation>Stoppt alle Cues und Klänge, die Panik-Stimmung läuft</translation>
     </message>
@@ -3353,7 +3353,7 @@
       <translation>Zurück zur Stimmung davor</translation>
     </message>
     <message>
-      <location line="+95" />
+      <location line="+98" />
       <source>%1 actions</source>
       <translation>%1 Aktionen</translation>
     </message>
@@ -3405,8 +3405,8 @@
       <translation>Alle Stimmungen und Oneshots</translation>
     </message>
     <message>
-      <location line="-205" />
-      <location line="+245" />
+      <location line="-208" />
+      <location line="+248" />
       <location line="+251" />
       <source>Panic mood</source>
       <translation>Panik-Stimmung</translation>
@@ -5111,7 +5111,7 @@
   <context>
     <name>ShowInspector</name>
     <message>
-      <location filename="../qml/ShowInspector.qml" line="+179" />
+      <location filename="../qml/ShowInspector.qml" line="+180" />
       <source>Basics</source>
       <translation>Grundlagen</translation>
     </message>
@@ -5208,17 +5208,42 @@
     </message>
     <message>
       <location line="+8" />
-      <location line="+51" />
+      <location line="+96" />
       <source>Stage</source>
       <translation>Bühne</translation>
     </message>
     <message>
-      <location line="-37" />
+      <location line="-82" />
       <source>Stage of the picture</source>
       <translation>Bühne des Bildes</translation>
     </message>
     <message>
       <location line="+10" />
+      <source>Mood</source>
+      <translation>Stimmung</translation>
+    </message>
+    <message>
+      <location line="+15" />
+      <source>Mood the cue sets</source>
+      <translation>Stimmung, die der Cue setzt</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>Fade</source>
+      <translation>Blende</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>Fade of the mood change</source>
+      <translation>Blende des Stimmungswechsels</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>How long the changing layers fade; empty: each layer's own, else the show's change time</source>
+      <translation>Wie lange die Ebenen blenden, die sich ändern; leer: die der Ebene, sonst die Wechselzeit der Show</translation>
+    </message>
+    <message>
+      <location line="+8" />
       <source>Fades</source>
       <translation>Blendet</translation>
     </message>
@@ -5577,7 +5602,7 @@
   <context>
     <name>ShowSidebar</name>
     <message>
-      <location filename="../qml/ShowSidebar.qml" line="+35" />
+      <location filename="../qml/ShowSidebar.qml" line="+38" />
       <source>Active</source>
       <translation>Aktiv</translation>
     </message>
@@ -5585,6 +5610,11 @@
       <location line="+0" />
       <source>Lists</source>
       <translation>Listen</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Moods</source>
+      <translation>Stimmungen</translation>
     </message>
     <message>
       <location line="+22" />
@@ -5676,6 +5706,21 @@
       <source>Cues…</source>
       <translation>Cues…</translation>
     </message>
+    <message>
+      <location line="+12" />
+      <source>No moods yet: they come on the Moods page.</source>
+      <translation>Noch keine Stimmungen: Sie kommen auf der Seite Stimmungen.</translation>
+    </message>
+    <message>
+      <location line="+41" />
+      <source>Add a cue that sets %1</source>
+      <translation>Cue hinzufügen, der %1 setzt</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Add a cue that sets this mood, after the chosen cue</source>
+      <translation>Einen Cue, der diese Stimmung setzt, nach dem gewählten Cue hinzufügen</translation>
+    </message>
   </context>
   <context>
     <name>ShowView</name>
@@ -5710,18 +5755,28 @@
       <translation>nutzt Input %1, dessen Mediendatei fehlt</translation>
     </message>
     <message>
-      <location line="+99" />
+      <location line="+1" />
+      <source>sets a mood that is not there</source>
+      <translation>setzt eine Stimmung, die es nicht gibt</translation>
+    </message>
+    <message>
+      <location line="+109" />
+      <source>Mood (gone)</source>
+      <translation>Stimmung (entfernt)</translation>
+    </message>
+    <message>
+      <location line="+7" />
       <source>Wait %1</source>
       <translation>Warten %1</translation>
     </message>
     <message>
       <location line="+1" />
-      <location line="+38" />
+      <location line="+39" />
       <source>Note</source>
       <translation>Notiz</translation>
     </message>
     <message>
-      <location line="-37" />
+      <location line="-38" />
       <source>Group</source>
       <translation>Gruppe</translation>
     </message>
@@ -5732,24 +5787,29 @@
     </message>
     <message>
       <location line="+0" />
-      <location line="+38" />
+      <location line="+39" />
       <source>Start</source>
       <translation>Start</translation>
     </message>
     <message>
-      <location line="-37" />
-      <location line="+38" />
+      <location line="-38" />
+      <location line="+39" />
       <source>Sound</source>
       <translation>Ton</translation>
     </message>
     <message>
-      <location line="-37" />
-      <location line="+38" />
+      <location line="-38" />
+      <location line="+39" />
       <source>Picture</source>
       <translation>Bild</translation>
     </message>
     <message>
-      <location line="-36" />
+      <location line="-37" />
+      <source>Mood</source>
+      <translation>Stimmung</translation>
+    </message>
+    <message>
+      <location line="+1" />
       <source>Actions</source>
       <translation>Aktionen</translation>
     </message>
@@ -5796,6 +5856,11 @@
     </message>
     <message>
       <location line="+2" />
+      <source>Set mood</source>
+      <translation>Stimmung setzen</translation>
+    </message>
+    <message>
+      <location line="+1" />
       <source>Actions: %1</source>
       <translation>Aktionen: %1</translation>
     </message>

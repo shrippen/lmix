@@ -3116,6 +3116,42 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_mood_cue_sets_its_mood() {
+        use lmix_types::{Cue, CueKind, MoodCue};
+        let service = Service::new(4, Arc::new(NullEngine::default()), None);
+        service.handle(bars()).await.unwrap();
+        let moods = scene_moods();
+        let dark = moods.groups[0].variants[0].id;
+        service.handle(Action::SetMoods { moods }).await.unwrap();
+        let cue = |mood| Cue {
+            mood,
+            ..Cue::empty(CueKind::Mood)
+        };
+        let unset = service
+            .handle(Action::AddCueList {
+                name: "Show".into(),
+                cues: vec![cue(None)],
+                source: None,
+            })
+            .await;
+        assert!(unset.is_err(), "a mood cue names its mood");
+        service
+            .handle(Action::AddCueList {
+                name: "Show".into(),
+                cues: vec![cue(Some(MoodCue {
+                    mood: dark,
+                    fade_ms: Some(500),
+                }))],
+                source: None,
+            })
+            .await
+            .unwrap();
+        let state = service.handle(Action::CueGo { list: None }).await.unwrap();
+        assert_eq!(state.mood.mood, Some(dark));
+        assert!(state.fade_to_black, "the variant's light ran");
+    }
+
+    #[tokio::test]
     async fn moods_are_checked_before_they_are_kept() {
         use lmix_types::{LayerContent, LayerId};
         let service = Service::new(4, Arc::new(NullEngine::default()), None);

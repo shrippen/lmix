@@ -760,7 +760,7 @@ impl Runner {
             CueKind::Wait | CueKind::Actions | CueKind::Fade => {
                 Some(pre + ms(cue.duration_ms.unwrap_or(0)))
             }
-            CueKind::Note | CueKind::Start => Some(pre),
+            CueKind::Note | CueKind::Start | CueKind::Mood => Some(pre),
         };
         self.runs.push(Run {
             id: self.next_id,
@@ -830,6 +830,27 @@ impl Runner {
             CueKind::Note => {}
             CueKind::Wait => end_at = Some(t + ms(cue.duration_ms.unwrap_or(0))),
             CueKind::Start => self.fire_start(lists, list, &cue, t, out),
+            // As `set_mood` from the API: the service sets it under the
+            // switcher's lock and runs what the layers do (MOOD.6).
+            CueKind::Mood => match cue.mood.clone() {
+                Some(mood) => out.push(Out::Actions {
+                    list: run.list,
+                    cue: cue.id,
+                    actions: vec![Action::SetMood {
+                        mood: mood.mood.to_string(),
+                        fade_ms: mood.fade_ms,
+                    }],
+                }),
+                // A show file changed by hand: its cue lists are not
+                // checked on opening.
+                None => out.push(Out::Event {
+                    list: run.list,
+                    cue: Some(cue.id),
+                    what: CueEvent::Failed {
+                        reason: "a mood cue needs a mood".into(),
+                    },
+                }),
+            },
             CueKind::Sound => {
                 let sound = cue.sound.clone().unwrap_or_default();
                 out.push(Out::Actions {

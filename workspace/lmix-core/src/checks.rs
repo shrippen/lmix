@@ -87,6 +87,11 @@ fn walk(
                 }
             }
         }
+        if let Some(mood) = &cue.mood {
+            if show.moods.find(mood.mood).is_none() {
+                warn(CueProblem::MoodGone);
+            }
+        }
         for action in &cue.actions {
             if let Some(name) = action_target(action) {
                 if !machine.targets.iter().any(|t| t.name == name) {
@@ -229,12 +234,29 @@ mod tests {
             children: vec![Cue::actions("Gone", vec![cut("Beamer")])],
             ..Cue::empty(CueKind::Group)
         };
-        let show = show_with(vec![
+        let mood = |mood| Cue {
+            mood: Some(lmix_types::MoodCue {
+                mood,
+                fade_ms: None,
+            }),
+            ..Cue::empty(CueKind::Mood)
+        };
+        let forest = lmix_types::MoodGroup {
+            id: lmix_types::MoodId::new(),
+            name: "Wald".into(),
+            color: None,
+            base: Default::default(),
+            variants: Vec::new(),
+        };
+        let mut show = show_with(vec![
             Cue::actions("Fine", vec![cut("Cam"), cut("cam"), cut("preview")]),
             start,
             Cue::actions("Light", vec![light]),
             group,
+            mood(forest.id),
+            mood(lmix_types::MoodId::new()),
         ]);
+        show.moods.groups.push(forest);
 
         let none = BTreeMap::new();
         let machine = |missing: &'static dyn Fn(InputId) -> bool| Machine {
@@ -252,6 +274,7 @@ mod tests {
                 "starts cue 99, which is not there",
                 "sends to target Haus, which this machine does not have",
                 "uses input Beamer, which is not there",
+                "sets a mood that is not there",
             ]
         );
         let cam = show.inputs[0].id;
