@@ -225,4 +225,14 @@ TestCase {
         verify(!findChild(p, "groups").visible)
         verify(!findChild(p, "oneShots").visible)
     }
+
+    function test_edit_opens_the_moods_dialog() {
+        const p = page()
+        const dialog = findChild(p, "moodsDialog")
+        verify(!dialog.opened)
+        findChild(p, "editMoods").clicked()
+        tryVerify(() => dialog.opened)
+        compare(dialog.moods, test.moods)
+        dialog.close()
+    }
 }

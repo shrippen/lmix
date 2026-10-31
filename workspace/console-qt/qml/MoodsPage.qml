@@ -242,6 +242,15 @@ AppPage {
     tools: [
         KanteButton {
             focusPolicy: Qt.NoFocus
+            objectName: "editMoods"
+            visible: root.show !== null && root.show !== undefined
+            text: qsTr("Edit…")
+            QQC2.ToolTip.visible: hovered
+            QQC2.ToolTip.text: qsTr("Groups, variants, layers, collections and the panic mood")
+            onClicked: editDialog.open()
+        },
+        KanteButton {
+            focusPolicy: Qt.NoFocus
             objectName: "compose"
             visible: root.collection !== null
             checkable: true
@@ -252,6 +261,16 @@ AppPage {
             onClicked: root.composing = !root.composing
         }
     ]
+
+    MoodsDialog {
+        id: editDialog
+        objectName: "moodsDialog"
+        parent: QQC2.Overlay.overlay
+        anchors.centerIn: parent
+        act: root.shell.act
+        show: root.show
+        core: root.shell.backend
+    }
 
     RowLayout {
         anchors.fill: parent
@@ -381,7 +400,16 @@ AppPage {
                 Layout.fillHeight: true
                 visible: root.groups.length === 0
                 title: qsTr("No moods yet")
-                text: qsTr("A mood says what runs on each layer: light, music, ambience, picture. They come with the show or over the API (set_moods).")
+                text: qsTr("A mood says what runs on each layer: light, music, ambience, picture.")
+                KanteButton {
+                    visible: root.show !== null && root.show !== undefined
+                    emphasis: KanteButton.Emphasis.Primary
+                    text: qsTr("Set up moods…")
+                    onClicked: {
+                        editDialog.tab = root.layers.length === 0 ? 1 : 0
+                        editDialog.open()
+                    }
+                }
             }
 
             // Groups: the head sets the base, a tile a variant.
