@@ -980,7 +980,7 @@
   <context>
     <name>AudioPage</name>
     <message>
-      <location filename="../qml/AudioPage.qml" line="+60" />
+      <location filename="../qml/AudioPage.qml" line="+63" />
       <source>Audio</source>
       <translation>Ton</translation>
     </message>

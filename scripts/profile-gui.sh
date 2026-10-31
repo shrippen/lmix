@@ -8,6 +8,7 @@
 #
 #   scripts/profile-gui.sh                        # 8 inputs, CUDA mixer
 #   INPUTS=31 MIXER=cpu PHASE=10 scripts/profile-gui.sh
+#   PAGE=audio INPUTS=31 …                        # another page (default mix)
 #   KEEP_WORK=1 …                                 # keep the trace (.qtd, opens in Qt Creator)
 #
 # Needs Xvfb, bc, Python 3, qmlprofiler (Qt 6), Qt 6 with Kirigami and gst-plugin-qml6.
@@ -20,6 +21,7 @@ PROFILE_PORT="${PROFILE_PORT:-3768}"
 DISPLAY_NO="${DISPLAY_NO:-:94}"
 MIXER="${MIXER:-cuda}"
 INPUTS="${INPUTS:-8}"
+PAGE="${PAGE:-mix}"
 RATE="${RATE:-40}"
 PHASE="${PHASE:-10}"
 CORE="http://127.0.0.1:${CORE_PORT}/api"
@@ -28,6 +30,12 @@ LIVE_DIR="${XDG_RUNTIME_DIR:-/tmp}/lmix-profile${DISPLAY_NO#:}"
 # A target of its own: the feature changes the build.
 PROFILE_TARGET="${PROFILE_TARGET:-$HOME/.cache/claude/lmix-profile-target}"
 PIDS=()
+# Another run (or session) on the same display would get this window's
+# keys and pictures, and its numbers ours.
+if [[ -e "/tmp/.X11-unix/X${DISPLAY_NO#:}" ]]; then
+    echo "display $DISPLAY_NO is taken; pick another with DISPLAY_NO (and the ports)" >&2
+    exit 2
+fi
 
 cleanup() {
     for pid in "${PIDS[@]}"; do kill "$pid" 2>/dev/null || true; done
@@ -79,7 +87,7 @@ PIDS+=($!)
 sleep 1
 XDG_CONFIG_HOME="$WORK/config" DISPLAY="$DISPLAY_NO" QT_QPA_PLATFORM=xcb LMIX_QML_PROFILE_PORT="$PROFILE_PORT" \
     LMIX_CORE="http://127.0.0.1:${CORE_PORT}" \
-    "$PROFILE_TARGET/release/lmix" --page mix --window maximized >"$WORK/lmix.log" 2>&1 &
+    "$PROFILE_TARGET/release/lmix" --page "$PAGE" --window maximized >"$WORK/lmix.log" 2>&1 &
 PIDS+=($!)
 # Pictures attach. Then the profiler, steered through a FIFO: it records
 # only the drag.

@@ -14,6 +14,9 @@ Prints percentiles per phase and exits 1 when a budget is exceeded:
     GAP_MAX_MS   longest frame gap while the fader moves (default 250)
     GUI_CPU_MAX  CPU of the GUI thread while the fader moves, % (default 35)
     RECOVER      frames per second after the drag, share of before (default 0.8)
+    BROKE_MAX    live pictures that broke and were built anew during the
+                 phases (default 0: one that never runs is rebuilt every
+                 second on the GUI thread, 31.10.2026)
     program: no picture the same as the one before (the ball moves every frame)
 """
 import datetime
@@ -61,6 +64,20 @@ def gui_frames(log):
     if offset is None:
         sys.exit("no lmix log line to place Qt's times (RUST_LOG must log lmix at debug)")
     return {thread: [offset + t for t in times] for thread, times in frames.items()}
+
+
+def broken_pictures(log, start):
+    """Unix times of the live pictures that broke after `start`."""
+    times = []
+    with open(log, errors="replace") as f:
+        for raw in f:
+            line = ANSI.sub("", raw)
+            m = RUST.match(line)
+            if m and "live picture broke" in line:
+                utc = datetime.datetime.fromisoformat(m.group(1)).replace(tzinfo=datetime.timezone.utc)
+                if utc.timestamp() >= start:
+                    times.append(utc.timestamp())
+    return times
 
 
 def program_frames(work, start):
@@ -116,6 +133,11 @@ def main():
             failures.append(f"window draws {fps['idle2']:.0f} fps after the drag, {fps['idle1']:.0f} before")
     if not windows:
         failures.append("no frame of lmix in the log")
+
+    broke = broken_pictures(f"{work}/lmix.log", phases["idle1"])
+    print(f"live pictures broken and built anew: {len(broke)}")
+    if len(broke) > env("BROKE_MAX", 0):
+        failures.append(f"{len(broke)} live pictures broke while measuring")
 
     print("GUI thread")
     for line in open(f"{work}/threads"):
