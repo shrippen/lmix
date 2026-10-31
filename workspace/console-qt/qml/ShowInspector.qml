@@ -6,7 +6,8 @@ import Kante
 
 /**
  * Inspector under the cue list (edit mode): the chosen cue's fields on
- * tabs, Basics, Triggers, Time & loops, Levels and Actions. Each change
+ * tabs, Basics (with the file, stage or what a fade fades), Triggers,
+ * Time & loops, Levels (with a sound's crosspoints) and Actions. Each change
  * goes to lmix-core at once (Enter or leaving a field); standby and
  * running cues stay (IMP.5). A list from a script is only shown.
  */
@@ -22,7 +23,8 @@ KanteCard {
      *  the inspector keeps the cue it began with, also when standby moves
      *  on (a follow, a GO from MIDI, OSC or another client): what is typed
      *  goes to that cue, or nowhere when it is gone from the active list. */
-    readonly property bool holding: actionDialog.visible || colourPicker.popover.visible || hasFocusInside(Window.activeFocusItem)
+    readonly property bool holding: actionDialog.visible || colourPicker.popover.visible || fileField.picking
+                                    || hasFocusInside(Window.activeFocusItem)
     property string heldId: ""
     // Let go only after the field that lost the keyboard saved its value
     // (editingFinished may come after the focus moved).
@@ -41,6 +43,69 @@ KanteCard {
     /** What the cue plays or shows, whose fades and repeats are edited. */
     readonly property var media: cue === null ? null : (cue.kind === "sound" ? cue.sound : (cue.kind === "picture" ? cue.picture : null))
     property int tab: 0
+
+    /** What a fade can fade, by kind: [{ref, label, kind}]. */
+    readonly property var fadeKinds: ["cue", "zone", "stage"]
+    readonly property var fadeChoices: {
+        var show = showView.show
+        return {
+            cue: showView.list ? mediaCues(showView.list.cues) : [],
+            zone: (show && show.zones ? show.zones : []).map(z => ({ ref: z.name, label: z.name })),
+            stage: (show && show.stages ? show.stages : []).map(s => ({ ref: s.name, label: s.name }))
+        }
+    }
+    readonly property var stageNames: showView.show && showView.show.stages ? showView.show.stages.map(s => s.name) : []
+
+    /** The sound and picture cues of `cues` and their groups but this one. */
+    function mediaCues(cues) {
+        var out = []
+        function walk(list) {
+            list.forEach(c => {
+                if ((c.kind === "sound" || c.kind === "picture") && (cue === null || c.id !== cue.id)) {
+                    var ref = c.number !== "" ? c.number : c.id
+                    out.push({ ref: ref, id: c.id, label: (c.number !== "" ? c.number + "  " : "") + showView.cueName(c), kind: c.kind })
+                }
+                walk(c.children || [])
+            })
+        }
+        walk(cues)
+        return out
+    }
+
+    /** The fade's target as {kind, ref}, or null. */
+    function fadeTarget(fade) {
+        var target = fade ? fade.target : null
+        if (!target) {
+            return null
+        }
+        var kind = fadeKinds.find(k => target[k] !== undefined)
+        return kind ? { kind: kind, ref: target[kind] } : null
+    }
+
+    /** A merge patch of `fade` for a new target: the old target goes
+     *  (null), and only the value the new one takes stays, set as in the
+     *  Levels tab when it was not: a level for a zone or a sound, an
+     *  opacity for a picture, a brightness for a stage; only a cue stops
+     *  after its fade. `mediaKind` is the target cue's kind. */
+    function fadePatch(fade, kind, ref, mediaKind) {
+        var old = fade || {}
+        var has = key => old[key] !== undefined && old[key] !== null
+        var target = { cue: null, zone: null, stage: null }
+        target[kind] = ref
+        var out = { target: target, gain_db: null, opacity: null, brightness: null, then: "keep" }
+        if (kind === "zone") {
+            out.gain_db = has("gain_db") ? old.gain_db : 0
+        } else if (kind === "stage") {
+            out.brightness = has("brightness") ? old.brightness : 1
+        } else if (mediaKind === "picture") {
+            out.opacity = has("opacity") ? old.opacity : 1
+            out.then = old.then || "keep"
+        } else {
+            out.gain_db = has("gain_db") ? old.gain_db : 0
+            out.then = old.then || "keep"
+        }
+        return out
+    }
 
     function hasFocusInside(item) {
         for (; item; item = item.parent) {
@@ -212,6 +277,114 @@ KanteCard {
                     onPicked: value => inspector.save({ color: value })
                 }
 
+                // The file of a sound or picture.
+                QQC2.Label {
+                    visible: inspector.media !== null
+                    text: qsTr("File")
+                }
+                PathField {
+                    id: fileField
+                    visible: inspector.media !== null
+                    Layout.columnSpan: 3
+                    Layout.fillWidth: true
+                    key: inspector.cue ? inspector.cue.id : ""
+                    path: inspector.media ? inspector.media.file : ""
+                    title: inspector.cue && inspector.cue.kind === "picture" ? qsTr("Video or still") : qsTr("Sound file")
+                    nameFilters: inspector.cue && inspector.cue.kind === "picture"
+                        ? [qsTr("Videos and stills (*.mp4 *.mov *.mkv *.webm *.png *.jpg *.jpeg)"), qsTr("All files (*)")]
+                        : [qsTr("Sound files (*.wav *.flac *.ogg *.opus *.mp3 *.aif *.aiff *.m4a)"), qsTr("All files (*)")]
+                    onAccepted: inspector.refocus()
+                    onEdited: path => inspector.saveIn(inspector.cue.kind, { file: path })
+                }
+
+                // The stage of a picture (VIS.2).
+                QQC2.Label {
+                    visible: inspector.cue !== null && inspector.cue.kind === "picture"
+                    text: qsTr("Stage")
+                }
+                KanteComboBox {
+                    id: stageBox
+                    visible: inspector.cue !== null && inspector.cue.kind === "picture"
+                    Layout.columnSpan: 3
+                    Layout.preferredWidth: Kirigami.Units.gridUnit * 12
+                    focusPolicy: Qt.NoFocus
+                    readonly property string stage: inspector.cue && inspector.cue.picture ? inspector.cue.picture.stage : ""
+                    // A stage that is gone stays named, marked.
+                    readonly property bool missing: inspector.stageNames.indexOf(stage) < 0
+                    model: missing ? [stage].concat(inspector.stageNames) : inspector.stageNames
+                    currentIndex: missing ? 0 : inspector.stageNames.indexOf(stage)
+                    invalid: missing
+                    Accessible.name: qsTr("Stage of the picture")
+                    onActivated: index => {
+                        inspector.saveIn("picture", { stage: model[index] })
+                        inspector.refocus()
+                    }
+                }
+
+                // What a fade fades (SND.6, VIS.4, VIS.7).
+                QQC2.Label {
+                    visible: inspector.cue !== null && inspector.cue.kind === "fade"
+                    text: qsTr("Fades")
+                }
+                RowLayout {
+                    id: fadeTargetRow
+                    visible: inspector.cue !== null && inspector.cue.kind === "fade"
+                    Layout.columnSpan: 3
+                    spacing: Kirigami.Units.smallSpacing
+
+                    readonly property var target: inspector.cue ? inspector.fadeTarget(inspector.cue.fade) : null
+                    readonly property string kind: target ? target.kind : "cue"
+                    readonly property var choices: inspector.fadeChoices[kind]
+                    readonly property var refs: choices.map(c => c.ref)
+                    // A cue is named by its number or its id (a cue added
+                    // without a number, numbered later).
+                    readonly property int at: target === null ? -1 : choices.findIndex(c => c.ref === target.ref || c.id === target.ref)
+                    readonly property bool missing: target !== null && at < 0
+
+                    /** Fades `ref` of `kind` from now on. */
+                    function retarget(kind, ref) {
+                        var choice = inspector.fadeChoices[kind].find(c => c.ref === ref)
+                        inspector.saveIn("fade", inspector.fadePatch(inspector.cue.fade, kind, ref, choice ? choice.kind : ""))
+                        inspector.refocus()
+                    }
+
+                    KanteSegmented {
+                        id: fadeKind
+                        activeFocusOnTab: false
+                        model: [qsTr("Cue"), qsTr("Zone"), qsTr("Stage")]
+                        tooltips: [qsTr("A sound or picture cue: its level or opacity"), qsTr("A zone: its level"), qsTr("A stage: its brightness")]
+                        Binding on currentIndex { value: inspector.fadeKinds.indexOf(fadeTargetRow.kind) }
+                        onActivated: index => {
+                            var kind = inspector.fadeKinds[index]
+                            var first = inspector.fadeChoices[kind][0]
+                            if (first === undefined) {
+                                // Nothing of that kind: the target stays.
+                                currentIndex = inspector.fadeKinds.indexOf(fadeTargetRow.kind)
+                                inspector.refocus()
+                                return
+                            }
+                            fadeTargetRow.retarget(kind, first.ref)
+                        }
+                    }
+                    KanteComboBox {
+                        id: fadeTargetBox
+                        Layout.preferredWidth: Kirigami.Units.gridUnit * 12
+                        focusPolicy: Qt.NoFocus
+                        // A target that is gone stays named, marked.
+                        model: (fadeTargetRow.missing ? [fadeTargetRow.target.ref] : []).concat(fadeTargetRow.choices.map(c => c.label))
+                        currentIndex: fadeTargetRow.target === null ? -1
+                            : (fadeTargetRow.missing ? 0 : fadeTargetRow.at)
+                        invalid: fadeTargetRow.missing
+                        Accessible.name: qsTr("What the fade fades")
+                        onActivated: index => fadeTargetRow.retarget(fadeTargetRow.kind, fadeTargetRow.refs[index - (fadeTargetRow.missing ? 1 : 0)])
+                    }
+                    QQC2.Label {
+                        visible: fadeTargetRow.choices.length === 0
+                        text: qsTr("The show has none yet.")
+                        color: KanteStyle.mutedTextColor
+                    }
+                }
+
                 QQC2.Label {
                     Layout.alignment: Qt.AlignTop
                     text: qsTr("Note")
@@ -289,6 +462,7 @@ KanteCard {
                         text: qsTr("fading over")
                     }
                     DurationField {
+                        key: inspector.cue ? inspector.cue.id : ""
                         visible: triggers.stopOthers !== null
                         Layout.preferredWidth: Kirigami.Units.gridUnit * 5
                         ms: triggers.stopOthers ? triggers.stopOthers.fade_ms : 0
@@ -313,6 +487,7 @@ KanteCard {
 
                 QQC2.Label { text: qsTr("Pre wait") }
                 DurationField {
+                    key: inspector.cue ? inspector.cue.id : ""
                     Layout.preferredWidth: Kirigami.Units.gridUnit * 6
                     ms: inspector.cue ? inspector.cue.pre_wait_ms : 0
                     Accessible.name: qsTr("Pre wait")
@@ -323,6 +498,7 @@ KanteCard {
                 }
                 QQC2.Label { text: qsTr("Post wait") }
                 DurationField {
+                    key: inspector.cue ? inspector.cue.id : ""
                     Layout.preferredWidth: Kirigami.Units.gridUnit * 6
                     ms: inspector.cue ? inspector.cue.post_wait_ms : 0
                     Accessible.name: qsTr("Post wait")
@@ -337,6 +513,7 @@ KanteCard {
                     text: qsTr("Duration")
                 }
                 DurationField {
+                    key: inspector.cue ? inspector.cue.id : ""
                     visible: inspector.timed
                     Layout.preferredWidth: Kirigami.Units.gridUnit * 6
                     optional: inspector.cue !== null && inspector.cue.kind !== "wait"
@@ -364,6 +541,7 @@ KanteCard {
                     text: qsTr("Fade in")
                 }
                 DurationField {
+                    key: inspector.cue ? inspector.cue.id : ""
                     visible: inspector.media !== null
                     Layout.preferredWidth: Kirigami.Units.gridUnit * 6
                     ms: inspector.media ? inspector.media.fade_in_ms : 0
@@ -377,6 +555,7 @@ KanteCard {
                     text: qsTr("Fade out")
                 }
                 DurationField {
+                    key: inspector.cue ? inspector.cue.id : ""
                     visible: inspector.media !== null
                     Layout.preferredWidth: Kirigami.Units.gridUnit * 6
                     ms: inspector.media ? inspector.media.fade_out_ms : 0
@@ -472,6 +651,27 @@ KanteCard {
                     visible: levels.kind === "sound"
                     text: qsTr("0 dB: as in the file; −60 dB: silence")
                     color: KanteStyle.mutedTextColor
+                }
+
+                // Sound: where its channels go (SND.5).
+                QQC2.ScrollView {
+                    id: routesView
+                    visible: levels.kind === "sound"
+                    Layout.columnSpan: 3
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    // The rows' width: a layout without it would stay as
+                    // narrow as the level row above.
+                    Layout.minimumWidth: soundRoutes.implicitWidth
+                    SoundRoutes {
+                        id: soundRoutes
+                        key: inspector.cue ? inspector.cue.id : ""
+                        routes: inspector.cue && inspector.cue.sound ? (inspector.cue.sound.routes || []) : []
+                        zones: inspector.showView.show && inspector.showView.show.zones ? inspector.showView.show.zones : []
+                        core: inspector.core
+                        onEdited: routes => inspector.saveIn("sound", { routes: routes })
+                        onFinished: inspector.refocus()
+                    }
                 }
 
                 // Picture: opacity and layer.

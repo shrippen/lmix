@@ -267,7 +267,7 @@ QLab kennt keinen Import aus Texten; am nächsten kommt das Anlegen von Cues
 | ID | Anforderung | Prio | MS | Stand |
 |---|---|---|---|---|
 | SUI.1 | Show-Oberfläche als Seite Show des Programms lmix (neben Mix, Audio, Outputs, Setup am selben lmix-core; mehrere lmix-Fenster parallel möglich) | M | S1 | ✅ (Seite Show von `lmix`, DECISIONS 2026-10-23; bis dahin `lmix-show`) |
-| SUI.2 | Cue-Liste mit Spalten Nummer, Name, Art, Ziel, Vorwartezeit, Dauer, Nachwartezeit, Folge; Standby deutlich markiert; Gruppen einklappbar | M | S1 | ◐ (Nummer, Name, Notiz, Art mit Dauer, Vor/Nach/Folge unter „Erweitert“, Gruppen einklappbar; Ziel steht im Namen) |
+| SUI.2 | Cue-Liste mit Spalten Nummer, Name, Art, Ziel, Vorwartezeit, Dauer, Nachwartezeit, Folge; Standby deutlich markiert; Gruppen einklappbar | M | S1 | ◐ (Nummer, Name, Notiz, Art, Dauer, Vor/Nach/Folge unter „Erweitert“, Zeiten mit Fortschritt, Gruppen einklappbar; Ziel steht im Namen) |
 | SUI.3 | Großer GO-Knopf, Panik-Knopf, Standby-Name und Standby-Notiz in großer Schrift | M | S1 | ✅ |
 | SUI.4 | Laufende Cues mit Fortschrittsbalken, Restzeit, Stopp und Pause je Cue | M | S1 | ✅ (Fortschritt, Restzeit, Pause und Stopp je Cue, „Alle pausieren/fortsetzen“) |
 | SUI.5 | Warnliste: defekte Cues, fehlende Medien, fehlende Zonen-Geräte, nicht erreichbare Ausgabeziele; vor der Show prüfbar | S | S1 | ◐ (fehlende Start-Ziele, Ausgabeziele, Inputs, Mediendateien; Erreichbarkeit der Ziele: `check_targets`, „Ziele prüfen“, jedes Senden; Zonen-Geräte mit Stufe 2) |
@@ -275,7 +275,7 @@ QLab kennt keinen Import aus Texten; am nächsten kommt das Anlegen von Cues
 | SUI.7 | Kleine Bühnenvorschau | S | S1 | ◐ (Live-Monitore) |
 | SUI.8 | Zonen-Leiste: Pegel und Lautstärke je Zone | S | S1 | ✅ (Pegel nach der Zonenlautstärke in `/api/audio/levels`, Lautstärke und Stumm im Zustand; Leiste unter der Show-Ansicht und im Reiter Zonen der Audio-Seite) |
 | SUI.9 | Gestaltung nach Kante (UI.9), Texte aus Katalogen de/en (NFA.11) | M | S1 | ✅ |
-| SUI.10 | Cues in der Oberfläche anlegen, bearbeiten, umsortieren, umnummerieren (wenn kein Drehbuch-Betrieb) | S | S2 | ◐ (Cue-Dialog AUT.14) |
+| SUI.10 | Cues in der Oberfläche anlegen, bearbeiten, umsortieren, umnummerieren (wenn kein Drehbuch-Betrieb) | S | S2 | ◐ (Leiste je Cue-Art außer Gruppe über `add_cue`, Inspector über `update_cue`, Umnummerieren dort; Umsortieren fehlt) |
 | SUI.11 | Standby unabhängig von der Auswahl (bearbeiten, während ein anderer Cue auf Standby steht) | S | S2 | – |
 | SUI.12 | Cue markieren (Prüfliste) und Zweitfarbe „bereits gelaufen“ | K | S2 | ✅ (`flagged` am Cue über `update_cue`, gespeichert; `ShowState.ran_cues` bis Reset oder neue Show; Console: ⚑ je Zeile, gelaufene Zeilen getönt) |
 | SUI.13 | Felder und Funktionen je nach Modus zeigen oder verbergen; Seltenes hinter „Erweitert“ (S-E.5) (lmix) | S | S1 | ◐ („Erweitert“ in der Show-Ansicht) |
