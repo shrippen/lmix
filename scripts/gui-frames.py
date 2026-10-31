@@ -3,7 +3,9 @@
 
     gui-frames.py WORK
 
-WORK holds lmix.log (Qt's render loop timing next to lmix's own log),
+WORK holds lmix.log (Qt's render loop timing next to lmix's own log; with
+the render thread's id when there are several windows, a page in its own
+window),
 phases (`<name> <unix time>` lines: idle1, fader, idle2, end), threads
 (CPU of lmix's threads per phase) and rec/ (a recording of program).
 Prints percentiles per phase and exits 1 when a budget is exceeded:
@@ -22,7 +24,7 @@ import subprocess
 import sys
 
 ANSI = re.compile(r"\x1b\[[0-9;]*m")
-QT = re.compile(r"^\s*([\d.]+) qt\.scenegraph\.time\.renderloop .*syncAndRender: frame rendered")
+QT = re.compile(r"^\s*([\d.]+) qt\.scenegraph\.time\.renderloop (?:(\d+) )?.*syncAndRender: frame rendered")
 QT_ANY = re.compile(r"^\s*([\d.]+) ")
 RUST = re.compile(r"^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d+)Z ")
 
@@ -37,10 +39,11 @@ def percentile(values, q):
 
 
 def gui_frames(log):
-    """Unix times of the frames lmix drew. Qt stamps its lines with time
-    since the process started; lmix's own lines carry UTC. A Qt line just
-    before a lmix line gives the offset."""
-    offset, last_qt, frames = None, None, []
+    """Unix times of the frames lmix drew, per render thread (one per
+    window). Qt stamps its lines with time since the process started;
+    lmix's own lines carry UTC. A Qt line just before a lmix line gives
+    the offset."""
+    offset, last_qt, frames = None, None, {}
     with open(log, errors="replace") as f:
         for raw in f:
             line = ANSI.sub("", raw)
@@ -54,10 +57,10 @@ def gui_frames(log):
                 last_qt = float(m.group(1))
             m = QT.match(line)
             if m:
-                frames.append(float(m.group(1)))
+                frames.setdefault(m.group(2) or "", []).append(float(m.group(1)))
     if offset is None:
         sys.exit("no lmix log line to place Qt's times (RUST_LOG must log lmix at debug)")
-    return [offset + t for t in frames]
+    return {thread: [offset + t for t in times] for thread, times in frames.items()}
 
 
 def program_frames(work, start):
@@ -89,22 +92,30 @@ def main():
     spans = [("idle1", "fader"), ("fader", "idle2"), ("idle2", "end")]
     failures = []
 
-    frames = gui_frames(f"{work}/lmix.log")
-    fps = {}
-    print("window (frames lmix drew)")
-    for a, b in spans:
-        t = [x for x in frames if phases[a] + 0.5 <= x < phases[b]]
-        gaps = [(y - x) * 1000 for x, y in zip(t, t[1:])]
-        fps[a] = len(t) / (phases[b] - phases[a] - 0.5)
-        print(f"  {a:6} {fps[a]:6.1f} fps  gap p50 {percentile(gaps, .5):6.1f}  p95 {percentile(gaps, .95):6.1f}"
-              f"  p99 {percentile(gaps, .99):6.1f}  max {max(gaps, default=0):7.1f} ms")
-        if a == "fader":
-            if percentile(gaps, .95) > env("GAP_P95_MS", 50):
-                failures.append(f"window frame gap p95 {percentile(gaps, .95):.0f} ms while the fader moves")
-            if max(gaps, default=1e9) > env("GAP_MAX_MS", 250):
-                failures.append(f"window frame gap max {max(gaps, default=1e9):.0f} ms while the fader moves")
-    if fps["idle2"] < env("RECOVER", 0.8) * fps["idle1"]:
-        failures.append(f"window draws {fps['idle2']:.0f} fps after the drag, {fps['idle1']:.0f} before")
+    windows = gui_frames(f"{work}/lmix.log")
+    # The budgets hold for the window with the live pictures, the one that
+    # draws most; another (a quiet page) is only shown.
+    busiest = max(windows, key=lambda w: len(windows[w]), default="")
+    for window, frames in sorted(windows.items(), key=lambda w: -len(w[1])):
+        checked = window == busiest
+        fps = {}
+        name = f" {window}" if window else ""
+        print(f"window{name} (frames lmix drew){'' if checked or not window else ', not checked'}")
+        for a, b in spans:
+            t = [x for x in frames if phases[a] + 0.5 <= x < phases[b]]
+            gaps = [(y - x) * 1000 for x, y in zip(t, t[1:])]
+            fps[a] = len(t) / (phases[b] - phases[a] - 0.5)
+            print(f"  {a:6} {fps[a]:6.1f} fps  gap p50 {percentile(gaps, .5):6.1f}  p95 {percentile(gaps, .95):6.1f}"
+                  f"  p99 {percentile(gaps, .99):6.1f}  max {max(gaps, default=0):7.1f} ms")
+            if a == "fader" and checked:
+                if percentile(gaps, .95) > env("GAP_P95_MS", 50):
+                    failures.append(f"window frame gap p95 {percentile(gaps, .95):.0f} ms while the fader moves")
+                if max(gaps, default=1e9) > env("GAP_MAX_MS", 250):
+                    failures.append(f"window frame gap max {max(gaps, default=1e9):.0f} ms while the fader moves")
+        if checked and fps["idle2"] < env("RECOVER", 0.8) * fps["idle1"]:
+            failures.append(f"window draws {fps['idle2']:.0f} fps after the drag, {fps['idle1']:.0f} before")
+    if not windows:
+        failures.append("no frame of lmix in the log")
 
     print("GUI thread")
     for line in open(f"{work}/threads"):

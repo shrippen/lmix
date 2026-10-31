@@ -14,6 +14,10 @@ Item {
 
     required property var core
     property int limit: 4
+    /** Posts lmix-core's refusals and the Console's errors: with pages in
+     *  windows of their own, only the window the operator works in does
+     *  (AppShell.operatorWindow), so a message shows once. */
+    property bool listening: true
     /** Where toasts stack; a page's own toast sets this as its parent. */
     readonly property alias column: column
 
@@ -40,10 +44,11 @@ Item {
         id: errors
     }
     // A message from before (the Console's own, before the window was there).
-    Component.onCompleted: post(Texts.message(core.message))
+    Component.onCompleted: if (listening) post(Texts.message(core.message))
 
     Connections {
         target: toasts.core
+        enabled: toasts.listening
         // One answer per action, also for the same refusal twice: closed,
         // it comes back when the action is refused again.
         function onAnswered(action, refusal) {
