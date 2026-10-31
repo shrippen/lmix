@@ -800,7 +800,7 @@ DE = {
     'Stream': 'Stream',
     'Style': 'Stil',
     'Unsaved show': 'Ungespeicherte Show',
-    'button in the page bar': 'Knopf in der Seitenleiste',
+    "button in the page bar or at the foot of a page's window": 'Knopf in der Seitenleiste oder unten im Fenster einer Seite',
     'double click preview': 'Doppelklick in die Vorschau',
     'Own shortcuts': 'Eigene Belegungen',
     'Search keys': 'Tasten suchen',
@@ -1224,4 +1224,14 @@ DE = {
     'Remove template %1?': 'Vorlage %1 entfernen?',
     'Remove template…': 'Vorlage entfernen…',
     'Layouts made from it stay. The template cannot be brought back.': 'Layouts, die daraus entstanden sind, bleiben. Die Vorlage lässt sich nicht zurückholen.',
+    # Pages in windows of their own (PageWindow, AppShell).
+    '%1 in its own window: to the front (Ctrl+%2)': '%1 im eigenen Fenster: nach vorn (Strg+%2)',
+    '%1 ↗': '%1 ↗',
+    'Back to the main window': 'Zurück ins Hauptfenster',
+    'Own window': 'Eigenes Fenster',
+    'Page in its own window': 'Seite im eigenen Fenster',
+    'Put this page back into the main window; closing this window does the same': 'Die Seite zurück ins Hauptfenster holen; das Schließen dieses Fensters tut dasselbe',
+    'Put this page into a window of its own, e.g. on a second screen; closing that window brings it back': 'Die Seite in ein eigenes Fenster lösen, etwa auf einen zweiten Bildschirm; das Schließen des Fensters holt sie zurück',
+    'The main window keeps one page': 'Eine Seite bleibt im Hauptfenster',
+    'lmix — %1': 'lmix — %1',
 }

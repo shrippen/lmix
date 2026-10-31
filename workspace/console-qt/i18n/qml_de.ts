@@ -595,13 +595,13 @@
   <context>
     <name>AppShell</name>
     <message>
-      <location filename="../qml/AppShell.qml" line="+372" />
-      <location line="+110" />
+      <location filename="../qml/AppShell.qml" line="+615" />
+      <location line="+111" />
       <source>Open show</source>
       <translation>Show öffnen</translation>
     </message>
     <message>
-      <location line="-109" />
+      <location line="-110" />
       <location line="+13" />
       <source>lmix shows (*.lmix)</source>
       <translation>lmix-Shows (*.lmix)</translation>
@@ -615,12 +615,12 @@
     </message>
     <message>
       <location line="-60" />
-      <location line="+100" />
+      <location line="+101" />
       <source>Save show</source>
       <translation>Show speichern</translation>
     </message>
     <message>
-      <location line="-85" />
+      <location line="-86" />
       <source>Export settings</source>
       <translation>Einstellungen exportieren</translation>
     </message>
@@ -652,17 +652,22 @@
       <translation>Show-Paket importieren</translation>
     </message>
     <message>
-      <location line="+11" />
+      <location line="+12" />
       <source>Empty folder for the package's show and media</source>
       <translation>Leerer Ordner für Show und Medien des Pakets</translation>
     </message>
     <message>
-      <location line="+292" />
+      <location line="+34" />
+      <source>button in the page bar or at the foot of a page's window</source>
+      <translation>Knopf in der Seitenleiste oder unten im Fenster einer Seite</translation>
+    </message>
+    <message>
+      <location line="+281" />
       <source>Keys</source>
       <translation>Tasten</translation>
     </message>
     <message>
-      <location line="-266" />
+      <location line="-289" />
       <source>Pages</source>
       <translation>Seiten</translation>
     </message>
@@ -683,14 +688,8 @@
     </message>
     <message>
       <location line="+2" />
-      <location line="+423" />
       <source>Panic all</source>
       <translation>Panik: alles</translation>
-    </message>
-    <message>
-      <location line="-423" />
-      <source>button in the page bar</source>
-      <translation>Knopf in der Seitenleiste</translation>
     </message>
     <message>
       <location line="+48" />
@@ -698,7 +697,7 @@
       <translation>Datei</translation>
     </message>
     <message>
-      <location line="+36" />
+      <location line="+43" />
       <source>Show</source>
       <translation>Show</translation>
     </message>
@@ -813,7 +812,27 @@
       <translation>Werkseinstellungen…</translation>
     </message>
     <message>
-      <location line="+35" />
+      <location line="+41" />
+      <source>Own window</source>
+      <translation>Eigenes Fenster</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Page in its own window</source>
+      <translation>Seite im eigenen Fenster</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Put this page into a window of its own, e.g. on a second screen; closing that window brings it back</source>
+      <translation>Die Seite in ein eigenes Fenster lösen, etwa auf einen zweiten Bildschirm; das Schließen des Fensters holt sie zurück</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>The main window keeps one page</source>
+      <translation>Eine Seite bleibt im Hauptfenster</translation>
+    </message>
+    <message>
+      <location line="+5" />
       <source>Unsaved show</source>
       <translation>Ungespeicherte Show</translation>
     </message>
@@ -834,12 +853,12 @@
     </message>
     <message>
       <location line="+0" />
-      <location line="+46" />
+      <location line="+48" />
       <source>lmix-core offline</source>
       <translation>lmix-core nicht erreichbar</translation>
     </message>
     <message>
-      <location line="-20" />
+      <location line="-22" />
       <source>Locked</source>
       <translation>Gesperrt</translation>
     </message>
@@ -854,7 +873,7 @@
       <translation>Gesperrt lassen sich keine Inputs schließen, keine Show laden, keine Ausgänge stoppen und weder Format noch Abtastrate noch Multiview ändern.</translation>
     </message>
     <message>
-      <location line="+17" />
+      <location line="+19" />
       <source>The Console tries again every second. The engine and its outputs keep running.</source>
       <translation>Die Console versucht es jede Sekunde erneut. Die Engine und ihre Ausgänge laufen weiter.</translation>
     </message>
@@ -869,7 +888,18 @@
       <translation>Diese Show-Datei hat das ältere Format %1 und wurde beim Öffnen umgewandelt. Beim Speichern bleibt die alte Datei daneben erhalten (.v%1.bak).</translation>
     </message>
     <message>
-      <location line="+47" />
+      <location line="+51" />
+      <source>%1 ↗</source>
+      <comment>page in its own window</comment>
+      <translation>%1 ↗</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>%1 in its own window: to the front (Ctrl+%2)</source>
+      <translation>%1 im eigenen Fenster: nach vorn (Strg+%2)</translation>
+    </message>
+    <message>
+      <location line="+1" />
       <source>%1 (Ctrl+%2)</source>
       <translation>%1 (Strg+%2)</translation>
     </message>
@@ -894,20 +924,9 @@
       <translation>Fehler</translation>
     </message>
     <message>
-      <location line="+22" />
+      <location line="+26" />
       <source>Program</source>
       <translation>Programm</translation>
-    </message>
-    <message>
-      <location line="+42" />
-      <source>Panic</source>
-      <comment>stops everything</comment>
-      <translation>Panik</translation>
-    </message>
-    <message>
-      <location line="+4" />
-      <source>Stop every cue over the panic time and fade program to black; recordings and streams go on</source>
-      <translation>Alle Cues über die Panikzeit stoppen und Programm auf Schwarz blenden; Aufnahmen und Streams laufen weiter</translation>
     </message>
   </context>
   <context>
@@ -2793,7 +2812,7 @@
   <context>
     <name>MessageToasts</name>
     <message>
-      <location filename="../qml/MessageToasts.qml" line="+73" />
+      <location filename="../qml/MessageToasts.qml" line="+78" />
       <source>Close</source>
       <translation>Schließen</translation>
     </message>
@@ -3976,6 +3995,53 @@
       <location line="+16" />
       <source>No cues in %1 yet</source>
       <translation>Noch keine Cues in %1</translation>
+    </message>
+  </context>
+  <context>
+    <name>PageWindow</name>
+    <message>
+      <location filename="../qml/PageWindow.qml" line="+42" />
+      <source>lmix — %1</source>
+      <translation>lmix — %1</translation>
+    </message>
+    <message>
+      <location line="+98" />
+      <source>lmix-core offline</source>
+      <translation>lmix-core nicht erreichbar</translation>
+    </message>
+    <message>
+      <location line="+17" />
+      <source>Keys</source>
+      <translation>Tasten</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Back to the main window</source>
+      <translation>Zurück ins Hauptfenster</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Put this page back into the main window; closing this window does the same</source>
+      <translation>Die Seite zurück ins Hauptfenster holen; das Schließen dieses Fensters tut dasselbe</translation>
+    </message>
+  </context>
+  <context>
+    <name>PanicButtons</name>
+    <message>
+      <location filename="../qml/PanicButtons.qml" line="+47" />
+      <source>Panic</source>
+      <comment>stops everything</comment>
+      <translation>Panik</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Panic all</source>
+      <translation>Panik: alles</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Stop every cue over the panic time and fade program to black; recordings and streams go on</source>
+      <translation>Alle Cues über die Panikzeit stoppen und Programm auf Schwarz blenden; Aufnahmen und Streams laufen weiter</translation>
     </message>
   </context>
   <context>
