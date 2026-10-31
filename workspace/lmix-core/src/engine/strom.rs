@@ -19,7 +19,7 @@
 use async_trait::async_trait;
 use lmix_types::{
     BoxRect, BusId, ChannelStrip, Device, DeviceKind, Effect, Listen, LiveTransport, Look,
-    OutputId, OutputStats, PageRunning, SignalLoss, SourceSpec, Transport,
+    OutputId, OutputSpec, OutputStats, PageRunning, SignalLoss, SourceSpec, SrtLink, Transport,
 };
 use reqwest::StatusCode;
 use serde::Serialize;
@@ -28,8 +28,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use strom_types::api::{
-    FadeToBlackRequest, SelectPreviewRequest, SrtRole, SrtStats, SrtStatsResponse,
-    TriggerTransitionRequest, UpdateBlockPropertiesRequest, VisionMixerState,
+    FadeToBlackRequest, OutputBytesResponse, SelectPreviewRequest, SrtRole, SrtStats,
+    SrtStatsResponse, TriggerTransitionRequest, UpdateBlockPropertiesRequest, VisionMixerState,
 };
 use strom_types::devtools::HtmlPageCommand;
 use strom_types::discovery::DeviceResponse;
@@ -54,8 +54,19 @@ const PLAYER_BUFFER: usize = 128;
 const MIXER_COMPOSITORS: [&str; 2] = ["mixer", "mv_comp"];
 /// The mixer's compositor of the tile picture (strom's `tiles_out`).
 const TILES_COMPOSITOR: &str = "tiles_comp";
-/// `max-last-buffer-repeat` default: repeat until end of stream.
-const REPEAT_FOREVER_NS: u64 = u64::MAX;
+/// `SignalLoss::Hold`: repeat the last frame for 584 years.
+///
+/// Not `u64::MAX` (GST_CLOCK_TIME_NONE, the property's "forever"): a
+/// pad that runs dry with NONE keeps its frame with an open end time,
+/// and the compositor (1.24 to 1.28) never drops a frame like that
+/// again, not even after `max-last-buffer-repeat` turns finite. Under
+/// load the source's next frames come late, the live compositor skips
+/// them, and the source killed after switching to black stayed on
+/// program for good (vm-check "dead source not black").
+const REPEAT_FOREVER_NS: u64 = u64::MAX - 1;
+// GST_CLOCK_TIME_NONE is u64::MAX; hold still means a century or more.
+const _: () = assert!(REPEAT_FOREVER_NS != u64::MAX);
+const _: () = assert!(REPEAT_FOREVER_NS > 100 * 365 * 24 * 3600 * 1_000_000_000);
 /// `SignalLoss::Black`: this long without a frame, then black.
 const BLACK_AFTER: Duration = Duration::from_millis(400);
 
@@ -139,6 +150,8 @@ pub struct StromEngine {
     /// Whether recordings may be live MKV; set by `start` from strom's
     /// GStreamer version.
     live_mkv: std::sync::Mutex<flows::LiveMkv>,
+    /// Last byte counter reading of each RTMP and recording output.
+    output_rates: std::sync::Mutex<super::output_rate::OutputRates>,
 }
 
 /// Longest wait for one engine call. Commands run under the switcher
@@ -191,6 +204,7 @@ impl StromEngine {
             stingers: Arc::new(meters::Stingers::new(MIXER_BLOCK)),
             playback: Default::default(),
             live_mkv: std::sync::Mutex::new(flows::LiveMkv::No),
+            output_rates: Default::default(),
         }
     }
 
@@ -2012,13 +2026,42 @@ impl Engine for StromEngine {
         }
     }
 
-    /// SRT sender statistics of the output's flow, summed over its
-    /// receivers (a listener may serve several).
-    async fn output_stats(&self, id: OutputId) -> Option<OutputStats> {
-        let path = format!("/flows/{}/srt-stats", flows::output_flow_id(id));
-        let resp = self.http.get(self.url(&path)).send().await.ok()?;
-        let stats: SrtStatsResponse = check(resp).await.ok()?.json().await.ok()?;
-        Some(sender_stats(id, &stats.stats))
+    /// SRT: sender statistics of the output's flow, summed over its
+    /// receivers (a listener may serve several). RTMP and recordings: the
+    /// rate from strom's byte counters (socket, file), from the second
+    /// reading on.
+    async fn output_stats(&self, id: OutputId, spec: &OutputSpec) -> Option<OutputStats> {
+        let flow = flows::output_flow_id(id);
+        match spec {
+            OutputSpec::Srt { .. } => {
+                let path = format!("/flows/{flow}/srt-stats");
+                let resp = self.http.get(self.url(&path)).send().await.ok()?;
+                let stats: SrtStatsResponse = check(resp).await.ok()?.json().await.ok()?;
+                Some(sender_stats(id, &stats.stats))
+            }
+            OutputSpec::Rtmp { .. } | OutputSpec::Record { .. } => {
+                let path = format!("/flows/{flow}/output-bytes");
+                let resp = self.http.get(self.url(&path)).send().await.ok()?;
+                let read: OutputBytesResponse = check(resp).await.ok()?.json().await.ok()?;
+                // No counted element (the splitmuxsink Recorder, MKV before
+                // GStreamer 1.26) is no measurement, not 0 bytes.
+                if read.stats.outputs.is_empty() {
+                    return None;
+                }
+                let bytes = read.stats.outputs.values().map(|c| c.bytes).sum();
+                let kbps = self.output_rates.lock().expect("output rates lock").rate(
+                    id,
+                    bytes,
+                    std::time::Instant::now(),
+                )?;
+                Some(OutputStats {
+                    output: id,
+                    kbps,
+                    srt: None,
+                })
+            }
+            _ => None,
+        }
     }
 
     /// Cameras, microphones and NDI sources, in that order.
@@ -2114,18 +2157,20 @@ fn sender_stats(id: OutputId, stats: &SrtStats) -> OutputStats {
     let rate_mbps: f64 = callers.iter().filter_map(|c| c.send_rate_mbps).sum();
     OutputStats {
         output: id,
-        connected: stats
-            .connections
-            .values()
-            .any(|c| c.role == SrtRole::Sink && c.connected),
         kbps: (rate_mbps * 1000.0).round() as u32,
-        packets_lost: callers.iter().filter_map(|c| c.packets_sent_lost).sum(),
-        packets_dropped: callers.iter().filter_map(|c| c.packets_sent_dropped).sum(),
-        rtt_ms: callers
-            .iter()
-            .filter_map(|c| c.rtt_ms)
-            .reduce(f64::max)
-            .map(|ms| ms.round() as u32),
+        srt: Some(SrtLink {
+            connected: stats
+                .connections
+                .values()
+                .any(|c| c.role == SrtRole::Sink && c.connected),
+            packets_lost: callers.iter().filter_map(|c| c.packets_sent_lost).sum(),
+            packets_dropped: callers.iter().filter_map(|c| c.packets_sent_dropped).sum(),
+            rtt_ms: callers
+                .iter()
+                .filter_map(|c| c.rtt_ms)
+                .reduce(f64::max)
+                .map(|ms| ms.round() as u32),
+        }),
     }
 }
 
@@ -2389,6 +2434,95 @@ mod tests {
         assert!(!engine.flow_running(stopped).await);
         assert!(!engine.flow_running(missing).await);
         assert!(engine.flow_running(broken).await);
+    }
+
+    /// RTMP and recordings take their rate from strom's byte counters of
+    /// the output's flow (M07): nothing from the first reading, then the
+    /// bytes between two readings, summed over the flow's sinks.
+    #[tokio::test]
+    async fn rtmp_and_recordings_report_the_rate_of_their_bytes() {
+        let asked = std::sync::Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
+        let seen = asked.clone();
+        let reading = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
+        let app = axum::Router::new().fallback(move |request: axum::extract::Request| {
+            let seen = seen.clone();
+            let reading = reading.clone();
+            async move {
+                seen.lock().unwrap().push(request.uri().path().to_string());
+                // Two sinks, 50 000 and 75 000 bytes more on each reading.
+                let n = reading.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                axum::Json(serde_json::json!({
+                    "flow_id": FlowId::nil(),
+                    "stats": { "outputs": {
+                        "rtmp:rtmp_sink": { "medium": "network", "bytes": 50_000 * n },
+                        "rec:fragmentsink": { "medium": "file", "bytes": 75_000 * n },
+                    }}
+                }))
+            }
+        });
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        let engine = StromEngine::new(
+            format!("http://{addr}"),
+            MixerBackend::Cpu,
+            MonitorOut::None,
+        );
+        let id = OutputId::new();
+        let spec = OutputSpec::Rtmp {
+            url: "rtmp://192.0.2.1/live".into(),
+            key: "key".into(),
+            video_kbps: 6000,
+            encoding: Default::default(),
+        };
+
+        assert_eq!(engine.output_stats(id, &spec).await, None);
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        let stats = engine.output_stats(id, &spec).await.expect("a rate");
+
+        // 125 000 bytes in at least 200 ms: at most 5000 kbit/s, less on
+        // a slow runner.
+        assert!((1000..=5000).contains(&stats.kbps), "kbps {}", stats.kbps);
+        assert_eq!((stats.output, stats.srt), (id, None));
+        let display = OutputSpec::Display {
+            mode: lmix_types::DisplayMode::Window,
+        };
+        assert_eq!(engine.output_stats(id, &display).await, None);
+        let path = format!("/api/flows/{}/output-bytes", flows::output_flow_id(id));
+        assert_eq!(*asked.lock().unwrap(), [path.clone(), path]);
+    }
+
+    /// A recording strom keeps no counter for (MKV before GStreamer 1.26,
+    /// `splitmuxsink`): strom answers no outputs, and that is no rate, not
+    /// 0 kbit/s, so the Console shows the configured one (review of #191).
+    #[tokio::test]
+    async fn an_output_without_a_counter_reports_no_rate() {
+        let app = axum::Router::new().fallback(|| async {
+            axum::Json(serde_json::json!({
+                "flow_id": FlowId::nil(),
+                "stats": { "outputs": {} }
+            }))
+        });
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        let engine = StromEngine::new(
+            format!("http://{addr}"),
+            MixerBackend::Cpu,
+            MonitorOut::None,
+        );
+        let id = OutputId::new();
+        let spec = OutputSpec::Record {
+            folder: "rec".into(),
+            container: lmix_types::Container::Mkv,
+            video_kbps: 6000,
+            encoding: Default::default(),
+        };
+
+        for _ in 0..3 {
+            assert_eq!(engine.output_stats(id, &spec).await, None);
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
     }
 
     /// A new playback flow forgets the zones' last levels: they are by
@@ -3883,11 +4017,13 @@ mod tests {
             out,
             OutputStats {
                 output: id,
-                connected: true,
                 kbps: 6500,
-                packets_lost: 5,
-                packets_dropped: 2,
-                rtt_ms: Some(31),
+                srt: Some(SrtLink {
+                    connected: true,
+                    packets_lost: 5,
+                    packets_dropped: 2,
+                    rtt_ms: Some(31),
+                }),
             }
         );
     }
@@ -3923,7 +4059,8 @@ mod tests {
 
         let out = sender_stats(OutputId::new(), &stats);
 
-        assert!(!out.connected);
-        assert_eq!((out.kbps, out.rtt_ms), (0, None));
+        let link = out.srt.expect("an SRT output reports its link");
+        assert!(!link.connected);
+        assert_eq!((out.kbps, link.rtt_ms), (0, None));
     }
 }

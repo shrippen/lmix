@@ -484,8 +484,12 @@ settled '[[ "$(output_state Rec)" == running && "$(output_state Stream)" == runn
 timeout "$((SETTLE_S + 5))" gst-launch-1.0 -q srtsrc uri="srt://127.0.0.1:9911" ! filesink location="$WORK/srt.ts" &
 receiver=$!
 # Link health while the receiver is connected (B32).
-stream_link() { curl -sf "$CORE/outputs/stats" | jq -e '.[] | select(.connected and .kbps > 0)' >/dev/null; }
+stream_link() { curl -sf "$CORE/outputs/stats" | jq -e '.[] | select(.srt.connected and .kbps > 0)' >/dev/null; }
 wait_for "$SETTLE_S" stream_link || fail "no link health for the SRT output: $(curl -sf "$CORE/outputs/stats")"
+# The recording's measured rate, from strom's byte counter (M07).
+output_id() { curl -sf "$CORE/state" | jq -r ".outputs[] | select(.name==\"$1\") | .id"; }
+rec_rate() { curl -sf "$CORE/outputs/stats" | jq -e --arg id "$(output_id Rec)" '.[] | select(.output == $id and .srt == null and .kbps > 0)' >/dev/null; }
+wait_for "$SETTLE_S" rec_rate || fail "no measured rate for the recording: $(curl -sf "$CORE/outputs/stats")"
 wait "$receiver" || true
 [[ $(stat -c %s "$WORK/srt.ts" 2>/dev/null || echo 0) -gt 50000 ]] || fail "SRT output delivered nothing"
 act '{"action":"stop_output","output":"Rec"}' >/dev/null
@@ -618,9 +622,15 @@ wait_for "$SETTLE_S" logo_pgm || fail "program lost the logo while the source wa
 [[ "$(input_state Logo)" == offline ]] || fail "dead source back before its file"
 running="$(curl -sf "$STROM/api/flows/$MIXER_ID" | jq -r '.flow.running')"
 [[ "$running" == true ]] || fail "mixer stopped after source loss"
+# Black while the frame is held: the held frame goes. Held "forever"
+# as GST_CLOCK_TIME_NONE, the compositor kept it for good.
+black_pgm() { picture program "$WORK/black.jpg" || return 1; [[ $(brightness "$WORK/black.jpg") -lt 5 ]]; }
+act '{"action":"set_signal_loss","input":"Logo","mode":"black"}' >/dev/null
+wait_for "$SETTLE_S" black_pgm || fail "held dead source not black after switching to black ($(brightness "$WORK/black.jpg"))"
+act '{"action":"set_signal_loss","input":"Logo","mode":"hold"}' >/dev/null
 revive_logo
 wait_for "$SETTLE_S" is_logo || fail "logo not back after failback"
-pass "failover: source died mid-transition, program held its last frame, input failed back"
+pass "failover: source died mid-transition, program held its last frame (black on demand), input failed back"
 
 # Signal loss per input: hold the last frame (default, above) or black.
 # A paused clip keeps sending its frame, so the source has to die.
@@ -628,7 +638,6 @@ act '{"action":"set_signal_loss","input":"Logo","mode":"black"}' >/dev/null
 act '{"action":"cut_direct","input":"Logo"}' >/dev/null
 wait_for "$SETTLE_S" logo_pgm || fail "logo not on program before the loss"
 kill_logo
-black_pgm() { picture program "$WORK/black.jpg" || return 1; [[ $(brightness "$WORK/black.jpg") -lt 5 ]]; }
 wait_for "$SETTLE_S" black_pgm || fail "dead source not black on program ($(brightness "$WORK/black.jpg"))"
 act '{"action":"set_signal_loss","input":"Logo","mode":"hold"}' >/dev/null
 revive_logo

@@ -156,7 +156,7 @@ measure() {
     median="$(jq -r '.median_ms // "null"' <<<"$latency")"
     p95="$(jq -r '.p95_ms // "null"' <<<"$latency")"
     stats="$(curl -sf "$CORE/outputs/stats" || echo '[]')"
-    link="$(jq -r 'map("\(.kbps) kbit/s lost \(.packets_lost) dropped \(.packets_dropped)") | join("; ")' <<<"$stats" 2>/dev/null || echo -)"
+    link="$(jq -r 'map("\(.kbps) kbit/s" + (if .srt then " lost \(.srt.packets_lost) dropped \(.srt.packets_dropped)" else "" end)) | join("; ")' <<<"$stats" 2>/dev/null || echo -)"
     states="$(curl -sf "$CORE/state" | jq -r '[.outputs[] | "\(.name)=\(.status.state)"] | join(" ")')"
     gpu="$(nvidia-smi --query-gpu=utilization.gpu,memory.used --format=csv,noheader 2>/dev/null | tr -d ' ' || echo -)"
     rss_last="$(rss_mb "$STROM_PID")"
