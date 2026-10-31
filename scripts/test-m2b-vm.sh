@@ -292,7 +292,8 @@ full=$(steady_db pgm_db)
 act '{"action":"set_channel_strip","input":"Ball","strip":{"gain_db":-20,"delay_ms":200}}' >/dev/null
 settled '[[ $(pgm_db) -lt $((full - 15)) ]]' || fail "strip gain -20 dB did not lower program ($full -> $(pgm_db) dB)"
 ball_slot="$(curl -sf "$CORE/state" | jq '.inputs[] | select(.name=="Ball") | .slot')"
-offset="$(curl -sf "$STROM/api/flows/$MIXER_ID/blocks/adelay$ball_slot/properties" | jq '.properties.offset_ms')"
+# The slot's delay is its audio mixer channel's (slot + 2, after the stinger).
+offset="$(curl -sf "$STROM/api/flows/$MIXER_ID/blocks/mix/properties" | jq ".properties.ch$((ball_slot + 2))_delay")"
 [[ "$(jq -n "$offset == 200")" == true ]] || fail "strip delay not in the engine (offset $offset ms)"
 [[ $(pgm_db) -gt $SILENT_DB ]] || fail "program silent after the delay change"
 act '{"action":"set_channel_strip","input":"Ball","strip":{}}' >/dev/null
@@ -424,8 +425,10 @@ pass "transport: pause, play, next; playback in the state"
 # --- paused clip: strom repeats its last frame (no signal loss) ---
 act '{"action":"cut_direct","input":"Clips"}' >/dev/null
 # Straight to program from outside preview: the mixer must follow lmix.
+# Its mixer input: its slot after black (input 0).
+clips_input=$(( $(curl -sf "$CORE/state" | jq '.inputs[] | select(.name=="Clips") | .slot') + 1 ))
 mixer_pgm="$(curl -sf "$STROM/api/flows/$MIXER_ID/blocks/vm/state" | jq '.program_input')"
-[[ "$mixer_pgm" == 4 ]] || fail "cut_direct: mixer program is input $mixer_pgm, not Clips (4)"
+[[ "$mixer_pgm" == "$clips_input" ]] || fail "cut_direct: mixer program is input $mixer_pgm, not Clips ($clips_input)"
 # Pause in the bright clip b, well before its end: start b afresh with
 # "next" from the dark clip a (from b, "next" goes to a first). Paused
 # near its end, b would roll over to a before the pause takes hold.
@@ -463,8 +466,8 @@ act '{"action":"transport_input","input":"Clips","transport":"pause"}' >/dev/nul
 wait_for "$SETTLE_S" clips_still || fail "clip did not pause before quick play"
 act '{"action":"quick_play","input":"Clips"}' >/dev/null
 [[ "$(curl -sf "$CORE/state" | jq -r '.program')" == "$clips_id" ]] || fail "quick play: Clips not on program"
-mixer_on_clips() { [[ "$(curl -sf "$STROM/api/flows/$MIXER_ID/blocks/vm/state" | jq '.program_input')" == 4 ]]; }
-wait_for "$SETTLE_S" mixer_on_clips || fail "quick play: mixer program is not Clips (4)"
+mixer_on_clips() { [[ "$(curl -sf "$STROM/api/flows/$MIXER_ID/blocks/vm/state" | jq '.program_input')" == "$clips_input" ]]; }
+wait_for "$SETTLE_S" mixer_on_clips || fail "quick play: mixer program is not Clips ($clips_input)"
 wait_for "$SETTLE_S" clips_move || fail "quick play: clip does not play"
 pass "quick play: paused clip off air to program, playing"
 
