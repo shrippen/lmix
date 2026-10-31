@@ -38,6 +38,7 @@ Abgleich mit upstream: `git fetch https://github.com/Eyevinn/strom main` und
 | AAC-Encoder-Delay aus der Zeitachse | #38 | PR | offen |
 | Start, Stopp, Löschen und Update eines Flows unter einer Sperre je Flow | #45, #47 | PR | offen; Race, Tests vorhanden |
 | Event-Filter-Test ohne Log-Zähler | #44 | PR | offen |
+| Thumbnail-Zweig starten, bevor das Tee ihn speist (sonst hält die Quelle an) | #55 | PR | offen; Test vorhanden |
 | Media Player hält beim Pausieren das letzte Bild | 7682d41 | PR | offen |
 | DeckLink Output mit direktem Media-Timing | #50 | PR | offen; überschneidet sich mit upstream #1131, #1168, zuerst abgleichen |
 | CUDA-Mischer auf echter Hardware (Alpha nach Fade, Stinger, Thumbnails) | #29 | PR | offen; hängt am CUDA-Mischer |
