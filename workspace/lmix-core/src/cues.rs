@@ -227,6 +227,28 @@ pub(crate) fn find_cue_mut<'a>(cues: &'a mut [Cue], text: &str) -> Option<&'a mu
     None
 }
 
+/// Puts `cue` after the cue `after` (number or id) in `cues` or their
+/// groups; gives it back when there is no such cue.
+pub(crate) fn insert_after(
+    cues: &mut Vec<Cue>,
+    after: &str,
+    cue: Box<Cue>,
+) -> Result<(), Box<Cue>> {
+    let named = |c: &Cue| c.id.to_string() == after || (!c.number.is_empty() && c.number == after);
+    if let Some(at) = cues.iter().position(named) {
+        cues.insert(at + 1, *cue);
+        return Ok(());
+    }
+    let mut cue = cue;
+    for parent in cues.iter_mut() {
+        match insert_after(&mut parent.children, after, cue) {
+            Ok(()) => return Ok(()),
+            Err(back) => cue = back,
+        }
+    }
+    Err(cue)
+}
+
 /// Last cue of the follow chain that starts at `start`.
 fn chain_end(cues: &[Cue], start: usize) -> usize {
     let mut i = start;

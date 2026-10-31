@@ -1949,7 +1949,10 @@ impl Service {
         // timer has to look again.
         let cue_lists = matches!(
             action,
-            Action::SetCueList { .. } | Action::UpdateCue { .. } | Action::RemoveCueList { .. }
+            Action::SetCueList { .. }
+                | Action::AddCue { .. }
+                | Action::UpdateCue { .. }
+                | Action::RemoveCueList { .. }
         );
         let commands = match action {
             Action::NewShow { format } => {

@@ -423,6 +423,7 @@ fn runs_automation(action: &Action) -> bool {
                 | Action::TitleReport { .. }
                 | Action::AddCueList { .. }
                 | Action::SetCueList { .. }
+                | Action::AddCue { .. }
                 | Action::UpdateCue { .. }
                 | Action::RemoveCueList { .. }
                 | Action::CueGo { .. }
@@ -1332,15 +1333,27 @@ impl Switcher {
                 self.replace_cues(index, name, cues, source)?;
                 Ok(Vec::new())
             }
-            Action::UpdateCue { list, cue, changes } => {
-                let index = self.cue_list_or_active(list.as_ref())?;
+            Action::AddCue { list, after, cue } => {
+                let index = self.editable_cue_list(list.as_ref())?;
                 let entry = &self.show.cue_lists[index];
-                if let Some(source) = &entry.source {
-                    return Err(bad_cues(format!(
-                        "cue list {} comes from {source} and is edited there",
-                        entry.name
-                    )));
+                let mut cues = entry.cues.clone();
+                if let Some(after) = after {
+                    if crate::cues::insert_after(&mut cues, &after, cue).is_err() {
+                        return Err(bad_cues(format!(
+                            "no cue {after} in cue list {}",
+                            entry.name
+                        )));
+                    }
+                } else {
+                    cues.push(*cue);
                 }
+                let (name, source) = (entry.name.clone(), entry.source.clone());
+                self.replace_cues(index, name, cues, source)?;
+                Ok(Vec::new())
+            }
+            Action::UpdateCue { list, cue, changes } => {
+                let index = self.editable_cue_list(list.as_ref())?;
+                let entry = &self.show.cue_lists[index];
                 let mut cues = entry.cues.clone();
                 let target = crate::cues::find_cue_mut(&mut cues, &cue)
                     .ok_or_else(|| bad_cues(format!("no cue {cue} in cue list {}", entry.name)))?;
@@ -3716,6 +3729,20 @@ impl Switcher {
             .list_changed(&self.show.cue_lists, tokio::time::Instant::now());
         self.sync_standby();
         Ok(())
+    }
+
+    /// `list`, or the active list without one, when it is not from a
+    /// script (it is edited there, IMP.9).
+    fn editable_cue_list(&self, list: Option<&InputRef>) -> Result<usize, ActionError> {
+        let index = self.cue_list_or_active(list)?;
+        let entry = &self.show.cue_lists[index];
+        if let Some(source) = &entry.source {
+            return Err(bad_cues(format!(
+                "cue list {} comes from {source} and is edited there",
+                entry.name
+            )));
+        }
+        Ok(index)
     }
 
     /// `list`, or the active list without one.
@@ -10587,6 +10614,72 @@ mod tests {
                 list: Some(InputRef::Text("Script".into())),
                 cue: "11".into(),
                 changes: serde_json::json!({ "name": "Encore" }),
+            })
+            .is_err());
+    }
+
+    /// One cue goes in after another, inside a group too, or at the end;
+    /// the rest of the list, standby and running cues stay.
+    #[test]
+    fn add_cue_puts_one_cue_in() {
+        let mut sw = two_inputs();
+        let t = tokio::time::Instant::now();
+        sw.apply(Action::SetGoGuard { ms: 0 }).unwrap();
+        let wait = |number: &str| Cue {
+            number: number.into(),
+            duration_ms: Some(60_000),
+            ..Cue::empty(CueKind::Wait)
+        };
+        let group = Cue {
+            number: "3".into(),
+            children: vec![wait("3.1")],
+            ..Cue::empty(CueKind::Group)
+        };
+        sw.apply(Action::AddCueList {
+            name: "Act".into(),
+            cues: vec![wait("1"), wait("2"), group],
+            source: None,
+        })
+        .unwrap();
+        sw.cue_go(None, t, None).unwrap();
+        let add = |sw: &mut Switcher, after: Option<&str>, number: &str| {
+            sw.apply(Action::AddCue {
+                list: None,
+                after: after.map(str::to_string),
+                cue: Box::new(Cue {
+                    number: number.into(),
+                    ..Cue::empty(CueKind::Note)
+                }),
+            })
+        };
+        let numbers = |cues: &[Cue]| cues.iter().map(|c| c.number.clone()).collect::<Vec<_>>();
+
+        add(&mut sw, Some("1"), "1.5").unwrap();
+        add(&mut sw, Some("3.1"), "3.2").unwrap();
+        add(&mut sw, None, "4").unwrap();
+        let cues = sw.state().cue_lists[0].cues.clone();
+        assert_eq!(numbers(&cues), ["1", "1.5", "2", "3", "4"]);
+        assert_eq!(numbers(&cues[3].children), ["3.1", "3.2"]);
+        // Standby stays on cue 2, cue 1 runs on.
+        assert_eq!(sw.state().cue_lists[0].standby, 3);
+        assert_eq!(sw.state().running_cues.len(), 1);
+
+        // Refused, and nothing changes: no such cue, a number used
+        // elsewhere, a list from a script.
+        assert!(add(&mut sw, Some("9"), "9.5").is_err());
+        assert!(add(&mut sw, None, "2").is_err());
+        assert_eq!(sw.state().cue_lists[0].cues, cues);
+        sw.apply(Action::AddCueList {
+            name: "Script".into(),
+            cues: vec![wait("11")],
+            source: Some("script:act2.md".into()),
+        })
+        .unwrap();
+        assert!(sw
+            .apply(Action::AddCue {
+                list: Some(InputRef::Text("Script".into())),
+                after: None,
+                cue: Box::new(Cue::empty(CueKind::Note)),
             })
             .is_err());
     }

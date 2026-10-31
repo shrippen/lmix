@@ -253,6 +253,7 @@ pub const ACTION_GROUPS: &[(&str, &[&str])] = &[
             "set_triggers",
             "add_cue_list",
             "set_cue_list",
+            "add_cue",
             "update_cue",
             "remove_cue_list",
             "cue_go",
@@ -734,6 +735,17 @@ pub enum Action {
         cues: Vec<Cue>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         source: Option<String>,
+    },
+    /// Add one cue to a list, without `list` the active one: after the
+    /// cue `after` (number or id, inside groups too), else at the end.
+    /// Like `update_cue` it names only the new cue, so an edit sent just
+    /// before is not undone by a whole list from an older state.
+    AddCue {
+        #[serde(default)]
+        list: Option<InputRef>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        after: Option<String>,
+        cue: Box<Cue>,
     },
     /// Change fields of one cue (number or id) of a list, inside groups
     /// too; without `list` the active list. `changes` is a JSON merge
