@@ -30,8 +30,6 @@ RowLayout {
     readonly property var chosen: showView.selectedCue
     readonly property var zones: showView.show && showView.show.zones ? showView.show.zones : []
     readonly property var stages: showView.show && showView.show.stages ? showView.show.stages : []
-    /** A dialog of the bar is open: the inspector keeps its cue. */
-    readonly property bool asking: soundDialog.visible || pictureDialog.visible || actionDialog.visible
     /** Id of the cue the new one goes after, taken when a dialog opens:
      *  standby may move meanwhile. Empty: at the end. */
     property string after: ""

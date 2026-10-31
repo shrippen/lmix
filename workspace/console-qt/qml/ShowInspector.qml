@@ -63,7 +63,7 @@ KanteCard {
             list.forEach(c => {
                 if ((c.kind === "sound" || c.kind === "picture") && (cue === null || c.id !== cue.id)) {
                     var ref = c.number !== "" ? c.number : c.id
-                    out.push({ ref: ref, label: (c.number !== "" ? c.number + "  " : "") + showView.cueName(c), kind: c.kind })
+                    out.push({ ref: ref, id: c.id, label: (c.number !== "" ? c.number + "  " : "") + showView.cueName(c), kind: c.kind })
                 }
                 walk(c.children || [])
             })
@@ -336,7 +336,10 @@ KanteCard {
                     readonly property string kind: target ? target.kind : "cue"
                     readonly property var choices: inspector.fadeChoices[kind]
                     readonly property var refs: choices.map(c => c.ref)
-                    readonly property bool missing: target !== null && refs.indexOf(target.ref) < 0
+                    // A cue is named by its number or its id (a cue added
+                    // without a number, numbered later).
+                    readonly property int at: target === null ? -1 : choices.findIndex(c => c.ref === target.ref || c.id === target.ref)
+                    readonly property bool missing: target !== null && at < 0
 
                     /** Fades `ref` of `kind` from now on. */
                     function retarget(kind, ref) {
@@ -370,7 +373,7 @@ KanteCard {
                         // A target that is gone stays named, marked.
                         model: (fadeTargetRow.missing ? [fadeTargetRow.target.ref] : []).concat(fadeTargetRow.choices.map(c => c.label))
                         currentIndex: fadeTargetRow.target === null ? -1
-                            : (fadeTargetRow.missing ? 0 : fadeTargetRow.refs.indexOf(fadeTargetRow.target.ref))
+                            : (fadeTargetRow.missing ? 0 : fadeTargetRow.at)
                         invalid: fadeTargetRow.missing
                         Accessible.name: qsTr("What the fade fades")
                         onActivated: index => fadeTargetRow.retarget(fadeTargetRow.kind, fadeTargetRow.refs[index - (fadeTargetRow.missing ? 1 : 0)])

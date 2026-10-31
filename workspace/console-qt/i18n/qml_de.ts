@@ -1335,7 +1335,7 @@
   <context>
     <name>CueAddBar</name>
     <message>
-      <location filename="../qml/CueAddBar.qml" line="+93" />
+      <location filename="../qml/CueAddBar.qml" line="+91" />
       <source>Add</source>
       <translation>Neu</translation>
     </message>
@@ -4893,12 +4893,12 @@
     </message>
     <message>
       <location line="+8" />
-      <location line="+48" />
+      <location line="+51" />
       <source>Stage</source>
       <translation>Bühne</translation>
     </message>
     <message>
-      <location line="-34" />
+      <location line="-37" />
       <source>Stage of the picture</source>
       <translation>Bühne des Bildes</translation>
     </message>
@@ -4908,7 +4908,7 @@
       <translation>Blendet</translation>
     </message>
     <message>
-      <location line="+24" />
+      <location line="+27" />
       <source>Cue</source>
       <translation>Cue</translation>
     </message>
@@ -5401,12 +5401,12 @@
     </message>
     <message>
       <location line="+1" />
-      <location line="+24" />
+      <location line="+38" />
       <source>Note</source>
       <translation>Notiz</translation>
     </message>
     <message>
-      <location line="-23" />
+      <location line="-37" />
       <source>Group</source>
       <translation>Gruppe</translation>
     </message>
@@ -5417,29 +5417,29 @@
     </message>
     <message>
       <location line="+0" />
-      <location line="+24" />
+      <location line="+38" />
       <source>Start</source>
       <translation>Start</translation>
     </message>
     <message>
-      <location line="-23" />
-      <location line="+24" />
+      <location line="-37" />
+      <location line="+38" />
       <source>Sound</source>
       <translation>Ton</translation>
     </message>
     <message>
-      <location line="-23" />
-      <location line="+24" />
+      <location line="-37" />
+      <location line="+38" />
       <source>Picture</source>
       <translation>Bild</translation>
     </message>
     <message>
-      <location line="-22" />
+      <location line="-36" />
       <source>Actions</source>
       <translation>Aktionen</translation>
     </message>
     <message>
-      <location line="+7" />
+      <location line="+21" />
       <source>Fade %1</source>
       <translation>Blende %1</translation>
     </message>

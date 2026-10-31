@@ -191,6 +191,17 @@ TestCase {
         compare(sent[0].changes.fade.target, { cue: null, zone: "Hall", stage: null })
     }
 
+    function test_a_target_by_id_is_found_after_numbering() {
+        const s = show(3)
+        s.cue_lists[0].cues[2].fade.target = { cue: "id-1" }
+        const view = createTemporaryObject(viewComponent, test.Window.contentItem, { show: s })
+        waitForRendering(view)
+        const row = find(inspector(view), i => i.refs !== undefined && i.missing !== undefined)
+        verify(!row.missing, "a fade of cue 1 by its id shows as gone")
+        compare(row.at, 0)
+        compare(view.cueName(s.cue_lists[0].cues[2]), "Fade 1")
+    }
+
     Component {
         id: routesComponent
         SoundRoutes {

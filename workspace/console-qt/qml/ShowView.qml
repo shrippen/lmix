@@ -177,7 +177,7 @@ ColumnLayout {
         case "wait": return qsTr("Wait %1").arg(clock(cue.duration_ms || 0))
         case "note": return qsTr("Note")
         case "group": return qsTr("Group")
-        case "start": return cue.target && cue.target.cue ? qsTr("Start %1").arg(cue.target.cue) : qsTr("Start")
+        case "start": return cue.target && cue.target.cue ? qsTr("Start %1").arg(refName(cue.target.cue)) : qsTr("Start")
         case "sound": return cue.sound ? cue.sound.file.split("/").pop() : qsTr("Sound")
         case "picture": return cue.picture ? cue.picture.file.split("/").pop() : qsTr("Picture")
         case "fade": return fadeName(cue)
@@ -185,10 +185,24 @@ ColumnLayout {
         }
     }
 
+    /** How a cue named by number or id reads: its number, else a sound's
+     *  or picture's file (its name does not lead to another cue), else the
+     *  reference itself. */
+    function refName(ref) {
+        var found = list ? findCue(list.cues, ref) : null
+        if (found === null) {
+            return ref
+        }
+        if (found.number !== "") {
+            return found.number
+        }
+        return found.kind === "sound" || found.kind === "picture" ? cueName(found) : ref
+    }
+
     function fadeName(cue) {
         var target = cue.fade ? cue.fade.target : null
         if (target && target.cue !== undefined)
-            return qsTr("Fade %1").arg(target.cue)
+            return qsTr("Fade %1").arg(refName(target.cue))
         if (target && target.zone !== undefined)
             return qsTr("Fade zone %1").arg(target.zone)
         if (target && target.stage !== undefined)
