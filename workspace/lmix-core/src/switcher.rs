@@ -9167,6 +9167,29 @@ mod tests {
         bottom: 0.25,
     };
 
+    /// A takeover frees the slots the show leaves empty with the first
+    /// switch (`free_stale`): every slot must be set before it, or a slot
+    /// the show fills again would go too.
+    #[test]
+    fn a_restore_sets_every_slot_before_the_first_switch() {
+        let mut sw = with_layout();
+        sw.apply(Action::PreviewInput { input: named("B") })
+            .unwrap();
+        let restore = sw.restore_commands();
+        let first_switch = restore
+            .iter()
+            .position(crate::engine::strom::switches)
+            .expect("a restore switches");
+        let last_slot = restore
+            .iter()
+            .rposition(|c| matches!(c, Command::SetSlot { .. }))
+            .expect("a restore sets slots");
+        assert!(
+            last_slot < first_switch,
+            "SetSlot at {last_slot} after the switch at {first_switch}: {restore:#?}"
+        );
+    }
+
     /// A, B; layout 1 = A behind, B top right zoomed in; A on program.
     fn with_layout() -> Switcher {
         let mut sw = two_inputs();

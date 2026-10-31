@@ -130,6 +130,9 @@ pub struct StromEngine {
     /// Emptied slots whose mixer input strom kept, as it was on program,
     /// preview or in a layout then: removed after the next switch.
     stale: std::sync::Mutex<std::collections::BTreeSet<usize>>,
+    /// Slots whose audio channel strom has but whose bus taps it did not
+    /// take: the next `grow` sets them, a `shrink` removes the channel.
+    untapped: std::sync::Mutex<std::collections::BTreeSet<usize>>,
     /// Ends of the stinger takes lmix starts (strom's events).
     stingers: Arc<meters::Stingers>,
     playback: playback::Playing,
@@ -184,6 +187,7 @@ impl StromEngine {
             buses: Default::default(),
             built: Default::default(),
             stale: Default::default(),
+            untapped: Default::default(),
             stingers: Arc::new(meters::Stingers::new(MIXER_BLOCK)),
             playback: Default::default(),
             live_mkv: std::sync::Mutex::new(flows::LiveMkv::No),
@@ -473,7 +477,11 @@ impl StromEngine {
         self.stale.lock().expect("stale lock").remove(&slot);
         let (video, audio) = {
             let built = self.built.lock().expect("built lock");
-            (built.video.contains(&slot), built.audio.contains(&slot))
+            let tapped = !self.untapped.lock().expect("untapped lock").contains(&slot);
+            (
+                built.video.contains(&slot),
+                built.audio.contains(&slot) && tapped,
+            )
         };
         if !video {
             let body = AddVisionMixerInputRequest {
@@ -516,8 +524,11 @@ impl StromEngine {
                 .await
                 .map_err(net)?;
             taken_or_added(check(resp).await)?;
-            // Counted as built once its taps are set too: a failed patch
-            // comes again with the next try (the add then answers 409).
+            // Untapped until its taps are set: a failed patch comes again
+            // with the next try (the add then answers 409), and a shrink
+            // before that still removes the channel.
+            self.built.lock().expect("built lock").audio.insert(slot);
+            self.untapped.lock().expect("untapped lock").insert(slot);
             // The buses' taps, which strom sets for the channels it has.
             let buses = self.buses.lock().expect("buses lock").clone();
             if let Some(buses) = buses {
@@ -532,7 +543,7 @@ impl StromEngine {
                 });
                 self.patch_taps(taps).await?;
             }
-            self.built.lock().expect("built lock").audio.insert(slot);
+            self.untapped.lock().expect("untapped lock").remove(&slot);
         }
         Ok(())
     }
@@ -570,6 +581,7 @@ impl StromEngine {
             .map_err(net)?;
         gone_or_removed(check(resp).await)?;
         self.built.lock().expect("built lock").audio.remove(&slot);
+        self.untapped.lock().expect("untapped lock").remove(&slot);
         self.mutes
             .lock()
             .expect("mutes lock")
@@ -1586,6 +1598,7 @@ impl Engine for StromEngine {
             *self.stale.lock().expect("stale lock") =
                 slots.video.union(&slots.audio).copied().collect();
             *self.built.lock().expect("built lock") = slots;
+            self.untapped.lock().expect("untapped lock").clear();
             *self.format.lock().expect("format lock") = format;
             if let Some(multiview) = current.as_ref().map(flows::multiview_of) {
                 *self.multiview.lock().expect("multiview lock") = multiview;
@@ -1613,6 +1626,7 @@ impl Engine for StromEngine {
         // A new mixer: the restore that follows brings the slots.
         *self.built.lock().expect("built lock") = self.no_slots();
         self.stale.lock().expect("stale lock").clear();
+        self.untapped.lock().expect("untapped lock").clear();
         let wanted = self.mixer_flow();
         self.build_mixer(&wanted).await
     }
@@ -2157,7 +2171,7 @@ async fn check(resp: reqwest::Response) -> Result<reqwest::Response, EngineError
 }
 
 /// Whether `command` may take an input off program, preview or a layout.
-fn switches(command: &Command) -> bool {
+pub(crate) fn switches(command: &Command) -> bool {
     matches!(
         command,
         Command::Program { .. }
@@ -3470,7 +3484,7 @@ mod tests {
         (format!("http://{addr}"), calls, kept, broken)
     }
 
-    /// A channel whose bus taps strom did not take counts as not built:
+    /// A channel whose bus taps strom did not take counts as untapped:
     /// the next try adds it (strom has it: 409) and sets the taps again.
     #[tokio::test]
     async fn a_channel_without_its_taps_comes_again() {
@@ -3485,12 +3499,13 @@ mod tests {
 
         broken.store(true, Ordering::Relaxed);
         assert!(engine.grow(0).await.is_err());
-        assert!(!engine.built.lock().unwrap().audio.contains(&0));
+        assert!(engine.untapped.lock().unwrap().contains(&0));
 
         broken.store(false, Ordering::Relaxed);
         calls.lock().unwrap().clear();
         engine.grow(0).await.unwrap();
         assert!(engine.built.lock().unwrap().audio.contains(&0));
+        assert!(engine.untapped.lock().unwrap().is_empty());
         let patched = calls
             .lock()
             .unwrap()
@@ -3498,6 +3513,36 @@ mod tests {
             .filter(|(m, p, _)| m == "PATCH" && p.ends_with("/properties"))
             .count();
         assert_eq!(patched, 1, "the taps again");
+    }
+
+    /// A slot emptied after its taps failed still has its channel in
+    /// strom: the shrink takes it away all the same.
+    #[tokio::test]
+    async fn a_channel_without_its_taps_goes_with_its_slot() {
+        let (url, calls, _, broken) = grow_strom(StatusCode::OK).await;
+        let engine = StromEngine::new(url, MixerBackend::Cpu, MonitorOut::None);
+        *engine.built.lock().unwrap() = engine.no_slots();
+        engine.tiles_watched.store(true, Ordering::Relaxed);
+        *engine.buses.lock().unwrap() = Some(flows::BuiltBuses::numbered(&MixerBuses {
+            phones_pre_fader: false,
+            buses: vec![(BusId::new(), false)],
+        }));
+
+        broken.store(true, Ordering::Relaxed);
+        assert!(engine.grow(0).await.is_err());
+        broken.store(false, Ordering::Relaxed);
+        calls.lock().unwrap().clear();
+        engine.shrink(0).await.unwrap();
+        let channel = format!("/channels/{}", flows::audio_channel(0));
+        assert!(
+            calls
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|(m, p, _)| m == "DELETE" && p.ends_with(&channel)),
+            "the channel goes"
+        );
+        assert!(!engine.built.lock().unwrap().audio.contains(&0));
     }
 
     /// A strom stand-in holding `flows` (by id) for a takeover; it records
