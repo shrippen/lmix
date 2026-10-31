@@ -114,6 +114,8 @@ QtObject {
     property var go_guard_ms
     property var go_rearm
     property var panic_ms
+    property var moods
+    property var mood
     property var script_folder
     property var older_format
     property var cue_warnings

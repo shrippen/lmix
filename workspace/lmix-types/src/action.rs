@@ -274,6 +274,8 @@ pub const ACTION_GROUPS: &[(&str, &[&str])] = &[
             "set_emergency_list",
             "set_cue_list_pads",
             "set_script_folder",
+            "set_moods",
+            "set_mood",
             "add_shortcut",
             "set_shortcut",
             "remove_shortcut",
@@ -891,6 +893,20 @@ pub enum Action {
     SetEmergencyList {
         #[serde(default)]
         list: Option<InputRef>,
+    },
+    /// The show's moods: layers, mood groups, collections, panic mood and
+    /// change times, all at once (MOOD.1–3, 7, 9). The mood set now stays
+    /// as long as it is there.
+    SetMoods {
+        moods: crate::mood::Moods,
+    },
+    /// Set a mood (id, group name or "group / variant"): layers that
+    /// change fade over `fade_ms`, else the layer's or the show's change
+    /// time; the rest runs on (MOOD.4).
+    SetMood {
+        mood: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        fade_ms: Option<u32>,
     },
     /// The show's script folder: lmix-core keeps `lmix-script load
     /// <folder> --watch` running for it; `null` stops it (SSH.2).
@@ -1614,6 +1630,8 @@ pub enum ActionError {
     BadStage { reason: String },
     #[error("cue list: {reason}")]
     BadCueList { reason: String },
+    #[error("mood: {reason}")]
+    BadMood { reason: String },
     #[error("triggers: {reason}")]
     BadTriggers { reason: String },
     #[error("locked: unlock first")]

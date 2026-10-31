@@ -6964,6 +6964,11 @@
     </message>
     <message>
       <location line="+1" />
+      <source>Mood: %1</source>
+      <translation>Stimmung: %1</translation>
+    </message>
+    <message>
+      <location line="+1" />
       <source>Triggers: %1</source>
       <translation>Auslöser: %1</translation>
     </message>

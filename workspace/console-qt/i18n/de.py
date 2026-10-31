@@ -999,6 +999,7 @@ DE = {
     'Sound: %1': 'Klang: %1',
     'Stage: %1': 'Bühne: %1',
     'Cue list: %1': 'Cue-Liste: %1',
+    'Mood: %1': 'Stimmung: %1',
     'Triggers: %1': 'Auslöser: %1',
     'The show is locked: unlock it first': 'Die Show ist gesperrt: erst entsperren',
     'No removed input to bring back': 'Kein entfernter Input zum Zurückholen',

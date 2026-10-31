@@ -151,6 +151,9 @@ pub struct Show {
     /// The list that runs with every panic and hard stop (SAF.4).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub emergency_list: Option<InputId>,
+    /// Moods (MOOD).
+    #[serde(default, skip_serializing_if = "lmix_types::Moods::is_empty")]
+    pub moods: lmix_types::Moods,
     /// Sound zones; their devices are this machine's (SND.10).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub zones: Vec<lmix_types::Zone>,
@@ -315,6 +318,7 @@ impl Default for Show {
             go_rearm: Default::default(),
             panic_ms: default_panic(),
             emergency_list: None,
+            moods: Default::default(),
             zones: Vec::new(),
             stages: Vec::new(),
             script_folder: None,
@@ -936,6 +940,7 @@ mod tests {
             go_rearm: lmix_types::cue::GoRearm::Release,
             panic_ms: 2000,
             emergency_list: None,
+            moods: Default::default(),
             zones: Vec::new(),
             stages: Vec::new(),
             script_folder: None,

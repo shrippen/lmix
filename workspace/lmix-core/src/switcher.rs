@@ -443,6 +443,8 @@ fn runs_automation(action: &Action) -> bool {
                 | Action::SetEmergencyList { .. }
                 | Action::SetCueListPads { .. }
                 | Action::SetScriptFolder { .. }
+                | Action::SetMoods { .. }
+                | Action::SetMood { .. }
                 | Action::SetZone { .. }
                 | Action::RemoveZone { .. }
                 | Action::SetZonePatch { .. }
@@ -624,6 +626,117 @@ fn check_cue(cue: &Cue, depth: usize) -> Result<(), ActionError> {
     Ok(())
 }
 
+/// Moods of a show (MOOD): limits, names to find them by, layers that
+/// are there, contents a cue could have, a panic mood of actions only.
+fn check_moods(moods: &lmix_types::Moods) -> Result<(), ActionError> {
+    use lmix_types::mood::{MOOD_COLLECTIONS, MOOD_GROUPS, MOOD_LAYERS};
+    use lmix_types::{LayerContent, LayerId};
+    let bad = |reason: String| Err(ActionError::BadMood { reason });
+    if moods.layers.len() > MOOD_LAYERS
+        || moods.groups.len() > MOOD_GROUPS
+        || moods.groups.iter().any(|g| g.variants.len() > MOOD_GROUPS)
+        || moods.collections.len() > MOOD_COLLECTIONS
+        || moods
+            .collections
+            .iter()
+            .any(|c| c.moods.len() + c.pads.len() > MOOD_GROUPS)
+    {
+        return bad(format!(
+            "at most {MOOD_LAYERS} layers, {MOOD_COLLECTIONS} collections and {MOOD_GROUPS} groups, variants of a group or entries of a collection"
+        ));
+    }
+    for ms in [moods.change_ms, moods.inside_ms]
+        .into_iter()
+        .chain(moods.layers.iter().filter_map(|l| l.fade_ms))
+    {
+        crate::playback::check_fade_time(ms)?;
+    }
+    let mut layer_ids = std::collections::HashSet::new();
+    let mut ids = std::collections::HashSet::new();
+    let unnamed = |name: &str| name.trim().is_empty() || name.contains('/');
+    for layer in &moods.layers {
+        if unnamed(&layer.name) || !layer_ids.insert(layer.id) {
+            return bad(format!(
+                "layer {:?}: a name without \"/\" and an id of its own",
+                layer.name
+            ));
+        }
+    }
+    let content = |what: &str, layer: &LayerId, content: &LayerContent| {
+        if !layer_ids.contains(layer) {
+            return bad(format!("{what}: no layer {layer}"));
+        }
+        match content {
+            LayerContent::Off => Ok(()),
+            LayerContent::Sound { sound } => crate::playback::check_sound(sound),
+            LayerContent::Picture { picture } => crate::playback::check_picture(picture),
+            LayerContent::Actions { actions } => {
+                if actions.is_empty() || actions.len() > AUTOMATION_ACTIONS {
+                    return bad(format!("{what}: 1–{AUTOMATION_ACTIONS} actions"));
+                }
+                if actions.iter().any(runs_automation) {
+                    return bad(format!(
+                        "{what}: actions cannot run shortcuts, cues, moods or change automation"
+                    ));
+                }
+                Ok(())
+            }
+        }
+    };
+    let mut names = std::collections::HashSet::new();
+    for group in &moods.groups {
+        if unnamed(&group.name) || !names.insert(group.name.trim().to_lowercase()) {
+            return bad(format!(
+                "group {:?}: a name of its own without \"/\"",
+                group.name
+            ));
+        }
+        if !ids.insert(group.id) {
+            return bad(format!("mood id {} twice", group.id));
+        }
+        for (layer, c) in &group.base {
+            content(&group.name, layer, c)?;
+        }
+        let mut variants = std::collections::HashSet::new();
+        for variant in &group.variants {
+            let what = format!("{} / {}", group.name, variant.name);
+            if unnamed(&variant.name) || !variants.insert(variant.name.trim().to_lowercase()) {
+                return bad(format!(
+                    "{what}: a name of its own in its group without \"/\""
+                ));
+            }
+            if !ids.insert(variant.id) {
+                return bad(format!("mood id {} twice", variant.id));
+            }
+            for (layer, c) in &variant.layers {
+                content(&what, layer, c)?;
+            }
+        }
+    }
+    for (layer, c) in &moods.panic {
+        if matches!(c, LayerContent::Sound { .. } | LayerContent::Picture { .. }) {
+            return bad("the panic mood holds actions only: sound and pictures stay off".into());
+        }
+        content("panic", layer, c)?;
+    }
+    for collection in &moods.collections {
+        if collection.name.trim().is_empty() {
+            return bad("a collection needs a name".into());
+        }
+        if let Some(missing) = collection.moods.iter().find(|m| !ids.contains(m)) {
+            return bad(format!("{}: no mood {missing}", collection.name));
+        }
+    }
+    Ok(())
+}
+
+/// Milliseconds since the Unix epoch, for times the clients draw.
+fn unix_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_millis() as u64)
+}
+
 /// Ids and numbers set are unique in the whole show (CUE.1).
 fn check_unique(lists: &[ShowCueList]) -> Result<(), ActionError> {
     fn walk<'a>(cues: &'a [Cue], all: &mut Vec<&'a Cue>) {
@@ -762,6 +875,8 @@ pub struct Switcher {
     removed: Vec<Removed>,
     /// Standby and running cues of the cue lists.
     cues: Runner,
+    /// The mood set and what runs on each layer (MOOD).
+    moods: crate::moods::MoodRunner,
     /// What would go wrong when they run (SUI.5); see `refresh_warnings`.
     cue_warnings: Vec<lmix_types::cue::CueWarning>,
     /// Targets that did not answer their last check or send (SUI.5).
@@ -854,6 +969,7 @@ impl Switcher {
             io_locked: Default::default(),
             removed: Vec::new(),
             cues: Runner::default(),
+            moods: Default::default(),
             cue_warnings: Vec::new(),
             unreached: Default::default(),
             older_format: None,
@@ -1623,7 +1739,13 @@ impl Switcher {
             | Action::CueResume { .. }
             | Action::CueReset
             | Action::CuePanic { .. }
-            | Action::CueHardStop => Err(bad_cues("run through the service".into())),
+            | Action::CueHardStop
+            | Action::SetMood { .. } => Err(bad_cues("run through the service".into())),
+            Action::SetMoods { moods } => {
+                check_moods(&moods)?;
+                self.show.moods = moods;
+                Ok(Vec::new())
+            }
             Action::SetLock { on } => {
                 self.locked = on;
                 Ok(Vec::new())
@@ -2059,6 +2181,7 @@ impl Switcher {
         // Cues of the old show stop without a word; nothing starts, and
         // standby is where the show kept it (SAF.6).
         self.cues = Runner::default();
+        self.moods = Default::default();
         self.cues.restore_standby(&self.show.cue_lists);
         self.distinct_shortcut_ids();
         self.path = path;
@@ -2684,6 +2807,8 @@ impl Switcher {
             go_guard_ms: self.show.go_guard_ms,
             go_rearm: self.show.go_rearm,
             panic_ms: self.show.panic_ms,
+            moods: self.show.moods.clone(),
+            mood: self.moods.now(&self.show.moods, unix_ms()),
             script_folder: self.show.script_folder.clone(),
             older_format: self.older_format,
             cue_warnings: self.cue_warnings.clone(),
@@ -3603,8 +3728,10 @@ impl Switcher {
         self.cues.resume(&self.show.cue_lists, index, cue, now)
     }
 
-    /// Stop every cue at once, every standby to the start (RUN.11).
+    /// Stop every cue at once, every standby to the start (RUN.11); with
+    /// the sounds and pictures the layers of the mood stop.
     pub fn cue_reset(&mut self, now: tokio::time::Instant) -> Vec<Out> {
+        self.moods.forget();
         self.cues.reset(now)
     }
 
@@ -3620,13 +3747,39 @@ impl Switcher {
         }
         let emergency = self.emergency_index();
         let ms = ms.unwrap_or(self.show.panic_ms);
-        Ok(self.cues.panic(&self.show.cue_lists, emergency, now, ms))
+        let mut out = self.cues.panic(&self.show.cue_lists, emergency, now, ms);
+        self.panic_mood(&mut out);
+        Ok(out)
     }
 
     /// Hard stop (SAF.3).
     pub fn cue_hard_stop(&mut self, now: tokio::time::Instant) -> Vec<Out> {
         let emergency = self.emergency_index();
-        self.cues.hard_stop(&self.show.cue_lists, emergency, now)
+        let mut out = self.cues.hard_stop(&self.show.cue_lists, emergency, now);
+        self.panic_mood(&mut out);
+        out
+    }
+
+    /// After the emergency list: the panic mood's actions (MOOD.9).
+    fn panic_mood(&mut self, out: &mut Vec<Out>) {
+        let actions = self.moods.panic(&self.show.moods);
+        if !actions.is_empty() {
+            out.push(Out::Mood { actions });
+        }
+    }
+
+    /// Set a mood (MOOD.4): the actions that change its layers.
+    pub fn set_mood(
+        &mut self,
+        mood: &str,
+        fade_ms: Option<u32>,
+    ) -> Result<Vec<Action>, ActionError> {
+        if let Some(ms) = fade_ms {
+            crate::playback::check_fade_time(ms)?;
+        }
+        self.moods
+            .set(&self.show.moods, mood, fade_ms, unix_ms())
+            .map_err(|reason| ActionError::BadMood { reason })
     }
 
     fn emergency_index(&self) -> Option<usize> {
@@ -10738,6 +10891,7 @@ mod tests {
         out.iter()
             .flat_map(|o| match o {
                 Out::Actions { actions, .. } => actions.clone(),
+                Out::Mood { actions } => actions.clone(),
                 Out::Event { .. } | Out::Panic { .. } | Out::StopPlayback { .. } => Vec::new(),
             })
             .collect()

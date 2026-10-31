@@ -30,6 +30,7 @@ mod layouts;
 mod machine;
 mod metrics;
 mod midi;
+mod moods;
 mod osc;
 mod osc_subs;
 mod package;

@@ -202,6 +202,12 @@ pub struct ShowState {
     /// Panic time (SAF.2).
     #[serde(default)]
     pub panic_ms: u32,
+    /// The show's moods (MOOD).
+    #[serde(default, skip_serializing_if = "crate::mood::Moods::is_empty")]
+    pub moods: crate::mood::Moods,
+    /// The mood set now and where each layer comes from (MOOD.5).
+    #[serde(default)]
+    pub mood: crate::mood::MoodNow,
     /// The show's script folder (SSH.2).
     #[serde(default)]
     pub script_folder: Option<String>,
