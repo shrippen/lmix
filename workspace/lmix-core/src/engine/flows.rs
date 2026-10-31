@@ -266,6 +266,18 @@ impl MixerBackend {
     }
 }
 
+/// The compositor a mixer flow was built for (`compositor_preference`);
+/// `None` for one that names none or another.
+pub fn backend_of(flow: &Flow) -> Option<MixerBackend> {
+    let vm = flow.blocks.iter().find(|b| b.id == MIXER_BLOCK)?;
+    let Some(PropertyValue::String(name)) = vm.properties.get("compositor_preference") else {
+        return None;
+    };
+    [MixerBackend::Cuda, MixerBackend::Gl, MixerBackend::Cpu]
+        .into_iter()
+        .find(|b| b.property() == name)
+}
+
 pub fn mixer_id() -> FlowId {
     Uuid::new_v5(&FLOW_NAMESPACE, b"mixer")
 }

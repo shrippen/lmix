@@ -516,7 +516,8 @@ impl StromEngine {
                 .await
                 .map_err(net)?;
             taken_or_added(check(resp).await)?;
-            self.built.lock().expect("built lock").audio.insert(slot);
+            // Counted as built once its taps are set too: a failed patch
+            // comes again with the next try (the add then answers 409).
             // The buses' taps, which strom sets for the channels it has.
             let buses = self.buses.lock().expect("buses lock").clone();
             if let Some(buses) = buses {
@@ -531,6 +532,7 @@ impl StromEngine {
                 });
                 self.patch_taps(taps).await?;
             }
+            self.built.lock().expect("built lock").audio.insert(slot);
         }
         Ok(())
     }
@@ -540,32 +542,9 @@ impl StromEngine {
     /// transition: it goes after the next switch (`free_stale`). The
     /// channel's settings go with it; a new occupant gets its own.
     async fn shrink(&self, slot: usize) -> Result<(), EngineError> {
-        let (video, audio) = {
-            let built = self.built.lock().expect("built lock");
-            (
-                self.backend.grows() && built.video.contains(&slot),
-                built.audio.contains(&slot),
-            )
-        };
-        if audio {
-            let channel = flows::audio_channel(slot);
-            let path = format!(
-                "/flows/{}/blocks/{AUDIO_MIXER}/channels/{channel}",
-                flows::mixer_id()
-            );
-            let resp = self
-                .http
-                .delete(self.url(&path))
-                .send()
-                .await
-                .map_err(net)?;
-            gone_or_removed(check(resp).await)?;
-            self.built.lock().expect("built lock").audio.remove(&slot);
-            self.mutes
-                .lock()
-                .expect("mutes lock")
-                .retain(|name, _| !name.starts_with(&format!("ch{channel}_")));
-        }
+        self.remove_sound(slot).await?;
+        let video =
+            self.backend.grows() && self.built.lock().expect("built lock").video.contains(&slot);
         if video {
             self.stale.lock().expect("stale lock").insert(slot);
             self.free_stale().await;
@@ -573,8 +552,35 @@ impl StromEngine {
         Ok(())
     }
 
-    /// Remove the mixer inputs of emptied slots that strom kept (see
-    /// `shrink`); those it still keeps stay for the next time.
+    /// Take `slot`'s audio channel away, if it has one.
+    async fn remove_sound(&self, slot: usize) -> Result<(), EngineError> {
+        if !self.built.lock().expect("built lock").audio.contains(&slot) {
+            return Ok(());
+        }
+        let channel = flows::audio_channel(slot);
+        let path = format!(
+            "/flows/{}/blocks/{AUDIO_MIXER}/channels/{channel}",
+            flows::mixer_id()
+        );
+        let resp = self
+            .http
+            .delete(self.url(&path))
+            .send()
+            .await
+            .map_err(net)?;
+        gone_or_removed(check(resp).await)?;
+        self.built.lock().expect("built lock").audio.remove(&slot);
+        self.mutes
+            .lock()
+            .expect("mutes lock")
+            .retain(|name, _| !name.starts_with(&format!("ch{channel}_")));
+        Ok(())
+    }
+
+    /// Remove what emptied slots still have in the mixer: the inputs
+    /// strom kept (see `shrink`), and after a takeover the channels and
+    /// inputs of slots the show does not fill again. Those strom still
+    /// keeps stay for the next time.
     async fn free_stale(&self) {
         let stale: Vec<usize> = self
             .stale
@@ -584,6 +590,16 @@ impl StromEngine {
             .copied()
             .collect();
         for slot in stale {
+            if let Err(e) = self.remove_sound(slot).await {
+                tracing::warn!("audio channel of slot {slot}: {e}");
+                continue;
+            }
+            let video = self.backend.grows()
+                && self.built.lock().expect("built lock").video.contains(&slot);
+            if !video {
+                self.stale.lock().expect("stale lock").remove(&slot);
+                continue;
+            }
             let path = format!(
                 "/flows/{}/blocks/{MIXER_BLOCK}/inputs/{}",
                 flows::mixer_id(),
@@ -1213,12 +1229,14 @@ impl StromEngine {
         Ok(have.index)
     }
 
-    /// strom's take (PGM to PVW), with `to` in its preview first. The
-    /// file guards the index: a library changed meanwhile is refused.
+    /// strom's take (PGM to PVW), with mixer input `to` in its preview
+    /// first. The file guards the index: a library changed meanwhile is
+    /// refused.
     async fn stinger_take(&self, to: usize, index: usize, file: &str) -> Result<(), EngineError> {
         let state = self.mixer_state().await?;
         if state.preview_pip.is_some() || state.preview_input != Some(to) {
-            self.select_preview(to).await?;
+            // `to` is the mixer input already, not a slot.
+            self.select_source(Source::Input(to)).await?;
         }
         let body = StingerTakeRequest {
             index: Some(index),
@@ -1548,16 +1566,26 @@ impl Engine for StromEngine {
         *self.live_mkv.lock().expect("live mkv lock") = flows::LiveMkv::for_gstreamer(&version);
 
         let current = self.get_flow(flows::mixer_id()).await?;
+        // Only a mixer of this backend: another one cannot grow as this
+        // engine does (OpenGL has fixed inputs) and is built anew.
         let reusable = current
             .as_ref()
-            .filter(|f| f.running && f.name == flows::MIXER_NAME)
+            .filter(|f| {
+                f.running
+                    && f.name == flows::MIXER_NAME
+                    && flows::backend_of(f) == Some(self.backend)
+            })
             .and_then(flows::slots_of);
         // Keep a running mixer in whatever format it has: the restore that
         // follows brings the show's (OUT.1), rebuilding only if it differs.
         if let (Some(slots), Some(format)) = (reusable, current.as_ref().and_then(flows::format_of))
         {
+            // Every slot it has is a candidate to go: the restore that
+            // follows fills the show's again (`grow` takes them off), the
+            // rest goes with the next switch (`free_stale`).
+            *self.stale.lock().expect("stale lock") =
+                slots.video.union(&slots.audio).copied().collect();
             *self.built.lock().expect("built lock") = slots;
-            self.stale.lock().expect("stale lock").clear();
             *self.format.lock().expect("format lock") = format;
             if let Some(multiview) = current.as_ref().map(flows::multiview_of) {
                 *self.multiview.lock().expect("multiview lock") = multiview;
@@ -2687,6 +2715,8 @@ mod tests {
         clips: Vec<(String, u64)>,
         /// Files strom cannot add (not on disk).
         absent: Vec<String>,
+        /// The mixer input in strom's preview (input 2 when unset).
+        preview: Option<usize>,
         calls: Vec<Call>,
     }
 
@@ -2743,12 +2773,18 @@ mod tests {
                     "running": false, "last_take": null
                 }))
             }
-            // Slot 1 (input 2, after black) in preview.
+            // Slot 1 (input 2, after black) in preview unless set.
             ("GET", Some("state")) => ok(serde_json::json!({
-                "program_input": 0, "preview_input": 2, "program_pip": null,
-                "preview_pip": null, "ftb_active": false, "dsk_enabled": [],
-                "overlay_alpha": 1.0, "pips": []
+                "program_input": 0, "preview_input": fake.preview.unwrap_or(2),
+                "program_pip": null, "preview_pip": null, "ftb_active": false,
+                "dsk_enabled": [], "overlay_alpha": 1.0, "pips": []
             })),
+            ("PUT", Some("preview")) => {
+                let request: SelectPreviewRequest =
+                    serde_json::from_value(call.body.clone()).unwrap();
+                fake.preview = request.source.as_input();
+                ok(serde_json::json!({}))
+            }
             ("DELETE", _) => match index {
                 Some(i) if at(fake, i) == file => {
                     fake.clips.remove(i);
@@ -2854,6 +2890,33 @@ mod tests {
         assert_eq!(takes.len(), 1);
         assert_eq!(takes[0]["index"], 1);
         assert_eq!(takes[0]["file"], "/sting.webm");
+    }
+
+    /// A stinger to a slot that is not in strom's preview puts that
+    /// slot's mixer input there first (slot 1 is input 2, after black),
+    /// not the next one.
+    #[tokio::test]
+    async fn a_stinger_puts_its_slot_in_preview_first() {
+        let (url, fake) = stinger_strom(&[("/sting.webm", 400)]).await;
+        fake.lock().unwrap().preview = Some(0);
+        let engine = StromEngine::new(url, MixerBackend::Cpu, MonitorOut::None);
+
+        engine.run(&sting("/sting.webm", 400)).await.unwrap();
+
+        let fake = fake.lock().unwrap();
+        let previews: Vec<_> = fake
+            .calls
+            .iter()
+            .filter(|c| c.path.ends_with("/preview"))
+            .map(|c| c.body["source"].clone())
+            .collect();
+        assert_eq!(previews.len(), 1, "{previews:?}");
+        assert_eq!(fake.preview, Some(2), "slot 1's input in preview");
+        let taken = fake
+            .calls
+            .iter()
+            .filter(|c| c.path.ends_with("/stinger/take"));
+        assert_eq!(taken.count(), 1, "taken, not cut instead");
     }
 
     /// A library sync that failed (strom busy, the mixer restarting)
@@ -3354,20 +3417,23 @@ mod tests {
 
     /// A strom stand-in for growing and shrinking the mixer: it records
     /// method, path and body; removing a mixer input is refused (409, on
-    /// air) while `kept` is set, adding answers with `add` (200 or 409).
-    /// Slot 0 (input 1) is on program.
+    /// air) while `kept` is set, a property patch fails (500) while
+    /// `broken` is set, adding answers with `add` (200 or 409). Slot 0
+    /// (input 1) is on program.
     async fn grow_strom(
         add: StatusCode,
     ) -> (
         String,
         std::sync::Arc<std::sync::Mutex<Vec<(String, String, serde_json::Value)>>>,
         std::sync::Arc<std::sync::atomic::AtomicBool>,
+        std::sync::Arc<std::sync::atomic::AtomicBool>,
     ) {
         let calls = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
         let kept = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-        let (seen, keep) = (calls.clone(), kept.clone());
+        let broken = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let (seen, keep, fail) = (calls.clone(), kept.clone(), broken.clone());
         let app = axum::Router::new().fallback(move |request: axum::extract::Request| {
-            let (seen, keep) = (seen.clone(), keep.clone());
+            let (seen, keep, fail) = (seen.clone(), keep.clone(), fail.clone());
             async move {
                 let method = request.method().to_string();
                 let path = request.uri().path().to_string();
@@ -3383,6 +3449,7 @@ mod tests {
                     "DELETE" if path.contains("/inputs/") && keep.load(Ordering::Relaxed) => {
                         StatusCode::CONFLICT
                     }
+                    "PATCH" if fail.load(Ordering::Relaxed) => StatusCode::INTERNAL_SERVER_ERROR,
                     _ => StatusCode::OK,
                 };
                 let answer = if path.ends_with("/state") {
@@ -3400,7 +3467,152 @@ mod tests {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
         tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
-        (format!("http://{addr}"), calls, kept)
+        (format!("http://{addr}"), calls, kept, broken)
+    }
+
+    /// A channel whose bus taps strom did not take counts as not built:
+    /// the next try adds it (strom has it: 409) and sets the taps again.
+    #[tokio::test]
+    async fn a_channel_without_its_taps_comes_again() {
+        let (url, calls, _, broken) = grow_strom(StatusCode::OK).await;
+        let engine = StromEngine::new(url, MixerBackend::Cpu, MonitorOut::None);
+        *engine.built.lock().unwrap() = engine.no_slots();
+        engine.tiles_watched.store(true, Ordering::Relaxed);
+        *engine.buses.lock().unwrap() = Some(flows::BuiltBuses::numbered(&MixerBuses {
+            phones_pre_fader: false,
+            buses: vec![(BusId::new(), false)],
+        }));
+
+        broken.store(true, Ordering::Relaxed);
+        assert!(engine.grow(0).await.is_err());
+        assert!(!engine.built.lock().unwrap().audio.contains(&0));
+
+        broken.store(false, Ordering::Relaxed);
+        calls.lock().unwrap().clear();
+        engine.grow(0).await.unwrap();
+        assert!(engine.built.lock().unwrap().audio.contains(&0));
+        let patched = calls
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(m, p, _)| m == "PATCH" && p.ends_with("/properties"))
+            .count();
+        assert_eq!(patched, 1, "the taps again");
+    }
+
+    /// A strom stand-in holding `flows` (by id) for a takeover; it records
+    /// method and path and answers everything else with `{}`.
+    async fn takeover_strom(
+        flows: Vec<Flow>,
+    ) -> (
+        String,
+        std::sync::Arc<std::sync::Mutex<Vec<(String, String)>>>,
+    ) {
+        let flows_by_id = std::sync::Arc::new(
+            flows
+                .into_iter()
+                .map(|f| (format!("/api/flows/{}", f.id), f))
+                .collect::<std::collections::HashMap<_, _>>(),
+        );
+        let calls = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let seen = calls.clone();
+        let app = axum::Router::new().fallback(move |request: axum::extract::Request| {
+            let (seen, flows_by_id) = (seen.clone(), flows_by_id.clone());
+            async move {
+                let (method, path) = (
+                    request.method().to_string(),
+                    request.uri().path().to_string(),
+                );
+                seen.lock().unwrap().push((method.clone(), path.clone()));
+                if method == "GET" {
+                    if let Some(flow) = flows_by_id.get(&path) {
+                        return (
+                            StatusCode::OK,
+                            axum::Json(serde_json::json!({ "flow": flow })),
+                        );
+                    }
+                }
+                (StatusCode::OK, axum::Json(serde_json::json!({})))
+            }
+        });
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        (format!("http://{addr}"), calls)
+    }
+
+    /// A running mixer with slots 0 and 1, built for `backend`.
+    fn running_mixer(backend: MixerBackend) -> Flow {
+        let probe = StromEngine::new(String::new(), backend, MonitorOut::None);
+        *probe.built.lock().unwrap() = flows::MixerSlots {
+            video: if backend.grows() {
+                (0..2).collect()
+            } else {
+                (0..flows::GL_SLOTS).collect()
+            },
+            audio: (0..2).collect(),
+        };
+        let mut mixer = probe.mixer_flow();
+        mixer.running = true;
+        mixer
+    }
+
+    /// A takeover keeps the slots the show fills again; the rest goes at
+    /// the next switch, channel and mixer input (not kept for good).
+    #[tokio::test]
+    async fn a_takeover_frees_the_slots_the_show_leaves_empty() {
+        let (url, calls) = takeover_strom(vec![running_mixer(MixerBackend::Cpu)]).await;
+        let engine = StromEngine::new(url, MixerBackend::Cpu, MonitorOut::None);
+        engine.start().await.unwrap();
+        assert_eq!(engine.built.lock().unwrap().video, [0, 1].into(), "reused");
+
+        // The restore fills slot 0 again, slot 1 stays empty.
+        engine.grow(0).await.unwrap();
+        calls.lock().unwrap().clear();
+        engine.free_stale().await;
+
+        let deletes: Vec<String> = calls
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(m, _)| m == "DELETE")
+            .map(|(_, p)| p.rsplit_once("/blocks/").unwrap().1.to_string())
+            .collect();
+        assert_eq!(deletes, ["mix/channels/3", "vm/inputs/2"]);
+        let built = engine.built.lock().unwrap();
+        assert_eq!(
+            (built.video.clone(), built.audio.clone()),
+            ([0].into(), [0].into())
+        );
+    }
+
+    /// A mixer of another backend is not taken over: an OpenGL mixer has
+    /// fixed inputs (no slot 16 and up), a growing one under OpenGL
+    /// would never give inputs back. It is built anew.
+    #[tokio::test]
+    async fn a_mixer_of_another_backend_is_built_anew() {
+        for (was, now) in [
+            (MixerBackend::Cuda, MixerBackend::Gl),
+            (MixerBackend::Gl, MixerBackend::Cuda),
+        ] {
+            let (url, calls) = takeover_strom(vec![running_mixer(was)]).await;
+            let engine = StromEngine::new(url, now, MonitorOut::None);
+            let _ = engine.start().await;
+            assert_eq!(
+                *engine.built.lock().unwrap(),
+                engine.no_slots(),
+                "{was:?} under {now:?}"
+            );
+            let mixer = format!("/api/flows/{}", flows::mixer_id());
+            assert!(
+                calls
+                    .lock()
+                    .unwrap()
+                    .iter()
+                    .any(|(m, p)| m != "GET" && p.starts_with(&mixer)),
+                "{was:?} under {now:?}: built anew"
+            );
+        }
     }
 
     /// A filled slot gets its mixer input (after black) and its audio
@@ -3408,7 +3620,7 @@ mod tests {
     /// again. No new mixer flow either way.
     #[tokio::test]
     async fn a_slot_grows_the_running_mixer_and_shrinks_it() {
-        let (url, calls, _) = grow_strom(StatusCode::OK).await;
+        let (url, calls, _, _) = grow_strom(StatusCode::OK).await;
         let engine = StromEngine::new(url, MixerBackend::Cuda, MonitorOut::None);
         *engine.built.lock().unwrap() = engine.no_slots();
         engine.tiles_watched.store(true, Ordering::Relaxed);
@@ -3459,7 +3671,7 @@ mod tests {
     /// answer, a mixer built with it): the slot counts as grown.
     #[tokio::test]
     async fn an_input_strom_has_already_counts_as_grown() {
-        let (url, _, _) = grow_strom(StatusCode::CONFLICT).await;
+        let (url, _, _, _) = grow_strom(StatusCode::CONFLICT).await;
         let engine = StromEngine::new(url, MixerBackend::Cpu, MonitorOut::None);
         *engine.built.lock().unwrap() = engine.no_slots();
         engine.tiles_watched.store(true, Ordering::Relaxed);
@@ -3474,7 +3686,7 @@ mod tests {
     /// switch, not before, and a slot filled again meanwhile keeps it.
     #[tokio::test]
     async fn an_input_on_air_goes_after_the_next_switch() {
-        let (url, calls, kept) = grow_strom(StatusCode::OK).await;
+        let (url, calls, kept, _) = grow_strom(StatusCode::OK).await;
         let engine = StromEngine::new(url, MixerBackend::Cuda, MonitorOut::None);
         *engine.built.lock().unwrap() = engine.no_slots();
         engine.tiles_watched.store(true, Ordering::Relaxed);
@@ -3517,7 +3729,7 @@ mod tests {
     /// gets its audio channel.
     #[tokio::test]
     async fn the_gl_mixer_grows_only_its_sound() {
-        let (url, calls, _) = grow_strom(StatusCode::OK).await;
+        let (url, calls, _, _) = grow_strom(StatusCode::OK).await;
         let engine = StromEngine::new(url, MixerBackend::Gl, MonitorOut::None);
         *engine.built.lock().unwrap() = engine.no_slots();
         assert_eq!(engine.built.lock().unwrap().video.len(), flows::GL_SLOTS);
