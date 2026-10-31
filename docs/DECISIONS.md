@@ -5763,6 +5763,7 @@ Program in der Aufnahme fror in keinem Lauf. Mehr Bilder/s heißt hier:
 Programm und Vorschau zeigen jetzt Bilder; das kostet den Render-Thread
 (Software-GL), nicht den GUI-Thread. Dass das Fenster mehr Frames zeichnet
 als die Quellen liefern, steht als eigener Punkt in `todo.md`.
+
 ## 2026-10-31 — Show: Cues anlegen, Zeitfelder, Datei, Ziel und Kreuzungen im Inspector
 
 **Anlass**: Offene Punkte „nur Oberfläche“ aus dem Click-Dummy
@@ -5959,6 +5960,7 @@ im Container mit `taskset -c 0,1`.
   keine Verzögerung; die Mischer-Uhr lief in den Läufen in Echtzeit.
   strom #48 („Zeitstempel springen unter Last“) bekommt dazu einen
   Kommentar.
+
 ## 2026-10-30 — Gemessene Bitrate auch für RTMP und Aufnahme (M07)
 
 Kontext: Der Kopf des Ausgangsmenüs zeigt die Bitrate, solange der Ausgang
@@ -6012,6 +6014,7 @@ je Sekunde und Ausgang vernachlässigbar.
 „Einstellungen…“ im Menü des Ausgangs sprang darum nur auf die Seite
 Outputs (Eintrag vom selben Tag oben).
 
+**Entscheidung**:
 - Aktion `update_output` (Gruppe „output“, Recht Bearbeiten): ersetzt
   Spec, Quelle, Namen und auf Wunsch den Bus eines Ausgangs; Id und Nummer
   bleiben. `bus` weggelassen behält den Ton, `null` gibt den eigenen der
@@ -6076,3 +6079,55 @@ Senden, Warten und Failback, fehlende Quelle und Karte bleiben, entfernt
 während offen, danach leer zum Anlegen), `tst_removals` (Toast nach dem
 Ändern, abgelehnt ohne Toast), `tst_outputs_page` (Einstellungen… der
 Detailkarte).
+
+## 2026-10-31 — Seite Stimmungen (MOOD)
+
+**Kontext**: Die Show-Ansicht kennt nur eine Reihenfolge. Manche Shows
+(Pen & Paper, Improtheater, Lesung mit Musik) brauchen eine Sammlung von
+Stimmungen, zwischen denen man nach Bedarf wechselt. Viele Stimmungen sind
+Varianten voneinander (Taverne friedlich, Tag, Nacht, Kampf) und teilen
+Eigenschaften. Acht Entwürfe als Leinwand „lmix Stimmungen“ (A–H).
+
+**Optionen**: A Kacheln, B Ebenen-Matrix, C Jetzt und Vorwahl, D Karte der
+Übergänge, E Gruppen mit Varianten, F Ort × Lage, G Grundstimmung mit
+Zusätzen, H Karte mit Inseln.
+
+**Entscheidung** (Owner 31.10.): **E**, mit diesen Festlegungen:
+- **Gruppe** (nicht „Ort“) mit Basis und Varianten. Klick auf den
+  Gruppenkopf setzt die Basis, Klick auf eine Variante die Variante.
+  Varianten erben von der Basis und überschreiben nur Ebenen.
+- **Letzter Befehl gewinnt** je Ebene: ein Show-Cue übernimmt eine
+  Ebene, der nächste Stimmungswechsel holt sie zurück. Welche Ebene ein
+  Cue belegt, sagt ein Cue-Feld „Ebene“ (Stufe 3); erraten aus Zone oder
+  Bühne wäre unscharf (ein Klang hat keinen festen Platz). Verglichen
+  wird mit dem, was tatsächlich läuft, nicht mit der vorigen Stimmung.
+- **Panik setzt die Stimmung „Panik“**, anpassbar (z. B. Saallicht an).
+  Das Anpassen ist eine erweiterte Funktion, die Panik-Stimmung steht
+  nicht dauernd auf der Seite. Damit die Panik verlässlich still und
+  schwarz macht (SAF.1, VIS.8), sind Klang- und Bild-Ebenen dort immer
+  aus; nur Aktions-Ebenen sind anpassbar. Sie laufen sofort mit der
+  Panik, auch beim harten Stopp, nach der Notfall-Liste (SAF.4), die
+  bleibt, wie sie ist.
+- **Blendzeit**: die des Aufrufs, sonst die der Ebene, sonst die
+  Wechselzeit der Show (Standard 3 s), innerhalb einer Stimmungsgruppe
+  eine eigene, kürzere (Standard 1 s).
+- **Begriff**: im Code und im Lastenheft „Stimmungsgruppe“ (`MoodGroup`),
+  weil „Gruppe“ schon der Gruppen-Cue ist (CUE.4); auf der Seite
+  Stimmungen heißt sie kurz „Gruppe“.
+- **Pool und Show**: Stimmungen einmal anlegen und in der Show als Cue
+  „Stimmung setzen“ beliebig oft verwenden, sodass man eine Show auch in
+  Stimmungen denken kann.
+- **Sammlungen** sind eine Auswahl aus dem Pool; eine Stimmung kann in
+  mehreren stehen.
+- **Oneshots** können alles sein, haben ihren eigenen Pool und gehören
+  ebenfalls zu Sammlungen. Auf der Seite Stimmungen als Leiste unten, in
+  der Show-Ansicht bleiben sie im Reiter Pads. Der Oneshot-Pool sind die
+  Pads der Show (RUN.12), Sammlungen verweisen auf ihre Cue-Ids.
+- Seitenleisten Sammlungen und Inspector sind einklappbar.
+
+**Folgen**: Neues Feld `moods` in der Show-Datei (vor dem ersten Release
+ohne Migration, ein fehlendes Feld ist leer). Die Engine ist rein wie der
+`Runner` und liefert nur Aktionen für die Ebenen, die sich ändern; Klang
+und Bild laufen über dieselben Medien-Aktionen wie Cues. Planung in
+`ROADMAP.md` („Seite Stimmungen“) und `LASTENHEFT-SHOW.md` §3.16.
+

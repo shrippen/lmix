@@ -433,6 +433,19 @@ der Engine gebaut; auf echter Hardware (19.10.): Klang-Cues ganz grün
 (GO 32,9 ms, Panik, 16 Klänge, zwei Geräte, Gerätekanäle), Bühnen nur
 ohne Sichtprüfung (H.38).
 
+#### Seite Stimmungen (MOOD, S2)
+
+Eine Sammlung von Zuständen neben der Reihenfolge der Show
+(`LASTENHEFT-SHOW.md` §3.16, DECISIONS 2026-10-31, Entwurf E). Stufen,
+je ein PR:
+
+| Stufe | Inhalt | IDs |
+|---|---|---|
+| 1 Modell und Engine | Typen `Moods` (Ebenen, Stimmungsgruppen mit Basis und Varianten, Sammlungen, Panik-Stimmung) in der Show-Datei; reine Engine in `lmix-core` (Vergleich je Ebene, Überblenden, Herkunft je Ebene); Aktionen `set_mood`, `set_moods`; Zustand; Tests | MOOD.1–4, 9 |
+| 2 Seite Stimmungen | Console-Seite nach Entwurf E mit einklappbaren Seitenleisten, Sammlungen, Oneshot-Leiste (Pads), Inspector mit Ebenen und Herkunft; Demo-Modus mit Stimmungen aus Studio Weber | MOOD.7, 8, 10, 13 |
+| 3 Show | Cue-Art „Stimmung setzen“, Reiter Stimmungen in der Show-Ansicht, Cue-Feld „Ebene“ (letzter Befehl gewinnt) | MOOD.5, 6 |
+| 4 Bearbeiten | Ebenen, Stimmungsgruppen, Varianten, Sammlungen, Panik-Stimmung in der Oberfläche; OSC, Kurzbefehle, Companion-Modul | MOOD.9, 11, 12 |
+
 ---
 
 ## 3b. Lösungsansätze (angenommen 2026-10-08)
