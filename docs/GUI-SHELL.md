@@ -72,8 +72,8 @@ die egui-Console:
   der GPU der Engine (eine Kopie auf der GPU), dann `glcolorconvert !
   qml6glsink(sync=false)` in ein `GstGLQt6VideoItem`. Bricht der Socket
   (Engine-Neustart, neuer Flow), fragt die Ansicht nach 1 s neu.
-- Kacheln: alle Slots in einem Bild (`GET /api/live/tiles`, Raster und
-  Zellgröße dazu), in RGBA (`tiles_format`), so dass die Console nichts
+- Kacheln: die ersten 20 Slots in einem Bild (`GET /api/live/tiles`, Raster
+  5 × 4 und Zellgröße dazu; spätere Slots holen ihren eigenen Stream), in RGBA (`tiles_format`), so dass die Console nichts
   umrechnet. Der Mischer skaliert die Inputs auf seiner GPU in ein Raster;
   die Console holt jedes Bild als GL-Textur aus einem `appsink`, und jede
   Kachel zeichnet ihren Ausschnitt direkt (`AtlasCell`, `cpp/atlas_cell.h`:

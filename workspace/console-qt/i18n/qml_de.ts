@@ -3562,7 +3562,7 @@
   <context>
     <name>OutputMenu</name>
     <message>
-      <location filename="../qml/OutputMenu.qml" line="+36" />
+      <location filename="../qml/OutputMenu.qml" line="+38" />
       <source>%1 kbit/s</source>
       <translation>%1 kbit/s</translation>
     </message>
@@ -3602,7 +3602,7 @@
       <translation>Rate</translation>
     </message>
     <message>
-      <location line="+2" />
+      <location line="+3" />
       <source>Packets lost</source>
       <translation>Pakete verloren</translation>
     </message>
@@ -3712,12 +3712,12 @@
     </message>
     <message>
       <location line="+1" />
-      <location line="+62" />
+      <location line="+64" />
       <source>Link</source>
       <translation>Verbindung</translation>
     </message>
     <message>
-      <location line="-49" />
+      <location line="-51" />
       <source>No outputs yet: + Output adds a recording, stream, NDI or screen</source>
       <translation>Noch keine Ausgänge: + Ausgang fügt Aufnahme, Stream, NDI oder Bildschirm hinzu</translation>
     </message>
@@ -3737,12 +3737,17 @@
       <translation>Ton</translation>
     </message>
     <message>
-      <location line="+62" />
+      <location line="+11" />
+      <source>Rate</source>
+      <translation>Rate</translation>
+    </message>
+    <message>
+      <location line="+53" />
       <source>of the source</source>
       <translation>der Quelle</translation>
     </message>
     <message>
-      <location line="-61" />
+      <location line="-63" />
       <source>Target</source>
       <translation>Ziel</translation>
     </message>
@@ -3757,7 +3762,7 @@
       <translation>%1 kbit/s</translation>
     </message>
     <message>
-      <location line="+9" />
+      <location line="+11" />
       <source>Failed</source>
       <translation>Fehlgeschlagen</translation>
     </message>
@@ -5895,12 +5900,12 @@
     <message>
       <location line="+1" />
       <location line="+63" />
-      <location line="+147" />
+      <location line="+151" />
       <source>NDI</source>
       <translation>NDI</translation>
     </message>
     <message>
-      <location line="-209" />
+      <location line="-213" />
       <source>WHIP (browser, OBS)</source>
       <translation>WHIP (Browser, OBS)</translation>
     </message>
@@ -6072,12 +6077,12 @@
     </message>
     <message>
       <location line="+1" />
-      <location line="+145" />
+      <location line="+149" />
       <source>Recording</source>
       <translation>Aufnahme</translation>
     </message>
     <message>
-      <location line="-143" />
+      <location line="-147" />
       <source>Screen: window</source>
       <translation>Bildschirm: Fenster</translation>
     </message>
@@ -6237,7 +6242,7 @@
       <translation>Der Cue-Zeitgeber hat keine Echtzeit-Priorität bekommen; auf einem ausgelasteten Rechner können Cues zu spät kommen. Erlauben mit rtkit (läuft mit der Desktop-Sitzung) oder mit einem Echtzeit-Limit für diesen Benutzer (Gruppe realtime, RLIMIT_RTPRIO).</translation>
     </message>
     <message>
-      <location line="+9" />
+      <location line="+10" />
       <source>no receiver</source>
       <translation>kein Empfänger</translation>
     </message>
@@ -6247,7 +6252,7 @@
       <translation>%1 Mbit/s</translation>
     </message>
     <message>
-      <location line="+5" />
+      <location line="+8" />
       <source>RTT –</source>
       <translation>RTT –</translation>
     </message>

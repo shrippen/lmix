@@ -72,7 +72,7 @@ for run in $(seq 1 "$RUNS"); do
     PIDS=($!)
     wait_up "http://127.0.0.1:${STROM_PORT}/health" strom
     "$CORE_BIN" --strom "http://127.0.0.1:${STROM_PORT}" --listen "127.0.0.1:${CORE_PORT}" \
-        --mixer "$MIXER" --slots 1 --autosave "$dir/autosave.lmix" --shortcuts "$dir/shortcuts.json" \
+        --mixer "$MIXER" --autosave "$dir/autosave.lmix" --shortcuts "$dir/shortcuts.json" \
         --layout-templates "$dir/layout-templates.json" --live-dir "$dir/live" >"$dir/core.log" 2>&1 &
     PIDS+=($!)
     wait_up "$CORE/state" lmix-core

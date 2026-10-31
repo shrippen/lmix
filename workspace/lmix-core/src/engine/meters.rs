@@ -87,9 +87,9 @@ fn parse_meter(element_id: &str, mixer_block: &str) -> Option<Meter> {
             .filter(|aux| *aux >= 1)
             .map(Meter::Aux);
     }
-    // Channels count from 1, slots from 0.
+    // A slot's channel; the stinger's is no slot's.
     let channel: usize = name.parse().ok()?;
-    channel.checked_sub(1).map(Meter::Slot)
+    super::flows::channel_slot(channel).map(Meter::Slot)
 }
 
 /// Loudest channel; silence when there are none.
@@ -429,7 +429,8 @@ mod tests {
     fn slots_keep_each_channel() {
         let (levels, read) = watch::channel(EngineLevels::default());
 
-        record_meter(&levels, "mix:meter:2", "mix", &[-12.0, -30.0], |_| None);
+        // Channel 3 is slot 1's (the stinger has channel 1).
+        record_meter(&levels, "mix:meter:3", "mix", &[-12.0, -30.0], |_| None);
 
         let l = read.borrow();
         assert_eq!(l.slots[&1].0, -12.0, "loudest");
@@ -464,7 +465,9 @@ mod tests {
 
     #[test]
     fn meter_names() {
-        assert_eq!(parse_meter("mix:meter:3", "mix"), Some(Meter::Slot(2)));
+        assert_eq!(parse_meter("mix:meter:3", "mix"), Some(Meter::Slot(1)));
+        // The stinger's channel is no slot's.
+        assert_eq!(parse_meter("mix:meter:1", "mix"), None);
         assert_eq!(parse_meter("mix:meter:main", "mix"), Some(Meter::Main));
         assert_eq!(
             parse_meter("mix:meter:monitor", "mix"),
