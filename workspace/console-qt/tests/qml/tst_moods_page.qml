@@ -195,6 +195,9 @@ TestCase {
         keyClick(Qt.Key_Backspace)
         keyClick(Qt.Key_2)
         compare(fakeShell.acted, [], "no mood is set while composing")
+        findChild(p, "compose").clicked()
+        keyClick(Qt.Key_Backspace)
+        compare(fakeShell.acted, [{ action: "set_mood", mood: "v-night" }], "done: the keys work again")
     }
 
     function test_a_collection_of_another_show_shows_all() {

@@ -96,12 +96,15 @@ AppPage {
             required property int index
             sequence: String(index + 1)
             enabled: root.visible && !root.shell.keyTaken(sequence)
+            // Held down, once: a repeat would change back and forth.
+            autoRepeat: false
             onActivated: root.setGroup(index)
         }
     }
     Shortcut {
         sequence: "Backspace"
         enabled: root.visible && !root.shell.keyTaken(sequence)
+        autoRepeat: false
         onActivated: root.back()
     }
 
