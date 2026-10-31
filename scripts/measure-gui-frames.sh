@@ -38,6 +38,12 @@ WORK="$(mktemp -d)"
 # Unix socket paths must stay short (107 bytes).
 LIVE_DIR="${XDG_RUNTIME_DIR:-/tmp}/lmix-frames${DISPLAY_NO#:}"
 PIDS=()
+# Another run (or session) on the same display would get this window's
+# keys and pictures, and its numbers ours.
+if [[ -e "/tmp/.X11-unix/X${DISPLAY_NO#:}" ]]; then
+    echo "display $DISPLAY_NO is taken; pick another with DISPLAY_NO (and the ports)" >&2
+    exit 2
+fi
 
 cleanup() {
     for pid in "${PIDS[@]}"; do kill "$pid" 2>/dev/null || true; done
