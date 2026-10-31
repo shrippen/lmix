@@ -6188,3 +6188,48 @@ Ebene, Panik nur Aktionen, Ebene entfernt), Service-Tests
 `a_mood_runs_its_layers_and_panic_sets_the_panic_mood` (mit Speichern,
 Laden und neuer Show) und `moods_are_checked_before_they_are_kept`.
 
+## 2026-10-31 — Stimmungen: die Seite (MOOD Stufe 2)
+
+**Anlass**: Stufe 2 der Seite Stimmungen (ROADMAP „Seite Stimmungen“):
+die Console-Seite nach Entwurf E und der Demo-Modus dazu.
+
+**Entscheidung**:
+- `MoodsPage.qml` als eigene Seite (`--page moods`) gleich nach Show.
+  Links die Sammlungen, rechts der Inspector mit den Ebenen der aktuellen
+  Stimmung und ihrer Herkunft (Basis, Variante, Panik); beide klappen ein
+  (Einstellungen `moods/collectionsOpen`, `inspectorOpen`), die gewählte
+  Sammlung bleibt (`moods/collection`).
+- Mitte: oben „Jetzt“ mit Name, Fortschritt des Übergangs und „Zurück zu
+  …“, darunter je Gruppe der Kopf (setzt die Basis) und die Kacheln der
+  Varianten, unten die Oneshot-Leiste. Der Fortschritt rechnet aus
+  `fading` (Beginn und Dauer) und läuft nur, solange die Seite sichtbar
+  ist und überblendet wird.
+- Sammlungen sind eine Auswahl, kein eigener Inhalt: „Zusammenstellen“
+  schaltet die Seite um, ein Klick nimmt dann eine Stimmung oder einen
+  Oneshot auf oder heraus (`set_moods` mit dem geänderten Ganzen, Recht
+  Bearbeiten). Eine Gruppe erscheint in einer Sammlung, wenn eine ihrer
+  Stimmungen darin steht; ihr Kopf ist nur aktiv, wenn die Basis dabei ist.
+- Oneshots sind die Pads der Show (Cue-Listen mit `pads`), ohne eigenen
+  Pool im Kern; die Leiste schaltet sie mit `cue_toggle` wie das Raster
+  Pads der Show-Ansicht.
+- Die Seiten-Panik heißt „Panik-Stimmung“ und ist die Show-Panik
+  (`cue_panic`): Cues und Klänge stoppen, die Panik-Stimmung läuft. Daneben
+  bleibt „Panik“ für alles.
+- Tasten: 1…9 setzen die Basis der Gruppe, die Rücktaste die Stimmung
+  davor.
+- Demo: `graufeld.reading` der Welt (eine Lesung im Sendehaus mit Saallicht,
+  Atmo und Musik); `demo/run.py` rendert die Klänge als Töne, legt die
+  Oneshots als Pad-Liste an, das Saallicht als HTTP-Ziel auf den
+  Discard-Port und setzt erst `before`, dann `now`.
+
+**Nach dem Review von Stufe 1**: Die Moods einer Show-Datei prüft der Kern
+beim Öffnen wie `set_moods` (eine von Hand geänderte Datei bringt keinen
+Klang in die Panik-Stimmung). Scheitert der Start eines Klangs oder Bilds
+einer Ebene, stoppt der Kern die Medien-Id trotzdem, bevor er die Ebene
+zurücknimmt: ein Klang, der angelegt wurde und nur beim Einblenden
+scheiterte, bliebe sonst stumm liegen.
+
+**Geprüft**: `tst_moods_page.qml` (Kopf und Kachel, Herkunft der Ebenen,
+Panik, Sammlung mit Oneshots, Zusammenstellen, Einklappen, Fortschritt,
+Tasten, leerer Pool), `moods_are_checked_before_they_are_kept` mit einer
+Show-Datei; Demo-Lauf `demo/start.sh de` mit Aufnahme der Seite.

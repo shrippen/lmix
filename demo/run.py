@@ -12,7 +12,8 @@ machine.
     SHOT_DIR=… SHOT_PLAN=… demo/start.sh de
                                    screenshots on a virtual display
                                    (shrippen.github.io/demo/tools/screenshots.py);
-                                   a shot's name picks the page: mixer (Mix), show
+                                   a shot's name picks the page: mixer (Mix), show,
+                                   moods
 
 Internal tool for screenshots: never part of a release.
 """
@@ -24,6 +25,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import uuid
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -31,6 +33,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 WORLD = json.loads((ROOT / "demo" / "world.json").read_text(encoding="utf-8"))
 STREAM = WORLD["graufeld"]["stream"]
+READING = WORLD["graufeld"]["reading"]
 
 STROM_PORT = 8510
 CORE_PORT = 8610
@@ -45,7 +48,10 @@ SHOT_SIZE = "1440x900x24"
 # Until every live picture shows and the meters move.
 SHOT_SETTLE_S = 15
 # Shot names and the page lmix opens on for each.
-APPS = {"mixer": "mix", "show": "show"}
+APPS = {"mixer": "mix", "show": "show", "moods": "moods"}
+# The hall light of the reading: an HTTP target nobody listens on (the
+# discard port), so the light layer's actions go nowhere.
+LIGHT_TARGET = "http://127.0.0.1:9"
 LOCALES = {"de": "de_DE.UTF-8", "en": "en_US.UTF-8"}
 # Kante follows the platform's brightness: a dark scheme gives Gruvbox,
 # none (a bare virtual display) gives Leinen.
@@ -148,6 +154,68 @@ def cues(lang, ids):
     act({"action": "add_cue_list", "name": STREAM["show"], "cues": cue_list})
 
 
+def moods(lang, work):
+    """For lmix Moods: the reading from the world (graufeld.reading), its
+    sounds rendered as tones into one zone, its one-shots as pads, and the
+    moods it names as set now and before."""
+    # The hall: a zone named after the house, a light named after its layer.
+    zone = text(READING["groups"][0]["name"], lang)
+    act({"action": "set_zone", "zone": {"name": zone, "channels": 2}})
+    light = text(next(l for l in READING["layers"] if l["id"] == "light")["name"], lang)
+    act({"action": "set_target", "target": {"name": light, "kind": "http", "addresses": [LIGHT_TARGET]}})
+
+    def sound(item, key):
+        # Under the name the world gives it, in a folder of its own.
+        folder = work / key
+        folder.mkdir()
+        clip = render({"id": Path(text(item["name"], lang)).stem, "pattern": "", "tone": item["tone"]}, lang, folder)
+        return {"file": str(clip), "repeat": "forever",
+                "routes": [{"channel": 1, "zone": zone, "zone_channel": c} for c in (1, 2)]}
+
+    def content(layer, value, key):
+        if value is None:
+            return {"kind": "off"}
+        if layer == "light":
+            return {"kind": "actions", "actions": [{"action": "http_request", "target": light,
+                                                     "path": f"/level/{value}"}]}
+        return {"kind": "sound", "sound": sound(value, key)}
+
+    layers = {item["id"]: str(uuid.uuid4()) for item in READING["layers"]}
+    ids = {}
+    groups = []
+    for group in READING["groups"]:
+        ids[group["id"]] = str(uuid.uuid4())
+        variants = []
+        for variant in group["variants"]:
+            key = f"{group['id']}/{variant['id']}"
+            ids[key] = str(uuid.uuid4())
+            variants.append({"id": ids[key], "name": text(variant["name"], lang),
+                             "layers": {layers[k]: content(k, v, f"{group['id']}-{variant['id']}-{k}")
+                                        for k, v in variant["layers"].items()}})
+        groups.append({"id": ids[group["id"]], "name": text(group["name"], lang), "color": group["color"],
+                       "base": {layers[k]: content(k, v, f"{group['id']}-{k}") for k, v in group["base"].items()},
+                       "variants": variants})
+
+    pads = text(READING["name"], lang)
+    cue_list = [{"name": text(shot["name"], lang), "kind": "sound",
+                 "sound": sound(shot, f"shot-{shot['id']}") | {"repeat": "once"}}
+                for shot in READING["oneshots"]]
+    state = act({"action": "add_cue_list", "name": pads, "cues": cue_list})
+    act({"action": "set_cue_list_pads", "list": pads, "on": True})
+    made = next(l for l in state["cue_lists"] if l["name"] == pads)["cues"]
+    shots = {shot["id"]: cue["id"] for shot, cue in zip(READING["oneshots"], made)}
+
+    act({"action": "set_moods", "moods": {
+        "layers": [{"id": layers[item["id"]], "name": text(item["name"], lang)} for item in READING["layers"]],
+        "groups": groups,
+        "collections": [{"id": str(uuid.uuid4()), "name": text(c["name"], lang),
+                         "moods": [ids[m] for m in c["moods"]], "pads": [shots[o] for o in c["oneshots"]]}
+                        for c in READING["collections"]],
+    }})
+    for mood in (READING["before"], READING["now"]):
+        act({"action": "set_mood", "mood": ids[mood]})
+
+
 def stage(lang, work):
     """The show from the world: inputs, colours, buses, outputs."""
     ids = {}
@@ -175,6 +243,7 @@ def stage(lang, work):
             act({"action": "start_output", "output": text(out["name"], lang)})
     titles(lang)
     cues(lang, ids)
+    moods(lang, work)
     act({"action": "save_show", "path": str(work / STREAM["file"])})
 
 

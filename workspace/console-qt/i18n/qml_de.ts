@@ -3326,6 +3326,195 @@
     </message>
   </context>
   <context>
+    <name>MoodsPage</name>
+    <message>
+      <location filename="../qml/MoodsPage.qml" line="+74" />
+      <source>Moods</source>
+      <translation>Stimmungen</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <location line="+437" />
+      <source>Panic</source>
+      <translation>Panik</translation>
+    </message>
+    <message>
+      <location line="-436" />
+      <source>Stops every cue and sound; the panic mood runs</source>
+      <translation>Stoppt alle Cues und Klänge, die Panik-Stimmung läuft</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Base of group 1…9</source>
+      <translation>Basis der Gruppe 1…9</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Back to the mood before</source>
+      <translation>Zurück zur Stimmung davor</translation>
+    </message>
+    <message>
+      <location line="+69" />
+      <source>%1 actions</source>
+      <translation>%1 Aktionen</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <location line="+385" />
+      <source>Off</source>
+      <translation>Aus</translation>
+    </message>
+    <message>
+      <location line="-348" />
+      <source>Done</source>
+      <translation>Fertig</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Compose</source>
+      <translation>Zusammenstellen</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Put moods and one-shots in or out of %1</source>
+      <translation>Stimmungen und Oneshots in %1 aufnehmen oder herausnehmen</translation>
+    </message>
+    <message>
+      <location line="+26" />
+      <location line="+6" />
+      <source>Collections</source>
+      <translation>Sammlungen</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Fold collections</source>
+      <translation>Sammlungen einklappen</translation>
+    </message>
+    <message>
+      <location line="+15" />
+      <source>All</source>
+      <translation>Alle</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>%1 moods · %2 one-shots</source>
+      <translation>%1 Stimmungen · %2 Oneshots</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Every mood and one-shot</source>
+      <translation>Alle Stimmungen und Oneshots</translation>
+    </message>
+    <message>
+      <location line="+40" />
+      <location line="+256" />
+      <source>Panic mood</source>
+      <translation>Panik-Stimmung</translation>
+    </message>
+    <message>
+      <location line="-256" />
+      <source>Now</source>
+      <translation>Jetzt</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>No mood set</source>
+      <translation>Keine Stimmung gesetzt</translation>
+    </message>
+    <message>
+      <location line="+17" />
+      <source>%1 s left</source>
+      <translation>noch %1 s</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Back to %1</source>
+      <translation>Zurück zu %1</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Back</source>
+      <translation>Zurück</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>No moods yet</source>
+      <translation>Noch keine Stimmungen</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>A mood says what runs on each layer: light, music, ambience, picture. They come with the show or over the API (set_moods).</source>
+      <translation>Eine Stimmung sagt, was auf jeder Ebene läuft: Licht, Musik, Atmo, Bild. Stimmungen kommen mit der Show oder über die API (set_moods).</translation>
+    </message>
+    <message>
+      <location line="+65" />
+      <location line="+30" />
+      <source>Set %1</source>
+      <translation>%1 setzen</translation>
+    </message>
+    <message>
+      <location line="-27" />
+      <source>In the collection: click to take it out</source>
+      <translation>In der Sammlung: klicken, um sie herauszunehmen</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Click to put it in the collection</source>
+      <translation>Klicken, um sie in die Sammlung aufzunehmen</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Base: %1</source>
+      <translation>Basis: %1</translation>
+    </message>
+    <message>
+      <location line="+29" />
+      <source>Changes %1; the rest from the base</source>
+      <translation>Ändert %1, der Rest kommt aus der Basis</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Same as the base</source>
+      <translation>Wie die Basis</translation>
+    </message>
+    <message>
+      <location line="+25" />
+      <source>One-shots: click to put in or out</source>
+      <translation>Oneshots: klicken zum Aufnehmen oder Herausnehmen</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>One-shots: over the mood, a click starts or stops</source>
+      <translation>Oneshots: über der Stimmung, ein Klick startet oder stoppt</translation>
+    </message>
+    <message>
+      <location line="+18" />
+      <source>Stop %1</source>
+      <translation>%1 stoppen</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Start %1</source>
+      <translation>Start %1</translation>
+    </message>
+    <message>
+      <location line="+28" />
+      <source>Fold layers</source>
+      <translation>Ebenen einklappen</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <location line="+9" />
+      <source>Layers</source>
+      <translation>Ebenen</translation>
+    </message>
+    <message>
+      <location line="+15" />
+      <source>Base</source>
+      <translation>Basis</translation>
+    </message>
+  </context>
+  <context>
     <name>MoreActionsMenu</name>
     <message>
       <location filename="../qml/MoreActionsMenu.qml" line="+31" />

@@ -149,6 +149,7 @@ fn main() {
                 "qml/CueListsDialog.qml",
                 "qml/ShowView.qml",
                 "qml/ShowSidebar.qml",
+                "qml/MoodsPage.qml",
                 "qml/ShowInspector.qml",
                 "qml/DurationField.qml",
                 "qml/CueTime.qml",
