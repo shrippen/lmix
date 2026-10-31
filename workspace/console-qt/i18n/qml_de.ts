@@ -1333,6 +1333,140 @@
     </message>
   </context>
   <context>
+    <name>CueAddBar</name>
+    <message>
+      <location filename="../qml/CueAddBar.qml" line="+93" />
+      <source>Add</source>
+      <translation>Neu</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Sound</source>
+      <translation>Ton</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Plays a sound file into the zones</source>
+      <translation>Spielt eine Klangdatei in die Zonen</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Picture</source>
+      <translation>Bild</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Shows a video or still on stage %1</source>
+      <translation>Zeigt ein Video oder Standbild auf Bühne %1</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>The show has no stage yet</source>
+      <translation>Die Show hat noch keine Bühne</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Fade</source>
+      <translation>Blende</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Fades out cue %1 and stops it</source>
+      <translation>Blendet Cue %1 aus und stoppt ihn</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Fades zone %1 to silence</source>
+      <translation>Blendet Zone %1 auf Stille</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Fades stage %1 to black</source>
+      <translation>Blendet Bühne %1 auf Schwarz</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>The show has nothing to fade: no sound or picture chosen, no zone, no stage</source>
+      <translation>Die Show hat nichts zum Blenden: kein Klang oder Bild gewählt, keine Zone, keine Bühne</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Actions</source>
+      <translation>Aktionen</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Runs actions of the catalogue, e.g. a cut or a title</source>
+      <translation>Führt Aktionen des Katalogs aus, z. B. einen Schnitt oder einen Titel</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>Wait</source>
+      <translation>Warten</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Only runs for a while, e.g. before the next cue follows</source>
+      <translation>Läuft nur eine Weile, z. B. bevor der nächste Cue folgt</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Note</source>
+      <translation>Notiz</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Does nothing: a stage direction or a section mark</source>
+      <translation>Tut nichts: eine Regieanweisung oder eine Abschnittsmarke</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>Start</source>
+      <translation>Start</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Starts cue %1 without moving standby</source>
+      <translation>Startet Cue %1, ohne Standby zu bewegen</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Choose the cue it starts first</source>
+      <translation>Erst den Cue wählen, den er startet</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>Sound file</source>
+      <translation>Klangdatei</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Sound files (*.wav *.flac *.ogg *.opus *.mp3 *.aif *.aiff *.m4a)</source>
+      <translation>Klangdateien (*.wav *.flac *.ogg *.opus *.mp3 *.aif *.aiff *.m4a)</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <location line="+7" />
+      <source>All files (*)</source>
+      <translation>Alle Dateien (*)</translation>
+    </message>
+    <message>
+      <location line="-1" />
+      <source>Video or still</source>
+      <translation>Video oder Standbild</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Videos and stills (*.mp4 *.mov *.mkv *.webm *.png *.jpg *.jpeg)</source>
+      <translation>Videos und Standbilder (*.mp4 *.mov *.mkv *.webm *.png *.jpg *.jpeg)</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>Actions of the new cue</source>
+      <translation>Aktionen des neuen Cues</translation>
+    </message>
+  </context>
+  <context>
     <name>CueColourButton</name>
     <message>
       <location filename="../qml/CueColourButton.qml" line="+21" />
@@ -3979,6 +4113,14 @@
     </message>
   </context>
   <context>
+    <name>PathField</name>
+    <message>
+      <location filename="../qml/PathField.qml" line="+67" />
+      <source>Choose…</source>
+      <translation>Wählen…</translation>
+    </message>
+  </context>
+  <context>
     <name>PtzDialog</name>
     <message>
       <location filename="../qml/PtzDialog.qml" line="+51" />
@@ -4654,7 +4796,7 @@
   <context>
     <name>ShowInspector</name>
     <message>
-      <location filename="../qml/ShowInspector.qml" line="+114" />
+      <location filename="../qml/ShowInspector.qml" line="+179" />
       <source>Basics</source>
       <translation>Grundlagen</translation>
     </message>
@@ -4719,7 +4861,89 @@
       <translation>Farbe</translation>
     </message>
     <message>
+      <location line="+11" />
+      <source>File</source>
+      <translation>Datei</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>Video or still</source>
+      <translation>Video oder Standbild</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Sound file</source>
+      <translation>Klangdatei</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Videos and stills (*.mp4 *.mov *.mkv *.webm *.png *.jpg *.jpeg)</source>
+      <translation>Videos und Standbilder (*.mp4 *.mov *.mkv *.webm *.png *.jpg *.jpeg)</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <location line="+1" />
+      <source>All files (*)</source>
+      <translation>Alle Dateien (*)</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Sound files (*.wav *.flac *.ogg *.opus *.mp3 *.aif *.aiff *.m4a)</source>
+      <translation>Klangdateien (*.wav *.flac *.ogg *.opus *.mp3 *.aif *.aiff *.m4a)</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <location line="+48" />
+      <source>Stage</source>
+      <translation>Bühne</translation>
+    </message>
+    <message>
+      <location line="-34" />
+      <source>Stage of the picture</source>
+      <translation>Bühne des Bildes</translation>
+    </message>
+    <message>
       <location line="+10" />
+      <source>Fades</source>
+      <translation>Blendet</translation>
+    </message>
+    <message>
+      <location line="+24" />
+      <source>Cue</source>
+      <translation>Cue</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Zone</source>
+      <translation>Zone</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>A sound or picture cue: its level or opacity</source>
+      <translation>Ein Klang- oder Bild-Cue: sein Pegel oder seine Deckkraft</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>A zone: its level</source>
+      <translation>Eine Zone: ihr Pegel</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>A stage: its brightness</source>
+      <translation>Eine Bühne: ihre Helligkeit</translation>
+    </message>
+    <message>
+      <location line="+23" />
+      <source>What the fade fades</source>
+      <translation>Was die Blende blendet</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>The show has none yet.</source>
+      <translation>Die Show hat noch keine.</translation>
+    </message>
+    <message>
+      <location line="+7" />
       <source>Note</source>
       <translation>Notiz</translation>
     </message>
@@ -4819,13 +5043,13 @@
       <translation>mit Ausblendung über</translation>
     </message>
     <message>
-      <location line="+7" />
+      <location line="+8" />
       <source>Fade of the cues it stops</source>
       <translation>Ausblendung der Cues, die er stoppt</translation>
     </message>
     <message>
       <location line="+18" />
-      <location line="+4" />
+      <location line="+5" />
       <source>Pre wait</source>
       <translation>Vorwartezeit</translation>
     </message>
@@ -4836,7 +5060,7 @@
     </message>
     <message>
       <location line="+4" />
-      <location line="+4" />
+      <location line="+5" />
       <source>Post wait</source>
       <translation>Nachwartezeit</translation>
     </message>
@@ -4847,7 +5071,7 @@
     </message>
     <message>
       <location line="+7" />
-      <location line="+7" />
+      <location line="+8" />
       <source>Duration</source>
       <translation>Dauer</translation>
     </message>
@@ -4873,13 +5097,13 @@
     </message>
     <message>
       <location line="+13" />
-      <location line="+7" />
+      <location line="+8" />
       <source>Fade in</source>
       <translation>Einblenden</translation>
     </message>
     <message>
       <location line="+6" />
-      <location line="+7" />
+      <location line="+8" />
       <source>Fade out</source>
       <translation>Ausblenden</translation>
     </message>
@@ -4920,12 +5144,12 @@
     </message>
     <message>
       <location line="+7" />
-      <location line="+71" />
+      <location line="+92" />
       <source>Level</source>
       <translation>Pegel</translation>
     </message>
     <message>
-      <location line="-60" />
+      <location line="-81" />
       <source>Level of the sound</source>
       <translation>Pegel des Klangs</translation>
     </message>
@@ -4935,7 +5159,7 @@
       <translation>0 dB: wie in der Datei; −60 dB: Stille</translation>
     </message>
     <message>
-      <location line="+7" />
+      <location line="+28" />
       <location line="+46" />
       <source>Opacity</source>
       <translation>Deckkraft</translation>
@@ -5141,7 +5365,7 @@
   <context>
     <name>ShowView</name>
     <message>
-      <location filename="../qml/ShowView.qml" line="+67" />
+      <location filename="../qml/ShowView.qml" line="+73" />
       <source>starts cue %1, which is not there</source>
       <translation>startet Cue %1, den es nicht gibt</translation>
     </message>
@@ -5171,7 +5395,7 @@
       <translation>nutzt Input %1, dessen Mediendatei fehlt</translation>
     </message>
     <message>
-      <location line="+77" />
+      <location line="+99" />
       <source>Wait %1</source>
       <translation>Warten %1</translation>
     </message>
@@ -5391,7 +5615,7 @@
       <translation>Noch keine Cue-Listen. Unter „Cues…“ eine anlegen oder mit „Drehbuch…“ einen Drehbuch-Ordner wählen.</translation>
     </message>
     <message>
-      <location line="+27" />
+      <location line="+35" />
       <source>No.</source>
       <translation>Nr.</translation>
     </message>
@@ -5412,6 +5636,11 @@
     </message>
     <message>
       <location line="+1" />
+      <source>Duration</source>
+      <translation>Dauer</translation>
+    </message>
+    <message>
+      <location line="+1" />
       <source>Post</source>
       <translation>Nach</translation>
     </message>
@@ -5421,7 +5650,7 @@
       <translation>Folge</translation>
     </message>
     <message>
-      <location line="+74" />
+      <location line="+85" />
       <source>Open group</source>
       <translation>Gruppe aufklappen</translation>
     </message>
@@ -5431,7 +5660,7 @@
       <translation>Gruppe zuklappen</translation>
     </message>
     <message>
-      <location line="+60" />
+      <location line="+73" />
       <source>Unmark cue</source>
       <translation>Markierung entfernen</translation>
     </message>
@@ -5499,6 +5728,69 @@
       <location line="+1" />
       <source> · GO again once let go</source>
       <translation> · GO erst nach Loslassen wieder</translation>
+    </message>
+  </context>
+  <context>
+    <name>SoundRoutes</name>
+    <message>
+      <location filename="../qml/SoundRoutes.qml" line="+109" />
+      <source>Crosspoints</source>
+      <translation>Kreuzungen</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>The show has no zones yet (Zones…).</source>
+      <translation>Die Show hat noch keine Zonen (Zonen…).</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>File channel n plays on channel n of zone %1.</source>
+      <translation>Dateikanal n spielt auf Kanal n von Zone %1.</translation>
+    </message>
+    <message>
+      <location line="+20" />
+      <source>File</source>
+      <translation>Datei</translation>
+    </message>
+    <message>
+      <location line="+6" />
+      <source>File channel of crosspoint %1</source>
+      <translation>Dateikanal der Kreuzung %1</translation>
+    </message>
+    <message>
+      <location line="+13" />
+      <source>Zone of crosspoint %1</source>
+      <translation>Zone der Kreuzung %1</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>Zone channel of crosspoint %1</source>
+      <translation>Zonenkanal der Kreuzung %1</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>Level of crosspoint %1</source>
+      <translation>Pegel der Kreuzung %1</translation>
+    </message>
+    <message>
+      <location line="+8" />
+      <source>Remove crosspoint %1</source>
+      <translation>Kreuzung %1 entfernen</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Remove this crosspoint</source>
+      <translation>Diese Kreuzung entfernen</translation>
+    </message>
+    <message>
+      <location line="+9" />
+      <source>+ Crosspoint</source>
+      <translation>+ Kreuzung</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Send one more file channel to a zone channel</source>
+      <translation>Einen weiteren Dateikanal auf einen Zonenkanal legen</translation>
     </message>
   </context>
   <context>

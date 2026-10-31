@@ -52,6 +52,12 @@ ColumnLayout {
     onStandbyAtChanged: selectedId = ""
     readonly property var running: show && show.running_cues ? show.running_cues : []
     readonly property var runningIds: running.map(r => r.cue)
+    /** The running cues by cue id, for the times in the list. */
+    readonly property var runById: {
+        var out = {}
+        running.forEach(r => out[r.cue] = r)
+        return out
+    }
     /** Cues that started since the show was opened or reset (SUI.12). */
     readonly property var ranIds: show && show.ran_cues ? show.ran_cues : []
     readonly property var standbyCue: list && list.standby <= list.cues.length ? list.cues[list.standby - 1] : null
@@ -95,6 +101,28 @@ ColumnLayout {
      *  standby and running cues (IMP.5). */
     function updateCue(id, changes) {
         act({ action: "update_cue", list: list.number, cue: id, changes: changes })
+    }
+
+    /** Adds `cue` to the active list after the cue with id `after`, or at
+     *  the end when it is empty, and chooses it for the inspector. Only
+     *  the new cue goes to lmix-core (`add_cue`), so an edit sent just
+     *  before stays. */
+    function addCue(cue, after) {
+        var made = Object.assign({ id: newId() }, cue)
+        var action = { action: "add_cue", list: list.number, cue: made }
+        if (after !== "") {
+            action.after = after
+        }
+        act(action)
+        selectedId = made.id
+    }
+
+    /** A random cue id (UUID version 4). */
+    function newId() {
+        return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => {
+            var r = Math.floor(Math.random() * 16)
+            return (c === "x" ? r : (r % 4) + 8).toString(16)
+        })
     }
 
     /** "12 Rain" of the cue with `id` in any list, for a warning. */
@@ -416,6 +444,14 @@ ColumnLayout {
                     anchors.margins: Kirigami.Units.smallSpacing
                     spacing: 0
 
+                    CueAddBar {
+                        id: addBar
+                        Layout.fillWidth: true
+                        Layout.bottomMargin: Kirigami.Units.smallSpacing
+                        visible: view.editing && !view.fromScript
+                        showView: view
+                    }
+
                     // Column heads.
                     RowLayout {
                         Layout.fillWidth: true
@@ -424,6 +460,7 @@ ColumnLayout {
                         KanteSectionLabel { Layout.fillWidth: true; text: qsTr("Cue") }
                         KanteSectionLabel { Layout.preferredWidth: Kirigami.Units.gridUnit * 8; text: qsTr("Kind") }
                         KanteSectionLabel { visible: view.advanced; Layout.preferredWidth: Kirigami.Units.gridUnit * 4; text: qsTr("Pre") }
+                        KanteSectionLabel { Layout.preferredWidth: Kirigami.Units.gridUnit * 4; text: qsTr("Duration") }
                         KanteSectionLabel { visible: view.advanced; Layout.preferredWidth: Kirigami.Units.gridUnit * 4; text: qsTr("Post") }
                         KanteSectionLabel { visible: view.advanced; Layout.preferredWidth: Kirigami.Units.gridUnit * 6; text: qsTr("Follow") }
                     }
@@ -448,6 +485,17 @@ ColumnLayout {
                             readonly property bool runs: view.runningIds.indexOf(cue.id) >= 0
                             readonly property bool ran: !runs && view.ranIds.indexOf(cue.id) >= 0
                             readonly property bool chosen: view.editing && inspector.cue !== null && inspector.cue.id === cue.id
+                            // Its times while it runs (CUE.2: the post wait
+                            // counts from the action, after the pre wait);
+                            // -1 for a part not begun. Only a running row
+                            // follows the clock.
+                            readonly property var run: runs ? view.runById[cue.id] : undefined
+                            readonly property real done: run ? view.elapsed(run) : -1
+                            readonly property int pre: cue.pre_wait_ms || 0
+                            readonly property real action: done < pre ? -1 : done - pre
+                            /** The duration, or what the core counts (a file's length). */
+                            readonly property var length: cue.duration_ms !== undefined ? cue.duration_ms
+                                : (run && run.total_ms ? run.total_ms - pre : null)
 
                             width: cueView.width
                             implicitHeight: rowLayout.implicitHeight + Kirigami.Units.smallSpacing * 2
@@ -528,21 +576,34 @@ ColumnLayout {
                                 }
                                 QQC2.Label {
                                     Layout.preferredWidth: Kirigami.Units.gridUnit * 8
-                                    text: view.kindLabel(row.cue) + (row.cue.duration_ms ? " · " + view.clock(row.cue.duration_ms) : "")
+                                    text: view.kindLabel(row.cue)
                                     color: KanteStyle.mutedTextColor
                                     elide: Text.ElideRight
                                 }
-                                QQC2.Label {
+                                // Time fields with progress (click dummy).
+                                CueTime {
                                     visible: view.advanced
                                     Layout.preferredWidth: Kirigami.Units.gridUnit * 4
-                                    text: row.cue.pre_wait_ms ? view.clock(row.cue.pre_wait_ms) : ""
-                                    font.family: KanteStyle.monoFamily
+                                    Layout.fillHeight: true
+                                    clock: view.clock
+                                    ms: row.pre
+                                    done: row.done < 0 ? -1 : Math.min(row.done, row.pre)
                                 }
-                                QQC2.Label {
+                                CueTime {
+                                    Layout.preferredWidth: Kirigami.Units.gridUnit * 4
+                                    Layout.fillHeight: true
+                                    clock: view.clock
+                                    ms: row.cue.duration_ms !== undefined ? row.cue.duration_ms : null
+                                    length: row.length
+                                    done: row.action
+                                }
+                                CueTime {
                                     visible: view.advanced
                                     Layout.preferredWidth: Kirigami.Units.gridUnit * 4
-                                    text: row.cue.post_wait_ms ? view.clock(row.cue.post_wait_ms) : ""
-                                    font.family: KanteStyle.monoFamily
+                                    Layout.fillHeight: true
+                                    clock: view.clock
+                                    ms: row.cue.post_wait_ms || 0
+                                    done: row.action < 0 ? -1 : Math.min(row.action, row.cue.post_wait_ms || 0)
                                 }
                                 QQC2.Label {
                                     visible: view.advanced
