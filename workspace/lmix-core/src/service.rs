@@ -690,8 +690,17 @@ impl Service {
     /// answer keeps neither the music nor the picture back (MOOD.4).
     async fn run_mood_actions(self: &Arc<Self>, actions: Vec<Action>) {
         for action in actions {
+            let media = match &action {
+                Action::PlaySound { id, .. } | Action::ShowPicture { id, .. } => Some(id.clone()),
+                _ => None,
+            };
             if let Err(e) = Box::pin(self.handle_as(action, Origin::Operator)).await {
                 tracing::warn!(error = %e, "mood action failed");
+                if let Some(id) = media {
+                    let mut sw = self.switcher.lock().await;
+                    sw.mood_media_failed(&id);
+                    self.publish(&sw);
+                }
             }
         }
     }
@@ -3071,9 +3080,22 @@ mod tests {
             .insert(LayerId::new(), LayerContent::Off);
         let mut twice = good.clone();
         twice.groups.push(good.groups[0].clone());
+        let mut alarm = good.clone();
+        alarm.panic.insert(
+            licht,
+            LayerContent::Actions {
+                actions: vec![Action::PlaySound {
+                    id: "alarm".into(),
+                    sound: lmix_types::SoundCue {
+                        file: "/sounds/alarm.wav".into(),
+                        ..Default::default()
+                    },
+                }],
+            },
+        );
         let mut slash = good.clone();
         slash.groups[0].variants[0].name = "Dunkel / Nacht".into();
-        for bad in [sound_in_panic, loops, no_layer, twice, slash] {
+        for bad in [sound_in_panic, alarm, loops, no_layer, twice, slash] {
             assert!(
                 matches!(
                     service

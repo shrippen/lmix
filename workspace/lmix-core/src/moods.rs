@@ -22,6 +22,17 @@ struct Playing {
     origin: LayerOrigin,
 }
 
+/// Whether `action` fades a layer's sound or picture.
+fn fades(action: &Action) -> bool {
+    matches!(
+        action,
+        Action::PlaySound { .. }
+            | Action::ShowPicture { .. }
+            | Action::StopSound { .. }
+            | Action::StopPicture { .. }
+    )
+}
+
 #[derive(Debug, Default)]
 pub struct MoodRunner {
     mood: Option<MoodId>,
@@ -71,7 +82,7 @@ impl MoodRunner {
                 continue;
             }
             let fade = fade_ms.or(layer.fade_ms).unwrap_or(change);
-            longest = longest.max(fade);
+            let was = out.len();
             self.stop(layer.id, fade, &mut out);
             self.start(
                 layer.id,
@@ -80,6 +91,10 @@ impl MoodRunner {
                 fade,
                 &mut out,
             );
+            // Only sound and pictures fade; actions and off to off do not.
+            if out[was..].iter().any(fades) {
+                longest = longest.max(fade);
+            }
         }
         // Layers the show no longer has go.
         let gone: Vec<LayerId> = self
@@ -90,7 +105,11 @@ impl MoodRunner {
             .collect();
         for layer in gone {
             let fade = fade_ms.unwrap_or(change);
+            let was = out.len();
             self.stop(layer, fade, &mut out);
+            if out[was..].iter().any(fades) {
+                longest = longest.max(fade);
+            }
         }
         if self.mood != Some(id) {
             self.previous = self.mood;
@@ -115,6 +134,12 @@ impl MoodRunner {
             }
         }
         out
+    }
+
+    /// The sound or picture `id` did not start (a file missing, a zone
+    /// gone): its layer is off, so the same mood again tries again.
+    pub fn media_failed(&mut self, id: &str) {
+        self.layers.retain(|_, p| p.media.as_deref() != Some(id));
     }
 
     /// Everything stopped (reset, a new show): no layer runs, no mood is
@@ -473,6 +498,45 @@ mod tests {
         let out = runner.set(&t.moods, "Tavern", None, 0).expect("after");
         assert_eq!(out.len(), 3, "{out:?}");
         assert_eq!(out[0], http("warm"));
+    }
+
+    #[test]
+    fn only_sound_and_pictures_make_a_fade() {
+        let t = tavern();
+        let mut runner = MoodRunner::default();
+        runner.set(&t.moods, "Forest", None, 0).expect("forest");
+        runner.set(&t.moods, "Forest", None, 0).expect("again");
+        assert_eq!(runner.now(&t.moods, 0).fading, None, "nothing changed");
+        runner.set(&t.moods, "Tavern", None, 0).expect("tavern");
+        runner
+            .set(&t.moods, "Tavern / Night", None, 0)
+            .expect("night");
+        assert_eq!(
+            runner.now(&t.moods, 0).fading,
+            None,
+            "only the light changed, over HTTP"
+        );
+    }
+
+    #[test]
+    fn a_layer_whose_sound_did_not_start_tries_again() {
+        let t = tavern();
+        let mut runner = MoodRunner::default();
+        let out = runner.set(&t.moods, "Tavern", None, 0).expect("set");
+        let Some(Action::PlaySound { id, .. }) = out.get(1) else {
+            panic!("plays the lute: {out:?}")
+        };
+        runner.media_failed(id);
+        assert!(!runner
+            .now(&t.moods, 0)
+            .layers
+            .iter()
+            .any(|l| l.layer == t.music));
+        let again = runner.set(&t.moods, "Tavern", None, 0).expect("again");
+        assert!(
+            matches!(again.as_slice(), [Action::PlaySound { .. }]),
+            "{again:?}"
+        );
     }
 
     #[test]

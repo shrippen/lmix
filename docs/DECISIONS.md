@@ -6168,7 +6168,19 @@ Stimmungen“): Typen, Engine und Aktionen im Kern, ohne Oberfläche.
 **Noch nicht**: Ein Klang einer Ebene, der von selbst endet, steht weiter
 als laufend in der Ebene (`media_ended` kennt nur Cue-Ids); ein
 `stop_sound` ohne Id stoppt die Stimmung, ohne dass die Engine es merkt.
-Beides mit Stufe 3, wenn Cues Ebenen übernehmen (MOOD.5).
+Beides mit Stufe 3, wenn Cues Ebenen übernehmen (MOOD.5). Dass bei
+gleichem Ziel die Panik-Stimmung nach der Notfall-Liste ankommt, sichert
+der Kern noch nicht zu: HTTP- und Home-Assistant-Anfragen laufen je als
+eigene Task. Und wie beim Cue-Pfad laufen die Aktionen einer Stimmung
+erst nach der Freigabe des Switchers; eine Panik genau dazwischen stoppt
+einen Klang, der danach erst startet, nicht (Bestand, gemeinsam mit den
+Cues zu schließen, etwa mit einer Panik-Generation).
+
+**Nach dem Review**: Die Panik-Stimmung weist auch Aktionen ab, die Klang
+oder Bühne starten oder aufhellen (`play_sound`, `show_picture`,
+`set_stage_level` …). `fading` zählt nur Ebenen, deren Klang oder Bild
+blendet. Startet der Klang oder das Bild einer Ebene nicht, ist die Ebene
+wieder aus; dieselbe Stimmung noch einmal versucht es erneut.
 
 **Geprüft**: `moods::tests` (Basis, Variante mit Gruppenwechselzeit,
 gleiche Stimmung ohne Aktion, andere Gruppe, Blendzeit von Aufruf und

@@ -714,7 +714,12 @@ fn check_moods(moods: &lmix_types::Moods) -> Result<(), ActionError> {
         }
     }
     for (layer, c) in &moods.panic {
-        if matches!(c, LayerContent::Sound { .. } | LayerContent::Picture { .. }) {
+        let sounds_or_shows = match c {
+            LayerContent::Sound { .. } | LayerContent::Picture { .. } => true,
+            LayerContent::Actions { actions } => actions.iter().any(makes_sound_or_light),
+            LayerContent::Off => false,
+        };
+        if sounds_or_shows {
             return bad("the panic mood holds actions only: sound and pictures stay off".into());
         }
         content("panic", layer, c)?;
@@ -728,6 +733,22 @@ fn check_moods(moods: &lmix_types::Moods) -> Result<(), ActionError> {
         }
     }
     Ok(())
+}
+
+/// Actions that start or raise sound or a stage: never after a panic
+/// (SAF.1, VIS.8, MOOD.9).
+fn makes_sound_or_light(action: &Action) -> bool {
+    matches!(
+        action,
+        Action::PlaySound { .. }
+            | Action::FadeSound { .. }
+            | Action::ResumeSound { .. }
+            | Action::SetZoneLevel { .. }
+            | Action::ShowPicture { .. }
+            | Action::FadePicture { .. }
+            | Action::ResumePicture { .. }
+            | Action::SetStageLevel { .. }
+    )
 }
 
 /// Milliseconds since the Unix epoch, for times the clients draw.
@@ -3766,6 +3787,12 @@ impl Switcher {
         if !actions.is_empty() {
             out.push(Out::Mood { actions });
         }
+    }
+
+    /// The sound or picture `id` of a mood layer did not start: the layer
+    /// is off again, so setting the mood once more tries again.
+    pub fn mood_media_failed(&mut self, id: &str) {
+        self.moods.media_failed(id);
     }
 
     /// Set a mood (MOOD.4): the actions that change its layers.
