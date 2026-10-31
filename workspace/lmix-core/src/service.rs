@@ -690,13 +690,30 @@ impl Service {
     /// answer keeps neither the music nor the picture back (MOOD.4).
     async fn run_mood_actions(self: &Arc<Self>, actions: Vec<Action>) {
         for action in actions {
+            // A start that failed may run all the same (made, then its
+            // fade-in failed): stopped, so no later change leaves it
+            // behind. Stopping what does not run does nothing.
             let media = match &action {
-                Action::PlaySound { id, .. } | Action::ShowPicture { id, .. } => Some(id.clone()),
+                Action::PlaySound { id, .. } => Some((
+                    id.clone(),
+                    Action::StopSound {
+                        id: Some(id.clone()),
+                        fade_ms: 0,
+                    },
+                )),
+                Action::ShowPicture { id, .. } => Some((
+                    id.clone(),
+                    Action::StopPicture {
+                        id: Some(id.clone()),
+                        fade_ms: 0,
+                    },
+                )),
                 _ => None,
             };
             if let Err(e) = Box::pin(self.handle_as(action, Origin::Operator)).await {
                 tracing::warn!(error = %e, "mood action failed");
-                if let Some(id) = media {
+                if let Some((id, stop)) = media {
+                    let _ = Box::pin(self.handle_as(stop, Origin::Operator)).await;
                     let mut sw = self.switcher.lock().await;
                     sw.mood_media_failed(&id);
                     self.publish(&sw);
@@ -3095,6 +3112,15 @@ mod tests {
         );
         let mut slash = good.clone();
         slash.groups[0].variants[0].name = "Dunkel / Nacht".into();
+        // A show file with them is refused as well.
+        let file = crate::show::Show {
+            moods: alarm.clone(),
+            ..Default::default()
+        };
+        assert!(matches!(
+            service.switcher.lock().await.replace(file, None),
+            Err(ActionError::BadMood { .. })
+        ));
         for bad in [sound_in_panic, alarm, loops, no_layer, twice, slash] {
             assert!(
                 matches!(

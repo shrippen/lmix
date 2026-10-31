@@ -2178,6 +2178,9 @@ impl Switcher {
         path: Option<String>,
     ) -> Result<Vec<Command>, ActionError> {
         self.check_no_stinger()?;
+        // Its moods as `set_moods` would take them: a file changed by hand
+        // brings no sound into the panic mood (MOOD.9).
+        check_moods(&show.moods)?;
         let mut commands: Vec<Command> = self
             .show
             .inputs
