@@ -5590,3 +5590,51 @@ Größe M nach Regel 3.
 - **„Belegungen…“ im Fuß** öffnet den Dialog der Kurzbefehle. Der Knopf steht
   am Anfang des Fußes, über `KanteDialog.footerStart` (Kante 1.57, für diesen
   Dialog eingeführt).
+
+## 2026-10-31 — Seiten lösbar auf einen zweiten Bildschirm
+
+Entscheidung aus Click-Dummy 1 (`docs/PLAN-SEITEN.md`): Jede Seite (Mix,
+Show, Audio, Ausgänge, Einrichtung) kann in ein eigenes Fenster, etwa auf
+einen zweiten Bildschirm, und zurück.
+
+- **Ein Fenster je Seite**, Titel „lmix — Mix“ (taugt für KWin-Regeln). In
+  der Titelzeile der Seite „Eigenes Fenster“ (Symbol `tab-detach`); zurück
+  über „Zurück ins Hauptfenster“ oder durch Schließen des Fensters, wie beim
+  Scopes-Fenster (Regel 4).
+- **Das Hauptfenster behält eine Seite.** Schließen des Hauptfensters
+  beendet lmix; gelöste Seiten öffnen beim nächsten Start wieder in ihrem
+  Fenster, am selben Ort (`lmix.conf`, `[pages] windows`, JSON mit Ort,
+  Bildschirm und normal/maximiert/Vollbild; der Ort wird in die vorhandenen
+  Bildschirme eingepasst). Das erste Lösen geht auf einen anderen
+  Bildschirm, wenn es einen gibt. Unter Wayland setzt KWin den Ort.
+- **Seitenleiste:** Eine gelöste Seite trägt „↗“; Klick oder Strg+n holt ihr
+  Fenster nach vorn. Strg+n, die Datei-Tasten und die Show-Kurzbefehle
+  gelten in jedem lmix-Fenster (`Qt.ApplicationShortcut`).
+- **Panik in jedem Fenster:** Der Fuß des Seitenfensters hat die Panik der
+  Seite und „Alles Panik“ (`PanicButtons.qml`, auch im Hauptfenster).
+- **Meldungen, Entfernen-Leiste und Dialoge der Shell** erscheinen in dem
+  Fenster, in dem gerade gearbeitet wird.
+- **Eine Verbindung, ein Bild:** Alle Fenster sprechen mit demselben Core.
+  Die Seite wird beim Lösen und Zurückholen neu gebaut (das alte Exemplar
+  geht zuerst), nicht umgehängt: Das Videobild hängt am GL-Kontext seines
+  Fensters, Popups am Overlay. Alle GL-Kontexte teilen eine Gruppe
+  (`AA_ShareOpenGLContexts`), die Kachelbilder kommen weiter aus dem einen
+  `TilesAtlas` im Hauptfenster (Hüllen je Fenster in `atlas_cell.cpp`). Das
+  kleine Program-Bild der Leiste fällt weg, solange Program in einem
+  gelösten Fenster sichtbar ist. Was nur auf dem Bildschirm steht (etwa
+  eine Auswahl), geht beim Lösen verloren.
+- **Keine Aufnahme-/Stream-Pille im Seitenfenster:** Ihr Atmen würde das
+  Fenster ständig neu zeichnen.
+- **Breaking** (vor dem ersten Release): `Main.qml` gibt die Seiten als
+  `AppShell.PageEntry` an statt als Kinder. Nichts zu migrieren.
+
+**Messung** (`scripts/measure-gui-frames.sh`, CPU-Mixer, Xvfb, je 10 s
+Ruhe/Fader/Ruhe; `DETACH=1` löst Mix maximiert, das Hauptfenster zeigt
+Show): vorher 81/81/78 fps und 82/82/82 fps, GUI-Thread 4/10/4 %; mit der
+Änderung, Mix im Hauptfenster 79/80/80 fps, 4/12/4 %. Mix gelöst: das
+Mix-Fenster 75/69/74 fps, das Hauptfenster daneben 36/58/38 fps, der
+GUI-Thread für beide zusammen 4/12/4 %, Program-Aufnahme ohne doppeltes
+Bild. Die Bilder des Hauptfensters kommen von der atmenden Aufnahme-Pille
+in seinem Kopf (Bestand). Ein zweiter Durchgang lief unter Last anderer
+Builds (Load 30) und fiel angedockt wie gelöst gleich ab (Ruhe danach
+13–15 fps), sagt also nichts über das Lösen.

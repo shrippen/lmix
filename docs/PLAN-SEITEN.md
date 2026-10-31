@@ -200,13 +200,26 @@ Kern, nur mit den geänderten Feldern (`update_cue`, DECISIONS 24.10.),
 Standby und laufende Cues bleiben. Listen aus
 einem Skript sind nur zu sehen.
 
+Seiten lösbar (31.10., Entscheidung Click-Dummy 1, DECISIONS 31.10.): der
+Knopf „Eigenes Fenster“ in der Kopfzeile legt die offene Seite in ein
+eigenes Fenster („lmix — Mix“), beim ersten Mal auf einen anderen
+Bildschirm als das Hauptfenster. Zurück über „Zurück ins Hauptfenster“
+oder durch Schließen des Fensters. Die Leiste bleibt im Hauptfenster und
+markiert die gelöste Seite („MIX ↗“); ein Klick oder Strg+n holt ihr
+Fenster nach vorn. Das Seitenfenster hat oben Titel, Werkzeuge der Seite,
+Uhr und „Tasten“, unten die Panik der Seite und „Panic all“. Globale Tasten
+gelten in jedem lmix-Fenster, die Tasten einer Seite in ihrem Fenster.
+Welche Seiten gelöst sind, Größe, Lage, Bildschirm und maximiert/Vollbild
+merkt sich der Rechner (`lmix.conf`, `[pages] windows`); unter Wayland
+setzt KWin die Lage. Eine Verbindung zum Kern und ein Kachelbild für alle
+Fenster; das Hauptfenster behält mindestens eine Seite.
+
 Aus dem Dummy noch offen, **nur Oberfläche** (der Kern kann es):
 - Show: Leiste zum Anlegen je Cue-Art, Zeitfelder mit Fortschritt;
   im Inspector Datei, Ziel und Zonen-Routing eines Klang-, Bild- oder
   Blenden-Cues; eine unlesbare Zeit nach Enter nicht still verwerfen,
   sondern im Feld lassen und markieren.
 - Audio: Mini-Kurven EQ und Dynamik je Zug, ON/AFV als Umschalter.
-- Seiten lösbar auf einen zweiten Bildschirm (Entscheidung Click-Dummy 1).
 - Leiste: wer eine Seite zuletzt bediente (braucht die Kennung je
   Verbindung im Kern, siehe Schritt 4).
 
