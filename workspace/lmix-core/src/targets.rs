@@ -168,16 +168,27 @@ pub async fn send(
     target: &TargetConfig,
     request: &Request,
 ) -> TargetResult {
-    if target.kind != TargetKind::Http {
-        return TargetResult::Failed {
-            reason: format!("{} speaks OSC; OSC cues come later", target.name),
-        };
+    if let Err(reason) = sendable(target) {
+        return TargetResult::Failed { reason };
     }
     let sends = target
         .addresses
         .iter()
         .map(|address| send_one(http, target, address, request));
-    let results = futures_util::future::join_all(sends).await;
+    combine(futures_util::future::join_all(sends).await)
+}
+
+/// Whether lmix sends to `target` at all.
+pub fn sendable(target: &TargetConfig) -> Result<(), String> {
+    if target.kind != TargetKind::Http {
+        return Err(format!("{} speaks OSC; OSC cues come later", target.name));
+    }
+    Ok(())
+}
+
+/// The answers of a target's addresses as one: reached when one answered
+/// with success; otherwise every reason.
+pub fn combine(results: Vec<Result<(), String>>) -> TargetResult {
     if results.iter().any(Result::is_ok) {
         return TargetResult::Ok;
     }
@@ -187,7 +198,8 @@ pub async fn send(
     }
 }
 
-async fn send_one(
+/// The request to one address of `target`.
+pub async fn send_one(
     http: &reqwest::Client,
     target: &TargetConfig,
     address: &str,

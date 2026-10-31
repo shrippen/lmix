@@ -460,7 +460,8 @@ Stufe 4a ✅ (31.10., DECISIONS „Stimmungen über OSC und Companion“),
 Stufe 4b ✅ (31.10., DECISIONS „Stimmungen bearbeiten“),
 Stufe 5a ✅ (31.10., DECISIONS „Stimmungen: Nacharbeiten am Bearbeiten“),
 Stufe 5b ✅ (31.10., DECISIONS „Stimmungen: Ebenen, die enden“),
-Stufe 5c ✅ (31.10., DECISIONS „Stimmungen: Vorladen“).
+Stufe 5c ✅ (31.10., DECISIONS „Stimmungen: Vorladen“),
+Stufe 5d ✅ (31.10., DECISIONS „Stimmungen: Panik nach der Notfall-Liste“).
 
 ---
 
