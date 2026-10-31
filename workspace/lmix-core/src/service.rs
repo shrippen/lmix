@@ -1160,15 +1160,15 @@ impl Service {
                 message: output_failure(&error.message),
             },
         );
+        self.fail_back_output(&mut sw, id);
         self.publish(&sw);
-        drop(sw);
-        self.fail_back_output(id);
         true
     }
 
     /// Start failed output `id` again until it runs (`restart_output`),
-    /// unless that is going on already.
-    fn fail_back_output(&self, id: OutputId) {
+    /// unless that is going on already. Marked in the switcher under its
+    /// lock: from now on its settings are locked (`update_output`).
+    fn fail_back_output(&self, sw: &mut Switcher, id: OutputId) {
         let Some(me) = self.me.upgrade() else {
             return;
         };
@@ -1178,6 +1178,7 @@ impl Service {
             .expect("failback lock")
             .insert(output_flow_id(id))
         {
+            sw.begin_failback(id);
             tokio::spawn(me.restart_output(id));
         }
     }
@@ -1240,7 +1241,7 @@ impl Service {
     /// The failback of output `id` is over, its hold too. Called under
     /// the switcher's lock: a failure after it starts a failback of its own.
     fn end_failback(&self, sw: &mut Switcher, id: OutputId) {
-        sw.end_hold(id);
+        sw.end_failback(id);
         self.failing_back
             .lock()
             .expect("failback lock")
@@ -2284,7 +2285,7 @@ impl Service {
                     // Failed: tried again until it runs, as after a crash
                     // (also across an engine restart, which restores only
                     // running outputs).
-                    self.fail_back_output(*id);
+                    self.fail_back_output(sw, *id);
                     if let Err(e) = restarted {
                         first_error.get_or_insert(ActionError::Engine {
                             message: format!("output failed, starting it again: {e}"),
@@ -4222,6 +4223,67 @@ mod tests {
             service.state().await.outputs[0].status,
             lmix_types::OutputStatus::Running { .. }
         ));
+    }
+
+    /// Between two tries of its failback a failed output keeps its
+    /// settings: the next try would start it with new ones. Stopped, it
+    /// can be changed.
+    #[tokio::test(start_paused = true)]
+    async fn an_output_failing_back_keeps_its_settings() {
+        let engine = Arc::new(NullEngine::failing());
+        let service = Service::new(4, engine.clone(), None);
+        tokio::spawn(service.clone().watch_failures());
+        tokio::task::yield_now().await;
+        service
+            .handle(Action::AddOutput {
+                spec: lmix_types::OutputSpec::Ndi { name: "PGM".into() },
+                source: lmix_types::OutputSource::Program,
+                bus: None,
+                name: Some("Card".into()),
+            })
+            .await
+            .unwrap();
+        engine.fail_outputs(true);
+        service
+            .handle(Action::StartOutput {
+                output: lmix_types::OutputRef::Text("Card".into()),
+            })
+            .await
+            .unwrap();
+        // Failed after 1.5 s; its failback tries again 2 s later.
+        tokio::time::sleep(std::time::Duration::from_millis(1600)).await;
+        let output = service.state().await.outputs[0].clone();
+        assert!(
+            matches!(output.status, lmix_types::OutputStatus::Failed { .. }),
+            "{:?}",
+            output.status
+        );
+        assert!(output.failback, "the state says a retry is coming");
+        let update = || Action::UpdateOutput {
+            output: lmix_types::OutputRef::Text("Card".into()),
+            spec: lmix_types::OutputSpec::Ndi {
+                name: "Other".into(),
+            },
+            source: lmix_types::OutputSource::Program,
+            name: Some("Card".into()),
+            bus: None,
+        };
+        assert!(matches!(
+            service.handle(update()).await,
+            Err(ActionError::OutputSending { .. })
+        ));
+
+        service
+            .handle(Action::StopOutput {
+                output: lmix_types::OutputRef::Text("Card".into()),
+            })
+            .await
+            .unwrap();
+        assert!(!service.state().await.outputs[0].failback);
+        service.handle(update()).await.unwrap();
+        // Its failback ends without starting it.
+        tokio::time::sleep(FAILBACK_MAX * 3).await;
+        assert!(!engine.output_running(output.id).await);
     }
 
     /// A service with output "Card" failed once and started again: its

@@ -3,8 +3,8 @@ import QtTest
 import "../../qml"
 
 /**
- * The Outputs page shows the output it is given (AppShell.showOutput,
- * Settings… in an output's menu): `selectedId` picks the detail.
+ * The Outputs page shows the selected output in detail: `selectedId`
+ * picks it (a click on its row); Settings… there opens its settings.
  */
 TestCase {
     id: test
@@ -52,5 +52,17 @@ TestCase {
         page.selectedId = "o2"
         compare(page.selected.id, "o2")
         compare(page.selected.name, "Recording")
+    }
+
+    function test_settings_opens_the_selected_ones() {
+        const page = createTemporaryObject(pageComponent, test)
+        page.selectedId = "o2"
+        const button = findChild(page, "settings")
+        verify(button.enabled)
+        button.clicked()
+        const dialog = findChild(page, "outputDialog")
+        compare(dialog.editId, "o2")
+        tryCompare(dialog, "opened", true)
+        compare(dialog.title, "Output settings")
     }
 }

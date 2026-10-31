@@ -272,6 +272,7 @@ QtObject {
         var e = m.error || {}
         switch (e.error) {
         case "unknown_output": return qsTr("No output matches %1").arg(e.reference)
+        case "output_sending": return qsTr("Output %1 sends: stop it first").arg(e.reference)
         case "unknown_input": return qsTr("No input matches %1").arg(e.reference)
         case "slots_full": return qsTr("All %1 mixer slots are in use").arg(e.slots)
         case "bad_transition_slot": return qsTr("Transition slot %1 does not exist (1–%2)").arg(e.slot).arg(e.max)

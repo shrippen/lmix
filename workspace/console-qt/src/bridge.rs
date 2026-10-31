@@ -14,7 +14,7 @@ use futures_util::StreamExt;
 use gstreamer as gst;
 use gstreamer::prelude::*;
 use lmix_types::{
-    state::TILES_LEASE, Action, BusRef, Event, InputRef, Latency, Levels, LiveFeed, LiveTiles,
+    state::TILES_LEASE, Action, Event, InputRef, Latency, Levels, LiveFeed, LiveTiles,
     LiveTransport, OutputStats,
 };
 use tokio_tungstenite::{connect_async, tungstenite::Message};
@@ -145,6 +145,13 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "addOutput"]
         fn add_output(self: Pin<&mut Core>, form: &QString) -> bool;
+
+        /// The `update_output` action the same form makes of output
+        /// `output` (its id), as JSON for `act`; empty while a needed
+        /// field is empty.
+        #[qinvokable]
+        #[cxx_name = "updateOutputAction"]
+        fn update_output_action(self: &Core, output: &QString, form: &QString) -> QString;
 
         /// Fetch devices, recent shows and templates again.
         #[qinvokable]
@@ -446,29 +453,18 @@ impl qobject::Core {
     }
 
     fn add_output(self: Pin<&mut Self>, form: &QString) -> bool {
-        let Ok(form) = serde_json::from_str::<forms::OutputForm>(&form.to_string()) else {
+        let Some(action) = forms::add_output_action(&form.to_string()) else {
             return false;
         };
-        let Some(spec) = forms::output_of(
-            &form.kind,
-            &form.text,
-            &form.container,
-            form.video_kbps,
-            form.encoding,
-            &form.key,
-            &form.mode,
-        ) else {
-            return false;
-        };
-        let spec = forms::with_card_sound(spec, &form.card);
-        let name = form.name.trim().to_string();
-        self.send(Action::AddOutput {
-            spec,
-            source: forms::output_source_of(&form.source),
-            name: (!name.is_empty()).then_some(name),
-            bus: (!form.bus.is_empty()).then(|| BusRef::Text(form.bus.clone())),
-        });
+        self.send(action);
         true
+    }
+
+    fn update_output_action(&self, output: &QString, form: &QString) -> QString {
+        forms::update_output_action(&output.to_string(), &form.to_string())
+            .and_then(|action| serde_json::to_string(&action).ok())
+            .map(|json| QString::from(&json))
+            .unwrap_or_default()
     }
 
     fn refresh_lists(self: Pin<&mut Self>) {

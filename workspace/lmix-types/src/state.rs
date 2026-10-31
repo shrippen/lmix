@@ -10,7 +10,8 @@ use crate::layout::{BoxRect, Layout, LayoutTemplate};
 use crate::output::{Output, OutputStats};
 use crate::shortcut::Shortcut;
 
-/// What was removed last and `restore` brings back.
+/// What was removed (or an output's settings changed) last and
+/// `restore` brings back; `name` is the name it comes back with.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct Restorable {
     pub kind: RemovedKind,
@@ -24,6 +25,8 @@ pub enum RemovedKind {
     Layout,
     Bus,
     Output,
+    /// An output's settings before `update_output`.
+    OutputSettings,
 }
 
 /// One transition button.

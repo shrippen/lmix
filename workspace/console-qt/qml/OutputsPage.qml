@@ -79,7 +79,7 @@ AppPage {
             focusPolicy: Qt.NoFocus
             text: qsTr("+ Output")
             enabled: root.backend.connected
-            onClicked: addOutputDialog.open()
+            onClicked: addOutputDialog.add()
         },
         KanteButton {
             visible: root.streams.length > 1
@@ -162,7 +162,22 @@ AppPage {
                     anchors.margins: Kirigami.Units.largeSpacing
                     readonly property var output: root.selected
                     readonly property var spec: output ? output.spec : ({})
-                    KanteSectionLabel { text: detail.output ? detail.output.name : "" }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        KanteSectionLabel {
+                            Layout.fillWidth: true
+                            text: detail.output ? detail.output.name : ""
+                        }
+                        // As in its menu (M07); the dialog says when it sends.
+                        KanteButton {
+                            objectName: "settings"
+                            size: KanteButton.Size.Small
+                            emphasis: KanteButton.Emphasis.Quiet
+                            text: qsTr("Settings…")
+                            enabled: root.backend.connected && detail.output !== null
+                            onClicked: addOutputDialog.edit(detail.output.id)
+                        }
+                    }
                     Detail { label: qsTr("Kind"); value: Texts.outputKind(detail.spec) }
                     Detail { label: qsTr("Source"); value: detail.output ? root.sourceName(detail.output) : "" }
                     Detail { label: qsTr("Sound"); value: root.busName(detail.output) }
@@ -356,9 +371,12 @@ AppPage {
 
     AddOutputDialog {
         id: addOutputDialog
+        objectName: "outputDialog"
         parent: QQC2.Overlay.overlay
         core: root.backend
         inputs: root.shell.inputs
         buses: root.show && root.show.buses ? root.show.buses : []
+        outputs: root.outputs
+        onUpdateRequested: (before, action) => root.shell.changeOutput(before, action)
     }
 }
