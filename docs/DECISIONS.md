@@ -6216,7 +6216,13 @@ die Console-Seite nach Entwurf E und der Demo-Modus dazu.
   (`cue_panic`): Cues und Klänge stoppen, die Panik-Stimmung läuft. Daneben
   bleibt „Panik“ für alles.
 - Tasten: 1…9 setzen die Basis der Gruppe, die Rücktaste die Stimmung
-  davor.
+  davor; als `Shortcut` des Fensters wie im Mix, nicht nur mit dem Fokus in
+  den Gruppen. Sie tun, was ein Klick könnte: keine Basis, die nicht in der
+  Sammlung steht, nichts beim Zusammenstellen. Die Knöpfe der Seite nehmen
+  keinen Fokus, so drückt die Leertaste nie einen Pad noch einmal.
+- Der Fortschritt zählt ab dem Eintreffen des Wechsels mit der Uhr der
+  Console (wie ShowView): der Kern kann auf einem anderen Rechner laufen.
+  Eine gemerkte Sammlung, die die geöffnete Show nicht hat, zeigt „Alle“.
 - Demo: `graufeld.reading` der Welt (eine Lesung im Sendehaus mit Saallicht,
   Atmo und Musik); `demo/run.py` rendert die Klänge als Töne, legt die
   Oneshots als Pad-Liste an, das Saallicht als HTTP-Ziel auf den
@@ -6227,9 +6233,11 @@ beim Öffnen wie `set_moods` (eine von Hand geänderte Datei bringt keinen
 Klang in die Panik-Stimmung). Scheitert der Start eines Klangs oder Bilds
 einer Ebene, stoppt der Kern die Medien-Id trotzdem, bevor er die Ebene
 zurücknimmt: ein Klang, der angelegt wurde und nur beim Einblenden
-scheiterte, bliebe sonst stumm liegen.
+scheiterte, bliebe sonst stumm liegen (Test
+`a_layer_that_failed_to_start_is_stopped_and_off`).
 
 **Geprüft**: `tst_moods_page.qml` (Kopf und Kachel, Herkunft der Ebenen,
 Panik, Sammlung mit Oneshots, Zusammenstellen, Einklappen, Fortschritt,
-Tasten, leerer Pool), `moods_are_checked_before_they_are_kept` mit einer
+Tasten nach einem Klick auf einen Pad und nur wo ein Klick ginge, Sammlung
+einer anderen Show, leerer Pool), `moods_are_checked_before_they_are_kept` mit einer
 Show-Datei; Demo-Lauf `demo/start.sh de` mit Aufnahme der Seite.

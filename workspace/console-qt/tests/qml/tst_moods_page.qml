@@ -47,6 +47,7 @@ TestCase {
         property var show: ({ moods: test.moods, mood: {}, cue_lists: [test.padList], running_cues: [] })
         property var acted: []
         function act(action) { acted.push(action) }
+        function keyTaken(sequence) { return false }
     }
 
     Component {
@@ -170,12 +171,37 @@ TestCase {
 
     function test_keys_set_a_group_and_go_back() {
         const p = page()
-        p.takeFocus()
+        // After a click on a pad as well: the keys are the window's, and
+        // the pad has no focus for space to press it again.
+        waitForRendering(p)
+        mouseClick(findChild(p, "pad:Door"))
+        compare(fakeShell.acted.length, 1, "the pad ran")
+        verify(!findChild(p, "pad:Door").activeFocus)
+        fakeShell.acted = []
         keyClick(Qt.Key_2)
         compare(fakeShell.acted, [{ action: "set_mood", mood: "g-forest" }])
         fakeShell.show = Object.assign({}, fakeShell.show, { mood: { mood: "g-forest", previous: "v-night" } })
         keyClick(Qt.Key_Backspace)
         compare(fakeShell.acted[1], { action: "set_mood", mood: "v-night" })
+    }
+
+    function test_keys_do_what_a_click_could() {
+        const p = page()
+        p.collectionId = "c-act1"
+        keyClick(Qt.Key_1)
+        compare(fakeShell.acted, [], "the base of Tavern is not in Act 1")
+        findChild(p, "compose").clicked()
+        fakeShell.show = Object.assign({}, fakeShell.show, { mood: { mood: "g-forest", previous: "v-night" } })
+        keyClick(Qt.Key_Backspace)
+        keyClick(Qt.Key_2)
+        compare(fakeShell.acted, [], "no mood is set while composing")
+    }
+
+    function test_a_collection_of_another_show_shows_all() {
+        const p = page()
+        p.collectionId = "c-gone"
+        compare(p.shownGroups.length, 2)
+        compare(p.shownCollectionId, "", "All is marked")
     }
 
     function test_without_moods_it_says_how_they_come() {

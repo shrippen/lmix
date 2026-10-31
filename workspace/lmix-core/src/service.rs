@@ -3066,6 +3066,56 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_layer_that_failed_to_start_is_stopped_and_off() {
+        use crate::switcher::Command;
+        use lmix_types::LayerContent;
+        let engine = Arc::new(NullEngine::default());
+        let service = Service::new(4, engine.clone(), None);
+        service.handle(bars()).await.unwrap();
+        service
+            .handle(Action::SetZone {
+                zone: lmix_types::Zone {
+                    name: "Saal".into(),
+                    channels: 2,
+                },
+            })
+            .await
+            .unwrap();
+        let mut moods = scene_moods();
+        let licht = moods.layers[0].id;
+        moods.groups[0].base.insert(
+            licht,
+            LayerContent::Sound {
+                sound: lmix_types::SoundCue {
+                    file: "/sounds/rain.wav".into(),
+                    ..Default::default()
+                },
+            },
+        );
+        service.handle(Action::SetMoods { moods }).await.unwrap();
+        engine.refuse(true);
+        let state = service
+            .handle(Action::SetMood {
+                mood: "Szene".into(),
+                fade_ms: None,
+            })
+            .await
+            .unwrap();
+        let log = engine.log();
+        let played = log.iter().find_map(|c| match c {
+            Command::PlaySound { id, .. } => Some(id.clone()),
+            _ => None,
+        });
+        let played = played.expect("the layer's sound was tried");
+        assert!(
+            log.iter()
+                .any(|c| matches!(c, Command::StopSound { id: Some(id), .. } if *id == played)),
+            "and stopped: it may run all the same"
+        );
+        assert!(state.mood.layers.is_empty(), "the layer is off");
+    }
+
+    #[tokio::test]
     async fn moods_are_checked_before_they_are_kept() {
         use lmix_types::{LayerContent, LayerId};
         let service = Service::new(4, Arc::new(NullEngine::default()), None);

@@ -218,7 +218,7 @@ Ein Programm `lmix` statt `lmix-mixer` und `lmix-show` (DECISIONS
   Dialoge).
 - Seitenwechsel über die Leiste oder Strg+1…n; `--page mix|show|moods|audio|outputs|setup` beim Start,
   sonst die zuletzt offene Seite. Seitentasten (1–9 im Mix, Leertaste und
-  Escape in der Show) wirken nur auf der sichtbaren Seite; die Belegungen
+  Escape in der Show, 1–9 und Rücktaste bei den Stimmungen) wirken nur auf der sichtbaren Seite; die Belegungen
   der Show (AUT.1–3) immer.
 - Einstellungen in `lmix.conf`, einmal aus `mixer.conf` und `show.conf`
   übernommen (`app.rs`).

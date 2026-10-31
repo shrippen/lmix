@@ -620,7 +620,7 @@
   <context>
     <name>AppShell</name>
     <message>
-      <location filename="../qml/AppShell.qml" line="+625" />
+      <location filename="../qml/AppShell.qml" line="+628" />
       <location line="+111" />
       <source>Open show</source>
       <translation>Show öffnen</translation>
@@ -3328,18 +3328,17 @@
   <context>
     <name>MoodsPage</name>
     <message>
-      <location filename="../qml/MoodsPage.qml" line="+74" />
+      <location filename="../qml/MoodsPage.qml" line="+77" />
       <source>Moods</source>
       <translation>Stimmungen</translation>
     </message>
     <message>
-      <location line="+4" />
-      <location line="+437" />
+      <location line="+478" />
       <source>Panic</source>
       <translation>Panik</translation>
     </message>
     <message>
-      <location line="-436" />
+      <location line="-472" />
       <source>Stops every cue and sound; the panic mood runs</source>
       <translation>Stoppt alle Cues und Klänge, die Panik-Stimmung läuft</translation>
     </message>
@@ -3354,18 +3353,18 @@
       <translation>Zurück zur Stimmung davor</translation>
     </message>
     <message>
-      <location line="+69" />
+      <location line="+95" />
       <source>%1 actions</source>
       <translation>%1 Aktionen</translation>
     </message>
     <message>
       <location line="+1" />
-      <location line="+385" />
+      <location line="+395" />
       <source>Off</source>
       <translation>Aus</translation>
     </message>
     <message>
-      <location line="-348" />
+      <location line="-345" />
       <source>Done</source>
       <translation>Fertig</translation>
     </message>
@@ -3381,7 +3380,7 @@
     </message>
     <message>
       <location line="+26" />
-      <location line="+6" />
+      <location line="+7" />
       <source>Collections</source>
       <translation>Sammlungen</translation>
     </message>
@@ -3391,7 +3390,7 @@
       <translation>Sammlungen einklappen</translation>
     </message>
     <message>
-      <location line="+15" />
+      <location line="+16" />
       <source>All</source>
       <translation>Alle</translation>
     </message>
@@ -3406,13 +3405,14 @@
       <translation>Alle Stimmungen und Oneshots</translation>
     </message>
     <message>
-      <location line="+40" />
-      <location line="+256" />
+      <location line="-205" />
+      <location line="+245" />
+      <location line="+251" />
       <source>Panic mood</source>
       <translation>Panik-Stimmung</translation>
     </message>
     <message>
-      <location line="-256" />
+      <location line="-251" />
       <source>Now</source>
       <translation>Jetzt</translation>
     </message>
@@ -3427,7 +3427,7 @@
       <translation>noch %1 s</translation>
     </message>
     <message>
-      <location line="+8" />
+      <location line="+9" />
       <source>Back to %1</source>
       <translation>Zurück zu %1</translation>
     </message>
@@ -3447,13 +3447,13 @@
       <translation>Eine Stimmung sagt, was auf jeder Ebene läuft: Licht, Musik, Atmo, Bild. Stimmungen kommen mit der Show oder über die API (set_moods).</translation>
     </message>
     <message>
-      <location line="+65" />
-      <location line="+30" />
+      <location line="+56" />
+      <location line="+31" />
       <source>Set %1</source>
       <translation>%1 setzen</translation>
     </message>
     <message>
-      <location line="-27" />
+      <location line="-28" />
       <source>In the collection: click to take it out</source>
       <translation>In der Sammlung: klicken, um sie herauszunehmen</translation>
     </message>
@@ -3468,7 +3468,7 @@
       <translation>Basis: %1</translation>
     </message>
     <message>
-      <location line="+29" />
+      <location line="+30" />
       <source>Changes %1; the rest from the base</source>
       <translation>Ändert %1, der Rest kommt aus der Basis</translation>
     </message>
@@ -3488,7 +3488,7 @@
       <translation>Oneshots: über der Stimmung, ein Klick startet oder stoppt</translation>
     </message>
     <message>
-      <location line="+18" />
+      <location line="+19" />
       <source>Stop %1</source>
       <translation>%1 stoppen</translation>
     </message>
@@ -3498,7 +3498,7 @@
       <translation>Start %1</translation>
     </message>
     <message>
-      <location line="+28" />
+      <location line="+29" />
       <source>Fold layers</source>
       <translation>Ebenen einklappen</translation>
     </message>

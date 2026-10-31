@@ -41,6 +41,9 @@ AppPage {
     /** The collection shown; "" for all of the pools. */
     property string collectionId: settings.collection
     readonly property var collection: collections.find(c => c.id === collectionId) || null
+    /** The collection marked in the list: "" for all, also when the show
+     *  has no collection by the remembered id (another show). */
+    readonly property string shownCollectionId: collection ? collectionId : ""
     /** Putting moods and one-shots in or out of the collection. */
     property bool composing: false
     property bool collectionsOpen: settings.collectionsOpen
@@ -84,6 +87,24 @@ AppPage {
         { what: qsTr("Back to the mood before"), key: Texts.keyLabel("Backspace") }
     ]
 
+    // Keys 1…9 and Backspace in the whole window while the page shows, as
+    // on the Mix page, not only where the focus is; the page's buttons take
+    // none, so space never presses one again.
+    Instantiator {
+        model: 9
+        delegate: Shortcut {
+            required property int index
+            sequence: String(index + 1)
+            enabled: root.visible && !root.shell.keyTaken(sequence)
+            onActivated: root.setGroup(index)
+        }
+    }
+    Shortcut {
+        sequence: "Backspace"
+        enabled: root.visible && !root.shell.keyTaken(sequence)
+        onActivated: root.back()
+    }
+
     Settings {
         id: settings
         category: "moods"
@@ -98,11 +119,19 @@ AppPage {
     onCollectionsOpenChanged: settings.collectionsOpen = collectionsOpen
     onInspectorOpenChanged: settings.inspectorOpen = inspectorOpen
 
-    // The progress runs only while a change fades: no timer otherwise.
+    // The progress runs only while a change fades: no timer otherwise. It
+    // counts from when the change came, by this machine's clock (the core
+    // may run on another one, ShowView does the same).
+    property real fadeSince: 0
+    property real fadeFrom: -1
     function updateFade() {
         const f = now.fading
+        if (f && f.since_ms !== fadeFrom) {
+            fadeFrom = f.since_ms
+            fadeSince = Date.now()
+        }
         fadeProgress = f && f.duration_ms > 0
-            ? Math.max(0, Math.min(1, (Date.now() - f.since_ms) / f.duration_ms)) : 1
+            ? Math.max(0, Math.min(1, (Date.now() - fadeSince) / f.duration_ms)) : 1
     }
     onNowChanged: updateFade()
     Timer {
@@ -158,11 +187,19 @@ AppPage {
     function describeAction(action) {
         return action.target ? [action.target, action.path || ""].join(" ").trim() : action.action
     }
+    /** Key `n` (0…8): the base of the n-th group shown, when its head
+     *  could be clicked. */
+    function setGroup(n) {
+        const group = shownGroups[n]
+        if (group && !composing && (!collection || inCollection(group.id))) {
+            setMood(group.id)
+        }
+    }
     function setMood(id) {
         shell.act({ action: "set_mood", mood: id })
     }
     function back() {
-        if (now.previous && placeOf(now.previous)) {
+        if (!composing && now.previous && placeOf(now.previous)) {
             setMood(now.previous)
         }
     }
@@ -188,6 +225,7 @@ AppPage {
 
     tools: [
         KanteButton {
+            focusPolicy: Qt.NoFocus
             objectName: "compose"
             visible: root.collection !== null
             checkable: true
@@ -224,6 +262,7 @@ AppPage {
                     }
                     KanteToolButton {
                         id: railButton
+                        focusPolicy: Qt.NoFocus
                         objectName: "foldCollections"
                         icon.name: root.collectionsOpen ? "sidebar-collapse-left" : "sidebar-expand-left"
                         text: root.collectionsOpen ? qsTr("Fold collections") : qsTr("Collections")
@@ -239,13 +278,14 @@ AppPage {
                     delegate: KanteListRow {
                         id: row
                         required property var modelData
+                        focusOnClick: false
                         readonly property string cid: modelData ? modelData.id : ""
                         Layout.fillWidth: true
                         text: modelData ? modelData.name : qsTr("All")
                         subtitle: modelData
                             ? qsTr("%1 moods · %2 one-shots").arg((modelData.moods || []).length).arg((modelData.pads || []).length)
                             : qsTr("Every mood and one-shot")
-                        selected: root.collectionId === cid
+                        selected: root.shownCollectionId === cid
                         onClicked: {
                             root.collectionId = cid
                             root.composing = false
@@ -310,6 +350,7 @@ AppPage {
                         }
                     }
                     KanteButton {
+                        focusPolicy: Qt.NoFocus
                         objectName: "back"
                         readonly property var before: root.placeOf(root.now.previous)
                         enabled: before !== null
@@ -336,16 +377,6 @@ AppPage {
                 visible: root.groups.length > 0
                 focus: true
                 contentWidth: availableWidth
-                Keys.onPressed: event => {
-                    const n = event.key - Qt.Key_1
-                    if (n >= 0 && n < 9 && n < root.shownGroups.length && !root.composing) {
-                        root.setMood(root.shownGroups[n].id)
-                        event.accepted = true
-                    } else if (event.key === Qt.Key_Backspace) {
-                        root.back()
-                        event.accepted = true
-                    }
-                }
 
                 ColumnLayout {
                     width: groupsView.availableWidth
@@ -379,6 +410,7 @@ AppPage {
                                     }
                                     KanteButton {
                                         id: baseButton
+                                        focusPolicy: Qt.NoFocus
                                         objectName: "base:" + groupCard.group.name
                                         readonly property bool on: groupCard.here && root.current.variant === null
                                         readonly property bool member: root.inCollection(groupCard.group.id)
@@ -409,6 +441,7 @@ AppPage {
                                         delegate: KanteButton {
                                             id: variantButton
                                             required property var modelData
+                                            focusPolicy: Qt.NoFocus
                                             readonly property var variant: modelData
                                             readonly property bool on: groupCard.here && root.current.variant !== null && root.current.variant.id === variant.id
                                             readonly property bool member: root.inCollection(variant.id)
@@ -457,6 +490,7 @@ AppPage {
                             model: root.shownPads
                             delegate: KanteButton {
                                 required property var modelData
+                                focusPolicy: Qt.NoFocus
                                 readonly property var cue: modelData.cue
                                 readonly property bool runs: root.runningIds.indexOf(cue.id) >= 0
                                 readonly property bool member: root.collection !== null && (root.collection.pads || []).indexOf(cue.id) >= 0
@@ -492,6 +526,7 @@ AppPage {
                     Layout.fillWidth: true
                     KanteToolButton {
                         id: foldInspector
+                        focusPolicy: Qt.NoFocus
                         objectName: "foldInspector"
                         icon.name: root.inspectorOpen ? "sidebar-collapse-right" : "sidebar-expand-right"
                         text: root.inspectorOpen ? qsTr("Fold layers") : qsTr("Layers")
