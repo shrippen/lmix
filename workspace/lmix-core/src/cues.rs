@@ -51,6 +51,13 @@ pub enum Out {
     /// Actions of the moods (MOOD.9: the panic mood), each on its own: one
     /// failing does not keep the others back.
     Mood { actions: Vec<Action> },
+    /// Cue `cue` of `list` fires and takes mood layer `layer` (MOOD.5);
+    /// before its own actions, so the mood fades out there first.
+    TakeLayer {
+        list: InputId,
+        cue: CueId,
+        layer: lmix_types::LayerId,
+    },
 }
 
 /// One started cue.
@@ -817,6 +824,15 @@ impl Runner {
             self.stop_runs(&victims, t, SoundEnd::Fade(stop.fade_ms), out);
         }
 
+        if let (Some(layer), CueKind::Sound | CueKind::Picture | CueKind::Actions) =
+            (cue.layer, cue.kind)
+        {
+            out.push(Out::TakeLayer {
+                list: run.list,
+                cue: cue.id,
+                layer,
+            });
+        }
         let mut end_at = Some(t);
         match cue.kind {
             CueKind::Actions => {
@@ -1290,7 +1306,8 @@ mod tests {
                 Out::Event { .. }
                 | Out::Panic { .. }
                 | Out::StopPlayback { .. }
-                | Out::Mood { .. } => None,
+                | Out::Mood { .. }
+                | Out::TakeLayer { .. } => None,
             })
             .collect()
     }
@@ -1302,7 +1319,8 @@ mod tests {
                 Out::Actions { .. }
                 | Out::Panic { .. }
                 | Out::StopPlayback { .. }
-                | Out::Mood { .. } => None,
+                | Out::Mood { .. }
+                | Out::TakeLayer { .. } => None,
             })
             .collect()
     }

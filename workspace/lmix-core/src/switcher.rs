@@ -580,6 +580,11 @@ fn check_cue(cue: &Cue, depth: usize) -> Result<(), ActionError> {
         || !own(cue.fade.is_some(), CueKind::Fade)
         || !own(cue.picture.is_some(), CueKind::Picture)
         || !own(cue.mood.is_some(), CueKind::Mood)
+        || (cue.layer.is_some()
+            && !matches!(
+                cue.kind,
+                CueKind::Sound | CueKind::Picture | CueKind::Actions
+            ))
         || !own(
             cue.mode.is_some() || !cue.children.is_empty(),
             CueKind::Group,
@@ -3826,6 +3831,17 @@ impl Switcher {
             }
         }
         running
+    }
+
+    /// Cue `cue` of `list` takes mood layer `layer` (MOOD.5): the actions
+    /// that fade the mood out there.
+    pub fn mood_take(
+        &mut self,
+        layer: lmix_types::LayerId,
+        list: lmix_types::InputId,
+        cue: lmix_types::CueId,
+    ) -> Vec<Action> {
+        self.moods.take(&self.show.moods, layer, list, cue)
     }
 
     /// Set a mood (MOOD.4): the actions that change its layers.
@@ -10952,7 +10968,10 @@ mod tests {
             .flat_map(|o| match o {
                 Out::Actions { actions, .. } => actions.clone(),
                 Out::Mood { actions } => actions.clone(),
-                Out::Event { .. } | Out::Panic { .. } | Out::StopPlayback { .. } => Vec::new(),
+                Out::Event { .. }
+                | Out::Panic { .. }
+                | Out::StopPlayback { .. }
+                | Out::TakeLayer { .. } => Vec::new(),
             })
             .collect()
     }

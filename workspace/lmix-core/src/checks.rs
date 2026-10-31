@@ -92,6 +92,11 @@ fn walk(
                 warn(CueProblem::MoodGone);
             }
         }
+        if let Some(layer) = cue.layer {
+            if !show.moods.layers.iter().any(|l| l.id == layer) {
+                warn(CueProblem::LayerGone);
+            }
+        }
         for action in &cue.actions {
             if let Some(name) = action_target(action) {
                 if !machine.targets.iter().any(|t| t.name == name) {
@@ -255,6 +260,10 @@ mod tests {
             group,
             mood(forest.id),
             mood(lmix_types::MoodId::new()),
+            Cue {
+                layer: Some(lmix_types::LayerId::new()),
+                ..Cue::actions("Blitz", vec![cut("Cam")])
+            },
         ]);
         show.moods.groups.push(forest);
 
@@ -275,6 +284,7 @@ mod tests {
                 "sends to target Haus, which this machine does not have",
                 "uses input Beamer, which is not there",
                 "sets a mood that is not there",
+                "takes a mood layer that is not there",
             ]
         );
         let cam = show.inputs[0].id;

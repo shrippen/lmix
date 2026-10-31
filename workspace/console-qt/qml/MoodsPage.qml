@@ -198,6 +198,19 @@ AppPage {
             setMood(group.id)
         }
     }
+    /** "12 Thunder" of the cue that took a layer (MOOD.5). */
+    function cueLabel(origin) {
+        const list = ((show && show.cue_lists) || []).find(l => l.id === origin.list)
+        let found = null
+        const walk = cues => (cues || []).forEach(c => {
+            if (c.id === origin.cue) {
+                found = c
+            }
+            walk(c.children)
+        })
+        walk(list ? list.cues : [])
+        return found ? [found.number, found.name].filter(x => x).join(" ") || qsTr("Cue") : qsTr("Cue (gone)")
+    }
     function setMood(id) {
         shell.act({ action: "set_mood", mood: id })
     }
@@ -554,8 +567,10 @@ AppPage {
                         readonly property var has: root.current ? root.contentOf(root.current, modelData.id) : null
                         objectName: "layer:" + modelData.name
                         /** Where the layer comes from, as the page says it. */
-                        readonly property string source: !origin ? ""
-                            : origin.origin.kind === "panic" ? qsTr("Panic")
+                        readonly property string kind: origin ? origin.origin.kind : ""
+                        readonly property string source: kind === "" ? ""
+                            : kind === "panic" ? qsTr("Panic")
+                            : kind === "cue" ? qsTr("Cue")
                             : has && has.own ? root.current.variant.name : qsTr("Base")
                         Layout.fillWidth: true
                         spacing: 0
@@ -570,14 +585,15 @@ AppPage {
                             KantePill {
                                 visible: layerRow.source !== ""
                                 text: layerRow.source
-                                status: layerRow.origin && layerRow.origin.origin.kind === "panic"
-                                    ? KantePill.State.Failed : KantePill.State.Running
+                                status: layerRow.kind === "panic" ? KantePill.State.Failed
+                                    : layerRow.kind === "cue" ? KantePill.State.Review : KantePill.State.Running
                             }
                         }
                         QQC2.Label {
                             Layout.fillWidth: true
                             elide: Text.ElideMiddle
-                            text: layerRow.origin && layerRow.has ? root.describe(layerRow.has.content)
+                            text: layerRow.kind === "cue" ? root.cueLabel(layerRow.origin.origin)
+                                : layerRow.origin && layerRow.has ? root.describe(layerRow.has.content)
                                 : layerRow.origin ? qsTr("Panic mood") : qsTr("Off")
                             color: layerRow.has && !layerRow.has.own && root.current.variant ? KanteStyle.mutedTextColor : KanteStyle.textColor
                         }

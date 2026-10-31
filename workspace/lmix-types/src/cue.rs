@@ -229,6 +229,10 @@ pub struct Cue {
     /// `mood`: what it sets.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mood: Option<MoodCue>,
+    /// `sound`, `picture`, `actions`: the mood layer it takes when it
+    /// fires (MOOD.5): the mood fades out there until the next change.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub layer: Option<crate::LayerId>,
 }
 
 impl Cue {
@@ -264,6 +268,7 @@ impl Cue {
             fade: None,
             picture: None,
             mood: None,
+            layer: None,
         }
     }
 
@@ -475,6 +480,8 @@ pub enum CueProblem {
     MediaMissing { input: String },
     /// A mood cue's mood is not in the show (MOOD.6).
     MoodGone,
+    /// The mood layer a cue takes is not in the show (MOOD.5).
+    LayerGone,
 }
 
 impl CueProblem {
@@ -497,6 +504,7 @@ impl CueProblem {
                 format!("uses input {input}, whose media file is missing")
             }
             Self::MoodGone => "sets a mood that is not there".into(),
+            Self::LayerGone => "takes a mood layer that is not there".into(),
         }
     }
 }
