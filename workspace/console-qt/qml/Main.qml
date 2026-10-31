@@ -19,6 +19,10 @@ AppShell {
             page: ShowPage {}
         },
         AppShell.PageEntry {
+            pageId: "moods"
+            page: MoodsPage {}
+        },
+        AppShell.PageEntry {
             pageId: "audio"
             page: AudioPage {}
         },

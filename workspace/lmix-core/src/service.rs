@@ -690,13 +690,30 @@ impl Service {
     /// answer keeps neither the music nor the picture back (MOOD.4).
     async fn run_mood_actions(self: &Arc<Self>, actions: Vec<Action>) {
         for action in actions {
+            // A start that failed may run all the same (made, then its
+            // fade-in failed): stopped, so no later change leaves it
+            // behind. Stopping what does not run does nothing.
             let media = match &action {
-                Action::PlaySound { id, .. } | Action::ShowPicture { id, .. } => Some(id.clone()),
+                Action::PlaySound { id, .. } => Some((
+                    id.clone(),
+                    Action::StopSound {
+                        id: Some(id.clone()),
+                        fade_ms: 0,
+                    },
+                )),
+                Action::ShowPicture { id, .. } => Some((
+                    id.clone(),
+                    Action::StopPicture {
+                        id: Some(id.clone()),
+                        fade_ms: 0,
+                    },
+                )),
                 _ => None,
             };
             if let Err(e) = Box::pin(self.handle_as(action, Origin::Operator)).await {
                 tracing::warn!(error = %e, "mood action failed");
-                if let Some(id) = media {
+                if let Some((id, stop)) = media {
+                    let _ = Box::pin(self.handle_as(stop, Origin::Operator)).await;
                     let mut sw = self.switcher.lock().await;
                     sw.mood_media_failed(&id);
                     self.publish(&sw);
@@ -3049,6 +3066,56 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_layer_that_failed_to_start_is_stopped_and_off() {
+        use crate::switcher::Command;
+        use lmix_types::LayerContent;
+        let engine = Arc::new(NullEngine::default());
+        let service = Service::new(4, engine.clone(), None);
+        service.handle(bars()).await.unwrap();
+        service
+            .handle(Action::SetZone {
+                zone: lmix_types::Zone {
+                    name: "Saal".into(),
+                    channels: 2,
+                },
+            })
+            .await
+            .unwrap();
+        let mut moods = scene_moods();
+        let licht = moods.layers[0].id;
+        moods.groups[0].base.insert(
+            licht,
+            LayerContent::Sound {
+                sound: lmix_types::SoundCue {
+                    file: "/sounds/rain.wav".into(),
+                    ..Default::default()
+                },
+            },
+        );
+        service.handle(Action::SetMoods { moods }).await.unwrap();
+        engine.refuse(true);
+        let state = service
+            .handle(Action::SetMood {
+                mood: "Szene".into(),
+                fade_ms: None,
+            })
+            .await
+            .unwrap();
+        let log = engine.log();
+        let played = log.iter().find_map(|c| match c {
+            Command::PlaySound { id, .. } => Some(id.clone()),
+            _ => None,
+        });
+        let played = played.expect("the layer's sound was tried");
+        assert!(
+            log.iter()
+                .any(|c| matches!(c, Command::StopSound { id: Some(id), .. } if *id == played)),
+            "and stopped: it may run all the same"
+        );
+        assert!(state.mood.layers.is_empty(), "the layer is off");
+    }
+
+    #[tokio::test]
     async fn moods_are_checked_before_they_are_kept() {
         use lmix_types::{LayerContent, LayerId};
         let service = Service::new(4, Arc::new(NullEngine::default()), None);
@@ -3095,6 +3162,15 @@ mod tests {
         );
         let mut slash = good.clone();
         slash.groups[0].variants[0].name = "Dunkel / Nacht".into();
+        // A show file with them is refused as well.
+        let file = crate::show::Show {
+            moods: alarm.clone(),
+            ..Default::default()
+        };
+        assert!(matches!(
+            service.switcher.lock().await.replace(file, None),
+            Err(ActionError::BadMood { .. })
+        ));
         for bad in [sound_in_panic, alarm, loops, no_layer, twice, slash] {
             assert!(
                 matches!(

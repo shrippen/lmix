@@ -72,6 +72,7 @@ struct Args {
 enum Page {
     Mix,
     Show,
+    Moods,
     Audio,
     Outputs,
     Setup,
@@ -82,6 +83,7 @@ impl Page {
         match self {
             Page::Mix => "mix",
             Page::Show => "show",
+            Page::Moods => "moods",
             Page::Audio => "audio",
             Page::Outputs => "outputs",
             Page::Setup => "setup",

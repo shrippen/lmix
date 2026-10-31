@@ -446,7 +446,8 @@ je ein PR:
 | 3 Show | Cue-Art „Stimmung setzen“, Reiter Stimmungen in der Show-Ansicht, Cue-Feld „Ebene“ (letzter Befehl gewinnt) | MOOD.5, 6 |
 | 4 Bearbeiten | Ebenen, Stimmungsgruppen, Varianten, Sammlungen, Panik-Stimmung in der Oberfläche; OSC, Kurzbefehle, Companion-Modul | MOOD.9, 11, 12 |
 
-Stand: Stufe 1 ✅ (31.10., DECISIONS „Stimmungen: Modell und Engine“).
+Stand: Stufe 1 ✅ (31.10., DECISIONS „Stimmungen: Modell und Engine“),
+Stufe 2 ✅ (31.10., DECISIONS „Stimmungen: die Seite“).
 
 ---
 
