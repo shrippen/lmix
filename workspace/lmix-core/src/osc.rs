@@ -743,6 +743,14 @@ mod tests {
                 fade_ms: Some(500)
             }))
         );
+        assert_eq!(
+            req("/lmix/mood", vec![Arg::Str("Wald".into()), Arg::Float(1.5)]),
+            Ok(Request::Action(Action::SetMood {
+                mood: "Wald".into(),
+                fade_ms: Some(1500)
+            })),
+            "a float is seconds"
+        );
         assert!(req("/lmix/mood", vec![]).is_err());
         assert_eq!(
             req("/lmix/cue/pause", vec![]),

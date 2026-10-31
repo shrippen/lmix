@@ -6327,7 +6327,8 @@ GO übernimmt, dieselbe Stimmung holt die Ebene zurück),
 - Companion bekommt kein eigenes Modul (wie RUN.12, DECISIONS „Pads“):
   Tasten senden OSC, die Rückmeldung kommt über die festen Abonnenten
   (CTL.4) mit dem neuen Anlass `mood`. Er geht, wenn sich die gesetzte
-  Stimmung ändert, und einmal, wenn der Abonnent angelegt wird; Platzhalter
+  Stimmung oder ihr Name ändert, und einmal, wenn der Abonnent angelegt
+  wird; Platzhalter
   `{mood}` und `{previous}` („Gruppe / Variante“, leer ohne Stimmung).
   Nach einer Panik ist keine Stimmung gesetzt: `{mood}` ist leer.
 

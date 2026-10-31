@@ -118,7 +118,8 @@ fn running_values(list: &CueList, run: Option<&RunningCue>) -> Values {
 pub struct Tracker {
     /// Standby cue (or "end") per subscriber and list.
     standby: HashMap<(String, InputId), String>,
-    /// Mood (its id, or empty) per subscriber.
+    /// Mood and the one before, as sent, per subscriber: a renamed or
+    /// removed mood goes again.
     mood: HashMap<String, String>,
     /// Lists that had a running cue at the last tick.
     running: HashSet<InputId>,
@@ -143,7 +144,6 @@ impl Tracker {
             .retain(|(feed, _), _| state.feeds.iter().any(|f| &f.name == feed));
         self.mood
             .retain(|feed, _| state.feeds.iter().any(|f| &f.name == feed));
-        let key = state.mood.mood.map(|m| m.to_string()).unwrap_or_default();
         let name = |id: Option<lmix_types::MoodId>| {
             id.and_then(|id| state.moods.find(id))
                 .map(|place| place.name())
@@ -154,6 +154,7 @@ impl Tracker {
             previous: name(state.mood.previous),
             ..Values::default()
         };
+        let key = format!("{}\n{}", mood.mood, mood.previous);
         for feed in &state.feeds {
             if self.mood.get(&feed.name) != Some(&key) {
                 out.extend(packets(feed, FeedOn::Mood, &mood));
@@ -187,7 +188,7 @@ impl Tracker {
         out
     }
 
-    /// Subscriber `name` gets its standby again at the next tick.
+    /// Subscriber `name` gets its standby and mood again at the next tick.
     fn feed_changed(&mut self, name: &str) {
         self.standby.retain(|(feed, _), _| feed != name);
         self.mood.remove(name);
@@ -348,7 +349,7 @@ mod tests {
             messages: vec![FeedMessage {
                 on: FeedOn::Mood,
                 address: "/cv/mood".into(),
-                args: vec!["{mood}".into(), "{previous}".into()],
+                args: vec!["{mood}|{previous}".into()],
             }],
             ..feed()
         }];
@@ -360,11 +361,14 @@ mod tests {
         let first = tracker.tick(&state);
         assert_eq!(first.len(), 1, "once when the subscriber is set");
         let packet = text(&first[0].1);
-        assert!(
-            packet.contains("Wald / Nacht") && packet.contains("Wald "),
-            "{packet}"
-        );
+        assert!(packet.contains("Wald / Nacht|Wald "), "{packet}");
         assert!(tracker.tick(&state).is_empty(), "no change, nothing sent");
+        state.moods.groups[0].name = "Forest".into();
+        let renamed = tracker.tick(&state);
+        assert!(
+            text(&renamed[0].1).contains("Forest / Nacht|Forest "),
+            "renamed: again"
+        );
         state.mood.mood = None;
         assert_eq!(tracker.tick(&state).len(), 1, "none set: empty");
     }
