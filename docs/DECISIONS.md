@@ -5630,3 +5630,16 @@ unverändert.
   geänderter EQ nur die zwei des Zugs. Kante fehlt eine x-Achse am
   Linien-Diagramm (und eine Skala bis genau 0); die Skala darunter ist aus
   Kante-Tokens gesetzt, Kante erweitern steht in `todo.md`.
+
+**Gemessen** (31.10., RTX 3070 Ti, Fedora 44, Qt 6.11.2):
+- QML allein (qmltestrunner, offscreen, 40 Züge mit EQ, Hochpass und
+  Kompressor an): die Seite aufbauen 258 ms statt 217 ms auf `main`
+  (+1 ms je Zug für zwei Kurven), ein Fader-Schritt 0,216 statt
+  0,192 ms (die Bindungen des einen Zugs, keine Kurve neu).
+- Ganze App (`PAGE=audio INPUTS=31 scripts/measure-gui-frames.sh`, CUDA,
+  Xvfb, Fader mit 40 Schritten/s, je zwei Läufe): GUI-Thread beim
+  Ziehen 44–45 % gegen 44–48 % auf `main`, Bildabstand p95 116–131 ms
+  gegen 123–166 ms. Kein Unterschied über dem Rauschen. Über dem Budget
+  des Skripts (35 %, p95 50 ms) liegt die Audio-Seite mit 31 Zügen auf
+  Xvfb schon auf `main`, auch ohne Ziehen (35–43 %); eigener Punkt in
+  `todo.md`.
