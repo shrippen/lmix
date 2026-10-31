@@ -289,6 +289,7 @@ KanteCard {
                         text: qsTr("fading over")
                     }
                     DurationField {
+                        key: inspector.cue ? inspector.cue.id : ""
                         visible: triggers.stopOthers !== null
                         Layout.preferredWidth: Kirigami.Units.gridUnit * 5
                         ms: triggers.stopOthers ? triggers.stopOthers.fade_ms : 0
@@ -313,6 +314,7 @@ KanteCard {
 
                 QQC2.Label { text: qsTr("Pre wait") }
                 DurationField {
+                    key: inspector.cue ? inspector.cue.id : ""
                     Layout.preferredWidth: Kirigami.Units.gridUnit * 6
                     ms: inspector.cue ? inspector.cue.pre_wait_ms : 0
                     Accessible.name: qsTr("Pre wait")
@@ -323,6 +325,7 @@ KanteCard {
                 }
                 QQC2.Label { text: qsTr("Post wait") }
                 DurationField {
+                    key: inspector.cue ? inspector.cue.id : ""
                     Layout.preferredWidth: Kirigami.Units.gridUnit * 6
                     ms: inspector.cue ? inspector.cue.post_wait_ms : 0
                     Accessible.name: qsTr("Post wait")
@@ -337,6 +340,7 @@ KanteCard {
                     text: qsTr("Duration")
                 }
                 DurationField {
+                    key: inspector.cue ? inspector.cue.id : ""
                     visible: inspector.timed
                     Layout.preferredWidth: Kirigami.Units.gridUnit * 6
                     optional: inspector.cue !== null && inspector.cue.kind !== "wait"
@@ -364,6 +368,7 @@ KanteCard {
                     text: qsTr("Fade in")
                 }
                 DurationField {
+                    key: inspector.cue ? inspector.cue.id : ""
                     visible: inspector.media !== null
                     Layout.preferredWidth: Kirigami.Units.gridUnit * 6
                     ms: inspector.media ? inspector.media.fade_in_ms : 0
@@ -377,6 +382,7 @@ KanteCard {
                     text: qsTr("Fade out")
                 }
                 DurationField {
+                    key: inspector.cue ? inspector.cue.id : ""
                     visible: inspector.media !== null
                     Layout.preferredWidth: Kirigami.Units.gridUnit * 6
                     ms: inspector.media ? inspector.media.fade_out_ms : 0
