@@ -316,6 +316,30 @@ TestCase {
         compare(changed, 2, "EQ and dynamics of input 2")
     }
 
+    SignalSpy {
+        id: keySpy
+        signalName: "selectedKeyChanged"
+    }
+
+    function test_a_fader_drag_leaves_the_other_strips_alone() {
+        var page = createTemporaryObject(audioPage, test)
+        verify(page)
+        waitForRendering(page)
+        // Nothing chosen: the first strip is the selected one, and its
+        // fader moves. Its object is new with every step; the key the
+        // strips compare with stays (31.10.2026: every strip looked again).
+        compare(page.selectedKey, Data.state.inputs[0].id)
+        keySpy.target = page
+        keySpy.clear()
+        for (var v = 99; v > 89; v--) {
+            showState.patch([{ p: ["inputs", 0, "audio", "volume"], v: v }])
+        }
+        compare(page.selected.audio.volume, 90)
+        compare(keySpy.count, 0)
+        page.selectedId = Data.state.inputs[1].id
+        compare(keySpy.count, 1)
+    }
+
     function test_a_click_on_a_curve_selects_the_strip() {
         var page = createTemporaryObject(audioPage, test)
         verify(page)

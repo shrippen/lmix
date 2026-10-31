@@ -45,6 +45,9 @@ AppPage {
     property int part: 0
     property string selectedId: ""
     readonly property var selected: StatePatch.byId(soundInputs, selectedId) || soundInputs[0] || null
+    /** Its id: new only when another strip is chosen. `selected` is anew
+     *  with each fader step of it, and every strip looked again. */
+    readonly property string selectedKey: selected ? selected.id : ""
     // A new state brings new objects: load only for another input, or
     // edits in progress would be thrown away.
     property string loadedId: ""
@@ -282,7 +285,7 @@ AppPage {
             || ({ id: key, number: 0, name: "", audio: { on: false, follow_video: false, volume: 0 }, listen: "off" })
         readonly property bool onProgram: root.show !== null && root.show.program === input.id
         readonly property bool onPreview: root.show !== null && root.show.preview === input.id
-        readonly property bool chosen: root.selected !== null && root.selected.id === input.id
+        readonly property bool chosen: root.selectedKey === key
         width: Kirigami.Units.gridUnit * 6
         height: ListView.view ? ListView.view.height - Kirigami.Units.gridUnit : 0
         barColor: onProgram ? KanteStyle.negativeTextColor : (onPreview ? KanteStyle.positiveTextColor : (chosen ? KanteStyle.focusColor : "transparent"))
