@@ -452,7 +452,8 @@ Stand: Stufe 1 ✅ (31.10., DECISIONS „Stimmungen: Modell und Engine“),
 Stufe 2 ✅ (31.10., DECISIONS „Stimmungen: die Seite“),
 Stufe 3a ✅ (31.10., DECISIONS „Stimmungen in der Show“),
 Stufe 3b ✅ (31.10., DECISIONS „Stimmungen: letzter Befehl gewinnt“),
-Stufe 4a ✅ (31.10., DECISIONS „Stimmungen über OSC und Companion“).
+Stufe 4a ✅ (31.10., DECISIONS „Stimmungen über OSC und Companion“),
+Stufe 4b ✅ (31.10., DECISIONS „Stimmungen bearbeiten“).
 
 ---
 

@@ -6334,3 +6334,41 @@ GO übernimmt, dieselbe Stimmung holt die Ebene zurück),
 
 **Geprüft**: `osc::tests` (`/lmix/mood` mit und ohne Blende, ohne
 Stimmung abgewiesen), `feeds::tests::the_mood_goes_when_it_changes`.
+
+## 2026-10-31 — Stimmungen bearbeiten (MOOD Stufe 4b)
+
+**Anlass**: MOOD.12 (und das Anpassen der Panik-Stimmung, MOOD.9): Ebenen,
+Gruppen, Varianten, Sammlungen und Panik-Stimmung in der Oberfläche, nicht
+nur über die API.
+
+**Entscheidung**:
+- Ein Dialog „Stimmungen“ (`MoodsDialog.qml`), geöffnet auf der Seite
+  Stimmungen mit „Bearbeiten…“ oder, ohne Stimmungen, mit „Stimmungen
+  einrichten…“ (dann mit dem Reiter Ebenen, solange es keine gibt). Er
+  bleibt aus der Seite heraus: die Seite ist zum Spielen da, das Anpassen
+  ist selten (wie die Panik-Stimmung als erweiterte Funktion).
+- Reiter: Stimmungen (Gruppen und Varianten links, rechts Name, Farbe der
+  Gruppe und je Ebene der Inhalt), Ebenen (Name, eigene Blende, Reihenfolge,
+  Wechselzeit und Gruppenwechselzeit), Sammlungen (Name, Reihenfolge; was
+  darin ist, bleibt „Zusammenstellen“ auf der Seite), Panik-Stimmung (je
+  Ebene aus oder Aktionen).
+- Jede Änderung geht sofort als ganzes `set_moods` an lmix-core, wie
+  „Zusammenstellen“: der Kern prüft (Namen, Ids, Pfade, Panik ohne Klang
+  und Bild) und lehnt ab, dann bleibt alles, wie es war. Kein eigener
+  Entwurf mit „Übernehmen“.
+- Eine Variante wählt je Ebene zusätzlich „Aus der Basis“ (der Schlüssel
+  fällt weg); Klang und Bild gehen erst mit ihrer Datei hinaus (vorher
+  lehnt der Kern sie ab), neu angelegt in Schleife, wie eine Atmo; Bild nur,
+  wenn die Show eine Bühne hat. Aktionen über den Aktionsdialog der Cues.
+- Entfernen räumt auf: eine Gruppe nimmt ihre Varianten mit und fällt aus
+  den Sammlungen, eine Ebene aus Gruppen, Varianten und Panik-Stimmung.
+  Ids neuer Einträge sind UUIDs wie die neuer Cues.
+
+**Noch nicht**: Pegel, Blenden und Routing eines Klangs oder Bilds einer
+Ebene (der Dialog setzt Datei, Bühne und Schleife; der Rest bleibt beim
+Standard oder kommt über die API). Ziehen zum Umsortieren.
+
+**Geprüft**: `tst_moods_dialog.qml` (Umbenennen ändert nur den Namen,
+Variante zurück zur Basis, neuer Klang wartet auf die Datei, Bild braucht
+eine Bühne, Gruppe verlässt die Sammlungen, freie Namen und UUIDs, Ebene
+verlässt Stimmungen und Panik, Panik nur aus oder Aktionen, Sammlungen).

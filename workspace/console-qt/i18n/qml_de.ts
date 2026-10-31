@@ -3326,6 +3326,229 @@
     </message>
   </context>
   <context>
+    <name>MoodsDialog</name>
+    <message>
+      <location filename="../qml/MoodsDialog.qml" line="+57" />
+      <location line="+131" />
+      <source>Moods</source>
+      <translation>Stimmungen</translation>
+    </message>
+    <message>
+      <location line="-87" />
+      <location line="+524" />
+      <source>Off</source>
+      <translation>Aus</translation>
+    </message>
+    <message>
+      <location line="-524" />
+      <source>Sound</source>
+      <translation>Ton</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Picture</source>
+      <translation>Bild</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <location line="+519" />
+      <source>Actions</source>
+      <translation>Aktionen</translation>
+    </message>
+    <message>
+      <location line="-518" />
+      <source>From the base</source>
+      <translation>Aus der Basis</translation>
+    </message>
+    <message>
+      <location line="+62" />
+      <source>Actions of the layer</source>
+      <translation>Aktionen der Ebene</translation>
+    </message>
+    <message>
+      <location line="+19" />
+      <location line="+292" />
+      <source>Layers</source>
+      <translation>Ebenen</translation>
+    </message>
+    <message>
+      <location line="-292" />
+      <source>Collections</source>
+      <translation>Sammlungen</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Panic mood</source>
+      <translation>Panik-Stimmung</translation>
+    </message>
+    <message>
+      <location line="+43" />
+      <source>+ Group</source>
+      <translation>+ Gruppe</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Group</source>
+      <translation>Gruppe</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>+ Variant</source>
+      <translation>+ Variante</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Variant</source>
+      <translation>Variante</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <location line="+261" />
+      <location line="+61" />
+      <source>Up</source>
+      <translation>Hoch</translation>
+    </message>
+    <message>
+      <location line="-307" />
+      <source>Down</source>
+      <translation>Runter</translation>
+    </message>
+    <message>
+      <location line="+16" />
+      <location line="+236" />
+      <location line="+60" />
+      <source>Remove</source>
+      <translation>Entfernen</translation>
+    </message>
+    <message>
+      <location line="-292" />
+      <source>A group goes with its variants; collections forget it</source>
+      <translation>Eine Gruppe geht mit ihren Varianten; Sammlungen vergessen sie</translation>
+    </message>
+    <message>
+      <location line="+31" />
+      <source>Add layers first (Layers tab): what a mood sets, e.g. light, music, ambience.</source>
+      <translation>Zuerst Ebenen anlegen (Reiter Ebenen): was eine Stimmung setzt, z. B. Licht, Musik, Atmo.</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Choose a group or variant, or add one.</source>
+      <translation>Eine Gruppe oder Variante wählen oder hinzufügen.</translation>
+    </message>
+    <message>
+      <location line="+5" />
+      <source>Name</source>
+      <translation>Name</translation>
+    </message>
+    <message>
+      <location line="+77" />
+      <source>Video or still</source>
+      <translation>Video oder Standbild</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Sound file</source>
+      <translation>Klangdatei</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Videos and stills (*.mp4 *.mov *.mkv *.webm *.png *.jpg *.jpeg)</source>
+      <translation>Videos und Standbilder (*.mp4 *.mov *.mkv *.webm *.png *.jpg *.jpeg)</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <location line="+1" />
+      <source>All files (*)</source>
+      <translation>Alle Dateien (*)</translation>
+    </message>
+    <message>
+      <location line="+0" />
+      <source>Sound files (*.wav *.flac *.ogg *.opus *.mp3 *.aif *.aiff *.m4a)</source>
+      <translation>Klangdateien (*.wav *.flac *.ogg *.opus *.mp3 *.aif *.aiff *.m4a)</translation>
+    </message>
+    <message>
+      <location line="+12" />
+      <source>Stage of the picture</source>
+      <translation>Bühne des Bildes</translation>
+    </message>
+    <message>
+      <location line="+11" />
+      <source>Loop</source>
+      <translation>Schleife</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <location line="+199" />
+      <source>Actions: %1…</source>
+      <translation>Aktionen: %1…</translation>
+    </message>
+    <message>
+      <location line="-181" />
+      <source>Change time</source>
+      <translation>Wechselzeit</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>How long a layer that changes fades, unless it has its own</source>
+      <translation>Wie lange eine Ebene blendet, die wechselt, wenn sie keine eigene Blende hat</translation>
+    </message>
+    <message>
+      <location line="+3" />
+      <source>Within a group</source>
+      <translation>Innerhalb einer Gruppe</translation>
+    </message>
+    <message>
+      <location line="+7" />
+      <source>The change time between the base and the variants of one group</source>
+      <translation>Die Wechselzeit zwischen der Basis und den Varianten einer Gruppe</translation>
+    </message>
+    <message>
+      <location line="+29" />
+      <source>Fade of the layer</source>
+      <translation>Blende der Ebene</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>The layer's own fade; empty: the change time</source>
+      <translation>Die eigene Blende der Ebene; leer: die Wechselzeit</translation>
+    </message>
+    <message>
+      <location line="+19" />
+      <source>The moods forget what they had on it</source>
+      <translation>Die Stimmungen vergessen, was sie darauf hatten</translation>
+    </message>
+    <message>
+      <location line="+17" />
+      <source>+ Layer</source>
+      <translation>+ Ebene</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Layer</source>
+      <translation>Ebene</translation>
+    </message>
+    <message>
+      <location line="+13" />
+      <source>What a collection holds is put together on the Moods page (Compose).</source>
+      <translation>Was eine Sammlung enthält, wird auf der Seite Stimmungen zusammengestellt (Zusammenstellen).</translation>
+    </message>
+    <message>
+      <location line="+34" />
+      <source>+ Collection</source>
+      <translation>+ Sammlung</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Collection</source>
+      <translation>Sammlung</translation>
+    </message>
+    <message>
+      <location line="+14" />
+      <source>Panic and hard stop fade every sound and picture out. Here a layer can run actions then, e.g. the house light on; they run after the emergency list.</source>
+      <translation>Panik und harter Stopp blenden jeden Klang und jedes Bild aus. Hier kann eine Ebene dann Aktionen ausführen, z. B. Saallicht an; sie laufen nach der Notfall-Liste.</translation>
+    </message>
+  </context>
+  <context>
     <name>MoodsPage</name>
     <message>
       <location filename="../qml/MoodsPage.qml" line="+77" />
@@ -3333,12 +3556,22 @@
       <translation>Stimmungen</translation>
     </message>
     <message>
-      <location line="+495" />
+      <location line="+326" />
+      <source>A mood says what runs on each layer: light, music, ambience, picture.</source>
+      <translation>Eine Stimmung sagt, was auf jeder Ebene läuft: Licht, Musik, Atmo, Bild.</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Set up moods…</source>
+      <translation>Stimmungen einrichten…</translation>
+    </message>
+    <message>
+      <location line="+193" />
       <source>Panic</source>
       <translation>Panik</translation>
     </message>
     <message>
-      <location line="-489" />
+      <location line="-517" />
       <source>Stops every cue and sound; the panic mood runs</source>
       <translation>Stoppt alle Cues und Klänge, die Panik-Stimmung läuft</translation>
     </message>
@@ -3359,12 +3592,22 @@
     </message>
     <message>
       <location line="+1" />
-      <location line="+411" />
+      <location line="+439" />
       <source>Off</source>
       <translation>Aus</translation>
     </message>
     <message>
-      <location line="-348" />
+      <location line="-378" />
+      <source>Edit…</source>
+      <translation>Bearbeiten…</translation>
+    </message>
+    <message>
+      <location line="+2" />
+      <source>Groups, variants, layers, collections and the panic mood</source>
+      <translation>Gruppen, Varianten, Ebenen, Sammlungen und die Panik-Stimmung</translation>
+    </message>
+    <message>
+      <location line="+9" />
       <source>Done</source>
       <translation>Fertig</translation>
     </message>
@@ -3379,7 +3622,7 @@
       <translation>Stimmungen und Oneshots in %1 aufnehmen oder herausnehmen</translation>
     </message>
     <message>
-      <location line="+26" />
+      <location line="+36" />
       <location line="+7" />
       <source>Collections</source>
       <translation>Sammlungen</translation>
@@ -3405,25 +3648,25 @@
       <translation>Alle Stimmungen und Oneshots</translation>
     </message>
     <message>
-      <location line="-221" />
-      <location line="+261" />
-      <location line="+254" />
+      <location line="-240" />
+      <location line="+280" />
+      <location line="+263" />
       <source>Panic mood</source>
       <translation>Panik-Stimmung</translation>
     </message>
     <message>
-      <location line="-385" />
-      <location line="+361" />
+      <location line="-413" />
+      <location line="+389" />
       <source>Cue</source>
       <translation>Cue</translation>
     </message>
     <message>
-      <location line="-361" />
+      <location line="-389" />
       <source>Cue (gone)</source>
       <translation>Cue (entfernt)</translation>
     </message>
     <message>
-      <location line="+131" />
+      <location line="+150" />
       <source>Now</source>
       <translation>Jetzt</translation>
     </message>
@@ -3453,12 +3696,7 @@
       <translation>Noch keine Stimmungen</translation>
     </message>
     <message>
-      <location line="+1" />
-      <source>A mood says what runs on each layer: light, music, ambience, picture. They come with the show or over the API (set_moods).</source>
-      <translation>Eine Stimmung sagt, was auf jeder Ebene läuft: Licht, Musik, Atmo, Bild. Stimmungen kommen mit der Show oder über die API (set_moods).</translation>
-    </message>
-    <message>
-      <location line="+56" />
+      <location line="+66" />
       <location line="+31" />
       <source>Set %1</source>
       <translation>%1 setzen</translation>
