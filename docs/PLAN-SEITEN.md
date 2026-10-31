@@ -218,3 +218,15 @@ Encoder-Last (STR.7), Vorlagen und Assistent (UI.13).
 **Vor Schritt 4**: Anmeldung der Arbeitsplätze am Kern (Schlüssel bzw.
 Pairing, TLS im WAN); „alle dürfen alles“ gilt nur für angemeldete Plätze
 (Review #133).
+
+## Seite Stimmungen (31.10.)
+
+Neue Seite neben Show: eine Sammlung von Stimmungen statt einer
+Reihenfolge (Entwurf E, DECISIONS 2026-10-31, `LASTENHEFT-SHOW.md`
+§3.16). Links die Sammlungen (einklappbar), in der Mitte die Gruppen mit
+ihren Varianten und oben die aktuelle Stimmung mit dem Übergang, rechts
+der Inspector mit den Ebenen und ihrer Herkunft (einklappbar), unten die
+Oneshots. Show und Stimmungen teilen den Kern: eine Stimmung, die die
+Show per Cue setzt, zeigt die Seite als aktuell, und ein Cue, der eine
+Ebene übernimmt, steht im Inspector als deren Herkunft.
+

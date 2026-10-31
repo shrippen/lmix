@@ -356,6 +356,30 @@ VST3, CLAP nach E.8). Der Show-Modus nutzt ihn je Cue und je Zone.
 | TC.7 | Timecode-Anzeige für ein- und ausgehende Ströme, auch groß für Sicht aus Entfernung | S | S3 | – |
 | TC.8 | Gemeinsamer Decoder mit dem Mischer (PER.9) | S | S3 | – |
 
+### 3.16 Stimmungen (MOOD) (lmix)
+
+Nicht jede Show ist eine Reihenfolge: eine Pen-&-Paper-Runde oder ein
+Improtheater braucht eine Sammlung von Zuständen, zwischen denen man nach
+Bedarf wechselt. Eine Stimmung legt fest, was auf jeder Ebene (Licht, Musik,
+Atmo, Bild, Duft …) gerade läuft. Entwurf E auf der Leinwand „lmix
+Stimmungen“, Entscheidungen in DECISIONS 2026-10-31.
+
+| ID | Anforderung | Prio | MS | Stand |
+|---|---|---|---|---|
+| MOOD.1 | Ebenen als Show-Einstellung: benannt (z. B. Licht, Musik, Atmo, Bild, Duft), feste Reihenfolge, je Ebene eine eigene Blendzeit (sonst die der Show) | M | S2 | – |
+| MOOD.2 | Gruppen mit Basis und Varianten (z. B. Taverne: Tag, Nacht, Kampf): die Basis belegt die Ebenen, eine Variante überschreibt nur einzelne Ebenen und erbt den Rest; ändert man die Basis, ändern sich alle Varianten mit | M | S2 | – |
+| MOOD.3 | Inhalt je Ebene: aus, ein Klang (wie SND), ein Bild (wie VIS) oder Aktionen (HTTP, OSC, Home Assistant …, wie EXT) | M | S2 | – |
+| MOOD.4 | Stimmung setzen: je Ebene vergleichen; was gleich bleibt, läuft ungestört weiter, was sich ändert, blendet über (Wechselzeit der Show, innerhalb einer Gruppe eine kürzere); Blendzeit je Aufruf überschreibbar; ein Klick auf den Gruppenkopf setzt die Basis, ein Klick auf eine Variante die Variante | M | S2 | – |
+| MOOD.5 | Letzter Befehl gewinnt je Ebene: ein Show-Cue, der eine Ebene belegt (gleiche Bühne und Bildebene, gleicher Klang-Platz), übernimmt sie; der nächste Stimmungswechsel holt sie zurück; der Zustand nennt die Herkunft je Ebene | S | S2 | – |
+| MOOD.6 | Cue „Stimmung setzen“ in der Show: Stimmungen einmal im Pool anlegen und in Cue-Listen beliebig oft verwenden; Reiter Stimmungen in der Show-Ansicht zum Ziehen und Auslösen | M | S2 | – |
+| MOOD.7 | Sammlungen: eine Auswahl aus dem Pool (Stimmungen und Oneshots) für einen Abend oder eine Szene; eine Stimmung kann in mehreren Sammlungen stehen; „Alle“ zeigt den ganzen Pool | S | S2 | – |
+| MOOD.8 | Oneshots: eigener Pool aus Cues beliebiger Art (die Pads der Show, RUN.12), Teil von Sammlungen; auf der Seite Stimmungen als Leiste unten, in der Show-Ansicht weiter im Reiter Pads | S | S2 | – |
+| MOOD.9 | Panik setzt nach dem Ausblenden die Stimmung „Panik“ (Standard: alle Ebenen aus; z. B. Saallicht an); anpassbar als erweiterte Funktion, nicht dauernd auf der Seite sichtbar; ersetzt nicht die Notfall-Liste (SAF.4) | M | S2 | – |
+| MOOD.10 | Seite Stimmungen der Console: Sammlungen links und Inspector rechts, beide einklappbar; Gruppen als Kopf mit Varianten-Kacheln, aktuelle Stimmung und Übergang mit Fortschritt, Ebenen mit Herkunft, Oneshot-Leiste; Kante (SUI.9), Texte de/en | M | S2 | – |
+| MOOD.11 | Stimmung setzen über jeden Bedienweg: API, OSC, Kurzbefehle, Companion (CTL) | S | S2 | – |
+| MOOD.12 | Ebenen, Gruppen, Varianten, Sammlungen und Panik-Stimmung in der Oberfläche anlegen, ändern, umsortieren, entfernen; gespeichert in der Show-Datei (SSH.1) | S | S2 | – |
+| MOOD.13 | Demo-Modus mit Stimmungen aus den gemeinsamen Demodaten (Studio Weber) für Screenshots | S | S2 | – |
+
 ---
 
 ## 4. Nichtfunktionale Anforderungen (SNF)
@@ -468,7 +492,7 @@ Licht in S1 nur über Home Assistant (EXT.4); eigene Lichtsteuerung ab S3.
 ### S2 — Theater-Grundstand
 
 Bearbeiten in der Oberfläche, Gruppen „hinein“ und Wiedergabeliste,
-unscharfe Cues, Springen-Cue, Zweitauslöser, Schleife beenden, direkte
+Stimmungen (MOOD), unscharfe Cues, Springen-Cue, Zweitauslöser, Schleife beenden, direkte
 Auslöser, Pause, Vorhören, Sperren je Ein-/Ausgabeklasse, Raster, relative
 Fades, weitere Kurven, Start-/Endpunkte, Kreuzungs-Fades, freie Geometrie,
 Videoton, virtuelle Bühne, HTML-Ebene (nach GFX.2), Effekt-Plugins je Cue

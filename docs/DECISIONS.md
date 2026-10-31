@@ -5663,3 +5663,44 @@ Senden, Warten und Failback, fehlende Quelle und Karte bleiben, entfernt
 während offen, danach leer zum Anlegen), `tst_removals` (Toast nach dem
 Ändern, abgelehnt ohne Toast), `tst_outputs_page` (Einstellungen… der
 Detailkarte).
+
+## 2026-10-31 — Seite Stimmungen (MOOD)
+
+**Kontext**: Die Show-Ansicht kennt nur eine Reihenfolge. Manche Shows
+(Pen & Paper, Improtheater, Lesung mit Musik) brauchen eine Sammlung von
+Stimmungen, zwischen denen man nach Bedarf wechselt. Viele Stimmungen sind
+Varianten voneinander (Taverne friedlich, Tag, Nacht, Kampf) und teilen
+Eigenschaften. Acht Entwürfe als Leinwand „lmix Stimmungen“ (A–H).
+
+**Optionen**: A Kacheln, B Ebenen-Matrix, C Jetzt und Vorwahl, D Karte der
+Übergänge, E Gruppen mit Varianten, F Ort × Lage, G Grundstimmung mit
+Zusätzen, H Karte mit Inseln.
+
+**Entscheidung** (Owner 31.10.): **E**, mit diesen Festlegungen:
+- **Gruppe** (nicht „Ort“) mit Basis und Varianten. Klick auf den
+  Gruppenkopf setzt die Basis, Klick auf eine Variante die Variante.
+  Varianten erben von der Basis und überschreiben nur Ebenen.
+- **Letzter Befehl gewinnt** je Ebene: ein Show-Cue, der eine Ebene
+  belegt, übernimmt sie; der nächste Stimmungswechsel holt sie zurück.
+  Zuerst für Bild-Ebenen (gleiche Bühne und Ebene ersetzen sich ohnehin),
+  für Klang und Aktionen mit Stufe 3.
+- **Panik setzt die Stimmung „Panik“** nach dem Ausblenden, Standard
+  „alles aus“, anpassbar (z. B. Saallicht an). Das Anpassen ist eine
+  erweiterte Funktion, die Panik-Stimmung steht nicht dauernd auf der Seite.
+- **Pool und Show**: Stimmungen einmal anlegen und in der Show als Cue
+  „Stimmung setzen“ beliebig oft verwenden, sodass man eine Show auch in
+  Stimmungen denken kann.
+- **Sammlungen** sind eine Auswahl aus dem Pool; eine Stimmung kann in
+  mehreren stehen.
+- **Oneshots** können alles sein, haben ihren eigenen Pool und gehören
+  ebenfalls zu Sammlungen. Auf der Seite Stimmungen als Leiste unten, in
+  der Show-Ansicht bleiben sie im Reiter Pads. Der Oneshot-Pool sind die
+  Pads der Show (RUN.12), Sammlungen verweisen auf ihre Cue-Ids.
+- Seitenleisten Sammlungen und Inspector sind einklappbar.
+
+**Folgen**: Neues Feld `moods` in der Show-Datei (vor dem ersten Release
+ohne Migration, ein fehlendes Feld ist leer). Die Engine ist rein wie der
+`Runner` und liefert nur Aktionen für die Ebenen, die sich ändern; Klang
+und Bild laufen über dieselben Medien-Aktionen wie Cues. Planung in
+`ROADMAP.md` („Seite Stimmungen“) und `LASTENHEFT-SHOW.md` §3.16.
+
