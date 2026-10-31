@@ -778,7 +778,9 @@ impl qobject::Core {
                             && !NO_CUDA_GL.swap(true, Ordering::Relaxed)
                         {
                             tracing::warn!(
-                                "no CUDA-GL interop for this window: pictures from the GPU go through system memory"
+                                %socket,
+                                ?message,
+                                "no CUDA-GL interop: from now on pictures from the GPU go through system memory (until lmix restarts)"
                             );
                         }
                     }

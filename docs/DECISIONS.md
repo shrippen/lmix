@@ -5664,7 +5664,10 @@ Vermutet waren die 31 Pegelanzeigen. Gesucht mit `scripts/profile-gui.sh`
   Bricht ein Bild von der GPU in `glcolorconvert`, bevor es einen Frame
   zeigte, kommen solche Bilder danach über den Systemspeicher
   (`cudadownload ! video/x-raw ! glupload`, `NO_CUDA_GL` in `bridge.rs`).
-  Mit Interop (NVIDIA-Anzeige) ändert sich nichts. Verworfen: den Neuaufbau
+  Mit Interop (NVIDIA-Anzeige) ändert sich nach dem Code nichts, solange
+  dort kein solcher Bruch vorkommt; gilt für den ganzen Prozess bis zum
+  Neustart, die Warnung im Log nennt Socket und Fehler. Auf echter
+  Hardware noch nicht geprüft. Verworfen: den Neuaufbau
   nur seltener versuchen (der Monitor bliebe schwarz), das Problem als
   Eigenheit von Xvfb stehen lassen (dasselbe gilt für eine Anzeige an
   einer anderen GPU als der des Mischers). Auf Xvfb zeigen Programm und
