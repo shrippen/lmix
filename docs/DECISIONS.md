@@ -5614,3 +5614,46 @@ sofort mit 504, der Zweig war aktiv, es kam kein Bild. Dasselbe Muster in
 - **Beleg:** strom-Test `test_attaching_never_stops_the_tapped_chain`
   (strom #55) hängt den Zweig 200-mal an eine Quelle ohne Takt an und ab; ohne die
   Änderung steht die Kette schon beim ersten Mal, mit ihr nie.
+
+## 2026-10-31 — vm-check: gehaltenes Bild bleibt stehen, RTMP ohne Video
+
+Die beiden häufigsten Fehler von `vm-check` seit 25.10. („dead source not
+black on program (35)“ etwa 12-mal, „RTMP output delivered nothing“ etwa
+7-mal) haben je eine echte Ursache, keine im Test. Lokal reproduzierbar
+im Container mit `taskset -c 0,1`.
+
+- **Gehaltenes Bild (lmix-core `engine/strom.rs`):** „Hold“ setzte
+  `max-last-buffer-repeat` am Compositor-Pad auf `u64::MAX`, das ist
+  GST_CLOCK_TIME_NONE. Läuft ein Pad mit NONE trocken, behält der
+  Compositor (`videoaggregator` 1.24 bis 1.28) das Bild mit offenem
+  Ende; kein späterer Wert holt es wieder heraus, auch 400 ms nicht. Im
+  Test kam das Logo nach dem Failover zurück, stockte unter Last kurz
+  (noch im Modus „hold“), die verspäteten Bilder danach verwirft der
+  Live-Compositor still, und das nach „black“ getötete Logo (Helligkeit
+  35 = Blau) blieb für immer auf Program. **Entscheidung:** „Hold“ heißt
+  jetzt `u64::MAX - 1` (584 Jahre, eine gültige Zeit). Verworfen: das
+  Pad beim Wechsel neu anlegen (Eingriff in den Mischer-Flow, an dem
+  gerade anders gearbeitet wird) und im Test länger warten (das Bild
+  geht nie). Beleg: ein GStreamer-Skript ohne lmix (NONE: bleibt 255,
+  `MAX - 1`: 0) und ein neuer Schritt im VM-Test, der beim gehaltenen
+  toten Logo auf „black“ schaltet; ohne die Änderung rot, ohne Last.
+- **RTMP ohne Video (strom `gst/pipeline/construction.rs`):** Senken
+  aus Blöcken (RTMP, SRT) laufen mit `qos=true`, an `add_element`
+  vorbei, also ohne die Probe, die strom an allen anderen Senken die
+  QoS-Events nach oben verwirft. Hinter `flvmux` meldet die Senke die
+  Laufzeit des Stroms, den der Muxer zuletzt durchließ. Kam das Video
+  unter Last 6 s hinter der Uhr an, ließ der Muxer den Ton durch, und
+  `videoconvert` vor dem Encoder warf jedes Videobild als zu spät weg
+  (Log: „falling behind 100 %, jitter 6 s“). Ein echter Stream hätte
+  ebenso kein Bild mehr gehabt, solange das Video zurücklag.
+  **Entscheidung:** Block-Senken bekommen dieselbe Probe wie die
+  übrigen (strom-PR auf `dev`). Beleg: strom-Test
+  `a_block_sink_does_not_send_qos_events_upstream` (ohne die Änderung
+  rot) und ein Skript mit 3 s verspätetem Video (0 statt 150 Bilder im
+  Encoder, mit der Probe 150).
+- **Messwerte, die irreführen:** `current-level-time` der Queues und
+  der Compositor-Pads (14 s bei 2 Puffern, 54 s bei 0 Bytes) und
+  `latency_min` aus `/api/flows/{id}/debug` (summiert die Queues) sind
+  keine Verzögerung; die Mischer-Uhr lief in den Läufen in Echtzeit.
+  strom #48 („Zeitstempel springen unter Last“) bekommt dazu einen
+  Kommentar.

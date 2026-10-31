@@ -54,8 +54,19 @@ const PLAYER_BUFFER: usize = 128;
 const MIXER_COMPOSITORS: [&str; 2] = ["mixer", "mv_comp"];
 /// The mixer's compositor of the tile picture (strom's `tiles_out`).
 const TILES_COMPOSITOR: &str = "tiles_comp";
-/// `max-last-buffer-repeat` default: repeat until end of stream.
-const REPEAT_FOREVER_NS: u64 = u64::MAX;
+/// `SignalLoss::Hold`: repeat the last frame for 584 years.
+///
+/// Not `u64::MAX` (GST_CLOCK_TIME_NONE, the property's "forever"): a
+/// pad that runs dry with NONE keeps its frame with an open end time,
+/// and the compositor (1.24 to 1.28) never drops a frame like that
+/// again, not even after `max-last-buffer-repeat` turns finite. Under
+/// load the source's next frames come late, the live compositor skips
+/// them, and the source killed after switching to black stayed on
+/// program for good (vm-check "dead source not black").
+const REPEAT_FOREVER_NS: u64 = u64::MAX - 1;
+// GST_CLOCK_TIME_NONE is u64::MAX; hold still means a century or more.
+const _: () = assert!(REPEAT_FOREVER_NS != u64::MAX);
+const _: () = assert!(REPEAT_FOREVER_NS > 100 * 365 * 24 * 3600 * 1_000_000_000);
 /// `SignalLoss::Black`: this long without a frame, then black.
 const BLACK_AFTER: Duration = Duration::from_millis(400);
 

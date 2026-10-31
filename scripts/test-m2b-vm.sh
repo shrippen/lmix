@@ -617,9 +617,15 @@ wait_for "$SETTLE_S" logo_pgm || fail "program lost the logo while the source wa
 [[ "$(input_state Logo)" == offline ]] || fail "dead source back before its file"
 running="$(curl -sf "$STROM/api/flows/$MIXER_ID" | jq -r '.flow.running')"
 [[ "$running" == true ]] || fail "mixer stopped after source loss"
+# Black while the frame is held: the held frame goes. Held "forever"
+# as GST_CLOCK_TIME_NONE, the compositor kept it for good.
+black_pgm() { picture program "$WORK/black.jpg" || return 1; [[ $(brightness "$WORK/black.jpg") -lt 5 ]]; }
+act '{"action":"set_signal_loss","input":"Logo","mode":"black"}' >/dev/null
+wait_for "$SETTLE_S" black_pgm || fail "held dead source not black after switching to black ($(brightness "$WORK/black.jpg"))"
+act '{"action":"set_signal_loss","input":"Logo","mode":"hold"}' >/dev/null
 revive_logo
 wait_for "$SETTLE_S" is_logo || fail "logo not back after failback"
-pass "failover: source died mid-transition, program held its last frame, input failed back"
+pass "failover: source died mid-transition, program held its last frame (black on demand), input failed back"
 
 # Signal loss per input: hold the last frame (default, above) or black.
 # A paused clip keeps sending its frame, so the source has to die.
@@ -627,7 +633,6 @@ act '{"action":"set_signal_loss","input":"Logo","mode":"black"}' >/dev/null
 act '{"action":"cut_direct","input":"Logo"}' >/dev/null
 wait_for "$SETTLE_S" logo_pgm || fail "logo not on program before the loss"
 kill_logo
-black_pgm() { picture program "$WORK/black.jpg" || return 1; [[ $(brightness "$WORK/black.jpg") -lt 5 ]]; }
 wait_for "$SETTLE_S" black_pgm || fail "dead source not black on program ($(brightness "$WORK/black.jpg"))"
 act '{"action":"set_signal_loss","input":"Logo","mode":"hold"}' >/dev/null
 revive_logo
