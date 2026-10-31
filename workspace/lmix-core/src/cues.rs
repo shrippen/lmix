@@ -1171,6 +1171,13 @@ impl Runner {
     }
 
     /// Cues that run, in start order (RUN.3).
+    /// Whether a run of cue `cue` of `list` is still going.
+    pub fn plays(&self, list: InputId, cue: CueId) -> bool {
+        self.runs
+            .iter()
+            .any(|r| r.list == list && r.cue == cue && !r.ended)
+    }
+
     pub fn running(&self, lists: &[ShowCueList], now: Instant) -> Vec<RunningCue> {
         self.runs
             .iter()

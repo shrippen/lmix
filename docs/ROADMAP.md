@@ -451,6 +451,7 @@ je ein PR:
 | 5b Ebenen-Ende | Endet der Klang oder Cue einer Ebene, ist sie aus; `stop_sound` ohne Id stoppt auch die Ebenen | MOOD.4, 5 |
 | 5c Vorladen | Mood-Cue auf Standby lädt die Klänge und Bilder seiner Ebenen vor | MOOD.6 |
 | 5d Panik | Panik-Stimmung sicher nach der Notfall-Liste | MOOD.9 |
+| 6a Nacharbeiten Kern | Nichts startet nach einer Panik, was vor ihr berechnet wurde; abgebrochenes GO läuft zu Ende; Medien-Ids und Vorladen robuster | MOOD.4–6, 9, SAF.1 |
 
 Stand: Stufe 1 ✅ (31.10., DECISIONS „Stimmungen: Modell und Engine“),
 Stufe 2 ✅ (31.10., DECISIONS „Stimmungen: die Seite“),
@@ -461,7 +462,8 @@ Stufe 4b ✅ (31.10., DECISIONS „Stimmungen bearbeiten“),
 Stufe 5a ✅ (31.10., DECISIONS „Stimmungen: Nacharbeiten am Bearbeiten“),
 Stufe 5b ✅ (31.10., DECISIONS „Stimmungen: Ebenen, die enden“),
 Stufe 5c ✅ (31.10., DECISIONS „Stimmungen: Vorladen“),
-Stufe 5d ✅ (31.10., DECISIONS „Stimmungen: Panik nach der Notfall-Liste“).
+Stufe 5d ✅ (31.10., DECISIONS „Stimmungen: Panik nach der Notfall-Liste“),
+Stufe 6a ✅ (1.11., DECISIONS „Stimmungen: Nacharbeiten im Kern“).
 
 ---
 

@@ -74,6 +74,9 @@ pub struct Service {
     events: broadcast::Sender<Event>,
     /// Wakes [`Service::watch_cues`] when cue times changed.
     cue_wake: tokio::sync::Notify,
+    /// Panics and hard stops so far: cue and mood actions worked out
+    /// before one do not start after it.
+    panics: std::sync::atomic::AtomicU64,
     /// Client for output targets (each request has its target's limit).
     target_http: reqwest::Client,
     /// One queue per address of an output target (name, address): its
@@ -203,6 +206,7 @@ impl Service {
             engine,
             events,
             cue_wake: tokio::sync::Notify::new(),
+            panics: std::sync::atomic::AtomicU64::new(0),
             target_http: crate::datasource::client(),
             target_queues: std::sync::Mutex::new(HashMap::new()),
             recent: Mutex::new(Recent::load(autosave.as_deref())),
@@ -632,9 +636,10 @@ impl Service {
                 // Every due step changes what runs (a wait's pre wait
                 // ending makes no out, but clients show the phase).
                 self.publish(&sw);
-                out
+                (out, self.panics.load(Ordering::Acquire))
             };
-            self.run_cue_outs(out).await;
+            let (out, since) = out;
+            self.run_cue_outs(out, since).await;
         }
     }
 
@@ -667,11 +672,11 @@ impl Service {
                 if !out.is_empty() || layer {
                     self.publish(&sw);
                 }
-                (out, layer)
+                (out, layer, self.panics.load(Ordering::Acquire))
             };
-            let (out, layer) = out;
+            let (out, layer, since) = out;
             self.cue_wake.notify_one();
-            self.run_cue_outs(out).await;
+            self.run_cue_outs(out, since).await;
             // The layer is off: a mood cue on standby starts it again.
             if layer {
                 self.preload_standby().await;
@@ -759,15 +764,53 @@ impl Service {
 
     /// Run cue actions and send cue events. A failing action stops the
     /// rest of its cue and is reported; times and follows go on (CUE.19).
-    async fn run_cue_outs(self: &Arc<Self>, out: Vec<crate::cues::Out>) {
+    /// `since`: the panics when `out` was worked out; after another, its
+    /// starts are left out (SAF.1), its events still go.
+    async fn run_cue_outs(self: &Arc<Self>, out: Vec<crate::cues::Out>, since: u64) {
         let hold = self.hold_preload().await;
-        self.run_cue_outs_held(out).await;
+        self.run_cue_outs_held(out, since).await;
         hold.release();
         self.preload_standby().await;
     }
 
-    async fn run_cue_outs_held(self: &Arc<Self>, out: Vec<crate::cues::Out>) {
+    /// [`Service::run_cue_outs`] in a task of its own: it goes on when the
+    /// caller is dropped.
+    fn spawn_cue_outs(
+        self: &Arc<Self>,
+        out: Vec<crate::cues::Out>,
+        since: u64,
+    ) -> tokio::task::JoinHandle<()> {
+        let me = Arc::clone(self);
+        tokio::spawn(async move { me.run_cue_outs(out, since).await })
+    }
+
+    /// The same for [`Service::run_mood_actions`].
+    fn spawn_mood_actions(
+        self: &Arc<Self>,
+        actions: Vec<Action>,
+        since: u64,
+    ) -> tokio::task::JoinHandle<()> {
+        let me = Arc::clone(self);
+        tokio::spawn(async move { me.run_mood_actions(actions, since).await })
+    }
+
+    /// Whether a panic came after `since`.
+    fn panicked_since(&self, since: u64) -> bool {
+        self.panics.load(Ordering::Acquire) != since
+    }
+
+    async fn run_cue_outs_held(self: &Arc<Self>, out: Vec<crate::cues::Out>, since: u64) {
         for o in out {
+            if self.panicked_since(since)
+                && matches!(
+                    o,
+                    crate::cues::Out::Mood { .. }
+                        | crate::cues::Out::TakeLayer { .. }
+                        | crate::cues::Out::Actions { .. }
+                )
+            {
+                continue;
+            }
             match o {
                 crate::cues::Out::Event { list, cue, what } => {
                     if let (
@@ -777,8 +820,9 @@ impl Service {
                         | lmix_types::CueEvent::Failed { .. },
                     ) = (cue, &what)
                     {
+                        let failed = matches!(what, lmix_types::CueEvent::Failed { .. });
                         let mut sw = self.switcher.lock().await;
-                        if sw.mood_cue_over(list, id) {
+                        if sw.mood_cue_over(list, id, failed) {
                             self.publish(&sw);
                         }
                     }
@@ -799,7 +843,7 @@ impl Service {
                     tracing::warn!(?mode, "panic");
                     let _ = self.events.send(Event::Panic { mode });
                 }
-                crate::cues::Out::Mood { actions } => self.run_mood_actions(actions).await,
+                crate::cues::Out::Mood { actions } => self.run_mood_actions(actions, since).await,
                 crate::cues::Out::TakeLayer { list, cue, layer } => {
                     let actions = {
                         let mut sw = self.switcher.lock().await;
@@ -807,10 +851,13 @@ impl Service {
                         self.publish(&sw);
                         actions
                     };
-                    self.run_mood_actions(actions).await;
+                    self.run_mood_actions(actions, since).await;
                 }
                 crate::cues::Out::Actions { list, cue, actions } => {
                     for action in actions {
+                        if self.panicked_since(since) {
+                            break;
+                        }
                         let Err(e) = Box::pin(self.handle_as(action, Origin::Operator)).await
                         else {
                             continue;
@@ -820,7 +867,7 @@ impl Service {
                         // took is off (MOOD.5).
                         {
                             let mut sw = self.switcher.lock().await;
-                            if sw.mood_cue_over(list, cue) {
+                            if sw.mood_cue_over(list, cue, true) {
                                 self.publish(&sw);
                             }
                         }
@@ -853,16 +900,21 @@ impl Service {
 
     /// Actions of a mood's layers, each on its own: a light that does not
     /// answer keeps neither the music nor the picture back (MOOD.4).
-    async fn run_mood_actions(self: &Arc<Self>, actions: Vec<Action>) {
+    async fn run_mood_actions(self: &Arc<Self>, actions: Vec<Action>, since: u64) {
         // What a mood cue on standby held ready is for these starts.
         let hold = self.hold_preload().await;
-        self.run_mood_actions_held(actions).await;
+        self.run_mood_actions_held(actions, since).await;
         hold.release();
         self.preload_standby().await;
     }
 
-    async fn run_mood_actions_held(self: &Arc<Self>, actions: Vec<Action>) {
+    async fn run_mood_actions_held(self: &Arc<Self>, actions: Vec<Action>, since: u64) {
         for action in actions {
+            // A panic came in between: the panic mood is set, this one
+            // starts nothing more (MOOD.9).
+            if self.panicked_since(since) {
+                break;
+            }
             // A start that failed may run all the same (made, then its
             // fade-in failed): stopped, so no later change leaves it
             // behind. Stopping what does not run does nothing.
@@ -1938,15 +1990,19 @@ impl Service {
                 return Ok(self.state().await);
             }
             Action::SetMood { mood, fade_ms } => {
-                let actions = {
+                let (actions, since) = {
                     let mut sw = self.switcher.lock().await;
                     let actions = sw.set_mood(mood, *fade_ms)?;
                     self.publish(&sw);
-                    actions
+                    (actions, self.panics.load(Ordering::Acquire))
                 };
                 // Then preloads again: a mood cue on standby now starts
-                // other layers, or the same with another fade.
-                self.run_mood_actions(actions).await;
+                // other layers, or the same with another fade. In a task
+                // of its own: a client that goes away leaves no layer half
+                // set.
+                if let Err(e) = self.spawn_mood_actions(actions, since).await {
+                    tracing::warn!(error = %e, "mood actions broke off");
+                }
                 return Ok(self.state().await);
             }
             Action::CueGo { .. }
@@ -1990,11 +2046,23 @@ impl Service {
                         self.write_autosave(&sw).await;
                     }
                     self.publish(&sw);
-                    out
+                    // Under the lock: whatever was worked out before this
+                    // panic sees it, whatever after does not.
+                    let since = if matches!(action, Action::CuePanic { .. } | Action::CueHardStop) {
+                        self.panics.fetch_add(1, Ordering::AcqRel) + 1
+                    } else {
+                        self.panics.load(Ordering::Acquire)
+                    };
+                    (out, since)
                 };
+                let (out, since) = out;
                 self.cue_wake.notify_one();
-                // What is due at once runs before the answer, like a cut.
-                self.run_cue_outs(out).await;
+                // What is due at once runs before the answer, like a cut;
+                // in a task of its own, so a client that goes away does not
+                // cut a cue short.
+                if let Err(e) = self.spawn_cue_outs(out, since).await {
+                    tracing::warn!(error = %e, "cue actions broke off");
+                }
                 return Ok(self.state().await);
             }
             _ => {}
@@ -3371,6 +3439,100 @@ mod tests {
             held.sounds.iter().any(|(ready, _)| ready == id),
             "the last preload before the start still holds it: {log:?}"
         );
+    }
+
+    /// SAF.1, MOOD.9: mood actions worked out before a panic do not start
+    /// after it.
+    #[tokio::test]
+    async fn a_mood_worked_out_before_a_panic_starts_nothing_after_it() {
+        use crate::switcher::Command;
+        use lmix_types::LayerContent;
+        let engine = Arc::new(NullEngine::default());
+        let service = Service::new(4, engine.clone(), None);
+        service.handle(bars()).await.unwrap();
+        service
+            .handle(Action::SetZone {
+                zone: lmix_types::Zone {
+                    name: "Saal".into(),
+                    channels: 2,
+                },
+            })
+            .await
+            .unwrap();
+        let mut moods = scene_moods();
+        let licht = moods.layers[0].id;
+        moods.groups[0].base.insert(
+            licht,
+            LayerContent::Sound {
+                sound: lmix_types::SoundCue {
+                    file: "/sounds/rain.wav".into(),
+                    ..Default::default()
+                },
+            },
+        );
+        service.handle(Action::SetMoods { moods }).await.unwrap();
+        // As SetMood does, then the panic comes before its actions run.
+        let (actions, since) = {
+            let mut sw = service.switcher.lock().await;
+            (
+                sw.set_mood("Szene", None).unwrap(),
+                service.panics.load(Ordering::Acquire),
+            )
+        };
+        service.handle(Action::CuePanic { ms: None }).await.unwrap();
+        service.run_mood_actions(actions, since).await;
+        assert!(
+            !engine
+                .log()
+                .iter()
+                .any(|c| matches!(c, Command::PlaySound { .. })),
+            "the rain does not start after the panic"
+        );
+    }
+
+    /// A dropped hold preloads on its own.
+    #[tokio::test]
+    async fn a_dropped_hold_preloads_what_waited() {
+        use crate::switcher::Command;
+        let engine = Arc::new(NullEngine::default());
+        let service = Service::new(4, engine.clone(), None);
+        service.handle(bars()).await.unwrap();
+        service
+            .handle(Action::SetZone {
+                zone: lmix_types::Zone {
+                    name: "Saal".into(),
+                    channels: 2,
+                },
+            })
+            .await
+            .unwrap();
+        let hold = service.hold_preload().await;
+        let mut cue = lmix_types::Cue::empty(lmix_types::CueKind::Sound);
+        cue.sound = Some(lmix_types::SoundCue {
+            file: "/sounds/rain.wav".into(),
+            ..Default::default()
+        });
+        service
+            .handle(Action::AddCueList {
+                name: "Show".into(),
+                cues: vec![cue],
+                source: None,
+            })
+            .await
+            .unwrap();
+        let held = |log: Vec<Command>| {
+            log.iter()
+                .any(|c| matches!(c, Command::SetPreload { preload } if !preload.sounds.is_empty()))
+        };
+        assert!(!held(engine.log()), "held back");
+        drop(hold);
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            while !held(engine.log()) {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("preloaded after the drop");
     }
 
     /// A client that goes away mid GO drops the hold: preloading goes on.

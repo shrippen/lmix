@@ -271,6 +271,10 @@ impl MoodRunner {
     /// elsewhere (`stop_sound` without id). Its layer is off, so the same
     /// mood again starts it again. Whether a layer had it.
     pub fn media_gone(&mut self, id: &str) -> bool {
+        // A cue's own sound or picture: never a layer's.
+        if !id.starts_with("mood-") {
+            return false;
+        }
         let before = self.layers.len();
         self.layers.retain(|_, p| p.media.as_deref() != Some(id));
         self.layers.len() != before
@@ -279,6 +283,22 @@ impl MoodRunner {
     /// Cue `cue` of `list` is over (ended, stopped, failed): the layers it
     /// took are off (MOOD.5), so the next mood starts its content there.
     /// Whether it had one.
+    /// Whether cue `cue` of `list` holds a layer.
+    pub fn holds(&self, list: InputId, cue: CueId) -> bool {
+        self.layers
+            .values()
+            .any(|p| p.origin == LayerOrigin::Cue { list, cue })
+    }
+
+    /// A new show: nothing runs, but media ids go on counting, so a late
+    /// end of the old show's sound turns off no layer of the new.
+    pub fn reset(&mut self) {
+        *self = Self {
+            started: self.started,
+            ..Self::default()
+        };
+    }
+
     pub fn cue_over(&mut self, list: InputId, cue: CueId) -> bool {
         let before = self.layers.len();
         self.layers
@@ -844,6 +864,25 @@ mod tests {
             matches!(again.as_slice(), [Action::PlaySound { .. }]),
             "{again:?}"
         );
+    }
+
+    #[test]
+    fn a_new_show_counts_media_ids_on() {
+        let t = tavern();
+        let mut runner = MoodRunner::default();
+        let out = runner.set(&t.moods, "Tavern", None, 0).expect("set");
+        let Some(Action::PlaySound { id: old, .. }) = out.get(1) else {
+            panic!("plays the lute: {out:?}")
+        };
+        runner.reset();
+        let out = runner.set(&t.moods, "Tavern", None, 0).expect("set");
+        let Some(Action::PlaySound { id, .. }) = out.get(1) else {
+            panic!("plays the lute: {out:?}")
+        };
+        assert_ne!(id, old);
+        // The old show's lute ending late turns off nothing.
+        assert!(!runner.media_gone(old));
+        assert!(!runner.media_gone("cue-1"), "a cue's media is no layer's");
     }
 
     #[test]
