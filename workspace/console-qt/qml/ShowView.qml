@@ -170,6 +170,23 @@ ColumnLayout {
         return minutes + ":" + (seconds < 10 ? "0" : "") + seconds.toFixed(1)
     }
 
+    /** The show's moods in order, each group's base before its variants:
+     *  [{ id, name, group, variant }] (MOOD.6). */
+    readonly property var moods: {
+        var out = []
+        var groups = show && show.moods && show.moods.groups ? show.moods.groups : []
+        groups.forEach(g => {
+            out.push({ id: g.id, name: g.name, group: g, variant: null })
+            ;(g.variants || []).forEach(v => out.push({ id: v.id, name: g.name + " / " + v.name, group: g, variant: v }))
+        })
+        return out
+    }
+    /** The name of mood `id`, "Group" or "Group / Variant". */
+    function moodName(id) {
+        var found = moods.find(m => m.id === id)
+        return found ? found.name : qsTr("Mood (gone)")
+    }
+
     function cueName(cue) {
         if (cue.name !== "")
             return cue.name
@@ -181,6 +198,7 @@ ColumnLayout {
         case "sound": return cue.sound ? cue.sound.file.split("/").pop() : qsTr("Sound")
         case "picture": return cue.picture ? cue.picture.file.split("/").pop() : qsTr("Picture")
         case "fade": return fadeName(cue)
+        case "mood": return cue.mood ? moodName(cue.mood.mood) : qsTr("Mood")
         default: return cue.actions && cue.actions.length > 0 ? cue.actions[0].action : qsTr("Actions")
         }
     }
@@ -219,6 +237,7 @@ ColumnLayout {
         case "sound": return qsTr("Sound")
         case "picture": return cue.picture ? qsTr("Picture on %1").arg(cue.picture.stage) : qsTr("Picture")
         case "fade": return qsTr("Fade")
+        case "mood": return qsTr("Set mood")
         default: return qsTr("Actions: %1").arg(cue.actions ? cue.actions.length : 0)
         }
     }

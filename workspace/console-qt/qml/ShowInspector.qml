@@ -39,6 +39,7 @@ KanteCard {
                                                : showView.selectedCue
     readonly property var cue: shown
     readonly property bool editable: !showView.fromScript
+    readonly property bool isMood: cue !== null && cue.kind === "mood"
     readonly property bool timed: cue !== null && ["wait", "actions", "sound", "picture", "fade"].indexOf(cue.kind) >= 0
     /** What the cue plays or shows, whose fades and repeats are edited. */
     readonly property var media: cue === null ? null : (cue.kind === "sound" ? cue.sound : (cue.kind === "picture" ? cue.picture : null))
@@ -319,6 +320,51 @@ KanteCard {
                         inspector.saveIn("picture", { stage: model[index] })
                         inspector.refocus()
                     }
+                }
+
+                // The mood a mood cue sets, and its own fade (MOOD.6).
+                QQC2.Label {
+                    visible: inspector.isMood
+                    text: qsTr("Mood")
+                }
+                KanteComboBox {
+                    id: moodBox
+                    objectName: "moodBox"
+                    visible: inspector.isMood
+                    Layout.preferredWidth: Kirigami.Units.gridUnit * 12
+                    focusPolicy: Qt.NoFocus
+                    readonly property string mood: inspector.isMood && inspector.cue.mood ? inspector.cue.mood.mood : ""
+                    readonly property var ids: inspector.showView.moods.map(m => m.id)
+                    // A mood that is gone stays named, marked.
+                    readonly property bool missing: ids.indexOf(mood) < 0
+                    model: (missing ? [inspector.showView.moodName(mood)] : []).concat(inspector.showView.moods.map(m => m.name))
+                    currentIndex: missing ? 0 : ids.indexOf(mood)
+                    invalid: missing
+                    Accessible.name: qsTr("Mood the cue sets")
+                    onActivated: index => {
+                        const at = missing ? index - 1 : index
+                        if (at >= 0) {
+                            inspector.saveIn("mood", { mood: ids[at] })
+                        }
+                        inspector.refocus()
+                    }
+                }
+                QQC2.Label {
+                    visible: inspector.isMood
+                    text: qsTr("Fade")
+                }
+                DurationField {
+                    key: inspector.cue ? inspector.cue.id : ""
+                    visible: inspector.isMood
+                    Layout.preferredWidth: Kirigami.Units.gridUnit * 6
+                    optional: true
+                    ms: inspector.isMood && inspector.cue.mood && inspector.cue.mood.fade_ms !== undefined ? inspector.cue.mood.fade_ms : null
+                    maxMs: 600000
+                    Accessible.name: qsTr("Fade of the mood change")
+                    QQC2.ToolTip.visible: hovered
+                    QQC2.ToolTip.text: qsTr("How long the changing layers fade; empty: each layer's own, else the show's change time")
+                    onAccepted: inspector.refocus()
+                    onEdited: value => inspector.saveIn("mood", { fade_ms: value })
                 }
 
                 // What a fade fades (SND.6, VIS.4, VIS.7).

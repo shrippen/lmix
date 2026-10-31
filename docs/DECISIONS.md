@@ -6241,3 +6241,31 @@ Panik, Sammlung mit Oneshots, Zusammenstellen, Einklappen, Fortschritt,
 Tasten nach einem Klick auf einen Pad und nur wo ein Klick ginge, Sammlung
 einer anderen Show, leerer Pool), `moods_are_checked_before_they_are_kept` mit einer
 Show-Datei; Demo-Lauf `demo/start.sh de` mit Aufnahme der Seite.
+
+## 2026-10-31 — Stimmungen in der Show (MOOD Stufe 3a)
+
+**Anlass**: MOOD.6: Stimmungen einmal im Pool anlegen und in Cue-Listen
+beliebig oft verwenden. Stufe 3 ist geteilt: 3a bringt den Cue und den
+Reiter, 3b das Cue-Feld „Ebene“ (MOOD.5).
+
+**Entscheidung**:
+- Cue-Art `mood` mit Feld `mood` (`MoodCue`: `mood` als Id, wahlweise
+  `fade_ms`). Die Id statt des Namens, damit Umbenennen den Cue nicht
+  bricht. Ein Mood-Cue gibt beim Feuern `set_mood` aus wie der Weg über die
+  API (gleiche Prüfung, gleiche Blendzeiten, Herkunft „Stimmung“) und endet
+  sofort; scheitert er (Stimmung entfernt), meldet die Liste den Cue als
+  gescheitert. Kein eigener Weg im Cue-Runner, keine Dauer.
+- Eine Stimmung, die es nicht mehr gibt, prüft der Kern beim Anlegen des
+  Cues nicht (die Cue-Prüfung kennt die Show nicht); die Oberfläche zeigt
+  ihn als „Stimmung (entfernt)“ und markiert die Auswahl im Inspector.
+- Reiter Stimmungen als dritter Reiter der Seitenleiste: Basis, darunter
+  die Varianten; ein Klick setzt die Stimmung, die gesetzte ist markiert.
+  Im Bearbeiten legt „+“ einen Cue an, der sie setzt, nach dem gewählten
+  Cue (wie die Leiste „Hinzufügen“). Ziehen in die Liste folgt später.
+- Inspector: Auswahl der Stimmung und Blende (leer: die der Ebene, sonst
+  die Wechselzeit).
+
+**Geprüft**: Service-Test `a_mood_cue_sets_its_mood` (ohne Stimmung
+abgewiesen, GO setzt die Variante und ihr Licht), `tst_show_moods.qml`
+(Reihenfolge und Namen, Klick und „+“, im Show-Modus nur Setzen,
+Inspector mit entfernter Stimmung).

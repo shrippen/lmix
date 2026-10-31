@@ -1326,4 +1326,13 @@ DE = {
     'Same as the base': 'Wie die Basis',
     'Set %1': '%1 setzen',
     'Stops every cue and sound; the panic mood runs': 'Stoppt alle Cues und Klänge, die Panik-Stimmung läuft',
+    'Mood (gone)': 'Stimmung (entfernt)',
+    'Mood': 'Stimmung',
+    'Set mood': 'Stimmung setzen',
+    'No moods yet: they come on the Moods page.': 'Noch keine Stimmungen: Sie kommen auf der Seite Stimmungen.',
+    'Add a cue that sets %1': 'Cue hinzufügen, der %1 setzt',
+    'Add a cue that sets this mood, after the chosen cue': 'Einen Cue, der diese Stimmung setzt, nach dem gewählten Cue hinzufügen',
+    'Mood the cue sets': 'Stimmung, die der Cue setzt',
+    'Fade of the mood change': 'Blende des Stimmungswechsels',
+    "How long the changing layers fade; empty: each layer's own, else the show's change time": 'Wie lange die Ebenen blenden, die sich ändern; leer: die der Ebene, sonst die Wechselzeit der Show',
 }

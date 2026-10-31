@@ -98,6 +98,18 @@ pub enum CueKind {
     /// Shows `picture` on a stage (VIS.2); ends after `duration_ms` when
     /// set, a video with `end: stop` at its end, else when stopped.
     Picture,
+    /// Sets `mood` (MOOD.6) as `set_mood` does; ends at once.
+    Mood,
+}
+
+/// What a mood cue sets (MOOD.6).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct MoodCue {
+    /// A group (its base) or a variant of the show's moods.
+    pub mood: crate::MoodId,
+    /// Fade of the change; without, the layer's or the show's (MOOD.4).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fade_ms: Option<u32>,
 }
 
 /// What starts the next cue (CUE.3).
@@ -214,6 +226,9 @@ pub struct Cue {
     /// `picture`: what it shows.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub picture: Option<PictureCue>,
+    /// `mood`: what it sets.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mood: Option<MoodCue>,
 }
 
 impl Cue {
@@ -248,6 +263,7 @@ impl Cue {
             sound: None,
             fade: None,
             picture: None,
+            mood: None,
         }
     }
 
@@ -285,6 +301,7 @@ impl Cue {
                 Some(picture) => file_name(&picture.file).to_string(),
                 None => "Picture".into(),
             },
+            CueKind::Mood => "Mood".into(),
             CueKind::Fade => match self.fade.as_ref().map(|f| &f.target) {
                 Some(FadeTarget::Cue(cue)) => format!("Fade {cue}"),
                 Some(FadeTarget::Zone(zone)) => format!("Fade zone {zone}"),

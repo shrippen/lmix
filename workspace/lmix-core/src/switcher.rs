@@ -579,6 +579,7 @@ fn check_cue(cue: &Cue, depth: usize) -> Result<(), ActionError> {
         || !own(cue.sound.is_some(), CueKind::Sound)
         || !own(cue.fade.is_some(), CueKind::Fade)
         || !own(cue.picture.is_some(), CueKind::Picture)
+        || !own(cue.mood.is_some(), CueKind::Mood)
         || !own(
             cue.mode.is_some() || !cue.children.is_empty(),
             CueKind::Group,
@@ -598,6 +599,14 @@ fn check_cue(cue: &Cue, depth: usize) -> Result<(), ActionError> {
             }
         }
         CueKind::Note => {}
+        CueKind::Mood => match &cue.mood {
+            None => return bad("a mood cue needs a mood"),
+            Some(mood) => {
+                if let Some(ms) = mood.fade_ms {
+                    crate::playback::check_fade_time(ms)?;
+                }
+            }
+        },
         CueKind::Wait if cue.duration_ms.is_none() => return bad("a wait needs duration_ms"),
         CueKind::Wait => {}
         CueKind::Start => {
