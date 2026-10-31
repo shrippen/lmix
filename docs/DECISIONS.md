@@ -6292,7 +6292,9 @@ kommt.
   blendet aus, was die Stimmung dort hat (Blende der Ebene, sonst die
   Wechselzeit), stoppt einen anderen Cue, der die Ebene hatte, und trägt
   die Herkunft `cue` (`list`, `cue`) ein. Eine Ebene, die die Show nicht
-  hat, bleibt unberührt.
+  hat, bleibt unberührt (die Show-Prüfung warnt, `layer_gone`), ebenso
+  eine Ebene der Panik-Stimmung: ein Cue der Notfall-Liste feuert vor ihr,
+  und auf der Bühne gilt die Panik-Stimmung (MOOD.9).
 - Der nächste Stimmungswechsel stoppt den Cue (`cue_stop` mit seiner
   Ausblendung) und setzt den Inhalt der Stimmung, auch wenn es dieselbe
   Stimmung ist: verglichen wird mit dem, was läuft, und dort läuft der Cue.

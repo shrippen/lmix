@@ -142,7 +142,8 @@ impl MoodRunner {
     /// Cue `cue` of `list` fires and names `layer` (MOOD.5): what the
     /// mood has there fades out (the layer's fade, else the change time),
     /// a cue that had the layer stops; the layer is the cue's. A layer the
-    /// show does not have: nothing.
+    /// show does not have, or the panic mood's (an emergency cue fires
+    /// before it, MOOD.9): nothing.
     pub fn take(
         &mut self,
         moods: &Moods,
@@ -155,7 +156,11 @@ impl MoodRunner {
         };
         let mut out = Vec::new();
         let taken = LayerOrigin::Cue { list, cue };
-        if self.layers.get(&layer).is_some_and(|p| p.origin == taken) {
+        if self
+            .layers
+            .get(&layer)
+            .is_some_and(|p| p.origin == taken || p.origin == LayerOrigin::Panic)
+        {
             return out;
         }
         self.stop(layer, own.fade_ms.unwrap_or(moods.change_ms), &mut out);
@@ -446,6 +451,12 @@ mod tests {
             "no such layer"
         );
         assert_eq!(runner.now(&t.moods, 0).layers.len(), 1);
+        runner.panic(&t.moods);
+        assert!(
+            runner.take(&t.moods, t.light, list, second).is_empty(),
+            "the panic mood keeps its layer"
+        );
+        assert_eq!(runner.now(&t.moods, 0).layers[0].origin, LayerOrigin::Panic);
     }
 
     #[test]

@@ -480,6 +480,8 @@ pub enum CueProblem {
     MediaMissing { input: String },
     /// A mood cue's mood is not in the show (MOOD.6).
     MoodGone,
+    /// The mood layer a cue takes is not in the show (MOOD.5).
+    LayerGone,
 }
 
 impl CueProblem {
@@ -502,6 +504,7 @@ impl CueProblem {
                 format!("uses input {input}, whose media file is missing")
             }
             Self::MoodGone => "sets a mood that is not there".into(),
+            Self::LayerGone => "takes a mood layer that is not there".into(),
         }
     }
 }

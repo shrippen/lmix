@@ -42,7 +42,8 @@ KanteCard {
     readonly property bool isMood: cue !== null && cue.kind === "mood"
     /** The show's mood layers, for a cue that takes one (MOOD.5). */
     readonly property var moodLayers: showView.show && showView.show.moods && showView.show.moods.layers ? showView.show.moods.layers : []
-    readonly property bool takesLayer: cue !== null && moodLayers.length > 0 && ["sound", "picture", "actions"].indexOf(cue.kind) >= 0
+    // Also without layers when it names one, so a gone one can be taken off.
+    readonly property bool takesLayer: cue !== null && (moodLayers.length > 0 || !!cue.layer) && ["sound", "picture", "actions"].indexOf(cue.kind) >= 0
     readonly property bool timed: cue !== null && ["wait", "actions", "sound", "picture", "fade"].indexOf(cue.kind) >= 0
     /** What the cue plays or shows, whose fades and repeats are edited. */
     readonly property var media: cue === null ? null : (cue.kind === "sound" ? cue.sound : (cue.kind === "picture" ? cue.picture : null))

@@ -5122,7 +5122,7 @@
   <context>
     <name>ShowInspector</name>
     <message>
-      <location filename="../qml/ShowInspector.qml" line="+183" />
+      <location filename="../qml/ShowInspector.qml" line="+184" />
       <source>Basics</source>
       <translation>Grundlagen</translation>
     </message>
@@ -5790,6 +5790,11 @@
       <location line="+1" />
       <source>sets a mood that is not there</source>
       <translation>setzt eine Stimmung, die es nicht gibt</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>takes a mood layer that is not there</source>
+      <translation>übernimmt eine Stimmungsebene, die es nicht gibt</translation>
     </message>
     <message>
       <location line="+109" />

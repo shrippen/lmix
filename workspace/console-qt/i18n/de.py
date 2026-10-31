@@ -1340,4 +1340,5 @@ DE = {
     'Mood layer the cue takes': 'Stimmungsebene, die der Cue übernimmt',
     'When the cue starts, the mood fades out on this layer; the next mood change stops the cue': 'Startet der Cue, blendet die Stimmung auf dieser Ebene aus; der nächste Stimmungswechsel stoppt den Cue',
     'Cue (gone)': 'Cue (entfernt)',
+    'takes a mood layer that is not there': 'übernimmt eine Stimmungsebene, die es nicht gibt',
 }
