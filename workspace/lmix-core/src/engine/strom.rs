@@ -3486,6 +3486,7 @@ mod tests {
                 let encoder = strom_types::stats::VideoEncoderStats {
                     frames: 25 * n,
                     encode_time_ns: 100_000_000 * n,
+                    hardware: false,
                 };
                 let queue = strom_types::stats::InterInputStats {
                     queued_buffers: 2,

@@ -236,6 +236,7 @@ DE = {
     '%1 · lost %2 · dropped %3 · %4': '%1 · verloren %2 · verworfen %3 · %4',
     '%1 of %2 ms': '%1 von %2 ms',
     '%1 ms per frame, %2 %': '%1 ms je Bild, %2 %',
+    'hardware, %1 ms latency': 'Hardware, %1 ms Latenz',
     'buffer %1 · frames dropped %2 · encoder %3': 'Puffer %1 · Bilder verworfen %2 · Encoder %3',
     'Buffer': 'Puffer',
     'Frames dropped': 'Bilder verworfen',

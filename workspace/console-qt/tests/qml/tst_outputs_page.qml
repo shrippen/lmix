@@ -143,6 +143,17 @@ TestCase {
         fakeShell.backend.links = links({ buffer_ms: 0, buffer_max_ms: 500, frames_dropped: 0,
             encode_ms: 30, encoder_percent: 95 })
         compare(load.valueColor, KanteStyle.warningColor)
+        // A GPU encoder's 140 % is latency, it keeps up: no warning.
+        fakeShell.backend.links = links({ buffer_ms: 0, buffer_max_ms: 500, frames_dropped: 0,
+            encode_ms: 46, encoder_percent: 140, hardware_encoder: true })
+        compare(load.valueColor, KanteStyle.textColor)
+        verify(load.value.endsWith("encoder " + Texts.encoderLoad({ encode_ms: 46, encoder_percent: 140,
+            hardware_encoder: true })), load.value)
+        verify(load.value.indexOf("%") < 0, "no busy share for a GPU encoder: " + load.value)
+        // No buffer limit is no warning.
+        fakeShell.backend.links = links({ buffer_ms: 40, buffer_max_ms: 0, frames_dropped: 0,
+            encode_ms: 2, encoder_percent: 6 })
+        compare(load.valueColor, KanteStyle.textColor)
     }
 
     function collect(item, name, into) {

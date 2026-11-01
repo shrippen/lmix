@@ -7541,12 +7541,12 @@
     <message>
       <location line="+1" />
       <location line="+63" />
-      <location line="+219" />
+      <location line="+227" />
       <source>NDI</source>
       <translation>NDI</translation>
     </message>
     <message>
-      <location line="-281" />
+      <location line="-289" />
       <source>WHIP (browser, OBS)</source>
       <translation>WHIP (Browser, OBS)</translation>
     </message>
@@ -7718,12 +7718,12 @@
     </message>
     <message>
       <location line="+1" />
-      <location line="+217" />
+      <location line="+225" />
       <source>Recording</source>
       <translation>Aufnahme</translation>
     </message>
     <message>
-      <location line="-215" />
+      <location line="-223" />
       <source>Screen: window</source>
       <translation>Bildschirm: Fenster</translation>
     </message>
@@ -7996,17 +7996,22 @@
       <translation>%1 von %2 ms</translation>
     </message>
     <message>
-      <location line="+6" />
+      <location line="+11" />
+      <source>hardware, %1 ms latency</source>
+      <translation>Hardware, %1 ms Latenz</translation>
+    </message>
+    <message>
+      <location line="+1" />
       <source>%1 ms per frame, %2 %</source>
       <translation>%1 ms je Bild, %2 %</translation>
     </message>
     <message>
-      <location line="+5" />
+      <location line="+4" />
       <source>buffer %1 · frames dropped %2 · encoder %3</source>
       <translation>Puffer %1 · Bilder verworfen %2 · Encoder %3</translation>
     </message>
     <message>
-      <location line="+25" />
+      <location line="+28" />
       <source>%1 s, on air in %2 s</source>
       <translation>%1 s, auf Sendung in %2 s</translation>
     </message>

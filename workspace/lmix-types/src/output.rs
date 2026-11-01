@@ -640,6 +640,10 @@ pub struct OutputLoad {
     /// longer keeps up. Exact for software encoders; for a hardware
     /// encoder with several frames in flight its latency, so too high.
     pub encoder_percent: Option<u32>,
+    /// The encoder runs on dedicated hardware (GPU): `encode_ms` is its
+    /// latency, `encoder_percent` no busy share.
+    #[serde(default)]
+    pub hardware_encoder: bool,
 }
 
 /// Link health of a running SRT output.

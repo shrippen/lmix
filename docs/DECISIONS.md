@@ -7976,6 +7976,20 @@ Encoder bei 90 % ist (verworfene Bilder zählen seit dem Start und sagen
 nichts über jetzt). `/metrics`: `lmix_output_buffer_ms`,
 `lmix_output_frames_dropped_total`, `lmix_output_encoder_percent`.
 
+**GPU-Encoder** (Review #234): lmix nimmt Hardware, wo es welche gibt
+(`encoder_preference: auto`). strom meldet `hardware_encoder` (`Hardware` in
+der Element-Klasse, wie bei Decodern). Die Console zeigt dann „Hardware, n ms
+Latenz“ ohne Anteil, die Warnfarbe folgt nur dem Puffer, `/metrics` lässt
+`lmix_output_encoder_percent` weg; sonst stünde ein NVENC mit zwei Bildern in
+Arbeit dauernd gelb, obwohl er mitkommt.
+
+**Last nur mit Rate** (Review #234): Bei RTMP und Aufnahmen kommt die Last mit
+der Rate, nicht ohne sie. Ohne Rate sind nur die erste Lesung (eine Sekunde)
+und Aufnahmen ohne Byte-Zähler (MKV über `splitmuxsink` vor GStreamer 1.26).
+Für die alte MKV-Aufnahme bleibt es bei der eingestellten Rate ohne Last:
+`OutputStats` mit gemessener Rate als Pflichtfeld bleibt so, die Console
+zeigt eine fehlende Messung weiter als eingestellte Rate. Bewusst so.
+
 **Nicht gemessen**: GPU-Last je Ausgang (siehe Option 2), Bildumwandlung vor
 dem Encoder (gehört nicht zur Encoder-Zeit, zeigt sich aber im Puffer).
 

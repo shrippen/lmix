@@ -447,10 +447,10 @@ fn render_output_load(out: &mut String, outputs: &[(String, &str, &OutputStats)]
         out,
         "lmix_output_encoder_percent",
         "gauge",
-        "Share of real time the output's encoder is busy.",
+        "Share of real time the output's software encoder is busy (GPU encoders: latency, left out).",
     );
     for (number, name, load) in &loads {
-        let Some(percent) = load.encoder_percent else {
+        let Some(percent) = load.encoder_percent.filter(|_| !load.hardware_encoder) else {
             continue;
         };
         f.sample(
@@ -611,6 +611,7 @@ mod tests {
             frames_dropped: 3,
             encode_ms: Some(8.0),
             encoder_percent: percent,
+            hardware_encoder: false,
         };
         let stats = |percent| OutputStats {
             output: id,
@@ -639,6 +640,13 @@ mod tests {
         }
         // Before the encoder's second reading: no load, no sample.
         let text = render(&snapshot(None), None);
+        assert!(!text.contains("lmix_output_encoder_percent{"), "{text}");
+        // A GPU encoder's share is latency: left out.
+        let mut gpu = snapshot(Some(140));
+        if let Some(load) = gpu.outputs[0].load.as_mut() {
+            load.hardware_encoder = true;
+        }
+        let text = render(&gpu, None);
         assert!(!text.contains("lmix_output_encoder_percent{"), "{text}");
     }
 }

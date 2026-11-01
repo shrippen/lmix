@@ -76,8 +76,9 @@ pub fn output_load(
             .map(|b| b.stats.as_slice())
     };
     let queue = InterInputStats::from_statistics(block(picture)?)?;
-    let (encode_ms, encoder_percent) = block(encoder)
-        .and_then(VideoEncoderStats::from_statistics)
+    let timed = block(encoder).and_then(VideoEncoderStats::from_statistics);
+    let hardware_encoder = timed.is_some_and(|e| e.hardware);
+    let (encode_ms, encoder_percent) = timed
         .map(|e| readings.load(id, e, Instant::now()))
         .unwrap_or_default();
     let max_ms = queue.max_time_ns / NS_PER_MS;
@@ -88,6 +89,7 @@ pub fn output_load(
         frames_dropped: queue.dropped_buffers,
         encode_ms,
         encoder_percent,
+        hardware_encoder,
     })
 }
 
@@ -99,6 +101,7 @@ mod tests {
         VideoEncoderStats {
             frames,
             encode_time_ns: ms * NS_PER_MS,
+            hardware: false,
         }
     }
 
@@ -174,8 +177,33 @@ mod tests {
                 frames_dropped: 7,
                 encode_ms: None,
                 encoder_percent: None,
+                hardware_encoder: false,
             })
         );
+    }
+
+    /// A GPU encoder says so: its time per frame is latency.
+    #[test]
+    fn a_hardware_encoder_is_marked() {
+        let queue = InterInputStats::default();
+        let gpu = VideoEncoderStats {
+            hardware: true,
+            ..encoder(1, 1)
+        };
+        let stats = [
+            block("pgm", queue.to_statistics()),
+            block("enc", gpu.to_statistics()),
+        ];
+        let mut readings = EncoderReadings::default();
+        let load = output_load(
+            &stats,
+            "pgm",
+            "enc",
+            OutputId::new(),
+            Framerate::Fps25,
+            &mut readings,
+        );
+        assert!(load.is_some_and(|l| l.hardware_encoder));
     }
 
     #[test]

@@ -297,12 +297,17 @@ QtObject {
     function outputBuffer(load) {
         return qsTr("%1 of %2 ms").arg(load.buffer_ms).arg(load.buffer_max_ms)
     }
-    /** The encoder's time per frame and busy share; "–" before its second reading. */
+    /**
+     * The encoder's time per frame and busy share; "–" before its second
+     * reading. A hardware encoder's time is its latency, no busy share.
+     */
     function encoderLoad(load) {
         if (load.encoder_percent === null || load.encoder_percent === undefined)
             return "–"
-        return qsTr("%1 ms per frame, %2 %").arg(Number(load.encode_ms).toLocaleString(Qt.locale(), "f", 1))
-            .arg(load.encoder_percent)
+        const ms = Number(load.encode_ms).toLocaleString(Qt.locale(), "f", 1)
+        if (load.hardware_encoder)
+            return qsTr("hardware, %1 ms latency").arg(ms)
+        return qsTr("%1 ms per frame, %2 %").arg(ms).arg(load.encoder_percent)
     }
     /** An output's load in one line: buffer, frames dropped, encoder. */
     function loadDetail(load) {
@@ -310,11 +315,14 @@ QtObject {
             .arg(load.frames_dropped).arg(encoderLoad(load))
     }
     /**
-     * The output falls behind now: its buffer half full or its encoder near
-     * real time. Dropped frames count since the start, so they do not say.
+     * The output falls behind now: its buffer half full or its software
+     * encoder near real time (a hardware encoder's share is latency, the
+     * buffer tells for it). Dropped frames count since the start, so they
+     * do not say.
      */
     function loadStrained(load) {
-        return 2 * load.buffer_ms >= load.buffer_max_ms || (load.encoder_percent || 0) >= 90
+        const buffer = load.buffer_max_ms > 0 && 2 * load.buffer_ms >= load.buffer_max_ms
+        return buffer || (!load.hardware_encoder && (load.encoder_percent || 0) >= 90)
     }
 
     /** Seconds until a running stream's delayed picture reaches its
