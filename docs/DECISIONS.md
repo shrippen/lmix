@@ -8457,8 +8457,8 @@ Branch `vm-paused-clip`, nur Doku; strom unverändert (Submodul bleibt auf `dev`
 
 ## 2026-11-01 — Mischer lässt verspätete Bilder aus (strom, Self-QoS am Compositor)
 
-Branch `mixer-self-qos`, strom #73 (Upstream-Branch `mixer-catch-up` auf Eyevinn `main` 4479d8c, 8a7694f;
-Submodul auf `lmix-mixer-self-qos`, 0694e39 = `dev` + Fix). Folgt auf „Mischer hinter der Uhr“ (1.11.).
+Branch `mixer-self-qos`, strom #73 (auf `dev` gemergt, 234f2be; Upstream-Branch `mixer-catch-up` auf Eyevinn `main` 4479d8c, 8a7694f,
+als Eyevinn #1203 eingereicht). Folgt auf „Mischer hinter der Uhr“ (1.11.).
 
 - **Kontext:** Schafft die CPU die Bildrate nicht, rechnet der Live-Compositor trotzdem jedes
   Ausgabebild und läuft immer weiter hinter der Uhr her; lokal auf zwei belegten Kernen bis 62 s.
