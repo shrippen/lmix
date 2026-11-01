@@ -13,6 +13,8 @@ KanteDialog {
 
     required property var inputs
     required property var outputs
+    /** Output targets of this machine, for OSC actions. */
+    property var targets: []
     /** Shows the label field. */
     property bool labelled: false
     /** OK needs at least one action (cues do). */
@@ -64,6 +66,7 @@ KanteDialog {
                 Layout.fillWidth: true
                 inputs: dialog.inputs
                 outputs: dialog.outputs
+                targets: dialog.targets
             }
         }
     }

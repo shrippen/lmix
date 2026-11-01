@@ -55,12 +55,12 @@ const MACHINE_INTERVAL: std::time::Duration = std::time::Duration::from_secs(2);
 /// Silence: also stands in for "no reading" (JSON has no infinity).
 pub const LEVEL_FLOOR_DB: f32 = -100.0;
 
-/// Requests waiting for one address of an output target, each with when
+/// Messages waiting for one address of an output target, each with when
 /// it was sent and where its answer goes.
 type TargetQueue = tokio::sync::mpsc::UnboundedSender<TargetJob>;
 type TargetJob = (
     crate::targets::TargetConfig,
-    crate::targets::Request,
+    crate::targets::Message,
     Instant,
     tokio::sync::oneshot::Sender<Result<(), String>>,
 );
@@ -307,15 +307,15 @@ impl Service {
         }
     }
 
-    /// Send `request` to `target` in the background; how it went is an
-    /// event, the caller never waits (EXT.3). Requests to one address
+    /// Send `message` to `target` in the background; how it went is an
+    /// event, the caller never waits (EXT.3, EXT.6). Messages to one address
     /// arrive in the order they were sent: the panic mood's light comes
     /// after the emergency list's (MOOD.9). A backup address that does not
     /// answer holds up only itself.
     fn send_to_target(
         self: &Arc<Self>,
         target: crate::targets::TargetConfig,
-        request: crate::targets::Request,
+        message: crate::targets::Message,
         out: Outbound,
     ) {
         if out == Outbound::Locked {
@@ -325,7 +325,7 @@ impl Service {
             });
             return;
         }
-        let answers = match crate::targets::sendable(&target) {
+        let answers = match crate::targets::sendable(&target, message.speech()) {
             Err(reason) => vec![Err(reason)],
             Ok(()) => {
                 let now = Instant::now();
@@ -335,7 +335,7 @@ impl Service {
                     .iter()
                     .map(|address| {
                         let (answer, answered) = tokio::sync::oneshot::channel();
-                        let job = (target.clone(), request.clone(), now, answer);
+                        let job = (target.clone(), message.clone(), now, answer);
                         self.queue(&mut queues, &target.name, address, job);
                         Ok(answered)
                     })
@@ -393,7 +393,7 @@ impl Service {
         let http = self.target_http.clone();
         let address = address.to_string();
         tokio::spawn(async move {
-            while let Some((target, request, sent, answer)) = jobs.recv().await {
+            while let Some((target, message, sent, answer)) = jobs.recv().await {
                 // Waited past its own limit behind one that did not answer:
                 // too late to matter, and it would hold up the next.
                 let limit = std::time::Duration::from_millis(u64::from(target.timeout_ms));
@@ -403,7 +403,14 @@ impl Service {
                         lmix_types::srt::redact_url(&address)
                     ))
                 } else {
-                    crate::targets::send_one(&http, &target, &address, &request).await
+                    match &message {
+                        crate::targets::Message::Http(request) => {
+                            crate::targets::send_one(&http, &target, &address, request).await
+                        }
+                        crate::targets::Message::Osc(packet) => {
+                            crate::osc_out::send(&target, &address, packet).await
+                        }
+                    }
                 };
                 let _ = answer.send(result);
             }
@@ -2020,7 +2027,7 @@ impl Service {
                     headers: headers.clone(),
                     body: body.clone(),
                 };
-                self.send_to_target(config, request, out);
+                self.send_to_target(config, crate::targets::Message::Http(request), out);
                 return Ok(self.state().await);
             }
             Action::HaService {
@@ -2037,7 +2044,21 @@ impl Service {
                 }
                 let request =
                     crate::targets::ha_request(service, entity.as_deref(), data.as_ref())?;
-                self.send_to_target(config, request, out);
+                self.send_to_target(config, crate::targets::Message::Http(request), out);
+                return Ok(self.state().await);
+            }
+            Action::OscSend {
+                target,
+                address,
+                args,
+            } => {
+                let (config, out) = self.target_and_out(target).await?;
+                if self.stale(origin) {
+                    return Ok(self.state().await);
+                }
+                let args: Vec<crate::osc::Arg> = args.args().iter().map(Into::into).collect();
+                let packet = crate::osc::encode_args(address.as_str(), &args);
+                self.send_to_target(config, crate::targets::Message::Osc(packet), out);
                 return Ok(self.state().await);
             }
             // REC.8: written by the engine, without the switcher locked
@@ -4571,6 +4592,86 @@ mod tests {
                 .await,
             Err(ActionError::UnknownTarget { .. })
         ));
+    }
+
+    /// EXT.6: an actions cue sends its OSC message to every address of an
+    /// OSC target; HTTP to it fails as an event, never the cue.
+    #[tokio::test]
+    async fn an_osc_cue_reaches_its_target() {
+        let socket = tokio::net::UdpSocket::bind("127.0.0.1:0").await.unwrap();
+        let service = Service::new(4, Arc::new(NullEngine::default()), None);
+        let mut events = service.subscribe();
+        service
+            .handle(Action::SetTarget {
+                target: lmix_types::TargetSpec {
+                    name: "Pult".into(),
+                    kind: lmix_types::TargetKind::OscUdp,
+                    addresses: vec![socket.local_addr().unwrap().to_string()],
+                    secret: None,
+                    timeout_ms: 2000,
+                },
+            })
+            .await
+            .unwrap();
+        let go: Action = serde_json::from_value(serde_json::json!({
+            "action": "osc_send", "target": "Pult",
+            "address": "/eos/cue/1/fire", "args": "5 0.5 \"Szene 2\" true"
+        }))
+        .unwrap();
+        let http = Action::HttpRequest {
+            target: "Pult".into(),
+            method: lmix_types::HttpMethod::Post,
+            path: String::new(),
+            headers: Default::default(),
+            body: None,
+        };
+        service
+            .handle(Action::AddCueList {
+                name: "Show".into(),
+                cues: vec![lmix_types::Cue::actions("Licht", vec![go, http])],
+                source: None,
+            })
+            .await
+            .unwrap();
+        service.handle(Action::CueGo { list: None }).await.unwrap();
+
+        let mut got = [0u8; 256];
+        let (n, _) = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            socket.recv_from(&mut got),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        let message = &crate::osc::decode(&got[..n])[0];
+        assert_eq!(message.address, "/eos/cue/1/fire");
+        use crate::osc::Arg;
+        assert_eq!(
+            message.args,
+            [
+                Arg::Int(5),
+                Arg::Float(0.5),
+                Arg::Str("Szene 2".into()),
+                Arg::Int(1)
+            ]
+        );
+        let mut results = Vec::new();
+        while results.len() < 2 {
+            let event = tokio::time::timeout(std::time::Duration::from_secs(5), events.recv())
+                .await
+                .unwrap();
+            if let Ok(Event::Target { result, .. }) = event {
+                results.push(result);
+            }
+        }
+        assert!(results.contains(&lmix_types::TargetResult::Ok));
+        assert!(results.contains(&lmix_types::TargetResult::Failed {
+            reason: "Pult speaks OSC: use osc_send".into()
+        }));
+        let bad = serde_json::from_value::<Action>(serde_json::json!({
+            "action": "osc_send", "target": "Pult", "address": "eos/go"
+        }));
+        assert!(bad.is_err(), "the address starts with /");
     }
 
     /// MOOD.9: requests to one target arrive in order, even when the first

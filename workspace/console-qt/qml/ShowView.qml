@@ -74,6 +74,7 @@ ColumnLayout {
         case "start_list_gone": return qsTr("starts a cue list that is not there")
         case "target_gone": return qsTr("sends to target %1, which this machine does not have").arg(w.target)
         case "target_unreached": return qsTr("sends to target %1, which did not answer: %2").arg(w.target).arg(w.reason)
+        case "target_mismatch": return qsTr("sends to target %1, which speaks another protocol (HTTP or OSC)").arg(w.target)
         case "input_gone": return qsTr("uses input %1, which is not there").arg(w.input)
         case "media_missing": return qsTr("uses input %1, whose media file is missing").arg(w.input)
         case "mood_gone": return qsTr("sets a mood that is not there")
@@ -355,6 +356,7 @@ ColumnLayout {
             act: view.act
             inputs: view.show ? view.show.inputs : []
             outputs: view.show ? view.show.outputs : []
+            targets: view.show && view.show.targets ? view.show.targets : []
             lists: view.allLists
             onClosed: view.forceActiveFocus()
         }

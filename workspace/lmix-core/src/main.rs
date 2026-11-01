@@ -32,6 +32,7 @@ mod metrics;
 mod midi;
 mod moods;
 mod osc;
+mod osc_out;
 mod osc_subs;
 mod package;
 mod patch;

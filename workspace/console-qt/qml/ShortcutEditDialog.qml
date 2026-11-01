@@ -16,6 +16,8 @@ KanteDialog {
     required property var core
     required property var inputs
     required property var outputs
+    /** Output targets of this machine, for OSC actions. */
+    property var targets: []
     /** Shortcut being edited; `null` adds one. Set before `open()`. */
     property var shortcut: null
 
@@ -136,6 +138,7 @@ KanteDialog {
                 Layout.fillWidth: true
                 inputs: dialog.inputs
                 outputs: dialog.outputs
+                targets: dialog.targets
             }
         }
     }

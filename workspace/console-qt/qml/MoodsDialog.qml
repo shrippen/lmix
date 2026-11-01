@@ -509,6 +509,7 @@ KanteDialog {
         anchors.centerIn: parent
         inputs: dialog.show && dialog.show.inputs ? dialog.show.inputs : []
         outputs: dialog.show && dialog.show.outputs ? dialog.show.outputs : []
+        targets: dialog.show && dialog.show.targets ? dialog.show.targets : []
         needsAction: true
         title: qsTr("Actions of the layer")
         onDone: (label, actions) => {
