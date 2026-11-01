@@ -292,6 +292,45 @@ TestCase {
         compare(toasts.column.parent, toasts)
     }
 
+    // The window grows with a dialog open: Qt resizes the overlay before the
+    // dimmed ground, so `dimmed` blinks to 0 for a moment; the toasts stay
+    // above the dialog, never moved or the layer opened anew.
+    function test_the_toasts_stay_raised_while_the_window_grows() {
+        const layer = findChild(shell, "toastLayer")
+        const toasts = layer.parent
+        shell.openShellDialog("resetSettings")
+        tryVerify(() => layer.opened)
+        const holder = toasts.column.parent
+        verify(holder !== toasts)
+        let moves = 0
+        let toggles = 0
+        const moved = () => moves++
+        const toggled = () => toggles++
+        toasts.column.parentChanged.connect(moved)
+        layer.openedChanged.connect(toggled)
+        const width = shell.width
+        const height = shell.height
+        for (let i = 1; i <= 5; i++) {
+            shell.width = width + 40 * i
+            shell.height = height + 30 * i
+            wait(0)
+        }
+        wait(50)
+        shell.width = width
+        shell.height = height
+        wait(50)
+        toasts.column.parentChanged.disconnect(moved)
+        layer.openedChanged.disconnect(toggled)
+        compare(moves, 0)
+        compare(toggles, 0)
+        verify(layer.opened)
+        compare(toasts.column.parent, holder)
+        const dialog = findChild(shell, "resetSettingsDialog")
+        dialog.close()
+        tryVerify(() => !layer.visible)
+        compare(toasts.column.parent, toasts)
+    }
+
     function test_the_small_program_only_without_one_elsewhere() {
         shell.showPage("show")
         verify(!shell.programElsewhere)

@@ -77,7 +77,8 @@ Item {
         let n = 0
         // An overlay not laid out yet (size 0) has no ground to look for.
         for (const item of overlay && overlay.width > 0 && overlay.height > 0 ? overlay.children : []) {
-            if (item.visible && item.width >= overlay.width && item.height >= overlay.height
+            // Null for a moment while a window is torn down.
+            if (item && item.visible && item.width >= overlay.width && item.height >= overlay.height
                     && !String(item).startsWith("QQuickPopupItem")) {
                 n++
             }
@@ -86,14 +87,19 @@ Item {
     }
     /** The toasts are raised above the dialogs. */
     readonly property bool raised: dimmed > 0
+    // `dimmed` the layer was last opened or closed for.
+    property int shownFor: 0
     // Opened again for each dialog, after it has opened: of popups at the
     // same height the one opened last is on top, so a dialog's own lists
-    // and menus opened later still cover the toasts.
+    // and menus opened later still cover the toasts. Only for a real
+    // change: while the window grows, Qt resizes the overlay before the
+    // grounds, so `dimmed` drops to 0 and back within each step.
     onDimmedChanged: Qt.callLater(() => {
         // Gone with its window meanwhile.
-        if (!layer) {
+        if (!layer || toasts.dimmed === toasts.shownFor) {
             return
         }
+        toasts.shownFor = toasts.dimmed
         layer.close()
         if (toasts.raised) {
             layer.open()

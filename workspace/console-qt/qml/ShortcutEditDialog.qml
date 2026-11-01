@@ -67,11 +67,16 @@ KanteDialog {
                     Layout.fillWidth: true
                     placeholderText: qsTr("Label")
                 }
-                // Press a key to set it; Escape clears.
+                // Press a key to set it; Escape clears. Tab and Backtab move
+                // the focus on as anywhere else, never recorded.
                 KanteButton {
                     id: keyButton
+                    objectName: "shortcutKeyButton"
                     property string sequence: ""
                     property bool listening: false
+                    function moves(event) {
+                        return event.key === Qt.Key_Tab || event.key === Qt.Key_Backtab
+                    }
                     text: listening ? qsTr("Press a key…") : (sequence || qsTr("No key"))
                     onClicked: {
                         listening = true
@@ -80,9 +85,9 @@ KanteDialog {
                     onActiveFocusChanged: if (!activeFocus) listening = false
                     // Recording takes every key, also one an application
                     // shortcut has (Ctrl+Z while a removal's toast shows).
-                    Keys.onShortcutOverride: event => event.accepted = listening
+                    Keys.onShortcutOverride: event => event.accepted = listening && !moves(event)
                     Keys.onPressed: event => {
-                        if (!listening)
+                        if (!listening || moves(event))
                             return
                         event.accepted = true
                         if (event.key === Qt.Key_Escape) {
