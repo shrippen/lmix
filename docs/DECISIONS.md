@@ -8225,3 +8225,37 @@ strom `dev` gemergt, daran hängt das Submodul).
   pausierter oder am Ende gehaltener Clip wiederholt sein letztes Bild (`hold_still`), liefert
   also auch nach dem Anhängen wieder ein Bild. Beleg: strom-Test
   `test_reattached_tap_does_not_serve_a_picture_from_before` (vorher altes JPEG, jetzt Timeout).
+
+## 2026-11-01 — Vorschaubild-Abgriff: Höchstalter in strom
+
+Branch `strom-tap-age`, strom #68 `thumbnail-max-age` (Submodul auf `lmix-tap-age`, `dev` + Fix).
+Folgt aus dem offenen Punkt von „Höchstalter des gehaltenen Bilds“ (lmix #238, Branch `picture-age`).
+
+**Kontext:** Solange ein Abgriff angehängt ist und abgefragt wird, gab strom sein letztes Bild aus,
+egal wie alt (`ThumbnailTap::get_thumbnail`; das Feld `cache_ttl` war dafür gedacht, aber
+ungenutzt). Hört eine Quelle auf, Bilder zu schicken (SRT-Eingang bricht ab, Live-Quelle steht),
+sah ihr letztes Bild für strom-Frontend, API und lmix-core wie ein laufendes aus; lmix-core kann
+das nicht erkennen, sein eigenes Höchstalter (5 s) zählt ab dem Eingang eines scheinbar frischen
+Bilds.
+
+**Entscheidung:** `cache_ttl` wird zu `max_age`, Standard 3 s. Älter antwortet `get_thumbnail` mit
+`Timeout` (API 504, lmix-core `NotReady`/503), wie vor dem ersten Bild. 3 s sind drei Abgriffe bei
+stroms Takt von einem Bild je Sekunde: ein oder zwei verspätete Abgriffe unter Last lassen das Bild
+nicht blinken. Quellen, die stillstehen, aber weiter Bilder schicken, bleiben frisch: Standbilder
+(`imagefreeze`, im Bildtakt), ein pausierter oder am Ende gehaltener Clip (`hold_still`, im
+Bildtakt), Program (der Compositor gibt immer aus). Ein geparkter Stinger schickt nichts und
+antwortet nach 3 s mit 504 (nach dem Wiederanhängen hatte er schon vorher kein Bild). Eine Quelle,
+die weiter Bilder mit eingefrorenem Inhalt schickt, bleibt frisch; das kann strom nicht sehen.
+Kosten: ein Vergleich je Abfrage, kein Timer. Schlimmster Fall für `/api/pictures` jetzt etwa
+8 s (3 s strom + 5 s lmix-core) statt unbegrenzt.
+
+**Verworfen:**
+- `cache_ttl` mit seinen 500 ms nutzen: kürzer als der Abgriff-Takt (1 s), jedes zweite Abfragen
+  wäre 504.
+- Höchstalter fest aus `update_interval` ableiten (etwa dreifach): undurchsichtiger als ein eigenes
+  Feld, und `update_interval` 0 (Tests) ergäbe 0.
+- Bild beim Überschreiten verwerfen: unnötig, die Prüfung bei der Abfrage reicht; ein neues Bild
+  ersetzt es ohnehin.
+
+Beleg: strom-Test `test_tap_does_not_serve_a_picture_after_frames_stop` (vorher altes JPEG nach
+1,5 s ohne Bild, jetzt Timeout; eine laufende Quelle bleibt über `max_age` hinaus ohne Lücke).
