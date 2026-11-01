@@ -7927,6 +7927,56 @@ nächste Schnitt 0,02 s, Abmelden gesendet, keine Daten hinaus; SRT mit
 prüft beide Fälle (`late_stream`: auf Sendung erst nach der Zeile `data`
 des Relais, Countdown nach `publish` und ohne `data`).
 
+## 2026-11-01 — vm-check: Abgriff hängt, Flow-Speichern scheitert
+
+Vier Fehlschläge von `vm-check` in einer Nacht, jeder an anderer Stelle,
+jeder im zweiten Versuch grün. Zwei echte Fehler in strom, beide auch
+upstream (`main` 4479d8c) vorhanden.
+
+- **Abgriff hängt für immer (`gst/thumbnail_tap.rs`):** Das Abhängen eines
+  unbenutzten Vorschaubild-Zweigs (nach 10 s, Aufgabe alle 5 s) hielt die
+  Zustandssperre des Abgriffs, während es den Zweig auf NULL setzte. Das
+  wartet auf den Streaming-Thread des Zweigs; steckte darin noch ein Bild,
+  wartete der im Appsink-Callback auf dieselbe Sperre. Verklemmt: der
+  Abgriff, die Sperre aller Abgriffe der Pipeline, ein Tokio-Worker, und
+  jede Bildabfrage dazu hängt mit gehaltener `pipelines`-Lesesperre; der
+  nächste Start oder Stopp eines Flows wartet dahinter, dann die ganze API.
+  Passt zu „held playlist still moves“ (Lauf 41273878525: Bild von Clips
+  20 s lang nicht zu haben, strom sonst erreichbar) und „program lost the
+  logo while the source was gone“ (41277478103: Program-Abgriff und
+  `/api/flows` antworteten gar nicht mehr, HTTP 000). **Entscheidung:** den
+  Zweig unter der Sperre aus dem Zustand nehmen, ohne sie anhalten; eine
+  eigene Sperre ordnet An- und Abhängen (sonst fordert ein neues Anhängen
+  das Tee-Pad an, das das Abhängen noch freigibt). Verworfen: im Callback
+  `try_lock` (verliert Bilder, lässt den Fehler im Code). Beleg: strom-Test
+  `test_detaching_never_waits_on_the_branch`, vorher 5 von 5 Läufen beim
+  ersten Abhängen verklemmt.
+- **„Failed to save flow“, IO error os error 2 (`storage/json_storage.rs`):**
+  Flows werden gleichzeitig gespeichert (die Sperren je Flow ordnen nur
+  denselben Flow). Jeder Schreiber las alle Flows, änderte sie und ersetzte
+  die Datei über dieselbe Temp-Datei `flows.tmp`; einer benannte die
+  Temp-Datei des anderen weg (ENOENT, 500 bei `add_input`, Lauf 41277936260),
+  oder der spätere Schreiber verlor den Flow des früheren. **Entscheidung:**
+  eine Schreibsperre über das ganze Lesen-Ändern-Schreiben. Verworfen: eine
+  Temp-Datei je Schreiber (behebt ENOENT, nicht den verlorenen Flow). Beleg:
+  `test_concurrent_saves_keep_every_flow` (32 Flows auf einmal), vorher in
+  jedem Lauf `Io(NotFound)`.
+- **Nicht geklärt: „logo not on program before the loss“** (41284928306).
+  strom antwortete; das Program-Bild blieb 20 s schwarz, obwohl das Logo als
+  Input wieder lief (eigenes Bild blau). Der Logo-Slot kam um 07:34:38.66
+  zurück, 1,2 s später schaltete der Test den Signalverlust auf „black“
+  (400 ms, `repeat-after-eos` aus). Dasselbe Muster wie das offene „program
+  black after the source came back“: neue Bilder des neu gestarteten Slots
+  erreichen das Compositor-Pad nicht (oder zu spät). Kein Test-Fehler, nicht
+  gelockert; ein Nachweis braucht einen Lauf mit `STROM_GST_DEBUG=aggregator:5`
+  unter Last (todo).
+- **Nebenbefund, unverändert:** Ein abgehängter Abgriff behält sein letztes
+  JPEG und liefert es beim nächsten Anhängen sofort wieder aus, auch wenn es
+  Minuten alt ist. „held playlist still moves“ besteht darum meist mit zwei
+  gleichen alten Bildern, nicht mit dem gehaltenen. Ob der Abgriff beim
+  Abhängen sein Bild verwirft, ist eine Entscheidung für die Console (kurz
+  kein Bild statt eines alten), todo.
+
 ## 2026-11-01 — Ausgänge: Puffer und Encoder-Last (STR.7)
 
 **Kontext**: STR.7 verlangt im Status eines Streams Puffer, verworfene
