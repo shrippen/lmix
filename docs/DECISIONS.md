@@ -7669,11 +7669,18 @@ eigenen `onEditingFinished`, Escape und das Wiederherstellen der Bindung
 bleiben wie sie waren (der Schnitt setzt `text` und hebt damit eine Bindung
 auf, die Stellen binden beim Fertigstellen neu). Kein Kante-Baustein: der
 Schnitt hängt an `Texts` der Console.
+Qt kürzt den eingefügten Teil, nicht das Ende: ein Emoji, mitten im Text
+getippt oder eingefügt, kann dort halb stehen bleiben. `Texts.whole` wirft
+darum jede einzelne Hälfte weg, wo sie auch steht (erste ohne zweite und
+zweite ohne erste), und das Feld lässt den Cursor an seiner Stelle, abzüglich
+der Einheiten, die davor wegfielen. Das Feld zählt UTF-16-Einheiten,
+lmix-core Zeichen: es ist höchstens strenger als der Kern.
 
 **Bricht**: nichts.
 
-**Geprüft**: `tst_limited_field.qml` (63 Zeichen plus Emoji, ohne Grenze,
-Bindung nach dem Schnitt), `tst_add_output_dialog.qml`
+**Geprüft**: `tst_limited_field.qml` (63 Zeichen plus Emoji, Einfügen in
+der Mitte samt Cursor, einzelne Hälften überall, ohne Grenze, Bindung nach
+dem Schnitt), `tst_add_output_dialog.qml`
 (`test_a_recording_keeps_its_file_name`), `tst_outputs_page.qml`
 (`test_mark_writes_the_note_once`); die bisherigen Tests der Mood-, Bus- und
 Mixer-Felder unverändert grün.
