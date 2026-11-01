@@ -13,7 +13,8 @@ TestCase {
     width: 1200
     height: 700
 
-    readonly property var outputs: [
+    property var sent: []
+    property var outputs: [
         { id: "o1", number: 1, name: "Stream", spec: { kind: "srt", uri: "srt://:9000" }, status: { state: "stopped" } },
         { id: "o2", number: 2, name: "Recording", spec: { kind: "record", folder: "/tmp/rec" }, status: { state: "stopped" } }
     ]
@@ -27,12 +28,18 @@ TestCase {
             property string devices: ""
             function runningTime(since) { return "" }
             // What the add dialog on the page reads.
-            function choices(list) { return list === "card_limits" ? JSON.stringify({ sound_delay_ms: 0 }) : "[]" }
+            function choices(list) {
+                switch (list) {
+                case "card_limits": return JSON.stringify({ sound_delay_ms: 0 })
+                case "record_limits": return JSON.stringify({ split_minutes_max: 1440, split_mb_min: 10, split_mb_max: 1048576, mark_text_max: 200 })
+                }
+                return "[]"
+            }
             function refreshLists() {}
         }
         property bool confirmStop: true
         property var inputs: []
-        function act(action) {}
+        function act(action) { test.sent.push(action) }
         function askRemove(kind, item) {}
         function inputById(id) { return null }
     }
@@ -44,6 +51,32 @@ TestCase {
             width: test.width
             height: test.height
         }
+    }
+
+    function init() {
+        sent = []
+        outputs[1].status = { state: "stopped" }
+        fakeShell.show = { outputs: outputs.slice(), buses: [] }
+    }
+
+    // REC.8: Mark and its note show while a recording runs; the note goes
+    // with the mark once.
+    function test_mark_writes_the_note_once() {
+        const page = createTemporaryObject(pageComponent, test)
+        // The window's header shows the tools (AppShell).
+        page.toolsItem.parent = test.Window.contentItem
+        const button = findChild(page.toolsItem, "markButton")
+        const note = findChild(page.toolsItem, "markText")
+        verify(!button.visible)
+        outputs[1].status = { state: "running", since_ms: 0 }
+        fakeShell.show = { outputs: outputs.slice(), buses: [] }
+        tryVerify(() => button.visible)
+        note.text = " Q&A "
+        button.clicked()
+        compare(sent, [{ action: "mark_recording", text: "Q&A" }])
+        compare(note.text, "")
+        button.clicked()
+        compare(sent[1], { action: "mark_recording" })
     }
 
     function test_selected_id_picks_the_detail() {

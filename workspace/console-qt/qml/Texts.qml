@@ -309,6 +309,8 @@ QtObject {
         case "unknown_data_source": return qsTr("No data source matches %1").arg(e.reference)
         case "bad_data_source": return qsTr("Data source: %1").arg(e.reason)
         case "bad_encoding": return qsTr("Encoding: %1").arg(e.reason)
+        case "bad_recording": return qsTr("Recording: %1").arg(e.reason)
+        case "no_recording": return qsTr("No recording runs")
         case "bad_sample_rate": return qsTr("Sample rate %1 Hz: 48000 or 44100").arg(e.hz)
         case "layouts_full": return qsTr("All %1 layouts are in use").arg(e.max)
         case "unknown_layout": return qsTr("No layout %1").arg(e.reference)

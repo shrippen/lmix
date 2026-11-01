@@ -30,6 +30,7 @@ TestCase {
             case "card_modes": return JSON.stringify(["1080p25", "1080i50"])
             case "card_channels": return JSON.stringify(["2", "8", "16"])
             case "card_limits": return JSON.stringify({ sound_delay_ms: 500 })
+            case "record_limits": return JSON.stringify({ split_minutes_max: 1440, split_mb_min: 10, split_mb_max: 1048576, mark_text_max: 200 })
             }
             return "[]"
         }
@@ -174,6 +175,34 @@ TestCase {
         compare(fields.enabled, true)
         compare(hint.visible, false)
         verify(dialog.acceptEnabled)
+    }
+
+    // REC.4: a recording's split shows and goes with the form; a size
+    // below the smallest becomes the smallest; other kinds send none.
+    function test_a_recording_keeps_its_split() {
+        outputs = [Object.assign(output("stopped"), {
+            spec: { kind: "record", folder: "show", split_minutes: 30, split_mb: 2048 }, source: { from: "program" } })]
+        const dialog = createTemporaryObject(dialogComponent, test)
+        dialog.edit("o1")
+        opened(dialog)
+        const minutes = findChild(dialog.contentItem, "splitMinutes")
+        const mb = findChild(dialog.contentItem, "splitMb")
+        verify(minutes.visible)
+        var form = JSON.parse(dialog.form())
+        compare([form.split_minutes, form.split_mb], [30, 2048])
+        mb.value = 3
+        compare(JSON.parse(dialog.form()).split_mb, 10)
+        mb.value = 0
+        compare(JSON.parse(dialog.form()).split_mb, 0)
+        dialog.reject()
+        tryCompare(dialog, "visible", false)
+
+        outputs = [output("stopped")]
+        dialog.edit("o1")
+        opened(dialog)
+        verify(!minutes.visible)
+        form = JSON.parse(dialog.form())
+        compare([form.split_minutes, form.split_mb], [0, 0])
     }
 
     function test_an_output_removed_meanwhile_closes_it() {

@@ -9,7 +9,7 @@
       <translation>Übernehmen</translation>
     </message>
     <message>
-      <location line="+23" />
+      <location line="+30" />
       <source>Label</source>
       <translation>Beschriftung</translation>
     </message>
@@ -98,6 +98,11 @@
     </message>
     <message>
       <location line="+1" />
+      <source>Mark in recordings</source>
+      <translation>Zeitmarke in Aufnahmen</translation>
+    </message>
+    <message>
+      <location line="+1" />
       <source>Sound of input on</source>
       <translation>Ton des Inputs an</translation>
     </message>
@@ -112,7 +117,7 @@
       <translation>Andere (JSON)</translation>
     </message>
     <message>
-      <location line="+112" />
+      <location line="+114" />
       <source>Action %1 is not valid JSON</source>
       <translation>Aktion %1 ist kein gültiges JSON</translation>
     </message>
@@ -481,7 +486,7 @@
       <translation>Karte %1 (nicht gefunden)</translation>
     </message>
     <message>
-      <location line="+64" />
+      <location line="+66" />
       <source>folder in the engine's media directory</source>
       <translation>Ordner im Medienverzeichnis der Engine</translation>
     </message>
@@ -512,7 +517,7 @@
       <translation>Speichern</translation>
     </message>
     <message>
-      <location line="+168" />
+      <location line="+173" />
       <source>The output is sending. Stop it first to change its settings.</source>
       <translation>Der Ausgang sendet. Erst stoppen, dann lassen sich seine Einstellungen ändern.</translation>
     </message>
@@ -607,7 +612,32 @@
       <translation>Keyframe alle (s)</translation>
     </message>
     <message>
+      <location line="+14" />
+      <source>New file every (min)</source>
+      <translation>Neue Datei alle (min)</translation>
+    </message>
+    <message>
+      <location line="+10" />
+      <source>or at (MB)</source>
+      <translation>oder bei (MB)</translation>
+    </message>
+    <message>
       <location line="+11" />
+      <source>New file</source>
+      <translation>Neue Datei</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Help on new files</source>
+      <translation>Hilfe zu neuen Dateien</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>0: one file. A new file starts at the next keyframe; no frame is lost.</source>
+      <translation>0: eine Datei. Die neue Datei beginnt am nächsten Keyframe; kein Bild geht verloren.</translation>
+    </message>
+    <message>
+      <location line="+4" />
       <source>Name</source>
       <translation>Name</translation>
     </message>
@@ -620,7 +650,7 @@
   <context>
     <name>AppShell</name>
     <message>
-      <location filename="../qml/AppShell.qml" line="+632" />
+      <location filename="../qml/AppShell.qml" line="+633" />
       <location line="+111" />
       <source>Open show</source>
       <translation>Show öffnen</translation>
@@ -3328,19 +3358,19 @@
   <context>
     <name>MoodsDialog</name>
     <message>
-      <location filename="../qml/MoodsDialog.qml" line="+104" />
-      <location line="+366" />
+      <location filename="../qml/MoodsDialog.qml" line="+119" />
+      <location line="+388" />
       <source>Moods</source>
       <translation>Stimmungen</translation>
     </message>
     <message>
-      <location line="-297" />
-      <location line="+833" />
+      <location line="-306" />
+      <location line="+832" />
       <source>Off</source>
       <translation>Aus</translation>
     </message>
     <message>
-      <location line="-833" />
+      <location line="-832" />
       <source>Sound</source>
       <translation>Ton</translation>
     </message>
@@ -3351,28 +3381,28 @@
     </message>
     <message>
       <location line="+2" />
-      <location line="+828" />
+      <location line="+827" />
       <source>Actions</source>
       <translation>Aktionen</translation>
     </message>
     <message>
-      <location line="-827" />
+      <location line="-826" />
       <source>From the base</source>
       <translation>Aus der Basis</translation>
     </message>
     <message>
-      <location line="+272" />
+      <location line="+281" />
       <source>Actions of the layer</source>
       <translation>Aktionen der Ebene</translation>
     </message>
     <message>
       <location line="+19" />
-      <location line="+330" />
+      <location line="+324" />
       <source>Layers</source>
       <translation>Ebenen</translation>
     </message>
     <message>
-      <location line="-330" />
+      <location line="-324" />
       <source>Collections</source>
       <translation>Sammlungen</translation>
     </message>
@@ -3382,7 +3412,7 @@
       <translation>Panik-Stimmung</translation>
     </message>
     <message>
-      <location line="+66" />
+      <location line="+59" />
       <source>+ Group</source>
       <translation>+ Gruppe</translation>
     </message>
@@ -3403,27 +3433,27 @@
     </message>
     <message>
       <location line="+10" />
-      <location line="+292" />
-      <location line="+89" />
+      <location line="+291" />
+      <location line="+87" />
       <source>Up</source>
       <translation>Hoch</translation>
     </message>
     <message>
-      <location line="-366" />
-      <location line="+282" />
-      <location line="+89" />
+      <location line="-363" />
+      <location line="+281" />
+      <location line="+87" />
       <source>Down</source>
       <translation>Runter</translation>
     </message>
     <message>
-      <location line="-355" />
-      <location line="+272" />
-      <location line="+89" />
+      <location line="-352" />
+      <location line="+271" />
+      <location line="+87" />
       <source>Remove</source>
       <translation>Entfernen</translation>
     </message>
     <message>
-      <location line="-350" />
+      <location line="-347" />
       <source>Remove variant %1?</source>
       <translation>Variante %1 entfernen?</translation>
     </message>
@@ -3458,7 +3488,7 @@
       <translation>Gruppe %1 entfernt</translation>
     </message>
     <message>
-      <location line="+264" />
+      <location line="+263" />
       <source>Remove layer %1?</source>
       <translation>Ebene %1 entfernen?</translation>
     </message>
@@ -3478,17 +3508,17 @@
       <translation>Ebene %1 entfernt</translation>
     </message>
     <message>
-      <location line="-242" />
+      <location line="-241" />
       <source>Add layers first (Layers tab): what a mood sets, e.g. light, music, ambience.</source>
       <translation>Zuerst Ebenen anlegen (Reiter Ebenen): was eine Stimmung setzt, z. B. Licht, Musik, Atmo.</translation>
     </message>
     <message>
-      <location line="-371" />
+      <location line="-370" />
       <source>Drag to move</source>
       <translation>Zum Verschieben ziehen</translation>
     </message>
     <message>
-      <location line="+92" />
+      <location line="+97" />
       <source>Layer %1</source>
       <translation>Ebene %1</translation>
     </message>
@@ -3518,7 +3548,7 @@
       <translation>Deckkraft des Bildes</translation>
     </message>
     <message>
-      <location line="+14" />
+      <location line="+15" />
       <source>Layer of the picture</source>
       <translation>Ebene des Bildes</translation>
     </message>
@@ -3533,7 +3563,7 @@
       <translation>Blendet mit der Ebene ein und aus: mit ihrer eigenen Blende, sonst mit der Wechselzeit.</translation>
     </message>
     <message>
-      <location line="+165" />
+      <location line="+158" />
       <source>Its variants go with it (%1). </source>
       <translation>Ihre Varianten gehen mit (%1). </translation>
     </message>
@@ -3579,7 +3609,7 @@
       <translation>Bühne des Bildes</translation>
     </message>
     <message>
-      <location line="+9" />
+      <location line="+10" />
       <source>Loop</source>
       <translation>Schleife</translation>
     </message>
@@ -3600,12 +3630,12 @@
     </message>
     <message>
       <location line="+5" />
-      <location line="+260" />
+      <location line="+256" />
       <source>Actions: %1…</source>
       <translation>Aktionen: %1…</translation>
     </message>
     <message>
-      <location line="-242" />
+      <location line="-238" />
       <source>Change time</source>
       <translation>Wechselzeit</translation>
     </message>
@@ -3625,7 +3655,7 @@
       <translation>Die Wechselzeit zwischen der Basis und den Varianten einer Gruppe</translation>
     </message>
     <message>
-      <location line="+45" />
+      <location line="+43" />
       <source>Fade of the layer</source>
       <translation>Blende der Ebene</translation>
     </message>
@@ -3640,8 +3670,8 @@
       <translation>+ Ebene</translation>
     </message>
     <message>
-      <location line="-481" />
-      <location line="+482" />
+      <location line="-474" />
+      <location line="+475" />
       <source>Layer</source>
       <translation>Ebene</translation>
     </message>
@@ -3651,7 +3681,7 @@
       <translation>Was eine Sammlung enthält, wird auf der Seite Stimmungen zusammengestellt (Zusammenstellen).</translation>
     </message>
     <message>
-      <location line="+55" />
+      <location line="+53" />
       <source>Remove collection %1?</source>
       <translation>Sammlung %1 entfernen?</translation>
     </message>
@@ -4258,7 +4288,7 @@
   <context>
     <name>OutputBar</name>
     <message>
-      <location filename="../qml/OutputBar.qml" line="+41" />
+      <location filename="../qml/OutputBar.qml" line="+44" />
       <source>Outputs</source>
       <translation>Ausgänge</translation>
     </message>
@@ -4298,7 +4328,17 @@
       <translation>Alle Streams starten</translation>
     </message>
     <message>
-      <location line="+15" />
+      <location line="+17" />
+      <source>Mark</source>
+      <translation>Zeitmarke</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Write the time into the protocol beside each running recording</source>
+      <translation>Uhrzeit ins Protokoll neben jeder laufenden Aufnahme schreiben</translation>
+    </message>
+    <message>
+      <location line="+4" />
       <source>+ Output</source>
       <translation>+ Ausgang</translation>
     </message>
@@ -4384,7 +4424,7 @@
   <context>
     <name>OutputsPage</name>
     <message>
-      <location filename="../qml/OutputsPage.qml" line="+68" />
+      <location filename="../qml/OutputsPage.qml" line="+76" />
       <source>Outputs</source>
       <translation>Ausgänge</translation>
     </message>
@@ -4429,7 +4469,22 @@
       <translation>Alle Aufnahmen starten</translation>
     </message>
     <message>
+      <location line="+8" />
+      <source>Note for the mark</source>
+      <translation>Notiz zur Zeitmarke</translation>
+    </message>
+    <message>
       <location line="+7" />
+      <source>Mark</source>
+      <translation>Zeitmarke</translation>
+    </message>
+    <message>
+      <location line="+4" />
+      <source>Write the time and the note into the protocol beside each running recording</source>
+      <translation>Uhrzeit und Notiz ins Protokoll neben jeder laufenden Aufnahme schreiben</translation>
+    </message>
+    <message>
+      <location line="+5" />
       <source>Ask before stopping</source>
       <translation>Vor dem Stoppen fragen</translation>
     </message>
@@ -5387,7 +5442,7 @@
       <translation>Belegung hinzufügen</translation>
     </message>
     <message>
-      <location line="+35" />
+      <location line="+42" />
       <source>Label</source>
       <translation>Beschriftung</translation>
     </message>
@@ -7578,6 +7633,16 @@
       <location line="+1" />
       <source>Encoding: %1</source>
       <translation>Encoding: %1</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>Recording: %1</source>
+      <translation>Aufnahme: %1</translation>
+    </message>
+    <message>
+      <location line="+1" />
+      <source>No recording runs</source>
+      <translation>Keine Aufnahme läuft</translation>
     </message>
     <message>
       <location line="+1" />

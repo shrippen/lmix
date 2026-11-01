@@ -26,7 +26,15 @@ AppPage {
     /** SRT streams: lmix-core's group `streams` (STR.1). */
     readonly property var streams: outputs.filter(o => o.spec.kind === "srt")
     readonly property var recordings: outputs.filter(o => o.spec.kind === "record")
+    /** A recording runs: marks go into its protocol (REC.8). */
+    readonly property bool recording: recordings.some(o => o.status.state === "running")
     function act(action) { shell.act(action) }
+    /** A mark in every running recording, with the note if there is one. */
+    function mark() {
+        const text = markText.text.trim()
+        act(text.length > 0 ? { action: "mark_recording", text: text } : { action: "mark_recording" })
+        markText.clear()
+    }
     // Rows by id: a new state keeps them (and their running-time timers).
     KeyedModel { id: outputModel }
     Component.onCompleted: outputModel.sync(outputs.map(o => o.id))
@@ -96,6 +104,23 @@ AppPage {
             text: all ? qsTr("Stop all recordings") : qsTr("Start all recordings")
             enabled: root.backend.connected
             onClicked: all ? root.stopGroup("recordings") : root.act({ action: "start_outputs", group: "recordings" })
+        },
+        KanteTextField {
+            id: markText
+            objectName: "markText"
+            visible: root.recording
+            placeholderText: qsTr("Note for the mark")
+            onAccepted: root.mark()
+        },
+        KanteButton {
+            objectName: "markButton"
+            visible: root.recording
+            focusPolicy: Qt.NoFocus
+            text: qsTr("Mark")
+            enabled: root.backend.connected
+            onClicked: root.mark()
+            QQC2.ToolTip.visible: hovered
+            QQC2.ToolTip.text: qsTr("Write the time and the note into the protocol beside each running recording")
         },
         QQC2.CheckBox {
             id: askBox
