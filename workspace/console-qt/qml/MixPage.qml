@@ -66,6 +66,13 @@ AppPage {
         property bool mixer: true
         /** Keys of the input actions kept in the "⋯" menu, as JSON. */
         property string menuOnly: "[]"
+        /** Guides over the monitors (OUT.12, SafeAreaGuides): safe-area
+         *  frame, crop, thirds, and on which monitor ("preview",
+         *  "program", "both"). */
+        property string guideFrame: ""
+        property string guideCrop: ""
+        property bool guideThirds: false
+        property string guidesOn: "preview"
     }
     readonly property var menuOnly: {
         try {
@@ -459,10 +466,13 @@ AppPage {
                     implicitHeight: previewMonitor.implicitHeight
                     Monitor {
                         id: previewMonitor
-                        anchors.horizontalCenter: parent.horizontalCenter
+                        objectName: "previewMonitor"
+                        // Centred on whole pixels: the guides' lines stay sharp.
+                        x: Math.round((parent.width - width) / 2)
                         label: qsTr("Preview")
                         detail: root.busLabel(root.show ? root.show.preview : null)
                         tally: KanteStyle.positiveTextColor
+                        guides: viewSettings.guidesOn !== "program"
                         // The mixer's preview output: an input or a layout, as a
                         // take brings it; it does not change pipelines on a click.
                         source: root.show && root.show.preview ? "preview" : ""
@@ -504,10 +514,13 @@ AppPage {
                     implicitHeight: programMonitor.implicitHeight
                     Monitor {
                         id: programMonitor
-                        anchors.horizontalCenter: parent.horizontalCenter
+                        objectName: "programMonitor"
+                        // Centred on whole pixels: the guides' lines stay sharp.
+                        x: Math.round((parent.width - width) / 2)
                         label: qsTr("Program")
                         detail: root.busLabel(root.show ? root.show.program : null)
                         tally: KanteStyle.negativeTextColor
+                        guides: viewSettings.guidesOn !== "preview"
                         source: "program"
                         peakDb: root.levels.peak("program")
                         input: root.programInput
@@ -540,15 +553,25 @@ AppPage {
                     text: qsTr("View")
                     emphasis: KanteButton.Emphasis.Quiet
                     onClicked: viewPopover.openAt(viewButton)
-                    // P01 A: two columns, the inputs left, the multiview and
-                    // the page right; the button names it, so no title.
+                    // P01 A: columns, the inputs left, the multiview and the
+                    // page beside them, the guides (OUT.12) right or, in a
+                    // window too narrow for three, below the two; the button
+                    // names it, so no title.
                     KantePopover {
                         id: viewPopover
+                        objectName: "viewPopover"
                         readonly property var multiview: root.show && root.show.multiview ? root.show.multiview : ({ program: "right", meters: "shown" })
+                        /** Width of the three columns side by side, with the popover's padding and a margin to the window's edges. */
+                        readonly property real threeWide: inputsColumn.implicitWidth + pageColumn.implicitWidth + guidesPicker.implicitWidth
+                            + 2 * viewGrid.columnSpacing + leftPadding + rightPadding + 2 * Kirigami.Units.largeSpacing
                         GridLayout {
-                            columns: 2
+                            id: viewGrid
+                            objectName: "viewGrid"
+                            columns: viewButton.Window.width >= viewPopover.threeWide ? 3 : 2
                             columnSpacing: Kirigami.Units.largeSpacing * 2
+                            rowSpacing: Kirigami.Units.largeSpacing
                             ColumnLayout {
+                                id: inputsColumn
                                 Layout.alignment: Qt.AlignTop
                                 spacing: Kirigami.Units.smallSpacing
                                 KanteSectionLabel { text: qsTr("Inputs") }
@@ -573,6 +596,7 @@ AppPage {
                                 }
                             }
                             ColumnLayout {
+                                id: pageColumn
                                 Layout.alignment: Qt.AlignTop
                                 spacing: Kirigami.Units.smallSpacing
                                 // OUT.10: program left or right, meters on the tiles;
@@ -612,6 +636,28 @@ AppPage {
                                     checked: root.simple
                                     enabled: backend.uiMode === ""
                                     onToggled: viewSettings.simple = checked
+                                }
+                            }
+                            // OUT.12: guides in the console's monitors only, never in an output.
+                            GuidesPicker {
+                                id: guidesPicker
+                                objectName: "guidesPicker"
+                                Layout.alignment: Qt.AlignTop
+                                Layout.columnSpan: viewGrid.columns === 3 ? 1 : 2
+                                frame: viewSettings.guideFrame
+                                crop: viewSettings.guideCrop
+                                thirds: viewSettings.guideThirds
+                                monitor: viewSettings.guidesOn
+                                onChanged: (key, value) => {
+                                    if (key === "frame") {
+                                        viewSettings.guideFrame = value
+                                    } else if (key === "crop") {
+                                        viewSettings.guideCrop = value
+                                    } else if (key === "thirds") {
+                                        viewSettings.guideThirds = value
+                                    } else if (key === "monitor") {
+                                        viewSettings.guidesOn = value
+                                    }
                                 }
                             }
                         }
@@ -967,6 +1013,8 @@ AppPage {
         property var peakDb: undefined
         /** The input shown, for its transport; null for layouts. */
         property var input: null
+        /** Whether the guides (OUT.12) show over this picture. */
+        property bool guides: false
         /** A double click into the picture. */
         signal doubleClicked()
 
@@ -1018,6 +1066,15 @@ AppPage {
                     core: root.backend
                     TapHandler {
                         onDoubleTapped: monitor.doubleClicked()
+                    }
+                    SafeAreaGuides {
+                        objectName: monitor.objectName + "Guides"
+                        anchors.fill: parent
+                        visible: monitor.guides && shown
+                        aspect: root.aspect
+                        frame: viewSettings.guideFrame
+                        crop: viewSettings.guideCrop
+                        thirds: viewSettings.guideThirds
                     }
                 }
                 KanteAudioMeter {

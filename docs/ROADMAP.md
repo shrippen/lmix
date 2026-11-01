@@ -320,6 +320,7 @@ Stand:
 | AUT.14 | ✅ Cue-Listen mit GO, Zurück, Sprung; Console-Dialog |
 | AUT.1 | ✅ MIDI aus Gerätedateien: Note/Regler je Kurzbefehl, Regler auf T-Bar, Lernen in der Console; ⚠ keine Rückmeldung an den Controller |
 | AUT.12 | ✅ Globale Tasten über das GlobalShortcuts-Portal (KDE, GNOME 48+); ⚠ nicht unter X11 ohne Portal |
+| OUT.12 | ✅ Hilfslinien über den Monitoren der Mix-Seite: Schutzbereiche, Ausschnitt 4:3/1:1/9:16, Drittel (2026-11-01); ⚠ Scopes (OUT.13) offen |
 
 ### M7 — Titel & Daten (HTML), direkt nach M4
 

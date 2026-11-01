@@ -127,6 +127,10 @@ Item {
     Component.onCompleted: count(tiled && visible)
     Component.onDestruction: {
         count(false)
-        core.releaseLive(video)
+        // A core going down with the window (the tests' stand-in) has lost
+        // its functions by now; the real one outlives every view.
+        if (core && typeof core.releaseLive === "function") {
+            core.releaseLive(video)
+        }
     }
 }
