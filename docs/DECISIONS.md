@@ -8038,11 +8038,20 @@ sichtbar ist nur, was einer kurzen Liste schlichter Formen entspricht.
   irgendeine Maske (URL-Teil oder geheimer Wert) in einem offenen
   Anführungszeichen, läuft sie bis zum Partner des innersten, ohne Partner
   bis Textende; weiter, wenn ein im Wert geöffnetes Anführungszeichen
-  darüber hinaus läuft, ein Buchstabe folgt (Apostroph im Wert) oder ein
-  `@` im selben Wort folgt. Das deckt `"passphrase=a b"`,
+  darüber hinaus läuft, ein Buchstabe folgt (Apostroph im Wert), bis
+  Wortende, wenn etwas anderes als Leerraum oder `,;)]}` folgt
+  (`'a'\''b'`, `"a"'b'`) oder ein `@` im selben Wort folgt; nie vor dem
+  Ende des Worts, das die Maske ohnehin erfasst hat (seit 10893ce). Das deckt `"passphrase=a b"`,
   `'passphrase=a b'`, `"uri=srt://h?passphrase=a b"` und ein in einem
   früheren Wort geöffnetes Anführungszeichen. Partner- und `@`-Suche sind
   zwischengespeichert, die Laufzeit bleibt linear.
+- Kein Panic, kein Leck bei einem Fehler (seit 10893ce): strom `text()`
+  und lmix `redact_text` laufen unter `catch_unwind` und maskieren bei
+  einem Panic den ganzen Text. strom maskiert Bus-Meldungen in einem
+  GLib-Callback, dort bricht ein Panic den Prozess ab (Runde 8 fand einen:
+  ein Anführungszeichen, das in einem übersprungenen Teil schloss, blieb
+  offen und schnitt eine URL rückwärts). Ein Test prüft 100 000
+  deterministische Pseudo-Zufallszeilen gegen die ungeschützte Funktion.
 
 lmix-core maskiert zusätzlich (Verteidigung in der Tiefe) strom-Fehlertexte,
 die es weitergibt (`check()` in `engine/strom.rs`, `PipelineError` in
@@ -8059,8 +8068,10 @@ Bewusst nicht abgedeckt (Prosa nicht unterscheidbar, im Doc-Kommentar von
 (`srt://u:a b@h` zeigt `b@h`), ein rohes `&` in einem geheimen Query-Wert
 vor `name=` (`passphrase=a&b=c` zeigt `b=c`), Geheimnisse im Pfad einer
 URL, die weder HTTP noch RTMP ist, Namen ohne geheime Endung oder ohne
-`=`/`:`. In Anführungszeichen (wo auch immer sie öffnen) ist Leerraum in
-einem Geheimnis abgedeckt. Kosten: in einem offenen Anführungszeichen
+`=`/`:`, ein einzelnes Anführungszeichen vor einem Geheimnis in
+Anführungszeichen (`the '90s … 'passphrase=a b'`: es paart mit dem
+falschen, `b'` bleibt sichtbar). Sonst ist Leerraum in einem Geheimnis in
+Anführungszeichen (wo auch immer sie öffnen) abgedeckt. Kosten: in einem offenen Anführungszeichen
 verliert eine Zeile alles bis zu dessen Partner, sobald darin etwas
 maskiert wird (`"uri=srt://h?passphrase=x&latency=120 refused"` →
 `"uri=srt://h?passphrase=…`).
@@ -8081,8 +8092,8 @@ die Geheimnisse weiter (Konfiguration, keine Verschlüsselung).
 der Änderung rot: `400 Bad Request: Invalid property
 srt_uri=srt://192.0.2.1:9000?passphrase=topsecret1`). Gemeinsame
 Test-Eingaben: strom `redact::tests::shared_vectors_*`, lmix-types
-`srt::tests::shared_vectors_*` (jede Eingabe der vier Review-Runden, ohne
-Panic, linear auch bei 1 MB).
+`srt::tests::shared_vectors_*` (jede Eingabe der Review-Runden, ohne
+Panic, linear auch bei 1 MB), `fuzzed_inputs_do_not_panic` in beiden.
 
 ## 2026-11-01 — Ausgänge: Puffer und Encoder-Last (STR.7)
 
