@@ -151,6 +151,7 @@ fn main() {
                 "qml/ShowSidebar.qml",
                 "qml/MoodsDialog.qml",
                 "qml/DropDrag.qml",
+                "qml/DragScroll.qml",
                 "qml/MoodsPage.qml",
                 "qml/ShowInspector.qml",
                 "qml/DurationField.qml",

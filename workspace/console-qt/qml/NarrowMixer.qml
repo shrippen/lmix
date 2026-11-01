@@ -418,6 +418,13 @@ KanteCard {
                     visible: menu.bus !== null
                     Layout.fillWidth: true
                     maximumLength: mixer.limits.name_max
+                    // Cut on whole characters, not inside an emoji.
+                    onTextChanged: {
+                        const whole = Texts.whole(text)
+                        if (whole !== text) {
+                            text = whole
+                        }
+                    }
                     Accessible.name: qsTr("Name of the bus")
                     placeholderText: qsTr("Name")
                     /** The bus being renamed. Only closing renames (Enter closes):

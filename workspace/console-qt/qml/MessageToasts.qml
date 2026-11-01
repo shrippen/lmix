@@ -117,7 +117,8 @@ Item {
     onGroundsChanged: Qt.callLater(settle)
 
     // Only as large as the toasts: it takes no clicks beside them and never
-    // the keyboard focus.
+    // the keyboard focus. To a screen reader a named pane: a popup reads as
+    // a dialog by default, and this one stays open over every modal one.
     QQC2.Popup {
         id: layer
         objectName: "toastLayer"
@@ -136,6 +137,20 @@ Item {
         exit: null
         contentItem: Item {
             id: holder
+            // On the popup's own item (its parent): Accessible on a Popup
+            // warns that it is not an Item.
+            Binding {
+                target: holder.parent
+                when: holder.parent !== null
+                property: "Accessible.role"
+                value: Accessible.Pane
+            }
+            Binding {
+                target: holder.parent
+                when: holder.parent !== null
+                property: "Accessible.name"
+                value: qsTr("Messages")
+            }
         }
     }
 

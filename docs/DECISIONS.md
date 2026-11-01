@@ -7557,6 +7557,56 @@ offenes Anführungszeichen lehnte die API mit 422 und Grund ab.
 **Offen**: Platzhalter für Live-Werte (EXT.7), feste Abonnenten auch über
 TCP (CTL.4 sendet nur UDP).
 
+## 2026-11-01 — Stimmungen: offene Hinweise der Reviews (MOOD Stufe 7d)
+
+**Anlass**: Hinweise aus den Reviews von #212 und #213, die die Stufen 7a–7c
+offen ließen: Namen im Dialog „Stimmungen bearbeiten“ waren unbegrenzt
+(lmix-core lehnt über 64 Zeichen ab, erst nach dem Senden); das stets
+offene Popup der Toasts las sich für einen Screenreader als namenloser
+Dialog; Ziehen in den scrollenden Listen Ebenen und Sammlungen scrollte
+nicht mit (die unterste von 16 Ebenen ging nicht in einem Zug nach oben).
+
+**Entscheidung**:
+- Namensfelder (Stimmung, Ebene, Sammlung) schneiden beim Tippen bei
+  `MOOD_NAME_MAX` ab; die Grenze kommt aus lmix-types über
+  `core.choices("mood_limits")` wie bei den Bussen, keine Zahl in QML.
+  `maximumLength` zählt UTF-16-Einheiten (lmix-core Zeichen, die Oberfläche
+  lässt also nie mehr zu); schneidet es ein Emoji entzwei, fällt die
+  übrige Hälfte weg (`Texts.whole`), sonst endete der Name mit „�“. Ebenso
+  in den Namensfeldern der Busse (`BusPanel`, `NarrowMixer`).
+- Die Toast-Ebene ist für Screenreader ein Bereich „Meldungen“
+  (`Accessible.Pane`), gesetzt am eigenen Item des Popups: `Accessible`
+  direkt am `Popup` wirkt zwar, warnt aber in Qt 6.11 bei jedem Fenster
+  („must be attached to an object deriving from Item“). Die Toasts selbst
+  bleiben `AlertMessage` mit ihrem Text.
+- Hält ein Ziehen am Griff den Zeiger nahe dem oberen oder unteren Rand
+  (zwei Rastereinheiten, in einer niedrigen Liste höchstens ein Drittel,
+  damit sich die Zonen nicht überlappen) der Ebenen oder Sammlungen, scrollt
+  die Liste (`DragScroll`, ein Timer je Bild, läuft nur dann); die
+  Zielzeile folgt. Steht der Zeiger jenseits des Rands, gilt die Zeile, die
+  dort noch zu sehen ist (`rowUnder` misst im sichtbaren Teil der Liste;
+  eine Lücke zwischen zwei Zeilen gehört der oberen), nicht eine
+  weggescrollte: die Markierung ist immer zu sehen.
+  Nicht in der Liste der Gruppen und Varianten: deren `ListView` gibt
+  eine weit aus dem Bild gescrollte Zeile samt ihrem Ziehen auf.
+- **Nicht geändert**: Pads, deren Liste keine Pads mehr ist, fallen weiter
+  aus den Sammlungen und kommen beim Wiedereinschalten nicht zurück
+  (Stufe 7a). Sie zu behalten hieße, Sammlungen Einträge zu lassen, die
+  keine Pads sind (Prüfung, Zählung, Seite); ein Rückgängig über
+  `Removed::Moods` ist ein eigenes Thema.
+
+**Bricht**: nichts.
+
+**Geprüft**: `tst_moods_dialog.qml`
+(`test_names_keep_to_the_length_the_core_takes`,
+`test_a_drag_at_the_edge_scrolls_the_list`,
+`test_a_drag_past_the_edge_marks_a_row_in_sight`), `tst_drag_scroll.qml`
+(niedrige Liste), `tst_audio_menu.qml` (Busnamen mit Emoji),
+`tst_message_toasts.qml`
+(`test_the_layer_reads_as_a_pane_of_messages`),
+`forms::tests::lists_carry_serde_names`; alle schlugen ohne die Änderung
+fehl. Alle QML-Tests (331).
+
 ## 2026-11-01 — Layout-Boxen tauschen und neu belegen (LAY.7)
 
 **Kontext**: Ein Layout ließ sich per Aktion nur ganz ersetzen
