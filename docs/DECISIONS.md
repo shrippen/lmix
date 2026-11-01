@@ -8008,7 +8008,9 @@ sichtbar ist nur, was einer kurzen Liste schlichter Formen entspricht.
   weg. HTTP/WebSocket (`http`, `https`, `ws`, `wss`): Herkunft und nur
   Pfadsegmente, die bekannte Wörter sind oder Dateinamen daraus (`whip`,
   `v1`, `publish`, `index.m3u8`, `segment_001.ts`, `chunk-stream0-00001.m4s`;
-  feste Wort- und Endungsliste, Zahl allein ist kein Wort), bis zum ersten
+  feste Wort- und Endungsliste, Zahl allein ist kein Wort, höchstens 10
+  Ziffern je Segment, seit strom #70: `live-1234567890-9876543210-5555555555`
+  kann ein Zahlenschlüssel sein), bis zum ersten
   anderen Segment, das den Rest maskiert; Query weg. Der Pfad kann der ganze
   Schlüssel sein (Cloudflare Stream WHIP:
   `https://customer-<id>.cloudflarestream.com/<key>/webRTC/publish` → `/***`,
@@ -8043,7 +8045,8 @@ sichtbar ist nur, was einer kurzen Liste schlichter Formen entspricht.
   (klein, ohne Trenner und Prozent-Kodierung: `streamKey`, `auth-token`,
   `pass%70hrase`); der Wert läuft bis Wortende, `name=` am Wortende maskiert
   das nächste Wort, `name:` am Wortende den Rest der Zeile (Header:
-  `auth-token: a b`, bis zu einem bekannten Paar), ein Wert, der genau
+  `auth-token: a b`, bis zu einem Leerraum vor einem bekannten Paar oder
+  `!`), ein Wert, der genau
   `Bearer`/`Basic`/`Digest` ist, eines mehr. Ein Wert, der mit einem
   Anführungszeichen beginnt, ist der Lauf bis zu dessen Partner
   (`{"passphrase":…,"latency":120}`), wenn der Wert dort endet (s. u.). Endungen u. a. `passphrase`, `token`, `key`,
@@ -8117,6 +8120,11 @@ ein roher Leerraum im Passwort (`srt://u:a b@h`), ein rohes `&` im
 geheimen Query-Wert vor einem unbekannten Namen (`passphrase=a&b=c`),
 Token im Pfad anderer Schemata (`rtsp://h/<token>/x`), `auth-token: a b`
 und ein `@` im Pfad (`rtmp://h/live/a@b` zeigte `b` als Host).
+Seit strom #70 (Review #69): ein Shell-`'\''` in einem Wert, der selbst ein
+Anführungszeichen öffnet (`'passphrase="my"'\''s secret'` zeigte
+`secret`; das im Wert offene Anführungszeichen maskiert jetzt bis zu
+seinem Partner oder Textende), und ein HTTP-Pfadsegment mit mehreren
+Zahlenblöcken (nur je Teil auf 10 Ziffern begrenzt, jetzt je Segment).
 
 Bewusst nicht abgedeckt (Prosa nicht unterscheidbar, im Doc-Kommentar von
 `text()` genannt): Namen ohne geheime Endung oder ohne `=`/`:`; ein
@@ -8133,7 +8141,8 @@ Geheimnis in Anführungszeichen (wo auch immer sie öffnen) abgedeckt.
 Kosten: Werte und URL-Teile mit Sonderzeichen werden samt Rest maskiert;
 ein offenes Anführungszeichen ohne Partner in einem maskierten Teil
 maskiert bis Textende, ein `'\''` in Shell-Anführungszeichen ebenso
-(`passphrase='a b'\''c' latency=1` verliert `latency=1`); eine Zeile mit
+(`passphrase='a b'\''c' latency=1` verliert `latency=1`,
+`srtsrc 'passphrase="my"'\''s secret' x` wird `srtsrc 'passphrase=…`); eine Zeile mit
 `name: wert` verliert den Rest der Zeile bis zu einem bekannten Paar
 (`Authorization: Bearer abc next` → `Authorization: …`); ein schließendes
 Anführungszeichen am Wortanfang vor einem Wort (selten) gilt als öffnend,
@@ -8164,8 +8173,15 @@ Differential-Fuzz gegen die Vorversion (400 576 Eingaben, 76 588
 geänderte Ausgaben, jede Klasse begründet: mehr sichtbar nur dort, wo die
 neuen Regeln es als Nicht-Geheimnis lesen) und ein Leck-Fuzz (5,5 Mio.
 gst-artige Zeilen mit bekanntem Geheimnis in jeder Quote-Form, roh, als
-`{:?}`, doppeltem `{:?}` und in JSON: Vorversion 123 507 Lecks, jetzt 668,
-alle in den genannten Grenzen). 38 gegnerische 1-MB-Eingaben je unter 70 ms
+`{:?}`, doppeltem `{:?}` und in JSON: Vorversion 123 507 Lecks, jetzt 668).
+Nicht alle 668 lagen in den genannten Grenzen, wie es hier zuerst stand:
+das Review von #69 fand die Shell-Familie oben, die erst strom #70
+schließt. Nach #70, Leck-Fuzz mit 759 568 Eingaben: 6 Lecks (#69: 30),
+alle ein Passwort mit `@` im Wort vor einem rohen Leerraum
+(`srt://u:a@b c@h`, genannte Grenze); Differential-Fuzz gegen #69:
+400 705 Eingaben, 2 475 geändert, bis auf zwei mit mehr Maske; die zwei
+zeigen eine spätere Zeile oder ein Wort hinter einer jetzt anders
+endenden Maske, kein Geheimnis. 38 gegnerische 1-MB-Eingaben je unter 70 ms
 (Release); das nächste `://` und `:` eines Worts werden gemerkt, sonst
 brauchte ein langes Wort mit vielen maskierten Werten 6,5 s.
 
