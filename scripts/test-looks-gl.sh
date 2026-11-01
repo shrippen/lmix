@@ -35,7 +35,7 @@ wait_up() {
     fail "$2 did not come up"
 }
 # Mean grey of the program picture, 0-255. The first request wakes the
-# picture tap (while it sleeps lmix-core serves the last frame).
+# picture tap (503 until it has a frame).
 grey() {
     curl -sf "$CORE/pictures/program" -o /dev/null || true
     sleep 3
