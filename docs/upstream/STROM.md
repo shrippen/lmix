@@ -4,9 +4,8 @@ Regel: `claude.md`, Arbeitsregeln („Jede Änderung an strom geht auch nach ups
 Jedes Thema auf `dev` steht hier mit seinem Stand, bis upstream es gemergt hat oder der
 User es als lmix-eigen entschieden hat.
 
-Stand 2026-10-29: `dev` (d4c588f/f5cf6bd) hat 132 Commits, die upstream `main` (7c80005) nicht
-hat (`git cherry`: keiner davon upstream), und liegt 83 Commits hinter upstream `main`
-(Basis 8fce2ee, 15.10.).
+Stand 2026-11-01: `dev` (c426a7e) hat 172 Commits ohne Merges, die upstream `main` (4479d8c) nicht
+hat (`git log --no-merges 4479d8c..gitea/dev`).
 
 Stand 2026-11-01: bei Eyevinn liegen fünf PRs von uns (#1185–#1189, unten), auf `main` 4479d8c
 rebasiert. Issue-Entwürfe liegen bereit und gehen erst nach Freigabe raus; weitere PR-Branches
@@ -24,6 +23,8 @@ Abgleich mit upstream: `git fetch https://github.com/Eyevinn/strom main` und
 
 | Thema | Commits / Gitea-PR | Weg | Stand, Hinweis |
 |---|---|---|---|
+| Media Player: Bus-Watch, die beim Stoppen entfernt wird (CRITICAL „has no signal watches“) | 21d8ec5 (kam mit #1) | – | upstream erledigt: upstream zählt die `add_signal_watch`-Aufrufe und entfernt genau so viele |
+| Vorschaubild-Abgriff liefert kein Bild älter als `max_age` | 7e40604, #68 | PR | offen; Gitea #68 noch offen, nicht auf `dev`; gehört zu Eyevinn #1187/#1189, nach dem Merge auf deren Branch stapeln |
 | Panic im eigenständigen nativen Frontend | 779cc60 | PR | offen |
 | GL-Renderer-Probe auf GStreamer 1.28 | a7a2aa9 | PR | offen; prüfen, ob upstream seit #1123 (1.28-Baseline) selbst gelöst |
 | NVENC-Rate-Control auf GStreamer 1.28 | dcf2b83 | PR | offen; wie oben |
@@ -35,7 +36,7 @@ Abgleich mit upstream: `git fetch https://github.com/Eyevinn/strom main` und
 | GL-Eingänge und Underlays auf NVIDIA ohne udmabuf | 887248d, 2e4a749, #36 | PR | offen; als ein PR |
 | Inaktive Pads in den Compositoren ignorieren | 2ccb62b, bb4fcd5 | PR | offen |
 | Encoder: GPU-Speicher vor Software-Konvertierung herunterladen, vor NVENC auf der GPU konvertieren | 79b3b31, 3e8301e | PR | offen |
-| DSK bleibt an, wenn er während des Ausblendens eingeschaltet wird | 04b87d1 | PR | offen |
+| DSK bleibt an, wenn er während des Ausblendens eingeschaltet wird | 04b87d1 | PR | offen; setzt das Ein-/Ausblenden der DSK-Ebenen (d47a50a, unten) voraus, gehört dann in dessen PR |
 | Losgelassenes Standbild lässt die Haupt-Pipeline fallen | #15 | PR | offen |
 | PiP-Schnitt zeigt das neue Bild vor dem Ausblenden des alten | #35 | PR | offen |
 | CUDA-Thumbnails ohne cudaconvertscale | #37 | PR | offen; hängt am CUDA-Mischer |
@@ -44,7 +45,7 @@ Abgleich mit upstream: `git fetch https://github.com/Eyevinn/strom main` und
 | Event-Filter-Test ohne Log-Zähler | #44 | PR | offen |
 | Thumbnail-Zweig starten, bevor das Tee ihn speist (sonst hält die Quelle an) | #55 | PR | offen; Test vorhanden |
 | Media Player hält beim Pausieren das letzte Bild | 7682d41 | PR | offen |
-| DeckLink Output mit direktem Media-Timing | #50 | PR | offen; überschneidet sich mit upstream #1131, #1168, zuerst abgleichen |
+| DeckLink Output mit direktem Media-Timing | #50 | Issue | Abgleich: upstream #1131 (f294622, Video an den Modus anpassen) und #1168 (a340f49, Audio anpassen) sind gemergt und berühren weder den Kartentakt-Seed noch den Vorlauf. Der Seed (eefe858, 56245a9, 031721f) ist auf `dev` durch #53 (decklink2sink) wieder entfernt; übrig bleibt der Vorlauf (`lead_time`, 1e98a41), der im decklink2sink-Issue-Entwurf (#53) mitläuft |
 | CUDA-Mischer auf echter Hardware (Alpha nach Fade, Stinger, Thumbnails) | #29 | PR | offen; hängt am CUDA-Mischer |
 | Vorschaubild-Abgriff: Abhängen ohne Zustandssperre (Verklemmung mit dem Appsink-Callback) | 5f32f15, #63 | PR | **Eyevinn #1187** (Branch `thumbnail-detach-deadlock`, 523a390) |
 | JSON-Speicher: Schreiben unter einer Sperre (gemeinsame Temp-Datei, verlorene Flows) | 8e7cbff, #62 | PR | **Eyevinn #1186** (Branch `json-storage-lock`, d44fd98) |
@@ -59,33 +60,34 @@ Abgleich mit upstream: `git fetch https://github.com/Eyevinn/strom main` und
 | Thema | Commits / Gitea-PR | Weg | Stand, Hinweis |
 |---|---|---|---|
 | `--host`/`STROM_HOST` | 4bce876 | PR | offen; klein |
-| `eos_on_stop`: Stopp schickt EOS und wartet begrenzt (5 s), damit Muxer abschließen und RTMP sich abmeldet | 596c10d | PR | offen; lmix nutzt es für alle Ausgänge, verzögerte Streams schließen vorher ihre Ventile (lmix-seitig, keine weitere strom-Änderung) |
+| `eos_on_stop`: Stopp schickt EOS und wartet begrenzt (5 s), damit Muxer abschließen und RTMP sich abmeldet | 596c10d | Issue | Issue-Entwurf in Arbeit (neue Flow-Eigenschaft, anderes Stoppverhalten: Entscheidung der Maintainer); lmix nutzt es für alle Ausgänge |
 | `STROM_FORCE_SOFTWARE_CONVERT` | bd86930 | – | upstream erledigt: 1e9b9c0 (#1142) hat die globale Konvertierungswahl samt CUDA-GL-Probe entfernt, nichts einzureichen |
 | CUDA-Compositor-Backend des Vision Mixers, mit CUDA-Kontext, CUDA/VA-Brücken, GPU-Skalierung und JPEG in Thumbnails, Alpha-Konvertierung, NVDEC-Deinterlace | 63cf137, 8725d4c, 7f367ec, 1079575, 4beaf4d, 77e8f4b, 176a1f2, 7615d6f | Issue | Issue-Entwurf fertig, wartet auf Freigabe; danach in mehrere PRs teilen |
-| CPU-Mischer: videoconvert und Speicherbrücken | b38ace4 | – | upstream erledigt: 1e9b9c0, 624082c (#1121), 4e0917e (#1138) |
+| CPU-Mischer: videoconvert und Speicherbrücken | b38ace4 | Issue | teilweise upstream gelöst: videoconvert und Download von CUDA/GL (1e9b9c0, 624082c #1121, 4e0917e #1138); VA-Download im CPU-Mischer (`vapostproc`) fehlt upstream (`download_front` lehnt VAMemory ab), steht im VA-Issue-Entwurf (#21) |
 | VA-Surfaces in den GL-Mischer | #21 | Issue | jetzt Issue: upstream lehnt VA-Speicher mit klarer Meldung ab, unser Weg ist ohne VA-Hardware ungeprüft; Issue-Entwurf fertig, wartet auf Freigabe |
-| Auslastung von Hardware-Decoder/-Encoder, eigener Speicher in den System-Stats | dd6293c, 34302d6 | PR | offen |
+| Auslastung von Hardware-Decoder/-Encoder, eigener Speicher in den System-Stats | dd6293c, 34302d6 | Issue | Issue-Entwurf in Arbeit (neue API-Felder oder Endpunkte: Entscheidung der Maintainer, wie bei der Block-Statistik #61/#64) |
 | Bis 32 Mischer-Eingänge, neun DSK-Ebenen | b778653, #6, #16 | Issue | Issue-Entwurf fertig, wartet auf Freigabe |
-| Mischer starten beim ersten Puffer | #1 | Issue | Issue-Entwurf fertig, wartet auf Freigabe; mit `sample_rate` des Audiomischers (ed647f2); `eos_on_stop` eigene Zeile; Bus-Watch-Fix 21d8ec5 upstream schon gelöst |
-| identity ts-offset im Lauf änderbar | #5 | PR | offen |
+| Mischer starten beim ersten Puffer | #1 | Issue | Issue-Entwurf fertig, wartet auf Freigabe; mit `sample_rate` des Audiomischers (ed647f2); `eos_on_stop` eigene Zeile |
+| DSK-Ebenen ein- und ausblenden (`duration_ms` in `DskToggleRequest`) | d47a50a (kam mit #5) | Issue | Issue-Entwurf fertig, wartet auf Freigabe (neues API-Feld); 04b87d1 gehört dazu |
+| identity ts-offset im Lauf änderbar | #5 (401053c) | PR | offen |
 | Media Player gibt Video im Systemspeicher aus | #3 | PR | offen |
-| Playlist-Loop im Lauf umschalten | #17 | PR | offen |
+| Playlist-Loop im Lauf umschalten | #17 | Issue | Issue-Entwurf in Arbeit (neue API-Felder oder Endpunkte: Entscheidung der Maintainer, wie bei der Block-Statistik #61/#64) |
 | Rand-Underlays live, Startzeit zuerst | 9274bbd | PR | offen |
 | HTML-Input: Seite per API steuern | #22 | Issue | Issue-Entwurf fertig, wartet auf Freigabe |
 | Show Sound / Show Playback (Klang- und Bild-Cues in Zonen, Wiederholen, Pause) | #23–#28, #30, #33, #51 | Issue | Issue-Entwurf fertig, wartet auf Freigabe (nur Frage, ob upstream es will) |
-| Audioausgänge mit Kanalpositionen | #31 | PR | offen |
+| Audioausgänge mit Kanalpositionen | #31 | Issue | Issue-Entwurf in Arbeit (neue API-Felder oder Endpunkte: Entscheidung der Maintainer, wie bei der Block-Statistik #61/#64) |
 | Vorschau-Ausgang des Mischers (`pvw_out`) | #32 | Issue | Issue-Entwurf fertig, wartet auf Freigabe, zusammen mit dem Kachel-Ausgang #52 |
 | Take an einer T-Bar-Position halten | #34 | Issue | Issue-Entwurf fertig, wartet auf Freigabe |
 | PadMap; Mischer-Eingänge im Lauf hinzufügen und entfernen; Benchmark | #39, #41, #40 | Issue | Issue-Entwurf fertig, wartet auf Freigabe, ein Issue mit #42, #43, #56, #57 |
 | Monitor folgt einem Aux-Bus; Aux-Busse im Lauf | #42, #43 | Issue | im Issue-Entwurf zu den Mischer-Eingängen im Lauf |
-| Inter Input wechselt den Kanal im Lauf | #46 | PR | offen |
-| DeckLink-Karten als Videoquellen auflisten | #49 | PR | offen |
+| Inter Input wechselt den Kanal im Lauf | #46 | Issue | Issue-Entwurf in Arbeit (neue API-Felder oder Endpunkte: Entscheidung der Maintainer, wie bei der Block-Statistik #61/#64) |
+| DeckLink-Karten als Videoquellen auflisten | #49 | Issue | Issue-Entwurf in Arbeit (neue API-Felder oder Endpunkte: Entscheidung der Maintainer, wie bei der Block-Statistik #61/#64) |
 | Audiomischer: Kanäle im Lauf hinzufügen und entfernen; Bildmischer ab einem Eingang mit freien Plätzen, Kachelbild für einen Teil der Eingänge | #56, #57 | Issue | im Issue-Entwurf zu den Mischer-Eingängen im Lauf |
-| Byte-Zähler der Ausgänge (`/flows/{id}/output-bytes`: RTMP, Live Recorder) | #54 | PR | offen; passt ohne Konflikt auf upstream `main` |
+| Byte-Zähler der Ausgänge (`/flows/{id}/output-bytes`: RTMP, Live Recorder) | #54 | Issue | Issue-Entwurf in Arbeit (neue API-Felder oder Endpunkte: Entscheidung der Maintainer, wie bei der Block-Statistik #61/#64) |
 | Block-Statistik: Warteschlange des Inter Input (wartend, verworfen) und Encoder-Zeit des Video Encoder (`/flows/{id}/rtp-stats`) | #61, #64 | Issue | Entwurf fertig, wartet auf Freigabe (zwei Buffer-Probes am Encoder und neue API-Typen sind eine Entscheidung der Maintainer); Branch `lmix-output-load` auf upstream `main` 4479d8c |
 | Kachel-Ausgang des Mischers (`tiles_out`) | #52, #57 | Issue | im Issue-Entwurf zum Vorschau-Ausgang |
 | DeckLink-Ausgang über `decklink2sink` (spätes Bild beim zweiten Start) | #53 | Issue | Issue-Entwurf fertig, wartet auf Freigabe; braucht GStreamer 1.30, upstream-Ziel ist 1.28 |
-| QoS-Events an blockgebauten Sinks verwerfen | #58 | PR | offen; wird gerade geprüft |
+| QoS-Events an blockgebauten Sinks verwerfen | #58 | PR | offen; wird geprüft: ob der Fehler auf upstream `main` auftritt (Sinks, die Blöcke selbst bauen) und ob der Branch ohne lmix-Teile auf `main` passt |
 
 ## Von upstream übernommen (nichts zu tun)
 
