@@ -7742,3 +7742,40 @@ Entfernen des Layouts davor, entferntes Layout gesperrt mit Hinweis.
 Switcher-Test `set_layout_by_id_hits_its_layout_after_one_before_is_gone`
 (Id als Text wie aus der Console, nach Entfernen des Layouts davor; ein
 Layout, das wie die Id heißt, gewinnt nicht).
+
+## 2026-11-01 — Geheimnisse in strom-Logs und -Fehlertexten; Queue-Warnung bei Sendeverzögerung
+
+**Kontext**: strom schrieb die ganze `srt_uri` (mit `passphrase=`,
+`streamid=`) bei jedem Bau eines SRT-Blocks ins Log (`info`), dazu
+Flow-Dumps (`debug`), jede Property-Änderung, gst-launch-Text und
+GStreamer-Fehler (auch als `PipelineError`-Event an Clients). Nur der
+RTMP-Block maskierte. Außerdem warnte der Pipeline-Monitor alle 5 s je
+Queue mit mehr als 2 s Inhalt „Queue level exceeds threshold“, also
+dauernd für die Verzögerungs-Queues von STR.5.
+
+**Optionen**: (a) Maskieren an jeder Stelle mit einem Helfer; (b) ein
+tracing-Layer, der jede Zeile umschreibt (kostet bei jeder Zeile, sieht
+strukturierte Felder nicht sicher). Für die Queue: (a) Verzögerungs-Queues
+nur auf `debug`; (b) Schwelle = 2 s über der eigenen `min-threshold-time`,
+Warnung einmal je Überschreitung.
+
+**Entscheidung**: strom `redact` (strom #59): `url`, `text`, `value`,
+`flow`; Passphrase, Stream-Id, Userinfo, RTMP-Stream-Key, Werte von
+Properties wie `auth_token` werden `***`. Queue (strom #60): Variante (b);
+zurück unter die Schwelle meldet `debug`. lmix-core maskiert zusätzlich
+(Verteidigung in der Tiefe) strom-Fehlertexte, die es weitergibt
+(`check()` in `engine/strom.rs`, `PipelineError` in `engine/meters.rs`),
+mit `lmix_types::srt::redact_text` (Wörter mit URL über `redact_url`,
+nackte `passphrase=…`).
+
+**Grenze**: Die STR.5-Queues haben 2 s Luft über der Verzögerung
+(`max-size-time`), erreichen die neue Schwelle also nie; ein volles
+Verzögerungs-Queue (Netz steht) meldet der Monitor nicht mehr, es zeigt
+sich über die SRT-/Ausgangs-Statistik. Flow-JSON und `GET /flows` tragen
+die Geheimnisse weiter (Konfiguration, keine Verschlüsselung).
+
+**Geprüft**: strom `redact::tests::srt_blocks_log_no_passphrase` (vor der
+Änderung rot: `topsecret1` im Log), `pipeline_monitor::tests::a_delay_queue_within_its_delay_is_not_over`
+(vor der Änderung rot), lmix-core `a_refusal_carries_no_passphrase` (vor
+der Änderung rot: `400 Bad Request: Invalid property
+srt_uri=srt://192.0.2.1:9000?passphrase=topsecret1`).
