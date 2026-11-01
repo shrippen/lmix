@@ -51,6 +51,9 @@ pub struct RecordingMark {
     pub output: OutputId,
     /// Its folder below the media directory (the spec's).
     pub folder: String,
+    /// The start of its file names, filled in (REC.5); empty: the
+    /// default `recording_prefix`.
+    pub file_name: String,
     /// Unix ms when the recording started, as lmix-core knows it (after a
     /// restart of lmix-core: when it found it running).
     pub since_ms: u64,
@@ -202,6 +205,16 @@ impl Protocols {
 pub fn recording_prefix(id: OutputId) -> String {
     let id = id.to_string();
     format!("{RECORDING_PREFIX}-{}", &id[..8])
+}
+
+/// File name prefix the recorder of output `id` gets: the filled-in
+/// `file_name` (REC.5), else `recording_prefix`.
+pub fn file_prefix(id: OutputId, file_name: &str) -> String {
+    if file_name.is_empty() {
+        recording_prefix(id)
+    } else {
+        file_name.to_string()
+    }
 }
 
 /// A path below the media directory, one way written: strom reports
@@ -437,6 +450,7 @@ mod tests {
         RecordingMark {
             output: OutputId(uuid::Uuid::nil()),
             folder: "show/".into(),
+            file_name: String::new(),
             since_ms: START_MS,
             at_ms: START_MS + at_s * 1000,
             text: text.into(),

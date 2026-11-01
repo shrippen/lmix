@@ -7088,3 +7088,92 @@ exceeds threshold“ (Grenze fest 2 s, `pipeline_monitor.rs`), solange ein
 Stream verzögert. Nur Log, nichts für die Bedienung; ein Kandidat für
 upstream (Grenze über `min-threshold-time` der Queue hinaus), nicht Teil
 dieser Änderung. STR.7 „Puffer“ (Füllstand im Status) bleibt offen.
+
+## 2026-11-01 — Aufnahme: Dateinamen und Standardordner (REC.5)
+
+**Kontext**: REC.5 verlangt ein Dateinamensmuster mit Datum und Zeit und
+einen Standardordner. Bisher hieß jede Aufnahme `lmix-<Anfang der
+Ausgangs-Id>_<Datum>_<Zeit>_<Nummer>`, der Ordner war Pflicht. Ohne Änderung
+an strom (a0ac38f9) umzusetzen.
+
+**Was strom vorgibt**: Beide Recorder (Live-Recorder, älterer
+`builtin.recorder`) bilden den Namen selbst:
+`<filename_prefix>_<JJJJMMTT>_<HHMMSS>_<5-stellige Nummer>.<Endung>`, die
+Zeit beim Bauen des Flows (Ortszeit von strom). lmix bestimmt nur den
+Präfix.
+
+**Optionen**:
+1. Präfix mit eigenen Platzhaltern für Datum und Zeit: strom hängt sie
+   trotzdem an, der Name hätte das Datum zweimal. Verworfen.
+2. Freies Format über einen neuen Parameter in strom (Upstream-Kandidat):
+   strom-Diff für eine Soll-Anforderung, und `marks.rs` müsste die
+   Startzeit aus beliebigen Namen lesen. Verworfen.
+3. **Muster für den Präfix**, Datum, Zeit und Nummer bleiben fest von strom
+   dahinter (sortieren richtig, REC.4 und REC.8 lesen sie).
+
+**Entscheidung**: Option 3. `OutputSpec::Record` hat `file_name` (leer: wie
+bisher `lmix-<Id>`; fehlt in älteren Shows und wird leer nicht
+geschrieben). Platzhalter `{output}` (Name des Ausgangs) und `{source}` (was
+er aufnimmt: Name des Inputs, sonst `program`, `preview`, `multiview`;
+englisch wie die übrigen Werte der API). Andere `{…}`, `/` oder `\` und mehr
+als 100 Zeichen lehnt `add_output`/`update_output` mit `bad_recording` ab.
+- **Einsetzen beim Start**: Der Switcher setzt die Namen ein, wenn die
+  Aufnahme startet (`recording_file_name`), und gibt den fertigen Präfix
+  im Start-Befehl an die Engine; die Show behält das Muster. Ein Umbenennen
+  im Lauf ändert die laufende Datei nicht, erst die nächste Aufnahme.
+- **Sichere Zeichen**: Buchstaben (auch Umlaute), Ziffern, Leerzeichen, `-`,
+  `_`, `.` bleiben, alles andere wird `_` (aus „Kamera Süd/1“ wird
+  `Kamera Süd_1`). strom setzt den Präfix in einen Pfad und in eine
+  Vorlage mit `%05d`; ein `%` oder `/` aus einem Input-Namen bräche sie.
+  Leerzeichen und Punkte an den Enden fallen weg, eingesetzt höchstens
+  100 Zeichen. Bleibt nichts, gilt `lmix-<Id>`.
+- **Gleiche Namen**: Zwei Aufnahmen in einen Ordner, deren Präfix gleich
+  herauskommt, schrieben bei gemeinsamem Start (REC.6, `start_outputs`) in
+  dieselbe Sekunde dieselbe Datei. Dann bekommt jede `-<Anfang der Id>`
+  angehängt (`Talk-6b343775_…`); geprüft wird mit den Namen beim Start.
+- **Zeitmarken (REC.8)**: Die Marke trägt den eingesetzten Präfix
+  (`RecordingMark::file_name`); vorläufiger Protokollname und die Suche nach
+  der laufenden Datei nach einem Neustart von lmix-core nutzen ihn statt
+  `lmix-<Id>`. Wurde der Ausgang oder sein Input im Lauf umbenannt und
+  lmix-core danach neu gestartet, sucht die Marke unter dem neuen Namen und
+  findet die Datei nicht; das Protokoll beginnt dann unter vorläufigem Namen
+  (Grenzfall, hingenommen).
+- **Standardordner**: Ein leerer Ordner wird beim Anlegen oder Ändern
+  `recordings` (`DEFAULT_RECORD_FOLDER`); `/` und `./` bleiben abgelehnt
+  (das Medienverzeichnis selbst ist kein Ordner der Aufnahme).
+- **Console**: Im Dialog „Ausgang“ bei Aufnahmen das Feld „Dateiname“ mit
+  Hilfe-Knopf und darunter „Erste Datei: Saal program_20261101_143000_00000.mkv“
+  (eingesetzt über die Bridge mit derselben Funktion wie im Kern, Datum als
+  Beispiel). Das Ordnerfeld darf leer bleiben, der Platzhalter nennt den
+  Standardordner.
+
+**Personas**: P2 (Konferenz) und P6 (Hochschule) finden Aufnahmen am Namen
+des Saals oder der Kamera statt an einer Id; ISO-Aufnahmen mit `{source}`
+heißen nach ihrem Input. Den Namen aus Datenquelle oder Zeitplan (REC.9, B6)
+gibt das nicht; der wäre ein weiterer Platzhalter, der beim Start einen Wert
+liest.
+
+**Gemessen** an strom a0ac38f9 (CPU-Mischer, Testbild „Kamera Süd/1“, fünf
+Aufnahmen über `start_outputs` gemeinsam gestartet, nach 5 s eine Zeitmarke):
+`recordings/Saal program_…_00000.mkv` (Ordner leer gelassen),
+`iso/Kamera Süd_1_…_00000.mkv` (247 Bilder, mit ffprobe lesbar),
+`show/Talk-b9859593_…` und `show/Talk-ef0b3f51_…` (gleiches Muster, eine
+Sekunde), `show/lmix-2b58ff40_…` (ohne Muster); jedes Protokoll
+`….marks.csv` lag neben seiner Datei und nannte sie. `{datum}` wurde mit
+`bad_recording` abgelehnt. lmix-core während einer Aufnahme „Vortrag
+{output}“ beendet und neu gestartet: die nächste Marke fand
+`Vortrag Saal_…_00000.mkv` im Ordner und schrieb daneben, Zeit ab dem
+Zeitstempel im Namen.
+
+**Geprüft und zurückgestellt: STR.7 „Puffer, Encoder-Last“** (vor REC.5
+untersucht, an strom a0ac38f9 mit SRT-Ausgang und ffmpeg als Empfänger):
+`srtsink` liefert keinen Füllstand des Sendepuffers (`snd_buf_level_ms`
+kommt in strom's SRT-Statistik als `null`), die geschätzte Bandbreite
+(`bandwidth_mbps`) zeigte auf Loopback 11,9 Mbit/s, ist also kein Maß der
+Leitung. Die CPU je Thread aus strom's `ThreadStats` ordnet nur
+GStreamer-Streaming-Threads einem Flow zu: x264 rechnet in eigenen Threads
+(34 Threads mit dem Namen des Streaming-Threads, zusammen 54 % CPU laut
+`top -H`), strom meldete für den Ausgangs-Flow 23 %. Eine Encoder-Last je
+Ausgang wäre damit um mehr als die Hälfte zu niedrig; bleibt offen, bis strom
+sie misst. Verlässlich wäre nur die Auslastung des NVENC-Encoders der GPU
+(`encoder_utilization`, für die ganze Maschine).

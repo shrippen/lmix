@@ -347,7 +347,7 @@ impl StromEngine {
 
         // An earlier file of the folder may be another run's: only for a
         // recording found running, whose files are all older.
-        let prefix = marks::recording_prefix(mark.output);
+        let prefix = marks::file_prefix(mark.output, &mark.file_name);
         let files = self.media_files(&mark.folder).await?;
         let files: Vec<(&str, u64)> = files.iter().map(|(p, m)| (p.as_str(), *m)).collect();
         let found = marks::newest_recording(&files, &prefix).map(marks::found_file);
@@ -375,7 +375,7 @@ impl StromEngine {
         let (base, provisional) = match beside {
             Some(base) => (base, marks::Provisional::No),
             None => {
-                let prefix = marks::recording_prefix(mark.output);
+                let prefix = marks::file_prefix(mark.output, &mark.file_name);
                 (
                     marks::protocol_guess(mark, &prefix),
                     marks::Provisional::Yes,
@@ -2789,6 +2789,7 @@ mod tests {
         RecordingMark {
             output,
             folder: "show".into(),
+            file_name: String::new(),
             since_ms: MARK_START_MS,
             at_ms: MARK_START_MS + at_s * 1000,
             text: text.into(),
@@ -3019,6 +3020,7 @@ mod tests {
         let mark = RecordingMark {
             output: id,
             folder: "show".into(),
+            file_name: String::new(),
             since_ms: start + 3_715_000,
             at_ms: start + 3_725_000,
             text: "after".into(),
@@ -3038,6 +3040,63 @@ mod tests {
             "{text}"
         );
         assert_eq!(media.lock().unwrap().files.len(), 3, "no other protocol");
+    }
+
+    /// REC.5: a recording with its own file name. After a restart the mark
+    /// looks for that name, not for `lmix-<id>`; before strom names a file
+    /// the guess has it too.
+    #[tokio::test]
+    async fn marks_find_a_recording_by_its_file_name() {
+        let (engine, media) = media_strom().await;
+        let id = OutputId::new();
+        let stem = "show/Talk B_20261101_143000";
+        let start = marks::stem_start_ms(stem).unwrap();
+        {
+            let mut media = media.lock().unwrap();
+            media
+                .files
+                .insert(format!("{stem}_00000.mkv"), String::new());
+            // Another output's, written later.
+            media.files.insert(
+                format!(
+                    "show/{}_20261101_150000_00000.mkv",
+                    marks::recording_prefix(id)
+                ),
+                String::new(),
+            );
+        }
+        let mark = RecordingMark {
+            output: id,
+            folder: "show".into(),
+            file_name: "Talk B".into(),
+            since_ms: start + 10_000,
+            at_ms: start + 20_000,
+            text: "found".into(),
+        };
+        engine
+            .mark_recordings(std::slice::from_ref(&mark))
+            .await
+            .unwrap();
+        let text = file_text(&media, &format!("{stem}.marks.csv"));
+        assert!(
+            text.contains("\"Talk B_20261101_143000_00000.mkv\""),
+            "{text}"
+        );
+
+        let fresh = OutputId::new();
+        engine.fresh_recording(fresh);
+        let first = RecordingMark {
+            output: fresh,
+            file_name: "Hall".into(),
+            ..mark
+        };
+        engine
+            .mark_recordings(std::slice::from_ref(&first))
+            .await
+            .unwrap();
+        let guess = marks::protocol_guess(&first, "Hall");
+        assert!(guess.starts_with("show/Hall_"), "{guess}");
+        assert!(media.lock().unwrap().files.contains_key(&guess));
     }
 
     /// A protocol strom could not read is not taken for none: nothing is
@@ -3257,6 +3316,7 @@ mod tests {
             encoding: Default::default(),
             split_minutes: 0,
             split_mb: 0,
+            file_name: String::new(),
         };
 
         for _ in 0..3 {
