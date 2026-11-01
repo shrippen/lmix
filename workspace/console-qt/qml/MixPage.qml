@@ -371,6 +371,7 @@ AppPage {
         anchors.centerIn: parent
         act: root.act
         inputs: root.inputs
+        layouts: root.show && root.show.layouts ? root.show.layouts : []
     }
 
     BusDialog {

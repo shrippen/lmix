@@ -10528,6 +10528,38 @@ mod tests {
         assert_eq!(sw.tally(), [1, 1, 1, 0], "failed actions change nothing");
     }
 
+    /// The layout editor saves by id (review of #228): a layout removed
+    /// before it meanwhile does not send the save to another layout, and
+    /// a layout named like another's id does not win over the id.
+    #[test]
+    fn set_layout_by_id_hits_its_layout_after_one_before_is_gone() {
+        let mut sw = with_layout();
+        let empty = |name: String| Action::AddLayout {
+            name: Some(name),
+            background: None,
+            boxes: vec![],
+        };
+        sw.apply(empty("Second".into())).unwrap();
+        let second = sw.show().layouts[1].id.to_string();
+        sw.apply(empty(second.clone())).unwrap();
+        sw.apply(Action::RemoveLayout {
+            layout: named("Interview"),
+        })
+        .unwrap();
+
+        // As the console sends it, the id as text; it was number 2.
+        let json =
+            format!(r#"{{"action":"set_layout","layout":"{second}","background":"B","boxes":[]}}"#);
+        sw.apply(serde_json::from_str::<Action>(&json).unwrap())
+            .unwrap();
+        let b = sw.state().inputs[1].id;
+        let layouts = sw.state().layouts;
+        assert_eq!(layouts[0].id.to_string(), second);
+        assert_eq!(layouts[0].background, Some(b), "the edited layout");
+        assert_eq!(layouts[1].name, second);
+        assert_eq!(layouts[1].background, None, "the one named like its id");
+    }
+
     #[test]
     fn layouts_are_checked() {
         let mut sw = with_layout();

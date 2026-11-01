@@ -7684,3 +7684,61 @@ dem Schnitt), `tst_add_output_dialog.qml`
 (`test_a_recording_keeps_its_file_name`), `tst_outputs_page.qml`
 (`test_mark_writes_the_note_once`); die bisherigen Tests der Mood-, Bus- und
 Mixer-Felder unverändert grün.
+
+## 2026-11-01 — Layout-Editor bei Änderungen im Betrieb (Review LAY.7)
+
+**Kontext**: Der Layout-Dialog hält eine Arbeitskopie. Tauschte währenddessen
+ein Cue oder Kurzbefehl Boxen (`swap_boxes`), legte einen anderen Input
+in eine Box (`set_box_input`), blendete eine aus (`show_box`) oder
+speicherte eine andere Console das Layout, schrieb „Layout speichern“ die
+alte Kopie zurück und machte die Änderung im Betrieb stillschweigend
+rückgängig, auch auf Sendung.
+
+**Optionen**: (a) nur einen Hinweis zeigen und „Neu laden“ anbieten
+(eigene Änderungen gehen dann verloren, wer nur einen Rahmen setzen
+wollte, muss neu anfangen); (b) beim Speichern nur senden, was im Dialog
+geändert wurde, alles andere so, wie es jetzt ist (Drei-Wege-Abgleich
+gegen das Layout beim Öffnen); (c) eine Sperre des Layouts, solange es
+bearbeitet wird (verbietet Bedienung auf Sendung, die Vorrang hat).
+
+**Entscheidung**: (b) mit Hinweis aus (a).
+- Jede Box der Arbeitskopie merkt sich ihre Herkunft (Index beim Öffnen,
+  neue Boxen keine). Eine Box besteht aus Teilen, die sich unabhängig
+  ändern: Bild (Input mit Zuschnitt, wie `swap_boxes` und
+  `set_box_input` sie behandeln), Platz, Rahmen, Sperre, „Sichtbar“; dazu
+  der Hintergrund. Was im Dialog nicht geändert wurde, kommt aus dem
+  Layout, wie es jetzt ist; was geändert wurde, gilt. Entfernte und
+  hinzugefügte Boxen im Dialog stören den Abgleich nicht.
+- Hat sich die Zahl der Boxen anderswo geändert, lassen sich die Boxen
+  nicht mehr zuordnen: Speichern sendet, was der Dialog zeigt. Ebenso,
+  wenn der Abgleich einen Input zweimal ins Layout brächte (lmix-core
+  lehnte das ab, die Arbeit im Dialog wäre verloren).
+- Der Dialog sagt es (`KanteCallout`, solange das Layout anders ist als
+  beim Öffnen): „wird behalten, wo hier nichts geändert wurde“ bzw.
+  (Warnung, auch wenn der Abgleich an einem doppelten Input scheitert)
+  „Speichern ersetzt es durch das hier Gezeigte“, beide mit „Neu laden“
+  (übernimmt den jetzigen Stand, verwirft die Arbeitskopie).
+- `set_layout` nennt das Layout über seine Id, nicht die Nummer: Entfernt
+  eine andere Console (oder ein Rückgängig) ein Layout davor, träfe die
+  Nummer beim Öffnen ein anderes Layout und überschriebe es, womöglich auf
+  Sendung. Ist das bearbeitete Layout selbst weg, sagt es der Hinweis
+  (Warnung, ohne „Neu laden“), Speichern ist gesperrt.
+- Grenze: Boxen werden über ihre Stelle in der Liste zugeordnet (die
+  Boxen haben keine Id). Ersetzt eine andere Console das Layout mit gleich
+  vielen, aber anderen Boxen, gilt der Abgleich trotzdem Stelle für Stelle;
+  der Hinweis erscheint, der Inhalt kann aber gemischt werden. Mit
+  `swap_boxes`, `set_box_input` und `show_box` (die die Boxen nicht
+  umordnen) passt die Zuordnung immer.
+- Muster wie `AddOutputDialog` (Zustand der Show als Eigenschaft, der
+  Dialog vergleicht selbst); kein Rückfrage-Dialog beim Speichern, der
+  im Betrieb aufhielte.
+
+**Geprüft**: QML-Test `tst_layout_dialog` (vor der Änderung rot):
+Tausch während offen bleibt mit eigenem Platz, eigene Änderung am selben
+Teil gewinnt, entfernte Box, doppelter Input fällt auf das Gezeigte
+zurück, unverändert ohne Hinweis, Boxen anderswo hinzugefügt mit Hinweis
+und „Neu laden“, neues Layout unverändert, Speichern über die Id nach
+Entfernen des Layouts davor, entferntes Layout gesperrt mit Hinweis.
+Switcher-Test `set_layout_by_id_hits_its_layout_after_one_before_is_gone`
+(Id als Text wie aus der Console, nach Entfernen des Layouts davor; ein
+Layout, das wie die Id heißt, gewinnt nicht).
