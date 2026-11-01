@@ -17,6 +17,8 @@ KanteDialog {
     required property var act
     required property var inputs
     required property var outputs
+    /** Output targets of this machine, for OSC actions. */
+    property var targets: []
     /** The input whose triggers are edited; set before `open()`. */
     property var input: null
     /** Or the graphics channel (lmix `Graphics`). */
@@ -70,6 +72,7 @@ KanteDialog {
         anchors.centerIn: parent
         inputs: dialog.inputs
         outputs: dialog.outputs
+        targets: dialog.targets
         title: qsTr("Actions of trigger %1").arg(dialog.editing + 1)
         needsAction: true
         onDone: (label, actions) => {

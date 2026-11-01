@@ -1905,7 +1905,8 @@ impl Switcher {
             Action::TestTarget { .. }
             | Action::CheckTargets
             | Action::HttpRequest { .. }
-            | Action::HaService { .. } => Err(ActionError::BadTarget {
+            | Action::HaService { .. }
+            | Action::OscSend { .. } => Err(ActionError::BadTarget {
                 reason: "run through the service".into(),
             }),
             Action::SetGoGuard { ms } => {

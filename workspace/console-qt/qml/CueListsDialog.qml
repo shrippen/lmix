@@ -17,6 +17,8 @@ KanteDialog {
     required property var act
     required property var inputs
     required property var outputs
+    /** Output targets of this machine, for OSC actions. */
+    property var targets: []
     required property var lists
 
     /** Shown list, by position. */
@@ -50,6 +52,7 @@ KanteDialog {
         anchors.centerIn: parent
         inputs: dialog.inputs
         outputs: dialog.outputs
+        targets: dialog.targets
         labelled: true
         needsAction: true
         title: dialog.list && dialog.editing < dialog.list.cues.length ? qsTr("Cue %1").arg(dialog.editing + 1) : qsTr("New cue")

@@ -352,6 +352,7 @@ pub fn right_of(action: &Action) -> Right {
         | Action::CheckTargets
         | Action::HttpRequest { .. }
         | Action::HaService { .. }
+        | Action::OscSend { .. }
         | Action::RunShortcut { .. }
         | Action::PreviewInput { .. }
         | Action::Cut

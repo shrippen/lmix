@@ -4,9 +4,9 @@
 //!
 //! - a start cue whose cue or list is gone;
 //! - an action naming an input that is not there;
-//! - an HTTP or Home Assistant action naming no target of this machine,
-//!   or one that did not answer the last check or send, or while the
-//!   targets are locked (RUN.9);
+//! - an HTTP, Home Assistant or OSC action naming no target of this
+//!   machine, one speaking the other protocol, one that did not answer
+//!   the last check or send, or while the targets are locked (RUN.9);
 //! - an input a cue uses whose media file is missing.
 
 use std::collections::BTreeMap;
@@ -16,7 +16,7 @@ use lmix_types::input::{REF_DYNAMIC, REF_PREVIEW, REF_PROGRAM};
 use lmix_types::{Action, InputId};
 
 use crate::show::{Show, ShowCueList};
-use crate::targets::TargetConfig;
+use crate::targets::{Speech, TargetConfig};
 
 /// What the machine knows besides the show.
 pub struct Machine<'a> {
@@ -42,7 +42,7 @@ pub fn cue_warnings(show: &Show, machine: &Machine) -> Vec<CueWarning> {
 pub fn used_targets(show: &Show) -> Vec<String> {
     fn add(cues: &[Cue], out: &mut Vec<String>) {
         for cue in cues {
-            for name in cue.actions.iter().filter_map(action_target) {
+            for (name, _) in cue.actions.iter().filter_map(action_target) {
                 if !out.iter().any(|n| n == name) {
                     out.push(name.to_string());
                 }
@@ -98,9 +98,14 @@ fn walk(
             }
         }
         for action in &cue.actions {
-            if let Some(name) = action_target(action) {
-                if !machine.targets.iter().any(|t| t.name == name) {
+            if let Some((name, speech)) = action_target(action) {
+                let target = machine.targets.iter().find(|t| t.name == name);
+                if target.is_none() {
                     warn(CueProblem::TargetGone {
+                        target: name.to_string(),
+                    });
+                } else if target.is_some_and(|t| crate::targets::sendable(t, speech).is_err()) {
+                    warn(CueProblem::TargetMismatch {
                         target: name.to_string(),
                     });
                 } else if machine.targets_locked {
@@ -138,9 +143,13 @@ fn has_cue(cues: &[Cue], text: &str) -> bool {
     })
 }
 
-fn action_target(action: &Action) -> Option<&str> {
+/// The target an action sends to, and in what.
+fn action_target(action: &Action) -> Option<(&str, Speech)> {
     match action {
-        Action::HttpRequest { target, .. } | Action::HaService { target, .. } => Some(target),
+        Action::HttpRequest { target, .. } | Action::HaService { target, .. } => {
+            Some((target, Speech::Http))
+        }
+        Action::OscSend { target, .. } => Some((target, Speech::Osc)),
         _ => None,
     }
 }
@@ -347,6 +356,45 @@ mod tests {
                 "sends to target Haus, which did not answer: cannot connect",
                 "sends to target Haus, which did not answer: cannot connect",
             ]
+        );
+    }
+
+    #[test]
+    fn osc_goes_to_osc_targets_only() {
+        let osc = |target: &str| Action::OscSend {
+            target: target.into(),
+            address: "/eos/go".to_string().try_into().unwrap(),
+            args: Default::default(),
+        };
+        let show = show_with(vec![Cue::actions("Go", vec![osc("Pult"), osc("Haus")])]);
+        let target = |name: &str, kind| TargetConfig {
+            name: name.into(),
+            kind,
+            addresses: vec!["10.0.0.5:8000".into()],
+            secret: None,
+            timeout_ms: 1000,
+        };
+        let targets = [
+            target("Pult", lmix_types::TargetKind::OscTcp),
+            target("Haus", lmix_types::TargetKind::Http),
+        ];
+        let none = BTreeMap::new();
+
+        let warnings = cue_warnings(
+            &show,
+            &Machine {
+                targets: &targets,
+                unreached: &none,
+                targets_locked: false,
+                missing: &|_| false,
+            },
+        );
+
+        assert_eq!(used_targets(&show), ["Pult", "Haus"]);
+        let texts: Vec<&str> = warnings.iter().map(|w| w.message.as_str()).collect();
+        assert_eq!(
+            texts,
+            ["sends to target Haus, which speaks another protocol (HTTP or OSC)"]
         );
     }
 }

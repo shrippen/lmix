@@ -21,6 +21,7 @@ pub mod layout;
 pub mod machine;
 pub mod midi;
 pub mod mood;
+pub mod osc;
 pub mod output;
 pub mod ptz;
 pub mod shortcut;
@@ -64,6 +65,7 @@ pub use mood::{
     LayerContent, LayerId, LayerNow, LayerOrigin, MoodCollection, MoodFade, MoodGroup, MoodId,
     MoodLayer, MoodNow, MoodVariant, Moods,
 };
+pub use osc::{OscAddress, OscArg, OscArgs};
 pub use output::{file_name, normal_folder, DEFAULT_RECORD_FOLDER, FILE_NAME_MAX};
 pub use output::{
     Container, DisplayMode, Framerate, MasterFormat, MultiviewLayout, MultiviewMeters, Output,

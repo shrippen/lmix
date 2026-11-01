@@ -1483,4 +1483,13 @@ DE = {
     'Show guides on': 'Hilfslinien zeigen auf',
     ('%1 %', 'a safe-area frame: its share of the picture'): '%1 %',
     'Messages': 'Meldungen',
+    'OSC message': 'OSC-Nachricht',
+    'Action %1 needs an OSC target (Output targets)': 'Aktion %1 braucht ein OSC-Ziel (Ausgabeziele)',
+    'Action %1: the OSC address starts with / and holds only letters, digits and signs of plain ASCII, no space, # or ,': 'Aktion %1: Die OSC-Adresse beginnt mit / und enthält nur Buchstaben, Ziffern und Zeichen aus einfachem ASCII, kein Leerzeichen, # oder ,',
+    'OSC target of action %1': 'OSC-Ziel von Aktion %1',
+    'OSC address of action %1': 'OSC-Adresse von Aktion %1',
+    'OSC arguments of action %1': 'OSC-Argumente von Aktion %1',
+    'Arguments: 1 0.5 "text" true': 'Argumente: 1 0.5 "Text" true',
+    'Separated by spaces: 1 is a whole number, 0.5 a decimal, "two words" text, true/false a truth value, nil empty; any other word is text.': 'Durch Leerzeichen getrennt: 1 ist eine ganze Zahl, 0.5 eine Dezimalzahl, "zwei Wörter" Text, true/false ein Wahrheitswert, nil leer; jedes andere Wort ist Text.',
+    'sends to target %1, which speaks another protocol (HTTP or OSC)': 'sendet an Ziel %1, das ein anderes Protokoll spricht (HTTP oder OSC)',
 }

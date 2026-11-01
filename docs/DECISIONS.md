@@ -7480,6 +7480,83 @@ titelsicheren Ränder beim Setzen von Bauchbinden. Offen: Hilfslinien im
 Layout-Editor (er fängt schon am 5-%-Rand) und ein eigener Rahmen in
 Prozent; Scopes (OUT.13) sind ein eigenes Thema.
 
+## 2026-11-01 — OSC-Cue (EXT.6)
+
+**Kontext**: OSC-Ziele (`osc_udp`, `osc_tcp`) ließen sich seit S1 anlegen,
+gesendet haben nur die festen Abonnenten (CTL.4, nur UDP). Ein Cue konnte
+einem Lichtpult (P9) oder Companion (P8) also kein GO schicken, außer über
+HTTP. Ohne Änderung an strom umzusetzen; strom ist nicht beteiligt.
+
+**Optionen für die Argumente**:
+1. JSON-Liste (`[50, 0.5, "Szene 2"]`): JSON und JavaScript unterscheiden
+   `1` und `1.0` nicht, ein Float `1.0` käme als Int an; manche Empfänger
+   nehmen nur Floats. Bräuchte getypte Objekte (`{"float": 1}`), umständlich
+   von Hand und in der Oberfläche. Verworfen.
+2. **Text wie getippt**: `50 0.5 "Szene 2" true nil`; die Art folgt aus der
+   Schreibweise.
+
+**Entscheidung**: Option 2. Neue Aktion `osc_send {target, address, args}`
+(Gruppe `targets`), wie `http_request` in Aktions-Cues, Kurzbefehlen,
+Auslösern und Stimmungs-Ebenen; keine eigene Cue-Art (wie DECISIONS
+„Ausgabeziele“).
+- **Argumente** (`lmix_types::osc`): durch Leerzeichen getrennt; ganze Zahl
+  (32 Bit) → `i`, mit Punkt oder Exponent → `f`, `true`/`false` → `T`/`F`,
+  `nil` → `N`, `"…"` → Text mit Leerzeichen (`\"` und `\\` darin), jedes
+  andere Wort → Text (`inf`, `NaN`, `1.2.3`). Abgelehnt statt still
+  geändert: ganze Zahlen jenseits von 32 Bit (`3000000000`; als Float
+  `3000000000.0`), Dezimalzahlen, die ein 32-Bit-Float nicht hält (`1e99`,
+  `1e-50`), und Steuerzeichen (ein NUL beendete den OSC-Text zu früh und
+  verschöbe jedes folgende Argument). Höchstens 32 Argumente und 4096 Bytes.
+- **Adresse**: beginnt mit `/`, nur druckbares ASCII (OSC 1.0) ohne `#` und
+  `,`, höchstens 256 Bytes; Muster wie `*` oder `[1-4]` gehen durch.
+- **Geprüft beim Lesen**: Adresse und Argumente sind eigene Typen
+  (`OscAddress`, `OscArgs`), die beim Einlesen der Aktion geprüft werden.
+  Eine falsche Nachricht lehnt die API mit Grund ab (422), sie kommt nie in
+  einen Cue; im JSON bleibt der Text, wie er getippt wurde.
+- **Senden** wie HTTP (EXT.3): kehrt sofort zurück, je Adresse eine
+  Warteschlange (Reihenfolge bleibt), Zeitlimit des Ziels, Ergebnis als
+  Ereignis `target`. OSC antwortet nicht: Über UDP gilt eine Nachricht als
+  erreicht, wenn sie gesendet ist; über TCP, wenn die Verbindung sie
+  angenommen hat.
+- **TCP mit SLIP** (OSC 1.1), wie es `TargetKind::OscTcp` schon nannte;
+  je Nachricht eine Verbindung (verbinden, Rahmen schreiben, schließen).
+  Eine dauerhafte Verbindung spart im LAN eine Rundreise, braucht aber
+  Wiederaufbau und Zustand; erst, wenn ein Pult es verlangt. Nach dem
+  Rahmen schließt lmix seine Seite; gesendet ist die Nachricht dann. Danach
+  liest lmix im Hintergrund bis zu 200 ms, was das Pult noch schickt (ein
+  Pult, das seinen Clients selbst sendet): Schließen mit ungelesenen Daten
+  schickte ein Reset, und das Pult könnte den Rahmen verwerfen. Dieses
+  Lesen zählt nicht zum Zeitlimit und hält die nächste Nachricht nicht auf. Pulte, die nur
+  den Längen-Präfix von OSC 1.0 lesen, gehen über UDP.
+- **Falsches Protokoll**: `http_request` an ein OSC-Ziel oder `osc_send` an
+  ein HTTP-Ziel scheitert als Ereignis (`… speaks OSC: use osc_send`), nie
+  der Cue; die Prüfung der Cue-Listen warnt vorher (`target_mismatch`,
+  SUI.5).
+- **Ziel testen** (EXT.5) bei OSC: Name auflösen, bei TCP verbinden; es
+  wird nichts gesendet, ein Test darf am Pult nichts auslösen.
+- **Console**: Im Aktionseditor (Cues, Kurzbefehle, Auslöser, Stimmungen)
+  die Zeile „OSC-Nachricht“ mit Ziel (nur OSC-Ziele), Adresse und
+  Argumenten, Erklärung der Schreibweise als Tooltip; auch in den
+  Auslösern der Grafikkanäle. Die Wahl des Ziels ist ein Name: Ändert sich
+  die Zielliste bei offenem Dialog, bleibt das gewählte Pult. Ein Ziel, das
+  der Rechner nicht hat, bleibt in der Liste stehen. Die Console prüft die
+  Adresse mit denselben Regeln wie lmix-core; die Argumente prüft
+  lmix-core beim Speichern.
+
+**Personas**: P9 schickt dem Lichtpult aus derselben Cue-Liste ein GO
+(`/eos/cue/1/12/fire`) und fährt Ton und Licht mit einem GO; P8 setzt über
+Companions OSC-Eingang Variablen oder drückt Tasten, ohne HTTP-API.
+
+**Gemessen** mit lmix-core (`--engine none`) über die HTTP-API: `osc_send`
+an ein `osc_udp`-Ziel kam als ein Datagramm an
+(`/eos/chan/1/at ,ifsTN 50 0.5 "Szene 2"`), an ein `osc_tcp`-Ziel als
+SLIP-Rahmen `c0 … c0`; `test_target` öffnete die TCP-Verbindung ohne Daten
+und meldete für einen geschlossenen Port `cannot connect`. `eos/go` und ein
+offenes Anführungszeichen lehnte die API mit 422 und Grund ab.
+
+**Offen**: Platzhalter für Live-Werte (EXT.7), feste Abonnenten auch über
+TCP (CTL.4 sendet nur UDP).
+
 ## 2026-11-01 — Stimmungen: offene Hinweise der Reviews (MOOD Stufe 7d)
 
 **Anlass**: Hinweise aus den Reviews von #212 und #213, die die Stufen 7a–7c
